@@ -15,6 +15,7 @@ const state = {
   portalSession: null,
   desiredOperationMode: null,
   portalUsers: [],
+  requestBlackouts: [],
   allEmployees: [],
   updateStatus: null,
   selectedColor: "#0b84c6",
@@ -27,6 +28,7 @@ const state = {
   editingOptionGroupId: null,
   editingGlobalBlockId: null,
   editingVacationGroupId: null,
+  editingRequestBlackoutId: null,
 };
 
 let scheduleNoteQuill = null;
@@ -59,6 +61,7 @@ const elements = Object.fromEntries(
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField",
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "vacationRequestsPanel", "managerVacationRequestList", "refreshVacationRequestsButton",
+    "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition",
     "employeeSettings", "locationSettings", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationSubmitButton", "cancelLocationEditButton",
@@ -68,7 +71,7 @@ const elements = Object.fromEntries(
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "portalFoundationHint", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
-    "loginGate", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink",
+    "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink",
     "brandLogo", "footerBrandLogo", "adminContactLink", "brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt", "brandingPreviewLogo", "brandingPreviewTitle", "brandingPreviewCompany", "brandingKitLibrary", "exportBrandingButton", "brandingImportFile", "importBrandingButton", "toast",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
 );
@@ -400,6 +403,7 @@ async function bootstrapApplication() {
   try {
     const status = await api("/api/portal/v1/status");
     state.portalStatus = status;
+    applyBranding(status.branding || {});
     state.desiredOperationMode = status.operationMode === "lan" ? "lan" : "local";
     if (status.portalEnabled) {
       const session = await api("/api/portal/v1/session");
@@ -516,7 +520,7 @@ function brandingFromSettings(settings = {}) {
 function applyBranding(settings = state.data?.settings || {}) {
   const branding = brandingFromSettings(settings);
   document.title = `${branding.appName} · Dienstplan`;
-  for (const image of [elements.brandLogo, elements.footerBrandLogo, elements.brandingPreviewLogo]) {
+  for (const image of [elements.loginBrandLogo, elements.brandLogo, elements.footerBrandLogo, elements.brandingPreviewLogo]) {
     if (!image) continue;
     image.src = branding.logoUrl;
     image.alt = branding.logoAlt;
@@ -563,6 +567,7 @@ async function loadAll() {
     state.vacationYear = vacationData.year;
     render();
     loadManagerVacationRequests();
+    loadRequestBlackouts();
   } catch (error) {
     showToast(error.message, true);
   }
@@ -1250,7 +1255,7 @@ async function loadPortalUsers() {
         <div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${user.passwordConfigured ? "Zugang eingerichtet" : "Noch kein Passwort"}${user.lastLoginAt ? ` · zuletzt ${escapeHtml(new Date(user.lastLoginAt).toLocaleString("de-AT"))}` : ""}</small></div>
         <select data-portal-role aria-label="Rolle">${roles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === user.role ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("")}</select>
         <label class="portal-active"><input data-portal-active type="checkbox" ${user.active ? "checked" : ""} /> aktiv</label>
-        <input data-portal-password type="password" minlength="10" placeholder="Neues Startpasswort" autocomplete="new-password" />
+        <span class="password-field portal-user-password"><input data-portal-password id="portalPassword-${escapeHtml(user.employeeNumber)}" type="password" minlength="6" placeholder="Neues Startpasswort" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-toggle="portalPassword-${escapeHtml(user.employeeNumber)}" aria-label="Passwort anzeigen">Anzeigen</button></span>
         <button class="secondary-button" data-save-portal-user type="button">Speichern</button>
       </article>
     `).join("");
@@ -1263,33 +1268,153 @@ async function loadPortalUsers() {
 async function loadManagerVacationRequests() {
   if (!elements.managerVacationRequestList) return;
   try {
-    const result = await api("/api/portal/v1/vacation-requests?status=pending");
+    const result = await api("/api/portal/v1/absence-requests");
     const requests = result.requests || [];
     elements.vacationRequestsPanel.classList.remove("hidden");
-    elements.managerVacationRequestList.innerHTML = requests.length ? requests.map((request) => `
-      <article class="manager-request-row" data-manager-request="${request.id}">
+    elements.managerVacationRequestList.innerHTML = requests.length ? requests.map((request) => {
+      const details = managerRequestDetails(request);
+      return `
+      <article class="manager-request-row" data-manager-request="${request.id}" data-request-kind="${escapeHtml(request.kind)}">
         <span class="employee-dot" style="--employee-color:${escapeHtml(request.color || "#507267")}"></span>
-        <div><strong>${escapeHtml(request.employee_number)} · ${escapeHtml(request.nickname || request.full_name)}</strong><small>${formatDate(request.date_from)} – ${formatDate(request.date_to)}${request.note ? ` · ${escapeHtml(request.note)}` : ""}</small></div>
+        <div><strong><span class="request-kind-badge ${escapeHtml(request.kind)}">${escapeHtml(details.label)}</span> ${escapeHtml(request.employee_number)} · ${escapeHtml(request.nickname || request.full_name)}</strong><small>${details.text}${request.note ? ` · ${escapeHtml(request.note)}` : ""}${request.check_reason ? ` · ${escapeHtml(request.check_reason)}` : ""}</small></div>
         <button class="secondary-button reject-request" data-request-decision="rejected" type="button">Ablehnen</button>
         <button class="primary-button" data-request-decision="approved" type="button">Genehmigen</button>
       </article>
-    `).join("") : '<p class="settings-note">Derzeit gibt es keine offenen Urlaubsanträge.</p>';
+    `; }).join("") : '<p class="settings-note">Derzeit gibt es keine offenen Abwesenheitsanträge.</p>';
   } catch (error) {
     elements.vacationRequestsPanel.classList.toggle("hidden", error.status === 403);
     if (error.status !== 403) elements.managerVacationRequestList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
   }
 }
 
-async function decideVacationRequest(id, decision) {
+function managerRequestDetails(request) {
+  if (request.kind === "time_off") return {
+    label: "ZA",
+    text: `${formatDate(request.request_date)} · ${escapeHtml(request.start_time)}–${escapeHtml(request.end_time)}`,
+  };
+  if (request.kind === "vacation_change") return {
+    label: "Urlaub ändern",
+    text: `${formatDate(request.original_date_from)}–${formatDate(request.original_date_to)} → ${formatDate(request.requested_date_from)}–${formatDate(request.requested_date_to)}`,
+  };
+  if (request.kind === "vacation_cancel") return {
+    label: "Urlaub stornieren",
+    text: `${formatDate(request.original_date_from)}–${formatDate(request.original_date_to)}`,
+  };
+  return { label: "Urlaub", text: `${formatDate(request.date_from)}–${formatDate(request.date_to)}` };
+}
+
+async function decideVacationRequest(id, decision, kind = "vacation") {
   const label = decision === "approved" ? "genehmigen" : "ablehnen";
-  if (!confirm(`Diesen Urlaubsantrag wirklich ${label}?`)) return;
+  const requestLabel = { time_off: "ZA", vacation_change: "Urlaubsänderung", vacation_cancel: "Urlaubsstorno", vacation: "Urlaub" }[kind] || "Antrag";
+  if (!confirm(`${requestLabel} wirklich ${label}?`)) return;
+  const endpoint = kind === "time_off"
+    ? `/api/portal/v1/time-off-requests/${id}/decision`
+    : kind === "vacation_change" || kind === "vacation_cancel"
+      ? `/api/portal/v1/vacation-change-requests/${id}/decision`
+      : `/api/portal/v1/vacation-requests/${id}/decision`;
   try {
-    await api(`/api/portal/v1/vacation-requests/${id}/decision`, {
+    await api(endpoint, {
       method: "PUT",
       body: JSON.stringify({ decision }),
     });
-    showToast(decision === "approved" ? "Urlaub wurde genehmigt und eingetragen." : "Urlaubsantrag wurde abgelehnt.");
+    showToast(decision === "approved" ? `${requestLabel} wurde genehmigt.` : `${requestLabel} wurde abgelehnt.`);
     await loadAll();
+  } catch (error) { showToast(error.message, true); }
+}
+
+function refreshRequestBlackoutDepartments(selectedDepartmentId = "") {
+  if (!elements.requestBlackoutDepartment) return;
+  const departments = departmentsForLocation(elements.requestBlackoutLocation.value, true);
+  elements.requestBlackoutDepartment.innerHTML = `<option value="">Gesamte Filiale</option>${departments.map((department) =>
+    `<option value="${department.id}">${escapeHtml(department.name)}${department.active ? "" : " (inaktiv)"}</option>`,
+  ).join("")}`;
+  elements.requestBlackoutDepartment.value = departments.some((department) => String(department.id) === String(selectedDepartmentId)) ? String(selectedDepartmentId) : "";
+}
+
+function resetRequestBlackoutForm() {
+  state.editingRequestBlackoutId = null;
+  elements.requestBlackoutForm?.reset();
+  if (elements.requestBlackoutVacation) elements.requestBlackoutVacation.checked = true;
+  if (elements.requestBlackoutActive) elements.requestBlackoutActive.checked = true;
+  if (elements.requestBlackoutLocation) elements.requestBlackoutLocation.value = state.locationId || state.locations.find((location) => location.active)?.id || "";
+  refreshRequestBlackoutDepartments();
+  elements.cancelRequestBlackoutEdit?.classList.add("hidden");
+  if (elements.requestBlackoutSubmit) elements.requestBlackoutSubmit.textContent = "Sperre speichern";
+}
+
+function renderRequestBlackouts() {
+  if (!elements.requestBlackoutList) return;
+  elements.requestBlackoutLocation.innerHTML = state.locations.map((location) => `<option value="${escapeHtml(location.id)}">${escapeHtml(location.name)}${location.active ? "" : " (inaktiv)"}</option>`).join("");
+  if (!state.editingRequestBlackoutId) resetRequestBlackoutForm();
+  elements.requestBlackoutList.innerHTML = state.requestBlackouts.length ? state.requestBlackouts.map((item) => `
+    <article class="request-blackout-row ${item.active ? "" : "inactive"}" data-request-blackout="${item.id}">
+      <div><strong>${escapeHtml(item.locationName)}${item.departmentName ? ` · ${escapeHtml(item.departmentName)}` : ""}</strong><small>${formatDate(item.dateFrom)}–${formatDate(item.dateTo)} · ${item.blockVacation ? "Urlaub" : ""}${item.blockVacation && item.blockTimeOff ? " + " : ""}${item.blockTimeOff ? "ZA" : ""}${item.reason ? ` · ${escapeHtml(item.reason)}` : ""}${item.active ? "" : " · inaktiv"}</small></div>
+      <button class="secondary-button" data-edit-request-blackout type="button">Bearbeiten</button>
+      <button class="secondary-button danger-button" data-delete-request-blackout type="button">Löschen</button>
+    </article>
+  `).join("") : '<p class="settings-note">Noch keine Antragssperren hinterlegt.</p>';
+}
+
+async function loadRequestBlackouts() {
+  if (!elements.requestBlackoutList) return;
+  try {
+    const result = await api("/api/portal/v1/request-blackouts");
+    state.requestBlackouts = result.blackouts || [];
+    elements.requestBlackoutPanel.classList.remove("hidden");
+    renderRequestBlackouts();
+  } catch (error) {
+    elements.requestBlackoutPanel.classList.toggle("hidden", error.status === 403);
+    if (error.status !== 403) elements.requestBlackoutList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function editRequestBlackout(id) {
+  const item = state.requestBlackouts.find((entry) => Number(entry.id) === Number(id));
+  if (!item) return;
+  state.editingRequestBlackoutId = item.id;
+  elements.requestBlackoutLocation.value = item.locationId;
+  refreshRequestBlackoutDepartments(item.departmentId || "");
+  elements.requestBlackoutDateFrom.value = item.dateFrom;
+  elements.requestBlackoutDateTo.value = item.dateTo;
+  elements.requestBlackoutReason.value = item.reason;
+  elements.requestBlackoutVacation.checked = item.blockVacation;
+  elements.requestBlackoutTimeOff.checked = item.blockTimeOff;
+  elements.requestBlackoutActive.checked = item.active;
+  elements.cancelRequestBlackoutEdit.classList.remove("hidden");
+  elements.requestBlackoutSubmit.textContent = "Änderung speichern";
+  elements.requestBlackoutForm.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+async function saveRequestBlackout(event) {
+  event.preventDefault();
+  const id = state.editingRequestBlackoutId;
+  try {
+    const result = await api(id ? `/api/portal/v1/request-blackouts/${id}` : "/api/portal/v1/request-blackouts", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify({
+        locationId: elements.requestBlackoutLocation.value,
+        departmentId: elements.requestBlackoutDepartment.value || null,
+        dateFrom: elements.requestBlackoutDateFrom.value,
+        dateTo: elements.requestBlackoutDateTo.value,
+        reason: elements.requestBlackoutReason.value,
+        blockVacation: elements.requestBlackoutVacation.checked,
+        blockTimeOff: elements.requestBlackoutTimeOff.checked,
+        active: elements.requestBlackoutActive.checked,
+      }),
+    });
+    state.requestBlackouts = result.blackouts || [];
+    resetRequestBlackoutForm();
+    renderRequestBlackouts();
+    showToast(id ? "Antragssperre wurde aktualisiert." : "Antragssperre wurde gespeichert.");
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function deleteRequestBlackout(id) {
+  if (!confirm("Diese Antragssperre wirklich löschen?")) return;
+  try {
+    await api(`/api/portal/v1/request-blackouts/${id}`, { method: "DELETE" });
+    await loadRequestBlackouts();
+    showToast("Antragssperre wurde gelöscht.");
   } catch (error) { showToast(error.message, true); }
 }
 
@@ -2456,7 +2581,27 @@ elements.portalUserList?.addEventListener("click", (event) => {
 elements.refreshVacationRequestsButton?.addEventListener("click", loadManagerVacationRequests);
 elements.managerVacationRequestList?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-request-decision]");
-  if (button) decideVacationRequest(button.closest("[data-manager-request]").dataset.managerRequest, button.dataset.requestDecision);
+  const row = button?.closest("[data-manager-request]");
+  if (button && row) decideVacationRequest(row.dataset.managerRequest, button.dataset.requestDecision, row.dataset.requestKind);
+});
+elements.requestBlackoutForm?.addEventListener("submit", saveRequestBlackout);
+elements.requestBlackoutLocation?.addEventListener("change", () => refreshRequestBlackoutDepartments());
+elements.cancelRequestBlackoutEdit?.addEventListener("click", resetRequestBlackoutForm);
+elements.requestBlackoutList?.addEventListener("click", (event) => {
+  const row = event.target.closest("[data-request-blackout]");
+  if (!row) return;
+  if (event.target.closest("[data-edit-request-blackout]")) editRequestBlackout(row.dataset.requestBlackout);
+  if (event.target.closest("[data-delete-request-blackout]")) deleteRequestBlackout(row.dataset.requestBlackout);
+});
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-password-toggle]");
+  if (!button) return;
+  const input = document.getElementById(button.dataset.passwordToggle);
+  if (!input) return;
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  button.textContent = show ? "Verbergen" : "Anzeigen";
+  button.setAttribute("aria-label", show ? "Passwort verbergen" : "Passwort anzeigen");
 });
 elements.updateCheckButton?.addEventListener("click", handleUpdateButton);
 elements.systemExitButton?.addEventListener("click", exitApplication);

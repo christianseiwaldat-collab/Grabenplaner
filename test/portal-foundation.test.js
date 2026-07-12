@@ -106,6 +106,9 @@ test("alte Datenbank wird um das Portal-Fundament erweitert", () => {
   const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => row.name));
   assert.ok(tables.has("portal_sessions"));
   assert.ok(tables.has("vacation_requests"));
+  assert.ok(tables.has("time_off_requests"));
+  assert.ok(tables.has("vacation_change_requests"));
+  assert.ok(tables.has("request_blackouts"));
   assert.ok(tables.has("time_entries"));
   assert.ok(tables.has("time_corrections"));
   assert.ok(tables.has("audit_log"));
@@ -145,6 +148,9 @@ test("Status meldet verfügbaren LAN-Modus bei weiterhin sicherem Lokalbetrieb",
   const status = await response.json();
   assert.equal(status.apiVersion, 1);
   assert.equal(status.operationMode, "local");
+  assert.equal(status.capabilities.timeOffRequests, false);
+  assert.equal(status.capabilities.vacationChanges, false);
+  assert.equal(status.capabilities.requestBlackouts, false);
   assert.equal(status.capabilities.timeTracking, false);
 });
 
@@ -304,14 +310,14 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const setup = await fetch(`${url}/api/portal/v1/setup/admin`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeNumber: "101", password: "Admin-Testpasswort-2026!" }),
+      body: JSON.stringify({ employeeNumber: "101", password: "987654" }),
     });
     assert.equal(setup.status, 201, await setup.clone().text());
 
     const adminLogin = await fetch(`${url}/api/portal/v1/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeNumber: "101", password: "Admin-Testpasswort-2026!" }),
+      body: JSON.stringify({ employeeNumber: "101", password: "987654" }),
     });
     assert.equal(adminLogin.status, 200, await adminLogin.clone().text());
     const admin = sessionHeaders(adminLogin);
@@ -319,14 +325,14 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const createEmployeeAccess = await fetch(`${url}/api/portal/v1/users/102`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
-      body: JSON.stringify({ role: "employee", active: true, password: "Mitarbeiter-Test-2026!", mustChangePassword: true }),
+      body: JSON.stringify({ role: "employee", active: true, password: "654321", mustChangePassword: true }),
     });
     assert.equal(createEmployeeAccess.status, 200, await createEmployeeAccess.clone().text());
 
     const employeeLogin = await fetch(`${url}/api/portal/v1/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeNumber: "102", password: "Mitarbeiter-Test-2026!" }),
+      body: JSON.stringify({ employeeNumber: "102", password: "654321" }),
     });
     assert.equal(employeeLogin.status, 200, await employeeLogin.clone().text());
     const employee = sessionHeaders(employeeLogin);
@@ -334,9 +340,43 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const passwordChange = await fetch(`${url}/api/portal/v1/me/password`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
-      body: JSON.stringify({ currentPassword: "Mitarbeiter-Test-2026!", newPassword: "Mitarbeiter-Neu-2026!" }),
+      body: JSON.stringify({ currentPassword: "654321", newPassword: "123456" }),
     });
     assert.equal(passwordChange.status, 200, await passwordChange.clone().text());
+
+    const blackoutResponse = await fetch(`${url}/api/portal/v1/request-blackouts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({
+        locationId: "01",
+        dateFrom: "2027-12-01",
+        dateTo: "2027-12-24",
+        blockVacation: true,
+        blockTimeOff: false,
+        reason: "Weihnachtsgeschäft",
+      }),
+    });
+    assert.equal(blackoutResponse.status, 201, await blackoutResponse.clone().text());
+
+    const blockedVacationCheck = await fetch(`${url}/api/portal/v1/me/vacation-check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+      body: JSON.stringify({ dateFrom: "2027-12-06", dateTo: "2027-12-10" }),
+    });
+    assert.equal(blockedVacationCheck.status, 200, await blockedVacationCheck.clone().text());
+    const blockedVacation = await blockedVacationCheck.json();
+    assert.equal(blockedVacation.trafficLight, "red");
+    assert.match(blockedVacation.reason, /Weihnachtsgeschäft/);
+
+    const allowedTimeOffCheck = await fetch(`${url}/api/portal/v1/me/time-off-check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+      body: JSON.stringify({ date: "2027-12-10", startTime: "11:00", endTime: "14:00" }),
+    });
+    assert.equal(allowedTimeOffCheck.status, 200, await allowedTimeOffCheck.clone().text());
+    const allowedTimeOff = await allowedTimeOffCheck.json();
+    assert.equal(allowedTimeOff.trafficLight, "yellow");
+    assert.equal(allowedTimeOff.allowed, true);
 
     const requestResponse = await fetch(`${url}/api/portal/v1/me/vacation-requests`, {
       method: "POST",
@@ -356,6 +396,74 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     assert.equal(decision.status, "approved");
     assert.match(decision.vacationGroupId, /^vac-/);
 
+    const approvedVacationsResponse = await fetch(`${url}/api/portal/v1/me/approved-vacations`, {
+      headers: { Cookie: employee.cookie },
+    });
+    assert.equal(approvedVacationsResponse.status, 200, await approvedVacationsResponse.clone().text());
+    const approvedVacations = await approvedVacationsResponse.json();
+    assert.ok(approvedVacations.vacations.some((item) => item.groupId === decision.vacationGroupId));
+
+    const changeRequestResponse = await fetch(`${url}/api/portal/v1/me/vacation-change-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+      body: JSON.stringify({
+        groupId: decision.vacationGroupId,
+        requestType: "change",
+        dateFrom: "2027-02-15",
+        dateTo: "2027-02-19",
+        note: "Terminverschiebung",
+      }),
+    });
+    assert.equal(changeRequestResponse.status, 201, await changeRequestResponse.clone().text());
+    const changeRequest = await changeRequestResponse.json();
+
+    const changeDecisionResponse = await fetch(`${url}/api/portal/v1/vacation-change-requests/${changeRequest.id}/decision`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ decision: "approved" }),
+    });
+    assert.equal(changeDecisionResponse.status, 200, await changeDecisionResponse.clone().text());
+
+    for (const employeeNumber of ["101", "102", "103"]) {
+      const shiftResponse = await fetch(`${url}/api/shifts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+        body: JSON.stringify({ employeeNumber, date: "2027-03-08", startTime: "09:00", endTime: "18:00" }),
+      });
+      assert.equal(shiftResponse.status, 201, await shiftResponse.clone().text());
+    }
+
+    const greenTimeOffCheckResponse = await fetch(`${url}/api/portal/v1/me/time-off-check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+      body: JSON.stringify({ date: "2027-03-08", startTime: "11:00", endTime: "14:00" }),
+    });
+    assert.equal(greenTimeOffCheckResponse.status, 200, await greenTimeOffCheckResponse.clone().text());
+    const greenTimeOffCheck = await greenTimeOffCheckResponse.json();
+    assert.equal(greenTimeOffCheck.trafficLight, "green", greenTimeOffCheck.reason);
+
+    const timeOffRequestResponse = await fetch(`${url}/api/portal/v1/me/time-off-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+      body: JSON.stringify({ date: "2027-03-08", startTime: "11:00", endTime: "14:00", note: "Privater Termin" }),
+    });
+    assert.equal(timeOffRequestResponse.status, 201, await timeOffRequestResponse.clone().text());
+    const timeOffRequest = await timeOffRequestResponse.json();
+
+    const openAbsencesResponse = await fetch(`${url}/api/portal/v1/absence-requests`, {
+      headers: { Cookie: admin.cookie },
+    });
+    assert.equal(openAbsencesResponse.status, 200, await openAbsencesResponse.clone().text());
+    const openAbsences = await openAbsencesResponse.json();
+    assert.ok(openAbsences.requests.some((item) => item.kind === "time_off" && item.id === timeOffRequest.id));
+
+    const timeOffDecisionResponse = await fetch(`${url}/api/portal/v1/time-off-requests/${timeOffRequest.id}/decision`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ decision: "approved" }),
+    });
+    assert.equal(timeOffDecisionResponse.status, 200, await timeOffDecisionResponse.clone().text());
+
     const exitResponse = await fetch(`${url}/api/system/exit`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
@@ -370,6 +478,16 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     assert.equal(storedRequest.status, "approved");
     assert.match(storedRequest.vacation_group_id, /^vac-/);
     assert.equal(verified.prepare("SELECT COUNT(*) AS count FROM week_options WHERE group_id = ? AND option_type = 'vacation'").get(storedRequest.vacation_group_id).count, 1);
+    const storedVacation = verified.prepare("SELECT date_from, date_to FROM week_options WHERE group_id = ? AND option_type = 'vacation'").get(storedRequest.vacation_group_id);
+    assert.equal(storedVacation.date_from, "2027-02-15");
+    assert.equal(storedVacation.date_to, "2027-02-19");
+    const storedTimeOff = verified.prepare("SELECT status, option_id FROM time_off_requests WHERE id = ?").get(timeOffRequest.id);
+    assert.equal(storedTimeOff.status, "approved");
+    assert.ok(storedTimeOff.option_id);
+    assert.deepEqual(verified.prepare("SELECT start_time, end_time FROM shifts WHERE employee_number = '102' AND shift_date = '2027-03-08' ORDER BY start_time").all().map((row) => ({ ...row })), [
+      { start_time: "09:00", end_time: "11:00" },
+      { start_time: "14:00", end_time: "18:00" },
+    ]);
     verified.close();
   } finally {
     if (child.exitCode === null) child.kill();

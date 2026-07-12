@@ -1,43 +1,443 @@
-const portalState = { session: null, weekStart: mondayOf(new Date()) };
-const optionNames = { vacation:"Urlaub",sick:"Krankenstand",branch:"Andere Filiale",vocational_school:"Berufsschule",school:"Schulung",time_off:"Zeitausgleich",special_leave:"Sonderurlaub",external_appointment:"Außer-Haus-Termin",team_meeting:"Teamsitzung",other:"Sonstiges" };
-const weekdayNames = ["Mo","Di","Mi","Do","Fr","Sa","So"];
-const el = Object.fromEntries(["portalLogin","portalLoginForm","loginPersonnelNumber","loginPassword","loginError","portalApp","portalLogo","portalUserName","portalUserRole","adminAppLink","changePasswordButton","logoutButton","scheduleView","vacationView","scheduleHeading","scheduleGrid","previousWeek","currentWeek","nextWeek","vacationRequestForm","vacationDateFrom","vacationDateTo","vacationNote","vacationMessage","vacationRequestList","passwordDialog","passwordForm","currentPassword","newPassword","repeatPassword","passwordMessage"].map((id)=>[id,document.querySelector(`#${id}`)]));
+const portalState = {
+  session: null,
+  weekStart: mondayOf(new Date()),
+  timeOffCheck: null,
+  vacationCheck: null,
+  vacationChange: null,
+};
 
-function mondayOf(value){ const d=new Date(value);d.setHours(12,0,0,0);const day=d.getDay()||7;d.setDate(d.getDate()-day+1);return iso(d); }
-function iso(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
-function addDays(value,amount){ const d=new Date(`${value}T12:00:00`);d.setDate(d.getDate()+amount);return iso(d); }
-function dateText(value,options={day:"2-digit",month:"2-digit",year:"numeric"}){ return new Intl.DateTimeFormat("de-AT",options).format(new Date(`${value}T12:00:00`)); }
-function esc(value){ return String(value??"").replace(/[&<>'"]/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c])); }
-function csrf(){ const part=document.cookie.split(";").map((x)=>x.trim()).find((x)=>x.startsWith("grabenplaner_csrf="));return part?decodeURIComponent(part.split("=").slice(1).join("=")):""; }
-async function api(url,options={}){ const headers={"Content-Type":"application/json",...options.headers};const token=csrf();if(token&&!["GET","HEAD"].includes(String(options.method||"GET").toUpperCase()))headers["X-CSRF-Token"]=token;const response=await fetch(url,{...options,headers});if(!response.ok){let payload={};try{payload=await response.json();}catch{}const error=new Error(payload.error||"Die Aktion konnte nicht ausgeführt werden.");error.status=response.status;throw error;}return response.status===204?null:response.json(); }
-function message(node,text,error=false){ node.textContent=text;node.classList.toggle("hidden",!text);node.classList.toggle("error",error); }
+const optionNames = {
+  vacation: "Urlaub",
+  sick: "Krankenstand",
+  branch: "Andere Filiale",
+  vocational_school: "Berufsschule",
+  school: "Schulung",
+  time_off: "Zeitausgleich",
+  special_leave: "Sonderurlaub",
+  external_appointment: "Außer-Haus-Termin",
+  team_meeting: "Teamsitzung",
+  other: "Sonstiges",
+};
+const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const statusLabels = { pending: "Offen", approved: "Genehmigt", rejected: "Abgelehnt", cancelled: "Storniert" };
 
-async function initialize(){
-  try{
-    const status=await api("/api/portal/v1/status");
-    if(status.branding?.logoUrl){document.querySelectorAll(".login-card img,#portalLogo").forEach((image)=>{image.src=status.branding.logoUrl;image.alt=status.branding.logoAlt||"Grabenplaner";});}
-    if(!status.portalEnabled){message(el.loginError,"Das Mitarbeiterportal ist auf diesem Gerät nicht als LAN-Host aktiv.",true);return;}
-    const session=await api("/api/portal/v1/session");
-    if(!session.authenticated){showLogin();return;}
+const el = Object.fromEntries([
+  "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo",
+  "portalUserName", "portalUserRole", "adminAppLink", "changePasswordButton", "logoutButton", "scheduleView", "timeOffView",
+  "vacationView", "approvedVacationView", "scheduleHeading", "scheduleGrid", "previousWeek", "currentWeek", "nextWeek",
+  "timeOffRequestForm", "timeOffDate", "timeOffStart", "timeOffEnd", "timeOffNote", "timeOffCheck", "timeOffMessage",
+  "timeOffSubmitButton", "timeOffRequestList", "vacationRequestForm", "vacationDateFrom", "vacationDateTo", "vacationNote",
+  "vacationCheck", "vacationMessage", "vacationSubmitButton", "vacationRequestList", "approvedVacationList", "passwordDialog",
+  "passwordForm", "currentPassword", "newPassword", "repeatPassword", "passwordMessage", "vacationChangeDialog",
+  "vacationChangeForm", "vacationChangeTitle", "vacationChangeOriginal", "vacationChangeDates", "vacationChangeFrom",
+  "vacationChangeTo", "vacationChangeNote", "vacationChangeMessage",
+].map((id) => [id, document.querySelector(`#${id}`)]));
+
+function mondayOf(value) {
+  const date = new Date(value);
+  date.setHours(12, 0, 0, 0);
+  const day = date.getDay() || 7;
+  date.setDate(date.getDate() - day + 1);
+  return iso(date);
+}
+
+function iso(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function addDays(value, amount) {
+  const date = new Date(`${value}T12:00:00`);
+  date.setDate(date.getDate() + amount);
+  return iso(date);
+}
+
+function dateText(value, options = { day: "2-digit", month: "2-digit", year: "numeric" }) {
+  return new Intl.DateTimeFormat("de-AT", options).format(new Date(`${value}T12:00:00`));
+}
+
+function esc(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
+  })[character]);
+}
+
+function csrf() {
+  const part = document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith("grabenplaner_csrf="));
+  return part ? decodeURIComponent(part.split("=").slice(1).join("=")) : "";
+}
+
+async function api(url, options = {}) {
+  const headers = { "Content-Type": "application/json", ...options.headers };
+  const token = csrf();
+  if (token && !["GET", "HEAD"].includes(String(options.method || "GET").toUpperCase())) headers["X-CSRF-Token"] = token;
+  const response = await fetch(url, { ...options, headers });
+  if (!response.ok) {
+    let payload = {};
+    try { payload = await response.json(); } catch {}
+    const error = new Error(payload.error || "Die Aktion konnte nicht ausgeführt werden.");
+    error.status = response.status;
+    error.code = payload.code || "";
+    throw error;
+  }
+  return response.status === 204 ? null : response.json();
+}
+
+function message(node, text, error = false) {
+  node.textContent = text;
+  node.classList.toggle("hidden", !text);
+  node.classList.toggle("error", error);
+}
+
+function applyPortalBranding(branding = {}) {
+  const logoUrl = branding.logoUrl || "/assets/grabenplaner-logo.svg";
+  const logoAlt = branding.logoAlt || branding.companyName || "Grabenplaner";
+  document.querySelectorAll(".login-card img,#portalLogo").forEach((image) => { image.src = logoUrl; image.alt = logoAlt; });
+  document.querySelectorAll("[data-brand-icon]").forEach((link) => { link.href = branding.iconUrl || "/assets/webicon.svg"; });
+}
+
+async function initialize() {
+  try {
+    const status = await api("/api/portal/v1/status");
+    applyPortalBranding(status.branding);
+    if (!status.portalEnabled) {
+      message(el.loginError, "Das Mitarbeiterportal ist auf diesem Gerät nicht als LAN-Host aktiv.", true);
+      return;
+    }
+    const session = await api("/api/portal/v1/session");
+    if (!session.authenticated) {
+      showLogin();
+      return;
+    }
     showPortal(session);
-    if(!session.user.mustChangePassword) await Promise.all([loadSchedule(),loadVacationRequests()]);
-  }catch(error){showLogin(error.message);}
+    if (!session.user.mustChangePassword) await loadPortalData();
+  } catch (error) {
+    showLogin(error.message);
+  }
 }
-function showLogin(error=""){ el.portalLogin.classList.remove("hidden");el.portalApp.classList.add("hidden");message(el.loginError,error,Boolean(error)); }
-function showPortal(session){ portalState.session=session;el.portalLogin.classList.add("hidden");el.portalApp.classList.remove("hidden");el.portalUserName.textContent=`${session.user.employeeNumber} · ${session.user.nickname||session.user.fullName}`;el.portalUserRole.textContent=session.user.roleName;el.adminAppLink.classList.toggle("hidden",!session.user.permissions.includes("schedule:read"));el.passwordDialog.dataset.required=session.user.mustChangePassword?"true":"false";if(session.user.mustChangePassword)setTimeout(()=>el.passwordDialog.showModal(),100); }
-async function login(event){event.preventDefault();try{const result=await api("/api/portal/v1/auth/login",{method:"POST",body:JSON.stringify({employeeNumber:el.loginPersonnelNumber.value,password:el.loginPassword.value})});el.loginPassword.value="";showPortal(result);if(!result.user.mustChangePassword)await Promise.all([loadSchedule(),loadVacationRequests()]);}catch(error){message(el.loginError,error.message,true);}}
-async function logout(){try{await api("/api/portal/v1/auth/logout",{method:"POST",body:"{}"});}catch{}location.reload();}
-function setTab(tab){document.querySelectorAll("[data-tab]").forEach((button)=>button.classList.toggle("active",button.dataset.tab===tab));el.scheduleView.classList.toggle("active",tab==="schedule");el.vacationView.classList.toggle("active",tab==="vacation");if(tab==="vacation")loadVacationRequests();}
 
-async function loadSchedule(){
-  const data=await api(`/api/portal/v1/me/schedule?week=${portalState.weekStart}`);portalState.weekStart=data.weekStart;
-  el.scheduleHeading.textContent=`KW ${data.calendarWeek} · ${dateText(data.weekStart)} – ${dateText(data.weekEnd)}`;
-  const today=iso(new Date());
-  el.scheduleGrid.innerHTML=Array.from({length:7},(_,index)=>{const date=addDays(data.weekStart,index);const shifts=data.shifts.filter((item)=>item.shift_date===date);const options=data.options.filter((item)=>item.date_from<=date&&item.date_to>=date);return `<article class="schedule-day ${date===today?"today":""} ${index>4?"weekend":""}"><header><strong>${weekdayNames[index]}</strong><span>${dateText(date,{day:"2-digit",month:"2-digit"})}</span></header>${shifts.map((shift)=>`<div class="shift-card"><strong>${esc(shift.start_time)}–${esc(shift.end_time)}</strong>${shift.department_name?`<br>${esc(shift.department_name)}`:""}${shift.area?`<br>${esc(shift.area)}`:""}</div>`).join("")}${options.map((option)=>`<div class="option-card"><strong>${esc(optionNames[option.option_type]||option.option_type)}</strong>${option.note?`<br>${esc(option.note)}`:""}</div>`).join("")}${!shifts.length&&!options.length?'<span class="empty-day">Kein Eintrag</span>':""}</article>`;}).join("");
+async function loadPortalData() {
+  await Promise.all([loadSchedule(), loadVacationRequests(), loadTimeOffRequests(), loadApprovedVacations()]);
 }
-async function loadVacationRequests(){const data=await api("/api/portal/v1/me/vacation-requests");const labels={pending:"Offen",approved:"Genehmigt",rejected:"Abgelehnt"};el.vacationRequestList.innerHTML=data.requests.length?data.requests.map((item)=>`<article class="request-item" data-request-id="${item.id}"><div><strong>${dateText(item.date_from)} – ${dateText(item.date_to)}</strong>${item.note?`<span>${esc(item.note)}</span>`:""}<span class="status ${item.status}">${labels[item.status]||esc(item.status)}</span></div>${item.status==="pending"?'<button class="cancel-request" type="button">Zurückziehen</button>':""}</article>`).join(""):'<p>Noch keine Urlaubsanträge vorhanden.</p>';}
-async function submitVacation(event){event.preventDefault();try{await api("/api/portal/v1/me/vacation-requests",{method:"POST",body:JSON.stringify({dateFrom:el.vacationDateFrom.value,dateTo:el.vacationDateTo.value,note:el.vacationNote.value})});el.vacationRequestForm.reset();message(el.vacationMessage,"Der Urlaubsantrag wurde übermittelt.");await loadVacationRequests();}catch(error){message(el.vacationMessage,error.message,true);}}
-async function cancelVacation(id){if(!confirm("Offenen Urlaubsantrag wirklich zurückziehen?"))return;try{await api(`/api/portal/v1/me/vacation-requests/${id}`,{method:"DELETE",body:"{}"});await loadVacationRequests();}catch(error){message(el.vacationMessage,error.message,true);}}
-async function changePassword(event){event.preventDefault();if(el.newPassword.value!==el.repeatPassword.value){message(el.passwordMessage,"Die neuen Passwörter stimmen nicht überein.",true);return;}try{await api("/api/portal/v1/me/password",{method:"PUT",body:JSON.stringify({currentPassword:el.currentPassword.value,newPassword:el.newPassword.value})});el.passwordDialog.dataset.required="false";el.passwordForm.reset();message(el.passwordMessage,"Passwort wurde geändert.");setTimeout(async()=>{el.passwordDialog.close();await Promise.all([loadSchedule(),loadVacationRequests()]);},700);}catch(error){message(el.passwordMessage,error.message,true);}}
 
-el.portalLoginForm.addEventListener("submit",login);el.logoutButton.addEventListener("click",logout);el.changePasswordButton.addEventListener("click",()=>el.passwordDialog.showModal());el.passwordForm.addEventListener("submit",changePassword);document.querySelectorAll("[data-close-dialog]").forEach((button)=>button.addEventListener("click",()=>{if(el.passwordDialog.dataset.required!=="true")el.passwordDialog.close();}));document.querySelectorAll("[data-tab]").forEach((button)=>button.addEventListener("click",()=>setTab(button.dataset.tab)));el.previousWeek.addEventListener("click",()=>{portalState.weekStart=addDays(portalState.weekStart,-7);loadSchedule();});el.nextWeek.addEventListener("click",()=>{portalState.weekStart=addDays(portalState.weekStart,7);loadSchedule();});el.currentWeek.addEventListener("click",()=>{portalState.weekStart=mondayOf(new Date());loadSchedule();});el.vacationRequestForm.addEventListener("submit",submitVacation);el.vacationRequestList.addEventListener("click",(event)=>{const button=event.target.closest(".cancel-request");if(button)cancelVacation(button.closest("[data-request-id]").dataset.requestId);});initialize();
+function showLogin(error = "") {
+  el.portalLogin.classList.remove("hidden");
+  el.portalApp.classList.add("hidden");
+  message(el.loginError, error, Boolean(error));
+}
+
+function showPortal(session) {
+  portalState.session = session;
+  el.portalLogin.classList.add("hidden");
+  el.portalApp.classList.remove("hidden");
+  el.portalUserName.textContent = `${session.user.employeeNumber} · ${session.user.nickname || session.user.fullName}`;
+  el.portalUserRole.textContent = session.user.roleName;
+  el.adminAppLink.classList.toggle("hidden", !session.user.permissions.includes("schedule:read"));
+  el.passwordDialog.dataset.required = session.user.mustChangePassword ? "true" : "false";
+  if (session.user.mustChangePassword) setTimeout(() => el.passwordDialog.showModal(), 100);
+}
+
+async function login(event) {
+  event.preventDefault();
+  try {
+    const result = await api("/api/portal/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ employeeNumber: el.loginPersonnelNumber.value, password: el.loginPassword.value }),
+    });
+    el.loginPassword.value = "";
+    showPortal(result);
+    if (!result.user.mustChangePassword) await loadPortalData();
+  } catch (error) {
+    message(el.loginError, error.message, true);
+  }
+}
+
+async function logout() {
+  try { await api("/api/portal/v1/auth/logout", { method: "POST", body: "{}" }); } catch {}
+  location.reload();
+}
+
+function setTab(tab) {
+  document.querySelectorAll("[data-tab]").forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
+  el.scheduleView.classList.toggle("active", tab === "schedule");
+  el.timeOffView.classList.toggle("active", tab === "timeOff");
+  el.vacationView.classList.toggle("active", tab === "vacation");
+  el.approvedVacationView.classList.toggle("active", tab === "approvedVacation");
+  if (tab === "timeOff") loadTimeOffRequests();
+  if (tab === "vacation") loadVacationRequests();
+  if (tab === "approvedVacation") loadApprovedVacations();
+}
+
+async function loadSchedule() {
+  const data = await api(`/api/portal/v1/me/schedule?week=${portalState.weekStart}`);
+  portalState.weekStart = data.weekStart;
+  el.scheduleHeading.textContent = `KW ${data.calendarWeek} · ${dateText(data.weekStart)} – ${dateText(data.weekEnd)}`;
+  const today = iso(new Date());
+  el.scheduleGrid.innerHTML = Array.from({ length: 7 }, (_, index) => {
+    const date = addDays(data.weekStart, index);
+    const shifts = data.shifts.filter((item) => item.shift_date === date);
+    const options = data.options.filter((item) => item.date_from <= date && item.date_to >= date);
+    return `<article class="schedule-day ${date === today ? "today" : ""} ${index > 4 ? "weekend" : ""}">
+      <header><strong>${weekdayNames[index]}</strong><span>${dateText(date, { day: "2-digit", month: "2-digit" })}</span></header>
+      ${shifts.map((shift) => `<div class="shift-card"><strong>${esc(shift.start_time)}–${esc(shift.end_time)}</strong>${shift.department_name ? `<br>${esc(shift.department_name)}` : ""}${shift.area ? `<br>${esc(shift.area)}` : ""}</div>`).join("")}
+      ${options.map((option) => `<div class="option-card"><strong>${esc(optionNames[option.option_type] || option.option_type)}</strong>${!option.all_day && option.start_time ? `<br>${esc(option.start_time)}–${esc(option.end_time)}` : ""}${option.note ? `<br>${esc(option.note)}` : ""}</div>`).join("")}
+      ${!shifts.length && !options.length ? '<span class="empty-day">Kein Eintrag</span>' : ""}
+    </article>`;
+  }).join("");
+}
+
+function updateTraffic(node, result, emptyText) {
+  const traffic = result?.trafficLight || "neutral";
+  node.classList.remove("neutral", "green", "yellow", "red");
+  node.classList.add(traffic);
+  node.querySelector("strong").textContent = ({ green: "Nach aktuellem Stand möglich", yellow: "Manuelle Prüfung erforderlich", red: "Derzeit nicht möglich" })[traffic] || "Zeitraum eingeben";
+  node.querySelector("small").textContent = result?.reason || emptyText;
+}
+
+let timeOffCheckTimer;
+async function checkTimeOff() {
+  clearTimeout(timeOffCheckTimer);
+  if (!el.timeOffDate.value || !el.timeOffStart.value || !el.timeOffEnd.value) {
+    portalState.timeOffCheck = null;
+    el.timeOffSubmitButton.disabled = true;
+    updateTraffic(el.timeOffCheck, null, "Danach wird die aktuelle Planung geprüft.");
+    return;
+  }
+  timeOffCheckTimer = setTimeout(async () => {
+    try {
+      const result = await api("/api/portal/v1/me/time-off-check", {
+        method: "POST",
+        body: JSON.stringify({ date: el.timeOffDate.value, startTime: el.timeOffStart.value, endTime: el.timeOffEnd.value }),
+      });
+      portalState.timeOffCheck = result;
+      el.timeOffSubmitButton.disabled = !result.allowed;
+      updateTraffic(el.timeOffCheck, result, "");
+    } catch (error) {
+      portalState.timeOffCheck = { trafficLight: "red", allowed: false, reason: error.message };
+      el.timeOffSubmitButton.disabled = true;
+      updateTraffic(el.timeOffCheck, portalState.timeOffCheck, "");
+    }
+  }, 180);
+}
+
+async function loadTimeOffRequests() {
+  const data = await api("/api/portal/v1/me/time-off-requests");
+  el.timeOffRequestList.innerHTML = data.requests.length ? data.requests.map((item) => `
+    <article class="request-item" data-time-off-request-id="${item.id}"><div>
+      <strong>${dateText(item.request_date)} · ${esc(item.start_time)}–${esc(item.end_time)}</strong>
+      ${item.note ? `<span>${esc(item.note)}</span>` : ""}
+      <span class="status ${item.status}">${statusLabels[item.status] || esc(item.status)}</span>
+      ${item.status === "pending" ? `<span>${esc(item.check_reason)}</span>` : ""}
+    </div>${item.status === "pending" ? '<button class="cancel-request" type="button">Zurückziehen</button>' : ""}</article>
+  `).join("") : "<p>Noch keine ZA-Anträge vorhanden.</p>";
+}
+
+async function submitTimeOff(event) {
+  event.preventDefault();
+  if (!portalState.timeOffCheck?.allowed) return;
+  try {
+    await api("/api/portal/v1/me/time-off-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        date: el.timeOffDate.value,
+        startTime: el.timeOffStart.value,
+        endTime: el.timeOffEnd.value,
+        note: el.timeOffNote.value,
+      }),
+    });
+    el.timeOffRequestForm.reset();
+    portalState.timeOffCheck = null;
+    el.timeOffSubmitButton.disabled = true;
+    updateTraffic(el.timeOffCheck, null, "Danach wird die aktuelle Planung geprüft.");
+    message(el.timeOffMessage, "Der ZA-Antrag wurde übermittelt.");
+    await loadTimeOffRequests();
+  } catch (error) {
+    message(el.timeOffMessage, error.message, true);
+    await checkTimeOff();
+  }
+}
+
+async function cancelTimeOff(id) {
+  if (!confirm("Offenen ZA-Antrag wirklich zurückziehen?")) return;
+  try {
+    await api(`/api/portal/v1/me/time-off-requests/${id}`, { method: "DELETE", body: "{}" });
+    await loadTimeOffRequests();
+  } catch (error) { message(el.timeOffMessage, error.message, true); }
+}
+
+let vacationCheckTimer;
+async function checkVacation() {
+  clearTimeout(vacationCheckTimer);
+  if (!el.vacationDateFrom.value || !el.vacationDateTo.value) {
+    portalState.vacationCheck = null;
+    el.vacationSubmitButton.disabled = true;
+    updateTraffic(el.vacationCheck, null, "Antragssperren werden sofort geprüft.");
+    return;
+  }
+  vacationCheckTimer = setTimeout(async () => {
+    try {
+      const result = await api("/api/portal/v1/me/vacation-check", {
+        method: "POST",
+        body: JSON.stringify({ dateFrom: el.vacationDateFrom.value, dateTo: el.vacationDateTo.value }),
+      });
+      portalState.vacationCheck = result;
+      el.vacationSubmitButton.disabled = !result.allowed;
+      updateTraffic(el.vacationCheck, result, "");
+    } catch (error) {
+      portalState.vacationCheck = { trafficLight: "red", allowed: false, reason: error.message };
+      el.vacationSubmitButton.disabled = true;
+      updateTraffic(el.vacationCheck, portalState.vacationCheck, "");
+    }
+  }, 180);
+}
+
+async function loadVacationRequests() {
+  const data = await api("/api/portal/v1/me/vacation-requests");
+  el.vacationRequestList.innerHTML = data.requests.length ? data.requests.map((item) => `
+    <article class="request-item" data-request-id="${item.id}"><div><strong>${dateText(item.date_from)} – ${dateText(item.date_to)}</strong>
+      ${item.note ? `<span>${esc(item.note)}</span>` : ""}<span class="status ${item.status}">${statusLabels[item.status] || esc(item.status)}</span>
+    </div>${item.status === "pending" ? '<button class="cancel-request" type="button">Zurückziehen</button>' : ""}</article>
+  `).join("") : "<p>Noch keine Urlaubsanträge vorhanden.</p>";
+}
+
+async function submitVacation(event) {
+  event.preventDefault();
+  if (!portalState.vacationCheck?.allowed) return;
+  try {
+    await api("/api/portal/v1/me/vacation-requests", {
+      method: "POST",
+      body: JSON.stringify({ dateFrom: el.vacationDateFrom.value, dateTo: el.vacationDateTo.value, note: el.vacationNote.value }),
+    });
+    el.vacationRequestForm.reset();
+    portalState.vacationCheck = null;
+    el.vacationSubmitButton.disabled = true;
+    updateTraffic(el.vacationCheck, null, "Antragssperren werden sofort geprüft.");
+    message(el.vacationMessage, "Der Urlaubsantrag wurde übermittelt.");
+    await loadVacationRequests();
+  } catch (error) {
+    message(el.vacationMessage, error.message, true);
+    await checkVacation();
+  }
+}
+
+async function cancelVacation(id) {
+  if (!confirm("Offenen Urlaubsantrag wirklich zurückziehen?")) return;
+  try {
+    await api(`/api/portal/v1/me/vacation-requests/${id}`, { method: "DELETE", body: "{}" });
+    await loadVacationRequests();
+  } catch (error) { message(el.vacationMessage, error.message, true); }
+}
+
+async function loadApprovedVacations() {
+  const data = await api("/api/portal/v1/me/approved-vacations");
+  const pendingByGroup = Object.fromEntries((data.pendingChanges || []).map((item) => [item.vacation_group_id, item]));
+  el.approvedVacationList.innerHTML = data.vacations.length ? data.vacations.map((vacation) => {
+    const pending = pendingByGroup[vacation.groupId];
+    const pendingLabel = pending ? (pending.request_type === "cancel" ? "Storno beantragt" : "Änderung beantragt") : "";
+    return `<article class="approved-vacation-item" data-vacation-group="${esc(vacation.groupId)}">
+      <div><strong>${dateText(vacation.dateFrom)} – ${dateText(vacation.dateTo)}</strong>${vacation.note ? `<span>${esc(vacation.note)}</span>` : ""}${pending ? `<span class="pending-change">${pendingLabel}</span>` : ""}</div>
+      <button data-vacation-action="change" type="button" ${pending ? "disabled" : ""}>Änderung beantragen</button>
+      <button class="vacation-cancel" data-vacation-action="cancel" type="button" ${pending ? "disabled" : ""}>Stornierung beantragen</button>
+    </article>`;
+  }).join("") : "<p>Derzeit ist kein genehmigter Urlaub eingetragen.</p>";
+}
+
+function openVacationChange(groupId, requestType) {
+  const item = el.approvedVacationList.querySelector(`[data-vacation-group="${CSS.escape(groupId)}"]`);
+  if (!item) return;
+  const dateMatch = item.querySelector("strong").textContent.match(/(\d{2}\.\d{2}\.\d{4}) – (\d{2}\.\d{2}\.\d{4})/);
+  const toIso = (value) => value ? value.split(".").reverse().join("-") : "";
+  portalState.vacationChange = { groupId, requestType };
+  el.vacationChangeTitle.textContent = requestType === "cancel" ? "Stornierung beantragen" : "Änderung beantragen";
+  el.vacationChangeOriginal.textContent = `Bisher: ${dateMatch?.[1] || ""} – ${dateMatch?.[2] || ""}`;
+  el.vacationChangeDates.classList.toggle("hidden", requestType === "cancel");
+  el.vacationChangeFrom.required = requestType === "change";
+  el.vacationChangeTo.required = requestType === "change";
+  el.vacationChangeFrom.value = toIso(dateMatch?.[1]);
+  el.vacationChangeTo.value = toIso(dateMatch?.[2]);
+  el.vacationChangeNote.value = "";
+  message(el.vacationChangeMessage, "");
+  el.vacationChangeDialog.showModal();
+}
+
+async function submitVacationChange(event) {
+  event.preventDefault();
+  const change = portalState.vacationChange;
+  if (!change) return;
+  try {
+    await api("/api/portal/v1/me/vacation-change-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        groupId: change.groupId,
+        requestType: change.requestType,
+        dateFrom: el.vacationChangeFrom.value,
+        dateTo: el.vacationChangeTo.value,
+        note: el.vacationChangeNote.value,
+      }),
+    });
+    el.vacationChangeDialog.close();
+    await loadApprovedVacations();
+  } catch (error) { message(el.vacationChangeMessage, error.message, true); }
+}
+
+async function changePassword(event) {
+  event.preventDefault();
+  if (el.newPassword.value !== el.repeatPassword.value) {
+    message(el.passwordMessage, "Die neuen Passwörter stimmen nicht überein.", true);
+    return;
+  }
+  try {
+    await api("/api/portal/v1/me/password", {
+      method: "PUT",
+      body: JSON.stringify({ currentPassword: el.currentPassword.value, newPassword: el.newPassword.value }),
+    });
+    el.passwordDialog.dataset.required = "false";
+    el.passwordForm.reset();
+    message(el.passwordMessage, "Passwort wurde geändert.");
+    setTimeout(async () => { el.passwordDialog.close(); await loadPortalData(); }, 700);
+  } catch (error) { message(el.passwordMessage, error.message, true); }
+}
+
+function togglePassword(button) {
+  const input = button.closest(".password-field")?.querySelector("input");
+  if (!input) return;
+  const visible = input.type === "text";
+  input.type = visible ? "password" : "text";
+  button.textContent = visible ? "Anzeigen" : "Verbergen";
+  button.setAttribute("aria-label", visible ? "Passwort anzeigen" : "Passwort verbergen");
+}
+
+el.portalLoginForm.addEventListener("submit", login);
+el.logoutButton.addEventListener("click", logout);
+el.changePasswordButton.addEventListener("click", () => el.passwordDialog.showModal());
+el.passwordForm.addEventListener("submit", changePassword);
+document.addEventListener("click", (event) => {
+  const toggle = event.target.closest("[data-password-toggle]");
+  if (toggle) togglePassword(toggle);
+});
+document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => {
+  if (el.passwordDialog.dataset.required !== "true") el.passwordDialog.close();
+}));
+document.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.tab)));
+el.previousWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, -7); loadSchedule(); });
+el.nextWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, 7); loadSchedule(); });
+el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule(); });
+el.timeOffRequestForm.addEventListener("submit", submitTimeOff);
+[el.timeOffDate, el.timeOffStart, el.timeOffEnd].forEach((field) => field.addEventListener("input", checkTimeOff));
+el.timeOffRequestList.addEventListener("click", (event) => {
+  const button = event.target.closest(".cancel-request");
+  if (button) cancelTimeOff(button.closest("[data-time-off-request-id]").dataset.timeOffRequestId);
+});
+el.vacationRequestForm.addEventListener("submit", submitVacation);
+[el.vacationDateFrom, el.vacationDateTo].forEach((field) => field.addEventListener("input", checkVacation));
+el.vacationRequestList.addEventListener("click", (event) => {
+  const button = event.target.closest(".cancel-request");
+  if (button) cancelVacation(button.closest("[data-request-id]").dataset.requestId);
+});
+el.approvedVacationList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-vacation-action]");
+  if (button && !button.disabled) openVacationChange(button.closest("[data-vacation-group]").dataset.vacationGroup, button.dataset.vacationAction);
+});
+el.vacationChangeForm.addEventListener("submit", submitVacationChange);
+document.querySelectorAll("[data-close-vacation-change]").forEach((button) => button.addEventListener("click", () => el.vacationChangeDialog.close()));
+
+initialize();

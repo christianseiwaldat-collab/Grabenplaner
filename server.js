@@ -12,7 +12,7 @@ const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
 const DEFAULT_OPERATION_MODE = "local";
 const SERVER_MODE_STATUS = "active";
-const PORTAL_PASSWORD_MIN_LENGTH = 10;
+const PORTAL_PASSWORD_MIN_LENGTH = 6;
 const PORTAL_SESSION_COOKIE = "grabenplaner_session";
 const PORTAL_CSRF_COOKIE = "grabenplaner_csrf";
 const scryptAsync = promisify(crypto.scrypt);
@@ -456,6 +456,65 @@ function createSchema() {
         ON UPDATE CASCADE ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS time_off_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_number TEXT NOT NULL,
+      request_date TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending',
+      traffic_light TEXT NOT NULL DEFAULT 'yellow',
+      check_reason TEXT NOT NULL DEFAULT '',
+      option_id INTEGER,
+      decided_by TEXT,
+      decided_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (option_id) REFERENCES week_options(id)
+        ON UPDATE CASCADE ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS vacation_change_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_number TEXT NOT NULL,
+      vacation_group_id TEXT NOT NULL,
+      request_type TEXT NOT NULL,
+      original_date_from TEXT NOT NULL,
+      original_date_to TEXT NOT NULL,
+      requested_date_from TEXT,
+      requested_date_to TEXT,
+      note TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending',
+      decided_by TEXT,
+      decided_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS request_blackouts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      location_id TEXT NOT NULL,
+      department_id INTEGER,
+      date_from TEXT NOT NULL,
+      date_to TEXT NOT NULL,
+      block_vacation INTEGER NOT NULL DEFAULT 1,
+      block_time_off INTEGER NOT NULL DEFAULT 0,
+      reason TEXT NOT NULL DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (department_id) REFERENCES departments(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS time_entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       employee_number TEXT NOT NULL,
@@ -500,6 +559,9 @@ function createSchema() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_vacation_requests_employee ON vacation_requests(employee_number, status);
+    CREATE INDEX IF NOT EXISTS idx_time_off_requests_employee ON time_off_requests(employee_number, status, request_date);
+    CREATE INDEX IF NOT EXISTS idx_vacation_change_requests_employee ON vacation_change_requests(employee_number, status);
+    CREATE INDEX IF NOT EXISTS idx_request_blackouts_range ON request_blackouts(location_id, date_from, date_to, active);
     CREATE INDEX IF NOT EXISTS idx_time_entries_employee_date ON time_entries(employee_number, entry_timestamp);
     CREATE INDEX IF NOT EXISTS idx_time_corrections_employee ON time_corrections(employee_number, status);
     CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
@@ -733,6 +795,8 @@ for (const role of builtinPortalRoles) {
 }
 const insertPortalSetting = db.prepare("INSERT OR IGNORE INTO portal_settings (key, value) VALUES (?, ?)");
 for (const [key, value] of Object.entries(defaultPortalSettings)) insertPortalSetting.run(key, value);
+db.prepare("UPDATE portal_settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'password_min_length'")
+  .run(String(PORTAL_PASSWORD_MIN_LENGTH));
 
 function ensureDefaultLocation() {
   const count = db.prepare("SELECT COUNT(*) AS count FROM locations").get().count;
@@ -1161,6 +1225,9 @@ function getPortalStatus() {
       login: portalEnabled,
       ownSchedule: portalEnabled,
       vacationRequests: portalEnabled,
+      timeOffRequests: portalEnabled,
+      vacationChanges: portalEnabled,
+      requestBlackouts: portalEnabled,
       timeTracking: false,
     },
   };
@@ -1207,6 +1274,8 @@ function validateVacationRequestDates(employeeNumber, body) {
   if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) {
     throw httpError(400, "Bitte einen gültigen Urlaubszeitraum eingeben.");
   }
+  const availability = evaluateVacationRequest(employeeNumber, { dateFrom, dateTo });
+  if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
   const overlapping = db.prepare(`
     SELECT id FROM vacation_requests
     WHERE employee_number = ? AND status IN ('pending', 'approved')
@@ -1215,6 +1284,249 @@ function validateVacationRequestDates(employeeNumber, body) {
   `).get(employeeNumber, dateTo, dateFrom);
   if (overlapping) throw httpError(409, "Für diesen Zeitraum besteht bereits ein Urlaubsantrag.");
   return { employeeNumber, dateFrom, dateTo, note };
+}
+
+function employeeRequestContext(employeeNumber, date = null) {
+  const employee = db.prepare(`
+    SELECT personnel_number, full_name, nickname, home_location_id, preferred_department_id
+    FROM employees WHERE personnel_number = ? AND active = 1
+  `).get(employeeNumber);
+  if (!employee) throw httpError(404, "Das aktive Teammitglied wurde nicht gefunden.");
+  let departmentId = employee.preferred_department_id ? Number(employee.preferred_department_id) : null;
+  if (date) {
+    const shiftDepartment = db.prepare(`
+      SELECT department_id FROM shifts
+      WHERE employee_number = ? AND shift_date = ? AND department_id IS NOT NULL
+      ORDER BY start_time LIMIT 1
+    `).get(employeeNumber, date)?.department_id;
+    if (shiftDepartment) departmentId = Number(shiftDepartment);
+  }
+  return {
+    employee,
+    locationId: employee.home_location_id || getLocations(true)[0]?.id || "01",
+    departmentId,
+  };
+}
+
+function serializeRequestBlackout(row) {
+  return {
+    id: Number(row.id),
+    locationId: row.location_id,
+    locationName: row.location_name || "",
+    departmentId: row.department_id ? Number(row.department_id) : null,
+    departmentName: row.department_name || "",
+    dateFrom: row.date_from,
+    dateTo: row.date_to,
+    blockVacation: Boolean(row.block_vacation),
+    blockTimeOff: Boolean(row.block_time_off),
+    reason: row.reason || "",
+    active: Boolean(row.active),
+    createdBy: row.created_by || "",
+  };
+}
+
+function getRequestBlackouts(activeOnly = false) {
+  return db.prepare(`
+    SELECT b.*, l.name AS location_name, d.name AS department_name
+    FROM request_blackouts b
+    JOIN locations l ON l.id = b.location_id
+    LEFT JOIN departments d ON d.id = b.department_id
+    ${activeOnly ? "WHERE b.active = 1" : ""}
+    ORDER BY b.active DESC, b.date_from, b.location_id, b.department_id
+  `).all().map(serializeRequestBlackout);
+}
+
+function validateRequestBlackout(body, existingId = 0) {
+  const locationId = normalizeLocationId(body.locationId || body.location_id || "");
+  const departmentId = normalizeDepartmentId(body.departmentId ?? body.department_id, true);
+  const dateFrom = String(body.dateFrom || body.date_from || "");
+  const dateTo = String(body.dateTo || body.date_to || "");
+  const blockVacation = body.blockVacation !== false;
+  const blockTimeOff = body.blockTimeOff === true;
+  const reason = stripEmoji(String(body.reason || "").trim()).slice(0, 240);
+  const active = body.active !== false;
+  validateLocationExists(locationId);
+  if (departmentId) validateDepartmentExists(departmentId, locationId);
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) {
+    throw httpError(400, "Bitte einen gültigen Sperrzeitraum eingeben.");
+  }
+  if (!blockVacation && !blockTimeOff) throw httpError(400, "Bitte Urlaub, Zeitausgleich oder beides sperren.");
+  const duplicate = db.prepare(`
+    SELECT id FROM request_blackouts
+    WHERE id <> ? AND location_id = ? AND COALESCE(department_id, 0) = COALESCE(?, 0)
+      AND date_from = ? AND date_to = ? AND block_vacation = ? AND block_time_off = ?
+  `).get(Number(existingId || 0), locationId, departmentId, dateFrom, dateTo, blockVacation ? 1 : 0, blockTimeOff ? 1 : 0);
+  if (duplicate) throw httpError(409, "Diese Antragssperre besteht bereits.");
+  return { locationId, departmentId, dateFrom, dateTo, blockVacation, blockTimeOff, reason, active };
+}
+
+function findRequestBlackout(employeeNumber, requestType, dateFrom, dateTo, dateForDepartment = null) {
+  const context = employeeRequestContext(employeeNumber, dateForDepartment || dateFrom);
+  const typeColumn = requestType === "time_off" ? "block_time_off" : "block_vacation";
+  const rows = db.prepare(`
+    SELECT b.*, l.name AS location_name, d.name AS department_name
+    FROM request_blackouts b
+    JOIN locations l ON l.id = b.location_id
+    LEFT JOIN departments d ON d.id = b.department_id
+    WHERE b.active = 1 AND b.location_id = ? AND b.${typeColumn} = 1
+      AND b.date_from <= ? AND b.date_to >= ?
+      AND (b.department_id IS NULL OR b.department_id = ?)
+    ORDER BY CASE WHEN b.department_id IS NULL THEN 1 ELSE 0 END, b.date_from
+  `).all(context.locationId, dateTo, dateFrom, context.departmentId);
+  return rows[0] ? serializeRequestBlackout(rows[0]) : null;
+}
+
+function requestBlackoutReason(blackout, requestLabel) {
+  const scope = blackout.departmentName ? `Abteilung ${blackout.departmentName}` : `Filiale ${blackout.locationName}`;
+  const reason = blackout.reason ? `: ${blackout.reason}` : ".";
+  return `${requestLabel} ist von ${blackout.dateFrom} bis ${blackout.dateTo} für ${scope} gesperrt${reason}`;
+}
+
+function evaluateVacationRequest(employeeNumber, body) {
+  const dateFrom = String(body.dateFrom || "");
+  const dateTo = String(body.dateTo || "");
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) {
+    return { trafficLight: "red", allowed: false, reason: "Bitte einen gültigen Urlaubszeitraum eingeben." };
+  }
+  const blackout = findRequestBlackout(employeeNumber, "vacation", dateFrom, dateTo);
+  if (blackout) return { trafficLight: "red", allowed: false, reason: requestBlackoutReason(blackout, "Urlaub") };
+  return { trafficLight: "green", allowed: true, reason: "Für diesen Zeitraum besteht keine Antragssperre." };
+}
+
+function staffingCountAt(locationId, departmentId, date, pointTime, excludedEmployeeNumber) {
+  const departmentClause = departmentId ? "AND s.department_id = ?" : "";
+  const values = departmentId
+    ? [date, locationId, pointTime, pointTime, excludedEmployeeNumber, departmentId]
+    : [date, locationId, pointTime, pointTime, excludedEmployeeNumber];
+  return Number(db.prepare(`
+    SELECT COUNT(DISTINCT s.employee_number) AS count
+    FROM shifts s JOIN employees e ON e.personnel_number = s.employee_number
+    WHERE s.shift_date = ? AND e.home_location_id = ?
+      AND s.start_time <= ? AND s.end_time > ? AND s.employee_number <> ?
+      ${departmentClause}
+  `).get(...values).count || 0);
+}
+
+function evaluateTimeOffRequest(employeeNumber, body) {
+  const date = String(body.date || body.requestDate || "");
+  const startTime = String(body.startTime || "");
+  const endTime = String(body.endTime || "");
+  if (!isIsoDate(date) || !isTime(startTime) || !isTime(endTime) || endTime <= startTime) {
+    return { trafficLight: "red", allowed: false, reason: "Bitte Datum und Uhrzeit für den Zeitausgleich vollständig eingeben." };
+  }
+  if (timeToMinutes(endTime) - timeToMinutes(startTime) < 15) {
+    return { trafficLight: "red", allowed: false, reason: "Zeitausgleich muss mindestens 15 Minuten dauern." };
+  }
+  if (date < viennaTodayIso()) {
+    return { trafficLight: "red", allowed: false, reason: "Für vergangene Tage kann kein Zeitausgleich beantragt werden." };
+  }
+  const context = employeeRequestContext(employeeNumber, date);
+  const blackout = findRequestBlackout(employeeNumber, "time_off", date, date, date);
+  if (blackout) return { trafficLight: "red", allowed: false, reason: requestBlackoutReason(blackout, "Zeitausgleich") };
+  const settings = getSettings();
+  const hours = operatingHours(date, settings);
+  if (!hours) return { trafficLight: "red", allowed: false, reason: "An diesem Tag ist die Filiale geschlossen." };
+  if (startTime < hours.start || endTime > hours.end) {
+    return { trafficLight: "red", allowed: false, reason: `Der Zeitraum liegt außerhalb der Öffnungszeit ${hours.start}–${hours.end} Uhr.` };
+  }
+  const globalBlock = getGlobalDayBlockForDate(date, context.locationId);
+  if (globalBlock) {
+    return { trafficLight: "red", allowed: false, reason: `Dieser Tag ist gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.` };
+  }
+  const conflictingOption = db.prepare(`
+    SELECT option_type, note, all_day, start_time, end_time FROM week_options
+    WHERE employee_number = ? AND ? BETWEEN date_from AND date_to
+  `).all(employeeNumber, date).find((option) => optionOverlapsTime(option, startTime, endTime));
+  if (conflictingOption) {
+    return { trafficLight: "red", allowed: false, reason: `Zu dieser Zeit ist bereits „${optionLabel(conflictingOption.option_type)}“ eingetragen.` };
+  }
+  const pendingOverlap = db.prepare(`
+    SELECT id FROM time_off_requests
+    WHERE employee_number = ? AND request_date = ? AND status = 'pending' AND id <> ?
+      AND start_time < ? AND ? < end_time LIMIT 1
+  `).get(employeeNumber, date, Number(body.excludeRequestId || 0), endTime, startTime);
+  if (pendingOverlap) return { trafficLight: "red", allowed: false, reason: "Für diesen Zeitraum besteht bereits ein offener ZA-Antrag." };
+  const coveringShift = db.prepare(`
+    SELECT * FROM shifts
+    WHERE employee_number = ? AND shift_date = ? AND start_time <= ? AND end_time >= ?
+    ORDER BY start_time LIMIT 1
+  `).get(employeeNumber, date, startTime, endTime);
+  const overlappingShift = db.prepare(`
+    SELECT * FROM shifts
+    WHERE employee_number = ? AND shift_date = ? AND start_time < ? AND ? < end_time
+    ORDER BY start_time LIMIT 1
+  `).get(employeeNumber, date, endTime, startTime);
+  if (!coveringShift && overlappingShift) {
+    return { trafficLight: "red", allowed: false, reason: `Der gewünschte Zeitraum liegt nicht vollständig innerhalb des Dienstes ${overlappingShift.start_time}–${overlappingShift.end_time} Uhr.` };
+  }
+  if (!coveringShift) {
+    return { trafficLight: "yellow", allowed: true, reason: "Für diesen Zeitraum ist noch kein Dienst eingetragen. Der Antrag wird manuell geprüft." };
+  }
+  const locationContext = resolvePlanningContext({ locationId: context.locationId, departmentId: null });
+  const locationRequired = Number(dayConfiguration(date, settings, locationContext)?.minStaff || 0);
+  const departmentId = coveringShift.department_id ? Number(coveringShift.department_id) : context.departmentId;
+  const departmentRequired = departmentId
+    ? Number(db.prepare("SELECT min_staff FROM departments WHERE id = ?").get(departmentId)?.min_staff || 0)
+    : 0;
+  for (let minute = timeToMinutes(startTime); minute < timeToMinutes(endTime); minute += 15) {
+    const point = minutesToTime(minute);
+    const locationCount = staffingCountAt(context.locationId, null, date, point, employeeNumber);
+    if (locationCount < locationRequired) {
+      return { trafficLight: "red", allowed: false, reason: `Um ${point} Uhr würde die Filial-Mindestbesetzung auf ${locationCount} von ${locationRequired} Personen sinken.` };
+    }
+    if (departmentId && departmentRequired > 0) {
+      const departmentCount = staffingCountAt(context.locationId, departmentId, date, point, employeeNumber);
+      if (departmentCount < departmentRequired) {
+        const departmentName = db.prepare("SELECT name FROM departments WHERE id = ?").get(departmentId)?.name || "Abteilung";
+        return { trafficLight: "red", allowed: false, reason: `Um ${point} Uhr würde die Mindestbesetzung in ${departmentName} auf ${departmentCount} von ${departmentRequired} Personen sinken.` };
+      }
+    }
+  }
+  return { trafficLight: "green", allowed: true, reason: "Der Zeitausgleich ist nach dem aktuellen Dienstplan möglich und kann zur Genehmigung eingereicht werden." };
+}
+
+function approvedVacationsForEmployee(employeeNumber, fromDate = `${new Date().getUTCFullYear()}-01-01`) {
+  const rows = db.prepare(`
+    SELECT id, group_id, date_from, date_to, note FROM week_options
+    WHERE employee_number = ? AND option_type = 'vacation' AND date_to >= ?
+    ORDER BY date_from, id
+  `).all(employeeNumber, fromDate);
+  const grouped = new Map();
+  for (const row of rows) {
+    const groupId = vacationGroupKey(row);
+    const item = grouped.get(groupId) || { groupId, dateFrom: row.date_from, dateTo: row.date_to, note: row.note || "" };
+    item.dateFrom = item.dateFrom < row.date_from ? item.dateFrom : row.date_from;
+    item.dateTo = item.dateTo > row.date_to ? item.dateTo : row.date_to;
+    item.note ||= row.note || "";
+    grouped.set(groupId, item);
+  }
+  return [...grouped.values()];
+}
+
+function insertApprovedTimeOff(entry) {
+  const shifts = db.prepare(`
+    SELECT * FROM shifts WHERE employee_number = ? AND shift_date = ?
+      AND start_time < ? AND ? < end_time ORDER BY start_time
+  `).all(entry.employee_number, entry.request_date, entry.end_time, entry.start_time);
+  const insertShift = db.prepare(`
+    INSERT INTO shifts (employee_number, department_id, shift_date, start_time, end_time, area, note)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const shift of shifts) {
+    db.prepare("DELETE FROM shifts WHERE id = ?").run(shift.id);
+    if (shift.start_time < entry.start_time) {
+      insertShift.run(shift.employee_number, shift.department_id, shift.shift_date, shift.start_time, entry.start_time, shift.area, shift.note);
+    }
+    if (shift.end_time > entry.end_time) {
+      insertShift.run(shift.employee_number, shift.department_id, shift.shift_date, entry.end_time, shift.end_time, shift.area, shift.note);
+    }
+  }
+  const option = db.prepare(`
+    INSERT INTO week_options
+      (employee_number, week_start, date_from, date_to, option_type, note, credited_minutes_per_day, all_day, start_time, end_time)
+    VALUES (?, ?, ?, ?, 'time_off', ?, NULL, 0, ?, ?)
+  `).run(entry.employee_number, getMonday(entry.request_date), entry.request_date, entry.request_date, entry.note || "", entry.start_time, entry.end_time);
+  return Number(option.lastInsertRowid);
 }
 
 function sendPortalInactive(_request, response) {
@@ -4004,6 +4316,113 @@ app.get("/api/portal/v1/me/schedule", (request, response) => {
   response.json({ weekStart, weekEnd, calendarWeek: getIsoWeek(weekStart), shifts, options, user: publicPortalUser(session) });
 });
 
+app.post("/api/portal/v1/me/vacation-check", (request, response) => {
+  const session = requirePortalSession(request, "own_vacation:request");
+  assertPortalCsrf(request);
+  response.json(evaluateVacationRequest(session.employeeNumber, request.body));
+});
+
+app.post("/api/portal/v1/me/time-off-check", (request, response) => {
+  const session = requirePortalSession(request, "own_time:write");
+  assertPortalCsrf(request);
+  response.json(evaluateTimeOffRequest(session.employeeNumber, request.body));
+});
+
+app.get("/api/portal/v1/me/time-off-requests", (request, response) => {
+  const session = requirePortalSession(request, "own_time:read");
+  const requests = db.prepare(`
+    SELECT id, request_date, start_time, end_time, note, status, traffic_light, check_reason,
+           decided_by, decided_at, created_at, updated_at
+    FROM time_off_requests WHERE employee_number = ? ORDER BY request_date DESC, created_at DESC
+  `).all(session.employeeNumber);
+  response.json({ requests });
+});
+
+app.post("/api/portal/v1/me/time-off-requests", (request, response) => {
+  const session = requirePortalSession(request, "own_time:write");
+  assertPortalCsrf(request);
+  const check = evaluateTimeOffRequest(session.employeeNumber, request.body);
+  if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+  const date = String(request.body.date || request.body.requestDate || "");
+  const startTime = String(request.body.startTime || "");
+  const endTime = String(request.body.endTime || "");
+  const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
+  const result = db.prepare(`
+    INSERT INTO time_off_requests
+      (employee_number, request_date, start_time, end_time, note, traffic_light, check_reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(session.employeeNumber, date, startTime, endTime, note, check.trafficLight, check.reason);
+  auditPortal(session.employeeNumber, "time_off.request.create", "time_off_request", String(result.lastInsertRowid), JSON.stringify(check));
+  response.status(201).json({ id: Number(result.lastInsertRowid), status: "pending", check });
+});
+
+app.delete("/api/portal/v1/me/time-off-requests/:id", (request, response) => {
+  const session = requirePortalSession(request, "own_time:write");
+  assertPortalCsrf(request);
+  const result = db.prepare("DELETE FROM time_off_requests WHERE id = ? AND employee_number = ? AND status = 'pending'")
+    .run(Number(request.params.id), session.employeeNumber);
+  if (!result.changes) throw httpError(404, "Der offene ZA-Antrag wurde nicht gefunden.");
+  auditPortal(session.employeeNumber, "time_off.request.delete", "time_off_request", request.params.id);
+  response.status(204).end();
+});
+
+app.get("/api/portal/v1/me/approved-vacations", (request, response) => {
+  const session = requirePortalSession(request, "own_vacation:read");
+  const vacations = approvedVacationsForEmployee(session.employeeNumber, `${new Date().getUTCFullYear() - 1}-01-01`);
+  const pendingChanges = db.prepare(`
+    SELECT id, vacation_group_id, request_type, original_date_from, original_date_to,
+           requested_date_from, requested_date_to, note, status, created_at
+    FROM vacation_change_requests WHERE employee_number = ? AND status = 'pending'
+    ORDER BY created_at DESC
+  `).all(session.employeeNumber);
+  response.json({ vacations, pendingChanges });
+});
+
+app.post("/api/portal/v1/me/vacation-change-requests", (request, response) => {
+  const session = requirePortalSession(request, "own_vacation:request");
+  assertPortalCsrf(request);
+  const groupId = String(request.body.groupId || "").trim();
+  const requestType = String(request.body.requestType || "");
+  if (!groupId || !["change", "cancel"].includes(requestType)) throw httpError(400, "Bitte eine gültige Urlaubsänderung auswählen.");
+  const vacation = approvedVacationsForEmployee(session.employeeNumber, "1900-01-01").find((item) => item.groupId === groupId);
+  if (!vacation) throw httpError(404, "Der genehmigte Urlaub wurde nicht gefunden.");
+  const pending = db.prepare(`
+    SELECT id FROM vacation_change_requests
+    WHERE employee_number = ? AND vacation_group_id = ? AND status = 'pending' LIMIT 1
+  `).get(session.employeeNumber, groupId);
+  if (pending) throw httpError(409, "Für diesen Urlaub besteht bereits ein offener Änderungs- oder Stornoantrag.");
+  let requestedFrom = null;
+  let requestedTo = null;
+  if (requestType === "change") {
+    requestedFrom = String(request.body.dateFrom || "");
+    requestedTo = String(request.body.dateTo || "");
+    if (!isIsoDate(requestedFrom) || !isIsoDate(requestedTo) || requestedTo < requestedFrom) {
+      throw httpError(400, "Bitte einen gültigen neuen Urlaubszeitraum eingeben.");
+    }
+    const availability = evaluateVacationRequest(session.employeeNumber, { dateFrom: requestedFrom, dateTo: requestedTo });
+    if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
+  }
+  const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
+  const result = db.prepare(`
+    INSERT INTO vacation_change_requests
+      (employee_number, vacation_group_id, request_type, original_date_from, original_date_to,
+       requested_date_from, requested_date_to, note)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(session.employeeNumber, groupId, requestType, vacation.dateFrom, vacation.dateTo, requestedFrom, requestedTo, note);
+  auditPortal(session.employeeNumber, `vacation.${requestType}.request`, "vacation_change_request", String(result.lastInsertRowid));
+  response.status(201).json({ id: Number(result.lastInsertRowid), status: "pending" });
+});
+
+app.delete("/api/portal/v1/me/vacation-change-requests/:id", (request, response) => {
+  const session = requirePortalSession(request, "own_vacation:request");
+  assertPortalCsrf(request);
+  const result = db.prepare("DELETE FROM vacation_change_requests WHERE id = ? AND employee_number = ? AND status = 'pending'")
+    .run(Number(request.params.id), session.employeeNumber);
+  if (!result.changes) throw httpError(404, "Der offene Änderungs- oder Stornoantrag wurde nicht gefunden.");
+  auditPortal(session.employeeNumber, "vacation.change_request.delete", "vacation_change_request", request.params.id);
+  response.status(204).end();
+});
+
 app.get("/api/portal/v1/me/vacation-requests", (request, response) => {
   const session = requirePortalSession(request, "own_vacation:read");
   const requests = db.prepare(`
@@ -4055,6 +4474,8 @@ app.put("/api/portal/v1/vacation-requests/:id/decision", (request, response) => 
   if (!entry) throw httpError(404, "Der offene Urlaubsantrag wurde nicht gefunden.");
   let groupId = null;
   if (decision === "approved") {
+    const availability = evaluateVacationRequest(entry.employee_number, { dateFrom: entry.date_from, dateTo: entry.date_to });
+    if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
     const vacation = validateVacationEntry({ employeeNumber: entry.employee_number, dateFrom: entry.date_from, dateTo: entry.date_to, note: entry.note });
     groupId = createVacationGroupId();
     db.exec("BEGIN");
@@ -4077,6 +4498,165 @@ app.put("/api/portal/v1/vacation-requests/:id/decision", (request, response) => 
   }
   auditPortal(session.employeeNumber, `vacation.request.${decision}`, "vacation_request", String(entry.id));
   response.json({ ok: true, id: entry.id, status: decision, vacationGroupId: groupId });
+});
+
+app.get("/api/portal/v1/absence-requests", (request, response) => {
+  requirePortalAdminOrLocal(request, "vacation:read");
+  const vacationRequests = db.prepare(`
+    SELECT v.id, v.employee_number, v.date_from, v.date_to, v.note, v.status, v.created_at,
+           e.full_name, e.nickname, e.color
+    FROM vacation_requests v JOIN employees e ON e.personnel_number = v.employee_number
+    WHERE v.status = 'pending'
+  `).all().map((row) => ({ ...row, kind: "vacation" }));
+  const timeOffRequests = db.prepare(`
+    SELECT t.id, t.employee_number, t.request_date, t.start_time, t.end_time, t.note,
+           t.status, t.traffic_light, t.check_reason, t.created_at,
+           e.full_name, e.nickname, e.color
+    FROM time_off_requests t JOIN employees e ON e.personnel_number = t.employee_number
+    WHERE t.status = 'pending'
+  `).all().map((row) => ({ ...row, kind: "time_off" }));
+  const changeRequests = db.prepare(`
+    SELECT c.id, c.employee_number, c.vacation_group_id, c.request_type,
+           c.original_date_from, c.original_date_to, c.requested_date_from, c.requested_date_to,
+           c.note, c.status, c.created_at, e.full_name, e.nickname, e.color
+    FROM vacation_change_requests c JOIN employees e ON e.personnel_number = c.employee_number
+    WHERE c.status = 'pending'
+  `).all().map((row) => ({ ...row, kind: row.request_type === "cancel" ? "vacation_cancel" : "vacation_change" }));
+  const requests = [...vacationRequests, ...timeOffRequests, ...changeRequests]
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || Number(a.id) - Number(b.id));
+  response.json({ requests });
+});
+
+app.put("/api/portal/v1/time-off-requests/:id/decision", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "time:review");
+  const decision = String(request.body.decision || "");
+  if (!["approved", "rejected"].includes(decision)) throw httpError(400, "Bitte genehmigen oder ablehnen.");
+  const entry = db.prepare("SELECT * FROM time_off_requests WHERE id = ? AND status = 'pending'").get(Number(request.params.id));
+  if (!entry) throw httpError(404, "Der offene ZA-Antrag wurde nicht gefunden.");
+  let optionId = null;
+  if (decision === "approved") {
+    const check = evaluateTimeOffRequest(entry.employee_number, {
+      date: entry.request_date,
+      startTime: entry.start_time,
+      endTime: entry.end_time,
+      excludeRequestId: entry.id,
+    });
+    if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+    db.exec("BEGIN");
+    try {
+      optionId = insertApprovedTimeOff(entry);
+      db.prepare(`
+        UPDATE time_off_requests SET status = 'approved', option_id = ?, traffic_light = ?, check_reason = ?,
+          decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+      `).run(optionId, check.trafficLight, check.reason, session.employeeNumber, entry.id);
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  } else {
+    db.prepare(`
+      UPDATE time_off_requests SET status = 'rejected', decided_by = ?, decided_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `).run(session.employeeNumber, entry.id);
+  }
+  auditPortal(session.employeeNumber, `time_off.request.${decision}`, "time_off_request", String(entry.id));
+  response.json({ ok: true, id: entry.id, status: decision, optionId });
+});
+
+app.put("/api/portal/v1/vacation-change-requests/:id/decision", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "vacation:approve");
+  const decision = String(request.body.decision || "");
+  if (!["approved", "rejected"].includes(decision)) throw httpError(400, "Bitte genehmigen oder ablehnen.");
+  const entry = db.prepare("SELECT * FROM vacation_change_requests WHERE id = ? AND status = 'pending'").get(Number(request.params.id));
+  if (!entry) throw httpError(404, "Der offene Änderungs- oder Stornoantrag wurde nicht gefunden.");
+  if (decision === "approved") {
+    const current = approvedVacationsForEmployee(entry.employee_number, "1900-01-01").find((item) => item.groupId === entry.vacation_group_id);
+    if (!current) throw httpError(409, "Der ursprüngliche Urlaub besteht nicht mehr.");
+    let replacement = null;
+    if (entry.request_type === "change") {
+      const availability = evaluateVacationRequest(entry.employee_number, { dateFrom: entry.requested_date_from, dateTo: entry.requested_date_to });
+      if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
+      replacement = validateVacationEntry({
+        employeeNumber: entry.employee_number,
+        dateFrom: entry.requested_date_from,
+        dateTo: entry.requested_date_to,
+        note: entry.note || current.note,
+      }, entry.vacation_group_id);
+    }
+    db.exec("BEGIN");
+    try {
+      deleteVacationGroup(entry.vacation_group_id);
+      if (replacement) insertVacationEntries(replacement, entry.vacation_group_id);
+      db.prepare(`
+        UPDATE vacation_change_requests SET status = 'approved', decided_by = ?, decided_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP WHERE id = ?
+      `).run(session.employeeNumber, entry.id);
+      if (entry.request_type === "change") {
+        db.prepare(`
+          UPDATE vacation_requests SET date_from = ?, date_to = ?, note = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE vacation_group_id = ?
+        `).run(entry.requested_date_from, entry.requested_date_to, entry.note || current.note, entry.vacation_group_id);
+      } else {
+        db.prepare(`
+          UPDATE vacation_requests SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+          WHERE vacation_group_id = ?
+        `).run(entry.vacation_group_id);
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  } else {
+    db.prepare(`
+      UPDATE vacation_change_requests SET status = 'rejected', decided_by = ?, decided_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `).run(session.employeeNumber, entry.id);
+  }
+  auditPortal(session.employeeNumber, `vacation.${entry.request_type}.${decision}`, "vacation_change_request", String(entry.id));
+  response.json({ ok: true, id: entry.id, status: decision });
+});
+
+app.get("/api/portal/v1/request-blackouts", (request, response) => {
+  requirePortalAdminOrLocal(request, "vacation:read");
+  response.json({ blackouts: getRequestBlackouts(false) });
+});
+
+app.post("/api/portal/v1/request-blackouts", (request, response) => {
+  const actor = requirePortalAdminOrLocal(request, "vacation:approve");
+  const blackout = validateRequestBlackout(request.body);
+  const result = db.prepare(`
+    INSERT INTO request_blackouts
+      (location_id, department_id, date_from, date_to, block_vacation, block_time_off, reason, active, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(blackout.locationId, blackout.departmentId, blackout.dateFrom, blackout.dateTo,
+    blackout.blockVacation ? 1 : 0, blackout.blockTimeOff ? 1 : 0, blackout.reason, blackout.active ? 1 : 0, actor.employeeNumber);
+  auditPortal(actor.employeeNumber, "request_blackout.create", "request_blackout", String(result.lastInsertRowid));
+  response.status(201).json({ blackouts: getRequestBlackouts(false) });
+});
+
+app.put("/api/portal/v1/request-blackouts/:id", (request, response) => {
+  const actor = requirePortalAdminOrLocal(request, "vacation:approve");
+  const id = Number(request.params.id);
+  if (!db.prepare("SELECT 1 FROM request_blackouts WHERE id = ?").get(id)) throw httpError(404, "Die Antragssperre wurde nicht gefunden.");
+  const blackout = validateRequestBlackout(request.body, id);
+  db.prepare(`
+    UPDATE request_blackouts SET location_id = ?, department_id = ?, date_from = ?, date_to = ?,
+      block_vacation = ?, block_time_off = ?, reason = ?, active = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(blackout.locationId, blackout.departmentId, blackout.dateFrom, blackout.dateTo,
+    blackout.blockVacation ? 1 : 0, blackout.blockTimeOff ? 1 : 0, blackout.reason, blackout.active ? 1 : 0, id);
+  auditPortal(actor.employeeNumber, "request_blackout.update", "request_blackout", String(id));
+  response.json({ blackouts: getRequestBlackouts(false) });
+});
+
+app.delete("/api/portal/v1/request-blackouts/:id", (request, response) => {
+  const actor = requirePortalAdminOrLocal(request, "vacation:approve");
+  const result = db.prepare("DELETE FROM request_blackouts WHERE id = ?").run(Number(request.params.id));
+  if (!result.changes) throw httpError(404, "Die Antragssperre wurde nicht gefunden.");
+  auditPortal(actor.employeeNumber, "request_blackout.delete", "request_blackout", request.params.id);
+  response.status(204).end();
 });
 
 app.all("/api/portal/v1/me/time-entries", sendPortalInactive);

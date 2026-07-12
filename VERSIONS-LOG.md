@@ -1,5 +1,17 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.47 Beta
+
+- Mitarbeiterportal um „Zeitausgleich beantragen“ erweitert: ZA kann für einen einzelnen Tag minutengenau mit Von-/Bis-Zeit und optionaler Bemerkung beantragt werden.
+- Ampelprüfung ergänzt: Grün bestätigt die aktuelle Planbarkeit, Gelb kennzeichnet die notwendige manuelle Prüfung und Rot erklärt unmittelbar, weshalb ein Antrag derzeit nicht möglich ist.
+- Bei genehmigtem stundenweisen ZA wird der bestehende Dienst automatisch geteilt und der ZA als eigener Sonderfall eingetragen.
+- „Genehmigter Urlaub“ im Mitarbeiterportal ergänzt; Änderungen und Stornierungen können zur Freigabe eingereicht werden.
+- Filialleitung und Admin prüfen Urlaub, ZA, Urlaubsänderungen und Stornierungen gemeinsam in einer übersichtlichen Antragsliste.
+- Antragssperren je Filiale oder Abteilung ergänzt; Urlaub und ZA können getrennt oder gemeinsam für einzelne Tage oder Zeiträume gesperrt werden.
+- Branding wird nun bereits auf den Loginseiten der Administration und des Mitarbeiterportals angewendet, einschließlich Logo und Webicon.
+- Passwörter können in allen Login-, Einrichtungs- und Änderungsfeldern eingeblendet werden; mindestens 6 Zeichen und reine Zahlenpasswörter sind möglich, ein stärkeres Passwort wird empfohlen.
+- Darstellung der leeren Antragsliste korrigiert; der Hinweistext wird nicht mehr am Kartenrand abgeschnitten.
+
 ## v0.46 Beta
 
 - Optionaler LAN-Host-Modus: Eine zentrale Grabenplaner-Installation kann im vertrauenswürdigen internen Firmennetz von weiteren PCs per Browser verwendet werden; die SQLite-Datenbank bleibt ausschließlich am Host-PC.

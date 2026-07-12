@@ -13,12 +13,12 @@
   <body>
     <section class="login-gate hidden" id="loginGate" aria-live="polite">
       <form class="login-card" id="adminLoginForm">
-        <img src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
+        <img id="loginBrandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
         <span class="eyebrow">Geschützter LAN-Zugang</span>
         <h1>Beim Grabenplaner anmelden</h1>
         <p>Filialleitung und Administration verwenden hier ihre Personalnummer.</p>
         <label class="field"><span>Personalnummer</span><input id="adminLoginPersonnelNumber" autocomplete="username" required /></label>
-        <label class="field"><span>Passwort</span><input id="adminLoginPassword" type="password" autocomplete="current-password" required /></label>
+        <label class="field"><span>Passwort</span><span class="password-field"><input id="adminLoginPassword" type="password" autocomplete="current-password" required /><button class="password-toggle" type="button" data-password-toggle="adminLoginPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
         <p class="login-error hidden" id="adminLoginError"></p>
         <button class="primary-button" type="submit">Anmelden</button>
         <a href="/portal.html">Zum Mitarbeiterportal</a>
@@ -28,7 +28,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.46 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.47 Beta</span></div>
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
@@ -157,10 +157,31 @@
 
           <section class="vacation-panel vacation-requests-panel" id="vacationRequestsPanel">
             <div class="vacation-panel-heading">
-              <div><h2>Offene Urlaubsanträge</h2><p>Anträge aus dem Mitarbeiterportal prüfen und direkt in die Urlaubsplanung übernehmen.</p></div>
+              <div><h2>Offene Abwesenheitsanträge</h2><p>Urlaub, Zeitausgleich sowie Änderungs- und Stornoanträge aus dem Mitarbeiterportal prüfen.</p></div>
               <button type="button" class="secondary-button" id="refreshVacationRequestsButton">Aktualisieren</button>
             </div>
             <div class="manager-request-list" id="managerVacationRequestList"><p class="settings-note">Offene Anträge werden geladen.</p></div>
+          </section>
+
+          <section class="vacation-panel" id="requestBlackoutPanel">
+            <div class="vacation-panel-heading">
+              <div><h2>Antragssperren</h2><p>Zeiträume festlegen, in denen Urlaub und/oder Zeitausgleich nicht beantragt werden können.</p></div>
+            </div>
+            <form class="blackout-form" id="requestBlackoutForm">
+              <input id="requestBlackoutId" type="hidden" />
+              <label class="field"><span>Filiale</span><select id="requestBlackoutLocation" required></select></label>
+              <label class="field"><span>Abteilung</span><select id="requestBlackoutDepartment"><option value="">Gesamte Filiale</option></select></label>
+              <label class="field"><span>Von</span><input id="requestBlackoutDateFrom" type="date" required /></label>
+              <label class="field"><span>Bis</span><input id="requestBlackoutDateTo" type="date" required /></label>
+              <label class="field blackout-reason"><span>Begründung</span><input id="requestBlackoutReason" placeholder="z. B. Weihnachtsgeschäft" required /></label>
+              <div class="blackout-types" aria-label="Gesperrte Antragsarten">
+                <label><input id="requestBlackoutVacation" type="checkbox" checked /> Urlaub</label>
+                <label><input id="requestBlackoutTimeOff" type="checkbox" /> Zeitausgleich</label>
+                <label><input id="requestBlackoutActive" type="checkbox" checked /> aktiv</label>
+              </div>
+              <div class="blackout-actions"><button class="secondary-button hidden" id="cancelRequestBlackoutEdit" type="button">Abbrechen</button><button class="primary-button" id="requestBlackoutSubmit" type="submit">Sperre speichern</button></div>
+            </form>
+            <div class="request-blackout-list" id="requestBlackoutList"><p class="settings-note">Sperrzeiträume werden geladen.</p></div>
           </section>
 
           <section class="vacation-panel">
@@ -473,7 +494,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.46 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.47 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -640,9 +661,9 @@
         <div class="modal-header"><div><span class="eyebrow">LAN-Host</span><h2>Admin-Ersteinrichtung</h2><p>Der erste Admin wird direkt am Grabenplaner-PC eingerichtet.</p></div><button type="button" class="close-button" data-close="adminSetupModal">×</button></div>
         <div class="form-grid">
           <label class="field full-width"><span>Teammitglied</span><select id="adminSetupEmployee" required></select></label>
-          <label class="field"><span>Passwort</span><input id="adminSetupPassword" type="password" minlength="10" autocomplete="new-password" required /></label>
-          <label class="field"><span>Passwort wiederholen</span><input id="adminSetupPasswordRepeat" type="password" minlength="10" autocomplete="new-password" required /></label>
-          <p class="calculation-note full-width">Mindestens 10 Zeichen. Dieses Konto darf Zugänge, Einstellungen und Dienstpläne verwalten.</p>
+          <label class="field"><span>Passwort</span><span class="password-field"><input id="adminSetupPassword" type="password" minlength="6" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+          <label class="field"><span>Passwort wiederholen</span><span class="password-field"><input id="adminSetupPasswordRepeat" type="password" minlength="6" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPasswordRepeat" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+          <p class="calculation-note full-width">Mindestens 6 Zeichen; auch nur Ziffern sind möglich. Ein starkes Passwort wird empfohlen. Dieses Konto darf Zugänge, Einstellungen und Dienstpläne verwalten.</p>
         </div>
         <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="adminSetupModal">Abbrechen</button><button type="submit" class="primary-button">Admin einrichten</button></div>
       </form>

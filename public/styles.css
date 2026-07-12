@@ -291,6 +291,9 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope"; letter-spacing: -.04em; }
 .login-card p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
 .login-card > a { color: var(--green); font-size: 10px; font-weight: 750; text-align: center; }
 .login-error { padding: 9px 11px; border-radius: 9px; color: #8e342c !important; background: #fbecea; }
+.password-field { position: relative; display: block; width: 100%; }
+.password-field input { width: 100%; padding-right: 74px; }
+.password-toggle { position: absolute; top: 50%; right: 5px; min-height: 28px; padding: 0 8px; border: 0; border-radius: 7px; color: var(--green); background: #e8f1ec; font: 800 8.5px inherit; transform: translateY(-50%); cursor: pointer; }
 .sidebar-portal-link { display: block; padding: 10px 12px; border-radius: 10px; color: #174f3b; background: #e3f2eb; font-size: 9px; font-weight: 800; text-align: center; text-decoration: none; }
 .access-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .portal-user-list { display: grid; gap: 8px; margin-top: 14px; }
@@ -299,12 +302,28 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope"; letter-spacing: -.04em; }
 .portal-user-row strong { font-size: 10px; }
 .portal-user-row small { margin-top: 3px; color: var(--muted); font-size: 8px; }
 .portal-active { display: flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 9px; }
-.manager-request-list { display: grid; gap: 8px; }
+.manager-request-list { display: grid; gap: 8px; padding: 14px 20px 17px; }
 .manager-request-row { display: grid; grid-template-columns: 12px minmax(220px,1fr) auto auto; align-items: center; gap: 9px; padding: 10px 11px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.72); }
 .manager-request-row .employee-dot { width: 10px; height: 34px; border-radius: 5px; background: var(--employee-color); }
 .manager-request-row strong,.manager-request-row small { display: block; }.manager-request-row strong { font-size: 10px; }.manager-request-row small { margin-top: 3px; color: var(--muted); font-size: 8.5px; }
 .manager-request-row .reject-request { color: #9a3d34; }
+.request-kind-badge { display: inline-flex; align-items: center; min-height: 19px; margin-right: 5px; padding: 0 7px; border-radius: 999px; color: #255948; background: #e1f0e9; font-size: 7.5px; letter-spacing: .02em; vertical-align: middle; }
+.request-kind-badge.time_off { color: #775916; background: #fbf0c9; }
+.request-kind-badge.vacation_change,.request-kind-badge.vacation_cancel { color: #814039; background: #f8e6e3; }
+.blackout-form { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 11px; padding: 16px 20px; border-top: 1px solid var(--line); }
+.blackout-reason { grid-column: span 2; }
+.blackout-types { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; padding: 0 0 10px; }
+.blackout-types label { display: flex; align-items: center; gap: 5px; color: #52615a; font-size: 9px; font-weight: 750; }
+.blackout-types input { width: 15px; height: 15px; }
+.blackout-actions { display: flex; justify-content: flex-end; align-items: end; gap: 8px; }
+.request-blackout-list { display: grid; gap: 8px; padding: 0 20px 18px; }
+.request-blackout-row { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.72); }
+.request-blackout-row.inactive { opacity: .62; }
+.request-blackout-row strong,.request-blackout-row small { display: block; }
+.request-blackout-row strong { font-size: 10px; }
+.request-blackout-row small { margin-top: 3px; color: var(--muted); font-size: 8.5px; }
 @media (max-width: 900px) { .portal-user-row { grid-template-columns: 1fr 1fr; } .portal-user-row > div { grid-column: 1 / -1; } }
+@media (max-width: 900px) { .blackout-form { grid-template-columns: 1fr 1fr; } .blackout-reason { grid-column: 1 / -1; } }
 .pdf-card { display: grid; grid-template-columns: minmax(260px,.72fr) minmax(360px,1.28fr); gap: 0 20px; align-items: start; }
 .pdf-card > .card-heading { grid-column: 1 / -1; }
 .pdf-card > :not(.card-heading):not(.pdf-live-preview) { grid-column: 1; }

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#edf2ee" />
     <title>Grabenplaner · Mitarbeiterportal</title>
-    <link rel="icon" type="image/svg+xml" href="/assets/webicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/assets/webicon.svg" data-brand-icon />
     <link rel="stylesheet" href="/portal.css" />
   </head>
   <body>
@@ -16,7 +16,7 @@
         <h1>Anmelden</h1>
         <p>Mit Personalnummer und persönlichem Passwort.</p>
         <label><span>Personalnummer</span><input id="loginPersonnelNumber" autocomplete="username" required /></label>
-        <label><span>Passwort</span><input id="loginPassword" type="password" autocomplete="current-password" required /></label>
+        <label><span>Passwort</span><span class="password-field"><input id="loginPassword" type="password" autocomplete="current-password" minlength="6" required /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
         <p class="message error hidden" id="loginError"></p>
         <button class="primary" type="submit">Anmelden</button>
       </form>
@@ -31,12 +31,30 @@
       <main>
         <nav class="portal-tabs">
           <button class="active" data-tab="schedule" type="button">Mein Dienstplan</button>
+          <button data-tab="timeOff" type="button">Zeitausgleich beantragen</button>
           <button data-tab="vacation" type="button">Urlaub beantragen</button>
+          <button data-tab="approvedVacation" type="button">Genehmigter Urlaub</button>
         </nav>
 
         <section class="portal-view active" id="scheduleView">
           <div class="view-heading"><div><span class="eyebrow">Meine Woche</span><h1 id="scheduleHeading">Mein Dienstplan</h1></div><div class="week-controls"><button id="previousWeek" type="button">←</button><button id="currentWeek" type="button">Diese Woche</button><button id="nextWeek" type="button">→</button></div></div>
           <div class="schedule-grid" id="scheduleGrid"></div>
+        </section>
+
+        <section class="portal-view" id="timeOffView">
+          <div class="view-heading"><div><span class="eyebrow">Selbstverwaltung</span><h1>Zeitausgleich beantragen</h1><p>Die Ampel prüft den aktuellen Dienstplan und zeigt sofort, ob der Zeitraum möglich ist.</p></div></div>
+          <div class="vacation-layout">
+            <form class="portal-card request-form" id="timeOffRequestForm">
+              <h2>Neuer ZA-Antrag</h2>
+              <label><span>Datum</span><input id="timeOffDate" type="date" required /></label>
+              <div class="date-fields"><label><span>Von</span><input id="timeOffStart" type="time" step="900" required /></label><label><span>Bis</span><input id="timeOffEnd" type="time" step="900" required /></label></div>
+              <label><span>Bemerkung</span><textarea id="timeOffNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
+              <div class="traffic-check neutral" id="timeOffCheck"><span class="traffic-light"></span><div><strong>Zeitraum eingeben</strong><small>Danach wird die aktuelle Planung geprüft.</small></div></div>
+              <p class="message hidden" id="timeOffMessage"></p>
+              <button class="primary" id="timeOffSubmitButton" type="submit" disabled>Antrag absenden</button>
+            </form>
+            <section class="portal-card"><h2>Meine ZA-Anträge</h2><div class="request-list" id="timeOffRequestList"></div></section>
+          </div>
         </section>
 
         <section class="portal-view" id="vacationView">
@@ -46,11 +64,17 @@
               <h2>Neuer Antrag</h2>
               <div class="date-fields"><label><span>Von</span><input id="vacationDateFrom" type="date" required /></label><label><span>Bis</span><input id="vacationDateTo" type="date" required /></label></div>
               <label><span>Bemerkung</span><textarea id="vacationNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
+              <div class="traffic-check neutral" id="vacationCheck"><span class="traffic-light"></span><div><strong>Zeitraum eingeben</strong><small>Antragssperren werden sofort geprüft.</small></div></div>
               <p class="message hidden" id="vacationMessage"></p>
-              <button class="primary" type="submit">Antrag absenden</button>
+              <button class="primary" id="vacationSubmitButton" type="submit" disabled>Antrag absenden</button>
             </form>
             <section class="portal-card"><h2>Meine Anträge</h2><div class="request-list" id="vacationRequestList"></div></section>
           </div>
+        </section>
+
+        <section class="portal-view" id="approvedVacationView">
+          <div class="view-heading"><div><span class="eyebrow">Übersicht</span><h1>Genehmigter Urlaub</h1><p>Hier können Änderungen oder Stornierungen zur Genehmigung eingereicht werden.</p></div></div>
+          <section class="portal-card approved-vacation-card"><div class="approved-vacation-list" id="approvedVacationList"></div></section>
         </section>
       </main>
     </div>
@@ -58,11 +82,23 @@
     <dialog id="passwordDialog">
       <form id="passwordForm">
         <div class="dialog-heading"><div><span class="eyebrow">Sicherheit</span><h2>Passwort ändern</h2></div><button type="button" data-close-dialog>×</button></div>
-        <label><span>Bisheriges Passwort</span><input id="currentPassword" type="password" autocomplete="current-password" required /></label>
-        <label><span>Neues Passwort</span><input id="newPassword" type="password" minlength="10" autocomplete="new-password" required /></label>
-        <label><span>Neues Passwort wiederholen</span><input id="repeatPassword" type="password" minlength="10" autocomplete="new-password" required /></label>
+        <label><span>Bisheriges Passwort</span><span class="password-field"><input id="currentPassword" type="password" autocomplete="current-password" minlength="6" required /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label><span>Neues Passwort</span><span class="password-field"><input id="newPassword" type="password" minlength="6" autocomplete="new-password" required /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <label><span>Neues Passwort wiederholen</span><span class="password-field"><input id="repeatPassword" type="password" minlength="6" autocomplete="new-password" required /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+        <p class="password-recommendation">Mindestens 6 Zeichen; Ziffern sind erlaubt. Ein längeres, schwer zu erratendes Passwort wird empfohlen.</p>
         <p class="message hidden" id="passwordMessage"></p>
         <div class="dialog-actions"><button type="button" data-close-dialog>Abbrechen</button><button class="primary" type="submit">Passwort speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="vacationChangeDialog">
+      <form id="vacationChangeForm">
+        <div class="dialog-heading"><div><span class="eyebrow">Genehmigter Urlaub</span><h2 id="vacationChangeTitle">Änderung beantragen</h2></div><button type="button" data-close-vacation-change>×</button></div>
+        <p id="vacationChangeOriginal"></p>
+        <div class="date-fields" id="vacationChangeDates"><label><span>Neu von</span><input id="vacationChangeFrom" type="date" /></label><label><span>Neu bis</span><input id="vacationChangeTo" type="date" /></label></div>
+        <label><span>Bemerkung</span><textarea id="vacationChangeNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
+        <p class="message hidden" id="vacationChangeMessage"></p>
+        <div class="dialog-actions"><button type="button" data-close-vacation-change>Abbrechen</button><button class="primary" type="submit">Antrag absenden</button></div>
       </form>
     </dialog>
     <script src="/portal.js"></script>
