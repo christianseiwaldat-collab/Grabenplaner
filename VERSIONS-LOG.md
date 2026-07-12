@@ -1,5 +1,19 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.49 Beta
+
+- Technischen HTTPS-Serverbetrieb ergänzt, der ausschließlich über geschützte Servervariablen und nicht über das Browser-Frontend aktiviert wird.
+- Betrieb hinter einem Reverse-Proxy vorbereitet: Proxy-Vertrauen, öffentliche HTTPS-Adresse, sichere Cookies, HSTS, Sicherheitsheader und Herkunftsprüfung werden im Servermodus erzwungen.
+- Unterschiedliche Passwortregeln nach Betriebsmodus: Lokal und LAN bleiben bei mindestens 6 Zeichen, im Serverbetrieb gelten für neu gesetzte Passwörter mindestens 10 Zeichen.
+- Zusätzliche IP-basierte Login-Drosselung sowie Admin-Funktion zum Entsperren blockierter Zugänge ergänzt.
+- SQLite für den zentralen Mehrbenutzerbetrieb gehärtet: WAL, Fremdschlüssel, fünf Sekunden Schreibwartezeit und automatische Checkpoints.
+- Datenbank-Integritätsprüfung und versionierte Migrationsmarkierung beim Start ergänzt.
+- Schutz vor einer zweiten Grabenplaner-Instanz auf derselben SQLite-Datei ergänzt.
+- Backups werden nach der Erstellung automatisch mit SQLite `quick_check` überprüft.
+- Neue Server- und Datenbankdiagnose für Admins mit Betriebsbereitschaft, HTTPS, Migration, Sitzungen, Instanzschutz und Backupstatus.
+- Im Serverbetrieb werden automatische App-Updates, PowerShell-Neustarts und Datenbankimporte aus dem Browser gesperrt und kontrollierten Wartungsfenstern überlassen.
+- Neutrale technische Anleitung `SERVERBETRIEB.md` für die spätere Einrichtung mit Firmen-IT ergänzt.
+
 ## v0.48 Beta
 
 - Eigener Menüpunkt „Anträge“ ergänzt: offene Urlaub- und ZA-Anträge werden getrennt dargestellt und bei Handlungsbedarf in der Navigation hervorgehoben.

@@ -32,7 +32,7 @@ applyDeviceMode();
 window.addEventListener("resize", applyDeviceMode, { passive: true });
 
 const el = Object.fromEntries([
-  "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo",
+  "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
   "portalUserName", "portalUserRole", "adminAppLink", "changePasswordButton", "logoutButton", "scheduleView", "timeOffView",
   "vacationView", "approvedVacationView", "scheduleHeading", "scheduleGrid", "previousWeek", "currentWeek", "nextWeek",
   "timeOffRequestForm", "timeOffDate", "timeOffStart", "timeOffEnd", "timeOffNote", "timeOffCheck", "timeOffMessage",
@@ -109,9 +109,13 @@ function applyPortalBranding(branding = {}) {
 async function initialize() {
   try {
     const status = await api("/api/portal/v1/status");
+    portalState.status = status;
     applyPortalBranding(status.branding);
+    const minimum = Number(status.passwordMinLength || 6);
+    [el.loginPassword, el.newPassword, el.repeatPassword].forEach((input) => { if (input) input.minLength = minimum; });
+    if (el.portalAccessModeLabel) el.portalAccessModeLabel.textContent = status.operationMode === "server" ? "Mitarbeiterportal · HTTPS" : "Mitarbeiterportal";
     if (!status.portalEnabled) {
-      message(el.loginError, "Das Mitarbeiterportal ist auf diesem Gerät nicht als LAN-Host aktiv.", true);
+      message(el.loginError, "Das Mitarbeiterportal ist auf diesem Gerät nicht als LAN-Host oder Server aktiv.", true);
       return;
     }
     const session = await api("/api/portal/v1/session");

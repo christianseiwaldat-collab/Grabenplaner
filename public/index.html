@@ -15,7 +15,7 @@
     <section class="login-gate hidden" id="loginGate" aria-live="polite">
       <form class="login-card" id="adminLoginForm">
         <img id="loginBrandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-        <span class="eyebrow">Geschützter LAN-Zugang</span>
+        <span class="eyebrow" id="adminAccessModeLabel">Geschützter LAN-Zugang</span>
         <h1>Beim Grabenplaner anmelden</h1>
         <p>Filialleitung und Administration verwenden hier ihre Personalnummer.</p>
         <label class="field"><span>Personalnummer</span><input id="adminLoginPersonnelNumber" autocomplete="username" required /></label>
@@ -29,7 +29,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.48 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.49 Beta</span></div>
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
@@ -291,7 +291,7 @@
 
           <section id="generalSettings" class="settings-section active">
             <div class="settings-card operation-mode-card">
-              <div class="card-heading"><div class="card-icon">Modus</div><div><h2>Betriebsmodus</h2><p>Wahlweise nur auf diesem Gerät oder zentral im lokalen Firmennetz.</p></div></div>
+              <div class="card-heading"><div class="card-icon">Modus</div><div><h2>Betriebsmodus</h2><p>Lokal, zentral im Firmennetz oder vorbereitet für einen abgesicherten HTTPS-Server.</p></div></div>
               <div class="operation-mode-options">
                 <button class="operation-mode-option active" id="localModeOption" type="button" aria-current="true">
                   <span class="operation-mode-mark">L</span>
@@ -303,9 +303,14 @@
                   <span><strong>LAN-Host</strong><small>Eine zentrale App, Zugriff anderer Firmen-PCs per Browser und Login.</small></span>
                   <span class="status-badge inactive" id="serverModeBadge">Verfügbar</span>
                 </button>
+                <button class="operation-mode-option server-managed-option" id="publicServerModeOption" type="button" aria-current="false">
+                  <span class="operation-mode-mark">HTTPS</span>
+                  <span><strong>Serverbetrieb</strong><small>Öffentlicher Zugriff ausschließlich über HTTPS-Reverse-Proxy und geschützte Serverkonfiguration.</small></span>
+                  <span class="status-badge inactive" id="publicServerModeBadge">Vorbereitet</span>
+                </button>
               </div>
               <p class="settings-note" id="portalFoundationHint">Vor der Aktivierung wird ein Admin-Zugang benötigt. Der Wechsel erfordert einen sicheren Neustart.</p>
-              <p class="settings-note security-note">Der LAN-Host ist für ein vertrauenswürdiges internes Firmennetz gedacht. Ein öffentlich erreichbarer HTTPS-Servermodus folgt später.</p>
+              <p class="settings-note security-note">Der Serverbetrieb wird nicht per Browser aktiviert. Dadurch können öffentliche Adresse, Proxy-Vertrauen und HTTPS-Pflicht nicht versehentlich verändert werden.</p>
             </div>
 
             <div class="settings-card pause-card">
@@ -497,6 +502,11 @@
           </section>
 
           <section id="backupSettings" class="settings-section">
+            <div class="settings-card full-settings-card server-diagnostics-card">
+              <div class="card-heading"><div class="card-icon">Server</div><div><h2>Server- und Datenbankdiagnose</h2><p>Prüft Betriebsmodus, HTTPS, SQLite, Migrationen, Instanzschutz, Sitzungen und Backups.</p></div></div>
+              <div class="server-diagnostics" id="serverDiagnostics"><p class="settings-note">Diagnosedaten werden geladen.</p></div>
+              <div class="backup-actions"><button type="button" class="secondary-button" id="refreshServerDiagnosticsButton">Diagnose aktualisieren</button></div>
+            </div>
             <div class="settings-card full-settings-card">
               <div class="card-heading"><div class="card-icon">DB</div><div><h2>Datenbank & Backups</h2><p>Beim Programmstart wird immer eine interne Sicherung in app\backups erstellt. Zusätzlich kann lokal am PC regelmäßig gesichert werden.</p></div></div>
               <div class="database-backup-path"><span>Interne Startsicherung</span><strong id="appBackupDirectoryText">app\backups</strong></div>
@@ -526,7 +536,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.48 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.49 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

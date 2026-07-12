@@ -114,6 +114,8 @@ test("alte Datenbank wird um das Portal-Fundament erweitert", () => {
   assert.ok(tables.has("time_entries"));
   assert.ok(tables.has("time_corrections"));
   assert.ok(tables.has("audit_log"));
+  assert.ok(tables.has("schema_migrations"));
+  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.49-server-foundation'").get());
 
   const userColumns = new Set(db.prepare("PRAGMA table_info(portal_users)").all().map((column) => column.name));
   assert.ok(userColumns.has("password_changed_at"));
@@ -184,15 +186,15 @@ test("Login und Mitarbeiterfunktionen bleiben bis zum Servermodus gesperrt", asy
   assert.equal(result.status.operationMode, "local");
 });
 
-test("ungültiger alter Servermodus wird nicht übernommen", async () => {
+test("Servermodus kann im Browser nicht ungeschützt aktiviert werden", async () => {
   const response = await fetch(`${baseUrl}/api/settings`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ operationMode: "server" }),
   });
-  assert.equal(response.status, 400);
+  assert.equal(response.status, 409);
   const result = await response.json();
-  assert.match(result.error, /Betriebsmodus/i);
+  assert.match(result.error, /Serverkonfiguration/i);
   assert.equal(getPortalStatus().operationMode, "local");
 });
 
@@ -579,6 +581,151 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
       { start_time: "14:00", end_time: "18:00" },
     ]);
     verified.close();
+  } finally {
+    if (child.exitCode === null) child.kill();
+  }
+});
+
+test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite Instanz", async () => {
+  const childRoot = path.join(testRoot, "server-foundation");
+  fs.mkdirSync(childRoot, { recursive: true });
+  const childDatabase = path.join(childRoot, "dienstplan.db");
+  const initPort = await getFreePort();
+  const initChild = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
+    cwd: path.join(__dirname, ".."), windowsHide: true,
+    env: { ...process.env, PORT: String(initPort), DB_PATH: childDatabase, BACKUP_DIR: path.join(childRoot, "backups"), GRABENPLANER_HOST: "127.0.0.1", GRABENPLANER_SEED_DEMO: "1" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let initError = "";
+  initChild.stderr.on("data", (chunk) => { initError += chunk.toString(); });
+  try {
+    await waitForJson(`http://127.0.0.1:${initPort}/api/health`, initChild);
+    const exitResponse = await fetch(`http://127.0.0.1:${initPort}/api/system/exit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    assert.equal(exitResponse.status, 200, await exitResponse.clone().text());
+    assert.equal((await waitForExit(initChild)).code, 0, initError);
+  } finally {
+    if (initChild.exitCode === null) initChild.kill();
+  }
+
+  const adminPassword = "SicheresServerPasswort!";
+  const prepared = new DatabaseSync(childDatabase);
+  prepared.prepare(`
+    INSERT INTO portal_users (employee_number, password_hash, role, active, must_change_password, password_changed_at)
+    VALUES ('101', ?, 'admin', 1, 0, CURRENT_TIMESTAMP)
+    ON CONFLICT(employee_number) DO UPDATE SET password_hash = excluded.password_hash, role = 'admin', active = 1, must_change_password = 0
+  `).run(await hashPortalPassword(adminPassword));
+  prepared.close();
+
+  const port = await getFreePort();
+  const publicAddress = "https://plan.example.test";
+  const serverEnvironment = {
+    ...process.env,
+    PORT: String(port),
+    DB_PATH: childDatabase,
+    BACKUP_DIR: path.join(childRoot, "backups"),
+    GRABENPLANER_HOST: "127.0.0.1",
+    GRABENPLANER_OPERATION_MODE: "server",
+    GRABENPLANER_PUBLIC_URL: publicAddress,
+    GRABENPLANER_TRUST_PROXY: "loopback",
+  };
+  const child = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
+    cwd: path.join(__dirname, ".."), windowsHide: true, env: serverEnvironment, stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stderr = "";
+  child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+  const url = `http://127.0.0.1:${port}`;
+  try {
+    const health = await waitForJson(`${url}/api/health`, child);
+    assert.equal(health.ok, true);
+    assert.equal(health.mode, "server");
+
+    const insecureStatus = await fetch(`${url}/api/portal/v1/status`);
+    assert.equal(insecureStatus.status, 426);
+
+    const secureHeaders = { "X-Forwarded-Proto": "https", Origin: publicAddress };
+    const statusResponse = await fetch(`${url}/api/portal/v1/status`, { headers: secureHeaders });
+    assert.equal(statusResponse.status, 200, await statusResponse.clone().text());
+    assert.match(statusResponse.headers.get("strict-transport-security") || "", /max-age=31536000/);
+    const status = await statusResponse.json();
+    assert.equal(status.operationMode, "server");
+    assert.equal(status.httpsRequired, true);
+    assert.equal(status.publicUrl, publicAddress);
+    assert.equal(status.passwordMinLength, 10);
+
+    const loginResponse = await fetch(`${url}/api/portal/v1/auth/login`, {
+      method: "POST",
+      headers: { ...secureHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeNumber: "101", password: adminPassword }),
+    });
+    assert.equal(loginResponse.status, 200, await loginResponse.clone().text());
+    const setCookies = typeof loginResponse.headers.getSetCookie === "function" ? loginResponse.headers.getSetCookie() : [loginResponse.headers.get("set-cookie")].filter(Boolean);
+    assert.ok(setCookies.every((cookie) => /; Secure/i.test(cookie)));
+    const cookie = setCookies.map((value) => value.split(";", 1)[0]).join("; ");
+    const csrfCookie = setCookies.map((value) => value.split(";", 1)[0]).find((value) => value.startsWith("grabenplaner_csrf="));
+    const csrf = decodeURIComponent(csrfCookie.split("=").slice(1).join("="));
+
+    const diagnosticsResponse = await fetch(`${url}/api/server-diagnostics`, { headers: { ...secureHeaders, Cookie: cookie } });
+    assert.equal(diagnosticsResponse.status, 200, await diagnosticsResponse.clone().text());
+    const diagnostics = await diagnosticsResponse.json();
+    assert.equal(diagnostics.ready, true);
+    assert.equal(diagnostics.database.journalMode, "wal");
+    assert.equal(diagnostics.database.busyTimeoutMs, 5000);
+    assert.equal(diagnostics.instanceLock.held, true);
+
+    const shortPasswordResponse = await fetch(`${url}/api/portal/v1/users/102`, {
+      method: "PUT", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf },
+      body: JSON.stringify({ role: "employee", active: true, password: "123456" }),
+    });
+    assert.equal(shortPasswordResponse.status, 400);
+    const employeePassword = "MitarbeiterPasswort!";
+    const employeeAccessResponse = await fetch(`${url}/api/portal/v1/users/102`, {
+      method: "PUT", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf },
+      body: JSON.stringify({ role: "employee", active: true, password: employeePassword, mustChangePassword: false }),
+    });
+    assert.equal(employeeAccessResponse.status, 200, await employeeAccessResponse.clone().text());
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const failedLogin = await fetch(`${url}/api/portal/v1/auth/login`, {
+        method: "POST", headers: { ...secureHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeNumber: "102", password: "falsch-falsch" }),
+      });
+      assert.equal(failedLogin.status, 401);
+    }
+    const lockedLogin = await fetch(`${url}/api/portal/v1/auth/login`, {
+      method: "POST", headers: { ...secureHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeNumber: "102", password: employeePassword }),
+    });
+    assert.equal(lockedLogin.status, 429);
+    const unlockResponse = await fetch(`${url}/api/portal/v1/users/102/unlock`, {
+      method: "POST", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf }, body: "{}",
+    });
+    assert.equal(unlockResponse.status, 200, await unlockResponse.clone().text());
+    const unlockedLogin = await fetch(`${url}/api/portal/v1/auth/login`, {
+      method: "POST", headers: { ...secureHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeNumber: "102", password: employeePassword }),
+    });
+    assert.equal(unlockedLogin.status, 200, await unlockedLogin.clone().text());
+
+    const secondPort = await getFreePort();
+    const second = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
+      cwd: path.join(__dirname, ".."), windowsHide: true, env: { ...serverEnvironment, PORT: String(secondPort) }, stdio: ["ignore", "pipe", "pipe"],
+    });
+    let secondError = "";
+    second.stderr.on("data", (chunk) => { secondError += chunk.toString(); });
+    const secondExit = await waitForExit(second);
+    assert.notEqual(secondExit.code, 0);
+    assert.match(secondError, /zweite Serverinstanz|bereits in Prozess/i);
+
+    const foreignOriginResponse = await fetch(`${url}/api/portal/v1/auth/logout`, {
+      method: "POST", headers: { "X-Forwarded-Proto": "https", Origin: "https://evil.example", "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf }, body: "{}",
+    });
+    assert.equal(foreignOriginResponse.status, 403);
+
+    const exitResponse = await fetch(`${url}/api/system/exit`, {
+      method: "POST", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf }, body: "{}",
+    });
+    assert.equal(exitResponse.status, 200, await exitResponse.clone().text());
+    assert.equal((await waitForExit(child)).code, 0, stderr);
+    assert.equal(fs.existsSync(`${path.resolve(childDatabase)}.server.lock`), false);
   } finally {
     if (child.exitCode === null) child.kill();
   }

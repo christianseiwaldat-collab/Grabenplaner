@@ -282,6 +282,8 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope"; letter-spacing: -.04em; }
 .operation-mode-option small { margin-top: 3px; color: var(--muted); font-size: 8.5px; line-height: 1.35; }
 .operation-mode-mark { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 9px; color: #52615b; background: #e6ece8; font-size: 9px; font-weight: 800; }
 .operation-mode-option.active .operation-mode-mark { color: white; background: var(--green); }
+.server-managed-option:not(.active) { border-style: dashed; }
+.server-managed-option .operation-mode-mark { width: 34px; font-size: 6.5px; }
 
 .login-gate { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at top left,#edf4ef,#e8e3d8 60%,#d9e4df); }
 .portal-locked .app-shell { display: none; }
@@ -302,6 +304,7 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope"; letter-spacing: -.04em; }
 .portal-user-row strong { font-size: 10px; }
 .portal-user-row small { margin-top: 3px; color: var(--muted); font-size: 8px; }
 .portal-active { display: flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 9px; }
+.portal-user-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
 .manager-request-list { display: grid; gap: 8px; padding: 14px 20px 17px; }
 .manager-request-row { display: grid; grid-template-columns: 12px minmax(220px,1fr) auto; align-items: center; gap: 9px; padding: 10px 11px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.72); }
 .manager-request-row .employee-dot { width: 10px; height: 34px; border-radius: 5px; background: var(--employee-color); }
@@ -341,6 +344,7 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope"; letter-spacing: -.04em; }
 .compact-admin-notice { position:fixed; top:0; left:0; right:0; z-index:1200; padding:10px 14px; color:#674b0d; background:#fff0bb; font-size:12px; font-weight:750; text-align:center; }
 html[data-ui-mode="mobile"] .app-shell { padding-top:42px; }
 @media (max-width: 900px) { .portal-user-row { grid-template-columns: 1fr 1fr; } .portal-user-row > div { grid-column: 1 / -1; } }
+@media (max-width: 900px) { .diagnostic-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 900px) { .blackout-form { grid-template-columns: 1fr 1fr; } .blackout-reason { grid-column: 1 / -1; } }
 .pdf-card { display: grid; grid-template-columns: minmax(260px,.72fr) minmax(360px,1.28fr); gap: 0 20px; align-items: start; }
 .pdf-card > .card-heading { grid-column: 1 / -1; }
@@ -355,6 +359,11 @@ html[data-ui-mode="mobile"] .app-shell { padding-top:42px; }
 .database-backup-path { display: grid; gap: 4px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid #dce2df; border-radius: 10px; background: #f8faf8; }
 .database-backup-path span { color: var(--muted); font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .database-backup-path strong { overflow-wrap: anywhere; font-size: 10px; }
+.server-diagnostics { display: grid; gap: 11px; }
+.diagnostic-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid #d8e2dd; border-radius: 11px; background: #f5faf7; }
+.diagnostic-summary.warning { border-color: #e2c87f; background: #fff8df; }.diagnostic-summary strong,.diagnostic-summary span { font-size: 9px; }.diagnostic-summary span { color: var(--muted); overflow-wrap: anywhere; }
+.diagnostic-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }.diagnostic-grid > span { padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255,255,255,.75); }.diagnostic-grid small,.diagnostic-grid strong { display:block; }.diagnostic-grid small { color:var(--muted); font-size:7.5px; }.diagnostic-grid strong { margin-top:4px; font-size:9px; overflow-wrap:anywhere; }
+.diagnostic-warnings { display:grid; gap:5px; }.diagnostic-warnings p,.diagnostic-all-clear { margin:0; padding:8px 10px; border-radius:8px; font-size:8.5px; }.diagnostic-warnings p { color:#765714; background:#fff0bf; }.diagnostic-all-clear { color:#246048; background:#e3f1e9; }
 .branding-settings-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) 260px; gap: 22px; align-items: start; }
 .branding-preview { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #f8faf8; }
 .branding-preview img { max-width: 100%; max-height: 120px; object-fit: contain; border-radius: 8px; background: white; }
