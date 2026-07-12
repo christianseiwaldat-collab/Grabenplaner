@@ -47,7 +47,8 @@
             <form class="portal-card request-form" id="timeOffRequestForm">
               <h2>Neuer ZA-Antrag</h2>
               <label><span>Datum</span><input id="timeOffDate" type="date" required /></label>
-              <div class="date-fields"><label><span>Von</span><input id="timeOffStart" type="time" step="900" required /></label><label><span>Bis</span><input id="timeOffEnd" type="time" step="900" required /></label></div>
+              <div class="date-fields"><label><span>Von</span><select id="timeOffStart" required disabled><option value="">Datum wählen</option></select></label><label><span>Bis</span><select id="timeOffEnd" required disabled><option value="">Zuerst Von wählen</option></select></label></div>
+              <fieldset class="approval-type"><legend>Art des Zeitausgleichs</legend><label><input type="radio" name="timeOffApprovalType" value="local" checked /><span><strong>Filialinterner ZA</strong><small>Genehmigung durch Filial- oder vertretende Abteilungsleitung.</small></span></label><label><input type="radio" name="timeOffApprovalType" value="hr" /><span><strong>Verbindlicher PL-ZA</strong><small>Zusätzliche endgültige Genehmigung durch die Personalleitung; schützt vor einer Einteilung in einer anderen Filiale.</small></span></label></fieldset>
               <label><span>Bemerkung</span><textarea id="timeOffNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
               <div class="traffic-check neutral" id="timeOffCheck"><span class="traffic-light"></span><div><strong>Zeitraum eingeben</strong><small>Danach wird die aktuelle Planung geprüft.</small></div></div>
               <p class="message hidden" id="timeOffMessage"></p>

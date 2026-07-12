@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <div class="compact-admin-notice hidden" id="compactAdminNotice">Die Verwaltungsplanung ist für einen großen Bildschirm optimiert. Das Mitarbeiterportal ist auf dem Handy besser bedienbar.</div>
     <section class="login-gate hidden" id="loginGate" aria-live="polite">
       <form class="login-card" id="adminLoginForm">
         <img id="loginBrandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
@@ -28,7 +29,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.47 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.48 Beta</span></div>
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
@@ -40,6 +41,9 @@
             <span class="nav-symbol">☀</span><span>Urlaubsplanung</span>
           </button>
           <div class="nav-children" id="vacationNavChildren"></div>
+          <button class="nav-item request-nav-item" data-view="requests" id="requestsNavButton">
+            <span class="nav-symbol">✓</span><span>Anträge</span><strong class="nav-count hidden" id="requestsNavCount">0</strong>
+          </button>
           <button class="nav-item" data-view="personnel">
             <span class="nav-symbol">◎</span><span>Personalverwaltung</span>
           </button>
@@ -122,7 +126,7 @@
                 <span id="saturdayRuleHint">Sa-Faktor aktiv</span>
               </div>
             </div>
-            <div class="week-lock-notice hidden" id="weekLockNotice">Diese Kalenderwoche liegt in der Vergangenheit und ist schreibgeschützt. Bearbeitung kann in den Grundeinstellungen aktiviert werden.</div>
+            <div class="week-lock-notice hidden" id="weekLockNotice">Diese Kalenderwoche ist für Änderungen gesperrt. Die Bearbeitungssperre kann in den Grundeinstellungen verwaltet werden.</div>
             <div class="timeline-scroll">
               <div class="timeline" id="timeline"></div>
             </div>
@@ -135,6 +139,21 @@
               <div class="hours-legend"><span>Eingeteilt = in Filiale nach Pause</span><span>Gewertet = inkl. Samstagsfaktor/Sonderfällen</span></div>
             </div>
             <div class="hours-grid" id="hoursOverview"></div>
+          </section>
+        </section>
+
+        <section id="requestsView" class="view">
+          <header class="topbar">
+            <div><span class="eyebrow">Freigaben</span><h1>Anträge</h1><p class="subtitle">Urlaub und Zeitausgleich prüfen, bearbeiten und vollständig nachvollziehen.</p></div>
+            <button type="button" class="secondary-button" id="refreshRequestsButton">Aktualisieren</button>
+          </header>
+          <section class="request-workflow-summary" id="requestWorkflowSummary"></section>
+          <section class="vacation-panel request-management-panel">
+            <div class="request-management-toolbar">
+              <div class="request-kind-tabs"><button class="active" data-request-kind-tab="vacation" type="button">Urlaub <span id="vacationRequestCount">0</span></button><button data-request-kind-tab="time_off" type="button">Zeitausgleich <span id="timeOffRequestCount">0</span></button></div>
+              <label class="field request-status-filter"><span>Status</span><select id="requestStatusFilter"><option value="actionable">Zu bearbeiten</option><option value="pending_local">Offen</option><option value="preliminary_local">Vorläufig genehmigt</option><option value="pending_hr">Wartet auf Personalleitung</option><option value="approved">Genehmigt</option><option value="rejected">Abgelehnt</option><option value="cancelled">Storniert</option><option value="all">Alle</option></select></label>
+            </div>
+            <div class="manager-request-list" id="managerVacationRequestList"><p class="settings-note">Anträge werden geladen.</p></div>
           </section>
         </section>
 
@@ -155,19 +174,12 @@
             </div>
           </header>
 
-          <section class="vacation-panel vacation-requests-panel" id="vacationRequestsPanel">
-            <div class="vacation-panel-heading">
-              <div><h2>Offene Abwesenheitsanträge</h2><p>Urlaub, Zeitausgleich sowie Änderungs- und Stornoanträge aus dem Mitarbeiterportal prüfen.</p></div>
-              <button type="button" class="secondary-button" id="refreshVacationRequestsButton">Aktualisieren</button>
-            </div>
-            <div class="manager-request-list" id="managerVacationRequestList"><p class="settings-note">Offene Anträge werden geladen.</p></div>
-          </section>
-
           <section class="vacation-panel" id="requestBlackoutPanel">
             <div class="vacation-panel-heading">
               <div><h2>Antragssperren</h2><p>Zeiträume festlegen, in denen Urlaub und/oder Zeitausgleich nicht beantragt werden können.</p></div>
+              <button type="button" class="primary-button" id="addRequestBlackoutButton">+ Neue Antragssperre</button>
             </div>
-            <form class="blackout-form" id="requestBlackoutForm">
+            <form class="blackout-form hidden" id="requestBlackoutForm">
               <input id="requestBlackoutId" type="hidden" />
               <label class="field"><span>Filiale</span><select id="requestBlackoutLocation" required></select></label>
               <label class="field"><span>Abteilung</span><select id="requestBlackoutDepartment"><option value="">Gesamte Filiale</option></select></label>
@@ -331,6 +343,7 @@
                 <div class="day-settings-row" data-day-settings="friday"><strong>Freitag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
                 <div class="day-settings-row" data-day-settings="saturday"><strong>Samstag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
               </div>
+              <div class="open-day-settings"><strong>Geöffnete Wochentage</strong><div><label><input id="mondayOpen" type="checkbox" /> Mo</label><label><input id="tuesdayOpen" type="checkbox" /> Di</label><label><input id="wednesdayOpen" type="checkbox" /> Mi</label><label><input id="thursdayOpen" type="checkbox" /> Do</label><label><input id="fridayOpen" type="checkbox" /> Fr</label><label><input id="saturdayOpen" type="checkbox" /> Sa</label></div></div>
             </div>
 
             <div class="settings-card sunday-card">
@@ -350,11 +363,20 @@
             </div>
 
             <div class="settings-card past-week-card">
-              <div class="card-heading"><div class="card-icon">KW</div><div><h2>Vergangene Wochen</h2><p>Schützt abgeschlossene Dienstpläne vor versehentlichen Änderungen.</p></div></div>
+              <div class="card-heading"><div class="card-icon">KW</div><div><h2>Bearbeitungssperre für Dienstpläne</h2><p>Legt fest, wann aktuelle und vergangene Dienstpläne nicht mehr verändert werden dürfen.</p></div></div>
               <label class="switch-row">
                 <span><strong>Vergangene Kalenderwochen bearbeiten erlauben</strong><small>Standardmäßig aus. Bei Bedarf temporär aktivieren.</small></span>
                 <input id="allowPastWeekEditing" type="checkbox" />
               </label>
+              <label class="switch-row">
+                <span><strong>Aktuelle Woche automatisch sperren</strong><small>Standardmäßig nach der letzten hinterlegten Standort-Schließzeit.</small></span>
+                <input id="currentWeekAutoLock" type="checkbox" />
+              </label>
+              <div class="lock-settings" id="currentWeekLockSettings">
+                <label class="field"><span>Sperrzeitpunkt</span><select id="currentWeekLockMode"><option value="closing">Nach letzter Schließzeit</option><option value="manual">Manuell festlegen</option></select></label>
+                <div class="inline-fields hidden" id="manualWeekLockFields"><label class="field"><span>Wochentag</span><select id="currentWeekLockDay"><option value="friday">Freitag</option><option value="saturday">Samstag</option><option value="sunday">Sonntag</option></select></label><label class="field"><span>Uhrzeit</span><input id="currentWeekLockTime" type="time" min="18:00" max="23:00" step="1800" /></label></div>
+                <p class="settings-note" id="currentWeekLockHint"></p>
+              </div>
             </div>
 
             <div class="settings-card toast-card">
@@ -364,6 +386,16 @@
           </section>
 
           <section id="accessSettings" class="settings-section">
+            <div class="settings-card full-span" id="workflowSettingsCard">
+              <div class="card-heading"><div class="card-icon">PL</div><div><h2>Freigabeworkflow</h2><p>Zusätzliche Genehmigung von Urlaubsanträgen durch die Personalleitung.</p></div></div>
+              <label class="switch-row"><span><strong>Personalleitung muss Urlaub endgültig genehmigen</strong><small>Filial- oder Abteilungsleitung leitet genehmigte Anträge an die Personalleitung weiter.</small></span><input id="vacationHrApprovalRequired" type="checkbox" /></label>
+              <p class="settings-note" id="workflowSettingsHint"></p>
+            </div>
+            <div class="settings-card full-span" id="delegationSettingsCard">
+              <div class="card-heading"><div class="card-icon">V</div><div><h2>Vertretung der Filialleitung</h2><p>Abteilungsleitungen dürfen Anträge nur bei Abwesenheit oder in einem hinterlegten Vertretungszeitraum bearbeiten.</p></div></div>
+              <form class="delegation-form" id="delegationForm"><label class="field"><span>Filiale</span><select id="delegationLocation" required></select></label><label class="field"><span>Abteilungsleitung</span><select id="delegationEmployee" required></select></label><label class="field"><span>Von</span><input id="delegationDateFrom" type="date" required /></label><label class="field"><span>Bis</span><input id="delegationDateTo" type="date" required /></label><label class="field"><span>Bemerkung</span><input id="delegationNote" placeholder="Optional" /></label><button class="primary-button" type="submit">Vertretung eintragen</button></form>
+              <div class="delegation-list" id="delegationList"></div>
+            </div>
             <div class="settings-card full-span">
               <div class="card-heading"><div class="card-icon">Login</div><div><h2>Portal-Zugänge</h2><p>Rollen, Freigabe und Startpasswort je Teammitglied verwalten.</p></div></div>
               <div class="access-toolbar">
@@ -494,7 +526,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.47 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.48 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -666,6 +698,16 @@
           <p class="calculation-note full-width">Mindestens 6 Zeichen; auch nur Ziffern sind möglich. Ein starkes Passwort wird empfohlen. Dieses Konto darf Zugänge, Einstellungen und Dienstpläne verwalten.</p>
         </div>
         <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="adminSetupModal">Abbrechen</button><button type="submit" class="primary-button">Admin einrichten</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal request-action-modal" id="requestActionModal">
+      <form method="dialog" id="requestActionForm">
+        <div class="modal-header"><div><span class="eyebrow">Antragsverwaltung</span><h2 id="requestActionTitle">Antrag bearbeiten</h2><p id="requestActionSummary"></p></div><button type="button" class="close-button" data-close="requestActionModal">×</button></div>
+        <div class="request-action-history" id="requestActionHistory"></div>
+        <div class="form-grid hidden" id="requestEditFields"><label class="field" id="requestEditDateFromField"><span>Neu von</span><input id="requestEditDateFrom" type="date" /></label><label class="field" id="requestEditDateToField"><span>Neu bis</span><input id="requestEditDateTo" type="date" /></label><label class="field hidden" id="requestEditTimeField"><span>Neue Uhrzeit</span><span class="request-time-fields"><input id="requestEditStartTime" type="time" step="900" /><span>–</span><input id="requestEditEndTime" type="time" step="900" /></span></label></div>
+        <label class="field full-width"><span>Entscheidungsbemerkung</span><textarea id="requestActionNote" rows="4" maxlength="500" placeholder="Optional"></textarea></label>
+        <div class="request-action-buttons"><button class="danger-button" data-request-action="reject" type="button">Ablehnen</button><button class="secondary-button" data-request-action="preliminary" type="button">Vorläufig genehmigen</button><button class="primary-button" data-request-action="approve" type="button">Genehmigen / weiterleiten</button><button class="primary-button hidden" data-request-action="change" id="changeApprovedRequestButton" type="button">Änderung speichern</button><button class="secondary-button hidden" data-request-action="cancel" id="cancelApprovedRequestButton" type="button">Genehmigten Antrag stornieren</button></div>
       </form>
     </dialog>
 

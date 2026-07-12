@@ -19,7 +19,17 @@ const optionNames = {
   other: "Sonstiges",
 };
 const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-const statusLabels = { pending: "Offen", approved: "Genehmigt", rejected: "Abgelehnt", cancelled: "Storniert" };
+const statusLabels = { pending: "Offen", pending_local: "Offen", preliminary_local: "Vorläufig genehmigt", pending_hr: "Wartet auf Personalleitung", approved: "Genehmigt", rejected: "Abgelehnt", cancelled: "Storniert" };
+
+function applyDeviceMode() {
+  const compact = window.matchMedia("(max-width: 720px)").matches;
+  const touch = window.matchMedia("(pointer: coarse)").matches;
+  const mobileHint = navigator.userAgentData?.mobile === true || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  document.documentElement.dataset.uiMode = compact || (touch && mobileHint) ? "mobile" : "desktop";
+  document.documentElement.dataset.inputMode = touch ? "touch" : "pointer";
+}
+applyDeviceMode();
+window.addEventListener("resize", applyDeviceMode, { passive: true });
 
 const el = Object.fromEntries([
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo",
@@ -77,6 +87,7 @@ async function api(url, options = {}) {
     const error = new Error(payload.error || "Die Aktion konnte nicht ausgeführt werden.");
     error.status = response.status;
     error.code = payload.code || "";
+    if (response.status === 401) showLogin("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
     throw error;
   }
   return response.status === 204 ? null : response.json();
@@ -219,15 +230,47 @@ async function checkTimeOff() {
   }, 180);
 }
 
+async function loadTimeOffSlots() {
+  const date = el.timeOffDate.value;
+  el.timeOffStart.disabled = true;
+  el.timeOffEnd.disabled = true;
+  el.timeOffStart.innerHTML = '<option value="">Zeiten werden geladen</option>';
+  el.timeOffEnd.innerHTML = '<option value="">Zuerst Von wählen</option>';
+  if (!date) return;
+  try {
+    const data = await api(`/api/portal/v1/me/time-off-slots?date=${encodeURIComponent(date)}`);
+    if (data.closed) {
+      updateTraffic(el.timeOffCheck, { trafficLight: "red", allowed: false, reason: data.reason }, "");
+      return;
+    }
+    portalState.timeOffSlots = data;
+    el.timeOffStart.innerHTML = `<option value="">Von wählen</option>${data.startTimes.map((time) => `<option value="${esc(time)}">${esc(time)}</option>`).join("")}`;
+    el.timeOffStart.disabled = false;
+    updateTraffic(el.timeOffCheck, null, `Möglicher Zeitraum: ${data.start}–${data.end} Uhr.`);
+  } catch (error) {
+    updateTraffic(el.timeOffCheck, { trafficLight: "red", allowed: false, reason: error.message }, "");
+  }
+}
+
+function updateTimeOffEndSlots() {
+  const start = el.timeOffStart.value;
+  const times = (portalState.timeOffSlots?.endTimes || []).filter((time) => time > start);
+  el.timeOffEnd.innerHTML = `<option value="">Bis wählen</option>${times.map((time) => `<option value="${esc(time)}">${esc(time)}</option>`).join("")}`;
+  el.timeOffEnd.disabled = !start;
+  checkTimeOff();
+}
+
 async function loadTimeOffRequests() {
   const data = await api("/api/portal/v1/me/time-off-requests");
   el.timeOffRequestList.innerHTML = data.requests.length ? data.requests.map((item) => `
     <article class="request-item" data-time-off-request-id="${item.id}"><div>
       <strong>${dateText(item.request_date)} · ${esc(item.start_time)}–${esc(item.end_time)}</strong>
+      <span>${item.approval_type === "hr" ? "Verbindlicher PL-ZA" : "Filialinterner ZA"}</span>
       ${item.note ? `<span>${esc(item.note)}</span>` : ""}
       <span class="status ${item.status}">${statusLabels[item.status] || esc(item.status)}</span>
-      ${item.status === "pending" ? `<span>${esc(item.check_reason)}</span>` : ""}
-    </div>${item.status === "pending" ? '<button class="cancel-request" type="button">Zurückziehen</button>' : ""}</article>
+      ${["pending","pending_local","preliminary_local","pending_hr"].includes(item.status) ? `<span>${esc(item.check_reason)}</span>` : ""}
+      ${item.local_approved_by ? `<span>Filiale: ${esc(item.local_approved_by)}</span>` : ""}${item.hr_approved_by ? `<span>Personalleitung: ${esc(item.hr_approved_by)}</span>` : ""}
+    </div>${["pending","pending_local","preliminary_local"].includes(item.status) ? '<button class="cancel-request" type="button">Zurückziehen</button>' : ""}</article>
   `).join("") : "<p>Noch keine ZA-Anträge vorhanden.</p>";
 }
 
@@ -242,11 +285,14 @@ async function submitTimeOff(event) {
         startTime: el.timeOffStart.value,
         endTime: el.timeOffEnd.value,
         note: el.timeOffNote.value,
+        approvalType: document.querySelector('input[name="timeOffApprovalType"]:checked')?.value || "local",
       }),
     });
     el.timeOffRequestForm.reset();
     portalState.timeOffCheck = null;
     el.timeOffSubmitButton.disabled = true;
+    el.timeOffStart.disabled = true;
+    el.timeOffEnd.disabled = true;
     updateTraffic(el.timeOffCheck, null, "Danach wird die aktuelle Planung geprüft.");
     message(el.timeOffMessage, "Der ZA-Antrag wurde übermittelt.");
     await loadTimeOffRequests();
@@ -295,7 +341,8 @@ async function loadVacationRequests() {
   el.vacationRequestList.innerHTML = data.requests.length ? data.requests.map((item) => `
     <article class="request-item" data-request-id="${item.id}"><div><strong>${dateText(item.date_from)} – ${dateText(item.date_to)}</strong>
       ${item.note ? `<span>${esc(item.note)}</span>` : ""}<span class="status ${item.status}">${statusLabels[item.status] || esc(item.status)}</span>
-    </div>${item.status === "pending" ? '<button class="cancel-request" type="button">Zurückziehen</button>' : ""}</article>
+      ${item.local_approved_by ? `<span>Filiale: ${esc(item.local_approved_by)}</span>` : ""}${item.hr_approved_by ? `<span>Personalleitung: ${esc(item.hr_approved_by)}</span>` : ""}
+    </div>${["pending","pending_local","preliminary_local"].includes(item.status) ? '<button class="cancel-request" type="button">Zurückziehen</button>' : ""}</article>
   `).join("") : "<p>Noch keine Urlaubsanträge vorhanden.</p>";
 }
 
@@ -422,7 +469,9 @@ el.previousWeek.addEventListener("click", () => { portalState.weekStart = addDay
 el.nextWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, 7); loadSchedule(); });
 el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule(); });
 el.timeOffRequestForm.addEventListener("submit", submitTimeOff);
-[el.timeOffDate, el.timeOffStart, el.timeOffEnd].forEach((field) => field.addEventListener("input", checkTimeOff));
+el.timeOffDate.addEventListener("change", loadTimeOffSlots);
+el.timeOffStart.addEventListener("change", updateTimeOffEndSlots);
+el.timeOffEnd.addEventListener("change", checkTimeOff);
 el.timeOffRequestList.addEventListener("click", (event) => {
   const button = event.target.closest(".cancel-request");
   if (button) cancelTimeOff(button.closest("[data-time-off-request-id]").dataset.timeOffRequestId);

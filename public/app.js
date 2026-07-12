@@ -15,7 +15,12 @@ const state = {
   portalSession: null,
   desiredOperationMode: null,
   portalUsers: [],
+  approvalDelegations: [],
   requestBlackouts: [],
+  absenceRequests: [],
+  requestCounts: { vacation: 0, timeOff: 0, total: 0 },
+  requestKindTab: "vacation",
+  selectedRequest: null,
   allEmployees: [],
   updateStatus: null,
   selectedColor: "#0b84c6",
@@ -30,6 +35,17 @@ const state = {
   editingVacationGroupId: null,
   editingRequestBlackoutId: null,
 };
+
+function applyDeviceMode() {
+  const compact = window.matchMedia("(max-width: 760px)").matches;
+  const touch = window.matchMedia("(pointer: coarse)").matches;
+  const mobileHint = navigator.userAgentData?.mobile === true || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  document.documentElement.dataset.uiMode = compact || (touch && mobileHint) ? "mobile" : "desktop";
+  document.documentElement.dataset.inputMode = touch ? "touch" : "pointer";
+  document.querySelector("#compactAdminNotice")?.classList.toggle("hidden", document.documentElement.dataset.uiMode !== "mobile");
+}
+applyDeviceMode();
+window.addEventListener("resize", applyDeviceMode, { passive: true });
 
 let scheduleNoteQuill = null;
 let scheduleNoteSanitizing = false;
@@ -55,13 +71,13 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "vacationsView", "personnelView", "settingsView", "planningNavChildren", "vacationNavChildren", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "vacationsView", "personnelView", "settingsView", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarEmployeeCount", "sidebarVersion", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "backupSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField",
-    "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "vacationRequestsPanel", "managerVacationRequestList", "refreshVacationRequestsButton",
-    "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "requestBlackoutList",
+    "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount",
+    "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition",
     "employeeSettings", "locationSettings", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationSubmitButton", "cancelLocationEditButton",
@@ -71,6 +87,9 @@ const elements = Object.fromEntries(
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "portalFoundationHint", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
+    "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
+    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint",
+    "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
     "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink",
     "brandLogo", "footerBrandLogo", "adminContactLink", "brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt", "brandingPreviewLogo", "brandingPreviewTitle", "brandingPreviewCompany", "brandingKitLibrary", "exportBrandingButton", "brandingImportFile", "importBrandingButton", "toast",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
@@ -142,7 +161,7 @@ function timeToMinutes(value) {
 function operatingHours(date, settings = state.data.settings) {
   const day = new Date(`${date}T12:00:00`).getDay();
   const key = dayKeyByNumber[day];
-  return key ? { start: settings[`${key}_start_time`], end: settings[`${key}_end_time`], key } : null;
+  return key && settings[`${key}_open`] !== "0" ? { start: settings[`${key}_start_time`], end: settings[`${key}_end_time`], key } : null;
 }
 
 function dayConfig(date, settings = state.data.settings) {
@@ -370,6 +389,7 @@ async function api(url, options = {}) {
     const error = new Error(message);
     error.status = response.status;
     error.code = code;
+    if (response.status === 401 && elements.loginGate) showLoginGate("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
     throw error;
   }
   return response.status === 204 ? null : response.json();
@@ -1190,6 +1210,15 @@ function renderSettings() {
   document.querySelector("#backupIntervalHours").value = settings.backup_interval_hours || "2";
   document.querySelector("#vacationCountSaturday").checked = settings.vacation_count_saturday === "1";
   document.querySelector("#allowPastWeekEditing").checked = settings.allow_past_week_editing === "1";
+  elements.currentWeekAutoLock.checked = settings.current_week_auto_lock !== "0";
+  elements.currentWeekLockMode.value = settings.current_week_lock_mode || "closing";
+  elements.currentWeekLockDay.value = settings.current_week_lock_day || "saturday";
+  elements.currentWeekLockTime.value = settings.current_week_lock_time || "17:00";
+  updateWeekLockSettings();
+  if (elements.vacationHrApprovalRequired) {
+    elements.vacationHrApprovalRequired.checked = Boolean(state.workflowSettings?.vacationHrApprovalRequired ?? state.portalStatus?.workflow?.vacationHrApprovalRequired);
+    elements.workflowSettingsHint.textContent = "Die Einstellung kann von Personalleitung oder Admin geändert werden.";
+  }
   document.querySelector("#breakRuleEnabled").checked = settings.break_rule_enabled === "1";
   document.querySelector("#breakAfterHours").value = Number(settings.break_after_minutes) / 60;
   document.querySelector("#breakDuration").value = settings.break_duration_minutes;
@@ -1206,10 +1235,26 @@ function renderSettings() {
     row.querySelector('[data-field="minStaff"]').value = settings[`${day}_min_staff`];
     row.querySelector('[data-field="minFrom"]').value = settings[`${day}_min_from`];
     row.querySelector('[data-field="minTo"]').value = settings[`${day}_min_to`];
+    document.querySelector(`#${day}Open`).checked = settings[`${day}_open`] !== "0";
   });
   document.querySelector("#showSunday").checked = settings.show_sunday === "1";
   renderOperationMode();
   updatePdfPreview();
+}
+
+function updateWeekLockSettings() {
+  const active = elements.currentWeekAutoLock.checked;
+  const manual = elements.currentWeekLockMode.value === "manual";
+  elements.currentWeekLockSettings.classList.toggle("disabled-setting", !active);
+  elements.currentWeekLockMode.disabled = !active;
+  elements.manualWeekLockFields.classList.toggle("hidden", !active || !manual);
+  elements.currentWeekLockTime.min = elements.currentWeekLockDay.value === "friday" ? "18:00" : "00:00";
+  const settings = state.data?.settings || {};
+  const openDays = planningDayKeys.filter((day) => settings[`${day}_open`] !== "0");
+  const lastDay = openDays.at(-1) || "friday";
+  const label = fixedDayLabels[lastDay] || lastDay;
+  const time = settings[`${lastDay}_end_time`] || "18:00";
+  elements.currentWeekLockHint.textContent = manual ? "Manuell möglich von Freitag 18:00 Uhr bis Sonntag 23:00 Uhr." : `Automatisch nach der letzten Schließzeit: ${label}, ${time} Uhr.`;
 }
 
 function renderOperationMode() {
@@ -1259,37 +1304,121 @@ async function loadPortalUsers() {
         <button class="secondary-button" data-save-portal-user type="button">Speichern</button>
       </article>
     `).join("");
+    await loadApprovalDelegations();
   } catch (error) {
     elements.accessSettingsHint.textContent = error.status === 403 ? "Nur Admins dürfen Portal-Zugänge verwalten." : error.message;
     elements.portalUserList.innerHTML = "";
   }
 }
 
+function refreshDelegationEmployees() {
+  const locationId = elements.delegationLocation?.value;
+  const eligible = state.portalUsers.filter((user) => user.role === "department_manager" && user.active)
+    .filter((user) => state.allEmployees.find((employee) => employee.personnel_number === user.employeeNumber)?.home_location_id === locationId);
+  elements.delegationEmployee.innerHTML = eligible.map((user) => `<option value="${escapeHtml(user.employeeNumber)}">${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</option>`).join("");
+}
+
+async function loadApprovalDelegations() {
+  if (!elements.delegationList) return;
+  try {
+    const result = await api("/api/portal/v1/approval-delegations");
+    state.approvalDelegations = result.delegations || [];
+    elements.delegationLocation.innerHTML = state.locations.map((location) => `<option value="${escapeHtml(location.id)}">${escapeHtml(location.name)}</option>`).join("");
+    refreshDelegationEmployees();
+    elements.delegationList.innerHTML = state.approvalDelegations.length ? state.approvalDelegations.map((item) => `<div class="delegation-row" data-delegation-id="${item.id}"><div><strong>${escapeHtml(item.location_name)} · ${escapeHtml(item.delegate_employee_number)} · ${escapeHtml(item.nickname || item.full_name)}</strong><small>${formatDate(item.date_from)}–${formatDate(item.date_to)}${item.note ? ` · ${escapeHtml(item.note)}` : ""}</small></div><button class="danger-button" data-delete-delegation type="button">Löschen</button></div>`).join("") : '<p class="settings-note">Keine zeitlich begrenzte Vertretung hinterlegt.</p>';
+  } catch (error) {
+    elements.delegationSettingsCard.classList.toggle("hidden", error.status === 403);
+  }
+}
+
+async function saveApprovalDelegation(event) {
+  event.preventDefault();
+  try {
+    const result = await api("/api/portal/v1/approval-delegations", { method: "POST", body: JSON.stringify({ locationId: elements.delegationLocation.value, employeeNumber: elements.delegationEmployee.value, dateFrom: elements.delegationDateFrom.value, dateTo: elements.delegationDateTo.value, note: elements.delegationNote.value }) });
+    state.approvalDelegations = result.delegations || [];
+    elements.delegationForm.reset();
+    await loadApprovalDelegations();
+    showToast("Vertretung wurde gespeichert.");
+  } catch (error) { showToast(error.message, true); }
+}
+
 async function loadManagerVacationRequests() {
   if (!elements.managerVacationRequestList) return;
   try {
-    const result = await api("/api/portal/v1/absence-requests");
-    const requests = result.requests || [];
-    elements.vacationRequestsPanel.classList.remove("hidden");
-    elements.managerVacationRequestList.innerHTML = requests.length ? requests.map((request) => {
-      const details = managerRequestDetails(request);
-      return `
-      <article class="manager-request-row" data-manager-request="${request.id}" data-request-kind="${escapeHtml(request.kind)}">
-        <span class="employee-dot" style="--employee-color:${escapeHtml(request.color || "#507267")}"></span>
-        <div><strong><span class="request-kind-badge ${escapeHtml(request.kind)}">${escapeHtml(details.label)}</span> ${escapeHtml(request.employee_number)} · ${escapeHtml(request.nickname || request.full_name)}</strong><small>${details.text}${request.note ? ` · ${escapeHtml(request.note)}` : ""}${request.check_reason ? ` · ${escapeHtml(request.check_reason)}` : ""}</small></div>
-        <button class="secondary-button reject-request" data-request-decision="rejected" type="button">Ablehnen</button>
-        <button class="primary-button" data-request-decision="approved" type="button">Genehmigen</button>
-      </article>
-    `; }).join("") : '<p class="settings-note">Derzeit gibt es keine offenen Abwesenheitsanträge.</p>';
+    const [result, workflow] = await Promise.all([api("/api/portal/v1/absence-requests"), api("/api/portal/v1/workflow-settings")]);
+    state.absenceRequests = result.requests || [];
+    state.requestCounts = result.counts || { vacation: 0, timeOff: 0, total: 0 };
+    state.workflowSettings = workflow;
+    if (elements.vacationHrApprovalRequired) elements.vacationHrApprovalRequired.checked = workflow.vacationHrApprovalRequired;
+    renderRequestNavigation();
+    renderManagerRequests();
   } catch (error) {
-    elements.vacationRequestsPanel.classList.toggle("hidden", error.status === 403);
+    elements.requestsNavButton?.classList.toggle("hidden", error.status === 403);
     if (error.status !== 403) elements.managerVacationRequestList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
   }
 }
 
+const requestStatusLabels = {
+  pending_local: "Offen",
+  preliminary_local: "Vorläufig genehmigt",
+  pending_hr: "Wartet auf Personalleitung",
+  approved: "Genehmigt",
+  rejected: "Abgelehnt",
+  cancelled: "Storniert",
+};
+
+function renderRequestNavigation() {
+  const counts = state.requestCounts;
+  elements.requestsNavCount.textContent = counts.total;
+  elements.requestsNavCount.classList.toggle("hidden", !counts.total);
+  elements.requestsNavButton.classList.toggle("attention", counts.total > 0);
+  elements.vacationRequestCount.textContent = counts.vacation;
+  elements.timeOffRequestCount.textContent = counts.timeOff;
+  elements.requestWorkflowSummary.innerHTML = `
+    <article><span>Urlaub offen</span><strong>${counts.vacation}</strong></article>
+    <article><span>ZA offen</span><strong>${counts.timeOff}</strong></article>
+    <article><span>Urlaubs-Zweitfreigabe</span><strong>${state.workflowSettings?.vacationHrApprovalRequired ? "Aktiv" : "Nicht aktiv"}</strong>${state.workflowSettings?.canChange ? `<button type="button" class="text-action" data-toggle-hr-workflow>${state.workflowSettings.vacationHrApprovalRequired ? "Deaktivieren" : "Aktivieren"}</button>` : ""}</article>`;
+}
+
+async function toggleHrWorkflow(required) {
+  try {
+    state.workflowSettings = await api("/api/portal/v1/workflow-settings", { method: "PUT", body: JSON.stringify({ vacationHrApprovalRequired: required }) });
+    if (elements.vacationHrApprovalRequired) elements.vacationHrApprovalRequired.checked = required;
+    renderRequestNavigation();
+    showToast(required ? "Die Zweitfreigabe durch die Personalleitung ist aktiv." : "Die Zweitfreigabe durch die Personalleitung ist deaktiviert.");
+  } catch (error) { showToast(error.message, true); }
+}
+
+function requestIsActionable(request) {
+  if (!["pending_local", "preliminary_local", "pending_hr"].includes(request.status)) return false;
+  const role = state.portalSession?.user?.role;
+  if (request.approval_stage === "hr") return role === "hr" || role === "admin" || !state.portalStatus?.portalEnabled;
+  return role !== "hr" || role === "admin" || !state.portalStatus?.portalEnabled;
+}
+
+function renderManagerRequests() {
+  const statusFilter = elements.requestStatusFilter.value || "actionable";
+  const isTimeOff = state.requestKindTab === "time_off";
+  const requests = state.absenceRequests.filter((request) => {
+    const kindMatches = isTimeOff ? request.kind === "time_off" : request.kind !== "time_off";
+    const statusMatches = statusFilter === "all" ? true : statusFilter === "actionable" ? requestIsActionable(request) : request.status === statusFilter;
+    return kindMatches && statusMatches;
+  });
+  elements.managerVacationRequestList.innerHTML = requests.length ? requests.map((request) => {
+      const details = managerRequestDetails(request);
+      const approvals = [request.local_approved_by ? `Filiale: ${escapeHtml(request.local_approved_by)}` : "", request.hr_approved_by ? `PL: ${escapeHtml(request.hr_approved_by)}` : ""].filter(Boolean).join(" · ");
+      return `
+      <article class="manager-request-row" data-manager-request="${request.id}" data-request-kind="${escapeHtml(request.kind)}">
+        <span class="employee-dot" style="--employee-color:${escapeHtml(request.color || "#507267")}"></span>
+        <div><strong><span class="request-kind-badge ${escapeHtml(request.kind)}">${escapeHtml(details.label)}</span> ${escapeHtml(request.employee_number)} · ${escapeHtml(request.nickname || request.full_name)}</strong><small>${details.text}${request.note ? ` · ${escapeHtml(request.note)}` : ""}</small><small><span class="request-status ${escapeHtml(request.status)}">${escapeHtml(requestStatusLabels[request.status] || request.status)}</span>${approvals ? ` · ${approvals}` : ""}${request.decision_note ? ` · ${escapeHtml(request.decision_note)}` : ""}</small></div>
+        <button class="secondary-button" data-open-request-action type="button">Antrag bearbeiten</button>
+      </article>
+    `; }).join("") : '<p class="settings-note">Für diesen Filter gibt es keine Anträge.</p>';
+}
+
 function managerRequestDetails(request) {
   if (request.kind === "time_off") return {
-    label: "ZA",
+    label: request.approval_type === "hr" ? "PL-ZA" : "ZA",
     text: `${formatDate(request.request_date)} · ${escapeHtml(request.start_time)}–${escapeHtml(request.end_time)}`,
   };
   if (request.kind === "vacation_change") return {
@@ -1303,21 +1432,44 @@ function managerRequestDetails(request) {
   return { label: "Urlaub", text: `${formatDate(request.date_from)}–${formatDate(request.date_to)}` };
 }
 
-async function decideVacationRequest(id, decision, kind = "vacation") {
-  const label = decision === "approved" ? "genehmigen" : "ablehnen";
-  const requestLabel = { time_off: "ZA", vacation_change: "Urlaubsänderung", vacation_cancel: "Urlaubsstorno", vacation: "Urlaub" }[kind] || "Antrag";
-  if (!confirm(`${requestLabel} wirklich ${label}?`)) return;
-  const endpoint = kind === "time_off"
-    ? `/api/portal/v1/time-off-requests/${id}/decision`
-    : kind === "vacation_change" || kind === "vacation_cancel"
-      ? `/api/portal/v1/vacation-change-requests/${id}/decision`
-      : `/api/portal/v1/vacation-requests/${id}/decision`;
+function openRequestAction(id, kind) {
+  const request = state.absenceRequests.find((item) => Number(item.id) === Number(id) && item.kind === kind);
+  if (!request) return;
+  state.selectedRequest = request;
+  const details = managerRequestDetails(request);
+  elements.requestActionTitle.textContent = `${details.label} bearbeiten`;
+  elements.requestActionSummary.textContent = `${request.employee_number} · ${request.nickname || request.full_name} · ${details.text}`;
+  elements.requestActionNote.value = "";
+  const approved = request.status === "approved";
+  elements.requestEditFields.classList.toggle("hidden", !approved);
+  const timeOff = request.kind === "time_off";
+  elements.requestEditDateFromField.querySelector("span").textContent = timeOff ? "Neues Datum" : "Neu von";
+  elements.requestEditDateToField.classList.toggle("hidden", timeOff);
+  elements.requestEditTimeField.classList.toggle("hidden", !timeOff);
+  elements.requestEditDateFrom.value = timeOff ? request.request_date : request.date_from;
+  elements.requestEditDateTo.value = timeOff ? "" : request.date_to;
+  elements.requestEditStartTime.value = timeOff ? request.start_time : "";
+  elements.requestEditEndTime.value = timeOff ? request.end_time : "";
+  elements.requestActionHistory.innerHTML = request.decisions?.length ? request.decisions.map((decision) => `<div><strong>${escapeHtml(decision.actor_employee_number)} · ${escapeHtml(decision.action)}</strong><span>${escapeHtml(new Date(decision.created_at).toLocaleString("de-AT"))}${decision.note ? ` · ${escapeHtml(decision.note)}` : ""}</span></div>`).join("") : '<p>Noch keine Entscheidung protokolliert.</p>';
+  document.querySelectorAll("[data-request-action]").forEach((button) => {
+    const action = button.dataset.requestAction;
+    const hidden = request.status === "approved" ? !["change", "cancel"].includes(action) : ["change", "cancel"].includes(action) || (request.approval_stage === "hr" && action === "preliminary");
+    button.classList.toggle("hidden", hidden);
+  });
+  elements.requestActionModal.showModal();
+}
+
+async function decideVacationRequest(action) {
+  const request = state.selectedRequest;
+  if (!request) return;
+  const apiKind = ["vacation_change", "vacation_cancel"].includes(request.kind) ? "vacation_change" : request.kind;
   try {
-    await api(endpoint, {
+    await api(`/api/portal/v1/absence-requests/${apiKind}/${request.id}/action`, {
       method: "PUT",
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ action, note: elements.requestActionNote.value, dateFrom: elements.requestEditDateFrom.value, dateTo: elements.requestEditDateTo.value, date: elements.requestEditDateFrom.value, startTime: elements.requestEditStartTime.value, endTime: elements.requestEditEndTime.value }),
     });
-    showToast(decision === "approved" ? `${requestLabel} wurde genehmigt.` : `${requestLabel} wurde abgelehnt.`);
+    elements.requestActionModal.close();
+    showToast(action === "approve" ? "Der Antrag wurde genehmigt beziehungsweise weitergeleitet." : action === "preliminary" ? "Der Antrag wurde vorläufig genehmigt." : action === "cancel" ? "Der Antrag wurde storniert." : "Der Antrag wurde abgelehnt.");
     await loadAll();
   } catch (error) { showToast(error.message, true); }
 }
@@ -1340,6 +1492,7 @@ function resetRequestBlackoutForm() {
   refreshRequestBlackoutDepartments();
   elements.cancelRequestBlackoutEdit?.classList.add("hidden");
   if (elements.requestBlackoutSubmit) elements.requestBlackoutSubmit.textContent = "Sperre speichern";
+  elements.requestBlackoutForm?.classList.add("hidden");
 }
 
 function renderRequestBlackouts() {
@@ -1372,6 +1525,7 @@ function editRequestBlackout(id) {
   const item = state.requestBlackouts.find((entry) => Number(entry.id) === Number(id));
   if (!item) return;
   state.editingRequestBlackoutId = item.id;
+  elements.requestBlackoutForm.classList.remove("hidden");
   elements.requestBlackoutLocation.value = item.locationId;
   refreshRequestBlackoutDepartments(item.departmentId || "");
   elements.requestBlackoutDateFrom.value = item.dateFrom;
@@ -1447,9 +1601,11 @@ function renderBrandingKits() {
 function setView(view) {
   document.querySelectorAll(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
   elements.planningView.classList.toggle("active", view === "planning");
+  elements.requestsView.classList.toggle("active", view === "requests");
   elements.vacationsView.classList.toggle("active", view === "vacations");
   elements.personnelView.classList.toggle("active", view === "personnel");
   elements.settingsView.classList.toggle("active", view === "settings");
+  if (view === "requests") loadManagerVacationRequests();
 }
 
 function setSettingsTab(tab) {
@@ -2392,6 +2548,7 @@ async function saveSettings(silent = false) {
   document.querySelectorAll("[data-day-settings]").forEach((row) => {
     const field = (name) => row.querySelector(`[data-field="${name}"]`);
     daySettings[row.dataset.daySettings] = {
+      open: document.querySelector(`#${row.dataset.daySettings}Open`).checked,
       start: field("start").value,
       end: field("end").value,
       lunchEnabled: field("lunchEnabled").checked,
@@ -2437,6 +2594,10 @@ async function saveSettings(silent = false) {
         backupIntervalHours: Number(document.querySelector("#backupIntervalHours").value),
         vacationCountSaturday: document.querySelector("#vacationCountSaturday").checked,
         allowPastWeekEditing: document.querySelector("#allowPastWeekEditing").checked,
+        currentWeekAutoLock: elements.currentWeekAutoLock.checked,
+        currentWeekLockMode: elements.currentWeekLockMode.value,
+        currentWeekLockDay: elements.currentWeekLockDay.value,
+        currentWeekLockTime: elements.currentWeekLockTime.value,
         breakRuleEnabled: document.querySelector("#breakRuleEnabled").checked,
         breakAfterMinutes: Math.round(Number(document.querySelector("#breakAfterHours").value) * 60),
         breakDurationMinutes: Number(document.querySelector("#breakDuration").value),
@@ -2572,19 +2733,44 @@ elements.serverModeOption?.addEventListener("click", () => {
   state.desiredOperationMode = "lan";
   renderOperationMode();
 });
+elements.currentWeekAutoLock?.addEventListener("change", updateWeekLockSettings);
+elements.currentWeekLockMode?.addEventListener("change", updateWeekLockSettings);
+elements.currentWeekLockDay?.addEventListener("change", updateWeekLockSettings);
 elements.adminSetupButton?.addEventListener("click", openAdminSetup);
 elements.adminSetupForm?.addEventListener("submit", setupPortalAdmin);
 elements.portalUserList?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-save-portal-user]");
   if (button) savePortalUser(button.closest("[data-portal-user]"));
 });
-elements.refreshVacationRequestsButton?.addEventListener("click", loadManagerVacationRequests);
+elements.delegationLocation?.addEventListener("change", refreshDelegationEmployees);
+elements.delegationForm?.addEventListener("submit", saveApprovalDelegation);
+elements.delegationList?.addEventListener("click", async (event) => {
+  const row = event.target.closest("[data-delegation-id]");
+  if (!row || !event.target.closest("[data-delete-delegation]") || !confirm("Diese Vertretung wirklich löschen?")) return;
+  try { await api(`/api/portal/v1/approval-delegations/${row.dataset.delegationId}`, { method: "DELETE" }); await loadApprovalDelegations(); } catch (error) { showToast(error.message, true); }
+});
+elements.refreshRequestsButton?.addEventListener("click", loadManagerVacationRequests);
 elements.managerVacationRequestList?.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-request-decision]");
+  const button = event.target.closest("[data-open-request-action]");
   const row = button?.closest("[data-manager-request]");
-  if (button && row) decideVacationRequest(row.dataset.managerRequest, button.dataset.requestDecision, row.dataset.requestKind);
+  if (button && row) openRequestAction(row.dataset.managerRequest, row.dataset.requestKind);
+});
+document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.addEventListener("click", () => {
+  state.requestKindTab = button.dataset.requestKindTab;
+  document.querySelectorAll("[data-request-kind-tab]").forEach((item) => item.classList.toggle("active", item === button));
+  renderManagerRequests();
+}));
+elements.requestStatusFilter?.addEventListener("change", renderManagerRequests);
+elements.requestWorkflowSummary?.addEventListener("click", (event) => {
+  if (event.target.closest("[data-toggle-hr-workflow]")) toggleHrWorkflow(!state.workflowSettings?.vacationHrApprovalRequired);
+});
+elements.vacationHrApprovalRequired?.addEventListener("change", (event) => toggleHrWorkflow(event.target.checked));
+elements.requestActionForm?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-request-action]");
+  if (button) decideVacationRequest(button.dataset.requestAction);
 });
 elements.requestBlackoutForm?.addEventListener("submit", saveRequestBlackout);
+elements.addRequestBlackoutButton?.addEventListener("click", () => { resetRequestBlackoutForm(); elements.requestBlackoutForm.classList.remove("hidden"); });
 elements.requestBlackoutLocation?.addEventListener("change", () => refreshRequestBlackoutDepartments());
 elements.cancelRequestBlackoutEdit?.addEventListener("click", resetRequestBlackoutForm);
 elements.requestBlackoutList?.addEventListener("click", (event) => {

@@ -1,5 +1,19 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.48 Beta
+
+- Eigener Menüpunkt „Anträge“ ergänzt: offene Urlaub- und ZA-Anträge werden getrennt dargestellt und bei Handlungsbedarf in der Navigation hervorgehoben.
+- Anträge bleiben nach der Entscheidung als nachvollziehbare Historie sichtbar; Status, Entscheidungsbemerkungen und die Personalnummern der freigebenden Personen werden angezeigt.
+- Zweistufiger Urlaubsworkflow ergänzt: Filial- oder vertretende Abteilungsleitung prüft zuerst, anschließend kann eine globale Freigabe durch die Personalleitung verlangt werden.
+- Neue feste Rolle „Personalleitung“ sowie zeitlich begrenzte Vertretungen der Filialleitung ergänzt.
+- ZA-Anträge unterscheiden zwischen filialinterner Freigabe und verbindlichem ZA mit zusätzlicher Freigabe durch die Personalleitung.
+- Entscheidungsdialog für Ablehnen, vorläufiges Genehmigen, Genehmigen, nachträgliches Bearbeiten und Stornieren ergänzt.
+- Uhrzeiten für ZA-Anträge werden in 15-Minuten-Schritten ausschließlich innerhalb der hinterlegten Öffnungs- und Dienstzeiten angeboten.
+- Antragssperren werden kompakt angezeigt; das Eingabeformular öffnet sich erst über „Neue Antragssperre“.
+- Neue „Bearbeitungssperre für Dienstpläne“: Die aktuelle Woche kann automatisch nach der letzten hinterlegten Schließzeit oder manuell zwischen Freitag 18:00 Uhr und Sonntag 23:00 Uhr gesperrt werden.
+- Geräteerkennung vorbereitet: Das Mitarbeiterportal ist mobil optimiert; die Verwaltungsplanung weist auf kleinen Bildschirmen auf die empfohlene Desktop-Nutzung hin.
+- Abgelaufene Sitzungen führen wieder zuverlässig zum Login, ohne dass die App in einem nicht bedienbaren Zustand bleibt.
+
 ## v0.47 Beta
 
 - Mitarbeiterportal um „Zeitausgleich beantragen“ erweitert: ZA kann für einen einzelnen Tag minutengenau mit Von-/Bis-Zeit und optionaler Bemerkung beantragt werden.

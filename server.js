@@ -54,6 +54,17 @@ const builtinPortalRoles = [
     ],
   },
   {
+    id: "department_manager",
+    name: "Abteilungsleitung",
+    description: "Vertretende Antragsfreigabe bei Abwesenheit oder hinterlegter Delegation der Filialleitung.",
+    sortOrder: 21,
+    permissions: [
+      "own_schedule:read", "own_time:read", "own_time:write", "own_time:correction_request",
+      "own_vacation:read", "own_vacation:request", "employees:read", "schedule:read", "schedule:write",
+      "time:read", "time:review", "vacation:read", "vacation:approve",
+    ],
+  },
+  {
     id: "admin",
     name: "Admin",
     description: "Vollzugriff auf Benutzer, Einstellungen, Rollen und Protokolle.",
@@ -77,6 +88,30 @@ const builtinPortalRoles = [
       "roles:read",
       "roles:write",
       "audit:read",
+      "hr:approve",
+      "hr:settings",
+    ],
+  },
+  {
+    id: "hr",
+    name: "Personalleitung",
+    description: "Standortübergreifende Prüfung von Urlaub und verbindlichem PL-Zeitausgleich.",
+    sortOrder: 25,
+    permissions: [
+      "own_schedule:read",
+      "own_time:read",
+      "own_time:write",
+      "own_time:correction_request",
+      "own_vacation:read",
+      "own_vacation:request",
+      "employees:read",
+      "schedule:read",
+      "time:read",
+      "time:review",
+      "vacation:read",
+      "vacation:approve",
+      "hr:approve",
+      "hr:settings",
     ],
   },
 ];
@@ -88,6 +123,7 @@ const defaultPortalSettings = {
   max_failed_login_attempts: "5",
   account_lock_minutes: "15",
   secure_cookies_required: "1",
+  vacation_hr_approval_required: "0",
 };
 
 function formatVersionLabel(version) {
@@ -515,6 +551,32 @@ function createSchema() {
         ON UPDATE CASCADE ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS request_decisions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_kind TEXT NOT NULL,
+      request_id INTEGER NOT NULL,
+      stage TEXT NOT NULL DEFAULT 'local',
+      action TEXT NOT NULL,
+      actor_employee_number TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS approval_delegations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      location_id TEXT NOT NULL,
+      delegate_employee_number TEXT NOT NULL,
+      date_from TEXT NOT NULL,
+      date_to TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (location_id) REFERENCES locations(id) ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (delegate_employee_number) REFERENCES employees(personnel_number) ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS time_entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       employee_number TEXT NOT NULL,
@@ -562,6 +624,8 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_time_off_requests_employee ON time_off_requests(employee_number, status, request_date);
     CREATE INDEX IF NOT EXISTS idx_vacation_change_requests_employee ON vacation_change_requests(employee_number, status);
     CREATE INDEX IF NOT EXISTS idx_request_blackouts_range ON request_blackouts(location_id, date_from, date_to, active);
+    CREATE INDEX IF NOT EXISTS idx_request_decisions_request ON request_decisions(request_kind, request_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_approval_delegations_range ON approval_delegations(location_id, date_from, date_to, active);
     CREATE INDEX IF NOT EXISTS idx_time_entries_employee_date ON time_entries(employee_number, entry_timestamp);
     CREATE INDEX IF NOT EXISTS idx_time_corrections_employee ON time_corrections(employee_number, status);
     CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
@@ -661,6 +725,28 @@ ensureColumn("portal_roles", "description", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("portal_roles", "sort_order", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("portal_roles", "updated_at", "TEXT");
 ensureColumn("vacation_requests", "vacation_group_id", "TEXT");
+ensureColumn("vacation_requests", "location_id", "TEXT");
+ensureColumn("vacation_requests", "approval_stage", "TEXT NOT NULL DEFAULT 'local'");
+ensureColumn("vacation_requests", "decision_note", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("vacation_requests", "local_approved_by", "TEXT");
+ensureColumn("vacation_requests", "local_approved_at", "TEXT");
+ensureColumn("vacation_requests", "hr_approved_by", "TEXT");
+ensureColumn("vacation_requests", "hr_approved_at", "TEXT");
+ensureColumn("time_off_requests", "location_id", "TEXT");
+ensureColumn("time_off_requests", "approval_type", "TEXT NOT NULL DEFAULT 'local'");
+ensureColumn("time_off_requests", "approval_stage", "TEXT NOT NULL DEFAULT 'local'");
+ensureColumn("time_off_requests", "decision_note", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("time_off_requests", "local_approved_by", "TEXT");
+ensureColumn("time_off_requests", "local_approved_at", "TEXT");
+ensureColumn("time_off_requests", "hr_approved_by", "TEXT");
+ensureColumn("time_off_requests", "hr_approved_at", "TEXT");
+ensureColumn("time_off_requests", "original_shifts_json", "TEXT NOT NULL DEFAULT '[]'");
+ensureColumn("vacation_change_requests", "approval_stage", "TEXT NOT NULL DEFAULT 'local'");
+ensureColumn("vacation_change_requests", "decision_note", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("vacation_change_requests", "local_approved_by", "TEXT");
+ensureColumn("vacation_change_requests", "local_approved_at", "TEXT");
+ensureColumn("vacation_change_requests", "hr_approved_by", "TEXT");
+ensureColumn("vacation_change_requests", "hr_approved_at", "TEXT");
 db.exec("CREATE INDEX IF NOT EXISTS idx_portal_users_role_active ON portal_users(role, active)");
 
 function rebuildGlobalDayBlocksForLocations() {
@@ -732,6 +818,10 @@ const defaultSettings = {
   vacation_count_saturday: "0",
   vacation_pdf_size: "A4",
   allow_past_week_editing: "0",
+  current_week_auto_lock: "1",
+  current_week_lock_mode: "closing",
+  current_week_lock_day: "saturday",
+  current_week_lock_time: "17:00",
   break_rule_enabled: "1",
   break_after_minutes: "360",
   break_duration_minutes: "30",
@@ -756,6 +846,7 @@ const planningDays = [
 const fixedWorkdayKeys = planningDays.map(([day]) => day);
 
 for (const [day, start, end] of planningDays) {
+  defaultSettings[`${day}_open`] = "1";
   defaultSettings[`${day}_start_time`] = start;
   defaultSettings[`${day}_end_time`] = end;
   defaultSettings[`${day}_lunch_enabled`] = "0";
@@ -1143,9 +1234,35 @@ function isPastWeekStart(weekStart) {
   return weekStart < currentWeekStart();
 }
 
+function viennaNowLocal(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(date);
+  const value = (type) => parts.find((part) => part.type === type)?.value || "";
+  return `${value("year")}-${value("month")}-${value("day")}T${value("hour")}:${value("minute")}`;
+}
+
+function currentWeekLockPoint(settings = getSettings()) {
+  const weekStart = currentWeekStart();
+  if (settings.current_week_lock_mode === "manual") {
+    const offsets = { friday: 4, saturday: 5, sunday: 6 };
+    const day = offsets[settings.current_week_lock_day] ?? 5;
+    return `${addDays(weekStart, day)}T${isTime(settings.current_week_lock_time) ? settings.current_week_lock_time : "17:00"}`;
+  }
+  const openDays = planningDays
+    .map(([day], index) => ({ day, index, open: settings[`${day}_open`] !== "0", end: settings[`${day}_end_time`] }))
+    .filter((item) => item.open && isTime(item.end));
+  const last = openDays.at(-1) || { index: 4, end: "18:00" };
+  return `${addDays(weekStart, last.index)}T${last.end}`;
+}
+
 function assertWeekEditable(weekStart, settings = getSettings()) {
   if (isPastWeekStart(weekStart) && !settingEnabled(settings, "allow_past_week_editing")) {
     throw httpError(423, "Vergangene Kalenderwochen sind standardmäßig gesperrt. Das kann in den Grundeinstellungen aktiviert werden.");
+  }
+  if (weekStart === currentWeekStart() && settingEnabled(settings, "current_week_auto_lock") && viennaNowLocal() >= currentWeekLockPoint(settings)) {
+    throw httpError(423, "Der Dienstplan der aktuellen Woche ist bereits für Änderungen gesperrt.");
   }
 }
 
@@ -1228,7 +1345,11 @@ function getPortalStatus() {
       timeOffRequests: portalEnabled,
       vacationChanges: portalEnabled,
       requestBlackouts: portalEnabled,
+      approvalWorkflow: portalEnabled,
       timeTracking: false,
+    },
+    workflow: {
+      vacationHrApprovalRequired: vacationHrApprovalRequired(),
     },
   };
 }
@@ -1508,6 +1629,8 @@ function insertApprovedTimeOff(entry) {
     SELECT * FROM shifts WHERE employee_number = ? AND shift_date = ?
       AND start_time < ? AND ? < end_time ORDER BY start_time
   `).all(entry.employee_number, entry.request_date, entry.end_time, entry.start_time);
+  db.prepare("UPDATE time_off_requests SET original_shifts_json = ? WHERE id = ?")
+    .run(JSON.stringify(shifts), entry.id);
   const insertShift = db.prepare(`
     INSERT INTO shifts (employee_number, department_id, shift_date, start_time, end_time, area, note)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -1527,6 +1650,82 @@ function insertApprovedTimeOff(entry) {
     VALUES (?, ?, ?, ?, 'time_off', ?, NULL, 0, ?, ?)
   `).run(entry.employee_number, getMonday(entry.request_date), entry.request_date, entry.request_date, entry.note || "", entry.start_time, entry.end_time);
   return Number(option.lastInsertRowid);
+}
+
+function restoreApprovedTimeOff(entry) {
+  let originals = [];
+  try { originals = JSON.parse(entry.original_shifts_json || "[]"); } catch {}
+  if (entry.option_id) db.prepare("DELETE FROM week_options WHERE id = ?").run(entry.option_id);
+  for (const original of originals) {
+    db.prepare(`
+      DELETE FROM shifts WHERE employee_number = ? AND shift_date = ?
+        AND COALESCE(department_id, 0) = COALESCE(?, 0)
+        AND start_time >= ? AND end_time <= ?
+    `).run(original.employee_number, original.shift_date, original.department_id, original.start_time, original.end_time);
+    db.prepare(`
+      INSERT INTO shifts (employee_number, department_id, shift_date, start_time, end_time, area, note)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(original.employee_number, original.department_id, original.shift_date, original.start_time, original.end_time, original.area || "", original.note || "");
+  }
+}
+
+function recordRequestDecision(kind, id, stage, action, actor, note = "") {
+  db.prepare(`
+    INSERT INTO request_decisions (request_kind, request_id, stage, action, actor_employee_number, note)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(kind, Number(id), stage, action, actor, stripEmoji(String(note || "").trim()).slice(0, 500));
+}
+
+function requestDecisionHistory(kind, id) {
+  return db.prepare(`
+    SELECT id, stage, action, actor_employee_number, note, created_at
+    FROM request_decisions WHERE request_kind = ? AND request_id = ? ORDER BY id
+  `).all(kind, Number(id));
+}
+
+function vacationHrApprovalRequired() {
+  return getPortalSettings().vacation_hr_approval_required === "1";
+}
+
+function actorStage(session, entry) {
+  if (entry.approval_stage === "hr" && (session.role === "hr" || session.role === "admin" || session.employeeNumber === "local")) return "hr";
+  return "local";
+}
+
+function assertRequestScope(session, entry) {
+  if (["admin", "hr"].includes(session.role) || session.employeeNumber === "local") return;
+  const locationId = entry.location_id || db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(entry.employee_number)?.home_location_id;
+  if (String(locationId || "") !== String(session.homeLocationId || "")) {
+    throw httpError(403, "Dieser Antrag gehört nicht zum eigenen Standort.", "PORTAL_PERMISSION_DENIED");
+  }
+  if (session.role === "department_manager") {
+    const today = viennaTodayIso();
+    const delegated = db.prepare(`
+      SELECT 1 FROM approval_delegations WHERE location_id = ? AND delegate_employee_number = ?
+        AND active = 1 AND date_from <= ? AND date_to >= ? LIMIT 1
+    `).get(locationId, session.employeeNumber, today, today);
+    const managerPresent = db.prepare(`
+      SELECT u.employee_number FROM portal_users u JOIN employees e ON e.personnel_number = u.employee_number
+      WHERE u.role = 'manager' AND u.active = 1 AND e.home_location_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM week_options w WHERE w.employee_number = u.employee_number
+            AND ? BETWEEN w.date_from AND w.date_to AND w.option_type IN ('vacation','sick','time_off','branch')
+        ) LIMIT 1
+    `).get(locationId, today);
+    if (!delegated && managerPresent) throw httpError(403, "Die Abteilungsleitung darf diesen Antrag nur bei Abwesenheit oder hinterlegter Vertretung der Filialleitung bearbeiten.");
+  }
+}
+
+function publicRequestStatus(value) {
+  return ({
+    pending: "pending_local",
+    pending_local: "pending_local",
+    preliminary_local: "preliminary_local",
+    pending_hr: "pending_hr",
+    approved: "approved",
+    rejected: "rejected",
+    cancelled: "cancelled",
+  })[value] || value;
 }
 
 function sendPortalInactive(_request, response) {
@@ -2277,6 +2476,7 @@ function dayConfiguration(isoDate, settings, context = null) {
   const contextMinStaff = context ? staffingFloorForContext(context) : 0;
   return {
     key,
+    open: settings[`${key}_open`] !== "0",
     start: settings[`${key}_start_time`],
     end: settings[`${key}_end_time`],
     lunchEnabled: settingEnabled(settings, `${key}_lunch_enabled`),
@@ -2292,7 +2492,7 @@ function dayConfiguration(isoDate, settings, context = null) {
 
 function operatingHours(isoDate, settings) {
   const config = dayConfiguration(isoDate, settings);
-  return config ? { start: config.start, end: config.end } : null;
+  return config?.open ? { start: config.start, end: config.end } : null;
 }
 
 function serializeGlobalDayBlock(row) {
@@ -2900,7 +3100,9 @@ function getSchedule(weekValue, contextInput = {}) {
     settings,
     currentWeekStart: currentWeekStart(),
     isPastWeek: isPastWeekStart(weekStart),
-    isPastWeekLocked: isPastWeekStart(weekStart) && !settingEnabled(settings, "allow_past_week_editing"),
+    isPastWeekLocked: (isPastWeekStart(weekStart) && !settingEnabled(settings, "allow_past_week_editing"))
+      || (weekStart === currentWeekStart() && settingEnabled(settings, "current_week_auto_lock") && viennaNowLocal() >= currentWeekLockPoint(settings)),
+    currentWeekLockPoint: currentWeekLockPoint(settings),
     employees,
     shifts,
     weekOptions,
@@ -4142,6 +4344,70 @@ app.get("/api/portal/v1/roles", (_request, response) => {
   response.json({ apiVersion: PORTAL_API_VERSION, roles: getPortalRoles() });
 });
 
+app.get("/api/portal/v1/workflow-settings", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "vacation:read");
+  response.json({
+    vacationHrApprovalRequired: vacationHrApprovalRequired(),
+    canChange: session.employeeNumber === "local" || session.role === "admin" || session.permissions?.includes("hr:settings"),
+  });
+});
+
+app.put("/api/portal/v1/workflow-settings", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "hr:settings");
+  const required = request.body.vacationHrApprovalRequired === true;
+  if (required) {
+    const hr = db.prepare("SELECT 1 FROM portal_users WHERE role = 'hr' AND active = 1 AND TRIM(password_hash) <> '' LIMIT 1").get();
+    if (!hr) throw httpError(409, "Bitte zuerst mindestens einen aktiven Zugang mit der Rolle Personalleitung einrichten.");
+  }
+  db.prepare(`
+    INSERT INTO portal_settings (key, value, updated_at) VALUES ('vacation_hr_approval_required', ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+  `).run(required ? "1" : "0");
+  auditPortal(session.employeeNumber, "workflow.settings.update", "portal_settings", "vacation_hr_approval_required", required ? "1" : "0");
+  response.json({ vacationHrApprovalRequired: required, canChange: true });
+});
+
+function approvalDelegations() {
+  return db.prepare(`
+    SELECT d.*, l.name AS location_name, e.full_name, e.nickname
+    FROM approval_delegations d JOIN locations l ON l.id = d.location_id
+    JOIN employees e ON e.personnel_number = d.delegate_employee_number
+    ORDER BY d.active DESC, d.date_from DESC, d.id DESC
+  `).all().map((row) => ({ ...row, active: Boolean(row.active) }));
+}
+
+app.get("/api/portal/v1/approval-delegations", (request, response) => {
+  requirePortalAdminOrLocal(request, "vacation:read");
+  response.json({ delegations: approvalDelegations() });
+});
+
+app.post("/api/portal/v1/approval-delegations", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "settings:write");
+  const locationId = normalizeLocationId(request.body.locationId);
+  const employeeNumber = String(request.body.employeeNumber || "").trim();
+  const dateFrom = String(request.body.dateFrom || "");
+  const dateTo = String(request.body.dateTo || "");
+  const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 240);
+  validateLocationExists(locationId);
+  const delegate = db.prepare(`
+    SELECT e.personnel_number FROM employees e JOIN portal_users u ON u.employee_number = e.personnel_number
+    WHERE e.personnel_number = ? AND e.home_location_id = ? AND u.role = 'department_manager' AND u.active = 1
+  `).get(employeeNumber, locationId);
+  if (!delegate) throw httpError(400, "Bitte eine aktive Abteilungsleitung dieser Filiale auswählen.");
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) throw httpError(400, "Bitte einen gültigen Vertretungszeitraum eingeben.");
+  db.prepare(`INSERT INTO approval_delegations (location_id, delegate_employee_number, date_from, date_to, note, created_by) VALUES (?, ?, ?, ?, ?, ?)`)
+    .run(locationId, employeeNumber, dateFrom, dateTo, note, session.employeeNumber);
+  response.status(201).json({ delegations: approvalDelegations() });
+});
+
+app.delete("/api/portal/v1/approval-delegations/:id", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "settings:write");
+  const result = db.prepare("DELETE FROM approval_delegations WHERE id = ?").run(Number(request.params.id));
+  if (!result.changes) throw httpError(404, "Die Vertretung wurde nicht gefunden.");
+  auditPortal(session.employeeNumber, "approval_delegation.delete", "approval_delegation", request.params.id);
+  response.status(204).end();
+});
+
 app.get("/api/portal/v1/session", (request, response) => {
   const status = getPortalStatus();
   const session = status.portalEnabled ? portalSessionFromRequest(request) : null;
@@ -4328,11 +4594,29 @@ app.post("/api/portal/v1/me/time-off-check", (request, response) => {
   response.json(evaluateTimeOffRequest(session.employeeNumber, request.body));
 });
 
+app.get("/api/portal/v1/me/time-off-slots", (request, response) => {
+  const session = requirePortalSession(request, "own_time:read");
+  const date = String(request.query.date || "");
+  if (!isIsoDate(date)) throw httpError(400, "Bitte zuerst ein gültiges Datum auswählen.");
+  const settings = getSettings();
+  const hours = operatingHours(date, settings);
+  const context = employeeRequestContext(session.employeeNumber, date);
+  const block = getGlobalDayBlockForDate(date, context.locationId);
+  if (!hours || block) {
+    response.json({ date, closed: true, reason: block?.reason || block?.holiday_name || "An diesem Tag ist die Filiale geschlossen.", startTimes: [], endTimes: [] });
+    return;
+  }
+  const values = [];
+  for (let minute = timeToMinutes(hours.start); minute <= timeToMinutes(hours.end); minute += 15) values.push(minutesToTime(minute));
+  response.json({ date, closed: false, start: hours.start, end: hours.end, startTimes: values.slice(0, -1), endTimes: values.slice(1) });
+});
+
 app.get("/api/portal/v1/me/time-off-requests", (request, response) => {
   const session = requirePortalSession(request, "own_time:read");
   const requests = db.prepare(`
-    SELECT id, request_date, start_time, end_time, note, status, traffic_light, check_reason,
-           decided_by, decided_at, created_at, updated_at
+    SELECT id, request_date, start_time, end_time, note, status, approval_type, approval_stage,
+           traffic_light, check_reason, decision_note, local_approved_by, local_approved_at,
+           hr_approved_by, hr_approved_at, decided_by, decided_at, created_at, updated_at
     FROM time_off_requests WHERE employee_number = ? ORDER BY request_date DESC, created_at DESC
   `).all(session.employeeNumber);
   response.json({ requests });
@@ -4347,11 +4631,13 @@ app.post("/api/portal/v1/me/time-off-requests", (request, response) => {
   const startTime = String(request.body.startTime || "");
   const endTime = String(request.body.endTime || "");
   const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
+  const approvalType = request.body.approvalType === "hr" ? "hr" : "local";
+  const locationId = employeeRequestContext(session.employeeNumber, date).locationId;
   const result = db.prepare(`
     INSERT INTO time_off_requests
-      (employee_number, request_date, start_time, end_time, note, traffic_light, check_reason)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(session.employeeNumber, date, startTime, endTime, note, check.trafficLight, check.reason);
+      (employee_number, location_id, request_date, start_time, end_time, note, approval_type, approval_stage, status, traffic_light, check_reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'local', 'pending_local', ?, ?)
+  `).run(session.employeeNumber, locationId, date, startTime, endTime, note, approvalType, check.trafficLight, check.reason);
   auditPortal(session.employeeNumber, "time_off.request.create", "time_off_request", String(result.lastInsertRowid), JSON.stringify(check));
   response.status(201).json({ id: Number(result.lastInsertRowid), status: "pending", check });
 });
@@ -4359,7 +4645,7 @@ app.post("/api/portal/v1/me/time-off-requests", (request, response) => {
 app.delete("/api/portal/v1/me/time-off-requests/:id", (request, response) => {
   const session = requirePortalSession(request, "own_time:write");
   assertPortalCsrf(request);
-  const result = db.prepare("DELETE FROM time_off_requests WHERE id = ? AND employee_number = ? AND status = 'pending'")
+  const result = db.prepare("DELETE FROM time_off_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local')")
     .run(Number(request.params.id), session.employeeNumber);
   if (!result.changes) throw httpError(404, "Der offene ZA-Antrag wurde nicht gefunden.");
   auditPortal(session.employeeNumber, "time_off.request.delete", "time_off_request", request.params.id);
@@ -4372,7 +4658,7 @@ app.get("/api/portal/v1/me/approved-vacations", (request, response) => {
   const pendingChanges = db.prepare(`
     SELECT id, vacation_group_id, request_type, original_date_from, original_date_to,
            requested_date_from, requested_date_to, note, status, created_at
-    FROM vacation_change_requests WHERE employee_number = ? AND status = 'pending'
+    FROM vacation_change_requests WHERE employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')
     ORDER BY created_at DESC
   `).all(session.employeeNumber);
   response.json({ vacations, pendingChanges });
@@ -4388,7 +4674,7 @@ app.post("/api/portal/v1/me/vacation-change-requests", (request, response) => {
   if (!vacation) throw httpError(404, "Der genehmigte Urlaub wurde nicht gefunden.");
   const pending = db.prepare(`
     SELECT id FROM vacation_change_requests
-    WHERE employee_number = ? AND vacation_group_id = ? AND status = 'pending' LIMIT 1
+    WHERE employee_number = ? AND vacation_group_id = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr') LIMIT 1
   `).get(session.employeeNumber, groupId);
   if (pending) throw httpError(409, "Für diesen Urlaub besteht bereits ein offener Änderungs- oder Stornoantrag.");
   let requestedFrom = null;
@@ -4406,8 +4692,8 @@ app.post("/api/portal/v1/me/vacation-change-requests", (request, response) => {
   const result = db.prepare(`
     INSERT INTO vacation_change_requests
       (employee_number, vacation_group_id, request_type, original_date_from, original_date_to,
-       requested_date_from, requested_date_to, note)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       requested_date_from, requested_date_to, note, status, approval_stage)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_local', 'local')
   `).run(session.employeeNumber, groupId, requestType, vacation.dateFrom, vacation.dateTo, requestedFrom, requestedTo, note);
   auditPortal(session.employeeNumber, `vacation.${requestType}.request`, "vacation_change_request", String(result.lastInsertRowid));
   response.status(201).json({ id: Number(result.lastInsertRowid), status: "pending" });
@@ -4416,7 +4702,7 @@ app.post("/api/portal/v1/me/vacation-change-requests", (request, response) => {
 app.delete("/api/portal/v1/me/vacation-change-requests/:id", (request, response) => {
   const session = requirePortalSession(request, "own_vacation:request");
   assertPortalCsrf(request);
-  const result = db.prepare("DELETE FROM vacation_change_requests WHERE id = ? AND employee_number = ? AND status = 'pending'")
+  const result = db.prepare("DELETE FROM vacation_change_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local')")
     .run(Number(request.params.id), session.employeeNumber);
   if (!result.changes) throw httpError(404, "Der offene Änderungs- oder Stornoantrag wurde nicht gefunden.");
   auditPortal(session.employeeNumber, "vacation.change_request.delete", "vacation_change_request", request.params.id);
@@ -4426,7 +4712,9 @@ app.delete("/api/portal/v1/me/vacation-change-requests/:id", (request, response)
 app.get("/api/portal/v1/me/vacation-requests", (request, response) => {
   const session = requirePortalSession(request, "own_vacation:read");
   const requests = db.prepare(`
-    SELECT id, date_from, date_to, note, status, decided_by, decided_at, created_at, updated_at
+    SELECT id, date_from, date_to, note, status, approval_stage, decision_note,
+           local_approved_by, local_approved_at, hr_approved_by, hr_approved_at,
+           decided_by, decided_at, created_at, updated_at
     FROM vacation_requests WHERE employee_number = ? ORDER BY created_at DESC, id DESC
   `).all(session.employeeNumber);
   response.json({ requests });
@@ -4436,10 +4724,11 @@ app.post("/api/portal/v1/me/vacation-requests", (request, response) => {
   const session = requirePortalSession(request, "own_vacation:request");
   assertPortalCsrf(request);
   const vacation = validateVacationRequestDates(session.employeeNumber, request.body);
+  const locationId = employeeRequestContext(session.employeeNumber, vacation.dateFrom).locationId;
   const result = db.prepare(`
-    INSERT INTO vacation_requests (employee_number, date_from, date_to, note)
-    VALUES (?, ?, ?, ?)
-  `).run(vacation.employeeNumber, vacation.dateFrom, vacation.dateTo, vacation.note);
+    INSERT INTO vacation_requests (employee_number, location_id, date_from, date_to, note, status, approval_stage)
+    VALUES (?, ?, ?, ?, ?, 'pending_local', 'local')
+  `).run(vacation.employeeNumber, locationId, vacation.dateFrom, vacation.dateTo, vacation.note);
   auditPortal(session.employeeNumber, "vacation.request.create", "vacation_request", String(result.lastInsertRowid));
   response.status(201).json({ id: Number(result.lastInsertRowid), status: "pending" });
 });
@@ -4447,7 +4736,7 @@ app.post("/api/portal/v1/me/vacation-requests", (request, response) => {
 app.delete("/api/portal/v1/me/vacation-requests/:id", (request, response) => {
   const session = requirePortalSession(request, "own_vacation:request");
   assertPortalCsrf(request);
-  const result = db.prepare("DELETE FROM vacation_requests WHERE id = ? AND employee_number = ? AND status = 'pending'")
+  const result = db.prepare("DELETE FROM vacation_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local')")
     .run(Number(request.params.id), session.employeeNumber);
   if (!result.changes) throw httpError(404, "Der offene Urlaubsantrag wurde nicht gefunden.");
   auditPortal(session.employeeNumber, "vacation.request.delete", "vacation_request", request.params.id);
@@ -4470,8 +4759,11 @@ app.put("/api/portal/v1/vacation-requests/:id/decision", (request, response) => 
   const session = requirePortalAdminOrLocal(request, "vacation:approve");
   const decision = String(request.body.decision || "");
   if (!["approved", "rejected"].includes(decision)) throw httpError(400, "Bitte genehmigen oder ablehnen.");
-  const entry = db.prepare("SELECT * FROM vacation_requests WHERE id = ? AND status = 'pending'").get(Number(request.params.id));
+  const entry = db.prepare("SELECT * FROM vacation_requests WHERE id = ? AND status IN ('pending','pending_local','preliminary_local')").get(Number(request.params.id));
   if (!entry) throw httpError(404, "Der offene Urlaubsantrag wurde nicht gefunden.");
+  assertRequestScope(session, entry);
+  if (session.role === "hr") throw httpError(403, "Die Personalleitung darf die vorgelagerte Filialfreigabe nicht ersetzen.");
+  if (vacationHrApprovalRequired()) throw httpError(409, "Dieser Antrag muss über den zweistufigen Freigabeworkflow bearbeitet werden.");
   let groupId = null;
   if (decision === "approved") {
     const availability = evaluateVacationRequest(entry.employee_number, { dateFrom: entry.date_from, dateTo: entry.date_to });
@@ -4501,38 +4793,211 @@ app.put("/api/portal/v1/vacation-requests/:id/decision", (request, response) => 
 });
 
 app.get("/api/portal/v1/absence-requests", (request, response) => {
-  requirePortalAdminOrLocal(request, "vacation:read");
+  const session = requirePortalAdminOrLocal(request, "vacation:read");
+  const scoped = !["admin", "hr"].includes(session.role) && session.employeeNumber !== "local";
+  const scopeSql = scoped ? "AND COALESCE(v.location_id, e.home_location_id) = ?" : "";
+  const scopeParams = scoped ? [session.homeLocationId] : [];
   const vacationRequests = db.prepare(`
-    SELECT v.id, v.employee_number, v.date_from, v.date_to, v.note, v.status, v.created_at,
+    SELECT v.id, v.employee_number, v.location_id, v.date_from, v.date_to, v.note, v.status,
+           v.approval_stage, v.decision_note, v.local_approved_by, v.local_approved_at,
+           v.hr_approved_by, v.hr_approved_at, v.decided_by, v.decided_at, v.created_at,
            e.full_name, e.nickname, e.color
     FROM vacation_requests v JOIN employees e ON e.personnel_number = v.employee_number
-    WHERE v.status = 'pending'
-  `).all().map((row) => ({ ...row, kind: "vacation" }));
+    WHERE 1 = 1 ${scopeSql}
+  `).all(...scopeParams).map((row) => ({ ...row, status: publicRequestStatus(row.status), kind: "vacation", decisions: requestDecisionHistory("vacation", row.id) }));
+  const timeScopeSql = scoped ? "AND COALESCE(t.location_id, e.home_location_id) = ?" : "";
   const timeOffRequests = db.prepare(`
-    SELECT t.id, t.employee_number, t.request_date, t.start_time, t.end_time, t.note,
-           t.status, t.traffic_light, t.check_reason, t.created_at,
+    SELECT t.id, t.employee_number, t.location_id, t.request_date, t.start_time, t.end_time, t.note,
+           t.status, t.approval_type, t.approval_stage, t.traffic_light, t.check_reason,
+           t.decision_note, t.local_approved_by, t.local_approved_at, t.hr_approved_by,
+           t.hr_approved_at, t.decided_by, t.decided_at, t.created_at,
            e.full_name, e.nickname, e.color
     FROM time_off_requests t JOIN employees e ON e.personnel_number = t.employee_number
-    WHERE t.status = 'pending'
-  `).all().map((row) => ({ ...row, kind: "time_off" }));
+    WHERE 1 = 1 ${timeScopeSql}
+  `).all(...scopeParams).map((row) => ({ ...row, status: publicRequestStatus(row.status), kind: "time_off", decisions: requestDecisionHistory("time_off", row.id) }));
+  const changeScopeSql = scoped ? "AND e.home_location_id = ?" : "";
   const changeRequests = db.prepare(`
     SELECT c.id, c.employee_number, c.vacation_group_id, c.request_type,
            c.original_date_from, c.original_date_to, c.requested_date_from, c.requested_date_to,
-           c.note, c.status, c.created_at, e.full_name, e.nickname, e.color
+           c.note, c.status, c.approval_stage, c.decision_note, c.local_approved_by,
+           c.local_approved_at, c.hr_approved_by, c.hr_approved_at, c.decided_by, c.decided_at,
+           c.created_at, e.full_name, e.nickname, e.color, e.home_location_id AS location_id
     FROM vacation_change_requests c JOIN employees e ON e.personnel_number = c.employee_number
-    WHERE c.status = 'pending'
-  `).all().map((row) => ({ ...row, kind: row.request_type === "cancel" ? "vacation_cancel" : "vacation_change" }));
+    WHERE 1 = 1 ${changeScopeSql}
+  `).all(...scopeParams).map((row) => ({ ...row, status: publicRequestStatus(row.status), kind: row.request_type === "cancel" ? "vacation_cancel" : "vacation_change", decisions: requestDecisionHistory("vacation_change", row.id) }));
   const requests = [...vacationRequests, ...timeOffRequests, ...changeRequests]
-    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || Number(a.id) - Number(b.id));
-  response.json({ requests });
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || Number(b.id) - Number(a.id));
+  const actionable = requests.filter((entry) => {
+    if (!["pending_local", "preliminary_local", "pending_hr"].includes(entry.status)) return false;
+    if (entry.approval_stage === "hr") return ["hr", "admin"].includes(session.role) || session.employeeNumber === "local";
+    return session.role !== "hr" || session.role === "admin" || session.employeeNumber === "local";
+  });
+  response.json({
+    requests,
+    counts: {
+      vacation: actionable.filter((entry) => entry.kind !== "time_off").length,
+      timeOff: actionable.filter((entry) => entry.kind === "time_off").length,
+      total: actionable.length,
+    },
+    vacationHrApprovalRequired: vacationHrApprovalRequired(),
+  });
+});
+
+function finalizeVacationRequest(entry, actor, note) {
+  const availability = evaluateVacationRequest(entry.employee_number, { dateFrom: entry.date_from, dateTo: entry.date_to });
+  if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
+  const vacation = validateVacationEntry({ employeeNumber: entry.employee_number, dateFrom: entry.date_from, dateTo: entry.date_to, note: entry.note });
+  const groupId = entry.vacation_group_id || createVacationGroupId();
+  insertVacationEntries(vacation, groupId);
+  db.prepare(`
+    UPDATE vacation_requests SET status = 'approved', approval_stage = 'complete', decision_note = ?,
+      decided_by = ?, decided_at = CURRENT_TIMESTAMP, vacation_group_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+  `).run(note, actor, groupId, entry.id);
+  return { vacationGroupId: groupId };
+}
+
+function finalizeTimeOffRequest(entry, actor, note) {
+  const check = evaluateTimeOffRequest(entry.employee_number, {
+    date: entry.request_date, startTime: entry.start_time, endTime: entry.end_time, excludeRequestId: entry.id,
+  });
+  if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+  const optionId = insertApprovedTimeOff(entry);
+  db.prepare(`
+    UPDATE time_off_requests SET status = 'approved', approval_stage = 'complete', option_id = ?,
+      traffic_light = ?, check_reason = ?, decision_note = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP,
+      updated_at = CURRENT_TIMESTAMP WHERE id = ?
+  `).run(optionId, check.trafficLight, check.reason, note, actor, entry.id);
+  return { optionId };
+}
+
+function finalizeVacationChangeRequest(entry, actor, note) {
+  const current = approvedVacationsForEmployee(entry.employee_number, "1900-01-01").find((item) => item.groupId === entry.vacation_group_id);
+  if (!current) throw httpError(409, "Der ursprüngliche Urlaub besteht nicht mehr.");
+  let replacement = null;
+  if (entry.request_type === "change") {
+    const availability = evaluateVacationRequest(entry.employee_number, { dateFrom: entry.requested_date_from, dateTo: entry.requested_date_to });
+    if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
+    replacement = validateVacationEntry({
+      employeeNumber: entry.employee_number,
+      dateFrom: entry.requested_date_from,
+      dateTo: entry.requested_date_to,
+      note: entry.note || current.note,
+    }, entry.vacation_group_id);
+  }
+  deleteVacationGroup(entry.vacation_group_id);
+  if (replacement) insertVacationEntries(replacement, entry.vacation_group_id);
+  db.prepare(`
+    UPDATE vacation_change_requests SET status = 'approved', approval_stage = 'complete', decision_note = ?,
+      decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+  `).run(note, actor, entry.id);
+  if (entry.request_type === "change") {
+    db.prepare(`UPDATE vacation_requests SET date_from = ?, date_to = ?, note = ?, updated_at = CURRENT_TIMESTAMP WHERE vacation_group_id = ?`)
+      .run(entry.requested_date_from, entry.requested_date_to, entry.note || current.note, entry.vacation_group_id);
+  } else {
+    db.prepare(`UPDATE vacation_requests SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE vacation_group_id = ?`)
+      .run(entry.vacation_group_id);
+  }
+  return {};
+}
+
+app.put("/api/portal/v1/absence-requests/:kind/:id/action", (request, response) => {
+  const kind = String(request.params.kind || "");
+  const permission = kind === "time_off" ? "time:review" : "vacation:approve";
+  const session = requirePortalAdminOrLocal(request, permission);
+  const table = kind === "time_off" ? "time_off_requests" : kind === "vacation_change" ? "vacation_change_requests" : kind === "vacation" ? "vacation_requests" : "";
+  if (!table) throw httpError(400, "Die Antragsart ist ungültig.");
+  let entry = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(Number(request.params.id));
+  if (!entry) throw httpError(404, "Der Antrag wurde nicht gefunden.");
+  if (!entry.location_id) entry.location_id = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(entry.employee_number)?.home_location_id;
+  assertRequestScope(session, entry);
+  if (entry.approval_stage !== "hr" && session.role === "hr") {
+    throw httpError(403, "Die Personalleitung darf die vorgelagerte Filialfreigabe nicht ersetzen.");
+  }
+  const action = String(request.body.action || "");
+  const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
+  const stage = actorStage(session, entry);
+  if (entry.approval_stage === "hr" && stage !== "hr") throw httpError(403, "Dieser Antrag wartet auf die Personalleitung.");
+  if (stage === "hr" && !["hr", "admin"].includes(session.role) && session.employeeNumber !== "local") throw httpError(403, "Nur die Personalleitung darf diese Freigabe abschließen.");
+  if (entry.status === "approved" && entry.hr_approved_by && ["change", "cancel"].includes(action)
+    && !["hr", "admin"].includes(session.role) && session.employeeNumber !== "local") {
+    throw httpError(403, "Dieser verbindliche Antrag kann nur durch die Personalleitung geändert oder storniert werden.");
+  }
+  let result = {};
+  db.exec("BEGIN");
+  try {
+    if (action === "preliminary") {
+      if (!["pending", "pending_local", "preliminary_local"].includes(entry.status) || stage !== "local") throw httpError(409, "Dieser Antrag kann nicht vorläufig genehmigt werden.");
+      db.prepare(`UPDATE ${table} SET status = 'preliminary_local', approval_stage = 'local', decision_note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(note, entry.id);
+    } else if (action === "reject") {
+      if (!["pending", "pending_local", "preliminary_local", "pending_hr"].includes(entry.status)) throw httpError(409, "Dieser Antrag ist bereits abgeschlossen.");
+      db.prepare(`UPDATE ${table} SET status = 'rejected', approval_stage = 'complete', decision_note = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+        .run(note, session.employeeNumber, entry.id);
+    } else if (action === "approve") {
+      if (!["pending", "pending_local", "preliminary_local", "pending_hr"].includes(entry.status)) throw httpError(409, "Dieser Antrag ist bereits abgeschlossen.");
+      if (stage === "local") {
+        db.prepare(`UPDATE ${table} SET local_approved_by = ?, local_approved_at = CURRENT_TIMESTAMP WHERE id = ?`).run(session.employeeNumber, entry.id);
+        const needsHr = kind === "time_off" ? entry.approval_type === "hr" : vacationHrApprovalRequired();
+        if (needsHr) {
+          db.prepare(`UPDATE ${table} SET status = 'pending_hr', approval_stage = 'hr', decision_note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(note, entry.id);
+        } else if (kind === "time_off") result = finalizeTimeOffRequest(entry, session.employeeNumber, note);
+        else if (kind === "vacation") result = finalizeVacationRequest(entry, session.employeeNumber, note);
+        else result = finalizeVacationChangeRequest(entry, session.employeeNumber, note);
+      } else {
+        db.prepare(`UPDATE ${table} SET hr_approved_by = ?, hr_approved_at = CURRENT_TIMESTAMP WHERE id = ?`).run(session.employeeNumber, entry.id);
+        if (kind === "time_off") result = finalizeTimeOffRequest(entry, session.employeeNumber, note);
+        else if (kind === "vacation") result = finalizeVacationRequest(entry, session.employeeNumber, note);
+        else result = finalizeVacationChangeRequest(entry, session.employeeNumber, note);
+      }
+    } else if (action === "change" && entry.status === "approved") {
+      if (kind === "time_off") {
+        const date = String(request.body.date || "");
+        const startTime = String(request.body.startTime || "");
+        const endTime = String(request.body.endTime || "");
+        if (!isIsoDate(date) || !isTime(startTime) || !isTime(endTime) || endTime <= startTime) throw httpError(400, "Bitte einen gültigen neuen ZA-Zeitraum eingeben.");
+        restoreApprovedTimeOff(entry);
+        db.prepare(`UPDATE time_off_requests SET request_date = ?, start_time = ?, end_time = ?, note = CASE WHEN ? <> '' THEN ? ELSE note END, option_id = NULL, original_shifts_json = '[]', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+          .run(date, startTime, endTime, note, note, entry.id);
+        entry = db.prepare("SELECT * FROM time_off_requests WHERE id = ?").get(entry.id);
+        result = finalizeTimeOffRequest(entry, session.employeeNumber, note);
+      } else if (kind === "vacation") {
+        const dateFrom = String(request.body.dateFrom || "");
+        const dateTo = String(request.body.dateTo || "");
+        if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) throw httpError(400, "Bitte einen gültigen neuen Urlaubszeitraum eingeben.");
+        deleteVacationGroup(entry.vacation_group_id);
+        db.prepare(`UPDATE vacation_requests SET date_from = ?, date_to = ?, note = CASE WHEN ? <> '' THEN ? ELSE note END, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+          .run(dateFrom, dateTo, note, note, entry.id);
+        entry = db.prepare("SELECT * FROM vacation_requests WHERE id = ?").get(entry.id);
+        result = finalizeVacationRequest(entry, session.employeeNumber, note);
+      } else throw httpError(409, "Dieser Vorgang kann nicht direkt geändert werden.");
+    } else if (action === "cancel" && entry.status === "approved") {
+      if (kind === "time_off") restoreApprovedTimeOff(entry);
+      else if (kind === "vacation") deleteVacationGroup(entry.vacation_group_id);
+      else throw httpError(409, "Dieser Vorgang kann nicht direkt storniert werden.");
+      db.prepare(`UPDATE ${table} SET status = 'cancelled', approval_stage = 'complete', decision_note = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+        .run(note, session.employeeNumber, entry.id);
+    } else {
+      throw httpError(400, "Bitte eine gültige Entscheidung auswählen.");
+    }
+    recordRequestDecision(kind, entry.id, stage, action, session.employeeNumber, note);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  auditPortal(session.employeeNumber, `${kind}.${action}`, `${kind}_request`, String(entry.id), note);
+  const updated = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(entry.id);
+  response.json({ ok: true, request: { ...updated, status: publicRequestStatus(updated.status) }, ...result });
 });
 
 app.put("/api/portal/v1/time-off-requests/:id/decision", (request, response) => {
   const session = requirePortalAdminOrLocal(request, "time:review");
   const decision = String(request.body.decision || "");
   if (!["approved", "rejected"].includes(decision)) throw httpError(400, "Bitte genehmigen oder ablehnen.");
-  const entry = db.prepare("SELECT * FROM time_off_requests WHERE id = ? AND status = 'pending'").get(Number(request.params.id));
+  const entry = db.prepare("SELECT * FROM time_off_requests WHERE id = ? AND status IN ('pending','pending_local','preliminary_local')").get(Number(request.params.id));
   if (!entry) throw httpError(404, "Der offene ZA-Antrag wurde nicht gefunden.");
+  assertRequestScope(session, entry);
+  if (session.role === "hr") throw httpError(403, "Die Personalleitung darf die vorgelagerte Filialfreigabe nicht ersetzen.");
+  if (entry.approval_type === "hr") throw httpError(409, "Dieser ZA muss über den zweistufigen Freigabeworkflow bearbeitet werden.");
   let optionId = null;
   if (decision === "approved") {
     const check = evaluateTimeOffRequest(entry.employee_number, {
@@ -4568,8 +5033,12 @@ app.put("/api/portal/v1/vacation-change-requests/:id/decision", (request, respon
   const session = requirePortalAdminOrLocal(request, "vacation:approve");
   const decision = String(request.body.decision || "");
   if (!["approved", "rejected"].includes(decision)) throw httpError(400, "Bitte genehmigen oder ablehnen.");
-  const entry = db.prepare("SELECT * FROM vacation_change_requests WHERE id = ? AND status = 'pending'").get(Number(request.params.id));
+  const entry = db.prepare("SELECT * FROM vacation_change_requests WHERE id = ? AND status IN ('pending','pending_local','preliminary_local')").get(Number(request.params.id));
   if (!entry) throw httpError(404, "Der offene Änderungs- oder Stornoantrag wurde nicht gefunden.");
+  entry.location_id = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(entry.employee_number)?.home_location_id;
+  assertRequestScope(session, entry);
+  if (session.role === "hr") throw httpError(403, "Die Personalleitung darf die vorgelagerte Filialfreigabe nicht ersetzen.");
+  if (vacationHrApprovalRequired()) throw httpError(409, "Dieser Antrag muss über den zweistufigen Freigabeworkflow bearbeitet werden.");
   if (decision === "approved") {
     const current = approvedVacationsForEmployee(entry.employee_number, "1900-01-01").find((item) => item.groupId === entry.vacation_group_id);
     if (!current) throw httpError(409, "Der ursprüngliche Urlaub besteht nicht mehr.");
@@ -4777,6 +5246,9 @@ app.put("/api/settings", (request, response) => {
     ? String(body.toastDuration)
     : "medium";
   const brandingValues = brandingValuesFromBody(body.branding || body);
+  const currentWeekLockMode = body.currentWeekLockMode === "manual" ? "manual" : "closing";
+  const currentWeekLockDay = ["friday", "saturday", "sunday"].includes(String(body.currentWeekLockDay)) ? String(body.currentWeekLockDay) : "saturday";
+  const currentWeekLockTime = String(body.currentWeekLockTime || "17:00");
 
   if (!Number.isInteger(backupIntervalHours) || backupIntervalHours < 1 || backupIntervalHours > 6) {
     throw httpError(400, "Das Backup-Intervall muss zwischen 1 und 6 Stunden liegen.");
@@ -4791,6 +5263,11 @@ app.put("/api/settings", (request, response) => {
   if (!Number.isFinite(saturdayBonusFactor) || saturdayBonusFactor < 1 || saturdayBonusFactor > 5) {
     throw httpError(400, "Der Samstagsfaktor muss zwischen 1 und 5 liegen.");
   }
+  if (!isTime(currentWeekLockTime)) throw httpError(400, "Der Sperrzeitpunkt ist ungültig.");
+  const lockOrder = { friday: 5, saturday: 6, sunday: 7 }[currentWeekLockDay] * 1440 + timeToMinutes(currentWeekLockTime);
+  if (currentWeekLockMode === "manual" && (lockOrder < 5 * 1440 + 18 * 60 || lockOrder > 7 * 1440 + 23 * 60)) {
+    throw httpError(400, "Der manuelle Sperrzeitpunkt muss zwischen Freitag 18:00 Uhr und Sonntag 23:00 Uhr liegen.");
+  }
 
   const values = {
     ...brandingValues,
@@ -4804,6 +5281,10 @@ app.put("/api/settings", (request, response) => {
     vacation_count_saturday: body.vacationCountSaturday === true ? "1" : "0",
     vacation_pdf_size: "A4",
     allow_past_week_editing: body.allowPastWeekEditing === true ? "1" : "0",
+    current_week_auto_lock: body.currentWeekAutoLock === false ? "0" : "1",
+    current_week_lock_mode: currentWeekLockMode,
+    current_week_lock_day: currentWeekLockDay,
+    current_week_lock_time: currentWeekLockTime,
     break_rule_enabled: body.breakRuleEnabled === false ? "0" : "1",
     break_after_minutes: String(breakAfterMinutes),
     break_duration_minutes: String(breakDurationMinutes),
@@ -4814,6 +5295,7 @@ app.put("/api/settings", (request, response) => {
   };
   for (const [day] of planningDays) {
     const submitted = submittedDays[day] || {};
+    const open = submitted.open !== false;
     const start = String(submitted.start || "");
     const end = String(submitted.end || "");
     const lunchEnabled = submitted.lunchEnabled === true;
@@ -4826,17 +5308,18 @@ app.put("/api/settings", (request, response) => {
     if (![start, end, lunchStart, lunchEnd, minFrom, minTo].every(isTime)) {
       throw httpError(400, `Bitte gültige Zeiten für ${day} eingeben.`);
     }
-    if (end <= start) throw httpError(400, `Das Dienstende für ${day} muss nach dem Beginn liegen.`);
+    if (open && end <= start) throw httpError(400, `Das Dienstende für ${day} muss nach dem Beginn liegen.`);
     if (lunchEnabled && (lunchEnd <= lunchStart || lunchStart < start || lunchEnd > end)) {
       throw httpError(400, `Die Mittagspause für ${day} muss innerhalb der Dienstzeit liegen.`);
     }
     if (!Number.isInteger(minStaff) || minStaff < 0 || minStaff > 99) {
       throw httpError(400, `Die Mindestbesetzung für ${day} ist ungültig.`);
     }
-    if (minTo <= minFrom || minFrom < start || minTo > end) {
+    if (open && (minTo <= minFrom || minFrom < start || minTo > end)) {
       throw httpError(400, `Der Zeitraum der Mindestbesetzung für ${day} muss innerhalb der Dienstzeit liegen.`);
     }
 
+    values[`${day}_open`] = open ? "1" : "0";
     values[`${day}_start_time`] = start;
     values[`${day}_end_time`] = end;
     values[`${day}_lunch_enabled`] = lunchEnabled ? "1" : "0";

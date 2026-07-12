@@ -14,5 +14,3 @@ Commercial use requires prior written permission from the copyright holder. Comm
 You may not remove copyright notices, claim authorship of Grabenplaner, or use protected names, logos, or branding kits without permission.
 
 This license is not an Open Source Initiative approved open-source license. If you want to use Grabenplaner commercially, request written permission first.
-
-This license text is intended as a practical project license and should be legally reviewed before relying on it for high-stakes commercial enforcement.
