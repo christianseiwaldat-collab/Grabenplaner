@@ -1,0 +1,2455 @@
+const state = {
+  weekStart: getMonday(new Date()),
+  vacationYear: new Date().getFullYear(),
+  vacationViewMode: "year",
+  vacationQuarter: Math.floor(new Date().getMonth() / 3) + 1,
+  vacationMonth: new Date().getMonth() + 1,
+  locationId: "",
+  departmentId: "",
+  data: null,
+  vacationData: null,
+  locations: [],
+  positions: [],
+  brandingKits: [],
+  portalStatus: null,
+  allEmployees: [],
+  updateStatus: null,
+  selectedColor: "#0b84c6",
+  personnelTab: "employees",
+  editingLocationId: null,
+  editingDepartmentId: null,
+  editingPositionId: null,
+  editingVacationEntitlements: false,
+  editingOptionId: null,
+  editingOptionGroupId: null,
+  editingGlobalBlockId: null,
+  editingVacationGroupId: null,
+};
+
+let scheduleNoteQuill = null;
+let scheduleNoteSanitizing = false;
+
+const optionLabels = {
+  vacation: "Urlaub",
+  sick: "Krank",
+  branch: "Andere Filiale",
+  vocational_school: "Berufsschule",
+  school: "Schulung",
+  time_off: "Zeitausgleich",
+  special_leave: "Sonderurlaub",
+  external_appointment: "Außer-Haus-Termin",
+  team_meeting: "Teamsitzung",
+  other: "Sonstiges",
+};
+const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const planningDayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+const dayKeyByNumber = { 1: "monday", 2: "tuesday", 3: "wednesday", 4: "thursday", 5: "friday", 6: "saturday" };
+const preferredDayLabels = { monday: "Montag", tuesday: "Dienstag", wednesday: "Mittwoch", thursday: "Donnerstag", friday: "Freitag" };
+const fixedDayLabels = { ...preferredDayLabels, saturday: "Samstag" };
+const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thursday: "Do", friday: "Fr", saturday: "Sa" };
+
+const elements = Object.fromEntries(
+  [
+    "planningView", "vacationsView", "personnelView", "settingsView", "planningNavChildren", "vacationNavChildren", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarEmployeeCount", "sidebarVersion", "pdfButton", "timeline", "weekLockNotice",
+    "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "backupSettings", "employeeSettings",
+    "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
+    "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField",
+    "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton",
+    "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
+    "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition",
+    "employeeSettings", "locationSettings", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationSubmitButton", "cancelLocationEditButton",
+    "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
+    "shiftModal", "shiftForm", "shiftModalTitle", "deleteShiftButton", "shiftCalculation", "shiftDepartment", "departmentPdfControl", "departmentPdfSelect", "departmentPdfButton",
+    "optionsModal", "optionForm", "optionList", "optionsWeekLabel", "optionsWeekRange", "optionPreviousWeek", "optionNextWeek", "globalBlockDate", "globalBlockReason", "globalBlockHoliday", "globalBlockSubmitButton", "optionSubmitButton", "cancelOptionEditButton", "autoPlanModal",
+    "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
+    "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
+    "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "portalFoundationHint",
+    "brandLogo", "footerBrandLogo", "adminContactLink", "brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt", "brandingPreviewLogo", "brandingPreviewTitle", "brandingPreviewCompany", "brandingKitLibrary", "exportBrandingButton", "brandingImportFile", "importBrandingButton", "toast",
+  ].map((id) => [id, document.querySelector(`#${id}`)]),
+);
+
+function getMonday(date) {
+  const copy = new Date(date);
+  copy.setHours(12, 0, 0, 0);
+  const day = copy.getDay() || 7;
+  copy.setDate(copy.getDate() - day + 1);
+  return toIsoDate(copy);
+}
+
+function getIsoWeek(isoDate) {
+  const date = new Date(`${isoDate}T12:00:00`);
+  const target = new Date(date.valueOf());
+  const dayNumber = (date.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNumber + 3);
+  const firstThursday = new Date(target.getFullYear(), 0, 4, 12);
+  const firstDayNumber = (firstThursday.getDay() + 6) % 7;
+  firstThursday.setDate(firstThursday.getDate() - firstDayNumber + 3);
+  return 1 + Math.round((target - firstThursday) / 604800000);
+}
+
+function toIsoDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function addDays(isoDate, amount) {
+  const date = new Date(`${isoDate}T12:00:00`);
+  date.setDate(date.getDate() + amount);
+  return toIsoDate(date);
+}
+
+function formatDate(isoDate, options = { day: "2-digit", month: "2-digit", year: "numeric" }) {
+  return new Intl.DateTimeFormat("de-AT", options).format(new Date(`${isoDate}T12:00:00`));
+}
+
+function formatHours(minutes) {
+  return `${new Intl.NumberFormat("de-AT", { minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(minutes / 60)} h`;
+}
+
+function formatCount(value) {
+  const rounded = Math.round(Number(value || 0) * 10) / 10;
+  return new Intl.NumberFormat("de-AT", {
+    minimumFractionDigits: Number.isInteger(rounded) ? 0 : 1,
+    maximumFractionDigits: 1,
+  }).format(rounded);
+}
+
+function formatDays(days) {
+  return `${new Intl.NumberFormat("de-AT", { minimumFractionDigits: days % 1 ? 1 : 0, maximumFractionDigits: 1 }).format(days)} T`;
+}
+
+function formatDaysLong(days) {
+  const value = Number(days || 0);
+  const formatted = new Intl.NumberFormat("de-AT", {
+    minimumFractionDigits: value % 1 ? 1 : 0,
+    maximumFractionDigits: 1,
+  }).format(value);
+  return `${formatted} ${value === 1 ? "Tag" : "Tage"}`;
+}
+
+function timeToMinutes(value) {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function operatingHours(date, settings = state.data.settings) {
+  const day = new Date(`${date}T12:00:00`).getDay();
+  const key = dayKeyByNumber[day];
+  return key ? { start: settings[`${key}_start_time`], end: settings[`${key}_end_time`], key } : null;
+}
+
+function dayConfig(date, settings = state.data.settings) {
+  const hours = operatingHours(date, settings);
+  if (!hours) return null;
+  return {
+    ...hours,
+    lunchEnabled: settings[`${hours.key}_lunch_enabled`] === "1",
+    lunchStart: settings[`${hours.key}_lunch_start`],
+    lunchEnd: settings[`${hours.key}_lunch_end`],
+  };
+}
+
+function isWeekLocked() {
+  return Boolean(state.data?.isPastWeekLocked);
+}
+
+function globalBlockForDate(date) {
+  return (state.data?.globalDayBlocks || []).find((block) => block.block_date === date);
+}
+
+function publicHolidayForDate(date) {
+  return (state.data?.publicHolidays || []).find((holiday) => holiday.date === date)
+    || (state.vacationData?.publicHolidays || []).find((holiday) => holiday.date === date);
+}
+
+function vacationHolidayForDate(date) {
+  return (state.vacationData?.publicHolidays || []).some((holiday) => holiday.date === date);
+}
+
+function specialCaseFor(employeeNumber, date) {
+  return state.data.weekOptions.find(
+    (option) => option.employee_number === employeeNumber && date >= option.date_from && date <= option.date_to,
+  );
+}
+
+function specialCasesFor(employeeNumber, date) {
+  return state.data.weekOptions.filter(
+    (option) => option.employee_number === employeeNumber && date >= option.date_from && date <= option.date_to,
+  );
+}
+
+function optionIsAllDay(option) {
+  return Number(option?.all_day ?? 1) === 1;
+}
+
+function fullDaySpecialCaseFor(employeeNumber, date) {
+  return specialCasesFor(employeeNumber, date).find(optionIsAllDay);
+}
+
+function formatOptionTime(option) {
+  return optionIsAllDay(option) ? "ganztägig" : `${option.start_time}–${option.end_time}`;
+}
+
+function fixedWorkdays(employee) {
+  return String(employee?.fixed_workdays || "").split(",").filter(Boolean);
+}
+
+function employeeCanWorkOnDate(employee, date) {
+  const fixedDays = fixedWorkdays(employee);
+  const dayKey = dayKeyByNumber[new Date(`${date}T12:00:00`).getDay()];
+  return fixedDays.length === 0 || fixedDays.includes(dayKey);
+}
+
+function formatFixedWorkdays(value) {
+  const days = String(value || "").split(",").filter(Boolean);
+  return days.length ? days.map((day) => fixedDayShortLabels[day] || day).join(", ") : "flexibel";
+}
+
+function monthName(month, format = "long") {
+  return new Intl.DateTimeFormat("de-AT", { month: format }).format(new Date(2026, month - 1, 1));
+}
+
+function monthStart(year, month) {
+  return `${year}-${String(month).padStart(2, "0")}-01`;
+}
+
+function monthEnd(year, month) {
+  return toIsoDate(new Date(year, month, 0, 12));
+}
+
+function monthCalendarRange(year, month) {
+  const start = getMonday(new Date(`${monthStart(year, month)}T12:00:00`));
+  const endMonday = getMonday(new Date(`${monthEnd(year, month)}T12:00:00`));
+  return { start, end: addDays(endMonday, 6) };
+}
+
+function dateRangesOverlap(startA, endA, startB, endB) {
+  return startA <= endB && startB <= endA;
+}
+
+function vacationDayCount(dateFrom, dateTo) {
+  if (!dateFrom || !dateTo || dateTo < dateFrom) return 0;
+  const countSaturday = state.data?.settings?.vacation_count_saturday === "1";
+  let days = 0;
+  for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
+    const day = new Date(`${date}T12:00:00`).getDay();
+    if (day === 0) continue;
+    if (day === 6 && !countSaturday) continue;
+    if (vacationHolidayForDate(date)) continue;
+    days += 1;
+  }
+  return days;
+}
+
+function selectedVacationRange() {
+  const year = Number(state.vacationYear);
+  if (state.vacationViewMode === "quarter") {
+    const startMonth = (Number(state.vacationQuarter) - 1) * 3 + 1;
+    return {
+      start: monthStart(year, startMonth),
+      end: monthEnd(year, startMonth + 2),
+      months: [startMonth, startMonth + 1, startMonth + 2],
+      label: `${state.vacationQuarter}. Quartal ${year}`,
+    };
+  }
+  if (state.vacationViewMode === "month") {
+    const month = Number(state.vacationMonth);
+    return {
+      start: monthStart(year, month),
+      end: monthEnd(year, month),
+      months: [month],
+      label: `${monthName(month)} ${year}`,
+    };
+  }
+  if (state.vacationViewMode === "employees") {
+    return {
+      start: `${year}-01-01`,
+      end: `${year}-12-31`,
+      months: [],
+      label: `Teamübersicht ${year}`,
+    };
+  }
+  return {
+    start: `${year}-01-01`,
+    end: `${year}-12-31`,
+    months: Array.from({ length: 12 }, (_item, index) => index + 1),
+    label: `Jahresübersicht ${year}`,
+  };
+}
+
+function vacationEntriesInRange(start, end) {
+  return (state.vacationData?.vacations || []).filter((vacation) =>
+    dateRangesOverlap(vacation.date_from, vacation.date_to, start, end),
+  );
+}
+
+function escapeHtml(value) {
+  const node = document.createElement("span");
+  node.textContent = value ?? "";
+  return node.innerHTML;
+}
+
+function activeLocations() {
+  return (state.locations || []).filter((location) => location.active);
+}
+
+function departmentsForLocation(locationId, includeInactive = false) {
+  const location = (state.locations || []).find((item) => item.id === locationId);
+  const departments = location?.departments || [];
+  return includeInactive ? departments : departments.filter((department) => department.active);
+}
+
+function currentLocation() {
+  return (state.locations || []).find((location) => location.id === state.locationId) || activeLocations()[0] || state.locations[0];
+}
+
+function currentDepartment() {
+  return departmentsForLocation(state.locationId, true).find((department) => String(department.id) === String(state.departmentId));
+}
+
+function contextSearchParams(includeDepartment = true) {
+  const params = new URLSearchParams();
+  if (state.locationId) params.set("location", state.locationId);
+  if (includeDepartment && state.departmentId) params.set("department", state.departmentId);
+  return params;
+}
+
+function contextQuery(includeDepartment = true) {
+  const params = contextSearchParams(includeDepartment);
+  const text = params.toString();
+  return text ? `&${text}` : "";
+}
+
+function setDefaultContext(locations) {
+  const active = (locations || []).filter((location) => location.active);
+  const fallback = active[0] || locations?.[0];
+  if (!fallback) return;
+  if (!state.locationId || !locations.some((location) => location.id === state.locationId && location.active)) {
+    state.locationId = fallback.id;
+    state.departmentId = "";
+  }
+  const departments = departmentsForLocation(state.locationId);
+  if (state.departmentId && !departments.some((department) => String(department.id) === String(state.departmentId))) {
+    state.departmentId = "";
+  }
+}
+
+function contrastColor(hex) {
+  const value = hex.replace("#", "");
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 > 155 ? "#172331" : "#ffffff";
+}
+
+async function api(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...options.headers },
+  });
+  if (!response.ok) {
+    let message = "Die Aktion konnte nicht ausgeführt werden.";
+    try { message = (await response.json()).error || message; } catch {}
+    throw new Error(message);
+  }
+  return response.status === 204 ? null : response.json();
+}
+
+function brandingFromSettings(settings = {}) {
+  return {
+    appName: "Grabenplaner",
+    companyName: (settings.companyName || settings.branding_company_name || "").trim(),
+    logoUrl: (settings.logoUrl || settings.branding_logo_url || "/assets/grabenplaner-logo.svg").trim() || "/assets/grabenplaner-logo.svg",
+    iconUrl: (settings.iconUrl || settings.branding_icon_url || "/assets/webicon.svg").trim() || "/assets/webicon.svg",
+    logoAlt: (settings.logoAlt || settings.branding_logo_alt || settings.companyName || settings.branding_company_name || "Grabenplaner").trim() || "Grabenplaner",
+    adminEmail: (settings.adminEmail || settings.branding_admin_email || "").trim(),
+  };
+}
+
+function applyBranding(settings = state.data?.settings || {}) {
+  const branding = brandingFromSettings(settings);
+  document.title = `${branding.appName} · Dienstplan`;
+  for (const image of [elements.brandLogo, elements.footerBrandLogo, elements.brandingPreviewLogo]) {
+    if (!image) continue;
+    image.src = branding.logoUrl;
+    image.alt = branding.logoAlt;
+  }
+  if (elements.brandingPreviewTitle) elements.brandingPreviewTitle.textContent = branding.appName;
+  if (elements.brandingPreviewCompany) elements.brandingPreviewCompany.textContent = branding.companyName || "Neutrale GitHub-Version";
+  document.querySelectorAll("[data-brand-icon]").forEach((link) => { link.href = branding.iconUrl; });
+  if (elements.adminContactLink) {
+    elements.adminContactLink.classList.toggle("hidden", !branding.adminEmail);
+    elements.adminContactLink.href = branding.adminEmail ? `mailto:${branding.adminEmail}` : "#";
+    elements.adminContactLink.textContent = branding.adminEmail ? `Admin: ${branding.adminEmail}` : "Admin";
+  }
+  return branding;
+}
+
+async function loadAll() {
+  try {
+    const [locations, positions, brandingKits, portalStatus] = await Promise.all([
+      api("/api/locations"),
+      api("/api/positions"),
+      api("/api/branding/kits"),
+      api("/api/portal/v1/status").catch(() => null),
+    ]);
+    state.locations = locations;
+    state.positions = positions;
+    state.brandingKits = brandingKits;
+    state.portalStatus = portalStatus;
+    setDefaultContext(state.locations);
+    const scheduleContext = contextQuery(true);
+    const vacationContext = contextQuery(false);
+    const [schedule, employees, vacationData] = await Promise.all([
+      api(`/api/schedule?week=${state.weekStart}${scheduleContext}`),
+      api("/api/employees"),
+      api(`/api/vacations?year=${state.vacationYear}${vacationContext}`),
+    ]);
+    state.data = schedule;
+    state.locations = schedule.locations || state.locations;
+    state.vacationData = vacationData;
+    state.allEmployees = employees;
+    state.weekStart = schedule.weekStart;
+    state.locationId = schedule.context?.locationId || state.locationId;
+    state.departmentId = schedule.context?.departmentId ? String(schedule.context.departmentId) : "";
+    state.vacationYear = vacationData.year;
+    render();
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function render() {
+  applyBranding(state.data?.settings || {});
+  renderContextNavigation();
+  renderHeader();
+  renderSummary();
+  renderTimeline();
+  renderRemarks();
+  renderHoursOverview();
+  renderVacations();
+  renderEmployees();
+  renderLocations();
+  renderPositions();
+  renderSettings();
+}
+
+function renderContextNavigation() {
+  const locations = activeLocations();
+  const planningContexts = locations.map((location) => ({
+    locationId: location.id,
+    departmentId: "",
+    label: `${location.name} · Gesamtplan`,
+  }));
+  const showPlanningChildren = planningContexts.length > 1;
+  elements.planningNavChildren.classList.toggle("hidden", !showPlanningChildren);
+  elements.planningNavChildren.innerHTML = showPlanningChildren ? planningContexts.map((item) => `
+    <button type="button" class="nav-child ${item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? "active" : ""}" data-context-view="planning" data-location-id="${escapeHtml(item.locationId)}" data-department-id="${escapeHtml(item.departmentId)}">${escapeHtml(item.label)}</button>
+  `).join("") : "";
+
+  const showVacationChildren = locations.length > 1;
+  elements.vacationNavChildren.classList.toggle("hidden", !showVacationChildren);
+  elements.vacationNavChildren.innerHTML = showVacationChildren ? locations.map((location) => `
+    <button type="button" class="nav-child ${location.id === state.locationId ? "active" : ""}" data-context-view="vacations" data-location-id="${escapeHtml(location.id)}" data-department-id="">${escapeHtml(location.name)}</button>
+  `).join("") : "";
+}
+
+function renderHeader() {
+  const end = addDays(state.weekStart, state.data.settings.show_sunday === "1" ? 6 : 5);
+  const location = currentLocation();
+  const department = currentDepartment();
+  const contextLabel = [location?.name, department?.name].filter(Boolean).join(" · ");
+  elements.weekTitle.textContent = `${formatDate(state.weekStart, { day: "numeric", month: "long" })} – ${formatDate(end, { day: "numeric", month: "long", year: "numeric" })}`;
+  elements.calendarWeek.textContent = `Kalenderwoche ${state.data.calendarWeek}${contextLabel ? ` · ${contextLabel}` : ""}`;
+  elements.scheduleTitle.textContent = `${state.data.settings.pdf_title} · KW ${state.data.calendarWeek}`;
+  elements.pdfButton.href = `/api/schedule.pdf?week=${state.weekStart}${contextQuery(true)}`;
+  document.querySelector("#weekJumpDate").value = state.weekStart;
+  elements.weekLockNotice.classList.toggle("hidden", !isWeekLocked());
+  const hasNote = Boolean(state.data.scheduleNote?.note_text);
+  elements.scheduleNoteButton.classList.toggle("has-note", hasNote);
+  elements.scheduleNoteButtonHint.textContent = hasNote ? "anzeigen/bearbeiten" : "hinzufügen";
+  ["autoPlanButton", "optionsButton", "resetWeekButton", "scheduleNoteButton"].forEach((id) => {
+    const button = document.querySelector(`#${id}`);
+    if (button) {
+      button.disabled = isWeekLocked();
+      button.title = isWeekLocked() ? "Vergangene Kalenderwochen sind schreibgeschützt." : "";
+    }
+  });
+}
+
+function renderSummary() {
+  const minutes = Object.values(state.data.totals).reduce((sum, value) => sum + Number(value), 0);
+  const inStoreMinutes = Object.values(state.data.inStoreTotals || state.data.plannedTotals || {}).reduce((sum, value) => sum + Number(value), 0);
+  elements.shiftCount.textContent = state.data.shifts.length;
+  elements.totalHours.textContent = formatHours(minutes);
+  elements.inStoreHours.textContent = formatHours(inStoreMinutes);
+  elements.optionCount.textContent = state.data.weekOptions.length + (state.data.globalDayBlocks || []).length;
+  elements.employeeCount.textContent = state.data.employees.length;
+  elements.sidebarEmployeeCount.textContent = state.data.employees.length;
+  const settings = state.data.settings;
+  elements.breakRuleHint.textContent = settings.break_rule_enabled === "1"
+    ? `Pause: ${Number(settings.break_after_minutes) / 60} h → ${settings.break_duration_minutes} min`
+    : "Pausenregel aus";
+  elements.saturdayRuleHint.textContent = settings.saturday_bonus_enabled === "1"
+    ? `Sa ab ${settings.saturday_bonus_from}: ×${String(settings.saturday_bonus_factor).replace(".", ",")}`
+    : "Sa-Faktor aus";
+  const departments = departmentsForLocation(state.locationId);
+  const showDepartmentPdf = !state.departmentId && departments.length > 0;
+  elements.departmentPdfControl?.classList.toggle("hidden", !showDepartmentPdf);
+  if (showDepartmentPdf) {
+    elements.departmentPdfSelect.innerHTML = departments.map((department) =>
+      `<option value="${department.id}">${escapeHtml(department.name)}</option>`,
+    ).join("");
+    const selectedDepartment = elements.departmentPdfSelect.value || String(departments[0].id);
+    elements.departmentPdfButton.href = `/api/schedule.pdf?week=${state.weekStart}&location=${encodeURIComponent(state.locationId)}&departmentId=${encodeURIComponent(selectedDepartment)}`;
+  }
+}
+
+function renderTimeline() {
+  const employees = state.data.employees;
+  const settings = state.data.settings;
+  const timedOptionStarts = state.data.weekOptions.filter((option) => !optionIsAllDay(option) && option.start_time).map((option) => timeToMinutes(option.start_time));
+  const timedOptionEnds = state.data.weekOptions.filter((option) => !optionIsAllDay(option) && option.end_time).map((option) => timeToMinutes(option.end_time));
+  const start = Math.min(
+    ...planningDayKeys.map((day) => timeToMinutes(settings[`${day}_start_time`])),
+    ...state.data.shifts.map((shift) => timeToMinutes(shift.start_time)),
+    ...timedOptionStarts,
+  );
+  const end = Math.max(
+    ...planningDayKeys.map((day) => timeToMinutes(settings[`${day}_end_time`])),
+    ...state.data.shifts.map((shift) => timeToMinutes(shift.end_time)),
+    ...timedOptionEnds,
+  );
+  const range = end - start;
+  const employeeCount = Math.max(1, employees.length);
+  const dayCount = settings.show_sunday === "1" ? 7 : 6;
+
+  const timeLabels = [];
+  for (let minute = start; minute <= end; minute += 60) {
+    const top = ((minute - start) / range) * 100;
+    timeLabels.push(`<span class="time-label" style="top:${top}%">${String(Math.floor(minute / 60)).padStart(2, "0")}:00</span>`);
+  }
+
+  const dayColumns = weekdayNames.slice(0, dayCount).map((weekday, dayIndex) => {
+    const date = addDays(state.weekStart, dayIndex);
+    const locked = isWeekLocked();
+    const globalBlock = globalBlockForDate(date);
+    const holiday = publicHolidayForDate(date);
+    const hours = dayConfig(date, settings);
+    const openStart = hours ? ((timeToMinutes(hours.start) - start) / range) * 100 : 0;
+    const openEnd = hours ? ((timeToMinutes(hours.end) - start) / range) * 100 : 0;
+    const lunchBand = hours?.lunchEnabled
+      ? `<span class="lunch-band" style="top:${((timeToMinutes(hours.lunchStart) - start) / range) * 100}%;height:${((timeToMinutes(hours.lunchEnd) - timeToMinutes(hours.lunchStart)) / range) * 100}%">Mittagspause</span>`
+      : "";
+    const headers = employees.length
+      ? employees.map((employee) => `
+          <div class="employee-strip" style="background:${employee.color};color:${contrastColor(employee.color)}" title="${escapeHtml(employee.full_name)} · ${employee.personnel_number}">
+            <strong>${escapeHtml(employee.nickname)}</strong><small>${escapeHtml(employee.personnel_number)}</small>
+          </div>`).join("")
+      : '<div class="employee-strip" style="background:#d7ddda;color:#65716c"><strong>Kein Team</strong></div>';
+
+    const lanes = employees.length
+      ? employees.map((employee) => {
+          const dayOptions = specialCasesFor(employee.personnel_number, date);
+          const specialCase = dayOptions.find(optionIsAllDay);
+          const fixedUnavailable = !employeeCanWorkOnDate(employee, date);
+          const unavailable = Boolean(locked || globalBlock || specialCase || fixedUnavailable);
+          const unavailableText = locked
+            ? "Vergangene Kalenderwoche ist schreibgeschützt"
+            : globalBlock
+              ? `${globalBlock.reason || globalBlock.holiday_name || "Tag gesperrt"}${globalBlock.is_public_holiday ? " · Feiertag" : ""}`
+              : specialCase
+                ? `${optionLabels[specialCase.option_type]} · ${formatOptionTime(specialCase)}${specialCase.note ? ` – ${specialCase.note}` : ""}`
+                : fixedUnavailable
+                  ? "Kein fixer Arbeitstag"
+                  : "";
+          const optionBlocks = dayOptions.filter((option) => !optionIsAllDay(option)).map((option) => {
+            const optionStart = Math.max(start, timeToMinutes(option.start_time));
+            const optionEnd = Math.min(end, timeToMinutes(option.end_time));
+            if (optionEnd <= optionStart) return "";
+            const top = ((optionStart - start) / range) * 100;
+            const height = Math.max(2.5, ((optionEnd - optionStart) / range) * 100);
+            const title = `${optionLabels[option.option_type]} · ${formatOptionTime(option)}${option.note ? ` – ${option.note}` : ""}`;
+            return `<span class="option-block" data-option-title="${escapeHtml(title)}" style="top:${top}%;height:${height}%"><em>${escapeHtml(optionLabels[option.option_type])}</em></span>`;
+          }).join("");
+          const shifts = state.data.shifts.filter((shift) => shift.shift_date === date && shift.employee_number === employee.personnel_number);
+          const bars = shifts.map((shift) => {
+            const barStart = Math.max(start, timeToMinutes(shift.start_time));
+            const barEnd = Math.min(end, timeToMinutes(shift.end_time));
+            const top = ((barStart - start) / range) * 100;
+            const height = Math.max(2.5, ((barEnd - barStart) / range) * 100);
+            const departmentLabel = shift.department_name || shift.area || "";
+            return `<button class="shift-bar" type="button" data-shift-id="${shift.id}" style="top:${top}%;height:${height}%;--employee-color:${employee.color}" title="${shift.start_time}–${shift.end_time} · ${formatHours(shift.counted_minutes)}${departmentLabel ? ` · ${escapeHtml(departmentLabel)}` : ""}" aria-label="${escapeHtml(employee.nickname)} ${shift.start_time} bis ${shift.end_time}">${departmentLabel ? `<span>${escapeHtml(departmentLabel)}</span>` : ""}</button>`;
+          }).join("");
+          const unavailableLabel = locked
+            ? "gesperrt"
+            : globalBlock
+              ? (globalBlock.is_public_holiday ? "Feiertag" : "gesperrt")
+              : specialCase
+                ? optionLabels[specialCase.option_type]
+                : "frei";
+          return `<div class="employee-lane ${specialCase ? "unavailable" : ""} ${fixedUnavailable ? "fixed-unavailable" : ""} ${globalBlock ? "global-unavailable" : ""} ${locked ? "locked-unavailable" : ""}" ${unavailable ? "" : `data-employee-number="${escapeHtml(employee.personnel_number)}" data-date="${date}"`} title="${escapeHtml(unavailableText)}">${bars}${optionBlocks}${unavailable ? `<span class="unavailable-mark">${escapeHtml(unavailableLabel)}</span>` : ""}</div>`;
+        }).join("")
+      : '<div class="employee-lane"></div>';
+
+    return `<section class="day-column ${dayIndex === 6 ? "sunday" : ""}" style="grid-column:${dayIndex + 2}">
+      <div class="day-title">${weekday} ${formatDate(date, { day: "2-digit", month: "2-digit" })}${holiday ? ` · ${escapeHtml(holiday.name)}` : ""}</div>
+      <div class="employee-strips">${headers}</div>
+      <div class="day-body ${hours ? "" : "closed-day"}" style="--open-start:${openStart}%;--open-end:${openEnd}%">${lunchBand}<div class="lane-grid">${lanes}</div></div>
+    </section>`;
+  }).join("");
+
+  elements.timeline.style.setProperty("--employee-count", employeeCount);
+  elements.timeline.style.setProperty("--day-count", dayCount);
+  elements.timeline.style.setProperty("--hour-step", `${100 / (range / 60)}%`);
+  elements.timeline.innerHTML = `<div class="time-header">Zeit</div>${dayColumns}<div class="time-axis">${timeLabels.join("")}</div>`;
+}
+
+function renderRemarks() {
+  const options = state.data.weekOptions;
+  const globalRemarks = (state.data.globalDayBlocks || []).map((block) => `
+          <div class="remark-item"><span class="remark-color" style="background:#9aa2a4"></span>
+          <span><strong>Alle:</strong> ${escapeHtml(block.reason || block.holiday_name || "Tag gesperrt")} · ${formatDate(block.block_date, { day: "2-digit", month: "2-digit" })}${block.is_public_holiday ? " · Feiertag" : ""}</span></div>`);
+  const optionRemarks = options.map((option) => `
+          <div class="remark-item"><span class="remark-color" style="background:${option.color}"></span>
+          <span><strong>${escapeHtml(option.nickname)}:</strong> ${optionLabels[option.option_type]} · ${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` – ${escapeHtml(option.note)}` : ""}</span></div>`);
+  const remarks = [...globalRemarks, ...optionRemarks];
+  elements.remarks.innerHTML = `<h3>Bemerkungen / Sonderfälle</h3>${
+    remarks.length
+      ? `<div class="remarks-list">${remarks.join("")}</div>`
+      : '<div class="empty-remarks">Keine Bemerkungen für diese Woche.</div>'
+  }`;
+}
+
+function renderHoursOverview() {
+  const showSaturdayStats = state.data.settings.show_saturday_service_stats !== "0";
+  let hasEstimatedSaturdayStats = false;
+  elements.hoursOverview.innerHTML = state.data.employees.map((employee) => {
+    const planned = state.data.plannedTotals[employee.personnel_number] || 0;
+    const optionCredit = state.data.optionCreditTotals[employee.personnel_number] || 0;
+    const counted = state.data.totals[employee.personnel_number] || 0;
+    const target = Number(employee.contracted_hours) * 60;
+    const difference = counted - target;
+    const percentage = target > 0 ? Math.min(100, (counted / target) * 100) : 0;
+    const saturdayStats = state.data.saturdayStats?.byEmployee?.[employee.personnel_number] || null;
+    if (saturdayStats?.fourWeeksEstimated || saturdayStats?.threeMonthsEstimated) hasEstimatedSaturdayStats = true;
+    const saturdayStatsHtml = showSaturdayStats && saturdayStats ? `
+      <div class="hours-saturday-stats">
+        <span>Sa-Dienst ≥2 h</span>
+        <strong class="${saturdayStats.fourWeeksEstimated ? "estimated" : ""}">4 Wo: ${formatCount(saturdayStats.fourWeeks)}${saturdayStats.fourWeeksEstimated ? "*" : ""}</strong>
+        <strong class="${saturdayStats.threeMonthsEstimated ? "estimated" : ""}">3 Mon: ${formatCount(saturdayStats.threeMonths)}${saturdayStats.threeMonthsEstimated ? "*" : ""}</strong>
+      </div>
+    ` : "";
+    return `<article class="hours-card">
+      <div class="hours-person">
+        <span class="hours-color" style="background:${employee.color}"></span>
+        <div><strong>${escapeHtml(employee.nickname)}</strong><small>${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.full_name)}</small></div>
+      </div>
+      <div class="hours-values">
+        <span><small>Eingeteilt</small><strong>${formatHours(planned)}</strong></span>
+        <span><small>Sonderfälle</small><strong>${formatHours(optionCredit)}</strong></span>
+        <span><small>Gewertet</small><strong>${formatHours(counted)}</strong></span>
+        <span><small>Wochen-Soll</small><strong>${formatHours(target)}</strong></span>
+        <span class="${difference > 0 ? "hours-over" : difference < 0 ? "hours-under" : "hours-exact"}"><small>Differenz</small><strong>${difference > 0 ? "+" : ""}${formatHours(difference)}</strong></span>
+      </div>
+      ${saturdayStatsHtml}
+      <div class="hours-progress"><span style="width:${percentage}%;background:${employee.color}"></span></div>
+    </article>`;
+  }).join("");
+  if (showSaturdayStats && hasEstimatedSaturdayStats) {
+    elements.hoursOverview.insertAdjacentHTML(
+      "beforeend",
+      '<div class="hours-estimate-note">* Errechneter Wert, da noch nicht ausreichend vergangene Dienstplandaten zur Verfügung stehen.</div>',
+    );
+  }
+}
+
+function formatVacationDateRange(vacation, monthStartValue = null, monthEndValue = null) {
+  const from = monthStartValue && vacation.date_from < monthStartValue ? monthStartValue : vacation.date_from;
+  const to = monthEndValue && vacation.date_to > monthEndValue ? monthEndValue : vacation.date_to;
+  return from === to
+    ? formatDate(from, { day: "2-digit", month: "2-digit" })
+    : `${formatDate(from, { day: "2-digit", month: "2-digit" })}–${formatDate(to, { day: "2-digit", month: "2-digit" })}`;
+}
+
+function updateVacationControls(range) {
+  elements.vacationYear.value = state.vacationYear;
+  elements.vacationViewMode.value = state.vacationViewMode;
+  elements.vacationQuarter.value = state.vacationQuarter;
+  elements.vacationMonth.value = state.vacationMonth;
+  elements.vacationQuarterField.classList.toggle("hidden", state.vacationViewMode !== "quarter");
+  elements.vacationMonthField.classList.toggle("hidden", state.vacationViewMode !== "month");
+  const parameters = new URLSearchParams({
+    year: String(state.vacationYear),
+    view: state.vacationViewMode,
+    quarter: String(state.vacationQuarter),
+    month: String(state.vacationMonth),
+  });
+  const locationParams = contextSearchParams(false);
+  locationParams.forEach((value, key) => parameters.set(key, value));
+  elements.vacationPdfButton.href = `/api/vacations.pdf?${parameters.toString()}`;
+  elements.vacationTitle.textContent = range.label;
+  elements.vacationSubtitle.textContent = `${formatDate(range.start)} bis ${formatDate(range.end)} · ${state.vacationData?.vacations?.length || 0} Urlaubseinträge im Jahr`;
+  elements.vacationCalendarTitle.textContent = `Urlaubskalender · ${range.label}`;
+}
+
+function vacationsOnDate(date) {
+  return (state.vacationData?.vacations || []).filter((vacation) =>
+    date >= vacation.date_from && date <= vacation.date_to,
+  );
+}
+
+function renderVacationMonthCard(month) {
+  const start = monthStart(state.vacationYear, month);
+  const end = monthEnd(state.vacationYear, month);
+  const calendarRange = monthCalendarRange(state.vacationYear, month);
+  const monthVacations = vacationEntriesInRange(start, end)
+    .slice()
+    .sort((a, b) => a.date_from.localeCompare(b.date_from) || a.nickname.localeCompare(b.nickname));
+  const dates = [];
+  for (let date = calendarRange.start; date <= calendarRange.end; date = addDays(date, 1)) dates.push(date);
+  const compact = state.vacationViewMode === "year";
+  const header = `<div class="vacation-weekday">KW</div>${weekdayNames.map((day) => `<div class="vacation-weekday">${day}</div>`).join("")}`;
+  const weeks = [];
+  for (let index = 0; index < dates.length; index += 7) {
+    const weekDates = dates.slice(index, index + 7);
+    weeks.push(`<div class="vacation-week-number">${getIsoWeek(weekDates[0])}</div>${weekDates.map((date) => {
+      const inMonth = date >= start && date <= end;
+      const dayVacations = inMonth ? vacationsOnDate(date) : [];
+      const holiday = inMonth ? vacationHolidayForDate(date) : false;
+      const visibleVacations = dayVacations.slice(0, compact ? 5 : 3);
+      const overflow = dayVacations.length - visibleVacations.length;
+      const markers = compact
+        ? `<div class="vacation-dot-row">${visibleVacations.map((vacation) => `<span class="vacation-dot" style="background:${vacation.color}" title="${escapeHtml(vacation.nickname)}"></span>`).join("")}${overflow > 0 ? `<span class="vacation-more">+${overflow}</span>` : ""}</div>`
+        : `<div class="vacation-day-tags">${visibleVacations.map((vacation) => `<span class="vacation-tag" style="background:${vacation.color};color:${contrastColor(vacation.color)}" title="${escapeHtml(vacation.nickname)}">${escapeHtml(vacation.nickname)}</span>`).join("")}${overflow > 0 ? `<span class="vacation-more">+${overflow}</span>` : ""}</div>`;
+      return `<div class="vacation-day ${inMonth ? "" : "outside-month"}">
+        <span class="vacation-day-number">${Number(date.slice(-2))}</span>
+        ${holiday ? '<span class="vacation-holiday">Feiertag</span>' : ""}
+        ${dayVacations.length ? markers : ""}
+      </div>`;
+    }).join("")}`);
+  }
+  return `<article class="vacation-month-card">
+    <h3>${monthName(month)}</h3>
+    <div class="vacation-calendar-grid">${header}${weeks.join("")}</div>
+    <div class="vacation-month-list compact">${
+      monthVacations.length
+        ? monthVacations.map((vacation) => {
+            const clippedFrom = vacation.date_from < start ? start : vacation.date_from;
+            const clippedTo = vacation.date_to > end ? end : vacation.date_to;
+            const days = vacationDayCount(clippedFrom, clippedTo);
+            return `<div class="vacation-item">
+              <span class="vacation-item-color" style="background:${vacation.color}"></span>
+              <div><strong>${escapeHtml(vacation.nickname)}</strong><small>${formatVacationDateRange(vacation, start, end)} · ${formatDays(days)}${vacation.note ? ` · ${escapeHtml(vacation.note)}` : ""}</small></div>
+              <div class="vacation-actions-inline">
+                <button type="button" class="edit-vacation" data-edit-vacation="${escapeHtml(vacation.group_id)}">Bearbeiten</button>
+                <button type="button" class="delete-vacation" data-delete-vacation="${escapeHtml(vacation.group_id)}">Löschen</button>
+              </div>
+            </div>`;
+          }).join("")
+        : '<div class="empty-vacation-month">Keine Urlaube eingetragen.</div>'
+    }</div>
+  </article>`;
+}
+
+function renderVacationEmployeeOverview(range) {
+  const employees = state.vacationData.employees || [];
+  return employees.map((employee) => {
+    const employeeVacations = vacationEntriesInRange(range.start, range.end)
+      .filter((vacation) => vacation.employee_number === employee.personnel_number)
+      .sort((a, b) => a.date_from.localeCompare(b.date_from));
+    const totals = state.vacationData.totals[employee.personnel_number] || { entitlement: 0, planned: 0, used: 0, consumed: 0, remaining: 0 };
+    return `<article class="vacation-employee-card">
+      <div class="vacation-employee-head" style="background:${employee.color};color:${contrastColor(employee.color)}">
+        <strong>${escapeHtml(employee.personnel_number)} ${escapeHtml(employee.nickname)}</strong>
+        <small><strong>Resturlaub: ${formatDaysLong(totals.remaining)}</strong> · geplant ${formatDaysLong(totals.planned ?? totals.used)} · konsumiert ${formatDaysLong(totals.consumed || 0)}</small>
+      </div>
+      <div class="vacation-employee-body">${
+        employeeVacations.length
+          ? employeeVacations.map((vacation) => {
+              const days = vacationDayCount(vacation.date_from, vacation.date_to);
+              return `<div class="vacation-item">
+                <span class="vacation-item-color" style="background:${employee.color}"></span>
+                <div><strong>${formatVacationDateRange(vacation)}</strong><small>${formatDays(days)}${vacation.note ? ` · ${escapeHtml(vacation.note)}` : ""}</small></div>
+                <div class="vacation-actions-inline">
+                  <button type="button" class="edit-vacation" data-edit-vacation="${escapeHtml(vacation.group_id)}">Bearbeiten</button>
+                  <button type="button" class="delete-vacation" data-delete-vacation="${escapeHtml(vacation.group_id)}">Löschen</button>
+                </div>
+              </div>`;
+            }).join("")
+          : '<div class="empty-vacation-month">Keine Urlaube eingetragen.</div>'
+      }</div>
+    </article>`;
+  }).join("");
+}
+
+function renderVacations() {
+  if (!state.vacationData) return;
+  const range = selectedVacationRange();
+  updateVacationControls(range);
+  const employees = state.vacationData.employees || [];
+  const savedMap = state.vacationData.entitlementsSaved || {};
+  const missingEntitlements = employees.some((employee) => !savedMap[employee.personnel_number]);
+  const showEntitlementInputs = state.editingVacationEntitlements || missingEntitlements;
+  elements.saveEntitlementsButton.classList.toggle("hidden", !showEntitlementInputs);
+  elements.editEntitlementsButton.classList.toggle("hidden", showEntitlementInputs || !employees.length);
+  elements.vacationSummary.innerHTML = employees.length ? employees.map((employee) => {
+    const totals = state.vacationData.totals[employee.personnel_number] || { entitlement: 0, used: 0, remaining: 0 };
+    return `<article class="vacation-summary-card">
+      <div class="vacation-summary-head">
+        <span class="vacation-color" style="background:${employee.color}"></span>
+        <div><strong>${escapeHtml(employee.nickname)}</strong><small>${escapeHtml(employee.full_name)} · ${escapeHtml(employee.personnel_number)}</small></div>
+      </div>
+      <div class="vacation-stats">
+        <div><span>Jahresurlaub</span><strong>${formatDays(totals.entitlement)}</strong></div>
+        <div><span>Verplant</span><strong>${formatDays(totals.planned ?? totals.used)}</strong></div>
+        <div><span>Rest</span><strong>${formatDays(totals.remaining)}</strong></div>
+      </div>
+      ${showEntitlementInputs ? `<label class="vacation-entitlement"><span>Jahresurlaub per 1.1.</span><input data-vacation-entitlement="${escapeHtml(employee.personnel_number)}" type="number" min="0" max="365" step="0.5" value="${Number(totals.entitlement || 0)}" /></label>` : ""}
+    </article>`;
+  }).join("") : '<div class="empty-options">Noch keine aktiven Teammitglieder angelegt.</div>';
+
+  elements.vacationCalendar.classList.toggle("single-month", state.vacationViewMode === "month");
+  elements.vacationCalendar.classList.toggle("quarter-view", state.vacationViewMode === "quarter");
+  elements.vacationCalendar.classList.toggle("employee-view", state.vacationViewMode === "employees");
+  elements.vacationCalendar.innerHTML = state.vacationViewMode === "employees"
+    ? renderVacationEmployeeOverview(range)
+    : range.months.map(renderVacationMonthCard).join("");
+}
+
+function openVacationModal(vacation = null) {
+  if (!state.vacationData?.employees?.length) {
+    showToast("Bitte zuerst ein aktives Teammitglied anlegen.", true);
+    return;
+  }
+  const range = selectedVacationRange();
+  state.editingVacationGroupId = vacation?.group_id || null;
+  elements.vacationForm.reset();
+  elements.vacationEmployee.innerHTML = state.vacationData.employees.map((employee) =>
+    `<option value="${escapeHtml(employee.personnel_number)}">${escapeHtml(employee.nickname)} · ${escapeHtml(employee.personnel_number)}</option>`,
+  ).join("");
+  elements.vacationEmployee.value = vacation?.employee_number || state.vacationData.employees[0].personnel_number;
+  elements.vacationDateFrom.value = vacation?.date_from || range.start;
+  elements.vacationDateTo.value = vacation?.date_to || range.start;
+  elements.vacationNote.value = vacation?.note || "";
+  elements.vacationModalTitle.textContent = vacation ? "Urlaub bearbeiten" : "Urlaub eintragen";
+  elements.vacationSubmitButton.textContent = vacation ? "Änderung speichern" : "Urlaub speichern";
+  updateVacationCalculation();
+  elements.vacationModal.showModal();
+}
+
+function updateVacationCalculation() {
+  if (!state.vacationData) return;
+  const employeeNumber = elements.vacationEmployee.value;
+  const dateFrom = elements.vacationDateFrom.value;
+  const dateTo = elements.vacationDateTo.value;
+  const employee = state.vacationData.employees.find((item) => item.personnel_number === employeeNumber);
+  if (!employee || !dateFrom || !dateTo || dateTo < dateFrom) {
+    elements.vacationCalculation.textContent = "Bitte Teammitglied und gültigen Zeitraum auswählen.";
+    return;
+  }
+  const days = vacationDayCount(dateFrom, dateTo);
+  const totals = state.vacationData.totals[employeeNumber] || { remaining: 0 };
+  const saturdayHint = state.data.settings.vacation_count_saturday === "1"
+    ? "Samstag wird als Urlaubstag gezählt."
+    : "Samstag wird nicht vom Resturlaub abgezogen, der Zeitraum ist aber trotzdem gesperrt.";
+  const holidays = [];
+  for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
+    const holiday = (state.vacationData?.publicHolidays || []).find((item) => item.date === date);
+    if (holiday) holidays.push(holiday.name);
+  }
+  const holidayHint = holidays.length ? ` Feiertage zählen nicht als Urlaubstag: ${[...new Set(holidays)].join(", ")}.` : "";
+  elements.vacationCalculation.textContent = `${employee.nickname}: aktueller Rest ${formatDays(totals.remaining)} · dieser Eintrag ${formatDays(days)} · danach ${formatDays(totals.remaining - days)}. ${saturdayHint}${holidayHint}`;
+}
+
+async function saveVacation(event) {
+  event.preventDefault();
+  const dateFrom = elements.vacationDateFrom.value;
+  const isEdit = Boolean(state.editingVacationGroupId);
+  try {
+    await api(isEdit ? `/api/vacations/${encodeURIComponent(state.editingVacationGroupId)}` : "/api/vacations", {
+      method: isEdit ? "PUT" : "POST",
+      body: JSON.stringify({
+        employeeNumber: elements.vacationEmployee.value,
+        dateFrom,
+        dateTo: elements.vacationDateTo.value,
+        note: elements.vacationNote.value,
+        locationId: state.locationId,
+      }),
+    });
+    elements.vacationModal.close();
+    state.editingVacationGroupId = null;
+    state.vacationYear = Number(dateFrom.slice(0, 4)) || state.vacationYear;
+    showToast(isEdit ? "Urlaub wurde aktualisiert." : "Urlaub wurde eingetragen.");
+    await loadAll();
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function saveVacationEntitlements() {
+  try {
+    const entries = Array.from(document.querySelectorAll("[data-vacation-entitlement]")).map((input) => ({
+      employeeNumber: input.dataset.vacationEntitlement,
+      days: Number(input.value || 0),
+    }));
+    state.vacationData = await api("/api/vacation-entitlements", {
+      method: "PUT",
+      body: JSON.stringify({ year: state.vacationYear, locationId: state.locationId, entries }),
+    });
+    state.editingVacationEntitlements = false;
+    showToast("Jahresurlaub wurde gespeichert.");
+    renderVacations();
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function deleteVacation(groupId) {
+  if (!groupId || !confirm("Diesen Urlaubseintrag wirklich löschen?")) return;
+  try {
+    await api(`/api/vacations/${encodeURIComponent(groupId)}`, { method: "DELETE" });
+    showToast("Urlaubseintrag wurde gelöscht.");
+    await loadAll();
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function loadSystemInfo() {
+  try {
+    const info = await api("/api/system-info");
+    const uptimeHours = Math.floor(info.uptimeSeconds / 3600);
+    const uptimeMinutes = Math.floor((info.uptimeSeconds % 3600) / 60);
+    const branding = applyBranding(info.branding || {});
+    const appName = branding.appName || info.appName || "Grabenplaner";
+    elements.versionLabel.innerHTML = `<strong>${escapeHtml(appName)}</strong> ${escapeHtml(info.appVersionLabel)}`;
+    elements.sidebarVersion.textContent = info.appVersionLabel;
+    if (elements.appBackupDirectoryText) elements.appBackupDirectoryText.textContent = info.appBackupDirectory || "app\\backups";
+    const backupCreatedAt = info.lastBackup?.createdAt || info.lastBackup?.externalBackup?.createdAt || info.lastBackup?.appBackup?.createdAt;
+    elements.systemData.innerHTML = `
+      <span><strong>Serverzeit</strong> ${escapeHtml(info.serverTime)} Uhr</span>
+      <span><strong>App</strong> ${escapeHtml(appName)} ${escapeHtml(info.appVersionLabel)}</span>
+      <span><strong>Betriebsmodus</strong> ${info.portal?.operationMode === "server" && info.portal?.portalEnabled ? "Server" : "Lokal"}</span>
+      <span><strong>Node.js</strong> ${escapeHtml(info.nodeVersion)}</span>
+      <span><strong>SQLite</strong> ${escapeHtml(info.sqliteVersion)}</span>
+      <span><strong>System</strong> ${escapeHtml(info.platform)}</span>
+      <span><strong>Datenbank</strong> ${escapeHtml(info.database)}</span>
+      <span><strong>App-Backup</strong> ${escapeHtml(info.appBackupDirectory || "app\\backups")}</span>
+      <span><strong>PC-Backup</strong> ${info.externalBackupEnabled ? escapeHtml(info.backupDirectory) : "deaktiviert"}</span>
+      <span><strong>Letztes Backup</strong> ${backupCreatedAt ? escapeHtml(new Intl.DateTimeFormat("de-AT", { dateStyle: "short", timeStyle: "short" }).format(new Date(backupCreatedAt))) : "noch ausständig"}</span>
+      <span><strong>Laufzeit</strong> ${uptimeHours} h ${uptimeMinutes} min</span>`;
+  } catch {
+    elements.systemData.textContent = "Technische Daten konnten nicht geladen werden.";
+  }
+}
+
+function formatOptionDates(option) {
+  return option.date_from === option.date_to
+    ? formatDate(option.date_from, { day: "2-digit", month: "2-digit" })
+    : `${formatDate(option.date_from, { day: "2-digit", month: "2-digit" })}–${formatDate(option.date_to, { day: "2-digit", month: "2-digit" })}`;
+}
+
+function renderEmployees() {
+  const showInactive = state.data?.settings?.show_inactive_personnel !== "0";
+  const employees = showInactive ? state.allEmployees : state.allEmployees.filter((employee) => employee.active);
+  elements.employeeTableBody.innerHTML = employees.map((employee) => `
+    <tr>
+      <td><span class="employee-color" style="background:${employee.color}"></span></td>
+      <td><strong>${escapeHtml(employee.personnel_number)}</strong></td>
+      <td>${escapeHtml(employee.full_name)}</td>
+      <td>${escapeHtml(employee.nickname)}</td>
+      <td>${escapeHtml(employee.position_name || "Verkaufsmitarbeiter")}</td>
+      <td>${escapeHtml(employee.home_location_name || employee.home_location_id || "–")}</td>
+      <td>${escapeHtml(employee.preferred_department_name || "–")}</td>
+      <td>${String(employee.contracted_hours).replace(".", ",")} h</td>
+      <td>${preferredDayLabels[employee.preferred_day_off] || "–"}</td>
+      <td>${escapeHtml(formatFixedWorkdays(employee.fixed_workdays))}</td>
+      <td><span class="status-badge ${employee.active ? "" : "inactive"}">${employee.active ? "Aktiv" : "Inaktiv"}</span></td>
+      <td><button type="button" class="edit-button" data-edit-employee="${escapeHtml(employee.personnel_number)}">Bearbeiten</button></td>
+    </tr>`).join("");
+}
+
+function renderLocations() {
+  if (!elements.locationList) return;
+  const locations = state.locations || [];
+  elements.departmentLocation.innerHTML = locations.map((location) =>
+    `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`,
+  ).join("");
+  if (!elements.departmentLocation.value && state.locationId) elements.departmentLocation.value = state.locationId;
+  elements.locationList.innerHTML = locations.length ? locations.map((location) => {
+    const departments = location.departments || [];
+    return `<article class="location-card">
+      <div class="location-card-head">
+        <div><strong>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</strong><small>${location.active ? "Aktiv" : "Inaktiv"} · ${departments.length} Abteilung(en) · Mindestbesetzung Filiale: ${Number(location.min_staff || 0)}</small></div>
+        <button type="button" class="edit-button" data-edit-location="${escapeHtml(location.id)}">Filiale bearbeiten</button>
+      </div>
+      <div class="department-list">${
+        departments.length ? departments.map((department) => `
+          <div class="department-item">
+            <span>${escapeHtml(department.name)}${department.active ? "" : " · inaktiv"} · Mindestbesetzung: ${Number(department.min_staff || 0)}</span>
+            <button type="button" class="edit-button" data-edit-department="${department.id}">Bearbeiten</button>
+          </div>
+        `).join("") : '<div class="empty-options">Keine Abteilungen angelegt.</div>'
+      }</div>
+    </article>`;
+  }).join("") : '<div class="empty-options">Noch keine Filiale angelegt.</div>';
+}
+
+function renderPositions() {
+  if (!elements.positionList) return;
+  const positions = state.positions || [];
+  elements.positionList.innerHTML = positions.length ? positions.map((position) => `
+    <div class="position-item">
+      <div><strong>${escapeHtml(position.name)}</strong><small>${position.builtin ? "Standardposition · fix" : "Eigene Position"}</small></div>
+      <div class="position-actions">${
+        position.builtin
+          ? '<span class="status-badge">Fix</span>'
+          : `<button type="button" class="edit-button" data-edit-position="${escapeHtml(position.id)}">Bearbeiten</button><button type="button" class="delete-option" data-delete-position="${escapeHtml(position.id)}">Löschen</button>`
+      }</div>
+    </div>
+  `).join("") : '<div class="empty-options">Keine Positionen angelegt.</div>';
+}
+
+function renderSettings() {
+  const settings = state.data.settings;
+  const vacationSettings = state.vacationData?.settings || settings;
+  const branding = applyBranding(settings);
+  elements.brandingCompanyName.value = branding.companyName;
+  elements.brandingAdminEmail.value = branding.adminEmail;
+  elements.brandingLogoUrl.value = branding.logoUrl;
+  elements.brandingIconUrl.value = branding.iconUrl;
+  elements.brandingLogoAlt.value = branding.logoAlt;
+  renderBrandingKits();
+  document.querySelector("#pdfTitleSetting").value = settings.pdf_title;
+  document.querySelector("#pdfFilenamePrefix").value = settings.pdf_filename_prefix || settings.pdf_title || "Dienstplan";
+  document.querySelector("#pdfFilenameIncludeKw").checked = settings.pdf_filename_include_kw !== "0";
+  document.querySelector("#pdfFilenameIncludeTimestamp").checked = settings.pdf_filename_include_timestamp === "1";
+  document.querySelector("#vacationPdfTitleSetting").value = vacationSettings.vacation_pdf_title || "Urlaubsplanung";
+  document.querySelector("#vacationPdfFilenamePrefix").value = vacationSettings.vacation_pdf_filename_prefix || vacationSettings.vacation_pdf_title || "Urlaubsplanung";
+  document.querySelector("#vacationPdfFilenameIncludePeriod").checked = vacationSettings.vacation_pdf_filename_include_period !== "0";
+  document.querySelector("#vacationPdfFilenameIncludeTimestamp").checked = vacationSettings.vacation_pdf_filename_include_timestamp === "1";
+  document.querySelector("#vacationPdfShowBalance").checked = vacationSettings.vacation_pdf_show_balance !== "0";
+  document.querySelector("#vacationPdfBalanceShowEntitlement").checked = vacationSettings.vacation_pdf_balance_show_entitlement !== "0";
+  document.querySelector("#vacationPdfBalanceShowPlanned").checked = vacationSettings.vacation_pdf_balance_show_planned !== "0";
+  document.querySelector("#vacationPdfBalanceShowConsumed").checked = vacationSettings.vacation_pdf_balance_show_consumed === "1";
+  document.querySelector("#vacationPdfCalendarStyle").value = vacationSettings.vacation_pdf_calendar_style || "bars";
+  document.querySelector("#toastDuration").value = settings.toast_duration || "medium";
+  document.querySelector("#showInactivePersonnel").checked = settings.show_inactive_personnel !== "0";
+  document.querySelector("#showSaturdayServiceStats").checked = settings.show_saturday_service_stats !== "0";
+  document.querySelector("#externalBackupEnabled").checked = settings.external_backup_enabled !== "0";
+  document.querySelector("#backupDirectory").value = settings.backup_directory || "";
+  document.querySelector("#backupIntervalHours").value = settings.backup_interval_hours || "2";
+  document.querySelector("#vacationCountSaturday").checked = settings.vacation_count_saturday === "1";
+  document.querySelector("#allowPastWeekEditing").checked = settings.allow_past_week_editing === "1";
+  document.querySelector("#breakRuleEnabled").checked = settings.break_rule_enabled === "1";
+  document.querySelector("#breakAfterHours").value = Number(settings.break_after_minutes) / 60;
+  document.querySelector("#breakDuration").value = settings.break_duration_minutes;
+  document.querySelector("#saturdayBonusEnabled").checked = settings.saturday_bonus_enabled === "1";
+  document.querySelector("#saturdayBonusFrom").value = settings.saturday_bonus_from;
+  document.querySelector("#saturdayBonusFactor").value = settings.saturday_bonus_factor;
+  document.querySelectorAll("[data-day-settings]").forEach((row) => {
+    const day = row.dataset.daySettings;
+    row.querySelector('[data-field="start"]').value = settings[`${day}_start_time`];
+    row.querySelector('[data-field="end"]').value = settings[`${day}_end_time`];
+    row.querySelector('[data-field="lunchEnabled"]').checked = settings[`${day}_lunch_enabled`] === "1";
+    row.querySelector('[data-field="lunchStart"]').value = settings[`${day}_lunch_start`];
+    row.querySelector('[data-field="lunchEnd"]').value = settings[`${day}_lunch_end`];
+    row.querySelector('[data-field="minStaff"]').value = settings[`${day}_min_staff`];
+    row.querySelector('[data-field="minFrom"]').value = settings[`${day}_min_from`];
+    row.querySelector('[data-field="minTo"]').value = settings[`${day}_min_to`];
+  });
+  document.querySelector("#showSunday").checked = settings.show_sunday === "1";
+  renderOperationMode();
+  updatePdfPreview();
+}
+
+function renderOperationMode() {
+  const status = state.portalStatus || {};
+  const serverActive = status.operationMode === "server" && status.serverModeStatus === "active" && status.portalEnabled === true;
+  elements.localModeOption?.classList.toggle("active", !serverActive);
+  elements.localModeOption?.setAttribute("aria-current", String(!serverActive));
+  elements.serverModeOption?.classList.toggle("active", serverActive);
+  elements.serverModeOption?.setAttribute("aria-current", String(serverActive));
+  if (elements.localModeBadge) {
+    elements.localModeBadge.textContent = serverActive ? "Verfügbar" : "Aktiv";
+    elements.localModeBadge.classList.toggle("inactive", serverActive);
+  }
+  if (elements.serverModeBadge) {
+    elements.serverModeBadge.textContent = serverActive ? "Aktiv" : "In Vorbereitung";
+    elements.serverModeBadge.classList.toggle("inactive", !serverActive);
+  }
+  if (elements.portalFoundationHint) {
+    const apiVersion = status.apiVersion || 1;
+    elements.portalFoundationHint.textContent = serverActive
+      ? `Portal-API v${apiVersion} ist aktiv. Anmeldung und Rollen werden im Serverbetrieb erzwungen.`
+      : `Portal-API v${apiVersion}, Rollen und Admin-Ersteinrichtung sind technisch vorbereitet. Der lokale Start bleibt ohne Loginpflicht.`;
+  }
+}
+
+function renderBrandingKits() {
+  if (!elements.brandingKitLibrary) return;
+  const kits = state.brandingKits || [];
+  elements.brandingKitLibrary.innerHTML = kits.length ? `
+    <div class="branding-kit-library-heading">
+      <div><strong>Installierte Branding-Kits</strong><small>Lokal gespeichert, z. B. am USB-Stick unter <code>data/branding-kits</code>.</small></div>
+    </div>
+    <div class="branding-kit-grid">
+      ${kits.map((kit) => {
+        const branding = brandingFromSettings(kit.branding || {});
+        return `<article class="branding-kit-card ${kit.active ? "active" : ""}">
+          <div class="branding-kit-preview">
+            <img src="${escapeHtml(branding.logoUrl)}" alt="" />
+            <span><img src="${escapeHtml(branding.iconUrl)}" alt="" /></span>
+          </div>
+          <div class="branding-kit-meta">
+            <strong>${escapeHtml(kit.name || branding.companyName || "Branding-Kit")}</strong>
+            <small>${escapeHtml(branding.companyName || "Neutral")}${branding.adminEmail ? ` · ${escapeHtml(branding.adminEmail)}` : ""}</small>
+          </div>
+          <button type="button" class="${kit.active ? "secondary-button" : "primary-button"}" data-apply-branding-kit="${escapeHtml(kit.id)}">${kit.active ? "Aktiv" : "Anwenden"}</button>
+        </article>`;
+      }).join("")}
+    </div>
+  ` : '<div class="empty-options">Noch keine Branding-Kits installiert.</div>';
+}
+
+function setView(view) {
+  document.querySelectorAll(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
+  elements.planningView.classList.toggle("active", view === "planning");
+  elements.vacationsView.classList.toggle("active", view === "vacations");
+  elements.personnelView.classList.toggle("active", view === "personnel");
+  elements.settingsView.classList.toggle("active", view === "settings");
+}
+
+function setSettingsTab(tab) {
+  document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("active", button.dataset.settingsTab === tab));
+  elements.generalSettings.classList.toggle("active", tab === "general");
+  elements.brandingSettings.classList.toggle("active", tab === "branding");
+  elements.pdfSettings.classList.toggle("active", tab === "pdf");
+  elements.personnelSettings.classList.toggle("active", tab === "personnel");
+  elements.backupSettings.classList.toggle("active", tab === "backup");
+}
+
+function setPersonnelTab(tab) {
+  state.personnelTab = tab;
+  document.querySelectorAll("[data-personnel-tab]").forEach((button) => button.classList.toggle("active", button.dataset.personnelTab === tab));
+  elements.employeeSettings.classList.toggle("active", tab === "employees");
+  elements.locationSettings.classList.toggle("active", tab === "locations");
+}
+
+function updateColorPicker(color) {
+  const normalized = /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : "#0b84c6";
+  state.selectedColor = normalized;
+  document.querySelector("#employeeColorPicker").value = normalized;
+  document.querySelector("#employeeColorHex").value = normalized;
+  document.querySelector("#employeeColorPreview").style.setProperty("--preview-color", normalized);
+}
+
+function updateEmployeeDepartmentOptions(selectedDepartmentId = "") {
+  const locationId = elements.employeeHomeLocation.value || state.locationId;
+  const departments = departmentsForLocation(locationId);
+  elements.employeePreferredDepartment.innerHTML = `<option value="">Keine Abteilung</option>${departments.map((department) =>
+    `<option value="${department.id}">${escapeHtml(department.name)}</option>`,
+  ).join("")}`;
+  if (selectedDepartmentId && departments.some((department) => String(department.id) === String(selectedDepartmentId))) {
+    elements.employeePreferredDepartment.value = String(selectedDepartmentId);
+  } else {
+    elements.employeePreferredDepartment.value = "";
+  }
+}
+
+function openEmployeeModal(employee = null) {
+  elements.employeeForm.reset();
+  elements.employeeHomeLocation.innerHTML = (state.locations || []).map((location) =>
+    `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`,
+  ).join("");
+  document.querySelector("#employeeNumber").value = employee?.personnel_number || "";
+  document.querySelector("#employeeNumber").disabled = Boolean(employee);
+  document.querySelector("#employeeName").value = employee?.full_name || "";
+  document.querySelector("#employeeNickname").value = employee?.nickname || "";
+  document.querySelector("#employeeHours").value = employee?.contracted_hours ?? 38.5;
+  elements.employeePosition.innerHTML = (state.positions || []).map((position) =>
+    `<option value="${escapeHtml(position.id)}">${escapeHtml(position.name)}</option>`,
+  ).join("");
+  elements.employeePosition.value = employee?.position_id || "verkaufsmitarbeiter";
+  elements.employeeHomeLocation.value = employee?.home_location_id || state.locationId || state.locations?.[0]?.id || "01";
+  updateEmployeeDepartmentOptions(employee?.preferred_department_id || "");
+  document.querySelector("#employeePreferredDay").value = employee?.preferred_day_off || "";
+  const fixedDays = fixedWorkdays(employee);
+  document.querySelectorAll('[name="employeeFixedWorkday"]').forEach((checkbox) => {
+    checkbox.checked = fixedDays.includes(checkbox.value);
+  });
+  document.querySelector("#employeeActive").checked = employee?.active ?? true;
+  updateColorPicker(employee?.color || "#0b84c6");
+  elements.employeeModalTitle.textContent = employee ? `${employee.nickname} bearbeiten` : "Teammitglied anlegen";
+  elements.deleteEmployeeButton.classList.toggle("hidden", !employee);
+  elements.employeeModal.showModal();
+}
+
+function calculateShiftPreview() {
+  if (!state.data) return;
+  const startValue = document.querySelector("#shiftStart").value;
+  const endValue = document.querySelector("#shiftEnd").value;
+  const dateValue = document.querySelector("#shiftDate").value;
+  if (!startValue || !endValue || !dateValue) return;
+  let start = timeToMinutes(startValue);
+  let end = timeToMinutes(endValue);
+  if (end <= start) end += 1440;
+  const raw = end - start;
+  const settings = state.data.settings;
+  const rulePause = settings.break_rule_enabled === "1" && raw > Number(settings.break_after_minutes)
+    ? Number(settings.break_duration_minutes) : 0;
+  const config = dayConfig(dateValue, settings);
+  const lunchPause = config?.lunchEnabled
+    ? Math.max(0, Math.min(end, timeToMinutes(config.lunchEnd)) - Math.max(start, timeToMinutes(config.lunchStart)))
+    : 0;
+  const pause = Math.max(rulePause, lunchPause);
+  let counted = raw - pause;
+  let bonus = 0;
+  if (new Date(`${dateValue}T12:00:00`).getDay() === 6 && settings.saturday_bonus_enabled === "1") {
+    const bonusFrom = timeToMinutes(settings.saturday_bonus_from);
+    const eligible = Math.max(0, end - Math.max(start, bonusFrom));
+    bonus = eligible * (Number(settings.saturday_bonus_factor) - 1);
+    counted += bonus;
+  }
+  elements.shiftCalculation.textContent = `Planzeit ${formatHours(raw)} · Pause ${formatHours(pause)}${bonus ? ` · Samstagszuschlag +${formatHours(bonus)}` : ""} · Gewertet ${formatHours(counted)}`;
+}
+
+function openShiftModal(employeeNumber, date, shift = null) {
+  if (isWeekLocked()) {
+    showToast("Diese Kalenderwoche ist schreibgeschützt.", true);
+    return;
+  }
+  const hours = operatingHours(shift?.shift_date || date);
+  if (!hours) {
+    showToast("An Sonntagen ist kein Dienst vorgesehen.", true);
+    return;
+  }
+  const specialCase = fullDaySpecialCaseFor(shift?.employee_number || employeeNumber, shift?.shift_date || date);
+  if (specialCase && !shift) {
+    showToast(`An diesem Tag ist bereits „${optionLabels[specialCase.option_type]}“ eingetragen.`, true);
+    return;
+  }
+  const initialEmployee = state.data.employees.find((employee) => employee.personnel_number === (shift?.employee_number || employeeNumber));
+  if (initialEmployee && !shift && !employeeCanWorkOnDate(initialEmployee, shift?.shift_date || date)) {
+    showToast(`${initialEmployee.nickname} hat an diesem Wochentag keinen fix vereinbarten Arbeitstag.`, true);
+    return;
+  }
+  document.querySelector("#shiftEmployee").innerHTML = state.data.employees.map((employee) =>
+    `<option value="${escapeHtml(employee.personnel_number)}">${escapeHtml(employee.nickname)} · ${escapeHtml(employee.personnel_number)}</option>`,
+  ).join("");
+  const departments = departmentsForLocation(state.locationId);
+  elements.shiftDepartment.innerHTML = `<option value="">Keine / Allgemein</option>${departments.map((department) =>
+    `<option value="${department.id}">${escapeHtml(department.name)}</option>`,
+  ).join("")}`;
+  elements.shiftForm.reset();
+  document.querySelector("#shiftId").value = shift?.id || "";
+  document.querySelector("#shiftEmployee").value = shift?.employee_number || employeeNumber;
+  const selectedEmployee = state.data.employees.find((employee) => employee.personnel_number === (shift?.employee_number || employeeNumber));
+  elements.shiftDepartment.value = shift?.department_id || state.departmentId || selectedEmployee?.preferred_department_id || "";
+  document.querySelector("#shiftDate").value = shift?.shift_date || date;
+  document.querySelector("#shiftStart").value = shift?.start_time || hours.start;
+  document.querySelector("#shiftEnd").value = shift?.end_time || hours.end;
+  document.querySelector("#shiftArea").value = shift?.area || "";
+  document.querySelector("#shiftNote").value = shift?.note || "";
+  elements.shiftModalTitle.textContent = shift ? "Dienst bearbeiten" : "Dienst eintragen";
+  elements.deleteShiftButton.classList.toggle("hidden", !shift);
+  calculateShiftPreview();
+  elements.shiftModal.showModal();
+}
+
+function openOptionsModal() {
+  if (isWeekLocked()) {
+    showToast("Diese Kalenderwoche ist schreibgeschützt.", true);
+    return;
+  }
+  const employeeOptions = state.data.employees.map((employee) =>
+    `<option value="${escapeHtml(employee.personnel_number)}">${escapeHtml(employee.nickname)} · ${escapeHtml(employee.personnel_number)}</option>`,
+  ).join("");
+  document.querySelector("#optionEmployee").innerHTML = employeeOptions;
+  document.querySelector("#optionDateFrom").value = state.weekStart;
+  document.querySelector("#optionDateTo").value = state.weekStart;
+  document.querySelector("#optionType").value = "vacation";
+  document.querySelector("#optionAllDay").checked = true;
+  const defaultHours = dayConfig(state.weekStart, state.data.settings);
+  document.querySelector("#optionStartTime").value = defaultHours?.start || "09:00";
+  document.querySelector("#optionEndTime").value = defaultHours?.end || "18:00";
+  document.querySelector("#optionHours").value = "";
+  document.querySelector("#optionNote").value = "";
+  elements.globalBlockDate.value = state.weekStart;
+  elements.globalBlockReason.value = publicHolidayForDate(state.weekStart)?.name || "";
+  elements.globalBlockHoliday.checked = Boolean(publicHolidayForDate(state.weekStart));
+  resetGlobalBlockEditor();
+  updateOptionCreditFields();
+  resetOptionEditor();
+  updateOptionWeekControls();
+  renderOptionList();
+  elements.optionsModal.showModal();
+  elements.optionsModal.focus();
+}
+
+function updateOptionWeekControls() {
+  const weekEnd = addDays(state.weekStart, 6);
+  elements.optionsWeekLabel.textContent = `KW ${state.data.calendarWeek}`;
+  elements.optionsWeekRange.textContent = `${formatDate(state.weekStart)} – ${formatDate(weekEnd)}`;
+  ["optionDateFrom", "optionDateTo"].forEach((id) => {
+    const input = document.querySelector(`#${id}`);
+    input.min = state.weekStart;
+    input.max = weekEnd;
+    if (!input.value || input.value < state.weekStart || input.value > weekEnd) input.value = state.weekStart;
+  });
+  elements.globalBlockDate.min = state.weekStart;
+  elements.globalBlockDate.max = weekEnd;
+  if (!elements.globalBlockDate.value || elements.globalBlockDate.value < state.weekStart || elements.globalBlockDate.value > weekEnd) {
+    elements.globalBlockDate.value = state.weekStart;
+  }
+}
+
+async function switchOptionsWeek(offsetWeeks) {
+  resetOptionEditor();
+  state.weekStart = addDays(state.weekStart, offsetWeeks * 7);
+  await loadAll();
+  if (elements.optionsModal.open) {
+    const employeeOptions = state.data.employees.map((employee) =>
+      `<option value="${escapeHtml(employee.personnel_number)}">${escapeHtml(employee.nickname)} · ${escapeHtml(employee.personnel_number)}</option>`,
+    ).join("");
+    document.querySelector("#optionEmployee").innerHTML = employeeOptions;
+    updateOptionWeekControls();
+    resetGlobalBlockEditor();
+    elements.globalBlockDate.value = state.weekStart;
+    elements.globalBlockReason.value = "";
+    elements.globalBlockHoliday.checked = false;
+    updateGlobalBlockHolidaySuggestion();
+    updateOptionCreditFields();
+    renderOptionList();
+  }
+}
+
+function resetGlobalBlockEditor() {
+  state.editingGlobalBlockId = null;
+  elements.globalBlockSubmitButton.textContent = "Tag sperren";
+}
+
+function updateGlobalBlockHolidaySuggestion() {
+  const holiday = publicHolidayForDate(elements.globalBlockDate.value);
+  if (holiday && !elements.globalBlockReason.value.trim()) {
+    elements.globalBlockReason.value = holiday.name;
+    elements.globalBlockHoliday.checked = true;
+  }
+}
+
+function fillGlobalBlockForm(block) {
+  state.editingGlobalBlockId = block.id;
+  elements.globalBlockDate.value = block.block_date;
+  elements.globalBlockReason.value = block.reason || block.holiday_name || "";
+  elements.globalBlockHoliday.checked = Boolean(block.is_public_holiday);
+  elements.globalBlockSubmitButton.textContent = "Sperrtag ändern";
+}
+
+function resetOptionEditor() {
+  state.editingOptionId = null;
+  state.editingOptionGroupId = null;
+  elements.optionSubmitButton.textContent = "Hinzufügen";
+  elements.cancelOptionEditButton.classList.add("hidden");
+}
+
+function fillOptionForm(option) {
+  state.editingOptionId = option.id;
+  state.editingOptionGroupId = option.group_id || null;
+  document.querySelector("#optionEmployee").value = option.employee_number;
+  document.querySelector("#optionType").value = option.option_type;
+  document.querySelector("#optionDateFrom").value = option.date_from;
+  document.querySelector("#optionDateTo").value = option.date_to;
+  document.querySelector("#optionAllDay").checked = optionIsAllDay(option);
+  document.querySelector("#optionStartTime").value = option.start_time || "09:00";
+  document.querySelector("#optionEndTime").value = option.end_time || "18:00";
+  document.querySelector("#optionHours").value = option.credited_minutes_per_day ? Number(option.credited_minutes_per_day) / 60 : "";
+  document.querySelector("#optionNote").value = option.note || "";
+  updateOptionCreditFields();
+  elements.optionSubmitButton.textContent = "Änderung speichern";
+  elements.cancelOptionEditButton.classList.remove("hidden");
+  elements.optionForm.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function updateOptionCreditFields() {
+  const type = document.querySelector("#optionType").value;
+  const alwaysAllDay = ["vacation", "sick", "branch", "vocational_school", "special_leave"].includes(type);
+  const supportsTime = ["school", "time_off", "external_appointment", "team_meeting", "other"].includes(type);
+  const manualAllDay = ["school", "external_appointment", "team_meeting", "other"].includes(type);
+  const allDayInput = document.querySelector("#optionAllDay");
+  if (alwaysAllDay) allDayInput.checked = true;
+  const allDay = allDayInput.checked || alwaysAllDay;
+  const manual = allDay && manualAllDay;
+  const employeeNumber = document.querySelector("#optionEmployee").value;
+  const employee = state.data.employees.find((item) => item.personnel_number === employeeNumber);
+  const dailyHours = employee ? Number(employee.contracted_hours) / 5 : 0;
+  document.querySelector("#optionAllDayField").classList.toggle("hidden", !supportsTime);
+  allDayInput.disabled = alwaysAllDay;
+  document.querySelector("#optionTimeFields").classList.toggle("hidden", allDay || !supportsTime);
+  document.querySelector("#optionHoursField").classList.toggle("hidden", !manual);
+  document.querySelector("#optionHours").required = manual;
+  const start = document.querySelector("#optionStartTime").value;
+  const end = document.querySelector("#optionEndTime").value;
+  const timedHours = start && end && end > start ? (timeToMinutes(end) - timeToMinutes(start)) / 60 : 0;
+  document.querySelector("#optionCreditHint").textContent = manual
+    ? "Ganztägig: Die eingetragenen Stunden werden für jeden ausgewählten Tag angerechnet."
+    : type === "time_off"
+      ? allDay
+        ? "Ganztägiger Zeitausgleich wird mit 0 Stunden angerechnet und sperrt den ganzen Tag."
+        : "Zeitlicher Zeitausgleich wird mit 0 Stunden angerechnet und sperrt nur den eingetragenen Zeitraum."
+      : supportsTime && !allDay
+        ? `Zeitlicher Eintrag: ${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 2 }).format(timedHours)} Stunden werden angerechnet.`
+        : `Ganzer Tag: Wochen-Soll ÷ 5 = ${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 2 }).format(dailyHours)} Stunden pro Tag.`;
+}
+
+function handleOptionTypeChange() {
+  const type = document.querySelector("#optionType").value;
+  document.querySelector("#optionAllDay").checked = ["vacation", "sick", "branch", "vocational_school", "special_leave"].includes(type);
+  updateOptionCreditFields();
+}
+
+function openAutoPlanModal() {
+  if (isWeekLocked()) {
+    showToast("Diese Kalenderwoche ist schreibgeschützt.", true);
+    return;
+  }
+  elements.autoPlanWeek.textContent = `${formatDate(state.weekStart)} bis ${formatDate(addDays(state.weekStart, state.data.settings.show_sunday === "1" ? 6 : 5))} · KW ${state.data.calendarWeek}`;
+  document.querySelector('input[name="autoMode"][value="fill"]').checked = true;
+  elements.autoPlanModal.showModal();
+}
+
+function openResetWeekModal() {
+  if (isWeekLocked()) {
+    showToast("Diese Kalenderwoche ist schreibgeschützt.", true);
+    return;
+  }
+  elements.resetWeekText.textContent = `${formatDate(state.weekStart)} bis ${formatDate(addDays(state.weekStart, state.data.settings.show_sunday === "1" ? 6 : 5))} · KW ${state.data.calendarWeek}`;
+  elements.resetWeekModal.showModal();
+}
+
+function renderOptionList() {
+  const options = state.data.weekOptions;
+  elements.optionList.innerHTML = options.length ? options.map((option) => `
+    <div class="option-item">
+      <span class="option-item-color" style="background:${option.color}"></span>
+      <div><strong>${escapeHtml(option.employee_number)} ${escapeHtml(option.nickname)} · ${optionLabels[option.option_type]}</strong>
+      <small>${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` · ${escapeHtml(option.note)}` : ""} · gerechnet ${formatHours(option.credited_minutes || 0)}</small></div>
+      <div class="option-actions">
+        <button type="button" class="edit-option" data-edit-option="${option.id}">Bearbeiten</button>
+        <button type="button" class="delete-option" data-delete-option="${option.id}">Entfernen</button>
+      </div>
+    </div>`).join("") : '<div class="empty-options">Für diese Woche sind noch keine Sonderfälle eingetragen.</div>';
+}
+
+function renderOptionList() {
+  const options = state.data.weekOptions;
+  const blocks = state.data.globalDayBlocks || [];
+  const blockItems = blocks.map((block) => `
+    <div class="option-item global-option-item">
+      <span class="option-item-color" style="background:#9aa2a4"></span>
+      <div><strong>Alle · ${escapeHtml(block.reason || block.holiday_name || "Tag gesperrt")}</strong>
+      <small>${formatDate(block.block_date)}${block.is_public_holiday ? " · Feiertag · gerechnet Wochen-Soll ÷ 5" : " · keine Stundenanrechnung"}</small></div>
+      <div class="option-actions">
+        <button type="button" class="edit-option" data-edit-global-block="${block.id}">Bearbeiten</button>
+        <button type="button" class="delete-option" data-delete-global-block="${block.id}">Entfernen</button>
+      </div>
+    </div>`);
+  const optionItems = options.map((option) => `
+    <div class="option-item">
+      <span class="option-item-color" style="background:${option.color}"></span>
+      <div><strong>${escapeHtml(option.employee_number)} ${escapeHtml(option.nickname)} · ${optionLabels[option.option_type]}</strong>
+      <small>${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` · ${escapeHtml(option.note)}` : ""} · gerechnet ${formatHours(option.credited_minutes || 0)}</small></div>
+      <div class="option-actions">
+        <button type="button" class="edit-option" data-edit-option="${option.id}">Bearbeiten</button>
+        <button type="button" class="delete-option" data-delete-option="${option.id}">Entfernen</button>
+      </div>
+    </div>`);
+  elements.optionList.innerHTML = blockItems.length || optionItems.length
+    ? [...blockItems, ...optionItems].join("")
+    : '<div class="empty-options">Für diese Woche sind noch keine Sonderfälle eingetragen.</div>';
+}
+
+async function saveEmployee(event) {
+  event.preventDefault();
+  const number = document.querySelector("#employeeNumber").value.trim();
+  const isEdit = document.querySelector("#employeeNumber").disabled;
+  const body = {
+    personnelNumber: number,
+    fullName: document.querySelector("#employeeName").value,
+    nickname: document.querySelector("#employeeNickname").value,
+    contractedHours: Number(document.querySelector("#employeeHours").value),
+    positionId: elements.employeePosition.value,
+    homeLocationId: elements.employeeHomeLocation.value,
+    preferredDepartmentId: elements.employeePreferredDepartment.value,
+    preferredDayOff: document.querySelector("#employeePreferredDay").value,
+    fixedWorkdays: Array.from(document.querySelectorAll('[name="employeeFixedWorkday"]:checked')).map((input) => input.value),
+    color: state.selectedColor,
+    active: document.querySelector("#employeeActive").checked,
+  };
+  try {
+    await api(isEdit ? `/api/employees/${encodeURIComponent(number)}` : "/api/employees", {
+      method: isEdit ? "PUT" : "POST",
+      body: JSON.stringify(body),
+    });
+    elements.employeeModal.close();
+    showToast(isEdit ? "Teammitglied wurde aktualisiert." : "Teammitglied wurde angelegt.");
+    await loadAll();
+  } catch (error) { showToast(error.message, true); }
+}
+
+function resetLocationForm() {
+  state.editingLocationId = null;
+  elements.locationForm.reset();
+  elements.locationId.disabled = false;
+  elements.locationMinStaff.value = 0;
+  elements.locationActive.checked = true;
+  elements.locationSubmitButton.textContent = "Filiale anlegen";
+  elements.cancelLocationEditButton.classList.add("hidden");
+}
+
+function fillLocationForm(location) {
+  state.editingLocationId = location.id;
+  elements.locationId.value = location.id;
+  elements.locationId.disabled = true;
+  elements.locationName.value = location.name;
+  elements.locationMinStaff.value = Number(location.min_staff || 0);
+  elements.locationActive.checked = Boolean(location.active);
+  elements.locationSubmitButton.textContent = "Filiale speichern";
+  elements.cancelLocationEditButton.classList.remove("hidden");
+}
+
+async function saveLocation(event) {
+  event.preventDefault();
+  const isEdit = Boolean(state.editingLocationId);
+  const id = isEdit ? state.editingLocationId : elements.locationId.value;
+  try {
+    state.locations = await api(isEdit ? `/api/locations/${encodeURIComponent(id)}` : "/api/locations", {
+      method: isEdit ? "PUT" : "POST",
+      body: JSON.stringify({
+        id,
+        name: elements.locationName.value,
+        minStaff: Number(elements.locationMinStaff.value || 0),
+        active: elements.locationActive.checked,
+      }),
+    });
+    resetLocationForm();
+    showToast(isEdit ? "Filiale wurde gespeichert." : "Filiale wurde angelegt.");
+    await loadAll();
+  } catch (error) { showToast(error.message, true); }
+}
+
+function resetDepartmentForm() {
+  state.editingDepartmentId = null;
+  elements.departmentForm.reset();
+  elements.departmentId.value = "";
+  elements.departmentLocation.value = state.locationId || elements.departmentLocation.options[0]?.value || "";
+  elements.departmentMinStaff.value = 0;
+  elements.departmentActive.checked = true;
+  elements.departmentSubmitButton.textContent = "Abteilung anlegen";
+  elements.cancelDepartmentEditButton.classList.add("hidden");
+}
+
+function fillDepartmentForm(department) {
+  state.editingDepartmentId = department.id;
+  elements.departmentId.value = department.id;
+  elements.departmentLocation.value = department.location_id;
+  elements.departmentName.value = department.name;
+  elements.departmentMinStaff.value = Number(department.min_staff || 0);
+  elements.departmentActive.checked = Boolean(department.active);
+  elements.departmentSubmitButton.textContent = "Abteilung speichern";
+  elements.cancelDepartmentEditButton.classList.remove("hidden");
+}
+
+async function saveDepartment(event) {
+  event.preventDefault();
+  const isEdit = Boolean(state.editingDepartmentId);
+  try {
+    state.locations = await api(isEdit ? `/api/departments/${state.editingDepartmentId}` : "/api/departments", {
+      method: isEdit ? "PUT" : "POST",
+      body: JSON.stringify({
+        locationId: elements.departmentLocation.value,
+        name: elements.departmentName.value,
+        minStaff: Number(elements.departmentMinStaff.value || 0),
+        active: elements.departmentActive.checked,
+      }),
+    });
+    resetDepartmentForm();
+    showToast(isEdit ? "Abteilung wurde gespeichert." : "Abteilung wurde angelegt.");
+    await loadAll();
+  } catch (error) { showToast(error.message, true); }
+}
+
+function resetPositionForm() {
+  state.editingPositionId = null;
+  elements.positionForm.reset();
+  elements.positionId.value = "";
+  elements.positionSubmitButton.textContent = "Position hinzufügen";
+  elements.cancelPositionEditButton.classList.add("hidden");
+}
+
+function fillPositionForm(position) {
+  state.editingPositionId = position.id;
+  elements.positionId.value = position.id;
+  elements.positionName.value = position.name;
+  elements.positionSubmitButton.textContent = "Position speichern";
+  elements.cancelPositionEditButton.classList.remove("hidden");
+}
+
+async function savePosition(event) {
+  event.preventDefault();
+  const isEdit = Boolean(state.editingPositionId);
+  try {
+    state.positions = await api(isEdit ? `/api/positions/${encodeURIComponent(state.editingPositionId)}` : "/api/positions", {
+      method: isEdit ? "PUT" : "POST",
+      body: JSON.stringify({ name: elements.positionName.value }),
+    });
+    resetPositionForm();
+    renderPositions();
+    showToast(isEdit ? "Position wurde gespeichert." : "Position wurde hinzugefügt.");
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function deletePosition(id) {
+  if (!confirm("Diese eigene Position wirklich löschen? Bestehende Teammitglieder werden auf Verkaufsmitarbeiter gesetzt.")) return;
+  try {
+    await api(`/api/positions/${encodeURIComponent(id)}`, { method: "DELETE" });
+    state.positions = await api("/api/positions");
+    resetPositionForm();
+    showToast("Position wurde gelöscht.");
+    await loadAll();
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function saveShift(event) {
+  event.preventDefault();
+  const id = document.querySelector("#shiftId").value;
+  const body = {
+    employeeNumber: document.querySelector("#shiftEmployee").value,
+    departmentId: elements.shiftDepartment.value || "",
+    date: document.querySelector("#shiftDate").value,
+    startTime: document.querySelector("#shiftStart").value,
+    endTime: document.querySelector("#shiftEnd").value,
+    area: document.querySelector("#shiftArea").value,
+    note: document.querySelector("#shiftNote").value,
+  };
+  try {
+    await api(id ? `/api/shifts/${id}` : "/api/shifts", { method: id ? "PUT" : "POST", body: JSON.stringify(body) });
+    elements.shiftModal.close();
+    state.weekStart = getMonday(new Date(`${body.date}T12:00:00`));
+    showToast(id ? "Dienst wurde aktualisiert." : "Dienst wurde eingetragen.");
+    await loadAll();
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function saveOption(event) {
+  event.preventDefault();
+  const isEdit = Boolean(state.editingOptionId);
+  const body = {
+    employeeNumber: document.querySelector("#optionEmployee").value,
+    weekStart: state.weekStart,
+    dateFrom: document.querySelector("#optionDateFrom").value,
+    dateTo: document.querySelector("#optionDateTo").value,
+    optionType: document.querySelector("#optionType").value,
+    allDay: document.querySelector("#optionAllDay").checked,
+    startTime: document.querySelector("#optionStartTime").value,
+    endTime: document.querySelector("#optionEndTime").value,
+    manualHours: document.querySelector("#optionHours").value,
+    note: document.querySelector("#optionNote").value,
+    groupId: state.editingOptionGroupId,
+  };
+  try {
+    await api(isEdit ? `/api/week-options/${state.editingOptionId}` : "/api/week-options", {
+      method: isEdit ? "PUT" : "POST",
+      body: JSON.stringify(body),
+    });
+    await loadAll();
+    renderOptionList();
+    document.querySelector("#optionNote").value = "";
+    document.querySelector("#optionHours").value = "";
+    resetOptionEditor();
+    showToast(isEdit ? "Planungsoption wurde aktualisiert." : "Planungsoption wurde hinzugefügt.");
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function saveGlobalBlock() {
+  const isEdit = Boolean(state.editingGlobalBlockId);
+  try {
+    await api(isEdit ? `/api/global-day-blocks/${state.editingGlobalBlockId}` : "/api/global-day-blocks", {
+      method: isEdit ? "PUT" : "POST",
+      body: JSON.stringify({
+        weekStart: state.weekStart,
+        locationId: state.locationId,
+        blockDate: elements.globalBlockDate.value,
+        reason: elements.globalBlockReason.value,
+        isPublicHoliday: elements.globalBlockHoliday.checked,
+      }),
+    });
+    await loadAll();
+    renderOptionList();
+    resetGlobalBlockEditor();
+    elements.globalBlockReason.value = "";
+    updateGlobalBlockHolidaySuggestion();
+    showToast(isEdit ? "Sperrtag wurde aktualisiert." : "Sperrtag wurde eingetragen.");
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function deleteGlobalBlock(id) {
+  if (!id || !confirm("Diesen Sperrtag wirklich entfernen?")) return;
+  try {
+    await api(`/api/global-day-blocks/${id}`, { method: "DELETE" });
+    await loadAll();
+    renderOptionList();
+    showToast("Sperrtag wurde entfernt.");
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function createAutomaticPlan(event) {
+  event.preventDefault();
+  const replaceExisting = document.querySelector('input[name="autoMode"]:checked').value === "replace";
+  try {
+    const result = await api("/api/schedule/auto", {
+      method: "POST",
+      body: JSON.stringify({ weekStart: state.weekStart, replaceExisting, locationId: state.locationId, departmentId: state.departmentId || "" }),
+    });
+    elements.autoPlanModal.close();
+    await loadAll();
+    const warningText = result.warnings.length ? ` ${result.warnings.join(" ")}` : "";
+    showToast(`${result.created} Dienste wurden automatisch erstellt.${warningText}`, result.warnings.length > 0);
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function resetCurrentWeek(event) {
+  event.preventDefault();
+  try {
+    const result = await api(`/api/schedule?week=${state.weekStart}${contextQuery(true)}`, { method: "DELETE" });
+    elements.resetWeekModal.close();
+    await loadAll();
+    showToast(`${result.deleted} Dienste wurden aus der aktuellen Woche gelöscht.`);
+  } catch (error) { showToast(error.message, true); }
+}
+
+const scheduleNoteMaxLength = 900;
+
+function stripEmoji(value) {
+  return String(value || "")
+    .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, "")
+    .replace(/[\u2600-\u27BF]/gu, "")
+    .replace(/\uFEFF/g, "");
+}
+
+function sanitizeScheduleNoteEditor() {
+  const editorRoot = scheduleNoteQuill?.root || elements.scheduleNoteEditor;
+  if (!editorRoot || scheduleNoteSanitizing) return;
+  const before = editorRoot.innerHTML;
+  const after = stripEmoji(before);
+  if (before !== after) {
+    if (scheduleNoteQuill) {
+      const selection = scheduleNoteQuill.getSelection();
+      scheduleNoteSanitizing = true;
+      scheduleNoteQuill.clipboard.dangerouslyPasteHTML(after);
+      if (selection) scheduleNoteQuill.setSelection(Math.min(selection.index, scheduleNoteQuill.getLength()), 0, "silent");
+      scheduleNoteSanitizing = false;
+    } else {
+      editorRoot.innerHTML = after;
+      const range = document.createRange();
+      range.selectNodeContents(editorRoot);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  }
+}
+
+function scheduleNotePlainText() {
+  return stripEmoji(scheduleNoteQuill?.getText() || elements.scheduleNoteEditor?.innerText || "").trim();
+}
+
+function scheduleNoteHtml() {
+  const html = stripEmoji(scheduleNoteQuill?.root?.innerHTML || elements.scheduleNoteEditor?.innerHTML || "").trim();
+  return /^<p><br><\/p>$/i.test(html) ? "" : html;
+}
+
+function setScheduleNoteHtml(html) {
+  const cleanHtml = stripEmoji(html || "");
+  if (scheduleNoteQuill) {
+    scheduleNoteSanitizing = true;
+    scheduleNoteQuill.setText("");
+    if (cleanHtml) scheduleNoteQuill.clipboard.dangerouslyPasteHTML(cleanHtml);
+    scheduleNoteSanitizing = false;
+  } else if (elements.scheduleNoteEditor) {
+    elements.scheduleNoteEditor.innerHTML = cleanHtml;
+  }
+}
+
+function updateScheduleNoteCounter() {
+  sanitizeScheduleNoteEditor();
+  const text = scheduleNotePlainText();
+  if (text.length > scheduleNoteMaxLength) {
+    if (scheduleNoteQuill) {
+      scheduleNoteQuill.deleteText(scheduleNoteMaxLength, scheduleNoteQuill.getLength(), "silent");
+    } else {
+      elements.scheduleNoteEditor.innerText = text.slice(0, scheduleNoteMaxLength);
+    }
+  }
+  elements.scheduleNoteCounter.textContent = `${Math.min(text.length, scheduleNoteMaxLength)}/${scheduleNoteMaxLength} Zeichen · Smileys werden für schlanke PDFs automatisch entfernt.`;
+}
+
+function openScheduleNoteModal() {
+  if (isWeekLocked()) {
+    showToast("Diese Kalenderwoche ist schreibgeschützt.", true);
+    return;
+  }
+  const note = state.data.scheduleNote || {};
+  elements.scheduleNoteForm.reset();
+  setScheduleNoteHtml(note.note_html || escapeHtml(note.note_text || "").replace(/\n/g, "<br>"));
+  elements.deleteScheduleNoteButton.classList.toggle("hidden", !note.note_text);
+  updateScheduleNoteCounter();
+  elements.scheduleNoteModal.showModal();
+  setTimeout(() => scheduleNoteQuill?.focus(), 50);
+}
+
+function initScheduleNoteEditor() {
+  if (!elements.scheduleNoteEditor || scheduleNoteQuill || !window.Quill) return;
+  const Size = window.Quill.import("attributors/class/size");
+  Size.whitelist = ["small", "large"];
+  window.Quill.register(Size, true);
+  scheduleNoteQuill = new window.Quill(elements.scheduleNoteEditor, {
+    theme: "snow",
+    placeholder: "z. B. Bitte Schaufensteraktion beachten",
+    formats: ["bold", "italic", "underline", "size"],
+    modules: {
+      toolbar: "#scheduleNoteToolbar",
+      clipboard: { matchVisual: false },
+    },
+  });
+  scheduleNoteQuill.on("text-change", updateScheduleNoteCounter);
+}
+
+async function saveScheduleNote(event) {
+  event.preventDefault();
+  sanitizeScheduleNoteEditor();
+  try {
+    await api("/api/schedule-note", {
+      method: "PUT",
+      body: JSON.stringify({
+        weekStart: state.weekStart,
+        locationId: state.locationId,
+        departmentId: state.departmentId || "",
+        noteText: scheduleNotePlainText(),
+        noteHtml: scheduleNoteHtml(),
+      }),
+    });
+    elements.scheduleNoteModal.close();
+    showToast("Besondere Bemerkung wurde gespeichert.");
+    await loadAll();
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function deleteScheduleNote() {
+  if (!state.data.scheduleNote?.note_text || !confirm("Diese besondere Bemerkung wirklich löschen?")) return;
+  try {
+    await api(`/api/schedule-note?week=${state.weekStart}${contextQuery(true)}`, { method: "DELETE" });
+    elements.scheduleNoteModal.close();
+    showToast("Besondere Bemerkung wurde gelöscht.");
+    await loadAll();
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function createManualBackup() {
+  try {
+    const backup = await api("/api/backup", { method: "POST" });
+    await loadSystemInfo();
+    const paths = [backup.appBackup?.path, backup.externalBackup?.path].filter(Boolean);
+    showToast(paths.length > 1 ? "Backups erstellt: intern und lokale PC-Sicherung." : `Backup erstellt: ${paths[0] || backup.path}`);
+  } catch (error) { showToast(error.message, true); }
+}
+
+function renderUpdateStatus(status = state.updateStatus) {
+  if (!elements.updateCheckButton) return;
+  elements.updateCheckButton.classList.remove("current", "available", "error", "checking");
+  if (!status) {
+    elements.updateCheckIcon.textContent = "↻";
+    elements.updateCheckText.textContent = "Update prüfen";
+    elements.updateCheckHint.textContent = "GitHub";
+    return;
+  }
+  elements.updateCheckButton.classList.add(status.cssClass || "");
+  elements.updateCheckIcon.textContent = status.icon || "↻";
+  elements.updateCheckText.textContent = status.text || "Update prüfen";
+  elements.updateCheckHint.textContent = status.hint || "GitHub";
+}
+
+async function checkForUpdates(showResult = true) {
+  state.updateStatus = { cssClass: "checking", icon: "↻", text: "Prüfe Update", hint: "GitHub..." };
+  renderUpdateStatus();
+  try {
+    const status = await api("/api/update-status");
+    state.updateStatus = {
+      ...status,
+      cssClass: status.updateAvailable ? "available" : "current",
+      icon: status.updateAvailable ? "!" : "✓",
+      text: status.updateAvailable ? "Update verfügbar" : "Aktuell",
+      hint: status.updateAvailable ? status.latestVersion : status.currentLabel,
+    };
+    renderUpdateStatus();
+    if (showResult) {
+      showToast(status.updateAvailable
+        ? `Neue Version ${status.latestVersion} verfügbar. Klick unten links startet die Aktualisierung.`
+        : "Du hast die aktuellste Version.");
+    }
+    return status;
+  } catch (error) {
+    state.updateStatus = { cssClass: "error", icon: "?", text: "Update unklar", hint: "GitHub nicht erreichbar" };
+    renderUpdateStatus();
+    if (showResult) showToast(error.message, true);
+    return null;
+  }
+}
+
+async function handleUpdateButton() {
+  const status = state.updateStatus?.latestTag ? state.updateStatus : await checkForUpdates(false);
+  if (!status) {
+    await checkForUpdates(true);
+    return;
+  }
+  if (!status.updateAvailable) {
+    showToast("Du hast die aktuellste Version.");
+    return;
+  }
+  const confirmed = confirm(`Version ${status.latestVersion} ist verfügbar.\n\nDie Aktualisierung ersetzt nur die App-Dateien. Dienstpläne, Datenbank und Backups bleiben erhalten.\n\nJetzt aktualisieren und Grabenplaner automatisch neu starten?`);
+  if (!confirmed) return;
+  try {
+    elements.updateCheckButton.disabled = true;
+    elements.updateCheckText.textContent = "Update läuft";
+    elements.updateCheckHint.textContent = "Neustart folgt";
+    const result = await api("/api/update-apply", { method: "POST", body: JSON.stringify({}) });
+    showToast(result.message || "Update wird installiert.");
+  } catch (error) {
+    elements.updateCheckButton.disabled = false;
+    showToast(error.message, true);
+  }
+}
+
+async function exitApplication() {
+  if (!confirm("Grabenplaner sicher beenden? Danach kannst du dieses Browserfenster schließen.")) return;
+  if (elements.systemExitButton) elements.systemExitButton.disabled = true;
+  try {
+    const result = await api("/api/system/exit", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    showToast(result.message || "Grabenplaner wird beendet.");
+    setTimeout(() => {
+      document.body.innerHTML = '<main class="shutdown-screen"><h1>Grabenplaner wurde beendet.</h1><p>Du kannst dieses Fenster schließen. Den USB-Stick bitte bei Bedarf selbst über Windows sicher auswerfen.</p></main>';
+    }, 900);
+  } catch (error) {
+    if (elements.systemExitButton) elements.systemExitButton.disabled = false;
+    showToast(error.message, true);
+  }
+}
+
+async function importBackup() {
+  const fileInput = document.querySelector("#backupImportFile");
+  const file = fileInput.files?.[0];
+  if (!file) {
+    showToast("Bitte zuerst eine Backup-Datei auswählen.", true);
+    return;
+  }
+  const preserveBranding = document.querySelector('input[name="backupImportMode"]:checked')?.value !== "complete";
+  const modeText = preserveBranding ? "Das aktuelle Branding bleibt erhalten." : "Das Branding aus dem Backup wird ebenfalls übernommen.";
+  if (!confirm(`Dieses Backup ersetzt nach einem Neustart die aktuelle Datenbank. ${modeText} Vorher wird automatisch ein Sicherheitsbackup erstellt. Fortfahren?`)) return;
+  try {
+    const response = await fetch(`/api/backup/import?preserveBranding=${preserveBranding ? "1" : "0"}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Backup-Filename": encodeURIComponent(file.name),
+      },
+      body: await file.arrayBuffer(),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "Backup konnte nicht importiert werden.");
+    showToast(result.message || "Backup importiert. Grabenplaner startet automatisch neu.");
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function exportBrandingKit() {
+  try {
+    const response = await fetch(`/api/branding/export.zip?${contextQuery(true).slice(1)}`);
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}));
+      throw new Error(result.error || "Branding-Kit konnte nicht exportiert werden.");
+    }
+    const blob = await response.blob();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "grabenplaner-branding-kit.zip";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+    showToast("Branding-Kit wurde exportiert.");
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function importBrandingKit() {
+  const file = elements.brandingImportFile.files?.[0];
+  if (!file) {
+    showToast("Bitte zuerst eine Branding-ZIP oder Branding-JSON auswählen.", true);
+    return;
+  }
+  const isZip = /\.zip$/i.test(file.name) || file.type === "application/zip" || file.type === "application/x-zip-compressed";
+  if (!confirm("Branding-Kit importieren? Firmenname, Logo, Admin-Kontakt und PDF-Titel werden für den aktuellen Standort übernommen.")) return;
+  try {
+    if (isZip) {
+      const response = await fetch(`/api/branding/import.zip?${contextQuery(true).slice(1)}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/zip",
+          "X-Branding-Filename": encodeURIComponent(file.name),
+        },
+        body: await file.arrayBuffer(),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Branding-ZIP konnte nicht importiert werden.");
+      if (result.kits) state.brandingKits = result.kits;
+    } else {
+      let kit;
+      try {
+        kit = JSON.parse((await file.text()).replace(/^\uFEFF/, ""));
+      } catch {
+        showToast("Die Branding-Datei ist keine gültige JSON-Datei.", true);
+        return;
+      }
+      const result = await api("/api/branding/import", {
+        method: "PUT",
+        body: JSON.stringify({
+          locationId: state.locationId,
+          departmentId: state.departmentId || "",
+          kit,
+        }),
+      });
+      if (result.kits) state.brandingKits = result.kits;
+    }
+    showToast("Branding-Kit wurde importiert.");
+    await loadAll();
+    await loadSystemInfo();
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function applyInstalledBrandingKit(kitId) {
+  try {
+    const result = await api(`/api/branding/kits/${encodeURIComponent(kitId)}/apply`, {
+      method: "POST",
+      body: JSON.stringify({
+        locationId: state.locationId,
+        departmentId: state.departmentId || "",
+      }),
+    });
+    if (result.kits) state.brandingKits = result.kits;
+    showToast("Branding-Kit wurde angewendet.");
+    await loadAll();
+    await loadSystemInfo();
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function saveSettings(silent = false) {
+  const daySettings = {};
+  document.querySelectorAll("[data-day-settings]").forEach((row) => {
+    const field = (name) => row.querySelector(`[data-field="${name}"]`);
+    daySettings[row.dataset.daySettings] = {
+      start: field("start").value,
+      end: field("end").value,
+      lunchEnabled: field("lunchEnabled").checked,
+      lunchStart: field("lunchStart").value,
+      lunchEnd: field("lunchEnd").value,
+      minStaff: Number(field("minStaff").value),
+      minFrom: field("minFrom").value,
+      minTo: field("minTo").value,
+    };
+  });
+  try {
+    await api("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        locationId: state.locationId,
+        departmentId: state.departmentId || "",
+        operationMode: state.portalStatus?.operationMode || "local",
+        branding: {
+          companyName: elements.brandingCompanyName.value,
+          logoUrl: elements.brandingLogoUrl.value,
+          iconUrl: elements.brandingIconUrl.value,
+          logoAlt: elements.brandingLogoAlt.value,
+          adminEmail: elements.brandingAdminEmail.value,
+        },
+        pdfTitle: document.querySelector("#pdfTitleSetting").value,
+        pdfFilenamePrefix: document.querySelector("#pdfFilenamePrefix").value,
+        pdfFilenameIncludeKw: document.querySelector("#pdfFilenameIncludeKw").checked,
+        pdfFilenameIncludeTimestamp: document.querySelector("#pdfFilenameIncludeTimestamp").checked,
+        vacationPdfTitle: document.querySelector("#vacationPdfTitleSetting").value,
+        vacationPdfFilenamePrefix: document.querySelector("#vacationPdfFilenamePrefix").value,
+        vacationPdfFilenameIncludePeriod: document.querySelector("#vacationPdfFilenameIncludePeriod").checked,
+        vacationPdfFilenameIncludeTimestamp: document.querySelector("#vacationPdfFilenameIncludeTimestamp").checked,
+        vacationPdfShowBalance: document.querySelector("#vacationPdfShowBalance").checked,
+        vacationPdfBalanceShowEntitlement: document.querySelector("#vacationPdfBalanceShowEntitlement").checked,
+        vacationPdfBalanceShowPlanned: document.querySelector("#vacationPdfBalanceShowPlanned").checked,
+        vacationPdfBalanceShowConsumed: document.querySelector("#vacationPdfBalanceShowConsumed").checked,
+        vacationPdfCalendarStyle: document.querySelector("#vacationPdfCalendarStyle").value,
+        toastDuration: document.querySelector("#toastDuration").value,
+        showInactivePersonnel: document.querySelector("#showInactivePersonnel").checked,
+        showSaturdayServiceStats: document.querySelector("#showSaturdayServiceStats").checked,
+        externalBackupEnabled: document.querySelector("#externalBackupEnabled").checked,
+        backupDirectory: document.querySelector("#backupDirectory").value,
+        backupIntervalHours: Number(document.querySelector("#backupIntervalHours").value),
+        vacationCountSaturday: document.querySelector("#vacationCountSaturday").checked,
+        allowPastWeekEditing: document.querySelector("#allowPastWeekEditing").checked,
+        breakRuleEnabled: document.querySelector("#breakRuleEnabled").checked,
+        breakAfterMinutes: Math.round(Number(document.querySelector("#breakAfterHours").value) * 60),
+        breakDurationMinutes: Number(document.querySelector("#breakDuration").value),
+        saturdayBonusEnabled: document.querySelector("#saturdayBonusEnabled").checked,
+        saturdayBonusFrom: document.querySelector("#saturdayBonusFrom").value,
+        saturdayBonusFactor: Number(document.querySelector("#saturdayBonusFactor").value),
+        showSunday: document.querySelector("#showSunday").checked,
+        daySettings,
+      }),
+    });
+    if (!silent) showToast("Einstellungen wurden gespeichert.");
+    await loadAll();
+    return true;
+  } catch (error) {
+    showToast(error.message, true);
+    return false;
+  }
+}
+
+async function deleteEmployee() {
+  const number = document.querySelector("#employeeNumber").value;
+  if (!number || !confirm("Teammitglied und alle zugehörigen Dienste wirklich löschen?")) return;
+  try {
+    await api(`/api/employees/${encodeURIComponent(number)}`, { method: "DELETE" });
+    elements.employeeModal.close();
+    showToast("Teammitglied wurde gelöscht.");
+    await loadAll();
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function deleteShift() {
+  const id = document.querySelector("#shiftId").value;
+  if (!id || !confirm("Diesen Dienst wirklich löschen?")) return;
+  try {
+    await api(`/api/shifts/${id}`, { method: "DELETE" });
+    elements.shiftModal.close();
+    showToast("Dienst wurde gelöscht.");
+    await loadAll();
+  } catch (error) { showToast(error.message, true); }
+}
+
+function updatePdfPreview() {
+  const title = document.querySelector("#pdfTitleSetting").value || "Dienstplan";
+  const prefix = (document.querySelector("#pdfFilenamePrefix").value || "Dienstplan").trim();
+  const filenameParts = [prefix || "Dienstplan"];
+  const now = new Date();
+  if (document.querySelector("#pdfFilenameIncludeKw").checked) filenameParts.push(`KW${state.data?.calendarWeek || ""}`);
+  if (document.querySelector("#pdfFilenameIncludeTimestamp").checked) {
+    filenameParts.push(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}`);
+  }
+  document.querySelector("#pdfTitlePreview").textContent = `${title} · Woche ab ${formatDate(state.weekStart)} · KW ${state.data?.calendarWeek || ""}`;
+  document.querySelector("#pdfFilenamePreview").textContent = `${filenameParts.join(" ")}.pdf`;
+
+  const vacationRange = selectedVacationRange();
+  const vacationTitle = document.querySelector("#vacationPdfTitleSetting").value || "Urlaubsplanung";
+  const vacationPrefix = (document.querySelector("#vacationPdfFilenamePrefix").value || "Urlaubsplanung").trim();
+  const vacationFilenameParts = [vacationPrefix || "Urlaubsplanung"];
+  if (document.querySelector("#vacationPdfFilenameIncludePeriod").checked) {
+    vacationFilenameParts.push(state.vacationViewMode === "year" ? `Jahr ${state.vacationYear}` : vacationRange.label);
+  }
+  if (document.querySelector("#vacationPdfFilenameIncludeTimestamp").checked) {
+    vacationFilenameParts.push(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}`);
+  }
+  document.querySelector("#vacationPdfTitlePreview").textContent = `${vacationTitle} · ${vacationRange.label}`;
+  document.querySelector("#vacationPdfFilenamePreview").textContent = `${vacationFilenameParts.join(" ")}.pdf`;
+  if (elements.vacationLayoutPreview) {
+    const style = document.querySelector("#vacationPdfCalendarStyle")?.value || "bars";
+    elements.vacationLayoutPreview.classList.toggle("dots", style === "dots");
+    elements.vacationLayoutPreview.classList.toggle("bars", style !== "dots");
+  }
+}
+
+async function generateSchedulePdfPreview() {
+  const saved = await saveSettings(true);
+  if (!saved) return;
+  elements.schedulePdfPreviewFrame.src = `/api/schedule-preview.pdf?week=${state.weekStart}${contextQuery(true)}&t=${Date.now()}`;
+  showToast("Dienstplan-PDF-Vorschau wurde erzeugt.");
+}
+
+async function generateVacationPdfPreview() {
+  const saved = await saveSettings(true);
+  if (!saved) return;
+  const range = selectedVacationRange();
+  const parameters = new URLSearchParams({
+    year: String(state.vacationYear),
+    view: state.vacationViewMode,
+    quarter: String(state.vacationQuarter),
+    month: String(state.vacationMonth),
+    location: state.locationId || "",
+    t: String(Date.now()),
+  });
+  elements.vacationPdfPreviewFrame.src = `/api/vacations-preview.pdf?${parameters.toString()}`;
+  showToast(`Urlaubs-PDF-Vorschau ${range.label} wurde erzeugt.`);
+}
+
+let toastTimer;
+function showToast(message, error = false) {
+  clearTimeout(toastTimer);
+  const openDialog = document.querySelector("dialog[open]");
+  (openDialog || document.body).appendChild(elements.toast);
+  elements.toast.textContent = message;
+  elements.toast.classList.toggle("error", error);
+  elements.toast.classList.add("visible");
+  const duration = { short: 5000, medium: 10000, long: 15000 }[state.data?.settings?.toast_duration || "medium"] || 10000;
+  toastTimer = setTimeout(() => {
+    elements.toast.classList.remove("visible");
+    document.body.appendChild(elements.toast);
+  }, duration);
+}
+
+document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+elements.updateCheckButton?.addEventListener("click", handleUpdateButton);
+elements.systemExitButton?.addEventListener("click", exitApplication);
+elements.exportBrandingButton?.addEventListener("click", exportBrandingKit);
+elements.importBrandingButton?.addEventListener("click", importBrandingKit);
+["brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt"].forEach((id) => {
+  elements[id]?.addEventListener("input", () => applyBranding({
+    companyName: elements.brandingCompanyName.value,
+    adminEmail: elements.brandingAdminEmail.value,
+    logoUrl: elements.brandingLogoUrl.value,
+    iconUrl: elements.brandingIconUrl.value,
+    logoAlt: elements.brandingLogoAlt.value,
+  }));
+});
+elements.brandingKitLibrary?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-apply-branding-kit]");
+  if (!button || button.textContent.trim() === "Aktiv") return;
+  applyInstalledBrandingKit(button.dataset.applyBrandingKit);
+});
+document.querySelectorAll("[data-settings-tab]").forEach((button) => button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab)));
+document.querySelectorAll("[data-personnel-tab]").forEach((button) => button.addEventListener("click", () => setPersonnelTab(button.dataset.personnelTab)));
+document.querySelector(".main-nav").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-context-view]");
+  if (!button) return;
+  state.locationId = button.dataset.locationId || state.locationId;
+  state.departmentId = button.dataset.departmentId || "";
+  setView(button.dataset.contextView);
+  loadAll();
+});
+document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => document.querySelector(`#${button.dataset.close}`).close()));
+document.querySelector("#previousWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, -7); loadAll(); });
+document.querySelector("#nextWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, 7); loadAll(); });
+document.querySelector("#todayButton").addEventListener("click", () => { state.weekStart = getMonday(new Date()); loadAll(); });
+document.querySelector("#weekJumpDate").addEventListener("change", (event) => {
+  if (!event.target.value) return;
+  state.weekStart = getMonday(new Date(`${event.target.value}T12:00:00`));
+  loadAll();
+});
+elements.vacationYear.addEventListener("change", () => {
+  const year = Number(elements.vacationYear.value);
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    showToast("Bitte ein gültiges Jahr auswählen.", true);
+    elements.vacationYear.value = state.vacationYear;
+    return;
+  }
+  state.vacationYear = year;
+  loadAll();
+});
+elements.vacationViewMode.addEventListener("change", () => {
+  state.vacationViewMode = elements.vacationViewMode.value;
+  renderVacations();
+  updatePdfPreview();
+});
+elements.vacationQuarter.addEventListener("change", () => {
+  state.vacationQuarter = Number(elements.vacationQuarter.value);
+  renderVacations();
+  updatePdfPreview();
+});
+elements.vacationMonth.addEventListener("change", () => {
+  state.vacationMonth = Number(elements.vacationMonth.value);
+  renderVacations();
+  updatePdfPreview();
+});
+elements.addVacationButton.addEventListener("click", openVacationModal);
+elements.saveEntitlementsButton.addEventListener("click", saveVacationEntitlements);
+elements.editEntitlementsButton.addEventListener("click", () => {
+  state.editingVacationEntitlements = true;
+  renderVacations();
+});
+document.querySelector("#optionsButton").addEventListener("click", openOptionsModal);
+document.querySelector("#optionType").addEventListener("change", handleOptionTypeChange);
+document.querySelector("#optionEmployee").addEventListener("change", updateOptionCreditFields);
+elements.globalBlockSubmitButton.addEventListener("click", saveGlobalBlock);
+elements.globalBlockDate.addEventListener("change", updateGlobalBlockHolidaySuggestion);
+elements.optionPreviousWeek.addEventListener("click", () => switchOptionsWeek(-1));
+elements.optionNextWeek.addEventListener("click", () => switchOptionsWeek(1));
+elements.optionsModal.addEventListener("keydown", (event) => {
+  if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName)) return;
+  event.preventDefault();
+  switchOptionsWeek(event.key === "ArrowLeft" ? -1 : 1);
+});
+elements.cancelOptionEditButton.addEventListener("click", () => {
+  resetOptionEditor();
+  document.querySelector("#optionNote").value = "";
+  document.querySelector("#optionHours").value = "";
+  updateOptionCreditFields();
+});
+document.querySelector("#autoPlanButton").addEventListener("click", openAutoPlanModal);
+document.querySelector("#resetWeekButton").addEventListener("click", openResetWeekModal);
+elements.scheduleNoteButton.addEventListener("click", openScheduleNoteModal);
+elements.scheduleNoteForm.addEventListener("submit", saveScheduleNote);
+elements.deleteScheduleNoteButton.addEventListener("click", deleteScheduleNote);
+initScheduleNoteEditor();
+elements.departmentPdfSelect?.addEventListener("change", () => {
+  const selectedDepartment = elements.departmentPdfSelect.value;
+  elements.departmentPdfButton.href = `/api/schedule.pdf?week=${state.weekStart}&location=${encodeURIComponent(state.locationId)}&departmentId=${encodeURIComponent(selectedDepartment)}`;
+});
+document.querySelector("#shiftEmployee").addEventListener("change", () => {
+  if (document.querySelector("#shiftId").value) return;
+  const employee = state.data?.employees?.find((item) => item.personnel_number === document.querySelector("#shiftEmployee").value);
+  if (employee?.preferred_department_id) elements.shiftDepartment.value = String(employee.preferred_department_id);
+});
+document.querySelector("#addEmployeeButton").addEventListener("click", () => openEmployeeModal());
+document.querySelector("#saveSettingsButton").addEventListener("click", () => saveSettings(false));
+elements.locationForm.addEventListener("submit", saveLocation);
+elements.departmentForm.addEventListener("submit", saveDepartment);
+elements.positionForm.addEventListener("submit", savePosition);
+elements.cancelLocationEditButton.addEventListener("click", resetLocationForm);
+elements.cancelDepartmentEditButton.addEventListener("click", resetDepartmentForm);
+elements.cancelPositionEditButton.addEventListener("click", resetPositionForm);
+elements.employeeHomeLocation.addEventListener("change", () => updateEmployeeDepartmentOptions());
+elements.schedulePdfPreviewButton.addEventListener("click", generateSchedulePdfPreview);
+elements.vacationPdfPreviewButton.addEventListener("click", generateVacationPdfPreview);
+document.querySelector("#createBackupButton").addEventListener("click", createManualBackup);
+document.querySelector("#importBackupButton").addEventListener("click", importBackup);
+["pdfTitleSetting", "pdfFilenamePrefix", "pdfFilenameIncludeKw", "pdfFilenameIncludeTimestamp", "vacationPdfTitleSetting", "vacationPdfFilenamePrefix", "vacationPdfFilenameIncludePeriod", "vacationPdfFilenameIncludeTimestamp", "vacationPdfCalendarStyle", "vacationPdfShowBalance", "vacationPdfBalanceShowEntitlement", "vacationPdfBalanceShowPlanned", "vacationPdfBalanceShowConsumed"].forEach((id) => {
+  document.querySelector(`#${id}`).addEventListener("input", updatePdfPreview);
+  document.querySelector(`#${id}`).addEventListener("change", updatePdfPreview);
+});
+["optionAllDay", "optionStartTime", "optionEndTime"].forEach((id) => {
+  document.querySelector(`#${id}`).addEventListener("input", updateOptionCreditFields);
+  document.querySelector(`#${id}`).addEventListener("change", updateOptionCreditFields);
+});
+document.querySelector("#optionDateFrom").addEventListener("change", () => {
+  const from = document.querySelector("#optionDateFrom").value;
+  const to = document.querySelector("#optionDateTo").value;
+  if (to < from) document.querySelector("#optionDateTo").value = from;
+});
+document.querySelector("#optionDateTo").addEventListener("change", () => {
+  const from = document.querySelector("#optionDateFrom").value;
+  const to = document.querySelector("#optionDateTo").value;
+  if (to < from) document.querySelector("#optionDateFrom").value = to;
+});
+elements.employeeForm.addEventListener("submit", saveEmployee);
+elements.shiftForm.addEventListener("submit", saveShift);
+elements.optionForm.addEventListener("submit", saveOption);
+elements.autoPlanForm.addEventListener("submit", createAutomaticPlan);
+elements.resetWeekForm.addEventListener("submit", resetCurrentWeek);
+elements.vacationForm.addEventListener("submit", saveVacation);
+elements.deleteEmployeeButton.addEventListener("click", deleteEmployee);
+elements.deleteShiftButton.addEventListener("click", deleteShift);
+["shiftStart", "shiftEnd", "shiftDate"].forEach((id) => document.querySelector(`#${id}`).addEventListener("input", calculateShiftPreview));
+["vacationEmployee", "vacationDateFrom", "vacationDateTo"].forEach((id) => {
+  document.querySelector(`#${id}`).addEventListener("input", updateVacationCalculation);
+  document.querySelector(`#${id}`).addEventListener("change", updateVacationCalculation);
+});
+
+document.querySelector("#employeeColorPicker").addEventListener("input", (event) => updateColorPicker(event.target.value));
+document.querySelector("#employeeColorHex").addEventListener("input", (event) => {
+  if (/^#[0-9a-f]{6}$/i.test(event.target.value)) updateColorPicker(event.target.value);
+});
+
+elements.employeeTableBody.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-edit-employee]");
+  if (!button) return;
+  openEmployeeModal(state.allEmployees.find((employee) => employee.personnel_number === button.dataset.editEmployee));
+});
+
+elements.locationList.addEventListener("click", (event) => {
+  const locationButton = event.target.closest("[data-edit-location]");
+  if (locationButton) {
+    const location = (state.locations || []).find((item) => item.id === locationButton.dataset.editLocation);
+    if (location) fillLocationForm(location);
+    return;
+  }
+  const departmentButton = event.target.closest("[data-edit-department]");
+  if (!departmentButton) return;
+  const departmentId = Number(departmentButton.dataset.editDepartment);
+  const department = (state.locations || []).flatMap((location) => location.departments || []).find((item) => item.id === departmentId);
+  if (department) fillDepartmentForm(department);
+});
+
+elements.positionList.addEventListener("click", (event) => {
+  const editButton = event.target.closest("[data-edit-position]");
+  if (editButton) {
+    const position = (state.positions || []).find((item) => item.id === editButton.dataset.editPosition);
+    if (position) fillPositionForm(position);
+    return;
+  }
+  const deleteButton = event.target.closest("[data-delete-position]");
+  if (deleteButton) deletePosition(deleteButton.dataset.deletePosition);
+});
+
+elements.timeline.addEventListener("click", (event) => {
+  const optionBlock = event.target.closest(".option-block");
+  if (optionBlock) {
+    showToast(optionBlock.dataset.optionTitle || "Dieser Zeitraum ist bereits belegt.", true);
+    return;
+  }
+  const shiftButton = event.target.closest("[data-shift-id]");
+  if (shiftButton) {
+    event.stopPropagation();
+    const shift = state.data.shifts.find((item) => item.id === Number(shiftButton.dataset.shiftId));
+    openShiftModal(shift.employee_number, shift.shift_date, shift);
+    return;
+  }
+  const lane = event.target.closest("[data-employee-number][data-date]");
+  if (lane) openShiftModal(lane.dataset.employeeNumber, lane.dataset.date);
+});
+
+elements.optionList.addEventListener("click", async (event) => {
+  const editGlobalButton = event.target.closest("[data-edit-global-block]");
+  if (editGlobalButton) {
+    const block = (state.data.globalDayBlocks || []).find((item) => item.id === Number(editGlobalButton.dataset.editGlobalBlock));
+    if (block) fillGlobalBlockForm(block);
+    return;
+  }
+  const deleteGlobalButton = event.target.closest("[data-delete-global-block]");
+  if (deleteGlobalButton) {
+    deleteGlobalBlock(deleteGlobalButton.dataset.deleteGlobalBlock);
+    return;
+  }
+  const editButton = event.target.closest("[data-edit-option]");
+  if (editButton) {
+    const option = state.data.weekOptions.find((item) => item.id === Number(editButton.dataset.editOption));
+    if (option) fillOptionForm(option);
+    return;
+  }
+  const button = event.target.closest("[data-delete-option]");
+  if (!button) return;
+  try {
+    await api(`/api/week-options/${button.dataset.deleteOption}`, { method: "DELETE" });
+    await loadAll();
+    renderOptionList();
+    showToast("Planungsoption wurde entfernt.");
+  } catch (error) { showToast(error.message, true); }
+});
+
+elements.vacationCalendar.addEventListener("click", (event) => {
+  const editButton = event.target.closest("[data-edit-vacation]");
+  if (editButton) {
+    const vacation = state.vacationData.vacations.find((item) => item.group_id === editButton.dataset.editVacation);
+    if (vacation) openVacationModal(vacation);
+    return;
+  }
+  const button = event.target.closest("[data-delete-vacation]");
+  if (!button) return;
+  deleteVacation(button.dataset.deleteVacation);
+});
+
+loadAll();
+loadSystemInfo();
+setTimeout(() => checkForUpdates(false), 1800);
+setInterval(loadSystemInfo, 30000);

@@ -1,0 +1,39 @@
+GRABENPLANER - PORTABLE USB-VERSION
+================================================
+
+Start:
+  "Grabenplaner v0.45 Beta starten.cmd" doppelklicken.
+
+Voraussetzung:
+  Windows 10 oder 11 auf einem 64-Bit-PC.
+  Die Anwendung verwendet die mitgelieferte Node.js-Laufzeit im Ordner "runtime".
+  Eine Installation von Node.js ist nicht erforderlich.
+
+Daten:
+  Die aktive Datenbank liegt unter data\dienstplan.db.
+  Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
+
+Leere Zweitkopie:
+  Ab v0.42.1 wird die leere Zweitkopie nicht mehr automatisch aktualisiert.
+  Der reguläre USB-Stand ist der Ordner "Grabenplaner".
+
+Backups:
+  - Beim Start wird immer ein internes Backup im App-Backupordner "backups" erstellt.
+  - Zusätzlich ist standardmäßig eine lokale PC-Sicherung aktiv.
+  - Während die App läuft, wird diese lokale PC-Sicherung standardmäßig alle 2 Stunden erstellt.
+  - Das Intervall ist in den Datenbank-Einstellungen von 1 bis 6 Stunden änderbar.
+  - Standardordner der lokalen PC-Sicherung: Dokumente\grabenplaner-backups.
+  - Es werden die letzten 30 Sicherungen je Backup-Ordner behalten.
+  - Mit "Backup erstellen.cmd" kann jederzeit manuell gesichert werden.
+
+WICHTIG:
+  Backups auf demselben USB-Stick schützen nicht vor Verlust oder Defekt des
+  Sticks. Den Ordner "backups" regelmäßig zusätzlich auf einen zweiten
+  Datenträger, einen Firmenserver oder einen vertrauenswürdigen Cloud-Speicher
+  kopieren.
+
+Sicheres Beenden:
+  In der linken Seitenleiste "Beenden" verwenden.
+  Grabenplaner beendet zuerst den lokalen Webserver und erstellt ein
+  Shutdown-Backup. Den USB-Stick danach bei Bedarf wie gewohnt über
+  Windows "Hardware sicher entfernen" auswerfen.

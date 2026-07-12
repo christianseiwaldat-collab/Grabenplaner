@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 260" role="img" aria-labelledby="title desc">
+  <title id="title">Grabenplaner</title>
+  <desc id="desc">Neutrales Grabenplaner Logo</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f9f6ed"/>
+      <stop offset="1" stop-color="#e9f2ec"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1f6f52"/>
+      <stop offset="1" stop-color="#2f9f79"/>
+    </linearGradient>
+  </defs>
+  <rect width="720" height="260" rx="34" fill="url(#bg)"/>
+  <g transform="translate(54 47)">
+    <rect x="0" y="0" width="166" height="166" rx="28" fill="url(#mark)"/>
+    <g fill="#fff" opacity=".96">
+      <rect x="34" y="43" width="98" height="16" rx="8"/>
+      <rect x="34" y="75" width="70" height="16" rx="8"/>
+      <rect x="34" y="107" width="112" height="16" rx="8"/>
+    </g>
+    <circle cx="131" cy="83" r="16" fill="#f2cf66"/>
+  </g>
+  <g fill="#173426" font-family="Inter, Arial, sans-serif">
+    <text x="250" y="113" font-size="54" font-weight="800" letter-spacing="-1.8">Grabenplaner</text>
+    <text x="254" y="155" font-size="24" font-weight="650" fill="#5d6e65">Dienst- und Urlaubsplanung</text>
+  </g>
+</svg>

@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f1e9" />
+    <title>Grabenplaner · Dienstplan</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/webicon.svg" data-brand-icon />
+    <link rel="apple-touch-icon" href="/assets/webicon.svg" data-brand-icon />
+    <link rel="stylesheet" href="/vendor/quill/quill.snow.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.45 Beta</span></div>
+        </div>
+
+        <nav class="main-nav" aria-label="Hauptnavigation">
+          <button class="nav-item active" data-view="planning">
+            <span class="nav-symbol">▦</span><span>Dienstplanung</span>
+          </button>
+          <div class="nav-children" id="planningNavChildren"></div>
+          <button class="nav-item" data-view="vacations">
+            <span class="nav-symbol">☀</span><span>Urlaubsplanung</span>
+          </button>
+          <div class="nav-children" id="vacationNavChildren"></div>
+          <button class="nav-item" data-view="personnel">
+            <span class="nav-symbol">◎</span><span>Personalverwaltung</span>
+          </button>
+          <button class="nav-item" data-view="settings">
+            <span class="nav-symbol">⚙</span><span>Einstellungen</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-summary">
+          <span class="eyebrow">Aktive Teammitglieder</span>
+          <strong id="sidebarEmployeeCount">0</strong>
+          <p>Personalstammdaten werden unter Personalverwaltung gepflegt.</p>
+        </div>
+
+        <div class="sidebar-actions" aria-label="Ansicht und System">
+          <button class="sidebar-update-button" id="updateCheckButton" type="button">
+            <span id="updateCheckIcon">↻</span>
+            <strong id="updateCheckText">Update prüfen</strong>
+            <small id="updateCheckHint">GitHub</small>
+          </button>
+          <a class="sidebar-developer-contact" href="mailto:christian.seiwald.at@gmail.com">
+            <span>Developer-Kontakt</span>
+            <strong>christian.seiwald.at@gmail.com</strong>
+          </a>
+          <button class="sidebar-exit-button" id="systemExitButton" type="button">
+            <span>Beenden</span>
+          </button>
+        </div>
+
+      </aside>
+
+      <main class="main-content">
+        <section id="planningView" class="view active">
+          <header class="topbar">
+            <div>
+              <span class="eyebrow">Wochendienstplan</span>
+              <h1>Dienstplanung</h1>
+              <p class="subtitle">Woche auswählen, Dienste planen und PDF exportieren.</p>
+            </div>
+            <div class="topbar-actions">
+              <div class="week-navigation" aria-label="Wochennavigation">
+                <button class="nav-button" id="previousWeek" aria-label="Vorherige Woche">←</button>
+                <button class="today-button" id="todayButton">Heute</button>
+                <button class="nav-button" id="nextWeek" aria-label="Nächste Woche">→</button>
+              </div>
+              <label class="week-jump"><span>Springe zu Woche</span><input id="weekJumpDate" type="date" /></label>
+              <button class="primary-button" id="autoPlanButton"><span>✦</span> Dienstplan automatisch erstellen</button>
+              <button class="secondary-button" id="optionsButton"><span>✦</span> Planungsoptionen</button>
+              <button class="secondary-button reset-button" id="resetWeekButton"><span>↺</span> Zurücksetzen</button>
+              <button class="secondary-button schedule-note-button" id="scheduleNoteButton" type="button"><span>✎</span><span>Bemerkung<small id="scheduleNoteButtonHint">hinzufügen</small></span></button>
+              <label class="department-pdf-control hidden" id="departmentPdfControl"><span>Abteilungs-PDF</span><select id="departmentPdfSelect"></select><a class="secondary-button" id="departmentPdfButton" href="/api/schedule.pdf"><span>↓</span></a></label>
+              <a class="primary-button" id="pdfButton" href="/api/schedule.pdf"><span>↓</span> PDF exportieren</a>
+            </div>
+          </header>
+
+          <section class="summary-grid">
+            <article class="summary-card week-context-card"><span>Zeitraum</span><strong id="weekTitle">Diese Woche</strong><small id="calendarWeek">Kalenderwoche</small></article>
+            <article class="summary-card"><span>Dienste</span><strong id="shiftCount">0</strong><small>in dieser Woche</small></article>
+            <article class="summary-card accent summary-duo">
+              <div><span>Gewertete Zeit</span><strong id="totalHours">0 h</strong><small>inklusive Samstagsfaktor</small></div>
+              <div><span>In Filiale eingeteilt</span><strong id="inStoreHours">0 h</strong><small>ohne Sonderfälle</small></div>
+            </article>
+            <article class="summary-card"><span>Sonderfälle</span><strong id="optionCount">0</strong><small>Urlaub, krank, Filiale</small></article>
+            <article class="summary-card"><span>Team</span><strong id="employeeCount">0</strong><small>aktive Teammitglieder</small></article>
+          </section>
+
+          <section class="schedule-panel">
+            <div class="schedule-heading">
+              <div>
+                <h2 id="scheduleTitle">Dienstplan</h2>
+                <p>Ein freies Feld anklicken, um einen Dienst einzutragen.</p>
+              </div>
+              <div class="schedule-key">
+                <span><i class="key-line"></i> Arbeitszeit</span>
+                <span id="breakRuleHint">Pause automatisch</span>
+                <span id="saturdayRuleHint">Sa-Faktor aktiv</span>
+              </div>
+            </div>
+            <div class="week-lock-notice hidden" id="weekLockNotice">Diese Kalenderwoche liegt in der Vergangenheit und ist schreibgeschützt. Bearbeitung kann in den Grundeinstellungen aktiviert werden.</div>
+            <div class="timeline-scroll">
+              <div class="timeline" id="timeline"></div>
+            </div>
+            <div class="remarks" id="remarks"></div>
+          </section>
+
+          <section class="hours-panel">
+            <div class="hours-heading">
+              <div><h2>Wochenstunden je Teammitglied</h2><p>Eingeteilte Nettozeit, gewertete Zeit und Wochen-Soll im Vergleich.</p></div>
+              <div class="hours-legend"><span>Eingeteilt = in Filiale nach Pause</span><span>Gewertet = inkl. Samstagsfaktor/Sonderfällen</span></div>
+            </div>
+            <div class="hours-grid" id="hoursOverview"></div>
+          </section>
+        </section>
+
+        <section id="vacationsView" class="view">
+          <header class="topbar">
+            <div>
+              <span class="eyebrow">Urlaubsplanung</span>
+              <h1 id="vacationTitle">Jahresübersicht</h1>
+              <p class="subtitle" id="vacationSubtitle">Resturlaub und geplante Urlaube</p>
+            </div>
+            <div class="topbar-actions vacation-actions">
+              <label class="week-jump"><span>Jahr</span><input id="vacationYear" type="number" min="2000" max="2100" step="1" /></label>
+              <label class="week-jump"><span>Ansicht</span><select id="vacationViewMode"><option value="year">Jahr</option><option value="quarter">Quartal</option><option value="month">Monat</option><option value="employees">Teamübersicht</option></select></label>
+              <label class="week-jump" id="vacationQuarterField"><span>Quartal</span><select id="vacationQuarter"><option value="1">Q1</option><option value="2">Q2</option><option value="3">Q3</option><option value="4">Q4</option></select></label>
+              <label class="week-jump" id="vacationMonthField"><span>Monat</span><select id="vacationMonth"><option value="1">Jänner</option><option value="2">Februar</option><option value="3">März</option><option value="4">April</option><option value="5">Mai</option><option value="6">Juni</option><option value="7">Juli</option><option value="8">August</option><option value="9">September</option><option value="10">Oktober</option><option value="11">November</option><option value="12">Dezember</option></select></label>
+              <button class="primary-button" id="addVacationButton"><span>+</span> Urlaub eintragen</button>
+              <a class="secondary-button" id="vacationPdfButton" href="/api/vacations.pdf"><span>↓</span> PDF exportieren</a>
+            </div>
+          </header>
+
+          <section class="vacation-panel">
+            <div class="vacation-panel-heading">
+              <div><h2>Resturlaub je Teammitglied</h2><p>Jahresurlaub per 1.1., bereits verplante Urlaubstage und aktueller Rest.</p></div>
+              <div class="entitlement-actions">
+                <button type="button" class="secondary-button hidden" id="editEntitlementsButton">Jahresurlaub bearbeiten</button>
+                <button type="button" class="secondary-button" id="saveEntitlementsButton">Jahresurlaub speichern</button>
+              </div>
+            </div>
+            <div class="vacation-summary-grid" id="vacationSummary"></div>
+          </section>
+
+          <section class="vacation-panel">
+            <div class="vacation-panel-heading">
+              <div><h2 id="vacationCalendarTitle">Urlaubskalender</h2><p>Urlaubseinträge nutzen die normalen Teamfarben und sperren automatisch die Wochenplanung.</p></div>
+              <div class="hours-legend"><span>Sa. wird standardmäßig nicht als Urlaubstag gezählt</span><span>Mo–Sa Eintrag sperrt Sa. trotzdem für Dienste</span></div>
+            </div>
+            <div class="vacation-calendar" id="vacationCalendar"></div>
+          </section>
+        </section>
+
+        <section id="personnelView" class="view">
+          <header class="settings-header">
+            <div><span class="eyebrow">Personalverwaltung</span><h1>Team & Standorte</h1><p class="subtitle">Stammdaten, Stammfilialen und Abteilungen zentral verwalten.</p></div>
+          </header>
+
+          <div class="settings-tabs personnel-tabs" role="tablist">
+            <button class="settings-tab active" data-personnel-tab="employees">Team</button>
+            <button class="settings-tab" data-personnel-tab="locations">Standortverwaltung</button>
+          </div>
+
+          <section id="employeeSettings" class="personnel-section active">
+            <div class="employee-toolbar">
+              <div><h2>Team</h2><p>Personalnummer, Name, Dienstplan-Name, Position, Farbe, Stammfiliale, Abteilung, Wochen-Sollzeit und fixe Arbeitstage.</p></div>
+              <button class="primary-button" id="addEmployeeButton">+ Teammitglied anlegen</button>
+            </div>
+            <div class="employee-table-wrap">
+              <table class="employee-table">
+                <thead><tr><th>Farbe</th><th>Personalnr.</th><th>Name</th><th>Dienstplan</th><th>Position</th><th>Filiale</th><th>Abteilung</th><th>Wochen-Soll</th><th>Freier Tag</th><th>Fixe Tage</th><th>Status</th><th></th></tr></thead>
+                <tbody id="employeeTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="locationSettings" class="personnel-section">
+            <div class="settings-grid location-management-grid">
+              <div class="settings-card">
+                <div class="card-heading"><div class="card-icon">01</div><div><h2>Filiale bearbeiten</h2><p>Filial-ID ist zweistellig und wird manuell vergeben, z. B. 01 für Hauptstandort.</p></div></div>
+                <form id="locationForm">
+                  <div class="inline-fields">
+                    <label class="field"><span>Filial-ID</span><input id="locationId" maxlength="2" pattern="[0-9]{2}" placeholder="01" required /></label>
+                    <label class="field"><span>Name</span><input id="locationName" maxlength="80" placeholder="Hauptstandort" required /></label>
+                    <label class="field"><span>Mindestbesetzung</span><input id="locationMinStaff" type="number" min="0" max="99" step="1" value="0" /></label>
+                  </div>
+                  <label class="switch-row"><span><strong>Aktiv</strong><small>In Navigation und Planung anzeigen.</small></span><input id="locationActive" type="checkbox" checked /></label>
+                  <div class="form-actions-inline"><button type="button" class="secondary-button hidden" id="cancelLocationEditButton">Bearbeitung abbrechen</button><button type="submit" class="primary-button" id="locationSubmitButton">Filiale anlegen</button></div>
+                </form>
+              </div>
+
+              <div class="settings-card">
+                <div class="card-heading"><div class="card-icon">Abt</div><div><h2>Abteilung bearbeiten</h2><p>Bis zu 3 Abteilungen je Filiale. Dienstplanung kann dann je Abteilung getrennt angezeigt werden.</p></div></div>
+                <form id="departmentForm">
+                  <input id="departmentId" type="hidden" />
+                  <label class="field"><span>Filiale</span><select id="departmentLocation" required></select></label>
+                  <label class="field pdf-filename-field"><span>Abteilungsname</span><input id="departmentName" maxlength="80" placeholder="Fotowelt" required /></label>
+                  <label class="field"><span>Mindestbesetzung</span><input id="departmentMinStaff" type="number" min="0" max="99" step="1" value="0" /></label>
+                  <label class="switch-row"><span><strong>Aktiv</strong><small>In der Dienstplanung als Unterpunkt anzeigen.</small></span><input id="departmentActive" type="checkbox" checked /></label>
+                  <div class="form-actions-inline"><button type="button" class="secondary-button hidden" id="cancelDepartmentEditButton">Bearbeitung abbrechen</button><button type="submit" class="primary-button" id="departmentSubmitButton">Abteilung anlegen</button></div>
+                </form>
+              </div>
+            </div>
+
+            <div class="settings-card full-settings-card location-list-card">
+              <div class="card-heading"><div class="card-icon">Liste</div><div><h2>Standorte & Abteilungen</h2><p>Bestehende Struktur der Filialen und zugeordneten Abteilungen.</p></div></div>
+              <div class="location-list" id="locationList"></div>
+            </div>
+          </section>
+        </section>
+
+        <section id="settingsView" class="view">
+          <header class="settings-header">
+            <div><span class="eyebrow">Konfiguration</span><h1>Einstellungen</h1></div>
+            <button class="primary-button" id="saveSettingsButton">Einstellungen speichern</button>
+          </header>
+
+          <div class="settings-tabs" role="tablist">
+            <button class="settings-tab active" data-settings-tab="general">Grundeinstellungen</button>
+            <button class="settings-tab" data-settings-tab="branding">Branding</button>
+            <button class="settings-tab" data-settings-tab="pdf">PDF-Ausgabe</button>
+            <button class="settings-tab" data-settings-tab="personnel">Personal</button>
+            <button class="settings-tab" data-settings-tab="backup">Datenbank</button>
+          </div>
+
+          <section id="generalSettings" class="settings-section active">
+            <div class="settings-card operation-mode-card">
+              <div class="card-heading"><div class="card-icon">Modus</div><div><h2>Betriebsmodus</h2><p>Der lokale Betrieb bleibt aktiv; der spätere Serverbetrieb wird schrittweise vorbereitet.</p></div></div>
+              <div class="operation-mode-options">
+                <div class="operation-mode-option active" id="localModeOption" aria-current="true">
+                  <span class="operation-mode-mark">L</span>
+                  <span><strong>Lokalbetrieb</strong><small>SQLite auf diesem Gerät oder USB-Stick, ohne Loginpflicht.</small></span>
+                  <span class="status-badge" id="localModeBadge">Aktiv</span>
+                </div>
+                <div class="operation-mode-option" id="serverModeOption" aria-current="false">
+                  <span class="operation-mode-mark">S</span>
+                  <span><strong>Serverbetrieb</strong><small>Zentraler HTTPS-Zugriff mit Anmeldung und Rollen.</small></span>
+                  <span class="status-badge inactive" id="serverModeBadge">In Vorbereitung</span>
+                </div>
+              </div>
+              <p class="settings-note" id="portalFoundationHint">Portal-API, Rollen und Admin-Ersteinrichtung sind technisch vorbereitet, aber noch nicht aktiv.</p>
+            </div>
+
+            <div class="settings-card pause-card">
+              <div class="card-heading"><div class="card-icon">◷</div><div><h2>Pausenregel</h2><p>Wird ausschließlich für die geplanten Stunden verwendet.</p></div></div>
+              <label class="switch-row">
+                <span><strong>Pausenregel aktiv</strong><small>Pause automatisch von der Planzeit abziehen.</small></span>
+                <input id="breakRuleEnabled" type="checkbox" />
+              </label>
+              <div class="inline-fields">
+                <label class="field"><span>Nach mehr als</span><div class="unit-input"><input id="breakAfterHours" type="number" min="0" max="24" step="0.25" /><em>Stunden</em></div></label>
+                <label class="field"><span>Pausendauer</span><div class="unit-input"><input id="breakDuration" type="number" min="0" max="240" step="5" /><em>Minuten</em></div></label>
+              </div>
+            </div>
+
+            <div class="settings-card saturday-card">
+              <div class="card-heading"><div class="card-icon">×1,5</div><div><h2>Samstagswertung</h2><p>Arbeitszeit ab einer Uhrzeit höher für die Sollzeit werten.</p></div></div>
+              <label class="switch-row">
+                <span><strong>Samstagsfaktor aktiv</strong><small>Standardmäßig ab 13:00 Uhr mit Faktor 1,5.</small></span>
+                <input id="saturdayBonusEnabled" type="checkbox" />
+              </label>
+              <div class="inline-fields">
+                <label class="field"><span>Gültig ab</span><input id="saturdayBonusFrom" type="time" /></label>
+                <label class="field"><span>Faktor</span><input id="saturdayBonusFactor" type="number" min="1" max="5" step="0.1" /></label>
+              </div>
+            </div>
+
+            <div class="settings-card full-settings-card service-times-card">
+              <div class="card-heading"><div class="card-icon">Zeit</div><div><h2>Dienstzeiten, Mittagspause und Mindestbesetzung</h2><p>Alle Werte gelten für manuelle und automatische Planungen.</p></div></div>
+              <div class="day-settings-table">
+                <div class="day-settings-head"><span>Tag</span><span>Dienstzeit</span><span>Mittagspause</span><span>Mindestbesetzung</span><span>Zeitraum</span></div>
+                <div class="day-settings-row" data-day-settings="monday"><strong>Montag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
+                <div class="day-settings-row" data-day-settings="tuesday"><strong>Dienstag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
+                <div class="day-settings-row" data-day-settings="wednesday"><strong>Mittwoch</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
+                <div class="day-settings-row" data-day-settings="thursday"><strong>Donnerstag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
+                <div class="day-settings-row" data-day-settings="friday"><strong>Freitag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
+                <div class="day-settings-row" data-day-settings="saturday"><strong>Samstag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
+              </div>
+            </div>
+
+            <div class="settings-card sunday-card">
+              <div class="card-heading"><div class="card-icon">So</div><div><h2>Sonntag</h2><p>Legt fest, ob der Sonntag in Webansicht und PDF dargestellt wird.</p></div></div>
+              <label class="switch-row">
+                <span><strong>Sonntag anzeigen</strong><small>Der Sonntag bleibt unabhängig davon für Dienste gesperrt.</small></span>
+                <input id="showSunday" type="checkbox" />
+              </label>
+            </div>
+
+            <div class="settings-card vacation-count-card">
+              <div class="card-heading"><div class="card-icon">Urlaub</div><div><h2>Urlaubstage zählen</h2><p>Standardmäßig zählt der Samstag nicht als Urlaubstag, kann aber über einen Mo–Sa Urlaub trotzdem gesperrt werden.</p></div></div>
+              <label class="switch-row">
+                <span><strong>Samstag als Urlaubstag werten</strong><small>Wenn aktiv, wird der Samstag beim Resturlaub mitgezählt.</small></span>
+                <input id="vacationCountSaturday" type="checkbox" />
+              </label>
+            </div>
+
+            <div class="settings-card past-week-card">
+              <div class="card-heading"><div class="card-icon">KW</div><div><h2>Vergangene Wochen</h2><p>Schützt abgeschlossene Dienstpläne vor versehentlichen Änderungen.</p></div></div>
+              <label class="switch-row">
+                <span><strong>Vergangene Kalenderwochen bearbeiten erlauben</strong><small>Standardmäßig aus. Bei Bedarf temporär aktivieren.</small></span>
+                <input id="allowPastWeekEditing" type="checkbox" />
+              </label>
+            </div>
+
+            <div class="settings-card toast-card">
+              <div class="card-heading"><div class="card-icon">!</div><div><h2>Warnmeldungen</h2><p>Legt fest, wie lange Hinweise und Fehlermeldungen sichtbar bleiben.</p></div></div>
+              <label class="field"><span>Anzeigedauer</span><select id="toastDuration"><option value="short">Kurz · 5 Sekunden</option><option value="medium">Mittel · 10 Sekunden</option><option value="long">Lang · 15 Sekunden</option></select></label>
+            </div>
+          </section>
+
+          <section id="brandingSettings" class="settings-section">
+            <div class="settings-card full-settings-card">
+              <div class="card-heading"><div class="card-icon">Logo</div><div><h2>Branding</h2><p>Firmenname, Logo und Admin-Kontakt für Oberfläche und PDF-Ausgabe.</p></div></div>
+              <div class="branding-settings-grid">
+                <div>
+                  <label class="field"><span>Firma / Organisation</span><input id="brandingCompanyName" maxlength="100" placeholder="Optional" /></label>
+                  <label class="field"><span>Admin-E-Mail</span><input id="brandingAdminEmail" maxlength="180" placeholder="Optional" /></label>
+                  <label class="field"><span>Logo-Pfad oder Bild-URL</span><input id="brandingLogoUrl" maxlength="300" placeholder="/assets/grabenplaner-logo.svg" /></label>
+                  <label class="field"><span>Logo-Alternativtext</span><input id="brandingLogoAlt" maxlength="120" placeholder="Grabenplaner" /></label>
+                  <label class="field"><span>Webicon/Favicon-Pfad</span><input id="brandingIconUrl" maxlength="300" placeholder="/assets/webicon.svg" /></label>
+                </div>
+                <div class="branding-preview">
+                  <span class="eyebrow">Vorschau</span>
+                  <img id="brandingPreviewLogo" src="/assets/grabenplaner-logo.svg" alt="" />
+                  <strong id="brandingPreviewTitle">Grabenplaner</strong>
+                  <small id="brandingPreviewCompany">Neutrale GitHub-Version</small>
+                </div>
+              </div>
+              <div class="branding-kit-actions">
+                <button type="button" class="secondary-button" id="exportBrandingButton">Branding-Kit exportieren</button>
+                <label class="secondary-button file-button">Branding-Kit auswählen<input id="brandingImportFile" type="file" accept=".zip,.json,application/zip,application/json" /></label>
+                <button type="button" class="primary-button" id="importBrandingButton">Branding-Kit importieren</button>
+              </div>
+              <div class="branding-kit-library" id="brandingKitLibrary"></div>
+              <p class="settings-note">Branding-Kits können als komplette ZIP-Datei oder als ältere JSON-Datei importiert werden. Importierte Kits werden lokal gespeichert und können später wie Themes erneut angewendet werden.</p>
+            </div>
+          </section>
+
+          <section id="pdfSettings" class="settings-section">
+            <div class="settings-card pdf-card">
+              <div class="card-heading"><div class="card-icon">Dienst</div><div><h2>PDF-Ausgabe Dienstplan</h2><p>A4 Querformat als kompakte Vektor-PDF mit anpassbarem Dateinamen.</p></div></div>
+              <label class="field"><span>Titel der PDF</span><input id="pdfTitleSetting" placeholder="Dienstplan" /></label>
+              <label class="field pdf-filename-field"><span>Dateiname vor Kalenderwoche</span><input id="pdfFilenamePrefix" minlength="5" maxlength="80" placeholder="Dienstplan" /></label>
+              <div class="pdf-file-options">
+                <label><input id="pdfFilenameIncludeKw" type="checkbox" /> Kalenderwoche automatisch anhängen</label>
+                <label><input id="pdfFilenameIncludeTimestamp" type="checkbox" /> Erstelldatum und Uhrzeit anhängen</label>
+              </div>
+              <div class="preview-line"><span>Titelvorschau</span><strong id="pdfTitlePreview"></strong></div>
+              <div class="preview-line"><span>Dateiname</span><strong id="pdfFilenamePreview"></strong></div>
+              <p class="settings-note">Standard: „Dienstplan KW31.pdf“. Der Text vor der KW muss 5 bis 80 Zeichen lang sein.</p>
+              <div class="pdf-live-preview">
+                <div><strong>PDF-Vorschau Dienstplan</strong><small>Wird erst beim Klick generiert.</small></div>
+                <button type="button" class="secondary-button" id="schedulePdfPreviewButton">Vorschau erzeugen</button>
+                <iframe id="schedulePdfPreviewFrame" title="PDF-Vorschau Dienstplan"></iframe>
+              </div>
+            </div>
+            <div class="settings-card pdf-card">
+              <div class="card-heading"><div class="card-icon">Urlaub</div><div><h2>PDF-Ausgabe Urlaubsplanung</h2><p>Nur für Monats-, Quartals- und Jahresübersichten des Urlaubsplaners.</p></div></div>
+              <label class="field"><span>Titel der PDF</span><input id="vacationPdfTitleSetting" placeholder="Urlaubsplanung" /></label>
+              <label class="field pdf-filename-field"><span>Dateiname vor Zeitraum</span><input id="vacationPdfFilenamePrefix" minlength="5" maxlength="80" placeholder="Urlaubsplanung" /></label>
+              <div class="pdf-file-options">
+                <label><input id="vacationPdfFilenameIncludePeriod" type="checkbox" /> Zeitraum automatisch anhängen</label>
+                <label><input id="vacationPdfFilenameIncludeTimestamp" type="checkbox" /> Erstelldatum und Uhrzeit anhängen</label>
+              </div>
+              <label class="field"><span>Kalenderdarstellung</span><select id="vacationPdfCalendarStyle"><option value="bars">Durchgezogene Urlaubslinien</option><option value="dots">Einzelne Farb-Punkte je Tag</option></select></label>
+              <div class="pdf-file-options vacation-balance-options">
+                <label><input id="vacationPdfShowBalance" type="checkbox" /> Resturlaub je Teammitglied anzeigen</label>
+                <label><input id="vacationPdfBalanceShowEntitlement" type="checkbox" /> Jahresurlaub per 1.1. anzeigen</label>
+                <label><input id="vacationPdfBalanceShowPlanned" type="checkbox" /> Eingeplanten Urlaub anzeigen</label>
+                <label><input id="vacationPdfBalanceShowConsumed" type="checkbox" /> Bereits konsumierten Urlaub anzeigen</label>
+              </div>
+              <div class="preview-line"><span>Titelvorschau</span><strong id="vacationPdfTitlePreview"></strong></div>
+              <div class="preview-line"><span>Dateiname</span><strong id="vacationPdfFilenamePreview"></strong></div>
+              <p class="settings-note">Urlaubs-PDFs werden einheitlich als A4 Querformat ausgegeben. Die PDF ist vektorbasiert und dadurch unabhängig von DPI gestochen scharf.</p>
+              <div class="pdf-live-preview">
+                <div><strong>PDF-Vorschau Urlaub</strong><small>Aktuelle Urlaubsansicht als echte PDF.</small></div>
+                <button type="button" class="secondary-button" id="vacationPdfPreviewButton">Vorschau erzeugen</button>
+                <iframe id="vacationPdfPreviewFrame" title="PDF-Vorschau Urlaub"></iframe>
+              </div>
+            </div>
+          </section>
+
+          <section id="personnelSettings" class="settings-section">
+            <div class="settings-card">
+              <div class="card-heading"><div class="card-icon">Pos</div><div><h2>Positionen</h2><p>Standardpositionen sind fix. Eigene Positionen können ergänzt, bearbeitet und gelöscht werden.</p></div></div>
+              <form id="positionForm" class="position-form">
+                <input id="positionId" type="hidden" />
+                <label class="field"><span>Position</span><input id="positionName" maxlength="60" placeholder="z. B. Kassa-Verantwortung" /></label>
+                <div class="form-actions-inline"><button type="button" class="secondary-button hidden" id="cancelPositionEditButton">Bearbeitung abbrechen</button><button type="submit" class="primary-button" id="positionSubmitButton">Position hinzufügen</button></div>
+              </form>
+              <div class="position-list" id="positionList"></div>
+            </div>
+            <div class="settings-card">
+              <div class="card-heading"><div class="card-icon">Team</div><div><h2>Personalansicht</h2><p>Darstellung der Stammdaten in der Personalverwaltung.</p></div></div>
+              <label class="switch-row"><span><strong>Inaktive Teammitglieder anzeigen</strong><small>Blendet inaktive Stammdaten in der Personalverwaltung ein.</small></span><input id="showInactivePersonnel" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>Samstagsstatistik anzeigen</strong><small>Zeigt in den Wochenstunden, wie oft ein Teammitglied zuletzt samstags mindestens 2 Stunden eingeteilt war.</small></span><input id="showSaturdayServiceStats" type="checkbox" /></label>
+            </div>
+          </section>
+
+          <section id="backupSettings" class="settings-section">
+            <div class="settings-card full-settings-card">
+              <div class="card-heading"><div class="card-icon">DB</div><div><h2>Datenbank & Backups</h2><p>Beim Programmstart wird immer eine interne Sicherung in app\backups erstellt. Zusätzlich kann lokal am PC regelmäßig gesichert werden.</p></div></div>
+              <div class="database-backup-path"><span>Interne Startsicherung</span><strong id="appBackupDirectoryText">app\backups</strong></div>
+              <label class="switch-row"><span><strong>Zusätzliche lokale PC-Sicherung aktiv</strong><small>Standardmäßig in den eigenen Dokumenten unter grabenplaner-backups.</small></span><input id="externalBackupEnabled" type="checkbox" /></label>
+              <label class="field full-width"><span>Lokaler Backup-Ordner am PC</span><input id="backupDirectory" placeholder="C:\Users\...\Documents\grabenplaner-backups" /></label>
+              <div class="inline-fields">
+                <label class="field"><span>Backup-Intervall</span><div class="unit-input"><input id="backupIntervalHours" type="number" min="1" max="6" step="1" /><em>Stunden</em></div></label>
+                <div class="backup-actions">
+                  <button type="button" class="secondary-button" id="createBackupButton">Backup jetzt erstellen</button>
+                </div>
+              </div>
+              <p class="settings-note">Standard: alle 2 Stunden, einstellbar von 1 bis 6 Stunden. Die letzten 30 Sicherungen bleiben je Backup-Ordner erhalten.</p>
+            </div>
+            <div class="settings-card full-settings-card">
+              <div class="card-heading"><div class="card-icon">Import</div><div><h2>Backup importieren</h2><p>Import ersetzt die aktuelle Datenbank nach einem Neustart. Vorher wird automatisch ein Sicherheitsbackup erstellt.</p></div></div>
+              <div class="import-mode-options">
+                <label class="choice-row"><input type="radio" name="backupImportMode" value="preserve-branding" checked /><span><strong>Datenbank importieren, aktuelles Branding behalten</strong><small>Empfohlen: Dienstplan-Daten werden ersetzt, Firmenlogo/PDF-Branding bleiben wie aktuell.</small></span></label>
+                <label class="choice-row"><input type="radio" name="backupImportMode" value="complete" /><span><strong>Komplette Datenbank importieren</strong><small>Auch Branding, PDF-Titel und Einstellungen aus dem Backup werden übernommen.</small></span></label>
+              </div>
+              <div class="inline-fields backup-import-row">
+                <label class="field"><span>Backup-Datei</span><input id="backupImportFile" type="file" accept=".db,.sqlite,.sqlite3,application/octet-stream" /></label>
+                <div class="backup-actions"><button type="button" class="danger-button" id="importBackupButton">Ausgewähltes Backup importieren</button></div>
+              </div>
+            </div>
+          </section>
+
+        </section>
+
+        <footer class="system-footer">
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.45 Beta</span></div>
+          <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
+          <a id="adminContactLink" class="hidden" href="#">Admin</a>
+        </footer>
+      </main>
+    </div>
+
+    <dialog class="modal" id="employeeModal">
+      <form method="dialog" id="employeeForm">
+        <div class="modal-header"><div><span class="eyebrow">Personalstammdaten</span><h2 id="employeeModalTitle">Teammitglied anlegen</h2></div><button type="button" class="close-button" data-close="employeeModal">×</button></div>
+        <div class="form-grid">
+          <label class="field"><span>Personalnummer</span><input id="employeeNumber" required /></label>
+          <label class="field"><span>Wochen-Sollzeit</span><div class="unit-input"><input id="employeeHours" type="number" min="0" max="80" step="0.25" required /><em>Stunden</em></div></label>
+          <label class="field"><span>Stammfiliale</span><select id="employeeHomeLocation" required></select></label>
+          <label class="field"><span>Position</span><select id="employeePosition" required></select></label>
+          <label class="field"><span>Bevorzugte Abteilung</span><select id="employeePreferredDepartment"><option value="">Keine Abteilung</option></select></label>
+          <label class="field full-width"><span>Bevorzugter freier Tag</span><select id="employeePreferredDay"><option value="">Kein bevorzugter Tag</option><option value="monday">Montag</option><option value="tuesday">Dienstag</option><option value="wednesday">Mittwoch</option><option value="thursday">Donnerstag</option><option value="friday">Freitag</option></select></label>
+          <div class="field full-width"><span>Dienstvertraglich vereinbarte fixe Arbeitstage</span>
+            <div class="weekday-checks">
+              <label><input type="checkbox" name="employeeFixedWorkday" value="monday" /> Mo</label>
+              <label><input type="checkbox" name="employeeFixedWorkday" value="tuesday" /> Di</label>
+              <label><input type="checkbox" name="employeeFixedWorkday" value="wednesday" /> Mi</label>
+              <label><input type="checkbox" name="employeeFixedWorkday" value="thursday" /> Do</label>
+              <label><input type="checkbox" name="employeeFixedWorkday" value="friday" /> Fr</label>
+              <label><input type="checkbox" name="employeeFixedWorkday" value="saturday" /> Sa</label>
+            </div>
+          </div>
+          <label class="field full-width"><span>Name</span><input id="employeeName" required /></label>
+          <label class="field full-width"><span>Spitzname / Anzeige im Dienstplan</span><input id="employeeNickname" required /></label>
+          <label class="field full-width"><span>Farbe im Dienstplan</span>
+            <div class="rgb-color-picker">
+              <input id="employeeColorPicker" type="color" value="#0b84c6" />
+              <input id="employeeColorHex" maxlength="7" value="#0b84c6" aria-label="RGB-Farbwert" />
+              <span id="employeeColorPreview"></span>
+            </div>
+          </label>
+          <label class="switch-row full-width"><span><strong>Aktiv</strong><small>In Planung und PDF anzeigen.</small></span><input id="employeeActive" type="checkbox" checked /></label>
+        </div>
+        <div class="modal-actions"><button type="button" class="danger-button hidden" id="deleteEmployeeButton">Teammitglied löschen</button><span></span><button type="button" class="secondary-button" data-close="employeeModal">Abbrechen</button><button type="submit" class="primary-button">Speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="shiftModal">
+      <form method="dialog" id="shiftForm">
+        <div class="modal-header"><div><span class="eyebrow">Wochenplanung</span><h2 id="shiftModalTitle">Dienst eintragen</h2></div><button type="button" class="close-button" data-close="shiftModal">×</button></div>
+        <input id="shiftId" type="hidden" />
+        <div class="form-grid">
+          <label class="field full-width"><span>Teammitglied</span><select id="shiftEmployee" required></select></label>
+          <label class="field full-width"><span>Abteilung</span><select id="shiftDepartment"><option value="">Keine / Allgemein</option></select></label>
+          <label class="field full-width"><span>Datum</span><input id="shiftDate" type="date" required /></label>
+          <label class="field"><span>Beginn</span><input id="shiftStart" type="time" required /></label>
+          <label class="field"><span>Ende</span><input id="shiftEnd" type="time" required /></label>
+          <label class="field full-width"><span>Bereich / Filiale</span><input id="shiftArea" placeholder="Optional" /></label>
+          <label class="field full-width"><span>Notiz</span><textarea id="shiftNote" rows="3" placeholder="Optional"></textarea></label>
+          <div class="calculation-note full-width" id="shiftCalculation"></div>
+        </div>
+        <div class="modal-actions"><button type="button" class="danger-button hidden" id="deleteShiftButton">Dienst löschen</button><span></span><button type="button" class="secondary-button" data-close="shiftModal">Abbrechen</button><button type="submit" class="primary-button">Speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal" id="optionsModal" tabindex="-1">
+      <form method="dialog" id="optionForm">
+        <div class="modal-header"><div><span class="eyebrow">Vor der Planerstellung</span><h2>Planungsoptionen · <span id="optionsWeekLabel"></span></h2><div class="option-week-switch"><button type="button" class="nav-button" id="optionPreviousWeek" aria-label="Vorherige Kalenderwoche">←</button><span id="optionsWeekRange"></span><button type="button" class="nav-button" id="optionNextWeek" aria-label="Nächste Kalenderwoche">→</button></div><p>Urlaub, Krankenstand, andere Filiale oder weitere Sonderfälle für diese Woche.</p></div><button type="button" class="close-button" data-close="optionsModal">×</button></div>
+        <div class="global-block-entry">
+          <div><strong>Ganzer Tag für alle sperren</strong><small>z. B. Feiertag, Betrieb geschlossen oder Inventur.</small></div>
+          <label class="field"><span>Datum</span><input id="globalBlockDate" type="date" /></label>
+          <label class="field global-block-reason"><span>Grund</span><input id="globalBlockReason" placeholder="z. B. Mariä Empfängnis" /></label>
+          <label class="checkbox-line global-block-holiday"><input id="globalBlockHoliday" type="checkbox" /> als Feiertag werten</label>
+          <button type="button" class="secondary-button" id="globalBlockSubmitButton">Tag sperren</button>
+        </div>
+        <div class="option-entry">
+          <label class="field"><span>Teammitglied</span><select id="optionEmployee" required></select></label>
+          <label class="field"><span>Art</span><select id="optionType"><option value="vacation">Urlaub</option><option value="sick">Krank</option><option value="branch">Andere Filiale</option><option value="vocational_school">Berufsschule</option><option value="school">Schulung</option><option value="time_off">Zeitausgleich</option><option value="special_leave">Sonderurlaub</option><option value="external_appointment">Außer-Haus-Termin</option><option value="team_meeting">Teamsitzung</option><option value="other">Sonstiges</option></select></label>
+          <label class="field"><span>Von</span><input id="optionDateFrom" type="date" required /></label>
+          <label class="field"><span>Bis</span><input id="optionDateTo" type="date" required /></label>
+          <div class="field option-all-day" id="optionAllDayField"><span>Umfang</span><label class="checkbox-line"><input id="optionAllDay" type="checkbox" /> ganztägig</label></div>
+          <div class="inline-fields option-time-fields" id="optionTimeFields">
+            <label class="field"><span>Beginn</span><input id="optionStartTime" type="time" /></label>
+            <label class="field"><span>Ende</span><input id="optionEndTime" type="time" /></label>
+          </div>
+          <label class="field option-hours hidden" id="optionHoursField"><span>Anrechenbare Stunden pro Tag</span><div class="unit-input"><input id="optionHours" type="number" min="0" max="24" step="0.1" /><em>Stunden</em></div></label>
+          <label class="field option-note"><span>Bemerkung / Grund</span><input id="optionNote" placeholder="z. B. Filiale 11/13 aushelfen" /></label>
+          <button type="submit" class="primary-button option-add" id="optionSubmitButton">Hinzufügen</button>
+          <button type="button" class="secondary-button option-cancel hidden" id="cancelOptionEditButton">Bearbeitung abbrechen</button>
+          <div class="calculation-note option-credit-hint" id="optionCreditHint"></div>
+        </div>
+        <div class="option-list" id="optionList"></div>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="primary-button" data-close="optionsModal">Fertig</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="autoPlanModal">
+      <form method="dialog" id="autoPlanForm">
+        <div class="modal-header"><div><span class="eyebrow">Automatische Planung</span><h2>Dienstplan automatisch erstellen</h2><p>Die Sollzeiten werden möglichst gleichmäßig von Montag bis Samstag verteilt. Sonderfälle und eingestellte Dienstzeiten werden berücksichtigt.</p></div><button type="button" class="close-button" data-close="autoPlanModal">×</button></div>
+        <div class="auto-plan-info">
+          <strong id="autoPlanWeek"></strong>
+          <ul>
+            <li>Alle Sonderfälle sperren die betroffenen Tage für Dienste.</li>
+            <li>Mindestbesetzung, Dienstzeiten und Mittagsschließungen werden beachtet.</li>
+            <li>Bevorzugte freie Tage werden nach Möglichkeit freigehalten.</li>
+            <li>Pausenregel und Samstagsfaktor fließen in die Sollzeit ein.</li>
+            <li>Sonntag bleibt geschlossen.</li>
+          </ul>
+        </div>
+        <label class="choice-row"><input type="radio" name="autoMode" value="fill" checked /><span><strong>Vorhandene Dienste ergänzen</strong><small>Bestehende Einteilungen bleiben unverändert.</small></span></label>
+        <label class="choice-row"><input type="radio" name="autoMode" value="replace" /><span><strong>Woche neu erstellen</strong><small>Alle vorhandenen Dienste dieser Woche werden ersetzt.</small></span></label>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="autoPlanModal">Abbrechen</button><button type="submit" class="primary-button">Jetzt erstellen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="resetWeekModal">
+      <form method="dialog" id="resetWeekForm">
+        <div class="modal-header"><div><span class="eyebrow">Wochenplanung löschen</span><h2>Aktuelle Woche zurücksetzen?</h2><p id="resetWeekText"></p></div><button type="button" class="close-button" data-close="resetWeekModal">×</button></div>
+        <div class="reset-warning"><strong>Es werden nur die eingetragenen Dienste dieser Woche gelöscht.</strong><p>Team, Grundeinstellungen und Planungsoptionen wie Urlaub oder Krankenstand bleiben erhalten.</p></div>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="resetWeekModal">Abbrechen</button><button type="submit" class="danger-button">Woche zurücksetzen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="scheduleNoteModal">
+      <form method="dialog" id="scheduleNoteForm">
+        <div class="modal-header"><div><span class="eyebrow">Dienstplan-PDF</span><h2>Besondere Bemerkung</h2><p>Dieser Hinweis erscheint nur auf der PDF dieser Kalenderwoche.</p></div><button type="button" class="close-button" data-close="scheduleNoteModal">×</button></div>
+        <div class="form-grid">
+          <div class="field full-width"><span>Text</span>
+            <div id="scheduleNoteToolbar" class="note-editor-toolbar" aria-label="Formatierung">
+              <span class="ql-formats">
+                <button class="ql-bold" type="button" aria-label="Fett"></button>
+                <button class="ql-italic" type="button" aria-label="Kursiv"></button>
+                <button class="ql-underline" type="button" aria-label="Unterstrichen"></button>
+              </span>
+              <span class="ql-formats">
+                <select class="ql-size" aria-label="Schriftgröße">
+                  <option value="small">klein</option>
+                  <option selected>normal</option>
+                  <option value="large">groß</option>
+                </select>
+              </span>
+              <span class="ql-formats">
+                <button class="ql-clean" type="button" aria-label="Formatierung entfernen"></button>
+              </span>
+            </div>
+            <div id="scheduleNoteEditor" class="note-editor"></div>
+          </div>
+          <div class="calculation-note full-width" id="scheduleNoteCounter"></div>
+        </div>
+        <div class="modal-actions"><button type="button" class="danger-button hidden" id="deleteScheduleNoteButton">Bemerkung löschen</button><span></span><button type="button" class="secondary-button" data-close="scheduleNoteModal">Abbrechen</button><button type="submit" class="primary-button">Speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="vacationModal">
+      <form method="dialog" id="vacationForm">
+        <div class="modal-header"><div><span class="eyebrow">Urlaubsplanung</span><h2 id="vacationModalTitle">Urlaub eintragen</h2><p>Der Eintrag sperrt den Zeitraum automatisch in der Wochenplanung.</p></div><button type="button" class="close-button" data-close="vacationModal">×</button></div>
+        <div class="form-grid">
+          <label class="field full-width"><span>Teammitglied</span><select id="vacationEmployee" required></select></label>
+          <label class="field"><span>Von</span><input id="vacationDateFrom" type="date" required /></label>
+          <label class="field"><span>Bis</span><input id="vacationDateTo" type="date" required /></label>
+          <label class="field full-width"><span>Bemerkung</span><input id="vacationNote" placeholder="Optional, z. B. Sommerurlaub" /></label>
+          <div class="calculation-note full-width" id="vacationCalculation"></div>
+        </div>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="vacationModal">Abbrechen</button><button type="submit" class="primary-button" id="vacationSubmitButton">Urlaub speichern</button></div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/vendor/quill/quill.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>
