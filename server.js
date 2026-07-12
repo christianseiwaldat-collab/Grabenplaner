@@ -11,8 +11,10 @@ const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
 const DEFAULT_OPERATION_MODE = "local";
-const SERVER_MODE_STATUS = "prepared";
+const SERVER_MODE_STATUS = "active";
 const PORTAL_PASSWORD_MIN_LENGTH = 10;
+const PORTAL_SESSION_COOKIE = "grabenplaner_session";
+const PORTAL_CSRF_COOKIE = "grabenplaner_csrf";
 const scryptAsync = promisify(crypto.scrypt);
 
 const builtinPortalRoles = [
@@ -80,7 +82,7 @@ const builtinPortalRoles = [
 ];
 
 const defaultPortalSettings = {
-  login_required: "0",
+  login_required: "1",
   password_min_length: String(PORTAL_PASSWORD_MIN_LENGTH),
   session_timeout_minutes: "480",
   max_failed_login_attempts: "5",
@@ -104,13 +106,32 @@ const defaultBranding = {
   admin_email: "",
 };
 
-const app = express();
-const PORT = Number(process.env.PORT || 3000);
-const HOST = String(process.env.GRABENPLANER_HOST || "127.0.0.1").trim() || "127.0.0.1";
-const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1"]);
-if (SERVER_MODE_STATUS !== "active" && !loopbackHosts.has(HOST.toLowerCase())) {
-  throw new Error("Eine externe Netzwerkbindung ist erst mit aktivem, abgesichertem Servermodus erlaubt.");
+const runtimeConfigPath = path.join(__dirname, "data", "runtime-config.json");
+
+function readRuntimeConfig() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(runtimeConfigPath, "utf8").replace(/^\uFEFF/, ""));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
 }
+
+function writeRuntimeConfig(values) {
+  const next = { ...readRuntimeConfig(), ...values, updatedAt: new Date().toISOString() };
+  fs.mkdirSync(path.dirname(runtimeConfigPath), { recursive: true });
+  const temporaryPath = `${runtimeConfigPath}.tmp`;
+  fs.writeFileSync(temporaryPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  fs.renameSync(temporaryPath, runtimeConfigPath);
+  return next;
+}
+
+const runtimeConfig = readRuntimeConfig();
+const app = express();
+const PORT = Number(process.env.PORT || runtimeConfig.port || 3000);
+const configuredHost = runtimeConfig.operationMode === "lan" ? "0.0.0.0" : "127.0.0.1";
+const HOST = String(process.env.GRABENPLANER_HOST || configuredHost).trim() || "127.0.0.1";
+const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1"]);
 const dataDirectory = path.join(__dirname, "data");
 const databasePath = process.env.DB_PATH || path.join(dataDirectory, "dienstplan.db");
 const appBackupDirectory = path.join(__dirname, "backups");
@@ -577,6 +598,7 @@ ensureColumn("portal_users", "locked_until", "TEXT");
 ensureColumn("portal_roles", "description", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("portal_roles", "sort_order", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("portal_roles", "updated_at", "TEXT");
+ensureColumn("vacation_requests", "vacation_group_id", "TEXT");
 db.exec("CREATE INDEX IF NOT EXISTS idx_portal_users_role_active ON portal_users(role, active)");
 
 function rebuildGlobalDayBlocksForLocations() {
@@ -745,10 +767,20 @@ if (process.env.GRABENPLANER_SEED_DEMO === "1" && db.prepare("SELECT COUNT(*) AS
   for (const employee of seedEmployees) insertEmployee.run(...employee, seedLocationId);
 }
 
+app.disable("x-powered-by");
+app.use((request, response, next) => {
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("X-Frame-Options", "DENY");
+  response.setHeader("Referrer-Policy", "no-referrer");
+  response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (request.path.startsWith("/api/portal/")) response.setHeader("Cache-Control", "no-store");
+  next();
+});
 app.use(express.json({ limit: "1mb" }));
 app.use("/branding-kits", express.static(brandingKitsDirectory));
 app.use("/vendor/quill", express.static(path.join(__dirname, "node_modules", "quill", "dist")));
 app.use(express.static(path.join(__dirname, "public")));
+app.use("/api", enforceAdminApiAccess);
 
 function httpError(status, message, code = "") {
   const error = new Error(message);
@@ -778,6 +810,159 @@ async function verifyPortalPassword(password, storedHash) {
     return crypto.timingSafeEqual(actualKey, expectedKey);
   } catch {
     return false;
+  }
+}
+
+function sha256(value) {
+  return crypto.createHash("sha256").update(String(value || "")).digest("hex");
+}
+
+function parseCookies(request) {
+  return Object.fromEntries(String(request.headers.cookie || "").split(";").map((part) => {
+    const separator = part.indexOf("=");
+    if (separator < 0) return ["", ""];
+    const key = part.slice(0, separator).trim();
+    const rawValue = part.slice(separator + 1).trim();
+    try { return [key, decodeURIComponent(rawValue)]; } catch { return [key, rawValue]; }
+  }).filter(([key]) => key));
+}
+
+function appendCookie(response, value) {
+  const current = response.getHeader("Set-Cookie");
+  response.setHeader("Set-Cookie", current ? [...(Array.isArray(current) ? current : [current]), value] : value);
+}
+
+function portalCookie(name, value, request, options = {}) {
+  const parts = [`${name}=${encodeURIComponent(value)}`, "Path=/", "SameSite=Strict"];
+  if (options.httpOnly) parts.push("HttpOnly");
+  if (request.secure || String(request.headers["x-forwarded-proto"] || "").toLowerCase() === "https") parts.push("Secure");
+  if (options.maxAge !== undefined) parts.push(`Max-Age=${Math.max(0, Math.floor(options.maxAge))}`);
+  return parts.join("; ");
+}
+
+function clearPortalCookies(request, response) {
+  appendCookie(response, portalCookie(PORTAL_SESSION_COOKIE, "", request, { httpOnly: true, maxAge: 0 }));
+  appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, "", request, { maxAge: 0 }));
+}
+
+function getLanUrls(port = PORT) {
+  const urls = [];
+  for (const addresses of Object.values(os.networkInterfaces())) {
+    for (const address of addresses || []) {
+      if (address.family !== "IPv4" || address.internal || address.address.startsWith("169.254.")) continue;
+      urls.push(`http://${address.address}:${port}`);
+    }
+  }
+  return [...new Set(urls)].sort();
+}
+
+function isLoopbackRequest(request) {
+  const address = String(request.socket?.remoteAddress || "").replace(/^::ffff:/, "").toLowerCase();
+  return address === "127.0.0.1" || address === "::1" || address === "localhost";
+}
+
+function auditPortal(actor, action, entityType = "", entityId = "", detail = "") {
+  db.prepare(`
+    INSERT INTO audit_log (actor, action, entity_type, entity_id, detail)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(String(actor || ""), String(action), String(entityType || ""), String(entityId || ""), String(detail || "").slice(0, 2000));
+}
+
+function portalSessionFromRequest(request, { touch = true } = {}) {
+  const token = parseCookies(request)[PORTAL_SESSION_COOKIE];
+  if (!token) return null;
+  const now = new Date().toISOString();
+  const session = db.prepare(`
+    SELECT s.id, s.employee_number, s.expires_at, s.revoked_at,
+           u.role, u.active, u.must_change_password,
+           e.full_name, e.nickname, e.color, e.home_location_id,
+           r.name AS role_name, r.permissions
+    FROM portal_sessions s
+    JOIN portal_users u ON u.employee_number = s.employee_number
+    JOIN employees e ON e.personnel_number = u.employee_number
+    LEFT JOIN portal_roles r ON r.id = u.role
+    WHERE s.token_hash = ?
+      AND s.revoked_at IS NULL
+      AND s.expires_at > ?
+      AND u.active = 1
+    LIMIT 1
+  `).get(sha256(token), now);
+  if (!session) return null;
+  if (touch) db.prepare("UPDATE portal_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?").run(session.id);
+  return {
+    id: session.id,
+    employeeNumber: session.employee_number,
+    fullName: session.full_name,
+    nickname: session.nickname,
+    color: session.color,
+    homeLocationId: session.home_location_id,
+    role: session.role,
+    roleName: session.role_name || session.role,
+    permissions: parsePortalPermissions(session.permissions),
+    mustChangePassword: Boolean(session.must_change_password),
+    expiresAt: session.expires_at,
+  };
+}
+
+function publicPortalUser(session) {
+  if (!session) return null;
+  return {
+    employeeNumber: session.employeeNumber,
+    fullName: session.fullName,
+    nickname: session.nickname,
+    color: session.color,
+    homeLocationId: session.homeLocationId,
+    role: session.role,
+    roleName: session.roleName,
+    permissions: session.permissions,
+    mustChangePassword: session.mustChangePassword,
+  };
+}
+
+function requirePortalSession(request, permission = "") {
+  const session = portalSessionFromRequest(request);
+  if (!session) throw httpError(401, "Bitte zuerst anmelden.", "PORTAL_LOGIN_REQUIRED");
+  if (permission && session.mustChangePassword) {
+    throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+  }
+  if (permission && !session.permissions.includes(permission)) {
+    throw httpError(403, "Für diese Aktion fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  return session;
+}
+
+function assertPortalCsrf(request) {
+  if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return;
+  const cookies = parseCookies(request);
+  const cookieToken = String(cookies[PORTAL_CSRF_COOKIE] || "");
+  const headerToken = String(request.headers["x-csrf-token"] || "");
+  const valid = cookieToken.length >= 24 && headerToken.length === cookieToken.length
+    && crypto.timingSafeEqual(Buffer.from(cookieToken), Buffer.from(headerToken));
+  if (!valid) throw httpError(403, "Die Sicherheitsprüfung ist abgelaufen. Bitte die Seite neu laden.", "PORTAL_CSRF_INVALID");
+}
+
+function enforceAdminApiAccess(request, _response, next) {
+  try {
+    const status = getPortalStatus();
+    if (!status.portalEnabled || request.path.startsWith("/portal/")) return next();
+    const method = String(request.method || "GET").toUpperCase();
+    let permission = "schedule:read";
+    if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+      if (/^\/(settings|branding|positions|employees|locations|departments|backup|system|update)/.test(request.path)) {
+        permission = "settings:write";
+      } else if (/^\/(vacations|vacation-entitlements)/.test(request.path)) {
+        permission = "vacation:approve";
+      } else {
+        permission = "schedule:write";
+      }
+    }
+    const session = requirePortalSession(request, permission);
+    if (session.role === "employee") throw httpError(403, "Bitte das Mitarbeiterportal verwenden.", "PORTAL_EMPLOYEE_ONLY");
+    assertPortalCsrf(request);
+    request.portalSession = session;
+    next();
+  } catch (error) {
+    next(error);
   }
 }
 
@@ -906,8 +1091,8 @@ function assertDateEditable(isoDate, settings = getSettings()) {
 
 function getSettings() {
   const stored = Object.fromEntries(db.prepare("SELECT key, value FROM settings").all().map((row) => [row.key, row.value]));
-  const requestedMode = stored.operation_mode === "server" ? "server" : DEFAULT_OPERATION_MODE;
-  const effectiveMode = requestedMode === "server" && SERVER_MODE_STATUS === "active" ? "server" : DEFAULT_OPERATION_MODE;
+  const requestedMode = ["lan", "server"].includes(stored.operation_mode) ? stored.operation_mode : DEFAULT_OPERATION_MODE;
+  const effectiveMode = requestedMode === "server" ? "lan" : requestedMode;
   return {
     ...stored,
     operation_mode: effectiveMode,
@@ -950,7 +1135,8 @@ function getPortalRoles() {
 function getPortalStatus() {
   const settings = getSettings();
   const portalSettings = getPortalSettings();
-  const portalEnabled = settings.operation_mode === "server" && SERVER_MODE_STATUS === "active";
+  const networkRuntimeActive = !loopbackHosts.has(HOST.toLowerCase()) || process.env.GRABENPLANER_FORCE_PORTAL === "1";
+  const portalEnabled = networkRuntimeActive && SERVER_MODE_STATUS === "active";
   const configuredAdmin = db.prepare(`
     SELECT 1
     FROM portal_users
@@ -963,17 +1149,72 @@ function getPortalStatus() {
     serverModeStatus: SERVER_MODE_STATUS,
     portalEnabled,
     serverModeAvailable: SERVER_MODE_STATUS === "active",
-    loginRequired: portalEnabled && portalSettings.login_required === "1",
+    loginRequired: portalEnabled,
     adminSetupState: configuredAdmin ? "configured" : "not-configured",
-    adminSetupAvailable: portalEnabled,
+    adminSetupAvailable: !configuredAdmin,
     localOnly: loopbackHosts.has(HOST.toLowerCase()),
+    listenHost: HOST,
+    port: PORT,
+    networkUrls: portalEnabled ? getLanUrls(PORT) : [],
+    branding: brandingFromSettings(settings),
     capabilities: {
       login: portalEnabled,
       ownSchedule: portalEnabled,
       vacationRequests: portalEnabled,
-      timeTracking: portalEnabled,
+      timeTracking: false,
     },
   };
+}
+
+function requirePortalAdminOrLocal(request, permission = "users:write") {
+  if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) {
+    return { employeeNumber: "local", role: "admin", permissions: [permission] };
+  }
+  const session = requirePortalSession(request, permission);
+  assertPortalCsrf(request);
+  return session;
+}
+
+function portalUsersForAdmin() {
+  return db.prepare(`
+    SELECT e.personnel_number, e.full_name, e.nickname, e.active AS employee_active,
+           u.role, u.active, u.must_change_password, u.last_login_at,
+           CASE WHEN TRIM(COALESCE(u.password_hash, '')) <> '' THEN 1 ELSE 0 END AS password_configured,
+           r.name AS role_name
+    FROM employees e
+    LEFT JOIN portal_users u ON u.employee_number = e.personnel_number
+    LEFT JOIN portal_roles r ON r.id = u.role
+    ORDER BY CAST(e.personnel_number AS INTEGER), e.personnel_number
+  `).all().map((row) => ({
+    employeeNumber: row.personnel_number,
+    fullName: row.full_name,
+    nickname: row.nickname,
+    employeeActive: Boolean(row.employee_active),
+    configured: Boolean(row.role),
+    role: row.role || "employee",
+    roleName: row.role_name || "Mitarbeiter",
+    active: row.active === null ? false : Boolean(row.active),
+    mustChangePassword: row.must_change_password === null ? true : Boolean(row.must_change_password),
+    passwordConfigured: Boolean(row.password_configured),
+    lastLoginAt: row.last_login_at || null,
+  }));
+}
+
+function validateVacationRequestDates(employeeNumber, body) {
+  const dateFrom = String(body.dateFrom || "");
+  const dateTo = String(body.dateTo || "");
+  const note = stripEmoji(String(body.note || "").trim()).slice(0, 500);
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) {
+    throw httpError(400, "Bitte einen gültigen Urlaubszeitraum eingeben.");
+  }
+  const overlapping = db.prepare(`
+    SELECT id FROM vacation_requests
+    WHERE employee_number = ? AND status IN ('pending', 'approved')
+      AND date_from <= ? AND date_to >= ?
+    LIMIT 1
+  `).get(employeeNumber, dateTo, dateFrom);
+  if (overlapping) throw httpError(409, "Für diesen Zeitraum besteht bereits ein Urlaubsantrag.");
+  return { employeeNumber, dateFrom, dateTo, note };
 }
 
 function sendPortalInactive(_request, response) {
@@ -3101,6 +3342,45 @@ app.post("/api/backup", (_request, response) => {
   response.status(201).json(createDatabaseBackup("manual"));
 });
 
+function scheduleApplicationRestart() {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-restart-"));
+  const scriptPath = path.join(tempRoot, "restart-grabenplaner.ps1");
+  const launcherPath = path.join(tempRoot, "launch-restart.cmd");
+  const safeAppDir = __dirname.replaceAll("'", "''");
+  const safeVersionLabel = APP_VERSION_LABEL.replaceAll("'", "''");
+  const script = `
+$ErrorActionPreference = 'Stop'
+$appDir = '${safeAppDir}'
+$versionLabel = '${safeVersionLabel}'
+$pidToWait = ${process.pid}
+$deadline = (Get-Date).AddMinutes(2)
+while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) {
+  if ((Get-Date) -gt $deadline) { throw "Server-Prozess $pidToWait wurde nicht rechtzeitig beendet." }
+  Start-Sleep -Milliseconds 300
+}
+Start-Sleep -Milliseconds 600
+$startFile = Join-Path $appDir "Grabenplaner $versionLabel starten.cmd"
+if (-not (Test-Path $startFile)) { $startFile = Join-Path $appDir 'Dienstplan starten.cmd' }
+Start-Process -FilePath $startFile -WorkingDirectory $appDir
+Start-Sleep -Seconds 2
+Remove-Item -LiteralPath '${tempRoot.replaceAll("'", "''")}' -Recurse -Force -ErrorAction SilentlyContinue
+`;
+  fs.writeFileSync(scriptPath, script, "utf8");
+  fs.writeFileSync(launcherPath, `@echo off\r\nstart "" /min powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"\r\n`, "utf8");
+  childProcess.spawn("cmd.exe", ["/d", "/c", launcherPath], {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  }).unref();
+  setTimeout(shutdown, 900);
+}
+
+app.post("/api/system/restart", (_request, response) => {
+  const backup = createDatabaseBackup("restart");
+  response.json({ ok: true, message: "Grabenplaner wird sicher neu gestartet.", backup });
+  response.on("finish", () => setTimeout(scheduleApplicationRestart, 250));
+});
+
 app.post("/api/system/exit", (_request, response) => {
   const driveInfo = runtimeDriveInfo();
   let backup = null;
@@ -3155,7 +3435,10 @@ try {
   Remove-Item -LiteralPath "$databasePath-shm" -Force -ErrorAction SilentlyContinue
   Copy-Item -LiteralPath $importPath -Destination $databasePath -Force
   Remove-Item -LiteralPath $importPath -Force -ErrorAction SilentlyContinue
+  $runtimeConfigPath = Join-Path $appDir 'data\runtime-config.json'
+  '{"operationMode":"local"}' | Set-Content -LiteralPath $runtimeConfigPath -Encoding UTF8
   Write-ImportLog "Datenbank ersetzt."
+  Write-ImportLog "Betriebsmodus aus Sicherheitsgründen auf Lokalbetrieb zurückgesetzt."
   $startFile = Join-Path $appDir "Grabenplaner $versionLabel starten.cmd"
   if (-not (Test-Path $startFile)) { $startFile = Join-Path $appDir 'Dienstplan starten.cmd' }
   Write-ImportLog "Starte neu: $startFile"
@@ -3547,26 +3830,256 @@ app.get("/api/portal/v1/roles", (_request, response) => {
   response.json({ apiVersion: PORTAL_API_VERSION, roles: getPortalRoles() });
 });
 
-app.get("/api/portal/v1/session", (_request, response) => {
+app.get("/api/portal/v1/session", (request, response) => {
   const status = getPortalStatus();
+  const session = status.portalEnabled ? portalSessionFromRequest(request) : null;
+  if (session && !parseCookies(request)[PORTAL_CSRF_COOKIE]) {
+    appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, crypto.randomBytes(24).toString("base64url"), request, {
+      maxAge: Math.max(60, Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000)),
+    }));
+  }
   response.json({
     apiVersion: PORTAL_API_VERSION,
-    authenticated: false,
+    authenticated: Boolean(session),
     loginRequired: status.loginRequired,
-    user: null,
+    user: publicPortalUser(session),
     status,
   });
 });
 
-app.all([
-  "/api/portal/v1/auth/login",
-  "/api/portal/v1/auth/logout",
-  "/api/portal/v1/setup/admin",
-  "/api/portal/v1/me",
-  "/api/portal/v1/me/schedule",
-  "/api/portal/v1/me/vacation-requests",
-  "/api/portal/v1/me/time-entries",
-], sendPortalInactive);
+app.post("/api/portal/v1/setup/admin", async (request, response) => {
+  if (!isLoopbackRequest(request)) throw httpError(403, "Die Admin-Ersteinrichtung ist nur direkt am Grabenplaner-PC möglich.");
+  if (getPortalStatus().adminSetupState === "configured") throw httpError(409, "Die Admin-Ersteinrichtung wurde bereits abgeschlossen.");
+  const employeeNumber = String(request.body.employeeNumber || "").trim();
+  const employee = db.prepare("SELECT personnel_number, full_name FROM employees WHERE personnel_number = ? AND active = 1").get(employeeNumber);
+  if (!employee) throw httpError(404, "Das ausgewählte aktive Teammitglied wurde nicht gefunden.");
+  const passwordHash = await hashPortalPassword(request.body.password);
+  db.prepare(`
+    INSERT INTO portal_users (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
+    VALUES (?, ?, 'admin', 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT(employee_number) DO UPDATE SET
+      password_hash = excluded.password_hash, role = 'admin', active = 1,
+      must_change_password = 0, password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+  `).run(employeeNumber, passwordHash);
+  auditPortal(employeeNumber, "portal.admin.setup", "portal_user", employeeNumber);
+  response.status(201).json({ ok: true, status: getPortalStatus() });
+});
+
+app.post("/api/portal/v1/auth/login", async (request, response) => {
+  if (!getPortalStatus().portalEnabled) return sendPortalInactive(request, response);
+  const employeeNumber = String(request.body.employeeNumber || "").trim();
+  const user = db.prepare(`
+    SELECT u.employee_number, u.password_hash, u.active, u.failed_login_attempts, u.locked_until,
+           e.active AS employee_active
+    FROM portal_users u JOIN employees e ON e.personnel_number = u.employee_number
+    WHERE u.employee_number = ?
+  `).get(employeeNumber);
+  const now = new Date();
+  if (user?.locked_until && new Date(user.locked_until) > now) {
+    throw httpError(429, "Der Zugang ist vorübergehend gesperrt. Bitte später erneut versuchen.", "PORTAL_ACCOUNT_LOCKED");
+  }
+  const valid = Boolean(user?.active && user?.employee_active && user.password_hash)
+    && await verifyPortalPassword(request.body.password, user.password_hash);
+  if (!valid) {
+    if (user) {
+      const portalSettings = getPortalSettings();
+      const attempts = Number(user.failed_login_attempts || 0) + 1;
+      const maximum = Number(portalSettings.max_failed_login_attempts || 5);
+      const lockUntil = attempts >= maximum
+        ? new Date(now.getTime() + Number(portalSettings.account_lock_minutes || 15) * 60000).toISOString()
+        : null;
+      db.prepare("UPDATE portal_users SET failed_login_attempts = ?, locked_until = ?, updated_at = CURRENT_TIMESTAMP WHERE employee_number = ?")
+        .run(lockUntil ? 0 : attempts, lockUntil, employeeNumber);
+    }
+    auditPortal(employeeNumber, "portal.login.failed", "portal_user", employeeNumber);
+    throw httpError(401, "Personalnummer oder Passwort ist nicht korrekt.", "PORTAL_LOGIN_FAILED");
+  }
+  db.prepare("DELETE FROM portal_sessions WHERE expires_at <= CURRENT_TIMESTAMP OR revoked_at IS NOT NULL").run();
+  db.prepare("UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND revoked_at IS NULL").run(employeeNumber);
+  const rawToken = crypto.randomBytes(32).toString("base64url");
+  const csrfToken = crypto.randomBytes(24).toString("base64url");
+  const timeoutMinutes = Math.min(1440, Math.max(15, Number(getPortalSettings().session_timeout_minutes || 480)));
+  const expiresAt = new Date(now.getTime() + timeoutMinutes * 60000).toISOString();
+  db.prepare(`
+    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
+    VALUES (?, ?, ?, ?)
+  `).run(crypto.randomUUID(), employeeNumber, sha256(rawToken), expiresAt);
+  db.prepare(`
+    UPDATE portal_users SET failed_login_attempts = 0, locked_until = NULL,
+      last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE employee_number = ?
+  `).run(employeeNumber);
+  appendCookie(response, portalCookie(PORTAL_SESSION_COOKIE, rawToken, request, { httpOnly: true, maxAge: timeoutMinutes * 60 }));
+  appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, csrfToken, request, { maxAge: timeoutMinutes * 60 }));
+  const session = portalSessionFromRequest({ ...request, headers: { ...request.headers, cookie: `${PORTAL_SESSION_COOKIE}=${rawToken}` } }, { touch: false });
+  auditPortal(employeeNumber, "portal.login.success", "portal_user", employeeNumber);
+  response.json({ ok: true, authenticated: true, user: publicPortalUser(session), status: getPortalStatus() });
+});
+
+app.post("/api/portal/v1/auth/logout", (request, response) => {
+  const session = portalSessionFromRequest(request, { touch: false });
+  if (session) {
+    assertPortalCsrf(request);
+    db.prepare("UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE id = ?").run(session.id);
+    auditPortal(session.employeeNumber, "portal.logout", "portal_user", session.employeeNumber);
+  }
+  clearPortalCookies(request, response);
+  response.json({ ok: true });
+});
+
+app.get("/api/portal/v1/users", (request, response) => {
+  requirePortalAdminOrLocal(request, "users:write");
+  response.json({ users: portalUsersForAdmin(), roles: getPortalRoles() });
+});
+
+app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
+  const actor = requirePortalAdminOrLocal(request, "users:write");
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  if (!db.prepare("SELECT 1 FROM employees WHERE personnel_number = ?").get(employeeNumber)) {
+    throw httpError(404, "Das Teammitglied wurde nicht gefunden.");
+  }
+  const role = String(request.body.role || "employee");
+  if (!db.prepare("SELECT 1 FROM portal_roles WHERE id = ?").get(role)) throw httpError(400, "Die ausgewählte Rolle ist ungültig.");
+  const password = String(request.body.password || "");
+  const existing = db.prepare("SELECT password_hash FROM portal_users WHERE employee_number = ?").get(employeeNumber);
+  const passwordHash = password ? await hashPortalPassword(password) : existing?.password_hash || "";
+  const active = request.body.active !== false ? 1 : 0;
+  if (role === "admin" && !active) {
+    const otherAdmins = Number(db.prepare("SELECT COUNT(*) AS count FROM portal_users WHERE role = 'admin' AND active = 1 AND employee_number <> ?").get(employeeNumber).count);
+    if (!otherAdmins) throw httpError(409, "Mindestens ein aktiver Admin-Zugang muss bestehen bleiben.");
+  }
+  db.prepare(`
+    INSERT INTO portal_users (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, CASE WHEN ? <> '' THEN CURRENT_TIMESTAMP ELSE NULL END, CURRENT_TIMESTAMP)
+    ON CONFLICT(employee_number) DO UPDATE SET
+      password_hash = excluded.password_hash, role = excluded.role, active = excluded.active,
+      must_change_password = excluded.must_change_password,
+      password_changed_at = CASE WHEN ? <> '' THEN CURRENT_TIMESTAMP ELSE portal_users.password_changed_at END,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(employeeNumber, passwordHash, role, active, password ? 1 : Number(request.body.mustChangePassword !== false), password, password);
+  if (!active || password) db.prepare("UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND revoked_at IS NULL").run(employeeNumber);
+  auditPortal(actor.employeeNumber, "portal.user.update", "portal_user", employeeNumber, JSON.stringify({ role, active: Boolean(active), passwordReset: Boolean(password) }));
+  response.json({ users: portalUsersForAdmin(), roles: getPortalRoles() });
+});
+
+app.get("/api/portal/v1/me", (request, response) => {
+  const session = requirePortalSession(request);
+  response.json({ user: publicPortalUser(session) });
+});
+
+app.put("/api/portal/v1/me/password", async (request, response) => {
+  const session = requirePortalSession(request);
+  assertPortalCsrf(request);
+  const current = db.prepare("SELECT password_hash FROM portal_users WHERE employee_number = ?").get(session.employeeNumber);
+  if (!await verifyPortalPassword(request.body.currentPassword, current?.password_hash)) {
+    throw httpError(401, "Das bisherige Passwort ist nicht korrekt.");
+  }
+  const passwordHash = await hashPortalPassword(request.body.newPassword);
+  db.prepare(`
+    UPDATE portal_users SET password_hash = ?, must_change_password = 0,
+      password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE employee_number = ?
+  `).run(passwordHash, session.employeeNumber);
+  auditPortal(session.employeeNumber, "portal.password.change", "portal_user", session.employeeNumber);
+  response.json({ ok: true });
+});
+
+app.get("/api/portal/v1/me/schedule", (request, response) => {
+  const session = requirePortalSession(request, "own_schedule:read");
+  const weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : currentWeekStart());
+  const weekEnd = addDays(weekStart, 6);
+  const shifts = db.prepare(`
+    SELECT s.id, s.shift_date, s.start_time, s.end_time, s.area, s.note,
+           d.name AS department_name
+    FROM shifts s LEFT JOIN departments d ON d.id = s.department_id
+    WHERE s.employee_number = ? AND s.shift_date BETWEEN ? AND ?
+    ORDER BY s.shift_date, s.start_time
+  `).all(session.employeeNumber, weekStart, weekEnd);
+  const options = db.prepare(`
+    SELECT id, date_from, date_to, option_type, note, all_day, start_time, end_time
+    FROM week_options
+    WHERE employee_number = ? AND date_from <= ? AND date_to >= ?
+    ORDER BY date_from, id
+  `).all(session.employeeNumber, weekEnd, weekStart);
+  response.json({ weekStart, weekEnd, calendarWeek: getIsoWeek(weekStart), shifts, options, user: publicPortalUser(session) });
+});
+
+app.get("/api/portal/v1/me/vacation-requests", (request, response) => {
+  const session = requirePortalSession(request, "own_vacation:read");
+  const requests = db.prepare(`
+    SELECT id, date_from, date_to, note, status, decided_by, decided_at, created_at, updated_at
+    FROM vacation_requests WHERE employee_number = ? ORDER BY created_at DESC, id DESC
+  `).all(session.employeeNumber);
+  response.json({ requests });
+});
+
+app.post("/api/portal/v1/me/vacation-requests", (request, response) => {
+  const session = requirePortalSession(request, "own_vacation:request");
+  assertPortalCsrf(request);
+  const vacation = validateVacationRequestDates(session.employeeNumber, request.body);
+  const result = db.prepare(`
+    INSERT INTO vacation_requests (employee_number, date_from, date_to, note)
+    VALUES (?, ?, ?, ?)
+  `).run(vacation.employeeNumber, vacation.dateFrom, vacation.dateTo, vacation.note);
+  auditPortal(session.employeeNumber, "vacation.request.create", "vacation_request", String(result.lastInsertRowid));
+  response.status(201).json({ id: Number(result.lastInsertRowid), status: "pending" });
+});
+
+app.delete("/api/portal/v1/me/vacation-requests/:id", (request, response) => {
+  const session = requirePortalSession(request, "own_vacation:request");
+  assertPortalCsrf(request);
+  const result = db.prepare("DELETE FROM vacation_requests WHERE id = ? AND employee_number = ? AND status = 'pending'")
+    .run(Number(request.params.id), session.employeeNumber);
+  if (!result.changes) throw httpError(404, "Der offene Urlaubsantrag wurde nicht gefunden.");
+  auditPortal(session.employeeNumber, "vacation.request.delete", "vacation_request", request.params.id);
+  response.status(204).end();
+});
+
+app.get("/api/portal/v1/vacation-requests", (request, response) => {
+  requirePortalAdminOrLocal(request, "vacation:read");
+  const status = ["pending", "approved", "rejected"].includes(String(request.query.status)) ? String(request.query.status) : "pending";
+  const requests = db.prepare(`
+    SELECT v.id, v.employee_number, v.date_from, v.date_to, v.note, v.status,
+           v.decided_by, v.decided_at, v.created_at, e.full_name, e.nickname, e.color
+    FROM vacation_requests v JOIN employees e ON e.personnel_number = v.employee_number
+    WHERE v.status = ? ORDER BY v.created_at, v.id
+  `).all(status);
+  response.json({ requests, status });
+});
+
+app.put("/api/portal/v1/vacation-requests/:id/decision", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "vacation:approve");
+  const decision = String(request.body.decision || "");
+  if (!["approved", "rejected"].includes(decision)) throw httpError(400, "Bitte genehmigen oder ablehnen.");
+  const entry = db.prepare("SELECT * FROM vacation_requests WHERE id = ? AND status = 'pending'").get(Number(request.params.id));
+  if (!entry) throw httpError(404, "Der offene Urlaubsantrag wurde nicht gefunden.");
+  let groupId = null;
+  if (decision === "approved") {
+    const vacation = validateVacationEntry({ employeeNumber: entry.employee_number, dateFrom: entry.date_from, dateTo: entry.date_to, note: entry.note });
+    groupId = createVacationGroupId();
+    db.exec("BEGIN");
+    try {
+      insertVacationEntries(vacation, groupId);
+      db.prepare(`
+        UPDATE vacation_requests SET status = 'approved', decided_by = ?, decided_at = CURRENT_TIMESTAMP,
+          vacation_group_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+      `).run(session.employeeNumber, groupId, entry.id);
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  } else {
+    db.prepare(`
+      UPDATE vacation_requests SET status = 'rejected', decided_by = ?, decided_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `).run(session.employeeNumber, entry.id);
+  }
+  auditPortal(session.employeeNumber, `vacation.request.${decision}`, "vacation_request", String(entry.id));
+  response.json({ ok: true, id: entry.id, status: decision, vacationGroupId: groupId });
+});
+
+app.all("/api/portal/v1/me/time-entries", sendPortalInactive);
 
 app.get("/api/settings", (_request, response) => response.json(getSettings()));
 
@@ -3653,8 +4166,11 @@ app.put("/api/branding/import.zip", express.raw({ type: ["application/zip", "app
 app.put("/api/settings", (request, response) => {
   const body = request.body;
   const requestedOperationMode = String(body.operationMode || DEFAULT_OPERATION_MODE);
-  if (requestedOperationMode !== DEFAULT_OPERATION_MODE) {
-    throw httpError(409, "Der Serverbetrieb ist technisch vorbereitet, aber in dieser Version noch nicht aktiv.", "SERVER_MODE_NOT_READY");
+  if (!["local", "lan"].includes(requestedOperationMode)) {
+    throw httpError(400, "Der ausgewählte Betriebsmodus ist ungültig.");
+  }
+  if (requestedOperationMode === "lan" && getPortalStatus().adminSetupState !== "configured") {
+    throw httpError(409, "Bitte zuerst die Admin-Ersteinrichtung abschließen.", "PORTAL_ADMIN_SETUP_REQUIRED");
   }
   const scheduleContext = resolvePlanningContext(body);
   const vacationContext = resolvePlanningContext({ ...body, departmentId: null, department: null });
@@ -3698,7 +4214,7 @@ app.put("/api/settings", (request, response) => {
 
   const values = {
     ...brandingValues,
-    operation_mode: DEFAULT_OPERATION_MODE,
+    operation_mode: requestedOperationMode,
     toast_duration: toastDuration,
     show_inactive_personnel: body.showInactivePersonnel === true ? "1" : "0",
     show_saturday_service_stats: body.showSaturdayServiceStats === false ? "0" : "1",
@@ -3777,7 +4293,14 @@ app.put("/api/settings", (request, response) => {
     throw error;
   }
   scheduleAutomaticBackups();
-  response.json(getSettings());
+  db.prepare(`
+    INSERT INTO portal_settings (key, value, updated_at) VALUES ('login_required', '1', CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value = '1', updated_at = CURRENT_TIMESTAMP
+  `).run();
+  const currentRuntimeMode = readRuntimeConfig().operationMode === "lan" ? "lan" : "local";
+  const restartRequired = currentRuntimeMode !== requestedOperationMode;
+  if (restartRequired) writeRuntimeConfig({ operationMode: requestedOperationMode });
+  response.json({ ...getSettings(), restartRequired, networkUrls: requestedOperationMode === "lan" ? getLanUrls(PORT) : [] });
 });
 
 app.post("/api/shifts", (request, response) => {
@@ -5406,10 +5929,17 @@ let server = null;
 
 function startServer() {
   if (server) return server;
+  const portalStatus = getPortalStatus();
+  if (!loopbackHosts.has(HOST.toLowerCase()) && (getSettings().operation_mode !== "lan" || !portalStatus.portalEnabled || portalStatus.adminSetupState !== "configured")) {
+    throw new Error("LAN-Bindung abgebrochen: Der LAN-Modus und ein Admin-Zugang müssen aktiviert sein.");
+  }
   server = app.listen(PORT, HOST, () => {
     const address = server.address();
     const listeningPort = typeof address === "object" && address ? address.port : PORT;
     console.log(`${APP_NAME} läuft auf http://localhost:${listeningPort}`);
+    if (portalStatus.portalEnabled) {
+      for (const url of getLanUrls(listeningPort)) console.log(`LAN-Zugriff: ${url}`);
+    }
     scheduleAutomaticBackups();
     setTimeout(() => {
       try {

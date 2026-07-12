@@ -12,6 +12,9 @@ const state = {
   positions: [],
   brandingKits: [],
   portalStatus: null,
+  portalSession: null,
+  desiredOperationMode: null,
+  portalUsers: [],
   allEmployees: [],
   updateStatus: null,
   selectedColor: "#0b84c6",
@@ -55,7 +58,7 @@ const elements = Object.fromEntries(
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "backupSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField",
-    "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton",
+    "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "vacationRequestsPanel", "managerVacationRequestList", "refreshVacationRequestsButton",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition",
     "employeeSettings", "locationSettings", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationSubmitButton", "cancelLocationEditButton",
@@ -64,7 +67,8 @@ const elements = Object.fromEntries(
     "optionsModal", "optionForm", "optionList", "optionsWeekLabel", "optionsWeekRange", "optionPreviousWeek", "optionNextWeek", "globalBlockDate", "globalBlockReason", "globalBlockHoliday", "globalBlockSubmitButton", "optionSubmitButton", "cancelOptionEditButton", "autoPlanModal",
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
-    "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "portalFoundationHint",
+    "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "portalFoundationHint", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
+    "loginGate", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink",
     "brandLogo", "footerBrandLogo", "adminContactLink", "brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt", "brandingPreviewLogo", "brandingPreviewTitle", "brandingPreviewCompany", "brandingKitLibrary", "exportBrandingButton", "brandingImportFile", "importBrandingButton", "toast",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
 );
@@ -343,16 +347,159 @@ function contrastColor(hex) {
 }
 
 async function api(url, options = {}) {
+  const csrfToken = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("grabenplaner_csrf="))?.split("=").slice(1).join("=");
+  const headers = { "Content-Type": "application/json", ...options.headers };
+  if (csrfToken && !["GET", "HEAD"].includes(String(options.method || "GET").toUpperCase())) {
+    headers["X-CSRF-Token"] = decodeURIComponent(csrfToken);
+  }
   const response = await fetch(url, {
     ...options,
-    headers: { "Content-Type": "application/json", ...options.headers },
+    headers,
   });
   if (!response.ok) {
     let message = "Die Aktion konnte nicht ausgeführt werden.";
-    try { message = (await response.json()).error || message; } catch {}
-    throw new Error(message);
+    let code = "";
+    try {
+      const payload = await response.json();
+      message = payload.error || message;
+      code = payload.code || "";
+    } catch {}
+    const error = new Error(message);
+    error.status = response.status;
+    error.code = code;
+    throw error;
   }
   return response.status === 204 ? null : response.json();
+}
+
+function showLoginGate(message = "") {
+  document.body.classList.add("portal-locked");
+  elements.loginGate?.classList.remove("hidden");
+  if (elements.adminLoginError) {
+    elements.adminLoginError.textContent = message;
+    elements.adminLoginError.classList.toggle("hidden", !message);
+  }
+  setTimeout(() => elements.adminLoginPersonnelNumber?.focus(), 50);
+}
+
+function hideLoginGate() {
+  document.body.classList.remove("portal-locked");
+  elements.loginGate?.classList.add("hidden");
+}
+
+function applyRoleVisibility() {
+  const permissions = state.portalSession?.user?.permissions || [];
+  const lanActive = state.portalStatus?.portalEnabled === true;
+  const adminAccess = !lanActive || permissions.includes("settings:write");
+  document.querySelectorAll('[data-view="personnel"],[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !adminAccess));
+  elements.systemExitButton?.classList.toggle("hidden", lanActive && !adminAccess);
+  elements.updateCheckButton?.classList.toggle("hidden", lanActive && !adminAccess);
+}
+
+async function bootstrapApplication() {
+  try {
+    const status = await api("/api/portal/v1/status");
+    state.portalStatus = status;
+    state.desiredOperationMode = status.operationMode === "lan" ? "lan" : "local";
+    if (status.portalEnabled) {
+      const session = await api("/api/portal/v1/session");
+      state.portalSession = session;
+      if (!session.authenticated) {
+        showLoginGate();
+        return;
+      }
+      if (session.user?.mustChangePassword) {
+        window.location.replace("/portal.html");
+        return;
+      }
+      if (session.user?.role === "employee") {
+        window.location.replace("/portal.html");
+        return;
+      }
+    }
+    hideLoginGate();
+    applyRoleVisibility();
+    await Promise.all([loadAll(), loadSystemInfo()]);
+    setTimeout(() => checkForUpdates(false), 1800);
+  } catch (error) {
+    showLoginGate(error.message);
+  }
+}
+
+async function loginToAdministration(event) {
+  event.preventDefault();
+  try {
+    const result = await api("/api/portal/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        employeeNumber: elements.adminLoginPersonnelNumber.value,
+        password: elements.adminLoginPassword.value,
+      }),
+    });
+    if (result.user?.role === "employee" || result.user?.mustChangePassword) {
+      window.location.replace("/portal.html");
+      return;
+    }
+    elements.adminLoginPassword.value = "";
+    state.portalSession = result;
+    hideLoginGate();
+    applyRoleVisibility();
+    await Promise.all([loadAll(), loadSystemInfo()]);
+  } catch (error) {
+    showLoginGate(error.message);
+  }
+}
+
+async function logoutPortal() {
+  try { await api("/api/portal/v1/auth/logout", { method: "POST", body: "{}" }); } catch {}
+  window.location.reload();
+}
+
+function openAdminSetup() {
+  const employees = (state.allEmployees || []).filter((employee) => employee.active);
+  elements.adminSetupEmployee.innerHTML = employees.map((employee) =>
+    `<option value="${escapeHtml(employee.personnel_number)}">${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.nickname || employee.full_name)}</option>`,
+  ).join("");
+  elements.adminSetupPassword.value = "";
+  elements.adminSetupPasswordRepeat.value = "";
+  elements.adminSetupModal.showModal();
+}
+
+async function setupPortalAdmin(event) {
+  event.preventDefault();
+  if (elements.adminSetupPassword.value !== elements.adminSetupPasswordRepeat.value) {
+    showToast("Die beiden Passwörter stimmen nicht überein.", true);
+    return;
+  }
+  try {
+    const result = await api("/api/portal/v1/setup/admin", {
+      method: "POST",
+      body: JSON.stringify({ employeeNumber: elements.adminSetupEmployee.value, password: elements.adminSetupPassword.value }),
+    });
+    state.portalStatus = result.status;
+    elements.adminSetupModal.close();
+    renderOperationMode();
+    await loadPortalUsers();
+    showToast("Admin-Zugang wurde eingerichtet.");
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function savePortalUser(row) {
+  const employeeNumber = row.dataset.portalUser;
+  try {
+    const result = await api(`/api/portal/v1/users/${encodeURIComponent(employeeNumber)}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        role: row.querySelector("[data-portal-role]").value,
+        active: row.querySelector("[data-portal-active]").checked,
+        password: row.querySelector("[data-portal-password]").value,
+        mustChangePassword: true,
+      }),
+    });
+    state.portalUsers = result.users || [];
+    showToast(`Zugang ${employeeNumber} wurde gespeichert.`);
+    await loadPortalUsers();
+  } catch (error) { showToast(error.message, true); }
 }
 
 function brandingFromSettings(settings = {}) {
@@ -397,6 +544,7 @@ async function loadAll() {
     state.positions = positions;
     state.brandingKits = brandingKits;
     state.portalStatus = portalStatus;
+    if (!state.desiredOperationMode) state.desiredOperationMode = portalStatus?.operationMode === "lan" ? "lan" : "local";
     setDefaultContext(state.locations);
     const scheduleContext = contextQuery(true);
     const vacationContext = contextQuery(false);
@@ -414,6 +562,7 @@ async function loadAll() {
     state.departmentId = schedule.context?.departmentId ? String(schedule.context.departmentId) : "";
     state.vacationYear = vacationData.year;
     render();
+    loadManagerVacationRequests();
   } catch (error) {
     showToast(error.message, true);
   }
@@ -924,7 +1073,7 @@ async function loadSystemInfo() {
     elements.systemData.innerHTML = `
       <span><strong>Serverzeit</strong> ${escapeHtml(info.serverTime)} Uhr</span>
       <span><strong>App</strong> ${escapeHtml(appName)} ${escapeHtml(info.appVersionLabel)}</span>
-      <span><strong>Betriebsmodus</strong> ${info.portal?.operationMode === "server" && info.portal?.portalEnabled ? "Server" : "Lokal"}</span>
+      <span><strong>Betriebsmodus</strong> ${info.portal?.operationMode === "lan" && info.portal?.portalEnabled ? "LAN-Host" : "Lokal"}</span>
       <span><strong>Node.js</strong> ${escapeHtml(info.nodeVersion)}</span>
       <span><strong>SQLite</strong> ${escapeHtml(info.sqliteVersion)}</span>
       <span><strong>System</strong> ${escapeHtml(info.platform)}</span>
@@ -1060,25 +1209,88 @@ function renderSettings() {
 
 function renderOperationMode() {
   const status = state.portalStatus || {};
-  const serverActive = status.operationMode === "server" && status.serverModeStatus === "active" && status.portalEnabled === true;
-  elements.localModeOption?.classList.toggle("active", !serverActive);
-  elements.localModeOption?.setAttribute("aria-current", String(!serverActive));
-  elements.serverModeOption?.classList.toggle("active", serverActive);
-  elements.serverModeOption?.setAttribute("aria-current", String(serverActive));
+  const actualLanActive = status.operationMode === "lan" && status.portalEnabled === true;
+  const selectedLan = state.desiredOperationMode === "lan";
+  elements.localModeOption?.classList.toggle("active", !selectedLan);
+  elements.localModeOption?.setAttribute("aria-current", String(!selectedLan));
+  elements.serverModeOption?.classList.toggle("active", selectedLan);
+  elements.serverModeOption?.setAttribute("aria-current", String(selectedLan));
   if (elements.localModeBadge) {
-    elements.localModeBadge.textContent = serverActive ? "Verfügbar" : "Aktiv";
-    elements.localModeBadge.classList.toggle("inactive", serverActive);
+    elements.localModeBadge.textContent = actualLanActive ? "Verfügbar" : (!selectedLan ? "Aktiv" : "Ausgewählt");
+    elements.localModeBadge.classList.toggle("inactive", actualLanActive || selectedLan);
   }
   if (elements.serverModeBadge) {
-    elements.serverModeBadge.textContent = serverActive ? "Aktiv" : "In Vorbereitung";
-    elements.serverModeBadge.classList.toggle("inactive", !serverActive);
+    elements.serverModeBadge.textContent = actualLanActive ? "Aktiv" : (selectedLan ? "Ausgewählt" : "Verfügbar");
+    elements.serverModeBadge.classList.toggle("inactive", !actualLanActive);
   }
   if (elements.portalFoundationHint) {
-    const apiVersion = status.apiVersion || 1;
-    elements.portalFoundationHint.textContent = serverActive
-      ? `Portal-API v${apiVersion} ist aktiv. Anmeldung und Rollen werden im Serverbetrieb erzwungen.`
-      : `Portal-API v${apiVersion}, Rollen und Admin-Ersteinrichtung sind technisch vorbereitet. Der lokale Start bleibt ohne Loginpflicht.`;
+    const networkText = (status.networkUrls || []).length ? ` Erreichbar unter ${status.networkUrls.join(" oder ")}.` : "";
+    elements.portalFoundationHint.textContent = actualLanActive
+      ? `LAN-Host ist aktiv. Anmeldung und Rollen werden erzwungen.${networkText}`
+      : status.adminSetupState === "configured"
+        ? "Admin-Zugang ist eingerichtet. Der LAN-Host kann aktiviert und anschließend sicher neu gestartet werden."
+        : "Bitte zuerst den Admin-Zugang unter „Zugänge“ einrichten.";
   }
+  elements.employeePortalLink?.classList.toggle("hidden", !actualLanActive);
+  elements.portalLogoutButton?.classList.toggle("hidden", !actualLanActive);
+}
+
+async function loadPortalUsers() {
+  if (!elements.portalUserList) return;
+  try {
+    const result = await api("/api/portal/v1/users");
+    state.portalUsers = result.users || [];
+    const roles = result.roles || [];
+    elements.accessSettingsHint.textContent = state.portalStatus?.adminSetupState === "configured"
+      ? "Startpasswörter werden nie angezeigt. Ein neu gesetztes Passwort muss beim ersten Login geändert werden."
+      : "Zuerst einen Admin einrichten; danach können weitere Zugänge vorbereitet werden.";
+    elements.adminSetupButton.classList.toggle("hidden", state.portalStatus?.adminSetupState === "configured");
+    elements.portalUserList.innerHTML = state.portalUsers.map((user) => `
+      <article class="portal-user-row" data-portal-user="${escapeHtml(user.employeeNumber)}">
+        <div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${user.passwordConfigured ? "Zugang eingerichtet" : "Noch kein Passwort"}${user.lastLoginAt ? ` · zuletzt ${escapeHtml(new Date(user.lastLoginAt).toLocaleString("de-AT"))}` : ""}</small></div>
+        <select data-portal-role aria-label="Rolle">${roles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === user.role ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("")}</select>
+        <label class="portal-active"><input data-portal-active type="checkbox" ${user.active ? "checked" : ""} /> aktiv</label>
+        <input data-portal-password type="password" minlength="10" placeholder="Neues Startpasswort" autocomplete="new-password" />
+        <button class="secondary-button" data-save-portal-user type="button">Speichern</button>
+      </article>
+    `).join("");
+  } catch (error) {
+    elements.accessSettingsHint.textContent = error.status === 403 ? "Nur Admins dürfen Portal-Zugänge verwalten." : error.message;
+    elements.portalUserList.innerHTML = "";
+  }
+}
+
+async function loadManagerVacationRequests() {
+  if (!elements.managerVacationRequestList) return;
+  try {
+    const result = await api("/api/portal/v1/vacation-requests?status=pending");
+    const requests = result.requests || [];
+    elements.vacationRequestsPanel.classList.remove("hidden");
+    elements.managerVacationRequestList.innerHTML = requests.length ? requests.map((request) => `
+      <article class="manager-request-row" data-manager-request="${request.id}">
+        <span class="employee-dot" style="--employee-color:${escapeHtml(request.color || "#507267")}"></span>
+        <div><strong>${escapeHtml(request.employee_number)} · ${escapeHtml(request.nickname || request.full_name)}</strong><small>${formatDate(request.date_from)} – ${formatDate(request.date_to)}${request.note ? ` · ${escapeHtml(request.note)}` : ""}</small></div>
+        <button class="secondary-button reject-request" data-request-decision="rejected" type="button">Ablehnen</button>
+        <button class="primary-button" data-request-decision="approved" type="button">Genehmigen</button>
+      </article>
+    `).join("") : '<p class="settings-note">Derzeit gibt es keine offenen Urlaubsanträge.</p>';
+  } catch (error) {
+    elements.vacationRequestsPanel.classList.toggle("hidden", error.status === 403);
+    if (error.status !== 403) elements.managerVacationRequestList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function decideVacationRequest(id, decision) {
+  const label = decision === "approved" ? "genehmigen" : "ablehnen";
+  if (!confirm(`Diesen Urlaubsantrag wirklich ${label}?`)) return;
+  try {
+    await api(`/api/portal/v1/vacation-requests/${id}/decision`, {
+      method: "PUT",
+      body: JSON.stringify({ decision }),
+    });
+    showToast(decision === "approved" ? "Urlaub wurde genehmigt und eingetragen." : "Urlaubsantrag wurde abgelehnt.");
+    await loadAll();
+  } catch (error) { showToast(error.message, true); }
 }
 
 function renderBrandingKits() {
@@ -1121,7 +1333,9 @@ function setSettingsTab(tab) {
   elements.brandingSettings.classList.toggle("active", tab === "branding");
   elements.pdfSettings.classList.toggle("active", tab === "pdf");
   elements.personnelSettings.classList.toggle("active", tab === "personnel");
+  elements.accessSettings.classList.toggle("active", tab === "access");
   elements.backupSettings.classList.toggle("active", tab === "backup");
+  if (tab === "access") loadPortalUsers();
 }
 
 function setPersonnelTab(tab) {
@@ -2064,12 +2278,12 @@ async function saveSettings(silent = false) {
     };
   });
   try {
-    await api("/api/settings", {
+    const result = await api("/api/settings", {
       method: "PUT",
       body: JSON.stringify({
         locationId: state.locationId,
         departmentId: state.departmentId || "",
-        operationMode: state.portalStatus?.operationMode || "local",
+        operationMode: state.desiredOperationMode || state.portalStatus?.operationMode || "local",
         branding: {
           companyName: elements.brandingCompanyName.value,
           logoUrl: elements.brandingLogoUrl.value,
@@ -2108,6 +2322,15 @@ async function saveSettings(silent = false) {
         daySettings,
       }),
     });
+    if (result.restartRequired && !silent) {
+      const modeText = state.desiredOperationMode === "lan" ? "LAN-Host" : "Lokalbetrieb";
+      if (confirm(`Die Einstellungen wurden gespeichert. Für den Wechsel auf ${modeText} muss Grabenplaner sicher neu starten. Jetzt neu starten?`)) {
+        await api("/api/system/restart", { method: "POST", body: "{}" });
+        document.body.innerHTML = '<main class="shutdown-screen"><h1>Grabenplaner startet neu.</h1><p>Diese Seite kann in wenigen Sekunden neu geladen werden.</p></main>';
+        setTimeout(() => window.location.reload(), 6000);
+        return true;
+      }
+    }
     if (!silent) showToast("Einstellungen wurden gespeichert.");
     await loadAll();
     return true;
@@ -2209,6 +2432,32 @@ function showToast(message, error = false) {
 }
 
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+elements.adminLoginForm?.addEventListener("submit", loginToAdministration);
+elements.portalLogoutButton?.addEventListener("click", logoutPortal);
+elements.localModeOption?.addEventListener("click", () => {
+  state.desiredOperationMode = "local";
+  renderOperationMode();
+});
+elements.serverModeOption?.addEventListener("click", () => {
+  if (state.portalStatus?.adminSetupState !== "configured") {
+    setSettingsTab("access");
+    openAdminSetup();
+    return;
+  }
+  state.desiredOperationMode = "lan";
+  renderOperationMode();
+});
+elements.adminSetupButton?.addEventListener("click", openAdminSetup);
+elements.adminSetupForm?.addEventListener("submit", setupPortalAdmin);
+elements.portalUserList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-save-portal-user]");
+  if (button) savePortalUser(button.closest("[data-portal-user]"));
+});
+elements.refreshVacationRequestsButton?.addEventListener("click", loadManagerVacationRequests);
+elements.managerVacationRequestList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-request-decision]");
+  if (button) decideVacationRequest(button.closest("[data-manager-request]").dataset.managerRequest, button.dataset.requestDecision);
+});
 elements.updateCheckButton?.addEventListener("click", handleUpdateButton);
 elements.systemExitButton?.addEventListener("click", exitApplication);
 elements.exportBrandingButton?.addEventListener("click", exportBrandingKit);
@@ -2449,7 +2698,7 @@ elements.vacationCalendar.addEventListener("click", (event) => {
   deleteVacation(button.dataset.deleteVacation);
 });
 
-loadAll();
-loadSystemInfo();
-setTimeout(() => checkForUpdates(false), 1800);
-setInterval(loadSystemInfo, 30000);
+bootstrapApplication();
+setInterval(() => {
+  if (!document.body.classList.contains("portal-locked")) loadSystemInfo();
+}, 30000);

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#edf2ee" />
+    <title>Grabenplaner · Mitarbeiterportal</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/webicon.svg" />
+    <link rel="stylesheet" href="/portal.css" />
+  </head>
+  <body>
+    <section class="portal-login" id="portalLogin">
+      <form class="portal-card login-card" id="portalLoginForm">
+        <img src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
+        <span class="eyebrow">Mitarbeiterportal</span>
+        <h1>Anmelden</h1>
+        <p>Mit Personalnummer und persönlichem Passwort.</p>
+        <label><span>Personalnummer</span><input id="loginPersonnelNumber" autocomplete="username" required /></label>
+        <label><span>Passwort</span><input id="loginPassword" type="password" autocomplete="current-password" required /></label>
+        <p class="message error hidden" id="loginError"></p>
+        <button class="primary" type="submit">Anmelden</button>
+      </form>
+    </section>
+
+    <div class="portal-app hidden" id="portalApp">
+      <header class="portal-header">
+        <div class="portal-brand"><img id="portalLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" /><div><strong>Grabenplaner</strong><span>Mitarbeiterportal</span></div></div>
+        <div class="portal-user"><div><strong id="portalUserName"></strong><span id="portalUserRole"></span></div><a id="adminAppLink" class="text-button hidden" href="/">Planung öffnen</a><button class="text-button" id="changePasswordButton" type="button">Passwort ändern</button><button class="text-button" id="logoutButton" type="button">Abmelden</button></div>
+      </header>
+
+      <main>
+        <nav class="portal-tabs">
+          <button class="active" data-tab="schedule" type="button">Mein Dienstplan</button>
+          <button data-tab="vacation" type="button">Urlaub beantragen</button>
+        </nav>
+
+        <section class="portal-view active" id="scheduleView">
+          <div class="view-heading"><div><span class="eyebrow">Meine Woche</span><h1 id="scheduleHeading">Mein Dienstplan</h1></div><div class="week-controls"><button id="previousWeek" type="button">←</button><button id="currentWeek" type="button">Diese Woche</button><button id="nextWeek" type="button">→</button></div></div>
+          <div class="schedule-grid" id="scheduleGrid"></div>
+        </section>
+
+        <section class="portal-view" id="vacationView">
+          <div class="view-heading"><div><span class="eyebrow">Selbstverwaltung</span><h1>Urlaub beantragen</h1><p>Der Antrag wird erst nach Genehmigung in die Urlaubsplanung übernommen.</p></div></div>
+          <div class="vacation-layout">
+            <form class="portal-card request-form" id="vacationRequestForm">
+              <h2>Neuer Antrag</h2>
+              <div class="date-fields"><label><span>Von</span><input id="vacationDateFrom" type="date" required /></label><label><span>Bis</span><input id="vacationDateTo" type="date" required /></label></div>
+              <label><span>Bemerkung</span><textarea id="vacationNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
+              <p class="message hidden" id="vacationMessage"></p>
+              <button class="primary" type="submit">Antrag absenden</button>
+            </form>
+            <section class="portal-card"><h2>Meine Anträge</h2><div class="request-list" id="vacationRequestList"></div></section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="passwordDialog">
+      <form id="passwordForm">
+        <div class="dialog-heading"><div><span class="eyebrow">Sicherheit</span><h2>Passwort ändern</h2></div><button type="button" data-close-dialog>×</button></div>
+        <label><span>Bisheriges Passwort</span><input id="currentPassword" type="password" autocomplete="current-password" required /></label>
+        <label><span>Neues Passwort</span><input id="newPassword" type="password" minlength="10" autocomplete="new-password" required /></label>
+        <label><span>Neues Passwort wiederholen</span><input id="repeatPassword" type="password" minlength="10" autocomplete="new-password" required /></label>
+        <p class="message hidden" id="passwordMessage"></p>
+        <div class="dialog-actions"><button type="button" data-close-dialog>Abbrechen</button><button class="primary" type="submit">Passwort speichern</button></div>
+      </form>
+    </dialog>
+    <script src="/portal.js"></script>
+  </body>
+</html>

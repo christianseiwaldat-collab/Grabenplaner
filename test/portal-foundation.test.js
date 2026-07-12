@@ -132,10 +132,10 @@ test("Built-in-Rollen werden aktualisiert und eigene Rollen bleiben erhalten", (
   assert.deepEqual(custom.permissions, ["audit:read"]);
 });
 
-test("Status meldet sicheren Lokalbetrieb ohne Loginpflicht", async () => {
+test("Status meldet verfügbaren LAN-Modus bei weiterhin sicherem Lokalbetrieb", async () => {
   const directStatus = getPortalStatus();
   assert.equal(directStatus.operationMode, "local");
-  assert.equal(directStatus.serverModeStatus, "prepared");
+  assert.equal(directStatus.serverModeStatus, "active");
   assert.equal(directStatus.portalEnabled, false);
   assert.equal(directStatus.loginRequired, false);
   assert.equal(directStatus.localOnly, true);
@@ -175,15 +175,15 @@ test("Login und Mitarbeiterfunktionen bleiben bis zum Servermodus gesperrt", asy
   assert.equal(result.status.operationMode, "local");
 });
 
-test("Servermodus kann in v0.45 nicht versehentlich aktiviert werden", async () => {
+test("ungültiger alter Servermodus wird nicht übernommen", async () => {
   const response = await fetch(`${baseUrl}/api/settings`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ operationMode: "server" }),
   });
-  assert.equal(response.status, 409);
+  assert.equal(response.status, 400);
   const result = await response.json();
-  assert.equal(result.code, "SERVER_MODE_NOT_READY");
+  assert.match(result.error, /Betriebsmodus/i);
   assert.equal(getPortalStatus().operationMode, "local");
 });
 
@@ -193,7 +193,7 @@ test("bestehende lokale Dienstplan-API bleibt erreichbar", async () => {
   const schedule = await response.json();
   assert.equal(schedule.weekStart, "2026-07-13");
   assert.equal(schedule.settings.operation_mode, "local");
-  assert.equal(schedule.settings.server_mode_status, "prepared");
+  assert.equal(schedule.settings.server_mode_status, "active");
 });
 
 test("vorbereitete Passwort-Hashes verwenden scrypt, Salz und Versionskennung", async () => {
@@ -262,5 +262,116 @@ test("produktiver Start bleibt auf Loopback und blockiert externe Bindung", asyn
   blocked.stderr.on("data", (chunk) => { blockedError += chunk.toString(); });
   const blockedExit = await waitForExit(blocked);
   assert.notEqual(blockedExit.code, 0);
-  assert.match(blockedError, /externe Netzwerkbindung/i);
+  assert.match(blockedError, /LAN-Bindung/i);
+});
+
+test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durchgängig", async () => {
+  const childRoot = path.join(testRoot, "lan-pilot");
+  fs.mkdirSync(childRoot, { recursive: true });
+  const childDatabase = path.join(childRoot, "dienstplan.db");
+  const port = await getFreePort();
+  const child = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
+    cwd: path.join(__dirname, ".."),
+    windowsHide: true,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      DB_PATH: childDatabase,
+      BACKUP_DIR: path.join(childRoot, "backups"),
+      GRABENPLANER_HOST: "127.0.0.1",
+      GRABENPLANER_FORCE_PORTAL: "1",
+      GRABENPLANER_SEED_DEMO: "1",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stderr = "";
+  child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+  const url = `http://127.0.0.1:${port}`;
+
+  function sessionHeaders(response) {
+    const setCookies = typeof response.headers.getSetCookie === "function"
+      ? response.headers.getSetCookie()
+      : [response.headers.get("set-cookie")].filter(Boolean);
+    const cookie = setCookies.map((value) => value.split(";", 1)[0]).join("; ");
+    const csrfCookie = setCookies.map((value) => value.split(";", 1)[0]).find((value) => value.startsWith("grabenplaner_csrf="));
+    return { cookie, csrf: decodeURIComponent(csrfCookie.split("=").slice(1).join("=")) };
+  }
+
+  try {
+    const status = await waitForJson(`${url}/api/portal/v1/status`, child);
+    assert.equal(status.portalEnabled, true);
+
+    const setup = await fetch(`${url}/api/portal/v1/setup/admin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeNumber: "101", password: "Admin-Testpasswort-2026!" }),
+    });
+    assert.equal(setup.status, 201, await setup.clone().text());
+
+    const adminLogin = await fetch(`${url}/api/portal/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeNumber: "101", password: "Admin-Testpasswort-2026!" }),
+    });
+    assert.equal(adminLogin.status, 200, await adminLogin.clone().text());
+    const admin = sessionHeaders(adminLogin);
+
+    const createEmployeeAccess = await fetch(`${url}/api/portal/v1/users/102`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ role: "employee", active: true, password: "Mitarbeiter-Test-2026!", mustChangePassword: true }),
+    });
+    assert.equal(createEmployeeAccess.status, 200, await createEmployeeAccess.clone().text());
+
+    const employeeLogin = await fetch(`${url}/api/portal/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeNumber: "102", password: "Mitarbeiter-Test-2026!" }),
+    });
+    assert.equal(employeeLogin.status, 200, await employeeLogin.clone().text());
+    const employee = sessionHeaders(employeeLogin);
+
+    const passwordChange = await fetch(`${url}/api/portal/v1/me/password`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+      body: JSON.stringify({ currentPassword: "Mitarbeiter-Test-2026!", newPassword: "Mitarbeiter-Neu-2026!" }),
+    });
+    assert.equal(passwordChange.status, 200, await passwordChange.clone().text());
+
+    const requestResponse = await fetch(`${url}/api/portal/v1/me/vacation-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+      body: JSON.stringify({ dateFrom: "2027-02-08", dateTo: "2027-02-12", note: "Testurlaub" }),
+    });
+    assert.equal(requestResponse.status, 201, await requestResponse.clone().text());
+    const vacationRequest = await requestResponse.json();
+
+    const decisionResponse = await fetch(`${url}/api/portal/v1/vacation-requests/${vacationRequest.id}/decision`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ decision: "approved" }),
+    });
+    assert.equal(decisionResponse.status, 200, await decisionResponse.clone().text());
+    const decision = await decisionResponse.json();
+    assert.equal(decision.status, "approved");
+    assert.match(decision.vacationGroupId, /^vac-/);
+
+    const exitResponse = await fetch(`${url}/api/system/exit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: "{}",
+    });
+    assert.equal(exitResponse.status, 200, await exitResponse.clone().text());
+    const exit = await waitForExit(child);
+    assert.equal(exit.code, 0, stderr);
+
+    const verified = new DatabaseSync(childDatabase);
+    const storedRequest = verified.prepare("SELECT status, vacation_group_id FROM vacation_requests WHERE id = ?").get(vacationRequest.id);
+    assert.equal(storedRequest.status, "approved");
+    assert.match(storedRequest.vacation_group_id, /^vac-/);
+    assert.equal(verified.prepare("SELECT COUNT(*) AS count FROM week_options WHERE group_id = ? AND option_type = 'vacation'").get(storedRequest.vacation_group_id).count, 1);
+    verified.close();
+  } finally {
+    if (child.exitCode === null) child.kill();
+  }
 });

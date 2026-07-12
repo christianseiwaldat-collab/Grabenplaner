@@ -275,12 +275,36 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope"; letter-spacing: -.04em; }
 .settings-note { margin: 13px 0 0; color: var(--muted); font-size: 8.5px; line-height: 1.5; }
 .operation-mode-options { display: grid; gap: 8px; }
 .operation-mode-option { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 11px; background: rgba(247,249,247,.76); }
+.operation-mode-option { width: 100%; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .operation-mode-option.active { border-color: #9ec8b9; background: #f1f8f5; box-shadow: inset 3px 0 #2c8062; }
 .operation-mode-option strong, .operation-mode-option small { display: block; }
 .operation-mode-option strong { color: var(--ink); font-size: 10.5px; }
 .operation-mode-option small { margin-top: 3px; color: var(--muted); font-size: 8.5px; line-height: 1.35; }
 .operation-mode-mark { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 9px; color: #52615b; background: #e6ece8; font-size: 9px; font-weight: 800; }
 .operation-mode-option.active .operation-mode-mark { color: white; background: var(--green); }
+
+.login-gate { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at top left,#edf4ef,#e8e3d8 60%,#d9e4df); }
+.portal-locked .app-shell { display: none; }
+.login-card { width: min(390px,100%); display: grid; gap: 14px; padding: 32px; border: 1px solid rgba(43,87,72,.18); border-radius: 22px; background: rgba(255,255,255,.94); box-shadow: 0 26px 80px rgba(23,48,39,.2); }
+.login-card > img { width: min(210px,70%); max-height: 64px; object-fit: contain; object-position: left center; margin-bottom: 6px; }
+.login-card h1 { margin: 0; font: 800 25px "Manrope"; letter-spacing: -.04em; }
+.login-card p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.login-card > a { color: var(--green); font-size: 10px; font-weight: 750; text-align: center; }
+.login-error { padding: 9px 11px; border-radius: 9px; color: #8e342c !important; background: #fbecea; }
+.sidebar-portal-link { display: block; padding: 10px 12px; border-radius: 10px; color: #174f3b; background: #e3f2eb; font-size: 9px; font-weight: 800; text-align: center; text-decoration: none; }
+.access-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.portal-user-list { display: grid; gap: 8px; margin-top: 14px; }
+.portal-user-row { display: grid; grid-template-columns: minmax(180px,1.5fr) minmax(125px,.8fr) auto minmax(150px,1fr) auto; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.68); }
+.portal-user-row strong,.portal-user-row small { display: block; }
+.portal-user-row strong { font-size: 10px; }
+.portal-user-row small { margin-top: 3px; color: var(--muted); font-size: 8px; }
+.portal-active { display: flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 9px; }
+.manager-request-list { display: grid; gap: 8px; }
+.manager-request-row { display: grid; grid-template-columns: 12px minmax(220px,1fr) auto auto; align-items: center; gap: 9px; padding: 10px 11px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.72); }
+.manager-request-row .employee-dot { width: 10px; height: 34px; border-radius: 5px; background: var(--employee-color); }
+.manager-request-row strong,.manager-request-row small { display: block; }.manager-request-row strong { font-size: 10px; }.manager-request-row small { margin-top: 3px; color: var(--muted); font-size: 8.5px; }
+.manager-request-row .reject-request { color: #9a3d34; }
+@media (max-width: 900px) { .portal-user-row { grid-template-columns: 1fr 1fr; } .portal-user-row > div { grid-column: 1 / -1; } }
 .pdf-card { display: grid; grid-template-columns: minmax(260px,.72fr) minmax(360px,1.28fr); gap: 0 20px; align-items: start; }
 .pdf-card > .card-heading { grid-column: 1 / -1; }
 .pdf-card > :not(.card-heading):not(.pdf-live-preview) { grid-column: 1; }

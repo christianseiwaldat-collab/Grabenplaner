@@ -11,11 +11,24 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <section class="login-gate hidden" id="loginGate" aria-live="polite">
+      <form class="login-card" id="adminLoginForm">
+        <img src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
+        <span class="eyebrow">Geschützter LAN-Zugang</span>
+        <h1>Beim Grabenplaner anmelden</h1>
+        <p>Filialleitung und Administration verwenden hier ihre Personalnummer.</p>
+        <label class="field"><span>Personalnummer</span><input id="adminLoginPersonnelNumber" autocomplete="username" required /></label>
+        <label class="field"><span>Passwort</span><input id="adminLoginPassword" type="password" autocomplete="current-password" required /></label>
+        <p class="login-error hidden" id="adminLoginError"></p>
+        <button class="primary-button" type="submit">Anmelden</button>
+        <a href="/portal.html">Zum Mitarbeiterportal</a>
+      </form>
+    </section>
     <div class="app-shell">
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.45 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.46 Beta</span></div>
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
@@ -42,6 +55,7 @@
         </div>
 
         <div class="sidebar-actions" aria-label="Ansicht und System">
+          <a class="sidebar-portal-link hidden" id="employeePortalLink" href="/portal.html">Mitarbeiterportal öffnen</a>
           <button class="sidebar-update-button" id="updateCheckButton" type="button">
             <span id="updateCheckIcon">↻</span>
             <strong id="updateCheckText">Update prüfen</strong>
@@ -53,6 +67,9 @@
           </a>
           <button class="sidebar-exit-button" id="systemExitButton" type="button">
             <span>Beenden</span>
+          </button>
+          <button class="sidebar-exit-button hidden" id="portalLogoutButton" type="button">
+            <span>Abmelden</span>
           </button>
         </div>
 
@@ -137,6 +154,14 @@
               <a class="secondary-button" id="vacationPdfButton" href="/api/vacations.pdf"><span>↓</span> PDF exportieren</a>
             </div>
           </header>
+
+          <section class="vacation-panel vacation-requests-panel" id="vacationRequestsPanel">
+            <div class="vacation-panel-heading">
+              <div><h2>Offene Urlaubsanträge</h2><p>Anträge aus dem Mitarbeiterportal prüfen und direkt in die Urlaubsplanung übernehmen.</p></div>
+              <button type="button" class="secondary-button" id="refreshVacationRequestsButton">Aktualisieren</button>
+            </div>
+            <div class="manager-request-list" id="managerVacationRequestList"><p class="settings-note">Offene Anträge werden geladen.</p></div>
+          </section>
 
           <section class="vacation-panel">
             <div class="vacation-panel-heading">
@@ -227,25 +252,27 @@
             <button class="settings-tab" data-settings-tab="branding">Branding</button>
             <button class="settings-tab" data-settings-tab="pdf">PDF-Ausgabe</button>
             <button class="settings-tab" data-settings-tab="personnel">Personal</button>
+            <button class="settings-tab" data-settings-tab="access">Zugänge</button>
             <button class="settings-tab" data-settings-tab="backup">Datenbank</button>
           </div>
 
           <section id="generalSettings" class="settings-section active">
             <div class="settings-card operation-mode-card">
-              <div class="card-heading"><div class="card-icon">Modus</div><div><h2>Betriebsmodus</h2><p>Der lokale Betrieb bleibt aktiv; der spätere Serverbetrieb wird schrittweise vorbereitet.</p></div></div>
+              <div class="card-heading"><div class="card-icon">Modus</div><div><h2>Betriebsmodus</h2><p>Wahlweise nur auf diesem Gerät oder zentral im lokalen Firmennetz.</p></div></div>
               <div class="operation-mode-options">
-                <div class="operation-mode-option active" id="localModeOption" aria-current="true">
+                <button class="operation-mode-option active" id="localModeOption" type="button" aria-current="true">
                   <span class="operation-mode-mark">L</span>
                   <span><strong>Lokalbetrieb</strong><small>SQLite auf diesem Gerät oder USB-Stick, ohne Loginpflicht.</small></span>
                   <span class="status-badge" id="localModeBadge">Aktiv</span>
-                </div>
-                <div class="operation-mode-option" id="serverModeOption" aria-current="false">
-                  <span class="operation-mode-mark">S</span>
-                  <span><strong>Serverbetrieb</strong><small>Zentraler HTTPS-Zugriff mit Anmeldung und Rollen.</small></span>
-                  <span class="status-badge inactive" id="serverModeBadge">In Vorbereitung</span>
-                </div>
+                </button>
+                <button class="operation-mode-option" id="serverModeOption" type="button" aria-current="false">
+                  <span class="operation-mode-mark">LAN</span>
+                  <span><strong>LAN-Host</strong><small>Eine zentrale App, Zugriff anderer Firmen-PCs per Browser und Login.</small></span>
+                  <span class="status-badge inactive" id="serverModeBadge">Verfügbar</span>
+                </button>
               </div>
-              <p class="settings-note" id="portalFoundationHint">Portal-API, Rollen und Admin-Ersteinrichtung sind technisch vorbereitet, aber noch nicht aktiv.</p>
+              <p class="settings-note" id="portalFoundationHint">Vor der Aktivierung wird ein Admin-Zugang benötigt. Der Wechsel erfordert einen sicheren Neustart.</p>
+              <p class="settings-note security-note">Der LAN-Host ist für ein vertrauenswürdiges internes Firmennetz gedacht. Ein öffentlich erreichbarer HTTPS-Servermodus folgt später.</p>
             </div>
 
             <div class="settings-card pause-card">
@@ -312,6 +339,18 @@
             <div class="settings-card toast-card">
               <div class="card-heading"><div class="card-icon">!</div><div><h2>Warnmeldungen</h2><p>Legt fest, wie lange Hinweise und Fehlermeldungen sichtbar bleiben.</p></div></div>
               <label class="field"><span>Anzeigedauer</span><select id="toastDuration"><option value="short">Kurz · 5 Sekunden</option><option value="medium">Mittel · 10 Sekunden</option><option value="long">Lang · 15 Sekunden</option></select></label>
+            </div>
+          </section>
+
+          <section id="accessSettings" class="settings-section">
+            <div class="settings-card full-span">
+              <div class="card-heading"><div class="card-icon">Login</div><div><h2>Portal-Zugänge</h2><p>Rollen, Freigabe und Startpasswort je Teammitglied verwalten.</p></div></div>
+              <div class="access-toolbar">
+                <button class="secondary-button" id="adminSetupButton" type="button">Admin-Ersteinrichtung</button>
+                <a class="secondary-button" href="/portal.html" target="_blank">Mitarbeiterportal öffnen</a>
+              </div>
+              <p class="settings-note" id="accessSettingsHint">Die Zugänge werden geladen.</p>
+              <div class="portal-user-list" id="portalUserList"></div>
             </div>
           </section>
 
@@ -434,7 +473,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.45 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.46 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -593,6 +632,19 @@
           <div class="calculation-note full-width" id="vacationCalculation"></div>
         </div>
         <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="vacationModal">Abbrechen</button><button type="submit" class="primary-button" id="vacationSubmitButton">Urlaub speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="adminSetupModal">
+      <form method="dialog" id="adminSetupForm">
+        <div class="modal-header"><div><span class="eyebrow">LAN-Host</span><h2>Admin-Ersteinrichtung</h2><p>Der erste Admin wird direkt am Grabenplaner-PC eingerichtet.</p></div><button type="button" class="close-button" data-close="adminSetupModal">×</button></div>
+        <div class="form-grid">
+          <label class="field full-width"><span>Teammitglied</span><select id="adminSetupEmployee" required></select></label>
+          <label class="field"><span>Passwort</span><input id="adminSetupPassword" type="password" minlength="10" autocomplete="new-password" required /></label>
+          <label class="field"><span>Passwort wiederholen</span><input id="adminSetupPasswordRepeat" type="password" minlength="10" autocomplete="new-password" required /></label>
+          <p class="calculation-note full-width">Mindestens 10 Zeichen. Dieses Konto darf Zugänge, Einstellungen und Dienstpläne verwalten.</p>
+        </div>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="adminSetupModal">Abbrechen</button><button type="submit" class="primary-button">Admin einrichten</button></div>
       </form>
     </dialog>
 

@@ -1,5 +1,19 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.46 Beta
+
+- Optionaler LAN-Host-Modus: Eine zentrale Grabenplaner-Installation kann im vertrauenswürdigen internen Firmennetz von weiteren PCs per Browser verwendet werden; die SQLite-Datenbank bleibt ausschließlich am Host-PC.
+- Admin-Ersteinrichtung direkt am Host-PC sowie Anmeldung mit Personalnummer und Passwort ergänzt.
+- Rollen und Berechtigungen aktiviert: Mitarbeiter, Filialleitung und Admin erhalten getrennte Zugriffe; sicherheitskritische Einstellungen bleiben Admins vorbehalten.
+- Portal-Zugänge je Teammitglied mit Rolle, Aktivstatus und einmaligem Startpasswort verwaltbar.
+- Mitarbeiterportal mit „Mein Dienstplan“, Wochenwechsel und persönlichen Sonderfällen ergänzt.
+- Urlaubsanträge können von Mitarbeitenden gestellt und offene Anträge wieder zurückgezogen werden.
+- Filialleitung und Admin können Anträge genehmigen oder ablehnen; genehmigter Urlaub wird automatisch in Urlaubs- und Wochenplanung übernommen.
+- Sicherheit: scrypt-Passwort-Hashes, zeitlich begrenzte Sitzungen, HttpOnly-/SameSite-Cookies, CSRF-Schutz, Kontosperre nach Fehlversuchen, Sicherheitsheader und Audit-Log aktiviert.
+- Betriebsmoduswechsel führt über Backup und sicheren PowerShell-Neustart; Branding, Updates und Datenbank bleiben zentral am Host-PC.
+- Nach einem Datenbankimport startet Grabenplaner vorsorglich wieder im Lokalbetrieb; der LAN-Host kann anschließend bewusst erneut aktiviert werden.
+- Der bisherige lokale SQLite-/USB-Betrieb bleibt unverändert Standard und benötigt weiterhin keine Anmeldung.
+
 ## v0.45 Beta
 
 - Server-Fundament ergänzt: Der Betriebsmodus ist in den Grundeinstellungen sichtbar und bleibt standardmäßig sicher auf „Lokalbetrieb“.
