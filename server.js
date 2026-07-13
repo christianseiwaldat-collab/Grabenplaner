@@ -8,6 +8,7 @@ const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
 const { promisify } = require("node:util");
 const { createAmuStorage, syncEncryptedFilesBackup } = require("./lib/amu-storage");
+const { prepareAmuDocument } = require("./lib/amu-processing");
 const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
@@ -156,6 +157,11 @@ const defaultPortalSettings = {
   secure_cookies_required: "1",
   vacation_hr_approval_required: "0",
   amu_retention_days: "730",
+  amu_upload_max_mb: "10",
+  amu_stored_max_mb: "2",
+  amu_convert_images_to_pdf: "1",
+  amu_grayscale_images: "1",
+  amu_manager_file_access: "0",
 };
 
 function formatVersionLabel(version) {
@@ -210,6 +216,7 @@ const serverModeActive = configuredOperationMode === "server";
 const publicUrl = String(process.env.GRABENPLANER_PUBLIC_URL || runtimeConfig.publicUrl || "").trim().replace(/\/$/, "");
 const trustProxySetting = String(process.env.GRABENPLANER_TRUST_PROXY || runtimeConfig.trustProxy || "loopback").trim() || "loopback";
 const serviceControlToken = String(process.env.GRABENPLANER_SERVICE_CONTROL_TOKEN || "").trim();
+const deploymentKind = String(process.env.GRABENPLANER_DEPLOYMENT_KIND || "local").trim().toLowerCase() || "local";
 const app = express();
 const PORT = Number(process.env.PORT || runtimeConfig.port || 3000);
 const configuredHost = configuredOperationMode === "lan" ? "0.0.0.0" : "127.0.0.1";
@@ -458,6 +465,7 @@ function createSchema() {
       name TEXT NOT NULL,
       min_staff INTEGER NOT NULL DEFAULT 0,
       day_settings_json TEXT NOT NULL DEFAULT '',
+      time_tracking_enabled INTEGER NOT NULL DEFAULT 0,
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -783,6 +791,9 @@ function createSchema() {
     CREATE TABLE IF NOT EXISTS time_entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       employee_number TEXT NOT NULL,
+      location_id TEXT,
+      department_id INTEGER,
+      work_date TEXT NOT NULL DEFAULT '',
       entry_type TEXT NOT NULL,
       entry_timestamp TEXT NOT NULL,
       source TEXT NOT NULL DEFAULT 'portal',
@@ -790,7 +801,11 @@ function createSchema() {
       created_by TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
-        ON UPDATE CASCADE ON DELETE CASCADE
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE SET NULL,
+      FOREIGN KEY (department_id) REFERENCES departments(id)
+        ON UPDATE CASCADE ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS time_corrections (
@@ -833,6 +848,7 @@ function createSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       employee_number TEXT NOT NULL,
       location_id TEXT NOT NULL,
+      department_id INTEGER,
       incapacity_from TEXT NOT NULL,
       incapacity_to TEXT NOT NULL,
       employee_note TEXT NOT NULL DEFAULT '',
@@ -848,7 +864,9 @@ function createSchema() {
       FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
         ON UPDATE CASCADE ON DELETE RESTRICT,
       FOREIGN KEY (location_id) REFERENCES locations(id)
-        ON UPDATE CASCADE ON DELETE RESTRICT
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (department_id) REFERENCES departments(id)
+        ON UPDATE CASCADE ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS amu_documents (
@@ -988,6 +1006,7 @@ if (tableExists("locations") && !columnExists("locations", "min_staff")) {
   db.exec("ALTER TABLE locations ADD COLUMN min_staff INTEGER NOT NULL DEFAULT 0");
 }
 ensureColumn("locations", "day_settings_json", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("locations", "time_tracking_enabled", "INTEGER NOT NULL DEFAULT 0");
 if (tableExists("departments") && !columnExists("departments", "min_staff")) {
   db.exec("ALTER TABLE departments ADD COLUMN min_staff INTEGER NOT NULL DEFAULT 0");
 }
@@ -1003,6 +1022,13 @@ ensureColumn("portal_users", "locked_until", "TEXT");
 ensureColumn("portal_roles", "description", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("portal_roles", "sort_order", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("portal_roles", "updated_at", "TEXT");
+ensureColumn("time_entries", "location_id", "TEXT");
+ensureColumn("time_entries", "department_id", "INTEGER");
+ensureColumn("time_entries", "work_date", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("amu_reports", "department_id", "INTEGER");
+db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_work_date ON time_entries(employee_number, work_date, entry_timestamp)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_location_date ON time_entries(location_id, work_date, entry_timestamp)");
+db.prepare("UPDATE time_entries SET work_date = SUBSTR(entry_timestamp, 1, 10) WHERE TRIM(COALESCE(work_date, '')) = ''").run();
 ensureColumn("vacation_requests", "vacation_group_id", "TEXT");
 ensureColumn("vacation_requests", "location_id", "TEXT");
 ensureColumn("vacation_requests", "approval_stage", "TEXT NOT NULL DEFAULT 'local'");
@@ -1191,6 +1217,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.50-portal-notifications-amu", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.51-location-hours-scopes-request-ranges", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.52-time-tracking-amu-policies", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -1275,13 +1303,13 @@ function requireAmuStorage() {
   return amuStorage;
 }
 
-function parseAmuMultipart(request) {
+function parseAmuMultipart(request, { maxFileBytes = 10 * 1024 * 1024, totalMaxBytes = 20 * 1024 * 1024 } = {}) {
   return new Promise((resolve, reject) => {
     const contentType = String(request.headers["content-type"] || "");
     const boundaryMatch = contentType.match(/^multipart\/form-data\s*;[\s\S]*?boundary=(?:"([^"]+)"|([^;\s]+))/i);
     const boundary = String(boundaryMatch?.[1] || boundaryMatch?.[2] || "");
     if (!boundary || boundary.length > 70 || /[\r\n]/.test(boundary)) {
-      reject(httpError(415, "Bitte die AUM als Formular mit PDF-, JPG- oder PNG-Dateien senden.", "AMU_MULTIPART_REQUIRED"));
+      reject(httpError(415, "Bitte die AUM als Formular mit PDF- oder Bilddateien senden.", "AMU_MULTIPART_REQUIRED"));
       return;
     }
     const chunks = [];
@@ -1295,8 +1323,8 @@ function parseAmuMultipart(request) {
     request.on("data", (chunk) => {
       if (settled) return;
       totalBytes += chunk.length;
-      if (totalBytes > 20 * 1024 * 1024) {
-        fail(httpError(413, "Der gesamte AUM-Upload darf höchstens 20 MiB groß sein.", "AMU_UPLOAD_TOO_LARGE"));
+      if (totalBytes > totalMaxBytes) {
+        fail(httpError(413, `Der gesamte AUM-Upload darf höchstens ${Math.ceil(totalMaxBytes / 1024 / 1024)} MB groß sein.`, "AMU_UPLOAD_TOO_LARGE"));
         return;
       }
       chunks.push(chunk);
@@ -1334,7 +1362,7 @@ function parseAmuMultipart(request) {
           partCount += 1;
           if (partCount > 9) throw httpError(413, "Das AUM-Formular enthält zu viele Teile.", "AMU_TOO_MANY_PARTS");
           if (filename && name === "documents") {
-            if (data.length > 10 * 1024 * 1024) throw httpError(413, "Eine AUM-Datei darf höchstens 10 MiB groß sein.", "AMU_DOCUMENT_TOO_LARGE");
+            if (data.length > maxFileBytes) throw httpError(413, `Eine AUM-Datei darf höchstens ${Math.ceil(maxFileBytes / 1024 / 1024)} MB groß sein.`, "AMU_DOCUMENT_TOO_LARGE");
             documents.push({ originalName: filename, buffer: Buffer.from(data) });
             if (documents.length > 3) throw httpError(413, "Pro AUM sind höchstens drei Dateien möglich.", "AMU_TOO_MANY_DOCUMENTS");
           } else if (!filename && ["incapacityFrom", "incapacityTo", "employeeNote"].includes(name)) {
@@ -1810,6 +1838,29 @@ function viennaNowLocal(date = new Date()) {
   return `${value("year")}-${value("month")}-${value("day")}T${value("hour")}:${value("minute")}`;
 }
 
+function viennaLocalDateTime(date, time) {
+  if (!isIsoDate(date) || !isTime(time)) throw httpError(400, "Bitte eine gültige Abschlusszeit eingeben.", "TIME_CORRECTION_INVALID");
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+  const desiredWallTime = Date.UTC(year, month - 1, day, hour, minute, 0);
+  let timestamp = desiredWallTime;
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const parts = formatter.formatToParts(new Date(timestamp));
+    const value = (type) => Number(parts.find((part) => part.type === type)?.value || 0);
+    const representedWallTime = Date.UTC(value("year"), value("month") - 1, value("day"), value("hour"), value("minute"), value("second"));
+    const difference = desiredWallTime - representedWallTime;
+    timestamp += difference;
+    if (difference === 0) break;
+  }
+  const result = new Date(timestamp);
+  if (viennaNowLocal(result) !== `${date}T${time}`) throw httpError(400, "Diese lokale Uhrzeit ist nicht eindeutig oder nicht gültig.", "TIME_CORRECTION_INVALID");
+  return result;
+}
+
 function currentWeekLockPoint(settings = getSettings()) {
   const weekStart = currentWeekStart();
   if (settings.current_week_lock_mode === "manual") {
@@ -1882,6 +1933,44 @@ function getPortalSettings() {
   };
 }
 
+function getAmuPolicy() {
+  const settings = getPortalSettings();
+  const uploadMaxMb = Math.min(25, Math.max(1, Number(settings.amu_upload_max_mb || 10)));
+  const storedMaxMb = Math.min(uploadMaxMb, Math.max(0.5, Number(settings.amu_stored_max_mb || 2)));
+  return {
+    uploadMaxMb,
+    storedMaxMb,
+    convertImagesToPdf: settings.amu_convert_images_to_pdf !== "0",
+    grayscaleImages: settings.amu_grayscale_images !== "0",
+    managerFileAccess: settings.amu_manager_file_access === "1",
+  };
+}
+
+function validateAmuPolicy(body = {}) {
+  const uploadMaxMb = Number(body.uploadMaxMb);
+  const storedMaxMb = Number(body.storedMaxMb);
+  if (!Number.isFinite(uploadMaxMb) || uploadMaxMb < 1 || uploadMaxMb > 25) {
+    throw httpError(400, "Der maximale AUM-Upload muss zwischen 1 und 25 MB liegen.", "AMU_POLICY_INVALID");
+  }
+  if (!Number.isFinite(storedMaxMb) || storedMaxMb < 0.5 || storedMaxMb > uploadMaxMb) {
+    throw httpError(400, "Die gespeicherte AUM-Größe muss zwischen 0,5 MB und dem Upload-Limit liegen.", "AMU_POLICY_INVALID");
+  }
+  return {
+    uploadMaxMb: Math.round(uploadMaxMb * 2) / 2,
+    storedMaxMb: Math.round(storedMaxMb * 2) / 2,
+    convertImagesToPdf: body.convertImagesToPdf !== false,
+    grayscaleImages: body.grayscaleImages !== false,
+    managerFileAccess: body.managerFileAccess === true,
+  };
+}
+
+function actorCanReadAmuFiles(session) {
+  if (!session) return false;
+  if (session.employeeNumber === "local" || ["admin", "hr"].includes(session.role)) return true;
+  if (session.permissions?.includes("amu:file:read")) return true;
+  return ["manager", "department_manager"].includes(session.role) && getAmuPolicy().managerFileAccess;
+}
+
 function parsePortalPermissions(value) {
   try {
     const permissions = JSON.parse(value || "[]");
@@ -1933,6 +2022,7 @@ function getPortalStatus() {
     publicUrl: serverModeActive ? publicUrl : "",
     httpsRequired: serverModeActive,
     trustProxy: serverModeActive ? trustProxySetting : "",
+    deploymentKind,
     passwordMinLength: portalPasswordMinLength(),
     branding: brandingFromSettings(settings),
     capabilities: {
@@ -1946,7 +2036,7 @@ function getPortalStatus() {
       absenceHistory: portalEnabled,
       notifications: portalEnabled,
       amuReports: portalEnabled && Boolean(amuStorage),
-      timeTracking: false,
+      timeTracking: portalEnabled,
     },
     workflow: {
       vacationHrApprovalRequired: vacationHrApprovalRequired(),
@@ -2048,6 +2138,243 @@ function employeeRequestContext(employeeNumber, date = null) {
     employee,
     locationId: employee.home_location_id || getLocations(true)[0]?.id || "01",
     departmentId,
+  };
+}
+
+const timeEntryTypes = new Set(["clock_in", "break_start", "break_end", "clock_out"]);
+const timeEntryLabels = {
+  clock_in: "Kommen",
+  break_start: "Pause",
+  break_end: "Weiter",
+  clock_out: "Gehen",
+};
+
+function timeEntryStateFromType(type) {
+  if (type === "clock_in" || type === "break_end") return "working";
+  if (type === "break_start") return "paused";
+  return "off";
+}
+
+function allowedTimeEntryActions(state) {
+  if (state === "off") return ["clock_in"];
+  if (state === "working") return ["break_start", "clock_out"];
+  if (state === "paused") return ["break_end", "clock_out"];
+  return [];
+}
+
+function suggestedClockOutTime(employeeNumber, date, locationId, latestTimestamp = "") {
+  const shiftEnd = db.prepare(`
+    SELECT end_time FROM shifts WHERE employee_number = ? AND shift_date = ?
+    ORDER BY end_time DESC LIMIT 1
+  `).get(employeeNumber, date)?.end_time;
+  const dayIndex = (new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7;
+  const dayKey = planningDays[dayIndex]?.[0];
+  const settings = settingsForLocation(locationId);
+  let suggestion = isTime(shiftEnd) ? shiftEnd : (dayKey && isTime(settings[`${dayKey}_end_time`]) ? settings[`${dayKey}_end_time`] : "18:00");
+  const latestLocalTime = latestTimestamp ? viennaNowLocal(new Date(latestTimestamp)).slice(11, 16) : "";
+  if (isTime(latestLocalTime) && timeToMinutes(suggestion) < timeToMinutes(latestLocalTime)) suggestion = latestLocalTime;
+  return suggestion;
+}
+
+function calculateWorkedMinutes(entries, now = new Date()) {
+  let runningFrom = null;
+  let totalMilliseconds = 0;
+  for (const entry of entries) {
+    const timestamp = new Date(entry.entry_timestamp);
+    if (Number.isNaN(timestamp.getTime())) continue;
+    if (entry.entry_type === "clock_in") {
+      if (!runningFrom) runningFrom = timestamp;
+    } else if (entry.entry_type === "break_start") {
+      if (runningFrom) totalMilliseconds += Math.max(0, timestamp - runningFrom);
+      runningFrom = null;
+    } else if (entry.entry_type === "break_end") {
+      if (!runningFrom) runningFrom = timestamp;
+    } else if (entry.entry_type === "clock_out") {
+      if (runningFrom) totalMilliseconds += Math.max(0, timestamp - runningFrom);
+      runningFrom = null;
+    }
+  }
+  if (runningFrom) totalMilliseconds += Math.max(0, now - runningFrom);
+  return Math.floor(totalMilliseconds / 60000);
+}
+
+function plannedMinutesForEmployeeDate(employeeNumber, date, locationId) {
+  const settings = settingsForLocation(locationId);
+  return db.prepare(`
+    SELECT id, employee_number, department_id, shift_date, start_time, end_time
+    FROM shifts WHERE employee_number = ? AND shift_date = ? ORDER BY start_time, id
+  `).all(employeeNumber, date).reduce((sum, shift) => {
+    const metrics = shiftMetrics(shift, settings);
+    return sum + Math.max(0, Number(metrics.raw_minutes || 0) - Number(metrics.break_minutes || 0));
+  }, 0);
+}
+
+function timeEntriesForDay(employeeNumber, date) {
+  return db.prepare(`
+    SELECT id, employee_number, location_id, department_id, work_date, entry_type,
+           entry_timestamp, source, note, created_by, created_at
+    FROM time_entries WHERE employee_number = ? AND work_date = ?
+    ORDER BY entry_timestamp, id
+  `).all(employeeNumber, date);
+}
+
+function timeTrackingDayStatus(employeeNumber, date = viennaTodayIso(), now = new Date()) {
+  if (!isIsoDate(date)) throw httpError(400, "Bitte ein gültiges Datum auswählen.", "TIME_ENTRY_DATE_INVALID");
+  const context = employeeRequestContext(employeeNumber, date);
+  const location = validateLocationExists(context.locationId);
+  const entries = timeEntriesForDay(employeeNumber, date);
+  const latestToday = entries.at(-1) || null;
+  const latestOverall = db.prepare(`
+    SELECT id, location_id, department_id, work_date, entry_type, entry_timestamp
+    FROM time_entries WHERE employee_number = ? ORDER BY entry_timestamp DESC, id DESC LIMIT 1
+  `).get(employeeNumber) || null;
+  const today = viennaTodayIso(now);
+  const staleEntry = latestOverall && latestOverall.work_date < today && timeEntryStateFromType(latestOverall.entry_type) !== "off"
+    ? latestOverall
+    : null;
+  const state = staleEntry && date === today ? "attention" : timeEntryStateFromType(latestToday?.entry_type);
+  const trackingEnabled = Boolean(location.time_tracking_enabled);
+  const allowedActions = trackingEnabled && date === today && !staleEntry ? allowedTimeEntryActions(state) : [];
+  const plannedMinutes = plannedMinutesForEmployeeDate(employeeNumber, date, context.locationId);
+  const actualMinutes = calculateWorkedMinutes(entries, now);
+  return {
+    date,
+    workDate: date,
+    timezone: "Europe/Vienna",
+    serverTime: now.toISOString(),
+    trackingEnabled,
+    enabled: trackingEnabled,
+    locationId: context.locationId,
+    locationName: location.name,
+    departmentId: context.departmentId,
+    state,
+    stateSince: latestToday?.entry_timestamp || staleEntry?.entry_timestamp || null,
+    staleEntry: staleEntry ? {
+      date: staleEntry.work_date,
+      type: staleEntry.entry_type,
+      timestamp: staleEntry.entry_timestamp,
+      suggestedClockOutTime: suggestedClockOutTime(employeeNumber, staleEntry.work_date, staleEntry.location_id || context.locationId, staleEntry.entry_timestamp),
+      message: `Eine Buchung vom ${staleEntry.work_date} wurde nicht mit „Gehen“ abgeschlossen. Bitte die Leitung informieren.`,
+    } : null,
+    reason: !trackingEnabled
+      ? "Die Zeiterfassung ist für diesen Standort noch nicht aktiviert."
+      : staleEntry
+        ? `Eine Buchung vom ${staleEntry.work_date} wurde nicht mit „Gehen“ abgeschlossen. Bitte die Leitung informieren.`
+        : "",
+    allowedActions,
+    plannedMinutes,
+    actualMinutes,
+    differenceMinutes: actualMinutes - plannedMinutes,
+    entries: entries.map((entry) => ({
+      id: Number(entry.id),
+      type: entry.entry_type,
+      label: timeEntryLabels[entry.entry_type] || entry.entry_type,
+      timestamp: entry.entry_timestamp,
+      locationId: entry.location_id || context.locationId,
+      departmentId: Number(entry.department_id || 0) || null,
+    })),
+  };
+}
+
+function bookTimeEntry(employeeNumber, action, now = new Date()) {
+  if (!timeEntryTypes.has(action)) throw httpError(400, "Diese Zeitbuchung ist ungültig.", "TIME_ENTRY_ACTION_INVALID");
+  const date = viennaTodayIso(now);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const before = timeTrackingDayStatus(employeeNumber, date, now);
+    if (!before.trackingEnabled) {
+      throw httpError(409, "Die Zeiterfassung ist für diesen Standort noch nicht aktiviert.", "TIME_TRACKING_DISABLED");
+    }
+    if (before.staleEntry) {
+      throw httpError(409, before.staleEntry.message, "TIME_ENTRY_PREVIOUS_DAY_OPEN");
+    }
+    if (!before.allowedActions.includes(action)) {
+      throw httpError(409, "Diese Buchung passt nicht zum aktuellen Zeiterfassungsstatus. Bitte die Anzeige aktualisieren.", "TIME_ENTRY_STATE_CONFLICT");
+    }
+    const context = employeeRequestContext(employeeNumber, date);
+    const timestamp = now.toISOString();
+    const result = db.prepare(`
+      INSERT INTO time_entries
+        (employee_number, location_id, department_id, work_date, entry_type, entry_timestamp, source, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, 'portal', ?)
+    `).run(employeeNumber, context.locationId, context.departmentId, date, action, timestamp, employeeNumber);
+    auditPortal(employeeNumber, "time.entry.create", "time_entry", String(result.lastInsertRowid), JSON.stringify({ action, date, locationId: context.locationId }));
+    db.exec("COMMIT");
+    return timeTrackingDayStatus(employeeNumber, date, now);
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
+function resolveStaleTimeEntry(session, employeeNumber, workDate, clockOutTime, now = new Date()) {
+  if (!isIsoDate(workDate) || !isTime(clockOutTime)) throw httpError(400, "Bitte Datum und Uhrzeit vollständig eingeben.", "TIME_CORRECTION_INVALID");
+  assertSessionEmployeeScope(session, employeeNumber);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const latest = db.prepare(`
+      SELECT id, employee_number, location_id, department_id, work_date, entry_type, entry_timestamp
+      FROM time_entries WHERE employee_number = ? ORDER BY entry_timestamp DESC, id DESC LIMIT 1
+    `).get(employeeNumber);
+    if (!latest || latest.work_date !== workDate || latest.work_date >= viennaTodayIso(now)
+      || timeEntryStateFromType(latest.entry_type) === "off") {
+      throw httpError(409, "Die offene Altbuchung wurde bereits geändert oder ist nicht mehr vorhanden.", "TIME_CORRECTION_STATE_CONFLICT");
+    }
+    const fallbackContext = employeeRequestContext(employeeNumber, workDate);
+    const correctionContext = {
+      locationId: latest.location_id || fallbackContext.locationId,
+      departmentId: Number(latest.department_id || 0) || fallbackContext.departmentId,
+    };
+    assertSessionContextScope(session, correctionContext);
+    const correctedAt = viennaLocalDateTime(workDate, clockOutTime);
+    const previousAt = new Date(latest.entry_timestamp);
+    if (Number.isNaN(previousAt.getTime()) || correctedAt < previousAt || correctedAt >= now) {
+      throw httpError(400, "Die Abschlusszeit muss nach der letzten Buchung und vor der aktuellen Serverzeit liegen.", "TIME_CORRECTION_INVALID");
+    }
+    const note = "Offene Buchung durch die Leitung abgeschlossen";
+    const result = db.prepare(`
+      INSERT INTO time_entries
+        (employee_number, location_id, department_id, work_date, entry_type, entry_timestamp, source, note, created_by)
+      VALUES (?, ?, ?, ?, 'clock_out', ?, 'manager_correction', ?, ?)
+    `).run(employeeNumber, correctionContext.locationId, correctionContext.departmentId, workDate, correctedAt.toISOString(), note, session.employeeNumber);
+    db.prepare(`
+      INSERT INTO time_corrections
+        (employee_number, correction_date, requested_change, status, decided_by, decided_at)
+      VALUES (?, ?, ?, 'approved', ?, CURRENT_TIMESTAMP)
+    `).run(employeeNumber, workDate, JSON.stringify({ action: "close_stale_entry", clockOutTime, timeEntryId: Number(result.lastInsertRowid) }), session.employeeNumber);
+    auditPortal(session.employeeNumber, "time.entry.stale.resolve", "time_entry", String(result.lastInsertRowid), JSON.stringify({ employeeNumber, workDate, clockOutTime }));
+    db.exec("COMMIT");
+    return timeTrackingDayStatus(employeeNumber, viennaTodayIso(now), now);
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
+function timePresenceForContext(session, context, date = viennaTodayIso(), now = new Date()) {
+  assertSessionContextScope(session, context);
+  const employees = db.prepare(`
+    SELECT personnel_number, full_name, nickname, color, home_location_id, preferred_department_id
+    FROM employees WHERE active = 1 AND home_location_id = ?
+  `).all(context.locationId)
+    .filter((employee) => !context.departmentId || employeeRequestContext(employee.personnel_number, date).departmentId === context.departmentId)
+    .sort((left, right) => left.personnel_number.localeCompare(right.personnel_number, "de", { numeric: true }));
+  return {
+    date,
+    timezone: "Europe/Vienna",
+    serverTime: now.toISOString(),
+    locationId: context.locationId,
+    locationName: context.locationName,
+    departmentId: context.departmentId,
+    departmentName: context.departmentName,
+    trackingEnabled: Boolean(validateLocationExists(context.locationId).time_tracking_enabled),
+    employees: employees.map((employee) => ({
+      employeeNumber: employee.personnel_number,
+      fullName: employee.full_name,
+      nickname: employee.nickname,
+      color: employee.color,
+      ...timeTrackingDayStatus(employee.personnel_number, date, now),
+    })),
   };
 }
 
@@ -2454,9 +2781,11 @@ function ownAmuReports(employeeNumber) {
 
 function amuReportMetadata(id) {
   return db.prepare(`
-    SELECT r.*, e.full_name, e.nickname, e.color, e.preferred_department_id, l.name AS location_name
+    SELECT r.*, e.full_name, e.nickname, e.color, e.preferred_department_id, l.name AS location_name,
+           d.name AS department_name
     FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
-    JOIN locations l ON l.id = r.location_id WHERE r.id = ?
+    JOIN locations l ON l.id = r.location_id
+    LEFT JOIN departments d ON d.id = r.department_id WHERE r.id = ?
   `).get(Number(id));
 }
 
@@ -2464,7 +2793,7 @@ function assertAmuReportScope(session, report) {
   if (!report) throw httpError(404, "Die Arbeitsunfähigkeitsmeldung wurde nicht gefunden.", "AMU_REPORT_NOT_FOUND");
   if (session.employeeNumber === "local" || ["admin", "hr"].includes(session.role)) return;
   const assigned = (session.scopes || []).some((scope) => scope.locationId === report.location_id
-    && (session.role !== "department_manager" || Number(scope.departmentId) === Number(report.preferred_department_id || 0)));
+    && (session.role !== "department_manager" || (report.department_id != null && Number(scope.departmentId) === Number(report.department_id))));
   if (!assigned) {
     auditPortal(session.employeeNumber, "amu.access.denied", "amu_report", String(report.id), "scope");
     throw httpError(403, "Diese Arbeitsunfähigkeitsmeldung gehört nicht zum eigenen Standort.", "PORTAL_PERMISSION_DENIED");
@@ -2473,7 +2802,7 @@ function assertAmuReportScope(session, report) {
 
 function amuDocumentMetadata(reportId, documentId) {
   return db.prepare(`
-    SELECT d.*, r.employee_number, r.location_id, r.status AS report_status
+    SELECT d.*, r.employee_number, r.location_id, r.department_id, r.status AS report_status
     FROM amu_documents d JOIN amu_reports r ON r.id = d.report_id
     WHERE d.report_id = ? AND d.id = ? AND d.status = 'active'
   `).get(Number(reportId), String(documentId));
@@ -2635,6 +2964,7 @@ function serializeLocation(row, departments = []) {
     ...row,
     min_staff: Number(row.min_staff || 0),
     day_settings: daySettingsFromLocation(row.id),
+    time_tracking_enabled: Boolean(row.time_tracking_enabled),
     active: Boolean(row.active),
     departments,
   };
@@ -2667,7 +2997,7 @@ function getPositions() {
 function getLocations(includeInactive = true) {
   const locationRows = db
     .prepare(`
-      SELECT id, name, min_staff, day_settings_json, active, created_at
+      SELECT id, name, min_staff, day_settings_json, time_tracking_enabled, active, created_at
       FROM locations
       ${includeInactive ? "" : "WHERE active = 1"}
       ORDER BY active DESC, id
@@ -2717,7 +3047,7 @@ function normalizeDepartmentId(value, allowEmpty = true) {
 }
 
 function validateLocationExists(locationId) {
-  const location = db.prepare("SELECT id, name, min_staff, active FROM locations WHERE id = ?").get(locationId);
+  const location = db.prepare("SELECT id, name, min_staff, time_tracking_enabled, active FROM locations WHERE id = ?").get(locationId);
   if (!location) throw httpError(404, "Die Filiale wurde nicht gefunden.");
   return location;
 }
@@ -2743,7 +3073,14 @@ function validateLocationPayload(body, isNew = false) {
   }
   if (!isNew) validateLocationExists(id);
   const daySettings = validateDaySettings(body.daySettings || (isNew ? legacyDaySettingsSnapshot() : daySettingsFromLocation(id)));
-  return { id, name, minStaff, daySettings, active: body.active === false ? 0 : 1 };
+  return {
+    id,
+    name,
+    minStaff,
+    daySettings,
+    timeTrackingEnabled: body.timeTrackingEnabled === true || body.time_tracking_enabled === true ? 1 : 0,
+    active: body.active === false ? 0 : 1,
+  };
 }
 
 function validateDaySettings(submittedDays = {}) {
@@ -4816,6 +5153,9 @@ app.get("/api/update-status", async (_request, response) => {
 
 app.post("/api/update-apply", async (_request, response) => {
   if (serverModeActive) throw httpError(409, "Im Serverbetrieb werden Updates kontrolliert am Server eingespielt.", "SERVER_MANAGED_UPDATE");
+  if (fs.existsSync(path.join(__dirname, ".git"))) {
+    throw httpError(409, "Ein Quellcode-Checkout wird nicht über den Portable-Updater überschrieben. Bitte die Aktualisierung mit Git durchführen.", "SOURCE_CHECKOUT_UPDATE_BLOCKED");
+  }
   const status = await buildUpdateStatus();
   if (!status.updateAvailable) {
     response.json({ ok: true, message: "Grabenplaner ist bereits aktuell.", status });
@@ -4876,7 +5216,7 @@ Expand-Archive -LiteralPath $zip.FullName -DestinationPath $extractDir -Force
 $source = Join-Path $extractDir 'Grabenplaner'
 if (-not (Test-Path (Join-Path $source 'server.js'))) { throw 'Entpackte Version ist unvollständig.' }
 Write-UpdateLog "Kopiere neue App-Dateien ..."
-$robocopyOutput = & robocopy $source $appDir /E /XD (Join-Path $source '.git') (Join-Path $source 'data') (Join-Path $source 'backups') (Join-Path $source 'release') /XF '*.db' '*.db-shm' '*.db-wal' '*.log' /NFL /NDL /NJH /NJS /NP 2>&1
+  $robocopyOutput = & robocopy $source $appDir /MIR /XD '.git' 'data' 'backups' 'release' 'usb-backups' /XF '*.db' '*.db-shm' '*.db-wal' '*.log' /NFL /NDL /NJH /NJS /NP 2>&1
 $robocopyExitCode = $LASTEXITCODE
 $robocopyOutput | ForEach-Object { Write-UpdateLog "robocopy: $_" }
 if ($robocopyExitCode -gt 7) { throw "Robocopy fehlgeschlagen: $robocopyExitCode" }
@@ -5230,8 +5570,8 @@ app.get("/api/locations", (request, response) => {
 app.post("/api/locations", (request, response) => {
   const location = validateLocationPayload(request.body, true);
   try {
-    db.prepare("INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES (?, ?, ?, ?, ?)")
-      .run(location.id, location.name, location.minStaff, JSON.stringify(location.daySettings), location.active);
+    db.prepare("INSERT INTO locations (id, name, min_staff, day_settings_json, time_tracking_enabled, active) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(location.id, location.name, location.minStaff, JSON.stringify(location.daySettings), location.timeTrackingEnabled, location.active);
   } catch (error) {
     if (String(error.message).includes("UNIQUE")) throw httpError(409, "Diese Filial-ID ist bereits vergeben.");
     throw error;
@@ -5242,8 +5582,8 @@ app.post("/api/locations", (request, response) => {
 app.put("/api/locations/:id", (request, response) => {
   const id = normalizeLocationId(request.params.id);
   const location = validateLocationPayload({ ...request.body, id }, false);
-  const result = db.prepare("UPDATE locations SET name = ?, min_staff = ?, day_settings_json = ?, active = ? WHERE id = ?")
-    .run(location.name, location.minStaff, JSON.stringify(location.daySettings), location.active, id);
+  const result = db.prepare("UPDATE locations SET name = ?, min_staff = ?, day_settings_json = ?, time_tracking_enabled = ?, active = ? WHERE id = ?")
+    .run(location.name, location.minStaff, JSON.stringify(location.daySettings), location.timeTrackingEnabled, location.active, id);
   if (!result.changes) throw httpError(404, "Die Filiale wurde nicht gefunden.");
   response.json(getLocations(true));
 });
@@ -5770,6 +6110,83 @@ app.put("/api/portal/v1/me/notifications/read-all", (request, response) => {
   response.json({ ok: true, updated: Number(result.changes || 0) });
 });
 
+app.get("/api/portal/v1/amu-settings", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "own_amu:read");
+  response.json({
+    policy: getAmuPolicy(),
+    canChange: session.employeeNumber === "local" || ["admin", "hr"].includes(session.role) || session.permissions?.includes("hr:settings"),
+  });
+});
+
+app.put("/api/portal/v1/amu-settings", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "hr:settings");
+  const policy = validateAmuPolicy(request.body || {});
+  const entries = {
+    amu_upload_max_mb: String(policy.uploadMaxMb),
+    amu_stored_max_mb: String(policy.storedMaxMb),
+    amu_convert_images_to_pdf: policy.convertImagesToPdf ? "1" : "0",
+    amu_grayscale_images: policy.grayscaleImages ? "1" : "0",
+    amu_manager_file_access: policy.managerFileAccess ? "1" : "0",
+  };
+  const upsert = db.prepare(`
+    INSERT INTO portal_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+  `);
+  db.exec("BEGIN");
+  try {
+    for (const [key, value] of Object.entries(entries)) upsert.run(key, value);
+    auditPortal(session.employeeNumber, "amu.settings.update", "portal_settings", "amu", JSON.stringify(policy));
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  response.json({ policy, canChange: true });
+});
+
+app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "amu:metadata:read");
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  assertSessionEmployeeScope(session, employeeNumber);
+  const employee = db.prepare(`
+    SELECT e.personnel_number, e.full_name, e.nickname, e.color, e.home_location_id,
+           e.preferred_department_id, l.name AS home_location_name, d.name AS preferred_department_name
+    FROM employees e LEFT JOIN locations l ON l.id = e.home_location_id
+    LEFT JOIN departments d ON d.id = e.preferred_department_id
+    WHERE e.personnel_number = ?
+  `).get(employeeNumber);
+  if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
+  let reports = db.prepare(`
+    SELECT r.*, e.full_name, e.nickname, e.color, e.preferred_department_id,
+           l.name AS location_name, d.name AS department_name
+    FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
+    JOIN locations l ON l.id = r.location_id LEFT JOIN departments d ON d.id = r.department_id
+    WHERE r.employee_number = ? AND r.status <> 'purged'
+    ORDER BY r.incapacity_from DESC, r.id DESC
+  `).all(employeeNumber);
+  if (session.role === "manager") {
+    const allowedLocations = new Set((session.scopes || []).map((scope) => scope.locationId));
+    reports = reports.filter((report) => allowedLocations.has(report.location_id));
+  } else if (session.role === "department_manager") {
+    const allowed = new Set((session.scopes || []).map((scope) => `${scope.locationId}:${Number(scope.departmentId || 0)}`));
+    reports = reports.filter((report) => report.department_id != null
+      && allowed.has(`${report.location_id}:${Number(report.department_id)}`));
+  }
+  const serialized = serializeAmuReports(reports);
+  const canOpenFiles = actorCanReadAmuFiles(session);
+  if (!canOpenFiles) {
+    for (const report of serialized) {
+      report.employee_note = "";
+      report.review_note = "";
+      report.documents = report.documents.map(({ id, detected_mime, size, byte_size, scan_status, status, created_at }, index) => ({
+        id, original_name: `Dokument ${index + 1}`, original_filename: `Dokument ${index + 1}`, detected_mime, size, byte_size,
+        scan_status, status, created_at, content_access: false,
+      }));
+    }
+  }
+  response.json({ employee, reports: serialized, canOpenFiles });
+});
+
 app.get("/api/portal/v1/me/amu-reports", (request, response) => {
   const session = requirePortalSession(request, "own_amu:read");
   response.json({ reports: ownAmuReports(session.employeeNumber) });
@@ -5780,7 +6197,13 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
   assertPortalCsrf(request);
   if (shutdownStarted) throw httpError(503, "Grabenplaner wird gerade sicher beendet. Bitte den Upload danach erneut versuchen.", "SERVER_SHUTTING_DOWN");
   const storage = requireAmuStorage();
-  const { fields, documents } = await parseAmuMultipart(request);
+  const policy = getAmuPolicy();
+  const maxInputBytes = Math.round(policy.uploadMaxMb * 1024 * 1024);
+  const maxStoredBytes = Math.round(policy.storedMaxMb * 1024 * 1024);
+  const { fields, documents } = await parseAmuMultipart(request, {
+    maxFileBytes: maxInputBytes,
+    totalMaxBytes: (maxInputBytes * 3) + (1024 * 1024),
+  });
   const incapacityFrom = String(fields.incapacityFrom || "");
   const incapacityTo = String(fields.incapacityTo || "");
   const employeeNote = stripEmoji(String(fields.employeeNote || "").trim()).slice(0, 500);
@@ -5788,7 +6211,7 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
     throw httpError(400, "Bitte einen gültigen Zeitraum der Arbeitsunfähigkeit eingeben.", "AMU_DATE_INVALID");
   }
   if (!documents.length || documents.length > 3) {
-    throw httpError(400, "Bitte mindestens eine und höchstens drei PDF-, JPG- oder PNG-Dateien auswählen.", "AMU_DOCUMENTS_REQUIRED");
+    throw httpError(400, "Bitte mindestens eine und höchstens drei PDF- oder Bilddateien auswählen.", "AMU_DOCUMENTS_REQUIRED");
   }
   const context = employeeRequestContext(session.employeeNumber, incapacityFrom);
   const retentionDays = Math.min(3650, Math.max(30, Number(getPortalSettings().amu_retention_days || 730)));
@@ -5796,14 +6219,30 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
   let committed = false;
   amuMutationInProgress += 1;
   try {
-    for (const document of documents) saved.push(await storage.saveBuffer({ buffer: document.buffer, originalName: document.originalName }));
+    for (const document of documents) {
+      const prepared = await prepareAmuDocument({
+        buffer: document.buffer,
+        originalName: document.originalName,
+        convertImagesToPdf: policy.convertImagesToPdf,
+        grayscale: policy.grayscaleImages,
+        maxInputBytes,
+        maxStoredBytes,
+        scanOriginal: policy.convertImagesToPdf ? (input) => storage.scanBuffer(input) : null,
+      });
+      const stored = await storage.saveBuffer({
+        buffer: prepared.buffer,
+        originalName: prepared.originalFilename,
+        maxBytes: maxStoredBytes,
+      });
+      saved.push({ ...stored, processing: prepared.processing, converted: prepared.converted, sourceMime: prepared.sourceMime });
+    }
     db.exec("BEGIN");
     try {
       const reportResult = db.prepare(`
         INSERT INTO amu_reports
-          (employee_number, location_id, incapacity_from, incapacity_to, employee_note, status, retention_until)
-        VALUES (?, ?, ?, ?, ?, 'submitted', ?)
-      `).run(session.employeeNumber, context.locationId, incapacityFrom, incapacityTo, storage.protectText(employeeNote), addDays(incapacityTo, retentionDays));
+          (employee_number, location_id, department_id, incapacity_from, incapacity_to, employee_note, status, retention_until)
+        VALUES (?, ?, ?, ?, ?, ?, 'submitted', ?)
+      `).run(session.employeeNumber, context.locationId, context.departmentId, incapacityFrom, incapacityTo, storage.protectText(employeeNote), addDays(incapacityTo, retentionDays));
       const reportId = Number(reportResult.lastInsertRowid);
       const insertDocument = db.prepare(`
         INSERT INTO amu_documents
@@ -5816,7 +6255,7 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
         insertDocument.run(documentId, reportId, item.storageKey, storage.protectText(item.originalFilename), item.detectedMime,
           item.byteSize, item.sha256, item.scanStatus, item.encryptionKeyId, session.employeeNumber);
         auditPortal(session.employeeNumber, "amu.document.upload", "amu_document", documentId,
-          JSON.stringify({ reportId, mime: item.detectedMime, size: item.byteSize, scan: item.scanStatus }));
+          JSON.stringify({ reportId, mime: item.detectedMime, sourceMime: item.sourceMime, converted: item.converted, size: item.byteSize, scan: item.scanStatus, processing: item.processing }));
       }
       auditPortal(session.employeeNumber, "amu.report.create", "amu_report", String(reportId), JSON.stringify({ locationId: context.locationId, documentCount: saved.length }));
       db.exec("COMMIT");
@@ -5846,7 +6285,9 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
       }
     }
     if (error.code?.startsWith?.("AMU_")) {
-      const status = error.code.includes("TOO_LARGE") ? 413 : error.code.includes("TYPE") || error.code.includes("HEIC") ? 415 : 400;
+      const status = error.code.includes("TOO_LARGE") || error.code.includes("LIMIT")
+        ? 413
+        : error.code.includes("TYPE") || error.code.includes("HEIC") ? 415 : 400;
       throw httpError(status, error.message, error.code);
     }
     throw error;
@@ -5891,29 +6332,34 @@ app.get("/api/portal/v1/me/amu-reports/:reportId/documents/:documentId/content",
 
 app.get("/api/portal/v1/amu-reports", (request, response) => {
   const session = requirePortalAdminOrLocal(request, "amu:metadata:read");
-  const scoped = !["admin", "hr"].includes(session.role) && session.employeeNumber !== "local";
-  const scopedLocationId = session.scopes?.[0]?.locationId || session.homeLocationId;
-  const rows = scoped
-    ? db.prepare(`
-        SELECT r.*, e.full_name, e.nickname, e.color, e.preferred_department_id, l.name AS location_name
-        FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
-        JOIN locations l ON l.id = r.location_id WHERE r.location_id = ?
-        ORDER BY r.submitted_at DESC, r.id DESC
-      `).all(scopedLocationId)
-    : db.prepare(`
-        SELECT r.*, e.full_name, e.nickname, e.color, e.preferred_department_id, l.name AS location_name
-        FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
-        JOIN locations l ON l.id = r.location_id ORDER BY r.submitted_at DESC, r.id DESC
-      `).all();
-  const allowedDepartments = new Set((session.scopes || []).map((scope) => Number(scope.departmentId || 0)).filter(Boolean));
-  const scopedRows = session.role === "department_manager" ? rows.filter((row) => allowedDepartments.has(Number(row.preferred_department_id || 0))) : rows;
-  const reports = serializeAmuReports(scopedRows);
-  if (!session.permissions?.includes("amu:file:read") && session.employeeNumber !== "local") {
-    for (const report of reports) report.documents = report.documents.map(({ id, detected_mime, size, byte_size, scan_status, status, created_at }, index) => ({
-      id, original_name: `Dokument ${index + 1}`, original_filename: `Dokument ${index + 1}`, detected_mime, size, byte_size, scan_status, status, created_at, content_access: false,
-    }));
+  const rows = db.prepare(`
+    SELECT r.*, e.full_name, e.nickname, e.color, e.preferred_department_id, l.name AS location_name,
+           d.name AS department_name
+    FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
+    JOIN locations l ON l.id = r.location_id LEFT JOIN departments d ON d.id = r.department_id
+    ORDER BY r.submitted_at DESC, r.id DESC
+  `).all();
+  let scopedRows = rows;
+  if (session.role === "manager") {
+    const allowedLocations = new Set((session.scopes || []).map((scope) => scope.locationId));
+    scopedRows = rows.filter((row) => allowedLocations.has(row.location_id));
+  } else if (session.role === "department_manager") {
+    const allowed = new Set((session.scopes || []).map((scope) => `${scope.locationId}:${Number(scope.departmentId || 0)}`));
+    scopedRows = rows.filter((row) => row.department_id != null
+      && allowed.has(`${row.location_id}:${Number(row.department_id)}`));
   }
-  response.json({ reports, pendingCount: reports.filter((item) => item.status === "submitted").length });
+  const reports = serializeAmuReports(scopedRows);
+  const canOpenFiles = actorCanReadAmuFiles(session);
+  if (!canOpenFiles) {
+    for (const report of reports) {
+      report.employee_note = "";
+      report.review_note = "";
+      report.documents = report.documents.map(({ id, detected_mime, size, byte_size, scan_status, status, created_at }, index) => ({
+        id, original_name: `Dokument ${index + 1}`, original_filename: `Dokument ${index + 1}`, detected_mime, size, byte_size, scan_status, status, created_at, content_access: false,
+      }));
+    }
+  }
+  response.json({ reports, pendingCount: reports.filter((item) => item.status === "submitted").length, canOpenFiles });
 });
 
 app.put("/api/portal/v1/amu-reports/:id/review", (request, response) => {
@@ -5941,7 +6387,8 @@ app.put("/api/portal/v1/amu-reports/:id/review", (request, response) => {
 });
 
 app.get("/api/portal/v1/amu-reports/:reportId/documents/:documentId/content", (request, response) => {
-  const session = requirePortalAdminOrLocal(request, "amu:file:read");
+  const session = requirePortalAdminOrLocal(request, "amu:metadata:read");
+  if (!actorCanReadAmuFiles(session)) throw httpError(403, "AUM-Dateien dürfen von diesem Zugang nicht geöffnet werden.", "PORTAL_PERMISSION_DENIED");
   const document = amuDocumentMetadata(request.params.reportId, request.params.documentId);
   if (!document) throw httpError(404, "Das AUM-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
   assertAmuReportScope(session, document);
@@ -6798,7 +7245,37 @@ app.delete("/api/portal/v1/request-blackouts/:id", (request, response) => {
   response.status(204).end();
 });
 
-app.all("/api/portal/v1/me/time-entries", sendPortalInactive);
+app.get("/api/portal/v1/me/time-entries", (request, response) => {
+  const session = requirePortalSession(request, "own_time:read");
+  const date = isIsoDate(request.query.date) ? String(request.query.date) : viennaTodayIso();
+  response.json({ status: timeTrackingDayStatus(session.employeeNumber, date) });
+});
+
+app.post("/api/portal/v1/me/time-entries", (request, response) => {
+  const session = requirePortalSession(request, "own_time:write");
+  assertPortalCsrf(request);
+  response.status(201).json({ status: bookTimeEntry(session.employeeNumber, String(request.body?.type || "")) });
+});
+
+app.post("/api/portal/v1/time-corrections/resolve-stale", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "time:review");
+  const employeeNumber = String(request.body?.employeeNumber || "").trim();
+  response.status(201).json({
+    status: resolveStaleTimeEntry(
+      session,
+      employeeNumber,
+      String(request.body?.workDate || ""),
+      String(request.body?.clockOutTime || ""),
+    ),
+  });
+});
+
+app.get("/api/portal/v1/time-presence", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "time:read");
+  const context = resolvePlanningContext(request.query || {});
+  const date = isIsoDate(request.query.date) ? String(request.query.date) : viennaTodayIso();
+  response.json({ presence: timePresenceForContext(session, context, date) });
+});
 
 app.get("/api/settings", (request, response) => {
   if (getPortalStatus().portalEnabled && !request.portalSession?.permissions?.includes("settings:write")) {
@@ -8825,5 +9302,9 @@ module.exports = {
   getPortalRoles,
   hashPortalPassword,
   verifyPortalPassword,
+  timeTrackingDayStatus,
+  bookTimeEntry,
+  resolveStaleTimeEntry,
+  timePresenceForContext,
   serverDiagnostics,
 };

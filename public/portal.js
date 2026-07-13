@@ -9,6 +9,11 @@ const portalState = {
   notifications: [],
   unreadNotifications: 0,
   amuReports: [],
+  amuPolicy: null,
+  activeTab: "schedule",
+  timeTracking: null,
+  timeTrackingLoading: false,
+  timeTrackingBooking: false,
   editingTimeOffId: null,
   editingVacationId: null,
   timeOffArchive: false,
@@ -42,7 +47,9 @@ window.addEventListener("resize", applyDeviceMode, { passive: true });
 const el = Object.fromEntries([
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
   "portalUserName", "portalUserRole", "adminAppLink", "changePasswordButton", "logoutButton", "notificationsButton", "notificationBadge", "scheduleView", "timeOffView",
-  "vacationView", "historyView", "amuView", "scheduleHeading", "scheduleGrid", "previousWeek", "currentWeek", "nextWeek",
+  "vacationView", "historyView", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingRefresh", "timeTrackingCard",
+  "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeDifference", "timeEntryList",
+  "scheduleHeading", "scheduleGrid", "previousWeek", "currentWeek", "nextWeek",
   "timeOffRequestForm", "timeOffFormTitle", "timeOffDate", "timeOffDateTo", "timeOffDateToField", "timeOffTimeFields", "timeOffStart", "timeOffEnd", "timeOffNote", "timeOffCheck", "timeOffMessage",
   "timeOffSubmitButton", "cancelTimeOffEdit", "timeOffArchiveToggle", "timeOffRequestList", "vacationRequestForm", "vacationFormTitle", "vacationDateFrom", "vacationDateTo", "vacationNote",
   "vacationCheck", "vacationMessage", "vacationSubmitButton", "cancelVacationEdit", "vacationRequestList", "approvedVacationList", "passwordDialog",
@@ -53,7 +60,7 @@ const el = Object.fromEntries([
   "timeOffChangeToField", "timeOffChangeTimes", "timeOffChangeStart", "timeOffChangeEnd", "timeOffChangeNote", "timeOffChangeMessage",
   "historyDetailDialog", "historyDetailTitle", "historyDetailSummary", "historyDecisionTimeline", "notificationsDialog", "notificationList",
   "markAllNotificationsRead", "amuReportForm", "amuIncapacityFrom", "amuIncapacityTo", "amuEmployeeNote", "amuDocuments",
-  "amuMessage", "amuSubmitButton", "amuReportList",
+  "amuMessage", "amuSubmitButton", "amuReportList", "amuCamera", "amuUploadHint", "portalDeploymentBanner",
 ].map((id) => [id, document.querySelector(`#${id}`)]));
 
 function mondayOf(value) {
@@ -76,6 +83,19 @@ function addDays(value, amount) {
 
 function dateText(value, options = { day: "2-digit", month: "2-digit", year: "numeric" }) {
   return new Intl.DateTimeFormat("de-AT", options).format(new Date(`${value}T12:00:00`));
+}
+
+function timeText(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "–";
+  return new Intl.DateTimeFormat("de-AT", { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function durationText(value, signed = false) {
+  const minutes = Math.round(Number(value) || 0);
+  const absolute = Math.abs(minutes);
+  const prefix = signed ? (minutes > 0 ? "+" : minutes < 0 ? "−" : "±") : "";
+  return `${prefix}${Math.floor(absolute / 60)}:${String(absolute % 60).padStart(2, "0")} h`;
 }
 
 function esc(value) {
@@ -120,10 +140,20 @@ function applyPortalBranding(branding = {}) {
   document.querySelectorAll("[data-brand-icon]").forEach((link) => { link.href = branding.iconUrl || "/assets/webicon.svg"; });
 }
 
+function timeTrackingCapabilityEnabled() {
+  return portalState.status?.capabilities?.timeTracking === true;
+}
+
+function applyPortalCapabilities() {
+  const timeTrackingEnabled = timeTrackingCapabilityEnabled();
+  el.timeTrackingTab?.classList.toggle("hidden", !timeTrackingEnabled);
+  if (!timeTrackingEnabled && portalState.activeTab === "timeTracking") setTab("schedule");
+}
+
 function applyRequestedTab() {
   const requested = new URLSearchParams(location.search).get("tab");
   const tab = requested === "requests" ? "history" : requested;
-  if (["schedule", "timeOff", "vacation", "history", "amu"].includes(tab)) setTab(tab);
+  if (["schedule", "timeTracking", "timeOff", "vacation", "history", "amu"].includes(tab)) setTab(tab);
 }
 
 async function initialize() {
@@ -133,6 +163,8 @@ async function initialize() {
     const status = await api("/api/portal/v1/status");
     portalState.status = status;
     applyPortalBranding(status.branding);
+    el.portalDeploymentBanner?.classList.toggle("hidden", status.deploymentKind !== "codespaces-test");
+    applyPortalCapabilities();
     const minimum = Number(status.passwordMinLength || 6);
     [el.loginPassword, el.newPassword, el.repeatPassword].forEach((input) => { if (input) input.minLength = minimum; });
     if (el.portalAccessModeLabel) el.portalAccessModeLabel.textContent = status.operationMode === "server" ? "Mitarbeiterportal · HTTPS" : "Mitarbeiterportal";
@@ -156,10 +188,12 @@ async function initialize() {
 }
 
 async function loadPortalData() {
-  await Promise.allSettled([
+  const requests = [
     loadSchedule(), loadVacationRequests(), loadTimeOffRequests(), loadApprovedVacations(),
-    loadAbsenceHistory(), loadNotifications(), loadAmuReports(),
-  ]);
+    loadAbsenceHistory(), loadNotifications(), loadAmuReports(), loadAmuSettings(),
+  ];
+  if (timeTrackingCapabilityEnabled()) requests.push(loadTimeTracking());
+  await Promise.allSettled(requests);
 }
 
 function showLogin(error = "") {
@@ -203,6 +237,8 @@ async function logout() {
 }
 
 function setTab(tab) {
+  if (tab === "timeTracking" && !timeTrackingCapabilityEnabled()) tab = "schedule";
+  portalState.activeTab = tab;
   document.querySelectorAll("[data-tab]").forEach((button) => {
     const active = button.dataset.tab === tab;
     button.classList.toggle("active", active);
@@ -210,14 +246,16 @@ function setTab(tab) {
     button.tabIndex = active ? 0 : -1;
   });
   el.scheduleView.classList.toggle("active", tab === "schedule");
+  el.timeTrackingView.classList.toggle("active", tab === "timeTracking");
   el.timeOffView.classList.toggle("active", tab === "timeOff");
   el.vacationView.classList.toggle("active", tab === "vacation");
   el.historyView.classList.toggle("active", tab === "history");
   el.amuView.classList.toggle("active", tab === "amu");
   if (tab === "timeOff") loadTimeOffRequests();
+  if (tab === "timeTracking") loadTimeTracking();
   if (tab === "vacation") loadVacationRequests();
   if (tab === "history") Promise.allSettled([loadAbsenceHistory(), loadApprovedVacations()]);
-  if (tab === "amu") loadAmuReports();
+  if (tab === "amu") Promise.allSettled([loadAmuReports(), loadAmuSettings()]);
 }
 
 async function loadSchedule() {
@@ -236,6 +274,117 @@ async function loadSchedule() {
       ${!shifts.length && !options.length ? '<span class="empty-day">Kein Eintrag</span>' : ""}
     </article>`;
   }).join("");
+}
+
+const timeEntryLabels = {
+  clock_in: "Kommen",
+  break_start: "Pause",
+  break_end: "Weiter",
+  clock_out: "Gehen",
+};
+
+const timeStateLabels = {
+  off: "Nicht eingestempelt",
+  not_working: "Nicht eingestempelt",
+  working: "Im Dienst",
+  paused: "In Pause",
+  attention: "Prüfung erforderlich",
+};
+
+const timeStateReasons = {
+  off: "Du kannst deinen Arbeitstag mit „Kommen“ beginnen.",
+  not_working: "Du kannst deinen Arbeitstag mit „Kommen“ beginnen.",
+  working: "Deine Arbeitszeit läuft.",
+  paused: "Deine Pause läuft.",
+};
+
+function timeEntryTimestamp(entry) {
+  return entry.entryTimestamp || entry.entry_timestamp || entry.timestamp || "";
+}
+
+function renderTimeTracking() {
+  const data = portalState.timeTracking;
+  if (!data) return;
+  const enabled = data.enabled === true;
+  const state = data.state || "off";
+  const allowedActions = new Set(Array.isArray(data.allowedActions) ? data.allowedActions : []);
+  const workDate = data.workDate || data.work_date || data.date || iso(new Date());
+  const entries = [...(Array.isArray(data.entries) ? data.entries : [])]
+    .sort((left, right) => String(timeEntryTimestamp(left)).localeCompare(String(timeEntryTimestamp(right))));
+
+  el.timeTrackingDate.textContent = `Heute, ${dateText(workDate, { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })}`;
+  el.timeTrackingState.textContent = enabled ? (timeStateLabels[state] || "Zeiterfassung") : "Nicht aktiviert";
+  el.timeTrackingIndicator.className = `time-state-indicator ${enabled ? state : "disabled"}`;
+
+  let reason = data.reason || (enabled ? timeStateReasons[state] : "Die Zeiterfassung ist für deinen Standort nicht aktiviert.");
+  if (data.staleEntry) {
+    const staleDate = data.staleEntry.date || data.staleEntry.workDate || data.staleEntry.work_date;
+    reason = staleDate
+      ? `Eine Buchung vom ${dateText(staleDate)} ist noch offen. Bitte wende dich an deine Leitung.`
+      : "Eine frühere Buchung ist noch offen. Bitte wende dich an deine Leitung.";
+  }
+  el.timeTrackingReason.textContent = reason;
+  el.timeTrackingCard.classList.toggle("time-unavailable", !enabled || Boolean(data.staleEntry));
+
+  el.timeTrackingActions.querySelectorAll("[data-time-action]").forEach((button) => {
+    const allowed = enabled && !data.staleEntry && allowedActions.has(button.dataset.timeAction);
+    button.disabled = portalState.timeTrackingLoading || portalState.timeTrackingBooking || !allowed;
+    button.setAttribute("aria-disabled", String(button.disabled));
+  });
+
+  el.timePlanned.textContent = durationText(data.plannedMinutes);
+  el.timeActual.textContent = durationText(data.actualMinutes);
+  el.timeDifference.textContent = durationText(data.differenceMinutes, true);
+  el.timeDifference.classList.toggle("positive", Number(data.differenceMinutes) > 0);
+  el.timeDifference.classList.toggle("negative", Number(data.differenceMinutes) < 0);
+
+  el.timeEntryList.innerHTML = entries.length ? entries.map((entry) => {
+    const type = entry.type || entry.entryType || entry.entry_type;
+    return `<article class="time-entry ${esc(type)}"><span class="time-entry-dot" aria-hidden="true"></span><div><strong>${esc(timeEntryLabels[type] || type || "Buchung")}</strong><small>${esc(timeText(timeEntryTimestamp(entry)))} Uhr</small></div></article>`;
+  }).join("") : '<p class="empty-state">Heute noch keine Buchung.</p>';
+}
+
+async function loadTimeTracking() {
+  if (!portalState.session || !timeTrackingCapabilityEnabled() || portalState.timeTrackingLoading || portalState.timeTrackingBooking) return;
+  portalState.timeTrackingLoading = true;
+  el.timeTrackingRefresh.disabled = true;
+  el.timeTrackingCard.setAttribute("aria-busy", "true");
+  if (portalState.timeTracking) renderTimeTracking();
+  try {
+    const result = await api("/api/portal/v1/me/time-entries");
+    portalState.timeTracking = result.status || result.timeTracking || result;
+    message(el.timeTrackingMessage, "");
+    renderTimeTracking();
+  } catch (error) {
+    message(el.timeTrackingMessage, error.message, true);
+  } finally {
+    portalState.timeTrackingLoading = false;
+    el.timeTrackingRefresh.disabled = false;
+    el.timeTrackingCard.removeAttribute("aria-busy");
+    renderTimeTracking();
+  }
+}
+
+async function bookTimeEntry(type) {
+  if (portalState.timeTrackingBooking || !timeTrackingCapabilityEnabled()) return;
+  const allowed = new Set(portalState.timeTracking?.allowedActions || []);
+  if (!allowed.has(type)) return;
+  portalState.timeTrackingBooking = true;
+  message(el.timeTrackingMessage, "Buchung wird gespeichert …");
+  renderTimeTracking();
+  try {
+    const result = await api("/api/portal/v1/me/time-entries", {
+      method: "POST",
+      body: JSON.stringify({ type }),
+    });
+    portalState.timeTracking = result.status || result.timeTracking || result;
+    message(el.timeTrackingMessage, `${timeEntryLabels[type] || "Buchung"} wurde gespeichert.`);
+  } catch (error) {
+    message(el.timeTrackingMessage, error.message, true);
+  } finally {
+    portalState.timeTrackingBooking = false;
+    renderTimeTracking();
+  }
 }
 
 function updateTraffic(node, result, emptyText) {
@@ -778,6 +927,19 @@ function formatBytes(value) {
   return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
 }
 
+async function loadAmuSettings() {
+  try {
+    const data = await api("/api/portal/v1/amu-settings");
+    portalState.amuPolicy = data.policy || null;
+    if (el.amuUploadHint && data.policy) {
+      const conversion = data.policy.convertImagesToPdf ? ` · Fotos werden${data.policy.grayscaleImages ? " in Graustufen" : ""} als PDF gespeichert` : "";
+      el.amuUploadHint.textContent = `PDF oder Foto · höchstens 3 Dateien · je max. ${String(data.policy.uploadMaxMb).replace(".", ",")} MB${conversion}`;
+    }
+  } catch {
+    portalState.amuPolicy = null;
+  }
+}
+
 function renderAmuReports() {
   el.amuReportList.innerHTML = portalState.amuReports.length ? portalState.amuReports.map((report) => {
     const documents = report.documents || [];
@@ -798,7 +960,11 @@ async function loadAmuReports() {
 
 async function submitAmuReport(event) {
   event.preventDefault();
-  const documents = [...el.amuDocuments.files];
+  const documents = [...el.amuDocuments.files, ...el.amuCamera.files];
+  if (!documents.length) {
+    message(el.amuMessage, "Bitte mindestens ein Dokument auswählen oder mit der Kamera fotografieren.", true);
+    return;
+  }
   if (documents.length > 3) {
     message(el.amuMessage, "Bitte höchstens drei Dokumente auswählen.", true);
     return;
@@ -807,10 +973,15 @@ async function submitAmuReport(event) {
     message(el.amuMessage, "Das Bis-Datum darf nicht vor dem Von-Datum liegen.", true);
     return;
   }
-  const allowedTypes = new Set(["application/pdf", "image/jpeg", "image/png"]);
-  const allowedExtensions = /\.(pdf|jpe?g|png)$/i;
+  const allowedTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "image/tiff"]);
+  const allowedExtensions = /\.(pdf|jpe?g|png|webp|tiff?)$/i;
   if (documents.some((file) => file.type ? !allowedTypes.has(file.type) : !allowedExtensions.test(file.name || ""))) {
-    message(el.amuMessage, "Erlaubt sind ausschließlich PDF-, JPG- und PNG-Dateien.", true);
+    message(el.amuMessage, "Erlaubt sind PDF-, JPG-, PNG-, WEBP- und TIFF-Dateien.", true);
+    return;
+  }
+  const maxBytes = Number(portalState.amuPolicy?.uploadMaxMb || 10) * 1024 * 1024;
+  if (documents.some((file) => file.size > maxBytes)) {
+    message(el.amuMessage, `Eine Datei ist größer als ${String(portalState.amuPolicy?.uploadMaxMb || 10).replace(".", ",")} MB.`, true);
     return;
   }
   const body = new FormData();
@@ -920,7 +1091,7 @@ document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addE
 document.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.tab)));
 document.querySelector(".portal-tabs")?.addEventListener("keydown", (event) => {
   if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-  const tabs = [...document.querySelectorAll("[data-tab]")];
+  const tabs = [...document.querySelectorAll("[data-tab]:not(.hidden)")];
   const current = tabs.indexOf(document.activeElement);
   let next = current;
   if (event.key === "Home") next = 0;
@@ -929,6 +1100,11 @@ document.querySelector(".portal-tabs")?.addEventListener("keydown", (event) => {
   event.preventDefault();
   tabs[next].focus();
   setTab(tabs[next].dataset.tab);
+});
+el.timeTrackingRefresh.addEventListener("click", loadTimeTracking);
+el.timeTrackingActions.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-time-action]");
+  if (button && !button.disabled) bookTimeEntry(button.dataset.timeAction);
 });
 el.previousWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, -7); loadSchedule(); });
 el.nextWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, 7); loadSchedule(); });
@@ -1014,10 +1190,16 @@ el.amuReportList.addEventListener("click", (event) => {
 });
 
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && portalState.session) loadNotifications();
+  if (!document.hidden && portalState.session) {
+    loadNotifications();
+    if (portalState.activeTab === "timeTracking") loadTimeTracking();
+  }
 });
 setInterval(() => {
   if (!document.hidden && portalState.session) loadNotifications();
 }, 45000);
+setInterval(() => {
+  if (!document.hidden && portalState.session && portalState.activeTab === "timeTracking") loadTimeTracking();
+}, 30000);
 
 initialize();

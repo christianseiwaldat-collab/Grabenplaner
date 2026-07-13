@@ -49,6 +49,10 @@ const {
   getPortalStatus,
   hashPortalPassword,
   verifyPortalPassword,
+  timeTrackingDayStatus,
+  bookTimeEntry,
+  resolveStaleTimeEntry,
+  timePresenceForContext,
 } = require("../server");
 
 let httpServer;
@@ -221,6 +225,62 @@ test("vorbereitete Passwort-Hashes verwenden scrypt, Salz und Versionskennung", 
   assert.equal(await verifyPortalPassword(password, "ungueltig"), false);
 });
 
+test("Zeiterfassung erzwingt die sichere Buchungsfolge und berechnet die Ist-Zeit", () => {
+  const location = db.prepare("SELECT id, name FROM locations ORDER BY id LIMIT 1").get();
+  assert.ok(location);
+  const employeeNumber = "991";
+  db.prepare(`
+    INSERT OR REPLACE INTO employees (personnel_number, full_name, nickname, color, contracted_hours, home_location_id, active)
+    VALUES (?, 'Zeit Test', 'Zeit', '#446688', 38.5, ?, 1)
+  `).run(employeeNumber, location.id);
+  db.prepare("UPDATE locations SET time_tracking_enabled = 1 WHERE id = ?").run(location.id);
+  const times = [
+    new Date("2026-07-13T07:00:00.000Z"),
+    new Date("2026-07-13T10:00:00.000Z"),
+    new Date("2026-07-13T10:30:00.000Z"),
+    new Date("2026-07-13T15:00:00.000Z"),
+  ];
+  try {
+    assert.deepEqual(timeTrackingDayStatus(employeeNumber, "2026-07-13", times[0]).allowedActions, ["clock_in"]);
+    assert.equal(bookTimeEntry(employeeNumber, "clock_in", times[0]).state, "working");
+    assert.throws(() => bookTimeEntry(employeeNumber, "clock_in", times[0]), (error) => error.code === "TIME_ENTRY_STATE_CONFLICT");
+    assert.equal(bookTimeEntry(employeeNumber, "break_start", times[1]).state, "paused");
+    assert.equal(bookTimeEntry(employeeNumber, "break_end", times[2]).state, "working");
+    const completed = bookTimeEntry(employeeNumber, "clock_out", times[3]);
+    assert.equal(completed.state, "off");
+    assert.equal(completed.actualMinutes, 450);
+    assert.deepEqual(completed.allowedActions, ["clock_in"]);
+    const presence = timePresenceForContext({ employeeNumber: "local", role: "admin", permissions: ["time:read"] }, {
+      locationId: location.id, locationName: location.name, departmentId: null, departmentName: "",
+    }, "2026-07-13", times[3]);
+    assert.equal(presence.employees.find((employee) => employee.employeeNumber === employeeNumber)?.actualMinutes, 450);
+
+    db.prepare("DELETE FROM time_entries WHERE employee_number = ?").run(employeeNumber);
+    bookTimeEntry(employeeNumber, "clock_in", times[0]);
+    const nextMorning = new Date("2026-07-14T08:00:00.000Z");
+    const stale = timeTrackingDayStatus(employeeNumber, "2026-07-14", nextMorning);
+    assert.equal(stale.state, "attention");
+    assert.equal(stale.allowedActions.length, 0);
+    assert.equal(stale.staleEntry.date, "2026-07-13");
+    const resolved = resolveStaleTimeEntry(
+      { employeeNumber: "local", role: "admin", permissions: ["time:review"] },
+      employeeNumber,
+      "2026-07-13",
+      "17:00",
+      nextMorning,
+    );
+    assert.equal(resolved.state, "off");
+    assert.equal(resolved.staleEntry, null);
+    assert.equal(timeTrackingDayStatus(employeeNumber, "2026-07-13", nextMorning).actualMinutes, 480);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM time_corrections WHERE employee_number = ?").get(employeeNumber).count, 1);
+  } finally {
+    db.prepare("DELETE FROM time_entries WHERE employee_number = ?").run(employeeNumber);
+    db.prepare("DELETE FROM time_corrections WHERE employee_number = ?").run(employeeNumber);
+    db.prepare("DELETE FROM employees WHERE personnel_number = ?").run(employeeNumber);
+    db.prepare("UPDATE locations SET time_tracking_enabled = 0 WHERE id = ?").run(location.id);
+  }
+});
+
 test("produktiver Start bleibt auf Loopback und blockiert externe Bindung", async () => {
   const childRoot = path.join(testRoot, "child-start");
   fs.mkdirSync(childRoot, { recursive: true });
@@ -363,6 +423,42 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
       body: JSON.stringify({ currentPassword: "654321", newPassword: "123456" }),
     });
     assert.equal(passwordChange.status, 200, await passwordChange.clone().text());
+
+    const locationsResponse = await fetch(`${url}/api/locations`, { headers: { Cookie: admin.cookie } });
+    assert.equal(locationsResponse.status, 200, await locationsResponse.clone().text());
+    const location = (await locationsResponse.json()).find((item) => item.id === "01");
+    const enableTimeTracking = await fetch(`${url}/api/locations/01`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({
+        id: location.id, name: location.name, minStaff: location.min_staff, active: location.active,
+        daySettings: location.day_settings, timeTrackingEnabled: true,
+      }),
+    });
+    assert.equal(enableTimeTracking.status, 200, await enableTimeTracking.clone().text());
+    const initialTimeStatus = await fetch(`${url}/api/portal/v1/me/time-entries`, { headers: { Cookie: employee.cookie } });
+    assert.equal(initialTimeStatus.status, 200, await initialTimeStatus.clone().text());
+    assert.equal((await initialTimeStatus.json()).status.trackingEnabled, true);
+    const clockIn = await fetch(`${url}/api/portal/v1/me/time-entries`, {
+      method: "POST", headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+      body: JSON.stringify({ type: "clock_in" }),
+    });
+    assert.equal(clockIn.status, 201, await clockIn.clone().text());
+    assert.equal((await clockIn.json()).status.state, "working");
+    const duplicateClockIn = await fetch(`${url}/api/portal/v1/me/time-entries`, {
+      method: "POST", headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+      body: JSON.stringify({ type: "clock_in" }),
+    });
+    assert.equal(duplicateClockIn.status, 409, await duplicateClockIn.clone().text());
+    const clockOut = await fetch(`${url}/api/portal/v1/me/time-entries`, {
+      method: "POST", headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+      body: JSON.stringify({ type: "clock_out" }),
+    });
+    assert.equal(clockOut.status, 201, await clockOut.clone().text());
+    assert.equal((await clockOut.json()).status.state, "off");
+    const presenceResponse = await fetch(`${url}/api/portal/v1/time-presence?locationId=01`, { headers: { Cookie: admin.cookie } });
+    assert.equal(presenceResponse.status, 200, await presenceResponse.clone().text());
+    assert.ok((await presenceResponse.json()).presence.employees.some((item) => item.employeeNumber === "102"));
 
     const createManagerAccess = await fetch(`${url}/api/portal/v1/users/103`, {
       method: "PUT",
@@ -668,7 +764,24 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
 
     const ownAmuContent = await fetch(`${url}/api/portal/v1/me/amu-reports/${amuUpload.report.id}/documents/${amuDocument.id}/content`, { headers: { Cookie: employee.cookie } });
     assert.equal(ownAmuContent.status, 200, await ownAmuContent.clone().text());
-    assert.deepEqual(Buffer.from(await ownAmuContent.arrayBuffer()).subarray(0, 8), onePixelPng.subarray(0, 8));
+    assert.equal(amuDocument.detected_mime, "application/pdf");
+    assert.match(amuDocument.original_filename, /\.pdf$/i);
+    assert.equal(Buffer.from(await ownAmuContent.arrayBuffer()).subarray(0, 5).toString("ascii"), "%PDF-");
+
+    const amuSettingsResponse = await fetch(`${url}/api/portal/v1/amu-settings`, { headers: { Cookie: admin.cookie } });
+    assert.equal(amuSettingsResponse.status, 200, await amuSettingsResponse.clone().text());
+    assert.equal((await amuSettingsResponse.json()).policy.convertImagesToPdf, true);
+    const updateAmuSettings = await fetch(`${url}/api/portal/v1/amu-settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ uploadMaxMb: 8, storedMaxMb: 2, convertImagesToPdf: true, grayscaleImages: true, managerFileAccess: false }),
+    });
+    assert.equal(updateAmuSettings.status, 200, await updateAmuSettings.clone().text());
+    const personnelRecord = await fetch(`${url}/api/portal/v1/personnel-records/102`, { headers: { Cookie: admin.cookie } });
+    assert.equal(personnelRecord.status, 200, await personnelRecord.clone().text());
+    const personnelRecordData = await personnelRecord.json();
+    assert.equal(personnelRecordData.canOpenFiles, true);
+    assert.ok(personnelRecordData.reports.some((report) => report.id === amuUpload.report.id));
 
     const adminAmuResponse = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: admin.cookie } });
     assert.equal(adminAmuResponse.status, 200, await adminAmuResponse.clone().text());
@@ -862,6 +975,53 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     await changePassword(manager, "445566", "665544");
     const departmentManager = await login("105", "556677");
     await changePassword(departmentManager, "556677", "776655");
+
+    const scopedAmuDatabase = new DatabaseSync(childDatabase);
+    scopedAmuDatabase.exec("PRAGMA busy_timeout = 5000");
+    scopedAmuDatabase.prepare("UPDATE employees SET preferred_department_id = ? WHERE personnel_number = '104'").run(firstDepartment.id);
+    const insertScopedAmu = scopedAmuDatabase.prepare(`
+      INSERT INTO amu_reports
+        (employee_number, location_id, department_id, incapacity_from, incapacity_to, employee_note, review_note, status)
+      VALUES (?, ?, ?, ?, ?, 'Interne Notiz', 'Leitungsnotiz', 'submitted')
+    `);
+    const localAmuId = Number(insertScopedAmu.run("104", "01", null, "2027-07-01", "2027-07-02").lastInsertRowid);
+    const remoteAmuId = Number(insertScopedAmu.run("104", "02", null, "2027-07-03", "2027-07-04").lastInsertRowid);
+    scopedAmuDatabase.close();
+
+    const managerPersonnelRecord = await fetch(`${url}/api/portal/v1/personnel-records/104`, { headers: { Cookie: manager.cookie } });
+    assert.equal(managerPersonnelRecord.status, 200, await managerPersonnelRecord.clone().text());
+    const managerPersonnelRecordData = await managerPersonnelRecord.json();
+    assert.ok(managerPersonnelRecordData.reports.some((report) => report.id === localAmuId));
+    assert.equal(managerPersonnelRecordData.reports.some((report) => report.id === remoteAmuId), false);
+
+    const managerAmuOverview = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: manager.cookie } });
+    assert.equal(managerAmuOverview.status, 200, await managerAmuOverview.clone().text());
+    const managerAmuOverviewData = await managerAmuOverview.json();
+    assert.equal(managerAmuOverviewData.canOpenFiles, false);
+    assert.ok(managerAmuOverviewData.reports.some((report) => report.id === localAmuId));
+    assert.equal(managerAmuOverviewData.reports.some((report) => report.id === remoteAmuId), false);
+    assert.equal(managerAmuOverviewData.reports.find((report) => report.id === localAmuId).employee_note, "");
+    assert.equal(managerAmuOverviewData.reports.find((report) => report.id === localAmuId).review_note, "");
+
+    const departmentManagerLegacyAmu = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: departmentManager.cookie } });
+    assert.equal(departmentManagerLegacyAmu.status, 200, await departmentManagerLegacyAmu.clone().text());
+    assert.equal((await departmentManagerLegacyAmu.json()).reports.some((report) => report.id === localAmuId), false);
+    const departmentManagerLegacyRecord = await fetch(`${url}/api/portal/v1/personnel-records/104`, { headers: { Cookie: departmentManager.cookie } });
+    assert.equal(departmentManagerLegacyRecord.status, 200, await departmentManagerLegacyRecord.clone().text());
+    assert.equal((await departmentManagerLegacyRecord.json()).reports.some((report) => report.id === localAmuId), false);
+
+    const enableManagerAmuFiles = await fetch(`${url}/api/portal/v1/amu-settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ uploadMaxMb: 10, storedMaxMb: 2, convertImagesToPdf: true, grayscaleImages: true, managerFileAccess: true }),
+    });
+    assert.equal(enableManagerAmuFiles.status, 200, await enableManagerAmuFiles.clone().text());
+    const managerAmuFilesEnabled = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: manager.cookie } });
+    assert.equal(managerAmuFilesEnabled.status, 200, await managerAmuFilesEnabled.clone().text());
+    const managerAmuFilesEnabledData = await managerAmuFilesEnabled.json();
+    assert.equal(managerAmuFilesEnabledData.canOpenFiles, true);
+    assert.equal(managerAmuFilesEnabledData.reports.find((report) => report.id === localAmuId).employee_note, "Interne Notiz");
+    assert.equal(managerAmuFilesEnabledData.reports.find((report) => report.id === localAmuId).review_note, "Leitungsnotiz");
 
     const remoteBlackoutResponse = await fetch(`${url}/api/portal/v1/request-blackouts`, {
       method: "POST",

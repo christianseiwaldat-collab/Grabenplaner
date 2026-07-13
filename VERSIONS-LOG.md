@@ -1,5 +1,17 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.52 Beta
+
+- Standortweise aktivierbare Zeiterfassung ergänzt: Mitarbeitende buchen im mobil optimierten Portal „Kommen“, „Pause“, „Weiter“ und „Gehen“ mit verbindlicher Serverzeit und geschützter Buchungsfolge.
+- Live-Anwesenheit für berechtigte Leitungen und Administration ergänzt, einschließlich Tagesbuchungen sowie erster Soll-/Ist-/Differenzanzeige.
+- Vergessene Gehen-Buchungen können durch berechtigte Leitungen mit tatsächlicher Abschlusszeit nachvollziehbar korrigiert werden, ohne den nächsten Arbeitstag dauerhaft zu sperren.
+- AUM-Uploads um direkten Kamerazugriff, WEBP/TIFF-Unterstützung und automatische, optional graustufige A4-PDF-Aufbereitung erweitert; Upload- und Speicherlimit sind für Admin und Personalleitung einstellbar.
+- Geschützten Personalakt mit vergangenen AUM-Meldungen ergänzt; der Dateizugriff für Filial- und Abteilungsleitungen bleibt separat einstellbar und bereichsbeschränkt.
+- Private GitHub-Codespaces-Testumgebung mit automatisch erzeugtem Demo-Admin, Datenhaltung außerhalb des Repositorys und sichtbarer Demodaten-Warnung vorbereitet.
+- Externe Schriftimporte entfernt und die Verwaltungsoberfläche zuverlässig auf lokale serifenlose Systemschriften festgelegt.
+- Integrierten Windows-Updater auf einen bereinigenden Programmabgleich umgestellt; Datenbank, Backups, AUM-Dateien und lokale Laufzeitkonfiguration bleiben ausdrücklich geschützt.
+- Automatisierte Tests für Dokumentaufbereitung, Verschlüsselung, Rollenbereiche, Zeiterfassungszustände sowie LAN-/HTTPS-Grundbetrieb erweitert.
+
 ## v0.51.1 Beta
 
 - Aufklappbare Filialgruppen in der Seitennavigation verwenden nun kleine Explorer-artige Pfeile links vor dem Bereichssymbol statt großer Plus-/Minus-Zeichen am rechten Rand.

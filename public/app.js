@@ -19,8 +19,12 @@ const state = {
   requestBlackouts: [],
   absenceRequests: [],
   amuReports: [],
+  amuCanOpenFiles: false,
   requestCounts: { vacation: 0, timeOff: 0, amu: 0, total: 0 },
   requestKindTab: "vacation",
+  currentView: "planning",
+  timePresence: null,
+  amuPolicy: null,
   selectedRequest: null,
   allEmployees: [],
   updateStatus: null,
@@ -72,7 +76,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "vacationsView", "personnelView", "settingsView", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelView", "settingsView", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarEmployeeCount", "sidebarVersion", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "backupSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -81,7 +85,7 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition",
-    "employeeSettings", "locationSettings", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationSubmitButton", "cancelLocationEditButton",
+    "employeeSettings", "locationSettings", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationSubmitButton", "cancelLocationEditButton",
     "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
     "shiftModal", "shiftForm", "shiftModalTitle", "deleteShiftButton", "shiftCalculation", "shiftDepartment", "departmentPdfControl", "departmentPdfSelect", "departmentPdfButton",
     "optionsModal", "optionForm", "optionList", "optionsWeekLabel", "optionsWeekRange", "optionPreviousWeek", "optionNextWeek", "globalBlockDate", "globalBlockReason", "globalBlockHoliday", "globalBlockSubmitButton", "optionSubmitButton", "cancelOptionEditButton", "autoPlanModal",
@@ -91,8 +95,10 @@ const elements = Object.fromEntries(
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint",
+    "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuManagerFileAccess", "amuSettingsHint", "saveAmuSettingsButton",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
-    "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink",
+    "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordTitle", "personnelRecordContent",
+    "timeCorrectionModal", "timeCorrectionForm", "timeCorrectionTitle", "timeCorrectionEmployee", "timeCorrectionWorkDate", "timeCorrectionEmployeeLabel", "timeCorrectionDateLabel", "timeCorrectionClockOutTime", "timeCorrectionMessage",
     "brandLogo", "footerBrandLogo", "adminContactLink", "brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt", "brandingPreviewLogo", "brandingPreviewTitle", "brandingPreviewCompany", "brandingKitLibrary", "exportBrandingButton", "brandingImportFile", "importBrandingButton", "toast",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
 );
@@ -424,12 +430,18 @@ function applyRoleVisibility() {
   const serverActive = state.portalStatus?.operationMode === "server";
   const adminAccess = !lanActive || permissions.includes("settings:write");
   const scopeAccess = permissions.includes("scopes:write");
-  document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !adminAccess));
+  const employeeReadAccess = adminAccess || permissions.includes("employees:read");
+  const timeReadAccess = lanActive && permissions.includes("time:read") && state.portalStatus?.capabilities?.timeTracking;
+  document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
+  elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !(adminAccess || scopeAccess)));
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("hidden", scopeAccess && !adminAccess && button.dataset.settingsTab !== "access"));
   elements.saveSettingsButton?.classList.toggle("hidden", scopeAccess && !adminAccess);
   elements.systemExitButton?.classList.toggle("hidden", serverActive || (lanActive && !adminAccess));
   elements.updateCheckButton?.classList.toggle("hidden", lanActive && !adminAccess);
+  document.querySelector('[data-personnel-tab="locations"]')?.classList.toggle("hidden", !adminAccess);
+  document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !adminAccess);
+  if (!adminAccess && state.personnelTab === "locations") setPersonnelTab("employees");
 }
 
 async function bootstrapApplication() {
@@ -437,6 +449,7 @@ async function bootstrapApplication() {
     const status = await api("/api/portal/v1/status");
     state.portalStatus = status;
     applyBranding(status.branding || {});
+    elements.deploymentBanner?.classList.toggle("hidden", status.deploymentKind !== "codespaces-test");
     const passwordMinimum = Number(status.passwordMinLength || 6);
     [elements.adminLoginPassword, elements.adminSetupPassword, elements.adminSetupPasswordRepeat].forEach((input) => { if (input) input.minLength = passwordMinimum; });
     if (elements.adminAccessModeLabel) elements.adminAccessModeLabel.textContent = status.operationMode === "server" ? "Geschützter HTTPS-Zugang" : "Geschützter LAN-Zugang";
@@ -1199,6 +1212,8 @@ function formatOptionDates(option) {
 function renderEmployees() {
   const showInactive = state.data?.settings?.show_inactive_personnel !== "0";
   const employees = showInactive ? state.allEmployees : state.allEmployees.filter((employee) => employee.active);
+  const canEdit = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("settings:write");
+  const canReadPersonnelRecord = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:metadata:read");
   elements.employeeTableBody.innerHTML = employees.map((employee) => `
     <tr>
       <td><span class="employee-color" style="background:${employee.color}"></span></td>
@@ -1212,7 +1227,7 @@ function renderEmployees() {
       <td>${preferredDayLabels[employee.preferred_day_off] || "–"}</td>
       <td>${escapeHtml(formatFixedWorkdays(employee.fixed_workdays))}</td>
       <td><span class="status-badge ${employee.active ? "" : "inactive"}">${employee.active ? "Aktiv" : "Inaktiv"}</span></td>
-      <td><button type="button" class="edit-button" data-edit-employee="${escapeHtml(employee.personnel_number)}">Bearbeiten</button></td>
+      <td><span class="table-actions">${canReadPersonnelRecord ? `<button type="button" class="edit-button" data-personnel-record="${escapeHtml(employee.personnel_number)}">Personalakt</button>` : ""}${canEdit ? `<button type="button" class="edit-button" data-edit-employee="${escapeHtml(employee.personnel_number)}">Bearbeiten</button>` : ""}</span></td>
     </tr>`).join("");
 }
 
@@ -1229,7 +1244,7 @@ function renderLocations() {
     const openingSummary = planningDayKeys.filter((day) => location.day_settings?.[day]?.open !== false).map((day) => `${preferredDayLabels[day]?.slice(0, 2) || (day === "saturday" ? "Sa" : day.slice(0, 2))} ${location.day_settings?.[day]?.start || "–"}–${location.day_settings?.[day]?.end || "–"}`).join(" · ");
     return `<article class="location-card">
       <div class="location-card-head">
-        <div><strong>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</strong><small>${location.active ? "Aktiv" : "Inaktiv"} · ${departments.length} Abteilung(en) · Mindestbesetzung Filiale: ${Number(location.min_staff || 0)}</small><small>${escapeHtml(openingSummary)}</small></div>
+        <div><strong>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</strong><small>${location.active ? "Aktiv" : "Inaktiv"} · ${departments.length} Abteilung(en) · Mindestbesetzung Filiale: ${Number(location.min_staff || 0)} · Zeiterfassung ${location.time_tracking_enabled ? "aktiv" : "aus"}</small><small>${escapeHtml(openingSummary)}</small></div>
         <button type="button" class="edit-button" data-edit-location="${escapeHtml(location.id)}">Filiale bearbeiten</button>
       </div>
       <div class="department-list">${
@@ -1398,6 +1413,44 @@ async function loadPortalUsers() {
   }
 }
 
+async function loadAmuSettings() {
+  if (!elements.amuSettingsCard) return;
+  try {
+    const result = await api("/api/portal/v1/amu-settings");
+    const policy = result.policy || {};
+    state.amuPolicy = policy;
+    elements.amuUploadMaxMb.value = Number(policy.uploadMaxMb || 10);
+    elements.amuStoredMaxMb.value = Number(policy.storedMaxMb || 2);
+    elements.amuConvertImagesToPdf.checked = policy.convertImagesToPdf !== false;
+    elements.amuGrayscaleImages.checked = policy.grayscaleImages !== false;
+    elements.amuManagerFileAccess.checked = policy.managerFileAccess === true;
+    [elements.amuUploadMaxMb, elements.amuStoredMaxMb, elements.amuConvertImagesToPdf, elements.amuGrayscaleImages, elements.amuManagerFileAccess, elements.saveAmuSettingsButton]
+      .forEach((control) => { if (control) control.disabled = !result.canChange; });
+    elements.amuSettingsHint.textContent = result.canChange ? "Änderbar durch Admin oder Personalleitung." : "Nur Admin oder Personalleitung kann diese Werte ändern.";
+  } catch (error) {
+    elements.amuSettingsCard.classList.toggle("hidden", error.status === 403);
+    elements.amuSettingsHint.textContent = error.message;
+  }
+}
+
+async function saveAmuSettings() {
+  try {
+    const result = await api("/api/portal/v1/amu-settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        uploadMaxMb: Number(elements.amuUploadMaxMb.value),
+        storedMaxMb: Number(elements.amuStoredMaxMb.value),
+        convertImagesToPdf: elements.amuConvertImagesToPdf.checked,
+        grayscaleImages: elements.amuGrayscaleImages.checked,
+        managerFileAccess: elements.amuManagerFileAccess.checked,
+      }),
+    });
+    state.amuPolicy = result.policy;
+    showToast("AUM-Einstellungen wurden gespeichert.");
+    await loadAmuSettings();
+  } catch (error) { showToast(error.message, true); }
+}
+
 async function unlockPortalUser(row) {
   try {
     const result = await api(`/api/portal/v1/users/${encodeURIComponent(row.dataset.portalUser)}/unlock`, { method: "POST", body: "{}" });
@@ -1444,6 +1497,7 @@ async function loadManagerVacationRequests() {
     const [result, workflow, amu] = await Promise.all([api("/api/portal/v1/absence-requests"), api("/api/portal/v1/workflow-settings"), api("/api/portal/v1/amu-reports")]);
     state.absenceRequests = result.requests || [];
     state.amuReports = amu.reports || [];
+    state.amuCanOpenFiles = amu.canOpenFiles === true;
     const absenceCounts = result.counts || { vacation: 0, timeOff: 0, total: 0 };
     const amuCount = Number(amu.pendingCount || state.amuReports.filter((item) => item.status === "submitted").length);
     state.requestCounts = { ...absenceCounts, amu: amuCount, total: Number(absenceCounts.total || 0) + amuCount };
@@ -1454,6 +1508,159 @@ async function loadManagerVacationRequests() {
   } catch (error) {
     elements.requestsNavButton?.classList.toggle("hidden", error.status === 403);
     if (error.status !== 403) elements.managerVacationRequestList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+let timePresenceRefreshTimer = null;
+
+function refreshTimePresenceDepartments() {
+  const locationId = elements.timeTrackingLocation?.value || state.locationId;
+  const user = state.portalSession?.user;
+  const departmentManager = user?.role === "department_manager";
+  const scopedDepartmentIds = new Set((user?.scopes || [])
+    .filter((scope) => scope.locationId === locationId && scope.departmentId)
+    .map((scope) => String(scope.departmentId)));
+  const allDepartments = state.locations.find((location) => location.id === locationId)?.departments || [];
+  const departments = departmentManager
+    ? allDepartments.filter((department) => scopedDepartmentIds.has(String(department.id)))
+    : allDepartments;
+  const selected = elements.timeTrackingDepartment?.value || "";
+  if (elements.timeTrackingDepartment) {
+    elements.timeTrackingDepartment.innerHTML = `${departmentManager ? "" : '<option value="">Gesamte Filiale</option>'}${departments.map((department) => `<option value="${department.id}">${escapeHtml(department.name)}</option>`).join("")}`;
+    elements.timeTrackingDepartment.value = departments.some((department) => String(department.id) === selected)
+      ? selected
+      : (departmentManager ? String(departments[0]?.id || "") : "");
+  }
+}
+
+function prepareTimePresenceControls() {
+  if (!elements.timeTrackingLocation) return;
+  const user = state.portalSession?.user;
+  const scopedLocationIds = new Set((user?.scopes || []).map((scope) => scope.locationId));
+  const scopedRole = ["manager", "department_manager"].includes(user?.role);
+  const availableLocations = state.locations.filter((location) => location.active && (!scopedRole || scopedLocationIds.has(location.id)));
+  const selected = elements.timeTrackingLocation.value || state.locationId || state.locations[0]?.id || "";
+  elements.timeTrackingLocation.innerHTML = availableLocations.map((location) => `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("");
+  elements.timeTrackingLocation.value = availableLocations.some((location) => location.id === selected) ? selected : elements.timeTrackingLocation.options[0]?.value || "";
+  refreshTimePresenceDepartments();
+}
+
+function formatClockTimestamp(timestamp) {
+  if (!timestamp) return "–";
+  try { return new Intl.DateTimeFormat("de-AT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Vienna" }).format(new Date(timestamp)); } catch { return "–"; }
+}
+
+function formatTimeDifference(minutes) {
+  const value = Number(minutes || 0);
+  return `${value >= 0 ? "+" : "−"}${formatHours(Math.abs(value))}`;
+}
+
+function renderTimePresence() {
+  if (!elements.timePresenceList) return;
+  const presence = state.timePresence;
+  if (!presence) return;
+  const employees = presence.employees || [];
+  const counts = { working: 0, paused: 0, off: 0, attention: 0 };
+  employees.forEach((employee) => { counts[employee.state] = Number(counts[employee.state] || 0) + 1; });
+  elements.timePresenceSummary.innerHTML = `
+    <article><span>Anwesend</span><strong>${counts.working}</strong></article>
+    <article><span>Pause</span><strong>${counts.paused}</strong></article>
+    <article><span>Abwesend</span><strong>${counts.off}</strong></article>
+    <article class="${counts.attention ? "warning" : ""}"><span>Zu prüfen</span><strong>${counts.attention}</strong></article>`;
+  elements.timePresenceUpdated.textContent = `${presence.locationName}${presence.departmentName ? ` · ${presence.departmentName}` : ""} · Stand ${formatClockTimestamp(presence.serverTime)} Uhr`;
+  if (!presence.trackingEnabled) {
+    elements.timePresenceList.innerHTML = '<p class="settings-note">Die Zeiterfassung ist für diesen Standort noch nicht aktiviert. Die Aktivierung erfolgt unter Teams & Standorte.</p>';
+    return;
+  }
+  const labels = { working: "Anwesend", paused: "Pause", off: "Abwesend", attention: "Bitte prüfen" };
+  const canReadPersonnelRecord = !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("amu:metadata:read");
+  const canReviewTime = !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("time:review");
+  elements.timePresenceList.innerHTML = employees.length ? employees.map((employee) => {
+    const entries = (employee.entries || []).map((entry) => `${escapeHtml(entry.label)} ${formatClockTimestamp(entry.timestamp)}`).join(" · ");
+    return `<article class="time-presence-row ${escapeHtml(employee.state)}">
+      <span class="employee-color" style="background:${escapeHtml(employee.color || "#748087")}"></span>
+      <div class="time-presence-person"><strong>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</strong><small>${entries || "Heute noch keine Buchung"}</small></div>
+      <span class="time-state-badge ${escapeHtml(employee.state)}">${labels[employee.state] || employee.state}</span>
+      <div class="time-presence-hours"><span>Soll <strong>${formatHours(employee.plannedMinutes)}</strong></span><span>Ist <strong>${formatHours(employee.actualMinutes)}</strong></span><span>Diff. <strong class="${Number(employee.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(employee.differenceMinutes)}</strong></span></div>
+      ${(employee.staleEntry && canReviewTime) || canReadPersonnelRecord ? `<div class="time-presence-actions">
+        ${employee.staleEntry && canReviewTime ? `<button type="button" class="secondary-button compact-button" data-resolve-stale="${escapeHtml(employee.employeeNumber)}">Altbuchung abschließen</button>` : ""}
+        ${canReadPersonnelRecord ? `<button type="button" class="secondary-button compact-button" data-personnel-record="${escapeHtml(employee.employeeNumber)}">Personalakt</button>` : ""}
+      </div>` : ""}
+    </article>`;
+  }).join("") : '<p class="settings-note">Für diesen Bereich wurden keine aktiven Teammitglieder gefunden.</p>';
+}
+
+async function loadTimePresence() {
+  if (!state.portalStatus?.capabilities?.timeTracking || !elements.timePresenceList) return;
+  prepareTimePresenceControls();
+  try {
+    const parameters = new URLSearchParams({ locationId: elements.timeTrackingLocation.value });
+    if (elements.timeTrackingDepartment.value) parameters.set("departmentId", elements.timeTrackingDepartment.value);
+    const result = await api(`/api/portal/v1/time-presence?${parameters.toString()}`);
+    state.timePresence = result.presence;
+    renderTimePresence();
+  } catch (error) {
+    elements.timePresenceList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function openStaleTimeCorrection(employeeNumber) {
+  const employee = state.timePresence?.employees?.find((item) => item.employeeNumber === employeeNumber);
+  if (!employee?.staleEntry || !elements.timeCorrectionModal) return;
+  elements.timeCorrectionEmployee.value = employeeNumber;
+  elements.timeCorrectionWorkDate.value = employee.staleEntry.date || "";
+  elements.timeCorrectionEmployeeLabel.textContent = `${employeeNumber} · ${employee.nickname || employee.fullName || "Teammitglied"}`;
+  elements.timeCorrectionDateLabel.textContent = formatDate(employee.staleEntry.date);
+  elements.timeCorrectionClockOutTime.value = employee.staleEntry.suggestedClockOutTime || "18:00";
+  elements.timeCorrectionMessage.textContent = "";
+  elements.timeCorrectionMessage.classList.add("hidden");
+  elements.timeCorrectionModal.showModal();
+  setTimeout(() => elements.timeCorrectionClockOutTime.focus(), 30);
+}
+
+async function submitStaleTimeCorrection(event) {
+  event.preventDefault();
+  const submitButton = elements.timeCorrectionForm.querySelector('[type="submit"]');
+  submitButton.disabled = true;
+  try {
+    await api("/api/portal/v1/time-corrections/resolve-stale", {
+      method: "POST",
+      body: JSON.stringify({
+        employeeNumber: elements.timeCorrectionEmployee.value,
+        workDate: elements.timeCorrectionWorkDate.value,
+        clockOutTime: elements.timeCorrectionClockOutTime.value,
+      }),
+    });
+    elements.timeCorrectionModal.close();
+    showToast("Die offene Altbuchung wurde nachvollziehbar abgeschlossen.");
+    await loadTimePresence();
+  } catch (error) {
+    elements.timeCorrectionMessage.textContent = error.message;
+    elements.timeCorrectionMessage.classList.remove("hidden");
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function openPersonnelRecord(employeeNumber) {
+  if (!elements.personnelRecordModal) return;
+  elements.personnelRecordTitle.textContent = `Personalakt · ${employeeNumber}`;
+  elements.personnelRecordContent.innerHTML = '<p class="settings-note">Einträge werden geladen.</p>';
+  elements.personnelRecordModal.showModal();
+  try {
+    const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(employeeNumber)}`);
+    const employee = result.employee || {};
+    elements.personnelRecordTitle.textContent = `${employee.personnel_number || employeeNumber} · ${employee.nickname || employee.full_name || "Personalakt"}`;
+    elements.personnelRecordContent.innerHTML = result.reports?.length ? result.reports.map((report) => {
+      const documents = (report.documents || []).map((document) => result.canOpenFiles
+        ? `<a class="secondary-button compact-button" href="/api/portal/v1/amu-reports/${report.id}/documents/${encodeURIComponent(document.id)}/content" target="_blank" rel="noopener">${escapeHtml(document.original_name || "Dokument")} öffnen</a>`
+        : `<span class="status-badge inactive">${escapeHtml(document.original_name || "Dokument")} · kein Dateizugriff</span>`).join("");
+      return `<article class="personnel-record-entry"><div><strong>${formatDate(report.incapacity_from)}–${formatDate(report.incapacity_to)}</strong><small>${escapeHtml(report.location_name || "")}${report.department_name ? ` · ${escapeHtml(report.department_name)}` : ""} · ${escapeHtml(requestStatusLabels[report.status] || report.status)}</small>${report.employee_note ? `<p>${escapeHtml(report.employee_note)}</p>` : ""}</div><div class="amu-document-links">${documents || "Kein aktives Dokument"}</div></article>`;
+    }).join("") : '<p class="settings-note">Noch keine Arbeitsunfähigkeitsmeldungen im Personalakt.</p>';
+  } catch (error) {
+    elements.personnelRecordContent.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
   }
 }
 
@@ -1505,7 +1712,7 @@ function renderManagerRequests() {
   const statusFilter = elements.requestStatusFilter.value || "actionable";
   if (state.requestKindTab === "amu") {
     const reports = state.amuReports.filter((report) => statusFilter === "all" ? true : statusFilter === "actionable" ? ["submitted", "returned"].includes(report.status) : report.status === statusFilter);
-    const canOpenFiles = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:file:read");
+    const canOpenFiles = !state.portalStatus?.portalEnabled || state.amuCanOpenFiles === true;
     const canReview = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:review");
     elements.managerVacationRequestList.innerHTML = reports.length ? reports.map((report) => {
       const files = (report.documents || []).map((document) => canOpenFiles
@@ -1573,7 +1780,7 @@ function openAmuAction(id) {
   elements.requestActionHistory.innerHTML = report.reviewed_by
     ? `<div><strong>${escapeHtml(report.reviewed_by)} · ${escapeHtml(requestStatusLabels[report.status] || report.status)}</strong><span>${report.reviewed_at ? escapeHtml(new Date(report.reviewed_at).toLocaleString("de-AT")) : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</span></div>`
     : '<p>Noch keine Prüfung protokolliert.</p>';
-  const canOpenFiles = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:file:read");
+  const canOpenFiles = !state.portalStatus?.portalEnabled || state.amuCanOpenFiles === true;
   elements.requestActionDocuments.classList.remove("hidden");
   elements.requestActionDocuments.innerHTML = (report.documents || []).map((document) => canOpenFiles
     ? `<a class="secondary-button" href="/api/portal/v1/amu-reports/${report.id}/documents/${encodeURIComponent(document.id)}/content" target="_blank" rel="noopener">${escapeHtml(document.original_name || "Dokument")} öffnen</a>`
@@ -1767,20 +1974,28 @@ function renderBrandingKits() {
 }
 
 function setView(view) {
+  state.currentView = view;
+  if (timePresenceRefreshTimer) clearInterval(timePresenceRefreshTimer);
+  timePresenceRefreshTimer = null;
   document.querySelectorAll(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
   elements.planningView.classList.toggle("active", view === "planning");
   elements.requestsView.classList.toggle("active", view === "requests");
+  elements.timeTrackingView?.classList.toggle("active", view === "timeTracking");
   elements.vacationsView.classList.toggle("active", view === "vacations");
   elements.personnelView.classList.toggle("active", view === "personnel");
   elements.settingsView.classList.toggle("active", view === "settings");
   if (view === "settings" && state.portalStatus?.portalEnabled && !state.portalSession?.user?.permissions?.includes("settings:write") && state.portalSession?.user?.permissions?.includes("scopes:write")) setSettingsTab("access");
   if (view === "requests") loadManagerVacationRequests();
+  if (view === "timeTracking") {
+    loadTimePresence();
+    timePresenceRefreshTimer = setInterval(() => { if (!document.hidden && state.currentView === "timeTracking") loadTimePresence(); }, 30000);
+  }
 }
 
 function applyRequestedView() {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
-  if (!["planning", "requests", "vacations", "personnel", "settings"].includes(requestedView)) return;
+  if (!["planning", "requests", "timeTracking", "vacations", "personnel", "settings"].includes(requestedView)) return;
   if (requestedView === "requests") {
     const requestedKind = parameters.get("kind");
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
@@ -1797,7 +2012,10 @@ function setSettingsTab(tab) {
   elements.personnelSettings.classList.toggle("active", tab === "personnel");
   elements.accessSettings.classList.toggle("active", tab === "access");
   elements.backupSettings.classList.toggle("active", tab === "backup");
-  if (tab === "access") loadPortalUsers();
+  if (tab === "access") {
+    loadPortalUsers();
+    loadAmuSettings();
+  }
 }
 
 function setPersonnelTab(tab) {
@@ -2173,6 +2391,7 @@ function resetLocationForm() {
   elements.locationId.disabled = false;
   elements.locationMinStaff.value = 0;
   elements.locationActive.checked = true;
+  elements.locationTimeTrackingEnabled.checked = false;
   setLocationDayFields(currentLocation()?.day_settings || state.locations?.[0]?.day_settings || {});
   elements.locationSubmitButton.textContent = "Filiale anlegen";
   elements.cancelLocationEditButton.classList.add("hidden");
@@ -2185,6 +2404,7 @@ function fillLocationForm(location) {
   elements.locationName.value = location.name;
   elements.locationMinStaff.value = Number(location.min_staff || 0);
   elements.locationActive.checked = Boolean(location.active);
+  elements.locationTimeTrackingEnabled.checked = Boolean(location.time_tracking_enabled);
   setLocationDayFields(location.day_settings || {});
   elements.locationSubmitButton.textContent = "Filiale speichern";
   elements.cancelLocationEditButton.classList.remove("hidden");
@@ -2233,6 +2453,7 @@ async function saveLocation(event) {
         name: elements.locationName.value,
         minStaff: Number(elements.locationMinStaff.value || 0),
         active: elements.locationActive.checked,
+        timeTrackingEnabled: elements.locationTimeTrackingEnabled.checked,
         daySettings: readLocationDayFields(),
       }),
     });
@@ -2974,6 +3195,19 @@ elements.delegationList?.addEventListener("click", async (event) => {
   try { await api(`/api/portal/v1/approval-delegations/${row.dataset.delegationId}`, { method: "DELETE" }); await loadApprovalDelegations(); } catch (error) { showToast(error.message, true); }
 });
 elements.refreshRequestsButton?.addEventListener("click", loadManagerVacationRequests);
+elements.refreshTimePresenceButton?.addEventListener("click", loadTimePresence);
+elements.timeTrackingLocation?.addEventListener("change", () => { refreshTimePresenceDepartments(); loadTimePresence(); });
+elements.timeTrackingDepartment?.addEventListener("change", loadTimePresence);
+elements.timePresenceList?.addEventListener("click", (event) => {
+  const correctionButton = event.target.closest("[data-resolve-stale]");
+  if (correctionButton) {
+    openStaleTimeCorrection(correctionButton.dataset.resolveStale);
+    return;
+  }
+  const button = event.target.closest("[data-personnel-record]");
+  if (button) openPersonnelRecord(button.dataset.personnelRecord);
+});
+elements.timeCorrectionForm?.addEventListener("submit", submitStaleTimeCorrection);
 elements.managerVacationRequestList?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-open-request-action]");
   const row = button?.closest("[data-manager-request]");
@@ -2993,6 +3227,7 @@ elements.requestWorkflowSummary?.addEventListener("click", (event) => {
   if (event.target.closest("[data-toggle-hr-workflow]")) toggleHrWorkflow(!state.workflowSettings?.vacationHrApprovalRequired);
 });
 elements.vacationHrApprovalRequired?.addEventListener("change", (event) => toggleHrWorkflow(event.target.checked));
+elements.saveAmuSettingsButton?.addEventListener("click", saveAmuSettings);
 elements.requestActionForm?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-request-action]");
   if (button) decideVacationRequest(button.dataset.requestAction);
@@ -3185,6 +3420,11 @@ document.querySelector("#employeeColorHex").addEventListener("input", (event) =>
 });
 
 elements.employeeTableBody.addEventListener("click", (event) => {
+  const recordButton = event.target.closest("[data-personnel-record]");
+  if (recordButton) {
+    openPersonnelRecord(recordButton.dataset.personnelRecord);
+    return;
+  }
   const button = event.target.closest("[data-edit-employee]");
   if (!button) return;
   openEmployeeModal(state.allEmployees.find((employee) => employee.personnel_number === button.dataset.editEmployee));

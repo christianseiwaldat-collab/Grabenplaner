@@ -1,6 +1,6 @@
 # Grabenplaner
 
-Aktuelle Beta-Version: **v0.51.1 Beta**
+Aktuelle Beta-Version: **v0.52 Beta**
 
 Grabenplaner ist eine lokale Windows-Web-App für Dienstplanung, Urlaubsplanung und PDF-Ausgaben. Die Daten bleiben lokal in einer SQLite-Datenbank; ein externer Datenbankserver ist nicht nötig.
 
@@ -8,7 +8,7 @@ Grabenplaner ist eine lokale Windows-Web-App für Dienstplanung, Urlaubsplanung 
 
 Unter Windows genügt ein Doppelklick auf:
 
-`Grabenplaner v0.51.1 Beta starten.cmd`
+`Grabenplaner v0.52 Beta starten.cmd`
 
 Die App öffnet anschließend lokal unter:
 
@@ -23,6 +23,7 @@ http://localhost:3000
 - Urlaubsplanung mit Jahres-, Quartals- und Monatsübersicht
 - PDF-Export für Dienstpläne, Abteilungspläne und Urlaubsübersichten
 - Wochenstundenübersicht und Auswertung je Teammitglied
+- Mitarbeiterportal mit Anträgen, AUM-Upload und Zeiterfassung
 - Lokale SQLite-Datenbank ohne externen Datenbankserver
 - Integriertes Backup-System
 - GitHub-basierter Aktualisierungscheck
@@ -41,6 +42,8 @@ Der aktuelle Betrieb bleibt lokal mit SQLite-Datenbank. Ein Servermodus ist tech
 
 Die technische Grundlage und die spätere Einrichtung mit Firmen-IT sind in [SERVERBETRIEB.md](SERVERBETRIEB.md) beschrieben.
 
+Eine private GitHub-Codespaces-Umgebung für reine Demo- und Funktionstests ist in [CODESPACES.md](CODESPACES.md) beschrieben. Dort dürfen keine echten Personal- oder Gesundheitsdaten verwendet werden.
+
 ## Backup und Datenbank
 
 - Beim Start wird automatisch eine interne Sicherung im Ordner `backups` erstellt.
@@ -53,13 +56,14 @@ Die technische Grundlage und die spätere Einrichtung mit Firmen-IT sind in [SER
 Mit lokal installiertem Node.js 22 oder neuer:
 
 ```powershell
-npm.cmd install
-npm.cmd start
+corepack enable
+pnpm install --frozen-lockfile
+pnpm start
 ```
 
 Der Port kann über die Umgebungsvariable `PORT` geändert werden:
 
 ```powershell
 $env:PORT=8080
-npm.cmd start
+pnpm start
 ```

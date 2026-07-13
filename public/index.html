@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <div class="deployment-banner hidden" id="deploymentBanner">Codespaces-Testbetrieb · Nur Demodaten verwenden</div>
     <div class="compact-admin-notice hidden" id="compactAdminNotice">Die Verwaltungsplanung ist für einen großen Bildschirm optimiert. Das Mitarbeiterportal ist auf dem Handy besser bedienbar.</div>
     <section class="login-gate hidden" id="loginGate" aria-live="polite">
       <form class="login-card" id="adminLoginForm">
@@ -29,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.51.1 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.52 Beta</span></div>
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
@@ -49,6 +50,9 @@
           <div class="nav-children" id="vacationNavChildren"></div>
           <button class="nav-item request-nav-item" data-view="requests" id="requestsNavButton">
             <span class="nav-symbol">✓</span><span>Anträge</span><strong class="nav-count hidden" id="requestsNavCount">0</strong>
+          </button>
+          <button class="nav-item hidden" data-view="timeTracking" id="timeTrackingNavButton">
+            <span class="nav-symbol">◷</span><span>Zeiterfassung</span>
           </button>
           <button class="nav-item" data-view="personnel">
             <span class="nav-symbol">◎</span><span>Teams &amp; Standorte</span>
@@ -163,6 +167,22 @@
           </section>
         </section>
 
+        <section id="timeTrackingView" class="view">
+          <header class="topbar">
+            <div><span class="eyebrow">Arbeitszeit</span><h1>Live-Anwesenheit</h1><p class="subtitle">Aktueller Status sowie erste Soll-/Ist-Auswertung je Teammitglied.</p></div>
+            <div class="topbar-actions time-presence-controls">
+              <label class="week-jump"><span>Filiale</span><select id="timeTrackingLocation"></select></label>
+              <label class="week-jump"><span>Abteilung</span><select id="timeTrackingDepartment"><option value="">Gesamte Filiale</option></select></label>
+              <button type="button" class="secondary-button" id="refreshTimePresenceButton">Aktualisieren</button>
+            </div>
+          </header>
+          <section class="time-presence-summary" id="timePresenceSummary"></section>
+          <section class="vacation-panel time-presence-panel">
+            <div class="vacation-panel-heading"><div><h2>Teamstatus heute</h2><p id="timePresenceUpdated">Noch nicht aktualisiert.</p></div></div>
+            <div class="time-presence-list" id="timePresenceList"><p class="settings-note">Die Anwesenheit wird geladen.</p></div>
+          </section>
+        </section>
+
         <section id="vacationsView" class="view">
           <header class="topbar">
             <div>
@@ -256,6 +276,7 @@
                     <label class="field"><span>Mindestbesetzung</span><input id="locationMinStaff" type="number" min="0" max="99" step="1" value="0" /></label>
                   </div>
                   <label class="switch-row"><span><strong>Aktiv</strong><small>In Navigation und Planung anzeigen.</small></span><input id="locationActive" type="checkbox" checked /></label>
+                  <label class="switch-row"><span><strong>Zeiterfassung aktiv</strong><small>Erlaubt Teammitgliedern dieses Standorts Kommen, Pause, Weiter und Gehen zu buchen.</small></span><input id="locationTimeTrackingEnabled" type="checkbox" /></label>
                   <div class="location-hours-editor">
                     <div class="card-heading compact-card-heading"><div class="card-icon">Zeit</div><div><h3>Öffnungszeiten &amp; Mindestbesetzung</h3><p>Diese Zeiten gelten ausschließlich für die ausgewählte Filiale.</p></div></div>
                     <div class="day-settings-table">
@@ -406,6 +427,17 @@
               <form class="delegation-form" id="delegationForm"><label class="field"><span>Filiale</span><select id="delegationLocation" required></select></label><label class="field"><span>Abteilungsleitung</span><select id="delegationEmployee" required></select></label><label class="field"><span>Von</span><input id="delegationDateFrom" type="date" required /></label><label class="field"><span>Bis</span><input id="delegationDateTo" type="date" required /></label><label class="field"><span>Bemerkung</span><input id="delegationNote" placeholder="Optional" /></label><button class="primary-button" type="submit">Vertretung eintragen</button></form>
               <div class="delegation-list" id="delegationList"></div>
             </div>
+            <div class="settings-card full-span" id="amuSettingsCard">
+              <div class="card-heading"><div class="card-icon">AUM</div><div><h2>AUM-Dateien</h2><p>Upload, platzsparende PDF-Aufbereitung und Zugriffsrechte für Personalakten.</p></div></div>
+              <div class="settings-grid compact-policy-grid">
+                <label class="field"><span>Maximaler Upload je Datei</span><div class="unit-input"><input id="amuUploadMaxMb" type="number" min="1" max="25" step="1" /><em>MB</em></div></label>
+                <label class="field"><span>Maximal gespeicherte Größe</span><div class="unit-input"><input id="amuStoredMaxMb" type="number" min="0.5" max="25" step="0.5" /><em>MB</em></div></label>
+              </div>
+              <label class="switch-row"><span><strong>Handyfotos als PDF speichern</strong><small>Fotos werden gedreht, passend verkleinert und als schlanke PDF abgelegt.</small></span><input id="amuConvertImagesToPdf" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>Fotos in Graustufen umwandeln</strong><small>Reduziert üblicherweise den Speicherbedarf; PDFs selbst bleiben unverändert.</small></span><input id="amuGrayscaleImages" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>Filial- und Abteilungsleitung darf AUM-Dateien öffnen</strong><small>Ohne Aktivierung sehen Leitungen nur Zeitraum und Bearbeitungsstatus.</small></span><input id="amuManagerFileAccess" type="checkbox" /></label>
+              <div class="form-actions-inline"><span class="settings-note" id="amuSettingsHint"></span><button class="primary-button" id="saveAmuSettingsButton" type="button">AUM-Einstellungen speichern</button></div>
+            </div>
             <div class="settings-card full-span">
               <div class="card-heading"><div class="card-icon">Login</div><div><h2>Portal-Zugänge</h2><p>Rollen, Freigabe und Startpasswort je Teammitglied verwalten.</p></div></div>
               <div class="access-toolbar">
@@ -541,7 +573,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.51.1 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.52 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -724,6 +756,29 @@
         <div class="form-grid hidden" id="requestEditFields"><label class="field" id="requestEditDateFromField"><span>Neu von</span><input id="requestEditDateFrom" type="date" /></label><label class="field" id="requestEditDateToField"><span>Neu bis</span><input id="requestEditDateTo" type="date" /></label><label class="field hidden" id="requestEditTimeField"><span>Neue Uhrzeit</span><span class="request-time-fields"><input id="requestEditStartTime" type="time" step="900" /><span>–</span><input id="requestEditEndTime" type="time" step="900" /></span></label></div>
         <label class="field full-width"><span>Entscheidungsbemerkung</span><textarea id="requestActionNote" rows="4" maxlength="500" placeholder="Optional"></textarea></label>
         <div class="request-action-buttons"><button class="danger-button" data-request-action="reject" type="button">Ablehnen</button><button class="secondary-button" data-request-action="preliminary" type="button">Vorläufig genehmigen</button><button class="primary-button" data-request-action="approve" type="button">Genehmigen / weiterleiten</button><button class="primary-button hidden" data-request-action="change" id="changeApprovedRequestButton" type="button">Änderung speichern</button><button class="secondary-button hidden" data-request-action="cancel" id="cancelApprovedRequestButton" type="button">Genehmigten Antrag stornieren</button><button class="primary-button hidden" data-amu-action="reviewed" type="button">Als geprüft markieren</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal personnel-record-modal" id="personnelRecordModal">
+      <form method="dialog">
+        <div class="modal-header"><div><span class="eyebrow">Personalakt</span><h2 id="personnelRecordTitle">Personalakt</h2><p>Geschützte Übersicht der bisherigen Arbeitsunfähigkeitsmeldungen.</p></div><button type="button" class="close-button" data-close="personnelRecordModal">×</button></div>
+        <div class="personnel-record-content" id="personnelRecordContent"><p class="settings-note">Einträge werden geladen.</p></div>
+        <div class="modal-actions"><span></span><span></span><span></span><button type="button" class="secondary-button" data-close="personnelRecordModal">Schließen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="timeCorrectionModal">
+      <form method="dialog" id="timeCorrectionForm">
+        <div class="modal-header"><div><span class="eyebrow">Zeiterfassung</span><h2 id="timeCorrectionTitle">Offene Altbuchung abschließen</h2><p>Die Abschlusszeit wird nachvollziehbar als Korrektur durch die Leitung protokolliert.</p></div><button type="button" class="close-button" data-close="timeCorrectionModal">×</button></div>
+        <input id="timeCorrectionEmployee" type="hidden" />
+        <input id="timeCorrectionWorkDate" type="hidden" />
+        <div class="form-grid">
+          <label class="field"><span>Teammitglied</span><strong id="timeCorrectionEmployeeLabel">–</strong></label>
+          <label class="field"><span>Offener Arbeitstag</span><strong id="timeCorrectionDateLabel">–</strong></label>
+          <label class="field"><span>Tatsächliche Gehen-Zeit</span><input id="timeCorrectionClockOutTime" type="time" step="60" required /></label>
+        </div>
+        <p class="message hidden" id="timeCorrectionMessage"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="timeCorrectionModal">Abbrechen</button><button type="submit" class="primary-button">Altbuchung abschließen</button></div>
       </form>
     </dialog>
 

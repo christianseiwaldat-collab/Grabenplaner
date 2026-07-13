@@ -1,0 +1,27 @@
+{
+  "name": "Grabenplaner v0.52 Codespaces-Test",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "24",
+      "pnpmVersion": "11.7.0"
+    }
+  },
+  "postCreateCommand": "pnpm install --frozen-lockfile",
+  "postStartCommand": "bash .devcontainer/post-start.sh",
+  "forwardPorts": [
+    3000
+  ],
+  "portsAttributes": {
+    "3000": {
+      "label": "Grabenplaner (Demo/Test)",
+      "onAutoForward": "notify",
+      "protocol": "http",
+      "visibility": "private"
+    }
+  },
+  "otherPortsAttributes": {
+    "onAutoForward": "ignore"
+  },
+  "remoteUser": "vscode"
+}
