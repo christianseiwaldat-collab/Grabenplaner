@@ -33,10 +33,13 @@
         <nav class="portal-tabs" role="tablist" aria-label="Mitarbeiterportal">
           <button class="active" data-tab="schedule" type="button" role="tab" aria-selected="true" aria-controls="scheduleView">Dienstplan</button>
           <button class="hidden" id="timeTrackingTab" data-tab="timeTracking" type="button" role="tab" aria-selected="false" aria-controls="timeTrackingView" tabindex="-1">Zeit</button>
+          <button class="hidden leadership-tab" id="leadershipTeamTab" data-tab="leadershipTeam" data-mobile-module="presence" type="button" role="tab" aria-selected="false" aria-controls="leadershipTeamView" tabindex="-1">Team</button>
+          <button class="hidden leadership-tab" id="leadershipApprovalsTab" data-tab="leadershipApprovals" data-mobile-module="approvals" type="button" role="tab" aria-selected="false" aria-controls="leadershipApprovalsView" tabindex="-1">Freigaben</button>
           <button data-tab="timeOff" type="button" role="tab" aria-selected="false" aria-controls="timeOffView" tabindex="-1">ZA</button>
           <button data-tab="vacation" type="button" role="tab" aria-selected="false" aria-controls="vacationView" tabindex="-1">Urlaub</button>
           <button data-tab="history" type="button" role="tab" aria-selected="false" aria-controls="historyView" tabindex="-1">Meine Anträge</button>
           <button data-tab="amu" type="button" role="tab" aria-selected="false" aria-controls="amuView" tabindex="-1">AUM</button>
+          <button class="hidden leadership-tab" id="leadershipMoreTab" data-tab="leadershipMore" data-mobile-module="more" type="button" role="tab" aria-selected="false" aria-controls="leadershipMoreView" tabindex="-1">Mehr</button>
         </nav>
 
         <section class="portal-view active" id="scheduleView" role="tabpanel">
@@ -70,6 +73,43 @@
               <div class="time-entry-heading"><h2>Tagesbuchungen</h2><small>Die Uhrzeit wird sicher vom Server übernommen.</small></div>
               <div class="time-entry-list" id="timeEntryList"><p class="empty-state">Heute noch keine Buchung.</p></div>
             </section>
+          </div>
+
+          <section class="portal-card time-period-card">
+            <div class="time-period-toolbar">
+              <div><span class="eyebrow">Arbeitszeitverlauf</span><h2 id="timePeriodHeading">Diese Woche</h2></div>
+              <div class="time-period-actions">
+                <div class="period-switch" role="group" aria-label="Zeitraum auswählen"><button class="active" data-time-period="week" type="button">Woche</button><button data-time-period="month" type="button">Monat</button></div>
+                <div class="week-controls"><button id="previousTimePeriod" type="button" aria-label="Vorheriger Zeitraum">←</button><button id="currentTimePeriod" type="button">Aktuell</button><button id="nextTimePeriod" type="button" aria-label="Nächster Zeitraum">→</button></div>
+              </div>
+            </div>
+            <div class="time-period-summary" id="timePeriodSummary"></div>
+            <div class="time-period-list" id="timePeriodList"><p class="empty-state">Zeitraum wird geladen.</p></div>
+          </section>
+        </section>
+
+        <section class="portal-view leadership-view" id="leadershipTeamView" role="tabpanel" aria-labelledby="leadershipTeamTab">
+          <div class="view-heading leadership-heading"><div><span class="eyebrow">Leitungsansicht</span><h1>Team jetzt</h1><p>Aktuelle Anwesenheit im eigenen Verantwortungsbereich.</p></div><button class="text-button" id="leadershipTeamRefresh" type="button">Aktualisieren</button></div>
+          <div class="leadership-context" id="leadershipContextFields"><label><span>Filiale</span><select id="leadershipLocation"></select></label><label><span>Abteilung</span><select id="leadershipDepartment"><option value="">Gesamte Filiale</option></select></label></div>
+          <div class="leadership-summary" id="leadershipPresenceSummary"></div>
+          <section class="portal-card leadership-list" id="leadershipPresenceList"><p class="empty-state">Teamstatus wird geladen.</p></section>
+        </section>
+
+        <section class="portal-view leadership-view" id="leadershipApprovalsView" role="tabpanel" aria-labelledby="leadershipApprovalsTab">
+          <div class="view-heading leadership-heading"><div><span class="eyebrow">Leitungsansicht</span><h1>Freigaben</h1><p>Offene Urlaubs-, ZA-, AUM- und Zeitkorrekturanträge.</p></div><button class="text-button" id="leadershipApprovalsRefresh" type="button">Aktualisieren</button></div>
+          <div class="leadership-context" id="leadershipApprovalContextFields"><label><span>Filiale</span><select id="leadershipApprovalLocation"></select></label><label><span>Abteilung</span><select id="leadershipApprovalDepartment"><option value="">Gesamte Filiale</option></select></label></div>
+          <div class="leadership-filter-tabs" role="group" aria-label="Antragsart"><button class="active" data-leadership-kind="absence" type="button">Urlaub &amp; ZA</button><button data-leadership-kind="amu" type="button">AUM</button><button data-leadership-kind="time_correction" type="button">Zeitkorrektur</button></div>
+          <section class="portal-card leadership-list" id="leadershipApprovalList"><p class="empty-state">Freigaben werden geladen.</p></section>
+        </section>
+
+        <section class="portal-view leadership-view" id="leadershipMoreView" role="tabpanel" aria-labelledby="leadershipMoreTab">
+          <div class="view-heading"><div><span class="eyebrow">Schnellzugriff</span><h1>Mehr</h1><p>Persönliche Anträge und weitere Funktionen.</p></div></div>
+          <div class="leadership-more-grid">
+            <button type="button" data-more-tab="timeOff"><strong>ZA beantragen</strong><span>Stundenweise, ganztägig oder mehrtägig</span></button>
+            <button type="button" data-more-tab="vacation"><strong>Urlaub beantragen</strong><span>Neuen Urlaubsantrag einreichen</span></button>
+            <button type="button" data-more-tab="amu"><strong>AUM übermitteln</strong><span>Dokument oder Handyfoto sicher senden</span></button>
+            <button type="button" id="leadershipPasswordButton"><strong>Passwort ändern</strong><span>Persönliches Passwort verwalten</span></button>
+            <a id="leadershipDesktopLink" href="/?desktop=1"><strong>Desktop-Planung</strong><span>Vollständige Verwaltung am großen Bildschirm</span></a>
           </div>
         </section>
 
@@ -184,6 +224,30 @@
         <div class="history-detail-summary" id="historyDetailSummary"></div>
         <div class="decision-timeline" id="historyDecisionTimeline"></div>
         <div class="dialog-actions"><button type="button" data-close-history-detail>Schließen</button></div>
+      </form>
+    </dialog>
+    <dialog id="timeCorrectionDialog">
+      <form id="timeCorrectionForm">
+        <div class="dialog-heading"><div><span class="eyebrow">Zeiterfassung</span><h2>Buchung korrigieren lassen</h2></div><button type="button" data-close-time-correction>×</button></div>
+        <p id="timeCorrectionDateText"></p>
+        <input id="timeCorrectionId" type="hidden" />
+        <input id="timeCorrectionDate" type="hidden" />
+        <div class="correction-entry-editor" id="timeCorrectionEntries"></div>
+        <button class="text-button correction-add-entry" id="addTimeCorrectionEntry" type="button">+ Buchung ergänzen</button>
+        <label><span>Bemerkung</span><textarea id="timeCorrectionNote" maxlength="500" rows="3" placeholder="Was soll korrigiert werden?"></textarea></label>
+        <p class="message hidden" id="timeCorrectionMessage"></p>
+        <div class="dialog-actions"><button type="button" data-close-time-correction>Abbrechen</button><button class="primary" type="submit">Korrektur anfragen</button></div>
+      </form>
+    </dialog>
+    <dialog id="leadershipRequestDialog">
+      <form id="leadershipRequestForm">
+        <div class="dialog-heading"><div><span class="eyebrow">Leitungsansicht</span><h2 id="leadershipRequestTitle">Antrag bearbeiten</h2></div><button type="button" data-close-leadership-request>×</button></div>
+        <div class="history-detail-summary" id="leadershipRequestSummary"></div>
+        <div class="correction-entry-editor hidden" id="leadershipCorrectionEntries"></div>
+        <button class="text-button correction-add-entry hidden" id="addLeadershipCorrectionEntry" type="button">+ Buchung ergänzen</button>
+        <label><span>Bemerkung</span><textarea id="leadershipRequestNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
+        <p class="message hidden" id="leadershipRequestMessage"></p>
+        <div class="dialog-actions leadership-request-actions" id="leadershipRequestActions"></div>
       </form>
     </dialog>
     <dialog id="notificationsDialog">

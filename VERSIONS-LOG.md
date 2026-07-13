@@ -1,5 +1,15 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.53 Beta
+
+- Geschütztes Rechtemanagement ergänzt: Admin und Personalleitung können ausgewählte Verwaltungsrechte gezielt an Filial- und Abteilungsleitungen delegieren; besonders sensible Funktionen bleiben der übergeordneten Ebene vorbehalten.
+- Installierte Branding-Kits können durch Admin oder Personalleitung standortbezogen zugewiesen werden; Filial- und Abteilungsleitungen erhalten keinen Zugriff auf Branding-Änderungen.
+- Zeiterfassung um persönliche Wochen- und Monatsübersichten sowie nachvollziehbare Korrekturanträge erweitert.
+- Berechtigte Leitungen können Zeitkorrekturen prüfen, bearbeiten, genehmigen oder ablehnen; Entscheidungen und Änderungen bleiben protokolliert.
+- Mobil optimiertes Leitungsportal mit wenigen, konfigurierbaren Kernfunktionen ergänzt; im Mitarbeiterportal öffnet sich die Zeiterfassung standardmäßig zuerst.
+- Verwaltungsübersicht für Zeiträume und offene Zeitkorrekturen ergänzt.
+- Private GitHub-Codespaces-Testumgebung für Rollen-, Portal- und Zeiterfassungsabläufe über den geschützten HTTPS-Proxy aktualisiert.
+
 ## v0.52 Beta
 
 - Standortweise aktivierbare Zeiterfassung ergänzt: Mitarbeitende buchen im mobil optimierten Portal „Kommen“, „Pause“, „Weiter“ und „Gehen“ mit verbindlicher Serverzeit und geschützter Buchungsfolge.

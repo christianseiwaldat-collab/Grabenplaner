@@ -12,8 +12,22 @@ const portalState = {
   amuPolicy: null,
   activeTab: "schedule",
   timeTracking: null,
+  timePeriod: "week",
+  timePeriodAnchor: iso(new Date()),
+  timeSummary: null,
+  timeCorrections: [],
   timeTrackingLoading: false,
   timeTrackingBooking: false,
+  mobileLayout: null,
+  mobileLeadership: false,
+  leadershipOverview: null,
+  leadershipLocations: [],
+  leadershipLocationId: "",
+  leadershipDepartmentId: "",
+  leadershipKind: "absence",
+  leadershipRequests: [],
+  leadershipAmuReports: [],
+  selectedLeadershipRequest: null,
   editingTimeOffId: null,
   editingVacationId: null,
   timeOffArchive: false,
@@ -40,6 +54,7 @@ function applyDeviceMode() {
   const mobileHint = navigator.userAgentData?.mobile === true || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   document.documentElement.dataset.uiMode = compact || (touch && mobileHint) ? "mobile" : "desktop";
   document.documentElement.dataset.inputMode = touch ? "touch" : "pointer";
+  if (portalState.session) applyMobileLeadershipLayout();
 }
 applyDeviceMode();
 window.addEventListener("resize", applyDeviceMode, { passive: true });
@@ -49,6 +64,11 @@ const el = Object.fromEntries([
   "portalUserName", "portalUserRole", "adminAppLink", "changePasswordButton", "logoutButton", "notificationsButton", "notificationBadge", "scheduleView", "timeOffView",
   "vacationView", "historyView", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingRefresh", "timeTrackingCard",
   "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeDifference", "timeEntryList",
+  "timePeriodHeading", "timePeriodSummary", "timePeriodList", "previousTimePeriod", "currentTimePeriod", "nextTimePeriod",
+  "leadershipTeamTab", "leadershipApprovalsTab", "leadershipMoreTab", "leadershipTeamView", "leadershipApprovalsView", "leadershipMoreView",
+  "leadershipTeamRefresh", "leadershipApprovalsRefresh", "leadershipContextFields", "leadershipLocation", "leadershipDepartment", "leadershipApprovalContextFields", "leadershipApprovalLocation", "leadershipApprovalDepartment", "leadershipPresenceSummary", "leadershipPresenceList", "leadershipApprovalList",
+  "leadershipPasswordButton", "leadershipDesktopLink", "timeCorrectionDialog", "timeCorrectionForm", "timeCorrectionId", "timeCorrectionDate", "timeCorrectionDateText", "timeCorrectionEntries", "timeCorrectionNote", "timeCorrectionMessage", "addTimeCorrectionEntry",
+  "leadershipRequestDialog", "leadershipRequestForm", "leadershipRequestTitle", "leadershipRequestSummary", "leadershipCorrectionEntries", "addLeadershipCorrectionEntry", "leadershipRequestNote", "leadershipRequestMessage", "leadershipRequestActions",
   "scheduleHeading", "scheduleGrid", "previousWeek", "currentWeek", "nextWeek",
   "timeOffRequestForm", "timeOffFormTitle", "timeOffDate", "timeOffDateTo", "timeOffDateToField", "timeOffTimeFields", "timeOffStart", "timeOffEnd", "timeOffNote", "timeOffCheck", "timeOffMessage",
   "timeOffSubmitButton", "cancelTimeOffEdit", "timeOffArchiveToggle", "timeOffRequestList", "vacationRequestForm", "vacationFormTitle", "vacationDateFrom", "vacationDateTo", "vacationNote",
@@ -79,6 +99,19 @@ function addDays(value, amount) {
   const date = new Date(`${value}T12:00:00`);
   date.setDate(date.getDate() + amount);
   return iso(date);
+}
+
+function addMonths(value, amount) {
+  const date = new Date(`${value}T12:00:00`);
+  const day = date.getDate();
+  date.setDate(1);
+  date.setMonth(date.getMonth() + amount);
+  date.setDate(Math.min(day, new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()));
+  return iso(date);
+}
+
+function isMobileUi() {
+  return document.documentElement.dataset.uiMode === "mobile";
 }
 
 function dateText(value, options = { day: "2-digit", month: "2-digit", year: "numeric" }) {
@@ -150,10 +183,129 @@ function applyPortalCapabilities() {
   if (!timeTrackingEnabled && portalState.activeTab === "timeTracking") setTab("schedule");
 }
 
-function applyRequestedTab() {
-  const requested = new URLSearchParams(location.search).get("tab");
-  const tab = requested === "requests" ? "history" : requested;
-  if (["schedule", "timeTracking", "timeOff", "vacation", "history", "amu"].includes(tab)) setTab(tab);
+function portalUser() {
+  return portalState.session?.user || null;
+}
+
+function isLeadershipUser(user = portalUser()) {
+  return ["department_manager", "manager", "hr", "admin"].includes(user?.role);
+}
+
+const mobileModuleAliases = {
+  time: "time",
+  timeTracking: "time",
+  time_tracking: "time",
+  presence: "presence",
+  team: "presence",
+  team_now: "presence",
+  approvals: "approvals",
+  requests_review: "approvals",
+  schedule: "schedule",
+  plan: "schedule",
+  requests: "requests",
+  history: "requests",
+  own_requests: "requests",
+  more: "more",
+};
+
+function normalizedMobileModules(value) {
+  const list = Array.isArray(value) ? value : [];
+  const normalized = list.map((item) => {
+    if (typeof item === "string") return mobileModuleAliases[item] || item;
+    if (item?.enabled === false || item?.visible === false) return "";
+    return mobileModuleAliases[item?.id || item?.key || item?.module] || item?.id || item?.key || item?.module || "";
+  }).filter(Boolean);
+  return [...new Set(normalized)].slice(0, 6);
+}
+
+function mobileModuleAllowed(module, permissions = portalUser()?.permissions || []) {
+  if (module === "time") return permissions.includes("own_time:read") && timeTrackingCapabilityEnabled();
+  if (module === "presence") return permissions.includes("time:read");
+  if (module === "approvals") return permissions.some((permission) => ["vacation:read", "vacation:approve", "time:review", "amu:metadata:read", "amu:review"].includes(permission));
+  if (module === "schedule") return permissions.includes("own_schedule:read");
+  if (module === "requests") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:correction_request"].includes(permission));
+  return module === "more";
+}
+
+function effectiveMobileModules() {
+  const fallback = ["time", "presence", "approvals", "schedule", "requests", "more"];
+  const configured = normalizedMobileModules(portalState.mobileLayout?.modules);
+  const available = normalizedMobileModules(portalState.mobileLayout?.availableModules);
+  const source = configured.length ? configured : fallback;
+  const availability = new Set(available.length ? available : fallback);
+  const modules = source.filter((module) => module !== "time" && availability.has(module) && mobileModuleAllowed(module));
+  if (availability.has("time") && mobileModuleAllowed("time")) modules.unshift("time");
+  return [...new Set(modules)].slice(0, 6);
+}
+
+function applyMobileLeadershipLayout() {
+  const navigation = document.querySelector(".portal-tabs");
+  if (!navigation) return;
+  const compactLeadership = isMobileUi() && isLeadershipUser();
+  portalState.mobileLeadership = compactLeadership;
+  navigation.classList.toggle("mobile-leadership", compactLeadership);
+  const regularTabs = ["schedule", "timeTracking", "timeOff", "vacation", "history", "amu"];
+  document.querySelectorAll(".leadership-tab").forEach((button) => button.classList.add("hidden"));
+  if (!compactLeadership) {
+    regularTabs.forEach((tab) => {
+      const button = document.querySelector(`[data-tab="${tab}"]`);
+      button?.classList.toggle("hidden", tab === "timeTracking" && !timeTrackingCapabilityEnabled());
+      button?.style.removeProperty("order");
+    });
+    document.querySelectorAll(".leadership-tab").forEach((button) => button.style.removeProperty("order"));
+    navigation.style.removeProperty("--mobile-module-count");
+    if (["leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(portalState.activeTab)) setTab("timeTracking");
+    return;
+  }
+  document.querySelectorAll("[data-tab]").forEach((button) => button.classList.add("hidden"));
+  const moduleTabs = {
+    time: "timeTracking",
+    presence: "leadershipTeam",
+    approvals: "leadershipApprovals",
+    schedule: "schedule",
+    requests: "history",
+    more: "leadershipMore",
+  };
+  const modules = effectiveMobileModules();
+  modules.forEach((module, index) => {
+    const button = document.querySelector(`[data-tab="${moduleTabs[module]}"]`);
+    button?.classList.remove("hidden");
+    if (button) button.style.order = String(index);
+  });
+  navigation.style.setProperty("--mobile-module-count", String(Math.max(1, modules.length)));
+  const activeButton = document.querySelector(`[data-tab="${portalState.activeTab}"]`);
+  if (activeButton?.classList.contains("hidden") && modules.length) setTab(moduleTabs[modules[0]]);
+}
+
+async function loadMobileLayout() {
+  if (!isLeadershipUser()) {
+    portalState.mobileLayout = null;
+    applyMobileLeadershipLayout();
+    return;
+  }
+  try {
+    portalState.mobileLayout = await api("/api/portal/v1/mobile-layout");
+  } catch {
+    portalState.mobileLayout = { modules: ["time", "presence", "approvals", "schedule", "requests", "more"] };
+  }
+  applyMobileLeadershipLayout();
+}
+
+function normalizedPortalTab(requested) {
+  const aliases = { requests: "history", team: "leadershipTeam", approvals: "leadershipApprovals", more: "leadershipMore", time: "timeTracking" };
+  const tab = aliases[requested] || requested;
+  if (["leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) && (!isMobileUi() || !isLeadershipUser())) return "";
+  return ["schedule", "timeTracking", "timeOff", "vacation", "history", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
+}
+
+function requestedPortalTab() {
+  return normalizedPortalTab(new URLSearchParams(location.search).get("tab"));
+}
+
+function chooseInitialPortalTab() {
+  const requested = requestedPortalTab();
+  setTab(requested || (timeTrackingCapabilityEnabled() ? "timeTracking" : "schedule"));
+  return requested;
 }
 
 async function initialize() {
@@ -179,8 +331,10 @@ async function initialize() {
     }
     showPortal(session);
     if (!session.user.mustChangePassword) {
+      await loadMobileLayout();
+      const requested = chooseInitialPortalTab();
       await loadPortalData();
-      applyRequestedTab();
+      if (!requested && portalState.timeTracking?.enabled !== true) setTab("schedule");
     }
   } catch (error) {
     showLogin(error.message);
@@ -204,12 +358,16 @@ function showLogin(error = "") {
 
 function showPortal(session) {
   portalState.session = session;
+  if (session.status) portalState.status = session.status;
+  applyPortalBranding(session.status?.branding || session.branding || portalState.status?.branding || {});
+  applyPortalCapabilities();
   el.portalLogin.classList.add("hidden");
   el.portalApp.classList.remove("hidden");
   el.portalUserName.textContent = `${session.user.employeeNumber} · ${session.user.nickname || session.user.fullName}`;
   el.portalUserRole.textContent = session.user.roleName;
   el.adminAppLink.classList.toggle("hidden", !session.user.permissions.includes("schedule:read"));
   el.passwordDialog.dataset.required = session.user.mustChangePassword ? "true" : "false";
+  applyMobileLeadershipLayout();
   if (session.user.mustChangePassword) setTimeout(() => el.passwordDialog.showModal(), 100);
 }
 
@@ -223,8 +381,10 @@ async function login(event) {
     el.loginPassword.value = "";
     showPortal(result);
     if (!result.user.mustChangePassword) {
+      await loadMobileLayout();
+      const requested = chooseInitialPortalTab();
       await loadPortalData();
-      applyRequestedTab();
+      if (!requested && portalState.timeTracking?.enabled !== true) setTab("schedule");
     }
   } catch (error) {
     message(el.loginError, error.message, true);
@@ -251,11 +411,16 @@ function setTab(tab) {
   el.vacationView.classList.toggle("active", tab === "vacation");
   el.historyView.classList.toggle("active", tab === "history");
   el.amuView.classList.toggle("active", tab === "amu");
+  el.leadershipTeamView?.classList.toggle("active", tab === "leadershipTeam");
+  el.leadershipApprovalsView?.classList.toggle("active", tab === "leadershipApprovals");
+  el.leadershipMoreView?.classList.toggle("active", tab === "leadershipMore");
   if (tab === "timeOff") loadTimeOffRequests();
-  if (tab === "timeTracking") loadTimeTracking();
+  if (tab === "timeTracking") Promise.allSettled([loadTimeTracking(), loadTimeSummary(), loadTimeCorrections()]);
   if (tab === "vacation") loadVacationRequests();
   if (tab === "history") Promise.allSettled([loadAbsenceHistory(), loadApprovedVacations()]);
   if (tab === "amu") Promise.allSettled([loadAmuReports(), loadAmuSettings()]);
+  if (tab === "leadershipTeam") loadLeadershipOverview();
+  if (tab === "leadershipApprovals") loadLeadershipApprovals();
 }
 
 async function loadSchedule() {
@@ -379,11 +544,431 @@ async function bookTimeEntry(type) {
     });
     portalState.timeTracking = result.status || result.timeTracking || result;
     message(el.timeTrackingMessage, `${timeEntryLabels[type] || "Buchung"} wurde gespeichert.`);
+    loadTimeSummary();
   } catch (error) {
     message(el.timeTrackingMessage, error.message, true);
   } finally {
     portalState.timeTrackingBooking = false;
     renderTimeTracking();
+  }
+}
+
+function normalizedTimeSummary(result = {}) {
+  const summary = result.summary || result;
+  const days = Array.isArray(summary.days) ? summary.days : [];
+  return {
+    ...summary,
+    days: days.map((day) => ({
+      ...day,
+      date: day.date || day.workDate || day.work_date,
+      plannedMinutes: Number(day.plannedMinutes ?? day.planned_minutes ?? 0),
+      actualMinutes: Number(day.actualMinutes ?? day.actual_minutes ?? 0),
+      differenceMinutes: Number(day.differenceMinutes ?? day.difference_minutes ?? 0),
+      entries: Array.isArray(day.entries) ? day.entries : [],
+    })),
+  };
+}
+
+function correctionRequestedChange(correction = {}) {
+  const raw = correction.requestedChange ?? correction.requested_change ?? correction.change ?? {};
+  if (raw && typeof raw === "object") return raw;
+  try { return JSON.parse(raw || "{}"); } catch { return {}; }
+}
+
+function correctionDate(correction = {}) {
+  return correction.correctionDate || correction.correction_date || correction.date || "";
+}
+
+function renderTimeSummary() {
+  const summary = portalState.timeSummary;
+  if (!summary) return;
+  const days = summary.days || [];
+  const totals = summary.totals || {
+    plannedMinutes: days.reduce((sum, day) => sum + day.plannedMinutes, 0),
+    actualMinutes: days.reduce((sum, day) => sum + day.actualMinutes, 0),
+    differenceMinutes: days.reduce((sum, day) => sum + day.differenceMinutes, 0),
+  };
+  const from = summary.from || days[0]?.date || portalState.timePeriodAnchor;
+  const to = summary.to || days.at(-1)?.date || portalState.timePeriodAnchor;
+  el.timePeriodHeading.textContent = portalState.timePeriod === "month"
+    ? dateText(from, { month: "long", year: "numeric" })
+    : `${dateText(from)} – ${dateText(to)}`;
+  el.timePeriodSummary.innerHTML = [
+    ["Soll", totals.plannedMinutes ?? totals.planned_minutes],
+    ["Ist", totals.actualMinutes ?? totals.actual_minutes],
+    ["Differenz", totals.differenceMinutes ?? totals.difference_minutes, true],
+  ].map(([label, value, signed]) => `<article><span>${label}</span><strong>${durationText(value, Boolean(signed))}</strong></article>`).join("");
+  const correctionByDate = new Map();
+  for (const correction of portalState.timeCorrections) {
+    const date = correctionDate(correction);
+    const current = correctionByDate.get(date);
+    if (!current || (current.status !== "pending" && correction.status === "pending")) correctionByDate.set(date, correction);
+  }
+  const canRequest = portalUser()?.permissions?.includes("own_time:correction_request");
+  const today = iso(new Date());
+  el.timePeriodList.innerHTML = days.length ? days.map((day) => {
+    const correction = correctionByDate.get(day.date) || day.correction;
+    const entryText = day.entries.length
+      ? day.entries.map((entry) => `${timeEntryLabels[entry.type || entry.entry_type] || entry.type || entry.entry_type}: ${entry.time || timeText(timeEntryTimestamp(entry))}`).join(" · ")
+      : "Keine Buchung";
+    const correctionStatus = correction?.status ? `<small class="time-period-correction">Korrektur: ${esc(statusLabels[correction.status] || correction.status)}</small>` : "";
+    const difference = Number(day.differenceMinutes || 0);
+    return `<article class="time-period-day ${day.date === today ? "today" : ""}" data-time-summary-date="${esc(day.date)}">
+      <div><strong>${dateText(day.date, { weekday: "short", day: "2-digit", month: "2-digit" })}</strong><small>${esc(entryText)}</small>${correctionStatus}</div>
+      <div class="time-period-value"><span>Soll</span><strong>${durationText(day.plannedMinutes)}</strong></div>
+      <div class="time-period-value"><span>Ist</span><strong>${durationText(day.actualMinutes)}</strong></div>
+      <div class="time-period-value"><span>Diff.</span><strong class="${difference < 0 ? "negative" : difference > 0 ? "positive" : ""}">${durationText(difference, true)}</strong></div>
+      ${canRequest && day.date <= today && correction?.status !== "approved" ? `<button type="button" data-open-time-correction>${correction?.status === "pending" ? "Antrag bearbeiten" : "Korrektur anfragen"}</button>` : ""}
+    </article>`;
+  }).join("") : '<p class="empty-state">Für diesen Zeitraum gibt es noch keine Arbeitszeitdaten.</p>';
+}
+
+async function loadTimeSummary() {
+  if (!portalState.session || !timeTrackingCapabilityEnabled()) return;
+  try {
+    const parameters = new URLSearchParams({ period: portalState.timePeriod, anchor: portalState.timePeriodAnchor });
+    portalState.timeSummary = normalizedTimeSummary(await api(`/api/portal/v1/me/time-summary?${parameters}`));
+    renderTimeSummary();
+  } catch (error) {
+    el.timePeriodList.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
+  }
+}
+
+async function loadTimeCorrections() {
+  if (!portalUser()?.permissions?.includes("own_time:correction_request")) return;
+  try {
+    const result = await api("/api/portal/v1/me/time-corrections");
+    portalState.timeCorrections = result.corrections || result.requests || (Array.isArray(result) ? result : []);
+    renderTimeSummary();
+  } catch {
+    portalState.timeCorrections = [];
+  }
+}
+
+function correctionEntryTime(entry, date) {
+  const direct = entry.time || entry.entryTime || entry.entry_time;
+  if (direct) return String(direct).slice(0, 5);
+  const timestamp = timeEntryTimestamp(entry);
+  if (!timestamp) return "";
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return new Intl.DateTimeFormat("de-AT", { hour: "2-digit", minute: "2-digit", hour12: false }).format(parsed);
+}
+
+function appendCorrectionEntry(entry = {}, container = el.timeCorrectionEntries) {
+  const type = entry.type || entry.entryType || entry.entry_type || "clock_in";
+  const row = document.createElement("div");
+  row.className = "correction-entry-row";
+  row.innerHTML = `<label><span>Buchung</span><select data-correction-type>${Object.entries(timeEntryLabels).map(([value, label]) => `<option value="${value}" ${value === type ? "selected" : ""}>${label}</option>`).join("")}</select></label><label><span>Uhrzeit</span><input data-correction-time type="time" step="60" value="${esc(entry.time || "")}" required /></label><button type="button" data-remove-correction-entry aria-label="Buchung entfernen">×</button>`;
+  container.append(row);
+}
+
+function openTimeCorrection(date) {
+  const day = portalState.timeSummary?.days?.find((item) => item.date === date);
+  if (!day) return;
+  const correction = portalState.timeCorrections.find((item) => correctionDate(item) === date && item.status === "pending") || null;
+  const requested = correctionRequestedChange(correction || {});
+  const entries = requested.proposedEntries || requested.entries || day.entries || [];
+  el.timeCorrectionId.value = correction?.id || "";
+  el.timeCorrectionDate.value = date;
+  el.timeCorrectionDateText.textContent = `${dateText(date, { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })} · bestehende Buchungen werden zur Prüfung mitgesendet.`;
+  el.timeCorrectionNote.value = correction?.note || requested.note || "";
+  el.timeCorrectionEntries.innerHTML = "";
+  entries.forEach((entry) => appendCorrectionEntry({ ...entry, time: correctionEntryTime(entry, date) }));
+  if (!entries.length) {
+    appendCorrectionEntry({ type: "clock_in", time: "" });
+    appendCorrectionEntry({ type: "clock_out", time: "" });
+  }
+  let withdraw = el.timeCorrectionForm.querySelector("[data-withdraw-time-correction]");
+  if (correction && !withdraw) {
+    withdraw = document.createElement("button");
+    withdraw.type = "button";
+    withdraw.className = "cancel-request";
+    withdraw.dataset.withdrawTimeCorrection = "";
+    withdraw.textContent = "Antrag zurückziehen";
+    el.timeCorrectionForm.querySelector(".dialog-actions")?.prepend(withdraw);
+  }
+  withdraw?.classList.toggle("hidden", !correction);
+  message(el.timeCorrectionMessage, "");
+  el.timeCorrectionDialog.showModal();
+}
+
+function timeCorrectionPayload() {
+  const proposedEntries = [...el.timeCorrectionEntries.querySelectorAll(".correction-entry-row")].map((row) => ({
+    type: row.querySelector("[data-correction-type]").value,
+    time: row.querySelector("[data-correction-time]").value,
+  }));
+  return {
+    date: el.timeCorrectionDate.value,
+    correctionDate: el.timeCorrectionDate.value,
+    note: el.timeCorrectionNote.value,
+    entries: proposedEntries,
+    proposedEntries,
+  };
+}
+
+async function submitTimeCorrection(event) {
+  event.preventDefault();
+  const entries = timeCorrectionPayload().proposedEntries;
+  if (!entries.length || entries.some((entry) => !entry.type || !entry.time)) {
+    message(el.timeCorrectionMessage, "Bitte alle Buchungen und Uhrzeiten vollständig eintragen.", true);
+    return;
+  }
+  const id = el.timeCorrectionId.value;
+  try {
+    await api(id ? `/api/portal/v1/me/time-corrections/${id}` : "/api/portal/v1/me/time-corrections", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(timeCorrectionPayload()),
+    });
+    el.timeCorrectionDialog.close();
+    await Promise.allSettled([loadTimeCorrections(), loadTimeSummary(), loadNotifications()]);
+  } catch (error) {
+    message(el.timeCorrectionMessage, error.message, true);
+  }
+}
+
+async function withdrawTimeCorrection() {
+  const id = el.timeCorrectionId.value;
+  if (!id || !confirm("Diesen Korrekturantrag wirklich zurückziehen?")) return;
+  try {
+    await api(`/api/portal/v1/me/time-corrections/${id}`, { method: "DELETE" });
+    el.timeCorrectionDialog.close();
+    await Promise.allSettled([loadTimeCorrections(), loadTimeSummary()]);
+  } catch (error) {
+    message(el.timeCorrectionMessage, error.message, true);
+  }
+}
+
+function leadershipQuery() {
+  const parameters = new URLSearchParams();
+  if (portalState.leadershipLocationId) parameters.set("locationId", portalState.leadershipLocationId);
+  if (portalState.leadershipDepartmentId) parameters.set("departmentId", portalState.leadershipDepartmentId);
+  return parameters;
+}
+
+async function loadLeadershipContexts() {
+  if (portalState.leadershipLocations.length) return;
+  try {
+    const result = await api("/api/locations");
+    portalState.leadershipLocations = (Array.isArray(result) ? result : result.locations || []).filter((location) => location.active !== false);
+  } catch {
+    portalState.leadershipLocations = [...new Set((portalUser()?.scopes || []).map((scope) => scope.locationId))]
+      .map((locationId) => ({ id: locationId, name: `Filiale ${locationId}`, departments: [] }));
+  }
+  const scoped = portalUser()?.scopes || [];
+  const preferredLocation = scoped[0]?.locationId || portalUser()?.homeLocationId || portalState.leadershipLocations[0]?.id || "";
+  if (!portalState.leadershipLocations.some((location) => location.id === portalState.leadershipLocationId)) portalState.leadershipLocationId = preferredLocation;
+  const preferredDepartment = scoped.find((scope) => scope.locationId === portalState.leadershipLocationId)?.departmentId || "";
+  if (!portalState.leadershipDepartmentId) portalState.leadershipDepartmentId = preferredDepartment ? String(preferredDepartment) : "";
+  renderLeadershipContexts();
+}
+
+function renderLeadershipContexts() {
+  const user = portalUser();
+  const locations = portalState.leadershipLocations;
+  const location = locations.find((item) => item.id === portalState.leadershipLocationId);
+  const scopedDepartments = new Set((user?.scopes || []).filter((scope) => scope.locationId === portalState.leadershipLocationId && scope.departmentId).map((scope) => Number(scope.departmentId)));
+  const departments = (location?.departments || []).filter((department) => user?.role !== "department_manager" || scopedDepartments.has(Number(department.id)));
+  const allowWholeLocation = user?.role !== "department_manager";
+  if (!allowWholeLocation && !departments.some((department) => String(department.id) === portalState.leadershipDepartmentId)) portalState.leadershipDepartmentId = departments[0] ? String(departments[0].id) : String([...scopedDepartments][0] || "");
+  const locationOptions = locations.map((item) => `<option value="${esc(item.id)}" ${item.id === portalState.leadershipLocationId ? "selected" : ""}>${esc(item.id)} · ${esc(item.name)}</option>`).join("");
+  const departmentOptions = `${allowWholeLocation ? '<option value="">Gesamte Filiale</option>' : ""}${departments.map((department) => `<option value="${department.id}">${esc(department.name)}</option>`).join("")}`;
+  for (const [locationSelect, departmentSelect, fields] of [
+    [el.leadershipLocation, el.leadershipDepartment, el.leadershipContextFields],
+    [el.leadershipApprovalLocation, el.leadershipApprovalDepartment, el.leadershipApprovalContextFields],
+  ]) {
+    if (!locationSelect || !departmentSelect) continue;
+    locationSelect.innerHTML = locationOptions;
+    locationSelect.value = portalState.leadershipLocationId;
+    departmentSelect.innerHTML = departmentOptions;
+    departmentSelect.value = portalState.leadershipDepartmentId;
+    locationSelect.disabled = locations.length < 2;
+    departmentSelect.disabled = departments.length + (allowWholeLocation ? 1 : 0) < 2;
+    fields?.classList.toggle("hidden", locations.length < 2 && departmentSelect.disabled);
+  }
+}
+
+function normalizedLeadershipOverview(result = {}) {
+  return result.overview || result;
+}
+
+function leadershipPresence(overview = portalState.leadershipOverview || {}) {
+  return overview.presence || overview.timePresence || overview.team || overview;
+}
+
+function renderLeadershipPresence() {
+  const presence = leadershipPresence();
+  const employees = presence.employees || presence.members || [];
+  const stateCounts = employees.reduce((counts, employee) => {
+    const state = employee.state || "off";
+    counts[state] = (counts[state] || 0) + 1;
+    return counts;
+  }, {});
+  const counts = portalState.leadershipOverview?.counts || presence.counts || {};
+  el.leadershipPresenceSummary.innerHTML = [
+    ["Im Dienst", counts.working ?? stateCounts.working ?? 0],
+    ["In Pause", counts.paused ?? stateCounts.paused ?? 0],
+    ["Prüfen", counts.attention ?? stateCounts.attention ?? 0],
+  ].map(([label, value]) => `<article><span>${label}</span><strong>${Number(value || 0)}</strong></article>`).join("");
+  el.leadershipPresenceList.innerHTML = employees.length ? employees.map((employee) => {
+    const state = employee.state || "off";
+    const entries = (employee.entries || []).map((entry) => `${timeEntryLabels[entry.type || entry.entry_type] || entry.type}: ${entry.time || timeText(timeEntryTimestamp(entry))}`).join(" · ");
+    return `<article class="leadership-person"><span class="leadership-person-dot" style="--person-color:${esc(employee.color || "#7b8983")}"></span><div><strong>${esc(employee.employeeNumber || employee.employee_number)} · ${esc(employee.nickname || employee.fullName || employee.full_name)}</strong><small>${esc(entries || "Heute noch keine Buchung")} · Soll ${durationText(employee.plannedMinutes ?? employee.planned_minutes)} · Ist ${durationText(employee.actualMinutes ?? employee.actual_minutes)}</small></div><span class="leadership-person-state ${esc(state)}">${esc(timeStateLabels[state] || "Nicht da")}</span></article>`;
+  }).join("") : '<p class="empty-state">Für diesen Bereich sind heute keine Teamdaten vorhanden.</p>';
+}
+
+async function loadLeadershipOverview() {
+  if (!isLeadershipUser()) return;
+  await loadLeadershipContexts();
+  el.leadershipPresenceList.innerHTML = '<p class="empty-state">Teamstatus wird geladen.</p>';
+  try {
+    portalState.leadershipOverview = normalizedLeadershipOverview(await api(`/api/portal/v1/leadership/overview?${leadershipQuery()}`));
+    renderLeadershipPresence();
+  } catch (error) {
+    el.leadershipPresenceList.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
+  }
+}
+
+function leadershipRequestActionable(request) {
+  if (!["pending", "pending_local", "preliminary_local", "pending_hr"].includes(request.status)) return false;
+  const role = portalUser()?.role;
+  const stage = request.approval_stage || request.approvalStage;
+  if (stage === "hr") return ["hr", "admin"].includes(role);
+  return role !== "hr";
+}
+
+function requestKindLabel(request) {
+  const kind = request.kind || request.request_kind;
+  if (kind === "time_off" || kind?.startsWith("time_off")) return "ZA";
+  if (kind === "vacation_change") return "Urlaubsänderung";
+  if (kind === "vacation_cancel") return "Urlaubsstorno";
+  return "Urlaub";
+}
+
+function leadershipItemInContext(item) {
+  const itemLocation = item.locationId || item.location_id || item.scoped_location_id || item.home_location_id || "";
+  const itemDepartment = Number(item.departmentId || item.department_id || item.preferred_department_id || 0) || null;
+  if (portalState.leadershipLocationId && itemLocation && itemLocation !== portalState.leadershipLocationId) return false;
+  if (portalState.leadershipDepartmentId && itemDepartment && itemDepartment !== Number(portalState.leadershipDepartmentId)) return false;
+  return true;
+}
+
+function leadershipRequestPeriodText(request) {
+  const from = request.date_from || request.request_date || request.requested_date_from || request.correction_date;
+  const to = request.date_to || request.requested_date_to || from;
+  if (!from) return "";
+  const time = request.all_day || request.requested_all_day ? " · ganztägig" : request.start_time ? ` · ${request.start_time}–${request.end_time}` : "";
+  return `${dateText(from)}${to && to !== from ? ` – ${dateText(to)}` : ""}${time}`;
+}
+
+function renderLeadershipApprovals() {
+  const kind = portalState.leadershipKind;
+  let items = [];
+  if (kind === "absence") items = portalState.leadershipRequests.filter(leadershipRequestActionable).filter(leadershipItemInContext);
+  else if (kind === "amu") items = portalState.leadershipAmuReports.filter((report) => ["submitted", "returned"].includes(report.status)).filter(leadershipItemInContext);
+  else {
+    const overview = portalState.leadershipOverview || {};
+    items = overview.timeCorrections || overview.time_corrections || overview.corrections || [];
+    items = items.filter((item) => (!item.status || item.status === "pending") && leadershipItemInContext(item));
+  }
+  el.leadershipApprovalList.innerHTML = items.length ? items.map((item) => {
+    const employeeNumber = item.employee_number || item.employeeNumber || "";
+    const name = item.nickname || item.full_name || item.fullName || "";
+    const label = kind === "amu" ? "AUM" : kind === "time_correction" ? "Zeitkorrektur" : requestKindLabel(item);
+    const period = kind === "amu" ? `${dateText(item.incapacity_from)} – ${dateText(item.incapacity_to)}` : leadershipRequestPeriodText(item);
+    return `<article class="leadership-request-row" data-leadership-request-id="${esc(item.id)}" data-leadership-request-kind="${esc(kind)}"><div><strong>${esc(label)} · ${esc(employeeNumber)} · ${esc(name)}</strong><small>${esc(period)}${item.note || item.employee_note ? ` · ${esc(item.note || item.employee_note)}` : ""}</small><span class="status ${esc(item.status || "pending")}">${esc(statusLabels[item.status] || item.status || "Offen")}</span></div><button type="button" data-open-leadership-request>Bearbeiten</button></article>`;
+  }).join("") : '<p class="empty-state">Derzeit ist in diesem Bereich nichts zu bearbeiten.</p>';
+}
+
+async function loadLeadershipApprovals() {
+  if (!isLeadershipUser()) return;
+  await loadLeadershipContexts();
+  el.leadershipApprovalList.innerHTML = '<p class="empty-state">Freigaben werden geladen.</p>';
+  portalState.leadershipRequests = [];
+  portalState.leadershipAmuReports = [];
+  portalState.leadershipOverview = null;
+  const permissions = portalUser()?.permissions || [];
+  const tasks = [api(`/api/portal/v1/leadership/overview?${leadershipQuery()}`).then((result) => { portalState.leadershipOverview = normalizedLeadershipOverview(result); })];
+  if (permissions.includes("vacation:read") || permissions.includes("time:review")) tasks.push(api(`/api/portal/v1/absence-requests?${leadershipQuery()}`).then((result) => { portalState.leadershipRequests = result.requests || []; }));
+  if (permissions.includes("amu:metadata:read") || permissions.includes("amu:review")) tasks.push(api(`/api/portal/v1/amu-reports?${leadershipQuery()}`).then((result) => { portalState.leadershipAmuReports = result.reports || []; }));
+  const results = await Promise.allSettled(tasks);
+  if (results.every((result) => result.status === "rejected")) {
+    el.leadershipApprovalList.innerHTML = `<p class="empty-state">${esc(results[0].reason?.message || "Freigaben konnten nicht geladen werden.")}</p>`;
+    return;
+  }
+  renderLeadershipApprovals();
+}
+
+function findLeadershipRequest(id, kind) {
+  if (kind === "amu") return portalState.leadershipAmuReports.find((item) => String(item.id) === String(id));
+  if (kind === "time_correction") {
+    const overview = portalState.leadershipOverview || {};
+    return (overview.timeCorrections || overview.time_corrections || overview.corrections || []).find((item) => String(item.id) === String(id));
+  }
+  return portalState.leadershipRequests.find((item) => String(item.id) === String(id));
+}
+
+function openLeadershipRequest(id, kind) {
+  const request = findLeadershipRequest(id, kind);
+  if (!request) return;
+  portalState.selectedLeadershipRequest = { request, kind };
+  const employeeNumber = request.employee_number || request.employeeNumber || "";
+  const name = request.nickname || request.full_name || request.fullName || "";
+  const title = kind === "amu" ? "AUM prüfen" : kind === "time_correction" ? "Zeitkorrektur prüfen" : `${requestKindLabel(request)} bearbeiten`;
+  el.leadershipRequestTitle.textContent = title;
+  el.leadershipRequestSummary.innerHTML = `<strong>${esc(employeeNumber)} · ${esc(name)}</strong><p>${esc(kind === "amu" ? `${dateText(request.incapacity_from)} – ${dateText(request.incapacity_to)}` : leadershipRequestPeriodText(request))}</p>${request.note || request.employee_note ? `<p>${esc(request.note || request.employee_note)}</p>` : ""}`;
+  el.leadershipRequestNote.value = "";
+  el.leadershipCorrectionEntries.innerHTML = "";
+  el.leadershipCorrectionEntries.classList.toggle("hidden", kind !== "time_correction");
+  el.addLeadershipCorrectionEntry.classList.toggle("hidden", kind !== "time_correction");
+  if (kind === "time_correction") {
+    const requested = correctionRequestedChange(request);
+    const entries = request.proposedEntries || request.proposed_entries || requested.proposedEntries || requested.entries || [];
+    entries.forEach((entry) => appendCorrectionEntry({ ...entry, time: correctionEntryTime(entry, correctionDate(request)) }, el.leadershipCorrectionEntries));
+  }
+  message(el.leadershipRequestMessage, "");
+  const actions = kind === "amu"
+    ? [["reviewed", "Als geprüft markieren", "primary-action"]]
+    : kind === "time_correction"
+      ? [["reject", "Ablehnen", "danger-action"], ["approve", "Genehmigen", "primary-action"]]
+      : [["reject", "Ablehnen", "danger-action"], ...(request.status !== "pending_hr" ? [["preliminary", "Vorläufig", "secondary-action"]] : []), ["approve", "Genehmigen / weiterleiten", "primary-action"]];
+  el.leadershipRequestActions.innerHTML = `<button type="button" data-close-leadership-request>Abbrechen</button>${actions.map(([action, label, className]) => `<button class="${className}" data-leadership-action="${action}" type="button">${label}</button>`).join("")}`;
+  el.leadershipRequestDialog.showModal();
+}
+
+async function decideLeadershipRequest(action) {
+  const selected = portalState.selectedLeadershipRequest;
+  if (!selected) return;
+  const { request, kind } = selected;
+  let url;
+  let body;
+  if (kind === "amu") {
+    url = `/api/portal/v1/amu-reports/${request.id}/review`;
+    body = { action: "reviewed", note: el.leadershipRequestNote.value };
+  } else if (kind === "time_correction") {
+    url = `/api/portal/v1/time-corrections/${request.id}/decision`;
+    const proposedEntries = [...el.leadershipCorrectionEntries.querySelectorAll(".correction-entry-row")].map((row) => ({
+      type: row.querySelector("[data-correction-type]").value,
+      time: row.querySelector("[data-correction-time]").value,
+    }));
+    if (action === "approve" && (!proposedEntries.length || proposedEntries.some((entry) => !entry.type || !entry.time))) {
+      message(el.leadershipRequestMessage, "Bitte die korrigierte Buchungsfolge vollständig eintragen.", true);
+      return;
+    }
+    body = { action, decision: action === "approve" ? "approved" : "rejected", note: el.leadershipRequestNote.value, entries: proposedEntries, proposedEntries };
+  } else {
+    const requestKind = ["vacation_change", "vacation_cancel"].includes(request.kind) ? "vacation_change"
+      : ["time_off_change", "time_off_cancel"].includes(request.kind) ? "time_off_change" : request.kind;
+    url = `/api/portal/v1/absence-requests/${requestKind}/${request.id}/action`;
+    body = { action, note: el.leadershipRequestNote.value };
+  }
+  try {
+    await api(url, { method: "PUT", body: JSON.stringify(body) });
+    el.leadershipRequestDialog.close();
+    portalState.selectedLeadershipRequest = null;
+    await Promise.allSettled([loadLeadershipApprovals(), loadNotifications()]);
+  } catch (error) {
+    message(el.leadershipRequestMessage, error.message, true);
   }
 }
 
@@ -893,9 +1478,9 @@ async function readNotification(id) {
     const target = String(item?.target || item?.link || "");
     if (target.startsWith("/portal")) {
       const requested = new URL(target, location.origin).searchParams.get("tab");
-      const tab = requested === "requests" ? "history" : requested;
+      const tab = normalizedPortalTab(requested);
       el.notificationsDialog.close();
-      setTab(["schedule", "timeOff", "vacation", "history", "amu"].includes(tab) ? tab : "history");
+      setTab(tab || "history");
     } else if (target.startsWith("/")) location.href = target;
     else if (item?.entity_type === "amu_report") {
       el.notificationsDialog.close();
@@ -1064,7 +1649,13 @@ async function changePassword(event) {
     el.passwordDialog.dataset.required = "false";
     el.passwordForm.reset();
     message(el.passwordMessage, "Passwort wurde geändert.");
-    setTimeout(async () => { el.passwordDialog.close(); await loadPortalData(); }, 700);
+    setTimeout(async () => {
+      el.passwordDialog.close();
+      await loadMobileLayout();
+      const requested = chooseInitialPortalTab();
+      await loadPortalData();
+      if (!requested && portalState.timeTracking?.enabled !== true) setTab("schedule");
+    }, 700);
   } catch (error) { message(el.passwordMessage, error.message, true); }
 }
 
@@ -1106,6 +1697,72 @@ el.timeTrackingActions.addEventListener("click", (event) => {
   const button = event.target.closest("[data-time-action]");
   if (button && !button.disabled) bookTimeEntry(button.dataset.timeAction);
 });
+document.querySelectorAll("[data-time-period]").forEach((button) => button.addEventListener("click", () => {
+  portalState.timePeriod = button.dataset.timePeriod;
+  portalState.timePeriodAnchor = iso(new Date());
+  document.querySelectorAll("[data-time-period]").forEach((item) => item.classList.toggle("active", item === button));
+  loadTimeSummary();
+}));
+el.previousTimePeriod.addEventListener("click", () => {
+  portalState.timePeriodAnchor = portalState.timePeriod === "month" ? addMonths(portalState.timePeriodAnchor, -1) : addDays(portalState.timePeriodAnchor, -7);
+  loadTimeSummary();
+});
+el.nextTimePeriod.addEventListener("click", () => {
+  portalState.timePeriodAnchor = portalState.timePeriod === "month" ? addMonths(portalState.timePeriodAnchor, 1) : addDays(portalState.timePeriodAnchor, 7);
+  loadTimeSummary();
+});
+el.currentTimePeriod.addEventListener("click", () => { portalState.timePeriodAnchor = iso(new Date()); loadTimeSummary(); });
+el.timePeriodList.addEventListener("click", (event) => {
+  const row = event.target.closest("[data-time-summary-date]");
+  if (row && event.target.closest("[data-open-time-correction]")) openTimeCorrection(row.dataset.timeSummaryDate);
+});
+el.timeCorrectionForm.addEventListener("submit", submitTimeCorrection);
+el.addTimeCorrectionEntry.addEventListener("click", () => appendCorrectionEntry());
+el.timeCorrectionEntries.addEventListener("click", (event) => {
+  if (event.target.closest("[data-remove-correction-entry]")) event.target.closest(".correction-entry-row")?.remove();
+});
+el.timeCorrectionForm.addEventListener("click", (event) => {
+  if (event.target.closest("[data-withdraw-time-correction]")) withdrawTimeCorrection();
+});
+document.querySelectorAll("[data-close-time-correction]").forEach((button) => button.addEventListener("click", () => el.timeCorrectionDialog.close()));
+el.leadershipTeamRefresh.addEventListener("click", loadLeadershipOverview);
+el.leadershipApprovalsRefresh.addEventListener("click", loadLeadershipApprovals);
+function changeLeadershipLocation(event) {
+  portalState.leadershipLocationId = event.currentTarget.value;
+  portalState.leadershipDepartmentId = "";
+  renderLeadershipContexts();
+  if (portalState.activeTab === "leadershipTeam") loadLeadershipOverview();
+  if (portalState.activeTab === "leadershipApprovals") loadLeadershipApprovals();
+}
+function changeLeadershipDepartment(event) {
+  portalState.leadershipDepartmentId = event.currentTarget.value;
+  renderLeadershipContexts();
+  if (portalState.activeTab === "leadershipTeam") loadLeadershipOverview();
+  if (portalState.activeTab === "leadershipApprovals") loadLeadershipApprovals();
+}
+[el.leadershipLocation, el.leadershipApprovalLocation].forEach((select) => select.addEventListener("change", changeLeadershipLocation));
+[el.leadershipDepartment, el.leadershipApprovalDepartment].forEach((select) => select.addEventListener("change", changeLeadershipDepartment));
+document.querySelectorAll("[data-leadership-kind]").forEach((button) => button.addEventListener("click", () => {
+  portalState.leadershipKind = button.dataset.leadershipKind;
+  document.querySelectorAll("[data-leadership-kind]").forEach((item) => item.classList.toggle("active", item === button));
+  renderLeadershipApprovals();
+}));
+el.leadershipApprovalList.addEventListener("click", (event) => {
+  const row = event.target.closest("[data-leadership-request-id]");
+  if (row && event.target.closest("[data-open-leadership-request]")) openLeadershipRequest(row.dataset.leadershipRequestId, row.dataset.leadershipRequestKind);
+});
+el.leadershipRequestActions.addEventListener("click", (event) => {
+  const action = event.target.closest("[data-leadership-action]")?.dataset.leadershipAction;
+  if (action) decideLeadershipRequest(action);
+  else if (event.target.closest("[data-close-leadership-request]")) el.leadershipRequestDialog.close();
+});
+el.addLeadershipCorrectionEntry.addEventListener("click", () => appendCorrectionEntry({}, el.leadershipCorrectionEntries));
+el.leadershipCorrectionEntries.addEventListener("click", (event) => {
+  if (event.target.closest("[data-remove-correction-entry]")) event.target.closest(".correction-entry-row")?.remove();
+});
+document.querySelectorAll("[data-close-leadership-request]").forEach((button) => button.addEventListener("click", () => el.leadershipRequestDialog.close()));
+document.querySelectorAll("[data-more-tab]").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.moreTab)));
+el.leadershipPasswordButton.addEventListener("click", () => el.passwordDialog.showModal());
 el.previousWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, -7); loadSchedule(); });
 el.nextWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, 7); loadSchedule(); });
 el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule(); });
@@ -1193,6 +1850,8 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden && portalState.session) {
     loadNotifications();
     if (portalState.activeTab === "timeTracking") loadTimeTracking();
+    if (portalState.activeTab === "leadershipTeam") loadLeadershipOverview();
+    if (portalState.activeTab === "leadershipApprovals") loadLeadershipApprovals();
   }
 });
 setInterval(() => {
@@ -1200,6 +1859,9 @@ setInterval(() => {
 }, 45000);
 setInterval(() => {
   if (!document.hidden && portalState.session && portalState.activeTab === "timeTracking") loadTimeTracking();
+}, 30000);
+setInterval(() => {
+  if (!document.hidden && portalState.session && portalState.activeTab === "leadershipTeam") loadLeadershipOverview();
 }, 30000);
 
 initialize();

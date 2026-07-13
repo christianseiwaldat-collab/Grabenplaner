@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.52 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.53 Beta</span></div>
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
@@ -181,6 +181,17 @@
             <div class="vacation-panel-heading"><div><h2>Teamstatus heute</h2><p id="timePresenceUpdated">Noch nicht aktualisiert.</p></div></div>
             <div class="time-presence-list" id="timePresenceList"><p class="settings-note">Die Anwesenheit wird geladen.</p></div>
           </section>
+          <section class="vacation-panel time-summary-panel">
+            <div class="vacation-panel-heading">
+              <div><h2>Arbeitszeitübersicht</h2><p>Soll, Ist und Differenz für einen frei wählbaren Zeitraum.</p></div>
+              <div class="time-summary-controls"><label class="field"><span>Von</span><input id="timeSummaryFrom" type="date" /></label><label class="field"><span>Bis</span><input id="timeSummaryTo" type="date" /></label><button type="button" class="secondary-button" id="loadTimeSummaryButton">Auswerten</button></div>
+            </div>
+            <div class="time-summary-list" id="timeSummaryList"><p class="settings-note">Zeitraum auswählen und auswerten.</p></div>
+          </section>
+          <section class="vacation-panel time-correction-panel" id="timeCorrectionPanel">
+            <div class="vacation-panel-heading"><div><h2>Zeitkorrekturen</h2><p>Anträge prüfen, bei Bedarf anpassen und nachvollziehbar entscheiden.</p></div><span class="status-badge inactive" id="timeCorrectionCount">0 offen</span></div>
+            <div class="time-correction-list" id="timeCorrectionRequestList"><p class="settings-note">Korrekturanträge werden geladen.</p></div>
+          </section>
         </section>
 
         <section id="vacationsView" class="view">
@@ -267,7 +278,7 @@
 
           <section id="locationSettings" class="personnel-section">
             <div class="settings-grid location-management-grid">
-              <div class="settings-card">
+              <div class="settings-card" id="locationFormCard">
                 <div class="card-heading"><div class="card-icon">01</div><div><h2>Filiale bearbeiten</h2><p>Filial-ID ist zweistellig und wird manuell vergeben, z. B. 01 für Hauptstandort.</p></div></div>
                 <form id="locationForm">
                   <div class="inline-fields">
@@ -294,7 +305,7 @@
                 </form>
               </div>
 
-              <div class="settings-card">
+              <div class="settings-card" id="departmentFormCard">
                 <div class="card-heading"><div class="card-icon">Abt</div><div><h2>Abteilung bearbeiten</h2><p>Bis zu 3 Abteilungen je Filiale. Dienstplanung kann dann je Abteilung getrennt angezeigt werden.</p></div></div>
                 <form id="departmentForm">
                   <input id="departmentId" type="hidden" />
@@ -326,6 +337,7 @@
             <button class="settings-tab" data-settings-tab="pdf">PDF-Ausgabe</button>
             <button class="settings-tab" data-settings-tab="personnel">Personal</button>
             <button class="settings-tab" data-settings-tab="access">Zugänge</button>
+            <button class="settings-tab" data-settings-tab="rights">Rechtemanagement</button>
             <button class="settings-tab" data-settings-tab="backup">Datenbank</button>
           </div>
 
@@ -350,6 +362,7 @@
                 </button>
               </div>
               <p class="settings-note" id="portalFoundationHint">Vor der Aktivierung wird ein Admin-Zugang benötigt. Der Wechsel erfordert einen sicheren Neustart.</p>
+              <div class="form-actions-inline"><button class="primary-button hidden" id="saveOperationModeButton" type="button">Betriebsmodus übernehmen</button></div>
               <p class="settings-note security-note">Der Serverbetrieb wird nicht per Browser aktiviert. Dadurch können öffentliche Adresse, Proxy-Vertrauen und HTTPS-Pflicht nicht versehentlich verändert werden.</p>
             </div>
 
@@ -449,6 +462,20 @@
             </div>
           </section>
 
+          <section id="rightsSettings" class="settings-section">
+            <div class="settings-card full-span">
+              <div class="card-heading"><div class="card-icon">R</div><div><h2>Rechtemanagement</h2><p>Zusätzliche Verwaltungsrechte gezielt an Filial- und Abteilungsleitungen vergeben.</p></div></div>
+              <p class="settings-note security-note">Rollenbereiche bleiben immer wirksam. Branding, Rechtemanagement, Backups und Updates können nicht an untergeordnete Rollen delegiert werden.</p>
+              <p class="settings-note" id="rightsManagementHint">Rechte werden geladen.</p>
+              <div class="rights-user-list" id="rightsUserList"></div>
+            </div>
+            <div class="settings-card full-span">
+              <div class="card-heading"><div class="card-icon">Mobil</div><div><h2>Mobile Leitungsansicht</h2><p>Legt fest, welche kompakten Funktionen Leitungen unterwegs im Mitarbeiterportal sehen.</p></div></div>
+              <div class="mobile-module-settings" id="mobileLeadershipModuleSettings"></div>
+              <div class="form-actions-inline"><span class="settings-note" id="mobileLeadershipSettingsHint">Maximal sechs Elemente je Rolle.</span><button class="primary-button" id="saveMobileLeadershipSettingsButton" type="button">Mobile Ansicht speichern</button></div>
+            </div>
+          </section>
+
           <section id="brandingSettings" class="settings-section">
             <div class="settings-card full-settings-card">
               <div class="card-heading"><div class="card-icon">Logo</div><div><h2>Branding</h2><p>Firmenname, Logo und Admin-Kontakt für Oberfläche und PDF-Ausgabe.</p></div></div>
@@ -474,6 +501,10 @@
               </div>
               <div class="branding-kit-library" id="brandingKitLibrary"></div>
               <p class="settings-note">Branding-Kits können als komplette ZIP-Datei oder als ältere JSON-Datei importiert werden. Importierte Kits werden lokal gespeichert und können später wie Themes erneut angewendet werden.</p>
+            </div>
+            <div class="settings-card full-settings-card">
+              <div class="card-heading"><div class="card-icon">Fil</div><div><h2>Branding je Standort</h2><p>Jede Filiale kann ein eigenes installiertes Branding-Kit verwenden. Ohne Zuordnung gilt das Standard-Branding.</p></div></div>
+              <div class="branding-assignment-list" id="brandingAssignmentList"><p class="settings-note">Standortzuordnungen werden geladen.</p></div>
             </div>
           </section>
 
@@ -522,7 +553,7 @@
           </section>
 
           <section id="personnelSettings" class="settings-section">
-            <div class="settings-card">
+            <div class="settings-card" id="positionSettingsCard">
               <div class="card-heading"><div class="card-icon">Pos</div><div><h2>Positionen</h2><p>Standardpositionen sind fix. Eigene Positionen können ergänzt, bearbeitet und gelöscht werden.</p></div></div>
               <form id="positionForm" class="position-form">
                 <input id="positionId" type="hidden" />
@@ -531,7 +562,7 @@
               </form>
               <div class="position-list" id="positionList"></div>
             </div>
-            <div class="settings-card">
+            <div class="settings-card" id="personnelViewSettingsCard">
               <div class="card-heading"><div class="card-icon">Team</div><div><h2>Personalansicht</h2><p>Darstellung der Stammdaten unter Teams &amp; Standorte.</p></div></div>
               <label class="switch-row"><span><strong>Inaktive Teammitglieder anzeigen</strong><small>Blendet inaktive Stammdaten unter Teams &amp; Standorte ein.</small></span><input id="showInactivePersonnel" type="checkbox" /></label>
               <label class="switch-row"><span><strong>Samstagsstatistik anzeigen</strong><small>Zeigt in den Wochenstunden, wie oft ein Teammitglied zuletzt samstags mindestens 2 Stunden eingeteilt war.</small></span><input id="showSaturdayServiceStats" type="checkbox" /></label>
@@ -573,7 +604,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.52 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.53 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -779,6 +810,22 @@
         </div>
         <p class="message hidden" id="timeCorrectionMessage"></p>
         <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="timeCorrectionModal">Abbrechen</button><button type="submit" class="primary-button">Altbuchung abschließen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="timeCorrectionReviewModal">
+      <form method="dialog" id="timeCorrectionReviewForm">
+        <div class="modal-header"><div><span class="eyebrow">Zeiterfassung</span><h2>Zeitkorrektur prüfen</h2><p id="timeCorrectionReviewSummary">Beantragte Buchungsfolge prüfen und bei Bedarf anpassen.</p></div><button type="button" class="close-button" data-close="timeCorrectionReviewModal">×</button></div>
+        <input id="timeCorrectionReviewId" type="hidden" />
+        <div class="form-grid">
+          <label class="field"><span>Kommen</span><input id="timeCorrectionReviewClockIn" type="time" step="60" required /></label>
+          <label class="field"><span>Pause von</span><input id="timeCorrectionReviewBreakStart" type="time" step="60" /></label>
+          <label class="field"><span>Pause bis</span><input id="timeCorrectionReviewBreakEnd" type="time" step="60" /></label>
+          <label class="field"><span>Gehen</span><input id="timeCorrectionReviewClockOut" type="time" step="60" required /></label>
+          <label class="field full-width"><span>Entscheidungsbemerkung</span><textarea id="timeCorrectionReviewNote" rows="3" maxlength="500" placeholder="Optional"></textarea></label>
+        </div>
+        <p class="message hidden" id="timeCorrectionReviewMessage"></p>
+        <div class="request-action-buttons"><button class="danger-button" data-time-correction-decision="reject" type="button">Ablehnen</button><button class="primary-button" data-time-correction-decision="approve" type="button">Korrektur genehmigen</button></div>
       </form>
     </dialog>
 

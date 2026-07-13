@@ -20,6 +20,16 @@ const PORTAL_SESSION_COOKIE = "grabenplaner_session";
 const PORTAL_CSRF_COOKIE = "grabenplaner_csrf";
 const scryptAsync = promisify(crypto.scrypt);
 
+const delegablePortalPermissionCatalog = Object.freeze([
+  { id: "settings:write", label: "Planungs- und Grundeinstellungen bearbeiten", group: "Einstellungen", warningLevel: "normal" },
+  { id: "employees:write", label: "Teammitglieder anlegen, bearbeiten und löschen", group: "Teams & Standorte", warningLevel: "high" },
+  { id: "locations:write", label: "Standorte bearbeiten", group: "Teams & Standorte", warningLevel: "high" },
+  { id: "departments:write", label: "Abteilungen anlegen und bearbeiten", group: "Teams & Standorte", warningLevel: "normal" },
+  { id: "positions:write", label: "Positionen anlegen, bearbeiten und löschen", group: "Teams & Standorte", warningLevel: "normal" },
+  { id: "operation_mode:write", label: "Betriebsmodus umschalten", group: "System", warningLevel: "critical" },
+]);
+const delegablePortalPermissions = new Set(delegablePortalPermissionCatalog.map((entry) => entry.id));
+
 const builtinPortalRoles = [
   {
     id: "employee",
@@ -100,6 +110,18 @@ const builtinPortalRoles = [
       "vacation:read",
       "vacation:approve",
       "settings:write",
+      "branding:read",
+      "branding:write",
+      "rights:read",
+      "rights:write",
+      "operation_mode:write",
+      "employees:write",
+      "locations:write",
+      "departments:write",
+      "positions:write",
+      "backup:write",
+      "update:write",
+      "system:write",
       "users:write",
       "roles:read",
       "roles:write",
@@ -138,6 +160,16 @@ const builtinPortalRoles = [
       "hr:approve",
       "hr:settings",
       "users:write",
+      "settings:write",
+      "branding:read",
+      "branding:write",
+      "rights:read",
+      "rights:write",
+      "operation_mode:write",
+      "employees:write",
+      "locations:write",
+      "departments:write",
+      "positions:write",
       "amu:metadata:read",
       "amu:file:read",
       "amu:review",
@@ -162,6 +194,12 @@ const defaultPortalSettings = {
   amu_convert_images_to_pdf: "1",
   amu_grayscale_images: "1",
   amu_manager_file_access: "0",
+  mobile_leadership_layouts: JSON.stringify({
+    department_manager: ["timeTracking", "team", "approvals", "schedule", "requests", "more"],
+    manager: ["timeTracking", "team", "approvals", "schedule", "requests", "more"],
+    hr: ["timeTracking", "approvals", "team", "schedule", "requests", "more"],
+    admin: ["timeTracking", "approvals", "team", "schedule", "requests", "more"],
+  }),
 };
 
 function formatVersionLabel(version) {
@@ -470,6 +508,20 @@ function createSchema() {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS location_branding (
+      location_id TEXT PRIMARY KEY,
+      kit_id TEXT NOT NULL DEFAULT 'custom',
+      company_name TEXT NOT NULL DEFAULT '',
+      logo_url TEXT NOT NULL DEFAULT '/assets/grabenplaner-logo.svg',
+      icon_url TEXT NOT NULL DEFAULT '/assets/webicon.svg',
+      logo_alt TEXT NOT NULL DEFAULT 'Grabenplaner',
+      admin_email TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS departments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       location_id TEXT NOT NULL,
@@ -658,6 +710,17 @@ function createSchema() {
       FOREIGN KEY (location_id) REFERENCES locations(id) ON UPDATE CASCADE ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS portal_permission_grants (
+      employee_number TEXT NOT NULL,
+      permission TEXT NOT NULL,
+      granted_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (employee_number, permission),
+      FOREIGN KEY (employee_number) REFERENCES portal_users(employee_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS vacation_requests (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       employee_number TEXT NOT NULL,
@@ -799,6 +862,10 @@ function createSchema() {
       source TEXT NOT NULL DEFAULT 'portal',
       note TEXT NOT NULL DEFAULT '',
       created_by TEXT,
+      voided_at TEXT,
+      voided_by TEXT,
+      void_reason TEXT NOT NULL DEFAULT '',
+      correction_id INTEGER,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
         ON UPDATE CASCADE ON DELETE CASCADE,
@@ -811,11 +878,16 @@ function createSchema() {
     CREATE TABLE IF NOT EXISTS time_corrections (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       employee_number TEXT NOT NULL,
+      location_id TEXT,
+      department_id INTEGER,
       correction_date TEXT NOT NULL,
       requested_change TEXT NOT NULL DEFAULT '',
+      request_note TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'pending',
       decided_by TEXT,
       decided_at TEXT,
+      decision_note TEXT NOT NULL DEFAULT '',
+      requested_by TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
@@ -926,6 +998,7 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_portal_users_role_active ON portal_users(role, active);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_employee ON portal_sessions(employee_number, expires_at);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_expiry ON portal_sessions(expires_at, revoked_at);
+    CREATE INDEX IF NOT EXISTS idx_portal_permission_grants_employee ON portal_permission_grants(employee_number, permission);
   `);
 }
 
@@ -1025,10 +1098,66 @@ ensureColumn("portal_roles", "updated_at", "TEXT");
 ensureColumn("time_entries", "location_id", "TEXT");
 ensureColumn("time_entries", "department_id", "INTEGER");
 ensureColumn("time_entries", "work_date", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("time_entries", "voided_at", "TEXT");
+ensureColumn("time_entries", "voided_by", "TEXT");
+ensureColumn("time_entries", "void_reason", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("time_entries", "correction_id", "INTEGER");
+ensureColumn("time_corrections", "location_id", "TEXT");
+ensureColumn("time_corrections", "department_id", "INTEGER");
+ensureColumn("time_corrections", "request_note", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("time_corrections", "decision_note", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("time_corrections", "requested_by", "TEXT");
 ensureColumn("amu_reports", "department_id", "INTEGER");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_work_date ON time_entries(employee_number, work_date, entry_timestamp)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_location_date ON time_entries(location_id, work_date, entry_timestamp)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_time_corrections_context ON time_corrections(location_id, department_id, status, correction_date)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_time_corrections_pending_employee_date ON time_corrections(employee_number, correction_date, status)");
 db.prepare("UPDATE time_entries SET work_date = SUBSTR(entry_timestamp, 1, 10) WHERE TRIM(COALESCE(work_date, '')) = ''").run();
+db.prepare(`
+  UPDATE time_entries
+  SET location_id = (SELECT e.home_location_id FROM employees e WHERE e.personnel_number = time_entries.employee_number)
+  WHERE TRIM(COALESCE(location_id, '')) = ''
+`).run();
+db.prepare(`
+  UPDATE time_entries
+  SET department_id = COALESCE(
+    (SELECT s.department_id FROM shifts s
+      WHERE s.employee_number = time_entries.employee_number AND s.shift_date = time_entries.work_date AND s.department_id IS NOT NULL
+      ORDER BY s.start_time, s.id LIMIT 1),
+    (SELECT e.preferred_department_id FROM employees e WHERE e.personnel_number = time_entries.employee_number)
+  )
+  WHERE department_id IS NULL
+`).run();
+db.prepare(`
+  UPDATE time_corrections
+  SET location_id = COALESCE(
+    (SELECT t.location_id FROM time_entries t
+      WHERE t.employee_number = time_corrections.employee_number AND t.work_date = time_corrections.correction_date
+        AND TRIM(COALESCE(t.location_id, '')) <> ''
+      ORDER BY t.entry_timestamp, t.id LIMIT 1),
+    (SELECT e.home_location_id FROM employees e WHERE e.personnel_number = time_corrections.employee_number)
+  )
+  WHERE TRIM(COALESCE(location_id, '')) = ''
+`).run();
+db.prepare(`
+  UPDATE time_corrections
+  SET department_id = COALESCE(
+    (SELECT t.department_id FROM time_entries t
+      WHERE t.employee_number = time_corrections.employee_number AND t.work_date = time_corrections.correction_date
+        AND t.department_id IS NOT NULL
+      ORDER BY t.entry_timestamp, t.id LIMIT 1),
+    (SELECT s.department_id FROM shifts s
+      WHERE s.employee_number = time_corrections.employee_number AND s.shift_date = time_corrections.correction_date
+        AND s.department_id IS NOT NULL
+      ORDER BY s.start_time, s.id LIMIT 1),
+    (SELECT e.preferred_department_id FROM employees e WHERE e.personnel_number = time_corrections.employee_number)
+  )
+  WHERE department_id IS NULL
+`).run();
+db.prepare(`
+  UPDATE time_corrections SET requested_by = employee_number
+  WHERE TRIM(COALESCE(requested_by, '')) = ''
+`).run();
 ensureColumn("vacation_requests", "vacation_group_id", "TEXT");
 ensureColumn("vacation_requests", "location_id", "TEXT");
 ensureColumn("vacation_requests", "approval_stage", "TEXT NOT NULL DEFAULT 'local'");
@@ -1219,6 +1348,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.51-location-hours-scopes-request-ranges", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.52-time-tracking-amu-policies", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.53-rights-branding-time-corrections-mobile", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -1610,6 +1741,10 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
   if (!scopes.length && !["admin", "hr"].includes(session.role) && session.home_location_id) {
     scopes.push({ locationId: session.home_location_id, departmentId: session.role === "department_manager" ? (Number(session.preferred_department_id) || null) : null });
   }
+  const rolePermissions = parsePortalPermissions(session.permissions);
+  const grantedPermissions = ["manager", "department_manager"].includes(session.role)
+    ? portalPermissionGrantsForEmployee(session.employee_number)
+    : [];
   return {
     id: session.id,
     employeeNumber: session.employee_number,
@@ -1619,7 +1754,9 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
     homeLocationId: session.home_location_id,
     role: session.role,
     roleName: session.role_name || session.role,
-    permissions: parsePortalPermissions(session.permissions),
+    permissions: [...new Set([...rolePermissions, ...grantedPermissions])],
+    rolePermissions,
+    grantedPermissions,
     scopes,
     mustChangePassword: Boolean(session.must_change_password),
     expiresAt: session.expires_at,
@@ -1637,6 +1774,8 @@ function publicPortalUser(session) {
     role: session.role,
     roleName: session.roleName,
     permissions: session.permissions,
+    rolePermissions: session.rolePermissions || [],
+    grantedPermissions: session.grantedPermissions || [],
     scopes: session.scopes || [],
     mustChangePassword: session.mustChangePassword,
   };
@@ -1665,6 +1804,13 @@ function assertSessionEmployeeScope(session, employeeNumber) {
   const employee = db.prepare("SELECT home_location_id, preferred_department_id FROM employees WHERE personnel_number = ?").get(employeeNumber);
   if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.");
   assertSessionContextScope(session, { locationId: employee.home_location_id, departmentId: employee.preferred_department_id });
+}
+
+function assertSessionLocationAdministrationScope(session, locationId) {
+  if (sessionHasGlobalScope(session)) return;
+  if (!(session.scopes || []).some((scope) => scope.locationId === locationId)) {
+    throw httpError(403, "Diese Filiale ist dem Zugang nicht zugewiesen.", "PORTAL_SCOPE_DENIED");
+  }
 }
 
 function requirePortalSession(request, permission = "") {
@@ -1697,7 +1843,27 @@ function enforceAdminApiAccess(request, _response, next) {
     const method = String(request.method || "GET").toUpperCase();
     let permission = "schedule:read";
     if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
-      if (/^\/(settings|branding|positions|employees|locations|departments|backup|system|update)/.test(request.path)) {
+      if (/^\/branding/.test(request.path)) {
+        permission = "branding:write";
+      } else if (/^\/employees/.test(request.path)) {
+        permission = "employees:write";
+      } else if (/^\/locations/.test(request.path)) {
+        permission = "locations:write";
+      } else if (/^\/departments/.test(request.path)) {
+        permission = "departments:write";
+      } else if (/^\/positions/.test(request.path)) {
+        permission = "positions:write";
+      } else if (/^\/backup/.test(request.path)) {
+        permission = "backup:write";
+      } else if (/^\/update/.test(request.path)) {
+        permission = "update:write";
+      } else if (/^\/operation-mode/.test(request.path)) {
+        permission = "operation_mode:write";
+      } else if (/^\/system\/restart/.test(request.path)) {
+        permission = "operation_mode:write";
+      } else if (/^\/system/.test(request.path)) {
+        permission = "system:write";
+      } else if (/^\/settings/.test(request.path)) {
         permission = "settings:write";
       } else if (/^\/(vacations|vacation-entitlements)/.test(request.path)) {
         permission = "vacation:approve";
@@ -1908,6 +2074,12 @@ function daySettingsFromLocation(locationId) {
 
 function settingsForLocation(locationId) {
   const settings = getSettings();
+  const branding = brandingForLocation(locationId, settings);
+  settings.branding_company_name = branding.companyName;
+  settings.branding_logo_url = branding.logoUrl;
+  settings.branding_icon_url = branding.iconUrl;
+  settings.branding_logo_alt = branding.logoAlt;
+  settings.branding_admin_email = branding.adminEmail;
   const days = daySettingsFromLocation(locationId);
   for (const [day] of planningDays) {
     const value = days[day];
@@ -1980,6 +2152,15 @@ function parsePortalPermissions(value) {
   }
 }
 
+function portalPermissionGrantsForEmployee(employeeNumber) {
+  if (!employeeNumber || !tableExists("portal_permission_grants")) return [];
+  return db.prepare(`
+    SELECT permission FROM portal_permission_grants
+    WHERE employee_number = ? ORDER BY permission
+  `).all(String(employeeNumber)).map((row) => row.permission)
+    .filter((permission) => delegablePortalPermissions.has(permission));
+}
+
 function getPortalRoles() {
   return db.prepare(`
     SELECT id, name, description, builtin, permissions, sort_order
@@ -1995,7 +2176,7 @@ function getPortalRoles() {
   }));
 }
 
-function getPortalStatus() {
+function getPortalStatus(locationId = "") {
   const settings = getSettings();
   const portalSettings = getPortalSettings();
   const networkRuntimeActive = serverModeActive || !loopbackHosts.has(HOST.toLowerCase()) || process.env.GRABENPLANER_FORCE_PORTAL === "1";
@@ -2024,7 +2205,7 @@ function getPortalStatus() {
     trustProxy: serverModeActive ? trustProxySetting : "",
     deploymentKind,
     passwordMinLength: portalPasswordMinLength(),
-    branding: brandingFromSettings(settings),
+    branding: locationId ? brandingForLocation(locationId, settings) : brandingFromSettings(settings),
     capabilities: {
       login: portalEnabled,
       ownSchedule: portalEnabled,
@@ -2050,6 +2231,26 @@ function requirePortalAdminOrLocal(request, permission = "users:write") {
   }
   const session = requirePortalSession(request, permission);
   assertPortalCsrf(request);
+  return session;
+}
+
+function requirePortalReadOrLocal(request, permission = "schedule:read") {
+  if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) {
+    return {
+      employeeNumber: "local",
+      role: "admin",
+      permissions: builtinPortalRoles.find((role) => role.id === "admin")?.permissions || [permission],
+      scopes: [],
+    };
+  }
+  return requirePortalSession(request, permission);
+}
+
+function requireAdminHrOrLocal(request, permission) {
+  const session = requirePortalAdminOrLocal(request, permission);
+  if (session.employeeNumber !== "local" && !["admin", "hr"].includes(session.role)) {
+    throw httpError(403, "Diese Aktion ist nur für Admin oder Personalleitung verfügbar.", "PORTAL_PERMISSION_DENIED");
+  }
   return session;
 }
 
@@ -2088,6 +2289,7 @@ function portalUsersForAdmin() {
     locked: Boolean(row.locked_until && new Date(row.locked_until) > new Date()),
     homeLocationId: row.home_location_id || "",
     preferredDepartmentId: Number(row.preferred_department_id || 0) || null,
+    grantedPermissions: portalPermissionGrantsForEmployee(row.personnel_number),
     scopes: db.prepare("SELECT location_id, department_id FROM portal_access_scopes WHERE employee_number = ? ORDER BY location_id, department_id")
       .all(row.personnel_number).map((scope) => ({ locationId: scope.location_id, departmentId: Number(scope.department_id || 0) || null })),
   }));
@@ -2198,12 +2400,15 @@ function calculateWorkedMinutes(entries, now = new Date()) {
   return Math.floor(totalMilliseconds / 60000);
 }
 
-function plannedMinutesForEmployeeDate(employeeNumber, date, locationId) {
+function plannedMinutesForEmployeeDate(employeeNumber, date, locationId, departmentId = null) {
   const settings = settingsForLocation(locationId);
   return db.prepare(`
     SELECT id, employee_number, department_id, shift_date, start_time, end_time
-    FROM shifts WHERE employee_number = ? AND shift_date = ? ORDER BY start_time, id
-  `).all(employeeNumber, date).reduce((sum, shift) => {
+    FROM shifts
+    WHERE employee_number = ? AND shift_date = ?
+      AND (? IS NULL OR department_id = ?)
+    ORDER BY start_time, id
+  `).all(employeeNumber, date, departmentId, departmentId).reduce((sum, shift) => {
     const metrics = shiftMetrics(shift, settings);
     return sum + Math.max(0, Number(metrics.raw_minutes || 0) - Number(metrics.break_minutes || 0));
   }, 0);
@@ -2213,7 +2418,7 @@ function timeEntriesForDay(employeeNumber, date) {
   return db.prepare(`
     SELECT id, employee_number, location_id, department_id, work_date, entry_type,
            entry_timestamp, source, note, created_by, created_at
-    FROM time_entries WHERE employee_number = ? AND work_date = ?
+    FROM time_entries WHERE employee_number = ? AND work_date = ? AND voided_at IS NULL
     ORDER BY entry_timestamp, id
   `).all(employeeNumber, date);
 }
@@ -2226,7 +2431,7 @@ function timeTrackingDayStatus(employeeNumber, date = viennaTodayIso(), now = ne
   const latestToday = entries.at(-1) || null;
   const latestOverall = db.prepare(`
     SELECT id, location_id, department_id, work_date, entry_type, entry_timestamp
-    FROM time_entries WHERE employee_number = ? ORDER BY entry_timestamp DESC, id DESC LIMIT 1
+    FROM time_entries WHERE employee_number = ? AND voided_at IS NULL ORDER BY entry_timestamp DESC, id DESC LIMIT 1
   `).get(employeeNumber) || null;
   const today = viennaTodayIso(now);
   const staleEntry = latestOverall && latestOverall.work_date < today && timeEntryStateFromType(latestOverall.entry_type) !== "off"
@@ -2314,7 +2519,7 @@ function resolveStaleTimeEntry(session, employeeNumber, workDate, clockOutTime, 
   try {
     const latest = db.prepare(`
       SELECT id, employee_number, location_id, department_id, work_date, entry_type, entry_timestamp
-      FROM time_entries WHERE employee_number = ? ORDER BY entry_timestamp DESC, id DESC LIMIT 1
+      FROM time_entries WHERE employee_number = ? AND voided_at IS NULL ORDER BY entry_timestamp DESC, id DESC LIMIT 1
     `).get(employeeNumber);
     if (!latest || latest.work_date !== workDate || latest.work_date >= viennaTodayIso(now)
       || timeEntryStateFromType(latest.entry_type) === "off") {
@@ -2332,17 +2537,30 @@ function resolveStaleTimeEntry(session, employeeNumber, workDate, clockOutTime, 
       throw httpError(400, "Die Abschlusszeit muss nach der letzten Buchung und vor der aktuellen Serverzeit liegen.", "TIME_CORRECTION_INVALID");
     }
     const note = "Offene Buchung durch die Leitung abgeschlossen";
+    const requestedChange = {
+      action: "close_stale_entry",
+      clockOutTime,
+      originalEntryIds: timeEntriesForDay(employeeNumber, workDate).map((entry) => Number(entry.id)),
+    };
+    const correctionResult = db.prepare(`
+      INSERT INTO time_corrections
+        (employee_number, location_id, department_id, correction_date, requested_change, request_note,
+         status, requested_by, decided_by, decided_at, decision_note)
+      VALUES (?, ?, ?, ?, ?, ?, 'approved', ?, ?, CURRENT_TIMESTAMP, ?)
+    `).run(employeeNumber, correctionContext.locationId, correctionContext.departmentId, workDate,
+      JSON.stringify(requestedChange), note, session.employeeNumber, session.employeeNumber, note);
+    const correctionId = Number(correctionResult.lastInsertRowid);
     const result = db.prepare(`
       INSERT INTO time_entries
-        (employee_number, location_id, department_id, work_date, entry_type, entry_timestamp, source, note, created_by)
-      VALUES (?, ?, ?, ?, 'clock_out', ?, 'manager_correction', ?, ?)
-    `).run(employeeNumber, correctionContext.locationId, correctionContext.departmentId, workDate, correctedAt.toISOString(), note, session.employeeNumber);
-    db.prepare(`
-      INSERT INTO time_corrections
-        (employee_number, correction_date, requested_change, status, decided_by, decided_at)
-      VALUES (?, ?, ?, 'approved', ?, CURRENT_TIMESTAMP)
-    `).run(employeeNumber, workDate, JSON.stringify({ action: "close_stale_entry", clockOutTime, timeEntryId: Number(result.lastInsertRowid) }), session.employeeNumber);
+        (employee_number, location_id, department_id, work_date, entry_type, entry_timestamp, source, note, created_by, correction_id)
+      VALUES (?, ?, ?, ?, 'clock_out', ?, 'manager_correction', ?, ?, ?)
+    `).run(employeeNumber, correctionContext.locationId, correctionContext.departmentId, workDate,
+      correctedAt.toISOString(), note, session.employeeNumber, correctionId);
+    requestedChange.timeEntryId = Number(result.lastInsertRowid);
+    db.prepare("UPDATE time_corrections SET requested_change = ? WHERE id = ?")
+      .run(JSON.stringify(requestedChange), correctionId);
     auditPortal(session.employeeNumber, "time.entry.stale.resolve", "time_entry", String(result.lastInsertRowid), JSON.stringify({ employeeNumber, workDate, clockOutTime }));
+    auditPortal(session.employeeNumber, "time.correction.approved", "time_correction", String(correctionId), JSON.stringify(requestedChange));
     db.exec("COMMIT");
     return timeTrackingDayStatus(employeeNumber, viennaTodayIso(now), now);
   } catch (error) {
@@ -2375,6 +2593,471 @@ function timePresenceForContext(session, context, date = viennaTodayIso(), now =
       color: employee.color,
       ...timeTrackingDayStatus(employee.personnel_number, date, now),
     })),
+  };
+}
+
+function calculateRecordedMinutes(entries, date, now = new Date()) {
+  let runningFrom = null;
+  let totalMilliseconds = 0;
+  for (const entry of entries) {
+    const timestamp = new Date(entry.entry_timestamp);
+    if (Number.isNaN(timestamp.getTime())) continue;
+    if (entry.entry_type === "clock_in") {
+      if (!runningFrom) runningFrom = timestamp;
+    } else if (entry.entry_type === "break_start") {
+      if (runningFrom) totalMilliseconds += Math.max(0, timestamp - runningFrom);
+      runningFrom = null;
+    } else if (entry.entry_type === "break_end") {
+      if (!runningFrom) runningFrom = timestamp;
+    } else if (entry.entry_type === "clock_out") {
+      if (runningFrom) totalMilliseconds += Math.max(0, timestamp - runningFrom);
+      runningFrom = null;
+    }
+  }
+  if (runningFrom && date === viennaTodayIso(now)) totalMilliseconds += Math.max(0, now - runningFrom);
+  return Math.floor(totalMilliseconds / 60000);
+}
+
+function parseTimeCorrectionChange(value) {
+  if (value && typeof value === "object") return value;
+  try {
+    const parsed = JSON.parse(String(value || "{}"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function serializeTimeCorrection(row) {
+  if (!row) return null;
+  const requestedChange = parseTimeCorrectionChange(row.requested_change);
+  const proposedEntries = requestedChange.proposedEntries || requestedChange.entries || [];
+  return {
+    id: Number(row.id),
+    employeeNumber: row.employee_number,
+    fullName: row.full_name || "",
+    nickname: row.nickname || "",
+    locationId: row.location_id || "",
+    locationName: row.location_name || "",
+    departmentId: Number(row.department_id || 0) || null,
+    departmentName: row.department_name || "",
+    correctionDate: row.correction_date,
+    requestedChange,
+    requested_change: requestedChange,
+    proposedEntries,
+    entries: proposedEntries,
+    reason: row.request_note || requestedChange.note || "",
+    note: row.request_note || requestedChange.note || "",
+    status: row.status,
+    requestedBy: row.requested_by || row.employee_number,
+    decidedBy: row.decided_by || null,
+    decidedAt: row.decided_at || null,
+    decisionNote: row.decision_note || "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function timeCorrectionRows(whereSql = "", values = []) {
+  return db.prepare(`
+    SELECT c.*, e.full_name, e.nickname, l.name AS location_name, d.name AS department_name
+    FROM time_corrections c
+    JOIN employees e ON e.personnel_number = c.employee_number
+    LEFT JOIN locations l ON l.id = c.location_id
+    LEFT JOIN departments d ON d.id = c.department_id
+    ${whereSql}
+    ORDER BY c.correction_date DESC, c.created_at DESC, c.id DESC
+  `).all(...values).map(serializeTimeCorrection);
+}
+
+function activeTimeEntriesForRange(employeeNumber, dateFrom, dateTo, departmentId = null) {
+  return db.prepare(`
+    SELECT id, employee_number, location_id, department_id, work_date, entry_type,
+           entry_timestamp, source, note, created_by, correction_id, created_at
+    FROM time_entries
+    WHERE employee_number = ? AND work_date BETWEEN ? AND ? AND voided_at IS NULL
+      AND (? IS NULL OR department_id = ?)
+    ORDER BY work_date, entry_timestamp, id
+  `).all(employeeNumber, dateFrom, dateTo, departmentId, departmentId);
+}
+
+function timeSummaryForEmployee(employeeNumber, dateFrom, dateTo, period = "range", now = new Date(), departmentId = null) {
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom || daysBetweenInclusive(dateFrom, dateTo) > 370) {
+    throw httpError(400, "Bitte einen gültigen Auswertungszeitraum von höchstens 370 Tagen wählen.", "TIME_SUMMARY_RANGE_INVALID");
+  }
+  const employee = db.prepare(`
+    SELECT personnel_number, full_name, nickname, color, home_location_id, preferred_department_id
+    FROM employees WHERE personnel_number = ? AND active = 1
+  `).get(employeeNumber);
+  if (!employee) throw httpError(404, "Das aktive Teammitglied wurde nicht gefunden.");
+  const entriesByDate = new Map();
+  for (const entry of activeTimeEntriesForRange(employeeNumber, dateFrom, dateTo, departmentId)) {
+    if (!entriesByDate.has(entry.work_date)) entriesByDate.set(entry.work_date, []);
+    entriesByDate.get(entry.work_date).push(entry);
+  }
+  const correctionsByDate = new Map();
+  for (const correction of timeCorrectionRows(
+    `WHERE c.employee_number = ? AND c.correction_date BETWEEN ? AND ? AND c.status <> 'withdrawn'
+       AND (? IS NULL OR c.department_id = ?)`,
+    [employeeNumber, dateFrom, dateTo, departmentId, departmentId],
+  )) {
+    if (!correctionsByDate.has(correction.correctionDate)) correctionsByDate.set(correction.correctionDate, correction);
+  }
+  const days = [];
+  for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
+    const entries = entriesByDate.get(date) || [];
+    const context = employeeRequestContext(employeeNumber, date);
+    const plannedMinutes = plannedMinutesForEmployeeDate(employeeNumber, date, context.locationId, departmentId);
+    const actualMinutes = calculateRecordedMinutes(entries, date, now);
+    const finalState = timeEntryStateFromType(entries.at(-1)?.entry_type);
+    days.push({
+      date,
+      workDate: date,
+      plannedMinutes,
+      actualMinutes,
+      differenceMinutes: actualMinutes - plannedMinutes,
+      incomplete: entries.length > 0 && finalState !== "off",
+      entries: entries.map((entry) => ({
+        id: Number(entry.id),
+        type: entry.entry_type,
+        label: timeEntryLabels[entry.entry_type] || entry.entry_type,
+        timestamp: entry.entry_timestamp,
+        source: entry.source,
+      })),
+      correction: correctionsByDate.get(date) || null,
+    });
+  }
+  const totals = days.reduce((result, day) => ({
+    plannedMinutes: result.plannedMinutes + day.plannedMinutes,
+    actualMinutes: result.actualMinutes + day.actualMinutes,
+    differenceMinutes: result.differenceMinutes + day.differenceMinutes,
+  }), { plannedMinutes: 0, actualMinutes: 0, differenceMinutes: 0 });
+  return {
+    period,
+    from: dateFrom,
+    to: dateTo,
+    dateFrom,
+    dateTo,
+    employeeNumber: employee.personnel_number,
+    fullName: employee.full_name,
+    nickname: employee.nickname,
+    color: employee.color,
+    ...totals,
+    incompleteDays: days.filter((day) => day.incomplete).length,
+    totals,
+    days,
+  };
+}
+
+function ownTimeSummary(employeeNumber, periodValue, anchorValue) {
+  const period = periodValue === "month" ? "month" : "week";
+  const anchor = isIsoDate(anchorValue) ? anchorValue : viennaTodayIso();
+  if (period === "month") {
+    const year = Number(anchor.slice(0, 4));
+    const monthIndex = Number(anchor.slice(5, 7)) - 1;
+    return timeSummaryForEmployee(employeeNumber, monthStart(year, monthIndex), monthEnd(year, monthIndex), period);
+  }
+  const from = getMonday(anchor);
+  return timeSummaryForEmployee(employeeNumber, from, addDays(from, 6), period);
+}
+
+function validateProposedTimeEntries(correctionDate, entriesValue, now = new Date()) {
+  const entries = Array.isArray(entriesValue) ? entriesValue.map((entry) => ({
+    type: String(entry?.type || entry?.entryType || entry?.entry_type || "").trim(),
+    time: String(entry?.time || "").trim().slice(0, 5),
+  })) : [];
+  const expectedTypes = entries.length === 2
+    ? ["clock_in", "clock_out"]
+    : entries.length === 4
+      ? ["clock_in", "break_start", "break_end", "clock_out"]
+      : null;
+  if (!isIsoDate(correctionDate) || correctionDate > viennaTodayIso(now) || !expectedTypes) {
+    throw httpError(400, "Bitte zwei Buchungen oder eine vollständige Buchungsfolge mit Pause angeben.", "TIME_CORRECTION_INVALID");
+  }
+  const timestamps = entries.map((entry, index) => {
+    if (entry.type !== expectedTypes[index] || !isTime(entry.time)) {
+      throw httpError(400, "Die Buchungsfolge muss mit Kommen beginnen, optional eine vollständige Pause enthalten und mit Gehen enden.", "TIME_CORRECTION_INVALID");
+    }
+    return viennaLocalDateTime(correctionDate, entry.time);
+  });
+  if (timestamps.some((timestamp, index) => index > 0 && timestamp <= timestamps[index - 1])) {
+    throw httpError(400, "Die Uhrzeiten müssen in einer eindeutigen zeitlichen Reihenfolge liegen.", "TIME_CORRECTION_INVALID");
+  }
+  if (correctionDate === viennaTodayIso(now) && timestamps.at(-1) > now) {
+    throw httpError(400, "Eine Zeitkorrektur darf nicht in der Zukunft enden.", "TIME_CORRECTION_INVALID");
+  }
+  return entries;
+}
+
+function validateOwnTimeCorrection(employeeNumber, body = {}, existingId = null) {
+  const correctionDate = String(body.correctionDate || body.date || "").trim();
+  const requestedEntries = body.requestedEntries || body.proposedEntries || body.entries;
+  const entries = validateProposedTimeEntries(correctionDate, requestedEntries);
+  const requestNote = stripEmoji(String(body.reason ?? body.note ?? "").trim()).slice(0, 500);
+  const context = employeeRequestContext(employeeNumber, correctionDate);
+  const duplicate = db.prepare(`
+    SELECT id FROM time_corrections
+    WHERE employee_number = ? AND correction_date = ? AND status = 'pending' AND id <> ?
+    LIMIT 1
+  `).get(employeeNumber, correctionDate, Number(existingId || 0));
+  if (duplicate) throw httpError(409, "Für diesen Tag besteht bereits ein offener Korrekturantrag.", "TIME_CORRECTION_PENDING_EXISTS");
+  const originals = timeEntriesForDay(employeeNumber, correctionDate);
+  return {
+    correctionDate,
+    entries,
+    requestNote,
+    context,
+    requestedChange: {
+      proposedEntries: entries,
+      entries,
+      note: requestNote,
+      originalEntryIds: originals.map((entry) => Number(entry.id)),
+      originalEntries: originals.map((entry) => ({ id: Number(entry.id), type: entry.entry_type, timestamp: entry.entry_timestamp })),
+    },
+  };
+}
+
+function notifyTimeCorrectionReviewers(correction, actor = "") {
+  for (const recipient of requestReviewerRecipients(correction.locationId, correction.departmentId, "local", actor)) {
+    createPortalNotification(recipient, "time_correction.review", "Zeitkorrektur wartet auf Prüfung", `${correction.employeeNumber} hat eine Zeitkorrektur beantragt.`, {
+      target: "/portal/?tab=approvals",
+      entityType: "time_correction",
+      entityId: correction.id,
+      dedupeKey: `time_correction:${correction.id}:review`,
+    });
+  }
+}
+
+function createOwnTimeCorrection(session, body) {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const input = validateOwnTimeCorrection(session.employeeNumber, body);
+    const result = db.prepare(`
+      INSERT INTO time_corrections
+        (employee_number, location_id, department_id, correction_date, requested_change, request_note, status, requested_by)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+    `).run(session.employeeNumber, input.context.locationId, input.context.departmentId, input.correctionDate,
+      JSON.stringify(input.requestedChange), input.requestNote, session.employeeNumber);
+    auditPortal(session.employeeNumber, "time.correction.request", "time_correction", String(result.lastInsertRowid), JSON.stringify(input.requestedChange));
+    db.exec("COMMIT");
+    const correction = timeCorrectionRows("WHERE c.id = ?", [Number(result.lastInsertRowid)])[0];
+    notifyTimeCorrectionReviewers(correction, session.employeeNumber);
+    return correction;
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
+function updateOwnTimeCorrection(session, idValue, body) {
+  const id = Number(idValue);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const existing = db.prepare("SELECT id, employee_number, status FROM time_corrections WHERE id = ?").get(id);
+    if (!existing || existing.employee_number !== session.employeeNumber) throw httpError(404, "Der Korrekturantrag wurde nicht gefunden.");
+    if (existing.status !== "pending") throw httpError(409, "Nur ein offener Korrekturantrag kann bearbeitet werden.", "TIME_CORRECTION_STATE_CONFLICT");
+    const input = validateOwnTimeCorrection(session.employeeNumber, body, id);
+    db.prepare(`
+      UPDATE time_corrections
+      SET location_id = ?, department_id = ?, correction_date = ?, requested_change = ?, request_note = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = 'pending'
+    `).run(input.context.locationId, input.context.departmentId, input.correctionDate, JSON.stringify(input.requestedChange), input.requestNote, id);
+    auditPortal(session.employeeNumber, "time.correction.update", "time_correction", String(id), JSON.stringify(input.requestedChange));
+    db.exec("COMMIT");
+    return timeCorrectionRows("WHERE c.id = ?", [id])[0];
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
+function withdrawOwnTimeCorrection(session, idValue) {
+  const id = Number(idValue);
+  const result = db.prepare(`
+    UPDATE time_corrections SET status = 'withdrawn', updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND employee_number = ? AND status = 'pending'
+  `).run(id, session.employeeNumber);
+  if (!result.changes) throw httpError(409, "Der Korrekturantrag wurde bereits bearbeitet oder nicht gefunden.", "TIME_CORRECTION_STATE_CONFLICT");
+  auditPortal(session.employeeNumber, "time.correction.withdraw", "time_correction", String(id));
+}
+
+function decideTimeCorrection(session, idValue, body = {}, now = new Date()) {
+  const id = Number(idValue);
+  const action = String(body.action || body.decision || "").toLowerCase();
+  if (!Number.isInteger(id) || !["approve", "approved", "reject", "rejected"].includes(action)) {
+    throw httpError(400, "Bitte eine gültige Entscheidung auswählen.", "TIME_CORRECTION_DECISION_INVALID");
+  }
+  const approved = action === "approve" || action === "approved";
+  const decisionNote = stripEmoji(String(body.decisionNote ?? body.note ?? "").trim()).slice(0, 500);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const row = db.prepare("SELECT * FROM time_corrections WHERE id = ?").get(id);
+    if (!row) throw httpError(404, "Der Korrekturantrag wurde nicht gefunden.");
+    if (row.status !== "pending") throw httpError(409, "Der Korrekturantrag wurde bereits entschieden.", "TIME_CORRECTION_STATE_CONFLICT");
+    const fallbackContext = employeeRequestContext(row.employee_number, row.correction_date);
+    const correctionContext = {
+      locationId: row.location_id || fallbackContext.locationId,
+      departmentId: Number(row.department_id || 0) || fallbackContext.departmentId,
+    };
+    assertSessionContextScope(session, correctionContext);
+    if (!row.location_id || (!row.department_id && correctionContext.departmentId)) {
+      db.prepare("UPDATE time_corrections SET location_id = ?, department_id = ? WHERE id = ?")
+        .run(correctionContext.locationId, correctionContext.departmentId, id);
+    }
+    const requestedChange = parseTimeCorrectionChange(row.requested_change);
+    let decidedEntries = requestedChange.proposedEntries || requestedChange.entries || [];
+    if (approved) {
+      decidedEntries = validateProposedTimeEntries(row.correction_date, body.entries || body.proposedEntries || decidedEntries, now);
+      const activeRows = timeEntriesForDay(row.employee_number, row.correction_date);
+      const originalIds = (requestedChange.originalEntryIds || []).map(Number).sort((left, right) => left - right);
+      const activeIds = activeRows.map((entry) => Number(entry.id)).sort((left, right) => left - right);
+      if (JSON.stringify(originalIds) !== JSON.stringify(activeIds)) {
+        throw httpError(409, "Die Originalbuchungen wurden seit dem Antrag verändert. Bitte einen neuen Korrekturantrag stellen.", "TIME_CORRECTION_SOURCE_CHANGED");
+      }
+      db.prepare(`
+        UPDATE time_entries
+        SET voided_at = CURRENT_TIMESTAMP, voided_by = ?, void_reason = ?, correction_id = ?
+        WHERE employee_number = ? AND work_date = ? AND voided_at IS NULL
+      `).run(session.employeeNumber, `Ersetzt durch genehmigte Zeitkorrektur ${id}`, id, row.employee_number, row.correction_date);
+      const insert = db.prepare(`
+        INSERT INTO time_entries
+          (employee_number, location_id, department_id, work_date, entry_type, entry_timestamp, source, note, created_by, correction_id)
+        VALUES (?, ?, ?, ?, ?, ?, 'manager_correction', ?, ?, ?)
+      `);
+      for (const entry of decidedEntries) {
+        insert.run(row.employee_number, correctionContext.locationId, correctionContext.departmentId, row.correction_date, entry.type,
+          viennaLocalDateTime(row.correction_date, entry.time).toISOString(), decisionNote, session.employeeNumber, id);
+      }
+    }
+    const status = approved ? "approved" : "rejected";
+    const result = db.prepare(`
+      UPDATE time_corrections
+      SET status = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP, decision_note = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = 'pending'
+    `).run(status, session.employeeNumber, decisionNote, id);
+    if (!result.changes) throw httpError(409, "Der Korrekturantrag wurde bereits entschieden.", "TIME_CORRECTION_STATE_CONFLICT");
+    auditPortal(session.employeeNumber, `time.correction.${status}`, "time_correction", String(id), JSON.stringify({ decisionNote, entries: decidedEntries }));
+    db.exec("COMMIT");
+    db.prepare("UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE entity_type = 'time_correction' AND entity_id = ?").run(String(id));
+    createPortalNotification(row.employee_number, "time_correction.decision", `Zeitkorrektur ${approved ? "genehmigt" : "abgelehnt"}`, `Bearbeitet von Personalnummer ${session.employeeNumber}.`, {
+      target: "/portal/?tab=time", entityType: "time_correction", entityId: id,
+      dedupeKey: `time_correction:${id}:${status}:${session.employeeNumber}`,
+    });
+    return timeCorrectionRows("WHERE c.id = ?", [id])[0];
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
+const mobileLeadershipModules = Object.freeze([
+  { id: "timeTracking", label: "Zeiterfassung" },
+  { id: "team", label: "Team heute" },
+  { id: "approvals", label: "Freigaben" },
+  { id: "schedule", label: "Mein Dienstplan" },
+  { id: "requests", label: "Meine Anträge" },
+  { id: "more", label: "Mehr" },
+]);
+const mobileLeadershipModuleIds = new Set(mobileLeadershipModules.map((module) => module.id));
+
+function mobileLeadershipLayouts() {
+  const fallback = JSON.parse(defaultPortalSettings.mobile_leadership_layouts);
+  try {
+    const value = JSON.parse(getPortalSettings().mobile_leadership_layouts || "{}");
+    for (const role of ["department_manager", "manager", "hr", "admin"]) {
+      const requested = Array.isArray(value[role]) ? value[role].filter((id) => mobileLeadershipModuleIds.has(id)) : [];
+      const modules = ["timeTracking", ...requested.filter((id) => id !== "timeTracking")];
+      fallback[role] = [...new Set(modules)].slice(0, 6);
+    }
+  } catch {}
+  return fallback;
+}
+
+function mobileModuleAllowedForSession(session, id) {
+  const permissions = session.permissions || [];
+  if (id === "timeTracking") return permissions.includes("own_time:read");
+  if (id === "team") return permissions.includes("time:read");
+  if (id === "approvals") return permissions.some((permission) => ["vacation:read", "vacation:approve", "time:review", "amu:metadata:read", "amu:review"].includes(permission));
+  if (id === "schedule") return permissions.includes("own_schedule:read");
+  if (id === "requests") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:correction_request"].includes(permission));
+  return id === "more";
+}
+
+function mobileLayoutPayload(session) {
+  const layouts = mobileLeadershipLayouts();
+  const roleLayout = layouts[session.role] || layouts.manager;
+  const modules = roleLayout.filter((id) => mobileModuleAllowedForSession(session, id));
+  return {
+    modules,
+    availableModules: mobileLeadershipModules,
+    layouts,
+    canChange: session.employeeNumber === "local" || ["admin", "hr"].includes(session.role),
+  };
+}
+
+function validateMobileLeadershipLayouts(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw httpError(400, "Bitte eine gültige Auswahl für die mobile Leitungsansicht übermitteln.", "MOBILE_LAYOUT_INVALID");
+  }
+  const result = mobileLeadershipLayouts();
+  for (const role of ["department_manager", "manager", "hr", "admin"]) {
+    const requested = Array.isArray(value[role]) ? value[role].map(String) : result[role];
+    if (requested.some((id) => !mobileLeadershipModuleIds.has(id))) {
+      throw httpError(400, "Die mobile Leitungsansicht enthält ein unbekanntes Element.", "MOBILE_LAYOUT_INVALID");
+    }
+    result[role] = [...new Set(["timeTracking", ...requested.filter((id) => id !== "timeTracking")])].slice(0, 6);
+  }
+  return result;
+}
+
+function leadershipOverviewForContext(session, context, now = new Date()) {
+  const presence = timePresenceForContext(session, context, viennaTodayIso(now), now);
+  const stateCounts = presence.employees.reduce((counts, employee) => {
+    counts[employee.state] = (counts[employee.state] || 0) + 1;
+    return counts;
+  }, {});
+  const corrections = timeCorrectionRows(`
+    WHERE c.status = 'pending' AND c.location_id = ?
+      AND (? IS NULL OR c.department_id = ?)
+  `, [context.locationId, context.departmentId, context.departmentId])
+    .filter((correction) => {
+      try {
+        assertSessionContextScope(session, correction);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+  const pendingAbsenceRows = db.prepare(`
+    SELECT employee_number, date_from AS request_date
+    FROM vacation_requests
+    WHERE location_id = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')
+    UNION ALL
+    SELECT employee_number, COALESCE(date_from, request_date) AS request_date
+    FROM time_off_requests
+    WHERE location_id = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')
+  `).all(context.locationId, context.locationId);
+  const absenceCount = pendingAbsenceRows.filter((entry) => !context.departmentId
+    || Number(employeeRequestContext(entry.employee_number, entry.request_date).departmentId || 0) === Number(context.departmentId)).length;
+  const amuCount = db.prepare(`
+    SELECT COUNT(*) AS count FROM amu_reports
+    WHERE location_id = ? AND status IN ('submitted','returned')
+      AND (? IS NULL OR department_id = ?)
+  `).get(context.locationId, context.departmentId, context.departmentId)?.count || 0;
+  return {
+    date: presence.date,
+    context,
+    presence,
+    counts: {
+      working: Number(stateCounts.working || 0),
+      paused: Number(stateCounts.paused || 0),
+      attention: Number(stateCounts.attention || 0),
+      off: Number(stateCounts.off || 0),
+      absenceRequests: Number(absenceCount),
+      amuReports: Number(amuCount),
+      timeCorrections: corrections.length,
+    },
+    timeCorrections: corrections,
   };
 }
 
@@ -2950,6 +3633,76 @@ function brandingFromSettings(settings = getSettings()) {
   };
 }
 
+function locationBrandingRow(locationId) {
+  if (!locationId || !tableExists("location_branding")) return null;
+  return db.prepare(`
+    SELECT location_id, kit_id, company_name, logo_url, icon_url, logo_alt, admin_email, updated_by, updated_at
+    FROM location_branding WHERE location_id = ?
+  `).get(String(locationId));
+}
+
+function brandingForLocation(locationId, fallbackSettings = null) {
+  const row = locationBrandingRow(locationId);
+  if (!row) return brandingFromSettings(fallbackSettings || getSettings());
+  return brandingFromSettings({
+    companyName: row.company_name,
+    logoUrl: row.logo_url,
+    iconUrl: row.icon_url,
+    logoAlt: row.logo_alt,
+    adminEmail: row.admin_email,
+  });
+}
+
+function saveLocationBrandingSnapshot(locationId, kitId, brandingInput, actor = "") {
+  const normalizedLocationId = normalizeLocationId(locationId);
+  validateLocationExists(normalizedLocationId);
+  const normalizedKitId = validateBrandOptionalText(kitId || "custom", 120) || "custom";
+  if (!/^[a-z0-9_-]+$/i.test(normalizedKitId)) throw httpError(400, "Die Branding-Kit-ID ist ungültig.");
+  const values = brandingValuesFromBody(brandingInput || {});
+  db.prepare(`
+    INSERT INTO location_branding
+      (location_id, kit_id, company_name, logo_url, icon_url, logo_alt, admin_email, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(location_id) DO UPDATE SET
+      kit_id = excluded.kit_id,
+      company_name = excluded.company_name,
+      logo_url = excluded.logo_url,
+      icon_url = excluded.icon_url,
+      logo_alt = excluded.logo_alt,
+      admin_email = excluded.admin_email,
+      updated_by = excluded.updated_by,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(
+    normalizedLocationId,
+    normalizedKitId,
+    values.branding_company_name,
+    values.branding_logo_url,
+    values.branding_icon_url,
+    values.branding_logo_alt,
+    values.branding_admin_email,
+    String(actor || ""),
+  );
+  return brandingForLocation(normalizedLocationId);
+}
+
+function brandingAssignmentForLocation(location) {
+  const row = locationBrandingRow(location.id);
+  return {
+    locationId: location.id,
+    locationName: location.name,
+    active: Boolean(location.active),
+    assigned: Boolean(row),
+    kitId: row?.kit_id || "",
+    branding: brandingForLocation(location.id),
+    updatedBy: row?.updated_by || "",
+    updatedAt: row?.updated_at || null,
+  };
+}
+
+function locationBrandingAssignments() {
+  return getLocations(true).map(brandingAssignmentForLocation);
+}
+
 function pdfFooterContact(settings = getSettings(), createdAt = new Date()) {
   const branding = brandingFromSettings(settings);
   return `${branding.adminEmail ? `Admin: ${branding.adminEmail} · ` : ""}Erstellt am ${formatPdfTimestamp(createdAt)}`;
@@ -3386,7 +4139,7 @@ function importBrandingAssetFromZip(extractPath, kit, brandingValues) {
   };
 }
 
-function applyBrandingKit(kit, contextInput = {}) {
+function applyBrandingKit(kit, contextInput = {}, actor = "") {
   const brandingSource = kit.branding || kit;
   const pdfSource = kit.pdf || {};
   const brandingValues = brandingValuesFromBody(brandingSource);
@@ -3396,26 +4149,21 @@ function applyBrandingKit(kit, contextInput = {}) {
   const schedulePrefix = pdfSource.scheduleFilenamePrefix ? validatePdfText(pdfSource.scheduleFilenamePrefix, "der Dienstplan-PDF-Dateiname", { min: 5, max: 80 }) : null;
   const vacationTitle = pdfSource.vacationTitle ? validatePdfText(pdfSource.vacationTitle, "den Urlaubsplaner-PDF-Titel") : null;
   const vacationPrefix = pdfSource.vacationFilenamePrefix ? validatePdfText(pdfSource.vacationFilenamePrefix, "der Urlaubsplaner-PDF-Dateiname", { min: 5, max: 80 }) : null;
-  const update = db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
   db.exec("BEGIN");
   try {
-    for (const [key, value] of Object.entries(brandingValues)) update.run(key, value);
+    saveLocationBrandingSnapshot(scheduleContext.locationId, kit.id || "custom", brandingValues, actor);
     const scheduleValues = {};
     if (scheduleTitle) {
-      update.run("pdf_title", scheduleTitle);
       scheduleValues.pdf_title = scheduleTitle;
     }
     if (schedulePrefix) {
-      update.run("pdf_filename_prefix", schedulePrefix);
       scheduleValues.pdf_filename_prefix = schedulePrefix;
     }
     const vacationValues = {};
     if (vacationTitle) {
-      update.run("vacation_pdf_title", vacationTitle);
       vacationValues.vacation_pdf_title = vacationTitle;
     }
     if (vacationPrefix) {
-      update.run("vacation_pdf_filename_prefix", vacationPrefix);
       vacationValues.vacation_pdf_filename_prefix = vacationPrefix;
     }
     if (Object.keys(scheduleValues).length) saveScopedPdfSettings("schedule", scheduleContext, scheduleValues);
@@ -3425,13 +4173,14 @@ function applyBrandingKit(kit, contextInput = {}) {
     db.exec("ROLLBACK");
     throw error;
   }
-  return { ok: true, settings: getSettings(), branding: brandingFromSettings(getSettings()) };
+  const settings = settingsForLocation(scheduleContext.locationId);
+  return { ok: true, settings, branding: brandingFromSettings(settings), locationId: scheduleContext.locationId };
 }
 
 function brandingKitForExport(requestQuery) {
   const scheduleContext = resolvePlanningContext(requestQuery);
   const vacationContext = resolvePlanningContext({ ...requestQuery, departmentId: null, department: null });
-  const baseSettings = getSettings();
+  const baseSettings = settingsForLocation(scheduleContext.locationId);
   const scheduleSettings = applyScopedPdfSettings(baseSettings, scheduleContext, "schedule");
   const vacationSettings = applyScopedPdfSettings(baseSettings, vacationContext, "vacation");
   return brandingKitFromSettings({
@@ -3574,8 +4323,9 @@ function readBrandingKitManifest(kitId) {
   return JSON.parse(fs.readFileSync(manifestPath, "utf8").replace(/^\uFEFF/, ""));
 }
 
-function listBrandingKits() {
-  const current = brandingFromSettings(getSettings());
+function listBrandingKits(locationId = "") {
+  const assignment = locationId ? locationBrandingRow(locationId) : null;
+  const current = locationId ? brandingForLocation(locationId) : brandingFromSettings(getSettings());
   const kits = [neutralBrandingKit()];
   for (const entry of fs.readdirSync(brandingKitsDirectory, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
@@ -3592,10 +4342,12 @@ function listBrandingKits() {
       installedAt: kit.installedAt || "",
       branding,
       pdf: kit.pdf || {},
-      active: branding.logoUrl === current.logoUrl
-        && branding.iconUrl === current.iconUrl
-        && branding.companyName === current.companyName
-        && branding.adminEmail === current.adminEmail,
+      active: assignment?.kit_id
+        ? String(kit.id || "neutral") === assignment.kit_id
+        : branding.logoUrl === current.logoUrl
+          && branding.iconUrl === current.iconUrl
+          && branding.companyName === current.companyName
+          && branding.adminEmail === current.adminEmail,
     };
   }).sort((a, b) => Number(b.builtin) - Number(a.builtin) || String(a.name).localeCompare(String(b.name), "de"));
 }
@@ -5111,7 +5863,7 @@ async function buildUpdateStatus() {
 
 app.get("/api/system-info", (request, response) => {
   const settings = getSettings();
-  const privileged = !getPortalStatus().portalEnabled || request.portalSession?.permissions?.includes("settings:write");
+  const privileged = !getPortalStatus().portalEnabled || request.portalSession?.permissions?.includes("system:write");
   const sqliteVersion = db.prepare("SELECT sqlite_version() AS version").get().version;
   const serverTime = new Intl.DateTimeFormat("de-AT", {
     day: "2-digit",
@@ -5135,15 +5887,15 @@ app.get("/api/system-info", (request, response) => {
     backupDirectory: privileged ? backupDirectoryFromSettings(settings) : "",
     externalBackupEnabled: settingEnabled(settings, "external_backup_enabled"),
     backupIntervalHours: Number(settings.backup_interval_hours || 2),
-    lastBackup,
+    lastBackup: privileged ? lastBackup : null,
     adminContact: brandingFromSettings(settings).adminEmail,
     appName: brandingFromSettings(settings).appName,
     branding: brandingFromSettings(settings),
     appVersion: packageMetadata.version,
     appVersionLabel: APP_VERSION_LABEL,
     portal: getPortalStatus(),
-    serverDiagnostics: serverDiagnostics(),
-    runtimeDrive: runtimeDriveInfo(),
+    serverDiagnostics: privileged ? serverDiagnostics() : null,
+    runtimeDrive: privileged ? runtimeDriveInfo() : null,
   });
 });
 
@@ -5428,6 +6180,12 @@ function currentBrandingSnapshot() {
           WHERE key IN (${placeholders})
         `).all(...brandingPreserveSettingKeys)
       : [],
+    locationBranding: tableExists("location_branding")
+      ? db.prepare(`
+          SELECT location_id, kit_id, company_name, logo_url, icon_url, logo_alt, admin_email, updated_by
+          FROM location_branding ORDER BY location_id
+        `).all()
+      : [],
   };
 }
 
@@ -5448,6 +6206,19 @@ function applyBrandingSnapshotToDatabase(importPath, snapshot) {
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (scope_type, location_id, department_key, key)
       );
+      CREATE TABLE IF NOT EXISTS location_branding (
+        location_id TEXT PRIMARY KEY,
+        kit_id TEXT NOT NULL DEFAULT 'custom',
+        company_name TEXT NOT NULL DEFAULT '',
+        logo_url TEXT NOT NULL DEFAULT '/assets/grabenplaner-logo.svg',
+        icon_url TEXT NOT NULL DEFAULT '/assets/webicon.svg',
+        logo_alt TEXT NOT NULL DEFAULT 'Grabenplaner',
+        admin_email TEXT NOT NULL DEFAULT '',
+        updated_by TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (location_id) REFERENCES locations(id)
+          ON UPDATE CASCADE ON DELETE CASCADE
+      );
     `);
     const updateSetting = imported.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
     const updatePdfSetting = imported.prepare(`
@@ -5456,11 +6227,34 @@ function applyBrandingSnapshotToDatabase(importPath, snapshot) {
       ON CONFLICT(scope_type, location_id, department_key, key)
       DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
     `);
+    const updateLocationBranding = imported.prepare(`
+      INSERT INTO location_branding
+        (location_id, kit_id, company_name, logo_url, icon_url, logo_alt, admin_email, updated_by, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(location_id) DO UPDATE SET
+        kit_id = excluded.kit_id,
+        company_name = excluded.company_name,
+        logo_url = excluded.logo_url,
+        icon_url = excluded.icon_url,
+        logo_alt = excluded.logo_alt,
+        admin_email = excluded.admin_email,
+        updated_by = excluded.updated_by,
+        updated_at = CURRENT_TIMESTAMP
+    `);
     imported.exec("BEGIN");
     try {
       for (const row of snapshot.settings || []) updateSetting.run(row.key, row.value);
       for (const row of snapshot.pdfSettings || []) {
         updatePdfSetting.run(row.scope_type, row.location_id, row.department_key || "", row.key, row.value);
+      }
+      imported.prepare("DELETE FROM location_branding").run();
+      const importedLocationExists = imported.prepare("SELECT 1 FROM locations WHERE id = ?");
+      for (const row of snapshot.locationBranding || []) {
+        if (!importedLocationExists.get(row.location_id)) continue;
+        updateLocationBranding.run(
+          row.location_id, row.kit_id, row.company_name, row.logo_url, row.icon_url,
+          row.logo_alt, row.admin_email, row.updated_by || "",
+        );
       }
       imported.exec("COMMIT");
     } catch (error) {
@@ -5572,40 +6366,65 @@ app.post("/api/locations", (request, response) => {
   try {
     db.prepare("INSERT INTO locations (id, name, min_staff, day_settings_json, time_tracking_enabled, active) VALUES (?, ?, ?, ?, ?, ?)")
       .run(location.id, location.name, location.minStaff, JSON.stringify(location.daySettings), location.timeTrackingEnabled, location.active);
+    if (!sessionHasGlobalScope(request.portalSession)) {
+      db.prepare(`
+        INSERT OR IGNORE INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
+        VALUES (?, ?, 0, ?)
+      `).run(request.portalSession.employeeNumber, location.id, request.portalSession.employeeNumber);
+      request.portalSession.scopes = [...(request.portalSession.scopes || []), { locationId: location.id, departmentId: null }];
+    }
   } catch (error) {
     if (String(error.message).includes("UNIQUE")) throw httpError(409, "Diese Filial-ID ist bereits vergeben.");
     throw error;
   }
-  response.status(201).json(getLocations(true));
+  response.status(201).json(getLocationsForSession(request.portalSession, true));
 });
 
 app.put("/api/locations/:id", (request, response) => {
   const id = normalizeLocationId(request.params.id);
+  assertSessionLocationAdministrationScope(request.portalSession, id);
   const location = validateLocationPayload({ ...request.body, id }, false);
   const result = db.prepare("UPDATE locations SET name = ?, min_staff = ?, day_settings_json = ?, time_tracking_enabled = ?, active = ? WHERE id = ?")
     .run(location.name, location.minStaff, JSON.stringify(location.daySettings), location.timeTrackingEnabled, location.active, id);
   if (!result.changes) throw httpError(404, "Die Filiale wurde nicht gefunden.");
-  response.json(getLocations(true));
+  response.json(getLocationsForSession(request.portalSession, true));
 });
 
 app.post("/api/departments", (request, response) => {
   const department = validateDepartmentPayload(request.body);
+  const departmentManagerCreatingInAssignedLocation = request.portalSession?.role === "department_manager"
+    && (request.portalSession.scopes || []).some((scope) => scope.locationId === department.locationId);
+  if (!departmentManagerCreatingInAssignedLocation) {
+    assertSessionContextScope(request.portalSession, { locationId: department.locationId });
+  }
   try {
     const sortOrder = db.prepare("SELECT COALESCE(MAX(sort_order), 0) + 1 AS next FROM departments WHERE location_id = ?")
       .get(department.locationId).next;
-    db.prepare("INSERT INTO departments (location_id, name, min_staff, active, sort_order) VALUES (?, ?, ?, ?, ?)")
+    const result = db.prepare("INSERT INTO departments (location_id, name, min_staff, active, sort_order) VALUES (?, ?, ?, ?, ?)")
       .run(department.locationId, department.name, department.minStaff, department.active, sortOrder);
+    if (departmentManagerCreatingInAssignedLocation) {
+      db.prepare(`
+        INSERT OR IGNORE INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
+        VALUES (?, ?, ?, ?)
+      `).run(request.portalSession.employeeNumber, department.locationId, Number(result.lastInsertRowid), request.portalSession.employeeNumber);
+      request.portalSession.scopes = [...(request.portalSession.scopes || []), {
+        locationId: department.locationId,
+        departmentId: Number(result.lastInsertRowid),
+      }];
+    }
   } catch (error) {
     if (String(error.message).includes("UNIQUE")) throw httpError(409, "Diese Abteilung gibt es in der Filiale bereits.");
     throw error;
   }
-  response.status(201).json(getLocations(true));
+  response.status(201).json(getLocationsForSession(request.portalSession, true));
 });
 
 app.put("/api/departments/:id", (request, response) => {
   const id = normalizeDepartmentId(request.params.id, false);
-  validateDepartmentExists(id);
+  const existing = validateDepartmentExists(id);
+  assertSessionContextScope(request.portalSession, { locationId: existing.location_id, departmentId: id });
   const department = validateDepartmentPayload(request.body, id);
+  assertSessionContextScope(request.portalSession, { locationId: department.locationId, departmentId: id });
   try {
     const result = db.prepare("UPDATE departments SET location_id = ?, name = ?, min_staff = ?, active = ? WHERE id = ?")
       .run(department.locationId, department.name, department.minStaff, department.active, id);
@@ -5614,7 +6433,7 @@ app.put("/api/departments/:id", (request, response) => {
     if (String(error.message).includes("UNIQUE")) throw httpError(409, "Diese Abteilung gibt es in der Filiale bereits.");
     throw error;
   }
-  response.json(getLocations(true));
+  response.json(getLocationsForSession(request.portalSession, true));
 });
 
 function positionSlug(name) {
@@ -5712,6 +6531,7 @@ app.get("/api/employees", (request, response) => {
 
 app.post("/api/employees", (request, response) => {
   const employee = validateEmployee(request.body, true);
+  assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
   try {
     db.prepare(`
       INSERT INTO employees
@@ -5740,7 +6560,9 @@ app.post("/api/employees", (request, response) => {
 
 app.put("/api/employees/:personnelNumber", (request, response) => {
   const personnelNumber = request.params.personnelNumber;
+  assertSessionEmployeeScope(request.portalSession, personnelNumber);
   const employee = validateEmployee({ ...request.body, personnelNumber }, false);
+  assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
   const result = db.prepare(`
     UPDATE employees
     SET full_name = ?, nickname = ?, color = ?, contracted_hours = ?, preferred_day_off = ?, fixed_workdays = ?,
@@ -5764,6 +6586,7 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
 });
 
 app.delete("/api/employees/:personnelNumber", (request, response) => {
+  assertSessionEmployeeScope(request.portalSession, request.params.personnelNumber);
   const result = db.prepare("DELETE FROM employees WHERE personnel_number = ?").run(request.params.personnelNumber);
   if (!result.changes) throw httpError(404, "Die Person wurde nicht gefunden.");
   response.status(204).end();
@@ -5842,8 +6665,9 @@ app.delete("/api/portal/v1/approval-delegations/:id", (request, response) => {
 });
 
 app.get("/api/portal/v1/session", (request, response) => {
-  const status = getPortalStatus();
-  const session = status.portalEnabled ? portalSessionFromRequest(request) : null;
+  const publicStatus = getPortalStatus();
+  const session = publicStatus.portalEnabled ? portalSessionFromRequest(request) : null;
+  const status = session?.homeLocationId ? getPortalStatus(session.homeLocationId) : publicStatus;
   if (session && !parseCookies(request)[PORTAL_CSRF_COOKIE]) {
     appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, crypto.randomBytes(24).toString("base64url"), request, {
       maxAge: Math.max(60, Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000)),
@@ -5927,7 +6751,7 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
   appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, csrfToken, request, { maxAge: timeoutMinutes * 60 }));
   const session = portalSessionFromRequest({ ...request, headers: { ...request.headers, cookie: `${PORTAL_SESSION_COOKIE}=${rawToken}` } }, { touch: false });
   auditPortal(employeeNumber, "portal.login.success", "portal_user", employeeNumber, `ip=${loginRateKey(request)}`);
-  response.json({ ok: true, authenticated: true, user: publicPortalUser(session), status: getPortalStatus() });
+  response.json({ ok: true, authenticated: true, user: publicPortalUser(session), status: getPortalStatus(session?.homeLocationId || "") });
 });
 
 app.post("/api/portal/v1/auth/logout", (request, response) => {
@@ -5939,6 +6763,61 @@ app.post("/api/portal/v1/auth/logout", (request, response) => {
   }
   clearPortalCookies(request, response);
   response.json({ ok: true });
+});
+
+function rightsManagementPayload() {
+  const roles = new Map(getPortalRoles().map((role) => [role.id, role]));
+  const users = portalUsersForAdmin()
+    .filter((user) => ["manager", "department_manager"].includes(user.role))
+    .map((user) => {
+      const rolePermissions = roles.get(user.role)?.permissions || [];
+      return {
+        ...user,
+        rolePermissions,
+        effectivePermissions: [...new Set([...rolePermissions, ...(user.grantedPermissions || [])])],
+      };
+    });
+  return {
+    catalog: delegablePortalPermissionCatalog,
+    users,
+  };
+}
+
+app.get("/api/portal/v1/rights", (request, response) => {
+  requireAdminHrOrLocal(request, "rights:read");
+  response.json(rightsManagementPayload());
+});
+
+app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "rights:write");
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  const target = db.prepare("SELECT role FROM portal_users WHERE employee_number = ? AND active = 1").get(employeeNumber);
+  if (!target) throw httpError(404, "Der aktive Portal-Zugang wurde nicht gefunden.");
+  if (!["manager", "department_manager"].includes(target.role)) {
+    throw httpError(403, "Zusätzliche Rechte können nur Filial- oder Abteilungsleitungen erhalten.", "PORTAL_PERMISSION_DENIED");
+  }
+  if (!Array.isArray(request.body.permissions)) throw httpError(400, "Bitte eine gültige Rechteauswahl übermitteln.");
+  const submitted = [...new Set(request.body.permissions.map((value) => String(value || "").trim()).filter(Boolean))];
+  const invalid = submitted.filter((permission) => !delegablePortalPermissions.has(permission));
+  if (invalid.length) {
+    throw httpError(400, `Diese Rechte dürfen nicht delegiert werden: ${invalid.join(", ")}`, "PORTAL_PERMISSION_NOT_DELEGABLE");
+  }
+  const before = portalPermissionGrantsForEmployee(employeeNumber);
+  db.exec("BEGIN");
+  try {
+    db.prepare("DELETE FROM portal_permission_grants WHERE employee_number = ?").run(employeeNumber);
+    const insert = db.prepare(`
+      INSERT INTO portal_permission_grants (employee_number, permission, granted_by, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    `);
+    for (const permission of submitted) insert.run(employeeNumber, permission, actor.employeeNumber);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "portal.rights.update", "portal_user", employeeNumber, JSON.stringify({ before, after: submitted }));
+  response.json(rightsManagementPayload());
 });
 
 app.get("/api/portal/v1/users", (request, response) => {
@@ -6011,6 +6890,9 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       password_changed_at = CASE WHEN ? <> '' THEN CURRENT_TIMESTAMP ELSE portal_users.password_changed_at END,
       updated_at = CURRENT_TIMESTAMP
   `).run(employeeNumber, passwordHash, role, active, password ? 1 : Number(request.body.mustChangePassword !== false), password, password);
+  if (!["manager", "department_manager"].includes(role)) {
+    db.prepare("DELETE FROM portal_permission_grants WHERE employee_number = ?").run(employeeNumber);
+  }
   if (!active || password) db.prepare("UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND revoked_at IS NULL").run(employeeNumber);
   auditPortal(actor.employeeNumber, "portal.user.update", "portal_user", employeeNumber, JSON.stringify({ role, active: Boolean(active), passwordReset: Boolean(password) }));
   response.json({ users: portalUsersForAdmin(), roles: getPortalRoles() });
@@ -6030,7 +6912,7 @@ app.post("/api/portal/v1/users/:employeeNumber/unlock", (request, response) => {
 
 app.get("/api/portal/v1/me", (request, response) => {
   const session = requirePortalSession(request);
-  response.json({ user: publicPortalUser(session) });
+  response.json({ user: publicPortalUser(session), branding: brandingForLocation(session.homeLocationId) });
 });
 
 app.put("/api/portal/v1/me/password", async (request, response) => {
@@ -7257,6 +8139,138 @@ app.post("/api/portal/v1/me/time-entries", (request, response) => {
   response.status(201).json({ status: bookTimeEntry(session.employeeNumber, String(request.body?.type || "")) });
 });
 
+app.get("/api/portal/v1/me/time-summary", (request, response) => {
+  const session = requirePortalSession(request, "own_time:read");
+  response.json({ summary: ownTimeSummary(session.employeeNumber, String(request.query.period || "week"), String(request.query.anchor || "")) });
+});
+
+app.get("/api/portal/v1/me/time-corrections", (request, response) => {
+  const session = requirePortalSession(request, "own_time:correction_request");
+  response.json({ corrections: timeCorrectionRows("WHERE c.employee_number = ?", [session.employeeNumber]) });
+});
+
+app.post("/api/portal/v1/me/time-corrections", (request, response) => {
+  const session = requirePortalSession(request, "own_time:correction_request");
+  assertPortalCsrf(request);
+  response.status(201).json({ correction: createOwnTimeCorrection(session, request.body || {}) });
+});
+
+app.put("/api/portal/v1/me/time-corrections/:id", (request, response) => {
+  const session = requirePortalSession(request, "own_time:correction_request");
+  assertPortalCsrf(request);
+  response.json({ correction: updateOwnTimeCorrection(session, request.params.id, request.body || {}) });
+});
+
+app.delete("/api/portal/v1/me/time-corrections/:id", (request, response) => {
+  const session = requirePortalSession(request, "own_time:correction_request");
+  assertPortalCsrf(request);
+  withdrawOwnTimeCorrection(session, request.params.id);
+  response.status(204).end();
+});
+
+app.get("/api/portal/v1/time-summary", (request, response) => {
+  const session = requirePortalReadOrLocal(request, "time:read");
+  const context = resolvePlanningContext(request.query || {});
+  assertSessionContextScope(session, context);
+  const dateFrom = String(request.query.from || "");
+  const dateTo = String(request.query.to || "");
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom || daysBetweenInclusive(dateFrom, dateTo) > 370) {
+    throw httpError(400, "Bitte einen gültigen Auswertungszeitraum von höchstens 370 Tagen wählen.", "TIME_SUMMARY_RANGE_INVALID");
+  }
+  const departmentActivity = context.departmentId ? db.prepare(`
+    SELECT 1
+    WHERE EXISTS (
+      SELECT 1 FROM shifts s
+      WHERE s.employee_number = ? AND s.shift_date BETWEEN ? AND ? AND s.department_id = ?
+    ) OR EXISTS (
+      SELECT 1 FROM time_entries t
+      WHERE t.employee_number = ? AND t.work_date BETWEEN ? AND ? AND t.department_id = ? AND t.voided_at IS NULL
+    )
+  `) : null;
+  const employees = db.prepare(`
+    SELECT personnel_number, full_name, nickname, color, preferred_department_id
+    FROM employees WHERE active = 1 AND home_location_id = ?
+    ORDER BY CAST(personnel_number AS INTEGER), personnel_number
+  `).all(context.locationId)
+    .filter((employee) => !context.departmentId
+      || Number(employee.preferred_department_id || 0) === Number(context.departmentId)
+      || Boolean(departmentActivity.get(
+        employee.personnel_number, dateFrom, dateTo, context.departmentId,
+        employee.personnel_number, dateFrom, dateTo, context.departmentId,
+      )))
+    .map((employee) => {
+      const summary = timeSummaryForEmployee(employee.personnel_number, dateFrom, dateTo, "range", new Date(), context.departmentId);
+      return {
+        employeeNumber: employee.personnel_number,
+        fullName: employee.full_name,
+        nickname: employee.nickname,
+        color: employee.color,
+        plannedMinutes: summary.plannedMinutes,
+        actualMinutes: summary.actualMinutes,
+        differenceMinutes: summary.differenceMinutes,
+        incompleteDays: summary.incompleteDays,
+      };
+    });
+  response.json({ summary: { period: "range", from: dateFrom, to: dateTo, dateFrom, dateTo, context, employees } });
+});
+
+app.get("/api/portal/v1/time-corrections", (request, response) => {
+  const session = requirePortalReadOrLocal(request, "time:review");
+  const context = resolvePlanningContext(request.query || {});
+  assertSessionContextScope(session, context);
+  const status = String(request.query.status || "pending").trim();
+  const allowedStatuses = new Set(["pending", "approved", "rejected", "withdrawn", "all"]);
+  if (!allowedStatuses.has(status)) throw httpError(400, "Dieser Korrekturstatus ist ungültig.");
+  const where = [`c.location_id = ?`];
+  const values = [context.locationId];
+  if (context.departmentId) {
+    where.push("c.department_id = ?");
+    values.push(context.departmentId);
+  }
+  if (status !== "all") {
+    where.push("c.status = ?");
+    values.push(status);
+  }
+  const corrections = timeCorrectionRows(`WHERE ${where.join(" AND ")}`, values)
+    .filter((correction) => {
+      try {
+        assertSessionContextScope(session, correction);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+  response.json({ corrections });
+});
+
+app.put("/api/portal/v1/time-corrections/:id/decision", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "time:review");
+  response.json({ correction: decideTimeCorrection(session, request.params.id, request.body || {}) });
+});
+
+app.get("/api/portal/v1/mobile-layout", (request, response) => {
+  const session = requirePortalReadOrLocal(request, "own_time:read");
+  response.json(mobileLayoutPayload(session));
+});
+
+app.put("/api/portal/v1/mobile-layout", (request, response) => {
+  const session = requireAdminHrOrLocal(request, "rights:write");
+  const layouts = validateMobileLeadershipLayouts(request.body?.layouts);
+  db.prepare(`
+    INSERT INTO portal_settings (key, value, updated_at) VALUES ('mobile_leadership_layouts', ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+  `).run(JSON.stringify(layouts));
+  auditPortal(session.employeeNumber, "mobile.layout.update", "portal_settings", "mobile_leadership_layouts", JSON.stringify(layouts));
+  response.json(mobileLayoutPayload(session));
+});
+
+app.get("/api/portal/v1/leadership/overview", (request, response) => {
+  const session = requirePortalReadOrLocal(request, "time:read");
+  const context = resolvePlanningContext(request.query || {});
+  assertSessionContextScope(session, context);
+  response.json({ overview: leadershipOverviewForContext(session, context) });
+});
+
 app.post("/api/portal/v1/time-corrections/resolve-stale", (request, response) => {
   const session = requirePortalAdminOrLocal(request, "time:review");
   const employeeNumber = String(request.body?.employeeNumber || "").trim();
@@ -7279,18 +8293,22 @@ app.get("/api/portal/v1/time-presence", (request, response) => {
 
 app.get("/api/settings", (request, response) => {
   if (getPortalStatus().portalEnabled && !request.portalSession?.permissions?.includes("settings:write")) {
-    throw httpError(403, "Nur Admins dürfen die Grundeinstellungen abrufen.", "PORTAL_PERMISSION_DENIED");
+    throw httpError(403, "Für die Grundeinstellungen fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
   }
-  response.json(getSettings());
+  const context = resolvePlanningContext(request.query || {});
+  assertSessionContextScope(request.portalSession, context);
+  response.json(settingsForLocation(context.locationId));
 });
 
 app.get("/api/branding/export", (request, response) => {
+  requireAdminHrOrLocal(request, "branding:read");
   const kit = brandingKitForExport(request.query);
   response.setHeader("Content-Disposition", contentDispositionHeader("grabenplaner-branding-kit.json"));
   response.json(kit);
 });
 
 app.get("/api/branding/export.zip", (request, response) => {
+  requireAdminHrOrLocal(request, "branding:read");
   const kit = brandingKitForExport(request.query);
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-branding-zip-"));
   const zipPath = path.join(tempRoot, "grabenplaner-branding-kit.zip");
@@ -7310,29 +8328,72 @@ app.get("/api/branding/export.zip", (request, response) => {
   });
 });
 
-app.get("/api/branding/kits", (_request, response) => {
-  response.json(listBrandingKits());
+app.get("/api/branding/kits", (request, response) => {
+  requireAdminHrOrLocal(request, "branding:read");
+  const context = resolvePlanningContext(request.query || {});
+  response.json(listBrandingKits(context.locationId));
+});
+
+app.get("/api/branding/assignments", (request, response) => {
+  requireAdminHrOrLocal(request, "branding:read");
+  response.json({ assignments: locationBrandingAssignments() });
+});
+
+app.put("/api/branding/assignments", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const locationId = normalizeLocationId(request.body.locationId || request.body.location);
+  validateLocationExists(locationId);
+  const submittedKitId = String(request.body.kitId ?? "").trim();
+  if (!submittedKitId) {
+    db.prepare("DELETE FROM location_branding WHERE location_id = ?").run(locationId);
+    auditPortal(actor.employeeNumber, "branding.assignment.update", "location", locationId, JSON.stringify({ kitId: "default" }));
+    response.json({
+      ok: true,
+      locationId,
+      settings: settingsForLocation(locationId),
+      branding: brandingForLocation(locationId),
+      assignments: locationBrandingAssignments(),
+      kits: listBrandingKits(locationId),
+    });
+    return;
+  }
+  const kitId = submittedKitId;
+  let result;
+  if (kitId !== "custom") {
+    const kit = readBrandingKitManifest(kitId);
+    result = applyBrandingKit(kit, { locationId }, actor.employeeNumber);
+  } else {
+    const branding = saveLocationBrandingSnapshot(locationId, "custom", request.body.branding || request.body, actor.employeeNumber);
+    result = { ok: true, locationId, settings: settingsForLocation(locationId), branding };
+  }
+  auditPortal(actor.employeeNumber, "branding.assignment.update", "location", locationId, JSON.stringify({ kitId }));
+  response.json({ ...result, assignments: locationBrandingAssignments(), kits: listBrandingKits(locationId) });
 });
 
 app.post("/api/branding/kits/:kitId/apply", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "branding:write");
   const kit = readBrandingKitManifest(request.params.kitId);
+  const context = resolvePlanningContext(request.body || {});
   response.json({
-    ...applyBrandingKit(kit, request.body || {}),
-    kits: listBrandingKits(),
+    ...applyBrandingKit(kit, context, actor.employeeNumber),
+    kits: listBrandingKits(context.locationId),
   });
 });
 
 app.put("/api/branding/import", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "branding:write");
   const kit = request.body?.kit || request.body || {};
   const installedKit = installBrandingKit(kit, { fileName: request.get("X-Branding-Filename") || "branding-kit.json" });
+  const context = resolvePlanningContext(request.body || {});
   response.json({
-    ...applyBrandingKit(installedKit, request.body || {}),
+    ...applyBrandingKit(installedKit, context, actor.employeeNumber),
     kit: installedKit,
-    kits: listBrandingKits(),
+    kits: listBrandingKits(context.locationId),
   });
 });
 
 app.put("/api/branding/import.zip", express.raw({ type: ["application/zip", "application/x-zip-compressed", "application/octet-stream"], limit: "25mb" }), (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "branding:write");
   if (!Buffer.isBuffer(request.body) || request.body.length < 128) {
     throw httpError(400, "Bitte eine gültige Branding-ZIP-Datei auswählen.");
   }
@@ -7350,10 +8411,11 @@ app.put("/api/branding/import.zip", express.raw({ type: ["application/zip", "app
       extractPath,
       fileName: decodeURIComponent(request.get("X-Branding-Filename") || "branding-kit.zip"),
     });
+    const context = resolvePlanningContext(request.query || {});
     response.json({
-      ...applyBrandingKit(installedKit, request.query || {}),
+      ...applyBrandingKit(installedKit, context, actor.employeeNumber),
       kit: installedKit,
-      kits: listBrandingKits(),
+      kits: listBrandingKits(context.locationId),
     });
   } catch (error) {
     if (error.status) throw error;
@@ -7364,18 +8426,46 @@ app.put("/api/branding/import.zip", express.raw({ type: ["application/zip", "app
   }
 });
 
-app.put("/api/settings", (request, response) => {
-  const body = request.body;
-  const requestedOperationMode = String(body.operationMode || DEFAULT_OPERATION_MODE);
-  if (!["local", "lan", "server"].includes(requestedOperationMode)) {
-    throw httpError(400, "Der ausgewählte Betriebsmodus ist ungültig.");
+function requestHasPermission(request, permission) {
+  if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) return true;
+  return Boolean(request.portalSession?.permissions?.includes(permission));
+}
+
+function assertRequestPermission(request, permission) {
+  if (!requestHasPermission(request, permission)) {
+    throw httpError(403, "Für diese Aktion fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
   }
-  if (requestedOperationMode === "server" && !serverModeActive) {
+}
+
+function validateOperationModeRequest(requestedMode) {
+  const mode = String(requestedMode || DEFAULT_OPERATION_MODE);
+  if (!["local", "lan", "server"].includes(mode)) throw httpError(400, "Der ausgewählte Betriebsmodus ist ungültig.");
+  if (mode === "server" && !serverModeActive) {
     throw httpError(409, "Der öffentliche Serverbetrieb wird ausschließlich über die geschützte Serverkonfiguration aktiviert.", "SERVER_CONFIGURATION_REQUIRED");
   }
-  if (requestedOperationMode === "lan" && getPortalStatus().adminSetupState !== "configured") {
+  if (mode === "lan" && getPortalStatus().adminSetupState !== "configured") {
     throw httpError(409, "Bitte zuerst die Admin-Ersteinrichtung abschließen.", "PORTAL_ADMIN_SETUP_REQUIRED");
   }
+  return mode;
+}
+
+app.put("/api/operation-mode", (request, response) => {
+  assertRequestPermission(request, "operation_mode:write");
+  const requestedOperationMode = validateOperationModeRequest(request.body.operationMode);
+  const update = db.prepare("INSERT INTO settings (key, value) VALUES ('operation_mode', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
+  update.run(requestedOperationMode);
+  const currentRuntimeMode = configuredOperationMode;
+  const restartRequired = !serverModeActive && currentRuntimeMode !== requestedOperationMode;
+  if (restartRequired) writeRuntimeConfig({ operationMode: requestedOperationMode });
+  auditPortal(request.portalSession?.employeeNumber || "local", "operation_mode.update", "settings", "operation_mode", requestedOperationMode);
+  response.json({ operationMode: requestedOperationMode, restartRequired, networkUrls: requestedOperationMode === "lan" ? getLanUrls(PORT) : [] });
+});
+
+app.put("/api/settings", (request, response) => {
+  const body = request.body;
+  const currentSettings = getSettings();
+  const requestedOperationMode = validateOperationModeRequest(body.operationMode || currentSettings.operation_mode);
+  if (requestedOperationMode !== currentSettings.operation_mode) assertRequestPermission(request, "operation_mode:write");
   const scheduleContext = resolvePlanningContext(body);
   const vacationContext = resolvePlanningContext({ ...body, departmentId: null, department: null });
   const scheduleDefaults = defaultSchedulePdfSettings(scheduleContext);
@@ -7400,6 +8490,10 @@ app.put("/api/settings", (request, response) => {
     ? String(body.toastDuration)
     : "medium";
   const brandingValues = brandingValuesFromBody(body.branding || body);
+  const brandingSubmitted = Boolean(body.branding);
+  if (brandingSubmitted && !(request.portalSession?.role === "admin" || request.portalSession?.role === "hr" || (!getPortalStatus().portalEnabled && isLoopbackRequest(request)))) {
+    throw httpError(403, "Branding darf nur durch Admin oder Personalleitung geändert werden.", "PORTAL_PERMISSION_DENIED");
+  }
   const currentWeekLockMode = body.currentWeekLockMode === "manual" ? "manual" : "closing";
   const currentWeekLockDay = ["friday", "saturday", "sunday"].includes(String(body.currentWeekLockDay)) ? String(body.currentWeekLockDay) : "saturday";
   const currentWeekLockTime = String(body.currentWeekLockTime || "17:00");
@@ -7422,9 +8516,12 @@ app.put("/api/settings", (request, response) => {
   if (currentWeekLockMode === "manual" && (lockOrder < 5 * 1440 + 18 * 60 || lockOrder > 7 * 1440 + 23 * 60)) {
     throw httpError(400, "Der manuelle Sperrzeitpunkt muss zwischen Freitag 18:00 Uhr und Sonntag 23:00 Uhr liegen.");
   }
+  const backupChanged = String(currentSettings.external_backup_enabled || "1") !== (externalBackupEnabled ? "1" : "0")
+    || String(currentSettings.backup_directory || "") !== backupDirectory.stored
+    || String(currentSettings.backup_interval_hours || "2") !== String(backupIntervalHours);
+  if (backupChanged) assertRequestPermission(request, "backup:write");
 
   const values = {
-    ...brandingValues,
     operation_mode: requestedOperationMode,
     toast_duration: toastDuration,
     show_inactive_personnel: body.showInactivePersonnel === true ? "1" : "0",
@@ -7451,6 +8548,7 @@ app.put("/api/settings", (request, response) => {
   db.exec("BEGIN");
   try {
     for (const [key, value] of Object.entries(values)) update.run(key, value);
+    if (brandingSubmitted) saveLocationBrandingSnapshot(scheduleContext.locationId, "custom", brandingValues, request.portalSession?.employeeNumber || "local");
     saveScopedPdfSettings("schedule", scheduleContext, {
       pdf_title: pdfTitle,
       pdf_filename_prefix: pdfFilenamePrefix,
@@ -7481,7 +8579,7 @@ app.put("/api/settings", (request, response) => {
   const currentRuntimeMode = configuredOperationMode;
   const restartRequired = !serverModeActive && currentRuntimeMode !== requestedOperationMode;
   if (restartRequired) writeRuntimeConfig({ operationMode: requestedOperationMode });
-  response.json({ ...getSettings(), restartRequired, networkUrls: requestedOperationMode === "lan" ? getLanUrls(PORT) : [] });
+  response.json({ ...settingsForLocation(scheduleContext.locationId), restartRequired, networkUrls: requestedOperationMode === "lan" ? getLanUrls(PORT) : [] });
 });
 
 app.post("/api/shifts", (request, response) => {
@@ -9190,7 +10288,7 @@ function validateServerStartup(portalStatus) {
       throw new Error("Serverbetrieb abgebrochen: GRABENPLANER_SERVICE_CONTROL_TOKEN muss als geheimer Dienststeuerungs-Token gesetzt sein.");
     }
     if (!amuStorage) {
-      throw new Error(`Serverbetrieb abgebrochen: Der geschützte AMU-Speicher ist nicht verfügbar${amuStorageStartupError ? `: ${amuStorageStartupError}` : "."}`);
+      throw new Error(`Serverbetrieb abgebrochen: Der geschützte AUM-Speicher ist nicht verfügbar${amuStorageStartupError ? `: ${amuStorageStartupError}` : "."}`);
     }
     return;
   }
@@ -9214,16 +10312,16 @@ function startServer() {
       for (const url of getLanUrls(listeningPort)) console.log(`LAN-Zugriff: ${url}`);
     }
     scheduleAutomaticBackups();
-    try { reconcileOrphanAmuBlobs(); } catch (error) { console.error("AMU-Abgleich fehlgeschlagen:", error); }
-    try { purgeExpiredAmuDocuments(); } catch (error) { console.error("AMU-Aufbewahrungsprüfung fehlgeschlagen:", error); }
+    try { reconcileOrphanAmuBlobs(); } catch (error) { console.error("AUM-Abgleich fehlgeschlagen:", error); }
+    try { purgeExpiredAmuDocuments(); } catch (error) { console.error("AUM-Aufbewahrungsprüfung fehlgeschlagen:", error); }
     retentionInterval = setInterval(() => {
-      try { purgeExpiredAmuDocuments(); } catch (error) { console.error("AMU-Aufbewahrungsprüfung fehlgeschlagen:", error); }
+      try { purgeExpiredAmuDocuments(); } catch (error) { console.error("AUM-Aufbewahrungsprüfung fehlgeschlagen:", error); }
     }, 24 * 60 * 60 * 1000);
     retentionInterval.unref();
     if (serverModeActive && amuStorage) {
       scannerProbeInterval = setInterval(() => {
         amuScannerProbe = amuStorage.probeScanner().catch((error) => {
-          console.error("AMU-Virenscanner ist nicht betriebsbereit:", error.message);
+          console.error("AUM-Virenscanner ist nicht betriebsbereit:", error.message);
           return null;
         });
       }, 5 * 60 * 1000);
@@ -9276,7 +10374,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
   waitForUploads.unref();
   const forceExit = setTimeout(() => {
     clearInterval(waitForUploads);
-    if (amuMutationInProgress > 0) console.error("Dienststopp nach 45 Sekunden erzwungen; ein AMU-Vorgang war noch aktiv.");
+    if (amuMutationInProgress > 0) console.error("Dienststopp nach 45 Sekunden erzwungen; ein AUM-Vorgang war noch aktiv.");
     finish();
   }, 45000);
   forceExit.unref();

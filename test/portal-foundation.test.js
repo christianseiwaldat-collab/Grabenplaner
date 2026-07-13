@@ -120,8 +120,11 @@ test("alte Datenbank wird um das Portal-Fundament erweitert", () => {
   assert.ok(tables.has("time_entries"));
   assert.ok(tables.has("time_corrections"));
   assert.ok(tables.has("audit_log"));
+  assert.ok(tables.has("portal_permission_grants"));
+  assert.ok(tables.has("location_branding"));
   assert.ok(tables.has("schema_migrations"));
   assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.49-server-foundation'").get());
+  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.53-rights-branding-time-corrections-mobile'").get());
 
   const userColumns = new Set(db.prepare("PRAGMA table_info(portal_users)").all().map((column) => column.name));
   assert.ok(userColumns.has("password_changed_at"));
@@ -142,6 +145,8 @@ test("Built-in-Rollen werden aktualisiert und eigene Rollen bleiben erhalten", (
   assert.ok(employee.permissions.includes("own_schedule:read"));
   assert.ok(employee.permissions.includes("own_vacation:request"));
   assert.ok(roles.some((role) => role.id === "hr" && role.name === "Personalleitung" && role.permissions.includes("hr:approve")));
+  assert.ok(roles.some((role) => role.id === "admin" && role.permissions.includes("rights:write") && role.permissions.includes("branding:write")));
+  assert.ok(roles.some((role) => role.id === "hr" && role.permissions.includes("rights:write") && role.permissions.includes("operation_mode:write")));
   assert.equal(custom.name, "Eigene Prüferrolle");
   assert.deepEqual(custom.permissions, ["audit:read"]);
 });
@@ -273,6 +278,18 @@ test("Zeiterfassung erzwingt die sichere Buchungsfolge und berechnet die Ist-Zei
     assert.equal(resolved.staleEntry, null);
     assert.equal(timeTrackingDayStatus(employeeNumber, "2026-07-13", nextMorning).actualMinutes, 480);
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM time_corrections WHERE employee_number = ?").get(employeeNumber).count, 1);
+    const staleCorrection = db.prepare(`
+      SELECT id, location_id, requested_by, decided_by, decision_note
+      FROM time_corrections WHERE employee_number = ?
+    `).get(employeeNumber);
+    assert.equal(staleCorrection.location_id, location.id);
+    assert.equal(staleCorrection.requested_by, "local");
+    assert.equal(staleCorrection.decided_by, "local");
+    assert.ok(staleCorrection.decision_note);
+    assert.equal(db.prepare(`
+      SELECT correction_id FROM time_entries
+      WHERE employee_number = ? AND entry_type = 'clock_out' ORDER BY id DESC LIMIT 1
+    `).get(employeeNumber).correction_id, staleCorrection.id);
   } finally {
     db.prepare("DELETE FROM time_entries WHERE employee_number = ?").run(employeeNumber);
     db.prepare("DELETE FROM time_corrections WHERE employee_number = ?").run(employeeNumber);
@@ -947,6 +964,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     assert.ok(secondDepartment?.id);
 
     for (const [employeeNumber, role, password] of [
+      ["103", "hr", "334455"],
       ["104", "manager", "445566"],
       ["105", "department_manager", "556677"],
     ]) {
@@ -975,6 +993,220 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     await changePassword(manager, "445566", "665544");
     const departmentManager = await login("105", "556677");
     await changePassword(departmentManager, "556677", "776655");
+    const hr = await login("103", "334455");
+    await changePassword(hr, "334455", "887766");
+
+    const managerRightsDenied = await fetch(`${url}/api/portal/v1/rights`, { headers: { Cookie: manager.cookie } });
+    assert.equal(managerRightsDenied.status, 403, await managerRightsDenied.clone().text());
+    const hrRightsResponse = await fetch(`${url}/api/portal/v1/rights`, { headers: { Cookie: hr.cookie } });
+    assert.equal(hrRightsResponse.status, 200, await hrRightsResponse.clone().text());
+    const rightsPayload = await hrRightsResponse.json();
+    assert.ok(rightsPayload.catalog.some((permission) => permission.id === "operation_mode:write" && permission.warningLevel === "critical"));
+    for (const forbidden of ["branding:write", "rights:write", "backup:write", "update:write"]) {
+      assert.equal(rightsPayload.catalog.some((permission) => permission.id === forbidden), false);
+    }
+    assert.ok(rightsPayload.users.some((user) => user.employeeNumber === "104" && user.role === "manager"));
+    assert.equal(rightsPayload.users.some((user) => user.employeeNumber === "103"), false);
+    const hrCannotTargetItself = await fetch(`${url}/api/portal/v1/rights/103`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: hr.cookie, "X-CSRF-Token": hr.csrf },
+      body: JSON.stringify({ permissions: [] }),
+    });
+    assert.equal(hrCannotTargetItself.status, 403, await hrCannotTargetItself.clone().text());
+
+    const invalidGrant = await fetch(`${url}/api/portal/v1/rights/104`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: hr.cookie, "X-CSRF-Token": hr.csrf },
+      body: JSON.stringify({ permissions: ["branding:write"] }),
+    });
+    assert.equal(invalidGrant.status, 400, await invalidGrant.clone().text());
+    assert.equal((await invalidGrant.json()).code, "PORTAL_PERMISSION_NOT_DELEGABLE");
+
+    const grantManagerRights = await fetch(`${url}/api/portal/v1/rights/104`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: hr.cookie, "X-CSRF-Token": hr.csrf },
+      body: JSON.stringify({ permissions: ["employees:write", "locations:write", "departments:write", "operation_mode:write"] }),
+    });
+    assert.equal(grantManagerRights.status, 200, await grantManagerRights.clone().text());
+    const grantedManager = (await grantManagerRights.json()).users.find((user) => user.employeeNumber === "104");
+    assert.deepEqual(grantedManager.grantedPermissions, ["departments:write", "employees:write", "locations:write", "operation_mode:write"]);
+
+    const managerSessionWithGrant = await fetch(`${url}/api/portal/v1/session`, { headers: { Cookie: manager.cookie } });
+    assert.equal(managerSessionWithGrant.status, 200, await managerSessionWithGrant.clone().text());
+    assert.ok((await managerSessionWithGrant.json()).user.permissions.includes("employees:write"));
+    const delegatedOperationMode = await fetch(`${url}/api/operation-mode`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+      body: JSON.stringify({ operationMode: "local" }),
+    });
+    assert.equal(delegatedOperationMode.status, 200, await delegatedOperationMode.clone().text());
+    assert.equal((await delegatedOperationMode.json()).restartRequired, false);
+
+    const scopedEmployeesResponse = await fetch(`${url}/api/employees`, { headers: { Cookie: manager.cookie } });
+    assert.equal(scopedEmployeesResponse.status, 200, await scopedEmployeesResponse.clone().text());
+    const scopedEmployees = await scopedEmployeesResponse.json();
+    const ownEmployee = scopedEmployees.find((employee) => employee.personnel_number === "104");
+    const ownEmployeeUpdatePayload = {
+      fullName: ownEmployee.full_name,
+      nickname: "Dana R",
+      color: ownEmployee.color,
+      contractedHours: ownEmployee.contracted_hours,
+      preferredDayOff: ownEmployee.preferred_day_off || "",
+      fixedWorkdays: ownEmployee.fixed_workdays || "",
+      positionId: ownEmployee.position_id,
+      homeLocationId: ownEmployee.home_location_id,
+      preferredDepartmentId: ownEmployee.preferred_department_id || "",
+      active: ownEmployee.active,
+    };
+    const ownEmployeeUpdate = await fetch(`${url}/api/employees/104`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+      body: JSON.stringify(ownEmployeeUpdatePayload),
+    });
+    assert.equal(ownEmployeeUpdate.status, 200, await ownEmployeeUpdate.clone().text());
+
+    const moveOutsideScope = await fetch(`${url}/api/employees/104`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+      body: JSON.stringify({ ...ownEmployeeUpdatePayload, homeLocationId: "02", preferredDepartmentId: "" }),
+    });
+    assert.equal(moveOutsideScope.status, 403, await moveOutsideScope.clone().text());
+    const createRemoteEmployee = await fetch(`${url}/api/employees`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({
+        personnelNumber: "107", fullName: "Gina Remote", nickname: "Gina", color: "#225588",
+        contractedHours: 20, preferredDayOff: "", fixedWorkdays: "", positionId: "verkaufsmitarbeiter",
+        homeLocationId: "02", preferredDepartmentId: "", active: true,
+      }),
+    });
+    assert.equal(createRemoteEmployee.status, 201, await createRemoteEmployee.clone().text());
+    const remoteEmployeeUpdate = await fetch(`${url}/api/employees/107`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+      body: JSON.stringify({
+        fullName: "Gina Remote", nickname: "Unzulässig", color: "#225588", contractedHours: 20,
+        preferredDayOff: "", fixedWorkdays: "", positionId: "verkaufsmitarbeiter",
+        homeLocationId: "02", preferredDepartmentId: "", active: true,
+      }),
+    });
+    assert.equal(remoteEmployeeUpdate.status, 403, await remoteEmployeeUpdate.clone().text());
+
+    const updateOwnLocation = await fetch(`${url}/api/locations/01`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+      body: JSON.stringify({
+        id: "01", name: "Hauptstandort intern", minStaff: initialLocations.find((location) => location.id === "01").min_staff,
+        daySettings, timeTrackingEnabled: false, active: true,
+      }),
+    });
+    assert.equal(updateOwnLocation.status, 200, await updateOwnLocation.clone().text());
+    const updateRemoteLocation = await fetch(`${url}/api/locations/02`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+      body: JSON.stringify({ id: "02", name: "Unzulässige Änderung", minStaff: 1, daySettings, timeTrackingEnabled: false, active: true }),
+    });
+    assert.equal(updateRemoteLocation.status, 403, await updateRemoteLocation.clone().text());
+    const createDelegatedLocation = await fetch(`${url}/api/locations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+      body: JSON.stringify({ id: "03", name: "Delegiert angelegt", minStaff: 1, daySettings, timeTrackingEnabled: false, active: true }),
+    });
+    assert.equal(createDelegatedLocation.status, 201, await createDelegatedLocation.clone().text());
+    assert.ok((await createDelegatedLocation.json()).some((location) => location.id === "03"));
+    const updateDelegatedLocation = await fetch(`${url}/api/locations/03`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+      body: JSON.stringify({ id: "03", name: "Delegiert gespeichert", minStaff: 2, daySettings, timeTrackingEnabled: false, active: true }),
+    });
+    assert.equal(updateDelegatedLocation.status, 200, await updateDelegatedLocation.clone().text());
+
+    const remoteDepartmentResponse = await fetch(`${url}/api/departments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ locationId: "02", name: "Remote-Abteilung", minStaff: 1, active: true }),
+    });
+    assert.equal(remoteDepartmentResponse.status, 201, await remoteDepartmentResponse.clone().text());
+    const remoteDepartment = (await remoteDepartmentResponse.json()).find((location) => location.id === "02").departments[0];
+    const updateOwnDepartment = await fetch(`${url}/api/departments/${firstDepartment.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+      body: JSON.stringify({ locationId: "01", name: "Abteilung Eins intern", minStaff: 1, active: true }),
+    });
+    assert.equal(updateOwnDepartment.status, 200, await updateOwnDepartment.clone().text());
+    const updateRemoteDepartment = await fetch(`${url}/api/departments/${remoteDepartment.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+      body: JSON.stringify({ locationId: "02", name: "Remote manipuliert", minStaff: 1, active: true }),
+    });
+    assert.equal(updateRemoteDepartment.status, 403, await updateRemoteDepartment.clone().text());
+
+    const revokeManagerRights = await fetch(`${url}/api/portal/v1/rights/104`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: hr.cookie, "X-CSRF-Token": hr.csrf },
+      body: JSON.stringify({ permissions: [] }),
+    });
+    assert.equal(revokeManagerRights.status, 200, await revokeManagerRights.clone().text());
+    const updateAfterRevoke = await fetch(`${url}/api/employees/104`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+      body: JSON.stringify({ ...ownEmployeeUpdatePayload, nickname: "Nicht erlaubt" }),
+    });
+    assert.equal(updateAfterRevoke.status, 403, await updateAfterRevoke.clone().text());
+    const managerSessionAfterRevoke = await fetch(`${url}/api/portal/v1/session`, { headers: { Cookie: manager.cookie } });
+    assert.equal(managerSessionAfterRevoke.status, 200, await managerSessionAfterRevoke.clone().text());
+    assert.equal((await managerSessionAfterRevoke.json()).user.permissions.includes("employees:write"), false);
+
+    const managerBrandingDenied = await fetch(`${url}/api/branding/assignments`, { headers: { Cookie: manager.cookie } });
+    assert.equal(managerBrandingDenied.status, 403, await managerBrandingDenied.clone().text());
+    const managerSystemInfo = await fetch(`${url}/api/system-info`, { headers: { Cookie: manager.cookie } });
+    assert.equal(managerSystemInfo.status, 200, await managerSystemInfo.clone().text());
+    const managerSystemInfoData = await managerSystemInfo.json();
+    assert.equal(managerSystemInfoData.serverDiagnostics, null);
+    assert.equal(managerSystemInfoData.runtimeDrive, null);
+    assert.equal(managerSystemInfoData.appBackupDirectory, "");
+    const assignFirstBranding = await fetch(`${url}/api/branding/assignments`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({
+        locationId: "01", kitId: "custom",
+        branding: { companyName: "Filiale Eins", logoUrl: "/assets/one.svg", iconUrl: "/assets/one-icon.svg", logoAlt: "Eins", adminEmail: "eins@example.test" },
+      }),
+    });
+    assert.equal(assignFirstBranding.status, 200, await assignFirstBranding.clone().text());
+    const assignSecondBranding = await fetch(`${url}/api/branding/assignments`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: hr.cookie, "X-CSRF-Token": hr.csrf },
+      body: JSON.stringify({
+        locationId: "02", kitId: "custom",
+        branding: { companyName: "Filiale Zwei", logoUrl: "/assets/two.svg", iconUrl: "/assets/two-icon.svg", logoAlt: "Zwei", adminEmail: "zwei@example.test" },
+      }),
+    });
+    assert.equal(assignSecondBranding.status, 200, await assignSecondBranding.clone().text());
+    const brandingAssignmentsResponse = await fetch(`${url}/api/branding/assignments`, { headers: { Cookie: hr.cookie } });
+    assert.equal(brandingAssignmentsResponse.status, 200, await brandingAssignmentsResponse.clone().text());
+    const brandingAssignments = (await brandingAssignmentsResponse.json()).assignments;
+    assert.equal(brandingAssignments.find((assignment) => assignment.locationId === "01").branding.companyName, "Filiale Eins");
+    assert.equal(brandingAssignments.find((assignment) => assignment.locationId === "02").branding.companyName, "Filiale Zwei");
+    const firstBrandSchedule = await fetch(`${url}/api/schedule?week=2027-08-02&location=01`, { headers: { Cookie: admin.cookie } });
+    const secondBrandSchedule = await fetch(`${url}/api/schedule?week=2027-08-02&location=02`, { headers: { Cookie: admin.cookie } });
+    assert.equal(firstBrandSchedule.status, 200, await firstBrandSchedule.clone().text());
+    assert.equal(secondBrandSchedule.status, 200, await secondBrandSchedule.clone().text());
+    assert.equal((await firstBrandSchedule.json()).settings.branding_company_name, "Filiale Eins");
+    assert.equal((await secondBrandSchedule.json()).settings.branding_company_name, "Filiale Zwei");
+    const brandedManagerSession = await fetch(`${url}/api/portal/v1/session`, { headers: { Cookie: manager.cookie } });
+    assert.equal(brandedManagerSession.status, 200, await brandedManagerSession.clone().text());
+    assert.equal((await brandedManagerSession.json()).status.branding.companyName, "Filiale Eins");
+    const resetFirstBranding = await fetch(`${url}/api/branding/assignments`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ locationId: "01", kitId: "" }),
+    });
+    assert.equal(resetFirstBranding.status, 200, await resetFirstBranding.clone().text());
+    const resetFirstBrandingData = await resetFirstBranding.json();
+    const resetFirstAssignment = resetFirstBrandingData.assignments.find((assignment) => assignment.locationId === "01");
+    assert.equal(resetFirstAssignment.assigned, false);
+    assert.notEqual(resetFirstAssignment.branding.companyName, "Filiale Eins");
 
     const scopedAmuDatabase = new DatabaseSync(childDatabase);
     scopedAmuDatabase.exec("PRAGMA busy_timeout = 5000");

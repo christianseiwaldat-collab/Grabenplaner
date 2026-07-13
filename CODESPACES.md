@@ -30,7 +30,7 @@ Alle Laufzeitdaten, Backups, Logs und Secrets liegen außerhalb des Repositorys 
 /workspaces/.grabenplaner-codespaces/${CODESPACE_NAME}
 ```
 
-Die erzeugten Zugangsdaten stehen in `secrets.json` (Dateimodus `0600`). Der Runner reicht GitHub-Token nicht an den Grabenplaner-Prozess weiter. Nicht gescannte AMU-Uploads sind nur in dieser Testumgebung erlaubt.
+Die erzeugten Zugangsdaten stehen in `secrets.json` (Dateimodus `0600`). Der Runner reicht GitHub-Token nicht an den Grabenplaner-Prozess weiter. Nicht gescannte AUM-Uploads sind nur in dieser Testumgebung erlaubt.
 
 Status und Log:
 

@@ -1,6 +1,6 @@
 # Grabenplaner
 
-Aktuelle Beta-Version: **v0.52 Beta**
+Aktuelle Beta-Version: **v0.53 Beta**
 
 Grabenplaner ist eine lokale Windows-Web-App für Dienstplanung, Urlaubsplanung und PDF-Ausgaben. Die Daten bleiben lokal in einer SQLite-Datenbank; ein externer Datenbankserver ist nicht nötig.
 
@@ -8,7 +8,7 @@ Grabenplaner ist eine lokale Windows-Web-App für Dienstplanung, Urlaubsplanung 
 
 Unter Windows genügt ein Doppelklick auf:
 
-`Grabenplaner v0.52 Beta starten.cmd`
+`Grabenplaner v0.53 Beta starten.cmd`
 
 Die App öffnet anschließend lokal unter:
 
@@ -24,13 +24,17 @@ http://localhost:3000
 - PDF-Export für Dienstpläne, Abteilungspläne und Urlaubsübersichten
 - Wochenstundenübersicht und Auswertung je Teammitglied
 - Mitarbeiterportal mit Anträgen, AUM-Upload und Zeiterfassung
+- Wochen- und Monatsübersichten der Zeiterfassung mit nachvollziehbaren Korrekturanträgen
+- Rollen- und Rechtemanagement mit gezielter Freigabe ausgewählter Verwaltungsfunktionen
+- Mobil optimiertes Leitungsportal mit konfigurierbaren Kernfunktionen
+- Standortbezogene Branding-Zuweisung für unterschiedliche Filialauftritte
 - Lokale SQLite-Datenbank ohne externen Datenbankserver
 - Integriertes Backup-System
 - GitHub-basierter Aktualisierungscheck
 
 ## Branding
 
-Firmenname, Logo, Admin-Kontakt und PDF-Titel können in den Einstellungen angepasst und als komplettes Branding-Kit exportiert oder importiert werden. Der App-Name bleibt fest `Grabenplaner`.
+Firmenname, Logo, Admin-Kontakt und PDF-Titel können in den Einstellungen angepasst und als komplettes Branding-Kit exportiert oder importiert werden. Admin und Personalleitung können installierte Brandings standortbezogen zuweisen. Der App-Name bleibt fest `Grabenplaner`.
 
 ## Lizenz
 
@@ -42,7 +46,7 @@ Der aktuelle Betrieb bleibt lokal mit SQLite-Datenbank. Ein Servermodus ist tech
 
 Die technische Grundlage und die spätere Einrichtung mit Firmen-IT sind in [SERVERBETRIEB.md](SERVERBETRIEB.md) beschrieben.
 
-Eine private GitHub-Codespaces-Umgebung für reine Demo- und Funktionstests ist in [CODESPACES.md](CODESPACES.md) beschrieben. Dort dürfen keine echten Personal- oder Gesundheitsdaten verwendet werden.
+Eine private GitHub-Codespaces-Umgebung für Demo- und Funktionstests der Rollen-, Portal- und Zeiterfassungsabläufe ist in [CODESPACES.md](CODESPACES.md) beschrieben. Dort dürfen keine echten Personal- oder Gesundheitsdaten verwendet werden.
 
 ## Backup und Datenbank
 
