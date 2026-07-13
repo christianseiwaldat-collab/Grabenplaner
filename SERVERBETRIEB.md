@@ -1,60 +1,91 @@
 # Grabenplaner Serverbetrieb
 
-Der Serverbetrieb in v0.49 Beta ist ein technisches Fundament für einen späteren Pilotbetrieb. Lokalbetrieb und LAN-Host bleiben unverändert verfügbar.
+Der Serverbetrieb ist für eine zentrale Instanz vorgesehen. Die Anwendung läuft ausschließlich auf `127.0.0.1`; Browser greifen über einen HTTPS-Reverse-Proxy darauf zu. Lokalbetrieb und LAN-Host bleiben davon unabhängig.
+
+## Pilotaufbau unter Windows
+
+- Programmdateien: `C:\Program Files\Grabenplaner\app`
+- Datenbank, Branding und Logs: `C:\ProgramData\Grabenplaner`
+- Backups: getrenntes lokales Laufwerk oder von der IT gesichertes Ziel
+- Anwendung: `127.0.0.1:3000`
+- öffentlicher Zugang: ausschließlich Caddy auf Port 443
+
+Die SQLite-Datenbank darf nicht auf einem Netzlaufwerk oder synchronisierten Cloudordner liegen. Es läuft genau eine Grabenplaner-Instanz.
 
 ## Voraussetzungen
 
-- Ein zentraler Windows- oder Linux-Server mit Node.js 22 oder der mitgelieferten Windows-Laufzeit
-- Eine feste Domain, zum Beispiel `plan.example.at`
-- Ein HTTPS-Reverse-Proxy wie Caddy oder Nginx
-- Ein zuvor im Lokal- oder LAN-Betrieb eingerichteter Admin-Zugang
-- Ein ausschließlich lokal am Server gespeicherter SQLite-Datenbankpfad
-- Ein zusätzlicher Backup-Ordner auf einem anderen Datenträger oder Sicherungsziel
+- Windows-Server oder dauerhaft verfügbarer Windows-PC
+- feste Domain und passende DNS-/Firewallfreigabe
+- bereits eingerichteter Grabenplaner-Admin
+- Caddy und WinSW in zuvor freigegebenen, fest gepinnten Versionen
+- SHA256-Prüfsummen der freigegebenen Binärdateien
+- separates, regelmäßig von der IT gesichertes Backupziel
 
-Die SQLite-Datei darf nicht auf einem Netzlaufwerk liegen. Alle Browser greifen auf eine einzige laufende Grabenplaner-Instanz zu.
+Grabenplaner lädt Caddy oder WinSW nicht selbst herunter. Die Beispiele unter `server-tools` enthalten keine Firmenwerte, Zertifikate oder Zugangsdaten.
 
-## Geschützte Serverkonfiguration
+## Vorbereitung
 
-Der Servermodus wird absichtlich nicht im Browser aktiviert. Die Serveradministration setzt beim Start mindestens:
+1. App vollständig in den vorgesehenen Programmordner kopieren.
+2. Admin zunächst im Lokal- oder LAN-Betrieb einrichten.
+3. Caddy- und WinSW-Binärdateien samt freigegebenen SHA256-Werten bereitstellen.
+4. Konfiguration zunächst ohne Dienstregistrierung erzeugen:
 
 ```powershell
-$env:GRABENPLANER_OPERATION_MODE = "server"
-$env:GRABENPLANER_PUBLIC_URL = "https://plan.example.at"
-$env:GRABENPLANER_HOST = "127.0.0.1"
-$env:GRABENPLANER_TRUST_PROXY = "loopback"
-$env:DB_PATH = "D:\Grabenplaner-Daten\dienstplan.db"
-$env:BACKUP_DIR = "E:\Grabenplaner-Backups"
-runtime\node.exe server.js
+.\server-tools\windows\Install-GrabenplanerServer.ps1 `
+  -PublicUrl 'https://plan.example.at' `
+  -BackupDirectory 'D:\Grabenplaner-Backups' `
+  -WhatIf
 ```
 
-`GRABENPLANER_PUBLIC_URL` muss eine vollständige HTTPS-Adresse ohne zusätzlichen Pfad enthalten. Der Reverse-Proxy verbindet sich anschließend intern mit `127.0.0.1:3000`.
+Danach erfolgt der kontrollierte Durchlauf mit `-RegisterServices`. Dabei müssen die lokal bereitgestellten Dateien und ihre zuvor freigegebenen SHA256-Werte ausdrücklich angegeben werden:
 
-Ein minimales Caddy-Prinzip sieht so aus:
+```powershell
+.\server-tools\windows\Install-GrabenplanerServer.ps1 `
+  -PublicUrl 'https://plan.example.at' `
+  -BackupDirectory 'D:\Grabenplaner-Backups' `
+  -WinSwExecutable 'C:\IT-Freigabe\WinSW-x64.exe' `
+  -WinSwSha256 '<freigegebener SHA256-Wert>' `
+  -CaddyExecutable 'C:\IT-Freigabe\caddy.exe' `
+  -CaddySha256 '<freigegebener SHA256-Wert>' `
+  -RegisterServices
+```
+
+`-StartServices` startet beide Dienste nur auf ausdrücklichen Wunsch. Der Assistent lädt nichts herunter.
+
+## Servervariablen
+
+Die vollständige neutrale Vorlage liegt in `server-tools/server.env.example`. Wesentlich sind:
 
 ```text
-plan.example.at {
-    reverse_proxy 127.0.0.1:3000
-}
+GRABENPLANER_OPERATION_MODE=server
+GRABENPLANER_PUBLIC_URL=https://plan.example.at
+GRABENPLANER_HOST=127.0.0.1
+GRABENPLANER_TRUST_PROXY=loopback
+GRABENPLANER_DATA_DIR=C:\ProgramData\Grabenplaner
+DB_PATH=C:\ProgramData\Grabenplaner\data\dienstplan.db
+BACKUP_DIR=D:\Grabenplaner-Backups
+GRABENPLANER_AMU_KEY_ID=server-v1
+GRABENPLANER_AMU_KEY=<geheimer 32-Byte-Schlüssel als Base64>
+GRABENPLANER_SERVICE_CONTROL_TOKEN=<geheimer zufälliger Dienststeuerungs-Token>
 ```
 
-Die endgültige Einrichtung von Domain, Zertifikat, Firewall, Serverdienst und Backupziel erfolgt gemeinsam mit der zuständigen Firmen-IT.
+Der Einrichtungsassistent erzeugt den AMU-Schlüssel bei einer neuen, leeren Installation zufällig in der ACL-geschützten Dienstkonfiguration. Sind bereits AMU-Dateien vorhanden, wird niemals still ein neuer Schlüssel erzeugt: Die Einrichtung verlangt den bestehenden Schlüssel und prüft ihn an den vorhandenen Dokumenten. Die IT muss diesen Recovery-Schlüssel zusätzlich getrennt und geschützt sichern; ohne ihn können verschlüsselte AMU-Dokumente nicht wiederhergestellt werden.
 
-## Sicherheitsverhalten
+Auch der Dienststeuerungs-Token wird zufällig erzeugt und bei einer erneuten Einrichtung beibehalten. WinSW verwendet ihn ausschließlich über den lokalen Stop-Helfer, damit der Server vor dem Dienstende ein Abschlussbackup und einen WAL-Checkpoint ausführt. Der normale Browserzugriff kann diesen Endpunkt nicht verwenden.
 
-Im Serverbetrieb gelten automatisch:
+Der Servermodus wird nicht im Browser aktiviert. Updates, Neustarts und Datenbankimporte erfolgen ausschließlich in einem Wartungsfenster am Server.
 
-- HTTPS-Pflicht und sichere Cookies
-- Prüfung der öffentlichen Herkunft bei schreibenden Browseranfragen
-- Mindestlänge von 10 Zeichen für neu gesetzte Passwörter
-- Kontosperre und zusätzliche IP-basierte Login-Drosselung
-- Sicherheitsheader und HSTS
-- Schutz vor zwei gleichzeitig laufenden Instanzen auf derselben Datenbank
-- gesperrte automatische App-Updates, Neustarts und Datenbankimporte aus dem Browser
+## Prüfung, Backup und Wiederherstellung
 
-Updates und Datenbankimporte werden im Serverbetrieb kontrolliert in einem Wartungsfenster durchgeführt.
+`Test-GrabenplanerServer.ps1` prüft Dienste, interne und öffentliche Healthchecks, HSTS, SQLite und die Aktualität der Backups. Das Caddyfile kann zusätzlich mit der bereitgestellten Caddy-Version validiert werden.
 
-## SQLite und Backups
+`Backup-Grabenplaner.ps1` arbeitet nur bei gestopptem App-Dienst. Es erstellt mit SQLite `VACUUM INTO` einen konsistenten Sicherungspunkt, prüft ihn mit `quick_check` und koppelt die Datenbank über Dateiname und SHA256 fest an ihr eigenes AMU-Manifest. Datenbank und verschlüsselte AMU-Dateien werden gemeinsam veröffentlicht und gemäß Aufbewahrung auch gemeinsam aufgeräumt. Im laufenden Betrieb übernimmt die integrierte Grabenplaner-Sicherung upload-sichere, ebenfalls gekoppelte Sicherungspunkte.
 
-Grabenplaner aktiviert WAL, Fremdschlüssel, eine Schreibwartezeit von fünf Sekunden und eine Integritätsprüfung beim Start. Erstellte Backups werden unmittelbar mit `quick_check` geprüft. Die Diagnose unter `Einstellungen > Datenbank` zeigt den aktuellen Zustand.
+`Restore-Grabenplaner.ps1` arbeitet nur bei vollständig gestopptem App-Dienst. Es akzeptiert ausschließlich zusammengehörige Datenbank-/AMU-Sicherungspunkte, prüft Integrität, Kopplung und den Recovery-Schlüssel, erstellt Sicherheitskopien des aktuellen Stands, tauscht beides kontrolliert aus und setzt bei einem Fehler automatisch zurück. Standardmäßig wird der gleichnamige `.amu`-Ordner neben der gewählten `.db`-Datei verwendet; der Schlüssel wird aus der geschützten Dienstkonfiguration gelesen oder ausdrücklich übergeben. Ein Dienststart nach erfolgreicher Wiederherstellung ist optional.
 
-SQLite ist für den geplanten kleinen Pilotbetrieb mit einer zentralen Serverinstanz geeignet. Sollte die spätere Nutzung deutlich wachsen oder mehrere Serverinstanzen benötigen, ist eine Migration auf PostgreSQL der nächste sinnvolle Schritt.
+## Pilotgrenzen
+
+- Domain, Zertifikat, Firewall, Dienstkonto und Backupziel werden gemeinsam mit der Firmen-IT freigegeben.
+- Die Beispiele führen keine automatische produktive Bereitstellung durch.
+- Die öffentliche Auslieferung bleibt neutral; Firmenlogos und Voreinstellungen gehören ausschließlich in separate Branding-Kits.
+- SQLite eignet sich für den kleinen Pilotbetrieb mit einer Instanz. Mehrere App-Server erfordern später eine andere Datenbankarchitektur.

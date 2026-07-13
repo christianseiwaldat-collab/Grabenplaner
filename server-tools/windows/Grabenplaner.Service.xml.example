@@ -1,0 +1,44 @@
+<service>
+  <id>GrabenplanerServer</id>
+  <name>Grabenplaner Server</name>
+  <description>Zentraler Grabenplaner-Anwendungsdienst</description>
+  <executable>{{NODE_EXECUTABLE}}</executable>
+  <startarguments>"{{SERVER_SCRIPT}}"</startarguments>
+  <stopexecutable>powershell.exe</stopexecutable>
+  <stoparguments>-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{{STOP_SCRIPT}}" -Port {{PORT}}</stoparguments>
+  <workingdirectory>{{APP_DIRECTORY}}</workingdirectory>
+  <stoptimeout>20 sec</stoptimeout>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="60 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <logpath>{{SERVICE_LOG_DIRECTORY}}</logpath>
+  <log mode="roll-by-size-time">
+    <sizeThreshold>10240</sizeThreshold>
+    <pattern>yyyyMMdd</pattern>
+    <autoRollAtTime>00:00:00</autoRollAtTime>
+    <zipOlderThanNumDays>7</zipOlderThanNumDays>
+    <zipDateFormat>yyyyMMdd</zipDateFormat>
+  </log>
+  <serviceaccount>
+    <domain>NT AUTHORITY</domain>
+    <user>LOCAL SERVICE</user>
+    <allowservicelogon>true</allowservicelogon>
+  </serviceaccount>
+  <env name="NODE_ENV" value="production" />
+  <env name="GRABENPLANER_OPERATION_MODE" value="server" />
+  <env name="GRABENPLANER_PUBLIC_URL" value="{{PUBLIC_URL}}" />
+  <env name="GRABENPLANER_HOST" value="127.0.0.1" />
+  <env name="GRABENPLANER_TRUST_PROXY" value="loopback" />
+  <env name="PORT" value="{{PORT}}" />
+  <env name="GRABENPLANER_DATA_DIR" value="{{DATA_DIRECTORY}}" />
+  <env name="DB_PATH" value="{{DATABASE_PATH}}" />
+  <env name="BACKUP_DIR" value="{{BACKUP_DIRECTORY}}" />
+  <env name="GRABENPLANER_LOG_DIR" value="{{APP_LOG_DIRECTORY}}" />
+  <env name="GRABENPLANER_BACKUP_KEEP" value="{{BACKUP_KEEP}}" />
+  <env name="GRABENPLANER_AMU_KEY_ID" value="{{AMU_KEY_ID}}" />
+  <env name="GRABENPLANER_AMU_KEY" value="{{AMU_KEY}}" />
+  <env name="GRABENPLANER_SERVICE_CONTROL_TOKEN" value="{{SERVICE_CONTROL_TOKEN}}" />
+</service>

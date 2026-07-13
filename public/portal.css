@@ -31,12 +31,19 @@ button { border:0; border-radius:10px; cursor:pointer; }
 .portal-brand img { width:130px; height:46px; object-fit:contain; object-position:left; }
 .portal-brand strong,.portal-brand span,.portal-user strong,.portal-user span { display:block; }
 .portal-brand span,.portal-user span { color:var(--muted); font-size:11px; }
-.portal-user { justify-content:flex-end; }
+.portal-user { justify-content:flex-end; min-width:0; }
+.portal-user-copy { min-width:0; }
+.compact-label { display:none !important; }
 .text-button { padding:8px 10px; color:var(--green); background:#e4efe9; font-size:11px; font-weight:800; text-decoration:none; }
+.notification-button { position:relative; display:grid; place-items:center; flex:0 0 38px; width:38px; height:38px; color:var(--green); background:#e4efe9; }
+.notification-button svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.notification-button.has-unread { color:#7d5907; background:#fff0bd; }
+.notification-badge { position:absolute; top:-5px; right:-6px; display:grid; place-items:center; min-width:19px; height:19px; padding:0 5px; border:2px solid #faf9f4; border-radius:999px; color:white !important; background:#c45142; font-size:8px !important; font-weight:900; }
 main { width:min(1180px,calc(100% - 30px)); margin:26px auto 60px; }
 .portal-tabs { display:flex; gap:7px; margin-bottom:22px; padding:5px; border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.58); }
-.portal-tabs button { flex:1; padding:10px; color:var(--muted); background:transparent; font-weight:800; }
+.portal-tabs button { flex:1; min-height:42px; padding:10px; color:var(--muted); background:transparent; font-weight:800; white-space:nowrap; }
 .portal-tabs button.active { color:white; background:var(--green); }
+.portal-tabs button:focus-visible { outline:3px solid rgba(55,124,96,.26); outline-offset:1px; }
 .portal-view { display:none; }
 .portal-view.active { display:block; }
 .view-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:15px; margin-bottom:18px; }
@@ -71,7 +78,7 @@ main { width:min(1180px,calc(100% - 30px)); margin:26px auto 60px; }
 .request-item strong,.request-item span { display:block; }
 .request-item span { margin-top:4px; color:var(--muted); font-size:11px; }
 .status { display:inline-block !important; width:max-content; margin-top:5px !important; padding:3px 7px; border-radius:999px; font-weight:800; }
-.status.pending { color:var(--warning); background:#fff2cf; }.status.approved { color:#236247; background:#dff1e8; }.status.rejected { color:var(--danger); background:#f8e5e2; }
+.status.pending,.status.submitted,.status.pending_local,.status.preliminary_local,.status.pending_hr,.status.returned { color:var(--warning); background:#fff2cf; }.status.approved,.status.accepted,.status.reviewed { color:#236247; background:#dff1e8; }.status.rejected { color:var(--danger); background:#f8e5e2; }.status.cancelled,.status.withdrawn { color:#687770; background:#e9eeeb; }
 .cancel-request { padding:7px 9px; color:var(--danger); background:#faecea; font-size:11px; font-weight:800; }
 .approved-vacation-card { padding:20px; }
 .approved-vacation-list { display:grid; gap:10px; }
@@ -80,11 +87,22 @@ main { width:min(1180px,calc(100% - 30px)); margin:26px auto 60px; }
 .approved-vacation-item button { padding:8px 10px; color:var(--green); background:#e4efe9; font-size:11px; font-weight:800; }
 .approved-vacation-item .vacation-cancel { color:var(--danger); background:#faecea; }
 .pending-change { margin-top:7px !important; color:#9a6b12 !important; font-weight:750; }
-dialog { width:min(450px,calc(100% - 28px)); padding:0; border:0; border-radius:18px; box-shadow:0 24px 80px rgba(20,43,35,.28); }
+dialog { width:min(520px,calc(100% - 28px)); max-height:min(90dvh,820px); padding:0; border:0; border-radius:18px; overflow:hidden; box-shadow:0 24px 80px rgba(20,43,35,.28); }
 dialog::backdrop { background:rgba(20,38,32,.5); backdrop-filter:blur(3px); }
-dialog form { display:grid; gap:14px; padding:24px; }
+dialog form { display:grid; gap:14px; max-height:min(90dvh,820px); padding:24px; overflow-y:auto; overscroll-behavior:contain; }
 .dialog-heading { display:flex; justify-content:space-between; gap:12px; }.dialog-heading h2 { margin:0; }.dialog-heading button { width:32px; height:32px; font-size:22px; background:#edf1ee; }
 .dialog-actions { display:flex; justify-content:flex-end; gap:8px; padding-top:8px; }.dialog-actions button { padding:9px 12px; }
-@media (max-width:850px) { .schedule-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.vacation-layout { grid-template-columns:1fr; }.portal-user > div { display:none; }.portal-tabs { display:grid; grid-template-columns:1fr 1fr; }.approved-vacation-item { grid-template-columns:1fr 1fr; }.approved-vacation-item > div { grid-column:1 / -1; } }
-@media (max-width:560px) { .portal-brand img { width:100px; }.portal-brand > div { display:none; }.portal-header { align-items:flex-start; }.portal-user { flex-wrap:wrap; }.schedule-grid { grid-template-columns:1fr; }.view-heading { align-items:flex-start; flex-direction:column; }.date-fields { grid-template-columns:1fr; } }
-@media (max-width:560px) { body { padding-bottom:82px; }.portal-header { min-height:62px; padding:8px 12px; }.portal-user .text-button { min-height:40px; }.portal-tabs { position:fixed; left:8px; right:8px; bottom:8px; z-index:30; margin:0; padding:5px; box-shadow:0 12px 35px rgba(25,53,43,.25); background:rgba(255,253,250,.97); backdrop-filter:blur(12px); }.portal-tabs button { min-height:48px; padding:7px 4px; font-size:11px; }.portal-card { border-radius:14px; }.request-form,.vacation-layout > section { padding:17px; } main { width:min(100% - 20px,1180px); margin-top:18px; }.primary,.text-button,.approved-vacation-item button,.cancel-request { min-height:44px; }.request-item { grid-template-columns:1fr; }.request-item button { width:100%; } }
+.history-card { padding:20px; }
+.history-toolbar { display:grid; grid-template-columns:repeat(2,minmax(0,220px)); gap:10px; margin-bottom:16px; }
+.history-list { display:grid; gap:9px; }
+.history-item { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:12px; padding:13px; border:1px solid var(--line); border-radius:12px; background:white; }
+.history-item strong,.history-item span,.history-item small { display:block; }.history-item span { margin-top:4px; color:var(--muted); font-size:11px; }.history-item small { margin-top:4px; color:#7b8882; font-size:10px; }
+.history-item-status { display:grid; justify-items:end; gap:3px; }.history-item-status small { text-align:right; }
+.approved-heading { margin-top:26px; }.approved-heading h2 { margin:0; }
+.history-detail-summary { display:grid; gap:9px; padding:13px; border-radius:12px; background:#f3f6f3; }.history-detail-summary .status { justify-self:start; }.history-detail-summary p { margin:0; font-size:12px; }
+.decision-timeline { display:grid; gap:0; padding-left:5px; }.timeline-entry { position:relative; display:grid; grid-template-columns:18px 1fr; gap:8px; min-height:52px; }.timeline-entry:not(:last-child)::after { content:""; position:absolute; top:15px; bottom:-2px; left:6px; width:2px; background:#d8e2dd; }.timeline-dot { z-index:1; width:14px; height:14px; margin-top:2px; border:3px solid #d9eee5; border-radius:50%; background:var(--green); }.timeline-entry strong,.timeline-entry small { display:block; }.timeline-entry small { margin-top:3px; color:var(--muted); font-size:10px; line-height:1.5; }
+.notification-toolbar { display:flex; justify-content:flex-end; }.notification-list { display:grid; gap:8px; }.notification-item { display:grid; grid-template-columns:9px 1fr; gap:9px; width:100%; padding:12px; color:var(--ink); border:1px solid var(--line); text-align:left; background:#fafbf9; }.notification-item.unread { border-color:#d8bd72; background:#fff8df; }.notification-dot { width:8px; height:8px; margin-top:5px; border-radius:50%; background:#aab3ae; }.notification-item.unread .notification-dot { background:#d39317; }.notification-item strong,.notification-item small,.notification-item time { display:block; }.notification-item small { margin-top:4px; color:var(--muted); font-size:11px; line-height:1.45; }.notification-item time { margin-top:6px; color:#87928d; font-size:9px; }
+.file-field small { color:var(--muted); font-size:10px; font-weight:500; }.file-field input { padding:8px; }.amu-report-list { padding:0; }.amu-report .document-links { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }.document-links a { padding:6px 8px; border-radius:8px; color:var(--green); background:#e8f1ec; font-size:10px; font-weight:750; text-decoration:none; }.empty-state { margin:0; padding:14px; color:var(--muted); text-align:center; }
+@media (max-width:850px) { .schedule-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.vacation-layout { grid-template-columns:1fr; }.portal-user-copy { display:none; }.portal-tabs { overflow-x:auto; scrollbar-width:none; }.portal-tabs::-webkit-scrollbar { display:none; }.portal-tabs button { flex:0 0 auto; min-width:112px; }.approved-vacation-item { grid-template-columns:1fr 1fr; }.approved-vacation-item > div { grid-column:1 / -1; }.history-item { grid-template-columns:1fr auto; }.history-item > div:first-child { grid-column:1 / -1; }.history-item-status { justify-items:start; }.history-item-status small { text-align:left; } }
+@media (max-width:560px) { .portal-brand img { width:88px; height:40px; }.portal-brand > div { display:none; }.portal-header { align-items:center; }.portal-user { gap:5px; flex-wrap:nowrap; }.portal-user #adminAppLink { display:none !important; }.wide-label { display:none !important; }.compact-label { display:block !important; }.header-action { min-height:38px; padding:7px; font-size:9px; }.schedule-grid { grid-template-columns:1fr; }.view-heading { align-items:flex-start; flex-direction:column; }.date-fields,.history-toolbar { grid-template-columns:1fr; width:100%; } }
+@media (max-width:560px) { body { padding-bottom:calc(78px + env(safe-area-inset-bottom)); }.portal-header { min-height:58px; padding:8px 10px; }.portal-tabs { position:fixed; left:8px; right:8px; bottom:max(8px,env(safe-area-inset-bottom)); z-index:30; margin:0; padding:5px; flex-wrap:nowrap; overflow-x:auto; scroll-snap-type:x proximity; box-shadow:0 12px 35px rgba(25,53,43,.25); background:rgba(255,253,250,.97); backdrop-filter:blur(12px); }.portal-tabs button { flex:0 0 auto; min-width:94px; min-height:48px; padding:7px 10px; font-size:10px; scroll-snap-align:start; }.portal-card { border-radius:14px; }.request-form,.vacation-layout > section,.history-card { padding:17px; } main { width:min(100% - 20px,1180px); margin-top:18px; }.primary,.text-button,.approved-vacation-item button,.cancel-request,input,select { min-height:44px; }.request-item,.history-item { grid-template-columns:1fr; }.request-item button,.history-item button { width:100%; }.history-item-status { justify-items:start; }.dialog-actions { position:sticky; bottom:-24px; padding:10px 0 max(2px,env(safe-area-inset-bottom)); background:white; }.notification-button { flex-basis:38px; } }

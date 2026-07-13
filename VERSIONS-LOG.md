@@ -1,5 +1,20 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.50 Beta
+
+- Mitarbeiterportal für Smartphones überarbeitet: kompakte Navigation, sichere Bildschirmränder, größere Touch-Ziele und besser bedienbare Dialoge.
+- Persönlichen Bereich „Meine Anträge“ ergänzt: Urlaub, ZA, Änderungen und Stornierungen bleiben mit Status, Freigaben, Bemerkungen und Entscheidungschronik dauerhaft nachvollziehbar.
+- Zurückgezogene Anträge werden nicht mehr gelöscht, sondern als „Zurückgezogen“ protokolliert; überlappende Anträge werden in allen Freigabestufen zuverlässig erkannt.
+- Interne Benachrichtigungen mit Ungelesen-Zähler ergänzt: neue Anträge, Weiterleitungen und Entscheidungen erscheinen bei den zuständigen Personen beziehungsweise Antragstellenden.
+- Arbeitsunfähigkeitsmeldungen (AMU) können im Mitarbeiterportal als PDF, JPG oder PNG mit bis zu drei Dokumenten hochgeladen und vor der Prüfung wieder zurückgezogen werden.
+- AMU-Dateien sowie Bemerkungen und Originaldateinamen liegen ausschließlich im geschützten Bereich, werden per AES-256-GCM verschlüsselt, anhand ihrer Dateisignatur geprüft und niemals über den öffentlichen Webordner ausgeliefert.
+- Ein dauerhafter Schlüsselprüfwert verhindert unbemerkte Schlüsselwechsel; abgebrochene Klartext-Uploads werden beim nächsten Start aus dem privaten Temporärordner entfernt.
+- Eigene AMU-Rechte für Mitarbeitende, Filial-/Abteilungsleitung, Personalleitung und Admin ergänzt; Dokumentinhalte bleiben Personalleitung und Admin vorbehalten.
+- Datenbank-Backups sichern nun auch die verschlüsselten AMU-Dateien als fest gekoppelten Sicherungspunkt mit Manifest, Datenbank-Hash und Prüfsummen; HEIC bleibt bis zu einer sicheren Normalisierung bewusst deaktiviert.
+- Firmenserver-Pilotpaket ergänzt: neutrale WinSW-/Caddy-Vorlagen, PowerShell-Installation, Diagnose, Backup und sichere Offline-Wiederherstellung.
+- Serverbetrieb gehärtet: beschreibbare Daten liegen getrennt vom Programm, Instanzschutz greift vor Migrationen, vor Migrationen und beim Dienststopp werden verifizierte Backups erstellt, und Browser-„Beenden“ ist im Dienstbetrieb gesperrt.
+- Serverdiagnose um Pilot-Checkliste, Daten-/Backupziel, freien Speicher, Backupalter, Virenscanner-Bereitschaft und geschützten AMU-Speicher erweitert.
+
 ## v0.49 Beta
 
 - Technischen HTTPS-Serverbetrieb ergänzt, der ausschließlich über geschützte Servervariablen und nicht über das Browser-Frontend aktiviert wird.

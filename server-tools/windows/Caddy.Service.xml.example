@@ -1,0 +1,29 @@
+<service>
+  <id>GrabenplanerCaddy</id>
+  <name>Grabenplaner HTTPS Proxy</name>
+  <description>Caddy HTTPS-Reverse-Proxy fuer Grabenplaner</description>
+  <executable>{{CADDY_EXECUTABLE}}</executable>
+  <arguments>run --config "{{CADDYFILE}}" --adapter caddyfile</arguments>
+  <workingdirectory>{{CADDY_DIRECTORY}}</workingdirectory>
+  <stoptimeout>20 sec</stoptimeout>
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+  <depend>GrabenplanerServer</depend>
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="60 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <logpath>{{SERVICE_LOG_DIRECTORY}}</logpath>
+  <log mode="roll-by-size-time">
+    <sizeThreshold>10240</sizeThreshold>
+    <pattern>yyyyMMdd</pattern>
+    <autoRollAtTime>00:00:00</autoRollAtTime>
+    <zipOlderThanNumDays>7</zipOlderThanNumDays>
+    <zipDateFormat>yyyyMMdd</zipDateFormat>
+  </log>
+  <serviceaccount>
+    <domain>NT AUTHORITY</domain>
+    <user>LOCAL SERVICE</user>
+    <allowservicelogon>true</allowservicelogon>
+  </serviceaccount>
+</service>

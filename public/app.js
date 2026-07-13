@@ -18,7 +18,8 @@ const state = {
   approvalDelegations: [],
   requestBlackouts: [],
   absenceRequests: [],
-  requestCounts: { vacation: 0, timeOff: 0, total: 0 },
+  amuReports: [],
+  requestCounts: { vacation: 0, timeOff: 0, amu: 0, total: 0 },
   requestKindTab: "vacation",
   selectedRequest: null,
   allEmployees: [],
@@ -76,7 +77,7 @@ const elements = Object.fromEntries(
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "backupSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField",
-    "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount",
+    "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount",
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition",
@@ -90,7 +91,7 @@ const elements = Object.fromEntries(
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint",
-    "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
+    "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
     "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink",
     "brandLogo", "footerBrandLogo", "adminContactLink", "brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt", "brandingPreviewLogo", "brandingPreviewTitle", "brandingPreviewCompany", "brandingKitLibrary", "exportBrandingButton", "brandingImportFile", "importBrandingButton", "toast",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
@@ -449,6 +450,7 @@ async function bootstrapApplication() {
     hideLoginGate();
     applyRoleVisibility();
     await Promise.all([loadAll(), loadSystemInfo()]);
+    applyRequestedView();
     setTimeout(() => checkForUpdates(false), 1800);
   } catch (error) {
     showLoginGate(error.message);
@@ -474,6 +476,7 @@ async function loginToAdministration(event) {
     hideLoginGate();
     applyRoleVisibility();
     await Promise.all([loadAll(), loadSystemInfo()]);
+    applyRequestedView();
   } catch (error) {
     showLoginGate(error.message);
   }
@@ -1110,7 +1113,10 @@ function renderServerDiagnostics(info) {
       <span><small>Instanzschutz</small><strong>${info.instanceLock?.held ? "aktiv" : info.instanceLock?.enabled ? "beim Serverstart" : "nicht nötig"}</strong></span>
       <span><small>Aktive Sitzungen</small><strong>${Number(info.security?.activeSessions || 0)}</strong></span>
       <span><small>Letztes Backup geprüft</small><strong>${info.backups?.lastVerified ? "ja" : "noch ausständig"}</strong></span>
-    </div>${warnings}`;
+      <span><small>AMU-Speicher</small><strong>${info.storage?.amu?.ok ? "verschlüsselt bereit" : "nicht bereit"}</strong></span>
+      <span><small>Backupziel</small><strong>${info.backups?.externalWritable ? "beschreibbar" : "prüfen"}</strong></span>
+    </div>
+    <div class="pilot-checklist"><strong>Server-Pilotbereitschaft</strong>${(info.pilotChecks || []).map((check) => `<span class="${check.ok ? "ok" : "warning"}"><i>${check.ok ? "✓" : "!"}</i><b>${escapeHtml(check.label)}</b><small>${escapeHtml(check.detail || "")}</small></span>`).join("")}</div>${warnings}`;
 }
 
 async function refreshServerDiagnostics() {
@@ -1404,9 +1410,12 @@ async function saveApprovalDelegation(event) {
 async function loadManagerVacationRequests() {
   if (!elements.managerVacationRequestList) return;
   try {
-    const [result, workflow] = await Promise.all([api("/api/portal/v1/absence-requests"), api("/api/portal/v1/workflow-settings")]);
+    const [result, workflow, amu] = await Promise.all([api("/api/portal/v1/absence-requests"), api("/api/portal/v1/workflow-settings"), api("/api/portal/v1/amu-reports")]);
     state.absenceRequests = result.requests || [];
-    state.requestCounts = result.counts || { vacation: 0, timeOff: 0, total: 0 };
+    state.amuReports = amu.reports || [];
+    const absenceCounts = result.counts || { vacation: 0, timeOff: 0, total: 0 };
+    const amuCount = Number(amu.pendingCount || state.amuReports.filter((item) => item.status === "submitted").length);
+    state.requestCounts = { ...absenceCounts, amu: amuCount, total: Number(absenceCounts.total || 0) + amuCount };
     state.workflowSettings = workflow;
     if (elements.vacationHrApprovalRequired) elements.vacationHrApprovalRequired.checked = workflow.vacationHrApprovalRequired;
     renderRequestNavigation();
@@ -1424,6 +1433,10 @@ const requestStatusLabels = {
   approved: "Genehmigt",
   rejected: "Abgelehnt",
   cancelled: "Storniert",
+  withdrawn: "Zurückgezogen",
+  submitted: "Eingereicht",
+  reviewed: "Geprüft",
+  returned: "Ergänzung erforderlich",
 };
 
 function renderRequestNavigation() {
@@ -1433,9 +1446,11 @@ function renderRequestNavigation() {
   elements.requestsNavButton.classList.toggle("attention", counts.total > 0);
   elements.vacationRequestCount.textContent = counts.vacation;
   elements.timeOffRequestCount.textContent = counts.timeOff;
+  elements.amuRequestCount.textContent = counts.amu || 0;
   elements.requestWorkflowSummary.innerHTML = `
     <article><span>Urlaub offen</span><strong>${counts.vacation}</strong></article>
     <article><span>ZA offen</span><strong>${counts.timeOff}</strong></article>
+    <article><span>AMU neu</span><strong>${counts.amu || 0}</strong></article>
     <article><span>Urlaubs-Zweitfreigabe</span><strong>${state.workflowSettings?.vacationHrApprovalRequired ? "Aktiv" : "Nicht aktiv"}</strong>${state.workflowSettings?.canChange ? `<button type="button" class="text-action" data-toggle-hr-workflow>${state.workflowSettings.vacationHrApprovalRequired ? "Deaktivieren" : "Aktivieren"}</button>` : ""}</article>`;
 }
 
@@ -1457,6 +1472,22 @@ function requestIsActionable(request) {
 
 function renderManagerRequests() {
   const statusFilter = elements.requestStatusFilter.value || "actionable";
+  if (state.requestKindTab === "amu") {
+    const reports = state.amuReports.filter((report) => statusFilter === "all" ? true : statusFilter === "actionable" ? ["submitted", "returned"].includes(report.status) : report.status === statusFilter);
+    const canOpenFiles = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:file:read");
+    const canReview = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:review");
+    elements.managerVacationRequestList.innerHTML = reports.length ? reports.map((report) => {
+      const files = (report.documents || []).map((document) => canOpenFiles
+        ? `<a href="/api/portal/v1/amu-reports/${report.id}/documents/${encodeURIComponent(document.id)}/content" target="_blank" rel="noopener">${escapeHtml(document.original_name || "Dokument")} · ${Math.max(1, Math.round(Number(document.size || 0) / 1024))} KB</a>`
+        : `<span>${escapeHtml(document.original_name || "Dokument")} · ${Math.max(1, Math.round(Number(document.size || 0) / 1024))} KB</span>`).join("");
+      return `<article class="manager-request-row amu-request-row" data-amu-report="${report.id}">
+        <span class="employee-dot" style="--employee-color:${escapeHtml(report.color || "#507267")}"></span>
+        <div><strong><span class="request-kind-badge amu">AMU</span> ${escapeHtml(report.employee_number)} · ${escapeHtml(report.nickname || report.full_name)}</strong><small>${formatDate(report.incapacity_from)}–${formatDate(report.incapacity_to)} · ${escapeHtml(report.location_name || "")}${report.employee_note ? ` · ${escapeHtml(report.employee_note)}` : ""}</small><small><span class="request-status ${escapeHtml(report.status)}">${escapeHtml(requestStatusLabels[report.status] || report.status)}</span>${report.reviewed_by ? ` · geprüft von ${escapeHtml(report.reviewed_by)}` : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</small><div class="amu-document-links">${files}</div></div>
+        ${canReview && ["submitted", "returned"].includes(report.status) ? '<button class="secondary-button" data-open-amu-action type="button">AMU bearbeiten</button>' : ""}
+      </article>`;
+    }).join("") : '<p class="settings-note">Für diesen Filter gibt es keine Arbeitsunfähigkeitsmeldungen.</p>';
+    return;
+  }
   const isTimeOff = state.requestKindTab === "time_off";
   const requests = state.absenceRequests.filter((request) => {
     const kindMatches = isTimeOff ? request.kind === "time_off" : request.kind !== "time_off";
@@ -1491,10 +1522,45 @@ function managerRequestDetails(request) {
   return { label: "Urlaub", text: `${formatDate(request.date_from)}–${formatDate(request.date_to)}` };
 }
 
+function openAmuAction(id) {
+  const report = state.amuReports.find((item) => Number(item.id) === Number(id));
+  if (!report) return;
+  state.selectedRequest = null;
+  state.selectedAmuReport = report;
+  elements.requestActionTitle.textContent = "AMU bearbeiten";
+  elements.requestActionSummary.textContent = `${report.employee_number} · ${report.nickname || report.full_name} · ${formatDate(report.incapacity_from)}–${formatDate(report.incapacity_to)}`;
+  elements.requestActionNote.value = "";
+  elements.requestEditFields.classList.add("hidden");
+  elements.requestActionHistory.innerHTML = report.reviewed_by
+    ? `<div><strong>${escapeHtml(report.reviewed_by)} · ${escapeHtml(requestStatusLabels[report.status] || report.status)}</strong><span>${report.reviewed_at ? escapeHtml(new Date(report.reviewed_at).toLocaleString("de-AT")) : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</span></div>`
+    : '<p>Noch keine Prüfung protokolliert.</p>';
+  const canOpenFiles = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:file:read");
+  elements.requestActionDocuments.classList.remove("hidden");
+  elements.requestActionDocuments.innerHTML = (report.documents || []).map((document) => canOpenFiles
+    ? `<a class="secondary-button" href="/api/portal/v1/amu-reports/${report.id}/documents/${encodeURIComponent(document.id)}/content" target="_blank" rel="noopener">${escapeHtml(document.original_name || "Dokument")} öffnen</a>`
+    : `<span>${escapeHtml(document.original_name || "Dokument")}</span>`).join("");
+  document.querySelectorAll("[data-request-action]").forEach((button) => button.classList.add("hidden"));
+  document.querySelectorAll("[data-amu-action]").forEach((button) => button.classList.toggle("hidden", !["submitted", "returned"].includes(report.status)));
+  elements.requestActionModal.showModal();
+}
+
+async function reviewAmu(action) {
+  const report = state.selectedAmuReport;
+  if (!report) return;
+  try {
+    await api(`/api/portal/v1/amu-reports/${report.id}/review`, { method: "PUT", body: JSON.stringify({ action, note: elements.requestActionNote.value }) });
+    elements.requestActionModal.close();
+    state.selectedAmuReport = null;
+    showToast("Die AMU wurde als geprüft markiert.");
+    await loadAll();
+  } catch (error) { showToast(error.message, true); }
+}
+
 function openRequestAction(id, kind) {
   const request = state.absenceRequests.find((item) => Number(item.id) === Number(id) && item.kind === kind);
   if (!request) return;
   state.selectedRequest = request;
+  state.selectedAmuReport = null;
   const details = managerRequestDetails(request);
   elements.requestActionTitle.textContent = `${details.label} bearbeiten`;
   elements.requestActionSummary.textContent = `${request.employee_number} · ${request.nickname || request.full_name} · ${details.text}`;
@@ -1510,6 +1576,9 @@ function openRequestAction(id, kind) {
   elements.requestEditStartTime.value = timeOff ? request.start_time : "";
   elements.requestEditEndTime.value = timeOff ? request.end_time : "";
   elements.requestActionHistory.innerHTML = request.decisions?.length ? request.decisions.map((decision) => `<div><strong>${escapeHtml(decision.actor_employee_number)} · ${escapeHtml(decision.action)}</strong><span>${escapeHtml(new Date(decision.created_at).toLocaleString("de-AT"))}${decision.note ? ` · ${escapeHtml(decision.note)}` : ""}</span></div>`).join("") : '<p>Noch keine Entscheidung protokolliert.</p>';
+  elements.requestActionDocuments.classList.add("hidden");
+  elements.requestActionDocuments.innerHTML = "";
+  document.querySelectorAll("[data-amu-action]").forEach((button) => button.classList.add("hidden"));
   document.querySelectorAll("[data-request-action]").forEach((button) => {
     const action = button.dataset.requestAction;
     const hidden = request.status === "approved" ? !["change", "cancel"].includes(action) : ["change", "cancel"].includes(action) || (request.approval_stage === "hr" && action === "preliminary");
@@ -1665,6 +1734,18 @@ function setView(view) {
   elements.personnelView.classList.toggle("active", view === "personnel");
   elements.settingsView.classList.toggle("active", view === "settings");
   if (view === "requests") loadManagerVacationRequests();
+}
+
+function applyRequestedView() {
+  const parameters = new URLSearchParams(window.location.search);
+  const requestedView = parameters.get("view");
+  if (!["planning", "requests", "vacations", "personnel", "settings"].includes(requestedView)) return;
+  if (requestedView === "requests") {
+    const requestedKind = parameters.get("kind");
+    if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
+    document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
+  }
+  setView(requestedView);
 }
 
 function setSettingsTab(tab) {
@@ -2826,9 +2907,13 @@ elements.managerVacationRequestList?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-open-request-action]");
   const row = button?.closest("[data-manager-request]");
   if (button && row) openRequestAction(row.dataset.managerRequest, row.dataset.requestKind);
+  const amuButton = event.target.closest("[data-open-amu-action]");
+  const amuRow = amuButton?.closest("[data-amu-report]");
+  if (amuButton && amuRow) openAmuAction(amuRow.dataset.amuReport);
 });
 document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.addEventListener("click", () => {
   state.requestKindTab = button.dataset.requestKindTab;
+  if (state.requestKindTab === "amu" && !["actionable", "all"].includes(elements.requestStatusFilter.value)) elements.requestStatusFilter.value = "actionable";
   document.querySelectorAll("[data-request-kind-tab]").forEach((item) => item.classList.toggle("active", item === button));
   renderManagerRequests();
 }));
@@ -2840,6 +2925,8 @@ elements.vacationHrApprovalRequired?.addEventListener("change", (event) => toggl
 elements.requestActionForm?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-request-action]");
   if (button) decideVacationRequest(button.dataset.requestAction);
+  const amuButton = event.target.closest("[data-amu-action]");
+  if (amuButton) reviewAmu(amuButton.dataset.amuAction);
 });
 elements.requestBlackoutForm?.addEventListener("submit", saveRequestBlackout);
 elements.addRequestBlackoutButton?.addEventListener("click", () => { resetRequestBlackoutForm(); elements.requestBlackoutForm.classList.remove("hidden"); });
@@ -3105,3 +3192,9 @@ bootstrapApplication();
 setInterval(() => {
   if (!document.body.classList.contains("portal-locked")) loadSystemInfo();
 }, 30000);
+setInterval(() => {
+  if (!document.body.classList.contains("portal-locked") && state.portalStatus?.portalEnabled) loadManagerVacationRequests();
+}, 45000);
+window.addEventListener("focus", () => {
+  if (!document.body.classList.contains("portal-locked") && state.portalStatus?.portalEnabled) loadManagerVacationRequests();
+});

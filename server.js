@@ -7,6 +7,7 @@ const path = require("node:path");
 const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
 const { promisify } = require("node:util");
+const { createAmuStorage, syncEncryptedFilesBackup } = require("./lib/amu-storage");
 const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
@@ -31,6 +32,9 @@ const builtinPortalRoles = [
       "own_time:correction_request",
       "own_vacation:read",
       "own_vacation:request",
+      "own_amu:create",
+      "own_amu:read",
+      "own_amu:withdraw",
     ],
   },
   {
@@ -45,6 +49,9 @@ const builtinPortalRoles = [
       "own_time:correction_request",
       "own_vacation:read",
       "own_vacation:request",
+      "own_amu:create",
+      "own_amu:read",
+      "own_amu:withdraw",
       "employees:read",
       "schedule:read",
       "schedule:write",
@@ -52,6 +59,7 @@ const builtinPortalRoles = [
       "time:review",
       "vacation:read",
       "vacation:approve",
+      "amu:metadata:read",
     ],
   },
   {
@@ -61,8 +69,10 @@ const builtinPortalRoles = [
     sortOrder: 21,
     permissions: [
       "own_schedule:read", "own_time:read", "own_time:write", "own_time:correction_request",
-      "own_vacation:read", "own_vacation:request", "employees:read", "schedule:read", "schedule:write",
+      "own_vacation:read", "own_vacation:request", "own_amu:create", "own_amu:read", "own_amu:withdraw",
+      "employees:read", "schedule:read", "schedule:write",
       "time:read", "time:review", "vacation:read", "vacation:approve",
+      "amu:metadata:read",
     ],
   },
   {
@@ -77,6 +87,9 @@ const builtinPortalRoles = [
       "own_time:correction_request",
       "own_vacation:read",
       "own_vacation:request",
+      "own_amu:create",
+      "own_amu:read",
+      "own_amu:withdraw",
       "employees:read",
       "schedule:read",
       "schedule:write",
@@ -91,6 +104,11 @@ const builtinPortalRoles = [
       "audit:read",
       "hr:approve",
       "hr:settings",
+      "amu:metadata:read",
+      "amu:file:read",
+      "amu:review",
+      "amu:delete",
+      "amu:audit",
     ],
   },
   {
@@ -105,6 +123,9 @@ const builtinPortalRoles = [
       "own_time:correction_request",
       "own_vacation:read",
       "own_vacation:request",
+      "own_amu:create",
+      "own_amu:read",
+      "own_amu:withdraw",
       "employees:read",
       "schedule:read",
       "time:read",
@@ -113,6 +134,11 @@ const builtinPortalRoles = [
       "vacation:approve",
       "hr:approve",
       "hr:settings",
+      "amu:metadata:read",
+      "amu:file:read",
+      "amu:review",
+      "amu:delete",
+      "amu:audit",
     ],
   },
 ];
@@ -125,6 +151,7 @@ const defaultPortalSettings = {
   account_lock_minutes: "15",
   secure_cookies_required: "1",
   vacation_hr_approval_required: "0",
+  amu_retention_days: "730",
 };
 
 function formatVersionLabel(version) {
@@ -143,7 +170,15 @@ const defaultBranding = {
   admin_email: "",
 };
 
-const runtimeConfigPath = path.join(__dirname, "data", "runtime-config.json");
+const portableDataDirectory = path.join(__dirname, "data");
+const configuredDataRoot = String(process.env.GRABENPLANER_DATA_DIR || "").trim();
+const environmentOperationMode = String(process.env.GRABENPLANER_OPERATION_MODE || "").trim().toLowerCase();
+const serverDataRoot = configuredDataRoot
+  ? path.resolve(configuredDataRoot)
+  : path.join(process.env.ProgramData || path.join(os.homedir(), "AppData", "Local"), "Grabenplaner");
+const runtimeConfigPath = environmentOperationMode === "server" || configuredDataRoot
+  ? path.join(serverDataRoot, "runtime-config.json")
+  : path.join(portableDataDirectory, "runtime-config.json");
 
 function readRuntimeConfig() {
   try {
@@ -164,22 +199,25 @@ function writeRuntimeConfig(values) {
 }
 
 const runtimeConfig = readRuntimeConfig();
-const environmentOperationMode = String(process.env.GRABENPLANER_OPERATION_MODE || "").trim().toLowerCase();
 const configuredOperationMode = ["local", "lan", "server"].includes(environmentOperationMode)
   ? environmentOperationMode
   : (["local", "lan", "server"].includes(runtimeConfig.operationMode) ? runtimeConfig.operationMode : DEFAULT_OPERATION_MODE);
 const serverModeActive = configuredOperationMode === "server";
 const publicUrl = String(process.env.GRABENPLANER_PUBLIC_URL || runtimeConfig.publicUrl || "").trim().replace(/\/$/, "");
 const trustProxySetting = String(process.env.GRABENPLANER_TRUST_PROXY || runtimeConfig.trustProxy || "loopback").trim() || "loopback";
+const serviceControlToken = String(process.env.GRABENPLANER_SERVICE_CONTROL_TOKEN || "").trim();
 const app = express();
 const PORT = Number(process.env.PORT || runtimeConfig.port || 3000);
 const configuredHost = configuredOperationMode === "lan" ? "0.0.0.0" : "127.0.0.1";
 const HOST = String(process.env.GRABENPLANER_HOST || configuredHost).trim() || "127.0.0.1";
 const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1"]);
-const dataDirectory = path.join(__dirname, "data");
+const dataRootDirectory = serverModeActive || configuredDataRoot ? serverDataRoot : __dirname;
+const dataDirectory = serverModeActive || configuredDataRoot ? path.join(dataRootDirectory, "data") : portableDataDirectory;
 const databasePath = process.env.DB_PATH || path.join(dataDirectory, "dienstplan.db");
-const appBackupDirectory = path.join(__dirname, "backups");
-const brandingKitsDirectory = path.join(dataDirectory, "branding-kits");
+const appBackupDirectory = serverModeActive || configuredDataRoot ? path.join(dataRootDirectory, "backups") : path.join(__dirname, "backups");
+const brandingKitsDirectory = serverModeActive || configuredDataRoot ? path.join(dataRootDirectory, "branding-kits") : path.join(dataDirectory, "branding-kits");
+const privateDataDirectory = serverModeActive || configuredDataRoot ? path.join(dataRootDirectory, "private") : path.join(dataDirectory, "private");
+const amuStorageDirectory = path.join(privateDataDirectory, "amu");
 const defaultBackupDirectorySetting = "%USERPROFILE%\\Documents\\grabenplaner-backups";
 const defaultBackupDirectory = process.env.BACKUP_DIR || path.join(os.homedir(), "Documents", "grabenplaner-backups");
 const instanceLockPath = databasePath === ":memory:" ? "" : `${path.resolve(databasePath)}.server.lock`;
@@ -193,6 +231,50 @@ function portalPasswordMinLength() {
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 fs.mkdirSync(appBackupDirectory, { recursive: true });
 fs.mkdirSync(brandingKitsDirectory, { recursive: true });
+fs.mkdirSync(amuStorageDirectory, { recursive: true });
+
+function loadAmuEncryptionConfiguration() {
+  const keyId = String(process.env.GRABENPLANER_AMU_KEY_ID || (serverModeActive ? "" : "local-v1")).trim();
+  const environmentKey = String(process.env.GRABENPLANER_AMU_KEY || "").trim();
+  if (environmentKey && keyId) return { keyId, key: environmentKey, source: "environment" };
+  if (serverModeActive) return null;
+  const keyPath = path.join(privateDataDirectory, "amu-local.key");
+  if (!fs.existsSync(keyPath)) {
+    fs.mkdirSync(path.dirname(keyPath), { recursive: true });
+    fs.writeFileSync(keyPath, `${crypto.randomBytes(32).toString("base64")}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+  }
+  try { fs.chmodSync(keyPath, 0o600); } catch {}
+  return { keyId, key: fs.readFileSync(keyPath, "utf8").trim(), source: "local-key-file", keyPath };
+}
+
+const amuEncryptionConfiguration = loadAmuEncryptionConfiguration();
+let amuStorage = null;
+let amuStorageStartupError = "";
+let amuMutationInProgress = 0;
+let amuScannerProbe = Promise.resolve(null);
+if (amuEncryptionConfiguration) {
+  try {
+    amuStorage = createAmuStorage({
+      rootDirectory: amuStorageDirectory,
+      encryptionKeys: { [amuEncryptionConfiguration.keyId]: amuEncryptionConfiguration.key },
+      activeKeyId: amuEncryptionConfiguration.keyId,
+      scanner: process.env.NODE_ENV === "test" && process.env.GRABENPLANER_TEST_AMU_SCANNER === "clean"
+        ? async () => ({ available: true, clean: true, engine: "test" })
+        : null,
+      requireScanner: serverModeActive && process.env.GRABENPLANER_ALLOW_UNSCANNED_AMU !== "1",
+    });
+    if (serverModeActive) {
+      amuScannerProbe = amuStorage.probeScanner().catch((error) => {
+        console.error("AMU-Virenscanner ist nicht betriebsbereit:", error.message);
+        return null;
+      });
+    }
+  } catch (error) {
+    amuStorageStartupError = error.message;
+  }
+} else {
+  amuStorageStartupError = "Im Serverbetrieb fehlt GRABENPLANER_AMU_KEY samt GRABENPLANER_AMU_KEY_ID.";
+}
 
 function safeRemoveFile(filePath) {
   try {
@@ -238,7 +320,16 @@ function cleanupPortableInstallRoot() {
 
 cleanupPortableInstallRoot();
 
-const db = new DatabaseSync(databasePath);
+const databaseExistedBeforeOpen = databasePath !== ":memory:" && fs.existsSync(databasePath);
+let instanceLockHeld = false;
+if (serverModeActive) acquireInstanceLock();
+let db;
+try {
+  db = new DatabaseSync(databasePath);
+} catch (error) {
+  releaseInstanceLock();
+  throw error;
+}
 db.exec("PRAGMA foreign_keys = ON");
 db.exec("PRAGMA busy_timeout = 5000");
 db.exec("PRAGMA journal_mode = WAL");
@@ -246,7 +337,8 @@ db.exec("PRAGMA synchronous = NORMAL");
 db.exec("PRAGMA wal_autocheckpoint = 1000");
 let lastBackup = null;
 let backupInterval = null;
-let instanceLockHeld = false;
+let retentionInterval = null;
+let scannerProbeInterval = null;
 
 function verifyDatabaseFile(filePath) {
   const verification = new DatabaseSync(filePath, { readOnly: true });
@@ -263,28 +355,58 @@ function backupTimestamp(date = new Date()) {
   return date.toISOString().replace(/[:.]/g, "-");
 }
 
+function fileSha256(filePath) {
+  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+}
+
 function pruneDatabaseBackups(backupDirectory, keep = 30) {
   const backups = fs
     .readdirSync(backupDirectory)
     .filter((name) => /^dienstplan-.*\.db$/.test(name))
     .map((name) => ({ name, path: path.join(backupDirectory, name), time: fs.statSync(path.join(backupDirectory, name)).mtimeMs }))
     .sort((a, b) => b.time - a.time);
-  for (const oldBackup of backups.slice(keep)) fs.rmSync(oldBackup.path, { force: true });
+  for (const oldBackup of backups.slice(keep)) {
+    const pairedAmuDirectory = path.join(backupDirectory, `${path.basename(oldBackup.name, ".db")}.amu`);
+    fs.rmSync(oldBackup.path, { force: true });
+    fs.rmSync(pairedAmuDirectory, { recursive: true, force: true });
+  }
 }
 
 function createDatabaseBackupToDirectory(backupDirectory, reason = "automatic", kind = "external") {
   if (databasePath === ":memory:" || !fs.existsSync(databasePath)) return null;
+  if (amuMutationInProgress > 0) throw new Error("Die Sicherung wartet, bis der laufende AMU-Upload abgeschlossen ist.");
+  if (!amuStorage) throw new Error("Ohne betriebsbereiten AMU-Speicher wird kein unvollständiger Sicherungspunkt erstellt.");
   fs.mkdirSync(backupDirectory, { recursive: true });
-  const target = path.join(backupDirectory, `dienstplan-${backupTimestamp()}.db`);
-  const escapedTarget = target.replaceAll("\\", "/").replaceAll("'", "''");
-  db.exec(`VACUUM INTO '${escapedTarget}'`);
-  const verification = verifyDatabaseFile(target);
-  if (!verification.ok) {
+  const snapshotName = `dienstplan-${backupTimestamp()}`;
+  const target = path.join(backupDirectory, `${snapshotName}.db`);
+  const amuTarget = path.join(backupDirectory, `${snapshotName}.amu`);
+  const nonce = crypto.randomUUID();
+  const temporaryDatabase = `${target}.partial-${nonce}`;
+  const temporaryAmu = `${amuTarget}.partial-${nonce}`;
+  let amuBackup = null;
+  try {
+    const escapedTarget = temporaryDatabase.replaceAll("\\", "/").replaceAll("'", "''");
+    db.exec(`VACUUM INTO '${escapedTarget}'`);
+    const verification = verifyDatabaseFile(temporaryDatabase);
+    if (!verification.ok) throw new Error("Das erstellte Datenbank-Backup hat die Integritätsprüfung nicht bestanden.");
+    const databaseHash = fileSha256(temporaryDatabase);
+    amuBackup = syncEncryptedFilesBackup({
+      sourceDirectory: amuStorageDirectory,
+      targetDirectory: temporaryAmu,
+      manifestMetadata: { database: { fileName: path.basename(target), sha256: databaseHash } },
+    });
+    fs.renameSync(temporaryAmu, amuTarget);
+    fs.renameSync(temporaryDatabase, target);
+    if (amuBackup) amuBackup.targetDirectory = amuTarget;
+  } catch (error) {
+    safeRemoveFile(temporaryDatabase);
+    fs.rmSync(temporaryAmu, { recursive: true, force: true });
+    fs.rmSync(amuTarget, { recursive: true, force: true });
     safeRemoveFile(target);
-    throw new Error("Das erstellte Datenbank-Backup hat die Integritätsprüfung nicht bestanden.");
+    throw error;
   }
   pruneDatabaseBackups(backupDirectory, 30);
-  return { path: target, createdAt: new Date().toISOString(), reason, kind, verified: true };
+  return { path: target, createdAt: new Date().toISOString(), reason, kind, verified: true, amuBackup };
 }
 
 function createInternalDatabaseBackup(reason = "automatic") {
@@ -645,6 +767,66 @@ function createSchema() {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS portal_notifications (
+      id TEXT PRIMARY KEY,
+      recipient_employee_number TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL DEFAULT '',
+      target TEXT NOT NULL DEFAULT '',
+      entity_type TEXT NOT NULL DEFAULT '',
+      entity_id TEXT NOT NULL DEFAULT '',
+      dedupe_key TEXT,
+      read_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (recipient_employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS amu_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_number TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      incapacity_from TEXT NOT NULL,
+      incapacity_to TEXT NOT NULL,
+      employee_note TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'submitted',
+      submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      reviewed_by TEXT,
+      reviewed_at TEXT,
+      review_note TEXT NOT NULL DEFAULT '',
+      retention_until TEXT,
+      withdrawn_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS amu_documents (
+      id TEXT PRIMARY KEY,
+      report_id INTEGER NOT NULL,
+      storage_key TEXT NOT NULL UNIQUE,
+      original_filename TEXT NOT NULL,
+      detected_mime TEXT NOT NULL,
+      byte_size INTEGER NOT NULL,
+      sha256 TEXT NOT NULL,
+      scan_status TEXT NOT NULL DEFAULT 'pending',
+      encryption_key_id TEXT NOT NULL,
+      encryption_iv TEXT NOT NULL,
+      encryption_tag TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      uploaded_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      deleted_by TEXT,
+      deleted_at TEXT,
+      purged_at TEXT,
+      FOREIGN KEY (report_id) REFERENCES amu_reports(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       actor TEXT NOT NULL DEFAULT '',
@@ -669,6 +851,12 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_approval_delegations_range ON approval_delegations(location_id, date_from, date_to, active);
     CREATE INDEX IF NOT EXISTS idx_time_entries_employee_date ON time_entries(employee_number, entry_timestamp);
     CREATE INDEX IF NOT EXISTS idx_time_corrections_employee ON time_corrections(employee_number, status);
+    CREATE INDEX IF NOT EXISTS idx_portal_notifications_recipient ON portal_notifications(recipient_employee_number, read_at, created_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_portal_notifications_dedupe ON portal_notifications(recipient_employee_number, dedupe_key) WHERE dedupe_key IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_amu_reports_employee ON amu_reports(employee_number, status, submitted_at);
+    CREATE INDEX IF NOT EXISTS idx_amu_reports_location ON amu_reports(location_id, status, submitted_at);
+    CREATE INDEX IF NOT EXISTS idx_amu_reports_retention ON amu_reports(retention_until, status);
+    CREATE INDEX IF NOT EXISTS idx_amu_documents_report ON amu_documents(report_id, status, created_at);
     CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
     CREATE INDEX IF NOT EXISTS idx_portal_users_role_active ON portal_users(role, active);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_employee ON portal_sessions(employee_number, expires_at);
@@ -709,6 +897,8 @@ function migrateLegacySchema() {
     db.exec("PRAGMA foreign_keys = ON");
   }
 }
+
+if (serverModeActive && databaseExistedBeforeOpen) createInternalDatabaseBackup("pre-migration");
 
 if (tableExists("employees") && !columnExists("employees", "personnel_number")) {
   migrateLegacySchema();
@@ -931,6 +1121,8 @@ db.prepare("UPDATE portal_settings SET value = ?, updated_at = CURRENT_TIMESTAMP
   .run(String(portalPasswordMinLength()));
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.49-server-foundation", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.50-portal-notifications-amu", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -980,8 +1172,9 @@ app.use((request, response, next) => {
   if (request.secure) response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   if (request.path.startsWith("/api/portal/")) response.setHeader("Cache-Control", "no-store");
   if (serverModeActive && !request.secure) {
-    const loopbackHealth = request.method === "GET" && request.path === "/api/health" && isLoopbackRequest(request);
-    if (!loopbackHealth) {
+    const loopbackServiceEndpoint = isLoopbackRequest(request)
+      && ((request.method === "GET" && request.path === "/api/health") || (request.method === "POST" && request.path === "/api/service/stop"));
+    if (!loopbackServiceEndpoint) {
       response.status(426).json({ error: "Der öffentliche Serverbetrieb akzeptiert ausschließlich HTTPS.", code: "HTTPS_REQUIRED" });
       return;
     }
@@ -1006,6 +1199,88 @@ function httpError(status, message, code = "") {
   error.status = status;
   if (code) error.code = code;
   return error;
+}
+
+function requireAmuStorage() {
+  if (!amuStorage) throw httpError(503, amuStorageStartupError || "Der geschützte AMU-Speicher ist nicht verfügbar.", "AMU_STORAGE_UNAVAILABLE");
+  return amuStorage;
+}
+
+function parseAmuMultipart(request) {
+  return new Promise((resolve, reject) => {
+    const contentType = String(request.headers["content-type"] || "");
+    const boundaryMatch = contentType.match(/^multipart\/form-data\s*;[\s\S]*?boundary=(?:"([^"]+)"|([^;\s]+))/i);
+    const boundary = String(boundaryMatch?.[1] || boundaryMatch?.[2] || "");
+    if (!boundary || boundary.length > 70 || /[\r\n]/.test(boundary)) {
+      reject(httpError(415, "Bitte die AMU als Formular mit PDF-, JPG- oder PNG-Dateien senden.", "AMU_MULTIPART_REQUIRED"));
+      return;
+    }
+    const chunks = [];
+    let totalBytes = 0;
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+    request.on("data", (chunk) => {
+      if (settled) return;
+      totalBytes += chunk.length;
+      if (totalBytes > 20 * 1024 * 1024) {
+        fail(httpError(413, "Der gesamte AMU-Upload darf höchstens 20 MiB groß sein.", "AMU_UPLOAD_TOO_LARGE"));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("error", () => fail(httpError(400, "Der AMU-Upload konnte nicht gelesen werden.", "AMU_MULTIPART_INVALID")));
+    request.on("end", () => {
+      if (settled) return;
+      try {
+        const body = Buffer.concat(chunks);
+        const delimiter = Buffer.from(`--${boundary}`, "utf8");
+        const nextDelimiter = Buffer.from(`\r\n--${boundary}`, "utf8");
+        const fields = {};
+        const documents = [];
+        let position = body.indexOf(delimiter);
+        let partCount = 0;
+        if (position !== 0) throw httpError(400, "Das Upload-Formular ist ungültig.", "AMU_MULTIPART_INVALID");
+        while (position >= 0) {
+          position += delimiter.length;
+          if (body.subarray(position, position + 2).toString("ascii") === "--") break;
+          if (body.subarray(position, position + 2).toString("ascii") !== "\r\n") throw httpError(400, "Das Upload-Formular ist ungültig.", "AMU_MULTIPART_INVALID");
+          position += 2;
+          const headerEnd = body.indexOf(Buffer.from("\r\n\r\n"), position);
+          if (headerEnd < 0 || headerEnd - position > 8192) throw httpError(400, "Ein Upload-Teil hat ungültige Kopfzeilen.", "AMU_MULTIPART_INVALID");
+          const headers = body.subarray(position, headerEnd).toString("utf8");
+          const dataStart = headerEnd + 4;
+          const dataEnd = body.indexOf(nextDelimiter, dataStart);
+          if (dataEnd < 0) throw httpError(400, "Das Upload-Formular ist unvollständig.", "AMU_MULTIPART_INVALID");
+          const data = body.subarray(dataStart, dataEnd);
+          const disposition = headers.split("\r\n").find((line) => /^content-disposition:/i.test(line)) || "";
+          const name = disposition.match(/(?:^|;)\s*name="([^"]*)"/i)?.[1] || "";
+          const encodedFilename = disposition.match(/(?:^|;)\s*filename\*=UTF-8''([^;]+)/i)?.[1];
+          const plainFilename = disposition.match(/(?:^|;)\s*filename="([^"]*)"/i)?.[1];
+          let filename = plainFilename || "";
+          if (encodedFilename) { try { filename = decodeURIComponent(encodedFilename); } catch {} }
+          partCount += 1;
+          if (partCount > 9) throw httpError(413, "Das AMU-Formular enthält zu viele Teile.", "AMU_TOO_MANY_PARTS");
+          if (filename && name === "documents") {
+            if (data.length > 10 * 1024 * 1024) throw httpError(413, "Eine AMU-Datei darf höchstens 10 MiB groß sein.", "AMU_DOCUMENT_TOO_LARGE");
+            documents.push({ originalName: filename, buffer: Buffer.from(data) });
+            if (documents.length > 3) throw httpError(413, "Pro AMU sind höchstens drei Dateien möglich.", "AMU_TOO_MANY_DOCUMENTS");
+          } else if (!filename && ["incapacityFrom", "incapacityTo", "employeeNote"].includes(name)) {
+            if (data.length > 4096) throw httpError(413, "Ein AMU-Textfeld ist zu groß.", "AMU_FIELD_TOO_LARGE");
+            fields[name] = data.toString("utf8");
+          }
+          position = dataEnd + 2;
+        }
+        settled = true;
+        resolve({ fields, documents });
+      } catch (error) {
+        fail(error.status ? error : httpError(400, "Das Upload-Formular ist ungültig.", "AMU_MULTIPART_INVALID"));
+      }
+    });
+  });
 }
 
 async function hashPortalPassword(password) {
@@ -1121,6 +1396,89 @@ function auditPortal(actor, action, entityType = "", entityId = "", detail = "")
   `).run(String(actor || ""), String(action), String(entityType || ""), String(entityId || ""), String(detail || "").slice(0, 2000));
 }
 
+function createPortalNotification(recipient, eventType, title, message = "", options = {}) {
+  const employeeNumber = String(recipient || "").trim();
+  if (!employeeNumber || employeeNumber === "local") return null;
+  const id = crypto.randomUUID();
+  const dedupeKey = options.dedupeKey ? String(options.dedupeKey).slice(0, 240) : null;
+  const result = db.prepare(`
+    INSERT OR IGNORE INTO portal_notifications
+      (id, recipient_employee_number, event_type, title, message, target, entity_type, entity_id, dedupe_key)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    employeeNumber,
+    String(eventType || "info").slice(0, 80),
+    stripEmoji(String(title || "")).slice(0, 160),
+    stripEmoji(String(message || "")).slice(0, 500),
+    String(options.target || "/portal/?tab=requests").slice(0, 240),
+    String(options.entityType || "").slice(0, 80),
+    String(options.entityId || "").slice(0, 120),
+    dedupeKey,
+  );
+  return result.changes ? id : null;
+}
+
+function requestReviewerRecipients(locationId, stage = "local", excludeEmployeeNumber = "") {
+  const rows = stage === "hr"
+    ? db.prepare(`
+        SELECT u.employee_number FROM portal_users u
+        WHERE u.active = 1 AND TRIM(u.password_hash) <> '' AND u.role IN ('hr','admin')
+        ORDER BY u.employee_number
+      `).all()
+    : db.prepare(`
+        SELECT u.employee_number FROM portal_users u
+        JOIN employees e ON e.personnel_number = u.employee_number
+        WHERE u.active = 1 AND TRIM(u.password_hash) <> ''
+          AND (u.role = 'admin' OR (e.home_location_id = ? AND u.role IN ('manager','department_manager')))
+        ORDER BY u.employee_number
+      `).all(String(locationId || ""));
+  return [...new Set(rows.map((row) => row.employee_number).filter((value) => value && value !== excludeEmployeeNumber))];
+}
+
+function notifyRequestReviewers(entry, kind, stage = "local", actor = "") {
+  const labels = { vacation: "Urlaubsantrag", vacation_change: "Urlaubsänderung", time_off: "ZA-Antrag" };
+  const label = labels[kind] || "Abwesenheitsantrag";
+  const locationId = entry.location_id || employeeRequestContext(entry.employee_number).locationId;
+  const targetKind = kind === "time_off" ? "time_off" : "vacation";
+  const target = `/?view=requests&kind=${targetKind}`;
+  for (const recipient of requestReviewerRecipients(locationId, stage, actor)) {
+    createPortalNotification(recipient, "request.review", `${label} wartet auf Prüfung`, `${entry.employee_number} hat einen Antrag eingereicht.`, {
+      target,
+      entityType: kind,
+      entityId: entry.id,
+      dedupeKey: `${kind}:${entry.id}:${stage}:review`,
+    });
+  }
+}
+
+function notifyRequestDecision(entry, kind, status, actor = "") {
+  const labels = { vacation: "Urlaubsantrag", vacation_change: "Urlaubsänderung", time_off: "ZA-Antrag" };
+  const statusText = {
+    approved: "wurde genehmigt",
+    rejected: "wurde abgelehnt",
+    cancelled: "wurde storniert",
+    withdrawn: "wurde zurückgezogen",
+    preliminary_local: "wurde vorläufig genehmigt",
+    pending_hr: "wurde an die Personalleitung weitergeleitet",
+  }[status] || "wurde bearbeitet";
+  createPortalNotification(entry.employee_number, "request.decision", `${labels[kind] || "Antrag"} ${statusText}`, actor ? `Bearbeitet von Personalnummer ${actor}.` : "", {
+    target: "/portal/?tab=requests",
+    entityType: kind,
+    entityId: entry.id,
+    dedupeKey: `${kind}:${entry.id}:${status}:${actor || "system"}`,
+  });
+}
+
+function resolveRequestReviewNotifications(kind, id, stage = "") {
+  const suffix = stage ? `${stage}:review` : ":review";
+  const pattern = stage ? `${kind}:${id}:${suffix}` : `${kind}:${id}:%:review`;
+  db.prepare(`
+    UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+    WHERE event_type = 'request.review' AND dedupe_key LIKE ?
+  `).run(pattern);
+}
+
 function portalSessionFromRequest(request, { touch = true } = {}) {
   const token = parseCookies(request)[PORTAL_SESSION_COOKIE];
   if (!token) return null;
@@ -1196,7 +1554,7 @@ function assertPortalCsrf(request) {
 
 function enforceAdminApiAccess(request, _response, next) {
   try {
-    if (request.path === "/health") return next();
+    if (request.path === "/health" || request.path === "/service/stop") return next();
     const status = getPortalStatus();
     if (!status.portalEnabled || request.path.startsWith("/portal/")) return next();
     const method = String(request.method || "GET").toUpperCase();
@@ -1448,6 +1806,9 @@ function getPortalStatus() {
       vacationChanges: portalEnabled,
       requestBlackouts: portalEnabled,
       approvalWorkflow: portalEnabled,
+      absenceHistory: portalEnabled,
+      notifications: portalEnabled,
+      amuReports: portalEnabled && Boolean(amuStorage),
       timeTracking: false,
     },
     workflow: {
@@ -1504,7 +1865,7 @@ function validateVacationRequestDates(employeeNumber, body) {
   if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
   const overlapping = db.prepare(`
     SELECT id FROM vacation_requests
-    WHERE employee_number = ? AND status IN ('pending', 'approved')
+    WHERE employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr','approved')
       AND date_from <= ? AND date_to >= ?
     LIMIT 1
   `).get(employeeNumber, dateTo, dateFrom);
@@ -1668,7 +2029,8 @@ function evaluateTimeOffRequest(employeeNumber, body) {
   }
   const pendingOverlap = db.prepare(`
     SELECT id FROM time_off_requests
-    WHERE employee_number = ? AND request_date = ? AND status = 'pending' AND id <> ?
+    WHERE employee_number = ? AND request_date = ?
+      AND status IN ('pending','pending_local','preliminary_local','pending_hr','approved') AND id <> ?
       AND start_time < ? AND ? < end_time LIMIT 1
   `).get(employeeNumber, date, Number(body.excludeRequestId || 0), endTime, startTime);
   if (pendingOverlap) return { trafficLight: "red", allowed: false, reason: "Für diesen Zeitraum besteht bereits ein offener ZA-Antrag." };
@@ -1786,6 +2148,178 @@ function requestDecisionHistory(kind, id) {
     SELECT id, stage, action, actor_employee_number, note, created_at
     FROM request_decisions WHERE request_kind = ? AND request_id = ? ORDER BY id
   `).all(kind, Number(id));
+}
+
+function absenceHistoryForEmployee(employeeNumber) {
+  const vacations = db.prepare(`
+    SELECT id, date_from, date_to, note, status, approval_stage, decision_note,
+           local_approved_by, local_approved_at, hr_approved_by, hr_approved_at,
+           decided_by, decided_at, created_at, updated_at
+    FROM vacation_requests WHERE employee_number = ?
+  `).all(employeeNumber).map((item) => ({
+    ...item,
+    kind: "vacation",
+    decisions: requestDecisionHistory("vacation", item.id),
+  }));
+  const timeOff = db.prepare(`
+    SELECT id, request_date, start_time, end_time, note, status, approval_type, approval_stage,
+           traffic_light, check_reason, decision_note, local_approved_by, local_approved_at,
+           hr_approved_by, hr_approved_at, decided_by, decided_at, created_at, updated_at
+    FROM time_off_requests WHERE employee_number = ?
+  `).all(employeeNumber).map((item) => ({
+    ...item,
+    kind: "time_off",
+    decisions: requestDecisionHistory("time_off", item.id),
+  }));
+  const changes = db.prepare(`
+    SELECT id, vacation_group_id, request_type, original_date_from, original_date_to,
+           requested_date_from, requested_date_to, note, status, approval_stage, decision_note,
+           local_approved_by, local_approved_at, hr_approved_by, hr_approved_at,
+           decided_by, decided_at, created_at, updated_at
+    FROM vacation_change_requests WHERE employee_number = ?
+  `).all(employeeNumber).map((item) => ({
+    ...item,
+    kind: item.request_type === "cancel" ? "vacation_cancel" : "vacation_change",
+    decisions: requestDecisionHistory("vacation_change", item.id),
+  }));
+  return [...vacations, ...timeOff, ...changes]
+    .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)) || Number(right.id) - Number(left.id));
+}
+
+function amuDocumentsForReports(reportIds) {
+  const ids = [...new Set(reportIds.map(Number).filter(Number.isInteger))];
+  if (!ids.length) return new Map();
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = db.prepare(`
+    SELECT id, report_id, original_filename, detected_mime, byte_size, scan_status, status, created_at
+    FROM amu_documents WHERE report_id IN (${placeholders}) AND status = 'active'
+    ORDER BY created_at, id
+  `).all(...ids);
+  const grouped = new Map(ids.map((id) => [id, []]));
+  for (const row of rows) grouped.get(Number(row.report_id))?.push({
+    id: row.id,
+    original_name: amuStorage?.unprotectText(row.original_filename) || "Dokument",
+    original_filename: amuStorage?.unprotectText(row.original_filename) || "Dokument",
+    detected_mime: row.detected_mime,
+    size: Number(row.byte_size),
+    byte_size: Number(row.byte_size),
+    scan_status: row.scan_status,
+    status: row.status,
+    created_at: row.created_at,
+  });
+  return grouped;
+}
+
+function serializeAmuReports(rows) {
+  const documents = amuDocumentsForReports(rows.map((row) => row.id));
+  return rows.map((row) => ({
+    ...row,
+    id: Number(row.id),
+    employee_note: amuStorage?.unprotectText(row.employee_note) || "",
+    review_note: amuStorage?.unprotectText(row.review_note) || "",
+    documents: documents.get(Number(row.id)) || [],
+  }));
+}
+
+function ownAmuReports(employeeNumber) {
+  return serializeAmuReports(db.prepare(`
+    SELECT r.*, l.name AS location_name
+    FROM amu_reports r JOIN locations l ON l.id = r.location_id
+    WHERE r.employee_number = ? ORDER BY r.submitted_at DESC, r.id DESC
+  `).all(employeeNumber));
+}
+
+function amuReportMetadata(id) {
+  return db.prepare(`
+    SELECT r.*, e.full_name, e.nickname, e.color, l.name AS location_name
+    FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
+    JOIN locations l ON l.id = r.location_id WHERE r.id = ?
+  `).get(Number(id));
+}
+
+function assertAmuReportScope(session, report) {
+  if (!report) throw httpError(404, "Die Arbeitsunfähigkeitsmeldung wurde nicht gefunden.", "AMU_REPORT_NOT_FOUND");
+  if (session.employeeNumber === "local" || ["admin", "hr"].includes(session.role)) return;
+  if (String(report.location_id || "") !== String(session.homeLocationId || "")) {
+    auditPortal(session.employeeNumber, "amu.access.denied", "amu_report", String(report.id), "scope");
+    throw httpError(403, "Diese Arbeitsunfähigkeitsmeldung gehört nicht zum eigenen Standort.", "PORTAL_PERMISSION_DENIED");
+  }
+}
+
+function amuDocumentMetadata(reportId, documentId) {
+  return db.prepare(`
+    SELECT d.*, r.employee_number, r.location_id, r.status AS report_status
+    FROM amu_documents d JOIN amu_reports r ON r.id = d.report_id
+    WHERE d.report_id = ? AND d.id = ? AND d.status = 'active'
+  `).get(Number(reportId), String(documentId));
+}
+
+function sendAmuDocument(response, metadata) {
+  const originalFilename = requireAmuStorage().unprotectText(metadata.original_filename) || "Dokument";
+  const content = requireAmuStorage().readBuffer({
+    storageKey: metadata.storage_key,
+    byteSize: metadata.byte_size,
+    sha256: metadata.sha256,
+    detectedMime: metadata.detected_mime,
+    originalFilename,
+  });
+  response.setHeader("Content-Type", metadata.detected_mime);
+  response.setHeader("Content-Length", String(content.length));
+  response.setHeader("Content-Disposition", contentDispositionHeader(originalFilename));
+  response.setHeader("Cache-Control", "private, no-store, max-age=0");
+  response.setHeader("Pragma", "no-cache");
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.end(content);
+}
+
+function purgeExpiredAmuDocuments(today = viennaTodayIso()) {
+  if (!amuStorage || !tableExists("amu_documents") || amuMutationInProgress > 0) return { purged: 0 };
+  const rows = db.prepare(`
+    SELECT d.id, d.storage_key, d.report_id
+    FROM amu_documents d JOIN amu_reports r ON r.id = d.report_id
+    WHERE r.retention_until IS NOT NULL AND r.retention_until < ?
+      AND r.status IN ('submitted','returned','reviewed','withdrawn','purged') AND d.status IN ('active','deleted')
+    ORDER BY d.created_at, d.id
+  `).all(today);
+  let purged = 0;
+  amuMutationInProgress += 1;
+  try {
+    for (const row of rows) {
+      db.prepare("UPDATE amu_documents SET status = 'deleted', deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP) WHERE id = ?").run(row.id);
+      try { amuStorage.deleteBlob(row.storage_key); } catch (error) {
+        auditPortal("system", "amu.document.purge.error", "amu_document", row.id, error.message);
+        continue;
+      }
+      db.prepare(`
+        UPDATE amu_documents SET status = 'purged', original_filename = 'Dokument', purged_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(row.id);
+      auditPortal("system", "amu.document.purge", "amu_document", row.id);
+      purged += 1;
+    }
+    db.prepare(`
+      UPDATE amu_reports SET status = 'purged', employee_note = '', review_note = '', updated_at = CURRENT_TIMESTAMP
+      WHERE retention_until IS NOT NULL AND retention_until < ? AND status IN ('submitted','returned','reviewed','withdrawn')
+        AND NOT EXISTS (SELECT 1 FROM amu_documents d WHERE d.report_id = amu_reports.id AND d.status <> 'purged')
+    `).run(today);
+  } finally {
+    amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
+  }
+  return { purged };
+}
+
+function reconcileOrphanAmuBlobs() {
+  if (!amuStorage || !tableExists("amu_documents") || amuMutationInProgress > 0) return { removed: 0 };
+  const referenced = new Set(db.prepare("SELECT storage_key FROM amu_documents").all().map((row) => String(row.storage_key || "").toLowerCase()));
+  let removed = 0;
+  for (const storageKey of amuStorage.listStorageKeys()) {
+    if (referenced.has(storageKey)) continue;
+    if (amuStorage.deleteBlob(storageKey)) {
+      auditPortal("system", "amu.document.orphan.purge", "amu_document", storageKey);
+      removed += 1;
+    }
+  }
+  return { removed };
 }
 
 function vacationHrApprovalRequired() {
@@ -3646,19 +4180,60 @@ function databasePragmaValue(name) {
   return row ? Object.values(row)[0] : null;
 }
 
+function directoryDiagnostics(directory) {
+  try {
+    fs.mkdirSync(directory, { recursive: true });
+    fs.accessSync(directory, fs.constants.R_OK | fs.constants.W_OK);
+    const stats = typeof fs.statfsSync === "function" ? fs.statfsSync(directory) : null;
+    return {
+      writable: true,
+      freeBytes: stats ? Number(stats.bavail) * Number(stats.bsize) : null,
+      volume: path.parse(path.resolve(directory)).root,
+    };
+  } catch (error) {
+    return { writable: false, freeBytes: null, volume: path.parse(path.resolve(directory)).root, error: error.message };
+  }
+}
+
+function latestDatabaseBackup(backupDirectory) {
+  try {
+    return fs.readdirSync(backupDirectory)
+      .filter((name) => /^dienstplan-.*\.db$/.test(name))
+      .map((name) => {
+        const modified = fs.statSync(path.join(backupDirectory, name)).mtime;
+        return { name, modifiedAt: modified.toISOString(), modifiedMs: modified.getTime() };
+      })
+      .sort((left, right) => right.modifiedMs - left.modifiedMs)[0] || null;
+  } catch { return null; }
+}
+
 function serverDiagnostics() {
   const settings = getSettings();
   const portal = getPortalStatus();
   const migration = db.prepare("SELECT id, app_version, applied_at FROM schema_migrations ORDER BY applied_at DESC, id DESC LIMIT 1").get() || null;
   const warnings = [];
+  const dataHealth = directoryDiagnostics(dataRootDirectory);
+  let externalDirectory = "";
+  try { externalDirectory = backupDirectoryFromSettings(settings); } catch (error) { warnings.push(`Das externe Backupziel ist ungültig: ${error.message}`); }
+  const backupHealth = externalDirectory ? directoryDiagnostics(externalDirectory) : { writable: false, freeBytes: null, volume: "" };
+  const latestBackup = latestDatabaseBackup(externalDirectory || appBackupDirectory) || latestDatabaseBackup(appBackupDirectory);
+  const latestBackupAgeHours = latestBackup ? Math.max(0, (Date.now() - latestBackup.modifiedMs) / 3600000) : null;
+  const amu = amuStorage ? amuStorage.diagnostics() : { ok: false, writable: false, error: amuStorageStartupError };
   if (serverModeActive && !/^https:\/\//i.test(publicUrl)) warnings.push("Für den Serverbetrieb fehlt eine gültige HTTPS-Adresse.");
   if (serverModeActive && portal.adminSetupState !== "configured") warnings.push("Vor dem Serverstart muss ein Admin-Zugang eingerichtet sein.");
   if (serverModeActive && !loopbackHosts.has(HOST.toLowerCase())) warnings.push("Der Server lauscht nicht ausschließlich auf Loopback. Firewall und Reverse-Proxy-Konfiguration prüfen.");
   if (settings.external_backup_enabled === "0") warnings.push("Die zusätzliche externe Datensicherung ist deaktiviert.");
+  if (!dataHealth.writable) warnings.push("Das Server-Datenverzeichnis ist nicht beschreibbar.");
+  if (settingEnabled(settings, "external_backup_enabled") && !backupHealth.writable) warnings.push("Das externe Backupziel ist nicht beschreibbar.");
+  if (latestBackupAgeHours === null || latestBackupAgeHours > Math.max(6, Number(settings.backup_interval_hours || 2) * 3)) warnings.push("Es wurde kein ausreichend aktuelles verifiziertes Datenbank-Backup gefunden.");
+  if (externalDirectory && path.parse(path.resolve(databasePath)).root.toLowerCase() === path.parse(path.resolve(externalDirectory)).root.toLowerCase()) warnings.push("Datenbank und externes Backup liegen auf demselben Laufwerk.");
+  if (!amu.ok) warnings.push(`Der geschützte AMU-Speicher ist nicht betriebsbereit${amu.error ? `: ${amu.error}` : "."}`);
+  if (serverModeActive && serviceControlToken.length < 32) warnings.push("Der sichere Token für den Windows-Dienststopp fehlt.");
   const lockedAccounts = Number(db.prepare("SELECT COUNT(*) AS count FROM portal_users WHERE locked_until > CURRENT_TIMESTAMP").get().count || 0);
   if (lockedAccounts) warnings.push(`${lockedAccounts} Zugang/Zugänge sind derzeit gesperrt.`);
   return {
-    ready: startupIntegrity.length === 1 && startupIntegrity[0] === "ok" && (!serverModeActive || (/^https:\/\//i.test(publicUrl) && portal.adminSetupState === "configured")),
+    ready: startupIntegrity.length === 1 && startupIntegrity[0] === "ok" && dataHealth.writable
+      && (!serverModeActive || (/^https:\/\//i.test(publicUrl) && portal.adminSetupState === "configured" && backupHealth.writable && amu.ok && serviceControlToken.length >= 32)),
     mode: portal.operationMode,
     publicUrl: portal.publicUrl,
     httpsRequired: portal.httpsRequired,
@@ -3676,17 +4251,34 @@ function serverDiagnostics() {
       migration,
     },
     instanceLock: { enabled: Boolean(instanceLockPath), held: instanceLockHeld },
+    process: { pid: process.pid, uptimeSeconds: Math.floor(process.uptime()), startedAt: new Date(Date.now() - process.uptime() * 1000).toISOString() },
+    storage: { dataRoot: dataRootDirectory, data: dataHealth, amu },
     backups: {
       appDirectory: appBackupDirectory,
       externalEnabled: settingEnabled(settings, "external_backup_enabled"),
-      externalDirectory: backupDirectoryFromSettings(settings),
+      externalDirectory,
+      externalWritable: backupHealth.writable,
+      freeBytes: backupHealth.freeBytes,
+      latest: latestBackup,
+      latestAgeHours: latestBackupAgeHours,
       lastVerified: Boolean(lastBackup?.appBackup?.verified || lastBackup?.externalBackup?.verified),
     },
+    pilotChecks: [
+      { id: "mode", label: "Servermodus", ok: serverModeActive, detail: serverModeActive ? "aktiv" : "für den Pilot noch nicht aktiv" },
+      { id: "https", label: "HTTPS-Adresse", ok: /^https:\/\//i.test(publicUrl), detail: publicUrl || "nicht konfiguriert" },
+      { id: "admin", label: "Admin-Zugang", ok: portal.adminSetupState === "configured", detail: portal.adminSetupState },
+      { id: "database", label: "SQLite-Integrität", ok: startupIntegrity[0] === "ok", detail: startupIntegrity[0] || "unbekannt" },
+      { id: "data", label: "Datenverzeichnis", ok: dataHealth.writable, detail: dataHealth.writable ? "beschreibbar" : "nicht beschreibbar" },
+      { id: "backup", label: "Externes Backup", ok: backupHealth.writable && latestBackupAgeHours !== null, detail: latestBackup ? latestBackup.modifiedAt : "noch kein Backup" },
+      { id: "amu", label: "AMU-Speicher", ok: amu.ok, detail: amu.ok ? "verschlüsselt und beschreibbar" : (amu.error || "nicht bereit") },
+      { id: "service-stop", label: "Dienststopp", ok: serviceControlToken.length >= 32, detail: serviceControlToken.length >= 32 ? "Token konfiguriert" : "Token fehlt" },
+    ],
     security: {
       lockedAccounts,
       activeSessions: Number(db.prepare("SELECT COUNT(*) AS count FROM portal_sessions WHERE revoked_at IS NULL AND expires_at > CURRENT_TIMESTAMP").get().count || 0),
       loginRateLimitActive: serverModeActive,
       secureCookies: serverModeActive,
+      serviceControlConfigured: serviceControlToken.length >= 32,
     },
     warnings,
   };
@@ -3701,6 +4293,21 @@ app.get("/api/health", (_request, response) => {
     mode: diagnostics.mode,
     database: diagnostics.database.integrity,
   });
+});
+
+app.post("/api/service/stop", (request, response) => {
+  if (!serverModeActive || !isLoopbackRequest(request) || serviceControlToken.length < 32) {
+    throw httpError(404, "Der Dienststeuerungs-Endpunkt ist nicht verfügbar.", "SERVICE_CONTROL_UNAVAILABLE");
+  }
+  const provided = String(request.headers["x-grabenplaner-service-token"] || "");
+  const valid = provided.length === serviceControlToken.length
+    && crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(serviceControlToken));
+  if (!valid) {
+    auditPortal("service", "service.stop.denied", "system", "server");
+    throw httpError(403, "Die Dienststeuerung wurde abgelehnt.", "SERVICE_CONTROL_DENIED");
+  }
+  response.json({ ok: true, message: "Der Grabenplaner-Dienst wird kontrolliert beendet." });
+  response.on("finish", () => setTimeout(() => shutdown({ reason: "windows-service" }), 150));
 });
 
 app.get("/api/server-diagnostics", (request, response) => {
@@ -4070,6 +4677,7 @@ app.post("/api/system/restart", (_request, response) => {
 });
 
 app.post("/api/system/exit", (_request, response) => {
+  if (serverModeActive) throw httpError(409, "Der Serverbetrieb wird über den Windows-Dienst beendet.", "SERVER_MANAGED_SHUTDOWN");
   const driveInfo = runtimeDriveInfo();
   let backup = null;
   try {
@@ -4083,7 +4691,7 @@ app.post("/api/system/exit", (_request, response) => {
     backup,
     drive: driveInfo.drive,
   });
-  response.on("finish", () => setTimeout(shutdown, 350));
+  response.on("finish", () => setTimeout(() => shutdown({ reason: "api", skipBackup: true }), 350));
 });
 
 function scheduleBackupImport(importPath) {
@@ -4235,6 +4843,12 @@ function applyBrandingSnapshotToDatabase(importPath, snapshot) {
 }
 
 app.post("/api/backup/import", express.raw({ type: "application/octet-stream", limit: "200mb" }), (request, response) => {
+  const currentAmuDocuments = tableExists("amu_documents")
+    ? Number(db.prepare("SELECT COUNT(*) AS count FROM amu_documents WHERE status = 'active'").get().count || 0)
+    : 0;
+  if (currentAmuDocuments > 0) {
+    throw httpError(409, "Diese Datenbank enthält geschützte AMU-Dokumente. Bitte Datenbank und AMU-Dateisicherung gemeinsam über die Wartungswerkzeuge wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
+  }
   if (serverModeActive) throw httpError(409, "Datenbankimporte sind im laufenden Serverbetrieb gesperrt und müssen in einem Wartungsfenster am Server durchgeführt werden.", "SERVER_MAINTENANCE_REQUIRED");
   if (!Buffer.isBuffer(request.body) || request.body.length < 1024) {
     throw httpError(400, "Bitte eine gültige Backup-Datei auswählen.");
@@ -4243,14 +4857,21 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   const importPath = path.join(dataDirectory, `pending-import-${backupTimestamp()}.db`);
   fs.writeFileSync(importPath, request.body);
   let importedDatabase;
+  let importedAmuDocuments = 0;
   try {
     importedDatabase = new DatabaseSync(importPath, { readOnly: true });
     importedDatabase.prepare("SELECT name FROM sqlite_master LIMIT 1").all();
+    const hasAmuDocuments = importedDatabase.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'amu_documents'").get();
+    if (hasAmuDocuments) importedAmuDocuments = Number(importedDatabase.prepare("SELECT COUNT(*) AS count FROM amu_documents WHERE status = 'active'").get().count || 0);
   } catch {
     fs.rmSync(importPath, { force: true });
     throw httpError(400, "Die ausgewählte Datei ist keine lesbare SQLite-Backup-Datei.");
   } finally {
     if (importedDatabase) importedDatabase.close();
+  }
+  if (importedAmuDocuments > 0) {
+    fs.rmSync(importPath, { force: true });
+    throw httpError(409, "Das ausgewählte Backup enthält geschützte AMU-Dokumente. Bitte die vollständige Datenbank- und AMU-Sicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
   }
   const preserveBranding = String(request.query.preserveBranding ?? "1") !== "0";
   if (preserveBranding) {
@@ -4772,6 +5393,246 @@ app.get("/api/portal/v1/me/schedule", (request, response) => {
   response.json({ weekStart, weekEnd, calendarWeek: getIsoWeek(weekStart), shifts, options, user: publicPortalUser(session) });
 });
 
+app.get(["/api/portal/v1/me/absence-history", "/api/portal/v1/me/absence-requests"], (request, response) => {
+  const session = requirePortalSession(request, "own_vacation:read");
+  response.json({ items: absenceHistoryForEmployee(session.employeeNumber) });
+});
+
+app.get("/api/portal/v1/me/notifications", (request, response) => {
+  const session = requirePortalSession(request);
+  const notifications = db.prepare(`
+    SELECT id, event_type, title, message, target, entity_type, entity_id, read_at, created_at
+    FROM portal_notifications WHERE recipient_employee_number = ?
+    ORDER BY created_at DESC, rowid DESC LIMIT 100
+  `).all(session.employeeNumber).map((item) => ({ ...item, link: item.target, request_id: item.entity_id || null }));
+  const unreadCount = Number(db.prepare(`
+    SELECT COUNT(*) AS count FROM portal_notifications
+    WHERE recipient_employee_number = ? AND read_at IS NULL
+  `).get(session.employeeNumber).count || 0);
+  response.json({ notifications, unreadCount });
+});
+
+app.put("/api/portal/v1/me/notifications/:id/read", (request, response) => {
+  const session = requirePortalSession(request);
+  assertPortalCsrf(request);
+  const result = db.prepare(`
+    UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+    WHERE id = ? AND recipient_employee_number = ?
+  `).run(String(request.params.id), session.employeeNumber);
+  if (!result.changes) throw httpError(404, "Die Benachrichtigung wurde nicht gefunden.");
+  response.json({ ok: true });
+});
+
+app.put("/api/portal/v1/me/notifications/read-all", (request, response) => {
+  const session = requirePortalSession(request);
+  assertPortalCsrf(request);
+  const result = db.prepare(`
+    UPDATE portal_notifications SET read_at = CURRENT_TIMESTAMP
+    WHERE recipient_employee_number = ? AND read_at IS NULL
+  `).run(session.employeeNumber);
+  response.json({ ok: true, updated: Number(result.changes || 0) });
+});
+
+app.get("/api/portal/v1/me/amu-reports", (request, response) => {
+  const session = requirePortalSession(request, "own_amu:read");
+  response.json({ reports: ownAmuReports(session.employeeNumber) });
+});
+
+app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
+  const session = requirePortalSession(request, "own_amu:create");
+  assertPortalCsrf(request);
+  if (shutdownStarted) throw httpError(503, "Grabenplaner wird gerade sicher beendet. Bitte den Upload danach erneut versuchen.", "SERVER_SHUTTING_DOWN");
+  const storage = requireAmuStorage();
+  const { fields, documents } = await parseAmuMultipart(request);
+  const incapacityFrom = String(fields.incapacityFrom || "");
+  const incapacityTo = String(fields.incapacityTo || "");
+  const employeeNote = stripEmoji(String(fields.employeeNote || "").trim()).slice(0, 500);
+  if (!isIsoDate(incapacityFrom) || !isIsoDate(incapacityTo) || incapacityTo < incapacityFrom) {
+    throw httpError(400, "Bitte einen gültigen Zeitraum der Arbeitsunfähigkeit eingeben.", "AMU_DATE_INVALID");
+  }
+  if (!documents.length || documents.length > 3) {
+    throw httpError(400, "Bitte mindestens eine und höchstens drei PDF-, JPG- oder PNG-Dateien auswählen.", "AMU_DOCUMENTS_REQUIRED");
+  }
+  const context = employeeRequestContext(session.employeeNumber, incapacityFrom);
+  const retentionDays = Math.min(3650, Math.max(30, Number(getPortalSettings().amu_retention_days || 730)));
+  const saved = [];
+  let committed = false;
+  amuMutationInProgress += 1;
+  try {
+    for (const document of documents) saved.push(await storage.saveBuffer({ buffer: document.buffer, originalName: document.originalName }));
+    db.exec("BEGIN");
+    try {
+      const reportResult = db.prepare(`
+        INSERT INTO amu_reports
+          (employee_number, location_id, incapacity_from, incapacity_to, employee_note, status, retention_until)
+        VALUES (?, ?, ?, ?, ?, 'submitted', ?)
+      `).run(session.employeeNumber, context.locationId, incapacityFrom, incapacityTo, storage.protectText(employeeNote), addDays(incapacityTo, retentionDays));
+      const reportId = Number(reportResult.lastInsertRowid);
+      const insertDocument = db.prepare(`
+        INSERT INTO amu_documents
+          (id, report_id, storage_key, original_filename, detected_mime, byte_size, sha256, scan_status,
+           encryption_key_id, encryption_iv, encryption_tag, status, uploaded_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', 'active', ?)
+      `);
+      for (const item of saved) {
+        const documentId = crypto.randomUUID();
+        insertDocument.run(documentId, reportId, item.storageKey, storage.protectText(item.originalFilename), item.detectedMime,
+          item.byteSize, item.sha256, item.scanStatus, item.encryptionKeyId, session.employeeNumber);
+        auditPortal(session.employeeNumber, "amu.document.upload", "amu_document", documentId,
+          JSON.stringify({ reportId, mime: item.detectedMime, size: item.byteSize, scan: item.scanStatus }));
+      }
+      auditPortal(session.employeeNumber, "amu.report.create", "amu_report", String(reportId), JSON.stringify({ locationId: context.locationId, documentCount: saved.length }));
+      db.exec("COMMIT");
+      committed = true;
+      const report = amuReportMetadata(reportId);
+      const recipients = new Set([
+        ...requestReviewerRecipients(context.locationId, "local", session.employeeNumber),
+        ...requestReviewerRecipients(context.locationId, "hr", session.employeeNumber),
+      ]);
+      for (const recipient of recipients) {
+        createPortalNotification(recipient, "amu.submitted", "Neue Arbeitsunfähigkeitsmeldung", `${session.employeeNumber} hat eine AMU hochgeladen.`, {
+          target: "/?view=requests&kind=amu",
+          entityType: "amu_report",
+          entityId: reportId,
+          dedupeKey: `amu:${reportId}:submitted`,
+        });
+      }
+      response.status(201).json({ report: serializeAmuReports([report])[0] });
+    } catch (error) {
+      if (!committed) db.exec("ROLLBACK");
+      throw error;
+    }
+  } catch (error) {
+    if (!committed) {
+      for (const item of saved) {
+        try { storage.deleteBlob(item.storageKey); } catch {}
+      }
+    }
+    if (error.code?.startsWith?.("AMU_")) {
+      const status = error.code.includes("TOO_LARGE") ? 413 : error.code.includes("TYPE") || error.code.includes("HEIC") ? 415 : 400;
+      throw httpError(status, error.message, error.code);
+    }
+    throw error;
+  } finally {
+    amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
+  }
+});
+
+app.post("/api/portal/v1/me/amu-reports/:id/withdraw", (request, response) => {
+  const session = requirePortalSession(request, "own_amu:withdraw");
+  assertPortalCsrf(request);
+  const report = db.prepare(`
+    SELECT * FROM amu_reports WHERE id = ? AND employee_number = ? AND status IN ('submitted','returned')
+  `).get(Number(request.params.id), session.employeeNumber);
+  if (!report) throw httpError(404, "Die offene Arbeitsunfähigkeitsmeldung wurde nicht gefunden.", "AMU_REPORT_NOT_FOUND");
+  db.exec("BEGIN");
+  try {
+    db.prepare(`
+      UPDATE amu_reports SET status = 'withdrawn', withdrawn_at = CURRENT_TIMESTAMP,
+        retention_until = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `).run(addDays(viennaTodayIso(), 30), report.id);
+    db.prepare("UPDATE amu_documents SET status = 'deleted', deleted_by = ?, deleted_at = CURRENT_TIMESTAMP WHERE report_id = ? AND status = 'active'")
+      .run(session.employeeNumber, report.id);
+    auditPortal(session.employeeNumber, "amu.report.withdraw", "amu_report", String(report.id));
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+  db.prepare("UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE entity_type = 'amu_report' AND entity_id = ?")
+    .run(String(report.id));
+  response.json({ ok: true });
+});
+
+app.get("/api/portal/v1/me/amu-reports/:reportId/documents/:documentId/content", (request, response) => {
+  const session = requirePortalSession(request, "own_amu:read");
+  const document = amuDocumentMetadata(request.params.reportId, request.params.documentId);
+  if (!document || document.employee_number !== session.employeeNumber || document.report_status === "withdrawn") {
+    auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", String(request.params.documentId));
+    throw httpError(404, "Das AMU-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
+  }
+  auditPortal(session.employeeNumber, "amu.document.download", "amu_document", document.id);
+  sendAmuDocument(response, document);
+});
+
+app.get("/api/portal/v1/amu-reports", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "amu:metadata:read");
+  const scoped = !["admin", "hr"].includes(session.role) && session.employeeNumber !== "local";
+  const rows = scoped
+    ? db.prepare(`
+        SELECT r.*, e.full_name, e.nickname, e.color, l.name AS location_name
+        FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
+        JOIN locations l ON l.id = r.location_id WHERE r.location_id = ?
+        ORDER BY r.submitted_at DESC, r.id DESC
+      `).all(session.homeLocationId)
+    : db.prepare(`
+        SELECT r.*, e.full_name, e.nickname, e.color, l.name AS location_name
+        FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
+        JOIN locations l ON l.id = r.location_id ORDER BY r.submitted_at DESC, r.id DESC
+      `).all();
+  const reports = serializeAmuReports(rows);
+  if (!session.permissions?.includes("amu:file:read") && session.employeeNumber !== "local") {
+    for (const report of reports) report.documents = report.documents.map(({ id, detected_mime, size, byte_size, scan_status, status, created_at }, index) => ({
+      id, original_name: `Dokument ${index + 1}`, original_filename: `Dokument ${index + 1}`, detected_mime, size, byte_size, scan_status, status, created_at, content_access: false,
+    }));
+  }
+  response.json({ reports, pendingCount: reports.filter((item) => item.status === "submitted").length });
+});
+
+app.put("/api/portal/v1/amu-reports/:id/review", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "amu:review");
+  const report = amuReportMetadata(request.params.id);
+  assertAmuReportScope(session, report);
+  if (!report || !["submitted", "returned"].includes(report.status)) throw httpError(409, "Diese Arbeitsunfähigkeitsmeldung ist bereits abgeschlossen.");
+  const action = String(request.body.action || "reviewed");
+  if (action !== "reviewed") throw httpError(400, "Bitte die Arbeitsunfähigkeitsmeldung als geprüft markieren.");
+  const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
+  db.prepare(`
+    UPDATE amu_reports SET status = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP,
+      review_note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+  `).run(action, session.employeeNumber, requireAmuStorage().protectText(note), report.id);
+  auditPortal(session.employeeNumber, `amu.report.${action}`, "amu_report", String(report.id));
+  createPortalNotification(report.employee_number, "amu.review", "AMU wurde geprüft", note, {
+    target: "/portal/?tab=amu",
+    entityType: "amu_report",
+    entityId: report.id,
+    dedupeKey: `amu:${report.id}:${action}:${session.employeeNumber}`,
+  });
+  db.prepare("UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE entity_type = 'amu_report' AND entity_id = ? AND event_type = 'amu.submitted'")
+    .run(String(report.id));
+  response.json({ report: serializeAmuReports([amuReportMetadata(report.id)])[0] });
+});
+
+app.get("/api/portal/v1/amu-reports/:reportId/documents/:documentId/content", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "amu:file:read");
+  const document = amuDocumentMetadata(request.params.reportId, request.params.documentId);
+  if (!document) throw httpError(404, "Das AMU-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
+  assertAmuReportScope(session, document);
+  auditPortal(session.employeeNumber, "amu.document.download", "amu_document", document.id);
+  sendAmuDocument(response, document);
+});
+
+app.delete("/api/portal/v1/amu-reports/:reportId/documents/:documentId", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "amu:delete");
+  const document = amuDocumentMetadata(request.params.reportId, request.params.documentId);
+  if (!document) throw httpError(404, "Das AMU-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
+  assertAmuReportScope(session, document);
+  amuMutationInProgress += 1;
+  try {
+    db.prepare("UPDATE amu_documents SET status = 'deleted', deleted_by = ?, deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(session.employeeNumber, document.id);
+    try {
+      requireAmuStorage().deleteBlob(document.storage_key);
+    } catch (error) {
+      db.prepare("UPDATE amu_documents SET status = 'active', deleted_by = NULL, deleted_at = NULL WHERE id = ?").run(document.id);
+      throw error;
+    }
+    db.prepare("UPDATE amu_documents SET status = 'purged', original_filename = 'Dokument', purged_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(document.id);
+    auditPortal(session.employeeNumber, "amu.document.delete", "amu_document", document.id);
+  } finally {
+    amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
+  }
+  response.status(204).end();
+});
+
 app.post("/api/portal/v1/me/vacation-check", (request, response) => {
   const session = requirePortalSession(request, "own_vacation:request");
   assertPortalCsrf(request);
@@ -4829,16 +5690,25 @@ app.post("/api/portal/v1/me/time-off-requests", (request, response) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, 'local', 'pending_local', ?, ?)
   `).run(session.employeeNumber, locationId, date, startTime, endTime, note, approvalType, check.trafficLight, check.reason);
   auditPortal(session.employeeNumber, "time_off.request.create", "time_off_request", String(result.lastInsertRowid), JSON.stringify(check));
+  notifyRequestReviewers({ id: Number(result.lastInsertRowid), employee_number: session.employeeNumber, location_id: locationId }, "time_off", "local", session.employeeNumber);
   response.status(201).json({ id: Number(result.lastInsertRowid), status: "pending", check });
 });
 
 app.delete("/api/portal/v1/me/time-off-requests/:id", (request, response) => {
   const session = requirePortalSession(request, "own_time:write");
   assertPortalCsrf(request);
-  const result = db.prepare("DELETE FROM time_off_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local')")
-    .run(Number(request.params.id), session.employeeNumber);
-  if (!result.changes) throw httpError(404, "Der offene ZA-Antrag wurde nicht gefunden.");
-  auditPortal(session.employeeNumber, "time_off.request.delete", "time_off_request", request.params.id);
+  const entry = db.prepare("SELECT * FROM time_off_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')")
+    .get(Number(request.params.id), session.employeeNumber);
+  if (!entry) throw httpError(404, "Der offene ZA-Antrag wurde nicht gefunden.");
+  db.exec("BEGIN");
+  try {
+    db.prepare("UPDATE time_off_requests SET status = 'withdrawn', approval_stage = 'complete', decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(session.employeeNumber, entry.id);
+    recordRequestDecision("time_off", entry.id, "employee", "withdraw", session.employeeNumber, "");
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+  resolveRequestReviewNotifications("time_off", entry.id);
+  auditPortal(session.employeeNumber, "time_off.request.withdraw", "time_off_request", request.params.id);
   response.status(204).end();
 });
 
@@ -4886,16 +5756,26 @@ app.post("/api/portal/v1/me/vacation-change-requests", (request, response) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_local', 'local')
   `).run(session.employeeNumber, groupId, requestType, vacation.dateFrom, vacation.dateTo, requestedFrom, requestedTo, note);
   auditPortal(session.employeeNumber, `vacation.${requestType}.request`, "vacation_change_request", String(result.lastInsertRowid));
+  notifyRequestReviewers({ id: Number(result.lastInsertRowid), employee_number: session.employeeNumber, location_id: employeeRequestContext(session.employeeNumber, vacation.dateFrom).locationId }, "vacation_change", "local", session.employeeNumber);
   response.status(201).json({ id: Number(result.lastInsertRowid), status: "pending" });
 });
 
 app.delete("/api/portal/v1/me/vacation-change-requests/:id", (request, response) => {
   const session = requirePortalSession(request, "own_vacation:request");
   assertPortalCsrf(request);
-  const result = db.prepare("DELETE FROM vacation_change_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local')")
-    .run(Number(request.params.id), session.employeeNumber);
+  const entry = db.prepare("SELECT * FROM vacation_change_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')")
+    .get(Number(request.params.id), session.employeeNumber);
+  const result = { changes: entry ? 1 : 0 };
   if (!result.changes) throw httpError(404, "Der offene Änderungs- oder Stornoantrag wurde nicht gefunden.");
-  auditPortal(session.employeeNumber, "vacation.change_request.delete", "vacation_change_request", request.params.id);
+  db.exec("BEGIN");
+  try {
+    db.prepare("UPDATE vacation_change_requests SET status = 'withdrawn', approval_stage = 'complete', decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(session.employeeNumber, entry.id);
+    recordRequestDecision("vacation_change", entry.id, "employee", "withdraw", session.employeeNumber, "");
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+  resolveRequestReviewNotifications("vacation_change", entry.id);
+  auditPortal(session.employeeNumber, "vacation.change_request.withdraw", "vacation_change_request", request.params.id);
   response.status(204).end();
 });
 
@@ -4920,16 +5800,26 @@ app.post("/api/portal/v1/me/vacation-requests", (request, response) => {
     VALUES (?, ?, ?, ?, ?, 'pending_local', 'local')
   `).run(vacation.employeeNumber, locationId, vacation.dateFrom, vacation.dateTo, vacation.note);
   auditPortal(session.employeeNumber, "vacation.request.create", "vacation_request", String(result.lastInsertRowid));
+  notifyRequestReviewers({ id: Number(result.lastInsertRowid), employee_number: session.employeeNumber, location_id: locationId }, "vacation", "local", session.employeeNumber);
   response.status(201).json({ id: Number(result.lastInsertRowid), status: "pending" });
 });
 
 app.delete("/api/portal/v1/me/vacation-requests/:id", (request, response) => {
   const session = requirePortalSession(request, "own_vacation:request");
   assertPortalCsrf(request);
-  const result = db.prepare("DELETE FROM vacation_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local')")
-    .run(Number(request.params.id), session.employeeNumber);
+  const entry = db.prepare("SELECT * FROM vacation_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')")
+    .get(Number(request.params.id), session.employeeNumber);
+  const result = { changes: entry ? 1 : 0 };
   if (!result.changes) throw httpError(404, "Der offene Urlaubsantrag wurde nicht gefunden.");
-  auditPortal(session.employeeNumber, "vacation.request.delete", "vacation_request", request.params.id);
+  db.exec("BEGIN");
+  try {
+    db.prepare("UPDATE vacation_requests SET status = 'withdrawn', approval_stage = 'complete', decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(session.employeeNumber, entry.id);
+    recordRequestDecision("vacation", entry.id, "employee", "withdraw", session.employeeNumber, "");
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+  resolveRequestReviewNotifications("vacation", entry.id);
+  auditPortal(session.employeeNumber, "vacation.request.withdraw", "vacation_request", request.params.id);
   response.status(204).end();
 });
 
@@ -4979,6 +5869,8 @@ app.put("/api/portal/v1/vacation-requests/:id/decision", (request, response) => 
     `).run(session.employeeNumber, entry.id);
   }
   auditPortal(session.employeeNumber, `vacation.request.${decision}`, "vacation_request", String(entry.id));
+  recordRequestDecision("vacation", entry.id, "local", decision === "approved" ? "approve" : "reject", session.employeeNumber, "");
+  notifyRequestDecision(entry, "vacation", decision, session.employeeNumber);
   response.json({ ok: true, id: entry.id, status: decision, vacationGroupId: groupId });
 });
 
@@ -5176,6 +6068,9 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", (request, response) 
   }
   auditPortal(session.employeeNumber, `${kind}.${action}`, `${kind}_request`, String(entry.id), note);
   const updated = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(entry.id);
+  resolveRequestReviewNotifications(kind, entry.id);
+  if (updated.status === "pending_hr") notifyRequestReviewers(updated, kind, "hr", session.employeeNumber);
+  notifyRequestDecision(updated, kind, updated.status, session.employeeNumber);
   response.json({ ok: true, request: { ...updated, status: publicRequestStatus(updated.status) }, ...result });
 });
 
@@ -5216,6 +6111,8 @@ app.put("/api/portal/v1/time-off-requests/:id/decision", (request, response) => 
     `).run(session.employeeNumber, entry.id);
   }
   auditPortal(session.employeeNumber, `time_off.request.${decision}`, "time_off_request", String(entry.id));
+  recordRequestDecision("time_off", entry.id, "local", decision === "approved" ? "approve" : "reject", session.employeeNumber, "");
+  notifyRequestDecision(entry, "time_off", decision, session.employeeNumber);
   response.json({ ok: true, id: entry.id, status: decision, optionId });
 });
 
@@ -5274,6 +6171,8 @@ app.put("/api/portal/v1/vacation-change-requests/:id/decision", (request, respon
     `).run(session.employeeNumber, entry.id);
   }
   auditPortal(session.employeeNumber, `vacation.${entry.request_type}.${decision}`, "vacation_change_request", String(entry.id));
+  recordRequestDecision("vacation_change", entry.id, "local", decision === "approved" ? "approve" : "reject", session.employeeNumber, "");
+  notifyRequestDecision(entry, "vacation_change", decision, session.employeeNumber);
   response.json({ ok: true, id: entry.id, status: decision });
 });
 
@@ -7235,6 +8134,12 @@ function validateServerStartup(portalStatus) {
     if (portalStatus.adminSetupState !== "configured") {
       throw new Error("Serverbetrieb abgebrochen: Zuerst im Lokal- oder LAN-Betrieb einen Admin-Zugang einrichten.");
     }
+    if (serviceControlToken.length < 32) {
+      throw new Error("Serverbetrieb abgebrochen: GRABENPLANER_SERVICE_CONTROL_TOKEN muss als geheimer Dienststeuerungs-Token gesetzt sein.");
+    }
+    if (!amuStorage) {
+      throw new Error(`Serverbetrieb abgebrochen: Der geschützte AMU-Speicher ist nicht verfügbar${amuStorageStartupError ? `: ${amuStorageStartupError}` : "."}`);
+    }
     return;
   }
   if (!loopbackHosts.has(HOST.toLowerCase()) && (getSettings().operation_mode !== "lan" || !portalStatus.portalEnabled || portalStatus.adminSetupState !== "configured")) {
@@ -7257,6 +8162,21 @@ function startServer() {
       for (const url of getLanUrls(listeningPort)) console.log(`LAN-Zugriff: ${url}`);
     }
     scheduleAutomaticBackups();
+    try { reconcileOrphanAmuBlobs(); } catch (error) { console.error("AMU-Abgleich fehlgeschlagen:", error); }
+    try { purgeExpiredAmuDocuments(); } catch (error) { console.error("AMU-Aufbewahrungsprüfung fehlgeschlagen:", error); }
+    retentionInterval = setInterval(() => {
+      try { purgeExpiredAmuDocuments(); } catch (error) { console.error("AMU-Aufbewahrungsprüfung fehlgeschlagen:", error); }
+    }, 24 * 60 * 60 * 1000);
+    retentionInterval.unref();
+    if (serverModeActive && amuStorage) {
+      scannerProbeInterval = setInterval(() => {
+        amuScannerProbe = amuStorage.probeScanner().catch((error) => {
+          console.error("AMU-Virenscanner ist nicht betriebsbereit:", error.message);
+          return null;
+        });
+      }, 5 * 60 * 1000);
+      scannerProbeInterval.unref();
+    }
     setTimeout(() => {
       try {
         const backup = createDatabaseBackup("startup");
@@ -7270,32 +8190,55 @@ function startServer() {
   return server;
 }
 
-function shutdown() {
+function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) {
   if (shutdownStarted) return;
   shutdownStarted = true;
+  let finished = false;
+  let serverClosed = !server;
   const finish = () => {
-    releaseInstanceLock();
+    if (finished) return;
+    finished = true;
     if (!databaseClosed) {
-      databaseClosed = true;
-      db.close();
+      try {
+        if (!skipBackup) createDatabaseBackup(`shutdown-${reason}`);
+      } catch (error) {
+        console.error("Backup beim Dienststopp konnte nicht erstellt werden:", error);
+      }
+      try { db.exec("PRAGMA wal_checkpoint(TRUNCATE)"); } catch {}
+      try { db.close(); } finally { databaseClosed = true; }
     }
-    process.exit(0);
+    releaseInstanceLock();
+    process.exit(exitCode);
   };
   if (backupInterval) clearInterval(backupInterval);
+  if (retentionInterval) clearInterval(retentionInterval);
+  if (scannerProbeInterval) clearInterval(scannerProbeInterval);
   if (!server) {
     finish();
     return;
   }
-  const forceExit = setTimeout(finish, 4000);
+  const tryFinish = () => {
+    if (serverClosed && amuMutationInProgress === 0) finish();
+  };
+  const waitForUploads = setInterval(tryFinish, 100);
+  waitForUploads.unref();
+  const forceExit = setTimeout(() => {
+    clearInterval(waitForUploads);
+    if (amuMutationInProgress > 0) console.error("Dienststopp nach 45 Sekunden erzwungen; ein AMU-Vorgang war noch aktiv.");
+    finish();
+  }, 45000);
   forceExit.unref();
-  server.close(finish);
+  server.close(() => {
+    serverClosed = true;
+    tryFinish();
+  });
 }
 
 if (require.main === module) {
-  startServer();
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
   process.on("exit", releaseInstanceLock);
+  process.on("SIGINT", () => shutdown({ reason: "SIGINT" }));
+  process.on("SIGTERM", () => shutdown({ reason: "SIGTERM" }));
+  try { startServer(); } catch (error) { releaseInstanceLock(); throw error; }
 }
 
 module.exports = {

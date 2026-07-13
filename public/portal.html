@@ -25,23 +25,24 @@
     <div class="portal-app hidden" id="portalApp">
       <header class="portal-header">
         <div class="portal-brand"><img id="portalLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" /><div><strong>Grabenplaner</strong><span>Mitarbeiterportal</span></div></div>
-        <div class="portal-user"><div><strong id="portalUserName"></strong><span id="portalUserRole"></span></div><a id="adminAppLink" class="text-button hidden" href="/">Planung öffnen</a><button class="text-button" id="changePasswordButton" type="button">Passwort ändern</button><button class="text-button" id="logoutButton" type="button">Abmelden</button></div>
+        <div class="portal-user"><div class="portal-user-copy"><strong id="portalUserName"></strong><span id="portalUserRole"></span></div><a id="adminAppLink" class="text-button hidden" href="/">Planung öffnen</a><button class="notification-button" id="notificationsButton" type="button" aria-label="Benachrichtigungen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span class="notification-badge hidden" id="notificationBadge">0</span></button><button class="text-button header-action" id="changePasswordButton" type="button"><span class="wide-label">Passwort ändern</span><span class="compact-label">Passwort</span></button><button class="text-button header-action" id="logoutButton" type="button">Abmelden</button></div>
       </header>
 
       <main>
-        <nav class="portal-tabs">
-          <button class="active" data-tab="schedule" type="button">Mein Dienstplan</button>
-          <button data-tab="timeOff" type="button">Zeitausgleich beantragen</button>
-          <button data-tab="vacation" type="button">Urlaub beantragen</button>
-          <button data-tab="approvedVacation" type="button">Genehmigter Urlaub</button>
+        <nav class="portal-tabs" role="tablist" aria-label="Mitarbeiterportal">
+          <button class="active" data-tab="schedule" type="button" role="tab" aria-selected="true" aria-controls="scheduleView">Dienstplan</button>
+          <button data-tab="timeOff" type="button" role="tab" aria-selected="false" aria-controls="timeOffView" tabindex="-1">ZA</button>
+          <button data-tab="vacation" type="button" role="tab" aria-selected="false" aria-controls="vacationView" tabindex="-1">Urlaub</button>
+          <button data-tab="history" type="button" role="tab" aria-selected="false" aria-controls="historyView" tabindex="-1">Meine Anträge</button>
+          <button data-tab="amu" type="button" role="tab" aria-selected="false" aria-controls="amuView" tabindex="-1">AMU</button>
         </nav>
 
-        <section class="portal-view active" id="scheduleView">
+        <section class="portal-view active" id="scheduleView" role="tabpanel">
           <div class="view-heading"><div><span class="eyebrow">Meine Woche</span><h1 id="scheduleHeading">Mein Dienstplan</h1></div><div class="week-controls"><button id="previousWeek" type="button">←</button><button id="currentWeek" type="button">Diese Woche</button><button id="nextWeek" type="button">→</button></div></div>
           <div class="schedule-grid" id="scheduleGrid"></div>
         </section>
 
-        <section class="portal-view" id="timeOffView">
+        <section class="portal-view" id="timeOffView" role="tabpanel">
           <div class="view-heading"><div><span class="eyebrow">Selbstverwaltung</span><h1>Zeitausgleich beantragen</h1><p>Die Ampel prüft den aktuellen Dienstplan und zeigt sofort, ob der Zeitraum möglich ist.</p></div></div>
           <div class="vacation-layout">
             <form class="portal-card request-form" id="timeOffRequestForm">
@@ -58,7 +59,7 @@
           </div>
         </section>
 
-        <section class="portal-view" id="vacationView">
+        <section class="portal-view" id="vacationView" role="tabpanel">
           <div class="view-heading"><div><span class="eyebrow">Selbstverwaltung</span><h1>Urlaub beantragen</h1><p>Der Antrag wird erst nach Genehmigung in die Urlaubsplanung übernommen.</p></div></div>
           <div class="vacation-layout">
             <form class="portal-card request-form" id="vacationRequestForm">
@@ -73,9 +74,32 @@
           </div>
         </section>
 
-        <section class="portal-view" id="approvedVacationView">
-          <div class="view-heading"><div><span class="eyebrow">Übersicht</span><h1>Genehmigter Urlaub</h1><p>Hier können Änderungen oder Stornierungen zur Genehmigung eingereicht werden.</p></div></div>
+        <section class="portal-view" id="historyView" role="tabpanel">
+          <div class="view-heading"><div><span class="eyebrow">Persönliche Übersicht</span><h1>Meine Anträge</h1><p>Alle Urlaubs- und ZA-Anträge mit Bearbeitungsverlauf an einem Ort.</p></div></div>
+          <section class="portal-card history-card">
+            <div class="history-toolbar">
+              <label><span>Art</span><select id="historyTypeFilter"><option value="all">Alle Anträge</option><option value="vacation">Urlaub</option><option value="time_off">Zeitausgleich</option></select></label>
+              <label><span>Status</span><select id="historyStatusFilter"><option value="all">Alle Status</option><option value="open">Offen</option><option value="approved">Genehmigt</option><option value="rejected">Abgelehnt</option><option value="cancelled">Storniert / zurückgezogen</option></select></label>
+            </div>
+            <div class="history-list" id="absenceHistoryList"></div>
+          </section>
+          <div class="view-heading approved-heading"><div><span class="eyebrow">Urlaubsübersicht</span><h2>Genehmigter Urlaub</h2><p>Änderungen oder Stornierungen können hier zur Genehmigung eingereicht werden.</p></div></div>
           <section class="portal-card approved-vacation-card"><div class="approved-vacation-list" id="approvedVacationList"></div></section>
+        </section>
+
+        <section class="portal-view" id="amuView" role="tabpanel">
+          <div class="view-heading"><div><span class="eyebrow">Arbeitsunfähigkeitsmeldung</span><h1>AMU übermitteln</h1><p>Zeitraum melden und bis zu drei Dokumente sicher anhängen.</p></div></div>
+          <div class="vacation-layout amu-layout">
+            <form class="portal-card request-form" id="amuReportForm">
+              <h2>Neue AMU</h2>
+              <div class="date-fields"><label><span>Arbeitsunfähig von</span><input id="amuIncapacityFrom" type="date" required /></label><label><span>Voraussichtlich bis</span><input id="amuIncapacityTo" type="date" required /></label></div>
+              <label><span>Bemerkung</span><textarea id="amuEmployeeNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
+              <label class="file-field"><span>Dokumente</span><input id="amuDocuments" type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" multiple required /><small>PDF, JPG oder PNG · höchstens 3 Dateien</small></label>
+              <p class="message hidden" id="amuMessage"></p>
+              <button class="primary" id="amuSubmitButton" type="submit">AMU sicher übermitteln</button>
+            </form>
+            <section class="portal-card"><h2>Meine AMU-Meldungen</h2><div class="request-list amu-report-list" id="amuReportList"></div></section>
+          </div>
         </section>
       </main>
     </div>
@@ -100,6 +124,22 @@
         <label><span>Bemerkung</span><textarea id="vacationChangeNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
         <p class="message hidden" id="vacationChangeMessage"></p>
         <div class="dialog-actions"><button type="button" data-close-vacation-change>Abbrechen</button><button class="primary" type="submit">Antrag absenden</button></div>
+      </form>
+    </dialog>
+    <dialog id="historyDetailDialog">
+      <form method="dialog">
+        <div class="dialog-heading"><div><span class="eyebrow">Antragsverlauf</span><h2 id="historyDetailTitle">Antrag</h2></div><button type="button" data-close-history-detail>×</button></div>
+        <div class="history-detail-summary" id="historyDetailSummary"></div>
+        <div class="decision-timeline" id="historyDecisionTimeline"></div>
+        <div class="dialog-actions"><button type="button" data-close-history-detail>Schließen</button></div>
+      </form>
+    </dialog>
+    <dialog id="notificationsDialog">
+      <form method="dialog">
+        <div class="dialog-heading"><div><span class="eyebrow">Mitarbeiterportal</span><h2>Benachrichtigungen</h2></div><button type="button" data-close-notifications>×</button></div>
+        <div class="notification-toolbar"><button class="text-button" id="markAllNotificationsRead" type="button">Alle als gelesen markieren</button></div>
+        <div class="notification-list" id="notificationList"></div>
+        <div class="dialog-actions"><button type="button" data-close-notifications>Schließen</button></div>
       </form>
     </dialog>
     <script src="/portal.js"></script>

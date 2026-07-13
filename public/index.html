@@ -29,7 +29,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.49 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.50 Beta</span></div>
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
@@ -150,7 +150,7 @@
           <section class="request-workflow-summary" id="requestWorkflowSummary"></section>
           <section class="vacation-panel request-management-panel">
             <div class="request-management-toolbar">
-              <div class="request-kind-tabs"><button class="active" data-request-kind-tab="vacation" type="button">Urlaub <span id="vacationRequestCount">0</span></button><button data-request-kind-tab="time_off" type="button">Zeitausgleich <span id="timeOffRequestCount">0</span></button></div>
+              <div class="request-kind-tabs"><button class="active" data-request-kind-tab="vacation" type="button">Urlaub <span id="vacationRequestCount">0</span></button><button data-request-kind-tab="time_off" type="button">Zeitausgleich <span id="timeOffRequestCount">0</span></button><button data-request-kind-tab="amu" type="button">AMU <span id="amuRequestCount">0</span></button></div>
               <label class="field request-status-filter"><span>Status</span><select id="requestStatusFilter"><option value="actionable">Zu bearbeiten</option><option value="pending_local">Offen</option><option value="preliminary_local">Vorläufig genehmigt</option><option value="pending_hr">Wartet auf Personalleitung</option><option value="approved">Genehmigt</option><option value="rejected">Abgelehnt</option><option value="cancelled">Storniert</option><option value="all">Alle</option></select></label>
             </div>
             <div class="manager-request-list" id="managerVacationRequestList"><p class="settings-note">Anträge werden geladen.</p></div>
@@ -536,7 +536,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.49 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.50 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -715,9 +715,10 @@
       <form method="dialog" id="requestActionForm">
         <div class="modal-header"><div><span class="eyebrow">Antragsverwaltung</span><h2 id="requestActionTitle">Antrag bearbeiten</h2><p id="requestActionSummary"></p></div><button type="button" class="close-button" data-close="requestActionModal">×</button></div>
         <div class="request-action-history" id="requestActionHistory"></div>
+        <div class="request-action-documents hidden" id="requestActionDocuments"></div>
         <div class="form-grid hidden" id="requestEditFields"><label class="field" id="requestEditDateFromField"><span>Neu von</span><input id="requestEditDateFrom" type="date" /></label><label class="field" id="requestEditDateToField"><span>Neu bis</span><input id="requestEditDateTo" type="date" /></label><label class="field hidden" id="requestEditTimeField"><span>Neue Uhrzeit</span><span class="request-time-fields"><input id="requestEditStartTime" type="time" step="900" /><span>–</span><input id="requestEditEndTime" type="time" step="900" /></span></label></div>
         <label class="field full-width"><span>Entscheidungsbemerkung</span><textarea id="requestActionNote" rows="4" maxlength="500" placeholder="Optional"></textarea></label>
-        <div class="request-action-buttons"><button class="danger-button" data-request-action="reject" type="button">Ablehnen</button><button class="secondary-button" data-request-action="preliminary" type="button">Vorläufig genehmigen</button><button class="primary-button" data-request-action="approve" type="button">Genehmigen / weiterleiten</button><button class="primary-button hidden" data-request-action="change" id="changeApprovedRequestButton" type="button">Änderung speichern</button><button class="secondary-button hidden" data-request-action="cancel" id="cancelApprovedRequestButton" type="button">Genehmigten Antrag stornieren</button></div>
+        <div class="request-action-buttons"><button class="danger-button" data-request-action="reject" type="button">Ablehnen</button><button class="secondary-button" data-request-action="preliminary" type="button">Vorläufig genehmigen</button><button class="primary-button" data-request-action="approve" type="button">Genehmigen / weiterleiten</button><button class="primary-button hidden" data-request-action="change" id="changeApprovedRequestButton" type="button">Änderung speichern</button><button class="secondary-button hidden" data-request-action="cancel" id="cancelApprovedRequestButton" type="button">Genehmigten Antrag stornieren</button><button class="primary-button hidden" data-amu-action="reviewed" type="button">Als geprüft markieren</button></div>
       </form>
     </dialog>
 

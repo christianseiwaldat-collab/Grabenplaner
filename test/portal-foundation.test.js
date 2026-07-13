@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const crypto = require("node:crypto");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
@@ -231,6 +232,7 @@ test("produktiver Start bleibt auf Loopback und blockiert externe Bindung", asyn
       PORT: String(port),
       DB_PATH: path.join(childRoot, "dienstplan.db"),
       BACKUP_DIR: path.join(childRoot, "backups"),
+      GRABENPLANER_DATA_DIR: path.join(childRoot, "app-data"),
       GRABENPLANER_HOST: "127.0.0.1",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -289,9 +291,12 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
       PORT: String(port),
       DB_PATH: childDatabase,
       BACKUP_DIR: path.join(childRoot, "backups"),
+      GRABENPLANER_DATA_DIR: path.join(childRoot, "app-data"),
       GRABENPLANER_HOST: "127.0.0.1",
       GRABENPLANER_FORCE_PORTAL: "1",
       GRABENPLANER_SEED_DEMO: "1",
+      NODE_ENV: "test",
+      GRABENPLANER_TEST_AMU_SCANNER: "clean",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -550,6 +555,65 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     assert.equal(hrPlTimeOffApproval.status, 200, await hrPlTimeOffApproval.clone().text());
     assert.equal((await hrPlTimeOffApproval.json()).request.status, "approved");
 
+    const withdrawnVacationResponse = await fetch(`${url}/api/portal/v1/me/vacation-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+      body: JSON.stringify({ dateFrom: "2027-06-07", dateTo: "2027-06-11", note: "Wird zurückgezogen" }),
+    });
+    assert.equal(withdrawnVacationResponse.status, 201, await withdrawnVacationResponse.clone().text());
+    const withdrawnVacation = await withdrawnVacationResponse.json();
+    const withdrawResponse = await fetch(`${url}/api/portal/v1/me/vacation-requests/${withdrawnVacation.id}`, {
+      method: "DELETE", headers: { Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+    });
+    assert.equal(withdrawResponse.status, 204, await withdrawResponse.clone().text());
+    const historyResponse = await fetch(`${url}/api/portal/v1/me/absence-history`, { headers: { Cookie: employee.cookie } });
+    assert.equal(historyResponse.status, 200, await historyResponse.clone().text());
+    const history = await historyResponse.json();
+    const withdrawnHistory = history.items.find((item) => item.kind === "vacation" && item.id === withdrawnVacation.id);
+    assert.equal(withdrawnHistory.status, "withdrawn");
+    assert.ok(withdrawnHistory.decisions.some((item) => item.action === "withdraw"));
+
+    const amuForm = new FormData();
+    amuForm.append("incapacityFrom", "2027-03-11");
+    amuForm.append("incapacityTo", "2027-03-13");
+    amuForm.append("employeeNote", "Arbeitsunfähig");
+    const onePixelPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
+    amuForm.append("documents", new Blob([onePixelPng], { type: "image/png" }), "amu-test.png");
+    const amuUploadResponse = await fetch(`${url}/api/portal/v1/me/amu-reports`, {
+      method: "POST", headers: { Cookie: employee.cookie, "X-CSRF-Token": employee.csrf }, body: amuForm,
+    });
+    assert.equal(amuUploadResponse.status, 201, await amuUploadResponse.clone().text());
+    const amuUpload = await amuUploadResponse.json();
+    assert.equal(amuUpload.report.status, "submitted");
+    assert.equal(amuUpload.report.employee_note, "Arbeitsunfähig");
+    assert.equal(amuUpload.report.documents.length, 1);
+    const amuDocument = amuUpload.report.documents[0];
+
+    const ownAmuContent = await fetch(`${url}/api/portal/v1/me/amu-reports/${amuUpload.report.id}/documents/${amuDocument.id}/content`, { headers: { Cookie: employee.cookie } });
+    assert.equal(ownAmuContent.status, 200, await ownAmuContent.clone().text());
+    assert.deepEqual(Buffer.from(await ownAmuContent.arrayBuffer()).subarray(0, 8), onePixelPng.subarray(0, 8));
+
+    const adminAmuResponse = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: admin.cookie } });
+    assert.equal(adminAmuResponse.status, 200, await adminAmuResponse.clone().text());
+    assert.equal((await adminAmuResponse.json()).pendingCount, 1);
+    const reviewAmuResponse = await fetch(`${url}/api/portal/v1/amu-reports/${amuUpload.report.id}/review`, {
+      method: "PUT", headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ action: "reviewed", note: "Geprüft" }),
+    });
+    assert.equal(reviewAmuResponse.status, 200, await reviewAmuResponse.clone().text());
+    assert.equal((await reviewAmuResponse.json()).report.status, "reviewed");
+
+    const employeeNotificationsResponse = await fetch(`${url}/api/portal/v1/me/notifications`, { headers: { Cookie: employee.cookie } });
+    assert.equal(employeeNotificationsResponse.status, 200, await employeeNotificationsResponse.clone().text());
+    const employeeNotifications = await employeeNotificationsResponse.json();
+    assert.ok(employeeNotifications.notifications.some((item) => item.event_type === "amu.review"));
+
+    const encryptedBlobs = fs.readdirSync(path.join(childRoot, "app-data", "private", "amu", "blobs"), { recursive: true })
+      .filter((name) => String(name).endsWith(".amu"));
+    assert.equal(encryptedBlobs.length, 1);
+    const encryptedContent = fs.readFileSync(path.join(childRoot, "app-data", "private", "amu", "blobs", encryptedBlobs[0]));
+    assert.equal(encryptedContent.includes(onePixelPng.subarray(0, 8)), false);
+
     const exitResponse = await fetch(`${url}/api/system/exit`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
@@ -558,6 +622,13 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     assert.equal(exitResponse.status, 200, await exitResponse.clone().text());
     const exit = await waitForExit(child);
     assert.equal(exit.code, 0, stderr);
+    const backupRoot = path.join(childRoot, "backups");
+    const latestBackup = fs.readdirSync(backupRoot).filter((name) => /^dienstplan-.*\.db$/.test(name)).sort().at(-1);
+    assert.ok(latestBackup);
+    const amuSnapshot = path.join(backupRoot, `${path.basename(latestBackup, ".db")}.amu`);
+    const amuManifest = JSON.parse(fs.readFileSync(path.join(amuSnapshot, "manifest.json"), "utf8"));
+    assert.equal(amuManifest.database.fileName, latestBackup);
+    assert.equal(amuManifest.database.sha256, crypto.createHash("sha256").update(fs.readFileSync(path.join(backupRoot, latestBackup))).digest("hex"));
 
     const verified = new DatabaseSync(childDatabase);
     const storedRequest = verified.prepare("SELECT status, vacation_group_id FROM vacation_requests WHERE id = ?").get(vacationRequest.id);
@@ -570,6 +641,11 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const storedTimeOff = verified.prepare("SELECT status, option_id FROM time_off_requests WHERE id = ?").get(timeOffRequest.id);
     assert.equal(storedTimeOff.status, "approved");
     assert.ok(storedTimeOff.option_id);
+    const storedAmu = verified.prepare("SELECT employee_note, review_note FROM amu_reports WHERE id = ?").get(amuUpload.report.id);
+    const storedAmuDocument = verified.prepare("SELECT original_filename FROM amu_documents WHERE report_id = ?").get(amuUpload.report.id);
+    assert.match(storedAmu.employee_note, /^enc:v1:/);
+    assert.match(storedAmu.review_note, /^enc:v1:/);
+    assert.match(storedAmuDocument.original_filename, /^enc:v1:/);
     const storedPlTimeOff = verified.prepare("SELECT status, approval_type, local_approved_by, hr_approved_by FROM time_off_requests WHERE id = ?").get(plTimeOff.id);
     assert.equal(storedPlTimeOff.status, "approved");
     assert.equal(storedPlTimeOff.approval_type, "hr");
@@ -618,6 +694,7 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
 
   const port = await getFreePort();
   const publicAddress = "https://plan.example.test";
+  const serviceControlToken = "test-service-control-token-0123456789abcdef";
   const serverEnvironment = {
     ...process.env,
     PORT: String(port),
@@ -627,6 +704,12 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     GRABENPLANER_OPERATION_MODE: "server",
     GRABENPLANER_PUBLIC_URL: publicAddress,
     GRABENPLANER_TRUST_PROXY: "loopback",
+    GRABENPLANER_DATA_DIR: path.join(childRoot, "server-data"),
+    GRABENPLANER_AMU_KEY_ID: "test-v1",
+    GRABENPLANER_AMU_KEY: Buffer.alloc(32, 7).toString("base64"),
+    NODE_ENV: "test",
+    GRABENPLANER_TEST_AMU_SCANNER: "clean",
+    GRABENPLANER_SERVICE_CONTROL_TOKEN: serviceControlToken,
   };
   const child = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
     cwd: path.join(__dirname, ".."), windowsHide: true, env: serverEnvironment, stdio: ["ignore", "pipe", "pipe"],
@@ -723,7 +806,12 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     const exitResponse = await fetch(`${url}/api/system/exit`, {
       method: "POST", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf }, body: "{}",
     });
-    assert.equal(exitResponse.status, 200, await exitResponse.clone().text());
+    assert.equal(exitResponse.status, 409, await exitResponse.clone().text());
+    assert.equal((await exitResponse.json()).code, "SERVER_MANAGED_SHUTDOWN");
+    const serviceStopResponse = await fetch(`${url}/api/service/stop`, {
+      method: "POST", headers: { "X-Grabenplaner-Service-Token": serviceControlToken }, body: "",
+    });
+    assert.equal(serviceStopResponse.status, 200, await serviceStopResponse.clone().text());
     assert.equal((await waitForExit(child)).code, 0, stderr);
     assert.equal(fs.existsSync(`${path.resolve(childDatabase)}.server.lock`), false);
   } finally {
