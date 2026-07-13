@@ -72,8 +72,17 @@ fi
 if [[ -z "${RUNNER_PID}" ]]; then
   rm -f -- "${READY_FILE}"
   cd -- "${REPOSITORY_ROOT}"
-  nohup node "${REPOSITORY_ROOT}/scripts/codespaces-runner.js" >> "${LOG_FILE}" 2>&1 < /dev/null &
-  RUNNER_PID="$!"
+  # Codespaces beendet nach dem Lifecycle-Hook dessen Prozessgruppe. Eine
+  # eigene Sitzung hält den Runner davon unabhängig dauerhaft am Leben.
+  nohup setsid -f node "${REPOSITORY_ROOT}/scripts/codespaces-runner.js" >> "${LOG_FILE}" 2>&1 < /dev/null
+  for _ in $(seq 1 40); do
+    if [[ -f "${PID_FILE}" ]]; then
+      RUNNER_PID="$(tr -d '[:space:]' < "${PID_FILE}")"
+      runner_is_alive "${RUNNER_PID}" && break
+    fi
+    RUNNER_PID=""
+    sleep 0.25
+  done
 fi
 
 for _ in $(seq 1 120); do
