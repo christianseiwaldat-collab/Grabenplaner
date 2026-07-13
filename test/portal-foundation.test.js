@@ -410,14 +410,19 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     assert.equal(adminLogin.status, 200, await adminLogin.clone().text());
     const admin = sessionHeaders(adminLogin);
 
-    const brandingExport = await fetch(`${url}/api/branding/export.zip?locationId=01`, { headers: { Cookie: admin.cookie } });
-    assert.equal(brandingExport.status, 200, await brandingExport.clone().text());
-    const brandingImport = await fetch(`${url}/api/branding/import.zip?locationId=01`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/zip", "X-Branding-Filename": "roundtrip.zip", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
-      body: await brandingExport.arrayBuffer(),
-    });
-    assert.equal(brandingImport.status, 200, await brandingImport.clone().text());
+    // Branding-ZIP-Dateien werden in der portablen Windows-App bewusst mit
+    // PowerShell gepackt. Codespaces prüft die plattformneutralen Portalabläufe;
+    // der ZIP-Roundtrip bleibt Teil der vollständigen Windows-Testsuite.
+    if (process.platform === "win32") {
+      const brandingExport = await fetch(`${url}/api/branding/export.zip?locationId=01`, { headers: { Cookie: admin.cookie } });
+      assert.equal(brandingExport.status, 200, await brandingExport.clone().text());
+      const brandingImport = await fetch(`${url}/api/branding/import.zip?locationId=01`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/zip", "X-Branding-Filename": "roundtrip.zip", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+        body: await brandingExport.arrayBuffer(),
+      });
+      assert.equal(brandingImport.status, 200, await brandingImport.clone().text());
+    }
 
     const createEmployeeAccess = await fetch(`${url}/api/portal/v1/users/102`, {
       method: "PUT",
