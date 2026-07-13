@@ -357,6 +357,7 @@ function setDefaultContext(locations) {
     state.departmentId = "";
   }
   const departments = departmentsForLocation(state.locationId);
+  if (state.portalSession?.user?.role === "department_manager" && !state.departmentId && departments.length) state.departmentId = String(departments[0].id);
   if (state.departmentId && !departments.some((department) => String(department.id) === String(state.departmentId))) {
     state.departmentId = "";
   }
@@ -397,6 +398,11 @@ async function api(url, options = {}) {
   return response.status === 204 ? null : response.json();
 }
 
+function csrfHeader() {
+  const value = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("grabenplaner_csrf="))?.split("=").slice(1).join("=");
+  return value ? { "X-CSRF-Token": decodeURIComponent(value) } : {};
+}
+
 function showLoginGate(message = "") {
   document.body.classList.add("portal-locked");
   elements.loginGate?.classList.remove("hidden");
@@ -417,7 +423,11 @@ function applyRoleVisibility() {
   const lanActive = state.portalStatus?.portalEnabled === true;
   const serverActive = state.portalStatus?.operationMode === "server";
   const adminAccess = !lanActive || permissions.includes("settings:write");
-  document.querySelectorAll('[data-view="personnel"],[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !adminAccess));
+  const scopeAccess = permissions.includes("scopes:write");
+  document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !adminAccess));
+  document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !(adminAccess || scopeAccess)));
+  document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("hidden", scopeAccess && !adminAccess && button.dataset.settingsTab !== "access"));
+  elements.saveSettingsButton?.classList.toggle("hidden", scopeAccess && !adminAccess);
   elements.systemExitButton?.classList.toggle("hidden", serverActive || (lanActive && !adminAccess));
   elements.updateCheckButton?.classList.toggle("hidden", lanActive && !adminAccess);
 }
@@ -519,16 +529,29 @@ async function setupPortalAdmin(event) {
 async function savePortalUser(row) {
   const employeeNumber = row.dataset.portalUser;
   try {
-    const result = await api(`/api/portal/v1/users/${encodeURIComponent(employeeNumber)}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        role: row.querySelector("[data-portal-role]").value,
-        active: row.querySelector("[data-portal-active]").checked,
-        password: row.querySelector("[data-portal-password]").value,
-        mustChangePassword: true,
-      }),
-    });
-    state.portalUsers = result.users || [];
+    const mayManageUsers = state.portalSession?.user?.permissions?.includes("users:write") || !state.portalStatus?.portalEnabled;
+    if (mayManageUsers) {
+      const result = await api(`/api/portal/v1/users/${encodeURIComponent(employeeNumber)}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          role: row.querySelector("[data-portal-role]").value,
+          active: row.querySelector("[data-portal-active]").checked,
+          password: row.querySelector("[data-portal-password]").value,
+          mustChangePassword: true,
+        }),
+      });
+      state.portalUsers = result.users || [];
+    }
+    const role = row.querySelector("[data-portal-role]").value;
+    if (["manager", "department_manager"].includes(role)) {
+      const locationId = row.querySelector("[data-scope-location]").value;
+      const departmentId = role === "department_manager" ? row.querySelector("[data-scope-department]").value : "";
+      const scoped = await api(`/api/portal/v1/users/${encodeURIComponent(employeeNumber)}/scopes`, {
+        method: "PUT",
+        body: JSON.stringify({ scopes: [{ locationId, departmentId }] }),
+      });
+      state.portalUsers = scoped.users || state.portalUsers;
+    }
     showToast(`Zugang ${employeeNumber} wurde gespeichert.`);
     await loadPortalUsers();
   } catch (error) { showToast(error.message, true); }
@@ -579,7 +602,7 @@ async function loadAll() {
     if (!state.desiredOperationMode) state.desiredOperationMode = ["lan", "server"].includes(portalStatus?.operationMode) ? portalStatus.operationMode : "local";
     setDefaultContext(state.locations);
     const scheduleContext = contextQuery(true);
-    const vacationContext = contextQuery(false);
+    const vacationContext = contextQuery(state.portalSession?.user?.role === "department_manager");
     const [schedule, employees, vacationData] = await Promise.all([
       api(`/api/schedule?week=${state.weekStart}${scheduleContext}`),
       api("/api/employees"),
@@ -618,22 +641,27 @@ function render() {
 
 function renderContextNavigation() {
   const locations = activeLocations();
-  const planningContexts = locations.map((location) => ({
-    locationId: location.id,
-    departmentId: "",
-    label: `${location.name} · Gesamtplan`,
-  }));
+  const departmentOnly = state.portalSession?.user?.role === "department_manager";
+  const planningContexts = locations.flatMap((location) => departmentOnly
+    ? (location.departments || []).map((department) => ({ locationId: location.id, departmentId: String(department.id), label: `${location.name} · ${department.name}` }))
+    : [{ locationId: location.id, departmentId: "", label: `${location.name} · Gesamtplan` }]);
   const showPlanningChildren = planningContexts.length > 1;
-  elements.planningNavChildren.classList.toggle("hidden", !showPlanningChildren);
+  const planningOpen = localStorage.getItem("grabenplaner-nav-planning") !== "closed";
+  elements.planningNavChildren.classList.toggle("hidden", !showPlanningChildren || !planningOpen);
+  document.querySelector('[data-nav-toggle="planning"]')?.classList.toggle("hidden", !showPlanningChildren);
   elements.planningNavChildren.innerHTML = showPlanningChildren ? planningContexts.map((item) => `
     <button type="button" class="nav-child ${item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? "active" : ""}" data-context-view="planning" data-location-id="${escapeHtml(item.locationId)}" data-department-id="${escapeHtml(item.departmentId)}">${escapeHtml(item.label)}</button>
   `).join("") : "";
 
   const showVacationChildren = locations.length > 1;
-  elements.vacationNavChildren.classList.toggle("hidden", !showVacationChildren);
+  const vacationOpen = localStorage.getItem("grabenplaner-nav-vacations") !== "closed";
+  elements.vacationNavChildren.classList.toggle("hidden", !showVacationChildren || !vacationOpen);
+  document.querySelector('[data-nav-toggle="vacations"]')?.classList.toggle("hidden", !showVacationChildren);
   elements.vacationNavChildren.innerHTML = showVacationChildren ? locations.map((location) => `
-    <button type="button" class="nav-child ${location.id === state.locationId ? "active" : ""}" data-context-view="vacations" data-location-id="${escapeHtml(location.id)}" data-department-id="">${escapeHtml(location.name)}</button>
+    <button type="button" class="nav-child ${location.id === state.locationId ? "active" : ""}" data-context-view="vacations" data-location-id="${escapeHtml(location.id)}" data-department-id="${departmentOnly ? escapeHtml(String(location.departments?.[0]?.id || "")) : ""}">${escapeHtml(location.name)}</button>
   `).join("") : "";
+  document.querySelector('[data-nav-toggle="planning"]')?.replaceChildren(document.createTextNode(planningOpen ? "−" : "+"));
+  document.querySelector('[data-nav-toggle="vacations"]')?.replaceChildren(document.createTextNode(vacationOpen ? "−" : "+"));
 }
 
 function renderHeader() {
@@ -733,7 +761,8 @@ function renderTimeline() {
     const lanes = employees.length
       ? employees.map((employee) => {
           const dayOptions = specialCasesFor(employee.personnel_number, date);
-          const specialCase = dayOptions.find(optionIsAllDay);
+          const specialCase = dayOptions.find((option) => optionIsAllDay(option) && !option.soft_pending);
+          const softPending = dayOptions.find((option) => optionIsAllDay(option) && option.soft_pending);
           const fixedUnavailable = !employeeCanWorkOnDate(employee, date);
           const unavailable = Boolean(locked || globalBlock || specialCase || fixedUnavailable);
           const unavailableText = locked
@@ -752,8 +781,9 @@ function renderTimeline() {
             const top = ((optionStart - start) / range) * 100;
             const height = Math.max(2.5, ((optionEnd - optionStart) / range) * 100);
             const title = `${optionLabels[option.option_type]} · ${formatOptionTime(option)}${option.note ? ` – ${option.note}` : ""}`;
-            return `<span class="option-block" data-option-title="${escapeHtml(title)}" style="top:${top}%;height:${height}%"><em>${escapeHtml(optionLabels[option.option_type])}</em></span>`;
+            return `<span class="option-block ${option.soft_pending ? "soft-pending-option" : ""}" data-option-title="${escapeHtml(title)}" style="top:${top}%;height:${height}%"><em>${escapeHtml(option.soft_pending ? "ZA beantragt" : optionLabels[option.option_type])}</em></span>`;
           }).join("");
+          const softPendingBlock = softPending ? '<span class="option-block soft-pending-option soft-pending-all-day"><em>ZA beantragt</em></span>' : "";
           const shifts = state.data.shifts.filter((shift) => shift.shift_date === date && shift.employee_number === employee.personnel_number);
           const bars = shifts.map((shift) => {
             const barStart = Math.max(start, timeToMinutes(shift.start_time));
@@ -770,7 +800,7 @@ function renderTimeline() {
               : specialCase
                 ? optionLabels[specialCase.option_type]
                 : "frei";
-          return `<div class="employee-lane ${specialCase ? "unavailable" : ""} ${fixedUnavailable ? "fixed-unavailable" : ""} ${globalBlock ? "global-unavailable" : ""} ${locked ? "locked-unavailable" : ""}" ${unavailable ? "" : `data-employee-number="${escapeHtml(employee.personnel_number)}" data-date="${date}"`} title="${escapeHtml(unavailableText)}">${bars}${optionBlocks}${unavailable ? `<span class="unavailable-mark">${escapeHtml(unavailableLabel)}</span>` : ""}</div>`;
+          return `<div class="employee-lane ${specialCase ? "unavailable" : ""} ${fixedUnavailable ? "fixed-unavailable" : ""} ${globalBlock ? "global-unavailable" : ""} ${locked ? "locked-unavailable" : ""}" ${unavailable ? "" : `data-employee-number="${escapeHtml(employee.personnel_number)}" data-date="${date}"`} title="${escapeHtml(unavailableText)}">${bars}${optionBlocks}${softPendingBlock}${unavailable ? `<span class="unavailable-mark">${escapeHtml(unavailableLabel)}</span>` : ""}</div>`;
         }).join("")
       : '<div class="employee-lane"></div>';
 
@@ -867,7 +897,7 @@ function updateVacationControls(range) {
     quarter: String(state.vacationQuarter),
     month: String(state.vacationMonth),
   });
-  const locationParams = contextSearchParams(false);
+  const locationParams = contextSearchParams(state.portalSession?.user?.role === "department_manager");
   locationParams.forEach((value, key) => parameters.set(key, value));
   elements.vacationPdfButton.href = `/api/vacations.pdf?${parameters.toString()}`;
   elements.vacationTitle.textContent = range.label;
@@ -1113,7 +1143,7 @@ function renderServerDiagnostics(info) {
       <span><small>Instanzschutz</small><strong>${info.instanceLock?.held ? "aktiv" : info.instanceLock?.enabled ? "beim Serverstart" : "nicht nötig"}</strong></span>
       <span><small>Aktive Sitzungen</small><strong>${Number(info.security?.activeSessions || 0)}</strong></span>
       <span><small>Letztes Backup geprüft</small><strong>${info.backups?.lastVerified ? "ja" : "noch ausständig"}</strong></span>
-      <span><small>AMU-Speicher</small><strong>${info.storage?.amu?.ok ? "verschlüsselt bereit" : "nicht bereit"}</strong></span>
+      <span><small>AUM-Speicher</small><strong>${info.storage?.amu?.ok ? "verschlüsselt bereit" : "nicht bereit"}</strong></span>
       <span><small>Backupziel</small><strong>${info.backups?.externalWritable ? "beschreibbar" : "prüfen"}</strong></span>
     </div>
     <div class="pilot-checklist"><strong>Server-Pilotbereitschaft</strong>${(info.pilotChecks || []).map((check) => `<span class="${check.ok ? "ok" : "warning"}"><i>${check.ok ? "✓" : "!"}</i><b>${escapeHtml(check.label)}</b><small>${escapeHtml(check.detail || "")}</small></span>`).join("")}</div>${warnings}`;
@@ -1189,11 +1219,13 @@ function renderLocations() {
     `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`,
   ).join("");
   if (!elements.departmentLocation.value && state.locationId) elements.departmentLocation.value = state.locationId;
+  if (!state.editingLocationId) setLocationDayFields(currentLocation()?.day_settings || locations[0]?.day_settings || {});
   elements.locationList.innerHTML = locations.length ? locations.map((location) => {
     const departments = location.departments || [];
+    const openingSummary = planningDayKeys.filter((day) => location.day_settings?.[day]?.open !== false).map((day) => `${preferredDayLabels[day]?.slice(0, 2) || (day === "saturday" ? "Sa" : day.slice(0, 2))} ${location.day_settings?.[day]?.start || "–"}–${location.day_settings?.[day]?.end || "–"}`).join(" · ");
     return `<article class="location-card">
       <div class="location-card-head">
-        <div><strong>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</strong><small>${location.active ? "Aktiv" : "Inaktiv"} · ${departments.length} Abteilung(en) · Mindestbesetzung Filiale: ${Number(location.min_staff || 0)}</small></div>
+        <div><strong>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</strong><small>${location.active ? "Aktiv" : "Inaktiv"} · ${departments.length} Abteilung(en) · Mindestbesetzung Filiale: ${Number(location.min_staff || 0)}</small><small>${escapeHtml(openingSummary)}</small></div>
         <button type="button" class="edit-button" data-edit-location="${escapeHtml(location.id)}">Filiale bearbeiten</button>
       </div>
       <div class="department-list">${
@@ -1269,18 +1301,6 @@ function renderSettings() {
   document.querySelector("#saturdayBonusEnabled").checked = settings.saturday_bonus_enabled === "1";
   document.querySelector("#saturdayBonusFrom").value = settings.saturday_bonus_from;
   document.querySelector("#saturdayBonusFactor").value = settings.saturday_bonus_factor;
-  document.querySelectorAll("[data-day-settings]").forEach((row) => {
-    const day = row.dataset.daySettings;
-    row.querySelector('[data-field="start"]').value = settings[`${day}_start_time`];
-    row.querySelector('[data-field="end"]').value = settings[`${day}_end_time`];
-    row.querySelector('[data-field="lunchEnabled"]').checked = settings[`${day}_lunch_enabled`] === "1";
-    row.querySelector('[data-field="lunchStart"]').value = settings[`${day}_lunch_start`];
-    row.querySelector('[data-field="lunchEnd"]').value = settings[`${day}_lunch_end`];
-    row.querySelector('[data-field="minStaff"]').value = settings[`${day}_min_staff`];
-    row.querySelector('[data-field="minFrom"]').value = settings[`${day}_min_from`];
-    row.querySelector('[data-field="minTo"]').value = settings[`${day}_min_to`];
-    document.querySelector(`#${day}Open`).checked = settings[`${day}_open`] !== "0";
-  });
   document.querySelector("#showSunday").checked = settings.show_sunday === "1";
   renderOperationMode();
   updatePdfPreview();
@@ -1346,20 +1366,27 @@ async function loadPortalUsers() {
   try {
     const result = await api("/api/portal/v1/users");
     state.portalUsers = result.users || [];
-    const roles = result.roles || [];
+    const actorRole = state.portalSession?.user?.role;
+    const roles = (result.roles || []).filter((role) => actorRole === "manager" ? role.id === "department_manager" : actorRole !== "hr" || ["employee", "manager", "department_manager"].includes(role.id));
     elements.accessSettingsHint.textContent = state.portalStatus?.adminSetupState === "configured"
       ? "Startpasswörter werden nie angezeigt. Ein neu gesetztes Passwort muss beim ersten Login geändert werden."
       : "Zuerst einen Admin einrichten; danach können weitere Zugänge vorbereitet werden.";
     elements.adminSetupButton.classList.toggle("hidden", state.portalStatus?.adminSetupState === "configured");
-    elements.portalUserList.innerHTML = state.portalUsers.map((user) => `
+    elements.portalUserList.innerHTML = state.portalUsers.map((user) => {
+      const scope = user.scopes?.[0] || { locationId: user.homeLocationId || state.locations[0]?.id || "", departmentId: user.preferredDepartmentId || "" };
+      const locations = state.locations.map((location) => `<option value="${escapeHtml(location.id)}" ${location.id === scope.locationId ? "selected" : ""}>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("");
+      const departments = (state.locations.find((location) => location.id === scope.locationId)?.departments || []).map((department) => `<option value="${department.id}" ${Number(department.id) === Number(scope.departmentId) ? "selected" : ""}>${escapeHtml(department.name)}</option>`).join("");
+      return `
       <article class="portal-user-row" data-portal-user="${escapeHtml(user.employeeNumber)}">
         <div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${user.passwordConfigured ? "Zugang eingerichtet" : "Noch kein Passwort"}${user.lastLoginAt ? ` · zuletzt ${escapeHtml(new Date(user.lastLoginAt).toLocaleString("de-AT"))}` : ""}${user.locked ? ` · gesperrt bis ${escapeHtml(new Date(user.lockedUntil).toLocaleString("de-AT"))}` : user.failedLoginAttempts ? ` · ${Number(user.failedLoginAttempts)} Fehlversuch(e)` : ""}</small></div>
-        <select data-portal-role aria-label="Rolle">${roles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === user.role ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("")}</select>
-        <label class="portal-active"><input data-portal-active type="checkbox" ${user.active ? "checked" : ""} /> aktiv</label>
-        <span class="password-field portal-user-password"><input data-portal-password id="portalPassword-${escapeHtml(user.employeeNumber)}" type="password" minlength="${Number(state.portalStatus?.passwordMinLength || 6)}" placeholder="Neues Startpasswort" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-toggle="portalPassword-${escapeHtml(user.employeeNumber)}" aria-label="Passwort anzeigen">Anzeigen</button></span>
+        <select data-portal-role aria-label="Rolle" ${actorRole === "manager" ? "disabled" : ""}>${roles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === user.role ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("")}</select>
+        <select data-scope-location aria-label="Zugewiesene Filiale" class="${["manager", "department_manager"].includes(user.role) ? "" : "hidden"}">${locations}</select>
+        <select data-scope-department aria-label="Zugewiesene Abteilung" class="${user.role === "department_manager" ? "" : "hidden"}">${departments}</select>
+        <label class="portal-active"><input data-portal-active type="checkbox" ${user.active ? "checked" : ""} ${actorRole === "manager" ? "disabled" : ""} /> aktiv</label>
+        <span class="password-field portal-user-password ${actorRole === "manager" ? "hidden" : ""}"><input data-portal-password id="portalPassword-${escapeHtml(user.employeeNumber)}" type="password" minlength="${Number(state.portalStatus?.passwordMinLength || 6)}" placeholder="Neues Startpasswort" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-toggle="portalPassword-${escapeHtml(user.employeeNumber)}" aria-label="Passwort anzeigen">Anzeigen</button></span>
         <span class="portal-user-actions"><button class="secondary-button" data-save-portal-user type="button">Speichern</button>${user.locked || user.failedLoginAttempts ? '<button class="secondary-button" data-unlock-portal-user type="button">Entsperren</button>' : ""}</span>
-      </article>
-    `).join("");
+      </article>`;
+    }).join("");
     await loadApprovalDelegations();
   } catch (error) {
     elements.accessSettingsHint.textContent = error.status === 403 ? "Nur Admins dürfen Portal-Zugänge verwalten." : error.message;
@@ -1450,7 +1477,7 @@ function renderRequestNavigation() {
   elements.requestWorkflowSummary.innerHTML = `
     <article><span>Urlaub offen</span><strong>${counts.vacation}</strong></article>
     <article><span>ZA offen</span><strong>${counts.timeOff}</strong></article>
-    <article><span>AMU neu</span><strong>${counts.amu || 0}</strong></article>
+    <article><span>AUM neu</span><strong>${counts.amu || 0}</strong></article>
     <article><span>Urlaubs-Zweitfreigabe</span><strong>${state.workflowSettings?.vacationHrApprovalRequired ? "Aktiv" : "Nicht aktiv"}</strong>${state.workflowSettings?.canChange ? `<button type="button" class="text-action" data-toggle-hr-workflow>${state.workflowSettings.vacationHrApprovalRequired ? "Deaktivieren" : "Aktivieren"}</button>` : ""}</article>`;
 }
 
@@ -1482,15 +1509,15 @@ function renderManagerRequests() {
         : `<span>${escapeHtml(document.original_name || "Dokument")} · ${Math.max(1, Math.round(Number(document.size || 0) / 1024))} KB</span>`).join("");
       return `<article class="manager-request-row amu-request-row" data-amu-report="${report.id}">
         <span class="employee-dot" style="--employee-color:${escapeHtml(report.color || "#507267")}"></span>
-        <div><strong><span class="request-kind-badge amu">AMU</span> ${escapeHtml(report.employee_number)} · ${escapeHtml(report.nickname || report.full_name)}</strong><small>${formatDate(report.incapacity_from)}–${formatDate(report.incapacity_to)} · ${escapeHtml(report.location_name || "")}${report.employee_note ? ` · ${escapeHtml(report.employee_note)}` : ""}</small><small><span class="request-status ${escapeHtml(report.status)}">${escapeHtml(requestStatusLabels[report.status] || report.status)}</span>${report.reviewed_by ? ` · geprüft von ${escapeHtml(report.reviewed_by)}` : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</small><div class="amu-document-links">${files}</div></div>
-        ${canReview && ["submitted", "returned"].includes(report.status) ? '<button class="secondary-button" data-open-amu-action type="button">AMU bearbeiten</button>' : ""}
+        <div><strong><span class="request-kind-badge amu">AUM</span> ${escapeHtml(report.employee_number)} · ${escapeHtml(report.nickname || report.full_name)}</strong><small>${formatDate(report.incapacity_from)}–${formatDate(report.incapacity_to)} · ${escapeHtml(report.location_name || "")}${report.employee_note ? ` · ${escapeHtml(report.employee_note)}` : ""}</small><small><span class="request-status ${escapeHtml(report.status)}">${escapeHtml(requestStatusLabels[report.status] || report.status)}</span>${report.reviewed_by ? ` · geprüft von ${escapeHtml(report.reviewed_by)}` : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</small><div class="amu-document-links">${files}</div></div>
+        ${canReview && ["submitted", "returned"].includes(report.status) ? '<button class="secondary-button" data-open-amu-action type="button">AUM bearbeiten</button>' : ""}
       </article>`;
     }).join("") : '<p class="settings-note">Für diesen Filter gibt es keine Arbeitsunfähigkeitsmeldungen.</p>';
     return;
   }
   const isTimeOff = state.requestKindTab === "time_off";
   const requests = state.absenceRequests.filter((request) => {
-    const kindMatches = isTimeOff ? request.kind === "time_off" : request.kind !== "time_off";
+    const kindMatches = isTimeOff ? request.kind.startsWith("time_off") : !request.kind.startsWith("time_off");
     const statusMatches = statusFilter === "all" ? true : statusFilter === "actionable" ? requestIsActionable(request) : request.status === statusFilter;
     return kindMatches && statusMatches;
   });
@@ -1507,9 +1534,17 @@ function renderManagerRequests() {
 }
 
 function managerRequestDetails(request) {
+  if (request.kind === "time_off_change") return {
+    label: "ZA ändern",
+    text: `${formatDate(request.original_date_from)}${request.original_date_to !== request.original_date_from ? `–${formatDate(request.original_date_to)}` : ""} → ${formatDate(request.requested_date_from)}${request.requested_date_to !== request.requested_date_from ? `–${formatDate(request.requested_date_to)}` : ""}${request.requested_all_day ? " · ganztägig" : ` · ${escapeHtml(request.requested_start_time)}–${escapeHtml(request.requested_end_time)}`}`,
+  };
+  if (request.kind === "time_off_cancel") return {
+    label: "ZA stornieren",
+    text: `${formatDate(request.original_date_from)}${request.original_date_to !== request.original_date_from ? `–${formatDate(request.original_date_to)}` : ""}${request.original_all_day ? " · ganztägig" : ` · ${escapeHtml(request.original_start_time)}–${escapeHtml(request.original_end_time)}`}`,
+  };
   if (request.kind === "time_off") return {
     label: request.approval_type === "hr" ? "PL-ZA" : "ZA",
-    text: `${formatDate(request.request_date)} · ${escapeHtml(request.start_time)}–${escapeHtml(request.end_time)}`,
+    text: `${formatDate(request.date_from || request.request_date)}${(request.date_to || request.request_date) !== (request.date_from || request.request_date) ? `–${formatDate(request.date_to)}` : ""}${request.all_day ? " · ganztägig" : ` · ${escapeHtml(request.start_time)}–${escapeHtml(request.end_time)}`}`,
   };
   if (request.kind === "vacation_change") return {
     label: "Urlaub ändern",
@@ -1527,7 +1562,7 @@ function openAmuAction(id) {
   if (!report) return;
   state.selectedRequest = null;
   state.selectedAmuReport = report;
-  elements.requestActionTitle.textContent = "AMU bearbeiten";
+  elements.requestActionTitle.textContent = "AUM bearbeiten";
   elements.requestActionSummary.textContent = `${report.employee_number} · ${report.nickname || report.full_name} · ${formatDate(report.incapacity_from)}–${formatDate(report.incapacity_to)}`;
   elements.requestActionNote.value = "";
   elements.requestEditFields.classList.add("hidden");
@@ -1551,7 +1586,7 @@ async function reviewAmu(action) {
     await api(`/api/portal/v1/amu-reports/${report.id}/review`, { method: "PUT", body: JSON.stringify({ action, note: elements.requestActionNote.value }) });
     elements.requestActionModal.close();
     state.selectedAmuReport = null;
-    showToast("Die AMU wurde als geprüft markiert.");
+    showToast("Die AUM wurde als geprüft markiert.");
     await loadAll();
   } catch (error) { showToast(error.message, true); }
 }
@@ -1569,10 +1604,10 @@ function openRequestAction(id, kind) {
   elements.requestEditFields.classList.toggle("hidden", !approved);
   const timeOff = request.kind === "time_off";
   elements.requestEditDateFromField.querySelector("span").textContent = timeOff ? "Neues Datum" : "Neu von";
-  elements.requestEditDateToField.classList.toggle("hidden", timeOff);
-  elements.requestEditTimeField.classList.toggle("hidden", !timeOff);
-  elements.requestEditDateFrom.value = timeOff ? request.request_date : request.date_from;
-  elements.requestEditDateTo.value = timeOff ? "" : request.date_to;
+  elements.requestEditDateToField.classList.toggle("hidden", timeOff && !request.all_day);
+  elements.requestEditTimeField.classList.toggle("hidden", !timeOff || request.all_day);
+  elements.requestEditDateFrom.value = timeOff ? (request.date_from || request.request_date) : request.date_from;
+  elements.requestEditDateTo.value = timeOff ? (request.date_to || request.request_date) : request.date_to;
   elements.requestEditStartTime.value = timeOff ? request.start_time : "";
   elements.requestEditEndTime.value = timeOff ? request.end_time : "";
   elements.requestActionHistory.innerHTML = request.decisions?.length ? request.decisions.map((decision) => `<div><strong>${escapeHtml(decision.actor_employee_number)} · ${escapeHtml(decision.action)}</strong><span>${escapeHtml(new Date(decision.created_at).toLocaleString("de-AT"))}${decision.note ? ` · ${escapeHtml(decision.note)}` : ""}</span></div>`).join("") : '<p>Noch keine Entscheidung protokolliert.</p>';
@@ -1590,7 +1625,8 @@ function openRequestAction(id, kind) {
 async function decideVacationRequest(action) {
   const request = state.selectedRequest;
   if (!request) return;
-  const apiKind = ["vacation_change", "vacation_cancel"].includes(request.kind) ? "vacation_change" : request.kind;
+  const apiKind = ["vacation_change", "vacation_cancel"].includes(request.kind) ? "vacation_change"
+    : ["time_off_change", "time_off_cancel"].includes(request.kind) ? "time_off_change" : request.kind;
   try {
     await api(`/api/portal/v1/absence-requests/${apiKind}/${request.id}/action`, {
       method: "PUT",
@@ -1733,6 +1769,7 @@ function setView(view) {
   elements.vacationsView.classList.toggle("active", view === "vacations");
   elements.personnelView.classList.toggle("active", view === "personnel");
   elements.settingsView.classList.toggle("active", view === "settings");
+  if (view === "settings" && state.portalStatus?.portalEnabled && !state.portalSession?.user?.permissions?.includes("settings:write") && state.portalSession?.user?.permissions?.includes("scopes:write")) setSettingsTab("access");
   if (view === "requests") loadManagerVacationRequests();
 }
 
@@ -2132,6 +2169,7 @@ function resetLocationForm() {
   elements.locationId.disabled = false;
   elements.locationMinStaff.value = 0;
   elements.locationActive.checked = true;
+  setLocationDayFields(currentLocation()?.day_settings || state.locations?.[0]?.day_settings || {});
   elements.locationSubmitButton.textContent = "Filiale anlegen";
   elements.cancelLocationEditButton.classList.add("hidden");
 }
@@ -2143,8 +2181,40 @@ function fillLocationForm(location) {
   elements.locationName.value = location.name;
   elements.locationMinStaff.value = Number(location.min_staff || 0);
   elements.locationActive.checked = Boolean(location.active);
+  setLocationDayFields(location.day_settings || {});
   elements.locationSubmitButton.textContent = "Filiale speichern";
   elements.cancelLocationEditButton.classList.remove("hidden");
+}
+
+function setLocationDayFields(daySettings = {}) {
+  document.querySelectorAll("[data-day-settings]").forEach((row) => {
+    const day = row.dataset.daySettings;
+    const values = daySettings[day] || {};
+    const field = (name) => row.querySelector(`[data-field="${name}"]`);
+    field("start").value = values.start || (day === "saturday" ? "10:00" : "09:00");
+    field("end").value = values.end || (day === "saturday" ? "17:00" : "18:00");
+    field("lunchEnabled").checked = values.lunchEnabled === true;
+    field("lunchStart").value = values.lunchStart || "13:00";
+    field("lunchEnd").value = values.lunchEnd || "14:00";
+    field("minStaff").value = Number(values.minStaff || 0);
+    field("minFrom").value = values.minFrom || field("start").value;
+    field("minTo").value = values.minTo || field("end").value;
+    document.querySelector(`#${day}Open`).checked = values.open !== false;
+  });
+}
+
+function readLocationDayFields() {
+  return Object.fromEntries([...document.querySelectorAll("[data-day-settings]")].map((row) => {
+    const field = (name) => row.querySelector(`[data-field="${name}"]`);
+    return [row.dataset.daySettings, {
+      open: document.querySelector(`#${row.dataset.daySettings}Open`).checked,
+      start: field("start").value, end: field("end").value,
+      lunchEnabled: field("lunchEnabled").checked,
+      lunchStart: field("lunchStart").value, lunchEnd: field("lunchEnd").value,
+      minStaff: Number(field("minStaff").value || 0),
+      minFrom: field("minFrom").value, minTo: field("minTo").value,
+    }];
+  }));
 }
 
 async function saveLocation(event) {
@@ -2159,6 +2229,7 @@ async function saveLocation(event) {
         name: elements.locationName.value,
         minStaff: Number(elements.locationMinStaff.value || 0),
         active: elements.locationActive.checked,
+        daySettings: readLocationDayFields(),
       }),
     });
     resetLocationForm();
@@ -2643,6 +2714,7 @@ async function importBrandingKit() {
         headers: {
           "Content-Type": "application/zip",
           "X-Branding-Filename": encodeURIComponent(file.name),
+          ...csrfHeader(),
         },
         body: await file.arrayBuffer(),
       });
@@ -2690,21 +2762,6 @@ async function applyInstalledBrandingKit(kitId) {
 }
 
 async function saveSettings(silent = false) {
-  const daySettings = {};
-  document.querySelectorAll("[data-day-settings]").forEach((row) => {
-    const field = (name) => row.querySelector(`[data-field="${name}"]`);
-    daySettings[row.dataset.daySettings] = {
-      open: document.querySelector(`#${row.dataset.daySettings}Open`).checked,
-      start: field("start").value,
-      end: field("end").value,
-      lunchEnabled: field("lunchEnabled").checked,
-      lunchStart: field("lunchStart").value,
-      lunchEnd: field("lunchEnd").value,
-      minStaff: Number(field("minStaff").value),
-      minFrom: field("minFrom").value,
-      minTo: field("minTo").value,
-    };
-  });
   try {
     const result = await api("/api/settings", {
       method: "PUT",
@@ -2751,7 +2808,6 @@ async function saveSettings(silent = false) {
         saturdayBonusFrom: document.querySelector("#saturdayBonusFrom").value,
         saturdayBonusFactor: Number(document.querySelector("#saturdayBonusFactor").value),
         showSunday: document.querySelector("#showSunday").checked,
-        daySettings,
       }),
     });
     if (result.restartRequired && !silent) {
@@ -2895,6 +2951,17 @@ elements.portalUserList?.addEventListener("click", (event) => {
   if (event.target.closest("[data-save-portal-user]")) savePortalUser(row);
   if (event.target.closest("[data-unlock-portal-user]")) unlockPortalUser(row);
 });
+elements.portalUserList?.addEventListener("change", (event) => {
+  const row = event.target.closest("[data-portal-user]");
+  if (!row) return;
+  const role = row.querySelector("[data-portal-role]").value;
+  row.querySelector("[data-scope-location]").classList.toggle("hidden", !["manager", "department_manager"].includes(role));
+  row.querySelector("[data-scope-department]").classList.toggle("hidden", role !== "department_manager");
+  if (event.target.matches("[data-scope-location]")) {
+    const departments = state.locations.find((location) => location.id === event.target.value)?.departments || [];
+    row.querySelector("[data-scope-department]").innerHTML = departments.map((department) => `<option value="${department.id}">${escapeHtml(department.name)}</option>`).join("");
+  }
+});
 elements.delegationLocation?.addEventListener("change", refreshDelegationEmployees);
 elements.delegationForm?.addEventListener("submit", saveApprovalDelegation);
 elements.delegationList?.addEventListener("click", async (event) => {
@@ -2969,6 +3036,18 @@ elements.brandingKitLibrary?.addEventListener("click", (event) => {
 document.querySelectorAll("[data-settings-tab]").forEach((button) => button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab)));
 document.querySelectorAll("[data-personnel-tab]").forEach((button) => button.addEventListener("click", () => setPersonnelTab(button.dataset.personnelTab)));
 document.querySelector(".main-nav").addEventListener("click", (event) => {
+  const toggle = event.target.closest("[data-nav-toggle]");
+  if (toggle) {
+    event.preventDefault();
+    event.stopPropagation();
+    const key = toggle.dataset.navToggle;
+    const children = key === "planning" ? elements.planningNavChildren : elements.vacationNavChildren;
+    const opening = children.classList.contains("hidden");
+    localStorage.setItem(`grabenplaner-nav-${key}`, opening ? "open" : "closed");
+    children.classList.toggle("hidden", !opening);
+    toggle.textContent = opening ? "−" : "+";
+    return;
+  }
   const button = event.target.closest("[data-context-view]");
   if (!button) return;
   state.locationId = button.dataset.locationId || state.locationId;

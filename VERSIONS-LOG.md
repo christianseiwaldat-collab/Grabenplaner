@@ -1,19 +1,30 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.51 Beta
+
+- Öffnungszeiten, Mittagspausen und Mindestbesetzungen in die jeweilige Standortverwaltung verschoben und bestehende Werte je Filiale sicher übernommen.
+- Rollenbereiche ergänzt: Admin und Personalleitung arbeiten global, Filialleitungen sehen zugewiesene Filialen und Abteilungsleitungen nur zugewiesene Abteilungen.
+- Navigation kompakter, scrollbar und mit ein-/ausklappbaren Filialunterpunkten gestaltet; „Personalverwaltung“ heißt nun „Teams & Standorte“.
+- Branding-ZIP-Import im geschützten LAN-Betrieb repariert und alle Überschriften mit zuverlässiger lokaler Sans-Serif-Darstellung versehen.
+- ZA-Anträge unterstützen stundenweise, ganztägige und mehrtägige Zeiträume, Bearbeitung vor der Entscheidung sowie Änderungs- und Stornoanträge für genehmigte zukünftige ZAs.
+- Bereichsprüfungen schützen Dienstpläne, Antragssperren und Urlaubsplanung vor Zugriffen außerhalb zugewiesener Filialen und Abteilungen; die Mitarbeiteransicht des Archivs ist auf sechs Monate begrenzt.
+- Urlaubsanträge können vor der Entscheidung geändert werden; „Meine Anträge“ trennt ZA und Urlaub übersichtlich.
+- Offene ZA-Anträge erscheinen als unverbindlicher Hinweis im Dienstplan; Arbeitsunfähigkeitsmeldungen werden in der Oberfläche korrekt als AUM bezeichnet.
+
 ## v0.50 Beta
 
 - Mitarbeiterportal für Smartphones überarbeitet: kompakte Navigation, sichere Bildschirmränder, größere Touch-Ziele und besser bedienbare Dialoge.
 - Persönlichen Bereich „Meine Anträge“ ergänzt: Urlaub, ZA, Änderungen und Stornierungen bleiben mit Status, Freigaben, Bemerkungen und Entscheidungschronik dauerhaft nachvollziehbar.
 - Zurückgezogene Anträge werden nicht mehr gelöscht, sondern als „Zurückgezogen“ protokolliert; überlappende Anträge werden in allen Freigabestufen zuverlässig erkannt.
 - Interne Benachrichtigungen mit Ungelesen-Zähler ergänzt: neue Anträge, Weiterleitungen und Entscheidungen erscheinen bei den zuständigen Personen beziehungsweise Antragstellenden.
-- Arbeitsunfähigkeitsmeldungen (AMU) können im Mitarbeiterportal als PDF, JPG oder PNG mit bis zu drei Dokumenten hochgeladen und vor der Prüfung wieder zurückgezogen werden.
-- AMU-Dateien sowie Bemerkungen und Originaldateinamen liegen ausschließlich im geschützten Bereich, werden per AES-256-GCM verschlüsselt, anhand ihrer Dateisignatur geprüft und niemals über den öffentlichen Webordner ausgeliefert.
+- Arbeitsunfähigkeitsmeldungen (AUM) können im Mitarbeiterportal als PDF, JPG oder PNG mit bis zu drei Dokumenten hochgeladen und vor der Prüfung wieder zurückgezogen werden.
+- AUM-Dateien sowie Bemerkungen und Originaldateinamen liegen ausschließlich im geschützten Bereich, werden per AES-256-GCM verschlüsselt, anhand ihrer Dateisignatur geprüft und niemals über den öffentlichen Webordner ausgeliefert.
 - Ein dauerhafter Schlüsselprüfwert verhindert unbemerkte Schlüsselwechsel; abgebrochene Klartext-Uploads werden beim nächsten Start aus dem privaten Temporärordner entfernt.
-- Eigene AMU-Rechte für Mitarbeitende, Filial-/Abteilungsleitung, Personalleitung und Admin ergänzt; Dokumentinhalte bleiben Personalleitung und Admin vorbehalten.
-- Datenbank-Backups sichern nun auch die verschlüsselten AMU-Dateien als fest gekoppelten Sicherungspunkt mit Manifest, Datenbank-Hash und Prüfsummen; HEIC bleibt bis zu einer sicheren Normalisierung bewusst deaktiviert.
+- Eigene AUM-Rechte für Mitarbeitende, Filial-/Abteilungsleitung, Personalleitung und Admin ergänzt; Dokumentinhalte bleiben Personalleitung und Admin vorbehalten.
+- Datenbank-Backups sichern nun auch die verschlüsselten AUM-Dateien als fest gekoppelten Sicherungspunkt mit Manifest, Datenbank-Hash und Prüfsummen; HEIC bleibt bis zu einer sicheren Normalisierung bewusst deaktiviert.
 - Firmenserver-Pilotpaket ergänzt: neutrale WinSW-/Caddy-Vorlagen, PowerShell-Installation, Diagnose, Backup und sichere Offline-Wiederherstellung.
 - Serverbetrieb gehärtet: beschreibbare Daten liegen getrennt vom Programm, Instanzschutz greift vor Migrationen, vor Migrationen und beim Dienststopp werden verifizierte Backups erstellt, und Browser-„Beenden“ ist im Dienstbetrieb gesperrt.
-- Serverdiagnose um Pilot-Checkliste, Daten-/Backupziel, freien Speicher, Backupalter, Virenscanner-Bereitschaft und geschützten AMU-Speicher erweitert.
+- Serverdiagnose um Pilot-Checkliste, Daten-/Backupziel, freien Speicher, Backupalter, Virenscanner-Bereitschaft und geschützten AUM-Speicher erweitert.
 
 ## v0.49 Beta
 

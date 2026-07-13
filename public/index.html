@@ -29,23 +29,23 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.50 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.51 Beta</span></div>
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
           <button class="nav-item active" data-view="planning">
-            <span class="nav-symbol">▦</span><span>Dienstplanung</span>
+            <span class="nav-symbol">▦</span><span>Dienstplanung</span><span class="nav-expand" data-nav-toggle="planning" aria-hidden="true">−</span>
           </button>
           <div class="nav-children" id="planningNavChildren"></div>
           <button class="nav-item" data-view="vacations">
-            <span class="nav-symbol">☀</span><span>Urlaubsplanung</span>
+            <span class="nav-symbol">☀</span><span>Urlaubsplanung</span><span class="nav-expand" data-nav-toggle="vacations" aria-hidden="true">−</span>
           </button>
           <div class="nav-children" id="vacationNavChildren"></div>
           <button class="nav-item request-nav-item" data-view="requests" id="requestsNavButton">
             <span class="nav-symbol">✓</span><span>Anträge</span><strong class="nav-count hidden" id="requestsNavCount">0</strong>
           </button>
           <button class="nav-item" data-view="personnel">
-            <span class="nav-symbol">◎</span><span>Personalverwaltung</span>
+            <span class="nav-symbol">◎</span><span>Teams &amp; Standorte</span>
           </button>
           <button class="nav-item" data-view="settings">
             <span class="nav-symbol">⚙</span><span>Einstellungen</span>
@@ -55,7 +55,7 @@
         <div class="sidebar-summary">
           <span class="eyebrow">Aktive Teammitglieder</span>
           <strong id="sidebarEmployeeCount">0</strong>
-          <p>Personalstammdaten werden unter Personalverwaltung gepflegt.</p>
+          <p>Stammdaten unter Teams &amp; Standorte.</p>
         </div>
 
         <div class="sidebar-actions" aria-label="Ansicht und System">
@@ -150,7 +150,7 @@
           <section class="request-workflow-summary" id="requestWorkflowSummary"></section>
           <section class="vacation-panel request-management-panel">
             <div class="request-management-toolbar">
-              <div class="request-kind-tabs"><button class="active" data-request-kind-tab="vacation" type="button">Urlaub <span id="vacationRequestCount">0</span></button><button data-request-kind-tab="time_off" type="button">Zeitausgleich <span id="timeOffRequestCount">0</span></button><button data-request-kind-tab="amu" type="button">AMU <span id="amuRequestCount">0</span></button></div>
+              <div class="request-kind-tabs"><button class="active" data-request-kind-tab="vacation" type="button">Urlaub <span id="vacationRequestCount">0</span></button><button data-request-kind-tab="time_off" type="button">Zeitausgleich <span id="timeOffRequestCount">0</span></button><button data-request-kind-tab="amu" type="button">AUM <span id="amuRequestCount">0</span></button></div>
               <label class="field request-status-filter"><span>Status</span><select id="requestStatusFilter"><option value="actionable">Zu bearbeiten</option><option value="pending_local">Offen</option><option value="preliminary_local">Vorläufig genehmigt</option><option value="pending_hr">Wartet auf Personalleitung</option><option value="approved">Genehmigt</option><option value="rejected">Abgelehnt</option><option value="cancelled">Storniert</option><option value="all">Alle</option></select></label>
             </div>
             <div class="manager-request-list" id="managerVacationRequestList"><p class="settings-note">Anträge werden geladen.</p></div>
@@ -218,7 +218,7 @@
 
         <section id="personnelView" class="view">
           <header class="settings-header">
-            <div><span class="eyebrow">Personalverwaltung</span><h1>Team & Standorte</h1><p class="subtitle">Stammdaten, Stammfilialen und Abteilungen zentral verwalten.</p></div>
+            <div><span class="eyebrow">Teams &amp; Standorte</span><h1>Team &amp; Standorte</h1><p class="subtitle">Stammdaten, Stammfilialen und Abteilungen zentral verwalten.</p></div>
           </header>
 
           <div class="settings-tabs personnel-tabs" role="tablist">
@@ -250,6 +250,19 @@
                     <label class="field"><span>Mindestbesetzung</span><input id="locationMinStaff" type="number" min="0" max="99" step="1" value="0" /></label>
                   </div>
                   <label class="switch-row"><span><strong>Aktiv</strong><small>In Navigation und Planung anzeigen.</small></span><input id="locationActive" type="checkbox" checked /></label>
+                  <div class="location-hours-editor">
+                    <div class="card-heading compact-card-heading"><div class="card-icon">Zeit</div><div><h3>Öffnungszeiten &amp; Mindestbesetzung</h3><p>Diese Zeiten gelten ausschließlich für die ausgewählte Filiale.</p></div></div>
+                    <div class="day-settings-table">
+                      <div class="day-settings-head"><span>Tag</span><span>Dienstzeit</span><span>Mittagspause</span><span>Mindestbesetzung</span><span>Zeitraum</span></div>
+                      <div class="day-settings-row" data-day-settings="monday"><strong>Montag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
+                      <div class="day-settings-row" data-day-settings="tuesday"><strong>Dienstag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
+                      <div class="day-settings-row" data-day-settings="wednesday"><strong>Mittwoch</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
+                      <div class="day-settings-row" data-day-settings="thursday"><strong>Donnerstag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
+                      <div class="day-settings-row" data-day-settings="friday"><strong>Freitag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
+                      <div class="day-settings-row" data-day-settings="saturday"><strong>Samstag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
+                    </div>
+                    <div class="open-day-settings"><strong>Geöffnete Wochentage</strong><div><label><input id="mondayOpen" type="checkbox" /> Mo</label><label><input id="tuesdayOpen" type="checkbox" /> Di</label><label><input id="wednesdayOpen" type="checkbox" /> Mi</label><label><input id="thursdayOpen" type="checkbox" /> Do</label><label><input id="fridayOpen" type="checkbox" /> Fr</label><label><input id="saturdayOpen" type="checkbox" /> Sa</label></div></div>
+                  </div>
                   <div class="form-actions-inline"><button type="button" class="secondary-button hidden" id="cancelLocationEditButton">Bearbeitung abbrechen</button><button type="submit" class="primary-button" id="locationSubmitButton">Filiale anlegen</button></div>
                 </form>
               </div>
@@ -335,20 +348,6 @@
                 <label class="field"><span>Gültig ab</span><input id="saturdayBonusFrom" type="time" /></label>
                 <label class="field"><span>Faktor</span><input id="saturdayBonusFactor" type="number" min="1" max="5" step="0.1" /></label>
               </div>
-            </div>
-
-            <div class="settings-card full-settings-card service-times-card">
-              <div class="card-heading"><div class="card-icon">Zeit</div><div><h2>Dienstzeiten, Mittagspause und Mindestbesetzung</h2><p>Alle Werte gelten für manuelle und automatische Planungen.</p></div></div>
-              <div class="day-settings-table">
-                <div class="day-settings-head"><span>Tag</span><span>Dienstzeit</span><span>Mittagspause</span><span>Mindestbesetzung</span><span>Zeitraum</span></div>
-                <div class="day-settings-row" data-day-settings="monday"><strong>Montag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
-                <div class="day-settings-row" data-day-settings="tuesday"><strong>Dienstag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
-                <div class="day-settings-row" data-day-settings="wednesday"><strong>Mittwoch</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
-                <div class="day-settings-row" data-day-settings="thursday"><strong>Donnerstag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
-                <div class="day-settings-row" data-day-settings="friday"><strong>Freitag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
-                <div class="day-settings-row" data-day-settings="saturday"><strong>Samstag</strong><div><input data-field="start" type="time" /><span>–</span><input data-field="end" type="time" /></div><div class="lunch-control"><label><input data-field="lunchEnabled" type="checkbox" /> aktiv</label><div><input data-field="lunchStart" type="time" /><span>–</span><input data-field="lunchEnd" type="time" /></div></div><input data-field="minStaff" type="number" min="0" max="99" /><div><input data-field="minFrom" type="time" /><span>–</span><input data-field="minTo" type="time" /></div></div>
-              </div>
-              <div class="open-day-settings"><strong>Geöffnete Wochentage</strong><div><label><input id="mondayOpen" type="checkbox" /> Mo</label><label><input id="tuesdayOpen" type="checkbox" /> Di</label><label><input id="wednesdayOpen" type="checkbox" /> Mi</label><label><input id="thursdayOpen" type="checkbox" /> Do</label><label><input id="fridayOpen" type="checkbox" /> Fr</label><label><input id="saturdayOpen" type="checkbox" /> Sa</label></div></div>
             </div>
 
             <div class="settings-card sunday-card">
@@ -495,8 +494,8 @@
               <div class="position-list" id="positionList"></div>
             </div>
             <div class="settings-card">
-              <div class="card-heading"><div class="card-icon">Team</div><div><h2>Personalansicht</h2><p>Darstellung der Stammdaten in der Personalverwaltung.</p></div></div>
-              <label class="switch-row"><span><strong>Inaktive Teammitglieder anzeigen</strong><small>Blendet inaktive Stammdaten in der Personalverwaltung ein.</small></span><input id="showInactivePersonnel" type="checkbox" /></label>
+              <div class="card-heading"><div class="card-icon">Team</div><div><h2>Personalansicht</h2><p>Darstellung der Stammdaten unter Teams &amp; Standorte.</p></div></div>
+              <label class="switch-row"><span><strong>Inaktive Teammitglieder anzeigen</strong><small>Blendet inaktive Stammdaten unter Teams &amp; Standorte ein.</small></span><input id="showInactivePersonnel" type="checkbox" /></label>
               <label class="switch-row"><span><strong>Samstagsstatistik anzeigen</strong><small>Zeigt in den Wochenstunden, wie oft ein Teammitglied zuletzt samstags mindestens 2 Stunden eingeteilt war.</small></span><input id="showSaturdayServiceStats" type="checkbox" /></label>
             </div>
           </section>
@@ -536,7 +535,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.50 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.51 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

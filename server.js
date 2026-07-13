@@ -60,6 +60,7 @@ const builtinPortalRoles = [
       "vacation:read",
       "vacation:approve",
       "amu:metadata:read",
+      "scopes:write",
     ],
   },
   {
@@ -109,6 +110,7 @@ const builtinPortalRoles = [
       "amu:review",
       "amu:delete",
       "amu:audit",
+      "scopes:write",
     ],
   },
   {
@@ -134,11 +136,13 @@ const builtinPortalRoles = [
       "vacation:approve",
       "hr:approve",
       "hr:settings",
+      "users:write",
       "amu:metadata:read",
       "amu:file:read",
       "amu:review",
       "amu:delete",
       "amu:audit",
+      "scopes:write",
     ],
   },
 ];
@@ -265,7 +269,7 @@ if (amuEncryptionConfiguration) {
     });
     if (serverModeActive) {
       amuScannerProbe = amuStorage.probeScanner().catch((error) => {
-        console.error("AMU-Virenscanner ist nicht betriebsbereit:", error.message);
+        console.error("AUM-Virenscanner ist nicht betriebsbereit:", error.message);
         return null;
       });
     }
@@ -273,7 +277,7 @@ if (amuEncryptionConfiguration) {
     amuStorageStartupError = error.message;
   }
 } else {
-  amuStorageStartupError = "Im Serverbetrieb fehlt GRABENPLANER_AMU_KEY samt GRABENPLANER_AMU_KEY_ID.";
+  amuStorageStartupError = "Im Serverbetrieb fehlt der konfigurierte AUM-Schlüssel.";
 }
 
 function safeRemoveFile(filePath) {
@@ -374,8 +378,8 @@ function pruneDatabaseBackups(backupDirectory, keep = 30) {
 
 function createDatabaseBackupToDirectory(backupDirectory, reason = "automatic", kind = "external") {
   if (databasePath === ":memory:" || !fs.existsSync(databasePath)) return null;
-  if (amuMutationInProgress > 0) throw new Error("Die Sicherung wartet, bis der laufende AMU-Upload abgeschlossen ist.");
-  if (!amuStorage) throw new Error("Ohne betriebsbereiten AMU-Speicher wird kein unvollständiger Sicherungspunkt erstellt.");
+  if (amuMutationInProgress > 0) throw new Error("Die Sicherung wartet, bis der laufende AUM-Upload abgeschlossen ist.");
+  if (!amuStorage) throw new Error("Ohne betriebsbereiten AUM-Speicher wird kein unvollständiger Sicherungspunkt erstellt.");
   fs.mkdirSync(backupDirectory, { recursive: true });
   const snapshotName = `dienstplan-${backupTimestamp()}`;
   const target = path.join(backupDirectory, `${snapshotName}.db`);
@@ -453,6 +457,7 @@ function createSchema() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       min_staff INTEGER NOT NULL DEFAULT 0,
+      day_settings_json TEXT NOT NULL DEFAULT '',
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -634,6 +639,17 @@ function createSchema() {
         ON UPDATE CASCADE ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS portal_access_scopes (
+      employee_number TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      department_id INTEGER NOT NULL DEFAULT 0,
+      assigned_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (employee_number, location_id, department_id),
+      FOREIGN KEY (employee_number) REFERENCES portal_users(employee_number) ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (location_id) REFERENCES locations(id) ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS vacation_requests (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       employee_number TEXT NOT NULL,
@@ -686,6 +702,36 @@ function createSchema() {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS time_off_change_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_number TEXT NOT NULL,
+      location_id TEXT,
+      original_request_id INTEGER NOT NULL,
+      request_type TEXT NOT NULL,
+      requested_date_from TEXT,
+      requested_date_to TEXT,
+      requested_all_day INTEGER NOT NULL DEFAULT 0,
+      requested_start_time TEXT,
+      requested_end_time TEXT,
+      note TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending_local',
+      approval_type TEXT NOT NULL DEFAULT 'local',
+      approval_stage TEXT NOT NULL DEFAULT 'local',
+      decision_note TEXT NOT NULL DEFAULT '',
+      local_approved_by TEXT,
+      local_approved_at TEXT,
+      hr_approved_by TEXT,
+      hr_approved_at TEXT,
+      decided_by TEXT,
+      decided_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (original_request_id) REFERENCES time_off_requests(id)
         ON UPDATE CASCADE ON DELETE CASCADE
     );
 
@@ -846,6 +892,7 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_vacation_requests_employee ON vacation_requests(employee_number, status);
     CREATE INDEX IF NOT EXISTS idx_time_off_requests_employee ON time_off_requests(employee_number, status, request_date);
     CREATE INDEX IF NOT EXISTS idx_vacation_change_requests_employee ON vacation_change_requests(employee_number, status);
+    CREATE INDEX IF NOT EXISTS idx_time_off_change_requests_employee ON time_off_change_requests(employee_number, status);
     CREATE INDEX IF NOT EXISTS idx_request_blackouts_range ON request_blackouts(location_id, date_from, date_to, active);
     CREATE INDEX IF NOT EXISTS idx_request_decisions_request ON request_decisions(request_kind, request_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_approval_delegations_range ON approval_delegations(location_id, date_from, date_to, active);
@@ -940,6 +987,7 @@ if (!columnExists("employees", "preferred_department_id")) {
 if (tableExists("locations") && !columnExists("locations", "min_staff")) {
   db.exec("ALTER TABLE locations ADD COLUMN min_staff INTEGER NOT NULL DEFAULT 0");
 }
+ensureColumn("locations", "day_settings_json", "TEXT NOT NULL DEFAULT ''");
 if (tableExists("departments") && !columnExists("departments", "min_staff")) {
   db.exec("ALTER TABLE departments ADD COLUMN min_staff INTEGER NOT NULL DEFAULT 0");
 }
@@ -972,6 +1020,10 @@ ensureColumn("time_off_requests", "local_approved_at", "TEXT");
 ensureColumn("time_off_requests", "hr_approved_by", "TEXT");
 ensureColumn("time_off_requests", "hr_approved_at", "TEXT");
 ensureColumn("time_off_requests", "original_shifts_json", "TEXT NOT NULL DEFAULT '[]'");
+ensureColumn("time_off_requests", "date_from", "TEXT");
+ensureColumn("time_off_requests", "date_to", "TEXT");
+ensureColumn("time_off_requests", "all_day", "INTEGER NOT NULL DEFAULT 0");
+db.prepare("UPDATE time_off_requests SET date_from = COALESCE(date_from, request_date), date_to = COALESCE(date_to, request_date) WHERE date_from IS NULL OR date_to IS NULL").run();
 ensureColumn("vacation_change_requests", "approval_stage", "TEXT NOT NULL DEFAULT 'local'");
 ensureColumn("vacation_change_requests", "decision_note", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("vacation_change_requests", "local_approved_by", "TEXT");
@@ -1091,6 +1143,20 @@ for (const [day, start, end] of planningDays) {
 const insertSetting = db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
 for (const [key, value] of Object.entries(defaultSettings)) insertSetting.run(key, value);
 
+function legacyDaySettingsSnapshot() {
+  const stored = Object.fromEntries(db.prepare("SELECT key, value FROM settings").all().map((row) => [row.key, row.value]));
+  return Object.fromEntries(planningDays.map(([day]) => [day, {
+    open: stored[`${day}_open`] !== "0",
+    start: stored[`${day}_start_time`], end: stored[`${day}_end_time`],
+    lunchEnabled: stored[`${day}_lunch_enabled`] === "1",
+    lunchStart: stored[`${day}_lunch_start`], lunchEnd: stored[`${day}_lunch_end`],
+    minStaff: Number(stored[`${day}_min_staff`] || 0),
+    minFrom: stored[`${day}_min_from`], minTo: stored[`${day}_min_to`],
+  }]));
+}
+db.prepare("UPDATE locations SET day_settings_json = ? WHERE TRIM(COALESCE(day_settings_json, '')) = ''")
+  .run(JSON.stringify(legacyDaySettingsSnapshot()));
+
 const builtinPositions = [
   ["teamleitung", "Teamleitung", 1],
   ["abteilungsleitung", "Abteilungsleitung", 2],
@@ -1123,6 +1189,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.49-server-foundation", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.50-portal-notifications-amu", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.51-location-hours-scopes-request-ranges", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -1132,7 +1200,8 @@ if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
 function ensureDefaultLocation() {
   const count = db.prepare("SELECT COUNT(*) AS count FROM locations").get().count;
   if (count === 0) {
-    db.prepare("INSERT INTO locations (id, name, active) VALUES ('01', 'Hauptstandort', 1)").run();
+    db.prepare("INSERT INTO locations (id, name, day_settings_json, active) VALUES ('01', 'Hauptstandort', ?, 1)")
+      .run(JSON.stringify(legacyDaySettingsSnapshot()));
   }
   const defaultLocation = db.prepare("SELECT id FROM locations ORDER BY active DESC, id LIMIT 1").get();
   if (defaultLocation) {
@@ -1202,7 +1271,7 @@ function httpError(status, message, code = "") {
 }
 
 function requireAmuStorage() {
-  if (!amuStorage) throw httpError(503, amuStorageStartupError || "Der geschützte AMU-Speicher ist nicht verfügbar.", "AMU_STORAGE_UNAVAILABLE");
+  if (!amuStorage) throw httpError(503, amuStorageStartupError || "Der geschützte AUM-Speicher ist nicht verfügbar.", "AMU_STORAGE_UNAVAILABLE");
   return amuStorage;
 }
 
@@ -1212,7 +1281,7 @@ function parseAmuMultipart(request) {
     const boundaryMatch = contentType.match(/^multipart\/form-data\s*;[\s\S]*?boundary=(?:"([^"]+)"|([^;\s]+))/i);
     const boundary = String(boundaryMatch?.[1] || boundaryMatch?.[2] || "");
     if (!boundary || boundary.length > 70 || /[\r\n]/.test(boundary)) {
-      reject(httpError(415, "Bitte die AMU als Formular mit PDF-, JPG- oder PNG-Dateien senden.", "AMU_MULTIPART_REQUIRED"));
+      reject(httpError(415, "Bitte die AUM als Formular mit PDF-, JPG- oder PNG-Dateien senden.", "AMU_MULTIPART_REQUIRED"));
       return;
     }
     const chunks = [];
@@ -1227,12 +1296,12 @@ function parseAmuMultipart(request) {
       if (settled) return;
       totalBytes += chunk.length;
       if (totalBytes > 20 * 1024 * 1024) {
-        fail(httpError(413, "Der gesamte AMU-Upload darf höchstens 20 MiB groß sein.", "AMU_UPLOAD_TOO_LARGE"));
+        fail(httpError(413, "Der gesamte AUM-Upload darf höchstens 20 MiB groß sein.", "AMU_UPLOAD_TOO_LARGE"));
         return;
       }
       chunks.push(chunk);
     });
-    request.on("error", () => fail(httpError(400, "Der AMU-Upload konnte nicht gelesen werden.", "AMU_MULTIPART_INVALID")));
+    request.on("error", () => fail(httpError(400, "Der AUM-Upload konnte nicht gelesen werden.", "AMU_MULTIPART_INVALID")));
     request.on("end", () => {
       if (settled) return;
       try {
@@ -1263,13 +1332,13 @@ function parseAmuMultipart(request) {
           let filename = plainFilename || "";
           if (encodedFilename) { try { filename = decodeURIComponent(encodedFilename); } catch {} }
           partCount += 1;
-          if (partCount > 9) throw httpError(413, "Das AMU-Formular enthält zu viele Teile.", "AMU_TOO_MANY_PARTS");
+          if (partCount > 9) throw httpError(413, "Das AUM-Formular enthält zu viele Teile.", "AMU_TOO_MANY_PARTS");
           if (filename && name === "documents") {
-            if (data.length > 10 * 1024 * 1024) throw httpError(413, "Eine AMU-Datei darf höchstens 10 MiB groß sein.", "AMU_DOCUMENT_TOO_LARGE");
+            if (data.length > 10 * 1024 * 1024) throw httpError(413, "Eine AUM-Datei darf höchstens 10 MiB groß sein.", "AMU_DOCUMENT_TOO_LARGE");
             documents.push({ originalName: filename, buffer: Buffer.from(data) });
-            if (documents.length > 3) throw httpError(413, "Pro AMU sind höchstens drei Dateien möglich.", "AMU_TOO_MANY_DOCUMENTS");
+            if (documents.length > 3) throw httpError(413, "Pro AUM sind höchstens drei Dateien möglich.", "AMU_TOO_MANY_DOCUMENTS");
           } else if (!filename && ["incapacityFrom", "incapacityTo", "employeeNote"].includes(name)) {
-            if (data.length > 4096) throw httpError(413, "Ein AMU-Textfeld ist zu groß.", "AMU_FIELD_TOO_LARGE");
+            if (data.length > 4096) throw httpError(413, "Ein AUM-Textfeld ist zu groß.", "AMU_FIELD_TOO_LARGE");
             fields[name] = data.toString("utf8");
           }
           position = dataEnd + 2;
@@ -1419,7 +1488,7 @@ function createPortalNotification(recipient, eventType, title, message = "", opt
   return result.changes ? id : null;
 }
 
-function requestReviewerRecipients(locationId, stage = "local", excludeEmployeeNumber = "") {
+function requestReviewerRecipients(locationId, departmentId = null, stage = "local", excludeEmployeeNumber = "") {
   const rows = stage === "hr"
     ? db.prepare(`
         SELECT u.employee_number FROM portal_users u
@@ -1430,19 +1499,25 @@ function requestReviewerRecipients(locationId, stage = "local", excludeEmployeeN
         SELECT u.employee_number FROM portal_users u
         JOIN employees e ON e.personnel_number = u.employee_number
         WHERE u.active = 1 AND TRIM(u.password_hash) <> ''
-          AND (u.role = 'admin' OR (e.home_location_id = ? AND u.role IN ('manager','department_manager')))
+          AND (u.role = 'admin' OR (u.role IN ('manager','department_manager') AND (
+            EXISTS (SELECT 1 FROM portal_access_scopes s WHERE s.employee_number = u.employee_number
+              AND s.location_id = ? AND (u.role = 'manager' OR s.department_id = ?))
+            OR (NOT EXISTS (SELECT 1 FROM portal_access_scopes s WHERE s.employee_number = u.employee_number)
+              AND e.home_location_id = ? AND (u.role = 'manager' OR e.preferred_department_id = ?))
+          )))
         ORDER BY u.employee_number
-      `).all(String(locationId || ""));
+      `).all(String(locationId || ""), Number(departmentId || 0), String(locationId || ""), Number(departmentId || 0));
   return [...new Set(rows.map((row) => row.employee_number).filter((value) => value && value !== excludeEmployeeNumber))];
 }
 
 function notifyRequestReviewers(entry, kind, stage = "local", actor = "") {
-  const labels = { vacation: "Urlaubsantrag", vacation_change: "Urlaubsänderung", time_off: "ZA-Antrag" };
+  const labels = { vacation: "Urlaubsantrag", vacation_change: "Urlaubsänderung", time_off: "ZA-Antrag", time_off_change: "ZA-Änderung" };
   const label = labels[kind] || "Abwesenheitsantrag";
-  const locationId = entry.location_id || employeeRequestContext(entry.employee_number).locationId;
-  const targetKind = kind === "time_off" ? "time_off" : "vacation";
+  const requestContext = employeeRequestContext(entry.employee_number, entry.request_date || entry.date_from);
+  const locationId = entry.location_id || requestContext.locationId;
+  const targetKind = kind.startsWith("time_off") ? "time_off" : "vacation";
   const target = `/?view=requests&kind=${targetKind}`;
-  for (const recipient of requestReviewerRecipients(locationId, stage, actor)) {
+  for (const recipient of requestReviewerRecipients(locationId, requestContext.departmentId, stage, actor)) {
     createPortalNotification(recipient, "request.review", `${label} wartet auf Prüfung`, `${entry.employee_number} hat einen Antrag eingereicht.`, {
       target,
       entityType: kind,
@@ -1453,7 +1528,7 @@ function notifyRequestReviewers(entry, kind, stage = "local", actor = "") {
 }
 
 function notifyRequestDecision(entry, kind, status, actor = "") {
-  const labels = { vacation: "Urlaubsantrag", vacation_change: "Urlaubsänderung", time_off: "ZA-Antrag" };
+  const labels = { vacation: "Urlaubsantrag", vacation_change: "Urlaubsänderung", time_off: "ZA-Antrag", time_off_change: "ZA-Änderung" };
   const statusText = {
     approved: "wurde genehmigt",
     rejected: "wurde abgelehnt",
@@ -1486,7 +1561,7 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
   const session = db.prepare(`
     SELECT s.id, s.employee_number, s.expires_at, s.revoked_at,
            u.role, u.active, u.must_change_password,
-           e.full_name, e.nickname, e.color, e.home_location_id,
+           e.full_name, e.nickname, e.color, e.home_location_id, e.preferred_department_id,
            r.name AS role_name, r.permissions
     FROM portal_sessions s
     JOIN portal_users u ON u.employee_number = s.employee_number
@@ -1500,6 +1575,13 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
   `).get(sha256(token), now);
   if (!session) return null;
   if (touch) db.prepare("UPDATE portal_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?").run(session.id);
+  const scopes = ["admin", "hr"].includes(session.role) ? [] : db.prepare(`
+    SELECT location_id, department_id FROM portal_access_scopes
+    WHERE employee_number = ? ORDER BY location_id, department_id
+  `).all(session.employee_number).map((scope) => ({ locationId: scope.location_id, departmentId: Number(scope.department_id || 0) || null }));
+  if (!scopes.length && !["admin", "hr"].includes(session.role) && session.home_location_id) {
+    scopes.push({ locationId: session.home_location_id, departmentId: session.role === "department_manager" ? (Number(session.preferred_department_id) || null) : null });
+  }
   return {
     id: session.id,
     employeeNumber: session.employee_number,
@@ -1510,6 +1592,7 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
     role: session.role,
     roleName: session.role_name || session.role,
     permissions: parsePortalPermissions(session.permissions),
+    scopes,
     mustChangePassword: Boolean(session.must_change_password),
     expiresAt: session.expires_at,
   };
@@ -1526,8 +1609,34 @@ function publicPortalUser(session) {
     role: session.role,
     roleName: session.roleName,
     permissions: session.permissions,
+    scopes: session.scopes || [],
     mustChangePassword: session.mustChangePassword,
   };
+}
+
+function sessionHasGlobalScope(session) {
+  return !session || session.employeeNumber === "local" || ["admin", "hr"].includes(session.role);
+}
+
+function assertSessionContextScope(session, input = {}) {
+  if (sessionHasGlobalScope(session)) return;
+  const locationId = String(input.locationId || input.location || "").trim();
+  const departmentId = Number(input.departmentId || input.department || 0) || null;
+  if (!locationId) return;
+  const matching = (session.scopes || []).filter((scope) => scope.locationId === locationId);
+  if (!matching.length) throw httpError(403, "Diese Filiale ist dem Zugang nicht zugewiesen.", "PORTAL_SCOPE_DENIED");
+  if (session.role === "department_manager") {
+    if (!departmentId || !matching.some((scope) => Number(scope.departmentId) === departmentId)) {
+      throw httpError(403, "Diese Abteilung ist dem Zugang nicht zugewiesen.", "PORTAL_SCOPE_DENIED");
+    }
+  }
+}
+
+function assertSessionEmployeeScope(session, employeeNumber) {
+  if (sessionHasGlobalScope(session)) return;
+  const employee = db.prepare("SELECT home_location_id, preferred_department_id FROM employees WHERE personnel_number = ?").get(employeeNumber);
+  if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.");
+  assertSessionContextScope(session, { locationId: employee.home_location_id, departmentId: employee.preferred_department_id });
 }
 
 function requirePortalSession(request, permission = "") {
@@ -1571,6 +1680,7 @@ function enforceAdminApiAccess(request, _response, next) {
     const session = requirePortalSession(request, permission);
     if (session.role === "employee") throw httpError(403, "Bitte das Mitarbeiterportal verwenden.", "PORTAL_EMPLOYEE_ONLY");
     assertPortalCsrf(request);
+    assertSessionContextScope(session, { ...request.query, ...request.body });
     request.portalSession = session;
     next();
   } catch (error) {
@@ -1737,6 +1847,33 @@ function getSettings() {
   };
 }
 
+function daySettingsFromLocation(locationId) {
+  const row = db.prepare("SELECT day_settings_json FROM locations WHERE id = ?").get(locationId);
+  try {
+    const parsed = JSON.parse(row?.day_settings_json || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch { return {}; }
+}
+
+function settingsForLocation(locationId) {
+  const settings = getSettings();
+  const days = daySettingsFromLocation(locationId);
+  for (const [day] of planningDays) {
+    const value = days[day];
+    if (!value) continue;
+    settings[`${day}_open`] = value.open === false ? "0" : "1";
+    settings[`${day}_start_time`] = value.start;
+    settings[`${day}_end_time`] = value.end;
+    settings[`${day}_lunch_enabled`] = value.lunchEnabled === true ? "1" : "0";
+    settings[`${day}_lunch_start`] = value.lunchStart;
+    settings[`${day}_lunch_end`] = value.lunchEnd;
+    settings[`${day}_min_staff`] = String(Number(value.minStaff || 0));
+    settings[`${day}_min_from`] = value.minFrom;
+    settings[`${day}_min_to`] = value.minTo;
+  }
+  return settings;
+}
+
 function getPortalSettings() {
   if (!tableExists("portal_settings")) return { ...defaultPortalSettings };
   return {
@@ -1826,9 +1963,17 @@ function requirePortalAdminOrLocal(request, permission = "users:write") {
   return session;
 }
 
+function requirePortalAnyPermission(request, permissions) {
+  if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) return { employeeNumber: "local", role: "admin", permissions };
+  const session = requirePortalSession(request);
+  assertPortalCsrf(request);
+  if (!permissions.some((permission) => session.permissions.includes(permission))) throw httpError(403, "Für diese Aktion fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  return session;
+}
+
 function portalUsersForAdmin() {
   return db.prepare(`
-    SELECT e.personnel_number, e.full_name, e.nickname, e.active AS employee_active,
+    SELECT e.personnel_number, e.full_name, e.nickname, e.home_location_id, e.preferred_department_id, e.active AS employee_active,
            u.role, u.active, u.must_change_password, u.last_login_at, u.failed_login_attempts, u.locked_until,
            CASE WHEN TRIM(COALESCE(u.password_hash, '')) <> '' THEN 1 ELSE 0 END AS password_configured,
            r.name AS role_name
@@ -1851,7 +1996,18 @@ function portalUsersForAdmin() {
     failedLoginAttempts: Number(row.failed_login_attempts || 0),
     lockedUntil: row.locked_until || null,
     locked: Boolean(row.locked_until && new Date(row.locked_until) > new Date()),
+    homeLocationId: row.home_location_id || "",
+    preferredDepartmentId: Number(row.preferred_department_id || 0) || null,
+    scopes: db.prepare("SELECT location_id, department_id FROM portal_access_scopes WHERE employee_number = ? ORDER BY location_id, department_id")
+      .all(row.personnel_number).map((scope) => ({ locationId: scope.location_id, departmentId: Number(scope.department_id || 0) || null })),
   }));
+}
+
+function portalUsersForActor(actor) {
+  const users = portalUsersForAdmin();
+  if (actor?.role !== "manager") return users;
+  const locations = new Set((actor.scopes || []).map((scope) => scope.locationId));
+  return users.filter((user) => user.role === "department_manager" && locations.has(user.homeLocationId));
 }
 
 function validateVacationRequestDates(employeeNumber, body) {
@@ -1921,6 +2077,13 @@ function getRequestBlackouts(activeOnly = false) {
     ${activeOnly ? "WHERE b.active = 1" : ""}
     ORDER BY b.active DESC, b.date_from, b.location_id, b.department_id
   `).all().map(serializeRequestBlackout);
+}
+
+function getRequestBlackoutsForSession(session, activeOnly = false) {
+  const blackouts = getRequestBlackouts(activeOnly);
+  if (sessionHasGlobalScope(session)) return blackouts;
+  return blackouts.filter((blackout) => (session.scopes || []).some((scope) => scope.locationId === blackout.locationId
+    && (session.role !== "department_manager" || Number(scope.departmentId) === Number(blackout.departmentId || 0))));
 }
 
 function validateRequestBlackout(body, existingId = 0) {
@@ -1995,22 +2158,48 @@ function staffingCountAt(locationId, departmentId, date, pointTime, excludedEmpl
 }
 
 function evaluateTimeOffRequest(employeeNumber, body) {
-  const date = String(body.date || body.requestDate || "");
+  const date = String(body.date || body.requestDate || body.dateFrom || "");
+  const dateTo = String(body.dateTo || date);
+  const allDay = body.allDay === true || dateTo !== date;
   const startTime = String(body.startTime || "");
   const endTime = String(body.endTime || "");
+  if (!isIsoDate(date) || !isIsoDate(dateTo) || dateTo < date) {
+    return { trafficLight: "red", allowed: false, reason: "Bitte einen gültigen ZA-Zeitraum eingeben." };
+  }
+  if (date < viennaTodayIso()) return { trafficLight: "red", allowed: false, reason: "Für vergangene Tage kann kein Zeitausgleich beantragt werden." };
+  if (allDay) {
+    const blackout = findRequestBlackout(employeeNumber, "time_off", date, dateTo, date);
+    if (blackout) return { trafficLight: "red", allowed: false, reason: requestBlackoutReason(blackout, "Zeitausgleich") };
+    const overlap = db.prepare(`SELECT id FROM time_off_requests WHERE employee_number = ?
+      AND status IN ('pending','pending_local','preliminary_local','pending_hr','approved') AND id <> ?
+      AND COALESCE(date_from, request_date) <= ? AND COALESCE(date_to, request_date) >= ? LIMIT 1`)
+      .get(employeeNumber, Number(body.excludeRequestId || 0), dateTo, date);
+    if (overlap) return { trafficLight: "red", allowed: false, reason: "Für diesen Zeitraum besteht bereits ein ZA-Antrag." };
+    const missingDays = [];
+    for (let current = date; current <= dateTo; current = addDays(current, 1)) {
+      const context = employeeRequestContext(employeeNumber, current);
+      if (!operatingHours(current, settingsForLocation(context.locationId))) {
+        return { trafficLight: "red", allowed: false, reason: `Am ${current} ist die Filiale geschlossen; dafür kann kein ganztägiger ZA beantragt werden.` };
+      }
+      const globalBlock = getGlobalDayBlockForDate(current, context.locationId);
+      if (globalBlock) return { trafficLight: "red", allowed: false, reason: `Der ${current} ist bereits gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.` };
+      const planned = db.prepare("SELECT 1 FROM shifts WHERE employee_number = ? AND shift_date = ? LIMIT 1").get(employeeNumber, current);
+      if (!planned) missingDays.push(current);
+    }
+    return { trafficLight: "yellow", allowed: true, reason: missingDays.length
+      ? "Der ganztägige ZA kann beantragt werden; der Dienstplan ist für mindestens einen Tag noch unvollständig und wird manuell geprüft."
+      : "Der ganztägige ZA wird unabhängig von der Vorprüfung immer zur Genehmigung eingereicht." };
+  }
   if (!isIsoDate(date) || !isTime(startTime) || !isTime(endTime) || endTime <= startTime) {
     return { trafficLight: "red", allowed: false, reason: "Bitte Datum und Uhrzeit für den Zeitausgleich vollständig eingeben." };
   }
   if (timeToMinutes(endTime) - timeToMinutes(startTime) < 15) {
     return { trafficLight: "red", allowed: false, reason: "Zeitausgleich muss mindestens 15 Minuten dauern." };
   }
-  if (date < viennaTodayIso()) {
-    return { trafficLight: "red", allowed: false, reason: "Für vergangene Tage kann kein Zeitausgleich beantragt werden." };
-  }
   const context = employeeRequestContext(employeeNumber, date);
   const blackout = findRequestBlackout(employeeNumber, "time_off", date, date, date);
   if (blackout) return { trafficLight: "red", allowed: false, reason: requestBlackoutReason(blackout, "Zeitausgleich") };
-  const settings = getSettings();
+  const settings = settingsForLocation(context.locationId);
   const hours = operatingHours(date, settings);
   if (!hours) return { trafficLight: "red", allowed: false, reason: "An diesem Tag ist die Filiale geschlossen." };
   if (startTime < hours.start || endTime > hours.end) {
@@ -2021,17 +2210,18 @@ function evaluateTimeOffRequest(employeeNumber, body) {
     return { trafficLight: "red", allowed: false, reason: `Dieser Tag ist gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.` };
   }
   const conflictingOption = db.prepare(`
-    SELECT option_type, note, all_day, start_time, end_time FROM week_options
+    SELECT option_type, note, all_day, start_time, end_time, group_id FROM week_options
     WHERE employee_number = ? AND ? BETWEEN date_from AND date_to
-  `).all(employeeNumber, date).find((option) => optionOverlapsTime(option, startTime, endTime));
+  `).all(employeeNumber, date).find((option) => option.group_id !== `za-request-${Number(body.excludeRequestId || 0)}`
+    && optionOverlapsTime(option, startTime, endTime));
   if (conflictingOption) {
     return { trafficLight: "red", allowed: false, reason: `Zu dieser Zeit ist bereits „${optionLabel(conflictingOption.option_type)}“ eingetragen.` };
   }
   const pendingOverlap = db.prepare(`
     SELECT id FROM time_off_requests
-    WHERE employee_number = ? AND request_date = ?
+    WHERE employee_number = ? AND ? BETWEEN COALESCE(date_from, request_date) AND COALESCE(date_to, request_date)
       AND status IN ('pending','pending_local','preliminary_local','pending_hr','approved') AND id <> ?
-      AND start_time < ? AND ? < end_time LIMIT 1
+      AND (all_day = 1 OR (start_time < ? AND ? < end_time)) LIMIT 1
   `).get(employeeNumber, date, Number(body.excludeRequestId || 0), endTime, startTime);
   if (pendingOverlap) return { trafficLight: "red", allowed: false, reason: "Für diesen Zeitraum besteht bereits ein offener ZA-Antrag." };
   const coveringShift = db.prepare(`
@@ -2092,10 +2282,13 @@ function approvedVacationsForEmployee(employeeNumber, fromDate = `${new Date().g
 }
 
 function insertApprovedTimeOff(entry) {
-  const shifts = db.prepare(`
-    SELECT * FROM shifts WHERE employee_number = ? AND shift_date = ?
-      AND start_time < ? AND ? < end_time ORDER BY start_time
-  `).all(entry.employee_number, entry.request_date, entry.end_time, entry.start_time);
+  const dateFrom = entry.date_from || entry.request_date;
+  const dateTo = entry.date_to || entry.request_date;
+  const allDay = Boolean(entry.all_day) || dateTo !== dateFrom;
+  const shifts = allDay
+    ? db.prepare("SELECT * FROM shifts WHERE employee_number = ? AND shift_date BETWEEN ? AND ? ORDER BY shift_date, start_time").all(entry.employee_number, dateFrom, dateTo)
+    : db.prepare(`SELECT * FROM shifts WHERE employee_number = ? AND shift_date = ? AND start_time < ? AND ? < end_time ORDER BY start_time`)
+      .all(entry.employee_number, entry.request_date, entry.end_time, entry.start_time);
   db.prepare("UPDATE time_off_requests SET original_shifts_json = ? WHERE id = ?")
     .run(JSON.stringify(shifts), entry.id);
   const insertShift = db.prepare(`
@@ -2104,25 +2297,33 @@ function insertApprovedTimeOff(entry) {
   `);
   for (const shift of shifts) {
     db.prepare("DELETE FROM shifts WHERE id = ?").run(shift.id);
-    if (shift.start_time < entry.start_time) {
+    if (!allDay && shift.start_time < entry.start_time) {
       insertShift.run(shift.employee_number, shift.department_id, shift.shift_date, shift.start_time, entry.start_time, shift.area, shift.note);
     }
-    if (shift.end_time > entry.end_time) {
+    if (!allDay && shift.end_time > entry.end_time) {
       insertShift.run(shift.employee_number, shift.department_id, shift.shift_date, entry.end_time, shift.end_time, shift.area, shift.note);
     }
   }
-  const option = db.prepare(`
-    INSERT INTO week_options
-      (employee_number, week_start, date_from, date_to, option_type, note, credited_minutes_per_day, all_day, start_time, end_time)
-    VALUES (?, ?, ?, ?, 'time_off', ?, NULL, 0, ?, ?)
-  `).run(entry.employee_number, getMonday(entry.request_date), entry.request_date, entry.request_date, entry.note || "", entry.start_time, entry.end_time);
-  return Number(option.lastInsertRowid);
+  const groupId = `za-request-${entry.id}`;
+  const insert = db.prepare(`INSERT INTO week_options
+      (employee_number, group_id, week_start, date_from, date_to, option_type, note, credited_minutes_per_day, all_day, start_time, end_time)
+    VALUES (?, ?, ?, ?, ?, 'time_off', ?, NULL, ?, ?, ?)`);
+  let firstId = null;
+  for (let segmentStart = dateFrom; segmentStart <= dateTo;) {
+    const weekStart = getMonday(segmentStart);
+    const segmentEnd = [dateTo, addDays(weekStart, 6)].sort()[0];
+    const result = insert.run(entry.employee_number, groupId, weekStart, segmentStart, segmentEnd, entry.note || "", allDay ? 1 : 0,
+      allDay ? null : entry.start_time, allDay ? null : entry.end_time);
+    firstId ||= Number(result.lastInsertRowid);
+    segmentStart = addDays(segmentEnd, 1);
+  }
+  return firstId;
 }
 
 function restoreApprovedTimeOff(entry) {
   let originals = [];
   try { originals = JSON.parse(entry.original_shifts_json || "[]"); } catch {}
-  if (entry.option_id) db.prepare("DELETE FROM week_options WHERE id = ?").run(entry.option_id);
+  db.prepare("DELETE FROM week_options WHERE group_id = ? OR id = ?").run(`za-request-${entry.id}`, entry.option_id || 0);
   for (const original of originals) {
     db.prepare(`
       DELETE FROM shifts WHERE employee_number = ? AND shift_date = ?
@@ -2151,6 +2352,7 @@ function requestDecisionHistory(kind, id) {
 }
 
 function absenceHistoryForEmployee(employeeNumber) {
+  const visibleSince = addMonths(viennaTodayIso(), -6);
   const vacations = db.prepare(`
     SELECT id, date_from, date_to, note, status, approval_stage, decision_note,
            local_approved_by, local_approved_at, hr_approved_by, hr_approved_at,
@@ -2162,7 +2364,8 @@ function absenceHistoryForEmployee(employeeNumber) {
     decisions: requestDecisionHistory("vacation", item.id),
   }));
   const timeOff = db.prepare(`
-    SELECT id, request_date, start_time, end_time, note, status, approval_type, approval_stage,
+    SELECT id, request_date, COALESCE(date_from, request_date) AS date_from, COALESCE(date_to, request_date) AS date_to,
+           all_day, start_time, end_time, note, status, approval_type, approval_stage,
            traffic_light, check_reason, decision_note, local_approved_by, local_approved_at,
            hr_approved_by, hr_approved_at, decided_by, decided_at, created_at, updated_at
     FROM time_off_requests WHERE employee_number = ?
@@ -2182,7 +2385,27 @@ function absenceHistoryForEmployee(employeeNumber) {
     kind: item.request_type === "cancel" ? "vacation_cancel" : "vacation_change",
     decisions: requestDecisionHistory("vacation_change", item.id),
   }));
-  return [...vacations, ...timeOff, ...changes]
+  const timeOffChanges = db.prepare(`
+    SELECT c.id, c.original_request_id, c.request_type, c.requested_date_from,
+           c.requested_date_to, c.requested_all_day, c.requested_start_time,
+           c.requested_end_time, c.note, c.status, c.approval_type, c.approval_stage,
+           c.decision_note, c.local_approved_by, c.local_approved_at, c.hr_approved_by,
+           c.hr_approved_at, c.decided_by, c.decided_at, c.created_at, c.updated_at,
+           COALESCE(t.date_from, t.request_date) AS original_date_from,
+           COALESCE(t.date_to, t.request_date) AS original_date_to,
+           t.all_day AS original_all_day, t.start_time AS original_start_time,
+           t.end_time AS original_end_time
+    FROM time_off_change_requests c
+    JOIN time_off_requests t ON t.id = c.original_request_id
+    WHERE c.employee_number = ?
+  `).all(employeeNumber).map((item) => ({
+    ...item,
+    kind: item.request_type === "cancel" ? "time_off_cancel" : "time_off_change",
+    decisions: requestDecisionHistory("time_off_change", item.id),
+  }));
+  return [...vacations, ...timeOff, ...changes, ...timeOffChanges]
+    .filter((item) => ["pending", "pending_local", "preliminary_local", "pending_hr"].includes(item.status)
+      || String(item.date_to || item.request_date || item.requested_date_to || item.original_date_to || item.created_at).slice(0, 10) >= visibleSince)
     .sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)) || Number(right.id) - Number(left.id));
 }
 
@@ -2231,7 +2454,7 @@ function ownAmuReports(employeeNumber) {
 
 function amuReportMetadata(id) {
   return db.prepare(`
-    SELECT r.*, e.full_name, e.nickname, e.color, l.name AS location_name
+    SELECT r.*, e.full_name, e.nickname, e.color, e.preferred_department_id, l.name AS location_name
     FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
     JOIN locations l ON l.id = r.location_id WHERE r.id = ?
   `).get(Number(id));
@@ -2240,7 +2463,9 @@ function amuReportMetadata(id) {
 function assertAmuReportScope(session, report) {
   if (!report) throw httpError(404, "Die Arbeitsunfähigkeitsmeldung wurde nicht gefunden.", "AMU_REPORT_NOT_FOUND");
   if (session.employeeNumber === "local" || ["admin", "hr"].includes(session.role)) return;
-  if (String(report.location_id || "") !== String(session.homeLocationId || "")) {
+  const assigned = (session.scopes || []).some((scope) => scope.locationId === report.location_id
+    && (session.role !== "department_manager" || Number(scope.departmentId) === Number(report.preferred_department_id || 0)));
+  if (!assigned) {
     auditPortal(session.employeeNumber, "amu.access.denied", "amu_report", String(report.id), "scope");
     throw httpError(403, "Diese Arbeitsunfähigkeitsmeldung gehört nicht zum eigenen Standort.", "PORTAL_PERMISSION_DENIED");
   }
@@ -2334,10 +2559,15 @@ function actorStage(session, entry) {
 function assertRequestScope(session, entry) {
   if (["admin", "hr"].includes(session.role) || session.employeeNumber === "local") return;
   const locationId = entry.location_id || db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(entry.employee_number)?.home_location_id;
-  if (String(locationId || "") !== String(session.homeLocationId || "")) {
+  const assignedScopes = session.scopes || [];
+  if (!assignedScopes.some((scope) => scope.locationId === locationId)) {
     throw httpError(403, "Dieser Antrag gehört nicht zum eigenen Standort.", "PORTAL_PERMISSION_DENIED");
   }
   if (session.role === "department_manager") {
+    const employeeDepartment = employeeRequestContext(entry.employee_number, entry.request_date || entry.date_from).departmentId;
+    if (!assignedScopes.some((scope) => scope.locationId === locationId && Number(scope.departmentId) === Number(employeeDepartment))) {
+      throw httpError(403, "Dieser Antrag gehört nicht zur eigenen Abteilung.", "PORTAL_PERMISSION_DENIED");
+    }
     const today = viennaTodayIso();
     const delegated = db.prepare(`
       SELECT 1 FROM approval_delegations WHERE location_id = ? AND delegate_employee_number = ?
@@ -2404,6 +2634,7 @@ function serializeLocation(row, departments = []) {
   return {
     ...row,
     min_staff: Number(row.min_staff || 0),
+    day_settings: daySettingsFromLocation(row.id),
     active: Boolean(row.active),
     departments,
   };
@@ -2436,7 +2667,7 @@ function getPositions() {
 function getLocations(includeInactive = true) {
   const locationRows = db
     .prepare(`
-      SELECT id, name, min_staff, active, created_at
+      SELECT id, name, min_staff, day_settings_json, active, created_at
       FROM locations
       ${includeInactive ? "" : "WHERE active = 1"}
       ORDER BY active DESC, id
@@ -2454,6 +2685,18 @@ function getLocations(includeInactive = true) {
   return locationRows.map((location) =>
     serializeLocation(location, departmentRows.filter((department) => department.location_id === location.id)),
   );
+}
+
+function getLocationsForSession(session, includeInactive = true) {
+  const locations = getLocations(includeInactive);
+  if (sessionHasGlobalScope(session)) return locations;
+  const allowed = new Map((session.scopes || []).map((scope) => [`${scope.locationId}:${scope.departmentId || 0}`, scope]));
+  return locations.filter((location) => [...allowed.keys()].some((key) => key.startsWith(`${location.id}:`))).map((location) => ({
+    ...location,
+    departments: session.role === "department_manager"
+      ? location.departments.filter((department) => allowed.has(`${location.id}:${department.id}`))
+      : location.departments,
+  }));
 }
 
 function normalizeLocationId(value) {
@@ -2499,7 +2742,31 @@ function validateLocationPayload(body, isNew = false) {
     throw httpError(400, "Die Mindestbesetzung der Filiale muss zwischen 0 und 99 liegen.");
   }
   if (!isNew) validateLocationExists(id);
-  return { id, name, minStaff, active: body.active === false ? 0 : 1 };
+  const daySettings = validateDaySettings(body.daySettings || (isNew ? legacyDaySettingsSnapshot() : daySettingsFromLocation(id)));
+  return { id, name, minStaff, daySettings, active: body.active === false ? 0 : 1 };
+}
+
+function validateDaySettings(submittedDays = {}) {
+  const result = {};
+  for (const [day] of planningDays) {
+    const submitted = submittedDays[day] || {};
+    const open = submitted.open !== false;
+    const start = String(submitted.start || "");
+    const end = String(submitted.end || "");
+    const lunchEnabled = submitted.lunchEnabled === true;
+    const lunchStart = String(submitted.lunchStart || "13:00");
+    const lunchEnd = String(submitted.lunchEnd || "14:00");
+    const minStaff = Number(submitted.minStaff || 0);
+    const minFrom = String(submitted.minFrom || start);
+    const minTo = String(submitted.minTo || end);
+    if (![start, end, lunchStart, lunchEnd, minFrom, minTo].every(isTime)) throw httpError(400, `Bitte gültige Zeiten für ${day} eingeben.`);
+    if (open && end <= start) throw httpError(400, `Das Dienstende für ${day} muss nach dem Beginn liegen.`);
+    if (lunchEnabled && (lunchEnd <= lunchStart || lunchStart < start || lunchEnd > end)) throw httpError(400, `Die Mittagspause für ${day} muss innerhalb der Dienstzeit liegen.`);
+    if (!Number.isInteger(minStaff) || minStaff < 0 || minStaff > 99) throw httpError(400, `Die Mindestbesetzung für ${day} ist ungültig.`);
+    if (open && (minTo <= minFrom || minFrom < start || minTo > end)) throw httpError(400, `Der Zeitraum der Mindestbesetzung für ${day} muss innerhalb der Dienstzeit liegen.`);
+    result[day] = { open, start, end, lunchEnabled, lunchStart, lunchEnd, minStaff, minFrom, minTo };
+  }
+  return result;
 }
 
 function validateDepartmentPayload(body, existingId = null) {
@@ -3335,7 +3602,7 @@ function validateShift(body) {
   if (!employeeCanWorkOnDate(employee, shiftDate)) {
     throw httpError(409, `${employee.nickname} hat an diesem Wochentag keinen fix vereinbarten Arbeitstag.`);
   }
-  const settings = getSettings();
+  const settings = settingsForLocation(employee.home_location_id);
   assertDateEditable(shiftDate, settings);
   const globalBlock = getGlobalDayBlockForDate(shiftDate, employee.home_location_id);
   if (globalBlock) {
@@ -3417,7 +3684,8 @@ function validateWeekOption(body, existingId = 0) {
     ? null
     : Number(body.manualHours);
 
-  if (!db.prepare("SELECT 1 FROM employees WHERE personnel_number = ?").get(employeeNumber)) {
+  const employee = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(employeeNumber);
+  if (!employee) {
     throw httpError(404, "Die ausgewählte Person wurde nicht gefunden.");
   }
   if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) {
@@ -3426,7 +3694,7 @@ function validateWeekOption(body, existingId = 0) {
   if (dateFrom < weekStart || dateTo > addDays(weekStart, 6)) {
     throw httpError(400, "Der Zeitraum muss innerhalb der ausgewählten Woche liegen.");
   }
-  assertWeekEditable(weekStart);
+  assertWeekEditable(weekStart, settingsForLocation(employee.home_location_id));
   if (!allowedWeekOptionTypes.includes(optionType)) throw httpError(400, "Bitte eine gültige Option auswählen.");
   if (!alwaysFullDayOptionTypes.has(optionType) && !timedOptionTypes.has(optionType)) {
     throw httpError(400, "Bitte eine gültige Option auswählen.");
@@ -3621,11 +3889,12 @@ function buildSaturdayServiceStats(weekStart, context, employees, currentWeekShi
   };
 }
 
-function getSchedule(weekValue, contextInput = {}) {
+function getSchedule(weekValue, contextInput = {}, session = null) {
   const weekStart = getMonday(isIsoDate(weekValue) ? weekValue : undefined);
   const weekEnd = addDays(weekStart, 6);
   const context = resolvePlanningContext(contextInput);
-  const settings = applyScopedPdfSettings(getSettings(), context, "schedule");
+  assertSessionContextScope(session, context);
+  const settings = applyScopedPdfSettings(settingsForLocation(context.locationId), context, "schedule");
   const globalDayBlocks = getGlobalDayBlocksForRange(weekStart, weekEnd, context.locationId);
   const globalBlockDates = new Set(globalDayBlocks.map((block) => block.block_date));
   const employeeFilter = scheduleEmployeeFilterSql(context, weekStart, weekEnd, "e");
@@ -3674,6 +3943,25 @@ function getSchedule(weekValue, contextInput = {}) {
       ORDER BY CAST(o.employee_number AS INTEGER), o.employee_number, o.date_from
     `)
     .all(weekStart, ...employeeFilter.values);
+  const pendingTimeOff = db.prepare(`
+    SELECT t.id, t.employee_number, COALESCE(t.date_from, t.request_date) AS date_from,
+           COALESCE(t.date_to, t.request_date) AS date_to, t.all_day, t.start_time, t.end_time, t.note,
+           e.nickname, e.color, e.contracted_hours
+    FROM time_off_requests t JOIN employees e ON e.personnel_number = t.employee_number
+    WHERE t.status IN ('pending','pending_local','preliminary_local','pending_hr')
+      AND COALESCE(t.date_from, t.request_date) <= ? AND COALESCE(t.date_to, t.request_date) >= ?
+      AND ${employeeFilter.sql}
+  `).all(weekEnd, weekStart, ...employeeFilter.values).map((item) => ({
+    ...item,
+    id: `pending-za-${item.id}`,
+    group_id: null,
+    week_start: weekStart,
+    option_type: "time_off",
+    note: `Beantragt${item.note ? ` · ${item.note}` : ""}`,
+    credited_minutes_per_day: 0,
+    soft_pending: true,
+  }));
+  weekOptions.push(...pendingTimeOff);
 
   const totals = {};
   const plannedTotals = {};
@@ -3735,7 +4023,7 @@ function getSchedule(weekValue, contextInput = {}) {
     weekEnd,
     calendarWeek: getIsoWeek(weekStart),
     context,
-    locations: getLocations(true),
+    locations: getLocationsForSession(session, true),
     settings,
     currentWeekStart: currentWeekStart(),
     isPastWeek: isPastWeekStart(weekStart),
@@ -3787,14 +4075,15 @@ function vacationGroupKey(row) {
   return row.group_id || `legacy-${row.id}`;
 }
 
-function getVacationPlan(yearValue, contextInput = {}) {
+function getVacationPlan(yearValue, contextInput = {}, session = null) {
   const year = validateYear(yearValue);
   const yearStart = `${year}-01-01`;
   const yearEnd = `${year}-12-31`;
   const today = new Date().toISOString().slice(0, 10);
   const consumedEnd = today < yearStart ? null : today > yearEnd ? yearEnd : today;
-  const context = resolvePlanningContext({ ...contextInput, departmentId: null, department: null });
-  const settings = applyScopedPdfSettings(getSettings(), context, "vacation");
+  const context = resolvePlanningContext(contextInput);
+  assertSessionContextScope(session, context);
+  const settings = applyScopedPdfSettings(settingsForLocation(context.locationId), context, "vacation");
   const employeeFilter = employeeLocationFilterSql(context, "e");
   const publicHolidays = publicHolidaysForRange(yearStart, yearEnd);
   const globalHolidayBlocks = getGlobalDayBlocksForRange(yearStart, yearEnd, context.locationId)
@@ -3913,7 +4202,7 @@ function getVacationPlan(yearValue, contextInput = {}) {
   return {
     year,
     context,
-    locations: getLocations(true),
+    locations: getLocationsForSession(session, true),
     settings,
     employees,
     entitlements,
@@ -3980,7 +4269,7 @@ function validateGlobalDayBlock(body, existingId = 0) {
     throw httpError(400, "Der Sperrtag muss innerhalb der ausgewählten Kalenderwoche liegen.");
   }
   if (!reason) throw httpError(400, "Bitte einen Grund für den Sperrtag eintragen.");
-  assertWeekEditable(weekStart);
+  assertWeekEditable(weekStart, settingsForLocation(context.locationId));
 
   const existingBlock = db
     .prepare("SELECT id FROM global_day_blocks WHERE location_id = ? AND block_date = ? AND id != ?")
@@ -4086,7 +4375,7 @@ function getScheduleNote(weekStart, context) {
 function validateScheduleNote(body) {
   const weekStart = getMonday(isIsoDate(body.weekStart) ? body.weekStart : undefined);
   const context = resolvePlanningContext(body);
-  assertWeekEditable(weekStart);
+  assertWeekEditable(weekStart, settingsForLocation(context.locationId));
   const noteHtml = sanitizeScheduleNoteHtml(body.noteHtml || "");
   const noteText = stripEmoji(
     textFromScheduleNoteHtml(noteHtml) || String(body.noteText || body.text || ""),
@@ -4227,7 +4516,7 @@ function serverDiagnostics() {
   if (settingEnabled(settings, "external_backup_enabled") && !backupHealth.writable) warnings.push("Das externe Backupziel ist nicht beschreibbar.");
   if (latestBackupAgeHours === null || latestBackupAgeHours > Math.max(6, Number(settings.backup_interval_hours || 2) * 3)) warnings.push("Es wurde kein ausreichend aktuelles verifiziertes Datenbank-Backup gefunden.");
   if (externalDirectory && path.parse(path.resolve(databasePath)).root.toLowerCase() === path.parse(path.resolve(externalDirectory)).root.toLowerCase()) warnings.push("Datenbank und externes Backup liegen auf demselben Laufwerk.");
-  if (!amu.ok) warnings.push(`Der geschützte AMU-Speicher ist nicht betriebsbereit${amu.error ? `: ${amu.error}` : "."}`);
+  if (!amu.ok) warnings.push(`Der geschützte AUM-Speicher ist nicht betriebsbereit${amu.error ? `: ${amu.error}` : "."}`);
   if (serverModeActive && serviceControlToken.length < 32) warnings.push("Der sichere Token für den Windows-Dienststopp fehlt.");
   const lockedAccounts = Number(db.prepare("SELECT COUNT(*) AS count FROM portal_users WHERE locked_until > CURRENT_TIMESTAMP").get().count || 0);
   if (lockedAccounts) warnings.push(`${lockedAccounts} Zugang/Zugänge sind derzeit gesperrt.`);
@@ -4270,7 +4559,7 @@ function serverDiagnostics() {
       { id: "database", label: "SQLite-Integrität", ok: startupIntegrity[0] === "ok", detail: startupIntegrity[0] || "unbekannt" },
       { id: "data", label: "Datenverzeichnis", ok: dataHealth.writable, detail: dataHealth.writable ? "beschreibbar" : "nicht beschreibbar" },
       { id: "backup", label: "Externes Backup", ok: backupHealth.writable && latestBackupAgeHours !== null, detail: latestBackup ? latestBackup.modifiedAt : "noch kein Backup" },
-      { id: "amu", label: "AMU-Speicher", ok: amu.ok, detail: amu.ok ? "verschlüsselt und beschreibbar" : (amu.error || "nicht bereit") },
+      { id: "amu", label: "AUM-Speicher", ok: amu.ok, detail: amu.ok ? "verschlüsselt und beschreibbar" : (amu.error || "nicht bereit") },
       { id: "service-stop", label: "Dienststopp", ok: serviceControlToken.length >= 32, detail: serviceControlToken.length >= 32 ? "Token konfiguriert" : "Token fehlt" },
     ],
     security: {
@@ -4483,8 +4772,9 @@ async function buildUpdateStatus() {
   };
 }
 
-app.get("/api/system-info", (_request, response) => {
+app.get("/api/system-info", (request, response) => {
   const settings = getSettings();
+  const privileged = !getPortalStatus().portalEnabled || request.portalSession?.permissions?.includes("settings:write");
   const sqliteVersion = db.prepare("SELECT sqlite_version() AS version").get().version;
   const serverTime = new Intl.DateTimeFormat("de-AT", {
     day: "2-digit",
@@ -4504,8 +4794,8 @@ app.get("/api/system-info", (_request, response) => {
     platform: `${os.type()} ${os.release()} · ${os.arch()}`,
     uptimeSeconds: Math.floor(process.uptime()),
     database: path.basename(databasePath),
-    appBackupDirectory,
-    backupDirectory: backupDirectoryFromSettings(settings),
+    appBackupDirectory: privileged ? appBackupDirectory : "",
+    backupDirectory: privileged ? backupDirectoryFromSettings(settings) : "",
     externalBackupEnabled: settingEnabled(settings, "external_backup_enabled"),
     backupIntervalHours: Number(settings.backup_interval_hours || 2),
     lastBackup,
@@ -4847,7 +5137,7 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
     ? Number(db.prepare("SELECT COUNT(*) AS count FROM amu_documents WHERE status = 'active'").get().count || 0)
     : 0;
   if (currentAmuDocuments > 0) {
-    throw httpError(409, "Diese Datenbank enthält geschützte AMU-Dokumente. Bitte Datenbank und AMU-Dateisicherung gemeinsam über die Wartungswerkzeuge wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
+    throw httpError(409, "Diese Datenbank enthält geschützte AUM-Dokumente. Bitte Datenbank und AUM-Dateisicherung gemeinsam über die Wartungswerkzeuge wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
   }
   if (serverModeActive) throw httpError(409, "Datenbankimporte sind im laufenden Serverbetrieb gesperrt und müssen in einem Wartungsfenster am Server durchgeführt werden.", "SERVER_MAINTENANCE_REQUIRED");
   if (!Buffer.isBuffer(request.body) || request.body.length < 1024) {
@@ -4871,7 +5161,7 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   }
   if (importedAmuDocuments > 0) {
     fs.rmSync(importPath, { force: true });
-    throw httpError(409, "Das ausgewählte Backup enthält geschützte AMU-Dokumente. Bitte die vollständige Datenbank- und AMU-Sicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
+    throw httpError(409, "Das ausgewählte Backup enthält geschützte AUM-Dokumente. Bitte die vollständige Datenbank- und AUM-Sicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
   }
   const preserveBranding = String(request.query.preserveBranding ?? "1") !== "0";
   if (preserveBranding) {
@@ -4890,11 +5180,12 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
 });
 
 app.get("/api/schedule", (request, response) => {
-  response.json(getSchedule(request.query.week, request.query));
+  response.json(getSchedule(request.query.week, request.query, request.portalSession));
 });
 
 app.put("/api/schedule-note", (request, response) => {
   const note = validateScheduleNote(request.body);
+  assertSessionContextScope(request.portalSession, note.context);
   db.prepare(`
     INSERT INTO schedule_notes
       (location_id, department_key, week_start, note_text, note_html, font_size, bold, italic, underline, updated_at)
@@ -4925,21 +5216,22 @@ app.put("/api/schedule-note", (request, response) => {
 app.delete("/api/schedule-note", (request, response) => {
   const weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : undefined);
   const context = resolvePlanningContext(request.query);
-  assertWeekEditable(weekStart);
+  assertSessionContextScope(request.portalSession, context);
+  assertWeekEditable(weekStart, settingsForLocation(context.locationId));
   db.prepare("DELETE FROM schedule_notes WHERE location_id = ? AND department_key = ? AND week_start = ?")
     .run(context.locationId, pdfDepartmentKey(context), weekStart);
   response.status(204).end();
 });
 
-app.get("/api/locations", (_request, response) => {
-  response.json(getLocations(true));
+app.get("/api/locations", (request, response) => {
+  response.json(getLocationsForSession(request.portalSession, true));
 });
 
 app.post("/api/locations", (request, response) => {
   const location = validateLocationPayload(request.body, true);
   try {
-    db.prepare("INSERT INTO locations (id, name, min_staff, active) VALUES (?, ?, ?, ?)")
-      .run(location.id, location.name, location.minStaff, location.active);
+    db.prepare("INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES (?, ?, ?, ?, ?)")
+      .run(location.id, location.name, location.minStaff, JSON.stringify(location.daySettings), location.active);
   } catch (error) {
     if (String(error.message).includes("UNIQUE")) throw httpError(409, "Diese Filial-ID ist bereits vergeben.");
     throw error;
@@ -4950,8 +5242,8 @@ app.post("/api/locations", (request, response) => {
 app.put("/api/locations/:id", (request, response) => {
   const id = normalizeLocationId(request.params.id);
   const location = validateLocationPayload({ ...request.body, id }, false);
-  const result = db.prepare("UPDATE locations SET name = ?, min_staff = ?, active = ? WHERE id = ?")
-    .run(location.name, location.minStaff, location.active, id);
+  const result = db.prepare("UPDATE locations SET name = ?, min_staff = ?, day_settings_json = ?, active = ? WHERE id = ?")
+    .run(location.name, location.minStaff, JSON.stringify(location.daySettings), location.active, id);
   if (!result.changes) throw httpError(404, "Die Filiale wurde nicht gefunden.");
   response.json(getLocations(true));
 });
@@ -5054,9 +5346,9 @@ app.delete("/api/positions/:id", (request, response) => {
   response.status(204).end();
 });
 
-app.get("/api/employees", (_request, response) => {
-  response.json(
-    db
+app.get("/api/employees", (request, response) => {
+  const session = request.portalSession;
+  let employees = db
       .prepare(`
         SELECT e.personnel_number, e.full_name, e.nickname, e.color, e.contracted_hours,
                e.preferred_day_off, e.fixed_workdays, e.position_id, e.home_location_id, e.preferred_department_id,
@@ -5068,9 +5360,14 @@ app.get("/api/employees", (_request, response) => {
         LEFT JOIN positions p ON p.id = e.position_id
         ORDER BY e.active DESC, CAST(e.personnel_number AS INTEGER), e.personnel_number
       `)
-      .all()
-      .map(serializeEmployee),
-  );
+      .all().map(serializeEmployee);
+  if (!sessionHasGlobalScope(session)) {
+    const locations = new Set((session.scopes || []).map((scope) => scope.locationId));
+    const departments = new Set((session.scopes || []).map((scope) => Number(scope.departmentId || 0)).filter(Boolean));
+    employees = employees.filter((employee) => locations.has(employee.home_location_id)
+      && (session.role !== "department_manager" || departments.has(Number(employee.preferred_department_id || 0))));
+  }
+  response.json(employees);
 });
 
 app.post("/api/employees", (request, response) => {
@@ -5305,8 +5602,41 @@ app.post("/api/portal/v1/auth/logout", (request, response) => {
 });
 
 app.get("/api/portal/v1/users", (request, response) => {
-  requirePortalAdminOrLocal(request, "users:write");
-  response.json({ users: portalUsersForAdmin(), roles: getPortalRoles() });
+  const actor = requirePortalAnyPermission(request, ["users:write", "scopes:write"]);
+  response.json({ users: portalUsersForActor(actor), roles: getPortalRoles() });
+});
+
+app.put("/api/portal/v1/users/:employeeNumber/scopes", (request, response) => {
+  const actor = requirePortalAdminOrLocal(request, "scopes:write");
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  const target = db.prepare(`SELECT u.role, e.home_location_id FROM portal_users u JOIN employees e ON e.personnel_number = u.employee_number WHERE u.employee_number = ?`).get(employeeNumber);
+  if (!target) throw httpError(404, "Der Zugang wurde nicht gefunden.");
+  if (!["manager", "department_manager"].includes(target.role)) throw httpError(400, "Nur Filial- und Abteilungsleitungen benötigen eine Bereichszuweisung.");
+  const submitted = Array.isArray(request.body.scopes) ? request.body.scopes : [];
+  const scopes = submitted.map((scope) => ({
+    locationId: normalizeLocationId(scope.locationId),
+    departmentId: normalizeDepartmentId(scope.departmentId, true),
+  }));
+  if (!scopes.length) throw httpError(400, "Bitte mindestens einen Bereich zuweisen.");
+  for (const scope of scopes) {
+    validateLocationExists(scope.locationId);
+    if (target.role === "department_manager") {
+      if (!scope.departmentId) throw httpError(400, "Für eine Abteilungsleitung muss eine Abteilung ausgewählt werden.");
+      validateDepartmentExists(scope.departmentId, scope.locationId);
+    } else scope.departmentId = null;
+    if (actor.role === "manager") assertSessionContextScope(actor, { locationId: scope.locationId });
+    if (actor.role === "manager" && target.home_location_id !== scope.locationId) throw httpError(403, "Die Abteilungsleitung gehört nicht zum eigenen Standort.");
+  }
+  if (actor.role === "manager" && target.role !== "department_manager") throw httpError(403, "Eine Filialleitung darf nur Abteilungsleitungen ihres Standorts zuweisen.");
+  db.exec("BEGIN");
+  try {
+    db.prepare("DELETE FROM portal_access_scopes WHERE employee_number = ?").run(employeeNumber);
+    const insert = db.prepare("INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by) VALUES (?, ?, ?, ?)");
+    for (const scope of scopes) insert.run(employeeNumber, scope.locationId, scope.departmentId || 0, actor.employeeNumber);
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+  auditPortal(actor.employeeNumber, "portal.scope.update", "portal_user", employeeNumber, JSON.stringify(scopes));
+  response.json({ users: portalUsersForActor(actor), roles: getPortalRoles() });
 });
 
 app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
@@ -5317,6 +5647,13 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
   }
   const role = String(request.body.role || "employee");
   if (!db.prepare("SELECT 1 FROM portal_roles WHERE id = ?").get(role)) throw httpError(400, "Die ausgewählte Rolle ist ungültig.");
+  if (actor.role === "hr" && !["employee", "manager", "department_manager"].includes(role)) {
+    throw httpError(403, "Die Personalleitung darf keine Admin- oder Personalleitungsrollen vergeben.");
+  }
+  if (actor.role === "hr") {
+    const existingRole = db.prepare("SELECT role FROM portal_users WHERE employee_number = ?").get(employeeNumber)?.role;
+    if (["admin", "hr"].includes(existingRole)) throw httpError(403, "Dieser globale Zugang kann nur von einem Admin geändert werden.");
+  }
   const password = String(request.body.password || "");
   const existing = db.prepare("SELECT password_hash FROM portal_users WHERE employee_number = ?").get(employeeNumber);
   const passwordHash = password ? await hashPortalPassword(password) : existing?.password_hash || "";
@@ -5486,11 +5823,11 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
       committed = true;
       const report = amuReportMetadata(reportId);
       const recipients = new Set([
-        ...requestReviewerRecipients(context.locationId, "local", session.employeeNumber),
-        ...requestReviewerRecipients(context.locationId, "hr", session.employeeNumber),
+        ...requestReviewerRecipients(context.locationId, context.departmentId, "local", session.employeeNumber),
+        ...requestReviewerRecipients(context.locationId, context.departmentId, "hr", session.employeeNumber),
       ]);
       for (const recipient of recipients) {
-        createPortalNotification(recipient, "amu.submitted", "Neue Arbeitsunfähigkeitsmeldung", `${session.employeeNumber} hat eine AMU hochgeladen.`, {
+        createPortalNotification(recipient, "amu.submitted", "Neue Arbeitsunfähigkeitsmeldung", `${session.employeeNumber} hat eine AUM hochgeladen.`, {
           target: "/?view=requests&kind=amu",
           entityType: "amu_report",
           entityId: reportId,
@@ -5546,7 +5883,7 @@ app.get("/api/portal/v1/me/amu-reports/:reportId/documents/:documentId/content",
   const document = amuDocumentMetadata(request.params.reportId, request.params.documentId);
   if (!document || document.employee_number !== session.employeeNumber || document.report_status === "withdrawn") {
     auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", String(request.params.documentId));
-    throw httpError(404, "Das AMU-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
+    throw httpError(404, "Das AUM-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
   }
   auditPortal(session.employeeNumber, "amu.document.download", "amu_document", document.id);
   sendAmuDocument(response, document);
@@ -5555,19 +5892,22 @@ app.get("/api/portal/v1/me/amu-reports/:reportId/documents/:documentId/content",
 app.get("/api/portal/v1/amu-reports", (request, response) => {
   const session = requirePortalAdminOrLocal(request, "amu:metadata:read");
   const scoped = !["admin", "hr"].includes(session.role) && session.employeeNumber !== "local";
+  const scopedLocationId = session.scopes?.[0]?.locationId || session.homeLocationId;
   const rows = scoped
     ? db.prepare(`
-        SELECT r.*, e.full_name, e.nickname, e.color, l.name AS location_name
+        SELECT r.*, e.full_name, e.nickname, e.color, e.preferred_department_id, l.name AS location_name
         FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
         JOIN locations l ON l.id = r.location_id WHERE r.location_id = ?
         ORDER BY r.submitted_at DESC, r.id DESC
-      `).all(session.homeLocationId)
+      `).all(scopedLocationId)
     : db.prepare(`
-        SELECT r.*, e.full_name, e.nickname, e.color, l.name AS location_name
+        SELECT r.*, e.full_name, e.nickname, e.color, e.preferred_department_id, l.name AS location_name
         FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
         JOIN locations l ON l.id = r.location_id ORDER BY r.submitted_at DESC, r.id DESC
       `).all();
-  const reports = serializeAmuReports(rows);
+  const allowedDepartments = new Set((session.scopes || []).map((scope) => Number(scope.departmentId || 0)).filter(Boolean));
+  const scopedRows = session.role === "department_manager" ? rows.filter((row) => allowedDepartments.has(Number(row.preferred_department_id || 0))) : rows;
+  const reports = serializeAmuReports(scopedRows);
   if (!session.permissions?.includes("amu:file:read") && session.employeeNumber !== "local") {
     for (const report of reports) report.documents = report.documents.map(({ id, detected_mime, size, byte_size, scan_status, status, created_at }, index) => ({
       id, original_name: `Dokument ${index + 1}`, original_filename: `Dokument ${index + 1}`, detected_mime, size, byte_size, scan_status, status, created_at, content_access: false,
@@ -5589,7 +5929,7 @@ app.put("/api/portal/v1/amu-reports/:id/review", (request, response) => {
       review_note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
   `).run(action, session.employeeNumber, requireAmuStorage().protectText(note), report.id);
   auditPortal(session.employeeNumber, `amu.report.${action}`, "amu_report", String(report.id));
-  createPortalNotification(report.employee_number, "amu.review", "AMU wurde geprüft", note, {
+  createPortalNotification(report.employee_number, "amu.review", "AUM wurde geprüft", note, {
     target: "/portal/?tab=amu",
     entityType: "amu_report",
     entityId: report.id,
@@ -5603,7 +5943,7 @@ app.put("/api/portal/v1/amu-reports/:id/review", (request, response) => {
 app.get("/api/portal/v1/amu-reports/:reportId/documents/:documentId/content", (request, response) => {
   const session = requirePortalAdminOrLocal(request, "amu:file:read");
   const document = amuDocumentMetadata(request.params.reportId, request.params.documentId);
-  if (!document) throw httpError(404, "Das AMU-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
+  if (!document) throw httpError(404, "Das AUM-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
   assertAmuReportScope(session, document);
   auditPortal(session.employeeNumber, "amu.document.download", "amu_document", document.id);
   sendAmuDocument(response, document);
@@ -5612,7 +5952,7 @@ app.get("/api/portal/v1/amu-reports/:reportId/documents/:documentId/content", (r
 app.delete("/api/portal/v1/amu-reports/:reportId/documents/:documentId", (request, response) => {
   const session = requirePortalAdminOrLocal(request, "amu:delete");
   const document = amuDocumentMetadata(request.params.reportId, request.params.documentId);
-  if (!document) throw httpError(404, "Das AMU-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
+  if (!document) throw httpError(404, "Das AUM-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
   assertAmuReportScope(session, document);
   amuMutationInProgress += 1;
   try {
@@ -5649,9 +5989,9 @@ app.get("/api/portal/v1/me/time-off-slots", (request, response) => {
   const session = requirePortalSession(request, "own_time:read");
   const date = String(request.query.date || "");
   if (!isIsoDate(date)) throw httpError(400, "Bitte zuerst ein gültiges Datum auswählen.");
-  const settings = getSettings();
-  const hours = operatingHours(date, settings);
   const context = employeeRequestContext(session.employeeNumber, date);
+  const settings = settingsForLocation(context.locationId);
+  const hours = operatingHours(date, settings);
   const block = getGlobalDayBlockForDate(date, context.locationId);
   if (!hours || block) {
     response.json({ date, closed: true, reason: block?.reason || block?.holiday_name || "An diesem Tag ist die Filiale geschlossen.", startTimes: [], endTimes: [] });
@@ -5665,11 +6005,14 @@ app.get("/api/portal/v1/me/time-off-slots", (request, response) => {
 app.get("/api/portal/v1/me/time-off-requests", (request, response) => {
   const session = requirePortalSession(request, "own_time:read");
   const requests = db.prepare(`
-    SELECT id, request_date, start_time, end_time, note, status, approval_type, approval_stage,
+    SELECT id, request_date, COALESCE(date_from, request_date) AS date_from, COALESCE(date_to, request_date) AS date_to,
+           all_day, start_time, end_time, note, status, approval_type, approval_stage,
            traffic_light, check_reason, decision_note, local_approved_by, local_approved_at,
            hr_approved_by, hr_approved_at, decided_by, decided_at, created_at, updated_at
-    FROM time_off_requests WHERE employee_number = ? ORDER BY request_date DESC, created_at DESC
-  `).all(session.employeeNumber);
+    FROM time_off_requests WHERE employee_number = ?
+      AND (status IN ('pending','pending_local','preliminary_local','pending_hr') OR COALESCE(date_to, request_date) >= ?)
+    ORDER BY COALESCE(date_from, request_date) DESC, created_at DESC
+  `).all(session.employeeNumber, addMonths(viennaTodayIso(), -6));
   response.json({ requests });
 });
 
@@ -5678,20 +6021,47 @@ app.post("/api/portal/v1/me/time-off-requests", (request, response) => {
   assertPortalCsrf(request);
   const check = evaluateTimeOffRequest(session.employeeNumber, request.body);
   if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
-  const date = String(request.body.date || request.body.requestDate || "");
-  const startTime = String(request.body.startTime || "");
-  const endTime = String(request.body.endTime || "");
+  const date = String(request.body.date || request.body.requestDate || request.body.dateFrom || "");
+  const dateTo = String(request.body.dateTo || date);
+  const allDay = request.body.allDay === true || dateTo !== date;
+  const startTime = allDay ? "00:00" : String(request.body.startTime || "");
+  const endTime = allDay ? "23:59" : String(request.body.endTime || "");
   const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
   const approvalType = request.body.approvalType === "hr" ? "hr" : "local";
   const locationId = employeeRequestContext(session.employeeNumber, date).locationId;
   const result = db.prepare(`
     INSERT INTO time_off_requests
-      (employee_number, location_id, request_date, start_time, end_time, note, approval_type, approval_stage, status, traffic_light, check_reason)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'local', 'pending_local', ?, ?)
-  `).run(session.employeeNumber, locationId, date, startTime, endTime, note, approvalType, check.trafficLight, check.reason);
+      (employee_number, location_id, request_date, date_from, date_to, all_day, start_time, end_time, note, approval_type, approval_stage, status, traffic_light, check_reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'local', 'pending_local', ?, ?)
+  `).run(session.employeeNumber, locationId, date, date, dateTo, allDay ? 1 : 0, startTime, endTime, note, approvalType, check.trafficLight, check.reason);
   auditPortal(session.employeeNumber, "time_off.request.create", "time_off_request", String(result.lastInsertRowid), JSON.stringify(check));
   notifyRequestReviewers({ id: Number(result.lastInsertRowid), employee_number: session.employeeNumber, location_id: locationId }, "time_off", "local", session.employeeNumber);
   response.status(201).json({ id: Number(result.lastInsertRowid), status: "pending", check });
+});
+
+app.put("/api/portal/v1/me/time-off-requests/:id", (request, response) => {
+  const session = requirePortalSession(request, "own_time:write");
+  assertPortalCsrf(request);
+  const entry = db.prepare("SELECT * FROM time_off_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')")
+    .get(Number(request.params.id), session.employeeNumber);
+  if (!entry) throw httpError(404, "Der offene ZA-Antrag wurde nicht gefunden.");
+  const check = evaluateTimeOffRequest(session.employeeNumber, { ...request.body, excludeRequestId: entry.id });
+  if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+  const dateFrom = String(request.body.date || request.body.dateFrom || "");
+  const dateTo = String(request.body.dateTo || dateFrom);
+  const allDay = request.body.allDay === true || dateTo !== dateFrom;
+  const startTime = allDay ? "00:00" : String(request.body.startTime || "");
+  const endTime = allDay ? "23:59" : String(request.body.endTime || "");
+  const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
+  const approvalType = request.body.approvalType === "hr" ? "hr" : "local";
+  db.prepare(`UPDATE time_off_requests SET request_date = ?, date_from = ?, date_to = ?, all_day = ?, start_time = ?, end_time = ?, note = ?, approval_type = ?,
+      status = 'pending_local', approval_stage = 'local', traffic_light = ?, check_reason = ?, decision_note = '', local_approved_by = NULL,
+      local_approved_at = NULL, hr_approved_by = NULL, hr_approved_at = NULL, decided_by = NULL, decided_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+    .run(dateFrom, dateFrom, dateTo, allDay ? 1 : 0, startTime, endTime, note, approvalType, check.trafficLight, check.reason, entry.id);
+  recordRequestDecision("time_off", entry.id, "employee", "change", session.employeeNumber, note);
+  resolveRequestReviewNotifications("time_off", entry.id);
+  notifyRequestReviewers({ ...entry, location_id: entry.location_id }, "time_off", "local", session.employeeNumber);
+  response.json({ id: entry.id, status: "pending", check });
 });
 
 app.delete("/api/portal/v1/me/time-off-requests/:id", (request, response) => {
@@ -5712,9 +6082,93 @@ app.delete("/api/portal/v1/me/time-off-requests/:id", (request, response) => {
   response.status(204).end();
 });
 
+app.get("/api/portal/v1/me/approved-time-off", (request, response) => {
+  const session = requirePortalSession(request, "own_time:read");
+  const requests = db.prepare(`
+    SELECT id, request_date, COALESCE(date_from, request_date) AS date_from,
+           COALESCE(date_to, request_date) AS date_to, all_day, start_time, end_time,
+           note, approval_type, local_approved_by, hr_approved_by, decided_by, decided_at
+    FROM time_off_requests
+    WHERE employee_number = ? AND status = 'approved' AND COALESCE(date_to, request_date) >= ?
+    ORDER BY COALESCE(date_from, request_date), start_time, id
+  `).all(session.employeeNumber, viennaTodayIso());
+  const pendingChanges = db.prepare(`
+    SELECT id, original_request_id, request_type, requested_date_from, requested_date_to,
+           requested_all_day, requested_start_time, requested_end_time, note, status, created_at
+    FROM time_off_change_requests
+    WHERE employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')
+    ORDER BY created_at DESC
+  `).all(session.employeeNumber);
+  response.json({ requests, pendingChanges });
+});
+
+app.post("/api/portal/v1/me/time-off-change-requests", (request, response) => {
+  const session = requirePortalSession(request, "own_time:write");
+  assertPortalCsrf(request);
+  const originalRequestId = Number(request.body.requestId || request.body.originalRequestId || 0);
+  const requestType = String(request.body.requestType || "");
+  if (!Number.isInteger(originalRequestId) || !["change", "cancel"].includes(requestType)) {
+    throw httpError(400, "Bitte eine gültige ZA-Änderung auswählen.");
+  }
+  const original = db.prepare(`SELECT * FROM time_off_requests
+    WHERE id = ? AND employee_number = ? AND status = 'approved' AND COALESCE(date_to, request_date) >= ?`)
+    .get(originalRequestId, session.employeeNumber, viennaTodayIso());
+  if (!original) throw httpError(404, "Der genehmigte Zeitausgleich wurde nicht gefunden.");
+  const pending = db.prepare(`SELECT id FROM time_off_change_requests
+    WHERE original_request_id = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr') LIMIT 1`)
+    .get(original.id);
+  if (pending) throw httpError(409, "Für diesen Zeitausgleich besteht bereits ein offener Änderungs- oder Stornoantrag.");
+
+  let dateFrom = null;
+  let dateTo = null;
+  let allDay = false;
+  let startTime = null;
+  let endTime = null;
+  if (requestType === "change") {
+    dateFrom = String(request.body.dateFrom || request.body.date || "");
+    dateTo = String(request.body.dateTo || dateFrom);
+    allDay = request.body.allDay === true || dateTo !== dateFrom;
+    startTime = allDay ? "00:00" : String(request.body.startTime || "");
+    endTime = allDay ? "23:59" : String(request.body.endTime || "");
+    const check = evaluateTimeOffRequest(session.employeeNumber, {
+      date: dateFrom, dateFrom, dateTo, allDay, startTime, endTime, excludeRequestId: original.id,
+    });
+    if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+  }
+  const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
+  const result = db.prepare(`INSERT INTO time_off_change_requests
+      (employee_number, location_id, original_request_id, request_type,
+       requested_date_from, requested_date_to, requested_all_day, requested_start_time,
+       requested_end_time, note, status, approval_type, approval_stage)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_local', ?, 'local')`)
+    .run(session.employeeNumber, original.location_id, original.id, requestType, dateFrom, dateTo,
+      allDay ? 1 : 0, startTime, endTime, note, original.approval_type || "local");
+  const id = Number(result.lastInsertRowid);
+  recordRequestDecision("time_off_change", id, "employee", requestType, session.employeeNumber, note);
+  auditPortal(session.employeeNumber, `time_off.${requestType}.request`, "time_off_change_request", String(id));
+  notifyRequestReviewers({ id, employee_number: session.employeeNumber, location_id: original.location_id }, "time_off_change", "local", session.employeeNumber);
+  response.status(201).json({ id, status: "pending" });
+});
+
+app.delete("/api/portal/v1/me/time-off-change-requests/:id", (request, response) => {
+  const session = requirePortalSession(request, "own_time:write");
+  assertPortalCsrf(request);
+  const entry = db.prepare(`SELECT * FROM time_off_change_requests
+    WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')`)
+    .get(Number(request.params.id), session.employeeNumber);
+  if (!entry) throw httpError(404, "Der offene Änderungs- oder Stornoantrag wurde nicht gefunden.");
+  db.prepare(`UPDATE time_off_change_requests SET status = 'withdrawn', approval_stage = 'complete',
+    decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+    .run(session.employeeNumber, entry.id);
+  recordRequestDecision("time_off_change", entry.id, "employee", "withdraw", session.employeeNumber, "");
+  resolveRequestReviewNotifications("time_off_change", entry.id);
+  auditPortal(session.employeeNumber, "time_off.change_request.withdraw", "time_off_change_request", String(entry.id));
+  response.status(204).end();
+});
+
 app.get("/api/portal/v1/me/approved-vacations", (request, response) => {
   const session = requirePortalSession(request, "own_vacation:read");
-  const vacations = approvedVacationsForEmployee(session.employeeNumber, `${new Date().getUTCFullYear() - 1}-01-01`);
+  const vacations = approvedVacationsForEmployee(session.employeeNumber, viennaTodayIso());
   const pendingChanges = db.prepare(`
     SELECT id, vacation_group_id, request_type, original_date_from, original_date_to,
            requested_date_from, requested_date_to, note, status, created_at
@@ -5785,8 +6239,10 @@ app.get("/api/portal/v1/me/vacation-requests", (request, response) => {
     SELECT id, date_from, date_to, note, status, approval_stage, decision_note,
            local_approved_by, local_approved_at, hr_approved_by, hr_approved_at,
            decided_by, decided_at, created_at, updated_at
-    FROM vacation_requests WHERE employee_number = ? ORDER BY created_at DESC, id DESC
-  `).all(session.employeeNumber);
+    FROM vacation_requests WHERE employee_number = ?
+      AND (status IN ('pending','pending_local','preliminary_local','pending_hr') OR date_to >= ?)
+    ORDER BY created_at DESC, id DESC
+  `).all(session.employeeNumber, addMonths(viennaTodayIso(), -6));
   response.json({ requests });
 });
 
@@ -5802,6 +6258,31 @@ app.post("/api/portal/v1/me/vacation-requests", (request, response) => {
   auditPortal(session.employeeNumber, "vacation.request.create", "vacation_request", String(result.lastInsertRowid));
   notifyRequestReviewers({ id: Number(result.lastInsertRowid), employee_number: session.employeeNumber, location_id: locationId }, "vacation", "local", session.employeeNumber);
   response.status(201).json({ id: Number(result.lastInsertRowid), status: "pending" });
+});
+
+app.put("/api/portal/v1/me/vacation-requests/:id", (request, response) => {
+  const session = requirePortalSession(request, "own_vacation:request");
+  assertPortalCsrf(request);
+  const entry = db.prepare("SELECT * FROM vacation_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')")
+    .get(Number(request.params.id), session.employeeNumber);
+  if (!entry) throw httpError(404, "Der offene Urlaubsantrag wurde nicht gefunden.");
+  const dateFrom = String(request.body.dateFrom || "");
+  const dateTo = String(request.body.dateTo || "");
+  const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) throw httpError(400, "Bitte einen gültigen Urlaubszeitraum eingeben.");
+  const availability = evaluateVacationRequest(session.employeeNumber, { dateFrom, dateTo });
+  if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
+  const overlapping = db.prepare(`SELECT id FROM vacation_requests WHERE employee_number = ? AND id <> ?
+    AND status IN ('pending','pending_local','preliminary_local','pending_hr','approved') AND date_from <= ? AND date_to >= ? LIMIT 1`)
+    .get(session.employeeNumber, entry.id, dateTo, dateFrom);
+  if (overlapping) throw httpError(409, "Für diesen Zeitraum besteht bereits ein Urlaubsantrag.");
+  db.prepare(`UPDATE vacation_requests SET date_from = ?, date_to = ?, note = ?, status = 'pending_local', approval_stage = 'local',
+    decision_note = '', local_approved_by = NULL, local_approved_at = NULL, hr_approved_by = NULL, hr_approved_at = NULL,
+    decided_by = NULL, decided_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(dateFrom, dateTo, note, entry.id);
+  recordRequestDecision("vacation", entry.id, "employee", "change", session.employeeNumber, note);
+  resolveRequestReviewNotifications("vacation", entry.id);
+  notifyRequestReviewers(entry, "vacation", "local", session.employeeNumber);
+  response.json({ id: entry.id, status: "pending" });
 });
 
 app.delete("/api/portal/v1/me/vacation-requests/:id", (request, response) => {
@@ -5824,14 +6305,16 @@ app.delete("/api/portal/v1/me/vacation-requests/:id", (request, response) => {
 });
 
 app.get("/api/portal/v1/vacation-requests", (request, response) => {
-  requirePortalAdminOrLocal(request, "vacation:read");
+  const actor = requirePortalAdminOrLocal(request, "vacation:read");
   const status = ["pending", "approved", "rejected"].includes(String(request.query.status)) ? String(request.query.status) : "pending";
   const requests = db.prepare(`
     SELECT v.id, v.employee_number, v.date_from, v.date_to, v.note, v.status,
-           v.decided_by, v.decided_at, v.created_at, e.full_name, e.nickname, e.color
+           v.decided_by, v.decided_at, v.created_at, e.full_name, e.nickname, e.color,
+           COALESCE(v.location_id, e.home_location_id) AS scoped_location_id, e.preferred_department_id
     FROM vacation_requests v JOIN employees e ON e.personnel_number = v.employee_number
     WHERE v.status = ? ORDER BY v.created_at, v.id
-  `).all(status);
+  `).all(status).filter((entry) => sessionHasGlobalScope(actor) || (actor.scopes || []).some((scope) => scope.locationId === entry.scoped_location_id
+    && (actor.role !== "department_manager" || Number(scope.departmentId) === Number(entry.preferred_department_id || 0))));
   response.json({ requests, status });
 });
 
@@ -5878,22 +6361,24 @@ app.get("/api/portal/v1/absence-requests", (request, response) => {
   const session = requirePortalAdminOrLocal(request, "vacation:read");
   const scoped = !["admin", "hr"].includes(session.role) && session.employeeNumber !== "local";
   const scopeSql = scoped ? "AND COALESCE(v.location_id, e.home_location_id) = ?" : "";
-  const scopeParams = scoped ? [session.homeLocationId] : [];
+  const scopeParams = scoped ? [session.scopes?.[0]?.locationId || session.homeLocationId] : [];
   const vacationRequests = db.prepare(`
     SELECT v.id, v.employee_number, v.location_id, v.date_from, v.date_to, v.note, v.status,
            v.approval_stage, v.decision_note, v.local_approved_by, v.local_approved_at,
            v.hr_approved_by, v.hr_approved_at, v.decided_by, v.decided_at, v.created_at,
-           e.full_name, e.nickname, e.color
+           e.full_name, e.nickname, e.color, e.preferred_department_id
     FROM vacation_requests v JOIN employees e ON e.personnel_number = v.employee_number
     WHERE 1 = 1 ${scopeSql}
   `).all(...scopeParams).map((row) => ({ ...row, status: publicRequestStatus(row.status), kind: "vacation", decisions: requestDecisionHistory("vacation", row.id) }));
   const timeScopeSql = scoped ? "AND COALESCE(t.location_id, e.home_location_id) = ?" : "";
   const timeOffRequests = db.prepare(`
-    SELECT t.id, t.employee_number, t.location_id, t.request_date, t.start_time, t.end_time, t.note,
+    SELECT t.id, t.employee_number, t.location_id, t.request_date,
+           COALESCE(t.date_from, t.request_date) AS date_from, COALESCE(t.date_to, t.request_date) AS date_to, t.all_day,
+           t.start_time, t.end_time, t.note,
            t.status, t.approval_type, t.approval_stage, t.traffic_light, t.check_reason,
            t.decision_note, t.local_approved_by, t.local_approved_at, t.hr_approved_by,
            t.hr_approved_at, t.decided_by, t.decided_at, t.created_at,
-           e.full_name, e.nickname, e.color
+           e.full_name, e.nickname, e.color, e.preferred_department_id
     FROM time_off_requests t JOIN employees e ON e.personnel_number = t.employee_number
     WHERE 1 = 1 ${timeScopeSql}
   `).all(...scopeParams).map((row) => ({ ...row, status: publicRequestStatus(row.status), kind: "time_off", decisions: requestDecisionHistory("time_off", row.id) }));
@@ -5903,11 +6388,37 @@ app.get("/api/portal/v1/absence-requests", (request, response) => {
            c.original_date_from, c.original_date_to, c.requested_date_from, c.requested_date_to,
            c.note, c.status, c.approval_stage, c.decision_note, c.local_approved_by,
            c.local_approved_at, c.hr_approved_by, c.hr_approved_at, c.decided_by, c.decided_at,
-           c.created_at, e.full_name, e.nickname, e.color, e.home_location_id AS location_id
+           c.created_at, e.full_name, e.nickname, e.color, e.home_location_id AS location_id, e.preferred_department_id
     FROM vacation_change_requests c JOIN employees e ON e.personnel_number = c.employee_number
     WHERE 1 = 1 ${changeScopeSql}
   `).all(...scopeParams).map((row) => ({ ...row, status: publicRequestStatus(row.status), kind: row.request_type === "cancel" ? "vacation_cancel" : "vacation_change", decisions: requestDecisionHistory("vacation_change", row.id) }));
-  const requests = [...vacationRequests, ...timeOffRequests, ...changeRequests]
+  const timeOffChangeScopeSql = scoped ? "AND COALESCE(c.location_id, e.home_location_id) = ?" : "";
+  const timeOffChangeRequests = db.prepare(`
+    SELECT c.id, c.employee_number, c.location_id, c.original_request_id, c.request_type,
+           c.requested_date_from, c.requested_date_to, c.requested_all_day,
+           c.requested_start_time, c.requested_end_time, c.note, c.status,
+           c.approval_type, c.approval_stage, c.decision_note, c.local_approved_by,
+           c.local_approved_at, c.hr_approved_by, c.hr_approved_at, c.decided_by,
+           c.decided_at, c.created_at, e.full_name, e.nickname, e.color,
+           e.preferred_department_id, COALESCE(t.date_from, t.request_date) AS original_date_from,
+           COALESCE(t.date_to, t.request_date) AS original_date_to, t.all_day AS original_all_day,
+           t.start_time AS original_start_time, t.end_time AS original_end_time
+    FROM time_off_change_requests c
+    JOIN time_off_requests t ON t.id = c.original_request_id
+    JOIN employees e ON e.personnel_number = c.employee_number
+    WHERE 1 = 1 ${timeOffChangeScopeSql}
+  `).all(...scopeParams).map((row) => ({
+    ...row,
+    status: publicRequestStatus(row.status),
+    kind: row.request_type === "cancel" ? "time_off_cancel" : "time_off_change",
+    decisions: requestDecisionHistory("time_off_change", row.id),
+  }));
+  let requests = [...vacationRequests, ...timeOffRequests, ...changeRequests, ...timeOffChangeRequests];
+  if (session.role === "department_manager") {
+    const departments = new Set((session.scopes || []).map((scope) => Number(scope.departmentId || 0)).filter(Boolean));
+    requests = requests.filter((entry) => departments.has(Number(entry.preferred_department_id || 0)));
+  }
+  requests = requests
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || Number(b.id) - Number(a.id));
   const actionable = requests.filter((entry) => {
     if (!["pending_local", "preliminary_local", "pending_hr"].includes(entry.status)) return false;
@@ -5917,8 +6428,8 @@ app.get("/api/portal/v1/absence-requests", (request, response) => {
   response.json({
     requests,
     counts: {
-      vacation: actionable.filter((entry) => entry.kind !== "time_off").length,
-      timeOff: actionable.filter((entry) => entry.kind === "time_off").length,
+      vacation: actionable.filter((entry) => !entry.kind.startsWith("time_off")).length,
+      timeOff: actionable.filter((entry) => entry.kind.startsWith("time_off")).length,
       total: actionable.length,
     },
     vacationHrApprovalRequired: vacationHrApprovalRequired(),
@@ -5940,7 +6451,13 @@ function finalizeVacationRequest(entry, actor, note) {
 
 function finalizeTimeOffRequest(entry, actor, note) {
   const check = evaluateTimeOffRequest(entry.employee_number, {
-    date: entry.request_date, startTime: entry.start_time, endTime: entry.end_time, excludeRequestId: entry.id,
+    date: entry.date_from || entry.request_date,
+    dateFrom: entry.date_from || entry.request_date,
+    dateTo: entry.date_to || entry.request_date,
+    allDay: Boolean(entry.all_day),
+    startTime: entry.start_time,
+    endTime: entry.end_time,
+    excludeRequestId: entry.id,
   });
   if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
   const optionId = insertApprovedTimeOff(entry);
@@ -5950,6 +6467,50 @@ function finalizeTimeOffRequest(entry, actor, note) {
       updated_at = CURRENT_TIMESTAMP WHERE id = ?
   `).run(optionId, check.trafficLight, check.reason, note, actor, entry.id);
   return { optionId };
+}
+
+function finalizeTimeOffChangeRequest(entry, actor, note) {
+  let original = db.prepare("SELECT * FROM time_off_requests WHERE id = ? AND employee_number = ? AND status = 'approved'")
+    .get(entry.original_request_id, entry.employee_number);
+  if (!original) throw httpError(409, "Der ursprüngliche Zeitausgleich besteht nicht mehr.");
+  let check = null;
+  if (entry.request_type === "change") {
+    check = evaluateTimeOffRequest(entry.employee_number, {
+      date: entry.requested_date_from,
+      dateFrom: entry.requested_date_from,
+      dateTo: entry.requested_date_to,
+      allDay: Boolean(entry.requested_all_day),
+      startTime: entry.requested_start_time,
+      endTime: entry.requested_end_time,
+      excludeRequestId: original.id,
+    });
+    if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+  }
+
+  restoreApprovedTimeOff(original);
+  if (entry.request_type === "cancel") {
+    db.prepare(`UPDATE time_off_requests SET status = 'cancelled', approval_stage = 'complete', option_id = NULL,
+      original_shifts_json = '[]', decision_note = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP,
+      updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(note, actor, original.id);
+  } else {
+    const allDay = Boolean(entry.requested_all_day) || entry.requested_date_to !== entry.requested_date_from;
+    db.prepare(`UPDATE time_off_requests SET request_date = ?, date_from = ?, date_to = ?, all_day = ?,
+      start_time = ?, end_time = ?, note = CASE WHEN ? <> '' THEN ? ELSE note END,
+      option_id = NULL, original_shifts_json = '[]', traffic_light = ?, check_reason = ?,
+      decision_note = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`).run(entry.requested_date_from, entry.requested_date_from, entry.requested_date_to,
+      allDay ? 1 : 0, allDay ? "00:00" : entry.requested_start_time,
+      allDay ? "23:59" : entry.requested_end_time, entry.note || "", entry.note || "",
+      check.trafficLight, check.reason, note, actor, original.id);
+    original = db.prepare("SELECT * FROM time_off_requests WHERE id = ?").get(original.id);
+    const optionId = insertApprovedTimeOff(original);
+    db.prepare("UPDATE time_off_requests SET option_id = ?, status = 'approved', approval_stage = 'complete', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(optionId, original.id);
+  }
+  db.prepare(`UPDATE time_off_change_requests SET status = 'approved', approval_stage = 'complete',
+    decision_note = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+    .run(note, actor, entry.id);
+  return { originalRequestId: original.id };
 }
 
 function finalizeVacationChangeRequest(entry, actor, note) {
@@ -5984,9 +6545,12 @@ function finalizeVacationChangeRequest(entry, actor, note) {
 
 app.put("/api/portal/v1/absence-requests/:kind/:id/action", (request, response) => {
   const kind = String(request.params.kind || "");
-  const permission = kind === "time_off" ? "time:review" : "vacation:approve";
+  const permission = kind.startsWith("time_off") ? "time:review" : "vacation:approve";
   const session = requirePortalAdminOrLocal(request, permission);
-  const table = kind === "time_off" ? "time_off_requests" : kind === "vacation_change" ? "vacation_change_requests" : kind === "vacation" ? "vacation_requests" : "";
+  const table = kind === "time_off" ? "time_off_requests"
+    : kind === "time_off_change" ? "time_off_change_requests"
+      : kind === "vacation_change" ? "vacation_change_requests"
+        : kind === "vacation" ? "vacation_requests" : "";
   if (!table) throw httpError(400, "Die Antragsart ist ungültig.");
   let entry = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(Number(request.params.id));
   if (!entry) throw httpError(404, "Der Antrag wurde nicht gefunden.");
@@ -6018,27 +6582,34 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", (request, response) 
       if (!["pending", "pending_local", "preliminary_local", "pending_hr"].includes(entry.status)) throw httpError(409, "Dieser Antrag ist bereits abgeschlossen.");
       if (stage === "local") {
         db.prepare(`UPDATE ${table} SET local_approved_by = ?, local_approved_at = CURRENT_TIMESTAMP WHERE id = ?`).run(session.employeeNumber, entry.id);
-        const needsHr = kind === "time_off" ? entry.approval_type === "hr" : vacationHrApprovalRequired();
+        const needsHr = kind.startsWith("time_off") ? entry.approval_type === "hr" : vacationHrApprovalRequired();
         if (needsHr) {
           db.prepare(`UPDATE ${table} SET status = 'pending_hr', approval_stage = 'hr', decision_note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(note, entry.id);
         } else if (kind === "time_off") result = finalizeTimeOffRequest(entry, session.employeeNumber, note);
+        else if (kind === "time_off_change") result = finalizeTimeOffChangeRequest(entry, session.employeeNumber, note);
         else if (kind === "vacation") result = finalizeVacationRequest(entry, session.employeeNumber, note);
         else result = finalizeVacationChangeRequest(entry, session.employeeNumber, note);
       } else {
         db.prepare(`UPDATE ${table} SET hr_approved_by = ?, hr_approved_at = CURRENT_TIMESTAMP WHERE id = ?`).run(session.employeeNumber, entry.id);
         if (kind === "time_off") result = finalizeTimeOffRequest(entry, session.employeeNumber, note);
+        else if (kind === "time_off_change") result = finalizeTimeOffChangeRequest(entry, session.employeeNumber, note);
         else if (kind === "vacation") result = finalizeVacationRequest(entry, session.employeeNumber, note);
         else result = finalizeVacationChangeRequest(entry, session.employeeNumber, note);
       }
     } else if (action === "change" && entry.status === "approved") {
       if (kind === "time_off") {
-        const date = String(request.body.date || "");
-        const startTime = String(request.body.startTime || "");
-        const endTime = String(request.body.endTime || "");
-        if (!isIsoDate(date) || !isTime(startTime) || !isTime(endTime) || endTime <= startTime) throw httpError(400, "Bitte einen gültigen neuen ZA-Zeitraum eingeben.");
+        const dateFrom = String(request.body.dateFrom || request.body.date || "");
+        const dateTo = String(request.body.dateTo || dateFrom);
+        const allDay = request.body.allDay === true || Boolean(entry.all_day) || dateTo !== dateFrom;
+        const startTime = allDay ? "00:00" : String(request.body.startTime || "");
+        const endTime = allDay ? "23:59" : String(request.body.endTime || "");
+        if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom
+          || (!allDay && (!isTime(startTime) || !isTime(endTime) || endTime <= startTime))) {
+          throw httpError(400, "Bitte einen gültigen neuen ZA-Zeitraum eingeben.");
+        }
         restoreApprovedTimeOff(entry);
-        db.prepare(`UPDATE time_off_requests SET request_date = ?, start_time = ?, end_time = ?, note = CASE WHEN ? <> '' THEN ? ELSE note END, option_id = NULL, original_shifts_json = '[]', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-          .run(date, startTime, endTime, note, note, entry.id);
+        db.prepare(`UPDATE time_off_requests SET request_date = ?, date_from = ?, date_to = ?, all_day = ?, start_time = ?, end_time = ?, note = CASE WHEN ? <> '' THEN ? ELSE note END, option_id = NULL, original_shifts_json = '[]', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+          .run(dateFrom, dateFrom, dateTo, allDay ? 1 : 0, startTime, endTime, note, note, entry.id);
         entry = db.prepare("SELECT * FROM time_off_requests WHERE id = ?").get(entry.id);
         result = finalizeTimeOffRequest(entry, session.employeeNumber, note);
       } else if (kind === "vacation") {
@@ -6086,7 +6657,10 @@ app.put("/api/portal/v1/time-off-requests/:id/decision", (request, response) => 
   let optionId = null;
   if (decision === "approved") {
     const check = evaluateTimeOffRequest(entry.employee_number, {
-      date: entry.request_date,
+      date: entry.date_from || entry.request_date,
+      dateFrom: entry.date_from || entry.request_date,
+      dateTo: entry.date_to || entry.request_date,
+      allDay: Boolean(entry.all_day),
       startTime: entry.start_time,
       endTime: entry.end_time,
       excludeRequestId: entry.id,
@@ -6177,13 +6751,14 @@ app.put("/api/portal/v1/vacation-change-requests/:id/decision", (request, respon
 });
 
 app.get("/api/portal/v1/request-blackouts", (request, response) => {
-  requirePortalAdminOrLocal(request, "vacation:read");
-  response.json({ blackouts: getRequestBlackouts(false) });
+  const actor = requirePortalAdminOrLocal(request, "vacation:read");
+  response.json({ blackouts: getRequestBlackoutsForSession(actor, false) });
 });
 
 app.post("/api/portal/v1/request-blackouts", (request, response) => {
   const actor = requirePortalAdminOrLocal(request, "vacation:approve");
   const blackout = validateRequestBlackout(request.body);
+  assertSessionContextScope(actor, { locationId: blackout.locationId, departmentId: blackout.departmentId });
   const result = db.prepare(`
     INSERT INTO request_blackouts
       (location_id, department_id, date_from, date_to, block_vacation, block_time_off, reason, active, created_by)
@@ -6191,14 +6766,17 @@ app.post("/api/portal/v1/request-blackouts", (request, response) => {
   `).run(blackout.locationId, blackout.departmentId, blackout.dateFrom, blackout.dateTo,
     blackout.blockVacation ? 1 : 0, blackout.blockTimeOff ? 1 : 0, blackout.reason, blackout.active ? 1 : 0, actor.employeeNumber);
   auditPortal(actor.employeeNumber, "request_blackout.create", "request_blackout", String(result.lastInsertRowid));
-  response.status(201).json({ blackouts: getRequestBlackouts(false) });
+  response.status(201).json({ blackouts: getRequestBlackoutsForSession(actor, false) });
 });
 
 app.put("/api/portal/v1/request-blackouts/:id", (request, response) => {
   const actor = requirePortalAdminOrLocal(request, "vacation:approve");
   const id = Number(request.params.id);
-  if (!db.prepare("SELECT 1 FROM request_blackouts WHERE id = ?").get(id)) throw httpError(404, "Die Antragssperre wurde nicht gefunden.");
+  const existing = db.prepare("SELECT location_id, department_id FROM request_blackouts WHERE id = ?").get(id);
+  if (!existing) throw httpError(404, "Die Antragssperre wurde nicht gefunden.");
+  assertSessionContextScope(actor, { locationId: existing.location_id, departmentId: existing.department_id });
   const blackout = validateRequestBlackout(request.body, id);
+  assertSessionContextScope(actor, { locationId: blackout.locationId, departmentId: blackout.departmentId });
   db.prepare(`
     UPDATE request_blackouts SET location_id = ?, department_id = ?, date_from = ?, date_to = ?,
       block_vacation = ?, block_time_off = ?, reason = ?, active = ?, updated_at = CURRENT_TIMESTAMP
@@ -6206,11 +6784,14 @@ app.put("/api/portal/v1/request-blackouts/:id", (request, response) => {
   `).run(blackout.locationId, blackout.departmentId, blackout.dateFrom, blackout.dateTo,
     blackout.blockVacation ? 1 : 0, blackout.blockTimeOff ? 1 : 0, blackout.reason, blackout.active ? 1 : 0, id);
   auditPortal(actor.employeeNumber, "request_blackout.update", "request_blackout", String(id));
-  response.json({ blackouts: getRequestBlackouts(false) });
+  response.json({ blackouts: getRequestBlackoutsForSession(actor, false) });
 });
 
 app.delete("/api/portal/v1/request-blackouts/:id", (request, response) => {
   const actor = requirePortalAdminOrLocal(request, "vacation:approve");
+  const existing = db.prepare("SELECT location_id, department_id FROM request_blackouts WHERE id = ?").get(Number(request.params.id));
+  if (!existing) throw httpError(404, "Die Antragssperre wurde nicht gefunden.");
+  assertSessionContextScope(actor, { locationId: existing.location_id, departmentId: existing.department_id });
   const result = db.prepare("DELETE FROM request_blackouts WHERE id = ?").run(Number(request.params.id));
   if (!result.changes) throw httpError(404, "Die Antragssperre wurde nicht gefunden.");
   auditPortal(actor.employeeNumber, "request_blackout.delete", "request_blackout", request.params.id);
@@ -6219,7 +6800,12 @@ app.delete("/api/portal/v1/request-blackouts/:id", (request, response) => {
 
 app.all("/api/portal/v1/me/time-entries", sendPortalInactive);
 
-app.get("/api/settings", (_request, response) => response.json(getSettings()));
+app.get("/api/settings", (request, response) => {
+  if (getPortalStatus().portalEnabled && !request.portalSession?.permissions?.includes("settings:write")) {
+    throw httpError(403, "Nur Admins dürfen die Grundeinstellungen abrufen.", "PORTAL_PERMISSION_DENIED");
+  }
+  response.json(getSettings());
+});
 
 app.get("/api/branding/export", (request, response) => {
   const kit = brandingKitForExport(request.query);
@@ -6333,7 +6919,6 @@ app.put("/api/settings", (request, response) => {
   const breakDurationMinutes = Number(body.breakDurationMinutes);
   const saturdayBonusFrom = String(body.saturdayBonusFrom || "");
   const saturdayBonusFactor = Number(body.saturdayBonusFactor);
-  const submittedDays = body.daySettings || {};
   const toastDuration = ["short", "medium", "long"].includes(String(body.toastDuration))
     ? String(body.toastDuration)
     : "medium";
@@ -6385,42 +6970,6 @@ app.put("/api/settings", (request, response) => {
     saturday_bonus_factor: String(saturdayBonusFactor),
     show_sunday: body.showSunday === true ? "1" : "0",
   };
-  for (const [day] of planningDays) {
-    const submitted = submittedDays[day] || {};
-    const open = submitted.open !== false;
-    const start = String(submitted.start || "");
-    const end = String(submitted.end || "");
-    const lunchEnabled = submitted.lunchEnabled === true;
-    const lunchStart = String(submitted.lunchStart || "");
-    const lunchEnd = String(submitted.lunchEnd || "");
-    const minStaff = Number(submitted.minStaff || 0);
-    const minFrom = String(submitted.minFrom || "");
-    const minTo = String(submitted.minTo || "");
-
-    if (![start, end, lunchStart, lunchEnd, minFrom, minTo].every(isTime)) {
-      throw httpError(400, `Bitte gültige Zeiten für ${day} eingeben.`);
-    }
-    if (open && end <= start) throw httpError(400, `Das Dienstende für ${day} muss nach dem Beginn liegen.`);
-    if (lunchEnabled && (lunchEnd <= lunchStart || lunchStart < start || lunchEnd > end)) {
-      throw httpError(400, `Die Mittagspause für ${day} muss innerhalb der Dienstzeit liegen.`);
-    }
-    if (!Number.isInteger(minStaff) || minStaff < 0 || minStaff > 99) {
-      throw httpError(400, `Die Mindestbesetzung für ${day} ist ungültig.`);
-    }
-    if (open && (minTo <= minFrom || minFrom < start || minTo > end)) {
-      throw httpError(400, `Der Zeitraum der Mindestbesetzung für ${day} muss innerhalb der Dienstzeit liegen.`);
-    }
-
-    values[`${day}_open`] = open ? "1" : "0";
-    values[`${day}_start_time`] = start;
-    values[`${day}_end_time`] = end;
-    values[`${day}_lunch_enabled`] = lunchEnabled ? "1" : "0";
-    values[`${day}_lunch_start`] = lunchStart;
-    values[`${day}_lunch_end`] = lunchEnd;
-    values[`${day}_min_staff`] = String(minStaff);
-    values[`${day}_min_from`] = minFrom;
-    values[`${day}_min_to`] = minTo;
-  }
   const update = db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
   db.exec("BEGIN");
   try {
@@ -6460,6 +7009,8 @@ app.put("/api/settings", (request, response) => {
 
 app.post("/api/shifts", (request, response) => {
   const shift = validateShift(request.body);
+  const locationId = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(shift.employeeNumber)?.home_location_id;
+  assertSessionContextScope(request.portalSession, { locationId, departmentId: shift.departmentId });
   const result = db.prepare(`
     INSERT INTO shifts (employee_number, department_id, shift_date, start_time, end_time, area, note)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -6469,10 +7020,13 @@ app.post("/api/shifts", (request, response) => {
 
 app.put("/api/shifts/:id", (request, response) => {
   const id = Number(request.params.id);
-  const existing = db.prepare("SELECT shift_date FROM shifts WHERE id = ?").get(id);
+  const existing = db.prepare("SELECT s.shift_date, s.department_id, e.home_location_id FROM shifts s JOIN employees e ON e.personnel_number = s.employee_number WHERE s.id = ?").get(id);
   if (!existing) throw httpError(404, "Der Dienst wurde nicht gefunden.");
-  assertDateEditable(existing.shift_date);
+  assertSessionContextScope(request.portalSession, { locationId: existing.home_location_id, departmentId: existing.department_id });
+  assertDateEditable(existing.shift_date, settingsForLocation(existing.home_location_id));
   const shift = validateShift(request.body);
+  const nextLocationId = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(shift.employeeNumber)?.home_location_id;
+  assertSessionContextScope(request.portalSession, { locationId: nextLocationId, departmentId: shift.departmentId });
   const result = db.prepare(`
     UPDATE shifts
     SET employee_number = ?, department_id = ?, shift_date = ?, start_time = ?, end_time = ?, area = ?, note = ?
@@ -6484,9 +7038,10 @@ app.put("/api/shifts/:id", (request, response) => {
 
 app.delete("/api/shifts/:id", (request, response) => {
   const id = Number(request.params.id);
-  const existing = db.prepare("SELECT shift_date FROM shifts WHERE id = ?").get(id);
+  const existing = db.prepare("SELECT s.shift_date, s.department_id, e.home_location_id FROM shifts s JOIN employees e ON e.personnel_number = s.employee_number WHERE s.id = ?").get(id);
   if (!existing) throw httpError(404, "Der Dienst wurde nicht gefunden.");
-  assertDateEditable(existing.shift_date);
+  assertSessionContextScope(request.portalSession, { locationId: existing.home_location_id, departmentId: existing.department_id });
+  assertDateEditable(existing.shift_date, settingsForLocation(existing.home_location_id));
   const result = db.prepare("DELETE FROM shifts WHERE id = ?").run(id);
   if (!result.changes) throw httpError(404, "Der Dienst wurde nicht gefunden.");
   response.status(204).end();
@@ -6496,7 +7051,8 @@ app.delete("/api/schedule", (request, response) => {
   const weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : undefined);
   const weekEnd = addDays(weekStart, 6);
   const context = resolvePlanningContext(request.query);
-  assertWeekEditable(weekStart);
+  assertSessionContextScope(request.portalSession, context);
+  assertWeekEditable(weekStart, settingsForLocation(context.locationId));
   const departmentFilter = context.departmentId ? "AND department_id = ?" : "";
   const params = context.departmentId
     ? [weekStart, weekEnd, context.locationId, context.departmentId]
@@ -6512,6 +7068,7 @@ app.delete("/api/schedule", (request, response) => {
 
 app.post("/api/week-options", (request, response) => {
   const option = validateWeekOption(request.body);
+  assertSessionEmployeeScope(request.portalSession, option.employeeNumber);
   const result = db.prepare(`
     INSERT INTO week_options
       (employee_number, group_id, week_start, date_from, date_to, option_type, note, credited_minutes_per_day, all_day, start_time, end_time)
@@ -6535,15 +7092,18 @@ app.post("/api/week-options", (request, response) => {
 app.put("/api/week-options/:id", (request, response) => {
   const id = Number(request.params.id);
   if (!Number.isInteger(id) || id <= 0) throw httpError(400, "Die Planungsoption ist ungültig.");
-  const existing = db.prepare("SELECT group_id, week_start FROM week_options WHERE id = ?").get(id);
+  const existing = db.prepare("SELECT group_id, week_start, employee_number FROM week_options WHERE id = ?").get(id);
   if (!existing) {
     throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
   }
-  assertWeekEditable(existing.week_start);
+  assertSessionEmployeeScope(request.portalSession, existing.employee_number);
+  const existingLocation = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(existing.employee_number)?.home_location_id;
+  assertWeekEditable(existing.week_start, settingsForLocation(existingLocation));
   const option = validateWeekOption({
     ...request.body,
     groupId: request.body.groupId === undefined ? existing.group_id : request.body.groupId,
   }, id);
+  assertSessionEmployeeScope(request.portalSession, option.employeeNumber);
   db.prepare(`
     UPDATE week_options
     SET employee_number = ?, group_id = ?, week_start = ?, date_from = ?, date_to = ?,
@@ -6568,9 +7128,11 @@ app.put("/api/week-options/:id", (request, response) => {
 
 app.delete("/api/week-options/:id", (request, response) => {
   const id = Number(request.params.id);
-  const existing = db.prepare("SELECT week_start FROM week_options WHERE id = ?").get(id);
+  const existing = db.prepare("SELECT week_start, employee_number FROM week_options WHERE id = ?").get(id);
   if (!existing) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
-  assertWeekEditable(existing.week_start);
+  assertSessionEmployeeScope(request.portalSession, existing.employee_number);
+  const existingLocation = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(existing.employee_number)?.home_location_id;
+  assertWeekEditable(existing.week_start, settingsForLocation(existingLocation));
   const result = db.prepare("DELETE FROM week_options WHERE id = ?").run(id);
   if (!result.changes) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
   response.status(204).end();
@@ -6578,40 +7140,44 @@ app.delete("/api/week-options/:id", (request, response) => {
 
 app.post("/api/global-day-blocks", (request, response) => {
   const block = validateGlobalDayBlock(request.body);
+  assertSessionContextScope(request.portalSession, { locationId: block.locationId });
   const result = db.prepare(`
     INSERT INTO global_day_blocks (location_id, week_start, block_date, reason, is_public_holiday)
     VALUES (?, ?, ?, ?, ?)
   `).run(block.locationId, block.weekStart, block.blockDate, block.reason, block.isPublicHoliday);
-  response.status(201).json({ id: Number(result.lastInsertRowid), ...block, schedule: getSchedule(block.weekStart, { locationId: block.locationId }) });
+  response.status(201).json({ id: Number(result.lastInsertRowid), ...block, schedule: getSchedule(block.weekStart, { locationId: block.locationId }, request.portalSession) });
 });
 
 app.put("/api/global-day-blocks/:id", (request, response) => {
   const id = Number(request.params.id);
   if (!Number.isInteger(id) || id <= 0) throw httpError(400, "Der Sperrtag ist ungültig.");
-  const existing = db.prepare("SELECT week_start FROM global_day_blocks WHERE id = ?").get(id);
+  const existing = db.prepare("SELECT week_start, location_id FROM global_day_blocks WHERE id = ?").get(id);
   if (!existing) throw httpError(404, "Der Sperrtag wurde nicht gefunden.");
-  assertWeekEditable(existing.week_start);
+  assertSessionContextScope(request.portalSession, { locationId: existing.location_id });
+  assertWeekEditable(existing.week_start, settingsForLocation(existing.location_id));
   const block = validateGlobalDayBlock(request.body, id);
+  assertSessionContextScope(request.portalSession, { locationId: block.locationId });
   db.prepare(`
     UPDATE global_day_blocks
     SET location_id = ?, week_start = ?, block_date = ?, reason = ?, is_public_holiday = ?
     WHERE id = ?
   `).run(block.locationId, block.weekStart, block.blockDate, block.reason, block.isPublicHoliday, id);
-  response.json({ id, ...block, schedule: getSchedule(block.weekStart, { locationId: block.locationId }) });
+  response.json({ id, ...block, schedule: getSchedule(block.weekStart, { locationId: block.locationId }, request.portalSession) });
 });
 
 app.delete("/api/global-day-blocks/:id", (request, response) => {
   const id = Number(request.params.id);
-  const existing = db.prepare("SELECT week_start FROM global_day_blocks WHERE id = ?").get(id);
+  const existing = db.prepare("SELECT week_start, location_id FROM global_day_blocks WHERE id = ?").get(id);
   if (!existing) throw httpError(404, "Der Sperrtag wurde nicht gefunden.");
-  assertWeekEditable(existing.week_start);
+  assertSessionContextScope(request.portalSession, { locationId: existing.location_id });
+  assertWeekEditable(existing.week_start, settingsForLocation(existing.location_id));
   const result = db.prepare("DELETE FROM global_day_blocks WHERE id = ?").run(id);
   if (!result.changes) throw httpError(404, "Der Sperrtag wurde nicht gefunden.");
   response.status(204).end();
 });
 
 app.get("/api/vacations", (request, response) => {
-  response.json(getVacationPlan(request.query.year, request.query));
+  response.json(getVacationPlan(request.query.year, request.query, request.portalSession));
 });
 
 app.put("/api/vacation-entitlements", (request, response) => {
@@ -6633,6 +7199,7 @@ app.put("/api/vacation-entitlements", (request, response) => {
       if (!employeeExists.get(employeeNumber)) {
         throw httpError(404, "Ein ausgewähltes Teammitglied wurde nicht gefunden.");
       }
+      assertSessionEmployeeScope(request.portalSession, employeeNumber);
       if (!Number.isFinite(days) || days < 0 || days > 365) {
         throw httpError(400, "Der Jahresurlaub muss zwischen 0 und 365 Tagen liegen.");
       }
@@ -6644,15 +7211,16 @@ app.put("/api/vacation-entitlements", (request, response) => {
     throw error;
   }
 
-  response.json(getVacationPlan(year, request.body));
+  response.json(getVacationPlan(year, request.body, request.portalSession));
 });
 
 app.post("/api/vacations", (request, response) => {
   const vacation = validateVacationEntry(request.body);
+  assertSessionEmployeeScope(request.portalSession, vacation.employeeNumber);
   const result = createVacationEntries(vacation);
   response.status(201).json({
     groupId: result.groupId,
-    plan: getVacationPlan(new Date(`${vacation.dateFrom}T12:00:00Z`).getUTCFullYear(), request.body),
+    plan: getVacationPlan(new Date(`${vacation.dateFrom}T12:00:00Z`).getUTCFullYear(), request.body, request.portalSession),
   });
 });
 
@@ -6661,15 +7229,21 @@ app.put("/api/vacations/:groupId", (request, response) => {
   if (!groupId || !vacationGroupExists(groupId)) {
     throw httpError(404, "Der Urlaubseintrag wurde nicht gefunden.");
   }
+  const existingEmployee = db.prepare("SELECT employee_number FROM week_options WHERE group_id = ? LIMIT 1").get(groupId)?.employee_number;
+  assertSessionEmployeeScope(request.portalSession, existingEmployee);
   const vacation = validateVacationEntry(request.body, groupId);
+  assertSessionEmployeeScope(request.portalSession, vacation.employeeNumber);
   const result = replaceVacationGroup(groupId, vacation);
   response.json({
     groupId: result.groupId,
-    plan: getVacationPlan(new Date(`${vacation.dateFrom}T12:00:00Z`).getUTCFullYear(), request.body),
+    plan: getVacationPlan(new Date(`${vacation.dateFrom}T12:00:00Z`).getUTCFullYear(), request.body, request.portalSession),
   });
 });
 
 app.delete("/api/vacations/:groupId", (request, response) => {
+  const existingEmployee = db.prepare("SELECT employee_number FROM week_options WHERE group_id = ? LIMIT 1").get(request.params.groupId)?.employee_number;
+  if (!existingEmployee) throw httpError(404, "Der Urlaubseintrag wurde nicht gefunden.");
+  assertSessionEmployeeScope(request.portalSession, existingEmployee);
   const result = deleteVacationGroup(request.params.groupId);
   if (!result) throw httpError(404, "Der Urlaubseintrag wurde nicht gefunden.");
   response.status(204).end();
@@ -6709,8 +7283,9 @@ app.post("/api/schedule/auto", (request, response) => {
   const weekStart = getMonday(isIsoDate(request.body.weekStart) ? request.body.weekStart : undefined);
   const weekEnd = addDays(weekStart, 6);
   const replaceExisting = request.body.replaceExisting === true;
-  const settings = getSettings();
   const context = resolvePlanningContext(request.body);
+  assertSessionContextScope(request.portalSession, context);
+  const settings = settingsForLocation(context.locationId);
   const employeeFilter = employeeLocationFilterSql(context, "e");
   assertWeekEditable(weekStart, settings);
   const globalDayBlocks = getGlobalDayBlocksForRange(weekStart, weekEnd, context.locationId);
@@ -6909,7 +7484,7 @@ app.post("/api/schedule/auto", (request, response) => {
     });
 
     db.exec("COMMIT");
-    response.json({ created, warnings, schedule: getSchedule(weekStart, context) });
+    response.json({ created, warnings, schedule: getSchedule(weekStart, context, request.portalSession) });
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;
@@ -8036,7 +8611,7 @@ function drawSchedulePdf(schedule, response, createdAt = new Date()) {
 }
 
 app.get("/api/schedule.pdf", (request, response) => {
-  const schedule = getSchedule(request.query.week, request.query);
+  const schedule = getSchedule(request.query.week, request.query, request.portalSession);
   const createdAt = new Date();
   const filename = buildPdfFilename(schedule, createdAt);
   response.setHeader("Content-Type", "application/pdf");
@@ -8046,7 +8621,7 @@ app.get("/api/schedule.pdf", (request, response) => {
 
 app.get("/api/vacations.pdf", (request, response) => {
   const selection = vacationSelectionFromQuery(request.query);
-  const plan = getVacationPlan(selection.year, request.query);
+  const plan = getVacationPlan(selection.year, request.query, request.portalSession);
   const createdAt = new Date();
   response.setHeader("Content-Type", "application/pdf");
   response.setHeader("Content-Disposition", contentDispositionHeader(buildVacationPdfFilename(plan.settings, selection, createdAt)));
@@ -8054,7 +8629,7 @@ app.get("/api/vacations.pdf", (request, response) => {
 });
 
 app.get("/api/schedule-preview.pdf", (request, response) => {
-  const schedule = getSchedule(request.query.week, request.query);
+  const schedule = getSchedule(request.query.week, request.query, request.portalSession);
   response.setHeader("Content-Type", "application/pdf");
   response.setHeader("Content-Disposition", "inline");
   drawSchedulePdf(schedule, response, new Date());
@@ -8062,7 +8637,7 @@ app.get("/api/schedule-preview.pdf", (request, response) => {
 
 app.get("/api/vacations-preview.pdf", (request, response) => {
   const selection = vacationSelectionFromQuery(request.query);
-  const plan = getVacationPlan(selection.year, request.query);
+  const plan = getVacationPlan(selection.year, request.query, request.portalSession);
   response.setHeader("Content-Type", "application/pdf");
   response.setHeader("Content-Disposition", "inline");
   drawVacationPdf(plan, selection, response, new Date());

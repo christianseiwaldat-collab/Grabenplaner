@@ -4,10 +4,14 @@ const portalState = {
   timeOffCheck: null,
   vacationCheck: null,
   vacationChange: null,
+  timeOffChange: null,
   absenceHistory: [],
   notifications: [],
   unreadNotifications: 0,
   amuReports: [],
+  editingTimeOffId: null,
+  editingVacationId: null,
+  timeOffArchive: false,
 };
 
 const optionNames = {
@@ -39,12 +43,14 @@ const el = Object.fromEntries([
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
   "portalUserName", "portalUserRole", "adminAppLink", "changePasswordButton", "logoutButton", "notificationsButton", "notificationBadge", "scheduleView", "timeOffView",
   "vacationView", "historyView", "amuView", "scheduleHeading", "scheduleGrid", "previousWeek", "currentWeek", "nextWeek",
-  "timeOffRequestForm", "timeOffDate", "timeOffStart", "timeOffEnd", "timeOffNote", "timeOffCheck", "timeOffMessage",
-  "timeOffSubmitButton", "timeOffRequestList", "vacationRequestForm", "vacationDateFrom", "vacationDateTo", "vacationNote",
-  "vacationCheck", "vacationMessage", "vacationSubmitButton", "vacationRequestList", "approvedVacationList", "passwordDialog",
-  "passwordForm", "currentPassword", "newPassword", "repeatPassword", "passwordMessage", "vacationChangeDialog",
+  "timeOffRequestForm", "timeOffFormTitle", "timeOffDate", "timeOffDateTo", "timeOffDateToField", "timeOffTimeFields", "timeOffStart", "timeOffEnd", "timeOffNote", "timeOffCheck", "timeOffMessage",
+  "timeOffSubmitButton", "cancelTimeOffEdit", "timeOffArchiveToggle", "timeOffRequestList", "vacationRequestForm", "vacationFormTitle", "vacationDateFrom", "vacationDateTo", "vacationNote",
+  "vacationCheck", "vacationMessage", "vacationSubmitButton", "cancelVacationEdit", "vacationRequestList", "approvedVacationList", "passwordDialog",
+  "passwordForm", "currentPassword", "newPassword", "repeatPassword", "passwordMessage", "vacationChangeDialog", "timeOffChangeDialog",
   "vacationChangeForm", "vacationChangeTitle", "vacationChangeOriginal", "vacationChangeDates", "vacationChangeFrom",
   "vacationChangeTo", "vacationChangeNote", "vacationChangeMessage", "historyTypeFilter", "historyStatusFilter", "absenceHistoryList",
+  "timeOffChangeForm", "timeOffChangeTitle", "timeOffChangeOriginal", "timeOffChangeFields", "timeOffChangeFrom", "timeOffChangeTo",
+  "timeOffChangeToField", "timeOffChangeTimes", "timeOffChangeStart", "timeOffChangeEnd", "timeOffChangeNote", "timeOffChangeMessage",
   "historyDetailDialog", "historyDetailTitle", "historyDetailSummary", "historyDecisionTimeline", "notificationsDialog", "notificationList",
   "markAllNotificationsRead", "amuReportForm", "amuIncapacityFrom", "amuIncapacityTo", "amuEmployeeNote", "amuDocuments",
   "amuMessage", "amuSubmitButton", "amuReportList",
@@ -122,6 +128,8 @@ function applyRequestedTab() {
 
 async function initialize() {
   try {
+    const today = new Date().toISOString().slice(0, 10);
+    [el.timeOffDate, el.timeOffDateTo, el.vacationDateFrom, el.vacationDateTo, el.amuIncapacityFrom, el.amuIncapacityTo].forEach((input) => { if (input) input.min = today; });
     const status = await api("/api/portal/v1/status");
     portalState.status = status;
     applyPortalBranding(status.branding);
@@ -239,9 +247,43 @@ function updateTraffic(node, result, emptyText) {
 }
 
 let timeOffCheckTimer;
+function timeOffMode() {
+  return document.querySelector('input[name="timeOffMode"]:checked')?.value || "hours";
+}
+
+function timeOffPayload() {
+  const mode = timeOffMode();
+  return {
+    date: el.timeOffDate.value,
+    dateFrom: el.timeOffDate.value,
+    dateTo: mode === "range" ? el.timeOffDateTo.value : el.timeOffDate.value,
+    allDay: mode !== "hours",
+    startTime: mode === "hours" ? el.timeOffStart.value : "",
+    endTime: mode === "hours" ? el.timeOffEnd.value : "",
+    note: el.timeOffNote.value,
+    approvalType: document.querySelector('input[name="timeOffApprovalType"]:checked')?.value || "local",
+  };
+}
+
+function updateTimeOffMode() {
+  const mode = timeOffMode();
+  const hourly = mode === "hours";
+  el.timeOffTimeFields.classList.toggle("hidden", !hourly);
+  [el.timeOffStart, el.timeOffEnd].forEach((field) => {
+    field.required = hourly;
+    field.disabled = !hourly || !el.timeOffDate.value || (field === el.timeOffEnd && !el.timeOffStart.value);
+  });
+  el.timeOffDateToField.classList.toggle("hidden", mode !== "range");
+  el.timeOffDateTo.required = mode === "range";
+  el.timeOffDateTo.min = el.timeOffDate.value || new Date().toISOString().slice(0, 10);
+  if (mode === "range" && (!el.timeOffDateTo.value || el.timeOffDateTo.value < el.timeOffDate.value)) el.timeOffDateTo.value = el.timeOffDate.value;
+  checkTimeOff();
+}
+
 async function checkTimeOff() {
   clearTimeout(timeOffCheckTimer);
-  if (!el.timeOffDate.value || !el.timeOffStart.value || !el.timeOffEnd.value) {
+  const payload = timeOffPayload();
+  if (!payload.dateFrom || (timeOffMode() === "range" && !payload.dateTo) || (timeOffMode() === "hours" && (!payload.startTime || !payload.endTime))) {
     portalState.timeOffCheck = null;
     el.timeOffSubmitButton.disabled = true;
     updateTraffic(el.timeOffCheck, null, "Danach wird die aktuelle Planung geprüft.");
@@ -251,7 +293,7 @@ async function checkTimeOff() {
     try {
       const result = await api("/api/portal/v1/me/time-off-check", {
         method: "POST",
-        body: JSON.stringify({ date: el.timeOffDate.value, startTime: el.timeOffStart.value, endTime: el.timeOffEnd.value }),
+        body: JSON.stringify({ ...payload, excludeRequestId: portalState.editingTimeOffId }),
       });
       portalState.timeOffCheck = result;
       el.timeOffSubmitButton.disabled = !result.allowed;
@@ -266,6 +308,11 @@ async function checkTimeOff() {
 
 async function loadTimeOffSlots() {
   const date = el.timeOffDate.value;
+  if (timeOffMode() !== "hours") {
+    el.timeOffStart.disabled = true;
+    el.timeOffEnd.disabled = true;
+    return;
+  }
   el.timeOffStart.disabled = true;
   el.timeOffEnd.disabled = true;
   el.timeOffStart.innerHTML = '<option value="">Zeiten werden geladen</option>';
@@ -295,40 +342,96 @@ function updateTimeOffEndSlots() {
 }
 
 async function loadTimeOffRequests() {
-  const data = await api("/api/portal/v1/me/time-off-requests");
-  el.timeOffRequestList.innerHTML = data.requests.length ? data.requests.map((item) => `
+  const [data, approvedData] = await Promise.all([
+    api("/api/portal/v1/me/time-off-requests"),
+    api("/api/portal/v1/me/approved-time-off"),
+  ]);
+  const approvedRequests = (approvedData.requests || []).map((item) => ({
+    ...item,
+    date_from: item.date_from || item.dateFrom || item.request_date,
+    date_to: item.date_to || item.dateTo || item.date_from || item.dateFrom || item.request_date,
+    start_time: item.start_time || item.startTime || "",
+    end_time: item.end_time || item.endTime || "",
+    all_day: item.all_day ?? item.allDay ?? false,
+    status: "approved",
+  }));
+  const approvedIds = new Set(approvedRequests.map((item) => Number(item.id)));
+  portalState.timeOffRequests = [...(data.requests || []).filter((item) => !approvedIds.has(Number(item.id))), ...approvedRequests];
+  portalState.pendingTimeOffChanges = approvedData.pendingChanges || [];
+  const pendingByRequest = new Map(portalState.pendingTimeOffChanges.map((item) => [
+    Number(item.original_request_id ?? item.time_off_request_id ?? item.request_id),
+    item,
+  ]));
+  const today = new Date().toISOString().slice(0, 10);
+  const requests = portalState.timeOffRequests.filter((item) => portalState.timeOffArchive ? (item.date_to || item.request_date) < today : (item.date_to || item.request_date) >= today || ["pending","pending_local","preliminary_local","pending_hr"].includes(item.status));
+  el.timeOffArchiveToggle.textContent = portalState.timeOffArchive ? "Aktuelle Anträge" : "Archiv";
+  el.timeOffRequestList.innerHTML = requests.length ? requests.map((item) => {
+    const pendingChange = pendingByRequest.get(Number(item.id));
+    const approvedFuture = item.status === "approved" && (item.date_to || item.request_date) >= today && !portalState.timeOffArchive;
+    const pendingLabel = pendingChange ? (pendingChange.request_type === "cancel" ? "Stornierung beantragt" : "Änderung beantragt") : "";
+    return `
     <article class="request-item" data-time-off-request-id="${item.id}"><div>
-      <strong>${dateText(item.request_date)} · ${esc(item.start_time)}–${esc(item.end_time)}</strong>
+      <strong>${dateText(item.date_from || item.request_date)}${(item.date_to || item.request_date) !== (item.date_from || item.request_date) ? ` – ${dateText(item.date_to)}` : ""}${item.all_day ? " · ganztägig" : ` · ${esc(item.start_time)}–${esc(item.end_time)}`}</strong>
       <span>${item.approval_type === "hr" ? "Verbindlicher PL-ZA" : "Filialinterner ZA"}</span>
       ${item.note ? `<span>${esc(item.note)}</span>` : ""}
       <span class="status ${item.status}">${statusLabels[item.status] || esc(item.status)}</span>
+      ${pendingChange ? `<span class="pending-change">${pendingLabel}</span>` : ""}
       ${["pending","pending_local","preliminary_local","pending_hr"].includes(item.status) ? `<span>${esc(item.check_reason)}</span>` : ""}
       ${item.local_approved_by ? `<span>Filiale: ${esc(item.local_approved_by)}</span>` : ""}${item.hr_approved_by ? `<span>Personalleitung: ${esc(item.hr_approved_by)}</span>` : ""}
-    </div>${["pending","pending_local","preliminary_local","pending_hr"].includes(item.status) ? '<button class="cancel-request" type="button">Zurückziehen</button>' : ""}</article>
-  `).join("") : "<p>Noch keine ZA-Anträge vorhanden.</p>";
+    </div>${["pending","pending_local","preliminary_local","pending_hr"].includes(item.status) ? '<div class="request-actions"><button class="text-button edit-request" type="button">Bearbeiten</button><button class="cancel-request" type="button">Zurückziehen</button></div>' : approvedFuture ? `<div class="request-actions approved-time-off-actions"><button class="text-button" data-time-off-action="change" type="button" ${pendingChange ? "disabled" : ""}>Änderung beantragen</button><button class="cancel-request" data-time-off-action="cancel" type="button" ${pendingChange ? "disabled" : ""}>Stornierung beantragen</button></div>` : ""}</article>
+  `;
+  }).join("") : "<p>Noch keine ZA-Anträge vorhanden.</p>";
+}
+
+async function editTimeOff(id) {
+  const item = portalState.timeOffRequests.find((request) => Number(request.id) === Number(id));
+  if (!item) return;
+  portalState.editingTimeOffId = Number(id);
+  const mode = item.all_day ? ((item.date_to || item.request_date) !== (item.date_from || item.request_date) ? "range" : "day") : "hours";
+  document.querySelector(`input[name="timeOffMode"][value="${mode}"]`).checked = true;
+  el.timeOffDate.value = item.date_from || item.request_date;
+  el.timeOffDateTo.value = item.date_to || item.request_date;
+  el.timeOffNote.value = item.note || "";
+  document.querySelector(`input[name="timeOffApprovalType"][value="${item.approval_type || "local"}"]`).checked = true;
+  updateTimeOffMode();
+  if (mode === "hours") {
+    await loadTimeOffSlots();
+    el.timeOffStart.value = item.start_time;
+    updateTimeOffEndSlots();
+    el.timeOffEnd.value = item.end_time;
+    checkTimeOff();
+  }
+  el.timeOffFormTitle.textContent = "ZA-Antrag bearbeiten";
+  el.timeOffSubmitButton.textContent = "Änderung einreichen";
+  el.cancelTimeOffEdit.classList.remove("hidden");
+  el.timeOffRequestForm.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetTimeOffForm() {
+  portalState.editingTimeOffId = null;
+  el.timeOffRequestForm.reset();
+  document.querySelector('input[name="timeOffMode"][value="hours"]').checked = true;
+  el.timeOffFormTitle.textContent = "Neuer ZA-Antrag";
+  el.timeOffSubmitButton.textContent = "Antrag absenden";
+  el.cancelTimeOffEdit.classList.add("hidden");
+  updateTimeOffMode();
 }
 
 async function submitTimeOff(event) {
   event.preventDefault();
   if (!portalState.timeOffCheck?.allowed) return;
   try {
-    await api("/api/portal/v1/me/time-off-requests", {
-      method: "POST",
-      body: JSON.stringify({
-        date: el.timeOffDate.value,
-        startTime: el.timeOffStart.value,
-        endTime: el.timeOffEnd.value,
-        note: el.timeOffNote.value,
-        approvalType: document.querySelector('input[name="timeOffApprovalType"]:checked')?.value || "local",
-      }),
+    await api(portalState.editingTimeOffId ? `/api/portal/v1/me/time-off-requests/${portalState.editingTimeOffId}` : "/api/portal/v1/me/time-off-requests", {
+      method: portalState.editingTimeOffId ? "PUT" : "POST",
+      body: JSON.stringify(timeOffPayload()),
     });
-    el.timeOffRequestForm.reset();
+    resetTimeOffForm();
     portalState.timeOffCheck = null;
     el.timeOffSubmitButton.disabled = true;
     el.timeOffStart.disabled = true;
     el.timeOffEnd.disabled = true;
     updateTraffic(el.timeOffCheck, null, "Danach wird die aktuelle Planung geprüft.");
-    message(el.timeOffMessage, "Der ZA-Antrag wurde übermittelt.");
+    message(el.timeOffMessage, "Der ZA-Antrag wurde gespeichert und erneut zur Genehmigung eingereicht.");
     await loadTimeOffRequests();
   } catch (error) {
     message(el.timeOffMessage, error.message, true);
@@ -342,6 +445,87 @@ async function cancelTimeOff(id) {
     await api(`/api/portal/v1/me/time-off-requests/${id}`, { method: "DELETE", body: "{}" });
     await loadTimeOffRequests();
   } catch (error) { message(el.timeOffMessage, error.message, true); }
+}
+
+function timeOffChangeMode() {
+  return document.querySelector('input[name="timeOffChangeMode"]:checked')?.value || "hours";
+}
+
+function updateTimeOffChangeMode() {
+  const mode = timeOffChangeMode();
+  const change = portalState.timeOffChange;
+  const editingPeriod = change?.requestType === "change";
+  el.timeOffChangeFields.classList.toggle("hidden", !editingPeriod);
+  el.timeOffChangeToField.classList.toggle("hidden", mode !== "range");
+  el.timeOffChangeTimes.classList.toggle("hidden", mode !== "hours");
+  el.timeOffChangeFrom.required = editingPeriod;
+  el.timeOffChangeTo.required = editingPeriod && mode === "range";
+  el.timeOffChangeStart.required = editingPeriod && mode === "hours";
+  el.timeOffChangeEnd.required = editingPeriod && mode === "hours";
+  el.timeOffChangeTo.min = el.timeOffChangeFrom.value || new Date().toISOString().slice(0, 10);
+  if (mode === "range" && (!el.timeOffChangeTo.value || el.timeOffChangeTo.value < el.timeOffChangeFrom.value)) {
+    el.timeOffChangeTo.value = el.timeOffChangeFrom.value;
+  }
+}
+
+function timeOffPeriodText(item) {
+  const from = item.date_from || item.request_date;
+  const to = item.date_to || from;
+  return `${dateText(from)}${to !== from ? ` – ${dateText(to)}` : ""}${item.all_day ? " · ganztägig" : ` · ${item.start_time}–${item.end_time}`}`;
+}
+
+function openTimeOffChange(requestId, requestType) {
+  const item = portalState.timeOffRequests.find((request) => Number(request.id) === Number(requestId) && request.status === "approved");
+  if (!item) return;
+  const from = item.date_from || item.request_date;
+  const to = item.date_to || from;
+  const mode = item.all_day ? (to !== from ? "range" : "day") : "hours";
+  portalState.timeOffChange = { requestId: Number(requestId), requestType };
+  el.timeOffChangeTitle.textContent = requestType === "cancel" ? "Stornierung beantragen" : "Änderung beantragen";
+  el.timeOffChangeOriginal.textContent = `Bisher: ${timeOffPeriodText(item)}`;
+  document.querySelector(`input[name="timeOffChangeMode"][value="${mode}"]`).checked = true;
+  el.timeOffChangeFrom.value = from;
+  el.timeOffChangeTo.value = to;
+  el.timeOffChangeStart.value = item.start_time || "";
+  el.timeOffChangeEnd.value = item.end_time || "";
+  el.timeOffChangeNote.value = "";
+  message(el.timeOffChangeMessage, "");
+  updateTimeOffChangeMode();
+  el.timeOffChangeDialog.showModal();
+}
+
+async function submitTimeOffChange(event) {
+  event.preventDefault();
+  const change = portalState.timeOffChange;
+  if (!change) return;
+  const mode = timeOffChangeMode();
+  const dateFrom = el.timeOffChangeFrom.value;
+  const dateTo = mode === "range" ? el.timeOffChangeTo.value : dateFrom;
+  if (change.requestType === "change" && mode === "hours" && el.timeOffChangeEnd.value <= el.timeOffChangeStart.value) {
+    message(el.timeOffChangeMessage, "Die Bis-Zeit muss nach der Von-Zeit liegen.", true);
+    return;
+  }
+  try {
+    await api("/api/portal/v1/me/time-off-change-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        requestId: change.requestId,
+        requestType: change.requestType,
+        dateFrom,
+        dateTo,
+        allDay: mode !== "hours",
+        startTime: mode === "hours" ? el.timeOffChangeStart.value : "",
+        endTime: mode === "hours" ? el.timeOffChangeEnd.value : "",
+        note: el.timeOffChangeNote.value,
+      }),
+    });
+    el.timeOffChangeDialog.close();
+    portalState.timeOffChange = null;
+    message(el.timeOffMessage, change.requestType === "cancel" ? "Die Stornierung wurde beantragt." : "Die Änderung wurde beantragt.");
+    await Promise.allSettled([loadTimeOffRequests(), loadAbsenceHistory(), loadNotifications()]);
+  } catch (error) {
+    message(el.timeOffChangeMessage, error.message, true);
+  }
 }
 
 let vacationCheckTimer;
@@ -372,27 +556,52 @@ async function checkVacation() {
 
 async function loadVacationRequests() {
   const data = await api("/api/portal/v1/me/vacation-requests");
+  portalState.vacationRequests = data.requests || [];
   el.vacationRequestList.innerHTML = data.requests.length ? data.requests.map((item) => `
     <article class="request-item" data-request-id="${item.id}"><div><strong>${dateText(item.date_from)} – ${dateText(item.date_to)}</strong>
       ${item.note ? `<span>${esc(item.note)}</span>` : ""}<span class="status ${item.status}">${statusLabels[item.status] || esc(item.status)}</span>
       ${item.local_approved_by ? `<span>Filiale: ${esc(item.local_approved_by)}</span>` : ""}${item.hr_approved_by ? `<span>Personalleitung: ${esc(item.hr_approved_by)}</span>` : ""}
-    </div>${["pending","pending_local","preliminary_local","pending_hr"].includes(item.status) ? '<button class="cancel-request" type="button">Zurückziehen</button>' : ""}</article>
+    </div>${["pending","pending_local","preliminary_local","pending_hr"].includes(item.status) ? '<div class="request-actions"><button class="text-button edit-request" type="button">Bearbeiten</button><button class="cancel-request" type="button">Zurückziehen</button></div>' : ""}</article>
   `).join("") : "<p>Noch keine Urlaubsanträge vorhanden.</p>";
+}
+
+function editVacation(id) {
+  const item = portalState.vacationRequests.find((request) => Number(request.id) === Number(id));
+  if (!item) return;
+  portalState.editingVacationId = Number(id);
+  el.vacationDateFrom.value = item.date_from;
+  el.vacationDateTo.value = item.date_to;
+  el.vacationDateTo.min = item.date_from;
+  el.vacationNote.value = item.note || "";
+  el.vacationFormTitle.textContent = "Urlaubsantrag bearbeiten";
+  el.vacationSubmitButton.textContent = "Änderung einreichen";
+  el.cancelVacationEdit.classList.remove("hidden");
+  checkVacation();
+  el.vacationRequestForm.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetVacationForm() {
+  portalState.editingVacationId = null;
+  el.vacationRequestForm.reset();
+  el.vacationFormTitle.textContent = "Neuer Antrag";
+  el.vacationSubmitButton.textContent = "Antrag absenden";
+  el.cancelVacationEdit.classList.add("hidden");
+  el.vacationDateTo.min = el.vacationDateFrom.min;
 }
 
 async function submitVacation(event) {
   event.preventDefault();
   if (!portalState.vacationCheck?.allowed) return;
   try {
-    await api("/api/portal/v1/me/vacation-requests", {
-      method: "POST",
+    await api(portalState.editingVacationId ? `/api/portal/v1/me/vacation-requests/${portalState.editingVacationId}` : "/api/portal/v1/me/vacation-requests", {
+      method: portalState.editingVacationId ? "PUT" : "POST",
       body: JSON.stringify({ dateFrom: el.vacationDateFrom.value, dateTo: el.vacationDateTo.value, note: el.vacationNote.value }),
     });
-    el.vacationRequestForm.reset();
+    resetVacationForm();
     portalState.vacationCheck = null;
     el.vacationSubmitButton.disabled = true;
     updateTraffic(el.vacationCheck, null, "Antragssperren werden sofort geprüft.");
-    message(el.vacationMessage, "Der Urlaubsantrag wurde übermittelt.");
+    message(el.vacationMessage, "Der Urlaubsantrag wurde gespeichert und zur Genehmigung eingereicht.");
     await loadVacationRequests();
   } catch (error) {
     message(el.vacationMessage, error.message, true);
@@ -430,13 +639,27 @@ const decisionLabels = {
 
 function requestKindText(item) {
   if (item.kind === "time_off") return "Zeitausgleich";
+  if (item.kind === "time_off_change") return "ZA-Änderung";
+  if (item.kind === "time_off_cancel") return "ZA-Stornierung";
   if (item.kind === "vacation_change" || item.request_type === "change") return "Urlaubsänderung";
   if (item.kind === "vacation_cancel" || item.request_type === "cancel") return "Urlaubsstorno";
   return "Urlaub";
 }
 
 function requestPeriodText(item) {
-  if (item.kind === "time_off") return `${dateText(item.request_date)} · ${esc(item.start_time)}–${esc(item.end_time)}`;
+  if (item.kind === "time_off") {
+    const from = item.date_from || item.request_date;
+    const to = item.date_to || item.request_date;
+    return `${dateText(from)}${to !== from ? `–${dateText(to)}` : ""}${item.all_day ? " · ganztägig" : ` · ${esc(item.start_time)}–${esc(item.end_time)}`}`;
+  }
+  if (item.kind === "time_off_change") {
+    const original = `${dateText(item.original_date_from)}${item.original_date_to !== item.original_date_from ? `–${dateText(item.original_date_to)}` : ""}`;
+    const requested = `${dateText(item.requested_date_from)}${item.requested_date_to !== item.requested_date_from ? `–${dateText(item.requested_date_to)}` : ""}${item.requested_all_day ? " · ganztägig" : ` · ${esc(item.requested_start_time)}–${esc(item.requested_end_time)}`}`;
+    return `${original} → ${requested}`;
+  }
+  if (item.kind === "time_off_cancel") {
+    return `${dateText(item.original_date_from)}${item.original_date_to !== item.original_date_from ? `–${dateText(item.original_date_to)}` : ""}`;
+  }
   if (item.request_type === "change" || item.kind === "vacation_change") {
     return `${dateText(item.original_date_from)}–${dateText(item.original_date_to)} → ${dateText(item.requested_date_from)}–${dateText(item.requested_date_to)}`;
   }
@@ -448,7 +671,7 @@ function requestPeriodText(item) {
 function requestMatchesHistoryFilters(item) {
   const type = el.historyTypeFilter.value;
   const status = el.historyStatusFilter.value;
-  const typeMatches = type === "all" || (type === "time_off" ? item.kind === "time_off" : item.kind !== "time_off");
+  const typeMatches = type === "all" || (type === "time_off" ? item.kind.startsWith("time_off") : !item.kind.startsWith("time_off"));
   const statusMatches = status === "all"
     || (status === "open" ? openRequestStatuses.has(item.status) : status === "cancelled" ? ["cancelled", "withdrawn"].includes(item.status) : item.status === status);
   return typeMatches && statusMatches;
@@ -560,7 +783,7 @@ function renderAmuReports() {
     const documents = report.documents || [];
     const canWithdraw = ["pending", "submitted", "pending_local", "returned"].includes(report.status);
     return `<article class="request-item amu-report" data-amu-report-id="${Number(report.id)}"><div><strong>${dateText(report.incapacity_from)}–${dateText(report.incapacity_to)}</strong>${report.employee_note ? `<span>${esc(report.employee_note)}</span>` : ""}<span class="status ${esc(report.status)}">${esc(statusLabels[report.status] || report.status)}</span><div class="document-links">${documents.map((document) => { const size = document.byte_size || document.size; return `<a href="/api/portal/v1/me/amu-reports/${Number(report.id)}/documents/${encodeURIComponent(String(document.id))}/content" target="_blank" rel="noopener">${esc(document.original_filename || document.original_name || document.filename || "Dokument")}${size ? ` · ${formatBytes(size)}` : ""}</a>`; }).join("")}</div></div>${canWithdraw ? '<button class="cancel-request" data-withdraw-amu type="button">Zurückziehen</button>' : ""}</article>`;
-  }).join("") : '<p class="empty-state">Noch keine AMU-Meldung vorhanden.</p>';
+  }).join("") : '<p class="empty-state">Noch keine AUM-Meldung vorhanden.</p>';
 }
 
 async function loadAmuReports() {
@@ -599,7 +822,7 @@ async function submitAmuReport(event) {
   try {
     await api("/api/portal/v1/me/amu-reports", { method: "POST", body });
     el.amuReportForm.reset();
-    message(el.amuMessage, "Die AMU wurde sicher übermittelt.");
+    message(el.amuMessage, "Die AUM wurde sicher übermittelt.");
     await Promise.allSettled([loadAmuReports(), loadNotifications()]);
   } catch (error) {
     message(el.amuMessage, error.message, true);
@@ -609,7 +832,7 @@ async function submitAmuReport(event) {
 }
 
 async function withdrawAmuReport(id) {
-  if (!confirm("Diese AMU-Meldung wirklich zurückziehen?")) return;
+  if (!confirm("Diese AUM-Meldung wirklich zurückziehen?")) return;
   try {
     await api(`/api/portal/v1/me/amu-reports/${id}/withdraw`, { method: "POST", body: "{}" });
     await Promise.allSettled([loadAmuReports(), loadNotifications()]);
@@ -712,25 +935,54 @@ el.nextWeek.addEventListener("click", () => { portalState.weekStart = addDays(po
 el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule(); });
 el.timeOffRequestForm.addEventListener("submit", submitTimeOff);
 el.timeOffDate.addEventListener("change", loadTimeOffSlots);
+el.timeOffDate.addEventListener("change", updateTimeOffMode);
+el.timeOffDateTo.addEventListener("change", checkTimeOff);
+document.querySelectorAll('input[name="timeOffMode"]').forEach((input) => input.addEventListener("change", updateTimeOffMode));
 el.timeOffStart.addEventListener("change", updateTimeOffEndSlots);
 el.timeOffEnd.addEventListener("change", checkTimeOff);
 el.timeOffRequestList.addEventListener("click", (event) => {
-  const button = event.target.closest(".cancel-request");
-  if (button) cancelTimeOff(button.closest("[data-time-off-request-id]").dataset.timeOffRequestId);
+  const row = event.target.closest("[data-time-off-request-id]");
+  const approvedAction = event.target.closest("[data-time-off-action]");
+  if (approvedAction && !approvedAction.disabled) {
+    openTimeOffChange(row.dataset.timeOffRequestId, approvedAction.dataset.timeOffAction);
+    return;
+  }
+  if (event.target.closest(".cancel-request")) cancelTimeOff(row.dataset.timeOffRequestId);
+  if (event.target.closest(".edit-request")) editTimeOff(row.dataset.timeOffRequestId);
 });
+el.cancelTimeOffEdit.addEventListener("click", resetTimeOffForm);
+el.timeOffArchiveToggle.addEventListener("click", () => { portalState.timeOffArchive = !portalState.timeOffArchive; loadTimeOffRequests(); });
 el.vacationRequestForm.addEventListener("submit", submitVacation);
 [el.vacationDateFrom, el.vacationDateTo].forEach((field) => field.addEventListener("input", checkVacation));
-el.vacationRequestList.addEventListener("click", (event) => {
-  const button = event.target.closest(".cancel-request");
-  if (button) cancelVacation(button.closest("[data-request-id]").dataset.requestId);
+el.vacationDateFrom.addEventListener("input", () => {
+  el.vacationDateTo.min = el.vacationDateFrom.value;
+  if (el.vacationDateTo.value && el.vacationDateTo.value < el.vacationDateFrom.value) el.vacationDateTo.value = el.vacationDateFrom.value;
 });
+el.vacationRequestList.addEventListener("click", (event) => {
+  const row = event.target.closest("[data-request-id]");
+  if (event.target.closest(".cancel-request")) cancelVacation(row.dataset.requestId);
+  if (event.target.closest(".edit-request")) editVacation(row.dataset.requestId);
+});
+el.cancelVacationEdit.addEventListener("click", resetVacationForm);
 el.approvedVacationList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-vacation-action]");
   if (button && !button.disabled) openVacationChange(button.closest("[data-vacation-group]").dataset.vacationGroup, button.dataset.vacationAction);
 });
 el.vacationChangeForm.addEventListener("submit", submitVacationChange);
 document.querySelectorAll("[data-close-vacation-change]").forEach((button) => button.addEventListener("click", () => el.vacationChangeDialog.close()));
-el.historyTypeFilter.addEventListener("change", renderAbsenceHistory);
+el.timeOffChangeForm.addEventListener("submit", submitTimeOffChange);
+document.querySelectorAll('input[name="timeOffChangeMode"]').forEach((input) => input.addEventListener("change", updateTimeOffChangeMode));
+el.timeOffChangeFrom.addEventListener("change", updateTimeOffChangeMode);
+el.timeOffChangeTo.addEventListener("change", updateTimeOffChangeMode);
+document.querySelectorAll("[data-close-time-off-change]").forEach((button) => button.addEventListener("click", () => {
+  portalState.timeOffChange = null;
+  el.timeOffChangeDialog.close();
+}));
+document.querySelectorAll("[data-history-kind]").forEach((button) => button.addEventListener("click", () => {
+  el.historyTypeFilter.value = button.dataset.historyKind;
+  document.querySelectorAll("[data-history-kind]").forEach((item) => item.classList.toggle("active", item === button));
+  renderAbsenceHistory();
+}));
 el.historyStatusFilter.addEventListener("change", renderAbsenceHistory);
 el.absenceHistoryList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-open-history]");
@@ -751,6 +1003,10 @@ el.notificationList.addEventListener("click", (event) => {
 });
 el.markAllNotificationsRead.addEventListener("click", markAllNotificationsRead);
 el.amuReportForm.addEventListener("submit", submitAmuReport);
+el.amuIncapacityFrom.addEventListener("input", () => {
+  el.amuIncapacityTo.min = el.amuIncapacityFrom.value || new Date().toISOString().slice(0, 10);
+  if (el.amuIncapacityTo.value && el.amuIncapacityTo.value < el.amuIncapacityFrom.value) el.amuIncapacityTo.value = el.amuIncapacityFrom.value;
+});
 el.amuReportList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-withdraw-amu]");
   const report = button?.closest("[data-amu-report-id]");

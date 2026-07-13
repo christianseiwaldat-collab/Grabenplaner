@@ -108,6 +108,7 @@ test("alte Datenbank wird um das Portal-Fundament erweitert", () => {
   assert.ok(tables.has("portal_sessions"));
   assert.ok(tables.has("vacation_requests"));
   assert.ok(tables.has("time_off_requests"));
+  assert.ok(tables.has("time_off_change_requests"));
   assert.ok(tables.has("vacation_change_requests"));
   assert.ok(tables.has("request_blackouts"));
   assert.ok(tables.has("request_decisions"));
@@ -332,6 +333,15 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     assert.equal(adminLogin.status, 200, await adminLogin.clone().text());
     const admin = sessionHeaders(adminLogin);
 
+    const brandingExport = await fetch(`${url}/api/branding/export.zip?locationId=01`, { headers: { Cookie: admin.cookie } });
+    assert.equal(brandingExport.status, 200, await brandingExport.clone().text());
+    const brandingImport = await fetch(`${url}/api/branding/import.zip?locationId=01`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/zip", "X-Branding-Filename": "roundtrip.zip", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: await brandingExport.arrayBuffer(),
+    });
+    assert.equal(brandingImport.status, 200, await brandingImport.clone().text());
+
     const createEmployeeAccess = await fetch(`${url}/api/portal/v1/users/102`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
@@ -353,6 +363,21 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
       body: JSON.stringify({ currentPassword: "654321", newPassword: "123456" }),
     });
     assert.equal(passwordChange.status, 200, await passwordChange.clone().text());
+
+    const createManagerAccess = await fetch(`${url}/api/portal/v1/users/103`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ role: "manager", active: true, password: "112233", mustChangePassword: true }),
+    });
+    assert.equal(createManagerAccess.status, 200, await createManagerAccess.clone().text());
+    const assignManagerScope = await fetch(`${url}/api/portal/v1/users/103/scopes`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ scopes: [{ locationId: "01" }] }),
+    });
+    assert.equal(assignManagerScope.status, 200, await assignManagerScope.clone().text());
+    const scopedUsers = await assignManagerScope.json();
+    assert.deepEqual(scopedUsers.users.find((item) => item.employeeNumber === "103").scopes, [{ locationId: "01", departmentId: null }]);
 
     const createHrAccess = await fetch(`${url}/api/portal/v1/users/103`, {
       method: "PUT",
@@ -411,6 +436,58 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const allowedTimeOff = await allowedTimeOffCheck.json();
     assert.equal(allowedTimeOff.trafficLight, "yellow");
     assert.equal(allowedTimeOff.allowed, true);
+
+    const multiDayTimeOffResponse = await fetch(`${url}/api/portal/v1/me/time-off-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+      body: JSON.stringify({ dateFrom: "2027-11-08", dateTo: "2027-11-09", allDay: true, note: "Zwei Tage ZA" }),
+    });
+    assert.equal(multiDayTimeOffResponse.status, 201, await multiDayTimeOffResponse.clone().text());
+    const multiDayTimeOff = await multiDayTimeOffResponse.json();
+    const editMultiDayTimeOff = await fetch(`${url}/api/portal/v1/me/time-off-requests/${multiDayTimeOff.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+      body: JSON.stringify({ dateFrom: "2027-11-10", dateTo: "2027-11-12", allDay: true, note: "Drei Tage ZA" }),
+    });
+    assert.equal(editMultiDayTimeOff.status, 200, await editMultiDayTimeOff.clone().text());
+    const ownTimeOffResponse = await fetch(`${url}/api/portal/v1/me/time-off-requests`, { headers: { Cookie: employee.cookie } });
+    const ownTimeOff = await ownTimeOffResponse.json();
+    const editedMultiDay = ownTimeOff.requests.find((item) => item.id === multiDayTimeOff.id);
+    assert.equal(editedMultiDay.date_from, "2027-11-10");
+    assert.equal(editedMultiDay.date_to, "2027-11-12");
+    assert.equal(Boolean(editedMultiDay.all_day), true);
+    const approveMultiDayTimeOff = await fetch(`${url}/api/portal/v1/absence-requests/time_off/${multiDayTimeOff.id}/action`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ action: "approve", note: "Mehrtagestest" }),
+    });
+    assert.equal(approveMultiDayTimeOff.status, 200, await approveMultiDayTimeOff.clone().text());
+    assert.equal((await approveMultiDayTimeOff.json()).request.status, "approved");
+    const approvedMultiDayResponse = await fetch(`${url}/api/portal/v1/me/approved-time-off`, { headers: { Cookie: employee.cookie } });
+    assert.equal(approvedMultiDayResponse.status, 200, await approvedMultiDayResponse.clone().text());
+    const approvedMultiDay = (await approvedMultiDayResponse.json()).requests.find((item) => item.id === multiDayTimeOff.id);
+    assert.equal(approvedMultiDay.date_from, "2027-11-10");
+    assert.equal(approvedMultiDay.date_to, "2027-11-12");
+    assert.equal(Boolean(approvedMultiDay.all_day), true);
+
+    const multiDayChangeResponse = await fetch(`${url}/api/portal/v1/me/time-off-change-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: employee.cookie, "X-CSRF-Token": employee.csrf },
+      body: JSON.stringify({ requestId: multiDayTimeOff.id, requestType: "change", dateFrom: "2027-11-15", dateTo: "2027-11-16", allDay: true, note: "Termin verschieben" }),
+    });
+    assert.equal(multiDayChangeResponse.status, 201, await multiDayChangeResponse.clone().text());
+    const multiDayChange = await multiDayChangeResponse.json();
+    const approveMultiDayChange = await fetch(`${url}/api/portal/v1/absence-requests/time_off_change/${multiDayChange.id}/action`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ action: "approve", note: "Verschiebung genehmigt" }),
+    });
+    assert.equal(approveMultiDayChange.status, 200, await approveMultiDayChange.clone().text());
+    assert.equal((await approveMultiDayChange.json()).request.status, "approved");
+    const changedApprovedResponse = await fetch(`${url}/api/portal/v1/me/approved-time-off`, { headers: { Cookie: employee.cookie } });
+    const changedApproved = (await changedApprovedResponse.json()).requests.find((item) => item.id === multiDayTimeOff.id);
+    assert.equal(changedApproved.date_from, "2027-11-15");
+    assert.equal(changedApproved.date_to, "2027-11-16");
 
     const requestResponse = await fetch(`${url}/api/portal/v1/me/vacation-requests`, {
       method: "POST",
@@ -657,6 +734,199 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
       { start_time: "14:00", end_time: "18:00" },
     ]);
     verified.close();
+  } finally {
+    if (child.exitCode === null) child.kill();
+  }
+});
+
+test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", async () => {
+  const childRoot = path.join(testRoot, "lan-scope-isolation");
+  fs.mkdirSync(childRoot, { recursive: true });
+  const childDatabase = path.join(childRoot, "dienstplan.db");
+  const port = await getFreePort();
+  const child = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
+    cwd: path.join(__dirname, ".."),
+    windowsHide: true,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      DB_PATH: childDatabase,
+      BACKUP_DIR: path.join(childRoot, "backups"),
+      GRABENPLANER_DATA_DIR: path.join(childRoot, "app-data"),
+      GRABENPLANER_HOST: "127.0.0.1",
+      GRABENPLANER_FORCE_PORTAL: "1",
+      GRABENPLANER_SEED_DEMO: "1",
+      NODE_ENV: "test",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stderr = "";
+  child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+  const url = `http://127.0.0.1:${port}`;
+
+  function sessionHeaders(response) {
+    const setCookies = typeof response.headers.getSetCookie === "function"
+      ? response.headers.getSetCookie()
+      : [response.headers.get("set-cookie")].filter(Boolean);
+    const cookie = setCookies.map((value) => value.split(";", 1)[0]).join("; ");
+    const csrfCookie = setCookies.map((value) => value.split(";", 1)[0]).find((value) => value.startsWith("grabenplaner_csrf="));
+    return { cookie, csrf: decodeURIComponent(csrfCookie.split("=").slice(1).join("=")) };
+  }
+
+  async function login(employeeNumber, password) {
+    const response = await fetch(`${url}/api/portal/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeNumber, password }),
+    });
+    assert.equal(response.status, 200, await response.clone().text());
+    return sessionHeaders(response);
+  }
+
+  async function changePassword(session, currentPassword, newPassword) {
+    const response = await fetch(`${url}/api/portal/v1/me/password`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: session.cookie, "X-CSRF-Token": session.csrf },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    assert.equal(response.status, 200, await response.clone().text());
+  }
+
+  try {
+    await waitForJson(`${url}/api/portal/v1/status`, child);
+    const setup = await fetch(`${url}/api/portal/v1/setup/admin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeNumber: "101", password: "987654" }),
+    });
+    assert.equal(setup.status, 201, await setup.clone().text());
+    const admin = await login("101", "987654");
+
+    const initialLocationsResponse = await fetch(`${url}/api/locations`, { headers: { Cookie: admin.cookie } });
+    assert.equal(initialLocationsResponse.status, 200, await initialLocationsResponse.clone().text());
+    const initialLocations = await initialLocationsResponse.json();
+    const daySettings = initialLocations.find((location) => location.id === "01").day_settings;
+
+    const secondLocationResponse = await fetch(`${url}/api/locations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ id: "02", name: "Zweiter Standort", minStaff: 1, daySettings, active: true }),
+    });
+    assert.equal(secondLocationResponse.status, 201, await secondLocationResponse.clone().text());
+
+    const firstDepartmentResponse = await fetch(`${url}/api/departments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ locationId: "01", name: "Abteilung Eins", minStaff: 1, active: true }),
+    });
+    assert.equal(firstDepartmentResponse.status, 201, await firstDepartmentResponse.clone().text());
+    const afterFirstDepartment = await firstDepartmentResponse.json();
+    const firstDepartment = afterFirstDepartment.find((location) => location.id === "01").departments.find((department) => department.name === "Abteilung Eins");
+    const secondDepartmentResponse = await fetch(`${url}/api/departments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ locationId: "01", name: "Abteilung Zwei", minStaff: 1, active: true }),
+    });
+    assert.equal(secondDepartmentResponse.status, 201, await secondDepartmentResponse.clone().text());
+    const afterSecondDepartment = await secondDepartmentResponse.json();
+    const secondDepartment = afterSecondDepartment.find((location) => location.id === "01").departments.find((department) => department.name === "Abteilung Zwei");
+    assert.ok(firstDepartment?.id);
+    assert.ok(secondDepartment?.id);
+
+    for (const [employeeNumber, role, password] of [
+      ["104", "manager", "445566"],
+      ["105", "department_manager", "556677"],
+    ]) {
+      const accessResponse = await fetch(`${url}/api/portal/v1/users/${employeeNumber}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+        body: JSON.stringify({ role, active: true, password, mustChangePassword: true }),
+      });
+      assert.equal(accessResponse.status, 200, await accessResponse.clone().text());
+    }
+
+    const managerScopeResponse = await fetch(`${url}/api/portal/v1/users/104/scopes`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ scopes: [{ locationId: "01" }] }),
+    });
+    assert.equal(managerScopeResponse.status, 200, await managerScopeResponse.clone().text());
+    const departmentManagerScopeResponse = await fetch(`${url}/api/portal/v1/users/105/scopes`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ scopes: [{ locationId: "01", departmentId: firstDepartment.id }] }),
+    });
+    assert.equal(departmentManagerScopeResponse.status, 200, await departmentManagerScopeResponse.clone().text());
+
+    const manager = await login("104", "445566");
+    await changePassword(manager, "445566", "665544");
+    const departmentManager = await login("105", "556677");
+    await changePassword(departmentManager, "556677", "776655");
+
+    const remoteBlackoutResponse = await fetch(`${url}/api/portal/v1/request-blackouts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({
+        locationId: "02", dateFrom: "2027-12-01", dateTo: "2027-12-24",
+        blockVacation: true, blockTimeOff: true, reason: "Nur Standort Zwei", active: true,
+      }),
+    });
+    assert.equal(remoteBlackoutResponse.status, 201, await remoteBlackoutResponse.clone().text());
+    const remoteBlackout = (await remoteBlackoutResponse.json()).blackouts.find((item) => item.reason === "Nur Standort Zwei");
+    assert.ok(remoteBlackout?.id);
+
+    const managerRemoteSchedule = await fetch(`${url}/api/schedule?week=2027-08-02&location=02`, { headers: { Cookie: manager.cookie } });
+    assert.equal(managerRemoteSchedule.status, 403, await managerRemoteSchedule.clone().text());
+    const managerRemoteScheduleDelete = await fetch(`${url}/api/schedule?week=2027-08-02&location=02`, {
+      method: "DELETE", headers: { Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+    });
+    assert.equal(managerRemoteScheduleDelete.status, 403, await managerRemoteScheduleDelete.clone().text());
+
+    const managerBlackoutsResponse = await fetch(`${url}/api/portal/v1/request-blackouts`, { headers: { Cookie: manager.cookie } });
+    assert.equal(managerBlackoutsResponse.status, 200, await managerBlackoutsResponse.clone().text());
+    assert.equal((await managerBlackoutsResponse.json()).blackouts.some((item) => item.locationId === "02"), false);
+    const managerRemoteBlackoutCreate = await fetch(`${url}/api/portal/v1/request-blackouts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+      body: JSON.stringify({ locationId: "02", dateFrom: "2028-01-02", dateTo: "2028-01-03", blockVacation: true, reason: "Verbotener Eintrag" }),
+    });
+    assert.equal(managerRemoteBlackoutCreate.status, 403, await managerRemoteBlackoutCreate.clone().text());
+    const managerRemoteBlackoutUpdate = await fetch(`${url}/api/portal/v1/request-blackouts/${remoteBlackout.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+      body: JSON.stringify({ locationId: "02", dateFrom: "2027-12-01", dateTo: "2027-12-24", blockVacation: true, blockTimeOff: true, reason: "Manipuliert" }),
+    });
+    assert.equal(managerRemoteBlackoutUpdate.status, 403, await managerRemoteBlackoutUpdate.clone().text());
+    const managerRemoteBlackoutDelete = await fetch(`${url}/api/portal/v1/request-blackouts/${remoteBlackout.id}`, {
+      method: "DELETE", headers: { Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
+    });
+    assert.equal(managerRemoteBlackoutDelete.status, 403, await managerRemoteBlackoutDelete.clone().text());
+
+    const departmentSchedule = await fetch(`${url}/api/schedule?week=2027-08-02&location=01&department=${firstDepartment.id}`, { headers: { Cookie: departmentManager.cookie } });
+    assert.equal(departmentSchedule.status, 200, await departmentSchedule.clone().text());
+    const broadDepartmentSchedule = await fetch(`${url}/api/schedule?week=2027-08-02&location=01`, { headers: { Cookie: departmentManager.cookie } });
+    assert.equal(broadDepartmentSchedule.status, 403, await broadDepartmentSchedule.clone().text());
+    const otherDepartmentSchedule = await fetch(`${url}/api/schedule?week=2027-08-02&location=01&department=${secondDepartment.id}`, { headers: { Cookie: departmentManager.cookie } });
+    assert.equal(otherDepartmentSchedule.status, 403, await otherDepartmentSchedule.clone().text());
+
+    const departmentVacations = await fetch(`${url}/api/vacations?year=2027&location=01&department=${firstDepartment.id}`, { headers: { Cookie: departmentManager.cookie } });
+    assert.equal(departmentVacations.status, 200, await departmentVacations.clone().text());
+    const broadDepartmentVacations = await fetch(`${url}/api/vacations?year=2027&location=01`, { headers: { Cookie: departmentManager.cookie } });
+    assert.equal(broadDepartmentVacations.status, 403, await broadDepartmentVacations.clone().text());
+    const otherDepartmentVacations = await fetch(`${url}/api/vacations?year=2027&location=01&department=${secondDepartment.id}`, { headers: { Cookie: departmentManager.cookie } });
+    assert.equal(otherDepartmentVacations.status, 403, await otherDepartmentVacations.clone().text());
+
+    const remoteBlackoutStillExists = await fetch(`${url}/api/portal/v1/request-blackouts`, { headers: { Cookie: admin.cookie } });
+    assert.equal(remoteBlackoutStillExists.status, 200, await remoteBlackoutStillExists.clone().text());
+    assert.ok((await remoteBlackoutStillExists.json()).blackouts.some((item) => item.id === remoteBlackout.id && item.reason === "Nur Standort Zwei"));
+
+    const exitResponse = await fetch(`${url}/api/system/exit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: "{}",
+    });
+    assert.equal(exitResponse.status, 200, await exitResponse.clone().text());
+    assert.equal((await waitForExit(child)).code, 0, stderr);
   } finally {
     if (child.exitCode === null) child.kill();
   }
