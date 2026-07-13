@@ -647,21 +647,25 @@ function renderContextNavigation() {
     : [{ locationId: location.id, departmentId: "", label: `${location.name} · Gesamtplan` }]);
   const showPlanningChildren = planningContexts.length > 1;
   const planningOpen = localStorage.getItem("grabenplaner-nav-planning") !== "closed";
+  const planningToggle = document.querySelector('[data-nav-toggle="planning"]');
   elements.planningNavChildren.classList.toggle("hidden", !showPlanningChildren || !planningOpen);
-  document.querySelector('[data-nav-toggle="planning"]')?.classList.toggle("hidden", !showPlanningChildren);
+  planningToggle?.classList.toggle("hidden", !showPlanningChildren);
+  planningToggle?.classList.toggle("expanded", planningOpen);
+  planningToggle?.setAttribute("aria-expanded", String(planningOpen));
   elements.planningNavChildren.innerHTML = showPlanningChildren ? planningContexts.map((item) => `
     <button type="button" class="nav-child ${item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? "active" : ""}" data-context-view="planning" data-location-id="${escapeHtml(item.locationId)}" data-department-id="${escapeHtml(item.departmentId)}">${escapeHtml(item.label)}</button>
   `).join("") : "";
 
   const showVacationChildren = locations.length > 1;
   const vacationOpen = localStorage.getItem("grabenplaner-nav-vacations") !== "closed";
+  const vacationToggle = document.querySelector('[data-nav-toggle="vacations"]');
   elements.vacationNavChildren.classList.toggle("hidden", !showVacationChildren || !vacationOpen);
-  document.querySelector('[data-nav-toggle="vacations"]')?.classList.toggle("hidden", !showVacationChildren);
+  vacationToggle?.classList.toggle("hidden", !showVacationChildren);
+  vacationToggle?.classList.toggle("expanded", vacationOpen);
+  vacationToggle?.setAttribute("aria-expanded", String(vacationOpen));
   elements.vacationNavChildren.innerHTML = showVacationChildren ? locations.map((location) => `
     <button type="button" class="nav-child ${location.id === state.locationId ? "active" : ""}" data-context-view="vacations" data-location-id="${escapeHtml(location.id)}" data-department-id="${departmentOnly ? escapeHtml(String(location.departments?.[0]?.id || "")) : ""}">${escapeHtml(location.name)}</button>
   `).join("") : "";
-  document.querySelector('[data-nav-toggle="planning"]')?.replaceChildren(document.createTextNode(planningOpen ? "−" : "+"));
-  document.querySelector('[data-nav-toggle="vacations"]')?.replaceChildren(document.createTextNode(vacationOpen ? "−" : "+"));
 }
 
 function renderHeader() {
@@ -3045,7 +3049,8 @@ document.querySelector(".main-nav").addEventListener("click", (event) => {
     const opening = children.classList.contains("hidden");
     localStorage.setItem(`grabenplaner-nav-${key}`, opening ? "open" : "closed");
     children.classList.toggle("hidden", !opening);
-    toggle.textContent = opening ? "−" : "+";
+    toggle.classList.toggle("expanded", opening);
+    toggle.setAttribute("aria-expanded", String(opening));
     return;
   }
   const button = event.target.closest("[data-context-view]");

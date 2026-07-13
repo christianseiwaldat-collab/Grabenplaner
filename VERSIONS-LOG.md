@@ -1,5 +1,10 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.51.1 Beta
+
+- Aufklappbare Filialgruppen in der Seitennavigation verwenden nun kleine Explorer-artige Pfeile links vor dem Bereichssymbol statt großer Plus-/Minus-Zeichen am rechten Rand.
+- Der Pfeil dreht sich passend zum Zustand, die untergeordneten Filialen bleiben sauber eingerückt und der Schalter ist auch per Tastatur zugänglich.
+
 ## v0.51 Beta
 
 - Öffnungszeiten, Mittagspausen und Mindestbesetzungen in die jeweilige Standortverwaltung verschoben und bestehende Werte je Filiale sicher übernommen.

@@ -31,11 +31,17 @@ button { color: inherit; }
 .brand-app span { display: block; margin-top: 3px; color: rgba(255,255,255,.68); font-size: 10px; font-weight: 700; }
 
 .main-nav { display: grid; gap: 5px; min-height: 0; padding: 14px 4px 8px 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.24) transparent; border-top: 1px solid rgba(255,255,255,.1); }
+.nav-branch { display: grid; grid-template-columns: 14px minmax(0,1fr); align-items: stretch; }
+.nav-branch > .nav-item { grid-column: 2; padding-left: 0; }
+.nav-disclosure { grid-column: 1; display: grid; place-items: center; width: 14px; min-height: 42px; padding: 0; border: 0; color: rgba(255,255,255,.62); background: transparent; cursor: pointer; }
+.nav-disclosure:hover { color: white; }
+.nav-disclosure span { width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .16s ease; }
+.nav-disclosure.expanded span { transform: rotate(45deg) translate(-1px,-1px); }
+.nav-disclosure:focus-visible { outline: 2px solid rgba(255,255,255,.72); outline-offset: -2px; border-radius: 5px; }
 .nav-item { display: flex; align-items: center; gap: 11px; width: 100%; padding: 12px; border: 0; border-radius: 11px; color: rgba(255,255,255,.67); background: transparent; font-size: 11.5px; font-weight: 600; text-align: left; cursor: pointer; }
 .nav-item:hover, .nav-item.active { color: white; background: rgba(255,255,255,.1); }
 .nav-item.active { box-shadow: inset 3px 0 var(--coral); }
 .nav-symbol { display: grid; place-items: center; width: 22px; font-size: 15px; }
-.nav-expand { margin-left: auto; width: 18px; color: rgba(255,255,255,.75); font-size: 15px; font-weight: 800; text-align: center; }
 .nav-children { display: grid; gap: 4px; margin: -1px 0 6px 34px; }
 .nav-child { width: 100%; padding: 7px 10px; border: 0; border-radius: 8px; color: rgba(255,255,255,.56); background: rgba(255,255,255,.035); font-size: 9.5px; font-weight: 700; text-align: left; cursor: pointer; }
 .nav-child:hover, .nav-child.active { color: white; background: rgba(255,255,255,.12); }

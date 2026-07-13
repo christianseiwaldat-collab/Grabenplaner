@@ -29,17 +29,23 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.51 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.51.1 Beta</span></div>
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
-          <button class="nav-item active" data-view="planning">
-            <span class="nav-symbol">▦</span><span>Dienstplanung</span><span class="nav-expand" data-nav-toggle="planning" aria-hidden="true">−</span>
-          </button>
+          <div class="nav-branch">
+            <button type="button" class="nav-disclosure expanded" data-nav-toggle="planning" aria-label="Dienstplanung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
+            <button class="nav-item active" data-view="planning">
+              <span class="nav-symbol">▦</span><span>Dienstplanung</span>
+            </button>
+          </div>
           <div class="nav-children" id="planningNavChildren"></div>
-          <button class="nav-item" data-view="vacations">
-            <span class="nav-symbol">☀</span><span>Urlaubsplanung</span><span class="nav-expand" data-nav-toggle="vacations" aria-hidden="true">−</span>
-          </button>
+          <div class="nav-branch">
+            <button type="button" class="nav-disclosure expanded" data-nav-toggle="vacations" aria-label="Urlaubsplanung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
+            <button class="nav-item" data-view="vacations">
+              <span class="nav-symbol">☀</span><span>Urlaubsplanung</span>
+            </button>
+          </div>
           <div class="nav-children" id="vacationNavChildren"></div>
           <button class="nav-item request-nav-item" data-view="requests" id="requestsNavButton">
             <span class="nav-symbol">✓</span><span>Anträge</span><strong class="nav-count hidden" id="requestsNavCount">0</strong>
@@ -535,7 +541,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.51 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.51.1 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
