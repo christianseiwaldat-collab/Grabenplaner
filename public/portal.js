@@ -173,6 +173,25 @@ function applyPortalBranding(branding = {}) {
   document.querySelectorAll("[data-brand-icon]").forEach((link) => { link.href = branding.iconUrl || "/assets/webicon.svg"; });
 }
 
+let loginBrandingTimer;
+async function previewLoginBranding() {
+  const employeeNumber = el.loginPersonnelNumber.value.trim();
+  try {
+    const result = await api("/api/portal/v1/auth/branding", {
+      method: "POST",
+      body: JSON.stringify({ employeeNumber }),
+    });
+    if (el.loginPersonnelNumber.value.trim() === employeeNumber) applyPortalBranding(result.branding || {});
+  } catch {
+    if (!employeeNumber) applyPortalBranding(portalState.status?.branding || {});
+  }
+}
+
+function scheduleLoginBrandingPreview() {
+  clearTimeout(loginBrandingTimer);
+  loginBrandingTimer = setTimeout(previewLoginBranding, 300);
+}
+
 function timeTrackingCapabilityEnabled() {
   return portalState.status?.capabilities?.timeTracking === true;
 }
@@ -1669,6 +1688,8 @@ function togglePassword(button) {
 }
 
 el.portalLoginForm.addEventListener("submit", login);
+el.loginPersonnelNumber.addEventListener("input", scheduleLoginBrandingPreview);
+el.loginPersonnelNumber.addEventListener("blur", previewLoginBranding);
 el.logoutButton.addEventListener("click", logout);
 el.changePasswordButton.addEventListener("click", () => el.passwordDialog.showModal());
 el.passwordForm.addEventListener("submit", changePassword);

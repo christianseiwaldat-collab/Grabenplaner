@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.53 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.53.1 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,12 +13,14 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Neu in v0.53 Beta:
-  - Rollen und delegierbare Verwaltungsrechte werden zentral verwaltet.
-  - Brandings können durch Admin oder Personalleitung je Standort zugewiesen werden.
-  - Zeiterfassung bietet Wochen-/Monatsübersichten und Korrekturanträge.
-  - Das mobile Leitungsportal bündelt konfigurierbare Kernfunktionen.
-  - Für Demo- und Funktionstests steht die private Codespaces-Testumgebung bereit.
+Neu in v0.53.1 Beta:
+  - Branding-Auswahl und Standortzuweisungen werden zuverlässig gespeichert.
+  - Admin und Personalleitung behalten ihr ausgewähltes Verwaltungs-Branding.
+  - Standortgebundene Rollen sehen ausschließlich das Branding ihrer Filiale.
+  - Branding-Kits können gelöscht und mehrere Standortzuweisungen gemeinsam
+    gespeichert werden.
+  - Standortverwaltung, Personalakt und Einstellungsseiten wurden übersichtlicher
+    gestaltet; die PDF-Vorschau funktioniert wieder zuverlässig.
 
 Leere Zweitkopie:
   Ab v0.42.1 wird die leere Zweitkopie nicht mehr automatisch aktualisiert.

@@ -28,6 +28,8 @@ const state = {
   timeCorrections: [],
   rightsManagement: null,
   brandingAssignments: [],
+  brandingPreference: null,
+  brandingFormDirty: false,
   mobileLeadershipSettings: null,
   amuPolicy: null,
   selectedRequest: null,
@@ -90,7 +92,7 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition",
-    "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationSubmitButton", "cancelLocationEditButton",
+    "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationSubmitButton", "cancelLocationEditButton",
     "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
     "shiftModal", "shiftForm", "shiftModalTitle", "deleteShiftButton", "shiftCalculation", "shiftDepartment", "departmentPdfControl", "departmentPdfSelect", "departmentPdfButton",
     "optionsModal", "optionForm", "optionList", "optionsWeekLabel", "optionsWeekRange", "optionPreviousWeek", "optionNextWeek", "globalBlockDate", "globalBlockReason", "globalBlockHoliday", "globalBlockSubmitButton", "optionSubmitButton", "cancelOptionEditButton", "autoPlanModal",
@@ -470,6 +472,8 @@ function applyRoleVisibility() {
   elements.updateCheckButton?.classList.toggle("hidden", lanActive && !globalAdministration);
   document.querySelector('[data-personnel-tab="locations"]')?.classList.toggle("hidden", !locationWriteAccess);
   document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !employeeWriteAccess);
+  elements.addLocationButton?.classList.toggle("hidden", !locationBaseWriteAccess);
+  elements.addDepartmentButton?.classList.toggle("hidden", !departmentWriteAccess);
   elements.locationFormCard?.classList.toggle("hidden", !locationBaseWriteAccess);
   elements.departmentFormCard?.classList.toggle("hidden", !departmentWriteAccess);
   elements.positionSettingsCard?.classList.toggle("hidden", !positionWriteAccess);
@@ -509,8 +513,9 @@ async function bootstrapApplication() {
       }
     }
     hideLoginGate();
+    applyShellBranding();
     applyRoleVisibility();
-    await Promise.all([loadAll(), loadSystemInfo()]);
+    await Promise.all([loadAll(), loadSystemInfo(), loadManagementBrandingPreference()]);
     applyRequestedView();
     setTimeout(() => checkForUpdates(false), 1800);
   } catch (error) {
@@ -534,9 +539,10 @@ async function loginToAdministration(event) {
     }
     elements.adminLoginPassword.value = "";
     state.portalSession = result;
+    applyShellBranding(result.status?.branding || result.branding || {});
     hideLoginGate();
     applyRoleVisibility();
-    await Promise.all([loadAll(), loadSystemInfo()]);
+    await Promise.all([loadAll(), loadSystemInfo(), loadManagementBrandingPreference()]);
     applyRequestedView();
   } catch (error) {
     showLoginGate(error.message);
@@ -638,6 +644,65 @@ function applyBranding(settings = state.data?.settings || {}) {
   return branding;
 }
 
+function hasManagementBrandingAccess() {
+  if (state.portalStatus?.portalEnabled !== true) return true;
+  return ["admin", "hr"].includes(state.portalSession?.user?.role);
+}
+
+function currentShellBranding(fallback = {}) {
+  if (hasManagementBrandingAccess() && state.brandingPreference?.branding) return state.brandingPreference.branding;
+  return state.portalSession?.status?.branding
+    || state.portalSession?.branding
+    || state.portalStatus?.branding
+    || fallback;
+}
+
+function applyShellBranding(fallback = {}) {
+  return applyBranding(currentShellBranding(fallback));
+}
+
+function updateManagementBrandingPreference(preference = {}) {
+  state.brandingPreference = {
+    kitId: String(preference.kitId || ""),
+    branding: brandingFromSettings(preference.branding || {}),
+  };
+  if (Array.isArray(preference.kits)) state.brandingKits = preference.kits;
+  if (state.portalStatus) state.portalStatus.branding = state.brandingPreference.branding;
+  if (state.portalSession?.status) state.portalSession.status.branding = state.brandingPreference.branding;
+  applyShellBranding(state.brandingPreference.branding);
+}
+
+async function loadManagementBrandingPreference() {
+  if (!hasManagementBrandingAccess()) return null;
+  try {
+    const preference = await api("/api/branding/preference");
+    updateManagementBrandingPreference(preference);
+    return preference;
+  } catch (error) {
+    if (error.status !== 403) throw error;
+    return null;
+  }
+}
+
+let adminLoginBrandingTimer;
+async function previewAdminLoginBranding() {
+  const employeeNumber = elements.adminLoginPersonnelNumber?.value.trim() || "";
+  try {
+    const result = await api("/api/portal/v1/auth/branding", {
+      method: "POST",
+      body: JSON.stringify({ employeeNumber }),
+    });
+    if ((elements.adminLoginPersonnelNumber?.value.trim() || "") === employeeNumber) applyBranding(result.branding || {});
+  } catch {
+    if (!employeeNumber) applyBranding(state.portalStatus?.branding || {});
+  }
+}
+
+function scheduleAdminLoginBrandingPreview() {
+  clearTimeout(adminLoginBrandingTimer);
+  adminLoginBrandingTimer = setTimeout(previewAdminLoginBranding, 300);
+}
+
 async function loadAll() {
   try {
     const [locations, positions, portalStatus] = await Promise.all([
@@ -676,7 +741,7 @@ async function loadAll() {
 }
 
 function render() {
-  applyBranding(state.data?.settings || {});
+  applyShellBranding(hasManagementBrandingAccess() ? {} : state.data?.settings || {});
   renderContextNavigation();
   renderHeader();
   renderSummary();
@@ -1217,7 +1282,8 @@ async function loadSystemInfo() {
     const info = await api("/api/system-info");
     const uptimeHours = Math.floor(info.uptimeSeconds / 3600);
     const uptimeMinutes = Math.floor((info.uptimeSeconds % 3600) / 60);
-    const branding = applyBranding(info.branding || {});
+    const brandingFallback = hasManagementBrandingAccess() ? info.branding || {} : state.data?.settings || {};
+    const branding = applyShellBranding(brandingFallback);
     const appName = branding.appName || info.appName || "Grabenplaner";
     elements.versionLabel.innerHTML = `<strong>${escapeHtml(appName)}</strong> ${escapeHtml(info.appVersionLabel)}`;
     elements.sidebarVersion.textContent = info.appVersionLabel;
@@ -1322,12 +1388,13 @@ function renderPositions() {
 function renderSettings() {
   const settings = state.data.settings;
   const vacationSettings = state.vacationData?.settings || settings;
-  const branding = applyBranding(settings);
+  const branding = applyShellBranding(hasManagementBrandingAccess() ? {} : settings);
   elements.brandingCompanyName.value = branding.companyName;
   elements.brandingAdminEmail.value = branding.adminEmail;
   elements.brandingLogoUrl.value = branding.logoUrl;
   elements.brandingIconUrl.value = branding.iconUrl;
   elements.brandingLogoAlt.value = branding.logoAlt;
+  state.brandingFormDirty = false;
   renderBrandingKits();
   document.querySelector("#pdfTitleSetting").value = settings.pdf_title;
   document.querySelector("#pdfFilenamePrefix").value = settings.pdf_filename_prefix || settings.pdf_title || "Dienstplan";
@@ -2203,6 +2270,7 @@ async function deleteRequestBlackout(id) {
 function renderBrandingKits() {
   if (!elements.brandingKitLibrary) return;
   const kits = state.brandingKits || [];
+  const activeKitId = String(state.brandingPreference?.kitId || "");
   elements.brandingKitLibrary.innerHTML = kits.length ? `
     <div class="branding-kit-library-heading">
       <div><strong>Installierte Branding-Kits</strong><small>Lokal gespeichert, z. B. am USB-Stick unter <code>data/branding-kits</code>.</small></div>
@@ -2210,7 +2278,8 @@ function renderBrandingKits() {
     <div class="branding-kit-grid">
       ${kits.map((kit) => {
         const branding = brandingFromSettings(kit.branding || {});
-        return `<article class="branding-kit-card ${kit.active ? "active" : ""}">
+        const active = String(kit.id) === activeKitId;
+        return `<article class="branding-kit-card ${active ? "active" : ""}">
           <div class="branding-kit-preview">
             <img src="${escapeHtml(branding.logoUrl)}" alt="" />
             <span><img src="${escapeHtml(branding.iconUrl)}" alt="" /></span>
@@ -2219,7 +2288,10 @@ function renderBrandingKits() {
             <strong>${escapeHtml(kit.name || branding.companyName || "Branding-Kit")}</strong>
             <small>${escapeHtml(branding.companyName || "Neutral")}${branding.adminEmail ? ` · ${escapeHtml(branding.adminEmail)}` : ""}</small>
           </div>
-          <button type="button" class="${kit.active ? "secondary-button" : "primary-button"}" data-apply-branding-kit="${escapeHtml(kit.id)}">${kit.active ? "Aktiv" : "Anwenden"}</button>
+          <div class="branding-kit-card-actions">
+            <button type="button" class="${active ? "secondary-button" : "primary-button"}" data-apply-branding-kit="${escapeHtml(kit.id)}" ${active ? "disabled" : ""}>${active ? "Aktiv" : "Anwenden"}</button>
+            ${kit.builtin ? "" : `<button type="button" class="delete-option" data-delete-branding-kit="${escapeHtml(kit.id)}" data-branding-kit-name="${escapeHtml(kit.name || branding.companyName || "Branding-Kit")}">Löschen</button>`}
+          </div>
         </article>`;
       }).join("")}
     </div>
@@ -2229,16 +2301,22 @@ function renderBrandingKits() {
 function renderBrandingAssignments() {
   if (!elements.brandingAssignmentList) return;
   const assignments = new Map((state.brandingAssignments || []).map((item) => [String(item.locationId || item.location_id), item]));
-  const options = [`<option value="">Standard-Branding</option>`, ...(state.brandingKits || []).map((kit) => `<option value="${escapeHtml(kit.id)}">${escapeHtml(kit.name || kit.branding?.companyName || "Branding-Kit")}</option>`)].join("");
-  elements.brandingAssignmentList.innerHTML = (state.locations || []).map((location) => {
+  const kitIds = new Set((state.brandingKits || []).map((kit) => String(kit.id)));
+  const standardOptions = [`<option value="">Standard-Branding</option>`, ...(state.brandingKits || []).map((kit) => `<option value="${escapeHtml(kit.id)}">${escapeHtml(kit.name || kit.branding?.companyName || "Branding-Kit")}</option>`)].join("");
+  const rows = (state.locations || []).map((location) => {
     const assignment = assignments.get(location.id) || {};
-    const kitId = assignment.kitId || assignment.kit_id || "";
-    return `<article class="branding-assignment-row" data-branding-location="${escapeHtml(location.id)}">
+    const kitId = String(assignment.kitId || assignment.kit_id || "");
+    const preservedOption = kitId && !kitIds.has(kitId)
+      ? `<option value="${escapeHtml(kitId)}">${escapeHtml(kitId === "custom" ? "Individuelles Branding (bestehend)" : `Bestehendes Branding · ${assignment.kitName || assignment.kit_name || kitId}`)}</option>`
+      : "";
+    return `<article class="branding-assignment-row" data-branding-location="${escapeHtml(location.id)}" data-initial-branding-kit="${escapeHtml(kitId)}">
       <div><strong>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</strong><small>${kitId ? `Eigenes Kit: ${escapeHtml(assignment.kitName || assignment.kit_name || kitId)}` : "Verwendet das Standard-Branding"}</small></div>
-      <label class="field"><span>Branding-Kit</span><select data-location-branding-kit>${options}</select></label>
-      <button class="secondary-button" type="button" data-save-branding-assignment>Zuordnung speichern</button>
+      <label class="field"><span>Branding-Kit</span><select data-location-branding-kit>${standardOptions}${preservedOption}</select></label>
     </article>`;
-  }).join("") || '<p class="settings-note">Keine Standorte vorhanden.</p>';
+  }).join("");
+  elements.brandingAssignmentList.innerHTML = rows
+    ? `${rows}<div class="form-actions-inline branding-assignment-actions"><span class="settings-note">Alle Änderungen werden gemeinsam gespeichert.</span><button class="primary-button" type="button" data-save-branding-assignments>Alle Zuordnungen speichern</button></div>`
+    : '<p class="settings-note">Keine Standorte vorhanden.</p>';
   elements.brandingAssignmentList.querySelectorAll("[data-branding-location]").forEach((row) => {
     const assignment = assignments.get(row.dataset.brandingLocation) || {};
     row.querySelector("[data-location-branding-kit]").value = assignment.kitId || assignment.kit_id || "";
@@ -2258,19 +2336,27 @@ async function loadBrandingAssignments() {
   }
 }
 
-async function saveBrandingAssignment(row) {
-  const locationId = row.dataset.brandingLocation;
-  const kitId = row.querySelector("[data-location-branding-kit]").value;
+async function saveBrandingAssignments() {
+  const assignments = [...elements.brandingAssignmentList.querySelectorAll("[data-branding-location]")]
+    .filter((row) => row.querySelector("[data-location-branding-kit]").value !== (row.dataset.initialBrandingKit || ""))
+    .map((row) => ({
+      locationId: row.dataset.brandingLocation,
+      kitId: row.querySelector("[data-location-branding-kit]").value,
+    }));
+  if (!assignments.length) {
+    showToast("Es wurden keine Standort-Brandings geändert.");
+    return;
+  }
   try {
     const result = await api("/api/branding/assignments", {
       method: "PUT",
-      body: JSON.stringify({ locationId, kitId }),
+      body: JSON.stringify({ assignments }),
     });
     state.brandingAssignments = result.assignments || state.brandingAssignments;
     if (result.kits) state.brandingKits = result.kits;
     renderBrandingAssignments();
     await loadAll();
-    showToast(kitId ? "Standort-Branding wurde zugeordnet." : "Der Standort verwendet wieder das Standard-Branding.");
+    showToast("Alle Standort-Brandings wurden gespeichert.");
   } catch (error) { showToast(error.message, true); }
 }
 
@@ -2324,7 +2410,7 @@ function setSettingsTab(tab) {
     loadAmuSettings();
   }
   if (tab === "rights") loadRightsManagement();
-  if (tab === "branding") loadBrandingAssignments();
+  if (tab === "branding") Promise.all([loadManagementBrandingPreference(), loadBrandingAssignments()]).then(() => renderSettings()).catch((error) => showToast(error.message, true));
 }
 
 function setPersonnelTab(tab) {
@@ -2703,7 +2789,8 @@ function resetLocationForm() {
   elements.locationTimeTrackingEnabled.checked = false;
   setLocationDayFields(currentLocation()?.day_settings || state.locations?.[0]?.day_settings || {});
   elements.locationSubmitButton.textContent = "Filiale anlegen";
-  elements.cancelLocationEditButton.classList.add("hidden");
+  const title = elements.locationEditorModal?.querySelector(".modal-header h2");
+  if (title) title.textContent = "Filiale anlegen";
 }
 
 function fillLocationForm(location) {
@@ -2716,7 +2803,8 @@ function fillLocationForm(location) {
   elements.locationTimeTrackingEnabled.checked = Boolean(location.time_tracking_enabled);
   setLocationDayFields(location.day_settings || {});
   elements.locationSubmitButton.textContent = "Filiale speichern";
-  elements.cancelLocationEditButton.classList.remove("hidden");
+  const title = elements.locationEditorModal?.querySelector(".modal-header h2");
+  if (title) title.textContent = "Filiale bearbeiten";
 }
 
 function setLocationDayFields(daySettings = {}) {
@@ -2766,6 +2854,7 @@ async function saveLocation(event) {
         daySettings: readLocationDayFields(),
       }),
     });
+    elements.locationEditorModal?.close();
     resetLocationForm();
     showToast(isEdit ? "Filiale wurde gespeichert." : "Filiale wurde angelegt.");
     await loadAll();
@@ -2780,7 +2869,8 @@ function resetDepartmentForm() {
   elements.departmentMinStaff.value = 0;
   elements.departmentActive.checked = true;
   elements.departmentSubmitButton.textContent = "Abteilung anlegen";
-  elements.cancelDepartmentEditButton.classList.add("hidden");
+  const title = elements.departmentEditorModal?.querySelector(".modal-header h2");
+  if (title) title.textContent = "Abteilung anlegen";
 }
 
 function fillDepartmentForm(department) {
@@ -2791,7 +2881,8 @@ function fillDepartmentForm(department) {
   elements.departmentMinStaff.value = Number(department.min_staff || 0);
   elements.departmentActive.checked = Boolean(department.active);
   elements.departmentSubmitButton.textContent = "Abteilung speichern";
-  elements.cancelDepartmentEditButton.classList.remove("hidden");
+  const title = elements.departmentEditorModal?.querySelector(".modal-header h2");
+  if (title) title.textContent = "Abteilung bearbeiten";
 }
 
 async function saveDepartment(event) {
@@ -2807,6 +2898,7 @@ async function saveDepartment(event) {
         active: elements.departmentActive.checked,
       }),
     });
+    elements.departmentEditorModal?.close();
     resetDepartmentForm();
     showToast(isEdit ? "Abteilung wurde gespeichert." : "Abteilung wurde angelegt.");
     await loadAll();
@@ -3281,18 +3373,44 @@ async function importBrandingKit() {
 
 async function applyInstalledBrandingKit(kitId) {
   try {
-    const result = await api(`/api/branding/kits/${encodeURIComponent(kitId)}/apply`, {
-      method: "POST",
-      body: JSON.stringify({
-        locationId: state.locationId,
-        departmentId: state.departmentId || "",
-      }),
+    const result = await api("/api/branding/preference", {
+      method: "PUT",
+      body: JSON.stringify({ kitId }),
     });
-    if (result.kits) state.brandingKits = result.kits;
+    updateManagementBrandingPreference(result);
+    renderSettings();
     showToast("Branding-Kit wurde angewendet.");
-    await loadAll();
-    await loadSystemInfo();
   } catch (error) { showToast(error.message, true); }
+}
+
+async function deleteInstalledBrandingKit(kitId, kitName) {
+  if (!confirm(`Branding-Kit „${kitName || kitId}“ wirklich löschen? Bereits verwendete Kits bleiben geschützt.`)) return;
+  try {
+    const result = await api(`/api/branding/kits/${encodeURIComponent(kitId)}?locationId=${encodeURIComponent(state.locationId || "")}`, { method: "DELETE" });
+    if (result.kits) state.brandingKits = result.kits;
+    renderBrandingKits();
+    renderBrandingAssignments();
+    showToast("Branding-Kit wurde gelöscht.");
+  } catch (error) {
+    showToast(error.code === "BRANDING_KIT_IN_USE" ? "Das Branding-Kit ist noch ausgewählt oder einem Standort zugeordnet." : error.message, true);
+  }
+}
+
+async function saveCustomManagementBranding() {
+  const result = await api("/api/branding/preference", {
+    method: "PUT",
+    body: JSON.stringify({
+      kitId: "custom",
+      branding: {
+        companyName: elements.brandingCompanyName.value,
+        logoUrl: elements.brandingLogoUrl.value,
+        iconUrl: elements.brandingIconUrl.value,
+        logoAlt: elements.brandingLogoAlt.value,
+        adminEmail: elements.brandingAdminEmail.value,
+      },
+    }),
+  });
+  updateManagementBrandingPreference(result);
 }
 
 async function saveOperationMode() {
@@ -3357,15 +3475,6 @@ async function saveSettings(silent = false) {
         saturdayBonusFactor: Number(document.querySelector("#saturdayBonusFactor").value),
         showSunday: document.querySelector("#showSunday").checked,
     };
-    if ((!portalEnabled || ["admin", "hr"].includes(role)) && elements.brandingSettings?.classList.contains("active")) {
-      payload.branding = {
-        companyName: elements.brandingCompanyName.value,
-        logoUrl: elements.brandingLogoUrl.value,
-        iconUrl: elements.brandingIconUrl.value,
-        logoAlt: elements.brandingLogoAlt.value,
-        adminEmail: elements.brandingAdminEmail.value,
-      };
-    }
     if (!portalEnabled || permissions.includes("operation_mode:write")) {
       payload.operationMode = state.desiredOperationMode || state.portalStatus?.operationMode || "local";
     }
@@ -3373,6 +3482,9 @@ async function saveSettings(silent = false) {
       method: "PUT",
       body: JSON.stringify(payload),
     });
+    if ((!portalEnabled || ["admin", "hr"].includes(role)) && elements.brandingSettings?.classList.contains("active") && state.brandingFormDirty) {
+      await saveCustomManagementBranding();
+    }
     if (result.restartRequired && !silent) {
       const modeText = state.desiredOperationMode === "lan" ? "LAN-Host" : state.desiredOperationMode === "server" ? "Serverbetrieb" : "Lokalbetrieb";
       if (confirm(`Die Einstellungen wurden gespeichert. Für den Wechsel auf ${modeText} muss Grabenplaner sicher neu starten. Jetzt neu starten?`)) {
@@ -3484,6 +3596,8 @@ function showToast(message, error = false) {
 
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
 elements.adminLoginForm?.addEventListener("submit", loginToAdministration);
+elements.adminLoginPersonnelNumber?.addEventListener("input", scheduleAdminLoginBrandingPreview);
+elements.adminLoginPersonnelNumber?.addEventListener("blur", previewAdminLoginBranding);
 elements.portalLogoutButton?.addEventListener("click", logoutPortal);
 elements.localModeOption?.addEventListener("click", () => {
   state.desiredOperationMode = "local";
@@ -3615,22 +3729,25 @@ elements.systemExitButton?.addEventListener("click", exitApplication);
 elements.exportBrandingButton?.addEventListener("click", exportBrandingKit);
 elements.importBrandingButton?.addEventListener("click", importBrandingKit);
 ["brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt"].forEach((id) => {
-  elements[id]?.addEventListener("input", () => applyBranding({
-    companyName: elements.brandingCompanyName.value,
-    adminEmail: elements.brandingAdminEmail.value,
-    logoUrl: elements.brandingLogoUrl.value,
-    iconUrl: elements.brandingIconUrl.value,
-    logoAlt: elements.brandingLogoAlt.value,
-  }));
+  elements[id]?.addEventListener("input", () => {
+    state.brandingFormDirty = true;
+    applyBranding({
+      companyName: elements.brandingCompanyName.value,
+      adminEmail: elements.brandingAdminEmail.value,
+      logoUrl: elements.brandingLogoUrl.value,
+      iconUrl: elements.brandingIconUrl.value,
+      logoAlt: elements.brandingLogoAlt.value,
+    });
+  });
 });
 elements.brandingKitLibrary?.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-apply-branding-kit]");
-  if (!button || button.textContent.trim() === "Aktiv") return;
-  applyInstalledBrandingKit(button.dataset.applyBrandingKit);
+  const applyButton = event.target.closest("[data-apply-branding-kit]");
+  if (applyButton && !applyButton.disabled) applyInstalledBrandingKit(applyButton.dataset.applyBrandingKit);
+  const deleteButton = event.target.closest("[data-delete-branding-kit]");
+  if (deleteButton) deleteInstalledBrandingKit(deleteButton.dataset.deleteBrandingKit, deleteButton.dataset.brandingKitName);
 });
 elements.brandingAssignmentList?.addEventListener("click", (event) => {
-  const row = event.target.closest("[data-branding-location]");
-  if (row && event.target.closest("[data-save-branding-assignment]")) saveBrandingAssignment(row);
+  if (event.target.closest("[data-save-branding-assignments]")) saveBrandingAssignments();
 });
 document.querySelectorAll("[data-settings-tab]").forEach((button) => button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab)));
 document.querySelectorAll("[data-personnel-tab]").forEach((button) => button.addEventListener("click", () => setPersonnelTab(button.dataset.personnelTab)));
@@ -3733,6 +3850,14 @@ document.querySelector("#addEmployeeButton").addEventListener("click", () => ope
 document.querySelector("#saveSettingsButton").addEventListener("click", () => saveSettings(false));
 elements.locationForm.addEventListener("submit", saveLocation);
 elements.departmentForm.addEventListener("submit", saveDepartment);
+elements.addLocationButton?.addEventListener("click", () => {
+  resetLocationForm();
+  elements.locationEditorModal?.showModal();
+});
+elements.addDepartmentButton?.addEventListener("click", () => {
+  resetDepartmentForm();
+  elements.departmentEditorModal?.showModal();
+});
 elements.positionForm.addEventListener("submit", savePosition);
 elements.cancelLocationEditButton.addEventListener("click", resetLocationForm);
 elements.cancelDepartmentEditButton.addEventListener("click", resetDepartmentForm);
@@ -3794,14 +3919,20 @@ elements.locationList.addEventListener("click", (event) => {
   const locationButton = event.target.closest("[data-edit-location]");
   if (locationButton) {
     const location = (state.locations || []).find((item) => item.id === locationButton.dataset.editLocation);
-    if (location) fillLocationForm(location);
+    if (location) {
+      fillLocationForm(location);
+      elements.locationEditorModal?.showModal();
+    }
     return;
   }
   const departmentButton = event.target.closest("[data-edit-department]");
   if (!departmentButton) return;
   const departmentId = Number(departmentButton.dataset.editDepartment);
   const department = (state.locations || []).flatMap((location) => location.departments || []).find((item) => item.id === departmentId);
-  if (department) fillDepartmentForm(department);
+  if (department) {
+    fillDepartmentForm(department);
+    elements.departmentEditorModal?.showModal();
+  }
 });
 
 elements.positionList.addEventListener("click", (event) => {

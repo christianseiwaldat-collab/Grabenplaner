@@ -125,6 +125,7 @@ test("alte Datenbank wird um das Portal-Fundament erweitert", () => {
   assert.ok(tables.has("schema_migrations"));
   assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.49-server-foundation'").get());
   assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.53-rights-branding-time-corrections-mobile'").get());
+  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.53.1-branch-branding-snapshots'").get());
 
   const userColumns = new Set(db.prepare("PRAGMA table_info(portal_users)").all().map((column) => column.name));
   assert.ok(userColumns.has("password_changed_at"));
@@ -216,6 +217,25 @@ test("bestehende lokale Dienstplan-API bleibt erreichbar", async () => {
   assert.equal(schedule.weekStart, "2026-07-13");
   assert.equal(schedule.settings.operation_mode, "local");
   assert.equal(schedule.settings.server_mode_status, "active");
+});
+
+test("PDF-Vorschauen dürfen nur gleichursprünglich eingebettet werden", async () => {
+  for (const previewPath of [
+    "/api/schedule-preview.pdf?week=2026-07-13",
+    "/api/vacations-preview.pdf?year=2026&view=year",
+  ]) {
+    const response = await fetch(`${baseUrl}${previewPath}`);
+    assert.equal(response.status, 200, await response.clone().text());
+    assert.match(response.headers.get("content-type") || "", /^application\/pdf/i);
+    assert.equal(response.headers.get("x-frame-options"), "SAMEORIGIN");
+    assert.match(response.headers.get("content-security-policy") || "", /frame-ancestors 'self'/);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    assert.equal(Buffer.from(bytes.subarray(0, 4)).toString("ascii"), "%PDF");
+  }
+
+  const protectedResponse = await fetch(`${baseUrl}/api/portal/v1/status`);
+  assert.equal(protectedResponse.headers.get("x-frame-options"), "DENY");
+  assert.match(protectedResponse.headers.get("content-security-policy") || "", /frame-ancestors 'none'/);
 });
 
 test("vorbereitete Passwort-Hashes verwenden scrypt, Salz und Versionskennung", async () => {
@@ -1202,6 +1222,92 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const brandedManagerSession = await fetch(`${url}/api/portal/v1/session`, { headers: { Cookie: manager.cookie } });
     assert.equal(brandedManagerSession.status, 200, await brandedManagerSession.clone().text());
     assert.equal((await brandedManagerSession.json()).status.branding.companyName, "Filiale Eins");
+
+    const managementPreferenceResponse = await fetch(`${url}/api/branding/preference`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: hr.cookie, "X-CSRF-Token": hr.csrf },
+      body: JSON.stringify({
+        kitId: "custom",
+        branding: { companyName: "Zentrale Leitung", logoUrl: "/assets/central.svg", iconUrl: "/assets/central-icon.svg", logoAlt: "Zentrale", adminEmail: "leitung@example.test" },
+      }),
+    });
+    assert.equal(managementPreferenceResponse.status, 200, await managementPreferenceResponse.clone().text());
+    assert.equal((await managementPreferenceResponse.json()).branding.companyName, "Zentrale Leitung");
+    const hrBrandedSession = await fetch(`${url}/api/portal/v1/session`, { headers: { Cookie: hr.cookie } });
+    assert.equal(hrBrandedSession.status, 200, await hrBrandedSession.clone().text());
+    assert.equal((await hrBrandedSession.json()).status.branding.companyName, "Zentrale Leitung");
+    const managerSessionAfterPreference = await fetch(`${url}/api/portal/v1/session`, { headers: { Cookie: manager.cookie } });
+    assert.equal(managerSessionAfterPreference.status, 200, await managerSessionAfterPreference.clone().text());
+    assert.equal((await managerSessionAfterPreference.json()).status.branding.companyName, "Filiale Eins");
+    const unassignedLocationSchedule = await fetch(`${url}/api/schedule?week=2027-08-02&location=03`, { headers: { Cookie: admin.cookie } });
+    assert.equal(unassignedLocationSchedule.status, 200, await unassignedLocationSchedule.clone().text());
+    assert.equal((await unassignedLocationSchedule.json()).settings.branding_company_name, "");
+
+    for (const [employeeNumber, expectedCompany] of [["104", "Filiale Eins"], ["103", "Zentrale Leitung"], ["999999", "Zentrale Leitung"]]) {
+      const loginBranding = await fetch(`${url}/api/portal/v1/auth/branding`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeNumber }),
+      });
+      assert.equal(loginBranding.status, 200, await loginBranding.clone().text());
+      assert.equal((await loginBranding.json()).branding.companyName, expectedCompany);
+    }
+
+    const disposableKitImport = await fetch(`${url}/api/branding/import`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf, "X-Branding-Filename": "disposable.json" },
+      body: JSON.stringify({
+        locationId: "02",
+        kit: {
+          name: "Loeschbares Test-Branding",
+          branding: { companyName: "Test Kit", logoUrl: "/assets/test.svg", iconUrl: "/assets/test-icon.svg", logoAlt: "Test", adminEmail: "test@example.test" },
+        },
+      }),
+    });
+    assert.equal(disposableKitImport.status, 200, await disposableKitImport.clone().text());
+    const disposableKit = (await disposableKitImport.json()).kit;
+    assert.ok(disposableKit.id);
+    const selectDisposablePreference = await fetch(`${url}/api/branding/preference`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ kitId: disposableKit.id }),
+    });
+    assert.equal(selectDisposablePreference.status, 200, await selectDisposablePreference.clone().text());
+    const deleteUsedKit = await fetch(`${url}/api/branding/kits/${encodeURIComponent(disposableKit.id)}`, {
+      method: "DELETE",
+      headers: { Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+    });
+    assert.equal(deleteUsedKit.status, 409, await deleteUsedKit.clone().text());
+    assert.equal((await deleteUsedKit.json()).code, "BRANDING_KIT_IN_USE");
+
+    const batchAssignments = await fetch(`${url}/api/branding/assignments`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: hr.cookie, "X-CSRF-Token": hr.csrf },
+      body: JSON.stringify({ assignments: [
+        { locationId: "01", kitId: "custom", branding: { companyName: "Stapel Eins", logoUrl: "/assets/batch-one.svg", iconUrl: "/assets/batch-one-icon.svg", logoAlt: "Eins", adminEmail: "eins@example.test" } },
+        { locationId: "02", kitId: "custom", branding: { companyName: "Stapel Zwei", logoUrl: "/assets/batch-two.svg", iconUrl: "/assets/batch-two-icon.svg", logoAlt: "Zwei", adminEmail: "zwei@example.test" } },
+      ] }),
+    });
+    assert.equal(batchAssignments.status, 200, await batchAssignments.clone().text());
+    const batchAssignmentData = await batchAssignments.json();
+    assert.equal(batchAssignmentData.assignments.find((assignment) => assignment.locationId === "01").branding.companyName, "Stapel Eins");
+    assert.equal(batchAssignmentData.assignments.find((assignment) => assignment.locationId === "02").branding.companyName, "Stapel Zwei");
+    const restoreManagementPreference = await fetch(`${url}/api/branding/preference`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({
+        kitId: "custom",
+        branding: { companyName: "Zentrale Leitung", logoUrl: "/assets/central.svg", iconUrl: "/assets/central-icon.svg", logoAlt: "Zentrale", adminEmail: "leitung@example.test" },
+      }),
+    });
+    assert.equal(restoreManagementPreference.status, 200, await restoreManagementPreference.clone().text());
+    const deleteUnusedKit = await fetch(`${url}/api/branding/kits/${encodeURIComponent(disposableKit.id)}`, {
+      method: "DELETE",
+      headers: { Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+    });
+    assert.equal(deleteUnusedKit.status, 200, await deleteUnusedKit.clone().text());
+    assert.equal((await deleteUnusedKit.json()).deleted.id, disposableKit.id);
+
     const resetFirstBranding = await fetch(`${url}/api/branding/assignments`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },

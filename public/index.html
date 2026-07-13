@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.53 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.53.1 Beta</span></div>
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
@@ -277,10 +277,23 @@
           </section>
 
           <section id="locationSettings" class="personnel-section">
-            <div class="settings-grid location-management-grid">
-              <div class="settings-card" id="locationFormCard">
-                <div class="card-heading"><div class="card-icon">01</div><div><h2>Filiale bearbeiten</h2><p>Filial-ID ist zweistellig und wird manuell vergeben, z. B. 01 für Hauptstandort.</p></div></div>
+            <div class="employee-toolbar location-overview-toolbar">
+              <div><h2>Standorte &amp; Abteilungen</h2><p>Bestehende Filialen, Öffnungszeiten und zugeordnete Abteilungen auf einen Blick.</p></div>
+              <div class="location-overview-actions">
+                <button class="secondary-button" id="addDepartmentButton" type="button">+ Abteilung anlegen</button>
+                <button class="primary-button" id="addLocationButton" type="button">+ Standort hinzufügen</button>
+              </div>
+            </div>
+
+            <div class="settings-card full-settings-card location-list-card">
+              <div class="card-heading"><div class="card-icon">Liste</div><div><h2>Standortübersicht</h2><p>Zum Ändern einer Filiale oder Abteilung den jeweiligen Eintrag bearbeiten.</p></div></div>
+              <div class="location-list" id="locationList"></div>
+            </div>
+
+            <dialog class="modal location-editor-modal" id="locationEditorModal">
+              <div id="locationFormCard">
                 <form id="locationForm">
+                  <div class="modal-header"><div><span class="eyebrow">Standortverwaltung</span><h2>Filiale bearbeiten</h2><p>Filial-ID ist zweistellig und wird manuell vergeben, z. B. 01 für Hauptstandort.</p></div><button type="button" class="close-button" data-close="locationEditorModal">×</button></div>
                   <div class="inline-fields">
                     <label class="field"><span>Filial-ID</span><input id="locationId" maxlength="2" pattern="[0-9]{2}" placeholder="01" required /></label>
                     <label class="field"><span>Name</span><input id="locationName" maxlength="80" placeholder="Hauptstandort" required /></label>
@@ -301,27 +314,24 @@
                     </div>
                     <div class="open-day-settings"><strong>Geöffnete Wochentage</strong><div><label><input id="mondayOpen" type="checkbox" /> Mo</label><label><input id="tuesdayOpen" type="checkbox" /> Di</label><label><input id="wednesdayOpen" type="checkbox" /> Mi</label><label><input id="thursdayOpen" type="checkbox" /> Do</label><label><input id="fridayOpen" type="checkbox" /> Fr</label><label><input id="saturdayOpen" type="checkbox" /> Sa</label></div></div>
                   </div>
-                  <div class="form-actions-inline"><button type="button" class="secondary-button hidden" id="cancelLocationEditButton">Bearbeitung abbrechen</button><button type="submit" class="primary-button" id="locationSubmitButton">Filiale anlegen</button></div>
+                  <div class="modal-actions location-modal-actions"><span></span><span></span><button type="button" class="secondary-button" id="cancelLocationEditButton" data-close="locationEditorModal">Abbrechen</button><button type="submit" class="primary-button" id="locationSubmitButton">Filiale anlegen</button></div>
                 </form>
               </div>
+            </dialog>
 
-              <div class="settings-card" id="departmentFormCard">
-                <div class="card-heading"><div class="card-icon">Abt</div><div><h2>Abteilung bearbeiten</h2><p>Bis zu 3 Abteilungen je Filiale. Dienstplanung kann dann je Abteilung getrennt angezeigt werden.</p></div></div>
+            <dialog class="modal" id="departmentEditorModal">
+              <div id="departmentFormCard">
                 <form id="departmentForm">
+                  <div class="modal-header"><div><span class="eyebrow">Standortverwaltung</span><h2>Abteilung bearbeiten</h2><p>Bis zu 3 Abteilungen je Filiale. Dienstplanung kann dann je Abteilung getrennt angezeigt werden.</p></div><button type="button" class="close-button" data-close="departmentEditorModal">×</button></div>
                   <input id="departmentId" type="hidden" />
                   <label class="field"><span>Filiale</span><select id="departmentLocation" required></select></label>
                   <label class="field pdf-filename-field"><span>Abteilungsname</span><input id="departmentName" maxlength="80" placeholder="Fotowelt" required /></label>
                   <label class="field"><span>Mindestbesetzung</span><input id="departmentMinStaff" type="number" min="0" max="99" step="1" value="0" /></label>
                   <label class="switch-row"><span><strong>Aktiv</strong><small>In der Dienstplanung als Unterpunkt anzeigen.</small></span><input id="departmentActive" type="checkbox" checked /></label>
-                  <div class="form-actions-inline"><button type="button" class="secondary-button hidden" id="cancelDepartmentEditButton">Bearbeitung abbrechen</button><button type="submit" class="primary-button" id="departmentSubmitButton">Abteilung anlegen</button></div>
+                  <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" id="cancelDepartmentEditButton" data-close="departmentEditorModal">Abbrechen</button><button type="submit" class="primary-button" id="departmentSubmitButton">Abteilung anlegen</button></div>
                 </form>
               </div>
-            </div>
-
-            <div class="settings-card full-settings-card location-list-card">
-              <div class="card-heading"><div class="card-icon">Liste</div><div><h2>Standorte & Abteilungen</h2><p>Bestehende Struktur der Filialen und zugeordneten Abteilungen.</p></div></div>
-              <div class="location-list" id="locationList"></div>
-            </div>
+            </dialog>
           </section>
         </section>
 
@@ -341,7 +351,7 @@
             <button class="settings-tab" data-settings-tab="backup">Datenbank</button>
           </div>
 
-          <section id="generalSettings" class="settings-section active">
+          <section id="generalSettings" class="settings-section settings-two-column active">
             <div class="settings-card operation-mode-card">
               <div class="card-heading"><div class="card-icon">Modus</div><div><h2>Betriebsmodus</h2><p>Lokal, zentral im Firmennetz oder vorbereitet für einen abgesicherten HTTPS-Server.</p></div></div>
               <div class="operation-mode-options">
@@ -429,7 +439,7 @@
             </div>
           </section>
 
-          <section id="accessSettings" class="settings-section">
+          <section id="accessSettings" class="settings-section settings-two-column">
             <div class="settings-card full-span" id="workflowSettingsCard">
               <div class="card-heading"><div class="card-icon">PL</div><div><h2>Freigabeworkflow</h2><p>Zusätzliche Genehmigung von Urlaubsanträgen durch die Personalleitung.</p></div></div>
               <label class="switch-row"><span><strong>Personalleitung muss Urlaub endgültig genehmigen</strong><small>Filial- oder Abteilungsleitung leitet genehmigte Anträge an die Personalleitung weiter.</small></span><input id="vacationHrApprovalRequired" type="checkbox" /></label>
@@ -462,7 +472,7 @@
             </div>
           </section>
 
-          <section id="rightsSettings" class="settings-section">
+          <section id="rightsSettings" class="settings-section settings-two-column">
             <div class="settings-card full-span">
               <div class="card-heading"><div class="card-icon">R</div><div><h2>Rechtemanagement</h2><p>Zusätzliche Verwaltungsrechte gezielt an Filial- und Abteilungsleitungen vergeben.</p></div></div>
               <p class="settings-note security-note">Rollenbereiche bleiben immer wirksam. Branding, Rechtemanagement, Backups und Updates können nicht an untergeordnete Rollen delegiert werden.</p>
@@ -476,7 +486,7 @@
             </div>
           </section>
 
-          <section id="brandingSettings" class="settings-section">
+          <section id="brandingSettings" class="settings-section settings-two-column">
             <div class="settings-card full-settings-card">
               <div class="card-heading"><div class="card-icon">Logo</div><div><h2>Branding</h2><p>Firmenname, Logo und Admin-Kontakt für Oberfläche und PDF-Ausgabe.</p></div></div>
               <div class="branding-settings-grid">
@@ -552,7 +562,7 @@
             </div>
           </section>
 
-          <section id="personnelSettings" class="settings-section">
+          <section id="personnelSettings" class="settings-section settings-two-column">
             <div class="settings-card" id="positionSettingsCard">
               <div class="card-heading"><div class="card-icon">Pos</div><div><h2>Positionen</h2><p>Standardpositionen sind fix. Eigene Positionen können ergänzt, bearbeitet und gelöscht werden.</p></div></div>
               <form id="positionForm" class="position-form">
@@ -569,7 +579,7 @@
             </div>
           </section>
 
-          <section id="backupSettings" class="settings-section">
+          <section id="backupSettings" class="settings-section settings-two-column">
             <div class="settings-card full-settings-card server-diagnostics-card">
               <div class="card-heading"><div class="card-icon">Server</div><div><h2>Server- und Datenbankdiagnose</h2><p>Prüft Betriebsmodus, HTTPS, SQLite, Migrationen, Instanzschutz, Sitzungen und Backups.</p></div></div>
               <div class="server-diagnostics" id="serverDiagnostics"><p class="settings-note">Diagnosedaten werden geladen.</p></div>
@@ -604,7 +614,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.53 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.53.1 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

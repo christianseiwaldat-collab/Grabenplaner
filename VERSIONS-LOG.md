@@ -1,5 +1,14 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.53.1 Beta
+
+- Branding-Verhalten nach Rollen präzisiert: Admin und Personalleitung behalten das in den Einstellungen gewählte Verwaltungs-Branding; standortgebundene Rollen und Mitarbeitende sehen ausschließlich das Branding ihrer Filiale – einschließlich der Anmeldung.
+- Speichern und Anwenden installierter Branding-Kits stabilisiert; nicht verwendete Kits können nun gelöscht werden.
+- Standortbezogene Branding-Zuweisungen lassen sich gesammelt bearbeiten und in einem Schritt speichern, ohne andere noch nicht gespeicherte Auswahlfelder zurückzusetzen.
+- Einstellungen für Branding, Personal, Zugänge, Rechtemanagement und Datenbank in ein platzsparendes zweispaltiges Layout überführt; die PDF-Ausgabe bleibt bewusst einspaltig.
+- Standortverwaltung auf eine kompakte Übersicht mit eigenen Dialogen zum Anlegen und Bearbeiten von Filialen und Abteilungen umgestellt.
+- PDF-Vorschau in den Ausgabeeinstellungen repariert sowie Personalakt-Dialog und leere Statusanzeigen ohne horizontales Abschneiden dargestellt.
+
 ## v0.53 Beta
 
 - Geschütztes Rechtemanagement ergänzt: Admin und Personalleitung können ausgewählte Verwaltungsrechte gezielt an Filial- und Abteilungsleitungen delegieren; besonders sensible Funktionen bleiben der übergeordneten Ebene vorbehalten.

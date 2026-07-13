@@ -1228,6 +1228,7 @@ if (!columnExists("global_day_blocks", "location_id")) {
 db.exec("CREATE INDEX IF NOT EXISTS idx_global_day_blocks_location_week ON global_day_blocks(location_id, week_start)");
 
 const defaultSettings = {
+  branding_management_kit_id: "",
   branding_company_name: defaultBranding.company_name,
   branding_logo_url: defaultBranding.logo_url,
   branding_icon_url: defaultBranding.icon_url,
@@ -1371,6 +1372,35 @@ function ensureDefaultLocation() {
 
 ensureDefaultLocation();
 
+function freezeLegacyLocationBranding() {
+  const migrationId = "v0.53.1-branch-branding-snapshots";
+  if (db.prepare("SELECT 1 FROM schema_migrations WHERE id = ?").get(migrationId)) return;
+  const settings = getSettings();
+  const branding = brandingFromSettings(settings);
+  const neutralBranding = brandingFromSettings(defaultSettings);
+  const isNeutral = ["companyName", "logoUrl", "iconUrl", "logoAlt", "adminEmail"]
+    .every((key) => branding[key] === neutralBranding[key]);
+  const kitId = String(settings.branding_management_kit_id || "").trim() || (isNeutral ? "neutral" : "custom");
+  const insertSnapshot = db.prepare(`
+    INSERT OR IGNORE INTO location_branding
+      (location_id, kit_id, company_name, logo_url, icon_url, logo_alt, admin_email, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'migration', CURRENT_TIMESTAMP)
+  `);
+  db.exec("BEGIN");
+  try {
+    for (const location of db.prepare("SELECT id FROM locations ORDER BY id").all()) {
+      insertSnapshot.run(location.id, kitId, branding.companyName, branding.logoUrl, branding.iconUrl, branding.logoAlt, branding.adminEmail);
+    }
+    db.prepare("INSERT INTO schema_migrations (id, app_version) VALUES (?, ?)").run(migrationId, packageMetadata.version);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+freezeLegacyLocationBranding();
+
 const seedEmployees = [
   ["101", "Alex Demo", "Alex", "#0b84c6"],
   ["102", "Bea Demo", "Bea", "#e26500"],
@@ -1392,11 +1422,12 @@ if (process.env.GRABENPLANER_SEED_DEMO === "1" && db.prepare("SELECT COUNT(*) AS
 
 app.disable("x-powered-by");
 app.use((request, response, next) => {
+  const embeddedPdfPreview = request.path === "/api/schedule-preview.pdf" || request.path === "/api/vacations-preview.pdf";
   response.setHeader("X-Content-Type-Options", "nosniff");
-  response.setHeader("X-Frame-Options", "DENY");
+  response.setHeader("X-Frame-Options", embeddedPdfPreview ? "SAMEORIGIN" : "DENY");
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  response.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
+  response.setHeader("Content-Security-Policy", `default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors '${embeddedPdfPreview ? "self" : "none"}'`);
   if (request.secure) response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   if (request.path.startsWith("/api/portal/")) response.setHeader("Cache-Control", "no-store");
   if (serverModeActive && !request.secure) {
@@ -1541,6 +1572,7 @@ function sha256(value) {
 }
 
 const loginRateLimits = new Map();
+const loginBrandingRateLimits = new Map();
 
 function loginRateKey(request) {
   return String(request.ip || request.socket?.remoteAddress || "unknown").replace(/^::ffff:/, "");
@@ -1571,6 +1603,21 @@ function registerFailedLogin(request) {
 
 function clearLoginRate(request) {
   loginRateLimits.delete(loginRateKey(request));
+}
+
+function assertLoginBrandingRateLimit(request) {
+  const key = loginRateKey(request);
+  const now = Date.now();
+  const windowMs = 5 * 60 * 1000;
+  const recent = (loginBrandingRateLimits.get(key) || []).filter((timestamp) => now - timestamp < windowMs);
+  if (recent.length >= 60) {
+    const retrySeconds = Math.max(1, Math.ceil((windowMs - (now - recent[0])) / 1000));
+    const error = httpError(429, "Zu viele Branding-Abfragen. Bitte spaeter erneut versuchen.", "LOGIN_BRANDING_RATE_LIMITED");
+    error.retryAfter = retrySeconds;
+    throw error;
+  }
+  recent.push(now);
+  loginBrandingRateLimits.set(key, recent);
 }
 
 function parseCookies(request) {
@@ -3641,9 +3688,9 @@ function locationBrandingRow(locationId) {
   `).get(String(locationId));
 }
 
-function brandingForLocation(locationId, fallbackSettings = null) {
+function brandingForLocation(locationId, _fallbackSettings = null) {
   const row = locationBrandingRow(locationId);
-  if (!row) return brandingFromSettings(fallbackSettings || getSettings());
+  if (!row) return brandingFromSettings(defaultSettings);
   return brandingFromSettings({
     companyName: row.company_name,
     logoUrl: row.logo_url,
@@ -3651,6 +3698,49 @@ function brandingForLocation(locationId, fallbackSettings = null) {
     logoAlt: row.logo_alt,
     adminEmail: row.admin_email,
   });
+}
+
+function managementBrandingPreference() {
+  const settings = getSettings();
+  return {
+    kitId: String(settings.branding_management_kit_id || ""),
+    branding: brandingFromSettings(settings),
+  };
+}
+
+function brandingForPortalSession(session) {
+  if (!session || session.employeeNumber === "local" || ["admin", "hr"].includes(session.role)) {
+    return managementBrandingPreference().branding;
+  }
+  return brandingForLocation(session.homeLocationId);
+}
+
+function portalStatusForSession(session) {
+  return {
+    ...getPortalStatus(),
+    branding: brandingForPortalSession(session),
+  };
+}
+
+function saveManagementBrandingPreference(kitId, brandingInput, actor = "") {
+  const normalizedKitId = validateBrandOptionalText(kitId || "custom", 120) || "custom";
+  if (!/^[a-z0-9_-]+$/i.test(normalizedKitId)) throw httpError(400, "Die Branding-Kit-ID ist ungueltig.");
+  const values = brandingValuesFromBody(brandingInput || {});
+  const update = db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
+  const entries = {
+    branding_management_kit_id: normalizedKitId,
+    ...values,
+  };
+  db.exec("BEGIN");
+  try {
+    for (const [key, value] of Object.entries(entries)) update.run(key, value);
+    auditPortal(actor, "branding.preference.update", "settings", "management", JSON.stringify({ kitId: normalizedKitId }));
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return managementBrandingPreference();
 }
 
 function saveLocationBrandingSnapshot(locationId, kitId, brandingInput, actor = "") {
@@ -4139,7 +4229,7 @@ function importBrandingAssetFromZip(extractPath, kit, brandingValues) {
   };
 }
 
-function applyBrandingKit(kit, contextInput = {}, actor = "") {
+function applyBrandingKit(kit, contextInput = {}, actor = "", { manageTransaction = true } = {}) {
   const brandingSource = kit.branding || kit;
   const pdfSource = kit.pdf || {};
   const brandingValues = brandingValuesFromBody(brandingSource);
@@ -4149,7 +4239,7 @@ function applyBrandingKit(kit, contextInput = {}, actor = "") {
   const schedulePrefix = pdfSource.scheduleFilenamePrefix ? validatePdfText(pdfSource.scheduleFilenamePrefix, "der Dienstplan-PDF-Dateiname", { min: 5, max: 80 }) : null;
   const vacationTitle = pdfSource.vacationTitle ? validatePdfText(pdfSource.vacationTitle, "den Urlaubsplaner-PDF-Titel") : null;
   const vacationPrefix = pdfSource.vacationFilenamePrefix ? validatePdfText(pdfSource.vacationFilenamePrefix, "der Urlaubsplaner-PDF-Dateiname", { min: 5, max: 80 }) : null;
-  db.exec("BEGIN");
+  if (manageTransaction) db.exec("BEGIN");
   try {
     saveLocationBrandingSnapshot(scheduleContext.locationId, kit.id || "custom", brandingValues, actor);
     const scheduleValues = {};
@@ -4168,9 +4258,9 @@ function applyBrandingKit(kit, contextInput = {}, actor = "") {
     }
     if (Object.keys(scheduleValues).length) saveScopedPdfSettings("schedule", scheduleContext, scheduleValues);
     if (Object.keys(vacationValues).length) saveScopedPdfSettings("vacation", vacationContext, vacationValues);
-    db.exec("COMMIT");
+    if (manageTransaction) db.exec("COMMIT");
   } catch (error) {
-    db.exec("ROLLBACK");
+    if (manageTransaction) db.exec("ROLLBACK");
     throw error;
   }
   const settings = settingsForLocation(scheduleContext.locationId);
@@ -4350,6 +4440,74 @@ function listBrandingKits(locationId = "") {
           && branding.adminEmail === current.adminEmail,
     };
   }).sort((a, b) => Number(b.builtin) - Number(a.builtin) || String(a.name).localeCompare(String(b.name), "de"));
+}
+
+function validateBrandingAssignmentInput(input = {}) {
+  const locationId = normalizeLocationId(input.locationId || input.location);
+  validateLocationExists(locationId);
+  const kitId = String(input.kitId ?? "").trim();
+  if (kitId && kitId !== "custom") readBrandingKitManifest(kitId);
+  if (kitId === "custom" && !input.branding) {
+    throw httpError(400, "Fuer ein individuelles Branding fehlen die Branding-Daten.", "BRANDING_ASSIGNMENT_INVALID");
+  }
+  return { locationId, kitId, branding: input.branding || input };
+}
+
+function applyBrandingAssignment(input, actor, { manageTransaction = true } = {}) {
+  const assignment = validateBrandingAssignmentInput(input);
+  let result;
+  if (!assignment.kitId) {
+    db.prepare("DELETE FROM location_branding WHERE location_id = ?").run(assignment.locationId);
+    result = {
+      ok: true,
+      locationId: assignment.locationId,
+      settings: settingsForLocation(assignment.locationId),
+      branding: brandingForLocation(assignment.locationId),
+    };
+  } else if (assignment.kitId === "custom") {
+    const branding = saveLocationBrandingSnapshot(assignment.locationId, "custom", assignment.branding, actor.employeeNumber);
+    result = { ok: true, locationId: assignment.locationId, settings: settingsForLocation(assignment.locationId), branding };
+  } else {
+    const kit = readBrandingKitManifest(assignment.kitId);
+    result = applyBrandingKit(kit, { locationId: assignment.locationId }, actor.employeeNumber, { manageTransaction });
+  }
+  auditPortal(actor.employeeNumber, "branding.assignment.update", "location", assignment.locationId, JSON.stringify({ kitId: assignment.kitId || "default" }));
+  return result;
+}
+
+function deleteInstalledBrandingKit(kitId, actor = "") {
+  const normalizedKitId = String(kitId || "").trim();
+  if (normalizedKitId === "neutral") throw httpError(400, "Das Standard-Branding kann nicht geloescht werden.", "BRANDING_KIT_BUILTIN");
+  const kit = readBrandingKitManifest(normalizedKitId);
+  const assignedLocations = db.prepare(`
+    SELECT lb.location_id, l.name AS location_name
+    FROM location_branding lb
+    LEFT JOIN locations l ON l.id = lb.location_id
+    WHERE lb.kit_id = ?
+    ORDER BY lb.location_id
+  `).all(normalizedKitId);
+  const selectedForManagement = String(getSettings().branding_management_kit_id || "") === normalizedKitId;
+  if (assignedLocations.length || selectedForManagement) {
+    const locations = assignedLocations.map((row) => `${row.location_id}${row.location_name ? ` ${row.location_name}` : ""}`);
+    const error = httpError(409, "Das Branding-Kit ist noch in Verwendung und kann erst nach dem Aufheben der Zuordnung geloescht werden.", "BRANDING_KIT_IN_USE");
+    error.details = { locations, selectedForManagement };
+    throw error;
+  }
+  const kitDirectory = path.resolve(brandingKitsDirectory, normalizedKitId);
+  const libraryRoot = path.resolve(brandingKitsDirectory);
+  if (!kitDirectory.startsWith(`${libraryRoot}${path.sep}`) || !fs.existsSync(kitDirectory)) {
+    throw httpError(404, "Branding-Kit wurde nicht gefunden.");
+  }
+  const stagedDirectory = `${kitDirectory}.deleting-${crypto.randomUUID()}`;
+  fs.renameSync(kitDirectory, stagedDirectory);
+  try {
+    auditPortal(actor, "branding.kit.delete", "branding_kit", normalizedKitId, JSON.stringify({ name: brandingKitName(kit) }));
+    fs.rmSync(stagedDirectory, { recursive: true, force: true });
+  } catch (error) {
+    if (fs.existsSync(stagedDirectory) && !fs.existsSync(kitDirectory)) fs.renameSync(stagedDirectory, kitDirectory);
+    throw error;
+  }
+  return { id: normalizedKitId, name: brandingKitName(kit) };
 }
 
 function employeeLocationFilterSql(context, alias = "e") {
@@ -6149,6 +6307,7 @@ try {
 }
 
 const brandingPreserveSettingKeys = [
+  "branding_management_kit_id",
   "branding_company_name",
   "branding_logo_url",
   "branding_icon_url",
@@ -6592,8 +6751,10 @@ app.delete("/api/employees/:personnelNumber", (request, response) => {
   response.status(204).end();
 });
 
-app.get(["/api/portal/status", "/api/portal/v1/status"], (_request, response) => {
-  response.json(getPortalStatus());
+app.get(["/api/portal/status", "/api/portal/v1/status"], (request, response) => {
+  const publicStatus = getPortalStatus();
+  const session = publicStatus.portalEnabled ? portalSessionFromRequest(request, { touch: false }) : null;
+  response.json(session ? portalStatusForSession(session) : publicStatus);
 });
 
 app.get("/api/portal/v1/roles", (_request, response) => {
@@ -6667,7 +6828,7 @@ app.delete("/api/portal/v1/approval-delegations/:id", (request, response) => {
 app.get("/api/portal/v1/session", (request, response) => {
   const publicStatus = getPortalStatus();
   const session = publicStatus.portalEnabled ? portalSessionFromRequest(request) : null;
-  const status = session?.homeLocationId ? getPortalStatus(session.homeLocationId) : publicStatus;
+  const status = session ? portalStatusForSession(session) : publicStatus;
   if (session && !parseCookies(request)[PORTAL_CSRF_COOKIE]) {
     appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, crypto.randomBytes(24).toString("base64url"), request, {
       maxAge: Math.max(60, Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000)),
@@ -6680,6 +6841,22 @@ app.get("/api/portal/v1/session", (request, response) => {
     user: publicPortalUser(session),
     status,
   });
+});
+
+app.post("/api/portal/v1/auth/branding", (request, response) => {
+  assertLoginBrandingRateLimit(request);
+  const employeeNumber = String(request.body.employeeNumber || "").trim();
+  const user = employeeNumber ? db.prepare(`
+    SELECT u.role, e.home_location_id
+    FROM portal_users u
+    JOIN employees e ON e.personnel_number = u.employee_number
+    WHERE u.employee_number = ? AND u.active = 1 AND e.active = 1
+    LIMIT 1
+  `).get(employeeNumber) : null;
+  const branding = user && !["admin", "hr"].includes(user.role)
+    ? brandingForLocation(user.home_location_id)
+    : managementBrandingPreference().branding;
+  response.json({ branding });
 });
 
 app.post("/api/portal/v1/setup/admin", async (request, response) => {
@@ -6751,7 +6928,7 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
   appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, csrfToken, request, { maxAge: timeoutMinutes * 60 }));
   const session = portalSessionFromRequest({ ...request, headers: { ...request.headers, cookie: `${PORTAL_SESSION_COOKIE}=${rawToken}` } }, { touch: false });
   auditPortal(employeeNumber, "portal.login.success", "portal_user", employeeNumber, `ip=${loginRateKey(request)}`);
-  response.json({ ok: true, authenticated: true, user: publicPortalUser(session), status: getPortalStatus(session?.homeLocationId || "") });
+  response.json({ ok: true, authenticated: true, user: publicPortalUser(session), status: portalStatusForSession(session) });
 });
 
 app.post("/api/portal/v1/auth/logout", (request, response) => {
@@ -6912,7 +7089,7 @@ app.post("/api/portal/v1/users/:employeeNumber/unlock", (request, response) => {
 
 app.get("/api/portal/v1/me", (request, response) => {
   const session = requirePortalSession(request);
-  response.json({ user: publicPortalUser(session), branding: brandingForLocation(session.homeLocationId) });
+  response.json({ user: publicPortalUser(session), branding: brandingForPortalSession(session) });
 });
 
 app.put("/api/portal/v1/me/password", async (request, response) => {
@@ -8341,33 +8518,55 @@ app.get("/api/branding/assignments", (request, response) => {
 
 app.put("/api/branding/assignments", (request, response) => {
   const actor = requireAdminHrOrLocal(request, "branding:write");
-  const locationId = normalizeLocationId(request.body.locationId || request.body.location);
-  validateLocationExists(locationId);
-  const submittedKitId = String(request.body.kitId ?? "").trim();
-  if (!submittedKitId) {
-    db.prepare("DELETE FROM location_branding WHERE location_id = ?").run(locationId);
-    auditPortal(actor.employeeNumber, "branding.assignment.update", "location", locationId, JSON.stringify({ kitId: "default" }));
-    response.json({
-      ok: true,
-      locationId,
-      settings: settingsForLocation(locationId),
-      branding: brandingForLocation(locationId),
-      assignments: locationBrandingAssignments(),
-      kits: listBrandingKits(locationId),
-    });
+  const submittedAssignments = Array.isArray(request.body.assignments) ? request.body.assignments : null;
+  if (submittedAssignments) {
+    if (!submittedAssignments.length || submittedAssignments.length > 250) {
+      throw httpError(400, "Bitte mindestens eine und hoechstens 250 Standortzuordnungen uebermitteln.", "BRANDING_ASSIGNMENTS_INVALID");
+    }
+    const validated = submittedAssignments.map(validateBrandingAssignmentInput);
+    if (new Set(validated.map((item) => item.locationId)).size !== validated.length) {
+      throw httpError(400, "Jeder Standort darf pro Speichervorgang nur einmal enthalten sein.", "BRANDING_ASSIGNMENTS_DUPLICATE");
+    }
+    const results = [];
+    db.exec("BEGIN");
+    try {
+      for (const assignment of submittedAssignments) {
+        results.push(applyBrandingAssignment(assignment, actor, { manageTransaction: false }));
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    response.json({ ok: true, results, assignments: locationBrandingAssignments(), kits: listBrandingKits() });
     return;
   }
-  const kitId = submittedKitId;
-  let result;
-  if (kitId !== "custom") {
+  const result = applyBrandingAssignment(request.body, actor);
+  response.json({ ...result, assignments: locationBrandingAssignments(), kits: listBrandingKits(result.locationId) });
+});
+
+app.get("/api/branding/preference", (request, response) => {
+  requireAdminHrOrLocal(request, "branding:read");
+  response.json(managementBrandingPreference());
+});
+
+app.put("/api/branding/preference", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const kitId = String(request.body.kitId || "neutral").trim();
+  let brandingInput;
+  if (kitId === "custom") brandingInput = request.body.branding || request.body;
+  else {
     const kit = readBrandingKitManifest(kitId);
-    result = applyBrandingKit(kit, { locationId }, actor.employeeNumber);
-  } else {
-    const branding = saveLocationBrandingSnapshot(locationId, "custom", request.body.branding || request.body, actor.employeeNumber);
-    result = { ok: true, locationId, settings: settingsForLocation(locationId), branding };
+    brandingInput = kit.branding || kit;
   }
-  auditPortal(actor.employeeNumber, "branding.assignment.update", "location", locationId, JSON.stringify({ kitId }));
-  response.json({ ...result, assignments: locationBrandingAssignments(), kits: listBrandingKits(locationId) });
+  const preference = saveManagementBrandingPreference(kitId, brandingInput, actor.employeeNumber);
+  response.json({ ok: true, ...preference, kits: listBrandingKits() });
+});
+
+app.delete("/api/branding/kits/:kitId", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const deleted = deleteInstalledBrandingKit(request.params.kitId, actor.employeeNumber);
+  response.json({ ok: true, deleted, kits: listBrandingKits(String(request.query.locationId || "")) });
 });
 
 app.post("/api/branding/kits/:kitId/apply", (request, response) => {
@@ -10226,6 +10425,7 @@ app.use((error, _request, response, _next) => {
     error: error.message || "Ein unerwarteter Fehler ist aufgetreten.",
   };
   if (error.code) payload.code = error.code;
+  if (error.details && typeof error.details === "object") payload.details = error.details;
   response.status(status).json(payload);
 });
 
