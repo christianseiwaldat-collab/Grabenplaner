@@ -1,5 +1,17 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.59 Beta
+
+- Krankmeldung als eigener, mobil optimierter Vorgang im Mitarbeiterportal ergänzt; sie kann im HTTPS-Serverbetrieb auch von außerhalb des Firmennetzes erfasst werden.
+- Zuständige Filial- und Abteilungsleitungen erhalten sofort eine interne Meldung; eine mögliche Unterschreitung der hinterlegten Mindestbesetzung wird gesondert hervorgehoben.
+- E-Mail, SMS und WhatsApp können je berechtigter Leitung als optionale externe Besetzungswarnung mit einer frühesten Versandzeit eingerichtet werden; die Provider-Anbindung bleibt Aufgabe der Firmen-IT.
+- Neue oder geänderte externe Warnziele werden erst nach Bestätigung eines sechsstelligen Einmalcodes aktiviert.
+- Externe Warnungen enthalten ausschließlich einen neutralen Hinweis zum Anmelden in der App, keine Personalnummer, Diagnose oder sonstige Gesundheitsdaten.
+- Besetzungsrisiken berücksichtigen den tatsächlichen Einsatzort eines Dienstes, delegierte Leserechte und spätere Umplanungen; erledigte Warnungen und ausstehende Versandaufträge werden automatisch aufgelöst.
+- AUM-Fotos erhalten eine lokale OCR-Erkennung für Beginn und Ende. Erkannte Werte sind nur Vorschläge, müssen geprüft und bestätigt werden und überschreiben keine manuellen Eingaben.
+- Gelbe lokale und rote Personalleitungs-Eskalationen für verspätete AUMs sind getrennt einstellbar; verspätete Uploads bleiben weiterhin möglich.
+- Krankmeldungsdaten, Warnziele und ausstehende externe Versandaufträge werden pseudonymisiert, kontextgebunden mit AES-256-GCM geschützt, bei einem Datenbankimport auf Integrität geprüft und nach den festgelegten Aufbewahrungsfristen gelöscht.
+
 ## v0.58 Beta
 
 - Rechteprofil direkt in die Personalstammdaten integriert: Developer und IT-Admin können App-Rolle und personenbezogene Zusatzrechte beim Anlegen oder Bearbeiten gemeinsam speichern.
