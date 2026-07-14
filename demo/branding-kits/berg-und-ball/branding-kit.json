@@ -1,0 +1,23 @@
+{
+  "format": "grabenplaner-branding-kit",
+  "version": 1,
+  "name": "Berg & Ball Sporthandel",
+  "branding": {
+    "appName": "Grabenplaner",
+    "companyName": "Berg & Ball Sporthandel",
+    "logoUrl": "assets/berg-und-ball-logo.svg",
+    "iconUrl": "assets/berg-und-ball-icon.svg",
+    "logoAlt": "Berg & Ball Sporthandel",
+    "adminEmail": ""
+  },
+  "assets": {
+    "logo": "assets/berg-und-ball-logo.svg",
+    "icon": "assets/berg-und-ball-icon.svg"
+  },
+  "pdf": {
+    "scheduleTitle": "Dienstplan Berg & Ball",
+    "scheduleFilenamePrefix": "Dienstplan-Berg-und-Ball",
+    "vacationTitle": "Urlaubsplanung Berg & Ball",
+    "vacationFilenamePrefix": "Urlaubsplanung-Berg-und-Ball"
+  }
+}

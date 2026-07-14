@@ -1,0 +1,62 @@
+{
+  "format": "grabenplaner-demo-profile",
+  "version": 1,
+  "id": "sporthandel",
+  "companyName": "Berg & Ball Sporthandel",
+  "branding": {
+    "kitId": "berg-und-ball-demo",
+    "logoUrl": "/assets/demo/berg-und-ball-logo.svg",
+    "iconUrl": "/assets/demo/berg-und-ball-icon.svg",
+    "logoAlt": "Berg & Ball Sporthandel",
+    "adminEmail": ""
+  },
+  "locations": [
+    { "id": "01", "name": "Zentrale Hafenviertel", "minStaff": 4, "weekdayStart": "09:00", "weekdayEnd": "19:00", "saturdayStart": "09:00", "saturdayEnd": "18:00", "departments": ["Running", "Outdoor", "Teamsport"] },
+    { "id": "02", "name": "Nordpark", "minStaff": 3, "weekdayStart": "09:00", "weekdayEnd": "18:30", "saturdayStart": "09:00", "saturdayEnd": "17:00", "departments": ["Fitness", "Running"] },
+    { "id": "03", "name": "Alpenstrasse", "minStaff": 4, "weekdayStart": "09:00", "weekdayEnd": "18:00", "saturdayStart": "09:00", "saturdayEnd": "17:00", "departments": ["Outdoor", "Wintersport", "Bike"] },
+    { "id": "04", "name": "Seetor", "minStaff": 3, "weekdayStart": "10:00", "weekdayEnd": "19:00", "saturdayStart": "10:00", "saturdayEnd": "18:00", "departments": ["Teamsport", "Fitness"] },
+    { "id": "05", "name": "City Center", "minStaff": 3, "weekdayStart": "09:30", "weekdayEnd": "19:00", "saturdayStart": "09:30", "saturdayEnd": "18:00", "departments": ["Running", "Urban Sports", "Outdoor"] },
+    { "id": "06", "name": "Suedtor", "minStaff": 2, "weekdayStart": "09:00", "weekdayEnd": "18:00", "saturdayStart": "09:00", "saturdayEnd": "17:00", "departments": ["Bike", "Outdoor"] }
+  ],
+  "employees": [
+    { "personnelNumber": "101", "fullName": "Miriam Leitner", "nickname": "Miriam", "color": "#15354a", "contractedHours": 38.5, "positionId": "teamleitung", "confirmationLevel": "A", "locationId": "01", "department": "Running", "category": "administration" },
+    { "personnelNumber": "900", "fullName": "Paula Koenig", "nickname": "Paula", "color": "#f28c35", "contractedHours": 38.5, "positionId": "teamleitung", "confirmationLevel": "A", "locationId": "01", "department": "Outdoor", "category": "personalleitung" },
+
+    { "personnelNumber": "201", "fullName": "Anna Berger", "nickname": "Anna", "color": "#0b84c6", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "A", "locationId": "01", "department": "Running", "category": "sales" },
+    { "personnelNumber": "202", "fullName": "Ben Hofer", "nickname": "Ben", "color": "#e26500", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "B", "locationId": "01", "department": "Outdoor", "category": "sales" },
+    { "personnelNumber": "203", "fullName": "Carla Moser", "nickname": "Carla", "color": "#07a67a", "contractedHours": 32, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "C", "locationId": "01", "department": "Teamsport", "category": "sales" },
+    { "personnelNumber": "204", "fullName": "David Kern", "nickname": "David", "color": "#c873a5", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "B", "locationId": "01", "department": "Running", "category": "sales" },
+    { "personnelNumber": "205", "fullName": "Elisa Wolf", "nickname": "Elisa", "color": "#7651b5", "contractedHours": 30, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "C", "locationId": "01", "department": "Outdoor", "category": "sales" },
+    { "personnelNumber": "206", "fullName": "Felix Maier", "nickname": "Felix", "color": "#c58b00", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "A", "locationId": "01", "department": "Teamsport", "category": "sales" },
+
+    { "personnelNumber": "207", "fullName": "Greta Bauer", "nickname": "Greta", "color": "#0b84c6", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "B", "locationId": "02", "department": "Fitness", "category": "sales" },
+    { "personnelNumber": "208", "fullName": "Hasan Kaya", "nickname": "Hasan", "color": "#e26500", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "C", "locationId": "02", "department": "Running", "category": "sales" },
+    { "personnelNumber": "209", "fullName": "Ida Fuchs", "nickname": "Ida", "color": "#07a67a", "contractedHours": 30, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "A", "locationId": "02", "department": "Fitness", "category": "sales" },
+    { "personnelNumber": "210", "fullName": "Jonas Gruber", "nickname": "Jonas", "color": "#c873a5", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "B", "locationId": "02", "department": "Running", "category": "sales" },
+    { "personnelNumber": "211", "fullName": "Kim Auer", "nickname": "Kim", "color": "#7651b5", "contractedHours": 25, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "C", "locationId": "02", "department": "Fitness", "category": "sales" },
+
+    { "personnelNumber": "212", "fullName": "Lara Winkler", "nickname": "Lara", "color": "#0b84c6", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "A", "locationId": "03", "department": "Outdoor", "category": "sales" },
+    { "personnelNumber": "213", "fullName": "Milan Novak", "nickname": "Milan", "color": "#e26500", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "B", "locationId": "03", "department": "Wintersport", "category": "sales" },
+    { "personnelNumber": "214", "fullName": "Nora Haas", "nickname": "Nora", "color": "#07a67a", "contractedHours": 32, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "C", "locationId": "03", "department": "Bike", "category": "sales" },
+    { "personnelNumber": "215", "fullName": "Omar Demir", "nickname": "Omar", "color": "#c873a5", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "B", "locationId": "03", "department": "Outdoor", "category": "sales" },
+    { "personnelNumber": "216", "fullName": "Pia Eder", "nickname": "Pia", "color": "#7651b5", "contractedHours": 30, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "C", "locationId": "03", "department": "Wintersport", "category": "sales" },
+    { "personnelNumber": "217", "fullName": "Rafael Kurz", "nickname": "Rafael", "color": "#c58b00", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "A", "locationId": "03", "department": "Bike", "category": "sales" },
+
+    { "personnelNumber": "218", "fullName": "Sara Huber", "nickname": "Sara", "color": "#0b84c6", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "B", "locationId": "04", "department": "Teamsport", "category": "sales" },
+    { "personnelNumber": "219", "fullName": "Tim Stadler", "nickname": "Tim", "color": "#e26500", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "C", "locationId": "04", "department": "Fitness", "category": "sales" },
+    { "personnelNumber": "220", "fullName": "Ute Koller", "nickname": "Ute", "color": "#07a67a", "contractedHours": 30, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "A", "locationId": "04", "department": "Teamsport", "category": "sales" },
+    { "personnelNumber": "221", "fullName": "Viktor Lang", "nickname": "Viktor", "color": "#c873a5", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "B", "locationId": "04", "department": "Fitness", "category": "sales" },
+    { "personnelNumber": "222", "fullName": "Wanda Beck", "nickname": "Wanda", "color": "#7651b5", "contractedHours": 25, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "C", "locationId": "04", "department": "Teamsport", "category": "sales" },
+
+    { "personnelNumber": "223", "fullName": "Xaver Brandl", "nickname": "Xaver", "color": "#0b84c6", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "A", "locationId": "05", "department": "Running", "category": "sales" },
+    { "personnelNumber": "224", "fullName": "Yasmin Steiner", "nickname": "Yasmin", "color": "#e26500", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "B", "locationId": "05", "department": "Urban Sports", "category": "sales" },
+    { "personnelNumber": "225", "fullName": "Zoe Pichler", "nickname": "Zoe", "color": "#07a67a", "contractedHours": 32, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "C", "locationId": "05", "department": "Outdoor", "category": "sales" },
+    { "personnelNumber": "226", "fullName": "Aaron Reiter", "nickname": "Aaron", "color": "#c873a5", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "B", "locationId": "05", "department": "Running", "category": "sales" },
+    { "personnelNumber": "227", "fullName": "Bianca Schmid", "nickname": "Bianca", "color": "#7651b5", "contractedHours": 30, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "C", "locationId": "05", "department": "Urban Sports", "category": "sales" },
+
+    { "personnelNumber": "228", "fullName": "Carlo Leitner", "nickname": "Carlo", "color": "#0b84c6", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "A", "locationId": "06", "department": "Bike", "category": "sales" },
+    { "personnelNumber": "229", "fullName": "Dalia Weiss", "nickname": "Dalia", "color": "#e26500", "contractedHours": 32, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "B", "locationId": "06", "department": "Outdoor", "category": "sales" },
+    { "personnelNumber": "230", "fullName": "Emil Seidl", "nickname": "Emil", "color": "#07a67a", "contractedHours": 38.5, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "C", "locationId": "06", "department": "Bike", "category": "sales" },
+    { "personnelNumber": "231", "fullName": "Flora Baum", "nickname": "Flora", "color": "#c873a5", "contractedHours": 25, "positionId": "verkaufsmitarbeiter", "confirmationLevel": "B", "locationId": "06", "department": "Outdoor", "category": "sales" }
+  ]
+}

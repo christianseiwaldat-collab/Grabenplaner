@@ -24,6 +24,7 @@ const state = {
   requestKindTab: "vacation",
   currentView: "planning",
   timePresence: null,
+  timeDayReview: null,
   timeSummary: null,
   timeCorrections: [],
   rightsManagement: null,
@@ -31,11 +32,14 @@ const state = {
   brandingPreference: null,
   brandingFormDirty: false,
   mobileLeadershipSettings: null,
+  selectedRightsEmployeeNumber: "",
   amuPolicy: null,
+  wifiAutomationSettings: null,
   selectedRequest: null,
   allEmployees: [],
   updateStatus: null,
   selectedColor: "#0b84c6",
+  employeeEditMode: "full",
   personnelTab: "employees",
   editingLocationId: null,
   editingDepartmentId: null,
@@ -84,30 +88,32 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 const elements = Object.fromEntries(
   [
     "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelView", "settingsView", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
-    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarEmployeeCount", "sidebarVersion", "pdfButton", "timeline", "weekLockNotice",
-    "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "backupSettings", "rightsSettings", "employeeSettings",
+    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarEmployeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
+    "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "wifiAutomationSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField",
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount",
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
-    "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition",
-    "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationSubmitButton", "cancelLocationEditButton",
+    "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel",
+    "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
     "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
     "shiftModal", "shiftForm", "shiftModalTitle", "deleteShiftButton", "shiftCalculation", "shiftDepartment", "departmentPdfControl", "departmentPdfSelect", "departmentPdfButton",
     "optionsModal", "optionForm", "optionList", "optionsWeekLabel", "optionsWeekRange", "optionPreviousWeek", "optionNextWeek", "globalBlockDate", "globalBlockReason", "globalBlockHoliday", "globalBlockSubmitButton", "optionSubmitButton", "cancelOptionEditButton", "autoPlanModal",
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
-    "rightsManagementHint", "rightsUserList", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "positionSettingsCard", "personnelViewSettingsCard",
+    "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "positionSettingsCard", "personnelViewSettingsCard",
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuManagerFileAccess", "amuSettingsHint", "saveAmuSettingsButton",
+    "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
     "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordTitle", "personnelRecordContent",
     "timeCorrectionModal", "timeCorrectionForm", "timeCorrectionTitle", "timeCorrectionEmployee", "timeCorrectionWorkDate", "timeCorrectionEmployeeLabel", "timeCorrectionDateLabel", "timeCorrectionClockOutTime", "timeCorrectionMessage",
-    "timeCorrectionReviewModal", "timeCorrectionReviewForm", "timeCorrectionReviewId", "timeCorrectionReviewSummary", "timeCorrectionReviewClockIn", "timeCorrectionReviewBreakStart", "timeCorrectionReviewBreakEnd", "timeCorrectionReviewClockOut", "timeCorrectionReviewNote", "timeCorrectionReviewMessage",
+    "timeCorrectionReviewModal", "timeCorrectionReviewForm", "timeCorrectionReviewId", "timeCorrectionReviewSummary", "timeCorrectionReviewEntries", "addTimeCorrectionReviewEntry", "timeCorrectionReviewNote", "timeCorrectionReviewMessage",
+    "timeDayReviewPanel", "timeReviewDate", "timeReviewFilter", "loadTimeDayReviewButton", "timeDayReviewSummary", "timeDayReviewList", "timeDayReviewModal", "timeDayReviewForm", "timeDayReviewTitle", "timeDayReviewDetail", "timeDayReviewEmployee", "timeDayReviewWorkDate", "timeDayReviewMetrics", "timeDayReviewIssues", "timeDayReviewNote", "timeDayReviewMessage", "removeTimeDayReviewButton",
     "timeSummaryFrom", "timeSummaryTo", "loadTimeSummaryButton", "timeSummaryList", "timeCorrectionPanel", "timeCorrectionCount", "timeCorrectionRequestList",
     "brandLogo", "footerBrandLogo", "adminContactLink", "brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt", "brandingPreviewLogo", "brandingPreviewTitle", "brandingPreviewCompany", "brandingKitLibrary", "brandingAssignmentList", "exportBrandingButton", "brandingImportFile", "importBrandingButton", "toast",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
@@ -393,21 +399,20 @@ async function api(url, options = {}) {
   if (csrfToken && !["GET", "HEAD"].includes(String(options.method || "GET").toUpperCase())) {
     headers["X-CSRF-Token"] = decodeURIComponent(csrfToken);
   }
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  let response;
+  try {
+    response = await fetch(url, { ...options, headers });
+  } catch (error) {
+    throw window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname });
+  }
   if (!response.ok) {
-    let message = "Die Aktion konnte nicht ausgeführt werden.";
-    let code = "";
-    try {
-      const payload = await response.json();
-      message = payload.error || message;
-      code = payload.code || "";
-    } catch {}
-    const error = new Error(message);
+    const detail = await window.GrabenplanerApiErrors.fromResponse(response, {
+      hostname: location.hostname,
+      fallback: "Die Aktion konnte nicht ausgeführt werden.",
+    });
+    const error = new Error(detail.message);
     error.status = response.status;
-    error.code = code;
+    error.code = detail.code;
     if (response.status === 401 && elements.loginGate) showLoginGate("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
     throw error;
   }
@@ -434,42 +439,61 @@ function hideLoginGate() {
   elements.loginGate?.classList.add("hidden");
 }
 
+function renderSidebarSession() {
+  const user = state.portalSession?.user;
+  const visible = state.portalStatus?.portalEnabled === true && Boolean(user);
+  elements.sidebarSessionInfo?.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  elements.sidebarSessionRole.textContent = user.roleName || user.role || "Angemeldet";
+  elements.sidebarSessionIdentity.textContent = `${user.employeeNumber} · ${user.fullName || user.nickname || ""}`;
+  elements.sidebarSessionPosition.textContent = user.positionName ? `Position: ${user.positionName}` : "Position: nicht hinterlegt";
+}
+
 function applyRoleVisibility() {
   const permissions = state.portalSession?.user?.permissions || [];
   const lanActive = state.portalStatus?.portalEnabled === true;
   const serverActive = state.portalStatus?.operationMode === "server";
   const role = state.portalSession?.user?.role || "admin";
-  const globalAdministration = !lanActive || ["admin", "hr"].includes(role);
+  const globalAdministration = !lanActive || ["developer", "it_admin", "admin", "hr"].includes(role);
   const settingsAccess = !lanActive || permissions.includes("settings:write");
   const rightsAccess = globalAdministration && (!lanActive || permissions.includes("rights:read"));
-  const brandingAccess = globalAdministration && (!lanActive || permissions.includes("branding:write"));
+  const brandingAccess = !lanActive || permissions.includes("branding:write");
   const employeeWriteAccess = !lanActive || permissions.includes("employees:write");
+  const employeeDisplayWriteAccess = !lanActive || permissions.includes("employees:display:write");
   const locationBaseWriteAccess = !lanActive || permissions.includes("locations:write");
   const departmentWriteAccess = !lanActive || permissions.includes("departments:write");
   const locationWriteAccess = locationBaseWriteAccess || departmentWriteAccess;
   const positionWriteAccess = !lanActive || permissions.includes("positions:write");
   const operationModeAccess = !lanActive || permissions.includes("operation_mode:write");
   const scopeAccess = permissions.includes("scopes:write");
-  const employeeReadAccess = employeeWriteAccess || permissions.includes("employees:read");
+  const employeeReadAccess = employeeWriteAccess || employeeDisplayWriteAccess || permissions.includes("employees:read");
   const timeReadAccess = lanActive && permissions.includes("time:read") && state.portalStatus?.capabilities?.timeTracking;
+  const wifiSettingsAccess = !lanActive || permissions.includes("wifi:settings");
   document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
-  const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess || operationModeAccess;
+  const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess || operationModeAccess || wifiSettingsAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
     general: settingsAccess || operationModeAccess,
     branding: brandingAccess,
     pdf: settingsAccess,
     personnel: settingsAccess || positionWriteAccess,
+    wifiAutomation: wifiSettingsAccess,
     access: scopeAccess || permissions.includes("users:write") || globalAdministration,
     rights: rightsAccess,
-    backup: globalAdministration,
+    backup: !lanActive || permissions.some((permission) => ["backup:write", "update:write", "system:write"].includes(permission)),
   };
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("hidden", !settingsTabs[button.dataset.settingsTab]));
-  elements.saveSettingsButton?.classList.toggle("hidden", !settingsAccess);
+  const wifiTabActive = document.querySelector('[data-settings-tab="wifiAutomation"]')?.classList.contains("active");
+  elements.saveSettingsButton?.classList.toggle("hidden", !settingsAccess || wifiTabActive);
   elements.saveOperationModeButton?.classList.toggle("hidden", !operationModeAccess || settingsAccess);
-  elements.systemExitButton?.classList.toggle("hidden", serverActive || (lanActive && !globalAdministration));
-  elements.updateCheckButton?.classList.toggle("hidden", lanActive && !globalAdministration);
+  const privilegedServerRole = ["developer", "it_admin", "admin"].includes(role);
+  const canExit = serverActive
+    ? privilegedServerRole && permissions.includes("system:write")
+    : !lanActive || permissions.includes("system:write");
+  elements.systemExitButton?.classList.toggle("hidden", !canExit);
+  if (elements.systemExitButton) elements.systemExitButton.querySelector("span").textContent = serverActive ? "Server beenden" : "Beenden";
+  elements.updateCheckButton?.classList.toggle("hidden", lanActive && !permissions.includes("update:write"));
   document.querySelector('[data-personnel-tab="locations"]')?.classList.toggle("hidden", !locationWriteAccess);
   document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !employeeWriteAccess);
   elements.addLocationButton?.classList.toggle("hidden", !locationBaseWriteAccess);
@@ -478,12 +502,14 @@ function applyRoleVisibility() {
   elements.departmentFormCard?.classList.toggle("hidden", !departmentWriteAccess);
   elements.positionSettingsCard?.classList.toggle("hidden", !positionWriteAccess);
   elements.personnelViewSettingsCard?.classList.toggle("hidden", !settingsAccess);
-  elements.workflowSettingsCard?.classList.toggle("hidden", !globalAdministration);
-  elements.amuSettingsCard?.classList.toggle("hidden", !globalAdministration);
+  elements.employeeTimeConfirmationLevelField?.classList.toggle("hidden", !wifiSettingsAccess);
+  elements.workflowSettingsCard?.classList.toggle("hidden", lanActive && !permissions.includes("hr:settings"));
+  elements.amuSettingsCard?.classList.toggle("hidden", lanActive && !permissions.includes("hr:settings"));
   elements.delegationSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.generalSettings?.querySelectorAll(".settings-card:not(.operation-mode-card)").forEach((card) => card.classList.toggle("hidden", !settingsAccess));
   [elements.localModeOption, elements.serverModeOption, elements.publicServerModeOption].forEach((button) => { if (button) button.disabled = !operationModeAccess; });
   if (!locationWriteAccess && state.personnelTab === "locations") setPersonnelTab("employees");
+  renderSidebarSession();
 }
 
 async function bootstrapApplication() {
@@ -646,7 +672,7 @@ function applyBranding(settings = state.data?.settings || {}) {
 
 function hasManagementBrandingAccess() {
   if (state.portalStatus?.portalEnabled !== true) return true;
-  return ["admin", "hr"].includes(state.portalSession?.user?.role);
+  return state.portalSession?.user?.permissions?.includes("branding:write");
 }
 
 function currentShellBranding(fallback = {}) {
@@ -1316,7 +1342,8 @@ function formatOptionDates(option) {
 function renderEmployees() {
   const showInactive = state.data?.settings?.show_inactive_personnel !== "0";
   const employees = showInactive ? state.allEmployees : state.allEmployees.filter((employee) => employee.active);
-  const canEdit = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("employees:write");
+  const canEditFull = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("employees:write");
+  const canEditDisplay = canEditFull || state.portalSession?.user?.permissions?.includes("employees:display:write");
   const canReadPersonnelRecord = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:metadata:read");
   elements.employeeTableBody.innerHTML = employees.map((employee) => `
     <tr>
@@ -1331,7 +1358,7 @@ function renderEmployees() {
       <td>${preferredDayLabels[employee.preferred_day_off] || "–"}</td>
       <td>${escapeHtml(formatFixedWorkdays(employee.fixed_workdays))}</td>
       <td><span class="status-badge ${employee.active ? "" : "inactive"}">${employee.active ? "Aktiv" : "Inaktiv"}</span></td>
-      <td><span class="table-actions">${canReadPersonnelRecord ? `<button type="button" class="edit-button" data-personnel-record="${escapeHtml(employee.personnel_number)}">Personalakt</button>` : ""}${canEdit ? `<button type="button" class="edit-button" data-edit-employee="${escapeHtml(employee.personnel_number)}">Bearbeiten</button>` : ""}</span></td>
+      <td><span class="table-actions">${canReadPersonnelRecord ? `<button type="button" class="edit-button" data-personnel-record="${escapeHtml(employee.personnel_number)}">Personalakt</button>` : ""}${canEditDisplay ? `<button type="button" class="edit-button" data-edit-employee="${escapeHtml(employee.personnel_number)}">${canEditFull ? "Bearbeiten" : "Farbe ändern"}</button>` : ""}</span></td>
     </tr>`).join("");
 }
 
@@ -1489,7 +1516,21 @@ function renderOperationMode() {
   }
   if (elements.adminAccessModeLabel) elements.adminAccessModeLabel.textContent = actualServerActive ? "Geschützter HTTPS-Zugang" : "Geschützter LAN-Zugang";
   elements.employeePortalLink?.classList.toggle("hidden", !(actualLanActive || actualServerActive));
-  elements.portalLogoutButton?.classList.toggle("hidden", !(actualLanActive || actualServerActive));
+  elements.portalLogoutButton?.classList.toggle("hidden", status.portalEnabled !== true);
+}
+
+function portalRoleAssignableInUi(actorRole, roleId) {
+  if (roleId === "developer") return false;
+  if (!actorRole || ["developer", "admin"].includes(actorRole)) return true;
+  if (["it_admin", "hr"].includes(actorRole)) return ["employee", "manager", "department_manager"].includes(roleId);
+  return actorRole === "manager" && roleId === "department_manager";
+}
+
+function portalUserManageableInUi(actorRole, user) {
+  if (user.roleLocked || user.role === "developer") return false;
+  if (!actorRole || ["developer", "admin"].includes(actorRole)) return true;
+  if (["it_admin", "hr"].includes(actorRole)) return ["employee", "manager", "department_manager"].includes(user.role);
+  return actorRole === "manager" && user.role === "department_manager";
 }
 
 async function loadPortalUsers() {
@@ -1498,7 +1539,11 @@ async function loadPortalUsers() {
     const result = await api("/api/portal/v1/users");
     state.portalUsers = result.users || [];
     const actorRole = state.portalSession?.user?.role;
-    const roles = (result.roles || []).filter((role) => actorRole === "manager" ? role.id === "department_manager" : actorRole !== "hr" || ["employee", "manager", "department_manager"].includes(role.id));
+    const permissions = state.portalSession?.user?.permissions || [];
+    const localAccess = !state.portalStatus?.portalEnabled;
+    const mayManageUsers = localAccess || permissions.includes("users:write");
+    const mayManageScopes = localAccess || permissions.includes("scopes:write");
+    const roles = (result.roles || []).filter((role) => role.assignable !== false && portalRoleAssignableInUi(actorRole, role.id));
     elements.accessSettingsHint.textContent = state.portalStatus?.adminSetupState === "configured"
       ? "Startpasswörter werden nie angezeigt. Ein neu gesetztes Passwort muss beim ersten Login geändert werden."
       : "Zuerst einen Admin einrichten; danach können weitere Zugänge vorbereitet werden.";
@@ -1507,15 +1552,21 @@ async function loadPortalUsers() {
       const scope = user.scopes?.[0] || { locationId: user.homeLocationId || state.locations[0]?.id || "", departmentId: user.preferredDepartmentId || "" };
       const locations = state.locations.map((location) => `<option value="${escapeHtml(location.id)}" ${location.id === scope.locationId ? "selected" : ""}>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("");
       const departments = (state.locations.find((location) => location.id === scope.locationId)?.departments || []).map((department) => `<option value="${department.id}" ${Number(department.id) === Number(scope.departmentId) ? "selected" : ""}>${escapeHtml(department.name)}</option>`).join("");
+      const roleEditable = mayManageUsers && portalUserManageableInUi(actorRole, user);
+      const scopeEditable = mayManageScopes && portalUserManageableInUi(actorRole, user) && ["manager", "department_manager"].includes(user.role);
+      const protectedRole = user.roleLocked || user.role === "developer";
+      const roleControl = roleEditable
+        ? `<select data-portal-role aria-label="Rolle">${roles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === user.role ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("")}</select>`
+        : `<input data-portal-role type="hidden" value="${escapeHtml(user.role)}" /><span class="protected-role-badge ${protectedRole ? "developer" : ""}">${escapeHtml(user.roleName || user.role)}${protectedRole ? " · geschützt" : ""}</span>`;
       return `
       <article class="portal-user-row" data-portal-user="${escapeHtml(user.employeeNumber)}">
         <div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${user.passwordConfigured ? "Zugang eingerichtet" : "Noch kein Passwort"}${user.lastLoginAt ? ` · zuletzt ${escapeHtml(new Date(user.lastLoginAt).toLocaleString("de-AT"))}` : ""}${user.locked ? ` · gesperrt bis ${escapeHtml(new Date(user.lockedUntil).toLocaleString("de-AT"))}` : user.failedLoginAttempts ? ` · ${Number(user.failedLoginAttempts)} Fehlversuch(e)` : ""}</small></div>
-        <select data-portal-role aria-label="Rolle" ${actorRole === "manager" ? "disabled" : ""}>${roles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === user.role ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("")}</select>
-        <select data-scope-location aria-label="Zugewiesene Filiale" class="${["manager", "department_manager"].includes(user.role) ? "" : "hidden"}">${locations}</select>
-        <select data-scope-department aria-label="Zugewiesene Abteilung" class="${user.role === "department_manager" ? "" : "hidden"}">${departments}</select>
-        <label class="portal-active"><input data-portal-active type="checkbox" ${user.active ? "checked" : ""} ${actorRole === "manager" ? "disabled" : ""} /> aktiv</label>
-        <span class="password-field portal-user-password ${actorRole === "manager" ? "hidden" : ""}"><input data-portal-password id="portalPassword-${escapeHtml(user.employeeNumber)}" type="password" minlength="${Number(state.portalStatus?.passwordMinLength || 6)}" placeholder="Neues Startpasswort" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-toggle="portalPassword-${escapeHtml(user.employeeNumber)}" aria-label="Passwort anzeigen">Anzeigen</button></span>
-        <span class="portal-user-actions"><button class="secondary-button" data-save-portal-user type="button">Speichern</button>${user.locked || user.failedLoginAttempts ? '<button class="secondary-button" data-unlock-portal-user type="button">Entsperren</button>' : ""}</span>
+        ${roleControl}
+        <select data-scope-location aria-label="Zugewiesene Filiale" class="${["manager", "department_manager"].includes(user.role) ? "" : "hidden"}" ${scopeEditable ? "" : "disabled"}>${locations}</select>
+        <select data-scope-department aria-label="Zugewiesene Abteilung" class="${user.role === "department_manager" ? "" : "hidden"}" ${scopeEditable ? "" : "disabled"}>${departments}</select>
+        <label class="portal-active"><input data-portal-active type="checkbox" ${user.active ? "checked" : ""} ${roleEditable ? "" : "disabled"} /> aktiv</label>
+        <span class="password-field portal-user-password ${roleEditable ? "" : "hidden"}"><input data-portal-password id="portalPassword-${escapeHtml(user.employeeNumber)}" type="password" minlength="${Number(state.portalStatus?.passwordMinLength || 6)}" placeholder="Neues Startpasswort" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-toggle="portalPassword-${escapeHtml(user.employeeNumber)}" aria-label="Passwort anzeigen">Anzeigen</button></span>
+        <span class="portal-user-actions">${roleEditable || scopeEditable ? '<button class="secondary-button" data-save-portal-user type="button">Speichern</button>' : ""}${(user.locked || user.failedLoginAttempts) && roleEditable ? '<button class="secondary-button" data-unlock-portal-user type="button">Entsperren</button>' : ""}</span>
       </article>`;
     }).join("");
     await loadApprovalDelegations();
@@ -1528,27 +1579,64 @@ async function loadPortalUsers() {
 function renderRightsManagement() {
   if (!elements.rightsUserList) return;
   const result = state.rightsManagement || {};
-  const catalog = result.catalog || [];
   const users = result.users || [];
+  const query = String(elements.rightsEmployeeSearch?.value || "").trim().toLocaleLowerCase("de-AT");
+  const filtered = users.filter((user) => !query || [user.employeeNumber, user.fullName, user.nickname, user.roleName]
+    .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(query)));
   elements.rightsManagementHint.textContent = users.length
-    ? "Zusatzrechte gelten sofort und immer nur innerhalb der bereits zugewiesenen Filiale beziehungsweise Abteilung."
-    : "Es gibt derzeit keine Filial- oder Abteilungsleitung, der Zusatzrechte zugewiesen werden können.";
-  elements.rightsUserList.innerHTML = users.map((user) => {
-    const granted = new Set(user.grants || user.grantedPermissions || []);
-    const scopeText = (user.scopes || []).map((scope) => {
-      const location = state.locations.find((item) => item.id === scope.locationId);
-      const department = location?.departments?.find((item) => Number(item.id) === Number(scope.departmentId));
-      return `${location?.name || scope.locationId}${department ? ` · ${department.name}` : ""}`;
-    }).join(", ") || user.homeLocationId || "Kein Bereich";
+    ? `${filtered.length} von ${users.length} Teammitgliedern angezeigt. Zusatzrechte ergänzen die Grundrechte der jeweiligen Rolle.`
+    : "Es sind noch keine aktiven Teammitglieder vorhanden.";
+  elements.rightsUserList.innerHTML = filtered.length ? filtered.map((user) => {
+    const additionalCount = (user.grantedPermissions || []).length;
+    const location = state.locations.find((item) => item.id === user.homeLocationId);
+    const status = !user.configured ? "Portal-Zugang noch nicht eingerichtet" : !user.active ? "Portal-Zugang inaktiv" : user.manageable ? "Zusatzrechte können bearbeitet werden" : "Rechte nur zur Ansicht";
     return `<article class="rights-user-card" data-rights-user="${escapeHtml(user.employeeNumber)}">
-      <div class="rights-user-heading"><div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${escapeHtml(user.roleName || user.role)} · ${escapeHtml(scopeText)}</small></div><button class="secondary-button" type="button" data-save-user-rights>Rechte speichern</button></div>
-      <div class="rights-permission-grid">${catalog.map((permission) => {
-        const warningLevel = permission.warningLevel || permission.risk || "normal";
-        const warningText = warningLevel === "critical" ? "Besonders weitreichendes Recht" : warningLevel === "high" ? "Weitreichendes Recht" : "Zusätzliches Verwaltungsrecht";
-        return `<label class="rights-permission ${["high", "critical"].includes(warningLevel) || permission.sensitive ? "sensitive" : ""} ${warningLevel === "critical" ? "critical" : ""}"><input type="checkbox" value="${escapeHtml(permission.id)}" ${granted.has(permission.id) ? "checked" : ""} /><span><strong>${escapeHtml(permission.label || permission.name || permission.id)}</strong><small>${escapeHtml(permission.description || warningText)}</small></span></label>`;
-      }).join("")}</div>
+      <div class="rights-user-heading"><div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${escapeHtml(user.roleName || user.role)} · ${escapeHtml(location?.name || user.homeLocationId || "Kein Standort")} · ${additionalCount} Zusatzrecht${additionalCount === 1 ? "" : "e"}</small><small>${escapeHtml(status)}</small></div><button class="secondary-button" type="button" data-edit-user-rights>${user.manageable ? "Rechte bearbeiten" : "Rechte ansehen"}</button></div>
     </article>`;
-  }).join("");
+  }).join("") : '<p class="settings-note rights-empty-search">Kein Teammitglied entspricht dieser Suche.</p>';
+}
+
+function openRightsEditor(employeeNumber) {
+  const result = state.rightsManagement || {};
+  const user = (result.users || []).find((entry) => entry.employeeNumber === employeeNumber);
+  if (!user || !elements.rightsEditorModal) return;
+  state.selectedRightsEmployeeNumber = employeeNumber;
+  const rolePermissions = new Set(user.rolePermissions || []);
+  const grantedPermissions = new Set(user.grantedPermissions || []);
+  const location = state.locations.find((item) => item.id === user.homeLocationId);
+  elements.rightsEditorTitle.textContent = `${user.employeeNumber} · ${user.nickname || user.fullName}`;
+  elements.rightsEditorSummary.textContent = `${user.roleName || user.role} · ${location?.name || user.homeLocationId || "Kein Standort"}`;
+  const groups = new Map();
+  for (const permission of result.catalog || []) {
+    const group = permission.group || "Weitere Rechte";
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(permission);
+  }
+  elements.rightsEditorPermissions.innerHTML = [...groups.entries()].map(([group, permissions]) => `
+    <section class="rights-permission-group"><h3>${escapeHtml(group)}</h3><div class="rights-permission-grid">${permissions.map((permission) => {
+      const baseRight = rolePermissions.has(permission.id);
+      const additionalRight = grantedPermissions.has(permission.id);
+      const editable = Boolean(user.manageable && permission.editable && !baseRight);
+      const lockedRight = !user.manageable || !permission.editable;
+      const warningLevel = permission.warningLevel || "normal";
+      const statusText = baseRight
+        ? "Grundrecht der Rolle"
+        : additionalRight
+          ? lockedRight ? "Individuell vergeben · nur zur Ansicht" : "Individuell vergeben"
+          : !user.manageable
+            ? "Für die aktuelle Rolle nur zur Ansicht"
+            : !permission.editable
+              ? "Nur durch IT-Admin oder höhere Ebene änderbar"
+              : permission.description || "Optionales Zusatzrecht";
+      return `<label class="rights-permission ${warningLevel === "critical" ? "critical" : warningLevel === "high" ? "sensitive" : ""} ${baseRight ? "base-right" : ""} ${additionalRight && !baseRight ? "additional-right" : ""} ${lockedRight ? "locked-right" : ""}"><input type="checkbox" data-additional-permission value="${escapeHtml(permission.id)}" ${baseRight || additionalRight ? "checked" : ""} ${editable ? "" : "disabled"} /><span><strong>${escapeHtml(permission.label || permission.id)}</strong><small>${escapeHtml(statusText)}</small></span></label>`;
+    }).join("")}</div></section>`).join("");
+  elements.saveRightsEditorButton.disabled = !user.manageable;
+  elements.rightsEditorHint.textContent = !user.configured
+    ? "Bitte zuerst unter Zugänge einen Portal-Zugang einrichten."
+    : !user.manageable
+      ? "Dieser Zugang ist für die aktuelle Rolle geschützt oder liegt außerhalb ihrer Verwaltungsebene."
+      : "Zusatzrechte gelten sofort, ergänzen die Grundrolle und bleiben an den zugewiesenen Standort beziehungsweise die Abteilung gebunden.";
+  elements.rightsEditorModal.showModal();
 }
 
 function renderMobileLeadershipSettings() {
@@ -1556,7 +1644,7 @@ function renderMobileLeadershipSettings() {
   const result = state.mobileLeadershipSettings || {};
   const modules = result.availableModules || [];
   const layouts = result.layouts || {};
-  const roleLabels = { department_manager: "Abteilungsleitung", manager: "Filialleitung", hr: "Personalleitung", admin: "Admin" };
+  const roleLabels = { department_manager: "Abteilungsleitung", manager: "Filialleitung", hr: "Personalleitung", admin: "Admin", it_admin: "IT-Admin", developer: "Developer" };
   elements.mobileLeadershipModuleSettings.innerHTML = Object.entries(roleLabels).map(([role, label]) => {
     const enabled = new Set(layouts[role] || []);
     return `<article class="mobile-role-card" data-mobile-layout-role="${role}"><strong>${label}</strong><div class="mobile-module-grid">${modules.map((module) => {
@@ -1565,7 +1653,7 @@ function renderMobileLeadershipSettings() {
     }).join("")}</div></article>`;
   }).join("");
   elements.saveMobileLeadershipSettingsButton.disabled = result.canChange === false;
-  elements.mobileLeadershipSettingsHint.textContent = result.canChange === false ? "Nur Admin oder Personalleitung kann diese Auswahl ändern." : "Zeiterfassung bleibt immer der erste Punkt; insgesamt maximal sechs Elemente je Rolle.";
+  elements.mobileLeadershipSettingsHint.textContent = result.canChange === false ? "Nur Developer, IT-Admin, Admin oder Personalleitung kann diese Auswahl ändern." : "Zeiterfassung bleibt immer der erste Punkt; insgesamt maximal sechs Elemente je Rolle.";
 }
 
 async function loadRightsManagement() {
@@ -1580,20 +1668,23 @@ async function loadRightsManagement() {
     renderRightsManagement();
     renderMobileLeadershipSettings();
   } catch (error) {
-    elements.rightsManagementHint.textContent = error.status === 403 ? "Rechtemanagement ist nur für Admin und Personalleitung verfügbar." : error.message;
+    elements.rightsManagementHint.textContent = error.status === 403 ? "Rechtemanagement ist nur für Developer, IT-Admin, Admin und Personalleitung verfügbar." : error.message;
     elements.rightsUserList.innerHTML = "";
     elements.mobileLeadershipModuleSettings.innerHTML = "";
   }
 }
 
-async function saveUserRights(card) {
-  const employeeNumber = card.dataset.rightsUser;
-  const permissions = [...card.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
+async function saveUserRights(event) {
+  event.preventDefault();
+  const employeeNumber = state.selectedRightsEmployeeNumber;
+  if (!employeeNumber) return;
+  const permissions = [...elements.rightsEditorPermissions.querySelectorAll('input[data-additional-permission]:checked:not(:disabled)')].map((input) => input.value);
   try {
     state.rightsManagement = await api(`/api/portal/v1/rights/${encodeURIComponent(employeeNumber)}`, {
       method: "PUT",
       body: JSON.stringify({ permissions }),
     });
+    elements.rightsEditorModal.close();
     renderRightsManagement();
     showToast(`Zusatzrechte für ${employeeNumber} wurden gespeichert.`);
   } catch (error) { showToast(error.message, true); }
@@ -1649,6 +1740,138 @@ async function saveAmuSettings() {
     state.amuPolicy = result.policy;
     showToast("AUM-Einstellungen wurden gespeichert.");
     await loadAmuSettings();
+  } catch (error) { showToast(error.message, true); }
+}
+
+function renderWifiConfirmationLevels() {
+  if (!elements.wifiConfirmationLevelList) return;
+  const query = String(elements.wifiConfirmationLevelSearch?.value || "").trim().toLocaleLowerCase("de");
+  const employees = (state.wifiAutomationSettings?.employees || []).filter((employee) => {
+    if (!query) return true;
+    return [employee.employeeNumber, employee.fullName, employee.nickname]
+      .some((value) => String(value || "").toLocaleLowerCase("de").includes(query));
+  });
+  elements.wifiConfirmationLevelList.innerHTML = employees.length ? employees.map((employee) => `
+    <article class="wifi-confirmation-level-row ${employee.active ? "" : "inactive"}">
+      <div><strong>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</strong><small>${escapeHtml(employee.fullName)}${employee.active ? "" : " · inaktiv"}</small></div>
+      <label><span>Stufe</span><select data-wifi-confirmation-level="${escapeHtml(employee.employeeNumber)}"><option value="A" ${employee.level === "A" ? "selected" : ""}>A</option><option value="B" ${employee.level === "B" ? "selected" : ""}>B</option><option value="C" ${employee.level === "C" ? "selected" : ""}>C</option></select></label>
+    </article>`).join("") : '<p class="settings-note">Keine passenden Teammitglieder gefunden.</p>';
+}
+
+function canManageWifiAutomationSettings() {
+  if (!state.portalStatus?.portalEnabled) return true;
+  const user = state.portalSession?.user;
+  return Boolean(user
+    && ["developer", "it_admin", "admin", "hr"].includes(user.role)
+    && user.permissions?.includes("wifi:settings"));
+}
+
+function updateWifiAutomationRuleHint() {
+  if (!elements.wifiAutomationSettingsHint) return;
+  const minimum = Number(elements.wifiMinimumPresenceMinutes?.value || 5);
+  const grace = Number(elements.wifiAbsenceGraceMinutes?.value || 30);
+  elements.wifiAutomationSettingsHint.textContent = `Unter ${minimum} Minuten entsteht kein Vorschlag. Rückkehr innerhalb von ${grace} Minuten zählt als durchgehende Anwesenheit.`;
+}
+
+function renderWifiConnector() {
+  const data = state.wifiAutomationSettings || {};
+  const connector = data.connector || {};
+  if (elements.wifiConnectorDetails) {
+    elements.wifiConnectorDetails.innerHTML = `
+      <div><strong>${connector.configured ? "Schnittstelle geschützt bereit" : "Schnittstelle noch nicht konfiguriert"}</strong><span>${escapeHtml(connector.configurationHint || "")}</span></div>
+      <div><strong>Provider</strong><span>${escapeHtml(connector.providerId || "generic-radius")} · ${escapeHtml(connector.eventEndpoint || "/api/integrations/wifi/events")}</span></div>`;
+  }
+  if (!elements.wifiLocationMappingList) return;
+  const mappings = data.locationMappings || [];
+  elements.wifiLocationMappingList.innerHTML = mappings.length ? mappings.map((mapping) => `
+    <article class="wifi-location-mapping-row" data-wifi-location-mapping="${escapeHtml(mapping.locationId)}">
+      <div><strong>${escapeHtml(mapping.locationName)}</strong><small>${escapeHtml(mapping.locationId)} · ${mapping.mapped ? "zugeordnet" : "nicht zugeordnet"}${mapping.active ? "" : " · inaktiv"}</small></div>
+      <label class="field"><span>Controller-Kennung</span><input data-wifi-location-reference maxlength="200" placeholder="${mapping.mapped ? "Neue Kennung zum Ersetzen" : "z. B. Filiale-18"}" /></label>
+      <label class="wifi-location-clear"><input type="checkbox" data-wifi-location-clear ${mapping.mapped ? "" : "disabled"} /> Zuordnung löschen</label>
+    </article>`).join("") : '<p class="settings-note">Noch keine Filialen vorhanden.</p>';
+}
+
+async function saveWifiLocationMappings() {
+  const mappings = Array.from(elements.wifiLocationMappingList?.querySelectorAll("[data-wifi-location-mapping]") || []).map((row) => ({
+    locationId: row.dataset.wifiLocationMapping,
+    externalReference: row.querySelector("[data-wifi-location-reference]")?.value.trim() || "",
+    clear: row.querySelector("[data-wifi-location-clear]")?.checked === true,
+  })).filter((item) => item.clear || item.externalReference);
+  if (!mappings.length) {
+    showToast("Bitte mindestens eine neue Controller-Kennung eingeben oder eine Zuordnung zum Löschen markieren.", true);
+    return;
+  }
+  try {
+    const result = await api("/api/portal/v1/wifi-automation/location-mappings", {
+      method: "PUT",
+      body: JSON.stringify({ mappings }),
+    });
+    state.wifiAutomationSettings.locationMappings = result.locationMappings || [];
+    renderWifiConnector();
+    showToast("Die WLAN-Filialzuordnungen wurden gespeichert.");
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function loadWifiAutomationSettings() {
+  if (!elements.wifiAutomationSettings) return;
+  try {
+    const result = await api("/api/portal/v1/wifi-automation/settings");
+    state.wifiAutomationSettings = result;
+    elements.wifiMinimumPresenceMinutes.value = Number(result.minimumPresenceMinutes || 5);
+    elements.wifiAbsenceGraceMinutes.value = Number(result.absenceGraceMinutes || 30);
+    elements.saveWifiAutomationSettingsButton.disabled = result.canChange === false;
+    elements.saveWifiLocationMappingsButton.disabled = result.canChange === false;
+    elements.saveWifiConfirmationLevelsButton.disabled = result.canChange === false;
+    if (elements.wifiAutomationStatus) {
+      const status = elements.wifiAutomationStatus.querySelector("strong");
+      const detail = elements.wifiAutomationStatus.querySelector("small");
+      if (status) status.textContent = result.connectorStatus === "configured" ? "WLAN-Schnittstelle verbunden" : "Noch keine WLAN-Schnittstelle verbunden";
+      if (detail) detail.textContent = result.automationActive
+        ? "Zeitvorschläge werden aus bestätigten Controller-Ereignissen vorbereitet."
+        : "Teil 1 speichert Regeln und Vertrauensstufen. Es entstehen noch keine automatischen Zeitbuchungen.";
+    }
+    updateWifiAutomationRuleHint();
+    renderWifiConnector();
+    renderWifiConfirmationLevels();
+  } catch (error) {
+    elements.wifiAutomationSettingsHint.textContent = error.status === 403
+      ? "WLAN-Regeln sind nur für Personalleitung, Admin, IT-Admin und Developer verfügbar."
+      : error.message;
+    elements.wifiConfirmationLevelList.innerHTML = "";
+  }
+}
+
+async function saveWifiAutomationSettings() {
+  try {
+    const result = await api("/api/portal/v1/wifi-automation/settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        minimumPresenceMinutes: Number(elements.wifiMinimumPresenceMinutes.value),
+        absenceGraceMinutes: Number(elements.wifiAbsenceGraceMinutes.value),
+      }),
+    });
+    state.wifiAutomationSettings = { ...state.wifiAutomationSettings, ...result };
+    updateWifiAutomationRuleHint();
+    renderWifiConnector();
+    showToast("Die WLAN-Anwesenheitsregeln wurden gespeichert.");
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function saveWifiConfirmationLevels() {
+  const levels = (state.wifiAutomationSettings?.employees || [])
+    .map((employee) => ({ employeeNumber: employee.employeeNumber, level: employee.level }));
+  try {
+    const result = await api("/api/portal/v1/wifi-automation/confirmation-levels", {
+      method: "PUT",
+      body: JSON.stringify({ levels }),
+    });
+    state.wifiAutomationSettings = { ...state.wifiAutomationSettings, employees: result.employees || [] };
+    renderWifiConfirmationLevels();
+    elements.wifiConfirmationLevelHint.textContent = result.changed
+      ? `${result.changed} Vertrauensstufe(n) wurden aktualisiert.`
+      : "Alle Vertrauensstufen waren bereits aktuell.";
+    showToast("Die Vertrauensstufen wurden gespeichert.");
+    await loadAll();
   } catch (error) { showToast(error.message, true); }
 }
 
@@ -1780,11 +2003,12 @@ function renderTimePresence() {
     || state.portalSession?.user?.permissions?.includes("time:review");
   elements.timePresenceList.innerHTML = employees.length ? employees.map((employee) => {
     const entries = (employee.entries || []).map((entry) => `${escapeHtml(entry.label)} ${formatClockTimestamp(entry.timestamp)}`).join(" · ");
+    const issues = timeEvaluationIssues(employee).map((issue) => issue.label || issue.code).join(" · ");
     return `<article class="time-presence-row ${escapeHtml(employee.state)}">
       <span class="employee-color" style="background:${escapeHtml(employee.color || "#748087")}"></span>
-      <div class="time-presence-person"><strong>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</strong><small>${entries || "Heute noch keine Buchung"}</small></div>
+      <div class="time-presence-person"><strong>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</strong><small>${entries || "Heute noch keine Buchung"}${issues ? ` · ${escapeHtml(issues)}` : ""}</small></div>
       <span class="time-state-badge ${escapeHtml(employee.state)}">${labels[employee.state] || employee.state}</span>
-      <div class="time-presence-hours"><span>Soll <strong>${formatHours(employee.plannedMinutes)}</strong></span><span>Ist <strong>${formatHours(employee.actualMinutes)}</strong></span><span>Diff. <strong class="${Number(employee.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(employee.differenceMinutes)}</strong></span></div>
+      <div class="time-presence-hours"><span>Plan <strong>${formatHours(employee.plannedMinutes)}</strong></span><span>Ist <strong>${formatHours(employee.actualMinutes)}</strong></span><span>Gewertet <strong>${formatHours(employee.actualValuedMinutes)}</strong></span><span>Pause <strong>${formatHours(employee.breakMinutes)}</strong></span><span>Diff. <strong class="${Number(employee.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(employee.differenceMinutes)}</strong></span></div>
       ${(employee.staleEntry && canReviewTime) || canReadPersonnelRecord ? `<div class="time-presence-actions">
         ${employee.staleEntry && canReviewTime ? `<button type="button" class="secondary-button compact-button" data-resolve-stale="${escapeHtml(employee.employeeNumber)}">Altbuchung abschließen</button>` : ""}
         ${canReadPersonnelRecord ? `<button type="button" class="secondary-button compact-button" data-personnel-record="${escapeHtml(employee.employeeNumber)}">Personalakt</button>` : ""}
@@ -1813,6 +2037,128 @@ function selectedTimeContextParameters() {
   return parameters;
 }
 
+function initializeTimeReviewDate() {
+  if (!elements.timeReviewDate) return;
+  const today = toIsoDate(new Date());
+  elements.timeReviewDate.max = today;
+  if (!elements.timeReviewDate.value) elements.timeReviewDate.value = today;
+}
+
+function timeEvaluationIssues(entry) {
+  return Array.isArray(entry?.issues) ? entry.issues : [];
+}
+
+function renderTimeDayReview() {
+  if (!elements.timeDayReviewList || !elements.timeDayReviewSummary) return;
+  const payload = state.timeDayReview;
+  if (!payload) return;
+  const evaluations = payload.evaluations || [];
+  const counts = payload.counts || {};
+  elements.timeDayReviewSummary.innerHTML = `
+    <article><span>Team</span><strong>${Number(counts.total || evaluations.length)}</strong></article>
+    <article class="${Number(counts.attention || 0) ? "warning" : ""}"><span>Auffällig</span><strong>${Number(counts.attention || 0)}</strong></article>
+    <article><span>Geprüft</span><strong>${Number(counts.reviewed || 0)}</strong></article>
+    <article><span>Noch offen</span><strong>${Number(counts.unreviewed || 0)}</strong></article>`;
+  const filter = elements.timeReviewFilter?.value || "all";
+  const visible = evaluations.filter((entry) => {
+    if (filter === "attention") return timeEvaluationIssues(entry).length > 0;
+    if (filter === "reviewed") return Boolean(entry.review && !entry.review.stale);
+    if (filter === "unreviewed") return !entry.review || entry.review.stale;
+    return true;
+  });
+  const canReview = !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("time:review");
+  elements.timeDayReviewList.innerHTML = visible.length ? visible.map((entry) => {
+    const issues = timeEvaluationIssues(entry);
+    const status = entry.review?.stale
+      ? '<span class="status-badge warning">Prüfung veraltet</span>'
+      : entry.review
+      ? `<span class="status-badge approved">Geprüft · ${escapeHtml(entry.review.reviewedBy || "")}</span>`
+      : issues.length
+        ? `<span class="status-badge warning">${issues.length} Hinweis${issues.length === 1 ? "" : "e"}</span>`
+        : '<span class="status-badge inactive">Ungeprüft</span>';
+    const issueText = issues.length
+      ? issues.map((issue) => issue.label || issue.code).join(" · ")
+      : entry.excused?.excused ? entry.excused.label : "Keine Auffälligkeit";
+    return `<article class="time-day-review-row ${issues.some((issue) => issue.severity === "error") ? "has-error" : issues.length ? "has-warning" : ""}" data-time-day-employee="${escapeHtml(entry.employeeNumber)}">
+      <span class="employee-color" style="background:${escapeHtml(entry.color || "#748087")}"></span>
+      <div class="time-day-review-person"><strong>${escapeHtml(entry.employeeNumber)} · ${escapeHtml(entry.nickname || entry.fullName || "Teammitglied")}</strong><small>${escapeHtml(issueText)}</small></div>
+      ${status}
+      <div class="time-day-review-values">
+        <span>Plan<strong>${formatHours(entry.plannedMinutes)}</strong></span>
+        <span>Ist<strong>${formatHours(entry.actualMinutes)}</strong></span>
+        <span>Gewertet<strong>${formatHours(entry.actualValuedMinutes)}</strong></span>
+        <span>Pause<strong>${formatHours(entry.breakMinutes)}</strong></span>
+        <span>Abw.<strong class="${Number(entry.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(entry.differenceMinutes)}</strong></span>
+      </div>
+      ${canReview ? '<button type="button" class="secondary-button compact-button" data-open-time-day-review>Prüfen</button>' : ""}
+    </article>`;
+  }).join("") : '<p class="settings-note">Für diesen Filter gibt es keine Arbeitstageinträge.</p>';
+}
+
+async function loadTimeDayReview() {
+  if (!elements.timeDayReviewList) return;
+  initializeTimeReviewDate();
+  const parameters = selectedTimeContextParameters();
+  parameters.set("date", elements.timeReviewDate.value);
+  elements.timeDayReviewList.innerHTML = '<p class="settings-note">Arbeitstag wird ausgewertet.</p>';
+  try {
+    const result = await api(`/api/portal/v1/time-day-evaluations?${parameters.toString()}`);
+    state.timeDayReview = result.dayReview || result;
+    renderTimeDayReview();
+  } catch (error) {
+    if (error.status === 403) elements.timeDayReviewPanel?.classList.add("hidden");
+    else elements.timeDayReviewList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function openTimeDayReview(employeeNumber) {
+  const entry = state.timeDayReview?.evaluations?.find((item) => item.employeeNumber === employeeNumber);
+  if (!entry || !elements.timeDayReviewModal) return;
+  elements.timeDayReviewEmployee.value = entry.employeeNumber;
+  elements.timeDayReviewWorkDate.value = entry.workDate || state.timeDayReview.date;
+  elements.timeDayReviewTitle.textContent = `${entry.employeeNumber} · ${entry.nickname || entry.fullName || "Teammitglied"}`;
+  elements.timeDayReviewDetail.textContent = `${formatDate(entry.workDate || state.timeDayReview.date)} · Bewertungsregel ${entry.evaluationVersion || "v1"}`;
+  elements.timeDayReviewMetrics.innerHTML = `
+    <article><span>Plan</span><strong>${formatHours(entry.plannedMinutes)}</strong></article>
+    <article><span>Ist</span><strong>${formatHours(entry.actualMinutes)}</strong></article>
+    <article><span>Gewertet</span><strong>${formatHours(entry.actualValuedMinutes)}</strong></article>
+    <article><span>Pause</span><strong>${formatHours(entry.breakMinutes)}${entry.requiredBreakMinutes ? ` / ${formatHours(entry.requiredBreakMinutes)}` : ""}</strong></article>
+    <article><span>Abweichung</span><strong class="${Number(entry.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(entry.differenceMinutes)}</strong></article>`;
+  const issues = timeEvaluationIssues(entry);
+  elements.timeDayReviewIssues.innerHTML = issues.length
+    ? issues.map((issue) => `<article class="${escapeHtml(issue.severity || "warning")}"><strong>${escapeHtml(issue.label || issue.code)}</strong><p>${escapeHtml(issue.message || "")}</p></article>`).join("")
+    : '<p class="settings-note">Für diesen Arbeitstag gibt es keine Auffälligkeit.</p>';
+  elements.timeDayReviewNote.value = entry.review?.note || "";
+  elements.removeTimeDayReviewButton.classList.toggle("hidden", !entry.review);
+  elements.timeDayReviewMessage.textContent = "";
+  elements.timeDayReviewMessage.classList.add("hidden");
+  elements.timeDayReviewModal.showModal();
+}
+
+async function saveTimeDayReview(reviewed) {
+  const employeeNumber = elements.timeDayReviewEmployee.value;
+  const date = elements.timeDayReviewWorkDate.value;
+  const body = {
+    reviewed,
+    note: elements.timeDayReviewNote.value,
+    locationId: elements.timeTrackingLocation.value,
+    departmentId: elements.timeTrackingDepartment.value || null,
+  };
+  try {
+    await api(`/api/portal/v1/time-day-reviews/${encodeURIComponent(employeeNumber)}/${encodeURIComponent(date)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    elements.timeDayReviewModal.close();
+    showToast(reviewed ? "Der Arbeitstag wurde als geprüft gespeichert." : "Die Tagesprüfung wurde aufgehoben.");
+    await Promise.all([loadTimeDayReview(), loadTimePresence(), loadTimeSummary()]);
+  } catch (error) {
+    elements.timeDayReviewMessage.textContent = error.message;
+    elements.timeDayReviewMessage.classList.remove("hidden");
+  }
+}
+
 function initializeTimeSummaryDates() {
   if (!elements.timeSummaryFrom || elements.timeSummaryFrom.value) return;
   const today = toIsoDate(new Date());
@@ -1825,9 +2171,11 @@ function renderTimeSummary() {
   const summary = state.timeSummary;
   const employees = summary?.employees || [];
   elements.timeSummaryList.innerHTML = employees.length ? employees.map((employee) => `<article class="time-summary-row">
-    <div><strong>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</strong><small>${formatDate(summary.from)}–${formatDate(summary.to)}${employee.incompleteDays ? ` · ${Number(employee.incompleteDays)} unvollständige Tag(e)` : ""}</small></div>
-    <div class="time-summary-metric"><span>Soll</span><strong>${formatHours(employee.plannedMinutes)}</strong></div>
+    <div><strong>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</strong><small>${formatDate(summary.from)}–${formatDate(summary.to)}${employee.issueDays ? ` · ${Number(employee.issueDays)} auffällige Tag(e)` : ""}${employee.reviewedDays ? ` · ${Number(employee.reviewedDays)} geprüft` : ""}</small></div>
+    <div class="time-summary-metric"><span>Plan</span><strong>${formatHours(employee.plannedMinutes)}</strong></div>
     <div class="time-summary-metric"><span>Ist</span><strong>${formatHours(employee.actualMinutes)}</strong></div>
+    <div class="time-summary-metric"><span>Gewertet</span><strong>${formatHours(employee.actualValuedMinutes)}</strong></div>
+    <div class="time-summary-metric"><span>Pause</span><strong>${formatHours(employee.breakMinutes)}</strong></div>
     <div class="time-summary-metric"><span>Differenz</span><strong class="${Number(employee.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(employee.differenceMinutes)}</strong></div>
   </article>`).join("") : '<p class="settings-note">Für diesen Zeitraum wurden keine auswertbaren Teammitglieder gefunden.</p>';
 }
@@ -1888,30 +2236,52 @@ function openTimeCorrectionReview(id) {
   if (!correction) return;
   const change = correctionChange(correction);
   const entries = change.entries || correction.entries || [];
-  const timeFor = (type) => {
-    const entry = entries.find((item) => item.type === type);
-    return entry?.time || String(entry?.timestamp || "").slice(11, 16) || "";
-  };
   elements.timeCorrectionReviewId.value = correction.id;
   elements.timeCorrectionReviewSummary.textContent = `${correction.employeeNumber || correction.employee_number} · ${formatDate(correction.correctionDate || correction.correction_date)}${correction.requestNote || correction.request_note ? ` · ${correction.requestNote || correction.request_note}` : ""}`;
-  elements.timeCorrectionReviewClockIn.value = timeFor("clock_in");
-  elements.timeCorrectionReviewBreakStart.value = timeFor("break_start");
-  elements.timeCorrectionReviewBreakEnd.value = timeFor("break_end");
-  elements.timeCorrectionReviewClockOut.value = timeFor("clock_out");
+  renderTimeCorrectionReviewEntries(entries);
   elements.timeCorrectionReviewNote.value = "";
   elements.timeCorrectionReviewMessage.textContent = "";
   elements.timeCorrectionReviewMessage.classList.add("hidden");
   elements.timeCorrectionReviewModal.showModal();
 }
 
+const timeCorrectionEntryLabels = {
+  clock_in: "Kommen",
+  break_start: "Pause",
+  break_end: "Weiter",
+  clock_out: "Gehen",
+};
+
+function renderTimeCorrectionReviewEntries(entries = []) {
+  if (!elements.timeCorrectionReviewEntries) return;
+  const normalized = entries.length ? entries : [{ type: "clock_in", time: "09:00" }, { type: "clock_out", time: "18:00" }];
+  elements.timeCorrectionReviewEntries.innerHTML = normalized.map((entry, index) => `<div class="time-correction-entry-row">
+    <label class="field"><span>Buchung ${index + 1}</span><select data-time-correction-entry-type>${Object.entries(timeCorrectionEntryLabels).map(([value, label]) => `<option value="${value}" ${entry.type === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+    <label class="field"><span>Uhrzeit</span><input data-time-correction-entry-time type="time" step="60" value="${escapeHtml(entry.time || String(entry.timestamp || "").slice(11, 16) || "")}" required /></label>
+    <button type="button" class="icon-button" data-remove-time-correction-entry aria-label="Buchung entfernen">×</button>
+  </div>`).join("");
+}
+
+function addTimeCorrectionReviewEntry() {
+  const entries = collectTimeCorrectionReviewEntries();
+  const lastType = entries.at(-1)?.type || "clock_out";
+  const nextType = lastType === "clock_in" || lastType === "break_end" ? "clock_out"
+    : lastType === "break_start" ? "break_end" : "clock_in";
+  entries.push({ type: nextType, time: "" });
+  renderTimeCorrectionReviewEntries(entries);
+  [...elements.timeCorrectionReviewEntries.querySelectorAll("[data-time-correction-entry-time]")].at(-1)?.focus();
+}
+
+function collectTimeCorrectionReviewEntries() {
+  return [...(elements.timeCorrectionReviewEntries?.querySelectorAll(".time-correction-entry-row") || [])].map((row) => ({
+    type: row.querySelector("[data-time-correction-entry-type]").value,
+    time: row.querySelector("[data-time-correction-entry-time]").value,
+  })).filter((entry) => entry.time);
+}
+
 async function decideTimeCorrection(action) {
   const id = elements.timeCorrectionReviewId.value;
-  const entries = [
-    ["clock_in", elements.timeCorrectionReviewClockIn.value],
-    ["break_start", elements.timeCorrectionReviewBreakStart.value],
-    ["break_end", elements.timeCorrectionReviewBreakEnd.value],
-    ["clock_out", elements.timeCorrectionReviewClockOut.value],
-  ].filter(([, time]) => time).map(([type, time]) => ({ type, time }));
+  const entries = collectTimeCorrectionReviewEntries();
   try {
     await api(`/api/portal/v1/time-corrections/${encodeURIComponent(id)}/decision`, {
       method: "PUT",
@@ -2379,7 +2749,8 @@ function setView(view) {
   if (view === "requests") loadManagerVacationRequests();
   if (view === "timeTracking") {
     initializeTimeSummaryDates();
-    Promise.all([loadTimePresence(), loadTimeSummary(), loadTimeCorrections()]);
+    initializeTimeReviewDate();
+    Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]);
     timePresenceRefreshTimer = setInterval(() => { if (!document.hidden && state.currentView === "timeTracking") loadTimePresence(); }, 30000);
   }
 }
@@ -2402,14 +2773,19 @@ function setSettingsTab(tab) {
   elements.brandingSettings.classList.toggle("active", tab === "branding");
   elements.pdfSettings.classList.toggle("active", tab === "pdf");
   elements.personnelSettings.classList.toggle("active", tab === "personnel");
+  elements.wifiAutomationSettings?.classList.toggle("active", tab === "wifiAutomation");
   elements.accessSettings.classList.toggle("active", tab === "access");
   elements.rightsSettings?.classList.toggle("active", tab === "rights");
   elements.backupSettings.classList.toggle("active", tab === "backup");
+  const canSaveGeneralSettings = !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("settings:write");
+  elements.saveSettingsButton?.classList.toggle("hidden", tab === "wifiAutomation" || !canSaveGeneralSettings);
   if (tab === "access") {
     loadPortalUsers();
     loadAmuSettings();
   }
   if (tab === "rights") loadRightsManagement();
+  if (tab === "wifiAutomation") loadWifiAutomationSettings();
   if (tab === "branding") Promise.all([loadManagementBrandingPreference(), loadBrandingAssignments()]).then(() => renderSettings()).catch((error) => showToast(error.message, true));
 }
 
@@ -2442,6 +2818,11 @@ function updateEmployeeDepartmentOptions(selectedDepartmentId = "") {
 }
 
 function openEmployeeModal(employee = null) {
+  const permissions = state.portalSession?.user?.permissions || [];
+  const fullAccess = !state.portalStatus?.portalEnabled || permissions.includes("employees:write");
+  const displayAccess = Boolean(employee) && permissions.includes("employees:display:write");
+  if (!fullAccess && !displayAccess) return;
+  state.employeeEditMode = fullAccess ? "full" : "display";
   elements.employeeForm.reset();
   elements.employeeHomeLocation.innerHTML = (state.locations || []).map((location) =>
     `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`,
@@ -2455,6 +2836,9 @@ function openEmployeeModal(employee = null) {
     `<option value="${escapeHtml(position.id)}">${escapeHtml(position.name)}</option>`,
   ).join("");
   elements.employeePosition.value = employee?.position_id || "verkaufsmitarbeiter";
+  const canManageConfirmationLevel = canManageWifiAutomationSettings();
+  elements.employeeTimeConfirmationLevel.value = employee?.time_confirmation_level || "C";
+  elements.employeeTimeConfirmationLevelField?.classList.toggle("hidden", !canManageConfirmationLevel);
   elements.employeeHomeLocation.value = employee?.home_location_id || state.locationId || state.locations?.[0]?.id || "01";
   updateEmployeeDepartmentOptions(employee?.preferred_department_id || "");
   document.querySelector("#employeePreferredDay").value = employee?.preferred_day_off || "";
@@ -2464,8 +2848,19 @@ function openEmployeeModal(employee = null) {
   });
   document.querySelector("#employeeActive").checked = employee?.active ?? true;
   updateColorPicker(employee?.color || "#0b84c6");
-  elements.employeeModalTitle.textContent = employee ? `${employee.nickname} bearbeiten` : "Teammitglied anlegen";
-  elements.deleteEmployeeButton.classList.toggle("hidden", !employee);
+  const displayOnly = state.employeeEditMode === "display";
+  const protectedControls = [
+    "employeeName", "employeeNickname", "employeeHours", "employeeHomeLocation", "employeePosition",
+    "employeeTimeConfirmationLevel", "employeePreferredDepartment", "employeePreferredDay", "employeeActive",
+  ];
+  for (const id of protectedControls) document.querySelector(`#${id}`).disabled = displayOnly;
+  elements.employeeTimeConfirmationLevel.disabled = displayOnly || !canManageConfirmationLevel;
+  document.querySelectorAll('[name="employeeFixedWorkday"]').forEach((control) => { control.disabled = displayOnly; });
+  document.querySelector("#employeeColorPicker").disabled = false;
+  document.querySelector("#employeeColorHex").disabled = false;
+  elements.employeeModalTitle.textContent = displayOnly ? `${employee.nickname} · Farbe ändern` : employee ? `${employee.nickname} bearbeiten` : "Teammitglied anlegen";
+  elements.employeeEditScopeHint?.classList.toggle("hidden", !displayOnly);
+  elements.deleteEmployeeButton.classList.toggle("hidden", !employee || displayOnly);
   elements.employeeModal.showModal();
 }
 
@@ -2756,6 +3151,18 @@ async function saveEmployee(event) {
   event.preventDefault();
   const number = document.querySelector("#employeeNumber").value.trim();
   const isEdit = document.querySelector("#employeeNumber").disabled;
+  if (isEdit && state.employeeEditMode === "display") {
+    try {
+      await api(`/api/employees/${encodeURIComponent(number)}/display`, {
+        method: "PATCH",
+        body: JSON.stringify({ color: state.selectedColor }),
+      });
+      elements.employeeModal.close();
+      showToast("Die Teamfarbe wurde aktualisiert.");
+      await loadAll();
+    } catch (error) { showToast(error.message, true); }
+    return;
+  }
   const body = {
     personnelNumber: number,
     fullName: document.querySelector("#employeeName").value,
@@ -2769,6 +3176,7 @@ async function saveEmployee(event) {
     color: state.selectedColor,
     active: document.querySelector("#employeeActive").checked,
   };
+  if (canManageWifiAutomationSettings()) body.timeConfirmationLevel = elements.employeeTimeConfirmationLevel.value;
   try {
     await api(isEdit ? `/api/employees/${encodeURIComponent(number)}` : "/api/employees", {
       method: isEdit ? "PUT" : "POST",
@@ -2780,6 +3188,22 @@ async function saveEmployee(event) {
   } catch (error) { showToast(error.message, true); }
 }
 
+function canManageTimeTrackingSettings() {
+  return !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("time:settings");
+}
+
+function syncLocationTimeTrackingFields() {
+  const canManage = canManageTimeTrackingSettings();
+  const trustedNetwork = elements.locationTimeTrackingAccessMode?.value === "trusted_network";
+  for (const field of [elements.locationTimeTrackingEnabled, elements.locationTimeTrackingAccessMode, elements.locationTimeTrackingVarianceMinutes]) {
+    if (field) field.disabled = !canManage;
+  }
+  if (elements.locationTimeTrackingAllowedNetworks) {
+    elements.locationTimeTrackingAllowedNetworks.disabled = !canManage || !trustedNetwork;
+  }
+}
+
 function resetLocationForm() {
   state.editingLocationId = null;
   elements.locationForm.reset();
@@ -2787,6 +3211,10 @@ function resetLocationForm() {
   elements.locationMinStaff.value = 0;
   elements.locationActive.checked = true;
   elements.locationTimeTrackingEnabled.checked = false;
+  elements.locationTimeTrackingAccessMode.value = "anywhere";
+  elements.locationTimeTrackingAllowedNetworks.value = "";
+  elements.locationTimeTrackingVarianceMinutes.value = "15";
+  syncLocationTimeTrackingFields();
   setLocationDayFields(currentLocation()?.day_settings || state.locations?.[0]?.day_settings || {});
   elements.locationSubmitButton.textContent = "Filiale anlegen";
   const title = elements.locationEditorModal?.querySelector(".modal-header h2");
@@ -2801,6 +3229,10 @@ function fillLocationForm(location) {
   elements.locationMinStaff.value = Number(location.min_staff || 0);
   elements.locationActive.checked = Boolean(location.active);
   elements.locationTimeTrackingEnabled.checked = Boolean(location.time_tracking_enabled);
+  elements.locationTimeTrackingAccessMode.value = location.time_tracking_access_mode === "trusted_network" ? "trusted_network" : "anywhere";
+  elements.locationTimeTrackingAllowedNetworks.value = location.time_tracking_allowed_networks || "";
+  elements.locationTimeTrackingVarianceMinutes.value = String(Number(location.time_tracking_variance_minutes ?? 15));
+  syncLocationTimeTrackingFields();
   setLocationDayFields(location.day_settings || {});
   elements.locationSubmitButton.textContent = "Filiale speichern";
   const title = elements.locationEditorModal?.querySelector(".modal-header h2");
@@ -2843,6 +3275,12 @@ async function saveLocation(event) {
   const isEdit = Boolean(state.editingLocationId);
   const id = isEdit ? state.editingLocationId : elements.locationId.value;
   try {
+    const timeTrackingSettings = canManageTimeTrackingSettings() ? {
+      timeTrackingEnabled: elements.locationTimeTrackingEnabled.checked,
+      timeTrackingAccessMode: elements.locationTimeTrackingAccessMode.value,
+      timeTrackingAllowedNetworks: elements.locationTimeTrackingAllowedNetworks.value,
+      timeTrackingVarianceMinutes: Number(elements.locationTimeTrackingVarianceMinutes.value || 15),
+    } : {};
     state.locations = await api(isEdit ? `/api/locations/${encodeURIComponent(id)}` : "/api/locations", {
       method: isEdit ? "PUT" : "POST",
       body: JSON.stringify({
@@ -2850,7 +3288,7 @@ async function saveLocation(event) {
         name: elements.locationName.value,
         minStaff: Number(elements.locationMinStaff.value || 0),
         active: elements.locationActive.checked,
-        timeTrackingEnabled: elements.locationTimeTrackingEnabled.checked,
+        ...timeTrackingSettings,
         daySettings: readLocationDayFields(),
       }),
     });
@@ -3264,16 +3702,22 @@ async function handleUpdateButton() {
 }
 
 async function exitApplication() {
-  if (!confirm("Grabenplaner sicher beenden? Danach kannst du dieses Browserfenster schließen.")) return;
+  const serverActive = state.portalStatus?.operationMode === "server";
+  const question = serverActive
+    ? "Den Grabenplaner-Server wirklich sicher beenden? Andere angemeldete Personen verlieren dabei die Verbindung."
+    : "Grabenplaner sicher beenden? Danach kannst du dieses Browserfenster schließen.";
+  if (!confirm(question)) return;
   if (elements.systemExitButton) elements.systemExitButton.disabled = true;
   try {
     const result = await api("/api/system/exit", {
       method: "POST",
       body: JSON.stringify({}),
     });
-    showToast(result.message || "Grabenplaner wird beendet.");
+    showToast(result.message || (serverActive ? "Der Server wird beendet." : "Grabenplaner wird beendet."));
     setTimeout(() => {
-      document.body.innerHTML = '<main class="shutdown-screen"><h1>Grabenplaner wurde beendet.</h1><p>Du kannst dieses Fenster schließen. Den USB-Stick bitte bei Bedarf selbst über Windows sicher auswerfen.</p></main>';
+      document.body.innerHTML = serverActive
+        ? '<main class="shutdown-screen"><h1>Grabenplaner-Server wurde beendet.</h1><p>Du kannst dieses Fenster schließen.</p></main>'
+        : '<main class="shutdown-screen"><h1>Grabenplaner wurde beendet.</h1><p>Du kannst dieses Fenster schließen. Den USB-Stick bitte bei Bedarf selbst über Windows sicher auswerfen.</p></main>';
     }, 900);
   } catch (error) {
     if (elements.systemExitButton) elements.systemExitButton.disabled = false;
@@ -3482,7 +3926,7 @@ async function saveSettings(silent = false) {
       method: "PUT",
       body: JSON.stringify(payload),
     });
-    if ((!portalEnabled || ["admin", "hr"].includes(role)) && elements.brandingSettings?.classList.contains("active") && state.brandingFormDirty) {
+    if ((!portalEnabled || permissions.includes("branding:write")) && elements.brandingSettings?.classList.contains("active") && state.brandingFormDirty) {
       await saveCustomManagementBranding();
     }
     if (result.restartRequired && !silent) {
@@ -3648,13 +4092,21 @@ elements.delegationList?.addEventListener("click", async (event) => {
   try { await api(`/api/portal/v1/approval-delegations/${row.dataset.delegationId}`, { method: "DELETE" }); await loadApprovalDelegations(); } catch (error) { showToast(error.message, true); }
 });
 elements.refreshRequestsButton?.addEventListener("click", loadManagerVacationRequests);
-elements.refreshTimePresenceButton?.addEventListener("click", () => Promise.all([loadTimePresence(), loadTimeSummary(), loadTimeCorrections()]));
+elements.refreshTimePresenceButton?.addEventListener("click", () => Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]));
+elements.loadTimeDayReviewButton?.addEventListener("click", loadTimeDayReview);
+elements.timeReviewFilter?.addEventListener("change", renderTimeDayReview);
 elements.loadTimeSummaryButton?.addEventListener("click", loadTimeSummary);
 elements.timeTrackingLocation?.addEventListener("change", () => {
   refreshTimePresenceDepartments();
-  Promise.all([loadTimePresence(), loadTimeSummary(), loadTimeCorrections()]);
+  Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]);
 });
-elements.timeTrackingDepartment?.addEventListener("change", () => Promise.all([loadTimePresence(), loadTimeSummary(), loadTimeCorrections()]));
+elements.timeTrackingDepartment?.addEventListener("change", () => Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]));
+elements.timeDayReviewList?.addEventListener("click", (event) => {
+  const row = event.target.closest("[data-time-day-employee]");
+  if (row && event.target.closest("[data-open-time-day-review]")) openTimeDayReview(row.dataset.timeDayEmployee);
+});
+elements.timeDayReviewForm?.addEventListener("submit", (event) => { event.preventDefault(); saveTimeDayReview(true); });
+elements.removeTimeDayReviewButton?.addEventListener("click", () => saveTimeDayReview(false));
 elements.timeCorrectionRequestList?.addEventListener("click", (event) => {
   const row = event.target.closest("[data-time-correction-request]");
   if (row && event.target.closest("[data-review-time-correction]")) openTimeCorrectionReview(row.dataset.timeCorrectionRequest);
@@ -3662,6 +4114,17 @@ elements.timeCorrectionRequestList?.addEventListener("click", (event) => {
 elements.timeCorrectionReviewForm?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-time-correction-decision]");
   if (button) decideTimeCorrection(button.dataset.timeCorrectionDecision);
+});
+elements.addTimeCorrectionReviewEntry?.addEventListener("click", addTimeCorrectionReviewEntry);
+elements.timeCorrectionReviewEntries?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-remove-time-correction-entry]");
+  if (!button) return;
+  const rows = elements.timeCorrectionReviewEntries.querySelectorAll(".time-correction-entry-row");
+  if (rows.length <= 2) {
+    showToast("Eine vollständige Korrektur benötigt mindestens Kommen und Gehen.", true);
+    return;
+  }
+  button.closest(".time-correction-entry-row")?.remove();
 });
 elements.timePresenceList?.addEventListener("click", (event) => {
   const correctionButton = event.target.closest("[data-resolve-stale]");
@@ -3673,6 +4136,7 @@ elements.timePresenceList?.addEventListener("click", (event) => {
   if (button) openPersonnelRecord(button.dataset.personnelRecord);
 });
 elements.timeCorrectionForm?.addEventListener("submit", submitStaleTimeCorrection);
+elements.locationTimeTrackingAccessMode?.addEventListener("change", syncLocationTimeTrackingFields);
 elements.managerVacationRequestList?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-open-request-action]");
   const row = button?.closest("[data-manager-request]");
@@ -3693,10 +4157,12 @@ elements.requestWorkflowSummary?.addEventListener("click", (event) => {
 });
 elements.vacationHrApprovalRequired?.addEventListener("change", (event) => toggleHrWorkflow(event.target.checked));
 elements.saveAmuSettingsButton?.addEventListener("click", saveAmuSettings);
+elements.rightsEmployeeSearch?.addEventListener("input", renderRightsManagement);
 elements.rightsUserList?.addEventListener("click", (event) => {
   const card = event.target.closest("[data-rights-user]");
-  if (card && event.target.closest("[data-save-user-rights]")) saveUserRights(card);
+  if (card && event.target.closest("[data-edit-user-rights]")) openRightsEditor(card.dataset.rightsUser);
 });
+elements.rightsEditorForm?.addEventListener("submit", saveUserRights);
 elements.saveMobileLeadershipSettingsButton?.addEventListener("click", saveMobileLeadershipSettings);
 elements.requestActionForm?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-request-action]");
@@ -3750,6 +4216,18 @@ elements.brandingAssignmentList?.addEventListener("click", (event) => {
   if (event.target.closest("[data-save-branding-assignments]")) saveBrandingAssignments();
 });
 document.querySelectorAll("[data-settings-tab]").forEach((button) => button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab)));
+elements.saveWifiAutomationSettingsButton?.addEventListener("click", saveWifiAutomationSettings);
+elements.saveWifiLocationMappingsButton?.addEventListener("click", saveWifiLocationMappings);
+elements.saveWifiConfirmationLevelsButton?.addEventListener("click", saveWifiConfirmationLevels);
+elements.wifiConfirmationLevelSearch?.addEventListener("input", renderWifiConfirmationLevels);
+elements.wifiConfirmationLevelList?.addEventListener("change", (event) => {
+  const select = event.target.closest("[data-wifi-confirmation-level]");
+  if (!select) return;
+  const employee = (state.wifiAutomationSettings?.employees || [])
+    .find((item) => item.employeeNumber === select.dataset.wifiConfirmationLevel);
+  if (employee) employee.level = select.value;
+});
+[elements.wifiMinimumPresenceMinutes, elements.wifiAbsenceGraceMinutes].forEach((input) => input?.addEventListener("input", updateWifiAutomationRuleHint));
 document.querySelectorAll("[data-personnel-tab]").forEach((button) => button.addEventListener("click", () => setPersonnelTab(button.dataset.personnelTab)));
 document.querySelector(".main-nav").addEventListener("click", (event) => {
   const toggle = event.target.closest("[data-nav-toggle]");

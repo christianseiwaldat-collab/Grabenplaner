@@ -1,6 +1,6 @@
 {
   "name": "grabenplaner",
-  "version": "0.53.1-beta",
+  "version": "0.57.0-beta",
   "private": true,
   "description": "Web-App zur Erstellung und zum PDF-Export von Wochendienstplänen",
   "main": "server.js",
@@ -8,7 +8,8 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test",
-    "codespaces": "node scripts/codespaces-runner.js"
+    "codespaces": "node scripts/codespaces-runner.js",
+    "developer:set": "node scripts/set-developer.js"
   },
   "engines": {
     "node": ">=22"

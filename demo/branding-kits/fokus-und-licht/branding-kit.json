@@ -1,0 +1,23 @@
+{
+  "format": "grabenplaner-branding-kit",
+  "version": 1,
+  "name": "Fokus & Licht Fotohandel",
+  "branding": {
+    "appName": "Grabenplaner",
+    "companyName": "Fokus & Licht Fotohandel",
+    "logoUrl": "assets/fokus-und-licht-logo.svg",
+    "iconUrl": "assets/fokus-und-licht-icon.svg",
+    "logoAlt": "Fokus & Licht Fotohandel",
+    "adminEmail": ""
+  },
+  "assets": {
+    "logo": "assets/fokus-und-licht-logo.svg",
+    "icon": "assets/fokus-und-licht-icon.svg"
+  },
+  "pdf": {
+    "scheduleTitle": "Dienstplan Fokus & Licht",
+    "scheduleFilenamePrefix": "Dienstplan-Fokus-und-Licht",
+    "vacationTitle": "Urlaubsplanung Fokus & Licht",
+    "vacationFilenamePrefix": "Urlaubsplanung-Fokus-und-Licht"
+  }
+}

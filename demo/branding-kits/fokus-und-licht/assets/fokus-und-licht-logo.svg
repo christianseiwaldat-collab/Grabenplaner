@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 220" role="img" aria-labelledby="title desc">
+  <title id="title">Fokus &amp; Licht Fotohandel</title>
+  <desc id="desc">Gruen-gelbes fiktives Markenlogo mit Kamera und Lichtpunkt.</desc>
+  <rect width="760" height="220" rx="34" fill="#f2f6ec"/>
+  <rect x="34" y="34" width="152" height="152" rx="34" fill="#176b57"/>
+  <path d="M69 84h27l12-18h33l12 18h10c10 0 18 8 18 18v52c0 10-8 18-18 18H69c-10 0-18-8-18-18v-52c0-10 8-18 18-18Z" fill="none" stroke="#fff" stroke-width="12" stroke-linejoin="round"/>
+  <circle cx="116" cy="128" r="28" fill="none" stroke="#ffd34e" stroke-width="12"/>
+  <circle cx="158" cy="105" r="7" fill="#ffd34e"/>
+  <text x="218" y="105" font-family="Arial, sans-serif" font-size="48" font-weight="700" fill="#153c34">Fokus &amp; Licht</text>
+  <text x="220" y="148" font-family="Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="2" fill="#54756b">FOTOHANDEL</text>
+</svg>

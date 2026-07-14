@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Berg und Ball">
+  <rect width="128" height="128" rx="28" fill="#15354a"/>
+  <path d="M17 100 52 40l21 31 14-21 28 50Z" fill="#fff"/>
+  <circle cx="91" cy="37" r="17" fill="#f28c35"/>
+  <path d="m82 25 9 12 11-8M75 37h16l6 14" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+</svg>
