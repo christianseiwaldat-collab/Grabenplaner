@@ -150,13 +150,20 @@ async function api(url, options = {}) {
   const headers = { ...(formData ? {} : { "Content-Type": "application/json" }), ...options.headers };
   const token = csrf();
   if (token && !["GET", "HEAD"].includes(String(options.method || "GET").toUpperCase())) headers["X-CSRF-Token"] = token;
-  const response = await fetch(url, { ...options, headers });
+  let response;
+  try {
+    response = await fetch(url, { ...options, headers });
+  } catch (error) {
+    throw window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname });
+  }
   if (!response.ok) {
-    let payload = {};
-    try { payload = await response.json(); } catch {}
-    const error = new Error(payload.error || "Die Aktion konnte nicht ausgeführt werden.");
+    const detail = await window.GrabenplanerApiErrors.fromResponse(response, {
+      hostname: location.hostname,
+      fallback: "Die Aktion konnte nicht ausgeführt werden.",
+    });
+    const error = new Error(detail.message);
     error.status = response.status;
-    error.code = payload.code || "";
+    error.code = detail.code;
     if (response.status === 401) showLogin("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
     throw error;
   }

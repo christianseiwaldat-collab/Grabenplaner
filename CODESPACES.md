@@ -20,6 +20,8 @@ Der Port-Eintrag `protocol: "http"` beschreibt dabei nur die interne Verbindung 
 
 Zum Anmelden immer die Adresse aus dem Bereich **PORTS** mit **Open in Browser** öffnen. Die App akzeptiert dabei sowohl die konfigurierte Codespaces-Adresse als auch die vom vertrauenswürdigen GitHub-Proxy gemeldete gleichursprüngliche Weiterleitungsadresse.
 
+War der Codespace zwischenzeitlich beendet oder ist die GitHub-Anmeldung des privaten Ports abgelaufen, eine noch offene Portal-Seite nicht weiterverwenden: Codespace starten, den Port `3000` erneut unter **PORTS** mit **Open in Browser** öffnen und den Start kurz abwarten. Das Portal zeigt für diesen Fall eine eigene Hinweismeldung; die Sicherheitsprüfung der App wird dabei nicht gelockert.
+
 Das Sporthandelsprofil wird ausschließlich in einer frischen, leeren Demo-Datenbank angelegt. Bereits vorhandene Codespaces-Testdaten werden nicht automatisch überschrieben.
 
 Die private URL lautet:

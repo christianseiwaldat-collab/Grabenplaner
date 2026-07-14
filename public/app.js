@@ -399,21 +399,20 @@ async function api(url, options = {}) {
   if (csrfToken && !["GET", "HEAD"].includes(String(options.method || "GET").toUpperCase())) {
     headers["X-CSRF-Token"] = decodeURIComponent(csrfToken);
   }
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  let response;
+  try {
+    response = await fetch(url, { ...options, headers });
+  } catch (error) {
+    throw window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname });
+  }
   if (!response.ok) {
-    let message = "Die Aktion konnte nicht ausgeführt werden.";
-    let code = "";
-    try {
-      const payload = await response.json();
-      message = payload.error || message;
-      code = payload.code || "";
-    } catch {}
-    const error = new Error(message);
+    const detail = await window.GrabenplanerApiErrors.fromResponse(response, {
+      hostname: location.hostname,
+      fallback: "Die Aktion konnte nicht ausgeführt werden.",
+    });
+    const error = new Error(detail.message);
     error.status = response.status;
-    error.code = code;
+    error.code = detail.code;
     if (response.status === 401 && elements.loginGate) showLoginGate("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
     throw error;
   }
