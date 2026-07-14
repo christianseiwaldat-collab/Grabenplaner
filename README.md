@@ -1,18 +1,77 @@
 # Grabenplaner
 
-Aktuelle Beta-Version: **v0.55 Beta**
+<p align="center">
+  <img src="public/assets/grabenplaner-logo.svg" alt="Grabenplaner – Dienst- und Urlaubsplanung" width="430">
+</p>
 
-Grabenplaner ist eine lokale Windows-Web-App für Dienstplanung, Urlaubsplanung und PDF-Ausgaben. Die Daten bleiben lokal in einer SQLite-Datenbank; ein externer Datenbankserver ist nicht nötig.
+<p align="center"><strong>Dienstplanung, Abwesenheiten und Zeiterfassung – passend für eine Filiale oder eine ganze Organisation.</strong></p>
 
-## Direkt starten
+<p align="center">
+  Grabenplaner verbindet Wochenplanung, Urlaubsverwaltung, Personalorganisation und ein smartphonegerechtes Mitarbeiterportal in einer übersichtlichen Anwendung. Filialen und Abteilungen bleiben sauber getrennt, Rechte lassen sich gezielt vergeben und jedes Unternehmen kann seinen eigenen Auftritt über wiederverwendbare Branding-Kits einrichten.
+</p>
 
-Unter Windows genügt ein Doppelklick auf:
+<p align="center">
+  <strong>v0.55 Beta</strong> · Windows · SQLite · Source-available
+</p>
 
-`Grabenplaner v0.55 Beta starten.cmd`
+<p align="center">
+  <a href="output/pdf/Grabenplaner-Prospekt-A4.pdf"><strong>Produktprospekt ansehen</strong></a>
+  &nbsp;·&nbsp;
+  <a href="output/pdf/Grabenplaner-Prospekt-Druckbogen-A3.pdf">Druckbogen herunterladen</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest">Aktuelle Version</a>
+</p>
 
-Die App öffnet anschließend lokal unter:
+## Eine App, drei Betriebsmodelle
 
-http://localhost:3000
+| Betriebsmodell | Status | Geeignet für |
+|---|---|---|
+| **Lokalbetrieb** | Verfügbar | Ein Windows-PC oder eine portable Installation mit lokaler SQLite-Datenbank |
+| **LAN-Host** | Verfügbar | Eine zentrale Installation, auf die weitere Geräte im vertrauenswürdigen Firmennetz per Browser und Login zugreifen |
+| **Serverbetrieb mit HTTPS** | Technische Pilotbasis | Eine zentrale Serverinstallation mit Reverse Proxy; vor einem Produktiveinsatz durch die zuständige Firmen-IT einzurichten und zu prüfen |
+
+Der Lokalbetrieb bleibt der unkomplizierte Standard. Im LAN-Host-Modus liegt die Datenbank ausschließlich am Host-PC. Für den Serverbetrieb sind neutrale Installations-, Diagnose-, Backup- und Wiederherstellungsvorlagen vorhanden; er ist derzeit noch nicht als allgemein freigegebener Produktivmodus ausgewiesen. Details stehen in [SERVERBETRIEB.md](SERVERBETRIEB.md).
+
+## Planung, Verwaltung und Mitarbeiterportal
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/readme/dienstplanung.webp" alt="Neutrale Dienstplanung im Grabenplaner" width="420">
+      <h3>Dienstplanung, die sofort lesbar ist</h3>
+      <p>Dienste für Filialen und Abteilungen planen, Mindestbesetzungen im Blick behalten und übersichtliche Wochen- oder Abteilungspläne als PDF ausgeben.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/readme/teams-standorte.webp" alt="Teams und Standorte im Grabenplaner verwalten" width="420">
+      <h3>Teams und Standorte einfach verwalten</h3>
+      <p>Teammitglieder, Positionen, Sollstunden, individuelle Arbeitsregeln sowie Standort- und Abteilungszuordnungen werden zentral gepflegt.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/readme/rechtemanagement.webp" alt="Rollen und personenbezogene Rechte im Grabenplaner" width="420">
+      <h3>Rechte passend zur Organisation</h3>
+      <p>Rollen bilden den sicheren Ausgangspunkt. Berechtigte Stellen können zusätzliche Rechte gezielt pro Person und innerhalb des zugewiesenen Bereichs vergeben.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/readme/branding-kits.webp" alt="Branding-Kits und standortbezogene Zuweisung" width="420">
+      <h3>Ein Auftritt – oder einer je Filiale</h3>
+      <p>Branding-Kits mit Logo, Farben und PDF-Vorgaben lassen sich importieren, exportieren und unterschiedlichen Standorten zuweisen. Der Produktname <strong>Grabenplaner</strong> bleibt unverändert.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/readme/mitarbeiterportal.webp" alt="Smartphonegerechtes Mitarbeiterportal mit Zeiterfassung" width="300">
+      <h3>Für Mitarbeitende auf Smartphones gemacht</h3>
+      <p>Dienstplan ansehen, Arbeitszeit buchen sowie Urlaub, Zeitausgleich und Änderungen beantragen – mit einer bewusst einfachen mobilen Oberfläche.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/readme/aum-upload.webp" alt="Geschützter AUM-Upload im Mitarbeiterportal" width="300">
+      <h3>AUM direkt übermitteln</h3>
+      <p>Arbeitsunfähigkeitsmeldungen können als Dokument oder Handyfoto hochgeladen, aufbereitet und nur für entsprechend berechtigte Personen zugänglich gemacht werden.</p>
+    </td>
+  </tr>
+</table>
 
 ## Key Features
 
@@ -22,47 +81,50 @@ http://localhost:3000
 - Automatische Anrechnung von Feiertagen
 - Urlaubsplanung mit Jahres-, Quartals- und Monatsübersicht
 - PDF-Export für Dienstpläne, Abteilungspläne und Urlaubsübersichten
-- Wochenstundenübersicht und Auswertung je Teammitglied
-- Mitarbeiterportal mit Anträgen, AUM-Upload und Zeiterfassung
+- Wochenstundenübersicht, Plan-/Ist-Vergleich, Pausenhinweise und Samstagswertung
+- Mitarbeiterportal mit Urlaubs- und ZA-Anträgen, AUM-Upload und Zeiterfassung
 - Wochen- und Monatsübersichten der Zeiterfassung mit nachvollziehbaren Korrekturanträgen
-- Tagesprüfung mit Plan-/Ist-Vergleich, Pausenhinweisen und Samstagswertung
-- Rollen- und Rechtemanagement mit personenbezogenen Zusatzrechten und getrennten Vergabegrenzen für IT-Admin und Personalleitung
 - Mobil optimiertes Leitungsportal mit konfigurierbaren Kernfunktionen
-- Standortbezogene Branding-Zuweisung für unterschiedliche Filialauftritte
+- Rollen- und Rechtemanagement mit personenbezogenen Zusatzrechten und Bereichsgrenzen
+- Standortbezogene Branding-Kits für unterschiedliche Filialauftritte
 - Lokale SQLite-Datenbank ohne externen Datenbankserver
-- Integriertes Backup-System
-- GitHub-basierter Aktualisierungscheck
+- Integriertes Backup-System und GitHub-basierter Aktualisierungscheck
 
-## Branding
+## Schutz sensibler AUM-Daten
 
-Firmenname, Logo, Admin-Kontakt und PDF-Titel können in den Einstellungen angepasst und als komplettes Branding-Kit exportiert oder importiert werden. Admin und Personalleitung können installierte Brandings standortbezogen zuweisen. Der App-Name bleibt fest `Grabenplaner`.
+AUM-Dokumente werden außerhalb des öffentlichen Webordners gespeichert und zusätzlich mit **AES-256-GCM** verschlüsselt. Auch geschützte AUM-Metadaten können verschlüsselt abgelegt werden. Die Anwendung prüft Dateitypen anhand ihres Inhalts; Bilder können platzsparend in eine A4-PDF-Datei umgewandelt werden. Im vorgesehenen Serverbetrieb ergänzt eine verpflichtende Virenscanner-Prüfung den Uploadprozess.
 
-## Lizenz
+Der Zugriff folgt eigenen, besonders eingeschränkten AUM-Rechten. Zusammengehörige Datenbank- und AUM-Sicherungen werden über Manifest und Prüfsummen gekoppelt. Diese zusätzlichen Schutzmaßnahmen ersetzen nicht HTTPS, sichere Betriebssystem- und Dateiberechtigungen, eine geschützte Schlüsselverwaltung und ein geprüftes Backupkonzept.
 
-Grabenplaner ist source-available, aber nicht Open Source. Private, interne Test- und Evaluierungsnutzung ist erlaubt; kommerzielle Nutzung nur nach vorheriger schriftlicher Genehmigung.
+## In Vorbereitung
 
-## Sicherheit
+- **Schnittstellen zur Lohnverrechnung:** Standardisierte Exporte für Arbeitszeiten, Abwesenheiten und relevante Personalstammdaten sind geplant, aber noch nicht verfügbar. Unterstützte Zielformate und Lohnverrechnungssysteme werden erst mit der konkreten Schnittstelle festgelegt.
+- Weitere Produktivhärtung und IT-gestützte Einführung des öffentlichen HTTPS-Serverbetriebs
+- Erweiterte Auswertungs- und Integrationsmöglichkeiten
 
-Sicherheitsprobleme bitte vertraulich gemäß [SECURITY.md](SECURITY.md) melden und nicht als öffentliches Issue veröffentlichen.
+## Schnellstart unter Windows
 
-## Servermodus
+1. Die portable ZIP-Datei unter [Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
+2. `Grabenplaner v0.55 Beta starten.cmd` doppelt anklicken.
+3. Die App öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
-Der aktuelle Betrieb bleibt lokal mit SQLite-Datenbank. Ein Servermodus ist technisch in Vorbereitung, aber noch nicht aktiv.
+Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in der App eingerichtet werden.
 
-Die technische Grundlage und die spätere Einrichtung mit Firmen-IT sind in [SERVERBETRIEB.md](SERVERBETRIEB.md) beschrieben.
+Aktualisierungen werden über GitHub geprüft. Die integrierte Aktualisierung ersetzt die Programmdateien kontrolliert und startet die App neu; Datenbank, Backups, AUM-Dateien und lokale Laufzeitkonfiguration bleiben geschützt.
 
-Eine private GitHub-Codespaces-Umgebung für Demo- und Funktionstests der Rollen-, Portal- und Zeiterfassungsabläufe ist in [CODESPACES.md](CODESPACES.md) beschrieben. Dort dürfen keine echten Personal- oder Gesundheitsdaten verwendet werden.
+## Technische Grundlage
 
-## Backup und Datenbank
+| Bereich | Umsetzung |
+|---|---|
+| Anwendung | Lokale beziehungsweise zentral bereitgestellte Web-App mit Node.js und Express |
+| Datenbank | SQLite, ohne separaten Datenbankserver |
+| PDF-Ausgabe | PDFKit |
+| Bild- und Dokumentaufbereitung | Sharp und PDFKit |
+| Geschützter AUM-Speicher | AES-256-GCM, private Ablage und gekoppelte Sicherungspunkte |
+| Authentifizierung | Rollen, Sitzungen, CSRF-Schutz und bereichsbezogene Berechtigungen |
+| Server-Pilot | HTTPS-Reverse-Proxy, Dienstbetrieb, Diagnose-, Backup- und Restore-Vorlagen |
 
-- Beim Start wird automatisch eine interne Sicherung im Ordner `backups` erstellt.
-- Optional kann zusätzlich regelmäßig in einen lokalen PC-Ordner gesichert werden.
-- Backup-Dateien können über die App wieder importiert werden.
-- Die echte Arbeitsdatenbank liegt lokal unter `data\dienstplan.db` und ist nicht Teil der GitHub-Release-ZIP.
-
-## Entwicklung
-
-Mit lokal installiertem Node.js 22 oder neuer:
+Für lokale Entwicklung wird Node.js 22 oder neuer benötigt:
 
 ```powershell
 corepack enable
@@ -76,3 +138,15 @@ Der Port kann über die Umgebungsvariable `PORT` geändert werden:
 $env:PORT=8080
 pnpm start
 ```
+
+Eine private GitHub-Codespaces-Umgebung für Demo- und Funktionstests ist in [CODESPACES.md](CODESPACES.md) beschrieben. Dort dürfen keine echten Personal-, Planungs- oder Gesundheitsdaten verwendet werden.
+
+## Branding und öffentliche Auslieferung
+
+Die öffentliche Grundauslieferung verwendet ausschließlich das neutrale Grabenplaner-Branding. Unternehmenslogos, geschützte Marken und kundenspezifische Voreinstellungen gehören in getrennte Branding-Kits und sind nicht Bestandteil dieses Repositorys.
+
+## Lizenz und Sicherheit
+
+Grabenplaner ist **source-available, aber nicht Open Source**. Private, interne Test- und Evaluierungsnutzung ist gemäß [LICENSE.md](LICENSE.md) erlaubt; kommerzielle Nutzung erfordert die vorherige schriftliche Genehmigung des Rechteinhabers.
+
+Sicherheitsprobleme bitte vertraulich nach den Hinweisen in [SECURITY.md](SECURITY.md) melden und nicht als öffentliches GitHub-Issue veröffentlichen.
