@@ -120,12 +120,12 @@
           <div class="leadership-more-grid">
             <button type="button" data-more-tab="timeOff"><strong>ZA beantragen</strong><span>Stundenweise, ganztägig oder mehrtägig</span></button>
             <button type="button" data-more-tab="vacation"><strong>Urlaub beantragen</strong><span>Neuen Urlaubsantrag einreichen</span></button>
-            <button type="button" data-more-tab="amu"><strong>Krankmeldung &amp; AUM</strong><span>Krankmelden oder Dokument sicher senden</span></button>
+            <button type="button" data-more-tab="amu"><strong>Krankmeldung &amp; AUM</strong><span>Krankmelden oder Dokument senden</span></button>
             <button type="button" id="leadershipPasswordButton"><strong>Passwort ändern</strong><span>Persönliches Passwort verwalten</span></button>
             <a id="leadershipDesktopLink" href="/?desktop=1"><strong>Desktop-Planung</strong><span>Vollständige Verwaltung am großen Bildschirm</span></a>
           </div>
           <section class="portal-card sickness-preferences-card hidden" id="sicknessNotificationPreferencesCard">
-            <div><span class="eyebrow">Nur bei gefährdeter Mindestbesetzung</span><h2>Zusätzliche Warnkanäle</h2><p>Die In-App-Meldung kommt immer sofort. Externe Warnungen werden frühestens ab der gewählten Uhrzeit versendet und enthalten keine Gesundheits- oder Personendaten.</p></div>
+            <div><span class="eyebrow">Nur bei gefährdeter Mindestbesetzung</span><h2>Zusätzliche Warnkanäle</h2><p>Die Portal-Meldung kommt immer sofort. Externe Warnungen werden frühestens ab der gewählten Uhrzeit versendet und enthalten keine Gesundheits- oder Personendaten.</p></div>
             <form id="sicknessNotificationPreferencesForm">
               <label><span>Externe Warnungen frühestens ab</span><input id="sicknessNotificationEarliestTime" type="time" value="08:00" required /></label>
               <div class="notification-channel-list" id="sicknessNotificationChannels"></div>
@@ -185,35 +185,58 @@
         </section>
 
         <section class="portal-view" id="amuView" role="tabpanel">
-          <div class="view-heading"><div><span class="eyebrow">Von zu Hause oder unterwegs</span><h1>Krankmeldung &amp; AUM</h1><p>Zuerst krankmelden; die AUM kann sicher nachgereicht werden.</p></div></div>
-          <div class="vacation-layout sickness-layout">
-            <form class="portal-card request-form" id="sicknessCaseForm">
-              <h2>Jetzt krankmelden</h2>
-              <div class="date-fields"><label><span>Beginn</span><input id="sicknessStartDate" type="date" required /></label><label><span>Voraussichtlich bis</span><input id="sicknessExpectedEnd" type="date" /></label></div>
-              <label><span>Bemerkung</span><textarea id="sicknessEmployeeNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
-              <p class="form-note">Die zuständige Filial- oder Abteilungsleitung wird sofort in der App informiert.</p>
+          <div class="sickness-hub-heading">
+            <span class="sickness-hub-icon" aria-hidden="true">
+              <svg viewBox="0 0 48 48"><path d="M16 8.5h16a4 4 0 0 1 4 4v27H12v-27a4 4 0 0 1 4-4Z"/><path d="M19 8.5V6h10v2.5M18 20h12M24 14v12"/></svg>
+            </span>
+            <div><span class="eyebrow">Von zu Hause oder unterwegs</span><h1>Krankmeldung &amp; AUM</h1><p>Krankmeldung senden, später eine AUM nachreichen und die Rückkehr melden – alles an einem Ort.</p></div>
+          </div>
+
+          <div class="sickness-hub-grid">
+            <form class="portal-card request-form sickness-report-card" id="sicknessCaseForm">
+              <div class="sickness-card-heading"><div><span class="eyebrow">Schritt 1</span><h2>Jetzt krankmelden</h2></div><span class="sickness-card-badge">Sofortmeldung</span></div>
+              <input id="sicknessStartDate" type="hidden" required />
+              <input id="sicknessExpectedEnd" type="hidden" />
+              <label class="range-trigger-field"><span>Zeitraum</span><button class="date-range-trigger" id="sicknessDateRangeButton" type="button" data-date-range-context="sickness" aria-haspopup="dialog" aria-controls="dateRangeDialog" aria-required="true"><span><strong id="sicknessDateRangeText">Beginn auswählen</strong><small>Das voraussichtliche Ende kann offenbleiben.</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z"/></svg></button></label>
+              <label><span>Bemerkung</span><textarea id="sicknessEmployeeNote" maxlength="500" rows="2" placeholder="Optional"></textarea></label>
+              <p class="form-note">Die zuständige Filial- oder Abteilungsleitung wird sofort im Portal informiert.</p>
               <p class="message hidden" id="sicknessMessage"></p>
-              <button class="primary" id="sicknessSubmitButton" type="submit">Krankmeldung senden</button>
+              <div class="sickness-form-actions"><button class="primary compact-primary" id="sicknessSubmitButton" type="submit">Krankmeldung senden</button></div>
             </form>
-            <section class="portal-card"><h2>Meine Krankmeldungen</h2><div class="request-list sickness-case-list" id="sicknessCaseList"></div></section>
+
+            <section class="portal-card sickness-cases-card">
+              <div class="sickness-card-heading"><div><span class="eyebrow">Aktueller Stand</span><h2>Meine Krankmeldungen</h2></div></div>
+              <div class="request-list sickness-case-list" id="sicknessCaseList"></div>
+            </section>
           </div>
-          <div class="view-heading approved-heading"><div><span class="eyebrow">Sicherer Personalakt</span><h2>AUM übermitteln</h2><p>Foto oder PDF anhängen. Bei Bildern erkennt die lokale OCR Beginn und Ende als prüfbaren Vorschlag.</p></div></div>
-          <div class="vacation-layout amu-layout">
-            <form class="portal-card request-form" id="amuReportForm">
-              <h2>Neue AUM</h2>
-              <label><span>Zur Krankmeldung</span><select id="amuSicknessCaseId"><option value="">Automatisch zuordnen</option></select></label>
-              <div class="date-fields"><label><span>Arbeitsunfähig von</span><input id="amuIncapacityFrom" type="date" required /></label><label><span>Voraussichtlich bis</span><input id="amuIncapacityTo" type="date" required /></label></div>
-              <label><span>Bemerkung</span><textarea id="amuEmployeeNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
-              <div class="amu-file-picker">
-                <label class="file-field"><span>Dokumente auswählen</span><input id="amuDocuments" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,.pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff" multiple /><small id="amuUploadHint">PDF oder Foto · höchstens 3 Dateien</small></label>
-                <label class="camera-button">Kamera<input id="amuCamera" type="file" accept="image/*" capture="environment" /></label>
-              </div>
-              <div class="amu-ocr-status hidden" id="amuOcrStatus" aria-live="polite"><span class="amu-ocr-spinner" aria-hidden="true"></span><div><strong id="amuOcrStatusTitle">Lokale Texterkennung</strong><small id="amuOcrStatusText"></small><label class="amu-ocr-confirm hidden" id="amuOcrConfirmField"><input id="amuOcrConfirmed" type="checkbox" /> Erkannte Datumswerte geprüft</label></div></div>
-              <p class="message hidden" id="amuMessage"></p>
-              <button class="primary" id="amuSubmitButton" type="submit">AUM sicher übermitteln</button>
-            </form>
-            <section class="portal-card"><h2>Meine AUM-Meldungen</h2><div class="request-list amu-report-list" id="amuReportList"></div></section>
-          </div>
+
+          <section class="portal-card amu-hub-card">
+            <details class="amu-upload-panel" id="amuUploadPanel">
+              <summary>
+                <span class="amu-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3h7l4 4v14H5V3h3Z"/><path d="M14 3v5h5M8 13h8M8 17h6"/></svg></span>
+                <span><span class="eyebrow">Schritt 2 · bei Bedarf</span><strong>AUM nachreichen</strong><small>Foto oder PDF anhängen; die lokale Datenerkennung schlägt Datumswerte zur Prüfung vor.</small></span>
+                <span class="amu-summary-action">AUM hinzufügen</span>
+              </summary>
+              <form class="request-form embedded-amu-form" id="amuReportForm">
+                <label><span>Zur Krankmeldung</span><select id="amuSicknessCaseId"><option value="">Automatisch zuordnen</option></select></label>
+                <input id="amuIncapacityFrom" type="hidden" required />
+                <input id="amuIncapacityTo" type="hidden" />
+                <label class="range-trigger-field"><span>Zeitraum der Arbeitsunfähigkeit</span><button class="date-range-trigger" id="amuDateRangeButton" type="button" data-date-range-context="amu" aria-haspopup="dialog" aria-controls="dateRangeDialog" aria-required="true"><span><strong id="amuDateRangeText">Zeitraum auswählen</strong><small>Der Beginn genügt; das Ende darf offenbleiben.</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z"/></svg></button></label>
+                <label><span>Bemerkung</span><textarea id="amuEmployeeNote" maxlength="500" rows="2" placeholder="Optional"></textarea></label>
+                <div class="amu-file-picker">
+                  <label class="file-field"><span>Dokumente auswählen</span><input id="amuDocuments" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,.pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff" multiple /><small id="amuUploadHint">PDF oder Foto · höchstens 3 Dateien</small></label>
+                  <label class="camera-button">Kamera<input id="amuCamera" type="file" accept="image/*" capture="environment" /></label>
+                </div>
+                <div class="amu-ocr-status hidden" id="amuOcrStatus" aria-live="polite"><span class="amu-ocr-spinner" aria-hidden="true"></span><div><strong id="amuOcrStatusTitle">Lokale Datenerkennung</strong><small id="amuOcrStatusText"></small><label class="amu-ocr-confirm hidden" id="amuOcrConfirmField"><input id="amuOcrConfirmed" type="checkbox" /> Erkannte Datumswerte geprüft</label></div></div>
+                <p class="message hidden" id="amuMessage"></p>
+                <div class="sickness-form-actions"><button class="primary compact-primary" id="amuSubmitButton" type="submit">AUM übermitteln</button></div>
+              </form>
+            </details>
+            <div class="amu-history-panel">
+              <div class="sickness-card-heading"><div><span class="eyebrow">Dokumente &amp; Verlauf</span><h2>Meine AUM-Meldungen</h2></div></div>
+              <div class="request-list amu-report-list" id="amuReportList"></div>
+            </div>
+          </section>
         </section>
       </main>
     </div>
@@ -227,6 +250,31 @@
         <p class="password-recommendation">Mindestens 6 Zeichen; Ziffern sind erlaubt. Ein längeres, schwer zu erratendes Passwort wird empfohlen.</p>
         <p class="message hidden" id="passwordMessage"></p>
         <div class="dialog-actions"><button type="button" data-close-dialog>Abbrechen</button><button class="primary" type="submit">Passwort speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="date-range-dialog" id="dateRangeDialog" aria-labelledby="dateRangeDialogTitle">
+      <form id="dateRangeForm">
+        <div class="dialog-heading"><div><span class="eyebrow">Zeitraum</span><h2 id="dateRangeDialogTitle">Datum auswählen</h2></div><button id="dateRangeClose" type="button" aria-label="Kalender schließen">×</button></div>
+        <input id="dateRangeContext" type="hidden" />
+        <div class="date-range-selection" aria-live="polite"><div><span>Beginn</span><strong id="dateRangeStartText">Noch nicht gewählt</strong></div><div><span>Ende</span><strong id="dateRangeEndText">Noch nicht gewählt</strong></div></div>
+        <div class="date-range-toolbar"><button id="dateRangePreviousMonth" type="button" aria-label="Vorheriger Monat">←</button><strong id="dateRangeMonthLabel">Monat</strong><button id="dateRangeNextMonth" type="button" aria-label="Nächster Monat">→</button></div>
+        <div class="date-range-weekdays" aria-hidden="true"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
+        <div class="date-range-grid" id="dateRangeCalendarGrid" role="grid" aria-label="Kalender"></div>
+        <label class="date-range-open-end" id="dateRangeOpenEndField"><input id="dateRangeOpenEnd" type="checkbox" /><span><strong>Ende noch offen</strong><small>Das voraussichtliche Ende kann später ergänzt werden.</small></span></label>
+        <p class="message hidden" id="dateRangeMessage"></p>
+        <div class="dialog-actions"><button id="dateRangeCancel" type="button">Abbrechen</button><button class="primary" id="dateRangeApply" type="submit">Zeitraum übernehmen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="sickness-recovery-dialog" id="sicknessRecoveryDialog" aria-labelledby="sicknessRecoveryTitle">
+      <form id="sicknessRecoveryForm">
+        <div class="dialog-heading"><div><span class="eyebrow">Krankmeldung abschließen</span><h2 id="sicknessRecoveryTitle">Wieder arbeitsfähig melden</h2></div><button id="sicknessRecoveryClose" type="button" aria-label="Dialog schließen">×</button></div>
+        <input id="sicknessRecoveryCaseId" type="hidden" />
+        <label><span>Wieder arbeitsfähig ab</span><input id="sicknessRecoveryDate" type="date" required /></label>
+        <p class="form-note">Die zuständige Leitung wird über die Rückkehr informiert.</p>
+        <p class="message hidden" id="sicknessRecoveryMessage"></p>
+        <div class="dialog-actions"><button id="sicknessRecoveryCancel" type="button">Abbrechen</button><button class="primary" id="sicknessRecoverySubmit" type="submit">Rückkehr melden</button></div>
       </form>
     </dialog>
 
@@ -298,6 +346,8 @@
     <script src="/vendor/tesseract-v7/tesseract.min.js"></script>
     <script src="/amu-ocr-parser.js"></script>
     <script src="/amu-ocr-client.js"></script>
+    <script src="/amu-pdf-client.js"></script>
+    <script src="/date-range-calendar.js"></script>
     <script src="/portal.js"></script>
   </body>
 </html>

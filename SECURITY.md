@@ -31,7 +31,7 @@ Für dieses Projekt besteht derzeit kein Bug-Bounty-Programm.
 
 - Die SQLite-Datenbank und Sicherungen können Personal- und Planungsdaten enthalten und müssen durch Betriebssystem- und Dateiberechtigungen geschützt werden.
 - Sensible Personalakt-Inhalte sowie AUM-Dokumente und ihre geschützten Metadaten werden zusätzlich mit AES-256-GCM verschlüsselt. Betriebliche Indizes und nicht sensible Verwaltungsdaten bleiben für den Anwendungsbetrieb in SQLite lesbar.
-- Die AUM-Texterkennung läuft lokal im Browser. OCR-Rohtext wird weder an den Server übertragen noch in der Datenbank gespeichert; vorgeschlagene Datumswerte müssen vor dem Upload bestätigt werden.
+- Die AUM-Datenerkennung läuft lokal im Browser. Digitale PDFs werden mit der lokal bereitgestellten PDF.js-Version ausgewertet; Scan-PDFs, hochgeladene Fotos und Kamerabilder werden lokal mit Tesseract.js verarbeitet. Ausgelesener Dokumenttext und OCR-Rohtext werden weder zur Erkennung an den Server übertragen noch in der Datenbank gespeichert. Vorgeschlagene Datumswerte müssen vor dem Upload bestätigt oder korrigiert werden.
 - Externe Besetzungswarnungen enthalten keine Gesundheits- oder Personaldaten. Zugangsdaten externer Provider dürfen nur in der geschützten Serverkonfiguration liegen.
 - Krankmeldungen und AUM-Warnungen werden in SQLite nur über geheime HMAC-Suchwerte zugeordnet; Personen-, Standort- und Statusdetails liegen im AES-256-GCM-geschützten Payload. Neutrale Portalhinweise enthalten keine Personalnummer oder Gesundheitsangabe.
 - Neue oder geänderte externe Warnziele bleiben deaktiviert, bis ein sechsstelliger, zeitlich begrenzter Einmalcode bestätigt wurde. Gespeichert werden nur ein gesalzener Code-Hash, Ablaufzeit und Fehlversuchszähler.

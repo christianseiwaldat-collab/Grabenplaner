@@ -71,6 +71,16 @@ test("akzeptiert zwei explizite gleiche Daten für eine eintägige AUM", () => {
   assert.equal(result.complete, true);
 });
 
+test("übernimmt einen sicher erkannten Beginn auch dann, wenn das AUM-Ende offen ist", () => {
+  const result = extract("Beginn der Arbeitsunfähigkeit: 14.07.2026\nVoraussichtlich bis: offen");
+  assert.equal(result.dateFrom, "2026-07-14");
+  assert.equal(result.dateTo, "");
+  assert.equal(result.complete, false);
+  assert.equal(result.autoFill, false);
+  assert.deepEqual(result.autoFillFields, { dateFrom: true, dateTo: false });
+  assert.deepEqual(result.warnings, ["period_incomplete"]);
+});
+
 test("lehnt unmögliche Kalenderdaten ab und erfindet keinen Zeitraum", () => {
   const result = extract("Arbeitsunfähig von 31.02.2026 bis 34.02.2026");
   assert.equal(result.dateFrom, "");

@@ -3,7 +3,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { createAmuOcrClient, DEFAULT_ASSET_PATHS } = require("../public/amu-ocr-client");
+const { createAmuOcrClient, mergeAumOcrResults, DEFAULT_ASSET_PATHS } = require("../public/amu-ocr-client");
 
 function fixture() {
   const calls = { create: [], parameters: [], recognize: [], terminate: 0 };
@@ -66,4 +66,23 @@ test("Progress-Ereignisse enthalten keinen OCR- oder Dokumenttext", async () => 
   await pending;
   assert.deepEqual(progress, [{ status: "recognizing text", progress: 0.5 }]);
   await client.dispose();
+});
+
+test("kombiniert ausschließlich abgeleitete Datumswerte mehrerer lokal erkannter Seiten", () => {
+  const result = mergeAumOcrResults([
+    {
+      dateFrom: "2026-07-10", dateTo: "", complete: false,
+      fieldConfidence: { dateFrom: 0.92, dateTo: 0 },
+      autoFillFields: { dateFrom: true, dateTo: false },
+    },
+    {
+      dateFrom: "", dateTo: "2026-07-17", complete: false,
+      fieldConfidence: { dateFrom: 0, dateTo: 0.88 },
+      autoFillFields: { dateFrom: false, dateTo: true },
+    },
+  ]);
+  assert.equal(result.dateFrom, "2026-07-10");
+  assert.equal(result.dateTo, "2026-07-17");
+  assert.equal(result.autoFill, true);
+  assert.doesNotMatch(JSON.stringify(result), /seite|ocr|text/i);
 });

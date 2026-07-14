@@ -857,7 +857,7 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const protectedUpdate = employeeNotifications.notifications.find((item) => item.event_type === "protected.update");
     assert.ok(protectedUpdate);
     assert.equal(protectedUpdate.title, "Geschützte Meldung aktualisiert");
-    assert.equal(protectedUpdate.message, "Bitte im geschützten Bereich der App anmelden.");
+    assert.equal(protectedUpdate.message, "Bitte im geschützten Portal anmelden.");
     assert.doesNotMatch(JSON.stringify(protectedUpdate), /Arbeitsunf|krank|AUM|Geprüft/i);
 
     const encryptedBlobs = fs.readdirSync(path.join(childRoot, "app-data", "private", "amu", "blobs"), { recursive: true })
