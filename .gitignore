@@ -13,3 +13,4 @@ npm-debug.log*
 *.log
 public/assets/private-*
 public/assets/*-private.*
+output/pdf/Grabenplaner-Prospekt-*.pdf
