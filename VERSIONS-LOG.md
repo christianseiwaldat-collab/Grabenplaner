@@ -1,5 +1,54 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.57 Beta
+
+- Geschützte, idempotente Controller-/RADIUS-Schnittstelle für pseudonymisierte WLAN-Ereignisse ergänzt; Hardware-Adressen, SSIDs und Gerätekennungen werden abgelehnt.
+- Freiwilliges Mitarbeiter-Opt-in, bearbeitbare Zeitvorschläge und persönliche Bestätigung im Mitarbeiterportal umgesetzt.
+- Reconnects innerhalb der einstellbaren Toleranz teilen die Anwesenheit nicht; nach Ablauf bleibt der ursprüngliche WLAN-Abbruch als Vorschlagsende maßgeblich.
+- Vertrauensstufen A, B und C steuern Wochenabschluss beziehungsweise Bestätigungsfrist; bald fällige und überfällige Vorschläge werden sichtbar gewarnt.
+- Automatische Endbuchungen bleiben ausgeschlossen: Erst die ausdrückliche Bestätigung erzeugt revisionsfähige Zeitbuchungen.
+- Controller-Kennungen je Filiale können ab Personalleitung gepflegt werden und werden ausschließlich gehasht gespeichert.
+- Angemeldete Person, App-Rolle und Firmenposition erscheinen kompakt im linken Menü; Logout liegt direkt bei diesen Angaben.
+- Im Serverbetrieb dürfen ausschließlich Developer, IT-Admin und Admin den eindeutig bezeichneten Server-Stopp auslösen.
+- Codespaces akzeptiert die vom vertrauenswürdigen GitHub-HTTPS-Proxy gemeldete gleichursprüngliche Weiterleitungsadresse, ohne die Origin-Prüfung für fremde Seiten zu lockern.
+- Öffentliche Musterkits für einen fiktiven Foto- und Sporthandel sowie ein Sporthandels-Demoprofil mit sechs Filialen, 15 Abteilungen und 31 Verkaufsmitarbeitenden ergänzt.
+- Produktprospekt neu aufgebaut; die aufgeklappte A3-Innenseite nutzt das Querformat nun als zusammenhängende Präsentationsfläche rund um das Smartphone-Portal.
+
+## v0.56 Beta
+
+- Ersten Teil der WLAN-Automatik als geschützte technische Grundlage ergänzt; eine echte Controller- oder RADIUS-Verbindung ist noch nicht aktiv.
+- Eigenen Einstellungsbereich „WLAN-Automatik“ für Personalleitung, Admin, IT-Admin und Developer eingeführt.
+- Mindestanwesenheit und Abwesenheitstoleranz sind einstellbar; bei endgültiger Abwesenheit bleibt der ursprüngliche WLAN-Abbruch als spätere Vorschlagszeit maßgeblich.
+- Vertrauensstufen A, B und C unabhängig von Position, Rolle, Filiale und Abteilung im Personalstamm ergänzt; neue und bestehende Datensätze starten vorsichtshalber mit Stufe C.
+- Kompakte, durchsuchbare Verwaltung aller Vertrauensstufen im WLAN-Menü ergänzt und Änderungen revisionsfähig protokolliert.
+- Pseudonymisierte, idempotente Datenstruktur für spätere WLAN-Ereignisse, Anwesenheitssitzungen und bestätigungspflichtige Zeitvorschläge vorbereitet.
+- Zugriffe unterhalb der Personalleitung erhalten weder die WLAN-Einstellungen noch die sensible Vertrauensstufe über Oberfläche oder API.
+- Automatische Buchungen bleiben bewusst deaktiviert: Teil 2 ergänzt erst die WLAN-Schnittstelle, Mitarbeiter-Opt-ins, Vorschlagsbildung und Bestätigungswarnungen.
+
+## v0.55 Beta
+
+- Zentrale Tagesauswertung für beliebig viele Pausen und geteilte Dienste eingeführt; offene historische Buchungen werden nicht mehr bis zur aktuellen Uhrzeit weitergerechnet.
+- Tatsächliche Arbeitszeit, Pausen, Dienstplanzeit, Abweichung und Samstagswertung werden getrennt und nachvollziehbar ausgewiesen.
+- Tagesprüfung für berechtigte Leitungen mit Hinweisen zu fehlenden Buchungen, unvollständigen Tagen, Pausenunterschreitungen, Zeitabweichungen und offenen Korrekturen ergänzt.
+- Geprüfte Tage speichern Regelversion und Auswertungsstand; nachträgliche Plan-, Buchungs-, Abwesenheits- oder Regeländerungen markieren die Prüfung automatisch als veraltet.
+- Standortbezogene Regeln für Buchungen von überall oder nur aus einem vertrauenswürdigen Firmennetz sowie eine einstellbare Abweichungstoleranz ergänzt.
+- Mehrteilige Zeitkorrekturen mit mehreren Pausen oder Arbeitsblöcken können in der Leitungsansicht vollständig bearbeitet werden.
+- Zeitübersichten im Mitarbeiterportal um gewertete Zeit, Pausen und konkrete Tageshinweise erweitert.
+- Rechtevergabe für Personalleitung, Admin und Developer optisch verdichtet; Checkboxen, geschützte Rechte und individuelle Zusatzrechte werden klar und responsiv dargestellt.
+- Abteilungsbereiche werden bei delegierten Zusatzrechten rollenunabhängig geprüft; die Tagesprüfung bleibt auf den zugewiesenen Bereich begrenzt.
+- Bereichsübergreifende Zeitkorrekturen können nur auf Filialebene entschieden werden und behalten bei der Übernahme ihre korrekte Abteilungszuordnung.
+
+## v0.54 Beta
+
+- Geschützte Developer-Rolle als technische Ebene oberhalb der regulären Administration ergänzt; sie kann nicht über die Weboberfläche vergeben, geändert oder entfernt werden.
+- IT-Admin als eigene technische Rolle für Zugänge, Rechtemanagement, Betriebsmodus, Updates, Backups und Serverbetrieb eingeführt, ohne automatische Personal- oder AUM-Fachrechte.
+- Rollenvergabe hierarchisch abgesichert: Personalleitung und IT-Admin verwalten untergeordnete Rollen, Admin und Developer die regulären Systemrollen; Developer bleibt ausschließlich offline bindbar.
+- Personenbezogene Zusatzrechte von der Position entkoppelt: IT-Admin kann den vollständigen delegierbaren Katalog auch normalen Mitarbeiterkonten zuweisen, während die Personalleitung nur festgelegte fachliche Rechte verwaltet.
+- Rechtemanagement mit Suche nach Personalnummer oder Name, kompakter Trefferliste und gruppiertem Bearbeitungsdialog für Grund- und Zusatzrechte ergänzt.
+- Bisher zu weitreichendes delegierbares Personalrecht durch ein enges Recht zur Änderung von Teamfarben ersetzt. Name, Sollzeit und weitere Stammdaten bleiben in Oberfläche und API schreibgeschützt.
+- Standort- und Abteilungsgrenzen sowie geschützte Benutzerkonten werden bei jeder relevanten Serveraktion geprüft und sicherheitsrelevant protokolliert.
+- Sicherheitsrichtlinie für vertrauliche Meldungen, unterstützte Versionen und sichere Betriebsbedingungen ergänzt.
+
 ## v0.53.1 Beta
 
 - Branding-Verhalten nach Rollen präzisiert: Admin und Personalleitung behalten das in den Einstellungen gewählte Verwaltungs-Branding; standortgebundene Rollen und Mitarbeitende sehen ausschließlich das Branding ihrer Filiale – einschließlich der Anmeldung.

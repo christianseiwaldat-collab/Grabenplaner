@@ -30,7 +30,13 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.53.1 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.57 Beta</span></div>
+        </div>
+        <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
+          <strong id="sidebarSessionRole"></strong>
+          <span id="sidebarSessionIdentity"></span>
+          <span id="sidebarSessionPosition"></span>
+          <button id="portalLogoutButton" type="button">(Logout)</button>
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
@@ -81,9 +87,6 @@
           </a>
           <button class="sidebar-exit-button" id="systemExitButton" type="button">
             <span>Beenden</span>
-          </button>
-          <button class="sidebar-exit-button hidden" id="portalLogoutButton" type="button">
-            <span>Abmelden</span>
           </button>
         </div>
 
@@ -181,9 +184,21 @@
             <div class="vacation-panel-heading"><div><h2>Teamstatus heute</h2><p id="timePresenceUpdated">Noch nicht aktualisiert.</p></div></div>
             <div class="time-presence-list" id="timePresenceList"><p class="settings-note">Die Anwesenheit wird geladen.</p></div>
           </section>
+          <section class="vacation-panel time-day-review-panel" id="timeDayReviewPanel">
+            <div class="vacation-panel-heading">
+              <div><h2>Tagesprüfung</h2><p>Plan, echte Arbeitszeit, Pausen und Samstagswertung gemeinsam prüfen.</p></div>
+              <div class="time-summary-controls">
+                <label class="field"><span>Arbeitstag</span><input id="timeReviewDate" type="date" /></label>
+                <label class="field"><span>Anzeige</span><select id="timeReviewFilter"><option value="all">Alle</option><option value="attention">Nur auffällige</option><option value="unreviewed">Noch ungeprüft</option><option value="reviewed">Geprüft</option></select></label>
+                <button type="button" class="secondary-button" id="loadTimeDayReviewButton">Anzeigen</button>
+              </div>
+            </div>
+            <section class="time-day-review-summary" id="timeDayReviewSummary"></section>
+            <div class="time-day-review-list" id="timeDayReviewList"><p class="settings-note">Tagesprüfung wird geladen.</p></div>
+          </section>
           <section class="vacation-panel time-summary-panel">
             <div class="vacation-panel-heading">
-              <div><h2>Arbeitszeitübersicht</h2><p>Soll, Ist und Differenz für einen frei wählbaren Zeitraum.</p></div>
+              <div><h2>Arbeitszeitübersicht</h2><p>Plan, Ist, gewertete Zeit und Abweichung für einen frei wählbaren Zeitraum.</p></div>
               <div class="time-summary-controls"><label class="field"><span>Von</span><input id="timeSummaryFrom" type="date" /></label><label class="field"><span>Bis</span><input id="timeSummaryTo" type="date" /></label><button type="button" class="secondary-button" id="loadTimeSummaryButton">Auswerten</button></div>
             </div>
             <div class="time-summary-list" id="timeSummaryList"><p class="settings-note">Zeitraum auswählen und auswerten.</p></div>
@@ -301,6 +316,11 @@
                   </div>
                   <label class="switch-row"><span><strong>Aktiv</strong><small>In Navigation und Planung anzeigen.</small></span><input id="locationActive" type="checkbox" checked /></label>
                   <label class="switch-row"><span><strong>Zeiterfassung aktiv</strong><small>Erlaubt Teammitgliedern dieses Standorts Kommen, Pause, Weiter und Gehen zu buchen.</small></span><input id="locationTimeTrackingEnabled" type="checkbox" /></label>
+                  <div class="time-tracking-location-settings">
+                    <label class="field"><span>Buchungsort</span><select id="locationTimeTrackingAccessMode"><option value="anywhere">Überall erlauben</option><option value="trusted_network">Nur im Firmennetz</option></select><small>Bei „Firmennetz“ sind lokale Netze sowie optional eingetragene IP-Bereiche zulässig.</small></label>
+                    <label class="field"><span>Zulässige IPs / Netze</span><textarea id="locationTimeTrackingAllowedNetworks" rows="3" maxlength="500" placeholder="z. B. 10.20.0.0/16"></textarea><small>Ein Eintrag je Zeile; nur für „Firmennetz“ nötig.</small></label>
+                    <label class="field"><span>Abweichung ab</span><div class="input-with-suffix"><input id="locationTimeTrackingVarianceMinutes" type="number" min="0" max="240" step="1" value="15" /><span>Minuten</span></div><small>Ab dieser Differenz zum Dienstplan wird der Tag auffällig markiert.</small></label>
+                  </div>
                   <div class="location-hours-editor">
                     <div class="card-heading compact-card-heading"><div class="card-icon">Zeit</div><div><h3>Öffnungszeiten &amp; Mindestbesetzung</h3><p>Diese Zeiten gelten ausschließlich für die ausgewählte Filiale.</p></div></div>
                     <div class="day-settings-table">
@@ -346,6 +366,7 @@
             <button class="settings-tab" data-settings-tab="branding">Branding</button>
             <button class="settings-tab" data-settings-tab="pdf">PDF-Ausgabe</button>
             <button class="settings-tab" data-settings-tab="personnel">Personal</button>
+            <button class="settings-tab" data-settings-tab="wifiAutomation">WLAN-Automatik</button>
             <button class="settings-tab" data-settings-tab="access">Zugänge</button>
             <button class="settings-tab" data-settings-tab="rights">Rechtemanagement</button>
             <button class="settings-tab" data-settings-tab="backup">Datenbank</button>
@@ -474,8 +495,9 @@
 
           <section id="rightsSettings" class="settings-section settings-two-column">
             <div class="settings-card full-span">
-              <div class="card-heading"><div class="card-icon">R</div><div><h2>Rechtemanagement</h2><p>Zusätzliche Verwaltungsrechte gezielt an Filial- und Abteilungsleitungen vergeben.</p></div></div>
-              <p class="settings-note security-note">Rollenbereiche bleiben immer wirksam. Branding, Rechtemanagement, Backups und Updates können nicht an untergeordnete Rollen delegiert werden.</p>
+              <div class="card-heading"><div class="card-icon">R</div><div><h2>Rechtemanagement</h2><p>Individuelle Zusatzrechte unabhängig von Position und Grundrolle vergeben.</p></div></div>
+              <p class="settings-note security-note">Grundrechte der Rolle bleiben erhalten. IT-Admin verwaltet den vollständigen Zusatzrechte-Katalog; die Personalleitung ausschließlich freigegebene fachliche Rechte. Der Developer-Zugang bleibt geschützt.</p>
+              <label class="field rights-search-field"><span>Teammitglied suchen</span><input id="rightsEmployeeSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer oder Name" /></label>
               <p class="settings-note" id="rightsManagementHint">Rechte werden geladen.</p>
               <div class="rights-user-list" id="rightsUserList"></div>
             </div>
@@ -579,6 +601,39 @@
             </div>
           </section>
 
+          <section id="wifiAutomationSettings" class="settings-section settings-two-column">
+            <div class="settings-card">
+              <div class="card-heading"><div class="card-icon">WLAN</div><div><h2>Automatische Zeitvorschläge</h2><p>Vorbereitung der späteren Erkennung über den WLAN-Controller der Filiale.</p></div></div>
+              <div class="wifi-foundation-status" id="wifiAutomationStatus">
+                <span class="status-badge inactive">Grundlage</span>
+                <div><strong>Noch keine WLAN-Schnittstelle verbunden</strong><small>In diesem ersten Teil werden ausschließlich Regeln und Datenstruktur vorbereitet. Es entstehen noch keine automatischen Zeitbuchungen.</small></div>
+              </div>
+              <p class="settings-note security-note">Die spätere Automatik erzeugt nur bearbeitbare Zeitvorschläge. Erst die persönliche Bestätigung übernimmt einen Vorschlag in die Zeiterfassung.</p>
+            </div>
+            <div class="settings-card">
+              <div class="card-heading"><div class="card-icon">API</div><div><h2>Controller &amp; Filialzuordnung</h2><p>Verbindet pseudonymisierte Controller- oder RADIUS-Ereignisse mit der richtigen Filiale.</p></div></div>
+              <div class="wifi-connector-details" id="wifiConnectorDetails"><p class="settings-note">Schnittstellenstatus wird geladen.</p></div>
+              <div class="wifi-location-mapping-list" id="wifiLocationMappingList"></div>
+              <div class="form-actions-inline"><span class="settings-note">Controller-Kennungen werden nur gehasht gespeichert.</span><button class="primary-button" id="saveWifiLocationMappingsButton" type="button">Zuordnungen speichern</button></div>
+            </div>
+            <div class="settings-card">
+              <div class="card-heading"><div class="card-icon">Zeit</div><div><h2>Anwesenheitsregeln</h2><p>Kurze Verbindungen und Unterbrechungen sollen keine falschen Buchungen erzeugen.</p></div></div>
+              <div class="settings-grid">
+                <label class="field"><span>Mindestanwesenheit</span><div class="unit-input"><input id="wifiMinimumPresenceMinutes" type="number" min="1" max="120" step="1" /><em>Minuten</em></div><small>Erst nach dieser durchgehenden Zeit darf später ein Zeitvorschlag beginnen.</small></label>
+                <label class="field"><span>Abwesenheitstoleranz</span><div class="unit-input"><input id="wifiAbsenceGraceMinutes" type="number" min="1" max="240" step="1" /><em>Minuten</em></div><small>Eine Rückkehr innerhalb dieser Zeit gilt als durchgehende Anwesenheit.</small></label>
+              </div>
+              <div class="calculation-note">Kehrt das Gerät nicht innerhalb der Toleranz zurück, verwendet der spätere Vorschlag den ursprünglichen Zeitpunkt des WLAN-Abbruchs – nicht das Ende der Wartezeit.</div>
+              <div class="form-actions-inline"><span class="settings-note" id="wifiAutomationSettingsHint">Regeln werden geladen.</span><button class="primary-button" id="saveWifiAutomationSettingsButton" type="button">WLAN-Regeln speichern</button></div>
+            </div>
+            <div class="settings-card full-span">
+              <div class="card-heading"><div class="card-icon">A–C</div><div><h2>Vertrauensstufe je Teammitglied</h2><p>Die Stufe gilt unabhängig von Position, Rolle, Filiale und Abteilung.</p></div></div>
+              <label class="field rights-search-field"><span>Teammitglied suchen</span><input id="wifiConfirmationLevelSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer oder Name" /></label>
+              <div class="wifi-confirmation-level-list" id="wifiConfirmationLevelList"><p class="settings-note">Teammitglieder werden geladen.</p></div>
+              <div class="confirmation-level-explanation"><span><strong>A</strong>Wochenweise bestätigen</span><span><strong>B</strong>Spätestens nach drei Tagen und zum Wochenabschluss</span><span><strong>C</strong>Täglich, spätestens am Folgetag um 12:00 Uhr</span></div>
+              <div class="form-actions-inline"><span class="settings-note" id="wifiConfirmationLevelHint">Neue Teammitglieder beginnen vorsichtshalber mit Stufe C.</span><button class="primary-button" id="saveWifiConfirmationLevelsButton" type="button">Vertrauensstufen speichern</button></div>
+            </div>
+          </section>
+
           <section id="backupSettings" class="settings-section settings-two-column">
             <div class="settings-card full-settings-card server-diagnostics-card">
               <div class="card-heading"><div class="card-icon">Server</div><div><h2>Server- und Datenbankdiagnose</h2><p>Prüft Betriebsmodus, HTTPS, SQLite, Migrationen, Instanzschutz, Sitzungen und Backups.</p></div></div>
@@ -614,7 +669,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.53.1 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.57 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -625,10 +680,12 @@
       <form method="dialog" id="employeeForm">
         <div class="modal-header"><div><span class="eyebrow">Personalstammdaten</span><h2 id="employeeModalTitle">Teammitglied anlegen</h2></div><button type="button" class="close-button" data-close="employeeModal">×</button></div>
         <div class="form-grid">
+          <p class="calculation-note full-width hidden" id="employeeEditScopeHint">Für diese Leitung ist ausschließlich die Teamfarbe freigegeben. Name, Wochen-Sollzeit und alle weiteren Personalstammdaten bleiben sichtbar, aber schreibgeschützt.</p>
           <label class="field"><span>Personalnummer</span><input id="employeeNumber" required /></label>
           <label class="field"><span>Wochen-Sollzeit</span><div class="unit-input"><input id="employeeHours" type="number" min="0" max="80" step="0.25" required /><em>Stunden</em></div></label>
           <label class="field"><span>Stammfiliale</span><select id="employeeHomeLocation" required></select></label>
           <label class="field"><span>Position</span><select id="employeePosition" required></select></label>
+          <label class="field" id="employeeTimeConfirmationLevelField"><span>Vertrauensstufe</span><select id="employeeTimeConfirmationLevel" required><option value="A">Stufe A · Wochenabschluss</option><option value="B">Stufe B · spätestens nach 3 Tagen</option><option value="C">Stufe C · täglich bis 12:00 Uhr</option></select><small>Unabhängig von Position und Rolle; steuert künftig die Bestätigungsfrist automatischer Zeitvorschläge.</small></label>
           <label class="field"><span>Bevorzugte Abteilung</span><select id="employeePreferredDepartment"><option value="">Keine Abteilung</option></select></label>
           <label class="field full-width"><span>Bevorzugter freier Tag</span><select id="employeePreferredDay"><option value="">Kein bevorzugter Tag</option><option value="monday">Montag</option><option value="tuesday">Dienstag</option><option value="wednesday">Mittwoch</option><option value="thursday">Donnerstag</option><option value="friday">Freitag</option></select></label>
           <div class="field full-width"><span>Dienstvertraglich vereinbarte fixe Arbeitstage</span>
@@ -789,6 +846,16 @@
       </form>
     </dialog>
 
+    <dialog class="modal wide-modal rights-editor-modal" id="rightsEditorModal">
+      <form method="dialog" id="rightsEditorForm">
+        <div class="modal-header"><div><span class="eyebrow">Individuelle Zusatzrechte</span><h2 id="rightsEditorTitle">Rechte bearbeiten</h2><p id="rightsEditorSummary"></p></div><button type="button" class="close-button" data-close="rightsEditorModal">×</button></div>
+        <div class="rights-editor-legend"><span><i class="role-right-dot"></i> Grundrecht der Rolle</span><span><i class="additional-right-dot"></i> Individuelles Zusatzrecht</span><span><i class="locked-right-dot"></i> Nur durch IT-Admin oder höhere Ebene änderbar</span></div>
+        <div class="rights-editor-permissions" id="rightsEditorPermissions"></div>
+        <p class="calculation-note" id="rightsEditorHint">Zusatzrechte gelten innerhalb der bereits zugewiesenen Filiale beziehungsweise Abteilung.</p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="rightsEditorModal">Abbrechen</button><button type="submit" class="primary-button" id="saveRightsEditorButton">Rechte speichern</button></div>
+      </form>
+    </dialog>
+
     <dialog class="modal request-action-modal" id="requestActionModal">
       <form method="dialog" id="requestActionForm">
         <div class="modal-header"><div><span class="eyebrow">Antragsverwaltung</span><h2 id="requestActionTitle">Antrag bearbeiten</h2><p id="requestActionSummary"></p></div><button type="button" class="close-button" data-close="requestActionModal">×</button></div>
@@ -827,11 +894,9 @@
       <form method="dialog" id="timeCorrectionReviewForm">
         <div class="modal-header"><div><span class="eyebrow">Zeiterfassung</span><h2>Zeitkorrektur prüfen</h2><p id="timeCorrectionReviewSummary">Beantragte Buchungsfolge prüfen und bei Bedarf anpassen.</p></div><button type="button" class="close-button" data-close="timeCorrectionReviewModal">×</button></div>
         <input id="timeCorrectionReviewId" type="hidden" />
+        <div class="time-correction-entry-editor" id="timeCorrectionReviewEntries"></div>
+        <button type="button" class="secondary-button compact-button" id="addTimeCorrectionReviewEntry">+ Buchung ergänzen</button>
         <div class="form-grid">
-          <label class="field"><span>Kommen</span><input id="timeCorrectionReviewClockIn" type="time" step="60" required /></label>
-          <label class="field"><span>Pause von</span><input id="timeCorrectionReviewBreakStart" type="time" step="60" /></label>
-          <label class="field"><span>Pause bis</span><input id="timeCorrectionReviewBreakEnd" type="time" step="60" /></label>
-          <label class="field"><span>Gehen</span><input id="timeCorrectionReviewClockOut" type="time" step="60" required /></label>
           <label class="field full-width"><span>Entscheidungsbemerkung</span><textarea id="timeCorrectionReviewNote" rows="3" maxlength="500" placeholder="Optional"></textarea></label>
         </div>
         <p class="message hidden" id="timeCorrectionReviewMessage"></p>
@@ -839,7 +904,21 @@
       </form>
     </dialog>
 
+    <dialog class="modal time-day-review-modal" id="timeDayReviewModal">
+      <form method="dialog" id="timeDayReviewForm">
+        <div class="modal-header"><div><span class="eyebrow">Zeiterfassung</span><h2 id="timeDayReviewTitle">Arbeitstag prüfen</h2><p id="timeDayReviewDetail">Plan und erfasste Arbeitszeit im Vergleich.</p></div><button type="button" class="close-button" data-close="timeDayReviewModal">×</button></div>
+        <input id="timeDayReviewEmployee" type="hidden" />
+        <input id="timeDayReviewWorkDate" type="hidden" />
+        <div class="time-day-review-metrics" id="timeDayReviewMetrics"></div>
+        <div class="time-day-review-issues" id="timeDayReviewIssues"></div>
+        <label class="field"><span>Prüfbemerkung</span><textarea id="timeDayReviewNote" rows="3" maxlength="500" placeholder="Optional"></textarea></label>
+        <p class="message hidden" id="timeDayReviewMessage"></p>
+        <div class="modal-actions"><button type="button" class="secondary-button hidden" id="removeTimeDayReviewButton">Prüfung aufheben</button><span></span><button type="button" class="secondary-button" data-close="timeDayReviewModal">Abbrechen</button><button type="submit" class="primary-button">Als geprüft speichern</button></div>
+      </form>
+    </dialog>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/api-errors.js"></script>
     <script src="/vendor/quill/quill.js"></script>
     <script src="/app.js"></script>
   </body>

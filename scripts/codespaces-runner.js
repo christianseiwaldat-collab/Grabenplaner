@@ -134,6 +134,7 @@ function loadOrCreateSecrets(ctx) {
       adminEmployeeNumber: ADMIN_EMPLOYEE_NUMBER,
       adminPassword: `${crypto.randomBytes(18).toString("base64url")}aA7!`,
       serviceControlToken: crypto.randomBytes(48).toString("base64url"),
+      wifiWebhookSecret: crypto.randomBytes(48).toString("base64url"),
       amuKeyId: `codespaces-${crypto.randomUUID()}`,
       amuKey: crypto.randomBytes(32).toString("base64"),
       createdAt: new Date().toISOString(),
@@ -141,10 +142,16 @@ function loadOrCreateSecrets(ctx) {
     writePrivateJson(ctx.secretsPath, secrets);
   }
 
+  if (!secrets.wifiWebhookSecret) {
+    secrets.wifiWebhookSecret = crypto.randomBytes(48).toString("base64url");
+    writePrivateJson(ctx.secretsPath, secrets);
+  }
+
   const valid = secrets?.schemaVersion === 1
     && secrets.adminEmployeeNumber === ADMIN_EMPLOYEE_NUMBER
     && typeof secrets.adminPassword === "string" && secrets.adminPassword.length >= 10
     && typeof secrets.serviceControlToken === "string" && secrets.serviceControlToken.length >= 32
+    && typeof secrets.wifiWebhookSecret === "string" && secrets.wifiWebhookSecret.length >= 32
     && typeof secrets.amuKeyId === "string" && secrets.amuKeyId.length >= 8
     && typeof secrets.amuKey === "string" && Buffer.from(secrets.amuKey, "base64").length === 32;
   if (!valid) {
@@ -199,6 +206,8 @@ function commonServerEnvironment(ctx, secrets, port) {
     GRABENPLANER_HOST: "127.0.0.1",
     GRABENPLANER_AMU_KEY_ID: secrets.amuKeyId,
     GRABENPLANER_AMU_KEY: secrets.amuKey,
+    GRABENPLANER_WIFI_PROVIDER_ID: "generic-radius",
+    GRABENPLANER_WIFI_WEBHOOK_SECRET: secrets.wifiWebhookSecret,
   };
 }
 
@@ -208,6 +217,7 @@ function localSetupEnvironment(ctx, secrets, port) {
     GRABENPLANER_OPERATION_MODE: "local",
     GRABENPLANER_FORCE_PORTAL: "1",
     GRABENPLANER_SEED_DEMO: "1",
+    GRABENPLANER_DEMO_PROFILE: "sporthandel",
   };
 }
 

@@ -6,6 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
+const net = require("node:net");
 const { promisify } = require("node:util");
 const { createAmuStorage, syncEncryptedFilesBackup } = require("./lib/amu-storage");
 const { prepareAmuDocument } = require("./lib/amu-processing");
@@ -21,14 +22,36 @@ const PORTAL_CSRF_COOKIE = "grabenplaner_csrf";
 const scryptAsync = promisify(crypto.scrypt);
 
 const delegablePortalPermissionCatalog = Object.freeze([
-  { id: "settings:write", label: "Planungs- und Grundeinstellungen bearbeiten", group: "Einstellungen", warningLevel: "normal" },
-  { id: "employees:write", label: "Teammitglieder anlegen, bearbeiten und löschen", group: "Teams & Standorte", warningLevel: "high" },
-  { id: "locations:write", label: "Standorte bearbeiten", group: "Teams & Standorte", warningLevel: "high" },
-  { id: "departments:write", label: "Abteilungen anlegen und bearbeiten", group: "Teams & Standorte", warningLevel: "normal" },
-  { id: "positions:write", label: "Positionen anlegen, bearbeiten und löschen", group: "Teams & Standorte", warningLevel: "normal" },
-  { id: "operation_mode:write", label: "Betriebsmodus umschalten", group: "System", warningLevel: "critical" },
+  { id: "schedule:read", label: "Dienstpläne lesen", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
+  { id: "schedule:write", label: "Dienstpläne bearbeiten", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
+  { id: "settings:write", label: "Planungs- und Grundeinstellungen bearbeiten", group: "Dienstplanung", warningLevel: "high", hrDelegable: true },
+  { id: "employees:read", label: "Teamstammdaten lesen", group: "Teams & Standorte", warningLevel: "normal", hrDelegable: true },
+  { id: "employees:display:write", label: "Teamfarben bearbeiten", description: "Nur die Farbe im Dienstplan; Name, Sollzeit und Personalstammdaten bleiben geschützt.", group: "Teams & Standorte", warningLevel: "normal", hrDelegable: true },
+  { id: "employees:write", label: "Teamstammdaten vollständig bearbeiten", description: "Umfasst Namen, Sollstunden und weitere Personalstammdaten.", group: "Teams & Standorte", warningLevel: "critical" },
+  { id: "departments:write", label: "Abteilungen anlegen und bearbeiten", group: "Teams & Standorte", warningLevel: "normal", hrDelegable: true },
+  { id: "positions:write", label: "Positionen anlegen, bearbeiten und löschen", group: "Teams & Standorte", warningLevel: "high", hrDelegable: true },
+  { id: "locations:write", label: "Standorte vollständig bearbeiten", group: "Teams & Standorte", warningLevel: "critical" },
+  { id: "time:read", label: "Zeiterfassung des Bereichs lesen", group: "Zeit & Abwesenheit", warningLevel: "normal", hrDelegable: true },
+  { id: "time:review", label: "Zeitbuchungen prüfen und korrigieren", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true },
+  { id: "time:settings", label: "Regeln der Zeiterfassung verwalten", description: "Buchungsort und Abweichungstoleranz je Standort.", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true },
+  { id: "vacation:read", label: "Urlaubs- und ZA-Anträge lesen", group: "Zeit & Abwesenheit", warningLevel: "normal", hrDelegable: true },
+  { id: "vacation:approve", label: "Urlaubs- und ZA-Anträge bearbeiten", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true },
+  { id: "hr:approve", label: "Verbindliche PL-Freigaben erteilen", group: "Zeit & Abwesenheit", warningLevel: "critical" },
+  { id: "hr:settings", label: "Antrags- und AUM-Regeln verwalten", group: "Zeit & Abwesenheit", warningLevel: "critical" },
+  { id: "amu:metadata:read", label: "AUM-Metadaten und Personalakt lesen", group: "AUM", warningLevel: "high", hrDelegable: true },
+  { id: "amu:file:read", label: "AUM-Dokumente öffnen", group: "AUM", warningLevel: "critical" },
+  { id: "amu:review", label: "AUM-Meldungen prüfen", group: "AUM", warningLevel: "critical" },
+  { id: "amu:delete", label: "AUM-Meldungen löschen", group: "AUM", warningLevel: "critical" },
+  { id: "amu:audit", label: "AUM-Prüfprotokoll lesen", group: "AUM", warningLevel: "critical" },
+  { id: "branding:read", label: "Branding-Verwaltung lesen", group: "System & Verwaltung", warningLevel: "high" },
+  { id: "branding:write", label: "Brandings verwalten und zuweisen", group: "System & Verwaltung", warningLevel: "critical" },
+  { id: "operation_mode:write", label: "Betriebsmodus umschalten", group: "System & Verwaltung", warningLevel: "critical" },
+  { id: "backup:write", label: "Datenbanksicherungen verwalten", group: "System & Verwaltung", warningLevel: "critical" },
+  { id: "update:write", label: "Grabenplaner aktualisieren", group: "System & Verwaltung", warningLevel: "critical" },
+  { id: "system:write", label: "App neu starten oder beenden", group: "System & Verwaltung", warningLevel: "critical" },
 ]);
 const delegablePortalPermissions = new Set(delegablePortalPermissionCatalog.map((entry) => entry.id));
+const hrDelegablePortalPermissions = new Set(delegablePortalPermissionCatalog.filter((entry) => entry.hrDelegable).map((entry) => entry.id));
 
 const builtinPortalRoles = [
   {
@@ -107,6 +130,8 @@ const builtinPortalRoles = [
       "schedule:write",
       "time:read",
       "time:review",
+      "time:settings",
+      "wifi:settings",
       "vacation:read",
       "vacation:approve",
       "settings:write",
@@ -155,6 +180,8 @@ const builtinPortalRoles = [
       "schedule:read",
       "time:read",
       "time:review",
+      "time:settings",
+      "wifi:settings",
       "vacation:read",
       "vacation:approve",
       "hr:approve",
@@ -180,6 +207,42 @@ const builtinPortalRoles = [
   },
 ];
 
+const adminPortalRole = builtinPortalRoles.find((role) => role.id === "admin");
+builtinPortalRoles.push(
+  {
+    id: "it_admin",
+    name: "IT-Admin",
+    description: "Technische Verwaltung von Zugängen, Serverbetrieb, Updates, Backups und delegierten Rechten.",
+    sortOrder: 35,
+    permissions: [
+      "own_schedule:read", "own_time:read", "own_time:write", "own_time:correction_request",
+      "own_vacation:read", "own_vacation:request", "own_amu:create", "own_amu:read", "own_amu:withdraw",
+      "employees:read", "schedule:read", "rights:read", "rights:write",
+      "operation_mode:write", "backup:write", "update:write", "system:write", "users:write",
+      "roles:read", "roles:write", "audit:read", "scopes:write", "wifi:settings",
+    ],
+  },
+  {
+    id: "developer",
+    name: "Developer",
+    description: "Geschützter technischer Superuser; nur über das lokale Entwicklerwerkzeug bindbar.",
+    sortOrder: 40,
+    permissions: [...adminPortalRole.permissions, "developer:system"],
+  },
+);
+
+const GLOBAL_SCOPE_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
+const RIGHTS_ADMIN_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
+const HR_DECISION_PORTAL_ROLES = new Set(["developer", "admin", "hr"]);
+const PROTECTED_PORTAL_ROLES = new Set(["developer"]);
+const PORTAL_ROLE_ASSIGNMENTS = Object.freeze({
+  developer: new Set(["employee", "department_manager", "manager", "hr", "admin", "it_admin"]),
+  admin: new Set(["employee", "department_manager", "manager", "hr", "admin", "it_admin"]),
+  it_admin: new Set(["employee", "department_manager", "manager"]),
+  hr: new Set(["employee", "department_manager", "manager"]),
+  manager: new Set(["department_manager"]),
+});
+
 const defaultPortalSettings = {
   login_required: "1",
   password_min_length: String(LOCAL_PORTAL_PASSWORD_MIN_LENGTH),
@@ -194,11 +257,15 @@ const defaultPortalSettings = {
   amu_convert_images_to_pdf: "1",
   amu_grayscale_images: "1",
   amu_manager_file_access: "0",
+  wifi_minimum_presence_minutes: "5",
+  wifi_absence_grace_minutes: "30",
   mobile_leadership_layouts: JSON.stringify({
     department_manager: ["timeTracking", "team", "approvals", "schedule", "requests", "more"],
     manager: ["timeTracking", "team", "approvals", "schedule", "requests", "more"],
     hr: ["timeTracking", "approvals", "team", "schedule", "requests", "more"],
     admin: ["timeTracking", "approvals", "team", "schedule", "requests", "more"],
+    it_admin: ["timeTracking", "team", "schedule", "requests", "more"],
+    developer: ["timeTracking", "approvals", "team", "schedule", "requests", "more"],
   }),
 };
 
@@ -255,6 +322,8 @@ const publicUrl = String(process.env.GRABENPLANER_PUBLIC_URL || runtimeConfig.pu
 const trustProxySetting = String(process.env.GRABENPLANER_TRUST_PROXY || runtimeConfig.trustProxy || "loopback").trim() || "loopback";
 const serviceControlToken = String(process.env.GRABENPLANER_SERVICE_CONTROL_TOKEN || "").trim();
 const deploymentKind = String(process.env.GRABENPLANER_DEPLOYMENT_KIND || "local").trim().toLowerCase() || "local";
+const codespacesForwardingDomain = String(process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || "app.github.dev")
+  .trim().toLowerCase();
 const app = express();
 const PORT = Number(process.env.PORT || runtimeConfig.port || 3000);
 const configuredHost = configuredOperationMode === "lan" ? "0.0.0.0" : "127.0.0.1";
@@ -271,6 +340,43 @@ const defaultBackupDirectorySetting = "%USERPROFILE%\\Documents\\grabenplaner-ba
 const defaultBackupDirectory = process.env.BACKUP_DIR || path.join(os.homedir(), "Documents", "grabenplaner-backups");
 const instanceLockPath = databasePath === ":memory:" ? "" : `${path.resolve(databasePath)}.server.lock`;
 
+function normalizeHttpOrigin(value) {
+  try {
+    const parsed = new URL(String(value || "").trim());
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return "";
+    const defaultPort = (parsed.protocol === 'https:' && parsed.port === '443')
+      || (parsed.protocol === 'http:' && parsed.port === '80');
+    return `${parsed.protocol}//${parsed.hostname.toLowerCase()}${parsed.port && !defaultPort ? `:${parsed.port}` : ""}`;
+  } catch {
+    return "";
+  }
+}
+
+const normalizedPublicOrigin = normalizeHttpOrigin(publicUrl);
+
+function trustedCodespacesForwardedOrigin(request) {
+  if (deploymentKind !== "codespaces-test" || !request.secure || !isLoopbackRequest(request)) return "";
+  const forwardedHost = String(request.headers["x-forwarded-host"] || "").split(",", 1)[0].trim().toLowerCase();
+  if (!forwardedHost || !/^[a-z0-9.-]+(?::\d+)?$/.test(forwardedHost)) return "";
+  const candidate = normalizeHttpOrigin(`https://${forwardedHost}`);
+  if (!candidate) return "";
+  const hostname = new URL(candidate).hostname;
+  if (!codespacesForwardingDomain || !hostname.endsWith(`.${codespacesForwardingDomain}`)) return "";
+  const configuredPortMarker = normalizedPublicOrigin
+    ? new URL(normalizedPublicOrigin).hostname.match(/-(\d+)\./)?.[1]
+    : "";
+  if (!hostname.includes(`-${configuredPortMarker || PORT}.`)) return "";
+  return candidate;
+}
+
+function requestOriginAllowed(request, origin) {
+  const normalizedOrigin = normalizeHttpOrigin(origin);
+  if (!normalizedOrigin) return false;
+  if (normalizedPublicOrigin && normalizedOrigin === normalizedPublicOrigin) return true;
+  const forwardedOrigin = trustedCodespacesForwardedOrigin(request);
+  return Boolean(forwardedOrigin && normalizedOrigin === forwardedOrigin);
+}
+
 if (serverModeActive) app.set("trust proxy", trustProxySetting);
 
 function portalPasswordMinLength() {
@@ -281,6 +387,33 @@ fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 fs.mkdirSync(appBackupDirectory, { recursive: true });
 fs.mkdirSync(brandingKitsDirectory, { recursive: true });
 fs.mkdirSync(amuStorageDirectory, { recursive: true });
+
+function loadPrivateSecret({ environmentName, fileName, bytes = 32, requiredInServerMode = false }) {
+  const environmentValue = String(process.env[environmentName] || "").trim();
+  if (environmentValue) return { value: environmentValue, source: "environment", path: "" };
+  if (requiredInServerMode && serverModeActive) return null;
+  const secretPath = path.join(privateDataDirectory, fileName);
+  if (!fs.existsSync(secretPath)) {
+    fs.mkdirSync(path.dirname(secretPath), { recursive: true });
+    fs.writeFileSync(secretPath, `${crypto.randomBytes(bytes).toString("base64url")}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+  }
+  try { fs.chmodSync(secretPath, 0o600); } catch {}
+  return { value: fs.readFileSync(secretPath, "utf8").trim(), source: "private-key-file", path: secretPath };
+}
+
+const wifiProviderId = String(process.env.GRABENPLANER_WIFI_PROVIDER_ID || "generic-radius")
+  .trim().toLowerCase().replace(/[^a-z0-9._-]/g, "-").slice(0, 64) || "generic-radius";
+const wifiIdentitySecret = loadPrivateSecret({
+  environmentName: "GRABENPLANER_WIFI_IDENTITY_KEY",
+  fileName: "wifi-identity.key",
+  bytes: 32,
+});
+const wifiWebhookSecret = loadPrivateSecret({
+  environmentName: "GRABENPLANER_WIFI_WEBHOOK_SECRET",
+  fileName: "wifi-webhook.secret",
+  bytes: 48,
+  requiredInServerMode: true,
+});
 
 function loadAmuEncryptionConfiguration() {
   const keyId = String(process.env.GRABENPLANER_AMU_KEY_ID || (serverModeActive ? "" : "local-v1")).trim();
@@ -504,6 +637,9 @@ function createSchema() {
       min_staff INTEGER NOT NULL DEFAULT 0,
       day_settings_json TEXT NOT NULL DEFAULT '',
       time_tracking_enabled INTEGER NOT NULL DEFAULT 0,
+      time_tracking_access_mode TEXT NOT NULL DEFAULT 'anywhere',
+      time_tracking_allowed_networks TEXT NOT NULL DEFAULT '',
+      time_tracking_variance_minutes INTEGER NOT NULL DEFAULT 15,
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -544,6 +680,7 @@ function createSchema() {
       preferred_day_off TEXT,
       fixed_workdays TEXT NOT NULL DEFAULT '',
       position_id TEXT NOT NULL DEFAULT 'verkaufsmitarbeiter',
+      time_confirmation_level TEXT NOT NULL DEFAULT 'C',
       home_location_id TEXT,
       preferred_department_id INTEGER,
       active INTEGER NOT NULL DEFAULT 1,
@@ -664,6 +801,7 @@ function createSchema() {
       employee_number TEXT PRIMARY KEY,
       password_hash TEXT NOT NULL DEFAULT '',
       role TEXT NOT NULL DEFAULT 'employee',
+      role_locked INTEGER NOT NULL DEFAULT 0,
       active INTEGER NOT NULL DEFAULT 1,
       must_change_password INTEGER NOT NULL DEFAULT 1,
       last_login_at TEXT,
@@ -894,6 +1032,125 @@ function createSchema() {
         ON UPDATE CASCADE ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS time_day_reviews (
+      employee_number TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      department_id INTEGER,
+      department_key INTEGER NOT NULL DEFAULT 0,
+      work_date TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      reviewed_by TEXT NOT NULL,
+      reviewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      evaluation_version TEXT NOT NULL DEFAULT 'v1',
+      snapshot_json TEXT NOT NULL DEFAULT '{}',
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (employee_number, work_date, department_key),
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (department_id) REFERENCES departments(id)
+        ON UPDATE CASCADE ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS wifi_automation_preferences (
+      employee_number TEXT PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      provider_id TEXT,
+      external_subject_hash TEXT,
+      opted_in_at TEXT,
+      opted_out_at TEXT,
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS wifi_presence_sessions (
+      id TEXT PRIMARY KEY,
+      employee_number TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      provider_id TEXT NOT NULL DEFAULT '',
+      correlation_hash TEXT NOT NULL DEFAULT '',
+      observed_start_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      disconnect_observed_at TEXT,
+      observed_end_at TEXT,
+      state TEXT NOT NULL DEFAULT 'observing',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS wifi_event_inbox (
+      id TEXT PRIMARY KEY,
+      provider_id TEXT NOT NULL,
+      external_event_hash TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      external_subject_hash TEXT NOT NULL,
+      location_reference_hash TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      payload_fingerprint TEXT NOT NULL DEFAULT '',
+      processing_status TEXT NOT NULL DEFAULT 'pending',
+      presence_session_id TEXT,
+      processed_at TEXT,
+      processing_error TEXT NOT NULL DEFAULT '',
+      UNIQUE(provider_id, external_event_hash),
+      FOREIGN KEY (presence_session_id) REFERENCES wifi_presence_sessions(id)
+        ON UPDATE CASCADE ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS wifi_location_mappings (
+      provider_id TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      external_location_hash TEXT NOT NULL,
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (provider_id, location_id),
+      UNIQUE(provider_id, external_location_hash),
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS wifi_time_suggestions (
+      id TEXT PRIMARY KEY,
+      presence_session_id TEXT NOT NULL,
+      employee_number TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      work_date TEXT NOT NULL,
+      suggested_start_at TEXT NOT NULL,
+      suggested_end_at TEXT NOT NULL,
+      confirmation_level_snapshot TEXT NOT NULL DEFAULT 'C',
+      minimum_presence_minutes_snapshot INTEGER NOT NULL DEFAULT 5,
+      absence_grace_minutes_snapshot INTEGER NOT NULL DEFAULT 30,
+      confirmation_due_at TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      confirmed_start_at TEXT,
+      confirmed_end_at TEXT,
+      confirmed_break_start_at TEXT,
+      confirmed_break_end_at TEXT,
+      confirmed_by TEXT,
+      confirmed_at TEXT,
+      rejected_by TEXT,
+      rejected_at TEXT,
+      rejection_reason TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (presence_session_id) REFERENCES wifi_presence_sessions(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      UNIQUE(presence_session_id, work_date)
+    );
+
     CREATE TABLE IF NOT EXISTS portal_settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
@@ -1069,6 +1326,13 @@ if (!columnExists("employees", "fixed_workdays")) {
 if (!columnExists("employees", "position_id")) {
   db.exec("ALTER TABLE employees ADD COLUMN position_id TEXT NOT NULL DEFAULT 'verkaufsmitarbeiter'");
 }
+ensureColumn("employees", "time_confirmation_level", "TEXT NOT NULL DEFAULT 'C'");
+ensureColumn("wifi_time_suggestions", "confirmed_start_at", "TEXT");
+ensureColumn("wifi_time_suggestions", "confirmed_end_at", "TEXT");
+ensureColumn("wifi_time_suggestions", "confirmed_break_start_at", "TEXT");
+ensureColumn("wifi_time_suggestions", "confirmed_break_end_at", "TEXT");
+ensureColumn("wifi_time_suggestions", "rejected_by", "TEXT");
+ensureColumn("wifi_time_suggestions", "rejection_reason", "TEXT NOT NULL DEFAULT ''");
 if (!columnExists("employees", "home_location_id")) {
   db.exec("ALTER TABLE employees ADD COLUMN home_location_id TEXT");
 }
@@ -1080,6 +1344,9 @@ if (tableExists("locations") && !columnExists("locations", "min_staff")) {
 }
 ensureColumn("locations", "day_settings_json", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("locations", "time_tracking_enabled", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("locations", "time_tracking_access_mode", "TEXT NOT NULL DEFAULT 'anywhere'");
+ensureColumn("locations", "time_tracking_allowed_networks", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("locations", "time_tracking_variance_minutes", "INTEGER NOT NULL DEFAULT 15");
 if (tableExists("departments") && !columnExists("departments", "min_staff")) {
   db.exec("ALTER TABLE departments ADD COLUMN min_staff INTEGER NOT NULL DEFAULT 0");
 }
@@ -1092,6 +1359,7 @@ if (!columnExists("shifts", "department_id")) {
 ensureColumn("portal_users", "password_changed_at", "TEXT");
 ensureColumn("portal_users", "failed_login_attempts", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("portal_users", "locked_until", "TEXT");
+ensureColumn("portal_users", "role_locked", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("portal_roles", "description", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("portal_roles", "sort_order", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("portal_roles", "updated_at", "TEXT");
@@ -1107,11 +1375,21 @@ ensureColumn("time_corrections", "department_id", "INTEGER");
 ensureColumn("time_corrections", "request_note", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("time_corrections", "decision_note", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("time_corrections", "requested_by", "TEXT");
+ensureColumn("time_day_reviews", "evaluation_version", "TEXT NOT NULL DEFAULT 'v1'");
+ensureColumn("time_day_reviews", "snapshot_json", "TEXT NOT NULL DEFAULT '{}'");
+ensureColumn("time_day_reviews", "department_key", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("amu_reports", "department_id", "INTEGER");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_work_date ON time_entries(employee_number, work_date, entry_timestamp)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_location_date ON time_entries(location_id, work_date, entry_timestamp)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_corrections_context ON time_corrections(location_id, department_id, status, correction_date)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_corrections_pending_employee_date ON time_corrections(employee_number, correction_date, status)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_time_day_reviews_context ON time_day_reviews(location_id, department_id, work_date)");
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_wifi_preference_external_subject ON wifi_automation_preferences(provider_id, external_subject_hash) WHERE TRIM(COALESCE(external_subject_hash, '')) <> ''");
+db.exec("CREATE INDEX IF NOT EXISTS idx_wifi_presence_employee_state ON wifi_presence_sessions(employee_number, state, observed_start_at)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_wifi_presence_location_state ON wifi_presence_sessions(location_id, state, observed_start_at)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_wifi_event_inbox_processing ON wifi_event_inbox(processing_status, received_at)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_wifi_suggestions_employee_date ON wifi_time_suggestions(employee_number, work_date, status)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_wifi_location_mapping_hash ON wifi_location_mappings(provider_id, external_location_hash)");
 db.prepare("UPDATE time_entries SET work_date = SUBSTR(entry_timestamp, 1, 10) WHERE TRIM(COALESCE(work_date, '')) = ''").run();
 db.prepare(`
   UPDATE time_entries
@@ -1337,6 +1615,24 @@ const upsertPortalRole = db.prepare(`
 for (const role of builtinPortalRoles) {
   upsertPortalRole.run(role.id, role.name, role.description, JSON.stringify(role.permissions), role.sortOrder);
 }
+db.prepare("UPDATE portal_users SET role_locked = 1 WHERE role = 'developer'").run();
+db.exec("BEGIN");
+try {
+  db.prepare(`
+    DELETE FROM portal_permission_grants
+    WHERE permission = 'employees:write'
+      AND EXISTS (
+        SELECT 1 FROM portal_permission_grants newer
+        WHERE newer.employee_number = portal_permission_grants.employee_number
+          AND newer.permission = 'employees:display:write'
+      )
+  `).run();
+  db.prepare("UPDATE portal_permission_grants SET permission = 'employees:display:write', updated_at = CURRENT_TIMESTAMP WHERE permission = 'employees:write'").run();
+  db.exec("COMMIT");
+} catch (error) {
+  db.exec("ROLLBACK");
+  throw error;
+}
 const insertPortalSetting = db.prepare("INSERT OR IGNORE INTO portal_settings (key, value) VALUES (?, ?)");
 for (const [key, value] of Object.entries(defaultPortalSettings)) insertPortalSetting.run(key, value);
 db.prepare("UPDATE portal_settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'password_min_length'")
@@ -1351,6 +1647,14 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.52-time-tracking-amu-policies", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.53-rights-branding-time-corrections-mobile", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.54-protected-developer-role-rights", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.55-time-evaluation-day-review", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.56-wifi-automation-foundation", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.57-wifi-automation-suggestions", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -1410,14 +1714,136 @@ const seedEmployees = [
   ["106", "Fina Demo", "Fina", "#c58b00"],
 ];
 
-if (process.env.GRABENPLANER_SEED_DEMO === "1" && db.prepare("SELECT COUNT(*) AS count FROM employees").get().count === 0) {
-  const seedLocationId = db.prepare("SELECT id FROM locations ORDER BY active DESC, id LIMIT 1").get()?.id || "01";
+function demoLocationDaySettings(location) {
+  return Object.fromEntries(planningDays.map(([day]) => {
+    const saturday = day === "saturday";
+    const start = saturday ? location.saturdayStart : location.weekdayStart;
+    const end = saturday ? location.saturdayEnd : location.weekdayEnd;
+    return [day, {
+      open: true,
+      start,
+      end,
+      lunchEnabled: false,
+      lunchStart: "13:00",
+      lunchEnd: "14:00",
+      minStaff: Number(location.minStaff || 0),
+      minFrom: start,
+      minTo: end,
+    }];
+  }));
+}
+
+function loadSporthandelDemoProfile() {
+  const profilePath = path.join(__dirname, "demo", "sporthandel", "demo-profile.json");
+  const profile = JSON.parse(fs.readFileSync(profilePath, "utf8").replace(/^\uFEFF/, ""));
+  if (profile?.format !== "grabenplaner-demo-profile" || profile?.id !== "sporthandel"
+    || !Array.isArray(profile.locations) || !Array.isArray(profile.employees)) {
+    throw new Error("Das Sporthandel-Demoprofil ist ungueltig.");
+  }
+  const salesCount = profile.employees.filter((employee) => employee.category === "sales").length;
+  if (profile.locations.length !== 6 || salesCount !== 31) {
+    throw new Error("Das Sporthandel-Demoprofil muss sechs Filialen und 31 Verkaufsmitarbeitende enthalten.");
+  }
+  return profile;
+}
+
+function seedSporthandelDemo() {
+  const profile = loadSporthandelDemoProfile();
+  const insertLocation = db.prepare(`
+    INSERT INTO locations
+      (id, name, min_staff, day_settings_json, time_tracking_enabled, time_tracking_access_mode,
+       time_tracking_allowed_networks, time_tracking_variance_minutes, active)
+    VALUES (?, ?, ?, ?, 1, 'anywhere', '', 15, 1)
+  `);
+  const insertDepartment = db.prepare(`
+    INSERT INTO departments (location_id, name, min_staff, active, sort_order)
+    VALUES (?, ?, ?, 1, ?)
+  `);
   const insertEmployee = db.prepare(`
     INSERT INTO employees
-      (personnel_number, full_name, nickname, color, contracted_hours, home_location_id, active)
-    VALUES (?, ?, ?, ?, 38.5, ?, 1)
+      (personnel_number, full_name, nickname, color, contracted_hours, position_id,
+       time_confirmation_level, home_location_id, preferred_department_id, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `);
-  for (const employee of seedEmployees) insertEmployee.run(...employee, seedLocationId);
+  const insertBranding = db.prepare(`
+    INSERT INTO location_branding
+      (location_id, kit_id, company_name, logo_url, icon_url, logo_alt, admin_email, updated_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'demo-profile')
+  `);
+  const upsertSetting = db.prepare(`
+    INSERT INTO settings (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `);
+
+  db.exec("BEGIN");
+  try {
+    db.prepare("DELETE FROM location_branding").run();
+    db.prepare("DELETE FROM departments").run();
+    db.prepare("DELETE FROM locations").run();
+
+    const departmentIds = new Map();
+    for (const location of profile.locations) {
+      insertLocation.run(location.id, location.name, Number(location.minStaff || 0), JSON.stringify(demoLocationDaySettings(location)));
+      for (const [index, departmentName] of location.departments.entries()) {
+        const result = insertDepartment.run(location.id, departmentName, 1, index + 1);
+        departmentIds.set(`${location.id}:${departmentName}`, Number(result.lastInsertRowid));
+      }
+      insertBranding.run(
+        location.id,
+        profile.branding.kitId,
+        profile.companyName,
+        profile.branding.logoUrl,
+        profile.branding.iconUrl,
+        profile.branding.logoAlt,
+        profile.branding.adminEmail || "",
+      );
+    }
+
+    for (const employee of profile.employees) {
+      const departmentId = departmentIds.get(`${employee.locationId}:${employee.department}`) || null;
+      insertEmployee.run(
+        employee.personnelNumber,
+        employee.fullName,
+        employee.nickname,
+        employee.color,
+        Number(employee.contractedHours || 38.5),
+        employee.positionId || "verkaufsmitarbeiter",
+        ["A", "B", "C"].includes(employee.confirmationLevel) ? employee.confirmationLevel : "C",
+        employee.locationId,
+        departmentId,
+      );
+    }
+
+    const managementBranding = {
+      branding_management_kit_id: profile.branding.kitId,
+      branding_company_name: profile.companyName,
+      branding_logo_url: profile.branding.logoUrl,
+      branding_icon_url: profile.branding.iconUrl,
+      branding_logo_alt: profile.branding.logoAlt,
+      branding_admin_email: profile.branding.adminEmail || "",
+    };
+    for (const [key, value] of Object.entries(managementBranding)) upsertSetting.run(key, value);
+    db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES ('demo-profile-sporthandel-v1', ?)")
+      .run(packageMetadata.version);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+if (process.env.GRABENPLANER_SEED_DEMO === "1" && db.prepare("SELECT COUNT(*) AS count FROM employees").get().count === 0) {
+  if (String(process.env.GRABENPLANER_DEMO_PROFILE || "").trim().toLowerCase() === "sporthandel") {
+    seedSporthandelDemo();
+  } else {
+    const seedLocationId = db.prepare("SELECT id FROM locations ORDER BY active DESC, id LIMIT 1").get()?.id || "01";
+    const insertEmployee = db.prepare(`
+      INSERT INTO employees
+        (personnel_number, full_name, nickname, color, contracted_hours, home_location_id, active)
+      VALUES (?, ?, ?, ?, 38.5, ?, 1)
+    `);
+    for (const employee of seedEmployees) insertEmployee.run(...employee, seedLocationId);
+  }
 }
 
 app.disable("x-powered-by");
@@ -1440,7 +1866,7 @@ app.use((request, response, next) => {
   }
   if (serverModeActive && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
     const origin = String(request.headers.origin || "").replace(/\/$/, "");
-    if (origin && publicUrl && origin !== publicUrl) {
+    if (origin && publicUrl && !requestOriginAllowed(request, origin)) {
       response.status(403).json({ error: "Die Anfrage stammt nicht von der konfigurierten Serveradresse.", code: "ORIGIN_NOT_ALLOWED" });
       return;
     }
@@ -1576,6 +2002,77 @@ const loginBrandingRateLimits = new Map();
 
 function loginRateKey(request) {
   return String(request.ip || request.socket?.remoteAddress || "unknown").replace(/^::ffff:/, "");
+}
+
+function normalizedIp(value) {
+  return String(value || "").trim().replace(/^\[|\]$/g, "").replace(/^::ffff:/i, "").split("%")[0].toLowerCase();
+}
+
+function ipToInteger(value) {
+  const address = normalizedIp(value);
+  const version = net.isIP(address);
+  if (version === 4) {
+    return {
+      version,
+      bits: 32,
+      value: address.split(".").reduce((result, part) => (result << 8n) + BigInt(Number(part)), 0n),
+    };
+  }
+  if (version !== 6) return null;
+  let ipv6 = address;
+  if (ipv6.includes(".")) {
+    const separator = ipv6.lastIndexOf(":");
+    const ipv4 = ipToInteger(ipv6.slice(separator + 1));
+    if (!ipv4 || ipv4.version !== 4) return null;
+    const high = Number((ipv4.value >> 16n) & 0xffffn).toString(16);
+    const low = Number(ipv4.value & 0xffffn).toString(16);
+    ipv6 = `${ipv6.slice(0, separator)}:${high}:${low}`;
+  }
+  const halves = ipv6.split("::");
+  if (halves.length > 2) return null;
+  const left = halves[0] ? halves[0].split(":") : [];
+  const right = halves[1] ? halves[1].split(":") : [];
+  const missing = 8 - left.length - right.length;
+  if (missing < 0 || (halves.length === 1 && missing !== 0)) return null;
+  const words = [...left, ...Array(missing).fill("0"), ...right];
+  if (words.length !== 8 || words.some((word) => !/^[0-9a-f]{1,4}$/i.test(word))) return null;
+  return {
+    version,
+    bits: 128,
+    value: words.reduce((result, word) => (result << 16n) + BigInt(parseInt(word, 16)), 0n),
+  };
+}
+
+function ipMatchesNetwork(ipValue, networkValue) {
+  const [networkAddress, prefixValue] = String(networkValue || "").split("/");
+  const ip = ipToInteger(ipValue);
+  const networkAddressValue = ipToInteger(networkAddress);
+  if (!ip || !networkAddressValue || ip.version !== networkAddressValue.version) return false;
+  const prefix = prefixValue === undefined ? ip.bits : Number(prefixValue);
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > ip.bits) return false;
+  if (prefix === 0) return true;
+  const mask = ((1n << BigInt(prefix)) - 1n) << BigInt(ip.bits - prefix);
+  return (ip.value & mask) === (networkAddressValue.value & mask);
+}
+
+function isPrivateNetworkIp(value) {
+  const ip = normalizedIp(value);
+  return ["127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16",
+    "::1/128", "fc00::/7", "fe80::/10"].some((network) => ipMatchesNetwork(ip, network));
+}
+
+function timeTrackingRequestAccess(request, location) {
+  const mode = location?.time_tracking_access_mode === "trusted_network" ? "trusted_network" : "anywhere";
+  const clientIp = normalizedIp(loginRateKey(request));
+  const configuredNetworks = String(location?.time_tracking_allowed_networks || "").split(/[\s,;]+/).filter(Boolean);
+  const explicitlyAllowed = configuredNetworks.some((network) => ipMatchesNetwork(clientIp, network));
+  const trustedLanClient = !serverModeActive && isPrivateNetworkIp(clientIp);
+  const allowed = mode === "anywhere" || explicitlyAllowed || trustedLanClient;
+  return {
+    mode,
+    allowed,
+    reason: allowed ? "" : "Zeitbuchungen sind für diesen Standort nur aus einem vertrauenswürdigen Firmennetz möglich.",
+  };
 }
 
 function assertLoginRateLimit(request) {
@@ -1766,12 +2263,14 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
   const now = new Date().toISOString();
   const session = db.prepare(`
     SELECT s.id, s.employee_number, s.expires_at, s.revoked_at,
-           u.role, u.active, u.must_change_password,
+           u.role, u.role_locked, u.active, u.must_change_password,
            e.full_name, e.nickname, e.color, e.home_location_id, e.preferred_department_id,
+           e.position_id, p.name AS position_name,
            r.name AS role_name, r.permissions
     FROM portal_sessions s
     JOIN portal_users u ON u.employee_number = s.employee_number
     JOIN employees e ON e.personnel_number = u.employee_number
+    LEFT JOIN positions p ON p.id = e.position_id
     LEFT JOIN portal_roles r ON r.id = u.role
     WHERE s.token_hash = ?
       AND s.revoked_at IS NULL
@@ -1781,17 +2280,15 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
   `).get(sha256(token), now);
   if (!session) return null;
   if (touch) db.prepare("UPDATE portal_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?").run(session.id);
-  const scopes = ["admin", "hr"].includes(session.role) ? [] : db.prepare(`
+  const scopes = GLOBAL_SCOPE_PORTAL_ROLES.has(session.role) ? [] : db.prepare(`
     SELECT location_id, department_id FROM portal_access_scopes
     WHERE employee_number = ? ORDER BY location_id, department_id
   `).all(session.employee_number).map((scope) => ({ locationId: scope.location_id, departmentId: Number(scope.department_id || 0) || null }));
-  if (!scopes.length && !["admin", "hr"].includes(session.role) && session.home_location_id) {
+  if (!scopes.length && !GLOBAL_SCOPE_PORTAL_ROLES.has(session.role) && session.home_location_id) {
     scopes.push({ locationId: session.home_location_id, departmentId: session.role === "department_manager" ? (Number(session.preferred_department_id) || null) : null });
   }
   const rolePermissions = parsePortalPermissions(session.permissions);
-  const grantedPermissions = ["manager", "department_manager"].includes(session.role)
-    ? portalPermissionGrantsForEmployee(session.employee_number)
-    : [];
+  const grantedPermissions = portalPermissionGrantsForEmployee(session.employee_number);
   return {
     id: session.id,
     employeeNumber: session.employee_number,
@@ -1799,8 +2296,11 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
     nickname: session.nickname,
     color: session.color,
     homeLocationId: session.home_location_id,
+    positionId: session.position_id || null,
+    positionName: session.position_name || "",
     role: session.role,
     roleName: session.role_name || session.role,
+    roleLocked: Boolean(session.role_locked),
     permissions: [...new Set([...rolePermissions, ...grantedPermissions])],
     rolePermissions,
     grantedPermissions,
@@ -1818,8 +2318,11 @@ function publicPortalUser(session) {
     nickname: session.nickname,
     color: session.color,
     homeLocationId: session.homeLocationId,
+    positionId: session.positionId,
+    positionName: session.positionName,
     role: session.role,
     roleName: session.roleName,
+    roleLocked: Boolean(session.roleLocked),
     permissions: session.permissions,
     rolePermissions: session.rolePermissions || [],
     grantedPermissions: session.grantedPermissions || [],
@@ -1829,7 +2332,7 @@ function publicPortalUser(session) {
 }
 
 function sessionHasGlobalScope(session) {
-  return !session || session.employeeNumber === "local" || ["admin", "hr"].includes(session.role);
+  return !session || session.employeeNumber === "local" || GLOBAL_SCOPE_PORTAL_ROLES.has(session.role);
 }
 
 function assertSessionContextScope(session, input = {}) {
@@ -1839,10 +2342,9 @@ function assertSessionContextScope(session, input = {}) {
   if (!locationId) return;
   const matching = (session.scopes || []).filter((scope) => scope.locationId === locationId);
   if (!matching.length) throw httpError(403, "Diese Filiale ist dem Zugang nicht zugewiesen.", "PORTAL_SCOPE_DENIED");
-  if (session.role === "department_manager") {
-    if (!departmentId || !matching.some((scope) => Number(scope.departmentId) === departmentId)) {
-      throw httpError(403, "Diese Abteilung ist dem Zugang nicht zugewiesen.", "PORTAL_SCOPE_DENIED");
-    }
+  if (matching.some((scope) => !Number(scope.departmentId || 0))) return;
+  if (!departmentId || !matching.some((scope) => Number(scope.departmentId) === departmentId)) {
+    throw httpError(403, "Diese Abteilung ist dem Zugang nicht zugewiesen.", "PORTAL_SCOPE_DENIED");
   }
 }
 
@@ -1884,7 +2386,7 @@ function assertPortalCsrf(request) {
 
 function enforceAdminApiAccess(request, _response, next) {
   try {
-    if (request.path === "/health" || request.path === "/service/stop") return next();
+    if (request.path === "/health" || request.path === "/service/stop" || request.path === "/integrations/wifi/events") return next();
     const status = getPortalStatus();
     if (!status.portalEnabled || request.path.startsWith("/portal/")) return next();
     const method = String(request.method || "GET").toUpperCase();
@@ -1892,6 +2394,8 @@ function enforceAdminApiAccess(request, _response, next) {
     if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
       if (/^\/branding/.test(request.path)) {
         permission = "branding:write";
+      } else if (/^\/employees\/[^/]+\/display\/?$/.test(request.path)) {
+        permission = "employees:display:write";
       } else if (/^\/employees/.test(request.path)) {
         permission = "employees:write";
       } else if (/^\/locations/.test(request.path)) {
@@ -1919,7 +2423,6 @@ function enforceAdminApiAccess(request, _response, next) {
       }
     }
     const session = requirePortalSession(request, permission);
-    if (session.role === "employee") throw httpError(403, "Bitte das Mitarbeiterportal verwenden.", "PORTAL_EMPLOYEE_ONLY");
     assertPortalCsrf(request);
     assertSessionContextScope(session, { ...request.query, ...request.body });
     request.portalSession = session;
@@ -2152,6 +2655,728 @@ function getPortalSettings() {
   };
 }
 
+function getWifiAutomationPolicy() {
+  const settings = getPortalSettings();
+  return {
+    minimumPresenceMinutes: Math.min(120, Math.max(1, Number(settings.wifi_minimum_presence_minutes || 5))),
+    absenceGraceMinutes: Math.min(240, Math.max(1, Number(settings.wifi_absence_grace_minutes || 30))),
+    endTimestampMode: "first_disconnect",
+    connectorStatus: "not_configured",
+    phase: "suggestions",
+  };
+}
+
+function validateWifiAutomationPolicy(body = {}) {
+  const minimumPresenceMinutes = Number(body.minimumPresenceMinutes);
+  const absenceGraceMinutes = Number(body.absenceGraceMinutes);
+  if (!Number.isInteger(minimumPresenceMinutes) || minimumPresenceMinutes < 1 || minimumPresenceMinutes > 120) {
+    throw httpError(400, "Die Mindestanwesenheit muss zwischen 1 und 120 Minuten liegen.", "WIFI_POLICY_INVALID");
+  }
+  if (!Number.isInteger(absenceGraceMinutes) || absenceGraceMinutes < 1 || absenceGraceMinutes > 240) {
+    throw httpError(400, "Die Abwesenheitstoleranz muss zwischen 1 und 240 Minuten liegen.", "WIFI_POLICY_INVALID");
+  }
+  return { minimumPresenceMinutes, absenceGraceMinutes };
+}
+
+function wifiConfirmationLevels() {
+  return db.prepare(`
+    SELECT personnel_number, full_name, nickname, active, time_confirmation_level
+    FROM employees
+    ORDER BY active DESC, CAST(personnel_number AS INTEGER), personnel_number
+  `).all().map((employee) => ({
+    employeeNumber: employee.personnel_number,
+    fullName: employee.full_name,
+    nickname: employee.nickname,
+    active: Boolean(employee.active),
+    level: ["A", "B", "C"].includes(String(employee.time_confirmation_level || "").toUpperCase())
+      ? String(employee.time_confirmation_level).toUpperCase()
+      : "C",
+  }));
+}
+
+function validateWifiConfirmationLevels(body = {}) {
+  if (!Array.isArray(body.levels) || body.levels.length > 1000) {
+    throw httpError(400, "Bitte eine gültige Liste mit höchstens 1000 Teammitgliedern übermitteln.", "WIFI_CONFIRMATION_LEVELS_INVALID");
+  }
+  const seen = new Set();
+  return body.levels.map((item) => {
+    const employeeNumber = String(item.employeeNumber || "").trim();
+    const level = String(item.level || "").trim().toUpperCase();
+    if (!employeeNumber || seen.has(employeeNumber) || !["A", "B", "C"].includes(level)) {
+      throw httpError(400, "Die übermittelten Vertrauensstufen sind ungültig.", "WIFI_CONFIRMATION_LEVELS_INVALID");
+    }
+    if (!db.prepare("SELECT 1 FROM employees WHERE personnel_number = ?").get(employeeNumber)) {
+      throw httpError(404, `Teammitglied ${employeeNumber} wurde nicht gefunden.`, "EMPLOYEE_NOT_FOUND");
+    }
+    seen.add(employeeNumber);
+    return { employeeNumber, level };
+  });
+}
+
+const wifiWebhookRateLimits = new Map();
+const wifiEventTypes = new Set(["connected", "seen", "disconnected"]);
+const wifiForbiddenEventFields = new Set(["mac", "macaddress", "mac_address", "bssid", "ssid", "device", "deviceid", "device_id"]);
+
+function wifiCanonicalReference(value, { caseSensitive = false } = {}) {
+  const normalized = String(value || "").trim().replace(/\s+/g, " ");
+  return caseSensitive ? normalized : normalized.toLocaleLowerCase("de");
+}
+
+function wifiReferenceHash(kind, value, providerId = wifiProviderId, options = {}) {
+  if (!wifiIdentitySecret?.value) throw httpError(503, "Der private WLAN-Identitätsschlüssel ist nicht verfügbar.", "WIFI_IDENTITY_KEY_UNAVAILABLE");
+  const normalized = wifiCanonicalReference(value, options);
+  return crypto.createHmac("sha256", wifiIdentitySecret.value)
+    .update(`${providerId}\0${kind}\0${normalized}`, "utf8").digest("hex");
+}
+
+function wifiWebhookConfigured() {
+  return Boolean(wifiWebhookSecret?.value && wifiWebhookSecret.value.length >= 32);
+}
+
+function wifiConnectorPayload(actor = null) {
+  const maySeeTechnicalHint = actor?.employeeNumber === "local" || ["developer", "it_admin", "admin"].includes(actor?.role);
+  return {
+    configured: wifiWebhookConfigured(),
+    providerId: wifiProviderId,
+    eventEndpoint: "/api/integrations/wifi/events",
+    secretSource: wifiWebhookSecret?.source || "missing",
+    configurationHint: !wifiWebhookConfigured()
+      ? "Im Serverbetrieb muss GRABENPLANER_WIFI_WEBHOOK_SECRET mit mindestens 32 Zeichen gesetzt werden."
+      : wifiWebhookSecret?.source === "environment"
+        ? "Der Webhook-Schlüssel wird sicher aus der Serverumgebung geladen."
+        : maySeeTechnicalHint
+          ? "Der Webhook-Schlüssel liegt geschützt im privaten Datenverzeichnis."
+          : "Die WLAN-Schnittstelle ist geschützt konfiguriert.",
+  };
+}
+
+function wifiLocationMappings() {
+  const mapped = new Map(db.prepare(`
+    SELECT location_id, updated_at FROM wifi_location_mappings WHERE provider_id = ?
+  `).all(wifiProviderId).map((row) => [row.location_id, row.updated_at]));
+  return db.prepare("SELECT id, name, active FROM locations ORDER BY active DESC, id").all().map((location) => ({
+    locationId: location.id,
+    locationName: location.name,
+    active: Boolean(location.active),
+    mapped: mapped.has(location.id),
+    updatedAt: mapped.get(location.id) || null,
+  }));
+}
+
+function saveWifiLocationMappings(actor, body = {}) {
+  if (!Array.isArray(body.mappings) || body.mappings.length > 1000) {
+    throw httpError(400, "Bitte gültige Standortzuordnungen übermitteln.", "WIFI_LOCATION_MAPPINGS_INVALID");
+  }
+  const seen = new Set();
+  const normalized = body.mappings.map((item) => {
+    const locationId = normalizeLocationId(item.locationId || "");
+    if (!locationId || seen.has(locationId)) throw httpError(400, "Eine Standortzuordnung ist doppelt oder ungültig.", "WIFI_LOCATION_MAPPINGS_INVALID");
+    validateLocationExists(locationId);
+    seen.add(locationId);
+    const clear = item.clear === true;
+    const externalReference = wifiCanonicalReference(item.externalReference || "");
+    if (!clear && (externalReference.length < 1 || externalReference.length > 200)) {
+      throw httpError(400, `Für Filiale ${locationId} fehlt eine gültige Controller-Kennung.`, "WIFI_LOCATION_MAPPINGS_INVALID");
+    }
+    return { locationId, clear, externalReference };
+  });
+  const remove = db.prepare("DELETE FROM wifi_location_mappings WHERE provider_id = ? AND location_id = ?");
+  const upsert = db.prepare(`
+    INSERT INTO wifi_location_mappings
+      (provider_id, location_id, external_location_hash, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(provider_id, location_id) DO UPDATE SET
+      external_location_hash = excluded.external_location_hash,
+      updated_by = excluded.updated_by,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const item of normalized) {
+      if (item.clear) remove.run(wifiProviderId, item.locationId);
+      else upsert.run(wifiProviderId, item.locationId, wifiReferenceHash("location", item.externalReference), actor.employeeNumber);
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    if (String(error.message || "").includes("UNIQUE")) {
+      throw httpError(409, "Eine Controller-Kennung darf nur einer Filiale zugeordnet sein.", "WIFI_LOCATION_MAPPING_CONFLICT");
+    }
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "wifi.location_mappings.update", "wifi_location_mapping", wifiProviderId,
+    JSON.stringify({ locations: normalized.map((item) => ({ locationId: item.locationId, cleared: item.clear })) }));
+  return wifiLocationMappings();
+}
+
+function wifiAutomationPreference(employeeNumber) {
+  const row = db.prepare(`
+    SELECT employee_number, enabled, provider_id, opted_in_at, opted_out_at, updated_at
+    FROM wifi_automation_preferences WHERE employee_number = ?
+  `).get(employeeNumber);
+  return row ? {
+    enabled: Boolean(row.enabled),
+    providerId: row.provider_id || wifiProviderId,
+    optedInAt: row.opted_in_at,
+    optedOutAt: row.opted_out_at,
+    updatedAt: row.updated_at,
+  } : { enabled: false, providerId: wifiProviderId, optedInAt: null, optedOutAt: null, updatedAt: null };
+}
+
+function setWifiAutomationPreference(session, enabled) {
+  const employeeNumber = session.employeeNumber;
+  const externalSubjectHash = enabled ? wifiReferenceHash("subject", employeeNumber) : null;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`
+      INSERT INTO wifi_automation_preferences
+        (employee_number, enabled, provider_id, external_subject_hash, opted_in_at, opted_out_at, updated_by, updated_at)
+      VALUES (?, ?, ?, ?, CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP END,
+        CASE WHEN ? = 0 THEN CURRENT_TIMESTAMP END, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(employee_number) DO UPDATE SET
+        enabled = excluded.enabled,
+        provider_id = excluded.provider_id,
+        external_subject_hash = excluded.external_subject_hash,
+        opted_in_at = CASE WHEN excluded.enabled = 1 THEN COALESCE(wifi_automation_preferences.opted_in_at, CURRENT_TIMESTAMP) ELSE wifi_automation_preferences.opted_in_at END,
+        opted_out_at = CASE WHEN excluded.enabled = 0 THEN CURRENT_TIMESTAMP ELSE NULL END,
+        updated_by = excluded.updated_by,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(employeeNumber, enabled ? 1 : 0, enabled ? wifiProviderId : null, externalSubjectHash,
+      enabled ? 1 : 0, enabled ? 1 : 0, employeeNumber);
+    if (!enabled) {
+      db.prepare(`
+        UPDATE wifi_presence_sessions SET state = 'cancelled', observed_end_at = COALESCE(observed_end_at, last_seen_at), updated_at = CURRENT_TIMESTAMP
+        WHERE employee_number = ? AND state IN ('observing','present','grace')
+      `).run(employeeNumber);
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  auditPortal(employeeNumber, enabled ? "wifi.preference.enable" : "wifi.preference.disable", "wifi_automation_preference", employeeNumber);
+  return wifiAutomationPreference(employeeNumber);
+}
+
+function wifiConfirmationDueAt(workDate, level) {
+  const weekEnd = addDays(getMonday(workDate), 6);
+  if (level === "A") return viennaLocalDateTime(weekEnd, "23:00").toISOString();
+  if (level === "B") {
+    const threeDayLimit = viennaLocalDateTime(addDays(workDate, 3), "12:00");
+    const weekLimit = viennaLocalDateTime(weekEnd, "23:00");
+    return new Date(Math.min(threeDayLimit.getTime(), weekLimit.getTime())).toISOString();
+  }
+  return viennaLocalDateTime(addDays(workDate, 1), "12:00").toISOString();
+}
+
+function splitWifiPresenceByWorkDate(startAt, endAt) {
+  const start = new Date(startAt);
+  const end = new Date(endAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return [];
+  const result = [];
+  let cursor = start;
+  while (cursor < end && result.length < 8) {
+    const workDate = viennaTodayIso(cursor);
+    const nextMidnight = viennaLocalDateTime(addDays(workDate, 1), "00:00");
+    const segmentEnd = new Date(Math.min(end.getTime(), nextMidnight.getTime()));
+    if (segmentEnd > cursor) result.push({ workDate, startAt: cursor.toISOString(), endAt: segmentEnd.toISOString() });
+    cursor = segmentEnd;
+  }
+  return result;
+}
+
+function wifiSuggestionWarning(row, now = new Date()) {
+  if (row.status !== "pending") return "none";
+  const dueAt = new Date(row.confirmation_due_at || 0);
+  if (Number.isNaN(dueAt.getTime())) return "pending";
+  const remaining = dueAt.getTime() - now.getTime();
+  if (remaining <= 0) return "overdue";
+  if (remaining <= 24 * 60 * 60 * 1000) return "due_soon";
+  return "pending";
+}
+
+function serializeWifiSuggestion(row, now = new Date()) {
+  const startAt = row.confirmed_start_at || row.suggested_start_at;
+  const endAt = row.confirmed_end_at || row.suggested_end_at;
+  return {
+    id: row.id,
+    workDate: row.work_date,
+    weekStart: getMonday(row.work_date),
+    locationId: row.location_id,
+    locationName: row.location_name || row.location_id,
+    suggestedStartAt: row.suggested_start_at,
+    suggestedEndAt: row.suggested_end_at,
+    startTime: viennaNowLocal(new Date(startAt)).slice(11, 16),
+    endTime: viennaNowLocal(new Date(endAt)).slice(11, 16),
+    breakStartTime: row.confirmed_break_start_at ? viennaNowLocal(new Date(row.confirmed_break_start_at)).slice(11, 16) : "",
+    breakEndTime: row.confirmed_break_end_at ? viennaNowLocal(new Date(row.confirmed_break_end_at)).slice(11, 16) : "",
+    level: row.confirmation_level_snapshot || "C",
+    dueAt: row.confirmation_due_at,
+    status: row.status,
+    warning: wifiSuggestionWarning(row, now),
+    confirmedAt: row.confirmed_at,
+    rejectedAt: row.rejected_at,
+    rejectionReason: row.rejection_reason || "",
+  };
+}
+
+function createWifiSuggestionsForSession(sessionRow, now = new Date()) {
+  const employee = db.prepare(`
+    SELECT time_confirmation_level FROM employees WHERE personnel_number = ? AND active = 1
+  `).get(sessionRow.employee_number);
+  if (!employee) return [];
+  const level = ["A", "B", "C"].includes(String(employee.time_confirmation_level || "").toUpperCase())
+    ? String(employee.time_confirmation_level).toUpperCase() : "C";
+  const policy = getWifiAutomationPolicy();
+  const created = [];
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO wifi_time_suggestions
+      (id, presence_session_id, employee_number, location_id, work_date,
+       suggested_start_at, suggested_end_at, confirmation_level_snapshot,
+       minimum_presence_minutes_snapshot, absence_grace_minutes_snapshot, confirmation_due_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const segment of splitWifiPresenceByWorkDate(sessionRow.observed_start_at, sessionRow.observed_end_at)) {
+    if (new Date(segment.endAt).getTime() - new Date(segment.startAt).getTime() < 60 * 1000) continue;
+    const id = crypto.randomUUID();
+    const result = insert.run(id, sessionRow.id, sessionRow.employee_number, sessionRow.location_id, segment.workDate,
+      segment.startAt, segment.endAt, level, policy.minimumPresenceMinutes, policy.absenceGraceMinutes,
+      wifiConfirmationDueAt(segment.workDate, level));
+    if (!result.changes) continue;
+    created.push(id);
+    createPortalNotification(sessionRow.employee_number, "wifi.suggestion", "Neuer WLAN-Zeitvorschlag",
+      `Für ${segment.workDate} liegt ein Zeitvorschlag zur Prüfung bereit.`, {
+        target: "/portal/?tab=timeTracking",
+        entityType: "wifi_time_suggestion",
+        entityId: id,
+        dedupeKey: `wifi-suggestion:${id}:created`,
+      });
+  }
+  if (created.length) {
+    auditPortal("wifi-controller", "wifi.suggestions.create", "wifi_presence_session", sessionRow.id,
+      JSON.stringify({ count: created.length, locationId: sessionRow.location_id }));
+  }
+  return created;
+}
+
+function finalizeWifiPresenceSession(row, now = new Date()) {
+  const endAt = row.disconnect_observed_at || row.observed_end_at || row.last_seen_at;
+  const start = new Date(row.observed_start_at);
+  const end = new Date(endAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+    db.prepare("UPDATE wifi_presence_sessions SET state = 'invalid', observed_end_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(endAt || now.toISOString(), row.id);
+    return [];
+  }
+  const policy = getWifiAutomationPolicy();
+  const durationMinutes = Math.floor((end.getTime() - start.getTime()) / 60000);
+  const state = durationMinutes >= policy.minimumPresenceMinutes ? "closed" : "ignored_short";
+  db.prepare(`
+    UPDATE wifi_presence_sessions
+    SET observed_end_at = ?, state = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(end.toISOString(), state, row.id);
+  if (state !== "closed") return [];
+  return createWifiSuggestionsForSession({ ...row, observed_end_at: end.toISOString() }, now);
+}
+
+function finalizeExpiredWifiPresenceSessions(now = new Date()) {
+  const policy = getWifiAutomationPolicy();
+  const rows = db.prepare(`
+    SELECT * FROM wifi_presence_sessions
+    WHERE state = 'grace' AND disconnect_observed_at IS NOT NULL
+    ORDER BY disconnect_observed_at
+  `).all();
+  let finalized = 0;
+  let suggestions = 0;
+  for (const candidate of rows) {
+    const disconnectedAt = new Date(candidate.disconnect_observed_at);
+    if (Number.isNaN(disconnectedAt.getTime()) || disconnectedAt.getTime() + policy.absenceGraceMinutes * 60000 > now.getTime()) continue;
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const current = db.prepare("SELECT * FROM wifi_presence_sessions WHERE id = ? AND state = 'grace'").get(candidate.id);
+      if (current) {
+        suggestions += finalizeWifiPresenceSession(current, now).length;
+        finalized += 1;
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      try { db.exec("ROLLBACK"); } catch {}
+      throw error;
+    }
+  }
+  return { finalized, suggestions };
+}
+
+function assertWifiWebhookRateLimit(request) {
+  const key = loginRateKey(request);
+  const now = Date.now();
+  const windowMs = 5 * 60 * 1000;
+  const recent = (wifiWebhookRateLimits.get(key) || []).filter((timestamp) => now - timestamp < windowMs);
+  if (recent.length >= 300) {
+    const error = httpError(429, "Zu viele WLAN-Ereignisse. Bitte die Controller-Konfiguration prüfen.", "WIFI_WEBHOOK_RATE_LIMITED");
+    error.retryAfter = Math.max(1, Math.ceil((windowMs - (now - recent[0])) / 1000));
+    throw error;
+  }
+  recent.push(now);
+  wifiWebhookRateLimits.set(key, recent);
+}
+
+function assertWifiWebhookAuthorization(request) {
+  if (!wifiWebhookConfigured()) throw httpError(503, "Die WLAN-Ereignisschnittstelle ist nicht konfiguriert.", "WIFI_WEBHOOK_NOT_CONFIGURED");
+  const authorization = String(request.headers.authorization || "");
+  const provided = authorization.startsWith("Bearer ")
+    ? authorization.slice(7).trim()
+    : String(request.headers["x-grabenplaner-wifi-token"] || "").trim();
+  const expected = wifiWebhookSecret.value;
+  const valid = provided.length === expected.length
+    && crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+  if (!valid) throw httpError(403, "Die WLAN-Ereignisschnittstelle hat den Zugriff abgelehnt.", "WIFI_WEBHOOK_DENIED");
+}
+
+function validateWifiEvent(body = {}, now = new Date()) {
+  const forbidden = Object.keys(body).find((key) => wifiForbiddenEventFields.has(String(key).toLowerCase()));
+  if (forbidden) throw httpError(400, "Hardware-Adressen, SSIDs und Gerätekennungen dürfen nicht übermittelt werden.", "WIFI_EVENT_PRIVACY_FIELD_REJECTED");
+  const providerId = String(body.providerId || wifiProviderId).trim().toLowerCase();
+  if (providerId !== wifiProviderId) throw httpError(400, "Die Provider-Kennung passt nicht zur konfigurierten Schnittstelle.", "WIFI_EVENT_PROVIDER_INVALID");
+  const eventType = String(body.eventType || "").trim().toLowerCase();
+  const externalEventId = wifiCanonicalReference(body.eventId || body.externalEventId || "", { caseSensitive: true });
+  const employeeReference = wifiCanonicalReference(body.employeeReference || "");
+  const locationReference = wifiCanonicalReference(body.locationReference || "");
+  const occurredAt = new Date(body.occurredAt || "");
+  if (!wifiEventTypes.has(eventType)) throw httpError(400, "Der WLAN-Ereignistyp ist ungültig.", "WIFI_EVENT_TYPE_INVALID");
+  if (!externalEventId || externalEventId.length > 240 || !employeeReference || employeeReference.length > 160
+    || !locationReference || locationReference.length > 200 || Number.isNaN(occurredAt.getTime())) {
+    throw httpError(400, "Das WLAN-Ereignis ist unvollständig oder ungültig.", "WIFI_EVENT_INVALID");
+  }
+  const age = now.getTime() - occurredAt.getTime();
+  if (age < -10 * 60 * 1000 || age > 31 * 24 * 60 * 60 * 1000) {
+    throw httpError(400, "Der Zeitpunkt des WLAN-Ereignisses liegt außerhalb des zulässigen Fensters.", "WIFI_EVENT_TIME_INVALID");
+  }
+  return { providerId, eventType, externalEventId, employeeReference, locationReference, occurredAt };
+}
+
+function processWifiEvent(input, now = new Date()) {
+  // Controller können Ereignisse kurz verzögert oder gebündelt liefern. Bereits offene
+  // Toleranzfenster werden deshalb relativ zum Ereigniszeitpunkt geschlossen, damit ein
+  // zeitlich korrekter Reconnect nicht durch die spätere Zustellung fälschlich geteilt wird.
+  finalizeExpiredWifiPresenceSessions(input.occurredAt);
+  const externalEventHash = wifiReferenceHash("event", input.externalEventId, input.providerId, { caseSensitive: true });
+  const externalSubjectHash = wifiReferenceHash("subject", input.employeeReference, input.providerId);
+  const externalLocationHash = wifiReferenceHash("location", input.locationReference, input.providerId);
+  const inboxId = crypto.randomUUID();
+  const payloadFingerprint = sha256(JSON.stringify({
+    providerId: input.providerId,
+    eventType: input.eventType,
+    externalEventHash,
+    externalSubjectHash,
+    externalLocationHash,
+    occurredAt: input.occurredAt.toISOString(),
+  }));
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const inserted = db.prepare(`
+      INSERT OR IGNORE INTO wifi_event_inbox
+        (id, provider_id, external_event_hash, event_type, external_subject_hash,
+         location_reference_hash, occurred_at, payload_fingerprint)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(inboxId, input.providerId, externalEventHash, input.eventType, externalSubjectHash,
+      externalLocationHash, input.occurredAt.toISOString(), payloadFingerprint);
+    if (!inserted.changes) {
+      db.exec("COMMIT");
+      return { accepted: true, duplicate: true, status: "duplicate" };
+    }
+    const preference = db.prepare(`
+      SELECT p.employee_number
+      FROM wifi_automation_preferences p
+      JOIN employees e ON e.personnel_number = p.employee_number
+      JOIN portal_users u ON u.employee_number = p.employee_number
+      WHERE p.enabled = 1 AND p.provider_id = ? AND p.external_subject_hash = ?
+        AND e.active = 1 AND u.active = 1
+      LIMIT 1
+    `).get(input.providerId, externalSubjectHash);
+    if (!preference) {
+      db.prepare("UPDATE wifi_event_inbox SET processing_status = 'ignored_no_opt_in', processed_at = CURRENT_TIMESTAMP WHERE id = ?").run(inboxId);
+      db.exec("COMMIT");
+      return { accepted: true, duplicate: false, status: "ignored_no_opt_in" };
+    }
+    const mapping = db.prepare(`
+      SELECT location_id FROM wifi_location_mappings
+      WHERE provider_id = ? AND external_location_hash = ?
+    `).get(input.providerId, externalLocationHash);
+    if (!mapping) {
+      db.prepare("UPDATE wifi_event_inbox SET processing_status = 'ignored_unknown_location', processed_at = CURRENT_TIMESTAMP WHERE id = ?").run(inboxId);
+      db.exec("COMMIT");
+      return { accepted: true, duplicate: false, status: "ignored_unknown_location" };
+    }
+    const policy = getWifiAutomationPolicy();
+    let session = db.prepare(`
+      SELECT * FROM wifi_presence_sessions
+      WHERE employee_number = ? AND location_id = ? AND provider_id = ?
+        AND state IN ('observing','present','grace')
+      ORDER BY observed_start_at DESC LIMIT 1
+    `).get(preference.employee_number, mapping.location_id, input.providerId);
+    let processingStatus = "processed";
+    if (input.eventType === "connected" || input.eventType === "seen") {
+      if (session?.state === "grace") {
+        const disconnectedAt = new Date(session.disconnect_observed_at);
+        const withinGrace = !Number.isNaN(disconnectedAt.getTime())
+          && input.occurredAt >= disconnectedAt
+          && input.occurredAt.getTime() <= disconnectedAt.getTime() + policy.absenceGraceMinutes * 60000;
+        if (withinGrace) {
+          db.prepare(`
+            UPDATE wifi_presence_sessions SET last_seen_at = ?, disconnect_observed_at = NULL,
+              observed_end_at = NULL, state = 'present', updated_at = CURRENT_TIMESTAMP WHERE id = ?
+          `).run(input.occurredAt.toISOString(), session.id);
+          processingStatus = "reconnected_within_grace";
+        } else {
+          finalizeWifiPresenceSession(session, now);
+          session = null;
+        }
+      }
+      if (session && session.state !== "grace") {
+        if (input.occurredAt < new Date(session.observed_start_at)) processingStatus = "ignored_out_of_order";
+        else {
+          const durationMinutes = Math.floor((input.occurredAt.getTime() - new Date(session.observed_start_at).getTime()) / 60000);
+          db.prepare(`
+            UPDATE wifi_presence_sessions SET last_seen_at = ?, state = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+          `).run(input.occurredAt.toISOString(), durationMinutes >= policy.minimumPresenceMinutes ? "present" : "observing", session.id);
+        }
+      } else if (!session) {
+        const sessionId = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO wifi_presence_sessions
+            (id, employee_number, location_id, provider_id, correlation_hash, observed_start_at, last_seen_at, state)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'observing')
+        `).run(sessionId, preference.employee_number, mapping.location_id, input.providerId,
+          wifiReferenceHash("correlation", `${externalSubjectHash}:${externalLocationHash}`),
+          input.occurredAt.toISOString(), input.occurredAt.toISOString());
+        session = { id: sessionId };
+        processingStatus = "session_started";
+      }
+    } else {
+      if (!session || session.state === "grace") processingStatus = "ignored_without_open_session";
+      else if (input.occurredAt < new Date(session.observed_start_at)) processingStatus = "ignored_out_of_order";
+      else {
+        db.prepare(`
+          UPDATE wifi_presence_sessions SET disconnect_observed_at = ?, state = 'grace', updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(input.occurredAt.toISOString(), session.id);
+        processingStatus = "grace_started";
+      }
+    }
+    db.prepare(`
+      UPDATE wifi_event_inbox SET processing_status = ?, presence_session_id = ?, processed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(processingStatus, session?.id || null, inboxId);
+    auditPortal("wifi-controller", "wifi.event.process", "wifi_event", inboxId,
+      JSON.stringify({ type: input.eventType, status: processingStatus, providerId: input.providerId }));
+    db.exec("COMMIT");
+    return { accepted: true, duplicate: false, status: processingStatus };
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
+function wifiAutomationEmployeePayload(session, now = new Date()) {
+  finalizeExpiredWifiPresenceSessions(now);
+  const employee = db.prepare(`
+    SELECT e.time_confirmation_level, e.home_location_id, l.name AS location_name, l.time_tracking_enabled
+    FROM employees e LEFT JOIN locations l ON l.id = e.home_location_id
+    WHERE e.personnel_number = ?
+  `).get(session.employeeNumber);
+  if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
+  const connector = wifiConnectorPayload();
+  const mapped = Boolean(db.prepare(`
+    SELECT 1 FROM wifi_location_mappings WHERE provider_id = ? AND location_id = ?
+  `).get(wifiProviderId, employee.home_location_id));
+  const trackingEnabled = Boolean(employee.time_tracking_enabled);
+  const canEnable = connector.configured && mapped && trackingEnabled;
+  const preference = wifiAutomationPreference(session.employeeNumber);
+  const cutoff = addDays(viennaTodayIso(now), -183);
+  const rows = db.prepare(`
+    SELECT s.*, l.name AS location_name
+    FROM wifi_time_suggestions s LEFT JOIN locations l ON l.id = s.location_id
+    WHERE s.employee_number = ? AND (s.status = 'pending' OR s.work_date >= ?)
+    ORDER BY s.work_date DESC, s.suggested_start_at DESC
+  `).all(session.employeeNumber, cutoff);
+  const suggestions = rows.map((row) => serializeWifiSuggestion(row, now));
+  for (const suggestion of suggestions.filter((item) => item.status === "pending" && ["due_soon", "overdue"].includes(item.warning))) {
+    const overdue = suggestion.warning === "overdue";
+    createPortalNotification(session.employeeNumber, overdue ? "wifi.suggestion.overdue" : "wifi.suggestion.due",
+      overdue ? "WLAN-Zeitvorschlag überfällig" : "WLAN-Zeitvorschlag bald bestätigen",
+      `Der Vorschlag für ${suggestion.workDate} wartet auf deine Bestätigung.`, {
+        target: "/portal/?tab=timeTracking",
+        entityType: "wifi_time_suggestion",
+        entityId: suggestion.id,
+        dedupeKey: `wifi-suggestion:${suggestion.id}:${suggestion.warning}`,
+      });
+  }
+  return {
+    providerId: wifiProviderId,
+    connectorConfigured: connector.configured,
+    locationMapped: mapped,
+    trackingEnabled,
+    canEnable,
+    availabilityReason: !connector.configured
+      ? "Die WLAN-Schnittstelle ist noch nicht durch die IT konfiguriert."
+      : !mapped
+        ? "Für deine Stammfiliale fehlt noch die Controller-Zuordnung."
+        : !trackingEnabled
+          ? "Die Zeiterfassung ist für deine Stammfiliale noch nicht aktiviert."
+          : "",
+    locationId: employee.home_location_id,
+    locationName: employee.location_name || employee.home_location_id,
+    confirmationLevel: ["A", "B", "C"].includes(employee.time_confirmation_level) ? employee.time_confirmation_level : "C",
+    preference,
+    suggestions,
+    counts: {
+      pending: suggestions.filter((item) => item.status === "pending").length,
+      dueSoon: suggestions.filter((item) => item.warning === "due_soon").length,
+      overdue: suggestions.filter((item) => item.warning === "overdue").length,
+    },
+  };
+}
+
+function wifiSuggestionForEmployee(id, employeeNumber) {
+  return db.prepare(`
+    SELECT s.*, l.name AS location_name
+    FROM wifi_time_suggestions s LEFT JOIN locations l ON l.id = s.location_id
+    WHERE s.id = ? AND s.employee_number = ?
+  `).get(String(id || ""), employeeNumber);
+}
+
+function validateWifiSuggestionConfirmation(row, input = {}, now = new Date()) {
+  const defaultStart = viennaNowLocal(new Date(row.suggested_start_at)).slice(11, 16);
+  const defaultEnd = viennaNowLocal(new Date(row.suggested_end_at)).slice(11, 16);
+  const startTime = String(input.startTime || defaultStart).trim();
+  const endTime = String(input.endTime || defaultEnd).trim();
+  const breakStartTime = String(input.breakStartTime || "").trim();
+  const breakEndTime = String(input.breakEndTime || "").trim();
+  if (!isTime(startTime) || !isTime(endTime)) {
+    throw httpError(400, "Bitte Beginn und Ende vollständig eingeben.", "WIFI_SUGGESTION_TIME_INVALID");
+  }
+  const startAt = viennaLocalDateTime(row.work_date, startTime);
+  const endAt = viennaLocalDateTime(row.work_date, endTime);
+  if (endAt <= startAt || endAt.getTime() - startAt.getTime() > 24 * 60 * 60 * 1000) {
+    throw httpError(400, "Das Ende muss nach dem Beginn liegen.", "WIFI_SUGGESTION_TIME_INVALID");
+  }
+  if (endAt.getTime() > now.getTime() + 10 * 60 * 1000) {
+    throw httpError(400, "Ein Zeitvorschlag darf nicht in die Zukunft bestätigt werden.", "WIFI_SUGGESTION_TIME_INVALID");
+  }
+  let breakStartAt = null;
+  let breakEndAt = null;
+  if (breakStartTime || breakEndTime) {
+    if (!isTime(breakStartTime) || !isTime(breakEndTime)) {
+      throw httpError(400, "Bitte für die Pause sowohl Beginn als auch Ende eingeben.", "WIFI_SUGGESTION_BREAK_INVALID");
+    }
+    breakStartAt = viennaLocalDateTime(row.work_date, breakStartTime);
+    breakEndAt = viennaLocalDateTime(row.work_date, breakEndTime);
+    if (!(startAt < breakStartAt && breakStartAt < breakEndAt && breakEndAt < endAt)) {
+      throw httpError(400, "Die Pause muss vollständig zwischen Arbeitsbeginn und Arbeitsende liegen.", "WIFI_SUGGESTION_BREAK_INVALID");
+    }
+  }
+  return { startTime, endTime, breakStartTime, breakEndTime, startAt, endAt, breakStartAt, breakEndAt };
+}
+
+function confirmWifiSuggestionBatch(session, items, now = new Date()) {
+  if (!Array.isArray(items) || !items.length || items.length > 31) {
+    throw httpError(400, "Bitte mindestens einen und höchstens 31 Zeitvorschläge übermitteln.", "WIFI_SUGGESTION_BATCH_INVALID");
+  }
+  const uniqueIds = new Set(items.map((item) => String(item.id || "").trim()).filter(Boolean));
+  if (uniqueIds.size !== items.length) throw httpError(400, "Ein Zeitvorschlag wurde doppelt übermittelt.", "WIFI_SUGGESTION_BATCH_INVALID");
+  const confirmed = [];
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const item of items) {
+      const row = wifiSuggestionForEmployee(item.id, session.employeeNumber);
+      if (!row) throw httpError(404, "Der WLAN-Zeitvorschlag wurde nicht gefunden.", "WIFI_SUGGESTION_NOT_FOUND");
+      if (row.status !== "pending") throw httpError(409, "Der WLAN-Zeitvorschlag wurde bereits bearbeitet.", "WIFI_SUGGESTION_ALREADY_DECIDED");
+      const values = validateWifiSuggestionConfirmation(row, item, now);
+      const departmentId = scheduledTimeEntryDepartment(session.employeeNumber, row.work_date, values.startTime)
+        || employeeRequestContext(session.employeeNumber, row.work_date).departmentId;
+      const additions = [
+        { entry_type: "clock_in", entry_timestamp: values.startAt.toISOString() },
+        ...(values.breakStartAt ? [
+          { entry_type: "break_start", entry_timestamp: values.breakStartAt.toISOString() },
+          { entry_type: "break_end", entry_timestamp: values.breakEndAt.toISOString() },
+        ] : []),
+        { entry_type: "clock_out", entry_timestamp: values.endAt.toISOString() },
+      ];
+      const existing = timeEntriesForDay(session.employeeNumber, row.work_date);
+      const parsed = parseTimeEntrySequence([...existing, ...additions], row.work_date, now);
+      if (parsed.errors.length || parsed.incomplete) {
+        throw httpError(409, "Der Vorschlag überschneidet sich mit bestehenden Buchungen oder ergibt keine gültige Buchungsfolge.", "WIFI_SUGGESTION_TIME_CONFLICT");
+      }
+      const insert = db.prepare(`
+        INSERT INTO time_entries
+          (employee_number, location_id, department_id, work_date, entry_type, entry_timestamp, source, note, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, 'wifi_confirmed', 'Bestätigter WLAN-Zeitvorschlag', ?)
+      `);
+      for (const entry of additions) {
+        insert.run(session.employeeNumber, row.location_id, departmentId, row.work_date,
+          entry.entry_type, entry.entry_timestamp, session.employeeNumber);
+      }
+      const updated = db.prepare(`
+        UPDATE wifi_time_suggestions SET status = 'confirmed',
+          confirmed_start_at = ?, confirmed_end_at = ?,
+          confirmed_break_start_at = ?, confirmed_break_end_at = ?,
+          confirmed_by = ?, confirmed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND employee_number = ? AND status = 'pending'
+      `).run(values.startAt.toISOString(), values.endAt.toISOString(),
+        values.breakStartAt?.toISOString() || null, values.breakEndAt?.toISOString() || null,
+        session.employeeNumber, row.id, session.employeeNumber);
+      if (!updated.changes) throw httpError(409, "Der Zeitvorschlag wurde zwischenzeitlich bearbeitet.", "WIFI_SUGGESTION_ALREADY_DECIDED");
+      invalidateTimeDayReview(session.employeeNumber, row.work_date);
+      auditPortal(session.employeeNumber, "wifi.suggestion.confirm", "wifi_time_suggestion", row.id,
+        JSON.stringify({ workDate: row.work_date, startTime: values.startTime, endTime: values.endTime, break: Boolean(values.breakStartAt) }));
+      confirmed.push(row.id);
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  return confirmed;
+}
+
+function confirmWifiSuggestionWeek(session, body = {}, now = new Date()) {
+  const employee = db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = ?").get(session.employeeNumber);
+  if (String(employee?.time_confirmation_level || "C").toUpperCase() !== "A") {
+    throw httpError(403, "Der Wochenabschluss ist nur für Vertrauensstufe A verfügbar.", "WIFI_WEEK_CONFIRMATION_NOT_ALLOWED");
+  }
+  const weekStart = String(body.weekStart || "").trim();
+  if (!isIsoDate(weekStart) || getMonday(weekStart) !== weekStart) {
+    throw httpError(400, "Bitte eine gültige Kalenderwoche auswählen.", "WIFI_SUGGESTION_WEEK_INVALID");
+  }
+  const pendingIds = db.prepare(`
+    SELECT id FROM wifi_time_suggestions
+    WHERE employee_number = ? AND status = 'pending' AND work_date BETWEEN ? AND ?
+    ORDER BY work_date, suggested_start_at
+  `).all(session.employeeNumber, weekStart, addDays(weekStart, 6)).map((row) => row.id);
+  const submittedIds = Array.isArray(body.suggestions) ? body.suggestions.map((item) => String(item.id || "")) : [];
+  if (!pendingIds.length || pendingIds.length !== submittedIds.length || pendingIds.some((id) => !submittedIds.includes(id))) {
+    throw httpError(409, "Bitte alle offenen Vorschläge dieser Woche gemeinsam prüfen und erneut abschließen.", "WIFI_SUGGESTION_WEEK_INCOMPLETE");
+  }
+  return confirmWifiSuggestionBatch(session, body.suggestions, now);
+}
+
+function rejectWifiSuggestion(session, id, reason = "") {
+  const row = wifiSuggestionForEmployee(id, session.employeeNumber);
+  if (!row) throw httpError(404, "Der WLAN-Zeitvorschlag wurde nicht gefunden.", "WIFI_SUGGESTION_NOT_FOUND");
+  if (row.status !== "pending") throw httpError(409, "Der WLAN-Zeitvorschlag wurde bereits bearbeitet.", "WIFI_SUGGESTION_ALREADY_DECIDED");
+  const cleanReason = stripEmoji(String(reason || "").trim()).slice(0, 300);
+  const result = db.prepare(`
+    UPDATE wifi_time_suggestions SET status = 'rejected', rejected_by = ?, rejected_at = CURRENT_TIMESTAMP,
+      rejection_reason = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND employee_number = ? AND status = 'pending'
+  `).run(session.employeeNumber, cleanReason, row.id, session.employeeNumber);
+  if (!result.changes) throw httpError(409, "Der WLAN-Zeitvorschlag wurde zwischenzeitlich bearbeitet.", "WIFI_SUGGESTION_ALREADY_DECIDED");
+  auditPortal(session.employeeNumber, "wifi.suggestion.reject", "wifi_time_suggestion", row.id,
+    JSON.stringify({ workDate: row.work_date, reasonProvided: Boolean(cleanReason) }));
+}
+
 function getAmuPolicy() {
   const settings = getPortalSettings();
   const uploadMaxMb = Math.min(25, Math.max(1, Number(settings.amu_upload_max_mb || 10)));
@@ -2185,7 +3410,7 @@ function validateAmuPolicy(body = {}) {
 
 function actorCanReadAmuFiles(session) {
   if (!session) return false;
-  if (session.employeeNumber === "local" || ["admin", "hr"].includes(session.role)) return true;
+  if (session.employeeNumber === "local" || HR_DECISION_PORTAL_ROLES.has(session.role)) return true;
   if (session.permissions?.includes("amu:file:read")) return true;
   return ["manager", "department_manager"].includes(session.role) && getAmuPolicy().managerFileAccess;
 }
@@ -2208,19 +3433,76 @@ function portalPermissionGrantsForEmployee(employeeNumber) {
     .filter((permission) => delegablePortalPermissions.has(permission));
 }
 
+function manageablePortalPermissionsForActor(actor) {
+  if (!actor) return new Set();
+  if (actor.employeeNumber === "local" || ["developer", "admin", "it_admin"].includes(actor.role)) {
+    return new Set(delegablePortalPermissions);
+  }
+  if (actor.role === "hr") return new Set(hrDelegablePortalPermissions);
+  return new Set();
+}
+
+function portalPermissionCatalogForActor(actor) {
+  const manageable = manageablePortalPermissionsForActor(actor);
+  return delegablePortalPermissionCatalog.map(({ hrDelegable: _hrDelegable, ...permission }) => ({
+    ...permission,
+    editable: manageable.has(permission.id),
+  }));
+}
+
+function actorCanManagePermissionGrants(actor, target) {
+  if (!actor || !target || target.role === "developer" || target.roleLocked || !target.configured || !target.active) return false;
+  if (actor.employeeNumber === "local" || ["developer", "admin", "it_admin"].includes(actor.role)) return true;
+  return actor.role === "hr" && ["employee", "department_manager", "manager"].includes(target.role);
+}
+
 function getPortalRoles() {
+  const builtinDefinitions = new Map(builtinPortalRoles.map((role) => [role.id, role]));
   return db.prepare(`
     SELECT id, name, description, builtin, permissions, sort_order
     FROM portal_roles
     ORDER BY sort_order, name, id
-  `).all().map((role) => ({
-    id: role.id,
-    name: role.name,
-    description: role.description || "",
-    builtin: Boolean(role.builtin),
-    permissions: parsePortalPermissions(role.permissions),
-    sortOrder: Number(role.sort_order || 0),
-  }));
+  `).all().map((role) => {
+    const definition = builtinDefinitions.get(role.id);
+    const protectedRole = PROTECTED_PORTAL_ROLES.has(role.id);
+    return {
+      id: role.id,
+      name: role.name,
+      description: role.description || "",
+      builtin: Boolean(role.builtin),
+      permissions: parsePortalPermissions(role.permissions),
+      sortOrder: Number(role.sort_order || 0),
+      protected: protectedRole,
+      assignable: !protectedRole,
+      technical: ["developer", "it_admin"].includes(role.id),
+      knownBuiltin: Boolean(definition),
+    };
+  });
+}
+
+function actorCanAssignPortalRole(actor, role) {
+  if (!actor || role === "developer" || PROTECTED_PORTAL_ROLES.has(role)) return false;
+  if (actor.employeeNumber === "local") return role !== "developer";
+  const allowed = PORTAL_ROLE_ASSIGNMENTS[actor.role];
+  if (allowed?.has(role)) return true;
+  return actor.role === "developer" || actor.role === "admin"
+    ? Boolean(db.prepare("SELECT 1 FROM portal_roles WHERE id = ? AND id <> 'developer'").get(role))
+    : false;
+}
+
+function actorCanManagePortalRole(actor, targetRole) {
+  if (!actor || targetRole === "developer") return false;
+  if (actor.employeeNumber === "local" || ["developer", "admin"].includes(actor.role)) return true;
+  if (actor.role === "it_admin" || actor.role === "hr") return ["employee", "department_manager", "manager"].includes(targetRole);
+  return actor.role === "manager" && targetRole === "department_manager";
+}
+
+function assertPortalUserIsMutable(target, actor) {
+  if (!target) throw httpError(404, "Der Zugang wurde nicht gefunden.");
+  if (target.role === "developer" || target.role_locked) {
+    auditPortal(actor?.employeeNumber || "system", "portal.developer.protected", "portal_user", target.employee_number || "", "mutation-denied");
+    throw httpError(403, "Der Developer-Zugang ist geschützt und kann nur mit dem lokalen Entwicklerwerkzeug geändert werden.", "PORTAL_DEVELOPER_PROTECTED");
+  }
 }
 
 function getPortalStatus(locationId = "") {
@@ -2231,7 +3513,7 @@ function getPortalStatus(locationId = "") {
   const configuredAdmin = db.prepare(`
     SELECT 1
     FROM portal_users
-    WHERE active = 1 AND role = 'admin' AND TRIM(password_hash) <> ''
+    WHERE active = 1 AND role IN ('developer','admin') AND TRIM(password_hash) <> ''
     LIMIT 1
   `).get();
   return {
@@ -2265,6 +3547,7 @@ function getPortalStatus(locationId = "") {
       notifications: portalEnabled,
       amuReports: portalEnabled && Boolean(amuStorage),
       timeTracking: portalEnabled,
+      wifiTimeSuggestions: portalEnabled,
     },
     workflow: {
       vacationHrApprovalRequired: vacationHrApprovalRequired(),
@@ -2295,10 +3578,17 @@ function requirePortalReadOrLocal(request, permission = "schedule:read") {
 
 function requireAdminHrOrLocal(request, permission) {
   const session = requirePortalAdminOrLocal(request, permission);
-  if (session.employeeNumber !== "local" && !["admin", "hr"].includes(session.role)) {
-    throw httpError(403, "Diese Aktion ist nur für Admin oder Personalleitung verfügbar.", "PORTAL_PERMISSION_DENIED");
+  if (session.employeeNumber !== "local" && !RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)) {
+    throw httpError(403, "Diese Aktion ist nur für Developer, IT-Admin, Admin oder Personalleitung verfügbar.", "PORTAL_PERMISSION_DENIED");
   }
   return session;
+}
+
+function sessionCanManageTimeConfirmationLevel(session) {
+  if (!getPortalStatus().portalEnabled) return true;
+  return Boolean(session
+    && RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)
+    && session.permissions?.includes("wifi:settings"));
 }
 
 function requirePortalAnyPermission(request, permissions) {
@@ -2312,7 +3602,7 @@ function requirePortalAnyPermission(request, permissions) {
 function portalUsersForAdmin() {
   return db.prepare(`
     SELECT e.personnel_number, e.full_name, e.nickname, e.home_location_id, e.preferred_department_id, e.active AS employee_active,
-           u.role, u.active, u.must_change_password, u.last_login_at, u.failed_login_attempts, u.locked_until,
+           u.role, u.role_locked, u.active, u.must_change_password, u.last_login_at, u.failed_login_attempts, u.locked_until,
            CASE WHEN TRIM(COALESCE(u.password_hash, '')) <> '' THEN 1 ELSE 0 END AS password_configured,
            r.name AS role_name
     FROM employees e
@@ -2327,6 +3617,7 @@ function portalUsersForAdmin() {
     configured: Boolean(row.role),
     role: row.role || "employee",
     roleName: row.role_name || "Mitarbeiter",
+    roleLocked: Boolean(row.role_locked) || row.role === "developer",
     active: row.active === null ? false : Boolean(row.active),
     mustChangePassword: row.must_change_password === null ? true : Boolean(row.must_change_password),
     passwordConfigured: Boolean(row.password_configured),
@@ -2397,6 +3688,7 @@ const timeEntryLabels = {
   break_end: "Weiter",
   clock_out: "Gehen",
 };
+const TIME_EVALUATION_VERSION = "v1";
 
 function timeEntryStateFromType(type) {
   if (type === "clock_in" || type === "break_end") return "working";
@@ -2425,40 +3717,282 @@ function suggestedClockOutTime(employeeNumber, date, locationId, latestTimestamp
   return suggestion;
 }
 
-function calculateWorkedMinutes(entries, now = new Date()) {
-  let runningFrom = null;
-  let totalMilliseconds = 0;
-  for (const entry of entries) {
+function parseTimeEntrySequence(entries, date, now = new Date()) {
+  const today = viennaTodayIso(now);
+  const ordered = [...entries].sort((left, right) => String(left.entry_timestamp).localeCompare(String(right.entry_timestamp)) || Number(left.id || 0) - Number(right.id || 0));
+  const segments = [];
+  const errors = [];
+  let state = "off";
+  let workingFrom = null;
+  let firstTimestamp = null;
+  let lastTimestamp = null;
+  for (const entry of ordered) {
     const timestamp = new Date(entry.entry_timestamp);
-    if (Number.isNaN(timestamp.getTime())) continue;
-    if (entry.entry_type === "clock_in") {
-      if (!runningFrom) runningFrom = timestamp;
-    } else if (entry.entry_type === "break_start") {
-      if (runningFrom) totalMilliseconds += Math.max(0, timestamp - runningFrom);
-      runningFrom = null;
-    } else if (entry.entry_type === "break_end") {
-      if (!runningFrom) runningFrom = timestamp;
-    } else if (entry.entry_type === "clock_out") {
-      if (runningFrom) totalMilliseconds += Math.max(0, timestamp - runningFrom);
-      runningFrom = null;
+    if (Number.isNaN(timestamp.getTime())) {
+      errors.push({ code: "invalid_timestamp", entryId: Number(entry.id || 0) || null });
+      continue;
     }
+    if (lastTimestamp && timestamp <= lastTimestamp) {
+      errors.push({ code: "non_increasing_timestamp", entryId: Number(entry.id || 0) || null });
+      continue;
+    }
+    const type = String(entry.entry_type || "");
+    const allowed = allowedTimeEntryActions(state);
+    if (!allowed.includes(type)) {
+      errors.push({ code: "invalid_sequence", entryId: Number(entry.id || 0) || null, type, state });
+      continue;
+    }
+    if (!firstTimestamp && type === "clock_in") firstTimestamp = timestamp;
+    if (type === "clock_in" || type === "break_end") {
+      workingFrom = timestamp;
+      state = "working";
+    } else if (type === "break_start") {
+      if (workingFrom) segments.push({ start: workingFrom, end: timestamp });
+      workingFrom = null;
+      state = "paused";
+    } else if (type === "clock_out") {
+      if (state === "working" && workingFrom) segments.push({ start: workingFrom, end: timestamp });
+      workingFrom = null;
+      state = "off";
+    }
+    lastTimestamp = timestamp;
   }
-  if (runningFrom) totalMilliseconds += Math.max(0, now - runningFrom);
-  return Math.floor(totalMilliseconds / 60000);
+  const ongoing = date === today && state !== "off";
+  if (ongoing && state === "working" && workingFrom && now > workingFrom) segments.push({ start: workingFrom, end: now, ongoing: true });
+  const effectiveEnd = ongoing ? now : lastTimestamp;
+  const workedMilliseconds = segments.reduce((sum, segment) => sum + Math.max(0, segment.end - segment.start), 0);
+  const presenceMilliseconds = firstTimestamp && effectiveEnd ? Math.max(0, effectiveEnd - firstTimestamp) : 0;
+  return {
+    state,
+    ongoing,
+    incomplete: ordered.length > 0 && state !== "off",
+    segments,
+    errors,
+    workedMinutes: Math.floor(workedMilliseconds / 60000),
+    presenceMinutes: Math.floor(presenceMilliseconds / 60000),
+    breakMinutes: Math.max(0, Math.floor((presenceMilliseconds - workedMilliseconds) / 60000)),
+    firstTimestamp: firstTimestamp?.toISOString() || null,
+    lastTimestamp: lastTimestamp?.toISOString() || null,
+  };
 }
 
-function plannedMinutesForEmployeeDate(employeeNumber, date, locationId, departmentId = null) {
+function plannedDayMetrics(employeeNumber, date, locationId, departmentId = null) {
   const settings = settingsForLocation(locationId);
-  return db.prepare(`
+  const blocks = db.prepare(`
     SELECT id, employee_number, department_id, shift_date, start_time, end_time
     FROM shifts
     WHERE employee_number = ? AND shift_date = ?
       AND (? IS NULL OR department_id = ?)
     ORDER BY start_time, id
-  `).all(employeeNumber, date, departmentId, departmentId).reduce((sum, shift) => {
-    const metrics = shiftMetrics(shift, settings);
-    return sum + Math.max(0, Number(metrics.raw_minutes || 0) - Number(metrics.break_minutes || 0));
-  }, 0);
+  `).all(employeeNumber, date, departmentId, departmentId).map((shift) => ({ ...shift, ...shiftMetrics(shift, settings) }));
+  return blocks.reduce((result, block) => ({
+    grossMinutes: result.grossMinutes + Number(block.raw_minutes || 0),
+    breakMinutes: result.breakMinutes + Number(block.break_minutes || 0),
+    netMinutes: result.netMinutes + Math.max(0, Number(block.raw_minutes || 0) - Number(block.break_minutes || 0)),
+    saturdayBonusMinutes: result.saturdayBonusMinutes + Number(block.bonus_minutes || 0),
+    valuedMinutes: result.valuedMinutes + Number(block.counted_minutes || 0),
+    blocks: result.blocks,
+  }), { grossMinutes: 0, breakMinutes: 0, netMinutes: 0, saturdayBonusMinutes: 0, valuedMinutes: 0, blocks });
+}
+
+function plannedMinutesForEmployeeDate(employeeNumber, date, locationId, departmentId = null) {
+  return plannedDayMetrics(employeeNumber, date, locationId, departmentId).netMinutes;
+}
+
+function actualDayMetrics(entries, date, settings, now = new Date()) {
+  const parsed = parseTimeEntrySequence(entries, date, now);
+  let eligibleSaturdayMinutes = 0;
+  const isSaturday = new Date(`${date}T12:00:00Z`).getUTCDay() === 6;
+  if (isSaturday && settingEnabled(settings, "saturday_bonus_enabled") && isTime(settings.saturday_bonus_from)) {
+    const bonusFrom = viennaLocalDateTime(date, settings.saturday_bonus_from);
+    eligibleSaturdayMinutes = Math.floor(parsed.segments.reduce((sum, segment) => (
+      sum + Math.max(0, segment.end - (segment.start > bonusFrom ? segment.start : bonusFrom))
+    ), 0) / 60000);
+  }
+  const saturdayBonusMinutes = Math.round(eligibleSaturdayMinutes * Math.max(0, Number(settings.saturday_bonus_factor || 1) - 1));
+  return {
+    ...parsed,
+    saturdayEligibleMinutes: eligibleSaturdayMinutes,
+    saturdayBonusMinutes,
+    valuedMinutes: parsed.workedMinutes + saturdayBonusMinutes,
+  };
+}
+
+function excusedTimeForEmployeeDate(employeeNumber, date, locationId) {
+  const options = db.prepare(`
+    SELECT option_type, note, all_day, start_time, end_time
+    FROM week_options
+    WHERE employee_number = ? AND ? BETWEEN date_from AND date_to
+    ORDER BY all_day DESC, start_time
+  `).all(employeeNumber, date);
+  const allDayOptions = options.filter((option) => Boolean(option.all_day));
+  if (allDayOptions.length) {
+    return {
+      excused: true,
+      label: allDayOptions.map((option) => optionLabel(option.option_type)).join(", "),
+      options,
+    };
+  }
+  if (isVacationHoliday(date, locationId)) return { excused: true, label: "Feiertag", options: [] };
+  return { excused: false, label: "", options };
+}
+
+function serializeTimeDayReview(row) {
+  if (!row) return null;
+  let snapshot = {};
+  try { snapshot = JSON.parse(row.snapshot_json || "{}"); } catch {}
+  return {
+    employeeNumber: row.employee_number,
+    locationId: row.location_id || "",
+    departmentId: Number(row.department_id || 0) || null,
+    workDate: row.work_date,
+    note: row.note || "",
+    reviewedBy: row.reviewed_by,
+    reviewedAt: row.reviewed_at,
+    evaluationVersion: row.evaluation_version || TIME_EVALUATION_VERSION,
+    snapshot,
+  };
+}
+
+function timeDayReview(employeeNumber, date, departmentId = null) {
+  const departmentKey = Number(departmentId || 0) || 0;
+  return serializeTimeDayReview(db.prepare(`
+    SELECT employee_number, location_id, department_id, department_key, work_date, note,
+           reviewed_by, reviewed_at, evaluation_version, snapshot_json
+    FROM time_day_reviews
+    WHERE employee_number = ? AND work_date = ? AND department_key = ?
+  `).get(employeeNumber, date, departmentKey));
+}
+
+function invalidateTimeDayReview(employeeNumber, date) {
+  if (!employeeNumber || !isIsoDate(date)) return 0;
+  return Number(db.prepare("DELETE FROM time_day_reviews WHERE employee_number = ? AND work_date = ?")
+    .run(employeeNumber, date).changes || 0);
+}
+
+function invalidateTimeDayReviewsForRange(locationId, dateFrom, dateTo, departmentId = null) {
+  if (!locationId || !isIsoDate(dateFrom) || !isIsoDate(dateTo)) return 0;
+  const result = departmentId
+    ? db.prepare(`
+      DELETE FROM time_day_reviews
+      WHERE location_id = ? AND work_date BETWEEN ? AND ? AND department_key IN (0, ?)
+    `).run(locationId, dateFrom, dateTo, Number(departmentId))
+    : db.prepare(`
+      DELETE FROM time_day_reviews
+      WHERE location_id = ? AND work_date BETWEEN ? AND ?
+    `).run(locationId, dateFrom, dateTo);
+  return Number(result.changes || 0);
+}
+
+function evaluateTimeDay(employeeNumber, date, now = new Date(), departmentId = null, providedEntries = null) {
+  const context = employeeRequestContext(employeeNumber, date);
+  const location = validateLocationExists(context.locationId);
+  const settings = settingsForLocation(context.locationId);
+  const entries = (providedEntries || timeEntriesForDay(employeeNumber, date))
+    .filter((entry) => !departmentId || Number(entry.department_id || 0) === Number(departmentId));
+  const planned = plannedDayMetrics(employeeNumber, date, context.locationId, departmentId);
+  const actual = actualDayMetrics(entries, date, settings, now);
+  const excused = excusedTimeForEmployeeDate(employeeNumber, date, context.locationId);
+  const today = viennaTodayIso(now);
+  const isPast = date < today;
+  const isFuture = date > today;
+  const plannedEndTime = planned.blocks.map((block) => block.end_time).filter(isTime).sort().at(-1) || "";
+  const todayAfterPlannedEnd = date === today && plannedEndTime && viennaNowLocal(now).slice(11, 16) >= plannedEndTime;
+  const bookingWindowEnded = isPast || todayAfterPlannedEnd;
+  const toleranceMinutes = Math.max(0, Number(location.time_tracking_variance_minutes ?? 15));
+  const differenceMinutes = actual.workedMinutes - planned.netMinutes;
+  const valuedDifferenceMinutes = actual.valuedMinutes - planned.valuedMinutes;
+  const requiredBreakMinutes = settingEnabled(settings, "break_rule_enabled")
+    && actual.workedMinutes > Number(settings.break_after_minutes || 0)
+    ? Number(settings.break_duration_minutes || 0)
+    : 0;
+  const issues = [];
+  const addIssue = (code, severity, label, message) => issues.push({ code, severity, label, message });
+  if (actual.errors.length) addIssue("invalid_sequence", "error", "Buchungsfolge prüfen", "Mindestens eine Buchung passt nicht zur zeitlichen Reihenfolge.");
+  if (isPast && actual.incomplete) addIssue("incomplete", "error", "Abschluss fehlt", "Der Arbeitstag wurde nicht vollständig mit „Gehen“ abgeschlossen.");
+  if (bookingWindowEnded && planned.netMinutes > 0 && entries.length === 0 && !excused.excused) {
+    addIssue("missing_entries", "error", "Buchungen fehlen", "Für den geplanten Dienst wurden keine Zeitbuchungen erfasst.");
+  }
+  if (!isFuture && actual.workedMinutes > 0 && planned.netMinutes === 0 && !excused.excused) {
+    addIssue("unscheduled_work", "warning", "Ohne Dienstplan", "Es wurde Arbeitszeit ohne geplanten Dienst erfasst.");
+  }
+  if (!isFuture && !actual.incomplete && requiredBreakMinutes > actual.breakMinutes) {
+    addIssue("break_short", "error", "Pause zu kurz", `Erfasst sind ${actual.breakMinutes} statt mindestens ${requiredBreakMinutes} Pausenminuten.`);
+  }
+  if (!isFuture && !actual.incomplete && planned.netMinutes > 0 && entries.length > 0 && Math.abs(differenceMinutes) > toleranceMinutes) {
+    addIssue("variance", "warning", "Zeitabweichung", `Die Ist-Zeit weicht um mehr als ${toleranceMinutes} Minuten vom Dienstplan ab.`);
+  }
+  const pendingCorrection = Boolean(db.prepare(`
+    SELECT 1 FROM time_corrections WHERE employee_number = ? AND correction_date = ? AND status = 'pending' LIMIT 1
+  `).get(employeeNumber, date));
+  if (pendingCorrection) addIssue("pending_correction", "info", "Korrektur offen", "Für diesen Tag wartet ein Korrekturantrag auf Bearbeitung.");
+  const evaluationHash = sha256(JSON.stringify({
+    version: TIME_EVALUATION_VERSION,
+    locationId: context.locationId,
+    departmentId: Number(departmentId || 0) || 0,
+    planned: planned.blocks.map((block) => [block.id, block.department_id, block.start_time, block.end_time]),
+    entries: entries.map((entry) => [entry.id, entry.department_id, entry.entry_type, entry.entry_timestamp]),
+    excused: excused.options.map((option) => [option.option_type, option.all_day, option.start_time, option.end_time]),
+    holiday: excused.label === "Feiertag",
+    rules: [
+      toleranceMinutes,
+      settings.break_rule_enabled,
+      settings.break_after_minutes,
+      settings.break_duration_minutes,
+      settings.saturday_bonus_enabled,
+      settings.saturday_bonus_from,
+      settings.saturday_bonus_factor,
+    ],
+  }));
+  const review = timeDayReview(employeeNumber, date, departmentId);
+  if (review) {
+    review.stale = review.snapshot?.evaluationHash !== evaluationHash;
+    if (review.stale) addIssue("review_stale", "info", "Prüfung veraltet", "Plan, Buchungen oder Bewertungsregeln wurden seit der Prüfung geändert.");
+  }
+  let code = isFuture ? "future" : date === today && actual.ongoing ? actual.state : "complete";
+  if (!entries.length && excused.excused) code = "excused_absence";
+  else if (!entries.length && planned.netMinutes > 0) code = isFuture || (date === today && !todayAfterPlannedEnd) ? "planned" : "missing_entries";
+  else if (!entries.length && planned.netMinutes === 0) code = "no_data";
+  else if (issues.some((issue) => issue.severity === "error")) code = issues[0].code;
+  else if (issues.length) code = "attention";
+  const severity = issues.some((issue) => issue.severity === "error") ? "error"
+    : issues.some((issue) => issue.severity === "warning") ? "warning"
+      : issues.some((issue) => issue.severity === "info") ? "info" : "ok";
+  return {
+    evaluationVersion: TIME_EVALUATION_VERSION,
+    evaluationHash,
+    date,
+    workDate: date,
+    locationId: context.locationId,
+    departmentId: departmentId || context.departmentId,
+    code,
+    severity,
+    issues,
+    excused,
+    pendingCorrection,
+    planned,
+    actual,
+    comparison: {
+      workedDifferenceMinutes: differenceMinutes,
+      valuedDifferenceMinutes,
+    },
+    plannedMinutes: planned.netMinutes,
+    actualMinutes: actual.workedMinutes,
+    differenceMinutes,
+    plannedValuedMinutes: planned.valuedMinutes,
+    actualValuedMinutes: actual.valuedMinutes,
+    valuedDifferenceMinutes,
+    breakMinutes: actual.breakMinutes,
+    requiredBreakMinutes,
+    saturdayBonusMinutes: actual.saturdayBonusMinutes,
+    incomplete: isPast && actual.incomplete,
+    review,
+  };
+}
+
+function calculateWorkedMinutes(entries, now = new Date()) {
+  const date = entries[0]?.work_date || viennaTodayIso(now);
+  return parseTimeEntrySequence(entries, date, now).workedMinutes;
 }
 
 function timeEntriesForDay(employeeNumber, date) {
@@ -2470,25 +4004,33 @@ function timeEntriesForDay(employeeNumber, date) {
   `).all(employeeNumber, date);
 }
 
-function timeTrackingDayStatus(employeeNumber, date = viennaTodayIso(), now = new Date()) {
+function findStaleOpenTimeEntry(employeeNumber, today) {
+  const dates = db.prepare(`
+    SELECT DISTINCT work_date FROM time_entries
+    WHERE employee_number = ? AND work_date < ? AND voided_at IS NULL
+    ORDER BY work_date DESC
+  `).all(employeeNumber, today);
+  for (const row of dates) {
+    const entries = timeEntriesForDay(employeeNumber, row.work_date);
+    const parsed = parseTimeEntrySequence(entries, row.work_date, new Date(`${today}T12:00:00Z`));
+    if (parsed.incomplete) return entries.at(-1) || null;
+  }
+  return null;
+}
+
+function timeTrackingDayStatus(employeeNumber, date = viennaTodayIso(), now = new Date(), options = {}) {
   if (!isIsoDate(date)) throw httpError(400, "Bitte ein gültiges Datum auswählen.", "TIME_ENTRY_DATE_INVALID");
   const context = employeeRequestContext(employeeNumber, date);
   const location = validateLocationExists(context.locationId);
   const entries = timeEntriesForDay(employeeNumber, date);
   const latestToday = entries.at(-1) || null;
-  const latestOverall = db.prepare(`
-    SELECT id, location_id, department_id, work_date, entry_type, entry_timestamp
-    FROM time_entries WHERE employee_number = ? AND voided_at IS NULL ORDER BY entry_timestamp DESC, id DESC LIMIT 1
-  `).get(employeeNumber) || null;
   const today = viennaTodayIso(now);
-  const staleEntry = latestOverall && latestOverall.work_date < today && timeEntryStateFromType(latestOverall.entry_type) !== "off"
-    ? latestOverall
-    : null;
-  const state = staleEntry && date === today ? "attention" : timeEntryStateFromType(latestToday?.entry_type);
+  const staleEntry = findStaleOpenTimeEntry(employeeNumber, today);
+  const evaluation = evaluateTimeDay(employeeNumber, date, now, options.departmentId || null);
+  const state = staleEntry && date === today ? "attention" : evaluation.actual.state;
   const trackingEnabled = Boolean(location.time_tracking_enabled);
-  const allowedActions = trackingEnabled && date === today && !staleEntry ? allowedTimeEntryActions(state) : [];
-  const plannedMinutes = plannedMinutesForEmployeeDate(employeeNumber, date, context.locationId);
-  const actualMinutes = calculateWorkedMinutes(entries, now);
+  const access = options.access || { allowed: options.accessAllowed !== false, mode: location.time_tracking_access_mode || "anywhere", reason: "" };
+  const allowedActions = trackingEnabled && access.allowed && date === today && !staleEntry ? allowedTimeEntryActions(state) : [];
   return {
     date,
     workDate: date,
@@ -2498,7 +4040,9 @@ function timeTrackingDayStatus(employeeNumber, date = viennaTodayIso(), now = ne
     enabled: trackingEnabled,
     locationId: context.locationId,
     locationName: location.name,
-    departmentId: context.departmentId,
+    departmentId: options.departmentId || context.departmentId,
+    accessMode: access.mode,
+    accessAllowed: access.allowed,
     state,
     stateSince: latestToday?.entry_timestamp || staleEntry?.entry_timestamp || null,
     staleEntry: staleEntry ? {
@@ -2510,14 +4054,14 @@ function timeTrackingDayStatus(employeeNumber, date = viennaTodayIso(), now = ne
     } : null,
     reason: !trackingEnabled
       ? "Die Zeiterfassung ist für diesen Standort noch nicht aktiviert."
+      : !access.allowed
+        ? access.reason
       : staleEntry
         ? `Eine Buchung vom ${staleEntry.work_date} wurde nicht mit „Gehen“ abgeschlossen. Bitte die Leitung informieren.`
         : "",
     allowedActions,
-    plannedMinutes,
-    actualMinutes,
-    differenceMinutes: actualMinutes - plannedMinutes,
-    entries: entries.map((entry) => ({
+    ...evaluation,
+    entries: entries.filter((entry) => !options.departmentId || Number(entry.department_id || 0) === Number(options.departmentId)).map((entry) => ({
       id: Number(entry.id),
       type: entry.entry_type,
       label: timeEntryLabels[entry.entry_type] || entry.entry_type,
@@ -2528,31 +4072,57 @@ function timeTrackingDayStatus(employeeNumber, date = viennaTodayIso(), now = ne
   };
 }
 
-function bookTimeEntry(employeeNumber, action, now = new Date()) {
+function timeEntryDepartment(employeeNumber, date, action, now, entries = []) {
+  const latestDepartment = Number(entries.at(-1)?.department_id || 0) || null;
+  if (action !== "clock_in") return latestDepartment || employeeRequestContext(employeeNumber, date).departmentId;
+  const localTime = viennaNowLocal(now).slice(11, 16);
+  return scheduledTimeEntryDepartment(employeeNumber, date, localTime)
+    || employeeRequestContext(employeeNumber, date).departmentId;
+}
+
+function scheduledTimeEntryDepartment(employeeNumber, date, localTime) {
+  const shifts = db.prepare(`
+    SELECT department_id, start_time, end_time
+    FROM shifts
+    WHERE employee_number = ? AND shift_date = ? AND department_id IS NOT NULL
+    ORDER BY start_time, id
+  `).all(employeeNumber, date);
+  const matching = shifts.find((shift) => shift.start_time <= localTime && shift.end_time >= localTime)
+    || shifts.find((shift) => shift.start_time >= localTime)
+    || shifts.at(-1);
+  return Number(matching?.department_id || 0) || null;
+}
+
+function bookTimeEntry(employeeNumber, action, now = new Date(), options = {}) {
   if (!timeEntryTypes.has(action)) throw httpError(400, "Diese Zeitbuchung ist ungültig.", "TIME_ENTRY_ACTION_INVALID");
   const date = viennaTodayIso(now);
   db.exec("BEGIN IMMEDIATE");
   try {
-    const before = timeTrackingDayStatus(employeeNumber, date, now);
+    const before = timeTrackingDayStatus(employeeNumber, date, now, options);
     if (!before.trackingEnabled) {
       throw httpError(409, "Die Zeiterfassung ist für diesen Standort noch nicht aktiviert.", "TIME_TRACKING_DISABLED");
     }
     if (before.staleEntry) {
       throw httpError(409, before.staleEntry.message, "TIME_ENTRY_PREVIOUS_DAY_OPEN");
     }
+    if (!before.accessAllowed) {
+      throw httpError(403, before.reason, "TIME_TRACKING_NETWORK_REQUIRED");
+    }
     if (!before.allowedActions.includes(action)) {
       throw httpError(409, "Diese Buchung passt nicht zum aktuellen Zeiterfassungsstatus. Bitte die Anzeige aktualisieren.", "TIME_ENTRY_STATE_CONFLICT");
     }
     const context = employeeRequestContext(employeeNumber, date);
+    context.departmentId = timeEntryDepartment(employeeNumber, date, action, now, timeEntriesForDay(employeeNumber, date));
     const timestamp = now.toISOString();
     const result = db.prepare(`
       INSERT INTO time_entries
         (employee_number, location_id, department_id, work_date, entry_type, entry_timestamp, source, created_by)
       VALUES (?, ?, ?, ?, ?, ?, 'portal', ?)
     `).run(employeeNumber, context.locationId, context.departmentId, date, action, timestamp, employeeNumber);
+    db.prepare("DELETE FROM time_day_reviews WHERE employee_number = ? AND work_date = ?").run(employeeNumber, date);
     auditPortal(employeeNumber, "time.entry.create", "time_entry", String(result.lastInsertRowid), JSON.stringify({ action, date, locationId: context.locationId }));
     db.exec("COMMIT");
-    return timeTrackingDayStatus(employeeNumber, date, now);
+    return timeTrackingDayStatus(employeeNumber, date, now, options);
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
     throw error;
@@ -2564,12 +4134,10 @@ function resolveStaleTimeEntry(session, employeeNumber, workDate, clockOutTime, 
   assertSessionEmployeeScope(session, employeeNumber);
   db.exec("BEGIN IMMEDIATE");
   try {
-    const latest = db.prepare(`
-      SELECT id, employee_number, location_id, department_id, work_date, entry_type, entry_timestamp
-      FROM time_entries WHERE employee_number = ? AND voided_at IS NULL ORDER BY entry_timestamp DESC, id DESC LIMIT 1
-    `).get(employeeNumber);
-    if (!latest || latest.work_date !== workDate || latest.work_date >= viennaTodayIso(now)
-      || timeEntryStateFromType(latest.entry_type) === "off") {
+    const workDateEntries = timeEntriesForDay(employeeNumber, workDate);
+    const latest = workDateEntries.at(-1) || null;
+    const parsed = parseTimeEntrySequence(workDateEntries, workDate, now);
+    if (!latest || workDate >= viennaTodayIso(now) || !parsed.incomplete) {
       throw httpError(409, "Die offene Altbuchung wurde bereits geändert oder ist nicht mehr vorhanden.", "TIME_CORRECTION_STATE_CONFLICT");
     }
     const fallbackContext = employeeRequestContext(employeeNumber, workDate);
@@ -2587,7 +4155,7 @@ function resolveStaleTimeEntry(session, employeeNumber, workDate, clockOutTime, 
     const requestedChange = {
       action: "close_stale_entry",
       clockOutTime,
-      originalEntryIds: timeEntriesForDay(employeeNumber, workDate).map((entry) => Number(entry.id)),
+      originalEntryIds: workDateEntries.map((entry) => Number(entry.id)),
     };
     const correctionResult = db.prepare(`
       INSERT INTO time_corrections
@@ -2606,6 +4174,7 @@ function resolveStaleTimeEntry(session, employeeNumber, workDate, clockOutTime, 
     requestedChange.timeEntryId = Number(result.lastInsertRowid);
     db.prepare("UPDATE time_corrections SET requested_change = ? WHERE id = ?")
       .run(JSON.stringify(requestedChange), correctionId);
+    db.prepare("DELETE FROM time_day_reviews WHERE employee_number = ? AND work_date = ?").run(employeeNumber, workDate);
     auditPortal(session.employeeNumber, "time.entry.stale.resolve", "time_entry", String(result.lastInsertRowid), JSON.stringify({ employeeNumber, workDate, clockOutTime }));
     auditPortal(session.employeeNumber, "time.correction.approved", "time_correction", String(correctionId), JSON.stringify(requestedChange));
     db.exec("COMMIT");
@@ -2638,31 +4207,130 @@ function timePresenceForContext(session, context, date = viennaTodayIso(), now =
       fullName: employee.full_name,
       nickname: employee.nickname,
       color: employee.color,
-      ...timeTrackingDayStatus(employee.personnel_number, date, now),
+      ...timeTrackingDayStatus(employee.personnel_number, date, now, { departmentId: context.departmentId }),
     })),
   };
 }
 
-function calculateRecordedMinutes(entries, date, now = new Date()) {
-  let runningFrom = null;
-  let totalMilliseconds = 0;
-  for (const entry of entries) {
-    const timestamp = new Date(entry.entry_timestamp);
-    if (Number.isNaN(timestamp.getTime())) continue;
-    if (entry.entry_type === "clock_in") {
-      if (!runningFrom) runningFrom = timestamp;
-    } else if (entry.entry_type === "break_start") {
-      if (runningFrom) totalMilliseconds += Math.max(0, timestamp - runningFrom);
-      runningFrom = null;
-    } else if (entry.entry_type === "break_end") {
-      if (!runningFrom) runningFrom = timestamp;
-    } else if (entry.entry_type === "clock_out") {
-      if (runningFrom) totalMilliseconds += Math.max(0, timestamp - runningFrom);
-      runningFrom = null;
-    }
+function employeeHasTimeContextActivity(employee, context, date) {
+  if (employee.home_location_id !== context.locationId) return false;
+  if (!context.departmentId) return true;
+  if (Number(employee.preferred_department_id || 0) === Number(context.departmentId)) return true;
+  return Boolean(db.prepare(`
+    SELECT 1
+    WHERE EXISTS (
+      SELECT 1 FROM shifts
+      WHERE employee_number = ? AND shift_date = ? AND department_id = ?
+    ) OR EXISTS (
+      SELECT 1 FROM time_entries
+      WHERE employee_number = ? AND work_date = ? AND department_id = ? AND voided_at IS NULL
+    )
+  `).get(
+    employee.personnel_number, date, context.departmentId,
+    employee.personnel_number, date, context.departmentId,
+  ));
+}
+
+function timeDayEvaluationsForContext(session, context, date = viennaTodayIso(), now = new Date()) {
+  if (!isIsoDate(date)) throw httpError(400, "Bitte ein gültiges Datum auswählen.", "TIME_ENTRY_DATE_INVALID");
+  assertSessionContextScope(session, context);
+  const employees = db.prepare(`
+    SELECT personnel_number, full_name, nickname, color, home_location_id, preferred_department_id
+    FROM employees
+    WHERE active = 1 AND home_location_id = ?
+    ORDER BY CAST(personnel_number AS INTEGER), personnel_number
+  `).all(context.locationId)
+    .filter((employee) => employeeHasTimeContextActivity(employee, context, date));
+  const evaluations = employees.map((employee) => ({
+    employeeNumber: employee.personnel_number,
+    fullName: employee.full_name,
+    nickname: employee.nickname,
+    color: employee.color,
+    ...evaluateTimeDay(employee.personnel_number, date, now, context.departmentId),
+  }));
+  return {
+    date,
+    timezone: "Europe/Vienna",
+    serverTime: now.toISOString(),
+    context,
+    counts: {
+      total: evaluations.length,
+      attention: evaluations.filter((entry) => entry.issues.length > 0).length,
+      reviewed: evaluations.filter((entry) => Boolean(entry.review && !entry.review.stale)).length,
+      unreviewed: evaluations.filter((entry) => !entry.review || entry.review.stale).length,
+    },
+    evaluations,
+  };
+}
+
+function setTimeDayReview(session, context, employeeNumber, date, body = {}, now = new Date()) {
+  if (!isIsoDate(date) || date > viennaTodayIso(now)) {
+    throw httpError(400, "Es können nur heutige oder vergangene Arbeitstage geprüft werden.", "TIME_DAY_REVIEW_DATE_INVALID");
   }
-  if (runningFrom && date === viennaTodayIso(now)) totalMilliseconds += Math.max(0, now - runningFrom);
-  return Math.floor(totalMilliseconds / 60000);
+  assertSessionContextScope(session, context);
+  const employee = db.prepare(`
+    SELECT personnel_number, full_name, nickname, color, home_location_id, preferred_department_id
+    FROM employees WHERE personnel_number = ? AND active = 1
+  `).get(employeeNumber);
+  if (!employee || !employeeHasTimeContextActivity(employee, context, date)) {
+    throw httpError(404, "Das Teammitglied wurde in diesem Bereich nicht gefunden.", "TIME_DAY_REVIEW_EMPLOYEE_NOT_FOUND");
+  }
+  const departmentKey = Number(context.departmentId || 0) || 0;
+  if (body.reviewed === false) {
+    db.prepare(`
+      DELETE FROM time_day_reviews
+      WHERE employee_number = ? AND work_date = ? AND department_key = ?
+    `).run(employeeNumber, date, departmentKey);
+    auditPortal(session.employeeNumber, "time.day_review.remove", "time_day_review", `${employeeNumber}:${date}:${departmentKey}`);
+    return {
+      employeeNumber: employee.personnel_number,
+      fullName: employee.full_name,
+      nickname: employee.nickname,
+      color: employee.color,
+      ...evaluateTimeDay(employeeNumber, date, now, context.departmentId),
+    };
+  }
+  const note = stripEmoji(String(body.note || "").trim()).slice(0, 500);
+  const evaluation = evaluateTimeDay(employeeNumber, date, now, context.departmentId);
+  const snapshot = {
+    evaluationVersion: evaluation.evaluationVersion,
+    evaluationHash: evaluation.evaluationHash,
+    code: evaluation.code,
+    severity: evaluation.severity,
+    plannedMinutes: evaluation.plannedMinutes,
+    actualMinutes: evaluation.actualMinutes,
+    actualValuedMinutes: evaluation.actualValuedMinutes,
+    differenceMinutes: evaluation.differenceMinutes,
+    issues: evaluation.issues.map((issue) => issue.code),
+  };
+  db.prepare(`
+    INSERT INTO time_day_reviews
+      (employee_number, location_id, department_id, department_key, work_date, note,
+       reviewed_by, reviewed_at, evaluation_version, snapshot_json, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(employee_number, work_date, department_key) DO UPDATE SET
+      location_id = excluded.location_id,
+      department_id = excluded.department_id,
+      note = excluded.note,
+      reviewed_by = excluded.reviewed_by,
+      reviewed_at = CURRENT_TIMESTAMP,
+      evaluation_version = excluded.evaluation_version,
+      snapshot_json = excluded.snapshot_json,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(employeeNumber, context.locationId, context.departmentId, departmentKey, date, note,
+    session.employeeNumber, TIME_EVALUATION_VERSION, JSON.stringify(snapshot));
+  auditPortal(session.employeeNumber, "time.day_review.save", "time_day_review", `${employeeNumber}:${date}:${departmentKey}`, JSON.stringify(snapshot));
+  return {
+    employeeNumber: employee.personnel_number,
+    fullName: employee.full_name,
+    nickname: employee.nickname,
+    color: employee.color,
+    ...evaluateTimeDay(employeeNumber, date, now, context.departmentId),
+  };
+}
+
+function calculateRecordedMinutes(entries, date, now = new Date()) {
+  return parseTimeEntrySequence(entries, date, now).workedMinutes;
 }
 
 function parseTimeCorrectionChange(value) {
@@ -2753,17 +4421,11 @@ function timeSummaryForEmployee(employeeNumber, dateFrom, dateTo, period = "rang
   const days = [];
   for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
     const entries = entriesByDate.get(date) || [];
-    const context = employeeRequestContext(employeeNumber, date);
-    const plannedMinutes = plannedMinutesForEmployeeDate(employeeNumber, date, context.locationId, departmentId);
-    const actualMinutes = calculateRecordedMinutes(entries, date, now);
-    const finalState = timeEntryStateFromType(entries.at(-1)?.entry_type);
+    const evaluation = evaluateTimeDay(employeeNumber, date, now, departmentId, entries);
     days.push({
+      ...evaluation,
       date,
       workDate: date,
-      plannedMinutes,
-      actualMinutes,
-      differenceMinutes: actualMinutes - plannedMinutes,
-      incomplete: entries.length > 0 && finalState !== "off",
       entries: entries.map((entry) => ({
         id: Number(entry.id),
         type: entry.entry_type,
@@ -2778,7 +4440,16 @@ function timeSummaryForEmployee(employeeNumber, dateFrom, dateTo, period = "rang
     plannedMinutes: result.plannedMinutes + day.plannedMinutes,
     actualMinutes: result.actualMinutes + day.actualMinutes,
     differenceMinutes: result.differenceMinutes + day.differenceMinutes,
-  }), { plannedMinutes: 0, actualMinutes: 0, differenceMinutes: 0 });
+    plannedValuedMinutes: result.plannedValuedMinutes + day.plannedValuedMinutes,
+    actualValuedMinutes: result.actualValuedMinutes + day.actualValuedMinutes,
+    valuedDifferenceMinutes: result.valuedDifferenceMinutes + day.valuedDifferenceMinutes,
+    breakMinutes: result.breakMinutes + day.breakMinutes,
+    saturdayBonusMinutes: result.saturdayBonusMinutes + day.saturdayBonusMinutes,
+  }), {
+    plannedMinutes: 0, actualMinutes: 0, differenceMinutes: 0,
+    plannedValuedMinutes: 0, actualValuedMinutes: 0, valuedDifferenceMinutes: 0,
+    breakMinutes: 0, saturdayBonusMinutes: 0,
+  });
   return {
     period,
     from: dateFrom,
@@ -2791,6 +4462,8 @@ function timeSummaryForEmployee(employeeNumber, dateFrom, dateTo, period = "rang
     color: employee.color,
     ...totals,
     incompleteDays: days.filter((day) => day.incomplete).length,
+    issueDays: days.filter((day) => day.issues.length).length,
+    reviewedDays: days.filter((day) => day.review && !day.review.stale).length,
     totals,
     days,
   };
@@ -2813,20 +4486,20 @@ function validateProposedTimeEntries(correctionDate, entriesValue, now = new Dat
     type: String(entry?.type || entry?.entryType || entry?.entry_type || "").trim(),
     time: String(entry?.time || "").trim().slice(0, 5),
   })) : [];
-  const expectedTypes = entries.length === 2
-    ? ["clock_in", "clock_out"]
-    : entries.length === 4
-      ? ["clock_in", "break_start", "break_end", "clock_out"]
-      : null;
-  if (!isIsoDate(correctionDate) || correctionDate > viennaTodayIso(now) || !expectedTypes) {
-    throw httpError(400, "Bitte zwei Buchungen oder eine vollständige Buchungsfolge mit Pause angeben.", "TIME_CORRECTION_INVALID");
+  if (!isIsoDate(correctionDate) || correctionDate > viennaTodayIso(now) || entries.length < 2 || entries.length > 24) {
+    throw httpError(400, "Bitte eine vollständige Buchungsfolge mit höchstens 24 Einträgen angeben.", "TIME_CORRECTION_INVALID");
   }
-  const timestamps = entries.map((entry, index) => {
-    if (entry.type !== expectedTypes[index] || !isTime(entry.time)) {
-      throw httpError(400, "Die Buchungsfolge muss mit Kommen beginnen, optional eine vollständige Pause enthalten und mit Gehen enden.", "TIME_CORRECTION_INVALID");
+  let state = "off";
+  const timestamps = entries.map((entry) => {
+    if (!timeEntryTypes.has(entry.type) || !isTime(entry.time) || !allowedTimeEntryActions(state).includes(entry.type)) {
+      throw httpError(400, "Die Buchungsfolge muss mit Kommen beginnen, darf Pausen oder weitere Dienste enthalten und muss vollständig mit Gehen enden.", "TIME_CORRECTION_INVALID");
     }
+    state = timeEntryStateFromType(entry.type);
     return viennaLocalDateTime(correctionDate, entry.time);
   });
+  if (state !== "off") {
+    throw httpError(400, "Die Buchungsfolge muss vollständig mit Gehen abgeschlossen werden.", "TIME_CORRECTION_INVALID");
+  }
   if (timestamps.some((timestamp, index) => index > 0 && timestamp <= timestamps[index - 1])) {
     throw httpError(400, "Die Uhrzeiten müssen in einer eindeutigen zeitlichen Reihenfolge liegen.", "TIME_CORRECTION_INVALID");
   }
@@ -2836,12 +4509,53 @@ function validateProposedTimeEntries(correctionDate, entriesValue, now = new Dat
   return entries;
 }
 
+function timeCorrectionDepartmentScope(employeeNumber, correctionDate, originalEntries = null) {
+  const fallback = employeeRequestContext(employeeNumber, correctionDate);
+  const entries = originalEntries || timeEntriesForDay(employeeNumber, correctionDate);
+  const departmentIds = new Set(entries.map((entry) => Number(entry.department_id || 0)).filter(Boolean));
+  for (const row of db.prepare(`
+    SELECT DISTINCT department_id FROM shifts
+    WHERE employee_number = ? AND shift_date = ? AND department_id IS NOT NULL
+  `).all(employeeNumber, correctionDate)) {
+    const departmentId = Number(row.department_id || 0);
+    if (departmentId) departmentIds.add(departmentId);
+  }
+  const values = [...departmentIds].sort((left, right) => left - right);
+  return {
+    locationId: fallback.locationId,
+    departmentId: values.length > 1 ? null : (values[0] || fallback.departmentId),
+    departmentIds: values,
+    crossDepartment: values.length > 1,
+  };
+}
+
+function assignCorrectionEntryDepartments(employeeNumber, correctionDate, proposedEntries, fallbackDepartmentId, originalEntries = []) {
+  const originalStarts = originalEntries
+    .filter((entry) => entry.entry_type === "clock_in" && Number(entry.department_id || 0))
+    .map((entry) => ({
+      time: viennaNowLocal(new Date(entry.entry_timestamp)).slice(11, 16),
+      departmentId: Number(entry.department_id),
+    }));
+  let activeDepartmentId = Number(fallbackDepartmentId || 0) || null;
+  return proposedEntries.map((entry) => {
+    if (entry.type === "clock_in") {
+      const scheduledDepartmentId = scheduledTimeEntryDepartment(employeeNumber, correctionDate, entry.time);
+      const closestOriginal = originalStarts
+        .map((candidate) => ({ ...candidate, distance: Math.abs(timeToMinutes(candidate.time) - timeToMinutes(entry.time)) }))
+        .sort((left, right) => left.distance - right.distance)[0];
+      activeDepartmentId = scheduledDepartmentId || closestOriginal?.departmentId || activeDepartmentId;
+    }
+    const assigned = { ...entry, departmentId: activeDepartmentId };
+    if (entry.type === "clock_out") activeDepartmentId = null;
+    return assigned;
+  });
+}
+
 function validateOwnTimeCorrection(employeeNumber, body = {}, existingId = null) {
   const correctionDate = String(body.correctionDate || body.date || "").trim();
   const requestedEntries = body.requestedEntries || body.proposedEntries || body.entries;
   const entries = validateProposedTimeEntries(correctionDate, requestedEntries);
   const requestNote = stripEmoji(String(body.reason ?? body.note ?? "").trim()).slice(0, 500);
-  const context = employeeRequestContext(employeeNumber, correctionDate);
   const duplicate = db.prepare(`
     SELECT id FROM time_corrections
     WHERE employee_number = ? AND correction_date = ? AND status = 'pending' AND id <> ?
@@ -2849,6 +4563,7 @@ function validateOwnTimeCorrection(employeeNumber, body = {}, existingId = null)
   `).get(employeeNumber, correctionDate, Number(existingId || 0));
   if (duplicate) throw httpError(409, "Für diesen Tag besteht bereits ein offener Korrekturantrag.", "TIME_CORRECTION_PENDING_EXISTS");
   const originals = timeEntriesForDay(employeeNumber, correctionDate);
+  const context = timeCorrectionDepartmentScope(employeeNumber, correctionDate, originals);
   return {
     correctionDate,
     entries,
@@ -2858,8 +4573,15 @@ function validateOwnTimeCorrection(employeeNumber, body = {}, existingId = null)
       proposedEntries: entries,
       entries,
       note: requestNote,
+      crossDepartment: context.crossDepartment,
+      departmentIds: context.departmentIds,
       originalEntryIds: originals.map((entry) => Number(entry.id)),
-      originalEntries: originals.map((entry) => ({ id: Number(entry.id), type: entry.entry_type, timestamp: entry.entry_timestamp })),
+      originalEntries: originals.map((entry) => ({
+        id: Number(entry.id),
+        type: entry.entry_type,
+        timestamp: entry.entry_timestamp,
+        departmentId: Number(entry.department_id || 0) || null,
+      })),
     },
   };
 }
@@ -2885,6 +4607,8 @@ function createOwnTimeCorrection(session, body) {
       VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
     `).run(session.employeeNumber, input.context.locationId, input.context.departmentId, input.correctionDate,
       JSON.stringify(input.requestedChange), input.requestNote, session.employeeNumber);
+    db.prepare("DELETE FROM time_day_reviews WHERE employee_number = ? AND work_date = ?")
+      .run(session.employeeNumber, input.correctionDate);
     auditPortal(session.employeeNumber, "time.correction.request", "time_correction", String(result.lastInsertRowid), JSON.stringify(input.requestedChange));
     db.exec("COMMIT");
     const correction = timeCorrectionRows("WHERE c.id = ?", [Number(result.lastInsertRowid)])[0];
@@ -2900,7 +4624,7 @@ function updateOwnTimeCorrection(session, idValue, body) {
   const id = Number(idValue);
   db.exec("BEGIN IMMEDIATE");
   try {
-    const existing = db.prepare("SELECT id, employee_number, status FROM time_corrections WHERE id = ?").get(id);
+    const existing = db.prepare("SELECT id, employee_number, correction_date, status FROM time_corrections WHERE id = ?").get(id);
     if (!existing || existing.employee_number !== session.employeeNumber) throw httpError(404, "Der Korrekturantrag wurde nicht gefunden.");
     if (existing.status !== "pending") throw httpError(409, "Nur ein offener Korrekturantrag kann bearbeitet werden.", "TIME_CORRECTION_STATE_CONFLICT");
     const input = validateOwnTimeCorrection(session.employeeNumber, body, id);
@@ -2909,6 +4633,8 @@ function updateOwnTimeCorrection(session, idValue, body) {
       SET location_id = ?, department_id = ?, correction_date = ?, requested_change = ?, request_note = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND status = 'pending'
     `).run(input.context.locationId, input.context.departmentId, input.correctionDate, JSON.stringify(input.requestedChange), input.requestNote, id);
+    db.prepare("DELETE FROM time_day_reviews WHERE employee_number = ? AND work_date IN (?, ?)")
+      .run(session.employeeNumber, existing.correction_date || input.correctionDate, input.correctionDate);
     auditPortal(session.employeeNumber, "time.correction.update", "time_correction", String(id), JSON.stringify(input.requestedChange));
     db.exec("COMMIT");
     return timeCorrectionRows("WHERE c.id = ?", [id])[0];
@@ -2920,11 +4646,13 @@ function updateOwnTimeCorrection(session, idValue, body) {
 
 function withdrawOwnTimeCorrection(session, idValue) {
   const id = Number(idValue);
+  const existing = db.prepare("SELECT employee_number, correction_date FROM time_corrections WHERE id = ?").get(id);
   const result = db.prepare(`
     UPDATE time_corrections SET status = 'withdrawn', updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND employee_number = ? AND status = 'pending'
   `).run(id, session.employeeNumber);
   if (!result.changes) throw httpError(409, "Der Korrekturantrag wurde bereits bearbeitet oder nicht gefunden.", "TIME_CORRECTION_STATE_CONFLICT");
+  if (existing) invalidateTimeDayReview(existing.employee_number, existing.correction_date);
   auditPortal(session.employeeNumber, "time.correction.withdraw", "time_correction", String(id));
 }
 
@@ -2941,21 +4669,25 @@ function decideTimeCorrection(session, idValue, body = {}, now = new Date()) {
     const row = db.prepare("SELECT * FROM time_corrections WHERE id = ?").get(id);
     if (!row) throw httpError(404, "Der Korrekturantrag wurde nicht gefunden.");
     if (row.status !== "pending") throw httpError(409, "Der Korrekturantrag wurde bereits entschieden.", "TIME_CORRECTION_STATE_CONFLICT");
+    const requestedChange = parseTimeCorrectionChange(row.requested_change);
+    const activeRows = timeEntriesForDay(row.employee_number, row.correction_date);
+    const currentScope = timeCorrectionDepartmentScope(row.employee_number, row.correction_date, activeRows);
+    const storedDepartmentIds = new Set((requestedChange.departmentIds || []).map(Number).filter(Boolean));
+    const crossDepartment = requestedChange.crossDepartment === true || storedDepartmentIds.size > 1
+      || currentScope.crossDepartment;
     const fallbackContext = employeeRequestContext(row.employee_number, row.correction_date);
     const correctionContext = {
       locationId: row.location_id || fallbackContext.locationId,
-      departmentId: Number(row.department_id || 0) || fallbackContext.departmentId,
+      departmentId: crossDepartment ? null : (Number(row.department_id || 0) || currentScope.departmentId || fallbackContext.departmentId),
     };
     assertSessionContextScope(session, correctionContext);
-    if (!row.location_id || (!row.department_id && correctionContext.departmentId)) {
+    if (!row.location_id || (!crossDepartment && !row.department_id && correctionContext.departmentId)) {
       db.prepare("UPDATE time_corrections SET location_id = ?, department_id = ? WHERE id = ?")
         .run(correctionContext.locationId, correctionContext.departmentId, id);
     }
-    const requestedChange = parseTimeCorrectionChange(row.requested_change);
     let decidedEntries = requestedChange.proposedEntries || requestedChange.entries || [];
     if (approved) {
       decidedEntries = validateProposedTimeEntries(row.correction_date, body.entries || body.proposedEntries || decidedEntries, now);
-      const activeRows = timeEntriesForDay(row.employee_number, row.correction_date);
       const originalIds = (requestedChange.originalEntryIds || []).map(Number).sort((left, right) => left - right);
       const activeIds = activeRows.map((entry) => Number(entry.id)).sort((left, right) => left - right);
       if (JSON.stringify(originalIds) !== JSON.stringify(activeIds)) {
@@ -2971,11 +4703,21 @@ function decideTimeCorrection(session, idValue, body = {}, now = new Date()) {
           (employee_number, location_id, department_id, work_date, entry_type, entry_timestamp, source, note, created_by, correction_id)
         VALUES (?, ?, ?, ?, ?, ?, 'manager_correction', ?, ?, ?)
       `);
-      for (const entry of decidedEntries) {
-        insert.run(row.employee_number, correctionContext.locationId, correctionContext.departmentId, row.correction_date, entry.type,
+      const assignedEntries = assignCorrectionEntryDepartments(
+        row.employee_number,
+        row.correction_date,
+        decidedEntries,
+        correctionContext.departmentId,
+        activeRows,
+      );
+      for (const entry of assignedEntries) {
+        insert.run(row.employee_number, correctionContext.locationId, entry.departmentId, row.correction_date, entry.type,
           viennaLocalDateTime(row.correction_date, entry.time).toISOString(), decisionNote, session.employeeNumber, id);
       }
+      db.prepare("DELETE FROM time_day_reviews WHERE employee_number = ? AND work_date = ?")
+        .run(row.employee_number, row.correction_date);
     }
+    if (!approved) invalidateTimeDayReview(row.employee_number, row.correction_date);
     const status = approved ? "approved" : "rejected";
     const result = db.prepare(`
       UPDATE time_corrections
@@ -3011,7 +4753,7 @@ function mobileLeadershipLayouts() {
   const fallback = JSON.parse(defaultPortalSettings.mobile_leadership_layouts);
   try {
     const value = JSON.parse(getPortalSettings().mobile_leadership_layouts || "{}");
-    for (const role of ["department_manager", "manager", "hr", "admin"]) {
+    for (const role of ["department_manager", "manager", "hr", "admin", "it_admin", "developer"]) {
       const requested = Array.isArray(value[role]) ? value[role].filter((id) => mobileLeadershipModuleIds.has(id)) : [];
       const modules = ["timeTracking", ...requested.filter((id) => id !== "timeTracking")];
       fallback[role] = [...new Set(modules)].slice(0, 6);
@@ -3038,7 +4780,7 @@ function mobileLayoutPayload(session) {
     modules,
     availableModules: mobileLeadershipModules,
     layouts,
-    canChange: session.employeeNumber === "local" || ["admin", "hr"].includes(session.role),
+    canChange: session.employeeNumber === "local" || RIGHTS_ADMIN_PORTAL_ROLES.has(session.role),
   };
 }
 
@@ -3047,7 +4789,7 @@ function validateMobileLeadershipLayouts(value) {
     throw httpError(400, "Bitte eine gültige Auswahl für die mobile Leitungsansicht übermitteln.", "MOBILE_LAYOUT_INVALID");
   }
   const result = mobileLeadershipLayouts();
-  for (const role of ["department_manager", "manager", "hr", "admin"]) {
+  for (const role of ["department_manager", "manager", "hr", "admin", "it_admin", "developer"]) {
     const requested = Array.isArray(value[role]) ? value[role].map(String) : result[role];
     if (requested.some((id) => !mobileLeadershipModuleIds.has(id))) {
       throw httpError(400, "Die mobile Leitungsansicht enthält ein unbekanntes Element.", "MOBILE_LAYOUT_INVALID");
@@ -3521,7 +5263,7 @@ function amuReportMetadata(id) {
 
 function assertAmuReportScope(session, report) {
   if (!report) throw httpError(404, "Die Arbeitsunfähigkeitsmeldung wurde nicht gefunden.", "AMU_REPORT_NOT_FOUND");
-  if (session.employeeNumber === "local" || ["admin", "hr"].includes(session.role)) return;
+  if (session.employeeNumber === "local" || HR_DECISION_PORTAL_ROLES.has(session.role)) return;
   const assigned = (session.scopes || []).some((scope) => scope.locationId === report.location_id
     && (session.role !== "department_manager" || (report.department_id != null && Number(scope.departmentId) === Number(report.department_id))));
   if (!assigned) {
@@ -3610,13 +5352,17 @@ function vacationHrApprovalRequired() {
   return getPortalSettings().vacation_hr_approval_required === "1";
 }
 
+function sessionCanApproveHr(session) {
+  return Boolean(session && (session.employeeNumber === "local" || session.permissions?.includes("hr:approve")));
+}
+
 function actorStage(session, entry) {
-  if (entry.approval_stage === "hr" && (session.role === "hr" || session.role === "admin" || session.employeeNumber === "local")) return "hr";
+  if (entry.approval_stage === "hr" && sessionCanApproveHr(session)) return "hr";
   return "local";
 }
 
 function assertRequestScope(session, entry) {
-  if (["admin", "hr"].includes(session.role) || session.employeeNumber === "local") return;
+  if (sessionHasGlobalScope(session)) return;
   const locationId = entry.location_id || db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(entry.employee_number)?.home_location_id;
   const assignedScopes = session.scopes || [];
   if (!assignedScopes.some((scope) => scope.locationId === locationId)) {
@@ -3709,7 +5455,7 @@ function managementBrandingPreference() {
 }
 
 function brandingForPortalSession(session) {
-  if (!session || session.employeeNumber === "local" || ["admin", "hr"].includes(session.role)) {
+  if (sessionHasGlobalScope(session)) {
     return managementBrandingPreference().branding;
   }
   return brandingForLocation(session.homeLocationId);
@@ -3808,6 +5554,9 @@ function serializeLocation(row, departments = []) {
     min_staff: Number(row.min_staff || 0),
     day_settings: daySettingsFromLocation(row.id),
     time_tracking_enabled: Boolean(row.time_tracking_enabled),
+    time_tracking_access_mode: row.time_tracking_access_mode === "trusted_network" ? "trusted_network" : "anywhere",
+    time_tracking_allowed_networks: String(row.time_tracking_allowed_networks || ""),
+    time_tracking_variance_minutes: Math.max(0, Number(row.time_tracking_variance_minutes || 0)),
     active: Boolean(row.active),
     departments,
   };
@@ -3840,7 +5589,9 @@ function getPositions() {
 function getLocations(includeInactive = true) {
   const locationRows = db
     .prepare(`
-      SELECT id, name, min_staff, day_settings_json, time_tracking_enabled, active, created_at
+      SELECT id, name, min_staff, day_settings_json, time_tracking_enabled,
+             time_tracking_access_mode, time_tracking_allowed_networks, time_tracking_variance_minutes,
+             active, created_at
       FROM locations
       ${includeInactive ? "" : "WHERE active = 1"}
       ORDER BY active DESC, id
@@ -3862,10 +5613,12 @@ function getLocations(includeInactive = true) {
 
 function getLocationsForSession(session, includeInactive = true) {
   const locations = getLocations(includeInactive);
-  if (sessionHasGlobalScope(session)) return locations;
+  const canReadTimeSettings = !session || session.employeeNumber === "local" || session.permissions?.includes("time:settings");
+  const visibleLocation = (location) => canReadTimeSettings ? location : { ...location, time_tracking_allowed_networks: "" };
+  if (sessionHasGlobalScope(session)) return locations.map(visibleLocation);
   const allowed = new Map((session.scopes || []).map((scope) => [`${scope.locationId}:${scope.departmentId || 0}`, scope]));
   return locations.filter((location) => [...allowed.keys()].some((key) => key.startsWith(`${location.id}:`))).map((location) => ({
-    ...location,
+    ...visibleLocation(location),
     departments: session.role === "department_manager"
       ? location.departments.filter((department) => allowed.has(`${location.id}:${department.id}`))
       : location.departments,
@@ -3890,9 +5643,30 @@ function normalizeDepartmentId(value, allowEmpty = true) {
 }
 
 function validateLocationExists(locationId) {
-  const location = db.prepare("SELECT id, name, min_staff, time_tracking_enabled, active FROM locations WHERE id = ?").get(locationId);
+  const location = db.prepare(`
+    SELECT id, name, min_staff, time_tracking_enabled, time_tracking_access_mode,
+           time_tracking_allowed_networks, time_tracking_variance_minutes, active
+    FROM locations WHERE id = ?
+  `).get(locationId);
   if (!location) throw httpError(404, "Die Filiale wurde nicht gefunden.");
   return location;
+}
+
+function normalizeTimeTrackingNetworks(value) {
+  const entries = [...new Set((Array.isArray(value) ? value : String(value || "").split(/[\s,;]+/))
+    .map((entry) => String(entry || "").trim().toLowerCase())
+    .filter(Boolean))];
+  if (entries.length > 20) throw httpError(400, "Es können höchstens 20 vertrauenswürdige IP-Adressen oder Netze hinterlegt werden.");
+  for (const entry of entries) {
+    const [address, prefix, ...remainder] = entry.split("/");
+    const version = net.isIP(address);
+    if (!version || remainder.length || (prefix !== undefined && (
+      !/^\d+$/.test(prefix) || Number(prefix) < 0 || Number(prefix) > (version === 4 ? 32 : 128)
+    ))) {
+      throw httpError(400, `Die Netzwerkangabe „${entry}“ ist ungültig.`);
+    }
+  }
+  return entries.join("\n");
 }
 
 function validateDepartmentExists(departmentId, locationId = null) {
@@ -3916,12 +5690,22 @@ function validateLocationPayload(body, isNew = false) {
   }
   if (!isNew) validateLocationExists(id);
   const daySettings = validateDaySettings(body.daySettings || (isNew ? legacyDaySettingsSnapshot() : daySettingsFromLocation(id)));
+  const timeTrackingAccessMode = body.timeTrackingAccessMode === "trusted_network" || body.time_tracking_access_mode === "trusted_network"
+    ? "trusted_network"
+    : "anywhere";
+  const timeTrackingVarianceMinutes = Number(body.timeTrackingVarianceMinutes ?? body.time_tracking_variance_minutes ?? 15);
+  if (!Number.isInteger(timeTrackingVarianceMinutes) || timeTrackingVarianceMinutes < 0 || timeTrackingVarianceMinutes > 240) {
+    throw httpError(400, "Die Toleranz der Zeiterfassung muss zwischen 0 und 240 Minuten liegen.");
+  }
   return {
     id,
     name,
     minStaff,
     daySettings,
     timeTrackingEnabled: body.timeTrackingEnabled === true || body.time_tracking_enabled === true ? 1 : 0,
+    timeTrackingAccessMode,
+    timeTrackingAllowedNetworks: normalizeTimeTrackingNetworks(body.timeTrackingAllowedNetworks ?? body.time_tracking_allowed_networks),
+    timeTrackingVarianceMinutes,
     active: body.active === false ? 0 : 1,
   };
 }
@@ -4757,7 +6541,7 @@ function shiftMetrics(shift, settings) {
         timeToMinutes(dayConfig.lunchEnd),
       );
     }
-    bonusMinutes = eligibleMinutes * (Number(settings.saturday_bonus_factor) - 1);
+    bonusMinutes = Math.round(eligibleMinutes * (Number(settings.saturday_bonus_factor) - 1));
     countedMinutes += bonusMinutes;
   }
 
@@ -4770,21 +6554,26 @@ function shiftMetrics(shift, settings) {
   };
 }
 
-function serializeEmployee(row) {
-  return {
+function serializeEmployee(row, options = {}) {
+  const serialized = {
     ...row,
     fixed_workdays: row.fixed_workdays || "",
     position_id: row.position_id || "verkaufsmitarbeiter",
     position_name: row.position_name || "Verkaufsmitarbeiter",
+    time_confirmation_level: ["A", "B", "C"].includes(String(row.time_confirmation_level || "").toUpperCase())
+      ? String(row.time_confirmation_level).toUpperCase()
+      : "C",
     home_location_id: row.home_location_id || "",
     home_location_name: row.home_location_name || "",
     preferred_department_id: row.preferred_department_id ? Number(row.preferred_department_id) : null,
     preferred_department_name: row.preferred_department_name || "",
     active: Boolean(row.active),
   };
+  if (options.includeTimeConfirmationLevel === false) delete serialized.time_confirmation_level;
+  return serialized;
 }
 
-function validateEmployee(body, isNew) {
+function validateEmployee(body, isNew, options = {}) {
   const personnelNumber = String(body.personnelNumber || "").trim();
   const fullName = String(body.fullName || "").trim();
   const nickname = String(body.nickname || "").trim();
@@ -4793,6 +6582,9 @@ function validateEmployee(body, isNew) {
   const preferredDayOff = String(body.preferredDayOff || "").trim();
   const fixedWorkdays = normalizeFixedWorkdays(body.fixedWorkdays ?? body.fixed_workdays);
   const positionId = String(body.positionId || body.position_id || "verkaufsmitarbeiter").trim() || "verkaufsmitarbeiter";
+  const submittedTimeConfirmationLevel = body.timeConfirmationLevel ?? body.time_confirmation_level
+    ?? options.defaultTimeConfirmationLevel ?? "C";
+  const timeConfirmationLevel = String(submittedTimeConfirmationLevel).trim().toUpperCase();
   const allowedPreferredDays = ["", "monday", "tuesday", "wednesday", "thursday", "friday"];
   const homeLocationId = normalizeLocationId(body.homeLocationId || body.home_location_id || "01");
   validateLocationExists(homeLocationId);
@@ -4813,6 +6605,9 @@ function validateEmployee(body, isNew) {
   if (!allowedPreferredDays.includes(preferredDayOff)) {
     throw httpError(400, "Der bevorzugte freie Tag ist ungültig.");
   }
+  if (!["A", "B", "C"].includes(timeConfirmationLevel)) {
+    throw httpError(400, "Bitte eine gültige Vertrauensstufe A, B oder C auswählen.", "EMPLOYEE_CONFIRMATION_LEVEL_INVALID");
+  }
 
   return {
     personnelNumber,
@@ -4823,6 +6618,7 @@ function validateEmployee(body, isNew) {
     preferredDayOff: preferredDayOff || null,
     fixedWorkdays: fixedWorkdays.join(","),
     positionId,
+    timeConfirmationLevel,
     homeLocationId,
     preferredDepartmentId,
     active: body.active === false ? 0 : 1,
@@ -6216,8 +8012,13 @@ app.post("/api/system/restart", (_request, response) => {
   response.on("finish", () => setTimeout(scheduleApplicationRestart, 250));
 });
 
-app.post("/api/system/exit", (_request, response) => {
-  if (serverModeActive) throw httpError(409, "Der Serverbetrieb wird über den Windows-Dienst beendet.", "SERVER_MANAGED_SHUTDOWN");
+app.post("/api/system/exit", (request, response) => {
+  if (serverModeActive) {
+    const session = requirePortalSession(request, "system:write");
+    if (!["developer", "it_admin", "admin"].includes(session.role)) {
+      throw httpError(403, "Nur Developer, IT-Administration oder Administration dürfen den Server beenden.", "SERVER_SHUTDOWN_ROLE_DENIED");
+    }
+  }
   const driveInfo = runtimeDriveInfo();
   let backup = null;
   try {
@@ -6227,7 +8028,9 @@ app.post("/api/system/exit", (_request, response) => {
   }
   response.json({
     ok: true,
-    message: "Grabenplaner wird sicher beendet. Bitte dieses Fenster danach schließen.",
+    message: serverModeActive
+      ? "Der Grabenplaner-Server wird sicher beendet."
+      : "Grabenplaner wird sicher beendet. Bitte dieses Fenster danach schließen.",
     backup,
     drive: driveInfo.drive,
   });
@@ -6522,9 +8325,18 @@ app.get("/api/locations", (request, response) => {
 
 app.post("/api/locations", (request, response) => {
   const location = validateLocationPayload(request.body, true);
+  if (location.timeTrackingEnabled || location.timeTrackingAccessMode !== "anywhere"
+    || location.timeTrackingAllowedNetworks || location.timeTrackingVarianceMinutes !== 15) {
+    assertRequestPermission(request, "time:settings");
+  }
   try {
-    db.prepare("INSERT INTO locations (id, name, min_staff, day_settings_json, time_tracking_enabled, active) VALUES (?, ?, ?, ?, ?, ?)")
-      .run(location.id, location.name, location.minStaff, JSON.stringify(location.daySettings), location.timeTrackingEnabled, location.active);
+    db.prepare(`
+      INSERT INTO locations
+        (id, name, min_staff, day_settings_json, time_tracking_enabled, time_tracking_access_mode,
+         time_tracking_allowed_networks, time_tracking_variance_minutes, active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(location.id, location.name, location.minStaff, JSON.stringify(location.daySettings), location.timeTrackingEnabled,
+      location.timeTrackingAccessMode, location.timeTrackingAllowedNetworks, location.timeTrackingVarianceMinutes, location.active);
     if (!sessionHasGlobalScope(request.portalSession)) {
       db.prepare(`
         INSERT OR IGNORE INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
@@ -6542,9 +8354,27 @@ app.post("/api/locations", (request, response) => {
 app.put("/api/locations/:id", (request, response) => {
   const id = normalizeLocationId(request.params.id);
   assertSessionLocationAdministrationScope(request.portalSession, id);
-  const location = validateLocationPayload({ ...request.body, id }, false);
-  const result = db.prepare("UPDATE locations SET name = ?, min_staff = ?, day_settings_json = ?, time_tracking_enabled = ?, active = ? WHERE id = ?")
-    .run(location.name, location.minStaff, JSON.stringify(location.daySettings), location.timeTrackingEnabled, location.active, id);
+  const current = validateLocationExists(id);
+  const location = validateLocationPayload({
+    timeTrackingEnabled: Boolean(current.time_tracking_enabled),
+    timeTrackingAccessMode: current.time_tracking_access_mode || "anywhere",
+    timeTrackingAllowedNetworks: current.time_tracking_allowed_networks || "",
+    timeTrackingVarianceMinutes: Number(current.time_tracking_variance_minutes ?? 15),
+    ...request.body,
+    id,
+  }, false);
+  const timeSettingsChanged = Number(current.time_tracking_enabled || 0) !== location.timeTrackingEnabled
+    || String(current.time_tracking_access_mode || "anywhere") !== location.timeTrackingAccessMode
+    || String(current.time_tracking_allowed_networks || "") !== location.timeTrackingAllowedNetworks
+    || Number(current.time_tracking_variance_minutes ?? 15) !== location.timeTrackingVarianceMinutes;
+  if (timeSettingsChanged) assertRequestPermission(request, "time:settings");
+  const result = db.prepare(`
+    UPDATE locations
+    SET name = ?, min_staff = ?, day_settings_json = ?, time_tracking_enabled = ?,
+        time_tracking_access_mode = ?, time_tracking_allowed_networks = ?, time_tracking_variance_minutes = ?, active = ?
+    WHERE id = ?
+  `).run(location.name, location.minStaff, JSON.stringify(location.daySettings), location.timeTrackingEnabled,
+    location.timeTrackingAccessMode, location.timeTrackingAllowedNetworks, location.timeTrackingVarianceMinutes, location.active, id);
   if (!result.changes) throw httpError(404, "Die Filiale wurde nicht gefunden.");
   response.json(getLocationsForSession(request.portalSession, true));
 });
@@ -6669,7 +8499,8 @@ app.get("/api/employees", (request, response) => {
   let employees = db
       .prepare(`
         SELECT e.personnel_number, e.full_name, e.nickname, e.color, e.contracted_hours,
-               e.preferred_day_off, e.fixed_workdays, e.position_id, e.home_location_id, e.preferred_department_id,
+               e.preferred_day_off, e.fixed_workdays, e.position_id, e.time_confirmation_level,
+               e.home_location_id, e.preferred_department_id,
                e.active, l.name AS home_location_name, d.name AS preferred_department_name,
                p.name AS position_name
         FROM employees e
@@ -6678,7 +8509,9 @@ app.get("/api/employees", (request, response) => {
         LEFT JOIN positions p ON p.id = e.position_id
         ORDER BY e.active DESC, CAST(e.personnel_number AS INTEGER), e.personnel_number
       `)
-      .all().map(serializeEmployee);
+      .all().map((row) => serializeEmployee(row, {
+        includeTimeConfirmationLevel: sessionCanManageTimeConfirmationLevel(session),
+      }));
   if (!sessionHasGlobalScope(session)) {
     const locations = new Set((session.scopes || []).map((scope) => scope.locationId));
     const departments = new Set((session.scopes || []).map((scope) => Number(scope.departmentId || 0)).filter(Boolean));
@@ -6690,13 +8523,15 @@ app.get("/api/employees", (request, response) => {
 
 app.post("/api/employees", (request, response) => {
   const employee = validateEmployee(request.body, true);
+  const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
+  if (!canManageTimeConfirmationLevel) employee.timeConfirmationLevel = "C";
   assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
   try {
     db.prepare(`
       INSERT INTO employees
         (personnel_number, full_name, nickname, color, contracted_hours, preferred_day_off, fixed_workdays,
-         position_id, home_location_id, preferred_department_id, active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         position_id, time_confirmation_level, home_location_id, preferred_department_id, active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       employee.personnelNumber,
       employee.fullName,
@@ -6706,6 +8541,7 @@ app.post("/api/employees", (request, response) => {
       employee.preferredDayOff,
       employee.fixedWorkdays,
       employee.positionId,
+      employee.timeConfirmationLevel,
       employee.homeLocationId,
       employee.preferredDepartmentId,
       employee.active,
@@ -6714,18 +8550,29 @@ app.post("/api/employees", (request, response) => {
     if (String(error.message).includes("UNIQUE")) throw httpError(409, "Diese Personalnummer ist bereits vergeben.");
     throw error;
   }
-  response.status(201).json({ ...employee, active: Boolean(employee.active) });
+  auditPortal(request.portalSession?.employeeNumber || "local", "employee.create", "employee", employee.personnelNumber,
+    JSON.stringify({ timeConfirmationLevel: employee.timeConfirmationLevel }));
+  const responseEmployee = { ...employee, active: Boolean(employee.active) };
+  if (!canManageTimeConfirmationLevel) delete responseEmployee.timeConfirmationLevel;
+  response.status(201).json(responseEmployee);
 });
 
 app.put("/api/employees/:personnelNumber", (request, response) => {
   const personnelNumber = request.params.personnelNumber;
   assertSessionEmployeeScope(request.portalSession, personnelNumber);
-  const employee = validateEmployee({ ...request.body, personnelNumber }, false);
+  const existing = db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = ?").get(personnelNumber);
+  if (!existing) throw httpError(404, "Die Person wurde nicht gefunden.");
+  const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
+  const employee = validateEmployee({
+    ...request.body,
+    personnelNumber,
+    ...(canManageTimeConfirmationLevel ? {} : { timeConfirmationLevel: existing.time_confirmation_level || "C" }),
+  }, false, { defaultTimeConfirmationLevel: existing.time_confirmation_level || "C" });
   assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
   const result = db.prepare(`
     UPDATE employees
     SET full_name = ?, nickname = ?, color = ?, contracted_hours = ?, preferred_day_off = ?, fixed_workdays = ?,
-        position_id = ?, home_location_id = ?, preferred_department_id = ?, active = ?
+        position_id = ?, time_confirmation_level = ?, home_location_id = ?, preferred_department_id = ?, active = ?
     WHERE personnel_number = ?
   `).run(
     employee.fullName,
@@ -6735,17 +8582,42 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
     employee.preferredDayOff,
     employee.fixedWorkdays,
     employee.positionId,
+    employee.timeConfirmationLevel,
     employee.homeLocationId,
     employee.preferredDepartmentId,
     employee.active,
     personnelNumber,
   );
   if (!result.changes) throw httpError(404, "Die Person wurde nicht gefunden.");
-  response.json({ ...employee, personnelNumber, active: Boolean(employee.active) });
+  auditPortal(request.portalSession?.employeeNumber || "local", "employee.update", "employee", personnelNumber,
+    JSON.stringify({
+      timeConfirmationLevelBefore: existing.time_confirmation_level || "C",
+      timeConfirmationLevelAfter: employee.timeConfirmationLevel,
+    }));
+  const responseEmployee = { ...employee, personnelNumber, active: Boolean(employee.active) };
+  if (!canManageTimeConfirmationLevel) delete responseEmployee.timeConfirmationLevel;
+  response.json(responseEmployee);
+});
+
+app.patch("/api/employees/:personnelNumber/display", (request, response) => {
+  const personnelNumber = String(request.params.personnelNumber || "").trim();
+  assertSessionEmployeeScope(request.portalSession, personnelNumber);
+  const color = String(request.body.color || "").trim().toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(color)) {
+    throw httpError(400, "Bitte eine gültige RGB-Farbe auswählen.", "EMPLOYEE_DISPLAY_INVALID");
+  }
+  const result = db.prepare("UPDATE employees SET color = ? WHERE personnel_number = ?").run(color, personnelNumber);
+  if (!result.changes) throw httpError(404, "Die Person wurde nicht gefunden.");
+  auditPortal(request.portalSession?.employeeNumber || "local", "employee.display.update", "employee", personnelNumber, JSON.stringify({ color }));
+  response.json({ personnelNumber, color });
 });
 
 app.delete("/api/employees/:personnelNumber", (request, response) => {
   assertSessionEmployeeScope(request.portalSession, request.params.personnelNumber);
+  const protectedUser = db.prepare("SELECT employee_number, role, role_locked FROM portal_users WHERE employee_number = ?").get(request.params.personnelNumber);
+  if (protectedUser && (protectedUser.role === "developer" || protectedUser.role_locked)) {
+    throw httpError(403, "Das Teammitglied ist mit dem geschützten Developer-Zugang verbunden und kann nicht gelöscht werden.", "PORTAL_DEVELOPER_PROTECTED");
+  }
   const result = db.prepare("DELETE FROM employees WHERE personnel_number = ?").run(request.params.personnelNumber);
   if (!result.changes) throw httpError(404, "Die Person wurde nicht gefunden.");
   response.status(204).end();
@@ -6759,6 +8631,85 @@ app.get(["/api/portal/status", "/api/portal/v1/status"], (request, response) => 
 
 app.get("/api/portal/v1/roles", (_request, response) => {
   response.json({ apiVersion: PORTAL_API_VERSION, roles: getPortalRoles() });
+});
+
+app.get("/api/portal/v1/wifi-automation/settings", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "wifi:settings");
+  const connector = wifiConnectorPayload(actor);
+  response.json({
+    ...getWifiAutomationPolicy(),
+    connectorStatus: connector.configured ? "configured" : "not_configured",
+    connector,
+    locationMappings: wifiLocationMappings(),
+    automationActive: connector.configured,
+    canChange: true,
+    employees: wifiConfirmationLevels(),
+  });
+});
+
+app.put("/api/portal/v1/wifi-automation/settings", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "wifi:settings");
+  const policy = validateWifiAutomationPolicy(request.body || {});
+  const upsert = db.prepare(`
+    INSERT INTO portal_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+  `);
+  db.exec("BEGIN");
+  try {
+    upsert.run("wifi_minimum_presence_minutes", String(policy.minimumPresenceMinutes));
+    upsert.run("wifi_absence_grace_minutes", String(policy.absenceGraceMinutes));
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "wifi.settings.update", "portal_settings", "wifi_automation", JSON.stringify(policy));
+  response.json({
+    ...getWifiAutomationPolicy(),
+    connectorStatus: wifiWebhookConfigured() ? "configured" : "not_configured",
+    connector: wifiConnectorPayload(actor),
+    locationMappings: wifiLocationMappings(),
+    automationActive: wifiWebhookConfigured(),
+    canChange: true,
+  });
+});
+
+app.put("/api/portal/v1/wifi-automation/location-mappings", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "wifi:settings");
+  response.json({ locationMappings: saveWifiLocationMappings(actor, request.body || {}) });
+});
+
+app.put("/api/portal/v1/wifi-automation/confirmation-levels", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "wifi:settings");
+  const levels = validateWifiConfirmationLevels(request.body || {});
+  const getCurrent = db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = ?");
+  const update = db.prepare("UPDATE employees SET time_confirmation_level = ? WHERE personnel_number = ?");
+  const changed = [];
+  db.exec("BEGIN");
+  try {
+    for (const item of levels) {
+      const before = String(getCurrent.get(item.employeeNumber)?.time_confirmation_level || "C").toUpperCase();
+      if (before === item.level) continue;
+      update.run(item.level, item.employeeNumber);
+      changed.push({ ...item, before });
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  for (const item of changed) {
+    auditPortal(actor.employeeNumber, "employee.time_confirmation_level.update", "employee", item.employeeNumber,
+      JSON.stringify({ before: item.before, after: item.level }));
+  }
+  response.json({ changed: changed.length, employees: wifiConfirmationLevels() });
+});
+
+app.post("/api/integrations/wifi/events", (request, response) => {
+  assertWifiWebhookRateLimit(request);
+  assertWifiWebhookAuthorization(request);
+  const result = processWifiEvent(validateWifiEvent(request.body || {}, new Date()), new Date());
+  response.status(result.duplicate ? 200 : 202).json(result);
 });
 
 app.get("/api/portal/v1/workflow-settings", (request, response) => {
@@ -6853,7 +8804,7 @@ app.post("/api/portal/v1/auth/branding", (request, response) => {
     WHERE u.employee_number = ? AND u.active = 1 AND e.active = 1
     LIMIT 1
   `).get(employeeNumber) : null;
-  const branding = user && !["admin", "hr"].includes(user.role)
+  const branding = user && !GLOBAL_SCOPE_PORTAL_ROLES.has(user.role)
     ? brandingForLocation(user.home_location_id)
     : managementBrandingPreference().branding;
   response.json({ branding });
@@ -6942,47 +8893,50 @@ app.post("/api/portal/v1/auth/logout", (request, response) => {
   response.json({ ok: true });
 });
 
-function rightsManagementPayload() {
+function rightsManagementPayload(actor) {
   const roles = new Map(getPortalRoles().map((role) => [role.id, role]));
   const users = portalUsersForAdmin()
-    .filter((user) => ["manager", "department_manager"].includes(user.role))
+    .filter((user) => user.employeeActive)
     .map((user) => {
       const rolePermissions = roles.get(user.role)?.permissions || [];
       return {
         ...user,
         rolePermissions,
         effectivePermissions: [...new Set([...rolePermissions, ...(user.grantedPermissions || [])])],
+        manageable: actorCanManagePermissionGrants(actor, user),
       };
     });
   return {
-    catalog: delegablePortalPermissionCatalog,
+    catalog: portalPermissionCatalogForActor(actor),
     users,
   };
 }
 
 app.get("/api/portal/v1/rights", (request, response) => {
-  requireAdminHrOrLocal(request, "rights:read");
-  response.json(rightsManagementPayload());
+  const actor = requireAdminHrOrLocal(request, "rights:read");
+  response.json(rightsManagementPayload(actor));
 });
 
 app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
   const actor = requireAdminHrOrLocal(request, "rights:write");
   const employeeNumber = String(request.params.employeeNumber || "").trim();
-  const target = db.prepare("SELECT role FROM portal_users WHERE employee_number = ? AND active = 1").get(employeeNumber);
-  if (!target) throw httpError(404, "Der aktive Portal-Zugang wurde nicht gefunden.");
-  if (!["manager", "department_manager"].includes(target.role)) {
-    throw httpError(403, "Zusätzliche Rechte können nur Filial- oder Abteilungsleitungen erhalten.", "PORTAL_PERMISSION_DENIED");
-  }
+  const target = portalUsersForAdmin().find((user) => user.employeeNumber === employeeNumber);
+  if (!target?.configured || !target.active) throw httpError(404, "Der aktive Portal-Zugang wurde nicht gefunden.");
+  if (!actorCanManagePermissionGrants(actor, target)) throw httpError(403, target.role === "developer"
+    ? "Der Developer-Zugang ist geschützt und kann nicht über die App verändert werden."
+    : "Für diesen Zugang dürfen keine individuellen Rechte geändert werden.", target.role === "developer" ? "PORTAL_DEVELOPER_PROTECTED" : "PORTAL_ROLE_HIERARCHY_DENIED");
   if (!Array.isArray(request.body.permissions)) throw httpError(400, "Bitte eine gültige Rechteauswahl übermitteln.");
   const submitted = [...new Set(request.body.permissions.map((value) => String(value || "").trim()).filter(Boolean))];
-  const invalid = submitted.filter((permission) => !delegablePortalPermissions.has(permission));
+  const manageablePermissions = manageablePortalPermissionsForActor(actor);
+  const invalid = submitted.filter((permission) => !manageablePermissions.has(permission));
   if (invalid.length) {
-    throw httpError(400, `Diese Rechte dürfen nicht delegiert werden: ${invalid.join(", ")}`, "PORTAL_PERMISSION_NOT_DELEGABLE");
+    throw httpError(403, `Diese Rechte dürfen durch den aktuellen Zugang nicht vergeben werden: ${invalid.join(", ")}`, "PORTAL_PERMISSION_NOT_DELEGABLE");
   }
   const before = portalPermissionGrantsForEmployee(employeeNumber);
   db.exec("BEGIN");
   try {
-    db.prepare("DELETE FROM portal_permission_grants WHERE employee_number = ?").run(employeeNumber);
+    const remove = db.prepare("DELETE FROM portal_permission_grants WHERE employee_number = ? AND permission = ?");
+    for (const permission of manageablePermissions) remove.run(employeeNumber, permission);
     const insert = db.prepare(`
       INSERT INTO portal_permission_grants (employee_number, permission, granted_by, updated_at)
       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
@@ -6993,8 +8947,9 @@ app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
     db.exec("ROLLBACK");
     throw error;
   }
-  auditPortal(actor.employeeNumber, "portal.rights.update", "portal_user", employeeNumber, JSON.stringify({ before, after: submitted }));
-  response.json(rightsManagementPayload());
+  const after = portalPermissionGrantsForEmployee(employeeNumber);
+  auditPortal(actor.employeeNumber, "portal.rights.update", "portal_user", employeeNumber, JSON.stringify({ before, after }));
+  response.json(rightsManagementPayload(actor));
 });
 
 app.get("/api/portal/v1/users", (request, response) => {
@@ -7043,20 +8998,27 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
   }
   const role = String(request.body.role || "employee");
   if (!db.prepare("SELECT 1 FROM portal_roles WHERE id = ?").get(role)) throw httpError(400, "Die ausgewählte Rolle ist ungültig.");
-  if (actor.role === "hr" && !["employee", "manager", "department_manager"].includes(role)) {
-    throw httpError(403, "Die Personalleitung darf keine Admin- oder Personalleitungsrollen vergeben.");
+  const existingUser = db.prepare("SELECT employee_number, role, role_locked, password_hash FROM portal_users WHERE employee_number = ?").get(employeeNumber);
+  if (existingUser) {
+    assertPortalUserIsMutable(existingUser, actor);
+    if (!actorCanManagePortalRole(actor, existingUser.role)) {
+      throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
+    }
   }
-  if (actor.role === "hr") {
-    const existingRole = db.prepare("SELECT role FROM portal_users WHERE employee_number = ?").get(employeeNumber)?.role;
-    if (["admin", "hr"].includes(existingRole)) throw httpError(403, "Dieser globale Zugang kann nur von einem Admin geändert werden.");
+  if (!actorCanAssignPortalRole(actor, role)) {
+    throw httpError(403, role === "developer"
+      ? "Die Developer-Rolle kann ausschließlich mit dem lokalen Entwicklerwerkzeug gebunden werden."
+      : "Diese Rolle darf durch den aktuellen Zugang nicht vergeben werden.", role === "developer" ? "PORTAL_DEVELOPER_PROTECTED" : "PORTAL_ROLE_HIERARCHY_DENIED");
   }
   const password = String(request.body.password || "");
-  const existing = db.prepare("SELECT password_hash FROM portal_users WHERE employee_number = ?").get(employeeNumber);
-  const passwordHash = password ? await hashPortalPassword(password) : existing?.password_hash || "";
+  const passwordHash = password ? await hashPortalPassword(password) : existingUser?.password_hash || "";
   const active = request.body.active !== false ? 1 : 0;
-  if (role === "admin" && !active) {
-    const otherAdmins = Number(db.prepare("SELECT COUNT(*) AS count FROM portal_users WHERE role = 'admin' AND active = 1 AND employee_number <> ?").get(employeeNumber).count);
-    if (!otherAdmins) throw httpError(409, "Mindestens ein aktiver Admin-Zugang muss bestehen bleiben.");
+  if (existingUser?.role === "admin" && (role !== "admin" || !active)) {
+    const otherSystemOwners = Number(db.prepare(`
+      SELECT COUNT(*) AS count FROM portal_users
+      WHERE role IN ('developer','admin') AND active = 1 AND employee_number <> ?
+    `).get(employeeNumber).count);
+    if (!otherSystemOwners) throw httpError(409, "Mindestens ein aktiver Developer- oder Admin-Zugang muss bestehen bleiben.");
   }
   db.prepare(`
     INSERT INTO portal_users (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
@@ -7067,9 +9029,6 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       password_changed_at = CASE WHEN ? <> '' THEN CURRENT_TIMESTAMP ELSE portal_users.password_changed_at END,
       updated_at = CURRENT_TIMESTAMP
   `).run(employeeNumber, passwordHash, role, active, password ? 1 : Number(request.body.mustChangePassword !== false), password, password);
-  if (!["manager", "department_manager"].includes(role)) {
-    db.prepare("DELETE FROM portal_permission_grants WHERE employee_number = ?").run(employeeNumber);
-  }
   if (!active || password) db.prepare("UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND revoked_at IS NULL").run(employeeNumber);
   auditPortal(actor.employeeNumber, "portal.user.update", "portal_user", employeeNumber, JSON.stringify({ role, active: Boolean(active), passwordReset: Boolean(password) }));
   response.json({ users: portalUsersForAdmin(), roles: getPortalRoles() });
@@ -7078,6 +9037,11 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
 app.post("/api/portal/v1/users/:employeeNumber/unlock", (request, response) => {
   const actor = requirePortalAdminOrLocal(request, "users:write");
   const employeeNumber = String(request.params.employeeNumber || "").trim();
+  const target = db.prepare("SELECT employee_number, role, role_locked FROM portal_users WHERE employee_number = ?").get(employeeNumber);
+  assertPortalUserIsMutable(target, actor);
+  if (!actorCanManagePortalRole(actor, target.role)) {
+    throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
+  }
   const result = db.prepare(`
     UPDATE portal_users SET failed_login_attempts = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP
     WHERE employee_number = ?
@@ -7865,7 +9829,7 @@ app.put("/api/portal/v1/vacation-requests/:id/decision", (request, response) => 
 
 app.get("/api/portal/v1/absence-requests", (request, response) => {
   const session = requirePortalAdminOrLocal(request, "vacation:read");
-  const scoped = !["admin", "hr"].includes(session.role) && session.employeeNumber !== "local";
+  const scoped = !sessionHasGlobalScope(session);
   const scopeSql = scoped ? "AND COALESCE(v.location_id, e.home_location_id) = ?" : "";
   const scopeParams = scoped ? [session.scopes?.[0]?.locationId || session.homeLocationId] : [];
   const vacationRequests = db.prepare(`
@@ -7928,8 +9892,8 @@ app.get("/api/portal/v1/absence-requests", (request, response) => {
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || Number(b.id) - Number(a.id));
   const actionable = requests.filter((entry) => {
     if (!["pending_local", "preliminary_local", "pending_hr"].includes(entry.status)) return false;
-    if (entry.approval_stage === "hr") return ["hr", "admin"].includes(session.role) || session.employeeNumber === "local";
-    return session.role !== "hr" || session.role === "admin" || session.employeeNumber === "local";
+    if (entry.approval_stage === "hr") return sessionCanApproveHr(session);
+    return session.role !== "hr" || ["developer", "admin"].includes(session.role) || session.employeeNumber === "local";
   });
   response.json({
     requests,
@@ -8069,10 +10033,10 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", (request, response) 
   const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
   const stage = actorStage(session, entry);
   if (entry.approval_stage === "hr" && stage !== "hr") throw httpError(403, "Dieser Antrag wartet auf die Personalleitung.");
-  if (stage === "hr" && !["hr", "admin"].includes(session.role) && session.employeeNumber !== "local") throw httpError(403, "Nur die Personalleitung darf diese Freigabe abschließen.");
+  if (stage === "hr" && !sessionCanApproveHr(session)) throw httpError(403, "Für diese verbindliche Freigabe fehlt die Berechtigung.");
   if (entry.status === "approved" && entry.hr_approved_by && ["change", "cancel"].includes(action)
-    && !["hr", "admin"].includes(session.role) && session.employeeNumber !== "local") {
-    throw httpError(403, "Dieser verbindliche Antrag kann nur durch die Personalleitung geändert oder storniert werden.");
+    && !sessionCanApproveHr(session)) {
+    throw httpError(403, "Für die Änderung dieses verbindlichen Antrags fehlt die Berechtigung.");
   }
   let result = {};
   db.exec("BEGIN");
@@ -8304,16 +10268,60 @@ app.delete("/api/portal/v1/request-blackouts/:id", (request, response) => {
   response.status(204).end();
 });
 
+app.get("/api/portal/v1/me/wifi-automation", (request, response) => {
+  const session = requirePortalSession(request, "own_time:read");
+  response.json(wifiAutomationEmployeePayload(session, new Date()));
+});
+
+app.put("/api/portal/v1/me/wifi-automation", (request, response) => {
+  const session = requirePortalSession(request, "own_time:read");
+  assertPortalCsrf(request);
+  if (typeof request.body?.enabled !== "boolean") {
+    throw httpError(400, "Bitte die WLAN-Automatik eindeutig ein- oder ausschalten.", "WIFI_PREFERENCE_INVALID");
+  }
+  if (request.body.enabled) {
+    const current = wifiAutomationEmployeePayload(session, new Date());
+    if (!current.canEnable) throw httpError(409, current.availabilityReason || "Die WLAN-Automatik ist noch nicht verfügbar.", "WIFI_AUTOMATION_UNAVAILABLE");
+  }
+  setWifiAutomationPreference(session, request.body.enabled);
+  response.json(wifiAutomationEmployeePayload(session, new Date()));
+});
+
+app.post("/api/portal/v1/me/wifi-suggestions/:id/confirm", (request, response) => {
+  const session = requirePortalSession(request, "own_time:write");
+  assertPortalCsrf(request);
+  confirmWifiSuggestionBatch(session, [{ id: request.params.id, ...(request.body || {}) }], new Date());
+  response.json(wifiAutomationEmployeePayload(session, new Date()));
+});
+
+app.post("/api/portal/v1/me/wifi-suggestions/confirm-week", (request, response) => {
+  const session = requirePortalSession(request, "own_time:write");
+  assertPortalCsrf(request);
+  confirmWifiSuggestionWeek(session, request.body || {}, new Date());
+  response.json(wifiAutomationEmployeePayload(session, new Date()));
+});
+
+app.post("/api/portal/v1/me/wifi-suggestions/:id/reject", (request, response) => {
+  const session = requirePortalSession(request, "own_time:write");
+  assertPortalCsrf(request);
+  rejectWifiSuggestion(session, request.params.id, request.body?.reason || "");
+  response.json(wifiAutomationEmployeePayload(session, new Date()));
+});
+
 app.get("/api/portal/v1/me/time-entries", (request, response) => {
   const session = requirePortalSession(request, "own_time:read");
   const date = isIsoDate(request.query.date) ? String(request.query.date) : viennaTodayIso();
-  response.json({ status: timeTrackingDayStatus(session.employeeNumber, date) });
+  const context = employeeRequestContext(session.employeeNumber, date);
+  const access = timeTrackingRequestAccess(request, validateLocationExists(context.locationId));
+  response.json({ status: timeTrackingDayStatus(session.employeeNumber, date, new Date(), { access }) });
 });
 
 app.post("/api/portal/v1/me/time-entries", (request, response) => {
   const session = requirePortalSession(request, "own_time:write");
   assertPortalCsrf(request);
-  response.status(201).json({ status: bookTimeEntry(session.employeeNumber, String(request.body?.type || "")) });
+  const context = employeeRequestContext(session.employeeNumber, viennaTodayIso());
+  const access = timeTrackingRequestAccess(request, validateLocationExists(context.locationId));
+  response.status(201).json({ status: bookTimeEntry(session.employeeNumber, String(request.body?.type || ""), new Date(), { access }) });
 });
 
 app.get("/api/portal/v1/me/time-summary", (request, response) => {
@@ -8385,10 +10393,33 @@ app.get("/api/portal/v1/time-summary", (request, response) => {
         plannedMinutes: summary.plannedMinutes,
         actualMinutes: summary.actualMinutes,
         differenceMinutes: summary.differenceMinutes,
+        plannedValuedMinutes: summary.plannedValuedMinutes,
+        actualValuedMinutes: summary.actualValuedMinutes,
+        valuedDifferenceMinutes: summary.valuedDifferenceMinutes,
+        breakMinutes: summary.breakMinutes,
+        saturdayBonusMinutes: summary.saturdayBonusMinutes,
         incompleteDays: summary.incompleteDays,
+        issueDays: summary.issueDays,
+        reviewedDays: summary.reviewedDays,
       };
     });
   response.json({ summary: { period: "range", from: dateFrom, to: dateTo, dateFrom, dateTo, context, employees } });
+});
+
+app.get("/api/portal/v1/time-day-evaluations", (request, response) => {
+  const session = requirePortalReadOrLocal(request, "time:read");
+  const context = resolvePlanningContext(request.query || {});
+  const date = isIsoDate(request.query.date) ? String(request.query.date) : viennaTodayIso();
+  response.json({ dayReview: timeDayEvaluationsForContext(session, context, date) });
+});
+
+app.put("/api/portal/v1/time-day-reviews/:employeeNumber/:date", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "time:review");
+  const context = resolvePlanningContext(request.body || {});
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  response.json({
+    evaluation: setTimeDayReview(session, context, employeeNumber, String(request.params.date || ""), request.body || {}),
+  });
 });
 
 app.get("/api/portal/v1/time-corrections", (request, response) => {
@@ -8478,14 +10509,14 @@ app.get("/api/settings", (request, response) => {
 });
 
 app.get("/api/branding/export", (request, response) => {
-  requireAdminHrOrLocal(request, "branding:read");
+  requirePortalAdminOrLocal(request, "branding:read");
   const kit = brandingKitForExport(request.query);
   response.setHeader("Content-Disposition", contentDispositionHeader("grabenplaner-branding-kit.json"));
   response.json(kit);
 });
 
 app.get("/api/branding/export.zip", (request, response) => {
-  requireAdminHrOrLocal(request, "branding:read");
+  requirePortalAdminOrLocal(request, "branding:read");
   const kit = brandingKitForExport(request.query);
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-branding-zip-"));
   const zipPath = path.join(tempRoot, "grabenplaner-branding-kit.zip");
@@ -8506,18 +10537,18 @@ app.get("/api/branding/export.zip", (request, response) => {
 });
 
 app.get("/api/branding/kits", (request, response) => {
-  requireAdminHrOrLocal(request, "branding:read");
+  requirePortalAdminOrLocal(request, "branding:read");
   const context = resolvePlanningContext(request.query || {});
   response.json(listBrandingKits(context.locationId));
 });
 
 app.get("/api/branding/assignments", (request, response) => {
-  requireAdminHrOrLocal(request, "branding:read");
+  requirePortalAdminOrLocal(request, "branding:read");
   response.json({ assignments: locationBrandingAssignments() });
 });
 
 app.put("/api/branding/assignments", (request, response) => {
-  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const actor = requirePortalAdminOrLocal(request, "branding:write");
   const submittedAssignments = Array.isArray(request.body.assignments) ? request.body.assignments : null;
   if (submittedAssignments) {
     if (!submittedAssignments.length || submittedAssignments.length > 250) {
@@ -8546,12 +10577,12 @@ app.put("/api/branding/assignments", (request, response) => {
 });
 
 app.get("/api/branding/preference", (request, response) => {
-  requireAdminHrOrLocal(request, "branding:read");
+  requirePortalAdminOrLocal(request, "branding:read");
   response.json(managementBrandingPreference());
 });
 
 app.put("/api/branding/preference", (request, response) => {
-  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const actor = requirePortalAdminOrLocal(request, "branding:write");
   const kitId = String(request.body.kitId || "neutral").trim();
   let brandingInput;
   if (kitId === "custom") brandingInput = request.body.branding || request.body;
@@ -8564,13 +10595,13 @@ app.put("/api/branding/preference", (request, response) => {
 });
 
 app.delete("/api/branding/kits/:kitId", (request, response) => {
-  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const actor = requirePortalAdminOrLocal(request, "branding:write");
   const deleted = deleteInstalledBrandingKit(request.params.kitId, actor.employeeNumber);
   response.json({ ok: true, deleted, kits: listBrandingKits(String(request.query.locationId || "")) });
 });
 
 app.post("/api/branding/kits/:kitId/apply", (request, response) => {
-  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const actor = requirePortalAdminOrLocal(request, "branding:write");
   const kit = readBrandingKitManifest(request.params.kitId);
   const context = resolvePlanningContext(request.body || {});
   response.json({
@@ -8580,7 +10611,7 @@ app.post("/api/branding/kits/:kitId/apply", (request, response) => {
 });
 
 app.put("/api/branding/import", (request, response) => {
-  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const actor = requirePortalAdminOrLocal(request, "branding:write");
   const kit = request.body?.kit || request.body || {};
   const installedKit = installBrandingKit(kit, { fileName: request.get("X-Branding-Filename") || "branding-kit.json" });
   const context = resolvePlanningContext(request.body || {});
@@ -8592,7 +10623,7 @@ app.put("/api/branding/import", (request, response) => {
 });
 
 app.put("/api/branding/import.zip", express.raw({ type: ["application/zip", "application/x-zip-compressed", "application/octet-stream"], limit: "25mb" }), (request, response) => {
-  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const actor = requirePortalAdminOrLocal(request, "branding:write");
   if (!Buffer.isBuffer(request.body) || request.body.length < 128) {
     throw httpError(400, "Bitte eine gültige Branding-ZIP-Datei auswählen.");
   }
@@ -8690,8 +10721,8 @@ app.put("/api/settings", (request, response) => {
     : "medium";
   const brandingValues = brandingValuesFromBody(body.branding || body);
   const brandingSubmitted = Boolean(body.branding);
-  if (brandingSubmitted && !(request.portalSession?.role === "admin" || request.portalSession?.role === "hr" || (!getPortalStatus().portalEnabled && isLoopbackRequest(request)))) {
-    throw httpError(403, "Branding darf nur durch Admin oder Personalleitung geändert werden.", "PORTAL_PERMISSION_DENIED");
+  if (brandingSubmitted && !(request.portalSession?.permissions?.includes("branding:write") || (!getPortalStatus().portalEnabled && isLoopbackRequest(request)))) {
+    throw httpError(403, "Für die Branding-Verwaltung fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
   }
   const currentWeekLockMode = body.currentWeekLockMode === "manual" ? "manual" : "closing";
   const currentWeekLockDay = ["friday", "saturday", "sunday"].includes(String(body.currentWeekLockDay)) ? String(body.currentWeekLockDay) : "saturday";
@@ -8789,12 +10820,13 @@ app.post("/api/shifts", (request, response) => {
     INSERT INTO shifts (employee_number, department_id, shift_date, start_time, end_time, area, note)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(shift.employeeNumber, shift.departmentId, shift.shiftDate, shift.startTime, shift.endTime, shift.area, shift.note);
+  invalidateTimeDayReview(shift.employeeNumber, shift.shiftDate);
   response.status(201).json({ id: Number(result.lastInsertRowid), ...shift });
 });
 
 app.put("/api/shifts/:id", (request, response) => {
   const id = Number(request.params.id);
-  const existing = db.prepare("SELECT s.shift_date, s.department_id, e.home_location_id FROM shifts s JOIN employees e ON e.personnel_number = s.employee_number WHERE s.id = ?").get(id);
+  const existing = db.prepare("SELECT s.employee_number, s.shift_date, s.department_id, e.home_location_id FROM shifts s JOIN employees e ON e.personnel_number = s.employee_number WHERE s.id = ?").get(id);
   if (!existing) throw httpError(404, "Der Dienst wurde nicht gefunden.");
   assertSessionContextScope(request.portalSession, { locationId: existing.home_location_id, departmentId: existing.department_id });
   assertDateEditable(existing.shift_date, settingsForLocation(existing.home_location_id));
@@ -8807,17 +10839,20 @@ app.put("/api/shifts/:id", (request, response) => {
     WHERE id = ?
   `).run(shift.employeeNumber, shift.departmentId, shift.shiftDate, shift.startTime, shift.endTime, shift.area, shift.note, id);
   if (!result.changes) throw httpError(404, "Der Dienst wurde nicht gefunden.");
+  invalidateTimeDayReview(existing.employee_number, existing.shift_date);
+  invalidateTimeDayReview(shift.employeeNumber, shift.shiftDate);
   response.json({ id, ...shift });
 });
 
 app.delete("/api/shifts/:id", (request, response) => {
   const id = Number(request.params.id);
-  const existing = db.prepare("SELECT s.shift_date, s.department_id, e.home_location_id FROM shifts s JOIN employees e ON e.personnel_number = s.employee_number WHERE s.id = ?").get(id);
+  const existing = db.prepare("SELECT s.employee_number, s.shift_date, s.department_id, e.home_location_id FROM shifts s JOIN employees e ON e.personnel_number = s.employee_number WHERE s.id = ?").get(id);
   if (!existing) throw httpError(404, "Der Dienst wurde nicht gefunden.");
   assertSessionContextScope(request.portalSession, { locationId: existing.home_location_id, departmentId: existing.department_id });
   assertDateEditable(existing.shift_date, settingsForLocation(existing.home_location_id));
   const result = db.prepare("DELETE FROM shifts WHERE id = ?").run(id);
   if (!result.changes) throw httpError(404, "Der Dienst wurde nicht gefunden.");
+  invalidateTimeDayReview(existing.employee_number, existing.shift_date);
   response.status(204).end();
 });
 
@@ -8837,6 +10872,7 @@ app.delete("/api/schedule", (request, response) => {
       AND employee_number IN (SELECT personnel_number FROM employees WHERE home_location_id = ?)
       ${departmentFilter}
   `).run(...params);
+  invalidateTimeDayReviewsForRange(context.locationId, weekStart, weekEnd, context.departmentId);
   response.json({ deleted: Number(result.changes), weekStart, weekEnd });
 });
 
@@ -8860,13 +10896,14 @@ app.post("/api/week-options", (request, response) => {
     option.startTime,
     option.endTime,
   );
+  for (let date = option.dateFrom; date <= option.dateTo; date = addDays(date, 1)) invalidateTimeDayReview(option.employeeNumber, date);
   response.status(201).json({ id: Number(result.lastInsertRowid), ...option });
 });
 
 app.put("/api/week-options/:id", (request, response) => {
   const id = Number(request.params.id);
   if (!Number.isInteger(id) || id <= 0) throw httpError(400, "Die Planungsoption ist ungültig.");
-  const existing = db.prepare("SELECT group_id, week_start, employee_number FROM week_options WHERE id = ?").get(id);
+  const existing = db.prepare("SELECT group_id, week_start, employee_number, date_from, date_to FROM week_options WHERE id = ?").get(id);
   if (!existing) {
     throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
   }
@@ -8897,18 +10934,21 @@ app.put("/api/week-options/:id", (request, response) => {
     option.endTime,
     id,
   );
+  for (let date = existing.date_from; date <= existing.date_to; date = addDays(date, 1)) invalidateTimeDayReview(existing.employee_number, date);
+  for (let date = option.dateFrom; date <= option.dateTo; date = addDays(date, 1)) invalidateTimeDayReview(option.employeeNumber, date);
   response.json({ id, ...option });
 });
 
 app.delete("/api/week-options/:id", (request, response) => {
   const id = Number(request.params.id);
-  const existing = db.prepare("SELECT week_start, employee_number FROM week_options WHERE id = ?").get(id);
+  const existing = db.prepare("SELECT week_start, employee_number, date_from, date_to FROM week_options WHERE id = ?").get(id);
   if (!existing) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
   assertSessionEmployeeScope(request.portalSession, existing.employee_number);
   const existingLocation = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(existing.employee_number)?.home_location_id;
   assertWeekEditable(existing.week_start, settingsForLocation(existingLocation));
   const result = db.prepare("DELETE FROM week_options WHERE id = ?").run(id);
   if (!result.changes) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
+  for (let date = existing.date_from; date <= existing.date_to; date = addDays(date, 1)) invalidateTimeDayReview(existing.employee_number, date);
   response.status(204).end();
 });
 
@@ -9257,6 +11297,7 @@ app.post("/api/schedule/auto", (request, response) => {
       }
     });
 
+    invalidateTimeDayReviewsForRange(context.locationId, weekStart, weekEnd, context.departmentId);
     db.exec("COMMIT");
     response.json({ created, warnings, schedule: getSchedule(weekStart, context, request.portalSession) });
   } catch (error) {
@@ -10600,6 +12641,13 @@ module.exports = {
   getPortalRoles,
   hashPortalPassword,
   verifyPortalPassword,
+  ipMatchesNetwork,
+  isPrivateNetworkIp,
+  timeTrackingRequestAccess,
+  parseTimeEntrySequence,
+  actualDayMetrics,
+  evaluateTimeDay,
+  validateProposedTimeEntries,
   timeTrackingDayStatus,
   bookTimeEntry,
   resolveStaleTimeEntry,
