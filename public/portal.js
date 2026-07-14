@@ -10,6 +10,10 @@ const portalState = {
   unreadNotifications: 0,
   amuReports: [],
   amuPolicy: null,
+  sicknessCases: [],
+  leadershipSicknessCases: [],
+  sicknessNotificationPreferences: null,
+  amuOcr: { busy: false, assisted: false, startManuallyEdited: false, endManuallyEdited: false, autoFilledStart: false, autoFilledEnd: false, fileKey: "", runToken: 0 },
   activeTab: "schedule",
   timeTracking: null,
   timePeriod: "week",
@@ -48,7 +52,7 @@ const optionNames = {
   other: "Sonstiges",
 };
 const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-const statusLabels = { pending: "Offen", submitted: "Übermittelt", pending_local: "Offen", preliminary_local: "Vorläufig genehmigt", pending_hr: "Wartet auf Personalleitung", approved: "Genehmigt", rejected: "Abgelehnt", cancelled: "Storniert", withdrawn: "Zurückgezogen", reviewed: "Geprüft", returned: "Ergänzung erforderlich" };
+const statusLabels = { pending: "Offen", submitted: "Übermittelt", reported: "Gemeldet", aum_received: "AUM vorhanden", pending_local: "Offen", preliminary_local: "Vorläufig genehmigt", pending_hr: "Wartet auf Personalleitung", approved: "Genehmigt", rejected: "Abgelehnt", cancelled: "Storniert", withdrawn: "Zurückgezogen", reviewed: "Geprüft", returned: "Ergänzung erforderlich", warning: "Besetzung prüfen", yellow: "AUM überfällig", red: "Rot eskaliert" };
 
 function applyDeviceMode() {
   const compact = window.matchMedia("(max-width: 720px)").matches;
@@ -82,8 +86,10 @@ const el = Object.fromEntries([
   "timeOffChangeForm", "timeOffChangeTitle", "timeOffChangeOriginal", "timeOffChangeFields", "timeOffChangeFrom", "timeOffChangeTo",
   "timeOffChangeToField", "timeOffChangeTimes", "timeOffChangeStart", "timeOffChangeEnd", "timeOffChangeNote", "timeOffChangeMessage",
   "historyDetailDialog", "historyDetailTitle", "historyDetailSummary", "historyDecisionTimeline", "notificationsDialog", "notificationList",
-  "markAllNotificationsRead", "amuReportForm", "amuIncapacityFrom", "amuIncapacityTo", "amuEmployeeNote", "amuDocuments",
-  "amuMessage", "amuSubmitButton", "amuReportList", "amuCamera", "amuUploadHint", "portalDeploymentBanner",
+  "markAllNotificationsRead", "sicknessCaseForm", "sicknessStartDate", "sicknessExpectedEnd", "sicknessEmployeeNote", "sicknessMessage", "sicknessSubmitButton", "sicknessCaseList",
+  "amuReportForm", "amuSicknessCaseId", "amuIncapacityFrom", "amuIncapacityTo", "amuEmployeeNote", "amuDocuments",
+  "amuMessage", "amuSubmitButton", "amuReportList", "amuCamera", "amuUploadHint", "amuOcrStatus", "amuOcrStatusTitle", "amuOcrStatusText", "amuOcrConfirmField", "amuOcrConfirmed", "portalDeploymentBanner",
+  "sicknessNotificationPreferencesCard", "sicknessNotificationPreferencesForm", "sicknessNotificationEarliestTime", "sicknessNotificationChannels", "sicknessNotificationPreferencesMessage",
 ].map((id) => [id, document.querySelector(`#${id}`)]));
 
 function mondayOf(value) {
@@ -214,14 +220,29 @@ function applyPortalCapabilities() {
   const timeTrackingEnabled = timeTrackingCapabilityEnabled();
   el.timeTrackingTab?.classList.toggle("hidden", !timeTrackingEnabled);
   if (!timeTrackingEnabled && portalState.activeTab === "timeTracking") setTab("schedule");
+  const sicknessEnabled = portalState.status?.capabilities?.sicknessReports === true;
+  document.querySelector('[data-tab="amu"]')?.classList.toggle("hidden", !sicknessEnabled);
 }
 
 function portalUser() {
   return portalState.session?.user || null;
 }
 
+const leadershipPortalPermissions = new Set([
+  "time:read",
+  "time:review",
+  "vacation:read",
+  "vacation:approve",
+  "hr:approve",
+  "amu:metadata:read",
+  "amu:review",
+  "sickness:read",
+  "notifications:settings",
+]);
+
 function isLeadershipUser(user = portalUser()) {
-  return ["department_manager", "manager", "hr", "admin", "it_admin", "developer"].includes(user?.role);
+  return Array.isArray(user?.permissions)
+    && user.permissions.some((permission) => leadershipPortalPermissions.has(permission));
 }
 
 const mobileModuleAliases = {
@@ -254,7 +275,7 @@ function normalizedMobileModules(value) {
 function mobileModuleAllowed(module, permissions = portalUser()?.permissions || []) {
   if (module === "time") return permissions.includes("own_time:read") && timeTrackingCapabilityEnabled();
   if (module === "presence") return permissions.includes("time:read");
-  if (module === "approvals") return permissions.some((permission) => ["vacation:read", "vacation:approve", "time:review", "amu:metadata:read", "amu:review"].includes(permission));
+  if (module === "approvals") return permissions.some((permission) => ["vacation:read", "vacation:approve", "time:review", "amu:metadata:read", "amu:review", "sickness:read"].includes(permission));
   if (module === "schedule") return permissions.includes("own_schedule:read");
   if (module === "requests") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:correction_request"].includes(permission));
   return module === "more";
@@ -282,7 +303,9 @@ function applyMobileLeadershipLayout() {
   if (!compactLeadership) {
     regularTabs.forEach((tab) => {
       const button = document.querySelector(`[data-tab="${tab}"]`);
-      button?.classList.toggle("hidden", tab === "timeTracking" && !timeTrackingCapabilityEnabled());
+      const unavailable = (tab === "timeTracking" && !timeTrackingCapabilityEnabled())
+        || (tab === "amu" && portalState.status?.capabilities?.sicknessReports !== true);
+      button?.classList.toggle("hidden", unavailable);
       button?.style.removeProperty("order");
     });
     document.querySelectorAll(".leadership-tab").forEach((button) => button.style.removeProperty("order"));
@@ -327,7 +350,7 @@ async function loadMobileLayout() {
 function normalizedPortalTab(requested) {
   const aliases = { requests: "history", team: "leadershipTeam", approvals: "leadershipApprovals", more: "leadershipMore", time: "timeTracking" };
   const tab = aliases[requested] || requested;
-  if (["leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) && (!isMobileUi() || !isLeadershipUser())) return "";
+  if (["leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) && !isLeadershipUser()) return "";
   return ["schedule", "timeTracking", "timeOff", "vacation", "history", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
 }
 
@@ -337,6 +360,8 @@ function requestedPortalTab() {
 
 function chooseInitialPortalTab() {
   const requested = requestedPortalTab();
+  const requestedKind = new URLSearchParams(location.search).get("kind");
+  if (["absence", "sickness", "amu", "time_correction"].includes(requestedKind)) portalState.leadershipKind = requestedKind;
   setTab(requested || (timeTrackingCapabilityEnabled() ? "timeTracking" : "schedule"));
   return requested;
 }
@@ -344,7 +369,10 @@ function chooseInitialPortalTab() {
 async function initialize() {
   try {
     const today = new Date().toISOString().slice(0, 10);
-    [el.timeOffDate, el.timeOffDateTo, el.vacationDateFrom, el.vacationDateTo, el.amuIncapacityFrom, el.amuIncapacityTo].forEach((input) => { if (input) input.min = today; });
+    [el.timeOffDate, el.timeOffDateTo, el.vacationDateFrom, el.vacationDateTo].forEach((input) => { if (input) input.min = today; });
+    if (el.sicknessStartDate) { el.sicknessStartDate.min = addDays(today, -365); el.sicknessStartDate.max = today; el.sicknessStartDate.value = today; }
+    if (el.amuIncapacityFrom) el.amuIncapacityFrom.min = addDays(today, -3650);
+    if (el.amuIncapacityTo) el.amuIncapacityTo.min = addDays(today, -3650);
     const status = await api("/api/portal/v1/status");
     portalState.status = status;
     applyPortalBranding(status.branding);
@@ -377,7 +405,7 @@ async function initialize() {
 async function loadPortalData() {
   const requests = [
     loadSchedule(), loadVacationRequests(), loadTimeOffRequests(), loadApprovedVacations(),
-    loadAbsenceHistory(), loadNotifications(), loadAmuReports(), loadAmuSettings(),
+    loadAbsenceHistory(), loadNotifications(), loadSicknessCases(), loadAmuReports(), loadAmuSettings(),
   ];
   if (timeTrackingCapabilityEnabled()) requests.push(loadTimeTracking());
   if (wifiTimeSuggestionsCapabilityEnabled()) requests.push(loadWifiAutomation());
@@ -400,6 +428,8 @@ function showPortal(session) {
   el.portalUserName.textContent = `${session.user.employeeNumber} · ${session.user.nickname || session.user.fullName}`;
   el.portalUserRole.textContent = session.user.roleName;
   el.adminAppLink.classList.toggle("hidden", !session.user.permissions.includes("schedule:read"));
+  el.sicknessNotificationPreferencesCard?.classList.toggle("hidden", !session.user.permissions.includes("notifications:settings"));
+  document.querySelector('[data-leadership-kind="sickness"]')?.classList.toggle("hidden", !session.user.permissions.includes("sickness:read"));
   el.passwordDialog.dataset.required = session.user.mustChangePassword ? "true" : "false";
   applyMobileLeadershipLayout();
   if (session.user.mustChangePassword) setTimeout(() => el.passwordDialog.showModal(), 100);
@@ -452,9 +482,13 @@ function setTab(tab) {
   if (tab === "timeTracking") Promise.allSettled([loadTimeTracking(), loadTimeSummary(), loadTimeCorrections(), loadWifiAutomation()]);
   if (tab === "vacation") loadVacationRequests();
   if (tab === "history") Promise.allSettled([loadAbsenceHistory(), loadApprovedVacations()]);
-  if (tab === "amu") Promise.allSettled([loadAmuReports(), loadAmuSettings()]);
+  if (tab === "amu") Promise.allSettled([loadSicknessCases(), loadAmuReports(), loadAmuSettings()]);
   if (tab === "leadershipTeam") loadLeadershipOverview();
-  if (tab === "leadershipApprovals") loadLeadershipApprovals();
+  if (tab === "leadershipApprovals") {
+    document.querySelectorAll("[data-leadership-kind]").forEach((item) => item.classList.toggle("active", item.dataset.leadershipKind === portalState.leadershipKind));
+    loadLeadershipApprovals();
+  }
+  if (tab === "leadershipMore" && portalUser()?.permissions?.includes("notifications:settings")) loadSicknessNotificationPreferences();
 }
 
 async function loadSchedule() {
@@ -1048,6 +1082,7 @@ function renderLeadershipApprovals() {
   const kind = portalState.leadershipKind;
   let items = [];
   if (kind === "absence") items = portalState.leadershipRequests.filter(leadershipRequestActionable).filter(leadershipItemInContext);
+  else if (kind === "sickness") items = portalState.leadershipSicknessCases.filter((entry) => entry.status !== "withdrawn").filter(leadershipItemInContext);
   else if (kind === "amu") items = portalState.leadershipAmuReports.filter((report) => ["submitted", "returned"].includes(report.status)).filter(leadershipItemInContext);
   else {
     const overview = portalState.leadershipOverview || {};
@@ -1057,9 +1092,16 @@ function renderLeadershipApprovals() {
   el.leadershipApprovalList.innerHTML = items.length ? items.map((item) => {
     const employeeNumber = item.employee_number || item.employeeNumber || "";
     const name = item.nickname || item.full_name || item.fullName || "";
-    const label = kind === "amu" ? "AUM" : kind === "time_correction" ? "Zeitkorrektur" : requestKindLabel(item);
-    const period = kind === "amu" ? `${dateText(item.incapacity_from)} – ${dateText(item.incapacity_to)}` : leadershipRequestPeriodText(item);
-    return `<article class="leadership-request-row" data-leadership-request-id="${esc(item.id)}" data-leadership-request-kind="${esc(kind)}"><div><strong>${esc(label)} · ${esc(employeeNumber)} · ${esc(name)}</strong><small>${esc(period)}${item.note || item.employee_note ? ` · ${esc(item.note || item.employee_note)}` : ""}</small><span class="status ${esc(item.status || "pending")}">${esc(statusLabels[item.status] || item.status || "Offen")}</span></div><button type="button" data-open-leadership-request>Bearbeiten</button></article>`;
+    const label = kind === "sickness" ? "Krankmeldung" : kind === "amu" ? "AUM" : kind === "time_correction" ? "Zeitkorrektur" : requestKindLabel(item);
+    const period = kind === "sickness"
+      ? `${dateText(item.start_date)}${item.expected_end ? ` – ${dateText(item.expected_end)}` : " · Ende offen"}`
+      : kind === "amu" ? `${dateText(item.incapacity_from)} – ${dateText(item.incapacity_to)}` : leadershipRequestPeriodText(item);
+    const risk = kind === "sickness" && item.staffing_risk?.atRisk ? " · Mindestbesetzung gefährdet" : "";
+    const status = kind === "sickness" ? (item.severity || item.status || "reported") : (item.status || "pending");
+    const statusText = kind === "sickness"
+      ? ({ red: "Rot eskaliert", yellow: "AUM überfällig", warning: "Besetzung prüfen", normal: item.status === "aum_received" ? "AUM vorhanden" : "Gemeldet" }[status] || "Gemeldet")
+      : (statusLabels[item.status] || item.status || "Offen");
+    return `<article class="leadership-request-row sickness-severity-${esc(status)}" data-leadership-request-id="${esc(item.id)}" data-leadership-request-kind="${esc(kind)}"><div><strong>${esc(label)} · ${esc(employeeNumber)} · ${esc(name)}</strong><small>${esc(period)}${item.note || item.employee_note ? ` · ${esc(item.note || item.employee_note)}` : ""}${esc(risk)}</small><span class="status ${esc(status)}">${esc(statusText)}</span></div><button type="button" data-open-leadership-request>${kind === "sickness" ? "Ansehen" : "Bearbeiten"}</button></article>`;
   }).join("") : '<p class="empty-state">Derzeit ist in diesem Bereich nichts zu bearbeiten.</p>';
 }
 
@@ -1069,12 +1111,19 @@ async function loadLeadershipApprovals() {
   el.leadershipApprovalList.innerHTML = '<p class="empty-state">Freigaben werden geladen.</p>';
   portalState.leadershipRequests = [];
   portalState.leadershipAmuReports = [];
+  portalState.leadershipSicknessCases = [];
   portalState.leadershipOverview = null;
   const permissions = portalUser()?.permissions || [];
-  const tasks = [api(`/api/portal/v1/leadership/overview?${leadershipQuery()}`).then((result) => { portalState.leadershipOverview = normalizedLeadershipOverview(result); })];
-  if (permissions.includes("vacation:read") || permissions.includes("time:review")) tasks.push(api(`/api/portal/v1/absence-requests?${leadershipQuery()}`).then((result) => { portalState.leadershipRequests = result.requests || []; }));
-  if (permissions.includes("amu:metadata:read") || permissions.includes("amu:review")) tasks.push(api(`/api/portal/v1/amu-reports?${leadershipQuery()}`).then((result) => { portalState.leadershipAmuReports = result.reports || []; }));
-  const results = await Promise.allSettled(tasks);
+  const tasks = [{ kind: "time_correction", request: api(`/api/portal/v1/leadership/overview?${leadershipQuery()}`).then((result) => { portalState.leadershipOverview = normalizedLeadershipOverview(result); }) }];
+  if (permissions.includes("vacation:read") || permissions.includes("time:review")) tasks.push({ kind: "absence", request: api(`/api/portal/v1/absence-requests?${leadershipQuery()}`).then((result) => { portalState.leadershipRequests = result.requests || []; }) });
+  if (permissions.includes("amu:metadata:read") || permissions.includes("amu:review")) tasks.push({ kind: "amu", request: api(`/api/portal/v1/amu-reports?${leadershipQuery()}`).then((result) => { portalState.leadershipAmuReports = result.reports || []; }) });
+  if (permissions.includes("sickness:read")) tasks.push({ kind: "sickness", request: api(`/api/portal/v1/sickness-cases?${leadershipQuery()}`).then((result) => { portalState.leadershipSicknessCases = result.cases || []; }) });
+  const results = await Promise.allSettled(tasks.map((task) => task.request));
+  const activeFailure = results.find((result, index) => result.status === "rejected" && tasks[index].kind === portalState.leadershipKind);
+  if (activeFailure) {
+    el.leadershipApprovalList.innerHTML = `<p class="message error">${esc(activeFailure.reason?.message || "Dieser Bereich konnte nicht geladen werden.")}</p>`;
+    return;
+  }
   if (results.every((result) => result.status === "rejected")) {
     el.leadershipApprovalList.innerHTML = `<p class="empty-state">${esc(results[0].reason?.message || "Freigaben konnten nicht geladen werden.")}</p>`;
     return;
@@ -1083,6 +1132,7 @@ async function loadLeadershipApprovals() {
 }
 
 function findLeadershipRequest(id, kind) {
+  if (kind === "sickness") return portalState.leadershipSicknessCases.find((item) => String(item.id) === String(id));
   if (kind === "amu") return portalState.leadershipAmuReports.find((item) => String(item.id) === String(id));
   if (kind === "time_correction") {
     const overview = portalState.leadershipOverview || {};
@@ -1097,25 +1147,30 @@ function openLeadershipRequest(id, kind) {
   portalState.selectedLeadershipRequest = { request, kind };
   const employeeNumber = request.employee_number || request.employeeNumber || "";
   const name = request.nickname || request.full_name || request.fullName || "";
-  const title = kind === "amu" ? "AUM prüfen" : kind === "time_correction" ? "Zeitkorrektur prüfen" : `${requestKindLabel(request)} bearbeiten`;
+  const title = kind === "sickness" ? "Krankmeldung" : kind === "amu" ? "AUM prüfen" : kind === "time_correction" ? "Zeitkorrektur prüfen" : `${requestKindLabel(request)} bearbeiten`;
   el.leadershipRequestTitle.textContent = title;
-  el.leadershipRequestSummary.innerHTML = `<strong>${esc(employeeNumber)} · ${esc(name)}</strong><p>${esc(kind === "amu" ? `${dateText(request.incapacity_from)} – ${dateText(request.incapacity_to)}` : leadershipRequestPeriodText(request))}</p>${request.note || request.employee_note ? `<p>${esc(request.note || request.employee_note)}</p>` : ""}`;
+  const sicknessPeriod = `${dateText(request.start_date)}${request.expected_end ? ` – ${dateText(request.expected_end)}` : " · Ende offen"}`;
+  const requestPeriod = kind === "sickness" ? sicknessPeriod : kind === "amu" ? `${dateText(request.incapacity_from)} – ${dateText(request.incapacity_to)}` : leadershipRequestPeriodText(request);
+  const sicknessDetails = kind === "sickness" && request.staffing_risk?.atRisk
+    ? `<p class="message error">Die hinterlegte Mindestbesetzung kann unterschritten werden. Kritische Zeitfenster: ${(request.staffing_risk.slots || []).slice(0, 4).map((slot) => `${esc(dateText(slot.date))} ${esc(slot.time)} Uhr`).join(" · ") || "laut aktuellem Dienstplan"}.</p>` : "";
+  el.leadershipRequestSummary.innerHTML = `<strong>${esc(employeeNumber)} · ${esc(name)}</strong><p>${esc(requestPeriod)}</p>${request.note || request.employee_note ? `<p>${esc(request.note || request.employee_note)}</p>` : ""}${sicknessDetails}`;
   el.leadershipRequestNote.value = "";
   el.leadershipCorrectionEntries.innerHTML = "";
   el.leadershipCorrectionEntries.classList.toggle("hidden", kind !== "time_correction");
   el.addLeadershipCorrectionEntry.classList.toggle("hidden", kind !== "time_correction");
+  el.leadershipRequestNote.closest("label")?.classList.toggle("hidden", kind === "sickness");
   if (kind === "time_correction") {
     const requested = correctionRequestedChange(request);
     const entries = request.proposedEntries || request.proposed_entries || requested.proposedEntries || requested.entries || [];
     entries.forEach((entry) => appendCorrectionEntry({ ...entry, time: correctionEntryTime(entry, correctionDate(request)) }, el.leadershipCorrectionEntries));
   }
   message(el.leadershipRequestMessage, "");
-  const actions = kind === "amu"
+  const actions = kind === "sickness" ? [] : kind === "amu"
     ? [["reviewed", "Als geprüft markieren", "primary-action"]]
     : kind === "time_correction"
       ? [["reject", "Ablehnen", "danger-action"], ["approve", "Genehmigen", "primary-action"]]
       : [["reject", "Ablehnen", "danger-action"], ...(request.status !== "pending_hr" ? [["preliminary", "Vorläufig", "secondary-action"]] : []), ["approve", "Genehmigen / weiterleiten", "primary-action"]];
-  el.leadershipRequestActions.innerHTML = `<button type="button" data-close-leadership-request>Abbrechen</button>${actions.map(([action, label, className]) => `<button class="${className}" data-leadership-action="${action}" type="button">${label}</button>`).join("")}`;
+  el.leadershipRequestActions.innerHTML = `<button type="button" data-close-leadership-request>${kind === "sickness" ? "Schließen" : "Abbrechen"}</button>${actions.map(([action, label, className]) => `<button class="${className}" data-leadership-action="${action}" type="button">${label}</button>`).join("")}`;
   el.leadershipRequestDialog.showModal();
 }
 
@@ -1660,7 +1715,10 @@ async function readNotification(id) {
     renderNotifications();
     const target = String(item?.target || item?.link || "");
     if (target.startsWith("/portal")) {
-      const requested = new URL(target, location.origin).searchParams.get("tab");
+      const targetUrl = new URL(target, location.origin);
+      const requested = targetUrl.searchParams.get("tab");
+      const requestedKind = targetUrl.searchParams.get("kind");
+      if (["absence", "sickness", "amu", "time_correction"].includes(requestedKind)) portalState.leadershipKind = requestedKind;
       const tab = normalizedPortalTab(requested);
       el.notificationsDialog.close();
       setTab(tab || "history");
@@ -1695,13 +1753,355 @@ function formatBytes(value) {
   return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
 }
 
+function sicknessStatusText(item) {
+  if (item.status === "withdrawn") return "Zurückgezogen";
+  if (item.status === "aum_received") return "AUM vorhanden";
+  if (item.severity === "red") return "AUM-Frist überschritten";
+  if (item.severity === "yellow") return "AUM überfällig";
+  if (item.staffing_risk?.atRisk) return "Besetzung wird geprüft";
+  return "Gemeldet";
+}
+
+function renderSicknessCases() {
+  const openCases = portalState.sicknessCases.filter((item) => ["reported", "aum_received"].includes(item.status));
+  el.sicknessCaseList.innerHTML = portalState.sicknessCases.length ? portalState.sicknessCases.map((item) => {
+    const period = `${dateText(item.start_date)}${item.expected_end ? `–${dateText(item.expected_end)}` : " · Ende offen"}`;
+    const canWithdraw = item.status === "reported" && !item.aum_received_at;
+    const risk = item.staffing_risk?.atRisk ? '<span class="sickness-risk-note">Mindestbesetzung wird durch die Leitung geprüft</span>' : "";
+    return `<article class="request-item sickness-case" data-sickness-case-id="${Number(item.id)}"><div><strong>${esc(period)}</strong>${item.employee_note ? `<span>${esc(item.employee_note)}</span>` : ""}${risk}<span class="status ${esc(item.severity || item.status)}">${esc(sicknessStatusText(item))}</span></div>${canWithdraw ? '<button class="cancel-request" data-withdraw-sickness type="button">Zurückziehen</button>' : ""}</article>`;
+  }).join("") : '<p class="empty-state">Noch keine Krankmeldung vorhanden.</p>';
+  const currentValue = el.amuSicknessCaseId.value;
+  el.amuSicknessCaseId.innerHTML = '<option value="">Automatisch zuordnen</option>' + openCases.map((item) => `<option value="${Number(item.id)}">${dateText(item.start_date)}${item.expected_end ? `–${dateText(item.expected_end)}` : " · Ende offen"}</option>`).join("");
+  if ([...el.amuSicknessCaseId.options].some((option) => option.value === currentValue)) el.amuSicknessCaseId.value = currentValue;
+}
+
+async function loadSicknessCases() {
+  try {
+    const data = await api("/api/portal/v1/me/sickness-cases");
+    portalState.sicknessCases = data.cases || [];
+    renderSicknessCases();
+  } catch (error) {
+    el.sicknessCaseList.innerHTML = `<p class="message error">${esc(error.message)}</p>`;
+  }
+}
+
+async function submitSicknessCase(event) {
+  event.preventDefault();
+  const startDate = el.sicknessStartDate.value;
+  const expectedEnd = el.sicknessExpectedEnd.value;
+  if (expectedEnd && expectedEnd < startDate) {
+    message(el.sicknessMessage, "Das voraussichtliche Ende darf nicht vor dem Beginn liegen.", true);
+    return;
+  }
+  el.sicknessSubmitButton.disabled = true;
+  try {
+    const result = await api("/api/portal/v1/me/sickness-cases", {
+      method: "POST",
+      body: JSON.stringify({ startDate, expectedEnd, note: el.sicknessEmployeeNote.value }),
+    });
+    el.sicknessCaseForm.reset();
+    el.sicknessStartDate.value = iso(new Date());
+    message(el.sicknessMessage, result.case?.staffing_risk?.atRisk
+      ? "Die Krankmeldung wurde gesendet. Die Leitung wurde auch auf die mögliche Unterschreitung der Mindestbesetzung hingewiesen."
+      : "Die Krankmeldung wurde gesendet und die zuständige Leitung informiert.");
+    await Promise.allSettled([loadSicknessCases(), loadNotifications()]);
+  } catch (error) {
+    message(el.sicknessMessage, error.message, true);
+  } finally {
+    el.sicknessSubmitButton.disabled = false;
+  }
+}
+
+async function withdrawSicknessCase(id) {
+  if (!confirm("Diese Krankmeldung wirklich zurückziehen?")) return;
+  try {
+    await api(`/api/portal/v1/me/sickness-cases/${encodeURIComponent(String(id))}/withdraw`, { method: "POST", body: "{}" });
+    await Promise.allSettled([loadSicknessCases(), loadNotifications()]);
+  } catch (error) {
+    message(el.sicknessMessage, error.message, true);
+  }
+}
+
+function selectSicknessCaseForAmu() {
+  resetAmuOcrState({ clearAutoFilled: true });
+  const selected = portalState.sicknessCases.find((item) => String(item.id) === el.amuSicknessCaseId.value);
+  if (!selected) {
+    el.amuIncapacityFrom.value = "";
+    el.amuIncapacityTo.value = "";
+    el.amuIncapacityTo.min = addDays(iso(new Date()), -3650);
+    return;
+  }
+  el.amuIncapacityFrom.value = selected.start_date || "";
+  el.amuIncapacityTo.min = selected.start_date || el.amuIncapacityTo.min;
+  el.amuIncapacityTo.value = selected.expected_end || selected.start_date || "";
+  portalState.amuOcr.startManuallyEdited = true;
+  portalState.amuOcr.endManuallyEdited = true;
+}
+
+let amuOcrClient = null;
+
+function updateAmuOcrStatus(title, text, state = "working") {
+  if (!el.amuOcrStatus) return;
+  el.amuOcrStatus.classList.remove("hidden", "working", "success", "warning", "error");
+  el.amuOcrStatus.classList.add(state);
+  el.amuOcrStatusTitle.textContent = title;
+  el.amuOcrStatusText.textContent = text;
+}
+
+function resetAmuOcrState({ keepStatus = false, preserveManual = false, clearAutoFilled = false } = {}) {
+  const previous = portalState.amuOcr || {};
+  if (clearAutoFilled) {
+    if (previous.autoFilledStart && !previous.startManuallyEdited) el.amuIncapacityFrom.value = "";
+    if (previous.autoFilledEnd && !previous.endManuallyEdited) el.amuIncapacityTo.value = "";
+  }
+  portalState.amuOcr = {
+    busy: false,
+    assisted: false,
+    startManuallyEdited: preserveManual && previous.startManuallyEdited === true,
+    endManuallyEdited: preserveManual && previous.endManuallyEdited === true,
+    autoFilledStart: false,
+    autoFilledEnd: false,
+    fileKey: "",
+    runToken: Number(previous.runToken || 0) + 1,
+  };
+  el.amuOcrConfirmed.checked = false;
+  el.amuOcrConfirmField.classList.add("hidden");
+  if (!keepStatus) el.amuOcrStatus.classList.add("hidden");
+}
+
+function ocrProgressLabel(status, progress) {
+  const labels = {
+    "loading tesseract core": "Texterkennung wird vorbereitet",
+    "initializing tesseract": "Texterkennung wird gestartet",
+    "loading language traineddata": "Deutsches Sprachmodell wird geladen",
+    "initializing api": "Dokument wird vorbereitet",
+    "recognizing text": "Beginn und Ende werden gesucht",
+  };
+  const percentage = Number.isFinite(progress) ? ` · ${Math.round(progress * 100)} %` : "";
+  return `${labels[status] || "Lokale Texterkennung läuft"}${percentage}`;
+}
+
+function ensureAmuOcrClient() {
+  if (amuOcrClient) return amuOcrClient;
+  amuOcrClient = window.GrabenplanerAmuOcrClient.createAmuOcrClient({
+    onProgress({ status, progress }) {
+      if (!portalState.amuOcr.busy) return;
+      updateAmuOcrStatus("Lokale OCR", ocrProgressLabel(status, progress), "working");
+    },
+  });
+  return amuOcrClient;
+}
+
+async function recognizeAmuImage(file) {
+  if (!file || !String(file.type || "").startsWith("image/")
+    || portalState.status?.capabilities?.localAmuOcr !== true
+    || portalState.amuPolicy?.ocrEnabled !== true) return;
+  const fileKey = `${file.name}:${file.size}:${file.lastModified}`;
+  const runToken = Number(portalState.amuOcr.runToken || 0) + 1;
+  portalState.amuOcr.fileKey = fileKey;
+  portalState.amuOcr.runToken = runToken;
+  portalState.amuOcr.busy = true;
+  updateAmuOcrStatus("Lokale OCR", "Die Texterkennung läuft nur auf diesem Gerät. Erst beim Senden wird das Dokument verschlüsselt übertragen.", "working");
+  try {
+    const result = await ensureAmuOcrClient().recognize(file, { referenceDate: iso(new Date()) });
+    if (portalState.amuOcr.fileKey !== fileKey || portalState.amuOcr.runToken !== runToken) return;
+    if (!result.complete) {
+      updateAmuOcrStatus("Datumswerte nicht vollständig erkannt", "Bitte Beginn und Ende manuell eintragen.", "warning");
+      return;
+    }
+    let applied = false;
+    if (result.autoFill && !portalState.amuOcr.startManuallyEdited) {
+      el.amuIncapacityFrom.value = result.dateFrom;
+      portalState.amuOcr.autoFilledStart = true;
+      applied = true;
+    }
+    if (result.autoFill && !portalState.amuOcr.endManuallyEdited) {
+      el.amuIncapacityTo.value = result.dateTo;
+      portalState.amuOcr.autoFilledEnd = true;
+      applied = true;
+    }
+    el.amuIncapacityTo.min = el.amuIncapacityFrom.value || el.amuIncapacityTo.min;
+    portalState.amuOcr.assisted = applied;
+    if (applied) {
+      el.amuOcrConfirmField.classList.remove("hidden");
+      updateAmuOcrStatus("Datumswerte erkannt", `${dateText(result.dateFrom)} bis ${dateText(result.dateTo)} · Bitte vor dem Senden prüfen.`, "success");
+    } else {
+      const explanation = portalState.amuOcr.startManuallyEdited || portalState.amuOcr.endManuallyEdited
+        ? "Manuelle Eingaben wurden nicht überschrieben."
+        : "Die Erkennung ist für ein automatisches Eintragen zu unsicher; bitte Werte manuell prüfen.";
+      updateAmuOcrStatus("Datumswerte erkannt", `${dateText(result.dateFrom)} bis ${dateText(result.dateTo)} · ${explanation}`, "warning");
+    }
+  } catch {
+    if (portalState.amuOcr.fileKey === fileKey && portalState.amuOcr.runToken === runToken) updateAmuOcrStatus("OCR nicht verfügbar", "Bitte Beginn und Ende manuell eintragen. Das Foto kann trotzdem hochgeladen werden.", "error");
+  } finally {
+    if (portalState.amuOcr.fileKey === fileKey && portalState.amuOcr.runToken === runToken) portalState.amuOcr.busy = false;
+  }
+}
+
+function handleAmuFileSelection(event) {
+  resetAmuOcrState({ preserveManual: true, clearAutoFilled: true });
+  const currentFiles = [...(event.currentTarget.files || [])];
+  const remainingFiles = event.currentTarget === el.amuCamera
+    ? [...(el.amuDocuments?.files || [])]
+    : [...(el.amuCamera?.files || [])];
+  const file = [...currentFiles, ...remainingFiles].find((entry) => String(entry.type || "").startsWith("image/"));
+  if (file) recognizeAmuImage(file);
+}
+
+function channelLabel(channel) {
+  return ({ email: "E-Mail", sms: "SMS", whatsapp: "WhatsApp" })[channel] || channel;
+}
+
+function renderSicknessNotificationPreferences() {
+  const data = portalState.sicknessNotificationPreferences;
+  if (!data) return;
+  const first = Object.values(data.channels || {})[0];
+  el.sicknessNotificationEarliestTime.value = first?.earliestTime || "08:00";
+  el.sicknessNotificationChannels.innerHTML = ["email", "sms", "whatsapp"].map((channel) => {
+    const preference = data.channels?.[channel] || {};
+    const provider = data.providers?.[channel] || {};
+    const available = provider.available === true;
+    const verified = Boolean(preference.verifiedAt);
+    const verificationRequired = preference.verificationRequired === true;
+    const type = channel === "email" ? "email" : "tel";
+    const statusText = verified ? "Bestätigt" : "Bestätigung ausständig";
+    return `<div class="notification-channel-row ${available ? "" : "unavailable"}" data-notification-channel="${channel}" data-provider-available="${available ? "1" : "0"}">
+      <div class="notification-channel-head"><label class="portal-switch"><span>${channelLabel(channel)} aktiv</span><input data-channel-enabled type="checkbox" ${preference.enabled && verified ? "checked" : ""} ${available && verified ? "" : "disabled"} /></label><span class="verification-status ${verified ? "verified" : "pending"}" data-channel-status>${statusText}</span></div>
+      <div class="notification-channel-setup"><label><span>Empfänger${available ? "" : " · durch Firmen-IT nicht eingerichtet"}</span><input data-channel-destination type="${type}" value="${esc(preference.destination || "")}" placeholder="${channel === "email" ? "leitung@firma.at" : "+436601234567"}" autocomplete="${channel === "email" ? "email" : "tel"}" ${available ? "" : "disabled"} /></label><button class="text-button" data-send-channel-verification type="button" ${available && preference.destination ? "" : "disabled"}>Code senden</button></div>
+      <div class="notification-verification-row ${verificationRequired ? "" : "hidden"}" data-channel-verification><label><span>Sechsstelliger Bestätigungscode</span><input data-channel-code type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="000000" /></label><button class="primary" data-confirm-channel-verification type="button">Bestätigen</button></div>
+    </div>`;
+  }).join("");
+}
+
+function updateSicknessNotificationChannelRow(row) {
+  if (!row) return;
+  const channel = row.dataset.notificationChannel;
+  const preference = portalState.sicknessNotificationPreferences?.channels?.[channel] || {};
+  const available = row.dataset.providerAvailable === "1";
+  const destination = row.querySelector("[data-channel-destination]");
+  const enabled = row.querySelector("[data-channel-enabled]");
+  const sendButton = row.querySelector("[data-send-channel-verification]");
+  const verification = row.querySelector("[data-channel-verification]");
+  const status = row.querySelector("[data-channel-status]");
+  const unchanged = String(destination?.value || "").trim() === String(preference.destination || "").trim();
+  const verified = Boolean(preference.verifiedAt) && unchanged;
+  const verificationRequired = preference.verificationRequired === true && unchanged;
+  if (enabled) {
+    enabled.disabled = !available || !verified;
+    if (!verified) enabled.checked = false;
+  }
+  if (sendButton) sendButton.disabled = !available || !String(destination?.value || "").trim();
+  verification?.classList.toggle("hidden", !verificationRequired);
+  if (status) {
+    status.textContent = verified ? "Bestätigt" : "Bestätigung ausständig";
+    status.classList.toggle("verified", verified);
+    status.classList.toggle("pending", !verified);
+  }
+}
+
+async function loadSicknessNotificationPreferences() {
+  if (!portalUser()?.permissions?.includes("notifications:settings")) return;
+  try {
+    portalState.sicknessNotificationPreferences = await api("/api/portal/v1/me/sickness-notification-preferences");
+    renderSicknessNotificationPreferences();
+  } catch (error) {
+    message(el.sicknessNotificationPreferencesMessage, error.message, true);
+  }
+}
+
+async function saveSicknessNotificationPreferences(event) {
+  event.preventDefault();
+  const channels = {};
+  const rows = [...el.sicknessNotificationChannels.querySelectorAll("[data-notification-channel]")];
+  const changedDestination = rows.some((row) => {
+    const preference = portalState.sicknessNotificationPreferences?.channels?.[row.dataset.notificationChannel] || {};
+    return String(row.querySelector("[data-channel-destination]")?.value || "").trim() !== String(preference.destination || "").trim();
+  });
+  if (changedDestination) {
+    message(el.sicknessNotificationPreferencesMessage, "Bitte geänderte Empfänger zuerst mit einem Bestätigungscode bestätigen.", true);
+    return;
+  }
+  rows.forEach((row) => {
+    const preference = portalState.sicknessNotificationPreferences?.channels?.[row.dataset.notificationChannel] || {};
+    channels[row.dataset.notificationChannel] = {
+      enabled: Boolean(preference.verifiedAt) && row.querySelector("[data-channel-enabled]").checked,
+      destination: preference.destination || "",
+    };
+  });
+  try {
+    portalState.sicknessNotificationPreferences = await api("/api/portal/v1/me/sickness-notification-preferences", {
+      method: "PUT",
+      body: JSON.stringify({ earliestTime: el.sicknessNotificationEarliestTime.value, channels }),
+    });
+    renderSicknessNotificationPreferences();
+    message(el.sicknessNotificationPreferencesMessage, "Die Warnkanäle wurden gespeichert.");
+  } catch (error) {
+    message(el.sicknessNotificationPreferencesMessage, error.message, true);
+  }
+}
+
+async function requestSicknessNotificationVerification(button) {
+  const row = button.closest("[data-notification-channel]");
+  const channel = row?.dataset.notificationChannel || "";
+  const destination = String(row?.querySelector("[data-channel-destination]")?.value || "").trim();
+  if (!destination) {
+    message(el.sicknessNotificationPreferencesMessage, `Bitte für ${channelLabel(channel)} zuerst einen Empfänger eingeben.`, true);
+    return;
+  }
+  button.disabled = true;
+  message(el.sicknessNotificationPreferencesMessage, "");
+  try {
+    portalState.sicknessNotificationPreferences = await api("/api/portal/v1/me/sickness-notification-preferences/verification", {
+      method: "POST",
+      body: JSON.stringify({ channel, destination, earliestTime: el.sicknessNotificationEarliestTime.value }),
+    });
+    renderSicknessNotificationPreferences();
+    message(el.sicknessNotificationPreferencesMessage, `Der Bestätigungscode für ${channelLabel(channel)} wurde gesendet.`);
+  } catch (error) {
+    message(el.sicknessNotificationPreferencesMessage, error.message, true);
+    button.disabled = false;
+  }
+}
+
+async function confirmSicknessNotificationVerification(button) {
+  const row = button.closest("[data-notification-channel]");
+  const channel = row?.dataset.notificationChannel || "";
+  const codeInput = row?.querySelector("[data-channel-code]");
+  const code = String(codeInput?.value || "").trim();
+  if (!/^\d{6}$/.test(code)) {
+    message(el.sicknessNotificationPreferencesMessage, "Bitte den sechsstelligen Bestätigungscode vollständig eingeben.", true);
+    codeInput?.focus();
+    return;
+  }
+  button.disabled = true;
+  message(el.sicknessNotificationPreferencesMessage, "");
+  try {
+    portalState.sicknessNotificationPreferences = await api("/api/portal/v1/me/sickness-notification-preferences/verification/confirm", {
+      method: "POST",
+      body: JSON.stringify({ channel, code }),
+    });
+    renderSicknessNotificationPreferences();
+    message(el.sicknessNotificationPreferencesMessage, `${channelLabel(channel)} wurde bestätigt und aktiviert.`);
+  } catch (error) {
+    message(el.sicknessNotificationPreferencesMessage, error.message, true);
+    button.disabled = false;
+    codeInput?.focus();
+  }
+}
+
 async function loadAmuSettings() {
   try {
     const data = await api("/api/portal/v1/amu-settings");
     portalState.amuPolicy = data.policy || null;
     if (el.amuUploadHint && data.policy) {
       const conversion = data.policy.convertImagesToPdf ? ` · Fotos werden${data.policy.grayscaleImages ? " in Graustufen" : ""} als PDF gespeichert` : "";
-      el.amuUploadHint.textContent = `PDF oder Foto · höchstens 3 Dateien · je max. ${String(data.policy.uploadMaxMb).replace(".", ",")} MB${conversion}`;
+      const ocr = data.policy.ocrEnabled ? " · lokale OCR bei Bildern" : "";
+      el.amuUploadHint.textContent = `PDF oder Foto · höchstens 3 Dateien · je max. ${String(data.policy.uploadMaxMb).replace(".", ",")} MB${conversion}${ocr}`;
+    }
+    if (data.policy?.ocrEnabled && portalState.status?.capabilities?.localAmuOcr === true && !portalState.amuOcr.busy) {
+      const selectedImage = [...(el.amuCamera?.files || []), ...(el.amuDocuments?.files || [])]
+        .find((entry) => String(entry.type || "").startsWith("image/"));
+      if (selectedImage && !portalState.amuOcr.fileKey) recognizeAmuImage(selectedImage);
     }
   } catch {
     portalState.amuPolicy = null;
@@ -1741,6 +2141,10 @@ async function submitAmuReport(event) {
     message(el.amuMessage, "Das Bis-Datum darf nicht vor dem Von-Datum liegen.", true);
     return;
   }
+  if (portalState.amuOcr.assisted && !el.amuOcrConfirmed.checked) {
+    message(el.amuMessage, "Bitte die durch OCR erkannten Datumswerte vor dem Senden bestätigen.", true);
+    return;
+  }
   const allowedTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "image/tiff"]);
   const allowedExtensions = /\.(pdf|jpe?g|png|webp|tiff?)$/i;
   if (documents.some((file) => file.type ? !allowedTypes.has(file.type) : !allowedExtensions.test(file.name || ""))) {
@@ -1756,13 +2160,17 @@ async function submitAmuReport(event) {
   body.append("incapacityFrom", el.amuIncapacityFrom.value);
   body.append("incapacityTo", el.amuIncapacityTo.value);
   body.append("employeeNote", el.amuEmployeeNote.value);
+  body.append("sicknessCaseId", el.amuSicknessCaseId.value);
+  body.append("ocrAssisted", portalState.amuOcr.assisted ? "1" : "0");
+  body.append("ocrConfirmed", el.amuOcrConfirmed.checked ? "1" : "0");
   documents.forEach((file) => body.append("documents", file));
   el.amuSubmitButton.disabled = true;
   try {
     await api("/api/portal/v1/me/amu-reports", { method: "POST", body });
     el.amuReportForm.reset();
+    resetAmuOcrState();
     message(el.amuMessage, "Die AUM wurde sicher übermittelt.");
-    await Promise.allSettled([loadAmuReports(), loadNotifications()]);
+    await Promise.allSettled([loadSicknessCases(), loadAmuReports(), loadNotifications()]);
   } catch (error) {
     message(el.amuMessage, error.message, true);
   } finally {
@@ -2027,10 +2435,41 @@ el.notificationList.addEventListener("click", (event) => {
   if (item) readNotification(item.dataset.notificationId);
 });
 el.markAllNotificationsRead.addEventListener("click", markAllNotificationsRead);
+el.sicknessCaseForm.addEventListener("submit", submitSicknessCase);
+el.sicknessStartDate.addEventListener("input", () => {
+  el.sicknessExpectedEnd.min = el.sicknessStartDate.value;
+  if (el.sicknessExpectedEnd.value && el.sicknessExpectedEnd.value < el.sicknessStartDate.value) el.sicknessExpectedEnd.value = el.sicknessStartDate.value;
+});
+el.sicknessCaseList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-withdraw-sickness]");
+  const row = button?.closest("[data-sickness-case-id]");
+  if (row) withdrawSicknessCase(row.dataset.sicknessCaseId);
+});
 el.amuReportForm.addEventListener("submit", submitAmuReport);
-el.amuIncapacityFrom.addEventListener("input", () => {
-  el.amuIncapacityTo.min = el.amuIncapacityFrom.value || new Date().toISOString().slice(0, 10);
+el.amuSicknessCaseId.addEventListener("change", selectSicknessCaseForAmu);
+el.amuIncapacityFrom.addEventListener("input", (event) => {
+  if (event.isTrusted) portalState.amuOcr.startManuallyEdited = true;
+  el.amuIncapacityTo.min = el.amuIncapacityFrom.value || addDays(iso(new Date()), -3650);
   if (el.amuIncapacityTo.value && el.amuIncapacityTo.value < el.amuIncapacityFrom.value) el.amuIncapacityTo.value = el.amuIncapacityFrom.value;
+});
+el.amuIncapacityTo.addEventListener("input", (event) => { if (event.isTrusted) portalState.amuOcr.endManuallyEdited = true; });
+el.amuDocuments.addEventListener("change", handleAmuFileSelection);
+el.amuCamera.addEventListener("change", handleAmuFileSelection);
+el.sicknessNotificationPreferencesForm?.addEventListener("submit", saveSicknessNotificationPreferences);
+el.sicknessNotificationChannels?.addEventListener("input", (event) => {
+  if (event.target.closest("[data-channel-destination]")) updateSicknessNotificationChannelRow(event.target.closest("[data-notification-channel]"));
+});
+el.sicknessNotificationChannels?.addEventListener("click", (event) => {
+  const send = event.target.closest("[data-send-channel-verification]");
+  const confirmButton = event.target.closest("[data-confirm-channel-verification]");
+  if (send) requestSicknessNotificationVerification(send);
+  if (confirmButton) confirmSicknessNotificationVerification(confirmButton);
+});
+el.sicknessNotificationChannels?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || !event.target.closest("[data-channel-code]")) return;
+  event.preventDefault();
+  const confirmButton = event.target.closest("[data-notification-channel]")?.querySelector("[data-confirm-channel-verification]");
+  if (confirmButton) confirmSicknessNotificationVerification(confirmButton);
 });
 el.amuReportList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-withdraw-amu]");

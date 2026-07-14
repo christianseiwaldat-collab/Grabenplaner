@@ -111,7 +111,7 @@ const elements = Object.fromEntries(
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint",
-    "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuManagerFileAccess", "amuSettingsHint", "saveAmuSettingsButton",
+    "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "amuManagerFileAccess", "sicknessLocalWarningDays", "sicknessHrWarningDays", "amuSettingsHint", "saveAmuSettingsButton",
     "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
     "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordTitle", "personnelRecordContent",
@@ -1728,8 +1728,11 @@ async function loadAmuSettings() {
     elements.amuStoredMaxMb.value = Number(policy.storedMaxMb || 2);
     elements.amuConvertImagesToPdf.checked = policy.convertImagesToPdf !== false;
     elements.amuGrayscaleImages.checked = policy.grayscaleImages !== false;
+    elements.amuOcrEnabled.checked = policy.ocrEnabled !== false;
     elements.amuManagerFileAccess.checked = policy.managerFileAccess === true;
-    [elements.amuUploadMaxMb, elements.amuStoredMaxMb, elements.amuConvertImagesToPdf, elements.amuGrayscaleImages, elements.amuManagerFileAccess, elements.saveAmuSettingsButton]
+    elements.sicknessLocalWarningDays.value = Number(policy.localWarningDays ?? 2);
+    elements.sicknessHrWarningDays.value = Number(policy.hrWarningDays ?? 3);
+    [elements.amuUploadMaxMb, elements.amuStoredMaxMb, elements.amuConvertImagesToPdf, elements.amuGrayscaleImages, elements.amuOcrEnabled, elements.amuManagerFileAccess, elements.sicknessLocalWarningDays, elements.sicknessHrWarningDays, elements.saveAmuSettingsButton]
       .forEach((control) => { if (control) control.disabled = !result.canChange; });
     elements.amuSettingsHint.textContent = result.canChange ? "Änderbar durch Admin oder Personalleitung." : "Nur Admin oder Personalleitung kann diese Werte ändern.";
   } catch (error) {
@@ -1747,7 +1750,10 @@ async function saveAmuSettings() {
         storedMaxMb: Number(elements.amuStoredMaxMb.value),
         convertImagesToPdf: elements.amuConvertImagesToPdf.checked,
         grayscaleImages: elements.amuGrayscaleImages.checked,
+        ocrEnabled: elements.amuOcrEnabled.checked,
         managerFileAccess: elements.amuManagerFileAccess.checked,
+        localWarningDays: Number(elements.sicknessLocalWarningDays.value),
+        hrWarningDays: Number(elements.sicknessHrWarningDays.value),
       }),
     });
     state.amuPolicy = result.policy;

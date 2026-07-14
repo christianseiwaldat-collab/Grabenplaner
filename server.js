@@ -10,6 +10,15 @@ const net = require("node:net");
 const { promisify } = require("node:util");
 const { createAmuStorage, syncEncryptedFilesBackup } = require("./lib/amu-storage");
 const { prepareAmuDocument } = require("./lib/amu-processing");
+const {
+  validateSicknessDeadlines,
+  sicknessDeadlineState,
+  externalAlertNotBefore,
+} = require("./lib/sickness-workflow");
+const {
+  createExternalNotificationAdapter,
+  STAFFING_ALERT_TEXT,
+} = require("./lib/external-notifications");
 const { acquireDatabaseLock, lockPathForDatabase, releaseDatabaseLock } = require("./lib/database-lock");
 const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
@@ -44,6 +53,9 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "amu:review", label: "AUM-Meldungen prüfen", group: "AUM", warningLevel: "critical" },
   { id: "amu:delete", label: "AUM-Meldungen löschen", group: "AUM", warningLevel: "critical" },
   { id: "amu:audit", label: "AUM-Prüfprotokoll lesen", group: "AUM", warningLevel: "critical" },
+  { id: "sickness:read", label: "Krankmeldungen im eigenen Bereich lesen", group: "AUM", warningLevel: "high", hrDelegable: true },
+  { id: "sickness:settings", label: "Krankmeldungs- und AUM-Fristen verwalten", group: "AUM", warningLevel: "critical" },
+  { id: "notifications:settings", label: "Eigene Besetzungswarnungen konfigurieren", group: "AUM", warningLevel: "normal", hrDelegable: true },
   { id: "branding:read", label: "Branding-Verwaltung lesen", group: "System & Verwaltung", warningLevel: "high" },
   { id: "branding:write", label: "Brandings verwalten und zuweisen", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "operation_mode:write", label: "Betriebsmodus umschalten", group: "System & Verwaltung", warningLevel: "critical" },
@@ -70,6 +82,8 @@ const builtinPortalRoles = [
       "own_amu:create",
       "own_amu:read",
       "own_amu:withdraw",
+      "own_sickness:create",
+      "own_sickness:read",
     ],
   },
   {
@@ -87,6 +101,8 @@ const builtinPortalRoles = [
       "own_amu:create",
       "own_amu:read",
       "own_amu:withdraw",
+      "own_sickness:create",
+      "own_sickness:read",
       "employees:read",
       "schedule:read",
       "schedule:write",
@@ -95,6 +111,8 @@ const builtinPortalRoles = [
       "vacation:read",
       "vacation:approve",
       "amu:metadata:read",
+      "sickness:read",
+      "notifications:settings",
       "scopes:write",
     ],
   },
@@ -106,9 +124,10 @@ const builtinPortalRoles = [
     permissions: [
       "own_schedule:read", "own_time:read", "own_time:write", "own_time:correction_request",
       "own_vacation:read", "own_vacation:request", "own_amu:create", "own_amu:read", "own_amu:withdraw",
+      "own_sickness:create", "own_sickness:read",
       "employees:read", "schedule:read", "schedule:write",
       "time:read", "time:review", "vacation:read", "vacation:approve",
-      "amu:metadata:read",
+      "amu:metadata:read", "sickness:read", "notifications:settings",
     ],
   },
   {
@@ -126,6 +145,8 @@ const builtinPortalRoles = [
       "own_amu:create",
       "own_amu:read",
       "own_amu:withdraw",
+      "own_sickness:create",
+      "own_sickness:read",
       "employees:read",
       "schedule:read",
       "schedule:write",
@@ -159,6 +180,9 @@ const builtinPortalRoles = [
       "amu:review",
       "amu:delete",
       "amu:audit",
+      "sickness:read",
+      "sickness:settings",
+      "notifications:settings",
       "scopes:write",
     ],
   },
@@ -177,6 +201,8 @@ const builtinPortalRoles = [
       "own_amu:create",
       "own_amu:read",
       "own_amu:withdraw",
+      "own_sickness:create",
+      "own_sickness:read",
       "employees:read",
       "schedule:read",
       "time:read",
@@ -203,6 +229,9 @@ const builtinPortalRoles = [
       "amu:review",
       "amu:delete",
       "amu:audit",
+      "sickness:read",
+      "sickness:settings",
+      "notifications:settings",
       "scopes:write",
     ],
   },
@@ -218,10 +247,12 @@ builtinPortalRoles.push(
     permissions: [
       "own_schedule:read", "own_time:read", "own_time:write", "own_time:correction_request",
       "own_vacation:read", "own_vacation:request", "own_amu:create", "own_amu:read", "own_amu:withdraw",
+      "own_sickness:create", "own_sickness:read",
       "employees:read", "schedule:read", "rights:read", "rights:write",
       "employees:write",
       "operation_mode:write", "backup:write", "update:write", "system:write", "users:write",
       "roles:read", "roles:write", "audit:read", "scopes:write", "wifi:settings",
+      "hr:settings", "sickness:read", "sickness:settings", "notifications:settings",
     ],
   },
   {
@@ -259,6 +290,9 @@ const defaultPortalSettings = {
   amu_convert_images_to_pdf: "1",
   amu_grayscale_images: "1",
   amu_manager_file_access: "0",
+  amu_ocr_enabled: "1",
+  sickness_local_warning_days: "2",
+  sickness_hr_warning_days: "3",
   wifi_minimum_presence_minutes: "5",
   wifi_absence_grace_minutes: "30",
   mobile_leadership_layouts: JSON.stringify({
@@ -460,6 +494,8 @@ if (amuEncryptionConfiguration) {
   amuStorageStartupError = "Im Serverbetrieb fehlt der konfigurierte AUM-Schlüssel.";
 }
 
+const externalNotificationAdapter = createExternalNotificationAdapter({ environment: process.env });
+
 function safeRemoveFile(filePath) {
   try {
     if (fs.existsSync(filePath)) fs.chmodSync(filePath, 0o666);
@@ -524,6 +560,8 @@ let lastBackup = null;
 let backupInterval = null;
 let retentionInterval = null;
 let scannerProbeInterval = null;
+let sicknessSweepInterval = null;
+let notificationDispatchInterval = null;
 
 function verifyDatabaseFile(filePath) {
   const verification = new DatabaseSync(filePath, { readOnly: true });
@@ -1178,6 +1216,7 @@ function createSchema() {
 
     CREATE TABLE IF NOT EXISTS amu_reports (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sickness_case_id INTEGER,
       employee_number TEXT NOT NULL,
       location_id TEXT NOT NULL,
       department_id INTEGER,
@@ -1199,6 +1238,8 @@ function createSchema() {
       FOREIGN KEY (location_id) REFERENCES locations(id)
         ON UPDATE CASCADE ON DELETE RESTRICT,
       FOREIGN KEY (department_id) REFERENCES departments(id)
+        ON UPDATE CASCADE ON DELETE SET NULL,
+      FOREIGN KEY (sickness_case_id) REFERENCES sickness_cases(id)
         ON UPDATE CASCADE ON DELETE SET NULL
     );
 
@@ -1223,6 +1264,62 @@ function createSchema() {
       protected_payload TEXT NOT NULL DEFAULT '',
       FOREIGN KEY (report_id) REFERENCES amu_reports(id)
         ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS sickness_cases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_lookup TEXT NOT NULL,
+      status_lookup TEXT NOT NULL,
+      protected_payload TEXT NOT NULL,
+      purge_after TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS sickness_alerts (
+      id TEXT PRIMARY KEY,
+      sickness_case_id INTEGER NOT NULL,
+      status_lookup TEXT NOT NULL,
+      protected_payload TEXT NOT NULL,
+      purge_after TEXT NOT NULL,
+      dedupe_lookup TEXT NOT NULL UNIQUE,
+      FOREIGN KEY (sickness_case_id) REFERENCES sickness_cases(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS sickness_notification_preferences (
+      employee_number TEXT NOT NULL,
+      channel TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      earliest_time TEXT NOT NULL DEFAULT '08:00',
+      protected_destination TEXT NOT NULL DEFAULT '',
+      verified_at TEXT,
+      verification_hash TEXT NOT NULL DEFAULT '',
+      verification_salt TEXT NOT NULL DEFAULT '',
+      verification_expires_at TEXT,
+      verification_attempts INTEGER NOT NULL DEFAULT 0,
+      verification_sent_at TEXT,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (employee_number, channel),
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS outbound_notification_jobs (
+      id TEXT PRIMARY KEY,
+      recipient_lookup TEXT NOT NULL,
+      channel TEXT NOT NULL,
+      entity_lookup TEXT NOT NULL,
+      protected_payload TEXT NOT NULL,
+      not_before TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error_code TEXT NOT NULL DEFAULT '',
+      sent_at TEXT,
+      purge_after TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      dedupe_lookup TEXT NOT NULL UNIQUE
     );
 
     CREATE TABLE IF NOT EXISTS audit_log (
@@ -1256,6 +1353,12 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_amu_reports_location ON amu_reports(location_id, status, submitted_at);
     CREATE INDEX IF NOT EXISTS idx_amu_reports_retention ON amu_reports(retention_until, status);
     CREATE INDEX IF NOT EXISTS idx_amu_documents_report ON amu_documents(report_id, status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_sickness_cases_employee ON sickness_cases(employee_lookup, status_lookup, created_at);
+    CREATE INDEX IF NOT EXISTS idx_sickness_cases_retention ON sickness_cases(purge_after, status_lookup);
+    CREATE INDEX IF NOT EXISTS idx_sickness_alerts_case ON sickness_alerts(sickness_case_id, status_lookup);
+    CREATE INDEX IF NOT EXISTS idx_sickness_alerts_retention ON sickness_alerts(purge_after, status_lookup);
+    CREATE INDEX IF NOT EXISTS idx_outbound_notification_jobs_due ON outbound_notification_jobs(status, not_before, created_at);
+    CREATE INDEX IF NOT EXISTS idx_outbound_notification_jobs_retention ON outbound_notification_jobs(purge_after, status);
     CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
     CREATE INDEX IF NOT EXISTS idx_portal_users_role_active ON portal_users(role, active);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_employee ON portal_sessions(employee_number, expires_at);
@@ -1304,7 +1407,33 @@ const protectedPersonnelMigrationRequired = tableExists("amu_reports") && (
   || Boolean(db.prepare("SELECT 1 FROM amu_reports WHERE TRIM(COALESCE(protected_payload, '')) = '' LIMIT 1").get())
   || Boolean(db.prepare("SELECT 1 FROM amu_documents WHERE TRIM(COALESCE(protected_payload, '')) = '' AND status <> 'purged' LIMIT 1").get())
 );
-if (databaseExistedBeforeOpen && (serverModeActive || protectedPersonnelMigrationRequired)) createInternalDatabaseBackup("pre-migration");
+const unreleasedSicknessDraftSchemaPresent = tableExists("sickness_cases")
+  && !columnExists("sickness_cases", "employee_lookup");
+if (databaseExistedBeforeOpen && (serverModeActive || protectedPersonnelMigrationRequired || unreleasedSicknessDraftSchemaPresent)) {
+  createInternalDatabaseBackup("pre-migration");
+}
+
+if (unreleasedSicknessDraftSchemaPresent) {
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (tableExists("amu_reports") && columnExists("amu_reports", "sickness_case_id")) {
+      db.prepare("UPDATE amu_reports SET sickness_case_id = NULL").run();
+    }
+    db.exec(`
+      DROP TABLE IF EXISTS outbound_notification_jobs;
+      DROP TABLE IF EXISTS sickness_alerts;
+      DROP TABLE IF EXISTS sickness_notification_preferences;
+      DROP TABLE IF EXISTS sickness_cases;
+    `);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+}
 
 if (tableExists("employees") && !columnExists("employees", "personnel_number")) {
   migrateLegacySchema();
@@ -1390,8 +1519,10 @@ ensureColumn("time_day_reviews", "evaluation_version", "TEXT NOT NULL DEFAULT 'v
 ensureColumn("time_day_reviews", "snapshot_json", "TEXT NOT NULL DEFAULT '{}'");
 ensureColumn("time_day_reviews", "department_key", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("amu_reports", "department_id", "INTEGER");
+ensureColumn("amu_reports", "sickness_case_id", "INTEGER");
 ensureColumn("amu_reports", "protected_payload", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("amu_documents", "protected_payload", "TEXT NOT NULL DEFAULT ''");
+db.exec("CREATE INDEX IF NOT EXISTS idx_amu_reports_sickness_case ON amu_reports(sickness_case_id)");
 
 function amuReportProtectionContext(row) {
   return {
@@ -1408,6 +1539,42 @@ function amuDocumentProtectionContext(row) {
     recordId: String(row.id),
     field: "payload",
     employeeNumber: String(row.employee_number || ""),
+  };
+}
+
+function sicknessCaseProtectionContext(row) {
+  return {
+    namespace: "sickness-case",
+    recordId: String(row.id),
+    field: "payload",
+    employeeNumber: String(row.employee_lookup || ""),
+  };
+}
+
+function sicknessAlertProtectionContext(row) {
+  return {
+    namespace: "sickness-alert",
+    recordId: String(row.id),
+    field: "payload",
+    employeeNumber: String(row.sickness_case_id || ""),
+  };
+}
+
+function sicknessPreferenceProtectionContext(row) {
+  return {
+    namespace: "sickness-notification-preference",
+    recordId: `${String(row.employee_number || "")}:${String(row.channel || "")}`,
+    field: "destination",
+    employeeNumber: String(row.employee_number || ""),
+  };
+}
+
+function outboundNotificationProtectionContext(row) {
+  return {
+    namespace: "outbound-notification-job",
+    recordId: String(row.id),
+    field: "payload",
+    employeeNumber: String(row.recipient_lookup || ""),
   };
 }
 
@@ -1772,6 +1939,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.57-wifi-automation-suggestions", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.58-protected-personnel-records", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.59-sickness-ocr-notifications", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -1966,11 +2135,13 @@ if (process.env.GRABENPLANER_SEED_DEMO === "1" && db.prepare("SELECT COUNT(*) AS
 app.disable("x-powered-by");
 app.use((request, response, next) => {
   const embeddedPdfPreview = request.path === "/api/schedule-preview.pdf" || request.path === "/api/vacations-preview.pdf";
+  const ocrClientAsset = request.path === "/portal" || request.path === "/portal/" || request.path === "/portal.html"
+    || request.path.startsWith("/vendor/tesseract");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", embeddedPdfPreview ? "SAMEORIGIN" : "DENY");
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  response.setHeader("Content-Security-Policy", `default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors '${embeddedPdfPreview ? "self" : "none"}'`);
+  response.setHeader("Content-Security-Policy", `default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'${ocrClientAsset ? " 'wasm-unsafe-eval'" : ""}; worker-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors '${embeddedPdfPreview ? "self" : "none"}'`);
   if (request.secure) response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   if (request.path.startsWith("/api/portal/")) response.setHeader("Cache-Control", "no-store");
   if (serverModeActive && !request.secure) {
@@ -1993,6 +2164,13 @@ app.use((request, response, next) => {
 app.use(express.json({ limit: "1mb" }));
 app.use("/branding-kits", express.static(brandingKitsDirectory));
 app.use("/vendor/quill", express.static(path.join(__dirname, "node_modules", "quill", "dist")));
+const tesseractPackageDirectory = fs.realpathSync(path.dirname(require.resolve("tesseract.js/package.json")));
+const tesseractCoreDirectory = fs.realpathSync(path.join(path.dirname(tesseractPackageDirectory), "tesseract.js-core"));
+const tesseractGermanDataDirectory = fs.realpathSync(path.join(__dirname, "node_modules", "@tesseract.js-data", "deu", "4.0.0_best_int"));
+const immutableVendorAssets = { maxAge: "365d", immutable: true, fallthrough: false };
+app.use("/vendor/tesseract-v7", express.static(path.join(tesseractPackageDirectory, "dist"), immutableVendorAssets));
+app.use("/vendor/tesseract-core-v7", express.static(tesseractCoreDirectory, immutableVendorAssets));
+app.use("/vendor/tesseract-data-deu-v1", express.static(tesseractGermanDataDirectory, immutableVendorAssets));
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/api", enforceAdminApiAccess);
 
@@ -2300,7 +2478,7 @@ function createPortalNotification(recipient, eventType, title, message = "", opt
     String(eventType || "info").slice(0, 80),
     stripEmoji(String(title || "")).slice(0, 160),
     stripEmoji(String(message || "")).slice(0, 500),
-    String(options.target || "/portal/?tab=requests").slice(0, 240),
+    String(options.target || "/portal.html?tab=requests").slice(0, 240),
     String(options.entityType || "").slice(0, 80),
     String(options.entityId || "").slice(0, 120),
     dedupeKey,
@@ -2358,7 +2536,7 @@ function notifyRequestDecision(entry, kind, status, actor = "") {
     pending_hr: "wurde an die Personalleitung weitergeleitet",
   }[status] || "wurde bearbeitet";
   createPortalNotification(entry.employee_number, "request.decision", `${labels[kind] || "Antrag"} ${statusText}`, actor ? `Bearbeitet von Personalnummer ${actor}.` : "", {
-    target: "/portal/?tab=requests",
+    target: "/portal.html?tab=requests",
     entityType: kind,
     entityId: entry.id,
     dedupeKey: `${kind}:${entry.id}:${status}:${actor || "system"}`,
@@ -3063,7 +3241,7 @@ function createWifiSuggestionsForSession(sessionRow, now = new Date()) {
     created.push(id);
     createPortalNotification(sessionRow.employee_number, "wifi.suggestion", "Neuer WLAN-Zeitvorschlag",
       `Für ${segment.workDate} liegt ein Zeitvorschlag zur Prüfung bereit.`, {
-        target: "/portal/?tab=timeTracking",
+        target: "/portal.html?tab=timeTracking",
         entityType: "wifi_time_suggestion",
         entityId: id,
         dedupeKey: `wifi-suggestion:${id}:created`,
@@ -3324,7 +3502,7 @@ function wifiAutomationEmployeePayload(session, now = new Date()) {
     createPortalNotification(session.employeeNumber, overdue ? "wifi.suggestion.overdue" : "wifi.suggestion.due",
       overdue ? "WLAN-Zeitvorschlag überfällig" : "WLAN-Zeitvorschlag bald bestätigen",
       `Der Vorschlag für ${suggestion.workDate} wartet auf deine Bestätigung.`, {
-        target: "/portal/?tab=timeTracking",
+        target: "/portal.html?tab=timeTracking",
         entityType: "wifi_time_suggestion",
         entityId: suggestion.id,
         dedupeKey: `wifi-suggestion:${suggestion.id}:${suggestion.warning}`,
@@ -3496,15 +3674,663 @@ function rejectWifiSuggestion(session, id, reason = "") {
 
 function getAmuPolicy() {
   const settings = getPortalSettings();
-  const uploadMaxMb = Math.min(25, Math.max(1, Number(settings.amu_upload_max_mb || 10)));
-  const storedMaxMb = Math.min(uploadMaxMb, Math.max(0.5, Number(settings.amu_stored_max_mb || 2)));
+  const parsedUploadMaxMb = Number(settings.amu_upload_max_mb);
+  const uploadMaxMb = Number.isFinite(parsedUploadMaxMb)
+    ? Math.min(25, Math.max(1, parsedUploadMaxMb))
+    : 10;
+  const parsedStoredMaxMb = Number(settings.amu_stored_max_mb);
+  const storedMaxMb = Number.isFinite(parsedStoredMaxMb)
+    ? Math.min(uploadMaxMb, Math.max(0.5, parsedStoredMaxMb))
+    : Math.min(uploadMaxMb, 2);
+  const parsedLocalWarningDays = Number(settings.sickness_local_warning_days);
+  const parsedHrWarningDays = Number(settings.sickness_hr_warning_days);
+  let localWarningDays = Number.isFinite(parsedLocalWarningDays)
+    ? Math.min(30, Math.max(0, Math.trunc(parsedLocalWarningDays)))
+    : 2;
+  let hrWarningDays = Number.isFinite(parsedHrWarningDays)
+    ? Math.min(60, Math.max(1, Math.trunc(parsedHrWarningDays)))
+    : 3;
+  if (localWarningDays >= hrWarningDays) {
+    localWarningDays = 2;
+    hrWarningDays = 3;
+  }
   return {
     uploadMaxMb,
     storedMaxMb,
     convertImagesToPdf: settings.amu_convert_images_to_pdf !== "0",
     grayscaleImages: settings.amu_grayscale_images !== "0",
     managerFileAccess: settings.amu_manager_file_access === "1",
+    ocrEnabled: settings.amu_ocr_enabled !== "0",
+    localWarningDays,
+    hrWarningDays,
   };
+}
+
+const SICKNESS_ALERT_RESOLVED_RETENTION_DAYS = 90;
+const OUTBOUND_NOTIFICATION_RETENTION_DAYS = 30;
+const OUTBOUND_NOTIFICATION_CANCELLED_RETENTION_DAYS = 7;
+const NOTIFICATION_VERIFICATION_TTL_MINUTES = 10;
+const NOTIFICATION_VERIFICATION_MAX_ATTEMPTS = 5;
+
+function sicknessCaseRetentionDays() {
+  const configured = Number(getPortalSettings().amu_retention_days || 730);
+  return Number.isFinite(configured) ? Math.min(3650, Math.max(30, Math.trunc(configured))) : 730;
+}
+
+function protectedPortalEntityId(kind, id) {
+  return sicknessLookup(`portal-${String(kind || "record")}`, String(id || ""));
+}
+
+function protectedPortalDedupeKey(parts) {
+  return `protected:${sicknessLookup("portal-notification", parts.join(":"))}`;
+}
+
+function sicknessAlertPayload(row) {
+  return parseProtectedJson(row.protected_payload, sicknessAlertProtectionContext(row));
+}
+
+function sicknessNotificationContexts(payload = {}) {
+  const submitted = Array.isArray(payload.staffingRisk?.contexts) ? payload.staffingRisk.contexts : [];
+  const contexts = submitted.map((context) => ({
+    locationId: String(context?.locationId || "").trim(),
+    departmentId: Number(context?.departmentId || 0) || null,
+  })).filter((context) => context.locationId);
+  if (payload.locationId) {
+    contexts.push({
+      locationId: String(payload.locationId),
+      departmentId: Number(payload.departmentId || 0) || null,
+    });
+  }
+  return [...new Map(contexts.map((context) => [
+    `${context.locationId}:${context.departmentId || 0}`,
+    context,
+  ])).values()];
+}
+
+function portalScopeMatchesAnyContext(role, scopes, contexts) {
+  if (GLOBAL_SCOPE_PORTAL_ROLES.has(role)) return true;
+  return contexts.some((context) => scopes.some((scope) => scope.locationId === context.locationId
+    && (!Number(scope.departmentId || 0)
+      || Number(scope.departmentId) === Number(context.departmentId || 0))));
+}
+
+function sicknessNotificationRecipients(payload, stage = "local", excludeEmployeeNumber = "") {
+  const contexts = sicknessNotificationContexts(payload);
+  if (!contexts.length) return [];
+  const scopeRows = db.prepare(`
+    SELECT employee_number, location_id, department_id
+    FROM portal_access_scopes ORDER BY employee_number, location_id, department_id
+  `).all();
+  const scopesByEmployee = new Map();
+  for (const scope of scopeRows) {
+    const values = scopesByEmployee.get(scope.employee_number) || [];
+    values.push({ locationId: scope.location_id, departmentId: Number(scope.department_id || 0) || null });
+    scopesByEmployee.set(scope.employee_number, values);
+  }
+  const users = db.prepare(`
+    SELECT u.employee_number, u.role, e.home_location_id, e.preferred_department_id,
+           r.permissions AS role_permissions
+    FROM portal_users u
+    JOIN employees e ON e.personnel_number = u.employee_number
+    LEFT JOIN portal_roles r ON r.id = u.role
+    WHERE u.active = 1 AND TRIM(u.password_hash) <> ''
+    ORDER BY u.employee_number
+  `).all();
+  const recipients = [];
+  for (const user of users) {
+    if (!user.employee_number || user.employee_number === excludeEmployeeNumber) continue;
+    const permissions = new Set([
+      ...parsePortalPermissions(user.role_permissions),
+      ...portalPermissionGrantsForEmployee(user.employee_number),
+    ]);
+    if (!permissions.has("sickness:read")) continue;
+    const globalScope = GLOBAL_SCOPE_PORTAL_ROLES.has(user.role);
+    if (stage === "hr" && !globalScope) continue;
+    let scopes = scopesByEmployee.get(user.employee_number) || [];
+    if (!scopes.length && !globalScope && user.home_location_id) {
+      scopes = [{
+        locationId: user.home_location_id,
+        departmentId: user.role === "department_manager"
+          ? (Number(user.preferred_department_id || 0) || null)
+          : null,
+      }];
+    }
+    if (portalScopeMatchesAnyContext(user.role, scopes, contexts)) recipients.push(user.employee_number);
+  }
+  return [...new Set(recipients)];
+}
+
+function upsertSicknessAlert(caseId, kind, severity, audience) {
+  const caseRow = db.prepare("SELECT id, purge_after FROM sickness_cases WHERE id = ?").get(Number(caseId));
+  if (!caseRow) return { created: false, id: null, dedupeLookup: "" };
+  const dedupeLookup = sicknessAlertDedupeLookup(caseId, kind, audience);
+  const existing = db.prepare("SELECT * FROM sickness_alerts WHERE dedupe_lookup = ?").get(dedupeLookup);
+  if (existing) {
+    const existingPayload = sicknessAlertPayload(existing);
+    if (existingPayload.status === "open") {
+      return { created: false, reopened: false, id: existing.id, dedupeLookup };
+    }
+    existingPayload.kind = kind;
+    existingPayload.severity = severity;
+    existingPayload.audience = audience;
+    existingPayload.status = "open";
+    existingPayload.triggeredAt = new Date().toISOString();
+    existingPayload.resolvedAt = "";
+    db.prepare(`
+      UPDATE sickness_alerts
+      SET status_lookup = ?, protected_payload = ?, purge_after = ?
+      WHERE id = ?
+    `).run(sicknessStatusLookup("open"), protectJson(existingPayload, sicknessAlertProtectionContext(existing)), caseRow.purge_after, existing.id);
+    return { created: true, reopened: true, id: existing.id, dedupeLookup };
+  }
+  const id = crypto.randomUUID();
+  const payload = protectJson({
+    kind, severity, audience, status: "open", triggeredAt: new Date().toISOString(), resolvedAt: "",
+  }, sicknessAlertProtectionContext({ id, sickness_case_id: Number(caseId) }));
+  const result = db.prepare(`
+    INSERT OR IGNORE INTO sickness_alerts
+      (id, sickness_case_id, status_lookup, protected_payload, purge_after, dedupe_lookup)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, Number(caseId), sicknessStatusLookup("open"), payload, caseRow.purge_after, dedupeLookup);
+  return { created: Boolean(result.changes), id: result.changes ? id : null, dedupeLookup };
+}
+
+function resolveSicknessAlerts(caseId, kinds = []) {
+  const filters = new Set(Array.isArray(kinds) && kinds.length ? kinds : ["staffing_risk", "aum_overdue_local", "aum_overdue_hr"]);
+  const rows = db.prepare("SELECT * FROM sickness_alerts WHERE sickness_case_id = ?").all(Number(caseId));
+  const resolvedAt = new Date().toISOString();
+  const purgeAfter = addDays(viennaTodayIso(), SICKNESS_ALERT_RESOLVED_RETENTION_DAYS);
+  const update = db.prepare("UPDATE sickness_alerts SET status_lookup = ?, protected_payload = ?, purge_after = ? WHERE id = ?");
+  let changes = 0;
+  for (const row of rows) {
+    const payload = sicknessAlertPayload(row);
+    if (payload.status !== "open" || !filters.has(payload.kind)) continue;
+    payload.status = "resolved";
+    payload.resolvedAt = payload.resolvedAt || resolvedAt;
+    update.run(sicknessStatusLookup("resolved"), protectJson(payload, sicknessAlertProtectionContext(row)), purgeAfter, row.id);
+    changes += 1;
+  }
+  return changes;
+}
+
+function notifySicknessRecipients(row, { stage = "local", kind }) {
+  const casePayload = sicknessCasePayload(row);
+  const recipients = sicknessNotificationRecipients(casePayload, stage, casePayload.employeeNumber);
+  for (const recipient of recipients) {
+    createPortalNotification(recipient, "protected.update", "Neue geschützte Meldung", "Bitte im geschützten Bereich der App anmelden.", {
+      target: "/portal.html?tab=leadershipApprovals",
+      entityType: "protected_record",
+      entityId: protectedPortalEntityId("sickness-case", row.id),
+      dedupeKey: protectedPortalDedupeKey([row.id, kind, recipient]),
+    });
+  }
+  return recipients;
+}
+
+function sicknessStaffingAlertIsOpen(caseId) {
+  return db.prepare("SELECT * FROM sickness_alerts WHERE sickness_case_id = ?").all(Number(caseId))
+    .some((row) => {
+      const payload = sicknessAlertPayload(row);
+      return payload.kind === "staffing_risk" && payload.status === "open";
+    });
+}
+
+function resolveSicknessStaffingArtifacts(caseId) {
+  const resolved = resolveSicknessAlerts(caseId, ["staffing_risk"]);
+  const entityId = protectedPortalEntityId("sickness-case", caseId);
+  const notifications = db.prepare(`
+    SELECT DISTINCT recipient_employee_number FROM portal_notifications
+    WHERE entity_type = 'protected_record' AND entity_id = ?
+  `).all(entityId);
+  const markRead = db.prepare(`
+    UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+    WHERE dedupe_key = ?
+  `);
+  for (const notification of notifications) {
+    markRead.run(protectedPortalDedupeKey([caseId, "staffing", notification.recipient_employee_number]));
+  }
+  const cancelled = db.prepare(`
+    UPDATE outbound_notification_jobs
+    SET status = 'cancelled', purge_after = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE entity_lookup = ? AND status = 'pending'
+  `).run(addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_CANCELLED_RETENTION_DAYS), sicknessOutboundEntityLookup(caseId)).changes;
+  return { resolved, cancelled };
+}
+
+function reactivateSicknessStaffingNotifications(caseId, recipients) {
+  const update = db.prepare("UPDATE portal_notifications SET read_at = NULL WHERE dedupe_key = ?");
+  for (const recipient of recipients) {
+    update.run(protectedPortalDedupeKey([caseId, "staffing", recipient]));
+  }
+}
+
+function reconcileSicknessStaffingRisk(row, now = new Date()) {
+  const payload = sicknessCasePayload(row);
+  if (!["reported", "aum_received"].includes(payload.status) || !payload.startDate) {
+    return { checked: false, created: false, resolved: false, risk: payload.staffingRisk || null };
+  }
+  const previousRisk = payload.staffingRisk || { atRisk: false, contexts: [] };
+  const nextRisk = evaluateSicknessStaffingRisk(
+    payload.employeeNumber,
+    payload.startDate,
+    payload.expectedEnd,
+    { locationId: payload.locationId, departmentId: payload.departmentId },
+    { asOfDate: viennaTodayIso(now) },
+  );
+  const previousContexts = sicknessNotificationContexts({
+    locationId: payload.locationId,
+    departmentId: payload.departmentId,
+    staffingRisk: previousRisk,
+  });
+  const contextChanged = JSON.stringify(previousContexts) !== JSON.stringify(nextRisk.contexts || []);
+  const primaryContext = nextRisk.contexts?.[0] || null;
+  if (primaryContext) {
+    payload.locationId = primaryContext.locationId;
+    payload.departmentId = primaryContext.departmentId;
+  }
+  const payloadChanged = JSON.stringify(previousRisk) !== JSON.stringify(nextRisk) || contextChanged;
+  payload.staffingRisk = nextRisk;
+  if (payloadChanged) {
+    row.protected_payload = protectJson(payload, sicknessCaseProtectionContext(row));
+    db.prepare("UPDATE sickness_cases SET protected_payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(row.protected_payload, row.id);
+  }
+  if (!nextRisk.atRisk) {
+    const effects = resolveSicknessStaffingArtifacts(row.id);
+    return { checked: true, created: false, resolved: Boolean(effects.resolved), risk: nextRisk };
+  }
+  const alert = upsertSicknessAlert(row.id, "staffing_risk", "warning", "local");
+  if (alert.created || contextChanged) {
+    if (contextChanged) resolveSicknessStaffingArtifacts(row.id);
+    const refreshedAlert = upsertSicknessAlert(row.id, "staffing_risk", "warning", "local");
+    const recipients = notifySicknessRecipients(row, {
+      stage: "local",
+      kind: "staffing",
+    });
+    reactivateSicknessStaffingNotifications(row.id, recipients);
+    queueExternalStaffingAlerts(row, recipients, now.toISOString());
+    return { checked: true, created: Boolean(alert.created || refreshedAlert.created), resolved: false, risk: nextRisk };
+  }
+  return { checked: true, created: false, resolved: false, risk: nextRisk };
+}
+
+function runSicknessEscalationSweep(now = new Date()) {
+  if (!amuStorage || !tableExists("sickness_cases")) return { checked: 0, alerts: 0 };
+  const policy = getAmuPolicy();
+  const rows = db.prepare(`
+    SELECT * FROM sickness_cases WHERE status_lookup IN (?, ?) ORDER BY created_at, id
+  `).all(sicknessStatusLookup("reported"), sicknessStatusLookup("aum_received"));
+  let alerts = 0;
+  for (const row of rows) {
+    const staffing = reconcileSicknessStaffingRisk(row, now);
+    if (staffing.created) alerts += 1;
+    const payload = sicknessCasePayload(row);
+    if (payload.status !== "reported") continue;
+    if (!payload.startDate) continue;
+    const state = sicknessDeadlineState({
+      startAt: payload.startDate,
+      asOf: now,
+      localDays: policy.localWarningDays,
+      hrDays: policy.hrWarningDays,
+    });
+    if (state.severity === "yellow" || state.severity === "red") {
+      const localAlert = upsertSicknessAlert(row.id, "aum_overdue_local", "yellow", "local");
+      if (localAlert.created) {
+        alerts += 1;
+        notifySicknessRecipients(row, {
+          stage: "local",
+          kind: "aum_overdue_local",
+        });
+      }
+    }
+    if (state.severity === "red") {
+      const hrAlert = upsertSicknessAlert(row.id, "aum_overdue_hr", "red", "hr");
+      if (hrAlert.created) {
+        alerts += 1;
+        notifySicknessRecipients(row, {
+          stage: "hr",
+          kind: "aum_overdue_hr",
+        });
+      }
+    }
+  }
+  return { checked: rows.length, alerts };
+}
+
+function refreshSicknessStaffingAfterPlanningChange(now = new Date()) {
+  try {
+    return runSicknessEscalationSweep(now);
+  } catch (error) {
+    console.error("Krankmeldungs-Besetzungsprüfung nach Dienstplanänderung fehlgeschlagen:", error);
+    return { checked: 0, alerts: 0, error: true };
+  }
+}
+
+const SICKNESS_NOTIFICATION_CHANNELS = Object.freeze(["email", "sms", "whatsapp"]);
+
+function externalNotificationProviderStatus() {
+  return externalNotificationAdapter.getProviderStatus();
+}
+
+function normalizedNotificationDestination(channel, value) {
+  const raw = stripEmoji(String(value || "").trim());
+  if (!raw) return "";
+  if (channel === "email") {
+    if (raw.length > 320 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw)) {
+      throw httpError(400, "Bitte eine gültige E-Mail-Adresse eingeben.", "SICKNESS_NOTIFICATION_DESTINATION_INVALID");
+    }
+    return raw;
+  }
+  const phone = raw.replace(/[\s()./-]/g, "");
+  if (!/^\+[1-9]\d{6,15}$/.test(phone)) {
+    throw httpError(400, "Bitte die Telefonnummer mit internationaler Vorwahl eingeben, zum Beispiel +436601234567.", "SICKNESS_NOTIFICATION_DESTINATION_INVALID");
+  }
+  return phone;
+}
+
+function sicknessNotificationPreferences(employeeNumber) {
+  const rows = db.prepare(`
+    SELECT employee_number, channel, enabled, earliest_time, protected_destination, verified_at,
+           verification_expires_at, verification_attempts, updated_at
+    FROM sickness_notification_preferences WHERE employee_number = ?
+  `).all(employeeNumber);
+  const byChannel = new Map(rows.map((row) => [row.channel, row]));
+  const channels = {};
+  for (const channel of SICKNESS_NOTIFICATION_CHANNELS) {
+    const row = byChannel.get(channel);
+    let destination = "";
+    if (row?.protected_destination) {
+      destination = parseProtectedJson(row.protected_destination, sicknessPreferenceProtectionContext(row)).destination || "";
+    }
+    channels[channel] = {
+      enabled: Boolean(row?.enabled),
+      destination,
+      earliestTime: isTime(row?.earliest_time) ? row.earliest_time : "08:00",
+      verifiedAt: row?.verified_at || null,
+      verificationRequired: Boolean(row?.protected_destination && !row?.verified_at),
+      verificationExpiresAt: row?.verification_expires_at || null,
+    };
+  }
+  return { channels, providers: externalNotificationProviderStatus(), messagePreview: STAFFING_ALERT_TEXT };
+}
+
+function saveSicknessNotificationPreferences(employeeNumber, body = {}) {
+  const earliestTime = String(body.earliestTime || "08:00");
+  if (!isTime(earliestTime)) throw httpError(400, "Bitte eine gültige früheste Warnzeit eingeben.", "SICKNESS_NOTIFICATION_TIME_INVALID");
+  const submitted = body.channels && typeof body.channels === "object" ? body.channels : {};
+  const existingRows = db.prepare("SELECT * FROM sickness_notification_preferences WHERE employee_number = ?").all(employeeNumber);
+  const existingByChannel = new Map(existingRows.map((row) => [row.channel, row]));
+  const values = SICKNESS_NOTIFICATION_CHANNELS.map((channel) => {
+    const input = submitted[channel] || {};
+    const enabled = input.enabled === true;
+    const destination = normalizedNotificationDestination(channel, input.destination);
+    if (enabled && !destination) {
+      throw httpError(400, "Für jeden aktivierten Warnkanal muss ein Empfänger hinterlegt sein.", "SICKNESS_NOTIFICATION_DESTINATION_REQUIRED");
+    }
+    const existing = existingByChannel.get(channel);
+    const previousDestination = existing?.protected_destination
+      ? (parseProtectedJson(existing.protected_destination, sicknessPreferenceProtectionContext(existing)).destination || "")
+      : "";
+    const unchanged = destination && destination === previousDestination;
+    const verifiedAt = unchanged ? (existing?.verified_at || null) : null;
+    if (enabled && !verifiedAt) {
+      throw httpError(409, "Bitte dieses Ziel zuerst mit dem sechsstelligen Einmalcode bestätigen.", "SICKNESS_NOTIFICATION_VERIFICATION_REQUIRED");
+    }
+    return {
+      channel, enabled, destination, verifiedAt,
+      verificationHash: unchanged ? (existing?.verification_hash || "") : "",
+      verificationSalt: unchanged ? (existing?.verification_salt || "") : "",
+      verificationExpiresAt: unchanged ? (existing?.verification_expires_at || null) : null,
+      verificationAttempts: unchanged ? Number(existing?.verification_attempts || 0) : 0,
+      verificationSentAt: unchanged ? (existing?.verification_sent_at || null) : null,
+    };
+  });
+  const upsert = db.prepare(`
+    INSERT INTO sickness_notification_preferences
+      (employee_number, channel, enabled, earliest_time, protected_destination, verified_at,
+       verification_hash, verification_salt, verification_expires_at, verification_attempts,
+       verification_sent_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(employee_number, channel) DO UPDATE SET
+      enabled = excluded.enabled, earliest_time = excluded.earliest_time,
+      protected_destination = excluded.protected_destination, verified_at = excluded.verified_at,
+      verification_hash = excluded.verification_hash, verification_salt = excluded.verification_salt,
+      verification_expires_at = excluded.verification_expires_at,
+      verification_attempts = excluded.verification_attempts,
+      verification_sent_at = excluded.verification_sent_at,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+  db.exec("BEGIN");
+  try {
+    for (const value of values) {
+      const context = sicknessPreferenceProtectionContext({ employee_number: employeeNumber, channel: value.channel });
+      const protectedDestination = value.destination ? protectJson({ destination: value.destination }, context) : "";
+      upsert.run(employeeNumber, value.channel, value.enabled ? 1 : 0, earliestTime, protectedDestination,
+        value.verifiedAt, value.verificationHash, value.verificationSalt, value.verificationExpiresAt,
+        value.verificationAttempts, value.verificationSentAt);
+    }
+    auditPortal(employeeNumber, "sickness.notification-preferences.update", "portal_user", employeeNumber,
+      JSON.stringify({ channels: values.filter((value) => value.enabled).map((value) => value.channel), earliestTime }));
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return sicknessNotificationPreferences(employeeNumber);
+}
+
+function notificationVerificationHash(code, salt) {
+  return crypto.scryptSync(String(code), String(salt), 32).toString("hex");
+}
+
+async function requestSicknessNotificationVerification(employeeNumber, body = {}) {
+  const channel = String(body.channel || "").trim().toLowerCase();
+  if (!SICKNESS_NOTIFICATION_CHANNELS.includes(channel)) {
+    throw httpError(400, "Der Warnkanal ist ungültig.", "SICKNESS_NOTIFICATION_CHANNEL_INVALID");
+  }
+  const provider = externalNotificationProviderStatus()[channel];
+  if (!provider?.available) throw httpError(503, "Dieser Warnkanal ist durch die Firmen-IT noch nicht eingerichtet.", "SICKNESS_NOTIFICATION_PROVIDER_UNAVAILABLE");
+  const destination = normalizedNotificationDestination(channel, body.destination);
+  if (!destination) throw httpError(400, "Bitte ein Ziel für den Warnkanal eingeben.", "SICKNESS_NOTIFICATION_DESTINATION_REQUIRED");
+  const earliestTime = String(body.earliestTime || "08:00");
+  if (!isTime(earliestTime)) throw httpError(400, "Bitte eine gültige früheste Warnzeit eingeben.", "SICKNESS_NOTIFICATION_TIME_INVALID");
+  const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+  const salt = crypto.randomBytes(16).toString("base64url");
+  const hash = notificationVerificationHash(code, salt);
+  const expiresAt = new Date(Date.now() + NOTIFICATION_VERIFICATION_TTL_MINUTES * 60 * 1000).toISOString();
+  const context = sicknessPreferenceProtectionContext({ employee_number: employeeNumber, channel });
+  const protectedDestination = protectJson({ destination }, context);
+  db.prepare(`
+    INSERT INTO sickness_notification_preferences
+      (employee_number, channel, enabled, earliest_time, protected_destination, verified_at,
+       verification_hash, verification_salt, verification_expires_at, verification_attempts,
+       verification_sent_at, updated_at)
+    VALUES (?, ?, 0, ?, ?, NULL, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT(employee_number, channel) DO UPDATE SET
+      enabled = 0, earliest_time = excluded.earliest_time,
+      protected_destination = excluded.protected_destination, verified_at = NULL,
+      verification_hash = excluded.verification_hash, verification_salt = excluded.verification_salt,
+      verification_expires_at = excluded.verification_expires_at, verification_attempts = 0,
+      verification_sent_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+  `).run(employeeNumber, channel, earliestTime, protectedDestination, hash, salt, expiresAt);
+  try {
+    await externalNotificationAdapter.sendVerificationCode({ channel, recipient: destination, code });
+  } catch (error) {
+    db.prepare(`
+      UPDATE sickness_notification_preferences
+      SET verification_hash = '', verification_salt = '', verification_expires_at = NULL,
+          verification_attempts = 0, updated_at = CURRENT_TIMESTAMP
+      WHERE employee_number = ? AND channel = ?
+    `).run(employeeNumber, channel);
+    throw httpError(502, "Der Bestätigungscode konnte nicht zugestellt werden.", error.code || "SICKNESS_NOTIFICATION_VERIFICATION_DELIVERY_FAILED");
+  }
+  auditPortal(employeeNumber, "sickness.notification-destination.verification.request", "portal_user", employeeNumber,
+    JSON.stringify({ channel }));
+  return { ...sicknessNotificationPreferences(employeeNumber), verification: { channel, required: true, expiresAt } };
+}
+
+function confirmSicknessNotificationVerification(employeeNumber, body = {}) {
+  const channel = String(body.channel || "").trim().toLowerCase();
+  const code = String(body.code || "").trim();
+  if (!SICKNESS_NOTIFICATION_CHANNELS.includes(channel) || !/^\d{6}$/.test(code)) {
+    throw httpError(400, "Der Bestätigungscode ist ungültig.", "SICKNESS_NOTIFICATION_VERIFICATION_INVALID");
+  }
+  const row = db.prepare("SELECT * FROM sickness_notification_preferences WHERE employee_number = ? AND channel = ?")
+    .get(employeeNumber, channel);
+  const expired = !row?.verification_expires_at || new Date(row.verification_expires_at).getTime() <= Date.now();
+  if (!row?.verification_hash || !row?.verification_salt || expired
+      || Number(row.verification_attempts || 0) >= NOTIFICATION_VERIFICATION_MAX_ATTEMPTS) {
+    throw httpError(410, "Der Bestätigungscode ist abgelaufen. Bitte einen neuen Code anfordern.", "SICKNESS_NOTIFICATION_VERIFICATION_EXPIRED");
+  }
+  const actual = Buffer.from(notificationVerificationHash(code, row.verification_salt), "hex");
+  const expected = Buffer.from(row.verification_hash, "hex");
+  const valid = actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+  if (!valid) {
+    const attempts = Number(row.verification_attempts || 0) + 1;
+    db.prepare("UPDATE sickness_notification_preferences SET verification_attempts = ?, updated_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND channel = ?")
+      .run(attempts, employeeNumber, channel);
+    if (attempts >= NOTIFICATION_VERIFICATION_MAX_ATTEMPTS) {
+      throw httpError(410, "Zu viele Fehlversuche. Bitte einen neuen Code anfordern.", "SICKNESS_NOTIFICATION_VERIFICATION_EXPIRED");
+    }
+    throw httpError(400, "Der Bestätigungscode ist nicht korrekt.", "SICKNESS_NOTIFICATION_VERIFICATION_INVALID");
+  }
+  db.prepare(`
+    UPDATE sickness_notification_preferences
+    SET enabled = 1, verified_at = CURRENT_TIMESTAMP, verification_hash = '', verification_salt = '',
+        verification_expires_at = NULL, verification_attempts = 0, updated_at = CURRENT_TIMESTAMP
+    WHERE employee_number = ? AND channel = ?
+  `).run(employeeNumber, channel);
+  auditPortal(employeeNumber, "sickness.notification-destination.verification.confirm", "portal_user", employeeNumber,
+    JSON.stringify({ channel }));
+  return sicknessNotificationPreferences(employeeNumber);
+}
+
+function queueExternalStaffingAlerts(caseRow, recipients, reportedAt = new Date().toISOString()) {
+  const providerStatus = externalNotificationProviderStatus();
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO outbound_notification_jobs
+      (id, recipient_lookup, channel, entity_lookup, protected_payload, not_before, purge_after, dedupe_lookup)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  let queued = 0;
+  for (const recipient of recipients) {
+    const preferences = db.prepare(`
+      SELECT employee_number, channel, enabled, earliest_time, protected_destination
+      FROM sickness_notification_preferences WHERE employee_number = ? AND enabled = 1 AND verified_at IS NOT NULL
+    `).all(recipient);
+    for (const preference of preferences) {
+      if (!SICKNESS_NOTIFICATION_CHANNELS.includes(preference.channel) || !providerStatus[preference.channel]?.available || !preference.protected_destination) continue;
+      const destination = parseProtectedJson(preference.protected_destination, sicknessPreferenceProtectionContext(preference)).destination || "";
+      if (!destination) continue;
+      const id = crypto.randomUUID();
+      const notBefore = externalAlertNotBefore({ reportAt: reportedAt, sendAfter: preference.earliest_time || "08:00" }).notBefore;
+      const recipientLookup = sicknessLookup("notification-recipient", recipient);
+      const protectedPayload = protectJson({
+        destination,
+        recipientEmployeeNumber: recipient,
+        sicknessCaseId: Number(caseRow.id),
+      }, outboundNotificationProtectionContext({ id, recipient_lookup: recipientLookup }));
+      const dedupeLookup = sicknessOutboundDedupeLookup(caseRow.id, recipient, preference.channel);
+      const result = insert.run(id, recipientLookup, preference.channel, sicknessOutboundEntityLookup(caseRow.id),
+        protectedPayload, notBefore, addDays(notBefore.slice(0, 10), OUTBOUND_NOTIFICATION_RETENTION_DAYS), dedupeLookup);
+      if (result.changes) {
+        queued += 1;
+        continue;
+      }
+      const existing = db.prepare("SELECT id, recipient_lookup, status FROM outbound_notification_jobs WHERE dedupe_lookup = ?").get(dedupeLookup);
+      if (!existing || ["pending", "processing"].includes(existing.status)) continue;
+      const rearmedPayload = protectJson({
+        destination,
+        recipientEmployeeNumber: recipient,
+        sicknessCaseId: Number(caseRow.id),
+      }, outboundNotificationProtectionContext(existing));
+      const rearmed = db.prepare(`
+        UPDATE outbound_notification_jobs
+        SET recipient_lookup = ?, channel = ?, entity_lookup = ?, protected_payload = ?, not_before = ?,
+            status = 'pending', attempts = 0, last_error_code = '', sent_at = NULL,
+            purge_after = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND status NOT IN ('pending','processing')
+      `).run(recipientLookup, preference.channel, sicknessOutboundEntityLookup(caseRow.id), rearmedPayload, notBefore,
+        addDays(notBefore.slice(0, 10), OUTBOUND_NOTIFICATION_RETENTION_DAYS), existing.id);
+      if (rearmed.changes) queued += 1;
+    }
+  }
+  if (queued) auditPortal("system", "protected.external-alerts.queued", "protected_record",
+    protectedPortalEntityId("sickness-case", caseRow.id), JSON.stringify({ queued }));
+  return queued;
+}
+
+async function processOutboundNotificationJobs(now = new Date()) {
+  const due = db.prepare(`
+    SELECT * FROM outbound_notification_jobs
+    WHERE status = 'pending' AND not_before <= ? ORDER BY not_before, created_at LIMIT 20
+  `).all(now.toISOString());
+  let sent = 0;
+  let failed = 0;
+  for (const job of due) {
+    const claimed = db.prepare(`
+      UPDATE outbound_notification_jobs SET status = 'processing', updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = 'pending'
+    `).run(job.id);
+    if (!claimed.changes) continue;
+    try {
+      const payload = parseProtectedJson(job.protected_payload, outboundNotificationProtectionContext(job));
+      if (payload.sicknessCaseId && !sicknessStaffingAlertIsOpen(payload.sicknessCaseId)) {
+        db.prepare(`
+          UPDATE outbound_notification_jobs
+          SET status = 'cancelled', purge_after = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_CANCELLED_RETENTION_DAYS), job.id);
+        continue;
+      }
+      await externalNotificationAdapter.sendStaffingAlert({ channel: job.channel, recipient: payload.destination });
+      db.prepare(`
+        UPDATE outbound_notification_jobs SET status = 'sent', attempts = attempts + 1,
+          last_error_code = '', sent_at = CURRENT_TIMESTAMP, purge_after = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+      `).run(addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_RETENTION_DAYS), job.id);
+      auditPortal("system", "protected.external-alert.sent", "outbound_notification_job", job.id, JSON.stringify({ channel: job.channel }));
+      sent += 1;
+    } catch (error) {
+      const attempts = Number(job.attempts || 0) + 1;
+      const retryMinutes = [5, 15, 60, 180][Math.min(attempts - 1, 3)];
+      const nextStatus = attempts >= 5 ? "failed" : "pending";
+      const nextAttempt = new Date(now.getTime() + retryMinutes * 60 * 1000).toISOString();
+      db.prepare(`
+        UPDATE outbound_notification_jobs SET status = ?, attempts = ?, last_error_code = ?,
+          not_before = ?, purge_after = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+      `).run(nextStatus, attempts, String(error.code || "EXTERNAL_NOTIFICATION_DELIVERY_FAILED").slice(0, 120), nextAttempt,
+        addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_RETENTION_DAYS), job.id);
+      auditPortal("system", "protected.external-alert.failed", "outbound_notification_job", job.id,
+        JSON.stringify({ channel: job.channel, code: String(error.code || "delivery_failed"), final: nextStatus === "failed" }));
+      failed += 1;
+    }
+  }
+  return { checked: due.length, sent, failed };
+}
+
+function purgeExpiredSicknessData(today = viennaTodayIso()) {
+  if (!tableExists("sickness_cases")) return { cases: 0, alerts: 0, jobs: 0 };
+  const alerts = db.prepare("DELETE FROM sickness_alerts WHERE purge_after < ?").run(today).changes;
+  const jobs = db.prepare("DELETE FROM outbound_notification_jobs WHERE purge_after < ? AND status <> 'processing'").run(today).changes;
+  const expiredCases = db.prepare("SELECT id FROM sickness_cases WHERE purge_after < ?").all(today);
+  let cases = 0;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const row of expiredCases) {
+      db.prepare(`
+        DELETE FROM portal_notifications WHERE entity_type = 'protected_record' AND entity_id = ?
+      `).run(protectedPortalEntityId("sickness-case", row.id));
+      cases += db.prepare("DELETE FROM sickness_cases WHERE id = ? AND purge_after < ?").run(row.id, today).changes;
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  if (cases || alerts || jobs) {
+    auditPortal("system", "sickness.retention.purge", "protected_record", "", JSON.stringify({ cases, alerts, jobs }));
+  }
+  return { cases, alerts, jobs };
 }
 
 function validateAmuPolicy(body = {}) {
@@ -3516,12 +4342,25 @@ function validateAmuPolicy(body = {}) {
   if (!Number.isFinite(storedMaxMb) || storedMaxMb < 0.5 || storedMaxMb > uploadMaxMb) {
     throw httpError(400, "Die gespeicherte AUM-Größe muss zwischen 0,5 MB und dem Upload-Limit liegen.", "AMU_POLICY_INVALID");
   }
+  const currentPolicy = getAmuPolicy();
+  let deadlines;
+  try {
+    deadlines = validateSicknessDeadlines({
+      localDays: Number(body.localWarningDays ?? currentPolicy.localWarningDays),
+      hrDays: Number(body.hrWarningDays ?? currentPolicy.hrWarningDays),
+    });
+  } catch (error) {
+    throw httpError(400, error.message, error.code || "SICKNESS_DEADLINE_INVALID");
+  }
   return {
     uploadMaxMb: Math.round(uploadMaxMb * 2) / 2,
     storedMaxMb: Math.round(storedMaxMb * 2) / 2,
     convertImagesToPdf: body.convertImagesToPdf !== false,
     grayscaleImages: body.grayscaleImages !== false,
     managerFileAccess: body.managerFileAccess === true,
+    ocrEnabled: body.ocrEnabled !== false,
+    localWarningDays: deadlines.localDays,
+    hrWarningDays: deadlines.hrDays,
   };
 }
 
@@ -3776,6 +4615,8 @@ function getPortalStatus(locationId = "") {
       absenceHistory: portalEnabled,
       notifications: portalEnabled,
       amuReports: portalEnabled && Boolean(amuStorage),
+      sicknessReports: portalEnabled && Boolean(amuStorage),
+      localAmuOcr: portalEnabled && Boolean(amuStorage) && portalSettings.amu_ocr_enabled !== "0",
       timeTracking: portalEnabled,
       wifiTimeSuggestions: portalEnabled,
     },
@@ -4819,7 +5660,7 @@ function validateOwnTimeCorrection(employeeNumber, body = {}, existingId = null)
 function notifyTimeCorrectionReviewers(correction, actor = "") {
   for (const recipient of requestReviewerRecipients(correction.locationId, correction.departmentId, "local", actor)) {
     createPortalNotification(recipient, "time_correction.review", "Zeitkorrektur wartet auf Prüfung", `${correction.employeeNumber} hat eine Zeitkorrektur beantragt.`, {
-      target: "/portal/?tab=approvals",
+      target: "/portal.html?tab=approvals",
       entityType: "time_correction",
       entityId: correction.id,
       dedupeKey: `time_correction:${correction.id}:review`,
@@ -4959,7 +5800,7 @@ function decideTimeCorrection(session, idValue, body = {}, now = new Date()) {
     db.exec("COMMIT");
     db.prepare("UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE entity_type = 'time_correction' AND entity_id = ?").run(String(id));
     createPortalNotification(row.employee_number, "time_correction.decision", `Zeitkorrektur ${approved ? "genehmigt" : "abgelehnt"}`, `Bearbeitet von Personalnummer ${session.employeeNumber}.`, {
-      target: "/portal/?tab=time", entityType: "time_correction", entityId: id,
+      target: "/portal.html?tab=time", entityType: "time_correction", entityId: id,
       dedupeKey: `time_correction:${id}:${status}:${session.employeeNumber}`,
     });
     return timeCorrectionRows("WHERE c.id = ?", [id])[0];
@@ -4996,7 +5837,7 @@ function mobileModuleAllowedForSession(session, id) {
   const permissions = session.permissions || [];
   if (id === "timeTracking") return permissions.includes("own_time:read");
   if (id === "team") return permissions.includes("time:read");
-  if (id === "approvals") return permissions.some((permission) => ["vacation:read", "vacation:approve", "time:review", "amu:metadata:read", "amu:review"].includes(permission));
+  if (id === "approvals") return permissions.some((permission) => ["vacation:read", "vacation:approve", "time:review", "amu:metadata:read", "amu:review", "sickness:read"].includes(permission));
   if (id === "schedule") return permissions.includes("own_schedule:read");
   if (id === "requests") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:correction_request"].includes(permission));
   return id === "more";
@@ -5465,6 +6306,173 @@ function amuDocumentsForReports(reportIds) {
     });
   }
   return grouped;
+}
+
+function sicknessCasePayload(row) {
+  return parseProtectedJson(row.protected_payload, sicknessCaseProtectionContext(row));
+}
+
+function sicknessCaseCoversDate(row, date) {
+  if (!row) return false;
+  const payload = sicknessCasePayload(row);
+  if (!["reported", "aum_received"].includes(payload.status)) return false;
+  return Boolean(payload.startDate && payload.startDate <= date && (!payload.expectedEnd || payload.expectedEnd >= date));
+}
+
+function activeSicknessEmployeeNumbers(date, { excludeCaseId = null, includeEmployeeNumber = "" } = {}) {
+  const rows = db.prepare(`
+    SELECT id, employee_lookup, status_lookup, protected_payload
+    FROM sickness_cases WHERE status_lookup IN (?, ?)
+  `).all(sicknessStatusLookup("reported"), sicknessStatusLookup("aum_received"));
+  const numbers = new Set(String(includeEmployeeNumber || "") ? [String(includeEmployeeNumber)] : []);
+  for (const row of rows) {
+    if (excludeCaseId != null && Number(row.id) === Number(excludeCaseId)) continue;
+    if (sicknessCaseCoversDate(row, date)) numbers.add(sicknessCasePayload(row).employeeNumber);
+  }
+  return numbers;
+}
+
+function staffingCountAtAvailable(locationId, departmentId, date, pointTime, excludedEmployeeNumbers = new Set()) {
+  const departmentClause = departmentId ? "AND s.department_id = ?" : "";
+  const values = departmentId
+    ? [date, locationId, pointTime, pointTime, departmentId]
+    : [date, locationId, pointTime, pointTime];
+  const rows = db.prepare(`
+    SELECT DISTINCT s.employee_number
+    FROM shifts s
+    JOIN employees e ON e.personnel_number = s.employee_number
+    LEFT JOIN departments d ON d.id = s.department_id
+    WHERE s.shift_date = ? AND COALESCE(d.location_id, e.home_location_id) = ?
+      AND s.start_time <= ? AND s.end_time > ?
+      ${departmentClause}
+  `).all(...values);
+  return rows.filter((row) => !excludedEmployeeNumbers.has(row.employee_number)).length;
+}
+
+function evaluateSicknessStaffingRisk(employeeNumber, startDate, expectedEnd, context, options = {}) {
+  const dateTo = expectedEnd || startDate;
+  const dateFrom = isIsoDate(options.asOfDate) && options.asOfDate > startDate ? options.asOfDate : startDate;
+  const shifts = db.prepare(`
+    SELECT s.shift_date, s.start_time, s.end_time, s.department_id,
+           COALESCE(d.location_id, e.home_location_id) AS location_id
+    FROM shifts s
+    JOIN employees e ON e.personnel_number = s.employee_number
+    LEFT JOIN departments d ON d.id = s.department_id
+    WHERE s.employee_number = ? AND s.shift_date BETWEEN ? AND ?
+    ORDER BY s.shift_date, s.start_time, s.id
+  `).all(employeeNumber, dateFrom, dateTo);
+  const slots = [];
+  const contexts = new Map();
+  let worstShortfall = 0;
+  for (const shift of shifts) {
+    const locationId = String(shift.location_id || context.locationId || "").trim();
+    if (!locationId) continue;
+    const departmentId = Number(shift.department_id || 0) || null;
+    contexts.set(`${locationId}:${departmentId || 0}`, { locationId, departmentId });
+    const settings = settingsForLocation(locationId);
+    const locationContext = resolvePlanningContext({ locationId, departmentId: null });
+    const config = dayConfiguration(shift.shift_date, settings, locationContext);
+    if (!config?.open || !isTime(config.minFrom) || !isTime(config.minTo)) continue;
+    const fromMinute = Math.max(timeToMinutes(shift.start_time), timeToMinutes(config.minFrom));
+    const toMinute = Math.min(timeToMinutes(shift.end_time), timeToMinutes(config.minTo));
+    const departmentRequired = departmentId
+      ? Number(db.prepare("SELECT min_staff FROM departments WHERE id = ? AND location_id = ?").get(departmentId, locationId)?.min_staff || 0)
+      : 0;
+    const unavailable = activeSicknessEmployeeNumbers(shift.shift_date, { includeEmployeeNumber: employeeNumber });
+    for (let minute = fromMinute; minute < toMinute; minute += 15) {
+      const time = minutesToTime(minute);
+      const locationCount = staffingCountAtAvailable(locationId, null, shift.shift_date, time, unavailable);
+      const locationShortfall = Math.max(0, Number(config.minStaff || 0) - locationCount);
+      const departmentCount = departmentId
+        ? staffingCountAtAvailable(locationId, departmentId, shift.shift_date, time, unavailable)
+        : 0;
+      const departmentShortfall = Math.max(0, departmentRequired - departmentCount);
+      const shortfall = Math.max(locationShortfall, departmentShortfall);
+      if (!shortfall) continue;
+      worstShortfall = Math.max(worstShortfall, shortfall);
+      if (slots.length < 12) {
+        slots.push({
+          date: shift.shift_date,
+          time,
+          locationId,
+          locationCount,
+          locationRequired: Number(config.minStaff || 0),
+          departmentId,
+          departmentCount,
+          departmentRequired,
+          shortfall,
+        });
+      }
+    }
+  }
+  return {
+    atRisk: worstShortfall > 0,
+    plannedShiftCount: shifts.length,
+    worstShortfall,
+    slots,
+    contexts: [...contexts.values()],
+  };
+}
+
+function serializeSicknessCases(rows, { includeNote = true } = {}) {
+  const alertStatement = db.prepare(`
+    SELECT * FROM sickness_alerts WHERE sickness_case_id = ? ORDER BY id
+  `);
+  return rows.map((row) => {
+    const payload = sicknessCasePayload(row);
+    const alerts = alertStatement.all(row.id).map((alertRow) => {
+      const alert = sicknessAlertPayload(alertRow);
+      return {
+        kind: alert.kind, severity: alert.severity, audience: alert.audience, status: alert.status,
+        triggered_at: alert.triggeredAt || null, resolved_at: alert.resolvedAt || null,
+      };
+    });
+    const employee = db.prepare("SELECT full_name, nickname FROM employees WHERE personnel_number = ?").get(payload.employeeNumber) || {};
+    const location = db.prepare("SELECT name FROM locations WHERE id = ?").get(payload.locationId) || {};
+    const department = payload.departmentId == null ? {} : (db.prepare("SELECT name FROM departments WHERE id = ?").get(payload.departmentId) || {});
+    const openAlerts = alerts.filter((alert) => alert.status === "open");
+    const severity = openAlerts.some((alert) => alert.severity === "red") ? "red"
+      : openAlerts.some((alert) => alert.severity === "yellow") ? "yellow"
+        : openAlerts.some((alert) => alert.kind === "staffing_risk") ? "warning" : "normal";
+    return {
+      id: Number(row.id),
+      employee_number: payload.employeeNumber || "",
+      full_name: employee.full_name || "",
+      nickname: employee.nickname || "",
+      location_id: payload.locationId || "",
+      location_name: location.name || "",
+      department_id: payload.departmentId == null ? null : Number(payload.departmentId),
+      department_name: department.name || "",
+      status: payload.status || "reported",
+      reported_at: payload.reportedAt || row.created_at,
+      aum_received_at: payload.aumReceivedAt || null,
+      closed_at: payload.closedAt || null,
+      start_date: payload.startDate || "",
+      expected_end: payload.expectedEnd || "",
+      employee_note: includeNote ? (payload.note || "") : "",
+      staffing_risk: payload.staffingRisk || { atRisk: false, plannedShiftCount: 0, worstShortfall: 0, slots: [] },
+      severity,
+      alerts,
+    };
+  });
+}
+
+function sicknessCaseMetadata(id) {
+  return db.prepare("SELECT * FROM sickness_cases WHERE id = ?").get(Number(id));
+}
+
+function ownSicknessCases(employeeNumber) {
+  return serializeSicknessCases(db.prepare(`
+    SELECT * FROM sickness_cases WHERE employee_lookup = ? ORDER BY created_at DESC, id DESC
+  `).all(sicknessEmployeeLookup(employeeNumber)));
+}
+
+function assertSicknessCaseScope(session, row) {
+  if (!row) throw httpError(404, "Die Krankmeldung wurde nicht gefunden.", "SICKNESS_CASE_NOT_FOUND");
+  if (session.employeeNumber === "local" || GLOBAL_SCOPE_PORTAL_ROLES.has(session.role)) return;
+  const payload = sicknessCasePayload(row);
+  const allowed = portalScopeMatchesAnyContext(session.role, session.scopes || [], sicknessNotificationContexts(payload));
+  if (!allowed) throw httpError(403, "Diese Krankmeldung gehört nicht zum eigenen Verantwortungsbereich.", "PORTAL_PERMISSION_DENIED");
 }
 
 function serializeAmuReports(rows) {
@@ -8500,7 +9508,7 @@ function verifyImportedProtectedPersonnelPayloads(importedDatabase) {
   let verified = 0;
   if (importedDatabaseHasColumn(importedDatabase, "amu_reports", "protected_payload")) {
     const reports = importedDatabase.prepare(`
-      SELECT id, employee_number, protected_payload
+      SELECT id, employee_lookup, protected_payload
       FROM amu_reports
       WHERE protected_payload <> ''
       ORDER BY id
@@ -8509,6 +9517,16 @@ function verifyImportedProtectedPersonnelPayloads(importedDatabase) {
       const payload = storage.unprotectRecord(report.protected_payload, amuReportProtectionContext(report), { allowLegacy: true });
       const parsed = JSON.parse(payload);
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected report payload");
+      verified += 1;
+    }
+  }
+  if (importedDatabaseHasColumn(importedDatabase, "sickness_alerts", "protected_payload")) {
+    const alerts = importedDatabase.prepare("SELECT id, sickness_case_id, protected_payload FROM sickness_alerts ORDER BY id").all();
+    for (const alert of alerts) {
+      if (!alert.protected_payload) throw new Error("missing protected sickness alert payload");
+      const payload = storage.unprotectRecord(alert.protected_payload, sicknessAlertProtectionContext(alert), { allowLegacy: true });
+      const parsed = JSON.parse(payload);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected sickness alert payload");
       verified += 1;
     }
   }
@@ -8550,6 +9568,60 @@ function verifyImportedProtectedPersonnelPayloads(importedDatabase) {
     `).all();
     for (const document of legacyDocuments) {
       storage.unprotectText(document.original_filename);
+      verified += 1;
+    }
+  }
+  if (importedDatabaseHasColumn(importedDatabase, "sickness_cases", "protected_payload")) {
+    const cases = importedDatabase.prepare(`
+      SELECT id, employee_number, protected_payload
+      FROM sickness_cases
+      ORDER BY id
+    `).all();
+    for (const sicknessCase of cases) {
+      if (!sicknessCase.protected_payload) throw new Error("missing protected sickness case payload");
+      const payload = storage.unprotectRecord(
+        sicknessCase.protected_payload,
+        sicknessCaseProtectionContext(sicknessCase),
+        { allowLegacy: true },
+      );
+      const parsed = JSON.parse(payload);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected sickness case payload");
+      verified += 1;
+    }
+  }
+  if (importedDatabaseHasColumn(importedDatabase, "sickness_notification_preferences", "protected_destination")) {
+    const preferences = importedDatabase.prepare(`
+      SELECT employee_number, channel, protected_destination
+      FROM sickness_notification_preferences
+      WHERE protected_destination <> ''
+      ORDER BY employee_number, channel
+    `).all();
+    for (const preference of preferences) {
+      const payload = storage.unprotectRecord(
+        preference.protected_destination,
+        sicknessPreferenceProtectionContext(preference),
+        { allowLegacy: true },
+      );
+      const parsed = JSON.parse(payload);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected notification destination");
+      verified += 1;
+    }
+  }
+  if (importedDatabaseHasColumn(importedDatabase, "outbound_notification_jobs", "protected_payload")) {
+    const jobs = importedDatabase.prepare(`
+      SELECT id, recipient_lookup, protected_payload
+      FROM outbound_notification_jobs
+      ORDER BY created_at, id
+    `).all();
+    for (const job of jobs) {
+      if (!job.protected_payload) throw new Error("missing protected outbound notification payload");
+      const payload = storage.unprotectRecord(
+        job.protected_payload,
+        outboundNotificationProtectionContext(job),
+        { allowLegacy: true },
+      );
+      const parsed = JSON.parse(payload);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected outbound notification payload");
       verified += 1;
     }
   }
@@ -9005,6 +10077,34 @@ app.get("/api/portal/v1/roles", (_request, response) => {
     catalog: delegablePortalPermissionCatalog.map(({ hrDelegable: _hrDelegable, ...permission }) => permission),
   });
 });
+
+function sicknessLookup(kind, value) {
+  const key = amuEncryptionConfiguration?.key;
+  if (!key) throw httpError(503, "Der geschützte Krankmeldungsindex ist nicht verfügbar.", "SICKNESS_INDEX_UNAVAILABLE");
+  return crypto.createHmac("sha256", key)
+    .update(`grabenplaner-sickness-index-v1\0${String(kind || "")}\0${String(value ?? "")}`)
+    .digest("hex");
+}
+
+function sicknessEmployeeLookup(employeeNumber) {
+  return sicknessLookup("employee", String(employeeNumber || ""));
+}
+
+function sicknessStatusLookup(status) {
+  return sicknessLookup("status", String(status || ""));
+}
+
+function sicknessAlertDedupeLookup(caseId, kind, audience) {
+  return sicknessLookup("alert", `${Number(caseId)}:${String(kind || "")}:${String(audience || "")}`);
+}
+
+function sicknessOutboundEntityLookup(caseId) {
+  return sicknessLookup("outbound-entity", String(Number(caseId)));
+}
+
+function sicknessOutboundDedupeLookup(caseId, recipient, channel) {
+  return sicknessLookup("outbound-dedupe", `${Number(caseId)}:${String(recipient || "")}:${String(channel || "")}`);
+}
 
 app.get("/api/portal/v1/wifi-automation/settings", (request, response) => {
   const actor = requireAdminHrOrLocal(request, "wifi:settings");
@@ -9512,6 +10612,155 @@ app.put("/api/portal/v1/me/notifications/read-all", (request, response) => {
   response.json({ ok: true, updated: Number(result.changes || 0) });
 });
 
+app.get("/api/portal/v1/me/sickness-notification-preferences", (request, response) => {
+  const session = requirePortalSession(request, "notifications:settings");
+  response.json(sicknessNotificationPreferences(session.employeeNumber));
+});
+
+app.put("/api/portal/v1/me/sickness-notification-preferences", (request, response) => {
+  const session = requirePortalSession(request, "notifications:settings");
+  assertPortalCsrf(request);
+  response.json(saveSicknessNotificationPreferences(session.employeeNumber, request.body || {}));
+});
+
+app.post("/api/portal/v1/me/sickness-notification-preferences/verification", async (request, response) => {
+  const session = requirePortalSession(request, "notifications:settings");
+  assertPortalCsrf(request);
+  response.json(await requestSicknessNotificationVerification(session.employeeNumber, request.body || {}));
+});
+
+app.post("/api/portal/v1/me/sickness-notification-preferences/verification/confirm", (request, response) => {
+  const session = requirePortalSession(request, "notifications:settings");
+  assertPortalCsrf(request);
+  response.json(confirmSicknessNotificationVerification(session.employeeNumber, request.body || {}));
+});
+
+app.get("/api/portal/v1/me/sickness-cases", (request, response) => {
+  const session = requirePortalSession(request, "own_sickness:read");
+  response.json({ cases: ownSicknessCases(session.employeeNumber), policy: getAmuPolicy() });
+});
+
+app.post("/api/portal/v1/me/sickness-cases", (request, response) => {
+  const session = requirePortalSession(request, "own_sickness:create");
+  assertPortalCsrf(request);
+  const startDate = String(request.body.startDate || "");
+  const expectedEnd = String(request.body.expectedEnd || "");
+  const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
+  const today = viennaTodayIso();
+  if (!isIsoDate(startDate) || startDate > today || startDate < addDays(today, -365)) {
+    throw httpError(400, "Bitte ein gültiges Beginn-Datum bis einschließlich heute eingeben.", "SICKNESS_DATE_INVALID");
+  }
+  if (expectedEnd && (!isIsoDate(expectedEnd) || expectedEnd < startDate || expectedEnd > addDays(startDate, 365))) {
+    throw httpError(400, "Das voraussichtliche Ende muss am oder nach dem Beginn liegen.", "SICKNESS_DATE_INVALID");
+  }
+  const newEnd = expectedEnd || "9999-12-31";
+  const overlapping = db.prepare(`
+    SELECT * FROM sickness_cases
+    WHERE employee_lookup = ? AND status_lookup IN (?, ?) ORDER BY id
+  `).all(sicknessEmployeeLookup(session.employeeNumber), sicknessStatusLookup("reported"), sicknessStatusLookup("aum_received")).find((row) => {
+    const payload = sicknessCasePayload(row);
+    const existingEnd = payload.expectedEnd || "9999-12-31";
+    return payload.startDate <= newEnd && existingEnd >= startDate;
+  });
+  if (overlapping) throw httpError(409, "Für diesen Zeitraum besteht bereits eine offene Krankmeldung.", "SICKNESS_CASE_OVERLAP");
+  const context = employeeRequestContext(session.employeeNumber, startDate);
+  const staffingRisk = evaluateSicknessStaffingRisk(session.employeeNumber, startDate, expectedEnd, context, { asOfDate: today });
+  const effectiveContext = staffingRisk.contexts?.[0] || context;
+  const policy = getAmuPolicy();
+  const deadlines = sicknessDeadlineState({ startAt: startDate, asOf: new Date(), localDays: policy.localWarningDays, hrDays: policy.hrWarningDays });
+  const reportedAt = new Date().toISOString();
+  const employeeLookup = sicknessEmployeeLookup(session.employeeNumber);
+  const purgeAfter = addDays(expectedEnd || startDate, sicknessCaseRetentionDays());
+  let caseId;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = db.prepare(`
+      INSERT INTO sickness_cases
+        (employee_lookup, status_lookup, protected_payload, purge_after)
+      VALUES (?, ?, '', ?)
+    `).run(employeeLookup, sicknessStatusLookup("reported"), purgeAfter);
+    caseId = Number(result.lastInsertRowid);
+    const protectedPayload = protectJson({
+      startDate,
+      expectedEnd,
+      note,
+      employeeNumber: session.employeeNumber,
+      locationId: effectiveContext.locationId,
+      departmentId: effectiveContext.departmentId,
+      status: "reported",
+      reportedAt,
+      aumReceivedAt: "",
+      closedAt: "",
+      retentionUntil: purgeAfter,
+      localDeadlineDate: deadlines.localDeadlineDate,
+      hrDeadlineDate: deadlines.hrDeadlineDate,
+      staffingRisk,
+    }, sicknessCaseProtectionContext({ id: caseId, employee_lookup: employeeLookup }));
+    db.prepare("UPDATE sickness_cases SET protected_payload = ? WHERE id = ?").run(protectedPayload, caseId);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  const row = sicknessCaseMetadata(caseId);
+  const recipients = notifySicknessRecipients(row, {
+    stage: "local",
+    kind: "reported",
+  });
+  if (staffingRisk.atRisk) {
+    const riskAlert = upsertSicknessAlert(caseId, "staffing_risk", "warning", "local");
+    const riskRecipients = notifySicknessRecipients(row, {
+      stage: "local",
+      kind: "staffing",
+    });
+    if (riskAlert.created) queueExternalStaffingAlerts(row, riskRecipients, reportedAt);
+  }
+  auditPortal(`protected:${sicknessEmployeeLookup(session.employeeNumber)}`, "protected.record.create", "protected_record",
+    protectedPortalEntityId("sickness-case", caseId), JSON.stringify({ staffingRisk: staffingRisk.atRisk, plannedShiftCount: staffingRisk.plannedShiftCount }));
+  runSicknessEscalationSweep();
+  response.status(201).json({ case: serializeSicknessCases([sicknessCaseMetadata(caseId)])[0] });
+});
+
+app.post("/api/portal/v1/me/sickness-cases/:id/withdraw", (request, response) => {
+  const session = requirePortalSession(request, "own_sickness:create");
+  assertPortalCsrf(request);
+  const row = db.prepare(`
+    SELECT * FROM sickness_cases WHERE id = ? AND employee_lookup = ? AND status_lookup = ?
+  `).get(Number(request.params.id), sicknessEmployeeLookup(session.employeeNumber), sicknessStatusLookup("reported"));
+  if (!row) throw httpError(404, "Die offene Krankmeldung wurde nicht gefunden.", "SICKNESS_CASE_NOT_FOUND");
+  const payload = sicknessCasePayload(row);
+  payload.status = "withdrawn";
+  payload.closedAt = new Date().toISOString();
+  payload.retentionUntil = addDays(viennaTodayIso(), 30);
+  const result = db.prepare(`
+    UPDATE sickness_cases SET status_lookup = ?, protected_payload = ?, purge_after = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND status_lookup = ?
+  `).run(sicknessStatusLookup("withdrawn"), protectJson(payload, sicknessCaseProtectionContext(row)), payload.retentionUntil,
+    row.id, sicknessStatusLookup("reported"));
+  if (!result.changes) throw httpError(409, "Die Krankmeldung wurde zwischenzeitlich bearbeitet.", "SICKNESS_CASE_ALREADY_UPDATED");
+  resolveSicknessAlerts(row.id);
+  db.prepare("UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE entity_type = 'protected_record' AND entity_id = ?")
+    .run(protectedPortalEntityId("sickness-case", row.id));
+  db.prepare("UPDATE outbound_notification_jobs SET status = 'cancelled', purge_after = ?, updated_at = CURRENT_TIMESTAMP WHERE entity_lookup = ? AND status = 'pending'")
+    .run(addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_CANCELLED_RETENTION_DAYS), sicknessOutboundEntityLookup(row.id));
+  auditPortal(`protected:${sicknessEmployeeLookup(session.employeeNumber)}`, "protected.record.withdraw", "protected_record",
+    protectedPortalEntityId("sickness-case", row.id));
+  response.json({ ok: true });
+});
+
+app.get("/api/portal/v1/sickness-cases", (request, response) => {
+  const session = requirePortalAdminOrLocal(request, "sickness:read");
+  const rows = db.prepare("SELECT * FROM sickness_cases ORDER BY created_at DESC, id DESC").all().filter((row) => {
+    if (sicknessCasePayload(row).status === "withdrawn") return false;
+    try { assertSicknessCaseScope(session, row); return true; } catch { return false; }
+  });
+  const cases = serializeSicknessCases(rows);
+  response.json({
+    cases,
+    pendingCount: cases.filter((entry) => entry.status === "reported" || ["yellow", "red", "warning"].includes(entry.severity)).length,
+  });
+});
+
 app.get("/api/portal/v1/amu-settings", (request, response) => {
   const session = requirePortalAdminOrLocal(request, "own_amu:read");
   response.json({
@@ -9529,6 +10778,9 @@ app.put("/api/portal/v1/amu-settings", (request, response) => {
     amu_convert_images_to_pdf: policy.convertImagesToPdf ? "1" : "0",
     amu_grayscale_images: policy.grayscaleImages ? "1" : "0",
     amu_manager_file_access: policy.managerFileAccess ? "1" : "0",
+    amu_ocr_enabled: policy.ocrEnabled ? "1" : "0",
+    sickness_local_warning_days: String(policy.localWarningDays),
+    sickness_hr_warning_days: String(policy.hrWarningDays),
   };
   const upsert = db.prepare(`
     INSERT INTO portal_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -9543,6 +10795,7 @@ app.put("/api/portal/v1/amu-settings", (request, response) => {
     db.exec("ROLLBACK");
     throw error;
   }
+  runSicknessEscalationSweep();
   response.json({ policy, canChange: true });
 });
 
@@ -9611,11 +10864,35 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
   const incapacityFrom = String(fields.incapacityFrom || "");
   const incapacityTo = String(fields.incapacityTo || "");
   const employeeNote = stripEmoji(String(fields.employeeNote || "").trim()).slice(0, 500);
+  const ocrAssisted = String(fields.ocrAssisted || "") === "1";
+  const ocrConfirmed = String(fields.ocrConfirmed || "") === "1";
   if (!isIsoDate(incapacityFrom) || !isIsoDate(incapacityTo) || incapacityTo < incapacityFrom) {
     throw httpError(400, "Bitte einen gültigen Zeitraum der Arbeitsunfähigkeit eingeben.", "AMU_DATE_INVALID");
   }
   if (!documents.length || documents.length > 3) {
     throw httpError(400, "Bitte mindestens eine und höchstens drei PDF- oder Bilddateien auswählen.", "AMU_DOCUMENTS_REQUIRED");
+  }
+  if (ocrAssisted && !ocrConfirmed) {
+    throw httpError(400, "Bitte die durch OCR vorgeschlagenen Datumswerte vor dem Upload bestätigen.", "AMU_OCR_CONFIRMATION_REQUIRED");
+  }
+  const requestedSicknessCaseId = Number(fields.sicknessCaseId || 0);
+  let linkedSicknessCase = requestedSicknessCaseId > 0
+    ? db.prepare(`
+        SELECT * FROM sickness_cases WHERE id = ? AND employee_lookup = ? AND status_lookup IN (?, ?)
+      `).get(requestedSicknessCaseId, sicknessEmployeeLookup(session.employeeNumber),
+        sicknessStatusLookup("reported"), sicknessStatusLookup("aum_received"))
+    : null;
+  if (requestedSicknessCaseId > 0 && !linkedSicknessCase) {
+    throw httpError(404, "Die ausgewählte offene Krankmeldung wurde nicht gefunden.", "SICKNESS_CASE_NOT_FOUND");
+  }
+  if (!linkedSicknessCase) {
+    linkedSicknessCase = db.prepare(`
+      SELECT * FROM sickness_cases WHERE employee_lookup = ? AND status_lookup IN (?, ?) ORDER BY created_at DESC, id DESC
+    `).all(sicknessEmployeeLookup(session.employeeNumber), sicknessStatusLookup("reported"), sicknessStatusLookup("aum_received")).find((row) => {
+      const payload = sicknessCasePayload(row);
+      const end = payload.expectedEnd || "9999-12-31";
+      return payload.startDate <= incapacityTo && end >= incapacityFrom;
+    }) || null;
   }
   const context = employeeRequestContext(session.employeeNumber, incapacityFrom);
   const retentionDays = Math.min(3650, Math.max(30, Number(getPortalSettings().amu_retention_days || 730)));
@@ -9644,9 +10921,9 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
     try {
       const reportResult = db.prepare(`
         INSERT INTO amu_reports
-          (employee_number, location_id, department_id, incapacity_from, incapacity_to, employee_note, status, retention_until, protected_payload)
-        VALUES (?, ?, ?, '', '', '', 'submitted', NULL, '')
-      `).run(session.employeeNumber, context.locationId, context.departmentId);
+          (sickness_case_id, employee_number, location_id, department_id, incapacity_from, incapacity_to, employee_note, status, retention_until, protected_payload)
+        VALUES (?, ?, ?, ?, '', '', '', 'submitted', NULL, '')
+      `).run(linkedSicknessCase?.id || null, session.employeeNumber, context.locationId, context.departmentId);
       const reportId = Number(reportResult.lastInsertRowid);
       const reportPayload = storage.protectRecord(JSON.stringify({
         incapacityFrom,
@@ -9678,20 +10955,35 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
         auditPortal(session.employeeNumber, "amu.document.upload", "amu_document", documentId,
           JSON.stringify({ reportId, mime: item.detectedMime, sourceMime: item.sourceMime, converted: item.converted, size: item.byteSize, scan: item.scanStatus, processing: item.processing }));
       }
+      if (linkedSicknessCase) {
+        const sicknessPayload = sicknessCasePayload(linkedSicknessCase);
+        sicknessPayload.startDate = sicknessPayload.startDate && sicknessPayload.startDate < incapacityFrom
+          ? sicknessPayload.startDate : incapacityFrom;
+        sicknessPayload.expectedEnd = sicknessPayload.expectedEnd && sicknessPayload.expectedEnd > incapacityTo
+          ? sicknessPayload.expectedEnd : incapacityTo;
+        sicknessPayload.status = "aum_received";
+        sicknessPayload.aumReceivedAt = new Date().toISOString();
+        sicknessPayload.retentionUntil = addDays(sicknessPayload.expectedEnd || incapacityTo, sicknessCaseRetentionDays());
+        db.prepare(`
+          UPDATE sickness_cases SET status_lookup = ?, protected_payload = ?, purge_after = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+        `).run(sicknessStatusLookup("aum_received"), protectJson(sicknessPayload, sicknessCaseProtectionContext(linkedSicknessCase)),
+          sicknessPayload.retentionUntil, linkedSicknessCase.id);
+      }
       auditPortal(session.employeeNumber, "amu.report.create", "amu_report", String(reportId), JSON.stringify({ locationId: context.locationId, documentCount: saved.length }));
       db.exec("COMMIT");
       committed = true;
+      if (linkedSicknessCase) resolveSicknessAlerts(linkedSicknessCase.id, ["aum_overdue_local", "aum_overdue_hr"]);
       const report = amuReportMetadata(reportId);
       const recipients = new Set([
         ...requestReviewerRecipients(context.locationId, context.departmentId, "local", session.employeeNumber),
         ...requestReviewerRecipients(context.locationId, context.departmentId, "hr", session.employeeNumber),
       ]);
       for (const recipient of recipients) {
-        createPortalNotification(recipient, "amu.submitted", "Neue Arbeitsunfähigkeitsmeldung", `${session.employeeNumber} hat eine AUM hochgeladen.`, {
-          target: "/?view=requests&kind=amu",
-          entityType: "amu_report",
-          entityId: reportId,
-          dedupeKey: `amu:${reportId}:submitted`,
+        createPortalNotification(recipient, "protected.update", "Neue geschützte Meldung", "Bitte im geschützten Bereich der App anmelden.", {
+          target: "/portal.html?tab=leadershipApprovals",
+          entityType: "protected_record",
+          entityId: protectedPortalEntityId("amu-report", reportId),
+          dedupeKey: protectedPortalDedupeKey(["amu", reportId, "submitted", recipient]),
         });
       }
       response.status(201).json({ report: serializeAmuReports([report])[0] });
@@ -9737,8 +11029,25 @@ app.post("/api/portal/v1/me/amu-reports/:id/withdraw", (request, response) => {
     auditPortal(session.employeeNumber, "amu.report.withdraw", "amu_report", String(report.id));
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); throw error; }
-  db.prepare("UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE entity_type = 'amu_report' AND entity_id = ?")
-    .run(String(report.id));
+  db.prepare("UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE entity_type = 'protected_record' AND entity_id = ?")
+    .run(protectedPortalEntityId("amu-report", report.id));
+  if (report.sickness_case_id) {
+    const remaining = Number(db.prepare(`
+      SELECT COUNT(*) AS count FROM amu_reports
+      WHERE sickness_case_id = ? AND id <> ? AND status NOT IN ('withdrawn','purged')
+    `).get(report.sickness_case_id, report.id).count || 0);
+    if (!remaining) {
+      const linked = sicknessCaseMetadata(report.sickness_case_id);
+      if (linked && sicknessCasePayload(linked).status === "aum_received") {
+        const linkedPayload = sicknessCasePayload(linked);
+        linkedPayload.status = "reported";
+        linkedPayload.aumReceivedAt = "";
+        db.prepare("UPDATE sickness_cases SET status_lookup = ?, protected_payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+          .run(sicknessStatusLookup("reported"), protectJson(linkedPayload, sicknessCaseProtectionContext(linked)), linked.id);
+      }
+      runSicknessEscalationSweep();
+    }
+  }
   response.json({ ok: true });
 });
 
@@ -9802,14 +11111,14 @@ app.put("/api/portal/v1/amu-reports/:id/review", (request, response) => {
     UPDATE amu_reports SET status = ?, protected_payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
   `).run(action, protectJson(protectedPayload, amuReportProtectionContext(report)), report.id);
   auditPortal(session.employeeNumber, `amu.report.${action}`, "amu_report", String(report.id));
-  createPortalNotification(report.employee_number, "amu.review", "AUM wurde geprüft", note, {
-    target: "/portal/?tab=amu",
-    entityType: "amu_report",
-    entityId: report.id,
-    dedupeKey: `amu:${report.id}:${action}:${session.employeeNumber}`,
+  db.prepare("UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE entity_type = 'protected_record' AND entity_id = ?")
+    .run(protectedPortalEntityId("amu-report", report.id));
+  createPortalNotification(report.employee_number, "protected.update", "Geschützte Meldung aktualisiert", "Bitte im geschützten Bereich der App anmelden.", {
+    target: "/portal.html?tab=amu",
+    entityType: "protected_record",
+    entityId: protectedPortalEntityId("amu-report", report.id),
+    dedupeKey: protectedPortalDedupeKey(["amu", report.id, action, session.employeeNumber]),
   });
-  db.prepare("UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE entity_type = 'amu_report' AND entity_id = ? AND event_type = 'amu.submitted'")
-    .run(String(report.id));
   response.json({ report: serializeAmuReports([amuReportMetadata(report.id)])[0] });
 });
 
@@ -11225,6 +12534,7 @@ app.post("/api/shifts", (request, response) => {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(shift.employeeNumber, shift.departmentId, shift.shiftDate, shift.startTime, shift.endTime, shift.area, shift.note);
   invalidateTimeDayReview(shift.employeeNumber, shift.shiftDate);
+  refreshSicknessStaffingAfterPlanningChange();
   response.status(201).json({ id: Number(result.lastInsertRowid), ...shift });
 });
 
@@ -11245,6 +12555,7 @@ app.put("/api/shifts/:id", (request, response) => {
   if (!result.changes) throw httpError(404, "Der Dienst wurde nicht gefunden.");
   invalidateTimeDayReview(existing.employee_number, existing.shift_date);
   invalidateTimeDayReview(shift.employeeNumber, shift.shiftDate);
+  refreshSicknessStaffingAfterPlanningChange();
   response.json({ id, ...shift });
 });
 
@@ -11257,6 +12568,7 @@ app.delete("/api/shifts/:id", (request, response) => {
   const result = db.prepare("DELETE FROM shifts WHERE id = ?").run(id);
   if (!result.changes) throw httpError(404, "Der Dienst wurde nicht gefunden.");
   invalidateTimeDayReview(existing.employee_number, existing.shift_date);
+  refreshSicknessStaffingAfterPlanningChange();
   response.status(204).end();
 });
 
@@ -11277,6 +12589,7 @@ app.delete("/api/schedule", (request, response) => {
       ${departmentFilter}
   `).run(...params);
   invalidateTimeDayReviewsForRange(context.locationId, weekStart, weekEnd, context.departmentId);
+  refreshSicknessStaffingAfterPlanningChange();
   response.json({ deleted: Number(result.changes), weekStart, weekEnd });
 });
 
@@ -11703,6 +13016,7 @@ app.post("/api/schedule/auto", (request, response) => {
 
     invalidateTimeDayReviewsForRange(context.locationId, weekStart, weekEnd, context.departmentId);
     db.exec("COMMIT");
+    refreshSicknessStaffingAfterPlanningChange();
     response.json({ created, warnings, schedule: getSchedule(weekStart, context, request.portalSession) });
   } catch (error) {
     db.exec("ROLLBACK");
@@ -12935,10 +14249,22 @@ function startServer() {
     scheduleAutomaticBackups();
     try { reconcileOrphanAmuBlobs(); } catch (error) { console.error("AUM-Abgleich fehlgeschlagen:", error); }
     try { purgeExpiredAmuDocuments(); } catch (error) { console.error("AUM-Aufbewahrungsprüfung fehlgeschlagen:", error); }
+    try { purgeExpiredSicknessData(); } catch (error) { console.error("Krankmeldungs-Aufbewahrungsprüfung fehlgeschlagen:", error); }
+    try { runSicknessEscalationSweep(); } catch (error) { console.error("Krankmeldungs-Fristenprüfung fehlgeschlagen:", error); }
+    processOutboundNotificationJobs().catch((error) => console.error("Externe Warnmeldungen konnten nicht verarbeitet werden:", error));
     retentionInterval = setInterval(() => {
       try { purgeExpiredAmuDocuments(); } catch (error) { console.error("AUM-Aufbewahrungsprüfung fehlgeschlagen:", error); }
+      try { purgeExpiredSicknessData(); } catch (error) { console.error("Krankmeldungs-Aufbewahrungsprüfung fehlgeschlagen:", error); }
     }, 24 * 60 * 60 * 1000);
     retentionInterval.unref();
+    sicknessSweepInterval = setInterval(() => {
+      try { runSicknessEscalationSweep(); } catch (error) { console.error("Krankmeldungs-Fristenprüfung fehlgeschlagen:", error); }
+    }, 60 * 1000);
+    sicknessSweepInterval.unref();
+    notificationDispatchInterval = setInterval(() => {
+      processOutboundNotificationJobs().catch((error) => console.error("Externe Warnmeldungen konnten nicht verarbeitet werden:", error));
+    }, 60 * 1000);
+    notificationDispatchInterval.unref();
     if (serverModeActive && amuStorage) {
       scannerProbeInterval = setInterval(() => {
         amuScannerProbe = amuStorage.probeScanner().catch((error) => {
@@ -12984,6 +14310,8 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
   if (backupInterval) clearInterval(backupInterval);
   if (retentionInterval) clearInterval(retentionInterval);
   if (scannerProbeInterval) clearInterval(scannerProbeInterval);
+  if (sicknessSweepInterval) clearInterval(sicknessSweepInterval);
+  if (notificationDispatchInterval) clearInterval(notificationDispatchInterval);
   if (!server) {
     finish();
     return;
@@ -13035,5 +14363,7 @@ module.exports = {
   serverDiagnostics,
   migrateProtectedPersonnelRecords,
   parseProtectedJson,
+  purgeExpiredSicknessData,
+  runSicknessEscalationSweep,
   releaseInstanceLockForTests,
 };

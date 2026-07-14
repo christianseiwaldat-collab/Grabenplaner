@@ -38,7 +38,7 @@
           <button data-tab="timeOff" type="button" role="tab" aria-selected="false" aria-controls="timeOffView" tabindex="-1">ZA</button>
           <button data-tab="vacation" type="button" role="tab" aria-selected="false" aria-controls="vacationView" tabindex="-1">Urlaub</button>
           <button data-tab="history" type="button" role="tab" aria-selected="false" aria-controls="historyView" tabindex="-1">Meine Anträge</button>
-          <button data-tab="amu" type="button" role="tab" aria-selected="false" aria-controls="amuView" tabindex="-1">AUM</button>
+          <button data-tab="amu" type="button" role="tab" aria-selected="false" aria-controls="amuView" tabindex="-1">Krank &amp; AUM</button>
           <button class="hidden leadership-tab" id="leadershipMoreTab" data-tab="leadershipMore" data-mobile-module="more" type="button" role="tab" aria-selected="false" aria-controls="leadershipMoreView" tabindex="-1">Mehr</button>
         </nav>
 
@@ -109,9 +109,9 @@
         </section>
 
         <section class="portal-view leadership-view" id="leadershipApprovalsView" role="tabpanel" aria-labelledby="leadershipApprovalsTab">
-          <div class="view-heading leadership-heading"><div><span class="eyebrow">Leitungsansicht</span><h1>Freigaben</h1><p>Offene Urlaubs-, ZA-, AUM- und Zeitkorrekturanträge.</p></div><button class="text-button" id="leadershipApprovalsRefresh" type="button">Aktualisieren</button></div>
+          <div class="view-heading leadership-heading"><div><span class="eyebrow">Leitungsansicht</span><h1>Freigaben &amp; Meldungen</h1><p>Offene Anträge, Krankmeldungen, AUMs und Zeitkorrekturen.</p></div><button class="text-button" id="leadershipApprovalsRefresh" type="button">Aktualisieren</button></div>
           <div class="leadership-context" id="leadershipApprovalContextFields"><label><span>Filiale</span><select id="leadershipApprovalLocation"></select></label><label><span>Abteilung</span><select id="leadershipApprovalDepartment"><option value="">Gesamte Filiale</option></select></label></div>
-          <div class="leadership-filter-tabs" role="group" aria-label="Antragsart"><button class="active" data-leadership-kind="absence" type="button">Urlaub &amp; ZA</button><button data-leadership-kind="amu" type="button">AUM</button><button data-leadership-kind="time_correction" type="button">Zeitkorrektur</button></div>
+          <div class="leadership-filter-tabs" role="group" aria-label="Antragsart"><button class="active" data-leadership-kind="absence" type="button">Urlaub &amp; ZA</button><button data-leadership-kind="sickness" type="button">Krankmeldungen</button><button data-leadership-kind="amu" type="button">AUM</button><button data-leadership-kind="time_correction" type="button">Zeitkorrektur</button></div>
           <section class="portal-card leadership-list" id="leadershipApprovalList"><p class="empty-state">Freigaben werden geladen.</p></section>
         </section>
 
@@ -120,10 +120,19 @@
           <div class="leadership-more-grid">
             <button type="button" data-more-tab="timeOff"><strong>ZA beantragen</strong><span>Stundenweise, ganztägig oder mehrtägig</span></button>
             <button type="button" data-more-tab="vacation"><strong>Urlaub beantragen</strong><span>Neuen Urlaubsantrag einreichen</span></button>
-            <button type="button" data-more-tab="amu"><strong>AUM übermitteln</strong><span>Dokument oder Handyfoto sicher senden</span></button>
+            <button type="button" data-more-tab="amu"><strong>Krankmeldung &amp; AUM</strong><span>Krankmelden oder Dokument sicher senden</span></button>
             <button type="button" id="leadershipPasswordButton"><strong>Passwort ändern</strong><span>Persönliches Passwort verwalten</span></button>
             <a id="leadershipDesktopLink" href="/?desktop=1"><strong>Desktop-Planung</strong><span>Vollständige Verwaltung am großen Bildschirm</span></a>
           </div>
+          <section class="portal-card sickness-preferences-card hidden" id="sicknessNotificationPreferencesCard">
+            <div><span class="eyebrow">Nur bei gefährdeter Mindestbesetzung</span><h2>Zusätzliche Warnkanäle</h2><p>Die In-App-Meldung kommt immer sofort. Externe Warnungen werden frühestens ab der gewählten Uhrzeit versendet und enthalten keine Gesundheits- oder Personendaten.</p></div>
+            <form id="sicknessNotificationPreferencesForm">
+              <label><span>Externe Warnungen frühestens ab</span><input id="sicknessNotificationEarliestTime" type="time" value="08:00" required /></label>
+              <div class="notification-channel-list" id="sicknessNotificationChannels"></div>
+              <p class="message hidden" id="sicknessNotificationPreferencesMessage"></p>
+              <button class="primary" type="submit">Warnkanäle speichern</button>
+            </form>
+          </section>
         </section>
 
         <section class="portal-view" id="timeOffView" role="tabpanel">
@@ -176,16 +185,30 @@
         </section>
 
         <section class="portal-view" id="amuView" role="tabpanel">
-          <div class="view-heading"><div><span class="eyebrow">Arbeitsunfähigkeitsmeldung</span><h1>AUM übermitteln</h1><p>Zeitraum melden und bis zu drei Dokumente sicher anhängen.</p></div></div>
+          <div class="view-heading"><div><span class="eyebrow">Von zu Hause oder unterwegs</span><h1>Krankmeldung &amp; AUM</h1><p>Zuerst krankmelden; die AUM kann sicher nachgereicht werden.</p></div></div>
+          <div class="vacation-layout sickness-layout">
+            <form class="portal-card request-form" id="sicknessCaseForm">
+              <h2>Jetzt krankmelden</h2>
+              <div class="date-fields"><label><span>Beginn</span><input id="sicknessStartDate" type="date" required /></label><label><span>Voraussichtlich bis</span><input id="sicknessExpectedEnd" type="date" /></label></div>
+              <label><span>Bemerkung</span><textarea id="sicknessEmployeeNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
+              <p class="form-note">Die zuständige Filial- oder Abteilungsleitung wird sofort in der App informiert.</p>
+              <p class="message hidden" id="sicknessMessage"></p>
+              <button class="primary" id="sicknessSubmitButton" type="submit">Krankmeldung senden</button>
+            </form>
+            <section class="portal-card"><h2>Meine Krankmeldungen</h2><div class="request-list sickness-case-list" id="sicknessCaseList"></div></section>
+          </div>
+          <div class="view-heading approved-heading"><div><span class="eyebrow">Sicherer Personalakt</span><h2>AUM übermitteln</h2><p>Foto oder PDF anhängen. Bei Bildern erkennt die lokale OCR Beginn und Ende als prüfbaren Vorschlag.</p></div></div>
           <div class="vacation-layout amu-layout">
             <form class="portal-card request-form" id="amuReportForm">
               <h2>Neue AUM</h2>
+              <label><span>Zur Krankmeldung</span><select id="amuSicknessCaseId"><option value="">Automatisch zuordnen</option></select></label>
               <div class="date-fields"><label><span>Arbeitsunfähig von</span><input id="amuIncapacityFrom" type="date" required /></label><label><span>Voraussichtlich bis</span><input id="amuIncapacityTo" type="date" required /></label></div>
               <label><span>Bemerkung</span><textarea id="amuEmployeeNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
               <div class="amu-file-picker">
                 <label class="file-field"><span>Dokumente auswählen</span><input id="amuDocuments" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,.pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff" multiple /><small id="amuUploadHint">PDF oder Foto · höchstens 3 Dateien</small></label>
                 <label class="camera-button">Kamera<input id="amuCamera" type="file" accept="image/*" capture="environment" /></label>
               </div>
+              <div class="amu-ocr-status hidden" id="amuOcrStatus" aria-live="polite"><span class="amu-ocr-spinner" aria-hidden="true"></span><div><strong id="amuOcrStatusTitle">Lokale Texterkennung</strong><small id="amuOcrStatusText"></small><label class="amu-ocr-confirm hidden" id="amuOcrConfirmField"><input id="amuOcrConfirmed" type="checkbox" /> Erkannte Datumswerte geprüft</label></div></div>
               <p class="message hidden" id="amuMessage"></p>
               <button class="primary" id="amuSubmitButton" type="submit">AUM sicher übermitteln</button>
             </form>
@@ -272,6 +295,9 @@
       </form>
     </dialog>
     <script src="/api-errors.js"></script>
+    <script src="/vendor/tesseract-v7/tesseract.min.js"></script>
+    <script src="/amu-ocr-parser.js"></script>
+    <script src="/amu-ocr-client.js"></script>
     <script src="/portal.js"></script>
   </body>
 </html>
