@@ -1,5 +1,18 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.55 Beta
+
+- Zentrale Tagesauswertung für beliebig viele Pausen und geteilte Dienste eingeführt; offene historische Buchungen werden nicht mehr bis zur aktuellen Uhrzeit weitergerechnet.
+- Tatsächliche Arbeitszeit, Pausen, Dienstplanzeit, Abweichung und Samstagswertung werden getrennt und nachvollziehbar ausgewiesen.
+- Tagesprüfung für berechtigte Leitungen mit Hinweisen zu fehlenden Buchungen, unvollständigen Tagen, Pausenunterschreitungen, Zeitabweichungen und offenen Korrekturen ergänzt.
+- Geprüfte Tage speichern Regelversion und Auswertungsstand; nachträgliche Plan-, Buchungs-, Abwesenheits- oder Regeländerungen markieren die Prüfung automatisch als veraltet.
+- Standortbezogene Regeln für Buchungen von überall oder nur aus einem vertrauenswürdigen Firmennetz sowie eine einstellbare Abweichungstoleranz ergänzt.
+- Mehrteilige Zeitkorrekturen mit mehreren Pausen oder Arbeitsblöcken können in der Leitungsansicht vollständig bearbeitet werden.
+- Zeitübersichten im Mitarbeiterportal um gewertete Zeit, Pausen und konkrete Tageshinweise erweitert.
+- Rechtevergabe für Personalleitung, Admin und Developer optisch verdichtet; Checkboxen, geschützte Rechte und individuelle Zusatzrechte werden klar und responsiv dargestellt.
+- Abteilungsbereiche werden bei delegierten Zusatzrechten rollenunabhängig geprüft; die Tagesprüfung bleibt auf den zugewiesenen Bereich begrenzt.
+- Bereichsübergreifende Zeitkorrekturen können nur auf Filialebene entschieden werden und behalten bei der Übernahme ihre korrekte Abteilungszuordnung.
+
 ## v0.54 Beta
 
 - Geschützte Developer-Rolle als technische Ebene oberhalb der regulären Administration ergänzt; sie kann nicht über die Weboberfläche vergeben, geändert oder entfernt werden.

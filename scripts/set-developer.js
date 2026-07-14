@@ -34,7 +34,7 @@ if (integrity.length !== 1 || integrity[0] !== "ok") {
 const userColumns = new Set(database.prepare("PRAGMA table_info(portal_users)").all().map((column) => column.name));
 if (!userColumns.has("role_locked")) {
   database.close();
-  throw new Error("Bitte Grabenplaner v0.54 zuerst einmal starten, damit die Datenbankmigration ausgeführt wird.");
+  throw new Error("Bitte Grabenplaner v0.55 zuerst einmal starten, damit die Datenbankmigration ausgeführt wird.");
 }
 const employee = database.prepare("SELECT personnel_number, full_name FROM employees WHERE personnel_number = ?").get(employeeNumber);
 if (!employee) {

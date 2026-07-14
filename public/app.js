@@ -24,6 +24,7 @@ const state = {
   requestKindTab: "vacation",
   currentView: "planning",
   timePresence: null,
+  timeDayReview: null,
   timeSummary: null,
   timeCorrections: [],
   rightsManagement: null,
@@ -94,7 +95,7 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition",
-    "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationSubmitButton", "cancelLocationEditButton",
+    "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
     "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
     "shiftModal", "shiftForm", "shiftModalTitle", "deleteShiftButton", "shiftCalculation", "shiftDepartment", "departmentPdfControl", "departmentPdfSelect", "departmentPdfButton",
     "optionsModal", "optionForm", "optionList", "optionsWeekLabel", "optionsWeekRange", "optionPreviousWeek", "optionNextWeek", "globalBlockDate", "globalBlockReason", "globalBlockHoliday", "globalBlockSubmitButton", "optionSubmitButton", "cancelOptionEditButton", "autoPlanModal",
@@ -109,7 +110,8 @@ const elements = Object.fromEntries(
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
     "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordTitle", "personnelRecordContent",
     "timeCorrectionModal", "timeCorrectionForm", "timeCorrectionTitle", "timeCorrectionEmployee", "timeCorrectionWorkDate", "timeCorrectionEmployeeLabel", "timeCorrectionDateLabel", "timeCorrectionClockOutTime", "timeCorrectionMessage",
-    "timeCorrectionReviewModal", "timeCorrectionReviewForm", "timeCorrectionReviewId", "timeCorrectionReviewSummary", "timeCorrectionReviewClockIn", "timeCorrectionReviewBreakStart", "timeCorrectionReviewBreakEnd", "timeCorrectionReviewClockOut", "timeCorrectionReviewNote", "timeCorrectionReviewMessage",
+    "timeCorrectionReviewModal", "timeCorrectionReviewForm", "timeCorrectionReviewId", "timeCorrectionReviewSummary", "timeCorrectionReviewEntries", "addTimeCorrectionReviewEntry", "timeCorrectionReviewNote", "timeCorrectionReviewMessage",
+    "timeDayReviewPanel", "timeReviewDate", "timeReviewFilter", "loadTimeDayReviewButton", "timeDayReviewSummary", "timeDayReviewList", "timeDayReviewModal", "timeDayReviewForm", "timeDayReviewTitle", "timeDayReviewDetail", "timeDayReviewEmployee", "timeDayReviewWorkDate", "timeDayReviewMetrics", "timeDayReviewIssues", "timeDayReviewNote", "timeDayReviewMessage", "removeTimeDayReviewButton",
     "timeSummaryFrom", "timeSummaryTo", "loadTimeSummaryButton", "timeSummaryList", "timeCorrectionPanel", "timeCorrectionCount", "timeCorrectionRequestList",
     "brandLogo", "footerBrandLogo", "adminContactLink", "brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt", "brandingPreviewLogo", "brandingPreviewTitle", "brandingPreviewCompany", "brandingKitLibrary", "brandingAssignmentList", "exportBrandingButton", "brandingImportFile", "importBrandingButton", "toast",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
@@ -1594,9 +1596,18 @@ function openRightsEditor(employeeNumber) {
       const baseRight = rolePermissions.has(permission.id);
       const additionalRight = grantedPermissions.has(permission.id);
       const editable = Boolean(user.manageable && permission.editable && !baseRight);
+      const lockedRight = !user.manageable || !permission.editable;
       const warningLevel = permission.warningLevel || "normal";
-      const statusText = baseRight ? "Grundrecht der Rolle" : !permission.editable ? "Nur durch IT-Admin oder höhere Ebene änderbar" : additionalRight ? "Individuell vergeben" : permission.description || "Optionales Zusatzrecht";
-      return `<label class="rights-permission ${warningLevel === "critical" ? "critical" : warningLevel === "high" ? "sensitive" : ""} ${baseRight ? "base-right" : ""} ${!permission.editable ? "locked-right" : ""}"><input type="checkbox" data-additional-permission value="${escapeHtml(permission.id)}" ${baseRight || additionalRight ? "checked" : ""} ${editable ? "" : "disabled"} /><span><strong>${escapeHtml(permission.label || permission.id)}</strong><small>${escapeHtml(statusText)}</small></span></label>`;
+      const statusText = baseRight
+        ? "Grundrecht der Rolle"
+        : additionalRight
+          ? lockedRight ? "Individuell vergeben · nur zur Ansicht" : "Individuell vergeben"
+          : !user.manageable
+            ? "Für die aktuelle Rolle nur zur Ansicht"
+            : !permission.editable
+              ? "Nur durch IT-Admin oder höhere Ebene änderbar"
+              : permission.description || "Optionales Zusatzrecht";
+      return `<label class="rights-permission ${warningLevel === "critical" ? "critical" : warningLevel === "high" ? "sensitive" : ""} ${baseRight ? "base-right" : ""} ${additionalRight && !baseRight ? "additional-right" : ""} ${lockedRight ? "locked-right" : ""}"><input type="checkbox" data-additional-permission value="${escapeHtml(permission.id)}" ${baseRight || additionalRight ? "checked" : ""} ${editable ? "" : "disabled"} /><span><strong>${escapeHtml(permission.label || permission.id)}</strong><small>${escapeHtml(statusText)}</small></span></label>`;
     }).join("")}</div></section>`).join("");
   elements.saveRightsEditorButton.disabled = !user.manageable;
   elements.rightsEditorHint.textContent = !user.configured
@@ -1839,11 +1850,12 @@ function renderTimePresence() {
     || state.portalSession?.user?.permissions?.includes("time:review");
   elements.timePresenceList.innerHTML = employees.length ? employees.map((employee) => {
     const entries = (employee.entries || []).map((entry) => `${escapeHtml(entry.label)} ${formatClockTimestamp(entry.timestamp)}`).join(" · ");
+    const issues = timeEvaluationIssues(employee).map((issue) => issue.label || issue.code).join(" · ");
     return `<article class="time-presence-row ${escapeHtml(employee.state)}">
       <span class="employee-color" style="background:${escapeHtml(employee.color || "#748087")}"></span>
-      <div class="time-presence-person"><strong>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</strong><small>${entries || "Heute noch keine Buchung"}</small></div>
+      <div class="time-presence-person"><strong>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</strong><small>${entries || "Heute noch keine Buchung"}${issues ? ` · ${escapeHtml(issues)}` : ""}</small></div>
       <span class="time-state-badge ${escapeHtml(employee.state)}">${labels[employee.state] || employee.state}</span>
-      <div class="time-presence-hours"><span>Soll <strong>${formatHours(employee.plannedMinutes)}</strong></span><span>Ist <strong>${formatHours(employee.actualMinutes)}</strong></span><span>Diff. <strong class="${Number(employee.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(employee.differenceMinutes)}</strong></span></div>
+      <div class="time-presence-hours"><span>Plan <strong>${formatHours(employee.plannedMinutes)}</strong></span><span>Ist <strong>${formatHours(employee.actualMinutes)}</strong></span><span>Gewertet <strong>${formatHours(employee.actualValuedMinutes)}</strong></span><span>Pause <strong>${formatHours(employee.breakMinutes)}</strong></span><span>Diff. <strong class="${Number(employee.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(employee.differenceMinutes)}</strong></span></div>
       ${(employee.staleEntry && canReviewTime) || canReadPersonnelRecord ? `<div class="time-presence-actions">
         ${employee.staleEntry && canReviewTime ? `<button type="button" class="secondary-button compact-button" data-resolve-stale="${escapeHtml(employee.employeeNumber)}">Altbuchung abschließen</button>` : ""}
         ${canReadPersonnelRecord ? `<button type="button" class="secondary-button compact-button" data-personnel-record="${escapeHtml(employee.employeeNumber)}">Personalakt</button>` : ""}
@@ -1872,6 +1884,128 @@ function selectedTimeContextParameters() {
   return parameters;
 }
 
+function initializeTimeReviewDate() {
+  if (!elements.timeReviewDate) return;
+  const today = toIsoDate(new Date());
+  elements.timeReviewDate.max = today;
+  if (!elements.timeReviewDate.value) elements.timeReviewDate.value = today;
+}
+
+function timeEvaluationIssues(entry) {
+  return Array.isArray(entry?.issues) ? entry.issues : [];
+}
+
+function renderTimeDayReview() {
+  if (!elements.timeDayReviewList || !elements.timeDayReviewSummary) return;
+  const payload = state.timeDayReview;
+  if (!payload) return;
+  const evaluations = payload.evaluations || [];
+  const counts = payload.counts || {};
+  elements.timeDayReviewSummary.innerHTML = `
+    <article><span>Team</span><strong>${Number(counts.total || evaluations.length)}</strong></article>
+    <article class="${Number(counts.attention || 0) ? "warning" : ""}"><span>Auffällig</span><strong>${Number(counts.attention || 0)}</strong></article>
+    <article><span>Geprüft</span><strong>${Number(counts.reviewed || 0)}</strong></article>
+    <article><span>Noch offen</span><strong>${Number(counts.unreviewed || 0)}</strong></article>`;
+  const filter = elements.timeReviewFilter?.value || "all";
+  const visible = evaluations.filter((entry) => {
+    if (filter === "attention") return timeEvaluationIssues(entry).length > 0;
+    if (filter === "reviewed") return Boolean(entry.review && !entry.review.stale);
+    if (filter === "unreviewed") return !entry.review || entry.review.stale;
+    return true;
+  });
+  const canReview = !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("time:review");
+  elements.timeDayReviewList.innerHTML = visible.length ? visible.map((entry) => {
+    const issues = timeEvaluationIssues(entry);
+    const status = entry.review?.stale
+      ? '<span class="status-badge warning">Prüfung veraltet</span>'
+      : entry.review
+      ? `<span class="status-badge approved">Geprüft · ${escapeHtml(entry.review.reviewedBy || "")}</span>`
+      : issues.length
+        ? `<span class="status-badge warning">${issues.length} Hinweis${issues.length === 1 ? "" : "e"}</span>`
+        : '<span class="status-badge inactive">Ungeprüft</span>';
+    const issueText = issues.length
+      ? issues.map((issue) => issue.label || issue.code).join(" · ")
+      : entry.excused?.excused ? entry.excused.label : "Keine Auffälligkeit";
+    return `<article class="time-day-review-row ${issues.some((issue) => issue.severity === "error") ? "has-error" : issues.length ? "has-warning" : ""}" data-time-day-employee="${escapeHtml(entry.employeeNumber)}">
+      <span class="employee-color" style="background:${escapeHtml(entry.color || "#748087")}"></span>
+      <div class="time-day-review-person"><strong>${escapeHtml(entry.employeeNumber)} · ${escapeHtml(entry.nickname || entry.fullName || "Teammitglied")}</strong><small>${escapeHtml(issueText)}</small></div>
+      ${status}
+      <div class="time-day-review-values">
+        <span>Plan<strong>${formatHours(entry.plannedMinutes)}</strong></span>
+        <span>Ist<strong>${formatHours(entry.actualMinutes)}</strong></span>
+        <span>Gewertet<strong>${formatHours(entry.actualValuedMinutes)}</strong></span>
+        <span>Pause<strong>${formatHours(entry.breakMinutes)}</strong></span>
+        <span>Abw.<strong class="${Number(entry.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(entry.differenceMinutes)}</strong></span>
+      </div>
+      ${canReview ? '<button type="button" class="secondary-button compact-button" data-open-time-day-review>Prüfen</button>' : ""}
+    </article>`;
+  }).join("") : '<p class="settings-note">Für diesen Filter gibt es keine Arbeitstageinträge.</p>';
+}
+
+async function loadTimeDayReview() {
+  if (!elements.timeDayReviewList) return;
+  initializeTimeReviewDate();
+  const parameters = selectedTimeContextParameters();
+  parameters.set("date", elements.timeReviewDate.value);
+  elements.timeDayReviewList.innerHTML = '<p class="settings-note">Arbeitstag wird ausgewertet.</p>';
+  try {
+    const result = await api(`/api/portal/v1/time-day-evaluations?${parameters.toString()}`);
+    state.timeDayReview = result.dayReview || result;
+    renderTimeDayReview();
+  } catch (error) {
+    if (error.status === 403) elements.timeDayReviewPanel?.classList.add("hidden");
+    else elements.timeDayReviewList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function openTimeDayReview(employeeNumber) {
+  const entry = state.timeDayReview?.evaluations?.find((item) => item.employeeNumber === employeeNumber);
+  if (!entry || !elements.timeDayReviewModal) return;
+  elements.timeDayReviewEmployee.value = entry.employeeNumber;
+  elements.timeDayReviewWorkDate.value = entry.workDate || state.timeDayReview.date;
+  elements.timeDayReviewTitle.textContent = `${entry.employeeNumber} · ${entry.nickname || entry.fullName || "Teammitglied"}`;
+  elements.timeDayReviewDetail.textContent = `${formatDate(entry.workDate || state.timeDayReview.date)} · Bewertungsregel ${entry.evaluationVersion || "v1"}`;
+  elements.timeDayReviewMetrics.innerHTML = `
+    <article><span>Plan</span><strong>${formatHours(entry.plannedMinutes)}</strong></article>
+    <article><span>Ist</span><strong>${formatHours(entry.actualMinutes)}</strong></article>
+    <article><span>Gewertet</span><strong>${formatHours(entry.actualValuedMinutes)}</strong></article>
+    <article><span>Pause</span><strong>${formatHours(entry.breakMinutes)}${entry.requiredBreakMinutes ? ` / ${formatHours(entry.requiredBreakMinutes)}` : ""}</strong></article>
+    <article><span>Abweichung</span><strong class="${Number(entry.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(entry.differenceMinutes)}</strong></article>`;
+  const issues = timeEvaluationIssues(entry);
+  elements.timeDayReviewIssues.innerHTML = issues.length
+    ? issues.map((issue) => `<article class="${escapeHtml(issue.severity || "warning")}"><strong>${escapeHtml(issue.label || issue.code)}</strong><p>${escapeHtml(issue.message || "")}</p></article>`).join("")
+    : '<p class="settings-note">Für diesen Arbeitstag gibt es keine Auffälligkeit.</p>';
+  elements.timeDayReviewNote.value = entry.review?.note || "";
+  elements.removeTimeDayReviewButton.classList.toggle("hidden", !entry.review);
+  elements.timeDayReviewMessage.textContent = "";
+  elements.timeDayReviewMessage.classList.add("hidden");
+  elements.timeDayReviewModal.showModal();
+}
+
+async function saveTimeDayReview(reviewed) {
+  const employeeNumber = elements.timeDayReviewEmployee.value;
+  const date = elements.timeDayReviewWorkDate.value;
+  const body = {
+    reviewed,
+    note: elements.timeDayReviewNote.value,
+    locationId: elements.timeTrackingLocation.value,
+    departmentId: elements.timeTrackingDepartment.value || null,
+  };
+  try {
+    await api(`/api/portal/v1/time-day-reviews/${encodeURIComponent(employeeNumber)}/${encodeURIComponent(date)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    elements.timeDayReviewModal.close();
+    showToast(reviewed ? "Der Arbeitstag wurde als geprüft gespeichert." : "Die Tagesprüfung wurde aufgehoben.");
+    await Promise.all([loadTimeDayReview(), loadTimePresence(), loadTimeSummary()]);
+  } catch (error) {
+    elements.timeDayReviewMessage.textContent = error.message;
+    elements.timeDayReviewMessage.classList.remove("hidden");
+  }
+}
+
 function initializeTimeSummaryDates() {
   if (!elements.timeSummaryFrom || elements.timeSummaryFrom.value) return;
   const today = toIsoDate(new Date());
@@ -1884,9 +2018,11 @@ function renderTimeSummary() {
   const summary = state.timeSummary;
   const employees = summary?.employees || [];
   elements.timeSummaryList.innerHTML = employees.length ? employees.map((employee) => `<article class="time-summary-row">
-    <div><strong>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</strong><small>${formatDate(summary.from)}–${formatDate(summary.to)}${employee.incompleteDays ? ` · ${Number(employee.incompleteDays)} unvollständige Tag(e)` : ""}</small></div>
-    <div class="time-summary-metric"><span>Soll</span><strong>${formatHours(employee.plannedMinutes)}</strong></div>
+    <div><strong>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</strong><small>${formatDate(summary.from)}–${formatDate(summary.to)}${employee.issueDays ? ` · ${Number(employee.issueDays)} auffällige Tag(e)` : ""}${employee.reviewedDays ? ` · ${Number(employee.reviewedDays)} geprüft` : ""}</small></div>
+    <div class="time-summary-metric"><span>Plan</span><strong>${formatHours(employee.plannedMinutes)}</strong></div>
     <div class="time-summary-metric"><span>Ist</span><strong>${formatHours(employee.actualMinutes)}</strong></div>
+    <div class="time-summary-metric"><span>Gewertet</span><strong>${formatHours(employee.actualValuedMinutes)}</strong></div>
+    <div class="time-summary-metric"><span>Pause</span><strong>${formatHours(employee.breakMinutes)}</strong></div>
     <div class="time-summary-metric"><span>Differenz</span><strong class="${Number(employee.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(employee.differenceMinutes)}</strong></div>
   </article>`).join("") : '<p class="settings-note">Für diesen Zeitraum wurden keine auswertbaren Teammitglieder gefunden.</p>';
 }
@@ -1947,30 +2083,52 @@ function openTimeCorrectionReview(id) {
   if (!correction) return;
   const change = correctionChange(correction);
   const entries = change.entries || correction.entries || [];
-  const timeFor = (type) => {
-    const entry = entries.find((item) => item.type === type);
-    return entry?.time || String(entry?.timestamp || "").slice(11, 16) || "";
-  };
   elements.timeCorrectionReviewId.value = correction.id;
   elements.timeCorrectionReviewSummary.textContent = `${correction.employeeNumber || correction.employee_number} · ${formatDate(correction.correctionDate || correction.correction_date)}${correction.requestNote || correction.request_note ? ` · ${correction.requestNote || correction.request_note}` : ""}`;
-  elements.timeCorrectionReviewClockIn.value = timeFor("clock_in");
-  elements.timeCorrectionReviewBreakStart.value = timeFor("break_start");
-  elements.timeCorrectionReviewBreakEnd.value = timeFor("break_end");
-  elements.timeCorrectionReviewClockOut.value = timeFor("clock_out");
+  renderTimeCorrectionReviewEntries(entries);
   elements.timeCorrectionReviewNote.value = "";
   elements.timeCorrectionReviewMessage.textContent = "";
   elements.timeCorrectionReviewMessage.classList.add("hidden");
   elements.timeCorrectionReviewModal.showModal();
 }
 
+const timeCorrectionEntryLabels = {
+  clock_in: "Kommen",
+  break_start: "Pause",
+  break_end: "Weiter",
+  clock_out: "Gehen",
+};
+
+function renderTimeCorrectionReviewEntries(entries = []) {
+  if (!elements.timeCorrectionReviewEntries) return;
+  const normalized = entries.length ? entries : [{ type: "clock_in", time: "09:00" }, { type: "clock_out", time: "18:00" }];
+  elements.timeCorrectionReviewEntries.innerHTML = normalized.map((entry, index) => `<div class="time-correction-entry-row">
+    <label class="field"><span>Buchung ${index + 1}</span><select data-time-correction-entry-type>${Object.entries(timeCorrectionEntryLabels).map(([value, label]) => `<option value="${value}" ${entry.type === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+    <label class="field"><span>Uhrzeit</span><input data-time-correction-entry-time type="time" step="60" value="${escapeHtml(entry.time || String(entry.timestamp || "").slice(11, 16) || "")}" required /></label>
+    <button type="button" class="icon-button" data-remove-time-correction-entry aria-label="Buchung entfernen">×</button>
+  </div>`).join("");
+}
+
+function addTimeCorrectionReviewEntry() {
+  const entries = collectTimeCorrectionReviewEntries();
+  const lastType = entries.at(-1)?.type || "clock_out";
+  const nextType = lastType === "clock_in" || lastType === "break_end" ? "clock_out"
+    : lastType === "break_start" ? "break_end" : "clock_in";
+  entries.push({ type: nextType, time: "" });
+  renderTimeCorrectionReviewEntries(entries);
+  [...elements.timeCorrectionReviewEntries.querySelectorAll("[data-time-correction-entry-time]")].at(-1)?.focus();
+}
+
+function collectTimeCorrectionReviewEntries() {
+  return [...(elements.timeCorrectionReviewEntries?.querySelectorAll(".time-correction-entry-row") || [])].map((row) => ({
+    type: row.querySelector("[data-time-correction-entry-type]").value,
+    time: row.querySelector("[data-time-correction-entry-time]").value,
+  })).filter((entry) => entry.time);
+}
+
 async function decideTimeCorrection(action) {
   const id = elements.timeCorrectionReviewId.value;
-  const entries = [
-    ["clock_in", elements.timeCorrectionReviewClockIn.value],
-    ["break_start", elements.timeCorrectionReviewBreakStart.value],
-    ["break_end", elements.timeCorrectionReviewBreakEnd.value],
-    ["clock_out", elements.timeCorrectionReviewClockOut.value],
-  ].filter(([, time]) => time).map(([type, time]) => ({ type, time }));
+  const entries = collectTimeCorrectionReviewEntries();
   try {
     await api(`/api/portal/v1/time-corrections/${encodeURIComponent(id)}/decision`, {
       method: "PUT",
@@ -2438,7 +2596,8 @@ function setView(view) {
   if (view === "requests") loadManagerVacationRequests();
   if (view === "timeTracking") {
     initializeTimeSummaryDates();
-    Promise.all([loadTimePresence(), loadTimeSummary(), loadTimeCorrections()]);
+    initializeTimeReviewDate();
+    Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]);
     timePresenceRefreshTimer = setInterval(() => { if (!document.hidden && state.currentView === "timeTracking") loadTimePresence(); }, 30000);
   }
 }
@@ -2866,6 +3025,22 @@ async function saveEmployee(event) {
   } catch (error) { showToast(error.message, true); }
 }
 
+function canManageTimeTrackingSettings() {
+  return !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("time:settings");
+}
+
+function syncLocationTimeTrackingFields() {
+  const canManage = canManageTimeTrackingSettings();
+  const trustedNetwork = elements.locationTimeTrackingAccessMode?.value === "trusted_network";
+  for (const field of [elements.locationTimeTrackingEnabled, elements.locationTimeTrackingAccessMode, elements.locationTimeTrackingVarianceMinutes]) {
+    if (field) field.disabled = !canManage;
+  }
+  if (elements.locationTimeTrackingAllowedNetworks) {
+    elements.locationTimeTrackingAllowedNetworks.disabled = !canManage || !trustedNetwork;
+  }
+}
+
 function resetLocationForm() {
   state.editingLocationId = null;
   elements.locationForm.reset();
@@ -2873,6 +3048,10 @@ function resetLocationForm() {
   elements.locationMinStaff.value = 0;
   elements.locationActive.checked = true;
   elements.locationTimeTrackingEnabled.checked = false;
+  elements.locationTimeTrackingAccessMode.value = "anywhere";
+  elements.locationTimeTrackingAllowedNetworks.value = "";
+  elements.locationTimeTrackingVarianceMinutes.value = "15";
+  syncLocationTimeTrackingFields();
   setLocationDayFields(currentLocation()?.day_settings || state.locations?.[0]?.day_settings || {});
   elements.locationSubmitButton.textContent = "Filiale anlegen";
   const title = elements.locationEditorModal?.querySelector(".modal-header h2");
@@ -2887,6 +3066,10 @@ function fillLocationForm(location) {
   elements.locationMinStaff.value = Number(location.min_staff || 0);
   elements.locationActive.checked = Boolean(location.active);
   elements.locationTimeTrackingEnabled.checked = Boolean(location.time_tracking_enabled);
+  elements.locationTimeTrackingAccessMode.value = location.time_tracking_access_mode === "trusted_network" ? "trusted_network" : "anywhere";
+  elements.locationTimeTrackingAllowedNetworks.value = location.time_tracking_allowed_networks || "";
+  elements.locationTimeTrackingVarianceMinutes.value = String(Number(location.time_tracking_variance_minutes ?? 15));
+  syncLocationTimeTrackingFields();
   setLocationDayFields(location.day_settings || {});
   elements.locationSubmitButton.textContent = "Filiale speichern";
   const title = elements.locationEditorModal?.querySelector(".modal-header h2");
@@ -2929,6 +3112,12 @@ async function saveLocation(event) {
   const isEdit = Boolean(state.editingLocationId);
   const id = isEdit ? state.editingLocationId : elements.locationId.value;
   try {
+    const timeTrackingSettings = canManageTimeTrackingSettings() ? {
+      timeTrackingEnabled: elements.locationTimeTrackingEnabled.checked,
+      timeTrackingAccessMode: elements.locationTimeTrackingAccessMode.value,
+      timeTrackingAllowedNetworks: elements.locationTimeTrackingAllowedNetworks.value,
+      timeTrackingVarianceMinutes: Number(elements.locationTimeTrackingVarianceMinutes.value || 15),
+    } : {};
     state.locations = await api(isEdit ? `/api/locations/${encodeURIComponent(id)}` : "/api/locations", {
       method: isEdit ? "PUT" : "POST",
       body: JSON.stringify({
@@ -2936,7 +3125,7 @@ async function saveLocation(event) {
         name: elements.locationName.value,
         minStaff: Number(elements.locationMinStaff.value || 0),
         active: elements.locationActive.checked,
-        timeTrackingEnabled: elements.locationTimeTrackingEnabled.checked,
+        ...timeTrackingSettings,
         daySettings: readLocationDayFields(),
       }),
     });
@@ -3734,13 +3923,21 @@ elements.delegationList?.addEventListener("click", async (event) => {
   try { await api(`/api/portal/v1/approval-delegations/${row.dataset.delegationId}`, { method: "DELETE" }); await loadApprovalDelegations(); } catch (error) { showToast(error.message, true); }
 });
 elements.refreshRequestsButton?.addEventListener("click", loadManagerVacationRequests);
-elements.refreshTimePresenceButton?.addEventListener("click", () => Promise.all([loadTimePresence(), loadTimeSummary(), loadTimeCorrections()]));
+elements.refreshTimePresenceButton?.addEventListener("click", () => Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]));
+elements.loadTimeDayReviewButton?.addEventListener("click", loadTimeDayReview);
+elements.timeReviewFilter?.addEventListener("change", renderTimeDayReview);
 elements.loadTimeSummaryButton?.addEventListener("click", loadTimeSummary);
 elements.timeTrackingLocation?.addEventListener("change", () => {
   refreshTimePresenceDepartments();
-  Promise.all([loadTimePresence(), loadTimeSummary(), loadTimeCorrections()]);
+  Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]);
 });
-elements.timeTrackingDepartment?.addEventListener("change", () => Promise.all([loadTimePresence(), loadTimeSummary(), loadTimeCorrections()]));
+elements.timeTrackingDepartment?.addEventListener("change", () => Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]));
+elements.timeDayReviewList?.addEventListener("click", (event) => {
+  const row = event.target.closest("[data-time-day-employee]");
+  if (row && event.target.closest("[data-open-time-day-review]")) openTimeDayReview(row.dataset.timeDayEmployee);
+});
+elements.timeDayReviewForm?.addEventListener("submit", (event) => { event.preventDefault(); saveTimeDayReview(true); });
+elements.removeTimeDayReviewButton?.addEventListener("click", () => saveTimeDayReview(false));
 elements.timeCorrectionRequestList?.addEventListener("click", (event) => {
   const row = event.target.closest("[data-time-correction-request]");
   if (row && event.target.closest("[data-review-time-correction]")) openTimeCorrectionReview(row.dataset.timeCorrectionRequest);
@@ -3748,6 +3945,17 @@ elements.timeCorrectionRequestList?.addEventListener("click", (event) => {
 elements.timeCorrectionReviewForm?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-time-correction-decision]");
   if (button) decideTimeCorrection(button.dataset.timeCorrectionDecision);
+});
+elements.addTimeCorrectionReviewEntry?.addEventListener("click", addTimeCorrectionReviewEntry);
+elements.timeCorrectionReviewEntries?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-remove-time-correction-entry]");
+  if (!button) return;
+  const rows = elements.timeCorrectionReviewEntries.querySelectorAll(".time-correction-entry-row");
+  if (rows.length <= 2) {
+    showToast("Eine vollständige Korrektur benötigt mindestens Kommen und Gehen.", true);
+    return;
+  }
+  button.closest(".time-correction-entry-row")?.remove();
 });
 elements.timePresenceList?.addEventListener("click", (event) => {
   const correctionButton = event.target.closest("[data-resolve-stale]");
@@ -3759,6 +3967,7 @@ elements.timePresenceList?.addEventListener("click", (event) => {
   if (button) openPersonnelRecord(button.dataset.personnelRecord);
 });
 elements.timeCorrectionForm?.addEventListener("submit", submitStaleTimeCorrection);
+elements.locationTimeTrackingAccessMode?.addEventListener("change", syncLocationTimeTrackingFields);
 elements.managerVacationRequestList?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-open-request-action]");
   const row = button?.closest("[data-manager-request]");

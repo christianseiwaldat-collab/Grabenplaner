@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.54 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.55 Beta</span></div>
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
@@ -181,9 +181,21 @@
             <div class="vacation-panel-heading"><div><h2>Teamstatus heute</h2><p id="timePresenceUpdated">Noch nicht aktualisiert.</p></div></div>
             <div class="time-presence-list" id="timePresenceList"><p class="settings-note">Die Anwesenheit wird geladen.</p></div>
           </section>
+          <section class="vacation-panel time-day-review-panel" id="timeDayReviewPanel">
+            <div class="vacation-panel-heading">
+              <div><h2>Tagesprüfung</h2><p>Plan, echte Arbeitszeit, Pausen und Samstagswertung gemeinsam prüfen.</p></div>
+              <div class="time-summary-controls">
+                <label class="field"><span>Arbeitstag</span><input id="timeReviewDate" type="date" /></label>
+                <label class="field"><span>Anzeige</span><select id="timeReviewFilter"><option value="all">Alle</option><option value="attention">Nur auffällige</option><option value="unreviewed">Noch ungeprüft</option><option value="reviewed">Geprüft</option></select></label>
+                <button type="button" class="secondary-button" id="loadTimeDayReviewButton">Anzeigen</button>
+              </div>
+            </div>
+            <section class="time-day-review-summary" id="timeDayReviewSummary"></section>
+            <div class="time-day-review-list" id="timeDayReviewList"><p class="settings-note">Tagesprüfung wird geladen.</p></div>
+          </section>
           <section class="vacation-panel time-summary-panel">
             <div class="vacation-panel-heading">
-              <div><h2>Arbeitszeitübersicht</h2><p>Soll, Ist und Differenz für einen frei wählbaren Zeitraum.</p></div>
+              <div><h2>Arbeitszeitübersicht</h2><p>Plan, Ist, gewertete Zeit und Abweichung für einen frei wählbaren Zeitraum.</p></div>
               <div class="time-summary-controls"><label class="field"><span>Von</span><input id="timeSummaryFrom" type="date" /></label><label class="field"><span>Bis</span><input id="timeSummaryTo" type="date" /></label><button type="button" class="secondary-button" id="loadTimeSummaryButton">Auswerten</button></div>
             </div>
             <div class="time-summary-list" id="timeSummaryList"><p class="settings-note">Zeitraum auswählen und auswerten.</p></div>
@@ -301,6 +313,11 @@
                   </div>
                   <label class="switch-row"><span><strong>Aktiv</strong><small>In Navigation und Planung anzeigen.</small></span><input id="locationActive" type="checkbox" checked /></label>
                   <label class="switch-row"><span><strong>Zeiterfassung aktiv</strong><small>Erlaubt Teammitgliedern dieses Standorts Kommen, Pause, Weiter und Gehen zu buchen.</small></span><input id="locationTimeTrackingEnabled" type="checkbox" /></label>
+                  <div class="time-tracking-location-settings">
+                    <label class="field"><span>Buchungsort</span><select id="locationTimeTrackingAccessMode"><option value="anywhere">Überall erlauben</option><option value="trusted_network">Nur im Firmennetz</option></select><small>Bei „Firmennetz“ sind lokale Netze sowie optional eingetragene IP-Bereiche zulässig.</small></label>
+                    <label class="field"><span>Zulässige IPs / Netze</span><textarea id="locationTimeTrackingAllowedNetworks" rows="3" maxlength="500" placeholder="z. B. 10.20.0.0/16"></textarea><small>Ein Eintrag je Zeile; nur für „Firmennetz“ nötig.</small></label>
+                    <label class="field"><span>Abweichung ab</span><div class="input-with-suffix"><input id="locationTimeTrackingVarianceMinutes" type="number" min="0" max="240" step="1" value="15" /><span>Minuten</span></div><small>Ab dieser Differenz zum Dienstplan wird der Tag auffällig markiert.</small></label>
+                  </div>
                   <div class="location-hours-editor">
                     <div class="card-heading compact-card-heading"><div class="card-icon">Zeit</div><div><h3>Öffnungszeiten &amp; Mindestbesetzung</h3><p>Diese Zeiten gelten ausschließlich für die ausgewählte Filiale.</p></div></div>
                     <div class="day-settings-table">
@@ -615,7 +632,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.54 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.55 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -839,15 +856,26 @@
       <form method="dialog" id="timeCorrectionReviewForm">
         <div class="modal-header"><div><span class="eyebrow">Zeiterfassung</span><h2>Zeitkorrektur prüfen</h2><p id="timeCorrectionReviewSummary">Beantragte Buchungsfolge prüfen und bei Bedarf anpassen.</p></div><button type="button" class="close-button" data-close="timeCorrectionReviewModal">×</button></div>
         <input id="timeCorrectionReviewId" type="hidden" />
+        <div class="time-correction-entry-editor" id="timeCorrectionReviewEntries"></div>
+        <button type="button" class="secondary-button compact-button" id="addTimeCorrectionReviewEntry">+ Buchung ergänzen</button>
         <div class="form-grid">
-          <label class="field"><span>Kommen</span><input id="timeCorrectionReviewClockIn" type="time" step="60" required /></label>
-          <label class="field"><span>Pause von</span><input id="timeCorrectionReviewBreakStart" type="time" step="60" /></label>
-          <label class="field"><span>Pause bis</span><input id="timeCorrectionReviewBreakEnd" type="time" step="60" /></label>
-          <label class="field"><span>Gehen</span><input id="timeCorrectionReviewClockOut" type="time" step="60" required /></label>
           <label class="field full-width"><span>Entscheidungsbemerkung</span><textarea id="timeCorrectionReviewNote" rows="3" maxlength="500" placeholder="Optional"></textarea></label>
         </div>
         <p class="message hidden" id="timeCorrectionReviewMessage"></p>
         <div class="request-action-buttons"><button class="danger-button" data-time-correction-decision="reject" type="button">Ablehnen</button><button class="primary-button" data-time-correction-decision="approve" type="button">Korrektur genehmigen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal time-day-review-modal" id="timeDayReviewModal">
+      <form method="dialog" id="timeDayReviewForm">
+        <div class="modal-header"><div><span class="eyebrow">Zeiterfassung</span><h2 id="timeDayReviewTitle">Arbeitstag prüfen</h2><p id="timeDayReviewDetail">Plan und erfasste Arbeitszeit im Vergleich.</p></div><button type="button" class="close-button" data-close="timeDayReviewModal">×</button></div>
+        <input id="timeDayReviewEmployee" type="hidden" />
+        <input id="timeDayReviewWorkDate" type="hidden" />
+        <div class="time-day-review-metrics" id="timeDayReviewMetrics"></div>
+        <div class="time-day-review-issues" id="timeDayReviewIssues"></div>
+        <label class="field"><span>Prüfbemerkung</span><textarea id="timeDayReviewNote" rows="3" maxlength="500" placeholder="Optional"></textarea></label>
+        <p class="message hidden" id="timeDayReviewMessage"></p>
+        <div class="modal-actions"><button type="button" class="secondary-button hidden" id="removeTimeDayReviewButton">Prüfung aufheben</button><span></span><button type="button" class="secondary-button" data-close="timeDayReviewModal">Abbrechen</button><button type="submit" class="primary-button">Als geprüft speichern</button></div>
       </form>
     </dialog>
 

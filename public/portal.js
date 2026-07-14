@@ -63,7 +63,7 @@ const el = Object.fromEntries([
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
   "portalUserName", "portalUserRole", "adminAppLink", "changePasswordButton", "logoutButton", "notificationsButton", "notificationBadge", "scheduleView", "timeOffView",
   "vacationView", "historyView", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingRefresh", "timeTrackingCard",
-  "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeDifference", "timeEntryList",
+  "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeWeighted", "timePause", "timeDifference", "timeTrackingIssues", "timeEntryList",
   "timePeriodHeading", "timePeriodSummary", "timePeriodList", "previousTimePeriod", "currentTimePeriod", "nextTimePeriod",
   "leadershipTeamTab", "leadershipApprovalsTab", "leadershipMoreTab", "leadershipTeamView", "leadershipApprovalsView", "leadershipMoreView",
   "leadershipTeamRefresh", "leadershipApprovalsRefresh", "leadershipContextFields", "leadershipLocation", "leadershipDepartment", "leadershipApprovalContextFields", "leadershipApprovalLocation", "leadershipApprovalDepartment", "leadershipPresenceSummary", "leadershipPresenceList", "leadershipApprovalList",
@@ -518,9 +518,14 @@ function renderTimeTracking() {
 
   el.timePlanned.textContent = durationText(data.plannedMinutes);
   el.timeActual.textContent = durationText(data.actualMinutes);
+  el.timeWeighted.textContent = durationText(data.actualValuedMinutes);
+  el.timePause.textContent = durationText(data.breakMinutes);
   el.timeDifference.textContent = durationText(data.differenceMinutes, true);
   el.timeDifference.classList.toggle("positive", Number(data.differenceMinutes) > 0);
   el.timeDifference.classList.toggle("negative", Number(data.differenceMinutes) < 0);
+  const issues = Array.isArray(data.issues) ? data.issues : [];
+  el.timeTrackingIssues.classList.toggle("hidden", !issues.length);
+  el.timeTrackingIssues.innerHTML = issues.map((issue) => `<article class="${esc(issue.severity || "warning")}"><strong>${esc(issue.label || issue.code)}</strong><span>${esc(issue.message || "")}</span></article>`).join("");
 
   el.timeEntryList.innerHTML = entries.length ? entries.map((entry) => {
     const type = entry.type || entry.entryType || entry.entry_type;
@@ -582,7 +587,10 @@ function normalizedTimeSummary(result = {}) {
       date: day.date || day.workDate || day.work_date,
       plannedMinutes: Number(day.plannedMinutes ?? day.planned_minutes ?? 0),
       actualMinutes: Number(day.actualMinutes ?? day.actual_minutes ?? 0),
+      actualValuedMinutes: Number(day.actualValuedMinutes ?? day.actual_valued_minutes ?? day.actualMinutes ?? 0),
+      breakMinutes: Number(day.breakMinutes ?? day.break_minutes ?? 0),
       differenceMinutes: Number(day.differenceMinutes ?? day.difference_minutes ?? 0),
+      issues: Array.isArray(day.issues) ? day.issues : [],
       entries: Array.isArray(day.entries) ? day.entries : [],
     })),
   };
@@ -605,6 +613,8 @@ function renderTimeSummary() {
   const totals = summary.totals || {
     plannedMinutes: days.reduce((sum, day) => sum + day.plannedMinutes, 0),
     actualMinutes: days.reduce((sum, day) => sum + day.actualMinutes, 0),
+    actualValuedMinutes: days.reduce((sum, day) => sum + day.actualValuedMinutes, 0),
+    breakMinutes: days.reduce((sum, day) => sum + day.breakMinutes, 0),
     differenceMinutes: days.reduce((sum, day) => sum + day.differenceMinutes, 0),
   };
   const from = summary.from || days[0]?.date || portalState.timePeriodAnchor;
@@ -613,8 +623,10 @@ function renderTimeSummary() {
     ? dateText(from, { month: "long", year: "numeric" })
     : `${dateText(from)} – ${dateText(to)}`;
   el.timePeriodSummary.innerHTML = [
-    ["Soll", totals.plannedMinutes ?? totals.planned_minutes],
+    ["Plan", totals.plannedMinutes ?? totals.planned_minutes],
     ["Ist", totals.actualMinutes ?? totals.actual_minutes],
+    ["Gewertet", totals.actualValuedMinutes ?? totals.actual_valued_minutes],
+    ["Pausen", totals.breakMinutes ?? totals.break_minutes],
     ["Differenz", totals.differenceMinutes ?? totals.difference_minutes, true],
   ].map(([label, value, signed]) => `<article><span>${label}</span><strong>${durationText(value, Boolean(signed))}</strong></article>`).join("");
   const correctionByDate = new Map();
@@ -631,11 +643,14 @@ function renderTimeSummary() {
       ? day.entries.map((entry) => `${timeEntryLabels[entry.type || entry.entry_type] || entry.type || entry.entry_type}: ${entry.time || timeText(timeEntryTimestamp(entry))}`).join(" · ")
       : "Keine Buchung";
     const correctionStatus = correction?.status ? `<small class="time-period-correction">Korrektur: ${esc(statusLabels[correction.status] || correction.status)}</small>` : "";
+    const issueStatus = day.issues.length ? `<small class="time-period-issues">${day.issues.map((issue) => esc(issue.label || issue.code)).join(" · ")}</small>` : "";
     const difference = Number(day.differenceMinutes || 0);
     return `<article class="time-period-day ${day.date === today ? "today" : ""}" data-time-summary-date="${esc(day.date)}">
-      <div><strong>${dateText(day.date, { weekday: "short", day: "2-digit", month: "2-digit" })}</strong><small>${esc(entryText)}</small>${correctionStatus}</div>
-      <div class="time-period-value"><span>Soll</span><strong>${durationText(day.plannedMinutes)}</strong></div>
+      <div><strong>${dateText(day.date, { weekday: "short", day: "2-digit", month: "2-digit" })}</strong><small>${esc(entryText)}</small>${issueStatus}${correctionStatus}</div>
+      <div class="time-period-value"><span>Plan</span><strong>${durationText(day.plannedMinutes)}</strong></div>
       <div class="time-period-value"><span>Ist</span><strong>${durationText(day.actualMinutes)}</strong></div>
+      <div class="time-period-value"><span>Gew.</span><strong>${durationText(day.actualValuedMinutes)}</strong></div>
+      <div class="time-period-value"><span>Pause</span><strong>${durationText(day.breakMinutes)}</strong></div>
       <div class="time-period-value"><span>Diff.</span><strong class="${difference < 0 ? "negative" : difference > 0 ? "positive" : ""}">${durationText(difference, true)}</strong></div>
       ${canRequest && day.date <= today && correction?.status !== "approved" ? `<button type="button" data-open-time-correction>${correction?.status === "pending" ? "Antrag bearbeiten" : "Korrektur anfragen"}</button>` : ""}
     </article>`;
