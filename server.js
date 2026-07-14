@@ -21,14 +21,35 @@ const PORTAL_CSRF_COOKIE = "grabenplaner_csrf";
 const scryptAsync = promisify(crypto.scrypt);
 
 const delegablePortalPermissionCatalog = Object.freeze([
-  { id: "settings:write", label: "Planungs- und Grundeinstellungen bearbeiten", group: "Einstellungen", warningLevel: "normal" },
-  { id: "employees:display:write", label: "Teamfarben bearbeiten", description: "Nur die Farbe im Dienstplan; Name, Sollzeit und Personalstammdaten bleiben geschützt.", group: "Teams & Standorte", warningLevel: "normal" },
-  { id: "locations:write", label: "Standorte bearbeiten", group: "Teams & Standorte", warningLevel: "high" },
-  { id: "departments:write", label: "Abteilungen anlegen und bearbeiten", group: "Teams & Standorte", warningLevel: "normal" },
-  { id: "positions:write", label: "Positionen anlegen, bearbeiten und löschen", group: "Teams & Standorte", warningLevel: "normal" },
-  { id: "operation_mode:write", label: "Betriebsmodus umschalten", group: "System", warningLevel: "critical" },
+  { id: "schedule:read", label: "Dienstpläne lesen", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
+  { id: "schedule:write", label: "Dienstpläne bearbeiten", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
+  { id: "settings:write", label: "Planungs- und Grundeinstellungen bearbeiten", group: "Dienstplanung", warningLevel: "high", hrDelegable: true },
+  { id: "employees:read", label: "Teamstammdaten lesen", group: "Teams & Standorte", warningLevel: "normal", hrDelegable: true },
+  { id: "employees:display:write", label: "Teamfarben bearbeiten", description: "Nur die Farbe im Dienstplan; Name, Sollzeit und Personalstammdaten bleiben geschützt.", group: "Teams & Standorte", warningLevel: "normal", hrDelegable: true },
+  { id: "employees:write", label: "Teamstammdaten vollständig bearbeiten", description: "Umfasst Namen, Sollstunden und weitere Personalstammdaten.", group: "Teams & Standorte", warningLevel: "critical" },
+  { id: "departments:write", label: "Abteilungen anlegen und bearbeiten", group: "Teams & Standorte", warningLevel: "normal", hrDelegable: true },
+  { id: "positions:write", label: "Positionen anlegen, bearbeiten und löschen", group: "Teams & Standorte", warningLevel: "high", hrDelegable: true },
+  { id: "locations:write", label: "Standorte vollständig bearbeiten", group: "Teams & Standorte", warningLevel: "critical" },
+  { id: "time:read", label: "Zeiterfassung des Bereichs lesen", group: "Zeit & Abwesenheit", warningLevel: "normal", hrDelegable: true },
+  { id: "time:review", label: "Zeitbuchungen prüfen und korrigieren", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true },
+  { id: "vacation:read", label: "Urlaubs- und ZA-Anträge lesen", group: "Zeit & Abwesenheit", warningLevel: "normal", hrDelegable: true },
+  { id: "vacation:approve", label: "Urlaubs- und ZA-Anträge bearbeiten", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true },
+  { id: "hr:approve", label: "Verbindliche PL-Freigaben erteilen", group: "Zeit & Abwesenheit", warningLevel: "critical" },
+  { id: "hr:settings", label: "Antrags- und AUM-Regeln verwalten", group: "Zeit & Abwesenheit", warningLevel: "critical" },
+  { id: "amu:metadata:read", label: "AUM-Metadaten und Personalakt lesen", group: "AUM", warningLevel: "high", hrDelegable: true },
+  { id: "amu:file:read", label: "AUM-Dokumente öffnen", group: "AUM", warningLevel: "critical" },
+  { id: "amu:review", label: "AUM-Meldungen prüfen", group: "AUM", warningLevel: "critical" },
+  { id: "amu:delete", label: "AUM-Meldungen löschen", group: "AUM", warningLevel: "critical" },
+  { id: "amu:audit", label: "AUM-Prüfprotokoll lesen", group: "AUM", warningLevel: "critical" },
+  { id: "branding:read", label: "Branding-Verwaltung lesen", group: "System & Verwaltung", warningLevel: "high" },
+  { id: "branding:write", label: "Brandings verwalten und zuweisen", group: "System & Verwaltung", warningLevel: "critical" },
+  { id: "operation_mode:write", label: "Betriebsmodus umschalten", group: "System & Verwaltung", warningLevel: "critical" },
+  { id: "backup:write", label: "Datenbanksicherungen verwalten", group: "System & Verwaltung", warningLevel: "critical" },
+  { id: "update:write", label: "Grabenplaner aktualisieren", group: "System & Verwaltung", warningLevel: "critical" },
+  { id: "system:write", label: "App neu starten oder beenden", group: "System & Verwaltung", warningLevel: "critical" },
 ]);
 const delegablePortalPermissions = new Set(delegablePortalPermissionCatalog.map((entry) => entry.id));
+const hrDelegablePortalPermissions = new Set(delegablePortalPermissionCatalog.filter((entry) => entry.hrDelegable).map((entry) => entry.id));
 
 const builtinPortalRoles = [
   {
@@ -206,7 +227,6 @@ builtinPortalRoles.push(
 
 const GLOBAL_SCOPE_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
 const RIGHTS_ADMIN_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
-const MANAGEMENT_BRANDING_PORTAL_ROLES = new Set(["developer", "admin", "hr"]);
 const HR_DECISION_PORTAL_ROLES = new Set(["developer", "admin", "hr"]);
 const PROTECTED_PORTAL_ROLES = new Set(["developer"]);
 const PORTAL_ROLE_ASSIGNMENTS = Object.freeze({
@@ -1850,9 +1870,7 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
     scopes.push({ locationId: session.home_location_id, departmentId: session.role === "department_manager" ? (Number(session.preferred_department_id) || null) : null });
   }
   const rolePermissions = parsePortalPermissions(session.permissions);
-  const grantedPermissions = ["manager", "department_manager"].includes(session.role)
-    ? portalPermissionGrantsForEmployee(session.employee_number)
-    : [];
+  const grantedPermissions = portalPermissionGrantsForEmployee(session.employee_number);
   return {
     id: session.id,
     employeeNumber: session.employee_number,
@@ -1984,7 +2002,6 @@ function enforceAdminApiAccess(request, _response, next) {
       }
     }
     const session = requirePortalSession(request, permission);
-    if (session.role === "employee") throw httpError(403, "Bitte das Mitarbeiterportal verwenden.", "PORTAL_EMPLOYEE_ONLY");
     assertPortalCsrf(request);
     assertSessionContextScope(session, { ...request.query, ...request.body });
     request.portalSession = session;
@@ -2271,6 +2288,29 @@ function portalPermissionGrantsForEmployee(employeeNumber) {
     WHERE employee_number = ? ORDER BY permission
   `).all(String(employeeNumber)).map((row) => row.permission)
     .filter((permission) => delegablePortalPermissions.has(permission));
+}
+
+function manageablePortalPermissionsForActor(actor) {
+  if (!actor) return new Set();
+  if (actor.employeeNumber === "local" || ["developer", "admin", "it_admin"].includes(actor.role)) {
+    return new Set(delegablePortalPermissions);
+  }
+  if (actor.role === "hr") return new Set(hrDelegablePortalPermissions);
+  return new Set();
+}
+
+function portalPermissionCatalogForActor(actor) {
+  const manageable = manageablePortalPermissionsForActor(actor);
+  return delegablePortalPermissionCatalog.map(({ hrDelegable: _hrDelegable, ...permission }) => ({
+    ...permission,
+    editable: manageable.has(permission.id),
+  }));
+}
+
+function actorCanManagePermissionGrants(actor, target) {
+  if (!actor || !target || target.role === "developer" || target.roleLocked || !target.configured || !target.active) return false;
+  if (actor.employeeNumber === "local" || ["developer", "admin", "it_admin"].includes(actor.role)) return true;
+  return actor.role === "hr" && ["employee", "department_manager", "manager"].includes(target.role);
 }
 
 function getPortalRoles() {
@@ -3710,8 +3750,12 @@ function vacationHrApprovalRequired() {
   return getPortalSettings().vacation_hr_approval_required === "1";
 }
 
+function sessionCanApproveHr(session) {
+  return Boolean(session && (session.employeeNumber === "local" || session.permissions?.includes("hr:approve")));
+}
+
 function actorStage(session, entry) {
-  if (entry.approval_stage === "hr" && (HR_DECISION_PORTAL_ROLES.has(session.role) || session.employeeNumber === "local")) return "hr";
+  if (entry.approval_stage === "hr" && sessionCanApproveHr(session)) return "hr";
   return "local";
 }
 
@@ -7059,47 +7103,50 @@ app.post("/api/portal/v1/auth/logout", (request, response) => {
   response.json({ ok: true });
 });
 
-function rightsManagementPayload() {
+function rightsManagementPayload(actor) {
   const roles = new Map(getPortalRoles().map((role) => [role.id, role]));
   const users = portalUsersForAdmin()
-    .filter((user) => ["manager", "department_manager"].includes(user.role))
+    .filter((user) => user.employeeActive)
     .map((user) => {
       const rolePermissions = roles.get(user.role)?.permissions || [];
       return {
         ...user,
         rolePermissions,
         effectivePermissions: [...new Set([...rolePermissions, ...(user.grantedPermissions || [])])],
+        manageable: actorCanManagePermissionGrants(actor, user),
       };
     });
   return {
-    catalog: delegablePortalPermissionCatalog,
+    catalog: portalPermissionCatalogForActor(actor),
     users,
   };
 }
 
 app.get("/api/portal/v1/rights", (request, response) => {
-  requireAdminHrOrLocal(request, "rights:read");
-  response.json(rightsManagementPayload());
+  const actor = requireAdminHrOrLocal(request, "rights:read");
+  response.json(rightsManagementPayload(actor));
 });
 
 app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
   const actor = requireAdminHrOrLocal(request, "rights:write");
   const employeeNumber = String(request.params.employeeNumber || "").trim();
-  const target = db.prepare("SELECT role FROM portal_users WHERE employee_number = ? AND active = 1").get(employeeNumber);
-  if (!target) throw httpError(404, "Der aktive Portal-Zugang wurde nicht gefunden.");
-  if (!["manager", "department_manager"].includes(target.role)) {
-    throw httpError(403, "Zusätzliche Rechte können nur Filial- oder Abteilungsleitungen erhalten.", "PORTAL_PERMISSION_DENIED");
-  }
+  const target = portalUsersForAdmin().find((user) => user.employeeNumber === employeeNumber);
+  if (!target?.configured || !target.active) throw httpError(404, "Der aktive Portal-Zugang wurde nicht gefunden.");
+  if (!actorCanManagePermissionGrants(actor, target)) throw httpError(403, target.role === "developer"
+    ? "Der Developer-Zugang ist geschützt und kann nicht über die App verändert werden."
+    : "Für diesen Zugang dürfen keine individuellen Rechte geändert werden.", target.role === "developer" ? "PORTAL_DEVELOPER_PROTECTED" : "PORTAL_ROLE_HIERARCHY_DENIED");
   if (!Array.isArray(request.body.permissions)) throw httpError(400, "Bitte eine gültige Rechteauswahl übermitteln.");
   const submitted = [...new Set(request.body.permissions.map((value) => String(value || "").trim()).filter(Boolean))];
-  const invalid = submitted.filter((permission) => !delegablePortalPermissions.has(permission));
+  const manageablePermissions = manageablePortalPermissionsForActor(actor);
+  const invalid = submitted.filter((permission) => !manageablePermissions.has(permission));
   if (invalid.length) {
-    throw httpError(400, `Diese Rechte dürfen nicht delegiert werden: ${invalid.join(", ")}`, "PORTAL_PERMISSION_NOT_DELEGABLE");
+    throw httpError(403, `Diese Rechte dürfen durch den aktuellen Zugang nicht vergeben werden: ${invalid.join(", ")}`, "PORTAL_PERMISSION_NOT_DELEGABLE");
   }
   const before = portalPermissionGrantsForEmployee(employeeNumber);
   db.exec("BEGIN");
   try {
-    db.prepare("DELETE FROM portal_permission_grants WHERE employee_number = ?").run(employeeNumber);
+    const remove = db.prepare("DELETE FROM portal_permission_grants WHERE employee_number = ? AND permission = ?");
+    for (const permission of manageablePermissions) remove.run(employeeNumber, permission);
     const insert = db.prepare(`
       INSERT INTO portal_permission_grants (employee_number, permission, granted_by, updated_at)
       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
@@ -7110,8 +7157,9 @@ app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
     db.exec("ROLLBACK");
     throw error;
   }
-  auditPortal(actor.employeeNumber, "portal.rights.update", "portal_user", employeeNumber, JSON.stringify({ before, after: submitted }));
-  response.json(rightsManagementPayload());
+  const after = portalPermissionGrantsForEmployee(employeeNumber);
+  auditPortal(actor.employeeNumber, "portal.rights.update", "portal_user", employeeNumber, JSON.stringify({ before, after }));
+  response.json(rightsManagementPayload(actor));
 });
 
 app.get("/api/portal/v1/users", (request, response) => {
@@ -7191,9 +7239,6 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       password_changed_at = CASE WHEN ? <> '' THEN CURRENT_TIMESTAMP ELSE portal_users.password_changed_at END,
       updated_at = CURRENT_TIMESTAMP
   `).run(employeeNumber, passwordHash, role, active, password ? 1 : Number(request.body.mustChangePassword !== false), password, password);
-  if (!["manager", "department_manager"].includes(role)) {
-    db.prepare("DELETE FROM portal_permission_grants WHERE employee_number = ?").run(employeeNumber);
-  }
   if (!active || password) db.prepare("UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND revoked_at IS NULL").run(employeeNumber);
   auditPortal(actor.employeeNumber, "portal.user.update", "portal_user", employeeNumber, JSON.stringify({ role, active: Boolean(active), passwordReset: Boolean(password) }));
   response.json({ users: portalUsersForAdmin(), roles: getPortalRoles() });
@@ -8057,7 +8102,7 @@ app.get("/api/portal/v1/absence-requests", (request, response) => {
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || Number(b.id) - Number(a.id));
   const actionable = requests.filter((entry) => {
     if (!["pending_local", "preliminary_local", "pending_hr"].includes(entry.status)) return false;
-    if (entry.approval_stage === "hr") return HR_DECISION_PORTAL_ROLES.has(session.role) || session.employeeNumber === "local";
+    if (entry.approval_stage === "hr") return sessionCanApproveHr(session);
     return session.role !== "hr" || ["developer", "admin"].includes(session.role) || session.employeeNumber === "local";
   });
   response.json({
@@ -8198,10 +8243,10 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", (request, response) 
   const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
   const stage = actorStage(session, entry);
   if (entry.approval_stage === "hr" && stage !== "hr") throw httpError(403, "Dieser Antrag wartet auf die Personalleitung.");
-  if (stage === "hr" && !HR_DECISION_PORTAL_ROLES.has(session.role) && session.employeeNumber !== "local") throw httpError(403, "Nur die Personalleitung darf diese Freigabe abschließen.");
+  if (stage === "hr" && !sessionCanApproveHr(session)) throw httpError(403, "Für diese verbindliche Freigabe fehlt die Berechtigung.");
   if (entry.status === "approved" && entry.hr_approved_by && ["change", "cancel"].includes(action)
-    && !HR_DECISION_PORTAL_ROLES.has(session.role) && session.employeeNumber !== "local") {
-    throw httpError(403, "Dieser verbindliche Antrag kann nur durch die Personalleitung geändert oder storniert werden.");
+    && !sessionCanApproveHr(session)) {
+    throw httpError(403, "Für die Änderung dieses verbindlichen Antrags fehlt die Berechtigung.");
   }
   let result = {};
   db.exec("BEGIN");
@@ -8607,14 +8652,14 @@ app.get("/api/settings", (request, response) => {
 });
 
 app.get("/api/branding/export", (request, response) => {
-  requireAdminHrOrLocal(request, "branding:read");
+  requirePortalAdminOrLocal(request, "branding:read");
   const kit = brandingKitForExport(request.query);
   response.setHeader("Content-Disposition", contentDispositionHeader("grabenplaner-branding-kit.json"));
   response.json(kit);
 });
 
 app.get("/api/branding/export.zip", (request, response) => {
-  requireAdminHrOrLocal(request, "branding:read");
+  requirePortalAdminOrLocal(request, "branding:read");
   const kit = brandingKitForExport(request.query);
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-branding-zip-"));
   const zipPath = path.join(tempRoot, "grabenplaner-branding-kit.zip");
@@ -8635,18 +8680,18 @@ app.get("/api/branding/export.zip", (request, response) => {
 });
 
 app.get("/api/branding/kits", (request, response) => {
-  requireAdminHrOrLocal(request, "branding:read");
+  requirePortalAdminOrLocal(request, "branding:read");
   const context = resolvePlanningContext(request.query || {});
   response.json(listBrandingKits(context.locationId));
 });
 
 app.get("/api/branding/assignments", (request, response) => {
-  requireAdminHrOrLocal(request, "branding:read");
+  requirePortalAdminOrLocal(request, "branding:read");
   response.json({ assignments: locationBrandingAssignments() });
 });
 
 app.put("/api/branding/assignments", (request, response) => {
-  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const actor = requirePortalAdminOrLocal(request, "branding:write");
   const submittedAssignments = Array.isArray(request.body.assignments) ? request.body.assignments : null;
   if (submittedAssignments) {
     if (!submittedAssignments.length || submittedAssignments.length > 250) {
@@ -8675,12 +8720,12 @@ app.put("/api/branding/assignments", (request, response) => {
 });
 
 app.get("/api/branding/preference", (request, response) => {
-  requireAdminHrOrLocal(request, "branding:read");
+  requirePortalAdminOrLocal(request, "branding:read");
   response.json(managementBrandingPreference());
 });
 
 app.put("/api/branding/preference", (request, response) => {
-  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const actor = requirePortalAdminOrLocal(request, "branding:write");
   const kitId = String(request.body.kitId || "neutral").trim();
   let brandingInput;
   if (kitId === "custom") brandingInput = request.body.branding || request.body;
@@ -8693,13 +8738,13 @@ app.put("/api/branding/preference", (request, response) => {
 });
 
 app.delete("/api/branding/kits/:kitId", (request, response) => {
-  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const actor = requirePortalAdminOrLocal(request, "branding:write");
   const deleted = deleteInstalledBrandingKit(request.params.kitId, actor.employeeNumber);
   response.json({ ok: true, deleted, kits: listBrandingKits(String(request.query.locationId || "")) });
 });
 
 app.post("/api/branding/kits/:kitId/apply", (request, response) => {
-  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const actor = requirePortalAdminOrLocal(request, "branding:write");
   const kit = readBrandingKitManifest(request.params.kitId);
   const context = resolvePlanningContext(request.body || {});
   response.json({
@@ -8709,7 +8754,7 @@ app.post("/api/branding/kits/:kitId/apply", (request, response) => {
 });
 
 app.put("/api/branding/import", (request, response) => {
-  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const actor = requirePortalAdminOrLocal(request, "branding:write");
   const kit = request.body?.kit || request.body || {};
   const installedKit = installBrandingKit(kit, { fileName: request.get("X-Branding-Filename") || "branding-kit.json" });
   const context = resolvePlanningContext(request.body || {});
@@ -8721,7 +8766,7 @@ app.put("/api/branding/import", (request, response) => {
 });
 
 app.put("/api/branding/import.zip", express.raw({ type: ["application/zip", "application/x-zip-compressed", "application/octet-stream"], limit: "25mb" }), (request, response) => {
-  const actor = requireAdminHrOrLocal(request, "branding:write");
+  const actor = requirePortalAdminOrLocal(request, "branding:write");
   if (!Buffer.isBuffer(request.body) || request.body.length < 128) {
     throw httpError(400, "Bitte eine gültige Branding-ZIP-Datei auswählen.");
   }
@@ -8819,8 +8864,8 @@ app.put("/api/settings", (request, response) => {
     : "medium";
   const brandingValues = brandingValuesFromBody(body.branding || body);
   const brandingSubmitted = Boolean(body.branding);
-  if (brandingSubmitted && !(MANAGEMENT_BRANDING_PORTAL_ROLES.has(request.portalSession?.role) || (!getPortalStatus().portalEnabled && isLoopbackRequest(request)))) {
-    throw httpError(403, "Branding darf nur durch Admin oder Personalleitung geändert werden.", "PORTAL_PERMISSION_DENIED");
+  if (brandingSubmitted && !(request.portalSession?.permissions?.includes("branding:write") || (!getPortalStatus().portalEnabled && isLoopbackRequest(request)))) {
+    throw httpError(403, "Für die Branding-Verwaltung fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
   }
   const currentWeekLockMode = body.currentWeekLockMode === "manual" ? "manual" : "closing";
   const currentWeekLockDay = ["friday", "saturday", "sunday"].includes(String(body.currentWeekLockDay)) ? String(body.currentWeekLockDay) : "saturday";

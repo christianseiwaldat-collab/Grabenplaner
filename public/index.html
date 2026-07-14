@@ -474,8 +474,9 @@
 
           <section id="rightsSettings" class="settings-section settings-two-column">
             <div class="settings-card full-span">
-              <div class="card-heading"><div class="card-icon">R</div><div><h2>Rechtemanagement</h2><p>Zusätzliche Verwaltungsrechte gezielt an Filial- und Abteilungsleitungen vergeben.</p></div></div>
-              <p class="settings-note security-note">Rollenbereiche bleiben immer wirksam. Branding, Rechtemanagement, Backups und Updates können nicht an untergeordnete Rollen delegiert werden.</p>
+              <div class="card-heading"><div class="card-icon">R</div><div><h2>Rechtemanagement</h2><p>Individuelle Zusatzrechte unabhängig von Position und Grundrolle vergeben.</p></div></div>
+              <p class="settings-note security-note">Grundrechte der Rolle bleiben erhalten. IT-Admin verwaltet den vollständigen Zusatzrechte-Katalog; die Personalleitung ausschließlich freigegebene fachliche Rechte. Der Developer-Zugang bleibt geschützt.</p>
+              <label class="field rights-search-field"><span>Teammitglied suchen</span><input id="rightsEmployeeSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer oder Name" /></label>
               <p class="settings-note" id="rightsManagementHint">Rechte werden geladen.</p>
               <div class="rights-user-list" id="rightsUserList"></div>
             </div>
@@ -787,6 +788,16 @@
           <p class="calculation-note full-width">Mindestens 6 Zeichen; auch nur Ziffern sind möglich. Ein starkes Passwort wird empfohlen. Dieses Konto darf Zugänge, Einstellungen und Dienstpläne verwalten.</p>
         </div>
         <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="adminSetupModal">Abbrechen</button><button type="submit" class="primary-button">Admin einrichten</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal rights-editor-modal" id="rightsEditorModal">
+      <form method="dialog" id="rightsEditorForm">
+        <div class="modal-header"><div><span class="eyebrow">Individuelle Zusatzrechte</span><h2 id="rightsEditorTitle">Rechte bearbeiten</h2><p id="rightsEditorSummary"></p></div><button type="button" class="close-button" data-close="rightsEditorModal">×</button></div>
+        <div class="rights-editor-legend"><span><i class="role-right-dot"></i> Grundrecht der Rolle</span><span><i class="additional-right-dot"></i> Individuelles Zusatzrecht</span><span><i class="locked-right-dot"></i> Nur durch IT-Admin oder höhere Ebene änderbar</span></div>
+        <div class="rights-editor-permissions" id="rightsEditorPermissions"></div>
+        <p class="calculation-note" id="rightsEditorHint">Zusatzrechte gelten innerhalb der bereits zugewiesenen Filiale beziehungsweise Abteilung.</p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="rightsEditorModal">Abbrechen</button><button type="submit" class="primary-button" id="saveRightsEditorButton">Rechte speichern</button></div>
       </form>
     </dialog>
 

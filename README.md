@@ -25,7 +25,7 @@ http://localhost:3000
 - Wochenstundenübersicht und Auswertung je Teammitglied
 - Mitarbeiterportal mit Anträgen, AUM-Upload und Zeiterfassung
 - Wochen- und Monatsübersichten der Zeiterfassung mit nachvollziehbaren Korrekturanträgen
-- Rollen- und Rechtemanagement mit gezielter Freigabe ausgewählter Verwaltungsfunktionen
+- Rollen- und Rechtemanagement mit personenbezogenen Zusatzrechten und getrennten Vergabegrenzen für IT-Admin und Personalleitung
 - Mobil optimiertes Leitungsportal mit konfigurierbaren Kernfunktionen
 - Standortbezogene Branding-Zuweisung für unterschiedliche Filialauftritte
 - Lokale SQLite-Datenbank ohne externen Datenbankserver

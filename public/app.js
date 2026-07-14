@@ -31,6 +31,7 @@ const state = {
   brandingPreference: null,
   brandingFormDirty: false,
   mobileLeadershipSettings: null,
+  selectedRightsEmployeeNumber: "",
   amuPolicy: null,
   selectedRequest: null,
   allEmployees: [],
@@ -100,7 +101,7 @@ const elements = Object.fromEntries(
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
-    "rightsManagementHint", "rightsUserList", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "positionSettingsCard", "personnelViewSettingsCard",
+    "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "positionSettingsCard", "personnelViewSettingsCard",
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint",
@@ -443,7 +444,7 @@ function applyRoleVisibility() {
   const globalAdministration = !lanActive || ["developer", "it_admin", "admin", "hr"].includes(role);
   const settingsAccess = !lanActive || permissions.includes("settings:write");
   const rightsAccess = globalAdministration && (!lanActive || permissions.includes("rights:read"));
-  const brandingAccess = globalAdministration && (!lanActive || permissions.includes("branding:write"));
+  const brandingAccess = !lanActive || permissions.includes("branding:write");
   const employeeWriteAccess = !lanActive || permissions.includes("employees:write");
   const employeeDisplayWriteAccess = !lanActive || permissions.includes("employees:display:write");
   const locationBaseWriteAccess = !lanActive || permissions.includes("locations:write");
@@ -648,7 +649,7 @@ function applyBranding(settings = state.data?.settings || {}) {
 
 function hasManagementBrandingAccess() {
   if (state.portalStatus?.portalEnabled !== true) return true;
-  return ["developer", "admin", "hr"].includes(state.portalSession?.user?.role);
+  return state.portalSession?.user?.permissions?.includes("branding:write");
 }
 
 function currentShellBranding(fallback = {}) {
@@ -1555,27 +1556,55 @@ async function loadPortalUsers() {
 function renderRightsManagement() {
   if (!elements.rightsUserList) return;
   const result = state.rightsManagement || {};
-  const catalog = result.catalog || [];
   const users = result.users || [];
+  const query = String(elements.rightsEmployeeSearch?.value || "").trim().toLocaleLowerCase("de-AT");
+  const filtered = users.filter((user) => !query || [user.employeeNumber, user.fullName, user.nickname, user.roleName]
+    .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(query)));
   elements.rightsManagementHint.textContent = users.length
-    ? "Zusatzrechte gelten sofort und immer nur innerhalb der bereits zugewiesenen Filiale beziehungsweise Abteilung."
-    : "Es gibt derzeit keine Filial- oder Abteilungsleitung, der Zusatzrechte zugewiesen werden können.";
-  elements.rightsUserList.innerHTML = users.map((user) => {
-    const granted = new Set(user.grants || user.grantedPermissions || []);
-    const scopeText = (user.scopes || []).map((scope) => {
-      const location = state.locations.find((item) => item.id === scope.locationId);
-      const department = location?.departments?.find((item) => Number(item.id) === Number(scope.departmentId));
-      return `${location?.name || scope.locationId}${department ? ` · ${department.name}` : ""}`;
-    }).join(", ") || user.homeLocationId || "Kein Bereich";
+    ? `${filtered.length} von ${users.length} Teammitgliedern angezeigt. Zusatzrechte ergänzen die Grundrechte der jeweiligen Rolle.`
+    : "Es sind noch keine aktiven Teammitglieder vorhanden.";
+  elements.rightsUserList.innerHTML = filtered.length ? filtered.map((user) => {
+    const additionalCount = (user.grantedPermissions || []).length;
+    const location = state.locations.find((item) => item.id === user.homeLocationId);
+    const status = !user.configured ? "Portal-Zugang noch nicht eingerichtet" : !user.active ? "Portal-Zugang inaktiv" : user.manageable ? "Zusatzrechte können bearbeitet werden" : "Rechte nur zur Ansicht";
     return `<article class="rights-user-card" data-rights-user="${escapeHtml(user.employeeNumber)}">
-      <div class="rights-user-heading"><div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${escapeHtml(user.roleName || user.role)} · ${escapeHtml(scopeText)}</small></div><button class="secondary-button" type="button" data-save-user-rights>Rechte speichern</button></div>
-      <div class="rights-permission-grid">${catalog.map((permission) => {
-        const warningLevel = permission.warningLevel || permission.risk || "normal";
-        const warningText = warningLevel === "critical" ? "Besonders weitreichendes Recht" : warningLevel === "high" ? "Weitreichendes Recht" : "Zusätzliches Verwaltungsrecht";
-        return `<label class="rights-permission ${["high", "critical"].includes(warningLevel) || permission.sensitive ? "sensitive" : ""} ${warningLevel === "critical" ? "critical" : ""}"><input type="checkbox" value="${escapeHtml(permission.id)}" ${granted.has(permission.id) ? "checked" : ""} /><span><strong>${escapeHtml(permission.label || permission.name || permission.id)}</strong><small>${escapeHtml(permission.description || warningText)}</small></span></label>`;
-      }).join("")}</div>
+      <div class="rights-user-heading"><div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${escapeHtml(user.roleName || user.role)} · ${escapeHtml(location?.name || user.homeLocationId || "Kein Standort")} · ${additionalCount} Zusatzrecht${additionalCount === 1 ? "" : "e"}</small><small>${escapeHtml(status)}</small></div><button class="secondary-button" type="button" data-edit-user-rights>${user.manageable ? "Rechte bearbeiten" : "Rechte ansehen"}</button></div>
     </article>`;
-  }).join("");
+  }).join("") : '<p class="settings-note rights-empty-search">Kein Teammitglied entspricht dieser Suche.</p>';
+}
+
+function openRightsEditor(employeeNumber) {
+  const result = state.rightsManagement || {};
+  const user = (result.users || []).find((entry) => entry.employeeNumber === employeeNumber);
+  if (!user || !elements.rightsEditorModal) return;
+  state.selectedRightsEmployeeNumber = employeeNumber;
+  const rolePermissions = new Set(user.rolePermissions || []);
+  const grantedPermissions = new Set(user.grantedPermissions || []);
+  const location = state.locations.find((item) => item.id === user.homeLocationId);
+  elements.rightsEditorTitle.textContent = `${user.employeeNumber} · ${user.nickname || user.fullName}`;
+  elements.rightsEditorSummary.textContent = `${user.roleName || user.role} · ${location?.name || user.homeLocationId || "Kein Standort"}`;
+  const groups = new Map();
+  for (const permission of result.catalog || []) {
+    const group = permission.group || "Weitere Rechte";
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(permission);
+  }
+  elements.rightsEditorPermissions.innerHTML = [...groups.entries()].map(([group, permissions]) => `
+    <section class="rights-permission-group"><h3>${escapeHtml(group)}</h3><div class="rights-permission-grid">${permissions.map((permission) => {
+      const baseRight = rolePermissions.has(permission.id);
+      const additionalRight = grantedPermissions.has(permission.id);
+      const editable = Boolean(user.manageable && permission.editable && !baseRight);
+      const warningLevel = permission.warningLevel || "normal";
+      const statusText = baseRight ? "Grundrecht der Rolle" : !permission.editable ? "Nur durch IT-Admin oder höhere Ebene änderbar" : additionalRight ? "Individuell vergeben" : permission.description || "Optionales Zusatzrecht";
+      return `<label class="rights-permission ${warningLevel === "critical" ? "critical" : warningLevel === "high" ? "sensitive" : ""} ${baseRight ? "base-right" : ""} ${!permission.editable ? "locked-right" : ""}"><input type="checkbox" data-additional-permission value="${escapeHtml(permission.id)}" ${baseRight || additionalRight ? "checked" : ""} ${editable ? "" : "disabled"} /><span><strong>${escapeHtml(permission.label || permission.id)}</strong><small>${escapeHtml(statusText)}</small></span></label>`;
+    }).join("")}</div></section>`).join("");
+  elements.saveRightsEditorButton.disabled = !user.manageable;
+  elements.rightsEditorHint.textContent = !user.configured
+    ? "Bitte zuerst unter Zugänge einen Portal-Zugang einrichten."
+    : !user.manageable
+      ? "Dieser Zugang ist für die aktuelle Rolle geschützt oder liegt außerhalb ihrer Verwaltungsebene."
+      : "Zusatzrechte gelten sofort, ergänzen die Grundrolle und bleiben an den zugewiesenen Standort beziehungsweise die Abteilung gebunden.";
+  elements.rightsEditorModal.showModal();
 }
 
 function renderMobileLeadershipSettings() {
@@ -1613,14 +1642,17 @@ async function loadRightsManagement() {
   }
 }
 
-async function saveUserRights(card) {
-  const employeeNumber = card.dataset.rightsUser;
-  const permissions = [...card.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
+async function saveUserRights(event) {
+  event.preventDefault();
+  const employeeNumber = state.selectedRightsEmployeeNumber;
+  if (!employeeNumber) return;
+  const permissions = [...elements.rightsEditorPermissions.querySelectorAll('input[data-additional-permission]:checked:not(:disabled)')].map((input) => input.value);
   try {
     state.rightsManagement = await api(`/api/portal/v1/rights/${encodeURIComponent(employeeNumber)}`, {
       method: "PUT",
       body: JSON.stringify({ permissions }),
     });
+    elements.rightsEditorModal.close();
     renderRightsManagement();
     showToast(`Zusatzrechte für ${employeeNumber} wurden gespeichert.`);
   } catch (error) { showToast(error.message, true); }
@@ -3536,7 +3568,7 @@ async function saveSettings(silent = false) {
       method: "PUT",
       body: JSON.stringify(payload),
     });
-    if ((!portalEnabled || ["developer", "admin", "hr"].includes(role)) && elements.brandingSettings?.classList.contains("active") && state.brandingFormDirty) {
+    if ((!portalEnabled || permissions.includes("branding:write")) && elements.brandingSettings?.classList.contains("active") && state.brandingFormDirty) {
       await saveCustomManagementBranding();
     }
     if (result.restartRequired && !silent) {
@@ -3747,10 +3779,12 @@ elements.requestWorkflowSummary?.addEventListener("click", (event) => {
 });
 elements.vacationHrApprovalRequired?.addEventListener("change", (event) => toggleHrWorkflow(event.target.checked));
 elements.saveAmuSettingsButton?.addEventListener("click", saveAmuSettings);
+elements.rightsEmployeeSearch?.addEventListener("input", renderRightsManagement);
 elements.rightsUserList?.addEventListener("click", (event) => {
   const card = event.target.closest("[data-rights-user]");
-  if (card && event.target.closest("[data-save-user-rights]")) saveUserRights(card);
+  if (card && event.target.closest("[data-edit-user-rights]")) openRightsEditor(card.dataset.rightsUser);
 });
+elements.rightsEditorForm?.addEventListener("submit", saveUserRights);
 elements.saveMobileLeadershipSettingsButton?.addEventListener("click", saveMobileLeadershipSettings);
 elements.requestActionForm?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-request-action]");

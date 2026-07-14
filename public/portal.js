@@ -850,9 +850,10 @@ async function loadLeadershipOverview() {
 
 function leadershipRequestActionable(request) {
   if (!["pending", "pending_local", "preliminary_local", "pending_hr"].includes(request.status)) return false;
-  const role = portalUser()?.role;
+  const user = portalUser();
+  const role = user?.role;
   const stage = request.approval_stage || request.approvalStage;
-  if (stage === "hr") return ["developer", "hr", "admin"].includes(role);
+  if (stage === "hr") return user?.permissions?.includes("hr:approve");
   return role !== "hr";
 }
 

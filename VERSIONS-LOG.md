@@ -5,6 +5,8 @@
 - Geschützte Developer-Rolle als technische Ebene oberhalb der regulären Administration ergänzt; sie kann nicht über die Weboberfläche vergeben, geändert oder entfernt werden.
 - IT-Admin als eigene technische Rolle für Zugänge, Rechtemanagement, Betriebsmodus, Updates, Backups und Serverbetrieb eingeführt, ohne automatische Personal- oder AUM-Fachrechte.
 - Rollenvergabe hierarchisch abgesichert: Personalleitung und IT-Admin verwalten untergeordnete Rollen, Admin und Developer die regulären Systemrollen; Developer bleibt ausschließlich offline bindbar.
+- Personenbezogene Zusatzrechte von der Position entkoppelt: IT-Admin kann den vollständigen delegierbaren Katalog auch normalen Mitarbeiterkonten zuweisen, während die Personalleitung nur festgelegte fachliche Rechte verwaltet.
+- Rechtemanagement mit Suche nach Personalnummer oder Name, kompakter Trefferliste und gruppiertem Bearbeitungsdialog für Grund- und Zusatzrechte ergänzt.
 - Bisher zu weitreichendes delegierbares Personalrecht durch ein enges Recht zur Änderung von Teamfarben ersetzt. Name, Sollzeit und weitere Stammdaten bleiben in Oberfläche und API schreibgeschützt.
 - Standort- und Abteilungsgrenzen sowie geschützte Benutzerkonten werden bei jeder relevanten Serveraktion geprüft und sicherheitsrelevant protokolliert.
 - Sicherheitsrichtlinie für vertrauliche Meldungen, unterstützte Versionen und sichere Betriebsbedingungen ergänzt.

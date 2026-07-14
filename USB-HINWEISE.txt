@@ -17,6 +17,8 @@ Neu in v0.54 Beta:
   - Developer, IT-Admin und reguläre Fachrollen sind klar getrennt.
   - Der Developer-Zugang ist geschützt und nicht über die App veränderbar.
   - Admin, IT-Admin und Personalleitung können Rechte hierarchisch verwalten.
+  - Zusatzrechte können per Personalsuche unabhängig von Position und Grundrolle
+    vergeben werden; die Personalleitung sieht nur ihren fachlichen Teilkatalog.
   - Filial- und Abteilungsleitungen können gezielt nur Teamfarben bearbeiten;
     Namen, Sollstunden und weitere Personalstammdaten bleiben geschützt.
   - Rollen-, Bereichs- und API-Prüfungen wurden weiter abgesichert.
