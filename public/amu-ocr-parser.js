@@ -283,6 +283,7 @@
         dateTo: "",
         confidence: 0,
         fieldConfidence: { dateFrom: 0, dateTo: 0 },
+        autoFillFields: { dateFrom: false, dateTo: false },
         complete: false,
         autoFill: false,
         requiresConfirmation: true,
@@ -301,9 +302,11 @@
     const dateFromConfidence = confidenceFor(start);
     const dateToConfidence = confidenceFor(end);
     const complete = Boolean(start && end);
-    const autoFill = complete
-      && start.labeled && end.labeled
-      && dateFromConfidence >= 0.72 && dateToConfidence >= 0.72;
+    const autoFillFields = {
+      dateFrom: Boolean(start && start.labeled && dateFromConfidence >= 0.72),
+      dateTo: Boolean(end && end.labeled && dateToConfidence >= 0.72),
+    };
+    const autoFill = complete && autoFillFields.dateFrom && autoFillFields.dateTo;
     const warnings = [];
     if (!candidates.length) warnings.push("no_date_detected");
     else if (!complete) warnings.push("period_incomplete");
@@ -319,6 +322,7 @@
         dateFrom: dateFromConfidence,
         dateTo: dateToConfidence,
       },
+      autoFillFields,
       complete,
       autoFill,
       requiresConfirmation: true,

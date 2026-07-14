@@ -76,8 +76,8 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Diens
     </td>
     <td width="50%" valign="top">
       <img src="docs/readme/aum-upload.webp" alt="Geschützter AUM-Upload im Mitarbeiterportal" width="300">
-      <h3>Krankmelden und AUM direkt übermitteln</h3>
-      <p>Mitarbeitende können sich im Portal krankmelden und eine AUM als Dokument oder Handyfoto nachreichen. Für die lokale OCR-Auswertung verlassen weder Foto noch OCR-Rohtext den Browser; beim bestätigten AUM-Upload wird das Dokument an Grabenplaner übertragen und geschützt gespeichert.</p>
+      <h3>Krankmeldung und AUM in einem Ablauf</h3>
+      <p>Mitarbeitende wählen den Krankheitszeitraum in einem gemeinsamen Kalender, können das voraussichtliche Ende offenlassen, eine AUM später nachreichen und anschließend ihre Arbeitsfähigkeit melden. Die lokale Datenerkennung verarbeitet digitale PDFs mit PDF.js sowie Scan-PDFs, hochgeladene Fotos und Kamerabilder mit Tesseract.js. Dokumenttext und OCR-Rohtext bleiben dabei im Browser; erst der bestätigte AUM-Upload überträgt das Dokument zur geschützten Speicherung.</p>
     </td>
   </tr>
 </table>
@@ -91,7 +91,7 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Diens
 - Urlaubsplanung mit Jahres-, Quartals- und Monatsübersicht
 - PDF-Export für Dienstpläne, Abteilungspläne und Urlaubsübersichten
 - Wochenstundenübersicht, Plan-/Ist-Vergleich, Pausenhinweise und Samstagswertung
-- Mitarbeiterportal mit Urlaubs- und ZA-Anträgen, Krankmeldung, lokalem AUM-OCR und Zeiterfassung
+- Mitarbeiterportal mit Urlaubs- und ZA-Anträgen, gemeinsamem Krankmeldungs-/AUM-Ablauf, lokaler Dokumenterkennung und Zeiterfassung
 - Sofortige interne Besetzungswarnung sowie optional zeitgesteuerte externe Warnkanäle für zuständige Leitungen
 - Freiwilliger WLAN-Anwesenheitsassistent mit bearbeitbaren und bestätigungspflichtigen Zeitvorschlägen
 - Wochen- und Monatsübersichten der Zeiterfassung mit nachvollziehbaren Korrekturanträgen
@@ -131,12 +131,12 @@ Aktualisierungen werden über GitHub geprüft. Die integrierte Aktualisierung er
 | Datenbank | SQLite, ohne separaten Datenbankserver |
 | PDF-Ausgabe | PDFKit |
 | Bild- und Dokumentaufbereitung | Sharp und PDFKit |
-| Lokale AUM-Texterkennung | Tesseract.js mit lokal mitgeliefertem deutschen Sprachmodell |
+| Lokale AUM-Datenerkennung | PDF.js für digitale PDFs; Tesseract.js mit lokal mitgeliefertem deutschen Sprachmodell für Scan-PDFs, hochgeladene Fotos und Kamerabilder |
 | Geschützter Personalakt-Speicher | AES-256-GCM, kontextgebundene Verschlüsselung und gemeinsame Sicherung mit der Datenbank |
 | Authentifizierung | Rollen, Sitzungen, CSRF-Schutz und bereichsbezogene Berechtigungen |
 | Server-Pilot | HTTPS-Reverse-Proxy, Dienstbetrieb, Diagnose-, Backup- und Restore-Vorlagen |
 
-Für lokale Entwicklung wird Node.js 22 oder neuer benötigt:
+Für lokale Entwicklung wird Node.js 22.13 oder neuer benötigt:
 
 ```powershell
 corepack enable

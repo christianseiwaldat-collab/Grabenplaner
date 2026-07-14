@@ -14,6 +14,7 @@ const portalState = {
   leadershipSicknessCases: [],
   sicknessNotificationPreferences: null,
   amuOcr: { busy: false, assisted: false, startManuallyEdited: false, endManuallyEdited: false, autoFilledStart: false, autoFilledEnd: false, fileKey: "", runToken: 0 },
+  dateRangeCalendar: null,
   activeTab: "schedule",
   timeTracking: null,
   timePeriod: "week",
@@ -52,7 +53,7 @@ const optionNames = {
   other: "Sonstiges",
 };
 const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-const statusLabels = { pending: "Offen", submitted: "Übermittelt", reported: "Gemeldet", aum_received: "AUM vorhanden", pending_local: "Offen", preliminary_local: "Vorläufig genehmigt", pending_hr: "Wartet auf Personalleitung", approved: "Genehmigt", rejected: "Abgelehnt", cancelled: "Storniert", withdrawn: "Zurückgezogen", reviewed: "Geprüft", returned: "Ergänzung erforderlich", warning: "Besetzung prüfen", yellow: "AUM überfällig", red: "Rot eskaliert" };
+const statusLabels = { pending: "Offen", submitted: "Übermittelt", reported: "Gemeldet", aum_received: "AUM vorhanden", recovered: "Wieder arbeitsfähig", pending_local: "Offen", preliminary_local: "Vorläufig genehmigt", pending_hr: "Wartet auf Personalleitung", approved: "Genehmigt", rejected: "Abgelehnt", cancelled: "Storniert", withdrawn: "Zurückgezogen", reviewed: "Geprüft", returned: "Ergänzung erforderlich", warning: "Besetzung prüfen", yellow: "AUM überfällig", red: "Rot eskaliert" };
 
 function applyDeviceMode() {
   const compact = window.matchMedia("(max-width: 720px)").matches;
@@ -89,6 +90,9 @@ const el = Object.fromEntries([
   "markAllNotificationsRead", "sicknessCaseForm", "sicknessStartDate", "sicknessExpectedEnd", "sicknessEmployeeNote", "sicknessMessage", "sicknessSubmitButton", "sicknessCaseList",
   "amuReportForm", "amuSicknessCaseId", "amuIncapacityFrom", "amuIncapacityTo", "amuEmployeeNote", "amuDocuments",
   "amuMessage", "amuSubmitButton", "amuReportList", "amuCamera", "amuUploadHint", "amuOcrStatus", "amuOcrStatusTitle", "amuOcrStatusText", "amuOcrConfirmField", "amuOcrConfirmed", "portalDeploymentBanner",
+  "sicknessDateRangeButton", "sicknessDateRangeText", "amuUploadPanel", "amuDateRangeButton", "amuDateRangeText",
+  "dateRangeDialog", "dateRangeForm", "dateRangeDialogTitle", "dateRangeStartText", "dateRangeEndText", "dateRangePreviousMonth", "dateRangeMonthLabel", "dateRangeNextMonth", "dateRangeCalendarGrid", "dateRangeOpenEnd", "dateRangeMessage", "dateRangeClose", "dateRangeCancel", "dateRangeApply",
+  "sicknessRecoveryDialog", "sicknessRecoveryForm", "sicknessRecoveryTitle", "sicknessRecoveryCaseId", "sicknessRecoveryDate", "sicknessRecoveryMessage", "sicknessRecoveryClose", "sicknessRecoveryCancel", "sicknessRecoverySubmit",
   "sicknessNotificationPreferencesCard", "sicknessNotificationPreferencesForm", "sicknessNotificationEarliestTime", "sicknessNotificationChannels", "sicknessNotificationPreferencesMessage",
 ].map((id) => [id, document.querySelector(`#${id}`)]));
 
@@ -125,6 +129,68 @@ function isMobileUi() {
 
 function dateText(value, options = { day: "2-digit", month: "2-digit", year: "numeric" }) {
   return new Intl.DateTimeFormat("de-AT", options).format(new Date(`${value}T12:00:00`));
+}
+
+function dateRangeText(start, end, emptyText = "Zeitraum auswählen") {
+  if (!start) return emptyText;
+  return end ? `${dateText(start)} – ${dateText(end)}` : `${dateText(start)} · Ende offen`;
+}
+
+function updateSicknessRangeControls() {
+  if (el.sicknessDateRangeText) {
+    el.sicknessDateRangeText.textContent = dateRangeText(el.sicknessStartDate.value, el.sicknessExpectedEnd.value, "Beginn auswählen");
+  }
+  if (el.amuDateRangeText) {
+    el.amuDateRangeText.textContent = dateRangeText(el.amuIncapacityFrom.value, el.amuIncapacityTo.value);
+  }
+}
+
+function openDateRangeCalendar(context) {
+  if (!portalState.dateRangeCalendar) return;
+  const sickness = context === "sickness";
+  const from = sickness ? el.sicknessStartDate : el.amuIncapacityFrom;
+  const to = sickness ? el.sicknessExpectedEnd : el.amuIncapacityTo;
+  el.dateRangeDialogTitle.textContent = sickness ? "Krankheitszeitraum auswählen" : "AUM-Zeitraum auswählen";
+  message(el.dateRangeMessage, "");
+  portalState.dateRangeCalendar.open({
+    start: from.value,
+    end: to.value,
+    min: sickness ? addDays(iso(new Date()), -365) : addDays(iso(new Date()), -3650),
+    maxStart: sickness ? iso(new Date()) : addDays(iso(new Date()), 3650),
+    maxEnd: sickness ? "" : addDays(iso(new Date()), 3650),
+    maxEndDays: sickness ? 365 : null,
+    allowOpenEnd: true,
+    openLabel: "Ende offen",
+    onCommit(start, end) {
+      from.value = start;
+      to.value = end;
+      if (!sickness) {
+        portalState.amuOcr.startManuallyEdited = true;
+        portalState.amuOcr.endManuallyEdited = true;
+      }
+      updateSicknessRangeControls();
+    },
+  });
+}
+
+function initializeDateRangeCalendar() {
+  const factory = window.GrabenplanerDateRangeCalendar?.createDateRangeCalendar;
+  if (!factory || !el.dateRangeDialog) return;
+  portalState.dateRangeCalendar = factory({
+    dialog: el.dateRangeDialog,
+    form: el.dateRangeForm,
+    grid: el.dateRangeCalendarGrid,
+    title: el.dateRangeMonthLabel,
+    startText: el.dateRangeStartText,
+    endText: el.dateRangeEndText,
+    previousButton: el.dateRangePreviousMonth,
+    nextButton: el.dateRangeNextMonth,
+    openEndCheckbox: el.dateRangeOpenEnd,
+    applyButton: el.dateRangeApply,
+    closeButtons: [el.dateRangeClose, el.dateRangeCancel],
+  });
+  el.sicknessDateRangeButton?.addEventListener("click", () => openDateRangeCalendar("sickness"));
+  el.amuDateRangeButton?.addEventListener("click", () => openDateRangeCalendar("amu"));
 }
 
 function timeText(value) {
@@ -373,6 +439,7 @@ async function initialize() {
     if (el.sicknessStartDate) { el.sicknessStartDate.min = addDays(today, -365); el.sicknessStartDate.max = today; el.sicknessStartDate.value = today; }
     if (el.amuIncapacityFrom) el.amuIncapacityFrom.min = addDays(today, -3650);
     if (el.amuIncapacityTo) el.amuIncapacityTo.min = addDays(today, -3650);
+    updateSicknessRangeControls();
     const status = await api("/api/portal/v1/status");
     portalState.status = status;
     applyPortalBranding(status.branding);
@@ -1755,6 +1822,8 @@ function formatBytes(value) {
 
 function sicknessStatusText(item) {
   if (item.status === "withdrawn") return "Zurückgezogen";
+  if (item.status === "recovered") return item.return_to_work_date
+    ? `Wieder arbeitsfähig ab ${dateText(item.return_to_work_date)}` : "Wieder arbeitsfähig";
   if (item.status === "aum_received") return "AUM vorhanden";
   if (item.severity === "red") return "AUM-Frist überschritten";
   if (item.severity === "yellow") return "AUM überfällig";
@@ -1763,15 +1832,24 @@ function sicknessStatusText(item) {
 }
 
 function renderSicknessCases() {
-  const openCases = portalState.sicknessCases.filter((item) => ["reported", "aum_received"].includes(item.status));
+  const attachableCases = portalState.sicknessCases.filter((item) => ["reported", "aum_received", "recovered"].includes(item.status));
   el.sicknessCaseList.innerHTML = portalState.sicknessCases.length ? portalState.sicknessCases.map((item) => {
-    const period = `${dateText(item.start_date)}${item.expected_end ? `–${dateText(item.expected_end)}` : " · Ende offen"}`;
+    const period = `${dateText(item.start_date)}${item.expected_end ? `–${dateText(item.expected_end)}` : item.status === "recovered" ? " · abgeschlossen" : " · Ende offen"}`;
     const canWithdraw = item.status === "reported" && !item.aum_received_at;
+    const canReturn = ["reported", "aum_received"].includes(item.status);
+    const canAttach = item.status !== "withdrawn";
+    const reports = portalState.amuReports.filter((report) => Number(report.sickness_case_id || 0) === Number(item.id));
     const risk = item.staffing_risk?.atRisk ? '<span class="sickness-risk-note">Mindestbesetzung wird durch die Leitung geprüft</span>' : "";
-    return `<article class="request-item sickness-case" data-sickness-case-id="${Number(item.id)}"><div><strong>${esc(period)}</strong>${item.employee_note ? `<span>${esc(item.employee_note)}</span>` : ""}${risk}<span class="status ${esc(item.severity || item.status)}">${esc(sicknessStatusText(item))}</span></div>${canWithdraw ? '<button class="cancel-request" data-withdraw-sickness type="button">Zurückziehen</button>' : ""}</article>`;
+    const reportNote = reports.length ? `<span>${reports.length} ${reports.length === 1 ? "AUM" : "AUMs"} verschlüsselt hinterlegt</span>` : "";
+    const actions = [
+      canAttach ? '<button class="text-button" data-add-amu type="button">AUM nachreichen</button>' : "",
+      canReturn ? '<button class="text-button" data-recover-sickness type="button">Arbeitsfähigkeit melden</button>' : "",
+      canWithdraw ? '<button class="cancel-request" data-withdraw-sickness type="button">Zurückziehen</button>' : "",
+    ].filter(Boolean).join("");
+    return `<article class="request-item sickness-case" data-sickness-case-id="${Number(item.id)}"><div><strong>${esc(period)}</strong>${item.employee_note ? `<span>${esc(item.employee_note)}</span>` : ""}${reportNote}${risk}<span class="status ${esc(item.severity || item.status)}">${esc(sicknessStatusText(item))}</span></div>${actions ? `<div class="sickness-case-actions">${actions}</div>` : ""}</article>`;
   }).join("") : '<p class="empty-state">Noch keine Krankmeldung vorhanden.</p>';
   const currentValue = el.amuSicknessCaseId.value;
-  el.amuSicknessCaseId.innerHTML = '<option value="">Automatisch zuordnen</option>' + openCases.map((item) => `<option value="${Number(item.id)}">${dateText(item.start_date)}${item.expected_end ? `–${dateText(item.expected_end)}` : " · Ende offen"}</option>`).join("");
+  el.amuSicknessCaseId.innerHTML = '<option value="">Automatisch zuordnen</option>' + attachableCases.map((item) => `<option value="${Number(item.id)}">${dateText(item.start_date)}${item.expected_end ? `–${dateText(item.expected_end)}` : " · Ende offen"}${item.status === "recovered" ? " · abgeschlossen" : ""}</option>`).join("");
   if ([...el.amuSicknessCaseId.options].some((option) => option.value === currentValue)) el.amuSicknessCaseId.value = currentValue;
 }
 
@@ -1789,6 +1867,10 @@ async function submitSicknessCase(event) {
   event.preventDefault();
   const startDate = el.sicknessStartDate.value;
   const expectedEnd = el.sicknessExpectedEnd.value;
+  if (!startDate) {
+    message(el.sicknessMessage, "Bitte den Beginn der Krankmeldung im Kalender auswählen.", true);
+    return;
+  }
   if (expectedEnd && expectedEnd < startDate) {
     message(el.sicknessMessage, "Das voraussichtliche Ende darf nicht vor dem Beginn liegen.", true);
     return;
@@ -1801,6 +1883,8 @@ async function submitSicknessCase(event) {
     });
     el.sicknessCaseForm.reset();
     el.sicknessStartDate.value = iso(new Date());
+    el.sicknessExpectedEnd.value = "";
+    updateSicknessRangeControls();
     message(el.sicknessMessage, result.case?.staffing_risk?.atRisk
       ? "Die Krankmeldung wurde gesendet. Die Leitung wurde auch auf die mögliche Unterschreitung der Mindestbesetzung hingewiesen."
       : "Die Krankmeldung wurde gesendet und die zuständige Leitung informiert.");
@@ -1829,16 +1913,57 @@ function selectSicknessCaseForAmu() {
     el.amuIncapacityFrom.value = "";
     el.amuIncapacityTo.value = "";
     el.amuIncapacityTo.min = addDays(iso(new Date()), -3650);
+    updateSicknessRangeControls();
     return;
   }
   el.amuIncapacityFrom.value = selected.start_date || "";
   el.amuIncapacityTo.min = selected.start_date || el.amuIncapacityTo.min;
-  el.amuIncapacityTo.value = selected.expected_end || selected.start_date || "";
-  portalState.amuOcr.startManuallyEdited = true;
-  portalState.amuOcr.endManuallyEdited = true;
+  el.amuIncapacityTo.value = selected.expected_end || "";
+  portalState.amuOcr.startManuallyEdited = false;
+  portalState.amuOcr.endManuallyEdited = false;
+  updateSicknessRangeControls();
+}
+
+function openAmuForSicknessCase(id) {
+  el.amuSicknessCaseId.value = String(id);
+  selectSicknessCaseForAmu();
+  el.amuUploadPanel.open = true;
+  el.amuUploadPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  setTimeout(() => el.amuDateRangeButton?.focus(), 350);
+}
+
+function openSicknessRecovery(id) {
+  const item = portalState.sicknessCases.find((entry) => Number(entry.id) === Number(id));
+  if (!item) return;
+  el.sicknessRecoveryCaseId.value = String(item.id);
+  el.sicknessRecoveryDate.min = item.start_date;
+  el.sicknessRecoveryDate.max = addDays(iso(new Date()), 31);
+  el.sicknessRecoveryDate.value = item.return_to_work_date || iso(new Date());
+  message(el.sicknessRecoveryMessage, "");
+  el.sicknessRecoveryDialog.showModal();
+}
+
+async function submitSicknessRecovery(event) {
+  event.preventDefault();
+  const id = el.sicknessRecoveryCaseId.value;
+  el.sicknessRecoverySubmit.disabled = true;
+  try {
+    await api(`/api/portal/v1/me/sickness-cases/${encodeURIComponent(id)}/return-to-work`, {
+      method: "POST",
+      body: JSON.stringify({ returnDate: el.sicknessRecoveryDate.value }),
+    });
+    el.sicknessRecoveryDialog.close();
+    message(el.sicknessMessage, "Die Arbeitsfähigkeit wurde gemeldet. Die zuständige Leitung wurde informiert.");
+    await Promise.allSettled([loadSicknessCases(), loadNotifications()]);
+  } catch (error) {
+    message(el.sicknessRecoveryMessage, error.message, true);
+  } finally {
+    el.sicknessRecoverySubmit.disabled = false;
+  }
 }
 
 let amuOcrClient = null;
+let amuPdfClient = null;
 
 function updateAmuOcrStatus(title, text, state = "working") {
   if (!el.amuOcrStatus) return;
@@ -1867,6 +1992,7 @@ function resetAmuOcrState({ keepStatus = false, preserveManual = false, clearAut
   el.amuOcrConfirmed.checked = false;
   el.amuOcrConfirmField.classList.add("hidden");
   if (!keepStatus) el.amuOcrStatus.classList.add("hidden");
+  updateSicknessRangeControls();
 }
 
 function ocrProgressLabel(status, progress) {
@@ -1878,7 +2004,7 @@ function ocrProgressLabel(status, progress) {
     "recognizing text": "Beginn und Ende werden gesucht",
   };
   const percentage = Number.isFinite(progress) ? ` · ${Math.round(progress * 100)} %` : "";
-  return `${labels[status] || "Lokale Texterkennung läuft"}${percentage}`;
+  return `${labels[status] || "Lokale Datenerkennung läuft"}${percentage}`;
 }
 
 function ensureAmuOcrClient() {
@@ -1886,66 +2012,112 @@ function ensureAmuOcrClient() {
   amuOcrClient = window.GrabenplanerAmuOcrClient.createAmuOcrClient({
     onProgress({ status, progress }) {
       if (!portalState.amuOcr.busy) return;
-      updateAmuOcrStatus("Lokale OCR", ocrProgressLabel(status, progress), "working");
+      updateAmuOcrStatus("Lokale Datenerkennung", ocrProgressLabel(status, progress), "working");
     },
   });
   return amuOcrClient;
 }
 
-async function recognizeAmuImage(file) {
-  if (!file || !String(file.type || "").startsWith("image/")
-    || portalState.status?.capabilities?.localAmuOcr !== true
+function ensureAmuPdfClient() {
+  if (amuPdfClient) return amuPdfClient;
+  amuPdfClient = window.GrabenplanerAmuPdfClient.createAmuPdfClient({
+    limits: { maxFileBytes: Number(portalState.amuPolicy?.uploadMaxMb || 10) * 1024 * 1024 },
+    recognizeCanvas(canvas, context) {
+      return ensureAmuOcrClient().recognize(canvas, { referenceDate: context.referenceDate });
+    },
+    onProgress({ event, pageNumber, pageCount }) {
+      if (!portalState.amuOcr.busy) return;
+      const labels = {
+        loading: "PDF wird lokal geöffnet",
+        extracting_text: "PDF-Text wird lokal geprüft",
+        rendering: "PDF-Seite wird lokal vorbereitet",
+        recognizing: "PDF-Seite wird lokal erkannt",
+      };
+      const pages = pageNumber && pageCount ? ` · Seite ${pageNumber} von ${pageCount}` : "";
+      updateAmuOcrStatus("Lokale PDF-Erkennung", `${labels[event] || "PDF wird lokal ausgewertet"}${pages}`, "working");
+    },
+  });
+  return amuPdfClient;
+}
+
+function isPdfFile(file) {
+  return String(file?.type || "").toLowerCase() === "application/pdf" || /\.pdf$/i.test(String(file?.name || ""));
+}
+
+function isImageFile(file) {
+  return String(file?.type || "").startsWith("image/") || /\.(?:jpe?g|png|webp|tiff?)$/i.test(String(file?.name || ""));
+}
+
+async function recognizeAmuFiles(files) {
+  const documents = [...files].filter((file) => isImageFile(file) || isPdfFile(file)).slice(0, 3);
+  if (!documents.length || portalState.status?.capabilities?.localAmuOcr !== true
     || portalState.amuPolicy?.ocrEnabled !== true) return;
-  const fileKey = `${file.name}:${file.size}:${file.lastModified}`;
+  const fileKey = documents.map((file) => `${file.name}:${file.size}:${file.lastModified}`).join("|");
   const runToken = Number(portalState.amuOcr.runToken || 0) + 1;
   portalState.amuOcr.fileKey = fileKey;
   portalState.amuOcr.runToken = runToken;
   portalState.amuOcr.busy = true;
-  updateAmuOcrStatus("Lokale OCR", "Die Texterkennung läuft nur auf diesem Gerät. Erst beim Senden wird das Dokument verschlüsselt übertragen.", "working");
+  updateAmuOcrStatus("Lokale Datenerkennung", "Foto oder PDF wird nur auf diesem Gerät ausgewertet. Beim Senden wird das Dokument an Grabenplaner übertragen und dort verschlüsselt gespeichert.", "working");
   try {
-    const result = await ensureAmuOcrClient().recognize(file, { referenceDate: iso(new Date()) });
-    if (portalState.amuOcr.fileKey !== fileKey || portalState.amuOcr.runToken !== runToken) return;
-    if (!result.complete) {
-      updateAmuOcrStatus("Datumswerte nicht vollständig erkannt", "Bitte Beginn und Ende manuell eintragen.", "warning");
-      return;
+    const results = [];
+    for (const file of documents) {
+      if (portalState.amuOcr.fileKey !== fileKey || portalState.amuOcr.runToken !== runToken) return;
+      const result = isPdfFile(file)
+        ? await ensureAmuPdfClient().recognize(file, { referenceDate: iso(new Date()) })
+        : await ensureAmuOcrClient().recognize(file, { referenceDate: iso(new Date()) });
+      results.push(result);
+      if (result.complete && result.autoFill) break;
     }
+    if (portalState.amuOcr.fileKey !== fileKey || portalState.amuOcr.runToken !== runToken) return;
+    const result = window.GrabenplanerAmuOcrClient.mergeAumOcrResults(results);
     let applied = false;
-    if (result.autoFill && !portalState.amuOcr.startManuallyEdited) {
+    if (result.dateFrom && result.autoFillFields?.dateFrom && !portalState.amuOcr.startManuallyEdited) {
       el.amuIncapacityFrom.value = result.dateFrom;
       portalState.amuOcr.autoFilledStart = true;
       applied = true;
     }
-    if (result.autoFill && !portalState.amuOcr.endManuallyEdited) {
+    if (result.dateTo && result.autoFillFields?.dateTo && !portalState.amuOcr.endManuallyEdited) {
       el.amuIncapacityTo.value = result.dateTo;
       portalState.amuOcr.autoFilledEnd = true;
       applied = true;
     }
     el.amuIncapacityTo.min = el.amuIncapacityFrom.value || el.amuIncapacityTo.min;
     portalState.amuOcr.assisted = applied;
+    updateSicknessRangeControls();
     if (applied) {
       el.amuOcrConfirmField.classList.remove("hidden");
-      updateAmuOcrStatus("Datumswerte erkannt", `${dateText(result.dateFrom)} bis ${dateText(result.dateTo)} · Bitte vor dem Senden prüfen.`, "success");
+      const period = result.dateTo
+        ? `${dateText(result.dateFrom)} bis ${dateText(result.dateTo)}`
+        : `${dateText(result.dateFrom)} · Ende nicht angegeben`;
+      updateAmuOcrStatus(result.dateTo ? "Datumswerte erkannt" : "Beginn erkannt", `${period} · Bitte vor dem Senden prüfen.`, "success");
+    } else if (!result.dateFrom && !result.dateTo) {
+      updateAmuOcrStatus("Keine eindeutigen Datumswerte erkannt", "Bitte den Beginn im Zeitraumskalender eintragen. Das Ende darf offenbleiben.", "warning");
     } else {
       const explanation = portalState.amuOcr.startManuallyEdited || portalState.amuOcr.endManuallyEdited
         ? "Manuelle Eingaben wurden nicht überschrieben."
-        : "Die Erkennung ist für ein automatisches Eintragen zu unsicher; bitte Werte manuell prüfen.";
-      updateAmuOcrStatus("Datumswerte erkannt", `${dateText(result.dateFrom)} bis ${dateText(result.dateTo)} · ${explanation}`, "warning");
+        : "Die Erkennung ist für ein automatisches Eintragen nicht eindeutig genug; bitte Werte manuell prüfen.";
+      const detected = [result.dateFrom ? `Beginn ${dateText(result.dateFrom)}` : "", result.dateTo ? `Ende ${dateText(result.dateTo)}` : ""].filter(Boolean).join(" · ");
+      updateAmuOcrStatus("Datumswerte gefunden", `${detected} · ${explanation}`, "warning");
     }
-  } catch {
-    if (portalState.amuOcr.fileKey === fileKey && portalState.amuOcr.runToken === runToken) updateAmuOcrStatus("OCR nicht verfügbar", "Bitte Beginn und Ende manuell eintragen. Das Foto kann trotzdem hochgeladen werden.", "error");
+  } catch (error) {
+    if (portalState.amuOcr.fileKey === fileKey && portalState.amuOcr.runToken === runToken) {
+      const cancelled = error?.code === "AMU_PDF_ABORTED";
+      if (!cancelled) updateAmuOcrStatus("Datenerkennung nicht verfügbar", "Bitte den Beginn manuell eintragen. Foto oder PDF kann trotzdem hochgeladen werden.", "error");
+    }
   } finally {
     if (portalState.amuOcr.fileKey === fileKey && portalState.amuOcr.runToken === runToken) portalState.amuOcr.busy = false;
   }
 }
 
 function handleAmuFileSelection(event) {
+  void amuPdfClient?.cancel?.();
   resetAmuOcrState({ preserveManual: true, clearAutoFilled: true });
   const currentFiles = [...(event.currentTarget.files || [])];
   const remainingFiles = event.currentTarget === el.amuCamera
     ? [...(el.amuDocuments?.files || [])]
     : [...(el.amuCamera?.files || [])];
-  const file = [...currentFiles, ...remainingFiles].find((entry) => String(entry.type || "").startsWith("image/"));
-  if (file) recognizeAmuImage(file);
+  const files = [...currentFiles, ...remainingFiles];
+  if (files.length) recognizeAmuFiles(files);
 }
 
 function channelLabel(channel) {
@@ -2095,13 +2267,12 @@ async function loadAmuSettings() {
     portalState.amuPolicy = data.policy || null;
     if (el.amuUploadHint && data.policy) {
       const conversion = data.policy.convertImagesToPdf ? ` · Fotos werden${data.policy.grayscaleImages ? " in Graustufen" : ""} als PDF gespeichert` : "";
-      const ocr = data.policy.ocrEnabled ? " · lokale OCR bei Bildern" : "";
+      const ocr = data.policy.ocrEnabled ? " · lokale Datenerkennung bei Fotos und PDFs" : "";
       el.amuUploadHint.textContent = `PDF oder Foto · höchstens 3 Dateien · je max. ${String(data.policy.uploadMaxMb).replace(".", ",")} MB${conversion}${ocr}`;
     }
     if (data.policy?.ocrEnabled && portalState.status?.capabilities?.localAmuOcr === true && !portalState.amuOcr.busy) {
-      const selectedImage = [...(el.amuCamera?.files || []), ...(el.amuDocuments?.files || [])]
-        .find((entry) => String(entry.type || "").startsWith("image/"));
-      if (selectedImage && !portalState.amuOcr.fileKey) recognizeAmuImage(selectedImage);
+      const selectedFiles = [...(el.amuCamera?.files || []), ...(el.amuDocuments?.files || [])];
+      if (selectedFiles.length && !portalState.amuOcr.fileKey) recognizeAmuFiles(selectedFiles);
     }
   } catch {
     portalState.amuPolicy = null;
@@ -2112,7 +2283,8 @@ function renderAmuReports() {
   el.amuReportList.innerHTML = portalState.amuReports.length ? portalState.amuReports.map((report) => {
     const documents = report.documents || [];
     const canWithdraw = ["pending", "submitted", "pending_local", "returned"].includes(report.status);
-    return `<article class="request-item amu-report" data-amu-report-id="${Number(report.id)}"><div><strong>${dateText(report.incapacity_from)}–${dateText(report.incapacity_to)}</strong>${report.employee_note ? `<span>${esc(report.employee_note)}</span>` : ""}<span class="status ${esc(report.status)}">${esc(statusLabels[report.status] || report.status)}</span><div class="document-links">${documents.map((document) => { const size = document.byte_size || document.size; return `<a href="/api/portal/v1/me/amu-reports/${Number(report.id)}/documents/${encodeURIComponent(String(document.id))}/content" target="_blank" rel="noopener">${esc(document.original_filename || document.original_name || document.filename || "Dokument")}${size ? ` · ${formatBytes(size)}` : ""}</a>`; }).join("")}</div></div>${canWithdraw ? '<button class="cancel-request" data-withdraw-amu type="button">Zurückziehen</button>' : ""}</article>`;
+    const period = `${dateText(report.incapacity_from)}${report.incapacity_to ? `–${dateText(report.incapacity_to)}` : " · Ende offen"}`;
+    return `<article class="request-item amu-report" data-amu-report-id="${Number(report.id)}"><div><strong>${period}</strong>${report.employee_note ? `<span>${esc(report.employee_note)}</span>` : ""}<span class="status ${esc(report.status)}">${esc(statusLabels[report.status] || report.status)}</span><div class="document-links">${documents.map((document) => { const size = document.byte_size || document.size; return `<a href="/api/portal/v1/me/amu-reports/${Number(report.id)}/documents/${encodeURIComponent(String(document.id))}/content" target="_blank" rel="noopener">${esc(document.original_filename || document.original_name || document.filename || "Dokument")}${size ? ` · ${formatBytes(size)}` : ""}</a>`; }).join("")}</div></div>${canWithdraw ? '<button class="cancel-request" data-withdraw-amu type="button">Zurückziehen</button>' : ""}</article>`;
   }).join("") : '<p class="empty-state">Noch keine AUM-Meldung vorhanden.</p>';
 }
 
@@ -2121,6 +2293,7 @@ async function loadAmuReports() {
     const data = await api("/api/portal/v1/me/amu-reports");
     portalState.amuReports = data.reports || data.items || [];
     renderAmuReports();
+    renderSicknessCases();
   } catch (error) {
     el.amuReportList.innerHTML = `<p class="message error">${esc(error.message)}</p>`;
   }
@@ -2137,12 +2310,16 @@ async function submitAmuReport(event) {
     message(el.amuMessage, "Bitte höchstens drei Dokumente auswählen.", true);
     return;
   }
-  if (el.amuIncapacityTo.value < el.amuIncapacityFrom.value) {
-    message(el.amuMessage, "Das Bis-Datum darf nicht vor dem Von-Datum liegen.", true);
+  if (!el.amuIncapacityFrom.value) {
+    message(el.amuMessage, "Bitte den Beginn der Arbeitsunfähigkeit im Zeitraumskalender auswählen.", true);
+    return;
+  }
+  if (el.amuIncapacityTo.value && el.amuIncapacityTo.value < el.amuIncapacityFrom.value) {
+    message(el.amuMessage, "Das Enddatum darf nicht vor dem Beginn liegen.", true);
     return;
   }
   if (portalState.amuOcr.assisted && !el.amuOcrConfirmed.checked) {
-    message(el.amuMessage, "Bitte die durch OCR erkannten Datumswerte vor dem Senden bestätigen.", true);
+    message(el.amuMessage, "Bitte die durch die lokale Datenerkennung vorgeschlagenen Datumswerte vor dem Senden bestätigen.", true);
     return;
   }
   const allowedTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "image/tiff"]);
@@ -2169,7 +2346,8 @@ async function submitAmuReport(event) {
     await api("/api/portal/v1/me/amu-reports", { method: "POST", body });
     el.amuReportForm.reset();
     resetAmuOcrState();
-    message(el.amuMessage, "Die AUM wurde sicher übermittelt.");
+    updateSicknessRangeControls();
+    message(el.amuMessage, "Die AUM wurde übermittelt und verschlüsselt gespeichert.");
     await Promise.allSettled([loadSicknessCases(), loadAmuReports(), loadNotifications()]);
   } catch (error) {
     message(el.amuMessage, error.message, true);
@@ -2436,23 +2614,17 @@ el.notificationList.addEventListener("click", (event) => {
 });
 el.markAllNotificationsRead.addEventListener("click", markAllNotificationsRead);
 el.sicknessCaseForm.addEventListener("submit", submitSicknessCase);
-el.sicknessStartDate.addEventListener("input", () => {
-  el.sicknessExpectedEnd.min = el.sicknessStartDate.value;
-  if (el.sicknessExpectedEnd.value && el.sicknessExpectedEnd.value < el.sicknessStartDate.value) el.sicknessExpectedEnd.value = el.sicknessStartDate.value;
-});
 el.sicknessCaseList.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-withdraw-sickness]");
-  const row = button?.closest("[data-sickness-case-id]");
-  if (row) withdrawSicknessCase(row.dataset.sicknessCaseId);
+  const row = event.target.closest("[data-sickness-case-id]");
+  if (!row) return;
+  if (event.target.closest("[data-withdraw-sickness]")) withdrawSicknessCase(row.dataset.sicknessCaseId);
+  else if (event.target.closest("[data-add-amu]")) openAmuForSicknessCase(row.dataset.sicknessCaseId);
+  else if (event.target.closest("[data-recover-sickness]")) openSicknessRecovery(row.dataset.sicknessCaseId);
 });
+el.sicknessRecoveryForm?.addEventListener("submit", submitSicknessRecovery);
+[el.sicknessRecoveryClose, el.sicknessRecoveryCancel].forEach((button) => button?.addEventListener("click", () => el.sicknessRecoveryDialog.close()));
 el.amuReportForm.addEventListener("submit", submitAmuReport);
 el.amuSicknessCaseId.addEventListener("change", selectSicknessCaseForAmu);
-el.amuIncapacityFrom.addEventListener("input", (event) => {
-  if (event.isTrusted) portalState.amuOcr.startManuallyEdited = true;
-  el.amuIncapacityTo.min = el.amuIncapacityFrom.value || addDays(iso(new Date()), -3650);
-  if (el.amuIncapacityTo.value && el.amuIncapacityTo.value < el.amuIncapacityFrom.value) el.amuIncapacityTo.value = el.amuIncapacityFrom.value;
-});
-el.amuIncapacityTo.addEventListener("input", (event) => { if (event.isTrusted) portalState.amuOcr.endManuallyEdited = true; });
 el.amuDocuments.addEventListener("change", handleAmuFileSelection);
 el.amuCamera.addEventListener("change", handleAmuFileSelection);
 el.sicknessNotificationPreferencesForm?.addEventListener("submit", saveSicknessNotificationPreferences);
@@ -2495,4 +2667,5 @@ setInterval(() => {
   if (!document.hidden && portalState.session && portalState.activeTab === "leadershipTeam") loadLeadershipOverview();
 }, 30000);
 
+initializeDateRangeCalendar();
 initialize();

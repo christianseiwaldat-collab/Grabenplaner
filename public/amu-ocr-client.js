@@ -19,6 +19,41 @@
     return null;
   }
 
+  function mergeAumOcrResults(results = []) {
+    const safeResults = results.filter((entry) => entry && typeof entry === "object");
+    const fieldCandidate = (field) => safeResults
+      .filter((entry) => /^\d{4}-\d{2}-\d{2}$/.test(String(entry[field] || "")))
+      .map((entry) => ({
+        value: String(entry[field]),
+        confidence: Number(entry.fieldConfidence?.[field] || 0),
+        autoFill: entry.autoFillFields?.[field] === true || (entry.autoFill === true && entry.complete === true),
+      }))
+      .sort((left, right) => Number(right.autoFill) - Number(left.autoFill) || right.confidence - left.confidence)[0] || null;
+    const from = fieldCandidate("dateFrom");
+    let to = fieldCandidate("dateTo");
+    if (from && to && to.value < from.value) to = null;
+    const complete = Boolean(from && to);
+    const autoFillFields = {
+      dateFrom: Boolean(from?.autoFill),
+      dateTo: Boolean(to?.autoFill),
+    };
+    const warnings = [];
+    if (!from && !to) warnings.push("no_date_detected");
+    else if (!complete) warnings.push("period_incomplete");
+    else if (!(autoFillFields.dateFrom && autoFillFields.dateTo)) warnings.push("manual_confirmation_recommended");
+    return {
+      dateFrom: from?.value || "",
+      dateTo: to?.value || "",
+      confidence: complete ? Number(Math.min(from.confidence, to.confidence).toFixed(2)) : 0,
+      fieldConfidence: { dateFrom: from?.confidence || 0, dateTo: to?.confidence || 0 },
+      autoFillFields,
+      complete,
+      autoFill: complete && autoFillFields.dateFrom && autoFillFields.dateTo,
+      requiresConfirmation: true,
+      warnings,
+    };
+  }
+
   function createAmuOcrClient(options = {}) {
     const tesseract = options.tesseract || (root && root.Tesseract);
     const parser = options.parser || defaultParser();
@@ -123,5 +158,5 @@
     return Object.freeze({ recognize, dispose });
   }
 
-  return Object.freeze({ createAmuOcrClient, DEFAULT_ASSET_PATHS });
+  return Object.freeze({ createAmuOcrClient, mergeAumOcrResults, DEFAULT_ASSET_PATHS });
 }));

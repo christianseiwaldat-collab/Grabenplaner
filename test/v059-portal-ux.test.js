@@ -62,3 +62,29 @@ test("v0.59: OTP-Zeilen stapeln sich auf schmalen Handy-Displays", () => {
   assert.match(source, /\.notification-channel-setup,\.notification-verification-row \{ grid-column:1; grid-template-columns:1fr; \}/);
   assert.match(source, /\.notification-channel-setup button,\.notification-verification-row button \{ width:100%; \}/);
 });
+
+test("v0.59: Krankmeldung und AUM bilden einen mobilen Fall mit Zeitraumskalender", () => {
+  const html = fs.readFileSync(path.join(projectRoot, "public", "portal.html"), "utf8");
+  const css = fs.readFileSync(path.join(projectRoot, "public", "portal.css"), "utf8");
+
+  assert.match(html, /class="sickness-hub-heading"[\s\S]*?<svg[\s\S]*?Krankmeldung &amp; AUM/);
+  assert.match(html, /id="sicknessDateRangeButton"[\s\S]*?id="amuDateRangeButton"/);
+  assert.match(html, /id="dateRangeCalendarGrid"/);
+  assert.match(html, /id="amuIncapacityTo" type="hidden"/);
+  assert.doesNotMatch(html, /id="amuIncapacityTo"[^>]*required/);
+  assert.match(html, /id="sicknessRecoveryDialog"[\s\S]*?Wieder arbeitsfähig ab/);
+  assert.match(css, /\.sickness-case-actions button[\s\S]*?min-height:38px/);
+  assert.match(css, /@media \(max-width:430px\)/);
+});
+
+test("v0.59: lokale Datenerkennung verarbeitet gespeicherte Fotos und PDFs vor dem Upload", () => {
+  const html = fs.readFileSync(path.join(projectRoot, "public", "portal.html"), "utf8");
+  const source = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
+
+  assert.match(html, /id="amuDocuments"[^>]*accept="application\/pdf,image\/jpeg/);
+  assert.match(html, /src="\/amu-pdf-client\.js"/);
+  assert.match(source, /async function recognizeAmuFiles\(files\)/);
+  assert.match(source, /isPdfFile\(file\)[\s\S]*?ensureAmuPdfClient\(\)\.recognize/);
+  assert.match(source, /\[\.\.\.\(el\.amuCamera\?\.files \|\| \[\]\), \.\.\.\(el\.amuDocuments\?\.files \|\| \[\]\)\]/);
+  assert.doesNotMatch(source, /async function recognizeAmuImage/);
+});
