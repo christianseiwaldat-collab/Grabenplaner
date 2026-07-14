@@ -6,12 +6,14 @@
 
 <p align="center"><strong>Dienstplanung, Abwesenheiten und Zeiterfassung – passend für eine Filiale oder eine ganze Organisation.</strong></p>
 
+<p align="center"><strong>Datenschutzfreundlich entwickelt – für einen DSGVO-konformen Betrieb konzipiert.</strong></p>
+
 <p align="center">
   Grabenplaner verbindet Wochenplanung, Urlaubsverwaltung, Personalorganisation und ein smartphonegerechtes Mitarbeiterportal in einer übersichtlichen Anwendung. Filialen und Abteilungen bleiben sauber getrennt, Rechte lassen sich gezielt vergeben und jedes Unternehmen kann seinen eigenen Auftritt über wiederverwendbare Branding-Kits einrichten.
 </p>
 
 <p align="center">
-  <strong>v0.55 Beta</strong> · Windows · SQLite · Source-available
+  <strong>v0.56 Beta</strong> · Windows · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -105,7 +107,7 @@ Der Zugriff folgt eigenen, besonders eingeschränkten AUM-Rechten. Zusammengehö
 ## Schnellstart unter Windows
 
 1. Die portable ZIP-Datei unter [Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.55 Beta starten.cmd` doppelt anklicken.
+2. `Grabenplaner v0.56 Beta starten.cmd` doppelt anklicken.
 3. Die App öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in der App eingerichtet werden.

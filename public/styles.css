@@ -268,6 +268,7 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .settings-two-column > .settings-card,
 .settings-two-column > .settings-card:first-child,
 .settings-two-column > .settings-card.full-settings-card { min-width: 0; grid-column: auto; }
+.settings-two-column > .settings-card.full-span { grid-column: 1 / -1; }
 #generalSettings .pause-card { order: 1; }
 #generalSettings .vacation-count-card { order: 2; }
 #generalSettings .saturday-card { order: 3; }
@@ -495,6 +496,21 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 .position-item strong { font-size: 10.5px; }
 .position-item small { margin-top: 2px; color: var(--muted); font-size: 8px; }
 .position-actions { display: flex; align-items: center; gap: 10px; }
+.wifi-foundation-status { display:flex; gap:12px; align-items:flex-start; margin-top:14px; padding:14px; border:1px solid var(--line); border-radius:14px; background:var(--surface-muted); }
+.wifi-foundation-status .status-badge { flex:0 0 auto; margin-top:1px; }
+.wifi-foundation-status strong,.wifi-foundation-status small { display:block; }
+.wifi-foundation-status small { margin-top:4px; color:var(--muted); line-height:1.45; }
+.wifi-confirmation-level-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 12px; margin-top:12px; }
+.wifi-confirmation-level-row { display:flex; align-items:center; justify-content:space-between; gap:14px; min-width:0; padding:11px 13px; border:1px solid var(--line); border-radius:13px; background:var(--surface-muted); }
+.wifi-confirmation-level-row.inactive { opacity:.68; }
+.wifi-confirmation-level-row > div { min-width:0; }
+.wifi-confirmation-level-row strong,.wifi-confirmation-level-row small { display:block; overflow-wrap:anywhere; }
+.wifi-confirmation-level-row small { margin-top:3px; color:var(--muted); }
+.wifi-confirmation-level-row label { display:flex; align-items:center; gap:7px; flex:0 0 auto; color:var(--muted); font-size:8.5px; font-weight:700; }
+.wifi-confirmation-level-row select { width:66px; min-width:66px; padding:7px 24px 7px 9px; }
+.confirmation-level-explanation { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:13px; }
+.confirmation-level-explanation span { display:flex; align-items:center; gap:8px; min-width:0; padding:9px 11px; border-radius:11px; color:var(--muted); background:rgba(240,244,241,.8); font-size:8.5px; }
+.confirmation-level-explanation strong { display:grid; place-items:center; flex:0 0 24px; width:24px; height:24px; border-radius:8px; color:var(--green-dark); background:#dfeee8; font-size:10px; }
 
 .modal { width: min(550px,calc(100vw - 28px)); max-height: calc(100vh - 35px); padding: 0; border: 0; border-radius: 18px; color: var(--ink); background: #faf9f5; box-shadow: 0 25px 80px rgba(15,34,27,.27); }
 .wide-modal { width: min(880px,calc(100vw - 28px)); }
@@ -795,6 +811,7 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
   .rights-permission-grid,.mobile-module-grid { grid-template-columns:1fr; }
   .branding-assignment-row,.time-correction-row { grid-template-columns:1fr; align-items:stretch; }
   .time-summary-row { grid-template-columns:minmax(0,1fr) repeat(5,minmax(62px,auto)); }
+  .wifi-confirmation-level-list { grid-template-columns:1fr; }
 }
 
 @media (max-width: 1100px) {
@@ -818,4 +835,7 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
   .time-summary-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .time-summary-row > div:first-child { grid-column:1 / -1; }
   .time-correction-entry-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr) 34px; }
+  .confirmation-level-explanation { grid-template-columns:1fr; }
+  .wifi-confirmation-level-row { align-items:stretch; flex-direction:column; }
+  .wifi-confirmation-level-row label { justify-content:space-between; }
 }

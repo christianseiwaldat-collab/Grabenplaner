@@ -131,6 +131,7 @@ const builtinPortalRoles = [
       "time:read",
       "time:review",
       "time:settings",
+      "wifi:settings",
       "vacation:read",
       "vacation:approve",
       "settings:write",
@@ -180,6 +181,7 @@ const builtinPortalRoles = [
       "time:read",
       "time:review",
       "time:settings",
+      "wifi:settings",
       "vacation:read",
       "vacation:approve",
       "hr:approve",
@@ -217,7 +219,7 @@ builtinPortalRoles.push(
       "own_vacation:read", "own_vacation:request", "own_amu:create", "own_amu:read", "own_amu:withdraw",
       "employees:read", "schedule:read", "rights:read", "rights:write",
       "operation_mode:write", "backup:write", "update:write", "system:write", "users:write",
-      "roles:read", "roles:write", "audit:read", "scopes:write",
+      "roles:read", "roles:write", "audit:read", "scopes:write", "wifi:settings",
     ],
   },
   {
@@ -255,6 +257,8 @@ const defaultPortalSettings = {
   amu_convert_images_to_pdf: "1",
   amu_grayscale_images: "1",
   amu_manager_file_access: "0",
+  wifi_minimum_presence_minutes: "5",
+  wifi_absence_grace_minutes: "30",
   mobile_leadership_layouts: JSON.stringify({
     department_manager: ["timeTracking", "team", "approvals", "schedule", "requests", "more"],
     manager: ["timeTracking", "team", "approvals", "schedule", "requests", "more"],
@@ -610,6 +614,7 @@ function createSchema() {
       preferred_day_off TEXT,
       fixed_workdays TEXT NOT NULL DEFAULT '',
       position_id TEXT NOT NULL DEFAULT 'verkaufsmitarbeiter',
+      time_confirmation_level TEXT NOT NULL DEFAULT 'C',
       home_location_id TEXT,
       preferred_department_id INTEGER,
       active INTEGER NOT NULL DEFAULT 1,
@@ -982,6 +987,85 @@ function createSchema() {
         ON UPDATE CASCADE ON DELETE SET NULL
     );
 
+    CREATE TABLE IF NOT EXISTS wifi_automation_preferences (
+      employee_number TEXT PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      provider_id TEXT,
+      external_subject_hash TEXT,
+      opted_in_at TEXT,
+      opted_out_at TEXT,
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS wifi_presence_sessions (
+      id TEXT PRIMARY KEY,
+      employee_number TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      provider_id TEXT NOT NULL DEFAULT '',
+      correlation_hash TEXT NOT NULL DEFAULT '',
+      observed_start_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL,
+      disconnect_observed_at TEXT,
+      observed_end_at TEXT,
+      state TEXT NOT NULL DEFAULT 'observing',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS wifi_event_inbox (
+      id TEXT PRIMARY KEY,
+      provider_id TEXT NOT NULL,
+      external_event_hash TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      external_subject_hash TEXT NOT NULL,
+      location_reference_hash TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      payload_fingerprint TEXT NOT NULL DEFAULT '',
+      processing_status TEXT NOT NULL DEFAULT 'pending',
+      presence_session_id TEXT,
+      processed_at TEXT,
+      processing_error TEXT NOT NULL DEFAULT '',
+      UNIQUE(provider_id, external_event_hash),
+      FOREIGN KEY (presence_session_id) REFERENCES wifi_presence_sessions(id)
+        ON UPDATE CASCADE ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS wifi_time_suggestions (
+      id TEXT PRIMARY KEY,
+      presence_session_id TEXT NOT NULL,
+      employee_number TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      work_date TEXT NOT NULL,
+      suggested_start_at TEXT NOT NULL,
+      suggested_end_at TEXT NOT NULL,
+      confirmation_level_snapshot TEXT NOT NULL DEFAULT 'C',
+      minimum_presence_minutes_snapshot INTEGER NOT NULL DEFAULT 5,
+      absence_grace_minutes_snapshot INTEGER NOT NULL DEFAULT 30,
+      confirmation_due_at TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      confirmed_by TEXT,
+      confirmed_at TEXT,
+      rejected_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (presence_session_id) REFERENCES wifi_presence_sessions(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      UNIQUE(presence_session_id, work_date)
+    );
+
     CREATE TABLE IF NOT EXISTS portal_settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
@@ -1157,6 +1241,7 @@ if (!columnExists("employees", "fixed_workdays")) {
 if (!columnExists("employees", "position_id")) {
   db.exec("ALTER TABLE employees ADD COLUMN position_id TEXT NOT NULL DEFAULT 'verkaufsmitarbeiter'");
 }
+ensureColumn("employees", "time_confirmation_level", "TEXT NOT NULL DEFAULT 'C'");
 if (!columnExists("employees", "home_location_id")) {
   db.exec("ALTER TABLE employees ADD COLUMN home_location_id TEXT");
 }
@@ -1208,6 +1293,11 @@ db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_location_date ON time_entri
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_corrections_context ON time_corrections(location_id, department_id, status, correction_date)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_corrections_pending_employee_date ON time_corrections(employee_number, correction_date, status)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_day_reviews_context ON time_day_reviews(location_id, department_id, work_date)");
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_wifi_preference_external_subject ON wifi_automation_preferences(provider_id, external_subject_hash) WHERE TRIM(COALESCE(external_subject_hash, '')) <> ''");
+db.exec("CREATE INDEX IF NOT EXISTS idx_wifi_presence_employee_state ON wifi_presence_sessions(employee_number, state, observed_start_at)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_wifi_presence_location_state ON wifi_presence_sessions(location_id, state, observed_start_at)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_wifi_event_inbox_processing ON wifi_event_inbox(processing_status, received_at)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_wifi_suggestions_employee_date ON wifi_time_suggestions(employee_number, work_date, status)");
 db.prepare("UPDATE time_entries SET work_date = SUBSTR(entry_timestamp, 1, 10) WHERE TRIM(COALESCE(work_date, '')) = ''").run();
 db.prepare(`
   UPDATE time_entries
@@ -1469,6 +1559,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.54-protected-developer-role-rights", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.55-time-evaluation-day-review", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.56-wifi-automation-foundation", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -2341,6 +2433,64 @@ function getPortalSettings() {
   };
 }
 
+function getWifiAutomationPolicy() {
+  const settings = getPortalSettings();
+  return {
+    minimumPresenceMinutes: Math.min(120, Math.max(1, Number(settings.wifi_minimum_presence_minutes || 5))),
+    absenceGraceMinutes: Math.min(240, Math.max(1, Number(settings.wifi_absence_grace_minutes || 30))),
+    endTimestampMode: "first_disconnect",
+    connectorStatus: "not_configured",
+    phase: "foundation",
+  };
+}
+
+function validateWifiAutomationPolicy(body = {}) {
+  const minimumPresenceMinutes = Number(body.minimumPresenceMinutes);
+  const absenceGraceMinutes = Number(body.absenceGraceMinutes);
+  if (!Number.isInteger(minimumPresenceMinutes) || minimumPresenceMinutes < 1 || minimumPresenceMinutes > 120) {
+    throw httpError(400, "Die Mindestanwesenheit muss zwischen 1 und 120 Minuten liegen.", "WIFI_POLICY_INVALID");
+  }
+  if (!Number.isInteger(absenceGraceMinutes) || absenceGraceMinutes < 1 || absenceGraceMinutes > 240) {
+    throw httpError(400, "Die Abwesenheitstoleranz muss zwischen 1 und 240 Minuten liegen.", "WIFI_POLICY_INVALID");
+  }
+  return { minimumPresenceMinutes, absenceGraceMinutes };
+}
+
+function wifiConfirmationLevels() {
+  return db.prepare(`
+    SELECT personnel_number, full_name, nickname, active, time_confirmation_level
+    FROM employees
+    ORDER BY active DESC, CAST(personnel_number AS INTEGER), personnel_number
+  `).all().map((employee) => ({
+    employeeNumber: employee.personnel_number,
+    fullName: employee.full_name,
+    nickname: employee.nickname,
+    active: Boolean(employee.active),
+    level: ["A", "B", "C"].includes(String(employee.time_confirmation_level || "").toUpperCase())
+      ? String(employee.time_confirmation_level).toUpperCase()
+      : "C",
+  }));
+}
+
+function validateWifiConfirmationLevels(body = {}) {
+  if (!Array.isArray(body.levels) || body.levels.length > 1000) {
+    throw httpError(400, "Bitte eine gültige Liste mit höchstens 1000 Teammitgliedern übermitteln.", "WIFI_CONFIRMATION_LEVELS_INVALID");
+  }
+  const seen = new Set();
+  return body.levels.map((item) => {
+    const employeeNumber = String(item.employeeNumber || "").trim();
+    const level = String(item.level || "").trim().toUpperCase();
+    if (!employeeNumber || seen.has(employeeNumber) || !["A", "B", "C"].includes(level)) {
+      throw httpError(400, "Die übermittelten Vertrauensstufen sind ungültig.", "WIFI_CONFIRMATION_LEVELS_INVALID");
+    }
+    if (!db.prepare("SELECT 1 FROM employees WHERE personnel_number = ?").get(employeeNumber)) {
+      throw httpError(404, `Teammitglied ${employeeNumber} wurde nicht gefunden.`, "EMPLOYEE_NOT_FOUND");
+    }
+    seen.add(employeeNumber);
+    return { employeeNumber, level };
+  });
+}
+
 function getAmuPolicy() {
   const settings = getPortalSettings();
   const uploadMaxMb = Math.min(25, Math.max(1, Number(settings.amu_upload_max_mb || 10)));
@@ -2545,6 +2695,13 @@ function requireAdminHrOrLocal(request, permission) {
     throw httpError(403, "Diese Aktion ist nur für Developer, IT-Admin, Admin oder Personalleitung verfügbar.", "PORTAL_PERMISSION_DENIED");
   }
   return session;
+}
+
+function sessionCanManageTimeConfirmationLevel(session) {
+  if (!getPortalStatus().portalEnabled) return true;
+  return Boolean(session
+    && RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)
+    && session.permissions?.includes("wifi:settings"));
 }
 
 function requirePortalAnyPermission(request, permissions) {
@@ -5510,21 +5667,26 @@ function shiftMetrics(shift, settings) {
   };
 }
 
-function serializeEmployee(row) {
-  return {
+function serializeEmployee(row, options = {}) {
+  const serialized = {
     ...row,
     fixed_workdays: row.fixed_workdays || "",
     position_id: row.position_id || "verkaufsmitarbeiter",
     position_name: row.position_name || "Verkaufsmitarbeiter",
+    time_confirmation_level: ["A", "B", "C"].includes(String(row.time_confirmation_level || "").toUpperCase())
+      ? String(row.time_confirmation_level).toUpperCase()
+      : "C",
     home_location_id: row.home_location_id || "",
     home_location_name: row.home_location_name || "",
     preferred_department_id: row.preferred_department_id ? Number(row.preferred_department_id) : null,
     preferred_department_name: row.preferred_department_name || "",
     active: Boolean(row.active),
   };
+  if (options.includeTimeConfirmationLevel === false) delete serialized.time_confirmation_level;
+  return serialized;
 }
 
-function validateEmployee(body, isNew) {
+function validateEmployee(body, isNew, options = {}) {
   const personnelNumber = String(body.personnelNumber || "").trim();
   const fullName = String(body.fullName || "").trim();
   const nickname = String(body.nickname || "").trim();
@@ -5533,6 +5695,9 @@ function validateEmployee(body, isNew) {
   const preferredDayOff = String(body.preferredDayOff || "").trim();
   const fixedWorkdays = normalizeFixedWorkdays(body.fixedWorkdays ?? body.fixed_workdays);
   const positionId = String(body.positionId || body.position_id || "verkaufsmitarbeiter").trim() || "verkaufsmitarbeiter";
+  const submittedTimeConfirmationLevel = body.timeConfirmationLevel ?? body.time_confirmation_level
+    ?? options.defaultTimeConfirmationLevel ?? "C";
+  const timeConfirmationLevel = String(submittedTimeConfirmationLevel).trim().toUpperCase();
   const allowedPreferredDays = ["", "monday", "tuesday", "wednesday", "thursday", "friday"];
   const homeLocationId = normalizeLocationId(body.homeLocationId || body.home_location_id || "01");
   validateLocationExists(homeLocationId);
@@ -5553,6 +5718,9 @@ function validateEmployee(body, isNew) {
   if (!allowedPreferredDays.includes(preferredDayOff)) {
     throw httpError(400, "Der bevorzugte freie Tag ist ungültig.");
   }
+  if (!["A", "B", "C"].includes(timeConfirmationLevel)) {
+    throw httpError(400, "Bitte eine gültige Vertrauensstufe A, B oder C auswählen.", "EMPLOYEE_CONFIRMATION_LEVEL_INVALID");
+  }
 
   return {
     personnelNumber,
@@ -5563,6 +5731,7 @@ function validateEmployee(body, isNew) {
     preferredDayOff: preferredDayOff || null,
     fixedWorkdays: fixedWorkdays.join(","),
     positionId,
+    timeConfirmationLevel,
     homeLocationId,
     preferredDepartmentId,
     active: body.active === false ? 0 : 1,
@@ -7436,7 +7605,8 @@ app.get("/api/employees", (request, response) => {
   let employees = db
       .prepare(`
         SELECT e.personnel_number, e.full_name, e.nickname, e.color, e.contracted_hours,
-               e.preferred_day_off, e.fixed_workdays, e.position_id, e.home_location_id, e.preferred_department_id,
+               e.preferred_day_off, e.fixed_workdays, e.position_id, e.time_confirmation_level,
+               e.home_location_id, e.preferred_department_id,
                e.active, l.name AS home_location_name, d.name AS preferred_department_name,
                p.name AS position_name
         FROM employees e
@@ -7445,7 +7615,9 @@ app.get("/api/employees", (request, response) => {
         LEFT JOIN positions p ON p.id = e.position_id
         ORDER BY e.active DESC, CAST(e.personnel_number AS INTEGER), e.personnel_number
       `)
-      .all().map(serializeEmployee);
+      .all().map((row) => serializeEmployee(row, {
+        includeTimeConfirmationLevel: sessionCanManageTimeConfirmationLevel(session),
+      }));
   if (!sessionHasGlobalScope(session)) {
     const locations = new Set((session.scopes || []).map((scope) => scope.locationId));
     const departments = new Set((session.scopes || []).map((scope) => Number(scope.departmentId || 0)).filter(Boolean));
@@ -7457,13 +7629,15 @@ app.get("/api/employees", (request, response) => {
 
 app.post("/api/employees", (request, response) => {
   const employee = validateEmployee(request.body, true);
+  const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
+  if (!canManageTimeConfirmationLevel) employee.timeConfirmationLevel = "C";
   assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
   try {
     db.prepare(`
       INSERT INTO employees
         (personnel_number, full_name, nickname, color, contracted_hours, preferred_day_off, fixed_workdays,
-         position_id, home_location_id, preferred_department_id, active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         position_id, time_confirmation_level, home_location_id, preferred_department_id, active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       employee.personnelNumber,
       employee.fullName,
@@ -7473,6 +7647,7 @@ app.post("/api/employees", (request, response) => {
       employee.preferredDayOff,
       employee.fixedWorkdays,
       employee.positionId,
+      employee.timeConfirmationLevel,
       employee.homeLocationId,
       employee.preferredDepartmentId,
       employee.active,
@@ -7481,18 +7656,29 @@ app.post("/api/employees", (request, response) => {
     if (String(error.message).includes("UNIQUE")) throw httpError(409, "Diese Personalnummer ist bereits vergeben.");
     throw error;
   }
-  response.status(201).json({ ...employee, active: Boolean(employee.active) });
+  auditPortal(request.portalSession?.employeeNumber || "local", "employee.create", "employee", employee.personnelNumber,
+    JSON.stringify({ timeConfirmationLevel: employee.timeConfirmationLevel }));
+  const responseEmployee = { ...employee, active: Boolean(employee.active) };
+  if (!canManageTimeConfirmationLevel) delete responseEmployee.timeConfirmationLevel;
+  response.status(201).json(responseEmployee);
 });
 
 app.put("/api/employees/:personnelNumber", (request, response) => {
   const personnelNumber = request.params.personnelNumber;
   assertSessionEmployeeScope(request.portalSession, personnelNumber);
-  const employee = validateEmployee({ ...request.body, personnelNumber }, false);
+  const existing = db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = ?").get(personnelNumber);
+  if (!existing) throw httpError(404, "Die Person wurde nicht gefunden.");
+  const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
+  const employee = validateEmployee({
+    ...request.body,
+    personnelNumber,
+    ...(canManageTimeConfirmationLevel ? {} : { timeConfirmationLevel: existing.time_confirmation_level || "C" }),
+  }, false, { defaultTimeConfirmationLevel: existing.time_confirmation_level || "C" });
   assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
   const result = db.prepare(`
     UPDATE employees
     SET full_name = ?, nickname = ?, color = ?, contracted_hours = ?, preferred_day_off = ?, fixed_workdays = ?,
-        position_id = ?, home_location_id = ?, preferred_department_id = ?, active = ?
+        position_id = ?, time_confirmation_level = ?, home_location_id = ?, preferred_department_id = ?, active = ?
     WHERE personnel_number = ?
   `).run(
     employee.fullName,
@@ -7502,13 +7688,21 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
     employee.preferredDayOff,
     employee.fixedWorkdays,
     employee.positionId,
+    employee.timeConfirmationLevel,
     employee.homeLocationId,
     employee.preferredDepartmentId,
     employee.active,
     personnelNumber,
   );
   if (!result.changes) throw httpError(404, "Die Person wurde nicht gefunden.");
-  response.json({ ...employee, personnelNumber, active: Boolean(employee.active) });
+  auditPortal(request.portalSession?.employeeNumber || "local", "employee.update", "employee", personnelNumber,
+    JSON.stringify({
+      timeConfirmationLevelBefore: existing.time_confirmation_level || "C",
+      timeConfirmationLevelAfter: employee.timeConfirmationLevel,
+    }));
+  const responseEmployee = { ...employee, personnelNumber, active: Boolean(employee.active) };
+  if (!canManageTimeConfirmationLevel) delete responseEmployee.timeConfirmationLevel;
+  response.json(responseEmployee);
 });
 
 app.patch("/api/employees/:personnelNumber/display", (request, response) => {
@@ -7543,6 +7737,66 @@ app.get(["/api/portal/status", "/api/portal/v1/status"], (request, response) => 
 
 app.get("/api/portal/v1/roles", (_request, response) => {
   response.json({ apiVersion: PORTAL_API_VERSION, roles: getPortalRoles() });
+});
+
+app.get("/api/portal/v1/wifi-automation/settings", (request, response) => {
+  requireAdminHrOrLocal(request, "wifi:settings");
+  response.json({
+    ...getWifiAutomationPolicy(),
+    automationActive: false,
+    canChange: true,
+    employees: wifiConfirmationLevels(),
+  });
+});
+
+app.put("/api/portal/v1/wifi-automation/settings", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "wifi:settings");
+  const policy = validateWifiAutomationPolicy(request.body || {});
+  const upsert = db.prepare(`
+    INSERT INTO portal_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+  `);
+  db.exec("BEGIN");
+  try {
+    upsert.run("wifi_minimum_presence_minutes", String(policy.minimumPresenceMinutes));
+    upsert.run("wifi_absence_grace_minutes", String(policy.absenceGraceMinutes));
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "wifi.settings.update", "portal_settings", "wifi_automation", JSON.stringify(policy));
+  response.json({
+    ...getWifiAutomationPolicy(),
+    automationActive: false,
+    canChange: true,
+  });
+});
+
+app.put("/api/portal/v1/wifi-automation/confirmation-levels", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "wifi:settings");
+  const levels = validateWifiConfirmationLevels(request.body || {});
+  const getCurrent = db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = ?");
+  const update = db.prepare("UPDATE employees SET time_confirmation_level = ? WHERE personnel_number = ?");
+  const changed = [];
+  db.exec("BEGIN");
+  try {
+    for (const item of levels) {
+      const before = String(getCurrent.get(item.employeeNumber)?.time_confirmation_level || "C").toUpperCase();
+      if (before === item.level) continue;
+      update.run(item.level, item.employeeNumber);
+      changed.push({ ...item, before });
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  for (const item of changed) {
+    auditPortal(actor.employeeNumber, "employee.time_confirmation_level.update", "employee", item.employeeNumber,
+      JSON.stringify({ before: item.before, after: item.level }));
+  }
+  response.json({ changed: changed.length, employees: wifiConfirmationLevels() });
 });
 
 app.get("/api/portal/v1/workflow-settings", (request, response) => {

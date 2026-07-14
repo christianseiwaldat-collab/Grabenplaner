@@ -1,5 +1,16 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.56 Beta
+
+- Ersten Teil der WLAN-Automatik als geschützte technische Grundlage ergänzt; eine echte Controller- oder RADIUS-Verbindung ist noch nicht aktiv.
+- Eigenen Einstellungsbereich „WLAN-Automatik“ für Personalleitung, Admin, IT-Admin und Developer eingeführt.
+- Mindestanwesenheit und Abwesenheitstoleranz sind einstellbar; bei endgültiger Abwesenheit bleibt der ursprüngliche WLAN-Abbruch als spätere Vorschlagszeit maßgeblich.
+- Vertrauensstufen A, B und C unabhängig von Position, Rolle, Filiale und Abteilung im Personalstamm ergänzt; neue und bestehende Datensätze starten vorsichtshalber mit Stufe C.
+- Kompakte, durchsuchbare Verwaltung aller Vertrauensstufen im WLAN-Menü ergänzt und Änderungen revisionsfähig protokolliert.
+- Pseudonymisierte, idempotente Datenstruktur für spätere WLAN-Ereignisse, Anwesenheitssitzungen und bestätigungspflichtige Zeitvorschläge vorbereitet.
+- Zugriffe unterhalb der Personalleitung erhalten weder die WLAN-Einstellungen noch die sensible Vertrauensstufe über Oberfläche oder API.
+- Automatische Buchungen bleiben bewusst deaktiviert: Teil 2 ergänzt erst die WLAN-Schnittstelle, Mitarbeiter-Opt-ins, Vorschlagsbildung und Bestätigungswarnungen.
+
 ## v0.55 Beta
 
 - Zentrale Tagesauswertung für beliebig viele Pausen und geteilte Dienste eingeführt; offene historische Buchungen werden nicht mehr bis zur aktuellen Uhrzeit weitergerechnet.

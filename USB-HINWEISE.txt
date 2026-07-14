@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.55 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.56 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,13 +13,13 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Neu in v0.55 Beta:
-  - Tagesprüfung mit Plan, Ist, gewerteter Zeit, Pause und Abweichung.
-  - Mehrere Pausen und geteilte Dienste werden vollständig ausgewertet.
-  - Samstagswertung gilt auch für tatsächlich gebuchte Arbeitszeit.
-  - Auffällige oder nachträglich geänderte Arbeitstage bleiben sichtbar.
-  - Buchungen können je Standort auf das Firmennetz eingeschränkt werden.
-  - Rechtevergabe und Checkboxen wurden kompakter und responsiver gestaltet.
+Neu in v0.56 Beta:
+  - Eigenes Einstellungsmenü für die geplante WLAN-Automatik ab Personalleitung.
+  - Mindestanwesenheit und Abwesenheitstoleranz können vorbereitet werden.
+  - Vertrauensstufen A, B und C werden unabhängig von Position und Rolle geführt.
+  - Neue Teammitglieder beginnen vorsichtshalber mit Stufe C.
+  - Datenschutzfreundliche, pseudonymisierte Datenstruktur für spätere Controller-Ereignisse.
+  - Es entstehen noch keine automatischen Zeitbuchungen; die echte WLAN-Anbindung folgt separat.
 
 Leere Zweitkopie:
   Ab v0.42.1 wird die leere Zweitkopie nicht mehr automatisch aktualisiert.
