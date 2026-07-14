@@ -22,11 +22,16 @@ button { color: inherit; }
 
 .app-shell { display: grid; grid-template-columns: 230px minmax(0,1fr); min-height: 100vh; }
 .sidebar { position: sticky; top: 0; display: flex; flex-direction: column; height: 100vh; padding: 22px 19px 16px; overflow: hidden; color: white; background: linear-gradient(160deg, rgba(255,255,255,.035), transparent 38%), var(--green-dark); }
-.brand { padding: 0 0 25px; }
+.brand { padding: 0 0 12px; }
 .brand-logo { display: block; width: 100%; height: auto; border-radius: 7px; box-shadow: 0 8px 22px rgba(0,0,0,.22); }
 .brand-app { margin-top: 12px; padding-left: 2px; }
 .brand-app strong { display: block; font: 800 20px/1.1 "Manrope", "DM Sans", "Segoe UI", sans-serif; letter-spacing: -.035em; }
 .brand-app span { display: block; margin-top: 3px; color: rgba(255,255,255,.68); font-size: 10px; font-weight: 700; }
+.sidebar-session { display:grid; gap:3px; margin:0 0 10px; padding:10px 11px; border:1px solid rgba(255,255,255,.12); border-radius:11px; background:rgba(255,255,255,.06); }
+.sidebar-session strong { color:#fff; font-size:9.5px; line-height:1.25; }
+.sidebar-session span { color:rgba(255,255,255,.68); font-size:8px; line-height:1.35; overflow-wrap:anywhere; }
+.sidebar-session button { justify-self:start; margin:2px 0 0; padding:0; border:0; color:#f3caba; background:transparent; font-size:8px; font-weight:800; cursor:pointer; }
+.sidebar-session button:hover { color:#fff; }
 
 .main-nav { display: grid; gap: 5px; min-height: 0; padding: 14px 4px 8px 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.24) transparent; border-top: 1px solid rgba(255,255,255,.1); }
 .nav-branch { display: grid; grid-template-columns: 14px minmax(0,1fr); align-items: stretch; }
@@ -500,6 +505,15 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 .wifi-foundation-status .status-badge { flex:0 0 auto; margin-top:1px; }
 .wifi-foundation-status strong,.wifi-foundation-status small { display:block; }
 .wifi-foundation-status small { margin-top:4px; color:var(--muted); line-height:1.45; }
+.wifi-connector-details { display:grid; gap:7px; margin:12px 0; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--surface-muted); }
+.wifi-connector-details strong,.wifi-connector-details span { display:block; }
+.wifi-connector-details span { margin-top:3px; color:var(--muted); font-size:8.5px; overflow-wrap:anywhere; }
+.wifi-location-mapping-list { display:grid; gap:8px; }
+.wifi-location-mapping-row { display:grid; grid-template-columns:minmax(120px,.8fr) minmax(180px,1.4fr) auto; gap:10px; align-items:end; padding:10px 11px; border:1px solid var(--line); border-radius:12px; background:#fff; }
+.wifi-location-mapping-row > div strong,.wifi-location-mapping-row > div small { display:block; }
+.wifi-location-mapping-row > div small { margin-top:3px; color:var(--muted); font-size:8px; }
+.wifi-location-mapping-row .field { margin:0; }
+.wifi-location-clear { align-self:center; display:flex; align-items:center; gap:6px; color:var(--muted); font-size:8.5px; font-weight:700; }
 .wifi-confirmation-level-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 12px; margin-top:12px; }
 .wifi-confirmation-level-row { display:flex; align-items:center; justify-content:space-between; gap:14px; min-width:0; padding:11px 13px; border:1px solid var(--line); border-radius:13px; background:var(--surface-muted); }
 .wifi-confirmation-level-row.inactive { opacity:.68; }
@@ -838,4 +852,5 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
   .confirmation-level-explanation { grid-template-columns:1fr; }
   .wifi-confirmation-level-row { align-items:stretch; flex-direction:column; }
   .wifi-confirmation-level-row label { justify-content:space-between; }
+  .wifi-location-mapping-row { grid-template-columns:1fr; }
 }

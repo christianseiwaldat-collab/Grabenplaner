@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 220" role="img" aria-labelledby="title desc">
+  <title id="title">Berg &amp; Ball Sporthandel</title>
+  <desc id="desc">Fiktives dunkelblau-oranges Sporthandelslogo mit Berg und Ball.</desc>
+  <rect width="760" height="220" rx="34" fill="#f4f5f2"/>
+  <rect x="34" y="34" width="152" height="152" rx="34" fill="#15354a"/>
+  <path d="M53 146 94 76l24 37 17-25 34 58Z" fill="#fff"/>
+  <circle cx="145" cy="72" r="20" fill="#f28c35"/>
+  <path d="m134 58 11 14 13-10M126 72l19 0 7 17" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+  <text x="218" y="105" font-family="Arial, sans-serif" font-size="48" font-weight="700" fill="#15354a">Berg &amp; Ball</text>
+  <text x="220" y="148" font-family="Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="2" fill="#f07d2b">SPORTHANDEL</text>
+</svg>
+

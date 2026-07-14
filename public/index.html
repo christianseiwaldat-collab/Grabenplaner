@@ -30,7 +30,13 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.56 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.57 Beta</span></div>
+        </div>
+        <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
+          <strong id="sidebarSessionRole"></strong>
+          <span id="sidebarSessionIdentity"></span>
+          <span id="sidebarSessionPosition"></span>
+          <button id="portalLogoutButton" type="button">(Logout)</button>
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
@@ -81,9 +87,6 @@
           </a>
           <button class="sidebar-exit-button" id="systemExitButton" type="button">
             <span>Beenden</span>
-          </button>
-          <button class="sidebar-exit-button hidden" id="portalLogoutButton" type="button">
-            <span>Abmelden</span>
           </button>
         </div>
 
@@ -608,6 +611,12 @@
               <p class="settings-note security-note">Die spätere Automatik erzeugt nur bearbeitbare Zeitvorschläge. Erst die persönliche Bestätigung übernimmt einen Vorschlag in die Zeiterfassung.</p>
             </div>
             <div class="settings-card">
+              <div class="card-heading"><div class="card-icon">API</div><div><h2>Controller &amp; Filialzuordnung</h2><p>Verbindet pseudonymisierte Controller- oder RADIUS-Ereignisse mit der richtigen Filiale.</p></div></div>
+              <div class="wifi-connector-details" id="wifiConnectorDetails"><p class="settings-note">Schnittstellenstatus wird geladen.</p></div>
+              <div class="wifi-location-mapping-list" id="wifiLocationMappingList"></div>
+              <div class="form-actions-inline"><span class="settings-note">Controller-Kennungen werden nur gehasht gespeichert.</span><button class="primary-button" id="saveWifiLocationMappingsButton" type="button">Zuordnungen speichern</button></div>
+            </div>
+            <div class="settings-card">
               <div class="card-heading"><div class="card-icon">Zeit</div><div><h2>Anwesenheitsregeln</h2><p>Kurze Verbindungen und Unterbrechungen sollen keine falschen Buchungen erzeugen.</p></div></div>
               <div class="settings-grid">
                 <label class="field"><span>Mindestanwesenheit</span><div class="unit-input"><input id="wifiMinimumPresenceMinutes" type="number" min="1" max="120" step="1" /><em>Minuten</em></div><small>Erst nach dieser durchgehenden Zeit darf später ein Zeitvorschlag beginnen.</small></label>
@@ -660,7 +669,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.56 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.57 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

@@ -446,6 +446,15 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
         body: await brandingExport.arrayBuffer(),
       });
       assert.equal(brandingImport.status, 200, await brandingImport.clone().text());
+      for (const fileName of ["fokus-und-licht-branding-kit.zip", "berg-und-ball-branding-kit.zip"]) {
+        const kitPath = path.join(__dirname, "..", "demo", "branding-kits", fileName);
+        const demoImport = await fetch(`${url}/api/branding/import.zip?locationId=01`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/zip", "X-Branding-Filename": fileName, Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+          body: fs.readFileSync(kitPath),
+        });
+        assert.equal(demoImport.status, 200, `${fileName}: ${await demoImport.clone().text()}`);
+      }
     }
 
     const createEmployeeAccess = await fetch(`${url}/api/portal/v1/users/102`, {
@@ -1632,6 +1641,19 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
       body: JSON.stringify({ employeeNumber: "102", password: employeePassword }),
     });
     assert.equal(unlockedLogin.status, 200, await unlockedLogin.clone().text());
+    const employeeCookies = typeof unlockedLogin.headers.getSetCookie === "function" ? unlockedLogin.headers.getSetCookie() : [unlockedLogin.headers.get("set-cookie")].filter(Boolean);
+    const employeeCookie = employeeCookies.map((value) => value.split(";", 1)[0]).join("; ");
+    const employeeCsrfCookie = employeeCookies.map((value) => value.split(";", 1)[0]).find((value) => value.startsWith("grabenplaner_csrf="));
+    const employeeCsrf = decodeURIComponent(employeeCsrfCookie.split("=").slice(1).join("="));
+    const employeePasswordChange = await fetch(`${url}/api/portal/v1/me/password`, {
+      method: "PUT", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: employeeCookie, "X-CSRF-Token": employeeCsrf },
+      body: JSON.stringify({ currentPassword: employeePassword, newPassword: "MitarbeiterPasswortNeu!" }),
+    });
+    assert.equal(employeePasswordChange.status, 200, await employeePasswordChange.clone().text());
+    const deniedEmployeeExit = await fetch(`${url}/api/system/exit`, {
+      method: "POST", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: employeeCookie, "X-CSRF-Token": employeeCsrf }, body: "{}",
+    });
+    assert.equal(deniedEmployeeExit.status, 403, await deniedEmployeeExit.clone().text());
 
     const secondPort = await getFreePort();
     const second = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
@@ -1651,12 +1673,8 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     const exitResponse = await fetch(`${url}/api/system/exit`, {
       method: "POST", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf }, body: "{}",
     });
-    assert.equal(exitResponse.status, 409, await exitResponse.clone().text());
-    assert.equal((await exitResponse.json()).code, "SERVER_MANAGED_SHUTDOWN");
-    const serviceStopResponse = await fetch(`${url}/api/service/stop`, {
-      method: "POST", headers: { "X-Grabenplaner-Service-Token": serviceControlToken }, body: "",
-    });
-    assert.equal(serviceStopResponse.status, 200, await serviceStopResponse.clone().text());
+    assert.equal(exitResponse.status, 200, await exitResponse.clone().text());
+    assert.equal((await exitResponse.json()).ok, true);
     assert.equal((await waitForExit(child)).code, 0, stderr);
     assert.equal(fs.existsSync(`${path.resolve(childDatabase)}.server.lock`), false);
   } finally {

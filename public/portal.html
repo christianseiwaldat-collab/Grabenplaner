@@ -49,6 +49,16 @@
 
         <section class="portal-view" id="timeTrackingView" role="tabpanel" aria-labelledby="timeTrackingTab">
           <div class="view-heading time-heading"><div><span class="eyebrow">Mein Arbeitstag</span><h1>Zeiterfassung</h1><p id="timeTrackingDate">Heutige Buchungen</p></div><button class="text-button time-refresh-button" id="timeTrackingRefresh" type="button">Aktualisieren</button></div>
+          <section class="portal-card wifi-suggestion-card" id="wifiAutomationCard" aria-live="polite">
+            <div class="wifi-suggestion-heading">
+              <div><span class="eyebrow">Optional</span><h2>WLAN-Zeitvorschläge</h2><p id="wifiAutomationAvailability">Status wird geladen.</p></div>
+              <label class="portal-switch"><span>Automatik</span><input id="wifiAutomationToggle" type="checkbox" /></label>
+            </div>
+            <div class="wifi-level-note" id="wifiConfirmationLevel"></div>
+            <div class="wifi-suggestion-warning hidden" id="wifiSuggestionWarning"></div>
+            <div class="wifi-suggestion-list" id="wifiSuggestionList"><p class="empty-state">Zeitvorschläge werden geladen.</p></div>
+            <p class="message hidden" id="wifiAutomationMessage"></p>
+          </section>
           <div class="time-tracking-layout">
             <section class="portal-card time-clock-card" id="timeTrackingCard" aria-live="polite">
               <div class="time-state-heading">

@@ -322,6 +322,8 @@ const publicUrl = String(process.env.GRABENPLANER_PUBLIC_URL || runtimeConfig.pu
 const trustProxySetting = String(process.env.GRABENPLANER_TRUST_PROXY || runtimeConfig.trustProxy || "loopback").trim() || "loopback";
 const serviceControlToken = String(process.env.GRABENPLANER_SERVICE_CONTROL_TOKEN || "").trim();
 const deploymentKind = String(process.env.GRABENPLANER_DEPLOYMENT_KIND || "local").trim().toLowerCase() || "local";
+const codespacesForwardingDomain = String(process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || "app.github.dev")
+  .trim().toLowerCase();
 const app = express();
 const PORT = Number(process.env.PORT || runtimeConfig.port || 3000);
 const configuredHost = configuredOperationMode === "lan" ? "0.0.0.0" : "127.0.0.1";
@@ -338,6 +340,43 @@ const defaultBackupDirectorySetting = "%USERPROFILE%\\Documents\\grabenplaner-ba
 const defaultBackupDirectory = process.env.BACKUP_DIR || path.join(os.homedir(), "Documents", "grabenplaner-backups");
 const instanceLockPath = databasePath === ":memory:" ? "" : `${path.resolve(databasePath)}.server.lock`;
 
+function normalizeHttpOrigin(value) {
+  try {
+    const parsed = new URL(String(value || "").trim());
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return "";
+    const defaultPort = (parsed.protocol === 'https:' && parsed.port === '443')
+      || (parsed.protocol === 'http:' && parsed.port === '80');
+    return `${parsed.protocol}//${parsed.hostname.toLowerCase()}${parsed.port && !defaultPort ? `:${parsed.port}` : ""}`;
+  } catch {
+    return "";
+  }
+}
+
+const normalizedPublicOrigin = normalizeHttpOrigin(publicUrl);
+
+function trustedCodespacesForwardedOrigin(request) {
+  if (deploymentKind !== "codespaces-test" || !request.secure || !isLoopbackRequest(request)) return "";
+  const forwardedHost = String(request.headers["x-forwarded-host"] || "").split(",", 1)[0].trim().toLowerCase();
+  if (!forwardedHost || !/^[a-z0-9.-]+(?::\d+)?$/.test(forwardedHost)) return "";
+  const candidate = normalizeHttpOrigin(`https://${forwardedHost}`);
+  if (!candidate) return "";
+  const hostname = new URL(candidate).hostname;
+  if (!codespacesForwardingDomain || !hostname.endsWith(`.${codespacesForwardingDomain}`)) return "";
+  const configuredPortMarker = normalizedPublicOrigin
+    ? new URL(normalizedPublicOrigin).hostname.match(/-(\d+)\./)?.[1]
+    : "";
+  if (!hostname.includes(`-${configuredPortMarker || PORT}.`)) return "";
+  return candidate;
+}
+
+function requestOriginAllowed(request, origin) {
+  const normalizedOrigin = normalizeHttpOrigin(origin);
+  if (!normalizedOrigin) return false;
+  if (normalizedPublicOrigin && normalizedOrigin === normalizedPublicOrigin) return true;
+  const forwardedOrigin = trustedCodespacesForwardedOrigin(request);
+  return Boolean(forwardedOrigin && normalizedOrigin === forwardedOrigin);
+}
+
 if (serverModeActive) app.set("trust proxy", trustProxySetting);
 
 function portalPasswordMinLength() {
@@ -348,6 +387,33 @@ fs.mkdirSync(path.dirname(databasePath), { recursive: true });
 fs.mkdirSync(appBackupDirectory, { recursive: true });
 fs.mkdirSync(brandingKitsDirectory, { recursive: true });
 fs.mkdirSync(amuStorageDirectory, { recursive: true });
+
+function loadPrivateSecret({ environmentName, fileName, bytes = 32, requiredInServerMode = false }) {
+  const environmentValue = String(process.env[environmentName] || "").trim();
+  if (environmentValue) return { value: environmentValue, source: "environment", path: "" };
+  if (requiredInServerMode && serverModeActive) return null;
+  const secretPath = path.join(privateDataDirectory, fileName);
+  if (!fs.existsSync(secretPath)) {
+    fs.mkdirSync(path.dirname(secretPath), { recursive: true });
+    fs.writeFileSync(secretPath, `${crypto.randomBytes(bytes).toString("base64url")}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+  }
+  try { fs.chmodSync(secretPath, 0o600); } catch {}
+  return { value: fs.readFileSync(secretPath, "utf8").trim(), source: "private-key-file", path: secretPath };
+}
+
+const wifiProviderId = String(process.env.GRABENPLANER_WIFI_PROVIDER_ID || "generic-radius")
+  .trim().toLowerCase().replace(/[^a-z0-9._-]/g, "-").slice(0, 64) || "generic-radius";
+const wifiIdentitySecret = loadPrivateSecret({
+  environmentName: "GRABENPLANER_WIFI_IDENTITY_KEY",
+  fileName: "wifi-identity.key",
+  bytes: 32,
+});
+const wifiWebhookSecret = loadPrivateSecret({
+  environmentName: "GRABENPLANER_WIFI_WEBHOOK_SECRET",
+  fileName: "wifi-webhook.secret",
+  bytes: 48,
+  requiredInServerMode: true,
+});
 
 function loadAmuEncryptionConfiguration() {
   const keyId = String(process.env.GRABENPLANER_AMU_KEY_ID || (serverModeActive ? "" : "local-v1")).trim();
@@ -1039,6 +1105,19 @@ function createSchema() {
         ON UPDATE CASCADE ON DELETE SET NULL
     );
 
+    CREATE TABLE IF NOT EXISTS wifi_location_mappings (
+      provider_id TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      external_location_hash TEXT NOT NULL,
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (provider_id, location_id),
+      UNIQUE(provider_id, external_location_hash),
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS wifi_time_suggestions (
       id TEXT PRIMARY KEY,
       presence_session_id TEXT NOT NULL,
@@ -1052,9 +1131,15 @@ function createSchema() {
       absence_grace_minutes_snapshot INTEGER NOT NULL DEFAULT 30,
       confirmation_due_at TEXT,
       status TEXT NOT NULL DEFAULT 'pending',
+      confirmed_start_at TEXT,
+      confirmed_end_at TEXT,
+      confirmed_break_start_at TEXT,
+      confirmed_break_end_at TEXT,
       confirmed_by TEXT,
       confirmed_at TEXT,
+      rejected_by TEXT,
       rejected_at TEXT,
+      rejection_reason TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (presence_session_id) REFERENCES wifi_presence_sessions(id)
@@ -1242,6 +1327,12 @@ if (!columnExists("employees", "position_id")) {
   db.exec("ALTER TABLE employees ADD COLUMN position_id TEXT NOT NULL DEFAULT 'verkaufsmitarbeiter'");
 }
 ensureColumn("employees", "time_confirmation_level", "TEXT NOT NULL DEFAULT 'C'");
+ensureColumn("wifi_time_suggestions", "confirmed_start_at", "TEXT");
+ensureColumn("wifi_time_suggestions", "confirmed_end_at", "TEXT");
+ensureColumn("wifi_time_suggestions", "confirmed_break_start_at", "TEXT");
+ensureColumn("wifi_time_suggestions", "confirmed_break_end_at", "TEXT");
+ensureColumn("wifi_time_suggestions", "rejected_by", "TEXT");
+ensureColumn("wifi_time_suggestions", "rejection_reason", "TEXT NOT NULL DEFAULT ''");
 if (!columnExists("employees", "home_location_id")) {
   db.exec("ALTER TABLE employees ADD COLUMN home_location_id TEXT");
 }
@@ -1298,6 +1389,7 @@ db.exec("CREATE INDEX IF NOT EXISTS idx_wifi_presence_employee_state ON wifi_pre
 db.exec("CREATE INDEX IF NOT EXISTS idx_wifi_presence_location_state ON wifi_presence_sessions(location_id, state, observed_start_at)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_wifi_event_inbox_processing ON wifi_event_inbox(processing_status, received_at)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_wifi_suggestions_employee_date ON wifi_time_suggestions(employee_number, work_date, status)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_wifi_location_mapping_hash ON wifi_location_mappings(provider_id, external_location_hash)");
 db.prepare("UPDATE time_entries SET work_date = SUBSTR(entry_timestamp, 1, 10) WHERE TRIM(COALESCE(work_date, '')) = ''").run();
 db.prepare(`
   UPDATE time_entries
@@ -1561,6 +1653,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.55-time-evaluation-day-review", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.56-wifi-automation-foundation", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.57-wifi-automation-suggestions", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -1620,14 +1714,136 @@ const seedEmployees = [
   ["106", "Fina Demo", "Fina", "#c58b00"],
 ];
 
-if (process.env.GRABENPLANER_SEED_DEMO === "1" && db.prepare("SELECT COUNT(*) AS count FROM employees").get().count === 0) {
-  const seedLocationId = db.prepare("SELECT id FROM locations ORDER BY active DESC, id LIMIT 1").get()?.id || "01";
+function demoLocationDaySettings(location) {
+  return Object.fromEntries(planningDays.map(([day]) => {
+    const saturday = day === "saturday";
+    const start = saturday ? location.saturdayStart : location.weekdayStart;
+    const end = saturday ? location.saturdayEnd : location.weekdayEnd;
+    return [day, {
+      open: true,
+      start,
+      end,
+      lunchEnabled: false,
+      lunchStart: "13:00",
+      lunchEnd: "14:00",
+      minStaff: Number(location.minStaff || 0),
+      minFrom: start,
+      minTo: end,
+    }];
+  }));
+}
+
+function loadSporthandelDemoProfile() {
+  const profilePath = path.join(__dirname, "demo", "sporthandel", "demo-profile.json");
+  const profile = JSON.parse(fs.readFileSync(profilePath, "utf8").replace(/^\uFEFF/, ""));
+  if (profile?.format !== "grabenplaner-demo-profile" || profile?.id !== "sporthandel"
+    || !Array.isArray(profile.locations) || !Array.isArray(profile.employees)) {
+    throw new Error("Das Sporthandel-Demoprofil ist ungueltig.");
+  }
+  const salesCount = profile.employees.filter((employee) => employee.category === "sales").length;
+  if (profile.locations.length !== 6 || salesCount !== 31) {
+    throw new Error("Das Sporthandel-Demoprofil muss sechs Filialen und 31 Verkaufsmitarbeitende enthalten.");
+  }
+  return profile;
+}
+
+function seedSporthandelDemo() {
+  const profile = loadSporthandelDemoProfile();
+  const insertLocation = db.prepare(`
+    INSERT INTO locations
+      (id, name, min_staff, day_settings_json, time_tracking_enabled, time_tracking_access_mode,
+       time_tracking_allowed_networks, time_tracking_variance_minutes, active)
+    VALUES (?, ?, ?, ?, 1, 'anywhere', '', 15, 1)
+  `);
+  const insertDepartment = db.prepare(`
+    INSERT INTO departments (location_id, name, min_staff, active, sort_order)
+    VALUES (?, ?, ?, 1, ?)
+  `);
   const insertEmployee = db.prepare(`
     INSERT INTO employees
-      (personnel_number, full_name, nickname, color, contracted_hours, home_location_id, active)
-    VALUES (?, ?, ?, ?, 38.5, ?, 1)
+      (personnel_number, full_name, nickname, color, contracted_hours, position_id,
+       time_confirmation_level, home_location_id, preferred_department_id, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `);
-  for (const employee of seedEmployees) insertEmployee.run(...employee, seedLocationId);
+  const insertBranding = db.prepare(`
+    INSERT INTO location_branding
+      (location_id, kit_id, company_name, logo_url, icon_url, logo_alt, admin_email, updated_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'demo-profile')
+  `);
+  const upsertSetting = db.prepare(`
+    INSERT INTO settings (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `);
+
+  db.exec("BEGIN");
+  try {
+    db.prepare("DELETE FROM location_branding").run();
+    db.prepare("DELETE FROM departments").run();
+    db.prepare("DELETE FROM locations").run();
+
+    const departmentIds = new Map();
+    for (const location of profile.locations) {
+      insertLocation.run(location.id, location.name, Number(location.minStaff || 0), JSON.stringify(demoLocationDaySettings(location)));
+      for (const [index, departmentName] of location.departments.entries()) {
+        const result = insertDepartment.run(location.id, departmentName, 1, index + 1);
+        departmentIds.set(`${location.id}:${departmentName}`, Number(result.lastInsertRowid));
+      }
+      insertBranding.run(
+        location.id,
+        profile.branding.kitId,
+        profile.companyName,
+        profile.branding.logoUrl,
+        profile.branding.iconUrl,
+        profile.branding.logoAlt,
+        profile.branding.adminEmail || "",
+      );
+    }
+
+    for (const employee of profile.employees) {
+      const departmentId = departmentIds.get(`${employee.locationId}:${employee.department}`) || null;
+      insertEmployee.run(
+        employee.personnelNumber,
+        employee.fullName,
+        employee.nickname,
+        employee.color,
+        Number(employee.contractedHours || 38.5),
+        employee.positionId || "verkaufsmitarbeiter",
+        ["A", "B", "C"].includes(employee.confirmationLevel) ? employee.confirmationLevel : "C",
+        employee.locationId,
+        departmentId,
+      );
+    }
+
+    const managementBranding = {
+      branding_management_kit_id: profile.branding.kitId,
+      branding_company_name: profile.companyName,
+      branding_logo_url: profile.branding.logoUrl,
+      branding_icon_url: profile.branding.iconUrl,
+      branding_logo_alt: profile.branding.logoAlt,
+      branding_admin_email: profile.branding.adminEmail || "",
+    };
+    for (const [key, value] of Object.entries(managementBranding)) upsertSetting.run(key, value);
+    db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES ('demo-profile-sporthandel-v1', ?)")
+      .run(packageMetadata.version);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+if (process.env.GRABENPLANER_SEED_DEMO === "1" && db.prepare("SELECT COUNT(*) AS count FROM employees").get().count === 0) {
+  if (String(process.env.GRABENPLANER_DEMO_PROFILE || "").trim().toLowerCase() === "sporthandel") {
+    seedSporthandelDemo();
+  } else {
+    const seedLocationId = db.prepare("SELECT id FROM locations ORDER BY active DESC, id LIMIT 1").get()?.id || "01";
+    const insertEmployee = db.prepare(`
+      INSERT INTO employees
+        (personnel_number, full_name, nickname, color, contracted_hours, home_location_id, active)
+      VALUES (?, ?, ?, ?, 38.5, ?, 1)
+    `);
+    for (const employee of seedEmployees) insertEmployee.run(...employee, seedLocationId);
+  }
 }
 
 app.disable("x-powered-by");
@@ -1650,7 +1866,7 @@ app.use((request, response, next) => {
   }
   if (serverModeActive && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
     const origin = String(request.headers.origin || "").replace(/\/$/, "");
-    if (origin && publicUrl && origin !== publicUrl) {
+    if (origin && publicUrl && !requestOriginAllowed(request, origin)) {
       response.status(403).json({ error: "Die Anfrage stammt nicht von der konfigurierten Serveradresse.", code: "ORIGIN_NOT_ALLOWED" });
       return;
     }
@@ -2049,10 +2265,12 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
     SELECT s.id, s.employee_number, s.expires_at, s.revoked_at,
            u.role, u.role_locked, u.active, u.must_change_password,
            e.full_name, e.nickname, e.color, e.home_location_id, e.preferred_department_id,
+           e.position_id, p.name AS position_name,
            r.name AS role_name, r.permissions
     FROM portal_sessions s
     JOIN portal_users u ON u.employee_number = s.employee_number
     JOIN employees e ON e.personnel_number = u.employee_number
+    LEFT JOIN positions p ON p.id = e.position_id
     LEFT JOIN portal_roles r ON r.id = u.role
     WHERE s.token_hash = ?
       AND s.revoked_at IS NULL
@@ -2078,6 +2296,8 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
     nickname: session.nickname,
     color: session.color,
     homeLocationId: session.home_location_id,
+    positionId: session.position_id || null,
+    positionName: session.position_name || "",
     role: session.role,
     roleName: session.role_name || session.role,
     roleLocked: Boolean(session.role_locked),
@@ -2098,6 +2318,8 @@ function publicPortalUser(session) {
     nickname: session.nickname,
     color: session.color,
     homeLocationId: session.homeLocationId,
+    positionId: session.positionId,
+    positionName: session.positionName,
     role: session.role,
     roleName: session.roleName,
     roleLocked: Boolean(session.roleLocked),
@@ -2164,7 +2386,7 @@ function assertPortalCsrf(request) {
 
 function enforceAdminApiAccess(request, _response, next) {
   try {
-    if (request.path === "/health" || request.path === "/service/stop") return next();
+    if (request.path === "/health" || request.path === "/service/stop" || request.path === "/integrations/wifi/events") return next();
     const status = getPortalStatus();
     if (!status.portalEnabled || request.path.startsWith("/portal/")) return next();
     const method = String(request.method || "GET").toUpperCase();
@@ -2440,7 +2662,7 @@ function getWifiAutomationPolicy() {
     absenceGraceMinutes: Math.min(240, Math.max(1, Number(settings.wifi_absence_grace_minutes || 30))),
     endTimestampMode: "first_disconnect",
     connectorStatus: "not_configured",
-    phase: "foundation",
+    phase: "suggestions",
   };
 }
 
@@ -2489,6 +2711,670 @@ function validateWifiConfirmationLevels(body = {}) {
     seen.add(employeeNumber);
     return { employeeNumber, level };
   });
+}
+
+const wifiWebhookRateLimits = new Map();
+const wifiEventTypes = new Set(["connected", "seen", "disconnected"]);
+const wifiForbiddenEventFields = new Set(["mac", "macaddress", "mac_address", "bssid", "ssid", "device", "deviceid", "device_id"]);
+
+function wifiCanonicalReference(value, { caseSensitive = false } = {}) {
+  const normalized = String(value || "").trim().replace(/\s+/g, " ");
+  return caseSensitive ? normalized : normalized.toLocaleLowerCase("de");
+}
+
+function wifiReferenceHash(kind, value, providerId = wifiProviderId, options = {}) {
+  if (!wifiIdentitySecret?.value) throw httpError(503, "Der private WLAN-Identitätsschlüssel ist nicht verfügbar.", "WIFI_IDENTITY_KEY_UNAVAILABLE");
+  const normalized = wifiCanonicalReference(value, options);
+  return crypto.createHmac("sha256", wifiIdentitySecret.value)
+    .update(`${providerId}\0${kind}\0${normalized}`, "utf8").digest("hex");
+}
+
+function wifiWebhookConfigured() {
+  return Boolean(wifiWebhookSecret?.value && wifiWebhookSecret.value.length >= 32);
+}
+
+function wifiConnectorPayload(actor = null) {
+  const maySeeTechnicalHint = actor?.employeeNumber === "local" || ["developer", "it_admin", "admin"].includes(actor?.role);
+  return {
+    configured: wifiWebhookConfigured(),
+    providerId: wifiProviderId,
+    eventEndpoint: "/api/integrations/wifi/events",
+    secretSource: wifiWebhookSecret?.source || "missing",
+    configurationHint: !wifiWebhookConfigured()
+      ? "Im Serverbetrieb muss GRABENPLANER_WIFI_WEBHOOK_SECRET mit mindestens 32 Zeichen gesetzt werden."
+      : wifiWebhookSecret?.source === "environment"
+        ? "Der Webhook-Schlüssel wird sicher aus der Serverumgebung geladen."
+        : maySeeTechnicalHint
+          ? "Der Webhook-Schlüssel liegt geschützt im privaten Datenverzeichnis."
+          : "Die WLAN-Schnittstelle ist geschützt konfiguriert.",
+  };
+}
+
+function wifiLocationMappings() {
+  const mapped = new Map(db.prepare(`
+    SELECT location_id, updated_at FROM wifi_location_mappings WHERE provider_id = ?
+  `).all(wifiProviderId).map((row) => [row.location_id, row.updated_at]));
+  return db.prepare("SELECT id, name, active FROM locations ORDER BY active DESC, id").all().map((location) => ({
+    locationId: location.id,
+    locationName: location.name,
+    active: Boolean(location.active),
+    mapped: mapped.has(location.id),
+    updatedAt: mapped.get(location.id) || null,
+  }));
+}
+
+function saveWifiLocationMappings(actor, body = {}) {
+  if (!Array.isArray(body.mappings) || body.mappings.length > 1000) {
+    throw httpError(400, "Bitte gültige Standortzuordnungen übermitteln.", "WIFI_LOCATION_MAPPINGS_INVALID");
+  }
+  const seen = new Set();
+  const normalized = body.mappings.map((item) => {
+    const locationId = normalizeLocationId(item.locationId || "");
+    if (!locationId || seen.has(locationId)) throw httpError(400, "Eine Standortzuordnung ist doppelt oder ungültig.", "WIFI_LOCATION_MAPPINGS_INVALID");
+    validateLocationExists(locationId);
+    seen.add(locationId);
+    const clear = item.clear === true;
+    const externalReference = wifiCanonicalReference(item.externalReference || "");
+    if (!clear && (externalReference.length < 1 || externalReference.length > 200)) {
+      throw httpError(400, `Für Filiale ${locationId} fehlt eine gültige Controller-Kennung.`, "WIFI_LOCATION_MAPPINGS_INVALID");
+    }
+    return { locationId, clear, externalReference };
+  });
+  const remove = db.prepare("DELETE FROM wifi_location_mappings WHERE provider_id = ? AND location_id = ?");
+  const upsert = db.prepare(`
+    INSERT INTO wifi_location_mappings
+      (provider_id, location_id, external_location_hash, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(provider_id, location_id) DO UPDATE SET
+      external_location_hash = excluded.external_location_hash,
+      updated_by = excluded.updated_by,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const item of normalized) {
+      if (item.clear) remove.run(wifiProviderId, item.locationId);
+      else upsert.run(wifiProviderId, item.locationId, wifiReferenceHash("location", item.externalReference), actor.employeeNumber);
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    if (String(error.message || "").includes("UNIQUE")) {
+      throw httpError(409, "Eine Controller-Kennung darf nur einer Filiale zugeordnet sein.", "WIFI_LOCATION_MAPPING_CONFLICT");
+    }
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "wifi.location_mappings.update", "wifi_location_mapping", wifiProviderId,
+    JSON.stringify({ locations: normalized.map((item) => ({ locationId: item.locationId, cleared: item.clear })) }));
+  return wifiLocationMappings();
+}
+
+function wifiAutomationPreference(employeeNumber) {
+  const row = db.prepare(`
+    SELECT employee_number, enabled, provider_id, opted_in_at, opted_out_at, updated_at
+    FROM wifi_automation_preferences WHERE employee_number = ?
+  `).get(employeeNumber);
+  return row ? {
+    enabled: Boolean(row.enabled),
+    providerId: row.provider_id || wifiProviderId,
+    optedInAt: row.opted_in_at,
+    optedOutAt: row.opted_out_at,
+    updatedAt: row.updated_at,
+  } : { enabled: false, providerId: wifiProviderId, optedInAt: null, optedOutAt: null, updatedAt: null };
+}
+
+function setWifiAutomationPreference(session, enabled) {
+  const employeeNumber = session.employeeNumber;
+  const externalSubjectHash = enabled ? wifiReferenceHash("subject", employeeNumber) : null;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`
+      INSERT INTO wifi_automation_preferences
+        (employee_number, enabled, provider_id, external_subject_hash, opted_in_at, opted_out_at, updated_by, updated_at)
+      VALUES (?, ?, ?, ?, CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP END,
+        CASE WHEN ? = 0 THEN CURRENT_TIMESTAMP END, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(employee_number) DO UPDATE SET
+        enabled = excluded.enabled,
+        provider_id = excluded.provider_id,
+        external_subject_hash = excluded.external_subject_hash,
+        opted_in_at = CASE WHEN excluded.enabled = 1 THEN COALESCE(wifi_automation_preferences.opted_in_at, CURRENT_TIMESTAMP) ELSE wifi_automation_preferences.opted_in_at END,
+        opted_out_at = CASE WHEN excluded.enabled = 0 THEN CURRENT_TIMESTAMP ELSE NULL END,
+        updated_by = excluded.updated_by,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(employeeNumber, enabled ? 1 : 0, enabled ? wifiProviderId : null, externalSubjectHash,
+      enabled ? 1 : 0, enabled ? 1 : 0, employeeNumber);
+    if (!enabled) {
+      db.prepare(`
+        UPDATE wifi_presence_sessions SET state = 'cancelled', observed_end_at = COALESCE(observed_end_at, last_seen_at), updated_at = CURRENT_TIMESTAMP
+        WHERE employee_number = ? AND state IN ('observing','present','grace')
+      `).run(employeeNumber);
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  auditPortal(employeeNumber, enabled ? "wifi.preference.enable" : "wifi.preference.disable", "wifi_automation_preference", employeeNumber);
+  return wifiAutomationPreference(employeeNumber);
+}
+
+function wifiConfirmationDueAt(workDate, level) {
+  const weekEnd = addDays(getMonday(workDate), 6);
+  if (level === "A") return viennaLocalDateTime(weekEnd, "23:00").toISOString();
+  if (level === "B") {
+    const threeDayLimit = viennaLocalDateTime(addDays(workDate, 3), "12:00");
+    const weekLimit = viennaLocalDateTime(weekEnd, "23:00");
+    return new Date(Math.min(threeDayLimit.getTime(), weekLimit.getTime())).toISOString();
+  }
+  return viennaLocalDateTime(addDays(workDate, 1), "12:00").toISOString();
+}
+
+function splitWifiPresenceByWorkDate(startAt, endAt) {
+  const start = new Date(startAt);
+  const end = new Date(endAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return [];
+  const result = [];
+  let cursor = start;
+  while (cursor < end && result.length < 8) {
+    const workDate = viennaTodayIso(cursor);
+    const nextMidnight = viennaLocalDateTime(addDays(workDate, 1), "00:00");
+    const segmentEnd = new Date(Math.min(end.getTime(), nextMidnight.getTime()));
+    if (segmentEnd > cursor) result.push({ workDate, startAt: cursor.toISOString(), endAt: segmentEnd.toISOString() });
+    cursor = segmentEnd;
+  }
+  return result;
+}
+
+function wifiSuggestionWarning(row, now = new Date()) {
+  if (row.status !== "pending") return "none";
+  const dueAt = new Date(row.confirmation_due_at || 0);
+  if (Number.isNaN(dueAt.getTime())) return "pending";
+  const remaining = dueAt.getTime() - now.getTime();
+  if (remaining <= 0) return "overdue";
+  if (remaining <= 24 * 60 * 60 * 1000) return "due_soon";
+  return "pending";
+}
+
+function serializeWifiSuggestion(row, now = new Date()) {
+  const startAt = row.confirmed_start_at || row.suggested_start_at;
+  const endAt = row.confirmed_end_at || row.suggested_end_at;
+  return {
+    id: row.id,
+    workDate: row.work_date,
+    weekStart: getMonday(row.work_date),
+    locationId: row.location_id,
+    locationName: row.location_name || row.location_id,
+    suggestedStartAt: row.suggested_start_at,
+    suggestedEndAt: row.suggested_end_at,
+    startTime: viennaNowLocal(new Date(startAt)).slice(11, 16),
+    endTime: viennaNowLocal(new Date(endAt)).slice(11, 16),
+    breakStartTime: row.confirmed_break_start_at ? viennaNowLocal(new Date(row.confirmed_break_start_at)).slice(11, 16) : "",
+    breakEndTime: row.confirmed_break_end_at ? viennaNowLocal(new Date(row.confirmed_break_end_at)).slice(11, 16) : "",
+    level: row.confirmation_level_snapshot || "C",
+    dueAt: row.confirmation_due_at,
+    status: row.status,
+    warning: wifiSuggestionWarning(row, now),
+    confirmedAt: row.confirmed_at,
+    rejectedAt: row.rejected_at,
+    rejectionReason: row.rejection_reason || "",
+  };
+}
+
+function createWifiSuggestionsForSession(sessionRow, now = new Date()) {
+  const employee = db.prepare(`
+    SELECT time_confirmation_level FROM employees WHERE personnel_number = ? AND active = 1
+  `).get(sessionRow.employee_number);
+  if (!employee) return [];
+  const level = ["A", "B", "C"].includes(String(employee.time_confirmation_level || "").toUpperCase())
+    ? String(employee.time_confirmation_level).toUpperCase() : "C";
+  const policy = getWifiAutomationPolicy();
+  const created = [];
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO wifi_time_suggestions
+      (id, presence_session_id, employee_number, location_id, work_date,
+       suggested_start_at, suggested_end_at, confirmation_level_snapshot,
+       minimum_presence_minutes_snapshot, absence_grace_minutes_snapshot, confirmation_due_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const segment of splitWifiPresenceByWorkDate(sessionRow.observed_start_at, sessionRow.observed_end_at)) {
+    if (new Date(segment.endAt).getTime() - new Date(segment.startAt).getTime() < 60 * 1000) continue;
+    const id = crypto.randomUUID();
+    const result = insert.run(id, sessionRow.id, sessionRow.employee_number, sessionRow.location_id, segment.workDate,
+      segment.startAt, segment.endAt, level, policy.minimumPresenceMinutes, policy.absenceGraceMinutes,
+      wifiConfirmationDueAt(segment.workDate, level));
+    if (!result.changes) continue;
+    created.push(id);
+    createPortalNotification(sessionRow.employee_number, "wifi.suggestion", "Neuer WLAN-Zeitvorschlag",
+      `Für ${segment.workDate} liegt ein Zeitvorschlag zur Prüfung bereit.`, {
+        target: "/portal/?tab=timeTracking",
+        entityType: "wifi_time_suggestion",
+        entityId: id,
+        dedupeKey: `wifi-suggestion:${id}:created`,
+      });
+  }
+  if (created.length) {
+    auditPortal("wifi-controller", "wifi.suggestions.create", "wifi_presence_session", sessionRow.id,
+      JSON.stringify({ count: created.length, locationId: sessionRow.location_id }));
+  }
+  return created;
+}
+
+function finalizeWifiPresenceSession(row, now = new Date()) {
+  const endAt = row.disconnect_observed_at || row.observed_end_at || row.last_seen_at;
+  const start = new Date(row.observed_start_at);
+  const end = new Date(endAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+    db.prepare("UPDATE wifi_presence_sessions SET state = 'invalid', observed_end_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(endAt || now.toISOString(), row.id);
+    return [];
+  }
+  const policy = getWifiAutomationPolicy();
+  const durationMinutes = Math.floor((end.getTime() - start.getTime()) / 60000);
+  const state = durationMinutes >= policy.minimumPresenceMinutes ? "closed" : "ignored_short";
+  db.prepare(`
+    UPDATE wifi_presence_sessions
+    SET observed_end_at = ?, state = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(end.toISOString(), state, row.id);
+  if (state !== "closed") return [];
+  return createWifiSuggestionsForSession({ ...row, observed_end_at: end.toISOString() }, now);
+}
+
+function finalizeExpiredWifiPresenceSessions(now = new Date()) {
+  const policy = getWifiAutomationPolicy();
+  const rows = db.prepare(`
+    SELECT * FROM wifi_presence_sessions
+    WHERE state = 'grace' AND disconnect_observed_at IS NOT NULL
+    ORDER BY disconnect_observed_at
+  `).all();
+  let finalized = 0;
+  let suggestions = 0;
+  for (const candidate of rows) {
+    const disconnectedAt = new Date(candidate.disconnect_observed_at);
+    if (Number.isNaN(disconnectedAt.getTime()) || disconnectedAt.getTime() + policy.absenceGraceMinutes * 60000 > now.getTime()) continue;
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const current = db.prepare("SELECT * FROM wifi_presence_sessions WHERE id = ? AND state = 'grace'").get(candidate.id);
+      if (current) {
+        suggestions += finalizeWifiPresenceSession(current, now).length;
+        finalized += 1;
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      try { db.exec("ROLLBACK"); } catch {}
+      throw error;
+    }
+  }
+  return { finalized, suggestions };
+}
+
+function assertWifiWebhookRateLimit(request) {
+  const key = loginRateKey(request);
+  const now = Date.now();
+  const windowMs = 5 * 60 * 1000;
+  const recent = (wifiWebhookRateLimits.get(key) || []).filter((timestamp) => now - timestamp < windowMs);
+  if (recent.length >= 300) {
+    const error = httpError(429, "Zu viele WLAN-Ereignisse. Bitte die Controller-Konfiguration prüfen.", "WIFI_WEBHOOK_RATE_LIMITED");
+    error.retryAfter = Math.max(1, Math.ceil((windowMs - (now - recent[0])) / 1000));
+    throw error;
+  }
+  recent.push(now);
+  wifiWebhookRateLimits.set(key, recent);
+}
+
+function assertWifiWebhookAuthorization(request) {
+  if (!wifiWebhookConfigured()) throw httpError(503, "Die WLAN-Ereignisschnittstelle ist nicht konfiguriert.", "WIFI_WEBHOOK_NOT_CONFIGURED");
+  const authorization = String(request.headers.authorization || "");
+  const provided = authorization.startsWith("Bearer ")
+    ? authorization.slice(7).trim()
+    : String(request.headers["x-grabenplaner-wifi-token"] || "").trim();
+  const expected = wifiWebhookSecret.value;
+  const valid = provided.length === expected.length
+    && crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
+  if (!valid) throw httpError(403, "Die WLAN-Ereignisschnittstelle hat den Zugriff abgelehnt.", "WIFI_WEBHOOK_DENIED");
+}
+
+function validateWifiEvent(body = {}, now = new Date()) {
+  const forbidden = Object.keys(body).find((key) => wifiForbiddenEventFields.has(String(key).toLowerCase()));
+  if (forbidden) throw httpError(400, "Hardware-Adressen, SSIDs und Gerätekennungen dürfen nicht übermittelt werden.", "WIFI_EVENT_PRIVACY_FIELD_REJECTED");
+  const providerId = String(body.providerId || wifiProviderId).trim().toLowerCase();
+  if (providerId !== wifiProviderId) throw httpError(400, "Die Provider-Kennung passt nicht zur konfigurierten Schnittstelle.", "WIFI_EVENT_PROVIDER_INVALID");
+  const eventType = String(body.eventType || "").trim().toLowerCase();
+  const externalEventId = wifiCanonicalReference(body.eventId || body.externalEventId || "", { caseSensitive: true });
+  const employeeReference = wifiCanonicalReference(body.employeeReference || "");
+  const locationReference = wifiCanonicalReference(body.locationReference || "");
+  const occurredAt = new Date(body.occurredAt || "");
+  if (!wifiEventTypes.has(eventType)) throw httpError(400, "Der WLAN-Ereignistyp ist ungültig.", "WIFI_EVENT_TYPE_INVALID");
+  if (!externalEventId || externalEventId.length > 240 || !employeeReference || employeeReference.length > 160
+    || !locationReference || locationReference.length > 200 || Number.isNaN(occurredAt.getTime())) {
+    throw httpError(400, "Das WLAN-Ereignis ist unvollständig oder ungültig.", "WIFI_EVENT_INVALID");
+  }
+  const age = now.getTime() - occurredAt.getTime();
+  if (age < -10 * 60 * 1000 || age > 31 * 24 * 60 * 60 * 1000) {
+    throw httpError(400, "Der Zeitpunkt des WLAN-Ereignisses liegt außerhalb des zulässigen Fensters.", "WIFI_EVENT_TIME_INVALID");
+  }
+  return { providerId, eventType, externalEventId, employeeReference, locationReference, occurredAt };
+}
+
+function processWifiEvent(input, now = new Date()) {
+  // Controller können Ereignisse kurz verzögert oder gebündelt liefern. Bereits offene
+  // Toleranzfenster werden deshalb relativ zum Ereigniszeitpunkt geschlossen, damit ein
+  // zeitlich korrekter Reconnect nicht durch die spätere Zustellung fälschlich geteilt wird.
+  finalizeExpiredWifiPresenceSessions(input.occurredAt);
+  const externalEventHash = wifiReferenceHash("event", input.externalEventId, input.providerId, { caseSensitive: true });
+  const externalSubjectHash = wifiReferenceHash("subject", input.employeeReference, input.providerId);
+  const externalLocationHash = wifiReferenceHash("location", input.locationReference, input.providerId);
+  const inboxId = crypto.randomUUID();
+  const payloadFingerprint = sha256(JSON.stringify({
+    providerId: input.providerId,
+    eventType: input.eventType,
+    externalEventHash,
+    externalSubjectHash,
+    externalLocationHash,
+    occurredAt: input.occurredAt.toISOString(),
+  }));
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const inserted = db.prepare(`
+      INSERT OR IGNORE INTO wifi_event_inbox
+        (id, provider_id, external_event_hash, event_type, external_subject_hash,
+         location_reference_hash, occurred_at, payload_fingerprint)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(inboxId, input.providerId, externalEventHash, input.eventType, externalSubjectHash,
+      externalLocationHash, input.occurredAt.toISOString(), payloadFingerprint);
+    if (!inserted.changes) {
+      db.exec("COMMIT");
+      return { accepted: true, duplicate: true, status: "duplicate" };
+    }
+    const preference = db.prepare(`
+      SELECT p.employee_number
+      FROM wifi_automation_preferences p
+      JOIN employees e ON e.personnel_number = p.employee_number
+      JOIN portal_users u ON u.employee_number = p.employee_number
+      WHERE p.enabled = 1 AND p.provider_id = ? AND p.external_subject_hash = ?
+        AND e.active = 1 AND u.active = 1
+      LIMIT 1
+    `).get(input.providerId, externalSubjectHash);
+    if (!preference) {
+      db.prepare("UPDATE wifi_event_inbox SET processing_status = 'ignored_no_opt_in', processed_at = CURRENT_TIMESTAMP WHERE id = ?").run(inboxId);
+      db.exec("COMMIT");
+      return { accepted: true, duplicate: false, status: "ignored_no_opt_in" };
+    }
+    const mapping = db.prepare(`
+      SELECT location_id FROM wifi_location_mappings
+      WHERE provider_id = ? AND external_location_hash = ?
+    `).get(input.providerId, externalLocationHash);
+    if (!mapping) {
+      db.prepare("UPDATE wifi_event_inbox SET processing_status = 'ignored_unknown_location', processed_at = CURRENT_TIMESTAMP WHERE id = ?").run(inboxId);
+      db.exec("COMMIT");
+      return { accepted: true, duplicate: false, status: "ignored_unknown_location" };
+    }
+    const policy = getWifiAutomationPolicy();
+    let session = db.prepare(`
+      SELECT * FROM wifi_presence_sessions
+      WHERE employee_number = ? AND location_id = ? AND provider_id = ?
+        AND state IN ('observing','present','grace')
+      ORDER BY observed_start_at DESC LIMIT 1
+    `).get(preference.employee_number, mapping.location_id, input.providerId);
+    let processingStatus = "processed";
+    if (input.eventType === "connected" || input.eventType === "seen") {
+      if (session?.state === "grace") {
+        const disconnectedAt = new Date(session.disconnect_observed_at);
+        const withinGrace = !Number.isNaN(disconnectedAt.getTime())
+          && input.occurredAt >= disconnectedAt
+          && input.occurredAt.getTime() <= disconnectedAt.getTime() + policy.absenceGraceMinutes * 60000;
+        if (withinGrace) {
+          db.prepare(`
+            UPDATE wifi_presence_sessions SET last_seen_at = ?, disconnect_observed_at = NULL,
+              observed_end_at = NULL, state = 'present', updated_at = CURRENT_TIMESTAMP WHERE id = ?
+          `).run(input.occurredAt.toISOString(), session.id);
+          processingStatus = "reconnected_within_grace";
+        } else {
+          finalizeWifiPresenceSession(session, now);
+          session = null;
+        }
+      }
+      if (session && session.state !== "grace") {
+        if (input.occurredAt < new Date(session.observed_start_at)) processingStatus = "ignored_out_of_order";
+        else {
+          const durationMinutes = Math.floor((input.occurredAt.getTime() - new Date(session.observed_start_at).getTime()) / 60000);
+          db.prepare(`
+            UPDATE wifi_presence_sessions SET last_seen_at = ?, state = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+          `).run(input.occurredAt.toISOString(), durationMinutes >= policy.minimumPresenceMinutes ? "present" : "observing", session.id);
+        }
+      } else if (!session) {
+        const sessionId = crypto.randomUUID();
+        db.prepare(`
+          INSERT INTO wifi_presence_sessions
+            (id, employee_number, location_id, provider_id, correlation_hash, observed_start_at, last_seen_at, state)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'observing')
+        `).run(sessionId, preference.employee_number, mapping.location_id, input.providerId,
+          wifiReferenceHash("correlation", `${externalSubjectHash}:${externalLocationHash}`),
+          input.occurredAt.toISOString(), input.occurredAt.toISOString());
+        session = { id: sessionId };
+        processingStatus = "session_started";
+      }
+    } else {
+      if (!session || session.state === "grace") processingStatus = "ignored_without_open_session";
+      else if (input.occurredAt < new Date(session.observed_start_at)) processingStatus = "ignored_out_of_order";
+      else {
+        db.prepare(`
+          UPDATE wifi_presence_sessions SET disconnect_observed_at = ?, state = 'grace', updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(input.occurredAt.toISOString(), session.id);
+        processingStatus = "grace_started";
+      }
+    }
+    db.prepare(`
+      UPDATE wifi_event_inbox SET processing_status = ?, presence_session_id = ?, processed_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(processingStatus, session?.id || null, inboxId);
+    auditPortal("wifi-controller", "wifi.event.process", "wifi_event", inboxId,
+      JSON.stringify({ type: input.eventType, status: processingStatus, providerId: input.providerId }));
+    db.exec("COMMIT");
+    return { accepted: true, duplicate: false, status: processingStatus };
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
+function wifiAutomationEmployeePayload(session, now = new Date()) {
+  finalizeExpiredWifiPresenceSessions(now);
+  const employee = db.prepare(`
+    SELECT e.time_confirmation_level, e.home_location_id, l.name AS location_name, l.time_tracking_enabled
+    FROM employees e LEFT JOIN locations l ON l.id = e.home_location_id
+    WHERE e.personnel_number = ?
+  `).get(session.employeeNumber);
+  if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
+  const connector = wifiConnectorPayload();
+  const mapped = Boolean(db.prepare(`
+    SELECT 1 FROM wifi_location_mappings WHERE provider_id = ? AND location_id = ?
+  `).get(wifiProviderId, employee.home_location_id));
+  const trackingEnabled = Boolean(employee.time_tracking_enabled);
+  const canEnable = connector.configured && mapped && trackingEnabled;
+  const preference = wifiAutomationPreference(session.employeeNumber);
+  const cutoff = addDays(viennaTodayIso(now), -183);
+  const rows = db.prepare(`
+    SELECT s.*, l.name AS location_name
+    FROM wifi_time_suggestions s LEFT JOIN locations l ON l.id = s.location_id
+    WHERE s.employee_number = ? AND (s.status = 'pending' OR s.work_date >= ?)
+    ORDER BY s.work_date DESC, s.suggested_start_at DESC
+  `).all(session.employeeNumber, cutoff);
+  const suggestions = rows.map((row) => serializeWifiSuggestion(row, now));
+  for (const suggestion of suggestions.filter((item) => item.status === "pending" && ["due_soon", "overdue"].includes(item.warning))) {
+    const overdue = suggestion.warning === "overdue";
+    createPortalNotification(session.employeeNumber, overdue ? "wifi.suggestion.overdue" : "wifi.suggestion.due",
+      overdue ? "WLAN-Zeitvorschlag überfällig" : "WLAN-Zeitvorschlag bald bestätigen",
+      `Der Vorschlag für ${suggestion.workDate} wartet auf deine Bestätigung.`, {
+        target: "/portal/?tab=timeTracking",
+        entityType: "wifi_time_suggestion",
+        entityId: suggestion.id,
+        dedupeKey: `wifi-suggestion:${suggestion.id}:${suggestion.warning}`,
+      });
+  }
+  return {
+    providerId: wifiProviderId,
+    connectorConfigured: connector.configured,
+    locationMapped: mapped,
+    trackingEnabled,
+    canEnable,
+    availabilityReason: !connector.configured
+      ? "Die WLAN-Schnittstelle ist noch nicht durch die IT konfiguriert."
+      : !mapped
+        ? "Für deine Stammfiliale fehlt noch die Controller-Zuordnung."
+        : !trackingEnabled
+          ? "Die Zeiterfassung ist für deine Stammfiliale noch nicht aktiviert."
+          : "",
+    locationId: employee.home_location_id,
+    locationName: employee.location_name || employee.home_location_id,
+    confirmationLevel: ["A", "B", "C"].includes(employee.time_confirmation_level) ? employee.time_confirmation_level : "C",
+    preference,
+    suggestions,
+    counts: {
+      pending: suggestions.filter((item) => item.status === "pending").length,
+      dueSoon: suggestions.filter((item) => item.warning === "due_soon").length,
+      overdue: suggestions.filter((item) => item.warning === "overdue").length,
+    },
+  };
+}
+
+function wifiSuggestionForEmployee(id, employeeNumber) {
+  return db.prepare(`
+    SELECT s.*, l.name AS location_name
+    FROM wifi_time_suggestions s LEFT JOIN locations l ON l.id = s.location_id
+    WHERE s.id = ? AND s.employee_number = ?
+  `).get(String(id || ""), employeeNumber);
+}
+
+function validateWifiSuggestionConfirmation(row, input = {}, now = new Date()) {
+  const defaultStart = viennaNowLocal(new Date(row.suggested_start_at)).slice(11, 16);
+  const defaultEnd = viennaNowLocal(new Date(row.suggested_end_at)).slice(11, 16);
+  const startTime = String(input.startTime || defaultStart).trim();
+  const endTime = String(input.endTime || defaultEnd).trim();
+  const breakStartTime = String(input.breakStartTime || "").trim();
+  const breakEndTime = String(input.breakEndTime || "").trim();
+  if (!isTime(startTime) || !isTime(endTime)) {
+    throw httpError(400, "Bitte Beginn und Ende vollständig eingeben.", "WIFI_SUGGESTION_TIME_INVALID");
+  }
+  const startAt = viennaLocalDateTime(row.work_date, startTime);
+  const endAt = viennaLocalDateTime(row.work_date, endTime);
+  if (endAt <= startAt || endAt.getTime() - startAt.getTime() > 24 * 60 * 60 * 1000) {
+    throw httpError(400, "Das Ende muss nach dem Beginn liegen.", "WIFI_SUGGESTION_TIME_INVALID");
+  }
+  if (endAt.getTime() > now.getTime() + 10 * 60 * 1000) {
+    throw httpError(400, "Ein Zeitvorschlag darf nicht in die Zukunft bestätigt werden.", "WIFI_SUGGESTION_TIME_INVALID");
+  }
+  let breakStartAt = null;
+  let breakEndAt = null;
+  if (breakStartTime || breakEndTime) {
+    if (!isTime(breakStartTime) || !isTime(breakEndTime)) {
+      throw httpError(400, "Bitte für die Pause sowohl Beginn als auch Ende eingeben.", "WIFI_SUGGESTION_BREAK_INVALID");
+    }
+    breakStartAt = viennaLocalDateTime(row.work_date, breakStartTime);
+    breakEndAt = viennaLocalDateTime(row.work_date, breakEndTime);
+    if (!(startAt < breakStartAt && breakStartAt < breakEndAt && breakEndAt < endAt)) {
+      throw httpError(400, "Die Pause muss vollständig zwischen Arbeitsbeginn und Arbeitsende liegen.", "WIFI_SUGGESTION_BREAK_INVALID");
+    }
+  }
+  return { startTime, endTime, breakStartTime, breakEndTime, startAt, endAt, breakStartAt, breakEndAt };
+}
+
+function confirmWifiSuggestionBatch(session, items, now = new Date()) {
+  if (!Array.isArray(items) || !items.length || items.length > 31) {
+    throw httpError(400, "Bitte mindestens einen und höchstens 31 Zeitvorschläge übermitteln.", "WIFI_SUGGESTION_BATCH_INVALID");
+  }
+  const uniqueIds = new Set(items.map((item) => String(item.id || "").trim()).filter(Boolean));
+  if (uniqueIds.size !== items.length) throw httpError(400, "Ein Zeitvorschlag wurde doppelt übermittelt.", "WIFI_SUGGESTION_BATCH_INVALID");
+  const confirmed = [];
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const item of items) {
+      const row = wifiSuggestionForEmployee(item.id, session.employeeNumber);
+      if (!row) throw httpError(404, "Der WLAN-Zeitvorschlag wurde nicht gefunden.", "WIFI_SUGGESTION_NOT_FOUND");
+      if (row.status !== "pending") throw httpError(409, "Der WLAN-Zeitvorschlag wurde bereits bearbeitet.", "WIFI_SUGGESTION_ALREADY_DECIDED");
+      const values = validateWifiSuggestionConfirmation(row, item, now);
+      const departmentId = scheduledTimeEntryDepartment(session.employeeNumber, row.work_date, values.startTime)
+        || employeeRequestContext(session.employeeNumber, row.work_date).departmentId;
+      const additions = [
+        { entry_type: "clock_in", entry_timestamp: values.startAt.toISOString() },
+        ...(values.breakStartAt ? [
+          { entry_type: "break_start", entry_timestamp: values.breakStartAt.toISOString() },
+          { entry_type: "break_end", entry_timestamp: values.breakEndAt.toISOString() },
+        ] : []),
+        { entry_type: "clock_out", entry_timestamp: values.endAt.toISOString() },
+      ];
+      const existing = timeEntriesForDay(session.employeeNumber, row.work_date);
+      const parsed = parseTimeEntrySequence([...existing, ...additions], row.work_date, now);
+      if (parsed.errors.length || parsed.incomplete) {
+        throw httpError(409, "Der Vorschlag überschneidet sich mit bestehenden Buchungen oder ergibt keine gültige Buchungsfolge.", "WIFI_SUGGESTION_TIME_CONFLICT");
+      }
+      const insert = db.prepare(`
+        INSERT INTO time_entries
+          (employee_number, location_id, department_id, work_date, entry_type, entry_timestamp, source, note, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, 'wifi_confirmed', 'Bestätigter WLAN-Zeitvorschlag', ?)
+      `);
+      for (const entry of additions) {
+        insert.run(session.employeeNumber, row.location_id, departmentId, row.work_date,
+          entry.entry_type, entry.entry_timestamp, session.employeeNumber);
+      }
+      const updated = db.prepare(`
+        UPDATE wifi_time_suggestions SET status = 'confirmed',
+          confirmed_start_at = ?, confirmed_end_at = ?,
+          confirmed_break_start_at = ?, confirmed_break_end_at = ?,
+          confirmed_by = ?, confirmed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND employee_number = ? AND status = 'pending'
+      `).run(values.startAt.toISOString(), values.endAt.toISOString(),
+        values.breakStartAt?.toISOString() || null, values.breakEndAt?.toISOString() || null,
+        session.employeeNumber, row.id, session.employeeNumber);
+      if (!updated.changes) throw httpError(409, "Der Zeitvorschlag wurde zwischenzeitlich bearbeitet.", "WIFI_SUGGESTION_ALREADY_DECIDED");
+      invalidateTimeDayReview(session.employeeNumber, row.work_date);
+      auditPortal(session.employeeNumber, "wifi.suggestion.confirm", "wifi_time_suggestion", row.id,
+        JSON.stringify({ workDate: row.work_date, startTime: values.startTime, endTime: values.endTime, break: Boolean(values.breakStartAt) }));
+      confirmed.push(row.id);
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  return confirmed;
+}
+
+function confirmWifiSuggestionWeek(session, body = {}, now = new Date()) {
+  const employee = db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = ?").get(session.employeeNumber);
+  if (String(employee?.time_confirmation_level || "C").toUpperCase() !== "A") {
+    throw httpError(403, "Der Wochenabschluss ist nur für Vertrauensstufe A verfügbar.", "WIFI_WEEK_CONFIRMATION_NOT_ALLOWED");
+  }
+  const weekStart = String(body.weekStart || "").trim();
+  if (!isIsoDate(weekStart) || getMonday(weekStart) !== weekStart) {
+    throw httpError(400, "Bitte eine gültige Kalenderwoche auswählen.", "WIFI_SUGGESTION_WEEK_INVALID");
+  }
+  const pendingIds = db.prepare(`
+    SELECT id FROM wifi_time_suggestions
+    WHERE employee_number = ? AND status = 'pending' AND work_date BETWEEN ? AND ?
+    ORDER BY work_date, suggested_start_at
+  `).all(session.employeeNumber, weekStart, addDays(weekStart, 6)).map((row) => row.id);
+  const submittedIds = Array.isArray(body.suggestions) ? body.suggestions.map((item) => String(item.id || "")) : [];
+  if (!pendingIds.length || pendingIds.length !== submittedIds.length || pendingIds.some((id) => !submittedIds.includes(id))) {
+    throw httpError(409, "Bitte alle offenen Vorschläge dieser Woche gemeinsam prüfen und erneut abschließen.", "WIFI_SUGGESTION_WEEK_INCOMPLETE");
+  }
+  return confirmWifiSuggestionBatch(session, body.suggestions, now);
+}
+
+function rejectWifiSuggestion(session, id, reason = "") {
+  const row = wifiSuggestionForEmployee(id, session.employeeNumber);
+  if (!row) throw httpError(404, "Der WLAN-Zeitvorschlag wurde nicht gefunden.", "WIFI_SUGGESTION_NOT_FOUND");
+  if (row.status !== "pending") throw httpError(409, "Der WLAN-Zeitvorschlag wurde bereits bearbeitet.", "WIFI_SUGGESTION_ALREADY_DECIDED");
+  const cleanReason = stripEmoji(String(reason || "").trim()).slice(0, 300);
+  const result = db.prepare(`
+    UPDATE wifi_time_suggestions SET status = 'rejected', rejected_by = ?, rejected_at = CURRENT_TIMESTAMP,
+      rejection_reason = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND employee_number = ? AND status = 'pending'
+  `).run(session.employeeNumber, cleanReason, row.id, session.employeeNumber);
+  if (!result.changes) throw httpError(409, "Der WLAN-Zeitvorschlag wurde zwischenzeitlich bearbeitet.", "WIFI_SUGGESTION_ALREADY_DECIDED");
+  auditPortal(session.employeeNumber, "wifi.suggestion.reject", "wifi_time_suggestion", row.id,
+    JSON.stringify({ workDate: row.work_date, reasonProvided: Boolean(cleanReason) }));
 }
 
 function getAmuPolicy() {
@@ -2661,6 +3547,7 @@ function getPortalStatus(locationId = "") {
       notifications: portalEnabled,
       amuReports: portalEnabled && Boolean(amuStorage),
       timeTracking: portalEnabled,
+      wifiTimeSuggestions: portalEnabled,
     },
     workflow: {
       vacationHrApprovalRequired: vacationHrApprovalRequired(),
@@ -7125,8 +8012,13 @@ app.post("/api/system/restart", (_request, response) => {
   response.on("finish", () => setTimeout(scheduleApplicationRestart, 250));
 });
 
-app.post("/api/system/exit", (_request, response) => {
-  if (serverModeActive) throw httpError(409, "Der Serverbetrieb wird über den Windows-Dienst beendet.", "SERVER_MANAGED_SHUTDOWN");
+app.post("/api/system/exit", (request, response) => {
+  if (serverModeActive) {
+    const session = requirePortalSession(request, "system:write");
+    if (!["developer", "it_admin", "admin"].includes(session.role)) {
+      throw httpError(403, "Nur Developer, IT-Administration oder Administration dürfen den Server beenden.", "SERVER_SHUTDOWN_ROLE_DENIED");
+    }
+  }
   const driveInfo = runtimeDriveInfo();
   let backup = null;
   try {
@@ -7136,7 +8028,9 @@ app.post("/api/system/exit", (_request, response) => {
   }
   response.json({
     ok: true,
-    message: "Grabenplaner wird sicher beendet. Bitte dieses Fenster danach schließen.",
+    message: serverModeActive
+      ? "Der Grabenplaner-Server wird sicher beendet."
+      : "Grabenplaner wird sicher beendet. Bitte dieses Fenster danach schließen.",
     backup,
     drive: driveInfo.drive,
   });
@@ -7740,10 +8634,14 @@ app.get("/api/portal/v1/roles", (_request, response) => {
 });
 
 app.get("/api/portal/v1/wifi-automation/settings", (request, response) => {
-  requireAdminHrOrLocal(request, "wifi:settings");
+  const actor = requireAdminHrOrLocal(request, "wifi:settings");
+  const connector = wifiConnectorPayload(actor);
   response.json({
     ...getWifiAutomationPolicy(),
-    automationActive: false,
+    connectorStatus: connector.configured ? "configured" : "not_configured",
+    connector,
+    locationMappings: wifiLocationMappings(),
+    automationActive: connector.configured,
     canChange: true,
     employees: wifiConfirmationLevels(),
   });
@@ -7768,9 +8666,17 @@ app.put("/api/portal/v1/wifi-automation/settings", (request, response) => {
   auditPortal(actor.employeeNumber, "wifi.settings.update", "portal_settings", "wifi_automation", JSON.stringify(policy));
   response.json({
     ...getWifiAutomationPolicy(),
-    automationActive: false,
+    connectorStatus: wifiWebhookConfigured() ? "configured" : "not_configured",
+    connector: wifiConnectorPayload(actor),
+    locationMappings: wifiLocationMappings(),
+    automationActive: wifiWebhookConfigured(),
     canChange: true,
   });
+});
+
+app.put("/api/portal/v1/wifi-automation/location-mappings", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "wifi:settings");
+  response.json({ locationMappings: saveWifiLocationMappings(actor, request.body || {}) });
 });
 
 app.put("/api/portal/v1/wifi-automation/confirmation-levels", (request, response) => {
@@ -7797,6 +8703,13 @@ app.put("/api/portal/v1/wifi-automation/confirmation-levels", (request, response
       JSON.stringify({ before: item.before, after: item.level }));
   }
   response.json({ changed: changed.length, employees: wifiConfirmationLevels() });
+});
+
+app.post("/api/integrations/wifi/events", (request, response) => {
+  assertWifiWebhookRateLimit(request);
+  assertWifiWebhookAuthorization(request);
+  const result = processWifiEvent(validateWifiEvent(request.body || {}, new Date()), new Date());
+  response.status(result.duplicate ? 200 : 202).json(result);
 });
 
 app.get("/api/portal/v1/workflow-settings", (request, response) => {
@@ -9353,6 +10266,46 @@ app.delete("/api/portal/v1/request-blackouts/:id", (request, response) => {
   if (!result.changes) throw httpError(404, "Die Antragssperre wurde nicht gefunden.");
   auditPortal(actor.employeeNumber, "request_blackout.delete", "request_blackout", request.params.id);
   response.status(204).end();
+});
+
+app.get("/api/portal/v1/me/wifi-automation", (request, response) => {
+  const session = requirePortalSession(request, "own_time:read");
+  response.json(wifiAutomationEmployeePayload(session, new Date()));
+});
+
+app.put("/api/portal/v1/me/wifi-automation", (request, response) => {
+  const session = requirePortalSession(request, "own_time:read");
+  assertPortalCsrf(request);
+  if (typeof request.body?.enabled !== "boolean") {
+    throw httpError(400, "Bitte die WLAN-Automatik eindeutig ein- oder ausschalten.", "WIFI_PREFERENCE_INVALID");
+  }
+  if (request.body.enabled) {
+    const current = wifiAutomationEmployeePayload(session, new Date());
+    if (!current.canEnable) throw httpError(409, current.availabilityReason || "Die WLAN-Automatik ist noch nicht verfügbar.", "WIFI_AUTOMATION_UNAVAILABLE");
+  }
+  setWifiAutomationPreference(session, request.body.enabled);
+  response.json(wifiAutomationEmployeePayload(session, new Date()));
+});
+
+app.post("/api/portal/v1/me/wifi-suggestions/:id/confirm", (request, response) => {
+  const session = requirePortalSession(request, "own_time:write");
+  assertPortalCsrf(request);
+  confirmWifiSuggestionBatch(session, [{ id: request.params.id, ...(request.body || {}) }], new Date());
+  response.json(wifiAutomationEmployeePayload(session, new Date()));
+});
+
+app.post("/api/portal/v1/me/wifi-suggestions/confirm-week", (request, response) => {
+  const session = requirePortalSession(request, "own_time:write");
+  assertPortalCsrf(request);
+  confirmWifiSuggestionWeek(session, request.body || {}, new Date());
+  response.json(wifiAutomationEmployeePayload(session, new Date()));
+});
+
+app.post("/api/portal/v1/me/wifi-suggestions/:id/reject", (request, response) => {
+  const session = requirePortalSession(request, "own_time:write");
+  assertPortalCsrf(request);
+  rejectWifiSuggestion(session, request.params.id, request.body?.reason || "");
+  response.json(wifiAutomationEmployeePayload(session, new Date()));
 });
 
 app.get("/api/portal/v1/me/time-entries", (request, response) => {

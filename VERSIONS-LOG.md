@@ -1,5 +1,19 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.57 Beta
+
+- Geschützte, idempotente Controller-/RADIUS-Schnittstelle für pseudonymisierte WLAN-Ereignisse ergänzt; Hardware-Adressen, SSIDs und Gerätekennungen werden abgelehnt.
+- Freiwilliges Mitarbeiter-Opt-in, bearbeitbare Zeitvorschläge und persönliche Bestätigung im Mitarbeiterportal umgesetzt.
+- Reconnects innerhalb der einstellbaren Toleranz teilen die Anwesenheit nicht; nach Ablauf bleibt der ursprüngliche WLAN-Abbruch als Vorschlagsende maßgeblich.
+- Vertrauensstufen A, B und C steuern Wochenabschluss beziehungsweise Bestätigungsfrist; bald fällige und überfällige Vorschläge werden sichtbar gewarnt.
+- Automatische Endbuchungen bleiben ausgeschlossen: Erst die ausdrückliche Bestätigung erzeugt revisionsfähige Zeitbuchungen.
+- Controller-Kennungen je Filiale können ab Personalleitung gepflegt werden und werden ausschließlich gehasht gespeichert.
+- Angemeldete Person, App-Rolle und Firmenposition erscheinen kompakt im linken Menü; Logout liegt direkt bei diesen Angaben.
+- Im Serverbetrieb dürfen ausschließlich Developer, IT-Admin und Admin den eindeutig bezeichneten Server-Stopp auslösen.
+- Codespaces akzeptiert die vom vertrauenswürdigen GitHub-HTTPS-Proxy gemeldete gleichursprüngliche Weiterleitungsadresse, ohne die Origin-Prüfung für fremde Seiten zu lockern.
+- Öffentliche Musterkits für einen fiktiven Foto- und Sporthandel sowie ein Sporthandels-Demoprofil mit sechs Filialen, 15 Abteilungen und 31 Verkaufsmitarbeitenden ergänzt.
+- Produktprospekt neu aufgebaut; die aufgeklappte A3-Innenseite nutzt das Querformat nun als zusammenhängende Präsentationsfläche rund um das Smartphone-Portal.
+
 ## v0.56 Beta
 
 - Ersten Teil der WLAN-Automatik als geschützte technische Grundlage ergänzt; eine echte Controller- oder RADIUS-Verbindung ist noch nicht aktiv.

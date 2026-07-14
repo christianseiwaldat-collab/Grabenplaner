@@ -181,9 +181,9 @@ test("v0.56: geschuetzte WLAN-Einstellungen liefern Defaults und erzwingen Grenz
     minimumPresenceMinutes: 5,
     absenceGraceMinutes: 30,
     endTimestampMode: "first_disconnect",
-    connectorStatus: "not_configured",
-    phase: "foundation",
-    automationActive: false,
+    connectorStatus: "configured",
+    phase: "suggestions",
+    automationActive: true,
   });
 
   for (const policy of [

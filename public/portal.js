@@ -18,6 +18,8 @@ const portalState = {
   timeCorrections: [],
   timeTrackingLoading: false,
   timeTrackingBooking: false,
+  wifiAutomation: null,
+  wifiAutomationLoading: false,
   mobileLayout: null,
   mobileLeadership: false,
   leadershipOverview: null,
@@ -64,6 +66,7 @@ const el = Object.fromEntries([
   "portalUserName", "portalUserRole", "adminAppLink", "changePasswordButton", "logoutButton", "notificationsButton", "notificationBadge", "scheduleView", "timeOffView",
   "vacationView", "historyView", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingRefresh", "timeTrackingCard",
   "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeWeighted", "timePause", "timeDifference", "timeTrackingIssues", "timeEntryList",
+  "wifiAutomationCard", "wifiAutomationAvailability", "wifiAutomationToggle", "wifiConfirmationLevel", "wifiSuggestionWarning", "wifiSuggestionList", "wifiAutomationMessage",
   "timePeriodHeading", "timePeriodSummary", "timePeriodList", "previousTimePeriod", "currentTimePeriod", "nextTimePeriod",
   "leadershipTeamTab", "leadershipApprovalsTab", "leadershipMoreTab", "leadershipTeamView", "leadershipApprovalsView", "leadershipMoreView",
   "leadershipTeamRefresh", "leadershipApprovalsRefresh", "leadershipContextFields", "leadershipLocation", "leadershipDepartment", "leadershipApprovalContextFields", "leadershipApprovalLocation", "leadershipApprovalDepartment", "leadershipPresenceSummary", "leadershipPresenceList", "leadershipApprovalList",
@@ -194,6 +197,10 @@ function scheduleLoginBrandingPreview() {
 
 function timeTrackingCapabilityEnabled() {
   return portalState.status?.capabilities?.timeTracking === true;
+}
+
+function wifiTimeSuggestionsCapabilityEnabled() {
+  return portalState.status?.capabilities?.wifiTimeSuggestions === true;
 }
 
 function applyPortalCapabilities() {
@@ -366,6 +373,7 @@ async function loadPortalData() {
     loadAbsenceHistory(), loadNotifications(), loadAmuReports(), loadAmuSettings(),
   ];
   if (timeTrackingCapabilityEnabled()) requests.push(loadTimeTracking());
+  if (wifiTimeSuggestionsCapabilityEnabled()) requests.push(loadWifiAutomation());
   await Promise.allSettled(requests);
 }
 
@@ -434,7 +442,7 @@ function setTab(tab) {
   el.leadershipApprovalsView?.classList.toggle("active", tab === "leadershipApprovals");
   el.leadershipMoreView?.classList.toggle("active", tab === "leadershipMore");
   if (tab === "timeOff") loadTimeOffRequests();
-  if (tab === "timeTracking") Promise.allSettled([loadTimeTracking(), loadTimeSummary(), loadTimeCorrections()]);
+  if (tab === "timeTracking") Promise.allSettled([loadTimeTracking(), loadTimeSummary(), loadTimeCorrections(), loadWifiAutomation()]);
   if (tab === "vacation") loadVacationRequests();
   if (tab === "history") Promise.allSettled([loadAbsenceHistory(), loadApprovedVacations()]);
   if (tab === "amu") Promise.allSettled([loadAmuReports(), loadAmuSettings()]);
@@ -552,6 +560,139 @@ async function loadTimeTracking() {
     el.timeTrackingCard.removeAttribute("aria-busy");
     renderTimeTracking();
   }
+}
+
+function wifiDateText(value) {
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("de-AT", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+}
+
+function wifiSuggestionInput(row) {
+  const input = (name, label, value) => `<label><span>${label}</span><input type="time" data-wifi-${name} value="${esc(value || "")}" /></label>`;
+  return `<article class="wifi-suggestion-row ${esc(row.warning || "pending")}" data-wifi-suggestion="${esc(row.id)}">
+    <div><strong>${esc(wifiDateText(row.workDate))}</strong><small>${esc(row.locationName)} · Stufe ${esc(row.level)}</small></div>
+    ${input("start", "Beginn", row.startTime)}${input("end", "Ende", row.endTime)}${input("break-start", "Pause von", row.breakStartTime)}${input("break-end", "Pause bis", row.breakEndTime)}
+    <div class="wifi-suggestion-actions"><button class="confirm" data-wifi-confirm type="button">Bestätigen</button><button class="reject" data-wifi-reject type="button">Verwerfen</button></div>
+  </article>`;
+}
+
+function wifiSuggestionValues(row) {
+  return {
+    id: row.dataset.wifiSuggestion,
+    startTime: row.querySelector("[data-wifi-start]")?.value || "",
+    endTime: row.querySelector("[data-wifi-end]")?.value || "",
+    breakStartTime: row.querySelector("[data-wifi-break-start]")?.value || "",
+    breakEndTime: row.querySelector("[data-wifi-break-end]")?.value || "",
+  };
+}
+
+function renderWifiAutomation() {
+  const data = portalState.wifiAutomation;
+  el.wifiAutomationCard?.classList.toggle("hidden", !wifiTimeSuggestionsCapabilityEnabled());
+  if (!data) return;
+  const enabled = data.preference?.enabled === true;
+  el.wifiAutomationToggle.checked = enabled;
+  el.wifiAutomationToggle.disabled = portalState.wifiAutomationLoading || (!data.canEnable && !enabled);
+  el.wifiAutomationAvailability.textContent = enabled
+    ? `Aktiv für ${data.locationName}. Die Vorschläge bleiben bis zu deiner Bestätigung unverbindlich.`
+    : data.canEnable ? `Für ${data.locationName} verfügbar. Du entscheidest selbst, ob die Erkennung aktiv ist.` : data.availabilityReason;
+  const levelText = {
+    A: "Stufe A · Vorschläge können gesammelt am Ende der Woche bestätigt werden.",
+    B: "Stufe B · Spätestens nach drei Tagen und jedenfalls bis zum Wochenabschluss bestätigen.",
+    C: "Stufe C · Täglich, spätestens am Folgetag um 12:00 Uhr bestätigen.",
+  };
+  el.wifiConfirmationLevel.textContent = levelText[data.confirmationLevel] || levelText.C;
+  const pending = (data.suggestions || []).filter((item) => item.status === "pending");
+  const history = (data.suggestions || []).filter((item) => item.status !== "pending").slice(0, 8);
+  const warningText = data.counts?.overdue
+    ? `${data.counts.overdue} Vorschlag/Vorschläge sind überfällig und müssen noch geprüft werden.`
+    : data.counts?.dueSoon ? `${data.counts.dueSoon} Vorschlag/Vorschläge bitte innerhalb der nächsten 24 Stunden prüfen.` : "";
+  el.wifiSuggestionWarning.textContent = warningText;
+  el.wifiSuggestionWarning.classList.toggle("hidden", !warningText);
+  el.wifiSuggestionWarning.classList.toggle("overdue", Boolean(data.counts?.overdue));
+  const groups = new Map();
+  for (const item of pending) {
+    if (!groups.has(item.weekStart)) groups.set(item.weekStart, []);
+    groups.get(item.weekStart).push(item);
+  }
+  const pendingHtml = [...groups.entries()].map(([weekStart, items]) => `
+    <div class="wifi-week-heading"><strong>Woche ab ${esc(wifiDateText(weekStart))}</strong>${data.confirmationLevel === "A" ? `<button class="wifi-week-confirm" data-wifi-confirm-week="${esc(weekStart)}" type="button">Woche abschließen</button>` : ""}</div>
+    ${items.map(wifiSuggestionInput).join("")}`).join("");
+  const historyHtml = history.length ? `<div class="wifi-week-heading"><strong>Zuletzt bearbeitet</strong></div>${history.map((item) => `
+    <div class="wifi-history-row"><span>${esc(wifiDateText(item.workDate))} · ${esc(item.startTime)}–${esc(item.endTime)}</span><strong>${item.status === "confirmed" ? "Bestätigt" : "Verworfen"}</strong></div>`).join("")}` : "";
+  el.wifiSuggestionList.innerHTML = pendingHtml || historyHtml
+    ? `${pendingHtml}${historyHtml}`
+    : `<p class="empty-state">${enabled ? "Derzeit wartet kein WLAN-Zeitvorschlag auf deine Prüfung." : "Aktiviere die Automatik freiwillig, um Zeitvorschläge zu erhalten."}</p>`;
+}
+
+async function loadWifiAutomation() {
+  if (!portalState.session || !wifiTimeSuggestionsCapabilityEnabled() || portalState.wifiAutomationLoading) return;
+  portalState.wifiAutomationLoading = true;
+  renderWifiAutomation();
+  try {
+    portalState.wifiAutomation = await api("/api/portal/v1/me/wifi-automation");
+    message(el.wifiAutomationMessage, "");
+  } catch (error) {
+    message(el.wifiAutomationMessage, error.message, true);
+  } finally {
+    portalState.wifiAutomationLoading = false;
+    renderWifiAutomation();
+  }
+}
+
+async function setWifiAutomationPreference() {
+  const enabled = el.wifiAutomationToggle.checked;
+  portalState.wifiAutomationLoading = true;
+  renderWifiAutomation();
+  try {
+    portalState.wifiAutomation = await api("/api/portal/v1/me/wifi-automation", {
+      method: "PUT", body: JSON.stringify({ enabled }),
+    });
+    message(el.wifiAutomationMessage, enabled ? "Die WLAN-Automatik wurde freiwillig aktiviert." : "Die WLAN-Automatik wurde ausgeschaltet.");
+  } catch (error) {
+    el.wifiAutomationToggle.checked = !enabled;
+    message(el.wifiAutomationMessage, error.message, true);
+  } finally {
+    portalState.wifiAutomationLoading = false;
+    renderWifiAutomation();
+  }
+}
+
+async function decideWifiSuggestion(target) {
+  const row = target.closest("[data-wifi-suggestion]");
+  if (!row) return;
+  try {
+    if (target.matches("[data-wifi-confirm]")) {
+      portalState.wifiAutomation = await api(`/api/portal/v1/me/wifi-suggestions/${encodeURIComponent(row.dataset.wifiSuggestion)}/confirm`, {
+        method: "POST", body: JSON.stringify(wifiSuggestionValues(row)),
+      });
+      message(el.wifiAutomationMessage, "Der bearbeitete Vorschlag wurde in die Zeiterfassung übernommen.");
+    } else if (target.matches("[data-wifi-reject]")) {
+      const reason = prompt("Optionaler Grund für das Verwerfen:", "") ?? null;
+      if (reason === null) return;
+      portalState.wifiAutomation = await api(`/api/portal/v1/me/wifi-suggestions/${encodeURIComponent(row.dataset.wifiSuggestion)}/reject`, {
+        method: "POST", body: JSON.stringify({ reason }),
+      });
+      message(el.wifiAutomationMessage, "Der Vorschlag wurde verworfen.");
+    }
+    renderWifiAutomation();
+    await Promise.allSettled([loadTimeTracking(), loadTimeSummary(), loadNotifications()]);
+  } catch (error) { message(el.wifiAutomationMessage, error.message, true); }
+}
+
+async function confirmWifiSuggestionWeek(weekStart) {
+  const suggestions = Array.from(el.wifiSuggestionList.querySelectorAll("[data-wifi-suggestion]"))
+    .map((row) => wifiSuggestionValues(row))
+    .filter((item) => portalState.wifiAutomation?.suggestions?.find((suggestion) => suggestion.id === item.id)?.weekStart === weekStart);
+  if (!suggestions.length) return;
+  try {
+    portalState.wifiAutomation = await api("/api/portal/v1/me/wifi-suggestions/confirm-week", {
+      method: "POST", body: JSON.stringify({ weekStart, suggestions }),
+    });
+    message(el.wifiAutomationMessage, "Die Woche wurde geprüft und abgeschlossen.");
+    renderWifiAutomation();
+    await Promise.allSettled([loadTimeTracking(), loadTimeSummary(), loadNotifications()]);
+  } catch (error) { message(el.wifiAutomationMessage, error.message, true); }
 }
 
 async function bookTimeEntry(type) {
@@ -1729,7 +1870,14 @@ document.querySelector(".portal-tabs")?.addEventListener("keydown", (event) => {
   tabs[next].focus();
   setTab(tabs[next].dataset.tab);
 });
-el.timeTrackingRefresh.addEventListener("click", loadTimeTracking);
+el.timeTrackingRefresh.addEventListener("click", () => Promise.allSettled([loadTimeTracking(), loadWifiAutomation()]));
+el.wifiAutomationToggle?.addEventListener("change", setWifiAutomationPreference);
+el.wifiSuggestionList?.addEventListener("click", (event) => {
+  const action = event.target.closest("[data-wifi-confirm],[data-wifi-reject]");
+  if (action) decideWifiSuggestion(action);
+  const week = event.target.closest("[data-wifi-confirm-week]");
+  if (week) confirmWifiSuggestionWeek(week.dataset.wifiConfirmWeek);
+});
 el.timeTrackingActions.addEventListener("click", (event) => {
   const button = event.target.closest("[data-time-action]");
   if (button && !button.disabled) bookTimeEntry(button.dataset.timeAction);
@@ -1886,7 +2034,7 @@ el.amuReportList.addEventListener("click", (event) => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && portalState.session) {
     loadNotifications();
-    if (portalState.activeTab === "timeTracking") loadTimeTracking();
+    if (portalState.activeTab === "timeTracking") Promise.allSettled([loadTimeTracking(), loadWifiAutomation()]);
     if (portalState.activeTab === "leadershipTeam") loadLeadershipOverview();
     if (portalState.activeTab === "leadershipApprovals") loadLeadershipApprovals();
   }
@@ -1895,7 +2043,7 @@ setInterval(() => {
   if (!document.hidden && portalState.session) loadNotifications();
 }, 45000);
 setInterval(() => {
-  if (!document.hidden && portalState.session && portalState.activeTab === "timeTracking") loadTimeTracking();
+  if (!document.hidden && portalState.session && portalState.activeTab === "timeTracking") Promise.allSettled([loadTimeTracking(), loadWifiAutomation()]);
 }, 30000);
 setInterval(() => {
   if (!document.hidden && portalState.session && portalState.activeTab === "leadershipTeam") loadLeadershipOverview();

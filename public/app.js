@@ -88,7 +88,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 const elements = Object.fromEntries(
   [
     "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelView", "settingsView", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
-    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarEmployeeCount", "sidebarVersion", "pdfButton", "timeline", "weekLockNotice",
+    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarEmployeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "wifiAutomationSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField",
@@ -108,7 +108,7 @@ const elements = Object.fromEntries(
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuManagerFileAccess", "amuSettingsHint", "saveAmuSettingsButton",
-    "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton",
+    "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
     "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordTitle", "personnelRecordContent",
     "timeCorrectionModal", "timeCorrectionForm", "timeCorrectionTitle", "timeCorrectionEmployee", "timeCorrectionWorkDate", "timeCorrectionEmployeeLabel", "timeCorrectionDateLabel", "timeCorrectionClockOutTime", "timeCorrectionMessage",
@@ -440,6 +440,16 @@ function hideLoginGate() {
   elements.loginGate?.classList.add("hidden");
 }
 
+function renderSidebarSession() {
+  const user = state.portalSession?.user;
+  const visible = state.portalStatus?.portalEnabled === true && Boolean(user);
+  elements.sidebarSessionInfo?.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  elements.sidebarSessionRole.textContent = user.roleName || user.role || "Angemeldet";
+  elements.sidebarSessionIdentity.textContent = `${user.employeeNumber} · ${user.fullName || user.nickname || ""}`;
+  elements.sidebarSessionPosition.textContent = user.positionName ? `Position: ${user.positionName}` : "Position: nicht hinterlegt";
+}
+
 function applyRoleVisibility() {
   const permissions = state.portalSession?.user?.permissions || [];
   const lanActive = state.portalStatus?.portalEnabled === true;
@@ -478,7 +488,12 @@ function applyRoleVisibility() {
   const wifiTabActive = document.querySelector('[data-settings-tab="wifiAutomation"]')?.classList.contains("active");
   elements.saveSettingsButton?.classList.toggle("hidden", !settingsAccess || wifiTabActive);
   elements.saveOperationModeButton?.classList.toggle("hidden", !operationModeAccess || settingsAccess);
-  elements.systemExitButton?.classList.toggle("hidden", serverActive || (lanActive && !permissions.includes("system:write")));
+  const privilegedServerRole = ["developer", "it_admin", "admin"].includes(role);
+  const canExit = serverActive
+    ? privilegedServerRole && permissions.includes("system:write")
+    : !lanActive || permissions.includes("system:write");
+  elements.systemExitButton?.classList.toggle("hidden", !canExit);
+  if (elements.systemExitButton) elements.systemExitButton.querySelector("span").textContent = serverActive ? "Server beenden" : "Beenden";
   elements.updateCheckButton?.classList.toggle("hidden", lanActive && !permissions.includes("update:write"));
   document.querySelector('[data-personnel-tab="locations"]')?.classList.toggle("hidden", !locationWriteAccess);
   document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !employeeWriteAccess);
@@ -495,6 +510,7 @@ function applyRoleVisibility() {
   elements.generalSettings?.querySelectorAll(".settings-card:not(.operation-mode-card)").forEach((card) => card.classList.toggle("hidden", !settingsAccess));
   [elements.localModeOption, elements.serverModeOption, elements.publicServerModeOption].forEach((button) => { if (button) button.disabled = !operationModeAccess; });
   if (!locationWriteAccess && state.personnelTab === "locations") setPersonnelTab("employees");
+  renderSidebarSession();
 }
 
 async function bootstrapApplication() {
@@ -1501,7 +1517,7 @@ function renderOperationMode() {
   }
   if (elements.adminAccessModeLabel) elements.adminAccessModeLabel.textContent = actualServerActive ? "Geschützter HTTPS-Zugang" : "Geschützter LAN-Zugang";
   elements.employeePortalLink?.classList.toggle("hidden", !(actualLanActive || actualServerActive));
-  elements.portalLogoutButton?.classList.toggle("hidden", !(actualLanActive || actualServerActive));
+  elements.portalLogoutButton?.classList.toggle("hidden", status.portalEnabled !== true);
 }
 
 function portalRoleAssignableInUi(actorRole, roleId) {
@@ -1758,6 +1774,45 @@ function updateWifiAutomationRuleHint() {
   elements.wifiAutomationSettingsHint.textContent = `Unter ${minimum} Minuten entsteht kein Vorschlag. Rückkehr innerhalb von ${grace} Minuten zählt als durchgehende Anwesenheit.`;
 }
 
+function renderWifiConnector() {
+  const data = state.wifiAutomationSettings || {};
+  const connector = data.connector || {};
+  if (elements.wifiConnectorDetails) {
+    elements.wifiConnectorDetails.innerHTML = `
+      <div><strong>${connector.configured ? "Schnittstelle geschützt bereit" : "Schnittstelle noch nicht konfiguriert"}</strong><span>${escapeHtml(connector.configurationHint || "")}</span></div>
+      <div><strong>Provider</strong><span>${escapeHtml(connector.providerId || "generic-radius")} · ${escapeHtml(connector.eventEndpoint || "/api/integrations/wifi/events")}</span></div>`;
+  }
+  if (!elements.wifiLocationMappingList) return;
+  const mappings = data.locationMappings || [];
+  elements.wifiLocationMappingList.innerHTML = mappings.length ? mappings.map((mapping) => `
+    <article class="wifi-location-mapping-row" data-wifi-location-mapping="${escapeHtml(mapping.locationId)}">
+      <div><strong>${escapeHtml(mapping.locationName)}</strong><small>${escapeHtml(mapping.locationId)} · ${mapping.mapped ? "zugeordnet" : "nicht zugeordnet"}${mapping.active ? "" : " · inaktiv"}</small></div>
+      <label class="field"><span>Controller-Kennung</span><input data-wifi-location-reference maxlength="200" placeholder="${mapping.mapped ? "Neue Kennung zum Ersetzen" : "z. B. Filiale-18"}" /></label>
+      <label class="wifi-location-clear"><input type="checkbox" data-wifi-location-clear ${mapping.mapped ? "" : "disabled"} /> Zuordnung löschen</label>
+    </article>`).join("") : '<p class="settings-note">Noch keine Filialen vorhanden.</p>';
+}
+
+async function saveWifiLocationMappings() {
+  const mappings = Array.from(elements.wifiLocationMappingList?.querySelectorAll("[data-wifi-location-mapping]") || []).map((row) => ({
+    locationId: row.dataset.wifiLocationMapping,
+    externalReference: row.querySelector("[data-wifi-location-reference]")?.value.trim() || "",
+    clear: row.querySelector("[data-wifi-location-clear]")?.checked === true,
+  })).filter((item) => item.clear || item.externalReference);
+  if (!mappings.length) {
+    showToast("Bitte mindestens eine neue Controller-Kennung eingeben oder eine Zuordnung zum Löschen markieren.", true);
+    return;
+  }
+  try {
+    const result = await api("/api/portal/v1/wifi-automation/location-mappings", {
+      method: "PUT",
+      body: JSON.stringify({ mappings }),
+    });
+    state.wifiAutomationSettings.locationMappings = result.locationMappings || [];
+    renderWifiConnector();
+    showToast("Die WLAN-Filialzuordnungen wurden gespeichert.");
+  } catch (error) { showToast(error.message, true); }
+}
+
 async function loadWifiAutomationSettings() {
   if (!elements.wifiAutomationSettings) return;
   try {
@@ -1766,6 +1821,7 @@ async function loadWifiAutomationSettings() {
     elements.wifiMinimumPresenceMinutes.value = Number(result.minimumPresenceMinutes || 5);
     elements.wifiAbsenceGraceMinutes.value = Number(result.absenceGraceMinutes || 30);
     elements.saveWifiAutomationSettingsButton.disabled = result.canChange === false;
+    elements.saveWifiLocationMappingsButton.disabled = result.canChange === false;
     elements.saveWifiConfirmationLevelsButton.disabled = result.canChange === false;
     if (elements.wifiAutomationStatus) {
       const status = elements.wifiAutomationStatus.querySelector("strong");
@@ -1776,6 +1832,7 @@ async function loadWifiAutomationSettings() {
         : "Teil 1 speichert Regeln und Vertrauensstufen. Es entstehen noch keine automatischen Zeitbuchungen.";
     }
     updateWifiAutomationRuleHint();
+    renderWifiConnector();
     renderWifiConfirmationLevels();
   } catch (error) {
     elements.wifiAutomationSettingsHint.textContent = error.status === 403
@@ -1796,6 +1853,7 @@ async function saveWifiAutomationSettings() {
     });
     state.wifiAutomationSettings = { ...state.wifiAutomationSettings, ...result };
     updateWifiAutomationRuleHint();
+    renderWifiConnector();
     showToast("Die WLAN-Anwesenheitsregeln wurden gespeichert.");
   } catch (error) { showToast(error.message, true); }
 }
@@ -3645,16 +3703,22 @@ async function handleUpdateButton() {
 }
 
 async function exitApplication() {
-  if (!confirm("Grabenplaner sicher beenden? Danach kannst du dieses Browserfenster schließen.")) return;
+  const serverActive = state.portalStatus?.operationMode === "server";
+  const question = serverActive
+    ? "Den Grabenplaner-Server wirklich sicher beenden? Andere angemeldete Personen verlieren dabei die Verbindung."
+    : "Grabenplaner sicher beenden? Danach kannst du dieses Browserfenster schließen.";
+  if (!confirm(question)) return;
   if (elements.systemExitButton) elements.systemExitButton.disabled = true;
   try {
     const result = await api("/api/system/exit", {
       method: "POST",
       body: JSON.stringify({}),
     });
-    showToast(result.message || "Grabenplaner wird beendet.");
+    showToast(result.message || (serverActive ? "Der Server wird beendet." : "Grabenplaner wird beendet."));
     setTimeout(() => {
-      document.body.innerHTML = '<main class="shutdown-screen"><h1>Grabenplaner wurde beendet.</h1><p>Du kannst dieses Fenster schließen. Den USB-Stick bitte bei Bedarf selbst über Windows sicher auswerfen.</p></main>';
+      document.body.innerHTML = serverActive
+        ? '<main class="shutdown-screen"><h1>Grabenplaner-Server wurde beendet.</h1><p>Du kannst dieses Fenster schließen.</p></main>'
+        : '<main class="shutdown-screen"><h1>Grabenplaner wurde beendet.</h1><p>Du kannst dieses Fenster schließen. Den USB-Stick bitte bei Bedarf selbst über Windows sicher auswerfen.</p></main>';
     }, 900);
   } catch (error) {
     if (elements.systemExitButton) elements.systemExitButton.disabled = false;
@@ -4154,6 +4218,7 @@ elements.brandingAssignmentList?.addEventListener("click", (event) => {
 });
 document.querySelectorAll("[data-settings-tab]").forEach((button) => button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab)));
 elements.saveWifiAutomationSettingsButton?.addEventListener("click", saveWifiAutomationSettings);
+elements.saveWifiLocationMappingsButton?.addEventListener("click", saveWifiLocationMappings);
 elements.saveWifiConfirmationLevelsButton?.addEventListener("click", saveWifiConfirmationLevels);
 elements.wifiConfirmationLevelSearch?.addEventListener("input", renderWifiConfirmationLevels);
 elements.wifiConfirmationLevelList?.addEventListener("change", (event) => {

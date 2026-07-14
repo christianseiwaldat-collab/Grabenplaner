@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.56 Beta</strong> · Windows · SQLite · Source-available
+  <strong>v0.57 Beta</strong> · Windows · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -85,6 +85,7 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard. Im LAN-Host-Modus liegt die
 - PDF-Export für Dienstpläne, Abteilungspläne und Urlaubsübersichten
 - Wochenstundenübersicht, Plan-/Ist-Vergleich, Pausenhinweise und Samstagswertung
 - Mitarbeiterportal mit Urlaubs- und ZA-Anträgen, AUM-Upload und Zeiterfassung
+- Freiwilliger WLAN-Anwesenheitsassistent mit bearbeitbaren und bestätigungspflichtigen Zeitvorschlägen
 - Wochen- und Monatsübersichten der Zeiterfassung mit nachvollziehbaren Korrekturanträgen
 - Mobil optimiertes Leitungsportal mit konfigurierbaren Kernfunktionen
 - Rollen- und Rechtemanagement mit personenbezogenen Zusatzrechten und Bereichsgrenzen
@@ -107,7 +108,7 @@ Der Zugriff folgt eigenen, besonders eingeschränkten AUM-Rechten. Zusammengehö
 ## Schnellstart unter Windows
 
 1. Die portable ZIP-Datei unter [Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.56 Beta starten.cmd` doppelt anklicken.
+2. `Grabenplaner v0.57 Beta starten.cmd` doppelt anklicken.
 3. Die App öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in der App eingerichtet werden.
@@ -142,6 +143,8 @@ pnpm start
 ```
 
 Eine private GitHub-Codespaces-Umgebung für Demo- und Funktionstests ist in [CODESPACES.md](CODESPACES.md) beschrieben. Dort dürfen keine echten Personal-, Planungs- oder Gesundheitsdaten verwendet werden.
+
+Öffentliche, rein fiktive [Muster-Branding-Kits und Demodaten](demo/README.md) stehen getrennt von produktiven Daten zum Download und Testen bereit.
 
 ## Branding und öffentliche Auslieferung
 
