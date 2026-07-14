@@ -17,22 +17,29 @@
 </p>
 
 <p align="center">
-  <a href="output/pdf/Grabenplaner-Prospekt-A4.pdf"><strong>Produktprospekt ansehen</strong></a>
-  &nbsp;·&nbsp;
-  <a href="output/pdf/Grabenplaner-Prospekt-Druckbogen-A3.pdf">Druckbogen herunterladen</a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest">Aktuelle Version</a>
+  <a href="https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest"><strong>Aktuelle Version herunterladen</strong></a>
 </p>
 
 ## Eine App, drei Betriebsmodelle
 
-| Betriebsmodell | Status | Geeignet für |
-|---|---|---|
-| **Lokalbetrieb** | Verfügbar | Ein Windows-PC oder eine portable Installation mit lokaler SQLite-Datenbank |
-| **LAN-Host** | Verfügbar | Eine zentrale Installation, auf die weitere Geräte im vertrauenswürdigen Firmennetz per Browser und Login zugreifen |
-| **Serverbetrieb mit HTTPS** | Technische Pilotbasis | Eine zentrale Serverinstallation mit Reverse Proxy; vor einem Produktiveinsatz durch die zuständige Firmen-IT einzurichten und zu prüfen |
+| Funktion | Lokalbetrieb | LAN-Host | HTTPS-Server |
+|---|---|---|---|
+| Dienst- und Abteilungsplanung | Ja | Ja | Ja |
+| Urlaubsplanung, Auswertungen und PDF-Export | Ja | Ja | Ja |
+| Personal, Standorte, Branding und Einstellungen | Ja | Ja, nach Rechten | Ja, nach Rechten |
+| Login, Rollen und Bereichsrechte | Nicht erforderlich | Verpflichtend | Verpflichtend |
+| Nutzung durch mehrere Browsergeräte | Nein, nur am App-PC | Ja, im Firmen-LAN/WLAN | Ja, über HTTPS |
+| Mitarbeiterportal und eigener Dienstplan | Nicht im Standardbetrieb | Ja | Ja |
+| Urlaubs- und ZA-Anträge sowie AUM-Upload | Nicht im Standardbetrieb | Ja | Ja |
+| Zeiterfassung durch Mitarbeitende | Nicht im Standardbetrieb | Ja, je Standort aktivierbar | Ja, je Standort aktivierbar |
+| Freiwillige WLAN-Zeitvorschläge | Nein | Optional mit Netzwerkintegration | Optional mit Netzwerkintegration |
+| Backups | Lokal | Zentral am Host-PC | Zentral mit IT-Wartungswerkzeugen |
+| GitHub-Aktualisierungscheck | Ja | Ja | Ja |
+| Automatisches Portable-Update | Ja | Ja, am Host-PC | Nein, kontrolliert durch die IT |
+| Zugriff | Nur auf diesem Gerät | Im vertrauenswürdigen Firmennetz | Über Internet oder Intranet per HTTPS |
+| Produktstatus | Verfügbar | Verfügbar | Technische Pilotbasis |
 
-Der Lokalbetrieb bleibt der unkomplizierte Standard. Im LAN-Host-Modus liegt die Datenbank ausschließlich am Host-PC. Für den Serverbetrieb sind neutrale Installations-, Diagnose-, Backup- und Wiederherstellungsvorlagen vorhanden; er ist derzeit noch nicht als allgemein freigegebener Produktivmodus ausgewiesen. Details stehen in [SERVERBETRIEB.md](SERVERBETRIEB.md).
+Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Dienst- und Urlaubsplanung an einem Gerät. Im LAN-Host-Modus liegt die Datenbank ausschließlich am Host-PC; Mitarbeitende können sich im Firmen-LAN oder -WLAN anmelden und dort auch die Zeiterfassung verwenden. Der HTTPS-Server erweitert dieses Modell um geschützten Zugriff von außerhalb, muss vor einem Produktiveinsatz jedoch durch die zuständige Firmen-IT eingerichtet und geprüft werden. Details stehen in [SERVERBETRIEB.md](SERVERBETRIEB.md).
 
 ## Planung, Verwaltung und Mitarbeiterportal
 
