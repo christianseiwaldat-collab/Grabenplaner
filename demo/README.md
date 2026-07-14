@@ -12,4 +12,3 @@ Die ZIP-Dateien koennen in Grabenplaner unter **Einstellungen > Branding** direk
 ## Sporthandel-Demo
 
 Die [Sporthandel-Demodaten](sporthandel/demo-profile.json) bilden sechs Filialen mit teilweise drei Abteilungen ab. Enthalten sind 31 Verkaufsmitarbeitende sowie je eine zusaetzliche Person fuer Administration und Personalleitung. Beim Erstellen eines frischen GitHub Codespaces wird dieses Profil automatisch eingerichtet.
-
