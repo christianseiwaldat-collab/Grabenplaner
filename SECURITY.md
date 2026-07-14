@@ -30,6 +30,10 @@ Für dieses Projekt besteht derzeit kein Bug-Bounty-Programm.
 ## Hinweise für einen sicheren Betrieb
 
 - Die SQLite-Datenbank und Sicherungen können Personal- und Planungsdaten enthalten und müssen durch Betriebssystem- und Dateiberechtigungen geschützt werden.
+- Sensible Personalakt-Inhalte sowie AUM-Dokumente und ihre geschützten Metadaten werden zusätzlich mit AES-256-GCM verschlüsselt. Betriebliche Indizes und nicht sensible Verwaltungsdaten bleiben für den Anwendungsbetrieb in SQLite lesbar.
+- Eine vollständige Sicherung besteht aus der Datenbank und der zugehörigen verschlüsselten Dokumentablage. Beide Bestandteile müssen gemeinsam aufbewahrt und wiederhergestellt werden.
+- Der separate Backup-Befehl verwendet dieselbe exklusive Datenbanksperre wie die App. Falls Grabenplaner noch läuft, muss die Sicherung in der App erstellt oder die App zuerst beendet werden.
+- Der lokale Verschlüsselungsschlüssel muss durch die Geräte-, Konto- und Dateiberechtigungen des Betriebssystems geschützt werden. Geht er verloren, können verschlüsselte Dokumente nicht wiederhergestellt werden.
 - Personen mit Schreibzugriff auf den App- oder Datenbankordner gelten als vertrauenswürdige Systembetreiber.
 - Der LAN-Host-Modus ist nur für ein vertrauenswürdiges internes Netzwerk vorgesehen.
 - Ein öffentlich erreichbarer Betrieb darf nur über den vorgesehenen Servermodus mit HTTPS und korrekt konfiguriertem Reverse Proxy erfolgen.

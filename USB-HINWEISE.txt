@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.57 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.58 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,13 +13,12 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Neu in v0.57 Beta:
-  - Geschützte Controller-/RADIUS-Schnittstelle für pseudonymisierte WLAN-Ereignisse.
-  - Freiwilliges Opt-in und bearbeitbare Zeitvorschläge im Mitarbeiterportal.
-  - Warnungen und Bestätigungsfristen entsprechend Vertrauensstufe A, B oder C.
-  - Erst die persönliche Bestätigung erzeugt eine Zeitbuchung; eine automatische Endbuchung gibt es nicht.
-  - Filialzuordnungen werden nur gehasht gespeichert und sind ab Personalleitung verwaltbar.
-  - Angemeldete Person, App-Rolle und Firmenposition werden in der Administration kompakt angezeigt.
+Neu in v0.58 Beta:
+  - App-Rolle und Zusatzrechte können beim Anlegen oder Bearbeiten eines Teammitglieds gemeinsam gespeichert werden.
+  - Nur Developer und IT-Admin dürfen dieses geschützte Rechteprofil ändern.
+  - Sensible Personalakt-Inhalte, AUM-Metadaten und Dokumente werden zusätzlich mit AES-256-GCM verschlüsselt.
+  - Bestehende Personalakt-Daten werden nach einer gekoppelten Sicherung sicher migriert.
+  - Manuelle Sicherungen umfassen Datenbank und verschlüsselte Dokumentablage gemeinsam.
 
 Leere Zweitkopie:
   Ab v0.42.1 wird die leere Zweitkopie nicht mehr automatisch aktualisiert.
@@ -32,7 +31,8 @@ Backups:
   - Das Intervall ist in den Datenbank-Einstellungen von 1 bis 6 Stunden änderbar.
   - Standardordner der lokalen PC-Sicherung: Dokumente\grabenplaner-backups.
   - Es werden die letzten 30 Sicherungen je Backup-Ordner behalten.
-  - Mit "Backup erstellen.cmd" kann jederzeit manuell gesichert werden.
+  - Mit "Backup erstellen.cmd" kann bei beendeter App manuell gesichert werden;
+    läuft Grabenplaner noch, verhindert eine gemeinsame Sperre widersprüchliche Sicherungsstände.
 
 WICHTIG:
   Backups auf demselben USB-Stick schützen nicht vor Verlust oder Defekt des

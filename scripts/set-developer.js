@@ -1,6 +1,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
+const { acquireDatabaseLock, releaseDatabaseLock } = require("../lib/database-lock");
+const packageMetadata = require("../package.json");
 
 function argument(name) {
   const index = process.argv.indexOf(`--${name}`);
@@ -21,9 +23,13 @@ if (!/^[A-Za-z0-9._-]{1,24}$/.test(employeeNumber)) {
   throw new Error("Bitte --employee-number mit einer gültigen Personalnummer angeben.");
 }
 if (!fs.existsSync(databasePath)) throw new Error(`Datenbank nicht gefunden: ${databasePath}`);
-if (fs.existsSync(`${databasePath}.server.lock`)) {
-  throw new Error("Grabenplaner ist möglicherweise noch aktiv. Bitte die App sicher beenden und den Befehl erneut ausführen.");
-}
+let databaseLock = acquireDatabaseLock({ databasePath, kind: "app", appVersion: packageMetadata.version });
+const releaseLock = () => {
+  if (!databaseLock) return;
+  releaseDatabaseLock(databaseLock);
+  databaseLock = null;
+};
+process.once("exit", releaseLock);
 
 let database = new DatabaseSync(databasePath);
 const integrity = database.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
@@ -78,6 +84,7 @@ try {
   throw error;
 }
 database.close();
+releaseLock();
 
 console.log(`Developer-Zugang geschützt gebunden: ${employeeNumber} · ${employee.full_name}`);
 console.log(`Sicherungsdatei: ${backupPath}`);

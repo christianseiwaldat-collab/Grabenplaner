@@ -528,6 +528,34 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 
 .modal { width: min(550px,calc(100vw - 28px)); max-height: calc(100vh - 35px); padding: 0; border: 0; border-radius: 18px; color: var(--ink); background: #faf9f5; box-shadow: 0 25px 80px rgba(15,34,27,.27); }
 .wide-modal { width: min(880px,calc(100vw - 28px)); }
+.employee-modal { width:min(920px,calc(100vw - 28px)); overflow:auto; }
+.employee-access-profile { display:grid; grid-template-columns:minmax(220px,.8fr) minmax(0,1.2fr); gap:13px 16px; margin-top:4px; padding:17px; border:1px solid #cbdad4; border-radius:15px; background:#f3f7f5; }
+.employee-access-profile.locked { border-color:#d8dcda; background:#f1f2f1; }
+.employee-access-heading { display:flex; grid-column:1 / -1; align-items:flex-start; justify-content:space-between; gap:16px; }
+.employee-access-heading h3 { margin:2px 0 0; font-size:15px; }
+.employee-access-heading p { margin:4px 0 0; color:var(--muted); font-size:9px; }
+.employee-access-profile > .field { margin:0; }
+.employee-role-summary { min-width:0; }
+.employee-role-summary > strong { display:block; margin-bottom:7px; font-size:9px; }
+.employee-role-summary > div { display:flex; flex-wrap:wrap; gap:5px; }
+.employee-role-summary span { padding:5px 8px; border-radius:999px; color:#2b594a; background:#dfeee8; font-size:8px; font-weight:750; }
+.employee-access-profile.locked .employee-role-summary span { color:#606965; background:#e1e4e2; }
+.employee-additional-rights { grid-column:1 / -1; border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.78); }
+.employee-additional-rights summary { display:flex; align-items:center; gap:8px; padding:11px 13px; cursor:pointer; font-size:9.5px; font-weight:800; }
+.employee-additional-rights summary span { display:grid; place-items:center; min-width:23px; height:23px; border-radius:999px; color:#31594c; background:#dfeee8; font-size:8px; }
+.employee-additional-rights > div { display:grid; gap:12px; padding:0 12px 12px; }
+.employee-additional-rights section { min-width:0; padding-top:10px; border-top:1px solid var(--line); }
+.employee-additional-rights h4 { margin:0 0 7px; font-size:9px; }
+.employee-additional-rights section > div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+.employee-access-right { display:flex; align-items:flex-start; gap:8px; min-width:0; padding:8px 9px; border:1px solid #d8dfdc; border-radius:10px; background:#fff; }
+.employee-access-right.base-right { border-color:#9fc2b5; background:#edf7f3; }
+.employee-access-right.additional-right { box-shadow:inset 3px 0 #f2b936; }
+.employee-access-right input { flex:0 0 15px; width:15px; height:15px; margin:1px 0 0; padding:0; accent-color:var(--green); }
+.employee-access-right strong,.employee-access-right small { display:block; overflow-wrap:anywhere; }
+.employee-access-right strong { font-size:8.7px; }
+.employee-access-right small { margin-top:2px; color:var(--muted); font-size:7.7px; }
+.employee-access-profile.locked .employee-access-right { opacity:.72; }
+.employee-access-profile > .calculation-note { grid-column:1 / -1; margin:0; }
 .modal::backdrop { background: rgba(14,31,25,.55); backdrop-filter: blur(4px); }
 .modal form { padding: 24px; }
 .modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
@@ -658,6 +686,9 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
   .hours-values { grid-template-columns: 1fr 1fr; }
   .settings-header .primary-button { margin-top: 15px; }
   .form-grid, .inline-fields, .option-entry, .global-block-entry, .service-time-grid { grid-template-columns: 1fr; }
+  .employee-access-profile { grid-template-columns:1fr; padding:13px; }
+  .employee-access-heading,.employee-additional-rights,.employee-access-profile > .calculation-note { grid-column:auto; }
+  .employee-additional-rights section > div { grid-template-columns:1fr; }
   .full-width, .option-hours, .option-note, .option-time-fields { grid-column: auto; }
   .option-add { width: 100%; }
   .location-overview-toolbar { align-items: stretch; flex-direction: column; }

@@ -10,6 +10,7 @@ const net = require("node:net");
 const { promisify } = require("node:util");
 const { createAmuStorage, syncEncryptedFilesBackup } = require("./lib/amu-storage");
 const { prepareAmuDocument } = require("./lib/amu-processing");
+const { acquireDatabaseLock, lockPathForDatabase, releaseDatabaseLock } = require("./lib/database-lock");
 const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
@@ -218,6 +219,7 @@ builtinPortalRoles.push(
       "own_schedule:read", "own_time:read", "own_time:write", "own_time:correction_request",
       "own_vacation:read", "own_vacation:request", "own_amu:create", "own_amu:read", "own_amu:withdraw",
       "employees:read", "schedule:read", "rights:read", "rights:write",
+      "employees:write",
       "operation_mode:write", "backup:write", "update:write", "system:write", "users:write",
       "roles:read", "roles:write", "audit:read", "scopes:write", "wifi:settings",
     ],
@@ -237,8 +239,8 @@ const HR_DECISION_PORTAL_ROLES = new Set(["developer", "admin", "hr"]);
 const PROTECTED_PORTAL_ROLES = new Set(["developer"]);
 const PORTAL_ROLE_ASSIGNMENTS = Object.freeze({
   developer: new Set(["employee", "department_manager", "manager", "hr", "admin", "it_admin"]),
-  admin: new Set(["employee", "department_manager", "manager", "hr", "admin", "it_admin"]),
-  it_admin: new Set(["employee", "department_manager", "manager"]),
+  admin: new Set(["employee", "department_manager", "manager", "hr", "admin"]),
+  it_admin: new Set(["employee", "department_manager", "manager", "hr"]),
   hr: new Set(["employee", "department_manager", "manager"]),
   manager: new Set(["department_manager"]),
 });
@@ -338,7 +340,7 @@ const privateDataDirectory = serverModeActive || configuredDataRoot ? path.join(
 const amuStorageDirectory = path.join(privateDataDirectory, "amu");
 const defaultBackupDirectorySetting = "%USERPROFILE%\\Documents\\grabenplaner-backups";
 const defaultBackupDirectory = process.env.BACKUP_DIR || path.join(os.homedir(), "Documents", "grabenplaner-backups");
-const instanceLockPath = databasePath === ":memory:" ? "" : `${path.resolve(databasePath)}.server.lock`;
+const instanceLockPath = lockPathForDatabase(databasePath);
 
 function normalizeHttpOrigin(value) {
   try {
@@ -504,7 +506,8 @@ cleanupPortableInstallRoot();
 
 const databaseExistedBeforeOpen = databasePath !== ":memory:" && fs.existsSync(databasePath);
 let instanceLockHeld = false;
-if (serverModeActive) acquireInstanceLock();
+let instanceLockHandle = null;
+acquireInstanceLock();
 let db;
 try {
   db = new DatabaseSync(databasePath);
@@ -1188,6 +1191,7 @@ function createSchema() {
       review_note TEXT NOT NULL DEFAULT '',
       retention_until TEXT,
       withdrawn_at TEXT,
+      protected_payload TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
@@ -1216,6 +1220,7 @@ function createSchema() {
       deleted_by TEXT,
       deleted_at TEXT,
       purged_at TEXT,
+      protected_payload TEXT NOT NULL DEFAULT '',
       FOREIGN KEY (report_id) REFERENCES amu_reports(id)
         ON UPDATE CASCADE ON DELETE CASCADE
     );
@@ -1293,7 +1298,13 @@ function migrateLegacySchema() {
   }
 }
 
-if (serverModeActive && databaseExistedBeforeOpen) createInternalDatabaseBackup("pre-migration");
+const protectedPersonnelMigrationRequired = tableExists("amu_reports") && (
+  !columnExists("amu_reports", "protected_payload")
+  || !columnExists("amu_documents", "protected_payload")
+  || Boolean(db.prepare("SELECT 1 FROM amu_reports WHERE TRIM(COALESCE(protected_payload, '')) = '' LIMIT 1").get())
+  || Boolean(db.prepare("SELECT 1 FROM amu_documents WHERE TRIM(COALESCE(protected_payload, '')) = '' AND status <> 'purged' LIMIT 1").get())
+);
+if (databaseExistedBeforeOpen && (serverModeActive || protectedPersonnelMigrationRequired)) createInternalDatabaseBackup("pre-migration");
 
 if (tableExists("employees") && !columnExists("employees", "personnel_number")) {
   migrateLegacySchema();
@@ -1379,6 +1390,110 @@ ensureColumn("time_day_reviews", "evaluation_version", "TEXT NOT NULL DEFAULT 'v
 ensureColumn("time_day_reviews", "snapshot_json", "TEXT NOT NULL DEFAULT '{}'");
 ensureColumn("time_day_reviews", "department_key", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("amu_reports", "department_id", "INTEGER");
+ensureColumn("amu_reports", "protected_payload", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("amu_documents", "protected_payload", "TEXT NOT NULL DEFAULT ''");
+
+function amuReportProtectionContext(row) {
+  return {
+    namespace: "personnel-record",
+    recordId: String(row.id),
+    field: "payload",
+    employeeNumber: String(row.employee_number || ""),
+  };
+}
+
+function amuDocumentProtectionContext(row) {
+  return {
+    namespace: "personnel-record-document",
+    recordId: String(row.id),
+    field: "payload",
+    employeeNumber: String(row.employee_number || ""),
+  };
+}
+
+function parseProtectedJson(value, context) {
+  try {
+    const text = requireAmuStorage().unprotectRecord(value, context);
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid payload");
+    return parsed;
+  } catch (error) {
+    if (tableExists("audit_log")) {
+      auditPortal("system", "personnel-record.decrypt.failed", context.namespace || "personnel_record", String(context.recordId || ""), String(error.code || "invalid-payload"));
+    }
+    throw httpError(503, "Geschützte Personalakt-Daten konnten nicht sicher entschlüsselt werden.", error.code || "PERSONNEL_RECORD_INTEGRITY_FAILED");
+  }
+}
+
+function protectJson(value, context) {
+  return requireAmuStorage().protectRecord(JSON.stringify(value), context);
+}
+
+function migrateProtectedPersonnelRecords() {
+  const reports = db.prepare("SELECT * FROM amu_reports ORDER BY id").all();
+  const documents = db.prepare(`
+    SELECT d.*, r.employee_number
+    FROM amu_documents d JOIN amu_reports r ON r.id = d.report_id
+    WHERE d.status <> 'purged'
+    ORDER BY d.created_at, d.id
+  `).all();
+  const pendingReports = reports.filter((row) => !String(row.protected_payload || "").startsWith("enc:v2:"));
+  const pendingDocuments = documents.filter((row) => !String(row.protected_payload || "").startsWith("enc:v2:"));
+  if (!pendingReports.length && !pendingDocuments.length) {
+    for (const row of reports) {
+      if (row.protected_payload) parseProtectedJson(row.protected_payload, amuReportProtectionContext(row));
+    }
+    for (const row of documents) parseProtectedJson(row.protected_payload, amuDocumentProtectionContext(row));
+    return { reports: 0, documents: 0 };
+  }
+  const storage = requireAmuStorage();
+  const updateReport = db.prepare(`
+    UPDATE amu_reports SET protected_payload = ?, incapacity_from = '', incapacity_to = '', employee_note = '',
+      reviewed_by = NULL, reviewed_at = NULL, review_note = '', retention_until = NULL, withdrawn_at = NULL,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `);
+  const updateDocument = db.prepare(`
+    UPDATE amu_documents SET protected_payload = ?, original_filename = '', detected_mime = 'application/octet-stream',
+      byte_size = 0, sha256 = '', uploaded_by = ''
+    WHERE id = ?
+  `);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const row of pendingReports) {
+      const payload = {
+        incapacityFrom: row.incapacity_from || "",
+        incapacityTo: row.incapacity_to || "",
+        employeeNote: storage.unprotectText(row.employee_note || ""),
+        reviewedBy: row.reviewed_by || "",
+        reviewedAt: row.reviewed_at || "",
+        reviewNote: storage.unprotectText(row.review_note || ""),
+        retentionUntil: row.retention_until || "",
+        withdrawnAt: row.withdrawn_at || "",
+      };
+      updateReport.run(storage.protectRecord(JSON.stringify(payload), amuReportProtectionContext(row)), row.id);
+    }
+    for (const row of pendingDocuments) {
+      const payload = {
+        originalFilename: storage.unprotectText(row.original_filename || "") || "Dokument",
+        detectedMime: row.detected_mime || "application/octet-stream",
+        byteSize: Number(row.byte_size || 0),
+        sha256: row.sha256 || "",
+        uploadedBy: row.uploaded_by || "",
+      };
+      updateDocument.run(storage.protectRecord(JSON.stringify(payload), amuDocumentProtectionContext(row)), row.id);
+    }
+    db.prepare("INSERT OR REPLACE INTO schema_migrations (id, app_version, applied_at) VALUES (?, ?, CURRENT_TIMESTAMP)")
+      .run("v0.58-protected-personnel-records", packageMetadata.version);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return { reports: pendingReports.length, documents: pendingDocuments.length };
+}
+
+migrateProtectedPersonnelRecords();
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_work_date ON time_entries(employee_number, work_date, entry_timestamp)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_location_date ON time_entries(location_id, work_date, entry_timestamp)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_corrections_context ON time_corrections(location_id, department_id, status, correction_date)");
@@ -1655,6 +1770,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.56-wifi-automation-foundation", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.57-wifi-automation-suggestions", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.58-protected-personnel-records", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -3452,7 +3569,8 @@ function portalPermissionCatalogForActor(actor) {
 
 function actorCanManagePermissionGrants(actor, target) {
   if (!actor || !target || target.role === "developer" || target.roleLocked || !target.configured || !target.active) return false;
-  if (actor.employeeNumber === "local" || ["developer", "admin", "it_admin"].includes(actor.role)) return true;
+  if (actor.employeeNumber === "local" || ["developer", "it_admin"].includes(actor.role)) return true;
+  if (actor.role === "admin") return target.role !== "it_admin";
   return actor.role === "hr" && ["employee", "department_manager", "manager"].includes(target.role);
 }
 
@@ -3485,15 +3603,17 @@ function actorCanAssignPortalRole(actor, role) {
   if (actor.employeeNumber === "local") return role !== "developer";
   const allowed = PORTAL_ROLE_ASSIGNMENTS[actor.role];
   if (allowed?.has(role)) return true;
-  return actor.role === "developer" || actor.role === "admin"
+  return actor.role === "developer"
     ? Boolean(db.prepare("SELECT 1 FROM portal_roles WHERE id = ? AND id <> 'developer'").get(role))
     : false;
 }
 
 function actorCanManagePortalRole(actor, targetRole) {
   if (!actor || targetRole === "developer") return false;
-  if (actor.employeeNumber === "local" || ["developer", "admin"].includes(actor.role)) return true;
-  if (actor.role === "it_admin" || actor.role === "hr") return ["employee", "department_manager", "manager"].includes(targetRole);
+  if (actor.employeeNumber === "local" || actor.role === "developer") return true;
+  if (actor.role === "admin") return targetRole !== "it_admin";
+  if (actor.role === "it_admin") return ["employee", "department_manager", "manager", "hr"].includes(targetRole);
+  if (actor.role === "hr") return ["employee", "department_manager", "manager"].includes(targetRole);
   return actor.role === "manager" && targetRole === "department_manager";
 }
 
@@ -3503,6 +3623,116 @@ function assertPortalUserIsMutable(target, actor) {
     auditPortal(actor?.employeeNumber || "system", "portal.developer.protected", "portal_user", target.employee_number || "", "mutation-denied");
     throw httpError(403, "Der Developer-Zugang ist geschützt und kann nur mit dem lokalen Entwicklerwerkzeug geändert werden.", "PORTAL_DEVELOPER_PROTECTED");
   }
+}
+
+function actorCanEditPersonnelAccessProfile(actor) {
+  return Boolean(actor && ["developer", "it_admin"].includes(actor.role));
+}
+
+function portalAccessProfileForEmployee(employeeNumber) {
+  const user = db.prepare(`
+    SELECT u.employee_number, u.role, u.role_locked, u.active, r.name AS role_name, r.permissions
+    FROM portal_users u
+    LEFT JOIN portal_roles r ON r.id = u.role
+    WHERE u.employee_number = ?
+  `).get(String(employeeNumber || ""));
+  const roleId = user?.role || "employee";
+  const role = getPortalRoles().find((entry) => entry.id === roleId)
+    || getPortalRoles().find((entry) => entry.id === "employee");
+  const rolePermissions = role?.permissions || parsePortalPermissions(user?.permissions);
+  const grantedPermissions = user ? portalPermissionGrantsForEmployee(employeeNumber) : [];
+  return {
+    configured: Boolean(user),
+    role: roleId,
+    roleName: user?.role_name || role?.name || "Mitarbeiter",
+    roleLocked: Boolean(user?.role_locked) || roleId === "developer",
+    active: user ? Boolean(user.active) : false,
+    rolePermissions,
+    grantedPermissions,
+    effectivePermissions: [...new Set([...rolePermissions, ...grantedPermissions])],
+  };
+}
+
+function validatePersonnelAccessProfile(actor, payload, employee = {}) {
+  if (payload === undefined) return null;
+  if (!actorCanEditPersonnelAccessProfile(actor)) {
+    throw httpError(403, "App-Rolle und individuelle Rechte dürfen hier nur Developer oder IT-Admin ändern.", "PERSONNEL_ACCESS_PROFILE_DENIED");
+  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw httpError(400, "Bitte ein gültiges Rechteprofil übermitteln.", "PERSONNEL_ACCESS_PROFILE_INVALID");
+  }
+  const employeeNumber = String(employee.personnelNumber || employee.personnel_number || "").trim();
+  const existing = db.prepare("SELECT employee_number, role, role_locked, active FROM portal_users WHERE employee_number = ?").get(employeeNumber);
+  if (existing) {
+    assertPortalUserIsMutable(existing, actor);
+    if (!actorCanManagePortalRole(actor, existing.role)) {
+      throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
+    }
+  }
+  const role = String(payload.role || existing?.role || "employee").trim();
+  if (!db.prepare("SELECT 1 FROM portal_roles WHERE id = ?").get(role)) {
+    throw httpError(400, "Die ausgewählte App-Rolle ist ungültig.", "PORTAL_ROLE_INVALID");
+  }
+  if (!actorCanAssignPortalRole(actor, role)) {
+    throw httpError(403, role === "developer"
+      ? "Die Developer-Rolle kann ausschließlich mit dem lokalen Entwicklerwerkzeug gebunden werden."
+      : "Diese App-Rolle darf durch den aktuellen Zugang nicht vergeben werden.", role === "developer" ? "PORTAL_DEVELOPER_PROTECTED" : "PORTAL_ROLE_HIERARCHY_DENIED");
+  }
+  if (!Array.isArray(payload.permissions)) {
+    throw httpError(400, "Bitte eine gültige Auswahl individueller Zusatzrechte übermitteln.", "PERSONNEL_ACCESS_PROFILE_INVALID");
+  }
+  const submittedPermissions = [...new Set(payload.permissions
+    .map((value) => String(value || "").trim())
+    .filter(Boolean))];
+  const invalidPermissions = submittedPermissions.filter((permission) => !delegablePortalPermissions.has(permission));
+  if (invalidPermissions.length) {
+    throw httpError(403, `Diese Rechte dürfen nicht vergeben werden: ${invalidPermissions.join(", ")}`, "PORTAL_PERMISSION_NOT_DELEGABLE");
+  }
+  const rolePermissions = new Set(getPortalRoles().find((entry) => entry.id === role)?.permissions || []);
+  const permissions = submittedPermissions.filter((permission) => !rolePermissions.has(permission));
+  const homeLocationId = String(employee.homeLocationId || employee.home_location_id || "").trim();
+  const preferredDepartmentId = Number(employee.preferredDepartmentId || employee.preferred_department_id || 0) || null;
+  if (role === "department_manager" && !preferredDepartmentId) {
+    throw httpError(400, "Für eine Abteilungsleitung muss zuerst eine bevorzugte Abteilung hinterlegt werden.", "PORTAL_SCOPE_REQUIRED");
+  }
+  return { employeeNumber, role, permissions, homeLocationId, preferredDepartmentId, previous: existing || null };
+}
+
+function applyPersonnelAccessProfile(actor, profile) {
+  if (!profile) return;
+  const before = profile.previous ? portalAccessProfileForEmployee(profile.employeeNumber) : null;
+  if (profile.previous?.role === "admin" && profile.role !== "admin") {
+    const otherSystemOwners = Number(db.prepare(`
+      SELECT COUNT(*) AS count FROM portal_users
+      WHERE role IN ('developer','admin') AND active = 1 AND employee_number <> ?
+    `).get(profile.employeeNumber).count);
+    if (!otherSystemOwners) throw httpError(409, "Mindestens ein aktiver Developer- oder Admin-Zugang muss bestehen bleiben.");
+  }
+  db.prepare(`
+    INSERT INTO portal_users (employee_number, password_hash, role, active, must_change_password, updated_at)
+    VALUES (?, '', ?, 1, 1, CURRENT_TIMESTAMP)
+    ON CONFLICT(employee_number) DO UPDATE SET role = excluded.role, updated_at = CURRENT_TIMESTAMP
+  `).run(profile.employeeNumber, profile.role);
+  db.prepare("DELETE FROM portal_permission_grants WHERE employee_number = ?").run(profile.employeeNumber);
+  const insertGrant = db.prepare(`
+    INSERT INTO portal_permission_grants (employee_number, permission, granted_by, updated_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+  `);
+  for (const permission of profile.permissions) insertGrant.run(profile.employeeNumber, permission, actor.employeeNumber);
+  db.prepare("DELETE FROM portal_access_scopes WHERE employee_number = ?").run(profile.employeeNumber);
+  if (["manager", "department_manager"].includes(profile.role)) {
+    db.prepare(`
+      INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
+      VALUES (?, ?, ?, ?)
+    `).run(profile.employeeNumber, profile.homeLocationId, profile.role === "department_manager" ? profile.preferredDepartmentId : 0, actor.employeeNumber);
+  }
+  const after = portalAccessProfileForEmployee(profile.employeeNumber);
+  auditPortal(actor.employeeNumber, "employee.access-profile.update", "portal_user", profile.employeeNumber, JSON.stringify({
+    roleBefore: before?.role || null,
+    roleAfter: after.role,
+    grantsBefore: before?.grantedPermissions || [],
+    grantsAfter: after.grantedPermissions,
+  }));
 }
 
 function getPortalStatus(locationId = "") {
@@ -5213,41 +5443,56 @@ function amuDocumentsForReports(reportIds) {
   if (!ids.length) return new Map();
   const placeholders = ids.map(() => "?").join(",");
   const rows = db.prepare(`
-    SELECT id, report_id, original_filename, detected_mime, byte_size, scan_status, status, created_at
-    FROM amu_documents WHERE report_id IN (${placeholders}) AND status = 'active'
-    ORDER BY created_at, id
+    SELECT d.id, d.report_id, d.protected_payload, d.scan_status, d.status, d.created_at,
+           r.employee_number
+    FROM amu_documents d JOIN amu_reports r ON r.id = d.report_id
+    WHERE d.report_id IN (${placeholders}) AND d.status = 'active'
+    ORDER BY d.created_at, d.id
   `).all(...ids);
   const grouped = new Map(ids.map((id) => [id, []]));
-  for (const row of rows) grouped.get(Number(row.report_id))?.push({
-    id: row.id,
-    original_name: amuStorage?.unprotectText(row.original_filename) || "Dokument",
-    original_filename: amuStorage?.unprotectText(row.original_filename) || "Dokument",
-    detected_mime: row.detected_mime,
-    size: Number(row.byte_size),
-    byte_size: Number(row.byte_size),
-    scan_status: row.scan_status,
-    status: row.status,
-    created_at: row.created_at,
-  });
+  for (const row of rows) {
+    const payload = parseProtectedJson(row.protected_payload, amuDocumentProtectionContext(row));
+    grouped.get(Number(row.report_id))?.push({
+      id: row.id,
+      original_name: payload.originalFilename || "Dokument",
+      original_filename: payload.originalFilename || "Dokument",
+      detected_mime: payload.detectedMime || "application/octet-stream",
+      size: Number(payload.byteSize || 0),
+      byte_size: Number(payload.byteSize || 0),
+      scan_status: row.scan_status,
+      status: row.status,
+      created_at: row.created_at,
+    });
+  }
   return grouped;
 }
 
 function serializeAmuReports(rows) {
   const documents = amuDocumentsForReports(rows.map((row) => row.id));
-  return rows.map((row) => ({
-    ...row,
-    id: Number(row.id),
-    employee_note: amuStorage?.unprotectText(row.employee_note) || "",
-    review_note: amuStorage?.unprotectText(row.review_note) || "",
-    documents: documents.get(Number(row.id)) || [],
-  }));
+  return rows.map((row) => {
+    const payload = parseProtectedJson(row.protected_payload, amuReportProtectionContext(row));
+    return {
+      ...row,
+      id: Number(row.id),
+      incapacity_from: payload.incapacityFrom || "",
+      incapacity_to: payload.incapacityTo || "",
+      employee_note: payload.employeeNote || "",
+      reviewed_by: payload.reviewedBy || null,
+      reviewed_at: payload.reviewedAt || null,
+      review_note: payload.reviewNote || "",
+      retention_until: payload.retentionUntil || null,
+      withdrawn_at: payload.withdrawnAt || null,
+      protected_payload: undefined,
+      documents: documents.get(Number(row.id)) || [],
+    };
+  });
 }
 
 function ownAmuReports(employeeNumber) {
   return serializeAmuReports(db.prepare(`
     SELECT r.*, l.name AS location_name
     FROM amu_reports r JOIN locations l ON l.id = r.location_id
-    WHERE r.employee_number = ? ORDER BY r.submitted_at DESC, r.id DESC
+    WHERE r.employee_number = ? AND r.status <> 'purged' ORDER BY r.submitted_at DESC, r.id DESC
   `).all(employeeNumber));
 }
 
@@ -5281,15 +5526,16 @@ function amuDocumentMetadata(reportId, documentId) {
 }
 
 function sendAmuDocument(response, metadata) {
-  const originalFilename = requireAmuStorage().unprotectText(metadata.original_filename) || "Dokument";
+  const payload = parseProtectedJson(metadata.protected_payload, amuDocumentProtectionContext(metadata));
+  const originalFilename = payload.originalFilename || "Dokument";
   const content = requireAmuStorage().readBuffer({
     storageKey: metadata.storage_key,
-    byteSize: metadata.byte_size,
-    sha256: metadata.sha256,
-    detectedMime: metadata.detected_mime,
+    byteSize: payload.byteSize,
+    sha256: payload.sha256,
+    detectedMime: payload.detectedMime,
     originalFilename,
   });
-  response.setHeader("Content-Type", metadata.detected_mime);
+  response.setHeader("Content-Type", payload.detectedMime);
   response.setHeader("Content-Length", String(content.length));
   response.setHeader("Content-Disposition", contentDispositionHeader(originalFilename));
   response.setHeader("Cache-Control", "private, no-store, max-age=0");
@@ -5300,13 +5546,23 @@ function sendAmuDocument(response, metadata) {
 
 function purgeExpiredAmuDocuments(today = viennaTodayIso()) {
   if (!amuStorage || !tableExists("amu_documents") || amuMutationInProgress > 0) return { purged: 0 };
-  const rows = db.prepare(`
-    SELECT d.id, d.storage_key, d.report_id
-    FROM amu_documents d JOIN amu_reports r ON r.id = d.report_id
-    WHERE r.retention_until IS NOT NULL AND r.retention_until < ?
-      AND r.status IN ('submitted','returned','reviewed','withdrawn','purged') AND d.status IN ('active','deleted')
-    ORDER BY d.created_at, d.id
-  `).all(today);
+  const expiringReports = db.prepare(`
+    SELECT id, employee_number, protected_payload, status
+    FROM amu_reports
+    WHERE status IN ('submitted','returned','reviewed','withdrawn','purged')
+    ORDER BY id
+  `).all().filter((row) => {
+    if (!row.protected_payload) return false;
+    const payload = parseProtectedJson(row.protected_payload, amuReportProtectionContext(row));
+    return Boolean(payload.retentionUntil && payload.retentionUntil < today);
+  });
+  const reportIds = expiringReports.map((row) => Number(row.id));
+  const rows = reportIds.length ? db.prepare(`
+    SELECT id, storage_key, report_id
+    FROM amu_documents
+    WHERE report_id IN (${reportIds.map(() => "?").join(",")}) AND status IN ('active','deleted')
+    ORDER BY created_at, id
+  `).all(...reportIds) : [];
   let purged = 0;
   amuMutationInProgress += 1;
   try {
@@ -5317,17 +5573,23 @@ function purgeExpiredAmuDocuments(today = viennaTodayIso()) {
         continue;
       }
       db.prepare(`
-        UPDATE amu_documents SET status = 'purged', original_filename = 'Dokument', purged_at = CURRENT_TIMESTAMP
+        UPDATE amu_documents SET status = 'purged', original_filename = '', protected_payload = '', purged_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).run(row.id);
       auditPortal("system", "amu.document.purge", "amu_document", row.id);
       purged += 1;
     }
-    db.prepare(`
-      UPDATE amu_reports SET status = 'purged', employee_note = '', review_note = '', updated_at = CURRENT_TIMESTAMP
-      WHERE retention_until IS NOT NULL AND retention_until < ? AND status IN ('submitted','returned','reviewed','withdrawn')
-        AND NOT EXISTS (SELECT 1 FROM amu_documents d WHERE d.report_id = amu_reports.id AND d.status <> 'purged')
-    `).run(today);
+    const updateReport = db.prepare(`
+      UPDATE amu_reports SET status = 'purged', protected_payload = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND NOT EXISTS (SELECT 1 FROM amu_documents d WHERE d.report_id = amu_reports.id AND d.status <> 'purged')
+    `);
+    for (const report of expiringReports) {
+      const purgedPayload = protectJson({
+        incapacityFrom: "", incapacityTo: "", employeeNote: "", reviewedBy: "", reviewedAt: "",
+        reviewNote: "", retentionUntil: "", withdrawnAt: "",
+      }, amuReportProtectionContext(report));
+      updateReport.run(purgedPayload, report.id);
+    }
   } finally {
     amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
   }
@@ -8228,9 +8490,78 @@ function applyBrandingSnapshotToDatabase(importPath, snapshot) {
   }
 }
 
+function importedDatabaseHasColumn(importedDatabase, tableName, columnName) {
+  return importedDatabase.prepare(`PRAGMA table_info(${tableName})`).all()
+    .some((column) => column.name === columnName);
+}
+
+function verifyImportedProtectedPersonnelPayloads(importedDatabase) {
+  const storage = requireAmuStorage();
+  let verified = 0;
+  if (importedDatabaseHasColumn(importedDatabase, "amu_reports", "protected_payload")) {
+    const reports = importedDatabase.prepare(`
+      SELECT id, employee_number, protected_payload
+      FROM amu_reports
+      WHERE protected_payload <> ''
+      ORDER BY id
+    `).all();
+    for (const report of reports) {
+      const payload = storage.unprotectRecord(report.protected_payload, amuReportProtectionContext(report), { allowLegacy: true });
+      const parsed = JSON.parse(payload);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected report payload");
+      verified += 1;
+    }
+  }
+  if (importedDatabaseHasColumn(importedDatabase, "amu_reports", "employee_note")
+    && importedDatabaseHasColumn(importedDatabase, "amu_reports", "review_note")) {
+    const legacyReports = importedDatabase.prepare(`
+      SELECT employee_note, review_note
+      FROM amu_reports
+      WHERE employee_note LIKE 'enc:v1:%' OR review_note LIKE 'enc:v1:%'
+    `).all();
+    for (const report of legacyReports) {
+      for (const value of [report.employee_note, report.review_note]) {
+        if (!String(value || "").startsWith("enc:v1:")) continue;
+        storage.unprotectText(value);
+        verified += 1;
+      }
+    }
+  }
+  if (importedDatabaseHasColumn(importedDatabase, "amu_documents", "protected_payload")) {
+    const documents = importedDatabase.prepare(`
+      SELECT d.id, d.protected_payload, r.employee_number
+      FROM amu_documents d
+      JOIN amu_reports r ON r.id = d.report_id
+      WHERE d.protected_payload <> ''
+      ORDER BY d.id
+    `).all();
+    for (const document of documents) {
+      const payload = storage.unprotectRecord(document.protected_payload, amuDocumentProtectionContext(document), { allowLegacy: true });
+      const parsed = JSON.parse(payload);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected document payload");
+      verified += 1;
+    }
+  }
+  if (importedDatabaseHasColumn(importedDatabase, "amu_documents", "original_filename")) {
+    const legacyDocuments = importedDatabase.prepare(`
+      SELECT original_filename
+      FROM amu_documents
+      WHERE original_filename LIKE 'enc:v1:%'
+    `).all();
+    for (const document of legacyDocuments) {
+      storage.unprotectText(document.original_filename);
+      verified += 1;
+    }
+  }
+  return verified;
+}
+
 app.post("/api/backup/import", express.raw({ type: "application/octet-stream", limit: "200mb" }), (request, response) => {
+  if (getPortalStatus().portalEnabled && !["developer", "it_admin"].includes(request.portalSession?.role)) {
+    throw httpError(403, "Datenbankimporte dürfen im geschützten Betrieb nur durch Developer oder IT-Admin ausgeführt werden.", "BACKUP_IMPORT_ROLE_DENIED");
+  }
   const currentAmuDocuments = tableExists("amu_documents")
-    ? Number(db.prepare("SELECT COUNT(*) AS count FROM amu_documents WHERE status = 'active'").get().count || 0)
+    ? Number(db.prepare("SELECT COUNT(*) AS count FROM amu_documents WHERE status <> 'purged'").get().count || 0)
     : 0;
   if (currentAmuDocuments > 0) {
     throw httpError(409, "Diese Datenbank enthält geschützte AUM-Dokumente. Bitte Datenbank und AUM-Dateisicherung gemeinsam über die Wartungswerkzeuge wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
@@ -8244,16 +8575,25 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   fs.writeFileSync(importPath, request.body);
   let importedDatabase;
   let importedAmuDocuments = 0;
+  let importedProtectedPayloadError = false;
   try {
     importedDatabase = new DatabaseSync(importPath, { readOnly: true });
     importedDatabase.prepare("SELECT name FROM sqlite_master LIMIT 1").all();
     const hasAmuDocuments = importedDatabase.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'amu_documents'").get();
-    if (hasAmuDocuments) importedAmuDocuments = Number(importedDatabase.prepare("SELECT COUNT(*) AS count FROM amu_documents WHERE status = 'active'").get().count || 0);
+    if (hasAmuDocuments) importedAmuDocuments = Number(importedDatabase.prepare("SELECT COUNT(*) AS count FROM amu_documents WHERE status <> 'purged'").get().count || 0);
+    if (!importedAmuDocuments) {
+      try { verifyImportedProtectedPersonnelPayloads(importedDatabase); }
+      catch { importedProtectedPayloadError = true; }
+    }
   } catch {
     fs.rmSync(importPath, { force: true });
     throw httpError(400, "Die ausgewählte Datei ist keine lesbare SQLite-Backup-Datei.");
   } finally {
     if (importedDatabase) importedDatabase.close();
+  }
+  if (importedProtectedPayloadError) {
+    fs.rmSync(importPath, { force: true });
+    throw httpError(409, "Die geschützten Personalakt-Daten dieses Backups gehören zu einem anderen Schlüsselsatz. Bitte die vollständige Datenbank- und AUM-Sicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
   }
   if (importedAmuDocuments > 0) {
     fs.rmSync(importPath, { force: true });
@@ -8509,8 +8849,11 @@ app.get("/api/employees", (request, response) => {
         LEFT JOIN positions p ON p.id = e.position_id
         ORDER BY e.active DESC, CAST(e.personnel_number AS INTEGER), e.personnel_number
       `)
-      .all().map((row) => serializeEmployee(row, {
-        includeTimeConfirmationLevel: sessionCanManageTimeConfirmationLevel(session),
+      .all().map((row) => ({
+        ...serializeEmployee(row, {
+          includeTimeConfirmationLevel: sessionCanManageTimeConfirmationLevel(session),
+        }),
+        portal_access: portalAccessProfileForEmployee(row.personnel_number),
       }));
   if (!sessionHasGlobalScope(session)) {
     const locations = new Set((session.scopes || []).map((scope) => scope.locationId));
@@ -8526,6 +8869,8 @@ app.post("/api/employees", (request, response) => {
   const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
   if (!canManageTimeConfirmationLevel) employee.timeConfirmationLevel = "C";
   assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
+  const accessProfile = validatePersonnelAccessProfile(request.portalSession, request.body.accessProfile, employee);
+  db.exec("BEGIN");
   try {
     db.prepare(`
       INSERT INTO employees
@@ -8546,13 +8891,20 @@ app.post("/api/employees", (request, response) => {
       employee.preferredDepartmentId,
       employee.active,
     );
+    applyPersonnelAccessProfile(request.portalSession, accessProfile);
+    db.exec("COMMIT");
   } catch (error) {
+    db.exec("ROLLBACK");
     if (String(error.message).includes("UNIQUE")) throw httpError(409, "Diese Personalnummer ist bereits vergeben.");
     throw error;
   }
   auditPortal(request.portalSession?.employeeNumber || "local", "employee.create", "employee", employee.personnelNumber,
     JSON.stringify({ timeConfirmationLevel: employee.timeConfirmationLevel }));
-  const responseEmployee = { ...employee, active: Boolean(employee.active) };
+  const responseEmployee = {
+    ...employee,
+    active: Boolean(employee.active),
+    portal_access: portalAccessProfileForEmployee(employee.personnelNumber),
+  };
   if (!canManageTimeConfirmationLevel) delete responseEmployee.timeConfirmationLevel;
   response.status(201).json(responseEmployee);
 });
@@ -8569,32 +8921,49 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
     ...(canManageTimeConfirmationLevel ? {} : { timeConfirmationLevel: existing.time_confirmation_level || "C" }),
   }, false, { defaultTimeConfirmationLevel: existing.time_confirmation_level || "C" });
   assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
-  const result = db.prepare(`
-    UPDATE employees
-    SET full_name = ?, nickname = ?, color = ?, contracted_hours = ?, preferred_day_off = ?, fixed_workdays = ?,
-        position_id = ?, time_confirmation_level = ?, home_location_id = ?, preferred_department_id = ?, active = ?
-    WHERE personnel_number = ?
-  `).run(
-    employee.fullName,
-    employee.nickname,
-    employee.color,
-    employee.contractedHours,
-    employee.preferredDayOff,
-    employee.fixedWorkdays,
-    employee.positionId,
-    employee.timeConfirmationLevel,
-    employee.homeLocationId,
-    employee.preferredDepartmentId,
-    employee.active,
+  const accessProfile = validatePersonnelAccessProfile(request.portalSession, request.body.accessProfile, {
+    ...employee,
     personnelNumber,
-  );
-  if (!result.changes) throw httpError(404, "Die Person wurde nicht gefunden.");
+  });
+  db.exec("BEGIN");
+  try {
+    const result = db.prepare(`
+      UPDATE employees
+      SET full_name = ?, nickname = ?, color = ?, contracted_hours = ?, preferred_day_off = ?, fixed_workdays = ?,
+          position_id = ?, time_confirmation_level = ?, home_location_id = ?, preferred_department_id = ?, active = ?
+      WHERE personnel_number = ?
+    `).run(
+      employee.fullName,
+      employee.nickname,
+      employee.color,
+      employee.contractedHours,
+      employee.preferredDayOff,
+      employee.fixedWorkdays,
+      employee.positionId,
+      employee.timeConfirmationLevel,
+      employee.homeLocationId,
+      employee.preferredDepartmentId,
+      employee.active,
+      personnelNumber,
+    );
+    if (!result.changes) throw httpError(404, "Die Person wurde nicht gefunden.");
+    applyPersonnelAccessProfile(request.portalSession, accessProfile);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
   auditPortal(request.portalSession?.employeeNumber || "local", "employee.update", "employee", personnelNumber,
     JSON.stringify({
       timeConfirmationLevelBefore: existing.time_confirmation_level || "C",
       timeConfirmationLevelAfter: employee.timeConfirmationLevel,
     }));
-  const responseEmployee = { ...employee, personnelNumber, active: Boolean(employee.active) };
+  const responseEmployee = {
+    ...employee,
+    personnelNumber,
+    active: Boolean(employee.active),
+    portal_access: portalAccessProfileForEmployee(personnelNumber),
+  };
   if (!canManageTimeConfirmationLevel) delete responseEmployee.timeConfirmationLevel;
   response.json(responseEmployee);
 });
@@ -8630,7 +8999,11 @@ app.get(["/api/portal/status", "/api/portal/v1/status"], (request, response) => 
 });
 
 app.get("/api/portal/v1/roles", (_request, response) => {
-  response.json({ apiVersion: PORTAL_API_VERSION, roles: getPortalRoles() });
+  response.json({
+    apiVersion: PORTAL_API_VERSION,
+    roles: getPortalRoles(),
+    catalog: delegablePortalPermissionCatalog.map(({ hrDelegable: _hrDelegable, ...permission }) => permission),
+  });
 });
 
 app.get("/api/portal/v1/wifi-automation/settings", (request, response) => {
@@ -8998,7 +9371,10 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
   }
   const role = String(request.body.role || "employee");
   if (!db.prepare("SELECT 1 FROM portal_roles WHERE id = ?").get(role)) throw httpError(400, "Die ausgewählte Rolle ist ungültig.");
-  const existingUser = db.prepare("SELECT employee_number, role, role_locked, password_hash FROM portal_users WHERE employee_number = ?").get(employeeNumber);
+  if (role === "developer") {
+    throw httpError(403, "Die Developer-Rolle kann ausschließlich mit dem lokalen Entwicklerwerkzeug gebunden werden.", "PORTAL_DEVELOPER_PROTECTED");
+  }
+  const existingUser = db.prepare("SELECT employee_number, role, role_locked, password_hash, must_change_password FROM portal_users WHERE employee_number = ?").get(employeeNumber);
   if (existingUser) {
     assertPortalUserIsMutable(existingUser, actor);
     if (!actorCanManagePortalRole(actor, existingUser.role)) {
@@ -9013,6 +9389,9 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
   const password = String(request.body.password || "");
   const passwordHash = password ? await hashPortalPassword(password) : existingUser?.password_hash || "";
   const active = request.body.active !== false ? 1 : 0;
+  const mustChangePassword = password
+    ? Number(request.body.mustChangePassword !== false)
+    : existingUser ? Number(Boolean(existingUser.must_change_password)) : Number(request.body.mustChangePassword !== false);
   if (existingUser?.role === "admin" && (role !== "admin" || !active)) {
     const otherSystemOwners = Number(db.prepare(`
       SELECT COUNT(*) AS count FROM portal_users
@@ -9028,7 +9407,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       must_change_password = excluded.must_change_password,
       password_changed_at = CASE WHEN ? <> '' THEN CURRENT_TIMESTAMP ELSE portal_users.password_changed_at END,
       updated_at = CURRENT_TIMESTAMP
-  `).run(employeeNumber, passwordHash, role, active, password ? 1 : Number(request.body.mustChangePassword !== false), password, password);
+  `).run(employeeNumber, passwordHash, role, active, mustChangePassword, password, password);
   if (!active || password) db.prepare("UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND revoked_at IS NULL").run(employeeNumber);
   auditPortal(actor.employeeNumber, "portal.user.update", "portal_user", employeeNumber, JSON.stringify({ role, active: Boolean(active), passwordReset: Boolean(password) }));
   response.json({ users: portalUsersForAdmin(), roles: getPortalRoles() });
@@ -9185,7 +9564,7 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) 
     FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
     JOIN locations l ON l.id = r.location_id LEFT JOIN departments d ON d.id = r.department_id
     WHERE r.employee_number = ? AND r.status <> 'purged'
-    ORDER BY r.incapacity_from DESC, r.id DESC
+    ORDER BY r.submitted_at DESC, r.id DESC
   `).all(employeeNumber);
   if (session.role === "manager") {
     const allowedLocations = new Set((session.scopes || []).map((scope) => scope.locationId));
@@ -9195,7 +9574,8 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) 
     reports = reports.filter((report) => report.department_id != null
       && allowed.has(`${report.location_id}:${Number(report.department_id)}`));
   }
-  const serialized = serializeAmuReports(reports);
+  const serialized = serializeAmuReports(reports)
+    .sort((left, right) => String(right.incapacity_from).localeCompare(String(left.incapacity_from)) || Number(right.id) - Number(left.id));
   const canOpenFiles = actorCanReadAmuFiles(session);
   if (!canOpenFiles) {
     for (const report of serialized) {
@@ -9207,6 +9587,7 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) 
       }));
     }
   }
+  auditPortal(session.employeeNumber, "personnel-record.view", "employee", employeeNumber, `entries=${serialized.length}`);
   response.json({ employee, reports: serialized, canOpenFiles });
 });
 
@@ -9263,20 +9644,37 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
     try {
       const reportResult = db.prepare(`
         INSERT INTO amu_reports
-          (employee_number, location_id, department_id, incapacity_from, incapacity_to, employee_note, status, retention_until)
-        VALUES (?, ?, ?, ?, ?, ?, 'submitted', ?)
-      `).run(session.employeeNumber, context.locationId, context.departmentId, incapacityFrom, incapacityTo, storage.protectText(employeeNote), addDays(incapacityTo, retentionDays));
+          (employee_number, location_id, department_id, incapacity_from, incapacity_to, employee_note, status, retention_until, protected_payload)
+        VALUES (?, ?, ?, '', '', '', 'submitted', NULL, '')
+      `).run(session.employeeNumber, context.locationId, context.departmentId);
       const reportId = Number(reportResult.lastInsertRowid);
+      const reportPayload = storage.protectRecord(JSON.stringify({
+        incapacityFrom,
+        incapacityTo,
+        employeeNote,
+        reviewedBy: "",
+        reviewedAt: "",
+        reviewNote: "",
+        retentionUntil: addDays(incapacityTo, retentionDays),
+        withdrawnAt: "",
+      }), amuReportProtectionContext({ id: reportId, employee_number: session.employeeNumber }));
+      db.prepare("UPDATE amu_reports SET protected_payload = ? WHERE id = ?").run(reportPayload, reportId);
       const insertDocument = db.prepare(`
         INSERT INTO amu_documents
           (id, report_id, storage_key, original_filename, detected_mime, byte_size, sha256, scan_status,
-           encryption_key_id, encryption_iv, encryption_tag, status, uploaded_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', 'active', ?)
+           encryption_key_id, encryption_iv, encryption_tag, status, uploaded_by, protected_payload)
+        VALUES (?, ?, ?, '', 'application/octet-stream', 0, '', ?, ?, '', '', 'active', '', ?)
       `);
       for (const item of saved) {
         const documentId = crypto.randomUUID();
-        insertDocument.run(documentId, reportId, item.storageKey, storage.protectText(item.originalFilename), item.detectedMime,
-          item.byteSize, item.sha256, item.scanStatus, item.encryptionKeyId, session.employeeNumber);
+        const documentPayload = storage.protectRecord(JSON.stringify({
+          originalFilename: item.originalFilename,
+          detectedMime: item.detectedMime,
+          byteSize: item.byteSize,
+          sha256: item.sha256,
+          uploadedBy: session.employeeNumber,
+        }), amuDocumentProtectionContext({ id: documentId, employee_number: session.employeeNumber }));
+        insertDocument.run(documentId, reportId, item.storageKey, item.scanStatus, item.encryptionKeyId, documentPayload);
         auditPortal(session.employeeNumber, "amu.document.upload", "amu_document", documentId,
           JSON.stringify({ reportId, mime: item.detectedMime, sourceMime: item.sourceMime, converted: item.converted, size: item.byteSize, scan: item.scanStatus, processing: item.processing }));
       }
@@ -9326,12 +9724,14 @@ app.post("/api/portal/v1/me/amu-reports/:id/withdraw", (request, response) => {
     SELECT * FROM amu_reports WHERE id = ? AND employee_number = ? AND status IN ('submitted','returned')
   `).get(Number(request.params.id), session.employeeNumber);
   if (!report) throw httpError(404, "Die offene Arbeitsunfähigkeitsmeldung wurde nicht gefunden.", "AMU_REPORT_NOT_FOUND");
+  const protectedPayload = parseProtectedJson(report.protected_payload, amuReportProtectionContext(report));
+  protectedPayload.withdrawnAt = new Date().toISOString();
+  protectedPayload.retentionUntil = addDays(viennaTodayIso(), 30);
   db.exec("BEGIN");
   try {
     db.prepare(`
-      UPDATE amu_reports SET status = 'withdrawn', withdrawn_at = CURRENT_TIMESTAMP,
-        retention_until = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-    `).run(addDays(viennaTodayIso(), 30), report.id);
+      UPDATE amu_reports SET status = 'withdrawn', protected_payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `).run(protectJson(protectedPayload, amuReportProtectionContext(report)), report.id);
     db.prepare("UPDATE amu_documents SET status = 'deleted', deleted_by = ?, deleted_at = CURRENT_TIMESTAMP WHERE report_id = ? AND status = 'active'")
       .run(session.employeeNumber, report.id);
     auditPortal(session.employeeNumber, "amu.report.withdraw", "amu_report", String(report.id));
@@ -9360,6 +9760,7 @@ app.get("/api/portal/v1/amu-reports", (request, response) => {
            d.name AS department_name
     FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
     JOIN locations l ON l.id = r.location_id LEFT JOIN departments d ON d.id = r.department_id
+    WHERE r.status <> 'purged'
     ORDER BY r.submitted_at DESC, r.id DESC
   `).all();
   let scopedRows = rows;
@@ -9393,10 +9794,13 @@ app.put("/api/portal/v1/amu-reports/:id/review", (request, response) => {
   const action = String(request.body.action || "reviewed");
   if (action !== "reviewed") throw httpError(400, "Bitte die Arbeitsunfähigkeitsmeldung als geprüft markieren.");
   const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
+  const protectedPayload = parseProtectedJson(report.protected_payload, amuReportProtectionContext(report));
+  protectedPayload.reviewedBy = session.employeeNumber;
+  protectedPayload.reviewedAt = new Date().toISOString();
+  protectedPayload.reviewNote = note;
   db.prepare(`
-    UPDATE amu_reports SET status = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP,
-      review_note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-  `).run(action, session.employeeNumber, requireAmuStorage().protectText(note), report.id);
+    UPDATE amu_reports SET status = ?, protected_payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+  `).run(action, protectJson(protectedPayload, amuReportProtectionContext(report)), report.id);
   auditPortal(session.employeeNumber, `amu.report.${action}`, "amu_report", String(report.id));
   createPortalNotification(report.employee_number, "amu.review", "AUM wurde geprüft", note, {
     target: "/portal/?tab=amu",
@@ -9434,7 +9838,7 @@ app.delete("/api/portal/v1/amu-reports/:reportId/documents/:documentId", (reques
       db.prepare("UPDATE amu_documents SET status = 'active', deleted_by = NULL, deleted_at = NULL WHERE id = ?").run(document.id);
       throw error;
     }
-    db.prepare("UPDATE amu_documents SET status = 'purged', original_filename = 'Dokument', purged_at = CURRENT_TIMESTAMP WHERE id = ?")
+    db.prepare("UPDATE amu_documents SET status = 'purged', original_filename = '', protected_payload = '', purged_at = CURRENT_TIMESTAMP WHERE id = ?")
       .run(document.id);
     auditPortal(session.employeeNumber, "amu.document.delete", "amu_document", document.id);
   } finally {
@@ -12474,45 +12878,21 @@ let shutdownStarted = false;
 let databaseClosed = false;
 let server = null;
 
-function runningProcess(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function acquireInstanceLock() {
   if (!instanceLockPath || instanceLockHeld) return;
-  fs.mkdirSync(path.dirname(instanceLockPath), { recursive: true });
-  if (fs.existsSync(instanceLockPath)) {
-    let existing = null;
-    try { existing = JSON.parse(fs.readFileSync(instanceLockPath, "utf8")); } catch {}
-    if (existing?.pid !== process.pid && runningProcess(Number(existing?.pid))) {
-      throw new Error(`Grabenplaner verwendet diese Datenbank bereits in Prozess ${existing.pid}. Eine zweite Serverinstanz wurde verhindert.`);
-    }
-    safeRemoveFile(instanceLockPath);
-  }
-  const descriptor = fs.openSync(instanceLockPath, "wx");
-  try {
-    fs.writeFileSync(descriptor, `${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString(), appVersion: packageMetadata.version, database: path.resolve(databasePath) }, null, 2)}\n`, "utf8");
-  } finally {
-    fs.closeSync(descriptor);
-  }
-  instanceLockHeld = true;
+  instanceLockHandle = acquireDatabaseLock({ databasePath, kind: "app", appVersion: packageMetadata.version });
+  instanceLockHeld = Boolean(instanceLockHandle);
 }
 
 function releaseInstanceLock() {
   if (!instanceLockPath || !instanceLockHeld) return;
-  try {
-    const existing = JSON.parse(fs.readFileSync(instanceLockPath, "utf8"));
-    if (Number(existing.pid) === process.pid) safeRemoveFile(instanceLockPath);
-  } catch {
-    safeRemoveFile(instanceLockPath);
-  }
+  releaseDatabaseLock(instanceLockHandle);
+  instanceLockHandle = null;
   instanceLockHeld = false;
+}
+
+function releaseInstanceLockForTests() {
+  releaseInstanceLock();
 }
 
 function validateServerStartup(portalStatus) {
@@ -12653,4 +13033,7 @@ module.exports = {
   resolveStaleTimeEntry,
   timePresenceForContext,
   serverDiagnostics,
+  migrateProtectedPersonnelRecords,
+  parseProtectedJson,
+  releaseInstanceLockForTests,
 };

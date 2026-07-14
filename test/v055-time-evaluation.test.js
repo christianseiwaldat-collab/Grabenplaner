@@ -138,6 +138,7 @@ test.beforeEach(resetFixture);
 
 test.after(() => {
   try { db.close(); } catch {}
+  subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
