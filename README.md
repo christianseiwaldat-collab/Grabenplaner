@@ -1,6 +1,6 @@
 # Grabenplaner
 
-Aktuelle Beta-Version: **v0.53.1 Beta**
+Aktuelle Beta-Version: **v0.54 Beta**
 
 Grabenplaner ist eine lokale Windows-Web-App für Dienstplanung, Urlaubsplanung und PDF-Ausgaben. Die Daten bleiben lokal in einer SQLite-Datenbank; ein externer Datenbankserver ist nicht nötig.
 
@@ -8,7 +8,7 @@ Grabenplaner ist eine lokale Windows-Web-App für Dienstplanung, Urlaubsplanung 
 
 Unter Windows genügt ein Doppelklick auf:
 
-`Grabenplaner v0.53.1 Beta starten.cmd`
+`Grabenplaner v0.54 Beta starten.cmd`
 
 Die App öffnet anschließend lokal unter:
 
@@ -39,6 +39,10 @@ Firmenname, Logo, Admin-Kontakt und PDF-Titel können in den Einstellungen angep
 ## Lizenz
 
 Grabenplaner ist source-available, aber nicht Open Source. Private, interne Test- und Evaluierungsnutzung ist erlaubt; kommerzielle Nutzung nur nach vorheriger schriftlicher Genehmigung.
+
+## Sicherheit
+
+Sicherheitsprobleme bitte vertraulich gemäß [SECURITY.md](SECURITY.md) melden und nicht als öffentliches Issue veröffentlichen.
 
 ## Servermodus
 

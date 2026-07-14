@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.53.1 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.54 Beta</span></div>
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
@@ -614,7 +614,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.53.1 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.54 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -625,6 +625,7 @@
       <form method="dialog" id="employeeForm">
         <div class="modal-header"><div><span class="eyebrow">Personalstammdaten</span><h2 id="employeeModalTitle">Teammitglied anlegen</h2></div><button type="button" class="close-button" data-close="employeeModal">×</button></div>
         <div class="form-grid">
+          <p class="calculation-note full-width hidden" id="employeeEditScopeHint">Für diese Leitung ist ausschließlich die Teamfarbe freigegeben. Name, Wochen-Sollzeit und alle weiteren Personalstammdaten bleiben sichtbar, aber schreibgeschützt.</p>
           <label class="field"><span>Personalnummer</span><input id="employeeNumber" required /></label>
           <label class="field"><span>Wochen-Sollzeit</span><div class="unit-input"><input id="employeeHours" type="number" min="0" max="80" step="0.25" required /><em>Stunden</em></div></label>
           <label class="field"><span>Stammfiliale</span><select id="employeeHomeLocation" required></select></label>

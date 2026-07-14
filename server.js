@@ -22,7 +22,7 @@ const scryptAsync = promisify(crypto.scrypt);
 
 const delegablePortalPermissionCatalog = Object.freeze([
   { id: "settings:write", label: "Planungs- und Grundeinstellungen bearbeiten", group: "Einstellungen", warningLevel: "normal" },
-  { id: "employees:write", label: "Teammitglieder anlegen, bearbeiten und löschen", group: "Teams & Standorte", warningLevel: "high" },
+  { id: "employees:display:write", label: "Teamfarben bearbeiten", description: "Nur die Farbe im Dienstplan; Name, Sollzeit und Personalstammdaten bleiben geschützt.", group: "Teams & Standorte", warningLevel: "normal" },
   { id: "locations:write", label: "Standorte bearbeiten", group: "Teams & Standorte", warningLevel: "high" },
   { id: "departments:write", label: "Abteilungen anlegen und bearbeiten", group: "Teams & Standorte", warningLevel: "normal" },
   { id: "positions:write", label: "Positionen anlegen, bearbeiten und löschen", group: "Teams & Standorte", warningLevel: "normal" },
@@ -180,6 +180,43 @@ const builtinPortalRoles = [
   },
 ];
 
+const adminPortalRole = builtinPortalRoles.find((role) => role.id === "admin");
+builtinPortalRoles.push(
+  {
+    id: "it_admin",
+    name: "IT-Admin",
+    description: "Technische Verwaltung von Zugängen, Serverbetrieb, Updates, Backups und delegierten Rechten.",
+    sortOrder: 35,
+    permissions: [
+      "own_schedule:read", "own_time:read", "own_time:write", "own_time:correction_request",
+      "own_vacation:read", "own_vacation:request", "own_amu:create", "own_amu:read", "own_amu:withdraw",
+      "employees:read", "schedule:read", "rights:read", "rights:write",
+      "operation_mode:write", "backup:write", "update:write", "system:write", "users:write",
+      "roles:read", "roles:write", "audit:read", "scopes:write",
+    ],
+  },
+  {
+    id: "developer",
+    name: "Developer",
+    description: "Geschützter technischer Superuser; nur über das lokale Entwicklerwerkzeug bindbar.",
+    sortOrder: 40,
+    permissions: [...adminPortalRole.permissions, "developer:system"],
+  },
+);
+
+const GLOBAL_SCOPE_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
+const RIGHTS_ADMIN_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
+const MANAGEMENT_BRANDING_PORTAL_ROLES = new Set(["developer", "admin", "hr"]);
+const HR_DECISION_PORTAL_ROLES = new Set(["developer", "admin", "hr"]);
+const PROTECTED_PORTAL_ROLES = new Set(["developer"]);
+const PORTAL_ROLE_ASSIGNMENTS = Object.freeze({
+  developer: new Set(["employee", "department_manager", "manager", "hr", "admin", "it_admin"]),
+  admin: new Set(["employee", "department_manager", "manager", "hr", "admin", "it_admin"]),
+  it_admin: new Set(["employee", "department_manager", "manager"]),
+  hr: new Set(["employee", "department_manager", "manager"]),
+  manager: new Set(["department_manager"]),
+});
+
 const defaultPortalSettings = {
   login_required: "1",
   password_min_length: String(LOCAL_PORTAL_PASSWORD_MIN_LENGTH),
@@ -199,6 +236,8 @@ const defaultPortalSettings = {
     manager: ["timeTracking", "team", "approvals", "schedule", "requests", "more"],
     hr: ["timeTracking", "approvals", "team", "schedule", "requests", "more"],
     admin: ["timeTracking", "approvals", "team", "schedule", "requests", "more"],
+    it_admin: ["timeTracking", "team", "schedule", "requests", "more"],
+    developer: ["timeTracking", "approvals", "team", "schedule", "requests", "more"],
   }),
 };
 
@@ -664,6 +703,7 @@ function createSchema() {
       employee_number TEXT PRIMARY KEY,
       password_hash TEXT NOT NULL DEFAULT '',
       role TEXT NOT NULL DEFAULT 'employee',
+      role_locked INTEGER NOT NULL DEFAULT 0,
       active INTEGER NOT NULL DEFAULT 1,
       must_change_password INTEGER NOT NULL DEFAULT 1,
       last_login_at TEXT,
@@ -1092,6 +1132,7 @@ if (!columnExists("shifts", "department_id")) {
 ensureColumn("portal_users", "password_changed_at", "TEXT");
 ensureColumn("portal_users", "failed_login_attempts", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("portal_users", "locked_until", "TEXT");
+ensureColumn("portal_users", "role_locked", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("portal_roles", "description", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("portal_roles", "sort_order", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("portal_roles", "updated_at", "TEXT");
@@ -1337,6 +1378,24 @@ const upsertPortalRole = db.prepare(`
 for (const role of builtinPortalRoles) {
   upsertPortalRole.run(role.id, role.name, role.description, JSON.stringify(role.permissions), role.sortOrder);
 }
+db.prepare("UPDATE portal_users SET role_locked = 1 WHERE role = 'developer'").run();
+db.exec("BEGIN");
+try {
+  db.prepare(`
+    DELETE FROM portal_permission_grants
+    WHERE permission = 'employees:write'
+      AND EXISTS (
+        SELECT 1 FROM portal_permission_grants newer
+        WHERE newer.employee_number = portal_permission_grants.employee_number
+          AND newer.permission = 'employees:display:write'
+      )
+  `).run();
+  db.prepare("UPDATE portal_permission_grants SET permission = 'employees:display:write', updated_at = CURRENT_TIMESTAMP WHERE permission = 'employees:write'").run();
+  db.exec("COMMIT");
+} catch (error) {
+  db.exec("ROLLBACK");
+  throw error;
+}
 const insertPortalSetting = db.prepare("INSERT OR IGNORE INTO portal_settings (key, value) VALUES (?, ?)");
 for (const [key, value] of Object.entries(defaultPortalSettings)) insertPortalSetting.run(key, value);
 db.prepare("UPDATE portal_settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'password_min_length'")
@@ -1351,6 +1410,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.52-time-tracking-amu-policies", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.53-rights-branding-time-corrections-mobile", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.54-protected-developer-role-rights", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -1766,7 +1827,7 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
   const now = new Date().toISOString();
   const session = db.prepare(`
     SELECT s.id, s.employee_number, s.expires_at, s.revoked_at,
-           u.role, u.active, u.must_change_password,
+           u.role, u.role_locked, u.active, u.must_change_password,
            e.full_name, e.nickname, e.color, e.home_location_id, e.preferred_department_id,
            r.name AS role_name, r.permissions
     FROM portal_sessions s
@@ -1781,11 +1842,11 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
   `).get(sha256(token), now);
   if (!session) return null;
   if (touch) db.prepare("UPDATE portal_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?").run(session.id);
-  const scopes = ["admin", "hr"].includes(session.role) ? [] : db.prepare(`
+  const scopes = GLOBAL_SCOPE_PORTAL_ROLES.has(session.role) ? [] : db.prepare(`
     SELECT location_id, department_id FROM portal_access_scopes
     WHERE employee_number = ? ORDER BY location_id, department_id
   `).all(session.employee_number).map((scope) => ({ locationId: scope.location_id, departmentId: Number(scope.department_id || 0) || null }));
-  if (!scopes.length && !["admin", "hr"].includes(session.role) && session.home_location_id) {
+  if (!scopes.length && !GLOBAL_SCOPE_PORTAL_ROLES.has(session.role) && session.home_location_id) {
     scopes.push({ locationId: session.home_location_id, departmentId: session.role === "department_manager" ? (Number(session.preferred_department_id) || null) : null });
   }
   const rolePermissions = parsePortalPermissions(session.permissions);
@@ -1801,6 +1862,7 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
     homeLocationId: session.home_location_id,
     role: session.role,
     roleName: session.role_name || session.role,
+    roleLocked: Boolean(session.role_locked),
     permissions: [...new Set([...rolePermissions, ...grantedPermissions])],
     rolePermissions,
     grantedPermissions,
@@ -1820,6 +1882,7 @@ function publicPortalUser(session) {
     homeLocationId: session.homeLocationId,
     role: session.role,
     roleName: session.roleName,
+    roleLocked: Boolean(session.roleLocked),
     permissions: session.permissions,
     rolePermissions: session.rolePermissions || [],
     grantedPermissions: session.grantedPermissions || [],
@@ -1829,7 +1892,7 @@ function publicPortalUser(session) {
 }
 
 function sessionHasGlobalScope(session) {
-  return !session || session.employeeNumber === "local" || ["admin", "hr"].includes(session.role);
+  return !session || session.employeeNumber === "local" || GLOBAL_SCOPE_PORTAL_ROLES.has(session.role);
 }
 
 function assertSessionContextScope(session, input = {}) {
@@ -1892,6 +1955,8 @@ function enforceAdminApiAccess(request, _response, next) {
     if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
       if (/^\/branding/.test(request.path)) {
         permission = "branding:write";
+      } else if (/^\/employees\/[^/]+\/display\/?$/.test(request.path)) {
+        permission = "employees:display:write";
       } else if (/^\/employees/.test(request.path)) {
         permission = "employees:write";
       } else if (/^\/locations/.test(request.path)) {
@@ -2185,7 +2250,7 @@ function validateAmuPolicy(body = {}) {
 
 function actorCanReadAmuFiles(session) {
   if (!session) return false;
-  if (session.employeeNumber === "local" || ["admin", "hr"].includes(session.role)) return true;
+  if (session.employeeNumber === "local" || HR_DECISION_PORTAL_ROLES.has(session.role)) return true;
   if (session.permissions?.includes("amu:file:read")) return true;
   return ["manager", "department_manager"].includes(session.role) && getAmuPolicy().managerFileAccess;
 }
@@ -2209,18 +2274,52 @@ function portalPermissionGrantsForEmployee(employeeNumber) {
 }
 
 function getPortalRoles() {
+  const builtinDefinitions = new Map(builtinPortalRoles.map((role) => [role.id, role]));
   return db.prepare(`
     SELECT id, name, description, builtin, permissions, sort_order
     FROM portal_roles
     ORDER BY sort_order, name, id
-  `).all().map((role) => ({
-    id: role.id,
-    name: role.name,
-    description: role.description || "",
-    builtin: Boolean(role.builtin),
-    permissions: parsePortalPermissions(role.permissions),
-    sortOrder: Number(role.sort_order || 0),
-  }));
+  `).all().map((role) => {
+    const definition = builtinDefinitions.get(role.id);
+    const protectedRole = PROTECTED_PORTAL_ROLES.has(role.id);
+    return {
+      id: role.id,
+      name: role.name,
+      description: role.description || "",
+      builtin: Boolean(role.builtin),
+      permissions: parsePortalPermissions(role.permissions),
+      sortOrder: Number(role.sort_order || 0),
+      protected: protectedRole,
+      assignable: !protectedRole,
+      technical: ["developer", "it_admin"].includes(role.id),
+      knownBuiltin: Boolean(definition),
+    };
+  });
+}
+
+function actorCanAssignPortalRole(actor, role) {
+  if (!actor || role === "developer" || PROTECTED_PORTAL_ROLES.has(role)) return false;
+  if (actor.employeeNumber === "local") return role !== "developer";
+  const allowed = PORTAL_ROLE_ASSIGNMENTS[actor.role];
+  if (allowed?.has(role)) return true;
+  return actor.role === "developer" || actor.role === "admin"
+    ? Boolean(db.prepare("SELECT 1 FROM portal_roles WHERE id = ? AND id <> 'developer'").get(role))
+    : false;
+}
+
+function actorCanManagePortalRole(actor, targetRole) {
+  if (!actor || targetRole === "developer") return false;
+  if (actor.employeeNumber === "local" || ["developer", "admin"].includes(actor.role)) return true;
+  if (actor.role === "it_admin" || actor.role === "hr") return ["employee", "department_manager", "manager"].includes(targetRole);
+  return actor.role === "manager" && targetRole === "department_manager";
+}
+
+function assertPortalUserIsMutable(target, actor) {
+  if (!target) throw httpError(404, "Der Zugang wurde nicht gefunden.");
+  if (target.role === "developer" || target.role_locked) {
+    auditPortal(actor?.employeeNumber || "system", "portal.developer.protected", "portal_user", target.employee_number || "", "mutation-denied");
+    throw httpError(403, "Der Developer-Zugang ist geschützt und kann nur mit dem lokalen Entwicklerwerkzeug geändert werden.", "PORTAL_DEVELOPER_PROTECTED");
+  }
 }
 
 function getPortalStatus(locationId = "") {
@@ -2231,7 +2330,7 @@ function getPortalStatus(locationId = "") {
   const configuredAdmin = db.prepare(`
     SELECT 1
     FROM portal_users
-    WHERE active = 1 AND role = 'admin' AND TRIM(password_hash) <> ''
+    WHERE active = 1 AND role IN ('developer','admin') AND TRIM(password_hash) <> ''
     LIMIT 1
   `).get();
   return {
@@ -2295,8 +2394,8 @@ function requirePortalReadOrLocal(request, permission = "schedule:read") {
 
 function requireAdminHrOrLocal(request, permission) {
   const session = requirePortalAdminOrLocal(request, permission);
-  if (session.employeeNumber !== "local" && !["admin", "hr"].includes(session.role)) {
-    throw httpError(403, "Diese Aktion ist nur für Admin oder Personalleitung verfügbar.", "PORTAL_PERMISSION_DENIED");
+  if (session.employeeNumber !== "local" && !RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)) {
+    throw httpError(403, "Diese Aktion ist nur für Developer, IT-Admin, Admin oder Personalleitung verfügbar.", "PORTAL_PERMISSION_DENIED");
   }
   return session;
 }
@@ -2312,7 +2411,7 @@ function requirePortalAnyPermission(request, permissions) {
 function portalUsersForAdmin() {
   return db.prepare(`
     SELECT e.personnel_number, e.full_name, e.nickname, e.home_location_id, e.preferred_department_id, e.active AS employee_active,
-           u.role, u.active, u.must_change_password, u.last_login_at, u.failed_login_attempts, u.locked_until,
+           u.role, u.role_locked, u.active, u.must_change_password, u.last_login_at, u.failed_login_attempts, u.locked_until,
            CASE WHEN TRIM(COALESCE(u.password_hash, '')) <> '' THEN 1 ELSE 0 END AS password_configured,
            r.name AS role_name
     FROM employees e
@@ -2327,6 +2426,7 @@ function portalUsersForAdmin() {
     configured: Boolean(row.role),
     role: row.role || "employee",
     roleName: row.role_name || "Mitarbeiter",
+    roleLocked: Boolean(row.role_locked) || row.role === "developer",
     active: row.active === null ? false : Boolean(row.active),
     mustChangePassword: row.must_change_password === null ? true : Boolean(row.must_change_password),
     passwordConfigured: Boolean(row.password_configured),
@@ -3011,7 +3111,7 @@ function mobileLeadershipLayouts() {
   const fallback = JSON.parse(defaultPortalSettings.mobile_leadership_layouts);
   try {
     const value = JSON.parse(getPortalSettings().mobile_leadership_layouts || "{}");
-    for (const role of ["department_manager", "manager", "hr", "admin"]) {
+    for (const role of ["department_manager", "manager", "hr", "admin", "it_admin", "developer"]) {
       const requested = Array.isArray(value[role]) ? value[role].filter((id) => mobileLeadershipModuleIds.has(id)) : [];
       const modules = ["timeTracking", ...requested.filter((id) => id !== "timeTracking")];
       fallback[role] = [...new Set(modules)].slice(0, 6);
@@ -3038,7 +3138,7 @@ function mobileLayoutPayload(session) {
     modules,
     availableModules: mobileLeadershipModules,
     layouts,
-    canChange: session.employeeNumber === "local" || ["admin", "hr"].includes(session.role),
+    canChange: session.employeeNumber === "local" || RIGHTS_ADMIN_PORTAL_ROLES.has(session.role),
   };
 }
 
@@ -3047,7 +3147,7 @@ function validateMobileLeadershipLayouts(value) {
     throw httpError(400, "Bitte eine gültige Auswahl für die mobile Leitungsansicht übermitteln.", "MOBILE_LAYOUT_INVALID");
   }
   const result = mobileLeadershipLayouts();
-  for (const role of ["department_manager", "manager", "hr", "admin"]) {
+  for (const role of ["department_manager", "manager", "hr", "admin", "it_admin", "developer"]) {
     const requested = Array.isArray(value[role]) ? value[role].map(String) : result[role];
     if (requested.some((id) => !mobileLeadershipModuleIds.has(id))) {
       throw httpError(400, "Die mobile Leitungsansicht enthält ein unbekanntes Element.", "MOBILE_LAYOUT_INVALID");
@@ -3521,7 +3621,7 @@ function amuReportMetadata(id) {
 
 function assertAmuReportScope(session, report) {
   if (!report) throw httpError(404, "Die Arbeitsunfähigkeitsmeldung wurde nicht gefunden.", "AMU_REPORT_NOT_FOUND");
-  if (session.employeeNumber === "local" || ["admin", "hr"].includes(session.role)) return;
+  if (session.employeeNumber === "local" || HR_DECISION_PORTAL_ROLES.has(session.role)) return;
   const assigned = (session.scopes || []).some((scope) => scope.locationId === report.location_id
     && (session.role !== "department_manager" || (report.department_id != null && Number(scope.departmentId) === Number(report.department_id))));
   if (!assigned) {
@@ -3611,12 +3711,12 @@ function vacationHrApprovalRequired() {
 }
 
 function actorStage(session, entry) {
-  if (entry.approval_stage === "hr" && (session.role === "hr" || session.role === "admin" || session.employeeNumber === "local")) return "hr";
+  if (entry.approval_stage === "hr" && (HR_DECISION_PORTAL_ROLES.has(session.role) || session.employeeNumber === "local")) return "hr";
   return "local";
 }
 
 function assertRequestScope(session, entry) {
-  if (["admin", "hr"].includes(session.role) || session.employeeNumber === "local") return;
+  if (sessionHasGlobalScope(session)) return;
   const locationId = entry.location_id || db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(entry.employee_number)?.home_location_id;
   const assignedScopes = session.scopes || [];
   if (!assignedScopes.some((scope) => scope.locationId === locationId)) {
@@ -3709,7 +3809,7 @@ function managementBrandingPreference() {
 }
 
 function brandingForPortalSession(session) {
-  if (!session || session.employeeNumber === "local" || ["admin", "hr"].includes(session.role)) {
+  if (sessionHasGlobalScope(session)) {
     return managementBrandingPreference().branding;
   }
   return brandingForLocation(session.homeLocationId);
@@ -6744,8 +6844,25 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
   response.json({ ...employee, personnelNumber, active: Boolean(employee.active) });
 });
 
+app.patch("/api/employees/:personnelNumber/display", (request, response) => {
+  const personnelNumber = String(request.params.personnelNumber || "").trim();
+  assertSessionEmployeeScope(request.portalSession, personnelNumber);
+  const color = String(request.body.color || "").trim().toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(color)) {
+    throw httpError(400, "Bitte eine gültige RGB-Farbe auswählen.", "EMPLOYEE_DISPLAY_INVALID");
+  }
+  const result = db.prepare("UPDATE employees SET color = ? WHERE personnel_number = ?").run(color, personnelNumber);
+  if (!result.changes) throw httpError(404, "Die Person wurde nicht gefunden.");
+  auditPortal(request.portalSession?.employeeNumber || "local", "employee.display.update", "employee", personnelNumber, JSON.stringify({ color }));
+  response.json({ personnelNumber, color });
+});
+
 app.delete("/api/employees/:personnelNumber", (request, response) => {
   assertSessionEmployeeScope(request.portalSession, request.params.personnelNumber);
+  const protectedUser = db.prepare("SELECT employee_number, role, role_locked FROM portal_users WHERE employee_number = ?").get(request.params.personnelNumber);
+  if (protectedUser && (protectedUser.role === "developer" || protectedUser.role_locked)) {
+    throw httpError(403, "Das Teammitglied ist mit dem geschützten Developer-Zugang verbunden und kann nicht gelöscht werden.", "PORTAL_DEVELOPER_PROTECTED");
+  }
   const result = db.prepare("DELETE FROM employees WHERE personnel_number = ?").run(request.params.personnelNumber);
   if (!result.changes) throw httpError(404, "Die Person wurde nicht gefunden.");
   response.status(204).end();
@@ -6853,7 +6970,7 @@ app.post("/api/portal/v1/auth/branding", (request, response) => {
     WHERE u.employee_number = ? AND u.active = 1 AND e.active = 1
     LIMIT 1
   `).get(employeeNumber) : null;
-  const branding = user && !["admin", "hr"].includes(user.role)
+  const branding = user && !GLOBAL_SCOPE_PORTAL_ROLES.has(user.role)
     ? brandingForLocation(user.home_location_id)
     : managementBrandingPreference().branding;
   response.json({ branding });
@@ -7043,20 +7160,27 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
   }
   const role = String(request.body.role || "employee");
   if (!db.prepare("SELECT 1 FROM portal_roles WHERE id = ?").get(role)) throw httpError(400, "Die ausgewählte Rolle ist ungültig.");
-  if (actor.role === "hr" && !["employee", "manager", "department_manager"].includes(role)) {
-    throw httpError(403, "Die Personalleitung darf keine Admin- oder Personalleitungsrollen vergeben.");
+  const existingUser = db.prepare("SELECT employee_number, role, role_locked, password_hash FROM portal_users WHERE employee_number = ?").get(employeeNumber);
+  if (existingUser) {
+    assertPortalUserIsMutable(existingUser, actor);
+    if (!actorCanManagePortalRole(actor, existingUser.role)) {
+      throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
+    }
   }
-  if (actor.role === "hr") {
-    const existingRole = db.prepare("SELECT role FROM portal_users WHERE employee_number = ?").get(employeeNumber)?.role;
-    if (["admin", "hr"].includes(existingRole)) throw httpError(403, "Dieser globale Zugang kann nur von einem Admin geändert werden.");
+  if (!actorCanAssignPortalRole(actor, role)) {
+    throw httpError(403, role === "developer"
+      ? "Die Developer-Rolle kann ausschließlich mit dem lokalen Entwicklerwerkzeug gebunden werden."
+      : "Diese Rolle darf durch den aktuellen Zugang nicht vergeben werden.", role === "developer" ? "PORTAL_DEVELOPER_PROTECTED" : "PORTAL_ROLE_HIERARCHY_DENIED");
   }
   const password = String(request.body.password || "");
-  const existing = db.prepare("SELECT password_hash FROM portal_users WHERE employee_number = ?").get(employeeNumber);
-  const passwordHash = password ? await hashPortalPassword(password) : existing?.password_hash || "";
+  const passwordHash = password ? await hashPortalPassword(password) : existingUser?.password_hash || "";
   const active = request.body.active !== false ? 1 : 0;
-  if (role === "admin" && !active) {
-    const otherAdmins = Number(db.prepare("SELECT COUNT(*) AS count FROM portal_users WHERE role = 'admin' AND active = 1 AND employee_number <> ?").get(employeeNumber).count);
-    if (!otherAdmins) throw httpError(409, "Mindestens ein aktiver Admin-Zugang muss bestehen bleiben.");
+  if (existingUser?.role === "admin" && (role !== "admin" || !active)) {
+    const otherSystemOwners = Number(db.prepare(`
+      SELECT COUNT(*) AS count FROM portal_users
+      WHERE role IN ('developer','admin') AND active = 1 AND employee_number <> ?
+    `).get(employeeNumber).count);
+    if (!otherSystemOwners) throw httpError(409, "Mindestens ein aktiver Developer- oder Admin-Zugang muss bestehen bleiben.");
   }
   db.prepare(`
     INSERT INTO portal_users (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
@@ -7078,6 +7202,11 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
 app.post("/api/portal/v1/users/:employeeNumber/unlock", (request, response) => {
   const actor = requirePortalAdminOrLocal(request, "users:write");
   const employeeNumber = String(request.params.employeeNumber || "").trim();
+  const target = db.prepare("SELECT employee_number, role, role_locked FROM portal_users WHERE employee_number = ?").get(employeeNumber);
+  assertPortalUserIsMutable(target, actor);
+  if (!actorCanManagePortalRole(actor, target.role)) {
+    throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
+  }
   const result = db.prepare(`
     UPDATE portal_users SET failed_login_attempts = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP
     WHERE employee_number = ?
@@ -7865,7 +7994,7 @@ app.put("/api/portal/v1/vacation-requests/:id/decision", (request, response) => 
 
 app.get("/api/portal/v1/absence-requests", (request, response) => {
   const session = requirePortalAdminOrLocal(request, "vacation:read");
-  const scoped = !["admin", "hr"].includes(session.role) && session.employeeNumber !== "local";
+  const scoped = !sessionHasGlobalScope(session);
   const scopeSql = scoped ? "AND COALESCE(v.location_id, e.home_location_id) = ?" : "";
   const scopeParams = scoped ? [session.scopes?.[0]?.locationId || session.homeLocationId] : [];
   const vacationRequests = db.prepare(`
@@ -7928,8 +8057,8 @@ app.get("/api/portal/v1/absence-requests", (request, response) => {
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || Number(b.id) - Number(a.id));
   const actionable = requests.filter((entry) => {
     if (!["pending_local", "preliminary_local", "pending_hr"].includes(entry.status)) return false;
-    if (entry.approval_stage === "hr") return ["hr", "admin"].includes(session.role) || session.employeeNumber === "local";
-    return session.role !== "hr" || session.role === "admin" || session.employeeNumber === "local";
+    if (entry.approval_stage === "hr") return HR_DECISION_PORTAL_ROLES.has(session.role) || session.employeeNumber === "local";
+    return session.role !== "hr" || ["developer", "admin"].includes(session.role) || session.employeeNumber === "local";
   });
   response.json({
     requests,
@@ -8069,9 +8198,9 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", (request, response) 
   const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
   const stage = actorStage(session, entry);
   if (entry.approval_stage === "hr" && stage !== "hr") throw httpError(403, "Dieser Antrag wartet auf die Personalleitung.");
-  if (stage === "hr" && !["hr", "admin"].includes(session.role) && session.employeeNumber !== "local") throw httpError(403, "Nur die Personalleitung darf diese Freigabe abschließen.");
+  if (stage === "hr" && !HR_DECISION_PORTAL_ROLES.has(session.role) && session.employeeNumber !== "local") throw httpError(403, "Nur die Personalleitung darf diese Freigabe abschließen.");
   if (entry.status === "approved" && entry.hr_approved_by && ["change", "cancel"].includes(action)
-    && !["hr", "admin"].includes(session.role) && session.employeeNumber !== "local") {
+    && !HR_DECISION_PORTAL_ROLES.has(session.role) && session.employeeNumber !== "local") {
     throw httpError(403, "Dieser verbindliche Antrag kann nur durch die Personalleitung geändert oder storniert werden.");
   }
   let result = {};
@@ -8690,7 +8819,7 @@ app.put("/api/settings", (request, response) => {
     : "medium";
   const brandingValues = brandingValuesFromBody(body.branding || body);
   const brandingSubmitted = Boolean(body.branding);
-  if (brandingSubmitted && !(request.portalSession?.role === "admin" || request.portalSession?.role === "hr" || (!getPortalStatus().portalEnabled && isLoopbackRequest(request)))) {
+  if (brandingSubmitted && !(MANAGEMENT_BRANDING_PORTAL_ROLES.has(request.portalSession?.role) || (!getPortalStatus().portalEnabled && isLoopbackRequest(request)))) {
     throw httpError(403, "Branding darf nur durch Admin oder Personalleitung geändert werden.", "PORTAL_PERMISSION_DENIED");
   }
   const currentWeekLockMode = body.currentWeekLockMode === "manual" ? "manual" : "closing";

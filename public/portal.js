@@ -207,7 +207,7 @@ function portalUser() {
 }
 
 function isLeadershipUser(user = portalUser()) {
-  return ["department_manager", "manager", "hr", "admin"].includes(user?.role);
+  return ["department_manager", "manager", "hr", "admin", "it_admin", "developer"].includes(user?.role);
 }
 
 const mobileModuleAliases = {
@@ -852,7 +852,7 @@ function leadershipRequestActionable(request) {
   if (!["pending", "pending_local", "preliminary_local", "pending_hr"].includes(request.status)) return false;
   const role = portalUser()?.role;
   const stage = request.approval_stage || request.approvalStage;
-  if (stage === "hr") return ["hr", "admin"].includes(role);
+  if (stage === "hr") return ["developer", "hr", "admin"].includes(role);
   return role !== "hr";
 }
 

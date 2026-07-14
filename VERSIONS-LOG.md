@@ -1,5 +1,14 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.54 Beta
+
+- Geschützte Developer-Rolle als technische Ebene oberhalb der regulären Administration ergänzt; sie kann nicht über die Weboberfläche vergeben, geändert oder entfernt werden.
+- IT-Admin als eigene technische Rolle für Zugänge, Rechtemanagement, Betriebsmodus, Updates, Backups und Serverbetrieb eingeführt, ohne automatische Personal- oder AUM-Fachrechte.
+- Rollenvergabe hierarchisch abgesichert: Personalleitung und IT-Admin verwalten untergeordnete Rollen, Admin und Developer die regulären Systemrollen; Developer bleibt ausschließlich offline bindbar.
+- Bisher zu weitreichendes delegierbares Personalrecht durch ein enges Recht zur Änderung von Teamfarben ersetzt. Name, Sollzeit und weitere Stammdaten bleiben in Oberfläche und API schreibgeschützt.
+- Standort- und Abteilungsgrenzen sowie geschützte Benutzerkonten werden bei jeder relevanten Serveraktion geprüft und sicherheitsrelevant protokolliert.
+- Sicherheitsrichtlinie für vertrauliche Meldungen, unterstützte Versionen und sichere Betriebsbedingungen ergänzt.
+
 ## v0.53.1 Beta
 
 - Branding-Verhalten nach Rollen präzisiert: Admin und Personalleitung behalten das in den Einstellungen gewählte Verwaltungs-Branding; standortgebundene Rollen und Mitarbeitende sehen ausschließlich das Branding ihrer Filiale – einschließlich der Anmeldung.

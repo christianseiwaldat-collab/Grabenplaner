@@ -36,6 +36,7 @@ const state = {
   allEmployees: [],
   updateStatus: null,
   selectedColor: "#0b84c6",
+  employeeEditMode: "full",
   personnelTab: "employees",
   editingLocationId: null,
   editingDepartmentId: null,
@@ -91,7 +92,7 @@ const elements = Object.fromEntries(
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount",
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
-    "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition",
+    "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationSubmitButton", "cancelLocationEditButton",
     "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
     "shiftModal", "shiftForm", "shiftModalTitle", "deleteShiftButton", "shiftCalculation", "shiftDepartment", "departmentPdfControl", "departmentPdfSelect", "departmentPdfButton",
@@ -439,18 +440,19 @@ function applyRoleVisibility() {
   const lanActive = state.portalStatus?.portalEnabled === true;
   const serverActive = state.portalStatus?.operationMode === "server";
   const role = state.portalSession?.user?.role || "admin";
-  const globalAdministration = !lanActive || ["admin", "hr"].includes(role);
+  const globalAdministration = !lanActive || ["developer", "it_admin", "admin", "hr"].includes(role);
   const settingsAccess = !lanActive || permissions.includes("settings:write");
   const rightsAccess = globalAdministration && (!lanActive || permissions.includes("rights:read"));
   const brandingAccess = globalAdministration && (!lanActive || permissions.includes("branding:write"));
   const employeeWriteAccess = !lanActive || permissions.includes("employees:write");
+  const employeeDisplayWriteAccess = !lanActive || permissions.includes("employees:display:write");
   const locationBaseWriteAccess = !lanActive || permissions.includes("locations:write");
   const departmentWriteAccess = !lanActive || permissions.includes("departments:write");
   const locationWriteAccess = locationBaseWriteAccess || departmentWriteAccess;
   const positionWriteAccess = !lanActive || permissions.includes("positions:write");
   const operationModeAccess = !lanActive || permissions.includes("operation_mode:write");
   const scopeAccess = permissions.includes("scopes:write");
-  const employeeReadAccess = employeeWriteAccess || permissions.includes("employees:read");
+  const employeeReadAccess = employeeWriteAccess || employeeDisplayWriteAccess || permissions.includes("employees:read");
   const timeReadAccess = lanActive && permissions.includes("time:read") && state.portalStatus?.capabilities?.timeTracking;
   document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
@@ -463,13 +465,13 @@ function applyRoleVisibility() {
     personnel: settingsAccess || positionWriteAccess,
     access: scopeAccess || permissions.includes("users:write") || globalAdministration,
     rights: rightsAccess,
-    backup: globalAdministration,
+    backup: !lanActive || permissions.some((permission) => ["backup:write", "update:write", "system:write"].includes(permission)),
   };
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("hidden", !settingsTabs[button.dataset.settingsTab]));
   elements.saveSettingsButton?.classList.toggle("hidden", !settingsAccess);
   elements.saveOperationModeButton?.classList.toggle("hidden", !operationModeAccess || settingsAccess);
-  elements.systemExitButton?.classList.toggle("hidden", serverActive || (lanActive && !globalAdministration));
-  elements.updateCheckButton?.classList.toggle("hidden", lanActive && !globalAdministration);
+  elements.systemExitButton?.classList.toggle("hidden", serverActive || (lanActive && !permissions.includes("system:write")));
+  elements.updateCheckButton?.classList.toggle("hidden", lanActive && !permissions.includes("update:write"));
   document.querySelector('[data-personnel-tab="locations"]')?.classList.toggle("hidden", !locationWriteAccess);
   document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !employeeWriteAccess);
   elements.addLocationButton?.classList.toggle("hidden", !locationBaseWriteAccess);
@@ -478,8 +480,8 @@ function applyRoleVisibility() {
   elements.departmentFormCard?.classList.toggle("hidden", !departmentWriteAccess);
   elements.positionSettingsCard?.classList.toggle("hidden", !positionWriteAccess);
   elements.personnelViewSettingsCard?.classList.toggle("hidden", !settingsAccess);
-  elements.workflowSettingsCard?.classList.toggle("hidden", !globalAdministration);
-  elements.amuSettingsCard?.classList.toggle("hidden", !globalAdministration);
+  elements.workflowSettingsCard?.classList.toggle("hidden", lanActive && !permissions.includes("hr:settings"));
+  elements.amuSettingsCard?.classList.toggle("hidden", lanActive && !permissions.includes("hr:settings"));
   elements.delegationSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.generalSettings?.querySelectorAll(".settings-card:not(.operation-mode-card)").forEach((card) => card.classList.toggle("hidden", !settingsAccess));
   [elements.localModeOption, elements.serverModeOption, elements.publicServerModeOption].forEach((button) => { if (button) button.disabled = !operationModeAccess; });
@@ -646,7 +648,7 @@ function applyBranding(settings = state.data?.settings || {}) {
 
 function hasManagementBrandingAccess() {
   if (state.portalStatus?.portalEnabled !== true) return true;
-  return ["admin", "hr"].includes(state.portalSession?.user?.role);
+  return ["developer", "admin", "hr"].includes(state.portalSession?.user?.role);
 }
 
 function currentShellBranding(fallback = {}) {
@@ -1316,7 +1318,8 @@ function formatOptionDates(option) {
 function renderEmployees() {
   const showInactive = state.data?.settings?.show_inactive_personnel !== "0";
   const employees = showInactive ? state.allEmployees : state.allEmployees.filter((employee) => employee.active);
-  const canEdit = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("employees:write");
+  const canEditFull = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("employees:write");
+  const canEditDisplay = canEditFull || state.portalSession?.user?.permissions?.includes("employees:display:write");
   const canReadPersonnelRecord = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:metadata:read");
   elements.employeeTableBody.innerHTML = employees.map((employee) => `
     <tr>
@@ -1331,7 +1334,7 @@ function renderEmployees() {
       <td>${preferredDayLabels[employee.preferred_day_off] || "–"}</td>
       <td>${escapeHtml(formatFixedWorkdays(employee.fixed_workdays))}</td>
       <td><span class="status-badge ${employee.active ? "" : "inactive"}">${employee.active ? "Aktiv" : "Inaktiv"}</span></td>
-      <td><span class="table-actions">${canReadPersonnelRecord ? `<button type="button" class="edit-button" data-personnel-record="${escapeHtml(employee.personnel_number)}">Personalakt</button>` : ""}${canEdit ? `<button type="button" class="edit-button" data-edit-employee="${escapeHtml(employee.personnel_number)}">Bearbeiten</button>` : ""}</span></td>
+      <td><span class="table-actions">${canReadPersonnelRecord ? `<button type="button" class="edit-button" data-personnel-record="${escapeHtml(employee.personnel_number)}">Personalakt</button>` : ""}${canEditDisplay ? `<button type="button" class="edit-button" data-edit-employee="${escapeHtml(employee.personnel_number)}">${canEditFull ? "Bearbeiten" : "Farbe ändern"}</button>` : ""}</span></td>
     </tr>`).join("");
 }
 
@@ -1492,13 +1495,31 @@ function renderOperationMode() {
   elements.portalLogoutButton?.classList.toggle("hidden", !(actualLanActive || actualServerActive));
 }
 
+function portalRoleAssignableInUi(actorRole, roleId) {
+  if (roleId === "developer") return false;
+  if (!actorRole || ["developer", "admin"].includes(actorRole)) return true;
+  if (["it_admin", "hr"].includes(actorRole)) return ["employee", "manager", "department_manager"].includes(roleId);
+  return actorRole === "manager" && roleId === "department_manager";
+}
+
+function portalUserManageableInUi(actorRole, user) {
+  if (user.roleLocked || user.role === "developer") return false;
+  if (!actorRole || ["developer", "admin"].includes(actorRole)) return true;
+  if (["it_admin", "hr"].includes(actorRole)) return ["employee", "manager", "department_manager"].includes(user.role);
+  return actorRole === "manager" && user.role === "department_manager";
+}
+
 async function loadPortalUsers() {
   if (!elements.portalUserList) return;
   try {
     const result = await api("/api/portal/v1/users");
     state.portalUsers = result.users || [];
     const actorRole = state.portalSession?.user?.role;
-    const roles = (result.roles || []).filter((role) => actorRole === "manager" ? role.id === "department_manager" : actorRole !== "hr" || ["employee", "manager", "department_manager"].includes(role.id));
+    const permissions = state.portalSession?.user?.permissions || [];
+    const localAccess = !state.portalStatus?.portalEnabled;
+    const mayManageUsers = localAccess || permissions.includes("users:write");
+    const mayManageScopes = localAccess || permissions.includes("scopes:write");
+    const roles = (result.roles || []).filter((role) => role.assignable !== false && portalRoleAssignableInUi(actorRole, role.id));
     elements.accessSettingsHint.textContent = state.portalStatus?.adminSetupState === "configured"
       ? "Startpasswörter werden nie angezeigt. Ein neu gesetztes Passwort muss beim ersten Login geändert werden."
       : "Zuerst einen Admin einrichten; danach können weitere Zugänge vorbereitet werden.";
@@ -1507,15 +1528,21 @@ async function loadPortalUsers() {
       const scope = user.scopes?.[0] || { locationId: user.homeLocationId || state.locations[0]?.id || "", departmentId: user.preferredDepartmentId || "" };
       const locations = state.locations.map((location) => `<option value="${escapeHtml(location.id)}" ${location.id === scope.locationId ? "selected" : ""}>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("");
       const departments = (state.locations.find((location) => location.id === scope.locationId)?.departments || []).map((department) => `<option value="${department.id}" ${Number(department.id) === Number(scope.departmentId) ? "selected" : ""}>${escapeHtml(department.name)}</option>`).join("");
+      const roleEditable = mayManageUsers && portalUserManageableInUi(actorRole, user);
+      const scopeEditable = mayManageScopes && portalUserManageableInUi(actorRole, user) && ["manager", "department_manager"].includes(user.role);
+      const protectedRole = user.roleLocked || user.role === "developer";
+      const roleControl = roleEditable
+        ? `<select data-portal-role aria-label="Rolle">${roles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === user.role ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("")}</select>`
+        : `<input data-portal-role type="hidden" value="${escapeHtml(user.role)}" /><span class="protected-role-badge ${protectedRole ? "developer" : ""}">${escapeHtml(user.roleName || user.role)}${protectedRole ? " · geschützt" : ""}</span>`;
       return `
       <article class="portal-user-row" data-portal-user="${escapeHtml(user.employeeNumber)}">
         <div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${user.passwordConfigured ? "Zugang eingerichtet" : "Noch kein Passwort"}${user.lastLoginAt ? ` · zuletzt ${escapeHtml(new Date(user.lastLoginAt).toLocaleString("de-AT"))}` : ""}${user.locked ? ` · gesperrt bis ${escapeHtml(new Date(user.lockedUntil).toLocaleString("de-AT"))}` : user.failedLoginAttempts ? ` · ${Number(user.failedLoginAttempts)} Fehlversuch(e)` : ""}</small></div>
-        <select data-portal-role aria-label="Rolle" ${actorRole === "manager" ? "disabled" : ""}>${roles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === user.role ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("")}</select>
-        <select data-scope-location aria-label="Zugewiesene Filiale" class="${["manager", "department_manager"].includes(user.role) ? "" : "hidden"}">${locations}</select>
-        <select data-scope-department aria-label="Zugewiesene Abteilung" class="${user.role === "department_manager" ? "" : "hidden"}">${departments}</select>
-        <label class="portal-active"><input data-portal-active type="checkbox" ${user.active ? "checked" : ""} ${actorRole === "manager" ? "disabled" : ""} /> aktiv</label>
-        <span class="password-field portal-user-password ${actorRole === "manager" ? "hidden" : ""}"><input data-portal-password id="portalPassword-${escapeHtml(user.employeeNumber)}" type="password" minlength="${Number(state.portalStatus?.passwordMinLength || 6)}" placeholder="Neues Startpasswort" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-toggle="portalPassword-${escapeHtml(user.employeeNumber)}" aria-label="Passwort anzeigen">Anzeigen</button></span>
-        <span class="portal-user-actions"><button class="secondary-button" data-save-portal-user type="button">Speichern</button>${user.locked || user.failedLoginAttempts ? '<button class="secondary-button" data-unlock-portal-user type="button">Entsperren</button>' : ""}</span>
+        ${roleControl}
+        <select data-scope-location aria-label="Zugewiesene Filiale" class="${["manager", "department_manager"].includes(user.role) ? "" : "hidden"}" ${scopeEditable ? "" : "disabled"}>${locations}</select>
+        <select data-scope-department aria-label="Zugewiesene Abteilung" class="${user.role === "department_manager" ? "" : "hidden"}" ${scopeEditable ? "" : "disabled"}>${departments}</select>
+        <label class="portal-active"><input data-portal-active type="checkbox" ${user.active ? "checked" : ""} ${roleEditable ? "" : "disabled"} /> aktiv</label>
+        <span class="password-field portal-user-password ${roleEditable ? "" : "hidden"}"><input data-portal-password id="portalPassword-${escapeHtml(user.employeeNumber)}" type="password" minlength="${Number(state.portalStatus?.passwordMinLength || 6)}" placeholder="Neues Startpasswort" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-toggle="portalPassword-${escapeHtml(user.employeeNumber)}" aria-label="Passwort anzeigen">Anzeigen</button></span>
+        <span class="portal-user-actions">${roleEditable || scopeEditable ? '<button class="secondary-button" data-save-portal-user type="button">Speichern</button>' : ""}${(user.locked || user.failedLoginAttempts) && roleEditable ? '<button class="secondary-button" data-unlock-portal-user type="button">Entsperren</button>' : ""}</span>
       </article>`;
     }).join("");
     await loadApprovalDelegations();
@@ -1556,7 +1583,7 @@ function renderMobileLeadershipSettings() {
   const result = state.mobileLeadershipSettings || {};
   const modules = result.availableModules || [];
   const layouts = result.layouts || {};
-  const roleLabels = { department_manager: "Abteilungsleitung", manager: "Filialleitung", hr: "Personalleitung", admin: "Admin" };
+  const roleLabels = { department_manager: "Abteilungsleitung", manager: "Filialleitung", hr: "Personalleitung", admin: "Admin", it_admin: "IT-Admin", developer: "Developer" };
   elements.mobileLeadershipModuleSettings.innerHTML = Object.entries(roleLabels).map(([role, label]) => {
     const enabled = new Set(layouts[role] || []);
     return `<article class="mobile-role-card" data-mobile-layout-role="${role}"><strong>${label}</strong><div class="mobile-module-grid">${modules.map((module) => {
@@ -1565,7 +1592,7 @@ function renderMobileLeadershipSettings() {
     }).join("")}</div></article>`;
   }).join("");
   elements.saveMobileLeadershipSettingsButton.disabled = result.canChange === false;
-  elements.mobileLeadershipSettingsHint.textContent = result.canChange === false ? "Nur Admin oder Personalleitung kann diese Auswahl ändern." : "Zeiterfassung bleibt immer der erste Punkt; insgesamt maximal sechs Elemente je Rolle.";
+  elements.mobileLeadershipSettingsHint.textContent = result.canChange === false ? "Nur Developer, IT-Admin, Admin oder Personalleitung kann diese Auswahl ändern." : "Zeiterfassung bleibt immer der erste Punkt; insgesamt maximal sechs Elemente je Rolle.";
 }
 
 async function loadRightsManagement() {
@@ -1580,7 +1607,7 @@ async function loadRightsManagement() {
     renderRightsManagement();
     renderMobileLeadershipSettings();
   } catch (error) {
-    elements.rightsManagementHint.textContent = error.status === 403 ? "Rechtemanagement ist nur für Admin und Personalleitung verfügbar." : error.message;
+    elements.rightsManagementHint.textContent = error.status === 403 ? "Rechtemanagement ist nur für Developer, IT-Admin, Admin und Personalleitung verfügbar." : error.message;
     elements.rightsUserList.innerHTML = "";
     elements.mobileLeadershipModuleSettings.innerHTML = "";
   }
@@ -2442,6 +2469,11 @@ function updateEmployeeDepartmentOptions(selectedDepartmentId = "") {
 }
 
 function openEmployeeModal(employee = null) {
+  const permissions = state.portalSession?.user?.permissions || [];
+  const fullAccess = !state.portalStatus?.portalEnabled || permissions.includes("employees:write");
+  const displayAccess = Boolean(employee) && permissions.includes("employees:display:write");
+  if (!fullAccess && !displayAccess) return;
+  state.employeeEditMode = fullAccess ? "full" : "display";
   elements.employeeForm.reset();
   elements.employeeHomeLocation.innerHTML = (state.locations || []).map((location) =>
     `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`,
@@ -2464,8 +2496,18 @@ function openEmployeeModal(employee = null) {
   });
   document.querySelector("#employeeActive").checked = employee?.active ?? true;
   updateColorPicker(employee?.color || "#0b84c6");
-  elements.employeeModalTitle.textContent = employee ? `${employee.nickname} bearbeiten` : "Teammitglied anlegen";
-  elements.deleteEmployeeButton.classList.toggle("hidden", !employee);
+  const displayOnly = state.employeeEditMode === "display";
+  const protectedControls = [
+    "employeeName", "employeeNickname", "employeeHours", "employeeHomeLocation", "employeePosition",
+    "employeePreferredDepartment", "employeePreferredDay", "employeeActive",
+  ];
+  for (const id of protectedControls) document.querySelector(`#${id}`).disabled = displayOnly;
+  document.querySelectorAll('[name="employeeFixedWorkday"]').forEach((control) => { control.disabled = displayOnly; });
+  document.querySelector("#employeeColorPicker").disabled = false;
+  document.querySelector("#employeeColorHex").disabled = false;
+  elements.employeeModalTitle.textContent = displayOnly ? `${employee.nickname} · Farbe ändern` : employee ? `${employee.nickname} bearbeiten` : "Teammitglied anlegen";
+  elements.employeeEditScopeHint?.classList.toggle("hidden", !displayOnly);
+  elements.deleteEmployeeButton.classList.toggle("hidden", !employee || displayOnly);
   elements.employeeModal.showModal();
 }
 
@@ -2756,6 +2798,18 @@ async function saveEmployee(event) {
   event.preventDefault();
   const number = document.querySelector("#employeeNumber").value.trim();
   const isEdit = document.querySelector("#employeeNumber").disabled;
+  if (isEdit && state.employeeEditMode === "display") {
+    try {
+      await api(`/api/employees/${encodeURIComponent(number)}/display`, {
+        method: "PATCH",
+        body: JSON.stringify({ color: state.selectedColor }),
+      });
+      elements.employeeModal.close();
+      showToast("Die Teamfarbe wurde aktualisiert.");
+      await loadAll();
+    } catch (error) { showToast(error.message, true); }
+    return;
+  }
   const body = {
     personnelNumber: number,
     fullName: document.querySelector("#employeeName").value,
@@ -3482,7 +3536,7 @@ async function saveSettings(silent = false) {
       method: "PUT",
       body: JSON.stringify(payload),
     });
-    if ((!portalEnabled || ["admin", "hr"].includes(role)) && elements.brandingSettings?.classList.contains("active") && state.brandingFormDirty) {
+    if ((!portalEnabled || ["developer", "admin", "hr"].includes(role)) && elements.brandingSettings?.classList.contains("active") && state.brandingFormDirty) {
       await saveCustomManagementBranding();
     }
     if (result.restartRequired && !silent) {

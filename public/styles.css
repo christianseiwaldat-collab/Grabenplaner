@@ -313,6 +313,8 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .portal-user-row small { margin-top: 3px; color: var(--muted); font-size: 8px; }
 .portal-active { display: flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 9px; }
 .portal-user-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.protected-role-badge { display:flex; align-items:center; min-height:34px; padding:7px 10px; border:1px solid var(--line); border-radius:9px; color:var(--muted); background:var(--surface-muted); font-size:9px; font-weight:800; }
+.protected-role-badge.developer { border-color:#bea657; color:#5f4b09; background:#fff6cf; }
 .manager-request-list { display: grid; gap: 8px; padding: 14px 20px 17px; }
 .manager-request-row { display: grid; grid-template-columns: 12px minmax(220px,1fr) auto; align-items: center; gap: 9px; padding: 10px 11px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.72); }
 .manager-request-row .employee-dot { width: 10px; height: 34px; border-radius: 5px; background: var(--employee-color); }
@@ -412,7 +414,7 @@ input, select, textarea { width: 100%; border: 1px solid #d3dcd7; border-radius:
 input, select { height: 40px; padding: 0 11px; }
 textarea { padding: 10px 11px; resize: vertical; }
 input:focus, select:focus, textarea:focus { border-color: #6c9989; box-shadow: 0 0 0 3px rgba(75,134,113,.11); }
-input:disabled { color: #89938e; background: #eef1ef; }
+input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#eef1ef; cursor:not-allowed; }
 .preview-line { margin-top: 13px; padding: 12px 14px; border-radius: 9px; background: #f0f3f1; }
 .preview-line span { display: block; margin-bottom: 4px; color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
 .preview-line strong { font-size: 10px; }

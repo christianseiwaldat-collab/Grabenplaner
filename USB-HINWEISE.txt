@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.53.1 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.54 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,14 +13,13 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Neu in v0.53.1 Beta:
-  - Branding-Auswahl und Standortzuweisungen werden zuverlässig gespeichert.
-  - Admin und Personalleitung behalten ihr ausgewähltes Verwaltungs-Branding.
-  - Standortgebundene Rollen sehen ausschließlich das Branding ihrer Filiale.
-  - Branding-Kits können gelöscht und mehrere Standortzuweisungen gemeinsam
-    gespeichert werden.
-  - Standortverwaltung, Personalakt und Einstellungsseiten wurden übersichtlicher
-    gestaltet; die PDF-Vorschau funktioniert wieder zuverlässig.
+Neu in v0.54 Beta:
+  - Developer, IT-Admin und reguläre Fachrollen sind klar getrennt.
+  - Der Developer-Zugang ist geschützt und nicht über die App veränderbar.
+  - Admin, IT-Admin und Personalleitung können Rechte hierarchisch verwalten.
+  - Filial- und Abteilungsleitungen können gezielt nur Teamfarben bearbeiten;
+    Namen, Sollstunden und weitere Personalstammdaten bleiben geschützt.
+  - Rollen-, Bereichs- und API-Prüfungen wurden weiter abgesichert.
 
 Leere Zweitkopie:
   Ab v0.42.1 wird die leere Zweitkopie nicht mehr automatisch aktualisiert.
