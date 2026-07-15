@@ -88,3 +88,15 @@ test("v0.59: lokale Datenerkennung verarbeitet gespeicherte Fotos und PDFs vor d
   assert.match(source, /\[\.\.\.\(el\.amuCamera\?\.files \|\| \[\]\), \.\.\.\(el\.amuDocuments\?\.files \|\| \[\]\)\]/);
   assert.doesNotMatch(source, /async function recognizeAmuImage/);
 });
+
+test("Portal: Rückkehr von der Handy-Kamera hält den AUM-Bereich aktiv", () => {
+  const source = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
+  const selectionBlock = source.match(/function handleAmuFileSelection\(event\) \{[\s\S]+?\n\}/);
+
+  assert.match(source, /const portalTabStorageKey = "grabenplaner\.portal\.active-tab"/);
+  assert.match(source, /function requestedPortalTab\(\) \{[\s\S]*?storedPortalTab\(\)/);
+  assert.match(source, /function rememberPortalTab\(tab\) \{[\s\S]*?history\.replaceState/);
+  assert.match(source, /portalState\.activeTab = tab;\s+rememberPortalTab\(tab\);/);
+  assert.ok(selectionBlock, "Dateiauswahl-Behandlung fehlt");
+  assert.match(selectionBlock[0], /portalState\.activeTab !== "amu"\) setTab\("amu"\)/);
+});
