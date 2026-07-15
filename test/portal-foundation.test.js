@@ -854,7 +854,11 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const employeeNotificationsResponse = await fetch(`${url}/api/portal/v1/me/notifications`, { headers: { Cookie: employee.cookie } });
     assert.equal(employeeNotificationsResponse.status, 200, await employeeNotificationsResponse.clone().text());
     const employeeNotifications = await employeeNotificationsResponse.json();
-    assert.ok(employeeNotifications.notifications.some((item) => item.event_type === "amu.review"));
+    const protectedUpdate = employeeNotifications.notifications.find((item) => item.event_type === "protected.update");
+    assert.ok(protectedUpdate);
+    assert.equal(protectedUpdate.title, "Geschützte Meldung aktualisiert");
+    assert.equal(protectedUpdate.message, "Bitte im geschützten Portal anmelden.");
+    assert.doesNotMatch(JSON.stringify(protectedUpdate), /Arbeitsunf|krank|AUM|Geprüft/i);
 
     const encryptedBlobs = fs.readdirSync(path.join(childRoot, "app-data", "private", "amu", "blobs"), { recursive: true })
       .filter((name) => String(name).endsWith(".amu"));

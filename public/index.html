@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.58 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.59 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -479,7 +479,13 @@
               </div>
               <label class="switch-row"><span><strong>Handyfotos als PDF speichern</strong><small>Fotos werden gedreht, passend verkleinert und als schlanke PDF abgelegt.</small></span><input id="amuConvertImagesToPdf" type="checkbox" /></label>
               <label class="switch-row"><span><strong>Fotos in Graustufen umwandeln</strong><small>Reduziert üblicherweise den Speicherbedarf; PDFs selbst bleiben unverändert.</small></span><input id="amuGrayscaleImages" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>Datumswerte lokal per OCR erkennen</strong><small>Beginn und Ende werden ausschließlich im Browser als bestätigungspflichtiger Vorschlag erkannt; OCR-Rohtext wird nicht gespeichert.</small></span><input id="amuOcrEnabled" type="checkbox" /></label>
               <label class="switch-row"><span><strong>Filial- und Abteilungsleitung darf AUM-Dateien öffnen</strong><small>Ohne Aktivierung sehen Leitungen nur Zeitraum und Bearbeitungsstatus.</small></span><input id="amuManagerFileAccess" type="checkbox" /></label>
+              <div class="settings-grid compact-policy-grid">
+                <label class="field"><span>Gelbe Warnung an Filial-/Abteilungsleitung nach</span><div class="unit-input"><input id="sicknessLocalWarningDays" type="number" min="0" max="30" step="1" /><em>Tagen</em></div></label>
+                <label class="field"><span>Rote Meldung an Personalleitung nach</span><div class="unit-input"><input id="sicknessHrWarningDays" type="number" min="1" max="60" step="1" /><em>Tagen</em></div></label>
+              </div>
+              <p class="settings-note">Die gelbe Frist muss kürzer sein als die rote Frist. Eine verspätete AUM kann weiterhin sicher hochgeladen werden.</p>
               <div class="form-actions-inline"><span class="settings-note" id="amuSettingsHint"></span><button class="primary-button" id="saveAmuSettingsButton" type="button">AUM-Einstellungen speichern</button></div>
             </div>
             <div class="settings-card full-span">
@@ -669,7 +675,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.58 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.59 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
