@@ -4,6 +4,7 @@
 
 - Der HTTPS-Serverbetrieb ist für einen IT-verwalteten produktiven Windows-Einzelserver mit Caddy als Reverse-Proxy und WinSW-Diensten ausgearbeitet.
 - Strikte Produktionsprüfungen sichern Loopback-Bindung, vertrauenswürdigen Proxy, öffentliche HTTPS-Adresse, sichere Sitzungen und die getrennte Datenablage ab.
+- Der Codespaces-Testbetrieb erkennt die öffentliche Browseradresse auch dann sicher, wenn GitHubs HTTPS-Proxy intern einen Loopback-Host weiterreicht; fremde Origins bleiben gesperrt.
 - Getrennte Dienstidentitäten und eingeschränkte ACLs begrenzen den Zugriff von Anwendung, Reverse-Proxy und Administration auf die jeweils erforderlichen Ordner.
 - Separate Live- und Ready-Endpunkte unterscheiden einen laufenden Prozess von einer vollständig betriebsbereiten Instanz einschließlich Datenbank, Speicher, Backupziel und AUM-Scanner.
 - Die Server-Betriebsprüfung ersetzt die frühere Pilot-Checkliste und zeigt berechtigten Stellen die produktionsrelevanten Prüfpunkte verständlich an.

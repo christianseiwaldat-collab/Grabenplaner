@@ -434,17 +434,24 @@ const normalizedPublicOrigin = normalizeHttpOrigin(publicUrl);
 
 function trustedCodespacesForwardedOrigin(request) {
   if (deploymentKind !== "codespaces-test" || !request.secure || !isLoopbackRequest(request)) return "";
-  const forwardedHost = String(request.headers["x-forwarded-host"] || "").split(",", 1)[0].trim().toLowerCase();
-  if (!forwardedHost || !/^[a-z0-9.-]+(?::\d+)?$/.test(forwardedHost)) return "";
-  const candidate = normalizeHttpOrigin(`https://${forwardedHost}`);
-  if (!candidate) return "";
-  const hostname = new URL(candidate).hostname;
-  if (!codespacesForwardingDomain || !hostname.endsWith(`.${codespacesForwardingDomain}`)) return "";
   const configuredPortMarker = normalizedPublicOrigin
     ? new URL(normalizedPublicOrigin).hostname.match(/-(\d+)\./)?.[1]
     : "";
-  if (!hostname.includes(`-${configuredPortMarker || PORT}.`)) return "";
-  return candidate;
+  const expectedHostnameSuffix = `-${configuredPortMarker || PORT}.${codespacesForwardingDomain}`;
+  const hostCandidates = [
+    String(request.headers.host || ""),
+    String(request.headers["x-forwarded-host"] || "").split(",", 1)[0],
+  ];
+
+  for (const value of new Set(hostCandidates.map((entry) => entry.trim().toLowerCase()).filter(Boolean))) {
+    if (!/^[a-z0-9.-]+(?::\d+)?$/.test(value)) continue;
+    const candidate = normalizeHttpOrigin(`https://${value}`);
+    if (!candidate) continue;
+    const hostname = new URL(candidate).hostname;
+    if (!codespacesForwardingDomain || !hostname.endsWith(expectedHostnameSuffix)) continue;
+    return candidate;
+  }
+  return "";
 }
 
 function requestOriginAllowed(request, origin) {
