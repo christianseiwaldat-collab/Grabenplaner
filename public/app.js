@@ -1288,6 +1288,7 @@ function operationModeLabel(mode) {
 function renderServerDiagnostics(info) {
   if (!elements.serverDiagnostics || !info) return;
   const statusClass = info.ready ? "ok" : "warning";
+  const productionChecks = Array.isArray(info.productionChecks) ? info.productionChecks : [];
   const warnings = info.warnings?.length
     ? `<div class="diagnostic-warnings">${info.warnings.map((warning) => `<p>${escapeHtml(warning)}</p>`).join("")}</div>`
     : '<p class="diagnostic-all-clear">Keine Warnungen in der aktuellen Konfiguration.</p>';
@@ -1305,7 +1306,7 @@ function renderServerDiagnostics(info) {
       <span><small>AUM-Speicher</small><strong>${info.storage?.amu?.ok ? "verschlüsselt bereit" : "nicht bereit"}</strong></span>
       <span><small>Backupziel</small><strong>${info.backups?.externalWritable ? "beschreibbar" : "prüfen"}</strong></span>
     </div>
-    <div class="pilot-checklist"><strong>Server-Pilotbereitschaft</strong>${(info.pilotChecks || []).map((check) => `<span class="${check.ok ? "ok" : "warning"}"><i>${check.ok ? "✓" : "!"}</i><b>${escapeHtml(check.label)}</b><small>${escapeHtml(check.detail || "")}</small></span>`).join("")}</div>${warnings}`;
+    <div class="pilot-checklist"><strong>Server-Betriebsprüfung</strong>${productionChecks.map((check) => `<span class="${check.ok ? "ok" : "warning"}"><i>${check.ok ? "✓" : "!"}</i><b>${escapeHtml(check.label)}</b><small>${escapeHtml(check.detail || "")}</small></span>`).join("")}</div>${warnings}`;
 }
 
 async function refreshServerDiagnostics() {
@@ -1514,7 +1515,7 @@ function renderOperationMode() {
     elements.serverModeBadge.classList.toggle("inactive", !actualLanActive);
   }
   if (elements.publicServerModeBadge) {
-    elements.publicServerModeBadge.textContent = actualServerActive ? "Aktiv" : "Serverkonfiguration";
+    elements.publicServerModeBadge.textContent = actualServerActive ? "Aktiv" : "IT-Konfiguration erforderlich";
     elements.publicServerModeBadge.classList.toggle("inactive", !actualServerActive);
   }
   if (elements.portalFoundationHint) {

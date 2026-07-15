@@ -5,7 +5,7 @@
   <executable>{{CADDY_EXECUTABLE}}</executable>
   <arguments>run --config "{{CADDYFILE}}" --adapter caddyfile</arguments>
   <workingdirectory>{{CADDY_DIRECTORY}}</workingdirectory>
-  <stoptimeout>20 sec</stoptimeout>
+  <stoptimeout>120 sec</stoptimeout>
   <startmode>Automatic</startmode>
   <delayedAutoStart>true</delayedAutoStart>
   <depend>GrabenplanerServer</depend>
@@ -23,7 +23,9 @@
   </log>
   <serviceaccount>
     <domain>NT AUTHORITY</domain>
-    <user>LOCAL SERVICE</user>
+    <user>NETWORK SERVICE</user>
     <allowservicelogon>true</allowservicelogon>
   </serviceaccount>
+  <env name="XDG_CONFIG_HOME" value="{{CADDY_CONFIG_DIRECTORY}}" />
+  <env name="XDG_DATA_HOME" value="{{CADDY_DATA_DIRECTORY}}" />
 </service>

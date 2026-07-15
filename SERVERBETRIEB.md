@@ -1,8 +1,10 @@
 # Grabenplaner Serverbetrieb
 
-Der Serverbetrieb ist für eine zentrale Instanz vorgesehen. Die Anwendung läuft ausschließlich auf `127.0.0.1`; Browser greifen über einen HTTPS-Reverse-Proxy darauf zu. Lokalbetrieb und LAN-Host bleiben davon unabhängig.
+Der HTTPS-Serverbetrieb ist für eine zentrale, von der Firmen-IT verwaltete Grabenplaner-Instanz vorgesehen. Die Node.js-Anwendung läuft ausschließlich auf `127.0.0.1`; Browser greifen nur über Caddy und eine freigegebene HTTPS-Adresse darauf zu. Lokalbetrieb und LAN-Host bleiben davon unabhängig.
 
-## Pilotaufbau unter Windows
+Die bereitgestellten Werkzeuge bilden einen produktionsnahen Windows-Einzelserver ab. Sie ersetzen nicht die betriebliche Prüfung von Domain, DNS, Firewall, Zertifikat, Dienstkonten, Virenscanner, Backupziel und Wiederanlaufplan durch die verantwortliche IT.
+
+## Zielaufbau unter Windows
 
 - Programmdateien: `C:\Program Files\Grabenplaner\app`
 - Datenbank, Branding und Logs: `C:\ProgramData\Grabenplaner`
@@ -12,6 +14,23 @@ Der Serverbetrieb ist für eine zentrale Instanz vorgesehen. Die Anwendung läuf
 
 Die SQLite-Datenbank darf nicht auf einem Netzlaufwerk oder synchronisierten Cloudordner liegen. Es läuft genau eine Grabenplaner-Instanz.
 
+Der Datenfluss bleibt bewusst eindeutig:
+
+1. Caddy nimmt öffentliche HTTPS-Verbindungen auf Port 443 an.
+2. Caddy leitet ausschließlich intern an `127.0.0.1:3000` weiter.
+3. Grabenplaner prüft die konfigurierte öffentliche Adresse, den vertrauenswürdigen Loopback-Proxy und die Herkunft schreibender Anfragen.
+4. SQLite, Branding, verschlüsselte AUM-Dokumente, Schlüsselkonfiguration und Logs liegen außerhalb des Programmordners.
+
+### Dienstidentitäten und Dateirechte
+
+Der Einrichtungsassistent trennt Reverse-Proxy und Anwendung auch auf Betriebssystemebene:
+
+- **Grabenplaner Server:** läuft als `LOCAL SERVICE` und erhält nur die für Programm, Daten, Logs und Backupziel erforderlichen Rechte.
+- **Grabenplaner HTTPS Proxy:** läuft als `NETWORK SERVICE` und erhält Zugriff auf Caddy-Konfiguration, Zertifikatsdaten und Proxy-Logs, nicht aber auf Datenbank, Branding oder AUM-Speicher.
+- **Administratoren und SYSTEM:** behalten die erforderlichen Wartungsrechte.
+
+Die erzeugten Dienstkonfigurationen enthalten Schlüssel beziehungsweise Dienststeuerungswerte und werden deshalb mit eingeschränkten ACLs gespeichert. Die Firmen-IT muss die gesetzten Rechte vor der Freigabe kontrollieren und darf den Datenordner nicht allgemein für Benutzer oder Netzwerkfreigaben öffnen.
+
 ## Voraussetzungen
 
 - Windows-Server oder dauerhaft verfügbarer Windows-PC
@@ -20,6 +39,8 @@ Die SQLite-Datenbank darf nicht auf einem Netzlaufwerk oder synchronisierten Clo
 - Caddy und WinSW in zuvor freigegebenen, fest gepinnten Versionen
 - SHA256-Prüfsummen der freigegebenen Binärdateien
 - separates, regelmäßig von der IT gesichertes Backupziel
+- lokal installierter und von Grabenplaner erreichbarer Virenscanner für AUM-Uploads
+- dokumentierter Wiederanlauf- und Wiederherstellungstest
 
 Grabenplaner lädt Caddy oder WinSW nicht selbst herunter. Die Beispiele unter `server-tools` enthalten keine Firmenwerte, Zertifikate oder Zugangsdaten.
 
@@ -57,7 +78,9 @@ Danach erfolgt der kontrollierte Durchlauf mit `-RegisterServices`. Dabei müsse
 Die vollständige neutrale Vorlage liegt in `server-tools/server.env.example`. Wesentlich sind:
 
 ```text
+NODE_ENV=production
 GRABENPLANER_OPERATION_MODE=server
+GRABENPLANER_DEPLOYMENT_KIND=production
 GRABENPLANER_PUBLIC_URL=https://plan.example.at
 GRABENPLANER_HOST=127.0.0.1
 GRABENPLANER_TRUST_PROXY=loopback
@@ -97,19 +120,68 @@ Der Einrichtungsassistent erzeugt den AMU-Schlüssel bei einer neuen, leeren Ins
 
 Auch der Dienststeuerungs-Token wird zufällig erzeugt und bei einer erneuten Einrichtung beibehalten. WinSW verwendet ihn ausschließlich über den lokalen Stop-Helfer, damit der Server vor dem Dienstende ein Abschlussbackup und einen WAL-Checkpoint ausführt. Der normale Browserzugriff kann diesen Endpunkt nicht verwenden.
 
-Der Servermodus wird nicht im Browser aktiviert. Updates, Neustarts und Datenbankimporte erfolgen ausschließlich in einem Wartungsfenster am Server.
+Der Servermodus wird nicht im Browser aktiviert. Auch die öffentliche Adresse, Proxy-Vertrauen und Produktionskennung können dort nicht verändert werden. Updates, Neustarts und Datenbankimporte erfolgen ausschließlich in einem Wartungsfenster am Server.
+
+## Betriebsbereitschaft und Überwachung
+
+Grabenplaner stellt zwei getrennte Prüfungen bereit:
+
+- `/api/health/live` bestätigt ausschließlich, dass der Anwendungsprozess antwortet. Caddy verwendet diesen Endpunkt für seine aktive Upstream-Prüfung.
+- `/api/health/ready` bestätigt die Betriebsbereitschaft einschließlich Produktionskonfiguration, Datenbankintegrität, Instanzschutz, Daten-/Backupziel, verschlüsseltem AUM-Speicher und Virenscanner.
+
+Eine laufende, aber noch nicht betriebsbereite Instanz darf deshalb beim Ready-Check einen Fehlerstatus liefern. Monitoring und Freigabeprüfungen müssen den Ready-Endpunkt verwenden; ein erfolgreicher Live-Check allein genügt nicht.
+
+In Grabenplaner zeigt **Einstellungen → Datenbank → Server-Betriebsprüfung** berechtigten administrativen Rollen zusätzliche Wartungsdetails einschließlich relevanter Speicherziele. Geheimnisse und Schlüssel werden nicht an den Browser ausgegeben; die öffentlichen Live-/Ready-Endpunkte bleiben auf einen minimalen Status ohne interne Pfade beschränkt.
 
 ## Prüfung, Backup und Wiederherstellung
 
-`Test-GrabenplanerServer.ps1` prüft Dienste, interne und öffentliche Healthchecks, HSTS, SQLite und die Aktualität der Backups. Das Caddyfile kann zusätzlich mit der bereitgestellten Caddy-Version validiert werden.
+`Test-GrabenplanerServer.ps1` prüft Dienste, interne und öffentliche Live-/Ready-Endpunkte, TLS-Zertifikat, HSTS und weitere Sicherheitsheader, SQLite sowie die Aktualität der Backups. Das Caddyfile kann zusätzlich mit der bereitgestellten Caddy-Version validiert werden. Diese Prüfung gehört nach Einrichtung, Update und Wiederherstellung zum Wartungsablauf.
 
 `Backup-Grabenplaner.ps1` arbeitet nur bei gestopptem Grabenplaner-Dienst. Es erstellt mit SQLite `VACUUM INTO` einen konsistenten Sicherungspunkt, prüft ihn mit `quick_check` und koppelt die Datenbank über Dateiname und SHA256 fest an ihr eigenes AMU-Manifest. Datenbank und verschlüsselte AMU-Dateien werden gemeinsam veröffentlicht und gemäß Aufbewahrung auch gemeinsam aufgeräumt. Im laufenden Betrieb übernimmt die integrierte Grabenplaner-Sicherung upload-sichere, ebenfalls gekoppelte Sicherungspunkte.
 
 `Restore-Grabenplaner.ps1` arbeitet nur bei vollständig gestopptem Grabenplaner-Dienst. Es akzeptiert ausschließlich zusammengehörige Datenbank-/AMU-Sicherungspunkte, prüft Integrität, Kopplung und den Recovery-Schlüssel, erstellt Sicherheitskopien des aktuellen Stands, tauscht beides kontrolliert aus und setzt bei einem Fehler automatisch zurück. Standardmäßig wird der gleichnamige `.amu`-Ordner neben der gewählten `.db`-Datei verwendet; der Schlüssel wird aus der geschützten Dienstkonfiguration gelesen oder ausdrücklich übergeben. Ein Dienststart nach erfolgreicher Wiederherstellung ist optional.
 
-## Pilotgrenzen
+## Kontrollierte Updates und Rollback
+
+Im HTTPS-Serverbetrieb ist das Portable-Update im Browser deaktiviert. `Update-GrabenplanerServer.ps1` führt ein von der IT gestartetes Wartungsupdate aus:
+
+1. Release-ZIP und ausdrücklich angegebene SHA256-Prüfsumme werden vor dem Entpacken geprüft.
+2. Vor jeder Änderung entsteht ein verifiziertes, mit der AUM-Ablage gekoppeltes Backup.
+3. Die neue Version wird zunächst in einem getrennten Staging-Ordner validiert.
+4. Caddy und Grabenplaner werden kontrolliert gestoppt; Datenordner, Dienstkonfiguration, Schlüssel und Backups bleiben unangetastet.
+5. Nach dem Austausch der Programmdateien müssen Dienststart sowie Live- und Ready-Prüfung erfolgreich sein.
+6. Schlägt die Prüfung fehl, wird automatisch auf den vorherigen Programmstand zurückgerollt und dieser erneut geprüft.
+
+Ein neutrales Serverpaket wird ausschließlich aus einem sauberen Git-Checkout erstellt. Der Paketbauer installiert die festgeschriebenen Produktionsabhängigkeiten neu, prüft sie nach einem vollständigen ZIP-Rundlauf und erzeugt zusätzlich eine SHA256-Datei:
+
+```powershell
+.\server-tools\windows\New-GrabenplanerServerPackage.ps1 `
+  -OutputDirectory '.\release\server' `
+  -NodeRuntimeDirectory '.\runtime'
+```
+
+Für den Paketbau wird die in `package.json` festgelegte pnpm-Version benötigt. Liegt pnpm nicht im `PATH`, kann die freigegebene `pnpm.cmd` mit `-PnpmExecutable` ausdrücklich angegeben werden. Unversionierte Dateien und kundenspezifische Assets führen zum Abbruch und gelangen nicht in das neutrale Paket.
+
+Das geprüfte Paket wird am Server in einer als Administrator gestarteten PowerShell zusammen mit seiner veröffentlichten Prüfsumme eingespielt:
+
+```powershell
+$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.61.0-beta-windows-x64.zip'
+$sha256 = ((Get-Content "$package.sha256" -Raw).Trim() -split '\s+')[0]
+
+.\server-tools\windows\Update-GrabenplanerServer.ps1 `
+  -PackageZip $package `
+  -PackageSha256 $sha256
+```
+
+Gleiche oder ältere Versionen werden standardmäßig abgewiesen. Ein bewusstes Wiederholen beziehungsweise Zurückstufen ist nur als dokumentierter IT-Sonderfall mit `-AllowDowngradeOrReinstall` möglich.
+
+Updates sollen zuerst in einer getrennten Testumgebung geprüft und anschließend in einem angekündigten Wartungsfenster eingespielt werden. Release-ZIP, Prüfsumme, Ergebnis und verwendeter Sicherungspunkt gehören in das betriebliche Änderungsprotokoll.
+
+## Betrieb und Grenzen
 
 - Domain, Zertifikat, Firewall, Dienstkonto und Backupziel werden gemeinsam mit der Firmen-IT freigegeben.
-- Die Beispiele führen keine automatische produktive Bereitstellung durch.
+- Die Werkzeuge führen keine unbeaufsichtigte Cloud- oder Internetbereitstellung durch; Einrichtung und Freigabe bleiben bewusste IT-Schritte.
 - Die öffentliche Auslieferung bleibt neutral; Firmenlogos und Voreinstellungen gehören ausschließlich in separate Branding-Kits.
-- SQLite eignet sich für den kleinen Pilotbetrieb mit einer Instanz. Mehrere Grabenplaner-Server erfordern später eine andere Datenbankarchitektur.
+- Der produktive Aufbau verwendet genau eine Grabenplaner-Instanz mit lokaler SQLite-Datenbank. Hochverfügbarkeit, mehrere aktive Anwendungsserver und horizontale Skalierung sind nicht Bestandteil dieser Version.
+- Caddy übernimmt HTTPS und Zertifikatsverwaltung, ersetzt aber keine Firewall, Systemaktualisierung, Endpoint-Security oder externe Überwachung.
+- Der derzeitige Smartphone-Zugang verwendet das Webportal. Nativer Token-Login und Gerätesitzungen für den eigenständig versionierten Android-/iOS-Client folgen in einem eigenen Sicherheitsblock.

@@ -41,7 +41,11 @@ Für dieses Projekt besteht derzeit kein Bug-Bounty-Programm.
 - Der lokale Verschlüsselungsschlüssel muss durch die Geräte-, Konto- und Dateiberechtigungen des Betriebssystems geschützt werden. Geht er verloren, können verschlüsselte Dokumente nicht wiederhergestellt werden.
 - Personen mit Schreibzugriff auf den Grabenplaner- oder Datenbankordner gelten als vertrauenswürdige Systembetreiber.
 - Der LAN-Host-Modus ist nur für ein vertrauenswürdiges internes Netzwerk vorgesehen.
-- Ein öffentlich erreichbarer Betrieb darf nur über den vorgesehenen Servermodus mit HTTPS und korrekt konfiguriertem Reverse Proxy erfolgen.
+- Ein öffentlich erreichbarer Betrieb darf nur über den vorgesehenen Servermodus mit HTTPS und korrekt konfiguriertem Reverse Proxy erfolgen. Die Anwendung muss dabei ausschließlich an eine Loopback-Adresse gebunden sein; unsichere Host-, Proxy-, Demo- oder Scanner-Ausnahmen werden im Produktionsprofil abgelehnt.
+- Grabenplaner-Anwendung und HTTPS-Reverse-Proxy müssen mit getrennten Dienstidentitäten und eingeschränkten Dateirechten betrieben werden. Der Proxy benötigt keinen Zugriff auf Datenbank, AUM-Ablage oder Anwendungsgeheimnisse.
+- Im produktiven HTTPS-Betrieb ist ein erreichbarer Virenscanner Voraussetzung für die Annahme von AUM-Dokumenten. Eine Test- oder Umgehungskonfiguration darf dort nicht verwendet werden.
+- Öffentliche Live- und Ready-Prüfungen geben keine internen Pfade oder Geheimnisse aus. Ausführliche Serverdiagnosen sind ausschließlich nach Anmeldung mit einem entsprechend berechtigten Konto verfügbar.
+- Serverupdates müssen in einem Wartungsfenster mit geprüfter Paket-Prüfsumme, vollständigem Vorab-Backup, anschließendem Ready-Check und vorbereitetem Rollback erfolgen.
 - Reale Datenbanken, Branding-Kits mit internen Daten und AUM-Dokumente dürfen nicht in öffentliche Repositories oder Fehlerberichte hochgeladen werden.
 
 ## Umfang
