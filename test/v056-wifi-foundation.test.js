@@ -112,6 +112,7 @@ test.beforeEach(resetFixture);
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
   try { db.close(); } catch {}
+  subject.releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
@@ -327,8 +328,12 @@ test("v0.56: WLAN-Regeln bleiben nach einem frischen App-Start erhalten", async 
   });
   assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
 
+  const restartDatabasePath = path.join(testRoot, "restart-dienstplan.db");
+  const escapedRestartDatabasePath = restartDatabasePath.replaceAll("\\", "/").replaceAll("'", "''");
+  db.exec(`VACUUM INTO '${escapedRestartDatabasePath}'`);
+
   const script = `
-    process.env.DB_PATH = ${JSON.stringify(databasePath)};
+    process.env.DB_PATH = ${JSON.stringify(restartDatabasePath)};
     process.env.BACKUP_DIR = ${JSON.stringify(path.join(testRoot, "restart-backups"))};
     process.env.GRABENPLANER_DATA_DIR = ${JSON.stringify(path.join(testRoot, "restart-data"))};
     process.env.GRABENPLANER_FORCE_PORTAL = "1";

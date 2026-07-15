@@ -19,7 +19,7 @@ process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
 process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
 
-const { app, db } = require("../server");
+const { app, db, releaseInstanceLockForTests } = require("../server");
 let httpServer;
 let baseUrl;
 let locationId;
@@ -141,6 +141,7 @@ test.beforeEach(reset);
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
   try { db.close(); } catch {}
+  releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 

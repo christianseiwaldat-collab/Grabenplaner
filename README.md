@@ -13,26 +13,33 @@
 </p>
 
 <p align="center">
-  <strong>v0.57 Beta</strong> · Windows · SQLite · Source-available
+  <strong>v0.58 Beta</strong> · Windows · SQLite · Source-available
 </p>
 
 <p align="center">
-  <a href="output/pdf/Grabenplaner-Prospekt-A4.pdf"><strong>Produktprospekt ansehen</strong></a>
-  &nbsp;·&nbsp;
-  <a href="output/pdf/Grabenplaner-Prospekt-Druckbogen-A3.pdf">Druckbogen herunterladen</a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest">Aktuelle Version</a>
+  <a href="https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest"><strong>Aktuelle Version herunterladen</strong></a>
 </p>
 
 ## Eine App, drei Betriebsmodelle
 
-| Betriebsmodell | Status | Geeignet für |
-|---|---|---|
-| **Lokalbetrieb** | Verfügbar | Ein Windows-PC oder eine portable Installation mit lokaler SQLite-Datenbank |
-| **LAN-Host** | Verfügbar | Eine zentrale Installation, auf die weitere Geräte im vertrauenswürdigen Firmennetz per Browser und Login zugreifen |
-| **Serverbetrieb mit HTTPS** | Technische Pilotbasis | Eine zentrale Serverinstallation mit Reverse Proxy; vor einem Produktiveinsatz durch die zuständige Firmen-IT einzurichten und zu prüfen |
+| Funktion | Lokalbetrieb | LAN-Host | HTTPS-Server |
+|---|---|---|---|
+| Dienst- und Abteilungsplanung | Ja | Ja | Ja |
+| Urlaubsplanung, Auswertungen und PDF-Export | Ja | Ja | Ja |
+| Personal, Standorte, Branding und Einstellungen | Ja | Ja, nach Rechten | Ja, nach Rechten |
+| Login, Rollen und Bereichsrechte | Nicht erforderlich | Verpflichtend | Verpflichtend |
+| Nutzung durch mehrere Browsergeräte | Nein, nur am App-PC | Ja, im Firmen-LAN/WLAN | Ja, über HTTPS |
+| Mitarbeiterportal und eigener Dienstplan | Nicht im Standardbetrieb | Ja | Ja |
+| Urlaubs- und ZA-Anträge sowie AUM-Upload | Nicht im Standardbetrieb | Ja | Ja |
+| Zeiterfassung durch Mitarbeitende | Nicht im Standardbetrieb | Ja, je Standort aktivierbar | Ja, je Standort aktivierbar |
+| Freiwillige WLAN-Zeitvorschläge | Nein | Optional mit Netzwerkintegration | Optional mit Netzwerkintegration |
+| Backups | Lokal | Zentral am Host-PC | Zentral mit IT-Wartungswerkzeugen |
+| GitHub-Aktualisierungscheck | Ja | Ja | Ja |
+| Automatisches Portable-Update | Ja | Ja, am Host-PC | Nein, kontrolliert durch die IT |
+| Zugriff | Nur auf diesem Gerät | Im vertrauenswürdigen Firmennetz | Über Internet oder Intranet per HTTPS |
+| Produktstatus | Verfügbar | Verfügbar | Technische Pilotbasis |
 
-Der Lokalbetrieb bleibt der unkomplizierte Standard. Im LAN-Host-Modus liegt die Datenbank ausschließlich am Host-PC. Für den Serverbetrieb sind neutrale Installations-, Diagnose-, Backup- und Wiederherstellungsvorlagen vorhanden; er ist derzeit noch nicht als allgemein freigegebener Produktivmodus ausgewiesen. Details stehen in [SERVERBETRIEB.md](SERVERBETRIEB.md).
+Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Dienst- und Urlaubsplanung an einem Gerät. Im LAN-Host-Modus liegt die Datenbank ausschließlich am Host-PC; Mitarbeitende können sich im Firmen-LAN oder -WLAN anmelden und dort auch die Zeiterfassung verwenden. Der HTTPS-Server erweitert dieses Modell um geschützten Zugriff von außerhalb, muss vor einem Produktiveinsatz jedoch durch die zuständige Firmen-IT eingerichtet und geprüft werden. Details stehen in [SERVERBETRIEB.md](SERVERBETRIEB.md).
 
 ## Planung, Verwaltung und Mitarbeiterportal
 
@@ -93,11 +100,11 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard. Im LAN-Host-Modus liegt die
 - Lokale SQLite-Datenbank ohne externen Datenbankserver
 - Integriertes Backup-System und GitHub-basierter Aktualisierungscheck
 
-## Schutz sensibler AUM-Daten
+## Schutz sensibler Personalakt-Daten
 
-AUM-Dokumente werden außerhalb des öffentlichen Webordners gespeichert und zusätzlich mit **AES-256-GCM** verschlüsselt. Auch geschützte AUM-Metadaten können verschlüsselt abgelegt werden. Die Anwendung prüft Dateitypen anhand ihres Inhalts; Bilder können platzsparend in eine A4-PDF-Datei umgewandelt werden. Im vorgesehenen Serverbetrieb ergänzt eine verpflichtende Virenscanner-Prüfung den Uploadprozess.
+Sensible Inhalte des Personalakts sowie AUM-Dokumente und ihre geschützten Metadaten werden außerhalb des öffentlichen Webordners gespeichert und zusätzlich mit **AES-256-GCM** verschlüsselt. Die Anwendung prüft Dateitypen anhand ihres Inhalts; Bilder können platzsparend in eine A4-PDF-Datei umgewandelt werden. Im vorgesehenen Serverbetrieb ergänzt eine verpflichtende Virenscanner-Prüfung den Uploadprozess.
 
-Der Zugriff folgt eigenen, besonders eingeschränkten AUM-Rechten. Zusammengehörige Datenbank- und AUM-Sicherungen werden über Manifest und Prüfsummen gekoppelt. Diese zusätzlichen Schutzmaßnahmen ersetzen nicht HTTPS, sichere Betriebssystem- und Dateiberechtigungen, eine geschützte Schlüsselverwaltung und ein geprüftes Backupkonzept.
+Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und verschlüsselte Dokumentablage werden gemeinsam gesichert. Diese zusätzlichen Schutzmaßnahmen ersetzen nicht HTTPS, sichere Betriebssystem- und Dateiberechtigungen, eine geschützte Schlüsselverwaltung und ein geprüftes Backupkonzept. Betriebliche Indizes und nicht sensible Verwaltungsdaten bleiben für den Anwendungsbetrieb in SQLite lesbar.
 
 ## In Vorbereitung
 
@@ -108,7 +115,7 @@ Der Zugriff folgt eigenen, besonders eingeschränkten AUM-Rechten. Zusammengehö
 ## Schnellstart unter Windows
 
 1. Die portable ZIP-Datei unter [Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.57 Beta starten.cmd` doppelt anklicken.
+2. `Grabenplaner v0.58 Beta starten.cmd` doppelt anklicken.
 3. Die App öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in der App eingerichtet werden.
@@ -123,7 +130,7 @@ Aktualisierungen werden über GitHub geprüft. Die integrierte Aktualisierung er
 | Datenbank | SQLite, ohne separaten Datenbankserver |
 | PDF-Ausgabe | PDFKit |
 | Bild- und Dokumentaufbereitung | Sharp und PDFKit |
-| Geschützter AUM-Speicher | AES-256-GCM, private Ablage und gekoppelte Sicherungspunkte |
+| Geschützter Personalakt-Speicher | AES-256-GCM, kontextgebundene Verschlüsselung und gemeinsame Sicherung mit der Datenbank |
 | Authentifizierung | Rollen, Sitzungen, CSRF-Schutz und bereichsbezogene Berechtigungen |
 | Server-Pilot | HTTPS-Reverse-Proxy, Dienstbetrieb, Diagnose-, Backup- und Restore-Vorlagen |
 

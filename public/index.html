@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.57 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.58 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -653,7 +653,7 @@
               </div>
               <p class="settings-note">Standard: alle 2 Stunden, einstellbar von 1 bis 6 Stunden. Die letzten 30 Sicherungen bleiben je Backup-Ordner erhalten.</p>
             </div>
-            <div class="settings-card full-settings-card">
+            <div class="settings-card full-settings-card" id="backupImportCard">
               <div class="card-heading"><div class="card-icon">Import</div><div><h2>Backup importieren</h2><p>Import ersetzt die aktuelle Datenbank nach einem Neustart. Vorher wird automatisch ein Sicherheitsbackup erstellt.</p></div></div>
               <div class="import-mode-options">
                 <label class="choice-row"><input type="radio" name="backupImportMode" value="preserve-branding" checked /><span><strong>Datenbank importieren, aktuelles Branding behalten</strong><small>Empfohlen: Dienstplan-Daten werden ersetzt, Firmenlogo/PDF-Branding bleiben wie aktuell.</small></span></label>
@@ -669,14 +669,14 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.57 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.58 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
       </main>
     </div>
 
-    <dialog class="modal" id="employeeModal">
+    <dialog class="modal wide-modal employee-modal" id="employeeModal">
       <form method="dialog" id="employeeForm">
         <div class="modal-header"><div><span class="eyebrow">Personalstammdaten</span><h2 id="employeeModalTitle">Teammitglied anlegen</h2></div><button type="button" class="close-button" data-close="employeeModal">×</button></div>
         <div class="form-grid">
@@ -708,6 +708,16 @@
             </div>
           </label>
           <label class="switch-row full-width"><span><strong>Aktiv</strong><small>In Planung und PDF anzeigen.</small></span><input id="employeeActive" type="checkbox" checked /></label>
+          <section class="employee-access-profile full-width" id="employeeAccessProfile">
+            <div class="employee-access-heading"><div><span class="eyebrow">App-Zugang</span><h3>Rechte</h3><p>App-Rolle und individuelle Zusatzrechte sind von der Position im Unternehmen getrennt.</p></div><span class="status-badge inactive" id="employeeAccessStatus">Nur Ansicht</span></div>
+            <label class="field"><span>App-Rolle</span><select id="employeeAppRole"></select><small id="employeeAppRoleDescription"></small></label>
+            <div class="employee-role-summary"><strong>Grundrechte der Rolle</strong><div id="employeeRolePermissions"></div></div>
+            <details class="employee-additional-rights" id="employeeAdditionalRightsDetails">
+              <summary>Individuelle Zusatzrechte <span id="employeeAdditionalRightsCount">0</span></summary>
+              <div id="employeeAdditionalRights"></div>
+            </details>
+            <p class="calculation-note" id="employeeAccessHint">Rechte werden geladen.</p>
+          </section>
         </div>
         <div class="modal-actions"><button type="button" class="danger-button hidden" id="deleteEmployeeButton">Teammitglied löschen</button><span></span><button type="button" class="secondary-button" data-close="employeeModal">Abbrechen</button><button type="submit" class="primary-button">Speichern</button></div>
       </form>
