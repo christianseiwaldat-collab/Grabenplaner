@@ -61,6 +61,8 @@ button { color: inherit; }
 .sidebar-update-button.current span { background: #59c98d; color: #0f281d; }
 .sidebar-update-button.available { border-color: rgba(240,198,91,.6); background: rgba(240,198,91,.2); color: white; }
 .sidebar-update-button.available span { background: #f0c65b; color: #392a09; }
+.sidebar-update-button.security { border-color: rgba(255,126,88,.72); background: rgba(203,69,42,.28); color: white; }
+.sidebar-update-button.security span { background: #ff7e58; color: #351109; }
 .sidebar-update-button.error { border-color: rgba(234,98,67,.45); background: rgba(234,98,67,.14); }
 .sidebar-update-button.checking span { animation: spin 1s linear infinite; }
 .sidebar-update-button:disabled { opacity: .62; cursor: wait; }

@@ -3738,7 +3738,7 @@ async function createManualBackup() {
 
 function renderUpdateStatus(status = state.updateStatus) {
   if (!elements.updateCheckButton) return;
-  elements.updateCheckButton.classList.remove("current", "available", "error", "checking");
+  elements.updateCheckButton.classList.remove("current", "available", "security", "error", "checking");
   if (!status) {
     elements.updateCheckIcon.textContent = "↻";
     elements.updateCheckText.textContent = "Update prüfen";
@@ -3756,19 +3756,20 @@ async function checkForUpdates(showResult = true) {
   renderUpdateStatus();
   try {
     const status = await api("/api/update-status");
+    const updateTypeLabel = status.updateTypeLabel || "Update";
     state.updateStatus = {
       ...status,
-      cssClass: status.updateAvailable ? "available" : "current",
+      cssClass: status.updateAvailable ? (status.updateKind === "security" ? "security" : "available") : "current",
       icon: status.updateAvailable ? "!" : "✓",
-      text: status.updateAvailable ? "Update verfügbar" : "Aktuell",
+      text: status.updateAvailable ? `${updateTypeLabel} verfügbar` : "Aktuell",
       hint: status.updateAvailable ? status.latestVersion : status.currentLabel,
     };
     renderUpdateStatus();
     if (showResult) {
       showToast(status.updateAvailable
         ? status.canAutoUpdate
-          ? `Neue Version ${status.latestVersion} verfügbar. Klick unten links startet die Aktualisierung.`
-          : `${status.managementNote || `Neue Version ${status.latestVersion} verfügbar.`}`
+          ? `${updateTypeLabel} ${status.latestVersion} verfügbar. Klick unten links startet die Aktualisierung.`
+          : `${status.managementNote || `${updateTypeLabel} ${status.latestVersion} verfügbar.`}`
         : "Du hast die aktuellste Version.");
     }
     return status;
@@ -3794,7 +3795,8 @@ async function handleUpdateButton() {
     showToast(status.managementNote || "Dieses Update muss kontrolliert am Server eingespielt werden.");
     return;
   }
-  const confirmed = confirm(`Version ${status.latestVersion} ist verfügbar.\n\nDie Aktualisierung ersetzt nur die App-Dateien. Dienstpläne, Datenbank und Backups bleiben erhalten.\n\nJetzt aktualisieren und Grabenplaner automatisch neu starten?`);
+  const updateTypeLabel = status.updateTypeLabel || "Update";
+  const confirmed = confirm(`${updateTypeLabel} ${status.latestVersion} ist verfügbar.\n\nDie Aktualisierung ersetzt nur die App-Dateien. Dienstpläne, Datenbank und Backups bleiben erhalten.\n\nJetzt aktualisieren und Grabenplaner automatisch neu starten?`);
   if (!confirmed) return;
   try {
     elements.updateCheckButton.disabled = true;

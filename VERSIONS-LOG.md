@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.59.1 Beta · Serviceupdate
+
+- Nach der Rückkehr von der Android-Kamera oder Dateiauswahl bleibt im Mitarbeiterportal der Bereich „Krankmeldung & AUM“ aktiv; ein vom Betriebssystem ausgelöster Seitenneuaufbau springt nicht mehr zur Zeiterfassung zurück.
+- Der zuletzt geöffnete Portalbereich wird nur für die laufende Browsersitzung gespeichert und beim Abmelden wieder entfernt.
+- Aktualisierungen unterscheiden künftig sichtbar zwischen Serviceupdate, Sicherheitsupdate und neuer Funktionsversion. Patchstände wie v0.59.1 bleiben eigenständige, aufsteigend sortierte Wartungsreleases.
+
 ## v0.59 Beta
 
 - Krankmeldung und AUM zu einem gemeinsamen, mobil optimierten Ablauf im Mitarbeiterportal zusammengeführt; eine Krankmeldung kann im HTTPS-Serverbetrieb auch von außerhalb des Firmennetzes erfasst werden.
