@@ -39,6 +39,7 @@ button { border:0; border-radius:10px; cursor:pointer; }
 .notification-button svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 .notification-button.has-unread { color:#7d5907; background:#fff0bd; }
 .notification-badge { position:absolute; top:-5px; right:-6px; display:grid; place-items:center; min-width:19px; height:19px; padding:0 5px; border:2px solid #faf9f4; border-radius:999px; color:white !important; background:#c45142; font-size:8px !important; font-weight:900; }
+.portal-settings-shortcut.active { color:white; background:var(--green); }
 main { width:min(1180px,calc(100% - 30px)); margin:26px auto 60px; }
 .portal-tabs { display:flex; gap:7px; margin-bottom:22px; padding:5px; border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.58); }
 .portal-tabs button { flex:1; min-height:42px; padding:10px; color:var(--muted); background:transparent; font-weight:800; white-space:nowrap; }
@@ -127,6 +128,12 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
 .camera-button:focus-within { outline:3px solid rgba(34,111,84,.28); outline-offset:3px; }
 @media (max-width:640px) { .amu-file-picker { grid-template-columns:1fr; }.camera-button { width:auto; min-height:42px; padding:9px 13px; justify-self:start; } }
 .wifi-suggestion-card { margin-bottom:15px; padding:21px 24px; }
+.portal-settings-grid { display:grid; grid-template-columns:minmax(250px,.7fr) minmax(420px,1.3fr); gap:15px; }
+.portal-settings-card { display:grid; align-content:space-between; gap:20px; min-height:190px; padding:22px; }
+.portal-settings-card h2 { margin-bottom:7px; }
+.portal-settings-card p { margin-bottom:0; font-size:12px; }
+.portal-settings-card .primary { justify-self:start; }
+.portal-settings-grid .wifi-suggestion-card { margin-bottom:0; }
 .wifi-suggestion-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
 .wifi-suggestion-heading h2 { margin:0 0 4px; }
 .wifi-suggestion-heading p { margin:0; font-size:12px; }
@@ -151,6 +158,8 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
 .wifi-history-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 11px; border-radius:10px; color:var(--muted); background:#f3f5f3; font-size:11px; }
 .wifi-suggestion-card .message { margin-top:12px; }
 .time-heading { align-items:center; }
+.time-greeting { margin:8px 0 0 !important; color:var(--ink); font-size:14px; font-weight:760; line-height:1.4; }
+.time-greeting + #timeTrackingDate { margin-top:4px; }
 .time-refresh-button:disabled { cursor:wait; opacity:.55; }
 .time-tracking-layout { display:grid; grid-template-columns:minmax(360px,.92fr) minmax(360px,1.08fr); gap:15px; }
 .time-clock-card,.time-day-card { padding:24px; }
@@ -258,8 +267,10 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
 @media (max-width:850px) { .schedule-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.vacation-layout { grid-template-columns:1fr; }.portal-user-copy { display:none; }.portal-tabs { overflow-x:auto; scrollbar-width:none; }.portal-tabs::-webkit-scrollbar { display:none; }.portal-tabs button { flex:0 0 auto; min-width:112px; }.approved-vacation-item { grid-template-columns:1fr 1fr; }.approved-vacation-item > div { grid-column:1 / -1; }.history-item { grid-template-columns:1fr auto; }.history-item > div:first-child { grid-column:1 / -1; }.history-item-status { justify-items:start; }.history-item-status small { text-align:left; } }
 @media (max-width:850px) { .sickness-preferences-card { grid-template-columns:1fr; }.notification-channel-row { grid-template-columns:minmax(130px,.55fr) minmax(240px,1.45fr); }.notification-verification-row { grid-column:2; } }
 @media (max-width:850px) { .time-tracking-layout { grid-template-columns:1fr; }.time-clock-card,.time-day-card { padding:20px; } }
+@media (max-width:850px) { .portal-settings-grid { grid-template-columns:1fr; }.portal-settings-card { min-height:0; } }
 @media (max-width:980px) { .wifi-suggestion-row { grid-template-columns:repeat(2,minmax(0,1fr)); }.wifi-suggestion-row > div:first-child,.wifi-suggestion-actions { grid-column:1 / -1; }.wifi-suggestion-actions button { flex:1; } }
 @media (max-width:560px) { .portal-brand img { width:88px; height:40px; }.portal-brand > div { display:none; }.portal-header { align-items:center; }.portal-user { gap:5px; flex-wrap:nowrap; }.portal-user #adminAppLink { display:none !important; }.wide-label { display:none !important; }.compact-label { display:block !important; }.header-action { min-height:38px; padding:7px; font-size:9px; }.schedule-grid { grid-template-columns:1fr; }.view-heading { align-items:flex-start; flex-direction:column; }.date-fields,.history-toolbar { grid-template-columns:1fr; width:100%; }.request-mode { grid-template-columns:1fr; } }
+@media (max-width:430px) { .portal-settings-shortcut { width:38px; padding:7px 4px; overflow:hidden; color:transparent; font-size:0; }.portal-settings-shortcut::before { content:"⚙"; color:var(--green); font-size:18px; }.portal-settings-shortcut.active::before { color:white; } }
 @media (max-width:560px) { .sickness-preferences-card { padding:17px; }.notification-channel-row { grid-template-columns:1fr; }.notification-channel-row .portal-switch { width:100%; }.notification-channel-head { grid-template-columns:1fr auto; align-items:center; }.notification-channel-setup,.notification-verification-row { grid-column:1; grid-template-columns:1fr; }.notification-channel-setup button,.notification-verification-row button { width:100%; } }
 @media (max-width:560px) { .leadership-filter-tabs { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:560px) { .time-heading { align-items:stretch; }.time-heading .time-refresh-button { align-self:flex-start; }.time-clock-card,.time-day-card { padding:17px; }.time-state-heading { grid-template-columns:36px 1fr; gap:11px; }.time-state-indicator { width:32px; height:32px; border-width:9px; }.time-state-heading h2 { font-size:22px; }.time-action-grid { gap:7px; margin-top:18px; }.time-action { min-height:70px; padding:11px; }.time-summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }.time-summary > div { padding:10px 8px; }.time-summary strong { font-size:15px; }.time-entry-heading { align-items:flex-start; flex-direction:column; }.time-entry-heading small { text-align:left; } }

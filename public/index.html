@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.59.2 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.60 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -488,6 +488,24 @@
               <p class="settings-note">Die gelbe Frist muss kürzer sein als die rote Frist. Eine verspätete AUM kann weiterhin sicher hochgeladen werden.</p>
               <div class="form-actions-inline"><span class="settings-note" id="amuSettingsHint"></span><button class="primary-button" id="saveAmuSettingsButton" type="button">AUM-Einstellungen speichern</button></div>
             </div>
+            <div class="settings-card full-span" id="greetingSettingsCard">
+              <div class="card-heading"><div class="card-icon">Hallo</div><div><h2>Persönliche Begrüßungen</h2><p>Abwechslungsreiche Starttexte im Mitarbeiterportal – ohne medizinische Details oder sensible Abwesenheitsdaten.</p></div></div>
+              <label class="switch-row"><span><strong>Persönliche Begrüßungen aktivieren</strong><small>Datenschutzfreundlich standardmäßig deaktiviert. Bei Deaktivierung zeigt der Kopfbereich nur Datum und Zeiterfassung.</small></span><input id="personalizedGreetingsEnabled" type="checkbox" /></label>
+              <div class="settings-grid greeting-rule-grid">
+                <label class="field"><span>Längerer Urlaub ab</span><div class="unit-input"><input id="greetingVacationMinimumDays" type="number" min="1" max="366" step="1" /><em>Tagen</em></div></label>
+                <label class="field"><span>Rückkehrgruß für</span><div class="unit-input"><input id="greetingReturnWorkdays" type="number" min="0" max="10" step="1" /><em>Arbeitstage</em></div></label>
+                <label class="field"><span>Gruß nach Genesung für</span><div class="unit-input"><input id="greetingRecoveryWorkdays" type="number" min="0" max="10" step="1" /><em>Arbeitstage</em></div></label>
+              </div>
+              <div class="greeting-template-grid">
+                <label class="field"><span>Begrüßungen am Morgen</span><textarea id="greetingMorningTemplates" rows="4" maxlength="1600"></textarea><small>Eine Variante pro Zeile. Platzhalter: {name} und {greeting}.</small></label>
+                <label class="field"><span>Begrüßungen tagsüber</span><textarea id="greetingDaytimeTemplates" rows="4" maxlength="1600"></textarea><small>Eine Variante pro Zeile. Platzhalter: {name} und {greeting}.</small></label>
+                <label class="field"><span>Begrüßungen am Abend</span><textarea id="greetingEveningTemplates" rows="4" maxlength="1600"></textarea><small>Eine Variante pro Zeile. Platzhalter: {name} und {greeting}.</small></label>
+                <label class="field"><span>Rückkehr nach längerem Urlaub</span><textarea id="greetingVacationTemplates" rows="4" maxlength="1600"></textarea><small>Eine Variante pro Zeile; konkrete Urlaubsdaten werden nicht ausgegeben.</small></label>
+                <label class="field"><span>Freundlicher Gruß während Abwesenheit</span><textarea id="greetingSicknessActiveTemplates" rows="4" maxlength="1600"></textarea><small>Nur allgemeine Wünsche – keine Diagnose oder AUM-Inhalte.</small></label>
+                <label class="field"><span>Rückkehr nach Genesung</span><textarea id="greetingSicknessReturnTemplates" rows="4" maxlength="1600"></textarea><small>Neutraler Willkommen-zurück-Text ohne Gesundheitsdetails.</small></label>
+              </div>
+              <div class="form-actions-inline"><span class="settings-note" id="greetingSettingsHint">Begrüßungen werden ausschließlich serverseitig ausgewählt.</span><button class="primary-button" id="saveGreetingSettingsButton" type="button">Begrüßungen speichern</button></div>
+            </div>
             <div class="settings-card full-span">
               <div class="card-heading"><div class="card-icon">Login</div><div><h2>Portal-Zugänge</h2><p>Rollen, Freigabe und Startpasswort je Teammitglied verwalten.</p></div></div>
               <div class="access-toolbar">
@@ -675,7 +693,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.59.2 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.60 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

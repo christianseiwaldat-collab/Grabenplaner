@@ -25,6 +25,7 @@ const portalState = {
   timeTrackingBooking: false,
   wifiAutomation: null,
   wifiAutomationLoading: false,
+  home: null,
   mobileLayout: null,
   mobileLeadership: false,
   leadershipOverview: null,
@@ -68,14 +69,14 @@ window.addEventListener("resize", applyDeviceMode, { passive: true });
 
 const el = Object.fromEntries([
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
-  "portalUserName", "portalUserRole", "adminAppLink", "changePasswordButton", "logoutButton", "notificationsButton", "notificationBadge", "scheduleView", "timeOffView",
-  "vacationView", "historyView", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingRefresh", "timeTrackingCard",
+  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "settingsView", "settingsPasswordButton", "scheduleView", "timeOffView",
+  "vacationView", "historyView", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
   "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeWeighted", "timePause", "timeDifference", "timeTrackingIssues", "timeEntryList",
   "wifiAutomationCard", "wifiAutomationAvailability", "wifiAutomationToggle", "wifiConfirmationLevel", "wifiSuggestionWarning", "wifiSuggestionList", "wifiAutomationMessage",
   "timePeriodHeading", "timePeriodSummary", "timePeriodList", "previousTimePeriod", "currentTimePeriod", "nextTimePeriod",
   "leadershipTeamTab", "leadershipApprovalsTab", "leadershipMoreTab", "leadershipTeamView", "leadershipApprovalsView", "leadershipMoreView",
   "leadershipTeamRefresh", "leadershipApprovalsRefresh", "leadershipContextFields", "leadershipLocation", "leadershipDepartment", "leadershipApprovalContextFields", "leadershipApprovalLocation", "leadershipApprovalDepartment", "leadershipPresenceSummary", "leadershipPresenceList", "leadershipApprovalList",
-  "leadershipPasswordButton", "leadershipDesktopLink", "timeCorrectionDialog", "timeCorrectionForm", "timeCorrectionId", "timeCorrectionDate", "timeCorrectionDateText", "timeCorrectionEntries", "timeCorrectionNote", "timeCorrectionMessage", "addTimeCorrectionEntry",
+  "leadershipSettingsButton", "leadershipDesktopLink", "timeCorrectionDialog", "timeCorrectionForm", "timeCorrectionId", "timeCorrectionDate", "timeCorrectionDateText", "timeCorrectionEntries", "timeCorrectionNote", "timeCorrectionMessage", "addTimeCorrectionEntry",
   "leadershipRequestDialog", "leadershipRequestForm", "leadershipRequestTitle", "leadershipRequestSummary", "leadershipCorrectionEntries", "addLeadershipCorrectionEntry", "leadershipRequestNote", "leadershipRequestMessage", "leadershipRequestActions",
   "scheduleHeading", "scheduleGrid", "previousWeek", "currentWeek", "nextWeek",
   "timeOffRequestForm", "timeOffFormTitle", "timeOffDate", "timeOffDateTo", "timeOffDateToField", "timeOffTimeFields", "timeOffStart", "timeOffEnd", "timeOffNote", "timeOffCheck", "timeOffMessage",
@@ -285,6 +286,7 @@ function wifiTimeSuggestionsCapabilityEnabled() {
 function applyPortalCapabilities() {
   const timeTrackingEnabled = timeTrackingCapabilityEnabled();
   el.timeTrackingTab?.classList.toggle("hidden", !timeTrackingEnabled);
+  el.wifiAutomationCard?.classList.toggle("hidden", !wifiTimeSuggestionsCapabilityEnabled());
   if (!timeTrackingEnabled && portalState.activeTab === "timeTracking") setTab("schedule");
   const sicknessEnabled = portalState.status?.capabilities?.sicknessReports === true;
   document.querySelector('[data-tab="amu"]')?.classList.toggle("hidden", !sicknessEnabled);
@@ -306,7 +308,7 @@ const leadershipPortalPermissions = new Set([
   "notifications:settings",
 ]);
 
-const mobileMoreSecondaryTabs = new Set(["timeOff", "vacation", "amu"]);
+const mobileMoreSecondaryTabs = new Set(["timeOff", "vacation", "amu", "settings"]);
 
 function syncPortalTabButtons(tab) {
   const representedByMore = portalState.mobileLeadership && mobileMoreSecondaryTabs.has(tab);
@@ -378,7 +380,8 @@ function applyMobileLeadershipLayout() {
   const compactLeadership = isMobileUi() && isLeadershipUser();
   portalState.mobileLeadership = compactLeadership;
   navigation.classList.toggle("mobile-leadership", compactLeadership);
-  const regularTabs = ["schedule", "timeTracking", "timeOff", "vacation", "history", "amu"];
+  el.portalSettingsShortcut?.classList.toggle("hidden", !compactLeadership);
+  const regularTabs = ["settings", "schedule", "timeTracking", "timeOff", "vacation", "history", "amu"];
   document.querySelectorAll(".leadership-tab").forEach((button) => button.classList.add("hidden"));
   if (!compactLeadership) {
     regularTabs.forEach((tab) => {
@@ -440,7 +443,7 @@ function normalizedPortalTab(requested) {
   const aliases = { requests: "history", team: "leadershipTeam", approvals: "leadershipApprovals", more: "leadershipMore", time: "timeTracking" };
   const tab = aliases[requested] || requested;
   if (["leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) && !isLeadershipUser()) return "";
-  return ["schedule", "timeTracking", "timeOff", "vacation", "history", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
+  return ["settings", "schedule", "timeTracking", "timeOff", "vacation", "history", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
 }
 
 const portalTabStorageKey = "grabenplaner.portal.active-tab";
@@ -529,12 +532,29 @@ async function initialize() {
 
 async function loadPortalData() {
   const requests = [
+    loadPortalHome(),
     loadSchedule(), loadVacationRequests(), loadTimeOffRequests(), loadApprovedVacations(),
     loadAbsenceHistory(), loadNotifications(), loadSicknessCases(), loadAmuReports(), loadAmuSettings(),
   ];
   if (timeTrackingCapabilityEnabled()) requests.push(loadTimeTracking());
-  if (wifiTimeSuggestionsCapabilityEnabled()) requests.push(loadWifiAutomation());
   await Promise.allSettled(requests);
+}
+
+function renderPortalGreeting() {
+  const greeting = portalState.home?.greeting;
+  const text = greeting?.enabled !== false ? String(greeting?.text || "").trim() : "";
+  if (!el.timeTrackingGreeting) return;
+  el.timeTrackingGreeting.textContent = text;
+  el.timeTrackingGreeting.classList.toggle("hidden", !text);
+}
+
+async function loadPortalHome() {
+  try {
+    portalState.home = await api("/api/portal/v1/me/home");
+  } catch {
+    portalState.home = null;
+  }
+  renderPortalGreeting();
 }
 
 function showLogin(error = "") {
@@ -591,6 +611,8 @@ function setTab(tab) {
   portalState.activeTab = tab;
   rememberPortalTab(tab);
   syncPortalTabButtons(tab);
+  el.portalSettingsShortcut?.classList.toggle("active", tab === "settings");
+  el.settingsView.classList.toggle("active", tab === "settings");
   el.scheduleView.classList.toggle("active", tab === "schedule");
   el.timeTrackingView.classList.toggle("active", tab === "timeTracking");
   el.timeOffView.classList.toggle("active", tab === "timeOff");
@@ -601,7 +623,8 @@ function setTab(tab) {
   el.leadershipApprovalsView?.classList.toggle("active", tab === "leadershipApprovals");
   el.leadershipMoreView?.classList.toggle("active", tab === "leadershipMore");
   if (tab === "timeOff") loadTimeOffRequests();
-  if (tab === "timeTracking") Promise.allSettled([loadTimeTracking(), loadTimeSummary(), loadTimeCorrections(), loadWifiAutomation()]);
+  if (tab === "settings") loadWifiAutomation();
+  if (tab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking(), loadTimeSummary(), loadTimeCorrections()]);
   if (tab === "vacation") loadVacationRequests();
   if (tab === "history") Promise.allSettled([loadAbsenceHistory(), loadApprovedVacations()]);
   if (tab === "amu") Promise.allSettled([loadSicknessCases(), loadAmuReports(), loadAmuSettings()]);
@@ -2497,7 +2520,9 @@ el.portalLoginForm.addEventListener("submit", login);
 el.loginPersonnelNumber.addEventListener("input", scheduleLoginBrandingPreview);
 el.loginPersonnelNumber.addEventListener("blur", previewLoginBranding);
 el.logoutButton.addEventListener("click", logout);
-el.changePasswordButton.addEventListener("click", () => el.passwordDialog.showModal());
+el.settingsPasswordButton?.addEventListener("click", () => el.passwordDialog.showModal());
+el.portalSettingsShortcut?.addEventListener("click", () => setTab("settings"));
+el.leadershipSettingsButton?.addEventListener("click", () => setTab("settings"));
 el.passwordForm.addEventListener("submit", changePassword);
 document.addEventListener("click", (event) => {
   const toggle = event.target.closest("[data-password-toggle]");
@@ -2519,7 +2544,7 @@ document.querySelector(".portal-tabs")?.addEventListener("keydown", (event) => {
   tabs[next].focus();
   setTab(tabs[next].dataset.tab);
 });
-el.timeTrackingRefresh.addEventListener("click", () => Promise.allSettled([loadTimeTracking(), loadWifiAutomation()]));
+el.timeTrackingRefresh.addEventListener("click", () => Promise.allSettled([loadPortalHome(), loadTimeTracking()]));
 el.wifiAutomationToggle?.addEventListener("change", setWifiAutomationPreference);
 el.wifiSuggestionList?.addEventListener("click", (event) => {
   const action = event.target.closest("[data-wifi-confirm],[data-wifi-reject]");
@@ -2596,7 +2621,6 @@ el.leadershipCorrectionEntries.addEventListener("click", (event) => {
 });
 document.querySelectorAll("[data-close-leadership-request]").forEach((button) => button.addEventListener("click", () => el.leadershipRequestDialog.close()));
 document.querySelectorAll("[data-more-tab]").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.moreTab)));
-el.leadershipPasswordButton.addEventListener("click", () => el.passwordDialog.showModal());
 el.previousWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, -7); loadSchedule(); });
 el.nextWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, 7); loadSchedule(); });
 el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule(); });
@@ -2708,7 +2732,8 @@ el.amuReportList.addEventListener("click", (event) => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && portalState.session) {
     loadNotifications();
-    if (portalState.activeTab === "timeTracking") Promise.allSettled([loadTimeTracking(), loadWifiAutomation()]);
+    if (portalState.activeTab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking()]);
+    if (portalState.activeTab === "settings") loadWifiAutomation();
     if (portalState.activeTab === "leadershipTeam") loadLeadershipOverview();
     if (portalState.activeTab === "leadershipApprovals") loadLeadershipApprovals();
   }
@@ -2717,7 +2742,8 @@ setInterval(() => {
   if (!document.hidden && portalState.session) loadNotifications();
 }, 45000);
 setInterval(() => {
-  if (!document.hidden && portalState.session && portalState.activeTab === "timeTracking") Promise.allSettled([loadTimeTracking(), loadWifiAutomation()]);
+  if (!document.hidden && portalState.session && portalState.activeTab === "timeTracking") loadTimeTracking();
+  if (!document.hidden && portalState.session && portalState.activeTab === "settings") loadWifiAutomation();
 }, 30000);
 setInterval(() => {
   if (!document.hidden && portalState.session && portalState.activeTab === "leadershipTeam") loadLeadershipOverview();

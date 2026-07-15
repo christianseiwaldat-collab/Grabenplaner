@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.59.2 Beta · Serviceupdate</strong> · Windows · SQLite · Source-available
+  <strong>v0.60 Beta</strong> · Windows · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -92,6 +92,8 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Diens
 - PDF-Export für Dienstpläne, Abteilungspläne und Urlaubsübersichten
 - Wochenstundenübersicht, Plan-/Ist-Vergleich, Pausenhinweise und Samstagswertung
 - Mitarbeiterportal mit Urlaubs- und ZA-Anträgen, gemeinsamem Krankmeldungs-/AUM-Ablauf, lokaler Dokumenterkennung und Zeiterfassung
+- Persönliche Portal-Einstellungen für Passwort und freiwillige WLAN-Zeitvorschläge
+- Datenschutzneutrale, konfigurierbare Begrüßungen für Arbeitstag, Urlaubsrückkehr und Genesung
 - Sofortige interne Besetzungswarnung sowie optional zeitgesteuerte externe Warnkanäle für zuständige Leitungen
 - Freiwilliger WLAN-Anwesenheitsassistent mit bearbeitbaren und bestätigungspflichtigen Zeitvorschlägen
 - Wochen- und Monatsübersichten der Zeiterfassung mit nachvollziehbaren Korrekturanträgen
@@ -111,12 +113,13 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 
 - **Schnittstellen zur Lohnverrechnung:** Standardisierte Exporte für Arbeitszeiten, Abwesenheiten und relevante Personalstammdaten sind geplant, aber noch nicht verfügbar. Unterstützte Zielformate und Lohnverrechnungssysteme werden erst mit der konkreten Schnittstelle festgelegt.
 - Weitere Produktivhärtung und IT-gestützte Einführung des öffentlichen HTTPS-Serverbetriebs
+- Nativer Token-Login und Geräte-Sitzungen für den eigenständig versionierten Android-/iOS-Client
 - Erweiterte Auswertungs- und Integrationsmöglichkeiten
 
 ## Schnellstart unter Windows
 
 1. Die portable ZIP-Datei unter [Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.59.2 Beta starten.cmd` doppelt anklicken.
+2. `Grabenplaner v0.60 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.
