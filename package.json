@@ -1,6 +1,6 @@
 {
   "name": "grabenplaner",
-  "version": "0.58.0-beta",
+  "version": "0.59.0-beta",
   "private": true,
   "description": "Web-App zur Erstellung und zum PDF-Export von Wochendienstplänen",
   "main": "server.js",
@@ -12,13 +12,16 @@
     "developer:set": "node scripts/set-developer.js"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13.0"
   },
   "packageManager": "pnpm@11.7.0",
   "dependencies": {
+    "@tesseract.js-data/deu": "1.0.0",
     "express": "^5.1.0",
+    "pdfjs-dist": "6.1.200",
     "pdfkit": "^0.17.1",
     "quill": "2.0.0",
-    "sharp": "0.34.5"
+    "sharp": "0.34.5",
+    "tesseract.js": "7.0.0"
   }
 }

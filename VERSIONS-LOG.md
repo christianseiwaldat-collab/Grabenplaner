@@ -1,4 +1,17 @@
-﻿# Grabenplaner Versions-Log
+# Grabenplaner Versions-Log
+
+## v0.59 Beta
+
+- Krankmeldung und AUM zu einem gemeinsamen, mobil optimierten Ablauf im Mitarbeiterportal zusammengeführt; eine Krankmeldung kann im HTTPS-Serverbetrieb auch von außerhalb des Firmennetzes erfasst werden.
+- Ein gemeinsamer Zeitraumskalender verlangt nur ein Beginn-Datum und erlaubt ein offenes voraussichtliches Ende. Über „Arbeitsfähigkeit melden“ wird der Fall später eindeutig abgeschlossen; eine AUM kann sofort oder nachträglich sicher zugeordnet werden.
+- Zuständige Filial- und Abteilungsleitungen erhalten sofort eine interne Meldung; eine mögliche Unterschreitung der hinterlegten Mindestbesetzung wird gesondert hervorgehoben.
+- E-Mail, SMS und WhatsApp können je berechtigter Leitung als optionale externe Besetzungswarnung mit einer frühesten Versandzeit eingerichtet werden; die Provider-Anbindung bleibt Aufgabe der Firmen-IT.
+- Neue oder geänderte externe Warnziele werden erst nach Bestätigung eines sechsstelligen Einmalcodes aktiviert.
+- Externe Warnungen enthalten ausschließlich einen neutralen Hinweis zum Anmelden im geschützten Portal, keine Personalnummer, Diagnose oder sonstige Gesundheitsdaten.
+- Besetzungsrisiken berücksichtigen den tatsächlichen Einsatzort eines Dienstes, delegierte Leserechte und spätere Umplanungen; erledigte Warnungen und ausstehende Versandaufträge werden automatisch aufgelöst.
+- Die lokale AUM-Datenerkennung unterstützt hochgeladene Fotos, direkte Kamerabilder und PDFs: Digitale PDFs werden mit PDF.js ausgewertet, Scan-PDFs und Bilder mit Tesseract.js. Erkannte Werte sind nur Vorschläge, müssen geprüft und bestätigt werden und überschreiben keine manuellen Eingaben.
+- Gelbe lokale und rote Personalleitungs-Eskalationen für verspätete AUMs sind getrennt einstellbar; verspätete Uploads bleiben weiterhin möglich.
+- Krankmeldungsdaten, Warnziele und ausstehende externe Versandaufträge werden pseudonymisiert, kontextgebunden mit AES-256-GCM geschützt, bei einem Datenbankimport auf Integrität geprüft und nach den festgelegten Aufbewahrungsfristen gelöscht.
 
 ## v0.58 Beta
 
@@ -24,7 +37,6 @@
 - Im Serverbetrieb dürfen ausschließlich Developer, IT-Admin und Admin den eindeutig bezeichneten Server-Stopp auslösen.
 - Codespaces akzeptiert die vom vertrauenswürdigen GitHub-HTTPS-Proxy gemeldete gleichursprüngliche Weiterleitungsadresse, ohne die Origin-Prüfung für fremde Seiten zu lockern.
 - Öffentliche Musterkits für einen fiktiven Foto- und Sporthandel sowie ein Sporthandels-Demoprofil mit sechs Filialen, 15 Abteilungen und 31 Verkaufsmitarbeitenden ergänzt.
-- Produktprospekt neu aufgebaut; die aufgeklappte A3-Innenseite nutzt das Querformat nun als zusammenhängende Präsentationsfläche rund um das Smartphone-Portal.
 
 ## v0.56 Beta
 
@@ -243,7 +255,6 @@
 - Bemerkungseditor auf Quill umgestellt: schlichte WYSIWYG-Leiste für fett, kursiv, unterstrichen, Schriftgröße und Formatierung löschen.
 - Oberes Menü in der Dienstplanung fixiert, damit die Wochen-Navigation beim Scrollen nicht mehr springt.
 - Abteilungs-PDFs zeigen nun auch eingeteilte Mitarbeitende, wenn sie nicht als bevorzugte Abteilung im Stammdatensatz hinterlegt sind.
-- Update-/Release-Ablauf angepasst: Der USB-Stick wird nicht mehr direkt aktualisiert; Updates sollen über die App getestet werden.
 
 ## v0.42.6 Beta
 
@@ -309,7 +320,6 @@
 - Standortverwaltung: Filialen mit zweistelliger Filial-ID und bis zu 3 Abteilungen je Filiale.
 - Personalstammdaten: Stammfiliale und bevorzugte Abteilung je Teammitglied ergänzt.
 - Dienstplanung kann bei mehreren Abteilungen als Unterpunkt je Abteilung geführt werden; Urlaubsplanung bleibt pro Filiale.
-- USB-Dauerregel ergänzt: Nach dem regulären USB-Update wird zusätzlich eine zweite Kopie mit leerer Datenbank im jeweiligen Versionsordner gepflegt.
 
 ## v0.41 Beta
 

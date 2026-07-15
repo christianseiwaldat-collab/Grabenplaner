@@ -13,14 +13,14 @@
 </p>
 
 <p align="center">
-  <strong>v0.58 Beta</strong> · Windows · SQLite · Source-available
+  <strong>v0.59 Beta</strong> · Windows · SQLite · Source-available
 </p>
 
 <p align="center">
   <a href="https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest"><strong>Aktuelle Version herunterladen</strong></a>
 </p>
 
-## Eine App, drei Betriebsmodelle
+## Grabenplaner, drei Betriebsmodelle
 
 | Funktion | Lokalbetrieb | LAN-Host | HTTPS-Server |
 |---|---|---|---|
@@ -28,9 +28,9 @@
 | Urlaubsplanung, Auswertungen und PDF-Export | Ja | Ja | Ja |
 | Personal, Standorte, Branding und Einstellungen | Ja | Ja, nach Rechten | Ja, nach Rechten |
 | Login, Rollen und Bereichsrechte | Nicht erforderlich | Verpflichtend | Verpflichtend |
-| Nutzung durch mehrere Browsergeräte | Nein, nur am App-PC | Ja, im Firmen-LAN/WLAN | Ja, über HTTPS |
+| Nutzung durch mehrere Browsergeräte | Nein, nur am Grabenplaner-PC | Ja, im Firmen-LAN/WLAN | Ja, über HTTPS |
 | Mitarbeiterportal und eigener Dienstplan | Nicht im Standardbetrieb | Ja | Ja |
-| Urlaubs- und ZA-Anträge sowie AUM-Upload | Nicht im Standardbetrieb | Ja | Ja |
+| Urlaubs- und ZA-Anträge, Krankmeldung und AUM-Upload | Nicht im Standardbetrieb | Ja | Ja |
 | Zeiterfassung durch Mitarbeitende | Nicht im Standardbetrieb | Ja, je Standort aktivierbar | Ja, je Standort aktivierbar |
 | Freiwillige WLAN-Zeitvorschläge | Nein | Optional mit Netzwerkintegration | Optional mit Netzwerkintegration |
 | Backups | Lokal | Zentral am Host-PC | Zentral mit IT-Wartungswerkzeugen |
@@ -76,8 +76,8 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Diens
     </td>
     <td width="50%" valign="top">
       <img src="docs/readme/aum-upload.webp" alt="Geschützter AUM-Upload im Mitarbeiterportal" width="300">
-      <h3>AUM direkt übermitteln</h3>
-      <p>Arbeitsunfähigkeitsmeldungen können als Dokument oder Handyfoto hochgeladen, aufbereitet und nur für entsprechend berechtigte Personen zugänglich gemacht werden.</p>
+      <h3>Krankmeldung und AUM in einem Ablauf</h3>
+      <p>Mitarbeitende wählen den Krankheitszeitraum in einem gemeinsamen Kalender, können das voraussichtliche Ende offenlassen, eine AUM später nachreichen und anschließend ihre Arbeitsfähigkeit melden. Die lokale Datenerkennung verarbeitet digitale PDFs mit PDF.js sowie Scan-PDFs, hochgeladene Fotos und Kamerabilder mit Tesseract.js. Dokumenttext und OCR-Rohtext bleiben dabei im Browser; erst der bestätigte AUM-Upload überträgt das Dokument zur geschützten Speicherung.</p>
     </td>
   </tr>
 </table>
@@ -91,7 +91,8 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Diens
 - Urlaubsplanung mit Jahres-, Quartals- und Monatsübersicht
 - PDF-Export für Dienstpläne, Abteilungspläne und Urlaubsübersichten
 - Wochenstundenübersicht, Plan-/Ist-Vergleich, Pausenhinweise und Samstagswertung
-- Mitarbeiterportal mit Urlaubs- und ZA-Anträgen, AUM-Upload und Zeiterfassung
+- Mitarbeiterportal mit Urlaubs- und ZA-Anträgen, gemeinsamem Krankmeldungs-/AUM-Ablauf, lokaler Dokumenterkennung und Zeiterfassung
+- Sofortige interne Besetzungswarnung sowie optional zeitgesteuerte externe Warnkanäle für zuständige Leitungen
 - Freiwilliger WLAN-Anwesenheitsassistent mit bearbeitbaren und bestätigungspflichtigen Zeitvorschlägen
 - Wochen- und Monatsübersichten der Zeiterfassung mit nachvollziehbaren Korrekturanträgen
 - Mobil optimiertes Leitungsportal mit konfigurierbaren Kernfunktionen
@@ -115,12 +116,12 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 ## Schnellstart unter Windows
 
 1. Die portable ZIP-Datei unter [Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.58 Beta starten.cmd` doppelt anklicken.
-3. Die App öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
+2. `Grabenplaner v0.59 Beta starten.cmd` doppelt anklicken.
+3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
-Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in der App eingerichtet werden.
+Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.
 
-Aktualisierungen werden über GitHub geprüft. Die integrierte Aktualisierung ersetzt die Programmdateien kontrolliert und startet die App neu; Datenbank, Backups, AUM-Dateien und lokale Laufzeitkonfiguration bleiben geschützt.
+Aktualisierungen werden über GitHub geprüft. Die integrierte Aktualisierung ersetzt die Programmdateien kontrolliert und startet Grabenplaner neu; Datenbank, Backups, AUM-Dateien und lokale Laufzeitkonfiguration bleiben geschützt.
 
 ## Technische Grundlage
 
@@ -130,11 +131,12 @@ Aktualisierungen werden über GitHub geprüft. Die integrierte Aktualisierung er
 | Datenbank | SQLite, ohne separaten Datenbankserver |
 | PDF-Ausgabe | PDFKit |
 | Bild- und Dokumentaufbereitung | Sharp und PDFKit |
+| Lokale AUM-Datenerkennung | PDF.js für digitale PDFs; Tesseract.js mit lokal mitgeliefertem deutschen Sprachmodell für Scan-PDFs, hochgeladene Fotos und Kamerabilder |
 | Geschützter Personalakt-Speicher | AES-256-GCM, kontextgebundene Verschlüsselung und gemeinsame Sicherung mit der Datenbank |
 | Authentifizierung | Rollen, Sitzungen, CSRF-Schutz und bereichsbezogene Berechtigungen |
 | Server-Pilot | HTTPS-Reverse-Proxy, Dienstbetrieb, Diagnose-, Backup- und Restore-Vorlagen |
 
-Für lokale Entwicklung wird Node.js 22 oder neuer benötigt:
+Für lokale Entwicklung wird Node.js 22.13 oder neuer benötigt:
 
 ```powershell
 corepack enable
