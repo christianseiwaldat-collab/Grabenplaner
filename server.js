@@ -20,6 +20,13 @@ const {
   STAFFING_ALERT_TEXT,
 } = require("./lib/external-notifications");
 const { acquireDatabaseLock, lockPathForDatabase, releaseDatabaseLock } = require("./lib/database-lock");
+const {
+  classifyRelease,
+  compareVersions,
+  normalizeVersionTag,
+  releaseTagName,
+  selectLatestRelease,
+} = require("./lib/release-version");
 const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
@@ -9014,40 +9021,6 @@ function runtimeDriveInfo() {
 
 const GITHUB_REPO = "christianseiwaldat-collab/Grabenplaner";
 
-function normalizeVersionTag(value) {
-  const text = String(value || "").trim().replace(/^v/i, "");
-  const shortBeta = text.match(/^(\d+)\.(\d+)-beta$/i);
-  if (shortBeta) return `${shortBeta[1]}.${shortBeta[2]}.0-beta`;
-  return text;
-}
-
-function compareVersions(a, b) {
-  const parse = (value) => normalizeVersionTag(value).replace(/-beta$/i, "").split(".").map((part) => Number(part) || 0);
-  const left = parse(a);
-  const right = parse(b);
-  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
-    const difference = (left[index] || 0) - (right[index] || 0);
-    if (difference) return difference;
-  }
-  return 0;
-}
-
-function releaseTagName(release) {
-  return release?.tag_name || release?.tagName || "";
-}
-
-function selectLatestRelease(releases = []) {
-  const candidates = releases
-    .filter((release) => releaseTagName(release) && !release.draft && !release.isDraft)
-    .sort((a, b) => {
-      const versionOrder = compareVersions(releaseTagName(b), releaseTagName(a));
-      if (versionOrder) return versionOrder;
-      return new Date(b.published_at || b.publishedAt || b.created_at || b.createdAt || 0)
-        - new Date(a.published_at || a.publishedAt || a.created_at || a.createdAt || 0);
-    });
-  return candidates[0] || null;
-}
-
 function findGhExecutable() {
   const candidates = [
     "C:\\Program Files\\GitHub CLI\\gh.exe",
@@ -9089,6 +9062,7 @@ async function latestReleaseViaFetch() {
   return {
     source: token ? "github-token" : "github-public",
     tagName: release.tag_name,
+    name: release.name || "",
     url: release.html_url,
     assets: (release.assets || []).map((asset) => ({
       name: asset.name,
@@ -9109,13 +9083,14 @@ function latestReleaseViaGh() {
   if (!selected) throw new Error("release not found");
   const output = childProcess.execFileSync(
     gh,
-    ["release", "view", selected.tagName, "--repo", GITHUB_REPO, "--json", "tagName,url,assets"],
+    ["release", "view", selected.tagName, "--repo", GITHUB_REPO, "--json", "tagName,name,url,assets"],
     { encoding: "utf8", timeout: 15000, stdio: ["ignore", "pipe", "pipe"] },
   );
   const release = JSON.parse(output);
   return {
     source: "gh",
     tagName: release.tagName,
+    name: release.name || "",
     url: release.url,
     assets: (release.assets || []).map((asset) => ({
       name: asset.name,
@@ -9140,6 +9115,7 @@ async function getLatestReleaseInfo() {
     return {
       source: "none",
       tagName: packageMetadata.version,
+      name: "",
       url: `https://github.com/${GITHUB_REPO}/releases`,
       assets: [],
     };
@@ -9153,6 +9129,7 @@ async function buildUpdateStatus() {
   const latest = await getLatestReleaseInfo();
   const comparison = compareVersions(latest.tagName, packageMetadata.version);
   const asset = latest.assets.find((item) => /windows-portable\.zip$/i.test(item.name)) || latest.assets[0] || null;
+  const updateType = classifyRelease(latest);
   return {
     ok: true,
     currentVersion: packageMetadata.version,
@@ -9161,6 +9138,8 @@ async function buildUpdateStatus() {
     latestTag: latest.tagName,
     latestUrl: latest.url,
     source: latest.source,
+    updateKind: updateType.kind,
+    updateTypeLabel: updateType.label,
     updateAvailable: comparison > 0,
     assetName: asset?.name || "",
     canAutoUpdate: Boolean(asset) && !serverModeActive,
