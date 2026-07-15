@@ -306,6 +306,20 @@ const leadershipPortalPermissions = new Set([
   "notifications:settings",
 ]);
 
+const mobileMoreSecondaryTabs = new Set(["timeOff", "vacation", "amu"]);
+
+function syncPortalTabButtons(tab) {
+  const representedByMore = portalState.mobileLeadership && mobileMoreSecondaryTabs.has(tab);
+  document.querySelectorAll("[data-tab]").forEach((button) => {
+    const active = representedByMore
+      ? button.dataset.tab === "leadershipMore"
+      : button.dataset.tab === tab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
+}
+
 function isLeadershipUser(user = portalUser()) {
   return Array.isArray(user?.permissions)
     && user.permissions.some((permission) => leadershipPortalPermissions.has(permission));
@@ -376,7 +390,11 @@ function applyMobileLeadershipLayout() {
     });
     document.querySelectorAll(".leadership-tab").forEach((button) => button.style.removeProperty("order"));
     navigation.style.removeProperty("--mobile-module-count");
-    if (["leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(portalState.activeTab)) setTab("timeTracking");
+    if (["leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(portalState.activeTab)) {
+      setTab("timeTracking");
+      return;
+    }
+    syncPortalTabButtons(portalState.activeTab);
     return;
   }
   document.querySelectorAll("[data-tab]").forEach((button) => button.classList.add("hidden"));
@@ -396,7 +414,12 @@ function applyMobileLeadershipLayout() {
   });
   navigation.style.setProperty("--mobile-module-count", String(Math.max(1, modules.length)));
   const activeButton = document.querySelector(`[data-tab="${portalState.activeTab}"]`);
-  if (activeButton?.classList.contains("hidden") && modules.length) setTab(moduleTabs[modules[0]]);
+  const secondaryViaMore = modules.includes("more") && mobileMoreSecondaryTabs.has(portalState.activeTab);
+  if (activeButton?.classList.contains("hidden") && modules.length && !secondaryViaMore) {
+    setTab(moduleTabs[modules[0]]);
+    return;
+  }
+  syncPortalTabButtons(portalState.activeTab);
 }
 
 async function loadMobileLayout() {
@@ -567,12 +590,7 @@ function setTab(tab) {
   if (tab === "timeTracking" && !timeTrackingCapabilityEnabled()) tab = "schedule";
   portalState.activeTab = tab;
   rememberPortalTab(tab);
-  document.querySelectorAll("[data-tab]").forEach((button) => {
-    const active = button.dataset.tab === tab;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-selected", String(active));
-    button.tabIndex = active ? 0 : -1;
-  });
+  syncPortalTabButtons(tab);
   el.scheduleView.classList.toggle("active", tab === "schedule");
   el.timeTrackingView.classList.toggle("active", tab === "timeTracking");
   el.timeOffView.classList.toggle("active", tab === "timeOff");
