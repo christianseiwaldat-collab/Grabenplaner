@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.60 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.61 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -374,7 +374,7 @@
 
           <section id="generalSettings" class="settings-section settings-two-column active">
             <div class="settings-card operation-mode-card">
-              <div class="card-heading"><div class="card-icon">Modus</div><div><h2>Betriebsmodus</h2><p>Lokal, zentral im Firmennetz oder vorbereitet für einen abgesicherten HTTPS-Server.</p></div></div>
+              <div class="card-heading"><div class="card-icon">Modus</div><div><h2>Betriebsmodus</h2><p>Lokal, zentral im Firmennetz oder als IT-verwalteter HTTPS-Einzelserver.</p></div></div>
               <div class="operation-mode-options">
                 <button class="operation-mode-option active" id="localModeOption" type="button" aria-current="true">
                   <span class="operation-mode-mark">L</span>
@@ -389,7 +389,7 @@
                 <button class="operation-mode-option server-managed-option" id="publicServerModeOption" type="button" aria-current="false">
                   <span class="operation-mode-mark">HTTPS</span>
                   <span><strong>Serverbetrieb</strong><small>Öffentlicher Zugriff ausschließlich über HTTPS-Reverse-Proxy und geschützte Serverkonfiguration.</small></span>
-                  <span class="status-badge inactive" id="publicServerModeBadge">Vorbereitet</span>
+                  <span class="status-badge inactive" id="publicServerModeBadge">IT-Konfiguration erforderlich</span>
                 </button>
               </div>
               <p class="settings-note" id="portalFoundationHint">Vor der Aktivierung wird ein Admin-Zugang benötigt. Der Wechsel erfordert einen sicheren Neustart.</p>
@@ -660,7 +660,7 @@
 
           <section id="backupSettings" class="settings-section settings-two-column">
             <div class="settings-card full-settings-card server-diagnostics-card">
-              <div class="card-heading"><div class="card-icon">Server</div><div><h2>Server- und Datenbankdiagnose</h2><p>Prüft Betriebsmodus, HTTPS, SQLite, Migrationen, Instanzschutz, Sitzungen und Backups.</p></div></div>
+              <div class="card-heading"><div class="card-icon">Server</div><div><h2>Server-Betriebsprüfung</h2><p>Prüft HTTPS-Konfiguration, SQLite, Migrationen, Instanzschutz, Sitzungen, Speicher und Backups.</p></div></div>
               <div class="server-diagnostics" id="serverDiagnostics"><p class="settings-note">Diagnosedaten werden geladen.</p></div>
               <div class="backup-actions"><button type="button" class="secondary-button" id="refreshServerDiagnosticsButton">Diagnose aktualisieren</button></div>
             </div>
@@ -693,7 +693,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.60 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.61 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

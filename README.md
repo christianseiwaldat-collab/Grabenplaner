@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.60 Beta</strong> · Windows · SQLite · Source-available
+  <strong>v0.61 Beta</strong> · Windows · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -37,9 +37,9 @@
 | GitHub-Aktualisierungscheck | Ja | Ja | Ja |
 | Automatisches Portable-Update | Ja | Ja, am Host-PC | Nein, kontrolliert durch die IT |
 | Zugriff | Nur auf diesem Gerät | Im vertrauenswürdigen Firmennetz | Über Internet oder Intranet per HTTPS |
-| Produktstatus | Verfügbar | Verfügbar | Technische Pilotbasis |
+| Produktstatus | Verfügbar | Verfügbar | IT-verwalteter Produktivbetrieb |
 
-Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Dienst- und Urlaubsplanung an einem Gerät. Im LAN-Host-Modus liegt die Datenbank ausschließlich am Host-PC; Mitarbeitende können sich im Firmen-LAN oder -WLAN anmelden und dort auch die Zeiterfassung verwenden. Der HTTPS-Server erweitert dieses Modell um geschützten Zugriff von außerhalb, muss vor einem Produktiveinsatz jedoch durch die zuständige Firmen-IT eingerichtet und geprüft werden. Details stehen in [SERVERBETRIEB.md](SERVERBETRIEB.md).
+Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Dienst- und Urlaubsplanung an einem Gerät. Im LAN-Host-Modus liegt die Datenbank ausschließlich am Host-PC; Mitarbeitende können sich im Firmen-LAN oder -WLAN anmelden und dort auch die Zeiterfassung verwenden. Der HTTPS-Server erweitert dieses Modell um geschützten Zugriff von außerhalb. Er ist für einen von der Firmen-IT eingerichteten und überwachten Windows-Einzelserver mit Caddy, WinSW, getrennten Dienstrechten sowie kontrollierten Backup-, Update- und Wiederherstellungsabläufen ausgelegt. Die konkrete Domain-, Firewall-, Zertifikats- und Betriebskonfiguration muss vor der Freigabe durch die zuständige IT geprüft werden. Details stehen in [SERVERBETRIEB.md](SERVERBETRIEB.md).
 
 ## Planung, Verwaltung und Mitarbeiterportal
 
@@ -105,21 +105,21 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Diens
 
 ## Schutz sensibler Personalakt-Daten
 
-Sensible Inhalte des Personalakts sowie AUM-Dokumente und ihre geschützten Metadaten werden außerhalb des öffentlichen Webordners gespeichert und zusätzlich mit **AES-256-GCM** verschlüsselt. Die Anwendung prüft Dateitypen anhand ihres Inhalts; Bilder können platzsparend in eine A4-PDF-Datei umgewandelt werden. Im vorgesehenen Serverbetrieb ergänzt eine verpflichtende Virenscanner-Prüfung den Uploadprozess.
+Sensible Inhalte des Personalakts sowie AUM-Dokumente und ihre geschützten Metadaten werden außerhalb des öffentlichen Webordners gespeichert und zusätzlich mit **AES-256-GCM** verschlüsselt. Die Anwendung prüft Dateitypen anhand ihres Inhalts; Bilder können platzsparend in eine A4-PDF-Datei umgewandelt werden. Im HTTPS-Serverbetrieb ergänzt eine verpflichtende Virenscanner-Prüfung den Uploadprozess.
 
 Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und verschlüsselte Dokumentablage werden gemeinsam gesichert. Diese zusätzlichen Schutzmaßnahmen ersetzen nicht HTTPS, sichere Betriebssystem- und Dateiberechtigungen, eine geschützte Schlüsselverwaltung und ein geprüftes Backupkonzept. Betriebliche Indizes und nicht sensible Verwaltungsdaten bleiben für den Anwendungsbetrieb in SQLite lesbar.
 
 ## In Vorbereitung
 
 - **Schnittstellen zur Lohnverrechnung:** Standardisierte Exporte für Arbeitszeiten, Abwesenheiten und relevante Personalstammdaten sind geplant, aber noch nicht verfügbar. Unterstützte Zielformate und Lohnverrechnungssysteme werden erst mit der konkreten Schnittstelle festgelegt.
-- Weitere Produktivhärtung und IT-gestützte Einführung des öffentlichen HTTPS-Serverbetriebs
+- Hochverfügbarkeit und horizontale Skalierung über mehrere Anwendungsinstanzen
 - Nativer Token-Login und Geräte-Sitzungen für den eigenständig versionierten Android-/iOS-Client
 - Erweiterte Auswertungs- und Integrationsmöglichkeiten
 
 ## Schnellstart unter Windows
 
 1. Die portable ZIP-Datei unter [Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.60 Beta starten.cmd` doppelt anklicken.
+2. `Grabenplaner v0.61 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.
@@ -137,7 +137,7 @@ Aktualisierungen werden über GitHub geprüft. Die integrierte Aktualisierung er
 | Lokale AUM-Datenerkennung | PDF.js für digitale PDFs; Tesseract.js mit lokal mitgeliefertem deutschen Sprachmodell für Scan-PDFs, hochgeladene Fotos und Kamerabilder |
 | Geschützter Personalakt-Speicher | AES-256-GCM, kontextgebundene Verschlüsselung und gemeinsame Sicherung mit der Datenbank |
 | Authentifizierung | Rollen, Sitzungen, CSRF-Schutz und bereichsbezogene Berechtigungen |
-| Server-Pilot | HTTPS-Reverse-Proxy, Dienstbetrieb, Diagnose-, Backup- und Restore-Vorlagen |
+| HTTPS-Serverbetrieb | IT-verwalteter Windows-Einzelserver mit Caddy, WinSW, Live-/Ready-Prüfung sowie kontrolliertem Update, Backup und Restore |
 
 Für lokale Entwicklung wird Node.js 22.13 oder neuer benötigt:
 

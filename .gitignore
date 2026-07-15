@@ -11,6 +11,7 @@ backups/*.db
 .env
 npm-debug.log*
 *.log
+__pycache__/
 public/assets/private-*
 public/assets/*-private.*
 output/pdf/Grabenplaner-Prospekt-*.pdf
