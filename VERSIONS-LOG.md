@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.60 Beta
+
+- Persönliche Portal-Einstellungen bündeln Passwortänderung und freiwillige WLAN-Zeitvorschläge an einer festen Stelle.
+- Die Zeiterfassung kann Teammitglieder persönlich begrüßen; die Funktion ist datenschutzfreundlich zunächst deaktiviert. Personalleitung, Admin, IT-Admin und Developer können neutrale Vorlagen sowie die Rückkehrzeiträume nach längerem Urlaub oder Genesung verwalten.
+- Begrüßungen werden serverseitig ausgewählt und geben weder Diagnosen noch AUM-Inhalte oder andere Gesundheitsdetails an Browser beziehungsweise Mobile-Client weiter.
+- Eine versionierte Mobile-API-v1-Basis liefert Status, Branding, Benutzerprofil, Navigation, Startbereich und persönliche Einstellungen mit stabilen Typen und Fehlercodes.
+- Der eigenständig versionierte Android-/iOS-Client erhält dafür den Vertragsstand 0.2.0; der native Token-Login folgt in einem eigenen Sicherheitsblock.
+
 ## v0.59.2 Beta · Serviceupdate
 
 - Mobile Leitungsansicht korrigiert: Die Unterbereiche „ZA beantragen“, „Urlaub beantragen“ und „Krankmeldung & AUM“ bleiben bei einer Layout-Neuberechnung unter „Mehr“ geöffnet.

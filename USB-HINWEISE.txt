@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.59.2 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.60 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,9 +13,10 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Serviceupdate v0.59.2 Beta:
-  - Mobile Unterbereiche unter "Mehr" bleiben auch beim Scrollen und bei Android-Viewportwechseln geöffnet.
-  - "Krankmeldung & AUM" springt nach der Kamerarückkehr nicht mehr zur Zeiterfassung.
+Version v0.60 Beta:
+  - Persönliche Portal-Einstellungen bündeln Passwort und freiwillige WLAN-Zeitvorschläge.
+  - Konfigurierbare, datenschutzneutrale Begrüßungen ergänzen die Zeiterfassung.
+  - Die versionierte Mobile-API-v1-Basis bereitet den eigenständigen Android-/iOS-Client vor.
 
 Leere Zweitkopie:
   Ab v0.42.1 wird die leere Zweitkopie nicht mehr automatisch aktualisiert.
