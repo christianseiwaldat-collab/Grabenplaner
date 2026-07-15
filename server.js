@@ -21,6 +21,13 @@ const {
 } = require("./lib/external-notifications");
 const { acquireDatabaseLock, lockPathForDatabase, releaseDatabaseLock } = require("./lib/database-lock");
 const {
+  assertRuntimeConfiguration,
+  createBoundedRateLimitStore,
+  parseBackupKeep,
+  parseServerPort,
+  runtimeValidationErrors,
+} = require("./lib/server-runtime");
+const {
   DEFAULT_PORTAL_GREETING_SETTINGS,
   PortalGreetingValidationError,
   resolvePortalGreeting,
@@ -43,6 +50,7 @@ const SERVER_PORTAL_PASSWORD_MIN_LENGTH = 10;
 const PORTAL_SESSION_COOKIE = "grabenplaner_session";
 const PORTAL_CSRF_COOKIE = "grabenplaner_csrf";
 const scryptAsync = promisify(crypto.scrypt);
+const DUMMY_PORTAL_PASSWORD_HASH = `scrypt-v1$${Buffer.alloc(16, 0xa5).toString("base64url")}$${Buffer.alloc(64, 0x5a).toString("base64url")}`;
 
 const delegablePortalPermissionCatalog = Object.freeze([
   { id: "schedule:read", label: "Dienstpläne lesen", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
@@ -375,7 +383,9 @@ const deploymentKind = String(process.env.GRABENPLANER_DEPLOYMENT_KIND || "local
 const codespacesForwardingDomain = String(process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || "app.github.dev")
   .trim().toLowerCase();
 const app = express();
-const PORT = Number(process.env.PORT || runtimeConfig.port || 3000);
+const configuredPortValue = process.env.PORT || runtimeConfig.port || 3000;
+const PORT = parseServerPort(configuredPortValue);
+const backupKeep = parseBackupKeep(process.env.GRABENPLANER_BACKUP_KEEP, 30);
 const configuredHost = configuredOperationMode === "lan" ? "0.0.0.0" : "127.0.0.1";
 const HOST = String(process.env.GRABENPLANER_HOST || configuredHost).trim() || "127.0.0.1";
 const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1"]);
@@ -389,6 +399,24 @@ const amuStorageDirectory = path.join(privateDataDirectory, "amu");
 const defaultBackupDirectorySetting = "%USERPROFILE%\\Documents\\grabenplaner-backups";
 const defaultBackupDirectory = process.env.BACKUP_DIR || path.join(os.homedir(), "Documents", "grabenplaner-backups");
 const instanceLockPath = lockPathForDatabase(databasePath);
+
+const runtimeConfiguration = {
+  operationMode: configuredOperationMode,
+  host: HOST,
+  port: PORT,
+  trustProxy: trustProxySetting,
+  deploymentKind,
+  nodeEnvironment: process.env.NODE_ENV,
+  backupKeep,
+  databasePath,
+  dataRoot: dataRootDirectory,
+  seedDemo: process.env.GRABENPLANER_SEED_DEMO,
+  demoProfile: process.env.GRABENPLANER_DEMO_PROFILE,
+  forcePortal: process.env.GRABENPLANER_FORCE_PORTAL,
+  allowUnscannedAmu: process.env.GRABENPLANER_ALLOW_UNSCANNED_AMU,
+  testAmuScanner: process.env.GRABENPLANER_TEST_AMU_SCANNER,
+};
+assertRuntimeConfiguration(runtimeConfiguration);
 
 function normalizeHttpOrigin(value) {
   try {
@@ -406,17 +434,24 @@ const normalizedPublicOrigin = normalizeHttpOrigin(publicUrl);
 
 function trustedCodespacesForwardedOrigin(request) {
   if (deploymentKind !== "codespaces-test" || !request.secure || !isLoopbackRequest(request)) return "";
-  const forwardedHost = String(request.headers["x-forwarded-host"] || "").split(",", 1)[0].trim().toLowerCase();
-  if (!forwardedHost || !/^[a-z0-9.-]+(?::\d+)?$/.test(forwardedHost)) return "";
-  const candidate = normalizeHttpOrigin(`https://${forwardedHost}`);
-  if (!candidate) return "";
-  const hostname = new URL(candidate).hostname;
-  if (!codespacesForwardingDomain || !hostname.endsWith(`.${codespacesForwardingDomain}`)) return "";
   const configuredPortMarker = normalizedPublicOrigin
     ? new URL(normalizedPublicOrigin).hostname.match(/-(\d+)\./)?.[1]
     : "";
-  if (!hostname.includes(`-${configuredPortMarker || PORT}.`)) return "";
-  return candidate;
+  const expectedHostnameSuffix = `-${configuredPortMarker || PORT}.${codespacesForwardingDomain}`;
+  const hostCandidates = [
+    String(request.headers.host || ""),
+    String(request.headers["x-forwarded-host"] || "").split(",", 1)[0],
+  ];
+
+  for (const value of new Set(hostCandidates.map((entry) => entry.trim().toLowerCase()).filter(Boolean))) {
+    if (!/^[a-z0-9.-]+(?::\d+)?$/.test(value)) continue;
+    const candidate = normalizeHttpOrigin(`https://${value}`);
+    if (!candidate) continue;
+    const hostname = new URL(candidate).hostname;
+    if (!codespacesForwardingDomain || !hostname.endsWith(expectedHostnameSuffix)) continue;
+    return candidate;
+  }
+  return "";
 }
 
 function requestOriginAllowed(request, origin) {
@@ -518,6 +553,7 @@ function safeRemoveFile(filePath) {
 }
 
 function cleanupPortableInstallRoot() {
+  if (serverModeActive) return;
   safeRemoveFile(path.join(__dirname, "public", "assets", ["lamp", "rechter_logo.webp"].join("")));
   if (fs.existsSync(path.join(__dirname, ".git"))) return;
 
@@ -576,6 +612,7 @@ let retentionInterval = null;
 let scannerProbeInterval = null;
 let sicknessSweepInterval = null;
 let notificationDispatchInterval = null;
+let rateLimitCleanupInterval = null;
 
 function verifyDatabaseFile(filePath) {
   const verification = new DatabaseSync(filePath, { readOnly: true });
@@ -642,7 +679,7 @@ function createDatabaseBackupToDirectory(backupDirectory, reason = "automatic", 
     safeRemoveFile(target);
     throw error;
   }
-  pruneDatabaseBackups(backupDirectory, 30);
+  pruneDatabaseBackups(backupDirectory, backupKeep);
   return { path: target, createdAt: new Date().toISOString(), reason, kind, verified: true, amuBackup };
 }
 
@@ -1423,7 +1460,11 @@ const protectedPersonnelMigrationRequired = tableExists("amu_reports") && (
 );
 const unreleasedSicknessDraftSchemaPresent = tableExists("sickness_cases")
   && !columnExists("sickness_cases", "employee_lookup");
-if (databaseExistedBeforeOpen && (serverModeActive || protectedPersonnelMigrationRequired || unreleasedSicknessDraftSchemaPresent)) {
+const legacySchemaMigrationRequired = tableExists("employees") && !columnExists("employees", "personnel_number");
+const portalMobileBaselineMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.60-portal-mobile-foundation' LIMIT 1").get();
+if (databaseExistedBeforeOpen && (portalMobileBaselineMigrationRequired || protectedPersonnelMigrationRequired
+  || unreleasedSicknessDraftSchemaPresent || legacySchemaMigrationRequired)) {
   createInternalDatabaseBackup("pre-migration");
 }
 
@@ -1449,7 +1490,7 @@ if (unreleasedSicknessDraftSchemaPresent) {
   }
 }
 
-if (tableExists("employees") && !columnExists("employees", "personnel_number")) {
+if (legacySchemaMigrationRequired) {
   migrateLegacySchema();
 } else {
   createSchema();
@@ -2150,6 +2191,14 @@ if (process.env.GRABENPLANER_SEED_DEMO === "1" && db.prepare("SELECT COUNT(*) AS
 
 app.disable("x-powered-by");
 app.use((request, response, next) => {
+  const providedRequestId = String(request.headers["x-request-id"] || "").trim();
+  request.grabenplanerRequestId = /^[a-z0-9._:-]{8,100}$/i.test(providedRequestId)
+    ? providedRequestId
+    : crypto.randomUUID();
+  response.setHeader("X-Request-Id", request.grabenplanerRequestId);
+  next();
+});
+app.use((request, response, next) => {
   const embeddedPdfPreview = request.path === "/api/schedule-preview.pdf" || request.path === "/api/vacations-preview.pdf";
   const ocrClientAsset = request.path === "/portal" || request.path === "/portal/" || request.path === "/portal.html"
     || request.path.startsWith("/vendor/tesseract") || request.path.startsWith("/vendor/pdfjs-v6.1.200");
@@ -2157,12 +2206,19 @@ app.use((request, response, next) => {
   response.setHeader("X-Frame-Options", embeddedPdfPreview ? "SAMEORIGIN" : "DENY");
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  response.setHeader("Content-Security-Policy", `default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'${ocrClientAsset ? " 'wasm-unsafe-eval'" : ""}; worker-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors '${embeddedPdfPreview ? "self" : "none"}'`);
+  response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  response.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+  response.setHeader("X-Permitted-Cross-Domain-Policies", "none");
+  response.setHeader("Content-Security-Policy", `default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'${ocrClientAsset ? " 'wasm-unsafe-eval'" : ""}; worker-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors '${embeddedPdfPreview ? "self" : "none"}'`);
   if (request.secure) response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  if (request.path.startsWith("/api/portal/") || request.path.startsWith("/api/mobile/")) response.setHeader("Cache-Control", "no-store");
+  if ((serverModeActive && request.path.startsWith("/api/"))
+    || request.path.startsWith("/api/portal/") || request.path.startsWith("/api/mobile/")) {
+    response.setHeader("Cache-Control", "no-store");
+  }
   if (serverModeActive && !request.secure) {
     const loopbackServiceEndpoint = isLoopbackRequest(request)
-      && ((request.method === "GET" && request.path === "/api/health") || (request.method === "POST" && request.path === "/api/service/stop"));
+      && ((request.method === "GET" && ["/api/health", "/api/health/live", "/api/health/ready"].includes(request.path))
+        || (request.method === "POST" && request.path === "/api/service/stop"));
     if (!loopbackServiceEndpoint) {
       response.status(426).json({ error: "Der öffentliche Serverbetrieb akzeptiert ausschließlich HTTPS.", code: "HTTPS_REQUIRED" });
       return;
@@ -2317,8 +2373,10 @@ function sha256(value) {
   return crypto.createHash("sha256").update(String(value || "")).digest("hex");
 }
 
-const loginRateLimits = new Map();
-const loginBrandingRateLimits = new Map();
+const LOGIN_RATE_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_BRANDING_RATE_WINDOW_MS = 5 * 60 * 1000;
+const loginRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 2048, maxEventsPerKey: 15 });
+const loginBrandingRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_BRANDING_RATE_WINDOW_MS, maxKeys: 2048, maxEventsPerKey: 60 });
 
 function loginRateKey(request) {
   return String(request.ip || request.socket?.remoteAddress || "unknown").replace(/^::ffff:/, "");
@@ -2399,11 +2457,9 @@ function assertLoginRateLimit(request) {
   if (!serverModeActive) return;
   const key = loginRateKey(request);
   const now = Date.now();
-  const windowMs = 15 * 60 * 1000;
-  const recent = (loginRateLimits.get(key) || []).filter((timestamp) => now - timestamp < windowMs);
-  loginRateLimits.set(key, recent);
+  const recent = loginRateLimits.get(key, now);
   if (recent.length >= 15) {
-    const retrySeconds = Math.max(1, Math.ceil((windowMs - (now - recent[0])) / 1000));
+    const retrySeconds = Math.max(1, Math.ceil((LOGIN_RATE_WINDOW_MS - (now - recent[0])) / 1000));
     const error = httpError(429, "Von diesem Gerät gab es zu viele fehlgeschlagene Anmeldungen. Bitte später erneut versuchen.", "LOGIN_RATE_LIMITED");
     error.retryAfter = retrySeconds;
     throw error;
@@ -2413,28 +2469,24 @@ function assertLoginRateLimit(request) {
 function registerFailedLogin(request) {
   if (!serverModeActive) return;
   const key = loginRateKey(request);
-  const attempts = loginRateLimits.get(key) || [];
-  attempts.push(Date.now());
-  loginRateLimits.set(key, attempts.slice(-15));
+  loginRateLimits.record(key, Date.now());
 }
 
 function clearLoginRate(request) {
-  loginRateLimits.delete(loginRateKey(request));
+  loginRateLimits.clear(loginRateKey(request));
 }
 
 function assertLoginBrandingRateLimit(request) {
   const key = loginRateKey(request);
   const now = Date.now();
-  const windowMs = 5 * 60 * 1000;
-  const recent = (loginBrandingRateLimits.get(key) || []).filter((timestamp) => now - timestamp < windowMs);
+  const recent = loginBrandingRateLimits.get(key, now);
   if (recent.length >= 60) {
-    const retrySeconds = Math.max(1, Math.ceil((windowMs - (now - recent[0])) / 1000));
+    const retrySeconds = Math.max(1, Math.ceil((LOGIN_BRANDING_RATE_WINDOW_MS - (now - recent[0])) / 1000));
     const error = httpError(429, "Zu viele Branding-Abfragen. Bitte spaeter erneut versuchen.", "LOGIN_BRANDING_RATE_LIMITED");
     error.retryAfter = retrySeconds;
     throw error;
   }
-  recent.push(now);
-  loginBrandingRateLimits.set(key, recent);
+  loginBrandingRateLimits.record(key, now);
 }
 
 function parseCookies(request) {
@@ -2718,7 +2770,7 @@ function assertPortalCsrf(request) {
 
 function enforceAdminApiAccess(request, _response, next) {
   try {
-    if (request.path === "/health" || request.path === "/service/stop" || request.path === "/integrations/wifi/events") return next();
+    if (["/health", "/health/live", "/health/ready", "/service/stop", "/integrations/wifi/events"].includes(request.path)) return next();
     const status = getPortalStatus();
     if (!status.portalEnabled || request.path.startsWith("/portal/") || request.path.startsWith("/mobile/")) return next();
     const method = String(request.method || "GET").toUpperCase();
@@ -9168,28 +9220,71 @@ function serverDiagnostics() {
   const portal = getPortalStatus();
   const migration = db.prepare("SELECT id, app_version, applied_at FROM schema_migrations ORDER BY applied_at DESC, id DESC LIMIT 1").get() || null;
   const warnings = [];
-  const dataHealth = directoryDiagnostics(dataRootDirectory);
+  const requiredStorageDirectories = {
+    database: path.dirname(path.resolve(databasePath)),
+    appBackups: appBackupDirectory,
+    brandingKits: brandingKitsDirectory,
+    privateData: privateDataDirectory,
+    amu: amuStorageDirectory,
+  };
+  const requiredStorageHealth = Object.fromEntries(Object.entries(requiredStorageDirectories)
+    .map(([name, directory]) => [name, { directory, ...directoryDiagnostics(directory) }]));
+  const requiredStorageVolumes = Object.values(requiredStorageHealth).map((item) => item.volume).filter(Boolean);
+  const requiredStorageFreeBytes = Object.values(requiredStorageHealth).map((item) => item.freeBytes).filter(Number.isFinite);
+  const dataHealth = {
+    writable: Object.values(requiredStorageHealth).every((item) => item.writable),
+    freeBytes: requiredStorageFreeBytes.length ? Math.min(...requiredStorageFreeBytes) : null,
+    volume: requiredStorageVolumes[0] || path.parse(path.resolve(dataRootDirectory)).root,
+    directories: requiredStorageHealth,
+  };
   let externalDirectory = "";
   try { externalDirectory = backupDirectoryFromSettings(settings); } catch (error) { warnings.push(`Das externe Backupziel ist ungültig: ${error.message}`); }
   const backupHealth = externalDirectory ? directoryDiagnostics(externalDirectory) : { writable: false, freeBytes: null, volume: "" };
-  const latestBackup = latestDatabaseBackup(externalDirectory || appBackupDirectory) || latestDatabaseBackup(appBackupDirectory);
+  const latestExternalBackup = externalDirectory ? latestDatabaseBackup(externalDirectory) : null;
+  const latestAppBackup = latestDatabaseBackup(appBackupDirectory);
+  const latestBackup = latestExternalBackup || latestAppBackup;
   const latestBackupAgeHours = latestBackup ? Math.max(0, (Date.now() - latestBackup.modifiedMs) / 3600000) : null;
+  const latestExternalBackupAgeHours = latestExternalBackup ? Math.max(0, (Date.now() - latestExternalBackup.modifiedMs) / 3600000) : null;
+  const backupFreshnessHours = Math.max(6, Number(settings.backup_interval_hours || 2) * 3);
+  const externalBackupReady = settingEnabled(settings, "external_backup_enabled") && backupHealth.writable
+    && latestExternalBackupAgeHours !== null && latestExternalBackupAgeHours <= backupFreshnessHours;
   const amu = amuStorage ? amuStorage.diagnostics() : { ok: false, writable: false, error: amuStorageStartupError };
+  const runtimeErrors = runtimeValidationErrors(runtimeConfiguration);
+  const publicHttpsReady = /^https:\/\//i.test(publicUrl);
   if (serverModeActive && !/^https:\/\//i.test(publicUrl)) warnings.push("Für den Serverbetrieb fehlt eine gültige HTTPS-Adresse.");
   if (serverModeActive && portal.adminSetupState !== "configured") warnings.push("Vor dem Serverstart muss ein Admin-Zugang eingerichtet sein.");
   if (serverModeActive && !loopbackHosts.has(HOST.toLowerCase())) warnings.push("Der Server lauscht nicht ausschließlich auf Loopback. Firewall und Reverse-Proxy-Konfiguration prüfen.");
+  if (runtimeErrors.length) warnings.push(...runtimeErrors);
   if (settings.external_backup_enabled === "0") warnings.push("Die zusätzliche externe Datensicherung ist deaktiviert.");
-  if (!dataHealth.writable) warnings.push("Das Server-Datenverzeichnis ist nicht beschreibbar.");
+  if (!dataHealth.writable) {
+    const failedDirectories = Object.entries(requiredStorageHealth).filter(([, item]) => !item.writable).map(([name]) => name);
+    warnings.push(`Mindestens ein benötigtes Server-Datenverzeichnis ist nicht beschreibbar: ${failedDirectories.join(", ")}.`);
+  }
   if (settingEnabled(settings, "external_backup_enabled") && !backupHealth.writable) warnings.push("Das externe Backupziel ist nicht beschreibbar.");
-  if (latestBackupAgeHours === null || latestBackupAgeHours > Math.max(6, Number(settings.backup_interval_hours || 2) * 3)) warnings.push("Es wurde kein ausreichend aktuelles verifiziertes Datenbank-Backup gefunden.");
+  if (latestExternalBackupAgeHours === null || latestExternalBackupAgeHours > backupFreshnessHours) warnings.push("Es wurde kein ausreichend aktuelles verifiziertes externes Datenbank-Backup gefunden.");
   if (externalDirectory && path.parse(path.resolve(databasePath)).root.toLowerCase() === path.parse(path.resolve(externalDirectory)).root.toLowerCase()) warnings.push("Datenbank und externes Backup liegen auf demselben Laufwerk.");
   if (!amu.ok) warnings.push(`Der geschützte AUM-Speicher ist nicht betriebsbereit${amu.error ? `: ${amu.error}` : "."}`);
   if (serverModeActive && serviceControlToken.length < 32) warnings.push("Der sichere Token für den Windows-Dienststopp fehlt.");
   const lockedAccounts = Number(db.prepare("SELECT COUNT(*) AS count FROM portal_users WHERE locked_until > CURRENT_TIMESTAMP").get().count || 0);
   if (lockedAccounts) warnings.push(`${lockedAccounts} Zugang/Zugänge sind derzeit gesperrt.`);
+  const productionChecks = [
+    { id: "mode", label: "Servermodus", ok: serverModeActive, detail: serverModeActive ? "aktiv" : "nicht aktiv" },
+    { id: "runtime", label: "Produktionslaufzeit", ok: runtimeErrors.length === 0, detail: `${deploymentKind} / NODE_ENV=${process.env.NODE_ENV || "nicht gesetzt"}` },
+    { id: "listener", label: "Interne Bindung", ok: loopbackHosts.has(HOST.toLowerCase()), detail: `${HOST}:${PORT}` },
+    { id: "proxy", label: "Proxy-Vertrauen", ok: trustProxySetting.toLowerCase() === "loopback", detail: trustProxySetting },
+    { id: "https", label: "HTTPS-Adresse", ok: publicHttpsReady, detail: publicUrl || "nicht konfiguriert" },
+    { id: "admin", label: "Admin-Zugang", ok: portal.adminSetupState === "configured", detail: portal.adminSetupState },
+    { id: "database", label: "SQLite-Integrität", ok: startupIntegrity[0] === "ok", detail: startupIntegrity[0] || "unbekannt" },
+    { id: "data", label: "Datenverzeichnis", ok: dataHealth.writable, detail: dataHealth.writable ? "beschreibbar" : "nicht beschreibbar" },
+    { id: "backup", label: "Externes Backup", ok: externalBackupReady, detail: latestExternalBackup ? latestExternalBackup.modifiedAt : "noch kein verifiziertes Backup" },
+    { id: "amu", label: "AUM-Speicher", ok: amu.ok, detail: amu.ok ? "verschlüsselt und beschreibbar" : (amu.error || "nicht bereit") },
+    { id: "scanner", label: "AUM-Virenscanner", ok: !amu.requireScanner || (amu.scannerChecked && amu.scannerAvailable && amu.ok), detail: amu.scannerEngine || (amu.scannerChecked ? "nicht verfügbar" : "Prüfung läuft") },
+    { id: "service-stop", label: "Dienststopp", ok: serviceControlToken.length >= 32, detail: serviceControlToken.length >= 32 ? "Token konfiguriert" : "Token fehlt" },
+  ];
   return {
     ready: startupIntegrity.length === 1 && startupIntegrity[0] === "ok" && dataHealth.writable
-      && (!serverModeActive || (/^https:\/\//i.test(publicUrl) && portal.adminSetupState === "configured" && backupHealth.writable && amu.ok && serviceControlToken.length >= 32)),
+      && (!serverModeActive || (runtimeErrors.length === 0 && publicHttpsReady && portal.adminSetupState === "configured"
+        && externalBackupReady && amu.ok && serviceControlToken.length >= 32)),
     mode: portal.operationMode,
     publicUrl: portal.publicUrl,
     httpsRequired: portal.httpsRequired,
@@ -9217,18 +9312,13 @@ function serverDiagnostics() {
       freeBytes: backupHealth.freeBytes,
       latest: latestBackup,
       latestAgeHours: latestBackupAgeHours,
+      latestExternal: latestExternalBackup,
+      latestExternalAgeHours: latestExternalBackupAgeHours,
+      retentionCount: backupKeep,
       lastVerified: Boolean(lastBackup?.appBackup?.verified || lastBackup?.externalBackup?.verified),
     },
-    pilotChecks: [
-      { id: "mode", label: "Servermodus", ok: serverModeActive, detail: serverModeActive ? "aktiv" : "für den Pilot noch nicht aktiv" },
-      { id: "https", label: "HTTPS-Adresse", ok: /^https:\/\//i.test(publicUrl), detail: publicUrl || "nicht konfiguriert" },
-      { id: "admin", label: "Admin-Zugang", ok: portal.adminSetupState === "configured", detail: portal.adminSetupState },
-      { id: "database", label: "SQLite-Integrität", ok: startupIntegrity[0] === "ok", detail: startupIntegrity[0] || "unbekannt" },
-      { id: "data", label: "Datenverzeichnis", ok: dataHealth.writable, detail: dataHealth.writable ? "beschreibbar" : "nicht beschreibbar" },
-      { id: "backup", label: "Externes Backup", ok: backupHealth.writable && latestBackupAgeHours !== null, detail: latestBackup ? latestBackup.modifiedAt : "noch kein Backup" },
-      { id: "amu", label: "AUM-Speicher", ok: amu.ok, detail: amu.ok ? "verschlüsselt und beschreibbar" : (amu.error || "nicht bereit") },
-      { id: "service-stop", label: "Dienststopp", ok: serviceControlToken.length >= 32, detail: serviceControlToken.length >= 32 ? "Token konfiguriert" : "Token fehlt" },
-    ],
+    productionChecks,
+    pilotChecks: productionChecks,
     security: {
       lockedAccounts,
       activeSessions: Number(db.prepare("SELECT COUNT(*) AS count FROM portal_sessions WHERE revoked_at IS NULL AND expires_at > CURRENT_TIMESTAMP").get().count || 0),
@@ -9240,16 +9330,14 @@ function serverDiagnostics() {
   };
 }
 
-app.get("/api/health", (_request, response) => {
+function sendReadiness(response) {
   const diagnostics = serverDiagnostics();
-  response.status(diagnostics.ready ? 200 : 503).json({
-    ok: diagnostics.ready,
-    app: APP_NAME,
-    version: packageMetadata.version,
-    mode: diagnostics.mode,
-    database: diagnostics.database.integrity,
-  });
-});
+  response.status(diagnostics.ready ? 200 : 503).json({ ok: diagnostics.ready });
+}
+
+app.get("/api/health/live", (_request, response) => response.json({ ok: true }));
+app.get("/api/health/ready", (_request, response) => sendReadiness(response));
+app.get("/api/health", (_request, response) => sendReadiness(response));
 
 app.post("/api/service/stop", (request, response) => {
   if (!serverModeActive || !isLoopbackRequest(request) || serviceControlToken.length < 32) {
@@ -10661,8 +10749,8 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
   if (user?.locked_until && new Date(user.locked_until) > now) {
     throw httpError(429, "Der Zugang ist vorübergehend gesperrt. Bitte später erneut versuchen.", "PORTAL_ACCOUNT_LOCKED");
   }
-  const valid = Boolean(user?.active && user?.employee_active && user.password_hash)
-    && await verifyPortalPassword(request.body.password, user.password_hash);
+  const passwordMatches = await verifyPortalPassword(request.body.password, user?.password_hash || DUMMY_PORTAL_PASSWORD_HASH);
+  const valid = Boolean(user?.active && user?.employee_active && user.password_hash) && passwordMatches;
   if (!valid) {
     registerFailedLogin(request);
     if (user) {
@@ -10709,6 +10797,7 @@ app.post("/api/portal/v1/auth/logout", (request, response) => {
     auditPortal(session.employeeNumber, "portal.logout", "portal_user", session.employeeNumber);
   }
   clearPortalCookies(request, response);
+  if (serverModeActive) response.setHeader("Clear-Site-Data", '"cache", "cookies", "storage"');
   response.json({ ok: true });
 });
 
@@ -14722,19 +14811,22 @@ app.get("/api/vacations-preview.pdf", (request, response) => {
 });
 
 app.use((error, request, response, _next) => {
-  const status = Number.isInteger(error.status) && error.status >= 100 && error.status < 1000 ? error.status : 500;
-  if (status >= 500) console.error(error);
+  const status = Number.isInteger(error.status) && error.status >= 400 && error.status <= 599 ? error.status : 500;
+  const requestId = request.grabenplanerRequestId || crypto.randomUUID();
+  if (status >= 500) console.error(`[${requestId}] ${request.method} ${request.originalUrl || request.path}`, error);
+  if (response.headersSent) {
+    _next(error);
+    return;
+  }
+  response.setHeader("X-Request-Id", requestId);
   if (error.retryAfter) response.setHeader("Retry-After", String(error.retryAfter));
   if (request.path.startsWith("/api/mobile/")) {
-    const providedRequestId = String(request.headers["x-request-id"] || "").trim();
-    const requestId = /^[a-z0-9._:-]{8,100}$/i.test(providedRequestId) ? providedRequestId : crypto.randomUUID();
-    response.setHeader("X-Request-Id", requestId);
     const mobileError = {
-      code: error.code || (status >= 500 ? "INTERNAL_ERROR" : "REQUEST_FAILED"),
+      code: status >= 500 ? "INTERNAL_ERROR" : (error.code || "REQUEST_FAILED"),
       message: status >= 500 ? "Die Aktion konnte nicht ausgeführt werden." : (error.message || "Die Aktion konnte nicht ausgeführt werden."),
       requestId,
     };
-    if (error.details?.fieldErrors && typeof error.details.fieldErrors === "object" && !Array.isArray(error.details.fieldErrors)) {
+    if (status < 500 && error.details?.fieldErrors && typeof error.details.fieldErrors === "object" && !Array.isArray(error.details.fieldErrors)) {
       mobileError.fieldErrors = Object.fromEntries(Object.entries(error.details.fieldErrors)
         .filter(([field]) => String(field).trim())
         .map(([field, message]) => [String(field), String(message || "Ungültige Eingabe.")]));
@@ -14743,10 +14835,12 @@ app.use((error, request, response, _next) => {
     return;
   }
   const payload = {
-    error: error.message || "Ein unerwarteter Fehler ist aufgetreten.",
+    error: status >= 500 ? "Die Aktion konnte nicht ausgeführt werden." : (error.message || "Die Aktion konnte nicht ausgeführt werden."),
+    requestId,
   };
-  if (error.code) payload.code = error.code;
-  if (error.details && typeof error.details === "object") payload.details = error.details;
+  if (status >= 500) payload.code = "INTERNAL_ERROR";
+  else if (error.code) payload.code = error.code;
+  if (status < 500 && error.details && typeof error.details === "object") payload.details = error.details;
   response.status(status).json(payload);
 });
 
@@ -14827,6 +14921,14 @@ function startServer() {
       processOutboundNotificationJobs().catch((error) => console.error("Externe Warnmeldungen konnten nicht verarbeitet werden:", error));
     }, 60 * 1000);
     notificationDispatchInterval.unref();
+    if (serverModeActive) {
+      rateLimitCleanupInterval = setInterval(() => {
+        const now = Date.now();
+        loginRateLimits.prune(now);
+        loginBrandingRateLimits.prune(now);
+      }, 5 * 60 * 1000);
+      rateLimitCleanupInterval.unref();
+    }
     if (serverModeActive && amuStorage) {
       scannerProbeInterval = setInterval(() => {
         amuScannerProbe = amuStorage.probeScanner().catch((error) => {
@@ -14874,6 +14976,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
   if (scannerProbeInterval) clearInterval(scannerProbeInterval);
   if (sicknessSweepInterval) clearInterval(sicknessSweepInterval);
   if (notificationDispatchInterval) clearInterval(notificationDispatchInterval);
+  if (rateLimitCleanupInterval) clearInterval(rateLimitCleanupInterval);
   if (!server) {
     finish();
     return;

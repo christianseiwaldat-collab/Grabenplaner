@@ -1,4 +1,4 @@
-[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
+﻿[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 param(
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
@@ -10,7 +10,7 @@ param(
 
     [string]$ServiceName = 'GrabenplanerServer',
     [string]$NodeExecutable = 'node',
-    [string]$InternalHealthUrl = 'http://127.0.0.1:3000/api/health',
+    [string]$InternalHealthUrl = 'http://127.0.0.1:3000/api/health/ready',
     [string]$AppDirectory = 'C:\Program Files\Grabenplaner\app',
     [string]$AmuBackupDirectory,
     [string]$AmuDirectory = 'C:\ProgramData\Grabenplaner\private\amu',
@@ -27,6 +27,19 @@ function Assert-LocalFile([string]$Path) {
     if ($fullPath.StartsWith('\\')) { throw "SQLite-Dateien auf Netzpfaden werden nicht unterstuetzt: $fullPath" }
     if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) { throw "Datei nicht gefunden: $fullPath" }
     return $fullPath
+}
+
+function Test-SameOrChildPath([string]$Candidate, [string]$Parent) {
+    $candidatePath = [System.IO.Path]::GetFullPath($Candidate).TrimEnd('\')
+    $parentPath = [System.IO.Path]::GetFullPath($Parent).TrimEnd('\')
+    return $candidatePath.Equals($parentPath, [StringComparison]::OrdinalIgnoreCase) -or
+        $candidatePath.StartsWith($parentPath + '\', [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Assert-SeparateTrees([string]$First, [string]$Second, [string]$Label) {
+    if ((Test-SameOrChildPath $First $Second) -or (Test-SameOrChildPath $Second $First)) {
+        throw "$Label muessen vollstaendig getrennte Ordnerbaeume sein."
+    }
 }
 
 function Test-SqliteDatabase([string]$Path) {
@@ -76,6 +89,77 @@ process.stdout.write(JSON.stringify({ ok: true, fileCount: result.fileCount }));
     return $verification
 }
 
+function Start-DatabaseMaintenanceLock([string]$Path, [string]$AppRoot, [string]$WorkingDirectory) {
+    $lockModule = Join-Path $AppRoot 'lib\database-lock.js'
+    if (-not (Test-Path -LiteralPath $lockModule -PathType Leaf)) { throw "Datenbanksperrmodul nicht gefunden: $lockModule" }
+    $helperPath = Join-Path $WorkingDirectory ".database-maintenance-lock-$([Guid]::NewGuid().ToString('N')).js"
+    $script = @'
+const [modulePath, databasePath] = process.argv.slice(2);
+const { acquireDatabaseLock, releaseDatabaseLock } = require(modulePath);
+const lock = acquireDatabaseLock({ databasePath, kind: 'backup', appVersion: 'server-restore-probe' });
+let released = false;
+function release() {
+  if (released) return;
+  released = true;
+  try { releaseDatabaseLock(lock); } finally { process.exit(0); }
+}
+process.stdout.write('LOCKED\n');
+process.stdin.setEncoding('utf8');
+process.stdin.once('data', release);
+process.stdin.once('end', release);
+process.on('SIGTERM', release);
+setInterval(() => {}, 60_000);
+'@
+    [System.IO.File]::WriteAllText($helperPath, $script, [Text.UTF8Encoding]::new($false))
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $NodeExecutable
+    $startInfo.Arguments = '"{0}" "{1}" "{2}"' -f $helperPath.Replace('"', '\"'), $lockModule.Replace('"', '\"'), $Path.Replace('"', '\"')
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardInput = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    try {
+        if (-not $process.Start()) { throw 'Der Datenbank-Wartungslock konnte nicht gestartet werden.' }
+        $lineTask = $process.StandardOutput.ReadLineAsync()
+        if (-not $lineTask.Wait(10000) -or $lineTask.Result -ne 'LOCKED') {
+            if (-not $process.HasExited) { $process.Kill() }
+            $detail = $process.StandardError.ReadToEnd()
+            throw "Die Datenbank wird noch verwendet oder der Wartungslock ist fehlgeschlagen. $detail"
+        }
+        return [pscustomobject]@{ Process = $process; HelperPath = $helperPath }
+    } catch {
+        $process.Dispose()
+        Remove-Item -LiteralPath $helperPath -Force -ErrorAction SilentlyContinue
+        throw
+    }
+}
+
+function Stop-DatabaseMaintenanceLock($Handle) {
+    if (-not $Handle) { return }
+    try {
+        if (-not $Handle.Process.HasExited) {
+            $Handle.Process.StandardInput.WriteLine('release')
+            $Handle.Process.StandardInput.Flush()
+            $Handle.Process.StandardInput.Close()
+            if (-not $Handle.Process.WaitForExit(10000)) { $Handle.Process.Kill() }
+        }
+    } finally {
+        $Handle.Process.Dispose()
+        Remove-Item -LiteralPath $Handle.HelperPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+$maintenanceMutex = [Threading.Mutex]::new($false, 'Global\GrabenplanerServerMaintenance')
+$maintenanceMutexHeld = $false
+try {
+if (-not $maintenanceMutex.WaitOne(0)) {
+    throw 'Eine andere Grabenplaner-Wartung (Backup, Restore oder Update) ist bereits aktiv.'
+}
+$maintenanceMutexHeld = $true
+
 $service = Get-Service -Name $ServiceName -ErrorAction Stop
 if ($service.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Stopped) {
     throw "Der Dienst $ServiceName muss vor der Wiederherstellung vollstaendig beendet sein. Aktueller Status: $($service.Status)."
@@ -86,6 +170,10 @@ Test-SqliteDatabase -Path $source
 $target = [System.IO.Path]::GetFullPath($DatabasePath)
 if ($target.StartsWith('\\')) { throw 'Die Zieldatenbank darf nicht auf einem Netzpfad liegen.' }
 if ($source -eq $target) { throw 'Backup-Datei und Zieldatenbank duerfen nicht identisch sein.' }
+$resolvedAppDirectory = [System.IO.Path]::GetFullPath($AppDirectory)
+if ($resolvedAppDirectory.StartsWith('\\') -or $resolvedAppDirectory -eq [System.IO.Path]::GetPathRoot($resolvedAppDirectory)) {
+    throw 'Der App-Ordner muss ein lokaler Ordner unterhalb des Laufwerksstamms sein.'
+}
 
 $targetDirectory = Split-Path -Parent $target
 $timestamp = Get-Date -Format 'yyyy-MM-ddTHH-mm-ss-fff'
@@ -102,6 +190,11 @@ if (-not $AmuBackupDirectory) {
     $AmuBackupDirectory = Join-Path (Split-Path -Parent $source) "$([System.IO.Path]::GetFileNameWithoutExtension($source)).amu"
 }
 $amuSource = [System.IO.Path]::GetFullPath($AmuBackupDirectory)
+$amuPaths = @($amuSource, $amuTarget)
+if ($amuPaths.Where({ $_.StartsWith('\\') -or $_ -eq [System.IO.Path]::GetPathRoot($_) }).Count -gt 0) {
+    throw 'AUM-Backup und AUM-Ziel muessen lokale Ordner unterhalb des Laufwerksstamms sein.'
+}
+Assert-SeparateTrees $amuSource $amuTarget 'AUM-Backup und AUM-Ziel'
 $amuManifestPath = Join-Path $amuSource 'manifest.json'
 if (-not (Test-Path -LiteralPath $amuManifestPath -PathType Leaf)) { throw "Das zum Datenbank-Backup gehörende AMU-Manifest wurde nicht gefunden: $amuSource" }
 if (-not (Test-Path -LiteralPath $amuModule -PathType Leaf)) { throw "AMU-Backupmodul nicht gefunden: $amuModule" }
@@ -138,9 +231,13 @@ if (-not $PSCmdlet.ShouldProcess($target, "Mit verifiziertem Backup $source wied
 
 New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
 $hadDatabase = Test-Path -LiteralPath $target -PathType Leaf
-if ($hadDatabase) { New-SafetyBackup -Source $target -Target $safetyBackup }
+$databaseLockHandle = $null
+$transactionCommitted = $false
+$restoreResult = $null
 
 try {
+    $databaseLockHandle = Start-DatabaseMaintenanceLock -Path $target -AppRoot $resolvedAppDirectory -WorkingDirectory $targetDirectory
+    if ($hadDatabase) { New-SafetyBackup -Source $target -Target $safetyBackup }
     Copy-Item -LiteralPath $source -Destination $temporary -Force
     Test-SqliteDatabase -Path $temporary
     Remove-Item -LiteralPath $walPath, $shmPath -Force -ErrorAction SilentlyContinue
@@ -153,6 +250,9 @@ try {
         Invoke-AmuStorage -Action 'restore' -ModulePath $amuModule -Source $amuSource -Target $amuTarget | Out-Null
         $amuRestored = $true
     }
+
+    Stop-DatabaseMaintenanceLock $databaseLockHandle
+    $databaseLockHandle = $null
 
     if ($StartServiceAfterRestore) {
         Start-Service -Name $ServiceName
@@ -168,13 +268,8 @@ try {
         if (-not $healthy) { throw 'Der Dienst wurde nach der Wiederherstellung nicht rechtzeitig betriebsbereit.' }
     }
 
-    Remove-Item -LiteralPath $rawPrevious -Force -ErrorAction SilentlyContinue
-    if ($amuRestored -and (Test-Path -LiteralPath $amuSafetyBackup -PathType Container)) {
-        $resolvedSafety = [System.IO.Path]::GetFullPath($amuSafetyBackup)
-        if (-not $resolvedSafety.StartsWith($targetDirectory + [IO.Path]::DirectorySeparatorChar)) { throw 'Der AMU-Sicherungsordner liegt außerhalb des erwarteten Arbeitsbereichs.' }
-        Remove-Item -LiteralPath $resolvedSafety -Recurse -Force
-    }
-    [pscustomobject]@{
+    $transactionCommitted = $true
+    $restoreResult = [pscustomobject]@{
         Ok             = $true
         Database       = $target
         SafetyBackup   = if ($hadDatabase) { $safetyBackup } else { $null }
@@ -184,20 +279,49 @@ try {
 } catch {
     $restoreError = $_
     Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+    if (-not $databaseLockHandle) {
+        $databaseLockHandle = Start-DatabaseMaintenanceLock -Path $target -AppRoot $resolvedAppDirectory -WorkingDirectory $targetDirectory
+    }
     Remove-Item -LiteralPath $target, $temporary, $walPath, $shmPath -Force -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $safetyBackup -PathType Leaf) {
         Copy-Item -LiteralPath $safetyBackup -Destination $target -Force
     } elseif (Test-Path -LiteralPath $rawPrevious -PathType Leaf) {
         Move-Item -LiteralPath $rawPrevious -Destination $target -Force
     }
-    if ($AmuBackupDirectory -and (Test-Path -LiteralPath (Join-Path $amuSafetyBackup 'manifest.json') -PathType Leaf)) {
-        try { Invoke-AmuStorage -Action 'restore' -ModulePath $amuModule -Source $amuSafetyBackup -Target $amuTarget | Out-Null } catch {}
+    $amuRollbackReady = -not $amuRestored
+    $amuRollbackError = $null
+    if ($amuRestored -and $AmuBackupDirectory -and (Test-Path -LiteralPath (Join-Path $amuSafetyBackup 'manifest.json') -PathType Leaf)) {
+        try {
+            Invoke-AmuStorage -Action 'restore' -ModulePath $amuModule -Source $amuSafetyBackup -Target $amuTarget | Out-Null
+            $amuRollbackReady = $true
+        } catch { $amuRollbackError = $_.Exception.Message }
     }
     Remove-Item -LiteralPath $rawPrevious -Force -ErrorAction SilentlyContinue
-    if ($StartServiceAfterRestore -and (Test-Path -LiteralPath $target -PathType Leaf)) {
+    Stop-DatabaseMaintenanceLock $databaseLockHandle
+    $databaseLockHandle = $null
+    $databaseRollbackReady = Test-Path -LiteralPath $target -PathType Leaf
+    if ($StartServiceAfterRestore -and $databaseRollbackReady -and $amuRollbackReady) {
         Start-Service -Name $ServiceName -ErrorAction SilentlyContinue
     }
-    throw "Wiederherstellung fehlgeschlagen; die vorherige Datenbank wurde zurueckgesetzt. $($restoreError.Exception.Message)"
+    $rollbackHint = if (-not $databaseRollbackReady -or -not $amuRollbackReady) {
+        " Der Sicherheitsrollback ist unvollstaendig (AUM: $amuRollbackError); sofortiger manueller IT-Eingriff ist erforderlich."
+    } else { '' }
+    throw "Wiederherstellung fehlgeschlagen; die vorherige gekoppelte Sicherung wurde zurueckgesetzt. $($restoreError.Exception.Message)$rollbackHint"
 } finally {
+    Stop-DatabaseMaintenanceLock $databaseLockHandle
     Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
+}
+if ($transactionCommitted) {
+    Remove-Item -LiteralPath $rawPrevious -Force -ErrorAction SilentlyContinue
+    if ($amuRestored -and (Test-Path -LiteralPath $amuSafetyBackup -PathType Container)) {
+        $resolvedSafety = [System.IO.Path]::GetFullPath($amuSafetyBackup)
+        if ($resolvedSafety.StartsWith($targetDirectory + [IO.Path]::DirectorySeparatorChar)) {
+            try { Remove-Item -LiteralPath $resolvedSafety -Recurse -Force -ErrorAction Stop } catch {}
+        }
+    }
+    $restoreResult
+}
+} finally {
+    if ($maintenanceMutexHeld) { $maintenanceMutex.ReleaseMutex() }
+    $maintenanceMutex.Dispose()
 }

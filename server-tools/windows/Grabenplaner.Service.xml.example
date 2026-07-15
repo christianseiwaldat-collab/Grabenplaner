@@ -7,7 +7,7 @@
   <stopexecutable>powershell.exe</stopexecutable>
   <stoparguments>-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{{STOP_SCRIPT}}" -Port {{PORT}}</stoparguments>
   <workingdirectory>{{APP_DIRECTORY}}</workingdirectory>
-  <stoptimeout>20 sec</stoptimeout>
+  <stoptimeout>120 sec</stoptimeout>
   <startmode>Automatic</startmode>
   <delayedAutoStart>true</delayedAutoStart>
   <onfailure action="restart" delay="10 sec" />
@@ -29,6 +29,7 @@
   </serviceaccount>
   <env name="NODE_ENV" value="production" />
   <env name="GRABENPLANER_OPERATION_MODE" value="server" />
+  <env name="GRABENPLANER_DEPLOYMENT_KIND" value="production" />
   <env name="GRABENPLANER_PUBLIC_URL" value="{{PUBLIC_URL}}" />
   <env name="GRABENPLANER_HOST" value="127.0.0.1" />
   <env name="GRABENPLANER_TRUST_PROXY" value="loopback" />

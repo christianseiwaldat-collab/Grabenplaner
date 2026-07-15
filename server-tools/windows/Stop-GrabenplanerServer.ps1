@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [ValidateRange(1, 65535)]
     [int]$Port = 3000,
@@ -18,7 +18,7 @@ $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 do {
     Start-Sleep -Milliseconds 250
     try {
-        Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$Port/api/health" -TimeoutSec 2 | Out-Null
+        Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$Port/api/health/live" -TimeoutSec 2 | Out-Null
         $running = $true
     } catch {
         $running = $false

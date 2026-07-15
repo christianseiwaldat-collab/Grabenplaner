@@ -1,4 +1,6 @@
 {
+	admin off
+
 	# Optional kann hier eine neutrale Kontaktadresse fuer ACME eingetragen werden:
 	# email admin@example.at
 }
@@ -9,7 +11,7 @@
 	respond @serviceStop 404
 
 	reverse_proxy {{UPSTREAM}} {
-		health_uri /api/health
+		health_uri /api/health/live
 		health_interval 30s
 		health_timeout 5s
 	}

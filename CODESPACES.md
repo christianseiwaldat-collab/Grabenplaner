@@ -2,6 +2,8 @@
 
 > **Achtung:** Diese Umgebung ist ausschließlich für Demo- und Testdaten bestimmt. Keine echten Personal-, Gesundheits- oder Produktivdaten verwenden.
 
+Codespaces bildet Browser-, Rollen- und Portalabläufe über den privaten GitHub-HTTPS-Proxy ab. Es ersetzt weder den produktiven Windows-Einzelserver mit Caddy/WinSW und getrennten Dienstrechten noch dessen Backup-, Virenscanner-, Update- und Wiederherstellungsprüfung.
+
 ## Start
 
 1. Im GitHub-Repository **Code → Codespaces → Create codespace on main** wählen.
@@ -21,6 +23,8 @@ Der Port-Eintrag `protocol: "http"` beschreibt dabei nur die interne Verbindung 
 Zum Anmelden immer die Adresse aus dem Bereich **PORTS** mit **Open in Browser** öffnen. Die App akzeptiert dabei sowohl die konfigurierte Codespaces-Adresse als auch die vom vertrauenswürdigen GitHub-Proxy gemeldete gleichursprüngliche Weiterleitungsadresse.
 
 War der Codespace zwischenzeitlich beendet oder ist die GitHub-Anmeldung des privaten Ports abgelaufen, eine noch offene Portal-Seite nicht weiterverwenden: Codespace starten, den Port `3000` erneut unter **PORTS** mit **Open in Browser** öffnen und den Start kurz abwarten. Das Portal zeigt für diesen Fall eine eigene Hinweismeldung; die Sicherheitsprüfung der App wird dabei nicht gelockert.
+
+Nach einem Update des Servercodes genügt ein Neuladen der Portal-Seite nicht. Den Codespace über **Codespaces: Rebuild Container** neu aufbauen oder für eine vollständig frische Demo-Testinstanz neu erstellen; erst danach läuft der aktualisierte Grabenplaner-Prozess.
 
 Das Sporthandelsprofil wird ausschließlich in einer frischen, leeren Demo-Datenbank angelegt. Bereits vorhandene Codespaces-Testdaten werden nicht automatisch überschrieben.
 
