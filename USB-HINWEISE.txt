@@ -14,7 +14,7 @@ Daten:
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
 Neu in v0.59 Beta:
-  - Krankmeldung und spätere AUM-Übermittlung sind im Mitarbeiterportal getrennt und mobil nutzbar.
+  - Krankmeldung und spätere AUM-Übermittlung sind im Mitarbeiterportal zu einem gemeinsamen mobilen Ablauf zusammengeführt.
   - AUM-Fotos können Beginn und Ende lokal per OCR als bestätigungspflichtigen Vorschlag erkennen.
   - Zuständige Leitungen erhalten sofort interne Besetzungswarnungen.
   - Optionale externe Warnkanäle und AUM-Fristen können im geschützten Betrieb eingerichtet werden.
