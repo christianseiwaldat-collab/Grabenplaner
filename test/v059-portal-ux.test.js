@@ -100,3 +100,13 @@ test("Portal: Rückkehr von der Handy-Kamera hält den AUM-Bereich aktiv", () =>
   assert.ok(selectionBlock, "Dateiauswahl-Behandlung fehlt");
   assert.match(selectionBlock[0], /portalState\.activeTab !== "amu"\) setTab\("amu"\)/);
 });
+
+test("Portal: mobiles Scroll-Resize lässt AUM als Unterbereich von Mehr geöffnet", () => {
+  const source = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
+
+  assert.match(source, /const mobileMoreSecondaryTabs = new Set\(\["timeOff", "vacation", "amu"\]\)/);
+  assert.match(source, /const secondaryViaMore = modules\.includes\("more"\) && mobileMoreSecondaryTabs\.has\(portalState\.activeTab\)/);
+  assert.match(source, /activeButton\?\.classList\.contains\("hidden"\) && modules\.length && !secondaryViaMore/);
+  assert.match(source, /representedByMore[\s\S]*?button\.dataset\.tab === "leadershipMore"/);
+  assert.match(source, /window\.addEventListener\("resize", applyDeviceMode/);
+});

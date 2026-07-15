@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.59.2 Beta · Serviceupdate
+
+- Mobile Leitungsansicht korrigiert: Die Unterbereiche „ZA beantragen“, „Urlaub beantragen“ und „Krankmeldung & AUM“ bleiben bei einer Layout-Neuberechnung unter „Mehr“ geöffnet.
+- Das Ein- oder Ausblenden der Android-Browserleiste löst beim Scrollen zwar weiterhin den normalen Viewportwechsel aus, springt aber nicht mehr fälschlich zur Zeiterfassung.
+- „Mehr“ bleibt als übergeordneter Menüpunkt sichtbar markiert, während einer seiner Unterbereiche geöffnet ist.
+
 ## v0.59.1 Beta · Serviceupdate
 
 - Nach der Rückkehr von der Android-Kamera oder Dateiauswahl bleibt im Mitarbeiterportal der Bereich „Krankmeldung & AUM“ aktiv; ein vom Betriebssystem ausgelöster Seitenneuaufbau springt nicht mehr zur Zeiterfassung zurück.

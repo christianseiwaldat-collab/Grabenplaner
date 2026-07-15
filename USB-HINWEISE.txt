@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.59.1 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.59.2 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,9 +13,9 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Serviceupdate v0.59.1 Beta:
-  - Nach dem Öffnen der Handy-Kamera bleibt der Bereich "Krankmeldung & AUM" beim Zurückkehren aktiv.
-  - Service-, Sicherheits- und größere Funktionsupdates werden in der Aktualisierungsanzeige klar unterschieden.
+Serviceupdate v0.59.2 Beta:
+  - Mobile Unterbereiche unter "Mehr" bleiben auch beim Scrollen und bei Android-Viewportwechseln geöffnet.
+  - "Krankmeldung & AUM" springt nach der Kamerarückkehr nicht mehr zur Zeiterfassung.
 
 Leere Zweitkopie:
   Ab v0.42.1 wird die leere Zweitkopie nicht mehr automatisch aktualisiert.
