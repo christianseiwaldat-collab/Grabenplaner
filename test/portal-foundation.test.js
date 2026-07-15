@@ -1622,8 +1622,14 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
   const url = `http://127.0.0.1:${port}`;
   try {
     const health = await waitForJson(`${url}/api/health`, child);
-    assert.equal(health.ok, true);
-    assert.equal(health.mode, "server");
+    assert.deepEqual(health, { ok: true });
+    const livenessResponse = await fetch(`${url}/api/health/live`);
+    assert.equal(livenessResponse.status, 200);
+    assert.equal(livenessResponse.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await livenessResponse.json(), { ok: true });
+    const readinessResponse = await fetch(`${url}/api/health/ready`);
+    assert.equal(readinessResponse.status, 200);
+    assert.deepEqual(await readinessResponse.json(), { ok: true });
 
     const insecureStatus = await fetch(`${url}/api/portal/v1/status`);
     assert.equal(insecureStatus.status, 426);
@@ -1632,6 +1638,12 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     const statusResponse = await fetch(`${url}/api/portal/v1/status`, { headers: secureHeaders });
     assert.equal(statusResponse.status, 200, await statusResponse.clone().text());
     assert.match(statusResponse.headers.get("strict-transport-security") || "", /max-age=31536000/);
+    assert.equal(statusResponse.headers.get("cross-origin-opener-policy"), "same-origin");
+    assert.equal(statusResponse.headers.get("cross-origin-resource-policy"), "same-origin");
+    assert.equal(statusResponse.headers.get("x-permitted-cross-domain-policies"), "none");
+    assert.match(statusResponse.headers.get("content-security-policy") || "", /form-action 'self'/);
+    assert.match(statusResponse.headers.get("x-request-id") || "", /^[a-f0-9-]{36}$/i);
+    assert.equal(statusResponse.headers.get("cache-control"), "no-store");
     const status = await statusResponse.json();
     assert.equal(status.operationMode, "server");
     assert.equal(status.httpsRequired, true);
@@ -1657,6 +1669,8 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     assert.equal(diagnostics.database.journalMode, "wal");
     assert.equal(diagnostics.database.busyTimeoutMs, 5000);
     assert.equal(diagnostics.instanceLock.held, true);
+    assert.ok(diagnostics.productionChecks.every((check) => check.ok), JSON.stringify(diagnostics.productionChecks));
+    assert.equal(diagnostics.backups.retentionCount, 30);
 
     const shortPasswordResponse = await fetch(`${url}/api/portal/v1/users/102`, {
       method: "PUT", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf },
@@ -1703,6 +1717,11 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
       method: "POST", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: employeeCookie, "X-CSRF-Token": employeeCsrf }, body: "{}",
     });
     assert.equal(deniedEmployeeExit.status, 403, await deniedEmployeeExit.clone().text());
+    const employeeLogout = await fetch(`${url}/api/portal/v1/auth/logout`, {
+      method: "POST", headers: { ...secureHeaders, Cookie: employeeCookie, "X-CSRF-Token": employeeCsrf },
+    });
+    assert.equal(employeeLogout.status, 200, await employeeLogout.clone().text());
+    assert.equal(employeeLogout.headers.get("clear-site-data"), '"cache", "cookies", "storage"');
 
     const secondPort = await getFreePort();
     const second = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {

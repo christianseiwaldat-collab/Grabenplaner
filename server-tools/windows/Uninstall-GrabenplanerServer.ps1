@@ -1,4 +1,4 @@
-[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
+﻿[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 param(
     [string]$DataDirectory = 'C:\ProgramData\Grabenplaner',
     [switch]$RemoveGeneratedServiceFiles
@@ -21,8 +21,8 @@ $services = @(
 foreach ($item in $services) {
     $service = Get-Service -Name $item.Name -ErrorAction SilentlyContinue
     if ($service -and $service.Status -ne 'Stopped' -and $PSCmdlet.ShouldProcess($item.Name, 'Windows-Dienst beenden')) {
-        Stop-Service -Name $item.Name -Force
-        $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
+        Stop-Service -Name $item.Name
+        $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(150))
     }
     if ($service -and $PSCmdlet.ShouldProcess($item.Name, 'Windows-Dienst deregistrieren')) {
         if (-not (Test-Path -LiteralPath $item.Executable -PathType Leaf)) {

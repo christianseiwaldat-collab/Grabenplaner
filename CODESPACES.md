@@ -2,6 +2,8 @@
 
 > **Achtung:** Diese Umgebung ist ausschließlich für Demo- und Testdaten bestimmt. Keine echten Personal-, Gesundheits- oder Produktivdaten verwenden.
 
+Codespaces bildet Browser-, Rollen- und Portalabläufe über den privaten GitHub-HTTPS-Proxy ab. Es ersetzt weder den produktiven Windows-Einzelserver mit Caddy/WinSW und getrennten Dienstrechten noch dessen Backup-, Virenscanner-, Update- und Wiederherstellungsprüfung.
+
 ## Start
 
 1. Im GitHub-Repository **Code → Codespaces → Create codespace on main** wählen.

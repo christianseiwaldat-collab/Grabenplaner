@@ -1,5 +1,16 @@
 # Grabenplaner Versions-Log
 
+## v0.61 Beta
+
+- Der HTTPS-Serverbetrieb ist für einen IT-verwalteten produktiven Windows-Einzelserver mit Caddy als Reverse-Proxy und WinSW-Diensten ausgearbeitet.
+- Strikte Produktionsprüfungen sichern Loopback-Bindung, vertrauenswürdigen Proxy, öffentliche HTTPS-Adresse, sichere Sitzungen und die getrennte Datenablage ab.
+- Getrennte Dienstidentitäten und eingeschränkte ACLs begrenzen den Zugriff von Anwendung, Reverse-Proxy und Administration auf die jeweils erforderlichen Ordner.
+- Separate Live- und Ready-Endpunkte unterscheiden einen laufenden Prozess von einer vollständig betriebsbereiten Instanz einschließlich Datenbank, Speicher, Backupziel und AUM-Scanner.
+- Die Server-Betriebsprüfung ersetzt die frühere Pilot-Checkliste und zeigt berechtigten Stellen die produktionsrelevanten Prüfpunkte verständlich an.
+- Ein kontrollierter Wartungsablauf prüft Release-ZIP und SHA256, erstellt vor dem Update ein verifiziertes Backup, tauscht nur Programmdateien aus und führt bei einem fehlgeschlagenen Start ein Rollback durch.
+- Backup und Wiederherstellung halten SQLite-Datenbank und verschlüsselte AUM-Ablage gekoppelt; Service-Stopp, Healthchecks und Caddy-Konfiguration sind in die Betriebswerkzeuge eingebunden.
+- Der aktuelle Produktivmodus bleibt bewusst eine einzelne Instanz ohne Hochverfügbarkeit. Nativer Token-Login und Gerätesitzungen für Android/iOS folgen in einem eigenen Sicherheitsblock.
+
 ## v0.60 Beta
 
 - Persönliche Portal-Einstellungen bündeln Passwortänderung und freiwillige WLAN-Zeitvorschläge an einer festen Stelle.
