@@ -420,8 +420,43 @@ function normalizedPortalTab(requested) {
   return ["schedule", "timeTracking", "timeOff", "vacation", "history", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
 }
 
+const portalTabStorageKey = "grabenplaner.portal.active-tab";
+
+function storedPortalTab() {
+  try {
+    return normalizedPortalTab(sessionStorage.getItem(portalTabStorageKey));
+  } catch {
+    return "";
+  }
+}
+
 function requestedPortalTab() {
-  return normalizedPortalTab(new URLSearchParams(location.search).get("tab"));
+  return normalizedPortalTab(new URLSearchParams(location.search).get("tab")) || storedPortalTab();
+}
+
+function rememberPortalTab(tab) {
+  const normalized = normalizedPortalTab(tab);
+  if (!normalized) return;
+  try {
+    sessionStorage.setItem(portalTabStorageKey, normalized);
+  } catch {}
+  try {
+    const url = new URL(location.href);
+    url.searchParams.set("tab", normalized);
+    history.replaceState(history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {}
+}
+
+function clearRememberedPortalTab() {
+  try {
+    sessionStorage.removeItem(portalTabStorageKey);
+  } catch {}
+  try {
+    const url = new URL(location.href);
+    url.searchParams.delete("tab");
+    url.searchParams.delete("kind");
+    history.replaceState(history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {}
 }
 
 function chooseInitialPortalTab() {
@@ -524,12 +559,14 @@ async function login(event) {
 
 async function logout() {
   try { await api("/api/portal/v1/auth/logout", { method: "POST", body: "{}" }); } catch {}
+  clearRememberedPortalTab();
   location.reload();
 }
 
 function setTab(tab) {
   if (tab === "timeTracking" && !timeTrackingCapabilityEnabled()) tab = "schedule";
   portalState.activeTab = tab;
+  rememberPortalTab(tab);
   document.querySelectorAll("[data-tab]").forEach((button) => {
     const active = button.dataset.tab === tab;
     button.classList.toggle("active", active);
@@ -2110,6 +2147,7 @@ async function recognizeAmuFiles(files) {
 }
 
 function handleAmuFileSelection(event) {
+  if (portalState.session && portalState.activeTab !== "amu") setTab("amu");
   void amuPdfClient?.cancel?.();
   resetAmuOcrState({ preserveManual: true, clearAutoFilled: true });
   const currentFiles = [...(event.currentTarget.files || [])];
