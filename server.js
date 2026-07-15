@@ -21,6 +21,12 @@ const {
 } = require("./lib/external-notifications");
 const { acquireDatabaseLock, lockPathForDatabase, releaseDatabaseLock } = require("./lib/database-lock");
 const {
+  DEFAULT_PORTAL_GREETING_SETTINGS,
+  PortalGreetingValidationError,
+  resolvePortalGreeting,
+  validatePortalGreetingSettings,
+} = require("./lib/portal-greetings");
+const {
   classifyRelease,
   compareVersions,
   normalizeVersionTag,
@@ -302,6 +308,7 @@ const defaultPortalSettings = {
   sickness_hr_warning_days: "3",
   wifi_minimum_presence_minutes: "5",
   wifi_absence_grace_minutes: "30",
+  personalized_greetings: JSON.stringify(DEFAULT_PORTAL_GREETING_SETTINGS),
   mobile_leadership_layouts: JSON.stringify({
     department_manager: ["timeTracking", "team", "approvals", "schedule", "requests", "more"],
     manager: ["timeTracking", "team", "approvals", "schedule", "requests", "more"],
@@ -1948,6 +1955,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.58-protected-personnel-records", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.59-sickness-ocr-notifications", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.60-portal-mobile-foundation", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -2150,7 +2159,7 @@ app.use((request, response, next) => {
   response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   response.setHeader("Content-Security-Policy", `default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'${ocrClientAsset ? " 'wasm-unsafe-eval'" : ""}; worker-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors '${embeddedPdfPreview ? "self" : "none"}'`);
   if (request.secure) response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-  if (request.path.startsWith("/api/portal/")) response.setHeader("Cache-Control", "no-store");
+  if (request.path.startsWith("/api/portal/") || request.path.startsWith("/api/mobile/")) response.setHeader("Cache-Control", "no-store");
   if (serverModeActive && !request.secure) {
     const loopbackServiceEndpoint = isLoopbackRequest(request)
       && ((request.method === "GET" && request.path === "/api/health") || (request.method === "POST" && request.path === "/api/service/stop"));
@@ -2711,7 +2720,7 @@ function enforceAdminApiAccess(request, _response, next) {
   try {
     if (request.path === "/health" || request.path === "/service/stop" || request.path === "/integrations/wifi/events") return next();
     const status = getPortalStatus();
-    if (!status.portalEnabled || request.path.startsWith("/portal/")) return next();
+    if (!status.portalEnabled || request.path.startsWith("/portal/") || request.path.startsWith("/mobile/")) return next();
     const method = String(request.method || "GET").toUpperCase();
     let permission = "schedule:read";
     if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
@@ -2978,6 +2987,26 @@ function getPortalSettings() {
     ...defaultPortalSettings,
     ...Object.fromEntries(db.prepare("SELECT key, value FROM portal_settings").all().map((row) => [row.key, row.value])),
   };
+}
+
+function portalGreetingSettings() {
+  try {
+    const stored = JSON.parse(getPortalSettings().personalized_greetings || "{}");
+    return validatePortalGreetingSettings(stored);
+  } catch {
+    return validatePortalGreetingSettings(DEFAULT_PORTAL_GREETING_SETTINGS);
+  }
+}
+
+function validatedPortalGreetingSettings(value) {
+  try {
+    return validatePortalGreetingSettings(value);
+  } catch (error) {
+    if (error instanceof PortalGreetingValidationError) {
+      throw httpError(400, error.message, error.code || "PORTAL_GREETING_SETTINGS_INVALID");
+    }
+    throw error;
+  }
 }
 
 function getWifiAutomationPolicy() {
@@ -3271,7 +3300,7 @@ function createWifiSuggestionsForSession(sessionRow, now = new Date()) {
     created.push(id);
     createPortalNotification(sessionRow.employee_number, "wifi.suggestion", "Neuer WLAN-Zeitvorschlag",
       `Für ${segment.workDate} liegt ein Zeitvorschlag zur Prüfung bereit.`, {
-        target: "/portal.html?tab=timeTracking",
+        target: "/portal.html?tab=settings",
         entityType: "wifi_time_suggestion",
         entityId: id,
         dedupeKey: `wifi-suggestion:${id}:created`,
@@ -3532,7 +3561,7 @@ function wifiAutomationEmployeePayload(session, now = new Date()) {
     createPortalNotification(session.employeeNumber, overdue ? "wifi.suggestion.overdue" : "wifi.suggestion.due",
       overdue ? "WLAN-Zeitvorschlag überfällig" : "WLAN-Zeitvorschlag bald bestätigen",
       `Der Vorschlag für ${suggestion.workDate} wartet auf deine Bestätigung.`, {
-        target: "/portal.html?tab=timeTracking",
+        target: "/portal.html?tab=settings",
         entityType: "wifi_time_suggestion",
         entityId: suggestion.id,
         dedupeKey: `wifi-suggestion:${suggestion.id}:${suggestion.warning}`,
@@ -5940,6 +5969,241 @@ function validateMobileLeadershipLayouts(value) {
     result[role] = [...new Set(["timeTracking", ...requested.filter((id) => id !== "timeTracking")])].slice(0, 6);
   }
   return result;
+}
+
+function greetingWorkdays(employeeNumber, endedOn, today, wanted = 12) {
+  if (!isIsoDate(endedOn) || !isIsoDate(today)) return [];
+  const horizon = [addDays(endedOn, 60), addDays(today, 30)].sort().at(-1);
+  const planned = db.prepare(`
+    SELECT DISTINCT shift_date FROM shifts
+    WHERE employee_number = ? AND shift_date > ? AND shift_date <= ?
+    ORDER BY shift_date
+  `).all(employeeNumber, endedOn, horizon).map((row) => row.shift_date);
+  if (planned.length) return planned.slice(0, wanted);
+
+  const employee = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(employeeNumber);
+  let locationSettings = null;
+  let locationContext = null;
+  if (employee?.home_location_id) {
+    try {
+      locationSettings = settingsForLocation(employee.home_location_id);
+      locationContext = resolvePlanningContext({ locationId: employee.home_location_id });
+    } catch {}
+  }
+  const fallback = [];
+  for (let date = addDays(endedOn, 1), attempts = 0; attempts < 90 && fallback.length < wanted; date = addDays(date, 1), attempts += 1) {
+    let workingDay = false;
+    if (locationSettings && locationContext) {
+      try { workingDay = dayConfiguration(date, locationSettings, locationContext)?.open === true; } catch {}
+    } else {
+      const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+      workingDay = weekday >= 1 && weekday <= 6;
+    }
+    if (workingDay) fallback.push(date);
+  }
+  return fallback;
+}
+
+function portalGreetingContext(session, now = new Date()) {
+  const today = viennaTodayIso(now);
+  const settings = portalGreetingSettings();
+  const recentVacation = approvedVacationsForEmployee(session.employeeNumber, addDays(today, -120))
+    .filter((entry) => isIsoDate(entry.dateFrom) && isIsoDate(entry.dateTo) && entry.dateTo < today)
+    .sort((left, right) => right.dateTo.localeCompare(left.dateTo))[0] || null;
+  const vacation = recentVacation ? {
+    startedOn: recentVacation.dateFrom,
+    endedOn: recentVacation.dateTo,
+    returnWorkdays: greetingWorkdays(session.employeeNumber, recentVacation.dateTo, today),
+  } : null;
+
+  let sickness = null;
+  try {
+    const cases = ownSicknessCases(session.employeeNumber);
+    const active = cases.find((entry) => ["reported", "aum_received"].includes(entry.status) && entry.start_date <= today);
+    if (active) {
+      sickness = { active: true };
+    } else {
+      const recovered = cases
+        .filter((entry) => entry.status === "recovered" && isIsoDate(entry.return_to_work_date) && entry.return_to_work_date <= today)
+        .sort((left, right) => right.return_to_work_date.localeCompare(left.return_to_work_date))[0];
+      if (recovered) {
+        const endedOn = addDays(recovered.return_to_work_date, -1);
+        sickness = {
+          active: false,
+          endedOn,
+          returnWorkdays: greetingWorkdays(session.employeeNumber, endedOn, today),
+        };
+      }
+    }
+  } catch {
+    sickness = null;
+  }
+
+  const displayName = String(session.nickname || session.fullName || "").trim().split(/\s+/)[0] || "du";
+  return {
+    at: now,
+    stableKey: session.employeeNumber,
+    name: displayName,
+    settings,
+    vacation,
+    sickness,
+  };
+}
+
+function portalGreetingForSession(session, now = new Date()) {
+  return resolvePortalGreeting(portalGreetingContext(session, now));
+}
+
+const mobileNavigationLabels = Object.freeze({
+  timeTracking: "Zeiterfassung",
+  team: "Team heute",
+  approvals: "Freigaben",
+  schedule: "Mein Dienstplan",
+  requests: "Meine Anträge",
+  sicknessAndAmu: "Krankmeldung & AUM",
+  notifications: "Benachrichtigungen",
+  settings: "Einstellungen",
+  more: "Mehr",
+});
+
+function mobileApiStatus(now = new Date()) {
+  const status = getPortalStatus();
+  return {
+    appName: APP_NAME,
+    serverVersion: packageMetadata.version,
+    apiVersion: 1,
+    minimumMobileVersion: "0.2.0",
+    serverTime: now.toISOString(),
+    deploymentKind: status.deploymentKind,
+    operationMode: status.operationMode,
+    portalEnabled: status.portalEnabled,
+    nativeAuthentication: false,
+    passwordMinLength: status.passwordMinLength,
+    capabilities: {
+      timeTracking: status.capabilities.timeTracking,
+      schedule: status.capabilities.ownSchedule,
+      absenceRequests: status.capabilities.vacationRequests && status.capabilities.timeOffRequests,
+      sicknessAndAmu: status.capabilities.sicknessReports && status.capabilities.amuReports,
+      notifications: status.capabilities.notifications,
+      pushNotifications: false,
+      personalSettingsRead: true,
+      personalSettingsWrite: false,
+      personalizedGreetings: portalGreetingSettings().enabled,
+    },
+  };
+}
+
+function mobileUserPayload(session) {
+  return {
+    employeeNumber: session.employeeNumber,
+    fullName: session.fullName || "",
+    nickname: session.nickname || "",
+    displayName: session.nickname || session.fullName || session.employeeNumber,
+    color: session.color || "#276e55",
+    homeLocationId: session.homeLocationId || "",
+    role: { id: session.role, name: session.roleName || session.role },
+    position: { id: session.positionId == null ? null : Number(session.positionId), name: session.positionName || "" },
+    mustChangePassword: Boolean(session.mustChangePassword),
+  };
+}
+
+function mobileNavigationPayload(session, status = getPortalStatus()) {
+  const permissions = session.permissions || [];
+  let modules;
+  if (["department_manager", "manager", "hr", "admin", "it_admin", "developer"].includes(session.role)) {
+    modules = mobileLayoutPayload(session).modules;
+  } else {
+    modules = [
+      status.capabilities.timeTracking && permissions.includes("own_time:read") ? "timeTracking" : "",
+      permissions.includes("own_schedule:read") ? "schedule" : "",
+      permissions.some((permission) => ["own_vacation:read", "own_vacation:request", "own_time:correction_request"].includes(permission)) ? "requests" : "",
+      permissions.some((permission) => ["own_sickness:create", "own_amu:create", "own_amu:read"].includes(permission)) ? "sicknessAndAmu" : "",
+      "settings",
+    ].filter(Boolean);
+  }
+  const normalized = [...new Set(modules)].filter((id) => mobileNavigationLabels[id] && id !== "settings").slice(0, 6);
+  normalized.unshift("settings");
+  return {
+    defaultModule: normalized.includes("timeTracking") ? "timeTracking" : (normalized[0] || "settings"),
+    items: normalized.map((id) => ({ id, label: mobileNavigationLabels[id], badgeCount: null })),
+  };
+}
+
+function mobilePersonalSettingsPayload(session, now = new Date()) {
+  const user = db.prepare("SELECT password_changed_at FROM portal_users WHERE employee_number = ?").get(session.employeeNumber) || {};
+  const policy = getWifiAutomationPolicy();
+  let wifi = null;
+  try { wifi = wifiAutomationEmployeePayload(session, now); } catch {}
+  return {
+    password: {
+      mustChange: Boolean(session.mustChangePassword),
+      minimumLength: portalPasswordMinLength(),
+      lastChangedAt: user.password_changed_at || null,
+    },
+    wifiTimeSuggestions: {
+      available: Boolean(wifi && (wifi.canEnable || wifi.preference?.enabled)),
+      enabled: Boolean(wifi?.preference?.enabled),
+      confirmationLevel: wifi?.confirmationLevel || "C",
+      minimumPresenceMinutes: policy.minimumPresenceMinutes,
+      absenceGraceMinutes: policy.absenceGraceMinutes,
+    },
+  };
+}
+
+function mobileHomePayload(session, now = new Date()) {
+  const date = viennaTodayIso(now);
+  let timeTracking = {
+    enabled: false,
+    accessAllowed: false,
+    state: "off",
+    stateSince: null,
+    allowedActions: [],
+    reason: "Die Zeiterfassung ist für diesen Zugang nicht verfügbar.",
+  };
+  if (session.permissions?.includes("own_time:read")) {
+    try {
+      const day = timeTrackingDayStatus(session.employeeNumber, date, now);
+      timeTracking = {
+        enabled: Boolean(day.enabled),
+        accessAllowed: Boolean(day.accessAllowed),
+        state: day.state,
+        stateSince: day.stateSince || null,
+        allowedActions: day.allowedActions || [],
+        reason: day.reason || "",
+      };
+    } catch {}
+  }
+  const greeting = portalGreetingForSession(session, now);
+  const unreadNotificationCount = Number(db.prepare(`
+    SELECT COUNT(*) AS count FROM portal_notifications
+    WHERE recipient_employee_number = ? AND read_at IS NULL
+  `).get(session.employeeNumber)?.count || 0);
+  return {
+    date,
+    timezone: "Europe/Vienna",
+    greeting: {
+      id: greeting.id,
+      kind: greeting.kind,
+      text: greeting.text,
+      validUntil: greeting.validUntil,
+      enabled: greeting.enabled,
+    },
+    timeTracking,
+    unreadNotificationCount,
+  };
+}
+
+function mobileBootstrapPayload(session, now = new Date()) {
+  const portalStatus = portalStatusForSession(session);
+  return {
+    generatedAt: now.toISOString(),
+    status: mobileApiStatus(now),
+    user: mobileUserPayload(session),
+    branding: brandingForPortalSession(session),
+    navigation: mobileNavigationPayload(session, portalStatus),
+    home: mobileHomePayload(session, now),
+    settings: mobilePersonalSettingsPayload(session, now),
+  };
 }
 
 function leadershipOverviewForContext(session, context, now = new Date()) {
@@ -10132,6 +10396,26 @@ app.get(["/api/portal/status", "/api/portal/v1/status"], (request, response) => 
   response.json(session ? portalStatusForSession(session) : publicStatus);
 });
 
+app.get("/api/mobile/v1/status", (_request, response) => {
+  response.json(mobileApiStatus(new Date()));
+});
+
+app.post("/api/mobile/v1/auth/branding", (request, response) => {
+  assertLoginBrandingRateLimit(request);
+  const employeeNumber = String(request.body?.employeeNumber || "").trim();
+  const user = employeeNumber ? db.prepare(`
+    SELECT u.role, e.home_location_id
+    FROM portal_users u
+    JOIN employees e ON e.personnel_number = u.employee_number
+    WHERE u.employee_number = ? AND u.active = 1 AND e.active = 1
+    LIMIT 1
+  `).get(employeeNumber) : null;
+  const branding = user && !GLOBAL_SCOPE_PORTAL_ROLES.has(user.role)
+    ? brandingForLocation(user.home_location_id)
+    : managementBrandingPreference().branding;
+  response.json({ branding });
+});
+
 app.get("/api/portal/v1/roles", (_request, response) => {
   response.json({
     apiVersion: PORTAL_API_VERSION,
@@ -10597,6 +10881,26 @@ app.get("/api/portal/v1/me", (request, response) => {
   response.json({ user: publicPortalUser(session), branding: brandingForPortalSession(session) });
 });
 
+app.get("/api/portal/v1/me/home", (request, response) => {
+  const session = requirePortalSession(request);
+  response.json(mobileHomePayload(session, new Date()));
+});
+
+app.get("/api/mobile/v1/bootstrap", (request, response) => {
+  const session = requirePortalSession(request);
+  response.json(mobileBootstrapPayload(session, new Date()));
+});
+
+app.get("/api/mobile/v1/me/home", (request, response) => {
+  const session = requirePortalSession(request);
+  response.json(mobileHomePayload(session, new Date()));
+});
+
+app.get("/api/mobile/v1/me/settings", (request, response) => {
+  const session = requirePortalSession(request);
+  response.json(mobilePersonalSettingsPayload(session, new Date()));
+});
+
 app.put("/api/portal/v1/me/password", async (request, response) => {
   const session = requirePortalSession(request);
   assertPortalCsrf(request);
@@ -10882,6 +11186,23 @@ app.get("/api/portal/v1/amu-settings", (request, response) => {
     policy: getAmuPolicy(),
     canChange: session.employeeNumber === "local" || ["admin", "hr"].includes(session.role) || session.permissions?.includes("hr:settings"),
   });
+});
+
+app.get("/api/portal/v1/greeting-settings", (request, response) => {
+  requireAdminHrOrLocal(request, "hr:settings");
+  response.json({ settings: portalGreetingSettings(), canChange: true });
+});
+
+app.put("/api/portal/v1/greeting-settings", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "hr:settings");
+  const settings = validatedPortalGreetingSettings(request.body || {});
+  db.prepare(`
+    INSERT INTO portal_settings (key, value, updated_at) VALUES ('personalized_greetings', ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+  `).run(JSON.stringify(settings));
+  auditPortal(actor.employeeNumber, "portal.greetings.update", "portal_settings", "personalized_greetings",
+    JSON.stringify({ enabled: settings.enabled, templateCounts: Object.fromEntries(Object.entries(settings.templates).map(([key, value]) => [key, value.length])) }));
+  response.json({ settings, canChange: true });
 });
 
 app.put("/api/portal/v1/amu-settings", (request, response) => {
@@ -14400,10 +14721,27 @@ app.get("/api/vacations-preview.pdf", (request, response) => {
   drawVacationPdf(plan, selection, response, new Date());
 });
 
-app.use((error, _request, response, _next) => {
+app.use((error, request, response, _next) => {
   const status = Number.isInteger(error.status) && error.status >= 100 && error.status < 1000 ? error.status : 500;
   if (status >= 500) console.error(error);
   if (error.retryAfter) response.setHeader("Retry-After", String(error.retryAfter));
+  if (request.path.startsWith("/api/mobile/")) {
+    const providedRequestId = String(request.headers["x-request-id"] || "").trim();
+    const requestId = /^[a-z0-9._:-]{8,100}$/i.test(providedRequestId) ? providedRequestId : crypto.randomUUID();
+    response.setHeader("X-Request-Id", requestId);
+    const mobileError = {
+      code: error.code || (status >= 500 ? "INTERNAL_ERROR" : "REQUEST_FAILED"),
+      message: status >= 500 ? "Die Aktion konnte nicht ausgeführt werden." : (error.message || "Die Aktion konnte nicht ausgeführt werden."),
+      requestId,
+    };
+    if (error.details?.fieldErrors && typeof error.details.fieldErrors === "object" && !Array.isArray(error.details.fieldErrors)) {
+      mobileError.fieldErrors = Object.fromEntries(Object.entries(error.details.fieldErrors)
+        .filter(([field]) => String(field).trim())
+        .map(([field, message]) => [String(field), String(message || "Ungültige Eingabe.")]));
+    }
+    response.status(status).json({ error: mobileError });
+    return;
+  }
   const payload = {
     error: error.message || "Ein unerwarteter Fehler ist aufgetreten.",
   };

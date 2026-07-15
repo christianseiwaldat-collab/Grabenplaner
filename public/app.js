@@ -38,6 +38,7 @@ const state = {
   employeeAccessDraft: new Set(),
   amuPolicy: null,
   wifiAutomationSettings: null,
+  greetingSettings: null,
   selectedRequest: null,
   allEmployees: [],
   updateStatus: null,
@@ -112,6 +113,7 @@ const elements = Object.fromEntries(
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "amuManagerFileAccess", "sicknessLocalWarningDays", "sicknessHrWarningDays", "amuSettingsHint", "saveAmuSettingsButton",
+    "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
     "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordTitle", "personnelRecordContent",
@@ -473,6 +475,7 @@ function applyRoleVisibility() {
   const employeeReadAccess = employeeWriteAccess || employeeDisplayWriteAccess || permissions.includes("employees:read");
   const timeReadAccess = lanActive && permissions.includes("time:read") && state.portalStatus?.capabilities?.timeTracking;
   const wifiSettingsAccess = !lanActive || permissions.includes("wifi:settings");
+  const greetingSettingsAccess = !lanActive || (globalAdministration && permissions.includes("hr:settings"));
   const backupImportAccess = !lanActive || ["developer", "it_admin"].includes(role);
   document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
@@ -510,6 +513,7 @@ function applyRoleVisibility() {
   elements.employeeTimeConfirmationLevelField?.classList.toggle("hidden", !wifiSettingsAccess);
   elements.workflowSettingsCard?.classList.toggle("hidden", lanActive && !permissions.includes("hr:settings"));
   elements.amuSettingsCard?.classList.toggle("hidden", lanActive && !permissions.includes("hr:settings"));
+  elements.greetingSettingsCard?.classList.toggle("hidden", !greetingSettingsAccess);
   document.querySelector("#backupImportCard")?.classList.toggle("hidden", !backupImportAccess);
   elements.delegationSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.generalSettings?.querySelectorAll(".settings-card:not(.operation-mode-card)").forEach((card) => card.classList.toggle("hidden", !settingsAccess));
@@ -1762,6 +1766,72 @@ async function saveAmuSettings() {
   } catch (error) { showToast(error.message, true); }
 }
 
+function greetingTemplateLines(element) {
+  return String(element?.value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function renderGreetingSettings(result) {
+  const settings = result?.settings || {};
+  state.greetingSettings = result;
+  elements.personalizedGreetingsEnabled.checked = settings.enabled !== false;
+  elements.greetingVacationMinimumDays.value = Number(settings.vacationMinimumCalendarDays || 14);
+  elements.greetingReturnWorkdays.value = Number(settings.vacationReturnWorkdays || 3);
+  elements.greetingRecoveryWorkdays.value = Number(settings.sicknessReturnWorkdays || 2);
+  elements.greetingMorningTemplates.value = (settings.templates?.morning || []).join("\n");
+  elements.greetingDaytimeTemplates.value = (settings.templates?.daytime || []).join("\n");
+  elements.greetingEveningTemplates.value = (settings.templates?.evening || []).join("\n");
+  elements.greetingVacationTemplates.value = (settings.templates?.vacationReturn || []).join("\n");
+  elements.greetingSicknessActiveTemplates.value = (settings.templates?.sicknessActive || []).join("\n");
+  elements.greetingSicknessReturnTemplates.value = (settings.templates?.sicknessReturn || []).join("\n");
+  const controls = [
+    elements.personalizedGreetingsEnabled, elements.greetingVacationMinimumDays, elements.greetingReturnWorkdays,
+    elements.greetingRecoveryWorkdays, elements.greetingMorningTemplates, elements.greetingDaytimeTemplates,
+    elements.greetingEveningTemplates, elements.greetingVacationTemplates, elements.greetingSicknessActiveTemplates,
+    elements.greetingSicknessReturnTemplates, elements.saveGreetingSettingsButton,
+  ];
+  controls.forEach((control) => { if (control) control.disabled = result?.canChange === false; });
+  elements.greetingSettingsHint.textContent = result?.canChange === false
+    ? "Nur Personalleitung, Admin, IT-Admin oder Developer kann diese Texte verwalten."
+    : "Die Auswahl erfolgt serverseitig; an das Portal wird ausschließlich der fertige, aktuell erlaubte Text übertragen.";
+}
+
+async function loadGreetingSettings() {
+  if (!elements.greetingSettingsCard || elements.greetingSettingsCard.classList.contains("hidden")) return;
+  try {
+    renderGreetingSettings(await api("/api/portal/v1/greeting-settings"));
+  } catch (error) {
+    elements.greetingSettingsCard.classList.toggle("hidden", error.status === 403);
+    elements.greetingSettingsHint.textContent = error.message;
+  }
+}
+
+async function saveGreetingSettings() {
+  try {
+    const result = await api("/api/portal/v1/greeting-settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        enabled: elements.personalizedGreetingsEnabled.checked,
+        vacationMinimumCalendarDays: Number(elements.greetingVacationMinimumDays.value),
+        vacationReturnWorkdays: Number(elements.greetingReturnWorkdays.value),
+        sicknessReturnWorkdays: Number(elements.greetingRecoveryWorkdays.value),
+        templates: {
+          morning: greetingTemplateLines(elements.greetingMorningTemplates),
+          daytime: greetingTemplateLines(elements.greetingDaytimeTemplates),
+          evening: greetingTemplateLines(elements.greetingEveningTemplates),
+          vacationReturn: greetingTemplateLines(elements.greetingVacationTemplates),
+          sicknessActive: greetingTemplateLines(elements.greetingSicknessActiveTemplates),
+          sicknessReturn: greetingTemplateLines(elements.greetingSicknessReturnTemplates),
+        },
+      }),
+    });
+    renderGreetingSettings(result);
+    showToast("Persönliche Begrüßungen wurden gespeichert.");
+  } catch (error) { showToast(error.message, true); }
+}
+
 function renderWifiConfirmationLevels() {
   if (!elements.wifiConfirmationLevelList) return;
   const query = String(elements.wifiConfirmationLevelSearch?.value || "").trim().toLocaleLowerCase("de");
@@ -2802,6 +2872,7 @@ function setSettingsTab(tab) {
   if (tab === "access") {
     loadPortalUsers();
     loadAmuSettings();
+    loadGreetingSettings();
   }
   if (tab === "rights") loadRightsManagement();
   if (tab === "wifiAutomation") loadWifiAutomationSettings();
@@ -4267,6 +4338,7 @@ elements.requestWorkflowSummary?.addEventListener("click", (event) => {
 });
 elements.vacationHrApprovalRequired?.addEventListener("change", (event) => toggleHrWorkflow(event.target.checked));
 elements.saveAmuSettingsButton?.addEventListener("click", saveAmuSettings);
+elements.saveGreetingSettingsButton?.addEventListener("click", saveGreetingSettings);
 elements.rightsEmployeeSearch?.addEventListener("input", renderRightsManagement);
 elements.rightsUserList?.addEventListener("click", (event) => {
   const card = event.target.closest("[data-rights-user]");

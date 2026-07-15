@@ -26,11 +26,12 @@
     <div class="portal-app hidden" id="portalApp">
       <header class="portal-header">
         <div class="portal-brand"><img id="portalLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" /><div><strong>Grabenplaner</strong><span>Mitarbeiterportal</span></div></div>
-        <div class="portal-user"><div class="portal-user-copy"><strong id="portalUserName"></strong><span id="portalUserRole"></span></div><a id="adminAppLink" class="text-button hidden" href="/">Planung öffnen</a><button class="notification-button" id="notificationsButton" type="button" aria-label="Benachrichtigungen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span class="notification-badge hidden" id="notificationBadge">0</span></button><button class="text-button header-action" id="changePasswordButton" type="button"><span class="wide-label">Passwort ändern</span><span class="compact-label">Passwort</span></button><button class="text-button header-action" id="logoutButton" type="button">Abmelden</button></div>
+        <div class="portal-user"><div class="portal-user-copy"><strong id="portalUserName"></strong><span id="portalUserRole"></span></div><a id="adminAppLink" class="text-button hidden" href="/">Planung öffnen</a><button class="notification-button" id="notificationsButton" type="button" aria-label="Benachrichtigungen öffnen" aria-haspopup="dialog" aria-expanded="false"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><span class="notification-badge hidden" id="notificationBadge">0</span></button><button class="text-button header-action portal-settings-shortcut hidden" id="portalSettingsShortcut" type="button" aria-label="Persönliche Einstellungen öffnen">Einstellungen</button><button class="text-button header-action" id="logoutButton" type="button">Abmelden</button></div>
       </header>
 
       <main>
         <nav class="portal-tabs" role="tablist" aria-label="Mitarbeiterportal">
+          <button data-tab="settings" type="button" role="tab" aria-selected="false" aria-controls="settingsView" tabindex="-1">Einstellungen</button>
           <button class="active" data-tab="schedule" type="button" role="tab" aria-selected="true" aria-controls="scheduleView">Dienstplan</button>
           <button class="hidden" id="timeTrackingTab" data-tab="timeTracking" type="button" role="tab" aria-selected="false" aria-controls="timeTrackingView" tabindex="-1">Zeit</button>
           <button class="hidden leadership-tab" id="leadershipTeamTab" data-tab="leadershipTeam" data-mobile-module="presence" type="button" role="tab" aria-selected="false" aria-controls="leadershipTeamView" tabindex="-1">Team</button>
@@ -42,23 +43,33 @@
           <button class="hidden leadership-tab" id="leadershipMoreTab" data-tab="leadershipMore" data-mobile-module="more" type="button" role="tab" aria-selected="false" aria-controls="leadershipMoreView" tabindex="-1">Mehr</button>
         </nav>
 
+        <section class="portal-view" id="settingsView" role="tabpanel">
+          <div class="view-heading"><div><span class="eyebrow">Persönlich</span><h1>Einstellungen</h1><p>Passwort und freiwillige Zeitvorschläge an einem Ort.</p></div></div>
+          <div class="portal-settings-grid">
+            <section class="portal-card portal-settings-card">
+              <div><span class="eyebrow">Sicherheit</span><h2>Passwort</h2><p>Ändere dein persönliches Passwort und kontrolliere die Eingabe bei Bedarf mit „Anzeigen“.</p></div>
+              <button class="primary" id="settingsPasswordButton" type="button">Passwort ändern</button>
+            </section>
+            <section class="portal-card wifi-suggestion-card" id="wifiAutomationCard" aria-live="polite">
+              <div class="wifi-suggestion-heading">
+                <div><span class="eyebrow">Freiwillig</span><h2>WLAN-Zeitvorschläge</h2><p id="wifiAutomationAvailability">Status wird geladen.</p></div>
+                <label class="portal-switch"><span>Aktiv</span><input id="wifiAutomationToggle" type="checkbox" /></label>
+              </div>
+              <div class="wifi-level-note" id="wifiConfirmationLevel"></div>
+              <div class="wifi-suggestion-warning hidden" id="wifiSuggestionWarning"></div>
+              <div class="wifi-suggestion-list" id="wifiSuggestionList"><p class="empty-state">Zeitvorschläge werden geladen.</p></div>
+              <p class="message hidden" id="wifiAutomationMessage"></p>
+            </section>
+          </div>
+        </section>
+
         <section class="portal-view active" id="scheduleView" role="tabpanel">
           <div class="view-heading"><div><span class="eyebrow">Meine Woche</span><h1 id="scheduleHeading">Mein Dienstplan</h1></div><div class="week-controls"><button id="previousWeek" type="button">←</button><button id="currentWeek" type="button">Diese Woche</button><button id="nextWeek" type="button">→</button></div></div>
           <div class="schedule-grid" id="scheduleGrid"></div>
         </section>
 
         <section class="portal-view" id="timeTrackingView" role="tabpanel" aria-labelledby="timeTrackingTab">
-          <div class="view-heading time-heading"><div><span class="eyebrow">Mein Arbeitstag</span><h1>Zeiterfassung</h1><p id="timeTrackingDate">Heutige Buchungen</p></div><button class="text-button time-refresh-button" id="timeTrackingRefresh" type="button">Aktualisieren</button></div>
-          <section class="portal-card wifi-suggestion-card" id="wifiAutomationCard" aria-live="polite">
-            <div class="wifi-suggestion-heading">
-              <div><span class="eyebrow">Optional</span><h2>WLAN-Zeitvorschläge</h2><p id="wifiAutomationAvailability">Status wird geladen.</p></div>
-              <label class="portal-switch"><span>Automatik</span><input id="wifiAutomationToggle" type="checkbox" /></label>
-            </div>
-            <div class="wifi-level-note" id="wifiConfirmationLevel"></div>
-            <div class="wifi-suggestion-warning hidden" id="wifiSuggestionWarning"></div>
-            <div class="wifi-suggestion-list" id="wifiSuggestionList"><p class="empty-state">Zeitvorschläge werden geladen.</p></div>
-            <p class="message hidden" id="wifiAutomationMessage"></p>
-          </section>
+          <div class="view-heading time-heading"><div><span class="eyebrow">Mein Arbeitstag</span><h1>Zeiterfassung</h1><p class="time-greeting hidden" id="timeTrackingGreeting"></p><p id="timeTrackingDate">Heutige Buchungen</p></div><button class="text-button time-refresh-button" id="timeTrackingRefresh" type="button">Aktualisieren</button></div>
           <div class="time-tracking-layout">
             <section class="portal-card time-clock-card" id="timeTrackingCard" aria-live="polite">
               <div class="time-state-heading">
@@ -121,7 +132,7 @@
             <button type="button" data-more-tab="timeOff"><strong>ZA beantragen</strong><span>Stundenweise, ganztägig oder mehrtägig</span></button>
             <button type="button" data-more-tab="vacation"><strong>Urlaub beantragen</strong><span>Neuen Urlaubsantrag einreichen</span></button>
             <button type="button" data-more-tab="amu"><strong>Krankmeldung &amp; AUM</strong><span>Krankmelden oder Dokument senden</span></button>
-            <button type="button" id="leadershipPasswordButton"><strong>Passwort ändern</strong><span>Persönliches Passwort verwalten</span></button>
+            <button type="button" id="leadershipSettingsButton"><strong>Einstellungen</strong><span>Passwort und WLAN-Zeitvorschläge verwalten</span></button>
             <a id="leadershipDesktopLink" href="/?desktop=1"><strong>Desktop-Planung</strong><span>Vollständige Verwaltung am großen Bildschirm</span></a>
           </div>
           <section class="portal-card sickness-preferences-card hidden" id="sicknessNotificationPreferencesCard">
