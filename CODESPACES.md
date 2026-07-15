@@ -24,6 +24,8 @@ Zum Anmelden immer die Adresse aus dem Bereich **PORTS** mit **Open in Browser**
 
 War der Codespace zwischenzeitlich beendet oder ist die GitHub-Anmeldung des privaten Ports abgelaufen, eine noch offene Portal-Seite nicht weiterverwenden: Codespace starten, den Port `3000` erneut unter **PORTS** mit **Open in Browser** öffnen und den Start kurz abwarten. Das Portal zeigt für diesen Fall eine eigene Hinweismeldung; die Sicherheitsprüfung der App wird dabei nicht gelockert.
 
+Nach einem Update des Servercodes genügt ein Neuladen der Portal-Seite nicht. Den Codespace über **Codespaces: Rebuild Container** neu aufbauen oder für eine vollständig frische Demo-Testinstanz neu erstellen; erst danach läuft der aktualisierte Grabenplaner-Prozess.
+
 Das Sporthandelsprofil wird ausschließlich in einer frischen, leeren Demo-Datenbank angelegt. Bereits vorhandene Codespaces-Testdaten werden nicht automatisch überschrieben.
 
 Die private URL lautet:

@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const http = require("node:http");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
@@ -38,6 +39,24 @@ async function waitForExit(child, timeoutMs = 12_000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("Server wurde nicht rechtzeitig beendet.")), timeoutMs);
     child.once("exit", (code) => { clearTimeout(timer); resolve(code); });
+  });
+}
+
+async function rawHttpRequest(url, { method = "GET", headers = {}, body = "" } = {}) {
+  return new Promise((resolve, reject) => {
+    const request = http.request(url, { method, headers }, (response) => {
+      let responseBody = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => { responseBody += chunk; });
+      response.on("end", () => resolve({
+        status: response.statusCode,
+        headers: response.headers,
+        body: responseBody,
+      }));
+    });
+    request.once("error", reject);
+    if (body) request.write(body);
+    request.end();
   });
 }
 
@@ -108,7 +127,10 @@ test("v0.57: Codespaces nutzt die Sporthandel-Demo und vertraut nur dem gleichur
   const actualOrigin = "https://aktuelle-adresse-3000.app.github.dev";
   const forwardedHeaders = {
     "X-Forwarded-Proto": "https",
-    "X-Forwarded-Host": "aktuelle-adresse-3000.app.github.dev",
+    // Der echte Codespaces-Proxy kann hier den internen Host weiterreichen.
+    // Der öffentliche Browser-Host steht dann im normalen Host-Header.
+    "X-Forwarded-Host": "127.0.0.1:3000",
+    Host: "aktuelle-adresse-3000.app.github.dev",
     Origin: actualOrigin,
   };
   const server = spawnServer({
@@ -125,18 +147,18 @@ test("v0.57: Codespaces nutzt die Sporthandel-Demo und vertraut nur dem gleichur
   const url = `http://127.0.0.1:${port}`;
   try {
     await waitFor(`${url}/api/portal/v1/status`, server, { "X-Forwarded-Proto": "https" });
-    const login = await fetch(`${url}/api/portal/v1/auth/login`, {
+    const login = await rawHttpRequest(`${url}/api/portal/v1/auth/login`, {
       method: "POST",
       headers: { ...forwardedHeaders, "Content-Type": "application/json" },
       body: JSON.stringify({ employeeNumber: "101", password: "DemoPasswort123!" }),
     });
-    assert.equal(login.status, 200, await login.clone().text());
-    const cookies = typeof login.headers.getSetCookie === "function" ? login.headers.getSetCookie() : [login.headers.get("set-cookie")].filter(Boolean);
+    assert.equal(login.status, 200, login.body);
+    const cookies = login.headers["set-cookie"] || [];
     const cookie = cookies.map((value) => value.split(";", 1)[0]).join("; ");
     const csrfCookie = cookies.map((value) => value.split(";", 1)[0]).find((value) => value.startsWith("grabenplaner_csrf="));
     const csrf = decodeURIComponent(csrfCookie.split("=").slice(1).join("="));
 
-    const foreign = await fetch(`${url}/api/portal/v1/auth/logout`, {
+    const foreign = await rawHttpRequest(`${url}/api/portal/v1/auth/logout`, {
       method: "POST",
       headers: {
         ...forwardedHeaders,
@@ -147,12 +169,24 @@ test("v0.57: Codespaces nutzt die Sporthandel-Demo und vertraut nur dem gleichur
     });
     assert.equal(foreign.status, 403);
 
-    const stopped = await fetch(`${url}/api/system/exit`, {
+    const spoofedForwardedHost = await rawHttpRequest(`${url}/api/portal/v1/auth/logout`, {
+      method: "POST",
+      headers: {
+        ...forwardedHeaders,
+        "X-Forwarded-Host": "fremde-adresse-3000.app.github.dev, aktuelle-adresse-3000.app.github.dev",
+        Origin: "https://fremde-adresse-3000.app.github.dev",
+        Cookie: cookie,
+        "X-CSRF-Token": csrf,
+      },
+    });
+    assert.equal(spoofedForwardedHost.status, 403);
+
+    const stopped = await rawHttpRequest(`${url}/api/system/exit`, {
       method: "POST",
       headers: { ...forwardedHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf },
       body: "{}",
     });
-    assert.equal(stopped.status, 200, await stopped.clone().text());
+    assert.equal(stopped.status, 200, stopped.body);
     assert.equal(await waitForExit(server), 0, serverError);
   } finally {
     if (server.exitCode === null) server.kill();
