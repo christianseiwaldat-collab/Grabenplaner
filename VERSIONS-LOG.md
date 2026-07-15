@@ -1,5 +1,17 @@
 ﻿# Grabenplaner Versions-Log
 
+## v0.58 Beta
+
+- Rechteprofil direkt in die Personalstammdaten integriert: Developer und IT-Admin können App-Rolle und personenbezogene Zusatzrechte beim Anlegen oder Bearbeiten gemeinsam speichern.
+- IT-Admins dürfen die Rolle Personalleitung samt Mindest- und Zusatzrechten vergeben; geschützte Developer-Konten bleiben ausschließlich offline gebunden und können weder über Oberfläche noch API zugewiesen werden.
+- Rollen-, Rechte- und Bereichsänderungen werden serverseitig geprüft, transaktional gespeichert und revisionsfähig protokolliert; unzulässige Rechteprofile lassen keine Teiländerungen zurück.
+- Sensible Personalakt- und AUM-Inhalte sowie Dokumentmetadaten werden kontextgebunden mit AES-256-GCM verschlüsselt; neue Dokumente binden die Verschlüsselung zusätzlich an ihren Ablagepfad.
+- Bestehende Personalakt-Daten werden vor der Migration gemeinsam mit der verschlüsselten Dokumentablage gesichert, anschließend verschlüsselt und aus den bisherigen Klartextfeldern entfernt.
+- Manuelle Sicherungen umfassen Datenbank und verschlüsselte Dokumentablage als zusammengehöriges Paar; App und separater Backup-Befehl sperren den Datenbestand währenddessen gegenseitig gegen parallele Änderungen.
+- Reine Datenbankimporte sind im geschützten Betrieb Developer/IT-Admin vorbehalten, werden bei vorhandenen Dokumenten abgewiesen und prüfen auch ältere verschlüsselte Personalakt-Datensätze vor der Annahme mit dem lokalen Schlüsselsatz.
+- Admin-Zugänge können die technische IT-Admin-Rolle weder über Personalstammdaten noch über die ältere Zugangsverwaltung vergeben; Developer bleibt ausschließlich offline bindbar.
+- Rollenänderungen ohne neues Startpasswort bewahren den bestehenden Passwortstatus und lösen keine unnötige erneute Passwortänderung aus.
+
 ## v0.57 Beta
 
 - Geschützte, idempotente Controller-/RADIUS-Schnittstelle für pseudonymisierte WLAN-Ereignisse ergänzt; Hardware-Adressen, SSIDs und Gerätekennungen werden abgelehnt.

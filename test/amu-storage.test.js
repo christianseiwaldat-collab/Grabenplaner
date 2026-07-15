@@ -94,11 +94,27 @@ test("Dokumente werden gescannt, verschlüsselt gespeichert und unverändert gel
   assert.equal(validateEncryptionKeyForStorage({ sourceDirectory: root, encryptionKeys: { primary: key() }, activeKeyId: "primary" }).fileCount, 1);
 
   const encrypted = fs.readFileSync(storage.blobPath(metadata.storageKey));
-  assert.equal(encrypted.subarray(0, 8).toString("ascii"), "GPAMU001");
+  assert.equal(encrypted.subarray(0, 8).toString("ascii"), "GPAMU002");
   assert.equal(encrypted.includes(source), false);
   assert.equal(fs.readdirSync(path.join(root, "tmp")).length, 0);
   assert.equal(storage.diagnostics().ok, true);
   assert.throws(() => storage.blobPath("../../public/index.html"), { code: "AMU_STORAGE_KEY_INVALID" });
+});
+
+test("Personalakt-Hüllen sind an Datensatz, Feld und Person gebunden", () => {
+  const storage = createAmuStorage({
+    rootDirectory: temporaryDirectory("record-context"),
+    encryptionKeys: { primary: key() },
+    activeKeyId: "primary",
+    scanner: async () => true,
+  });
+  const context = { namespace: "personnel-record", recordId: "17", field: "payload", employeeNumber: "420" };
+  const protectedRecord = storage.protectRecord(JSON.stringify({ note: "vertraulich" }), context);
+  assert.match(protectedRecord, /^enc:v2:/);
+  assert.equal(protectedRecord.includes("vertraulich"), false);
+  assert.deepEqual(JSON.parse(storage.unprotectRecord(protectedRecord, context)), { note: "vertraulich" });
+  assert.throws(() => storage.unprotectRecord(protectedRecord, { ...context, recordId: "18" }), { code: "PERSONNEL_RECORD_INTEGRITY_FAILED" });
+  assert.throws(() => storage.unprotectRecord("Klartext", context), { code: "PERSONNEL_RECORD_PLAINTEXT_REJECTED" });
 });
 
 test("Start bereinigt Klartextreste und prüft den dauerhaften Recovery-Schlüssel", () => {

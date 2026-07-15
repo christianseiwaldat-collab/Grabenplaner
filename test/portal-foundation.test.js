@@ -7,6 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { DatabaseSync } = require("node:sqlite");
+const { createAmuStorage } = require("../lib/amu-storage");
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-portal-test-"));
 const databasePath = path.join(testRoot, "legacy.db");
@@ -53,6 +54,7 @@ const {
   bookTimeEntry,
   resolveStaleTimeEntry,
   timePresenceForContext,
+  releaseInstanceLockForTests,
 } = require("../server");
 
 let httpServer;
@@ -104,6 +106,7 @@ test.before(async () => {
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
   db.close();
+  releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true });
 });
 
@@ -150,7 +153,7 @@ test("Built-in-Rollen werden aktualisiert und eigene Rollen bleiben erhalten", (
   assert.ok(roles.some((role) => role.id === "hr" && role.name === "Personalleitung" && role.permissions.includes("hr:approve")));
   assert.ok(roles.some((role) => role.id === "admin" && role.permissions.includes("rights:write") && role.permissions.includes("branding:write")));
   assert.ok(roles.some((role) => role.id === "hr" && role.permissions.includes("rights:write") && role.permissions.includes("operation_mode:write")));
-  assert.ok(roles.some((role) => role.id === "it_admin" && role.permissions.includes("rights:write") && role.permissions.includes("update:write") && !role.permissions.includes("employees:write")));
+  assert.ok(roles.some((role) => role.id === "it_admin" && role.permissions.includes("rights:write") && role.permissions.includes("update:write") && role.permissions.includes("employees:write")));
   assert.ok(roles.some((role) => role.id === "developer" && role.protected && !role.assignable && role.permissions.includes("developer:system")));
   assert.equal(custom.name, "Eigene Prüferrolle");
   assert.deepEqual(custom.permissions, ["audit:read"]);
@@ -886,11 +889,19 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const storedTimeOff = verified.prepare("SELECT status, option_id FROM time_off_requests WHERE id = ?").get(timeOffRequest.id);
     assert.equal(storedTimeOff.status, "approved");
     assert.ok(storedTimeOff.option_id);
-    const storedAmu = verified.prepare("SELECT employee_note, review_note FROM amu_reports WHERE id = ?").get(amuUpload.report.id);
-    const storedAmuDocument = verified.prepare("SELECT original_filename FROM amu_documents WHERE report_id = ?").get(amuUpload.report.id);
-    assert.match(storedAmu.employee_note, /^enc:v1:/);
-    assert.match(storedAmu.review_note, /^enc:v1:/);
-    assert.match(storedAmuDocument.original_filename, /^enc:v1:/);
+    const storedAmu = verified.prepare("SELECT incapacity_from, incapacity_to, employee_note, review_note, protected_payload FROM amu_reports WHERE id = ?").get(amuUpload.report.id);
+    const storedAmuDocument = verified.prepare("SELECT original_filename, detected_mime, byte_size, sha256, uploaded_by, protected_payload FROM amu_documents WHERE report_id = ?").get(amuUpload.report.id);
+    assert.equal(storedAmu.incapacity_from, "");
+    assert.equal(storedAmu.incapacity_to, "");
+    assert.equal(storedAmu.employee_note, "");
+    assert.equal(storedAmu.review_note, "");
+    assert.match(storedAmu.protected_payload, /^enc:v2:/);
+    assert.equal(storedAmuDocument.original_filename, "");
+    assert.equal(storedAmuDocument.detected_mime, "application/octet-stream");
+    assert.equal(storedAmuDocument.byte_size, 0);
+    assert.equal(storedAmuDocument.sha256, "");
+    assert.equal(storedAmuDocument.uploaded_by, "");
+    assert.match(storedAmuDocument.protected_payload, /^enc:v2:/);
     const storedPlTimeOff = verified.prepare("SELECT status, approval_type, local_approved_by, hr_approved_by FROM time_off_requests WHERE id = ?").get(plTimeOff.id);
     assert.equal(storedPlTimeOff.status, "approved");
     assert.equal(storedPlTimeOff.approval_type, "hr");
@@ -1006,7 +1017,6 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       ["103", "hr", "334455"],
       ["104", "manager", "445566"],
       ["105", "department_manager", "556677"],
-      ["106", "it_admin", "667788"],
     ]) {
       const accessResponse = await fetch(`${url}/api/portal/v1/users/${employeeNumber}`, {
         method: "PUT",
@@ -1014,6 +1024,19 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
         body: JSON.stringify({ role, active: true, password, mustChangePassword: true }),
       });
       assert.equal(accessResponse.status, 200, await accessResponse.clone().text());
+    }
+    const fixtureDatabase = new DatabaseSync(childDatabase);
+    try {
+      fixtureDatabase.prepare(`
+        INSERT INTO portal_users
+          (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
+        VALUES ('106', ?, 'it_admin', 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT(employee_number) DO UPDATE SET
+          password_hash = excluded.password_hash, role = 'it_admin', active = 1,
+          must_change_password = 1, password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      `).run(await hashPortalPassword("667788"));
+    } finally {
+      fixtureDatabase.close();
     }
 
     const managerScopeResponse = await fetch(`${url}/api/portal/v1/users/104/scopes`, {
@@ -1076,13 +1099,19 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const employeeBrandingAccess = await fetch(`${url}/api/branding/assignments`, { headers: { Cookie: employee.cookie, "X-CSRF-Token": employee.csrf } });
     assert.equal(employeeBrandingAccess.status, 200, await employeeBrandingAccess.clone().text());
 
-    const itAdminCannotChangeHr = await fetch(`${url}/api/portal/v1/users/103`, {
+    const itAdminCanManageHr = await fetch(`${url}/api/portal/v1/users/103`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: itAdmin.cookie, "X-CSRF-Token": itAdmin.csrf },
       body: JSON.stringify({ role: "employee", active: true }),
     });
-    assert.equal(itAdminCannotChangeHr.status, 403, await itAdminCannotChangeHr.clone().text());
-    assert.equal((await itAdminCannotChangeHr.json()).code, "PORTAL_ROLE_HIERARCHY_DENIED");
+    assert.equal(itAdminCanManageHr.status, 200, await itAdminCanManageHr.clone().text());
+    assert.equal((await itAdminCanManageHr.json()).users.find((user) => user.employeeNumber === "103").role, "employee");
+    const restoreHrByItAdmin = await fetch(`${url}/api/portal/v1/users/103`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: itAdmin.cookie, "X-CSRF-Token": itAdmin.csrf },
+      body: JSON.stringify({ role: "hr", active: true }),
+    });
+    assert.equal(restoreHrByItAdmin.status, 200, await restoreHrByItAdmin.clone().text());
     const developerRoleCannotBeAssigned = await fetch(`${url}/api/portal/v1/users/106`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
@@ -1403,13 +1432,29 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const scopedAmuDatabase = new DatabaseSync(childDatabase);
     scopedAmuDatabase.exec("PRAGMA busy_timeout = 5000");
     scopedAmuDatabase.prepare("UPDATE employees SET preferred_department_id = ? WHERE personnel_number = '104'").run(firstDepartment.id);
+    const scopedAmuStorage = createAmuStorage({
+      rootDirectory: path.join(childRoot, "app-data", "private", "amu"),
+      encryptionKeys: { "local-v1": fs.readFileSync(path.join(childRoot, "app-data", "private", "amu-local.key"), "utf8").trim() },
+      activeKeyId: "local-v1",
+      scanner: async () => true,
+    });
     const insertScopedAmu = scopedAmuDatabase.prepare(`
       INSERT INTO amu_reports
-        (employee_number, location_id, department_id, incapacity_from, incapacity_to, employee_note, review_note, status)
-      VALUES (?, ?, ?, ?, ?, 'Interne Notiz', 'Leitungsnotiz', 'submitted')
+        (employee_number, location_id, department_id, incapacity_from, incapacity_to, employee_note, review_note, status, protected_payload)
+      VALUES (?, ?, ?, '', '', '', '', 'submitted', '')
     `);
-    const localAmuId = Number(insertScopedAmu.run("104", "01", null, "2027-07-01", "2027-07-02").lastInsertRowid);
-    const remoteAmuId = Number(insertScopedAmu.run("104", "02", null, "2027-07-03", "2027-07-04").lastInsertRowid);
+    const updateScopedAmu = scopedAmuDatabase.prepare("UPDATE amu_reports SET protected_payload = ? WHERE id = ?");
+    function insertProtectedScopedAmu(locationId, from, to) {
+      const id = Number(insertScopedAmu.run("104", locationId, null).lastInsertRowid);
+      const protectedPayload = scopedAmuStorage.protectRecord(JSON.stringify({
+        incapacityFrom: from, incapacityTo: to, employeeNote: "Interne Notiz", reviewedBy: "101",
+        reviewedAt: "2027-06-30T10:00:00.000Z", reviewNote: "Leitungsnotiz", retentionUntil: "2029-07-04", withdrawnAt: "",
+      }), { namespace: "personnel-record", recordId: String(id), field: "payload", employeeNumber: "104" });
+      updateScopedAmu.run(protectedPayload, id);
+      return id;
+    }
+    const localAmuId = insertProtectedScopedAmu("01", "2027-07-01", "2027-07-02");
+    const remoteAmuId = insertProtectedScopedAmu("02", "2027-07-03", "2027-07-04");
     scopedAmuDatabase.close();
 
     const managerPersonnelRecord = await fetch(`${url}/api/portal/v1/personnel-records/104`, { headers: { Cookie: manager.cookie } });
