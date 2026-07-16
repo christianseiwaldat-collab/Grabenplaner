@@ -1,5 +1,15 @@
 # Grabenplaner Versions-Log
 
+## v0.63 Beta
+
+- Neuer neutraler Personalimport-Assistent für CSV- und XLSX-Dateien mit automatischen Zuordnungsvorschlägen, frei prüfbarer Feldzuordnung, Vorschau und atomarer Übernahme.
+- Personalnummern bleiben Textwerte einschließlich führender Nullen; Dubletten werden standardmäßig übersprungen und Groß-/Kleinschreibung erzeugt keine zweite Person.
+- Wiederverwendbare Import- und Lohnverrechnungsprofile speichern ausschließlich Zuordnungen und Einstellungen, niemals die hochgeladenen Personalzeilen.
+- Konfigurierbarer Lohnverrechnungs-Export als Tagesjournal oder Lohnarten-Datei in CSV/XLSX mit Planwerten oder aktuell geprüften Ist-Zeiten.
+- Vorprüfung sperrt finale Ist-Exporte bei fehlender beziehungsweise veralteter Tagesprüfung, offenen Korrekturen, unvollständigen Buchungen oder Arbeits-/Abwesenheitsüberschneidungen; ein ausdrücklich gekennzeichneter Entwurf bleibt möglich.
+- Standort- und Abteilungswerte werden getrennt geprüft; nicht eindeutig zuordenbare Mehrabteilungstage sowie standortübergreifende Ist-Zeiten bleiben bis zur passenden Tagesprüfung auf klar markierte Entwürfe beschränkt. Ein Lauf umfasst höchstens 93 Tage.
+- Eigene delegierbare Rechte, Bereichsprüfung und datensparsame Laufprotokolle schützen Import und Export; sensible Personalakt-, Bank-, Adress-, SV- und AUM-Daten sind ausgeschlossen.
+
 ## v0.62 Beta
 
 - Sichere native Geräteanmeldung für Grabenplaner Mobile im konfigurierten HTTPS-Serverbetrieb mit kurzlebigen Zugriffstokens, rotierenden Refresh-Tokens und serverseitig widerrufbaren Gerätesitzungen.
