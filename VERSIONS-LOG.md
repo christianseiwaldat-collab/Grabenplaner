@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.62 Beta
+
+- Sichere native Geräteanmeldung für Grabenplaner Mobile im konfigurierten HTTPS-Serverbetrieb mit kurzlebigen Zugriffstokens, rotierenden Refresh-Tokens und serverseitig widerrufbaren Gerätesitzungen.
+- Android-Alpha-Vertrag für Standortbranding, persönlichen Dienstplan, Zeiterfassungsstatus und idempotente Zeitbuchungen mit vertrauenswürdiger Serverzeit.
+- Gerätewechsel, erneute Anmeldung, Passwort- und Rechteänderungen beenden betroffene Sitzungen nachvollziehbar; Refresh, Wiederverwendung bereits konsumierter Tokens und App-Mindestversion werden serverseitig geprüft.
+- Der Browserzugang behält seine bestehende Cookie-, CSRF- und Origin-Sicherheit. Native App-Routen akzeptieren ausschließlich Bearer-Tokens und öffnen keine Cross-Origin-Browserfreigabe.
+
 ## v0.61.2 Beta · Funktionspatch
 
 - Der USB-Stick-Assistent steht berechtigten Developer-, IT-Admin- und Admin-Konten nun auch im LAN-Host- und HTTPS-Serverbetrieb zur Verfügung.

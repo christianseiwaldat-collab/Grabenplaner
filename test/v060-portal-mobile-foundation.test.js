@@ -121,7 +121,7 @@ test("v0.60: Personalleitung verwaltet Begrüßungen, Filialleitung erhält 403"
   assert.equal(denied.payload.code, "PORTAL_PERMISSION_DENIED");
 });
 
-test("v0.60: Mobile-v1 liefert Status, Home und Bootstrap als stabilen Grundvertrag", async () => {
+test("v0.60: Mobile-v1 meldet den lokalen Grundvertrag ohne native Anmeldung", async () => {
   const employee = session("962", "employee");
 
   const status = await request("/api/mobile/v1/status");
@@ -129,37 +129,28 @@ test("v0.60: Mobile-v1 liefert Status, Home und Bootstrap als stabilen Grundvert
   assert.equal(status.payload.appName, "Grabenplaner");
   assert.equal(status.payload.apiVersion, 1);
   assert.equal(status.payload.nativeAuthentication, false);
+  assert.equal(status.payload.minimumMobileVersion, "0.3.0-alpha.1");
   assert.equal(status.payload.capabilities.personalSettingsRead, true);
   assert.equal(status.payload.capabilities.personalSettingsWrite, false);
   assert.equal(typeof status.payload.capabilities.personalizedGreetings, "boolean");
 
   const home = await request("/api/mobile/v1/me/home", { auth: employee });
-  assert.equal(home.response.status, 200, JSON.stringify(home.payload));
-  assert.match(home.payload.date, /^\d{4}-\d{2}-\d{2}$/);
-  assert.equal(home.payload.timezone, "Europe/Vienna");
-  assert.equal(typeof home.payload.timeTracking.enabled, "boolean");
-  assert.equal(typeof home.payload.greeting.text, "string");
-  assert.equal(typeof home.payload.greeting.enabled, "boolean");
+  assert.equal(home.response.status, 409, JSON.stringify(home.payload));
+  assert.equal(home.payload.error.code, "MOBILE_AUTH_UNAVAILABLE");
 
   const bootstrap = await request("/api/mobile/v1/bootstrap", { auth: employee });
-  assert.equal(bootstrap.response.status, 200, JSON.stringify(bootstrap.payload));
-  assert.equal(bootstrap.payload.status.apiVersion, 1);
-  assert.equal(bootstrap.payload.user.employeeNumber, "962");
-  assert.equal(Array.isArray(bootstrap.payload.navigation.items), true);
-  assert.equal(bootstrap.payload.navigation.items[0]?.id, "settings");
-  assert.equal(bootstrap.payload.home.date, home.payload.date);
-  assert.equal(typeof bootstrap.payload.settings.password.minimumLength, "number");
-  assert.equal(typeof bootstrap.payload.settings.wifiTimeSuggestions.enabled, "boolean");
+  assert.equal(bootstrap.response.status, 409, JSON.stringify(bootstrap.payload));
+  assert.equal(bootstrap.payload.error.code, "MOBILE_AUTH_UNAVAILABLE");
 });
 
 test("v0.60: Mobile-v1-Fehler besitzen Code, Meldung und nachvollziehbare Request-ID", async () => {
   const requestId = "v060-mobile-request-0001";
   const denied = await request("/api/mobile/v1/bootstrap", { requestId });
 
-  assert.equal(denied.response.status, 401, JSON.stringify(denied.payload));
+  assert.equal(denied.response.status, 409, JSON.stringify(denied.payload));
   assert.equal(denied.response.headers.get("x-request-id"), requestId);
   assert.deepEqual(Object.keys(denied.payload), ["error"]);
-  assert.equal(denied.payload.error.code, "PORTAL_LOGIN_REQUIRED");
+  assert.equal(denied.payload.error.code, "MOBILE_AUTH_UNAVAILABLE");
   assert.equal(typeof denied.payload.error.message, "string");
   assert.equal(denied.payload.error.requestId, requestId);
 });
