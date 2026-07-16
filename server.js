@@ -75,6 +75,14 @@ const {
   payrollCatalog,
   buildPayrollRows,
 } = require("./lib/payroll-export");
+const {
+  normalizeIntegrationConnection,
+  toPublicIntegrationConnection,
+  integrationConnectionCatalog,
+} = require("./lib/integration-connections");
+const { createIntegrationSecretVault } = require("./lib/integration-secret-vault");
+const { createSqlViewSource } = require("./lib/sql-view-source");
+const { createIdempotencyKey, createSafeApiDelivery, payloadSha256 } = require("./lib/safe-api-delivery");
 const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
@@ -95,7 +103,13 @@ const DUMMY_PORTAL_PASSWORD_HASH = `scrypt-v1$${Buffer.alloc(16, 0xa5).toString(
 const usbProvisioningTokenSecret = crypto.randomBytes(32);
 const consumedUsbProvisioningTokens = new Map();
 let usbProvisioningActive = false;
-const integrationCache = new IntegrationCache({ ttlMs: 15 * 60 * 1000, maxEntries: 25, maxEntriesPerActor: 5 });
+const integrationCache = new IntegrationCache({
+  ttlMs: 15 * 60 * 1000,
+  maxEntries: 25,
+  maxEntriesPerActor: 5,
+  maxEntryBytes: 16 * 1024 * 1024,
+  maxBytes: 64 * 1024 * 1024,
+});
 
 const delegablePortalPermissionCatalog = Object.freeze([
   { id: "schedule:read", label: "Dienstpläne lesen", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
@@ -124,8 +138,12 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "notifications:settings", label: "Eigene Besetzungswarnungen konfigurieren", group: "AUM", warningLevel: "normal", hrDelegable: true },
   { id: "integrations:read", label: "Schnittstellen und Laufprotokolle lesen", group: "Import & Lohnverrechnung", warningLevel: "high" },
   { id: "integrations:profiles:write", label: "Import- und Exportprofile verwalten", group: "Import & Lohnverrechnung", warningLevel: "high" },
+  { id: "integrations:connections:read", label: "Direkte Verbindungen lesen", group: "Import & Lohnverrechnung", warningLevel: "high" },
+  { id: "integrations:connections:write", label: "Direkte Verbindungen konfigurieren", description: "SQL-Quellen und HTTPS-Ziele ohne Offenlegung gespeicherter Zugangsdaten verwalten.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
+  { id: "integrations:credentials:write", label: "Zugangsdaten direkter Verbindungen ersetzen", description: "Geschützte Zugangsdaten neu setzen; gespeicherte Werte bleiben grundsätzlich unsichtbar.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "employees:import", label: "Personalstammdaten importieren", description: "CSV-/Excel-Import mit Vorschau; sensible Personalaktfelder sind ausgeschlossen.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "payroll:export", label: "Lohnverrechnungsdaten exportieren", description: "Zeit-, Abwesenheits- und Zuschlagsdaten als CSV oder Excel ausgeben.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
+  { id: "payroll:deliver", label: "Lohnverrechnungsdaten sicher übertragen", description: "Ausschließlich final geprüfte und minimierte Daten an ein vorkonfiguriertes HTTPS-Ziel übergeben.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "branding:read", label: "Branding-Verwaltung lesen", group: "System & Verwaltung", warningLevel: "high" },
   { id: "branding:write", label: "Brandings verwalten und zuweisen", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "operation_mode:write", label: "Betriebsmodus umschalten", group: "System & Verwaltung", warningLevel: "critical" },
@@ -256,8 +274,10 @@ const builtinPortalRoles = [
       "notifications:settings",
       "integrations:read",
       "integrations:profiles:write",
+      "integrations:connections:read",
       "employees:import",
       "payroll:export",
+      "payroll:deliver",
       "scopes:write",
     ],
   },
@@ -309,8 +329,10 @@ const builtinPortalRoles = [
       "notifications:settings",
       "integrations:read",
       "integrations:profiles:write",
+      "integrations:connections:read",
       "employees:import",
       "payroll:export",
+      "payroll:deliver",
       "scopes:write",
     ],
   },
@@ -333,7 +355,8 @@ builtinPortalRoles.push(
       "usb:provision",
       "roles:read", "roles:write", "audit:read", "scopes:write", "wifi:settings",
       "hr:settings", "sickness:read", "sickness:settings", "notifications:settings",
-      "integrations:read", "integrations:profiles:write", "employees:import",
+      "integrations:read", "integrations:profiles:write", "integrations:connections:read",
+      "integrations:connections:write", "integrations:credentials:write", "employees:import",
     ],
   },
   {
@@ -341,7 +364,7 @@ builtinPortalRoles.push(
     name: "Developer",
     description: "Geschützter technischer Superuser; nur über das lokale Entwicklerwerkzeug bindbar.",
     sortOrder: 40,
-    permissions: [...adminPortalRole.permissions, "developer:system"],
+    permissions: [...adminPortalRole.permissions, "integrations:connections:write", "integrations:credentials:write", "developer:system"],
   },
 );
 
@@ -589,6 +612,40 @@ function loadAmuEncryptionConfiguration() {
   return { keyId, key: fs.readFileSync(keyPath, "utf8").trim(), source: "local-key-file", keyPath };
 }
 
+function loadIntegrationEncryptionConfiguration() {
+  const keyId = String(process.env.GRABENPLANER_INTEGRATION_KEY_ID || (serverModeActive ? "" : "local-v1")).trim();
+  const environmentKey = String(process.env.GRABENPLANER_INTEGRATION_KEY || "").trim();
+  const environmentKeys = {};
+  const keyRing = String(process.env.GRABENPLANER_INTEGRATION_KEYS || "").trim();
+  if (keyRing) {
+    try {
+      const parsed = JSON.parse(keyRing);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid key ring");
+      for (const [id, value] of Object.entries(parsed)) environmentKeys[String(id)] = String(value || "");
+    } catch {
+      throw new Error("GRABENPLANER_INTEGRATION_KEYS muss ein JSON-Objekt aus Schlüsselkennungen und 32-Byte-Schlüsseln sein.");
+    }
+  }
+  if (environmentKey && keyId) environmentKeys[keyId] = environmentKey;
+  if (keyId && environmentKeys[keyId]) return { keyId, keys: environmentKeys, source: "environment" };
+  if (serverModeActive) return null;
+  const keyPath = path.join(privateDataDirectory, "integration-local.key");
+  if (!fs.existsSync(keyPath)) {
+    fs.mkdirSync(path.dirname(keyPath), { recursive: true });
+    fs.writeFileSync(keyPath, `${crypto.randomBytes(32).toString("base64")}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+  }
+  try { fs.chmodSync(keyPath, 0o600); } catch {}
+  return { keyId, keys: { [keyId]: fs.readFileSync(keyPath, "utf8").trim() }, source: "local-key-file", keyPath };
+}
+
+const integrationEncryptionConfiguration = loadIntegrationEncryptionConfiguration();
+const integrationSecretVault = integrationEncryptionConfiguration
+  ? createIntegrationSecretVault({
+    activeKeyId: integrationEncryptionConfiguration.keyId,
+    keys: integrationEncryptionConfiguration.keys,
+  })
+  : null;
+const sqlViewSource = createSqlViewSource();
 const amuEncryptionConfiguration = loadAmuEncryptionConfiguration();
 let amuStorage = null;
 let amuStorageStartupError = "";
@@ -1517,6 +1574,51 @@ function createSchema() {
       FOREIGN KEY (profile_id) REFERENCES integration_profiles(id) ON DELETE SET NULL
     );
 
+    CREATE TABLE IF NOT EXISTS integration_connections (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL CHECK(kind IN ('personnel_sql_source', 'payroll_https_target')),
+      name TEXT NOT NULL COLLATE NOCASE,
+      provider TEXT NOT NULL,
+      configuration_json TEXT NOT NULL DEFAULT '{}',
+      protected_credentials TEXT NOT NULL DEFAULT '',
+      credential_key_id TEXT NOT NULL DEFAULT '',
+      revision INTEGER NOT NULL DEFAULT 1,
+      active INTEGER NOT NULL DEFAULT 1,
+      last_test_status TEXT NOT NULL DEFAULT '',
+      last_test_at TEXT,
+      last_error_code TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(kind, name)
+    );
+
+    CREATE TABLE IF NOT EXISTS integration_deliveries (
+      id TEXT PRIMARY KEY,
+      connection_id TEXT NOT NULL,
+      profile_id TEXT,
+      idempotency_key TEXT NOT NULL UNIQUE,
+      date_from TEXT NOT NULL,
+      date_to TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      department_id TEXT NOT NULL DEFAULT '',
+      connection_revision INTEGER NOT NULL DEFAULT 1,
+      connection_fingerprint TEXT NOT NULL DEFAULT '',
+      payload_sha256 TEXT NOT NULL,
+      row_count INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL CHECK(status IN ('pending', 'sending', 'delivered', 'rejected', 'unknown')),
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      http_status INTEGER,
+      error_code TEXT NOT NULL DEFAULT '',
+      actor_employee_number TEXT NOT NULL DEFAULT '',
+      started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      completed_at TEXT,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (connection_id) REFERENCES integration_connections(id) ON DELETE RESTRICT,
+      FOREIGN KEY (profile_id) REFERENCES integration_profiles(id) ON DELETE SET NULL
+    );
+
     CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       actor TEXT NOT NULL DEFAULT '',
@@ -1557,6 +1659,9 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_integration_profiles_kind ON integration_profiles(direction, kind, active, name);
     CREATE INDEX IF NOT EXISTS idx_integration_runs_started ON integration_runs(started_at DESC, direction, kind);
     CREATE INDEX IF NOT EXISTS idx_integration_runs_actor ON integration_runs(actor_employee_number, started_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_integration_connections_kind ON integration_connections(kind, active, name);
+    CREATE INDEX IF NOT EXISTS idx_integration_deliveries_started ON integration_deliveries(started_at DESC, status);
+    CREATE INDEX IF NOT EXISTS idx_integration_deliveries_connection ON integration_deliveries(connection_id, started_at DESC);
     CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
     CREATE INDEX IF NOT EXISTS idx_portal_users_role_active ON portal_users(role, active);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_employee ON portal_sessions(employee_number, expires_at);
@@ -1646,6 +1751,9 @@ if (legacySchemaMigrationRequired) {
   createSchema();
 }
 createSchema();
+ensureColumn("integration_connections", "revision", "INTEGER NOT NULL DEFAULT 1");
+ensureColumn("integration_deliveries", "connection_revision", "INTEGER NOT NULL DEFAULT 1");
+ensureColumn("integration_deliveries", "connection_fingerprint", "TEXT NOT NULL DEFAULT ''");
 if (!columnExists("week_options", "group_id")) {
   db.exec("ALTER TABLE week_options ADD COLUMN group_id TEXT");
 }
@@ -2172,6 +2280,8 @@ if (!db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(inte
   db.prepare("INSERT INTO schema_migrations (id, app_version) VALUES (?, ?)")
     .run(integrationFeatureMigrationId, packageMetadata.version);
 }
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.64-sql-api-connectors", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -3292,6 +3402,11 @@ function enforceAdminApiAccess(request, _response, next) {
     const integrationRoute = /^\/integrations(?:\/|$)/.test(request.path);
     if (integrationRoute) {
       if (/^\/integrations\/personnel-import(?:\/|$)/.test(request.path)) permission = "employees:import";
+      else if (/^\/integrations\/connections\/[^/]+\/sql\/inspect\/?$/.test(request.path)) permission = "employees:import";
+      else if (/^\/integrations\/connections(?:\/|$)/.test(request.path)) {
+        permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "integrations:connections:read" : "integrations:connections:write";
+      } else if (/^\/integrations\/payroll-export\/deliver\/?$/.test(request.path)) permission = "payroll:deliver";
+      else if (/^\/integrations\/payroll-export\/deliveries\/?$/.test(request.path)) permission = "integrations:read";
       else if (/^\/integrations\/payroll-export(?:\/|$)/.test(request.path)) permission = "payroll:export";
       else if (/^\/integrations\/profiles(?:\/|$)/.test(request.path) && !["GET", "HEAD", "OPTIONS"].includes(method)) permission = "integrations:profiles:write";
       else permission = "integrations:read";
@@ -3531,7 +3646,7 @@ function installationFeaturesForApiPath(apiPath) {
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:amu|sickness)|portal\/v1\/(?:amu|sickness)|portal\/v1\/personnel-records|amu(?:-|\/|$)|sickness(?:-|\/|$))/.test(requestPath)) required.add("sicknessAmu");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence)|time(?:-|\/|$)|mobile\/v1\/(?:time|me\/time-entries))/.test(requestPath)) required.add("timeTracking");
   if (/^\/(?:portal\/v1\/me(?:\/|$)|mobile\/v1\/(?:bootstrap|me(?:\/|$))|portal\/v1\/(?:greeting-settings|mobile-layout|leadership\/overview))/.test(requestPath)) required.add("employeePortal");
-  if (/^\/integrations\/(?:personnel-import|payroll-export|profiles|runs)(?:\/|$)/.test(requestPath)) required.add("integrations");
+  if (/^\/integrations\/(?:personnel-import|payroll-export|profiles|runs|connections)(?:\/|$)/.test(requestPath)) required.add("integrations");
   return [...required];
 }
 
@@ -10081,6 +10196,8 @@ function serverDiagnostics() {
   const externalBackupReady = settingEnabled(settings, "external_backup_enabled") && backupHealth.writable
     && latestExternalBackupAgeHours !== null && latestExternalBackupAgeHours <= backupFreshnessHours;
   const amu = amuStorage ? amuStorage.diagnostics() : { ok: false, writable: false, error: amuStorageStartupError };
+  const protectedIntegrationConnectionCount = Number(db.prepare("SELECT COUNT(*) AS count FROM integration_connections WHERE protected_credentials <> '' AND active = 1").get().count || 0);
+  const integrationSecretsReady = protectedIntegrationConnectionCount === 0 || Boolean(integrationSecretVault);
   const runtimeErrors = runtimeValidationErrors(runtimeConfiguration);
   const publicHttpsReady = /^https:\/\//i.test(publicUrl);
   if (serverModeActive && !/^https:\/\//i.test(publicUrl)) warnings.push("Für den Serverbetrieb fehlt eine gültige HTTPS-Adresse.");
@@ -10096,6 +10213,7 @@ function serverDiagnostics() {
   if (latestExternalBackupAgeHours === null || latestExternalBackupAgeHours > backupFreshnessHours) warnings.push("Es wurde kein ausreichend aktuelles verifiziertes externes Datenbank-Backup gefunden.");
   if (externalDirectory && path.parse(path.resolve(databasePath)).root.toLowerCase() === path.parse(path.resolve(externalDirectory)).root.toLowerCase()) warnings.push("Datenbank und externes Backup liegen auf demselben Laufwerk.");
   if (!amu.ok) warnings.push(`Der geschützte AUM-Speicher ist nicht betriebsbereit${amu.error ? `: ${amu.error}` : "."}`);
+  if (!integrationSecretsReady) warnings.push("Für aktive direkte Verbindungen fehlt der geschützte Integrationsschlüssel.");
   if (serverModeActive && serviceControlToken.length < 32) warnings.push("Der sichere Token für den Windows-Dienststopp fehlt.");
   const lockedAccounts = Number(db.prepare("SELECT COUNT(*) AS count FROM portal_users WHERE locked_until > CURRENT_TIMESTAMP").get().count || 0);
   if (lockedAccounts) warnings.push(`${lockedAccounts} Zugang/Zugänge sind derzeit gesperrt.`);
@@ -10110,13 +10228,14 @@ function serverDiagnostics() {
     { id: "data", label: "Datenverzeichnis", ok: dataHealth.writable, detail: dataHealth.writable ? "beschreibbar" : "nicht beschreibbar" },
     { id: "backup", label: "Externes Backup", ok: externalBackupReady, detail: latestExternalBackup ? latestExternalBackup.modifiedAt : "noch kein verifiziertes Backup" },
     { id: "amu", label: "AUM-Speicher", ok: amu.ok, detail: amu.ok ? "verschlüsselt und beschreibbar" : (amu.error || "nicht bereit") },
+    { id: "integration-secrets", label: "Schnittstellenschlüssel", ok: integrationSecretsReady, detail: protectedIntegrationConnectionCount ? `${protectedIntegrationConnectionCount} geschützte Verbindung(en)` : "derzeit nicht benötigt" },
     { id: "scanner", label: "AUM-Virenscanner", ok: !amu.requireScanner || (amu.scannerChecked && amu.scannerAvailable && amu.ok), detail: amu.scannerEngine || (amu.scannerChecked ? "nicht verfügbar" : "Prüfung läuft") },
     { id: "service-stop", label: "Dienststopp", ok: serviceControlToken.length >= 32, detail: serviceControlToken.length >= 32 ? "Token konfiguriert" : "Token fehlt" },
   ];
   return {
     ready: startupIntegrity.length === 1 && startupIntegrity[0] === "ok" && dataHealth.writable
       && (!serverModeActive || (runtimeErrors.length === 0 && publicHttpsReady && portal.adminSetupState === "configured"
-        && externalBackupReady && amu.ok && serviceControlToken.length >= 32)),
+        && externalBackupReady && amu.ok && integrationSecretsReady && serviceControlToken.length >= 32)),
     mode: portal.operationMode,
     publicUrl: portal.publicUrl,
     httpsRequired: portal.httpsRequired,
@@ -10178,6 +10297,331 @@ function parseIntegrationJson(value, fallback = {}) {
   } catch {
     return fallback;
   }
+}
+
+function requireIntegrationSecretVault() {
+  if (!integrationSecretVault) {
+    throw httpError(503, "Der geschützte Schlüsselspeicher für direkte Verbindungen ist nicht konfiguriert.", "INTEGRATION_SECRET_KEY_UNAVAILABLE");
+  }
+  return integrationSecretVault;
+}
+
+function integrationCredentialContext(connection) {
+  return {
+    namespace: "integration-connection",
+    connectorId: String(connection.id || ""),
+    field: "credentials",
+    purpose: String(connection.kind || "integration"),
+  };
+}
+
+function serializeIntegrationConnection(row) {
+  const configuration = parseIntegrationJson(row.configuration_json);
+  const serialized = toPublicIntegrationConnection({
+    id: row.id,
+    version: 1,
+    kind: row.kind,
+    provider: row.provider,
+    name: row.name,
+    active: Boolean(row.active),
+    configuration,
+    status: row.active ? (row.last_test_status || "untested") : "disabled",
+    lastTestedAt: row.last_test_at || null,
+    lastErrorCode: row.last_error_code || "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }, { credentialsConfigured: Boolean(row.protected_credentials) });
+  return { ...serialized, revision: Math.max(1, Number(row.revision || 1)) };
+}
+
+function integrationConnectionRows(kind = "") {
+  const where = ["personnel_sql_source", "payroll_https_target"].includes(kind) ? "WHERE kind = ?" : "";
+  return db.prepare(`
+    SELECT * FROM integration_connections ${where}
+    ORDER BY active DESC, kind, name COLLATE NOCASE
+  `).all(...(where ? [kind] : [])).map(serializeIntegrationConnection);
+}
+
+function integrationConnectionById(id, kind = "", options = {}) {
+  const row = db.prepare(`SELECT * FROM integration_connections WHERE id = ?${options.includeInactive ? "" : " AND active = 1"}`)
+    .get(String(id || ""));
+  if (!row || (kind && row.kind !== kind)) {
+    throw httpError(404, "Die direkte Verbindung wurde nicht gefunden.", "INTEGRATION_CONNECTION_NOT_FOUND");
+  }
+  return { row, public: serializeIntegrationConnection(row) };
+}
+
+function normalizeIntegrationConnectionRequest(body, existing = null) {
+  const previous = existing?.public || null;
+  if (previous && body?.kind !== undefined && String(body.kind) !== previous.kind) {
+    throw httpError(400, "Die Art einer bestehenden direkten Verbindung kann nicht geändert werden.", "INTEGRATION_CONNECTION_KIND_LOCKED");
+  }
+  if (previous && body?.provider !== undefined && String(body.provider) !== previous.provider) {
+    throw httpError(400, "Der Provider einer bestehenden direkten Verbindung kann nicht geändert werden.", "INTEGRATION_CONNECTION_PROVIDER_LOCKED");
+  }
+  const merged = {
+    ...(previous || {}),
+    ...(body || {}),
+    configuration: {
+      ...(previous?.configuration || {}),
+      ...((body?.configuration && typeof body.configuration === "object") ? body.configuration : {}),
+    },
+  };
+  if (body && Object.hasOwn(body, "credentials")) merged.credentials = body.credentials;
+  else delete merged.credentials;
+  if (previous?.kind === "payroll_https_target"
+    && merged.configuration.authenticationType === "none"
+    && previous.configuration.authenticationType !== "none"
+    && !Object.hasOwn(body || {}, "credentials")) merged.credentials = {};
+  if (previous?.kind === "payroll_https_target"
+    && merged.configuration.authenticationType !== previous.configuration.authenticationType
+    && merged.configuration.authenticationType !== "none"
+    && !Object.hasOwn(body || {}, "credentials")) {
+    throw httpError(400, "Bei einer geänderten Authentifizierungsart müssen neue Zugangsdaten gesetzt werden.", "INTEGRATION_CONNECTION_CREDENTIALS_REQUIRED");
+  }
+  try {
+    return normalizeIntegrationConnection(merged, {
+      existingCredentialsConfigured: Boolean(existing?.row?.protected_credentials),
+    });
+  } catch (error) {
+    throw httpError(400, error.message && !/^INTEGRATION_/.test(error.message)
+      ? error.message : "Die Angaben der direkten Verbindung sind ungültig.", error.code || "INTEGRATION_CONNECTION_INVALID");
+  }
+}
+
+function protectIntegrationCredentials(connectionId, kind, credentials) {
+  if (!credentials || !Object.keys(credentials).length) return { protectedCredentials: "", keyId: "" };
+  const vault = requireIntegrationSecretVault();
+  const protectedCredentials = vault.seal(JSON.stringify(credentials), integrationCredentialContext({ id: connectionId, kind }));
+  return { protectedCredentials, keyId: vault.inspect(protectedCredentials).keyId };
+}
+
+async function withIntegrationCredentials(connection, consumer) {
+  if (typeof consumer !== "function") throw new TypeError("consumer required");
+  if (!connection.row.protected_credentials) return consumer({});
+  const vault = requireIntegrationSecretVault();
+  let result;
+  await vault.useSecret(connection.row.protected_credentials, integrationCredentialContext(connection.row), async (buffer) => {
+    let credentials;
+    try {
+      credentials = JSON.parse(buffer.toString("utf8"));
+      result = await consumer(credentials);
+    } finally {
+      if (credentials && typeof credentials === "object") {
+        for (const key of Object.keys(credentials)) credentials[key] = "";
+      }
+    }
+  });
+  return result;
+}
+
+function assertIntegrationConnectionScope(actor, connection, context = {}) {
+  assertSessionContextScope(actor, context);
+  const scope = connection.public.configuration.scope || {};
+  const locationId = String(context.locationId || "");
+  const departmentId = String(context.departmentId || "");
+  if (scope.locationIds?.length && (!locationId || !scope.locationIds.includes(locationId))) {
+    throw httpError(403, "Diese Verbindung ist für den gewählten Standort nicht freigegeben.", "INTEGRATION_CONNECTION_SCOPE_DENIED");
+  }
+  if (scope.departmentIds?.length && (!departmentId || !scope.departmentIds.includes(departmentId))) {
+    throw httpError(403, "Diese Verbindung ist für die gewählte Abteilung nicht freigegeben.", "INTEGRATION_CONNECTION_SCOPE_DENIED");
+  }
+}
+
+function assertIntegrationPermission(actor, permission) {
+  if (actor.employeeNumber === "local") return;
+  if (!actor.permissions?.includes(permission)) {
+    throw httpError(403, "Für diese Schnittstellenaktion fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+}
+
+function apiAuthenticationHeaders(connection, credentials) {
+  const configuration = connection.public.configuration;
+  if (configuration.authenticationType === "none") return {};
+  if (configuration.authenticationType === "bearer") return { authorization: `Bearer ${credentials.token}` };
+  if (configuration.authenticationType === "api_key") return { [configuration.apiKeyHeader]: credentials.apiKey };
+  if (configuration.authenticationType === "basic") {
+    return { authorization: `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`, "utf8").toString("base64")}` };
+  }
+  throw httpError(400, "Die Authentifizierung des API-Ziels ist ungültig.", "INTEGRATION_CONNECTION_AUTHENTICATION_INVALID");
+}
+
+function apiDeliveryClient(connection) {
+  const configuration = connection.public.configuration;
+  return createSafeApiDelivery({
+    timeoutMs: configuration.timeoutMs,
+    maxRequestBytes: configuration.requestLimitBytes,
+    maxResponseBytes: configuration.responseLimitBytes,
+    allowedHeaders: [
+      "accept", "authorization", "content-type", "idempotency-key", "user-agent", "x-api-key",
+      ...(configuration.apiKeyHeader ? [configuration.apiKeyHeader] : []),
+    ],
+  });
+}
+
+const forbiddenSqlPersonnelColumnTokens = [
+  "svnr", "svnummer", "sozialversicherung", "iban", "bank", "konto", "adresse", "anschrift", "strasse",
+  "telefon", "phone", "passwort", "password", "token", "secret", "aum", "diagnose",
+];
+
+function normalizedSqlColumnToken(value) {
+  return String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function assertSqlPersonnelColumns(columns) {
+  const blocked = columns.filter((column) => forbiddenSqlPersonnelColumnTokens
+    .some((token) => normalizedSqlColumnToken(column.name).includes(token)));
+  if (blocked.length) {
+    throw httpError(422,
+      "Die freigegebene SQL-View enthält sensible oder für den Personalimport nicht erforderliche Spalten. Bitte dafür eine datensparsame View bereitstellen.",
+      "SQL_VIEW_SENSITIVE_COLUMNS_FORBIDDEN");
+  }
+}
+
+function allowedSqlPersonnelColumns(configuration, columns) {
+  const available = new Map(columns.map((column) => [String(column.name || "").toLocaleLowerCase("de-AT"), column]));
+  const selected = (configuration.allowedColumns || []).map((name) => available.get(String(name).toLocaleLowerCase("de-AT")));
+  if (!selected.length || selected.some((column) => !column)) {
+    throw httpError(409,
+      "Mindestens eine freigegebene SQL-Spalte ist nicht mehr in der View vorhanden. Bitte die Verbindung pr\u00fcfen.",
+      "SQL_VIEW_ALLOWED_COLUMNS_CHANGED");
+  }
+  assertSqlPersonnelColumns(selected);
+  return selected;
+}
+
+function sqlPersonnelScopeContext(input = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) input = {};
+  return {
+    locationId: String(input.locationId || input.defaultLocationId || ""),
+    departmentId: String(input.departmentId || input.defaultDepartmentId || ""),
+  };
+}
+
+function assertGlobalSqlPersonnelImportActor(actor) {
+  if (!sessionHasGlobalScope(actor)) {
+    throw httpError(403,
+      "Der direkte SQL-Personalimport ist nur f\u00fcr Zug\u00e4nge mit globalem Unternehmensbereich verf\u00fcgbar.",
+      "INTEGRATION_SQL_GLOBAL_SCOPE_REQUIRED");
+  }
+}
+
+function assertGlobalIntegrationConnectionActor(actor) {
+  if (!sessionHasGlobalScope(actor)) {
+    throw httpError(403,
+      "Direkte Verbindungen können nur von Zugängen mit globalem Unternehmensbereich verwaltet werden.",
+      "INTEGRATION_CONNECTION_GLOBAL_SCOPE_REQUIRED");
+  }
+}
+
+function integrationConnectionConfigurationFingerprint(connection) {
+  const value = connection?.public || connection || {};
+  return sha256(JSON.stringify({
+    id: String(value.id || ""),
+    kind: String(value.kind || ""),
+    provider: String(value.provider || ""),
+    configuration: value.configuration || {},
+  }));
+}
+
+function revalidateSqlPersonnelPreviewConnection(actor, preview) {
+  assertGlobalSqlPersonnelImportActor(actor);
+  assertIntegrationPermission(actor, "integrations:connections:read");
+  if (!preview.connectionId || !preview.connectionFingerprint) {
+    throw httpError(409, "Die SQL-Importvorschau ist veraltet. Bitte die Daten erneut einlesen.", "INTEGRATION_CONNECTION_CHANGED");
+  }
+  let connection;
+  try {
+    connection = integrationConnectionById(preview.connectionId, "personnel_sql_source");
+  } catch (error) {
+    if (error.code === "INTEGRATION_CONNECTION_NOT_FOUND") {
+      throw httpError(409, "Die SQL-Verbindung wurde deaktiviert oder entfernt. Bitte die Daten erneut einlesen.", "INTEGRATION_CONNECTION_CHANGED");
+    }
+    throw error;
+  }
+  if (connection.public.status !== "ready") {
+    throw httpError(409, "Die SQL-Verbindung ist nicht mehr einsatzbereit. Bitte die Verbindung erneut pr\u00fcfen und die Daten neu einlesen.", "INTEGRATION_CONNECTION_CHANGED");
+  }
+  assertIntegrationConnectionScope(actor, connection, sqlPersonnelScopeContext(preview.connectionScopeContext));
+  if (integrationConnectionConfigurationFingerprint(connection) !== preview.connectionFingerprint) {
+    throw httpError(409, "Die SQL-Verbindung wurde seit der Vorschau ge\u00e4ndert. Bitte die Daten erneut einlesen.", "INTEGRATION_CONNECTION_CHANGED");
+  }
+  return connection;
+}
+
+function publicPersonnelInspection(parsed, session) {
+  return {
+    inspectionId: session.id,
+    expiresAt: session.expiresAt,
+    format: parsed.format,
+    sourceTransport: parsed.sourceTransport || "file",
+    sourceLabel: parsed.sourceLabel || parsed.format.toUpperCase(),
+    encoding: parsed.encoding,
+    delimiter: parsed.delimiter === "\t" ? "tab" : parsed.delimiter,
+    byteSize: parsed.byteSize,
+    sheets: parsed.summaries.map((summary) => {
+      const sheet = parsed.sheets.find((item) => item.name === summary.name);
+      const header = sheet?.rows?.[summary.suggestedHeaderRow - 1] || [];
+      return {
+        ...summary,
+        headerFingerprint: headerFingerprint(header),
+        suggestedMapping: suggestPersonnelMapping(header),
+        headerCandidates: (sheet?.rows || []).slice(0, 20).map((candidate, index) => ({
+          rowNumber: index + 1,
+          headerFingerprint: headerFingerprint(candidate),
+          suggestedMapping: suggestPersonnelMapping(candidate),
+        })),
+      };
+    }),
+  };
+}
+
+function sqlSourceConfiguration(connection) {
+  const config = connection.public.configuration;
+  return {
+    providerId: connection.public.provider,
+    host: config.host,
+    port: config.port,
+    database: config.database,
+    instanceName: config.instanceName,
+    schemaName: config.schemaName,
+    objectName: config.objectName,
+    tlsMode: config.tlsMode,
+    timeoutMs: config.timeoutMs,
+  };
+}
+
+function sqlInspectionFromResult(connection, result, scopeContext = {}) {
+  const header = result.columns.map((column) => ({ text: column.name, formula: false, error: false }));
+  const rows = [header, ...result.rows.map((row) => row.map((text) => ({ text: String(text ?? ""), formula: false, error: false })))];
+  const sheetName = `${result.view.schema}.${result.view.name}`;
+  const serializedRows = JSON.stringify(result.rows);
+  const contentSha256 = crypto.createHash("sha256")
+    .update(JSON.stringify({ connectionId: connection.public.id, sheetName }), "utf8")
+    .update("\n", "utf8")
+    .update(serializedRows, "utf8")
+    .digest("hex");
+  return {
+    format: "csv",
+    sourceTransport: "sql_view",
+    sourceLabel: "SQL-View",
+    connectionId: connection.public.id,
+    connectionFingerprint: integrationConnectionConfigurationFingerprint(connection),
+    connectionScopeContext: sqlPersonnelScopeContext(scopeContext),
+    contentSha256,
+    byteSize: Number(result.byteSize || Buffer.byteLength(serializedRows, "utf8")),
+    encoding: "utf8",
+    delimiter: ",",
+    sheets: [{ name: sheetName, rows }],
+    summaries: [{
+      name: sheetName,
+      rowCount: result.rowCount,
+      columnCount: result.columns.length,
+      suggestedHeaderRow: 1,
+      topRows: rows.slice(0, 20).map((row) => row.map((cell) => cell.text)),
+      headers: result.columns.map((column, columnIndex) => ({ columnIndex, label: column.name })),
+    }],
+  };
 }
 
 function serializeIntegrationProfile(row) {
@@ -10587,7 +11031,7 @@ function applyPersonnelImport(actor, preview) {
       profileId: preview.profileId,
       direction: "import",
       kind: "personnel",
-      format: preview.format,
+      format: ["csv", "xlsx"].includes(preview.format) ? preview.format : "csv",
       contentSha256: preview.contentSha256,
       actor: actor.employeeNumber,
       totalCount: preview.summary.total,
@@ -10595,7 +11039,13 @@ function applyPersonnelImport(actor, preview) {
       updatedCount: preview.summary.update,
       skippedCount: preview.summary.skip,
       errorCount: 0,
-      options: { duplicateStrategy: preview.duplicateStrategy, sheetName: preview.sheetName, headerRow: preview.headerRow },
+      options: {
+        duplicateStrategy: preview.duplicateStrategy,
+        sheetName: preview.sheetName,
+        headerRow: preview.headerRow,
+        sourceTransport: preview.sourceTransport || "file",
+        connectionId: preview.connectionId || null,
+      },
       result: { rows: preview.rows.map((row) => ({ rowNumber: row.rowNumber, action: row.action })) },
     });
     auditPortal(actor.employeeNumber, "integration.personnel.import.applied", "integration_run", runId,
@@ -10893,6 +11343,239 @@ function payrollRowsForCsv(preflight) {
   ])));
 }
 
+function serializeIntegrationDelivery(row) {
+  return {
+    id: row.id,
+    connectionId: row.connection_id,
+    profileId: row.profile_id || null,
+    dateFrom: row.date_from,
+    dateTo: row.date_to,
+    locationId: row.location_id,
+    departmentId: row.department_id || null,
+    connectionRevision: Math.max(1, Number(row.connection_revision || 1)),
+    connectionFingerprint: row.connection_fingerprint || "",
+    payloadSha256: row.payload_sha256,
+    rowCount: Number(row.row_count || 0),
+    status: row.status,
+    attemptCount: Number(row.attempt_count || 0),
+    httpStatus: row.http_status === null ? null : Number(row.http_status),
+    errorCode: row.error_code || "",
+    actorEmployeeNumber: row.actor_employee_number || "",
+    startedAt: row.started_at,
+    completedAt: row.completed_at || null,
+    updatedAt: row.updated_at,
+  };
+}
+
+function reconcileInterruptedIntegrationDeliveries() {
+  if (!tableExists("integration_deliveries")) return 0;
+  const interrupted = db.prepare("SELECT id FROM integration_deliveries WHERE status = 'sending'").all();
+  if (!interrupted.length) return 0;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const markUnknown = db.prepare(`
+      UPDATE integration_deliveries
+      SET status = 'unknown', error_code = 'PROCESS_INTERRUPTED',
+          completed_at = COALESCE(completed_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = 'sending'
+    `);
+    let recovered = 0;
+    for (const row of interrupted) {
+      if (markUnknown.run(row.id).changes) {
+        recovered += 1;
+        auditPortal("system", "integration.payroll.delivery.recovered", "integration_delivery", row.id,
+          JSON.stringify({ status: "unknown", errorCode: "PROCESS_INTERRUPTED" }));
+      }
+    }
+    db.exec("COMMIT");
+    return recovered;
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
+reconcileInterruptedIntegrationDeliveries();
+
+function minimizedPayrollApiPayload(preflight, deliveryId, generatedAt) {
+  const columns = preflight.columns.filter((column) => column.id !== "fullName")
+    .map((column) => ({ id: column.id, label: column.label, type: column.type }));
+  const rows = preflight.rows.map((row) => Object.fromEntries(columns.map((column) => [column.id, row[column.id] ?? ""])));
+  const dataSha256 = payloadSha256({ columns, rows });
+  return {
+    schema: "grabenplaner.payroll.v1",
+    deliveryId,
+    generatedAt,
+    source: {
+      dateFrom: preflight.dateFrom,
+      dateTo: preflight.dateTo,
+      locationId: preflight.context.locationId,
+      departmentId: preflight.context.departmentId || null,
+      sourceMode: preflight.configuration.sourceMode,
+      layout: preflight.configuration.layout,
+    },
+    columns,
+    rows,
+    dataSha256,
+  };
+}
+
+app.get("/api/integrations/connections/catalog", (request, response) => {
+  const actor = integrationActor(request, "integrations:connections:read");
+  assertGlobalIntegrationConnectionActor(actor);
+  response.json({ ...integrationConnectionCatalog(), secretStoreAvailable: Boolean(integrationSecretVault) });
+});
+
+app.get("/api/integrations/connections", (request, response) => {
+  const actor = integrationActor(request, "integrations:connections:read");
+  assertGlobalIntegrationConnectionActor(actor);
+  response.json({ connections: integrationConnectionRows(String(request.query.kind || "")) });
+});
+
+app.post("/api/integrations/connections", (request, response) => {
+  const actor = integrationActor(request, "integrations:connections:write");
+  assertGlobalIntegrationConnectionActor(actor);
+  const connection = normalizeIntegrationConnectionRequest(request.body || {});
+  const id = crypto.randomUUID();
+  let protectedState = { protectedCredentials: "", keyId: "" };
+  if (connection.credentials && Object.keys(connection.credentials).length) {
+    assertIntegrationPermission(actor, "integrations:credentials:write");
+    protectedState = protectIntegrationCredentials(id, connection.kind, connection.credentials);
+  }
+  try {
+    db.prepare(`
+      INSERT INTO integration_connections
+        (id, kind, name, provider, configuration_json, protected_credentials, credential_key_id,
+         active, created_by, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, connection.kind, connection.name, connection.provider, JSON.stringify(connection.configuration),
+      protectedState.protectedCredentials, protectedState.keyId, connection.active ? 1 : 0,
+      actor.employeeNumber, actor.employeeNumber);
+  } catch (error) {
+    if (String(error.message).includes("UNIQUE")) {
+      throw httpError(409, "Eine direkte Verbindung mit diesem Namen besteht bereits.", "INTEGRATION_CONNECTION_DUPLICATE");
+    }
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "integration.connection.create", "integration_connection", id,
+    JSON.stringify({ kind: connection.kind, provider: connection.provider, credentialsConfigured: Boolean(protectedState.protectedCredentials) }));
+  response.status(201).json({ connection: integrationConnectionById(id, "", { includeInactive: true }).public });
+});
+
+app.put("/api/integrations/connections/:id", (request, response) => {
+  const actor = integrationActor(request, "integrations:connections:write");
+  assertGlobalIntegrationConnectionActor(actor);
+  const existing = integrationConnectionById(request.params.id, "", { includeInactive: true });
+  const connection = normalizeIntegrationConnectionRequest(request.body || {}, existing);
+  let protectedCredentials = existing.row.protected_credentials;
+  let keyId = existing.row.credential_key_id;
+  if (connection.credentials !== null) {
+    assertIntegrationPermission(actor, "integrations:credentials:write");
+    const protectedState = protectIntegrationCredentials(existing.row.id, connection.kind, connection.credentials);
+    protectedCredentials = protectedState.protectedCredentials;
+    keyId = protectedState.keyId;
+  }
+  try {
+    db.prepare(`
+      UPDATE integration_connections
+      SET name = ?, provider = ?, configuration_json = ?, protected_credentials = ?, credential_key_id = ?,
+          active = ?, revision = revision + 1, last_test_status = '', last_test_at = NULL, last_error_code = '',
+          updated_by = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(connection.name, connection.provider, JSON.stringify(connection.configuration), protectedCredentials, keyId,
+      connection.active ? 1 : 0, actor.employeeNumber, existing.row.id);
+  } catch (error) {
+    if (String(error.message).includes("UNIQUE")) {
+      throw httpError(409, "Eine direkte Verbindung mit diesem Namen besteht bereits.", "INTEGRATION_CONNECTION_DUPLICATE");
+    }
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "integration.connection.update", "integration_connection", existing.row.id,
+    JSON.stringify({ kind: connection.kind, provider: connection.provider, credentialsReplaced: connection.credentials !== null }));
+  response.json({ connection: integrationConnectionById(existing.row.id, "", { includeInactive: true }).public });
+});
+
+app.delete("/api/integrations/connections/:id", (request, response) => {
+  const actor = integrationActor(request, "integrations:connections:write");
+  assertGlobalIntegrationConnectionActor(actor);
+  const existing = integrationConnectionById(request.params.id, "", { includeInactive: true });
+  db.prepare(`
+    UPDATE integration_connections SET active = 0, revision = revision + 1, last_test_status = '', last_error_code = '',
+      updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+  `).run(actor.employeeNumber, existing.row.id);
+  auditPortal(actor.employeeNumber, "integration.connection.disable", "integration_connection", existing.row.id,
+    JSON.stringify({ kind: existing.row.kind }));
+  response.status(204).end();
+});
+
+app.post("/api/integrations/connections/:id/test", async (request, response) => {
+  const actor = integrationActor(request, "integrations:connections:write");
+  assertGlobalIntegrationConnectionActor(actor);
+  const connection = integrationConnectionById(request.params.id);
+  let status = "ready";
+  let errorCode = "";
+  try {
+    if (connection.row.kind === "personnel_sql_source") {
+      await withIntegrationCredentials(connection, async (credentials) => {
+        const config = connection.public.configuration;
+        const columns = await sqlViewSource.listColumns(sqlSourceConfiguration(connection), credentials, {
+          schema: config.schemaName,
+          view: config.objectName,
+        });
+        allowedSqlPersonnelColumns(config, columns.columns);
+      });
+    } else {
+      const client = apiDeliveryClient(connection);
+      await withIntegrationCredentials(connection, async () => client.probe({ url: connection.public.configuration.endpoint }));
+    }
+  } catch (error) {
+    status = "error";
+    errorCode = String(error.code || "INTEGRATION_CONNECTION_TEST_FAILED").slice(0, 80);
+    db.prepare(`UPDATE integration_connections SET last_test_status = ?, last_test_at = CURRENT_TIMESTAMP,
+      last_error_code = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(status, errorCode, connection.row.id);
+    auditPortal(actor.employeeNumber, "integration.connection.test", "integration_connection", connection.row.id,
+      JSON.stringify({ kind: connection.row.kind, status, errorCode }));
+    if (!error.status) error.status = 502;
+    throw error;
+  }
+  db.prepare(`UPDATE integration_connections SET last_test_status = ?, last_test_at = CURRENT_TIMESTAMP,
+    last_error_code = '', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(status, connection.row.id);
+  auditPortal(actor.employeeNumber, "integration.connection.test", "integration_connection", connection.row.id,
+    JSON.stringify({ kind: connection.row.kind, status }));
+  response.json({ ok: true, connection: integrationConnectionById(connection.row.id).public });
+});
+
+app.post("/api/integrations/connections/:id/sql/inspect", async (request, response) => {
+  const actor = integrationActor(request, "employees:import");
+  assertGlobalSqlPersonnelImportActor(actor);
+  assertIntegrationPermission(actor, "integrations:connections:read");
+  const connection = integrationConnectionById(request.params.id, "personnel_sql_source");
+  if (connection.public.status !== "ready") {
+    throw httpError(409, "Die SQL-Personalquelle muss nach der letzten Änderung zuerst erfolgreich geprüft werden.", "INTEGRATION_CONNECTION_NOT_READY");
+  }
+  const scopeContext = sqlPersonnelScopeContext(request.body);
+  assertIntegrationConnectionScope(actor, connection, scopeContext);
+  const config = connection.public.configuration;
+  const result = await withIntegrationCredentials(connection, async (credentials) => {
+    const metadata = await sqlViewSource.listColumns(sqlSourceConfiguration(connection), credentials, {
+      schema: config.schemaName,
+      view: config.objectName,
+    });
+    const selectedColumns = allowedSqlPersonnelColumns(config, metadata.columns);
+    return sqlViewSource.readView(sqlSourceConfiguration(connection), credentials, {
+      schema: config.schemaName,
+      view: config.objectName,
+      columns: selectedColumns.map((column) => column.name),
+      maxRows: config.rowLimit,
+    });
+  });
+  const parsed = sqlInspectionFromResult(connection, result, scopeContext);
+  const session = integrationCache.create(actor.employeeNumber, "personnel-inspection", parsed);
+  auditPortal(actor.employeeNumber, "integration.personnel.sql.inspect", "integration_connection", connection.row.id,
+    JSON.stringify({ rows: result.rowCount, columns: result.columns.length, contentSha256: parsed.contentSha256 }));
+  response.status(201).json(publicPersonnelInspection(parsed, session));
+});
+
 app.get("/api/integrations/personnel-import/catalog", (request, response) => {
   const actor = integrationActor(request, "employees:import");
   response.json({
@@ -10920,28 +11603,7 @@ app.post("/api/integrations/personnel-import/inspect", express.raw({
     delimiter: String(request.query.delimiter || "auto") === "tab" ? "\t" : String(request.query.delimiter || "auto"),
   });
   const session = integrationCache.create(actor.employeeNumber, "personnel-inspection", parsed);
-  response.status(201).json({
-    inspectionId: session.id,
-    expiresAt: session.expiresAt,
-    format: parsed.format,
-    encoding: parsed.encoding,
-    delimiter: parsed.delimiter === "\t" ? "tab" : parsed.delimiter,
-    byteSize: parsed.byteSize,
-    sheets: parsed.summaries.map((summary) => {
-      const sheet = parsed.sheets.find((item) => item.name === summary.name);
-      const header = sheet?.rows?.[summary.suggestedHeaderRow - 1] || [];
-      return {
-        ...summary,
-        headerFingerprint: headerFingerprint(header),
-        suggestedMapping: suggestPersonnelMapping(header),
-        headerCandidates: (sheet?.rows || []).slice(0, 20).map((candidate, index) => ({
-          rowNumber: index + 1,
-          headerFingerprint: headerFingerprint(candidate),
-          suggestedMapping: suggestPersonnelMapping(candidate),
-        })),
-      };
-    }),
-  });
+  response.status(201).json(publicPersonnelInspection(parsed, session));
 });
 
 app.post("/api/integrations/personnel-import/preview", (request, response) => {
@@ -10950,6 +11612,10 @@ app.post("/api/integrations/personnel-import/preview", (request, response) => {
   const preview = personnelImportPreview(actor, inspectionEntry.value, request.body || {});
   preview.inspectionId = request.body.inspectionId;
   preview.format = inspectionEntry.value.format;
+  preview.sourceTransport = inspectionEntry.value.sourceTransport || "file";
+  preview.connectionId = inspectionEntry.value.connectionId || null;
+  preview.connectionFingerprint = inspectionEntry.value.connectionFingerprint || null;
+  preview.connectionScopeContext = inspectionEntry.value.connectionScopeContext || null;
   preview.contentSha256 = inspectionEntry.value.contentSha256;
   integrationCache.deleteKind(actor.employeeNumber, "personnel-preview");
   const previewSession = integrationCache.create(actor.employeeNumber, "personnel-preview", preview);
@@ -10959,6 +11625,7 @@ app.post("/api/integrations/personnel-import/preview", (request, response) => {
 app.post("/api/integrations/personnel-import/apply", (request, response) => {
   const actor = integrationActor(request, "employees:import");
   const entry = integrationCache.get(request.body.previewId, actor.employeeNumber, "personnel-preview");
+  if (entry.value.sourceTransport === "sql_view") revalidateSqlPersonnelPreviewConnection(actor, entry.value);
   const result = applyPersonnelImport(actor, entry.value);
   integrationCache.delete(entry.id, actor.employeeNumber);
   if (entry.value.inspectionId) integrationCache.delete(entry.value.inspectionId, actor.employeeNumber);
@@ -11056,6 +11723,132 @@ app.post("/api/integrations/payroll-export/preflight", (request, response) => {
     sampleRows: preflight.rows.slice(0, 50),
     sampleTruncated: preflight.rows.length > 50,
   });
+});
+
+app.get("/api/integrations/payroll-export/deliveries", (request, response) => {
+  const actor = integrationActor(request, "integrations:read");
+  const requestedLimit = Number(request.query.limit);
+  const limit = Number.isFinite(requestedLimit) ? Math.min(100, Math.max(1, Math.trunc(requestedLimit))) : 30;
+  const globalAccess = sessionHasGlobalScope(actor);
+  const rows = db.prepare(`
+    SELECT * FROM integration_deliveries
+    ${globalAccess ? "" : "WHERE actor_employee_number = ?"}
+    ORDER BY started_at DESC, id DESC LIMIT ?
+  `).all(...(globalAccess ? [limit] : [actor.employeeNumber, limit])).map(serializeIntegrationDelivery);
+  response.json({ deliveries: rows });
+});
+
+app.post("/api/integrations/payroll-export/deliver", async (request, response) => {
+  const actor = integrationActor(request, "payroll:deliver");
+  const connection = integrationConnectionById(request.body.connectionId, "payroll_https_target");
+  const preflight = payrollPreflight(actor, request.body || {});
+  if (!request.body.fingerprint || request.body.fingerprint !== preflight.fingerprint) {
+    throw httpError(409, "Die Daten haben sich seit der Vorprüfung geändert. Bitte erneut prüfen.", "PAYROLL_PREFLIGHT_STALE");
+  }
+  if (preflight.configuration.sourceMode !== "actual_reviewed") {
+    throw httpError(422,
+      "Die direkte Übertragung ist ausschließlich mit final geprüften Ist-Zeiten zulässig.",
+      "PAYROLL_DELIVERY_FINAL_VALUES_REQUIRED");
+  }
+  if (preflight.blockers.length) {
+    throw httpError(422, "Eine direkte Übertragung ist erst ohne offene Prüfpunkte möglich.", "PAYROLL_DELIVERY_BLOCKED");
+  }
+  if (!preflight.rowCount) throw httpError(422, "Für die direkte Übertragung sind keine Daten vorhanden.", "PAYROLL_DELIVERY_EMPTY");
+  assertIntegrationConnectionScope(actor, connection, {
+    locationId: preflight.context.locationId,
+    departmentId: preflight.context.departmentId || "",
+  });
+  if (connection.public.status !== "ready") {
+    throw httpError(409, "Das HTTPS-Lohnziel muss nach der letzten Änderung zuerst erfolgreich geprüft werden.", "INTEGRATION_CONNECTION_NOT_READY");
+  }
+  const connectionRevision = Math.max(1, Number(connection.row.revision || 1));
+  const connectionFingerprint = integrationConnectionConfigurationFingerprint(connection);
+  const idempotencyKey = createIdempotencyKey({
+    connectorId: `${connection.row.id}:${connectionRevision}:${connectionFingerprint}`,
+    profileId: preflight.profileId || "inline",
+    fingerprint: preflight.fingerprint,
+    scope: `${preflight.context.locationId}:${preflight.context.departmentId || "all"}:${preflight.dateFrom}:${preflight.dateTo}`,
+  });
+  let deliveryRow = db.prepare("SELECT * FROM integration_deliveries WHERE idempotency_key = ?").get(idempotencyKey);
+  if (deliveryRow && !(request.body.retry === true && deliveryRow.status === "unknown")) {
+    response.status(deliveryRow.status === "delivered" ? 200 : 409).json({
+      ok: deliveryRow.status === "delivered",
+      reused: true,
+      delivery: serializeIntegrationDelivery(deliveryRow),
+    });
+    return;
+  }
+  const deliveryId = deliveryRow?.id || crypto.randomUUID();
+  const generatedAt = deliveryRow?.started_at || new Date().toISOString();
+  const payload = minimizedPayrollApiPayload(preflight, deliveryId, generatedAt);
+  const contentSha256 = payloadSha256(payload);
+  if (deliveryRow && deliveryRow.payload_sha256 !== contentSha256) {
+    throw httpError(409, "Die frühere Übertragung kann wegen geänderter Daten nicht wiederholt werden.", "PAYROLL_DELIVERY_PAYLOAD_CHANGED");
+  }
+  if (!deliveryRow) {
+    db.prepare(`
+      INSERT INTO integration_deliveries
+        (id, connection_id, profile_id, idempotency_key, date_from, date_to, location_id, department_id,
+         connection_revision, connection_fingerprint, payload_sha256, row_count, status, attempt_count,
+         actor_employee_number, started_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?)
+    `).run(deliveryId, connection.row.id, preflight.profileId, idempotencyKey, preflight.dateFrom, preflight.dateTo,
+      preflight.context.locationId, preflight.context.departmentId || "", connectionRevision, connectionFingerprint,
+      contentSha256, preflight.rowCount,
+      actor.employeeNumber, generatedAt, generatedAt);
+  }
+  const claim = db.prepare(`
+    UPDATE integration_deliveries
+    SET status = 'sending', attempt_count = attempt_count + 1, http_status = NULL, error_code = '',
+        completed_at = NULL, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND status IN ('pending', 'unknown')
+  `).run(deliveryId);
+  if (!claim.changes) {
+    deliveryRow = db.prepare("SELECT * FROM integration_deliveries WHERE id = ?").get(deliveryId);
+    response.status(409).json({ ok: false, reused: true, delivery: serializeIntegrationDelivery(deliveryRow) });
+    return;
+  }
+  try {
+    const result = await withIntegrationCredentials(connection, async (credentials) => {
+      const client = apiDeliveryClient(connection);
+      return client.deliver({
+        url: connection.public.configuration.endpoint,
+        payload,
+        headers: {
+          ...apiAuthenticationHeaders(connection, credentials),
+          "user-agent": `Grabenplaner/${packageMetadata.version}`,
+        },
+        idempotencyKey,
+      });
+    });
+    const status = result.ok ? "delivered" : "rejected";
+    const errorCode = result.ok ? "" : "API_DELIVERY_REJECTED";
+    db.prepare(`
+      UPDATE integration_deliveries
+      SET status = ?, http_status = ?, error_code = ?, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(status, result.statusCode, errorCode, deliveryId);
+    auditPortal(actor.employeeNumber, "integration.payroll.delivery", "integration_delivery", deliveryId,
+      JSON.stringify({ connectionId: connection.row.id, rows: preflight.rowCount, status, httpStatus: result.statusCode, contentSha256 }));
+    const completed = serializeIntegrationDelivery(db.prepare("SELECT * FROM integration_deliveries WHERE id = ?").get(deliveryId));
+    if (!result.ok) throw httpError(502, "Das Zielsystem hat die Übertragung abgelehnt.", "PAYROLL_DELIVERY_REJECTED");
+    response.status(201).json({ ok: true, delivery: completed });
+  } catch (error) {
+    const current = db.prepare("SELECT status FROM integration_deliveries WHERE id = ?").get(deliveryId);
+    if (current?.status === "sending") {
+      const errorCode = String(error.code || "API_DELIVERY_UNKNOWN").slice(0, 80);
+      const definitive = errorCode.startsWith("INTEGRATION_SECRET_") || errorCode.includes("AUTHENTICATION");
+      db.prepare(`
+        UPDATE integration_deliveries
+        SET status = ?, error_code = ?, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(definitive ? "rejected" : "unknown", errorCode, deliveryId);
+      auditPortal(actor.employeeNumber, "integration.payroll.delivery", "integration_delivery", deliveryId,
+        JSON.stringify({ connectionId: connection.row.id, rows: preflight.rowCount, status: definitive ? "rejected" : "unknown", errorCode, contentSha256 }));
+    }
+    if (!error.status) error.status = 502;
+    throw error;
+  }
 });
 
 app.post("/api/integrations/payroll-export/file", async (request, response) => {
@@ -11840,7 +12633,27 @@ function verifyImportedProtectedPersonnelPayloads(importedDatabase) {
   return verified;
 }
 
-app.post("/api/backup/import", express.raw({ type: "application/octet-stream", limit: "200mb" }), (request, response) => {
+async function verifyImportedIntegrationCredentials(importedDatabase) {
+  if (!importedDatabase.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'integration_connections'").get()
+    || !importedDatabaseHasColumn(importedDatabase, "integration_connections", "protected_credentials")) return 0;
+  const connections = importedDatabase.prepare(`
+    SELECT id, kind, protected_credentials
+    FROM integration_connections
+    WHERE protected_credentials <> ''
+    ORDER BY id
+  `).all();
+  if (!connections.length) return 0;
+  const vault = requireIntegrationSecretVault();
+  for (const connection of connections) {
+    await vault.useSecret(connection.protected_credentials, integrationCredentialContext(connection), async (buffer) => {
+      const parsed = JSON.parse(buffer.toString("utf8"));
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected integration credential");
+    });
+  }
+  return connections.length;
+}
+
+app.post("/api/backup/import", express.raw({ type: "application/octet-stream", limit: "200mb" }), async (request, response) => {
   if (getPortalStatus().portalEnabled && !["developer", "it_admin"].includes(request.portalSession?.role)) {
     throw httpError(403, "Datenbankimporte dürfen im geschützten Betrieb nur durch Developer oder IT-Admin ausgeführt werden.", "BACKUP_IMPORT_ROLE_DENIED");
   }
@@ -11860,6 +12673,7 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   let importedDatabase;
   let importedAmuDocuments = 0;
   let importedProtectedPayloadError = false;
+  let importedIntegrationCredentialError = false;
   try {
     importedDatabase = new DatabaseSync(importPath, { readOnly: true });
     importedDatabase.prepare("SELECT name FROM sqlite_master LIMIT 1").all();
@@ -11869,6 +12683,8 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
       try { verifyImportedProtectedPersonnelPayloads(importedDatabase); }
       catch { importedProtectedPayloadError = true; }
     }
+    try { await verifyImportedIntegrationCredentials(importedDatabase); }
+    catch { importedIntegrationCredentialError = true; }
   } catch {
     fs.rmSync(importPath, { force: true });
     throw httpError(400, "Die ausgewählte Datei ist keine lesbare SQLite-Backup-Datei.");
@@ -11878,6 +12694,10 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   if (importedProtectedPayloadError) {
     fs.rmSync(importPath, { force: true });
     throw httpError(409, "Die geschützten Personalakt-Daten dieses Backups gehören zu einem anderen Schlüsselsatz. Bitte die vollständige Datenbank- und AUM-Sicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
+  }
+  if (importedIntegrationCredentialError) {
+    fs.rmSync(importPath, { force: true });
+    throw httpError(409, "Die geschützten Zugangsdaten direkter Verbindungen gehören zu einem anderen Schlüsselsatz. Bitte die vollständige Serversicherung mit dem zugehörigen Integrationsschlüssel wiederherstellen oder die Verbindungen im Quellsystem entfernen.", "INTEGRATION_FULL_RESTORE_REQUIRED");
   }
   if (importedAmuDocuments > 0) {
     fs.rmSync(importPath, { force: true });
@@ -17496,6 +18316,12 @@ module.exports = {
   runSicknessEscalationSweep,
   installationFeatures,
   installationFeaturesForApiPath,
+  minimizedPayrollApiPayload,
+  reconcileInterruptedIntegrationDeliveries,
+  integrationConnectionConfigurationFingerprint,
+  revalidateSqlPersonnelPreviewConnection,
+  sqlInspectionFromResult,
+  sqlSourceConfiguration,
   validateUsbFeatures,
   validateUsbEmployees,
   usbProvisioningAvailability,

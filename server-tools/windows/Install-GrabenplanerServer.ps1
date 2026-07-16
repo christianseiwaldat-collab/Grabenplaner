@@ -19,6 +19,9 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$AmuKeyId = 'server-v1',
     [string]$AmuEncryptionKey,
+    [ValidateNotNullOrEmpty()]
+    [string]$IntegrationKeyId = 'server-v1',
+    [string]$IntegrationEncryptionKey,
     [string]$ServiceControlToken,
 
     [string]$NodeExecutable,
@@ -197,6 +200,26 @@ process.stdout.write(JSON.stringify(result));
     $keyValidationScript | & $nodePath - $amuModule $amuStorageRoot $AmuKeyId $AmuEncryptionKey | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Der angegebene AMU-Schlüssel kann die vorhandenen Dokumente nicht entschlüsseln. Die Einrichtung wurde abgebrochen.' }
 }
+$suppliedIntegrationKey = $PSBoundParameters.ContainsKey('IntegrationEncryptionKey') -and -not [string]::IsNullOrWhiteSpace($IntegrationEncryptionKey)
+$createdIntegrationKey = $false
+if (Test-Path -LiteralPath $appServiceXml -PathType Leaf) {
+    try {
+        [xml]$existingIntegrationService = Get-Content -LiteralPath $appServiceXml -Raw
+        $existingIntegrationKey = $existingIntegrationService.service.env | Where-Object { $_.name -eq 'GRABENPLANER_INTEGRATION_KEY' } | Select-Object -First 1
+        $existingIntegrationKeyId = $existingIntegrationService.service.env | Where-Object { $_.name -eq 'GRABENPLANER_INTEGRATION_KEY_ID' } | Select-Object -First 1
+        if ($suppliedIntegrationKey -and $existingIntegrationKey.value -and $IntegrationEncryptionKey -ne [string]$existingIntegrationKey.value) {
+            throw 'Ein bestehender Integrationsschlüssel darf nicht durch eine Neuinstallation ersetzt werden.'
+        }
+        if (-not $IntegrationEncryptionKey -and $existingIntegrationKey.value) { $IntegrationEncryptionKey = [string]$existingIntegrationKey.value }
+        if (-not $PSBoundParameters.ContainsKey('IntegrationKeyId') -and $existingIntegrationKeyId.value) { $IntegrationKeyId = [string]$existingIntegrationKeyId.value }
+    } catch { throw 'Der bestehende Integrationsschlüssel konnte nicht sicher aus der Dienstkonfiguration gelesen werden.' }
+}
+if (-not $IntegrationEncryptionKey) {
+    $IntegrationEncryptionKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+    $createdIntegrationKey = $true
+}
+try { $integrationKeyBytes = [Convert]::FromBase64String($IntegrationEncryptionKey) } catch { throw 'IntegrationEncryptionKey muss ein gültiger Base64-Schlüssel sein.' }
+if ($integrationKeyBytes.Length -ne 32) { throw 'IntegrationEncryptionKey muss genau 32 Byte enthalten.' }
 $createdServiceControlToken = $false
 if (-not $ServiceControlToken -and (Test-Path -LiteralPath $appServiceXml -PathType Leaf)) {
     try {
@@ -281,6 +304,8 @@ $appReplacements = @{
     '{{BACKUP_KEEP}}' = [string]$BackupKeep
     '{{AMU_KEY_ID}}' = ConvertTo-XmlText $AmuKeyId
     '{{AMU_KEY}}' = ConvertTo-XmlText $AmuEncryptionKey
+    '{{INTEGRATION_KEY_ID}}' = ConvertTo-XmlText $IntegrationKeyId
+    '{{INTEGRATION_KEY}}' = ConvertTo-XmlText $IntegrationEncryptionKey
     '{{SERVICE_CONTROL_TOKEN}}' = ConvertTo-XmlText $ServiceControlToken
     '{{STOP_SCRIPT}}' = ConvertTo-XmlText $stopScript
 }
@@ -338,6 +363,8 @@ if ($RegisterServices) {
     ServicesStarted    = [bool]($RegisterServices -and $StartServices)
     AmuKeyId           = $AmuKeyId
     AmuRecoveryKeyCreated = $createdAmuKey
+    IntegrationKeyId   = $IntegrationKeyId
+    IntegrationKeyCreated = $createdIntegrationKey
     ServiceControlTokenCreated = $createdServiceControlToken
     ScannerEngine      = $scannerEngine
 }
