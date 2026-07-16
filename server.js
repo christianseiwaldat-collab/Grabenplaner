@@ -40,6 +40,19 @@ const {
   releaseTagName,
   selectLatestRelease,
 } = require("./lib/release-version");
+const { populateUsbProfileDatabase } = require("./lib/usb-profile-database");
+const {
+  createSelectionToken,
+  enumerateSafeUsbCandidates,
+  expectedFormatConfirmation,
+  hidePortableAppDirectory,
+  provisionUsbStick,
+  stagePortableInstallation,
+  assertFormatConfirmation,
+  verifySelectionToken,
+  verifyTokenEnvelope,
+} = require("./lib/usb-provisioning");
+const { renderFirstStepsPdf } = require("./lib/first-steps-pdf");
 const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
@@ -51,6 +64,9 @@ const PORTAL_SESSION_COOKIE = "grabenplaner_session";
 const PORTAL_CSRF_COOKIE = "grabenplaner_csrf";
 const scryptAsync = promisify(crypto.scrypt);
 const DUMMY_PORTAL_PASSWORD_HASH = `scrypt-v1$${Buffer.alloc(16, 0xa5).toString("base64url")}$${Buffer.alloc(64, 0x5a).toString("base64url")}`;
+const usbProvisioningTokenSecret = crypto.randomBytes(32);
+const consumedUsbProvisioningTokens = new Map();
+let usbProvisioningActive = false;
 
 const delegablePortalPermissionCatalog = Object.freeze([
   { id: "schedule:read", label: "Dienstpläne lesen", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
@@ -190,6 +206,7 @@ const builtinPortalRoles = [
       "backup:write",
       "update:write",
       "system:write",
+      "usb:provision",
       "users:write",
       "roles:read",
       "roles:write",
@@ -272,6 +289,7 @@ builtinPortalRoles.push(
       "employees:read", "schedule:read", "rights:read", "rights:write",
       "employees:write",
       "operation_mode:write", "backup:write", "update:write", "system:write", "users:write",
+      "usb:provision",
       "roles:read", "roles:write", "audit:read", "scopes:write", "wifi:settings",
       "hr:settings", "sickness:read", "sickness:settings", "notifications:settings",
     ],
@@ -289,6 +307,19 @@ const GLOBAL_SCOPE_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr
 const RIGHTS_ADMIN_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
 const HR_DECISION_PORTAL_ROLES = new Set(["developer", "admin", "hr"]);
 const PROTECTED_PORTAL_ROLES = new Set(["developer"]);
+const USB_PROVISIONING_ROLES = new Set(["developer", "it_admin", "admin"]);
+
+const installationFeatureCatalog = Object.freeze([
+  { id: "schedule", label: "Dienstplanung", required: true },
+  { id: "vacation", label: "Urlaubsplanung" },
+  { id: "requests", label: "Abwesenheitsanträge" },
+  { id: "employeePortal", label: "Mitarbeiterportal" },
+  { id: "timeTracking", label: "Zeiterfassung" },
+  { id: "sicknessAmu", label: "Krankmeldung & AUM" },
+  { id: "wifiSuggestions", label: "WLAN-Zeitvorschläge" },
+]);
+const installationFeatureIds = new Set(installationFeatureCatalog.map((feature) => feature.id));
+const defaultInstallationFeatures = installationFeatureCatalog.map((feature) => feature.id);
 const PORTAL_ROLE_ASSIGNMENTS = Object.freeze({
   developer: new Set(["employee", "department_manager", "manager", "hr", "admin", "it_admin"]),
   admin: new Set(["employee", "department_manager", "manager", "hr", "admin"]),
@@ -1843,6 +1874,7 @@ if (!columnExists("global_day_blocks", "location_id")) {
 db.exec("CREATE INDEX IF NOT EXISTS idx_global_day_blocks_location_week ON global_day_blocks(location_id, week_start)");
 
 const defaultSettings = {
+  installation_features: JSON.stringify(defaultInstallationFeatures),
   branding_management_kit_id: "",
   branding_company_name: defaultBranding.company_name,
   branding_logo_url: defaultBranding.logo_url,
@@ -2251,6 +2283,7 @@ app.use("/vendor/pdfjs-v6.1.200/wasm", express.static(path.join(pdfjsPackageDire
 app.use("/vendor/pdfjs-v6.1.200/iccs", express.static(path.join(pdfjsPackageDirectory, "iccs"), immutableVendorAssets));
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/api", enforceAdminApiAccess);
+app.use("/api", enforceInstallationFeatures);
 
 function httpError(status, message, code = "") {
   const error = new Error(message);
@@ -2377,6 +2410,8 @@ const LOGIN_RATE_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_BRANDING_RATE_WINDOW_MS = 5 * 60 * 1000;
 const loginRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 2048, maxEventsPerKey: 15 });
 const loginBrandingRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_BRANDING_RATE_WINDOW_MS, maxKeys: 2048, maxEventsPerKey: 60 });
+const usbCreatorAuthRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 128, maxEventsPerKey: 8 });
+const usbCreatorGlobalRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 32, maxEventsPerKey: 24 });
 
 function loginRateKey(request) {
   return String(request.ip || request.socket?.remoteAddress || "unknown").replace(/^::ffff:/, "");
@@ -2998,6 +3033,48 @@ function getSettings() {
     operation_mode: effectiveMode,
     server_mode_status: SERVER_MODE_STATUS,
   };
+}
+
+function installationFeaturesForApiPath(apiPath) {
+  const requestPath = String(apiPath || "").toLowerCase();
+  const required = new Set();
+  if (/^\/(?:schedule(?:$|\/|\.pdf$|-note(?:\/|$)|-preview\.pdf$)|shifts(?:\/|$)|week-options(?:\/|$)|global-day-blocks(?:\/|$)|auto-plan(?:\/|$)|portal\/v1\/me\/schedule(?:\/|$))/.test(requestPath)) required.add("schedule");
+  if (/^\/(?:vacations?(?:$|\/|\.pdf$|-preview\.pdf$)|vacation-entitlements(?:\/|$))/.test(requestPath)) required.add("vacation");
+  if (/^\/(?:portal\/v1\/(?:me\/)?(?:absence(?:-|\/|$)|vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$)|time-off(?:-|\/|$)|approved-time-off(?:\/|$)|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))/.test(requestPath)) required.add("requests");
+  if (/^\/portal\/v1\/(?:me\/)?(?:vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$))/.test(requestPath)) required.add("vacation");
+  if (/^\/(?:portal\/v1\/(?:me\/)?(?:wifi-automation|wifi-suggestions)|portal\/v1\/wifi-automation|wifi(?:-|\/|$)|integrations\/wifi)/.test(requestPath)) required.add("wifiSuggestions");
+  if (/^\/(?:portal\/v1\/(?:me\/)?(?:amu|sickness)|portal\/v1\/(?:amu|sickness)|portal\/v1\/personnel-records|amu(?:-|\/|$)|sickness(?:-|\/|$))/.test(requestPath)) required.add("sicknessAmu");
+  if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence)|time(?:-|\/|$)|mobile\/v1\/time)/.test(requestPath)) required.add("timeTracking");
+  if (/^\/(?:portal\/v1\/me(?:\/|$)|mobile\/v1\/(?:bootstrap|me(?:\/|$))|portal\/v1\/(?:greeting-settings|mobile-layout|leadership\/overview))/.test(requestPath)) required.add("employeePortal");
+  return [...required];
+}
+
+function enforceInstallationFeatures(request, _response, next) {
+  try {
+    const disabled = installationFeaturesForApiPath(request.path)
+      .filter((feature) => !installationFeatureEnabled(feature));
+    if (disabled.length) {
+      throw httpError(403, "Diese Funktion ist für diese Grabenplaner-Installation nicht freigeschaltet.", "FEATURE_DISABLED");
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+function installationFeatures(settings = getSettings()) {
+  let configured = defaultInstallationFeatures;
+  try {
+    const parsed = JSON.parse(String(settings.installation_features || "[]"));
+    if (Array.isArray(parsed)) configured = parsed;
+  } catch {}
+  const enabled = new Set(configured.filter((feature) => installationFeatureIds.has(feature)));
+  for (const feature of installationFeatureCatalog.filter((item) => item.required)) enabled.add(feature.id);
+  return Object.fromEntries(installationFeatureCatalog.map((feature) => [feature.id, enabled.has(feature.id)]));
+}
+
+function installationFeatureEnabled(feature, settings = getSettings()) {
+  return installationFeatures(settings)[feature] !== false;
 }
 
 function daySettingsFromLocation(locationId) {
@@ -4726,6 +4803,7 @@ function applyPersonnelAccessProfile(actor, profile) {
 function getPortalStatus(locationId = "") {
   const settings = getSettings();
   const portalSettings = getPortalSettings();
+  const features = installationFeatures(settings);
   const networkRuntimeActive = serverModeActive || !loopbackHosts.has(HOST.toLowerCase()) || process.env.GRABENPLANER_FORCE_PORTAL === "1";
   const portalEnabled = networkRuntimeActive && SERVER_MODE_STATUS === "active";
   const configuredAdmin = db.prepare(`
@@ -4751,23 +4829,31 @@ function getPortalStatus(locationId = "") {
     httpsRequired: serverModeActive,
     trustProxy: serverModeActive ? trustProxySetting : "",
     deploymentKind,
+    installationFeatures: features,
+    installationFeatureCatalog,
+    usbProvisioning: {
+      available: process.platform === "win32" && configuredOperationMode === "local" && !serverModeActive
+        && loopbackHosts.has(HOST.toLowerCase()) && deploymentKind === "local",
+      localOnly: true,
+      requiresElevation: false,
+    },
     passwordMinLength: portalPasswordMinLength(),
     branding: locationId ? brandingForLocation(locationId, settings) : brandingFromSettings(settings),
     capabilities: {
       login: portalEnabled,
-      ownSchedule: portalEnabled,
-      vacationRequests: portalEnabled,
-      timeOffRequests: portalEnabled,
-      vacationChanges: portalEnabled,
-      requestBlackouts: portalEnabled,
-      approvalWorkflow: portalEnabled,
-      absenceHistory: portalEnabled,
-      notifications: portalEnabled,
-      amuReports: portalEnabled && Boolean(amuStorage),
-      sicknessReports: portalEnabled && Boolean(amuStorage),
-      localAmuOcr: portalEnabled && Boolean(amuStorage) && portalSettings.amu_ocr_enabled !== "0",
-      timeTracking: portalEnabled,
-      wifiTimeSuggestions: portalEnabled,
+      ownSchedule: portalEnabled && features.employeePortal && features.schedule,
+      vacationRequests: portalEnabled && features.employeePortal && features.vacation && features.requests,
+      timeOffRequests: portalEnabled && features.employeePortal && features.requests,
+      vacationChanges: portalEnabled && features.employeePortal && features.vacation && features.requests,
+      requestBlackouts: portalEnabled && features.requests,
+      approvalWorkflow: portalEnabled && features.requests,
+      absenceHistory: portalEnabled && features.employeePortal && features.requests,
+      notifications: portalEnabled && features.employeePortal && features.requests,
+      amuReports: portalEnabled && features.employeePortal && features.sicknessAmu && Boolean(amuStorage),
+      sicknessReports: portalEnabled && features.employeePortal && features.sicknessAmu && Boolean(amuStorage),
+      localAmuOcr: portalEnabled && features.employeePortal && features.sicknessAmu && Boolean(amuStorage) && portalSettings.amu_ocr_enabled !== "0",
+      timeTracking: portalEnabled && features.employeePortal && features.timeTracking,
+      wifiTimeSuggestions: portalEnabled && features.employeePortal && features.timeTracking && features.wifiSuggestions,
     },
     workflow: {
       vacationHrApprovalRequired: vacationHrApprovalRequired(),
@@ -7581,9 +7667,10 @@ function brandingKitFromSettings(settings = getSettings()) {
 }
 
 function runPowerShell(command, args = []) {
+  const invocation = `${String(command || "").trim()}${args.length ? ` ${args.map((value) => `'${String(value ?? "").replaceAll("'", "''")}'`).join(" ")}` : ""}`;
   return childProcess.execFileSync(
     "powershell.exe",
-    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command, ...args],
+    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", invocation],
     { stdio: "pipe", windowsHide: true },
   );
 }
@@ -7595,11 +7682,99 @@ function createZipArchive(sourcePath, zipPath) {
   );
 }
 
+function inspectZipArchive(zipPath, {
+  maximumEntries = 300,
+  maximumUncompressedBytes = 75 * 1024 * 1024,
+  maximumEntryBytes = 20 * 1024 * 1024,
+  maximumPathLength = 240,
+  maximumPathDepth = 12,
+  maximumSegmentLength = 100,
+} = {}) {
+  const output = runPowerShell(`
+& {
+  param($zipPath)
+  $ErrorActionPreference = 'Stop'
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $archive = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+  try {
+    $count = 0
+    [Int64]$total = 0
+    [Int64]$largest = 0
+    $unsafe = $false
+    $unsafeName = $false
+    foreach ($entry in $archive.Entries) {
+      $count += 1
+      [Int64]$length = $entry.Length
+      $total += $length
+      if ($length -gt $largest) { $largest = $length }
+      $name = ([string]$entry.FullName).Replace('\\', '/')
+      if ([System.IO.Path]::IsPathRooted($name) -or $name -match '^[A-Za-z]:' -or @($name.Split('/') | Where-Object { $_ -eq '..' }).Count -gt 0) { $unsafe = $true }
+      $segments = @($name.Split('/') | Where-Object { $_ -ne '' })
+      if ($name.Length -gt ${Number(maximumPathLength)} -or $segments.Count -gt ${Number(maximumPathDepth)} -or @($segments | Where-Object { $_.Length -gt ${Number(maximumSegmentLength)} -or $_ -match ':' }).Count -gt 0) { $unsafeName = $true }
+    }
+    [PSCustomObject]@{ entries = $count; totalBytes = $total; largestBytes = $largest; unsafePath = $unsafe; unsafeName = $unsafeName } | ConvertTo-Json -Compress
+  } finally {
+    $archive.Dispose()
+  }
+}
+`, [zipPath]).toString("utf8").replace(/^\uFEFF/, "").trim();
+  let inspection;
+  try { inspection = JSON.parse(output); }
+  catch { throw httpError(400, "Die Branding-ZIP-Datei konnte nicht sicher geprüft werden.", "BRANDING_ARCHIVE_INVALID"); }
+  if (inspection.unsafePath || inspection.unsafeName || Number(inspection.entries) > maximumEntries
+    || Number(inspection.totalBytes) > maximumUncompressedBytes
+    || Number(inspection.largestBytes) > maximumEntryBytes) {
+    throw httpError(400, "Die Branding-ZIP-Datei ist zu groß oder enthält unzulässige Pfade.", "BRANDING_ARCHIVE_LIMIT");
+  }
+  return inspection;
+}
+
+function validateExtractedBrandingArchive(extractPath, limits = {}) {
+  const maximumEntries = Number(limits.maximumEntries || 300);
+  const maximumUncompressedBytes = Number(limits.maximumUncompressedBytes || 75 * 1024 * 1024);
+  const maximumPathLength = Number(limits.maximumPathLength || 240);
+  const maximumPathDepth = Number(limits.maximumPathDepth || 12);
+  const maximumSegmentLength = Number(limits.maximumSegmentLength || 100);
+  let entries = 0;
+  let totalBytes = 0;
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      entries += 1;
+      if (entries > maximumEntries) throw httpError(400, "Die Branding-ZIP-Datei enthält zu viele Dateien.", "BRANDING_ARCHIVE_LIMIT");
+      const entryPath = path.join(directory, entry.name);
+      const relativePath = path.relative(extractPath, entryPath);
+      const segments = relativePath.split(path.sep).filter(Boolean);
+      if (relativePath.length > maximumPathLength || segments.length > maximumPathDepth
+        || segments.some((segment) => segment.length > maximumSegmentLength || segment.includes(":"))) {
+        throw httpError(400, "Die Branding-ZIP-Datei enthält unzulässig lange oder tiefe Pfade.", "BRANDING_ARCHIVE_LIMIT");
+      }
+      const stat = fs.lstatSync(entryPath);
+      if (stat.isSymbolicLink()) throw httpError(400, "Verknüpfungen sind in Branding-Kits nicht erlaubt.", "BRANDING_ARCHIVE_LINK");
+      if (stat.isDirectory()) walk(entryPath);
+      else if (stat.isFile()) {
+        totalBytes += stat.size;
+        if (totalBytes > maximumUncompressedBytes) throw httpError(400, "Die Branding-ZIP-Datei ist entpackt zu groß.", "BRANDING_ARCHIVE_LIMIT");
+      }
+    }
+  };
+  walk(extractPath);
+}
+
 function extractZipArchive(zipPath, extractPath) {
+  const limits = {
+    maximumEntries: 300,
+    maximumUncompressedBytes: 75 * 1024 * 1024,
+    maximumEntryBytes: 20 * 1024 * 1024,
+    maximumPathLength: 240,
+    maximumPathDepth: 12,
+    maximumSegmentLength: 100,
+  };
+  inspectZipArchive(zipPath, limits);
   runPowerShell(
     "& { param($zipPath, $extractPath) $ErrorActionPreference = 'Stop'; Expand-Archive -LiteralPath $zipPath -DestinationPath $extractPath -Force }",
     [zipPath, extractPath],
   );
+  validateExtractedBrandingArchive(extractPath, limits);
 }
 
 function walkFiles(directory) {
@@ -7995,6 +8170,7 @@ function scheduleEmployeeFilterSql(context, weekStart, weekEnd, alias = "e") {
 
 function resolveBackupDirectory(value) {
   const raw = String(value || defaultBackupDirectorySetting).trim()
+    .replace(/%GRABENPLANER_ROOT%/gi, path.basename(__dirname).toLowerCase() === "app" ? path.dirname(__dirname) : __dirname)
     .replace(/%USERPROFILE%/gi, os.homedir())
     .replace(/%HOME%/gi, os.homedir());
   if (raw === "~") return os.homedir();
@@ -9606,14 +9782,32 @@ Expand-Archive -LiteralPath $zip.FullName -DestinationPath $extractDir -Force
 $source = Join-Path $extractDir 'Grabenplaner'
 if (-not (Test-Path (Join-Path $source 'server.js'))) { throw 'Entpackte Version ist unvollständig.' }
 Write-UpdateLog "Kopiere neue App-Dateien ..."
-  $robocopyOutput = & robocopy $source $appDir /MIR /XD '.git' 'data' 'backups' 'release' 'usb-backups' /XF '*.db' '*.db-shm' '*.db-wal' '*.log' /NFL /NDL /NJH /NJS /NP 2>&1
+  Get-ChildItem -LiteralPath $appDir -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object { try { $_.IsReadOnly = $false } catch {} }
+  $robocopyOutput = & robocopy $source $appDir /MIR /XD '.git' 'data' 'backups' 'release' 'usb-backups' /XF '*.db' '*.db-shm' '*.db-wal' '*.log' 'portable-layout.json' /NFL /NDL /NJH /NJS /NP 2>&1
 $robocopyExitCode = $LASTEXITCODE
 $robocopyOutput | ForEach-Object { Write-UpdateLog "robocopy: $_" }
 if ($robocopyExitCode -gt 7) { throw "Robocopy fehlgeschlagen: $robocopyExitCode" }
 if ((Split-Path $appDir -Leaf) -eq 'app') {
-  $rootStart = Join-Path $parentDir "Grabenplaner $versionLabel starten.cmd"
-  "@echo off\`r\`ncd /d ""%~dp0app""\`r\`ncall ""Grabenplaner $versionLabel starten.cmd""\`r\`n" | Set-Content -LiteralPath $rootStart -Encoding Default
-  "@echo off\`r\`ncd /d ""%~dp0app""\`r\`ncall ""Dienstplan starten.cmd""\`r\`n" | Set-Content -LiteralPath (Join-Path $parentDir 'Dienstplan starten.cmd') -Encoding Default
+  Get-ChildItem -LiteralPath $parentDir -Filter 'Grabenplaner v* Beta starten.cmd' -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath (Join-Path $parentDir 'Dienstplan starten.cmd') -Force -ErrorAction SilentlyContinue
+  "@echo off\`r\`ncd /d ""%~dp0app""\`r\`ncall ""Dienstplan starten.cmd""\`r\`n" | Set-Content -LiteralPath (Join-Path $parentDir 'Grabenplaner starten.cmd') -Encoding Default
+  "@echo off\`r\`ncd /d ""%~dp0app""\`r\`ncall ""Backup erstellen.cmd""\`r\`n" | Set-Content -LiteralPath (Join-Path $parentDir 'Backup erstellen.cmd') -Encoding Default
+  $portableLayout = Join-Path $appDir 'portable-layout.json'
+  if (Test-Path -LiteralPath $portableLayout) {
+    try {
+      $layout = Get-Content -LiteralPath $portableLayout -Raw | ConvertFrom-Json
+      if ($layout.protectProgramFiles) {
+        Get-ChildItem -LiteralPath $appDir -Force -File -ErrorAction SilentlyContinue |
+          Where-Object { $_.Name -ne 'portable-layout.json' } |
+          ForEach-Object { try { $_.IsReadOnly = $true } catch {} }
+        foreach ($name in @('lib','node_modules','public','runtime','scripts','docs')) {
+          $protectedRoot = Join-Path $appDir $name
+          if (Test-Path -LiteralPath $protectedRoot) { Get-ChildItem -LiteralPath $protectedRoot -Recurse -Force -File | ForEach-Object { $_.IsReadOnly = $true } }
+        }
+      }
+      if ($layout.hideProgramFolder) { & attrib.exe +H +S $appDir }
+    } catch { Write-UpdateLog "Portabler Versehschutz konnte nicht vollständig wiederhergestellt werden: $($_.Exception.Message)" }
+  }
 }
 $startFile = Join-Path $appDir "Grabenplaner $versionLabel starten.cmd"
 if (-not (Test-Path $startFile)) { $startFile = Join-Path $appDir 'Dienstplan starten.cmd' }
@@ -12841,6 +13035,500 @@ app.get("/api/portal/v1/time-presence", (request, response) => {
   response.json({ presence: timePresenceForContext(session, context, date) });
 });
 
+function usbProvisioningAvailability() {
+  if (process.platform !== "win32") return { available: false, reason: "Der USB-Stick-Assistent ist nur unter Windows verfügbar." };
+  if (configuredOperationMode !== "local" || serverModeActive || getPortalStatus().portalEnabled) {
+    return { available: false, reason: "Der USB-Stick-Assistent ist ausschließlich im lokalen Windows-Betrieb verfügbar." };
+  }
+  if (!loopbackHosts.has(HOST.toLowerCase()) || deploymentKind !== "local") {
+    return { available: false, reason: "Der USB-Stick-Assistent darf nur direkt am lokalen Grabenplaner-PC verwendet werden." };
+  }
+  return { available: true, reason: "" };
+}
+
+function assertUsbProvisioningRequest(request, { mutation = false } = {}) {
+  const availability = usbProvisioningAvailability();
+  if (!availability.available || !isLoopbackRequest(request)) {
+    throw httpError(403, availability.reason || "Der USB-Stick-Assistent ist an diesem Ort nicht verfügbar.", "USB_LOCAL_ONLY");
+  }
+  if (mutation && request.get("X-Grabenplaner-USB-Action") !== "provisioning") {
+    throw httpError(403, "Die lokale Sicherheitsbestätigung für den USB-Vorgang fehlt.", "USB_ACTION_HEADER_REQUIRED");
+  }
+  return availability;
+}
+
+function usbCreatorCandidates() {
+  return db.prepare(`
+    SELECT u.employee_number, u.role, e.full_name, e.nickname, e.home_location_id, p.name AS position_name
+    FROM portal_users u
+    JOIN employees e ON e.personnel_number = u.employee_number
+    LEFT JOIN positions p ON p.id = e.position_id
+    WHERE u.active = 1 AND e.active = 1 AND TRIM(u.password_hash) <> ''
+      AND u.role IN ('developer', 'it_admin', 'admin')
+    ORDER BY CAST(u.employee_number AS INTEGER), u.employee_number
+  `).all().map((row) => ({
+    employeeNumber: row.employee_number,
+    role: row.role,
+    fullName: row.full_name,
+    nickname: row.nickname,
+    positionName: row.position_name || "",
+    homeLocationId: row.home_location_id || "",
+    assignableRoleIds: [...(PORTAL_ROLE_ASSIGNMENTS[row.role] || new Set(["employee"]))],
+  }));
+}
+
+async function verifyUsbCreator(request, employeeNumber, password) {
+  const number = String(employeeNumber || "").trim();
+  const now = Date.now();
+  const ipKey = loginRateKey(request);
+  const rateKey = `${ipKey}:${number || "unknown"}`;
+  if (usbCreatorGlobalRateLimits.get(ipKey, now).length >= 24 || usbCreatorAuthRateLimits.get(rateKey, now).length >= 8) {
+    throw httpError(429, "Zu viele fehlgeschlagene Freigaben. Bitte 15 Minuten warten.", "USB_CREATOR_RATE_LIMITED");
+  }
+  const row = db.prepare(`
+    SELECT u.employee_number, u.password_hash, u.role,
+           e.personnel_number, e.full_name, e.nickname, e.color, e.contracted_hours,
+           e.preferred_day_off, e.fixed_workdays, e.position_id, e.time_confirmation_level,
+           e.home_location_id, e.preferred_department_id, e.active
+    FROM portal_users u
+    JOIN employees e ON e.personnel_number = u.employee_number
+    WHERE u.employee_number = ? AND u.active = 1 AND e.active = 1
+  `).get(number);
+  const allowed = Boolean(row && USB_PROVISIONING_ROLES.has(row.role) && row.password_hash);
+  const passwordMatches = await verifyPortalPassword(password, allowed ? row.password_hash : DUMMY_PORTAL_PASSWORD_HASH);
+  if (!allowed || !passwordMatches) {
+    usbCreatorAuthRateLimits.record(rateKey, now);
+    usbCreatorGlobalRateLimits.record(ipKey, now);
+    throw httpError(403, "Das Passwort des Erstellerkontos ist nicht korrekt.", "USB_CREATOR_AUTH_FAILED");
+  }
+  usbCreatorAuthRateLimits.clear(rateKey);
+  return {
+    personnelNumber: row.employee_number,
+    role: row.role,
+    passwordHash: row.password_hash,
+    employee: row,
+  };
+}
+
+function usbCandidateOptions() {
+  let externalBackupDrive = "";
+  try {
+    externalBackupDrive = String(backupDirectoryFromSettings(getSettings())).match(/^[a-z]:/i)?.[0] || "";
+  } catch {}
+  return {
+    appPath: __dirname,
+    dataPath: dataDirectory,
+    excludedDriveLetters: externalBackupDrive ? [externalBackupDrive] : [],
+    allowMultiPartition: false,
+  };
+}
+
+async function usbDriveChoices() {
+  const result = await enumerateSafeUsbCandidates(usbCandidateOptions());
+  return {
+    drives: result.candidates.map((candidate) => ({
+      token: createSelectionToken(candidate, usbProvisioningTokenSecret, { candidateOptions: usbCandidateOptions() }),
+      driveLetter: candidate.driveLetter,
+      label: candidate.label,
+      fileSystem: candidate.fileSystem,
+      sizeBytes: candidate.sizeBytes,
+      freeBytes: candidate.freeBytes,
+      model: candidate.diskFriendlyName || "USB-Datenträger",
+      expectedConfirmation: expectedFormatConfirmation(candidate.driveLetter),
+    })),
+    rejectedCount: result.rejected.length,
+  };
+}
+
+const usbFeatureAliases = Object.freeze({
+  planning: "schedule",
+  schedule: "schedule",
+  vacations: "vacation",
+  vacation: "vacation",
+  absence_requests: "requests",
+  requests: "requests",
+  employee_portal: "employeePortal",
+  employeePortal: "employeePortal",
+  time_tracking: "timeTracking",
+  timeTracking: "timeTracking",
+  sickness_amu: "sicknessAmu",
+  sicknessAmu: "sicknessAmu",
+  wifi_time_suggestions: "wifiSuggestions",
+  wifiSuggestions: "wifiSuggestions",
+});
+
+function validateUsbFeatures(body = {}) {
+  const profile = String(body.profile || "custom");
+  let submitted = Array.isArray(body.enabledFeatures) ? body.enabledFeatures : [];
+  if (profile === "full") submitted = defaultInstallationFeatures;
+  if (profile === "planning-vacation") submitted = ["schedule", "vacation", "requests"];
+  const enabled = new Set(submitted.map((feature) => usbFeatureAliases[feature] || feature).filter((feature) => installationFeatureIds.has(feature)));
+  enabled.add("schedule");
+  if (enabled.has("wifiSuggestions")) enabled.add("timeTracking");
+  if (enabled.has("sicknessAmu")) enabled.add("requests");
+  if (enabled.has("timeTracking") || enabled.has("sicknessAmu") || enabled.has("wifiSuggestions")) enabled.add("employeePortal");
+  return [...enabled];
+}
+
+function validateUsbSelectedLocations(value) {
+  const selected = [...new Set((Array.isArray(value) ? value : []).map((id) => normalizeLocationId(id)))];
+  if (!selected.length) throw httpError(400, "Bitte mindestens einen Standort für den Stick auswählen.", "USB_LOCATION_REQUIRED");
+  for (const locationId of selected) validateLocationExists(locationId);
+  return selected;
+}
+
+function validateUsbBrandings(body = {}) {
+  const primaryKitId = String(body.primaryBrandingKitId || "neutral").trim();
+  const primaryKit = readBrandingKitManifest(primaryKitId);
+  const additionalIds = [...new Set((Array.isArray(body.additionalBrandingKitIds) ? body.additionalBrandingKitIds : [])
+    .map((kitId) => String(kitId || "").trim()).filter(Boolean))];
+  if (additionalIds.length > 30) throw httpError(400, "Es können höchstens 30 zusätzliche Branding-Kits mitgegeben werden.", "USB_BRANDING_LIMIT");
+  const kitIds = [...new Set([primaryKitId, ...additionalIds])];
+  for (const kitId of kitIds) readBrandingKitManifest(kitId);
+  return { primaryKitId, primaryKit, kitIds };
+}
+
+function usbRoleAllowedForCreator(creatorRole, requestedRole) {
+  if (requestedRole === "employee") return true;
+  return Boolean(PORTAL_ROLE_ASSIGNMENTS[creatorRole]?.has(requestedRole));
+}
+
+async function validateUsbEmployees(inputEmployees, selectedLocations, creator) {
+  const inputs = Array.isArray(inputEmployees) ? inputEmployees.slice(0, 250) : [];
+  const result = [];
+  const seen = new Set();
+  for (const input of inputs) {
+    const sourceNumber = String(input.sourcePersonnelNumber || "").trim();
+    const personnelNumber = String(input.personnelNumber || sourceNumber || "").trim();
+    if (!/^\d{1,12}$/.test(personnelNumber)) throw httpError(400, "Eine Personalnummer im USB-Team ist ungültig.", "USB_EMPLOYEE_INVALID");
+    if (personnelNumber === creator.personnelNumber || seen.has(personnelNumber)) continue;
+    seen.add(personnelNumber);
+    let employee;
+    if (sourceNumber) {
+      employee = db.prepare(`
+        SELECT personnel_number, full_name, nickname, color, contracted_hours, preferred_day_off,
+               fixed_workdays, position_id, time_confirmation_level, home_location_id,
+               preferred_department_id, active
+        FROM employees WHERE personnel_number = ?
+      `).get(sourceNumber);
+      if (!employee) throw httpError(404, `Teammitglied ${sourceNumber} wurde nicht gefunden.`, "USB_EMPLOYEE_NOT_FOUND");
+      employee = { ...employee, personnel_number: personnelNumber };
+    } else {
+      const fullName = String(input.fullName || "").trim();
+      const nickname = String(input.nickname || "").trim();
+      const color = String(input.color || "#0b84c6").trim().toLowerCase();
+      const contractedHours = Number(input.contractedHours ?? 38.5);
+      const positionId = String(input.positionId || "verkaufsmitarbeiter").trim();
+      const homeLocationId = String(input.homeLocationId || selectedLocations[0]).trim();
+      const preferredDepartmentId = Number(input.preferredDepartmentId || 0) || null;
+      if (!fullName || fullName.length > 100 || !nickname || nickname.length > 40 || !/^#[0-9a-f]{6}$/.test(color)
+        || !Number.isFinite(contractedHours) || contractedHours < 0 || contractedHours > 80) {
+        throw httpError(400, `Die Stammdaten für Personalnummer ${personnelNumber} sind unvollständig.`, "USB_EMPLOYEE_INVALID");
+      }
+      if (!db.prepare("SELECT 1 FROM positions WHERE id = ?").get(positionId)) throw httpError(400, "Die gewählte Position wurde nicht gefunden.", "USB_EMPLOYEE_POSITION_INVALID");
+      if (!selectedLocations.includes(homeLocationId)) throw httpError(400, "Der Standort eines Teammitglieds ist nicht für den Stick ausgewählt.", "USB_EMPLOYEE_LOCATION_INVALID");
+      if (preferredDepartmentId) validateDepartmentExists(preferredDepartmentId, homeLocationId);
+      employee = {
+        personnel_number: personnelNumber,
+        full_name: fullName,
+        nickname,
+        color,
+        contracted_hours: contractedHours,
+        preferred_day_off: null,
+        fixed_workdays: "",
+        position_id: positionId,
+        time_confirmation_level: "C",
+        home_location_id: homeLocationId,
+        preferred_department_id: preferredDepartmentId,
+        active: 1,
+      };
+    }
+    if (!selectedLocations.includes(String(employee.home_location_id || ""))) {
+      throw httpError(400, `Der Standort von ${personnelNumber} ist nicht für den Stick ausgewählt.`, "USB_EMPLOYEE_LOCATION_INVALID");
+    }
+    const role = String(input.role || "employee").trim();
+    if (role === "developer" || !getPortalRoles().some((entry) => entry.id === role) || !usbRoleAllowedForCreator(creator.role, role)) {
+      throw httpError(403, `Die Rolle für Personalnummer ${personnelNumber} darf vom Ersteller nicht vergeben werden.`, "USB_EMPLOYEE_ROLE_DENIED");
+    }
+    if (role === "department_manager") {
+      const departmentId = Number(employee.preferred_department_id || 0);
+      if (!departmentId) {
+        throw httpError(400, `Für die Abteilungsleitung ${personnelNumber} muss eine Abteilung ausgewählt sein.`, "USB_EMPLOYEE_DEPARTMENT_REQUIRED");
+      }
+      validateDepartmentExists(departmentId, String(employee.home_location_id || ""));
+    }
+    const password = String(input.startPassword || "");
+    const additionalPermissions = [...new Set((Array.isArray(input.additionalPermissions) ? input.additionalPermissions : [])
+      .map(String).filter((permission) => delegablePortalPermissions.has(permission)))];
+    result.push({
+      ...employee,
+      personnelNumber,
+      role,
+      passwordHash: password ? await hashPortalPassword(password) : "",
+      additionalPermissions,
+    });
+  }
+  return result;
+}
+
+function usbPrimaryBranding(brandingSelection) {
+  const raw = brandingSelection.primaryKit.branding || brandingSelection.primaryKit;
+  const branding = brandingFromSettings(raw);
+  return {
+    kitId: brandingSelection.primaryKitId,
+    ...branding,
+    primaryColor: raw.primaryColor || raw.primary_color || raw.colors?.primary,
+    secondaryColor: raw.secondaryColor || raw.secondary_color || raw.colors?.secondary,
+    accentColor: raw.accentColor || raw.accent_color || raw.colors?.accent,
+    textColor: raw.textColor || raw.text_color || raw.colors?.text,
+    backgroundColor: raw.backgroundColor || raw.background_color || raw.colors?.background,
+  };
+}
+
+function usbFirstStepsSpec(body, primaryBranding, enabledFeatures) {
+  const guide = body.firstSteps && typeof body.firstSteps === "object" ? body.firstSteps : {};
+  const steps = [];
+  if (guide.includeStartup !== false) steps.push({ title: "Grabenplaner starten und sicher beenden", text: "Öffnen Sie im Hauptverzeichnis des USB-Sticks die Datei „Grabenplaner starten.cmd“. Der Browser öffnet sich automatisch. Verwenden Sie zum Beenden den Befehl „Beenden“ im linken Menü und warten Sie, bis Grabenplaner den lokalen Webserver geschlossen hat." });
+  if (guide.includePdf !== false) steps.push({ title: "PDFs ablegen", text: "Der Ordner „PDF-Exporte“ im Hauptverzeichnis ist für fertige Dienst- und Urlaubspläne vorbereitet." });
+  if (guide.includeBackup !== false) steps.push({ title: "Backups sichern", text: "Mit „Backup erstellen.cmd“ wird eine Sicherung erstellt. Bewahren Sie regelmäßig eine zusätzliche Kopie auf einem zweiten Datenträger auf." });
+  if (String(guide.notes || "").trim()) steps.push({ title: "Hinweise für diese Installation", text: String(guide.notes) });
+  const labels = installationFeatureCatalog.filter((feature) => enabledFeatures.includes(feature.id)).map((feature) => feature.label);
+  return {
+    title: guide.title,
+    introduction: guide.introduction,
+    steps,
+    features: guide.includeModules === false ? [] : labels,
+    contact: guide.contact,
+    closingNote: "Änderungen an Team, Rechten, Branding und Funktionsumfang sind nur für berechtigte Administrationsrollen vorgesehen.",
+    versionLabel: APP_VERSION_LABEL,
+    branding: {
+      ...primaryBranding,
+      logo: localAssetPathFromUrl(primaryBranding.logoUrl),
+    },
+  };
+}
+
+function initializeUsbStageDatabase(appDirectory) {
+  const targetDatabase = path.join(appDirectory, "data", "dienstplan.db");
+  const runtimeNode = path.join(appDirectory, "runtime", "node.exe");
+  const nodeExecutable = fs.existsSync(runtimeNode) ? runtimeNode : process.execPath;
+  const initializer = path.join(appDirectory, "scripts", "initialize-portable-db.js");
+  const result = childProcess.spawnSync(nodeExecutable, [initializer, targetDatabase, appDirectory], {
+    cwd: appDirectory,
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 120000,
+    maxBuffer: 4 * 1024 * 1024,
+  });
+  if (result.error || result.status !== 0) {
+    throw httpError(500, `Die frische USB-Datenbank konnte nicht erstellt werden: ${String(result.stderr || result.error?.message || "Unbekannter Fehler").trim().slice(0, 800)}`, "USB_DATABASE_INITIALIZE_FAILED");
+  }
+  return targetDatabase;
+}
+
+function copyUsbBrandingKits(kitIds, appDirectory) {
+  const targetRoot = path.join(appDirectory, "data", "branding-kits");
+  fs.mkdirSync(targetRoot, { recursive: true });
+  for (const kitId of kitIds) {
+    if (kitId === "neutral") continue;
+    const source = path.resolve(brandingKitsDirectory, kitId);
+    const libraryRoot = path.resolve(brandingKitsDirectory);
+    if (!source.startsWith(`${libraryRoot}${path.sep}`) || !fs.existsSync(path.join(source, "manifest.json"))) {
+      throw httpError(404, `Branding-Kit ${kitId} wurde nicht gefunden.`, "USB_BRANDING_NOT_FOUND");
+    }
+    fs.cpSync(source, path.join(targetRoot, kitId), { recursive: true, force: true });
+  }
+}
+
+function protectUsbProgramFiles(appDirectory) {
+  const safeApp = path.resolve(appDirectory).replaceAll("'", "''");
+  runPowerShell(`
+$ErrorActionPreference = 'Stop'
+$app = '${safeApp}'
+$roots = @('lib','node_modules','public','runtime','scripts','docs')
+foreach ($name in $roots) {
+  $target = Join-Path $app $name
+  if (Test-Path -LiteralPath $target) { Get-ChildItem -LiteralPath $target -Recurse -Force -File | ForEach-Object { $_.IsReadOnly = $true } }
+}
+Get-ChildItem -LiteralPath $app -Force -File | Where-Object { $_.Name -ne 'portable-layout.json' } | ForEach-Object { $_.IsReadOnly = $true }
+`);
+}
+
+function consumeUsbTokenOnce(payload) {
+  const now = Date.now();
+  for (const [nonce, expiresAt] of consumedUsbProvisioningTokens) if (expiresAt < now) consumedUsbProvisioningTokens.delete(nonce);
+  if (consumedUsbProvisioningTokens.has(payload.nonce)) throw httpError(409, "Diese USB-Auswahl wurde bereits verwendet.", "USB_TOKEN_ALREADY_USED");
+  consumedUsbProvisioningTokens.set(payload.nonce, payload.expiresAt);
+}
+
+function normalizeUsbProvisioningError(error) {
+  if (error.status) return error;
+  const status = /TOKEN|SELECTION|CONFIRM|VOLUME|DRIVE|PATH|LAYOUT|SOURCE/.test(String(error.code || "")) ? 400
+    : /POWERSHELL|FORMAT|HIDE/.test(String(error.code || "")) ? 403 : 500;
+  const normalized = httpError(status, error.message || "Der USB-Stick konnte nicht vorbereitet werden.", error.code || "USB_PROVISIONING_FAILED");
+  if (error.details) normalized.details = error.details;
+  return normalized;
+}
+
+app.get("/api/usb-provisioning/status", async (request, response) => {
+  assertUsbProvisioningRequest(request);
+  let driveData = { drives: [], rejectedCount: 0 };
+  let driveWarning = "";
+  try { driveData = await usbDriveChoices(); }
+  catch (error) { driveWarning = error.message; }
+  response.json({
+    ...usbProvisioningAvailability(),
+    ...driveData,
+    driveWarning,
+    creators: usbCreatorCandidates(),
+    featureCatalog: installationFeatureCatalog,
+    profiles: {
+      full: defaultInstallationFeatures,
+      "planning-vacation": ["schedule", "vacation", "requests"],
+    },
+  });
+});
+
+app.get("/api/usb-provisioning/drives", async (request, response) => {
+  assertUsbProvisioningRequest(request);
+  response.json(await usbDriveChoices());
+});
+
+app.post("/api/usb-provisioning/first-steps.pdf", async (request, response) => {
+  assertUsbProvisioningRequest(request, { mutation: true });
+  const enabledFeatures = validateUsbFeatures(request.body || {});
+  const brandingSelection = validateUsbBrandings(request.body || {});
+  const primaryBranding = usbPrimaryBranding(brandingSelection);
+  const buffer = await renderFirstStepsPdf(usbFirstStepsSpec(request.body || {}, primaryBranding, enabledFeatures));
+  response.type("application/pdf").setHeader("Content-Disposition", "inline; filename=Erste-Schritte.pdf");
+  response.send(buffer);
+});
+
+app.put("/api/usb-provisioning/branding/import", express.raw({ type: ["application/zip", "application/json", "application/octet-stream"], limit: "25mb" }), (request, response) => {
+  assertUsbProvisioningRequest(request, { mutation: true });
+  if (!Buffer.isBuffer(request.body) || request.body.length < 2) throw httpError(400, "Bitte eine Branding-Kit-Datei auswählen.", "USB_BRANDING_IMPORT_INVALID");
+  const fileName = decodeURIComponent(request.get("X-Branding-Filename") || "branding-kit.zip");
+  if (/\.json$/i.test(fileName)) {
+    const kit = JSON.parse(request.body.toString("utf8").replace(/^\uFEFF/, ""));
+    const installedKit = installBrandingKit(kit, { fileName });
+    response.json({ ok: true, kit: installedKit, kits: listBrandingKits() });
+    return;
+  }
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-usb-branding-"));
+  try {
+    const zipPath = path.join(tempRoot, "branding.zip");
+    const extractPath = path.join(tempRoot, "extract");
+    fs.writeFileSync(zipPath, request.body);
+    fs.mkdirSync(extractPath, { recursive: true });
+    extractZipArchive(zipPath, extractPath);
+    const jsonFile = findKitJsonFile(extractPath);
+    if (!jsonFile) throw httpError(400, "In der ZIP-Datei wurde keine Branding-Kit-JSON gefunden.");
+    const kit = JSON.parse(fs.readFileSync(jsonFile, "utf8").replace(/^\uFEFF/, ""));
+    const installedKit = installBrandingKit(kit, { extractPath, fileName });
+    response.json({ ok: true, kit: installedKit, kits: listBrandingKits() });
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+app.post("/api/usb-provisioning/create", async (request, response) => {
+  assertUsbProvisioningRequest(request, { mutation: true });
+  if (usbProvisioningActive) throw httpError(409, "Ein USB-Stick wird bereits vorbereitet.", "USB_PROVISIONING_BUSY");
+  usbProvisioningActive = true;
+  let stage = null;
+  try {
+    const body = request.body || {};
+    const creator = await verifyUsbCreator(request, body.creatorEmployeeNumber, body.creatorPassword);
+    const enabledFeatures = validateUsbFeatures(body);
+    const selectedLocations = validateUsbSelectedLocations(body.selectedLocationIds);
+    const brandingSelection = validateUsbBrandings(body);
+    const primaryBranding = usbPrimaryBranding(brandingSelection);
+    const employees = await validateUsbEmployees(body.employees, selectedLocations, creator);
+    const firstStepsSpec = usbFirstStepsSpec(body, primaryBranding, enabledFeatures);
+    const installationName = validateBrandOptionalText(body.installationName, 80);
+    const selectionValidatedAt = Date.now();
+    const tokenPayload = verifyTokenEnvelope(body.selectionToken, usbProvisioningTokenSecret, { now: selectionValidatedAt });
+    const earlyEnumeration = await enumerateSafeUsbCandidates(usbCandidateOptions());
+    const currentCandidate = earlyEnumeration.candidates.find((candidate) => candidate.driveLetter === tokenPayload.identity.driveLetter);
+    if (!currentCandidate) throw httpError(409, "Der ausgewählte USB-Stick ist nicht mehr verfügbar.", "USB_SELECTION_NOT_FOUND");
+    verifySelectionToken(body.selectionToken, currentCandidate, usbProvisioningTokenSecret, { now: selectionValidatedAt });
+    assertFormatConfirmation(body.confirmation, currentCandidate.driveLetter);
+
+    stage = await stagePortableInstallation({
+      sourceAppDirectory: __dirname,
+      copyOptions: { directories: ["docs", "lib", "node_modules", "public", "runtime", "scripts"] },
+      manifestMetadata: {
+        appVersion: packageMetadata.version,
+        installationName,
+        creator: creator.personnelNumber,
+        enabledFeatures,
+        primaryBrandingKitId: brandingSelection.primaryKitId,
+      },
+      prepareApp: async ({ stageRoot, appDirectory }) => {
+        fs.writeFileSync(path.join(stageRoot, "Backup erstellen.cmd"), "@echo off\r\ncd /d \"%~dp0app\"\r\ncall \"Backup erstellen.cmd\"\r\n", "latin1");
+        const targetDatabase = initializeUsbStageDatabase(appDirectory);
+        copyUsbBrandingKits(brandingSelection.kitIds, appDirectory);
+        fs.writeFileSync(path.join(appDirectory, "portable-layout.json"), `${JSON.stringify({
+          format: "grabenplaner-portable-layout",
+          version: 1,
+          createdAt: new Date().toISOString(),
+          installationName,
+          hideProgramFolder: body.hideProgramFolder !== false,
+          protectProgramFiles: body.protectProgramFiles !== false,
+          enabledFeatures,
+        }, null, 2)}\n`, "utf8");
+        populateUsbProfileDatabase({
+          sourceDatabase: db,
+          targetDatabasePath: targetDatabase,
+          selectedLocationIds: selectedLocations,
+          employees,
+          creator,
+          primaryBranding,
+          enabledFeatures,
+          permissionCatalog: [...delegablePortalPermissions],
+        });
+      },
+      generateFirstStepsPdf: async () => renderFirstStepsPdf(firstStepsSpec),
+    });
+
+    const result = await provisionUsbStick({
+      stage,
+      selectionToken: body.selectionToken,
+      tokenSecret: usbProvisioningTokenSecret,
+      confirmation: body.confirmation,
+      candidateOptions: usbCandidateOptions(),
+      consumeToken: consumeUsbTokenOnce,
+      now: selectionValidatedAt,
+      hideApp: async (appDirectory) => {
+        if (body.protectProgramFiles !== false) protectUsbProgramFiles(appDirectory);
+        if (body.hideProgramFolder !== false) await hidePortableAppDirectory(appDirectory);
+      },
+    });
+    auditPortal(creator.personnelNumber, "usb.provision", "volume", result.driveLetter, JSON.stringify({
+      installationName,
+      employees: employees.length + 1,
+      locations: selectedLocations,
+      enabledFeatures,
+      primaryBrandingKitId: brandingSelection.primaryKitId,
+    }));
+    response.json({
+      ...result,
+      installationName,
+      creator: creator.personnelNumber,
+      employeeCount: employees.length + 1,
+      locationCount: selectedLocations.length,
+      brandingCount: brandingSelection.kitIds.length,
+      enabledFeatures,
+      manifestSha256: sha256(JSON.stringify(stage.manifest)),
+    });
+  } catch (error) {
+    throw normalizeUsbProvisioningError(error);
+  } finally {
+    usbProvisioningActive = false;
+    if (stage?.stageRoot) fs.rmSync(stage.stageRoot, { recursive: true, force: true });
+  }
+});
+
 app.get("/api/settings", (request, response) => {
   if (getPortalStatus().portalEnabled && !request.portalSession?.permissions?.includes("settings:write")) {
     throw httpError(403, "Für die Grundeinstellungen fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
@@ -14926,6 +15614,8 @@ function startServer() {
         const now = Date.now();
         loginRateLimits.prune(now);
         loginBrandingRateLimits.prune(now);
+        usbCreatorAuthRateLimits.prune(now);
+        usbCreatorGlobalRateLimits.prune(now);
       }, 5 * 60 * 1000);
       rateLimitCleanupInterval.unref();
     }
@@ -15030,5 +15720,10 @@ module.exports = {
   parseProtectedJson,
   purgeExpiredSicknessData,
   runSicknessEscalationSweep,
+  installationFeatures,
+  installationFeaturesForApiPath,
+  validateUsbFeatures,
+  validateUsbEmployees,
+  usbProvisioningAvailability,
   releaseInstanceLockForTests,
 };

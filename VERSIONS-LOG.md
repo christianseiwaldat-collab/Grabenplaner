@@ -1,5 +1,16 @@
 # Grabenplaner Versions-Log
 
+## v0.61.1 Beta · Serviceupdate
+
+- Neuer lokaler Windows-Assistent zum Erstellen vorkonfigurierter Grabenplaner-USB-Sticks ohne UAC-Anforderung oder Rechteumgehung.
+- Der Assistent übernimmt ausgewählte Standorte, Teammitglieder, Rollen und Zusatzrechte in eine frische Datenbank; Dienste, Urlaube, Zeitbuchungen, AUMs, Sitzungen und Auditverlauf werden nicht kopiert.
+- Der Ersteller wird verpflichtend als Admin mit seinem bestehenden Passwort-Hash angelegt. Ein Developer-Zugang wird niemals auf den Zielstick übertragen.
+- Funktionsprofile blenden nicht freigeschaltete Bereiche aus und sperren die zugehörigen APIs zusätzlich serverseitig.
+- Haupt-Branding, mehrere zusätzliche Branding-Kits und eine anpassbare, automatisch gebrandete „Erste Schritte“-PDF können vorbereitet werden.
+- Das Ziel erhält ein aufgeräumtes Hauptverzeichnis mit Startdatei, Anleitung, Backups und PDF-Exporten; Programmdateien liegen optional versteckt und gegen versehentliche Änderungen geschützt im Unterordner `app`.
+- Vor der Formatierung werden Laufwerksidentität, Kapazität und exakte Bestätigung geprüft. Nach der NTFS-Formatierung wird der Datenträger erneut identifiziert und die vollständige Installation abschließend per SHA-256 verifiziert.
+- Branding-ZIP-Importe sind zusätzlich gegen übergroße oder verschachtelte Archive abgesichert; die Ersteller-Freigabe besitzt eine lokale Fehlversuchsbegrenzung.
+
 ## v0.61 Beta
 
 - Der HTTPS-Serverbetrieb ist für einen IT-verwalteten produktiven Windows-Einzelserver mit Caddy als Reverse-Proxy und WinSW-Diensten ausgearbeitet.
