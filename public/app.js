@@ -54,6 +54,15 @@ const state = {
   editingGlobalBlockId: null,
   editingVacationGroupId: null,
   editingRequestBlackoutId: null,
+  usbProvisioning: {
+    metadata: null,
+    step: "profile",
+    selectedDriveToken: "",
+    creatorEmployeeNumber: "",
+    selectedEmployees: new Set(),
+    employeeDrafts: [],
+    employeeOverrides: new Map(),
+  },
 };
 
 function applyDeviceMode() {
@@ -122,6 +131,7 @@ const elements = Object.fromEntries(
     "timeDayReviewPanel", "timeReviewDate", "timeReviewFilter", "loadTimeDayReviewButton", "timeDayReviewSummary", "timeDayReviewList", "timeDayReviewModal", "timeDayReviewForm", "timeDayReviewTitle", "timeDayReviewDetail", "timeDayReviewEmployee", "timeDayReviewWorkDate", "timeDayReviewMetrics", "timeDayReviewIssues", "timeDayReviewNote", "timeDayReviewMessage", "removeTimeDayReviewButton",
     "timeSummaryFrom", "timeSummaryTo", "loadTimeSummaryButton", "timeSummaryList", "timeCorrectionPanel", "timeCorrectionCount", "timeCorrectionRequestList",
     "brandLogo", "footerBrandLogo", "adminContactLink", "brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt", "brandingPreviewLogo", "brandingPreviewTitle", "brandingPreviewCompany", "brandingKitLibrary", "brandingAssignmentList", "exportBrandingButton", "brandingImportFile", "importBrandingButton", "toast",
+    "usbProvisioningTab", "usbProvisioningSettings", "usbProvisioningAvailabilityCard", "usbProvisioningAvailability", "usbProvisioningAvailabilityBadge", "usbProvisioningAvailabilityTitle", "usbProvisioningAvailabilityText", "usbProvisioningWizard", "usbWizardDraftStatus", "usbInstallationProfile", "usbInstallationName", "usbModuleSelection", "usbPrimaryBranding", "usbPrimaryBrandingPreview", "usbAdditionalBrandings", "usbBrandingImportFile", "usbImportBrandingButton", "usbCreatorSummary", "usbCreatorEmployee", "usbCreatorPassword", "usbLocationSelection", "usbAddLocationButton", "usbEmployeeSearch", "usbAddEmployeeButton", "usbEmployeeSelection", "usbGuideTitle", "usbGuideIntroduction", "usbGuideNotes", "usbGuideContact", "usbGuideIncludeStartup", "usbGuideIncludeModules", "usbGuideIncludePdf", "usbGuideIncludeBackup", "usbGuidePreviewButton", "usbGuidePreviewFrame", "usbRefreshDrivesButton", "usbDriveList", "usbHideProgramFolder", "usbProtectProgramFiles", "usbProvisioningSummary", "usbFormatConfirmation", "usbFormatConfirmationHint", "usbProvisioningStartButton", "usbWizardActions", "usbWizardPreviousButton", "usbWizardStepHint", "usbWizardNextButton", "usbProvisioningProgressPanel", "usbProvisioningProgressTitle", "usbProvisioningProgressPercent", "usbProvisioningProgressTrack", "usbProvisioningProgressText", "usbProvisioningProgressSteps", "usbProvisioningResultPanel", "usbProvisioningResultText", "usbProvisioningResultDetails", "usbEmployeeDraftModal", "usbEmployeeDraftForm", "usbDraftPersonnelNumber", "usbDraftFullName", "usbDraftNickname", "usbDraftColor", "usbDraftContractedHours", "usbDraftPosition", "usbDraftLocation", "usbDraftDepartment", "usbDraftRole", "usbDraftPassword",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
 );
 
@@ -457,6 +467,7 @@ function renderSidebarSession() {
 
 function applyRoleVisibility() {
   const permissions = state.portalSession?.user?.permissions || [];
+  const features = state.portalStatus?.installationFeatures || {};
   const lanActive = state.portalStatus?.portalEnabled === true;
   const serverActive = state.portalStatus?.operationMode === "server";
   const role = state.portalSession?.user?.role || "admin";
@@ -477,8 +488,12 @@ function applyRoleVisibility() {
   const wifiSettingsAccess = !lanActive || permissions.includes("wifi:settings");
   const greetingSettingsAccess = !lanActive || (globalAdministration && permissions.includes("hr:settings"));
   const backupImportAccess = !lanActive || ["developer", "it_admin"].includes(role);
+  const usbProvisioningAccess = state.portalStatus?.usbProvisioning?.available === true
+    && (!lanActive || (["developer", "it_admin", "admin"].includes(role) && permissions.includes("usb:provision")));
   document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
-  elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
+  document.querySelectorAll('[data-view="vacations"]').forEach((button) => button.classList.toggle("hidden", features.vacation === false));
+  elements.requestsNavButton?.classList.toggle("hidden", features.requests === false);
+  elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess || features.timeTracking === false);
   const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess || operationModeAccess || wifiSettingsAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
@@ -486,14 +501,17 @@ function applyRoleVisibility() {
     branding: brandingAccess,
     pdf: settingsAccess,
     personnel: settingsAccess || positionWriteAccess,
-    wifiAutomation: wifiSettingsAccess,
-    access: scopeAccess || permissions.includes("users:write") || globalAdministration,
+    wifiAutomation: wifiSettingsAccess && features.wifiSuggestions !== false && features.timeTracking !== false,
+    access: (scopeAccess || permissions.includes("users:write") || globalAdministration)
+      && (features.employeePortal !== false || features.requests !== false || features.sicknessAmu !== false),
     rights: rightsAccess,
     backup: !lanActive || permissions.some((permission) => ["backup:write", "update:write", "system:write"].includes(permission)),
+    usbProvisioning: usbProvisioningAccess,
   };
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("hidden", !settingsTabs[button.dataset.settingsTab]));
   const wifiTabActive = document.querySelector('[data-settings-tab="wifiAutomation"]')?.classList.contains("active");
-  elements.saveSettingsButton?.classList.toggle("hidden", !settingsAccess || wifiTabActive);
+  const usbTabActive = document.querySelector('[data-settings-tab="usbProvisioning"]')?.classList.contains("active");
+  elements.saveSettingsButton?.classList.toggle("hidden", !settingsAccess || wifiTabActive || usbTabActive);
   elements.saveOperationModeButton?.classList.toggle("hidden", !operationModeAccess || settingsAccess);
   const privilegedServerRole = ["developer", "it_admin", "admin"].includes(role);
   const canExit = serverActive
@@ -513,7 +531,8 @@ function applyRoleVisibility() {
   elements.employeeTimeConfirmationLevelField?.classList.toggle("hidden", !wifiSettingsAccess);
   elements.workflowSettingsCard?.classList.toggle("hidden", lanActive && !permissions.includes("hr:settings"));
   elements.amuSettingsCard?.classList.toggle("hidden", lanActive && !permissions.includes("hr:settings"));
-  elements.greetingSettingsCard?.classList.toggle("hidden", !greetingSettingsAccess);
+  if (features.sicknessAmu === false) elements.amuSettingsCard?.classList.add("hidden");
+  elements.greetingSettingsCard?.classList.toggle("hidden", !greetingSettingsAccess || features.employeePortal === false);
   document.querySelector("#backupImportCard")?.classList.toggle("hidden", !backupImportAccess);
   elements.delegationSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.generalSettings?.querySelectorAll(".settings-card:not(.operation-mode-card)").forEach((card) => card.classList.toggle("hidden", !settingsAccess));
@@ -756,10 +775,13 @@ async function loadAll() {
     setDefaultContext(state.locations);
     const scheduleContext = contextQuery(true);
     const vacationContext = contextQuery(state.portalSession?.user?.role === "department_manager");
+    const vacationEnabled = portalStatus?.installationFeatures?.vacation !== false;
     const [schedule, employees, vacationData, brandingKits] = await Promise.all([
       api(`/api/schedule?week=${state.weekStart}${scheduleContext}`),
       api("/api/employees"),
-      api(`/api/vacations?year=${state.vacationYear}${vacationContext}`),
+      vacationEnabled
+        ? api(`/api/vacations?year=${state.vacationYear}${vacationContext}`)
+        : Promise.resolve({ year: state.vacationYear, vacations: [], entitlements: [], publicHolidays: [] }),
       api(`/api/branding/kits?locationId=${encodeURIComponent(state.locationId)}`).catch(() => state.brandingKits || []),
     ]);
     state.data = schedule;
@@ -772,8 +794,10 @@ async function loadAll() {
     state.departmentId = schedule.context?.departmentId ? String(schedule.context.departmentId) : "";
     state.vacationYear = vacationData.year;
     render();
-    loadManagerVacationRequests();
-    loadRequestBlackouts();
+    if (portalStatus?.installationFeatures?.requests !== false) {
+      loadManagerVacationRequests();
+      loadRequestBlackouts();
+    }
   } catch (error) {
     showToast(error.message, true);
   }
@@ -1358,7 +1382,8 @@ function renderEmployees() {
   const employees = showInactive ? state.allEmployees : state.allEmployees.filter((employee) => employee.active);
   const canEditFull = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("employees:write");
   const canEditDisplay = canEditFull || state.portalSession?.user?.permissions?.includes("employees:display:write");
-  const canReadPersonnelRecord = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:metadata:read");
+  const canReadPersonnelRecord = state.portalStatus?.installationFeatures?.sicknessAmu !== false
+    && (!state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:metadata:read"));
   elements.employeeTableBody.innerHTML = employees.map((employee) => `
     <tr>
       <td><span class="employee-color" style="background:${employee.color}"></span></td>
@@ -2008,7 +2033,12 @@ async function saveApprovalDelegation(event) {
 async function loadManagerVacationRequests() {
   if (!elements.managerVacationRequestList) return;
   try {
-    const [result, workflow, amu] = await Promise.all([api("/api/portal/v1/absence-requests"), api("/api/portal/v1/workflow-settings"), api("/api/portal/v1/amu-reports")]);
+    const sicknessEnabled = state.portalStatus?.installationFeatures?.sicknessAmu !== false;
+    const [result, workflow, amu] = await Promise.all([
+      api("/api/portal/v1/absence-requests"),
+      api("/api/portal/v1/workflow-settings"),
+      sicknessEnabled ? api("/api/portal/v1/amu-reports") : Promise.resolve({ reports: [], pendingCount: 0, canOpenFiles: false }),
+    ]);
     state.absenceRequests = result.requests || [];
     state.amuReports = amu.reports || [];
     state.amuCanOpenFiles = amu.canOpenFiles === true;
@@ -2087,8 +2117,8 @@ function renderTimePresence() {
     return;
   }
   const labels = { working: "Anwesend", paused: "Pause", off: "Abwesend", attention: "Bitte prüfen" };
-  const canReadPersonnelRecord = !state.portalStatus?.portalEnabled
-    || state.portalSession?.user?.permissions?.includes("amu:metadata:read");
+  const canReadPersonnelRecord = state.portalStatus?.installationFeatures?.sicknessAmu !== false
+    && (!state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:metadata:read"));
   const canReviewTime = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("time:review");
   elements.timePresenceList.innerHTML = employees.length ? employees.map((employee) => {
@@ -2459,16 +2489,20 @@ const requestStatusLabels = {
 
 function renderRequestNavigation() {
   const counts = state.requestCounts;
+  const sicknessEnabled = state.portalStatus?.installationFeatures?.sicknessAmu !== false;
+  document.querySelectorAll('[data-request-kind-tab="amu"]').forEach((button) => button.classList.toggle("hidden", !sicknessEnabled));
+  if (!sicknessEnabled && state.requestKindTab === "amu") state.requestKindTab = "vacation";
+  document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
   elements.requestsNavCount.textContent = counts.total;
   elements.requestsNavCount.classList.toggle("hidden", !counts.total);
   elements.requestsNavButton.classList.toggle("attention", counts.total > 0);
   elements.vacationRequestCount.textContent = counts.vacation;
   elements.timeOffRequestCount.textContent = counts.timeOff;
-  elements.amuRequestCount.textContent = counts.amu || 0;
+  elements.amuRequestCount.textContent = sicknessEnabled ? counts.amu || 0 : 0;
   elements.requestWorkflowSummary.innerHTML = `
     <article><span>Urlaub offen</span><strong>${counts.vacation}</strong></article>
     <article><span>ZA offen</span><strong>${counts.timeOff}</strong></article>
-    <article><span>AUM neu</span><strong>${counts.amu || 0}</strong></article>
+    ${sicknessEnabled ? `<article><span>AUM neu</span><strong>${counts.amu || 0}</strong></article>` : ""}
     <article><span>Urlaubs-Zweitfreigabe</span><strong>${state.workflowSettings?.vacationHrApprovalRequired ? "Aktiv" : "Nicht aktiv"}</strong>${state.workflowSettings?.canChange ? `<button type="button" class="text-action" data-toggle-hr-workflow>${state.workflowSettings.vacationHrApprovalRequired ? "Deaktivieren" : "Aktivieren"}</button>` : ""}</article>`;
 }
 
@@ -2821,6 +2855,10 @@ async function saveBrandingAssignments() {
 }
 
 function setView(view) {
+  const features = state.portalStatus?.installationFeatures || {};
+  if ((view === "vacations" && features.vacation === false)
+    || (view === "requests" && features.requests === false)
+    || (view === "timeTracking" && features.timeTracking === false)) view = "planning";
   state.currentView = view;
   if (timePresenceRefreshTimer) clearInterval(timePresenceRefreshTimer);
   timePresenceRefreshTimer = null;
@@ -2867,9 +2905,10 @@ function setSettingsTab(tab) {
   elements.accessSettings.classList.toggle("active", tab === "access");
   elements.rightsSettings?.classList.toggle("active", tab === "rights");
   elements.backupSettings.classList.toggle("active", tab === "backup");
+  elements.usbProvisioningSettings?.classList.toggle("active", tab === "usbProvisioning");
   const canSaveGeneralSettings = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("settings:write");
-  elements.saveSettingsButton?.classList.toggle("hidden", tab === "wifiAutomation" || !canSaveGeneralSettings);
+  elements.saveSettingsButton?.classList.toggle("hidden", ["wifiAutomation", "usbProvisioning"].includes(tab) || !canSaveGeneralSettings);
   if (tab === "access") {
     loadPortalUsers();
     loadAmuSettings();
@@ -2878,6 +2917,7 @@ function setSettingsTab(tab) {
   if (tab === "rights") loadRightsManagement();
   if (tab === "wifiAutomation") loadWifiAutomationSettings();
   if (tab === "branding") Promise.all([loadManagementBrandingPreference(), loadBrandingAssignments()]).then(() => renderSettings()).catch((error) => showToast(error.message, true));
+  if (tab === "usbProvisioning") loadUsbProvisioning().catch((error) => showToast(error.message, true));
 }
 
 function setPersonnelTab(tab) {
@@ -4022,6 +4062,488 @@ async function deleteInstalledBrandingKit(kitId, kitName) {
   }
 }
 
+const usbWizardSteps = ["profile", "branding", "team", "guide", "drive"];
+const usbProfileFeatures = {
+  full: ["planning", "vacations", "absence_requests", "employee_portal", "time_tracking", "sickness_amu", "wifi_time_suggestions"],
+  "planning-vacation": ["planning", "vacations", "absence_requests"],
+};
+
+function usbFeatureInputs() {
+  return [...elements.usbModuleSelection.querySelectorAll('input[type="checkbox"]')];
+}
+
+function applyUsbProfile(profile = elements.usbInstallationProfile.value) {
+  const selected = new Set(usbProfileFeatures[profile] || []);
+  if (profile !== "custom") {
+    for (const input of usbFeatureInputs()) input.checked = input.disabled || selected.has(input.value);
+  }
+  syncUsbFeatureDependencies();
+}
+
+function syncUsbFeatureDependencies() {
+  const values = Object.fromEntries(usbFeatureInputs().map((input) => [input.value, input]));
+  if (values.wifi_time_suggestions?.checked) values.time_tracking.checked = true;
+  if (values.sickness_amu?.checked) values.absence_requests.checked = true;
+  if (values.time_tracking?.checked || values.sickness_amu?.checked || values.wifi_time_suggestions?.checked) values.employee_portal.checked = true;
+  updateUsbSummary();
+}
+
+function selectedUsbFeatures() {
+  return usbFeatureInputs().filter((input) => input.checked).map((input) => input.value);
+}
+
+function selectedUsbLocationIds() {
+  return [...elements.usbLocationSelection.querySelectorAll('[data-usb-location]:checked')].map((input) => input.value);
+}
+
+function currentUsbDrive() {
+  return (state.usbProvisioning.metadata?.drives || []).find((drive) => drive.token === state.usbProvisioning.selectedDriveToken) || null;
+}
+
+function formatUsbSize(bytes) {
+  const value = Number(bytes || 0);
+  if (value < 1024 ** 3) return `${Math.max(0, value / 1024 ** 2).toFixed(0)} MB`;
+  return `${(value / 1024 ** 3).toFixed(value >= 10 * 1024 ** 3 ? 0 : 1)} GB`;
+}
+
+function setUsbWizardStep(step) {
+  if (!usbWizardSteps.includes(step)) return;
+  state.usbProvisioning.step = step;
+  const index = usbWizardSteps.indexOf(step);
+  document.querySelectorAll("[data-usb-wizard-step]").forEach((button) => {
+    const active = button.dataset.usbWizardStep === step;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-current", active ? "step" : "false");
+  });
+  document.querySelectorAll("[data-usb-wizard-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.usbWizardPanel === step));
+  elements.usbWizardPreviousButton.disabled = index === 0;
+  elements.usbWizardNextButton.classList.toggle("hidden", index === usbWizardSteps.length - 1);
+  elements.usbWizardStepHint.textContent = `Schritt ${index + 1} von ${usbWizardSteps.length} · ${document.querySelector(`[data-usb-wizard-step="${step}"] strong`)?.textContent || ""}`;
+  if (step === "drive") refreshUsbDrives().catch((error) => showToast(error.message, true));
+  updateUsbSummary();
+}
+
+function renderUsbAvailability(metadata) {
+  const available = metadata?.available === true;
+  elements.usbProvisioningAvailabilityBadge.textContent = available ? "Verfügbar" : "Nicht verfügbar";
+  elements.usbProvisioningAvailabilityBadge.classList.toggle("inactive", !available);
+  elements.usbProvisioningAvailabilityTitle.textContent = available ? "Lokaler Windows-Assistent ist bereit" : "USB-Stick-Erstellung ist hier gesperrt";
+  elements.usbProvisioningAvailabilityText.textContent = available
+    ? "Formatierung und Installation laufen ausschließlich auf diesem Windows-PC und mit den aktuellen Benutzerrechten."
+    : (metadata?.reason || "Der Assistent ist nur direkt am lokalen Windows-PC verfügbar.");
+  elements.usbProvisioningWizard.classList.toggle("hidden", !available);
+}
+
+function renderUsbCreators() {
+  const creators = state.usbProvisioning.metadata?.creators || [];
+  const previous = elements.usbCreatorEmployee.value;
+  const currentEmployeeNumber = state.portalSession?.user?.employeeNumber || "";
+  elements.usbCreatorEmployee.innerHTML = creators.map((creator) => `<option value="${escapeHtml(creator.employeeNumber)}">${escapeHtml(creator.employeeNumber)} · ${escapeHtml(creator.fullName)} · ${escapeHtml(creator.role)}</option>`).join("");
+  const selected = creators.find((creator) => creator.employeeNumber === previous)
+    || creators.find((creator) => creator.employeeNumber === currentEmployeeNumber)
+    || creators[0];
+  if (!selected) {
+    elements.usbCreatorSummary.innerHTML = '<span class="usb-creator-mark">!</span><div><strong>Kein geeignetes Erstellerkonto</strong><small>Richte zuerst einen aktiven Developer-, IT-Admin- oder Admin-Zugang mit Passwort ein.</small></div><span class="status-badge inactive">Fehlt</span>';
+    return;
+  }
+  elements.usbCreatorEmployee.value = selected.employeeNumber;
+  state.usbProvisioning.creatorEmployeeNumber = selected.employeeNumber;
+  state.usbProvisioning.selectedEmployees.add(selected.employeeNumber);
+  elements.usbCreatorSummary.innerHTML = `<span class="usb-creator-mark">A</span><div><strong>${escapeHtml(selected.employeeNumber)} · ${escapeHtml(selected.fullName)}</strong><small>${escapeHtml(selected.positionName || selected.role)} · wird auf dem Zielstick als Admin angelegt</small></div><span class="status-badge">Pflicht</span>`;
+}
+
+function renderUsbBrandings() {
+  const kits = state.brandingKits || [];
+  const previous = elements.usbPrimaryBranding.value;
+  elements.usbPrimaryBranding.innerHTML = kits.map((kit) => `<option value="${escapeHtml(kit.id)}">${escapeHtml(kit.name)}</option>`).join("");
+  const preferred = kits.some((kit) => kit.id === previous) ? previous
+    : (state.brandingPreference?.kitId && kits.some((kit) => kit.id === state.brandingPreference.kitId)
+      ? state.brandingPreference.kitId : (kits.find((kit) => kit.active)?.id || kits[0]?.id || "neutral"));
+  elements.usbPrimaryBranding.value = preferred;
+  const primary = kits.find((kit) => kit.id === preferred);
+  elements.usbPrimaryBrandingPreview.innerHTML = primary
+    ? `<img src="${escapeHtml(primary.branding.logoUrl)}" alt="" /><strong>${escapeHtml(primary.name)}</strong><small>${escapeHtml(primary.branding.companyName || "Grabenplaner")}</small>`
+    : '<span class="status-badge inactive">Fehlt</span><strong>Kein Branding ausgewählt</strong>';
+  const selectedExtras = new Set([...elements.usbAdditionalBrandings.querySelectorAll("input:checked")].map((input) => input.value));
+  elements.usbAdditionalBrandings.innerHTML = kits.filter((kit) => kit.id !== "neutral").map((kit) => {
+    const forced = kit.id === preferred;
+    return `<label><input type="checkbox" value="${escapeHtml(kit.id)}" ${forced || selectedExtras.has(kit.id) ? "checked" : ""} ${forced ? "disabled" : ""} /><span><strong>${escapeHtml(kit.name)}</strong><small>${forced ? "Haupt-Branding · wird immer mitinstalliert" : "Zusätzlich mitinstallieren"}</small></span></label>`;
+  }).join("") || '<p class="settings-note">Neben dem neutralen Standard sind noch keine Branding-Kits installiert.</p>';
+}
+
+function renderUsbLocations() {
+  const selectedBefore = new Set([...elements.usbLocationSelection.querySelectorAll('[data-usb-location]:checked')].map((input) => input.value));
+  const locations = (state.locations || []).filter((location) => location.active);
+  const creatorLocationId = selectedUsbCreator()?.homeLocationId || "";
+  elements.usbLocationSelection.innerHTML = locations.map((location) => {
+    const required = location.id === creatorLocationId;
+    const selected = required || (selectedBefore.size ? selectedBefore.has(location.id) : true);
+    const departmentText = (location.departments || []).filter((department) => department.active).map((department) => department.name).join(", ") || "Keine Abteilung";
+    return `<label class="usb-selection-row"><input data-usb-location type="checkbox" value="${escapeHtml(location.id)}" ${selected ? "checked" : ""} ${required ? "disabled" : ""} /><span><strong>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</strong><small>${escapeHtml(departmentText)}</small></span><span class="status-badge ${selected ? "" : "inactive"}">${required ? "Ersteller" : selected ? "Dabei" : "Nicht dabei"}</span></label>`;
+  }).join("") || '<p class="settings-note">Es ist kein aktiver Standort vorhanden.</p>';
+}
+
+function synchronizeUsbTeamWithLocations() {
+  const selectedLocations = new Set(selectedUsbLocationIds());
+  const creatorNumber = elements.usbCreatorEmployee.value;
+  for (const employee of state.allEmployees || []) {
+    if (employee.personnel_number !== creatorNumber && !selectedLocations.has(String(employee.home_location_id || ""))) {
+      state.usbProvisioning.selectedEmployees.delete(employee.personnel_number);
+    }
+  }
+  for (const draft of state.usbProvisioning.employeeDrafts) {
+    if (!selectedLocations.has(String(draft.homeLocationId || ""))) state.usbProvisioning.selectedEmployees.delete(draft.personnelNumber);
+  }
+  state.usbProvisioning.selectedEmployees.add(creatorNumber);
+  renderUsbEmployees();
+}
+
+function selectedUsbCreator() {
+  const creators = state.usbProvisioning.metadata?.creators || [];
+  return creators.find((creator) => creator.employeeNumber === elements.usbCreatorEmployee.value) || creators[0] || null;
+}
+
+function usbRoleOptions(selectedRole, { departmentId = null } = {}) {
+  const assignable = new Set(selectedUsbCreator()?.assignableRoleIds || ["employee"]);
+  const allowed = (state.portalRoles || []).filter((role) => assignable.has(role.id)
+    && (role.id !== "department_manager" || Number(departmentId || 0) > 0));
+  const effectiveRole = allowed.some((role) => role.id === selectedRole) ? selectedRole : "employee";
+  return allowed.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === effectiveRole ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("");
+}
+
+function usbPermissionOptions(selected = []) {
+  const values = new Set(selected);
+  return (state.portalPermissionCatalog || []).map((permission) => `<label><input type="checkbox" value="${escapeHtml(permission.id)}" ${values.has(permission.id) ? "checked" : ""} /><span>${escapeHtml(permission.label)}</span></label>`).join("");
+}
+
+function captureUsbEmployeeRows() {
+  for (const row of elements.usbEmployeeSelection.querySelectorAll("[data-usb-employee]")) {
+    const number = row.dataset.usbEmployee;
+    const selected = Boolean(row.querySelector("[data-usb-employee-selected]")?.checked);
+    if (selected) state.usbProvisioning.selectedEmployees.add(number);
+    else state.usbProvisioning.selectedEmployees.delete(number);
+    state.usbProvisioning.employeeOverrides.set(number, {
+      role: row.querySelector("[data-usb-role]")?.value || "employee",
+      startPassword: row.querySelector("[data-usb-start-password]")?.value || "",
+      additionalPermissions: [...row.querySelectorAll(".usb-rights-grid input:checked")].map((input) => input.value),
+    });
+  }
+}
+
+function renderUsbEmployees() {
+  const creatorNumber = elements.usbCreatorEmployee.value;
+  const selectedLocations = new Set(selectedUsbLocationIds());
+  const query = elements.usbEmployeeSearch.value.trim().toLocaleLowerCase("de");
+  const existing = (state.allEmployees || []).filter((employee) => employee.active
+    && (employee.personnel_number === creatorNumber || selectedLocations.has(String(employee.home_location_id || "")))
+    && (!query || `${employee.personnel_number} ${employee.full_name} ${employee.nickname}`.toLocaleLowerCase("de").includes(query)));
+  const rows = existing.map((employee) => {
+    const number = employee.personnel_number;
+    const creator = number === creatorNumber;
+    const selected = creator || state.usbProvisioning.selectedEmployees.has(number);
+    const override = state.usbProvisioning.employeeOverrides.get(number) || {};
+    const role = creator ? "admin" : (override.role || employee.portal_access?.role || "employee");
+    return `<article class="usb-team-row" data-usb-employee="${escapeHtml(number)}" data-usb-source="${escapeHtml(number)}">
+      <label class="usb-team-identity"><input data-usb-employee-selected type="checkbox" ${selected ? "checked" : ""} ${creator ? "disabled" : ""} /><span><strong>${escapeHtml(number)} · ${escapeHtml(employee.full_name)}</strong><small>${escapeHtml(employee.nickname)} · ${escapeHtml(employee.home_location_name || employee.home_location_id || "")}</small></span></label>
+      <select data-usb-role ${creator ? "disabled" : ""}>${creator ? '<option value="admin" selected>Admin</option>' : usbRoleOptions(role, { departmentId: employee.preferred_department_id })}</select>
+      <input data-usb-start-password type="password" minlength="6" autocomplete="new-password" value="${escapeHtml(override.startPassword || "")}" placeholder="Startpasswort optional" ${creator ? "disabled" : ""} />
+      ${creator ? '<span class="status-badge">Admin · Pflicht</span>' : `<details><summary>Zusatzrechte</summary><div class="usb-rights-grid">${usbPermissionOptions(override.additionalPermissions || employee.portal_access?.grantedPermissions || [])}</div></details>`}
+    </article>`;
+  });
+  const draftRows = state.usbProvisioning.employeeDrafts.filter((draft) => selectedLocations.has(String(draft.homeLocationId || ""))
+    && (!query || `${draft.personnelNumber} ${draft.fullName} ${draft.nickname}`.toLocaleLowerCase("de").includes(query))).map((draft) => {
+    const override = state.usbProvisioning.employeeOverrides.get(draft.personnelNumber) || {};
+    const selected = state.usbProvisioning.selectedEmployees.has(draft.personnelNumber);
+    return `<article class="usb-team-row" data-usb-employee="${escapeHtml(draft.personnelNumber)}" data-usb-draft="1">
+    <label class="usb-team-identity"><input data-usb-employee-selected type="checkbox" ${selected ? "checked" : ""} /><span><strong>${escapeHtml(draft.personnelNumber)} · ${escapeHtml(draft.fullName)}</strong><small>${escapeHtml(draft.nickname)} · nur Zielstick</small></span></label>
+    <select data-usb-role>${usbRoleOptions(override.role || draft.role, { departmentId: draft.preferredDepartmentId })}</select>
+    <input data-usb-start-password type="password" minlength="6" autocomplete="new-password" value="${escapeHtml(override.startPassword ?? draft.startPassword ?? "")}" placeholder="Startpasswort optional" />
+    <div class="usb-draft-actions"><details><summary>Zusatzrechte</summary><div class="usb-rights-grid">${usbPermissionOptions(override.additionalPermissions || draft.additionalPermissions || [])}</div></details><button type="button" class="text-action" data-usb-edit-draft="${escapeHtml(draft.personnelNumber)}">Bearbeiten</button><button type="button" class="text-action danger-text" data-usb-remove-draft="${escapeHtml(draft.personnelNumber)}">Entfernen</button></div>
+  </article>`;
+  });
+  elements.usbEmployeeSelection.innerHTML = [...rows, ...draftRows].join("") || '<p class="settings-note">Keine Teammitglieder gefunden.</p>';
+}
+
+function renderUsbDrives() {
+  const drives = state.usbProvisioning.metadata?.drives || [];
+  elements.usbDriveList.innerHTML = drives.map((drive) => `<label class="usb-drive-option ${drive.token === state.usbProvisioning.selectedDriveToken ? "selected" : ""}"><input type="radio" name="usbDrive" value="${escapeHtml(drive.token)}" ${drive.token === state.usbProvisioning.selectedDriveToken ? "checked" : ""} /><span><strong>${escapeHtml(drive.driveLetter)} · ${escapeHtml(drive.model)}</strong><small>${escapeHtml(drive.label || "Ohne Laufwerksname")} · ${escapeHtml(drive.fileSystem || "unbekannt")}</small></span><span>${formatUsbSize(drive.sizeBytes)}</span></label>`).join("")
+    || `<p class="settings-note">${escapeHtml(state.usbProvisioning.metadata?.driveWarning || "Kein geeigneter USB-Wechseldatenträger erkannt.")}</p>`;
+}
+
+function updateUsbSummary() {
+  if (!elements.usbProvisioningSummary) return;
+  const drive = currentUsbDrive();
+  const features = selectedUsbFeatures().length;
+  const locations = selectedUsbLocationIds().length;
+  const employees = state.usbProvisioning.selectedEmployees.size;
+  const branding = elements.usbPrimaryBranding.selectedOptions?.[0]?.textContent || "nicht gewählt";
+  elements.usbProvisioningSummary.innerHTML = `<p><strong>${escapeHtml(elements.usbInstallationName.value.trim() || "Neue Grabenplaner-Installation")}</strong></p><p>${features} Funktionsbereiche · ${locations} Standorte · ${employees} Teammitglieder · ${escapeHtml(branding)}${drive ? ` · Ziel ${escapeHtml(drive.driveLetter)}` : ""}</p>`;
+  const expected = drive?.expectedConfirmation || "FORMATIEREN X:";
+  elements.usbFormatConfirmation.placeholder = expected;
+  elements.usbFormatConfirmationHint.textContent = drive ? `Alle vorhandenen Daten auf ${drive.driveLetter} werden gelöscht. Exakt „${expected}“ eingeben.` : "Zuerst einen geeigneten USB-Stick auswählen.";
+  const valid = Boolean(drive && elements.usbCreatorEmployee.value && elements.usbCreatorPassword.value
+    && locations > 0 && elements.usbFormatConfirmation.value.trim() === expected);
+  elements.usbProvisioningStartButton.disabled = !valid;
+}
+
+async function loadUsbProvisioning() {
+  const firstLoad = !state.usbProvisioning.metadata;
+  const metadata = await api("/api/usb-provisioning/status");
+  state.usbProvisioning.metadata = metadata;
+  renderUsbAvailability(metadata);
+  if (!metadata.available) return;
+  elements.usbWizardDraftStatus.textContent = "Entwurf bereit";
+  elements.usbWizardDraftStatus.classList.remove("inactive");
+  renderUsbCreators();
+  renderUsbBrandings();
+  renderUsbLocations();
+  if (firstLoad) {
+    for (const employee of state.allEmployees.filter((item) => item.active)) state.usbProvisioning.selectedEmployees.add(employee.personnel_number);
+  }
+  renderUsbEmployees();
+  renderUsbDrives();
+  if (firstLoad) applyUsbProfile(elements.usbInstallationProfile.value);
+  updateUsbSummary();
+}
+
+async function refreshUsbDrives() {
+  if (!state.usbProvisioning.metadata?.available) return;
+  elements.usbRefreshDrivesButton.disabled = true;
+  try {
+    const result = await api("/api/usb-provisioning/drives");
+    state.usbProvisioning.metadata = { ...state.usbProvisioning.metadata, ...result };
+    if (!result.drives.some((drive) => drive.token === state.usbProvisioning.selectedDriveToken)) state.usbProvisioning.selectedDriveToken = "";
+    renderUsbDrives();
+    updateUsbSummary();
+  } finally { elements.usbRefreshDrivesButton.disabled = false; }
+}
+
+function usbFirstStepsPayload() {
+  return {
+    title: elements.usbGuideTitle.value,
+    introduction: elements.usbGuideIntroduction.value,
+    notes: elements.usbGuideNotes.value,
+    contact: elements.usbGuideContact.value,
+    includeStartup: elements.usbGuideIncludeStartup.checked,
+    includeModules: elements.usbGuideIncludeModules.checked,
+    includePdf: elements.usbGuideIncludePdf.checked,
+    includeBackup: elements.usbGuideIncludeBackup.checked,
+  };
+}
+
+function selectedUsbAdditionalBrandings() {
+  return [...elements.usbAdditionalBrandings.querySelectorAll("input:checked")].map((input) => input.value);
+}
+
+function usbBasePayload() {
+  return {
+    profile: elements.usbInstallationProfile.value,
+    enabledFeatures: selectedUsbFeatures(),
+    installationName: elements.usbInstallationName.value,
+    primaryBrandingKitId: elements.usbPrimaryBranding.value || "neutral",
+    additionalBrandingKitIds: selectedUsbAdditionalBrandings(),
+    selectedLocationIds: selectedUsbLocationIds(),
+    firstSteps: usbFirstStepsPayload(),
+  };
+}
+
+async function previewUsbFirstSteps() {
+  elements.usbGuidePreviewButton.disabled = true;
+  try {
+    const response = await fetch("/api/usb-provisioning/first-steps.pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Grabenplaner-USB-Action": "provisioning", ...csrfHeader() },
+      body: JSON.stringify(usbBasePayload()),
+    });
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({}));
+      throw new Error(detail.error || "Die PDF-Vorschau konnte nicht erstellt werden.");
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const old = elements.usbGuidePreviewFrame.dataset.objectUrl;
+    elements.usbGuidePreviewFrame.src = url;
+    elements.usbGuidePreviewFrame.dataset.objectUrl = url;
+    if (old) URL.revokeObjectURL(old);
+  } finally { elements.usbGuidePreviewButton.disabled = false; }
+}
+
+async function importUsbBranding() {
+  const file = elements.usbBrandingImportFile.files?.[0];
+  if (!file) throw new Error("Bitte zuerst ein Branding-Kit auswählen.");
+  const response = await fetch("/api/usb-provisioning/branding/import", {
+    method: "PUT",
+    headers: { "Content-Type": "application/octet-stream", "X-Branding-Filename": encodeURIComponent(file.name), "X-Grabenplaner-USB-Action": "provisioning", ...csrfHeader() },
+    body: await file.arrayBuffer(),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Branding-Kit konnte nicht importiert werden.");
+  state.brandingKits = result.kits || state.brandingKits;
+  renderUsbBrandings();
+  showToast("Branding-Kit wurde für die Auswahl installiert, ohne das aktuelle Erscheinungsbild zu ändern.");
+}
+
+function collectUsbEmployees() {
+  return [...elements.usbEmployeeSelection.querySelectorAll("[data-usb-employee]")].filter((row) => row.querySelector("[data-usb-employee-selected]")?.checked).map((row) => {
+    const personnelNumber = row.dataset.usbEmployee;
+    const draft = state.usbProvisioning.employeeDrafts.find((item) => item.personnelNumber === personnelNumber);
+    return {
+      ...(draft || {}),
+      personnelNumber,
+      sourcePersonnelNumber: row.dataset.usbSource || "",
+      role: row.querySelector("[data-usb-role]")?.value || "employee",
+      startPassword: row.querySelector("[data-usb-start-password]")?.value || "",
+      additionalPermissions: [...row.querySelectorAll(".usb-rights-grid input:checked")].map((input) => input.value),
+    };
+  });
+}
+
+function setUsbProgress(percent, title, text) {
+  elements.usbProvisioningProgressPanel.classList.remove("hidden");
+  elements.usbProvisioningProgressPercent.textContent = `${percent} %`;
+  elements.usbProvisioningProgressTrack.setAttribute("aria-valuenow", String(percent));
+  elements.usbProvisioningProgressTrack.querySelector("span").style.width = `${percent}%`;
+  elements.usbProvisioningProgressTitle.textContent = title;
+  elements.usbProvisioningProgressText.textContent = text;
+  elements.usbWizardDraftStatus.textContent = percent >= 100 ? "Erstellt" : percent > 0 ? "In Arbeit" : "Fehler";
+  elements.usbWizardDraftStatus.classList.toggle("inactive", percent <= 0);
+}
+
+async function createUsbStick() {
+  const drive = currentUsbDrive();
+  if (!drive) return;
+  if (!confirm(`${drive.driveLetter} (${drive.model}, ${formatUsbSize(drive.sizeBytes)}) wird vollständig formatiert. Alle vorhandenen Daten werden unwiderruflich gelöscht. Fortfahren?`)) return;
+  captureUsbEmployeeRows();
+  elements.usbEmployeeSearch.value = "";
+  renderUsbEmployees();
+  elements.usbProvisioningStartButton.disabled = true;
+  elements.usbWizardActions.classList.add("hidden");
+  elements.usbProvisioningResultPanel.classList.add("hidden");
+  elements.usbProvisioningProgressSteps.innerHTML = ["Paket", "Datenbank", "Branding", "PDF", "Formatierung", "Kopie", "Prüfung"].map((step) => `<span>${step}</span>`).join("");
+  setUsbProgress(12, "Installation wird vorbereitet", "Die Ziel-Datenbank, Brandings und Dokumentation werden vollständig vor der Formatierung erstellt.");
+  const progressTimer = setTimeout(() => setUsbProgress(42, "Vorbereitung geprüft", "Der USB-Stick wird nun von Windows formatiert und anschließend beschrieben."), 1800);
+  try {
+    const response = await fetch("/api/usb-provisioning/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Grabenplaner-USB-Action": "provisioning", ...csrfHeader() },
+      body: JSON.stringify({
+        ...usbBasePayload(),
+        creatorEmployeeNumber: elements.usbCreatorEmployee.value,
+        creatorPassword: elements.usbCreatorPassword.value,
+        employees: collectUsbEmployees(),
+        selectionToken: drive.token,
+        confirmation: elements.usbFormatConfirmation.value,
+        hideProgramFolder: elements.usbHideProgramFolder.checked,
+        protectProgramFiles: elements.usbProtectProgramFiles.checked,
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || "Der USB-Stick konnte nicht erstellt werden.");
+    setUsbProgress(100, "USB-Stick geprüft", "Alle vorbereiteten Dateien wurden kopiert und mit SHA-256 überprüft.");
+    elements.usbProvisioningResultPanel.classList.remove("hidden");
+    elements.usbProvisioningResultText.textContent = `${result.driveLetter} ist als Grabenplaner-Stick bereit. Das Erstellerkonto ${result.creator} wurde als Admin übernommen.`;
+    elements.usbProvisioningResultDetails.innerHTML = `<span>${result.employeeCount} Teammitglieder</span><span>${result.locationCount} Standorte</span><span>${result.brandingCount} Brandings</span><span>Prüfsumme ${escapeHtml(String(result.manifestSha256 || "").slice(0, 12))}…</span>`;
+    elements.usbCreatorPassword.value = "";
+    elements.usbFormatConfirmation.value = "";
+    state.usbProvisioning.selectedDriveToken = "";
+    showToast("Der USB-Stick wurde sicher erstellt und geprüft.");
+  } finally {
+    clearTimeout(progressTimer);
+    elements.usbWizardActions.classList.remove("hidden");
+    updateUsbSummary();
+  }
+}
+
+function openUsbEmployeeDraft(personnelNumber = "") {
+  elements.usbEmployeeDraftForm.reset();
+  const draft = state.usbProvisioning.employeeDrafts.find((item) => item.personnelNumber === personnelNumber) || null;
+  const draftOverride = draft ? (state.usbProvisioning.employeeOverrides.get(draft.personnelNumber) || {}) : {};
+  elements.usbEmployeeDraftForm.dataset.editNumber = draft?.personnelNumber || "";
+  elements.usbDraftPersonnelNumber.disabled = Boolean(draft);
+  elements.usbDraftColor.value = "#0b84c6";
+  elements.usbDraftContractedHours.value = "38.5";
+  elements.usbDraftPosition.innerHTML = state.positions.map((position) => `<option value="${escapeHtml(position.id)}">${escapeHtml(position.name)}</option>`).join("");
+  const selectedLocations = new Set(selectedUsbLocationIds());
+  elements.usbDraftLocation.innerHTML = (state.locations || []).filter((location) => location.active && selectedLocations.has(location.id)).map((location) => `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("");
+  if (draft) {
+    elements.usbDraftPersonnelNumber.value = draft.personnelNumber;
+    elements.usbDraftFullName.value = draft.fullName;
+    elements.usbDraftNickname.value = draft.nickname;
+    elements.usbDraftColor.value = draft.color;
+    elements.usbDraftContractedHours.value = String(draft.contractedHours);
+    elements.usbDraftPosition.value = draft.positionId;
+    elements.usbDraftLocation.value = draft.homeLocationId;
+    elements.usbDraftPassword.value = draftOverride.startPassword ?? draft.startPassword ?? "";
+  }
+  updateUsbDraftDepartments();
+  if (draft?.preferredDepartmentId) elements.usbDraftDepartment.value = String(draft.preferredDepartmentId);
+  updateUsbDraftRoleOptions(draftOverride.role || draft?.role || "employee");
+  elements.usbEmployeeDraftModal.showModal();
+}
+
+function updateUsbDraftDepartments() {
+  const departments = departmentsForLocation(elements.usbDraftLocation.value);
+  elements.usbDraftDepartment.innerHTML = `<option value="">Keine Abteilung</option>${departments.map((department) => `<option value="${department.id}">${escapeHtml(department.name)}</option>`).join("")}`;
+}
+
+function updateUsbDraftRoleOptions(preferredRole = elements.usbDraftRole.value || "employee") {
+  elements.usbDraftRole.innerHTML = usbRoleOptions(preferredRole, { departmentId: elements.usbDraftDepartment.value });
+}
+
+function saveUsbEmployeeDraft(event) {
+  event.preventDefault();
+  const editNumber = elements.usbEmployeeDraftForm.dataset.editNumber || "";
+  const draft = {
+    personnelNumber: elements.usbDraftPersonnelNumber.value.trim(),
+    fullName: elements.usbDraftFullName.value.trim(),
+    nickname: elements.usbDraftNickname.value.trim(),
+    color: elements.usbDraftColor.value,
+    contractedHours: Number(elements.usbDraftContractedHours.value),
+    positionId: elements.usbDraftPosition.value,
+    homeLocationId: elements.usbDraftLocation.value,
+    preferredDepartmentId: Number(elements.usbDraftDepartment.value || 0) || null,
+    role: elements.usbDraftRole.value,
+    startPassword: elements.usbDraftPassword.value,
+    additionalPermissions: [],
+  };
+  if (!/^\d{1,12}$/.test(draft.personnelNumber) || !draft.fullName || !draft.nickname) {
+    showToast("Bitte Personalnummer, Namen und Spitznamen vollständig eingeben.", true);
+    return;
+  }
+  if (draft.role === "department_manager" && !draft.preferredDepartmentId) {
+    showToast("Für eine Abteilungsleitung muss eine Abteilung ausgewählt sein.", true);
+    return;
+  }
+  if (state.allEmployees.some((employee) => employee.personnel_number === draft.personnelNumber)
+    || state.usbProvisioning.employeeDrafts.some((employee) => employee.personnelNumber === draft.personnelNumber && employee.personnelNumber !== editNumber)) {
+    showToast("Diese Personalnummer ist bereits vorhanden.", true);
+    return;
+  }
+  if (editNumber) {
+    const index = state.usbProvisioning.employeeDrafts.findIndex((employee) => employee.personnelNumber === editNumber);
+    if (index >= 0) state.usbProvisioning.employeeDrafts[index] = draft;
+  } else {
+    state.usbProvisioning.employeeDrafts.push(draft);
+  }
+  state.usbProvisioning.employeeOverrides.set(draft.personnelNumber, {
+    role: draft.role,
+    startPassword: draft.startPassword,
+    additionalPermissions: state.usbProvisioning.employeeOverrides.get(draft.personnelNumber)?.additionalPermissions || [],
+  });
+  state.usbProvisioning.selectedEmployees.add(draft.personnelNumber);
+  elements.usbEmployeeDraftModal.close();
+  renderUsbEmployees();
+  updateUsbSummary();
+}
+
+function removeUsbEmployeeDraft(personnelNumber) {
+  state.usbProvisioning.employeeDrafts = state.usbProvisioning.employeeDrafts
+    .filter((employee) => employee.personnelNumber !== personnelNumber);
+  state.usbProvisioning.selectedEmployees.delete(personnelNumber);
+  state.usbProvisioning.employeeOverrides.delete(personnelNumber);
+  renderUsbEmployees();
+  updateUsbSummary();
+}
+
 async function saveCustomManagementBranding() {
   const result = await api("/api/branding/preference", {
     method: "PUT",
@@ -4398,6 +4920,82 @@ elements.brandingKitLibrary?.addEventListener("click", (event) => {
 elements.brandingAssignmentList?.addEventListener("click", (event) => {
   if (event.target.closest("[data-save-branding-assignments]")) saveBrandingAssignments();
 });
+document.querySelectorAll("[data-usb-wizard-step]").forEach((button) => button.addEventListener("click", () => setUsbWizardStep(button.dataset.usbWizardStep)));
+elements.usbWizardPreviousButton?.addEventListener("click", () => {
+  const index = usbWizardSteps.indexOf(state.usbProvisioning.step);
+  setUsbWizardStep(usbWizardSteps[Math.max(0, index - 1)]);
+});
+elements.usbWizardNextButton?.addEventListener("click", () => {
+  const index = usbWizardSteps.indexOf(state.usbProvisioning.step);
+  setUsbWizardStep(usbWizardSteps[Math.min(usbWizardSteps.length - 1, index + 1)]);
+});
+elements.usbInstallationProfile?.addEventListener("change", () => applyUsbProfile());
+elements.usbModuleSelection?.addEventListener("change", (event) => {
+  if (!event.target.matches('input[type="checkbox"]')) return;
+  elements.usbInstallationProfile.value = "custom";
+  syncUsbFeatureDependencies();
+});
+elements.usbInstallationName?.addEventListener("input", updateUsbSummary);
+elements.usbPrimaryBranding?.addEventListener("change", () => { renderUsbBrandings(); updateUsbSummary(); });
+elements.usbAdditionalBrandings?.addEventListener("change", updateUsbSummary);
+elements.usbImportBrandingButton?.addEventListener("click", () => importUsbBranding().catch((error) => showToast(error.message, true)));
+elements.usbCreatorEmployee?.addEventListener("change", () => {
+  const previousCreator = state.usbProvisioning.creatorEmployeeNumber;
+  captureUsbEmployeeRows();
+  if (previousCreator && previousCreator !== elements.usbCreatorEmployee.value) {
+    state.usbProvisioning.employeeOverrides.delete(previousCreator);
+  }
+  elements.usbCreatorPassword.value = "";
+  renderUsbCreators();
+  renderUsbLocations();
+  synchronizeUsbTeamWithLocations();
+  updateUsbSummary();
+});
+elements.usbCreatorPassword?.addEventListener("input", updateUsbSummary);
+elements.usbLocationSelection?.addEventListener("change", (event) => {
+  captureUsbEmployeeRows();
+  const input = event.target.closest("[data-usb-location]");
+  if (input) {
+    const badge = input.closest(".usb-selection-row")?.querySelector(".status-badge");
+    if (badge) { badge.textContent = input.checked ? "Dabei" : "Nicht dabei"; badge.classList.toggle("inactive", !input.checked); }
+  }
+  synchronizeUsbTeamWithLocations();
+  updateUsbSummary();
+});
+elements.usbAddLocationButton?.addEventListener("click", () => { setView("personnel"); setPersonnelTab("locations"); showToast("Standorte können hier verwaltet werden. Danach zum USB-Assistenten zurückkehren."); });
+elements.usbEmployeeSearch?.addEventListener("input", () => { captureUsbEmployeeRows(); renderUsbEmployees(); });
+elements.usbEmployeeSelection?.addEventListener("change", () => { captureUsbEmployeeRows(); updateUsbSummary(); });
+elements.usbEmployeeSelection?.addEventListener("click", (event) => {
+  const editButton = event.target.closest("[data-usb-edit-draft]");
+  if (editButton) {
+    captureUsbEmployeeRows();
+    openUsbEmployeeDraft(editButton.dataset.usbEditDraft);
+    return;
+  }
+  const removeButton = event.target.closest("[data-usb-remove-draft]");
+  if (removeButton) removeUsbEmployeeDraft(removeButton.dataset.usbRemoveDraft);
+});
+elements.usbAddEmployeeButton?.addEventListener("click", () => openUsbEmployeeDraft());
+elements.usbEmployeeDraftForm?.addEventListener("submit", saveUsbEmployeeDraft);
+elements.usbDraftLocation?.addEventListener("change", () => {
+  updateUsbDraftDepartments();
+  updateUsbDraftRoleOptions();
+});
+elements.usbDraftDepartment?.addEventListener("change", () => updateUsbDraftRoleOptions());
+elements.usbGuidePreviewButton?.addEventListener("click", () => previewUsbFirstSteps().catch((error) => showToast(error.message, true)));
+elements.usbRefreshDrivesButton?.addEventListener("click", () => refreshUsbDrives().catch((error) => showToast(error.message, true)));
+elements.usbDriveList?.addEventListener("change", (event) => {
+  const input = event.target.closest('input[name="usbDrive"]');
+  if (!input) return;
+  state.usbProvisioning.selectedDriveToken = input.value;
+  renderUsbDrives();
+  updateUsbSummary();
+});
+[elements.usbFormatConfirmation, elements.usbHideProgramFolder, elements.usbProtectProgramFiles].forEach((input) => input?.addEventListener("input", updateUsbSummary));
+elements.usbProvisioningStartButton?.addEventListener("click", () => createUsbStick().catch((error) => {
+  setUsbProgress(0, "USB-Stick nicht erstellt", error.message);
+  showToast(error.message, true);
+}));
 document.querySelectorAll("[data-settings-tab]").forEach((button) => button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab)));
 elements.saveWifiAutomationSettingsButton?.addEventListener("click", saveWifiAutomationSettings);
 elements.saveWifiLocationMappingsButton?.addEventListener("click", saveWifiLocationMappings);

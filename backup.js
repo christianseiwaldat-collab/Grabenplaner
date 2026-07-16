@@ -20,6 +20,7 @@ const protectedDocumentsDirectory = process.env.GRABENPLANER_AMU_DIR
 
 function resolveBackupDirectory(value) {
   const raw = String(value || defaultBackupDirectorySetting).trim()
+    .replace(/%GRABENPLANER_ROOT%/gi, path.basename(__dirname).toLowerCase() === "app" ? path.dirname(__dirname) : __dirname)
     .replace(/%USERPROFILE%/gi, os.homedir())
     .replace(/%HOME%/gi, os.homedir());
   if (raw === "~") return os.homedir();
