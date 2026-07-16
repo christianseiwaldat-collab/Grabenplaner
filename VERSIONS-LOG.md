@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.68 Beta
+
+- Eine lesbare Konfigurationsprüfung ergänzt das Rechte-Dashboard und unterscheidet erfolgreiche Prüfungen, bewusste Hinweise, Warnungen und echte Blocker.
+- Alternative Urlaubs-, ZA-, AUM-, Tagesprüfungs- und Lohnübergabewege können folgenlos simuliert werden. Die Simulation verändert keine gespeicherten Einstellungen oder Fachdaten.
+- Prüfhinweise führen mit einem Klick direkt zum betroffenen Prozessschritt; von dort kann zur passenden Einstellung oder zur Rechteübersicht gewechselt werden.
+- Standortabhängige Prüfungen erkennen unter anderem deaktivierte Zeiterfassung sowie fehlende Netzwerkfreigaben, ohne vertrauliche Netzadressen offenzulegen.
+- Der gewählte Prozessweg kann einschließlich Simulation, Standortbezug, Regeln, Schritten und Prüfergebnis als geschützte PDF-Dokumentation ausgegeben werden.
+- Zugriff auf Dashboard, Prüfdaten und PDF-Export bleibt auf Personalleitung, Admin, IT-Admin und Developer beziehungsweise ausdrücklich berechtigte Rollen beschränkt.
+
 ## v0.67 Beta
 
 - Das grafische Rechte-Dashboard erhält eine zweite Ansicht für die aktuellen Standardprozesse von Urlaubsantrag, Zeitausgleich, Krankmeldung/AUM, Tagesprüfung und Lohnübergabe.
