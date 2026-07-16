@@ -163,6 +163,26 @@ test("v0.63: temporäre Importvorschauen sind zeitlich und an den Akteur gebunde
   assert.throws(() => cache.get(created.id, "101", "inspection"), /abgelaufen/i);
 });
 
+test("v0.64: temporäre Importvorschauen begrenzen Einzel- und Gesamtspeicher", () => {
+  const cache = new IntegrationCache({
+    ttlMs: 60_000,
+    maxEntries: 10,
+    maxEntriesPerActor: 10,
+    maxEntryBytes: 1100,
+    maxBytes: 1500,
+  });
+  cache.create("101", "inspection", { value: "a".repeat(900) });
+  assert.throws(
+    () => cache.create("102", "inspection", { value: "b".repeat(900) }),
+    (error) => error.code === "INTEGRATION_SESSION_SIZE_LIMIT" && error.status === 413,
+  );
+  assert.throws(
+    () => new IntegrationCache({ maxEntryBytes: 1024, maxBytes: 2048 }).create("101", "inspection", { value: "c".repeat(1500) }),
+    (error) => error.code === "INTEGRATION_SESSION_SIZE_LIMIT" && error.status === 413,
+  );
+  cache.clear();
+});
+
 test("v0.63: Personalimport benötigt eigenes Recht und übernimmt Vorschau atomar ohne Portalrechte", async () => {
   const manager = session("102", "manager");
   const denied = await request("/api/integrations/personnel-import/catalog", { auth: manager });

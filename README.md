@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.63 Beta</strong> · Windows · SQLite · Source-available
+  <strong>v0.64 Beta</strong> · Windows · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@
 | Dienst- und Abteilungsplanung | Ja | Ja | Ja |
 | Urlaubsplanung, Auswertungen und PDF-Export | Ja | Ja | Ja |
 | Personal, Standorte, Branding und Einstellungen | Ja | Ja, nach Rechten | Ja, nach Rechten |
-| Personalimport sowie Lohnverrechnungs-Export | Ja | Ja, nach Rechten | Ja, nach Rechten |
+| Personalimport, Lohnexport und direkte Schnittstellen | Ja | Ja, nach Rechten | Ja, nach Rechten |
 | Login, Rollen und Bereichsrechte | Nicht erforderlich | Verpflichtend | Verpflichtend |
 | Nutzung durch mehrere Browsergeräte | Nein, nur am Grabenplaner-PC | Ja, im Firmen-LAN/WLAN | Ja, über HTTPS |
 | Mitarbeiterportal und eigener Dienstplan | Nicht im Standardbetrieb | Ja | Ja |
@@ -88,6 +88,7 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Diens
 - Dienst- und Urlaubsplanung für Filialen, Abteilungen und Teams
 - Personalverwaltung mit Teammitgliedern, Positionen, Sollstunden und individuellen Arbeitsregeln
 - Geprüfter CSV-/XLSX-Import für Personalstammdaten mit Feldzuordnung, Vorschau, Dublettenbehandlung und wiederverwendbaren Profilen
+- Strikt lesender Personalimport aus freigegebenen Microsoft-SQL-Server-Views; Zugangsdaten bleiben getrennt verschlüsselt und die Vorschau muss weiterhin bestätigt werden
 - Mindestbesetzung je Filiale, Abteilung und Wochentag
 - Automatische Anrechnung von Feiertagen
 - Urlaubsplanung mit Jahres-, Quartals- und Monatsübersicht
@@ -100,6 +101,7 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Diens
 - Freiwilliger WLAN-Anwesenheitsassistent mit bearbeitbaren und bestätigungspflichtigen Zeitvorschlägen
 - Wochen- und Monatsübersichten der Zeiterfassung mit nachvollziehbaren Korrekturanträgen
 - Konfigurierbare CSV-/XLSX-Exporte für Lohnverrechnung mit Tagesjournal oder Lohnarten, Vorprüfung und getrennten Plan- beziehungsweise geprüften Ist-Werten
+- Kontrollierte HTTPS-JSON-Übergabe final geprüfter, minimierter Lohnwerte mit Idempotenz, SSRF-Schutz und nachvollziehbarem Zustellstatus
 - Mobil optimiertes Leitungsportal mit konfigurierbaren Kernfunktionen
 - Versionierte Mobile-API mit sicherer Geräteanmeldung, Standortbranding, persönlichem Dienstplan und Zeiterfassung für den eigenständigen Android-/iOS-Client
 - Rollen- und Rechtemanagement mit personenbezogenen Zusatzrechten und Bereichsgrenzen
@@ -116,14 +118,14 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 
 ## In Vorbereitung
 
-- Erweiterte, kundenspezifische Import-/Exportprofile und direkte, durch die jeweilige Firmen-IT geprüfte API-Anbindungen
+- Weitere Datenbankprovider und kundenspezifische, durch die jeweilige Firmen-IT geprüfte API-Verträge
 - Hochverfügbarkeit und horizontale Skalierung über mehrere Anwendungsinstanzen
 - Erweiterte Auswertungs- und Integrationsmöglichkeiten
 
 ## Schnellstart unter Windows
 
 1. Die portable ZIP-Datei unter [Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.63 Beta starten.cmd` doppelt anklicken.
+2. `Grabenplaner v0.64 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.
@@ -138,6 +140,7 @@ Aktualisierungen werden über GitHub geprüft. Die integrierte Aktualisierung er
 | Datenbank | SQLite, ohne separaten Datenbankserver |
 | PDF-Ausgabe | PDFKit |
 | Tabellenimport und -export | CSV sowie XLSX mit ExcelJS |
+| Direkte Schnittstellen | Microsoft SQL Server über ausschließlich lesbare Views; HTTPS-JSON mit TLS 1.2+, DNS-/SSRF-Schutz und idempotenter Zustellung |
 | Bild- und Dokumentaufbereitung | Sharp und PDFKit |
 | Lokale AUM-Datenerkennung | PDF.js für digitale PDFs; Tesseract.js mit lokal mitgeliefertem deutschen Sprachmodell für Scan-PDFs, hochgeladene Fotos und Kamerabilder |
 | Geschützter Personalakt-Speicher | AES-256-GCM, kontextgebundene Verschlüsselung und gemeinsame Sicherung mit der Datenbank |
@@ -160,6 +163,8 @@ pnpm start
 ```
 
 Eine private GitHub-Codespaces-Umgebung für Demo- und Funktionstests ist in [CODESPACES.md](CODESPACES.md) beschrieben. Dort dürfen keine echten Personal-, Planungs- oder Gesundheitsdaten verwendet werden.
+
+Einrichtung, Rechte, Sicherheitsgrenzen und Betriebsablauf direkter SQL-/API-Verbindungen sind in [INTEGRATIONEN.md](INTEGRATIONEN.md) beschrieben.
 
 Öffentliche, rein fiktive [Muster-Branding-Kits und Demodaten](demo/README.md) stehen getrennt von produktiven Daten zum Download und Testen bereit.
 
