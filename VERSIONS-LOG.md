@@ -1,5 +1,16 @@
 # Grabenplaner Versions-Log
 
+## v0.64 Beta
+
+- Direkte, manuell ausgelöste Verbindungen ergänzen den bestehenden Datei-Import und -Export, ohne automatische Hintergrundsynchronisation.
+- Microsoft SQL Server wird über einen reinen Lesezugriff auf eine ausdrücklich freigegebene View angebunden; zusätzlich werden nur die konfigurierten Spalten gelesen. Freie SQL-Befehle, Tabellenzugriffe, Prozeduren und Schreiboperationen sind ausgeschlossen.
+- SQL-Daten durchlaufen weiterhin die befristete Vorschau, Feldzuordnung, Dublettenprüfung und atomare Bestätigung des Personalimport-Assistenten. Vorschauen sind auf 5 MiB begrenzt, an Verbindung und Bereich gebunden und werden vor der Übernahme erneut geprüft.
+- Final geprüfte Lohnwerte können als minimiertes, versioniertes JSON an ein vorkonfiguriertes HTTPS-Ziel übergeben werden. Entwürfe und Läufe mit Blockern sind von der direkten Zustellung ausgeschlossen.
+- DNS-/SSRF-Prüfung, IP-Pinning, TLS 1.2+, feste Größen- und Zeitlimits, Redirect-Sperre sowie an die Zielrevision gebundene Idempotenz schützen die API-Übertragung. Der Verbindungstest bleibt auf DNS und TLS beschränkt und sendet keine Fachdaten.
+- Nach einem Prozessabbruch bleiben Zustellungen nicht hängen, sondern werden nachvollziehbar als unklar markiert und nur ausdrücklich erneut versucht.
+- Zugangsdaten liegen getrennt von öffentlicher Konfiguration und Laufprotokollen kontextgebunden mit AES-256-GCM verschlüsselt; Antworten zeigen ausschließlich, ob Zugangsdaten eingerichtet sind.
+- Eigene Rechte trennen Lesen, technische Konfiguration, Ersetzen von Zugangsdaten und fachliche Lohnübergabe. Verlauf und Audit enthalten nur neutrale Metadaten, Status und Hashes.
+
 ## v0.63 Beta
 
 - Neuer neutraler Personalimport-Assistent für CSV- und XLSX-Dateien mit automatischen Zuordnungsvorschlägen, frei prüfbarer Feldzuordnung, Vorschau und atomarer Übernahme.

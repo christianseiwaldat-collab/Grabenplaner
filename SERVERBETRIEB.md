@@ -89,6 +89,8 @@ DB_PATH=C:\ProgramData\Grabenplaner\data\dienstplan.db
 BACKUP_DIR=D:\Grabenplaner-Backups
 GRABENPLANER_AMU_KEY_ID=server-v1
 GRABENPLANER_AMU_KEY=<geheimer 32-Byte-Schlüssel als Base64>
+GRABENPLANER_INTEGRATION_KEY_ID=server-v1
+GRABENPLANER_INTEGRATION_KEY=<separater geheimer 32-Byte-Schlüssel als Base64>
 GRABENPLANER_SERVICE_CONTROL_TOKEN=<geheimer zufälliger Dienststeuerungs-Token>
 ```
 
@@ -165,7 +167,7 @@ Für den Paketbau wird die in `package.json` festgelegte pnpm-Version benötigt.
 Das geprüfte Paket wird am Server in einer als Administrator gestarteten PowerShell zusammen mit seiner veröffentlichten Prüfsumme eingespielt:
 
 ```powershell
-$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.63.0-beta-windows-x64.zip'
+$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.64.0-beta-windows-x64.zip'
 $sha256 = ((Get-Content "$package.sha256" -Raw).Trim() -split '\s+')[0]
 
 .\server-tools\windows\Update-GrabenplanerServer.ps1 `

@@ -23,7 +23,10 @@ test("v0.61 server tools: Caddy and WinSW use production-safe identities and hea
   assert.match(proxyService, /XDG_CONFIG_HOME/);
   assert.match(proxyService, /XDG_DATA_HOME/);
   assert.match(appService, /GRABENPLANER_DEPLOYMENT_KIND" value="production/);
+  assert.match(appService, /GRABENPLANER_INTEGRATION_KEY_ID/);
+  assert.match(appService, /GRABENPLANER_INTEGRATION_KEY/);
   assert.match(environment, /^GRABENPLANER_DEPLOYMENT_KIND=production$/m);
+  assert.match(environment, /^GRABENPLANER_INTEGRATION_KEY_ID=server-v1$/m);
 });
 
 test("v0.61 server tools: installer separates app secrets from the proxy and requires a scanner", () => {
@@ -44,6 +47,8 @@ test("v0.61 server tools: installer separates app secrets from the proxy and req
   assert.match(installer, /Assert-SeparateTrees \$appRoot \$dataRoot/);
   assert.match(installer, /Assert-SeparateTrees \$backupRoot \$appRoot/);
   assert.match(installer, /Node-Runtime darf nicht im Daten- oder Backupordner liegen/);
+  assert.match(installer, /IntegrationEncryptionKey muss genau 32 Byte enthalten/);
+  assert.match(installer, /bestehender Integrationsschlüssel/i);
 });
 
 test("v0.61 server tools: update is checksum-bound, staged, backed up, health-checked and rollback-capable", () => {

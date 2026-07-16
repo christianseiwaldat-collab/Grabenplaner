@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.63 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.64 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -628,8 +628,18 @@
           </section>
 
           <section id="integrationSettings" class="settings-section settings-two-column">
+            <div class="settings-card full-span" id="integrationConnectionsCard">
+              <div class="card-heading"><div class="card-icon">Link</div><div><h2>Direkte Verbindungen</h2><p>Geschützte SQL-Personalquellen und HTTPS-Ziele für die Lohnverrechnung verwalten.</p></div></div>
+              <p class="settings-note security-note">Gespeicherte Zugangsdaten werden grundsätzlich nie angezeigt. Sie können mit einem eigenen Recht ausschließlich durch neue Werte ersetzt werden.</p>
+              <div class="integration-connection-list" id="integrationConnectionList"><p class="settings-note">Verbindungen werden geladen.</p></div>
+              <div class="integration-actions"><button class="primary-button" id="addIntegrationConnectionButton" type="button">Verbindung hinzufügen</button></div>
+              <details class="integration-column-details integration-delivery-details">
+                <summary>Letzte sichere Übertragungen</summary>
+                <div class="integration-delivery-list" id="integrationDeliveryHistory"><p class="settings-note">Lieferverlauf wird geladen.</p></div>
+              </details>
+            </div>
             <div class="settings-card" id="employeeImportCard">
-              <div class="card-heading"><div class="card-icon">Import</div><div><h2>Personalstammdaten importieren</h2><p>CSV- oder Excel-Datei zuordnen, prüfen und erst nach einer Vorschau übernehmen.</p></div></div>
+              <div class="card-heading"><div class="card-icon">Import</div><div><h2>Personalstammdaten importieren</h2><p>Datei oder freigegebene SQL-View zuordnen, prüfen und erst nach einer Vorschau übernehmen.</p></div></div>
               <p class="settings-note security-note">Importiert werden ausschließlich freigegebene Stammdaten. Passwörter, Rollen, Bankdaten, SV-Nummern, Adressen und Personalakt-Inhalte bleiben ausgeschlossen.</p>
               <div class="integration-actions"><button class="primary-button" id="openPersonnelImportButton" type="button">Importassistent öffnen</button></div>
             </div>
@@ -648,6 +658,7 @@
                 <label class="field"><span>Datenquelle</span><select id="payrollSourceMode"><option value="actual_reviewed">Geprüfte Ist-Zeit</option><option value="planned">Planwerte</option></select></label>
                 <label class="field"><span>Aufbau</span><select id="payrollLayout"><option value="daily_journal">Tagesjournal</option><option value="movement_lines">Lohnarten</option></select></label>
                 <label class="field"><span>Dateiformat</span><select id="payrollFormat"><option value="csv">CSV</option><option value="xlsx">Excel (.xlsx)</option></select></label>
+                <label class="field" id="payrollApiTargetField"><span>Sicheres API-Ziel</span><select id="payrollApiTarget"><option value="">Keine direkte Übertragung</option></select></label>
                 <label class="field"><span>CSV-Trennzeichen</span><select id="payrollDelimiter"><option value=";">Semikolon</option><option value=",">Komma</option><option value="tab">Tabulator</option></select></label>
                 <label class="field"><span>Dezimaltrennzeichen</span><select id="payrollDecimalSeparator"><option value="comma">Komma</option><option value="dot">Punkt</option></select></label>
               </div>
@@ -656,7 +667,7 @@
               <details class="integration-column-details" id="payrollWageCodeDetails"><summary>Eigene Lohnarten-Codes zuordnen</summary><div class="integration-wage-code-grid" id="payrollWageCodeMap"></div></details>
               <label class="switch-row"><span><strong>Entwurf trotz offener Prüfpunkte erlauben</strong><small>Finale Exporte bleiben gesperrt, bis fehlende Tagesprüfungen, Korrekturen oder Überschneidungen geklärt sind.</small></span><input id="payrollAllowDraft" type="checkbox" /></label>
               <div class="integration-profile-save"><label class="field"><span>Aktuelle Auswahl als Profil speichern</span><input id="payrollProfileName" maxlength="80" placeholder="z. B. Monatsübergabe Lohnverrechnung" /></label><button class="secondary-button" id="savePayrollProfileButton" type="button">Profil speichern</button></div>
-              <div class="integration-actions"><button class="secondary-button" id="payrollPreflightButton" type="button">Export prüfen</button><button class="primary-button" id="payrollDownloadButton" type="button" disabled>Datei erstellen</button></div>
+              <div class="integration-actions"><button class="secondary-button" id="payrollPreflightButton" type="button">Export prüfen</button><button class="secondary-button" id="payrollDeliverButton" type="button" disabled>Sicher übertragen</button><button class="primary-button" id="payrollDownloadButton" type="button" disabled>Datei erstellen</button></div>
               <div class="integration-preflight" id="payrollPreflightResult"><p class="settings-note">Vor dem Download werden Datenqualität und Freigabestatus geprüft.</p></div>
             </div>
             <div class="settings-card" id="exportProfileCard">
@@ -884,7 +895,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.63 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.64 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -1066,17 +1077,20 @@
     <dialog class="modal wide-modal integration-import-modal" id="personnelImportModal">
       <form method="dialog" id="personnelImportForm">
         <div class="modal-header"><div><span class="eyebrow">CSV- und Excel-Assistent</span><h2>Personalstammdaten importieren</h2><p>Datei auswählen, Spalten zuordnen und Änderungen vor der Übernahme prüfen.</p></div><button type="button" class="close-button" data-close="personnelImportModal">×</button></div>
-        <div class="integration-wizard-progress" id="personnelImportProgress"><span class="active">1 · Datei</span><span>2 · Zuordnung</span><span>3 · Vorschau</span></div>
+        <div class="integration-wizard-progress" id="personnelImportProgress"><span class="active">1 · Quelle</span><span>2 · Zuordnung</span><span>3 · Vorschau</span></div>
         <section class="integration-wizard-step" id="personnelImportFileStep">
           <div class="form-grid">
-            <label class="field full-width"><span>CSV- oder Excel-Datei</span><input id="personnelImportFile" type="file" accept=".csv,.tsv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label>
+            <label class="field"><span>Quelle</span><select id="personnelImportSourceType"><option value="file">CSV- oder Excel-Datei</option><option value="sql">Freigegebene SQL-View</option></select></label>
+            <label class="field" id="personnelImportSqlConnectionField"><span>SQL-Personalquelle</span><select id="personnelImportSqlConnection"><option value="">Verbindung auswählen</option></select></label>
+            <label class="field full-width" id="personnelImportFileField"><span>CSV- oder Excel-Datei</span><input id="personnelImportFile" type="file" accept=".csv,.tsv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label>
             <label class="field"><span>Gespeichertes Profil</span><select id="personnelImportProfile"><option value="">Ohne Profil / automatisch erkennen</option></select></label>
             <label class="field"><span>Vorhandene Personalnummer</span><select id="personnelImportDuplicateStrategy"><option value="skip">Überspringen (empfohlen)</option><option value="update">Stammdaten aktualisieren</option></select></label>
             <label class="field"><span>Standardstandort für neue Personen</span><select id="personnelImportDefaultLocation"></select></label>
+            <label class="field"><span>Standardabteilung / SQL-Bereich</span><select id="personnelImportDefaultDepartment"><option value="">Gesamter Standort</option></select></label>
             <label class="field"><span>Standardposition</span><select id="personnelImportDefaultPosition"></select></label>
             <label class="field"><span>Standard-Sollzeit</span><div class="unit-input"><input id="personnelImportDefaultHours" type="number" min="0" max="80" step="0.5" value="38.5" /><em>Std.</em></div></label>
           </div>
-          <div class="integration-actions"><button class="primary-button" id="inspectPersonnelImportButton" type="button">Datei prüfen</button></div>
+          <div class="integration-actions"><button class="primary-button" id="inspectPersonnelImportButton" type="button">Quelle prüfen</button></div>
         </section>
         <section class="integration-wizard-step hidden" id="personnelImportMappingStep">
           <div class="form-grid">
@@ -1094,6 +1108,73 @@
         </section>
         <p class="message hidden" id="personnelImportMessage"></p>
         <div class="modal-actions"><button type="button" class="secondary-button hidden" id="backPersonnelImportButton">Zuordnung ändern</button><span></span><button type="button" class="secondary-button" id="resetPersonnelImportButton">Neu beginnen</button><button type="button" class="secondary-button" data-close="personnelImportModal">Schließen</button><button type="button" class="primary-button" id="applyPersonnelImportButton" disabled>Geprüften Import übernehmen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal integration-connection-modal" id="integrationConnectionModal">
+      <form method="dialog" id="integrationConnectionForm">
+        <div class="modal-header"><div><span class="eyebrow">Geschützte Schnittstelle</span><h2 id="integrationConnectionTitle">Direkte Verbindung hinzufügen</h2><p>Nur die öffentliche Konfiguration wird angezeigt. Gespeicherte Zugangsdaten bleiben verborgen.</p></div><button type="button" class="close-button" data-close="integrationConnectionModal">×</button></div>
+        <input id="integrationConnectionId" type="hidden" />
+        <div class="integration-connection-form-grid">
+          <label class="field"><span>Art</span><select id="integrationConnectionKind"><option value="personnel_sql_source">SQL-Personalquelle</option><option value="payroll_https_target">HTTPS-Lohnziel</option></select></label>
+          <label class="field"><span>Name</span><input id="integrationConnectionName" minlength="2" maxlength="80" required placeholder="z. B. Personal-View Zentrale" /></label>
+          <label class="switch-row integration-connection-active"><span><strong>Verbindung aktiv</strong><small>Nur aktive Verbindungen stehen in Import und Lohnübergabe zur Auswahl.</small></span><input id="integrationConnectionActive" type="checkbox" checked /></label>
+        </div>
+        <details class="integration-column-details integration-scope-details">
+          <summary>Geltungsbereich einschränken</summary>
+          <div class="form-grid">
+            <label class="field"><span>Freigegebene Standorte</span><select id="integrationConnectionScopeLocations" multiple size="4"></select></label>
+            <label class="field"><span>Freigegebene Abteilungen</span><select id="integrationConnectionScopeDepartments" multiple size="4"></select></label>
+          </div>
+          <p class="settings-note">Ohne Auswahl gilt die Verbindung innerhalb der persönlichen Bereichsrechte für alle Standorte beziehungsweise Abteilungen.</p>
+        </details>
+
+        <section class="integration-connection-fields" id="integrationSqlFields">
+          <h3>SQL-View</h3>
+          <div class="form-grid">
+            <label class="field"><span>Server</span><input id="integrationSqlHost" maxlength="253" placeholder="sql.example.local" /></label>
+            <label class="field"><span>Port</span><input id="integrationSqlPort" type="number" min="1" max="65535" value="1433" /></label>
+            <label class="field"><span>Datenbank</span><input id="integrationSqlDatabase" maxlength="128" /></label>
+            <label class="field"><span>Instanz (optional)</span><input id="integrationSqlInstance" maxlength="128" /></label>
+            <label class="field"><span>Schema</span><input id="integrationSqlSchema" maxlength="128" value="dbo" /></label>
+            <label class="field"><span>View</span><input id="integrationSqlView" maxlength="128" /></label>
+            <label class="field full-width"><span>Freigegebene Spalten</span><textarea id="integrationSqlAllowedColumns" rows="3" maxlength="12900" placeholder="Personalnummer, Vorname, Nachname, Sollstunden"></textarea><small>Nur diese Spalten werden gelesen; durch Komma oder neue Zeile trennen.</small></label>
+            <label class="field"><span>Transportverschlüsselung</span><select id="integrationSqlTls"><option value="verify_full">Zertifikat vollständig prüfen</option></select></label>
+            <label class="field"><span>Zeitlimit</span><div class="unit-input"><input id="integrationSqlTimeout" type="number" min="1000" max="30000" step="1000" value="10000" /><em>ms</em></div></label>
+            <label class="field"><span>Maximale Vorschau</span><div class="unit-input"><input id="integrationSqlRowLimit" type="number" min="1" max="5000" value="1000" /><em>Zeilen</em></div></label>
+          </div>
+          <p class="settings-note">Es werden ausschließlich die ausdrücklich freigegebenen Spalten einer SQL-View gelesen. Freie SQL-Befehle und schreibende Zugriffe sind nicht vorgesehen.</p>
+        </section>
+
+        <section class="integration-connection-fields hidden" id="integrationApiFields">
+          <h3>HTTPS-JSON-Ziel</h3>
+          <div class="form-grid">
+            <label class="field full-width"><span>HTTPS-Adresse</span><input id="integrationApiEndpoint" type="url" maxlength="2048" placeholder="https://lohn.example.at/api/import" /></label>
+            <label class="field"><span>Authentifizierung</span><select id="integrationApiAuthentication"><option value="none">Keine</option><option value="bearer">Bearer-Token</option><option value="api_key">API-Key im Header</option><option value="basic">Benutzername und Passwort</option></select></label>
+            <label class="field" id="integrationApiKeyHeaderField"><span>API-Key-Header</span><input id="integrationApiKeyHeader" maxlength="80" value="X-API-Key" /></label>
+            <label class="field"><span>Zeitlimit</span><div class="unit-input"><input id="integrationApiTimeout" type="number" min="1000" max="30000" step="1000" value="10000" /><em>ms</em></div></label>
+            <label class="field"><span>Maximale Anfrage</span><div class="unit-input"><input id="integrationApiRequestLimit" type="number" min="1024" max="10485760" value="5242880" /><em>Byte</em></div></label>
+            <label class="field"><span>Maximale Antwort</span><div class="unit-input"><input id="integrationApiResponseLimit" type="number" min="1024" max="2097152" value="262144" /><em>Byte</em></div></label>
+          </div>
+          <p class="settings-note">Die Übertragung verwendet ausschließlich HTTPS, JSON, POST und den festen Header <code>Idempotency-Key</code>. „Verbindung testen“ prüft nur DNS und TLS und sendet keine Fachdaten.</p>
+        </section>
+
+        <section class="integration-credential-panel" id="integrationCredentialPanel">
+          <div><h3 id="integrationCredentialTitle">Neue Zugangsdaten</h3><p id="integrationCredentialStatus">Noch keine Zugangsdaten gespeichert.</p></div>
+          <p class="settings-note security-note">Zugangsdaten werden nur zum Setzen oder Ersetzen eingegeben. Vorhandene Werte werden nie vom Server geladen oder im Browser angezeigt.</p>
+          <div class="form-grid" id="integrationSqlCredentials">
+            <label class="field"><span>SQL-Benutzername</span><input id="integrationCredentialUsername" autocomplete="off" maxlength="256" /></label>
+            <label class="field"><span>Neues Passwort</span><input id="integrationCredentialPassword" type="password" autocomplete="new-password" maxlength="4096" /></label>
+          </div>
+          <div class="form-grid hidden" id="integrationApiCredentials">
+            <label class="field hidden" id="integrationBearerTokenField"><span>Neues Bearer-Token</span><input id="integrationCredentialToken" type="password" autocomplete="new-password" maxlength="4096" /></label>
+            <label class="field hidden" id="integrationApiKeyField"><span>Neuer API-Key</span><input id="integrationCredentialApiKey" type="password" autocomplete="new-password" maxlength="4096" /></label>
+            <label class="field hidden" id="integrationBasicUsernameField"><span>Benutzername</span><input id="integrationCredentialBasicUsername" autocomplete="off" maxlength="256" /></label>
+            <label class="field hidden" id="integrationBasicPasswordField"><span>Neues Passwort</span><input id="integrationCredentialBasicPassword" type="password" autocomplete="new-password" maxlength="4096" /></label>
+          </div>
+        </section>
+        <p class="message hidden" id="integrationConnectionMessage"></p>
+        <div class="modal-actions integration-connection-actions"><button type="button" class="danger-button hidden" id="deleteIntegrationConnectionButton">Löschen</button><button type="button" class="secondary-button hidden" id="testIntegrationConnectionButton">Verbindung testen</button><span></span><button type="button" class="secondary-button" data-close="integrationConnectionModal">Abbrechen</button><button type="submit" class="primary-button" id="saveIntegrationConnectionButton">Speichern</button></div>
       </form>
     </dialog>
 

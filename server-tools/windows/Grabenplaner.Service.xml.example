@@ -41,5 +41,7 @@
   <env name="GRABENPLANER_BACKUP_KEEP" value="{{BACKUP_KEEP}}" />
   <env name="GRABENPLANER_AMU_KEY_ID" value="{{AMU_KEY_ID}}" />
   <env name="GRABENPLANER_AMU_KEY" value="{{AMU_KEY}}" />
+  <env name="GRABENPLANER_INTEGRATION_KEY_ID" value="{{INTEGRATION_KEY_ID}}" />
+  <env name="GRABENPLANER_INTEGRATION_KEY" value="{{INTEGRATION_KEY}}" />
   <env name="GRABENPLANER_SERVICE_CONTROL_TOKEN" value="{{SERVICE_CONTROL_TOKEN}}" />
 </service>
