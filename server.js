@@ -44,6 +44,7 @@ const { populateUsbProfileDatabase } = require("./lib/usb-profile-database");
 const {
   createSelectionToken,
   enumerateSafeUsbCandidates,
+  evaluateUsbProvisioningAccess,
   expectedFormatConfirmation,
   hidePortableAppDirectory,
   provisionUsbStick,
@@ -2809,8 +2810,9 @@ function enforceAdminApiAccess(request, _response, next) {
     const status = getPortalStatus();
     if (!status.portalEnabled || request.path.startsWith("/portal/") || request.path.startsWith("/mobile/")) return next();
     const method = String(request.method || "GET").toUpperCase();
-    let permission = "schedule:read";
-    if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+    const usbProvisioningRoute = /^\/usb-provisioning(?:\/|$)/.test(request.path);
+    let permission = usbProvisioningRoute ? "usb:provision" : "schedule:read";
+    if (!usbProvisioningRoute && !["GET", "HEAD", "OPTIONS"].includes(method)) {
       if (/^\/branding/.test(request.path)) {
         permission = "branding:write";
       } else if (/^\/employees\/[^/]+\/display\/?$/.test(request.path)) {
@@ -4800,7 +4802,7 @@ function applyPersonnelAccessProfile(actor, profile) {
   }));
 }
 
-function getPortalStatus(locationId = "") {
+function getPortalStatus(locationId = "", request = null) {
   const settings = getSettings();
   const portalSettings = getPortalSettings();
   const features = installationFeatures(settings);
@@ -4831,12 +4833,7 @@ function getPortalStatus(locationId = "") {
     deploymentKind,
     installationFeatures: features,
     installationFeatureCatalog,
-    usbProvisioning: {
-      available: process.platform === "win32" && configuredOperationMode === "local" && !serverModeActive
-        && loopbackHosts.has(HOST.toLowerCase()) && deploymentKind === "local",
-      localOnly: true,
-      requiresElevation: false,
-    },
+    usbProvisioning: usbProvisioningAvailability(request),
     passwordMinLength: portalPasswordMinLength(),
     branding: locationId ? brandingForLocation(locationId, settings) : brandingFromSettings(settings),
     capabilities: {
@@ -7220,9 +7217,9 @@ function brandingForPortalSession(session) {
   return brandingForLocation(session.homeLocationId);
 }
 
-function portalStatusForSession(session) {
+function portalStatusForSession(session, request = null) {
   return {
-    ...getPortalStatus(),
+    ...getPortalStatus("", request),
     branding: brandingForPortalSession(session),
   };
 }
@@ -10673,9 +10670,9 @@ app.delete("/api/employees/:personnelNumber", (request, response) => {
 });
 
 app.get(["/api/portal/status", "/api/portal/v1/status"], (request, response) => {
-  const publicStatus = getPortalStatus();
+  const publicStatus = getPortalStatus("", request);
   const session = publicStatus.portalEnabled ? portalSessionFromRequest(request, { touch: false }) : null;
-  response.json(session ? portalStatusForSession(session) : publicStatus);
+  response.json(session ? portalStatusForSession(session, request) : publicStatus);
 });
 
 app.get("/api/mobile/v1/status", (_request, response) => {
@@ -10878,9 +10875,9 @@ app.delete("/api/portal/v1/approval-delegations/:id", (request, response) => {
 });
 
 app.get("/api/portal/v1/session", (request, response) => {
-  const publicStatus = getPortalStatus();
+  const publicStatus = getPortalStatus("", request);
   const session = publicStatus.portalEnabled ? portalSessionFromRequest(request) : null;
-  const status = session ? portalStatusForSession(session) : publicStatus;
+  const status = session ? portalStatusForSession(session, request) : publicStatus;
   if (session && !parseCookies(request)[PORTAL_CSRF_COOKIE]) {
     appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, crypto.randomBytes(24).toString("base64url"), request, {
       maxAge: Math.max(60, Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000)),
@@ -10926,7 +10923,7 @@ app.post("/api/portal/v1/setup/admin", async (request, response) => {
       must_change_password = 0, password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
   `).run(employeeNumber, passwordHash);
   auditPortal(employeeNumber, "portal.admin.setup", "portal_user", employeeNumber);
-  response.status(201).json({ ok: true, status: getPortalStatus() });
+  response.status(201).json({ ok: true, status: getPortalStatus("", request) });
 });
 
 app.post("/api/portal/v1/auth/login", async (request, response) => {
@@ -10980,7 +10977,7 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
   appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, csrfToken, request, { maxAge: timeoutMinutes * 60 }));
   const session = portalSessionFromRequest({ ...request, headers: { ...request.headers, cookie: `${PORTAL_SESSION_COOKIE}=${rawToken}` } }, { touch: false });
   auditPortal(employeeNumber, "portal.login.success", "portal_user", employeeNumber, `ip=${loginRateKey(request)}`);
-  response.json({ ok: true, authenticated: true, user: publicPortalUser(session), status: portalStatusForSession(session) });
+  response.json({ ok: true, authenticated: true, user: publicPortalUser(session), status: portalStatusForSession(session, request) });
 });
 
 app.post("/api/portal/v1/auth/logout", (request, response) => {
@@ -13035,30 +13032,65 @@ app.get("/api/portal/v1/time-presence", (request, response) => {
   response.json({ presence: timePresenceForContext(session, context, date) });
 });
 
-function usbProvisioningAvailability() {
-  if (process.platform !== "win32") return { available: false, reason: "Der USB-Stick-Assistent ist nur unter Windows verfügbar." };
-  if (configuredOperationMode !== "local" || serverModeActive || getPortalStatus().portalEnabled) {
-    return { available: false, reason: "Der USB-Stick-Assistent ist ausschließlich im lokalen Windows-Betrieb verfügbar." };
-  }
-  if (!loopbackHosts.has(HOST.toLowerCase()) || deploymentKind !== "local") {
-    return { available: false, reason: "Der USB-Stick-Assistent darf nur direkt am lokalen Grabenplaner-PC verwendet werden." };
-  }
-  return { available: true, reason: "" };
+function usbProvisioningAvailability(request = null) {
+  return evaluateUsbProvisioningAccess({
+    platform: process.platform,
+    operationMode: configuredOperationMode,
+    deploymentKind,
+    requestPresent: Boolean(request),
+    socketAddress: request?.socket?.remoteAddress || "",
+    clientAddress: request?.ip || request?.socket?.remoteAddress || "",
+    proxyChainPresent: Array.isArray(request?.ips) && request.ips.length > 0,
+  });
+}
+
+function usbProvisioningOriginAllowed(request) {
+  const origin = String(request.headers.origin || "").trim();
+  const fetchSite = String(request.headers["sec-fetch-site"] || "").trim().toLowerCase();
+  if (!origin || (fetchSite && fetchSite !== "same-origin")) return false;
+  if (serverModeActive) return requestOriginAllowed(request, origin);
+  const host = String(request.headers.host || "").trim();
+  if (!host || /[\r\n]/.test(host)) return false;
+  const protocol = request.secure ? "https" : "http";
+  const normalizedOrigin = normalizeHttpOrigin(origin);
+  const expectedOrigin = normalizeHttpOrigin(`${protocol}://${host}`);
+  return Boolean(normalizedOrigin && expectedOrigin && normalizedOrigin === expectedOrigin);
 }
 
 function assertUsbProvisioningRequest(request, { mutation = false } = {}) {
-  const availability = usbProvisioningAvailability();
-  if (!availability.available || !isLoopbackRequest(request)) {
-    throw httpError(403, availability.reason || "Der USB-Stick-Assistent ist an diesem Ort nicht verfügbar.", "USB_LOCAL_ONLY");
+  const availability = usbProvisioningAvailability(request);
+  if (!availability.available) {
+    throw httpError(
+      403,
+      availability.reason || "Der USB-Stick-Assistent ist an diesem Ort nicht verfügbar.",
+      availability.reasonCode || "USB_HOST_CONSOLE_REQUIRED",
+    );
   }
-  if (mutation && request.get("X-Grabenplaner-USB-Action") !== "provisioning") {
+  const portalEnabled = getPortalStatus().portalEnabled;
+  let session = request.portalSession || null;
+  if (portalEnabled) {
+    session ||= requirePortalSession(request, "usb:provision");
+    if (!USB_PROVISIONING_ROLES.has(session.role) || !session.permissions.includes("usb:provision")) {
+      throw httpError(403, "Diese Aktion ist nur für Developer, IT-Admin oder Admin verfügbar.", "PORTAL_PERMISSION_DENIED");
+    }
+    if (mutation) assertPortalCsrf(request);
+    request.portalSession = session;
+  }
+  if (request.get("X-Grabenplaner-USB-Action") !== "provisioning") {
     throw httpError(403, "Die lokale Sicherheitsbestätigung für den USB-Vorgang fehlt.", "USB_ACTION_HEADER_REQUIRED");
   }
-  return availability;
+  const fetchSite = String(request.headers["sec-fetch-site"] || "").trim().toLowerCase();
+  if (fetchSite && fetchSite !== "same-origin") {
+    throw httpError(403, "Der USB-Vorgang muss direkt aus der Grabenplaner-Oberfläche gestartet werden.", "USB_ORIGIN_REQUIRED");
+  }
+  if (mutation && !usbProvisioningOriginAllowed(request)) {
+    throw httpError(403, "Der USB-Vorgang muss direkt aus der Grabenplaner-Oberfläche gestartet werden.", "USB_ORIGIN_REQUIRED");
+  }
+  return { ...availability, session };
 }
 
-function usbCreatorCandidates() {
-  return db.prepare(`
+function usbCreatorCandidates(session = null) {
+  const candidates = db.prepare(`
     SELECT u.employee_number, u.role, e.full_name, e.nickname, e.home_location_id, p.name AS position_name
     FROM portal_users u
     JOIN employees e ON e.personnel_number = u.employee_number
@@ -13075,10 +13107,18 @@ function usbCreatorCandidates() {
     homeLocationId: row.home_location_id || "",
     assignableRoleIds: [...(PORTAL_ROLE_ASSIGNMENTS[row.role] || new Set(["employee"]))],
   }));
+  if (!session) return candidates;
+  return candidates.filter((candidate) => candidate.employeeNumber === session.employeeNumber);
 }
 
 async function verifyUsbCreator(request, employeeNumber, password) {
   const number = String(employeeNumber || "").trim();
+  if (getPortalStatus().portalEnabled) {
+    const session = request.portalSession || requirePortalSession(request, "usb:provision");
+    if (session.employeeNumber !== number) {
+      throw httpError(403, "Im Netzwerk- oder Serverbetrieb muss das angemeldete Administratorkonto den USB-Stick erstellen.", "USB_CREATOR_SESSION_MISMATCH");
+    }
+  }
   const now = Date.now();
   const ipKey = loginRateKey(request);
   const rateKey = `${ipKey}:${number || "unknown"}`;
@@ -13371,16 +13411,17 @@ function normalizeUsbProvisioningError(error) {
 }
 
 app.get("/api/usb-provisioning/status", async (request, response) => {
-  assertUsbProvisioningRequest(request);
+  const access = assertUsbProvisioningRequest(request);
+  const { session, ...availability } = access;
   let driveData = { drives: [], rejectedCount: 0 };
   let driveWarning = "";
   try { driveData = await usbDriveChoices(); }
   catch (error) { driveWarning = error.message; }
   response.json({
-    ...usbProvisioningAvailability(),
+    ...availability,
     ...driveData,
     driveWarning,
-    creators: usbCreatorCandidates(),
+    creators: usbCreatorCandidates(session),
     featureCatalog: installationFeatureCatalog,
     profiles: {
       full: defaultInstallationFeatures,
@@ -13432,7 +13473,7 @@ app.put("/api/usb-provisioning/branding/import", express.raw({ type: ["applicati
 });
 
 app.post("/api/usb-provisioning/create", async (request, response) => {
-  assertUsbProvisioningRequest(request, { mutation: true });
+  const access = assertUsbProvisioningRequest(request, { mutation: true });
   if (usbProvisioningActive) throw httpError(409, "Ein USB-Stick wird bereits vorbereitet.", "USB_PROVISIONING_BUSY");
   usbProvisioningActive = true;
   let stage = null;
@@ -13504,7 +13545,7 @@ app.post("/api/usb-provisioning/create", async (request, response) => {
         if (body.hideProgramFolder !== false) await hidePortableAppDirectory(appDirectory);
       },
     });
-    auditPortal(creator.personnelNumber, "usb.provision", "volume", result.driveLetter, JSON.stringify({
+    auditPortal(access.session?.employeeNumber || creator.personnelNumber, "usb.provision", "volume", result.driveLetter, JSON.stringify({
       installationName,
       employees: employees.length + 1,
       locations: selectedLocations,

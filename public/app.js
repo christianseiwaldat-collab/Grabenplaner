@@ -488,13 +488,13 @@ function applyRoleVisibility() {
   const wifiSettingsAccess = !lanActive || permissions.includes("wifi:settings");
   const greetingSettingsAccess = !lanActive || (globalAdministration && permissions.includes("hr:settings"));
   const backupImportAccess = !lanActive || ["developer", "it_admin"].includes(role);
-  const usbProvisioningAccess = state.portalStatus?.usbProvisioning?.available === true
-    && (!lanActive || (["developer", "it_admin", "admin"].includes(role) && permissions.includes("usb:provision")));
+  const usbProvisioningAccess = ["developer", "it_admin", "admin"].includes(role)
+    && (!lanActive || permissions.includes("usb:provision"));
   document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
   document.querySelectorAll('[data-view="vacations"]').forEach((button) => button.classList.toggle("hidden", features.vacation === false));
   elements.requestsNavButton?.classList.toggle("hidden", features.requests === false);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess || features.timeTracking === false);
-  const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess || operationModeAccess || wifiSettingsAccess;
+  const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess || operationModeAccess || wifiSettingsAccess || usbProvisioningAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
     general: settingsAccess || operationModeAccess,
@@ -2917,7 +2917,12 @@ function setSettingsTab(tab) {
   if (tab === "rights") loadRightsManagement();
   if (tab === "wifiAutomation") loadWifiAutomationSettings();
   if (tab === "branding") Promise.all([loadManagementBrandingPreference(), loadBrandingAssignments()]).then(() => renderSettings()).catch((error) => showToast(error.message, true));
-  if (tab === "usbProvisioning") loadUsbProvisioning().catch((error) => showToast(error.message, true));
+  if (tab === "usbProvisioning") {
+    renderUsbAvailability(state.portalStatus?.usbProvisioning || {});
+    if (state.portalStatus?.usbProvisioning?.available === true) {
+      loadUsbProvisioning().catch((error) => showToast(error.message, true));
+    }
+  }
 }
 
 function setPersonnelTab(tab) {
@@ -4125,12 +4130,22 @@ function setUsbWizardStep(step) {
 
 function renderUsbAvailability(metadata) {
   const available = metadata?.available === true;
-  elements.usbProvisioningAvailabilityBadge.textContent = available ? "Verfügbar" : "Nicht verfügbar";
+  const reasonCode = String(metadata?.reasonCode || "");
+  let title = "Nur direkt am Windows-Host möglich";
+  let fallbackReason = "Aus Sicherheitsgründen können nur USB-Sticks verwendet werden, die direkt am Windows-Host angeschlossen sind. USB-Sticks an einem entfernten PC, Tablet oder Smartphone sind nicht erreichbar.";
+  if (reasonCode === "USB_WINDOWS_REQUIRED") {
+    title = "Nur auf einem Windows-Host verfügbar";
+    fallbackReason = "Die Vorbereitung und Formatierung sind nur an einem Windows-Host verfügbar.";
+  } else if (reasonCode === "USB_DEPLOYMENT_UNSUPPORTED") {
+    title = "In dieser Umgebung nicht verfügbar";
+    fallbackReason = "Der USB-Stick-Assistent ist in dieser Test- oder Entwicklungsumgebung nicht verfügbar.";
+  }
+  elements.usbProvisioningAvailabilityBadge.textContent = available ? "Bereit" : "Gesperrt";
   elements.usbProvisioningAvailabilityBadge.classList.toggle("inactive", !available);
-  elements.usbProvisioningAvailabilityTitle.textContent = available ? "Lokaler Windows-Assistent ist bereit" : "USB-Stick-Erstellung ist hier gesperrt";
+  elements.usbProvisioningAvailabilityTitle.textContent = available ? "Windows-Host ist bereit" : title;
   elements.usbProvisioningAvailabilityText.textContent = available
-    ? "Formatierung und Installation laufen ausschließlich auf diesem Windows-PC und mit den aktuellen Benutzerrechten."
-    : (metadata?.reason || "Der Assistent ist nur direkt am lokalen Windows-PC verfügbar.");
+    ? "Formatierung und Installation erfolgen auf diesem Windows-Host mit den aktuellen Benutzerrechten."
+    : (metadata?.reason || fallbackReason);
   elements.usbProvisioningWizard.classList.toggle("hidden", !available);
 }
 
@@ -4277,7 +4292,7 @@ function updateUsbSummary() {
   const locations = selectedUsbLocationIds().length;
   const employees = state.usbProvisioning.selectedEmployees.size;
   const branding = elements.usbPrimaryBranding.selectedOptions?.[0]?.textContent || "nicht gewählt";
-  elements.usbProvisioningSummary.innerHTML = `<p><strong>${escapeHtml(elements.usbInstallationName.value.trim() || "Neue Grabenplaner-Installation")}</strong></p><p>${features} Funktionsbereiche · ${locations} Standorte · ${employees} Teammitglieder · ${escapeHtml(branding)}${drive ? ` · Ziel ${escapeHtml(drive.driveLetter)}` : ""}</p>`;
+  elements.usbProvisioningSummary.innerHTML = `<p><strong>${escapeHtml(elements.usbInstallationName.value.trim() || "Neue Grabenplaner-Installation")}</strong></p><p>Zielbetrieb: Lokal · ${features} Funktionsbereiche · ${locations} Standorte · ${employees} Teammitglieder · ${escapeHtml(branding)}${drive ? ` · Ziel ${escapeHtml(drive.driveLetter)}` : ""}</p>`;
   const expected = drive?.expectedConfirmation || "FORMATIEREN X:";
   elements.usbFormatConfirmation.placeholder = expected;
   elements.usbFormatConfirmationHint.textContent = drive ? `Alle vorhandenen Daten auf ${drive.driveLetter} werden gelöscht. Exakt „${expected}“ eingeben.` : "Zuerst einen geeigneten USB-Stick auswählen.";
@@ -4287,8 +4302,15 @@ function updateUsbSummary() {
 }
 
 async function loadUsbProvisioning() {
+  const availability = state.portalStatus?.usbProvisioning || {};
+  if (availability.available !== true) {
+    renderUsbAvailability(availability);
+    return;
+  }
   const firstLoad = !state.usbProvisioning.metadata;
-  const metadata = await api("/api/usb-provisioning/status");
+  const metadata = await api("/api/usb-provisioning/status", {
+    headers: { "X-Grabenplaner-USB-Action": "provisioning" },
+  });
   state.usbProvisioning.metadata = metadata;
   renderUsbAvailability(metadata);
   if (!metadata.available) return;
@@ -4310,7 +4332,9 @@ async function refreshUsbDrives() {
   if (!state.usbProvisioning.metadata?.available) return;
   elements.usbRefreshDrivesButton.disabled = true;
   try {
-    const result = await api("/api/usb-provisioning/drives");
+    const result = await api("/api/usb-provisioning/drives", {
+      headers: { "X-Grabenplaner-USB-Action": "provisioning" },
+    });
     state.usbProvisioning.metadata = { ...state.usbProvisioning.metadata, ...result };
     if (!result.drives.some((drive) => drive.token === state.usbProvisioning.selectedDriveToken)) state.usbProvisioning.selectedDriveToken = "";
     renderUsbDrives();

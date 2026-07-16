@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.61.2 Beta · Funktionspatch
+
+- Der USB-Stick-Assistent steht berechtigten Developer-, IT-Admin- und Admin-Konten nun auch im LAN-Host- und HTTPS-Serverbetrieb zur Verfügung.
+- Formatierung und Installation bleiben aus Sicherheitsgründen ausschließlich direkt am physischen Windows-Host möglich; entfernte Browser, Tablets und Smartphones erhalten nur einen erklärenden Sperrhinweis.
+- Im HTTPS-Betrieb wird zusätzlich die wirksame Clientadresse hinter dem vertrauenswürdigen Reverse-Proxy geprüft. Mutationen verlangen weiterhin Session, USB-Berechtigung, CSRF-Schutz, Aktionsheader und eine gleichursprüngliche Browseranfrage.
+- Im Netzwerk- und Serverbetrieb ist das Erstellerkonto an das angemeldete Administratorkonto gebunden. Der erzeugte Stick startet unabhängig vom Quellmodus stets mit eigener SQLite-Datenbank im Lokalbetrieb.
+
 ## v0.61.1 Beta · Serviceupdate
 
 - Neuer lokaler Windows-Assistent zum Erstellen vorkonfigurierter Grabenplaner-USB-Sticks ohne UAC-Anforderung oder Rechteumgehung.

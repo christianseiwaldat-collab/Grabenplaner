@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.61.1 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.61.2 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -693,11 +693,12 @@
 
           <section id="usbProvisioningSettings" class="settings-section settings-two-column">
             <div class="settings-card full-span usb-availability-card" id="usbProvisioningAvailabilityCard">
-              <div class="card-heading"><div class="card-icon">USB</div><div><h2>USB-Stick erstellen</h2><p>Eine neue, vorkonfigurierte Grabenplaner-Installation für einen Windows-USB-Stick vorbereiten.</p></div></div>
+              <div class="card-heading"><div class="card-icon">USB</div><div><h2>USB-Stick erstellen</h2><p>Am Windows-Host einen vorkonfigurierten Grabenplaner-Stick erstellen. Die Installation auf dem Stick startet immer im Lokalbetrieb.</p></div></div>
               <div class="usb-availability" id="usbProvisioningAvailability">
                 <span class="status-badge inactive" id="usbProvisioningAvailabilityBadge">Wird geprüft</span>
-                <div><strong id="usbProvisioningAvailabilityTitle">Lokale Windows-Umgebung wird geprüft</strong><small id="usbProvisioningAvailabilityText">Der Assistent ist ausschließlich direkt am Grabenplaner-PC im Lokalbetrieb verfügbar.</small></div>
+                <div><strong id="usbProvisioningAvailabilityTitle">Windows-Host wird geprüft</strong><small id="usbProvisioningAvailabilityText">USB-Sticks können ausschließlich direkt am Windows-Host vorbereitet werden.</small></div>
               </div>
+              <p class="settings-note security-note"><strong>Ziel: Lokalbetrieb.</strong> Der erstellte Stick arbeitet unabhängig vom aktuellen LAN- oder HTTPS-Betrieb mit eigener lokaler SQLite-Datenbank.</p>
               <p class="settings-note security-note">Es wird keine Windows-Administratorfreigabe angefordert. Erlaubt Windows die Formatierung mit dem aktuellen Benutzerkonto nicht, wird der Vorgang mit einer verständlichen Meldung beendet.</p>
             </div>
 
@@ -720,7 +721,7 @@
                   <div class="usb-panel-heading"><span class="usb-panel-number">1</span><div><h3>Installationsprofil</h3><p>Ein passendes Grundprofil wählen und anschließend bei Bedarf einzelne Funktionen anpassen.</p></div></div>
                   <label class="field"><span>Profil</span><select id="usbInstallationProfile"><option value="full">Vollständiger Grabenplaner</option><option value="planning-vacation" selected>Dienstplanung &amp; Urlaub</option><option value="custom">Benutzerdefiniert</option></select></label>
                   <label class="field"><span>Bezeichnung der Installation</span><input id="usbInstallationName" maxlength="80" placeholder="z. B. Filiale 05 · Dienstplanung" /></label>
-                  <div class="calculation-note">Das Profil legt nur den verfügbaren Funktionsumfang dieser Installation fest. Rollen und individuelle Rechte werden im Schritt „Team“ vergeben.</div>
+                  <div class="calculation-note"><strong>Zielbetrieb: Lokalbetrieb.</strong> Das Profil legt nur den verfügbaren Funktionsumfang dieser eigenständigen Installation fest. Rollen und individuelle Rechte werden im Schritt „Team“ vergeben.</div>
                 </section>
                 <section class="usb-panel-card">
                   <div class="usb-panel-heading"><span class="usb-panel-number">✓</span><div><h3>Enthaltene Funktionen</h3><p>Nicht ausgewählte Bereiche werden im Zielsystem ausgeblendet und technisch deaktiviert.</p></div></div>
@@ -798,7 +799,7 @@
 
               <div class="usb-wizard-panel" data-usb-wizard-panel="drive">
                 <section class="usb-panel-card">
-                  <div class="usb-panel-heading"><span class="usb-panel-number">5</span><div><h3>USB-Stick auswählen</h3><p>Es werden ausschließlich geeignete, wechselbare USB-Laufwerke angeboten.</p></div></div>
+                  <div class="usb-panel-heading"><span class="usb-panel-number">5</span><div><h3>USB-Stick am Host auswählen</h3><p>Angezeigt werden ausschließlich geeignete Wechselmedien, die direkt am Windows-Host angeschlossen sind.</p></div></div>
                   <div class="usb-subsection-heading"><div><strong>Erkannte Laufwerke</strong><small>Laufwerksbuchstabe, Hersteller und Größe vor der Auswahl genau prüfen.</small></div><button class="secondary-button compact-button" id="usbRefreshDrivesButton" type="button">Neu suchen</button></div>
                   <div class="usb-drive-list" id="usbDriveList"><p class="settings-note">Noch keine Laufwerksprüfung durchgeführt.</p></div>
                   <div class="usb-format-summary"><span><small>Dateisystem</small><strong>NTFS</strong></span><span><small>Laufwerksname</small><strong>Grabenplaner</strong></span><span><small>Formatierung</small><strong>Schnell</strong></span></div>
@@ -810,7 +811,7 @@
                   <div class="usb-root-preview"><strong>Im Hauptverzeichnis sichtbar</strong><code>Grabenplaner starten.cmd</code><code>Erste Schritte.pdf</code><code>Backups\</code><code>PDF-Exporte\</code></div>
                   <div class="usb-final-summary" id="usbProvisioningSummary"><p class="settings-note">Profil, Branding, Team und Zielstick werden vor dem Start noch einmal zusammengefasst.</p></div>
                   <label class="field usb-confirm-field"><span>Zur Bestätigung exakt eingeben</span><input id="usbFormatConfirmation" autocomplete="off" spellcheck="false" placeholder="FORMATIEREN X:" /><small id="usbFormatConfirmationHint">X: wird nach der Laufwerksauswahl durch den tatsächlichen Buchstaben ersetzt.</small></label>
-                  <button class="danger-button" id="usbProvisioningStartButton" type="button" disabled>USB-Stick formatieren und erstellen</button>
+                  <button class="danger-button" id="usbProvisioningStartButton" type="button" disabled>USB-Stick am Host formatieren und erstellen</button>
                 </section>
               </div>
 
@@ -836,7 +837,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.61.1 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.61.2 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
