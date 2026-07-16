@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.61.1 Beta</strong> · Windows · SQLite · Source-available
+  <strong>v0.61.2 Beta</strong> · Windows · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -102,7 +102,7 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Diens
 - Standortbezogene Branding-Kits für unterschiedliche Filialauftritte
 - Lokale SQLite-Datenbank ohne externen Datenbankserver
 - Integriertes Backup-System und GitHub-basierter Aktualisierungscheck
-- Lokaler Windows-Assistent für vorkonfigurierte USB-Sticks mit Funktionsprofil, Team, Rollen, Branding-Kits und anpassbarer „Erste Schritte“-PDF
+- Windows-Host-Assistent für vorkonfigurierte USB-Sticks mit Funktionsprofil, Team, Rollen, Branding-Kits und anpassbarer „Erste Schritte“-PDF; nutzbar aus Lokal-, LAN- und HTTPS-Betrieb direkt am Host
 
 ## Schutz sensibler Personalakt-Daten
 
@@ -120,7 +120,7 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 ## Schnellstart unter Windows
 
 1. Die portable ZIP-Datei unter [Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.61.1 Beta starten.cmd` doppelt anklicken.
+2. `Grabenplaner v0.61.2 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.
