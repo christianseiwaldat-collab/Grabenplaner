@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.65 Beta
+
+- Einstellungen sind fachlich neu gegliedert: Urlaubsfreigaben liegen unter „Urlaub“, Pausen-, Samstags- und WLAN-Regeln unter „Zeiterfassung“, Vertrauensstufen unter „Personal“.
+- „Ansicht & Startverhalten“ kann den zuletzt angesehenen Dienstplan- und Urlaubs-Gesamtplan benutzer- und browserbezogen wieder öffnen; der Sonntag wird im selben Bereich gesteuert.
+- Personalleitung und höhere Rollen können das Vertrauensstufensystem ohne Datenverlust deaktivieren und die Sichtbarkeit für Filialleitung, Abteilungsleitung sowie Teammitglieder getrennt festlegen.
+- Bei deaktivierten Vertrauensstufen bleiben A/B/C-Zuordnungen bearbeitbar gespeichert; für Bestätigungsfristen gilt währenddessen vorsichtshalber Stufe C.
+- Zugänge und Rechtemanagement nutzen eine kompaktere echte Zweispaltenansicht. WLAN-Status, Controller-Zuordnung und Anwesenheitsregeln sind in einem gemeinsamen Bereich gebündelt.
+
 ## v0.64 Beta
 
 - Direkte, manuell ausgelöste Verbindungen ergänzen den bestehenden Datei-Import und -Export, ohne automatische Hintergrundsynchronisation.

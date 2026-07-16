@@ -167,7 +167,7 @@ Für den Paketbau wird die in `package.json` festgelegte pnpm-Version benötigt.
 Das geprüfte Paket wird am Server in einer als Administrator gestarteten PowerShell zusammen mit seiner veröffentlichten Prüfsumme eingespielt:
 
 ```powershell
-$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.64.0-beta-windows-x64.zip'
+$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.65.0-beta-windows-x64.zip'
 $sha256 = ((Get-Content "$package.sha256" -Raw).Trim() -split '\s+')[0]
 
 .\server-tools\windows\Update-GrabenplanerServer.ps1 `
