@@ -32,6 +32,16 @@ legacyDb.exec(`
     permissions TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+  CREATE TABLE time_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_number TEXT NOT NULL,
+    entry_type TEXT NOT NULL,
+    entry_timestamp TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'portal',
+    note TEXT NOT NULL DEFAULT '',
+    created_by TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
   INSERT INTO portal_roles (id, name, builtin, permissions)
   VALUES ('employee', 'Alt', 1, '["legacy"]');
   INSERT INTO portal_roles (id, name, builtin, permissions)
@@ -113,6 +123,8 @@ test.after(async () => {
 test("alte Datenbank wird um das Portal-Fundament erweitert", () => {
   const tables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => row.name));
   assert.ok(tables.has("portal_sessions"));
+  assert.ok(tables.has("mobile_sessions"));
+  assert.ok(tables.has("mobile_refresh_token_history"));
   assert.ok(tables.has("vacation_requests"));
   assert.ok(tables.has("time_off_requests"));
   assert.ok(tables.has("time_off_change_requests"));
@@ -141,6 +153,11 @@ test("alte Datenbank wird um das Portal-Fundament erweitert", () => {
   assert.ok(roleColumns.has("description"));
   assert.ok(roleColumns.has("sort_order"));
   assert.ok(roleColumns.has("updated_at"));
+
+  const timeEntryColumns = new Set(db.prepare("PRAGMA table_info(time_entries)").all().map((column) => column.name));
+  assert.ok(timeEntryColumns.has("client_request_id"));
+  assert.ok(timeEntryColumns.has("mobile_session_id"));
+  assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_time_entries_mobile_request'").get());
 });
 
 test("Built-in-Rollen werden aktualisiert und eigene Rollen bleiben erhalten", () => {
