@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.61 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.61.1 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -370,6 +370,7 @@
             <button class="settings-tab" data-settings-tab="access">Zugänge</button>
             <button class="settings-tab" data-settings-tab="rights">Rechtemanagement</button>
             <button class="settings-tab" data-settings-tab="backup">Datenbank</button>
+            <button class="settings-tab hidden" id="usbProvisioningTab" data-settings-tab="usbProvisioning">USB-Stick</button>
           </div>
 
           <section id="generalSettings" class="settings-section settings-two-column active">
@@ -690,15 +691,176 @@
             </div>
           </section>
 
+          <section id="usbProvisioningSettings" class="settings-section settings-two-column">
+            <div class="settings-card full-span usb-availability-card" id="usbProvisioningAvailabilityCard">
+              <div class="card-heading"><div class="card-icon">USB</div><div><h2>USB-Stick erstellen</h2><p>Eine neue, vorkonfigurierte Grabenplaner-Installation für einen Windows-USB-Stick vorbereiten.</p></div></div>
+              <div class="usb-availability" id="usbProvisioningAvailability">
+                <span class="status-badge inactive" id="usbProvisioningAvailabilityBadge">Wird geprüft</span>
+                <div><strong id="usbProvisioningAvailabilityTitle">Lokale Windows-Umgebung wird geprüft</strong><small id="usbProvisioningAvailabilityText">Der Assistent ist ausschließlich direkt am Grabenplaner-PC im Lokalbetrieb verfügbar.</small></div>
+              </div>
+              <p class="settings-note security-note">Es wird keine Windows-Administratorfreigabe angefordert. Erlaubt Windows die Formatierung mit dem aktuellen Benutzerkonto nicht, wird der Vorgang mit einer verständlichen Meldung beendet.</p>
+            </div>
+
+            <div class="settings-card full-span usb-wizard-shell" id="usbProvisioningWizard">
+              <div class="usb-wizard-heading">
+                <div><span class="eyebrow">Vorbereitung</span><h2>Stick-Assistent</h2><p>Alle Zielangaben werden zuerst geprüft. Die Formatierung beginnt erst nach der ausdrücklichen Bestätigung.</p></div>
+                <span class="status-badge inactive" id="usbWizardDraftStatus">Noch nicht gestartet</span>
+              </div>
+
+              <nav class="usb-wizard-steps" aria-label="Schritte der USB-Stick-Erstellung">
+                <button class="active" type="button" data-usb-wizard-step="profile" aria-current="step"><span>1</span><strong>Profil</strong></button>
+                <button type="button" data-usb-wizard-step="branding"><span>2</span><strong>Branding</strong></button>
+                <button type="button" data-usb-wizard-step="team"><span>3</span><strong>Team</strong></button>
+                <button type="button" data-usb-wizard-step="guide"><span>4</span><strong>Erste Schritte</strong></button>
+                <button type="button" data-usb-wizard-step="drive"><span>5</span><strong>USB-Stick</strong></button>
+              </nav>
+
+              <div class="usb-wizard-panel active" data-usb-wizard-panel="profile">
+                <section class="usb-panel-card">
+                  <div class="usb-panel-heading"><span class="usb-panel-number">1</span><div><h3>Installationsprofil</h3><p>Ein passendes Grundprofil wählen und anschließend bei Bedarf einzelne Funktionen anpassen.</p></div></div>
+                  <label class="field"><span>Profil</span><select id="usbInstallationProfile"><option value="full">Vollständiger Grabenplaner</option><option value="planning-vacation" selected>Dienstplanung &amp; Urlaub</option><option value="custom">Benutzerdefiniert</option></select></label>
+                  <label class="field"><span>Bezeichnung der Installation</span><input id="usbInstallationName" maxlength="80" placeholder="z. B. Filiale 05 · Dienstplanung" /></label>
+                  <div class="calculation-note">Das Profil legt nur den verfügbaren Funktionsumfang dieser Installation fest. Rollen und individuelle Rechte werden im Schritt „Team“ vergeben.</div>
+                </section>
+                <section class="usb-panel-card">
+                  <div class="usb-panel-heading"><span class="usb-panel-number">✓</span><div><h3>Enthaltene Funktionen</h3><p>Nicht ausgewählte Bereiche werden im Zielsystem ausgeblendet und technisch deaktiviert.</p></div></div>
+                  <div class="usb-module-grid" id="usbModuleSelection">
+                    <label><input type="checkbox" value="planning" checked disabled /><span><strong>Dienstplanung</strong><small>Erforderliche Kernfunktion</small></span></label>
+                    <label><input type="checkbox" value="vacations" checked /><span><strong>Urlaubsplanung</strong><small>Kalender und PDF-Ausgabe</small></span></label>
+                    <label><input type="checkbox" value="absence_requests" checked /><span><strong>Urlaub &amp; ZA</strong><small>Anträge und Freigaben</small></span></label>
+                    <label><input type="checkbox" value="employee_portal" /><span><strong>Mitarbeiterportal</strong><small>Persönliche Smartphone-Ansicht</small></span></label>
+                    <label><input type="checkbox" value="time_tracking" /><span><strong>Zeiterfassung</strong><small>Kommen, Pause und Gehen</small></span></label>
+                    <label><input type="checkbox" value="sickness_amu" /><span><strong>Krankmeldung &amp; AUM</strong><small>Meldung und Dokumente</small></span></label>
+                    <label><input type="checkbox" value="wifi_time_suggestions" /><span><strong>WLAN-Zeitvorschläge</strong><small>Benötigt die Zeiterfassung</small></span></label>
+                  </div>
+                </section>
+              </div>
+
+              <div class="usb-wizard-panel" data-usb-wizard-panel="branding">
+                <section class="usb-panel-card">
+                  <div class="usb-panel-heading"><span class="usb-panel-number">2</span><div><h3>Haupt-Branding</h3><p>Dieses Erscheinungsbild wird beim ersten Start und für die „Erste Schritte“-PDF verwendet.</p></div></div>
+                  <label class="field"><span>Haupt-Branding</span><select id="usbPrimaryBranding"><option value="">Installierte Brandings werden geladen …</option></select></label>
+                  <div class="usb-branding-preview" id="usbPrimaryBrandingPreview"><span class="status-badge inactive">Vorschau</span><strong>Noch kein Branding ausgewählt</strong><small>Logo, Firmenname und Farben erscheinen hier.</small></div>
+                </section>
+                <section class="usb-panel-card">
+                  <div class="usb-panel-heading"><span class="usb-panel-number">+</span><div><h3>Weitere Branding-Kits</h3><p>Zusätzliche Kits werden mitinstalliert und können später als Branding ausgewählt oder Filialen zugeordnet werden.</p></div></div>
+                  <div class="usb-additional-brandings" id="usbAdditionalBrandings"><p class="settings-note">Installierte Branding-Kits werden geladen.</p></div>
+                  <div class="usb-import-row">
+                    <label class="secondary-button file-button">Branding-Kit auswählen<input id="usbBrandingImportFile" type="file" accept=".zip,.json,application/zip,application/json" /></label>
+                    <button class="primary-button" id="usbImportBrandingButton" type="button">Für den Stick importieren</button>
+                  </div>
+                  <p class="settings-note">Das Haupt-Branding wird immer mitinstalliert. Ein hier importiertes Kit verändert nicht automatisch das Branding der laufenden Installation.</p>
+                </section>
+              </div>
+
+              <div class="usb-wizard-panel" data-usb-wizard-panel="team">
+                <section class="usb-panel-card">
+                  <div class="usb-panel-heading"><span class="usb-panel-number">3</span><div><h3>Ersteller &amp; Standorte</h3><p>Der Ersteller wird zwingend als Admin mit seinem bestehenden Passwort übernommen.</p></div></div>
+                  <article class="usb-creator-card" id="usbCreatorSummary">
+                    <span class="usb-creator-mark">A</span><div><strong>Admin wird ermittelt</strong><small>Personalnummer, Name und bestehender Zugang werden lokal geprüft.</small></div><span class="status-badge inactive">Pflicht</span>
+                  </article>
+                  <div class="inline-fields usb-creator-auth">
+                    <label class="field"><span>Erstellerkonto</span><select id="usbCreatorEmployee"></select></label>
+                    <label class="field"><span>Bestehendes Passwort bestätigen</span><span class="password-field"><input id="usbCreatorPassword" type="password" autocomplete="current-password" /><button type="button" data-password-toggle="usbCreatorPassword">Anzeigen</button></span></label>
+                  </div>
+                  <p class="settings-note">Das Passwort wird nur zur Freigabe dieses Vorgangs geprüft und nicht in Klartext gespeichert. Der vorhandene Passwort-Hash wird als Admin-Zugang übernommen.</p>
+                  <div class="usb-subsection-heading"><div><strong>Standorte &amp; Abteilungen</strong><small>Nur ausgewählte Stammdaten werden auf den Stick übernommen.</small></div><button class="secondary-button compact-button" id="usbAddLocationButton" type="button">Standorte verwalten</button></div>
+                  <div class="usb-selection-list" id="usbLocationSelection"><p class="settings-note">Standorte werden geladen.</p></div>
+                </section>
+                <section class="usb-panel-card">
+                  <div class="usb-panel-heading"><span class="usb-panel-number">MA</span><div><h3>Team, Rollen &amp; Rechte</h3><p>Bestehende Personen auswählen oder nur für den Zielstick neu vorbereiten.</p></div></div>
+                  <div class="usb-team-toolbar"><label class="field"><span>Teammitglied suchen</span><input id="usbEmployeeSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer oder Name" /></label><button class="primary-button" id="usbAddEmployeeButton" type="button">+ Teammitglied</button></div>
+                  <div class="usb-selection-list usb-team-selection" id="usbEmployeeSelection"><p class="settings-note">Teammitglieder, App-Rollen und Zusatzrechte werden geladen.</p></div>
+                </section>
+              </div>
+
+              <div class="usb-wizard-panel" data-usb-wizard-panel="guide">
+                <section class="usb-panel-card usb-guide-fields">
+                  <div class="usb-panel-heading"><span class="usb-panel-number">4</span><div><h3>„Erste Schritte“-PDF anpassen</h3><p>Eine kurze, gebrandete Einführung liegt später direkt im Hauptverzeichnis des Sticks.</p></div></div>
+                  <label class="field"><span>Titel</span><input id="usbGuideTitle" maxlength="120" value="Erste Schritte mit dem Grabenplaner" /></label>
+                  <label class="field"><span>Einleitung</span><textarea id="usbGuideIntroduction" rows="4" maxlength="1400" placeholder="Kurze Begrüßung und Zweck dieser Installation"></textarea></label>
+                  <label class="field"><span>Eigene Hinweise</span><textarea id="usbGuideNotes" rows="5" maxlength="2400" placeholder="Optional, z. B. Ansprechperson oder interner Ablauf"></textarea></label>
+                  <label class="field"><span>Kontakt</span><input id="usbGuideContact" maxlength="180" placeholder="Name, E-Mail oder Telefonnummer" /></label>
+                  <div class="usb-guide-topics">
+                    <strong>Standardkapitel</strong>
+                    <label><input id="usbGuideIncludeStartup" type="checkbox" checked /> Starten und sicher beenden</label>
+                    <label><input id="usbGuideIncludeModules" type="checkbox" checked /> Freigeschaltete Funktionen</label>
+                    <label><input id="usbGuideIncludePdf" type="checkbox" checked /> PDF-Exporte</label>
+                    <label><input id="usbGuideIncludeBackup" type="checkbox" checked /> Backups</label>
+                  </div>
+                </section>
+                <section class="usb-panel-card usb-guide-preview-card">
+                  <div class="usb-panel-heading"><span class="usb-panel-number">PDF</span><div><h3>Vorschau</h3><p>Logo und Farben stammen automatisch aus dem Haupt-Branding.</p></div></div>
+                  <button class="secondary-button" id="usbGuidePreviewButton" type="button">PDF-Vorschau erzeugen</button>
+                  <iframe id="usbGuidePreviewFrame" title="Vorschau der Erste-Schritte-PDF"></iframe>
+                </section>
+              </div>
+
+              <div class="usb-wizard-panel" data-usb-wizard-panel="drive">
+                <section class="usb-panel-card">
+                  <div class="usb-panel-heading"><span class="usb-panel-number">5</span><div><h3>USB-Stick auswählen</h3><p>Es werden ausschließlich geeignete, wechselbare USB-Laufwerke angeboten.</p></div></div>
+                  <div class="usb-subsection-heading"><div><strong>Erkannte Laufwerke</strong><small>Laufwerksbuchstabe, Hersteller und Größe vor der Auswahl genau prüfen.</small></div><button class="secondary-button compact-button" id="usbRefreshDrivesButton" type="button">Neu suchen</button></div>
+                  <div class="usb-drive-list" id="usbDriveList"><p class="settings-note">Noch keine Laufwerksprüfung durchgeführt.</p></div>
+                  <div class="usb-format-summary"><span><small>Dateisystem</small><strong>NTFS</strong></span><span><small>Laufwerksname</small><strong>Grabenplaner</strong></span><span><small>Formatierung</small><strong>Schnell</strong></span></div>
+                </section>
+                <section class="usb-panel-card usb-confirm-card">
+                  <div class="usb-panel-heading"><span class="usb-panel-number">!</span><div><h3>Versehschutz &amp; Bestätigung</h3><p>Die Programmdateien liegen anschließend aufgeräumt in einem geschützten Unterordner.</p></div></div>
+                  <label class="switch-row"><span><strong>Programmordner ausblenden</strong><small>Der Ordner <code>app</code> wird in Windows als versteckter Systemordner markiert.</small></span><input id="usbHideProgramFolder" type="checkbox" checked /></label>
+                  <label class="switch-row"><span><strong>Zusätzlicher Löschschutz</strong><small>Programmdateien erhalten einen Schutz gegen versehentliche Änderungen; der Stick bleibt auf anderen Windows-PCs nutzbar.</small></span><input id="usbProtectProgramFiles" type="checkbox" checked /></label>
+                  <div class="usb-root-preview"><strong>Im Hauptverzeichnis sichtbar</strong><code>Grabenplaner starten.cmd</code><code>Erste Schritte.pdf</code><code>Backups\</code><code>PDF-Exporte\</code></div>
+                  <div class="usb-final-summary" id="usbProvisioningSummary"><p class="settings-note">Profil, Branding, Team und Zielstick werden vor dem Start noch einmal zusammengefasst.</p></div>
+                  <label class="field usb-confirm-field"><span>Zur Bestätigung exakt eingeben</span><input id="usbFormatConfirmation" autocomplete="off" spellcheck="false" placeholder="FORMATIEREN X:" /><small id="usbFormatConfirmationHint">X: wird nach der Laufwerksauswahl durch den tatsächlichen Buchstaben ersetzt.</small></label>
+                  <button class="danger-button" id="usbProvisioningStartButton" type="button" disabled>USB-Stick formatieren und erstellen</button>
+                </section>
+              </div>
+
+              <div class="usb-wizard-actions" id="usbWizardActions">
+                <button class="secondary-button" id="usbWizardPreviousButton" type="button" disabled>Zurück</button>
+                <span class="settings-note" id="usbWizardStepHint">Schritt 1 von 5 · Profil und Funktionen</span>
+                <button class="primary-button" id="usbWizardNextButton" type="button">Weiter</button>
+              </div>
+
+              <section class="usb-job-panel hidden" id="usbProvisioningProgressPanel" aria-live="polite">
+                <div class="usb-job-heading"><div><span class="eyebrow">USB-Stick wird erstellt</span><h3 id="usbProvisioningProgressTitle">Vorbereitung läuft</h3></div><strong id="usbProvisioningProgressPercent">0 %</strong></div>
+                <div class="usb-progress-track" id="usbProvisioningProgressTrack" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+                <p id="usbProvisioningProgressText">Die erforderlichen Dateien werden vorbereitet.</p>
+                <div class="usb-progress-steps" id="usbProvisioningProgressSteps"></div>
+              </section>
+
+              <section class="usb-job-panel usb-result-panel hidden" id="usbProvisioningResultPanel" aria-live="polite">
+                <span class="usb-result-mark">✓</span><div><span class="eyebrow">Fertig</span><h3>Der Grabenplaner-Stick ist einsatzbereit</h3><p id="usbProvisioningResultText">Installation, Datenbank, Branding und Dokumentation wurden geprüft.</p><div class="usb-result-details" id="usbProvisioningResultDetails"></div></div>
+              </section>
+            </div>
+          </section>
+
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.61 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.61.1 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
       </main>
     </div>
+
+    <dialog class="modal" id="usbEmployeeDraftModal">
+      <form method="dialog" id="usbEmployeeDraftForm">
+        <div class="modal-header"><div><span class="eyebrow">Nur für den neuen Stick</span><h2>Teammitglied vorbereiten</h2><p>Der Entwurf verändert die laufende Datenbank nicht.</p></div><button type="button" class="close-button" data-close="usbEmployeeDraftModal">×</button></div>
+        <div class="form-grid">
+          <label class="field"><span>Personalnummer</span><input id="usbDraftPersonnelNumber" inputmode="numeric" maxlength="12" required /></label>
+          <label class="field"><span>Vollständiger Name</span><input id="usbDraftFullName" maxlength="100" required /></label>
+          <label class="field"><span>Spitzname im Plan</span><input id="usbDraftNickname" maxlength="40" required /></label>
+          <label class="field"><span>Farbe</span><input id="usbDraftColor" type="color" value="#0b84c6" required /></label>
+          <label class="field"><span>Sollstunden</span><input id="usbDraftContractedHours" type="number" min="0" max="80" step="0.5" value="38.5" required /></label>
+          <label class="field"><span>Position</span><select id="usbDraftPosition" required></select></label>
+          <label class="field"><span>Standort</span><select id="usbDraftLocation" required></select></label>
+          <label class="field"><span>Abteilung</span><select id="usbDraftDepartment"><option value="">Keine Abteilung</option></select></label>
+          <label class="field"><span>App-Rolle</span><select id="usbDraftRole"><option value="employee">Mitarbeiter</option><option value="department_manager">Abteilungsleitung</option><option value="manager">Filialleitung</option><option value="hr">Personalleitung</option><option value="admin">Admin</option></select></label>
+          <label class="field"><span>Startpasswort (optional)</span><span class="password-field"><input id="usbDraftPassword" type="password" minlength="6" autocomplete="new-password" /><button type="button" data-password-toggle="usbDraftPassword">Anzeigen</button></span><small>Ohne Startpasswort wird noch kein Portalzugang aktiviert.</small></label>
+        </div>
+        <div class="modal-actions"><span></span><button type="button" class="secondary-button" data-close="usbEmployeeDraftModal">Abbrechen</button><button type="submit" class="primary-button">Entwurf übernehmen</button></div>
+      </form>
+    </dialog>
 
     <dialog class="modal wide-modal employee-modal" id="employeeModal">
       <form method="dialog" id="employeeForm">
