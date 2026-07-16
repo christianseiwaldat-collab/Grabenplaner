@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.61.2 Beta</strong> · Windows · SQLite · Source-available
+  <strong>v0.62 Beta</strong> · Windows · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -98,6 +98,7 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Diens
 - Freiwilliger WLAN-Anwesenheitsassistent mit bearbeitbaren und bestätigungspflichtigen Zeitvorschlägen
 - Wochen- und Monatsübersichten der Zeiterfassung mit nachvollziehbaren Korrekturanträgen
 - Mobil optimiertes Leitungsportal mit konfigurierbaren Kernfunktionen
+- Versionierte Mobile-API mit sicherer Geräteanmeldung, Standortbranding, persönlichem Dienstplan und Zeiterfassung für den eigenständigen Android-/iOS-Client
 - Rollen- und Rechtemanagement mit personenbezogenen Zusatzrechten und Bereichsgrenzen
 - Standortbezogene Branding-Kits für unterschiedliche Filialauftritte
 - Lokale SQLite-Datenbank ohne externen Datenbankserver
@@ -114,13 +115,12 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 
 - **Schnittstellen zur Lohnverrechnung:** Standardisierte Exporte für Arbeitszeiten, Abwesenheiten und relevante Personalstammdaten sind geplant, aber noch nicht verfügbar. Unterstützte Zielformate und Lohnverrechnungssysteme werden erst mit der konkreten Schnittstelle festgelegt.
 - Hochverfügbarkeit und horizontale Skalierung über mehrere Anwendungsinstanzen
-- Nativer Token-Login und Geräte-Sitzungen für den eigenständig versionierten Android-/iOS-Client
 - Erweiterte Auswertungs- und Integrationsmöglichkeiten
 
 ## Schnellstart unter Windows
 
 1. Die portable ZIP-Datei unter [Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.61.2 Beta starten.cmd` doppelt anklicken.
+2. `Grabenplaner v0.62 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.
@@ -137,7 +137,7 @@ Aktualisierungen werden über GitHub geprüft. Die integrierte Aktualisierung er
 | Bild- und Dokumentaufbereitung | Sharp und PDFKit |
 | Lokale AUM-Datenerkennung | PDF.js für digitale PDFs; Tesseract.js mit lokal mitgeliefertem deutschen Sprachmodell für Scan-PDFs, hochgeladene Fotos und Kamerabilder |
 | Geschützter Personalakt-Speicher | AES-256-GCM, kontextgebundene Verschlüsselung und gemeinsame Sicherung mit der Datenbank |
-| Authentifizierung | Rollen, Sitzungen, CSRF-Schutz und bereichsbezogene Berechtigungen |
+| Authentifizierung | Rollen, Browser-Sitzungen mit CSRF-Schutz, rotierende native Geräte-Sitzungen und bereichsbezogene Berechtigungen |
 | HTTPS-Serverbetrieb | IT-verwalteter Windows-Einzelserver mit Caddy, WinSW, Live-/Ready-Prüfung sowie kontrolliertem Update, Backup und Restore |
 
 Für lokale Entwicklung wird Node.js 22.13 oder neuer benötigt:
