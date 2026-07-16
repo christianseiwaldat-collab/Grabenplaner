@@ -43,6 +43,15 @@ const state = {
   allEmployees: [],
   updateStatus: null,
   selectedColor: "#0b84c6",
+  integrations: {
+    importCatalog: null,
+    payrollCatalog: null,
+    profiles: [],
+    runs: [],
+    inspection: null,
+    preview: null,
+    payrollPreflight: null,
+  },
   employeeEditMode: "full",
   personnelTab: "employees",
   editingLocationId: null,
@@ -102,7 +111,7 @@ const elements = Object.fromEntries(
   [
     "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelView", "settingsView", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarEmployeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
-    "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "wifiAutomationSettings", "backupSettings", "rightsSettings", "employeeSettings",
+    "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "integrationSettings", "wifiAutomationSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField",
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount",
@@ -132,6 +141,9 @@ const elements = Object.fromEntries(
     "timeSummaryFrom", "timeSummaryTo", "loadTimeSummaryButton", "timeSummaryList", "timeCorrectionPanel", "timeCorrectionCount", "timeCorrectionRequestList",
     "brandLogo", "footerBrandLogo", "adminContactLink", "brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt", "brandingPreviewLogo", "brandingPreviewTitle", "brandingPreviewCompany", "brandingKitLibrary", "brandingAssignmentList", "exportBrandingButton", "brandingImportFile", "importBrandingButton", "toast",
     "usbProvisioningTab", "usbProvisioningSettings", "usbProvisioningAvailabilityCard", "usbProvisioningAvailability", "usbProvisioningAvailabilityBadge", "usbProvisioningAvailabilityTitle", "usbProvisioningAvailabilityText", "usbProvisioningWizard", "usbWizardDraftStatus", "usbInstallationProfile", "usbInstallationName", "usbModuleSelection", "usbPrimaryBranding", "usbPrimaryBrandingPreview", "usbAdditionalBrandings", "usbBrandingImportFile", "usbImportBrandingButton", "usbCreatorSummary", "usbCreatorEmployee", "usbCreatorPassword", "usbLocationSelection", "usbAddLocationButton", "usbEmployeeSearch", "usbAddEmployeeButton", "usbEmployeeSelection", "usbGuideTitle", "usbGuideIntroduction", "usbGuideNotes", "usbGuideContact", "usbGuideIncludeStartup", "usbGuideIncludeModules", "usbGuideIncludePdf", "usbGuideIncludeBackup", "usbGuidePreviewButton", "usbGuidePreviewFrame", "usbRefreshDrivesButton", "usbDriveList", "usbHideProgramFolder", "usbProtectProgramFiles", "usbProvisioningSummary", "usbFormatConfirmation", "usbFormatConfirmationHint", "usbProvisioningStartButton", "usbWizardActions", "usbWizardPreviousButton", "usbWizardStepHint", "usbWizardNextButton", "usbProvisioningProgressPanel", "usbProvisioningProgressTitle", "usbProvisioningProgressPercent", "usbProvisioningProgressTrack", "usbProvisioningProgressText", "usbProvisioningProgressSteps", "usbProvisioningResultPanel", "usbProvisioningResultText", "usbProvisioningResultDetails", "usbEmployeeDraftModal", "usbEmployeeDraftForm", "usbDraftPersonnelNumber", "usbDraftFullName", "usbDraftNickname", "usbDraftColor", "usbDraftContractedHours", "usbDraftPosition", "usbDraftLocation", "usbDraftDepartment", "usbDraftRole", "usbDraftPassword",
+    "employeeImportCard", "importProfileCard", "payrollExportCard", "exportProfileCard", "integrationInformationCard", "integrationHistoryCard", "openPersonnelImportButton", "importProfileList", "exportProfileList", "integrationHistory",
+    "payrollProfile", "payrollLocation", "payrollDepartment", "payrollDateFrom", "payrollDateTo", "payrollSourceMode", "payrollLayout", "payrollFormat", "payrollDelimiter", "payrollDecimalSeparator", "payrollColumnSelection", "payrollWageCodeDetails", "payrollWageCodeMap", "payrollAllowDraft", "payrollProfileName", "savePayrollProfileButton", "payrollPreflightButton", "payrollDownloadButton", "payrollPreflightResult",
+    "personnelImportModal", "personnelImportForm", "personnelImportProgress", "personnelImportFileStep", "personnelImportMappingStep", "personnelImportPreviewStep", "personnelImportFile", "personnelImportProfile", "personnelImportDuplicateStrategy", "personnelImportDefaultLocation", "personnelImportDefaultPosition", "personnelImportDefaultHours", "inspectPersonnelImportButton", "personnelImportSheet", "personnelImportHeaderRow", "personnelImportMapping", "personnelImportProfileName", "savePersonnelImportProfileButton", "previewPersonnelImportButton", "personnelImportSummary", "personnelImportPreviewBody", "personnelImportPreviewHint", "personnelImportMessage", "resetPersonnelImportButton", "backPersonnelImportButton", "applyPersonnelImportButton",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
 );
 
@@ -435,6 +447,30 @@ async function api(url, options = {}) {
   return response.status === 204 ? null : response.json();
 }
 
+async function rawApi(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  const method = String(options.method || "GET").toUpperCase();
+  if (!["GET", "HEAD"].includes(method)) Object.assign(headers, csrfHeader());
+  let response;
+  try {
+    response = await fetch(url, { ...options, method, headers });
+  } catch (error) {
+    throw window.GrabenplanerApiErrors.fromNetwork(error, { hostname: location.hostname });
+  }
+  if (!response.ok) {
+    const detail = await window.GrabenplanerApiErrors.fromResponse(response, {
+      hostname: location.hostname,
+      fallback: "Die Aktion konnte nicht ausgef\u00fchrt werden.",
+    });
+    const error = new Error(detail.message);
+    error.status = response.status;
+    error.code = detail.code;
+    if (response.status === 401 && elements.loginGate) showLoginGate("Die Anmeldung ist abgelaufen. Bitte erneut anmelden.");
+    throw error;
+  }
+  return response;
+}
+
 function csrfHeader() {
   const value = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("grabenplaner_csrf="))?.split("=").slice(1).join("=");
   return value ? { "X-CSRF-Token": decodeURIComponent(value) } : {};
@@ -490,17 +526,24 @@ function applyRoleVisibility() {
   const backupImportAccess = !lanActive || ["developer", "it_admin"].includes(role);
   const usbProvisioningAccess = ["developer", "it_admin", "admin"].includes(role)
     && (!lanActive || permissions.includes("usb:provision"));
+  const integrationsEnabled = features.integrations !== false;
+  const integrationReadAccess = integrationsEnabled && (!lanActive || permissions.includes("integrations:read"));
+  const personnelImportAccess = integrationsEnabled && (!lanActive || permissions.includes("employees:import"));
+  const payrollExportAccess = integrationsEnabled && (!lanActive || permissions.includes("payroll:export"));
+  const integrationProfileWriteAccess = integrationsEnabled && (!lanActive || permissions.includes("integrations:profiles:write"));
+  const integrationAccess = integrationReadAccess || personnelImportAccess || payrollExportAccess || integrationProfileWriteAccess;
   document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
   document.querySelectorAll('[data-view="vacations"]').forEach((button) => button.classList.toggle("hidden", features.vacation === false));
   elements.requestsNavButton?.classList.toggle("hidden", features.requests === false);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess || features.timeTracking === false);
-  const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess || operationModeAccess || wifiSettingsAccess || usbProvisioningAccess;
+  const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess || operationModeAccess || wifiSettingsAccess || usbProvisioningAccess || integrationAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
     general: settingsAccess || operationModeAccess,
     branding: brandingAccess,
     pdf: settingsAccess,
     personnel: settingsAccess || positionWriteAccess,
+    integrations: integrationAccess,
     wifiAutomation: wifiSettingsAccess && features.wifiSuggestions !== false && features.timeTracking !== false,
     access: (scopeAccess || permissions.includes("users:write") || globalAdministration)
       && (features.employeePortal !== false || features.requests !== false || features.sicknessAmu !== false),
@@ -510,8 +553,9 @@ function applyRoleVisibility() {
   };
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("hidden", !settingsTabs[button.dataset.settingsTab]));
   const wifiTabActive = document.querySelector('[data-settings-tab="wifiAutomation"]')?.classList.contains("active");
+  const integrationTabActive = document.querySelector('[data-settings-tab="integrations"]')?.classList.contains("active");
   const usbTabActive = document.querySelector('[data-settings-tab="usbProvisioning"]')?.classList.contains("active");
-  elements.saveSettingsButton?.classList.toggle("hidden", !settingsAccess || wifiTabActive || usbTabActive);
+  elements.saveSettingsButton?.classList.toggle("hidden", !settingsAccess || wifiTabActive || integrationTabActive || usbTabActive);
   elements.saveOperationModeButton?.classList.toggle("hidden", !operationModeAccess || settingsAccess);
   const privilegedServerRole = ["developer", "it_admin", "admin"].includes(role);
   const canExit = serverActive
@@ -528,6 +572,14 @@ function applyRoleVisibility() {
   elements.departmentFormCard?.classList.toggle("hidden", !departmentWriteAccess);
   elements.positionSettingsCard?.classList.toggle("hidden", !positionWriteAccess);
   elements.personnelViewSettingsCard?.classList.toggle("hidden", !settingsAccess);
+  elements.employeeImportCard?.classList.toggle("hidden", !personnelImportAccess);
+  elements.importProfileCard?.classList.toggle("hidden", !(integrationReadAccess || personnelImportAccess));
+  elements.payrollExportCard?.classList.toggle("hidden", !payrollExportAccess);
+  elements.exportProfileCard?.classList.toggle("hidden", !(integrationReadAccess || payrollExportAccess));
+  elements.integrationHistoryCard?.classList.toggle("hidden", !integrationReadAccess);
+  elements.integrationInformationCard?.classList.toggle("hidden", !integrationAccess);
+  if (elements.savePersonnelImportProfileButton) elements.savePersonnelImportProfileButton.disabled = !integrationProfileWriteAccess;
+  if (elements.savePayrollProfileButton) elements.savePayrollProfileButton.disabled = !integrationProfileWriteAccess;
   elements.employeeTimeConfirmationLevelField?.classList.toggle("hidden", !wifiSettingsAccess);
   elements.workflowSettingsCard?.classList.toggle("hidden", lanActive && !permissions.includes("hr:settings"));
   elements.amuSettingsCard?.classList.toggle("hidden", lanActive && !permissions.includes("hr:settings"));
@@ -2854,6 +2906,542 @@ async function saveBrandingAssignments() {
   } catch (error) { showToast(error.message, true); }
 }
 
+function hasIntegrationPermission(permission) {
+  return state.portalStatus?.portalEnabled !== true || state.portalSession?.user?.permissions?.includes(permission);
+}
+
+function currentMonthRange() {
+  const now = new Date();
+  return {
+    from: toIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)),
+    to: toIsoDate(now),
+  };
+}
+
+function integrationProfiles(direction, kind) {
+  return (state.integrations.profiles || []).filter((profile) => profile.direction === direction && profile.kind === kind && profile.active !== false);
+}
+
+function renderIntegrationProfileLists() {
+  const canWrite = hasIntegrationPermission("integrations:profiles:write");
+  const render = (profiles, target, emptyText) => {
+    if (!target) return;
+    target.innerHTML = profiles.length ? profiles.map((profile) => `
+      <div class="integration-profile-row" data-integration-profile="${escapeHtml(profile.id)}">
+        <div><strong>${escapeHtml(profile.name)}</strong><small>${profile.format.toUpperCase()} · ${profile.configuration?.layout === "movement_lines" ? "Lohnarten" : profile.direction === "export" ? "Tagesjournal" : "Feldzuordnung"}</small></div>
+        ${canWrite ? `<button class="icon-button" type="button" data-delete-integration-profile="${escapeHtml(profile.id)}" aria-label="Profil l\u00f6schen">\u00d7</button>` : ""}
+      </div>
+    `).join("") : `<p class="settings-note">${escapeHtml(emptyText)}</p>`;
+  };
+  const importProfiles = integrationProfiles("import", "personnel");
+  const exportProfiles = integrationProfiles("export", "payroll");
+  render(importProfiles, elements.importProfileList, "Noch kein Importprofil gespeichert.");
+  render(exportProfiles, elements.exportProfileList, "Noch kein Exportprofil gespeichert.");
+  if (elements.personnelImportProfile) {
+    const selected = elements.personnelImportProfile.value;
+    elements.personnelImportProfile.innerHTML = `<option value="">Ohne Profil / automatisch erkennen</option>${importProfiles.map((profile) => `<option value="${escapeHtml(profile.id)}">${escapeHtml(profile.name)}</option>`).join("")}`;
+    if (importProfiles.some((profile) => profile.id === selected)) elements.personnelImportProfile.value = selected;
+  }
+  if (elements.payrollProfile) {
+    const selected = elements.payrollProfile.value;
+    elements.payrollProfile.innerHTML = `<option value="">Ohne gespeichertes Profil</option>${exportProfiles.map((profile) => `<option value="${escapeHtml(profile.id)}">${escapeHtml(profile.name)}</option>`).join("")}`;
+    if (exportProfiles.some((profile) => profile.id === selected)) elements.payrollProfile.value = selected;
+  }
+}
+
+function renderIntegrationHistory() {
+  if (!elements.integrationHistory) return;
+  const runs = state.integrations.runs || [];
+  elements.integrationHistory.innerHTML = runs.length ? runs.map((run) => {
+    const label = run.direction === "import" ? "Personalimport" : "Lohnexport";
+    const details = run.direction === "import"
+      ? `${run.createdCount} neu · ${run.updatedCount} aktualisiert · ${run.skippedCount} \u00fcbersprungen`
+      : `${run.totalCount} Zeilen · ${run.status === "draft" ? "Entwurf" : "final"}`;
+    return `<div class="integration-history-row"><span class="status-badge ${run.errorCount ? "warning" : ""}">${escapeHtml(label)}</span><div><strong>${escapeHtml(details)}</strong><small>${escapeHtml(run.actorEmployeeNumber || "lokal")} · ${new Date(run.completedAt || run.startedAt).toLocaleString("de-AT")}</small></div><span>${escapeHtml(run.format.toUpperCase())}</span></div>`;
+  }).join("") : `<p class="settings-note">Noch kein Import oder Export protokolliert.</p>`;
+}
+
+function renderPayrollContextOptions() {
+  if (!elements.payrollLocation) return;
+  const locations = state.locations.filter((location) => location.active !== false);
+  const selected = elements.payrollLocation.value || state.locationId || locations[0]?.id || "";
+  elements.payrollLocation.innerHTML = locations.map((location) => `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("");
+  if (locations.some((location) => location.id === selected)) elements.payrollLocation.value = selected;
+  renderPayrollDepartments();
+}
+
+function renderPayrollDepartments() {
+  if (!elements.payrollDepartment) return;
+  const location = state.locations.find((item) => item.id === elements.payrollLocation.value);
+  const selected = elements.payrollDepartment.value;
+  elements.payrollDepartment.innerHTML = `<option value="">Gesamter Standort</option>${(location?.departments || []).filter((department) => department.active !== false).map((department) => `<option value="${department.id}">${escapeHtml(department.name)}</option>`).join("")}`;
+  if ((location?.departments || []).some((department) => String(department.id) === selected)) elements.payrollDepartment.value = selected;
+}
+
+function selectedPayrollLayoutDefinition() {
+  return (state.integrations.payrollCatalog?.layouts || []).find((layout) => layout.id === elements.payrollLayout?.value)
+    || state.integrations.payrollCatalog?.layouts?.[0] || null;
+}
+
+function renderPayrollColumns(selectedColumns = null) {
+  const layout = selectedPayrollLayoutDefinition();
+  if (!layout || !elements.payrollColumnSelection) return;
+  const current = selectedColumns || [...elements.payrollColumnSelection.querySelectorAll("input:checked")].map((input) => input.value);
+  const checked = new Set(current.length ? current : layout.defaultColumns);
+  elements.payrollColumnSelection.innerHTML = layout.columns.map((column) => `
+    <label><input type="checkbox" value="${escapeHtml(column.id)}" ${checked.has(column.id) ? "checked" : ""} /><span>${escapeHtml(column.label)}</span></label>
+  `).join("");
+  if (elements.payrollWageCodeDetails) elements.payrollWageCodeDetails.classList.toggle("hidden", layout.id !== "movement_lines");
+  renderPayrollWageCodes();
+}
+
+const payrollCodeLabels = {
+  regular_work: "Regul\u00e4re Arbeitszeit", saturday_bonus: "Samstagszuschlag", vacation: "Urlaub", sickness: "Krankenstand",
+  time_off: "Zeitausgleich", branch_assignment: "Andere Filiale", vocational_school: "Berufsschule", training: "Schulung",
+  special_leave: "Sonderurlaub", external_appointment: "Au\u00dfer-Haus-Termin", team_meeting: "Teamsitzung", public_holiday: "Feiertag", other: "Sonstiges",
+};
+
+function renderPayrollWageCodes(values = null) {
+  if (!elements.payrollWageCodeMap) return;
+  const current = values || Object.fromEntries([...elements.payrollWageCodeMap.querySelectorAll("input[data-payroll-code]")].map((input) => [input.dataset.payrollCode, input.value]));
+  const codes = state.integrations.payrollCatalog?.internalCodes || [];
+  elements.payrollWageCodeMap.innerHTML = codes.map((code) => `<label class="field"><span>${escapeHtml(payrollCodeLabels[code] || code)}</span><input data-payroll-code="${escapeHtml(code)}" maxlength="40" value="${escapeHtml(current[code] || "")}" placeholder="${escapeHtml(code)}" /></label>`).join("");
+}
+
+function currentPayrollConfiguration() {
+  const wageCodeMap = Object.fromEntries([...elements.payrollWageCodeMap.querySelectorAll("input[data-payroll-code]")]
+    .map((input) => [input.dataset.payrollCode, input.value.trim()]).filter(([, value]) => value));
+  return {
+    layout: elements.payrollLayout.value,
+    sourceMode: elements.payrollSourceMode.value,
+    format: elements.payrollFormat.value,
+    delimiter: elements.payrollDelimiter.value,
+    decimalSeparator: elements.payrollDecimalSeparator.value,
+    columns: [...elements.payrollColumnSelection.querySelectorAll("input:checked")].map((input) => input.value),
+    wageCodeMap,
+  };
+}
+
+function applyPayrollConfiguration(configuration = {}) {
+  if (configuration.layout) elements.payrollLayout.value = configuration.layout;
+  if (configuration.sourceMode) elements.payrollSourceMode.value = configuration.sourceMode;
+  if (configuration.format) elements.payrollFormat.value = configuration.format;
+  if (configuration.delimiter) elements.payrollDelimiter.value = configuration.delimiter;
+  if (configuration.decimalSeparator) elements.payrollDecimalSeparator.value = configuration.decimalSeparator;
+  renderPayrollColumns(configuration.columns || null);
+  renderPayrollWageCodes(configuration.wageCodeMap || {});
+  elements.payrollDelimiter.closest("label")?.classList.toggle("hidden", elements.payrollFormat.value !== "csv");
+  elements.payrollDecimalSeparator.closest("label")?.classList.toggle("hidden", elements.payrollFormat.value !== "csv");
+  state.integrations.payrollPreflight = null;
+  elements.payrollDownloadButton.disabled = true;
+}
+
+function renderPayrollPreflight(result = null) {
+  if (!elements.payrollPreflightResult) return;
+  if (!result) {
+    elements.payrollPreflightResult.innerHTML = `<p class="settings-note">Vor dem Download werden Datenqualit\u00e4t und Freigabestatus gepr\u00fcft.</p>`;
+    elements.payrollDownloadButton.disabled = true;
+    return;
+  }
+  const blockerLabels = {
+    MISSING_REVIEW: "Tagespr\u00fcfung fehlt",
+    STALE_REVIEW: "Tagespr\u00fcfung ist veraltet",
+    PENDING_CORRECTION: "Korrektur ist noch offen",
+    TIME_EVALUATION_ERROR: "Zeitbuchungen m\u00fcssen gepr\u00fcft werden",
+    WORK_ABSENCE_OVERLAP: "Arbeitszeit und Abwesenheit \u00fcberschneiden sich",
+    CROSS_LOCATION_REVIEW_UNAVAILABLE: "Standortübergreifende Ist-Zeit ist nur als Entwurf verfügbar",
+    MIXED_DEPARTMENTS: "Mehrere Abteilungen müssen getrennt exportiert werden",
+    INACTIVE_EMPLOYMENT_HISTORY_REQUIRED: "Beschäftigungszeitraum eines inaktiven Teammitglieds muss geprüft werden",
+  };
+  const blockerCodes = [...new Set((result.blockers || []).map((item) => item.code))];
+  const blockerDetails = (result.blockers || []).slice(0, 100).map((item) => `<li><strong>${escapeHtml(item.employeeNumber || "\u2013")}</strong> \u00b7 ${escapeHtml(item.workDate ? formatDate(item.workDate) : "ohne Datum")} \u00b7 ${escapeHtml(blockerLabels[item.code] || item.code)}</li>`).join("");
+  const blockerText = result.blockers?.length
+    ? `<div class="integration-alert error"><strong>${result.blockers.length} offene Pr\u00fcfpunkte</strong><span>${blockerCodes.map((code) => escapeHtml(blockerLabels[code] || code)).join(", ")}</span></div><details><summary>Betroffene Teammitglieder und Tage anzeigen</summary><ul>${blockerDetails}</ul>${result.blockers.length > 100 ? `<p class="settings-note">Weitere ${result.blockers.length - 100} Pr\u00fcfpunkte sind vorhanden.</p>` : ""}</details>`
+    : result.rowCount
+      ? `<div class="integration-alert ok"><strong>Pr\u00fcfung bestanden</strong><span>Der finale Export kann erstellt werden.</span></div>`
+      : `<div class="integration-alert"><strong>Keine Exportdaten</strong><span>F\u00fcr den gew\u00e4hlten Zeitraum wurden keine exportierbaren Bewegungen gefunden.</span></div>`;
+  const warnings = (result.warnings || []).map((warning) => `<li>${escapeHtml(warning.message || warning.code)}</li>`).join("");
+  const sampleColumns = (result.columns || []).slice(0, 8);
+  const sample = (result.sampleRows || []).slice(0, 10);
+  elements.payrollPreflightResult.innerHTML = `
+    <div class="integration-metrics"><span><strong>${result.employeeCount}</strong> Teammitglieder</span><span><strong>${result.dayCount}</strong> Tageswerte</span><span><strong>${result.rowCount}</strong> Exportzeilen</span></div>
+    ${blockerText}
+    ${warnings ? `<details><summary>${result.warnings.length} Hinweis(e)</summary><ul>${warnings}</ul></details>` : ""}
+    ${sample.length ? `<div class="integration-table-wrap"><table class="integration-table"><thead><tr>${sampleColumns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr></thead><tbody>${sample.map((row) => `<tr>${sampleColumns.map((column) => `<td>${escapeHtml(row[column.id] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : `<p class="settings-note">Im gew\u00e4hlten Zeitraum wurden keine exportierbaren Bewegungen gefunden.</p>`}
+  `;
+  elements.payrollDownloadButton.disabled = !result.rowCount || (result.blockers?.length > 0 && !elements.payrollAllowDraft.checked);
+}
+
+async function loadIntegrations() {
+  const requests = [];
+  const keys = [];
+  if (hasIntegrationPermission("employees:import")) { keys.push("importCatalog"); requests.push(api("/api/integrations/personnel-import/catalog")); }
+  if (hasIntegrationPermission("payroll:export")) { keys.push("payrollCatalog"); requests.push(api("/api/integrations/payroll-export/catalog")); }
+  if (hasIntegrationPermission("integrations:read")) {
+    keys.push("profiles", "runs");
+    requests.push(api("/api/integrations/profiles").then((result) => result.profiles || []), api("/api/integrations/runs?limit=30").then((result) => result.runs || []));
+  }
+  const values = await Promise.all(requests);
+  keys.forEach((key, index) => { state.integrations[key] = values[index]; });
+  const range = currentMonthRange();
+  if (!elements.payrollDateFrom.value) elements.payrollDateFrom.value = range.from;
+  if (!elements.payrollDateTo.value) elements.payrollDateTo.value = range.to;
+  renderIntegrationProfileLists();
+  renderIntegrationHistory();
+  renderPayrollContextOptions();
+  renderPayrollColumns();
+  renderPayrollPreflight(state.integrations.payrollPreflight);
+  populatePersonnelImportDefaults();
+}
+
+function populatePersonnelImportDefaults() {
+  const catalog = state.integrations.importCatalog;
+  if (!catalog) return;
+  const locationValue = elements.personnelImportDefaultLocation.value || state.locationId;
+  elements.personnelImportDefaultLocation.innerHTML = (catalog.references?.locations || []).filter((location) => location.active !== false).map((location) => `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("");
+  if ([...elements.personnelImportDefaultLocation.options].some((option) => option.value === locationValue)) elements.personnelImportDefaultLocation.value = locationValue;
+  const positionValue = elements.personnelImportDefaultPosition.value || "verkaufsmitarbeiter";
+  elements.personnelImportDefaultPosition.innerHTML = (catalog.references?.positions || []).map((position) => `<option value="${escapeHtml(position.id)}">${escapeHtml(position.name)}</option>`).join("");
+  if ([...elements.personnelImportDefaultPosition.options].some((option) => option.value === positionValue)) elements.personnelImportDefaultPosition.value = positionValue;
+}
+
+function setPersonnelImportStep(step) {
+  elements.personnelImportFileStep.classList.toggle("hidden", step !== "file");
+  elements.personnelImportMappingStep.classList.toggle("hidden", step !== "mapping");
+  elements.personnelImportPreviewStep.classList.toggle("hidden", step !== "preview");
+  const order = { file: 0, mapping: 1, preview: 2 };
+  [...elements.personnelImportProgress.children].forEach((item, index) => item.classList.toggle("active", index <= order[step]));
+  elements.backPersonnelImportButton?.classList.toggle("hidden", step !== "preview");
+}
+
+function setPersonnelImportMessage(message = "", error = false) {
+  elements.personnelImportMessage.textContent = message;
+  elements.personnelImportMessage.classList.toggle("hidden", !message);
+  elements.personnelImportMessage.classList.toggle("error", error);
+}
+
+async function discardPersonnelImportSessions() {
+  const ids = [...new Set([
+    state.integrations.preview?.previewId,
+    state.integrations.inspection?.inspectionId,
+  ].filter(Boolean))];
+  await Promise.allSettled(ids.map((id) => rawApi(`/api/integrations/personnel-import/sessions/${encodeURIComponent(id)}`, { method: "DELETE" })));
+}
+
+function clearPersonnelImportWizard() {
+  state.integrations.inspection = null;
+  state.integrations.preview = null;
+  elements.personnelImportFile.value = "";
+  elements.personnelImportMapping.innerHTML = "";
+  elements.personnelImportSummary.innerHTML = "";
+  elements.personnelImportPreviewBody.innerHTML = "";
+  elements.personnelImportPreviewHint.textContent = "";
+  elements.applyPersonnelImportButton.disabled = true;
+  setPersonnelImportMessage();
+  setPersonnelImportStep("file");
+}
+
+function resetPersonnelImportWizard() {
+  void discardPersonnelImportSessions();
+  clearPersonnelImportWizard();
+}
+
+async function openPersonnelImportWizard() {
+  if (!state.integrations.importCatalog) await loadIntegrations();
+  resetPersonnelImportWizard();
+  populatePersonnelImportDefaults();
+  renderIntegrationProfileLists();
+  elements.personnelImportModal.showModal();
+}
+
+function selectedImportSheet() {
+  return state.integrations.inspection?.sheets?.find((sheet) => sheet.name === elements.personnelImportSheet.value)
+    || state.integrations.inspection?.sheets?.[0] || null;
+}
+
+function selectedImportProfile() {
+  return integrationProfiles("import", "personnel").find((profile) => profile.id === elements.personnelImportProfile.value) || null;
+}
+
+function importHeadersForSelection() {
+  const sheet = selectedImportSheet();
+  if (!sheet) return [];
+  const headerRow = Math.max(1, Math.min(20, Number(elements.personnelImportHeaderRow.value || sheet.suggestedHeaderRow || 1)));
+  const values = sheet.topRows?.[headerRow - 1] || sheet.headers?.map((header) => header.label) || [];
+  return values.map((label, columnIndex) => ({ columnIndex, label: label || `Spalte ${columnIndex + 1}` }));
+}
+
+function selectedImportHeaderCandidate() {
+  const sheet = selectedImportSheet();
+  if (!sheet) return null;
+  const rowNumber = Math.max(1, Math.min(20, Number(elements.personnelImportHeaderRow.value || sheet.suggestedHeaderRow || 1)));
+  return sheet.headerCandidates?.find((candidate) => Number(candidate.rowNumber) === rowNumber)
+    || (rowNumber === Number(sheet.suggestedHeaderRow) ? {
+      rowNumber,
+      headerFingerprint: sheet.headerFingerprint,
+      suggestedMapping: sheet.suggestedMapping,
+    } : null);
+}
+
+function renderPersonnelImportMapping() {
+  const sheet = selectedImportSheet();
+  const catalog = state.integrations.importCatalog;
+  if (!sheet || !catalog) return;
+  const headers = importHeadersForSelection();
+  const headerCandidate = selectedImportHeaderCandidate();
+  const profile = selectedImportProfile();
+  const profileMatches = profile?.configuration?.format === state.integrations.inspection.format
+    && (!profile.configuration.headerFingerprint || profile.configuration.headerFingerprint === headerCandidate?.headerFingerprint);
+  const mapping = profileMatches ? profile.configuration.mapping || {} : headerCandidate?.suggestedMapping || {};
+  elements.personnelImportMapping.innerHTML = catalog.fields.map((field) => `
+    <label class="field"><span>${escapeHtml(field.label)}${field.required ? " *" : ""}</span><select data-import-field="${escapeHtml(field.id)}"><option value="">Nicht importieren</option>${headers.map((header) => `<option value="${header.columnIndex}" ${Number(mapping[field.id]?.columnIndex) === header.columnIndex ? "selected" : ""}>${escapeHtml(header.label)} · Spalte ${header.columnIndex + 1}</option>`).join("")}</select></label>
+  `).join("");
+  if (profile && !profileMatches) setPersonnelImportMessage("Das Profil passt nicht exakt zu dieser Kopfzeile. Die Spalten wurden neu vorgeschlagen.", false);
+  else setPersonnelImportMessage();
+}
+
+async function inspectPersonnelImport() {
+  const file = elements.personnelImportFile.files?.[0];
+  if (!file) { setPersonnelImportMessage("Bitte zuerst eine CSV- oder XLSX-Datei ausw\u00e4hlen.", true); return; }
+  elements.inspectPersonnelImportButton.disabled = true;
+  setPersonnelImportMessage("Datei wird sicher gepr\u00fcft …");
+  try {
+    const profileConfiguration = selectedImportProfile()?.configuration || {};
+    const parameters = new URLSearchParams({
+      encoding: profileConfiguration.encoding || "auto",
+      delimiter: profileConfiguration.delimiter || "auto",
+    });
+    const lowerName = file.name.toLowerCase();
+    const contentType = lowerName.endsWith(".xlsx")
+      ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      : lowerName.endsWith(".tsv") ? "text/tab-separated-values" : "text/csv";
+    const response = await rawApi(`/api/integrations/personnel-import/inspect?${parameters}`, {
+      method: "POST",
+      headers: { "Content-Type": contentType, "X-Import-Filename": encodeURIComponent(file.name) },
+      body: file,
+    });
+    state.integrations.inspection = await response.json();
+    elements.personnelImportSheet.innerHTML = state.integrations.inspection.sheets.map((sheet) => `<option value="${escapeHtml(sheet.name)}">${escapeHtml(sheet.name)} · ${sheet.rowCount} Zeilen</option>`).join("");
+    if (profileConfiguration.sheetName && [...elements.personnelImportSheet.options].some((option) => option.value === profileConfiguration.sheetName)) {
+      elements.personnelImportSheet.value = profileConfiguration.sheetName;
+    }
+    const sheet = selectedImportSheet();
+    const profileHeaderRow = Number(profileConfiguration.headerRow || 0);
+    elements.personnelImportHeaderRow.value = profileHeaderRow >= 1 && profileHeaderRow <= 20
+      ? profileHeaderRow
+      : sheet?.suggestedHeaderRow || 1;
+    renderPersonnelImportMapping();
+    setPersonnelImportStep("mapping");
+    setPersonnelImportMessage(`${state.integrations.inspection.format.toUpperCase()} erkannt · Quelldatei bleibt nur f\u00fcr diese befristete Vorschau im Arbeitsspeicher.`);
+  } catch (error) {
+    setPersonnelImportMessage(error.message, true);
+  } finally {
+    elements.inspectPersonnelImportButton.disabled = false;
+  }
+}
+
+function currentPersonnelImportMapping() {
+  return Object.fromEntries([...elements.personnelImportMapping.querySelectorAll("select[data-import-field]")]
+    .filter((select) => select.value !== "").map((select) => [select.dataset.importField, { columnIndex: Number(select.value) }]));
+}
+
+function currentPersonnelImportConfiguration() {
+  const sheet = selectedImportSheet();
+  return {
+    version: 1,
+    format: state.integrations.inspection?.format || "csv",
+    sheetName: sheet?.name || "",
+    headerRow: Number(elements.personnelImportHeaderRow.value || 1),
+    encoding: state.integrations.inspection?.encoding || "auto",
+    delimiter: state.integrations.inspection?.delimiter || "auto",
+    mapping: currentPersonnelImportMapping(),
+    defaults: {
+      contractedHours: Number(elements.personnelImportDefaultHours.value || 38.5),
+      positionId: elements.personnelImportDefaultPosition.value,
+      homeLocationId: elements.personnelImportDefaultLocation.value,
+      active: true,
+    },
+    headerFingerprint: selectedImportHeaderCandidate()?.headerFingerprint || "",
+    duplicateStrategy: elements.personnelImportDuplicateStrategy.value,
+  };
+}
+
+function actionLabel(action) {
+  return { create: "Neu", update: "Aktualisierung", skip: "\u00dcbersprungen", error: "Fehler" }[action] || action;
+}
+
+function renderPersonnelImportPreview(result) {
+  elements.personnelImportSummary.innerHTML = `<span><strong>${result.summary.create}</strong> neu</span><span><strong>${result.summary.update}</strong> aktualisiert</span><span><strong>${result.summary.skip}</strong> \u00fcbersprungen</span><span class="${result.summary.errors ? "error" : ""}"><strong>${result.summary.errors}</strong> Fehler</span>`;
+  elements.personnelImportPreviewBody.innerHTML = result.rows.map((row) => {
+    const messages = [...row.errors, ...row.warnings].map((item) => item.message).join(" · ");
+    return `<tr class="integration-row-${escapeHtml(row.action)}"><td>${row.rowNumber}</td><td><span class="status-badge ${row.action === "error" ? "warning" : row.action === "skip" ? "inactive" : ""}">${escapeHtml(actionLabel(row.action))}</span></td><td>${escapeHtml(row.display.personnelNumber)}</td><td>${escapeHtml(row.display.fullName)}</td><td>${escapeHtml(row.display.nickname)}</td><td>${escapeHtml(row.display.contractedHours ?? "")}</td><td>${escapeHtml([row.display.location, row.display.department, row.display.position].filter(Boolean).join(" · "))}</td><td>${escapeHtml(messages || "OK")}</td></tr>`;
+  }).join("");
+  elements.personnelImportPreviewHint.textContent = result.truncated
+    ? `Die Tabelle zeigt bis zu 200 Zeilen; Fehler werden zuerst angezeigt. Die Zusammenfassung umfasst die gesamte Datei.${result.hiddenErrorCount ? ` Weitere ${result.hiddenErrorCount} Fehlerzeilen sind in der Quelldatei zu korrigieren.` : ""}`
+    : "Alle Importzeilen werden angezeigt.";
+  elements.applyPersonnelImportButton.disabled = result.summary.errors > 0 || result.summary.total === 0;
+  setPersonnelImportStep("preview");
+}
+
+async function previewPersonnelImport() {
+  if (!state.integrations.inspection) return;
+  const configuration = currentPersonnelImportConfiguration();
+  elements.previewPersonnelImportButton.disabled = true;
+  setPersonnelImportMessage("Importvorschau wird erstellt …");
+  try {
+    if (state.integrations.preview?.previewId) {
+      await rawApi(`/api/integrations/personnel-import/sessions/${encodeURIComponent(state.integrations.preview.previewId)}`, { method: "DELETE" });
+      state.integrations.preview = null;
+    }
+    const result = await api("/api/integrations/personnel-import/preview", {
+      method: "POST",
+      body: JSON.stringify({
+        inspectionId: state.integrations.inspection.inspectionId,
+        sheetName: configuration.sheetName,
+        headerRow: configuration.headerRow,
+        mapping: configuration.mapping,
+        defaults: configuration.defaults,
+        duplicateStrategy: configuration.duplicateStrategy,
+        profileId: elements.personnelImportProfile.value || null,
+        headerFingerprint: configuration.headerFingerprint,
+      }),
+    });
+    state.integrations.preview = result;
+    renderPersonnelImportPreview(result);
+    setPersonnelImportMessage(result.summary.errors ? "Bitte die markierten Fehler in der Quelldatei oder Zuordnung korrigieren." : "Vorschau gepr\u00fcft. Erst der n\u00e4chste Klick \u00fcbernimmt Stammdaten.", result.summary.errors > 0);
+  } catch (error) {
+    setPersonnelImportMessage(error.message, true);
+  } finally {
+    elements.previewPersonnelImportButton.disabled = false;
+  }
+}
+
+async function returnPersonnelImportToMapping() {
+  if (state.integrations.preview?.previewId) {
+    await rawApi(`/api/integrations/personnel-import/sessions/${encodeURIComponent(state.integrations.preview.previewId)}`, { method: "DELETE" }).catch(() => null);
+  }
+  state.integrations.preview = null;
+  elements.applyPersonnelImportButton.disabled = true;
+  setPersonnelImportStep("mapping");
+  setPersonnelImportMessage("Zuordnung oder Standardwerte anpassen und anschließend eine neue Vorschau erstellen.");
+}
+
+async function applyPersonnelImport() {
+  if (!state.integrations.preview?.previewId) return;
+  if (!confirm("Den gepr\u00fcften Personalimport jetzt atomar \u00fcbernehmen?")) return;
+  elements.applyPersonnelImportButton.disabled = true;
+  try {
+    const result = await api("/api/integrations/personnel-import/apply", { method: "POST", body: JSON.stringify({ previewId: state.integrations.preview.previewId }) });
+    elements.personnelImportModal.close();
+    showToast(`${result.create} Teammitglieder angelegt, ${result.update} aktualisiert, ${result.skip} \u00fcbersprungen.`);
+    await loadAll();
+    await loadIntegrations();
+    setSettingsTab("integrations");
+  } catch (error) {
+    setPersonnelImportMessage(error.message, true);
+    elements.applyPersonnelImportButton.disabled = false;
+  }
+}
+
+async function saveIntegrationProfile(direction) {
+  const isImport = direction === "import";
+  const name = (isImport ? elements.personnelImportProfileName : elements.payrollProfileName).value.trim();
+  if (!name) { showToast("Bitte einen Profilnamen eingeben.", true); return; }
+  const configuration = isImport ? currentPersonnelImportConfiguration() : currentPayrollConfiguration();
+  const result = await api("/api/integrations/profiles", {
+    method: "POST",
+    body: JSON.stringify({ direction, kind: isImport ? "personnel" : "payroll", name, configuration }),
+  });
+  state.integrations.profiles.push(result.profile);
+  (isImport ? elements.personnelImportProfileName : elements.payrollProfileName).value = "";
+  renderIntegrationProfileLists();
+  if (isImport) elements.personnelImportProfile.value = result.profile.id;
+  else elements.payrollProfile.value = result.profile.id;
+  showToast("Schnittstellenprofil gespeichert.");
+}
+
+async function deleteIntegrationProfile(id) {
+  const profile = state.integrations.profiles.find((item) => item.id === id);
+  if (!profile || !confirm(`Profil \u201e${profile.name}\u201c wirklich l\u00f6schen?`)) return;
+  await api(`/api/integrations/profiles/${encodeURIComponent(id)}`, { method: "DELETE" });
+  state.integrations.profiles = state.integrations.profiles.filter((item) => item.id !== id);
+  renderIntegrationProfileLists();
+  showToast("Profil gel\u00f6scht.");
+}
+
+async function preflightPayrollExport() {
+  elements.payrollPreflightButton.disabled = true;
+  elements.payrollDownloadButton.disabled = true;
+  elements.payrollPreflightResult.innerHTML = `<p class="settings-note">Exportdaten werden gepr\u00fcft …</p>`;
+  try {
+    const result = await api("/api/integrations/payroll-export/preflight", {
+      method: "POST",
+      body: JSON.stringify({
+        dateFrom: elements.payrollDateFrom.value,
+        dateTo: elements.payrollDateTo.value,
+        locationId: elements.payrollLocation.value,
+        departmentId: elements.payrollDepartment.value || null,
+        profileId: elements.payrollProfile.value || null,
+        configuration: currentPayrollConfiguration(),
+      }),
+    });
+    state.integrations.payrollPreflight = result;
+    renderPayrollPreflight(result);
+  } catch (error) {
+    state.integrations.payrollPreflight = null;
+    elements.payrollPreflightResult.innerHTML = `<div class="integration-alert error"><strong>Pr\u00fcfung nicht m\u00f6glich</strong><span>${escapeHtml(error.message)}</span></div>`;
+  } finally {
+    elements.payrollPreflightButton.disabled = false;
+  }
+}
+
+function downloadFileResponse(response, fallbackName) {
+  return response.blob().then((blob) => {
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    const simple = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+    let fileName = fallbackName;
+    try { fileName = encoded ? decodeURIComponent(encoded) : simple || fallbackName; } catch {}
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+}
+
+async function downloadPayrollExport() {
+  const preflight = state.integrations.payrollPreflight;
+  if (!preflight) return;
+  elements.payrollDownloadButton.disabled = true;
+  try {
+    const response = await rawApi("/api/integrations/payroll-export/file", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dateFrom: elements.payrollDateFrom.value,
+        dateTo: elements.payrollDateTo.value,
+        locationId: elements.payrollLocation.value,
+        departmentId: elements.payrollDepartment.value || null,
+        profileId: elements.payrollProfile.value || null,
+        configuration: currentPayrollConfiguration(),
+        fingerprint: preflight.fingerprint,
+        allowDraft: elements.payrollAllowDraft.checked,
+      }),
+    });
+    await downloadFileResponse(response, `grabenplaner-lohnexport.${elements.payrollFormat.value}`);
+    showToast("Lohnverrechnungsdatei erstellt.");
+    await loadIntegrations();
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    renderPayrollPreflight(state.integrations.payrollPreflight);
+  }
+}
+
 function setView(view) {
   const features = state.portalStatus?.installationFeatures || {};
   if ((view === "vacations" && features.vacation === false)
@@ -2897,10 +3485,12 @@ function applyRequestedView() {
 
 function setSettingsTab(tab) {
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("active", button.dataset.settingsTab === tab));
+  document.querySelector(`[data-settings-tab="${tab}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
   elements.generalSettings.classList.toggle("active", tab === "general");
   elements.brandingSettings.classList.toggle("active", tab === "branding");
   elements.pdfSettings.classList.toggle("active", tab === "pdf");
   elements.personnelSettings.classList.toggle("active", tab === "personnel");
+  elements.integrationSettings?.classList.toggle("active", tab === "integrations");
   elements.wifiAutomationSettings?.classList.toggle("active", tab === "wifiAutomation");
   elements.accessSettings.classList.toggle("active", tab === "access");
   elements.rightsSettings?.classList.toggle("active", tab === "rights");
@@ -2908,13 +3498,14 @@ function setSettingsTab(tab) {
   elements.usbProvisioningSettings?.classList.toggle("active", tab === "usbProvisioning");
   const canSaveGeneralSettings = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("settings:write");
-  elements.saveSettingsButton?.classList.toggle("hidden", ["wifiAutomation", "usbProvisioning"].includes(tab) || !canSaveGeneralSettings);
+  elements.saveSettingsButton?.classList.toggle("hidden", ["wifiAutomation", "integrations", "usbProvisioning"].includes(tab) || !canSaveGeneralSettings);
   if (tab === "access") {
     loadPortalUsers();
     loadAmuSettings();
     loadGreetingSettings();
   }
   if (tab === "rights") loadRightsManagement();
+  if (tab === "integrations") loadIntegrations().catch((error) => showToast(error.message, true));
   if (tab === "wifiAutomation") loadWifiAutomationSettings();
   if (tab === "branding") Promise.all([loadManagementBrandingPreference(), loadBrandingAssignments()]).then(() => renderSettings()).catch((error) => showToast(error.message, true));
   if (tab === "usbProvisioning") {
@@ -5020,6 +5611,61 @@ elements.usbProvisioningStartButton?.addEventListener("click", () => createUsbSt
   setUsbProgress(0, "USB-Stick nicht erstellt", error.message);
   showToast(error.message, true);
 }));
+elements.openPersonnelImportButton?.addEventListener("click", () => openPersonnelImportWizard().catch((error) => showToast(error.message, true)));
+elements.inspectPersonnelImportButton?.addEventListener("click", inspectPersonnelImport);
+elements.personnelImportSheet?.addEventListener("change", () => {
+  const sheet = selectedImportSheet();
+  elements.personnelImportHeaderRow.value = sheet?.suggestedHeaderRow || 1;
+  renderPersonnelImportMapping();
+});
+elements.personnelImportHeaderRow?.addEventListener("input", renderPersonnelImportMapping);
+elements.personnelImportProfile?.addEventListener("change", () => {
+  const profile = selectedImportProfile();
+  const configuration = profile?.configuration || {};
+  const defaults = profile?.configuration?.defaults || {};
+  if (defaults.homeLocationId) elements.personnelImportDefaultLocation.value = defaults.homeLocationId;
+  if (defaults.positionId) elements.personnelImportDefaultPosition.value = defaults.positionId;
+  if (defaults.contractedHours !== undefined) elements.personnelImportDefaultHours.value = defaults.contractedHours;
+  if (profile?.configuration?.duplicateStrategy) elements.personnelImportDuplicateStrategy.value = profile.configuration.duplicateStrategy;
+  if (state.integrations.inspection) {
+    if (configuration.sheetName && [...elements.personnelImportSheet.options].some((option) => option.value === configuration.sheetName)) {
+      elements.personnelImportSheet.value = configuration.sheetName;
+    }
+    const sheet = selectedImportSheet();
+    const headerRow = Number(configuration.headerRow || 0);
+    elements.personnelImportHeaderRow.value = headerRow >= 1 && headerRow <= 20 ? headerRow : sheet?.suggestedHeaderRow || 1;
+    renderPersonnelImportMapping();
+  }
+});
+elements.previewPersonnelImportButton?.addEventListener("click", previewPersonnelImport);
+elements.applyPersonnelImportButton?.addEventListener("click", applyPersonnelImport);
+elements.resetPersonnelImportButton?.addEventListener("click", resetPersonnelImportWizard);
+elements.backPersonnelImportButton?.addEventListener("click", () => returnPersonnelImportToMapping().catch((error) => setPersonnelImportMessage(error.message, true)));
+elements.personnelImportModal?.addEventListener("close", () => {
+  void discardPersonnelImportSessions();
+  clearPersonnelImportWizard();
+});
+elements.savePersonnelImportProfileButton?.addEventListener("click", () => saveIntegrationProfile("import").catch((error) => showToast(error.message, true)));
+[elements.importProfileList, elements.exportProfileList].forEach((list) => list?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-delete-integration-profile]");
+  if (button) deleteIntegrationProfile(button.dataset.deleteIntegrationProfile).catch((error) => showToast(error.message, true));
+}));
+elements.payrollProfile?.addEventListener("change", () => {
+  const profile = integrationProfiles("export", "payroll").find((item) => item.id === elements.payrollProfile.value);
+  applyPayrollConfiguration(profile?.configuration || {});
+});
+elements.payrollLocation?.addEventListener("change", () => { renderPayrollDepartments(); state.integrations.payrollPreflight = null; renderPayrollPreflight(); });
+elements.payrollDepartment?.addEventListener("change", () => { state.integrations.payrollPreflight = null; renderPayrollPreflight(); });
+elements.payrollLayout?.addEventListener("change", () => { renderPayrollColumns([]); state.integrations.payrollPreflight = null; renderPayrollPreflight(); });
+elements.payrollFormat?.addEventListener("change", () => applyPayrollConfiguration(currentPayrollConfiguration()));
+[elements.payrollDateFrom, elements.payrollDateTo, elements.payrollSourceMode, elements.payrollDelimiter, elements.payrollDecimalSeparator, elements.payrollColumnSelection, elements.payrollWageCodeMap].forEach((control) => control?.addEventListener("change", () => {
+  state.integrations.payrollPreflight = null;
+  renderPayrollPreflight();
+}));
+elements.payrollAllowDraft?.addEventListener("change", () => renderPayrollPreflight(state.integrations.payrollPreflight));
+elements.payrollPreflightButton?.addEventListener("click", preflightPayrollExport);
+elements.payrollDownloadButton?.addEventListener("click", downloadPayrollExport);
+elements.savePayrollProfileButton?.addEventListener("click", () => saveIntegrationProfile("export").catch((error) => showToast(error.message, true)));
 document.querySelectorAll("[data-settings-tab]").forEach((button) => button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab)));
 elements.saveWifiAutomationSettingsButton?.addEventListener("click", saveWifiAutomationSettings);
 elements.saveWifiLocationMappingsButton?.addEventListener("click", saveWifiLocationMappings);
