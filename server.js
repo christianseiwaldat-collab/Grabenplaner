@@ -54,6 +54,27 @@ const {
   verifyTokenEnvelope,
 } = require("./lib/usb-provisioning");
 const { renderFirstStepsPdf } = require("./lib/first-steps-pdf");
+const {
+  MAX_IMPORT_BYTES,
+  TabularDataError,
+  inspectTabularBuffer,
+  createCsvBuffer,
+  createXlsxBuffer,
+} = require("./lib/tabular-data");
+const { IntegrationCache, IntegrationCacheError } = require("./lib/integration-cache");
+const {
+  publicPersonnelImportFields,
+  suggestPersonnelMapping,
+  normalizeMapping: normalizePersonnelImportMapping,
+  normalizeProfileConfiguration,
+  mappedPersonnelRow,
+  headerFingerprint,
+} = require("./lib/personnel-import");
+const {
+  normalizePayrollConfiguration,
+  payrollCatalog,
+  buildPayrollRows,
+} = require("./lib/payroll-export");
 const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
@@ -74,6 +95,7 @@ const DUMMY_PORTAL_PASSWORD_HASH = `scrypt-v1$${Buffer.alloc(16, 0xa5).toString(
 const usbProvisioningTokenSecret = crypto.randomBytes(32);
 const consumedUsbProvisioningTokens = new Map();
 let usbProvisioningActive = false;
+const integrationCache = new IntegrationCache({ ttlMs: 15 * 60 * 1000, maxEntries: 25, maxEntriesPerActor: 5 });
 
 const delegablePortalPermissionCatalog = Object.freeze([
   { id: "schedule:read", label: "Dienstpläne lesen", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
@@ -100,6 +122,10 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "sickness:read", label: "Krankmeldungen im eigenen Bereich lesen", group: "AUM", warningLevel: "high", hrDelegable: true },
   { id: "sickness:settings", label: "Krankmeldungs- und AUM-Fristen verwalten", group: "AUM", warningLevel: "critical" },
   { id: "notifications:settings", label: "Eigene Besetzungswarnungen konfigurieren", group: "AUM", warningLevel: "normal", hrDelegable: true },
+  { id: "integrations:read", label: "Schnittstellen und Laufprotokolle lesen", group: "Import & Lohnverrechnung", warningLevel: "high" },
+  { id: "integrations:profiles:write", label: "Import- und Exportprofile verwalten", group: "Import & Lohnverrechnung", warningLevel: "high" },
+  { id: "employees:import", label: "Personalstammdaten importieren", description: "CSV-/Excel-Import mit Vorschau; sensible Personalaktfelder sind ausgeschlossen.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
+  { id: "payroll:export", label: "Lohnverrechnungsdaten exportieren", description: "Zeit-, Abwesenheits- und Zuschlagsdaten als CSV oder Excel ausgeben.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "branding:read", label: "Branding-Verwaltung lesen", group: "System & Verwaltung", warningLevel: "high" },
   { id: "branding:write", label: "Brandings verwalten und zuweisen", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "operation_mode:write", label: "Betriebsmodus umschalten", group: "System & Verwaltung", warningLevel: "critical" },
@@ -228,6 +254,10 @@ const builtinPortalRoles = [
       "sickness:read",
       "sickness:settings",
       "notifications:settings",
+      "integrations:read",
+      "integrations:profiles:write",
+      "employees:import",
+      "payroll:export",
       "scopes:write",
     ],
   },
@@ -277,6 +307,10 @@ const builtinPortalRoles = [
       "sickness:read",
       "sickness:settings",
       "notifications:settings",
+      "integrations:read",
+      "integrations:profiles:write",
+      "employees:import",
+      "payroll:export",
       "scopes:write",
     ],
   },
@@ -299,6 +333,7 @@ builtinPortalRoles.push(
       "usb:provision",
       "roles:read", "roles:write", "audit:read", "scopes:write", "wifi:settings",
       "hr:settings", "sickness:read", "sickness:settings", "notifications:settings",
+      "integrations:read", "integrations:profiles:write", "employees:import",
     ],
   },
   {
@@ -324,9 +359,11 @@ const installationFeatureCatalog = Object.freeze([
   { id: "timeTracking", label: "Zeiterfassung" },
   { id: "sicknessAmu", label: "Krankmeldung & AUM" },
   { id: "wifiSuggestions", label: "WLAN-Zeitvorschläge" },
+  { id: "integrations", label: "Personalimport & Lohnverrechnung" },
 ]);
 const installationFeatureIds = new Set(installationFeatureCatalog.map((feature) => feature.id));
 const defaultInstallationFeatures = installationFeatureCatalog.map((feature) => feature.id);
+const preV063DefaultInstallationFeatures = defaultInstallationFeatures.filter((feature) => feature !== "integrations");
 const PORTAL_ROLE_ASSIGNMENTS = Object.freeze({
   developer: new Set(["employee", "department_manager", "manager", "hr", "admin", "it_admin"]),
   admin: new Set(["employee", "department_manager", "manager", "hr", "admin"]),
@@ -1443,6 +1480,43 @@ function createSchema() {
       dedupe_lookup TEXT NOT NULL UNIQUE
     );
 
+    CREATE TABLE IF NOT EXISTS integration_profiles (
+      id TEXT PRIMARY KEY,
+      direction TEXT NOT NULL CHECK(direction IN ('import', 'export')),
+      kind TEXT NOT NULL CHECK(kind IN ('personnel', 'payroll')),
+      name TEXT NOT NULL COLLATE NOCASE,
+      format TEXT NOT NULL CHECK(format IN ('csv', 'xlsx')),
+      configuration_json TEXT NOT NULL DEFAULT '{}',
+      active INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(direction, kind, name)
+    );
+
+    CREATE TABLE IF NOT EXISTS integration_runs (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT,
+      direction TEXT NOT NULL CHECK(direction IN ('import', 'export')),
+      kind TEXT NOT NULL CHECK(kind IN ('personnel', 'payroll')),
+      format TEXT NOT NULL CHECK(format IN ('csv', 'xlsx')),
+      content_sha256 TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'completed',
+      total_count INTEGER NOT NULL DEFAULT 0,
+      created_count INTEGER NOT NULL DEFAULT 0,
+      updated_count INTEGER NOT NULL DEFAULT 0,
+      skipped_count INTEGER NOT NULL DEFAULT 0,
+      error_count INTEGER NOT NULL DEFAULT 0,
+      actor_employee_number TEXT NOT NULL DEFAULT '',
+      options_json TEXT NOT NULL DEFAULT '{}',
+      result_json TEXT NOT NULL DEFAULT '{}',
+      error_code TEXT NOT NULL DEFAULT '',
+      started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      completed_at TEXT,
+      FOREIGN KEY (profile_id) REFERENCES integration_profiles(id) ON DELETE SET NULL
+    );
+
     CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       actor TEXT NOT NULL DEFAULT '',
@@ -1480,6 +1554,9 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_sickness_alerts_retention ON sickness_alerts(purge_after, status_lookup);
     CREATE INDEX IF NOT EXISTS idx_outbound_notification_jobs_due ON outbound_notification_jobs(status, not_before, created_at);
     CREATE INDEX IF NOT EXISTS idx_outbound_notification_jobs_retention ON outbound_notification_jobs(purge_after, status);
+    CREATE INDEX IF NOT EXISTS idx_integration_profiles_kind ON integration_profiles(direction, kind, active, name);
+    CREATE INDEX IF NOT EXISTS idx_integration_runs_started ON integration_runs(started_at DESC, direction, kind);
+    CREATE INDEX IF NOT EXISTS idx_integration_runs_actor ON integration_runs(actor_employee_number, started_at DESC);
     CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
     CREATE INDEX IF NOT EXISTS idx_portal_users_role_active ON portal_users(role, active);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_employee ON portal_sessions(employee_number, expires_at);
@@ -2078,6 +2155,23 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.59-sickness-ocr-notifications", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.60-portal-mobile-foundation", packageMetadata.version);
+const integrationFeatureMigrationId = "v0.63-import-payroll-integrations";
+if (!db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(integrationFeatureMigrationId)) {
+  const stored = db.prepare("SELECT value FROM settings WHERE key = 'installation_features'").get()?.value;
+  try {
+    const configured = JSON.parse(String(stored || "[]"));
+    if (Array.isArray(configured)) {
+      const enabled = new Set(configured.filter((feature) => installationFeatureIds.has(feature)));
+      const previouslyComplete = preV063DefaultInstallationFeatures.every((feature) => enabled.has(feature));
+      if (previouslyComplete && !enabled.has("integrations")) {
+        db.prepare("UPDATE settings SET value = ? WHERE key = 'installation_features'")
+          .run(JSON.stringify([...configured, "integrations"]));
+      }
+    }
+  } catch {}
+  db.prepare("INSERT INTO schema_migrations (id, app_version) VALUES (?, ?)")
+    .run(integrationFeatureMigrationId, packageMetadata.version);
+}
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -3195,7 +3289,13 @@ function enforceAdminApiAccess(request, _response, next) {
     const method = String(request.method || "GET").toUpperCase();
     const usbProvisioningRoute = /^\/usb-provisioning(?:\/|$)/.test(request.path);
     let permission = usbProvisioningRoute ? "usb:provision" : "schedule:read";
-    if (!usbProvisioningRoute && !["GET", "HEAD", "OPTIONS"].includes(method)) {
+    const integrationRoute = /^\/integrations(?:\/|$)/.test(request.path);
+    if (integrationRoute) {
+      if (/^\/integrations\/personnel-import(?:\/|$)/.test(request.path)) permission = "employees:import";
+      else if (/^\/integrations\/payroll-export(?:\/|$)/.test(request.path)) permission = "payroll:export";
+      else if (/^\/integrations\/profiles(?:\/|$)/.test(request.path) && !["GET", "HEAD", "OPTIONS"].includes(method)) permission = "integrations:profiles:write";
+      else permission = "integrations:read";
+    } else if (!usbProvisioningRoute && !["GET", "HEAD", "OPTIONS"].includes(method)) {
       if (/^\/branding/.test(request.path)) {
         permission = "branding:write";
       } else if (/^\/employees\/[^/]+\/display\/?$/.test(request.path)) {
@@ -3431,6 +3531,7 @@ function installationFeaturesForApiPath(apiPath) {
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:amu|sickness)|portal\/v1\/(?:amu|sickness)|portal\/v1\/personnel-records|amu(?:-|\/|$)|sickness(?:-|\/|$))/.test(requestPath)) required.add("sicknessAmu");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence)|time(?:-|\/|$)|mobile\/v1\/(?:time|me\/time-entries))/.test(requestPath)) required.add("timeTracking");
   if (/^\/(?:portal\/v1\/me(?:\/|$)|mobile\/v1\/(?:bootstrap|me(?:\/|$))|portal\/v1\/(?:greeting-settings|mobile-layout|leadership\/overview))/.test(requestPath)) required.add("employeePortal");
+  if (/^\/integrations\/(?:personnel-import|payroll-export|profiles|runs)(?:\/|$)/.test(requestPath)) required.add("integrations");
   return [...required];
 }
 
@@ -5346,12 +5447,12 @@ function validateVacationRequestDates(employeeNumber, body) {
   return { employeeNumber, dateFrom, dateTo, note };
 }
 
-function employeeRequestContext(employeeNumber, date = null) {
+function employeeRequestContext(employeeNumber, date = null, options = {}) {
   const employee = db.prepare(`
     SELECT personnel_number, full_name, nickname, home_location_id, preferred_department_id
-    FROM employees WHERE personnel_number = ? AND active = 1
+    FROM employees WHERE personnel_number = ?${options.includeInactive ? "" : " AND active = 1"}
   `).get(employeeNumber);
-  if (!employee) throw httpError(404, "Das aktive Teammitglied wurde nicht gefunden.");
+  if (!employee) throw httpError(404, options.includeInactive ? "Das Teammitglied wurde nicht gefunden." : "Das aktive Teammitglied wurde nicht gefunden.");
   let departmentId = employee.preferred_department_id ? Number(employee.preferred_department_id) : null;
   if (date) {
     const shiftDepartment = db.prepare(`
@@ -5463,15 +5564,19 @@ function parseTimeEntrySequence(entries, date, now = new Date()) {
   };
 }
 
-function plannedDayMetrics(employeeNumber, date, locationId, departmentId = null) {
+function plannedDayMetrics(employeeNumber, date, locationId, departmentId = null, filterLocation = false) {
   const settings = settingsForLocation(locationId);
   const blocks = db.prepare(`
-    SELECT id, employee_number, department_id, shift_date, start_time, end_time
-    FROM shifts
-    WHERE employee_number = ? AND shift_date = ?
-      AND (? IS NULL OR department_id = ?)
-    ORDER BY start_time, id
-  `).all(employeeNumber, date, departmentId, departmentId).map((shift) => ({ ...shift, ...shiftMetrics(shift, settings) }));
+    SELECT s.id, s.employee_number, s.department_id, s.shift_date, s.start_time, s.end_time
+    FROM shifts s
+    JOIN employees e ON e.personnel_number = s.employee_number
+    LEFT JOIN departments d ON d.id = s.department_id
+    WHERE s.employee_number = ? AND s.shift_date = ?
+      AND (? IS NULL OR s.department_id = ?)
+      AND (? = 0 OR COALESCE(d.location_id, e.home_location_id) = ?)
+    ORDER BY s.start_time, s.id
+  `).all(employeeNumber, date, departmentId, departmentId, filterLocation ? 1 : 0, locationId)
+    .map((shift) => ({ ...shift, ...shiftMetrics(shift, settings) }));
   return blocks.reduce((result, block) => ({
     grossMinutes: result.grossMinutes + Number(block.raw_minutes || 0),
     breakMinutes: result.breakMinutes + Number(block.break_minutes || 0),
@@ -5505,14 +5610,14 @@ function actualDayMetrics(entries, date, settings, now = new Date()) {
   };
 }
 
-function excusedTimeForEmployeeDate(employeeNumber, date, locationId) {
+function excusedTimeForEmployeeDate(employeeNumber, date, locationId, activeSickness = null) {
   const options = db.prepare(`
     SELECT option_type, note, all_day, start_time, end_time
     FROM week_options
     WHERE employee_number = ? AND ? BETWEEN date_from AND date_to
     ORDER BY all_day DESC, start_time
   `).all(employeeNumber, date);
-  if (activeSicknessEmployeeNumbers(date).has(employeeNumber)) {
+  if ((activeSickness || activeSicknessEmployeeNumbers(date)).has(employeeNumber)) {
     return { excused: true, label: "Krankenstand", options };
   }
   const allDayOptions = options.filter((option) => Boolean(option.all_day));
@@ -5574,15 +5679,18 @@ function invalidateTimeDayReviewsForRange(locationId, dateFrom, dateTo, departme
   return Number(result.changes || 0);
 }
 
-function evaluateTimeDay(employeeNumber, date, now = new Date(), departmentId = null, providedEntries = null) {
-  const context = employeeRequestContext(employeeNumber, date);
-  const location = validateLocationExists(context.locationId);
-  const settings = settingsForLocation(context.locationId);
+function evaluateTimeDay(employeeNumber, date, now = new Date(), departmentId = null, providedEntries = null, evaluationOptions = {}) {
+  const context = employeeRequestContext(employeeNumber, date, { includeInactive: evaluationOptions.includeInactive === true });
+  const evaluationLocationId = String(evaluationOptions.locationId || context.locationId);
+  const filterLocation = evaluationOptions.filterLocation === true;
+  const location = validateLocationExists(evaluationLocationId);
+  const settings = settingsForLocation(evaluationLocationId);
   const entries = (providedEntries || timeEntriesForDay(employeeNumber, date))
-    .filter((entry) => !departmentId || Number(entry.department_id || 0) === Number(departmentId));
-  const planned = plannedDayMetrics(employeeNumber, date, context.locationId, departmentId);
+    .filter((entry) => (!departmentId || Number(entry.department_id || 0) === Number(departmentId))
+      && (!filterLocation || String(entry.location_id || context.locationId) === evaluationLocationId));
+  const planned = plannedDayMetrics(employeeNumber, date, evaluationLocationId, departmentId, filterLocation);
   const actual = actualDayMetrics(entries, date, settings, now);
-  const excused = excusedTimeForEmployeeDate(employeeNumber, date, context.locationId);
+  const excused = excusedTimeForEmployeeDate(employeeNumber, date, evaluationLocationId, evaluationOptions.activeSickness || null);
   const today = viennaTodayIso(now);
   const isPast = date < today;
   const isFuture = date > today;
@@ -5613,12 +5721,16 @@ function evaluateTimeDay(employeeNumber, date, now = new Date(), departmentId = 
     addIssue("variance", "warning", "Zeitabweichung", `Die Ist-Zeit weicht um mehr als ${toleranceMinutes} Minuten vom Dienstplan ab.`);
   }
   const pendingCorrection = Boolean(db.prepare(`
-    SELECT 1 FROM time_corrections WHERE employee_number = ? AND correction_date = ? AND status = 'pending' LIMIT 1
-  `).get(employeeNumber, date));
+    SELECT 1 FROM time_corrections
+    WHERE employee_number = ? AND correction_date = ? AND status = 'pending'
+      AND (? = 0 OR location_id = ?)
+      AND (? IS NULL OR department_id = ?)
+    LIMIT 1
+  `).get(employeeNumber, date, filterLocation ? 1 : 0, evaluationLocationId, departmentId, departmentId));
   if (pendingCorrection) addIssue("pending_correction", "info", "Korrektur offen", "Für diesen Tag wartet ein Korrekturantrag auf Bearbeitung.");
   const evaluationHash = sha256(JSON.stringify({
     version: TIME_EVALUATION_VERSION,
-    locationId: context.locationId,
+    locationId: evaluationLocationId,
     departmentId: Number(departmentId || 0) || 0,
     planned: planned.blocks.map((block) => [block.id, block.department_id, block.start_time, block.end_time]),
     entries: entries.map((entry) => [entry.id, entry.department_id, entry.entry_type, entry.entry_timestamp]),
@@ -5637,7 +5749,7 @@ function evaluateTimeDay(employeeNumber, date, now = new Date(), departmentId = 
   }));
   const review = timeDayReview(employeeNumber, date, departmentId);
   if (review) {
-    review.stale = review.snapshot?.evaluationHash !== evaluationHash;
+    review.stale = review.locationId !== evaluationLocationId || review.snapshot?.evaluationHash !== evaluationHash;
     if (review.stale) addIssue("review_stale", "info", "Prüfung veraltet", "Plan, Buchungen oder Bewertungsregeln wurden seit der Prüfung geändert.");
   }
   let code = isFuture ? "future" : date === today && actual.ongoing ? actual.state : "complete";
@@ -5654,7 +5766,7 @@ function evaluateTimeDay(employeeNumber, date, now = new Date(), departmentId = 
     evaluationHash,
     date,
     workDate: date,
-    locationId: context.locationId,
+    locationId: evaluationLocationId,
     departmentId: departmentId || context.departmentId,
     code,
     severity,
@@ -10054,6 +10166,954 @@ function sendReadiness(response) {
   const diagnostics = serverDiagnostics();
   response.status(diagnostics.ready ? 200 : 503).json({ ok: diagnostics.ready });
 }
+
+function integrationActor(request, permission) {
+  return requirePortalAdminOrLocal(request, permission);
+}
+
+function parseIntegrationJson(value, fallback = {}) {
+  try {
+    const parsed = JSON.parse(String(value || "{}"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function serializeIntegrationProfile(row) {
+  return {
+    id: row.id,
+    direction: row.direction,
+    kind: row.kind,
+    name: row.name,
+    format: row.format,
+    configuration: parseIntegrationJson(row.configuration_json),
+    active: Boolean(row.active),
+    createdBy: row.created_by || "",
+    updatedBy: row.updated_by || "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function integrationProfiles(filters = {}) {
+  const where = [];
+  const values = [];
+  if (["import", "export"].includes(filters.direction)) { where.push("direction = ?"); values.push(filters.direction); }
+  if (["personnel", "payroll"].includes(filters.kind)) { where.push("kind = ?"); values.push(filters.kind); }
+  return db.prepare(`
+    SELECT * FROM integration_profiles
+    ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+    ORDER BY active DESC, direction, kind, name COLLATE NOCASE
+  `).all(...values).map(serializeIntegrationProfile);
+}
+
+function normalizeIntegrationProfile(body = {}, existing = null) {
+  if (existing && body.direction !== undefined && String(body.direction) !== existing.direction) {
+    throw httpError(400, "Die Richtung eines bestehenden Schnittstellenprofils kann nicht geändert werden.", "INTEGRATION_PROFILE_KIND_LOCKED");
+  }
+  if (existing && body.kind !== undefined && String(body.kind) !== existing.kind) {
+    throw httpError(400, "Die Art eines bestehenden Schnittstellenprofils kann nicht geändert werden.", "INTEGRATION_PROFILE_KIND_LOCKED");
+  }
+  const direction = String(body.direction || existing?.direction || "");
+  const kind = String(body.kind || existing?.kind || "");
+  if (!((direction === "import" && kind === "personnel") || (direction === "export" && kind === "payroll"))) {
+    throw httpError(400, "Dieses Schnittstellenprofil wird nicht unterst\u00fctzt.", "INTEGRATION_PROFILE_KIND_INVALID");
+  }
+  const name = String(body.name || existing?.name || "").trim().replace(/\s+/g, " ");
+  if (name.length < 2 || name.length > 80) throw httpError(400, "Der Profilname muss 2 bis 80 Zeichen lang sein.", "INTEGRATION_PROFILE_NAME_INVALID");
+  let configuration;
+  try {
+    configuration = direction === "import"
+      ? normalizeProfileConfiguration(body.configuration || existing?.configuration || {})
+      : normalizePayrollConfiguration(body.configuration || existing?.configuration || {});
+  } catch (error) {
+    throw httpError(400, "Die Profilkonfiguration ist ung\u00fcltig.", error.message || "INTEGRATION_PROFILE_INVALID");
+  }
+  const format = configuration.format;
+  return { direction, kind, name, format, configuration, active: body.active !== false };
+}
+
+function serializeIntegrationRun(row) {
+  return {
+    id: row.id,
+    profileId: row.profile_id || null,
+    direction: row.direction,
+    kind: row.kind,
+    format: row.format,
+    status: row.status,
+    totalCount: Number(row.total_count || 0),
+    createdCount: Number(row.created_count || 0),
+    updatedCount: Number(row.updated_count || 0),
+    skippedCount: Number(row.skipped_count || 0),
+    errorCount: Number(row.error_count || 0),
+    actorEmployeeNumber: row.actor_employee_number || "",
+    options: parseIntegrationJson(row.options_json),
+    result: parseIntegrationJson(row.result_json),
+    errorCode: row.error_code || "",
+    startedAt: row.started_at,
+    completedAt: row.completed_at || null,
+  };
+}
+
+function insertIntegrationRun(run) {
+  const id = run.id || crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO integration_runs
+      (id, profile_id, direction, kind, format, content_sha256, status, total_count,
+       created_count, updated_count, skipped_count, error_count, actor_employee_number,
+       options_json, result_json, error_code, completed_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `).run(
+    id, run.profileId || null, run.direction, run.kind, run.format, run.contentSha256 || "",
+    run.status || "completed", Number(run.totalCount || 0), Number(run.createdCount || 0),
+    Number(run.updatedCount || 0), Number(run.skippedCount || 0), Number(run.errorCount || 0),
+    run.actor || "", JSON.stringify(run.options || {}), JSON.stringify(run.result || {}), run.errorCode || "",
+  );
+  return id;
+}
+
+function integrationProfileById(id, direction = "", kind = "", options = {}) {
+  const row = db.prepare(`SELECT * FROM integration_profiles WHERE id = ?${options.includeInactive ? "" : " AND active = 1"}`).get(String(id || ""));
+  if (!row || (direction && row.direction !== direction) || (kind && row.kind !== kind)) {
+    throw httpError(404, "Das Schnittstellenprofil wurde nicht gefunden.", "INTEGRATION_PROFILE_NOT_FOUND");
+  }
+  return serializeIntegrationProfile(row);
+}
+
+function personnelImportReferenceData(actor = null) {
+  return {
+    positions: getPositions().map((position) => ({ id: position.id, name: position.name, active: true })),
+    locations: getLocationsForSession(actor, true).map((location) => ({
+      id: location.id,
+      name: location.name,
+      active: location.active,
+      departments: location.departments.map((department) => ({ id: department.id, name: department.name, active: department.active })),
+    })),
+  };
+}
+
+function employeeImportRow(personnelNumber) {
+  return db.prepare(`
+    SELECT personnel_number, full_name, nickname, color, contracted_hours, preferred_day_off,
+           fixed_workdays, position_id, time_confirmation_level, home_location_id,
+           preferred_department_id, active
+    FROM employees WHERE personnel_number = ?
+  `).get(personnelNumber);
+}
+
+function employeeImportRowsCaseInsensitive(personnelNumber) {
+  return db.prepare(`
+    SELECT personnel_number, full_name, nickname, color, contracted_hours, preferred_day_off,
+           fixed_workdays, position_id, time_confirmation_level, home_location_id,
+           preferred_department_id, active
+    FROM employees WHERE personnel_number = ? COLLATE NOCASE
+    ORDER BY personnel_number
+  `).all(personnelNumber);
+}
+
+function employeeImportFingerprint(row) {
+  if (!row) return "";
+  return sha256(JSON.stringify([
+    row.personnel_number, row.full_name, row.nickname, row.color, Number(row.contracted_hours),
+    row.preferred_day_off || "", row.fixed_workdays || "", row.position_id || "",
+    row.time_confirmation_level || "C", row.home_location_id || "",
+    Number(row.preferred_department_id || 0), Number(row.active || 0),
+  ]));
+}
+
+function uniqueReferenceByName(rows, name, typeLabel) {
+  const normalized = String(name || "").trim().toLocaleLowerCase("de-AT");
+  const matches = rows.filter((row) => String(row.name || "").trim().toLocaleLowerCase("de-AT") === normalized);
+  if (matches.length === 1) return matches[0];
+  if (!matches.length) throw httpError(400, `${typeLabel} wurde nicht gefunden.`, "IMPORT_REFERENCE_NOT_FOUND");
+  throw httpError(400, `${typeLabel} ist nicht eindeutig. Bitte die ID importieren.`, "IMPORT_REFERENCE_AMBIGUOUS");
+}
+
+function importFieldMapped(mapping, ...fields) {
+  return fields.some((field) => Object.hasOwn(mapping, field));
+}
+
+function resolvePersonnelImportCandidate(incoming, mapping, existing, actor) {
+  const creating = !existing;
+  if (existing) {
+    assertSessionContextScope(actor, {
+      locationId: existing.home_location_id,
+      departmentId: existing.preferred_department_id,
+    });
+  }
+  const base = existing ? {
+    personnelNumber: existing.personnel_number,
+    fullName: existing.full_name,
+    nickname: existing.nickname,
+    color: existing.color,
+    contractedHours: Number(existing.contracted_hours),
+    preferredDayOff: existing.preferred_day_off || "",
+    fixedWorkdays: String(existing.fixed_workdays || "").split(",").filter(Boolean),
+    positionId: existing.position_id,
+    timeConfirmationLevel: existing.time_confirmation_level || "C",
+    homeLocationId: existing.home_location_id,
+    preferredDepartmentId: existing.preferred_department_id || "",
+    active: Boolean(existing.active),
+  } : {
+    personnelNumber: incoming.personnelNumber,
+    fullName: incoming.fullName,
+    nickname: incoming.nickname,
+    color: incoming.color,
+    contractedHours: incoming.contractedHours,
+    preferredDayOff: incoming.preferredDayOff,
+    fixedWorkdays: incoming.fixedWorkdays,
+    positionId: incoming.positionId,
+    timeConfirmationLevel: "C",
+    homeLocationId: incoming.homeLocationId,
+    preferredDepartmentId: incoming.preferredDepartmentId,
+    active: incoming.active,
+  };
+  const use = (field) => creating || importFieldMapped(mapping, field);
+  if (use("fullName")) base.fullName = incoming.fullName;
+  if (use("nickname")) base.nickname = incoming.nickname;
+  if (use("color")) base.color = incoming.color;
+  if (use("contractedHours")) base.contractedHours = incoming.contractedHours;
+  if (use("preferredDayOff")) base.preferredDayOff = incoming.preferredDayOff;
+  if (use("fixedWorkdays")) base.fixedWorkdays = incoming.fixedWorkdays;
+  if (use("active")) base.active = incoming.active;
+
+  const references = personnelImportReferenceData(actor);
+  if (creating || importFieldMapped(mapping, "positionId", "positionName")) {
+    const position = incoming.positionId && references.positions.find((item) => item.id === incoming.positionId)
+      || (incoming.positionName ? uniqueReferenceByName(references.positions, incoming.positionName, "Die Position") : null);
+    if (!position) throw httpError(400, "Bitte eine g\u00fcltige Position zuordnen.", "IMPORT_POSITION_REQUIRED");
+    base.positionId = position.id;
+  }
+  if (creating || importFieldMapped(mapping, "homeLocationId", "homeLocationName")) {
+    const location = incoming.homeLocationId && references.locations.find((item) => item.id === incoming.homeLocationId)
+      || (incoming.homeLocationName ? uniqueReferenceByName(references.locations, incoming.homeLocationName, "Der Standort") : null);
+    if (!location) throw httpError(400, "Bitte einen g\u00fcltigen Standardstandort ausw\u00e4hlen.", "IMPORT_LOCATION_REQUIRED");
+    base.homeLocationId = location.id;
+  }
+  if (creating || importFieldMapped(mapping, "preferredDepartmentId", "preferredDepartmentName")) {
+    const location = references.locations.find((item) => item.id === base.homeLocationId);
+    if (!incoming.preferredDepartmentId && !incoming.preferredDepartmentName) base.preferredDepartmentId = "";
+    else {
+      const departmentId = Number(incoming.preferredDepartmentId || 0);
+      const department = departmentId && location?.departments.find((item) => Number(item.id) === departmentId)
+        || (incoming.preferredDepartmentName ? uniqueReferenceByName(location?.departments || [], incoming.preferredDepartmentName, "Die Abteilung") : null);
+      if (!department) throw httpError(400, "Bitte eine g\u00fcltige Abteilung zuordnen.", "IMPORT_DEPARTMENT_INVALID");
+      base.preferredDepartmentId = department.id;
+    }
+  }
+  const candidate = validateEmployee(base, creating, { defaultTimeConfirmationLevel: existing?.time_confirmation_level || "C" });
+  assertSessionContextScope(actor, { locationId: candidate.homeLocationId, departmentId: candidate.preferredDepartmentId });
+  return candidate;
+}
+
+function personnelImportPreview(actor, inspection, body = {}) {
+  const sheetName = String(body.sheetName || inspection.sheets[0]?.name || "");
+  const sheet = inspection.sheets.find((item) => item.name === sheetName);
+  if (!sheet) throw httpError(400, "Das ausgew\u00e4hlte Tabellenblatt wurde nicht gefunden.", "IMPORT_SHEET_NOT_FOUND");
+  const headerRow = Number(body.headerRow || 1);
+  if (!Number.isInteger(headerRow) || headerRow < 1 || headerRow > 20 || headerRow > sheet.rows.length) {
+    throw httpError(400, "Die Kopfzeile ist ung\u00fcltig.", "IMPORT_HEADER_ROW_INVALID");
+  }
+  const headerCells = sheet.rows[headerRow - 1] || [];
+  let mapping;
+  try { mapping = normalizePersonnelImportMapping(body.mapping || {}, headerCells.length); }
+  catch (error) {
+    const message = error.message === "IMPORT_MAPPING_REQUIRED_FIELDS"
+      ? "Personalnummer und vollst\u00e4ndiger Name m\u00fcssen zugeordnet sein."
+      : "Die Feldzuordnung ist ung\u00fcltig.";
+    throw httpError(400, message, error.message || "IMPORT_MAPPING_INVALID");
+  }
+  const fingerprint = headerFingerprint(headerCells);
+  if (body.headerFingerprint && body.headerFingerprint !== fingerprint) {
+    throw httpError(409, "Die Spalten stimmen nicht mehr mit dem ausgew\u00e4hlten Profil \u00fcberein.", "IMPORT_HEADER_CHANGED");
+  }
+  const duplicateStrategy = body.duplicateStrategy === "update" ? "update" : "skip";
+  const profile = body.profileId ? integrationProfileById(body.profileId, "import", "personnel") : null;
+  const defaults = body.defaults && typeof body.defaults === "object" ? body.defaults : (profile?.configuration?.defaults || {});
+  const rows = [];
+  const seen = new Map();
+  const sourceRows = sheet.rows.slice(headerRow);
+  sourceRows.forEach((sourceRow, offset) => {
+    const rowNumber = headerRow + offset + 1;
+    if (!sourceRow.some((cell) => cell.text || cell.formula || cell.error)) return;
+    const incoming = mappedPersonnelRow(sourceRow, mapping, defaults);
+    const errors = [];
+    const warnings = [];
+    for (const [field, meta] of Object.entries(incoming.sourceMeta || {})) {
+      if (meta.formula) errors.push({ code: "FORMULA_CELL", field, message: "Formelzellen werden im Personalimport nicht \u00fcbernommen." });
+      if (meta.error) errors.push({ code: "ERROR_CELL", field, message: "Die Quelldatei enth\u00e4lt in diesem Feld einen Excel-Fehler." });
+    }
+    if (!incoming.personnelNumber) errors.push({ code: "PERSONNEL_NUMBER_REQUIRED", field: "personnelNumber", message: "Personalnummer fehlt." });
+    if (!incoming.fullName) errors.push({ code: "FULL_NAME_REQUIRED", field: "fullName", message: "Name fehlt." });
+    if (incoming.derivedNickname) warnings.push({ code: "NICKNAME_DERIVED", field: "nickname", message: "Der Anzeigename wird aus dem ersten Namensteil gebildet." });
+    const key = incoming.personnelNumber.toLocaleLowerCase("de-AT");
+    if (key && seen.has(key)) {
+      errors.push({ code: "DUPLICATE_IN_FILE", field: "personnelNumber", message: "Diese Personalnummer kommt in der Datei mehrfach vor." });
+      seen.get(key).errors.push({ code: "DUPLICATE_IN_FILE", field: "personnelNumber", message: "Diese Personalnummer kommt in der Datei mehrfach vor." });
+    } else if (key) seen.set(key, { errors });
+    const existingMatches = incoming.personnelNumber ? employeeImportRowsCaseInsensitive(incoming.personnelNumber) : [];
+    if (existingMatches.length > 1) {
+      errors.push({ code: "PERSONNEL_NUMBER_AMBIGUOUS", field: "personnelNumber", message: "Diese Personalnummer ist im Bestand nicht eindeutig. Bitte die Stammdaten zuerst bereinigen." });
+    }
+    const existing = existingMatches.length === 1 ? existingMatches[0] : null;
+    if (existing && existing.personnel_number !== incoming.personnelNumber) {
+      warnings.push({ code: "PERSONNEL_NUMBER_CASE_MATCH", field: "personnelNumber", message: `Die Personalnummer entspricht dem bestehenden Eintrag ${existing.personnel_number}; Groß-/Kleinschreibung wird nicht als neue Person behandelt.` });
+    }
+    let candidate = null;
+    let action = existing ? (duplicateStrategy === "update" ? "update" : "skip") : "create";
+    if (existing && duplicateStrategy === "skip") warnings.push({ code: "EXISTING_SKIPPED", message: "Die vorhandene Personalnummer wird nicht ver\u00e4ndert." });
+    if (!errors.length && action !== "skip") {
+      try {
+        candidate = resolvePersonnelImportCandidate(incoming, mapping, existing, actor);
+        if (existing && employeeImportFingerprint(existing) === employeeImportFingerprint({
+          personnel_number: candidate.personnelNumber,
+          full_name: candidate.fullName,
+          nickname: candidate.nickname,
+          color: candidate.color,
+          contracted_hours: candidate.contractedHours,
+          preferred_day_off: candidate.preferredDayOff,
+          fixed_workdays: candidate.fixedWorkdays,
+          position_id: candidate.positionId,
+          time_confirmation_level: candidate.timeConfirmationLevel,
+          home_location_id: candidate.homeLocationId,
+          preferred_department_id: candidate.preferredDepartmentId,
+          active: candidate.active,
+        })) {
+          action = "skip";
+          warnings.push({ code: "UNCHANGED", message: "Es sind keine \u00c4nderungen erforderlich." });
+        }
+      } catch (error) {
+        errors.push({ code: error.code || "ROW_INVALID", message: error.message || "Die Zeile ist ung\u00fcltig." });
+      }
+    }
+    if (errors.length) action = "error";
+    rows.push({
+      rowNumber,
+      action,
+      candidate,
+      existingFingerprint: employeeImportFingerprint(existing),
+      errors,
+      warnings,
+      display: {
+        personnelNumber: incoming.personnelNumber,
+        fullName: incoming.fullName,
+        nickname: incoming.nickname,
+        contractedHours: incoming.contractedHours,
+        location: candidate?.homeLocationId || incoming.homeLocationId || incoming.homeLocationName,
+        department: candidate?.preferredDepartmentId || incoming.preferredDepartmentId || incoming.preferredDepartmentName,
+        position: candidate?.positionId || incoming.positionId || incoming.positionName,
+        active: candidate ? Boolean(candidate.active) : incoming.active,
+      },
+    });
+  });
+  if (!rows.length) {
+    throw httpError(400, "Unterhalb der Kopfzeile wurden keine Importdaten gefunden.", "IMPORT_DATA_ROWS_REQUIRED");
+  }
+  for (const row of rows) if (row.errors.length) row.action = "error";
+  const summary = {
+    total: rows.length,
+    create: rows.filter((row) => row.action === "create").length,
+    update: rows.filter((row) => row.action === "update").length,
+    skip: rows.filter((row) => row.action === "skip").length,
+    errors: rows.filter((row) => row.action === "error").length,
+    warnings: rows.reduce((sum, row) => sum + row.warnings.length, 0),
+  };
+  return { sheetName, headerRow, mapping, headerFingerprint: fingerprint, duplicateStrategy, profileId: profile?.id || null, rows, summary };
+}
+
+function publicPersonnelPreview(preview, previewSession) {
+  const errorRows = preview.rows.filter((row) => row.action === "error");
+  const regularRows = preview.rows.filter((row) => row.action !== "error");
+  const visibleRows = preview.rows.length <= 200
+    ? preview.rows
+    : [...errorRows.slice(0, 200), ...regularRows.slice(0, Math.max(0, 200 - errorRows.length))];
+  return {
+    previewId: previewSession.id,
+    expiresAt: previewSession.expiresAt,
+    summary: preview.summary,
+    rows: visibleRows.map(({ candidate: _candidate, existingFingerprint: _fingerprint, ...row }) => row),
+    truncated: preview.rows.length > 200,
+    hiddenErrorCount: Math.max(0, errorRows.length - visibleRows.filter((row) => row.action === "error").length),
+  };
+}
+
+function applyPersonnelImport(actor, preview) {
+  if (preview.summary.errors) throw httpError(422, "Der Import enth\u00e4lt noch fehlerhafte Zeilen.", "IMPORT_HAS_ERRORS");
+  const createEmployee = db.prepare(`
+    INSERT INTO employees
+      (personnel_number, full_name, nickname, color, contracted_hours, preferred_day_off, fixed_workdays,
+       position_id, time_confirmation_level, home_location_id, preferred_department_id, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const updateEmployee = db.prepare(`
+    UPDATE employees SET full_name = ?, nickname = ?, color = ?, contracted_hours = ?, preferred_day_off = ?,
+      fixed_workdays = ?, position_id = ?, time_confirmation_level = ?, home_location_id = ?, preferred_department_id = ?, active = ?
+    WHERE personnel_number = ?
+  `);
+  const runId = crypto.randomUUID();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const row of preview.rows) {
+      if (!["create", "update"].includes(row.action)) continue;
+      const candidate = row.candidate;
+      const currentMatches = employeeImportRowsCaseInsensitive(candidate.personnelNumber);
+      const current = currentMatches.length === 1 ? currentMatches[0] : null;
+      if (row.action === "create" && currentMatches.length) throw httpError(409, "Die Importvorschau ist veraltet. Eine Personalnummer wurde inzwischen angelegt.", "IMPORT_PREVIEW_STALE");
+      if (row.action === "update" && currentMatches.length !== 1) throw httpError(409, "Die Importvorschau ist veraltet. Die Personalnummer ist nicht mehr eindeutig.", "IMPORT_PREVIEW_STALE");
+      if (row.action === "update" && employeeImportFingerprint(current) !== row.existingFingerprint) {
+        throw httpError(409, "Die Importvorschau ist veraltet. Stammdaten wurden inzwischen ge\u00e4ndert.", "IMPORT_PREVIEW_STALE");
+      }
+      if (row.action === "update") {
+        assertSessionContextScope(actor, {
+          locationId: current.home_location_id,
+          departmentId: current.preferred_department_id,
+        });
+      }
+      const validated = validateEmployee(candidate, row.action === "create", { defaultTimeConfirmationLevel: candidate.timeConfirmationLevel || "C" });
+      assertSessionContextScope(actor, { locationId: validated.homeLocationId, departmentId: validated.preferredDepartmentId });
+      if (row.action === "create") {
+        createEmployee.run(validated.personnelNumber, validated.fullName, validated.nickname, validated.color,
+          validated.contractedHours, validated.preferredDayOff, validated.fixedWorkdays, validated.positionId,
+          validated.timeConfirmationLevel, validated.homeLocationId, validated.preferredDepartmentId, validated.active);
+      } else {
+        updateEmployee.run(validated.fullName, validated.nickname, validated.color, validated.contractedHours,
+          validated.preferredDayOff, validated.fixedWorkdays, validated.positionId, validated.timeConfirmationLevel,
+          validated.homeLocationId, validated.preferredDepartmentId, validated.active, validated.personnelNumber);
+      }
+    }
+    insertIntegrationRun({
+      id: runId,
+      profileId: preview.profileId,
+      direction: "import",
+      kind: "personnel",
+      format: preview.format,
+      contentSha256: preview.contentSha256,
+      actor: actor.employeeNumber,
+      totalCount: preview.summary.total,
+      createdCount: preview.summary.create,
+      updatedCount: preview.summary.update,
+      skippedCount: preview.summary.skip,
+      errorCount: 0,
+      options: { duplicateStrategy: preview.duplicateStrategy, sheetName: preview.sheetName, headerRow: preview.headerRow },
+      result: { rows: preview.rows.map((row) => ({ rowNumber: row.rowNumber, action: row.action })) },
+    });
+    auditPortal(actor.employeeNumber, "integration.personnel.import.applied", "integration_run", runId,
+      JSON.stringify({ profileId: preview.profileId, total: preview.summary.total, created: preview.summary.create, updated: preview.summary.update, skipped: preview.summary.skip, contentSha256: preview.contentSha256 }));
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  return { runId, ...preview.summary };
+}
+
+const payrollAbsenceCodeByOption = Object.freeze({
+  vacation: "vacation",
+  sick: "sickness",
+  time_off: "time_off",
+  branch: "branch_assignment",
+  vocational_school: "vocational_school",
+  school: "training",
+  special_leave: "special_leave",
+  external_appointment: "external_appointment",
+  team_meeting: "team_meeting",
+  other: "other",
+});
+
+function payrollOptionCreditedOnDate(option, date, settings, locationId) {
+  if (!optionIsAllDay(option)) return true;
+  if (option.option_type === "vacation") return vacationDayCount(date, date, settings, locationId) === 1;
+  const day = new Date(`${date}T12:00:00Z`).getUTCDay();
+  if (day === 0) return false;
+  if (!alwaysFullDayOptionTypes.has(option.option_type)) return true;
+  let creditedBeforeOrOnDate = 0;
+  for (let current = option.date_from; current <= date; current = addDays(current, 1)) {
+    if (new Date(`${current}T12:00:00Z`).getUTCDay() !== 0) creditedBeforeOrOnDate += 1;
+  }
+  return creditedBeforeOrOnDate <= 5;
+}
+
+function payrollAbsencesForDay(employee, date, locationId, activeSickness = null, departmentId = null) {
+  const employeeNumber = employee.personnel_number;
+  if (String(employee.home_location_id || "") !== String(locationId || "")) return [];
+  if (departmentId && Number(employee.preferred_department_id || 0) !== Number(departmentId)) return [];
+  const settings = settingsForLocation(locationId);
+  const rows = db.prepare(`
+    SELECT id, option_type, date_from, date_to, all_day, start_time, end_time, credited_minutes_per_day
+    FROM week_options
+    WHERE employee_number = ? AND ? BETWEEN date_from AND date_to
+    ORDER BY id
+  `).all(employeeNumber, date);
+  const absences = rows.filter((row) => payrollOptionCreditedOnDate(row, date, settings, locationId)).map((row) => {
+    const internalCode = payrollAbsenceCodeByOption[row.option_type] || "other";
+    const quantityMinutes = !row.all_day && isTime(row.start_time) && isTime(row.end_time)
+      ? Math.max(0, timeToMinutes(row.end_time) - timeToMinutes(row.start_time))
+      : optionMinutesPerDay(row, employee.contracted_hours);
+    return {
+      internalCode,
+      referenceType: "week_option",
+      referenceId: Number(row.id),
+      quantityMinutes,
+      quantityDays: row.all_day ? 1 : 0,
+      unit: row.all_day ? "days" : "minutes",
+      allDay: Boolean(row.all_day),
+      startTime: row.start_time || "",
+      endTime: row.end_time || "",
+    };
+  });
+  const weekDay = new Date(`${date}T12:00:00Z`).getUTCDay();
+  if (weekDay >= 1 && weekDay <= 5 && (activeSickness || activeSicknessEmployeeNumbers(date)).has(employeeNumber) && !absences.some((absence) => absence.internalCode === "sickness")) {
+    absences.push({
+      internalCode: "sickness", referenceType: "sickness_case", referenceId: null,
+      quantityMinutes: Math.round((Number(employee.contracted_hours || 0) * 60) / 5), quantityDays: 1,
+      unit: "days", allDay: true, startTime: "", endTime: "",
+    });
+  }
+  const holidayCredited = weekDay >= 1 && weekDay <= 5
+    || (weekDay === 6 && settingEnabled(settings, "vacation_count_saturday"));
+  if (employee.active && holidayCredited && isVacationHoliday(date, locationId)) {
+    absences.push({
+      internalCode: "public_holiday", referenceType: "public_holiday", referenceId: null,
+      quantityMinutes: Math.round((Number(employee.contracted_hours || 0) * 60) / 5), quantityDays: 1,
+      unit: "days", allDay: true, startTime: "", endTime: "",
+    });
+  }
+  const unique = new Map();
+  for (const absence of absences) {
+    const key = `${absence.internalCode}:${absence.referenceType}:${absence.referenceId ?? date}`;
+    if (!unique.has(key)) unique.set(key, absence);
+  }
+  return [...unique.values()];
+}
+
+function payrollEmployeesForContext(context, dateFrom, dateTo) {
+  const employees = db.prepare(`
+    SELECT e.personnel_number, e.full_name, e.contracted_hours, e.home_location_id, e.preferred_department_id, e.active
+    FROM employees e
+    WHERE (e.active = 1 AND e.home_location_id = ?)
+       OR EXISTS (
+         SELECT 1 FROM time_entries t
+         WHERE t.employee_number = e.personnel_number AND t.location_id = ?
+           AND t.work_date BETWEEN ? AND ? AND t.voided_at IS NULL
+       )
+       OR EXISTS (
+         SELECT 1 FROM shifts s
+         LEFT JOIN departments d ON d.id = s.department_id
+         WHERE s.employee_number = e.personnel_number
+           AND COALESCE(d.location_id, e.home_location_id) = ?
+           AND s.shift_date BETWEEN ? AND ?
+       )
+       OR EXISTS (
+         SELECT 1 FROM week_options w
+         WHERE w.employee_number = e.personnel_number AND e.home_location_id = ?
+           AND w.date_from <= ? AND w.date_to >= ?
+       )
+    ORDER BY CAST(e.personnel_number AS INTEGER), e.personnel_number
+  `).all(context.locationId, context.locationId, dateFrom, dateTo,
+    context.locationId, dateFrom, dateTo, context.locationId, dateTo, dateFrom);
+  return employees.filter((employee) => {
+    if (!context.departmentId) return true;
+    if (Number(employee.preferred_department_id || 0) === Number(context.departmentId)) return true;
+    return Boolean(db.prepare(`
+      SELECT 1
+      WHERE EXISTS (SELECT 1 FROM shifts WHERE employee_number = ? AND shift_date BETWEEN ? AND ? AND department_id = ?)
+         OR EXISTS (SELECT 1 FROM time_entries WHERE employee_number = ? AND work_date BETWEEN ? AND ? AND department_id = ? AND voided_at IS NULL)
+    `).get(employee.personnel_number, dateFrom, dateTo, context.departmentId,
+      employee.personnel_number, dateFrom, dateTo, context.departmentId));
+  });
+}
+
+function payrollCorrectionState(employeeNumber, date, locationId, departmentId = null) {
+  const row = db.prepare(`
+    SELECT status FROM time_corrections
+    WHERE employee_number = ? AND correction_date = ?
+      AND location_id = ?
+      AND (? IS NULL OR department_id = ?)
+    ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, id DESC LIMIT 1
+  `).get(employeeNumber, date, locationId, departmentId, departmentId);
+  return row?.status || "none";
+}
+
+function payrollWorkRanges(evaluation, sourceMode) {
+  if (sourceMode === "planned") {
+    return (evaluation.planned?.blocks || []).map((block) => ({ start: block.start_time, end: block.end_time }));
+  }
+  return (evaluation.actual?.segments || []).map((segment) => ({
+    start: viennaNowLocal(segment.start).slice(11, 16),
+    end: viennaNowLocal(segment.end).slice(11, 16),
+  }));
+}
+
+function payrollAbsenceOverlapsWork(absence, ranges) {
+  if (!ranges.length) return false;
+  if (absence.allDay) return true;
+  if (!isTime(absence.startTime) || !isTime(absence.endTime)) return true;
+  return ranges.some((range) => isTime(range.start) && isTime(range.end)
+    && timeRangesOverlap(absence.startTime, absence.endTime, range.start, range.end));
+}
+
+function payrollPreflight(actor, body = {}) {
+  const dateFrom = String(body.dateFrom || body.from || "");
+  const dateTo = String(body.dateTo || body.to || "");
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom || daysBetweenInclusive(dateFrom, dateTo) > 93) {
+    throw httpError(400, "Bitte einen g\u00fcltigen Zeitraum von h\u00f6chstens 93 Tagen ausw\u00e4hlen.", "PAYROLL_RANGE_INVALID");
+  }
+  const context = resolvePlanningContext(body);
+  assertSessionContextScope(actor, context);
+  let configuration = body.configuration || {};
+  const profile = body.profileId ? integrationProfileById(body.profileId, "export", "payroll") : null;
+  if (profile) configuration = { ...profile.configuration, ...configuration };
+  const config = normalizePayrollConfiguration(configuration);
+  const employees = payrollEmployeesForContext(context, dateFrom, dateTo);
+  const sicknessByDate = new Map();
+  const days = [];
+  const blockers = [];
+  const warnings = [{
+    code: "CURRENT_RULES_USED",
+    message: "Vertragsstunden und Zuschlagsregeln sind noch nicht historisiert; f\u00fcr den Zeitraum gilt der aktuell gespeicherte Regelstand.",
+  }];
+  for (const employee of employees) {
+    for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
+      if (!sicknessByDate.has(date)) sicknessByDate.set(date, activeSicknessEmployeeNumbers(date));
+      const activeSickness = sicknessByDate.get(date);
+      const dayEntries = timeEntriesForDay(employee.personnel_number, date);
+      const evaluation = evaluateTimeDay(employee.personnel_number, date, new Date(), context.departmentId, dayEntries, {
+        locationId: context.locationId,
+        filterLocation: true,
+        activeSickness,
+        includeInactive: true,
+      });
+      const conflictAbsences = payrollAbsencesForDay(employee, date, context.locationId, activeSickness, null);
+      const absences = context.departmentId
+        ? payrollAbsencesForDay(employee, date, context.locationId, activeSickness, context.departmentId)
+        : conflictAbsences;
+      const relevant = evaluation.plannedMinutes > 0 || evaluation.actualMinutes > 0 || absences.length > 0
+        || evaluation.pendingCorrection || Boolean(evaluation.review);
+      if (!relevant) continue;
+      const reviewState = config.sourceMode === "planned" ? "not_required"
+        : !evaluation.review ? "missing" : evaluation.review.stale ? "stale" : "reviewed";
+      const correctionState = payrollCorrectionState(employee.personnel_number, date, context.locationId, context.departmentId);
+      const issueCodes = (evaluation.issues || []).map((issue) => issue.code);
+      const departmentIds = new Set([
+        ...(evaluation.planned?.blocks || []).map((block) => Number(block.department_id || 0)),
+        ...dayEntries.filter((entry) => String(entry.location_id || employee.home_location_id) === context.locationId)
+          .map((entry) => Number(entry.department_id || 0)),
+      ].filter(Boolean));
+      if (!context.departmentId && departmentIds.size > 1) {
+        issueCodes.push("mixed_departments");
+        blockers.push({ code: "MIXED_DEPARTMENTS", employeeNumber: employee.personnel_number, workDate: date });
+      }
+      const exportedDepartmentId = context.departmentId
+        || (departmentIds.size === 1 ? [...departmentIds][0] : (departmentIds.size ? "" : employee.preferred_department_id || ""));
+      const workRanges = payrollWorkRanges(evaluation, config.sourceMode);
+      const overlappingAbsence = conflictAbsences.find((absence) => absence.internalCode !== "public_holiday"
+        && payrollAbsenceOverlapsWork(absence, workRanges));
+      const hasWork = (config.sourceMode === "planned" ? evaluation.plannedMinutes : evaluation.actualMinutes) > 0;
+      if (config.sourceMode === "actual_reviewed" && employee.home_location_id !== context.locationId && evaluation.actualMinutes > 0) {
+        blockers.push({ code: "CROSS_LOCATION_REVIEW_UNAVAILABLE", employeeNumber: employee.personnel_number, workDate: date });
+      }
+      if (config.sourceMode === "actual_reviewed" && hasWork && reviewState !== "reviewed") {
+        blockers.push({ code: reviewState === "stale" ? "STALE_REVIEW" : "MISSING_REVIEW", employeeNumber: employee.personnel_number, workDate: date });
+      }
+      if (config.sourceMode === "actual_reviewed" && correctionState === "pending") {
+        blockers.push({ code: "PENDING_CORRECTION", employeeNumber: employee.personnel_number, workDate: date });
+      }
+      if (config.sourceMode === "actual_reviewed" && (evaluation.incomplete || (evaluation.issues || []).some((issue) => issue.severity === "error"))) {
+        blockers.push({ code: "TIME_EVALUATION_ERROR", employeeNumber: employee.personnel_number, workDate: date });
+      }
+      if (overlappingAbsence && (config.sourceMode === "planned" ? evaluation.plannedMinutes : evaluation.actualMinutes) > 0) {
+        blockers.push({ code: "WORK_ABSENCE_OVERLAP", employeeNumber: employee.personnel_number, workDate: date });
+      }
+      if (!employee.active) {
+        warnings.push({ code: "INACTIVE_EMPLOYEE_INCLUDED", employeeNumber: employee.personnel_number, workDate: date, message: "Ein inaktives Teammitglied hat Bewegungen im Exportzeitraum; der Beschäftigungszeitraum ist noch nicht historisiert." });
+        blockers.push({ code: "INACTIVE_EMPLOYMENT_HISTORY_REQUIRED", employeeNumber: employee.personnel_number, workDate: date });
+      }
+      const settings = settingsForLocation(context.locationId);
+      const saturdayFactor = Number(settings.saturday_bonus_factor || 1);
+      const plannedEligible = saturdayFactor > 1
+        ? Math.round(Number(evaluation.planned?.saturdayBonusMinutes || 0) / (saturdayFactor - 1))
+        : 0;
+      days.push({
+        personnelNumber: employee.personnel_number,
+        fullName: employee.full_name,
+        workDate: date,
+        locationId: context.locationId,
+        departmentId: exportedDepartmentId,
+        sourceMode: config.sourceMode,
+        plannedMinutes: Number(evaluation.plannedMinutes || 0),
+        actualMinutes: Number(evaluation.actualMinutes || 0),
+        breakMinutes: Number(evaluation.breakMinutes || 0),
+        saturdayBonusMinutes: config.sourceMode === "planned"
+          ? Number(evaluation.planned?.saturdayBonusMinutes || 0)
+          : Number(evaluation.saturdayBonusMinutes || 0),
+        saturdayEligibleMinutes: config.sourceMode === "planned"
+          ? plannedEligible
+          : Number(evaluation.actual?.saturdayEligibleMinutes || 0),
+        saturdayFactor,
+        valuedMinutes: config.sourceMode === "planned" ? Number(evaluation.plannedValuedMinutes || 0) : Number(evaluation.actualValuedMinutes || 0),
+        differenceMinutes: Number(evaluation.differenceMinutes || 0),
+        absences,
+        reviewState,
+        correctionState,
+        issueCodes,
+      });
+    }
+  }
+  const built = buildPayrollRows(days, config);
+  const fingerprint = sha256(JSON.stringify({ dateFrom, dateTo, context, config: built.config, rows: built.rows }));
+  return {
+    dateFrom,
+    dateTo,
+    context,
+    profileId: profile?.id || null,
+    configuration: built.config,
+    columns: built.columns,
+    rows: built.rows,
+    rowCount: built.rows.length,
+    employeeCount: new Set(days.map((day) => day.personnelNumber)).size,
+    dayCount: days.length,
+    blockers,
+    warnings: warnings.slice(0, 200),
+    fingerprint,
+  };
+}
+
+function payrollFileName(preflight, draft = false) {
+  const extension = preflight.configuration.format === "xlsx" ? "xlsx" : "csv";
+  const mode = preflight.configuration.sourceMode === "planned" ? "planwerte" : "istzeiten";
+  return `${draft ? "ENTWURF-" : ""}grabenplaner-lohnexport-${mode}-${preflight.dateFrom}-${preflight.dateTo}.${extension}`;
+}
+
+function payrollRowsForCsv(preflight) {
+  if (preflight.configuration.decimalSeparator !== "comma") return preflight.rows;
+  return preflight.rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [
+    key,
+    typeof value === "number" && !Number.isInteger(value) ? String(value).replace(".", ",") : value,
+  ])));
+}
+
+app.get("/api/integrations/personnel-import/catalog", (request, response) => {
+  const actor = integrationActor(request, "employees:import");
+  response.json({
+    fields: publicPersonnelImportFields(),
+    references: personnelImportReferenceData(actor),
+    limits: { maxBytes: MAX_IMPORT_BYTES, maxRows: 5000, maxColumns: 100 },
+    duplicateStrategies: [
+      { id: "skip", label: "Vorhandene Personalnummern \u00fcberspringen" },
+      { id: "update", label: "Vorhandene Stammdaten aktualisieren" },
+    ],
+  });
+});
+
+app.post("/api/integrations/personnel-import/inspect", express.raw({
+  type: ["text/csv", "text/tab-separated-values", "application/csv", "application/vnd.ms-excel", "application/octet-stream", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+  limit: "5mb",
+}), async (request, response) => {
+  const actor = integrationActor(request, "employees:import");
+  let fileName = String(request.get("X-Import-Filename") || "import.csv");
+  try { fileName = decodeURIComponent(fileName); } catch {}
+  const parsed = await inspectTabularBuffer(request.body, {
+    fileName,
+    contentType: request.get("Content-Type") || "",
+    encoding: String(request.query.encoding || "auto"),
+    delimiter: String(request.query.delimiter || "auto") === "tab" ? "\t" : String(request.query.delimiter || "auto"),
+  });
+  const session = integrationCache.create(actor.employeeNumber, "personnel-inspection", parsed);
+  response.status(201).json({
+    inspectionId: session.id,
+    expiresAt: session.expiresAt,
+    format: parsed.format,
+    encoding: parsed.encoding,
+    delimiter: parsed.delimiter === "\t" ? "tab" : parsed.delimiter,
+    byteSize: parsed.byteSize,
+    sheets: parsed.summaries.map((summary) => {
+      const sheet = parsed.sheets.find((item) => item.name === summary.name);
+      const header = sheet?.rows?.[summary.suggestedHeaderRow - 1] || [];
+      return {
+        ...summary,
+        headerFingerprint: headerFingerprint(header),
+        suggestedMapping: suggestPersonnelMapping(header),
+        headerCandidates: (sheet?.rows || []).slice(0, 20).map((candidate, index) => ({
+          rowNumber: index + 1,
+          headerFingerprint: headerFingerprint(candidate),
+          suggestedMapping: suggestPersonnelMapping(candidate),
+        })),
+      };
+    }),
+  });
+});
+
+app.post("/api/integrations/personnel-import/preview", (request, response) => {
+  const actor = integrationActor(request, "employees:import");
+  const inspectionEntry = integrationCache.get(request.body.inspectionId, actor.employeeNumber, "personnel-inspection");
+  const preview = personnelImportPreview(actor, inspectionEntry.value, request.body || {});
+  preview.inspectionId = request.body.inspectionId;
+  preview.format = inspectionEntry.value.format;
+  preview.contentSha256 = inspectionEntry.value.contentSha256;
+  integrationCache.deleteKind(actor.employeeNumber, "personnel-preview");
+  const previewSession = integrationCache.create(actor.employeeNumber, "personnel-preview", preview);
+  response.status(201).json(publicPersonnelPreview(preview, previewSession));
+});
+
+app.post("/api/integrations/personnel-import/apply", (request, response) => {
+  const actor = integrationActor(request, "employees:import");
+  const entry = integrationCache.get(request.body.previewId, actor.employeeNumber, "personnel-preview");
+  const result = applyPersonnelImport(actor, entry.value);
+  integrationCache.delete(entry.id, actor.employeeNumber);
+  if (entry.value.inspectionId) integrationCache.delete(entry.value.inspectionId, actor.employeeNumber);
+  response.status(201).json({ ok: true, ...result });
+});
+
+app.delete("/api/integrations/personnel-import/sessions/:id", (request, response) => {
+  const actor = integrationActor(request, "employees:import");
+  integrationCache.delete(request.params.id, actor.employeeNumber);
+  response.status(204).end();
+});
+
+app.get("/api/integrations/profiles", (request, response) => {
+  integrationActor(request, "integrations:read");
+  response.json({ profiles: integrationProfiles({ direction: request.query.direction, kind: request.query.kind }) });
+});
+
+app.post("/api/integrations/profiles", (request, response) => {
+  const actor = integrationActor(request, "integrations:profiles:write");
+  const profile = normalizeIntegrationProfile(request.body || {});
+  const id = crypto.randomUUID();
+  try {
+    db.prepare(`
+      INSERT INTO integration_profiles
+        (id, direction, kind, name, format, configuration_json, active, created_by, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, profile.direction, profile.kind, profile.name, profile.format, JSON.stringify(profile.configuration), profile.active ? 1 : 0, actor.employeeNumber, actor.employeeNumber);
+  } catch (error) {
+    if (String(error.message).includes("UNIQUE")) throw httpError(409, "Ein Profil mit diesem Namen besteht bereits.", "INTEGRATION_PROFILE_DUPLICATE");
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "integration.profile.create", "integration_profile", id, JSON.stringify({ direction: profile.direction, kind: profile.kind, format: profile.format }));
+  response.status(201).json({ profile: serializeIntegrationProfile(db.prepare("SELECT * FROM integration_profiles WHERE id = ?").get(id)) });
+});
+
+app.put("/api/integrations/profiles/:id", (request, response) => {
+  const actor = integrationActor(request, "integrations:profiles:write");
+  const existing = integrationProfileById(request.params.id, "", "", { includeInactive: true });
+  const profile = normalizeIntegrationProfile(request.body || {}, existing);
+  try {
+    db.prepare(`
+      UPDATE integration_profiles SET name = ?, format = ?, configuration_json = ?, active = ?,
+        updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `).run(profile.name, profile.format, JSON.stringify(profile.configuration), profile.active ? 1 : 0, actor.employeeNumber, existing.id);
+  } catch (error) {
+    if (String(error.message).includes("UNIQUE")) throw httpError(409, "Ein Profil mit diesem Namen besteht bereits.", "INTEGRATION_PROFILE_DUPLICATE");
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "integration.profile.update", "integration_profile", existing.id, JSON.stringify({ direction: profile.direction, kind: profile.kind, format: profile.format }));
+  response.json({ profile: serializeIntegrationProfile(db.prepare("SELECT * FROM integration_profiles WHERE id = ?").get(existing.id)) });
+});
+
+app.delete("/api/integrations/profiles/:id", (request, response) => {
+  const actor = integrationActor(request, "integrations:profiles:write");
+  const existing = integrationProfileById(request.params.id, "", "", { includeInactive: true });
+  db.prepare("DELETE FROM integration_profiles WHERE id = ?").run(existing.id);
+  auditPortal(actor.employeeNumber, "integration.profile.delete", "integration_profile", existing.id, JSON.stringify({ direction: existing.direction, kind: existing.kind }));
+  response.status(204).end();
+});
+
+app.get("/api/integrations/runs", (request, response) => {
+  const actor = integrationActor(request, "integrations:read");
+  const requestedLimit = Number(request.query.limit);
+  const limit = Number.isFinite(requestedLimit) ? Math.min(100, Math.max(1, Math.trunc(requestedLimit))) : 30;
+  const globalAccess = sessionHasGlobalScope(actor);
+  const rows = db.prepare(`
+    SELECT * FROM integration_runs
+    ${globalAccess ? "" : "WHERE actor_employee_number = ?"}
+    ORDER BY started_at DESC, id DESC LIMIT ?
+  `).all(...(globalAccess ? [limit] : [actor.employeeNumber, limit])).map(serializeIntegrationRun);
+  response.json({ runs: rows });
+});
+
+app.get("/api/integrations/payroll-export/catalog", (request, response) => {
+  integrationActor(request, "payroll:export");
+  response.json({ ...payrollCatalog(), locations: getLocationsForSession(request.portalSession, true) });
+});
+
+app.post("/api/integrations/payroll-export/preflight", (request, response) => {
+  const actor = integrationActor(request, "payroll:export");
+  const preflight = payrollPreflight(actor, request.body || {});
+  response.json({
+    dateFrom: preflight.dateFrom,
+    dateTo: preflight.dateTo,
+    context: preflight.context,
+    profileId: preflight.profileId,
+    configuration: preflight.configuration,
+    columns: preflight.columns,
+    rowCount: preflight.rowCount,
+    employeeCount: preflight.employeeCount,
+    dayCount: preflight.dayCount,
+    blockers: preflight.blockers.slice(0, 200),
+    warnings: preflight.warnings,
+    fingerprint: preflight.fingerprint,
+    sampleRows: preflight.rows.slice(0, 50),
+    sampleTruncated: preflight.rows.length > 50,
+  });
+});
+
+app.post("/api/integrations/payroll-export/file", async (request, response) => {
+  const actor = integrationActor(request, "payroll:export");
+  const preflight = payrollPreflight(actor, request.body || {});
+  if (request.body.fingerprint && request.body.fingerprint !== preflight.fingerprint) {
+    throw httpError(409, "Die Daten haben sich seit der Vorpr\u00fcfung ge\u00e4ndert. Bitte erneut pr\u00fcfen.", "PAYROLL_PREFLIGHT_STALE");
+  }
+  const draft = request.body.allowDraft === true;
+  if (preflight.blockers.length && !draft) {
+    throw httpError(422, "Der finale Export ist wegen offener Pr\u00fcfpunkte noch gesperrt. Bitte die Hinweise beheben oder ausdr\u00fccklich einen Entwurf exportieren.", "PAYROLL_EXPORT_BLOCKED");
+  }
+  const delimiter = preflight.configuration.delimiter === "tab" ? "\t" : preflight.configuration.delimiter;
+  const draftNotice = draft
+    ? `ENTWURF – ${preflight.blockers.length} offene Prüfpunkte. Nicht für die endgültige Lohnverrechnung verwenden.`
+    : "";
+  const output = preflight.configuration.format === "xlsx"
+    ? await createXlsxBuffer(preflight.columns, preflight.rows, {
+      sheetName: preflight.configuration.layout === "movement_lines" ? "Lohnarten" : "Tagesjournal",
+      notice: draftNotice,
+    })
+    : createCsvBuffer(preflight.columns, payrollRowsForCsv(preflight), { delimiter, notice: draftNotice });
+  const contentSha256 = sha256(output);
+  const runId = insertIntegrationRun({
+    profileId: preflight.profileId,
+    direction: "export",
+    kind: "payroll",
+    format: preflight.configuration.format,
+    contentSha256,
+    status: draft ? "draft" : "completed",
+    totalCount: preflight.rowCount,
+    errorCount: preflight.blockers.length,
+    actor: actor.employeeNumber,
+    options: {
+      dateFrom: preflight.dateFrom,
+      dateTo: preflight.dateTo,
+      locationId: preflight.context.locationId,
+      departmentId: preflight.context.departmentId || null,
+      sourceMode: preflight.configuration.sourceMode,
+      layout: preflight.configuration.layout,
+      draft,
+    },
+    result: {
+      warningCodes: [...new Set(preflight.warnings.map((warning) => warning.code))],
+      blockerCodes: [...new Set(preflight.blockers.map((blocker) => blocker.code))],
+    },
+  });
+  auditPortal(actor.employeeNumber, "integration.payroll.export", "integration_run", runId,
+    JSON.stringify({ profileId: preflight.profileId, format: preflight.configuration.format, rows: preflight.rowCount, draft, contentSha256 }));
+  response.setHeader("Content-Type", preflight.configuration.format === "xlsx"
+    ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    : "text/csv; charset=utf-8");
+  response.setHeader("Content-Disposition", contentDispositionHeader(payrollFileName(preflight, draft)));
+  response.setHeader("X-Grabenplaner-Export-Status", draft ? "draft" : "final");
+  response.setHeader("Content-Length", output.length);
+  response.setHeader("X-Integration-Run-Id", runId);
+  response.send(output);
+});
 
 app.get("/api/health/live", (_request, response) => response.json({ ok: true }));
 app.get("/api/health/ready", (_request, response) => sendReadiness(response));

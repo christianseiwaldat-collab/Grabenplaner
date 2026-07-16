@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.62 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.63 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -366,6 +366,7 @@
             <button class="settings-tab" data-settings-tab="branding">Branding</button>
             <button class="settings-tab" data-settings-tab="pdf">PDF-Ausgabe</button>
             <button class="settings-tab" data-settings-tab="personnel">Personal</button>
+            <button class="settings-tab" data-settings-tab="integrations">Import &amp; Lohnverrechnung</button>
             <button class="settings-tab" data-settings-tab="wifiAutomation">WLAN-Automatik</button>
             <button class="settings-tab" data-settings-tab="access">Zugänge</button>
             <button class="settings-tab" data-settings-tab="rights">Rechtemanagement</button>
@@ -626,6 +627,52 @@
             </div>
           </section>
 
+          <section id="integrationSettings" class="settings-section settings-two-column">
+            <div class="settings-card" id="employeeImportCard">
+              <div class="card-heading"><div class="card-icon">Import</div><div><h2>Personalstammdaten importieren</h2><p>CSV- oder Excel-Datei zuordnen, prüfen und erst nach einer Vorschau übernehmen.</p></div></div>
+              <p class="settings-note security-note">Importiert werden ausschließlich freigegebene Stammdaten. Passwörter, Rollen, Bankdaten, SV-Nummern, Adressen und Personalakt-Inhalte bleiben ausgeschlossen.</p>
+              <div class="integration-actions"><button class="primary-button" id="openPersonnelImportButton" type="button">Importassistent öffnen</button></div>
+            </div>
+            <div class="settings-card" id="importProfileCard">
+              <div class="card-heading"><div class="card-icon">Profil</div><div><h2>Importprofile</h2><p>Wiederkehrende Spaltenzuordnungen ohne Personaldaten speichern.</p></div></div>
+              <div class="integration-profile-list" id="importProfileList"><p class="settings-note">Profile werden geladen.</p></div>
+            </div>
+            <div class="settings-card full-span" id="payrollExportCard">
+              <div class="card-heading"><div class="card-icon">Lohn</div><div><h2>Lohnverrechnung vorbereiten</h2><p>Geprüfte Ist-Zeiten oder Planwerte als konfigurierbares Tagesjournal beziehungsweise Lohnarten-Datei exportieren.</p></div></div>
+              <div class="integration-export-grid">
+                <label class="field"><span>Exportprofil</span><select id="payrollProfile"><option value="">Ohne gespeichertes Profil</option></select></label>
+                <label class="field"><span>Standort</span><select id="payrollLocation"></select></label>
+                <label class="field"><span>Abteilung</span><select id="payrollDepartment"><option value="">Gesamter Standort</option></select></label>
+                <label class="field"><span>Von</span><input id="payrollDateFrom" type="date" /></label>
+                <label class="field"><span>Bis</span><input id="payrollDateTo" type="date" /></label>
+                <label class="field"><span>Datenquelle</span><select id="payrollSourceMode"><option value="actual_reviewed">Geprüfte Ist-Zeit</option><option value="planned">Planwerte</option></select></label>
+                <label class="field"><span>Aufbau</span><select id="payrollLayout"><option value="daily_journal">Tagesjournal</option><option value="movement_lines">Lohnarten</option></select></label>
+                <label class="field"><span>Dateiformat</span><select id="payrollFormat"><option value="csv">CSV</option><option value="xlsx">Excel (.xlsx)</option></select></label>
+                <label class="field"><span>CSV-Trennzeichen</span><select id="payrollDelimiter"><option value=";">Semikolon</option><option value=",">Komma</option><option value="tab">Tabulator</option></select></label>
+                <label class="field"><span>Dezimaltrennzeichen</span><select id="payrollDecimalSeparator"><option value="comma">Komma</option><option value="dot">Punkt</option></select></label>
+              </div>
+              <p class="settings-note">Ein Export umfasst höchstens 93 Tage. Standortübergreifende Ist-Zeiten bleiben bis zur standortbezogenen Tagesprüfung ausdrücklich auf Entwürfe beschränkt.</p>
+              <details class="integration-column-details"><summary>Exportspalten auswählen</summary><div class="integration-column-grid" id="payrollColumnSelection"></div></details>
+              <details class="integration-column-details" id="payrollWageCodeDetails"><summary>Eigene Lohnarten-Codes zuordnen</summary><div class="integration-wage-code-grid" id="payrollWageCodeMap"></div></details>
+              <label class="switch-row"><span><strong>Entwurf trotz offener Prüfpunkte erlauben</strong><small>Finale Exporte bleiben gesperrt, bis fehlende Tagesprüfungen, Korrekturen oder Überschneidungen geklärt sind.</small></span><input id="payrollAllowDraft" type="checkbox" /></label>
+              <div class="integration-profile-save"><label class="field"><span>Aktuelle Auswahl als Profil speichern</span><input id="payrollProfileName" maxlength="80" placeholder="z. B. Monatsübergabe Lohnverrechnung" /></label><button class="secondary-button" id="savePayrollProfileButton" type="button">Profil speichern</button></div>
+              <div class="integration-actions"><button class="secondary-button" id="payrollPreflightButton" type="button">Export prüfen</button><button class="primary-button" id="payrollDownloadButton" type="button" disabled>Datei erstellen</button></div>
+              <div class="integration-preflight" id="payrollPreflightResult"><p class="settings-note">Vor dem Download werden Datenqualität und Freigabestatus geprüft.</p></div>
+            </div>
+            <div class="settings-card" id="exportProfileCard">
+              <div class="card-heading"><div class="card-icon">Mapping</div><div><h2>Exportprofile</h2><p>Spalten, Lohnarten-Aufbau und Dateiformat wiederverwenden.</p></div></div>
+              <div class="integration-profile-list" id="exportProfileList"><p class="settings-note">Profile werden geladen.</p></div>
+            </div>
+            <div class="settings-card" id="integrationInformationCard">
+              <div class="card-heading"><div class="card-icon">i</div><div><h2>Klare Datenbasis</h2><p>Planwerte und geprüfte Ist-Zeiten werden nie still miteinander vermischt.</p></div></div>
+              <p class="settings-note">Personaldatenimporte verändern keine Portalrollen oder Rechte. Exportdateien werden nur zum Download erzeugt und nicht dauerhaft im Grabenplaner abgelegt.</p>
+            </div>
+            <div class="settings-card full-span" id="integrationHistoryCard">
+              <div class="card-heading"><div class="card-icon">Log</div><div><h2>Import- und Exportverlauf</h2><p>Nachvollziehbare Laufdaten ohne gespeicherte Quelldateien oder Personalzeilen.</p></div></div>
+              <div class="integration-history" id="integrationHistory"><p class="settings-note">Verlauf wird geladen.</p></div>
+            </div>
+          </section>
+
           <section id="wifiAutomationSettings" class="settings-section settings-two-column">
             <div class="settings-card">
               <div class="card-heading"><div class="card-icon">WLAN</div><div><h2>Automatische Zeitvorschläge</h2><p>Vorbereitung der späteren Erkennung über den WLAN-Controller der Filiale.</p></div></div>
@@ -837,7 +884,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.62 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.63 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -1013,6 +1060,40 @@
           <div class="calculation-note full-width" id="scheduleNoteCounter"></div>
         </div>
         <div class="modal-actions"><button type="button" class="danger-button hidden" id="deleteScheduleNoteButton">Bemerkung löschen</button><span></span><button type="button" class="secondary-button" data-close="scheduleNoteModal">Abbrechen</button><button type="submit" class="primary-button">Speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal integration-import-modal" id="personnelImportModal">
+      <form method="dialog" id="personnelImportForm">
+        <div class="modal-header"><div><span class="eyebrow">CSV- und Excel-Assistent</span><h2>Personalstammdaten importieren</h2><p>Datei auswählen, Spalten zuordnen und Änderungen vor der Übernahme prüfen.</p></div><button type="button" class="close-button" data-close="personnelImportModal">×</button></div>
+        <div class="integration-wizard-progress" id="personnelImportProgress"><span class="active">1 · Datei</span><span>2 · Zuordnung</span><span>3 · Vorschau</span></div>
+        <section class="integration-wizard-step" id="personnelImportFileStep">
+          <div class="form-grid">
+            <label class="field full-width"><span>CSV- oder Excel-Datei</span><input id="personnelImportFile" type="file" accept=".csv,.tsv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label>
+            <label class="field"><span>Gespeichertes Profil</span><select id="personnelImportProfile"><option value="">Ohne Profil / automatisch erkennen</option></select></label>
+            <label class="field"><span>Vorhandene Personalnummer</span><select id="personnelImportDuplicateStrategy"><option value="skip">Überspringen (empfohlen)</option><option value="update">Stammdaten aktualisieren</option></select></label>
+            <label class="field"><span>Standardstandort für neue Personen</span><select id="personnelImportDefaultLocation"></select></label>
+            <label class="field"><span>Standardposition</span><select id="personnelImportDefaultPosition"></select></label>
+            <label class="field"><span>Standard-Sollzeit</span><div class="unit-input"><input id="personnelImportDefaultHours" type="number" min="0" max="80" step="0.5" value="38.5" /><em>Std.</em></div></label>
+          </div>
+          <div class="integration-actions"><button class="primary-button" id="inspectPersonnelImportButton" type="button">Datei prüfen</button></div>
+        </section>
+        <section class="integration-wizard-step hidden" id="personnelImportMappingStep">
+          <div class="form-grid">
+            <label class="field"><span>Tabellenblatt</span><select id="personnelImportSheet"></select></label>
+            <label class="field"><span>Kopfzeile</span><input id="personnelImportHeaderRow" type="number" min="1" max="20" value="1" /></label>
+          </div>
+          <div class="integration-mapping-grid" id="personnelImportMapping"></div>
+          <div class="integration-profile-save"><label class="field"><span>Zuordnung als Profil speichern</span><input id="personnelImportProfileName" maxlength="80" placeholder="z. B. Export aus Personalverwaltung" /></label><button class="secondary-button" id="savePersonnelImportProfileButton" type="button">Profil speichern</button></div>
+          <div class="integration-actions"><button class="primary-button" id="previewPersonnelImportButton" type="button">Importvorschau erstellen</button></div>
+        </section>
+        <section class="integration-wizard-step hidden" id="personnelImportPreviewStep">
+          <div class="integration-preview-summary" id="personnelImportSummary"></div>
+          <div class="integration-table-wrap"><table class="integration-table"><thead><tr><th>Zeile</th><th>Aktion</th><th>Personalnr.</th><th>Name</th><th>Anzeigename</th><th>Sollzeit</th><th>Zuordnung</th><th>Prüfung</th></tr></thead><tbody id="personnelImportPreviewBody"></tbody></table></div>
+          <p class="settings-note" id="personnelImportPreviewHint"></p>
+        </section>
+        <p class="message hidden" id="personnelImportMessage"></p>
+        <div class="modal-actions"><button type="button" class="secondary-button hidden" id="backPersonnelImportButton">Zuordnung ändern</button><span></span><button type="button" class="secondary-button" id="resetPersonnelImportButton">Neu beginnen</button><button type="button" class="secondary-button" data-close="personnelImportModal">Schließen</button><button type="button" class="primary-button" id="applyPersonnelImportButton" disabled>Geprüften Import übernehmen</button></div>
       </form>
     </dialog>
 
