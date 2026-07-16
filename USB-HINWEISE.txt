@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.61.1 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.61.2 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,7 +13,7 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Version v0.61.1 Beta:
+Version v0.61.2 Beta:
   - Lokaler Windows-Assistent für vorkonfigurierte Grabenplaner-USB-Sticks.
   - Auswahl von Funktionsprofil, Team, Rollen, Haupt-Branding und zusätzlichen Branding-Kits.
   - Anpassbare, automatisch gebrandete "Erste Schritte.pdf" im Hauptverzeichnis.
@@ -21,7 +21,10 @@ Version v0.61.1 Beta:
   - Sichere Laufwerksprüfung, ausdrückliche Formatierbestätigung und SHA-256-Abschlussprüfung.
 
 USB-Stick-Assistent:
-  - Nur direkt im lokalen Windows-Betrieb und für Developer, IT-Admin oder Admin verfügbar.
+  - In Lokal-, LAN- und HTTPS-Betrieb für Developer, IT-Admin oder Admin verfügbar,
+    jedoch ausschließlich direkt am physischen Windows-Host.
+  - Die neue Installation auf dem Stick verwendet stets eine eigene lokale SQLite-Datenbank
+    und startet unabhängig vom Quellmodus im Lokalbetrieb.
   - Es wird keine Windows-Administratorfreigabe angefordert. Reichen die Rechte des aktuellen
     Benutzerkontos zum Formatieren nicht aus, wird der Vorgang ohne Umgehung beendet.
   - Der Ersteller wird als Admin mit dem vorhandenen Passwort-Hash übernommen. Für einen
