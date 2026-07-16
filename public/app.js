@@ -30,6 +30,10 @@ const state = {
   timeSummary: null,
   timeCorrections: [],
   rightsManagement: null,
+  rightsDashboard: null,
+  rightsDashboardSelectedEmployeeNumber: "",
+  rightsDashboardSelectedPermissionId: "",
+  rightsDashboardTheme: "light",
   brandingAssignments: [],
   brandingPreference: null,
   brandingFormDirty: false,
@@ -116,7 +120,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelView", "settingsView", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelView", "rightsDashboardView", "settingsView", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "rightsDashboardNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarEmployeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -134,6 +138,7 @@ const elements = Object.fromEntries(
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
+    "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan",
@@ -550,6 +555,7 @@ function applyRoleVisibility() {
   document.querySelectorAll('[data-view="vacations"]').forEach((button) => button.classList.toggle("hidden", features.vacation === false));
   elements.requestsNavButton?.classList.toggle("hidden", features.requests === false);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess || features.timeTracking === false);
+  elements.rightsDashboardNavButton?.classList.toggle("hidden", !rightsAccess);
   const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess || operationModeAccess || wifiSettingsAccess || usbProvisioningAccess || integrationAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
@@ -1816,6 +1822,209 @@ async function saveUserRights(event) {
     renderRightsManagement();
     showToast(`Zusatzrechte für ${employeeNumber} wurden gespeichert.`);
   } catch (error) { showToast(error.message, true); }
+}
+
+function rightsDashboardThemeStorageKey() {
+  const employeeNumber = state.portalSession?.user?.employeeNumber || "local";
+  return `grabenplaner:rights-dashboard-theme:${employeeNumber}`;
+}
+
+function applyRightsDashboardTheme(theme) {
+  const normalized = theme === "dark" ? "dark" : "light";
+  state.rightsDashboardTheme = normalized;
+  elements.rightsDashboardView?.setAttribute("data-dashboard-theme", normalized);
+  document.querySelectorAll("button[data-dashboard-theme]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.dashboardTheme === normalized));
+  });
+}
+
+async function saveRightsDashboardTheme(theme) {
+  const previous = state.rightsDashboardTheme;
+  const normalized = theme === "dark" ? "dark" : "light";
+  applyRightsDashboardTheme(normalized);
+  localStorage.setItem(rightsDashboardThemeStorageKey(), normalized);
+  try {
+    const result = await api("/api/portal/v1/rights-dashboard/preferences", {
+      method: "PUT",
+      body: JSON.stringify({ theme: normalized }),
+    });
+    applyRightsDashboardTheme(result.theme);
+  } catch (error) {
+    applyRightsDashboardTheme(previous);
+    localStorage.setItem(rightsDashboardThemeStorageKey(), previous);
+    showToast(error.message, true);
+  }
+}
+
+function populateRightsDashboardDepartments() {
+  if (!elements.rightsDashboardDepartmentFilter || !state.rightsDashboard) return;
+  const current = elements.rightsDashboardDepartmentFilter.value;
+  const locationId = elements.rightsDashboardLocationFilter?.value || "";
+  const departments = state.rightsDashboard.locations
+    .filter((location) => !locationId || String(location.id) === locationId)
+    .flatMap((location) => (location.departments || []).map((department) => ({
+      ...department,
+      locationName: location.name,
+    })));
+  elements.rightsDashboardDepartmentFilter.innerHTML = `<option value="">Alle Abteilungen</option>${departments.map((department) => (
+    `<option value="${escapeHtml(String(department.id))}">${escapeHtml(locationId ? department.name : `${department.locationName} · ${department.name}`)}</option>`
+  )).join("")}`;
+  elements.rightsDashboardDepartmentFilter.value = departments.some((department) => String(department.id) === current) ? current : "";
+}
+
+function populateRightsDashboardFilters() {
+  const dashboard = state.rightsDashboard;
+  if (!dashboard) return;
+  const role = elements.rightsDashboardRoleFilter?.value || "";
+  const location = elements.rightsDashboardLocationFilter?.value || "";
+  elements.rightsDashboardRoleFilter.innerHTML = `<option value="">Alle Rollen</option>${dashboard.roles.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("")}`;
+  elements.rightsDashboardLocationFilter.innerHTML = `<option value="">Alle Standorte</option>${dashboard.locations.filter((item) => item.active).map((item) => `<option value="${escapeHtml(String(item.id))}">${escapeHtml(`${item.id} · ${item.name}`)}</option>`).join("")}`;
+  elements.rightsDashboardRoleFilter.value = dashboard.roles.some((item) => item.id === role) ? role : "";
+  elements.rightsDashboardLocationFilter.value = dashboard.locations.some((item) => String(item.id) === location) ? location : "";
+  populateRightsDashboardDepartments();
+}
+
+function rightsDashboardPermissionMatches(permission, search) {
+  if (!search) return true;
+  return [permission.id, permission.label, permission.description, permission.group, permission.originLabel, permission.coverage?.label]
+    .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(search));
+}
+
+function rightsDashboardFilteredUsers() {
+  const dashboard = state.rightsDashboard;
+  if (!dashboard) return [];
+  const search = String(elements.rightsDashboardSearch?.value || "").trim().toLocaleLowerCase("de-AT");
+  const role = elements.rightsDashboardRoleFilter?.value || "";
+  const locationId = elements.rightsDashboardLocationFilter?.value || "";
+  const departmentId = elements.rightsDashboardDepartmentFilter?.value || "";
+  const origin = elements.rightsDashboardOriginFilter?.value || "";
+  return dashboard.users.filter((user) => {
+    if (role && user.role !== role) return false;
+    if (locationId && user.scope.type !== "global" && !(user.scope.entries || []).some((scope) => String(scope.locationId) === locationId)) return false;
+    if (departmentId && user.scope.type !== "global" && !(user.scope.entries || []).some((scope) => String(scope.departmentId || "") === departmentId)) return false;
+    if (origin === "role" && !user.permissions.some((permission) => permission.origin === "role")) return false;
+    if (origin === "delegated" && !user.permissions.some((permission) => permission.origin === "delegated")) return false;
+    if (origin === "restricted" && !user.permissions.some((permission) => permission.coverage?.restricted)) return false;
+    if (!search) return true;
+    const identityMatch = [user.employeeNumber, user.fullName, user.nickname, user.roleName, user.scope.label]
+      .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(search));
+    return identityMatch || user.permissions.some((permission) => rightsDashboardPermissionMatches(permission, search));
+  });
+}
+
+function rightsDashboardVisiblePermissions(user) {
+  const search = String(elements.rightsDashboardSearch?.value || "").trim().toLocaleLowerCase("de-AT");
+  const origin = elements.rightsDashboardOriginFilter?.value || "";
+  const identityMatch = [user.employeeNumber, user.fullName, user.nickname, user.roleName, user.scope.label]
+    .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(search));
+  return user.permissions.filter((permission) => {
+    if (origin === "role" && permission.origin !== "role") return false;
+    if (origin === "delegated" && permission.origin !== "delegated") return false;
+    if (origin === "restricted" && !permission.coverage?.restricted) return false;
+    return !search || identityMatch || rightsDashboardPermissionMatches(permission, search);
+  });
+}
+
+function renderRightsDashboardSummary() {
+  if (!elements.rightsDashboardSummary || !state.rightsDashboard) return;
+  const summary = state.rightsDashboard.summary;
+  const cards = [
+    ["Teammitglieder", summary.teamMembers, "aktive Stammdaten im Dashboard"],
+    ["Aktive Zugänge", summary.activeAccesses, "mit eingerichtetem Portal-Zugang"],
+    ["Zusatzrechte", summary.delegatedRights, "individuell ergänzte Berechtigungen"],
+    ["Bereichsgebunden", summary.scopedRights, "auf Person, Filiale oder Abteilung begrenzt"],
+  ];
+  elements.rightsDashboardSummary.innerHTML = cards.map(([label, value, hint]) => `<article class="rights-dashboard-stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong><small>${escapeHtml(hint)}</small></article>`).join("");
+}
+
+function renderRightsDashboardExplanation(user, permission) {
+  if (!elements.rightsDashboardExplanation) return;
+  if (!permission) {
+    elements.rightsDashboardExplanation.innerHTML = "<strong>Recht anklicken</strong><p>Die Erklärung zeigt Herkunft, Geltungsbereich und aktuellen Status.</p>";
+    return;
+  }
+  const status = permission.effective
+    ? "Wirksam"
+    : user.accessActive ? "Ohne wirksamen Bereich" : "Nicht wirksam, da der Zugang inaktiv oder nicht vollständig eingerichtet ist";
+  elements.rightsDashboardExplanation.innerHTML = `
+    <strong>${escapeHtml(permission.label)}</strong>
+    <p>${escapeHtml(permission.description || "Für dieses technische Recht ist keine zusätzliche Beschreibung hinterlegt.")}</p>
+    <dl>
+      <dt>Herkunft</dt><dd>${escapeHtml(permission.originLabel)}</dd>
+      <dt>Geltungsbereich</dt><dd>${escapeHtml(permission.coverage?.label || "Nicht festgelegt")}</dd>
+      <dt>Status</dt><dd>${escapeHtml(status)}</dd>
+      <dt>Technischer Schlüssel</dt><dd><code>${escapeHtml(permission.id)}</code></dd>
+    </dl>`;
+}
+
+function renderRightsDashboardSelection(user) {
+  const visiblePermissions = rightsDashboardVisiblePermissions(user);
+  elements.rightsDashboardEmpty?.classList.add("hidden");
+  elements.rightsDashboardSelection?.classList.remove("hidden");
+  elements.rightsDashboardPersonTitle.textContent = `${user.employeeNumber} · ${user.fullName || user.nickname || "Teammitglied"}`;
+  elements.rightsDashboardPersonSubtitle.textContent = `${user.roleName} · ${user.scope.label}`;
+  elements.rightsDashboardAccessStatus.textContent = user.accessActive ? "Zugang aktiv" : user.configured ? "Zugang inaktiv" : "Kein Zugang";
+  elements.rightsDashboardAccessStatus.classList.toggle("inactive", !user.accessActive);
+  const scopeSource = user.scope.source === "assigned" ? "explizit zugewiesen" : user.scope.source === "home" ? "aus Stammdaten" : user.scope.source === "role" ? "durch globale Rolle" : "ohne Zuweisung";
+  const nodes = [
+    ["Person", user.fullName || user.nickname || "Teammitglied", `Personalnummer ${user.employeeNumber}`],
+    ["Rolle", user.roleName, user.roleDescription || "Grundrechte aus der App-Rolle"],
+    ["Bereich", user.scope.label, scopeSource],
+    ["Wirksame Rechte", String(user.counts.effective), `${user.counts.role} Grundrechte · ${user.counts.delegated} Zusatzrechte`],
+  ];
+  elements.rightsDashboardPath.innerHTML = nodes.map(([label, value, hint]) => `<article class="rights-dashboard-node"><span>${escapeHtml(label)}</span><strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong><small>${escapeHtml(hint)}</small></article>`).join("");
+
+  const grouped = new Map();
+  for (const permission of visiblePermissions) {
+    if (!grouped.has(permission.group)) grouped.set(permission.group, []);
+    grouped.get(permission.group).push(permission);
+  }
+  elements.rightsDashboardMatrix.innerHTML = grouped.size
+    ? [...grouped.entries()].map(([group, permissions]) => `<section class="rights-dashboard-group"><h3>${escapeHtml(group)}</h3><div class="rights-dashboard-permission-grid">${permissions.map((permission) => {
+      const selected = permission.id === state.rightsDashboardSelectedPermissionId;
+      const classes = ["rights-dashboard-permission", permission.origin === "delegated" ? "delegated" : "", permission.coverage?.restricted ? "restricted" : "", permission.effective ? "" : "inactive", selected ? "selected" : ""].filter(Boolean).join(" ");
+      return `<button type="button" class="${classes}" data-rights-dashboard-permission="${escapeHtml(permission.id)}" aria-pressed="${selected}"><span class="permission-origin"></span><span><strong>${escapeHtml(permission.label)}</strong><small>${escapeHtml(`${permission.origin === "delegated" ? "Zusatzrecht" : "Grundrecht"} · ${permission.coverage?.label || "ohne Bereich"}`)}</small></span></button>`;
+    }).join("")}</div></section>`).join("")
+    : "<p class=\"settings-note\">Für diese Filterung sind keine Rechte sichtbar.</p>";
+  const selectedPermission = visiblePermissions.find((permission) => permission.id === state.rightsDashboardSelectedPermissionId) || null;
+  if (!selectedPermission) state.rightsDashboardSelectedPermissionId = "";
+  renderRightsDashboardExplanation(user, selectedPermission);
+}
+
+function renderRightsDashboard() {
+  if (!state.rightsDashboard || !elements.rightsDashboardUserList) return;
+  const users = rightsDashboardFilteredUsers();
+  elements.rightsDashboardResultCount.textContent = String(users.length);
+  if (!users.some((user) => user.employeeNumber === state.rightsDashboardSelectedEmployeeNumber)) {
+    state.rightsDashboardSelectedEmployeeNumber = users[0]?.employeeNumber || "";
+    state.rightsDashboardSelectedPermissionId = "";
+  }
+  elements.rightsDashboardUserList.innerHTML = users.length ? users.map((user) => {
+    const selected = user.employeeNumber === state.rightsDashboardSelectedEmployeeNumber;
+    return `<button type="button" class="rights-dashboard-user ${user.accessActive ? "" : "inactive"} ${selected ? "selected" : ""}" data-rights-dashboard-user="${escapeHtml(user.employeeNumber)}" aria-pressed="${selected}"><span class="rights-dashboard-user-mark">${escapeHtml(user.employeeNumber)}</span><span class="rights-dashboard-user-copy"><strong>${escapeHtml(user.fullName || user.nickname || "Teammitglied")}</strong><small>${escapeHtml(`${user.roleName} · ${user.scope.label}`)}</small></span><span class="rights-dashboard-user-count">${escapeHtml(String(user.counts.effective))}</span></button>`;
+  }).join("") : "<p class=\"settings-note\">Keine Personen entsprechen der aktuellen Filterung.</p>";
+  const selected = users.find((user) => user.employeeNumber === state.rightsDashboardSelectedEmployeeNumber);
+  elements.rightsDashboardEmpty?.classList.toggle("hidden", Boolean(selected));
+  elements.rightsDashboardSelection?.classList.toggle("hidden", !selected);
+  if (selected) renderRightsDashboardSelection(selected);
+}
+
+async function loadRightsDashboard() {
+  if (!elements.rightsDashboardView) return;
+  try {
+    const dashboard = await api("/api/portal/v1/rights-dashboard");
+    state.rightsDashboard = dashboard;
+    const localTheme = localStorage.getItem(rightsDashboardThemeStorageKey());
+    applyRightsDashboardTheme(dashboard.actor?.employeeNumber === "local" && localTheme ? localTheme : dashboard.preferences?.theme);
+    populateRightsDashboardFilters();
+    renderRightsDashboardSummary();
+    renderRightsDashboard();
+  } catch (error) {
+    state.rightsDashboard = null;
+    elements.rightsDashboardUserList.innerHTML = `<p class="settings-note">${escapeHtml(error.status === 403 ? "Das Rechte-Dashboard ist nur für Personalleitung, Admin, IT-Admin und Developer verfügbar." : error.message)}</p>`;
+    elements.rightsDashboardEmpty?.classList.remove("hidden");
+    elements.rightsDashboardSelection?.classList.add("hidden");
+  }
 }
 
 async function saveMobileLeadershipSettings() {
@@ -4014,7 +4223,8 @@ function setView(view) {
   const features = state.portalStatus?.installationFeatures || {};
   if ((view === "vacations" && features.vacation === false)
     || (view === "requests" && features.requests === false)
-    || (view === "timeTracking" && features.timeTracking === false)) view = "planning";
+    || (view === "timeTracking" && features.timeTracking === false)
+    || (view === "rightsDashboard" && elements.rightsDashboardNavButton?.classList.contains("hidden"))) view = "planning";
   state.currentView = view;
   if (timePresenceRefreshTimer) clearInterval(timePresenceRefreshTimer);
   timePresenceRefreshTimer = null;
@@ -4024,6 +4234,7 @@ function setView(view) {
   elements.timeTrackingView?.classList.toggle("active", view === "timeTracking");
   elements.vacationsView.classList.toggle("active", view === "vacations");
   elements.personnelView.classList.toggle("active", view === "personnel");
+  elements.rightsDashboardView?.classList.toggle("active", view === "rightsDashboard");
   elements.settingsView.classList.toggle("active", view === "settings");
   if (view === "settings") {
     const activeSettingsTab = document.querySelector("[data-settings-tab].active:not(.hidden)");
@@ -4031,6 +4242,7 @@ function setView(view) {
     if (!activeSettingsTab && firstAllowedSettingsTab) setSettingsTab(firstAllowedSettingsTab.dataset.settingsTab);
   }
   if (view === "requests") loadManagerVacationRequests();
+  if (view === "rightsDashboard") loadRightsDashboard();
   if (view === "timeTracking") {
     initializeTimeSummaryDates();
     initializeTimeReviewDate();
@@ -4042,7 +4254,7 @@ function setView(view) {
 function applyRequestedView() {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
-  if (!["planning", "requests", "timeTracking", "vacations", "personnel", "settings"].includes(requestedView)) return;
+  if (!["planning", "requests", "timeTracking", "vacations", "personnel", "rightsDashboard", "settings"].includes(requestedView)) return;
   if (requestedView === "requests") {
     const requestedKind = parameters.get("kind");
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
@@ -6067,6 +6279,29 @@ elements.rightsUserList?.addEventListener("click", (event) => {
   if (card && event.target.closest("[data-edit-user-rights]")) openRightsEditor(card.dataset.rightsUser);
 });
 elements.rightsEditorForm?.addEventListener("submit", saveUserRights);
+document.querySelectorAll("button[data-dashboard-theme]").forEach((button) => button.addEventListener("click", () => saveRightsDashboardTheme(button.dataset.dashboardTheme)));
+elements.rightsDashboardSearch?.addEventListener("input", renderRightsDashboard);
+elements.rightsDashboardRoleFilter?.addEventListener("change", renderRightsDashboard);
+elements.rightsDashboardLocationFilter?.addEventListener("change", () => {
+  populateRightsDashboardDepartments();
+  renderRightsDashboard();
+});
+elements.rightsDashboardDepartmentFilter?.addEventListener("change", renderRightsDashboard);
+elements.rightsDashboardOriginFilter?.addEventListener("change", renderRightsDashboard);
+elements.rightsDashboardUserList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-rights-dashboard-user]");
+  if (!button) return;
+  state.rightsDashboardSelectedEmployeeNumber = button.dataset.rightsDashboardUser;
+  state.rightsDashboardSelectedPermissionId = "";
+  renderRightsDashboard();
+});
+elements.rightsDashboardMatrix?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-rights-dashboard-permission]");
+  if (!button) return;
+  state.rightsDashboardSelectedPermissionId = button.dataset.rightsDashboardPermission;
+  const selected = rightsDashboardFilteredUsers().find((user) => user.employeeNumber === state.rightsDashboardSelectedEmployeeNumber);
+  if (selected) renderRightsDashboardSelection(selected);
+});
 elements.saveMobileLeadershipSettingsButton?.addEventListener("click", saveMobileLeadershipSettings);
 elements.requestActionForm?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-request-action]");
