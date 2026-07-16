@@ -63,6 +63,12 @@ const LOCAL_PORTAL_PASSWORD_MIN_LENGTH = 6;
 const SERVER_PORTAL_PASSWORD_MIN_LENGTH = 10;
 const PORTAL_SESSION_COOKIE = "grabenplaner_session";
 const PORTAL_CSRF_COOKIE = "grabenplaner_csrf";
+const MOBILE_ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000;
+const MOBILE_REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const MOBILE_MAX_ACTIVE_SESSIONS = 5;
+const MOBILE_ACCESS_TOKEN_PREFIX = "gpma1";
+const MOBILE_REFRESH_TOKEN_PREFIX = "gpmr1";
+const MOBILE_MINIMUM_APP_VERSION = "0.3.0-alpha.1";
 const scryptAsync = promisify(crypto.scrypt);
 const DUMMY_PORTAL_PASSWORD_HASH = `scrypt-v1$${Buffer.alloc(16, 0xa5).toString("base64url")}$${Buffer.alloc(64, 0x5a).toString("base64url")}`;
 const usbProvisioningTokenSecret = crypto.randomBytes(32);
@@ -961,6 +967,36 @@ function createSchema() {
         ON UPDATE CASCADE ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS mobile_sessions (
+      id TEXT PRIMARY KEY,
+      employee_number TEXT NOT NULL,
+      access_token_hash TEXT NOT NULL UNIQUE,
+      access_expires_at TEXT NOT NULL,
+      refresh_token_hash TEXT NOT NULL UNIQUE,
+      previous_refresh_token_hash TEXT,
+      refresh_expires_at TEXT NOT NULL,
+      installation_id_hash TEXT NOT NULL,
+      platform TEXT NOT NULL,
+      device_label TEXT NOT NULL DEFAULT '',
+      app_version TEXT NOT NULL DEFAULT '',
+      last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      revoked_at TEXT,
+      revoked_reason TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_number) REFERENCES portal_users(employee_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS mobile_refresh_token_history (
+      session_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL,
+      consumed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (session_id, token_hash),
+      FOREIGN KEY (session_id) REFERENCES mobile_sessions(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS portal_access_scopes (
       employee_number TEXT NOT NULL,
       location_id TEXT NOT NULL,
@@ -1128,6 +1164,8 @@ function createSchema() {
       voided_by TEXT,
       void_reason TEXT NOT NULL DEFAULT '',
       correction_id INTEGER,
+      client_request_id TEXT,
+      mobile_session_id TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
         ON UPDATE CASCADE ON DELETE CASCADE,
@@ -1446,6 +1484,9 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_portal_users_role_active ON portal_users(role, active);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_employee ON portal_sessions(employee_number, expires_at);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_expiry ON portal_sessions(expires_at, revoked_at);
+    CREATE INDEX IF NOT EXISTS idx_mobile_sessions_employee ON mobile_sessions(employee_number, refresh_expires_at);
+    CREATE INDEX IF NOT EXISTS idx_mobile_sessions_expiry ON mobile_sessions(refresh_expires_at, revoked_at);
+    CREATE INDEX IF NOT EXISTS idx_mobile_refresh_history_consumed ON mobile_refresh_token_history(consumed_at);
     CREATE INDEX IF NOT EXISTS idx_portal_permission_grants_employee ON portal_permission_grants(employee_number, permission);
   `);
 }
@@ -1597,6 +1638,8 @@ ensureColumn("time_entries", "voided_at", "TEXT");
 ensureColumn("time_entries", "voided_by", "TEXT");
 ensureColumn("time_entries", "void_reason", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("time_entries", "correction_id", "INTEGER");
+ensureColumn("time_entries", "client_request_id", "TEXT");
+ensureColumn("time_entries", "mobile_session_id", "TEXT");
 ensureColumn("time_corrections", "location_id", "TEXT");
 ensureColumn("time_corrections", "department_id", "INTEGER");
 ensureColumn("time_corrections", "request_note", "TEXT NOT NULL DEFAULT ''");
@@ -1749,6 +1792,10 @@ function migrateProtectedPersonnelRecords() {
 
 migrateProtectedPersonnelRecords();
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_work_date ON time_entries(employee_number, work_date, entry_timestamp)");
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_mobile_request ON time_entries(employee_number, client_request_id) WHERE client_request_id IS NOT NULL");
+db.exec("CREATE INDEX IF NOT EXISTS idx_mobile_sessions_employee ON mobile_sessions(employee_number, refresh_expires_at)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_mobile_sessions_expiry ON mobile_sessions(refresh_expires_at, revoked_at)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_mobile_refresh_history_consumed ON mobile_refresh_token_history(consumed_at)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_location_date ON time_entries(location_id, work_date, entry_timestamp)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_corrections_context ON time_corrections(location_id, department_id, status, correction_date)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_corrections_pending_employee_date ON time_corrections(employee_number, correction_date, status)");
@@ -2411,6 +2458,7 @@ const LOGIN_RATE_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_BRANDING_RATE_WINDOW_MS = 5 * 60 * 1000;
 const loginRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 2048, maxEventsPerKey: 15 });
 const loginBrandingRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_BRANDING_RATE_WINDOW_MS, maxKeys: 2048, maxEventsPerKey: 60 });
+const mobileRefreshRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 2048, maxEventsPerKey: 90 });
 const usbCreatorAuthRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 128, maxEventsPerKey: 8 });
 const usbCreatorGlobalRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 32, maxEventsPerKey: 24 });
 
@@ -2523,6 +2571,19 @@ function assertLoginBrandingRateLimit(request) {
     throw error;
   }
   loginBrandingRateLimits.record(key, now);
+}
+
+function assertMobileRefreshRateLimit(request) {
+  const key = loginRateKey(request);
+  const now = Date.now();
+  const recent = mobileRefreshRateLimits.get(key, now);
+  if (recent.length >= 90) {
+    const retrySeconds = Math.max(1, Math.ceil((LOGIN_RATE_WINDOW_MS - (now - recent[0])) / 1000));
+    const error = httpError(429, "Zu viele Sitzungsaktualisierungen. Bitte spaeter erneut versuchen.", "MOBILE_REFRESH_RATE_LIMITED");
+    error.retryAfter = retrySeconds;
+    throw error;
+  }
+  mobileRefreshRateLimits.record(key, now);
 }
 
 function parseCookies(request) {
@@ -2804,6 +2865,328 @@ function assertPortalCsrf(request) {
   if (!valid) throw httpError(403, "Die Sicherheitsprüfung ist abgelaufen. Bitte die Seite neu laden.", "PORTAL_CSRF_INVALID");
 }
 
+function mobileNativeAuthenticationAvailable() {
+  const status = getPortalStatus();
+  return serverModeActive
+    && status.portalEnabled
+    && Boolean(normalizedPublicOrigin && normalizedPublicOrigin.startsWith("https://"));
+}
+
+function requireMobileNativeAuthentication() {
+  if (!mobileNativeAuthenticationAvailable()) {
+    throw httpError(409, "Die native App-Anmeldung ist nur im sicheren HTTPS-Serverbetrieb verfuegbar.", "MOBILE_AUTH_UNAVAILABLE");
+  }
+}
+
+function createMobileToken(prefix, sessionId) {
+  return `${prefix}.${sessionId}.${crypto.randomBytes(32).toString("base64url")}`;
+}
+
+function parseMobileToken(value, expectedPrefix) {
+  const token = String(value || "").trim();
+  const parts = token.split(".");
+  if (parts.length !== 3 || parts[0] !== expectedPrefix || !/^[0-9a-f-]{36}$/i.test(parts[1]) || !/^[A-Za-z0-9_-]{40,64}$/.test(parts[2])) {
+    return null;
+  }
+  return { token, sessionId: parts[1] };
+}
+
+function mobileBearerToken(request) {
+  const header = String(request.headers.authorization || "");
+  const match = header.match(/^Bearer\s+([^\s]+)$/i);
+  return match ? match[1] : "";
+}
+
+function safeHashEquals(left, right) {
+  const leftValue = Buffer.from(String(left || ""));
+  const rightValue = Buffer.from(String(right || ""));
+  return leftValue.length === rightValue.length && leftValue.length > 0 && crypto.timingSafeEqual(leftValue, rightValue);
+}
+
+function parseMobileSemanticVersion(value) {
+  const version = String(value || "").trim();
+  const match = version.match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/);
+  if (!match) return null;
+  const prerelease = match[4] ? match[4].split(".") : [];
+  if (prerelease.some((identifier) => /^\d+$/.test(identifier) && identifier.length > 1 && identifier.startsWith("0"))) return null;
+  return {
+    version,
+    core: [match[1], match[2], match[3]],
+    prerelease,
+  };
+}
+
+function compareMobileNumericIdentifiers(left, right) {
+  if (left.length !== right.length) return left.length > right.length ? 1 : -1;
+  return left === right ? 0 : (left > right ? 1 : -1);
+}
+
+function compareMobileSemanticVersions(leftValue, rightValue) {
+  const left = parseMobileSemanticVersion(leftValue);
+  const right = parseMobileSemanticVersion(rightValue);
+  if (!left || !right) return null;
+  for (let index = 0; index < 3; index += 1) {
+    const comparison = compareMobileNumericIdentifiers(left.core[index], right.core[index]);
+    if (comparison) return comparison;
+  }
+  if (!left.prerelease.length || !right.prerelease.length) {
+    if (left.prerelease.length === right.prerelease.length) return 0;
+    return left.prerelease.length ? -1 : 1;
+  }
+  for (let index = 0; index < Math.max(left.prerelease.length, right.prerelease.length); index += 1) {
+    const leftIdentifier = left.prerelease[index];
+    const rightIdentifier = right.prerelease[index];
+    if (leftIdentifier === undefined || rightIdentifier === undefined) return leftIdentifier === undefined ? -1 : 1;
+    if (leftIdentifier === rightIdentifier) continue;
+    const leftNumeric = /^\d+$/.test(leftIdentifier);
+    const rightNumeric = /^\d+$/.test(rightIdentifier);
+    if (leftNumeric && rightNumeric) return compareMobileNumericIdentifiers(leftIdentifier, rightIdentifier);
+    if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
+    return leftIdentifier > rightIdentifier ? 1 : -1;
+  }
+  return 0;
+}
+
+function validateMobileAppVersion(value) {
+  const appVersion = String(value || "").trim();
+  if (appVersion.length > 64) {
+    const error = httpError(400, "Die App-Version ist kein gültiger SemVer-Wert.", "MOBILE_APP_VERSION_INVALID");
+    error.details = { fieldErrors: { "device.appVersion": "Bitte eine vollständige semantische Version übermitteln." } };
+    throw error;
+  }
+  const comparison = compareMobileSemanticVersions(appVersion, MOBILE_MINIMUM_APP_VERSION);
+  if (comparison === null) {
+    const error = httpError(400, "Die App-Version ist kein gültiger SemVer-Wert.", "MOBILE_APP_VERSION_INVALID");
+    error.details = { fieldErrors: { "device.appVersion": "Bitte eine vollständige semantische Version übermitteln." } };
+    throw error;
+  }
+  if (comparison < 0) {
+    const error = httpError(426, "Diese App-Version wird nicht mehr unterstützt. Bitte Grabenplaner Mobile aktualisieren.", "MOBILE_APP_UPDATE_REQUIRED");
+    error.details = { minimumMobileVersion: MOBILE_MINIMUM_APP_VERSION, currentMobileVersion: appVersion };
+    throw error;
+  }
+  return appVersion;
+}
+
+function validateMobileDevice(input = {}) {
+  const installationId = String(input.installationId || "").trim();
+  const platform = String(input.platform || "").trim().toLowerCase();
+  const label = stripEmoji(String(input.label || "").trim()).replace(/[\x00-\x1f]/g, " ").slice(0, 80);
+  const appVersion = validateMobileAppVersion(input.appVersion);
+  if (!/^[A-Za-z0-9._:-]{8,128}$/.test(installationId)) {
+    const error = httpError(400, "Die App-Installation konnte nicht eindeutig erkannt werden.", "MOBILE_DEVICE_INVALID");
+    error.details = { fieldErrors: { "device.installationId": "Bitte eine gueltige Installations-ID uebermitteln." } };
+    throw error;
+  }
+  if (!["android", "ios"].includes(platform)) {
+    const error = httpError(400, "Die mobile Plattform ist ungueltig.", "MOBILE_DEVICE_INVALID");
+    error.details = { fieldErrors: { "device.platform": "Unterstuetzt werden Android und iOS." } };
+    throw error;
+  }
+  return {
+    installationIdHash: sha256(installationId),
+    platform,
+    label,
+    appVersion,
+  };
+}
+
+function mobileSessionPrincipal(row) {
+  if (!row) return null;
+  const scopes = GLOBAL_SCOPE_PORTAL_ROLES.has(row.role) ? [] : db.prepare(`
+    SELECT location_id, department_id FROM portal_access_scopes
+    WHERE employee_number = ? ORDER BY location_id, department_id
+  `).all(row.employee_number).map((scope) => ({ locationId: scope.location_id, departmentId: Number(scope.department_id || 0) || null }));
+  if (!scopes.length && !GLOBAL_SCOPE_PORTAL_ROLES.has(row.role) && row.home_location_id) {
+    scopes.push({ locationId: row.home_location_id, departmentId: row.role === "department_manager" ? (Number(row.preferred_department_id) || null) : null });
+  }
+  const rolePermissions = parsePortalPermissions(row.permissions);
+  const grantedPermissions = portalPermissionGrantsForEmployee(row.employee_number);
+  return {
+    id: row.id,
+    mobileSessionId: row.id,
+    employeeNumber: row.employee_number,
+    fullName: row.full_name,
+    nickname: row.nickname,
+    color: row.color,
+    homeLocationId: row.home_location_id,
+    positionId: row.position_id || null,
+    positionName: row.position_name || "",
+    role: row.role,
+    roleName: row.role_name || row.role,
+    roleLocked: Boolean(row.role_locked),
+    permissions: [...new Set([...rolePermissions, ...grantedPermissions])],
+    rolePermissions,
+    grantedPermissions,
+    scopes,
+    mustChangePassword: Boolean(row.must_change_password),
+    expiresAt: row.access_expires_at,
+    refreshExpiresAt: row.refresh_expires_at,
+  };
+}
+
+function mobileSessionRow(sessionId) {
+  return db.prepare(`
+    SELECT m.*, u.role, u.role_locked, u.active, u.must_change_password,
+           e.full_name, e.nickname, e.color, e.home_location_id, e.preferred_department_id,
+           e.position_id, e.active AS employee_active, p.name AS position_name,
+           r.name AS role_name, r.permissions
+    FROM mobile_sessions m
+    JOIN portal_users u ON u.employee_number = m.employee_number
+    JOIN employees e ON e.personnel_number = u.employee_number
+    LEFT JOIN positions p ON p.id = e.position_id
+    LEFT JOIN portal_roles r ON r.id = u.role
+    WHERE m.id = ?
+    LIMIT 1
+  `).get(sessionId);
+}
+
+function mobileSessionFromRequest(request, { touch = true } = {}) {
+  const parsed = parseMobileToken(mobileBearerToken(request), MOBILE_ACCESS_TOKEN_PREFIX);
+  if (!parsed) return null;
+  const row = mobileSessionRow(parsed.sessionId);
+  const now = new Date().toISOString();
+  if (!row || row.revoked_at || !row.active || !row.employee_active || row.access_expires_at <= now
+    || !safeHashEquals(row.access_token_hash, sha256(parsed.token))) return null;
+  if (touch) db.prepare("UPDATE mobile_sessions SET last_seen_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(row.id);
+  return mobileSessionPrincipal(row);
+}
+
+function requireMobileSession(request, permission = "", { allowPasswordChange = false } = {}) {
+  requireMobileNativeAuthentication();
+  const session = mobileSessionFromRequest(request);
+  if (!session) throw httpError(401, "Bitte erneut in der App anmelden.", "MOBILE_AUTH_REQUIRED");
+  if (!allowPasswordChange && session.mustChangePassword) {
+    throw httpError(428, "Bitte zuerst das persoenliche Startpasswort aendern.", "MOBILE_PASSWORD_CHANGE_REQUIRED");
+  }
+  if (permission && !session.permissions.includes(permission)) {
+    throw httpError(403, "Fuer diese Aktion fehlt die Berechtigung.", "MOBILE_PERMISSION_DENIED");
+  }
+  return session;
+}
+
+function mobileTokenSet(accessToken, accessExpiresAt, refreshToken, refreshExpiresAt) {
+  return { accessToken, accessTokenExpiresAt: accessExpiresAt, refreshToken, refreshTokenExpiresAt: refreshExpiresAt };
+}
+
+function revokeMobileSessionsForEmployee(employeeNumber, reason = "access_changed", exceptSessionId = "") {
+  const query = exceptSessionId
+    ? "UPDATE mobile_sessions SET revoked_at = CURRENT_TIMESTAMP, revoked_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND id <> ? AND revoked_at IS NULL"
+    : "UPDATE mobile_sessions SET revoked_at = CURRENT_TIMESTAMP, revoked_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND revoked_at IS NULL";
+  return exceptSessionId
+    ? db.prepare(query).run(String(reason).slice(0, 80), String(employeeNumber), String(exceptSessionId)).changes
+    : db.prepare(query).run(String(reason).slice(0, 80), String(employeeNumber)).changes;
+}
+
+function createMobileSession(employeeNumber, device, now = new Date()) {
+  db.prepare("DELETE FROM mobile_sessions WHERE refresh_expires_at <= ?").run(now.toISOString());
+  db.prepare(`
+    UPDATE mobile_sessions
+    SET revoked_at = CURRENT_TIMESTAMP, revoked_reason = 'device_replaced', updated_at = CURRENT_TIMESTAMP
+    WHERE employee_number = ? AND installation_id_hash = ? AND revoked_at IS NULL
+  `).run(employeeNumber, device.installationIdHash);
+  const active = db.prepare(`
+    SELECT id FROM mobile_sessions
+    WHERE employee_number = ? AND revoked_at IS NULL AND refresh_expires_at > ?
+    ORDER BY last_seen_at DESC, created_at DESC
+  `).all(employeeNumber, now.toISOString());
+  for (const stale of active.slice(Math.max(0, MOBILE_MAX_ACTIVE_SESSIONS - 1))) {
+    db.prepare("UPDATE mobile_sessions SET revoked_at = CURRENT_TIMESTAMP, revoked_reason = 'device_limit', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(stale.id);
+  }
+  const id = crypto.randomUUID();
+  const accessToken = createMobileToken(MOBILE_ACCESS_TOKEN_PREFIX, id);
+  const refreshToken = createMobileToken(MOBILE_REFRESH_TOKEN_PREFIX, id);
+  const accessExpiresAt = new Date(now.getTime() + MOBILE_ACCESS_TOKEN_TTL_MS).toISOString();
+  const refreshExpiresAt = new Date(now.getTime() + MOBILE_REFRESH_TOKEN_TTL_MS).toISOString();
+  db.prepare(`
+    INSERT INTO mobile_sessions
+      (id, employee_number, access_token_hash, access_expires_at, refresh_token_hash,
+       refresh_expires_at, installation_id_hash, platform, device_label, app_version)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, employeeNumber, sha256(accessToken), accessExpiresAt, sha256(refreshToken), refreshExpiresAt,
+    device.installationIdHash, device.platform, device.label, device.appVersion);
+  return { id, tokenSet: mobileTokenSet(accessToken, accessExpiresAt, refreshToken, refreshExpiresAt) };
+}
+
+function rotateAuthenticatedMobileSession(sessionId, now = new Date()) {
+  const row = mobileSessionRow(sessionId);
+  if (!row || row.revoked_at || !row.active || !row.employee_active || row.refresh_expires_at <= now.toISOString()) {
+    throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_AUTH_REQUIRED");
+  }
+  const accessToken = createMobileToken(MOBILE_ACCESS_TOKEN_PREFIX, row.id);
+  const refreshToken = createMobileToken(MOBILE_REFRESH_TOKEN_PREFIX, row.id);
+  const accessExpiresAt = new Date(now.getTime() + MOBILE_ACCESS_TOKEN_TTL_MS).toISOString();
+  db.prepare(`
+    INSERT OR IGNORE INTO mobile_refresh_token_history (session_id, token_hash, consumed_at)
+    VALUES (?, ?, ?)
+  `).run(row.id, row.refresh_token_hash, now.toISOString());
+  const result = db.prepare(`
+    UPDATE mobile_sessions
+    SET access_token_hash = ?, access_expires_at = ?, previous_refresh_token_hash = refresh_token_hash,
+        refresh_token_hash = ?, last_seen_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND revoked_at IS NULL
+  `).run(sha256(accessToken), accessExpiresAt, sha256(refreshToken), row.id);
+  if (!result.changes) throw httpError(409, "Die App-Sitzung wurde gleichzeitig geändert.", "MOBILE_SESSION_CONFLICT");
+  return mobileTokenSet(accessToken, accessExpiresAt, refreshToken, row.refresh_expires_at);
+}
+
+function refreshMobileSession(rawRefreshToken, device, now = new Date()) {
+  const parsed = parseMobileToken(rawRefreshToken, MOBILE_REFRESH_TOKEN_PREFIX);
+  if (!parsed) throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_REFRESH_INVALID");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const row = mobileSessionRow(parsed.sessionId);
+    const submittedHash = sha256(parsed.token);
+    if (!row || row.revoked_at || !row.active || !row.employee_active) {
+      throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_REFRESH_INVALID");
+    }
+    if (!safeHashEquals(row.installation_id_hash, device.installationIdHash) || row.platform !== device.platform) {
+      throw httpError(401, "Die App-Sitzung gehört zu einer anderen Installation.", "MOBILE_DEVICE_MISMATCH");
+    }
+    const consumed = db.prepare(`
+      SELECT 1 FROM mobile_refresh_token_history WHERE session_id = ? AND token_hash = ? LIMIT 1
+    `).get(row.id, submittedHash);
+    if (consumed || safeHashEquals(row.previous_refresh_token_hash, submittedHash)) {
+      db.prepare("UPDATE mobile_sessions SET revoked_at = CURRENT_TIMESTAMP, revoked_reason = 'refresh_reuse', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(row.id);
+      db.exec("COMMIT");
+      throw httpError(401, "Die App-Sitzung wurde aus Sicherheitsgruenden beendet. Bitte erneut anmelden.", "MOBILE_REFRESH_REUSED");
+    }
+    if (row.refresh_expires_at <= now.toISOString() || !safeHashEquals(row.refresh_token_hash, submittedHash)) {
+      throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_REFRESH_INVALID");
+    }
+    const accessToken = createMobileToken(MOBILE_ACCESS_TOKEN_PREFIX, row.id);
+    const refreshToken = createMobileToken(MOBILE_REFRESH_TOKEN_PREFIX, row.id);
+    const accessExpiresAt = new Date(now.getTime() + MOBILE_ACCESS_TOKEN_TTL_MS).toISOString();
+    db.prepare(`
+      INSERT OR IGNORE INTO mobile_refresh_token_history (session_id, token_hash, consumed_at)
+      VALUES (?, ?, ?)
+    `).run(row.id, row.refresh_token_hash, now.toISOString());
+    const result = db.prepare(`
+      UPDATE mobile_sessions
+      SET access_token_hash = ?, access_expires_at = ?, previous_refresh_token_hash = refresh_token_hash,
+          refresh_token_hash = ?, device_label = ?, app_version = ?,
+          last_seen_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND refresh_token_hash = ? AND revoked_at IS NULL
+    `).run(sha256(accessToken), accessExpiresAt, sha256(refreshToken), device.label, device.appVersion,
+      row.id, row.refresh_token_hash);
+    if (!result.changes) throw httpError(409, "Die App-Sitzung wurde gleichzeitig aktualisiert. Bitte erneut anmelden.", "MOBILE_REFRESH_CONFLICT");
+    db.exec("COMMIT");
+    return mobileTokenSet(accessToken, accessExpiresAt, refreshToken, row.refresh_expires_at);
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
+function mobileSessionRowFromRefreshToken(rawRefreshToken, now = new Date()) {
+  const parsed = parseMobileToken(rawRefreshToken, MOBILE_REFRESH_TOKEN_PREFIX);
+  if (!parsed) return null;
+  const row = mobileSessionRow(parsed.sessionId);
+  if (!row || row.revoked_at || !row.active || !row.employee_active || row.refresh_expires_at <= now.toISOString()
+    || !safeHashEquals(row.refresh_token_hash, sha256(parsed.token))) return null;
+  return row;
+}
+
 function enforceAdminApiAccess(request, _response, next) {
   try {
     if (["/health", "/health/live", "/health/ready", "/service/stop", "/integrations/wifi/events"].includes(request.path)) return next();
@@ -3040,13 +3423,13 @@ function getSettings() {
 function installationFeaturesForApiPath(apiPath) {
   const requestPath = String(apiPath || "").toLowerCase();
   const required = new Set();
-  if (/^\/(?:schedule(?:$|\/|\.pdf$|-note(?:\/|$)|-preview\.pdf$)|shifts(?:\/|$)|week-options(?:\/|$)|global-day-blocks(?:\/|$)|auto-plan(?:\/|$)|portal\/v1\/me\/schedule(?:\/|$))/.test(requestPath)) required.add("schedule");
+  if (/^\/(?:schedule(?:$|\/|\.pdf$|-note(?:\/|$)|-preview\.pdf$)|shifts(?:\/|$)|week-options(?:\/|$)|global-day-blocks(?:\/|$)|auto-plan(?:\/|$)|portal\/v1\/me\/schedule(?:\/|$)|mobile\/v1\/me\/schedule(?:\/|$))/.test(requestPath)) required.add("schedule");
   if (/^\/(?:vacations?(?:$|\/|\.pdf$|-preview\.pdf$)|vacation-entitlements(?:\/|$))/.test(requestPath)) required.add("vacation");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:absence(?:-|\/|$)|vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$)|time-off(?:-|\/|$)|approved-time-off(?:\/|$)|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))/.test(requestPath)) required.add("requests");
   if (/^\/portal\/v1\/(?:me\/)?(?:vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$))/.test(requestPath)) required.add("vacation");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:wifi-automation|wifi-suggestions)|portal\/v1\/wifi-automation|wifi(?:-|\/|$)|integrations\/wifi)/.test(requestPath)) required.add("wifiSuggestions");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:amu|sickness)|portal\/v1\/(?:amu|sickness)|portal\/v1\/personnel-records|amu(?:-|\/|$)|sickness(?:-|\/|$))/.test(requestPath)) required.add("sicknessAmu");
-  if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence)|time(?:-|\/|$)|mobile\/v1\/time)/.test(requestPath)) required.add("timeTracking");
+  if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence)|time(?:-|\/|$)|mobile\/v1\/(?:time|me\/time-entries))/.test(requestPath)) required.add("timeTracking");
   if (/^\/(?:portal\/v1\/me(?:\/|$)|mobile\/v1\/(?:bootstrap|me(?:\/|$))|portal\/v1\/(?:greeting-settings|mobile-layout|leadership\/overview))/.test(requestPath)) required.add("employeePortal");
   return [...required];
 }
@@ -4800,6 +5183,7 @@ function applyPersonnelAccessProfile(actor, profile) {
     grantsBefore: before?.grantedPermissions || [],
     grantsAfter: after.grantedPermissions,
   }));
+  revokeMobileSessionsForEmployee(profile.employeeNumber, "access_profile_changed");
 }
 
 function getPortalStatus(locationId = "", request = null) {
@@ -5402,9 +5786,28 @@ function scheduledTimeEntryDepartment(employeeNumber, date, localTime) {
 
 function bookTimeEntry(employeeNumber, action, now = new Date(), options = {}) {
   if (!timeEntryTypes.has(action)) throw httpError(400, "Diese Zeitbuchung ist ungültig.", "TIME_ENTRY_ACTION_INVALID");
+  const clientRequestId = String(options.clientRequestId || "").trim().toLowerCase();
+  if (clientRequestId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientRequestId)) {
+    throw httpError(400, "Die mobile Buchungs-ID ist ungültig.", "TIME_ENTRY_CLIENT_REQUEST_INVALID");
+  }
   const date = viennaTodayIso(now);
   db.exec("BEGIN IMMEDIATE");
   try {
+    if (clientRequestId) {
+      const existing = db.prepare(`
+        SELECT id, entry_type FROM time_entries
+        WHERE employee_number = ? AND client_request_id = ?
+        LIMIT 1
+      `).get(employeeNumber, clientRequestId);
+      if (existing) {
+        if (existing.entry_type !== action) {
+          throw httpError(409, "Diese mobile Buchungs-ID wurde bereits für eine andere Aktion verwendet.", "TIME_ENTRY_IDEMPOTENCY_CONFLICT");
+        }
+        const replayStatus = timeTrackingDayStatus(employeeNumber, date, now, options);
+        db.exec("COMMIT");
+        return options.returnMeta ? { status: replayStatus, replayed: true } : replayStatus;
+      }
+    }
     const before = timeTrackingDayStatus(employeeNumber, date, now, options);
     if (!before.trackingEnabled) {
       throw httpError(409, "Die Zeiterfassung ist für diesen Standort noch nicht aktiviert.", "TIME_TRACKING_DISABLED");
@@ -5423,13 +5826,17 @@ function bookTimeEntry(employeeNumber, action, now = new Date(), options = {}) {
     const timestamp = now.toISOString();
     const result = db.prepare(`
       INSERT INTO time_entries
-        (employee_number, location_id, department_id, work_date, entry_type, entry_timestamp, source, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, 'portal', ?)
-    `).run(employeeNumber, context.locationId, context.departmentId, date, action, timestamp, employeeNumber);
+        (employee_number, location_id, department_id, work_date, entry_type, entry_timestamp,
+         source, created_by, client_request_id, mobile_session_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(employeeNumber, context.locationId, context.departmentId, date, action, timestamp,
+      options.source === "mobile" ? "mobile" : "portal", employeeNumber, clientRequestId || null,
+      options.mobileSessionId ? String(options.mobileSessionId) : null);
     db.prepare("DELETE FROM time_day_reviews WHERE employee_number = ? AND work_date = ?").run(employeeNumber, date);
     auditPortal(employeeNumber, "time.entry.create", "time_entry", String(result.lastInsertRowid), JSON.stringify({ action, date, locationId: context.locationId }));
     db.exec("COMMIT");
-    return timeTrackingDayStatus(employeeNumber, date, now, options);
+    const status = timeTrackingDayStatus(employeeNumber, date, now, options);
+    return options.returnMeta ? { status, replayed: false } : status;
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
     throw error;
@@ -6203,16 +6610,17 @@ const mobileNavigationLabels = Object.freeze({
 
 function mobileApiStatus(now = new Date()) {
   const status = getPortalStatus();
+  const nativeAuthentication = mobileNativeAuthenticationAvailable();
   return {
     appName: APP_NAME,
     serverVersion: packageMetadata.version,
     apiVersion: 1,
-    minimumMobileVersion: "0.2.0",
+    minimumMobileVersion: MOBILE_MINIMUM_APP_VERSION,
     serverTime: now.toISOString(),
     deploymentKind: status.deploymentKind,
     operationMode: status.operationMode,
     portalEnabled: status.portalEnabled,
-    nativeAuthentication: false,
+    nativeAuthentication,
     passwordMinLength: status.passwordMinLength,
     capabilities: {
       timeTracking: status.capabilities.timeTracking,
@@ -6222,7 +6630,7 @@ function mobileApiStatus(now = new Date()) {
       notifications: status.capabilities.notifications,
       pushNotifications: false,
       personalSettingsRead: true,
-      personalSettingsWrite: false,
+      personalSettingsWrite: nativeAuthentication,
       personalizedGreetings: portalGreetingSettings().enabled,
     },
   };
@@ -6285,7 +6693,7 @@ function mobilePersonalSettingsPayload(session, now = new Date()) {
   };
 }
 
-function mobileHomePayload(session, now = new Date()) {
+function mobileHomePayload(session, request = null, now = new Date()) {
   const date = viennaTodayIso(now);
   let timeTracking = {
     enabled: false,
@@ -6297,13 +6705,16 @@ function mobileHomePayload(session, now = new Date()) {
   };
   if (session.permissions?.includes("own_time:read")) {
     try {
-      const day = timeTrackingDayStatus(session.employeeNumber, date, now);
+      const context = employeeRequestContext(session.employeeNumber, date);
+      const location = validateLocationExists(context.locationId);
+      const access = request ? timeTrackingRequestAccess(request, location) : undefined;
+      const day = timeTrackingDayStatus(session.employeeNumber, date, now, access ? { access } : {});
       timeTracking = {
         enabled: Boolean(day.enabled),
         accessAllowed: Boolean(day.accessAllowed),
         state: day.state,
         stateSince: day.stateSince || null,
-        allowedActions: day.allowedActions || [],
+        allowedActions: session.permissions?.includes("own_time:write") ? (day.allowedActions || []) : [],
         reason: day.reason || "",
       };
     } catch {}
@@ -6328,15 +6739,15 @@ function mobileHomePayload(session, now = new Date()) {
   };
 }
 
-function mobileBootstrapPayload(session, now = new Date()) {
+function mobileBootstrapPayload(session, request = null, now = new Date()) {
   const portalStatus = portalStatusForSession(session);
   return {
     generatedAt: now.toISOString(),
     status: mobileApiStatus(now),
     user: mobileUserPayload(session),
-    branding: brandingForPortalSession(session),
+    branding: mobileBrandingPayload(session),
     navigation: mobileNavigationPayload(session, portalStatus),
-    home: mobileHomePayload(session, now),
+    home: mobileHomePayload(session, request, now),
     settings: mobilePersonalSettingsPayload(session, now),
   };
 }
@@ -7215,6 +7626,142 @@ function brandingForPortalSession(session) {
     return managementBrandingPreference().branding;
   }
   return brandingForLocation(session.homeLocationId);
+}
+
+const defaultMobileBrandingTheme = Object.freeze({
+  primary: "#205b49",
+  secondary: "#2d8f6e",
+  accent: "#f4c952",
+  text: "#17222e",
+  background: "#f4f1e8",
+});
+
+function mobileHexColor(value, fallback) {
+  const color = String(value || "").trim().toLowerCase();
+  return /^#[0-9a-f]{6}$/.test(color) ? color : fallback;
+}
+
+function mobileColorLuminance(color) {
+  const channels = color.slice(1).match(/.{2}/g).map((entry) => Number.parseInt(entry, 16) / 255)
+    .map((value) => value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+function mobileColorContrast(left, right) {
+  const first = mobileColorLuminance(left);
+  const second = mobileColorLuminance(right);
+  return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+}
+
+function mobileBrandingTheme(raw = {}) {
+  const colors = raw.colors && typeof raw.colors === "object" ? raw.colors : {};
+  const theme = {
+    primary: mobileHexColor(raw.primaryColor || raw.primary_color || colors.primary, defaultMobileBrandingTheme.primary),
+    secondary: mobileHexColor(raw.secondaryColor || raw.secondary_color || colors.secondary, defaultMobileBrandingTheme.secondary),
+    accent: mobileHexColor(raw.accentColor || raw.accent_color || colors.accent, defaultMobileBrandingTheme.accent),
+    text: mobileHexColor(raw.textColor || raw.text_color || colors.text, defaultMobileBrandingTheme.text),
+    background: mobileHexColor(raw.backgroundColor || raw.background_color || colors.background, defaultMobileBrandingTheme.background),
+  };
+  if (mobileColorContrast(theme.text, theme.background) < 4.5) {
+    theme.text = defaultMobileBrandingTheme.text;
+    theme.background = defaultMobileBrandingTheme.background;
+  }
+  return theme;
+}
+
+function mobileSameOriginAssetPath(value, fallback) {
+  const candidate = String(value || "").trim();
+  let pathname = "";
+  try {
+    if (candidate.startsWith("/")) pathname = new URL(candidate, "https://grabenplaner.invalid").pathname;
+    else {
+      const parsed = new URL(candidate);
+      if (!normalizedPublicOrigin || parsed.origin !== normalizedPublicOrigin) return fallback;
+      pathname = parsed.pathname;
+    }
+  } catch {
+    return fallback;
+  }
+  if (!/^\/(?:assets|branding-kits)\/[A-Za-z0-9._~!$&'()+,;=:@%\/-]+$/.test(pathname)
+    || pathname.includes("..") || /%2f|%5c|%2e%2e/i.test(pathname)) return fallback;
+  return pathname;
+}
+
+function mobileBrandingSourceForSession(session) {
+  let kitId = "neutral";
+  if (sessionHasGlobalScope(session)) kitId = String(getSettings().branding_management_kit_id || "neutral");
+  else kitId = String(locationBrandingRow(session.homeLocationId)?.kit_id || "neutral");
+  if (kitId && kitId !== "custom") {
+    try {
+      const kit = readBrandingKitManifest(kitId);
+      return { kitId, raw: kit.branding || kit };
+    } catch {}
+  }
+  return { kitId: kitId || "custom", raw: {} };
+}
+
+function mobileBrandingPayload(session) {
+  const branding = brandingForPortalSession(session);
+  const source = mobileBrandingSourceForSession(session);
+  const theme = mobileBrandingTheme(source.raw);
+  const payload = {
+    ...branding,
+    logoUrl: mobileSameOriginAssetPath(branding.logoUrl, defaultBranding.logo_url),
+    iconUrl: mobileSameOriginAssetPath(branding.iconUrl, defaultBranding.icon_url),
+    theme,
+  };
+  return {
+    ...payload,
+    revision: sha256(JSON.stringify({ kitId: source.kitId, ...payload })).slice(0, 24),
+  };
+}
+
+function mobileSchedulePayload(session, weekValue = "") {
+  if (weekValue && !isIsoDate(weekValue)) {
+    throw httpError(400, "Bitte eine gültige Kalenderwoche auswählen.", "MOBILE_SCHEDULE_WEEK_INVALID");
+  }
+  const weekStart = getMonday(weekValue || currentWeekStart());
+  const weekEnd = addDays(weekStart, 6);
+  const shifts = db.prepare(`
+    SELECT s.id, s.shift_date, s.start_time, s.end_time, s.area, s.note, s.department_id,
+           d.name AS department_name
+    FROM shifts s LEFT JOIN departments d ON d.id = s.department_id
+    WHERE s.employee_number = ? AND s.shift_date BETWEEN ? AND ?
+    ORDER BY s.shift_date, s.start_time, s.id
+  `).all(session.employeeNumber, weekStart, weekEnd).map((shift) => ({
+    id: Number(shift.id),
+    date: shift.shift_date,
+    startTime: shift.start_time,
+    endTime: shift.end_time,
+    area: shift.area || "",
+    note: shift.note || "",
+    departmentId: Number(shift.department_id || 0) || null,
+    departmentName: shift.department_name || "",
+  }));
+  const options = db.prepare(`
+    SELECT id, date_from, date_to, option_type, note, all_day, start_time, end_time
+    FROM week_options
+    WHERE employee_number = ? AND date_from <= ? AND date_to >= ?
+    ORDER BY date_from, id
+  `).all(session.employeeNumber, weekEnd, weekStart).map((option) => ({
+    id: Number(option.id),
+    dateFrom: option.date_from,
+    dateTo: option.date_to,
+    type: option.option_type,
+    note: option.note || "",
+    allDay: Boolean(option.all_day),
+    startTime: option.start_time || null,
+    endTime: option.end_time || null,
+  }));
+  return {
+    weekStart,
+    weekEnd,
+    calendarWeek: getIsoWeek(weekStart),
+    timezone: "Europe/Vienna",
+    locationId: session.homeLocationId || "",
+    shifts,
+    options,
+  };
 }
 
 function portalStatusForSession(session, request = null) {
@@ -10681,18 +11228,77 @@ app.get("/api/mobile/v1/status", (_request, response) => {
 
 app.post("/api/mobile/v1/auth/branding", (request, response) => {
   assertLoginBrandingRateLimit(request);
+  response.json({ branding: mobileBrandingPayload({ role: "admin", homeLocationId: "" }) });
+});
+
+app.post("/api/mobile/v1/auth/login", async (request, response) => {
+  requireMobileNativeAuthentication();
+  assertLoginRateLimit(request);
   const employeeNumber = String(request.body?.employeeNumber || "").trim();
-  const user = employeeNumber ? db.prepare(`
-    SELECT u.role, e.home_location_id
-    FROM portal_users u
-    JOIN employees e ON e.personnel_number = u.employee_number
-    WHERE u.employee_number = ? AND u.active = 1 AND e.active = 1
-    LIMIT 1
-  `).get(employeeNumber) : null;
-  const branding = user && !GLOBAL_SCOPE_PORTAL_ROLES.has(user.role)
-    ? brandingForLocation(user.home_location_id)
-    : managementBrandingPreference().branding;
-  response.json({ branding });
+  const device = validateMobileDevice(request.body?.device || {});
+  const user = db.prepare(`
+    SELECT u.employee_number, u.password_hash, u.active, u.failed_login_attempts, u.locked_until,
+           e.active AS employee_active
+    FROM portal_users u JOIN employees e ON e.personnel_number = u.employee_number
+    WHERE u.employee_number = ?
+  `).get(employeeNumber);
+  const now = new Date();
+  if (user?.locked_until && new Date(user.locked_until) > now) {
+    throw httpError(429, "Der Zugang ist vorübergehend gesperrt. Bitte später erneut versuchen.", "MOBILE_ACCOUNT_LOCKED");
+  }
+  const passwordMatches = await verifyPortalPassword(request.body?.password, user?.password_hash || DUMMY_PORTAL_PASSWORD_HASH);
+  const valid = Boolean(user?.active && user?.employee_active && user.password_hash) && passwordMatches;
+  if (!valid) {
+    registerFailedLogin(request);
+    if (user) {
+      const portalSettings = getPortalSettings();
+      const attempts = Number(user.failed_login_attempts || 0) + 1;
+      const maximum = Number(portalSettings.max_failed_login_attempts || 5);
+      const lockUntil = attempts >= maximum
+        ? new Date(now.getTime() + Number(portalSettings.account_lock_minutes || 15) * 60000).toISOString()
+        : null;
+      db.prepare("UPDATE portal_users SET failed_login_attempts = ?, locked_until = ?, updated_at = CURRENT_TIMESTAMP WHERE employee_number = ?")
+        .run(lockUntil ? 0 : attempts, lockUntil, employeeNumber);
+    }
+    auditPortal(employeeNumber, "mobile.login.failed", "portal_user", employeeNumber, `ip=${loginRateKey(request)}`);
+    throw httpError(401, "Personalnummer oder Passwort ist nicht korrekt.", "MOBILE_LOGIN_FAILED");
+  }
+  clearLoginRate(request);
+  db.prepare(`
+    UPDATE portal_users SET failed_login_attempts = 0, locked_until = NULL,
+      last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE employee_number = ?
+  `).run(employeeNumber);
+  const created = createMobileSession(employeeNumber, device, now);
+  const session = mobileSessionPrincipal(mobileSessionRow(created.id));
+  auditPortal(employeeNumber, "mobile.login.success", "mobile_session", created.id,
+    JSON.stringify({ platform: device.platform, appVersion: device.appVersion }));
+  response.status(201).json({ tokenSet: created.tokenSet, bootstrap: mobileBootstrapPayload(session, request, now) });
+});
+
+app.post("/api/mobile/v1/auth/refresh", (request, response) => {
+  requireMobileNativeAuthentication();
+  assertMobileRefreshRateLimit(request);
+  const device = validateMobileDevice(request.body?.device || {});
+  const parsed = parseMobileToken(request.body?.refreshToken, MOBILE_REFRESH_TOKEN_PREFIX);
+  const rowBefore = parsed ? mobileSessionRow(parsed.sessionId) : null;
+  const tokenSet = refreshMobileSession(request.body?.refreshToken, device, new Date());
+  if (rowBefore) auditPortal(rowBefore.employee_number, "mobile.session.refresh", "mobile_session", rowBefore.id);
+  response.json({ tokenSet });
+});
+
+app.post("/api/mobile/v1/auth/logout", (request, response) => {
+  requireMobileNativeAuthentication();
+  const accessSession = mobileSessionFromRequest(request, { touch: false });
+  const row = accessSession
+    ? mobileSessionRow(accessSession.mobileSessionId)
+    : mobileSessionRowFromRefreshToken(request.body?.refreshToken, new Date());
+  const result = row ? db.prepare(`
+    UPDATE mobile_sessions SET revoked_at = CURRENT_TIMESTAMP, revoked_reason = 'logout', updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND revoked_at IS NULL
+  `).run(row.id) : { changes: 0 };
+  if (row && result.changes) auditPortal(row.employee_number, "mobile.logout", "mobile_session", row.id);
+  response.json({ ok: true });
 });
 
 app.get("/api/portal/v1/roles", (_request, response) => {
@@ -10922,6 +11528,7 @@ app.post("/api/portal/v1/setup/admin", async (request, response) => {
       password_hash = excluded.password_hash, role = 'admin', active = 1,
       must_change_password = 0, password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
   `).run(employeeNumber, passwordHash);
+  revokeMobileSessionsForEmployee(employeeNumber, "admin_setup_changed");
   auditPortal(employeeNumber, "portal.admin.setup", "portal_user", employeeNumber);
   response.status(201).json({ ok: true, status: getPortalStatus("", request) });
 });
@@ -11047,6 +11654,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
     throw error;
   }
   const after = portalPermissionGrantsForEmployee(employeeNumber);
+  revokeMobileSessionsForEmployee(employeeNumber, "permissions_changed");
   auditPortal(actor.employeeNumber, "portal.rights.update", "portal_user", employeeNumber, JSON.stringify({ before, after }));
   response.json(rightsManagementPayload(actor));
 });
@@ -11085,6 +11693,7 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", (request, response) => {
     for (const scope of scopes) insert.run(employeeNumber, scope.locationId, scope.departmentId || 0, actor.employeeNumber);
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); throw error; }
+  revokeMobileSessionsForEmployee(employeeNumber, "scopes_changed");
   auditPortal(actor.employeeNumber, "portal.scope.update", "portal_user", employeeNumber, JSON.stringify(scopes));
   response.json({ users: portalUsersForActor(actor), roles: getPortalRoles() });
 });
@@ -11135,6 +11744,7 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       updated_at = CURRENT_TIMESTAMP
   `).run(employeeNumber, passwordHash, role, active, mustChangePassword, password, password);
   if (!active || password) db.prepare("UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND revoked_at IS NULL").run(employeeNumber);
+  revokeMobileSessionsForEmployee(employeeNumber, "account_changed");
   auditPortal(actor.employeeNumber, "portal.user.update", "portal_user", employeeNumber, JSON.stringify({ role, active: Boolean(active), passwordReset: Boolean(password) }));
   response.json({ users: portalUsersForAdmin(), roles: getPortalRoles() });
 });
@@ -11163,22 +11773,54 @@ app.get("/api/portal/v1/me", (request, response) => {
 
 app.get("/api/portal/v1/me/home", (request, response) => {
   const session = requirePortalSession(request);
-  response.json(mobileHomePayload(session, new Date()));
+  response.json(mobileHomePayload(session, request, new Date()));
 });
 
 app.get("/api/mobile/v1/bootstrap", (request, response) => {
-  const session = requirePortalSession(request);
-  response.json(mobileBootstrapPayload(session, new Date()));
+  const session = requireMobileSession(request, "", { allowPasswordChange: true });
+  response.json(mobileBootstrapPayload(session, request, new Date()));
 });
 
 app.get("/api/mobile/v1/me/home", (request, response) => {
-  const session = requirePortalSession(request);
-  response.json(mobileHomePayload(session, new Date()));
+  const session = requireMobileSession(request);
+  response.json(mobileHomePayload(session, request, new Date()));
 });
 
 app.get("/api/mobile/v1/me/settings", (request, response) => {
-  const session = requirePortalSession(request);
+  const session = requireMobileSession(request);
   response.json(mobilePersonalSettingsPayload(session, new Date()));
+});
+
+app.post("/api/mobile/v1/me/password", async (request, response) => {
+  const session = requireMobileSession(request, "", { allowPasswordChange: true });
+  const current = db.prepare("SELECT password_hash FROM portal_users WHERE employee_number = ?").get(session.employeeNumber);
+  if (!await verifyPortalPassword(request.body?.currentPassword, current?.password_hash)) {
+    throw httpError(401, "Das bisherige Passwort ist nicht korrekt.", "MOBILE_PASSWORD_CURRENT_INVALID");
+  }
+  const passwordHash = await hashPortalPassword(request.body?.newPassword);
+  let tokenSet;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`
+      UPDATE portal_users SET password_hash = ?, must_change_password = 0,
+        password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE employee_number = ?
+    `).run(passwordHash, session.employeeNumber);
+    db.prepare("UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND revoked_at IS NULL").run(session.employeeNumber);
+    revokeMobileSessionsForEmployee(session.employeeNumber, "password_changed", session.mobileSessionId);
+    tokenSet = rotateAuthenticatedMobileSession(session.mobileSessionId, new Date());
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  auditPortal(session.employeeNumber, "mobile.password.change", "portal_user", session.employeeNumber);
+  response.json({ ok: true, tokenSet });
+});
+
+app.get("/api/mobile/v1/me/schedule", (request, response) => {
+  const session = requireMobileSession(request, "own_schedule:read");
+  response.json(mobileSchedulePayload(session, String(request.query.week || "")));
 });
 
 app.put("/api/portal/v1/me/password", async (request, response) => {
@@ -11194,6 +11836,7 @@ app.put("/api/portal/v1/me/password", async (request, response) => {
       password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
     WHERE employee_number = ?
   `).run(passwordHash, session.employeeNumber);
+  revokeMobileSessionsForEmployee(session.employeeNumber, "password_changed");
   auditPortal(session.employeeNumber, "portal.password.change", "portal_user", session.employeeNumber);
   response.json({ ok: true });
 });
@@ -12839,6 +13482,35 @@ app.post("/api/portal/v1/me/wifi-suggestions/:id/reject", (request, response) =>
   assertPortalCsrf(request);
   rejectWifiSuggestion(session, request.params.id, request.body?.reason || "");
   response.json(wifiAutomationEmployeePayload(session, new Date()));
+});
+
+app.get("/api/mobile/v1/me/time-entries", (request, response) => {
+  const session = requireMobileSession(request, "own_time:read");
+  const dateValue = String(request.query.date || "");
+  if (dateValue && !isIsoDate(dateValue)) {
+    throw httpError(400, "Bitte ein gültiges Datum auswählen.", "TIME_ENTRY_DATE_INVALID");
+  }
+  const date = dateValue || viennaTodayIso();
+  const context = employeeRequestContext(session.employeeNumber, date);
+  const access = timeTrackingRequestAccess(request, validateLocationExists(context.locationId));
+  const status = timeTrackingDayStatus(session.employeeNumber, date, new Date(), { access });
+  if (!session.permissions.includes("own_time:write")) status.allowedActions = [];
+  response.json({ status });
+});
+
+app.post("/api/mobile/v1/me/time-entries", (request, response) => {
+  const session = requireMobileSession(request, "own_time:write");
+  const now = new Date();
+  const context = employeeRequestContext(session.employeeNumber, viennaTodayIso(now));
+  const access = timeTrackingRequestAccess(request, validateLocationExists(context.locationId));
+  const result = bookTimeEntry(session.employeeNumber, String(request.body?.type || ""), now, {
+    access,
+    source: "mobile",
+    clientRequestId: request.body?.clientRequestId,
+    mobileSessionId: session.mobileSessionId,
+    returnMeta: true,
+  });
+  response.status(result.replayed ? 200 : 201).json(result);
 });
 
 app.get("/api/portal/v1/me/time-entries", (request, response) => {
@@ -15655,6 +16327,7 @@ function startServer() {
         const now = Date.now();
         loginRateLimits.prune(now);
         loginBrandingRateLimits.prune(now);
+        mobileRefreshRateLimits.prune(now);
         usbCreatorAuthRateLimits.prune(now);
         usbCreatorGlobalRateLimits.prune(now);
       }, 5 * 60 * 1000);
