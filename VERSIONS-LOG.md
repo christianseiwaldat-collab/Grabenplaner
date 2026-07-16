@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.67 Beta
+
+- Das grafische Rechte-Dashboard erhält eine zweite Ansicht für die aktuellen Standardprozesse von Urlaubsantrag, Zeitausgleich, Krankmeldung/AUM, Tagesprüfung und Lohnübergabe.
+- Jeder Prozess zeigt Antrag beziehungsweise Buchung, automatische Prüfungen, Entscheidungen, Freigaben und Abschluss als leicht lesbaren vertikalen Ablauf.
+- Ein Klick auf einen Schritt erklärt die zuständige Rolle, die aktuell wirksame Einstellung, den Status und die benötigten Rechte.
+- Aktive, bedingte, übersprungene und deaktivierte Schritte sind optisch getrennt; Urlaubssperren, Freigabestufen, AUM-Regeln und vorhandene Lohnschnittstellen fließen direkt ein.
+- Für Zeiterfassung und Lohnübergabe kann der betrachtete Standort gewechselt werden. Standortbezogene Aktivierung, Buchungsort und Abweichungstoleranz werden ohne vertrauliche Netzwerkdaten dargestellt.
+- Die helle oder dunkle Darstellung bleibt ausschließlich auf dieses Dashboard beschränkt.
+
 ## v0.66 Beta
 
 - Neues grafisches Rechte-Dashboard für Personalleitung, Admin, IT-Admin und Developer mit dem nachvollziehbaren Pfad Person → Rolle → Standort/Abteilung → wirksame Rechte.
