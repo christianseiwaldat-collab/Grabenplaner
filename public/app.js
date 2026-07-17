@@ -34,6 +34,10 @@ const state = {
   rightsDashboardSelectedEmployeeNumber: "",
   rightsDashboardSelectedPermissionId: "",
   rightsDashboardTheme: "light",
+  rightsDashboardMode: "rights",
+  rightsDashboardSelectedProcessId: "vacation",
+  rightsDashboardSelectedProcessStepId: "",
+  rightsProcessLocationId: "",
   brandingAssignments: [],
   brandingPreference: null,
   brandingFormDirty: false,
@@ -138,7 +142,8 @@ const elements = Object.fromEntries(
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
-    "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
+    "rightsDashboardRightsPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
+    "rightsProcessLocation", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan",
@@ -2009,6 +2014,144 @@ function renderRightsDashboard() {
   if (selected) renderRightsDashboardSelection(selected);
 }
 
+function setRightsDashboardMode(mode) {
+  const normalized = mode === "processes" ? "processes" : "rights";
+  state.rightsDashboardMode = normalized;
+  document.querySelectorAll("[data-rights-dashboard-mode]").forEach((button) => {
+    button.setAttribute("aria-selected", String(button.dataset.rightsDashboardMode === normalized));
+  });
+  elements.rightsDashboardRightsPanel?.classList.toggle("hidden", normalized !== "rights");
+  elements.rightsDashboardProcessesPanel?.classList.toggle("hidden", normalized !== "processes");
+  if (normalized === "processes") renderRightsProcessDashboard();
+}
+
+function rightsProcessDashboard() {
+  return state.rightsDashboard?.processDashboard || null;
+}
+
+function rightsProcessLocation() {
+  const dashboard = rightsProcessDashboard();
+  if (!dashboard) return null;
+  return dashboard.locations.find((location) => String(location.id) === String(state.rightsProcessLocationId))
+    || dashboard.locations[0]
+    || null;
+}
+
+function populateRightsProcessLocations() {
+  const dashboard = rightsProcessDashboard();
+  if (!dashboard || !elements.rightsProcessLocation) return;
+  const current = state.rightsProcessLocationId || elements.rightsProcessLocation.value;
+  elements.rightsProcessLocation.innerHTML = dashboard.locations.length
+    ? dashboard.locations.map((location) => `<option value="${escapeHtml(String(location.id))}">${escapeHtml(`${location.id} · ${location.name}`)}</option>`).join("")
+    : "<option value=\"\">Kein aktiver Standort</option>";
+  state.rightsProcessLocationId = dashboard.locations.some((location) => String(location.id) === String(current))
+    ? String(current)
+    : String(dashboard.locations[0]?.id || "");
+  elements.rightsProcessLocation.value = state.rightsProcessLocationId;
+}
+
+function rightsProcessStepState(process, step) {
+  if (!process.enabled) return "inactive";
+  if (step.stateRule === "timeTrackingEnabled") return rightsProcessLocation()?.timeTrackingEnabled ? "active" : "inactive";
+  return step.state || "active";
+}
+
+function rightsProcessStateLabel(stateValue) {
+  return ({ active: "Aktiv", conditional: "Bedingt", bypassed: "Übersprungen", inactive: "Deaktiviert" })[stateValue] || "Aktiv";
+}
+
+function rightsProcessRuleValue(rule) {
+  const location = rightsProcessLocation();
+  if (!rule.locationRule) return rule.value;
+  if (!location) return "Kein Standort";
+  if (rule.locationRule === "tracking") return location.timeTrackingEnabled ? "Aktiv" : "Deaktiviert";
+  if (rule.locationRule === "access") return location.timeTrackingAccessLabel;
+  if (rule.locationRule === "variance") return `${location.timeTrackingVarianceMinutes} Minuten`;
+  return rule.value;
+}
+
+function rightsProcessStepSetting(process, step) {
+  const location = rightsProcessLocation();
+  if (!process.locationSensitive || !location) return step.setting;
+  if (process.id === "time_review" && step.id === "booking") {
+    return location.timeTrackingEnabled
+      ? `${location.name}: aktiv · ${location.timeTrackingAccessLabel}`
+      : `${location.name}: Zeiterfassung deaktiviert`;
+  }
+  if (process.id === "time_review" && step.id === "variance") {
+    return `${location.name}: ${location.timeTrackingVarianceMinutes} Minuten Abweichungstoleranz`;
+  }
+  if (process.id === "payroll" && step.id === "context") return `${location.name} ist als aktueller Standortbezug gewählt.`;
+  return step.setting;
+}
+
+function rightsProcessStatus(process) {
+  if (!process.enabled) return process.statusLabel;
+  if (process.id === "time_review") return rightsProcessLocation()?.timeTrackingEnabled ? "Am Standort aktiv" : "Am Standort deaktiviert";
+  return process.statusLabel;
+}
+
+function renderRightsProcessExplanation(process, step) {
+  if (!elements.rightsProcessExplanation) return;
+  if (!process || !step) {
+    elements.rightsProcessExplanation.innerHTML = "<strong>Prozessschritt anklicken</strong><p>Hier werden Zuständigkeit, wirksame Einstellung und benötigte Rechte erklärt.</p>";
+    return;
+  }
+  const stateValue = rightsProcessStepState(process, step);
+  const permissionLookup = new Map((state.rightsDashboard?.catalog || []).map((permission) => [permission.id, permission.label]));
+  const permissions = (step.permissions || []).map((permission) => permissionLookup.get(permission) || permission);
+  const effect = stateValue === "active"
+    ? "Teil des aktuell wirksamen Standardwegs."
+    : stateValue === "conditional"
+      ? "Wird nur ausgelöst, wenn die beschriebene Bedingung eintritt."
+      : stateValue === "bypassed"
+        ? "Wird mit der aktuellen Konfiguration übersprungen."
+        : "Ist mit der aktuellen Modul- oder Standorteinstellung nicht aktiv.";
+  elements.rightsProcessExplanation.innerHTML = `
+    <strong>${escapeHtml(step.title)}</strong>
+    <p>${escapeHtml(step.description)}</p>
+    <dl>
+      <dt>Zuständig</dt><dd>${escapeHtml(step.actor)}</dd>
+      <dt>Aktuelle Regel</dt><dd>${escapeHtml(rightsProcessStepSetting(process, step))}</dd>
+      <dt>Status</dt><dd>${escapeHtml(`${rightsProcessStateLabel(stateValue)} · ${effect}`)}</dd>
+      <dt>Benötigte Rechte</dt><dd>${permissions.length ? permissions.map((permission) => `<code>${escapeHtml(permission)}</code>`).join(", ") : "Systemschritt ohne eigenes Benutzerrecht"}</dd>
+    </dl>`;
+}
+
+function renderRightsProcessDashboard() {
+  const dashboard = rightsProcessDashboard();
+  if (!dashboard || !elements.rightsProcessList) return;
+  const processes = dashboard.processes || [];
+  if (!processes.some((process) => process.id === state.rightsDashboardSelectedProcessId)) {
+    state.rightsDashboardSelectedProcessId = processes[0]?.id || "";
+    state.rightsDashboardSelectedProcessStepId = "";
+  }
+  const selectedProcess = processes.find((process) => process.id === state.rightsDashboardSelectedProcessId);
+  elements.rightsProcessList.innerHTML = processes.length ? processes.map((process) => {
+    const selected = process.id === state.rightsDashboardSelectedProcessId;
+    const status = rightsProcessStatus(process);
+    return `<button type="button" class="rights-process-item ${process.enabled ? "" : "disabled"} ${selected ? "selected" : ""}" data-rights-process="${escapeHtml(process.id)}" aria-pressed="${selected}"><span class="rights-process-item-mark">${escapeHtml(process.symbol)}</span><span class="rights-process-item-copy"><strong>${escapeHtml(process.title)}</strong><small>${escapeHtml(status)}</small></span></button>`;
+  }).join("") : "<p class=\"settings-note\">Keine Prozessdefinitionen verfügbar.</p>";
+  if (!selectedProcess) return;
+  elements.rightsProcessLocation.disabled = !selectedProcess.locationSensitive;
+  elements.rightsProcessTitle.textContent = selectedProcess.title;
+  elements.rightsProcessSummary.textContent = selectedProcess.summary;
+  const processStatus = rightsProcessStatus(selectedProcess);
+  elements.rightsProcessStatus.textContent = processStatus;
+  elements.rightsProcessStatus.classList.toggle("inactive", !selectedProcess.enabled || processStatus.includes("deaktiviert"));
+  elements.rightsProcessRules.innerHTML = (selectedProcess.rules || []).map((rule) => `<article class="rights-process-rule ${escapeHtml(rule.tone || "neutral")}"><span>${escapeHtml(rule.label)}</span><strong>${escapeHtml(rightsProcessRuleValue(rule))}</strong></article>`).join("");
+  if (!(selectedProcess.steps || []).some((step) => step.id === state.rightsDashboardSelectedProcessStepId)) {
+    state.rightsDashboardSelectedProcessStepId = selectedProcess.steps?.[0]?.id || "";
+  }
+  elements.rightsProcessTimeline.innerHTML = (selectedProcess.steps || []).map((step) => {
+    const stateValue = rightsProcessStepState(selectedProcess, step);
+    const selected = step.id === state.rightsDashboardSelectedProcessStepId;
+    return `<button type="button" class="rights-process-step ${escapeHtml(step.type || "system")} ${escapeHtml(stateValue)} ${selected ? "selected" : ""}" data-rights-process-step="${escapeHtml(step.id)}" aria-pressed="${selected}"><span class="rights-process-step-track"></span><span class="rights-process-step-copy"><strong>${escapeHtml(step.title)}</strong><span>${escapeHtml(step.actor)}</span><small>${escapeHtml(step.description)}</small></span><span class="rights-process-step-state">${escapeHtml(rightsProcessStateLabel(stateValue))}</span></button>`;
+  }).join("");
+  const selectedStep = selectedProcess.steps?.find((step) => step.id === state.rightsDashboardSelectedProcessStepId) || null;
+  renderRightsProcessExplanation(selectedProcess, selectedStep);
+}
+
 async function loadRightsDashboard() {
   if (!elements.rightsDashboardView) return;
   try {
@@ -2017,8 +2160,10 @@ async function loadRightsDashboard() {
     const localTheme = localStorage.getItem(rightsDashboardThemeStorageKey());
     applyRightsDashboardTheme(dashboard.actor?.employeeNumber === "local" && localTheme ? localTheme : dashboard.preferences?.theme);
     populateRightsDashboardFilters();
+    populateRightsProcessLocations();
     renderRightsDashboardSummary();
     renderRightsDashboard();
+    setRightsDashboardMode(state.rightsDashboardMode);
   } catch (error) {
     state.rightsDashboard = null;
     elements.rightsDashboardUserList.innerHTML = `<p class="settings-note">${escapeHtml(error.status === 403 ? "Das Rechte-Dashboard ist nur für Personalleitung, Admin, IT-Admin und Developer verfügbar." : error.message)}</p>`;
@@ -6280,6 +6425,7 @@ elements.rightsUserList?.addEventListener("click", (event) => {
 });
 elements.rightsEditorForm?.addEventListener("submit", saveUserRights);
 document.querySelectorAll("button[data-dashboard-theme]").forEach((button) => button.addEventListener("click", () => saveRightsDashboardTheme(button.dataset.dashboardTheme)));
+document.querySelectorAll("button[data-rights-dashboard-mode]").forEach((button) => button.addEventListener("click", () => setRightsDashboardMode(button.dataset.rightsDashboardMode)));
 elements.rightsDashboardSearch?.addEventListener("input", renderRightsDashboard);
 elements.rightsDashboardRoleFilter?.addEventListener("change", renderRightsDashboard);
 elements.rightsDashboardLocationFilter?.addEventListener("change", () => {
@@ -6301,6 +6447,23 @@ elements.rightsDashboardMatrix?.addEventListener("click", (event) => {
   state.rightsDashboardSelectedPermissionId = button.dataset.rightsDashboardPermission;
   const selected = rightsDashboardFilteredUsers().find((user) => user.employeeNumber === state.rightsDashboardSelectedEmployeeNumber);
   if (selected) renderRightsDashboardSelection(selected);
+});
+elements.rightsProcessLocation?.addEventListener("change", () => {
+  state.rightsProcessLocationId = elements.rightsProcessLocation.value;
+  renderRightsProcessDashboard();
+});
+elements.rightsProcessList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-rights-process]");
+  if (!button) return;
+  state.rightsDashboardSelectedProcessId = button.dataset.rightsProcess;
+  state.rightsDashboardSelectedProcessStepId = "";
+  renderRightsProcessDashboard();
+});
+elements.rightsProcessTimeline?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-rights-process-step]");
+  if (!button) return;
+  state.rightsDashboardSelectedProcessStepId = button.dataset.rightsProcessStep;
+  renderRightsProcessDashboard();
 });
 elements.saveMobileLeadershipSettingsButton?.addEventListener("click", saveMobileLeadershipSettings);
 elements.requestActionForm?.addEventListener("click", (event) => {
