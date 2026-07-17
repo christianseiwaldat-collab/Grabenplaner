@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.66 Beta
+
+- Neues grafisches Rechte-Dashboard für Personalleitung, Admin, IT-Admin und Developer mit dem nachvollziehbaren Pfad Person → Rolle → Standort/Abteilung → wirksame Rechte.
+- Grundrechte einer Rolle, individuelle Zusatzrechte und auf Person, Filiale oder Abteilung begrenzte Geltungsbereiche werden klar unterschieden.
+- Suche nach Personalnummer, Name oder Recht sowie Filter nach App-Rolle, Standort, Abteilung und Rechteart erleichtern die Kontrolle größerer Teams.
+- Jedes wirksame Recht erklärt Herkunft, Geltungsbereich, Status und technischen Schlüssel, ohne Passwort- oder andere sensible Zugangsdaten auszugeben.
+- Das Dashboard besitzt eine eigene helle oder dunkle Darstellung. Sie gilt ausschließlich dort und wird pro angemeldetem Benutzer gespeichert.
+
 ## v0.65 Beta
 
 - Einstellungen sind fachlich neu gegliedert: Urlaubsfreigaben liegen unter „Urlaub“, Pausen-, Samstags- und WLAN-Regeln unter „Zeiterfassung“, Vertrauensstufen unter „Personal“.
