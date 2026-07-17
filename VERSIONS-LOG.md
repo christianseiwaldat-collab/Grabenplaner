@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.69 Beta
+
+- Wiederverwendbare SQL-Importprofile speichern Quellenart und konkrete geprüfte Verbindung zusätzlich zur Feldzuordnung; sie können direkt aus der Profilübersicht erneut geöffnet werden.
+- Ein Profil darf serverseitig nur mit seiner hinterlegten Quellenart und SQL-Verbindung verwendet werden. Vorschau und ausdrückliche atomare Bestätigung bleiben verpflichtend.
+- SQL-Personalquellen und HTTPS-Lohnziele sind fest an ihren jeweils freigegebenen, versionierten Schnittstellenvertrag gebunden; unpassende Verträge werden abgewiesen.
+- Die neue Vertragsübersicht dokumentiert Richtung, Transport, Version und SHA-256-Prüfsumme. Berechtigte Stellen können die maschinenlesbaren JSON-Verträge für die Firmen-IT herunterladen.
+- Der Vertrag `grabenplaner.personnel-view.v1` erlaubt ausschließlich schreibgeschützte Personalstammdaten aus einer freigegebenen View und schließt sensible Personalakt-Daten aus.
+- Der Vertrag `grabenplaner.payroll.v1` beschreibt die minimierte, idempotente HTTPS-JSON-Übergabe ausschließlich final geprüfter Ist-Werte.
+
 ## v0.68 Beta
 
 - Eine lesbare Konfigurationsprüfung ergänzt das Rechte-Dashboard und unterscheidet erfolgreiche Prüfungen, bewusste Hinweise, Warnungen und echte Blocker.

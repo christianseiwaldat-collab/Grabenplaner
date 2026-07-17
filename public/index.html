@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.68 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.69 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -702,6 +702,11 @@
                 <div class="integration-delivery-list" id="integrationDeliveryHistory"><p class="settings-note">Lieferverlauf wird geladen.</p></div>
               </details>
             </div>
+            <div class="settings-card" id="integrationContractsCard">
+              <div class="card-heading"><div class="card-icon">API</div><div><h2>Schnittstellenverträge</h2><p>Verbindliche Datenwege, Versionen und technische Verträge für die Firmen-IT.</p></div></div>
+              <p class="settings-note security-note">SQL-Quellen bleiben schreibgeschützt. Ausgehende Übergaben verwenden ausschließlich den dokumentierten Vertrag der jeweiligen Verbindung.</p>
+              <div class="integration-contract-list" id="integrationContractList"><p class="settings-note">Verträge werden geladen.</p></div>
+            </div>
             <div class="settings-card" id="employeeImportCard">
               <div class="card-heading"><div class="card-icon">Import</div><div><h2>Personalstammdaten importieren</h2><p>Datei oder freigegebene SQL-View zuordnen, prüfen und erst nach einer Vorschau übernehmen.</p></div></div>
               <p class="settings-note security-note">Importiert werden ausschließlich freigegebene Stammdaten. Passwörter, Rollen, Bankdaten, SV-Nummern, Adressen und Personalakt-Inhalte bleiben ausgeschlossen.</p>
@@ -968,7 +973,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.68 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.69 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -1216,7 +1221,7 @@
             <label class="field"><span>Zeitlimit</span><div class="unit-input"><input id="integrationSqlTimeout" type="number" min="1000" max="30000" step="1000" value="10000" /><em>ms</em></div></label>
             <label class="field"><span>Maximale Vorschau</span><div class="unit-input"><input id="integrationSqlRowLimit" type="number" min="1" max="5000" value="1000" /><em>Zeilen</em></div></label>
           </div>
-          <p class="settings-note">Es werden ausschließlich die ausdrücklich freigegebenen Spalten einer SQL-View gelesen. Freie SQL-Befehle und schreibende Zugriffe sind nicht vorgesehen.</p>
+          <p class="settings-note">Vertrag <code>grabenplaner.personnel-view.v1</code>: Es werden ausschließlich die ausdrücklich freigegebenen Spalten einer SQL-View gelesen. Freie SQL-Befehle und schreibende Zugriffe sind nicht vorgesehen.</p>
         </section>
 
         <section class="integration-connection-fields hidden" id="integrationApiFields">
@@ -1229,7 +1234,7 @@
             <label class="field"><span>Maximale Anfrage</span><div class="unit-input"><input id="integrationApiRequestLimit" type="number" min="1024" max="10485760" value="5242880" /><em>Byte</em></div></label>
             <label class="field"><span>Maximale Antwort</span><div class="unit-input"><input id="integrationApiResponseLimit" type="number" min="1024" max="2097152" value="262144" /><em>Byte</em></div></label>
           </div>
-          <p class="settings-note">Die Übertragung verwendet ausschließlich HTTPS, JSON, POST und den festen Header <code>Idempotency-Key</code>. „Verbindung testen“ prüft nur DNS und TLS und sendet keine Fachdaten.</p>
+          <p class="settings-note">Vertrag <code>grabenplaner.payroll.v1</code>: Die Übertragung verwendet ausschließlich HTTPS, JSON, POST und den festen Header <code>Idempotency-Key</code>. „Verbindung testen“ prüft nur DNS und TLS und sendet keine Fachdaten.</p>
         </section>
 
         <section class="integration-credential-panel" id="integrationCredentialPanel">
