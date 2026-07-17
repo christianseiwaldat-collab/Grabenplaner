@@ -57,6 +57,7 @@ const state = {
     importCatalog: null,
     payrollCatalog: null,
     connectionCatalog: null,
+    contracts: [],
     connections: [],
     deliveries: [],
     connectionLoadError: "",
@@ -159,7 +160,7 @@ const elements = Object.fromEntries(
     "timeSummaryFrom", "timeSummaryTo", "loadTimeSummaryButton", "timeSummaryList", "timeCorrectionPanel", "timeCorrectionCount", "timeCorrectionRequestList",
     "brandLogo", "footerBrandLogo", "adminContactLink", "brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt", "brandingPreviewLogo", "brandingPreviewTitle", "brandingPreviewCompany", "brandingKitLibrary", "brandingAssignmentList", "exportBrandingButton", "brandingImportFile", "importBrandingButton", "toast",
     "usbProvisioningTab", "usbProvisioningSettings", "usbProvisioningAvailabilityCard", "usbProvisioningAvailability", "usbProvisioningAvailabilityBadge", "usbProvisioningAvailabilityTitle", "usbProvisioningAvailabilityText", "usbProvisioningWizard", "usbWizardDraftStatus", "usbInstallationProfile", "usbInstallationName", "usbModuleSelection", "usbPrimaryBranding", "usbPrimaryBrandingPreview", "usbAdditionalBrandings", "usbBrandingImportFile", "usbImportBrandingButton", "usbCreatorSummary", "usbCreatorEmployee", "usbCreatorPassword", "usbLocationSelection", "usbAddLocationButton", "usbEmployeeSearch", "usbAddEmployeeButton", "usbEmployeeSelection", "usbGuideTitle", "usbGuideIntroduction", "usbGuideNotes", "usbGuideContact", "usbGuideIncludeStartup", "usbGuideIncludeModules", "usbGuideIncludePdf", "usbGuideIncludeBackup", "usbGuidePreviewButton", "usbGuidePreviewFrame", "usbRefreshDrivesButton", "usbDriveList", "usbHideProgramFolder", "usbProtectProgramFiles", "usbProvisioningSummary", "usbFormatConfirmation", "usbFormatConfirmationHint", "usbProvisioningStartButton", "usbWizardActions", "usbWizardPreviousButton", "usbWizardStepHint", "usbWizardNextButton", "usbProvisioningProgressPanel", "usbProvisioningProgressTitle", "usbProvisioningProgressPercent", "usbProvisioningProgressTrack", "usbProvisioningProgressText", "usbProvisioningProgressSteps", "usbProvisioningResultPanel", "usbProvisioningResultText", "usbProvisioningResultDetails", "usbEmployeeDraftModal", "usbEmployeeDraftForm", "usbDraftPersonnelNumber", "usbDraftFullName", "usbDraftNickname", "usbDraftColor", "usbDraftContractedHours", "usbDraftPosition", "usbDraftLocation", "usbDraftDepartment", "usbDraftRole", "usbDraftPassword",
-    "integrationConnectionsCard", "integrationConnectionList", "integrationDeliveryHistory", "addIntegrationConnectionButton",
+    "integrationConnectionsCard", "integrationConnectionList", "integrationDeliveryHistory", "addIntegrationConnectionButton", "integrationContractsCard", "integrationContractList",
     "employeeImportCard", "importProfileCard", "payrollExportCard", "exportProfileCard", "integrationInformationCard", "integrationHistoryCard", "openPersonnelImportButton", "importProfileList", "exportProfileList", "integrationHistory",
     "payrollProfile", "payrollLocation", "payrollDepartment", "payrollDateFrom", "payrollDateTo", "payrollSourceMode", "payrollLayout", "payrollFormat", "payrollApiTargetField", "payrollApiTarget", "payrollDelimiter", "payrollDecimalSeparator", "payrollColumnSelection", "payrollWageCodeDetails", "payrollWageCodeMap", "payrollAllowDraft", "payrollProfileName", "savePayrollProfileButton", "payrollPreflightButton", "payrollDeliverButton", "payrollDownloadButton", "payrollPreflightResult",
     "personnelImportModal", "personnelImportForm", "personnelImportProgress", "personnelImportFileStep", "personnelImportMappingStep", "personnelImportPreviewStep", "personnelImportSourceType", "personnelImportFileField", "personnelImportSqlConnectionField", "personnelImportSqlConnection", "personnelImportFile", "personnelImportProfile", "personnelImportDuplicateStrategy", "personnelImportDefaultLocation", "personnelImportDefaultDepartment", "personnelImportDefaultPosition", "personnelImportDefaultHours", "inspectPersonnelImportButton", "personnelImportSheet", "personnelImportHeaderRow", "personnelImportMapping", "personnelImportProfileName", "savePersonnelImportProfileButton", "previewPersonnelImportButton", "personnelImportSummary", "personnelImportPreviewBody", "personnelImportPreviewHint", "personnelImportMessage", "resetPersonnelImportButton", "backPersonnelImportButton", "applyPersonnelImportButton",
@@ -608,6 +609,7 @@ function applyRoleVisibility() {
   elements.exportProfileCard?.classList.toggle("hidden", !(integrationReadAccess || payrollExportAccess));
   elements.integrationHistoryCard?.classList.toggle("hidden", !integrationReadAccess);
   elements.integrationInformationCard?.classList.toggle("hidden", !integrationAccess);
+  elements.integrationContractsCard?.classList.toggle("hidden", !integrationReadAccess);
   elements.integrationConnectionsCard?.classList.toggle("hidden", !(connectionReadAccess || connectionWriteAccess));
   elements.addIntegrationConnectionButton?.classList.toggle("hidden", !connectionWriteAccess);
   elements.integrationDeliveryHistory?.closest("details")?.classList.toggle("hidden", !integrationReadAccess);
@@ -3478,14 +3480,25 @@ function integrationProfiles(direction, kind) {
 
 function renderIntegrationProfileLists() {
   const canWrite = hasIntegrationPermission("integrations:profiles:write");
+  const canImport = hasIntegrationPermission("employees:import");
   const render = (profiles, target, emptyText) => {
     if (!target) return;
-    target.innerHTML = profiles.length ? profiles.map((profile) => `
+    target.innerHTML = profiles.length ? profiles.map((profile) => {
+      const connection = integrationConnections().find((item) => item.id === profile.configuration?.connectionId);
+      const source = profile.direction === "import"
+        ? profile.configuration?.sourceType === "sql"
+          ? `SQL-View · ${connection?.name || "Quelle nicht verfügbar"}`
+          : `${profile.format.toUpperCase()}-Datei`
+        : `${profile.format.toUpperCase()} · ${profile.configuration?.layout === "movement_lines" ? "Lohnarten" : "Tagesjournal"}`;
+      return `
       <div class="integration-profile-row" data-integration-profile="${escapeHtml(profile.id)}">
-        <div><strong>${escapeHtml(profile.name)}</strong><small>${profile.format.toUpperCase()} · ${profile.configuration?.layout === "movement_lines" ? "Lohnarten" : profile.direction === "export" ? "Tagesjournal" : "Feldzuordnung"}</small></div>
-        ${canWrite ? `<button class="icon-button" type="button" data-delete-integration-profile="${escapeHtml(profile.id)}" aria-label="Profil l\u00f6schen">\u00d7</button>` : ""}
+        <div class="integration-profile-copy"><strong>${escapeHtml(profile.name)}</strong><small>${escapeHtml(source)}</small></div>
+        <div class="integration-profile-actions">
+          ${profile.direction === "import" && canImport ? `<button class="secondary-button compact-button" type="button" data-use-integration-profile="${escapeHtml(profile.id)}">Verwenden</button>` : ""}
+          ${canWrite ? `<button class="icon-button" type="button" data-delete-integration-profile="${escapeHtml(profile.id)}" aria-label="Profil l\u00f6schen">\u00d7</button>` : ""}
+        </div>
       </div>
-    `).join("") : `<p class="settings-note">${escapeHtml(emptyText)}</p>`;
+    `; }).join("") : `<p class="settings-note">${escapeHtml(emptyText)}</p>`;
   };
   const importProfiles = integrationProfiles("import", "personnel");
   const exportProfiles = integrationProfiles("export", "payroll");
@@ -3539,6 +3552,26 @@ function connectionPublicSummary(connection) {
   try { return new URL(configuration.endpoint).host; } catch { return "HTTPS-JSON-Ziel"; }
 }
 
+function renderIntegrationContracts() {
+  if (!elements.integrationContractList) return;
+  const contracts = state.integrations.contracts || [];
+  elements.integrationContractList.innerHTML = contracts.length ? contracts.map((contract) => {
+    const direction = contract.direction === "inbound" ? "Eingang" : "Ausgang";
+    const transport = contract.transport === "mssql_view" ? "SQL-View · nur Lesen" : "HTTPS-JSON · dokumentierte API";
+    const shortHash = String(contract.sha256 || "").slice(0, 12);
+    return `<article class="integration-contract-row">
+      <span class="integration-contract-mark" aria-hidden="true">${contract.direction === "inbound" ? "IN" : "OUT"}</span>
+      <div><strong>${escapeHtml(contract.title)}</strong><small>${escapeHtml(direction)} · ${escapeHtml(transport)}</small><code>${escapeHtml(contract.id)} · v${escapeHtml(contract.version)}${shortHash ? ` · SHA-256 ${escapeHtml(shortHash)}…` : ""}</code></div>
+      <button class="secondary-button compact-button" type="button" data-download-integration-contract="${escapeHtml(contract.id)}">JSON</button>
+    </article>`;
+  }).join("") : '<p class="settings-note">Keine Schnittstellenverträge verfügbar.</p>';
+}
+
+async function downloadIntegrationContract(id) {
+  const response = await rawApi(`/api/integrations/contracts/${encodeURIComponent(id)}?download=1`);
+  await downloadFileResponse(response, `${id}.json`);
+}
+
 function renderIntegrationConnections() {
   if (!elements.integrationConnectionList) return;
   const canConfigure = canConfigureIntegrationConnections();
@@ -3555,7 +3588,7 @@ function renderIntegrationConnections() {
       : connection.credentialsConfigured ? "Zugangsdaten geschützt hinterlegt" : "Zugangsdaten fehlen";
     return `<article class="integration-connection-row" data-integration-connection="${escapeHtml(connection.id)}">
       <span class="integration-connection-mark" aria-hidden="true">${connection.kind === "personnel_sql_source" ? "SQL" : "API"}</span>
-      <div class="integration-connection-copy"><div><strong>${escapeHtml(connection.name)}</strong><span class="status-badge ${status.className}">${escapeHtml(status.label)}</span></div><small>${escapeHtml(integrationConnectionKindLabel(connection.kind))} · ${escapeHtml(connectionPublicSummary(connection))}</small><small>${escapeHtml(credentials)} · ${escapeHtml(tested)}</small></div>
+      <div class="integration-connection-copy"><div><strong>${escapeHtml(connection.name)}</strong><span class="status-badge ${status.className}">${escapeHtml(status.label)}</span></div><small>${escapeHtml(integrationConnectionKindLabel(connection.kind))} · ${escapeHtml(connectionPublicSummary(connection))}</small><small>${escapeHtml(credentials)} · ${escapeHtml(tested)}</small><small>Vertrag ${escapeHtml(connection.configuration?.contractId || "nicht gebunden")}</small></div>
       <div class="integration-connection-actions">
         ${canConfigure && connection.active !== false ? `<button class="secondary-button compact-button" type="button" data-test-integration-connection="${escapeHtml(connection.id)}">Testen</button>` : ""}
         ${canConfigure ? `<button class="secondary-button compact-button" type="button" data-edit-integration-connection="${escapeHtml(connection.id)}">Bearbeiten</button>` : ""}
@@ -3970,8 +4003,12 @@ async function loadIntegrations() {
   if (hasIntegrationPermission("employees:import")) { keys.push("importCatalog"); requests.push(api("/api/integrations/personnel-import/catalog")); }
   if (hasIntegrationPermission("payroll:export")) { keys.push("payrollCatalog"); requests.push(api("/api/integrations/payroll-export/catalog")); }
   if (hasIntegrationPermission("integrations:read")) {
-    keys.push("profiles", "runs");
-    requests.push(api("/api/integrations/profiles").then((result) => result.profiles || []), api("/api/integrations/runs?limit=30").then((result) => result.runs || []));
+    keys.push("profiles", "runs", "contracts");
+    requests.push(
+      api("/api/integrations/profiles").then((result) => result.profiles || []),
+      api("/api/integrations/runs?limit=30").then((result) => result.runs || []),
+      api("/api/integrations/contracts").then((result) => result.contracts || []),
+    );
   }
   if (hasIntegrationPermission("integrations:connections:read") || hasIntegrationPermission("integrations:connections:write")) {
     keys.push("connectionCatalog", "connections");
@@ -4000,6 +4037,7 @@ async function loadIntegrations() {
   if (!elements.payrollDateTo.value) elements.payrollDateTo.value = range.to;
   renderIntegrationProfileLists();
   renderIntegrationConnections();
+  renderIntegrationContracts();
   renderIntegrationDeliveries();
   renderIntegrationHistory();
   renderPayrollContextOptions();
@@ -4048,6 +4086,7 @@ function clearPersonnelImportWizard() {
   state.integrations.preview = null;
   elements.personnelImportFile.value = "";
   elements.personnelImportSourceType.value = "file";
+  if (elements.personnelImportProfile) elements.personnelImportProfile.value = "";
   elements.personnelImportMapping.innerHTML = "";
   elements.personnelImportSummary.innerHTML = "";
   elements.personnelImportPreviewBody.innerHTML = "";
@@ -4063,13 +4102,33 @@ function resetPersonnelImportWizard() {
   clearPersonnelImportWizard();
 }
 
-async function openPersonnelImportWizard() {
+function applyPersonnelImportProfile(profile) {
+  const configuration = profile?.configuration || {};
+  const defaults = configuration.defaults || {};
+  if (profile && elements.personnelImportProfile) elements.personnelImportProfile.value = profile.id;
+  elements.personnelImportSourceType.value = configuration.sourceType === "sql" ? "sql" : "file";
+  if (configuration.connectionId && [...elements.personnelImportSqlConnection.options].some((option) => option.value === configuration.connectionId)) {
+    elements.personnelImportSqlConnection.value = configuration.connectionId;
+  }
+  if (defaults.homeLocationId) elements.personnelImportDefaultLocation.value = defaults.homeLocationId;
+  updatePersonnelImportDefaultDepartments(defaults.preferredDepartmentId || "");
+  if (defaults.positionId) elements.personnelImportDefaultPosition.value = defaults.positionId;
+  if (defaults.contractedHours !== undefined) elements.personnelImportDefaultHours.value = defaults.contractedHours;
+  if (configuration.duplicateStrategy) elements.personnelImportDuplicateStrategy.value = configuration.duplicateStrategy;
+  updatePersonnelImportSourceFields();
+  if (configuration.sourceType === "sql" && configuration.connectionId && elements.personnelImportSqlConnection.value !== configuration.connectionId) {
+    setPersonnelImportMessage("Die im Profil hinterlegte SQL-Personalquelle ist derzeit nicht geprüft oder nicht verfügbar.", true);
+  }
+}
+
+async function openPersonnelImportWizard(profileId = "") {
   if (!state.integrations.importCatalog) await loadIntegrations();
   resetPersonnelImportWizard();
   populatePersonnelImportDefaults();
   renderIntegrationProfileLists();
   renderIntegrationConnectionSelections();
-  updatePersonnelImportSourceFields();
+  const profile = integrationProfiles("import", "personnel").find((item) => item.id === profileId) || null;
+  applyPersonnelImportProfile(profile);
   elements.personnelImportModal.showModal();
 }
 
@@ -4214,7 +4273,7 @@ function currentPersonnelImportMapping() {
 function currentPersonnelImportConfiguration() {
   const sheet = selectedImportSheet();
   return {
-    version: 1,
+    version: 2,
     sourceType: elements.personnelImportSourceType.value,
     connectionId: elements.personnelImportSourceType.value === "sql" ? elements.personnelImportSqlConnection.value : "",
     format: state.integrations.inspection?.format || "csv",
@@ -6708,12 +6767,7 @@ elements.personnelImportHeaderRow?.addEventListener("input", renderPersonnelImpo
 elements.personnelImportProfile?.addEventListener("change", () => {
   const profile = selectedImportProfile();
   const configuration = profile?.configuration || {};
-  const defaults = profile?.configuration?.defaults || {};
-  if (defaults.homeLocationId) elements.personnelImportDefaultLocation.value = defaults.homeLocationId;
-  updatePersonnelImportDefaultDepartments(defaults.preferredDepartmentId || "");
-  if (defaults.positionId) elements.personnelImportDefaultPosition.value = defaults.positionId;
-  if (defaults.contractedHours !== undefined) elements.personnelImportDefaultHours.value = defaults.contractedHours;
-  if (profile?.configuration?.duplicateStrategy) elements.personnelImportDuplicateStrategy.value = profile.configuration.duplicateStrategy;
+  applyPersonnelImportProfile(profile);
   if (state.integrations.inspection) {
     if (configuration.sheetName && [...elements.personnelImportSheet.options].some((option) => option.value === configuration.sheetName)) {
       elements.personnelImportSheet.value = configuration.sheetName;
@@ -6747,9 +6801,18 @@ elements.deleteIntegrationConnectionButton?.addEventListener("click", () => dele
 elements.integrationConnectionModal?.addEventListener("close", () => { clearIntegrationCredentialInputs(); resetIntegrationConnectionForm(); });
 elements.savePersonnelImportProfileButton?.addEventListener("click", () => saveIntegrationProfile("import").catch((error) => showToast(error.message, true)));
 [elements.importProfileList, elements.exportProfileList].forEach((list) => list?.addEventListener("click", (event) => {
+  const useButton = event.target.closest("[data-use-integration-profile]");
+  if (useButton) {
+    openPersonnelImportWizard(useButton.dataset.useIntegrationProfile).catch((error) => showToast(error.message, true));
+    return;
+  }
   const button = event.target.closest("[data-delete-integration-profile]");
   if (button) deleteIntegrationProfile(button.dataset.deleteIntegrationProfile).catch((error) => showToast(error.message, true));
 }));
+elements.integrationContractList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-download-integration-contract]");
+  if (button) downloadIntegrationContract(button.dataset.downloadIntegrationContract).catch((error) => showToast(error.message, true));
+});
 elements.payrollProfile?.addEventListener("change", () => {
   const profile = integrationProfiles("export", "payroll").find((item) => item.id === elements.payrollProfile.value);
   applyPayrollConfiguration(profile?.configuration || {});
