@@ -323,6 +323,8 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
   const managerList = await request("/api/portal/v1/sickness-cases", { auth: managerAuth });
   assert.equal(managerList.response.status, 200, JSON.stringify(managerList.payload));
   assert.deepEqual(managerList.payload.cases.map((entry) => entry.id), [caseId]);
+  assert.equal(managerList.payload.cases[0].employee_note, "");
+  assert.equal(managerList.payload.cases[0].amu_status, "required");
 
   const foreignList = await request("/api/portal/v1/sickness-cases", { auth: foreignManagerAuth });
   assert.equal(foreignList.response.status, 200, JSON.stringify(foreignList.payload));
@@ -331,6 +333,7 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
   const hrList = await request("/api/portal/v1/sickness-cases", { auth: hrAuth });
   assert.equal(hrList.response.status, 200, JSON.stringify(hrList.payload));
   assert.deepEqual(hrList.payload.cases.map((entry) => entry.id), [caseId]);
+  assert.equal(hrList.payload.cases[0].employee_note, confidentialNote);
 
   const employeeLeadershipList = await request("/api/portal/v1/sickness-cases", { auth: employeeAuth });
   assert.equal(employeeLeadershipList.response.status, 403);
@@ -338,6 +341,7 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
   const ownList = await request("/api/portal/v1/me/sickness-cases", { auth: employeeAuth });
   assert.equal(ownList.response.status, 200, JSON.stringify(ownList.payload));
   assert.deepEqual(ownList.payload.cases.map((entry) => entry.id), [caseId]);
+  assert.equal(ownList.payload.cases[0].employee_note, confidentialNote);
 
   // app.listen() statt startServer(): Der Queue-Dispatcher wird in diesem Test nie gestartet.
   const finalJob = db.prepare("SELECT status, attempts, sent_at FROM outbound_notification_jobs WHERE id = ?").get(queued[0].id);
@@ -449,11 +453,18 @@ test("v0.59: filialfremder Einsatz steuert Besetzungsrisiko, effektive Leserecht
   assert.equal(deploymentAum.payload.report.location_id, "92");
   assert.equal(deploymentAum.payload.report.department_id, departmentB);
   const homeAumList = await request("/api/portal/v1/amu-reports", { auth: managerAuth });
-  assert.equal(homeAumList.response.status, 200, JSON.stringify(homeAumList.payload));
-  assert.equal(homeAumList.payload.reports.some((entry) => Number(entry.id) === Number(deploymentAum.payload.report.id)), false);
+  assert.equal(homeAumList.response.status, 403, JSON.stringify(homeAumList.payload));
   const deploymentAumList = await request("/api/portal/v1/amu-reports", { auth: foreignManagerAuth });
-  assert.equal(deploymentAumList.response.status, 200, JSON.stringify(deploymentAumList.payload));
-  assert.equal(deploymentAumList.payload.reports.some((entry) => Number(entry.id) === Number(deploymentAum.payload.report.id)), true);
+  assert.equal(deploymentAumList.response.status, 403, JSON.stringify(deploymentAumList.payload));
+  const deploymentDocumentId = deploymentAum.payload.report.documents[0].id;
+  const deniedDocument = await request(`/api/portal/v1/amu-reports/${deploymentAum.payload.report.id}/documents/${deploymentDocumentId}/content`, { auth: foreignManagerAuth });
+  assert.equal(deniedDocument.response.status, 403, JSON.stringify(deniedDocument.payload));
+  assert.ok(db.prepare("SELECT 1 FROM audit_log WHERE actor = '594' AND action = 'amu.document.access.denied' AND entity_id = ?").get(deploymentDocumentId));
+  const deploymentStatusView = await request("/api/portal/v1/sickness-cases", { auth: foreignManagerAuth });
+  const deploymentCaseSummary = deploymentStatusView.payload.cases.find((entry) => entry.id === caseId);
+  assert.equal(deploymentCaseSummary.employee_note, "");
+  assert.equal(deploymentCaseSummary.amu_status, "received");
+  assert.ok(Object.hasOwn(deploymentCaseSummary, "staffing_risk"));
 
   const directCrossEmployee = session("605", "employee");
   insertShift.run("605", departmentB, shiftDate, shiftStart, shiftEnd);
@@ -472,7 +483,7 @@ test("v0.59: filialfremder Einsatz steuert Besetzungsrisiko, effektive Leserecht
   assert.equal(directCrossCases.payload.cases[0].location_id, "92");
   assert.equal(directCrossCases.payload.cases[0].department_id, departmentB);
   const directCrossReports = await request("/api/portal/v1/amu-reports", { auth: foreignManagerAuth });
-  assert.equal(directCrossReports.payload.reports.some((entry) => Number(entry.id) === Number(directCrossAum.payload.report.id)), true);
+  assert.equal(directCrossReports.response.status, 403, JSON.stringify(directCrossReports.payload));
 });
 
 test("v0.59: AUM ohne Enddatum bleibt verschlüsselt und eine Rückkehrmeldung beendet die Verfügbarkeit eindeutig", async () => {
@@ -677,6 +688,7 @@ test("v0.59: direkter AUM-Upload legt einen geschuetzten Krankenstandsfall an un
   const ownCases = await request("/api/portal/v1/me/sickness-cases", { auth: employee });
   const directCase = ownCases.payload.cases.find((entry) => entry.id === caseId);
   assert.equal(directCase.status, "aum_received");
+  assert.equal(directCase.amu_status, "received");
   assert.equal(directCase.start_date, startDate);
   assert.equal(directCase.expected_end, "");
 
@@ -694,11 +706,19 @@ test("v0.59: direkter AUM-Upload legt einen geschuetzten Krankenstandsfall an un
   assert.equal(blocked.payload.code, "SICKNESS_SHIFT_CONFLICT");
 
   const delegated = await request("/api/portal/v1/amu-reports", { auth: delegatedReaderAuth });
-  assert.equal(delegated.response.status, 200, JSON.stringify(delegated.payload));
-  assert.equal(delegated.payload.reports.some((entry) => Number(entry.id) === Number(direct.payload.report.id)), false);
+  assert.equal(delegated.response.status, 403, JSON.stringify(delegated.payload));
   const hr = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
   assert.equal(hr.response.status, 200, JSON.stringify(hr.payload));
   assert.equal(hr.payload.reports.some((entry) => Number(entry.id) === Number(direct.payload.report.id)), true);
+  const reviewed = await request(`/api/portal/v1/amu-reports/${direct.payload.report.id}/review`, {
+    method: "PUT", auth: hrAuth, body: { action: "reviewed", note: "Geprüft" },
+  });
+  assert.equal(reviewed.response.status, 200, JSON.stringify(reviewed.payload));
+  const managerSummary = await request("/api/portal/v1/sickness-cases", { auth: managerAuth });
+  const reviewedCase = managerSummary.payload.cases.find((entry) => entry.id === caseId);
+  assert.equal(reviewedCase.employee_note, "");
+  assert.equal(reviewedCase.amu_status, "reviewed");
+  assert.ok(Object.hasOwn(reviewedCase, "staffing_risk"));
 });
 
 test("v0.59: ein nachgereichtes AUM korrigiert eine zu frueh gemeldete Arbeitsfaehigkeit", async () => {
