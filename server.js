@@ -40,6 +40,10 @@ const {
   releaseTagName,
   selectLatestRelease,
 } = require("./lib/release-version");
+const {
+  configureSystemCertificateAuthorities,
+  downloadGitHubReleaseAsset,
+} = require("./lib/update-download");
 const { populateUsbProfileDatabase } = require("./lib/usb-profile-database");
 const {
   createSelectionToken,
@@ -12130,6 +12134,7 @@ function findGhExecutable() {
 }
 
 async function latestReleaseViaFetch() {
+  configureSystemCertificateAuthorities();
   const headers = {
     "Accept": "application/vnd.github+json",
     "User-Agent": `${APP_NAME}/${packageMetadata.version}`,
@@ -12149,6 +12154,8 @@ async function latestReleaseViaFetch() {
     assets: (release.assets || []).map((asset) => ({
       name: asset.name,
       url: asset.browser_download_url,
+      size: asset.size,
+      digest: asset.digest || "",
     })),
   };
 }
@@ -12177,6 +12184,8 @@ function latestReleaseViaGh() {
     assets: (release.assets || []).map((asset) => ({
       name: asset.name,
       url: asset.url,
+      size: asset.size,
+      digest: asset.digest || "",
     })),
   };
 }
@@ -12207,12 +12216,12 @@ async function getLatestReleaseInfo() {
   throw failure;
 }
 
-async function buildUpdateStatus() {
+async function resolveUpdateStatus() {
   const latest = await getLatestReleaseInfo();
   const comparison = compareVersions(latest.tagName, packageMetadata.version);
-  const asset = latest.assets.find((item) => /windows-portable\.zip$/i.test(item.name)) || latest.assets[0] || null;
+  const asset = latest.assets.find((item) => /windows-portable\.zip$/i.test(item.name)) || null;
   const updateType = classifyRelease(latest);
-  return {
+  const status = {
     ok: true,
     currentVersion: packageMetadata.version,
     currentLabel: APP_VERSION_LABEL,
@@ -12224,9 +12233,16 @@ async function buildUpdateStatus() {
     updateTypeLabel: updateType.label,
     updateAvailable: comparison > 0,
     assetName: asset?.name || "",
+    assetSize: Number(asset?.size || 0),
+    assetIntegrity: asset?.digest ? "sha256" : "https",
     canAutoUpdate: Boolean(asset) && !serverModeActive,
     managementNote: serverModeActive ? "Serverupdates werden kontrolliert am Server durchgeführt." : "",
   };
+  return { status, asset };
+}
+
+async function buildUpdateStatus() {
+  return (await resolveUpdateStatus()).status;
 }
 
 app.get("/api/system-info", (request, response) => {
@@ -12276,32 +12292,41 @@ app.post("/api/update-apply", async (_request, response) => {
   if (fs.existsSync(path.join(__dirname, ".git"))) {
     throw httpError(409, "Ein Quellcode-Checkout wird nicht über den Portable-Updater überschrieben. Bitte die Aktualisierung mit Git durchführen.", "SOURCE_CHECKOUT_UPDATE_BLOCKED");
   }
-  const status = await buildUpdateStatus();
+  const { status, asset } = await resolveUpdateStatus();
   if (!status.updateAvailable) {
     response.json({ ok: true, message: "Grabenplaner ist bereits aktuell.", status });
     return;
   }
-  const gh = findGhExecutable();
-  if (!gh) {
-    throw httpError(503, "Automatische Aktualisierung ist nur möglich, wenn die GitHub CLI auf diesem PC angemeldet ist. Deine Daten bleiben bei einem manuellen Update trotzdem erhalten.");
-  }
+  if (!asset) throw httpError(503, "Für diese Version wurde kein Windows-Portable-ZIP veröffentlicht.", "UPDATE_ASSET_MISSING");
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-update-"));
   const scriptPath = path.join(tempRoot, "apply-update.ps1");
   const launcherPath = path.join(tempRoot, "launch-update.cmd");
+  let download;
+  try {
+    download = await downloadGitHubReleaseAsset({
+      asset,
+      destinationDirectory: path.join(tempRoot, "download"),
+      userAgent: `${APP_NAME}/${packageMetadata.version}`,
+    });
+  } catch (error) {
+    fs.rmSync(tempRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    throw httpError(502, `Das Update konnte nicht sicher von GitHub geladen werden: ${error.message}`, error.code || "UPDATE_DOWNLOAD_FAILED");
+  }
   const safeAppDir = __dirname.replaceAll("'", "''");
   const safeParentDir = path.dirname(__dirname).replaceAll("'", "''");
-  const safeGh = gh.replaceAll("'", "''");
   const safeTag = status.latestTag.replaceAll("'", "''");
-  const safeRepo = GITHUB_REPO.replaceAll("'", "''");
+  const safeZipPath = download.filePath.replaceAll("'", "''");
+  const safeExpectedSha256 = download.sha256.replaceAll("'", "''");
   const safeVersionLabel = formatVersionLabel(status.latestVersion).replaceAll("'", "''");
   const script = `
 $ErrorActionPreference = 'Stop'
 $appDir = '${safeAppDir}'
 $parentDir = '${safeParentDir}'
 $workDir = '${tempRoot.replaceAll("'", "''")}'
-$gh = '${safeGh}'
 $tag = '${safeTag}'
-$repo = '${safeRepo}'
+$zipPath = '${safeZipPath}'
+$expectedSha256 = '${safeExpectedSha256}'
+$expectedByteSize = ${download.byteSize}
 $versionLabel = '${safeVersionLabel}'
 $pidToWait = ${process.pid}
 $logPath = Join-Path $appDir 'data\\update-last.log'
@@ -12313,7 +12338,7 @@ try {
   New-Item -ItemType Directory -Path (Split-Path -Parent $logPath) -Force | Out-Null
   Set-Content -LiteralPath $logPath -Value ("[{0}] Updater gestartet: {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $versionLabel) -Encoding UTF8
   Write-UpdateLog "App-Verzeichnis: $appDir"
-  Write-UpdateLog "GitHub CLI: $gh"
+  Write-UpdateLog "Release-ZIP wurde direkt über GitHub HTTPS geladen: $tag"
   Write-UpdateLog "Warte auf Server-Prozess $pidToWait ..."
   $deadline = (Get-Date).AddMinutes(2)
   while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) {
@@ -12321,18 +12346,16 @@ try {
     Start-Sleep -Milliseconds 300
   }
   Start-Sleep -Milliseconds 800
-$zipDir = Join-Path $workDir 'download'
 $extractDir = Join-Path $workDir 'extract'
-New-Item -ItemType Directory -Path $zipDir,$extractDir -Force | Out-Null
-Write-UpdateLog "Lade Release $tag ..."
-$ghOutput = & $gh release download $tag --repo $repo --pattern '*windows-portable.zip' --dir $zipDir --clobber 2>&1
-$ghExitCode = $LASTEXITCODE
-$ghOutput | ForEach-Object { Write-UpdateLog "gh: $_" }
-if ($ghExitCode -ne 0) { throw "GitHub-Download fehlgeschlagen: $ghExitCode" }
-$zip = Get-ChildItem $zipDir -Filter '*.zip' | Select-Object -First 1
-if (-not $zip) { throw 'Release-ZIP wurde nicht gefunden.' }
+New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+if (-not (Test-Path -LiteralPath $zipPath)) { throw 'Das sicher geladene Release-ZIP wurde nicht gefunden.' }
+$zip = Get-Item -LiteralPath $zipPath
+if ($zip.Length -ne $expectedByteSize) { throw 'Die Größe des Release-ZIPs hat sich vor der Installation verändert.' }
+$actualSha256 = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actualSha256 -ne $expectedSha256) { throw 'Die SHA-256-Prüfsumme des Release-ZIPs hat sich vor der Installation verändert.' }
+Write-UpdateLog "Release-ZIP geprüft: $($zip.Name), $expectedByteSize Bytes, SHA-256 $expectedSha256"
 Write-UpdateLog "Entpacke $($zip.Name) ..."
-Expand-Archive -LiteralPath $zip.FullName -DestinationPath $extractDir -Force
+Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir -Force
 $source = Join-Path $extractDir 'Grabenplaner'
 if (-not (Test-Path (Join-Path $source 'server.js'))) { throw 'Entpackte Version ist unvollständig.' }
 Write-UpdateLog "Kopiere neue App-Dateien ..."
@@ -12386,7 +12409,7 @@ Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
   );
   response.json({
     ok: true,
-    message: "Update wird geladen und installiert. Grabenplaner startet danach automatisch neu. Alle Datenbanken und Backups bleiben erhalten.",
+    message: "Update wurde sicher über GitHub HTTPS geladen und wird installiert. Grabenplaner startet danach automatisch neu. Alle Datenbanken und Backups bleiben erhalten.",
     logPath: path.join(__dirname, "data", "update-last.log"),
     status,
   });
