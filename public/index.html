@@ -1304,10 +1304,11 @@
     </dialog>
 
     <dialog class="modal personnel-record-modal" id="personnelRecordModal">
-      <form method="dialog">
-        <div class="modal-header"><div><span class="eyebrow">Personalakt</span><h2 id="personnelRecordTitle">Personalakt</h2><p>Geschützte Übersicht der bisherigen Arbeitsunfähigkeitsmeldungen.</p></div><button type="button" class="close-button" data-close="personnelRecordModal">×</button></div>
+      <form method="dialog" id="personnelRecordForm">
+        <div class="modal-header"><div><span class="eyebrow">Personalakt</span><h2 id="personnelRecordTitle">Personalakt</h2><p>Geschützte Stammdaten und Arbeitsunfähigkeitsmeldungen.</p></div><button type="button" class="close-button" data-close="personnelRecordModal">×</button></div>
         <div class="personnel-record-content" id="personnelRecordContent"><p class="settings-note">Einträge werden geladen.</p></div>
-        <div class="modal-actions"><span></span><span></span><span></span><button type="button" class="secondary-button" data-close="personnelRecordModal">Schließen</button></div>
+        <p class="message hidden" id="personnelRecordMessage"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="personnelRecordModal">Schließen</button><button type="submit" class="primary-button hidden" id="savePersonnelRecordButton">Personalakt speichern</button></div>
       </form>
     </dialog>
 

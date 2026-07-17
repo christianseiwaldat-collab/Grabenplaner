@@ -743,6 +743,14 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
 .personnel-record-entry strong,.personnel-record-entry small { display:block; }
 .personnel-record-entry small { margin-top:4px; color:var(--muted); }
 .personnel-record-entry p { margin:7px 0 0; }
+.personnel-record-section { display:grid; gap:13px; min-width:0; padding:16px; border:1px solid var(--line); border-radius:17px; background:var(--surface-muted); }
+.personnel-record-section-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+.personnel-record-section-heading h3 { margin:3px 0 0; font-size:15px; }
+.personnel-record-section-heading .status-badge { flex:0 0 auto; }
+.personnel-record-field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px 13px; }
+.personnel-record-span-two { grid-column:1 / -1; }
+.personnel-record-report-list { display:grid; gap:10px; min-width:0; }
+.sensitive-personnel-section { border-color:#e5cf91; background:#fffaf0; }
 .time-summary-controls { display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; }
 .time-summary-controls .field { min-width:145px; }
 .time-summary-list,.time-correction-list,.time-day-review-list,.rights-user-list,.branding-assignment-list { display:grid; gap:10px; }
@@ -1090,6 +1098,11 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
   .rights-editor-modal form { padding:18px; }
   .rights-editor-legend { gap:8px 12px; }
   .personnel-record-entry { padding:13px; }
+  .personnel-record-section { padding:13px; }
+  .personnel-record-section-heading { align-items:stretch; flex-direction:column; }
+  .personnel-record-section-heading .status-badge { align-self:flex-start; }
+  .personnel-record-field-grid { grid-template-columns:minmax(0,1fr); }
+  .personnel-record-span-two { grid-column:auto; }
   .time-day-review-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .time-day-review-values,.time-day-review-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .time-summary-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
