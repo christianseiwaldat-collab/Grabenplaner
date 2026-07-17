@@ -72,6 +72,13 @@ function minutesAgo(minutes) {
   return new Date(Date.now() - minutes * 60_000);
 }
 
+function stablePastEventTime(minutesAfterStart = 0) {
+  const start = new Date();
+  start.setHours(15, 0, 0, 0);
+  if (start.getTime() + 30 * 60_000 > Date.now()) start.setDate(start.getDate() - 1);
+  return new Date(start.getTime() + minutesAfterStart * 60_000);
+}
+
 function isoDate(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Vienna", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
@@ -181,24 +188,25 @@ test("v0.57: Zuordnung und Opt-in speichern keine Klartext-Controllerkennung", a
 test("v0.57: Webhook ist geschützt, datensparsam, idempotent und erzeugt erst nach Toleranz einen Vorschlag", async () => {
   const admin = session("101", "admin");
   const employee = session("102", "employee");
+  const connectedAt = stablePastEventTime(0);
   await request("/api/portal/v1/wifi-automation/location-mappings", { method: "PUT", auth: admin, body: { mappings: [{ locationId, externalReference: "Filiale-Controller-18" }] } });
   await request("/api/portal/v1/me/wifi-automation", { method: "PUT", auth: employee, body: { enabled: true } });
 
   const denied = await request("/api/integrations/wifi/events", { method: "POST", body: {} });
   assert.equal(denied.response.status, 403);
-  const privacy = await event("privacy-1", "connected", minutesAgo(30), { mac: "00:11:22:33:44:55" });
+  const privacy = await event("privacy-1", "connected", connectedAt, { mac: "00:11:22:33:44:55" });
   assert.equal(privacy.response.status, 400);
   assert.equal(privacy.payload.code, "WIFI_EVENT_PRIVACY_FIELD_REJECTED");
 
-  const connected = await event("connect-1", "connected", minutesAgo(30));
+  const connected = await event("connect-1", "connected", connectedAt);
   assert.equal(connected.response.status, 202, JSON.stringify(connected.payload));
-  const duplicate = await event("connect-1", "connected", minutesAgo(30));
+  const duplicate = await event("connect-1", "connected", connectedAt);
   assert.equal(duplicate.response.status, 200);
   assert.equal(duplicate.payload.duplicate, true);
-  await event("disconnect-1", "disconnected", minutesAgo(20));
-  const reconnect = await event("reconnect-1", "connected", minutesAgo(18));
+  await event("disconnect-1", "disconnected", stablePastEventTime(10));
+  const reconnect = await event("reconnect-1", "connected", stablePastEventTime(12));
   assert.equal(reconnect.payload.status, "reconnected_within_grace");
-  await event("disconnect-2", "disconnected", minutesAgo(10));
+  await event("disconnect-2", "disconnected", stablePastEventTime(20));
 
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM wifi_time_suggestions").get().count, 0, "Während der Toleranz darf noch kein Vorschlag entstehen.");
   const payload = await request("/api/portal/v1/me/wifi-automation", { auth: employee });

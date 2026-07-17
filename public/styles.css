@@ -276,13 +276,9 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .settings-two-column > .settings-card:first-child,
 .settings-two-column > .settings-card.full-settings-card { min-width: 0; grid-column: auto; }
 .settings-two-column > .settings-card.full-span { grid-column: 1 / -1; }
-#generalSettings .pause-card { order: 1; }
-#generalSettings .vacation-count-card { order: 2; }
-#generalSettings .saturday-card { order: 3; }
-#generalSettings .sunday-card { order: 4; }
-#generalSettings .past-week-card { order: 5; }
-#generalSettings .toast-card { order: 6; }
-#generalSettings .service-times-card { grid-column: 1 / -1; order: 7; }
+#generalSettings .past-week-card { order: 1; }
+#generalSettings .toast-card { order: 2; }
+#generalSettings .service-times-card { grid-column: 1 / -1; order: 3; }
 .pdf-filename-field { margin-top: 14px; }
 .pdf-file-options { display: grid; gap: 9px; margin-top: 13px; }
 .pdf-file-options label { display: flex; align-items: center; gap: 8px; color: #52615a; font-size: 9.5px; font-weight: 700; }
@@ -531,6 +527,13 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 .confirmation-level-explanation { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:13px; }
 .confirmation-level-explanation span { display:flex; align-items:center; gap:8px; min-width:0; padding:9px 11px; border-radius:11px; color:var(--muted); background:rgba(240,244,241,.8); font-size:8.5px; }
 .confirmation-level-explanation strong { display:grid; place-items:center; flex:0 0 24px; width:24px; height:24px; border-radius:8px; color:var(--green-dark); background:#dfeee8; font-size:10px; }
+.trust-level-policy-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 14px; }
+.trust-level-policy-grid .switch-row { margin:0; }
+.wifi-settings-sections { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.wifi-settings-sections > section { min-width:0; padding:15px; border:1px solid var(--line); border-radius:14px; background:var(--surface-muted); }
+.wifi-settings-sections > section:first-child { grid-column:1 / -1; }
+.wifi-settings-sections h3 { margin:0 0 11px; font-size:11px; }
+.wifi-settings-sections .wifi-foundation-status { margin-top:0; background:rgba(255,255,255,.72); }
 
 .modal { width: min(550px,calc(100vw - 28px)); max-height: calc(100vh - 35px); padding: 0; border: 0; border-radius: 18px; color: var(--ink); background: #faf9f5; box-shadow: 0 25px 80px rgba(15,34,27,.27); }
 .wide-modal { width: min(880px,calc(100vw - 28px)); }
@@ -700,7 +703,7 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
   .location-overview-toolbar { align-items: stretch; flex-direction: column; }
   .location-overview-actions { justify-content: stretch; }
   .location-overview-actions > button { flex: 1 1 100%; }
-  .branding-kit-grid, #accessSettings .delegation-form, #accessSettings .compact-policy-grid, #accessSettings .portal-user-row, #rightsSettings .mobile-module-grid, #backupSettings .diagnostic-grid { grid-template-columns: 1fr; }
+  .branding-kit-grid, #vacationSettings .delegation-form, #accessSettings .compact-policy-grid, #accessSettings .portal-user-row, #rightsSettings .mobile-module-grid, #backupSettings .diagnostic-grid { grid-template-columns: 1fr; }
   #accessSettings .portal-user-row > * { grid-column: auto; }
   .modal-actions { grid-template-columns: 1fr 1fr; }
   .modal-actions > span { display: none; }
@@ -834,8 +837,9 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
 .branding-assignment-row small { margin-top:4px; color:var(--muted); }
 #brandingSettings .branding-assignment-row { grid-template-columns:minmax(0,1fr); align-items:stretch; }
 .branding-assignment-actions { margin-top: 14px; justify-content: flex-end; }
-#accessSettings .delegation-form { grid-template-columns:repeat(2,minmax(0,1fr)); }
-#accessSettings .compact-policy-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+#vacationSettings .delegation-form { grid-template-columns:repeat(2,minmax(0,1fr)); }
+#accessSettings .compact-policy-grid { grid-template-columns:minmax(0,1fr); }
+#accessSettings .greeting-template-grid { grid-template-columns:minmax(0,1fr); }
 #accessSettings .portal-user-row { grid-template-columns:repeat(2,minmax(0,1fr)); align-items:end; }
 #accessSettings .portal-user-row > div { grid-column:1 / -1; }
 #rightsSettings .rights-permission-grid { grid-template-columns:minmax(0,1fr); }
@@ -1051,6 +1055,8 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
   .branding-assignment-row,.time-correction-row { grid-template-columns:1fr; align-items:stretch; }
   .time-summary-row { grid-template-columns:minmax(0,1fr) repeat(5,minmax(62px,auto)); }
   .wifi-confirmation-level-list { grid-template-columns:1fr; }
+  .wifi-settings-sections,.trust-level-policy-grid { grid-template-columns:1fr; }
+  .wifi-settings-sections > section:first-child { grid-column:auto; }
   .greeting-rule-grid,.greeting-template-grid { grid-template-columns:1fr; }
   .usb-wizard-panel { grid-template-columns:1fr; }
   .usb-additional-brandings { grid-template-columns:1fr; }
@@ -1068,7 +1074,7 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
 }
 
 @media (max-width: 600px) {
-  #accessSettings .delegation-form,
+  #vacationSettings .delegation-form,
   #accessSettings .compact-policy-grid,
   #accessSettings .portal-user-row,
   #rightsSettings .mobile-module-grid,
