@@ -1,11 +1,20 @@
 # Direkte Integrationen
 
-Grabenplaner v0.64 ergänzt die vorhandenen CSV-/XLSX-Abläufe um zwei bewusst eng begrenzte, manuell ausgelöste Verbindungsarten:
+Grabenplaner v0.69 ergänzt die vorhandenen CSV-/XLSX-Abläufe um zwei bewusst eng begrenzte, manuell ausgelöste Verbindungsarten:
 
 - Personalstammdaten aus einer freigegebenen Microsoft-SQL-Server-View lesen
 - final geprüfte Lohnwerte an eine dokumentierte HTTPS-JSON-API übergeben
 
 Es gibt keine automatische Synchronisation. Jede Übernahme beziehungsweise Übergabe wird durch eine berechtigte Person ausgelöst und bleibt nachvollziehbar.
+
+## Versionierte Schnittstellenverträge
+
+Jede direkte Verbindung ist fest an einen maschinenlesbaren Vertrag gebunden. Die Vertragsübersicht in den Einstellungen zeigt Version, Richtung, Transport und SHA-256-Prüfsumme; das vollständige JSON-Dokument kann für Prüfung und Ablage durch die Firmen-IT heruntergeladen werden.
+
+- `grabenplaner.personnel-view.v1` beschreibt den schreibgeschützten Eingang notwendiger Personalstammdaten.
+- `grabenplaner.payroll.v1` beschreibt die minimierte, idempotente HTTPS-JSON-Übergabe final geprüfter Lohnwerte.
+
+Der Vertrag kann nicht durch freie Eingaben auf einen fachfremden Datenweg umgestellt werden. Eine spätere Vertragsänderung erhält eine neue Version und muss bewusst in Grabenplaner implementiert und geprüft werden.
 
 ## Microsoft SQL Server
 
@@ -14,6 +23,8 @@ Die Firmen-IT stellt eine eigene, datensparsame View bereit. Der verwendete Date
 Die View und die Spalten-Freigabeliste sollen nur benötigte Personalstammdaten enthalten, beispielsweise Personalnummer, Name, Anzeigename, Sollstunden sowie freigegebene Standort-, Abteilungs- und Positionskennungen. SV-Nummer, Bankverbindung, Anschrift, Telefonnummer, Passwörter, AUM- oder andere Personalaktdaten dürfen nicht enthalten sein. Entsprechend benannte sensible Spalten werden vor dem Lesen abgewiesen.
 
 Nach dem Lesen gelten dieselben Schutzschritte wie beim Dateiimport: befristete Vorschau im Arbeitsspeicher, frei prüfbare Feldzuordnung, Dublettenbehandlung, Bereichsprüfung und ausdrückliche atomare Übernahme.
+
+Ein gespeichertes SQL-Importprofil merkt sich Feldzuordnung, Standardwerte, Dublettenregel und die konkrete SQL-Personalquelle. Beim erneuten Verwenden wird die View trotzdem neu gelesen, als Vorschau dargestellt und erst nach Bestätigung übernommen. Ein Profil kann nicht still mit einer anderen Quelle ausgeführt werden.
 
 ## HTTPS-Lohnziel
 

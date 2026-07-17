@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.68 Beta</strong> · Windows · SQLite · Source-available
+  <strong>v0.69 Beta</strong> · Windows · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -88,7 +88,7 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Diens
 - Dienst- und Urlaubsplanung für Filialen, Abteilungen und Teams
 - Personalverwaltung mit Teammitgliedern, Positionen, Sollstunden und individuellen Arbeitsregeln
 - Geprüfter CSV-/XLSX-Import für Personalstammdaten mit Feldzuordnung, Vorschau, Dublettenbehandlung und wiederverwendbaren Profilen
-- Strikt lesender Personalimport aus freigegebenen Microsoft-SQL-Server-Views; Zugangsdaten bleiben getrennt verschlüsselt und die Vorschau muss weiterhin bestätigt werden
+- Strikt lesender Personalimport aus freigegebenen Microsoft-SQL-Server-Views mit vollständig wiederverwendbaren, an die geprüfte Quelle gebundenen Importprofilen
 - Mindestbesetzung je Filiale, Abteilung und Wochentag
 - Automatische Anrechnung von Feiertagen
 - Urlaubsplanung mit Jahres-, Quartals- und Monatsübersicht
@@ -101,7 +101,7 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Diens
 - Freiwilliger WLAN-Anwesenheitsassistent mit bearbeitbaren und bestätigungspflichtigen Zeitvorschlägen
 - Wochen- und Monatsübersichten der Zeiterfassung mit nachvollziehbaren Korrekturanträgen
 - Konfigurierbare CSV-/XLSX-Exporte für Lohnverrechnung mit Tagesjournal oder Lohnarten, Vorprüfung und getrennten Plan- beziehungsweise geprüften Ist-Werten
-- Kontrollierte HTTPS-JSON-Übergabe final geprüfter, minimierter Lohnwerte mit Idempotenz, SSRF-Schutz und nachvollziehbarem Zustellstatus
+- Kontrollierte HTTPS-JSON-Übergabe final geprüfter, minimierter Lohnwerte mit Idempotenz, SSRF-Schutz, nachvollziehbarem Zustellstatus und herunterladbarem versionierten Schnittstellenvertrag
 - Mobil optimiertes Leitungsportal mit konfigurierbaren Kernfunktionen
 - Versionierte Mobile-API mit sicherer Geräteanmeldung, Standortbranding, persönlichem Dienstplan und Zeiterfassung für den eigenständigen Android-/iOS-Client
 - Rollen- und Rechtemanagement mit personenbezogenen Zusatzrechten, Bereichsgrenzen sowie grafischer Prozessübersicht mit Konfigurationsprüfung, folgenloser Simulation und PDF-Dokumentation
@@ -125,7 +125,7 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 ## Schnellstart unter Windows
 
 1. Die portable ZIP-Datei unter [Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.68 Beta starten.cmd` doppelt anklicken.
+2. `Grabenplaner v0.69 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.
