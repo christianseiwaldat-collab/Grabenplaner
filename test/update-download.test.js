@@ -93,3 +93,25 @@ test("Updater: Update-Endpunkt und Installationshelfer benötigen keine GitHub C
   assert.match(endpoint, /Get-FileHash[^\n]+SHA256/);
   assert.doesNotMatch(endpoint, /findGhExecutable|release download|GitHub CLI/);
 });
+
+test("Updater: schützt nur Datenordner an der Paketwurzel und bestätigt den Neustart", () => {
+  const serverSource = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
+  const endpoint = serverSource.slice(
+    serverSource.indexOf('app.post("/api/update-apply"'),
+    serverSource.indexOf('app.post("/api/backup"'),
+  );
+  assert.match(endpoint, /\$protectedRootNames = @\('\.git', 'data', 'backups', 'release', 'usb-backups'\)/);
+  assert.match(endpoint, /New-Item -ItemType Directory -Path \$protectedSourceDirectory/);
+  assert.match(endpoint, /\$excludedSourceDirectories \+= \$protectedSourceDirectory/);
+  assert.match(endpoint, /robocopy @robocopyArguments/);
+  assert.doesNotMatch(endpoint, /robocopy \$source \$appDir \/MIR \/XD '\.git' 'data'/);
+  assert.match(endpoint, /Assert-PortableRuntime \$source/);
+  assert.match(endpoint, /Assert-PortableRuntime \$appDir/);
+  assert.match(endpoint, /Invoke-WebRequest[^\n]+\$healthUrl/);
+  assert.match(endpoint, /GRABENPLANER_UPDATE_RESTART/);
+  assert.ok(endpoint.indexOf("Invoke-WebRequest") < endpoint.indexOf('Write-UpdateLog "Update erfolgreich abgeschlossen."'));
+
+  const startFile = fs.readFileSync(path.join(__dirname, "..", "Grabenplaner v0.69.1 Beta starten.cmd"), "utf8");
+  assert.match(startFile, /set "UPDATE_RESTART=%GRABENPLANER_UPDATE_RESTART%"/);
+  assert.match(startFile, /if \/I "%UPDATE_RESTART%"=="1" exit \/b 1/);
+});
