@@ -130,7 +130,7 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.
 
-Aktualisierungen werden über GitHub geprüft. Die integrierte Aktualisierung ersetzt die Programmdateien kontrolliert und startet Grabenplaner neu; Datenbank, Backups, AUM-Dateien und lokale Laufzeitkonfiguration bleiben geschützt.
+Aktualisierungen werden über GitHub geprüft und als Portable-ZIP direkt über HTTPS geladen; eine installierte oder angemeldete GitHub CLI ist nicht erforderlich. Vor der Installation prüft Grabenplaner Dateigröße und SHA-256-Prüfsumme. Die integrierte Aktualisierung ersetzt die Programmdateien kontrolliert und startet Grabenplaner neu; Datenbank, Backups, AUM-Dateien und lokale Laufzeitkonfiguration bleiben geschützt.
 
 ## Technische Grundlage
 
