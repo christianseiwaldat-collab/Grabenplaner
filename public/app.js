@@ -51,6 +51,7 @@ const state = {
   greetingSettings: null,
   selectedRequest: null,
   allEmployees: [],
+  personnelRecord: null,
   updateStatus: null,
   selectedColor: "#0b84c6",
   integrations: {
@@ -153,7 +154,7 @@ const elements = Object.fromEntries(
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
-    "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordTitle", "personnelRecordContent",
+    "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordForm", "personnelRecordTitle", "personnelRecordContent", "personnelRecordMessage", "savePersonnelRecordButton",
     "timeCorrectionModal", "timeCorrectionForm", "timeCorrectionTitle", "timeCorrectionEmployee", "timeCorrectionWorkDate", "timeCorrectionEmployeeLabel", "timeCorrectionDateLabel", "timeCorrectionClockOutTime", "timeCorrectionMessage",
     "timeCorrectionReviewModal", "timeCorrectionReviewForm", "timeCorrectionReviewId", "timeCorrectionReviewSummary", "timeCorrectionReviewEntries", "addTimeCorrectionReviewEntry", "timeCorrectionReviewNote", "timeCorrectionReviewMessage",
     "timeDayReviewPanel", "timeReviewDate", "timeReviewFilter", "loadTimeDayReviewButton", "timeDayReviewSummary", "timeDayReviewList", "timeDayReviewModal", "timeDayReviewForm", "timeDayReviewTitle", "timeDayReviewDetail", "timeDayReviewEmployee", "timeDayReviewWorkDate", "timeDayReviewMetrics", "timeDayReviewIssues", "timeDayReviewNote", "timeDayReviewMessage", "removeTimeDayReviewButton",
@@ -1477,8 +1478,9 @@ function renderEmployees() {
   const employees = showInactive ? state.allEmployees : state.allEmployees.filter((employee) => employee.active);
   const canEditFull = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("employees:write");
   const canEditDisplay = canEditFull || state.portalSession?.user?.permissions?.includes("employees:display:write");
-  const canReadPersonnelRecord = state.portalStatus?.installationFeatures?.sicknessAmu !== false
-    && (!state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:metadata:read"));
+  const canReadPersonnelRecord = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.some((permission) => [
+    "personnel:sensitive:read", "personnel:sensitive:write", "personnel:phone:read", "personnel:phone:write", "amu:metadata:read",
+  ].includes(permission));
   elements.employeeTableBody.innerHTML = employees.map((employee) => `
     <tr>
       <td><span class="employee-color" style="background:${employee.color}"></span></td>
@@ -2726,8 +2728,9 @@ function renderTimePresence() {
     return;
   }
   const labels = { working: "Anwesend", paused: "Pause", off: "Abwesend", attention: "Bitte prüfen" };
-  const canReadPersonnelRecord = state.portalStatus?.installationFeatures?.sicknessAmu !== false
-    && (!state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:metadata:read"));
+  const canReadPersonnelRecord = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.some((permission) => [
+    "personnel:sensitive:read", "personnel:sensitive:write", "personnel:phone:read", "personnel:phone:write", "amu:metadata:read",
+  ].includes(permission));
   const canReviewTime = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("time:review");
   elements.timePresenceList.innerHTML = employees.length ? employees.map((employee) => {
@@ -3065,21 +3068,100 @@ async function submitStaleTimeCorrection(event) {
 
 async function openPersonnelRecord(employeeNumber) {
   if (!elements.personnelRecordModal) return;
+  state.personnelRecord = null;
   elements.personnelRecordTitle.textContent = `Personalakt · ${employeeNumber}`;
   elements.personnelRecordContent.innerHTML = '<p class="settings-note">Einträge werden geladen.</p>';
-  elements.personnelRecordModal.showModal();
+  elements.personnelRecordMessage.textContent = "";
+  elements.personnelRecordMessage.classList.add("hidden");
+  elements.savePersonnelRecordButton.classList.add("hidden");
+  if (!elements.personnelRecordModal.open) elements.personnelRecordModal.showModal();
   try {
     const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(employeeNumber)}`);
+    state.personnelRecord = { employeeNumber, result };
     const employee = result.employee || {};
+    const access = result.access || {};
+    const profile = result.profile || {};
     elements.personnelRecordTitle.textContent = `${employee.personnel_number || employeeNumber} · ${employee.nickname || employee.full_name || "Personalakt"}`;
-    elements.personnelRecordContent.innerHTML = result.reports?.length ? result.reports.map((report) => {
+    const phoneSection = access.canReadPhone ? `
+      <section class="personnel-record-section">
+        <div class="personnel-record-section-heading"><div><span class="eyebrow">Kontaktdaten</span><h3>Telefonnummer</h3></div>${access.canWritePhone ? '<span class="status-badge approved">Bearbeitbar</span>' : '<span class="status-badge inactive">Nur lesen</span>'}</div>
+        <label class="field"><span>Telefonnummer</span><input name="personnelPhone" type="tel" maxlength="40" value="${escapeHtml(profile.phone || "")}" ${access.canWritePhone ? "" : "disabled"} autocomplete="tel" /></label>
+        ${access.phoneWriteRequiresTrustA && !access.canWritePhone ? '<p class="calculation-note">Leitungen benötigen für Änderungen ein ausdrücklich vergebenes Schreibrecht und die eigene Vertrauensstufe A.</p>' : ""}
+      </section>` : "";
+    const sensitive = profile.sensitive || {};
+    const address = sensitive.address || {};
+    const sensitiveSection = access.canReadSensitive ? `
+      <section class="personnel-record-section sensitive-personnel-section">
+        <div class="personnel-record-section-heading"><div><span class="eyebrow">Besonders geschützt</span><h3>Sensible MA-Daten</h3></div>${access.canWriteSensitive ? '<span class="status-badge approved">Bearbeitbar</span>' : '<span class="status-badge inactive">Nur lesen</span>'}</div>
+        <div class="personnel-record-field-grid">
+          <label class="field"><span>SV-Nummer</span><input name="socialSecurityNumber" inputmode="numeric" maxlength="13" value="${escapeHtml(sensitive.socialSecurityNumber || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+          <label class="field"><span>Kontoinhaber/-in</span><input name="accountHolder" maxlength="120" value="${escapeHtml(sensitive.accountHolder || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+          <label class="field personnel-record-span-two"><span>IBAN</span><input name="iban" maxlength="34" value="${escapeHtml(sensitive.iban || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+          <label class="field"><span>BIC</span><input name="bic" maxlength="11" value="${escapeHtml(sensitive.bic || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+          <label class="field personnel-record-span-two"><span>Straße und Hausnummer</span><input name="street" maxlength="160" value="${escapeHtml(address.street || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+          <label class="field"><span>Postleitzahl</span><input name="postalCode" maxlength="20" value="${escapeHtml(address.postalCode || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+          <label class="field"><span>Ort</span><input name="city" maxlength="100" value="${escapeHtml(address.city || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+          <label class="field personnel-record-span-two"><span>Land</span><input name="country" maxlength="80" value="${escapeHtml(address.country || "Österreich")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+        </div>
+        <p class="calculation-note">Die Werte werden verschlüsselt gespeichert. Die SV-Nummer ist außerhalb des geschützten Personalakts nicht sichtbar.</p>
+      </section>` : "";
+    const reportEntries = (result.reports || []).map((report) => {
       const documents = (report.documents || []).map((document) => result.canOpenFiles
         ? `<a class="secondary-button compact-button" href="/api/portal/v1/amu-reports/${report.id}/documents/${encodeURIComponent(document.id)}/content" target="_blank" rel="noopener">${escapeHtml(document.original_name || "Dokument")} öffnen</a>`
         : `<span class="status-badge inactive">${escapeHtml(document.original_name || "Dokument")} · kein Dateizugriff</span>`).join("");
-      return `<article class="personnel-record-entry"><div><strong>${formatDate(report.incapacity_from)}–${formatDate(report.incapacity_to)}</strong><small>${escapeHtml(report.location_name || "")}${report.department_name ? ` · ${escapeHtml(report.department_name)}` : ""} · ${escapeHtml(requestStatusLabels[report.status] || report.status)}</small>${report.employee_note ? `<p>${escapeHtml(report.employee_note)}</p>` : ""}</div><div class="amu-document-links">${documents || "Kein aktives Dokument"}</div></article>`;
-    }).join("") : '<p class="settings-note">Noch keine Arbeitsunfähigkeitsmeldungen im Personalakt.</p>';
+      const period = `${formatDate(report.incapacity_from)}–${report.incapacity_to ? formatDate(report.incapacity_to) : "offen"}`;
+      return `<article class="personnel-record-entry"><div><strong>${period}</strong><small>${escapeHtml(report.location_name || "")}${report.department_name ? ` · ${escapeHtml(report.department_name)}` : ""} · ${escapeHtml(requestStatusLabels[report.status] || report.status)}</small>${report.employee_note ? `<p>${escapeHtml(report.employee_note)}</p>` : ""}</div><div class="amu-document-links">${documents || "Kein aktives Dokument"}</div></article>`;
+    }).join("");
+    const amuSection = access.canReadAmu ? `
+      <section class="personnel-record-section">
+        <div class="personnel-record-section-heading"><div><span class="eyebrow">Dokumente & Verlauf</span><h3>Arbeitsunfähigkeitsmeldungen</h3></div>${result.canOpenFiles ? '<span class="status-badge approved">Dateizugriff</span>' : '<span class="status-badge inactive">Metadaten</span>'}</div>
+        <div class="personnel-record-report-list">${reportEntries || '<p class="settings-note">Noch keine Arbeitsunfähigkeitsmeldungen im Personalakt.</p>'}</div>
+      </section>` : "";
+    elements.personnelRecordContent.innerHTML = `${phoneSection}${sensitiveSection}${amuSection}`
+      || '<p class="settings-note">Für diesen Personalakt sind keine Bereiche freigegeben.</p>';
+    elements.savePersonnelRecordButton.classList.toggle("hidden", !access.canWritePhone && !access.canWriteSensitive);
   } catch (error) {
+    state.personnelRecord = null;
     elements.personnelRecordContent.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function savePersonnelRecord(event) {
+  event.preventDefault();
+  const current = state.personnelRecord;
+  if (!current) return;
+  const access = current.result?.access || {};
+  const body = {};
+  if (access.canWritePhone) body.phone = elements.personnelRecordForm.elements.personnelPhone?.value || "";
+  if (access.canWriteSensitive) {
+    const fields = elements.personnelRecordForm.elements;
+    body.sensitive = {
+      socialSecurityNumber: fields.socialSecurityNumber?.value || "",
+      iban: fields.iban?.value || "",
+      bic: fields.bic?.value || "",
+      accountHolder: fields.accountHolder?.value || "",
+      address: {
+        street: fields.street?.value || "",
+        postalCode: fields.postalCode?.value || "",
+        city: fields.city?.value || "",
+        country: fields.country?.value || "",
+      },
+    };
+  }
+  elements.savePersonnelRecordButton.disabled = true;
+  elements.personnelRecordMessage.classList.add("hidden");
+  try {
+    const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    showToast(result.changedFields?.length ? "Der Personalakt wurde verschlüsselt gespeichert." : "Es waren keine Änderungen zu speichern.");
+    await openPersonnelRecord(current.employeeNumber);
+  } catch (error) {
+    elements.personnelRecordMessage.textContent = error.message;
+    elements.personnelRecordMessage.classList.remove("hidden");
+  } finally {
+    elements.savePersonnelRecordButton.disabled = false;
   }
 }
 
@@ -6997,6 +7079,7 @@ document.querySelector("#optionDateTo").addEventListener("change", () => {
   if (to < from) document.querySelector("#optionDateFrom").value = to;
 });
 elements.employeeForm.addEventListener("submit", saveEmployee);
+elements.personnelRecordForm?.addEventListener("submit", savePersonnelRecord);
 elements.shiftForm.addEventListener("submit", saveShift);
 elements.optionForm.addEventListener("submit", saveOption);
 elements.autoPlanForm.addEventListener("submit", createAutomaticPlan);

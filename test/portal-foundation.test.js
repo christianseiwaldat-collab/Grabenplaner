@@ -1488,7 +1488,13 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     scopedAmuDatabase.close();
 
     const managerPersonnelRecord = await fetch(`${url}/api/portal/v1/personnel-records/104`, { headers: { Cookie: manager.cookie } });
-    assert.equal(managerPersonnelRecord.status, 403, await managerPersonnelRecord.clone().text());
+    assert.equal(managerPersonnelRecord.status, 200, await managerPersonnelRecord.clone().text());
+    const managerPersonnelPayload = await managerPersonnelRecord.json();
+    assert.equal(managerPersonnelPayload.profile.phone, "");
+    assert.equal(managerPersonnelPayload.profile.sensitive, null);
+    assert.deepEqual(managerPersonnelPayload.reports, []);
+    assert.equal(managerPersonnelPayload.access.canReadPhone, true);
+    assert.equal(managerPersonnelPayload.access.canReadAmu, false);
 
     const managerAmuOverview = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: manager.cookie } });
     assert.equal(managerAmuOverview.status, 403, await managerAmuOverview.clone().text());

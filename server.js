@@ -133,6 +133,10 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "vacation:approve", label: "Urlaubs- und ZA-Anträge bearbeiten", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true },
   { id: "hr:approve", label: "Verbindliche PL-Freigaben erteilen", group: "Zeit & Abwesenheit", warningLevel: "critical" },
   { id: "hr:settings", label: "Antrags- und AUM-Regeln verwalten", group: "Zeit & Abwesenheit", warningLevel: "critical" },
+  { id: "personnel:sensitive:read", label: "Sensible MA-Daten lesen", description: "SV-Nummer, Bankverbindung und Wohnadresse; nur Personalleitung oder ausdrücklich berechtigte höhere Rollen.", group: "Personalakt", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:sensitive:write", label: "Sensible MA-Daten bearbeiten", description: "SV-Nummer, Bankverbindung und Wohnadresse verschlüsselt pflegen.", group: "Personalakt", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:phone:read", label: "Telefonnummern im eigenen Bereich lesen", group: "Personalakt", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:phone:write", label: "Telefonnummern im eigenen Bereich bearbeiten", description: "Bei Filial- und Abteilungsleitungen zusätzlich nur mit eigener Vertrauensstufe A.", group: "Personalakt", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "amu:metadata:read", label: "Geschützte AUM-Metadaten lesen", description: "Nur Personalleitung und höhere geschützte Rollen; nicht an Filial- oder Abteilungsleitung delegierbar.", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "amu:file:read", label: "AUM-Dokumente öffnen", description: "Besonders geschütztes Zusatzrecht für Personalleitung und höhere Rollen.", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "amu:review", label: "AUM-Meldungen prüfen", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -160,9 +164,21 @@ const delegablePortalPermissions = new Set(delegablePortalPermissionCatalog.map(
 const hrDelegablePortalPermissions = new Set(delegablePortalPermissionCatalog.filter((entry) => entry.hrDelegable).map((entry) => entry.id));
 const protectedAmuPermissionIds = new Set(["amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit"]);
 const protectedAmuRoleIds = new Set(["hr", "admin", "it_admin", "developer"]);
+const permissionEligibleRoles = new Map(delegablePortalPermissionCatalog
+  .filter((entry) => Array.isArray(entry.eligibleRoles))
+  .map((entry) => [entry.id, new Set(entry.eligibleRoles)]));
 
 function portalPermissionAllowedForRole(permission, role) {
-  return !protectedAmuPermissionIds.has(String(permission || "")) || protectedAmuRoleIds.has(String(role || ""));
+  const eligibleRoles = permissionEligibleRoles.get(String(permission || ""));
+  return !eligibleRoles || eligibleRoles.has(String(role || ""));
+}
+
+function portalPermissionRoleRestrictionError(permissions) {
+  const restricted = Array.isArray(permissions) ? permissions : [];
+  if (restricted.length && restricted.every((permission) => protectedAmuPermissionIds.has(permission))) {
+    return httpError(403, "Geschützte AUM-Rechte dürfen nur Personalleitung und höheren Rollen zugewiesen werden.", "AMU_PERMISSION_ROLE_RESTRICTED");
+  }
+  return httpError(403, "Diese Personalakt-Rechte sind für die gewählte App-Rolle nicht zulässig.", "PORTAL_PERMISSION_ROLE_RESTRICTED");
 }
 
 const portalDashboardPermissionDetails = Object.freeze([
@@ -192,6 +208,7 @@ const portalDashboardPermissionDetails = Object.freeze([
 
 const portalGlobalPermissionIds = new Set([
   "settings:write", "positions:write", "hr:approve", "hr:settings", "sickness:settings",
+  "personnel:sensitive:read", "personnel:sensitive:write",
   "amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit",
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
   "integrations:connections:write", "integrations:credentials:write", "branding:read", "branding:write",
@@ -246,6 +263,7 @@ const builtinPortalRoles = [
       "vacation:approve",
       "sickness:read",
       "notifications:settings",
+      "personnel:phone:read",
       "scopes:write",
     ],
   },
@@ -309,6 +327,10 @@ const builtinPortalRoles = [
       "audit:read",
       "hr:approve",
       "hr:settings",
+      "personnel:sensitive:read",
+      "personnel:sensitive:write",
+      "personnel:phone:read",
+      "personnel:phone:write",
       "amu:metadata:read",
       "amu:file:read",
       "amu:review",
@@ -364,6 +386,10 @@ const builtinPortalRoles = [
       "locations:write",
       "departments:write",
       "positions:write",
+      "personnel:sensitive:read",
+      "personnel:sensitive:write",
+      "personnel:phone:read",
+      "personnel:phone:write",
       "amu:metadata:read",
       "amu:file:read",
       "amu:review",
@@ -962,6 +988,21 @@ function createSchema() {
       FOREIGN KEY (preferred_department_id) REFERENCES departments(id)
         ON UPDATE CASCADE ON DELETE SET NULL
     );
+
+    CREATE TABLE IF NOT EXISTS personnel_sensitive_records (
+      employee_number TEXT PRIMARY KEY,
+      social_security_lookup TEXT NOT NULL DEFAULT '',
+      protected_payload TEXT NOT NULL,
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_personnel_sensitive_sv_lookup
+      ON personnel_sensitive_records(social_security_lookup)
+      WHERE TRIM(social_security_lookup) <> '';
 
     CREATE TABLE IF NOT EXISTS positions (
       id TEXT PRIMARY KEY,
@@ -1915,6 +1956,73 @@ function amuDocumentProtectionContext(row) {
   };
 }
 
+function personnelSensitiveProtectionContext(row) {
+  return {
+    namespace: "personnel-sensitive-record",
+    recordId: String(row.employee_number || ""),
+    field: "payload",
+    employeeNumber: String(row.employee_number || ""),
+  };
+}
+
+function emptyPersonnelSensitiveProfile() {
+  return {
+    socialSecurityNumber: "",
+    iban: "",
+    bic: "",
+    accountHolder: "",
+    address: { street: "", postalCode: "", city: "", country: "Österreich" },
+    phone: "",
+  };
+}
+
+function personnelSensitiveLookup(kind, value) {
+  const key = amuEncryptionConfiguration?.key;
+  if (!key) throw httpError(503, "Der geschützte Personalakt-Index ist nicht verfügbar.", "PERSONNEL_INDEX_UNAVAILABLE");
+  return crypto.createHmac("sha256", key)
+    .update(`grabenplaner-personnel-index-v1\0${String(kind || "")}\0${String(value ?? "")}`)
+    .digest("hex");
+}
+
+function personnelSensitiveProfile(employeeNumber) {
+  const row = db.prepare(`
+    SELECT employee_number, protected_payload
+    FROM personnel_sensitive_records WHERE employee_number = ?
+  `).get(String(employeeNumber || ""));
+  if (!row) return emptyPersonnelSensitiveProfile();
+  const payload = parseProtectedJson(row.protected_payload, personnelSensitiveProtectionContext(row));
+  const address = payload.address && typeof payload.address === "object" && !Array.isArray(payload.address)
+    ? payload.address : {};
+  return {
+    socialSecurityNumber: String(payload.socialSecurityNumber || ""),
+    iban: String(payload.iban || ""),
+    bic: String(payload.bic || ""),
+    accountHolder: String(payload.accountHolder || ""),
+    address: {
+      street: String(address.street || ""),
+      postalCode: String(address.postalCode || ""),
+      city: String(address.city || ""),
+      country: String(address.country || "Österreich"),
+    },
+    phone: String(payload.phone || ""),
+  };
+}
+
+function verifyProtectedSensitivePersonnelRecords() {
+  if (!tableExists("personnel_sensitive_records")) return 0;
+  const rows = db.prepare(`
+    SELECT employee_number, protected_payload
+    FROM personnel_sensitive_records ORDER BY employee_number
+  `).all();
+  for (const row of rows) {
+    if (!String(row.protected_payload || "").startsWith("enc:v2:")) {
+      throw httpError(503, "Sensible Personalakt-Daten liegen nicht im erwarteten verschlüsselten Format vor.", "PERSONNEL_RECORD_INTEGRITY_FAILED");
+    }
+    parseProtectedJson(row.protected_payload, personnelSensitiveProtectionContext(row));
+  }
+  return rows.length;
+}
+
 function sicknessCaseProtectionContext(row) {
   return {
     namespace: "sickness-case",
@@ -2034,6 +2142,7 @@ function migrateProtectedPersonnelRecords() {
 }
 
 migrateProtectedPersonnelRecords();
+verifyProtectedSensitivePersonnelRecords();
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_work_date ON time_entries(employee_number, work_date, entry_timestamp)");
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_mobile_request ON time_entries(employee_number, client_request_id) WHERE client_request_id IS NOT NULL");
 db.exec("CREATE INDEX IF NOT EXISTS idx_mobile_sessions_employee ON mobile_sessions(employee_number, refresh_expires_at)");
@@ -2280,7 +2389,10 @@ for (const role of builtinPortalRoles) {
 db.prepare("UPDATE portal_users SET role_locked = 1 WHERE role = 'developer'").run();
 db.prepare(`
   DELETE FROM portal_permission_grants
-  WHERE permission IN ('amu:metadata:read','amu:file:read','amu:review','amu:delete','amu:audit')
+  WHERE permission IN (
+    'amu:metadata:read','amu:file:read','amu:review','amu:delete','amu:audit',
+    'personnel:sensitive:read','personnel:sensitive:write'
+  )
     AND EXISTS (
       SELECT 1 FROM portal_users u
       WHERE u.employee_number = portal_permission_grants.employee_number
@@ -2335,6 +2447,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.60-portal-mobile-foundation", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.70-aum-security-foundation", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.70-sensitive-personnel-records", packageMetadata.version);
 const integrationFeatureMigrationId = "v0.63-import-payroll-integrations";
 if (!db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(integrationFeatureMigrationId)) {
   const stored = db.prepare("SELECT value FROM settings WHERE key = 'installation_features'").get()?.value;
@@ -3727,7 +3841,7 @@ function installationFeaturesForApiPath(apiPath) {
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:absence(?:-|\/|$)|vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$)|time-off(?:-|\/|$)|approved-time-off(?:\/|$)|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))/.test(requestPath)) required.add("requests");
   if (/^\/portal\/v1\/(?:me\/)?(?:vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$))/.test(requestPath)) required.add("vacation");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:wifi-automation|wifi-suggestions)|portal\/v1\/wifi-automation|wifi(?:-|\/|$)|integrations\/wifi)/.test(requestPath)) required.add("wifiSuggestions");
-  if (/^\/(?:portal\/v1\/(?:me\/)?(?:amu|sickness)|portal\/v1\/(?:amu|sickness)|portal\/v1\/personnel-records|amu(?:-|\/|$)|sickness(?:-|\/|$))/.test(requestPath)) required.add("sicknessAmu");
+  if (/^\/(?:portal\/v1\/(?:me\/)?(?:amu|sickness)|portal\/v1\/(?:amu|sickness)|amu(?:-|\/|$)|sickness(?:-|\/|$))/.test(requestPath)) required.add("sicknessAmu");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence)|time(?:-|\/|$)|mobile\/v1\/(?:time|me\/time-entries))/.test(requestPath)) required.add("timeTracking");
   if (/^\/(?:portal\/v1\/me(?:\/|$)|mobile\/v1\/(?:bootstrap|me(?:\/|$))|portal\/v1\/(?:greeting-settings|mobile-layout|leadership\/overview))/.test(requestPath)) required.add("employeePortal");
   if (/^\/integrations\/(?:personnel-import|payroll-export|profiles|runs|connections|contracts)(?:\/|$)/.test(requestPath)) required.add("integrations");
@@ -5321,6 +5435,163 @@ function actorCanReadAmuSensitiveMetadata(session) {
   return protectedAmuRoleIds.has(session.role) && session.permissions?.includes("amu:metadata:read");
 }
 
+function actorCanReadPersonnelSensitiveData(session) {
+  if (!session) return false;
+  if (session.employeeNumber === "local") return true;
+  return portalPermissionAllowedForRole("personnel:sensitive:read", session.role)
+    && session.permissions?.includes("personnel:sensitive:read");
+}
+
+function actorCanWritePersonnelSensitiveData(session) {
+  if (!session) return false;
+  if (session.employeeNumber === "local") return true;
+  return portalPermissionAllowedForRole("personnel:sensitive:write", session.role)
+    && session.permissions?.includes("personnel:sensitive:write");
+}
+
+function actorCanReadPersonnelPhone(session) {
+  if (!session) return false;
+  if (session.employeeNumber === "local") return true;
+  return portalPermissionAllowedForRole("personnel:phone:read", session.role)
+    && session.permissions?.includes("personnel:phone:read");
+}
+
+function actorCanWritePersonnelPhone(session) {
+  if (!session) return false;
+  if (session.employeeNumber === "local") return true;
+  if (!portalPermissionAllowedForRole("personnel:phone:write", session.role)
+    || !session.permissions?.includes("personnel:phone:write")) return false;
+  if (!["manager", "department_manager"].includes(session.role)) return true;
+  const actor = db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = ?")
+    .get(session.employeeNumber);
+  return getTrustLevelPolicy().enabled && normalizeTimeConfirmationLevel(actor?.time_confirmation_level) === "A";
+}
+
+function personnelRecordAccess(session) {
+  const canWriteSensitive = actorCanWritePersonnelSensitiveData(session);
+  const canWritePhone = actorCanWritePersonnelPhone(session);
+  const canReadSensitive = actorCanReadPersonnelSensitiveData(session) || canWriteSensitive;
+  const canReadPhone = actorCanReadPersonnelPhone(session) || canWritePhone;
+  const canReadAmu = installationFeatureEnabled("sicknessAmu") && actorCanReadAmuSensitiveMetadata(session);
+  return {
+    canReadSensitive,
+    canWriteSensitive,
+    canReadPhone,
+    canWritePhone,
+    canReadAmu,
+    canOpenFiles: canReadAmu && actorCanReadAmuFiles(session),
+    phoneWriteRequiresTrustA: ["manager", "department_manager"].includes(session?.role || ""),
+  };
+}
+
+function requirePersonnelRecordSession(request, { write = false } = {}) {
+  let session;
+  if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) {
+    session = {
+      employeeNumber: "local",
+      role: "admin",
+      permissions: builtinPortalRoles.find((role) => role.id === "admin")?.permissions || [],
+      scopes: [],
+    };
+  } else {
+    session = requirePortalSession(request);
+    if (session.mustChangePassword) {
+      throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+    }
+  }
+  if (write) assertPortalCsrf(request);
+  const access = personnelRecordAccess(session);
+  if (!access.canReadSensitive && !access.canReadPhone && !access.canReadAmu) {
+    throw httpError(403, "Für den Personalakt fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  return { session, access };
+}
+
+function normalizePersonnelField(value, maximumLength) {
+  return stripEmoji(String(value ?? "").trim().replace(/\s+/g, " ")).slice(0, maximumLength);
+}
+
+function normalizeSocialSecurityNumber(value) {
+  const normalized = String(value ?? "").replace(/\D/g, "");
+  if (!normalized) return "";
+  if (!/^\d{10}$/.test(normalized)) {
+    throw httpError(400, "Die SV-Nummer muss aus genau 10 Ziffern bestehen.", "PERSONNEL_SOCIAL_SECURITY_INVALID");
+  }
+  const digits = [...normalized].map(Number);
+  const weights = [3, 7, 9, 0, 5, 8, 4, 2, 1, 6];
+  const checksum = digits.reduce((sum, digit, index) => sum + (digit * weights[index]), 0) % 11;
+  if (checksum === 10 || checksum !== digits[3]) {
+    throw httpError(400, "Die Prüfziffer der SV-Nummer ist ungültig.", "PERSONNEL_SOCIAL_SECURITY_INVALID");
+  }
+  return normalized;
+}
+
+function normalizeIban(value) {
+  const normalized = String(value ?? "").replace(/\s+/g, "").toUpperCase();
+  if (!normalized) return "";
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(normalized)) {
+    throw httpError(400, "Bitte eine gültige IBAN eingeben.", "PERSONNEL_IBAN_INVALID");
+  }
+  const rearranged = `${normalized.slice(4)}${normalized.slice(0, 4)}`;
+  let remainder = 0;
+  for (const character of rearranged) {
+    const expanded = /\d/.test(character) ? character : String(character.charCodeAt(0) - 55);
+    for (const digit of expanded) remainder = ((remainder * 10) + Number(digit)) % 97;
+  }
+  if (remainder !== 1) throw httpError(400, "Die Prüfziffer der IBAN ist ungültig.", "PERSONNEL_IBAN_INVALID");
+  return normalized;
+}
+
+function normalizeBic(value) {
+  const normalized = String(value ?? "").replace(/\s+/g, "").toUpperCase();
+  if (normalized && !/^[A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?$/.test(normalized)) {
+    throw httpError(400, "Bitte einen gültigen BIC mit 8 oder 11 Zeichen eingeben.", "PERSONNEL_BIC_INVALID");
+  }
+  return normalized;
+}
+
+function normalizePersonnelPhone(value) {
+  const normalized = normalizePersonnelField(value, 40);
+  if (normalized && !/^\+?[0-9][0-9\s()/.-]{4,38}$/.test(normalized)) {
+    throw httpError(400, "Bitte eine gültige Telefonnummer eingeben.", "PERSONNEL_PHONE_INVALID");
+  }
+  return normalized;
+}
+
+function validatePersonnelSensitiveInput(value = {}) {
+  const address = value.address && typeof value.address === "object" && !Array.isArray(value.address)
+    ? value.address : {};
+  return {
+    socialSecurityNumber: normalizeSocialSecurityNumber(value.socialSecurityNumber),
+    iban: normalizeIban(value.iban),
+    bic: normalizeBic(value.bic),
+    accountHolder: normalizePersonnelField(value.accountHolder, 120),
+    address: {
+      street: normalizePersonnelField(address.street, 160),
+      postalCode: normalizePersonnelField(address.postalCode, 20),
+      city: normalizePersonnelField(address.city, 100),
+      country: normalizePersonnelField(address.country, 80) || "Österreich",
+    },
+  };
+}
+
+function changedPersonnelProfileFields(before, after) {
+  const fieldValues = (profile) => ({
+    socialSecurityNumber: profile.socialSecurityNumber || "",
+    iban: profile.iban || "",
+    bic: profile.bic || "",
+    accountHolder: profile.accountHolder || "",
+    street: profile.address?.street || "",
+    postalCode: profile.address?.postalCode || "",
+    city: profile.address?.city || "",
+    country: profile.address?.country || "",
+    phone: profile.phone || "",
+  });
+  const left = fieldValues(before);
+  const right = fieldValues(after);
+  return Object.keys(right).filter((field) => left[field] !== right[field]);
+}
+
 function parsePortalPermissions(value) {
   try {
     const permissions = JSON.parse(value || "[]");
@@ -5481,7 +5752,7 @@ function validatePersonnelAccessProfile(actor, payload, employee = {}) {
   }
   const roleRestrictedPermissions = submittedPermissions.filter((permission) => !portalPermissionAllowedForRole(permission, role));
   if (roleRestrictedPermissions.length) {
-    throw httpError(403, "Geschützte AUM-Rechte dürfen nur Personalleitung und höheren Rollen zugewiesen werden.", "AMU_PERMISSION_ROLE_RESTRICTED");
+    throw portalPermissionRoleRestrictionError(roleRestrictedPermissions);
   }
   const rolePermissions = new Set(getPortalRoles().find((entry) => entry.id === role)?.permissions || []);
   const permissions = submittedPermissions.filter((permission) => !rolePermissions.has(permission));
@@ -12779,6 +13050,24 @@ function importedDatabaseHasColumn(importedDatabase, tableName, columnName) {
 function verifyImportedProtectedPersonnelPayloads(importedDatabase) {
   const storage = requireAmuStorage();
   let verified = 0;
+  if (importedDatabaseHasColumn(importedDatabase, "personnel_sensitive_records", "protected_payload")) {
+    const profiles = importedDatabase.prepare(`
+      SELECT employee_number, protected_payload
+      FROM personnel_sensitive_records
+      ORDER BY employee_number
+    `).all();
+    for (const profile of profiles) {
+      if (!profile.protected_payload) throw new Error("missing protected personnel profile payload");
+      const payload = storage.unprotectRecord(
+        profile.protected_payload,
+        personnelSensitiveProtectionContext(profile),
+        { allowLegacy: true },
+      );
+      const parsed = JSON.parse(payload);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected personnel profile payload");
+      verified += 1;
+    }
+  }
   if (importedDatabaseHasColumn(importedDatabase, "amu_reports", "protected_payload")) {
     const reports = importedDatabase.prepare(`
       SELECT id, employee_lookup, protected_payload
@@ -12961,7 +13250,7 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   }
   if (importedProtectedPayloadError) {
     fs.rmSync(importPath, { force: true });
-    throw httpError(409, "Die geschützten Personalakt-Daten dieses Backups gehören zu einem anderen Schlüsselsatz. Bitte die vollständige Datenbank- und AUM-Sicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
+    throw httpError(409, "Die geschützten Personalakt-Daten dieses Backups gehören zu einem anderen Schlüsselsatz. Bitte die vollständige Datenbank und die zugehörige private Datensicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
   }
   if (importedIntegrationCredentialError) {
     fs.rmSync(importPath, { force: true });
@@ -14425,7 +14714,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
   }
   const roleRestricted = submitted.filter((permission) => !portalPermissionAllowedForRole(permission, target.role));
   if (roleRestricted.length) {
-    throw httpError(403, "Geschützte AUM-Rechte dürfen nur Personalleitung und höheren Rollen zugewiesen werden.", "AMU_PERMISSION_ROLE_RESTRICTED");
+    throw portalPermissionRoleRestrictionError(roleRestricted);
   }
   const before = portalPermissionGrantsForEmployee(employeeNumber);
   db.exec("BEGIN");
@@ -14947,7 +15236,7 @@ app.put("/api/portal/v1/amu-settings", (request, response) => {
 });
 
 app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) => {
-  const session = requirePortalAdminOrLocal(request, "amu:metadata:read");
+  const { session, access } = requirePersonnelRecordSession(request);
   const employeeNumber = String(request.params.employeeNumber || "").trim();
   assertSessionEmployeeScope(session, employeeNumber);
   const employee = db.prepare(`
@@ -14958,30 +15247,106 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) 
     WHERE e.personnel_number = ?
   `).get(employeeNumber);
   if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
-  let reports = db.prepare(`
-    SELECT r.*, e.full_name, e.nickname, e.color, e.preferred_department_id,
-           l.name AS location_name, d.name AS department_name
-    FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
-    JOIN locations l ON l.id = r.location_id LEFT JOIN departments d ON d.id = r.department_id
-    WHERE r.employee_number = ? AND r.status <> 'purged'
-    ORDER BY r.submitted_at DESC, r.id DESC
-  `).all(employeeNumber);
-  reports = reports.filter((report) => sessionCanAccessAmuReport(session, report));
-  const serialized = serializeAmuReports(reports)
-    .sort((left, right) => String(right.incapacity_from).localeCompare(String(left.incapacity_from)) || Number(right.id) - Number(left.id));
-  const canOpenFiles = actorCanReadAmuFiles(session);
-  if (!canOpenFiles) {
-    for (const report of serialized) {
-      report.employee_note = "";
-      report.review_note = "";
-      report.documents = report.documents.map(({ id, detected_mime, size, byte_size, scan_status, status, created_at }, index) => ({
-        id, original_name: `Dokument ${index + 1}`, original_filename: `Dokument ${index + 1}`, detected_mime, size, byte_size,
-        scan_status, status, created_at, content_access: false,
-      }));
+  const protectedProfile = access.canReadPhone || access.canReadSensitive
+    ? personnelSensitiveProfile(employeeNumber) : emptyPersonnelSensitiveProfile();
+  let serialized = [];
+  if (access.canReadAmu) {
+    let reports = db.prepare(`
+      SELECT r.*, e.full_name, e.nickname, e.color, e.preferred_department_id,
+             l.name AS location_name, d.name AS department_name
+      FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
+      JOIN locations l ON l.id = r.location_id LEFT JOIN departments d ON d.id = r.department_id
+      WHERE r.employee_number = ? AND r.status <> 'purged'
+      ORDER BY r.submitted_at DESC, r.id DESC
+    `).all(employeeNumber);
+    reports = reports.filter((report) => sessionCanAccessAmuReport(session, report));
+    serialized = serializeAmuReports(reports)
+      .sort((left, right) => String(right.incapacity_from).localeCompare(String(left.incapacity_from)) || Number(right.id) - Number(left.id));
+    if (!access.canOpenFiles) {
+      for (const report of serialized) {
+        report.employee_note = "";
+        report.review_note = "";
+        report.documents = report.documents.map(({ id, detected_mime, size, byte_size, scan_status, status, created_at }, index) => ({
+          id, original_name: `Dokument ${index + 1}`, original_filename: `Dokument ${index + 1}`, detected_mime, size, byte_size,
+          scan_status, status, created_at, content_access: false,
+        }));
+      }
     }
   }
-  auditPortal(session.employeeNumber, "personnel-record.view", "employee", employeeNumber, `entries=${serialized.length}`);
-  response.json({ employee, reports: serialized, canOpenFiles });
+  const sections = [access.canReadPhone ? "phone" : "", access.canReadSensitive ? "sensitive" : "", access.canReadAmu ? "amu" : ""].filter(Boolean);
+  auditPortal(session.employeeNumber, "personnel-record.view", "employee", employeeNumber,
+    JSON.stringify({ sections, amuEntries: serialized.length }));
+  response.json({
+    employee,
+    profile: {
+      phone: access.canReadPhone ? protectedProfile.phone : null,
+      sensitive: access.canReadSensitive ? {
+        socialSecurityNumber: protectedProfile.socialSecurityNumber,
+        iban: protectedProfile.iban,
+        bic: protectedProfile.bic,
+        accountHolder: protectedProfile.accountHolder,
+        address: protectedProfile.address,
+      } : null,
+    },
+    reports: serialized,
+    access,
+    canOpenFiles: access.canOpenFiles,
+  });
+});
+
+app.put("/api/portal/v1/personnel-records/:employeeNumber", (request, response) => {
+  const { session, access } = requirePersonnelRecordSession(request, { write: true });
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  assertSessionEmployeeScope(session, employeeNumber);
+  const employee = db.prepare("SELECT personnel_number FROM employees WHERE personnel_number = ?").get(employeeNumber);
+  if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
+  const hasSensitiveInput = Object.prototype.hasOwnProperty.call(request.body || {}, "sensitive");
+  const hasPhoneInput = Object.prototype.hasOwnProperty.call(request.body || {}, "phone");
+  if (!hasSensitiveInput && !hasPhoneInput) {
+    throw httpError(400, "Es wurden keine Personalakt-Daten übermittelt.", "PERSONNEL_RECORD_INPUT_REQUIRED");
+  }
+  if (hasSensitiveInput && !access.canWriteSensitive) {
+    throw httpError(403, "Sensible MA-Daten dürfen mit diesem Zugang nicht bearbeitet werden.", "PERSONNEL_SENSITIVE_WRITE_DENIED");
+  }
+  if (hasPhoneInput && !access.canWritePhone) {
+    const message = access.phoneWriteRequiresTrustA
+      ? "Telefonnummern dürfen durch Leitungen nur mit Vertrauensstufe A und ausdrücklich vergebenem Schreibrecht geändert werden."
+      : "Die Telefonnummer darf mit diesem Zugang nicht bearbeitet werden.";
+    throw httpError(403, message, "PERSONNEL_PHONE_WRITE_DENIED");
+  }
+  const before = personnelSensitiveProfile(employeeNumber);
+  const next = {
+    ...before,
+    ...(hasSensitiveInput ? validatePersonnelSensitiveInput(request.body.sensitive || {}) : {}),
+    phone: hasPhoneInput ? normalizePersonnelPhone(request.body.phone) : before.phone,
+  };
+  const changedFields = changedPersonnelProfileFields(before, next);
+  if (!changedFields.length) {
+    return response.json({ ok: true, changedFields: [], access });
+  }
+  const socialSecurityLookup = next.socialSecurityNumber
+    ? personnelSensitiveLookup("social-security-number", next.socialSecurityNumber) : "";
+  const protectedPayload = protectJson(next, personnelSensitiveProtectionContext({ employee_number: employeeNumber }));
+  try {
+    db.prepare(`
+      INSERT INTO personnel_sensitive_records
+        (employee_number, social_security_lookup, protected_payload, updated_by, updated_at)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(employee_number) DO UPDATE SET
+        social_security_lookup = excluded.social_security_lookup,
+        protected_payload = excluded.protected_payload,
+        updated_by = excluded.updated_by,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(employeeNumber, socialSecurityLookup, protectedPayload, session.employeeNumber);
+  } catch (error) {
+    if (String(error.message || "").includes("UNIQUE")) {
+      throw httpError(409, "Diese SV-Nummer ist bereits einem anderen Personalakt zugeordnet.", "PERSONNEL_SOCIAL_SECURITY_DUPLICATE");
+    }
+    throw error;
+  }
+  auditPortal(session.employeeNumber, "personnel-record.update", "employee", employeeNumber,
+    JSON.stringify({ fields: changedFields }));
+  response.json({ ok: true, changedFields, access });
 });
 
 app.get("/api/portal/v1/me/amu-reports", (request, response) => {
