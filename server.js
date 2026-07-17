@@ -87,6 +87,7 @@ const {
 const { createIntegrationSecretVault } = require("./lib/integration-secret-vault");
 const { createSqlViewSource } = require("./lib/sql-view-source");
 const { createIdempotencyKey, createSafeApiDelivery, payloadSha256 } = require("./lib/safe-api-delivery");
+const { CONTRACT_IDS, contractById, contractSha256, contractSummaries } = require("./lib/integration-contracts");
 const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
@@ -2344,6 +2345,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.67-process-dashboard", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.68-dashboard-validation", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.69-integration-contracts", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -3708,7 +3711,7 @@ function installationFeaturesForApiPath(apiPath) {
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:amu|sickness)|portal\/v1\/(?:amu|sickness)|portal\/v1\/personnel-records|amu(?:-|\/|$)|sickness(?:-|\/|$))/.test(requestPath)) required.add("sicknessAmu");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence)|time(?:-|\/|$)|mobile\/v1\/(?:time|me\/time-entries))/.test(requestPath)) required.add("timeTracking");
   if (/^\/(?:portal\/v1\/me(?:\/|$)|mobile\/v1\/(?:bootstrap|me(?:\/|$))|portal\/v1\/(?:greeting-settings|mobile-layout|leadership\/overview))/.test(requestPath)) required.add("employeePortal");
-  if (/^\/integrations\/(?:personnel-import|payroll-export|profiles|runs|connections)(?:\/|$)/.test(requestPath)) required.add("integrations");
+  if (/^\/integrations\/(?:personnel-import|payroll-export|profiles|runs|connections|contracts)(?:\/|$)/.test(requestPath)) required.add("integrations");
   return [...required];
 }
 
@@ -10672,6 +10675,7 @@ function publicPersonnelInspection(parsed, session) {
     format: parsed.format,
     sourceTransport: parsed.sourceTransport || "file",
     sourceLabel: parsed.sourceLabel || parsed.format.toUpperCase(),
+    sourceContractId: parsed.sourceContractId || null,
     encoding: parsed.encoding,
     delimiter: parsed.delimiter === "\t" ? "tab" : parsed.delimiter,
     byteSize: parsed.byteSize,
@@ -10721,6 +10725,7 @@ function sqlInspectionFromResult(connection, result, scopeContext = {}) {
     format: "csv",
     sourceTransport: "sql_view",
     sourceLabel: "SQL-View",
+    sourceContractId: connection.public.configuration.contractId || CONTRACT_IDS.personnelSqlView,
     connectionId: connection.public.id,
     connectionFingerprint: integrationConnectionConfigurationFingerprint(connection),
     connectionScopeContext: sqlPersonnelScopeContext(scopeContext),
@@ -10990,6 +10995,7 @@ function personnelImportPreview(actor, inspection, body = {}) {
   }
   const duplicateStrategy = body.duplicateStrategy === "update" ? "update" : "skip";
   const profile = body.profileId ? integrationProfileById(body.profileId, "import", "personnel") : null;
+  assertPersonnelImportProfileSource(profile, inspection);
   const defaults = body.defaults && typeof body.defaults === "object" ? body.defaults : (profile?.configuration?.defaults || {});
   const rows = [];
   const seen = new Map();
@@ -11080,6 +11086,17 @@ function personnelImportPreview(actor, inspection, body = {}) {
     warnings: rows.reduce((sum, row) => sum + row.warnings.length, 0),
   };
   return { sheetName, headerRow, mapping, headerFingerprint: fingerprint, duplicateStrategy, profileId: profile?.id || null, rows, summary };
+}
+
+function assertPersonnelImportProfileSource(profile, inspection) {
+  if (!profile) return;
+  const actualSourceType = inspection.sourceTransport === "sql_view" ? "sql" : "file";
+  if (profile.configuration.sourceType !== actualSourceType) {
+    throw httpError(409, "Das Importprofil ist an eine andere Quellenart gebunden.", "INTEGRATION_PROFILE_SOURCE_MISMATCH");
+  }
+  if (actualSourceType === "sql" && profile.configuration.connectionId !== inspection.connectionId) {
+    throw httpError(409, "Das Importprofil ist an eine andere SQL-Personalquelle gebunden.", "INTEGRATION_PROFILE_CONNECTION_MISMATCH");
+  }
 }
 
 function publicPersonnelPreview(preview, previewSession) {
@@ -11519,7 +11536,7 @@ function minimizedPayrollApiPayload(preflight, deliveryId, generatedAt) {
   const rows = preflight.rows.map((row) => Object.fromEntries(columns.map((column) => [column.id, row[column.id] ?? ""])));
   const dataSha256 = payloadSha256({ columns, rows });
   return {
-    schema: "grabenplaner.payroll.v1",
+    schema: CONTRACT_IDS.payrollHttpsJson,
     deliveryId,
     generatedAt,
     source: {
@@ -11535,6 +11552,30 @@ function minimizedPayrollApiPayload(preflight, deliveryId, generatedAt) {
     dataSha256,
   };
 }
+
+app.get("/api/integrations/contracts", (request, response) => {
+  integrationActor(request, "integrations:read");
+  response.json({
+    contracts: contractSummaries().map((contract) => ({
+      ...contract,
+      documentUrl: `/api/integrations/contracts/${encodeURIComponent(contract.id)}?download=1`,
+    })),
+  });
+});
+
+app.get("/api/integrations/contracts/:id", (request, response) => {
+  integrationActor(request, "integrations:read");
+  const contract = contractById(request.params.id);
+  if (!contract) throw httpError(404, "Der Schnittstellenvertrag wurde nicht gefunden.", "INTEGRATION_CONTRACT_NOT_FOUND");
+  const sha256 = contractSha256(contract);
+  response.setHeader("ETag", `\"sha256-${sha256}\"`);
+  response.setHeader("Cache-Control", "private, no-store");
+  if (String(request.query.download || "") === "1") {
+    response.setHeader("Content-Type", "application/json; charset=utf-8");
+    response.setHeader("Content-Disposition", `attachment; filename=\"${contract.id}.json\"`);
+  }
+  response.json({ contract, documentSha256: sha256 });
+});
 
 app.get("/api/integrations/connections/catalog", (request, response) => {
   const actor = integrationActor(request, "integrations:connections:read");
@@ -11732,6 +11773,7 @@ app.post("/api/integrations/personnel-import/preview", (request, response) => {
   preview.connectionId = inspectionEntry.value.connectionId || null;
   preview.connectionFingerprint = inspectionEntry.value.connectionFingerprint || null;
   preview.connectionScopeContext = inspectionEntry.value.connectionScopeContext || null;
+  preview.sourceContractId = inspectionEntry.value.sourceContractId || null;
   preview.contentSha256 = inspectionEntry.value.contentSha256;
   integrationCache.deleteKind(actor.employeeNumber, "personnel-preview");
   const previewSession = integrationCache.create(actor.employeeNumber, "personnel-preview", preview);
@@ -11857,6 +11899,9 @@ app.get("/api/integrations/payroll-export/deliveries", (request, response) => {
 app.post("/api/integrations/payroll-export/deliver", async (request, response) => {
   const actor = integrationActor(request, "payroll:deliver");
   const connection = integrationConnectionById(request.body.connectionId, "payroll_https_target");
+  if (connection.public.configuration.contractId !== CONTRACT_IDS.payrollHttpsJson) {
+    throw httpError(409, "Das HTTPS-Ziel ist nicht an den aktuellen Lohnvertrag gebunden.", "INTEGRATION_CONTRACT_MISMATCH");
+  }
   const preflight = payrollPreflight(actor, request.body || {});
   if (!request.body.fingerprint || request.body.fingerprint !== preflight.fingerprint) {
     throw httpError(409, "Die Daten haben sich seit der Vorprüfung geändert. Bitte erneut prüfen.", "PAYROLL_PREFLIGHT_STALE");
@@ -19105,6 +19150,7 @@ module.exports = {
   revalidateSqlPersonnelPreviewConnection,
   sqlInspectionFromResult,
   sqlSourceConfiguration,
+  assertPersonnelImportProfileSource,
   validateUsbFeatures,
   validateUsbEmployees,
   usbProvisioningAvailability,
