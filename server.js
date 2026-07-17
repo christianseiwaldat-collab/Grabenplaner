@@ -414,6 +414,10 @@ const defaultPortalSettings = {
   sickness_hr_warning_days: "3",
   wifi_minimum_presence_minutes: "5",
   wifi_absence_grace_minutes: "30",
+  trust_levels_enabled: "1",
+  trust_levels_visible_to_managers: "0",
+  trust_levels_visible_to_department_managers: "0",
+  trust_levels_visible_to_employees: "1",
   personalized_greetings: JSON.stringify(DEFAULT_PORTAL_GREETING_SETTINGS),
   mobile_leadership_layouts: JSON.stringify({
     department_manager: ["timeTracking", "team", "approvals", "schedule", "requests", "more"],
@@ -2152,6 +2156,8 @@ const defaultSettings = {
   saturday_start_time: "10:00",
   saturday_end_time: "17:00",
   show_sunday: "0",
+  remember_last_schedule_overall_plan: "1",
+  remember_last_vacation_overall_plan: "1",
 };
 
 const planningDays = [
@@ -2282,6 +2288,8 @@ if (!db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(inte
 }
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.64-sql-api-connectors", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.65-settings-dashboard-foundation", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -3750,6 +3758,34 @@ function getWifiAutomationPolicy() {
   };
 }
 
+function getTrustLevelPolicy() {
+  const settings = getPortalSettings();
+  return {
+    enabled: settings.trust_levels_enabled !== "0",
+    visibleToManagers: settings.trust_levels_visible_to_managers === "1",
+    visibleToDepartmentManagers: settings.trust_levels_visible_to_department_managers === "1",
+    visibleToEmployees: settings.trust_levels_visible_to_employees !== "0",
+  };
+}
+
+function validateTrustLevelPolicy(body = {}) {
+  return {
+    enabled: body.enabled !== false,
+    visibleToManagers: body.visibleToManagers === true,
+    visibleToDepartmentManagers: body.visibleToDepartmentManagers === true,
+    visibleToEmployees: body.visibleToEmployees !== false,
+  };
+}
+
+function normalizeTimeConfirmationLevel(value) {
+  const level = String(value || "C").trim().toUpperCase();
+  return ["A", "B", "C"].includes(level) ? level : "C";
+}
+
+function effectiveTimeConfirmationLevel(value, policy = getTrustLevelPolicy()) {
+  return policy.enabled ? normalizeTimeConfirmationLevel(value) : "C";
+}
+
 function validateWifiAutomationPolicy(body = {}) {
   const minimumPresenceMinutes = Number(body.minimumPresenceMinutes);
   const absenceGraceMinutes = Number(body.absenceGraceMinutes);
@@ -4009,8 +4045,7 @@ function createWifiSuggestionsForSession(sessionRow, now = new Date()) {
     SELECT time_confirmation_level FROM employees WHERE personnel_number = ? AND active = 1
   `).get(sessionRow.employee_number);
   if (!employee) return [];
-  const level = ["A", "B", "C"].includes(String(employee.time_confirmation_level || "").toUpperCase())
-    ? String(employee.time_confirmation_level).toUpperCase() : "C";
+  const level = effectiveTimeConfirmationLevel(employee.time_confirmation_level);
   const policy = getWifiAutomationPolicy();
   const created = [];
   const insert = db.prepare(`
@@ -4285,7 +4320,13 @@ function wifiAutomationEmployeePayload(session, now = new Date()) {
     WHERE s.employee_number = ? AND (s.status = 'pending' OR s.work_date >= ?)
     ORDER BY s.work_date DESC, s.suggested_start_at DESC
   `).all(session.employeeNumber, cutoff);
-  const suggestions = rows.map((row) => serializeWifiSuggestion(row, now));
+  const confirmationLevelVisible = employeeCanViewOwnTimeConfirmationLevel();
+  const confirmationLevel = effectiveTimeConfirmationLevel(employee.time_confirmation_level);
+  const suggestions = rows.map((row) => {
+    const suggestion = serializeWifiSuggestion(row, now);
+    if (!confirmationLevelVisible) delete suggestion.level;
+    return suggestion;
+  });
   for (const suggestion of suggestions.filter((item) => item.status === "pending" && ["due_soon", "overdue"].includes(item.warning))) {
     const overdue = suggestion.warning === "overdue";
     createPortalNotification(session.employeeNumber, overdue ? "wifi.suggestion.overdue" : "wifi.suggestion.due",
@@ -4312,7 +4353,10 @@ function wifiAutomationEmployeePayload(session, now = new Date()) {
           : "",
     locationId: employee.home_location_id,
     locationName: employee.location_name || employee.home_location_id,
-    confirmationLevel: ["A", "B", "C"].includes(employee.time_confirmation_level) ? employee.time_confirmation_level : "C",
+    confirmationLevel: confirmationLevelVisible ? confirmationLevel : null,
+    confirmationLevelVisible,
+    trustLevelsEnabled: getTrustLevelPolicy().enabled,
+    canConfirmWeek: confirmationLevel === "A",
     preference,
     suggestions,
     counts: {
@@ -4427,7 +4471,7 @@ function confirmWifiSuggestionBatch(session, items, now = new Date()) {
 
 function confirmWifiSuggestionWeek(session, body = {}, now = new Date()) {
   const employee = db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = ?").get(session.employeeNumber);
-  if (String(employee?.time_confirmation_level || "C").toUpperCase() !== "A") {
+  if (effectiveTimeConfirmationLevel(employee?.time_confirmation_level) !== "A") {
     throw httpError(403, "Der Wochenabschluss ist nur für Vertrauensstufe A verfügbar.", "WIFI_WEEK_CONFIRMATION_NOT_ALLOWED");
   }
   const weekStart = String(body.weekStart || "").trim();
@@ -5492,6 +5536,22 @@ function sessionCanManageTimeConfirmationLevel(session) {
   return Boolean(session
     && RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)
     && session.permissions?.includes("wifi:settings"));
+}
+
+function sessionCanViewTimeConfirmationLevel(session) {
+  if (!getPortalStatus().portalEnabled) return true;
+  if (!session) return false;
+  if (RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)) return true;
+  const policy = getTrustLevelPolicy();
+  if (!policy.enabled) return false;
+  if (session.role === "manager") return policy.visibleToManagers;
+  if (session.role === "department_manager") return policy.visibleToDepartmentManagers;
+  return false;
+}
+
+function employeeCanViewOwnTimeConfirmationLevel() {
+  const policy = getTrustLevelPolicy();
+  return policy.enabled && policy.visibleToEmployees;
 }
 
 function requirePortalAnyPermission(request, permissions) {
@@ -6913,7 +6973,9 @@ function mobilePersonalSettingsPayload(session, now = new Date()) {
     wifiTimeSuggestions: {
       available: Boolean(wifi && (wifi.canEnable || wifi.preference?.enabled)),
       enabled: Boolean(wifi?.preference?.enabled),
-      confirmationLevel: wifi?.confirmationLevel || "C",
+      confirmationLevel: wifi?.confirmationLevelVisible ? wifi.confirmationLevel : null,
+      confirmationLevelVisible: Boolean(wifi?.confirmationLevelVisible),
+      trustLevelsEnabled: Boolean(wifi?.trustLevelsEnabled),
       minimumPresenceMinutes: policy.minimumPresenceMinutes,
       absenceGraceMinutes: policy.absenceGraceMinutes,
     },
@@ -12955,7 +13017,7 @@ app.get("/api/employees", (request, response) => {
       `)
       .all().map((row) => ({
         ...serializeEmployee(row, {
-          includeTimeConfirmationLevel: sessionCanManageTimeConfirmationLevel(session),
+          includeTimeConfirmationLevel: sessionCanViewTimeConfirmationLevel(session),
         }),
         portal_access: portalAccessProfileForEmployee(row.personnel_number),
       }));
@@ -13229,6 +13291,54 @@ app.get("/api/portal/v1/wifi-automation/settings", (request, response) => {
     canChange: true,
     employees: wifiConfirmationLevels(),
   });
+});
+
+app.get("/api/portal/v1/trust-level-settings", (request, response) => {
+  requireAdminHrOrLocal(request, "wifi:settings");
+  response.json({
+    ...getTrustLevelPolicy(),
+    canChange: true,
+    employees: wifiConfirmationLevels(),
+  });
+});
+
+app.put("/api/portal/v1/trust-level-settings", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "wifi:settings");
+  const policy = validateTrustLevelPolicy(request.body || {});
+  const levels = request.body?.levels === undefined ? [] : validateWifiConfirmationLevels(request.body || {});
+  const values = {
+    trust_levels_enabled: policy.enabled ? "1" : "0",
+    trust_levels_visible_to_managers: policy.visibleToManagers ? "1" : "0",
+    trust_levels_visible_to_department_managers: policy.visibleToDepartmentManagers ? "1" : "0",
+    trust_levels_visible_to_employees: policy.visibleToEmployees ? "1" : "0",
+  };
+  const upsert = db.prepare(`
+    INSERT INTO portal_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+  `);
+  const getCurrent = db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = ?");
+  const updateLevel = db.prepare("UPDATE employees SET time_confirmation_level = ? WHERE personnel_number = ?");
+  const changed = [];
+  db.exec("BEGIN");
+  try {
+    for (const [key, value] of Object.entries(values)) upsert.run(key, value);
+    for (const item of levels) {
+      const before = normalizeTimeConfirmationLevel(getCurrent.get(item.employeeNumber)?.time_confirmation_level);
+      if (before === item.level) continue;
+      updateLevel.run(item.level, item.employeeNumber);
+      changed.push({ ...item, before });
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "trust_levels.settings.update", "portal_settings", "trust_levels", JSON.stringify(policy));
+  for (const item of changed) {
+    auditPortal(actor.employeeNumber, "employee.time_confirmation_level.update", "employee", item.employeeNumber,
+      JSON.stringify({ before: item.before, after: item.level }));
+  }
+  response.json({ ...getTrustLevelPolicy(), changed: changed.length, canChange: true, employees: wifiConfirmationLevels() });
 });
 
 app.put("/api/portal/v1/wifi-automation/settings", (request, response) => {
@@ -16350,6 +16460,12 @@ app.put("/api/settings", (request, response) => {
   const currentWeekLockMode = body.currentWeekLockMode === "manual" ? "manual" : "closing";
   const currentWeekLockDay = ["friday", "saturday", "sunday"].includes(String(body.currentWeekLockDay)) ? String(body.currentWeekLockDay) : "saturday";
   const currentWeekLockTime = String(body.currentWeekLockTime || "17:00");
+  const rememberLastScheduleOverallPlan = body.rememberLastScheduleOverallPlan === undefined
+    ? currentSettings.remember_last_schedule_overall_plan !== "0"
+    : body.rememberLastScheduleOverallPlan !== false;
+  const rememberLastVacationOverallPlan = body.rememberLastVacationOverallPlan === undefined
+    ? currentSettings.remember_last_vacation_overall_plan !== "0"
+    : body.rememberLastVacationOverallPlan !== false;
 
   if (!Number.isInteger(backupIntervalHours) || backupIntervalHours < 1 || backupIntervalHours > 6) {
     throw httpError(400, "Das Backup-Intervall muss zwischen 1 und 6 Stunden liegen.");
@@ -16373,6 +16489,9 @@ app.put("/api/settings", (request, response) => {
     || String(currentSettings.backup_directory || "") !== backupDirectory.stored
     || String(currentSettings.backup_interval_hours || "2") !== String(backupIntervalHours);
   if (backupChanged) assertRequestPermission(request, "backup:write");
+  const managementViewSettingsChanged = currentSettings.remember_last_schedule_overall_plan !== (rememberLastScheduleOverallPlan ? "1" : "0")
+    || currentSettings.remember_last_vacation_overall_plan !== (rememberLastVacationOverallPlan ? "1" : "0");
+  if (managementViewSettingsChanged) requireAdminHrOrLocal(request, "hr:settings");
 
   const values = {
     operation_mode: requestedOperationMode,
@@ -16396,6 +16515,8 @@ app.put("/api/settings", (request, response) => {
     saturday_bonus_from: saturdayBonusFrom,
     saturday_bonus_factor: String(saturdayBonusFactor),
     show_sunday: body.showSunday === true ? "1" : "0",
+    remember_last_schedule_overall_plan: rememberLastScheduleOverallPlan ? "1" : "0",
+    remember_last_vacation_overall_plan: rememberLastVacationOverallPlan ? "1" : "0",
   };
   const update = db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
   db.exec("BEGIN");

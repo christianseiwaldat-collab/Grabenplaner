@@ -38,6 +38,7 @@ const state = {
   employeeAccessDraft: new Set(),
   amuPolicy: null,
   wifiAutomationSettings: null,
+  trustLevelSettings: null,
   greetingSettings: null,
   selectedRequest: null,
   allEmployees: [],
@@ -117,7 +118,7 @@ const elements = Object.fromEntries(
   [
     "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelView", "settingsView", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarEmployeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
-    "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "integrationSettings", "wifiAutomationSettings", "backupSettings", "rightsSettings", "employeeSettings",
+    "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField",
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount",
@@ -132,13 +133,13 @@ const elements = Object.fromEntries(
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
-    "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "positionSettingsCard", "personnelViewSettingsCard",
+    "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
-    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint",
+    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "amuManagerFileAccess", "sicknessLocalWarningDays", "sicknessHrWarningDays", "amuSettingsHint", "saveAmuSettingsButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
-    "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton",
+    "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
     "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordTitle", "personnelRecordContent",
     "timeCorrectionModal", "timeCorrectionForm", "timeCorrectionTitle", "timeCorrectionEmployee", "timeCorrectionWorkDate", "timeCorrectionEmployeeLabel", "timeCorrectionDateLabel", "timeCorrectionClockOutTime", "timeCorrectionMessage",
@@ -555,9 +556,10 @@ function applyRoleVisibility() {
     general: settingsAccess || operationModeAccess,
     branding: brandingAccess,
     pdf: settingsAccess,
-    personnel: settingsAccess || positionWriteAccess,
+    personnel: settingsAccess || positionWriteAccess || wifiSettingsAccess,
+    vacation: features.vacation !== false && (settingsAccess || globalAdministration),
+    timeTracking: settingsAccess || (wifiSettingsAccess && features.wifiSuggestions !== false && features.timeTracking !== false),
     integrations: integrationAccess,
-    wifiAutomation: wifiSettingsAccess && features.wifiSuggestions !== false && features.timeTracking !== false,
     access: (scopeAccess || permissions.includes("users:write") || globalAdministration)
       && (features.employeePortal !== false || features.requests !== false || features.sicknessAmu !== false),
     rights: rightsAccess,
@@ -565,10 +567,10 @@ function applyRoleVisibility() {
     usbProvisioning: usbProvisioningAccess,
   };
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("hidden", !settingsTabs[button.dataset.settingsTab]));
-  const wifiTabActive = document.querySelector('[data-settings-tab="wifiAutomation"]')?.classList.contains("active");
+  const timeTrackingTabActive = document.querySelector('[data-settings-tab="timeTracking"]')?.classList.contains("active");
   const integrationTabActive = document.querySelector('[data-settings-tab="integrations"]')?.classList.contains("active");
   const usbTabActive = document.querySelector('[data-settings-tab="usbProvisioning"]')?.classList.contains("active");
-  elements.saveSettingsButton?.classList.toggle("hidden", !settingsAccess || wifiTabActive || integrationTabActive || usbTabActive);
+  elements.saveSettingsButton?.classList.toggle("hidden", !settingsAccess || integrationTabActive || usbTabActive || (timeTrackingTabActive && !settingsAccess));
   elements.saveOperationModeButton?.classList.toggle("hidden", !operationModeAccess || settingsAccess);
   const privilegedServerRole = ["developer", "it_admin", "admin"].includes(role);
   const canExit = serverActive
@@ -585,6 +587,9 @@ function applyRoleVisibility() {
   elements.departmentFormCard?.classList.toggle("hidden", !departmentWriteAccess);
   elements.positionSettingsCard?.classList.toggle("hidden", !positionWriteAccess);
   elements.personnelViewSettingsCard?.classList.toggle("hidden", !settingsAccess);
+  elements.trustLevelSettingsCard?.classList.toggle("hidden", !wifiSettingsAccess || !globalAdministration);
+  elements.viewBehaviorSettingsCard?.classList.toggle("hidden", !globalAdministration);
+  elements.wifiSettingsCard?.classList.toggle("hidden", !wifiSettingsAccess || features.wifiSuggestions === false || features.timeTracking === false);
   elements.employeeImportCard?.classList.toggle("hidden", !personnelImportAccess);
   elements.importProfileCard?.classList.toggle("hidden", !(integrationReadAccess || personnelImportAccess));
   elements.payrollExportCard?.classList.toggle("hidden", !payrollExportAccess);
@@ -610,6 +615,7 @@ function applyRoleVisibility() {
   document.querySelector("#backupImportCard")?.classList.toggle("hidden", !backupImportAccess);
   elements.delegationSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.generalSettings?.querySelectorAll(".settings-card:not(.operation-mode-card)").forEach((card) => card.classList.toggle("hidden", !settingsAccess));
+  if (globalAdministration) elements.viewBehaviorSettingsCard?.classList.remove("hidden");
   [elements.localModeOption, elements.serverModeOption, elements.publicServerModeOption].forEach((button) => { if (button) button.disabled = !operationModeAccess; });
   if (!locationWriteAccess && state.personnelTab === "locations") setPersonnelTab("employees");
   renderSidebarSession();
@@ -847,6 +853,7 @@ async function loadAll() {
     state.portalPermissionCatalog = roleData.catalog || [];
     if (!state.desiredOperationMode) state.desiredOperationMode = ["lan", "server"].includes(portalStatus?.operationMode) ? portalStatus.operationMode : "local";
     setDefaultContext(state.locations);
+    restoreRememberedOverallContext(state.currentView, state.locations);
     const scheduleContext = contextQuery(true);
     const vacationContext = contextQuery(state.portalSession?.user?.role === "department_manager");
     const vacationEnabled = portalStatus?.installationFeatures?.vacation !== false;
@@ -1564,7 +1571,7 @@ function renderSettings() {
   updateWeekLockSettings();
   if (elements.vacationHrApprovalRequired) {
     elements.vacationHrApprovalRequired.checked = Boolean(state.workflowSettings?.vacationHrApprovalRequired ?? state.portalStatus?.workflow?.vacationHrApprovalRequired);
-    elements.workflowSettingsHint.textContent = "Die Einstellung kann von Personalleitung oder Admin geändert werden.";
+    elements.workflowSettingsHint.textContent = "Die Einstellung kann von Personalleitung oder höher geändert werden.";
   }
   document.querySelector("#breakRuleEnabled").checked = settings.break_rule_enabled === "1";
   document.querySelector("#breakAfterHours").value = Number(settings.break_after_minutes) / 60;
@@ -1573,6 +1580,10 @@ function renderSettings() {
   document.querySelector("#saturdayBonusFrom").value = settings.saturday_bonus_from;
   document.querySelector("#saturdayBonusFactor").value = settings.saturday_bonus_factor;
   document.querySelector("#showSunday").checked = settings.show_sunday === "1";
+  elements.rememberLastScheduleOverallPlan.checked = settings.remember_last_schedule_overall_plan !== "0";
+  elements.rememberLastVacationOverallPlan.checked = settings.remember_last_vacation_overall_plan !== "0";
+  localStorage.setItem(rememberContextCacheKey("planning"), elements.rememberLastScheduleOverallPlan.checked ? "1" : "0");
+  localStorage.setItem(rememberContextCacheKey("vacations"), elements.rememberLastVacationOverallPlan.checked ? "1" : "0");
   renderOperationMode();
   updatePdfPreview();
 }
@@ -1935,7 +1946,7 @@ async function saveGreetingSettings() {
 function renderWifiConfirmationLevels() {
   if (!elements.wifiConfirmationLevelList) return;
   const query = String(elements.wifiConfirmationLevelSearch?.value || "").trim().toLocaleLowerCase("de");
-  const employees = (state.wifiAutomationSettings?.employees || []).filter((employee) => {
+  const employees = (state.trustLevelSettings?.employees || []).filter((employee) => {
     if (!query) return true;
     return [employee.employeeNumber, employee.fullName, employee.nickname]
       .some((value) => String(value || "").toLocaleLowerCase("de").includes(query));
@@ -2002,7 +2013,7 @@ async function saveWifiLocationMappings() {
 }
 
 async function loadWifiAutomationSettings() {
-  if (!elements.wifiAutomationSettings) return;
+  if (!elements.timeTrackingSettings || !elements.wifiSettingsCard || elements.wifiSettingsCard.classList.contains("hidden")) return;
   try {
     const result = await api("/api/portal/v1/wifi-automation/settings");
     state.wifiAutomationSettings = result;
@@ -2010,7 +2021,6 @@ async function loadWifiAutomationSettings() {
     elements.wifiAbsenceGraceMinutes.value = Number(result.absenceGraceMinutes || 30);
     elements.saveWifiAutomationSettingsButton.disabled = result.canChange === false;
     elements.saveWifiLocationMappingsButton.disabled = result.canChange === false;
-    elements.saveWifiConfirmationLevelsButton.disabled = result.canChange === false;
     if (elements.wifiAutomationStatus) {
       const status = elements.wifiAutomationStatus.querySelector("strong");
       const detail = elements.wifiAutomationStatus.querySelector("small");
@@ -2021,10 +2031,75 @@ async function loadWifiAutomationSettings() {
     }
     updateWifiAutomationRuleHint();
     renderWifiConnector();
-    renderWifiConfirmationLevels();
   } catch (error) {
     elements.wifiAutomationSettingsHint.textContent = error.status === 403
       ? "WLAN-Regeln sind nur für Personalleitung, Admin, IT-Admin und Developer verfügbar."
+      : error.message;
+  }
+}
+
+function contextPreferenceUserKey() {
+  return state.portalSession?.user?.employeeNumber || "local";
+}
+
+function rememberContextSettingKey(view) {
+  return view === "vacations" ? "remember_last_vacation_overall_plan" : "remember_last_schedule_overall_plan";
+}
+
+function rememberContextCacheKey(view) {
+  return `grabenplaner-remember-${view}-overall-plan`;
+}
+
+function rememberContextEnabled(view) {
+  const settings = state.data?.settings;
+  const key = rememberContextSettingKey(view);
+  if (settings && key in settings) {
+    const enabled = settings[key] !== "0";
+    localStorage.setItem(rememberContextCacheKey(view), enabled ? "1" : "0");
+    return enabled;
+  }
+  return localStorage.getItem(rememberContextCacheKey(view)) !== "0";
+}
+
+function rememberedContextKey(view) {
+  return `grabenplaner-last-overall-plan:${contextPreferenceUserKey()}:${view}`;
+}
+
+function rememberOverallContext(view, locationId, departmentId = "") {
+  if (!rememberContextEnabled(view) || departmentId || !locationId) return;
+  localStorage.setItem(rememberedContextKey(view), locationId);
+}
+
+function restoreRememberedOverallContext(view, locations = state.locations) {
+  if (!["planning", "vacations"].includes(view) || !rememberContextEnabled(view)) return false;
+  if (state.portalSession?.user?.role === "department_manager") return false;
+  const locationId = localStorage.getItem(rememberedContextKey(view));
+  if (!locationId || !(locations || []).some((location) => location.id === locationId && location.active)) return false;
+  const changed = state.locationId !== locationId || Boolean(state.departmentId);
+  state.locationId = locationId;
+  state.departmentId = "";
+  return changed;
+}
+
+function renderTrustLevelSettings() {
+  const settings = state.trustLevelSettings;
+  if (!settings) return;
+  elements.trustLevelsEnabled.checked = settings.enabled !== false;
+  elements.trustLevelsVisibleToManagers.checked = settings.visibleToManagers === true;
+  elements.trustLevelsVisibleToDepartmentManagers.checked = settings.visibleToDepartmentManagers === true;
+  elements.trustLevelsVisibleToEmployees.checked = settings.visibleToEmployees !== false;
+  elements.saveWifiConfirmationLevelsButton.disabled = settings.canChange === false;
+  renderWifiConfirmationLevels();
+}
+
+async function loadTrustLevelSettings() {
+  if (!elements.trustLevelSettingsCard || elements.trustLevelSettingsCard.classList.contains("hidden")) return;
+  try {
+    state.trustLevelSettings = await api("/api/portal/v1/trust-level-settings");
+    renderTrustLevelSettings();
+  } catch (error) {
+    elements.wifiConfirmationLevelHint.textContent = error.status === 403
+      ? "Vertrauensstufen sind nur für Personalleitung, Admin, IT-Admin und Developer verfügbar."
       : error.message;
     elements.wifiConfirmationLevelList.innerHTML = "";
   }
@@ -2047,15 +2122,21 @@ async function saveWifiAutomationSettings() {
 }
 
 async function saveWifiConfirmationLevels() {
-  const levels = (state.wifiAutomationSettings?.employees || [])
+  const levels = (state.trustLevelSettings?.employees || [])
     .map((employee) => ({ employeeNumber: employee.employeeNumber, level: employee.level }));
   try {
-    const result = await api("/api/portal/v1/wifi-automation/confirmation-levels", {
+    const result = await api("/api/portal/v1/trust-level-settings", {
       method: "PUT",
-      body: JSON.stringify({ levels }),
+      body: JSON.stringify({
+        enabled: elements.trustLevelsEnabled.checked,
+        visibleToManagers: elements.trustLevelsVisibleToManagers.checked,
+        visibleToDepartmentManagers: elements.trustLevelsVisibleToDepartmentManagers.checked,
+        visibleToEmployees: elements.trustLevelsVisibleToEmployees.checked,
+        levels,
+      }),
     });
-    state.wifiAutomationSettings = { ...state.wifiAutomationSettings, employees: result.employees || [] };
-    renderWifiConfirmationLevels();
+    state.trustLevelSettings = result;
+    renderTrustLevelSettings();
     elements.wifiConfirmationLevelHint.textContent = result.changed
       ? `${result.changed} Vertrauensstufe(n) wurden aktualisiert.`
       : "Alle Vertrauensstufen waren bereits aktuell.";
@@ -2078,6 +2159,21 @@ function refreshDelegationEmployees() {
   const eligible = state.portalUsers.filter((user) => user.role === "department_manager" && user.active)
     .filter((user) => state.allEmployees.find((employee) => employee.personnel_number === user.employeeNumber)?.home_location_id === locationId);
   elements.delegationEmployee.innerHTML = eligible.map((user) => `<option value="${escapeHtml(user.employeeNumber)}">${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</option>`).join("");
+}
+
+async function loadWorkflowSettings() {
+  if (!elements.workflowSettingsCard) return;
+  try {
+    state.workflowSettings = await api("/api/portal/v1/workflow-settings");
+    elements.vacationHrApprovalRequired.checked = Boolean(state.workflowSettings.vacationHrApprovalRequired);
+    elements.vacationHrApprovalRequired.disabled = state.workflowSettings.canChange !== true;
+    elements.workflowSettingsHint.textContent = state.workflowSettings.canChange
+      ? "Die Einstellung kann von Personalleitung oder höher geändert werden."
+      : "Nur Personalleitung oder höhere Rollen können diese Einstellung ändern.";
+  } catch (error) {
+    elements.workflowSettingsCard.classList.toggle("hidden", error.status === 403);
+    if (error.status !== 403) elements.workflowSettingsHint.textContent = error.message;
+  }
 }
 
 async function loadApprovalDelegations() {
@@ -3952,7 +4048,9 @@ function applyRequestedView() {
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
     document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
   }
+  const contextChanged = restoreRememberedOverallContext(requestedView);
   setView(requestedView);
+  if (contextChanged) loadAll();
 }
 
 function setSettingsTab(tab) {
@@ -3962,23 +4060,29 @@ function setSettingsTab(tab) {
   elements.brandingSettings.classList.toggle("active", tab === "branding");
   elements.pdfSettings.classList.toggle("active", tab === "pdf");
   elements.personnelSettings.classList.toggle("active", tab === "personnel");
+  elements.vacationSettings?.classList.toggle("active", tab === "vacation");
+  elements.timeTrackingSettings?.classList.toggle("active", tab === "timeTracking");
   elements.integrationSettings?.classList.toggle("active", tab === "integrations");
-  elements.wifiAutomationSettings?.classList.toggle("active", tab === "wifiAutomation");
   elements.accessSettings.classList.toggle("active", tab === "access");
   elements.rightsSettings?.classList.toggle("active", tab === "rights");
   elements.backupSettings.classList.toggle("active", tab === "backup");
   elements.usbProvisioningSettings?.classList.toggle("active", tab === "usbProvisioning");
   const canSaveGeneralSettings = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("settings:write");
-  elements.saveSettingsButton?.classList.toggle("hidden", ["wifiAutomation", "integrations", "usbProvisioning"].includes(tab) || !canSaveGeneralSettings);
+  elements.saveSettingsButton?.classList.toggle("hidden", ["integrations", "usbProvisioning"].includes(tab) || !canSaveGeneralSettings);
   if (tab === "access") {
     loadPortalUsers();
     loadAmuSettings();
     loadGreetingSettings();
   }
+  if (tab === "vacation") {
+    loadWorkflowSettings();
+    loadApprovalDelegations();
+  }
   if (tab === "rights") loadRightsManagement();
   if (tab === "integrations") loadIntegrations().catch((error) => showToast(error.message, true));
-  if (tab === "wifiAutomation") loadWifiAutomationSettings();
+  if (tab === "timeTracking") loadWifiAutomationSettings();
+  if (tab === "personnel") loadTrustLevelSettings();
   if (tab === "branding") Promise.all([loadManagementBrandingPreference(), loadBrandingAssignments()]).then(() => renderSettings()).catch((error) => showToast(error.message, true));
   if (tab === "usbProvisioning") {
     renderUsbAvailability(state.portalStatus?.usbProvisioning || {});
@@ -4111,8 +4215,9 @@ function openEmployeeModal(employee = null) {
   ).join("");
   elements.employeePosition.value = employee?.position_id || "verkaufsmitarbeiter";
   const canManageConfirmationLevel = canManageWifiAutomationSettings();
+  const canViewConfirmationLevel = canManageConfirmationLevel || Boolean(employee && "time_confirmation_level" in employee);
   elements.employeeTimeConfirmationLevel.value = employee?.time_confirmation_level || "C";
-  elements.employeeTimeConfirmationLevelField?.classList.toggle("hidden", !canManageConfirmationLevel);
+  elements.employeeTimeConfirmationLevelField?.classList.toggle("hidden", !canViewConfirmationLevel);
   elements.employeeHomeLocation.value = employee?.home_location_id || state.locationId || state.locations?.[0]?.id || "01";
   updateEmployeeDepartmentOptions(employee?.preferred_department_id || "");
   document.querySelector("#employeePreferredDay").value = employee?.preferred_day_off || "";
@@ -5709,6 +5814,8 @@ async function saveSettings(silent = false) {
         saturdayBonusFrom: document.querySelector("#saturdayBonusFrom").value,
         saturdayBonusFactor: Number(document.querySelector("#saturdayBonusFactor").value),
         showSunday: document.querySelector("#showSunday").checked,
+        rememberLastScheduleOverallPlan: elements.rememberLastScheduleOverallPlan.checked,
+        rememberLastVacationOverallPlan: elements.rememberLastVacationOverallPlan.checked,
     };
     if (!portalEnabled || permissions.includes("operation_mode:write")) {
       payload.operationMode = state.desiredOperationMode || state.portalStatus?.operationMode || "local";
@@ -5829,7 +5936,12 @@ function showToast(message, error = false) {
   }, duration);
 }
 
-document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
+document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
+  const view = button.dataset.view;
+  const contextChanged = restoreRememberedOverallContext(view);
+  setView(view);
+  if (contextChanged) loadAll();
+}));
 elements.adminLoginForm?.addEventListener("submit", loginToAdministration);
 elements.adminLoginPersonnelNumber?.addEventListener("input", scheduleAdminLoginBrandingPreview);
 elements.adminLoginPersonnelNumber?.addEventListener("blur", previewAdminLoginBranding);
@@ -6167,7 +6279,7 @@ elements.wifiConfirmationLevelSearch?.addEventListener("input", renderWifiConfir
 elements.wifiConfirmationLevelList?.addEventListener("change", (event) => {
   const select = event.target.closest("[data-wifi-confirmation-level]");
   if (!select) return;
-  const employee = (state.wifiAutomationSettings?.employees || [])
+  const employee = (state.trustLevelSettings?.employees || [])
     .find((item) => item.employeeNumber === select.dataset.wifiConfirmationLevel);
   if (employee) employee.level = select.value;
 });
@@ -6191,6 +6303,7 @@ document.querySelector(".main-nav").addEventListener("click", (event) => {
   if (!button) return;
   state.locationId = button.dataset.locationId || state.locationId;
   state.departmentId = button.dataset.departmentId || "";
+  rememberOverallContext(button.dataset.contextView, state.locationId, state.departmentId);
   setView(button.dataset.contextView);
   loadAll();
 });

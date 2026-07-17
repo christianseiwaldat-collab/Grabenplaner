@@ -753,10 +753,10 @@ function wifiDateText(value) {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("de-AT", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
 }
 
-function wifiSuggestionInput(row) {
+function wifiSuggestionInput(row, showConfirmationLevel = true) {
   const input = (name, label, value) => `<label><span>${label}</span><input type="time" data-wifi-${name} value="${esc(value || "")}" /></label>`;
   return `<article class="wifi-suggestion-row ${esc(row.warning || "pending")}" data-wifi-suggestion="${esc(row.id)}">
-    <div><strong>${esc(wifiDateText(row.workDate))}</strong><small>${esc(row.locationName)} · Stufe ${esc(row.level)}</small></div>
+    <div><strong>${esc(wifiDateText(row.workDate))}</strong><small>${esc(row.locationName)}${showConfirmationLevel && row.level ? ` · Stufe ${esc(row.level)}` : ""}</small></div>
     ${input("start", "Beginn", row.startTime)}${input("end", "Ende", row.endTime)}${input("break-start", "Pause von", row.breakStartTime)}${input("break-end", "Pause bis", row.breakEndTime)}
     <div class="wifi-suggestion-actions"><button class="confirm" data-wifi-confirm type="button">Bestätigen</button><button class="reject" data-wifi-reject type="button">Verwerfen</button></div>
   </article>`;
@@ -787,7 +787,9 @@ function renderWifiAutomation() {
     B: "Stufe B · Spätestens nach drei Tagen und jedenfalls bis zum Wochenabschluss bestätigen.",
     C: "Stufe C · Täglich, spätestens am Folgetag um 12:00 Uhr bestätigen.",
   };
-  el.wifiConfirmationLevel.textContent = levelText[data.confirmationLevel] || levelText.C;
+  const showConfirmationLevel = data.confirmationLevelVisible !== false && Boolean(data.confirmationLevel);
+  el.wifiConfirmationLevel.classList.toggle("hidden", !showConfirmationLevel);
+  el.wifiConfirmationLevel.textContent = showConfirmationLevel ? (levelText[data.confirmationLevel] || levelText.C) : "";
   const pending = (data.suggestions || []).filter((item) => item.status === "pending");
   const history = (data.suggestions || []).filter((item) => item.status !== "pending").slice(0, 8);
   const warningText = data.counts?.overdue
@@ -802,8 +804,8 @@ function renderWifiAutomation() {
     groups.get(item.weekStart).push(item);
   }
   const pendingHtml = [...groups.entries()].map(([weekStart, items]) => `
-    <div class="wifi-week-heading"><strong>Woche ab ${esc(wifiDateText(weekStart))}</strong>${data.confirmationLevel === "A" ? `<button class="wifi-week-confirm" data-wifi-confirm-week="${esc(weekStart)}" type="button">Woche abschließen</button>` : ""}</div>
-    ${items.map(wifiSuggestionInput).join("")}`).join("");
+    <div class="wifi-week-heading"><strong>Woche ab ${esc(wifiDateText(weekStart))}</strong>${data.canConfirmWeek ? `<button class="wifi-week-confirm" data-wifi-confirm-week="${esc(weekStart)}" type="button">Woche abschließen</button>` : ""}</div>
+    ${items.map((item) => wifiSuggestionInput(item, showConfirmationLevel)).join("")}`).join("");
   const historyHtml = history.length ? `<div class="wifi-week-heading"><strong>Zuletzt bearbeitet</strong></div>${history.map((item) => `
     <div class="wifi-history-row"><span>${esc(wifiDateText(item.workDate))} · ${esc(item.startTime)}–${esc(item.endTime)}</span><strong>${item.status === "confirmed" ? "Bestätigt" : "Verworfen"}</strong></div>`).join("")}` : "";
   el.wifiSuggestionList.innerHTML = pendingHtml || historyHtml

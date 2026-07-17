@@ -45,6 +45,10 @@ function resetFixture() {
     `);
     upsert.run("wifi_minimum_presence_minutes", "5");
     upsert.run("wifi_absence_grace_minutes", "30");
+    upsert.run("trust_levels_enabled", "1");
+    upsert.run("trust_levels_visible_to_managers", "0");
+    upsert.run("trust_levels_visible_to_department_managers", "0");
+    upsert.run("trust_levels_visible_to_employees", "1");
     db.exec("COMMIT");
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
@@ -97,6 +101,30 @@ async function requestJson(route, { method = "GET", session = null, body } = {})
   let payload = null;
   try { payload = text ? JSON.parse(text) : null; } catch { payload = { raw: text }; }
   return { response, payload };
+}
+
+function settingsUpdateBody(settings, locationId, overrides = {}) {
+  return {
+    locationId,
+    pdfTitle: settings.pdf_title || "Dienstplan",
+    pdfFilenamePrefix: settings.pdf_filename_prefix || "Dienstplan",
+    vacationPdfTitle: settings.vacation_pdf_title || "Urlaubsplanung",
+    vacationPdfFilenamePrefix: settings.vacation_pdf_filename_prefix || "Urlaubsplanung",
+    vacationPdfCalendarStyle: settings.vacation_pdf_calendar_style || "bars",
+    externalBackupEnabled: false,
+    backupDirectory: settings.backup_directory || "",
+    backupIntervalHours: Number(settings.backup_interval_hours || 2),
+    breakAfterMinutes: Number(settings.break_after_minutes || 360),
+    breakDurationMinutes: Number(settings.break_duration_minutes || 30),
+    saturdayBonusFrom: settings.saturday_bonus_from || "13:00",
+    saturdayBonusFactor: Number(settings.saturday_bonus_factor || 1.5),
+    currentWeekLockMode: settings.current_week_lock_mode || "closing",
+    currentWeekLockDay: settings.current_week_lock_day || "saturday",
+    currentWeekLockTime: settings.current_week_lock_time || "17:00",
+    rememberLastScheduleOverallPlan: settings.remember_last_schedule_overall_plan !== "0",
+    rememberLastVacationOverallPlan: settings.remember_last_vacation_overall_plan !== "0",
+    ...overrides,
+  };
 }
 
 test.before(async () => {
@@ -356,6 +384,94 @@ test("v0.56: WLAN-Regeln bleiben nach einem frischen App-Start erhalten", async 
     { key: "wifi_absence_grace_minutes", value: "73" },
     { key: "wifi_minimum_presence_minutes", value: "17" },
   ]);
+});
+
+test("v0.65: Vertrauensstufen bleiben gespeichert, sind abschaltbar und rollenabhängig sichtbar", async () => {
+  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.65-settings-dashboard-foundation'").get());
+  const admin = createPortalSession("101", "admin");
+  const saved = await requestJson("/api/portal/v1/trust-level-settings", {
+    method: "PUT",
+    session: admin,
+    body: {
+      enabled: true,
+      visibleToManagers: true,
+      visibleToDepartmentManagers: false,
+      visibleToEmployees: false,
+      levels: [{ employeeNumber: "102", level: "A" }],
+    },
+  });
+  assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
+  assert.equal(saved.payload.changed, 1);
+  assert.equal(saved.payload.visibleToManagers, true);
+
+  const manager = createPortalSession("105", "manager", ["employees:write"]);
+  const managerEmployees = await requestJson("/api/employees", { session: manager });
+  assert.equal(managerEmployees.response.status, 200, JSON.stringify(managerEmployees.payload));
+  assert.ok(managerEmployees.payload.some((employee) => "time_confirmation_level" in employee));
+
+  const employee = createPortalSession("102", "employee");
+  const ownWifi = await requestJson("/api/portal/v1/me/wifi-automation", { session: employee });
+  assert.equal(ownWifi.response.status, 200, JSON.stringify(ownWifi.payload));
+  assert.equal(ownWifi.payload.confirmationLevelVisible, false);
+  assert.equal(ownWifi.payload.confirmationLevel, null);
+
+  const adminAgain = createPortalSession("101", "admin");
+  const disabled = await requestJson("/api/portal/v1/trust-level-settings", {
+    method: "PUT",
+    session: adminAgain,
+    body: {
+      enabled: false,
+      visibleToManagers: true,
+      visibleToDepartmentManagers: true,
+      visibleToEmployees: true,
+      levels: [{ employeeNumber: "102", level: "A" }],
+    },
+  });
+  assert.equal(disabled.response.status, 200, JSON.stringify(disabled.payload));
+  assert.equal(disabled.payload.enabled, false);
+  assert.equal(db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = '102'").get().time_confirmation_level, "A");
+
+  const employeeAgain = createPortalSession("102", "employee");
+  const weekClose = await requestJson("/api/portal/v1/me/wifi-suggestions/confirm-week", {
+    method: "POST",
+    session: employeeAgain,
+    body: { weekStart: "2026-07-13", suggestions: [] },
+  });
+  assert.equal(weekClose.response.status, 403, JSON.stringify(weekClose.payload));
+  assert.equal(weekClose.payload.code, "WIFI_WEEK_CONFIRMATION_NOT_ALLOWED");
+});
+
+test("v0.65: Startverhalten ist standardmäßig aktiv und nur durch Personalleitung oder höher änderbar", async () => {
+  const locationId = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = '105'").get().home_location_id;
+  const manager = createPortalSession("105", "manager", ["settings:write"]);
+  const current = await requestJson(`/api/settings?location=${encodeURIComponent(locationId)}`, { session: manager });
+  assert.equal(current.response.status, 200, JSON.stringify(current.payload));
+  assert.equal(current.payload.remember_last_schedule_overall_plan, "1");
+  assert.equal(current.payload.remember_last_vacation_overall_plan, "1");
+
+  const denied = await requestJson("/api/settings", {
+    method: "PUT",
+    session: manager,
+    body: settingsUpdateBody(current.payload, locationId, {
+      rememberLastScheduleOverallPlan: false,
+      rememberLastVacationOverallPlan: true,
+    }),
+  });
+  assert.equal(denied.response.status, 403, JSON.stringify(denied.payload));
+  assert.equal(db.prepare("SELECT value FROM settings WHERE key = 'remember_last_schedule_overall_plan'").get().value, "1");
+
+  const admin = createPortalSession("101", "admin");
+  const changed = await requestJson("/api/settings", {
+    method: "PUT",
+    session: admin,
+    body: settingsUpdateBody(current.payload, locationId, {
+      rememberLastScheduleOverallPlan: false,
+      rememberLastVacationOverallPlan: true,
+    }),
+  });
+  assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
+  assert.equal(changed.payload.remember_last_schedule_overall_plan, "0");
+  assert.equal(changed.payload.remember_last_vacation_overall_plan, "1");
 });
 
 test("v0.56: Event-Inbox ist gehasht und idempotent, eine Session darf zwei Arbeitstage vorschlagen", () => {
