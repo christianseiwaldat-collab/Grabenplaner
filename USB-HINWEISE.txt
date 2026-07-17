@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.68 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.68.1 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,7 +13,7 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Version v0.68 Beta:
+Version v0.68.1 Beta:
   - Grafisches Rechte-Dashboard für Personalleitung, Admin, IT-Admin und Developer.
   - Nachvollziehbarer Weg von Person und Rolle über Standort oder Abteilung zu den wirksamen Rechten.
   - Getrennte Darstellung von Rollenrechten, individuellen Zusatzrechten und Bereichsgrenzen.
