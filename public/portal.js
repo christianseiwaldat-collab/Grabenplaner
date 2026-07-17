@@ -1245,8 +1245,9 @@ function renderLeadershipApprovals() {
       : kind === "amu" ? `${dateText(item.incapacity_from)} – ${dateText(item.incapacity_to)}` : leadershipRequestPeriodText(item);
     const risk = kind === "sickness" && item.staffing_risk?.atRisk ? " · Mindestbesetzung gefährdet" : "";
     const status = kind === "sickness" ? (item.severity || item.status || "reported") : (item.status || "pending");
+    const amuStatusText = ({ required: "AUM erforderlich", received: "AUM eingelangt", reviewed: "AUM geprüft" })[item.aum_status] || "Krankmeldung erfasst";
     const statusText = kind === "sickness"
-      ? ({ red: "Rot eskaliert", yellow: "AUM überfällig", warning: "Besetzung prüfen", normal: item.status === "aum_received" ? "AUM vorhanden" : "Gemeldet" }[status] || "Gemeldet")
+      ? ({ red: "Rot eskaliert", yellow: "AUM überfällig", warning: "Besetzung prüfen", normal: amuStatusText }[status] || amuStatusText)
       : (statusLabels[item.status] || item.status || "Offen");
     return `<article class="leadership-request-row sickness-severity-${esc(status)}" data-leadership-request-id="${esc(item.id)}" data-leadership-request-kind="${esc(kind)}"><div><strong>${esc(label)} · ${esc(employeeNumber)} · ${esc(name)}</strong><small>${esc(period)}${item.note || item.employee_note ? ` · ${esc(item.note || item.employee_note)}` : ""}${esc(risk)}</small><span class="status ${esc(status)}">${esc(statusText)}</span></div><button type="button" data-open-leadership-request>${kind === "sickness" ? "Ansehen" : "Bearbeiten"}</button></article>`;
   }).join("") : '<p class="empty-state">Derzeit ist in diesem Bereich nichts zu bearbeiten.</p>';
@@ -1261,6 +1262,10 @@ async function loadLeadershipApprovals() {
   portalState.leadershipSicknessCases = [];
   portalState.leadershipOverview = null;
   const permissions = portalUser()?.permissions || [];
+  const canUseProtectedAmuArea = permissions.includes("amu:metadata:read") || permissions.includes("amu:review");
+  document.querySelector('[data-leadership-kind="amu"]')?.classList.toggle("hidden", !canUseProtectedAmuArea);
+  if (portalState.leadershipKind === "amu" && !canUseProtectedAmuArea) portalState.leadershipKind = "sickness";
+  document.querySelectorAll("[data-leadership-kind]").forEach((button) => button.classList.toggle("active", button.dataset.leadershipKind === portalState.leadershipKind));
   const tasks = [{ kind: "time_correction", request: api(`/api/portal/v1/leadership/overview?${leadershipQuery()}`).then((result) => { portalState.leadershipOverview = normalizedLeadershipOverview(result); }) }];
   if (permissions.includes("vacation:read") || permissions.includes("time:review")) tasks.push({ kind: "absence", request: api(`/api/portal/v1/absence-requests?${leadershipQuery()}`).then((result) => { portalState.leadershipRequests = result.requests || []; }) });
   if (permissions.includes("amu:metadata:read") || permissions.includes("amu:review")) tasks.push({ kind: "amu", request: api(`/api/portal/v1/amu-reports?${leadershipQuery()}`).then((result) => { portalState.leadershipAmuReports = result.reports || []; }) });

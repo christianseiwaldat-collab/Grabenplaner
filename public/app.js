@@ -149,7 +149,7 @@ const elements = Object.fromEntries(
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan",
-    "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "amuManagerFileAccess", "sicknessLocalWarningDays", "sicknessHrWarningDays", "amuSettingsHint", "saveAmuSettingsButton",
+    "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "amuSettingsHint", "saveAmuSettingsButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
@@ -1758,13 +1758,16 @@ function openRightsEditor(employeeNumber) {
     <section class="rights-permission-group"><h3>${escapeHtml(group)}</h3><div class="rights-permission-grid">${permissions.map((permission) => {
       const baseRight = rolePermissions.has(permission.id);
       const additionalRight = grantedPermissions.has(permission.id);
-      const editable = Boolean(user.manageable && permission.editable && !baseRight);
-      const lockedRight = !user.manageable || !permission.editable;
+      const roleEligible = !Array.isArray(permission.eligibleRoles) || permission.eligibleRoles.includes(user.role);
+      const editable = Boolean(user.manageable && permission.editable && roleEligible && !baseRight);
+      const lockedRight = !user.manageable || !permission.editable || !roleEligible;
       const warningLevel = permission.warningLevel || "normal";
       const statusText = baseRight
         ? "Grundrecht der Rolle"
         : additionalRight
           ? lockedRight ? "Individuell vergeben · nur zur Ansicht" : "Individuell vergeben"
+          : !roleEligible
+            ? "Nur für Personalleitung und höhere geschützte Rollen"
           : !user.manageable
             ? "Für die aktuelle Rolle nur zur Ansicht"
             : !permission.editable
@@ -2282,10 +2285,9 @@ async function loadAmuSettings() {
     elements.amuConvertImagesToPdf.checked = policy.convertImagesToPdf !== false;
     elements.amuGrayscaleImages.checked = policy.grayscaleImages !== false;
     elements.amuOcrEnabled.checked = policy.ocrEnabled !== false;
-    elements.amuManagerFileAccess.checked = policy.managerFileAccess === true;
     elements.sicknessLocalWarningDays.value = Number(policy.localWarningDays ?? 2);
     elements.sicknessHrWarningDays.value = Number(policy.hrWarningDays ?? 3);
-    [elements.amuUploadMaxMb, elements.amuStoredMaxMb, elements.amuConvertImagesToPdf, elements.amuGrayscaleImages, elements.amuOcrEnabled, elements.amuManagerFileAccess, elements.sicknessLocalWarningDays, elements.sicknessHrWarningDays, elements.saveAmuSettingsButton]
+    [elements.amuUploadMaxMb, elements.amuStoredMaxMb, elements.amuConvertImagesToPdf, elements.amuGrayscaleImages, elements.amuOcrEnabled, elements.sicknessLocalWarningDays, elements.sicknessHrWarningDays, elements.saveAmuSettingsButton]
       .forEach((control) => { if (control) control.disabled = !result.canChange; });
     elements.amuSettingsHint.textContent = result.canChange ? "Änderbar durch Admin oder Personalleitung." : "Nur Admin oder Personalleitung kann diese Werte ändern.";
   } catch (error) {
@@ -2304,7 +2306,6 @@ async function saveAmuSettings() {
         convertImagesToPdf: elements.amuConvertImagesToPdf.checked,
         grayscaleImages: elements.amuGrayscaleImages.checked,
         ocrEnabled: elements.amuOcrEnabled.checked,
-        managerFileAccess: elements.amuManagerFileAccess.checked,
         localWarningDays: Number(elements.sicknessLocalWarningDays.value),
         hrWarningDays: Number(elements.sicknessHrWarningDays.value),
       }),

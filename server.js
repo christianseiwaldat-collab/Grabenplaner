@@ -133,11 +133,11 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "vacation:approve", label: "Urlaubs- und ZA-Anträge bearbeiten", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true },
   { id: "hr:approve", label: "Verbindliche PL-Freigaben erteilen", group: "Zeit & Abwesenheit", warningLevel: "critical" },
   { id: "hr:settings", label: "Antrags- und AUM-Regeln verwalten", group: "Zeit & Abwesenheit", warningLevel: "critical" },
-  { id: "amu:metadata:read", label: "AUM-Metadaten und Personalakt lesen", group: "AUM", warningLevel: "high", hrDelegable: true },
-  { id: "amu:file:read", label: "AUM-Dokumente öffnen", group: "AUM", warningLevel: "critical" },
-  { id: "amu:review", label: "AUM-Meldungen prüfen", group: "AUM", warningLevel: "critical" },
-  { id: "amu:delete", label: "AUM-Meldungen löschen", group: "AUM", warningLevel: "critical" },
-  { id: "amu:audit", label: "AUM-Prüfprotokoll lesen", group: "AUM", warningLevel: "critical" },
+  { id: "amu:metadata:read", label: "Geschützte AUM-Metadaten lesen", description: "Nur Personalleitung und höhere geschützte Rollen; nicht an Filial- oder Abteilungsleitung delegierbar.", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "amu:file:read", label: "AUM-Dokumente öffnen", description: "Besonders geschütztes Zusatzrecht für Personalleitung und höhere Rollen.", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "amu:review", label: "AUM-Meldungen prüfen", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "amu:delete", label: "AUM-Meldungen löschen", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "amu:audit", label: "AUM-Prüfprotokoll lesen", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "sickness:read", label: "Krankmeldungen im eigenen Bereich lesen", group: "AUM", warningLevel: "high", hrDelegable: true },
   { id: "sickness:settings", label: "Krankmeldungs- und AUM-Fristen verwalten", group: "AUM", warningLevel: "critical" },
   { id: "notifications:settings", label: "Eigene Besetzungswarnungen konfigurieren", group: "AUM", warningLevel: "normal", hrDelegable: true },
@@ -158,6 +158,12 @@ const delegablePortalPermissionCatalog = Object.freeze([
 ]);
 const delegablePortalPermissions = new Set(delegablePortalPermissionCatalog.map((entry) => entry.id));
 const hrDelegablePortalPermissions = new Set(delegablePortalPermissionCatalog.filter((entry) => entry.hrDelegable).map((entry) => entry.id));
+const protectedAmuPermissionIds = new Set(["amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit"]);
+const protectedAmuRoleIds = new Set(["hr", "admin", "it_admin", "developer"]);
+
+function portalPermissionAllowedForRole(permission, role) {
+  return !protectedAmuPermissionIds.has(String(permission || "")) || protectedAmuRoleIds.has(String(role || ""));
+}
 
 const portalDashboardPermissionDetails = Object.freeze([
   { id: "own_schedule:read", label: "Eigenen Dienstplan lesen", group: "Eigene Daten", scopeBehavior: "self" },
@@ -186,6 +192,7 @@ const portalDashboardPermissionDetails = Object.freeze([
 
 const portalGlobalPermissionIds = new Set([
   "settings:write", "positions:write", "hr:approve", "hr:settings", "sickness:settings",
+  "amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit",
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
   "integrations:connections:write", "integrations:credentials:write", "branding:read", "branding:write",
   "operation_mode:write", "backup:write", "update:write", "system:write", "wifi:settings",
@@ -237,7 +244,6 @@ const builtinPortalRoles = [
       "time:review",
       "vacation:read",
       "vacation:approve",
-      "amu:metadata:read",
       "sickness:read",
       "notifications:settings",
       "scopes:write",
@@ -254,7 +260,7 @@ const builtinPortalRoles = [
       "own_sickness:create", "own_sickness:read",
       "employees:read", "schedule:read", "schedule:write",
       "time:read", "time:review", "vacation:read", "vacation:approve",
-      "amu:metadata:read", "sickness:read", "notifications:settings",
+      "sickness:read", "notifications:settings",
     ],
   },
   {
@@ -447,7 +453,6 @@ const defaultPortalSettings = {
   amu_stored_max_mb: "2",
   amu_convert_images_to_pdf: "1",
   amu_grayscale_images: "1",
-  amu_manager_file_access: "0",
   amu_ocr_enabled: "1",
   sickness_local_warning_days: "2",
   sickness_hr_warning_days: "3",
@@ -2273,6 +2278,16 @@ for (const role of builtinPortalRoles) {
   upsertPortalRole.run(role.id, role.name, role.description, JSON.stringify(role.permissions), role.sortOrder);
 }
 db.prepare("UPDATE portal_users SET role_locked = 1 WHERE role = 'developer'").run();
+db.prepare(`
+  DELETE FROM portal_permission_grants
+  WHERE permission IN ('amu:metadata:read','amu:file:read','amu:review','amu:delete','amu:audit')
+    AND EXISTS (
+      SELECT 1 FROM portal_users u
+      WHERE u.employee_number = portal_permission_grants.employee_number
+        AND u.role NOT IN ('hr','admin','it_admin','developer')
+    )
+`).run();
+db.prepare("UPDATE portal_settings SET value = '0', updated_at = CURRENT_TIMESTAMP WHERE key = 'amu_manager_file_access'").run();
 db.exec("BEGIN");
 try {
   db.prepare(`
@@ -2318,6 +2333,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.59-sickness-ocr-notifications", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.60-portal-mobile-foundation", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.70-aum-security-foundation", packageMetadata.version);
 const integrationFeatureMigrationId = "v0.63-import-payroll-integrations";
 if (!db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(integrationFeatureMigrationId)) {
   const stored = db.prepare("SELECT value FROM settings WHERE key = 'installation_features'").get()?.value;
@@ -3037,7 +3054,8 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
   if (!scopes.length && !GLOBAL_SCOPE_PORTAL_ROLES.has(session.role) && session.home_location_id) {
     scopes.push({ locationId: session.home_location_id, departmentId: session.role === "department_manager" ? (Number(session.preferred_department_id) || null) : null });
   }
-  const rolePermissions = parsePortalPermissions(session.permissions);
+  const rolePermissions = parsePortalPermissions(session.permissions)
+    .filter((permission) => portalPermissionAllowedForRole(permission, session.role));
   const grantedPermissions = portalPermissionGrantsForEmployee(session.employee_number);
   return {
     id: session.id,
@@ -3269,7 +3287,8 @@ function mobileSessionPrincipal(row) {
   if (!scopes.length && !GLOBAL_SCOPE_PORTAL_ROLES.has(row.role) && row.home_location_id) {
     scopes.push({ locationId: row.home_location_id, departmentId: row.role === "department_manager" ? (Number(row.preferred_department_id) || null) : null });
   }
-  const rolePermissions = parsePortalPermissions(row.permissions);
+  const rolePermissions = parsePortalPermissions(row.permissions)
+    .filter((permission) => portalPermissionAllowedForRole(permission, row.role));
   const grantedPermissions = portalPermissionGrantsForEmployee(row.employee_number);
   return {
     id: row.id,
@@ -4589,7 +4608,6 @@ function getAmuPolicy() {
     storedMaxMb,
     convertImagesToPdf: settings.amu_convert_images_to_pdf !== "0",
     grayscaleImages: settings.amu_grayscale_images !== "0",
-    managerFileAccess: settings.amu_manager_file_access === "1",
     ocrEnabled: settings.amu_ocr_enabled !== "0",
     localWarningDays,
     hrWarningDays,
@@ -5285,7 +5303,6 @@ function validateAmuPolicy(body = {}) {
     storedMaxMb: Math.round(storedMaxMb * 2) / 2,
     convertImagesToPdf: body.convertImagesToPdf !== false,
     grayscaleImages: body.grayscaleImages !== false,
-    managerFileAccess: body.managerFileAccess === true,
     ocrEnabled: body.ocrEnabled !== false,
     localWarningDays: deadlines.localDays,
     hrWarningDays: deadlines.hrDays,
@@ -5294,9 +5311,14 @@ function validateAmuPolicy(body = {}) {
 
 function actorCanReadAmuFiles(session) {
   if (!session) return false;
-  if (session.employeeNumber === "local" || HR_DECISION_PORTAL_ROLES.has(session.role)) return true;
-  if (session.permissions?.includes("amu:file:read")) return true;
-  return ["manager", "department_manager"].includes(session.role) && getAmuPolicy().managerFileAccess;
+  if (session.employeeNumber === "local") return true;
+  return protectedAmuRoleIds.has(session.role) && session.permissions?.includes("amu:file:read");
+}
+
+function actorCanReadAmuSensitiveMetadata(session) {
+  if (!session) return false;
+  if (session.employeeNumber === "local") return true;
+  return protectedAmuRoleIds.has(session.role) && session.permissions?.includes("amu:metadata:read");
 }
 
 function parsePortalPermissions(value) {
@@ -5310,11 +5332,12 @@ function parsePortalPermissions(value) {
 
 function portalPermissionGrantsForEmployee(employeeNumber) {
   if (!employeeNumber || !tableExists("portal_permission_grants")) return [];
+  const role = db.prepare("SELECT role FROM portal_users WHERE employee_number = ?").get(String(employeeNumber))?.role || "employee";
   return db.prepare(`
     SELECT permission FROM portal_permission_grants
     WHERE employee_number = ? ORDER BY permission
   `).all(String(employeeNumber)).map((row) => row.permission)
-    .filter((permission) => delegablePortalPermissions.has(permission));
+    .filter((permission) => delegablePortalPermissions.has(permission) && portalPermissionAllowedForRole(permission, role));
 }
 
 function manageablePortalPermissionsForActor(actor) {
@@ -5355,7 +5378,8 @@ function getPortalRoles() {
       name: role.name,
       description: role.description || "",
       builtin: Boolean(role.builtin),
-      permissions: parsePortalPermissions(role.permissions),
+      permissions: parsePortalPermissions(role.permissions)
+        .filter((permission) => portalPermissionAllowedForRole(permission, role.id)),
       sortOrder: Number(role.sort_order || 0),
       protected: protectedRole,
       assignable: !protectedRole,
@@ -5454,6 +5478,10 @@ function validatePersonnelAccessProfile(actor, payload, employee = {}) {
   const invalidPermissions = submittedPermissions.filter((permission) => !delegablePortalPermissions.has(permission));
   if (invalidPermissions.length) {
     throw httpError(403, `Diese Rechte dürfen nicht vergeben werden: ${invalidPermissions.join(", ")}`, "PORTAL_PERMISSION_NOT_DELEGABLE");
+  }
+  const roleRestrictedPermissions = submittedPermissions.filter((permission) => !portalPermissionAllowedForRole(permission, role));
+  if (roleRestrictedPermissions.length) {
+    throw httpError(403, "Geschützte AUM-Rechte dürfen nur Personalleitung und höheren Rollen zugewiesen werden.", "AMU_PERMISSION_ROLE_RESTRICTED");
   }
   const rolePermissions = new Set(getPortalRoles().find((entry) => entry.id === role)?.permissions || []);
   const permissions = submittedPermissions.filter((permission) => !rolePermissions.has(permission));
@@ -7655,8 +7683,19 @@ function serializeSicknessCases(rows, { includeNote = true } = {}) {
   const alertStatement = db.prepare(`
     SELECT * FROM sickness_alerts WHERE sickness_case_id = ? ORDER BY id
   `);
+  const amuStatusStatement = db.prepare(`
+    SELECT status FROM amu_reports
+    WHERE sickness_case_id = ? AND status NOT IN ('withdrawn','purged')
+    ORDER BY submitted_at DESC, id DESC
+  `);
   return rows.map((row) => {
     const payload = sicknessCasePayload(row);
+    const reportStatuses = amuStatusStatement.all(row.id).map((report) => String(report.status || ""));
+    const amuStatus = reportStatuses.includes("reviewed")
+      ? "reviewed"
+      : reportStatuses.some((status) => ["submitted", "returned"].includes(status)) || payload.status === "aum_received"
+        ? "received"
+        : "required";
     const alerts = alertStatement.all(row.id).map((alertRow) => {
       const alert = sicknessAlertPayload(alertRow);
       return {
@@ -7688,6 +7727,7 @@ function serializeSicknessCases(rows, { includeNote = true } = {}) {
       expected_end: payload.expectedEnd || "",
       return_to_work_date: payload.returnToWorkDate || "",
       employee_note: includeNote ? (payload.note || "") : "",
+      amu_status: amuStatus,
       staffing_risk: payload.staffingRisk || { atRisk: false, plannedShiftCount: 0, worstShortfall: 0, slots: [] },
       severity,
       alerts,
@@ -13901,7 +13941,7 @@ function rightsDashboardProcesses() {
           { label: "Lokaler Hinweis", value: `nach ${amuPolicy.localWarningDays} Tag(en)`, tone: "attention" },
           { label: "PL-Eskalation", value: `nach ${amuPolicy.hrWarningDays} Tag(en)`, tone: "critical" },
           { label: "Lokale OCR", value: amuPolicy.ocrEnabled ? "Aktiv" : "Deaktiviert", tone: amuPolicy.ocrEnabled ? "positive" : "neutral" },
-          { label: "Dateizugriff Leitung", value: amuPolicy.managerFileAccess ? "Freigegeben" : "Nur Personalleitung", tone: amuPolicy.managerFileAccess ? "attention" : "positive" },
+          { label: "AUM-Dateizugriff", value: "PL+ mit Zusatzrecht", tone: "positive" },
         ],
         simulations: [
           { id: "current", label: "Aktuelle Konfiguration", description: "Zeigt Krankmeldung, optionale Nachreichung und fachliche Prüfung.", stepStates: {} },
@@ -13914,7 +13954,7 @@ function rightsDashboardProcesses() {
           { id: "document", title: "AUM direkt oder später nachreichen", actor: "Teammitglied", type: "actor", state: "conditional", description: "Foto oder PDF kann bei der Krankmeldung oder nachträglich sicher hochgeladen werden; ein offenes Enddatum ist zulässig.", setting: `Upload bis ${amuPolicy.uploadMaxMb} MB, Speicherung bis ${amuPolicy.storedMaxMb} MB.`, permissions: ["own_amu:create"], settingsTarget: { tab: "access", label: "AUM-Einstellungen öffnen" } },
           { id: "ocr", title: "Datumswerte lokal erkennen", actor: "Grabenplaner", type: "system", state: amuPolicy.ocrEnabled ? "active" : "bypassed", description: amuPolicy.ocrEnabled ? "Die lokale OCR schlägt Beginn und Ende zur menschlichen Bestätigung vor." : "Die lokale OCR ist deaktiviert; Datumswerte werden manuell bestätigt.", setting: amuPolicy.ocrEnabled ? "OCR erstellt nur bearbeitbare Vorschläge." : "Keine automatische Datenerkennung.", permissions: [], settingsTarget: { tab: "access", label: "AUM-Einstellungen öffnen" } },
           { id: "secure_storage", title: "Dokument geschützt speichern", actor: "Grabenplaner", type: "system", state: "active", description: "AUM-Dokumente und Personalakt werden getrennt verschlüsselt gespeichert und revisionsfähig zugeordnet.", setting: amuPolicy.grayscaleImages ? "Bilder werden platzsparend in Graustufen verarbeitet." : "Farbinformationen bleiben erhalten.", permissions: [] },
-          { id: "review", title: "Fall fachlich prüfen", actor: "Personalleitung", type: "approval", state: "active", description: amuPolicy.managerFileAccess ? "Berechtigte Leitungen können zusätzlich die freigegebenen Dokumente einsehen." : "Filial- und Abteilungsleitung sehen den Fallstatus, aber nicht das AUM-Dokument.", setting: amuPolicy.managerFileAccess ? "Dokumentzugriff für berechtigte Leitung aktiv." : "AUM-Datei bleibt auf Personalleitung und höhere Rechte begrenzt.", permissions: ["amu:metadata:read", "amu:file:read", "amu:review"], settingsTarget: { tab: "access", label: "AUM-Einstellungen öffnen" } },
+          { id: "review", title: "Fall fachlich prüfen", actor: "Personalleitung", type: "approval", state: "active", description: "Filial- und Abteilungsleitung sehen ausschließlich Zeitraum, Status und Planungswirkung. Das Dokument bleibt geschützten PL+-Rollen mit ausdrücklichem Leserecht vorbehalten.", setting: "AUM-Dateizugriff ist nicht an lokale Leitungen delegierbar.", permissions: ["amu:metadata:read", "amu:file:read", "amu:review"], settingsTarget: { tab: "access", label: "AUM-Einstellungen öffnen" } },
           { id: "completion", title: "Arbeitsfähigkeit abschließen", actor: "Teammitglied oder Personalleitung", type: "finish", state: "active", description: "Ein bestätigtes Enddatum oder eine Rückkehrmeldung beendet die Nichtverfügbarkeit nachvollziehbar.", setting: "Ohne Enddatum bleibt der Krankenstandsfall offen.", permissions: ["own_sickness:read"] },
         ],
       }),
@@ -14334,6 +14374,10 @@ app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
   const invalid = submitted.filter((permission) => !manageablePermissions.has(permission));
   if (invalid.length) {
     throw httpError(403, `Diese Rechte dürfen durch den aktuellen Zugang nicht vergeben werden: ${invalid.join(", ")}`, "PORTAL_PERMISSION_NOT_DELEGABLE");
+  }
+  const roleRestricted = submitted.filter((permission) => !portalPermissionAllowedForRole(permission, target.role));
+  if (roleRestricted.length) {
+    throw httpError(403, "Geschützte AUM-Rechte dürfen nur Personalleitung und höheren Rollen zugewiesen werden.", "AMU_PERMISSION_ROLE_RESTRICTED");
   }
   const before = portalPermissionGrantsForEmployee(employeeNumber);
   db.exec("BEGIN");
@@ -14793,7 +14837,7 @@ app.get("/api/portal/v1/sickness-cases", (request, response) => {
     if (sicknessCasePayload(row).status === "withdrawn") return false;
     try { assertSicknessCaseScope(session, row); return true; } catch { return false; }
   });
-  const cases = serializeSicknessCases(rows);
+  const cases = serializeSicknessCases(rows, { includeNote: actorCanReadAmuSensitiveMetadata(session) });
   response.json({
     cases,
     pendingCount: cases.filter((entry) => entry.status === "reported" || ["yellow", "red", "warning"].includes(entry.severity)).length,
@@ -14833,7 +14877,6 @@ app.put("/api/portal/v1/amu-settings", (request, response) => {
     amu_stored_max_mb: String(policy.storedMaxMb),
     amu_convert_images_to_pdf: policy.convertImagesToPdf ? "1" : "0",
     amu_grayscale_images: policy.grayscaleImages ? "1" : "0",
-    amu_manager_file_access: policy.managerFileAccess ? "1" : "0",
     amu_ocr_enabled: policy.ocrEnabled ? "1" : "0",
     sickness_local_warning_days: String(policy.localWarningDays),
     sickness_hr_warning_days: String(policy.hrWarningDays),
@@ -15283,10 +15326,16 @@ app.put("/api/portal/v1/amu-reports/:id/review", (request, response) => {
 });
 
 app.get("/api/portal/v1/amu-reports/:reportId/documents/:documentId/content", (request, response) => {
-  const session = requirePortalAdminOrLocal(request, "amu:metadata:read");
-  if (!actorCanReadAmuFiles(session)) throw httpError(403, "AUM-Dateien dürfen von diesem Zugang nicht geöffnet werden.", "PORTAL_PERMISSION_DENIED");
+  const session = requirePortalReadOrLocal(request, "");
+  if (!actorCanReadAmuSensitiveMetadata(session) || !actorCanReadAmuFiles(session)) {
+    auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", String(request.params.documentId), "missing-protected-file-right");
+    throw httpError(403, "AUM-Dateien dürfen von diesem Zugang nicht geöffnet werden.", "PORTAL_PERMISSION_DENIED");
+  }
   const document = amuDocumentMetadata(request.params.reportId, request.params.documentId);
-  if (!document) throw httpError(404, "Das AUM-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
+  if (!document) {
+    auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", String(request.params.documentId), "not-found");
+    throw httpError(404, "Das AUM-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
+  }
   assertAmuReportScope(session, document);
   auditPortal(session.employeeNumber, "amu.document.download", "amu_document", document.id);
   sendAmuDocument(response, document);

@@ -74,7 +74,6 @@ function resetFixture() {
   db.prepare("DELETE FROM request_blackouts WHERE created_by = 'v067-test'").run();
   setPortalSetting("vacation_hr_approval_required", "0");
   setPortalSetting("amu_ocr_enabled", "1");
-  setPortalSetting("amu_manager_file_access", "0");
   setPortalSetting("sickness_local_warning_days", "2");
   setPortalSetting("sickness_hr_warning_days", "3");
   db.prepare(`
@@ -140,7 +139,6 @@ test("v0.67: API liefert fünf sichere, erklärbare Standardprozesse", async () 
 test("v0.67: Freigabe-, AUM- und Sperrregeln verändern den dargestellten Prozess", async () => {
   setPortalSetting("vacation_hr_approval_required", "1");
   setPortalSetting("amu_ocr_enabled", "0");
-  setPortalSetting("amu_manager_file_access", "1");
   setPortalSetting("sickness_local_warning_days", "4");
   setPortalSetting("sickness_hr_warning_days", "7");
   db.prepare(`
@@ -156,7 +154,7 @@ test("v0.67: Freigabe-, AUM- und Sperrregeln verändern den dargestellten Prozes
   assert.equal(vacation.rules.find((rule) => rule.label === "Aktive Antragssperren").value, "1");
   assert.equal(timeOff.rules.find((rule) => rule.label === "Aktive ZA-Sperren").value, "1");
   assert.equal(sickness.steps.find((step) => step.id === "ocr").state, "bypassed");
-  assert.equal(sickness.rules.find((rule) => rule.label === "Dateizugriff Leitung").value, "Freigegeben");
+  assert.equal(sickness.rules.find((rule) => rule.label === "AUM-Dateizugriff").value, "PL+ mit Zusatzrecht");
   assert.equal(sickness.rules.find((rule) => rule.label === "Lokaler Hinweis").value, "nach 4 Tag(en)");
   assert.equal(sickness.rules.find((rule) => rule.label === "PL-Eskalation").value, "nach 7 Tag(en)");
 });
