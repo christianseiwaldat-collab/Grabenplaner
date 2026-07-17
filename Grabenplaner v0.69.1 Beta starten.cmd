@@ -1,11 +1,13 @@
 @echo off
 cd /d "%~dp0"
 
+set "UPDATE_RESTART=%GRABENPLANER_UPDATE_RESTART%"
+set "GRABENPLANER_UPDATE_RESTART="
 set "NODE_EXE=%~dp0runtime\node.exe"
 if not exist "%NODE_EXE%" set "NODE_EXE=node"
 
 for /f "usebackq delims=" %%V in (`"%NODE_EXE%" -e "const v=require('./package.json').version; const m=String(v).match(/^(\d+)\.(\d+)\.(\d+)-beta/); console.log(m ? ('v' + m[1] + '.' + m[2] + (m[3] === '0' ? '' : '.' + m[3]) + ' Beta') : 'v' + v)"`) do set "APP_VERSION=%%V"
-if "%APP_VERSION%"=="" set "APP_VERSION=v0.69 Beta"
+if "%APP_VERSION%"=="" set "APP_VERSION=v0.69.1 Beta"
 
 title Grabenplaner %APP_VERSION%
 
@@ -22,6 +24,7 @@ if %errorlevel% equ 10 (
 
 if not exist "node_modules\" (
     echo  Der Ordner node_modules fehlt. Bitte die komplette App erneut herunterladen.
+    if /I "%UPDATE_RESTART%"=="1" exit /b 1
     pause
     exit /b 1
 )
@@ -35,4 +38,5 @@ start "" powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Sleep -Se
 
 echo.
 echo  Grabenplaner wurde beendet.
+if /I "%UPDATE_RESTART%"=="1" exit /b 1
 pause
