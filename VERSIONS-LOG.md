@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.69.1 Beta · Serviceupdate
+
+- Der Portable-Updater schützt nur noch die vorgesehenen Datenordner an der Paketwurzel. Gleichnamige Laufzeitordner innerhalb von `node_modules` werden vollständig aktualisiert.
+- Das entpackte Paket und die installierte Laufzeit werden vor dem Neustart auf benötigte Module und eine gültige Serverdatei geprüft.
+- Ein Update gilt erst dann als erfolgreich, wenn der neu gestartete Grabenplaner seinen Bereitschaftsendpunkt bestätigt.
+- Scheitert der Neustart, bleibt die Datenbank unberührt und ein klarer Hinweis verweist auf das lokale Updateprotokoll.
+- Automatische Update-Neustarts hinterlassen nach einem Startfehler kein irreführend wartendes Startfenster.
+
 ## v0.69 Beta
 
 - Wiederverwendbare SQL-Importprofile speichern Quellenart und konkrete geprüfte Verbindung zusätzlich zur Feldzuordnung; sie können direkt aus der Profilübersicht erneut geöffnet werden.
