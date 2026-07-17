@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.68.1 Beta · Serviceupdate
+
+- Portable Aktualisierungen laden das veröffentlichte Windows-ZIP direkt über GitHub HTTPS; eine installierte oder angemeldete GitHub CLI ist nicht mehr erforderlich.
+- Dateiname, erlaubter GitHub-Host, gemeldete Dateigröße und die von GitHub veröffentlichte SHA-256-Prüfsumme werden vor der Installation kontrolliert.
+- Unter Windows berücksichtigt der HTTPS-Abruf auch den Systemzertifikatsspeicher, damit freigegebene Firmen- und Sicherheitssoftware-Zertifikate ohne unsichere TLS-Abschaltung funktionieren.
+- Unvollständige, manipulierte oder von einem fremden Host gelieferte Downloads werden verworfen, bevor der laufende Grabenplaner beendet wird.
+- Der Installationshelfer prüft Größe und SHA-256 unmittelbar vor dem Entpacken erneut; Datenbanken, Backups, AUM-Dateien und lokale Laufzeitkonfiguration bleiben weiterhin geschützt.
+
 ## v0.68 Beta
 
 - Eine lesbare Konfigurationsprüfung ergänzt das Rechte-Dashboard und unterscheidet erfolgreiche Prüfungen, bewusste Hinweise, Warnungen und echte Blocker.
