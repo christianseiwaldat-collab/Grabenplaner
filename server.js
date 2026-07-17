@@ -154,6 +154,40 @@ const delegablePortalPermissionCatalog = Object.freeze([
 const delegablePortalPermissions = new Set(delegablePortalPermissionCatalog.map((entry) => entry.id));
 const hrDelegablePortalPermissions = new Set(delegablePortalPermissionCatalog.filter((entry) => entry.hrDelegable).map((entry) => entry.id));
 
+const portalDashboardPermissionDetails = Object.freeze([
+  { id: "own_schedule:read", label: "Eigenen Dienstplan lesen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "own_time:read", label: "Eigene Zeiterfassung lesen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "own_time:write", label: "Eigene Arbeitszeit buchen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "own_time:correction_request", label: "Eigene Zeitkorrektur beantragen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "own_vacation:read", label: "Eigenen Urlaub lesen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "own_vacation:request", label: "Eigenen Urlaub beantragen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "own_amu:create", label: "Eigene AUM hochladen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "own_amu:read", label: "Eigene AUM-Meldungen lesen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "own_amu:withdraw", label: "Eigene AUM-Meldung zurückziehen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "own_sickness:create", label: "Eigene Krankmeldung erfassen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "own_sickness:read", label: "Eigene Krankmeldungen lesen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "notifications:settings", label: "Eigene Besetzungswarnungen konfigurieren", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "wifi:settings", label: "WLAN-Zeitvorschläge verwalten", group: "Zeit & Abwesenheit", scopeBehavior: "global" },
+  { id: "users:write", label: "Portal-Zugänge verwalten", group: "Zugänge & Rechte", scopeBehavior: "global" },
+  { id: "roles:read", label: "App-Rollen lesen", group: "Zugänge & Rechte", scopeBehavior: "global" },
+  { id: "roles:write", label: "App-Rollen verwalten", group: "Zugänge & Rechte", scopeBehavior: "global" },
+  { id: "rights:read", label: "Rechteübersicht lesen", group: "Zugänge & Rechte", scopeBehavior: "global" },
+  { id: "rights:write", label: "Individuelle Rechte verwalten", group: "Zugänge & Rechte", scopeBehavior: "global" },
+  { id: "scopes:write", label: "Standort- und Abteilungsbereiche zuweisen", group: "Zugänge & Rechte", scopeBehavior: "global" },
+  { id: "audit:read", label: "Prüfprotokolle lesen", group: "Zugänge & Rechte", scopeBehavior: "global" },
+  { id: "usb:provision", label: "USB-Installationen vorbereiten", group: "System & Verwaltung", scopeBehavior: "global" },
+  { id: "developer:system", label: "Geschützte Entwicklerfunktionen", group: "System & Verwaltung", scopeBehavior: "global" },
+]);
+
+const portalGlobalPermissionIds = new Set([
+  "settings:write", "positions:write", "hr:approve", "hr:settings", "sickness:settings",
+  "integrations:read", "integrations:profiles:write", "integrations:connections:read",
+  "integrations:connections:write", "integrations:credentials:write", "branding:read", "branding:write",
+  "operation_mode:write", "backup:write", "update:write", "system:write", "wifi:settings",
+  "users:write", "roles:read", "roles:write", "rights:read", "rights:write", "scopes:write",
+  "audit:read", "usb:provision", "developer:system",
+]);
+
 const builtinPortalRoles = [
   {
     id: "employee",
@@ -1061,6 +1095,16 @@ function createSchema() {
       last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       revoked_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_number) REFERENCES portal_users(employee_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS portal_user_preferences (
+      employee_number TEXT NOT NULL,
+      preference_key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (employee_number, preference_key),
       FOREIGN KEY (employee_number) REFERENCES portal_users(employee_number)
         ON UPDATE CASCADE ON DELETE CASCADE
     );
@@ -2290,6 +2334,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.64-sql-api-connectors", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.65-settings-dashboard-foundation", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.66-rights-dashboard", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -13589,6 +13635,185 @@ app.post("/api/portal/v1/auth/logout", (request, response) => {
   response.json({ ok: true });
 });
 
+function rightsDashboardPermissionCatalog(roles = getPortalRoles()) {
+  const details = new Map(portalDashboardPermissionDetails.map((permission) => [permission.id, permission]));
+  const catalog = new Map();
+  for (const permission of delegablePortalPermissionCatalog) {
+    const dashboardDetail = details.get(permission.id) || {};
+    catalog.set(permission.id, {
+      id: permission.id,
+      label: dashboardDetail.label || permission.label || permission.id,
+      description: permission.description || dashboardDetail.description || "",
+      group: dashboardDetail.group || permission.group || "Weitere Rechte",
+      warningLevel: permission.warningLevel || "normal",
+      scopeBehavior: dashboardDetail.scopeBehavior
+        || (portalGlobalPermissionIds.has(permission.id) ? "global" : "organizational"),
+    });
+  }
+  for (const permission of portalDashboardPermissionDetails) {
+    if (catalog.has(permission.id)) continue;
+    catalog.set(permission.id, {
+      description: "",
+      warningLevel: permission.id === "developer:system" ? "critical" : "normal",
+      ...permission,
+    });
+  }
+  for (const role of roles) {
+    for (const permissionId of role.permissions || []) {
+      if (catalog.has(permissionId)) continue;
+      catalog.set(permissionId, {
+        id: permissionId,
+        label: permissionId.replaceAll("_", " ").replaceAll(":", " · "),
+        description: "Technisches Rollenrecht ohne eigene Zusatzrechte-Freigabe.",
+        group: "Weitere Rechte",
+        warningLevel: "normal",
+        scopeBehavior: portalGlobalPermissionIds.has(permissionId) ? "global" : "organizational",
+      });
+    }
+  }
+  return [...catalog.values()].sort((left, right) => left.group.localeCompare(right.group, "de-AT")
+    || left.label.localeCompare(right.label, "de-AT") || left.id.localeCompare(right.id));
+}
+
+function rightsDashboardScopes(user, locationLookup, departmentLookup) {
+  if (!user.configured) return { type: "inactive", source: "none", label: "Kein Portal-Zugang", entries: [] };
+  if (GLOBAL_SCOPE_PORTAL_ROLES.has(user.role)) {
+    return { type: "global", source: "role", label: "Alle Standorte und Abteilungen", entries: [] };
+  }
+  const assigned = Array.isArray(user.scopes) && user.scopes.length
+    ? user.scopes.map((scope) => ({ ...scope, source: "assigned" }))
+    : user.homeLocationId
+      ? [{
+          locationId: user.homeLocationId,
+          departmentId: user.role === "department_manager" ? user.preferredDepartmentId : null,
+          source: "home",
+        }]
+      : [];
+  const entries = assigned.map((scope) => {
+    const location = locationLookup.get(String(scope.locationId || ""));
+    const department = scope.departmentId ? departmentLookup.get(Number(scope.departmentId)) : null;
+    return {
+      locationId: String(scope.locationId || ""),
+      locationName: location?.name || String(scope.locationId || "Nicht zugewiesen"),
+      departmentId: department?.id || null,
+      departmentName: department?.name || "",
+      source: scope.source,
+      label: department
+        ? `${location?.name || scope.locationId} · ${department.name}`
+        : location?.name || String(scope.locationId || "Nicht zugewiesen"),
+    };
+  });
+  if (!entries.length) return { type: "none", source: "none", label: "Kein wirksamer Bereich", entries: [] };
+  const departmentOnly = entries.every((entry) => entry.departmentId);
+  return {
+    type: departmentOnly ? "department" : "location",
+    source: entries.some((entry) => entry.source === "assigned") ? "assigned" : "home",
+    label: entries.map((entry) => entry.label).join(", "),
+    entries,
+  };
+}
+
+function rightsDashboardCoverage(permission, user, scope) {
+  if (permission.scopeBehavior === "self") {
+    return { type: "self", label: "Nur eigene Daten", restricted: true };
+  }
+  if (permission.scopeBehavior === "global" || GLOBAL_SCOPE_PORTAL_ROLES.has(user.role)) {
+    return { type: "global", label: "Gesamte Installation", restricted: false };
+  }
+  if (scope.type === "none" || scope.type === "inactive") {
+    return { type: "none", label: "Kein wirksamer Bereich", restricted: true };
+  }
+  return { type: scope.type, label: scope.label, restricted: true };
+}
+
+function rightsDashboardThemeForActor(actor) {
+  if (!actor || actor.employeeNumber === "local") return "light";
+  const stored = db.prepare(`
+    SELECT value FROM portal_user_preferences
+    WHERE employee_number = ? AND preference_key = 'rights_dashboard_theme'
+  `).get(actor.employeeNumber)?.value;
+  return stored === "dark" ? "dark" : "light";
+}
+
+function rightsDashboardPayload(actor) {
+  const roles = getPortalRoles();
+  const roleLookup = new Map(roles.map((role) => [role.id, role]));
+  const locations = db.prepare("SELECT id, name, active FROM locations ORDER BY id").all()
+    .map((location) => ({ id: location.id, name: location.name, active: Boolean(location.active) }));
+  const departments = db.prepare("SELECT id, location_id, name, active FROM departments ORDER BY location_id, sort_order, name, id").all()
+    .map((department) => ({ id: Number(department.id), locationId: department.location_id, name: department.name, active: Boolean(department.active) }));
+  const locationLookup = new Map(locations.map((location) => [String(location.id), location]));
+  const departmentLookup = new Map(departments.map((department) => [Number(department.id), department]));
+  const catalog = rightsDashboardPermissionCatalog(roles);
+  const catalogLookup = new Map(catalog.map((permission) => [permission.id, permission]));
+  const users = portalUsersForAdmin().filter((user) => user.employeeActive).map((user) => {
+    const role = roleLookup.get(user.role) || roleLookup.get("employee") || { id: "employee", name: "Mitarbeiter", permissions: [] };
+    const rolePermissions = new Set(role.permissions || []);
+    const grantedPermissions = new Set(user.grantedPermissions || []);
+    const scope = rightsDashboardScopes(user, locationLookup, departmentLookup);
+    const accessActive = Boolean(user.configured && user.active && user.passwordConfigured);
+    const assignedPermissionIds = [...new Set([...rolePermissions, ...grantedPermissions])].sort();
+    const permissions = assignedPermissionIds.map((permissionId) => {
+      const permission = catalogLookup.get(permissionId) || {
+        id: permissionId, label: permissionId, description: "", group: "Weitere Rechte",
+        warningLevel: "normal", scopeBehavior: "organizational",
+      };
+      const origin = rolePermissions.has(permissionId) ? "role" : "delegated";
+      const coverage = rightsDashboardCoverage(permission, user, scope);
+      return {
+        id: permission.id,
+        label: permission.label,
+        description: permission.description,
+        group: permission.group,
+        warningLevel: permission.warningLevel,
+        origin,
+        originLabel: origin === "role" ? `Grundrecht der Rolle ${role.name}` : "Individuelles Zusatzrecht",
+        coverage,
+        effective: accessActive && coverage.type !== "none",
+      };
+    });
+    return {
+      employeeNumber: user.employeeNumber,
+      fullName: user.fullName,
+      nickname: user.nickname,
+      configured: user.configured,
+      accessActive,
+      role: role.id,
+      roleName: role.name,
+      roleDescription: role.description || "",
+      homeLocationId: user.homeLocationId,
+      preferredDepartmentId: user.preferredDepartmentId,
+      scope,
+      permissions,
+      counts: {
+        effective: permissions.filter((permission) => permission.effective).length,
+        role: permissions.filter((permission) => permission.effective && permission.origin === "role").length,
+        delegated: permissions.filter((permission) => permission.effective && permission.origin === "delegated").length,
+        restricted: permissions.filter((permission) => permission.effective && permission.coverage.restricted).length,
+      },
+    };
+  });
+  const effectivePermissions = users.flatMap((user) => user.permissions.filter((permission) => permission.effective));
+  return {
+    generatedAt: new Date().toISOString(),
+    actor: { employeeNumber: actor.employeeNumber, role: actor.role },
+    preferences: { theme: rightsDashboardThemeForActor(actor) },
+    summary: {
+      teamMembers: users.length,
+      activeAccesses: users.filter((user) => user.accessActive).length,
+      delegatedRights: effectivePermissions.filter((permission) => permission.origin === "delegated").length,
+      scopedRights: effectivePermissions.filter((permission) => permission.coverage.restricted).length,
+    },
+    roles: roles.map((role) => ({ id: role.id, name: role.name, description: role.description || "" })),
+    locations: locations.map((location) => ({
+      ...location,
+      departments: departments.filter((department) => department.locationId === location.id),
+    })),
+    catalog,
+    users,
+  };
+}
+
 function rightsManagementPayload(actor) {
   const roles = new Map(getPortalRoles().map((role) => [role.id, role]));
   const users = portalUsersForAdmin()
@@ -13611,6 +13836,25 @@ function rightsManagementPayload(actor) {
 app.get("/api/portal/v1/rights", (request, response) => {
   const actor = requireAdminHrOrLocal(request, "rights:read");
   response.json(rightsManagementPayload(actor));
+});
+
+app.get("/api/portal/v1/rights-dashboard", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "rights:read");
+  response.json(rightsDashboardPayload(actor));
+});
+
+app.put("/api/portal/v1/rights-dashboard/preferences", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "rights:read");
+  const theme = request.body.theme === "dark" ? "dark" : request.body.theme === "light" ? "light" : "";
+  if (!theme) throw httpError(400, "Bitte eine gültige Dashboard-Darstellung auswählen.", "RIGHTS_DASHBOARD_THEME_INVALID");
+  if (actor.employeeNumber !== "local") {
+    db.prepare(`
+      INSERT INTO portal_user_preferences (employee_number, preference_key, value, updated_at)
+      VALUES (?, 'rights_dashboard_theme', ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(employee_number, preference_key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+    `).run(actor.employeeNumber, theme);
+  }
+  response.json({ theme });
 });
 
 app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {

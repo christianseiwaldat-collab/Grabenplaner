@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.65 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.66 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -62,6 +62,9 @@
           </button>
           <button class="nav-item" data-view="personnel">
             <span class="nav-symbol">◎</span><span>Teams &amp; Standorte</span>
+          </button>
+          <button class="nav-item hidden" data-view="rightsDashboard" id="rightsDashboardNavButton">
+            <span class="nav-symbol">◇</span><span>Rechte-Dashboard</span>
           </button>
           <button class="nav-item" data-view="settings">
             <span class="nav-symbol">⚙</span><span>Einstellungen</span>
@@ -352,6 +355,44 @@
                 </form>
               </div>
             </dialog>
+          </section>
+        </section>
+
+        <section id="rightsDashboardView" class="view rights-dashboard" data-dashboard-theme="light">
+          <header class="topbar rights-dashboard-topbar">
+            <div><span class="eyebrow">Rollen &amp; Berechtigungen</span><h1>Rechte-Dashboard</h1><p class="subtitle">Wirksame Rechte und ihre Herkunft verständlich nachvollziehen.</p></div>
+            <div class="dashboard-theme-switch" role="group" aria-label="Darstellung des Rechte-Dashboards">
+              <span>Darstellung</span>
+              <button type="button" data-dashboard-theme="light" aria-pressed="true">Hell</button>
+              <button type="button" data-dashboard-theme="dark" aria-pressed="false">Dunkel</button>
+            </div>
+          </header>
+
+          <section class="rights-dashboard-summary" id="rightsDashboardSummary" aria-label="Zusammenfassung der Rechtevergaben"></section>
+
+          <section class="rights-dashboard-filterbar" aria-label="Rechte-Dashboard filtern">
+            <label><span>Person oder Recht</span><input id="rightsDashboardSearch" type="search" placeholder="Personalnummer, Name oder Recht" autocomplete="off" /></label>
+            <label><span>App-Rolle</span><select id="rightsDashboardRoleFilter"><option value="">Alle Rollen</option></select></label>
+            <label><span>Standort</span><select id="rightsDashboardLocationFilter"><option value="">Alle Standorte</option></select></label>
+            <label><span>Abteilung</span><select id="rightsDashboardDepartmentFilter"><option value="">Alle Abteilungen</option></select></label>
+            <label><span>Rechteart</span><select id="rightsDashboardOriginFilter"><option value="">Alle Rechtearten</option><option value="role">Grundrechte</option><option value="delegated">Zusatzrechte</option><option value="restricted">Bereichsgebunden</option></select></label>
+          </section>
+
+          <section class="rights-dashboard-workspace">
+            <aside class="rights-dashboard-people" aria-label="Teammitglieder">
+              <div class="rights-dashboard-section-heading"><div><span class="eyebrow">Team</span><h2>Personen</h2></div><strong id="rightsDashboardResultCount">0</strong></div>
+              <div class="rights-dashboard-user-list" id="rightsDashboardUserList"><p class="settings-note">Rechte werden geladen.</p></div>
+            </aside>
+            <section class="rights-dashboard-detail" aria-live="polite">
+              <div class="rights-dashboard-empty" id="rightsDashboardEmpty"><strong>Teammitglied auswählen</strong><p>Danach wird der Weg von der Person über Rolle und Bereich bis zu den wirksamen Rechten angezeigt.</p></div>
+              <div class="hidden" id="rightsDashboardSelection">
+                <div class="rights-dashboard-section-heading"><div><span class="eyebrow">Wirksame Berechtigungen</span><h2 id="rightsDashboardPersonTitle">Teammitglied</h2><p id="rightsDashboardPersonSubtitle"></p></div><span class="status-badge" id="rightsDashboardAccessStatus">Aktiv</span></div>
+                <div class="rights-dashboard-path" id="rightsDashboardPath" aria-label="Weg der Rechtevergabe"></div>
+                <div class="rights-dashboard-legend"><span><i class="role-origin"></i> Grundrecht der Rolle</span><span><i class="delegated-origin"></i> Individuelles Zusatzrecht</span><span><i class="restricted-origin"></i> Auf eigenen Bereich beschränkt</span></div>
+                <div class="rights-dashboard-matrix" id="rightsDashboardMatrix"></div>
+                <aside class="rights-dashboard-explanation" id="rightsDashboardExplanation"><strong>Recht anklicken</strong><p>Die Erklärung zeigt Herkunft, Geltungsbereich und aktuellen Status.</p></aside>
+              </div>
+            </section>
           </section>
         </section>
 
@@ -889,7 +930,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.65 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.66 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
