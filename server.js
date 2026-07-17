@@ -2336,6 +2336,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.65-settings-dashboard-foundation", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.66-rights-dashboard", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.67-process-dashboard", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -13735,6 +13737,148 @@ function rightsDashboardThemeForActor(actor) {
   return stored === "dark" ? "dark" : "light";
 }
 
+function rightsDashboardProcesses() {
+  const features = installationFeatures();
+  const portalSettings = getPortalSettings();
+  const amuPolicy = getAmuPolicy();
+  const vacationHrRequired = vacationHrApprovalRequired();
+  const activeVacationBlackouts = Number(db.prepare("SELECT COUNT(*) AS count FROM request_blackouts WHERE active = 1 AND block_vacation = 1").get()?.count || 0);
+  const activeTimeOffBlackouts = Number(db.prepare("SELECT COUNT(*) AS count FROM request_blackouts WHERE active = 1 AND block_time_off = 1").get()?.count || 0);
+  const activeDelegations = Number(db.prepare("SELECT COUNT(*) AS count FROM approval_delegations WHERE active = 1").get()?.count || 0);
+  const payrollTargets = Number(db.prepare(`
+    SELECT COUNT(*) AS count FROM integration_connections
+    WHERE kind = 'payroll_https_target' AND active = 1 AND TRIM(COALESCE(protected_credentials, '')) <> ''
+  `).get()?.count || 0);
+  const payrollProfiles = Number(db.prepare(`
+    SELECT COUNT(*) AS count FROM integration_profiles
+    WHERE direction = 'export' AND kind = 'payroll' AND active = 1
+  `).get()?.count || 0);
+  const locations = getLocations(false).map((location) => ({
+    id: location.id,
+    name: location.name,
+    timeTrackingEnabled: Boolean(location.time_tracking_enabled),
+    timeTrackingAccessMode: location.time_tracking_access_mode === "trusted_network" ? "trusted_network" : "anywhere",
+    timeTrackingAccessLabel: location.time_tracking_access_mode === "trusted_network" ? "Nur freigegebene Netzwerke" : "Ortsunabhängige Buchung",
+    timeTrackingVarianceMinutes: Math.max(0, Number(location.time_tracking_variance_minutes || 0)),
+  }));
+  const process = (definition) => ({
+    ...definition,
+    statusLabel: definition.enabled ? "Ablauf aktiv" : "Modul nicht freigeschaltet",
+  });
+  return {
+    generatedAt: new Date().toISOString(),
+    locations,
+    processes: [
+      process({
+        id: "vacation",
+        symbol: "U",
+        title: "Urlaubsantrag",
+        summary: "Vom Antrag über die lokale Freigabe bis zur verbindlichen Urlaubsplanung.",
+        enabled: features.requests !== false && features.vacation !== false,
+        locationSensitive: false,
+        rules: [
+          { label: "PL-Freigabe", value: vacationHrRequired ? "Erforderlich" : "Nicht erforderlich", tone: vacationHrRequired ? "attention" : "positive" },
+          { label: "Aktive Antragssperren", value: String(activeVacationBlackouts), tone: activeVacationBlackouts ? "attention" : "neutral" },
+          { label: "Aktive Vertretungen", value: String(activeDelegations), tone: activeDelegations ? "positive" : "neutral" },
+        ],
+        steps: [
+          { id: "request", title: "Urlaub beantragen", actor: "Teammitglied", type: "actor", state: "active", description: "Zeitraum auswählen, optional eine Bemerkung ergänzen und den Antrag absenden.", setting: "Nur freigegebene Zeiträume können beantragt werden.", permissions: ["own_vacation:request"] },
+          { id: "eligibility", title: "Sperren und Überschneidungen prüfen", actor: "Grabenplaner", type: "system", state: "active", description: "Antragssperren, bestehende Anträge und der ausgewählte Zeitraum werden automatisch geprüft.", setting: `${activeVacationBlackouts} aktive Urlaubssperre(n)`, permissions: [] },
+          { id: "local_approval", title: "Lokale Freigabe", actor: "Filial- oder vertretende Abteilungsleitung", type: "approval", state: "active", description: "Die zuständige Leitung kann genehmigen, vorläufig genehmigen oder ablehnen und eine Bemerkung hinterlegen.", setting: activeDelegations ? "Aktive Vertretungsregeln werden berücksichtigt." : "Zuständigkeit folgt dem zugewiesenen Bereich.", permissions: ["vacation:read", "vacation:approve"] },
+          { id: "hr_approval", title: "Freigabe durch Personalleitung", actor: "Personalleitung", type: "approval", state: vacationHrRequired ? "active" : "bypassed", description: vacationHrRequired ? "Nach der lokalen Freigabe entscheidet die Personalleitung verbindlich." : "Dieser Schritt wird mit der aktuellen Einstellung übersprungen.", setting: vacationHrRequired ? "Zweistufige Freigabe ist aktiv." : "Lokale Freigabe ist ausreichend.", permissions: ["hr:approve"] },
+          { id: "planning", title: "Urlaub verbindlich eintragen", actor: "Grabenplaner", type: "finish", state: "active", description: "Der genehmigte Zeitraum wird in Urlaubs- und Dienstplanung übernommen und bleibt für Änderungs- oder Stornoanträge nachvollziehbar.", setting: "Genehmigte Daten werden als Abwesenheit berücksichtigt.", permissions: [] },
+        ],
+      }),
+      process({
+        id: "time_off",
+        symbol: "ZA",
+        title: "Zeitausgleich",
+        summary: "Filialinterner oder PL-gebundener ZA mit Planbarkeitsprüfung und passendem Freigabeweg.",
+        enabled: features.requests !== false,
+        locationSensitive: false,
+        rules: [
+          { label: "Freigabeart", value: "Vom MA auswählbar", tone: "positive" },
+          { label: "Aktive ZA-Sperren", value: String(activeTimeOffBlackouts), tone: activeTimeOffBlackouts ? "attention" : "neutral" },
+          { label: "Mehrtägiger ZA", value: "Nur ganztägig", tone: "neutral" },
+        ],
+        steps: [
+          { id: "request", title: "ZA beantragen", actor: "Teammitglied", type: "actor", state: "active", description: "Ein Tag kann stundenweise oder ganztägig, ein Zeitraum ausschließlich ganztägig beantragt werden.", setting: "Filialinterner oder PL-gebundener ZA wird bereits im Antrag gewählt.", permissions: ["own_vacation:request"] },
+          { id: "traffic_light", title: "Planbarkeit prüfen", actor: "Grabenplaner", type: "system", state: "active", description: "Dienstplan, Öffnungszeiten, Mindestbesetzung und Antragssperren ergeben eine verständliche Ampelbewertung.", setting: `${activeTimeOffBlackouts} aktive ZA-Sperre(n)`, permissions: [] },
+          { id: "local_approval", title: "Lokale Freigabe", actor: "Filial- oder vertretende Abteilungsleitung", type: "approval", state: "active", description: "Die zuständige Leitung prüft den Antrag im eigenen Standort- oder Abteilungsbereich.", setting: "Dieser Schritt ist für beide ZA-Arten erforderlich.", permissions: ["vacation:read", "vacation:approve"] },
+          { id: "approval_type", title: "Gewählte ZA-Art auswerten", actor: "Grabenplaner", type: "decision", state: "conditional", description: "Filialinterner ZA wird lokal abgeschlossen; PL-gebundener ZA wird an die Personalleitung weitergegeben.", setting: "Die Auswahl des Teammitglieds bestimmt den zweiten Freigabeschritt.", permissions: [] },
+          { id: "hr_approval", title: "Optionale PL-Freigabe", actor: "Personalleitung", type: "approval", state: "conditional", description: "Nur ein ausdrücklich PL-gebundener ZA benötigt diese zusätzliche Genehmigung.", setting: "Bei filialinternem ZA wird dieser Schritt übersprungen.", permissions: ["hr:approve"] },
+          { id: "planning", title: "ZA im Plan vormerken", actor: "Grabenplaner", type: "finish", state: "active", description: "Der genehmigte ZA wird in der Planung als Abwesenheit berücksichtigt; offene Anträge können zuvor weich sichtbar sein.", setting: "ZA erzeugt keine Arbeitsstunden.", permissions: [] },
+        ],
+      }),
+      process({
+        id: "sickness_amu",
+        symbol: "AUM",
+        title: "Krankmeldung & AUM",
+        summary: "Sichere Krankmeldung, optionale AUM-Nachreichung, Fristen und geschützter Abschluss des Falls.",
+        enabled: features.employeePortal !== false && features.sicknessAmu !== false,
+        locationSensitive: false,
+        rules: [
+          { label: "Lokaler Hinweis", value: `nach ${amuPolicy.localWarningDays} Tag(en)`, tone: "attention" },
+          { label: "PL-Eskalation", value: `nach ${amuPolicy.hrWarningDays} Tag(en)`, tone: "critical" },
+          { label: "Lokale OCR", value: amuPolicy.ocrEnabled ? "Aktiv" : "Deaktiviert", tone: amuPolicy.ocrEnabled ? "positive" : "neutral" },
+          { label: "Dateizugriff Leitung", value: amuPolicy.managerFileAccess ? "Freigegeben" : "Nur Personalleitung", tone: amuPolicy.managerFileAccess ? "attention" : "positive" },
+        ],
+        steps: [
+          { id: "report", title: "Krank melden", actor: "Teammitglied", type: "actor", state: "active", description: "Der Krankenstand wird mit Startdatum gemeldet; eine vorhandene AUM kann sofort mitgesendet werden.", setting: "Die Meldung ist unabhängig vom aktuellen Arbeitsort möglich.", permissions: ["own_sickness:create"] },
+          { id: "staffing", title: "Besetzung und Hinweise prüfen", actor: "Grabenplaner", type: "system", state: "active", description: "Die Person wird als nicht einsetzbar berücksichtigt; bei gefährdeter Mindestbesetzung können geschützte Warnungen entstehen.", setting: `Lokale Warnung nach ${amuPolicy.localWarningDays}, PL-Eskalation nach ${amuPolicy.hrWarningDays} Tag(en).`, permissions: ["sickness:read", "notifications:settings"] },
+          { id: "document", title: "AUM direkt oder später nachreichen", actor: "Teammitglied", type: "actor", state: "conditional", description: "Foto oder PDF kann bei der Krankmeldung oder nachträglich sicher hochgeladen werden; ein offenes Enddatum ist zulässig.", setting: `Upload bis ${amuPolicy.uploadMaxMb} MB, Speicherung bis ${amuPolicy.storedMaxMb} MB.`, permissions: ["own_amu:create"] },
+          { id: "ocr", title: "Datumswerte lokal erkennen", actor: "Grabenplaner", type: "system", state: amuPolicy.ocrEnabled ? "active" : "bypassed", description: amuPolicy.ocrEnabled ? "Die lokale OCR schlägt Beginn und Ende zur menschlichen Bestätigung vor." : "Die lokale OCR ist deaktiviert; Datumswerte werden manuell bestätigt.", setting: amuPolicy.ocrEnabled ? "OCR erstellt nur bearbeitbare Vorschläge." : "Keine automatische Datenerkennung.", permissions: [] },
+          { id: "secure_storage", title: "Dokument geschützt speichern", actor: "Grabenplaner", type: "system", state: "active", description: "AUM-Dokumente und Personalakt werden getrennt verschlüsselt gespeichert und revisionsfähig zugeordnet.", setting: amuPolicy.grayscaleImages ? "Bilder werden platzsparend in Graustufen verarbeitet." : "Farbinformationen bleiben erhalten.", permissions: [] },
+          { id: "review", title: "Fall fachlich prüfen", actor: "Personalleitung", type: "approval", state: "active", description: amuPolicy.managerFileAccess ? "Berechtigte Leitungen können zusätzlich die freigegebenen Dokumente einsehen." : "Filial- und Abteilungsleitung sehen den Fallstatus, aber nicht das AUM-Dokument.", setting: amuPolicy.managerFileAccess ? "Dokumentzugriff für berechtigte Leitung aktiv." : "AUM-Datei bleibt auf Personalleitung und höhere Rechte begrenzt.", permissions: ["amu:metadata:read", "amu:file:read", "amu:review"] },
+          { id: "completion", title: "Arbeitsfähigkeit abschließen", actor: "Teammitglied oder Personalleitung", type: "finish", state: "active", description: "Ein bestätigtes Enddatum oder eine Rückkehrmeldung beendet die Nichtverfügbarkeit nachvollziehbar.", setting: "Ohne Enddatum bleibt der Krankenstandsfall offen.", permissions: ["own_sickness:read"] },
+        ],
+      }),
+      process({
+        id: "time_review",
+        symbol: "ZEIT",
+        title: "Zeiterfassung & Tagesprüfung",
+        summary: "Von der Buchung über Abweichungen und Korrekturen bis zum geprüften Tagesabschluss.",
+        enabled: features.timeTracking !== false,
+        locationSensitive: true,
+        rules: [
+          { label: "Standortregel", value: "Standort auswählen", tone: "neutral", locationRule: "tracking" },
+          { label: "Buchungsort", value: "Standort auswählen", tone: "neutral", locationRule: "access" },
+          { label: "Abweichungstoleranz", value: "Standort auswählen", tone: "neutral", locationRule: "variance" },
+        ],
+        steps: [
+          { id: "booking", title: "Kommen, Pause, Weiter, Gehen", actor: "Teammitglied", type: "actor", state: "active", stateRule: "timeTrackingEnabled", description: "Zeitereignisse werden mit vertrauenswürdiger Serverzeit und sicherer Buchungsreihenfolge erfasst.", setting: "Die Verfügbarkeit richtet sich nach dem gewählten Standort.", permissions: ["own_time:write"] },
+          { id: "evaluation", title: "Tageswerte berechnen", actor: "Grabenplaner", type: "system", state: "active", description: "Sollzeit, Istzeit, Pausen, Samstagswertung und Abwesenheiten werden zu einer Tagesbewertung zusammengeführt.", setting: "Änderungen an Dienst, Zeit oder Abwesenheit machen eine alte Prüfung automatisch ungültig.", permissions: [] },
+          { id: "variance", title: "Abweichungen kennzeichnen", actor: "Grabenplaner", type: "decision", state: "active", description: "Fehlende Buchungen, unvollständige Tage, Pausenfehler und Abweichungen außerhalb der Standorttoleranz werden sichtbar.", setting: "Die Minuten-Toleranz wird je Standort angewendet.", permissions: [] },
+          { id: "correction", title: "Korrektur klären", actor: "Teammitglied und Leitung", type: "approval", state: "conditional", description: "Das Teammitglied kann eine Korrektur beantragen; berechtigte Leitung prüft oder berichtigt die Buchungsfolge.", setting: "Offene Korrekturen verhindern einen finalen Ist-Lohnexport.", permissions: ["own_time:correction_request", "time:review"] },
+          { id: "review", title: "Arbeitstag final prüfen", actor: "Filial- oder Abteilungsleitung", type: "approval", state: "active", description: "Die zuständige Leitung bestätigt die aktuelle Bewertung im eigenen Bereich.", setting: "Die Prüfung speichert einen nachvollziehbaren Snapshot des Tages.", permissions: ["time:read", "time:review"] },
+          { id: "ready", title: "Für Auswertung bereit", actor: "Grabenplaner", type: "finish", state: "active", description: "Ein aktueller, vollständig geprüfter Tag kann in die Lohnverrechnungsauswertung einfließen.", setting: "Spätere Änderungen setzen den Status wieder auf ungeprüft.", permissions: [] },
+        ],
+      }),
+      process({
+        id: "payroll",
+        symbol: "LV",
+        title: "Lohnverrechnung übergeben",
+        summary: "Geprüfte Zeit- und Abwesenheitsdaten als Datei oder über ein freigegebenes HTTPS-Ziel ausgeben.",
+        enabled: features.integrations !== false,
+        locationSensitive: true,
+        rules: [
+          { label: "Exportprofile", value: String(payrollProfiles), tone: payrollProfiles ? "positive" : "neutral" },
+          { label: "Aktive HTTPS-Ziele", value: String(payrollTargets), tone: payrollTargets ? "positive" : "neutral" },
+          { label: "Maximaler Zeitraum", value: "93 Tage", tone: "neutral" },
+        ],
+        steps: [
+          { id: "context", title: "Zeitraum und Bereich wählen", actor: "Personalleitung oder Administration", type: "actor", state: "active", description: "Standort, optionale Abteilung, Zeitraum, Datenquelle und ein gespeichertes Exportprofil werden festgelegt.", setting: `${payrollProfiles} aktive(s) Lohnprofil(e) verfügbar.`, permissions: ["payroll:export"] },
+          { id: "preflight", title: "Daten vorprüfen", actor: "Grabenplaner", type: "system", state: "active", description: "Prüfstatus, Korrekturen, unvollständige Buchungen, Überschneidungen und Abteilungszuordnung werden kontrolliert.", setting: "Für geprüfte Ist-Werte sind aktuelle Tagesprüfungen erforderlich.", permissions: [] },
+          { id: "decision", title: "Blocker oder freigabefähig", actor: "Grabenplaner", type: "decision", state: "active", description: "Blocker verhindern die finale Ausgabe; ein ausdrücklich gekennzeichneter Entwurf kann weiterhin zur Kontrolle erstellt werden.", setting: "Finale Übergabe ist nur ohne Blocker möglich.", permissions: [] },
+          { id: "file", title: "CSV oder Excel erzeugen", actor: "Berechtigte Stelle", type: "actor", state: "active", description: "Die minimierten Lohnwerte können als Datei ausgegeben und extern weiterverarbeitet werden.", setting: "Keine Personalakt-, Bank-, Adress-, SV- oder AUM-Daten im Export.", permissions: ["payroll:export"] },
+          { id: "delivery", title: "Optional sicher per HTTPS übertragen", actor: "Grabenplaner", type: "system", state: payrollTargets ? "active" : "bypassed", description: payrollTargets ? "Final geprüfte Daten können an ein vorkonfiguriertes, getestetes HTTPS-Ziel gesendet werden." : "Kein aktives HTTPS-Lohnziel mit Zugangsdaten konfiguriert; der Datei-Export bleibt verfügbar.", setting: `${payrollTargets} aktives HTTPS-Ziel(e).`, permissions: ["payroll:deliver"] },
+          { id: "audit", title: "Ergebnis protokollieren", actor: "Grabenplaner", type: "finish", state: "active", description: "Status, Zeit, Zielrevision, Zeilenzahl und Prüfsumme bleiben nachvollziehbar; fachliche Nutzdaten werden nicht in das Audit kopiert.", setting: "Unterbrochene Übertragungen werden als unklar markiert und nicht still wiederholt.", permissions: ["integrations:read"] },
+        ],
+      }),
+    ],
+  };
+}
+
 function rightsDashboardPayload(actor) {
   const roles = getPortalRoles();
   const roleLookup = new Map(roles.map((role) => [role.id, role]));
@@ -13811,6 +13955,7 @@ function rightsDashboardPayload(actor) {
     })),
     catalog,
     users,
+    processDashboard: rightsDashboardProcesses(),
   };
 }
 
