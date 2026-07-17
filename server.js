@@ -12318,6 +12318,7 @@ app.post("/api/update-apply", async (_request, response) => {
   const safeZipPath = download.filePath.replaceAll("'", "''");
   const safeExpectedSha256 = download.sha256.replaceAll("'", "''");
   const safeVersionLabel = formatVersionLabel(status.latestVersion).replaceAll("'", "''");
+  const safeHealthUrl = `http://127.0.0.1:${PORT}/api/health/ready`.replaceAll("'", "''");
   const script = `
 $ErrorActionPreference = 'Stop'
 $appDir = '${safeAppDir}'
@@ -12328,11 +12329,27 @@ $zipPath = '${safeZipPath}'
 $expectedSha256 = '${safeExpectedSha256}'
 $expectedByteSize = ${download.byteSize}
 $versionLabel = '${safeVersionLabel}'
+$healthUrl = '${safeHealthUrl}'
 $pidToWait = ${process.pid}
 $logPath = Join-Path $appDir 'data\\update-last.log'
 function Write-UpdateLog([string]$message) {
   $line = "[{0}] {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $message
   Add-Content -LiteralPath $logPath -Value $line -Encoding UTF8
+}
+function Assert-PortableRuntime([string]$root, [string]$label) {
+  $nodeExe = Join-Path $root 'runtime\\node.exe'
+  $serverFile = Join-Path $root 'server.js'
+  if (-not (Test-Path -LiteralPath $nodeExe)) { throw "$label ist unvollständig: runtime\\node.exe fehlt." }
+  if (-not (Test-Path -LiteralPath $serverFile)) { throw "$label ist unvollständig: server.js fehlt." }
+  Push-Location $root
+  try {
+    $moduleCheck = & $nodeExe -e "for (const name of ['express','unzipper','bluebird','sharp']) require.resolve(name)" 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "$label enthält unvollständige Laufzeitmodule: $moduleCheck" }
+    $syntaxCheck = & $nodeExe --check $serverFile 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "$label enthält keinen startfähigen Server: $syntaxCheck" }
+  } finally {
+    Pop-Location
+  }
 }
 try {
   New-Item -ItemType Directory -Path (Split-Path -Parent $logPath) -Force | Out-Null
@@ -12358,12 +12375,24 @@ Write-UpdateLog "Entpacke $($zip.Name) ..."
 Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir -Force
 $source = Join-Path $extractDir 'Grabenplaner'
 if (-not (Test-Path (Join-Path $source 'server.js'))) { throw 'Entpackte Version ist unvollständig.' }
+Assert-PortableRuntime $source 'Das entpackte Update'
 Write-UpdateLog "Kopiere neue App-Dateien ..."
   Get-ChildItem -LiteralPath $appDir -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object { try { $_.IsReadOnly = $false } catch {} }
-  $robocopyOutput = & robocopy $source $appDir /MIR /XD '.git' 'data' 'backups' 'release' 'usb-backups' /XF '*.db' '*.db-shm' '*.db-wal' '*.log' 'portable-layout.json' /NFL /NDL /NJH /NJS /NP 2>&1
+$protectedRootNames = @('.git', 'data', 'backups', 'release', 'usb-backups')
+$excludedSourceDirectories = @()
+foreach ($name in $protectedRootNames) {
+  $protectedSourceDirectory = Join-Path $source $name
+  if (-not (Test-Path -LiteralPath $protectedSourceDirectory)) {
+    New-Item -ItemType Directory -Path $protectedSourceDirectory -Force | Out-Null
+  }
+  $excludedSourceDirectories += $protectedSourceDirectory
+}
+$robocopyArguments = @($source, $appDir, '/MIR', '/XD') + $excludedSourceDirectories + @('/XF', '*.db', '*.db-shm', '*.db-wal', '*.log', 'portable-layout.json', '/NFL', '/NDL', '/NJH', '/NJS', '/NP')
+$robocopyOutput = & robocopy @robocopyArguments 2>&1
 $robocopyExitCode = $LASTEXITCODE
 $robocopyOutput | ForEach-Object { Write-UpdateLog "robocopy: $_" }
 if ($robocopyExitCode -gt 7) { throw "Robocopy fehlgeschlagen: $robocopyExitCode" }
+Assert-PortableRuntime $appDir 'Die aktualisierte Installation'
 if ((Split-Path $appDir -Leaf) -eq 'app') {
   Get-ChildItem -LiteralPath $parentDir -Filter 'Grabenplaner v* Beta starten.cmd' -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath (Join-Path $parentDir 'Dienstplan starten.cmd') -Force -ErrorAction SilentlyContinue
@@ -12389,14 +12418,33 @@ if ((Split-Path $appDir -Leaf) -eq 'app') {
 $startFile = Join-Path $appDir "Grabenplaner $versionLabel starten.cmd"
 if (-not (Test-Path $startFile)) { $startFile = Join-Path $appDir 'Dienstplan starten.cmd' }
 Write-UpdateLog "Starte neu: $startFile"
-Start-Process -FilePath $startFile -WorkingDirectory $appDir
-Start-Sleep -Seconds 3
+$env:GRABENPLANER_UPDATE_RESTART = '1'
+Start-Process -FilePath $startFile -WorkingDirectory $appDir | Out-Null
+$restartDeadline = (Get-Date).AddSeconds(90)
+$restartReady = $false
+$lastHealthError = 'Keine Antwort vom neuen Server.'
+while ((Get-Date) -lt $restartDeadline) {
+  try {
+    $healthResponse = Invoke-WebRequest -UseBasicParsing -Uri $healthUrl -TimeoutSec 4
+    if ($healthResponse.StatusCode -eq 200) { $restartReady = $true; break }
+  } catch {
+    $lastHealthError = $_.Exception.Message
+  }
+  Start-Sleep -Seconds 1
+}
+if (-not $restartReady) { throw "Der Neustart konnte nicht bestätigt werden. $lastHealthError" }
+Write-UpdateLog "Neustart geprüft: $healthUrl"
 Write-UpdateLog "Update erfolgreich abgeschlossen."
 Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
 } catch {
   try {
     Write-UpdateLog ("FEHLER: " + $_.Exception.Message)
     Write-UpdateLog ("Details: " + $_.ScriptStackTrace)
+  } catch {}
+  try {
+    Add-Type -AssemblyName PresentationFramework
+    $errorMessage = "Grabenplaner konnte nach dem Update nicht sicher gestartet werden. Die Datenbank blieb erhalten. Details stehen in:" + [Environment]::NewLine + $logPath
+    [System.Windows.MessageBox]::Show($errorMessage, 'Grabenplaner-Update', 'OK', 'Error') | Out-Null
   } catch {}
   exit 1
 }
