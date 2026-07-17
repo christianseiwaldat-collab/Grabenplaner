@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.67 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.68 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -405,9 +405,17 @@
 
           <section class="rights-dashboard-process-panel hidden" id="rightsDashboardProcessesPanel" aria-label="Standardprozesse">
             <div class="rights-process-toolbar">
-              <div><span class="eyebrow">Aktueller Regelstand</span><h2>Standardprozesse</h2><p>Die Darstellung folgt den momentan gespeicherten Einstellungen und Funktionsfreigaben.</p></div>
-              <label><span>Standortbezug</span><select id="rightsProcessLocation"><option value="">Erster aktiver Standort</option></select></label>
+              <div><span class="eyebrow">Aktueller Regelstand</span><h2>Standardprozesse</h2><p>Prüfen, folgenlos simulieren und als lesbare Prozessdokumentation ausgeben.</p></div>
+              <div class="rights-process-toolbar-controls">
+                <label><span>Standortbezug</span><select id="rightsProcessLocation"><option value="">Erster aktiver Standort</option></select></label>
+                <label><span>Simulation</span><select id="rightsProcessScenario"><option value="current">Aktuelle Konfiguration</option></select></label>
+                <button class="secondary-button" id="rightsProcessExportPdf" type="button">Prozess als PDF</button>
+              </div>
             </div>
+            <section class="rights-process-validation" aria-label="Konfigurationsprüfung">
+              <div class="rights-process-validation-heading"><div><span class="eyebrow">Prüfung</span><h2>Konfigurationsstatus</h2><p id="rightsProcessValidationHint">Prüfergebnis wird geladen.</p></div><div class="rights-process-validation-summary" id="rightsProcessValidationSummary"></div></div>
+              <div class="rights-process-validation-list" id="rightsProcessValidationList"></div>
+            </section>
             <div class="rights-process-workspace">
               <aside class="rights-process-navigation" aria-label="Prozessauswahl">
                 <div class="rights-dashboard-section-heading"><div><span class="eyebrow">Abläufe</span><h2>Prozess wählen</h2></div></div>
@@ -415,6 +423,7 @@
               </aside>
               <section class="rights-process-detail" aria-live="polite">
                 <div class="rights-process-heading"><div><span class="eyebrow">Ablauf &amp; Zuständigkeit</span><h2 id="rightsProcessTitle">Prozess</h2><p id="rightsProcessSummary"></p></div><span class="status-badge" id="rightsProcessStatus">Aktiv</span></div>
+                <div class="rights-process-simulation-note" id="rightsProcessSimulationNote"><strong>Aktuelle Konfiguration</strong><span>Die Simulation verändert keine gespeicherten Daten.</span></div>
                 <div class="rights-process-rules" id="rightsProcessRules" aria-label="Aktuell wirksame Regeln"></div>
                 <div class="rights-process-flow-layout">
                   <div class="rights-process-timeline" id="rightsProcessTimeline" aria-label="Prozessschritte"></div>
@@ -959,7 +968,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.67 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.68 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
