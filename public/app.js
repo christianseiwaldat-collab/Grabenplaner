@@ -74,6 +74,12 @@ const state = {
   allEmployees: [],
   personnelDirectory: [],
   costCenters: [],
+  centralVacations: [],
+  centralVacationYear: new Date().getFullYear(),
+  centralVacationCostCenterFilter: "",
+  centralVacationSearch: "",
+  centralVacationLoadedYear: null,
+  centralVacationLoading: false,
   personnelAdministrationLoaded: false,
   personnelAdministrationLoading: false,
   personnelAdministrationTab: "employees",
@@ -159,7 +165,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "rightsDashboardView", "settingsView", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "personnelAdministrationNavButton", "rightsDashboardNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "personnelAdministrationNavButton", "rightsDashboardNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarEmployeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -168,9 +174,9 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeeHomeLocation", "employeeHomeLocationHint", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "addCostCenterButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton",
+    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "addCostCenterButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
-    "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
+    "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationCostCenterField", "locationCostCenter", "locationCostCenterReadonly", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
     "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
     "shiftModal", "shiftForm", "shiftModalTitle", "deleteShiftButton", "shiftCalculation", "shiftDepartment", "departmentPdfControl", "departmentPdfSelect", "departmentPdfButton",
     "optionsModal", "optionForm", "optionList", "optionsWeekLabel", "optionsWeekRange", "optionPreviousWeek", "optionNextWeek", "globalBlockDate", "globalBlockReason", "globalBlockHoliday", "globalBlockSubmitButton", "optionSubmitButton", "cancelOptionEditButton", "autoPlanModal",
@@ -597,6 +603,13 @@ function canWriteCostCenters() {
     || state.portalSession?.user?.permissions?.includes("cost_centers:write") === true;
 }
 
+function canReadCentralVacations() {
+  return canReadCentralPersonnel() && (
+    !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("vacation:read") === true
+  );
+}
+
 function applyRoleVisibility() {
   const permissions = state.portalSession?.user?.permissions || [];
   const features = state.portalStatus?.installationFeatures || {};
@@ -637,6 +650,7 @@ function applyRoleVisibility() {
   const centralPersonnelWriteAccess = canWriteCentralPersonnel();
   const costCenterReadAccess = canReadCostCenters();
   const costCenterWriteAccess = canWriteCostCenters();
+  const centralVacationReadAccess = canReadCentralVacations() && features.vacation !== false;
   elements.personnelAdministrationNavButton?.classList.toggle("hidden", !centralPersonnelReadAccess);
   document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
   document.querySelectorAll('[data-view="vacations"]').forEach((button) => button.classList.toggle("hidden", features.vacation === false));
@@ -676,11 +690,15 @@ function applyRoleVisibility() {
   document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !(employeeWriteAccess && centralPersonnelWriteAccess));
   elements.addCentralEmployeeButton?.classList.toggle("hidden", !centralPersonnelWriteAccess);
   document.querySelector('[data-personnel-administration-tab="costCenters"]')?.classList.toggle("hidden", !costCenterReadAccess);
+  elements.centralVacationsTab?.classList.toggle("hidden", !centralVacationReadAccess);
   elements.addCostCenterButton?.classList.toggle("hidden", !costCenterWriteAccess);
-  elements.addLocationButton?.classList.toggle("hidden", !locationBaseWriteAccess);
+  elements.addLocationButton?.classList.toggle("hidden", !(locationBaseWriteAccess && costCenterWriteAccess));
   elements.addDepartmentButton?.classList.toggle("hidden", !departmentWriteAccess);
   elements.locationFormCard?.classList.toggle("hidden", !locationBaseWriteAccess);
   elements.departmentFormCard?.classList.toggle("hidden", !departmentWriteAccess);
+  elements.locationCostCenterField?.classList.toggle("hidden", !costCenterWriteAccess);
+  elements.locationCostCenterReadonly?.classList.toggle("hidden", costCenterWriteAccess);
+  if (elements.locationCostCenter) elements.locationCostCenter.disabled = !costCenterWriteAccess;
   elements.positionSettingsCard?.classList.toggle("hidden", !positionWriteAccess);
   elements.personnelViewSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.trustLevelSettingsCard?.classList.toggle("hidden", !wifiSettingsAccess || !globalAdministration);
@@ -716,6 +734,7 @@ function applyRoleVisibility() {
   [elements.localModeOption, elements.serverModeOption, elements.publicServerModeOption].forEach((button) => { if (button) button.disabled = !operationModeAccess; });
   if (!locationWriteAccess && state.personnelTab === "locations") setPersonnelTab("employees");
   if (!costCenterReadAccess && state.personnelAdministrationTab === "costCenters") setPersonnelAdministrationTab("employees");
+  if (!centralVacationReadAccess && state.personnelAdministrationTab === "vacations") setPersonnelAdministrationTab("employees");
   if (!centralPersonnelReadAccess && state.currentView === "personnelAdministration") setView("planning");
   renderSidebarSession();
 }
@@ -999,32 +1018,53 @@ function render() {
   renderSettings();
 }
 
+function navigationGroups() {
+  return {
+    filialManagement: { toggle: elements.filialManagementToggle, children: elements.filialManagementNavChildren },
+    planning: { toggle: document.querySelector('[data-nav-toggle="planning"]'), children: elements.planningNavChildren },
+    vacations: { toggle: document.querySelector('[data-nav-toggle="vacations"]'), children: elements.vacationNavChildren },
+  };
+}
+
+function setNavigationCurrent(element, current) {
+  if (!element) return;
+  if (current) element.setAttribute("aria-current", "page");
+  else element.removeAttribute("aria-current");
+}
+
+function applyNavigationGroupState(key, visible = true) {
+  const group = navigationGroups()[key];
+  if (!group?.toggle || !group.children) return false;
+  const open = localStorage.getItem(`grabenplaner-nav-${key}`) !== "closed";
+  group.children.classList.toggle("hidden", !visible || !open);
+  group.toggle.classList.toggle("hidden", !visible);
+  group.toggle.classList.toggle("expanded", open);
+  group.toggle.setAttribute("aria-expanded", String(open));
+  return open;
+}
+
 function renderContextNavigation() {
   const locations = activeLocations();
   const departmentOnly = state.portalSession?.user?.role === "department_manager";
+  const filialViewActive = ["personnel", "planning", "vacations"].includes(state.currentView);
+  elements.filialManagementNav?.classList.toggle("contains-active", filialViewActive);
+  applyNavigationGroupState("filialManagement", true);
+  setNavigationCurrent(elements.filialTeamsNavButton, state.currentView === "personnel");
+  setNavigationCurrent(elements.planningNavButton, state.currentView === "planning");
+  setNavigationCurrent(elements.vacationsNavButton, state.currentView === "vacations");
   const planningContexts = locations.flatMap((location) => departmentOnly
     ? (location.departments || []).map((department) => ({ locationId: location.id, departmentId: String(department.id), label: `${location.name} · ${department.name}` }))
     : [{ locationId: location.id, departmentId: "", label: `${location.name} · Gesamtplan` }]);
   const showPlanningChildren = planningContexts.length > 1;
-  const planningOpen = localStorage.getItem("grabenplaner-nav-planning") !== "closed";
-  const planningToggle = document.querySelector('[data-nav-toggle="planning"]');
-  elements.planningNavChildren.classList.toggle("hidden", !showPlanningChildren || !planningOpen);
-  planningToggle?.classList.toggle("hidden", !showPlanningChildren);
-  planningToggle?.classList.toggle("expanded", planningOpen);
-  planningToggle?.setAttribute("aria-expanded", String(planningOpen));
+  applyNavigationGroupState("planning", showPlanningChildren);
   elements.planningNavChildren.innerHTML = showPlanningChildren ? planningContexts.map((item) => `
-    <button type="button" class="nav-child ${item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? "active" : ""}" data-context-view="planning" data-location-id="${escapeHtml(item.locationId)}" data-department-id="${escapeHtml(item.departmentId)}">${escapeHtml(item.label)}</button>
+    <button type="button" class="nav-child ${state.currentView === "planning" && item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? "active" : ""}" ${state.currentView === "planning" && item.locationId === state.locationId && String(item.departmentId || "") === String(state.departmentId || "") ? 'aria-current="page"' : ""} data-context-view="planning" data-location-id="${escapeHtml(item.locationId)}" data-department-id="${escapeHtml(item.departmentId)}">${escapeHtml(item.label)}</button>
   `).join("") : "";
 
   const showVacationChildren = locations.length > 1;
-  const vacationOpen = localStorage.getItem("grabenplaner-nav-vacations") !== "closed";
-  const vacationToggle = document.querySelector('[data-nav-toggle="vacations"]');
-  elements.vacationNavChildren.classList.toggle("hidden", !showVacationChildren || !vacationOpen);
-  vacationToggle?.classList.toggle("hidden", !showVacationChildren);
-  vacationToggle?.classList.toggle("expanded", vacationOpen);
-  vacationToggle?.setAttribute("aria-expanded", String(vacationOpen));
+  applyNavigationGroupState("vacations", showVacationChildren);
   elements.vacationNavChildren.innerHTML = showVacationChildren ? locations.map((location) => `
-    <button type="button" class="nav-child ${location.id === state.locationId ? "active" : ""}" data-context-view="vacations" data-location-id="${escapeHtml(location.id)}" data-department-id="${departmentOnly ? escapeHtml(String(location.departments?.[0]?.id || "")) : ""}">${escapeHtml(location.name)}</button>
+    <button type="button" class="nav-child ${state.currentView === "vacations" && location.id === state.locationId ? "active" : ""}" ${state.currentView === "vacations" && location.id === state.locationId ? 'aria-current="page"' : ""} data-context-view="vacations" data-location-id="${escapeHtml(location.id)}" data-department-id="${departmentOnly ? escapeHtml(String(location.departments?.[0]?.id || "")) : ""}">${escapeHtml(location.name)}</button>
   `).join("") : "";
 }
 
@@ -1455,6 +1495,7 @@ async function saveVacation(event) {
     });
     elements.vacationModal.close();
     state.editingVacationGroupId = null;
+    state.centralVacationLoadedYear = null;
     state.vacationYear = Number(dateFrom.slice(0, 4)) || state.vacationYear;
     showToast(isEdit ? "Urlaub wurde aktualisiert." : "Urlaub wurde eingetragen.");
     await loadAll();
@@ -1471,6 +1512,7 @@ async function saveVacationEntitlements() {
       method: "PUT",
       body: JSON.stringify({ year: state.vacationYear, locationId: state.locationId, entries }),
     });
+    state.centralVacationLoadedYear = null;
     state.editingVacationEntitlements = false;
     showToast("Jahresurlaub wurde gespeichert.");
     renderVacations();
@@ -1481,6 +1523,7 @@ async function deleteVacation(groupId) {
   if (!groupId || !confirm("Diesen Urlaubseintrag wirklich löschen?")) return;
   try {
     await api(`/api/vacations/${encodeURIComponent(groupId)}`, { method: "DELETE" });
+    state.centralVacationLoadedYear = null;
     showToast("Urlaubseintrag wurde gelöscht.");
     await loadAll();
   } catch (error) { showToast(error.message, true); }
@@ -1735,19 +1778,149 @@ function renderCostCenters() {
     </article>`).join("") : '<p class="settings-note">Noch keine Kostenstelle angelegt.</p>';
 }
 
+function normalizeCentralVacation(item = {}) {
+  return {
+    ...item,
+    group_id: String(item.group_id ?? item.groupId ?? item.id ?? ""),
+    employee_number: String(item.employee_number ?? item.employeeNumber ?? ""),
+    full_name: String(item.full_name ?? item.fullName ?? ""),
+    nickname: String(item.nickname ?? ""),
+    date_from: String(item.date_from ?? item.dateFrom ?? ""),
+    date_to: String(item.date_to ?? item.dateTo ?? ""),
+    days: Number(item.days ?? item.vacation_days ?? item.vacationDays ?? NaN),
+    cost_center_id: String(item.cost_center_id ?? item.costCenterId ?? ""),
+    cost_center_code: String(item.cost_center_code ?? item.costCenterCode ?? ""),
+    cost_center_name: String(item.cost_center_name ?? item.costCenterName ?? ""),
+    home_location_id: String(item.home_location_id ?? item.homeLocationId ?? ""),
+    home_location_name: String(item.home_location_name ?? item.homeLocationName ?? ""),
+    preferred_department_name: String(item.preferred_department_name ?? item.preferredDepartmentName ?? ""),
+    source: String(item.source ?? item.origin ?? "direct"),
+  };
+}
+
+function centralVacationSourceLabel(source) {
+  return ({ request: "Genehmigter Antrag", approved_request: "Genehmigter Antrag", direct: "Direkt erfasst", import: "Import" })[source]
+    || "Erfasst";
+}
+
+async function loadCentralVacations({ force = false } = {}) {
+  if (!canReadCentralVacations() || state.centralVacationLoading) return;
+  const year = Number(state.centralVacationYear || new Date().getFullYear());
+  if (!force && state.centralVacationLoadedYear === year) {
+    renderCentralVacations();
+    return;
+  }
+  state.centralVacationLoading = true;
+  if (elements.centralVacationList) elements.centralVacationList.innerHTML = '<tr><td colspan="7">Unternehmensweite Urlaubsdaten werden geladen.</td></tr>';
+  try {
+    const payload = await api(`/api/personnel-vacations?year=${encodeURIComponent(year)}`);
+    state.centralVacations = apiList(payload, ["vacations", "items", "entries"]).map(normalizeCentralVacation);
+    state.centralVacationYear = Number(payload?.year || year);
+    state.centralVacationLoadedYear = state.centralVacationYear;
+    renderCentralVacations();
+  } catch (error) {
+    if (elements.centralVacationList) elements.centralVacationList.innerHTML = `<tr><td colspan="7">${escapeHtml(error.message)}</td></tr>`;
+    showToast(error.message, true);
+  } finally {
+    state.centralVacationLoading = false;
+  }
+}
+
+function filteredCentralVacations() {
+  const search = state.centralVacationSearch.trim().toLocaleLowerCase("de-AT");
+  const costCenterId = String(state.centralVacationCostCenterFilter || "");
+  return state.centralVacations.filter((vacation) => {
+    if (costCenterId && vacation.cost_center_id !== costCenterId) return false;
+    if (!search) return true;
+    return [vacation.employee_number, vacation.full_name, vacation.nickname, vacation.cost_center_code,
+      vacation.cost_center_name, vacation.home_location_id, vacation.home_location_name, vacation.preferred_department_name]
+      .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(search));
+  }).sort((left, right) => left.date_from.localeCompare(right.date_from)
+    || left.employee_number.localeCompare(right.employee_number, "de-AT", { numeric: true, sensitivity: "base" }));
+}
+
+function renderCentralVacationSummary() {
+  if (!elements.centralVacationSummary) return;
+  const today = toIsoDate(new Date());
+  const active = state.centralVacations.filter((vacation) => vacation.date_from <= today && vacation.date_to >= today).length;
+  const upcoming = state.centralVacations.filter((vacation) => vacation.date_from > today).length;
+  const employees = new Set(state.centralVacations.map((vacation) => vacation.employee_number).filter(Boolean)).size;
+  const costCenters = new Set(state.centralVacations.map((vacation) => vacation.cost_center_id).filter(Boolean)).size;
+  elements.centralVacationSummary.innerHTML = [
+    ["Urlaubseinträge", state.centralVacations.length, `im Jahr ${state.centralVacationYear}`],
+    ["Beschäftigte", employees, "mit Urlaubseintrag"],
+    ["Heute abwesend", active, "genehmigte Urlaube"],
+    ["Kommend", upcoming, `${costCenters} Kostenstelle${costCenters === 1 ? "" : "n"}`],
+  ].map(([label, value, note]) => `<article class="personnel-administration-stat"><span>${escapeHtml(label)}</span><strong>${Number(value)}</strong><small>${escapeHtml(note)}</small></article>`).join("");
+}
+
+function renderCentralVacations() {
+  if (!elements.centralVacationList || !canReadCentralVacations()) return;
+  if (elements.centralVacationYear) elements.centralVacationYear.value = state.centralVacationYear;
+  const currentCostCenter = String(state.centralVacationCostCenterFilter || "");
+  const centersById = new Map(state.costCenters.map((center) => [String(center.id), center]));
+  for (const vacation of state.centralVacations) {
+    if (vacation.cost_center_id && !centersById.has(vacation.cost_center_id)) {
+      centersById.set(vacation.cost_center_id, {
+        id: vacation.cost_center_id,
+        code: vacation.cost_center_code,
+        name: vacation.cost_center_name,
+        active: true,
+      });
+    }
+  }
+  elements.centralVacationCostCenterFilter.innerHTML = `<option value="">Alle Kostenstellen</option>${[...centersById.values()]
+    .sort((left, right) => String(left.code || left.name).localeCompare(String(right.code || right.name), "de-AT", { numeric: true }))
+    .map((center) => `<option value="${escapeHtmlAttribute(String(center.id))}">${escapeHtml([center.code, center.name].filter(Boolean).join(" · ") || "Kostenstelle")}</option>`).join("")}`;
+  if ([...elements.centralVacationCostCenterFilter.options].some((option) => option.value === currentCostCenter)) {
+    elements.centralVacationCostCenterFilter.value = currentCostCenter;
+  } else {
+    state.centralVacationCostCenterFilter = "";
+  }
+  renderCentralVacationSummary();
+  const rows = filteredCentralVacations();
+  elements.centralVacationList.innerHTML = rows.length ? rows.map((vacation) => {
+    const personName = vacation.full_name || vacation.nickname || "–";
+    const costCenter = [vacation.cost_center_code, vacation.cost_center_name].filter(Boolean).join(" · ") || "Nicht zugeordnet";
+    const location = [vacation.home_location_name || vacation.home_location_id, vacation.preferred_department_name].filter(Boolean).join(" · ") || "Keine Stammfiliale";
+    const period = vacation.date_from === vacation.date_to
+      ? formatDate(vacation.date_from)
+      : `${formatDate(vacation.date_from)} – ${formatDate(vacation.date_to)}`;
+    return `<tr>
+      <td data-label="Zeitraum"><strong>${escapeHtml(period)}</strong></td>
+      <td data-label="Personalnr.">${escapeHtml(vacation.employee_number || "–")}</td>
+      <td data-label="Name"><strong>${escapeHtml(personName)}</strong>${vacation.nickname && vacation.nickname !== personName ? `<small>${escapeHtml(vacation.nickname)}</small>` : ""}</td>
+      <td data-label="Kostenstelle"><span class="status-badge ${vacation.cost_center_id ? "" : "warning"}">${escapeHtml(costCenter)}</span></td>
+      <td data-label="Filiale / Abteilung">${escapeHtml(location)}</td>
+      <td data-label="Tage">${Number.isFinite(vacation.days) ? escapeHtml(formatDaysLong(vacation.days)) : "–"}</td>
+      <td data-label="Quelle">${escapeHtml(centralVacationSourceLabel(vacation.source))}</td>
+    </tr>`;
+  }).join("") : '<tr><td colspan="7" class="personnel-directory-empty">Keine passenden Urlaubseinträge gefunden.</td></tr>';
+}
+
 function renderPersonnelAdministration() {
   if (!canReadCentralPersonnel()) return;
   renderPersonnelAdministrationSummary();
   renderPersonnelDirectory();
   renderCostCenters();
+  if (state.centralVacationLoadedYear !== null) renderCentralVacations();
 }
 
 function setPersonnelAdministrationTab(tab) {
-  const normalized = tab === "costCenters" && canReadCostCenters() ? "costCenters" : "employees";
+  const normalized = tab === "costCenters" && canReadCostCenters()
+    ? "costCenters"
+    : tab === "vacations" && canReadCentralVacations() ? "vacations" : "employees";
   state.personnelAdministrationTab = normalized;
-  document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => button.classList.toggle("active", button.dataset.personnelAdministrationTab === normalized));
+  document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => {
+    const active = button.dataset.personnelAdministrationTab === normalized;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
   elements.personnelDirectorySection?.classList.toggle("active", normalized === "employees");
   elements.costCenterSection?.classList.toggle("active", normalized === "costCenters");
+  elements.centralVacationSection?.classList.toggle("active", normalized === "vacations");
+  if (normalized === "vacations") loadCentralVacations().catch((error) => showToast(error.message, true));
 }
 
 function openCostCenterModal(costCenter = null) {
@@ -4318,6 +4491,7 @@ async function decideVacationRequest(action) {
       method: "PUT",
       body: JSON.stringify({ action, note: elements.requestActionNote.value, dateFrom: elements.requestEditDateFrom.value, dateTo: elements.requestEditDateTo.value, date: elements.requestEditDateFrom.value, startTime: elements.requestEditStartTime.value, endTime: elements.requestEditEndTime.value }),
     });
+    state.centralVacationLoadedYear = null;
     elements.requestActionModal.close();
     showToast(action === "approve" ? "Der Antrag wurde genehmigt beziehungsweise weitergeleitet." : action === "preliminary" ? "Der Antrag wurde vorläufig genehmigt." : action === "cancel" ? "Der Antrag wurde storniert." : "Der Antrag wurde abgelehnt.");
     await loadAll();
@@ -5569,6 +5743,7 @@ function setView(view) {
   if (timePresenceRefreshTimer) clearInterval(timePresenceRefreshTimer);
   timePresenceRefreshTimer = null;
   document.querySelectorAll(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
+  renderContextNavigation();
   elements.planningView.classList.toggle("active", view === "planning");
   elements.requestsView.classList.toggle("active", view === "requests");
   elements.timeTrackingView?.classList.toggle("active", view === "timeTracking");
@@ -6111,6 +6286,40 @@ function calculateShiftPreview() {
   elements.shiftCalculation.textContent = `Planzeit ${formatHours(raw)} · Pause ${formatHours(pause)}${bonus ? ` · Samstagszuschlag +${formatHours(bonus)}` : ""} · Gewertet ${formatHours(counted)}`;
 }
 
+function canUseAllEmployeesForShiftPlanning() {
+  return !state.portalStatus?.portalEnabled
+    || ["developer", "it_admin", "admin", "hr"].includes(state.portalSession?.user?.role);
+}
+
+function shiftEmployeeCandidates(selectedEmployeeNumber = "", shift = null) {
+  const scopedEmployees = state.data?.employees || [];
+  const source = canUseAllEmployeesForShiftPlanning() ? state.allEmployees : scopedEmployees;
+  const selected = String(selectedEmployeeNumber || "");
+  const candidates = source.filter((employee) => (
+    employee.active !== false && employee.active !== 0 && employee.active !== "0"
+  ) || String(employee.personnel_number) === selected);
+  if (!candidates.some((employee) => String(employee.personnel_number) === selected)) {
+    const existing = [...scopedEmployees, ...state.allEmployees]
+      .find((employee) => String(employee.personnel_number) === selected);
+    if (existing) candidates.push(existing);
+    else if (selected) candidates.push({
+      personnel_number: selected,
+      nickname: shift?.nickname || shift?.full_name || selected,
+      home_location_id: shift?.home_location_id || shift?.homeLocationId || "",
+    });
+  }
+  return [...new Map(candidates.map((employee) => [employee.personnel_number, employee])).values()]
+    .sort((left, right) => String(left.personnel_number).localeCompare(String(right.personnel_number), "de-AT", { numeric: true, sensitivity: "base" }));
+}
+
+function shiftEmployeeOptionLabel(employee) {
+  const homeLocationId = String(employee.home_location_id || employee.homeLocationId || "");
+  const homeLocation = employee.home_location_name || employee.homeLocationName
+    || state.locations.find((location) => location.id === homeLocationId)?.name || homeLocationId;
+  const externalHint = homeLocationId && homeLocationId !== state.locationId ? ` · Stammfiliale ${homeLocation}` : "";
+  return `${employee.nickname || employee.full_name || employee.fullName || employee.personnel_number} · ${employee.personnel_number}${externalHint}`;
+}
+
 function openShiftModal(employeeNumber, date, shift = null) {
   if (isWeekLocked()) {
     showToast("Diese Kalenderwoche ist schreibgeschützt.", true);
@@ -6126,13 +6335,15 @@ function openShiftModal(employeeNumber, date, shift = null) {
     showToast(`An diesem Tag ist bereits „${optionLabels[specialCase.option_type]}“ eingetragen.`, true);
     return;
   }
-  const initialEmployee = state.data.employees.find((employee) => employee.personnel_number === (shift?.employee_number || employeeNumber));
+  const selectedEmployeeNumber = shift?.employee_number || employeeNumber;
+  const candidates = shiftEmployeeCandidates(selectedEmployeeNumber, shift);
+  const initialEmployee = candidates.find((employee) => employee.personnel_number === selectedEmployeeNumber);
   if (initialEmployee && !shift && !employeeCanWorkOnDate(initialEmployee, shift?.shift_date || date)) {
     showToast(`${initialEmployee.nickname} hat an diesem Wochentag keinen fix vereinbarten Arbeitstag.`, true);
     return;
   }
-  document.querySelector("#shiftEmployee").innerHTML = state.data.employees.map((employee) =>
-    `<option value="${escapeHtml(employee.personnel_number)}">${escapeHtml(employee.nickname)} · ${escapeHtml(employee.personnel_number)}</option>`,
+  document.querySelector("#shiftEmployee").innerHTML = candidates.map((employee) =>
+    `<option value="${escapeHtmlAttribute(employee.personnel_number)}">${escapeHtml(shiftEmployeeOptionLabel(employee))}</option>`,
   ).join("");
   const departments = departmentsForLocation(state.locationId);
   elements.shiftDepartment.innerHTML = `<option value="">Keine / Allgemein</option>${departments.map((department) =>
@@ -6140,8 +6351,8 @@ function openShiftModal(employeeNumber, date, shift = null) {
   ).join("")}`;
   elements.shiftForm.reset();
   document.querySelector("#shiftId").value = shift?.id || "";
-  document.querySelector("#shiftEmployee").value = shift?.employee_number || employeeNumber;
-  const selectedEmployee = state.data.employees.find((employee) => employee.personnel_number === (shift?.employee_number || employeeNumber));
+  document.querySelector("#shiftEmployee").value = selectedEmployeeNumber;
+  const selectedEmployee = candidates.find((employee) => employee.personnel_number === selectedEmployeeNumber);
   elements.shiftDepartment.value = shift?.department_id || state.departmentId || selectedEmployee?.preferred_department_id || "";
   document.querySelector("#shiftDate").value = shift?.shift_date || date;
   document.querySelector("#shiftStart").value = shift?.start_time || hours.start;
@@ -6456,6 +6667,33 @@ function syncLocationTimeTrackingFields() {
   }
 }
 
+async function ensureLocationCostCenters() {
+  if (!canReadCostCenters() || state.costCenters.length) return;
+  const payload = await api("/api/cost-centers?includeInactive=1");
+  state.costCenters = apiList(payload, ["costCenters", "cost_centers", "items"]).map(normalizeCostCenter);
+}
+
+function populateLocationCostCenter(selectedId = "", fallbackLabel = "") {
+  const canEdit = canWriteCostCenters();
+  const activeCenters = state.costCenters
+    .filter((center) => center.active || String(center.id) === String(selectedId))
+    .sort((left, right) => left.code.localeCompare(right.code, "de-AT", { numeric: true, sensitivity: "base" }));
+  elements.locationCostCenterField?.classList.toggle("hidden", !canEdit);
+  elements.locationCostCenterReadonly?.classList.toggle("hidden", canEdit);
+  if (elements.locationCostCenter) {
+    elements.locationCostCenter.disabled = !canEdit;
+    elements.locationCostCenter.innerHTML = `<option value="">Bitte Kostenstelle auswählen</option>${activeCenters.map((center) =>
+      `<option value="${escapeHtmlAttribute(String(center.id))}">${escapeHtml([center.code, center.name].filter(Boolean).join(" · ") || "Kostenstelle")}${center.active ? "" : " · inaktiv"}</option>`,
+    ).join("")}`;
+    elements.locationCostCenter.value = activeCenters.some((center) => String(center.id) === String(selectedId)) ? String(selectedId) : "";
+  }
+  const selectedCenter = state.costCenters.find((center) => String(center.id) === String(selectedId));
+  const readonlyLabel = elements.locationCostCenterReadonly?.querySelector("strong");
+  if (readonlyLabel) readonlyLabel.textContent = selectedCenter
+    ? [selectedCenter.code, selectedCenter.name].filter(Boolean).join(" · ")
+    : fallbackLabel || "Noch nicht zugeordnet";
+}
+
 function resetLocationForm() {
   state.editingLocationId = null;
   elements.locationForm.reset();
@@ -6466,6 +6704,9 @@ function resetLocationForm() {
   elements.locationTimeTrackingAccessMode.value = "anywhere";
   elements.locationTimeTrackingAllowedNetworks.value = "";
   elements.locationTimeTrackingVarianceMinutes.value = "15";
+  const fallbackLocation = currentLocation();
+  populateLocationCostCenter(fallbackLocation?.cost_center_id || fallbackLocation?.costCenterId || "",
+    [fallbackLocation?.cost_center_code || fallbackLocation?.costCenterCode, fallbackLocation?.cost_center_name || fallbackLocation?.costCenterName].filter(Boolean).join(" · "));
   syncLocationTimeTrackingFields();
   setLocationDayFields(currentLocation()?.day_settings || state.locations?.[0]?.day_settings || {});
   elements.locationSubmitButton.textContent = "Filiale anlegen";
@@ -6484,6 +6725,8 @@ function fillLocationForm(location) {
   elements.locationTimeTrackingAccessMode.value = location.time_tracking_access_mode === "trusted_network" ? "trusted_network" : "anywhere";
   elements.locationTimeTrackingAllowedNetworks.value = location.time_tracking_allowed_networks || "";
   elements.locationTimeTrackingVarianceMinutes.value = String(Number(location.time_tracking_variance_minutes ?? 15));
+  populateLocationCostCenter(location.cost_center_id || location.costCenterId || "",
+    [location.cost_center_code || location.costCenterCode, location.cost_center_name || location.costCenterName].filter(Boolean).join(" · "));
   syncLocationTimeTrackingFields();
   setLocationDayFields(location.day_settings || {});
   elements.locationSubmitButton.textContent = "Filiale speichern";
@@ -6533,6 +6776,7 @@ async function saveLocation(event) {
       timeTrackingAllowedNetworks: elements.locationTimeTrackingAllowedNetworks.value,
       timeTrackingVarianceMinutes: Number(elements.locationTimeTrackingVarianceMinutes.value || 15),
     } : {};
+    const costCenterSettings = canWriteCostCenters() ? { costCenterId: elements.locationCostCenter.value } : {};
     state.locations = await api(isEdit ? `/api/locations/${encodeURIComponent(id)}` : "/api/locations", {
       method: isEdit ? "PUT" : "POST",
       body: JSON.stringify({
@@ -6540,11 +6784,13 @@ async function saveLocation(event) {
         name: elements.locationName.value,
         minStaff: Number(elements.locationMinStaff.value || 0),
         active: elements.locationActive.checked,
+        ...costCenterSettings,
         ...timeTrackingSettings,
         daySettings: readLocationDayFields(),
       }),
     });
     elements.locationEditorModal?.close();
+    state.personnelAdministrationLoaded = false;
     resetLocationForm();
     showToast(isEdit ? "Filiale wurde gespeichert." : "Filiale wurde angelegt.");
     await loadAll();
@@ -6641,6 +6887,7 @@ async function saveShift(event) {
   const id = document.querySelector("#shiftId").value;
   const body = {
     employeeNumber: document.querySelector("#shiftEmployee").value,
+    locationId: state.locationId,
     departmentId: elements.shiftDepartment.value || "",
     date: document.querySelector("#shiftDate").value,
     startTime: document.querySelector("#shiftStart").value,
@@ -8290,7 +8537,9 @@ document.querySelector(".main-nav").addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
     const key = toggle.dataset.navToggle;
-    const children = key === "planning" ? elements.planningNavChildren : elements.vacationNavChildren;
+    const group = navigationGroups()[key];
+    const children = group?.children;
+    if (!children) return;
     const opening = children.classList.contains("hidden");
     localStorage.setItem(`grabenplaner-nav-${key}`, opening ? "open" : "closed");
     children.classList.toggle("hidden", !opening);
@@ -8379,8 +8628,13 @@ elements.departmentPdfSelect?.addEventListener("change", () => {
 });
 document.querySelector("#shiftEmployee").addEventListener("change", () => {
   if (document.querySelector("#shiftId").value) return;
-  const employee = state.data?.employees?.find((item) => item.personnel_number === document.querySelector("#shiftEmployee").value);
-  if (employee?.preferred_department_id) elements.shiftDepartment.value = String(employee.preferred_department_id);
+  const employeeNumber = document.querySelector("#shiftEmployee").value;
+  const employee = [...(state.data?.employees || []), ...state.allEmployees]
+    .find((item) => item.personnel_number === employeeNumber);
+  const departmentId = String(employee?.preferred_department_id || employee?.preferredDepartmentId || "");
+  if (departmentId && [...elements.shiftDepartment.options].some((option) => option.value === departmentId)) {
+    elements.shiftDepartment.value = departmentId;
+  }
 });
 document.querySelector("#addEmployeeButton").addEventListener("click", async () => {
   if (canWriteCentralPersonnel() && !state.personnelAdministrationLoaded) await loadPersonnelAdministration();
@@ -8388,6 +8642,18 @@ document.querySelector("#addEmployeeButton").addEventListener("click", async () 
 });
 elements.addCentralEmployeeButton?.addEventListener("click", () => openEmployeeModal());
 document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => button.addEventListener("click", () => setPersonnelAdministrationTab(button.dataset.personnelAdministrationTab)));
+document.querySelector(".personnel-administration-tabs")?.addEventListener("keydown", (event) => {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const tabs = [...document.querySelectorAll("[data-personnel-administration-tab]:not(.hidden)")];
+  if (!tabs.length) return;
+  const currentIndex = Math.max(0, tabs.indexOf(document.activeElement));
+  const targetIndex = event.key === "Home" ? 0
+    : event.key === "End" ? tabs.length - 1
+      : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+  event.preventDefault();
+  tabs[targetIndex].focus();
+  setPersonnelAdministrationTab(tabs[targetIndex].dataset.personnelAdministrationTab);
+});
 elements.personnelDirectorySearch?.addEventListener("input", (event) => {
   state.personnelDirectorySearch = event.target.value;
   renderPersonnelDirectory();
@@ -8400,15 +8666,43 @@ elements.personnelDirectoryStatusFilter?.addEventListener("change", (event) => {
   state.personnelDirectoryStatusFilter = event.target.value;
   renderPersonnelDirectory();
 });
+elements.centralVacationSearch?.addEventListener("input", (event) => {
+  state.centralVacationSearch = event.target.value;
+  renderCentralVacations();
+});
+elements.centralVacationCostCenterFilter?.addEventListener("change", (event) => {
+  state.centralVacationCostCenterFilter = event.target.value;
+  renderCentralVacations();
+});
+elements.centralVacationYear?.addEventListener("change", async (event) => {
+  const year = Number(event.target.value);
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    showToast("Bitte ein gültiges Jahr auswählen.", true);
+    event.target.value = state.centralVacationYear;
+    return;
+  }
+  state.centralVacationYear = year;
+  state.centralVacationLoadedYear = null;
+  await loadCentralVacations({ force: true });
+});
 elements.addCostCenterButton?.addEventListener("click", () => openCostCenterModal());
 elements.costCenterForm?.addEventListener("submit", saveCostCenter);
 elements.deactivateCostCenterButton?.addEventListener("click", deactivateCostCenter);
 document.querySelector("#saveSettingsButton").addEventListener("click", () => saveSettings(false));
 elements.locationForm.addEventListener("submit", saveLocation);
 elements.departmentForm.addEventListener("submit", saveDepartment);
-elements.addLocationButton?.addEventListener("click", () => {
-  resetLocationForm();
-  elements.locationEditorModal?.showModal();
+elements.addLocationButton?.addEventListener("click", async () => {
+  try {
+    await ensureLocationCostCenters();
+    resetLocationForm();
+    if (!state.costCenters.some((center) => center.active)) {
+      showToast("Bitte zuerst eine aktive Kostenstelle anlegen.", true);
+      return;
+    }
+    elements.locationEditorModal?.showModal();
+  } catch (error) {
+    showToast(error.message, true);
+  }
 });
 elements.addDepartmentButton?.addEventListener("click", () => {
   resetDepartmentForm();
@@ -8519,13 +8813,18 @@ elements.employeeTableBody.addEventListener("click", async (event) => {
   openEmployeeModal(state.allEmployees.find((employee) => employee.personnel_number === button.dataset.editEmployee));
 });
 
-elements.locationList.addEventListener("click", (event) => {
+elements.locationList.addEventListener("click", async (event) => {
   const locationButton = event.target.closest("[data-edit-location]");
   if (locationButton) {
     const location = (state.locations || []).find((item) => item.id === locationButton.dataset.editLocation);
     if (location) {
-      fillLocationForm(location);
-      elements.locationEditorModal?.showModal();
+      try {
+        await ensureLocationCostCenters();
+        fillLocationForm(location);
+        elements.locationEditorModal?.showModal();
+      } catch (error) {
+        showToast(error.message, true);
+      }
     }
     return;
   }
