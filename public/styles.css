@@ -469,10 +469,74 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
 .employee-table tr:hover td { background: #fafbf9; }
 .employee-color { display: block; width: 25px; height: 25px; border-radius: 8px; }
 .employee-table strong { font-size: 10.5px; }
+.personnel-administration-tabs { max-width:520px; }
+.personnel-administration-section { display:none; }
+.personnel-administration-section.active { display:block; }
+.personnel-administration-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:15px; }
+.personnel-administration-stat { min-width:0; padding:16px 18px; border:1px solid var(--line); border-radius:15px; color:var(--ink); background:var(--surface); box-shadow:var(--shadow); }
+.personnel-administration-stat span,.personnel-administration-stat small { display:block; color:var(--muted); }
+.personnel-administration-stat span { font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+.personnel-administration-stat strong { display:block; margin:4px 0 2px; font-size:24px; }
+.personnel-administration-stat small { font-size:11px; }
+.personnel-administration-stat.warning { border-color:#ddb65a; background:color-mix(in srgb,#f1c95d 13%,var(--surface)); }
+.personnel-directory-toolbar,.cost-center-toolbar { margin-bottom:10px; }
+.personnel-directory-filters { display:grid; grid-template-columns:minmax(230px,1.5fr) minmax(180px,1fr) minmax(150px,.7fr); gap:11px; margin-bottom:11px; padding:13px 15px; border:1px solid var(--line); border-radius:14px; background:var(--surface); }
+.personnel-directory-filters .field { margin:0; }
+.personnel-directory-table-wrap { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:15px; background:var(--surface); box-shadow:var(--shadow); }
+.personnel-directory-table { width:100%; border-collapse:collapse; table-layout:fixed; }
+.personnel-directory-table th { padding:11px 10px; color:var(--muted); background:var(--surface-soft); font-size:10.5px; text-align:left; text-transform:uppercase; letter-spacing:.06em; }
+.personnel-directory-table th:nth-child(1) { width:9%; }
+.personnel-directory-table th:nth-child(2) { width:16%; }
+.personnel-directory-table th:nth-child(3) { width:13%; }
+.personnel-directory-table th:nth-child(4) { width:15%; }
+.personnel-directory-table th:nth-child(5) { width:17%; }
+.personnel-directory-table th:nth-child(6) { width:11%; }
+.personnel-directory-table th:nth-child(7) { width:8%; }
+.personnel-directory-table th:nth-child(8) { width:11%; }
+.personnel-directory-table td { min-width:0; padding:11px 10px; border-top:1px solid var(--line); font-size:12.5px; overflow-wrap:anywhere; vertical-align:middle; }
+.personnel-directory-table td > strong,.personnel-directory-table td > small { display:block; }
+.personnel-directory-table td > small { margin-top:3px; color:var(--muted); font-size:11px; }
+.personnel-directory-table .status-badge { font-size:10.5px; }
+.personnel-directory-table .edit-button { font-size:11.5px; }
+.personnel-directory-table tr:hover td { background:color-mix(in srgb,var(--green) 4%,var(--surface)); }
+.personnel-directory-table .table-actions { justify-content:flex-end; }
+.personnel-directory-table .status-badge.warning { color:#7a5707; background:#fff0bc; }
+.personnel-directory-unassigned td { background:color-mix(in srgb,#f1c95d 7%,var(--surface)); }
+.personnel-directory-empty { padding:25px !important; color:var(--muted); text-align:center; }
+.cost-center-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:11px; margin-top:12px; }
+.cost-center-card { display:grid; grid-template-columns:auto minmax(0,1fr); grid-template-rows:auto auto; gap:11px 13px; min-width:0; padding:15px; border:1px solid var(--line); border-radius:15px; color:var(--ink); background:var(--surface); box-shadow:var(--shadow); }
+.cost-center-card.inactive { opacity:.72; }
+.cost-center-card-code { display:grid; align-content:start; justify-items:start; gap:7px; }
+.cost-center-card-code > strong { min-width:56px; padding:8px 10px; border-radius:10px; color:var(--green); background:color-mix(in srgb,var(--green) 12%,var(--surface)); font-size:13px; text-align:center; }
+.cost-center-card-copy { min-width:0; }
+.cost-center-card-copy .eyebrow { margin-bottom:3px; font-size:10px; }
+.cost-center-card-copy h3 { margin:0; font-size:17px; overflow-wrap:anywhere; }
+.cost-center-card-copy p { margin:5px 0 0; color:var(--muted); font-size:12px; line-height:1.45; overflow-wrap:anywhere; }
+.cost-center-card-counts { display:flex; flex-wrap:wrap; gap:6px; grid-column:1 / -1; }
+.cost-center-card-counts span { padding:6px 8px; border-radius:9px; color:var(--muted); background:var(--surface-soft); font-size:11.5px; }
+.cost-center-card-counts strong { color:var(--ink); }
+.cost-center-card .status-badge { font-size:10px; }
+.cost-center-card .edit-button { font-size:11.5px; }
+.cost-center-card:has(> .edit-button) { position:relative; padding-right:88px; }
+.cost-center-card > .edit-button { position:absolute; top:15px; right:15px; }
 .status-badge { display: inline-flex; padding: 4px 8px; border-radius: 20px; color: #267258; background: #e4f3ed; font-size: 8px; font-weight: 700; }
 .status-badge.inactive { color: #79837f; background: #ebeeec; }
 .edit-button { border: 0; color: var(--green); background: transparent; font-size: 9px; font-weight: 700; cursor: pointer; }
 .personnel-tabs { max-width: 520px; }
+@media (max-width:1180px) {
+  .personnel-administration-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .personnel-directory-table-wrap { overflow:visible; border:0; background:transparent; box-shadow:none; }
+  .personnel-directory-table,.personnel-directory-table tbody { display:block; }
+  .personnel-directory-table thead { display:none; }
+  .personnel-directory-table tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 14px; margin-bottom:10px; padding:14px; border:1px solid var(--line); border-radius:15px; background:var(--surface); box-shadow:var(--shadow); }
+  .personnel-directory-table td { display:block; padding:0; border:0; }
+  .personnel-directory-table td::before { content:attr(data-label); display:block; margin-bottom:3px; color:var(--muted); font-size:10px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; }
+  .personnel-directory-table tr:hover td { background:transparent; }
+  .personnel-directory-table td:last-child { grid-column:1 / -1; }
+  .personnel-directory-table .table-actions { justify-content:flex-start; }
+  .personnel-directory-table .personnel-directory-empty { grid-column:1 / -1; }
+  .personnel-directory-table .personnel-directory-empty::before { display:none; }
+}
 .location-overview-toolbar { margin-bottom: 15px; }
 .location-overview-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; }
 .location-list-card { margin-bottom: 15px; }
@@ -681,6 +745,8 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
   .settings-two-column.active { display: block; }
   .settings-card { margin-bottom: 13px; }
   .settings-card:first-child { grid-column: auto; }
+  .personnel-directory-filters { grid-template-columns:1fr 1fr; }
+  .personnel-directory-filters .field:first-child { grid-column:1 / -1; }
 }
 @media (max-width: 600px) {
   .main-content { padding: 20px 14px 28px; }
@@ -703,6 +769,13 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
   .location-overview-toolbar { align-items: stretch; flex-direction: column; }
   .location-overview-actions { justify-content: stretch; }
   .location-overview-actions > button { flex: 1 1 100%; }
+  .personnel-directory-toolbar,.cost-center-toolbar { align-items:stretch; flex-direction:column; }
+  .personnel-directory-toolbar > button,.cost-center-toolbar > button { width:100%; }
+  .personnel-directory-filters { grid-template-columns:1fr; }
+  .personnel-directory-filters .field:first-child { grid-column:auto; }
+  .personnel-directory-table tr { grid-template-columns:1fr; }
+  .personnel-directory-table td:last-child { grid-column:auto; }
+  .cost-center-list { grid-template-columns:1fr; }
   .branding-kit-grid, #vacationSettings .delegation-form, #accessSettings .compact-policy-grid, #accessSettings .portal-user-row, #rightsSettings .mobile-module-grid, #backupSettings .diagnostic-grid { grid-template-columns: 1fr; }
   #accessSettings .portal-user-row > * { grid-column: auto; }
   .amu-manager-access-row { grid-template-columns:minmax(0,1fr); align-items:stretch; }
