@@ -1375,3 +1375,70 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
   .rights-process-step { grid-template-columns:26px minmax(0,1fr); }
   .rights-process-step-state { grid-column:2; justify-self:start; margin:-5px 0 13px 10px; }
 }
+
+/* Seitenspezifische Darstellung */
+.page-theme-switch:not(.dashboard-theme-switch) { display:flex; align-items:center; gap:4px; padding:4px; border:1px solid var(--line); border-radius:12px; background:color-mix(in srgb,var(--surface) 86%,transparent); }
+.page-theme-switch:not(.dashboard-theme-switch) button { min-height:32px; padding:0 11px; border:0; border-radius:8px; color:var(--muted); background:transparent; font-size:9px; font-weight:800; cursor:pointer; }
+.page-theme-switch:not(.dashboard-theme-switch) button[aria-pressed="true"] { color:#fff; background:var(--green); }
+.page-theme-switch button:focus-visible { outline:2px solid var(--green); outline-offset:2px; }
+.settings-header-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; }
+
+.view[data-page-theme="dark"]:not(.rights-dashboard) {
+  --canvas:#111916;
+  --surface:#1b2522;
+  --surface-soft:#202d29;
+  --ink:#edf4f1;
+  --muted:#a5b2ad;
+  --line:#34443e;
+  --green:#63c49e;
+  --green-dark:#4aaa80;
+  --coral:#ff876c;
+  --coral-soft:#492d28;
+  --blue-soft:#243a43;
+  --shadow:0 12px 38px rgba(0,0,0,.24);
+  color:var(--ink);
+}
+html[data-active-page-theme="dark"],
+html[data-active-page-theme="dark"] body,
+html[data-active-page-theme="dark"] .main-content { color:#edf4f1; background:#111916; }
+html[data-active-page-theme="dark"] body { background:radial-gradient(circle at 85% 0,rgba(99,196,158,.08),transparent 32rem),#111916; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .topbar { border-color:#34443e; background:linear-gradient(180deg,rgba(17,25,22,.98),rgba(17,25,22,.94)); }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(.summary-card,.schedule-panel,.hours-panel,.vacation-panel,.settings-card,.settings-tabs,.employee-toolbar,.employee-table-wrap,.location-card,.position-item,.portal-user-row,.manager-request-row,.request-workflow-summary article,.request-blackout-row,.time-presence-summary article,.time-presence-row,.option-entry,.choice-row,.option-week-switch,.branding-kit-card) { color:var(--ink); border-color:var(--line); background:var(--surface); box-shadow:var(--shadow); }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(.week-context-card,.remarks,.hours-estimate-note,.vacation-item,.vacation-month-card,.vacation-employee-card,.location-card-head,.department-item,.position-item,.operation-mode-option,.preview-line,.database-backup-path,.diagnostic-summary,.branding-preview,.branding-kit-preview,.pdf-live-preview,.day-settings-head,.day-settings-row,.option-item,.global-block-entry) { color:var(--ink); border-color:var(--line); background:var(--surface-soft); }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(.time-header,.time-axis,.vacation-weekday,.vacation-week-number,.employee-table th) { color:var(--muted); border-color:var(--line); background:#202d29; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(.hours-card,.vacation-summary-card,.vacation-day) { color:var(--ink); border-color:var(--line); background:var(--surface); }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .vacation-day.outside-month { color:#73817c; background:#17201d; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(.vacation-calendar-grid,.vacation-weekday,.vacation-week-number,.vacation-day,.employee-table td,.vacation-entitlement) { border-color:var(--line); }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(.vacation-month-card h3,.vacation-day-number,.employee-table strong,.location-card strong,.settings-card h2,.settings-card h3) { color:var(--ink); }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(input,select,textarea,.secondary-button,.week-navigation,.request-kind-tabs button,.checkbox-line,.weekday-checks label,.note-style-options label) { color:var(--ink); border-color:var(--line); background:#24322d; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(input,select,textarea)::placeholder { color:#7f8d88; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(input,select,textarea):disabled { color:#798681; background:#18211e; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(.secondary-button,.nav-button,.today-button):hover { background:#2d3d37; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .settings-tab.active { color:#10241d; background:#79d0ad; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .employee-table tr:hover td { background:#24322d; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .pdf-live-preview iframe { border-color:var(--line); background:#fff; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .page-theme-switch { border-color:var(--line); background:var(--surface); }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .page-theme-switch button[aria-pressed="true"] { color:#10241d; background:#79d0ad; }
+
+/* Die technische Fußzeile folgt immer der aktiven Seitendarstellung. */
+html[data-active-page-theme="dark"] .system-footer { color:#a5b2ad; border-color:#34443e; background:#1b2522; }
+html[data-active-page-theme="dark"] .system-footer :is(strong,span) { color:inherit; }
+html[data-active-page-theme="dark"] .system-footer strong { color:#edf4f1; }
+html[data-active-page-theme="dark"] .system-footer a { color:#79d0ad; }
+
+/* Lesbarkeit der Rechte- und Prozess-Dashboards */
+.rights-dashboard[data-dashboard-font-size="compact"] { --rd-font-xs:6.7px; --rd-font-sm:7.5px; --rd-font-md:8.5px; --rd-font-lg:9px; --rd-font-title:15px; }
+.rights-dashboard[data-dashboard-font-size="standard"] { --rd-font-xs:8px; --rd-font-sm:9px; --rd-font-md:10px; --rd-font-lg:11px; --rd-font-title:17px; }
+.rights-dashboard[data-dashboard-font-size="large"] { --rd-font-xs:9.5px; --rd-font-sm:10.5px; --rd-font-md:11.5px; --rd-font-lg:13px; --rd-font-title:19px; }
+.rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-stat span,.rights-dashboard-filterbar label > span,.rights-dashboard-node span,.rights-dashboard-permission > span,.rights-process-rule span,.rights-process-validation-summary span) { font-size:var(--rd-font-xs); }
+.rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-stat small,.rights-dashboard-user-copy small,.rights-dashboard-node small,.rights-dashboard-permission small,.rights-dashboard-section-heading p,.rights-process-item-copy small,.rights-process-step-copy span,.rights-process-step-copy small,.rights-process-explanation dt,.rights-process-explanation dd,.rights-process-validation-item small,.rights-process-simulation-note) { font-size:var(--rd-font-sm); }
+.rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-user-copy strong,.rights-dashboard-user-count,.rights-dashboard-node strong,.rights-dashboard-permission strong,.rights-process-item-copy strong,.rights-process-rule strong,.rights-process-step-copy strong,.rights-process-explanation p,.rights-process-validation-item strong) { font-size:var(--rd-font-md); }
+.rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-mode-switch button,.dashboard-theme-switch button,.rights-process-toolbar select,.rights-process-action) { font-size:var(--rd-font-sm); }
+.rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-section-heading h2,.rights-process-validation-heading h2) { font-size:var(--rd-font-title); }
+.rights-dashboard[data-dashboard-font-size] .rights-process-explanation strong { font-size:var(--rd-font-lg); }
+
+@media (max-width: 850px) {
+  .settings-header-actions,.topbar-actions { align-items:stretch; flex-wrap:wrap; }
+  .page-theme-switch:not(.dashboard-theme-switch) { flex:1 1 auto; }
+  .page-theme-switch:not(.dashboard-theme-switch) button { flex:1; }
+}

@@ -14545,13 +14545,104 @@ function rightsDashboardCoverage(permission, user, scope) {
   return { type: scope.type, label: scope.label, restricted: true };
 }
 
+const UI_PREFERENCE_VIEWS = Object.freeze([
+  "planning",
+  "requests",
+  "timeTracking",
+  "vacations",
+  "personnel",
+  "rightsDashboard",
+  "settings",
+]);
+const UI_PAGE_THEMES = new Set(["light", "dark"]);
+const DASHBOARD_FONT_SIZES = new Set(["compact", "standard", "large"]);
+
+function uiPreferenceActor(request, { write = false } = {}) {
+  if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) {
+    return { employeeNumber: "local", role: "admin", permissions: [] };
+  }
+  const session = requirePortalSession(request);
+  if (write) assertPortalCsrf(request);
+  return session;
+}
+
+function uiPreferencesForActor(actor, overrides = {}) {
+  const pageThemes = Object.fromEntries(UI_PREFERENCE_VIEWS.map((view) => [view, "light"]));
+  let dashboardFontSize = "standard";
+  if (actor?.employeeNumber && actor.employeeNumber !== "local") {
+    const rows = db.prepare(`
+      SELECT preference_key, value FROM portal_user_preferences
+      WHERE employee_number = ? AND (
+        preference_key LIKE 'page_theme_%'
+        OR preference_key IN ('rights_dashboard_theme', 'dashboard_font_size')
+      )
+    `).all(actor.employeeNumber);
+    const lookup = new Map(rows.map((row) => [row.preference_key, row.value]));
+    for (const view of UI_PREFERENCE_VIEWS) {
+      const stored = lookup.get(`page_theme_${view}`)
+        || (view === "rightsDashboard" ? lookup.get("rights_dashboard_theme") : "");
+      if (UI_PAGE_THEMES.has(stored)) pageThemes[view] = stored;
+    }
+    if (DASHBOARD_FONT_SIZES.has(lookup.get("dashboard_font_size"))) {
+      dashboardFontSize = lookup.get("dashboard_font_size");
+    }
+  }
+  for (const [view, theme] of Object.entries(overrides.pageThemes || {})) {
+    if (UI_PREFERENCE_VIEWS.includes(view) && UI_PAGE_THEMES.has(theme)) pageThemes[view] = theme;
+  }
+  if (DASHBOARD_FONT_SIZES.has(overrides.dashboardFontSize)) dashboardFontSize = overrides.dashboardFontSize;
+  return {
+    actor: actor?.employeeNumber || "local",
+    pageThemes,
+    dashboardFontSize,
+  };
+}
+
+function saveUiPreferencesForActor(actor, input = {}) {
+  const submittedThemes = input.pageThemes === undefined ? {} : input.pageThemes;
+  if (!submittedThemes || typeof submittedThemes !== "object" || Array.isArray(submittedThemes)) {
+    throw httpError(400, "Bitte gültige Seitendarstellungen übermitteln.", "UI_PREFERENCES_INVALID");
+  }
+  const pageThemes = {};
+  for (const [view, theme] of Object.entries(submittedThemes)) {
+    if (!UI_PREFERENCE_VIEWS.includes(view) || !UI_PAGE_THEMES.has(theme)) {
+      throw httpError(400, "Bitte gültige Seitendarstellungen übermitteln.", "UI_PREFERENCES_INVALID");
+    }
+    pageThemes[view] = theme;
+  }
+  const dashboardFontSize = input.dashboardFontSize === undefined ? undefined : String(input.dashboardFontSize || "");
+  if (dashboardFontSize !== undefined && !DASHBOARD_FONT_SIZES.has(dashboardFontSize)) {
+    throw httpError(400, "Bitte eine gültige Dashboard-Schriftgröße auswählen.", "UI_PREFERENCES_INVALID");
+  }
+  if (!Object.keys(pageThemes).length && dashboardFontSize === undefined) {
+    throw httpError(400, "Es wurde keine Darstellung zum Speichern übermittelt.", "UI_PREFERENCES_INVALID");
+  }
+  if (actor.employeeNumber !== "local") {
+    const store = db.prepare(`
+      INSERT INTO portal_user_preferences (employee_number, preference_key, value, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(employee_number, preference_key) DO UPDATE SET
+        value = excluded.value,
+        updated_at = CURRENT_TIMESTAMP
+    `);
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      for (const [view, theme] of Object.entries(pageThemes)) {
+        store.run(actor.employeeNumber, `page_theme_${view}`, theme);
+        if (view === "rightsDashboard") store.run(actor.employeeNumber, "rights_dashboard_theme", theme);
+      }
+      if (dashboardFontSize !== undefined) store.run(actor.employeeNumber, "dashboard_font_size", dashboardFontSize);
+      db.exec("COMMIT");
+    } catch (error) {
+      try { db.exec("ROLLBACK"); } catch {}
+      throw error;
+    }
+  }
+  return uiPreferencesForActor(actor, { pageThemes, dashboardFontSize });
+}
+
 function rightsDashboardThemeForActor(actor) {
-  if (!actor || actor.employeeNumber === "local") return "light";
-  const stored = db.prepare(`
-    SELECT value FROM portal_user_preferences
-    WHERE employee_number = ? AND preference_key = 'rights_dashboard_theme'
-  `).get(actor.employeeNumber)?.value;
-  return stored === "dark" ? "dark" : "light";
+  return uiPreferencesForActor(actor).pageThemes.rightsDashboard;
 }
 
 function rightsDashboardProcesses() {
@@ -15035,6 +15126,16 @@ app.get("/api/portal/v1/rights", (request, response) => {
   response.json(rightsManagementPayload(actor));
 });
 
+app.get("/api/portal/v1/ui-preferences", (request, response) => {
+  const actor = uiPreferenceActor(request);
+  response.json(uiPreferencesForActor(actor));
+});
+
+app.put("/api/portal/v1/ui-preferences", (request, response) => {
+  const actor = uiPreferenceActor(request, { write: true });
+  response.json(saveUiPreferencesForActor(actor, request.body || {}));
+});
+
 app.get("/api/portal/v1/rights-dashboard", (request, response) => {
   const actor = requireAdminHrOrLocal(request, "rights:read");
   response.json(rightsDashboardPayload(actor));
@@ -15060,13 +15161,7 @@ app.put("/api/portal/v1/rights-dashboard/preferences", (request, response) => {
   const actor = requireAdminHrOrLocal(request, "rights:read");
   const theme = request.body.theme === "dark" ? "dark" : request.body.theme === "light" ? "light" : "";
   if (!theme) throw httpError(400, "Bitte eine gültige Dashboard-Darstellung auswählen.", "RIGHTS_DASHBOARD_THEME_INVALID");
-  if (actor.employeeNumber !== "local") {
-    db.prepare(`
-      INSERT INTO portal_user_preferences (employee_number, preference_key, value, updated_at)
-      VALUES (?, 'rights_dashboard_theme', ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(employee_number, preference_key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
-    `).run(actor.employeeNumber, theme);
-  }
+  saveUiPreferencesForActor(actor, { pageThemes: { rightsDashboard: theme } });
   response.json({ theme });
 });
 
