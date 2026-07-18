@@ -4665,6 +4665,11 @@ function getIsoWeek(isoDate) {
 }
 
 function viennaTodayIso(date = new Date()) {
+  const testDate = String(process.env.GRABENPLANER_TEST_TODAY || "").trim();
+  const dateTimestamp = date instanceof Date ? date.getTime() : Number.NaN;
+  // Keep real-clock integration tests deterministic while preserving explicitly simulated sweep dates.
+  const followsRealClock = Number.isFinite(dateTimestamp) && Math.abs(dateTimestamp - Date.now()) < 60000;
+  if (process.env.NODE_ENV === "test" && isIsoDate(testDate) && followsRealClock) return testDate;
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Vienna",
     year: "numeric",
