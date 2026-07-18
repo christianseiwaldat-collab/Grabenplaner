@@ -154,7 +154,7 @@ test("v0.67: Freigabe-, AUM- und Sperrregeln verändern den dargestellten Prozes
   assert.equal(vacation.rules.find((rule) => rule.label === "Aktive Antragssperren").value, "1");
   assert.equal(timeOff.rules.find((rule) => rule.label === "Aktive ZA-Sperren").value, "1");
   assert.equal(sickness.steps.find((step) => step.id === "ocr").state, "bypassed");
-  assert.equal(sickness.rules.find((rule) => rule.label === "AUM-Dateizugriff").value, "PL+ mit Zusatzrecht");
+  assert.equal(sickness.rules.find((rule) => rule.label === "AUM-Dateizugriff").value, "Filialleitung im eigenen Bereich");
   assert.equal(sickness.rules.find((rule) => rule.label === "Lokaler Hinweis").value, "nach 4 Tag(en)");
   assert.equal(sickness.rules.find((rule) => rule.label === "PL-Eskalation").value, "nach 7 Tag(en)");
 });

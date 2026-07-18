@@ -22,6 +22,8 @@ const state = {
   absenceRequests: [],
   amuReports: [],
   amuCanOpenFiles: false,
+  amuCanReview: false,
+  amuAccess: null,
   requestCounts: { vacation: 0, timeOff: 0, amu: 0, total: 0 },
   requestKindTab: "vacation",
   currentView: "planning",
@@ -59,6 +61,7 @@ const state = {
   selectedRightsEmployeeNumber: "",
   employeeAccessDraft: new Set(),
   amuPolicy: null,
+  amuAccessPolicy: null,
   wifiAutomationSettings: null,
   trustLevelSettings: null,
   greetingSettings: null,
@@ -163,7 +166,7 @@ const elements = Object.fromEntries(
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "dashboardFontSize",
-    "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton",
+    "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
@@ -2585,6 +2588,72 @@ async function saveAmuSettings() {
   } catch (error) { showToast(error.message, true); }
 }
 
+function renderAmuAccessPolicy(result = state.amuAccessPolicy) {
+  if (!elements.amuManagerAccessList || !elements.amuManagerDefaultAccess) return;
+  const policy = result?.policy || {};
+  const canChange = result?.canChange === true;
+  const managerDefault = policy.managerDefault !== false;
+  const managers = Array.isArray(policy.managers) ? policy.managers : [];
+  elements.amuManagerDefaultAccess.checked = managerDefault;
+  elements.amuManagerDefaultAccess.disabled = !canChange;
+  elements.saveAmuAccessPolicyButton.disabled = !canChange;
+  elements.amuManagerAccessList.innerHTML = managers.length ? managers.map((manager) => {
+    const locations = (manager.locations || []).map((location) => location.name).filter(Boolean).join(" · ") || "Keine Filiale zugewiesen";
+    const inheritedLabel = managerDefault ? "Rollenstandard · erlaubt" : "Rollenstandard · PL übernimmt";
+    const effectiveLabel = manager.routingEligible ? "Filialleitung zuständig" : "Personalleitung zuständig";
+    return `<article class="amu-manager-access-row">
+      <div class="amu-manager-access-person"><strong>${escapeHtml(manager.employeeNumber)} · ${escapeHtml(manager.nickname || manager.fullName || "Filialleitung")}</strong><small>${escapeHtml(locations)}${manager.active ? (manager.passwordConfigured ? "" : " · noch kein Passwort") : " · Zugang inaktiv"}</small></div>
+      <label class="field"><span>Persönliche Regel</span><select data-amu-manager-access="${escapeHtml(manager.employeeNumber)}" ${canChange ? "" : "disabled"}>
+        <option value="inherit" ${manager.accessMode === "inherit" ? "selected" : ""}>${escapeHtml(inheritedLabel)}</option>
+        <option value="allow" ${manager.accessMode === "allow" ? "selected" : ""}>Persönlich erlaubt</option>
+        <option value="deny" ${manager.accessMode === "deny" ? "selected" : ""}>Entzogen · PL übernimmt</option>
+      </select></label>
+      <span class="status-badge ${manager.routingEligible ? "approved" : "warning"}">${escapeHtml(effectiveLabel)}</span>
+    </article>`;
+  }).join("") : '<p class="settings-note">Noch keine Filialleitung mit Portalzugang eingerichtet.</p>';
+  elements.amuAccessPolicyHint.textContent = canChange
+    ? "Entzüge wirken sofort. Offene AUMs werden automatisch der Personalleitung zugewiesen."
+    : "Nur Personalleitung, Administration oder IT-Administration kann diese Regeln ändern.";
+}
+
+async function loadAmuAccessPolicy() {
+  const section = elements.amuManagerDefaultAccess?.closest(".amu-access-policy");
+  if (!section) return;
+  try {
+    const result = await api("/api/portal/v1/amu-access-policy");
+    state.amuAccessPolicy = result;
+    section.classList.remove("hidden");
+    renderAmuAccessPolicy(result);
+  } catch (error) {
+    section.classList.toggle("hidden", error.status === 403);
+    if (error.status !== 403) elements.amuAccessPolicyHint.textContent = error.message;
+  }
+}
+
+async function saveAmuAccessPolicy() {
+  const overrides = [...elements.amuManagerAccessList.querySelectorAll("[data-amu-manager-access]")].map((select) => ({
+    employeeNumber: select.dataset.amuManagerAccess,
+    accessMode: select.value,
+  }));
+  elements.saveAmuAccessPolicyButton.disabled = true;
+  try {
+    const result = await api("/api/portal/v1/amu-access-policy", {
+      method: "PUT",
+      body: JSON.stringify({
+        managerDefault: elements.amuManagerDefaultAccess.checked,
+        overrides,
+      }),
+    });
+    state.amuAccessPolicy = result;
+    renderAmuAccessPolicy(result);
+    showToast("AUM-Zugriff und Zuständigkeit wurden gespeichert.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    if (state.amuAccessPolicy?.canChange) elements.saveAmuAccessPolicyButton.disabled = false;
+  }
+}
+
 function greetingTemplateLines(element) {
   return String(element?.value || "")
     .split(/\r?\n/)
@@ -2920,6 +2989,8 @@ async function loadManagerVacationRequests() {
     state.absenceRequests = result.requests || [];
     state.amuReports = amu.reports || [];
     state.amuCanOpenFiles = amu.canOpenFiles === true;
+    state.amuCanReview = amu.canReview === true;
+    state.amuAccess = amu.access || null;
     const absenceCounts = result.counts || { vacation: 0, timeOff: 0, total: 0 };
     const amuCount = Number(amu.pendingCount || state.amuReports.filter((item) => item.status === "submitted").length);
     state.requestCounts = { ...absenceCounts, amu: amuCount, total: Number(absenceCounts.total || 0) + amuCount };
@@ -3454,19 +3525,20 @@ function amuReportStatusLabel(report) {
 function renderRequestNavigation() {
   const counts = state.requestCounts;
   const sicknessEnabled = state.portalStatus?.installationFeatures?.sicknessAmu !== false;
-  document.querySelectorAll('[data-request-kind-tab="amu"]').forEach((button) => button.classList.toggle("hidden", !sicknessEnabled));
-  if (!sicknessEnabled && state.requestKindTab === "amu") state.requestKindTab = "vacation";
+  const amuAvailable = sicknessEnabled && state.amuAccess?.available !== false;
+  document.querySelectorAll('[data-request-kind-tab="amu"]').forEach((button) => button.classList.toggle("hidden", !amuAvailable));
+  if (!amuAvailable && state.requestKindTab === "amu") state.requestKindTab = "vacation";
   document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
   elements.requestsNavCount.textContent = counts.total;
   elements.requestsNavCount.classList.toggle("hidden", !counts.total);
   elements.requestsNavButton.classList.toggle("attention", counts.total > 0);
   elements.vacationRequestCount.textContent = counts.vacation;
   elements.timeOffRequestCount.textContent = counts.timeOff;
-  elements.amuRequestCount.textContent = sicknessEnabled ? counts.amu || 0 : 0;
+  elements.amuRequestCount.textContent = amuAvailable ? counts.amu || 0 : 0;
   elements.requestWorkflowSummary.innerHTML = `
     <article><span>Urlaub offen</span><strong>${counts.vacation}</strong></article>
     <article><span>ZA offen</span><strong>${counts.timeOff}</strong></article>
-    ${sicknessEnabled ? `<article><span>AUM neu</span><strong>${counts.amu || 0}</strong></article>` : ""}
+    ${amuAvailable ? `<article><span>AUM neu</span><strong>${counts.amu || 0}</strong></article>` : ""}
     <article><span>Urlaubs-Zweitfreigabe</span><strong>${state.workflowSettings?.vacationHrApprovalRequired ? "Aktiv" : "Nicht aktiv"}</strong>${state.workflowSettings?.canChange ? `<button type="button" class="text-action" data-toggle-hr-workflow>${state.workflowSettings.vacationHrApprovalRequired ? "Deaktivieren" : "Aktivieren"}</button>` : ""}</article>`;
 }
 
@@ -3491,15 +3563,17 @@ function renderManagerRequests() {
   if (state.requestKindTab === "amu") {
     const reports = state.amuReports.filter((report) => statusFilter === "all" ? true : statusFilter === "actionable" ? ["submitted", "returned"].includes(report.status) : report.status === statusFilter);
     const canOpenFiles = !state.portalStatus?.portalEnabled || state.amuCanOpenFiles === true;
-    const canReview = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:review");
+    const canReview = !state.portalStatus?.portalEnabled || state.amuCanReview === true;
     elements.managerVacationRequestList.innerHTML = reports.length ? reports.map((report) => {
       const files = (report.documents || []).map((document) => canOpenFiles
         ? `<a href="/api/portal/v1/amu-reports/${report.id}/documents/${encodeURIComponent(document.id)}/content" target="_blank" rel="noopener">${escapeHtml(document.original_name || "Dokument")} · ${Math.max(1, Math.round(Number(document.size || 0) / 1024))} KB</a>`
         : `<span>${escapeHtml(document.original_name || "Dokument")} · ${Math.max(1, Math.round(Number(document.size || 0) / 1024))} KB</span>`).join("");
+      const responsibility = report.responsibility || {};
+      const reportCanReview = canReview && responsibility.can_review !== false;
       return `<article class="manager-request-row amu-request-row" data-amu-report="${report.id}">
         <span class="employee-dot" style="--employee-color:${escapeHtml(report.color || "#507267")}"></span>
-        <div><strong><span class="request-kind-badge amu">AUM</span> ${escapeHtml(report.employee_number)} · ${escapeHtml(report.nickname || report.full_name)}</strong><small>${formatAmuPeriod(report)} · ${escapeHtml(report.location_name || "")}${report.employee_note ? ` · ${escapeHtml(report.employee_note)}` : ""}</small><small><span class="request-status ${escapeHtml(report.status)}">${escapeHtml(amuReportStatusLabel(report))}</span>${report.reviewed_by && report.review_mode !== "automatic" ? ` · geprüft von ${escapeHtml(report.reviewed_by)}` : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</small><div class="amu-document-links">${files}</div></div>
-        ${canReview && ["submitted", "returned"].includes(report.status) ? '<button class="secondary-button" data-open-amu-action type="button">AUM bearbeiten</button>' : ""}
+        <div><strong><span class="request-kind-badge amu">AUM</span> ${escapeHtml(report.employee_number)} · ${escapeHtml(report.nickname || report.full_name)}</strong><small>${formatAmuPeriod(report)} · ${escapeHtml(report.location_name || "")}${report.employee_note ? ` · ${escapeHtml(report.employee_note)}` : ""}</small><small><span class="request-status ${escapeHtml(report.status)}">${escapeHtml(amuReportStatusLabel(report))}</span>${responsibility.label ? ` · zuständig: ${escapeHtml(responsibility.label)}` : ""}${report.reviewed_by && report.review_mode !== "automatic" ? ` · geprüft von ${escapeHtml(report.reviewed_by)}` : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</small><div class="amu-document-links">${files}</div></div>
+        ${reportCanReview && ["submitted", "returned"].includes(report.status) ? '<button class="secondary-button" data-open-amu-action type="button">AUM bearbeiten</button>' : ""}
       </article>`;
     }).join("") : '<p class="settings-note">Für diesen Filter gibt es keine Arbeitsunfähigkeitsmeldungen.</p>';
     return;
@@ -4928,6 +5002,7 @@ function setSettingsTab(tab) {
   if (tab === "access") {
     loadPortalUsers();
     loadAmuSettings();
+    loadAmuAccessPolicy();
     loadGreetingSettings();
   }
   if (tab === "vacation") {
@@ -6937,6 +7012,7 @@ elements.requestWorkflowSummary?.addEventListener("click", (event) => {
 });
 elements.vacationHrApprovalRequired?.addEventListener("change", (event) => toggleHrWorkflow(event.target.checked));
 elements.saveAmuSettingsButton?.addEventListener("click", saveAmuSettings);
+elements.saveAmuAccessPolicyButton?.addEventListener("click", saveAmuAccessPolicy);
 elements.saveGreetingSettingsButton?.addEventListener("click", saveGreetingSettings);
 elements.rightsEmployeeSearch?.addEventListener("input", renderRightsManagement);
 elements.rightsUserList?.addEventListener("click", (event) => {
