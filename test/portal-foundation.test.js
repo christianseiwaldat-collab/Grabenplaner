@@ -1492,15 +1492,23 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const managerPersonnelPayload = await managerPersonnelRecord.json();
     assert.equal(managerPersonnelPayload.profile.phone, "");
     assert.equal(managerPersonnelPayload.profile.sensitive, null);
-    assert.deepEqual(managerPersonnelPayload.reports, []);
+    assert.deepEqual(managerPersonnelPayload.reports.map((report) => Number(report.id)), [localAmuId]);
+    assert.equal(managerPersonnelPayload.reports.some((report) => Number(report.id) === remoteAmuId), false);
+    assert.equal(Object.hasOwn(managerPersonnelPayload.reports[0], "identity_check"), false);
+    assert.equal(Object.hasOwn(managerPersonnelPayload.reports[0], "automatic_review"), false);
     assert.equal(managerPersonnelPayload.access.canReadPhone, true);
-    assert.equal(managerPersonnelPayload.access.canReadAmu, false);
+    assert.equal(managerPersonnelPayload.access.canReadAmu, true);
+    assert.equal(managerPersonnelPayload.access.canOpenFiles, true);
 
     const managerAmuOverview = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: manager.cookie } });
-    assert.equal(managerAmuOverview.status, 403, await managerAmuOverview.clone().text());
+    assert.equal(managerAmuOverview.status, 200, await managerAmuOverview.clone().text());
+    const managerAmuOverviewPayload = await managerAmuOverview.json();
+    assert.deepEqual(managerAmuOverviewPayload.reports.map((report) => Number(report.id)), [localAmuId]);
+    assert.equal(managerAmuOverviewPayload.access.mode, "local_manager");
 
     const departmentManagerLegacyAmu = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: departmentManager.cookie } });
-    assert.equal(departmentManagerLegacyAmu.status, 403, await departmentManagerLegacyAmu.clone().text());
+    assert.equal(departmentManagerLegacyAmu.status, 200, await departmentManagerLegacyAmu.clone().text());
+    assert.deepEqual((await departmentManagerLegacyAmu.json()).reports, []);
     const departmentManagerLegacyRecord = await fetch(`${url}/api/portal/v1/personnel-records/104`, { headers: { Cookie: departmentManager.cookie } });
     assert.equal(departmentManagerLegacyRecord.status, 403, await departmentManagerLegacyRecord.clone().text());
 
@@ -1511,8 +1519,9 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     });
     assert.equal(obsoleteManagerAmuSetting.status, 200, await obsoleteManagerAmuSetting.clone().text());
     assert.equal(Object.hasOwn((await obsoleteManagerAmuSetting.json()).policy, "managerFileAccess"), false);
-    const managerAmuStillDenied = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: manager.cookie } });
-    assert.equal(managerAmuStillDenied.status, 403, await managerAmuStillDenied.clone().text());
+    const managerAmuStillScoped = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: manager.cookie } });
+    assert.equal(managerAmuStillScoped.status, 200, await managerAmuStillScoped.clone().text());
+    assert.deepEqual((await managerAmuStillScoped.json()).reports.map((report) => Number(report.id)), [localAmuId]);
 
     const protectedRightCannotBeDelegated = await fetch(`${url}/api/portal/v1/rights/104`, {
       method: "PUT",

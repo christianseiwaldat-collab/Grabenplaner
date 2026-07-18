@@ -24,11 +24,11 @@ test("v0.59: Fehler des aktiven Leitungsbereichs werden nicht als leere Liste ve
 
 test("v0.59: geschützte AUM-Benachrichtigungen bleiben in der mobilen Leitungsansicht", () => {
   const source = fs.readFileSync(path.join(projectRoot, "server.js"), "utf8");
-  const notificationBlock = source.match(/createPortalNotification\(recipient, "protected\.update"[\s\S]{0,620}?protectedPortalEntityId\("amu-report"[\s\S]{0,220}?\n\s*\}\);/);
+  const notificationBlock = source.match(/function synchronizeAmuResponsibility\([\s\S]+?\n\}/);
 
   assert.ok(notificationBlock, "AUM-Benachrichtigungsblock fehlt");
-  assert.match(notificationBlock[0], /target: "\/portal\.html\?tab=leadershipApprovals/);
-  assert.doesNotMatch(notificationBlock[0], /target: "\/\?view=requests&kind=amu"/);
+  assert.match(notificationBlock[0], /routing\.stage === "local" \? "\/portal\.html\?tab=leadershipApprovals"/);
+  assert.match(notificationBlock[0], /: "\/\?view=requests&kind=amu"/);
 });
 
 test("v0.59: externe Warnkanäle werden vor Aktivierung per Einmalcode bestätigt", () => {
