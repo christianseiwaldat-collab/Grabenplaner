@@ -8,6 +8,20 @@ const portalState = {
   absenceHistory: [],
   notifications: [],
   unreadNotifications: 0,
+  processTasks: [],
+  processTaskSummary: null,
+  processTasksLoading: false,
+  processTasksLoadPromise: null,
+  processTasksAvailable: true,
+  processTasksError: "",
+  processTaskCompletionPending: new Set(),
+  processTaskCompletionKeys: new Map(),
+  processTaskCompletionPayloads: new Map(),
+  processTaskNotes: new Map(),
+  processTaskMessages: new Map(),
+  processTaskRequestedRunId: "",
+  processTaskRequestedStepId: "",
+  processTaskFlash: "",
   amuReports: [],
   amuPolicy: null,
   sicknessAumAllowance: null,
@@ -79,6 +93,7 @@ window.addEventListener("resize", applyDeviceMode, { passive: true });
 const el = Object.fromEntries([
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
   "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "settingsView", "settingsPasswordButton", "scheduleView", "timeOffView",
+  "processTasksTab", "processTasksTabCount", "processTasksView", "refreshProcessTasks", "processTaskSummary", "processTaskList",
   "vacationView", "historyView", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
   "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeWeighted", "timePause", "timeDifference", "timeTrackingIssues", "timeEntryList",
   "wifiAutomationCard", "wifiAutomationAvailability", "wifiAutomationToggle", "wifiConfirmationLevel", "wifiSuggestionWarning", "wifiSuggestionList", "wifiAutomationMessage",
@@ -322,6 +337,7 @@ const leadershipPortalPermissions = new Set([
 ]);
 
 const mobileMoreSecondaryTabs = new Set(["timeOff", "vacation", "amu", "settings"]);
+mobileMoreSecondaryTabs.add("processTasks");
 
 function syncPortalTabButtons(tab) {
   const representedByMore = portalState.mobileLeadership && mobileMoreSecondaryTabs.has(tab);
@@ -394,7 +410,7 @@ function applyMobileLeadershipLayout() {
   portalState.mobileLeadership = compactLeadership;
   navigation.classList.toggle("mobile-leadership", compactLeadership);
   el.portalSettingsShortcut?.classList.toggle("hidden", !compactLeadership);
-  const regularTabs = ["settings", "schedule", "timeTracking", "timeOff", "vacation", "history", "amu"];
+  const regularTabs = ["settings", "schedule", "timeTracking", "processTasks", "timeOff", "vacation", "history", "amu"];
   document.querySelectorAll(".leadership-tab").forEach((button) => button.classList.add("hidden"));
   if (!compactLeadership) {
     regularTabs.forEach((tab) => {
@@ -456,7 +472,7 @@ function normalizedPortalTab(requested) {
   const aliases = { requests: "history", team: "leadershipTeam", approvals: "leadershipApprovals", more: "leadershipMore", time: "timeTracking" };
   const tab = aliases[requested] || requested;
   if (["leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) && !isLeadershipUser()) return "";
-  return ["settings", "schedule", "timeTracking", "timeOff", "vacation", "history", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
+  return ["settings", "schedule", "timeTracking", "processTasks", "timeOff", "vacation", "history", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
 }
 
 const portalTabStorageKey = "grabenplaner.portal.active-tab";
@@ -482,6 +498,15 @@ function rememberPortalTab(tab) {
   try {
     const url = new URL(location.href);
     url.searchParams.set("tab", normalized);
+    if (normalized === "processTasks") {
+      if (portalState.processTaskRequestedRunId) url.searchParams.set("run", portalState.processTaskRequestedRunId);
+      if (portalState.processTaskRequestedStepId) url.searchParams.set("step", portalState.processTaskRequestedStepId);
+    } else {
+      portalState.processTaskRequestedRunId = "";
+      portalState.processTaskRequestedStepId = "";
+      url.searchParams.delete("run");
+      url.searchParams.delete("step");
+    }
     history.replaceState(history.state, "", `${url.pathname}${url.search}${url.hash}`);
   } catch {}
 }
@@ -494,13 +519,18 @@ function clearRememberedPortalTab() {
     const url = new URL(location.href);
     url.searchParams.delete("tab");
     url.searchParams.delete("kind");
+    url.searchParams.delete("run");
+    url.searchParams.delete("step");
     history.replaceState(history.state, "", `${url.pathname}${url.search}${url.hash}`);
   } catch {}
 }
 
 function chooseInitialPortalTab() {
   const requested = requestedPortalTab();
-  const requestedKind = new URLSearchParams(location.search).get("kind");
+  const parameters = new URLSearchParams(location.search);
+  const requestedKind = parameters.get("kind");
+  portalState.processTaskRequestedRunId = String(parameters.get("run") || "").slice(0, 120);
+  portalState.processTaskRequestedStepId = String(parameters.get("step") || "").slice(0, 120);
   if (["absence", "sickness", "amu", "time_correction"].includes(requestedKind)) portalState.leadershipKind = requestedKind;
   setTab(requested || (timeTrackingCapabilityEnabled() ? "timeTracking" : "schedule"));
   return requested;
@@ -547,7 +577,7 @@ async function loadPortalData() {
   const requests = [
     loadPortalHome(),
     loadSchedule(), loadVacationRequests(), loadTimeOffRequests(), loadApprovedVacations(),
-    loadAbsenceHistory(), loadNotifications(), loadSicknessCases(), loadAmuReports(), loadAmuSettings(),
+    loadAbsenceHistory(), loadNotifications(), loadProcessTasks(), loadSicknessCases(), loadAmuReports(), loadAmuSettings(),
   ];
   if (timeTrackingCapabilityEnabled()) requests.push(loadTimeTracking());
   await Promise.allSettled(requests);
@@ -632,6 +662,7 @@ function setTab(tab) {
   el.vacationView.classList.toggle("active", tab === "vacation");
   el.historyView.classList.toggle("active", tab === "history");
   el.amuView.classList.toggle("active", tab === "amu");
+  el.processTasksView?.classList.toggle("active", tab === "processTasks");
   el.leadershipTeamView?.classList.toggle("active", tab === "leadershipTeam");
   el.leadershipApprovalsView?.classList.toggle("active", tab === "leadershipApprovals");
   el.leadershipMoreView?.classList.toggle("active", tab === "leadershipMore");
@@ -641,6 +672,7 @@ function setTab(tab) {
   if (tab === "vacation") loadVacationRequests();
   if (tab === "history") Promise.allSettled([loadAbsenceHistory(), loadApprovedVacations()]);
   if (tab === "amu") Promise.allSettled([loadSicknessCases(), loadAmuReports(), loadAmuSettings()]);
+  if (tab === "processTasks") loadProcessTasks();
   if (tab === "leadershipTeam") loadLeadershipOverview();
   if (tab === "leadershipApprovals") {
     document.querySelectorAll("[data-leadership-kind]").forEach((item) => item.classList.toggle("active", item.dataset.leadershipKind === portalState.leadershipKind));
@@ -1891,12 +1923,29 @@ async function readNotification(id) {
     }
     renderNotifications();
     const target = String(item?.target || item?.link || "");
-    if (target.startsWith("/portal")) {
-      const targetUrl = new URL(target, location.origin);
+    const targetUrl = target.startsWith("/") ? new URL(target, location.origin) : null;
+    const legacyProcessTarget = targetUrl?.pathname === "/"
+      && targetUrl.searchParams.get("view") === "rightsDashboard"
+      && targetUrl.searchParams.get("dashboard") === "processes";
+    const entityType = String(item?.entity_type || item?.entityType || "");
+    if (legacyProcessTarget || /(?:^|_)process(?:_|$)/.test(entityType)) {
+      portalState.processTaskRequestedRunId = String(
+        item?.run_id || item?.runId || targetUrl?.searchParams.get("run") || item?.entity_id || item?.entityId || "",
+      ).slice(0, 120);
+      portalState.processTaskRequestedStepId = String(
+        item?.step_id || item?.stepId || targetUrl?.searchParams.get("step") || "",
+      ).slice(0, 120);
+      el.notificationsDialog.close();
+      setTab("processTasks");
+    } else if (target.startsWith("/portal")) {
       const requested = targetUrl.searchParams.get("tab");
       const requestedKind = targetUrl.searchParams.get("kind");
       if (["absence", "sickness", "amu", "time_correction"].includes(requestedKind)) portalState.leadershipKind = requestedKind;
       const tab = normalizedPortalTab(requested);
+      if (tab === "processTasks") {
+        portalState.processTaskRequestedRunId = String(targetUrl.searchParams.get("run") || "").slice(0, 120);
+        portalState.processTaskRequestedStepId = String(targetUrl.searchParams.get("step") || "").slice(0, 120);
+      }
       el.notificationsDialog.close();
       setTab(tab || "history");
     } else if (target.startsWith("/")) location.href = target;
@@ -1920,6 +1969,197 @@ async function markAllNotificationsRead() {
     renderNotifications();
   } catch (error) {
     el.notificationList.insertAdjacentHTML("afterbegin", `<p class="message error">${esc(error.message)}</p>`);
+  }
+}
+
+function processTaskValue(task, ...paths) {
+  for (const path of paths) {
+    const value = path.split(".").reduce((current, key) => current?.[key], task);
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return "";
+}
+
+function normalizeProcessTask(task = {}) {
+  const runId = String(processTaskValue(task, "runId", "run_id", "processRunId", "process_run_id"));
+  const stepId = String(processTaskValue(task, "stepId", "step_id", "step.id"));
+  const activationCount = Number(processTaskValue(task, "activationCount", "activation_count") || 1);
+  const position = Number(processTaskValue(task, "position", "stepPosition", "step_position", "step.position", "step.sequence") || 1);
+  const stepCount = Number(processTaskValue(task, "stepCount", "step_count", "totalSteps", "total_steps", "progress.total") || position);
+  return {
+    ...task,
+    runId,
+    stepId,
+    activationCount: Number.isInteger(activationCount) && activationCount > 0 ? activationCount : 1,
+    key: `${runId}:${Number.isInteger(activationCount) && activationCount > 0 ? activationCount : 1}:${stepId}`,
+    processId: String(processTaskValue(task, "processId", "process_id", "process.id")),
+    processTitle: String(processTaskValue(task, "processTitle", "process_title", "process.title") || "Prozess"),
+    processSymbol: String(processTaskValue(task, "processSymbol", "process_symbol", "process.symbol") || "AP").slice(0, 5),
+    stepTitle: String(processTaskValue(task, "stepTitle", "step_title", "title", "step.title") || "Arbeitsschritt"),
+    stepDescription: String(processTaskValue(task, "stepDescription", "step_description", "description", "step.description")),
+    conditionText: String(processTaskValue(task, "conditionText", "condition_text", "condition.text", "step.conditionText", "step.condition.text")),
+    scopeLabel: String(processTaskValue(task, "scopeLabel", "scope_label", "scope.label") || "Unternehmen"),
+    position: Number.isFinite(position) && position > 0 ? position : 1,
+    stepCount: Number.isFinite(stepCount) && stepCount > 0 ? Math.max(stepCount, position) : position,
+    status: String(processTaskValue(task, "status", "taskStatus", "task_status") || "open"),
+    assignedAt: String(processTaskValue(task, "assignedAt", "assigned_at", "createdAt", "created_at")),
+    dueAt: String(processTaskValue(task, "dueAt", "due_at")),
+    canComplete: processTaskValue(task, "canComplete", "can_complete") !== false && task.blocked !== true && task.current !== false,
+    completionNoteRequired: processTaskValue(task, "completionNoteRequired", "completion_note_required") === true,
+  };
+}
+
+function processTaskDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function clearProcessTaskRequest() {
+  portalState.processTaskRequestedRunId = "";
+  portalState.processTaskRequestedStepId = "";
+  try {
+    const url = new URL(location.href);
+    url.searchParams.delete("run");
+    url.searchParams.delete("step");
+    history.replaceState(history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {}
+}
+
+function openProcessTaskCount() {
+  return portalState.processTasks.filter((task) => !["completed", "resolved", "cancelled"].includes(task.status)).length;
+}
+
+function renderProcessTasks() {
+  const openCount = openProcessTaskCount();
+  const runCount = new Set(portalState.processTasks.filter((task) => !["completed", "resolved", "cancelled"].includes(task.status)).map((task) => task.runId)).size;
+  if (el.processTasksTabCount) {
+    el.processTasksTabCount.textContent = openCount > 99 ? "99+" : String(openCount);
+    el.processTasksTabCount.classList.toggle("hidden", openCount < 1);
+  }
+  if (el.processTaskSummary) {
+    el.processTaskSummary.innerHTML = `<article><span>Offene Schritte</span><strong>${openCount}</strong></article><article><span>Laufende Prozesse</span><strong>${runCount}</strong></article>`;
+  }
+  if (!el.processTaskList) return;
+  const requestedRunId = portalState.processTaskRequestedRunId;
+  const requestedStepId = portalState.processTaskRequestedStepId;
+  const requestedMissing = !portalState.processTasksLoading && requestedRunId && !portalState.processTasks.some((task) => task.runId === requestedRunId && (!requestedStepId || task.stepId === requestedStepId));
+  const flash = portalState.processTaskFlash ? `<p class="message process-task-flash">${esc(portalState.processTaskFlash)}</p>` : "";
+  const missing = requestedMissing ? '<p class="message">Diese Aufgabe ist nicht mehr offen oder wurde bereits von einer zuständigen Person erledigt.</p>' : "";
+  const loadError = portalState.processTasksError ? `<div class="portal-card"><p class="message error">${esc(portalState.processTasksError)}</p></div>` : "";
+  const tasks = portalState.processTasks.filter((task) => !["completed", "resolved", "cancelled"].includes(task.status));
+  el.processTaskList.innerHTML = `${flash}${missing}${loadError || (tasks.length ? tasks.map((task) => {
+    const pending = portalState.processTaskCompletionPending.has(task.key);
+    const taskMessage = portalState.processTaskMessages.get(task.key) || "";
+    const completionPayload = portalState.processTaskCompletionPayloads.get(task.key);
+    const taskNote = completionPayload?.note ?? portalState.processTaskNotes.get(task.key) ?? "";
+    const highlighted = task.runId === requestedRunId && (!requestedStepId || task.stepId === requestedStepId);
+    const assigned = processTaskDateTime(task.assignedAt);
+    const due = processTaskDateTime(task.dueAt);
+    return `<article class="portal-card process-task-card ${highlighted ? "deep-linked" : ""}" data-process-task-key="${esc(task.key)}" data-process-run-id="${esc(task.runId)}" data-process-step-id="${esc(task.stepId)}">
+      <header><span class="process-task-symbol">${esc(task.processSymbol)}</span><div><span class="eyebrow">Schritt ${task.position} von ${task.stepCount}</span><h2>${esc(task.stepTitle)}</h2><p>${esc(task.processTitle)} · ${esc(task.scopeLabel)}</p></div><span class="status ${task.canComplete ? "pending" : "returned"}">${task.canComplete ? "Bereit" : "Wartet"}</span></header>
+      ${task.stepDescription ? `<p class="process-task-description">${esc(task.stepDescription)}</p>` : ""}
+      ${task.conditionText ? `<aside class="process-task-condition"><strong>Gilt, wenn</strong><span>${esc(task.conditionText)}</span></aside>` : ""}
+      ${(assigned || due) ? `<div class="process-task-meta">${assigned ? `<span>Zugewiesen ${esc(assigned)}</span>` : ""}${due ? `<span>Fällig ${esc(due)}</span>` : ""}</div>` : ""}
+      <div class="process-task-completion ${task.canComplete ? "" : "hidden"}"><label><span>Abschlussnotiz${task.completionNoteRequired ? " · erforderlich" : " · optional"}${completionPayload ? " · Wiederholung unverändert" : ""}</span><textarea data-process-task-note rows="2" maxlength="500" ${task.completionNoteRequired ? "required" : ""} ${completionPayload ? "disabled" : ""} placeholder="Kurze, sachliche Rückmeldung">${esc(taskNote)}</textarea></label><button class="primary" data-complete-process-task type="button" ${pending ? "disabled" : ""}>${pending ? "Wird gespeichert …" : completionPayload ? "Erneut versuchen" : "Schritt erledigen"}</button></div>
+      ${taskMessage ? `<p class="message error process-task-message">${esc(taskMessage)}</p>` : ""}
+    </article>`;
+  }).join("") : '<div class="portal-card process-task-empty"><span aria-hidden="true">✓</span><h2>Alles erledigt</h2><p>Derzeit ist dir kein offener Prozessschritt zugewiesen.</p></div>')}`;
+  el.processTaskList.setAttribute("aria-busy", String(portalState.processTasksLoading));
+  if (requestedRunId && portalState.activeTab === "processTasks") {
+    requestAnimationFrame(() => {
+      const target = [...el.processTaskList.querySelectorAll("[data-process-run-id]")].find((card) => card.dataset.processRunId === requestedRunId && (!requestedStepId || card.dataset.processStepId === requestedStepId));
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+  if (requestedMissing) clearProcessTaskRequest();
+}
+
+async function loadProcessTasks(options = {}) {
+  const afterCurrent = options?.afterCurrent === true;
+  if (!portalState.session || !portalState.processTasksAvailable) return;
+  if (portalState.processTasksLoading) {
+    const currentLoad = portalState.processTasksLoadPromise;
+    if (!afterCurrent) return currentLoad;
+    if (currentLoad) await currentLoad;
+    if (!portalState.session || !portalState.processTasksAvailable) return;
+    return loadProcessTasks();
+  }
+  portalState.processTasksLoading = true;
+  if (el.refreshProcessTasks) el.refreshProcessTasks.disabled = true;
+  el.processTaskList?.setAttribute("aria-busy", "true");
+  const request = (async () => {
+    try {
+      portalState.processTasksError = "";
+      const data = await api("/api/portal/v1/me/process-tasks");
+      portalState.processTasks = (Array.isArray(data?.tasks) ? data.tasks : Array.isArray(data?.items) ? data.items : []).map(normalizeProcessTask)
+        .filter((task) => task.runId && task.stepId)
+        .sort((left, right) => String(left.assignedAt).localeCompare(String(right.assignedAt)) || left.position - right.position);
+      const activeKeys = new Set(portalState.processTasks.map((task) => task.key));
+      [portalState.processTaskNotes, portalState.processTaskMessages, portalState.processTaskCompletionKeys, portalState.processTaskCompletionPayloads].forEach((entries) => {
+        for (const key of entries.keys()) if (!activeKeys.has(key)) entries.delete(key);
+      });
+      portalState.processTaskSummary = data?.summary || null;
+      portalState.processTasksAvailable = data?.available !== false;
+      el.processTasksTab?.classList.toggle("hidden", !portalState.processTasksAvailable);
+    } catch (error) {
+      if ([403, 404].includes(error.status)) {
+        portalState.processTasksAvailable = false;
+        el.processTasksTab?.classList.add("hidden");
+        if (portalState.activeTab === "processTasks") setTab("schedule");
+      } else portalState.processTasksError = error.message;
+    } finally {
+      portalState.processTasksLoading = false;
+      if (el.refreshProcessTasks) el.refreshProcessTasks.disabled = false;
+      renderProcessTasks();
+    }
+  })();
+  portalState.processTasksLoadPromise = request;
+  try {
+    return await request;
+  } finally {
+    if (portalState.processTasksLoadPromise === request) portalState.processTasksLoadPromise = null;
+  }
+}
+
+async function completeProcessTask(task, card) {
+  if (!task?.canComplete || portalState.processTaskCompletionPending.has(task.key)) return;
+  const previousPayload = portalState.processTaskCompletionPayloads.get(task.key);
+  const note = previousPayload?.note ?? String(card?.querySelector("[data-process-task-note]")?.value || "").trim();
+  if (task.completionNoteRequired && !note) {
+    portalState.processTaskMessages.set(task.key, "Bitte eine kurze Abschlussnotiz eintragen.");
+    renderProcessTasks();
+    return;
+  }
+  const idempotencyKey = portalState.processTaskCompletionKeys.get(task.key)
+    || globalThis.crypto?.randomUUID?.()
+    || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  portalState.processTaskCompletionKeys.set(task.key, idempotencyKey);
+  portalState.processTaskCompletionPayloads.set(task.key, { idempotencyKey, note });
+  portalState.processTaskCompletionPending.add(task.key);
+  portalState.processTaskMessages.delete(task.key);
+  portalState.processTaskFlash = "";
+  renderProcessTasks();
+  try {
+    await api(`/api/portal/v1/me/process-tasks/${encodeURIComponent(task.runId)}/${encodeURIComponent(task.stepId)}/complete`, {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify({ idempotencyKey, note, activationCount: task.activationCount }),
+    });
+    portalState.processTaskCompletionKeys.delete(task.key);
+    portalState.processTaskCompletionPayloads.delete(task.key);
+    portalState.processTaskNotes.delete(task.key);
+    if (portalState.processTaskRequestedRunId === task.runId
+        && (!portalState.processTaskRequestedStepId || portalState.processTaskRequestedStepId === task.stepId)) {
+      clearProcessTaskRequest();
+    }
+    portalState.processTaskFlash = "Der Arbeitsschritt wurde nachvollziehbar abgeschlossen.";
+    await Promise.allSettled([loadProcessTasks({ afterCurrent: true }), loadNotifications()]);
+  } catch (error) {
+    portalState.processTaskMessages.set(task.key, `${error.message} Beim erneuten Versuch wird dieselbe Vorgangs-ID verwendet.`);
+  } finally {
+    portalState.processTaskCompletionPending.delete(task.key);
+    renderProcessTasks();
   }
 }
 
@@ -2327,7 +2567,8 @@ function renderSicknessNotificationPreferences() {
     const type = channel === "email" ? "email" : "tel";
     const statusText = verified ? "Bestätigt" : "Bestätigung ausständig";
     return `<div class="notification-channel-row ${available ? "" : "unavailable"}" data-notification-channel="${channel}" data-provider-available="${available ? "1" : "0"}">
-      <div class="notification-channel-head"><label class="portal-switch"><span>${channelLabel(channel)} aktiv</span><input data-channel-enabled type="checkbox" ${preference.enabled && verified ? "checked" : ""} ${available && verified ? "" : "disabled"} /></label><span class="verification-status ${verified ? "verified" : "pending"}" data-channel-status>${statusText}</span></div>
+      <div class="notification-channel-head"><strong>${channelLabel(channel)}</strong><span class="verification-status ${verified ? "verified" : "pending"}" data-channel-status>${statusText}</span></div>
+      <div class="notification-purpose-options"><label class="portal-switch"><span>Warnung bei gefährdeter Mindestbesetzung</span><input data-channel-enabled type="checkbox" ${preference.enabled && verified ? "checked" : ""} ${available && verified ? "" : "disabled"} /></label><label class="portal-switch"><span>Auch neutrale Prozessmeldungen</span><input data-channel-process-enabled type="checkbox" ${preference.processEnabled && verified ? "checked" : ""} ${available && verified ? "" : "disabled"} /></label></div>
       <div class="notification-channel-setup"><label><span>Empfänger${available ? "" : " · durch Firmen-IT nicht eingerichtet"}</span><input data-channel-destination type="${type}" value="${esc(preference.destination || "")}" placeholder="${channel === "email" ? "leitung@firma.at" : "+436601234567"}" autocomplete="${channel === "email" ? "email" : "tel"}" ${available ? "" : "disabled"} /></label><button class="text-button" data-send-channel-verification type="button" ${available && preference.destination ? "" : "disabled"}>Code senden</button></div>
       <div class="notification-verification-row ${verificationRequired ? "" : "hidden"}" data-channel-verification><label><span>Sechsstelliger Bestätigungscode</span><input data-channel-code type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="000000" /></label><button class="primary" data-confirm-channel-verification type="button">Bestätigen</button></div>
     </div>`;
@@ -2341,6 +2582,7 @@ function updateSicknessNotificationChannelRow(row) {
   const available = row.dataset.providerAvailable === "1";
   const destination = row.querySelector("[data-channel-destination]");
   const enabled = row.querySelector("[data-channel-enabled]");
+  const processEnabled = row.querySelector("[data-channel-process-enabled]");
   const sendButton = row.querySelector("[data-send-channel-verification]");
   const verification = row.querySelector("[data-channel-verification]");
   const status = row.querySelector("[data-channel-status]");
@@ -2350,6 +2592,10 @@ function updateSicknessNotificationChannelRow(row) {
   if (enabled) {
     enabled.disabled = !available || !verified;
     if (!verified) enabled.checked = false;
+  }
+  if (processEnabled) {
+    processEnabled.disabled = !available || !verified;
+    if (!verified) processEnabled.checked = false;
   }
   if (sendButton) sendButton.disabled = !available || !String(destination?.value || "").trim();
   verification?.classList.toggle("hidden", !verificationRequired);
@@ -2386,6 +2632,7 @@ async function saveSicknessNotificationPreferences(event) {
     const preference = portalState.sicknessNotificationPreferences?.channels?.[row.dataset.notificationChannel] || {};
     channels[row.dataset.notificationChannel] = {
       enabled: Boolean(preference.verifiedAt) && row.querySelector("[data-channel-enabled]").checked,
+      processEnabled: Boolean(preference.verifiedAt) && row.querySelector("[data-channel-process-enabled]").checked,
       destination: preference.destination || "",
     };
   });
@@ -2395,7 +2642,7 @@ async function saveSicknessNotificationPreferences(event) {
       body: JSON.stringify({ earliestTime: el.sicknessNotificationEarliestTime.value, channels }),
     });
     renderSicknessNotificationPreferences();
-    message(el.sicknessNotificationPreferencesMessage, "Die Warnkanäle wurden gespeichert.");
+    message(el.sicknessNotificationPreferencesMessage, "Die externen Warnungen und Prozessmeldungen wurden gespeichert.");
   } catch (error) {
     message(el.sicknessNotificationPreferencesMessage, error.message, true);
   }
@@ -2844,6 +3091,21 @@ el.notificationList.addEventListener("click", (event) => {
   if (item) readNotification(item.dataset.notificationId);
 });
 el.markAllNotificationsRead.addEventListener("click", markAllNotificationsRead);
+el.refreshProcessTasks?.addEventListener("click", loadProcessTasks);
+el.processTaskList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-complete-process-task]");
+  const card = button?.closest("[data-process-task-key]");
+  if (!button || !card || button.disabled) return;
+  const task = portalState.processTasks.find((entry) => entry.key === card.dataset.processTaskKey);
+  if (task) completeProcessTask(task, card);
+});
+el.processTaskList?.addEventListener("input", (event) => {
+  const note = event.target.closest("[data-process-task-note]");
+  const card = note?.closest("[data-process-task-key]");
+  if (note && card && !portalState.processTaskCompletionPayloads.has(card.dataset.processTaskKey)) {
+    portalState.processTaskNotes.set(card.dataset.processTaskKey, note.value);
+  }
+});
 el.sicknessCaseForm.addEventListener("submit", submitSicknessCase);
 el.sicknessCaseList.addEventListener("click", (event) => {
   const row = event.target.closest("[data-sickness-case-id]");
@@ -2885,6 +3147,7 @@ el.amuReportList.addEventListener("click", (event) => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && portalState.session) {
     loadNotifications();
+    loadProcessTasks();
     if (portalState.activeTab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking()]);
     if (portalState.activeTab === "settings") loadWifiAutomation();
     if (portalState.activeTab === "leadershipTeam") loadLeadershipOverview();
@@ -2892,7 +3155,7 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 setInterval(() => {
-  if (!document.hidden && portalState.session) loadNotifications();
+  if (!document.hidden && portalState.session) Promise.allSettled([loadNotifications(), loadProcessTasks()]);
 }, 45000);
 setInterval(() => {
   if (!document.hidden && portalState.session && portalState.activeTab === "timeTracking") loadTimeTracking();
