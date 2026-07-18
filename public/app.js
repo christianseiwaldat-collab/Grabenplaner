@@ -44,6 +44,7 @@ const state = {
     requests: "light",
     timeTracking: "light",
     vacations: "light",
+    personnelAdministration: "light",
     personnel: "light",
     rightsDashboard: "light",
     settings: "light",
@@ -71,6 +72,15 @@ const state = {
   greetingSettings: null,
   selectedRequest: null,
   allEmployees: [],
+  personnelDirectory: [],
+  costCenters: [],
+  personnelAdministrationLoaded: false,
+  personnelAdministrationLoading: false,
+  personnelAdministrationTab: "employees",
+  personnelDirectorySearch: "",
+  personnelDirectoryCostCenterFilter: "",
+  personnelDirectoryStatusFilter: "active",
+  editingCostCenterId: null,
   personnelRecord: null,
   personnelRecordDirtyFields: new Set(),
   employeePersonnelRecord: null,
@@ -149,7 +159,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelView", "rightsDashboardView", "settingsView", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "rightsDashboardNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "rightsDashboardView", "settingsView", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "personnelAdministrationNavButton", "rightsDashboardNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarEmployeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -157,7 +167,8 @@ const elements = Object.fromEntries(
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount",
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
-    "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
+    "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeeHomeLocation", "employeeHomeLocationHint", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
+    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "addCostCenterButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
     "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
@@ -565,6 +576,27 @@ function renderSidebarSession() {
   elements.sidebarSessionPosition.textContent = user.positionName ? `Position: ${user.positionName}` : "Position: nicht hinterlegt";
 }
 
+function canReadCentralPersonnel() {
+  return !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("personnel:central:read") === true;
+}
+
+function canWriteCentralPersonnel() {
+  return !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("personnel:central:write") === true;
+}
+
+function canReadCostCenters() {
+  return !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("cost_centers:read") === true
+    || canReadCentralPersonnel();
+}
+
+function canWriteCostCenters() {
+  return !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("cost_centers:write") === true;
+}
+
 function applyRoleVisibility() {
   const permissions = state.portalSession?.user?.permissions || [];
   const features = state.portalStatus?.installationFeatures || {};
@@ -601,6 +633,11 @@ function applyRoleVisibility() {
   const payrollDeliverAccess = integrationsEnabled && (!lanActive || permissions.includes("payroll:deliver"));
   const integrationAccess = integrationReadAccess || personnelImportAccess || payrollExportAccess || integrationProfileWriteAccess
     || connectionReadAccess || connectionWriteAccess || credentialWriteAccess || payrollDeliverAccess;
+  const centralPersonnelReadAccess = canReadCentralPersonnel();
+  const centralPersonnelWriteAccess = canWriteCentralPersonnel();
+  const costCenterReadAccess = canReadCostCenters();
+  const costCenterWriteAccess = canWriteCostCenters();
+  elements.personnelAdministrationNavButton?.classList.toggle("hidden", !centralPersonnelReadAccess);
   document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
   document.querySelectorAll('[data-view="vacations"]').forEach((button) => button.classList.toggle("hidden", features.vacation === false));
   elements.requestsNavButton?.classList.toggle("hidden", features.requests === false);
@@ -636,7 +673,10 @@ function applyRoleVisibility() {
   if (elements.systemExitButton) elements.systemExitButton.querySelector("span").textContent = serverActive ? "Server beenden" : "Beenden";
   elements.updateCheckButton?.classList.toggle("hidden", lanActive && !permissions.includes("update:write"));
   document.querySelector('[data-personnel-tab="locations"]')?.classList.toggle("hidden", !locationWriteAccess);
-  document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !employeeWriteAccess);
+  document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !(employeeWriteAccess && centralPersonnelWriteAccess));
+  elements.addCentralEmployeeButton?.classList.toggle("hidden", !centralPersonnelWriteAccess);
+  document.querySelector('[data-personnel-administration-tab="costCenters"]')?.classList.toggle("hidden", !costCenterReadAccess);
+  elements.addCostCenterButton?.classList.toggle("hidden", !costCenterWriteAccess);
   elements.addLocationButton?.classList.toggle("hidden", !locationBaseWriteAccess);
   elements.addDepartmentButton?.classList.toggle("hidden", !departmentWriteAccess);
   elements.locationFormCard?.classList.toggle("hidden", !locationBaseWriteAccess);
@@ -675,6 +715,8 @@ function applyRoleVisibility() {
   if (globalAdministration) elements.viewBehaviorSettingsCard?.classList.remove("hidden");
   [elements.localModeOption, elements.serverModeOption, elements.publicServerModeOption].forEach((button) => { if (button) button.disabled = !operationModeAccess; });
   if (!locationWriteAccess && state.personnelTab === "locations") setPersonnelTab("employees");
+  if (!costCenterReadAccess && state.personnelAdministrationTab === "costCenters") setPersonnelAdministrationTab("employees");
+  if (!centralPersonnelReadAccess && state.currentView === "personnelAdministration") setView("planning");
   renderSidebarSession();
 }
 
@@ -950,6 +992,7 @@ function render() {
   renderRemarks();
   renderHoursOverview();
   renderVacations();
+  renderPersonnelAdministration();
   renderEmployees();
   renderLocations();
   renderPositions();
@@ -1524,6 +1567,251 @@ function personnelRecordAvailableInUi() {
   ].includes(permission)) === true;
 }
 
+function apiList(payload, keys = []) {
+  if (Array.isArray(payload)) return payload;
+  for (const key of keys) {
+    if (Array.isArray(payload?.[key])) return payload[key];
+  }
+  return [];
+}
+
+function normalizedActive(value, fallback = true) {
+  if (value === undefined || value === null) return fallback;
+  return ![false, 0, "0"].includes(value);
+}
+
+function normalizeCostCenter(item = {}) {
+  return {
+    ...item,
+    id: item.id ?? item.cost_center_id ?? item.costCenterId ?? item.code ?? "",
+    code: String(item.code ?? item.cost_center_code ?? item.costCenterCode ?? ""),
+    name: String(item.name ?? item.cost_center_name ?? item.costCenterName ?? ""),
+    type: String(item.type ?? item.cost_center_type ?? item.costCenterType ?? "other"),
+    description: String(item.description ?? ""),
+    active: normalizedActive(item.active),
+    employee_count: Number(item.employee_count ?? item.employeeCount ?? 0),
+    location_count: Number(item.location_count ?? item.locationCount ?? 0),
+  };
+}
+
+function normalizePersonnelDirectoryEmployee(item = {}) {
+  const personnelNumber = String(item.personnel_number ?? item.personnelNumber ?? item.employee_number ?? item.employeeNumber ?? "");
+  const scoped = state.allEmployees.find((employee) => String(employee.personnel_number) === personnelNumber) || {};
+  const merged = { ...scoped, ...item };
+  return {
+    ...merged,
+    personnel_number: personnelNumber,
+    full_name: String(merged.full_name ?? merged.fullName ?? ""),
+    nickname: String(merged.nickname ?? ""),
+    position_name: String(merged.position_name ?? merged.positionName ?? ""),
+    position_id: merged.position_id ?? merged.positionId ?? "",
+    cost_center_id: merged.cost_center_id ?? merged.costCenterId ?? "",
+    cost_center_code: String(merged.cost_center_code ?? merged.costCenterCode ?? ""),
+    cost_center_name: String(merged.cost_center_name ?? merged.costCenterName ?? ""),
+    cost_center_type: String(merged.cost_center_type ?? merged.costCenterType ?? ""),
+    home_location_id: merged.home_location_id ?? merged.homeLocationId ?? "",
+    home_location_name: String(merged.home_location_name ?? merged.homeLocationName ?? ""),
+    preferred_department_id: merged.preferred_department_id ?? merged.preferredDepartmentId ?? "",
+    preferred_department_name: String(merged.preferred_department_name ?? merged.preferredDepartmentName ?? ""),
+    contracted_hours: Number(merged.contracted_hours ?? merged.contractedHours ?? 0),
+    target_workdays_per_week: Number(merged.target_workdays_per_week ?? merged.targetWorkdaysPerWeek ?? 5),
+    active: normalizedActive(merged.active),
+  };
+}
+
+function costCenterTypeLabel(type) {
+  return ({ branch: "Filiale", administration: "Verwaltung", production: "Produktion", other: "Sonstige" })[type] || "Sonstige";
+}
+
+async function loadPersonnelAdministration({ force = false } = {}) {
+  if (!canReadCentralPersonnel() || state.personnelAdministrationLoading) return;
+  if (state.personnelAdministrationLoaded && !force) {
+    renderPersonnelAdministration();
+    return;
+  }
+  state.personnelAdministrationLoading = true;
+  if (elements.personnelDirectoryBody) elements.personnelDirectoryBody.innerHTML = '<tr><td colspan="8">Personalstammdaten werden geladen.</td></tr>';
+  try {
+    const [directoryPayload, costCenterPayload] = await Promise.all([
+      api("/api/personnel-directory"),
+      canReadCostCenters()
+        ? api("/api/cost-centers?includeInactive=1").catch((error) => {
+          if ([403, 404].includes(error.status)) return [];
+          throw error;
+        })
+        : Promise.resolve([]),
+    ]);
+    state.personnelDirectory = apiList(directoryPayload, ["employees", "items", "personnel"])
+      .map(normalizePersonnelDirectoryEmployee);
+    state.costCenters = apiList(costCenterPayload, ["costCenters", "cost_centers", "items"])
+      .map(normalizeCostCenter);
+    state.personnelAdministrationLoaded = true;
+    renderPersonnelAdministration();
+  } catch (error) {
+    if (elements.personnelDirectoryBody) elements.personnelDirectoryBody.innerHTML = `<tr><td colspan="8">${escapeHtml(error.message)}</td></tr>`;
+    if (elements.costCenterList) elements.costCenterList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    showToast(error.message, true);
+  } finally {
+    state.personnelAdministrationLoading = false;
+  }
+}
+
+function filteredPersonnelDirectory() {
+  const search = state.personnelDirectorySearch.trim().toLocaleLowerCase("de-AT");
+  const costCenter = state.personnelDirectoryCostCenterFilter;
+  const status = state.personnelDirectoryStatusFilter;
+  return state.personnelDirectory.filter((employee) => {
+    if (status === "active" && !employee.active) return false;
+    if (status === "inactive" && employee.active) return false;
+    if (status === "unassigned" && employee.cost_center_id) return false;
+    if (costCenter && String(employee.cost_center_id) !== String(costCenter)) return false;
+    if (!search) return true;
+    return [employee.personnel_number, employee.full_name, employee.nickname, employee.position_name,
+      employee.cost_center_code, employee.cost_center_name, employee.home_location_name, employee.preferred_department_name]
+      .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(search));
+  }).sort((left, right) => String(left.personnel_number).localeCompare(String(right.personnel_number), "de-AT", { numeric: true, sensitivity: "base" }));
+}
+
+function renderPersonnelAdministrationSummary() {
+  if (!elements.personnelAdministrationSummary) return;
+  const total = state.personnelDirectory.length;
+  const active = state.personnelDirectory.filter((employee) => employee.active).length;
+  const inactive = total - active;
+  const unassigned = state.personnelDirectory.filter((employee) => !employee.cost_center_id).length;
+  elements.personnelAdministrationSummary.innerHTML = [
+    ["Beschäftigte", total, "gesamt"],
+    ["Aktiv", active, "aktuelle Personalstämme"],
+    ["Inaktiv", inactive, "historisch erhalten"],
+    ["Ohne Kostenstelle", unassigned, unassigned ? "Zuordnung nachpflegen" : "vollständig zugeordnet"],
+  ].map(([label, value, note], index) => `<article class="personnel-administration-stat ${index === 3 && value ? "warning" : ""}"><span>${escapeHtml(label)}</span><strong>${Number(value)}</strong><small>${escapeHtml(note)}</small></article>`).join("");
+}
+
+function renderPersonnelDirectory() {
+  if (!elements.personnelDirectoryBody) return;
+  const currentCostCenter = state.personnelDirectoryCostCenterFilter;
+  elements.personnelDirectoryCostCenterFilter.innerHTML = `<option value="">Alle Kostenstellen</option>${state.costCenters
+    .slice().sort((left, right) => left.code.localeCompare(right.code, "de-AT", { numeric: true }))
+    .map((center) => `<option value="${escapeHtmlAttribute(String(center.id))}">${escapeHtml(`${center.code} · ${center.name}${center.active ? "" : " · inaktiv"}`)}</option>`).join("")}`;
+  if ([...elements.personnelDirectoryCostCenterFilter.options].some((option) => option.value === String(currentCostCenter))) {
+    elements.personnelDirectoryCostCenterFilter.value = String(currentCostCenter);
+  } else {
+    state.personnelDirectoryCostCenterFilter = "";
+  }
+  const rows = filteredPersonnelDirectory();
+  const canEdit = canWriteCentralPersonnel();
+  const canOpenRecord = personnelRecordAvailableInUi();
+  elements.personnelDirectoryBody.innerHTML = rows.length ? rows.map((employee) => {
+    const costCenter = employee.cost_center_id
+      ? [employee.cost_center_code, employee.cost_center_name].filter(Boolean).join(" · ") || "Zugeordnet"
+      : "Nicht zugeordnet";
+    const location = [employee.home_location_name || employee.home_location_id, employee.preferred_department_name].filter(Boolean).join(" · ") || "Keine Stammfiliale";
+    const actions = [
+      canEdit ? `<button type="button" class="edit-button" data-central-edit-employee="${escapeHtmlAttribute(employee.personnel_number)}">Stammdaten</button>` : "",
+      canOpenRecord ? `<button type="button" class="edit-button" data-central-personnel-record="${escapeHtmlAttribute(employee.personnel_number)}">Personalakt</button>` : "",
+    ].filter(Boolean).join("");
+    return `<tr class="${employee.cost_center_id ? "" : "personnel-directory-unassigned"}">
+      <td data-label="Personalnr."><strong>${escapeHtml(employee.personnel_number)}</strong></td>
+      <td data-label="Name"><strong>${escapeHtml(employee.full_name || employee.nickname || "–")}</strong>${employee.nickname && employee.nickname !== employee.full_name ? `<small>${escapeHtml(employee.nickname)}</small>` : ""}</td>
+      <td data-label="Position">${escapeHtml(employee.position_name || "–")}</td>
+      <td data-label="Kostenstelle"><span class="status-badge ${employee.cost_center_id ? "" : "warning"}">${escapeHtml(costCenter)}</span></td>
+      <td data-label="Filiale / Abteilung">${escapeHtml(location)}</td>
+      <td data-label="Wochen-Soll">${escapeHtml(String(employee.contracted_hours).replace(".", ","))} h · ${Number(employee.target_workdays_per_week || 5)} T.</td>
+      <td data-label="Status"><span class="status-badge ${employee.active ? "" : "inactive"}">${employee.active ? "Aktiv" : "Inaktiv"}</span></td>
+      <td data-label="Aktionen"><span class="table-actions">${actions || "–"}</span></td>
+    </tr>`;
+  }).join("") : '<tr><td colspan="8" class="personnel-directory-empty">Keine passenden Mitarbeitenden gefunden.</td></tr>';
+}
+
+function renderCostCenters() {
+  if (!elements.costCenterList) return;
+  const canEdit = canWriteCostCenters();
+  const centers = state.costCenters.slice().sort((left, right) => left.code.localeCompare(right.code, "de-AT", { numeric: true, sensitivity: "base" }));
+  elements.costCenterList.innerHTML = centers.length ? centers.map((center) => `
+    <article class="cost-center-card ${center.active ? "" : "inactive"}">
+      <div class="cost-center-card-code"><strong>${escapeHtml(center.code || "–")}</strong><span class="status-badge ${center.active ? "" : "inactive"}">${center.active ? "Aktiv" : "Inaktiv"}</span></div>
+      <div class="cost-center-card-copy"><span class="eyebrow">${escapeHtml(costCenterTypeLabel(center.type))}</span><h3>${escapeHtml(center.name || center.code || "Kostenstelle")}</h3>${center.description ? `<p>${escapeHtml(center.description)}</p>` : ""}</div>
+      <div class="cost-center-card-counts"><span><strong>${Number(center.employee_count)}</strong> Beschäftigte</span><span><strong>${Number(center.location_count)}</strong> Filialen</span></div>
+      ${canEdit ? `<button type="button" class="edit-button" data-edit-cost-center="${escapeHtmlAttribute(String(center.id))}">Bearbeiten</button>` : ""}
+    </article>`).join("") : '<p class="settings-note">Noch keine Kostenstelle angelegt.</p>';
+}
+
+function renderPersonnelAdministration() {
+  if (!canReadCentralPersonnel()) return;
+  renderPersonnelAdministrationSummary();
+  renderPersonnelDirectory();
+  renderCostCenters();
+}
+
+function setPersonnelAdministrationTab(tab) {
+  const normalized = tab === "costCenters" && canReadCostCenters() ? "costCenters" : "employees";
+  state.personnelAdministrationTab = normalized;
+  document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => button.classList.toggle("active", button.dataset.personnelAdministrationTab === normalized));
+  elements.personnelDirectorySection?.classList.toggle("active", normalized === "employees");
+  elements.costCenterSection?.classList.toggle("active", normalized === "costCenters");
+}
+
+function openCostCenterModal(costCenter = null) {
+  if (!canWriteCostCenters() || !elements.costCenterModal) return;
+  state.editingCostCenterId = costCenter?.id ?? null;
+  elements.costCenterForm.reset();
+  elements.costCenterId.value = costCenter?.id ?? "";
+  elements.costCenterCode.value = costCenter?.code || "";
+  elements.costCenterCode.disabled = Boolean(costCenter);
+  elements.costCenterName.value = costCenter?.name || "";
+  elements.costCenterType.value = costCenter?.type || "other";
+  elements.costCenterDescription.value = costCenter?.description || "";
+  elements.costCenterActive.checked = costCenter?.active ?? true;
+  elements.costCenterModalTitle.textContent = costCenter ? "Kostenstelle bearbeiten" : "Kostenstelle anlegen";
+  elements.costCenterSubmitButton.textContent = costCenter ? "Kostenstelle speichern" : "Kostenstelle anlegen";
+  elements.deactivateCostCenterButton.classList.toggle("hidden", !costCenter?.active);
+  elements.costCenterModal.showModal();
+}
+
+async function saveCostCenter(event) {
+  event.preventDefault();
+  if (!canWriteCostCenters()) return;
+  const id = state.editingCostCenterId;
+  const body = {
+    code: elements.costCenterCode.value.trim(),
+    name: elements.costCenterName.value.trim(),
+    type: elements.costCenterType.value,
+    description: elements.costCenterDescription.value.trim(),
+    active: elements.costCenterActive.checked,
+  };
+  elements.costCenterSubmitButton.disabled = true;
+  try {
+    await api(id === null ? "/api/cost-centers" : `/api/cost-centers/${encodeURIComponent(id)}`, {
+      method: id === null ? "POST" : "PUT",
+      body: JSON.stringify(body),
+    });
+    elements.costCenterModal.close();
+    state.personnelAdministrationLoaded = false;
+    await loadPersonnelAdministration({ force: true });
+    showToast(id === null ? "Kostenstelle wurde angelegt." : "Kostenstelle wurde gespeichert.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.costCenterSubmitButton.disabled = false;
+  }
+}
+
+async function deactivateCostCenter() {
+  const id = state.editingCostCenterId;
+  if (id === null || !canWriteCostCenters() || !confirm("Diese Kostenstelle deaktivieren? Bestehende Zuordnungen und historische Daten bleiben erhalten.")) return;
+  elements.deactivateCostCenterButton.disabled = true;
+  try {
+    await api(`/api/cost-centers/${encodeURIComponent(id)}`, { method: "DELETE" });
+    elements.costCenterModal.close();
+    state.personnelAdministrationLoaded = false;
+    await loadPersonnelAdministration({ force: true });
+    showToast("Kostenstelle wurde deaktiviert.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.deactivateCostCenterButton.disabled = false;
+  }
+}
+
 function renderEmployees() {
   const showInactive = state.data?.settings?.show_inactive_personnel !== "0";
   const employees = showInactive ? state.allEmployees : state.allEmployees.filter((employee) => employee.active);
@@ -1564,7 +1852,7 @@ function renderLocations() {
     const openingSummary = planningDayKeys.filter((day) => location.day_settings?.[day]?.open !== false).map((day) => `${preferredDayLabels[day]?.slice(0, 2) || (day === "saturday" ? "Sa" : day.slice(0, 2))} ${location.day_settings?.[day]?.start || "–"}–${location.day_settings?.[day]?.end || "–"}`).join(" · ");
     return `<article class="location-card">
       <div class="location-card-head">
-        <div><strong>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</strong><small>${location.active ? "Aktiv" : "Inaktiv"} · ${departments.length} Abteilung(en) · Mindestbesetzung Filiale: ${Number(location.min_staff || 0)} · Zeiterfassung ${location.time_tracking_enabled ? "aktiv" : "aus"}</small><small>${escapeHtml(openingSummary)}</small></div>
+        <div><strong>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</strong><small>${location.active ? "Aktiv" : "Inaktiv"} · ${departments.length} Abteilung(en) · Mindestbesetzung Filiale: ${Number(location.min_staff || 0)} · Zeiterfassung ${location.time_tracking_enabled ? "aktiv" : "aus"}</small><small>Kostenstelle: ${escapeHtml([location.cost_center_code ?? location.costCenterCode, location.cost_center_name ?? location.costCenterName].filter(Boolean).join(" · ") || "noch nicht zugeordnet")} · ${escapeHtml(openingSummary)}</small></div>
         ${canEditLocations ? `<button type="button" class="edit-button" data-edit-location="${escapeHtml(location.id)}">Filiale bearbeiten</button>` : ""}
       </div>
       <div class="department-list">${
@@ -1978,6 +2266,7 @@ const UI_APPEARANCE_VIEWS = Object.freeze([
   "requests",
   "timeTracking",
   "vacations",
+  "personnelAdministration",
   "personnel",
   "rightsDashboard",
   "settings",
@@ -2001,6 +2290,7 @@ function pageViewElement(view) {
     requests: elements.requestsView,
     timeTracking: elements.timeTrackingView,
     vacations: elements.vacationsView,
+    personnelAdministration: elements.personnelAdministrationView,
     personnel: elements.personnelView,
     rightsDashboard: elements.rightsDashboardView,
     settings: elements.settingsView,
@@ -3217,7 +3507,7 @@ function renderTimePresence() {
     <article class="${counts.attention ? "warning" : ""}"><span>Zu prüfen</span><strong>${counts.attention}</strong></article>`;
   elements.timePresenceUpdated.textContent = `${presence.locationName}${presence.departmentName ? ` · ${presence.departmentName}` : ""} · Stand ${formatClockTimestamp(presence.serverTime)} Uhr`;
   if (!presence.trackingEnabled) {
-    elements.timePresenceList.innerHTML = '<p class="settings-note">Die Zeiterfassung ist für diesen Standort noch nicht aktiviert. Die Aktivierung erfolgt unter Teams & Standorte.</p>';
+    elements.timePresenceList.innerHTML = '<p class="settings-note">Die Zeiterfassung ist für diesen Standort noch nicht aktiviert. Die Aktivierung erfolgt in der Filialverwaltung.</p>';
     return;
   }
   const labels = { working: "Anwesend", paused: "Pause", off: "Abwesend", attention: "Bitte prüfen" };
@@ -5273,6 +5563,7 @@ function setView(view) {
   if ((view === "vacations" && features.vacation === false)
     || (view === "requests" && features.requests === false)
     || (view === "timeTracking" && features.timeTracking === false)
+    || (view === "personnelAdministration" && elements.personnelAdministrationNavButton?.classList.contains("hidden"))
     || (view === "rightsDashboard" && elements.rightsDashboardNavButton?.classList.contains("hidden"))) view = "planning";
   state.currentView = view;
   if (timePresenceRefreshTimer) clearInterval(timePresenceRefreshTimer);
@@ -5282,6 +5573,7 @@ function setView(view) {
   elements.requestsView.classList.toggle("active", view === "requests");
   elements.timeTrackingView?.classList.toggle("active", view === "timeTracking");
   elements.vacationsView.classList.toggle("active", view === "vacations");
+  elements.personnelAdministrationView?.classList.toggle("active", view === "personnelAdministration");
   elements.personnelView.classList.toggle("active", view === "personnel");
   elements.rightsDashboardView?.classList.toggle("active", view === "rightsDashboard");
   elements.settingsView.classList.toggle("active", view === "settings");
@@ -5292,6 +5584,7 @@ function setView(view) {
     if (!activeSettingsTab && firstAllowedSettingsTab) setSettingsTab(firstAllowedSettingsTab.dataset.settingsTab);
   }
   if (view === "requests") loadManagerVacationRequests();
+  if (view === "personnelAdministration") loadPersonnelAdministration();
   if (view === "rightsDashboard") loadRightsDashboard();
   if (view === "timeTracking") {
     initializeTimeSummaryDates();
@@ -5304,7 +5597,7 @@ function setView(view) {
 function applyRequestedView() {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
-  if (!["planning", "requests", "timeTracking", "vacations", "personnel", "rightsDashboard", "settings"].includes(requestedView)) return;
+  if (!["planning", "requests", "timeTracking", "vacations", "personnelAdministration", "personnel", "rightsDashboard", "settings"].includes(requestedView)) return;
   if (requestedView === "requests") {
     const requestedKind = parameters.get("kind");
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
@@ -5386,6 +5679,7 @@ function updateEmployeeDepartmentOptions(selectedDepartmentId = "") {
 function canEditEmployeeAccessProfile(employee = null) {
   if (!state.portalStatus?.portalEnabled) return false;
   if (!["developer", "it_admin"].includes(state.portalSession?.user?.role)) return false;
+  if (employee && !employee.portal_access) return false;
   return employee?.portal_access?.roleLocked !== true && employee?.portal_access?.role !== "developer";
 }
 
@@ -5688,15 +5982,41 @@ async function loadEmployeeProtectedRecord(employeeNumber) {
 
 function openEmployeeModal(employee = null) {
   const permissions = state.portalSession?.user?.permissions || [];
-  const fullAccess = !state.portalStatus?.portalEnabled || permissions.includes("employees:write");
+  const centralContext = state.currentView === "personnelAdministration";
+  const fullAccess = !state.portalStatus?.portalEnabled
+    || (centralContext ? canWriteCentralPersonnel() : permissions.includes("employees:write"));
   const displayAccess = Boolean(employee) && permissions.includes("employees:display:write");
   if (!fullAccess && !displayAccess) return;
+  const centralPersonnelWrite = canWriteCentralPersonnel();
   state.employeeEditMode = fullAccess ? "full" : "display";
   elements.employeeForm.reset();
   state.employeePersonnelRecord = null;
-  elements.employeeHomeLocation.innerHTML = (state.locations || []).map((location) =>
+  const employeeCostCenterId = employee?.cost_center_id ?? employee?.costCenterId ?? "";
+  const availableCostCenters = state.costCenters.filter((center) => center.active || String(center.id) === String(employeeCostCenterId));
+  if (employeeCostCenterId && !availableCostCenters.some((center) => String(center.id) === String(employeeCostCenterId))) {
+    availableCostCenters.push(normalizeCostCenter({
+      id: employeeCostCenterId,
+      code: employee?.cost_center_code ?? employee?.costCenterCode ?? "",
+      name: employee?.cost_center_name ?? employee?.costCenterName ?? "Bestehende Kostenstelle",
+      active: false,
+    }));
+  }
+  elements.employeeCostCenter.innerHTML = `<option value="">Bitte Kostenstelle auswählen</option>${availableCostCenters
+    .sort((left, right) => left.code.localeCompare(right.code, "de-AT", { numeric: true }))
+    .map((center) => `<option value="${escapeHtmlAttribute(String(center.id))}">${escapeHtml(`${center.code} · ${center.name}${center.active ? "" : " · inaktiv"}`)}</option>`).join("")}`;
+  elements.employeeCostCenter.value = String(employeeCostCenterId || "");
+  elements.employeeCostCenter.disabled = !centralPersonnelWrite;
+  elements.employeeCostCenter.required = centralPersonnelWrite;
+  elements.employeeCostCenterHint.textContent = centralPersonnelWrite
+    ? "Eine Kostenstelle ist für jeden Personalstamm erforderlich."
+    : "Die Kostenstelle kann ausschließlich in der zentralen Personalverwaltung geändert werden.";
+  elements.employeeHomeLocation.innerHTML = `<option value="">Keine Stammfiliale</option>${(state.locations || []).map((location) =>
     `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`,
-  ).join("");
+  ).join("")}`;
+  elements.employeeHomeLocation.required = !centralPersonnelWrite;
+  elements.employeeHomeLocationHint.textContent = centralPersonnelWrite
+    ? "Für Verwaltung, Geschäftsleitung oder Produktion kann die Stammfiliale entfallen."
+    : "Eine filiallose Zuordnung kann ausschließlich in der zentralen Personalverwaltung gespeichert werden.";
   document.querySelector("#employeeNumber").value = employee?.personnel_number || "";
   document.querySelector("#employeeNumber").disabled = Boolean(employee);
   document.querySelector("#employeeName").value = employee?.full_name || "";
@@ -5712,7 +6032,9 @@ function openEmployeeModal(employee = null) {
   elements.employeeTimeConfirmationLevel.value = employee?.time_confirmation_level || "C";
   elements.employeeSicknessWithoutAumEnabled.checked = employee?.sickness_without_aum_enabled === true;
   elements.employeeTimeConfirmationLevelField?.classList.toggle("hidden", !canViewConfirmationLevel);
-  elements.employeeHomeLocation.value = employee?.home_location_id || state.locationId || state.locations?.[0]?.id || "01";
+  elements.employeeHomeLocation.value = employee
+    ? String(employee.home_location_id ?? employee.homeLocationId ?? "")
+    : centralPersonnelWrite ? "" : (state.locationId || state.locations?.[0]?.id || "");
   updateEmployeeDepartmentOptions(employee?.preferred_department_id || "");
   document.querySelector("#employeePreferredDay").value = employee?.preferred_day_off || "";
   const fixedDays = fixedWorkdays(employee);
@@ -5744,10 +6066,11 @@ function openEmployeeModal(employee = null) {
     }
   }
   const protectedControls = [
-    "employeeName", "employeeNickname", "employeeHours", "employeeTargetWorkdays", "employeeHomeLocation", "employeePosition",
+    "employeeName", "employeeNickname", "employeeHours", "employeeTargetWorkdays", "employeeCostCenter", "employeeHomeLocation", "employeePosition",
     "employeeTimeConfirmationLevel", "employeePreferredDepartment", "employeePreferredDay", "employeeActive",
   ];
   for (const id of protectedControls) document.querySelector(`#${id}`).disabled = displayOnly;
+  elements.employeeCostCenter.disabled = displayOnly || !centralPersonnelWrite;
   elements.employeeTimeConfirmationLevel.disabled = displayOnly || !canManageConfirmationLevel;
   syncEmployeeSicknessAllowanceField();
   document.querySelectorAll('[name="employeeFixedWorkday"]').forEach((control) => { control.disabled = displayOnly; });
@@ -6058,6 +6381,16 @@ async function saveEmployee(event) {
     } catch (error) { showToast(error.message, true); }
     return;
   }
+  const centralPersonnelWrite = canWriteCentralPersonnel();
+  if (centralPersonnelWrite && !elements.employeeCostCenter.value) {
+    showToast("Bitte eine Kostenstelle auswählen.", true);
+    elements.employeeCostCenter.focus();
+    return;
+  }
+  if (!centralPersonnelWrite && !elements.employeeHomeLocation.value) {
+    showToast("Eine filiallose Zuordnung kann ausschließlich in der zentralen Personalverwaltung gespeichert werden.", true);
+    return;
+  }
   const body = {
     personnelNumber: number,
     fullName: document.querySelector("#employeeName").value,
@@ -6072,6 +6405,7 @@ async function saveEmployee(event) {
     color: state.selectedColor,
     active: document.querySelector("#employeeActive").checked,
   };
+  if (centralPersonnelWrite) body.costCenterId = elements.employeeCostCenter.value;
   if (canManageWifiAutomationSettings()) {
     body.timeConfirmationLevel = elements.employeeTimeConfirmationLevel.value;
     body.sicknessWithoutAumEnabled = elements.employeeSicknessWithoutAumEnabled.checked;
@@ -6081,7 +6415,9 @@ async function saveEmployee(event) {
     const recordPatch = personnelRecordPatch(state.employeePersonnelRecord.initial || {}, currentPersonnelRecord);
     if (!isEdit || Object.keys(recordPatch).length) body.personnelRecord = isEdit ? recordPatch : currentPersonnelRecord;
   }
-  const editedEmployee = state.allEmployees.find((employee) => employee.personnel_number === number) || null;
+  const editedEmployee = state.allEmployees.find((employee) => employee.personnel_number === number)
+    || state.personnelDirectory.find((employee) => employee.personnel_number === number)
+    || null;
   if (canEditEmployeeAccessProfile(editedEmployee)) {
     const role = elements.employeeAppRole.value || "employee";
     const basePermissions = new Set(state.portalRoles.find((entry) => entry.id === role)?.permissions || []);
@@ -6097,8 +6433,10 @@ async function saveEmployee(event) {
     });
     elements.employeeModal.close();
     state.rightsManagement = null;
+    state.personnelAdministrationLoaded = false;
     showToast(isEdit ? "Teammitglied wurde aktualisiert." : "Teammitglied wurde angelegt.");
     await loadAll();
+    if (state.currentView === "personnelAdministration") await loadPersonnelAdministration({ force: true });
   } catch (error) { showToast(error.message, true); }
 }
 
@@ -7376,8 +7714,10 @@ async function deleteEmployee() {
   try {
     await api(`/api/employees/${encodeURIComponent(number)}`, { method: "DELETE" });
     elements.employeeModal.close();
+    state.personnelAdministrationLoaded = false;
     showToast("Teammitglied wurde gelöscht.");
     await loadAll();
+    if (state.currentView === "personnelAdministration") await loadPersonnelAdministration({ force: true });
   } catch (error) { showToast(error.message, true); }
 }
 
@@ -8042,7 +8382,27 @@ document.querySelector("#shiftEmployee").addEventListener("change", () => {
   const employee = state.data?.employees?.find((item) => item.personnel_number === document.querySelector("#shiftEmployee").value);
   if (employee?.preferred_department_id) elements.shiftDepartment.value = String(employee.preferred_department_id);
 });
-document.querySelector("#addEmployeeButton").addEventListener("click", () => openEmployeeModal());
+document.querySelector("#addEmployeeButton").addEventListener("click", async () => {
+  if (canWriteCentralPersonnel() && !state.personnelAdministrationLoaded) await loadPersonnelAdministration();
+  openEmployeeModal();
+});
+elements.addCentralEmployeeButton?.addEventListener("click", () => openEmployeeModal());
+document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => button.addEventListener("click", () => setPersonnelAdministrationTab(button.dataset.personnelAdministrationTab)));
+elements.personnelDirectorySearch?.addEventListener("input", (event) => {
+  state.personnelDirectorySearch = event.target.value;
+  renderPersonnelDirectory();
+});
+elements.personnelDirectoryCostCenterFilter?.addEventListener("change", (event) => {
+  state.personnelDirectoryCostCenterFilter = event.target.value;
+  renderPersonnelDirectory();
+});
+elements.personnelDirectoryStatusFilter?.addEventListener("change", (event) => {
+  state.personnelDirectoryStatusFilter = event.target.value;
+  renderPersonnelDirectory();
+});
+elements.addCostCenterButton?.addEventListener("click", () => openCostCenterModal());
+elements.costCenterForm?.addEventListener("submit", saveCostCenter);
+elements.deactivateCostCenterButton?.addEventListener("click", deactivateCostCenter);
 document.querySelector("#saveSettingsButton").addEventListener("click", () => saveSettings(false));
 elements.locationForm.addEventListener("submit", saveLocation);
 elements.departmentForm.addEventListener("submit", saveDepartment);
@@ -8127,7 +8487,27 @@ document.querySelector("#employeeColorHex").addEventListener("input", (event) =>
   if (/^#[0-9a-f]{6}$/i.test(event.target.value)) updateColorPicker(event.target.value);
 });
 
-elements.employeeTableBody.addEventListener("click", (event) => {
+elements.personnelDirectoryBody?.addEventListener("click", async (event) => {
+  const recordButton = event.target.closest("[data-central-personnel-record]");
+  if (recordButton) {
+    openPersonnelRecord(recordButton.dataset.centralPersonnelRecord);
+    return;
+  }
+  const editButton = event.target.closest("[data-central-edit-employee]");
+  if (!editButton) return;
+  const employeeNumber = editButton.dataset.centralEditEmployee;
+  const employee = state.personnelDirectory.find((item) => item.personnel_number === employeeNumber);
+  if (employee) openEmployeeModal(employee);
+});
+
+elements.costCenterList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-edit-cost-center]");
+  if (!button) return;
+  const costCenter = state.costCenters.find((item) => String(item.id) === String(button.dataset.editCostCenter));
+  if (costCenter) openCostCenterModal(costCenter);
+});
+
+elements.employeeTableBody.addEventListener("click", async (event) => {
   const recordButton = event.target.closest("[data-personnel-record]");
   if (recordButton) {
     openPersonnelRecord(recordButton.dataset.personnelRecord);
@@ -8135,6 +8515,7 @@ elements.employeeTableBody.addEventListener("click", (event) => {
   }
   const button = event.target.closest("[data-edit-employee]");
   if (!button) return;
+  if (canWriteCentralPersonnel() && !state.personnelAdministrationLoaded) await loadPersonnelAdministration();
   openEmployeeModal(state.allEmployees.find((employee) => employee.personnel_number === button.dataset.editEmployee));
 });
 
