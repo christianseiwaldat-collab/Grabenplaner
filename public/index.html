@@ -288,7 +288,7 @@
             </div>
             <div class="employee-table-wrap">
               <table class="employee-table">
-                <thead><tr><th>Farbe</th><th>Personalnr.</th><th>Name</th><th>Dienstplan</th><th>Position</th><th>Filiale</th><th>Abteilung</th><th>Wochen-Soll</th><th>Freier Tag</th><th>Fixe Tage</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Farbe</th><th>Personalnr.</th><th>Name</th><th>Dienstplan</th><th>Position</th><th>Filiale</th><th>Abteilung</th><th>Wochen-Soll / Tage</th><th>Freier Tag</th><th>Fixe Tage</th><th>Status</th><th></th></tr></thead>
                 <tbody id="employeeTableBody"></tbody>
               </table>
             </div>
@@ -532,13 +532,19 @@
               </div>
               <label class="switch-row"><span><strong>Handyfotos als PDF speichern</strong><small>Fotos werden gedreht, passend verkleinert und als schlanke PDF abgelegt.</small></span><input id="amuConvertImagesToPdf" type="checkbox" /></label>
               <label class="switch-row"><span><strong>Fotos in Graustufen umwandeln</strong><small>Reduziert üblicherweise den Speicherbedarf; PDFs selbst bleiben unverändert.</small></span><input id="amuGrayscaleImages" type="checkbox" /></label>
-              <label class="switch-row"><span><strong>Datumswerte lokal per OCR erkennen</strong><small>Beginn und Ende werden ausschließlich im Browser als bestätigungspflichtiger Vorschlag erkannt; OCR-Rohtext wird nicht gespeichert.</small></span><input id="amuOcrEnabled" type="checkbox" /></label>
-              <label class="switch-row"><span><strong>Filial- und Abteilungsleitung darf AUM-Dateien öffnen</strong><small>Ohne Aktivierung sehen Leitungen nur Zeitraum und Bearbeitungsstatus.</small></span><input id="amuManagerFileAccess" type="checkbox" /></label>
+              <label class="switch-row"><span><strong>Lokale Datums-Vorschläge</strong><small>Beginn und Ende werden auf dem Gerät als bestätigungspflichtiger Vorschlag erkannt. Der geschützte serverseitige SV-Abgleich der echten Upload-Datei bleibt unabhängig davon aktiv; OCR-Rohtext wird nicht gespeichert.</small></span><input id="amuOcrEnabled" type="checkbox" /></label>
               <div class="settings-grid compact-policy-grid">
                 <label class="field"><span>Gelbe Warnung an Filial-/Abteilungsleitung nach</span><div class="unit-input"><input id="sicknessLocalWarningDays" type="number" min="0" max="30" step="1" /><em>Tagen</em></div></label>
                 <label class="field"><span>Rote Meldung an Personalleitung nach</span><div class="unit-input"><input id="sicknessHrWarningDays" type="number" min="1" max="60" step="1" /><em>Tagen</em></div></label>
               </div>
               <p class="settings-note">Die gelbe Frist muss kürzer sein als die rote Frist. Eine verspätete AUM kann weiterhin sicher hochgeladen werden.</p>
+              <label class="switch-row"><span><strong>Krankenstand ohne AUM für Stufe A</strong><small>Erlaubt ein begrenztes Jahreskontingent nur für einzeln freigeschaltete Teammitglieder mit Vertrauensstufe A.</small></span><input id="sicknessAumAllowanceEnabled" type="checkbox" /></label>
+              <div class="settings-grid compact-policy-grid">
+                <label class="field"><span>Fälle je Kalenderjahr</span><div class="unit-input"><input id="sicknessAumAllowanceMaxCases" type="number" min="1" max="20" step="1" /><em>Fälle</em></div></label>
+                <label class="field"><span>Maximal je Fall</span><div class="unit-input"><input id="sicknessAumAllowanceMaxDays" type="number" min="1" max="3" step="1" /><em>Kalendertage</em></div></label>
+              </div>
+              <p class="settings-note">Wird ein Fall länger als erlaubt, ist die AUM rückwirkend für den gesamten Zeitraum erforderlich. Eine später geprüfte AUM gibt das verbrauchte Kontingent wieder frei.</p>
+              <label class="switch-row"><span><strong>Korrekt erkannte AUM bei Vertrauensstufe A automatisch erledigen</strong><small>Nur bei exaktem SV-Abgleich, plausiblen und vom Teammitglied bestätigten Datumswerten sowie erfolgreicher Datei- und Sicherheitsprüfung.</small></span><input id="amuAutoReviewTrustA" type="checkbox" /></label>
               <div class="form-actions-inline"><span class="settings-note" id="amuSettingsHint"></span><button class="primary-button" id="saveAmuSettingsButton" type="button">AUM-Einstellungen speichern</button></div>
             </div>
             <div class="settings-card" id="greetingSettingsCard">
@@ -1006,9 +1012,11 @@
           <p class="calculation-note full-width hidden" id="employeeEditScopeHint">Für diese Leitung ist ausschließlich die Teamfarbe freigegeben. Name, Wochen-Sollzeit und alle weiteren Personalstammdaten bleiben sichtbar, aber schreibgeschützt.</p>
           <label class="field"><span>Personalnummer</span><input id="employeeNumber" required /></label>
           <label class="field"><span>Wochen-Sollzeit</span><div class="unit-input"><input id="employeeHours" type="number" min="0" max="80" step="0.25" required /><em>Stunden</em></div></label>
+          <label class="field"><span>Soll-Arbeitstage pro Woche</span><div class="unit-input"><input id="employeeTargetWorkdays" type="number" min="1" max="6" step="1" required /><em>Tage</em></div><small>Grundlage für die unveränderlich gespeicherte Krankenstandszeit je vorgesehenem Arbeitstag.</small></label>
           <label class="field"><span>Stammfiliale</span><select id="employeeHomeLocation" required></select></label>
           <label class="field"><span>Position</span><select id="employeePosition" required></select></label>
           <label class="field" id="employeeTimeConfirmationLevelField"><span>Vertrauensstufe</span><select id="employeeTimeConfirmationLevel" required><option value="A">Stufe A · Wochenabschluss</option><option value="B">Stufe B · spätestens nach 3 Tagen</option><option value="C">Stufe C · täglich bis 12:00 Uhr</option></select><small>Unabhängig von Position und Rolle; steuert künftig die Bestätigungsfrist automatischer Zeitvorschläge.</small></label>
+          <label class="switch-row full-width hidden" id="employeeSicknessWithoutAumField"><span><strong>Persönliches Kontingent ohne AUM freischalten</strong><small id="employeeSicknessWithoutAumHint">Wirksam nur bei Vertrauensstufe A und aktivierter Unternehmensregel.</small></span><input id="employeeSicknessWithoutAumEnabled" type="checkbox" /></label>
           <label class="field"><span>Bevorzugte Abteilung</span><select id="employeePreferredDepartment"><option value="">Keine Abteilung</option></select></label>
           <label class="field full-width"><span>Bevorzugter freier Tag</span><select id="employeePreferredDay"><option value="">Kein bevorzugter Tag</option><option value="monday">Montag</option><option value="tuesday">Dienstag</option><option value="wednesday">Mittwoch</option><option value="thursday">Donnerstag</option><option value="friday">Freitag</option></select></label>
           <div class="field full-width"><span>Dienstvertraglich vereinbarte fixe Arbeitstage</span>
@@ -1305,10 +1313,11 @@
     </dialog>
 
     <dialog class="modal personnel-record-modal" id="personnelRecordModal">
-      <form method="dialog">
-        <div class="modal-header"><div><span class="eyebrow">Personalakt</span><h2 id="personnelRecordTitle">Personalakt</h2><p>Geschützte Übersicht der bisherigen Arbeitsunfähigkeitsmeldungen.</p></div><button type="button" class="close-button" data-close="personnelRecordModal">×</button></div>
+      <form method="dialog" id="personnelRecordForm">
+        <div class="modal-header"><div><span class="eyebrow">Personalakt</span><h2 id="personnelRecordTitle">Personalakt</h2><p>Geschützte Stammdaten und Arbeitsunfähigkeitsmeldungen.</p></div><button type="button" class="close-button" data-close="personnelRecordModal">×</button></div>
         <div class="personnel-record-content" id="personnelRecordContent"><p class="settings-note">Einträge werden geladen.</p></div>
-        <div class="modal-actions"><span></span><span></span><span></span><button type="button" class="secondary-button" data-close="personnelRecordModal">Schließen</button></div>
+        <p class="message hidden" id="personnelRecordMessage"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="personnelRecordModal">Schließen</button><button type="submit" class="primary-button hidden" id="savePersonnelRecordButton">Personalakt speichern</button></div>
       </form>
     </dialog>
 

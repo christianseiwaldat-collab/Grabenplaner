@@ -127,7 +127,7 @@ test("verwendet ausschlie\u00dflich versionierte, gleichurspr\u00fcngliche PDF.j
 });
 
 test("liest eine digitale PDF lokal und gibt nur abgeleitete Datumswerte zur\u00fcck", async () => {
-  const sensitive = "Name Erika Musterfrau Diagnose vertraulich Arbeitsunf\u00e4hig von 10.07.2026 bis 17.07.2026";
+  const sensitive = "Name Erika Musterfrau Versicherungsnummer 1000 010190 Diagnose vertraulich Arbeitsunf\u00e4hig von 10.07.2026 bis 17.07.2026";
   const { calls, pdfjs } = pdfFixture([{ text: sensitive }]);
   let ocrCalls = 0;
   const file = localFile();
@@ -142,6 +142,8 @@ test("liest eine digitale PDF lokal und gibt nur abgeleitete Datumswerte zur\u00
   assert.equal(result.dateTo, "2026-07-17");
   assert.equal(result.complete, true);
   assert.equal(result.requiresConfirmation, true);
+  assert.equal(result.socialSecurityNumber, "1000010190");
+  assert.equal(result.socialSecurityStatus, "detected");
   assert.equal(ocrCalls, 0);
   assert.equal(calls.getDocument.length, 1);
   assert.ok(calls.getDocument[0].data instanceof Uint8Array);
@@ -224,11 +226,29 @@ test("entfernt Rohtext und Freitext auch aus einem injizierten OCR-Ergebnis", as
         complete: true,
         autoFill: true,
         warnings: ["Diagnose vertraulich", "manual_confirmation_recommended"],
+        socialSecurityNumber: "1000010190",
+        socialSecurityConfidence: 0.98,
+        socialSecurityStatus: "detected",
       };
     },
   });
   const serialized = JSON.stringify(await client.recognize(localFile(), { referenceDate: REFERENCE_DATE }));
   assert.doesNotMatch(serialized, /Diagnose|vertraulich|Erika|medical|text/i);
+  assert.match(serialized, /1000010190/);
+});
+
+test("markiert widersprüchliche SV-Nummern in einer digitalen PDF als mehrdeutig", async () => {
+  const { pdfjs } = pdfFixture([
+    { text: "Versicherungsnummer 1000 010190 Arbeitsunfähig von 10.07.2026 bis 17.07.2026" },
+    { text: "SV-Nr. 1009 311299" },
+  ]);
+  const client = createAmuPdfClient({ pdfjs });
+  const result = await client.recognize(localFile(), { referenceDate: REFERENCE_DATE });
+
+  assert.equal(result.socialSecurityNumber, "");
+  assert.equal(result.socialSecurityConfidence, 0);
+  assert.equal(result.socialSecurityStatus, "ambiguous");
+  assert.doesNotMatch(JSON.stringify(result), /Versicherungsnummer|SV-Nr|Arbeitsunfähig/i);
 });
 
 test("weist eine zu gro\u00dfe PDF vor dem Einlesen mit manueller Ausweichm\u00f6glichkeit ab", async () => {

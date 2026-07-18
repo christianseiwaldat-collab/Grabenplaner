@@ -98,6 +98,10 @@ function reset() {
     db.prepare("DELETE FROM portal_users").run();
     db.prepare("DELETE FROM amu_documents").run();
     db.prepare("DELETE FROM amu_reports").run();
+    db.prepare("DELETE FROM personnel_sensitive_records").run();
+    db.prepare("DELETE FROM audit_log WHERE action LIKE 'personnel-record.%'").run();
+    db.prepare("UPDATE employees SET time_confirmation_level = 'C' WHERE personnel_number IN ('104','105')").run();
+    db.prepare("UPDATE portal_settings SET value = '1' WHERE key = 'trust_levels_enabled'").run();
     db.prepare("DELETE FROM employees WHERE personnel_number LIKE '88%' OR personnel_number LIKE '89%'").run();
     db.exec("COMMIT");
   } catch (error) {
@@ -341,4 +345,170 @@ test("v0.58: DB-Import prüft auch alte enc:v1-Personalaktfelder mit dem lokalen
   const denied = await requestRaw("/api/backup/import", { auth: itAdmin, body: fs.readFileSync(importedPath) });
   assert.equal(denied.response.status, 409, JSON.stringify(denied.payload));
   assert.equal(denied.payload.code, "AMU_FULL_RESTORE_REQUIRED");
+});
+
+test("v0.70 Block 2: sensible Personalaktfelder werden verschlüsselt gespeichert und feldgenau ausgegeben", async () => {
+  const hr = session("103", "hr");
+  const saved = await request("/api/portal/v1/personnel-records/102", {
+    method: "PUT",
+    auth: hr,
+    body: {
+      phone: "+43 664 1234567",
+      sensitive: {
+        socialSecurityNumber: "1238010190",
+        iban: "AT611904300234573201",
+        bic: "BKAUATWW",
+        accountHolder: "Demo Person",
+        address: { street: "Musterweg 12", postalCode: "6020", city: "Innsbruck", country: "Österreich" },
+      },
+    },
+  });
+  assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
+  assert.deepEqual(saved.payload.changedFields.sort(), [
+    "accountHolder", "bic", "city", "iban", "phone", "postalCode", "socialSecurityNumber", "street",
+  ]);
+
+  const stored = db.prepare("SELECT * FROM personnel_sensitive_records WHERE employee_number = '102'").get();
+  assert.match(stored.protected_payload, /^enc:v2:/);
+  assert.notEqual(stored.social_security_lookup, "1238010190");
+  assert.equal(stored.protected_payload.includes("1238010190"), false);
+  assert.equal(stored.protected_payload.includes("AT611904300234573201"), false);
+  assert.equal(stored.protected_payload.includes("Musterweg"), false);
+
+  const loaded = await request("/api/portal/v1/personnel-records/102", { auth: hr });
+  assert.equal(loaded.response.status, 200, JSON.stringify(loaded.payload));
+  assert.equal(loaded.payload.profile.phone, "+43 664 1234567");
+  assert.equal(loaded.payload.profile.sensitive.socialSecurityNumber, "1238010190");
+  assert.equal(loaded.payload.profile.sensitive.iban, "AT611904300234573201");
+  assert.equal(loaded.payload.profile.sensitive.address.city, "Innsbruck");
+  assert.equal(loaded.payload.access.canWriteSensitive, true);
+
+  const audit = db.prepare(`
+    SELECT detail FROM audit_log
+    WHERE action = 'personnel-record.update' AND entity_id = '102'
+    ORDER BY id DESC LIMIT 1
+  `).get();
+  assert.ok(audit);
+  assert.equal(audit.detail.includes("1238010190"), false);
+  assert.equal(audit.detail.includes("AT611904300234573201"), false);
+  assert.equal(audit.detail.includes("+43 664"), false);
+  assert.match(audit.detail, /socialSecurityNumber/);
+});
+
+test("v0.70 Block 2: Leitungen sehen nur Telefon und benötigen Schreibrecht plus eigene Vertrauensstufe A", async () => {
+  const hr = session("103", "hr");
+  await request("/api/portal/v1/personnel-records/102", {
+    method: "PUT", auth: hr,
+    body: { phone: "+43 512 555111", sensitive: { socialSecurityNumber: "1238010190" } },
+  });
+  const manager = session("104", "manager");
+  const visible = await request("/api/portal/v1/personnel-records/102", { auth: manager });
+  assert.equal(visible.response.status, 200, JSON.stringify(visible.payload));
+  assert.equal(visible.payload.profile.phone, "+43 512 555111");
+  assert.equal(visible.payload.profile.sensitive, null);
+  assert.deepEqual(visible.payload.reports, []);
+  assert.equal(visible.payload.access.canWritePhone, false);
+
+  const withoutGrant = await request("/api/portal/v1/personnel-records/102", {
+    method: "PUT", auth: manager, body: { phone: "+43 512 555222" },
+  });
+  assert.equal(withoutGrant.response.status, 403, JSON.stringify(withoutGrant.payload));
+  assert.equal(withoutGrant.payload.code, "PERSONNEL_PHONE_WRITE_DENIED");
+
+  const delegated = await request("/api/portal/v1/rights/104", {
+    method: "PUT", auth: hr, body: { permissions: ["personnel:phone:write"] },
+  });
+  assert.equal(delegated.response.status, 200, JSON.stringify(delegated.payload));
+  const withoutTrustA = await request("/api/portal/v1/personnel-records/102", {
+    method: "PUT", auth: manager, body: { phone: "+43 512 555222" },
+  });
+  assert.equal(withoutTrustA.response.status, 403, JSON.stringify(withoutTrustA.payload));
+  assert.equal(withoutTrustA.payload.code, "PERSONNEL_PHONE_WRITE_DENIED");
+
+  db.prepare("UPDATE employees SET time_confirmation_level = 'A' WHERE personnel_number = '104'").run();
+  const changed = await request("/api/portal/v1/personnel-records/102", {
+    method: "PUT", auth: manager, body: { phone: "+43 512 555222" },
+  });
+  assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
+  assert.deepEqual(changed.payload.changedFields, ["phone"]);
+
+  db.prepare("UPDATE portal_settings SET value = '0' WHERE key = 'trust_levels_enabled'").run();
+  const disabledPolicy = await request("/api/portal/v1/personnel-records/102", {
+    method: "PUT", auth: manager, body: { phone: "+43 512 555333" },
+  });
+  assert.equal(disabledPolicy.response.status, 403, JSON.stringify(disabledPolicy.payload));
+  assert.equal(db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = '104'").get().time_confirmation_level, "A");
+});
+
+test("v0.70 Block 2: IT-Admin hat sensible Personaldaten nicht automatisch und doppelte SV-Nummern werden verhindert", async () => {
+  const hr = session("103", "hr");
+  const first = await request("/api/portal/v1/personnel-records/102", {
+    method: "PUT", auth: hr, body: { sensitive: { socialSecurityNumber: "1238010190" } },
+  });
+  assert.equal(first.response.status, 200, JSON.stringify(first.payload));
+
+  const itAdmin = session("106", "it_admin");
+  const denied = await request("/api/portal/v1/personnel-records/102", { auth: itAdmin });
+  assert.equal(denied.response.status, 403, JSON.stringify(denied.payload));
+
+  db.prepare(`
+    INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+    VALUES ('106', 'personnel:sensitive:read', '101')
+  `).run();
+  const explicitlyAllowed = await request("/api/portal/v1/personnel-records/102", { auth: itAdmin });
+  assert.equal(explicitlyAllowed.response.status, 200, JSON.stringify(explicitlyAllowed.payload));
+  assert.equal(explicitlyAllowed.payload.profile.sensitive.socialSecurityNumber, "1238010190");
+  assert.equal(explicitlyAllowed.payload.access.canWriteSensitive, false);
+
+  const duplicate = await request("/api/portal/v1/personnel-records/105", {
+    method: "PUT", auth: hr, body: { sensitive: { socialSecurityNumber: "1238010190" } },
+  });
+  assert.equal(duplicate.response.status, 409, JSON.stringify(duplicate.payload));
+  assert.equal(duplicate.payload.code, "PERSONNEL_SOCIAL_SECURITY_DUPLICATE");
+
+  const invalid = await request("/api/portal/v1/personnel-records/105", {
+    method: "PUT", auth: hr, body: { sensitive: { socialSecurityNumber: "1230010190" } },
+  });
+  assert.equal(invalid.response.status, 400, JSON.stringify(invalid.payload));
+  assert.equal(invalid.payload.code, "PERSONNEL_SOCIAL_SECURITY_INVALID");
+});
+
+test("v0.70 Block 2: DB-Import lehnt sensible Personalakten mit fremdem Schlüssel ab", async () => {
+  const foreignRoot = fs.mkdtempSync(path.join(testRoot, "foreign-sensitive-profile-"));
+  const foreignStorage = createAmuStorage({
+    rootDirectory: path.join(foreignRoot, "amu"),
+    encryptionKeys: { foreign: Buffer.alloc(32, 0x7c) },
+    activeKeyId: "foreign",
+    scanner: async () => ({ available: true, clean: true, engine: "test" }),
+  });
+  const importedPath = path.join(foreignRoot, "foreign-sensitive.db");
+  const imported = new DatabaseSync(importedPath);
+  imported.exec(`
+    CREATE TABLE personnel_sensitive_records (
+      employee_number TEXT PRIMARY KEY,
+      protected_payload TEXT NOT NULL
+    );
+  `);
+  const context = { namespace: "personnel-sensitive-record", recordId: "102", field: "payload", employeeNumber: "102" };
+  imported.prepare("INSERT INTO personnel_sensitive_records (employee_number, protected_payload) VALUES ('102', ?)")
+    .run(foreignStorage.protectRecord(JSON.stringify({ socialSecurityNumber: "1238010190" }), context));
+  imported.close();
+
+  const itAdmin = session("106", "it_admin");
+  const denied = await requestRaw("/api/backup/import", { auth: itAdmin, body: fs.readFileSync(importedPath) });
+  assert.equal(denied.response.status, 409, JSON.stringify(denied.payload));
+  assert.equal(denied.payload.code, "AMU_FULL_RESTORE_REQUIRED");
+});
+
+test("v0.70 Block 2: Personalakt-Oberfläche trennt Kontakt, sensible Daten und AUM-Verlauf kompakt", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+  const script = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
+  const styles = fs.readFileSync(path.join(__dirname, "..", "public", "styles.css"), "utf8");
+  assert.match(html, /id="personnelRecordForm"/);
+  assert.match(html, /id="savePersonnelRecordButton"/);
+  assert.match(script, /name="socialSecurityNumber"/);
+  assert.match(script, /personnel:sensitive:read/);
+  assert.match(script, /phoneWriteRequiresTrustA/);
+  assert.match(styles, /\.personnel-record-field-grid/);
+  assert.match(styles, /\.sensitive-personnel-section/);
 });

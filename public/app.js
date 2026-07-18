@@ -51,6 +51,7 @@ const state = {
   greetingSettings: null,
   selectedRequest: null,
   allEmployees: [],
+  personnelRecord: null,
   updateStatus: null,
   selectedColor: "#0b84c6",
   integrations: {
@@ -134,7 +135,7 @@ const elements = Object.fromEntries(
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount",
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
-    "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel",
+    "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
     "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
@@ -149,11 +150,11 @@ const elements = Object.fromEntries(
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan",
-    "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "amuManagerFileAccess", "sicknessLocalWarningDays", "sicknessHrWarningDays", "amuSettingsHint", "saveAmuSettingsButton",
+    "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
-    "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordTitle", "personnelRecordContent",
+    "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordForm", "personnelRecordTitle", "personnelRecordContent", "personnelRecordMessage", "savePersonnelRecordButton",
     "timeCorrectionModal", "timeCorrectionForm", "timeCorrectionTitle", "timeCorrectionEmployee", "timeCorrectionWorkDate", "timeCorrectionEmployeeLabel", "timeCorrectionDateLabel", "timeCorrectionClockOutTime", "timeCorrectionMessage",
     "timeCorrectionReviewModal", "timeCorrectionReviewForm", "timeCorrectionReviewId", "timeCorrectionReviewSummary", "timeCorrectionReviewEntries", "addTimeCorrectionReviewEntry", "timeCorrectionReviewNote", "timeCorrectionReviewMessage",
     "timeDayReviewPanel", "timeReviewDate", "timeReviewFilter", "loadTimeDayReviewButton", "timeDayReviewSummary", "timeDayReviewList", "timeDayReviewModal", "timeDayReviewForm", "timeDayReviewTitle", "timeDayReviewDetail", "timeDayReviewEmployee", "timeDayReviewWorkDate", "timeDayReviewMetrics", "timeDayReviewIssues", "timeDayReviewNote", "timeDayReviewMessage", "removeTimeDayReviewButton",
@@ -1477,8 +1478,9 @@ function renderEmployees() {
   const employees = showInactive ? state.allEmployees : state.allEmployees.filter((employee) => employee.active);
   const canEditFull = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("employees:write");
   const canEditDisplay = canEditFull || state.portalSession?.user?.permissions?.includes("employees:display:write");
-  const canReadPersonnelRecord = state.portalStatus?.installationFeatures?.sicknessAmu !== false
-    && (!state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:metadata:read"));
+  const canReadPersonnelRecord = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.some((permission) => [
+    "personnel:sensitive:read", "personnel:sensitive:write", "personnel:phone:read", "personnel:phone:write", "amu:metadata:read",
+  ].includes(permission));
   elements.employeeTableBody.innerHTML = employees.map((employee) => `
     <tr>
       <td><span class="employee-color" style="background:${employee.color}"></span></td>
@@ -1488,7 +1490,7 @@ function renderEmployees() {
       <td>${escapeHtml(employee.position_name || "Verkaufsmitarbeiter")}</td>
       <td>${escapeHtml(employee.home_location_name || employee.home_location_id || "–")}</td>
       <td>${escapeHtml(employee.preferred_department_name || "–")}</td>
-      <td>${String(employee.contracted_hours).replace(".", ",")} h</td>
+      <td>${String(employee.contracted_hours).replace(".", ",")} h · ${Number(employee.target_workdays_per_week || 5)} T.</td>
       <td>${preferredDayLabels[employee.preferred_day_off] || "–"}</td>
       <td>${escapeHtml(formatFixedWorkdays(employee.fixed_workdays))}</td>
       <td><span class="status-badge ${employee.active ? "" : "inactive"}">${employee.active ? "Aktiv" : "Inaktiv"}</span></td>
@@ -1758,13 +1760,16 @@ function openRightsEditor(employeeNumber) {
     <section class="rights-permission-group"><h3>${escapeHtml(group)}</h3><div class="rights-permission-grid">${permissions.map((permission) => {
       const baseRight = rolePermissions.has(permission.id);
       const additionalRight = grantedPermissions.has(permission.id);
-      const editable = Boolean(user.manageable && permission.editable && !baseRight);
-      const lockedRight = !user.manageable || !permission.editable;
+      const roleEligible = !Array.isArray(permission.eligibleRoles) || permission.eligibleRoles.includes(user.role);
+      const editable = Boolean(user.manageable && permission.editable && roleEligible && !baseRight);
+      const lockedRight = !user.manageable || !permission.editable || !roleEligible;
       const warningLevel = permission.warningLevel || "normal";
       const statusText = baseRight
         ? "Grundrecht der Rolle"
         : additionalRight
           ? lockedRight ? "Individuell vergeben · nur zur Ansicht" : "Individuell vergeben"
+          : !roleEligible
+            ? "Nur für Personalleitung und höhere geschützte Rollen"
           : !user.manageable
             ? "Für die aktuelle Rolle nur zur Ansicht"
             : !permission.editable
@@ -2282,10 +2287,13 @@ async function loadAmuSettings() {
     elements.amuConvertImagesToPdf.checked = policy.convertImagesToPdf !== false;
     elements.amuGrayscaleImages.checked = policy.grayscaleImages !== false;
     elements.amuOcrEnabled.checked = policy.ocrEnabled !== false;
-    elements.amuManagerFileAccess.checked = policy.managerFileAccess === true;
     elements.sicknessLocalWarningDays.value = Number(policy.localWarningDays ?? 2);
     elements.sicknessHrWarningDays.value = Number(policy.hrWarningDays ?? 3);
-    [elements.amuUploadMaxMb, elements.amuStoredMaxMb, elements.amuConvertImagesToPdf, elements.amuGrayscaleImages, elements.amuOcrEnabled, elements.amuManagerFileAccess, elements.sicknessLocalWarningDays, elements.sicknessHrWarningDays, elements.saveAmuSettingsButton]
+    elements.sicknessAumAllowanceEnabled.checked = policy.aumAllowance?.enabled === true;
+    elements.sicknessAumAllowanceMaxCases.value = Number(policy.aumAllowance?.maxCasesPerYear ?? 3);
+    elements.sicknessAumAllowanceMaxDays.value = Number(policy.aumAllowance?.maxCalendarDaysPerCase ?? 1);
+    elements.amuAutoReviewTrustA.checked = policy.autoReviewTrustA === true;
+    [elements.amuUploadMaxMb, elements.amuStoredMaxMb, elements.amuConvertImagesToPdf, elements.amuGrayscaleImages, elements.amuOcrEnabled, elements.sicknessLocalWarningDays, elements.sicknessHrWarningDays, elements.sicknessAumAllowanceEnabled, elements.sicknessAumAllowanceMaxCases, elements.sicknessAumAllowanceMaxDays, elements.amuAutoReviewTrustA, elements.saveAmuSettingsButton]
       .forEach((control) => { if (control) control.disabled = !result.canChange; });
     elements.amuSettingsHint.textContent = result.canChange ? "Änderbar durch Admin oder Personalleitung." : "Nur Admin oder Personalleitung kann diese Werte ändern.";
   } catch (error) {
@@ -2304,9 +2312,14 @@ async function saveAmuSettings() {
         convertImagesToPdf: elements.amuConvertImagesToPdf.checked,
         grayscaleImages: elements.amuGrayscaleImages.checked,
         ocrEnabled: elements.amuOcrEnabled.checked,
-        managerFileAccess: elements.amuManagerFileAccess.checked,
         localWarningDays: Number(elements.sicknessLocalWarningDays.value),
         hrWarningDays: Number(elements.sicknessHrWarningDays.value),
+        aumAllowance: {
+          enabled: elements.sicknessAumAllowanceEnabled.checked,
+          maxCasesPerYear: Number(elements.sicknessAumAllowanceMaxCases.value),
+          maxCalendarDaysPerCase: Number(elements.sicknessAumAllowanceMaxDays.value),
+        },
+        autoReviewTrustA: elements.amuAutoReviewTrustA.checked,
       }),
     });
     state.amuPolicy = result.policy;
@@ -2725,8 +2738,9 @@ function renderTimePresence() {
     return;
   }
   const labels = { working: "Anwesend", paused: "Pause", off: "Abwesend", attention: "Bitte prüfen" };
-  const canReadPersonnelRecord = state.portalStatus?.installationFeatures?.sicknessAmu !== false
-    && (!state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("amu:metadata:read"));
+  const canReadPersonnelRecord = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.some((permission) => [
+    "personnel:sensitive:read", "personnel:sensitive:write", "personnel:phone:read", "personnel:phone:write", "amu:metadata:read",
+  ].includes(permission));
   const canReviewTime = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("time:review");
   elements.timePresenceList.innerHTML = employees.length ? employees.map((employee) => {
@@ -3064,21 +3078,100 @@ async function submitStaleTimeCorrection(event) {
 
 async function openPersonnelRecord(employeeNumber) {
   if (!elements.personnelRecordModal) return;
+  state.personnelRecord = null;
   elements.personnelRecordTitle.textContent = `Personalakt · ${employeeNumber}`;
   elements.personnelRecordContent.innerHTML = '<p class="settings-note">Einträge werden geladen.</p>';
-  elements.personnelRecordModal.showModal();
+  elements.personnelRecordMessage.textContent = "";
+  elements.personnelRecordMessage.classList.add("hidden");
+  elements.savePersonnelRecordButton.classList.add("hidden");
+  if (!elements.personnelRecordModal.open) elements.personnelRecordModal.showModal();
   try {
     const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(employeeNumber)}`);
+    state.personnelRecord = { employeeNumber, result };
     const employee = result.employee || {};
+    const access = result.access || {};
+    const profile = result.profile || {};
     elements.personnelRecordTitle.textContent = `${employee.personnel_number || employeeNumber} · ${employee.nickname || employee.full_name || "Personalakt"}`;
-    elements.personnelRecordContent.innerHTML = result.reports?.length ? result.reports.map((report) => {
+    const phoneSection = access.canReadPhone ? `
+      <section class="personnel-record-section">
+        <div class="personnel-record-section-heading"><div><span class="eyebrow">Kontaktdaten</span><h3>Telefonnummer</h3></div>${access.canWritePhone ? '<span class="status-badge approved">Bearbeitbar</span>' : '<span class="status-badge inactive">Nur lesen</span>'}</div>
+        <label class="field"><span>Telefonnummer</span><input name="personnelPhone" type="tel" maxlength="40" value="${escapeHtml(profile.phone || "")}" ${access.canWritePhone ? "" : "disabled"} autocomplete="tel" /></label>
+        ${access.phoneWriteRequiresTrustA && !access.canWritePhone ? '<p class="calculation-note">Leitungen benötigen für Änderungen ein ausdrücklich vergebenes Schreibrecht und die eigene Vertrauensstufe A.</p>' : ""}
+      </section>` : "";
+    const sensitive = profile.sensitive || {};
+    const address = sensitive.address || {};
+    const sensitiveSection = access.canReadSensitive ? `
+      <section class="personnel-record-section sensitive-personnel-section">
+        <div class="personnel-record-section-heading"><div><span class="eyebrow">Besonders geschützt</span><h3>Sensible MA-Daten</h3></div>${access.canWriteSensitive ? '<span class="status-badge approved">Bearbeitbar</span>' : '<span class="status-badge inactive">Nur lesen</span>'}</div>
+        <div class="personnel-record-field-grid">
+          <label class="field"><span>SV-Nummer</span><input name="socialSecurityNumber" inputmode="numeric" maxlength="13" value="${escapeHtml(sensitive.socialSecurityNumber || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+          <label class="field"><span>Kontoinhaber/-in</span><input name="accountHolder" maxlength="120" value="${escapeHtml(sensitive.accountHolder || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+          <label class="field personnel-record-span-two"><span>IBAN</span><input name="iban" maxlength="34" value="${escapeHtml(sensitive.iban || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+          <label class="field"><span>BIC</span><input name="bic" maxlength="11" value="${escapeHtml(sensitive.bic || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+          <label class="field personnel-record-span-two"><span>Straße und Hausnummer</span><input name="street" maxlength="160" value="${escapeHtml(address.street || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+          <label class="field"><span>Postleitzahl</span><input name="postalCode" maxlength="20" value="${escapeHtml(address.postalCode || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+          <label class="field"><span>Ort</span><input name="city" maxlength="100" value="${escapeHtml(address.city || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+          <label class="field personnel-record-span-two"><span>Land</span><input name="country" maxlength="80" value="${escapeHtml(address.country || "Österreich")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
+        </div>
+        <p class="calculation-note">Die Werte werden verschlüsselt gespeichert. Die SV-Nummer ist außerhalb des geschützten Personalakts nicht sichtbar.</p>
+      </section>` : "";
+    const reportEntries = (result.reports || []).map((report) => {
       const documents = (report.documents || []).map((document) => result.canOpenFiles
         ? `<a class="secondary-button compact-button" href="/api/portal/v1/amu-reports/${report.id}/documents/${encodeURIComponent(document.id)}/content" target="_blank" rel="noopener">${escapeHtml(document.original_name || "Dokument")} öffnen</a>`
         : `<span class="status-badge inactive">${escapeHtml(document.original_name || "Dokument")} · kein Dateizugriff</span>`).join("");
-      return `<article class="personnel-record-entry"><div><strong>${formatDate(report.incapacity_from)}–${formatDate(report.incapacity_to)}</strong><small>${escapeHtml(report.location_name || "")}${report.department_name ? ` · ${escapeHtml(report.department_name)}` : ""} · ${escapeHtml(requestStatusLabels[report.status] || report.status)}</small>${report.employee_note ? `<p>${escapeHtml(report.employee_note)}</p>` : ""}</div><div class="amu-document-links">${documents || "Kein aktives Dokument"}</div></article>`;
-    }).join("") : '<p class="settings-note">Noch keine Arbeitsunfähigkeitsmeldungen im Personalakt.</p>';
+      const period = `${formatDate(report.incapacity_from)}–${report.incapacity_to ? formatDate(report.incapacity_to) : "offen"}`;
+      return `<article class="personnel-record-entry"><div><strong>${period}</strong><small>${escapeHtml(report.location_name || "")}${report.department_name ? ` · ${escapeHtml(report.department_name)}` : ""} · ${escapeHtml(amuReportStatusLabel(report))}</small>${report.employee_note ? `<p>${escapeHtml(report.employee_note)}</p>` : ""}</div><div class="amu-document-links">${documents || "Kein aktives Dokument"}</div></article>`;
+    }).join("");
+    const amuSection = access.canReadAmu ? `
+      <section class="personnel-record-section">
+        <div class="personnel-record-section-heading"><div><span class="eyebrow">Dokumente & Verlauf</span><h3>Arbeitsunfähigkeitsmeldungen</h3></div>${result.canOpenFiles ? '<span class="status-badge approved">Dateizugriff</span>' : '<span class="status-badge inactive">Metadaten</span>'}</div>
+        <div class="personnel-record-report-list">${reportEntries || '<p class="settings-note">Noch keine Arbeitsunfähigkeitsmeldungen im Personalakt.</p>'}</div>
+      </section>` : "";
+    elements.personnelRecordContent.innerHTML = `${phoneSection}${sensitiveSection}${amuSection}`
+      || '<p class="settings-note">Für diesen Personalakt sind keine Bereiche freigegeben.</p>';
+    elements.savePersonnelRecordButton.classList.toggle("hidden", !access.canWritePhone && !access.canWriteSensitive);
   } catch (error) {
+    state.personnelRecord = null;
     elements.personnelRecordContent.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function savePersonnelRecord(event) {
+  event.preventDefault();
+  const current = state.personnelRecord;
+  if (!current) return;
+  const access = current.result?.access || {};
+  const body = {};
+  if (access.canWritePhone) body.phone = elements.personnelRecordForm.elements.personnelPhone?.value || "";
+  if (access.canWriteSensitive) {
+    const fields = elements.personnelRecordForm.elements;
+    body.sensitive = {
+      socialSecurityNumber: fields.socialSecurityNumber?.value || "",
+      iban: fields.iban?.value || "",
+      bic: fields.bic?.value || "",
+      accountHolder: fields.accountHolder?.value || "",
+      address: {
+        street: fields.street?.value || "",
+        postalCode: fields.postalCode?.value || "",
+        city: fields.city?.value || "",
+        country: fields.country?.value || "",
+      },
+    };
+  }
+  elements.savePersonnelRecordButton.disabled = true;
+  elements.personnelRecordMessage.classList.add("hidden");
+  try {
+    const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    showToast(result.changedFields?.length ? "Der Personalakt wurde verschlüsselt gespeichert." : "Es waren keine Änderungen zu speichern.");
+    await openPersonnelRecord(current.employeeNumber);
+  } catch (error) {
+    elements.personnelRecordMessage.textContent = error.message;
+    elements.personnelRecordMessage.classList.remove("hidden");
+  } finally {
+    elements.savePersonnelRecordButton.disabled = false;
   }
 }
 
@@ -3094,6 +3187,12 @@ const requestStatusLabels = {
   reviewed: "Geprüft",
   returned: "Ergänzung erforderlich",
 };
+
+function amuReportStatusLabel(report) {
+  return report?.review_mode === "automatic"
+    ? "Automatisch geprüft und zugeordnet"
+    : requestStatusLabels[report?.status] || report?.status || "";
+}
 
 function renderRequestNavigation() {
   const counts = state.requestCounts;
@@ -3142,7 +3241,7 @@ function renderManagerRequests() {
         : `<span>${escapeHtml(document.original_name || "Dokument")} · ${Math.max(1, Math.round(Number(document.size || 0) / 1024))} KB</span>`).join("");
       return `<article class="manager-request-row amu-request-row" data-amu-report="${report.id}">
         <span class="employee-dot" style="--employee-color:${escapeHtml(report.color || "#507267")}"></span>
-        <div><strong><span class="request-kind-badge amu">AUM</span> ${escapeHtml(report.employee_number)} · ${escapeHtml(report.nickname || report.full_name)}</strong><small>${formatDate(report.incapacity_from)}–${formatDate(report.incapacity_to)} · ${escapeHtml(report.location_name || "")}${report.employee_note ? ` · ${escapeHtml(report.employee_note)}` : ""}</small><small><span class="request-status ${escapeHtml(report.status)}">${escapeHtml(requestStatusLabels[report.status] || report.status)}</span>${report.reviewed_by ? ` · geprüft von ${escapeHtml(report.reviewed_by)}` : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</small><div class="amu-document-links">${files}</div></div>
+        <div><strong><span class="request-kind-badge amu">AUM</span> ${escapeHtml(report.employee_number)} · ${escapeHtml(report.nickname || report.full_name)}</strong><small>${formatDate(report.incapacity_from)}–${formatDate(report.incapacity_to)} · ${escapeHtml(report.location_name || "")}${report.employee_note ? ` · ${escapeHtml(report.employee_note)}` : ""}</small><small><span class="request-status ${escapeHtml(report.status)}">${escapeHtml(amuReportStatusLabel(report))}</span>${report.reviewed_by && report.review_mode !== "automatic" ? ` · geprüft von ${escapeHtml(report.reviewed_by)}` : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</small><div class="amu-document-links">${files}</div></div>
         ${canReview && ["submitted", "returned"].includes(report.status) ? '<button class="secondary-button" data-open-amu-action type="button">AUM bearbeiten</button>' : ""}
       </article>`;
     }).join("") : '<p class="settings-note">Für diesen Filter gibt es keine Arbeitsunfähigkeitsmeldungen.</p>';
@@ -3200,7 +3299,7 @@ function openAmuAction(id) {
   elements.requestActionNote.value = "";
   elements.requestEditFields.classList.add("hidden");
   elements.requestActionHistory.innerHTML = report.reviewed_by
-    ? `<div><strong>${escapeHtml(report.reviewed_by)} · ${escapeHtml(requestStatusLabels[report.status] || report.status)}</strong><span>${report.reviewed_at ? escapeHtml(new Date(report.reviewed_at).toLocaleString("de-AT")) : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</span></div>`
+    ? `<div><strong>${report.review_mode === "automatic" ? "Grabenplaner-Automatik" : escapeHtml(report.reviewed_by)} · ${escapeHtml(amuReportStatusLabel(report))}</strong><span>${report.reviewed_at ? escapeHtml(new Date(report.reviewed_at).toLocaleString("de-AT")) : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</span></div>`
     : '<p>Noch keine Prüfung protokolliert.</p>';
   const canOpenFiles = !state.portalStatus?.portalEnabled || state.amuCanOpenFiles === true;
   elements.requestActionDocuments.classList.remove("hidden");
@@ -4693,6 +4792,18 @@ function renderEmployeeAccessProfile(employee = null) {
       : "App-Rolle und Rechte sind hier nur sichtbar. Änderungen sind ausschließlich durch Developer oder IT-Admin möglich.";
 }
 
+function syncEmployeeSicknessAllowanceField() {
+  const canManage = canManageWifiAutomationSettings();
+  if (!elements.employeeSicknessWithoutAumField) return;
+  elements.employeeSicknessWithoutAumField.classList.toggle("hidden", !canManage);
+  if (!canManage) return;
+  const trustA = elements.employeeTimeConfirmationLevel.value === "A";
+  elements.employeeSicknessWithoutAumEnabled.disabled = state.employeeEditMode === "display" || !trustA;
+  elements.employeeSicknessWithoutAumHint.textContent = trustA
+    ? "Wirksam, sobald auch die Unternehmensregel aktiviert ist."
+    : "Die Freigabe bleibt gespeichert, wird aber erst mit Vertrauensstufe A wirksam.";
+}
+
 function openEmployeeModal(employee = null) {
   const permissions = state.portalSession?.user?.permissions || [];
   const fullAccess = !state.portalStatus?.portalEnabled || permissions.includes("employees:write");
@@ -4708,6 +4819,7 @@ function openEmployeeModal(employee = null) {
   document.querySelector("#employeeName").value = employee?.full_name || "";
   document.querySelector("#employeeNickname").value = employee?.nickname || "";
   document.querySelector("#employeeHours").value = employee?.contracted_hours ?? 38.5;
+  elements.employeeTargetWorkdays.value = employee?.target_workdays_per_week ?? 5;
   elements.employeePosition.innerHTML = (state.positions || []).map((position) =>
     `<option value="${escapeHtml(position.id)}">${escapeHtml(position.name)}</option>`,
   ).join("");
@@ -4715,6 +4827,7 @@ function openEmployeeModal(employee = null) {
   const canManageConfirmationLevel = canManageWifiAutomationSettings();
   const canViewConfirmationLevel = canManageConfirmationLevel || Boolean(employee && "time_confirmation_level" in employee);
   elements.employeeTimeConfirmationLevel.value = employee?.time_confirmation_level || "C";
+  elements.employeeSicknessWithoutAumEnabled.checked = employee?.sickness_without_aum_enabled === true;
   elements.employeeTimeConfirmationLevelField?.classList.toggle("hidden", !canViewConfirmationLevel);
   elements.employeeHomeLocation.value = employee?.home_location_id || state.locationId || state.locations?.[0]?.id || "01";
   updateEmployeeDepartmentOptions(employee?.preferred_department_id || "");
@@ -4730,11 +4843,12 @@ function openEmployeeModal(employee = null) {
   updateColorPicker(employee?.color || "#0b84c6");
   const displayOnly = state.employeeEditMode === "display";
   const protectedControls = [
-    "employeeName", "employeeNickname", "employeeHours", "employeeHomeLocation", "employeePosition",
+    "employeeName", "employeeNickname", "employeeHours", "employeeTargetWorkdays", "employeeHomeLocation", "employeePosition",
     "employeeTimeConfirmationLevel", "employeePreferredDepartment", "employeePreferredDay", "employeeActive",
   ];
   for (const id of protectedControls) document.querySelector(`#${id}`).disabled = displayOnly;
   elements.employeeTimeConfirmationLevel.disabled = displayOnly || !canManageConfirmationLevel;
+  syncEmployeeSicknessAllowanceField();
   document.querySelectorAll('[name="employeeFixedWorkday"]').forEach((control) => { control.disabled = displayOnly; });
   document.querySelector("#employeeColorPicker").disabled = false;
   document.querySelector("#employeeColorHex").disabled = false;
@@ -5048,6 +5162,7 @@ async function saveEmployee(event) {
     fullName: document.querySelector("#employeeName").value,
     nickname: document.querySelector("#employeeNickname").value,
     contractedHours: Number(document.querySelector("#employeeHours").value),
+    targetWorkdaysPerWeek: Number(elements.employeeTargetWorkdays.value),
     positionId: elements.employeePosition.value,
     homeLocationId: elements.employeeHomeLocation.value,
     preferredDepartmentId: elements.employeePreferredDepartment.value,
@@ -5056,7 +5171,10 @@ async function saveEmployee(event) {
     color: state.selectedColor,
     active: document.querySelector("#employeeActive").checked,
   };
-  if (canManageWifiAutomationSettings()) body.timeConfirmationLevel = elements.employeeTimeConfirmationLevel.value;
+  if (canManageWifiAutomationSettings()) {
+    body.timeConfirmationLevel = elements.employeeTimeConfirmationLevel.value;
+    body.sicknessWithoutAumEnabled = elements.employeeSicknessWithoutAumEnabled.checked;
+  }
   const editedEmployee = state.allEmployees.find((employee) => employee.personnel_number === number) || null;
   if (canEditEmployeeAccessProfile(editedEmployee)) {
     const role = elements.employeeAppRole.value || "employee";
@@ -6961,6 +7079,7 @@ elements.cancelLocationEditButton.addEventListener("click", resetLocationForm);
 elements.cancelDepartmentEditButton.addEventListener("click", resetDepartmentForm);
 elements.cancelPositionEditButton.addEventListener("click", resetPositionForm);
 elements.employeeHomeLocation.addEventListener("change", () => updateEmployeeDepartmentOptions());
+elements.employeeTimeConfirmationLevel?.addEventListener("change", syncEmployeeSicknessAllowanceField);
 elements.employeeAppRole?.addEventListener("change", () => {
   const employeeNumber = document.querySelector("#employeeNumber").value.trim();
   renderEmployeeAccessProfile(state.allEmployees.find((employee) => employee.personnel_number === employeeNumber) || null);
@@ -6996,6 +7115,7 @@ document.querySelector("#optionDateTo").addEventListener("change", () => {
   if (to < from) document.querySelector("#optionDateFrom").value = to;
 });
 elements.employeeForm.addEventListener("submit", saveEmployee);
+elements.personnelRecordForm?.addEventListener("submit", savePersonnelRecord);
 elements.shiftForm.addEventListener("submit", saveShift);
 elements.optionForm.addEventListener("submit", saveOption);
 elements.autoPlanForm.addEventListener("submit", createAutomaticPlan);
