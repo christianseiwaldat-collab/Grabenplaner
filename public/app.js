@@ -34,6 +34,16 @@ const state = {
   rightsDashboardSelectedEmployeeNumber: "",
   rightsDashboardSelectedPermissionId: "",
   rightsDashboardTheme: "light",
+  pageThemes: {
+    planning: "light",
+    requests: "light",
+    timeTracking: "light",
+    vacations: "light",
+    personnel: "light",
+    rightsDashboard: "light",
+    settings: "light",
+  },
+  dashboardFontSize: "standard",
   rightsDashboardMode: "rights",
   rightsDashboardSelectedProcessId: "vacation",
   rightsDashboardSelectedProcessStepId: "",
@@ -149,7 +159,7 @@ const elements = Object.fromEntries(
     "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
-    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan",
+    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "dashboardFontSize",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
@@ -198,8 +208,22 @@ function addDays(isoDate, amount) {
   return toIsoDate(date);
 }
 
-function formatDate(isoDate, options = { day: "2-digit", month: "2-digit", year: "numeric" }) {
-  return new Intl.DateTimeFormat("de-AT", options).format(new Date(`${isoDate}T12:00:00`));
+function formatDate(isoDate, options = { day: "2-digit", month: "2-digit", year: "numeric" }, fallback = "—") {
+  const normalized = String(isoDate || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return fallback;
+  const date = new Date(`${normalized}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return fallback;
+  try {
+    return new Intl.DateTimeFormat("de-AT", options).format(date);
+  } catch {
+    return fallback;
+  }
+}
+
+function formatAmuPeriod(report = {}) {
+  const start = formatDate(report.incapacity_from, undefined, "Beginn offen");
+  const end = report.incapacity_to ? formatDate(report.incapacity_to, undefined, "offen") : "offen";
+  return `${start}–${end}`;
 }
 
 function formatHours(minutes) {
@@ -665,7 +689,7 @@ async function bootstrapApplication() {
     hideLoginGate();
     applyShellBranding();
     applyRoleVisibility();
-    await Promise.all([loadAll(), loadSystemInfo(), loadManagementBrandingPreference()]);
+    await Promise.all([loadAll(), loadSystemInfo(), loadManagementBrandingPreference(), loadUiPreferences()]);
     applyRequestedView();
     setTimeout(() => checkForUpdates(false), 1800);
   } catch (error) {
@@ -692,7 +716,7 @@ async function loginToAdministration(event) {
     applyShellBranding(result.status?.branding || result.branding || {});
     hideLoginGate();
     applyRoleVisibility();
-    await Promise.all([loadAll(), loadSystemInfo(), loadManagementBrandingPreference()]);
+    await Promise.all([loadAll(), loadSystemInfo(), loadManagementBrandingPreference(), loadUiPreferences()]);
     applyRequestedView();
   } catch (error) {
     showLoginGate(error.message);
@@ -1598,6 +1622,7 @@ function renderSettings() {
   document.querySelector("#showSunday").checked = settings.show_sunday === "1";
   elements.rememberLastScheduleOverallPlan.checked = settings.remember_last_schedule_overall_plan !== "0";
   elements.rememberLastVacationOverallPlan.checked = settings.remember_last_vacation_overall_plan !== "0";
+  applyDashboardFontSize(state.dashboardFontSize);
   localStorage.setItem(rememberContextCacheKey("planning"), elements.rememberLastScheduleOverallPlan.checked ? "1" : "0");
   localStorage.setItem(rememberContextCacheKey("vacations"), elements.rememberLastVacationOverallPlan.checked ? "1" : "0");
   renderOperationMode();
@@ -1837,36 +1862,136 @@ async function saveUserRights(event) {
   } catch (error) { showToast(error.message, true); }
 }
 
+const UI_APPEARANCE_VIEWS = Object.freeze([
+  "planning",
+  "requests",
+  "timeTracking",
+  "vacations",
+  "personnel",
+  "rightsDashboard",
+  "settings",
+]);
+
+function uiPreferenceActorKey() {
+  return state.portalSession?.user?.employeeNumber || "local";
+}
+
+function pageThemeStorageKey(view) {
+  return `grabenplaner:page-theme:${uiPreferenceActorKey()}:${view}`;
+}
+
+function dashboardFontSizeStorageKey() {
+  return `grabenplaner:dashboard-font-size:${uiPreferenceActorKey()}`;
+}
+
+function pageViewElement(view) {
+  return ({
+    planning: elements.planningView,
+    requests: elements.requestsView,
+    timeTracking: elements.timeTrackingView,
+    vacations: elements.vacationsView,
+    personnel: elements.personnelView,
+    rightsDashboard: elements.rightsDashboardView,
+    settings: elements.settingsView,
+  })[view] || null;
+}
+
+function applyActivePageAppearance() {
+  const theme = state.pageThemes[state.currentView] === "dark" ? "dark" : "light";
+  document.documentElement.dataset.activePageTheme = theme;
+  document.documentElement.dataset.activeView = state.currentView;
+  document.querySelector(".main-content")?.setAttribute("data-active-page-theme", theme);
+}
+
+function applyPageTheme(view, theme) {
+  if (!UI_APPEARANCE_VIEWS.includes(view)) return;
+  const normalized = theme === "dark" ? "dark" : "light";
+  state.pageThemes[view] = normalized;
+  const viewElement = pageViewElement(view);
+  viewElement?.setAttribute("data-page-theme", normalized);
+  if (view === "rightsDashboard") {
+    state.rightsDashboardTheme = normalized;
+    viewElement?.setAttribute("data-dashboard-theme", normalized);
+  }
+  viewElement?.querySelectorAll("button[data-page-theme-choice]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.pageThemeChoice === normalized));
+  });
+  if (state.currentView === view) applyActivePageAppearance();
+}
+
+function applyDashboardFontSize(value) {
+  const normalized = ["compact", "standard", "large"].includes(value) ? value : "standard";
+  state.dashboardFontSize = normalized;
+  elements.rightsDashboardView?.setAttribute("data-dashboard-font-size", normalized);
+  if (elements.dashboardFontSize) elements.dashboardFontSize.value = normalized;
+}
+
+async function loadUiPreferences() {
+  let preferences = null;
+  try {
+    preferences = await api("/api/portal/v1/ui-preferences");
+  } catch (error) {
+    if (![401, 403, 404].includes(error.status)) throw error;
+  }
+  const localOnly = (preferences?.actor || uiPreferenceActorKey()) === "local";
+  for (const view of UI_APPEARANCE_VIEWS) {
+    const stored = localOnly ? localStorage.getItem(pageThemeStorageKey(view)) : "";
+    applyPageTheme(view, stored || preferences?.pageThemes?.[view] || "light");
+  }
+  const storedFontSize = localOnly ? localStorage.getItem(dashboardFontSizeStorageKey()) : "";
+  applyDashboardFontSize(storedFontSize || preferences?.dashboardFontSize || "standard");
+  applyActivePageAppearance();
+}
+
+async function savePageTheme(view, theme) {
+  if (!UI_APPEARANCE_VIEWS.includes(view)) return;
+  const previous = state.pageThemes[view] || "light";
+  const normalized = theme === "dark" ? "dark" : "light";
+  applyPageTheme(view, normalized);
+  localStorage.setItem(pageThemeStorageKey(view), normalized);
+  try {
+    const result = await api("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      body: JSON.stringify({ pageThemes: { [view]: normalized } }),
+    });
+    applyPageTheme(view, result.pageThemes?.[view] || normalized);
+  } catch (error) {
+    applyPageTheme(view, previous);
+    localStorage.setItem(pageThemeStorageKey(view), previous);
+    showToast(error.message, true);
+  }
+}
+
+async function saveDashboardFontSize(value, { silent = false } = {}) {
+  const previous = state.dashboardFontSize;
+  const normalized = ["compact", "standard", "large"].includes(value) ? value : "standard";
+  applyDashboardFontSize(normalized);
+  localStorage.setItem(dashboardFontSizeStorageKey(), normalized);
+  try {
+    const result = await api("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      body: JSON.stringify({ dashboardFontSize: normalized }),
+    });
+    applyDashboardFontSize(result.dashboardFontSize || normalized);
+    if (!silent) showToast("Die Dashboard-Schriftgröße wurde gespeichert.");
+  } catch (error) {
+    applyDashboardFontSize(previous);
+    localStorage.setItem(dashboardFontSizeStorageKey(), previous);
+    if (!silent) showToast(error.message, true);
+    throw error;
+  }
+}
+
 function rightsDashboardThemeStorageKey() {
-  const employeeNumber = state.portalSession?.user?.employeeNumber || "local";
-  return `grabenplaner:rights-dashboard-theme:${employeeNumber}`;
+  return pageThemeStorageKey("rightsDashboard");
 }
 
 function applyRightsDashboardTheme(theme) {
-  const normalized = theme === "dark" ? "dark" : "light";
-  state.rightsDashboardTheme = normalized;
-  elements.rightsDashboardView?.setAttribute("data-dashboard-theme", normalized);
-  document.querySelectorAll("button[data-dashboard-theme]").forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.dashboardTheme === normalized));
-  });
+  applyPageTheme("rightsDashboard", theme);
 }
 
 async function saveRightsDashboardTheme(theme) {
-  const previous = state.rightsDashboardTheme;
-  const normalized = theme === "dark" ? "dark" : "light";
-  applyRightsDashboardTheme(normalized);
-  localStorage.setItem(rightsDashboardThemeStorageKey(), normalized);
-  try {
-    const result = await api("/api/portal/v1/rights-dashboard/preferences", {
-      method: "PUT",
-      body: JSON.stringify({ theme: normalized }),
-    });
-    applyRightsDashboardTheme(result.theme);
-  } catch (error) {
-    applyRightsDashboardTheme(previous);
-    localStorage.setItem(rightsDashboardThemeStorageKey(), previous);
-    showToast(error.message, true);
-  }
+  await savePageTheme("rightsDashboard", theme);
 }
 
 function populateRightsDashboardDepartments() {
@@ -2245,8 +2370,7 @@ async function loadRightsDashboard() {
   try {
     const dashboard = await api("/api/portal/v1/rights-dashboard");
     state.rightsDashboard = dashboard;
-    const localTheme = localStorage.getItem(rightsDashboardThemeStorageKey());
-    applyRightsDashboardTheme(dashboard.actor?.employeeNumber === "local" && localTheme ? localTheme : dashboard.preferences?.theme);
+    applyRightsDashboardTheme(state.pageThemes.rightsDashboard || dashboard.preferences?.theme || "light");
     populateRightsDashboardFilters();
     populateRightsProcessLocations();
     renderRightsProcessValidation();
@@ -3119,7 +3243,7 @@ async function openPersonnelRecord(employeeNumber) {
       const documents = (report.documents || []).map((document) => result.canOpenFiles
         ? `<a class="secondary-button compact-button" href="/api/portal/v1/amu-reports/${report.id}/documents/${encodeURIComponent(document.id)}/content" target="_blank" rel="noopener">${escapeHtml(document.original_name || "Dokument")} öffnen</a>`
         : `<span class="status-badge inactive">${escapeHtml(document.original_name || "Dokument")} · kein Dateizugriff</span>`).join("");
-      const period = `${formatDate(report.incapacity_from)}–${report.incapacity_to ? formatDate(report.incapacity_to) : "offen"}`;
+      const period = formatAmuPeriod(report);
       return `<article class="personnel-record-entry"><div><strong>${period}</strong><small>${escapeHtml(report.location_name || "")}${report.department_name ? ` · ${escapeHtml(report.department_name)}` : ""} · ${escapeHtml(amuReportStatusLabel(report))}</small>${report.employee_note ? `<p>${escapeHtml(report.employee_note)}</p>` : ""}</div><div class="amu-document-links">${documents || "Kein aktives Dokument"}</div></article>`;
     }).join("");
     const amuSection = access.canReadAmu ? `
@@ -3241,7 +3365,7 @@ function renderManagerRequests() {
         : `<span>${escapeHtml(document.original_name || "Dokument")} · ${Math.max(1, Math.round(Number(document.size || 0) / 1024))} KB</span>`).join("");
       return `<article class="manager-request-row amu-request-row" data-amu-report="${report.id}">
         <span class="employee-dot" style="--employee-color:${escapeHtml(report.color || "#507267")}"></span>
-        <div><strong><span class="request-kind-badge amu">AUM</span> ${escapeHtml(report.employee_number)} · ${escapeHtml(report.nickname || report.full_name)}</strong><small>${formatDate(report.incapacity_from)}–${formatDate(report.incapacity_to)} · ${escapeHtml(report.location_name || "")}${report.employee_note ? ` · ${escapeHtml(report.employee_note)}` : ""}</small><small><span class="request-status ${escapeHtml(report.status)}">${escapeHtml(amuReportStatusLabel(report))}</span>${report.reviewed_by && report.review_mode !== "automatic" ? ` · geprüft von ${escapeHtml(report.reviewed_by)}` : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</small><div class="amu-document-links">${files}</div></div>
+        <div><strong><span class="request-kind-badge amu">AUM</span> ${escapeHtml(report.employee_number)} · ${escapeHtml(report.nickname || report.full_name)}</strong><small>${formatAmuPeriod(report)} · ${escapeHtml(report.location_name || "")}${report.employee_note ? ` · ${escapeHtml(report.employee_note)}` : ""}</small><small><span class="request-status ${escapeHtml(report.status)}">${escapeHtml(amuReportStatusLabel(report))}</span>${report.reviewed_by && report.review_mode !== "automatic" ? ` · geprüft von ${escapeHtml(report.reviewed_by)}` : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</small><div class="amu-document-links">${files}</div></div>
         ${canReview && ["submitted", "returned"].includes(report.status) ? '<button class="secondary-button" data-open-amu-action type="button">AUM bearbeiten</button>' : ""}
       </article>`;
     }).join("") : '<p class="settings-note">Für diesen Filter gibt es keine Arbeitsunfähigkeitsmeldungen.</p>';
@@ -3295,7 +3419,7 @@ function openAmuAction(id) {
   state.selectedRequest = null;
   state.selectedAmuReport = report;
   elements.requestActionTitle.textContent = "AUM bearbeiten";
-  elements.requestActionSummary.textContent = `${report.employee_number} · ${report.nickname || report.full_name} · ${formatDate(report.incapacity_from)}–${formatDate(report.incapacity_to)}`;
+  elements.requestActionSummary.textContent = `${report.employee_number} · ${report.nickname || report.full_name} · ${formatAmuPeriod(report)}`;
   elements.requestActionNote.value = "";
   elements.requestEditFields.classList.add("hidden");
   elements.requestActionHistory.innerHTML = report.reviewed_by
@@ -4621,6 +4745,7 @@ function setView(view) {
   elements.personnelView.classList.toggle("active", view === "personnel");
   elements.rightsDashboardView?.classList.toggle("active", view === "rightsDashboard");
   elements.settingsView.classList.toggle("active", view === "settings");
+  applyActivePageAppearance();
   if (view === "settings") {
     const activeSettingsTab = document.querySelector("[data-settings-tab].active:not(.hidden)");
     const firstAllowedSettingsTab = document.querySelector("[data-settings-tab]:not(.hidden)");
@@ -6440,6 +6565,9 @@ async function saveSettings(silent = false) {
       method: "PUT",
       body: JSON.stringify(payload),
     });
+    if (elements.dashboardFontSize) {
+      await saveDashboardFontSize(elements.dashboardFontSize.value, { silent: true });
+    }
     if ((!portalEnabled || permissions.includes("branding:write")) && elements.brandingSettings?.classList.contains("active") && state.brandingFormDirty) {
       await saveCustomManagementBranding();
     }
@@ -6683,7 +6811,11 @@ elements.rightsUserList?.addEventListener("click", (event) => {
   if (card && event.target.closest("[data-edit-user-rights]")) openRightsEditor(card.dataset.rightsUser);
 });
 elements.rightsEditorForm?.addEventListener("submit", saveUserRights);
-document.querySelectorAll("button[data-dashboard-theme]").forEach((button) => button.addEventListener("click", () => saveRightsDashboardTheme(button.dataset.dashboardTheme)));
+document.querySelectorAll("button[data-page-theme-choice]").forEach((button) => button.addEventListener("click", () => {
+  const view = button.closest(".view")?.id?.replace(/View$/, "") || state.currentView;
+  savePageTheme(view, button.dataset.pageThemeChoice);
+}));
+elements.dashboardFontSize?.addEventListener("change", () => applyDashboardFontSize(elements.dashboardFontSize.value));
 document.querySelectorAll("button[data-rights-dashboard-mode]").forEach((button) => button.addEventListener("click", () => setRightsDashboardMode(button.dataset.rightsDashboardMode)));
 elements.rightsDashboardSearch?.addEventListener("input", renderRightsDashboard);
 elements.rightsDashboardRoleFilter?.addEventListener("change", renderRightsDashboard);
