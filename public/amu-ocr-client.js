@@ -33,6 +33,16 @@
     let to = fieldCandidate("dateTo");
     if (from && to && to.value < from.value) to = null;
     const complete = Boolean(from && to);
+    const identityCandidates = safeResults
+      .filter((entry) => entry.socialSecurityStatus === "detected" && /^\d{10}$/.test(String(entry.socialSecurityNumber || "")))
+      .map((entry) => ({
+        value: String(entry.socialSecurityNumber),
+        confidence: Math.min(1, Math.max(0, Number(entry.socialSecurityConfidence) || 0)),
+      }));
+    const identityValues = [...new Set(identityCandidates.map((entry) => entry.value))];
+    const identity = identityValues.length === 1
+      ? identityCandidates.filter((entry) => entry.value === identityValues[0]).sort((left, right) => right.confidence - left.confidence)[0]
+      : null;
     const autoFillFields = {
       dateFrom: Boolean(from?.autoFill),
       dateTo: Boolean(to?.autoFill),
@@ -51,6 +61,9 @@
       autoFill: complete && autoFillFields.dateFrom && autoFillFields.dateTo,
       requiresConfirmation: true,
       warnings,
+      socialSecurityNumber: identity?.value || "",
+      socialSecurityConfidence: identity?.confidence || 0,
+      socialSecurityStatus: identityValues.length > 1 ? "ambiguous" : identity ? "detected" : "not_detected",
     };
   }
 

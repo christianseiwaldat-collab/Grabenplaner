@@ -83,10 +83,23 @@ test("v0.59: lokale Datenerkennung verarbeitet gespeicherte Fotos und PDFs vor d
 
   assert.match(html, /id="amuDocuments"[^>]*accept="application\/pdf,image\/jpeg/);
   assert.match(html, /src="\/amu-pdf-client\.js"/);
-  assert.match(source, /async function recognizeAmuFiles\(files\)/);
+  assert.match(source, /async function recognizeAmuFiles\(files, contextName = "amu"\)/);
   assert.match(source, /isPdfFile\(file\)[\s\S]*?ensureAmuPdfClient\(\)\.recognize/);
-  assert.match(source, /\[\.\.\.\(el\.amuCamera\?\.files \|\| \[\]\), \.\.\.\(el\.amuDocuments\?\.files \|\| \[\]\)\]/);
+  assert.match(source, /for \(const contextName of \["amu", "sickness"\]\)/);
   assert.doesNotMatch(source, /async function recognizeAmuImage/);
+});
+
+test("AUM Block 3: Krankmeldung kann ein Dokument direkt mit denselben Uploadregeln senden", () => {
+  const html = fs.readFileSync(path.join(projectRoot, "public", "portal.html"), "utf8");
+  const source = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
+
+  assert.match(html, /id="sicknessAmuPanel"[\s\S]*?AUM direkt mitsenden/);
+  assert.match(html, /id="sicknessAmuDocuments"[^>]*data-amu-context="sickness"/);
+  assert.match(html, /id="sicknessAmuCamera"[^>]*capture="environment"/);
+  assert.match(source, /async function uploadAmuForContext/);
+  assert.match(source, /uploadAmuForContext\("sickness"/);
+  assert.match(source, /body\.append\("directSicknessReport", "1"\)/);
+  assert.match(source, /selectedAmuFiles\("sickness"\)/);
 });
 
 test("Portal: Rückkehr von der Handy-Kamera hält den AUM-Bereich aktiv", () => {
