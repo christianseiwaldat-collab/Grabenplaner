@@ -146,6 +146,9 @@ function insertEmployee(personnelNumber, fullName, locationId, departmentId) {
 }
 
 test.before(async () => {
+  // These integration tests intentionally exercise the current planning week.
+  // Keep them deterministic after the configured weekly closing time as well.
+  db.prepare("UPDATE settings SET value = '0' WHERE key = 'current_week_auto_lock'").run();
   const settings = JSON.stringify(daySettings());
   db.prepare("INSERT INTO locations (id, name, min_staff, day_settings_json, active) VALUES ('91', 'V59 Standort A', 2, ?, 1)")
     .run(settings);

@@ -219,12 +219,25 @@ if (-not $AmuEncryptionKey -or -not $AmuKeyId) {
     throw 'Für die Wiederherstellung ist der gesicherte AMU-Recovery-Schlüssel erforderlich.'
 }
 $keyValidationScript = @'
-const [modulePath, sourceDirectory, keyId, key] = process.argv.slice(2);
-const { validateEncryptionKeyForStorage } = require(modulePath);
+const { DatabaseSync } = require('node:sqlite');
+const [modulePath, sourceDirectory, keyId, key, databasePath] = process.argv.slice(2);
+const { validateEncryptionKeyForStorage, verifyBackupReferences } = require(modulePath);
+const database = new DatabaseSync(databasePath, { readOnly: true });
+let requiredStorageKeys = [];
+try {
+  const hasTable = (name) => Boolean(database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
+  if (hasTable('amu_documents')) {
+    requiredStorageKeys.push(...database.prepare("SELECT storage_key FROM amu_documents WHERE status = 'active'").all().map((row) => row.storage_key));
+  }
+  if (hasTable('personnel_record_documents')) {
+    requiredStorageKeys.push(...database.prepare("SELECT storage_key FROM personnel_record_documents WHERE status = 'active'").all().map((row) => row.storage_key));
+  }
+} finally { database.close(); }
+verifyBackupReferences({ backupDirectory: sourceDirectory, requiredStorageKeys });
 const result = validateEncryptionKeyForStorage({ sourceDirectory, encryptionKeys: { [keyId]: key }, activeKeyId: keyId });
-process.stdout.write(JSON.stringify(result));
+process.stdout.write(JSON.stringify({ ...result, requiredStorageKeys: requiredStorageKeys.length }));
 '@
-$keyValidationScript | & $NodeExecutable - $amuModule $amuSource $AmuKeyId $AmuEncryptionKey | Out-Null
+$keyValidationScript | & $NodeExecutable - $amuModule $amuSource $AmuKeyId $AmuEncryptionKey $source | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Der Recovery-Schlüssel kann den gewählten AMU-Sicherungspunkt nicht entschlüsseln.' }
 
 if (-not $PSCmdlet.ShouldProcess($target, "Mit verifiziertem Backup $source wiederherstellen")) { return }

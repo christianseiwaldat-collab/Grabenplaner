@@ -1032,7 +1032,7 @@
     </dialog>
 
     <dialog class="modal wide-modal employee-modal" id="employeeModal">
-      <form method="dialog" id="employeeForm">
+      <form method="dialog" id="employeeForm" autocomplete="off">
         <div class="modal-header"><div><span class="eyebrow">Personalstammdaten</span><h2 id="employeeModalTitle">Teammitglied anlegen</h2></div><button type="button" class="close-button" data-close="employeeModal">×</button></div>
         <div class="form-grid">
           <p class="calculation-note full-width hidden" id="employeeEditScopeHint">Für diese Leitung ist ausschließlich die Teamfarbe freigegeben. Name, Wochen-Sollzeit und alle weiteren Personalstammdaten bleiben sichtbar, aber schreibgeschützt.</p>
@@ -1065,6 +1065,67 @@
             </div>
           </label>
           <label class="switch-row full-width"><span><strong>Aktiv</strong><small>In Planung und PDF anzeigen.</small></span><input id="employeeActive" type="checkbox" checked /></label>
+          <details class="employee-protected-record full-width hidden" id="employeeProtectedRecord">
+            <summary><span><strong>Geschützter Personalakt</strong><small>Persönliche, vertragliche und sensible Daten verschlüsselt erfassen.</small></span><span class="status-badge approved">PL+</span></summary>
+            <p class="calculation-note" id="employeeProtectedRecordHint">Die Angaben werden ausschließlich im geschützten Personalakt gespeichert.</p>
+            <div class="protected-record-sections">
+              <section class="protected-record-section">
+                <h3>Persönliche Daten</h3>
+                <div class="personnel-record-field-grid">
+                  <label class="field"><span>Vorname</span><input name="employeeRecordFirstName" maxlength="100" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
+                  <label class="field"><span>Nachname</span><input name="employeeRecordLastName" maxlength="100" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
+                  <label class="field"><span>Früherer Name</span><input name="employeeRecordPreviousName" maxlength="120" autocomplete="off" /></label>
+                  <label class="field"><span>Anrede</span><input name="employeeRecordSalutation" maxlength="40" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
+                  <label class="field"><span>Titel</span><input name="employeeRecordTitle" maxlength="80" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
+                  <label class="field"><span>Geburtsdatum</span><input name="employeeRecordBirthDate" type="date" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
+                  <label class="field"><span>Geburtsort</span><input name="employeeRecordBirthPlace" maxlength="120" autocomplete="off" /></label>
+                  <label class="field"><span>Staatsangehörigkeit</span><input name="employeeRecordNationality" maxlength="80" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
+                </div>
+              </section>
+              <section class="protected-record-section">
+                <h3>Kontakt &amp; Notfallkontakt</h3>
+                <div class="personnel-record-field-grid">
+                  <label class="field"><span>Telefonnummer</span><input name="employeeRecordPhone" type="tel" maxlength="40" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
+                  <label class="field"><span>Weitere Telefonnummer</span><input name="employeeRecordAlternatePhone" type="tel" maxlength="40" autocomplete="off" /></label>
+                  <label class="field personnel-record-span-two"><span>Private E-Mail</span><input name="employeeRecordPrivateEmail" type="email" maxlength="160" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
+                  <label class="field"><span>Notfallkontakt · Name</span><input name="employeeRecordEmergencyName" maxlength="120" autocomplete="off" /></label>
+                  <label class="field"><span>Beziehung</span><input name="employeeRecordEmergencyRelationship" maxlength="80" autocomplete="off" /></label>
+                  <label class="field personnel-record-span-two"><span>Notfallkontakt · Telefon</span><input name="employeeRecordEmergencyPhone" type="tel" maxlength="40" autocomplete="off" /></label>
+                </div>
+              </section>
+              <section class="protected-record-section sensitive-personnel-section">
+                <h3>SV, Bank &amp; Adresse</h3>
+                <div class="personnel-record-field-grid">
+                  <label class="field"><span>SV-Nummer</span><input name="employeeRecordSocialSecurityNumber" inputmode="numeric" maxlength="13" autocomplete="off" /></label>
+                  <label class="field"><span>Kontoinhaber/-in</span><input name="employeeRecordAccountHolder" maxlength="120" autocomplete="off" /></label>
+                  <label class="field personnel-record-span-two"><span>IBAN</span><input name="employeeRecordIban" maxlength="34" autocomplete="off" /></label>
+                  <label class="field"><span>BIC</span><input name="employeeRecordBic" maxlength="11" autocomplete="off" /></label>
+                  <label class="field personnel-record-span-two"><span>Straße und Hausnummer</span><input name="employeeRecordStreet" maxlength="160" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
+                  <label class="field personnel-record-span-two"><span>Adresszusatz</span><input name="employeeRecordAddressSupplement" maxlength="120" autocomplete="off" /></label>
+                  <label class="field"><span>Postleitzahl</span><input name="employeeRecordPostalCode" maxlength="20" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
+                  <label class="field"><span>Ort</span><input name="employeeRecordCity" maxlength="100" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
+                  <label class="field"><span>Bundesland</span><input name="employeeRecordState" maxlength="100" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
+                  <label class="field"><span>Land</span><input name="employeeRecordCountry" maxlength="80" value="Österreich" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
+                </div>
+              </section>
+              <section class="protected-record-section">
+                <h3>Beschäftigung &amp; Vertrag</h3>
+                <div class="personnel-record-field-grid">
+                  <label class="field"><span>Eintrittsdatum</span><input name="employeeRecordStartDate" type="date" /></label>
+                  <label class="field"><span>Austrittsdatum</span><input name="employeeRecordEndDate" type="date" /></label>
+                  <label class="field"><span>Befristet bis</span><input name="employeeRecordFixedTermEnd" type="date" /></label>
+                  <label class="field"><span>Probezeit bis</span><input name="employeeRecordProbationEnd" type="date" /></label>
+                  <label class="field"><span>Beschäftigungsart</span><input name="employeeRecordEmploymentType" maxlength="100" placeholder="z. B. Teilzeit" /></label>
+                  <label class="field"><span>Vertragsart</span><input name="employeeRecordContractType" maxlength="100" placeholder="z. B. unbefristet" /></label>
+                  <label class="field"><span>Beschäftigungsstatus</span><input name="employeeRecordEmploymentStatus" maxlength="80" placeholder="z. B. aktiv" /></label>
+                  <label class="field"><span>Kollektivvertrag</span><input name="employeeRecordCollectiveAgreement" maxlength="160" /></label>
+                  <label class="field"><span>Einstufung</span><input name="employeeRecordClassification" maxlength="120" /></label>
+                  <label class="field"><span>Lohnverrechnungsgruppe</span><input name="employeeRecordPayrollGroup" maxlength="120" /></label>
+                  <label class="field personnel-record-span-two"><span>Interne Hinweise</span><textarea name="employeeRecordNotes" rows="3" maxlength="2000"></textarea></label>
+                </div>
+              </section>
+            </div>
+          </details>
           <section class="employee-access-profile full-width" id="employeeAccessProfile">
             <div class="employee-access-heading"><div><span class="eyebrow">App-Zugang</span><h3>Rechte</h3><p>App-Rolle und individuelle Zusatzrechte sind von der Position im Unternehmen getrennt.</p></div><span class="status-badge inactive" id="employeeAccessStatus">Nur Ansicht</span></div>
             <label class="field"><span>App-Rolle</span><select id="employeeAppRole"></select><small id="employeeAppRoleDescription"></small></label>
@@ -1339,7 +1400,7 @@
     </dialog>
 
     <dialog class="modal personnel-record-modal" id="personnelRecordModal">
-      <form method="dialog" id="personnelRecordForm">
+      <form method="dialog" id="personnelRecordForm" autocomplete="off">
         <div class="modal-header"><div><span class="eyebrow">Personalakt</span><h2 id="personnelRecordTitle">Personalakt</h2><p>Geschützte Stammdaten und Arbeitsunfähigkeitsmeldungen.</p></div><button type="button" class="close-button" data-close="personnelRecordModal">×</button></div>
         <div class="personnel-record-content" id="personnelRecordContent"><p class="settings-note">Einträge werden geladen.</p></div>
         <p class="message hidden" id="personnelRecordMessage"></p>
