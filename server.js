@@ -8,7 +8,7 @@ const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
 const net = require("node:net");
 const { promisify } = require("node:util");
-const { createAmuStorage, syncEncryptedFilesBackup } = require("./lib/amu-storage");
+const { createAmuStorage, syncEncryptedFilesBackup, verifyBackupReferences } = require("./lib/amu-storage");
 const { prepareAmuDocument } = require("./lib/amu-processing");
 const { evaluateAumEvidence } = require("./lib/amu-identity-check");
 const { evaluateAutomaticAumReview } = require("./lib/amu-auto-review");
@@ -857,6 +857,45 @@ function fileSha256(filePath) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
 
+function databaseHasTable(database, tableName) {
+  return Boolean(database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName));
+}
+
+function protectedStorageReferencesFromDatabase(database) {
+  const keys = [];
+  if (databaseHasTable(database, "amu_documents")) {
+    keys.push(...database.prepare("SELECT storage_key FROM amu_documents WHERE status = 'active'").all()
+      .map((row) => String(row.storage_key || "").toLowerCase()));
+  }
+  if (databaseHasTable(database, "personnel_record_documents")) {
+    keys.push(...database.prepare("SELECT storage_key FROM personnel_record_documents WHERE status = 'active'").all()
+      .map((row) => String(row.storage_key || "").toLowerCase()));
+  }
+  if (keys.some((key) => !key) || new Set(keys).size !== keys.length) {
+    throw new Error("Die Datenbank enthält ungültige oder doppelte Verweise auf geschützte Dokumente.");
+  }
+  return keys;
+}
+
+function verifyProtectedBackupPair(databaseFile, backupDirectory, expectedDatabase = {}) {
+  const snapshot = new DatabaseSync(databaseFile, { readOnly: true });
+  let requiredStorageKeys;
+  try {
+    requiredStorageKeys = protectedStorageReferencesFromDatabase(snapshot);
+  } finally {
+    snapshot.close();
+  }
+  const verified = verifyBackupReferences({ backupDirectory, requiredStorageKeys });
+  const manifestDatabase = verified.manifest?.database || {};
+  if (expectedDatabase.fileName && manifestDatabase.fileName !== expectedDatabase.fileName) {
+    throw new Error("Datenbank und private Dateisicherung gehören nicht zum selben Sicherungspunkt.");
+  }
+  if (expectedDatabase.sha256 && String(manifestDatabase.sha256 || "").toLowerCase() !== String(expectedDatabase.sha256).toLowerCase()) {
+    throw new Error("Die Datenbank-Prüfsumme der privaten Dateisicherung stimmt nicht überein.");
+  }
+  return { requiredStorageKeys, manifest: verified.manifest };
+}
+
 function pruneDatabaseBackups(backupDirectory, keep = 30) {
   const backups = fs
     .readdirSync(backupDirectory)
@@ -874,6 +913,7 @@ function createDatabaseBackupToDirectory(backupDirectory, reason = "automatic", 
   if (databasePath === ":memory:" || !fs.existsSync(databasePath)) return null;
   if (amuMutationInProgress > 0) throw new Error("Die Sicherung wartet, bis der laufende AUM-Upload abgeschlossen ist.");
   if (!amuStorage) throw new Error("Ohne betriebsbereiten AUM-Speicher wird kein unvollständiger Sicherungspunkt erstellt.");
+  verifyActiveProtectedDocumentBlobs();
   fs.mkdirSync(backupDirectory, { recursive: true });
   const snapshotName = `dienstplan-${backupTimestamp()}`;
   const target = path.join(backupDirectory, `${snapshotName}.db`);
@@ -892,6 +932,10 @@ function createDatabaseBackupToDirectory(backupDirectory, reason = "automatic", 
       sourceDirectory: amuStorageDirectory,
       targetDirectory: temporaryAmu,
       manifestMetadata: { database: { fileName: path.basename(target), sha256: databaseHash } },
+    });
+    verifyProtectedBackupPair(temporaryDatabase, temporaryAmu, {
+      fileName: path.basename(target),
+      sha256: databaseHash,
     });
     fs.renameSync(temporaryAmu, amuTarget);
     fs.renameSync(temporaryDatabase, target);
@@ -1023,6 +1067,23 @@ function createSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_personnel_sensitive_sv_lookup
       ON personnel_sensitive_records(social_security_lookup)
       WHERE TRIM(social_security_lookup) <> '';
+
+    CREATE TABLE IF NOT EXISTS personnel_record_documents (
+      id TEXT PRIMARY KEY,
+      employee_number TEXT NOT NULL,
+      storage_key TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'active',
+      protected_payload TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      deleted_by TEXT,
+      deleted_at TEXT,
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_personnel_record_documents_employee
+      ON personnel_record_documents(employee_number, status, created_at);
 
     CREATE TABLE IF NOT EXISTS positions (
       id TEXT PRIMARY KEY,
@@ -1997,14 +2058,49 @@ function personnelSensitiveProtectionContext(row) {
   };
 }
 
+function personnelRecordDocumentProtectionContext(row) {
+  return {
+    namespace: "personnel-record-attachment",
+    recordId: String(row.id || ""),
+    field: "payload",
+    employeeNumber: String(row.employee_number || ""),
+  };
+}
+
 function emptyPersonnelSensitiveProfile() {
   return {
+    identity: {
+      firstName: "",
+      lastName: "",
+      previousName: "",
+      salutation: "",
+      title: "",
+      birthDate: "",
+      birthPlace: "",
+      nationality: "",
+    },
     socialSecurityNumber: "",
     iban: "",
     bic: "",
     accountHolder: "",
-    address: { street: "", postalCode: "", city: "", country: "Österreich" },
+    address: { street: "", supplement: "", postalCode: "", city: "", state: "", country: "Österreich" },
     phone: "",
+    alternatePhone: "",
+    privateEmail: "",
+    emergencyContact: { name: "", relationship: "", phone: "" },
+    employment: {
+      startDate: "",
+      endDate: "",
+      fixedTermEnd: "",
+      probationEnd: "",
+      employmentType: "",
+      contractType: "",
+      employmentStatus: "",
+      collectiveAgreement: "",
+      classification: "",
+      payrollGroup: "",
+      notes: "",
+    },
   };
 }
 
@@ -2045,21 +2141,75 @@ function personnelSensitiveProfile(employeeNumber) {
   `).get(String(employeeNumber || ""));
   if (!row) return emptyPersonnelSensitiveProfile();
   const payload = parseProtectedJson(row.protected_payload, personnelSensitiveProtectionContext(row));
+  const identity = payload.identity && typeof payload.identity === "object" && !Array.isArray(payload.identity)
+    ? payload.identity : {};
   const address = payload.address && typeof payload.address === "object" && !Array.isArray(payload.address)
     ? payload.address : {};
+  const emergencyContact = payload.emergencyContact && typeof payload.emergencyContact === "object" && !Array.isArray(payload.emergencyContact)
+    ? payload.emergencyContact : {};
+  const employment = payload.employment && typeof payload.employment === "object" && !Array.isArray(payload.employment)
+    ? payload.employment : {};
   return {
+    identity: {
+      firstName: String(identity.firstName || ""),
+      lastName: String(identity.lastName || ""),
+      previousName: String(identity.previousName || ""),
+      salutation: String(identity.salutation || ""),
+      title: String(identity.title || ""),
+      birthDate: String(identity.birthDate || ""),
+      birthPlace: String(identity.birthPlace || ""),
+      nationality: String(identity.nationality || ""),
+    },
     socialSecurityNumber: String(payload.socialSecurityNumber || ""),
     iban: String(payload.iban || ""),
     bic: String(payload.bic || ""),
     accountHolder: String(payload.accountHolder || ""),
     address: {
       street: String(address.street || ""),
+      supplement: String(address.supplement || ""),
       postalCode: String(address.postalCode || ""),
       city: String(address.city || ""),
-      country: String(address.country || "Österreich"),
+      state: String(address.state || ""),
+      country: String(own(address, "country") ? address.country : "Österreich"),
     },
     phone: String(payload.phone || ""),
+    alternatePhone: String(payload.alternatePhone || ""),
+    privateEmail: String(payload.privateEmail || ""),
+    emergencyContact: {
+      name: String(emergencyContact.name || ""),
+      relationship: String(emergencyContact.relationship || ""),
+      phone: String(emergencyContact.phone || ""),
+    },
+    employment: {
+      startDate: String(employment.startDate || ""),
+      endDate: String(employment.endDate || ""),
+      fixedTermEnd: String(employment.fixedTermEnd || ""),
+      probationEnd: String(employment.probationEnd || ""),
+      employmentType: String(employment.employmentType || ""),
+      contractType: String(employment.contractType || ""),
+      employmentStatus: String(employment.employmentStatus || ""),
+      collectiveAgreement: String(employment.collectiveAgreement || ""),
+      classification: String(employment.classification || ""),
+      payrollGroup: String(employment.payrollGroup || ""),
+      notes: String(employment.notes || ""),
+    },
   };
+}
+
+function verifyProtectedPersonnelRecordDocuments() {
+  if (!tableExists("personnel_record_documents")) return 0;
+  const rows = db.prepare(`
+    SELECT id, employee_number, protected_payload
+    FROM personnel_record_documents
+    ORDER BY employee_number, created_at, id
+  `).all();
+  for (const row of rows) {
+    if (!String(row.protected_payload || "").startsWith("enc:v2:")) {
+      throw httpError(503, "Personalakt-Dokumente liegen nicht im erwarteten verschlüsselten Format vor.", "PERSONNEL_DOCUMENT_INTEGRITY_FAILED");
+    }
+    parseProtectedJson(row.protected_payload, personnelRecordDocumentProtectionContext(row));
+  }
+  return rows.length;
 }
 
 function verifyProtectedSensitivePersonnelRecords() {
@@ -2197,6 +2347,7 @@ function migrateProtectedPersonnelRecords() {
 
 migrateProtectedPersonnelRecords();
 verifyProtectedSensitivePersonnelRecords();
+verifyProtectedPersonnelRecordDocuments();
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_work_date ON time_entries(employee_number, work_date, entry_timestamp)");
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_mobile_request ON time_entries(employee_number, client_request_id) WHERE client_request_id IS NOT NULL");
 db.exec("CREATE INDEX IF NOT EXISTS idx_mobile_sessions_employee ON mobile_sessions(employee_number, refresh_expires_at)");
@@ -2513,6 +2664,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.70-aum-security-foundation", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.70-sensitive-personnel-records", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.71-extended-personnel-records", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.70-sickness-allowance-valuation", packageMetadata.version);
 const integrationFeatureMigrationId = "v0.63-import-payroll-integrations";
@@ -2886,6 +3039,89 @@ function parseAmuMultipart(request, { maxFileBytes = 10 * 1024 * 1024, totalMaxB
         resolve({ fields, documents });
       } catch (error) {
         fail(error.status ? error : httpError(400, "Das Upload-Formular ist ungültig.", "AMU_MULTIPART_INVALID"));
+      }
+    });
+  });
+}
+
+function parsePersonnelDocumentMultipart(request, { maxFileBytes = 15 * 1024 * 1024 } = {}) {
+  return new Promise((resolve, reject) => {
+    const contentType = String(request.headers["content-type"] || "");
+    const boundaryMatch = contentType.match(/^multipart\/form-data\s*;[\s\S]*?boundary=(?:"([^"]+)"|([^;\s]+))/i);
+    const boundary = String(boundaryMatch?.[1] || boundaryMatch?.[2] || "");
+    if (!boundary || boundary.length > 70 || /[\r\n]/.test(boundary)) {
+      reject(httpError(415, "Bitte das Personalakt-Dokument als Formular senden.", "PERSONNEL_DOCUMENT_MULTIPART_REQUIRED"));
+      return;
+    }
+    const totalMaxBytes = maxFileBytes + (128 * 1024);
+    const chunks = [];
+    let totalBytes = 0;
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+    request.on("data", (chunk) => {
+      if (settled) return;
+      totalBytes += chunk.length;
+      if (totalBytes > totalMaxBytes) {
+        fail(httpError(413, "Das Personalakt-Dokument darf höchstens 15 MB groß sein.", "PERSONNEL_DOCUMENT_TOO_LARGE"));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("error", () => fail(httpError(400, "Das Personalakt-Dokument konnte nicht gelesen werden.", "PERSONNEL_DOCUMENT_MULTIPART_INVALID")));
+    request.on("end", () => {
+      if (settled) return;
+      try {
+        const body = Buffer.concat(chunks);
+        const delimiter = Buffer.from(`--${boundary}`, "utf8");
+        const nextDelimiter = Buffer.from(`\r\n--${boundary}`, "utf8");
+        const fields = {};
+        let document = null;
+        let position = body.indexOf(delimiter);
+        let partCount = 0;
+        if (position !== 0) throw httpError(400, "Das Upload-Formular ist ungültig.", "PERSONNEL_DOCUMENT_MULTIPART_INVALID");
+        while (position >= 0) {
+          position += delimiter.length;
+          if (body.subarray(position, position + 2).toString("ascii") === "--") break;
+          if (body.subarray(position, position + 2).toString("ascii") !== "\r\n") {
+            throw httpError(400, "Das Upload-Formular ist ungültig.", "PERSONNEL_DOCUMENT_MULTIPART_INVALID");
+          }
+          position += 2;
+          const headerEnd = body.indexOf(Buffer.from("\r\n\r\n"), position);
+          if (headerEnd < 0 || headerEnd - position > 8192) {
+            throw httpError(400, "Ein Upload-Teil hat ungültige Kopfzeilen.", "PERSONNEL_DOCUMENT_MULTIPART_INVALID");
+          }
+          const headers = body.subarray(position, headerEnd).toString("utf8");
+          const dataStart = headerEnd + 4;
+          const dataEnd = body.indexOf(nextDelimiter, dataStart);
+          if (dataEnd < 0) throw httpError(400, "Das Upload-Formular ist unvollständig.", "PERSONNEL_DOCUMENT_MULTIPART_INVALID");
+          const data = body.subarray(dataStart, dataEnd);
+          const disposition = headers.split("\r\n").find((line) => /^content-disposition:/i.test(line)) || "";
+          const name = disposition.match(/(?:^|;)\s*name="([^"]*)"/i)?.[1] || "";
+          const encodedFilename = disposition.match(/(?:^|;)\s*filename\*=UTF-8''([^;]+)/i)?.[1];
+          const plainFilename = disposition.match(/(?:^|;)\s*filename="([^"]*)"/i)?.[1];
+          let filename = plainFilename || "";
+          if (encodedFilename) { try { filename = decodeURIComponent(encodedFilename); } catch {} }
+          partCount += 1;
+          if (partCount > 8) throw httpError(413, "Das Upload-Formular enthält zu viele Teile.", "PERSONNEL_DOCUMENT_TOO_MANY_PARTS");
+          if (filename && ["document", "documents"].includes(name)) {
+            if (document) throw httpError(413, "Bitte jeweils nur ein Personalakt-Dokument hochladen.", "PERSONNEL_DOCUMENT_TOO_MANY_FILES");
+            if (data.length > maxFileBytes) throw httpError(413, "Das Personalakt-Dokument darf höchstens 15 MB groß sein.", "PERSONNEL_DOCUMENT_TOO_LARGE");
+            document = { originalName: filename, buffer: Buffer.from(data) };
+          } else if (!filename && ["category", "title", "documentDate", "description"].includes(name)) {
+            if (data.length > 4096) throw httpError(413, "Ein Dokumentfeld ist zu groß.", "PERSONNEL_DOCUMENT_FIELD_TOO_LARGE");
+            fields[name] = data.toString("utf8");
+          }
+          position = dataEnd + 2;
+        }
+        if (!document?.buffer?.length) throw httpError(400, "Bitte ein Personalakt-Dokument auswählen.", "PERSONNEL_DOCUMENT_REQUIRED");
+        settled = true;
+        resolve({ fields, document });
+      } catch (error) {
+        fail(error.status ? error : httpError(400, "Das Upload-Formular ist ungültig.", "PERSONNEL_DOCUMENT_MULTIPART_INVALID"));
       }
     });
   });
@@ -5704,6 +5940,8 @@ function personnelRecordAccess(session) {
     canReadAmu,
     canReadAmuSensitiveMetadata,
     canOpenFiles: canReadAmu && actorCanReadAmuFiles(session),
+    canReadDocuments: canReadSensitive,
+    canWriteDocuments: canWriteSensitive,
     phoneWriteRequiresTrustA: ["manager", "department_manager"].includes(session?.role || ""),
   };
 }
@@ -5726,9 +5964,122 @@ function requirePersonnelRecordSession(request, { write = false } = {}) {
   if (write) assertPortalCsrf(request);
   const access = personnelRecordAccess(session);
   if (!access.canReadSensitive && !access.canReadPhone && !access.canReadAmu) {
+    auditPortal(session.employeeNumber, "personnel-record.access.denied", "employee",
+      String(request.params?.employeeNumber || ""), write ? "write" : "read");
     throw httpError(403, "Für den Personalakt fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
   }
   return { session, access };
+}
+
+const PERSONNEL_DOCUMENT_CATEGORIES = new Set([
+  "contract", "amendment", "certificate", "training", "identity", "payroll", "other",
+]);
+
+function validatePersonnelDocumentFields(value = {}) {
+  const category = String(value.category || "other").trim().toLowerCase();
+  if (!PERSONNEL_DOCUMENT_CATEGORIES.has(category)) {
+    throw httpError(400, "Bitte eine gültige Dokumentkategorie auswählen.", "PERSONNEL_DOCUMENT_CATEGORY_INVALID");
+  }
+  const labels = {
+    contract: "Dienstvertrag", amendment: "Vertragsänderung", certificate: "Nachweis",
+    training: "Schulung", identity: "Identitätsnachweis", payroll: "Lohnverrechnung", other: "Dokument",
+  };
+  const title = normalizePersonnelField(value.title, 160) || labels[category];
+  const documentDate = normalizePersonnelDate(value.documentDate, "Das Dokumentdatum");
+  const description = normalizePersonnelField(value.description, 1000);
+  return { category, title, documentDate, description };
+}
+
+function personnelRecordDocumentRows(employeeNumber, { includeDeleted = false } = {}) {
+  const rows = db.prepare(`
+    SELECT id, employee_number, storage_key, status, protected_payload, created_at, updated_at
+    FROM personnel_record_documents
+    WHERE employee_number = ? ${includeDeleted ? "" : "AND status = 'active'"}
+    ORDER BY created_at DESC, id DESC
+  `).all(String(employeeNumber || ""));
+  return rows.map((row) => {
+    const payload = parseProtectedJson(row.protected_payload, personnelRecordDocumentProtectionContext(row));
+    return {
+      id: row.id,
+      status: row.status,
+      category: String(payload.category || "other"),
+      title: String(payload.title || "Dokument"),
+      documentDate: String(payload.documentDate || ""),
+      description: String(payload.description || ""),
+      originalFilename: String(payload.originalFilename || "Dokument"),
+      detectedMime: String(payload.detectedMime || "application/octet-stream"),
+      byteSize: Number(payload.byteSize || 0),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  });
+}
+
+function personnelRecordDocumentMetadata(employeeNumber, documentId, { activeOnly = true } = {}) {
+  return db.prepare(`
+    SELECT id, employee_number, storage_key, status, protected_payload, created_at, updated_at
+    FROM personnel_record_documents
+    WHERE employee_number = ? AND id = ? ${activeOnly ? "AND status = 'active'" : ""}
+  `).get(String(employeeNumber || ""), String(documentId || ""));
+}
+
+function readPersonnelRecordDocument(metadata) {
+  const payload = parseProtectedJson(metadata.protected_payload, personnelRecordDocumentProtectionContext(metadata));
+  const originalFilename = String(payload.originalFilename || "Dokument");
+  const detectedMime = String(payload.detectedMime || "application/octet-stream");
+  const content = requireAmuStorage().readBuffer({
+    storageKey: metadata.storage_key,
+    byteSize: Number(payload.byteSize || 0),
+    sha256: String(payload.sha256 || ""),
+    detectedMime,
+    originalFilename,
+  });
+  return { content, detectedMime, originalFilename };
+}
+
+function purgedPersonnelRecordDocumentPayload(row) {
+  return protectJson({
+    category: "", title: "", documentDate: "", description: "", originalFilename: "",
+    detectedMime: "application/octet-stream", byteSize: 0, sha256: "", uploadedBy: "",
+  }, personnelRecordDocumentProtectionContext(row));
+}
+
+function finalizeDeletedPersonnelRecordDocuments() {
+  if (!amuStorage || !tableExists("personnel_record_documents") || amuMutationInProgress > 0) {
+    return { checked: 0, purged: 0, failed: 0 };
+  }
+  const rows = db.prepare(`
+    SELECT id, employee_number, storage_key, status
+    FROM personnel_record_documents
+    WHERE status = 'deleted'
+    ORDER BY deleted_at, id
+  `).all();
+  let purged = 0;
+  let failed = 0;
+  amuMutationInProgress += 1;
+  try {
+    for (const row of rows) {
+      try {
+        amuStorage.deleteBlob(row.storage_key);
+        const result = db.prepare(`
+          UPDATE personnel_record_documents
+          SET status = 'purged', protected_payload = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND status = 'deleted'
+        `).run(purgedPersonnelRecordDocumentPayload(row), row.id);
+        if (result.changes) {
+          auditPortal("system", "personnel-record.document.purge-retry", "personnel_record_document", row.id);
+          purged += 1;
+        }
+      } catch (error) {
+        auditPortal("system", "personnel-record.document.purge-failed", "personnel_record_document", row.id,
+          String(error.code || "delete-failed"));
+        failed += 1;
+      }
+    }
+  } finally {
+    amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
+  }
+  return { checked: rows.length, purged, failed };
 }
 
 function normalizePersonnelField(value, maximumLength) {
@@ -5782,38 +6133,215 @@ function normalizePersonnelPhone(value) {
   return normalized;
 }
 
-function validatePersonnelSensitiveInput(value = {}) {
-  const address = value.address && typeof value.address === "object" && !Array.isArray(value.address)
-    ? value.address : {};
+function normalizePersonnelEmail(value) {
+  const normalized = normalizePersonnelField(value, 160).toLowerCase();
+  if (normalized && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    throw httpError(400, "Bitte eine gültige E-Mail-Adresse eingeben.", "PERSONNEL_EMAIL_INVALID");
+  }
+  return normalized;
+}
+
+function normalizePersonnelDate(value, label, { allowFuture = true } = {}) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return "";
+  if (!isIsoDate(normalized)) throw httpError(400, `${label} ist ungültig.`, "PERSONNEL_DATE_INVALID");
+  if (!allowFuture && normalized > new Date().toISOString().slice(0, 10)) {
+    throw httpError(400, `${label} darf nicht in der Zukunft liegen.`, "PERSONNEL_DATE_INVALID");
+  }
+  return normalized;
+}
+
+function personnelObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function own(object, key) {
+  return Object.prototype.hasOwnProperty.call(object || {}, key);
+}
+
+function personnelPatchValue(source, nested, key) {
+  if (own(nested, key)) return { supplied: true, value: nested[key] };
+  if (own(source, key)) return { supplied: true, value: source[key] };
+  return { supplied: false, value: undefined };
+}
+
+function mergePersonnelSensitiveProfile(before, value = {}) {
+  const source = personnelObject(value);
+  const next = JSON.parse(JSON.stringify(before || emptyPersonnelSensitiveProfile()));
+  const identity = personnelObject(source.identity);
+  const address = personnelObject(source.address);
+  const emergencyContact = personnelObject(source.emergencyContact);
+  const employment = personnelObject(source.employment);
+  const scalarFields = [
+    ["socialSecurityNumber", normalizeSocialSecurityNumber],
+    ["iban", normalizeIban],
+    ["bic", normalizeBic],
+    ["accountHolder", (entry) => normalizePersonnelField(entry, 120)],
+    ["alternatePhone", normalizePersonnelPhone],
+    ["privateEmail", normalizePersonnelEmail],
+  ];
+  for (const [key, normalize] of scalarFields) {
+    if (own(source, key)) next[key] = normalize(source[key]);
+  }
+
+  const identityFields = [
+    ["firstName", 100], ["lastName", 100], ["previousName", 120], ["salutation", 40],
+    ["title", 80], ["birthPlace", 120], ["nationality", 80],
+  ];
+  for (const [key, maximumLength] of identityFields) {
+    const patch = personnelPatchValue(source, identity, key);
+    if (patch.supplied) next.identity[key] = normalizePersonnelField(patch.value, maximumLength);
+  }
+  const birthDate = personnelPatchValue(source, identity, "birthDate");
+  if (birthDate.supplied) next.identity.birthDate = normalizePersonnelDate(birthDate.value, "Das Geburtsdatum", { allowFuture: false });
+
+  for (const [key, maximumLength] of [["street", 160], ["supplement", 120], ["postalCode", 20], ["city", 100], ["state", 100], ["country", 80]]) {
+    const patch = personnelPatchValue(source, address, key);
+    if (patch.supplied) next.address[key] = normalizePersonnelField(patch.value, maximumLength);
+  }
+
+  for (const [key, maximumLength] of [["name", 160], ["relationship", 80]]) {
+    const directKey = key === "name" ? "emergencyContactName" : "emergencyContactRelationship";
+    const patch = own(emergencyContact, key)
+      ? { supplied: true, value: emergencyContact[key] }
+      : personnelPatchValue(source, {}, directKey);
+    if (patch.supplied) next.emergencyContact[key] = normalizePersonnelField(patch.value, maximumLength);
+  }
+  const emergencyPhone = own(emergencyContact, "phone")
+    ? { supplied: true, value: emergencyContact.phone }
+    : personnelPatchValue(source, {}, "emergencyContactPhone");
+  if (emergencyPhone.supplied) next.emergencyContact.phone = normalizePersonnelPhone(emergencyPhone.value);
+
+  for (const [key, label] of [
+    ["startDate", "Das Eintrittsdatum"], ["endDate", "Das Austrittsdatum"],
+    ["fixedTermEnd", "Das Befristungsende"], ["probationEnd", "Das Ende der Probezeit"],
+  ]) {
+    const patch = personnelPatchValue(source, employment, key);
+    if (patch.supplied) next.employment[key] = normalizePersonnelDate(patch.value, label);
+  }
+  for (const [key, maximumLength] of [
+    ["employmentType", 80], ["contractType", 80], ["employmentStatus", 80],
+    ["collectiveAgreement", 160], ["classification", 120], ["payrollGroup", 120], ["notes", 1000],
+  ]) {
+    const patch = personnelPatchValue(source, employment, key);
+    if (patch.supplied) next.employment[key] = normalizePersonnelField(patch.value, maximumLength);
+  }
+  const startDate = next.employment.startDate;
+  for (const [key, label] of [["endDate", "Austrittsdatum"], ["fixedTermEnd", "Befristungsende"], ["probationEnd", "Ende der Probezeit"]]) {
+    if (startDate && next.employment[key] && next.employment[key] < startDate) {
+      throw httpError(400, `${label} darf nicht vor dem Eintrittsdatum liegen.`, "PERSONNEL_EMPLOYMENT_DATE_INVALID");
+    }
+  }
+  return next;
+}
+
+function personnelRecordInput(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw httpError(400, "Bitte gültige Personalakt-Daten übermitteln.", "PERSONNEL_RECORD_INPUT_INVALID");
+  }
+  const nestedSensitive = own(value, "sensitive") ? personnelObject(value.sensitive) : null;
+  if (own(value, "sensitive") && value.sensitive !== null && nestedSensitive !== value.sensitive) {
+    throw httpError(400, "Bitte gültige sensible Personalakt-Daten übermitteln.", "PERSONNEL_RECORD_INPUT_INVALID");
+  }
+  const direct = { ...value };
+  delete direct.phone;
+  delete direct.sensitive;
   return {
-    socialSecurityNumber: normalizeSocialSecurityNumber(value.socialSecurityNumber),
-    iban: normalizeIban(value.iban),
-    bic: normalizeBic(value.bic),
-    accountHolder: normalizePersonnelField(value.accountHolder, 120),
-    address: {
-      street: normalizePersonnelField(address.street, 160),
-      postalCode: normalizePersonnelField(address.postalCode, 20),
-      city: normalizePersonnelField(address.city, 100),
-      country: normalizePersonnelField(address.country, 80) || "Österreich",
-    },
+    hasPhone: own(value, "phone"),
+    phone: value.phone,
+    sensitive: { ...direct, ...(nestedSensitive || {}) },
+    hasSensitive: Object.keys(direct).length > 0 || Boolean(nestedSensitive && Object.keys(nestedSensitive).length),
   };
 }
 
 function changedPersonnelProfileFields(before, after) {
   const fieldValues = (profile) => ({
+    "identity.firstName": profile.identity?.firstName || "",
+    "identity.lastName": profile.identity?.lastName || "",
+    "identity.previousName": profile.identity?.previousName || "",
+    "identity.salutation": profile.identity?.salutation || "",
+    "identity.title": profile.identity?.title || "",
+    "identity.birthDate": profile.identity?.birthDate || "",
+    "identity.birthPlace": profile.identity?.birthPlace || "",
+    "identity.nationality": profile.identity?.nationality || "",
     socialSecurityNumber: profile.socialSecurityNumber || "",
     iban: profile.iban || "",
     bic: profile.bic || "",
     accountHolder: profile.accountHolder || "",
     street: profile.address?.street || "",
+    "address.supplement": profile.address?.supplement || "",
     postalCode: profile.address?.postalCode || "",
     city: profile.address?.city || "",
+    "address.state": profile.address?.state || "",
     country: profile.address?.country || "",
     phone: profile.phone || "",
+    alternatePhone: profile.alternatePhone || "",
+    privateEmail: profile.privateEmail || "",
+    "emergencyContact.name": profile.emergencyContact?.name || "",
+    "emergencyContact.relationship": profile.emergencyContact?.relationship || "",
+    "emergencyContact.phone": profile.emergencyContact?.phone || "",
+    "employment.startDate": profile.employment?.startDate || "",
+    "employment.endDate": profile.employment?.endDate || "",
+    "employment.fixedTermEnd": profile.employment?.fixedTermEnd || "",
+    "employment.probationEnd": profile.employment?.probationEnd || "",
+    "employment.employmentType": profile.employment?.employmentType || "",
+    "employment.contractType": profile.employment?.contractType || "",
+    "employment.employmentStatus": profile.employment?.employmentStatus || "",
+    "employment.collectiveAgreement": profile.employment?.collectiveAgreement || "",
+    "employment.classification": profile.employment?.classification || "",
+    "employment.payrollGroup": profile.employment?.payrollGroup || "",
+    "employment.notes": profile.employment?.notes || "",
   });
   const left = fieldValues(before);
   const right = fieldValues(after);
   return Object.keys(right).filter((field) => left[field] !== right[field]);
+}
+
+function preparePersonnelRecordMutation(request, employeeNumber, value) {
+  if (value === undefined) return null;
+  const { session, access } = requirePersonnelRecordSession(request, { write: true });
+  if (!access.canWriteSensitive) {
+    throw httpError(403, "Der geschützte Personalakt darf mit diesem Zugang nicht bearbeitet werden.", "PERSONNEL_SENSITIVE_WRITE_DENIED");
+  }
+  const input = personnelRecordInput(value);
+  const before = personnelSensitiveProfile(employeeNumber);
+  const next = mergePersonnelSensitiveProfile(before, input.hasSensitive ? input.sensitive : {});
+  if (input.hasPhone) next.phone = normalizePersonnelPhone(input.phone);
+  return {
+    session,
+    employeeNumber: String(employeeNumber || ""),
+    before,
+    next,
+    changedFields: changedPersonnelProfileFields(before, next),
+  };
+}
+
+function persistPersonnelRecordMutation(prepared, action = "update") {
+  if (!prepared || !prepared.changedFields.length) return [];
+  const socialSecurityLookup = prepared.next.socialSecurityNumber
+    ? personnelSensitiveLookup("social-security-number", prepared.next.socialSecurityNumber) : "";
+  const protectedPayload = protectJson(prepared.next,
+    personnelSensitiveProtectionContext({ employee_number: prepared.employeeNumber }));
+  try {
+    db.prepare(`
+      INSERT INTO personnel_sensitive_records
+        (employee_number, social_security_lookup, protected_payload, updated_by, updated_at)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(employee_number) DO UPDATE SET
+        social_security_lookup = excluded.social_security_lookup,
+        protected_payload = excluded.protected_payload,
+        updated_by = excluded.updated_by,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(prepared.employeeNumber, socialSecurityLookup, protectedPayload, prepared.session.employeeNumber);
+  } catch (error) {
+    if (String(error.message || "").includes("UNIQUE")) {
+      throw httpError(409, "Diese SV-Nummer ist bereits einem anderen Personalakt zugeordnet.", "PERSONNEL_SOCIAL_SECURITY_DUPLICATE");
+    }
+    throw error;
+  }
+  auditPortal(prepared.session.employeeNumber, `personnel-record.${action}`, "employee", prepared.employeeNumber,
+    JSON.stringify({ fields: prepared.changedFields }));
+  return prepared.changedFields;
 }
 
 function parsePortalPermissions(value) {
@@ -8681,6 +9209,39 @@ function readAmuDocument(metadata) {
   return { content, detectedMime: payload.detectedMime, originalFilename };
 }
 
+function verifyActiveProtectedDocumentBlobs() {
+  if (!amuStorage) throw new Error("Der geschützte Dokumentenspeicher ist nicht verfügbar.");
+  const storageKeys = new Set();
+  const amuDocuments = tableExists("amu_documents") ? db.prepare(`
+    SELECT d.*, r.employee_number
+    FROM amu_documents d JOIN amu_reports r ON r.id = d.report_id
+    WHERE d.status = 'active'
+    ORDER BY d.created_at, d.id
+  `).all() : [];
+  const personnelDocuments = tableExists("personnel_record_documents") ? db.prepare(`
+    SELECT id, employee_number, storage_key, status, protected_payload, created_at, updated_at
+    FROM personnel_record_documents
+    WHERE status = 'active'
+    ORDER BY created_at, id
+  `).all() : [];
+  const verifyUniqueStorageKey = (storageKey) => {
+    const normalized = String(storageKey || "").toLowerCase();
+    if (!normalized || storageKeys.has(normalized)) {
+      throw new Error("Geschützte Dokumente besitzen ungültige oder doppelte Speicherverweise.");
+    }
+    storageKeys.add(normalized);
+  };
+  for (const document of amuDocuments) {
+    verifyUniqueStorageKey(document.storage_key);
+    readAmuDocument(document);
+  }
+  for (const document of personnelDocuments) {
+    verifyUniqueStorageKey(document.storage_key);
+    readPersonnelRecordDocument(document);
+  }
+  return { amuDocuments: amuDocuments.length, personnelDocuments: personnelDocuments.length, storageKeys: [...storageKeys] };
+}
+
 function sendAmuDocument(response, metadata, prepared = readAmuDocument(metadata)) {
   response.setHeader("Content-Type", prepared.detectedMime);
   response.setHeader("Content-Length", String(prepared.content.length));
@@ -8745,7 +9306,13 @@ function purgeExpiredAmuDocuments(today = viennaTodayIso()) {
 
 function reconcileOrphanAmuBlobs() {
   if (!amuStorage || !tableExists("amu_documents") || amuMutationInProgress > 0) return { removed: 0 };
+  const personnelFinalization = finalizeDeletedPersonnelRecordDocuments();
   const referenced = new Set(db.prepare("SELECT storage_key FROM amu_documents").all().map((row) => String(row.storage_key || "").toLowerCase()));
+  if (tableExists("personnel_record_documents")) {
+    for (const row of db.prepare("SELECT storage_key FROM personnel_record_documents WHERE status IN ('active','deleted')").all()) {
+      referenced.add(String(row.storage_key || "").toLowerCase());
+    }
+  }
   let removed = 0;
   for (const storageKey of amuStorage.listStorageKeys()) {
     if (referenced.has(storageKey)) continue;
@@ -8754,7 +9321,7 @@ function reconcileOrphanAmuBlobs() {
       removed += 1;
     }
   }
-  return { removed };
+  return { removed, personnelFinalization };
 }
 
 function vacationHrApprovalRequired() {
@@ -13697,6 +14264,24 @@ function verifyImportedProtectedPersonnelPayloads(importedDatabase) {
       verified += 1;
     }
   }
+  if (importedDatabaseHasColumn(importedDatabase, "personnel_record_documents", "protected_payload")) {
+    const documents = importedDatabase.prepare(`
+      SELECT id, employee_number, protected_payload
+      FROM personnel_record_documents
+      ORDER BY employee_number, created_at, id
+    `).all();
+    for (const document of documents) {
+      if (!document.protected_payload) throw new Error("missing protected personnel document payload");
+      const payload = storage.unprotectRecord(
+        document.protected_payload,
+        personnelRecordDocumentProtectionContext(document),
+        { allowLegacy: true },
+      );
+      const parsed = JSON.parse(payload);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected personnel document payload");
+      verified += 1;
+    }
+  }
   if (importedDatabaseHasColumn(importedDatabase, "amu_reports", "protected_payload")) {
     const reports = importedDatabase.prepare(`
       SELECT id, employee_lookup, protected_payload
@@ -13846,8 +14431,11 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   const currentAmuDocuments = tableExists("amu_documents")
     ? Number(db.prepare("SELECT COUNT(*) AS count FROM amu_documents WHERE status <> 'purged'").get().count || 0)
     : 0;
-  if (currentAmuDocuments > 0) {
-    throw httpError(409, "Diese Datenbank enthält geschützte AUM-Dokumente. Bitte Datenbank und AUM-Dateisicherung gemeinsam über die Wartungswerkzeuge wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
+  const currentPersonnelDocuments = tableExists("personnel_record_documents")
+    ? Number(db.prepare("SELECT COUNT(*) AS count FROM personnel_record_documents WHERE status <> 'purged'").get().count || 0)
+    : 0;
+  if (currentAmuDocuments + currentPersonnelDocuments > 0) {
+    throw httpError(409, "Diese Datenbank enthält geschützte Personalakt-Dokumente. Bitte Datenbank und private Dateisicherung gemeinsam über die Wartungswerkzeuge wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
   }
   if (serverModeActive) throw httpError(409, "Datenbankimporte sind im laufenden Serverbetrieb gesperrt und müssen in einem Wartungsfenster am Server durchgeführt werden.", "SERVER_MAINTENANCE_REQUIRED");
   if (!Buffer.isBuffer(request.body) || request.body.length < 1024) {
@@ -13858,6 +14446,7 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   fs.writeFileSync(importPath, request.body);
   let importedDatabase;
   let importedAmuDocuments = 0;
+  let importedPersonnelDocuments = 0;
   let importedProtectedPayloadError = false;
   let importedIntegrationCredentialError = false;
   try {
@@ -13865,7 +14454,9 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
     importedDatabase.prepare("SELECT name FROM sqlite_master LIMIT 1").all();
     const hasAmuDocuments = importedDatabase.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'amu_documents'").get();
     if (hasAmuDocuments) importedAmuDocuments = Number(importedDatabase.prepare("SELECT COUNT(*) AS count FROM amu_documents WHERE status <> 'purged'").get().count || 0);
-    if (!importedAmuDocuments) {
+    const hasPersonnelDocuments = importedDatabase.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'personnel_record_documents'").get();
+    if (hasPersonnelDocuments) importedPersonnelDocuments = Number(importedDatabase.prepare("SELECT COUNT(*) AS count FROM personnel_record_documents WHERE status <> 'purged'").get().count || 0);
+    if (!importedAmuDocuments && !importedPersonnelDocuments) {
       try { verifyImportedProtectedPersonnelPayloads(importedDatabase); }
       catch { importedProtectedPayloadError = true; }
     }
@@ -13885,9 +14476,9 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
     fs.rmSync(importPath, { force: true });
     throw httpError(409, "Die geschützten Zugangsdaten direkter Verbindungen gehören zu einem anderen Schlüsselsatz. Bitte die vollständige Serversicherung mit dem zugehörigen Integrationsschlüssel wiederherstellen oder die Verbindungen im Quellsystem entfernen.", "INTEGRATION_FULL_RESTORE_REQUIRED");
   }
-  if (importedAmuDocuments > 0) {
+  if (importedAmuDocuments + importedPersonnelDocuments > 0) {
     fs.rmSync(importPath, { force: true });
-    throw httpError(409, "Das ausgewählte Backup enthält geschützte AUM-Dokumente. Bitte die vollständige Datenbank- und AUM-Sicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
+    throw httpError(409, "Das ausgewählte Backup enthält geschützte Personalakt-Dokumente. Bitte die vollständige Datenbank- und private Dateisicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
   }
   const preserveBranding = String(request.query.preserveBranding ?? "1") !== "0";
   if (preserveBranding) {
@@ -14165,6 +14756,7 @@ app.post("/api/employees", (request, response) => {
   }
   assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
   const accessProfile = validatePersonnelAccessProfile(request.portalSession, request.body.accessProfile, employee);
+  const personnelRecordMutation = preparePersonnelRecordMutation(request, employee.personnelNumber, request.body.personnelRecord);
   db.exec("BEGIN");
   try {
     db.prepare(`
@@ -14190,6 +14782,7 @@ app.post("/api/employees", (request, response) => {
       employee.active,
     );
     applyPersonnelAccessProfile(request.portalSession, accessProfile);
+    persistPersonnelRecordMutation(personnelRecordMutation, "create");
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -14197,7 +14790,10 @@ app.post("/api/employees", (request, response) => {
     throw error;
   }
   auditPortal(request.portalSession?.employeeNumber || "local", "employee.create", "employee", employee.personnelNumber,
-    JSON.stringify({ timeConfirmationLevel: employee.timeConfirmationLevel }));
+    JSON.stringify({
+      timeConfirmationLevel: employee.timeConfirmationLevel,
+      personnelRecordFields: personnelRecordMutation?.changedFields || [],
+    }));
   reconcileOpenAmuResponsibilities(request.portalSession?.employeeNumber || "local");
   const responseEmployee = {
     ...employee,
@@ -14235,6 +14831,7 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
     ...employee,
     personnelNumber,
   });
+  const personnelRecordMutation = preparePersonnelRecordMutation(request, personnelNumber, request.body.personnelRecord);
   db.exec("BEGIN");
   try {
     const result = db.prepare(`
@@ -14261,6 +14858,7 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
     );
     if (!result.changes) throw httpError(404, "Die Person wurde nicht gefunden.");
     applyPersonnelAccessProfile(request.portalSession, accessProfile);
+    persistPersonnelRecordMutation(personnelRecordMutation, "update");
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -14274,6 +14872,7 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
       targetWorkdaysAfter: employee.targetWorkdaysPerWeek,
       sicknessWithoutAumBefore: Boolean(existing.sickness_without_aum_enabled),
       sicknessWithoutAumAfter: Boolean(employee.sicknessWithoutAumEnabled),
+      personnelRecordFields: personnelRecordMutation?.changedFields || [],
     }));
   reconcileOpenAmuResponsibilities(request.portalSession?.employeeNumber || "local");
   const responseEmployee = {
@@ -14307,6 +14906,15 @@ app.delete("/api/employees/:personnelNumber", (request, response) => {
   const protectedUser = db.prepare("SELECT employee_number, role, role_locked FROM portal_users WHERE employee_number = ?").get(request.params.personnelNumber);
   if (protectedUser && (protectedUser.role === "developer" || protectedUser.role_locked)) {
     throw httpError(403, "Das Teammitglied ist mit dem geschützten Developer-Zugang verbunden und kann nicht gelöscht werden.", "PORTAL_DEVELOPER_PROTECTED");
+  }
+  const protectedDocuments = tableExists("personnel_record_documents")
+    ? Number(db.prepare(`
+      SELECT COUNT(*) AS count FROM personnel_record_documents
+      WHERE employee_number = ? AND status <> 'purged'
+    `).get(request.params.personnelNumber)?.count || 0)
+    : 0;
+  if (protectedDocuments > 0) {
+    throw httpError(409, "Das Teammitglied besitzt noch geschützte Personalakt-Dokumente und kann deshalb nur deaktiviert werden.", "PERSONNEL_DOCUMENTS_PREVENT_DELETE");
   }
   const result = db.prepare("DELETE FROM employees WHERE personnel_number = ?").run(request.params.personnelNumber);
   if (!result.changes) throw httpError(404, "Die Person wurde nicht gefunden.");
@@ -16253,6 +16861,7 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) 
   if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
   const protectedProfile = access.canReadPhone || access.canReadSensitive
     ? personnelSensitiveProfile(employeeNumber) : emptyPersonnelSensitiveProfile();
+  const personnelDocuments = access.canReadDocuments ? personnelRecordDocumentRows(employeeNumber) : [];
   let serialized = [];
   if (access.canReadAmu) {
     let reports = db.prepare(`
@@ -16282,21 +16891,28 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) 
       }
     }
   }
-  const sections = [access.canReadPhone ? "phone" : "", access.canReadSensitive ? "sensitive" : "", access.canReadAmu ? "amu" : ""].filter(Boolean);
+  const sections = [access.canReadPhone ? "phone" : "", access.canReadSensitive ? "sensitive" : "",
+    access.canReadDocuments ? "documents" : "", access.canReadAmu ? "amu" : ""].filter(Boolean);
   auditPortal(session.employeeNumber, "personnel-record.view", "employee", employeeNumber,
-    JSON.stringify({ sections, amuEntries: serialized.length }));
+    JSON.stringify({ sections, documentEntries: personnelDocuments.length, amuEntries: serialized.length }));
   response.json({
     employee,
     profile: {
       phone: access.canReadPhone ? protectedProfile.phone : null,
       sensitive: access.canReadSensitive ? {
+        identity: protectedProfile.identity,
         socialSecurityNumber: protectedProfile.socialSecurityNumber,
         iban: protectedProfile.iban,
         bic: protectedProfile.bic,
         accountHolder: protectedProfile.accountHolder,
+        alternatePhone: protectedProfile.alternatePhone,
+        privateEmail: protectedProfile.privateEmail,
+        emergencyContact: protectedProfile.emergencyContact,
         address: protectedProfile.address,
+        employment: protectedProfile.employment,
       } : null,
     },
+    documents: personnelDocuments,
     reports: serialized,
     access,
     canOpenFiles: access.canOpenFiles,
@@ -16324,11 +16940,8 @@ app.put("/api/portal/v1/personnel-records/:employeeNumber", (request, response) 
     throw httpError(403, message, "PERSONNEL_PHONE_WRITE_DENIED");
   }
   const before = personnelSensitiveProfile(employeeNumber);
-  const next = {
-    ...before,
-    ...(hasSensitiveInput ? validatePersonnelSensitiveInput(request.body.sensitive || {}) : {}),
-    phone: hasPhoneInput ? normalizePersonnelPhone(request.body.phone) : before.phone,
-  };
+  const next = mergePersonnelSensitiveProfile(before, hasSensitiveInput ? request.body.sensitive || {} : {});
+  if (hasPhoneInput) next.phone = normalizePersonnelPhone(request.body.phone);
   const changedFields = changedPersonnelProfileFields(before, next);
   if (!changedFields.length) {
     return response.json({ ok: true, changedFields: [], access });
@@ -16356,6 +16969,143 @@ app.put("/api/portal/v1/personnel-records/:employeeNumber", (request, response) 
   auditPortal(session.employeeNumber, "personnel-record.update", "employee", employeeNumber,
     JSON.stringify({ fields: changedFields }));
   response.json({ ok: true, changedFields, access });
+});
+
+app.post("/api/portal/v1/personnel-records/:employeeNumber/documents", async (request, response) => {
+  const { session, access } = requirePersonnelRecordSession(request, { write: true });
+  if (!access.canWriteDocuments) {
+    auditPortal(session.employeeNumber, "personnel-record.document.access-denied", "employee",
+      String(request.params.employeeNumber || ""), "write");
+    throw httpError(403, "Personalakt-Dokumente dürfen mit diesem Zugang nicht hinzugefügt werden.", "PERSONNEL_DOCUMENT_WRITE_DENIED");
+  }
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  assertSessionEmployeeScope(session, employeeNumber);
+  if (!db.prepare("SELECT 1 FROM employees WHERE personnel_number = ?").get(employeeNumber)) {
+    throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
+  }
+  const { fields, document } = await parsePersonnelDocumentMultipart(request);
+  const documentFields = validatePersonnelDocumentFields(fields);
+  const storage = requireAmuStorage();
+  let stored = null;
+  let committed = false;
+  amuMutationInProgress += 1;
+  try {
+    stored = await storage.saveBuffer({
+      buffer: document.buffer,
+      originalName: document.originalName,
+      maxBytes: 15 * 1024 * 1024,
+    });
+    const documentId = crypto.randomUUID();
+    const protectedPayload = protectJson({
+      ...documentFields,
+      originalFilename: stored.originalFilename,
+      detectedMime: stored.detectedMime,
+      byteSize: stored.byteSize,
+      sha256: stored.sha256,
+      uploadedBy: session.employeeNumber,
+    }, personnelRecordDocumentProtectionContext({ id: documentId, employee_number: employeeNumber }));
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.prepare(`
+        INSERT INTO personnel_record_documents
+          (id, employee_number, storage_key, status, protected_payload)
+        VALUES (?, ?, ?, 'active', ?)
+      `).run(documentId, employeeNumber, stored.storageKey, protectedPayload);
+      auditPortal(session.employeeNumber, "personnel-record.document.upload", "personnel_record_document", documentId,
+        JSON.stringify({ fields: ["category", "title", "documentDate", "description", "file"] }));
+      db.exec("COMMIT");
+      committed = true;
+    } catch (error) {
+      try { db.exec("ROLLBACK"); } catch {}
+      throw error;
+    }
+    const created = personnelRecordDocumentRows(employeeNumber).find((entry) => entry.id === documentId);
+    response.status(201).json({ document: created, access });
+  } catch (error) {
+    if (!committed && stored?.storageKey) {
+      try { storage.deleteBlob(stored.storageKey); } catch {}
+    }
+    if (error.status) throw error;
+    if (error.code?.startsWith?.("AMU_")) {
+      const status = error.code.includes("TOO_LARGE") || error.code.includes("LIMIT")
+        ? 413 : error.code.includes("TYPE") || error.code.includes("HEIC") ? 415 : 400;
+      const code = error.code.replace(/^AMU_DOCUMENT_/, "PERSONNEL_DOCUMENT_")
+        .replace(/^AMU_/, "PERSONNEL_DOCUMENT_");
+      throw httpError(status, error.message, code);
+    }
+    throw error;
+  } finally {
+    amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
+  }
+});
+
+app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/content", (request, response) => {
+  const { session, access } = requirePersonnelRecordSession(request);
+  if (!access.canReadDocuments) {
+    auditPortal(session.employeeNumber, "personnel-record.document.access-denied", "employee",
+      String(request.params.employeeNumber || ""), "read");
+    throw httpError(403, "Personalakt-Dokumente dürfen mit diesem Zugang nicht geöffnet werden.", "PERSONNEL_DOCUMENT_READ_DENIED");
+  }
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  assertSessionEmployeeScope(session, employeeNumber);
+  const metadata = personnelRecordDocumentMetadata(employeeNumber, request.params.documentId);
+  if (!metadata) throw httpError(404, "Das Personalakt-Dokument wurde nicht gefunden.", "PERSONNEL_DOCUMENT_NOT_FOUND");
+  let prepared;
+  try {
+    prepared = readPersonnelRecordDocument(metadata);
+  } catch (error) {
+    auditPortal(session.employeeNumber, "personnel-record.document.integrity-failed", "personnel_record_document", metadata.id,
+      String(error.code || "read-failed"));
+    throw error;
+  }
+  auditPortal(session.employeeNumber, "personnel-record.document.download", "personnel_record_document", metadata.id);
+  sendAmuDocument(response, metadata, prepared);
+});
+
+app.delete("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId", (request, response) => {
+  const { session, access } = requirePersonnelRecordSession(request, { write: true });
+  if (!access.canWriteDocuments) {
+    auditPortal(session.employeeNumber, "personnel-record.document.access-denied", "employee",
+      String(request.params.employeeNumber || ""), "delete");
+    throw httpError(403, "Personalakt-Dokumente dürfen mit diesem Zugang nicht gelöscht werden.", "PERSONNEL_DOCUMENT_WRITE_DENIED");
+  }
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  assertSessionEmployeeScope(session, employeeNumber);
+  const metadata = personnelRecordDocumentMetadata(employeeNumber, request.params.documentId);
+  if (!metadata) throw httpError(404, "Das Personalakt-Dokument wurde nicht gefunden.", "PERSONNEL_DOCUMENT_NOT_FOUND");
+  const purgedPayload = purgedPersonnelRecordDocumentPayload(metadata);
+  amuMutationInProgress += 1;
+  try {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const deleted = db.prepare(`
+        UPDATE personnel_record_documents
+        SET status = 'deleted', deleted_by = ?, deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND employee_number = ? AND status = 'active'
+      `).run(session.employeeNumber, metadata.id, employeeNumber);
+      if (!deleted.changes) throw httpError(404, "Das Personalakt-Dokument wurde nicht gefunden.", "PERSONNEL_DOCUMENT_NOT_FOUND");
+      auditPortal(session.employeeNumber, "personnel-record.document.delete", "personnel_record_document", metadata.id);
+      db.exec("COMMIT");
+    } catch (error) {
+      try { db.exec("ROLLBACK"); } catch {}
+      throw error;
+    }
+    try {
+      requireAmuStorage().deleteBlob(metadata.storage_key);
+      db.prepare(`
+        UPDATE personnel_record_documents
+        SET status = 'purged', protected_payload = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND status = 'deleted'
+      `).run(purgedPayload, metadata.id);
+    } catch (error) {
+      auditPortal("system", "personnel-record.document.purge-failed", "personnel_record_document", metadata.id,
+        String(error.code || "delete-failed"));
+      throw httpError(503, "Das Dokument wurde gesperrt, konnte aber noch nicht vollständig aus dem Dateispeicher entfernt werden.", "PERSONNEL_DOCUMENT_PURGE_FAILED");
+    }
+    response.status(204).end();
+  } finally {
+    amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
+  }
 });
 
 app.get("/api/portal/v1/me/amu-reports", (request, response) => {
@@ -20597,6 +21347,7 @@ function startServer() {
     try { runSicknessEscalationSweep(); } catch (error) { console.error("Krankmeldungs-Fristenprüfung fehlgeschlagen:", error); }
     processOutboundNotificationJobs().catch((error) => console.error("Externe Warnmeldungen konnten nicht verarbeitet werden:", error));
     retentionInterval = setInterval(() => {
+      try { reconcileOrphanAmuBlobs(); } catch (error) { console.error("Dokumentenabgleich fehlgeschlagen:", error); }
       try { purgeExpiredAmuDocuments(); } catch (error) { console.error("AUM-Aufbewahrungsprüfung fehlgeschlagen:", error); }
       try { purgeExpiredSicknessData(); } catch (error) { console.error("Krankmeldungs-Aufbewahrungsprüfung fehlgeschlagen:", error); }
     }, 24 * 60 * 60 * 1000);
@@ -20733,5 +21484,9 @@ module.exports = {
   validateUsbFeatures,
   validateUsbEmployees,
   usbProvisioningAvailability,
+  createDatabaseBackupToDirectory,
+  verifyActiveProtectedDocumentBlobs,
+  verifyProtectedBackupPair,
+  finalizeDeletedPersonnelRecordDocuments,
   releaseInstanceLockForTests,
 };
