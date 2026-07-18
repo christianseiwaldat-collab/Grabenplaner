@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.70 Beta
+
+- AUM-Dokumente und erkannte Gesundheitsdaten sind serverseitig besonders geschützt; Zugriffe werden nachvollziehbar protokolliert.
+- Der Personalakt unterstützt verschlüsselte sensible Stammdaten wie Sozialversicherungsnummer, Bankverbindung, Adresse und geregelte Telefonrechte.
+- Krankmeldungen können im Mitarbeiterportal direkt mit einer AUM verbunden werden; lokale OCR-Vorschläge werden vor der Übermittlung bestätigt und serverseitig geprüft.
+- Für Vertrauensstufe A stehen konfigurierbare Krankenstände ohne AUM sowie nachvollziehbare Bewertungs-Snapshots für Krankenstunden bereit.
+- Eindeutig erkannte und zugeordnete AUM-Fälle können nach freigegebenen Regeln automatisch abgeschlossen werden; unsichere Fälle bleiben in der manuellen Prüfung.
+
 ## v0.69.1 Beta · Serviceupdate
 
 - Der Portable-Updater schützt nur noch die vorgesehenen Datenordner an der Paketwurzel. Gleichnamige Laufzeitordner innerhalb von `node_modules` werden vollständig aktualisiert.
