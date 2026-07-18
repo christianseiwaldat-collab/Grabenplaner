@@ -10,6 +10,7 @@ const portalState = {
   unreadNotifications: 0,
   amuReports: [],
   amuPolicy: null,
+  sicknessAumAllowance: null,
   sicknessCases: [],
   leadershipSicknessCases: [],
   sicknessNotificationPreferences: null,
@@ -56,7 +57,7 @@ const optionNames = {
   other: "Sonstiges",
 };
 const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-const statusLabels = { pending: "Offen", submitted: "Übermittelt", reported: "Gemeldet", aum_received: "AUM vorhanden", recovered: "Wieder arbeitsfähig", pending_local: "Offen", preliminary_local: "Vorläufig genehmigt", pending_hr: "Wartet auf Personalleitung", approved: "Genehmigt", rejected: "Abgelehnt", cancelled: "Storniert", withdrawn: "Zurückgezogen", reviewed: "Geprüft", returned: "Ergänzung erforderlich", warning: "Besetzung prüfen", yellow: "AUM überfällig", red: "Rot eskaliert" };
+const statusLabels = { pending: "Offen", submitted: "Übermittelt", reported: "Gemeldet", aum_received: "AUM vorhanden", not_required: "AUM nicht erforderlich", recovered: "Wieder arbeitsfähig", pending_local: "Offen", preliminary_local: "Vorläufig genehmigt", pending_hr: "Wartet auf Personalleitung", approved: "Genehmigt", rejected: "Abgelehnt", cancelled: "Storniert", withdrawn: "Zurückgezogen", reviewed: "Geprüft", returned: "Ergänzung erforderlich", warning: "Besetzung prüfen", yellow: "AUM überfällig", red: "Rot eskaliert" };
 
 function applyDeviceMode() {
   const compact = window.matchMedia("(max-width: 720px)").matches;
@@ -90,7 +91,7 @@ const el = Object.fromEntries([
   "timeOffChangeForm", "timeOffChangeTitle", "timeOffChangeOriginal", "timeOffChangeFields", "timeOffChangeFrom", "timeOffChangeTo",
   "timeOffChangeToField", "timeOffChangeTimes", "timeOffChangeStart", "timeOffChangeEnd", "timeOffChangeNote", "timeOffChangeMessage",
   "historyDetailDialog", "historyDetailTitle", "historyDetailSummary", "historyDecisionTimeline", "notificationsDialog", "notificationList",
-  "markAllNotificationsRead", "sicknessCaseForm", "sicknessStartDate", "sicknessExpectedEnd", "sicknessEmployeeNote", "sicknessMessage", "sicknessSubmitButton", "sicknessCaseList",
+  "markAllNotificationsRead", "sicknessCaseForm", "sicknessStartDate", "sicknessExpectedEnd", "sicknessEmployeeNote", "sicknessMessage", "sicknessSubmitButton", "sicknessCaseList", "sicknessAumAllowance",
   "sicknessAmuPanel", "sicknessAmuDocuments", "sicknessAmuCamera", "sicknessAmuUploadHint", "sicknessAmuOcrStatus", "sicknessAmuOcrStatusTitle", "sicknessAmuOcrStatusText", "sicknessAmuOcrConfirmField", "sicknessAmuOcrConfirmed",
   "amuReportForm", "amuSicknessCaseId", "amuIncapacityFrom", "amuIncapacityTo", "amuEmployeeNote", "amuDocuments",
   "amuMessage", "amuSubmitButton", "amuReportList", "amuCamera", "amuUploadHint", "amuOcrStatus", "amuOcrStatusTitle", "amuOcrStatusText", "amuOcrConfirmField", "amuOcrConfirmed", "portalDeploymentBanner",
@@ -1260,7 +1261,7 @@ function renderLeadershipApprovals() {
       : kind === "amu" ? `${dateText(item.incapacity_from)}${item.incapacity_to ? ` – ${dateText(item.incapacity_to)}` : " · Ende offen"}` : leadershipRequestPeriodText(item);
     const risk = kind === "sickness" && item.staffing_risk?.atRisk ? " · Mindestbesetzung gefährdet" : "";
     const status = kind === "sickness" ? (item.severity || item.status || "reported") : (item.status || "pending");
-    const amuStatusText = ({ required: "AUM erforderlich", received: "AUM eingelangt", reviewed: "AUM geprüft" })[item.aum_status] || "Krankmeldung erfasst";
+    const amuStatusText = ({ required: "AUM erforderlich", not_required: "AUM nicht erforderlich", received: "AUM eingelangt", reviewed: "AUM geprüft" })[item.aum_status] || "Krankmeldung erfasst";
     const statusText = kind === "sickness"
       ? ({ red: "Rot eskaliert", yellow: "AUM überfällig", warning: "Besetzung prüfen", normal: amuStatusText }[status] || amuStatusText)
       : (statusLabels[item.status] || item.status || "Offen");
@@ -1928,6 +1929,7 @@ function sicknessStatusText(item) {
   if (item.status === "recovered") return item.return_to_work_date
     ? `Wieder arbeitsfähig ab ${dateText(item.return_to_work_date)}` : "Wieder arbeitsfähig";
   if (item.status === "aum_received") return "AUM vorhanden";
+  if (item.aum_allowance?.required === false) return "Ohne AUM zulässig";
   if (item.severity === "red") return "AUM-Frist überschritten";
   if (item.severity === "yellow") return "AUM überfällig";
   if (item.staffing_risk?.atRisk) return "Besetzung wird geprüft";
@@ -1944,12 +1946,14 @@ function renderSicknessCases() {
     const reports = portalState.amuReports.filter((report) => Number(report.sickness_case_id || 0) === Number(item.id));
     const risk = item.staffing_risk?.atRisk ? '<span class="sickness-risk-note">Mindestbesetzung wird durch die Leitung geprüft</span>' : "";
     const reportNote = reports.length ? `<span>${reports.length} ${reports.length === 1 ? "AUM" : "AUMs"} verschlüsselt hinterlegt</span>` : "";
+    const creditedMinutes = Number(item.sickness_valuation?.total_minutes || 0);
+    const creditNote = creditedMinutes > 0 ? `<span>Angerechnete Krankenstandszeit: ${esc(durationText(creditedMinutes))}</span>` : "";
     const actions = [
       canAttach ? '<button class="text-button" data-add-amu type="button">AUM nachreichen</button>' : "",
       canReturn ? '<button class="text-button" data-recover-sickness type="button">Arbeitsfähigkeit melden</button>' : "",
       canWithdraw ? '<button class="cancel-request" data-withdraw-sickness type="button">Zurückziehen</button>' : "",
     ].filter(Boolean).join("");
-    return `<article class="request-item sickness-case" data-sickness-case-id="${Number(item.id)}"><div><strong>${esc(period)}</strong>${item.employee_note ? `<span>${esc(item.employee_note)}</span>` : ""}${reportNote}${risk}<span class="status ${esc(item.severity || item.status)}">${esc(sicknessStatusText(item))}</span></div>${actions ? `<div class="sickness-case-actions">${actions}</div>` : ""}</article>`;
+    return `<article class="request-item sickness-case" data-sickness-case-id="${Number(item.id)}"><div><strong>${esc(period)}</strong>${item.employee_note ? `<span>${esc(item.employee_note)}</span>` : ""}${reportNote}${creditNote}${risk}<span class="status ${esc(item.severity || item.status)}">${esc(sicknessStatusText(item))}</span></div>${actions ? `<div class="sickness-case-actions">${actions}</div>` : ""}</article>`;
   }).join("") : '<p class="empty-state">Noch keine Krankmeldung vorhanden.</p>';
   const currentValue = el.amuSicknessCaseId.value;
   el.amuSicknessCaseId.innerHTML = '<option value="">Automatisch zuordnen</option>' + attachableCases.map((item) => `<option value="${Number(item.id)}">${dateText(item.start_date)}${item.expected_end ? `–${dateText(item.expected_end)}` : " · Ende offen"}${item.status === "recovered" ? " · abgeschlossen" : ""}</option>`).join("");
@@ -1960,7 +1964,9 @@ async function loadSicknessCases() {
   try {
     const data = await api("/api/portal/v1/me/sickness-cases");
     portalState.sicknessCases = data.cases || [];
+    portalState.sicknessAumAllowance = data.aumAllowance || null;
     renderSicknessCases();
+    renderSicknessAumAllowance();
   } catch (error) {
     el.sicknessCaseList.innerHTML = `<p class="message error">${esc(error.message)}</p>`;
   }
@@ -2100,6 +2106,24 @@ function amuOcrContext(contextName = "amu") {
     confirmField: sickness ? el.sicknessAmuOcrConfirmField : el.amuOcrConfirmField,
     confirmed: sickness ? el.sicknessAmuOcrConfirmed : el.amuOcrConfirmed,
   };
+}
+
+function renderSicknessAumAllowance() {
+  if (!el.sicknessAumAllowance) return;
+  const allowance = portalState.sicknessAumAllowance;
+  if (!allowance || allowance.enabled !== true) {
+    el.sicknessAumAllowance.classList.add("hidden");
+    el.sicknessAumAllowance.textContent = "";
+    return;
+  }
+  el.sicknessAumAllowance.classList.remove("hidden");
+  if (allowance.eligible) {
+    el.sicknessAumAllowance.textContent = `Ohne AUM möglich · noch ${allowance.remainingCases} von ${allowance.maxCasesPerYear} Fällen verfügbar · maximal ${allowance.maxCalendarDaysPerCase} Kalendertag${allowance.maxCalendarDaysPerCase === 1 ? "" : "e"} je Fall.`;
+  } else if (allowance.reason === "quota_exhausted") {
+    el.sicknessAumAllowance.textContent = `AUM erforderlich · das Kontingent für ${allowance.policyYear} ist ausgeschöpft.`;
+  } else {
+    el.sicknessAumAllowance.textContent = "AUM laut aktueller Unternehmensregel erforderlich.";
+  }
 }
 
 function updateAmuOcrStatus(contextName, title, text, state = "working") {

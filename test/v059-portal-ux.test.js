@@ -102,6 +102,31 @@ test("AUM Block 3: Krankmeldung kann ein Dokument direkt mit denselben Uploadreg
   assert.match(source, /selectedAmuFiles\("sickness"\)/);
 });
 
+test("AUM Block 4: PL-Regel, persönliche Freigabe und Soll-Arbeitstage sind bedienbar", () => {
+  const adminHtml = fs.readFileSync(path.join(projectRoot, "public", "index.html"), "utf8");
+  const adminSource = fs.readFileSync(path.join(projectRoot, "public", "app.js"), "utf8");
+
+  assert.match(adminHtml, /id="sicknessAumAllowanceEnabled"/);
+  assert.match(adminHtml, /id="sicknessAumAllowanceMaxCases"[^>]*max="20"/);
+  assert.match(adminHtml, /id="sicknessAumAllowanceMaxDays"[^>]*max="3"/);
+  assert.match(adminHtml, /id="employeeTargetWorkdays"[^>]*min="1"[^>]*max="6"/);
+  assert.match(adminHtml, /id="employeeSicknessWithoutAumEnabled"/);
+  assert.match(adminSource, /aumAllowance:\s*\{[\s\S]*?maxCasesPerYear:[\s\S]*?maxCalendarDaysPerCase:/);
+  assert.match(adminSource, /function syncEmployeeSicknessAllowanceField/);
+  assert.match(adminSource, /targetWorkdaysPerWeek: Number\(elements\.employeeTargetWorkdays\.value\)/);
+});
+
+test("AUM Block 4: Mitarbeiterportal zeigt Kontingent und gespeicherte Krankenstandszeit", () => {
+  const portalHtml = fs.readFileSync(path.join(projectRoot, "public", "portal.html"), "utf8");
+  const portalSource = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
+
+  assert.match(portalHtml, /id="sicknessAumAllowance"/);
+  assert.match(portalSource, /Ohne AUM möglich · noch \$\{allowance\.remainingCases\}/);
+  assert.match(portalSource, /AUM laut aktueller Unternehmensregel erforderlich/);
+  assert.match(portalSource, /Angerechnete Krankenstandszeit:/);
+  assert.match(portalSource, /item\.aum_allowance\?\.required === false/);
+});
+
 test("Portal: Rückkehr von der Handy-Kamera hält den AUM-Bereich aktiv", () => {
   const source = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
   const selectionBlock = source.match(/function handleAmuFileSelection\(event\) \{[\s\S]+?\n\}/);

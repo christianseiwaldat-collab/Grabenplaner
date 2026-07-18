@@ -135,7 +135,7 @@ const elements = Object.fromEntries(
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount",
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
-    "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel",
+    "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
     "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
@@ -150,7 +150,7 @@ const elements = Object.fromEntries(
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan",
-    "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "amuSettingsHint", "saveAmuSettingsButton",
+    "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuSettingsHint", "saveAmuSettingsButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
@@ -1490,7 +1490,7 @@ function renderEmployees() {
       <td>${escapeHtml(employee.position_name || "Verkaufsmitarbeiter")}</td>
       <td>${escapeHtml(employee.home_location_name || employee.home_location_id || "–")}</td>
       <td>${escapeHtml(employee.preferred_department_name || "–")}</td>
-      <td>${String(employee.contracted_hours).replace(".", ",")} h</td>
+      <td>${String(employee.contracted_hours).replace(".", ",")} h · ${Number(employee.target_workdays_per_week || 5)} T.</td>
       <td>${preferredDayLabels[employee.preferred_day_off] || "–"}</td>
       <td>${escapeHtml(formatFixedWorkdays(employee.fixed_workdays))}</td>
       <td><span class="status-badge ${employee.active ? "" : "inactive"}">${employee.active ? "Aktiv" : "Inaktiv"}</span></td>
@@ -2289,7 +2289,10 @@ async function loadAmuSettings() {
     elements.amuOcrEnabled.checked = policy.ocrEnabled !== false;
     elements.sicknessLocalWarningDays.value = Number(policy.localWarningDays ?? 2);
     elements.sicknessHrWarningDays.value = Number(policy.hrWarningDays ?? 3);
-    [elements.amuUploadMaxMb, elements.amuStoredMaxMb, elements.amuConvertImagesToPdf, elements.amuGrayscaleImages, elements.amuOcrEnabled, elements.sicknessLocalWarningDays, elements.sicknessHrWarningDays, elements.saveAmuSettingsButton]
+    elements.sicknessAumAllowanceEnabled.checked = policy.aumAllowance?.enabled === true;
+    elements.sicknessAumAllowanceMaxCases.value = Number(policy.aumAllowance?.maxCasesPerYear ?? 3);
+    elements.sicknessAumAllowanceMaxDays.value = Number(policy.aumAllowance?.maxCalendarDaysPerCase ?? 1);
+    [elements.amuUploadMaxMb, elements.amuStoredMaxMb, elements.amuConvertImagesToPdf, elements.amuGrayscaleImages, elements.amuOcrEnabled, elements.sicknessLocalWarningDays, elements.sicknessHrWarningDays, elements.sicknessAumAllowanceEnabled, elements.sicknessAumAllowanceMaxCases, elements.sicknessAumAllowanceMaxDays, elements.saveAmuSettingsButton]
       .forEach((control) => { if (control) control.disabled = !result.canChange; });
     elements.amuSettingsHint.textContent = result.canChange ? "Änderbar durch Admin oder Personalleitung." : "Nur Admin oder Personalleitung kann diese Werte ändern.";
   } catch (error) {
@@ -2310,6 +2313,11 @@ async function saveAmuSettings() {
         ocrEnabled: elements.amuOcrEnabled.checked,
         localWarningDays: Number(elements.sicknessLocalWarningDays.value),
         hrWarningDays: Number(elements.sicknessHrWarningDays.value),
+        aumAllowance: {
+          enabled: elements.sicknessAumAllowanceEnabled.checked,
+          maxCasesPerYear: Number(elements.sicknessAumAllowanceMaxCases.value),
+          maxCalendarDaysPerCase: Number(elements.sicknessAumAllowanceMaxDays.value),
+        },
       }),
     });
     state.amuPolicy = result.policy;
@@ -4776,6 +4784,18 @@ function renderEmployeeAccessProfile(employee = null) {
       : "App-Rolle und Rechte sind hier nur sichtbar. Änderungen sind ausschließlich durch Developer oder IT-Admin möglich.";
 }
 
+function syncEmployeeSicknessAllowanceField() {
+  const canManage = canManageWifiAutomationSettings();
+  if (!elements.employeeSicknessWithoutAumField) return;
+  elements.employeeSicknessWithoutAumField.classList.toggle("hidden", !canManage);
+  if (!canManage) return;
+  const trustA = elements.employeeTimeConfirmationLevel.value === "A";
+  elements.employeeSicknessWithoutAumEnabled.disabled = state.employeeEditMode === "display" || !trustA;
+  elements.employeeSicknessWithoutAumHint.textContent = trustA
+    ? "Wirksam, sobald auch die Unternehmensregel aktiviert ist."
+    : "Die Freigabe bleibt gespeichert, wird aber erst mit Vertrauensstufe A wirksam.";
+}
+
 function openEmployeeModal(employee = null) {
   const permissions = state.portalSession?.user?.permissions || [];
   const fullAccess = !state.portalStatus?.portalEnabled || permissions.includes("employees:write");
@@ -4791,6 +4811,7 @@ function openEmployeeModal(employee = null) {
   document.querySelector("#employeeName").value = employee?.full_name || "";
   document.querySelector("#employeeNickname").value = employee?.nickname || "";
   document.querySelector("#employeeHours").value = employee?.contracted_hours ?? 38.5;
+  elements.employeeTargetWorkdays.value = employee?.target_workdays_per_week ?? 5;
   elements.employeePosition.innerHTML = (state.positions || []).map((position) =>
     `<option value="${escapeHtml(position.id)}">${escapeHtml(position.name)}</option>`,
   ).join("");
@@ -4798,6 +4819,7 @@ function openEmployeeModal(employee = null) {
   const canManageConfirmationLevel = canManageWifiAutomationSettings();
   const canViewConfirmationLevel = canManageConfirmationLevel || Boolean(employee && "time_confirmation_level" in employee);
   elements.employeeTimeConfirmationLevel.value = employee?.time_confirmation_level || "C";
+  elements.employeeSicknessWithoutAumEnabled.checked = employee?.sickness_without_aum_enabled === true;
   elements.employeeTimeConfirmationLevelField?.classList.toggle("hidden", !canViewConfirmationLevel);
   elements.employeeHomeLocation.value = employee?.home_location_id || state.locationId || state.locations?.[0]?.id || "01";
   updateEmployeeDepartmentOptions(employee?.preferred_department_id || "");
@@ -4813,11 +4835,12 @@ function openEmployeeModal(employee = null) {
   updateColorPicker(employee?.color || "#0b84c6");
   const displayOnly = state.employeeEditMode === "display";
   const protectedControls = [
-    "employeeName", "employeeNickname", "employeeHours", "employeeHomeLocation", "employeePosition",
+    "employeeName", "employeeNickname", "employeeHours", "employeeTargetWorkdays", "employeeHomeLocation", "employeePosition",
     "employeeTimeConfirmationLevel", "employeePreferredDepartment", "employeePreferredDay", "employeeActive",
   ];
   for (const id of protectedControls) document.querySelector(`#${id}`).disabled = displayOnly;
   elements.employeeTimeConfirmationLevel.disabled = displayOnly || !canManageConfirmationLevel;
+  syncEmployeeSicknessAllowanceField();
   document.querySelectorAll('[name="employeeFixedWorkday"]').forEach((control) => { control.disabled = displayOnly; });
   document.querySelector("#employeeColorPicker").disabled = false;
   document.querySelector("#employeeColorHex").disabled = false;
@@ -5131,6 +5154,7 @@ async function saveEmployee(event) {
     fullName: document.querySelector("#employeeName").value,
     nickname: document.querySelector("#employeeNickname").value,
     contractedHours: Number(document.querySelector("#employeeHours").value),
+    targetWorkdaysPerWeek: Number(elements.employeeTargetWorkdays.value),
     positionId: elements.employeePosition.value,
     homeLocationId: elements.employeeHomeLocation.value,
     preferredDepartmentId: elements.employeePreferredDepartment.value,
@@ -5139,7 +5163,10 @@ async function saveEmployee(event) {
     color: state.selectedColor,
     active: document.querySelector("#employeeActive").checked,
   };
-  if (canManageWifiAutomationSettings()) body.timeConfirmationLevel = elements.employeeTimeConfirmationLevel.value;
+  if (canManageWifiAutomationSettings()) {
+    body.timeConfirmationLevel = elements.employeeTimeConfirmationLevel.value;
+    body.sicknessWithoutAumEnabled = elements.employeeSicknessWithoutAumEnabled.checked;
+  }
   const editedEmployee = state.allEmployees.find((employee) => employee.personnel_number === number) || null;
   if (canEditEmployeeAccessProfile(editedEmployee)) {
     const role = elements.employeeAppRole.value || "employee";
@@ -7044,6 +7071,7 @@ elements.cancelLocationEditButton.addEventListener("click", resetLocationForm);
 elements.cancelDepartmentEditButton.addEventListener("click", resetDepartmentForm);
 elements.cancelPositionEditButton.addEventListener("click", resetPositionForm);
 elements.employeeHomeLocation.addEventListener("change", () => updateEmployeeDepartmentOptions());
+elements.employeeTimeConfirmationLevel?.addEventListener("change", syncEmployeeSicknessAllowanceField);
 elements.employeeAppRole?.addEventListener("change", () => {
   const employeeNumber = document.querySelector("#employeeNumber").value.trim();
   renderEmployeeAccessProfile(state.allEmployees.find((employee) => employee.personnel_number === employeeNumber) || null);

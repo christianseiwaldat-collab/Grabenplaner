@@ -175,6 +175,8 @@ test.before(async () => {
   insertEmployee("609", "Identität Treffer", "91", departmentA);
   insertEmployee("610", "Identität Manuell", "91", departmentA);
   insertEmployee("611", "Identität Ohne Stammdaten", "91", departmentA);
+  insertEmployee("612", "AUM Kontingent", "91", departmentA);
+  insertEmployee("613", "AUM Dauer", "91", departmentA);
 
   const employeeAuth = session("591", "employee");
   const managerAuth = session("593", "manager");
@@ -1015,5 +1017,116 @@ test("AUM Block 3: direkter Anhang prüft die tatsächliche Datei gegen den gesc
   } finally {
     db.prepare("UPDATE portal_settings SET value = '1', updated_at = CURRENT_TIMESTAMP WHERE key = 'amu_ocr_enabled'").run();
     delete process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT;
+  }
+});
+
+test("AUM Block 4: Stufe-A-Kontingent, rückwirkende AUM-Pflicht und Krankenstunden bleiben nachvollziehbar", async () => {
+  const { hrAuth, managerAuth, departmentA } = auth;
+  const allowanceEmployee = session("612", "employee");
+  const durationEmployee = session("613", "employee");
+  db.prepare(`
+    UPDATE employees SET contracted_hours = 32, target_workdays_per_week = 5,
+      time_confirmation_level = 'A', sickness_without_aum_enabled = 1,
+      preferred_day_off = '', fixed_workdays = ''
+    WHERE personnel_number IN ('612', '613')
+  `).run();
+
+  const previousSettings = await request("/api/portal/v1/amu-settings", { auth: hrAuth });
+  assert.equal(previousSettings.response.status, 200, JSON.stringify(previousSettings.payload));
+  const currentPolicy = previousSettings.payload.policy;
+  const updateSettings = async (aumAllowance) => request("/api/portal/v1/amu-settings", {
+    method: "PUT",
+    auth: hrAuth,
+    body: {
+      uploadMaxMb: currentPolicy.uploadMaxMb,
+      storedMaxMb: currentPolicy.storedMaxMb,
+      convertImagesToPdf: currentPolicy.convertImagesToPdf,
+      grayscaleImages: currentPolicy.grayscaleImages,
+      ocrEnabled: currentPolicy.ocrEnabled,
+      localWarningDays: currentPolicy.localWarningDays,
+      hrWarningDays: currentPolicy.hrWarningDays,
+      aumAllowance,
+    },
+  });
+
+  try {
+    const invalid = await updateSettings({ enabled: true, maxCasesPerYear: 2, maxCalendarDaysPerCase: 4 });
+    assert.equal(invalid.response.status, 400, JSON.stringify(invalid.payload));
+
+    const configured = await updateSettings({ enabled: true, maxCasesPerYear: 2, maxCalendarDaysPerCase: 1 });
+    assert.equal(configured.response.status, 200, JSON.stringify(configured.payload));
+
+    const today = mostRecentPlanningDate();
+    const dates = [offsetDate(today, -1), offsetDate(today, -2), offsetDate(today, -3)];
+    const createdCases = [];
+    for (const date of dates) {
+      const created = await request("/api/portal/v1/me/sickness-cases", {
+        method: "POST", auth: allowanceEmployee, body: { startDate: date, expectedEnd: date, note: "" },
+      });
+      assert.equal(created.response.status, 201, JSON.stringify(created.payload));
+      createdCases.push(created.payload.case);
+    }
+    assert.equal(createdCases[0].aum_allowance.required, false);
+    assert.equal(createdCases[0].aum_allowance.consumes_quota, true);
+    assert.equal(createdCases[0].sickness_valuation.minutes_per_workday, 384);
+    assert.equal(createdCases[0].sickness_valuation.total_minutes, 384);
+    assert.equal(createdCases[1].aum_allowance.required, false);
+    assert.equal(createdCases[2].aum_allowance.required, true);
+    assert.equal(createdCases[2].aum_allowance.reason, "quota_exhausted");
+
+    const ownCases = await request("/api/portal/v1/me/sickness-cases", { auth: allowanceEmployee });
+    assert.equal(ownCases.response.status, 200, JSON.stringify(ownCases.payload));
+    assert.equal(ownCases.payload.aumAllowance.usedCases, 2);
+    assert.equal(ownCases.payload.aumAllowance.remainingCases, 0);
+    assert.equal(ownCases.payload.aumAllowance.maxCalendarDaysPerCase, 1);
+
+    const firstDate = dates[0];
+    const monday = (() => {
+      const date = new Date(`${firstDate}T12:00:00Z`);
+      const day = date.getUTCDay() || 7;
+      date.setUTCDate(date.getUTCDate() - day + 1);
+      return date.toISOString().slice(0, 10);
+    })();
+    const schedule = await request(`/api/schedule?week=${monday}&location=91&department=${departmentA}`, { auth: managerAuth });
+    assert.equal(schedule.response.status, 200, JSON.stringify(schedule.payload));
+    assert.equal(schedule.payload.sicknessCreditTotals["612"], 1152);
+
+    const evaluation = await request(`/api/portal/v1/time-day-evaluations?locationId=91&departmentId=${departmentA}&date=${firstDate}`, {
+      auth: managerAuth,
+    });
+    assert.equal(evaluation.response.status, 200, JSON.stringify(evaluation.payload));
+    const employeeDay = evaluation.payload.dayReview.evaluations.find((entry) => entry.employeeNumber === "612");
+    assert.equal(employeeDay.absenceCreditedMinutes, 384);
+    assert.equal(employeeDay.excused.label, "Krankenstand");
+
+    const aum = await uploadAum(allowanceEmployee, {
+      incapacityFrom: firstDate, incapacityTo: firstDate, sicknessCaseId: createdCases[0].id,
+    });
+    assert.equal(aum.response.status, 201, JSON.stringify(aum.payload));
+    const reviewed = await request(`/api/portal/v1/amu-reports/${aum.payload.report.id}/review`, {
+      method: "PUT", auth: hrAuth, body: { action: "reviewed", note: "Geprüft" },
+    });
+    assert.equal(reviewed.response.status, 200, JSON.stringify(reviewed.payload));
+    const afterReview = await request("/api/portal/v1/me/sickness-cases", { auth: allowanceEmployee });
+    assert.equal(afterReview.payload.aumAllowance.usedCases, 1);
+    assert.equal(afterReview.payload.aumAllowance.remainingCases, 1);
+    assert.equal(afterReview.payload.cases.find((entry) => Number(entry.id) === Number(createdCases[0].id)).aum_allowance.reason, "aum_reviewed");
+
+    const durationStart = today;
+    const durationCase = await request("/api/portal/v1/me/sickness-cases", {
+      method: "POST", auth: durationEmployee, body: { startDate: durationStart, expectedEnd: "", note: "" },
+    });
+    assert.equal(durationCase.response.status, 201, JSON.stringify(durationCase.payload));
+    assert.equal(durationCase.payload.case.aum_allowance.required, false);
+    runSicknessEscalationSweep(new Date(`${offsetDate(durationStart, 1)}T12:00:00+02:00`));
+    const durationView = await request("/api/portal/v1/me/sickness-cases", { auth: durationEmployee });
+    assert.equal(durationView.response.status, 200, JSON.stringify(durationView.payload));
+    assert.equal(durationView.payload.cases[0].aum_allowance.required, true);
+    assert.equal(durationView.payload.cases[0].aum_allowance.reason, "duration_exceeded");
+    assert.equal(durationView.payload.cases[0].aum_allowance.consumes_quota, false);
+    assert.equal(durationView.payload.aumAllowance.usedCases, 0);
+    assert.equal(durationView.payload.aumAllowance.remainingCases, 2);
+  } finally {
+    await updateSettings(currentPolicy.aumAllowance || { enabled: false, maxCasesPerYear: 3, maxCalendarDaysPerCase: 1 });
   }
 });
