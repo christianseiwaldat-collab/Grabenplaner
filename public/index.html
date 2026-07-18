@@ -116,6 +116,7 @@
               <button class="secondary-button schedule-note-button" id="scheduleNoteButton" type="button"><span>✎</span><span>Bemerkung<small id="scheduleNoteButtonHint">hinzufügen</small></span></button>
               <label class="department-pdf-control hidden" id="departmentPdfControl"><span>Abteilungs-PDF</span><select id="departmentPdfSelect"></select><a class="secondary-button" id="departmentPdfButton" href="/api/schedule.pdf"><span>↓</span></a></label>
               <a class="primary-button" id="pdfButton" href="/api/schedule.pdf"><span>↓</span> PDF exportieren</a>
+              <div class="page-theme-switch" role="group" aria-label="Darstellung der Dienstplanung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
             </div>
           </header>
 
@@ -161,7 +162,7 @@
         <section id="requestsView" class="view">
           <header class="topbar">
             <div><span class="eyebrow">Freigaben</span><h1>Anträge</h1><p class="subtitle">Urlaub und Zeitausgleich prüfen, bearbeiten und vollständig nachvollziehen.</p></div>
-            <button type="button" class="secondary-button" id="refreshRequestsButton">Aktualisieren</button>
+            <div class="topbar-actions"><button type="button" class="secondary-button" id="refreshRequestsButton">Aktualisieren</button><div class="page-theme-switch" role="group" aria-label="Darstellung der Anträge"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div></div>
           </header>
           <section class="request-workflow-summary" id="requestWorkflowSummary"></section>
           <section class="vacation-panel request-management-panel">
@@ -180,6 +181,7 @@
               <label class="week-jump"><span>Filiale</span><select id="timeTrackingLocation"></select></label>
               <label class="week-jump"><span>Abteilung</span><select id="timeTrackingDepartment"><option value="">Gesamte Filiale</option></select></label>
               <button type="button" class="secondary-button" id="refreshTimePresenceButton">Aktualisieren</button>
+              <div class="page-theme-switch" role="group" aria-label="Darstellung der Zeiterfassung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
             </div>
           </header>
           <section class="time-presence-summary" id="timePresenceSummary"></section>
@@ -226,6 +228,7 @@
               <label class="week-jump" id="vacationMonthField"><span>Monat</span><select id="vacationMonth"><option value="1">Jänner</option><option value="2">Februar</option><option value="3">März</option><option value="4">April</option><option value="5">Mai</option><option value="6">Juni</option><option value="7">Juli</option><option value="8">August</option><option value="9">September</option><option value="10">Oktober</option><option value="11">November</option><option value="12">Dezember</option></select></label>
               <button class="primary-button" id="addVacationButton"><span>+</span> Urlaub eintragen</button>
               <a class="secondary-button" id="vacationPdfButton" href="/api/vacations.pdf"><span>↓</span> PDF exportieren</a>
+              <div class="page-theme-switch" role="group" aria-label="Darstellung der Urlaubsplanung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
             </div>
           </header>
 
@@ -274,6 +277,7 @@
         <section id="personnelView" class="view">
           <header class="settings-header">
             <div><span class="eyebrow">Teams &amp; Standorte</span><h1>Team &amp; Standorte</h1><p class="subtitle">Stammdaten, Stammfilialen und Abteilungen zentral verwalten.</p></div>
+            <div class="page-theme-switch" role="group" aria-label="Darstellung von Team und Standorten"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
           </header>
 
           <div class="settings-tabs personnel-tabs" role="tablist">
@@ -366,10 +370,10 @@
                 <button type="button" role="tab" data-rights-dashboard-mode="rights" aria-selected="true">Rechteübersicht</button>
                 <button type="button" role="tab" data-rights-dashboard-mode="processes" aria-selected="false">Prozesswege</button>
               </div>
-              <div class="dashboard-theme-switch" role="group" aria-label="Darstellung des Rechte-Dashboards">
+              <div class="page-theme-switch dashboard-theme-switch" role="group" aria-label="Darstellung des Rechte-Dashboards">
                 <span>Darstellung</span>
-                <button type="button" data-dashboard-theme="light" aria-pressed="true">Hell</button>
-                <button type="button" data-dashboard-theme="dark" aria-pressed="false">Dunkel</button>
+                <button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button>
+                <button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button>
               </div>
             </div>
           </header>
@@ -437,7 +441,7 @@
         <section id="settingsView" class="view">
           <header class="settings-header">
             <div><span class="eyebrow">Konfiguration</span><h1>Einstellungen</h1></div>
-            <button class="primary-button" id="saveSettingsButton">Einstellungen speichern</button>
+            <div class="settings-header-actions"><div class="page-theme-switch" role="group" aria-label="Darstellung der Einstellungen"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div><button class="primary-button" id="saveSettingsButton">Einstellungen speichern</button></div>
           </header>
 
           <div class="settings-tabs" role="tablist">
@@ -484,6 +488,7 @@
               <label class="switch-row"><span><strong>Letzten Dienstplan-Gesamtplan wieder öffnen</strong><small>Merkt sich den zuletzt angesehenen Standort pro angemeldetem Benutzer und Browser.</small></span><input id="rememberLastScheduleOverallPlan" type="checkbox" /></label>
               <label class="switch-row"><span><strong>Letzten Urlaubs-Gesamtplan wieder öffnen</strong><small>Kehrt beim nächsten Aufruf zur zuletzt angesehenen Filiale zurück.</small></span><input id="rememberLastVacationOverallPlan" type="checkbox" /></label>
               <label class="switch-row"><span><strong>Sonntag anzeigen</strong><small>Zeigt den Sonntag in Webansicht und PDF; für Dienste bleibt er gesperrt.</small></span><input id="showSunday" type="checkbox" /></label>
+              <label class="field"><span>Dashboard-Schriftgröße</span><select id="dashboardFontSize"><option value="compact">Kompakt · bisherige Größe</option><option value="standard">Standard · empfohlen</option><option value="large">Groß</option></select><small>Vergrößert Texte in Rechte- und Prozess-Dashboards, ohne die Planungsraster zu verändern.</small></label>
               <p class="settings-note">Die beiden Startansichten können von Personalleitung, Admin, IT-Admin und Developer festgelegt werden.</p>
             </div>
 
