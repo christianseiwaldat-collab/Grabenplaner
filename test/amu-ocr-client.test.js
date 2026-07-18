@@ -5,13 +5,13 @@ const test = require("node:test");
 
 const { createAmuOcrClient, mergeAumOcrResults, DEFAULT_ASSET_PATHS } = require("../public/amu-ocr-client");
 
-function fixture() {
+function fixture(recognizedText = "Arbeitsunfähig von 10.07.2026 bis 17.07.2026\nDiagnose vertraulich") {
   const calls = { create: [], parameters: [], recognize: [], terminate: 0 };
   const worker = {
     async setParameters(parameters) { calls.parameters.push(parameters); },
     async recognize(image, options, output) {
       calls.recognize.push({ image, options, output });
-      return { data: { text: "Arbeitsunfähig von 10.07.2026 bis 17.07.2026\nDiagnose vertraulich" } };
+      return { data: { text: recognizedText } };
     },
     async terminate() { calls.terminate += 1; },
   };
@@ -85,4 +85,48 @@ test("kombiniert ausschließlich abgeleitete Datumswerte mehrerer lokal erkannte
   assert.equal(result.dateTo, "2026-07-17");
   assert.equal(result.autoFill, true);
   assert.doesNotMatch(JSON.stringify(result), /seite|ocr|text/i);
+});
+
+test("gibt aus dem OCR-Text nur die abgeleitete SV-Nummer und keine Rohtexte zurück", async () => {
+  const { tesseract } = fixture([
+    "Name: Erika Musterfrau",
+    "Versicherungsnummer: 1000 010190",
+    "Diagnose: vertraulich",
+    "Arbeitsunfähig von 10.07.2026 bis 17.07.2026",
+  ].join("\n"));
+  const client = createAmuOcrClient({ tesseract, idleMs: 0 });
+  const result = await client.recognize("image", { referenceDate: "2026-07-14T12:00:00Z" });
+
+  assert.equal(result.socialSecurityNumber, "1000010190");
+  assert.equal(result.socialSecurityStatus, "detected");
+  assert.equal(result.socialSecurityConfidence, 0.98);
+  assert.doesNotMatch(JSON.stringify(result), /Erika|Diagnose|vertraulich|Versicherungsnummer/i);
+  await client.dispose();
+});
+
+test("führt identische SV-Treffer zusammen und verwirft widersprüchliche Treffer als mehrdeutig", () => {
+  const common = {
+    dateFrom: "2026-07-10",
+    dateTo: "2026-07-17",
+    complete: true,
+    autoFill: true,
+    fieldConfidence: { dateFrom: 0.9, dateTo: 0.9 },
+    socialSecurityStatus: "detected",
+  };
+  const same = mergeAumOcrResults([
+    { ...common, socialSecurityNumber: "1000010190", socialSecurityConfidence: 0.86, text: "nicht behalten" },
+    { ...common, socialSecurityNumber: "1000010190", socialSecurityConfidence: 0.98, diagnosis: "vertraulich" },
+  ]);
+  assert.equal(same.socialSecurityNumber, "1000010190");
+  assert.equal(same.socialSecurityConfidence, 0.98);
+  assert.equal(same.socialSecurityStatus, "detected");
+  assert.doesNotMatch(JSON.stringify(same), /nicht behalten|diagnosis|vertraulich|text/i);
+
+  const ambiguous = mergeAumOcrResults([
+    { ...common, socialSecurityNumber: "1000010190", socialSecurityConfidence: 0.98 },
+    { ...common, socialSecurityNumber: "1009311299", socialSecurityConfidence: 0.98 },
+  ]);
+  assert.equal(ambiguous.socialSecurityNumber, "");
+  assert.equal(ambiguous.socialSecurityConfidence, 0);
+  assert.equal(ambiguous.socialSecurityStatus, "ambiguous");
 });

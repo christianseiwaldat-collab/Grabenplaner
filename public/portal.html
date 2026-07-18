@@ -210,6 +210,16 @@
               <input id="sicknessExpectedEnd" type="hidden" />
               <label class="range-trigger-field"><span>Zeitraum</span><button class="date-range-trigger" id="sicknessDateRangeButton" type="button" data-date-range-context="sickness" aria-haspopup="dialog" aria-controls="dateRangeDialog" aria-required="true"><span><strong id="sicknessDateRangeText">Beginn auswählen</strong><small>Das voraussichtliche Ende kann offenbleiben.</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z"/></svg></button></label>
               <label><span>Bemerkung</span><textarea id="sicknessEmployeeNote" maxlength="500" rows="2" placeholder="Optional"></textarea></label>
+              <details class="sickness-inline-amu" id="sicknessAmuPanel">
+                <summary><span><strong>AUM direkt mitsenden</strong><small>Optional: Foto oder PDF gleich mit der Krankmeldung geschützt übermitteln.</small></span><span class="amu-summary-action">Hinzufügen</span></summary>
+                <div class="sickness-inline-amu-fields">
+                  <div class="amu-file-picker">
+                    <label class="file-field"><span>Dokumente auswählen</span><input id="sicknessAmuDocuments" data-amu-context="sickness" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,.pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff" multiple /><small id="sicknessAmuUploadHint">PDF oder Foto · höchstens 3 Dateien</small></label>
+                    <label class="camera-button">Kamera<input id="sicknessAmuCamera" data-amu-context="sickness" type="file" accept="image/*" capture="environment" /></label>
+                  </div>
+                  <div class="amu-ocr-status hidden" id="sicknessAmuOcrStatus" aria-live="polite"><span class="amu-ocr-spinner" aria-hidden="true"></span><div><strong id="sicknessAmuOcrStatusTitle">Lokale Datenerkennung</strong><small id="sicknessAmuOcrStatusText"></small><label class="amu-ocr-confirm hidden" id="sicknessAmuOcrConfirmField"><input id="sicknessAmuOcrConfirmed" type="checkbox" /> Erkannte Datumswerte geprüft</label></div></div>
+                </div>
+              </details>
               <p class="form-note">Die zuständige Filial- oder Abteilungsleitung wird sofort im Portal informiert.</p>
               <p class="message hidden" id="sicknessMessage"></p>
               <div class="sickness-form-actions"><button class="primary compact-primary" id="sicknessSubmitButton" type="submit">Krankmeldung senden</button></div>
@@ -225,7 +235,7 @@
             <details class="amu-upload-panel" id="amuUploadPanel">
               <summary>
                 <span class="amu-summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3h7l4 4v14H5V3h3Z"/><path d="M14 3v5h5M8 13h8M8 17h6"/></svg></span>
-                <span><span class="eyebrow">Schritt 2 · bei Bedarf</span><strong>AUM nachreichen</strong><small>Foto oder PDF anhängen; die lokale Datenerkennung schlägt Datumswerte zur Prüfung vor.</small></span>
+                <span><span class="eyebrow">Schritt 2 · bei Bedarf</span><strong>AUM nachreichen</strong><small>Foto oder PDF anhängen; Datumswerte werden lokal vorgeschlagen und die SV-Angabe geschützt abgeglichen.</small></span>
                 <span class="amu-summary-action">AUM hinzufügen</span>
               </summary>
               <form class="request-form embedded-amu-form" id="amuReportForm">
@@ -235,8 +245,8 @@
                 <label class="range-trigger-field"><span>Zeitraum der Arbeitsunfähigkeit</span><button class="date-range-trigger" id="amuDateRangeButton" type="button" data-date-range-context="amu" aria-haspopup="dialog" aria-controls="dateRangeDialog" aria-required="true"><span><strong id="amuDateRangeText">Zeitraum auswählen</strong><small>Der Beginn genügt; das Ende darf offenbleiben.</small></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z"/></svg></button></label>
                 <label><span>Bemerkung</span><textarea id="amuEmployeeNote" maxlength="500" rows="2" placeholder="Optional"></textarea></label>
                 <div class="amu-file-picker">
-                  <label class="file-field"><span>Dokumente auswählen</span><input id="amuDocuments" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,.pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff" multiple /><small id="amuUploadHint">PDF oder Foto · höchstens 3 Dateien</small></label>
-                  <label class="camera-button">Kamera<input id="amuCamera" type="file" accept="image/*" capture="environment" /></label>
+                  <label class="file-field"><span>Dokumente auswählen</span><input id="amuDocuments" data-amu-context="amu" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff,.pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff" multiple /><small id="amuUploadHint">PDF oder Foto · höchstens 3 Dateien</small></label>
+                  <label class="camera-button">Kamera<input id="amuCamera" data-amu-context="amu" type="file" accept="image/*" capture="environment" /></label>
                 </div>
                 <div class="amu-ocr-status hidden" id="amuOcrStatus" aria-live="polite"><span class="amu-ocr-spinner" aria-hidden="true"></span><div><strong id="amuOcrStatusTitle">Lokale Datenerkennung</strong><small id="amuOcrStatusText"></small><label class="amu-ocr-confirm hidden" id="amuOcrConfirmField"><input id="amuOcrConfirmed" type="checkbox" /> Erkannte Datumswerte geprüft</label></div></div>
                 <p class="message hidden" id="amuMessage"></p>

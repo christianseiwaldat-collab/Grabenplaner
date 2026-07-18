@@ -95,6 +95,13 @@ function offsetDate(value, days) {
   return date.toISOString().slice(0, 10);
 }
 
+function protectedBlobCount() {
+  const directory = path.join(process.env.GRABENPLANER_DATA_DIR, "amu");
+  if (!fs.existsSync(directory)) return 0;
+  return fs.readdirSync(directory, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".amu")).length;
+}
+
 async function uploadAum(auth, fields = {}) {
   const form = new FormData();
   for (const [name, value] of Object.entries(fields)) {
@@ -165,6 +172,9 @@ test.before(async () => {
   insertEmployee("606", "Getrennter Krankenstand", "91", departmentA);
   insertEmployee("607", "Neue Krankmeldung", "91", departmentA);
   insertEmployee("608", "Zeitprüfung Krank", "91", departmentA);
+  insertEmployee("609", "Identität Treffer", "91", departmentA);
+  insertEmployee("610", "Identität Manuell", "91", departmentA);
+  insertEmployee("611", "Identität Ohne Stammdaten", "91", departmentA);
 
   const employeeAuth = session("591", "employee");
   const managerAuth = session("593", "manager");
@@ -592,7 +602,7 @@ test("v0.59: AUM ohne Enddatum bleibt verschlüsselt und eine Rückkehrmeldung b
 
   const returnDayConfig = daySettings()[["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
     [new Date(`${returnDate}T12:00:00Z`).getUTCDay()]];
-  if (returnDayConfig.open) {
+  if (returnDayConfig.open && new Date(`${returnDate}T12:00:00Z`).getUTCDay() !== 0) {
     const allowedFromReturn = await request("/api/shifts", {
       method: "POST",
       auth: managerAuth,
@@ -647,7 +657,9 @@ test("v0.59: ein gemeldetes AUM-Ende begrenzt die Nichtverfügbarkeit ohne zusä
   const employee = session("592", "employee");
   const { managerAuth, departmentA } = auth;
   const startDate = mostRecentPlanningDate();
-  const nextDate = offsetDate(startDate, 1);
+  const firstFollowingDate = offsetDate(startDate, 1);
+  const nextDate = new Date(`${firstFollowingDate}T12:00:00Z`).getUTCDay() === 0
+    ? offsetDate(firstFollowingDate, 1) : firstFollowingDate;
   const created = await request("/api/portal/v1/me/sickness-cases", {
     method: "POST", auth: employee, body: { startDate, note: "" },
   });
@@ -749,13 +761,14 @@ test("v0.59: ein nachgereichtes AUM korrigiert eine zu frueh gemeldete Arbeitsfa
   assert.equal(corrected.return_to_work_date, "");
   assert.equal(corrected.expected_end, returnDate);
 
+  const blockedDate = new Date(`${returnDate}T12:00:00Z`).getUTCDay() === 0 ? startDate : returnDate;
   const day = daySettings()[["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
-    [new Date(`${returnDate}T12:00:00Z`).getUTCDay()]];
+    [new Date(`${blockedDate}T12:00:00Z`).getUTCDay()]];
   const blocked = await request("/api/shifts", {
     method: "POST",
     auth: managerAuth,
     body: {
-      employeeNumber: "601", departmentId: departmentA, date: returnDate,
+      employeeNumber: "601", departmentId: departmentA, date: blockedDate,
       startTime: day.start, endTime: day.end, area: "Korrigierte Rückkehr", note: "",
     },
   });
@@ -866,8 +879,8 @@ test("v0.59: ein späterer getrennter AUM-Zeitraum erzeugt einen neuen Krankenst
 
 test("v0.59: eine neue Krankmeldung nach einem begrenzten früheren Zeitraum ist zulässig", async () => {
   const employee = session("607", "employee");
-  const firstDate = offsetDate(mostRecentPlanningDate(), -20);
-  const laterDate = offsetDate(firstDate, 10);
+  const firstDate = offsetDate(mostRecentPlanningDate(), -4);
+  const laterDate = offsetDate(firstDate, 2);
   const first = await request("/api/portal/v1/me/sickness-cases", {
     method: "POST", auth: employee, body: { startDate: firstDate, expectedEnd: firstDate, note: "" },
   });
@@ -914,4 +927,93 @@ test("v0.59: eine nachträgliche Krankmeldung macht eine bestehende Zeitprüfung
   assert.ok(employeeDay);
   assert.equal(employeeDay.review.stale, true);
   assert.equal(employeeDay.code, "excused_absence");
+});
+
+test("AUM Block 3: direkter Anhang prüft die tatsächliche Datei gegen den geschützten Personalakt", async () => {
+  const { hrAuth } = auth;
+  const matchingEmployee = session("609", "employee");
+  const manualEmployee = session("610", "employee");
+  const noProfileEmployee = session("611", "employee");
+  const socialSecurityNumber = "1238010190";
+  const manualSocialSecurityNumber = "1009311299";
+  const foreignSocialSecurityNumber = "1000000005";
+  const today = mostRecentPlanningDate();
+
+  for (const [employeeNumber, number] of [["609", socialSecurityNumber], ["610", manualSocialSecurityNumber]]) {
+    const profile = await request(`/api/portal/v1/personnel-records/${employeeNumber}`, {
+      method: "PUT",
+      auth: hrAuth,
+      body: { sensitive: { socialSecurityNumber: number } },
+    });
+    assert.equal(profile.response.status, 200, JSON.stringify(profile.payload));
+  }
+
+  try {
+    process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = `Versicherungsnummer: ${socialSecurityNumber}`;
+    const matched = await uploadAum(matchingEmployee, {
+      incapacityFrom: today,
+      incapacityTo: today,
+      sicknessNote: "Direkt mit AUM gemeldet",
+      directSicknessReport: "1",
+    });
+    assert.equal(matched.response.status, 201, JSON.stringify(matched.payload));
+    assert.equal(Object.hasOwn(matched.payload.report, "identity_check"), false);
+    assert.equal(JSON.stringify(matched.payload).includes(socialSecurityNumber), false);
+    const ownCases = await request("/api/portal/v1/me/sickness-cases", { auth: matchingEmployee });
+    assert.equal(ownCases.payload.cases.length, 1);
+    assert.equal(ownCases.payload.cases[0].status, "aum_received");
+
+    const protectedList = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
+    assert.equal(protectedList.response.status, 200, JSON.stringify(protectedList.payload));
+    const matchedForHr = protectedList.payload.reports.find((entry) => Number(entry.id) === Number(matched.payload.report.id));
+    assert.deepEqual(matchedForHr.identity_check.status, "matched");
+    assert.equal(JSON.stringify(matchedForHr).includes(socialSecurityNumber), false);
+
+    db.prepare(`
+      INSERT INTO portal_settings (key, value, updated_at) VALUES ('amu_ocr_enabled', '0', CURRENT_TIMESTAMP)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+    `).run();
+    const matchedWithoutLocalDateOcr = await uploadAum(matchingEmployee, {
+      incapacityFrom: offsetDate(today, -1),
+    });
+    assert.equal(matchedWithoutLocalDateOcr.response.status, 201, JSON.stringify(matchedWithoutLocalDateOcr.payload));
+    const protectedListWithoutLocalDateOcr = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
+    assert.equal(
+      protectedListWithoutLocalDateOcr.payload.reports.find(
+        (entry) => Number(entry.id) === Number(matchedWithoutLocalDateOcr.payload.report.id),
+      ).identity_check.status,
+      "matched",
+    );
+    db.prepare("UPDATE portal_settings SET value = '1', updated_at = CURRENT_TIMESTAMP WHERE key = 'amu_ocr_enabled'").run();
+
+    process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = "Keine eindeutig beschriftete SV-Nummer";
+    const manual = await uploadAum(manualEmployee, { incapacityFrom: today });
+    assert.equal(manual.response.status, 201, JSON.stringify(manual.payload));
+    const manualList = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
+    assert.equal(manualList.payload.reports.find((entry) => Number(entry.id) === Number(manual.payload.report.id)).identity_check.status, "not_detected");
+
+    process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = `SV-Nummer ${socialSecurityNumber}`;
+    const missingProfile = await uploadAum(noProfileEmployee, { incapacityFrom: today });
+    assert.equal(missingProfile.response.status, 201, JSON.stringify(missingProfile.payload));
+    const profileList = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
+    assert.equal(profileList.payload.reports.find((entry) => Number(entry.id) === Number(missingProfile.payload.report.id)).identity_check.status, "profile_missing");
+
+    const reportsBeforeMismatch = db.prepare("SELECT COUNT(*) AS count FROM amu_reports").get().count;
+    const documentsBeforeMismatch = db.prepare("SELECT COUNT(*) AS count FROM amu_documents").get().count;
+    const blobsBeforeMismatch = protectedBlobCount();
+    process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = `Sozialversicherungsnummer ${foreignSocialSecurityNumber}`;
+    const mismatch = await uploadAum(manualEmployee, { incapacityFrom: offsetDate(today, -1) });
+    assert.equal(mismatch.response.status, 422, JSON.stringify(mismatch.payload));
+    assert.equal(mismatch.payload.code, "AMU_SOCIAL_SECURITY_MISMATCH");
+    assert.equal(JSON.stringify(mismatch.payload).includes(foreignSocialSecurityNumber), false);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM amu_reports").get().count, reportsBeforeMismatch);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM amu_documents").get().count, documentsBeforeMismatch);
+    assert.equal(protectedBlobCount(), blobsBeforeMismatch);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE detail LIKE ? OR detail LIKE ?").get(
+      `%${socialSecurityNumber}%`, `%${foreignSocialSecurityNumber}%`,
+    ).count, 0);
+  } finally {
+    db.prepare("UPDATE portal_settings SET value = '1', updated_at = CURRENT_TIMESTAMP WHERE key = 'amu_ocr_enabled'").run();
+    delete process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT;
+  }
 });

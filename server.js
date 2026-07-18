@@ -10,6 +10,7 @@ const net = require("node:net");
 const { promisify } = require("node:util");
 const { createAmuStorage, syncEncryptedFilesBackup } = require("./lib/amu-storage");
 const { prepareAmuDocument } = require("./lib/amu-processing");
+const { evaluateAumIdentity } = require("./lib/amu-identity-check");
 const {
   validateSicknessDeadlines,
   sicknessDeadlineState,
@@ -1984,6 +1985,28 @@ function personnelSensitiveLookup(kind, value) {
     .digest("hex");
 }
 
+function timingSafeLookupEqual(left, right) {
+  const expected = String(left || "");
+  const actual = String(right || "");
+  if (!/^[0-9a-f]{64}$/i.test(expected) || !/^[0-9a-f]{64}$/i.test(actual)) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(actual, "hex"));
+}
+
+async function evaluateUploadedAumIdentity(employeeNumber, documents) {
+  const normalizedEmployeeNumber = String(employeeNumber || "");
+  const readStoredLookup = () => String(db.prepare(`
+    SELECT social_security_lookup FROM personnel_sensitive_records WHERE employee_number = ?
+  `).get(normalizedEmployeeNumber)?.social_security_lookup || "");
+  const storedLookup = readStoredLookup();
+  return evaluateAumIdentity(documents, {
+    profileConfigured: Boolean(storedLookup),
+    compareCandidate(candidate) {
+      const candidateLookup = personnelSensitiveLookup("social-security-number", candidate);
+      return timingSafeLookupEqual(readStoredLookup(), candidateLookup);
+    },
+  });
+}
+
 function personnelSensitiveProfile(employeeNumber) {
   const row = db.prepare(`
     SELECT employee_number, protected_payload
@@ -2802,14 +2825,14 @@ function parseAmuMultipart(request, { maxFileBytes = 10 * 1024 * 1024, totalMaxB
           let filename = plainFilename || "";
           if (encodedFilename) { try { filename = decodeURIComponent(encodedFilename); } catch {} }
           partCount += 1;
-          if (partCount > 9) throw httpError(413, "Das AUM-Formular enthält zu viele Teile.", "AMU_TOO_MANY_PARTS");
+          if (partCount > 12) throw httpError(413, "Das AUM-Formular enthält zu viele Teile.", "AMU_TOO_MANY_PARTS");
           if (filename && name === "documents") {
             if (data.length > maxFileBytes) throw httpError(413, `Eine AUM-Datei darf höchstens ${Math.ceil(maxFileBytes / 1024 / 1024)} MB groß sein.`, "AMU_DOCUMENT_TOO_LARGE");
             documents.push({ originalName: filename, buffer: Buffer.from(data) });
             if (documents.length > 3) throw httpError(413, "Pro AUM sind höchstens drei Dateien möglich.", "AMU_TOO_MANY_DOCUMENTS");
           } else if (!filename && [
             "incapacityFrom", "incapacityTo", "employeeNote",
-            "sicknessCaseId", "ocrAssisted", "ocrConfirmed",
+            "sicknessCaseId", "sicknessNote", "directSicknessReport", "ocrAssisted", "ocrConfirmed",
           ].includes(name)) {
             if (data.length > 4096) throw httpError(413, "Ein AUM-Textfeld ist zu groß.", "AMU_FIELD_TOO_LARGE");
             fields[name] = data.toString("utf8");
@@ -8024,7 +8047,7 @@ function assertSicknessCaseScope(session, row) {
   if (!allowed) throw httpError(403, "Diese Krankmeldung gehört nicht zum eigenen Verantwortungsbereich.", "PORTAL_PERMISSION_DENIED");
 }
 
-function serializeAmuReports(rows) {
+function serializeAmuReports(rows, { includeIdentityCheck = false } = {}) {
   const documents = amuDocumentsForReports(rows.map((row) => row.id));
   return rows.map((row) => {
     const payload = parseProtectedJson(row.protected_payload, amuReportProtectionContext(row));
@@ -8039,6 +8062,9 @@ function serializeAmuReports(rows) {
       review_note: payload.reviewNote || "",
       retention_until: payload.retentionUntil || null,
       withdrawn_at: payload.withdrawnAt || null,
+      identity_check: includeIdentityCheck
+        ? payload.identityCheck || { status: "not_checked", checkedAt: null, engineVersion: null }
+        : undefined,
       protected_payload: undefined,
       documents: documents.get(Number(row.id)) || [],
     };
@@ -15014,8 +15040,8 @@ app.post("/api/portal/v1/me/sickness-cases", (request, response) => {
   const expectedEnd = String(request.body.expectedEnd || "");
   const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
   const today = viennaTodayIso();
-  if (!isIsoDate(startDate) || startDate > today || startDate < addDays(today, -365)) {
-    throw httpError(400, "Bitte ein gültiges Beginn-Datum bis einschließlich heute eingeben.", "SICKNESS_DATE_INVALID");
+  if (!isIsoDate(startDate) || startDate > today || startDate < addDays(today, -5)) {
+    throw httpError(400, "Der Beginn der Krankmeldung darf heute oder höchstens fünf Tage zurückliegen.", "SICKNESS_DATE_INVALID");
   }
   if (expectedEnd && (!isIsoDate(expectedEnd) || expectedEnd < startDate || expectedEnd > addDays(startDate, 365))) {
     throw httpError(400, "Das voraussichtliche Ende muss am oder nach dem Beginn liegen.", "SICKNESS_DATE_INVALID");
@@ -15260,7 +15286,7 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) 
       ORDER BY r.submitted_at DESC, r.id DESC
     `).all(employeeNumber);
     reports = reports.filter((report) => sessionCanAccessAmuReport(session, report));
-    serialized = serializeAmuReports(reports)
+    serialized = serializeAmuReports(reports, { includeIdentityCheck: access.canReadSensitive })
       .sort((left, right) => String(right.incapacity_from).localeCompare(String(left.incapacity_from)) || Number(right.id) - Number(left.id));
     if (!access.canOpenFiles) {
       for (const report of serialized) {
@@ -15392,10 +15418,18 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
   const incapacityFrom = String(fields.incapacityFrom || "").trim();
   const incapacityTo = String(fields.incapacityTo || "").trim();
   const employeeNote = stripEmoji(String(fields.employeeNote || "").trim()).slice(0, 500);
+  const sicknessNote = stripEmoji(String(fields.sicknessNote || "").trim()).slice(0, 500);
+  const directSicknessReport = String(fields.directSicknessReport || "") === "1";
   const ocrAssisted = String(fields.ocrAssisted || "") === "1";
   const ocrConfirmed = String(fields.ocrConfirmed || "") === "1";
   if (!isIsoDate(incapacityFrom) || (incapacityTo && (!isIsoDate(incapacityTo) || incapacityTo < incapacityFrom))) {
     throw httpError(400, "Bitte einen gültigen Zeitraum der Arbeitsunfähigkeit eingeben.", "AMU_DATE_INVALID");
+  }
+  if (directSicknessReport) {
+    const today = viennaTodayIso();
+    if (incapacityFrom > today || incapacityFrom < addDays(today, -5)) {
+      throw httpError(400, "Der Beginn der Krankmeldung darf heute oder höchstens fünf Tage zurückliegen.", "SICKNESS_DATE_INVALID");
+    }
   }
   if (!documents.length || documents.length > 3) {
     throw httpError(400, "Bitte mindestens eine und höchstens drei PDF- oder Bilddateien auswählen.", "AMU_DOCUMENTS_REQUIRED");
@@ -15424,6 +15458,7 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
   let reportContext = employeeRequestContext(session.employeeNumber, incapacityFrom);
   const retentionDays = Math.min(3650, Math.max(30, Number(getPortalSettings().amu_retention_days || 730)));
   const saved = [];
+  let identityCheck = null;
   let createdSicknessCaseId = 0;
   let committed = false;
   amuMutationInProgress += 1;
@@ -15444,6 +15479,14 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
         maxBytes: maxStoredBytes,
       });
       saved.push({ ...stored, processing: prepared.processing, converted: prepared.converted, sourceMime: prepared.sourceMime });
+    }
+    // Die lokale Datums-Erkennung ist optional. Der geschützte serverseitige
+    // Abgleich mit der tatsächlich hochgeladenen Datei bleibt davon unabhängig.
+    identityCheck = await evaluateUploadedAumIdentity(session.employeeNumber, documents);
+    if (identityCheck.status === "mismatch") {
+      auditPortal(session.employeeNumber, "amu.identity.reject", "protected_record",
+        protectedPortalEntityId("employee", session.employeeNumber), JSON.stringify({ status: "mismatch" }));
+      throw httpError(422, "Die AUM konnte der eigenen Personalakte nicht eindeutig zugeordnet werden. Bitte das Dokument prüfen oder die Personalleitung kontaktieren.", "AMU_SOCIAL_SECURITY_MISMATCH");
     }
     db.exec("BEGIN");
     try {
@@ -15500,7 +15543,7 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
         linkedPayload = {
           startDate: incapacityFrom,
           expectedEnd: incapacityTo,
-          note: "",
+          note: sicknessNote || employeeNote,
           employeeNumber: session.employeeNumber,
           locationId: effectiveContext.locationId,
           departmentId: effectiveContext.departmentId,
@@ -15535,6 +15578,9 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
         reviewNote: "",
         retentionUntil: isIsoDate(reportRetentionBase) ? addDays(reportRetentionBase, retentionDays) : "",
         withdrawnAt: "",
+        identityCheck,
+        ocrDateAssisted: ocrAssisted,
+        ocrDateConfirmed: ocrAssisted && ocrConfirmed,
       }), amuReportProtectionContext({ id: reportId, employee_number: session.employeeNumber }));
       db.prepare("UPDATE amu_reports SET protected_payload = ? WHERE id = ?").run(reportPayload, reportId);
       const insertDocument = db.prepare(`
@@ -15582,6 +15628,8 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
           sicknessPayload.retentionUntil, linkedSicknessCase.id);
       }
       auditPortal(session.employeeNumber, "amu.report.create", "amu_report", String(reportId), JSON.stringify({ locationId: reportContext.locationId, documentCount: saved.length }));
+      auditPortal(session.employeeNumber, "amu.identity.check", "amu_report", String(reportId),
+        JSON.stringify({ status: identityCheck.status }));
       db.exec("COMMIT");
       committed = true;
       if (createdSicknessCaseId) {
@@ -15621,6 +15669,7 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
         try { storage.deleteBlob(item.storageKey); } catch {}
       }
     }
+    if (error.status) throw error;
     if (error.code?.startsWith?.("AMU_")) {
       const status = error.code.includes("TOO_LARGE") || error.code.includes("LIMIT")
         ? 413
@@ -15697,7 +15746,7 @@ app.get("/api/portal/v1/amu-reports", (request, response) => {
     ORDER BY r.submitted_at DESC, r.id DESC
   `).all();
   const scopedRows = rows.filter((row) => sessionCanAccessAmuReport(session, row));
-  const reports = serializeAmuReports(scopedRows);
+  const reports = serializeAmuReports(scopedRows, { includeIdentityCheck: actorCanReadAmuSensitiveMetadata(session) });
   const canOpenFiles = actorCanReadAmuFiles(session);
   if (!canOpenFiles) {
     for (const report of reports) {
@@ -15735,7 +15784,7 @@ app.put("/api/portal/v1/amu-reports/:id/review", (request, response) => {
     entityId: protectedPortalEntityId("amu-report", report.id),
     dedupeKey: protectedPortalDedupeKey(["amu", report.id, action, session.employeeNumber]),
   });
-  response.json({ report: serializeAmuReports([amuReportMetadata(report.id)])[0] });
+  response.json({ report: serializeAmuReports([amuReportMetadata(report.id)], { includeIdentityCheck: actorCanReadAmuSensitiveMetadata(session) })[0] });
 });
 
 app.get("/api/portal/v1/amu-reports/:reportId/documents/:documentId/content", (request, response) => {
