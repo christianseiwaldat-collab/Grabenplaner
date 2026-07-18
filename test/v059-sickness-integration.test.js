@@ -19,6 +19,17 @@ process.env.GRABENPLANER_SMS_WEBHOOK_URL = "https://notifications.invalid/graben
 process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
 
+const realViennaToday = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Vienna",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+}).format(new Date());
+const realViennaDay = new Date(`${realViennaToday}T12:00:00Z`).getUTCDay();
+process.env.GRABENPLANER_TEST_TODAY = realViennaDay === 0
+  ? new Date(new Date(`${realViennaToday}T12:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10)
+  : realViennaToday;
+
 const nativeFetch = globalThis.fetch;
 let deliveredVerificationCode = "";
 globalThis.fetch = async (url, options) => {
@@ -86,7 +97,7 @@ function viennaDateKey(value = new Date()) {
 }
 
 function mostRecentPlanningDate() {
-  return viennaDateKey();
+  return process.env.GRABENPLANER_TEST_TODAY || viennaDateKey();
 }
 
 function offsetDate(value, days) {
