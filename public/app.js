@@ -58,6 +58,10 @@ const state = {
   brandingPreference: null,
   brandingFormDirty: false,
   mobileLeadershipSettings: null,
+  personnelFieldRights: null,
+  selectedPersonnelFieldRightsRole: "manager",
+  personnelFieldRightsDirtyRoles: new Set(),
+  personnelFieldRightsDrafts: {},
   selectedRightsEmployeeNumber: "",
   employeeAccessDraft: new Set(),
   amuPolicy: null,
@@ -68,6 +72,7 @@ const state = {
   selectedRequest: null,
   allEmployees: [],
   personnelRecord: null,
+  personnelRecordDirtyFields: new Set(),
   employeePersonnelRecord: null,
   updateStatus: null,
   selectedColor: "#0b84c6",
@@ -161,7 +166,7 @@ const elements = Object.fromEntries(
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
-    "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
+    "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "serverDiagnostics", "refreshServerDiagnosticsButton",
@@ -418,6 +423,12 @@ function escapeHtml(value) {
   const node = document.createElement("span");
   node.textContent = value ?? "";
   return node.innerHTML;
+}
+
+function escapeHtmlAttribute(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character]);
 }
 
 function activeLocations() {
@@ -1504,14 +1515,21 @@ function formatOptionDates(option) {
     : `${formatDate(option.date_from, { day: "2-digit", month: "2-digit" })}–${formatDate(option.date_to, { day: "2-digit", month: "2-digit" })}`;
 }
 
+function personnelRecordAvailableInUi() {
+  if (!state.portalStatus?.portalEnabled) return true;
+  const capability = state.portalSession?.user?.personnelRecordAccess?.available;
+  if (typeof capability === "boolean") return capability;
+  return state.portalSession?.user?.permissions?.some((permission) => [
+    "personnel:sensitive:read", "personnel:sensitive:write", "personnel:phone:read", "personnel:phone:write", "amu:metadata:read",
+  ].includes(permission)) === true;
+}
+
 function renderEmployees() {
   const showInactive = state.data?.settings?.show_inactive_personnel !== "0";
   const employees = showInactive ? state.allEmployees : state.allEmployees.filter((employee) => employee.active);
   const canEditFull = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("employees:write");
   const canEditDisplay = canEditFull || state.portalSession?.user?.permissions?.includes("employees:display:write");
-  const canReadPersonnelRecord = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.some((permission) => [
-    "personnel:sensitive:read", "personnel:sensitive:write", "personnel:phone:read", "personnel:phone:write", "amu:metadata:read",
-  ].includes(permission));
+  const canReadPersonnelRecord = personnelRecordAvailableInUi();
   elements.employeeTableBody.innerHTML = employees.map((employee) => `
     <tr>
       <td><span class="employee-color" style="background:${employee.color}"></span></td>
@@ -1764,10 +1782,13 @@ function renderRightsManagement() {
     : "Es sind noch keine aktiven Teammitglieder vorhanden.";
   elements.rightsUserList.innerHTML = filtered.length ? filtered.map((user) => {
     const additionalCount = (user.grantedPermissions || []).length;
+    const personnelLevels = Object.values(user.personnelFieldAccess || {});
+    const personnelSummary = ["manager", "department_manager"].includes(user.role) && personnelLevels.length
+      ? `<small>Personalakt effektiv · ${personnelLevels.filter((level) => level === "read").length} lesen · ${personnelLevels.filter((level) => level === "write").length} bearbeiten</small>` : "";
     const location = state.locations.find((item) => item.id === user.homeLocationId);
     const status = !user.configured ? "Portal-Zugang noch nicht eingerichtet" : !user.active ? "Portal-Zugang inaktiv" : user.manageable ? "Zusatzrechte können bearbeitet werden" : "Rechte nur zur Ansicht";
     return `<article class="rights-user-card" data-rights-user="${escapeHtml(user.employeeNumber)}">
-      <div class="rights-user-heading"><div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${escapeHtml(user.roleName || user.role)} · ${escapeHtml(location?.name || user.homeLocationId || "Kein Standort")} · ${additionalCount} Zusatzrecht${additionalCount === 1 ? "" : "e"}</small><small>${escapeHtml(status)}</small></div><button class="secondary-button" type="button" data-edit-user-rights>${user.manageable ? "Rechte bearbeiten" : "Rechte ansehen"}</button></div>
+      <div class="rights-user-heading"><div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${escapeHtml(user.roleName || user.role)} · ${escapeHtml(location?.name || user.homeLocationId || "Kein Standort")} · ${additionalCount} Zusatzrecht${additionalCount === 1 ? "" : "e"}</small>${personnelSummary}<small>${escapeHtml(status)}</small></div><button class="secondary-button" type="button" data-edit-user-rights>${user.manageable ? "Rechte bearbeiten" : "Rechte ansehen"}</button></div>
     </article>`;
   }).join("") : '<p class="settings-note rights-empty-search">Kein Teammitglied entspricht dieser Suche.</p>';
 }
@@ -1835,21 +1856,104 @@ function renderMobileLeadershipSettings() {
   elements.mobileLeadershipSettingsHint.textContent = result.canChange === false ? "Nur Developer, IT-Admin, Admin oder Personalleitung kann diese Auswahl ändern." : "Zeiterfassung bleibt immer der erste Punkt; insgesamt maximal sechs Elemente je Rolle.";
 }
 
+function personnelFieldLevelLabel(level, payload = state.personnelFieldRights || {}) {
+  return (payload.accessLevels || []).find((entry) => entry.id === level)?.label
+    || ({ hidden: "Verborgen", read: "Nur lesen", write: "Bearbeiten" }[level] || level);
+}
+
+function personnelFieldGroupSummary(groupElement) {
+  if (!groupElement) return;
+  const counts = { hidden: 0, read: 0, write: 0 };
+  groupElement.querySelectorAll("select[data-personnel-field-right]").forEach((select) => {
+    counts[select.value] = Number(counts[select.value] || 0) + 1;
+  });
+  const summary = groupElement.querySelector("[data-personnel-field-group-summary]");
+  if (summary) summary.textContent = `${counts.hidden} verborgen · ${counts.read} lesen · ${counts.write} bearbeiten`;
+}
+
+function renderPersonnelFieldRights() {
+  if (!elements.personnelFieldRightsMatrix || !elements.personnelFieldRightsRole) return;
+  const payload = state.personnelFieldRights || {};
+  const roles = Array.isArray(payload.roles) ? payload.roles : [];
+  const fields = Array.isArray(payload.fields) ? payload.fields : [];
+  const accessLevels = Array.isArray(payload.accessLevels) && payload.accessLevels.length
+    ? payload.accessLevels : [{ id: "hidden", label: "Verborgen" }, { id: "read", label: "Nur lesen" }, { id: "write", label: "Bearbeiten" }];
+  if (!roles.some((role) => role.id === state.selectedPersonnelFieldRightsRole)) {
+    state.selectedPersonnelFieldRightsRole = roles[0]?.id || "manager";
+  }
+  elements.personnelFieldRightsRole.innerHTML = roles.map((role) => `<option value="${escapeHtmlAttribute(role.id)}" ${role.id === state.selectedPersonnelFieldRightsRole ? "selected" : ""}>${escapeHtml(role.label || role.id)}${state.personnelFieldRightsDirtyRoles.has(role.id) ? " · nicht gespeichert" : ""}</option>`).join("");
+  elements.personnelFieldRightsRole.disabled = roles.length < 2;
+  const roleMatrix = state.personnelFieldRightsDrafts[state.selectedPersonnelFieldRightsRole]
+    || payload.matrix?.[state.selectedPersonnelFieldRightsRole] || {};
+  const groups = new Map();
+  for (const field of fields) {
+    const group = field.group || "Weitere Daten";
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(field);
+  }
+  elements.personnelFieldRightsMatrix.innerHTML = groups.size ? [...groups.entries()].map(([group, groupFields], groupIndex) => `
+    <details class="personnel-field-rights-group" ${groupIndex === 0 ? "open" : ""}>
+      <summary><span><strong>${escapeHtml(group)}</strong><small data-personnel-field-group-summary></small></span><span aria-hidden="true">›</span></summary>
+      <div class="personnel-field-rights-list">${groupFields.map((field) => {
+        const currentLevel = ["hidden", "read", "write"].includes(roleMatrix[field.key]) ? roleMatrix[field.key] : "hidden";
+        return `<label class="personnel-field-right-row" data-field-access-level="${escapeHtmlAttribute(currentLevel)}"><span class="personnel-field-right-name"><strong>${escapeHtml(field.label || field.key)}</strong>${field.sensitive ? '<small>Besonders geschützt</small>' : ""}</span><select data-personnel-field-right="${escapeHtmlAttribute(field.key)}" aria-label="${escapeHtmlAttribute(`Zugriff auf ${field.label || field.key}`)}" ${payload.canChange === false ? "disabled" : ""}>${accessLevels.map((level) => `<option value="${escapeHtmlAttribute(level.id)}" ${level.id === currentLevel ? "selected" : ""}>${escapeHtml(level.label || personnelFieldLevelLabel(level.id, payload))}</option>`).join("")}</select></label>`;
+      }).join("")}</div>
+    </details>`).join("") : '<p class="settings-note">Es sind noch keine Personalakt-Felder konfiguriert.</p>';
+  elements.personnelFieldRightsMatrix.querySelectorAll(".personnel-field-rights-group").forEach(personnelFieldGroupSummary);
+  elements.savePersonnelFieldRightsButton.disabled = payload.canChange === false || !fields.length;
+  const roleLabel = roles.find((role) => role.id === state.selectedPersonnelFieldRightsRole)?.label || "diese Leitungsebene";
+  elements.personnelFieldRightsHint.textContent = state.personnelFieldRightsDirtyRoles.has(state.selectedPersonnelFieldRightsRole)
+    ? `Ungespeicherte Änderungen für ${roleLabel}. Andere Leitungsebenen können trotzdem angesehen werden.`
+    : payload.canChange === false
+    ? "Die Personalakt-Feldrechte können mit diesem Zugang nur angesehen werden."
+    : `Änderungen gelten für alle Zugänge der Rolle ${roleLabel} und werden serverseitig durchgesetzt.`;
+}
+
 async function loadRightsManagement() {
   if (!elements.rightsSettings) return;
   try {
-    const [rights, mobile] = await Promise.all([
+    const [rights, mobile, personnelFieldRights] = await Promise.all([
       api("/api/portal/v1/rights"),
       api("/api/portal/v1/mobile-layout"),
+      api("/api/portal/v1/personnel-field-rights"),
     ]);
     state.rightsManagement = rights;
     state.mobileLeadershipSettings = mobile;
+    state.personnelFieldRights = personnelFieldRights;
+    state.personnelFieldRightsDirtyRoles.clear();
+    state.personnelFieldRightsDrafts = {};
     renderRightsManagement();
     renderMobileLeadershipSettings();
+    renderPersonnelFieldRights();
   } catch (error) {
     elements.rightsManagementHint.textContent = error.status === 403 ? "Rechtemanagement ist nur für Developer, IT-Admin, Admin und Personalleitung verfügbar." : error.message;
     elements.rightsUserList.innerHTML = "";
     elements.mobileLeadershipModuleSettings.innerHTML = "";
+    elements.personnelFieldRightsMatrix.innerHTML = "";
+  }
+}
+
+async function savePersonnelFieldRights() {
+  const role = state.selectedPersonnelFieldRightsRole;
+  const fields = Object.fromEntries([...elements.personnelFieldRightsMatrix.querySelectorAll("select[data-personnel-field-right]")]
+    .map((select) => [select.dataset.personnelFieldRight, select.value]));
+  const expectedCount = state.personnelFieldRights?.fields?.length || 0;
+  if (!role || Object.keys(fields).length !== expectedCount) return showToast("Die Feldrechte konnten nicht vollständig gelesen werden.", true);
+  elements.savePersonnelFieldRightsButton.disabled = true;
+  try {
+    state.personnelFieldRights = await api(`/api/portal/v1/personnel-field-rights/${encodeURIComponent(role)}`, {
+      method: "PUT",
+      body: JSON.stringify({ fields }),
+    });
+    state.personnelFieldRightsDirtyRoles.delete(role);
+    delete state.personnelFieldRightsDrafts[role];
+    renderPersonnelFieldRights();
+    const roleLabel = state.personnelFieldRights.roles?.find((entry) => entry.id === role)?.label || role;
+    showToast(`Personalakt-Feldrechte für ${roleLabel} wurden gespeichert.`);
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    if (elements.savePersonnelFieldRightsButton) elements.savePersonnelFieldRightsButton.disabled = state.personnelFieldRights?.canChange === false;
   }
 }
 
@@ -2035,6 +2139,35 @@ function rightsDashboardPermissionMatches(permission, search) {
     .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(search));
 }
 
+function rightsDashboardIdentityMatches(user, search) {
+  if (!search) return true;
+  return [user.employeeNumber, user.fullName, user.nickname, user.roleName, user.scope.label]
+    .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(search));
+}
+
+function rightsDashboardPersonnelFieldContext(user) {
+  if (!["manager", "department_manager"].includes(user?.role) || !state.personnelFieldRights) return null;
+  const matrix = user.personnelFieldAccess && !Array.isArray(user.personnelFieldAccess)
+    && typeof user.personnelFieldAccess === "object" ? user.personnelFieldAccess : null;
+  return matrix ? { payload: state.personnelFieldRights, matrix } : null;
+}
+
+function rightsDashboardVisiblePersonnelFields(user) {
+  const context = rightsDashboardPersonnelFieldContext(user);
+  if (!context) return [];
+  const origin = elements.rightsDashboardOriginFilter?.value || "";
+  if (origin === "delegated") return [];
+  const search = String(elements.rightsDashboardSearch?.value || "").trim().toLocaleLowerCase("de-AT");
+  const identityMatch = rightsDashboardIdentityMatches(user, search);
+  return (context.payload.fields || []).filter((field) => {
+    const level = context.matrix[field.key];
+    if (!["read", "write"].includes(level)) return false;
+    if (!search || identityMatch) return true;
+    return [field.key, field.label, field.group, personnelFieldLevelLabel(level, context.payload), "Personalakt", "Feldzugriff", "Effektiv"]
+      .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(search));
+  });
+}
+
 function rightsDashboardFilteredUsers() {
   const dashboard = state.rightsDashboard;
   if (!dashboard) return [];
@@ -2047,21 +2180,21 @@ function rightsDashboardFilteredUsers() {
     if (role && user.role !== role) return false;
     if (locationId && user.scope.type !== "global" && !(user.scope.entries || []).some((scope) => String(scope.locationId) === locationId)) return false;
     if (departmentId && user.scope.type !== "global" && !(user.scope.entries || []).some((scope) => String(scope.departmentId || "") === departmentId)) return false;
-    if (origin === "role" && !user.permissions.some((permission) => permission.origin === "role")) return false;
+    const visiblePersonnelFields = rightsDashboardVisiblePersonnelFields(user);
+    if (origin === "role" && !user.permissions.some((permission) => permission.origin === "role") && !visiblePersonnelFields.length) return false;
     if (origin === "delegated" && !user.permissions.some((permission) => permission.origin === "delegated")) return false;
-    if (origin === "restricted" && !user.permissions.some((permission) => permission.coverage?.restricted)) return false;
+    if (origin === "restricted" && !user.permissions.some((permission) => permission.coverage?.restricted) && !visiblePersonnelFields.length) return false;
     if (!search) return true;
-    const identityMatch = [user.employeeNumber, user.fullName, user.nickname, user.roleName, user.scope.label]
-      .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(search));
-    return identityMatch || user.permissions.some((permission) => rightsDashboardPermissionMatches(permission, search));
+    return rightsDashboardIdentityMatches(user, search)
+      || user.permissions.some((permission) => rightsDashboardPermissionMatches(permission, search))
+      || visiblePersonnelFields.length > 0;
   });
 }
 
 function rightsDashboardVisiblePermissions(user) {
   const search = String(elements.rightsDashboardSearch?.value || "").trim().toLocaleLowerCase("de-AT");
   const origin = elements.rightsDashboardOriginFilter?.value || "";
-  const identityMatch = [user.employeeNumber, user.fullName, user.nickname, user.roleName, user.scope.label]
-    .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(search));
+  const identityMatch = rightsDashboardIdentityMatches(user, search);
   return user.permissions.filter((permission) => {
     if (origin === "role" && permission.origin !== "role") return false;
     if (origin === "delegated" && permission.origin !== "delegated") return false;
@@ -2102,6 +2235,21 @@ function renderRightsDashboardExplanation(user, permission) {
     </dl>`;
 }
 
+function renderPersonnelFieldRightsDashboard(user) {
+  const context = rightsDashboardPersonnelFieldContext(user);
+  if (!context) return "";
+  const { payload, matrix } = context;
+  const fields = rightsDashboardVisiblePersonnelFields(user);
+  if (!fields.length) return "";
+  const counts = { hidden: 0, read: 0, write: 0 };
+  fields.forEach((field) => { counts[matrix[field.key]] += 1; });
+  const roleLabel = payload.roles?.find((role) => role.id === user.role)?.label || user.roleName;
+  const filtered = String(elements.rightsDashboardSearch?.value || "").trim() || elements.rightsDashboardOriginFilter?.value;
+  const summary = filtered ? `${fields.length} Treffer · ${counts.read} lesen · ${counts.write} bearbeiten`
+    : `${counts.read} lesen · ${counts.write} bearbeiten`;
+  return `<section class="rights-dashboard-group personnel-field-dashboard-group"><h3>Personalakt-Feldzugriff</h3><p>Effektiv für ${escapeHtml(roleLabel)} · ${escapeHtml(summary)}</p><div class="personnel-field-dashboard-list">${fields.map((field) => `<article class="rights-dashboard-permission personnel-field-dashboard-access ${escapeHtmlAttribute(matrix[field.key])}"><span class="permission-origin"></span><span><strong>${escapeHtml(field.label || field.key)}</strong><small>Effektiv · ${escapeHtml(personnelFieldLevelLabel(matrix[field.key], payload))}</small></span></article>`).join("")}</div></section>`;
+}
+
 function renderRightsDashboardSelection(user) {
   const visiblePermissions = rightsDashboardVisiblePermissions(user);
   elements.rightsDashboardEmpty?.classList.add("hidden");
@@ -2124,13 +2272,15 @@ function renderRightsDashboardSelection(user) {
     if (!grouped.has(permission.group)) grouped.set(permission.group, []);
     grouped.get(permission.group).push(permission);
   }
-  elements.rightsDashboardMatrix.innerHTML = grouped.size
+  const personnelFieldMatrix = renderPersonnelFieldRightsDashboard(user);
+  const permissionMatrix = grouped.size
     ? [...grouped.entries()].map(([group, permissions]) => `<section class="rights-dashboard-group"><h3>${escapeHtml(group)}</h3><div class="rights-dashboard-permission-grid">${permissions.map((permission) => {
       const selected = permission.id === state.rightsDashboardSelectedPermissionId;
       const classes = ["rights-dashboard-permission", permission.origin === "delegated" ? "delegated" : "", permission.coverage?.restricted ? "restricted" : "", permission.effective ? "" : "inactive", selected ? "selected" : ""].filter(Boolean).join(" ");
       return `<button type="button" class="${classes}" data-rights-dashboard-permission="${escapeHtml(permission.id)}" aria-pressed="${selected}"><span class="permission-origin"></span><span><strong>${escapeHtml(permission.label)}</strong><small>${escapeHtml(`${permission.origin === "delegated" ? "Zusatzrecht" : "Grundrecht"} · ${permission.coverage?.label || "ohne Bereich"}`)}</small></span></button>`;
     }).join("")}</div></section>`).join("")
-    : "<p class=\"settings-note\">Für diese Filterung sind keine Rechte sichtbar.</p>";
+    : personnelFieldMatrix ? "" : "<p class=\"settings-note\">Für diese Filterung sind keine Rechte sichtbar.</p>";
+  elements.rightsDashboardMatrix.innerHTML = `${permissionMatrix}${personnelFieldMatrix}`;
   const selectedPermission = visiblePermissions.find((permission) => permission.id === state.rightsDashboardSelectedPermissionId) || null;
   if (!selectedPermission) state.rightsDashboardSelectedPermissionId = "";
   renderRightsDashboardExplanation(user, selectedPermission);
@@ -2504,8 +2654,12 @@ function exportRightsProcessPdf() {
 async function loadRightsDashboard() {
   if (!elements.rightsDashboardView) return;
   try {
-    const dashboard = await api("/api/portal/v1/rights-dashboard");
+    const [dashboard, personnelFieldRights] = await Promise.all([
+      api("/api/portal/v1/rights-dashboard"),
+      state.personnelFieldRights || api("/api/portal/v1/personnel-field-rights"),
+    ]);
     state.rightsDashboard = dashboard;
+    state.personnelFieldRights = personnelFieldRights;
     applyRightsDashboardTheme(state.pageThemes.rightsDashboard || dashboard.preferences?.theme || "light");
     populateRightsDashboardFilters();
     populateRightsProcessLocations();
@@ -3067,9 +3221,7 @@ function renderTimePresence() {
     return;
   }
   const labels = { working: "Anwesend", paused: "Pause", off: "Abwesend", attention: "Bitte prüfen" };
-  const canReadPersonnelRecord = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.some((permission) => [
-    "personnel:sensitive:read", "personnel:sensitive:write", "personnel:phone:read", "personnel:phone:write", "amu:metadata:read",
-  ].includes(permission));
+  const canReadPersonnelRecord = personnelRecordAvailableInUi();
   const canReviewTime = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("time:review");
   elements.timePresenceList.innerHTML = employees.length ? employees.map((employee) => {
@@ -3405,17 +3557,65 @@ async function submitStaleTimeCorrection(event) {
   }
 }
 
-function personnelRecordField(name, label, value, editable, attributes = "", spanTwo = false) {
+const PERSONNEL_RECORD_FORM_FIELDS = Object.freeze([
+  ["firstName", "identity.firstName", ["identity", "firstName"]], ["lastName", "identity.lastName", ["identity", "lastName"]],
+  ["previousName", "identity.previousName", ["identity", "previousName"]], ["salutation", "identity.salutation", ["identity", "salutation"]],
+  ["title", "identity.title", ["identity", "title"]], ["birthDate", "identity.birthDate", ["identity", "birthDate"]],
+  ["birthPlace", "identity.birthPlace", ["identity", "birthPlace"]], ["nationality", "identity.nationality", ["identity", "nationality"]],
+  ["socialSecurityNumber", "socialSecurityNumber", ["socialSecurityNumber"]], ["iban", "iban", ["iban"]],
+  ["bic", "bic", ["bic"]], ["accountHolder", "accountHolder", ["accountHolder"]],
+  ["street", "address.street", ["address", "street"]], ["addressSupplement", "address.supplement", ["address", "supplement"]],
+  ["postalCode", "address.postalCode", ["address", "postalCode"]], ["city", "address.city", ["address", "city"]],
+  ["state", "address.state", ["address", "state"]], ["country", "address.country", ["address", "country"]],
+  ["alternatePhone", "alternatePhone", ["alternatePhone"]], ["privateEmail", "privateEmail", ["privateEmail"]],
+  ["emergencyName", "emergencyContact.name", ["emergencyContact", "name"]],
+  ["emergencyRelationship", "emergencyContact.relationship", ["emergencyContact", "relationship"]],
+  ["emergencyPhone", "emergencyContact.phone", ["emergencyContact", "phone"]],
+  ["employmentStartDate", "employment.startDate", ["employment", "startDate"]],
+  ["employmentEndDate", "employment.endDate", ["employment", "endDate"]],
+  ["fixedTermEnd", "employment.fixedTermEnd", ["employment", "fixedTermEnd"]],
+  ["probationEnd", "employment.probationEnd", ["employment", "probationEnd"]],
+  ["employmentType", "employment.employmentType", ["employment", "employmentType"]],
+  ["contractType", "employment.contractType", ["employment", "contractType"]],
+  ["employmentStatus", "employment.employmentStatus", ["employment", "employmentStatus"]],
+  ["collectiveAgreement", "employment.collectiveAgreement", ["employment", "collectiveAgreement"]],
+  ["classification", "employment.classification", ["employment", "classification"]],
+  ["payrollGroup", "employment.payrollGroup", ["employment", "payrollGroup"]],
+  ["employmentNotes", "employment.notes", ["employment", "notes"]],
+]);
+
+function personnelRecordAccessMode(access = {}, fieldKey) {
+  const explicit = access.fieldAccess?.[fieldKey];
+  if (["hidden", "read", "write"].includes(explicit)) return explicit;
+  if (fieldKey === "phone") return access.canWritePhone ? "write" : access.canReadPhone ? "read" : "hidden";
+  if (fieldKey === "documents") return access.canWriteDocuments ? "write" : access.canReadDocuments ? "read" : "hidden";
+  return access.canWriteSensitive ? "write" : access.canReadSensitive ? "read" : "hidden";
+}
+
+function personnelRecordSectionMode(access, fieldKeys) {
+  const modes = fieldKeys.map((key) => personnelRecordAccessMode(access, key));
+  if (modes.includes("write") && modes.includes("read")) return "mixed";
+  return modes.includes("write") ? "write" : modes.includes("read") ? "read" : "hidden";
+}
+
+function personnelRecordField(name, fieldKey, label, value, accessMode, attributes = "", spanTwo = false) {
+  if (accessMode === "hidden") return "";
+  const editable = accessMode === "write";
   const protectedAttributes = String(attributes || "").replace(/\s*autocomplete="[^"]*"/gi, "");
-  return `<label class="field${spanTwo ? " personnel-record-span-two" : ""}"><span>${escapeHtml(label)}</span><input name="${escapeHtml(name)}" value="${escapeHtml(value || "")}" autocomplete="off" data-1p-ignore="true" data-lpignore="true" ${protectedAttributes} ${editable ? "" : "disabled"} /></label>`;
+  return `<label class="field${spanTwo ? " personnel-record-span-two" : ""}${editable ? "" : " personnel-record-field-readonly"}" data-personnel-field-key="${escapeHtmlAttribute(fieldKey)}"><span>${escapeHtml(label)}</span><input name="${escapeHtmlAttribute(name)}" value="${escapeHtmlAttribute(value || "")}" autocomplete="off" data-1p-ignore="true" data-lpignore="true" ${protectedAttributes} ${editable ? "" : "disabled"} /></label>`;
 }
 
-function personnelRecordArea(name, label, value, editable) {
-  return `<label class="field personnel-record-span-two"><span>${escapeHtml(label)}</span><textarea name="${escapeHtml(name)}" rows="3" maxlength="2000" autocomplete="off" data-1p-ignore="true" data-lpignore="true" ${editable ? "" : "disabled"}>${escapeHtml(value || "")}</textarea></label>`;
+function personnelRecordArea(name, fieldKey, label, value, accessMode) {
+  if (accessMode === "hidden") return "";
+  const editable = accessMode === "write";
+  return `<label class="field personnel-record-span-two${editable ? "" : " personnel-record-field-readonly"}" data-personnel-field-key="${escapeHtmlAttribute(fieldKey)}"><span>${escapeHtml(label)}</span><textarea name="${escapeHtmlAttribute(name)}" rows="3" maxlength="2000" autocomplete="off" data-1p-ignore="true" data-lpignore="true" ${editable ? "" : "disabled"}>${escapeHtml(value || "")}</textarea></label>`;
 }
 
-function personnelRecordDetails(title, eyebrow, editable, content, className = "") {
-  return `<details class="personnel-record-details ${className}" open><summary><span><small>${escapeHtml(eyebrow)}</small><strong>${escapeHtml(title)}</strong></span><span class="status-badge ${editable ? "approved" : "inactive"}">${editable ? "Bearbeitbar" : "Nur lesen"}</span></summary><div class="personnel-record-details-body">${content}</div></details>`;
+function personnelRecordDetails(title, eyebrow, accessMode, content, className = "") {
+  if (accessMode === "hidden" || !String(content || "").trim()) return "";
+  const editable = accessMode === "write" || accessMode === "mixed" || accessMode === true;
+  const badge = accessMode === "mixed" ? "Teilweise bearbeitbar" : editable ? "Bearbeitbar" : "Nur lesen";
+  return `<details class="personnel-record-details ${className}" open><summary><span><small>${escapeHtml(eyebrow)}</small><strong>${escapeHtml(title)}</strong></span><span class="status-badge ${accessMode === "mixed" ? "warning" : editable ? "approved" : "inactive"}">${badge}</span></summary><div class="personnel-record-details-body">${content}</div></details>`;
 }
 
 function personnelDocumentDate(value) {
@@ -3425,15 +3625,16 @@ function personnelDocumentDate(value) {
 }
 
 function renderPersonnelDocuments(employeeNumber, result, access) {
-  const canReadDocuments = access.canReadDocuments ?? access.canReadSensitive;
-  const canWriteDocuments = access.canWriteDocuments ?? access.canWriteSensitive;
+  const documentAccess = personnelRecordAccessMode(access, "documents");
+  const canReadDocuments = documentAccess !== "hidden";
+  const canWriteDocuments = documentAccess === "write";
   if (!canReadDocuments) return "";
   const entries = (Array.isArray(result.documents) ? result.documents : []).map((document) => {
     const id = String(document.id || "");
     const title = document.title || document.original_name || document.original_filename || "Personalakt-Dokument";
     const category = document.category_label || document.category || "Sonstiges";
     const description = document.description ? `<p>${escapeHtml(document.description)}</p>` : "";
-    return `<article class="personnel-document-entry"><div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(category)} · ${escapeHtml(personnelDocumentDate(document.document_date || document.documentDate))}</small>${description}</div><div class="personnel-document-actions"><a class="secondary-button compact-button" href="/api/portal/v1/personnel-records/${encodeURIComponent(employeeNumber)}/documents/${encodeURIComponent(id)}/content" target="_blank" rel="noopener">Öffnen</a>${canWriteDocuments ? `<button type="button" class="danger-button compact-button" data-delete-personnel-document="${escapeHtml(id)}">Löschen</button>` : ""}</div></article>`;
+    return `<article class="personnel-document-entry"><div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(category)} · ${escapeHtml(personnelDocumentDate(document.document_date || document.documentDate))}</small>${description}</div><div class="personnel-document-actions"><a class="secondary-button compact-button" href="/api/portal/v1/personnel-records/${encodeURIComponent(employeeNumber)}/documents/${encodeURIComponent(id)}/content" target="_blank" rel="noopener">Öffnen</a>${canWriteDocuments ? `<button type="button" class="danger-button compact-button" data-delete-personnel-document="${escapeHtmlAttribute(id)}">Löschen</button>` : ""}</div></article>`;
   }).join("");
   const upload = canWriteDocuments ? `
     <div class="personnel-document-upload">
@@ -3446,7 +3647,7 @@ function renderPersonnelDocuments(employeeNumber, result, access) {
       </div>
       <div class="personnel-document-upload-actions"><button type="button" class="primary-button compact-button" data-upload-personnel-document>Dokument geschützt hochladen</button></div>
     </div>` : "";
-  return personnelRecordDetails("Personalakt-Dokumente", "Geschützte Ablage", canWriteDocuments,
+  return personnelRecordDetails("Personalakt-Dokumente", "Geschützte Ablage", documentAccess,
     `<div class="personnel-document-list">${entries || '<p class="settings-note">Noch keine allgemeinen Personalakt-Dokumente vorhanden.</p>'}</div>${upload}`,
     "sensitive-personnel-section");
 }
@@ -3456,6 +3657,7 @@ async function openPersonnelRecord(employeeNumber) {
   const requestToken = Symbol(`personnel-record-${employeeNumber}`);
   state.personnelRecordRequestToken = requestToken;
   state.personnelRecord = null;
+  state.personnelRecordDirtyFields.clear();
   elements.personnelRecordTitle.textContent = `Personalakt · ${employeeNumber}`;
   elements.personnelRecordContent.innerHTML = '<p class="settings-note">Einträge werden geladen.</p>';
   elements.personnelRecordMessage.textContent = "";
@@ -3470,62 +3672,68 @@ async function openPersonnelRecord(employeeNumber) {
     const access = result.access || {};
     const record = normalizeProtectedPersonnelRecord(result.profile || {});
     const sensitive = record.sensitive;
+    const mode = (key) => personnelRecordAccessMode(access, key);
     elements.personnelRecordTitle.textContent = `${employee.personnel_number || employeeNumber} · ${employee.nickname || employee.full_name || "Personalakt"}`;
 
-    const contactSection = access.canReadPhone ? personnelRecordDetails("Kontaktdaten", "Kontakt", access.canWritePhone, `
+    const contactKeys = ["phone", "alternatePhone", "privateEmail"];
+    const contactSection = personnelRecordDetails("Kontaktdaten", "Kontakt", personnelRecordSectionMode(access, contactKeys), `
       <div class="personnel-record-field-grid">
-        ${personnelRecordField("personnelPhone", "Telefonnummer", record.phone, access.canWritePhone, 'type="tel" maxlength="40" autocomplete="tel"')}
-        ${access.canReadSensitive ? personnelRecordField("alternatePhone", "Weitere Telefonnummer", sensitive.alternatePhone, access.canWriteSensitive, 'type="tel" maxlength="40"') : ""}
-        ${access.canReadSensitive ? personnelRecordField("privateEmail", "Private E-Mail", sensitive.privateEmail, access.canWriteSensitive, 'type="email" maxlength="160" autocomplete="email"', true) : ""}
-      </div>${access.phoneWriteRequiresTrustA && !access.canWritePhone ? '<p class="calculation-note">Leitungen benötigen für Änderungen ein ausdrücklich vergebenes Schreibrecht und die eigene Vertrauensstufe A.</p>' : ""}`) : "";
+        ${personnelRecordField("personnelPhone", "phone", "Telefonnummer", record.phone, mode("phone"), 'type="tel" maxlength="40" autocomplete="tel"')}
+        ${personnelRecordField("alternatePhone", "alternatePhone", "Weitere Telefonnummer", sensitive.alternatePhone, mode("alternatePhone"), 'type="tel" maxlength="40"')}
+        ${personnelRecordField("privateEmail", "privateEmail", "Private E-Mail", sensitive.privateEmail, mode("privateEmail"), 'type="email" maxlength="160" autocomplete="email"', true)}
+      </div>${access.phoneWriteRequiresTrustA && mode("phone") !== "write" ? '<p class="calculation-note">Leitungen benötigen für Änderungen ein ausdrücklich vergebenes Schreibrecht und die eigene Vertrauensstufe A.</p>' : ""}`);
 
-    const identitySection = access.canReadSensitive ? personnelRecordDetails("Persönliche Daten", "Identität", access.canWriteSensitive, `
+    const identityKeys = ["identity.firstName", "identity.lastName", "identity.previousName", "identity.salutation", "identity.title", "identity.birthDate", "identity.birthPlace", "identity.nationality"];
+    const identitySection = personnelRecordDetails("Persönliche Daten", "Identität", personnelRecordSectionMode(access, identityKeys), `
       <div class="personnel-record-field-grid">
-        ${personnelRecordField("firstName", "Vorname", sensitive.identity.firstName, access.canWriteSensitive, 'maxlength="100" autocomplete="given-name"')}
-        ${personnelRecordField("lastName", "Nachname", sensitive.identity.lastName, access.canWriteSensitive, 'maxlength="100" autocomplete="family-name"')}
-        ${personnelRecordField("previousName", "Früherer Name", sensitive.identity.previousName, access.canWriteSensitive, 'maxlength="120"')}
-        ${personnelRecordField("salutation", "Anrede", sensitive.identity.salutation, access.canWriteSensitive, 'maxlength="40"')}
-        ${personnelRecordField("title", "Titel", sensitive.identity.title, access.canWriteSensitive, 'maxlength="80"')}
-        ${personnelRecordField("birthDate", "Geburtsdatum", sensitive.identity.birthDate, access.canWriteSensitive, 'type="date"')}
-        ${personnelRecordField("birthPlace", "Geburtsort", sensitive.identity.birthPlace, access.canWriteSensitive, 'maxlength="120"')}
-        ${personnelRecordField("nationality", "Staatsangehörigkeit", sensitive.identity.nationality, access.canWriteSensitive, 'maxlength="80"')}
-      </div>`) : "";
+        ${personnelRecordField("firstName", "identity.firstName", "Vorname", sensitive.identity.firstName, mode("identity.firstName"), 'maxlength="100" autocomplete="given-name"')}
+        ${personnelRecordField("lastName", "identity.lastName", "Nachname", sensitive.identity.lastName, mode("identity.lastName"), 'maxlength="100" autocomplete="family-name"')}
+        ${personnelRecordField("previousName", "identity.previousName", "Früherer Name", sensitive.identity.previousName, mode("identity.previousName"), 'maxlength="120"')}
+        ${personnelRecordField("salutation", "identity.salutation", "Anrede", sensitive.identity.salutation, mode("identity.salutation"), 'maxlength="40"')}
+        ${personnelRecordField("title", "identity.title", "Titel", sensitive.identity.title, mode("identity.title"), 'maxlength="80"')}
+        ${personnelRecordField("birthDate", "identity.birthDate", "Geburtsdatum", sensitive.identity.birthDate, mode("identity.birthDate"), 'type="date"')}
+        ${personnelRecordField("birthPlace", "identity.birthPlace", "Geburtsort", sensitive.identity.birthPlace, mode("identity.birthPlace"), 'maxlength="120"')}
+        ${personnelRecordField("nationality", "identity.nationality", "Staatsangehörigkeit", sensitive.identity.nationality, mode("identity.nationality"), 'maxlength="80"')}
+      </div>`);
 
-    const emergencySection = access.canReadSensitive ? personnelRecordDetails("Notfallkontakt", "Kontakt", access.canWriteSensitive, `
+    const emergencyKeys = ["emergencyContact.name", "emergencyContact.relationship", "emergencyContact.phone"];
+    const emergencySection = personnelRecordDetails("Notfallkontakt", "Kontakt", personnelRecordSectionMode(access, emergencyKeys), `
       <div class="personnel-record-field-grid">
-        ${personnelRecordField("emergencyName", "Name", sensitive.emergencyContact.name, access.canWriteSensitive, 'maxlength="120"')}
-        ${personnelRecordField("emergencyRelationship", "Beziehung", sensitive.emergencyContact.relationship, access.canWriteSensitive, 'maxlength="80"')}
-        ${personnelRecordField("emergencyPhone", "Telefonnummer", sensitive.emergencyContact.phone, access.canWriteSensitive, 'type="tel" maxlength="40"', true)}
-      </div>`) : "";
+        ${personnelRecordField("emergencyName", "emergencyContact.name", "Name", sensitive.emergencyContact.name, mode("emergencyContact.name"), 'maxlength="120"')}
+        ${personnelRecordField("emergencyRelationship", "emergencyContact.relationship", "Beziehung", sensitive.emergencyContact.relationship, mode("emergencyContact.relationship"), 'maxlength="80"')}
+        ${personnelRecordField("emergencyPhone", "emergencyContact.phone", "Telefonnummer", sensitive.emergencyContact.phone, mode("emergencyContact.phone"), 'type="tel" maxlength="40"', true)}
+      </div>`);
 
-    const protectedSection = access.canReadSensitive ? personnelRecordDetails("SV, Bank & Adresse", "Besonders geschützt", access.canWriteSensitive, `
+    const protectedKeys = ["socialSecurityNumber", "accountHolder", "iban", "bic", "address.street", "address.supplement", "address.postalCode", "address.city", "address.state", "address.country"];
+    const protectedSection = personnelRecordDetails("SV, Bank & Adresse", "Besonders geschützt", personnelRecordSectionMode(access, protectedKeys), `
       <div class="personnel-record-field-grid">
-        ${personnelRecordField("socialSecurityNumber", "SV-Nummer", sensitive.socialSecurityNumber, access.canWriteSensitive, 'inputmode="numeric" maxlength="13" autocomplete="off"')}
-        ${personnelRecordField("accountHolder", "Kontoinhaber/-in", sensitive.accountHolder, access.canWriteSensitive, 'maxlength="120" autocomplete="off"')}
-        ${personnelRecordField("iban", "IBAN", sensitive.iban, access.canWriteSensitive, 'maxlength="34" autocomplete="off"', true)}
-        ${personnelRecordField("bic", "BIC", sensitive.bic, access.canWriteSensitive, 'maxlength="11" autocomplete="off"')}
-        ${personnelRecordField("street", "Straße und Hausnummer", sensitive.address.street, access.canWriteSensitive, 'maxlength="160" autocomplete="street-address"', true)}
-        ${personnelRecordField("addressSupplement", "Adresszusatz", sensitive.address.supplement, access.canWriteSensitive, 'maxlength="120"', true)}
-        ${personnelRecordField("postalCode", "Postleitzahl", sensitive.address.postalCode, access.canWriteSensitive, 'maxlength="20" autocomplete="postal-code"')}
-        ${personnelRecordField("city", "Ort", sensitive.address.city, access.canWriteSensitive, 'maxlength="100" autocomplete="address-level2"')}
-        ${personnelRecordField("state", "Bundesland", sensitive.address.state, access.canWriteSensitive, 'maxlength="100" autocomplete="address-level1"')}
-        ${personnelRecordField("country", "Land", sensitive.address.country, access.canWriteSensitive, 'maxlength="80" autocomplete="country-name"')}
-      </div><p class="calculation-note">Diese Werte werden verschlüsselt gespeichert und niemals in Teamlisten ausgegeben.</p>`, "sensitive-personnel-section") : "";
+        ${personnelRecordField("socialSecurityNumber", "socialSecurityNumber", "SV-Nummer", sensitive.socialSecurityNumber, mode("socialSecurityNumber"), 'inputmode="numeric" maxlength="13" autocomplete="off"')}
+        ${personnelRecordField("accountHolder", "accountHolder", "Kontoinhaber/-in", sensitive.accountHolder, mode("accountHolder"), 'maxlength="120" autocomplete="off"')}
+        ${personnelRecordField("iban", "iban", "IBAN", sensitive.iban, mode("iban"), 'maxlength="34" autocomplete="off"', true)}
+        ${personnelRecordField("bic", "bic", "BIC", sensitive.bic, mode("bic"), 'maxlength="11" autocomplete="off"')}
+        ${personnelRecordField("street", "address.street", "Straße und Hausnummer", sensitive.address.street, mode("address.street"), 'maxlength="160" autocomplete="street-address"', true)}
+        ${personnelRecordField("addressSupplement", "address.supplement", "Adresszusatz", sensitive.address.supplement, mode("address.supplement"), 'maxlength="120"', true)}
+        ${personnelRecordField("postalCode", "address.postalCode", "Postleitzahl", sensitive.address.postalCode, mode("address.postalCode"), 'maxlength="20" autocomplete="postal-code"')}
+        ${personnelRecordField("city", "address.city", "Ort", sensitive.address.city, mode("address.city"), 'maxlength="100" autocomplete="address-level2"')}
+        ${personnelRecordField("state", "address.state", "Bundesland", sensitive.address.state, mode("address.state"), 'maxlength="100" autocomplete="address-level1"')}
+        ${personnelRecordField("country", "address.country", "Land", sensitive.address.country, mode("address.country"), 'maxlength="80" autocomplete="country-name"')}
+      </div><p class="calculation-note">Diese Werte werden verschlüsselt gespeichert und niemals in Teamlisten ausgegeben.</p>`, "sensitive-personnel-section");
 
-    const employmentSection = access.canReadSensitive ? personnelRecordDetails("Beschäftigung & Vertrag", "Vertragsdaten", access.canWriteSensitive, `
+    const employmentKeys = ["employment.startDate", "employment.endDate", "employment.fixedTermEnd", "employment.probationEnd", "employment.employmentType", "employment.contractType", "employment.employmentStatus", "employment.collectiveAgreement", "employment.classification", "employment.payrollGroup", "employment.notes"];
+    const employmentSection = personnelRecordDetails("Beschäftigung & Vertrag", "Vertragsdaten", personnelRecordSectionMode(access, employmentKeys), `
       <div class="personnel-record-field-grid">
-        ${personnelRecordField("employmentStartDate", "Eintrittsdatum", sensitive.employment.startDate, access.canWriteSensitive, 'type="date"')}
-        ${personnelRecordField("employmentEndDate", "Austrittsdatum", sensitive.employment.endDate, access.canWriteSensitive, 'type="date"')}
-        ${personnelRecordField("fixedTermEnd", "Befristet bis", sensitive.employment.fixedTermEnd, access.canWriteSensitive, 'type="date"')}
-        ${personnelRecordField("probationEnd", "Probezeit bis", sensitive.employment.probationEnd, access.canWriteSensitive, 'type="date"')}
-        ${personnelRecordField("employmentType", "Beschäftigungsart", sensitive.employment.employmentType, access.canWriteSensitive, 'maxlength="100"')}
-        ${personnelRecordField("contractType", "Vertragsart", sensitive.employment.contractType, access.canWriteSensitive, 'maxlength="100"')}
-        ${personnelRecordField("employmentStatus", "Beschäftigungsstatus", sensitive.employment.employmentStatus, access.canWriteSensitive, 'maxlength="80"')}
-        ${personnelRecordField("collectiveAgreement", "Kollektivvertrag", sensitive.employment.collectiveAgreement, access.canWriteSensitive, 'maxlength="160"')}
-        ${personnelRecordField("classification", "Einstufung", sensitive.employment.classification, access.canWriteSensitive, 'maxlength="120"')}
-        ${personnelRecordField("payrollGroup", "Lohnverrechnungsgruppe", sensitive.employment.payrollGroup, access.canWriteSensitive, 'maxlength="120"')}
-        ${personnelRecordArea("employmentNotes", "Interne Hinweise", sensitive.employment.notes, access.canWriteSensitive)}
-      </div>`) : "";
+        ${personnelRecordField("employmentStartDate", "employment.startDate", "Eintrittsdatum", sensitive.employment.startDate, mode("employment.startDate"), 'type="date"')}
+        ${personnelRecordField("employmentEndDate", "employment.endDate", "Austrittsdatum", sensitive.employment.endDate, mode("employment.endDate"), 'type="date"')}
+        ${personnelRecordField("fixedTermEnd", "employment.fixedTermEnd", "Befristet bis", sensitive.employment.fixedTermEnd, mode("employment.fixedTermEnd"), 'type="date"')}
+        ${personnelRecordField("probationEnd", "employment.probationEnd", "Probezeit bis", sensitive.employment.probationEnd, mode("employment.probationEnd"), 'type="date"')}
+        ${personnelRecordField("employmentType", "employment.employmentType", "Beschäftigungsart", sensitive.employment.employmentType, mode("employment.employmentType"), 'maxlength="100"')}
+        ${personnelRecordField("contractType", "employment.contractType", "Vertragsart", sensitive.employment.contractType, mode("employment.contractType"), 'maxlength="100"')}
+        ${personnelRecordField("employmentStatus", "employment.employmentStatus", "Beschäftigungsstatus", sensitive.employment.employmentStatus, mode("employment.employmentStatus"), 'maxlength="80"')}
+        ${personnelRecordField("collectiveAgreement", "employment.collectiveAgreement", "Kollektivvertrag", sensitive.employment.collectiveAgreement, mode("employment.collectiveAgreement"), 'maxlength="160"')}
+        ${personnelRecordField("classification", "employment.classification", "Einstufung", sensitive.employment.classification, mode("employment.classification"), 'maxlength="120"')}
+        ${personnelRecordField("payrollGroup", "employment.payrollGroup", "Lohnverrechnungsgruppe", sensitive.employment.payrollGroup, mode("employment.payrollGroup"), 'maxlength="120"')}
+        ${personnelRecordArea("employmentNotes", "employment.notes", "Interne Hinweise", sensitive.employment.notes, mode("employment.notes"))}
+      </div>`);
 
     const reportEntries = (result.reports || []).map((report) => {
       const documents = (report.documents || []).map((document) => result.canOpenFiles
@@ -3538,7 +3746,9 @@ async function openPersonnelRecord(employeeNumber) {
     const documentSection = renderPersonnelDocuments(employeeNumber, result, access);
     elements.personnelRecordContent.innerHTML = `${contactSection}${identitySection}${emergencySection}${protectedSection}${employmentSection}${documentSection}${amuSection}`
       || '<p class="settings-note">Für diesen Personalakt sind keine Bereiche freigegeben.</p>';
-    elements.savePersonnelRecordButton.classList.toggle("hidden", !access.canWritePhone && !access.canWriteSensitive);
+    state.personnelRecordDirtyFields.clear();
+    const canWriteFormField = mode("phone") === "write" || PERSONNEL_RECORD_FORM_FIELDS.some(([, fieldKey]) => mode(fieldKey) === "write");
+    elements.savePersonnelRecordButton.classList.toggle("hidden", !canWriteFormField);
   } catch (error) {
     if (!elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
     state.personnelRecord = null;
@@ -3553,18 +3763,24 @@ async function savePersonnelRecord(event) {
   const access = current.result?.access || {};
   const fields = elements.personnelRecordForm.elements;
   const value = (name) => String(fields.namedItem(name)?.value || "").trim();
+  const mode = (key) => personnelRecordAccessMode(access, key);
+  const setNestedValue = (target, path, fieldValue) => {
+    let cursor = target;
+    path.forEach((part, index) => {
+      if (index === path.length - 1) cursor[part] = fieldValue;
+      else cursor = cursor[part] ||= {};
+    });
+  };
   const body = {};
-  if (access.canWritePhone) body.phone = value("personnelPhone");
-  if (access.canWriteSensitive) {
-    body.sensitive = {
-      identity: { firstName: value("firstName"), lastName: value("lastName"), previousName: value("previousName"), salutation: value("salutation"), title: value("title"), birthDate: value("birthDate"), birthPlace: value("birthPlace"), nationality: value("nationality") },
-      alternatePhone: value("alternatePhone"), privateEmail: value("privateEmail"),
-      emergencyContact: { name: value("emergencyName"), relationship: value("emergencyRelationship"), phone: value("emergencyPhone") },
-      socialSecurityNumber: value("socialSecurityNumber"), iban: value("iban"), bic: value("bic"), accountHolder: value("accountHolder"),
-      address: { street: value("street"), supplement: value("addressSupplement"), postalCode: value("postalCode"), city: value("city"), state: value("state"), country: value("country") },
-      employment: { startDate: value("employmentStartDate"), endDate: value("employmentEndDate"), fixedTermEnd: value("fixedTermEnd"), probationEnd: value("probationEnd"), employmentType: value("employmentType"), contractType: value("contractType"), employmentStatus: value("employmentStatus"), collectiveAgreement: value("collectiveAgreement"), classification: value("classification"), payrollGroup: value("payrollGroup"), notes: value("employmentNotes") },
-    };
-  }
+  if (state.personnelRecordDirtyFields.has("phone") && mode("phone") === "write" && fields.namedItem("personnelPhone")) body.phone = value("personnelPhone");
+  const sensitivePatch = {};
+  PERSONNEL_RECORD_FORM_FIELDS.forEach(([inputName, fieldKey, path]) => {
+    if (state.personnelRecordDirtyFields.has(fieldKey) && mode(fieldKey) === "write" && fields.namedItem(inputName)) {
+      setNestedValue(sensitivePatch, path, value(inputName));
+    }
+  });
+  if (Object.keys(sensitivePatch).length) body.sensitive = sensitivePatch;
+  if (!Object.keys(body).length) return showToast("Es wurden keine bearbeitbaren Felder geändert.");
   elements.savePersonnelRecordButton.disabled = true;
   elements.personnelRecordMessage.classList.add("hidden");
   try {
@@ -5388,6 +5604,7 @@ function clearEmployeeProtectedRecord() {
 function clearPersonnelRecordDialog() {
   state.personnelRecordRequestToken = null;
   state.personnelRecord = null;
+  state.personnelRecordDirtyFields.clear();
   if (elements.personnelRecordContent) elements.personnelRecordContent.replaceChildren();
   if (elements.personnelRecordMessage) elements.personnelRecordMessage.textContent = "";
 }
@@ -7376,6 +7593,26 @@ elements.rightsUserList?.addEventListener("click", (event) => {
   if (card && event.target.closest("[data-edit-user-rights]")) openRightsEditor(card.dataset.rightsUser);
 });
 elements.rightsEditorForm?.addEventListener("submit", saveUserRights);
+elements.personnelFieldRightsRole?.addEventListener("change", (event) => {
+  state.selectedPersonnelFieldRightsRole = event.target.value;
+  renderPersonnelFieldRights();
+});
+elements.personnelFieldRightsMatrix?.addEventListener("change", (event) => {
+  const select = event.target.closest("select[data-personnel-field-right]");
+  if (!select) return;
+  const role = state.selectedPersonnelFieldRightsRole;
+  const matrix = state.personnelFieldRightsDrafts[role]
+    ||= { ...(state.personnelFieldRights?.matrix?.[role] || {}) };
+  matrix[select.dataset.personnelFieldRight] = select.value;
+  state.personnelFieldRightsDirtyRoles.add(state.selectedPersonnelFieldRightsRole);
+  const roleLabel = state.personnelFieldRights?.roles?.find((role) => role.id === state.selectedPersonnelFieldRightsRole)?.label || "diese Leitungsebene";
+  if (elements.personnelFieldRightsHint) elements.personnelFieldRightsHint.textContent = `Ungespeicherte Änderungen für ${roleLabel}. Andere Leitungsebenen können trotzdem angesehen werden.`;
+  const selectedOption = elements.personnelFieldRightsRole?.selectedOptions?.[0];
+  if (selectedOption && !selectedOption.textContent.includes("nicht gespeichert")) selectedOption.textContent += " · nicht gespeichert";
+  select.closest(".personnel-field-right-row")?.setAttribute("data-field-access-level", select.value);
+  personnelFieldGroupSummary(select.closest(".personnel-field-rights-group"));
+});
+elements.savePersonnelFieldRightsButton?.addEventListener("click", savePersonnelFieldRights);
 document.querySelectorAll("button[data-page-theme-choice]").forEach((button) => button.addEventListener("click", () => {
   const view = button.closest(".view")?.id?.replace(/View$/, "") || state.currentView;
   savePageTheme(view, button.dataset.pageThemeChoice);
@@ -7859,6 +8096,10 @@ document.querySelector("#optionDateTo").addEventListener("change", () => {
 });
 elements.employeeForm.addEventListener("submit", saveEmployee);
 elements.personnelRecordForm?.addEventListener("submit", savePersonnelRecord);
+elements.personnelRecordContent?.addEventListener("input", (event) => {
+  const field = event.target.closest("[data-personnel-field-key]");
+  if (field && !event.target.disabled) state.personnelRecordDirtyFields.add(field.dataset.personnelFieldKey);
+});
 elements.personnelRecordContent?.addEventListener("click", (event) => {
   const uploadButton = event.target.closest("[data-upload-personnel-document]");
   if (uploadButton) {

@@ -176,6 +176,54 @@ const delegablePortalPermissions = new Set(delegablePortalPermissionCatalog.map(
 const hrDelegablePortalPermissions = new Set(delegablePortalPermissionCatalog.filter((entry) => entry.hrDelegable).map((entry) => entry.id));
 const protectedAmuPermissionIds = new Set(["amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit"]);
 const protectedAmuRoleIds = new Set(["hr", "admin", "it_admin", "developer"]);
+const personnelFieldAccessLevels = new Set(["hidden", "read", "write"]);
+const personnelFieldManagedRoles = new Set(["manager", "department_manager"]);
+const personnelFieldPrivilegedRoles = new Set(["hr", "admin", "it_admin", "developer"]);
+const personnelFieldCatalog = Object.freeze([
+  { key: "identity.firstName", label: "Vorname", group: "Persönliche Daten" },
+  { key: "identity.lastName", label: "Nachname", group: "Persönliche Daten" },
+  { key: "identity.previousName", label: "Früherer Name", group: "Persönliche Daten" },
+  { key: "identity.salutation", label: "Anrede", group: "Persönliche Daten" },
+  { key: "identity.title", label: "Titel", group: "Persönliche Daten" },
+  { key: "identity.birthDate", label: "Geburtsdatum", group: "Persönliche Daten" },
+  { key: "identity.birthPlace", label: "Geburtsort", group: "Persönliche Daten" },
+  { key: "identity.nationality", label: "Staatsangehörigkeit", group: "Persönliche Daten" },
+  { key: "socialSecurityNumber", label: "SV-Nummer", group: "Besonders sensible Daten", sensitive: true },
+  { key: "iban", label: "IBAN", group: "Bankverbindung", sensitive: true },
+  { key: "bic", label: "BIC", group: "Bankverbindung", sensitive: true },
+  { key: "accountHolder", label: "Kontoinhaber", group: "Bankverbindung", sensitive: true },
+  { key: "address.street", label: "Straße und Hausnummer", group: "Adresse", sensitive: true },
+  { key: "address.supplement", label: "Adresszusatz", group: "Adresse", sensitive: true },
+  { key: "address.postalCode", label: "Postleitzahl", group: "Adresse", sensitive: true },
+  { key: "address.city", label: "Ort", group: "Adresse", sensitive: true },
+  { key: "address.state", label: "Bundesland/Region", group: "Adresse", sensitive: true },
+  { key: "address.country", label: "Land", group: "Adresse", sensitive: true },
+  { key: "phone", label: "Telefonnummer", group: "Kontakt" },
+  { key: "alternatePhone", label: "Weitere Telefonnummer", group: "Kontakt" },
+  { key: "privateEmail", label: "Private E-Mail-Adresse", group: "Kontakt" },
+  { key: "emergencyContact.name", label: "Notfallkontakt: Name", group: "Notfallkontakt", sensitive: true },
+  { key: "emergencyContact.relationship", label: "Notfallkontakt: Beziehung", group: "Notfallkontakt", sensitive: true },
+  { key: "emergencyContact.phone", label: "Notfallkontakt: Telefonnummer", group: "Notfallkontakt", sensitive: true },
+  { key: "employment.startDate", label: "Eintrittsdatum", group: "Beschäftigung" },
+  { key: "employment.endDate", label: "Austrittsdatum", group: "Beschäftigung" },
+  { key: "employment.fixedTermEnd", label: "Befristungsende", group: "Beschäftigung" },
+  { key: "employment.probationEnd", label: "Ende der Probezeit", group: "Beschäftigung" },
+  { key: "employment.employmentType", label: "Beschäftigungsart", group: "Beschäftigung" },
+  { key: "employment.contractType", label: "Vertragsart", group: "Beschäftigung" },
+  { key: "employment.employmentStatus", label: "Beschäftigungsstatus", group: "Beschäftigung" },
+  { key: "employment.collectiveAgreement", label: "Kollektivvertrag", group: "Beschäftigung" },
+  { key: "employment.classification", label: "Einstufung", group: "Beschäftigung" },
+  { key: "employment.payrollGroup", label: "Lohn-/Gehaltsgruppe", group: "Beschäftigung" },
+  { key: "employment.notes", label: "Vertragliche Notizen", group: "Beschäftigung", sensitive: true },
+  { key: "documents", label: "Personalakt-Dokumente", group: "Dokumente", sensitive: true, documentClass: true },
+]);
+const personnelFieldKeys = new Set(personnelFieldCatalog.map((field) => field.key));
+const personnelEmploymentDateFieldKeys = Object.freeze([
+  "employment.startDate",
+  "employment.endDate",
+  "employment.fixedTermEnd",
+  "employment.probationEnd",
+]);
 const permissionEligibleRoles = new Map(delegablePortalPermissionCatalog
   .filter((entry) => Array.isArray(entry.eligibleRoles))
   .map((entry) => [entry.id, new Set(entry.eligibleRoles)]));
@@ -1084,6 +1132,20 @@ function createSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_personnel_record_documents_employee
       ON personnel_record_documents(employee_number, status, created_at);
+
+    CREATE TABLE IF NOT EXISTS personnel_field_permissions (
+      role_id TEXT NOT NULL,
+      field_key TEXT NOT NULL,
+      access_level TEXT NOT NULL CHECK (access_level IN ('hidden','read','write')),
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (role_id, field_key),
+      CHECK (role_id IN ('manager','department_manager'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_personnel_field_permissions_role
+      ON personnel_field_permissions(role_id, field_key);
 
     CREATE TABLE IF NOT EXISTS positions (
       id TEXT PRIMARY KEY,
@@ -2667,6 +2729,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.71-extended-personnel-records", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.71-personnel-field-rights", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.70-sickness-allowance-valuation", packageMetadata.version);
 const integrationFeatureMigrationId = "v0.63-import-payroll-integrations";
 if (!db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(integrationFeatureMigrationId)) {
@@ -3499,6 +3563,7 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
 
 function publicPortalUser(session) {
   if (!session) return null;
+  const recordAccess = personnelRecordAccess(session);
   return {
     employeeNumber: session.employeeNumber,
     fullName: session.fullName,
@@ -3515,6 +3580,14 @@ function publicPortalUser(session) {
     grantedPermissions: session.grantedPermissions || [],
     scopes: session.scopes || [],
     mustChangePassword: session.mustChangePassword,
+    personnelRecordAccess: {
+      available: recordAccess.canReadSensitive || recordAccess.canReadPhone
+        || recordAccess.canReadDocuments || recordAccess.canReadAmu,
+      fieldAccess: recordAccess.fieldAccess,
+      canReadDocuments: recordAccess.canReadDocuments,
+      canWriteDocuments: recordAccess.canWriteDocuments,
+      phoneWriteRequiresTrustA: recordAccess.phoneWriteRequiresTrustA,
+    },
   };
 }
 
@@ -3540,6 +3613,84 @@ function assertSessionEmployeeScope(session, employeeNumber) {
   const employee = db.prepare("SELECT home_location_id, preferred_department_id FROM employees WHERE personnel_number = ?").get(employeeNumber);
   if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.");
   assertSessionContextScope(session, { locationId: employee.home_location_id, departmentId: employee.preferred_department_id });
+}
+
+function personnelRecordDeniedRoute(request) {
+  const method = String(request?.method || "UNKNOWN").toUpperCase();
+  const routePath = typeof request?.route?.path === "string" ? request.route.path : "unknown";
+  return `${method} ${routePath}`.slice(0, 320);
+}
+
+function auditPersonnelRecordDenied(session, employeeNumber, request, reason, fieldKeys = []) {
+  const safeFieldKeys = [...new Set((Array.isArray(fieldKeys) ? fieldKeys : [])
+    .map((fieldKey) => String(fieldKey || ""))
+    .filter((fieldKey) => personnelFieldKeys.has(fieldKey)))];
+  auditPortal(session?.employeeNumber || "", "personnel-record.access.denied", "employee",
+    String(employeeNumber || ""), JSON.stringify({
+      reason: String(reason || "PERSONNEL_RECORD_ACCESS_DENIED").slice(0, 120),
+      route: personnelRecordDeniedRoute(request),
+      fieldKeys: safeFieldKeys,
+    }));
+}
+
+function assertPersonnelRecordEmployeeScope(session, employeeNumber, request = null, fieldKeys = []) {
+  if (sessionHasGlobalScope(session)) return;
+  try {
+    const explicitScopes = db.prepare(`
+      SELECT location_id, department_id
+      FROM portal_access_scopes
+      WHERE employee_number = ?
+      ORDER BY location_id, department_id
+    `).all(session.employeeNumber).map((scope) => ({
+      locationId: String(scope.location_id),
+      departmentId: Number(scope.department_id || 0) || null,
+    }));
+    if (!explicitScopes.length) {
+      throw httpError(403, "Für den Personalakt ist kein ausdrücklich freigegebener Bereich hinterlegt.", "PORTAL_SCOPE_DENIED");
+    }
+    const employee = db.prepare("SELECT home_location_id, preferred_department_id FROM employees WHERE personnel_number = ?")
+      .get(String(employeeNumber || ""));
+    if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
+    if (!String(employee.home_location_id || "").trim()) {
+      throw httpError(403, "Der Personalakt ist keinem freigegebenen Standort zugeordnet.", "PORTAL_SCOPE_DENIED");
+    }
+    assertSessionContextScope({ ...session, scopes: explicitScopes }, {
+      locationId: employee.home_location_id,
+      departmentId: employee.preferred_department_id,
+    });
+  } catch (error) {
+    if ([403, 404].includes(Number(error?.status))) {
+      auditPersonnelRecordDenied(session, employeeNumber, request, error.code || "PORTAL_SCOPE_DENIED", fieldKeys);
+    }
+    throw error;
+  }
+}
+
+function assertPersonnelRecordContextScope(session, input = {}, request = null, employeeNumber = "", fieldKeys = []) {
+  if (sessionHasGlobalScope(session)) return;
+  try {
+    if (!String(input.locationId || input.location || "").trim()) {
+      throw httpError(403, "Der Personalakt ist keinem freigegebenen Standort zugeordnet.", "PORTAL_SCOPE_DENIED");
+    }
+    const explicitScopes = db.prepare(`
+      SELECT location_id, department_id
+      FROM portal_access_scopes
+      WHERE employee_number = ?
+      ORDER BY location_id, department_id
+    `).all(session.employeeNumber).map((scope) => ({
+      locationId: String(scope.location_id),
+      departmentId: Number(scope.department_id || 0) || null,
+    }));
+    if (!explicitScopes.length) {
+      throw httpError(403, "Für den Personalakt ist kein ausdrücklich freigegebener Bereich hinterlegt.", "PORTAL_SCOPE_DENIED");
+    }
+    assertSessionContextScope({ ...session, scopes: explicitScopes }, input);
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelRecordDenied(session, employeeNumber, request, error.code || "PORTAL_SCOPE_DENIED", fieldKeys);
+    }
+    throw error;
+  }
 }
 
 function assertSessionLocationAdministrationScope(session, locationId) {
@@ -5925,14 +6076,164 @@ function actorCanWritePersonnelPhone(session) {
   return getTrustLevelPolicy().enabled && normalizeTimeConfirmationLevel(actor?.time_confirmation_level) === "A";
 }
 
+function personnelFieldDefaultAccess(role, fieldKey) {
+  if (role === "manager" && fieldKey === "phone") return "read";
+  return "hidden";
+}
+
+function personnelFieldStoredRows(role) {
+  if (!personnelFieldManagedRoles.has(String(role || "")) || !tableExists("personnel_field_permissions")) {
+    return new Map();
+  }
+  return new Map(db.prepare(`
+    SELECT field_key, access_level
+    FROM personnel_field_permissions
+    WHERE role_id = ?
+    ORDER BY field_key
+  `).all(String(role)).filter((row) => personnelFieldKeys.has(row.field_key)
+    && personnelFieldAccessLevels.has(row.access_level))
+    .map((row) => [row.field_key, row.access_level]));
+}
+
+function personnelFieldMatrixForRole(role) {
+  const stored = personnelFieldStoredRows(role);
+  return Object.fromEntries(personnelFieldCatalog.map((field) => [
+    field.key,
+    stored.get(field.key) || personnelFieldDefaultAccess(role, field.key),
+  ]));
+}
+
+function applyPersonnelFieldAccessDependencies(matrix) {
+  const next = { ...matrix };
+  for (const fieldKey of personnelEmploymentDateFieldKeys) {
+    if (next[fieldKey] !== "write") continue;
+    const relatedDateHidden = personnelEmploymentDateFieldKeys
+      .some((relatedFieldKey) => relatedFieldKey !== fieldKey && next[relatedFieldKey] === "hidden");
+    if (relatedDateHidden) next[fieldKey] = "read";
+  }
+  return next;
+}
+
+function personnelFieldEffectiveAccess(session) {
+  if (!session) return Object.fromEntries(personnelFieldCatalog.map((field) => [field.key, "hidden"]));
+  if (session.employeeNumber === "local") {
+    return applyPersonnelFieldAccessDependencies(
+      Object.fromEntries(personnelFieldCatalog.map((field) => [field.key, "write"])),
+    );
+  }
+  if (personnelFieldPrivilegedRoles.has(session.role)) {
+    const sensitiveWrite = actorCanWritePersonnelSensitiveData(session);
+    const sensitiveRead = sensitiveWrite || actorCanReadPersonnelSensitiveData(session);
+    const phoneWrite = actorCanWritePersonnelPhone(session);
+    const phoneRead = phoneWrite || actorCanReadPersonnelPhone(session);
+    return applyPersonnelFieldAccessDependencies(
+      Object.fromEntries(personnelFieldCatalog.map((field) => {
+        if (field.key === "phone") return [field.key, phoneWrite ? "write" : phoneRead ? "read" : "hidden"];
+        return [field.key, sensitiveWrite ? "write" : sensitiveRead ? "read" : "hidden"];
+      })),
+    );
+  }
+  if (!personnelFieldManagedRoles.has(session.role)) {
+    return Object.fromEntries(personnelFieldCatalog.map((field) => [field.key, "hidden"]));
+  }
+  const stored = personnelFieldStoredRows(session.role);
+  const matrix = personnelFieldMatrixForRole(session.role);
+  if (!stored.has("phone")) {
+    if (actorCanWritePersonnelPhone(session)) matrix.phone = "write";
+    else if (actorCanReadPersonnelPhone(session)) matrix.phone = "read";
+  } else if (matrix.phone === "write") {
+    const actor = db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = ?")
+      .get(session.employeeNumber);
+    const trustA = getTrustLevelPolicy().enabled
+      && normalizeTimeConfirmationLevel(actor?.time_confirmation_level) === "A";
+    if (!trustA) matrix.phone = "read";
+  }
+  return applyPersonnelFieldAccessDependencies(matrix);
+}
+
+function personnelFieldRightsPayload(actor) {
+  return {
+    accessLevels: [
+      { id: "hidden", label: "Verborgen" },
+      { id: "read", label: "Nur lesen" },
+      { id: "write", label: "Bearbeiten" },
+    ],
+    roles: [
+      { id: "manager", label: "Filialleitung" },
+      { id: "department_manager", label: "Abteilungsleitung" },
+    ],
+    fields: personnelFieldCatalog.map((field) => ({
+      key: field.key,
+      label: field.label,
+      group: field.group,
+      sensitive: Boolean(field.sensitive),
+      documentClass: Boolean(field.documentClass),
+    })),
+    matrix: {
+      manager: personnelFieldMatrixForRole("manager"),
+      department_manager: personnelFieldMatrixForRole("department_manager"),
+    },
+    canChange: actor?.employeeNumber === "local"
+      || (personnelFieldPrivilegedRoles.has(actor?.role) && actor?.permissions?.includes("rights:write")),
+  };
+}
+
+function validatePersonnelFieldRightsMatrix(role, input) {
+  if (!personnelFieldManagedRoles.has(role)) {
+    throw httpError(400, "Bitte eine gültige Leitungsrolle auswählen.", "PERSONNEL_FIELD_RIGHTS_ROLE_INVALID");
+  }
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw httpError(400, "Bitte eine vollständige Feldrechtematrix übermitteln.", "PERSONNEL_FIELD_RIGHTS_INVALID");
+  }
+  const keys = Object.keys(input);
+  const unknown = keys.filter((key) => !personnelFieldKeys.has(key));
+  const missing = personnelFieldCatalog.map((field) => field.key).filter((key) => !own(input, key));
+  const invalidLevels = keys.filter((key) => personnelFieldKeys.has(key)
+    && !personnelFieldAccessLevels.has(String(input[key] || "")));
+  if (unknown.length || missing.length || invalidLevels.length || keys.length !== personnelFieldCatalog.length) {
+    throw httpError(400, "Die Feldrechtematrix ist unvollständig oder enthält ungültige Werte.", "PERSONNEL_FIELD_RIGHTS_INVALID");
+  }
+  return Object.fromEntries(personnelFieldCatalog.map((field) => [field.key, String(input[field.key])]));
+}
+
+function savePersonnelFieldRightsMatrix(actor, role, input) {
+  const next = validatePersonnelFieldRightsMatrix(role, input);
+  const before = personnelFieldMatrixForRole(role);
+  const changes = personnelFieldCatalog
+    .filter((field) => before[field.key] !== next[field.key])
+    .map((field) => [field.key, before[field.key], next[field.key]]);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("DELETE FROM personnel_field_permissions WHERE role_id = ?").run(role);
+    const insert = db.prepare(`
+      INSERT INTO personnel_field_permissions
+        (role_id, field_key, access_level, updated_by, updated_at)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `);
+    for (const field of personnelFieldCatalog) {
+      insert.run(role, field.key, next[field.key], actor.employeeNumber);
+    }
+    auditPortal(actor.employeeNumber, "personnel-field-rights.update", "portal_role", role,
+      JSON.stringify({ matrixStored: true, changes }));
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  return personnelFieldRightsPayload(actor);
+}
+
 function personnelRecordAccess(session) {
-  const canWriteSensitive = actorCanWritePersonnelSensitiveData(session);
-  const canWritePhone = actorCanWritePersonnelPhone(session);
-  const canReadSensitive = actorCanReadPersonnelSensitiveData(session) || canWriteSensitive;
-  const canReadPhone = actorCanReadPersonnelPhone(session) || canWritePhone;
+  const fieldAccess = personnelFieldEffectiveAccess(session);
+  const sensitiveFields = personnelFieldCatalog.filter((field) => !["phone", "documents"].includes(field.key));
+  const canWriteSensitive = sensitiveFields.some((field) => fieldAccess[field.key] === "write");
+  const canReadSensitive = sensitiveFields.some((field) => fieldAccess[field.key] !== "hidden");
+  const canWritePhone = fieldAccess.phone === "write";
+  const canReadPhone = fieldAccess.phone !== "hidden";
   const canReadAmuSensitiveMetadata = actorCanReadAmuSensitiveMetadata(session);
   const canReadAmu = installationFeatureEnabled("sicknessAmu") && actorCanListAmuReports(session);
   return {
+    fieldAccess,
     canReadSensitive,
     canWriteSensitive,
     canReadPhone,
@@ -5940,8 +6241,8 @@ function personnelRecordAccess(session) {
     canReadAmu,
     canReadAmuSensitiveMetadata,
     canOpenFiles: canReadAmu && actorCanReadAmuFiles(session),
-    canReadDocuments: canReadSensitive,
-    canWriteDocuments: canWriteSensitive,
+    canReadDocuments: fieldAccess.documents !== "hidden",
+    canWriteDocuments: fieldAccess.documents === "write",
     phoneWriteRequiresTrustA: ["manager", "department_manager"].includes(session?.role || ""),
   };
 }
@@ -5963,9 +6264,9 @@ function requirePersonnelRecordSession(request, { write = false } = {}) {
   }
   if (write) assertPortalCsrf(request);
   const access = personnelRecordAccess(session);
-  if (!access.canReadSensitive && !access.canReadPhone && !access.canReadAmu) {
-    auditPortal(session.employeeNumber, "personnel-record.access.denied", "employee",
-      String(request.params?.employeeNumber || ""), write ? "write" : "read");
+  if (!access.canReadSensitive && !access.canReadPhone && !access.canReadDocuments && !access.canReadAmu) {
+    auditPersonnelRecordDenied(session, request.params?.employeeNumber, request,
+      write ? "PERSONNEL_RECORD_WRITE_PERMISSION_DENIED" : "PERSONNEL_RECORD_READ_PERMISSION_DENIED");
     throw httpError(403, "Für den Personalakt fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
   }
   return { session, access };
@@ -6268,12 +6569,12 @@ function changedPersonnelProfileFields(before, after) {
     iban: profile.iban || "",
     bic: profile.bic || "",
     accountHolder: profile.accountHolder || "",
-    street: profile.address?.street || "",
+    "address.street": profile.address?.street || "",
     "address.supplement": profile.address?.supplement || "",
-    postalCode: profile.address?.postalCode || "",
-    city: profile.address?.city || "",
+    "address.postalCode": profile.address?.postalCode || "",
+    "address.city": profile.address?.city || "",
     "address.state": profile.address?.state || "",
-    country: profile.address?.country || "",
+    "address.country": profile.address?.country || "",
     phone: profile.phone || "",
     alternatePhone: profile.alternatePhone || "",
     privateEmail: profile.privateEmail || "",
@@ -6297,12 +6598,99 @@ function changedPersonnelProfileFields(before, after) {
   return Object.keys(right).filter((field) => left[field] !== right[field]);
 }
 
+function personnelPathValue(object, fieldKey) {
+  return String(fieldKey || "").split(".").reduce((value, segment) => value?.[segment], object);
+}
+
+function setPersonnelPathValue(object, fieldKey, value) {
+  const segments = String(fieldKey || "").split(".");
+  let target = object;
+  for (const segment of segments.slice(0, -1)) {
+    if (!target[segment] || typeof target[segment] !== "object" || Array.isArray(target[segment])) target[segment] = {};
+    target = target[segment];
+  }
+  target[segments.at(-1)] = value;
+}
+
+function submittedPersonnelRecordFieldKeys(value) {
+  const input = personnelObject(value);
+  const result = new Set();
+  if (own(input, "phone")) result.add("phone");
+  const direct = { ...input };
+  delete direct.phone;
+  delete direct.sensitive;
+  const sources = [direct];
+  if (input.sensitive && typeof input.sensitive === "object" && !Array.isArray(input.sensitive)) {
+    sources.push(input.sensitive);
+  }
+  const directAliases = {
+    firstName: "identity.firstName", lastName: "identity.lastName", previousName: "identity.previousName",
+    salutation: "identity.salutation", title: "identity.title", birthDate: "identity.birthDate",
+    birthPlace: "identity.birthPlace", nationality: "identity.nationality",
+    street: "address.street", supplement: "address.supplement", postalCode: "address.postalCode",
+    city: "address.city", state: "address.state", country: "address.country",
+    emergencyContactName: "emergencyContact.name",
+    emergencyContactRelationship: "emergencyContact.relationship",
+    emergencyContactPhone: "emergencyContact.phone",
+    startDate: "employment.startDate", endDate: "employment.endDate",
+    fixedTermEnd: "employment.fixedTermEnd", probationEnd: "employment.probationEnd",
+    employmentType: "employment.employmentType", contractType: "employment.contractType",
+    employmentStatus: "employment.employmentStatus", collectiveAgreement: "employment.collectiveAgreement",
+    classification: "employment.classification", payrollGroup: "employment.payrollGroup",
+    notes: "employment.notes",
+  };
+  for (const source of sources) {
+    for (const field of personnelFieldCatalog) {
+      if (["phone", "documents"].includes(field.key)) continue;
+      const segments = field.key.split(".");
+      if (segments.length === 1) {
+        if (own(source, field.key)) result.add(field.key);
+      } else {
+        const nested = source[segments[0]];
+        if (nested && typeof nested === "object" && !Array.isArray(nested) && own(nested, segments[1])) {
+          result.add(field.key);
+        }
+      }
+    }
+    for (const [alias, fieldKey] of Object.entries(directAliases)) {
+      if (own(source, alias)) result.add(fieldKey);
+    }
+  }
+  return [...result];
+}
+
+function redactPersonnelSensitiveProfile(profile, fieldAccess) {
+  const redacted = {};
+  for (const field of personnelFieldCatalog) {
+    if (["phone", "documents"].includes(field.key) || fieldAccess[field.key] === "hidden") continue;
+    setPersonnelPathValue(redacted, field.key, personnelPathValue(profile, field.key) ?? "");
+  }
+  return redacted;
+}
+
+function assertPersonnelRecordFieldsWritable(request, session, access, submittedFields, employeeNumber) {
+  const denied = submittedFields.filter((fieldKey) => access.fieldAccess[fieldKey] !== "write");
+  if (!denied.length) return;
+  if (denied.length === 1 && denied[0] === "phone") {
+    const message = access.phoneWriteRequiresTrustA
+      ? "Telefonnummern dürfen durch Leitungen nur mit Vertrauensstufe A und ausdrücklich vergebenem Feldrecht geändert werden."
+      : "Die Telefonnummer darf mit diesem Zugang nicht bearbeitet werden.";
+    auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_PHONE_WRITE_DENIED", denied);
+    throw httpError(403, message, "PERSONNEL_PHONE_WRITE_DENIED");
+  }
+  auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_FIELD_WRITE_DENIED", denied);
+  throw httpError(403, "Mindestens ein übermitteltes Personalakt-Feld darf mit diesem Zugang nicht bearbeitet werden.",
+    "PERSONNEL_FIELD_WRITE_DENIED");
+}
+
 function preparePersonnelRecordMutation(request, employeeNumber, value) {
   if (value === undefined) return null;
   const { session, access } = requirePersonnelRecordSession(request, { write: true });
-  if (!access.canWriteSensitive) {
-    throw httpError(403, "Der geschützte Personalakt darf mit diesem Zugang nicht bearbeitet werden.", "PERSONNEL_SENSITIVE_WRITE_DENIED");
+  const submittedFields = submittedPersonnelRecordFieldKeys(value);
+  if (!submittedFields.length) {
+    throw httpError(400, "Es wurden keine gültigen Personalakt-Daten übermittelt.", "PERSONNEL_RECORD_INPUT_REQUIRED");
   }
+  assertPersonnelRecordFieldsWritable(request, session, access, submittedFields, employeeNumber);
   const input = personnelRecordInput(value);
   const before = personnelSensitiveProfile(employeeNumber);
   const next = mergePersonnelSensitiveProfile(before, input.hasSensitive ? input.sensitive : {});
@@ -6313,6 +6701,7 @@ function preparePersonnelRecordMutation(request, employeeNumber, value) {
     before,
     next,
     changedFields: changedPersonnelProfileFields(before, next),
+    submittedFields,
   };
 }
 
@@ -14754,6 +15143,12 @@ app.post("/api/employees", (request, response) => {
     employee.timeConfirmationLevel = "C";
     employee.sicknessWithoutAumEnabled = 0;
   }
+  if (request.body.personnelRecord !== undefined) {
+    assertPersonnelRecordContextScope(request.portalSession, {
+      locationId: employee.homeLocationId,
+      departmentId: employee.preferredDepartmentId,
+    }, request, employee.personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
+  }
   assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
   const accessProfile = validatePersonnelAccessProfile(request.portalSession, request.body.accessProfile, employee);
   const personnelRecordMutation = preparePersonnelRecordMutation(request, employee.personnelNumber, request.body.personnelRecord);
@@ -14809,6 +15204,10 @@ app.post("/api/employees", (request, response) => {
 
 app.put("/api/employees/:personnelNumber", (request, response) => {
   const personnelNumber = request.params.personnelNumber;
+  if (request.body.personnelRecord !== undefined) {
+    assertPersonnelRecordEmployeeScope(request.portalSession, personnelNumber, request,
+      submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
+  }
   assertSessionEmployeeScope(request.portalSession, personnelNumber);
   const existing = db.prepare(`
     SELECT time_confirmation_level, sickness_without_aum_enabled, target_workdays_per_week
@@ -16041,6 +16440,11 @@ function rightsDashboardPayload(actor) {
     const scope = rightsDashboardScopes(user, locationLookup, departmentLookup);
     const accessActive = Boolean(user.configured && user.active && user.passwordConfigured);
     const assignedPermissionIds = [...new Set([...rolePermissions, ...grantedPermissions])].sort();
+    const personnelFieldAccess = personnelFieldEffectiveAccess({
+      employeeNumber: user.employeeNumber,
+      role: role.id,
+      permissions: assignedPermissionIds,
+    });
     const permissions = assignedPermissionIds.map((permissionId) => {
       const permission = catalogLookup.get(permissionId) || {
         id: permissionId, label: permissionId, description: "", group: "Weitere Rechte",
@@ -16077,6 +16481,7 @@ function rightsDashboardPayload(actor) {
       homeLocationId: user.homeLocationId,
       preferredDepartmentId: user.preferredDepartmentId,
       scope,
+      personnelFieldAccess,
       permissions,
       counts: {
         effective: permissions.filter((permission) => permission.effective).length,
@@ -16116,10 +16521,16 @@ function rightsManagementPayload(actor) {
     .filter((user) => user.employeeActive)
     .map((user) => {
       const rolePermissions = roles.get(user.role)?.permissions || [];
+      const effectivePermissions = [...new Set([...rolePermissions, ...(user.grantedPermissions || [])])];
       return {
         ...user,
         rolePermissions,
-        effectivePermissions: [...new Set([...rolePermissions, ...(user.grantedPermissions || [])])],
+        effectivePermissions,
+        personnelFieldAccess: personnelFieldEffectiveAccess({
+          employeeNumber: user.employeeNumber,
+          role: user.role,
+          permissions: effectivePermissions,
+        }),
         manageable: actorCanManagePermissionGrants(actor, user),
       };
     });
@@ -16226,6 +16637,16 @@ function drawRightsDashboardProcessPdf(processDashboard, process, location, vali
 app.get("/api/portal/v1/rights", (request, response) => {
   const actor = requireAdminHrOrLocal(request, "rights:read");
   response.json(rightsManagementPayload(actor));
+});
+
+app.get("/api/portal/v1/personnel-field-rights", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "rights:read");
+  response.json(personnelFieldRightsPayload(actor));
+});
+
+app.put("/api/portal/v1/personnel-field-rights/:role", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "rights:write");
+  response.json(savePersonnelFieldRightsMatrix(actor, String(request.params.role || ""), request.body?.fields));
 });
 
 app.get("/api/portal/v1/ui-preferences", (request, response) => {
@@ -16850,7 +17271,7 @@ app.put("/api/portal/v1/amu-settings", (request, response) => {
 app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) => {
   const { session, access } = requirePersonnelRecordSession(request);
   const employeeNumber = String(request.params.employeeNumber || "").trim();
-  assertSessionEmployeeScope(session, employeeNumber);
+  assertPersonnelRecordEmployeeScope(session, employeeNumber, request);
   const employee = db.prepare(`
     SELECT e.personnel_number, e.full_name, e.nickname, e.color, e.home_location_id,
            e.preferred_department_id, l.name AS home_location_name, d.name AS preferred_department_name
@@ -16858,9 +17279,13 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) 
     LEFT JOIN departments d ON d.id = e.preferred_department_id
     WHERE e.personnel_number = ?
   `).get(employeeNumber);
-  if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
+  if (!employee) {
+    auditPersonnelRecordDenied(session, employeeNumber, request, "EMPLOYEE_NOT_FOUND");
+    throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
+  }
   const protectedProfile = access.canReadPhone || access.canReadSensitive
     ? personnelSensitiveProfile(employeeNumber) : emptyPersonnelSensitiveProfile();
+  const redactedProfile = redactPersonnelSensitiveProfile(protectedProfile, access.fieldAccess);
   const personnelDocuments = access.canReadDocuments ? personnelRecordDocumentRows(employeeNumber) : [];
   let serialized = [];
   if (access.canReadAmu) {
@@ -16899,18 +17324,7 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) 
     employee,
     profile: {
       phone: access.canReadPhone ? protectedProfile.phone : null,
-      sensitive: access.canReadSensitive ? {
-        identity: protectedProfile.identity,
-        socialSecurityNumber: protectedProfile.socialSecurityNumber,
-        iban: protectedProfile.iban,
-        bic: protectedProfile.bic,
-        accountHolder: protectedProfile.accountHolder,
-        alternatePhone: protectedProfile.alternatePhone,
-        privateEmail: protectedProfile.privateEmail,
-        emergencyContact: protectedProfile.emergencyContact,
-        address: protectedProfile.address,
-        employment: protectedProfile.employment,
-      } : null,
+      sensitive: access.canReadSensitive ? redactedProfile : null,
     },
     documents: personnelDocuments,
     reports: serialized,
@@ -16922,23 +17336,24 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) 
 app.put("/api/portal/v1/personnel-records/:employeeNumber", (request, response) => {
   const { session, access } = requirePersonnelRecordSession(request, { write: true });
   const employeeNumber = String(request.params.employeeNumber || "").trim();
-  assertSessionEmployeeScope(session, employeeNumber);
+  assertPersonnelRecordEmployeeScope(session, employeeNumber, request,
+    submittedPersonnelRecordFieldKeys(request.body || {}));
   const employee = db.prepare("SELECT personnel_number FROM employees WHERE personnel_number = ?").get(employeeNumber);
-  if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
+  if (!employee) {
+    auditPersonnelRecordDenied(session, employeeNumber, request, "EMPLOYEE_NOT_FOUND",
+      submittedPersonnelRecordFieldKeys(request.body || {}));
+    throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
+  }
   const hasSensitiveInput = Object.prototype.hasOwnProperty.call(request.body || {}, "sensitive");
   const hasPhoneInput = Object.prototype.hasOwnProperty.call(request.body || {}, "phone");
   if (!hasSensitiveInput && !hasPhoneInput) {
     throw httpError(400, "Es wurden keine Personalakt-Daten übermittelt.", "PERSONNEL_RECORD_INPUT_REQUIRED");
   }
-  if (hasSensitiveInput && !access.canWriteSensitive) {
-    throw httpError(403, "Sensible MA-Daten dürfen mit diesem Zugang nicht bearbeitet werden.", "PERSONNEL_SENSITIVE_WRITE_DENIED");
+  const submittedFields = submittedPersonnelRecordFieldKeys(request.body || {});
+  if (!submittedFields.length) {
+    throw httpError(400, "Es wurden keine gültigen Personalakt-Daten übermittelt.", "PERSONNEL_RECORD_INPUT_REQUIRED");
   }
-  if (hasPhoneInput && !access.canWritePhone) {
-    const message = access.phoneWriteRequiresTrustA
-      ? "Telefonnummern dürfen durch Leitungen nur mit Vertrauensstufe A und ausdrücklich vergebenem Schreibrecht geändert werden."
-      : "Die Telefonnummer darf mit diesem Zugang nicht bearbeitet werden.";
-    throw httpError(403, message, "PERSONNEL_PHONE_WRITE_DENIED");
-  }
+  assertPersonnelRecordFieldsWritable(request, session, access, submittedFields, employeeNumber);
   const before = personnelSensitiveProfile(employeeNumber);
   const next = mergePersonnelSensitiveProfile(before, hasSensitiveInput ? request.body.sensitive || {} : {});
   if (hasPhoneInput) next.phone = normalizePersonnelPhone(request.body.phone);
@@ -16974,13 +17389,14 @@ app.put("/api/portal/v1/personnel-records/:employeeNumber", (request, response) 
 app.post("/api/portal/v1/personnel-records/:employeeNumber/documents", async (request, response) => {
   const { session, access } = requirePersonnelRecordSession(request, { write: true });
   if (!access.canWriteDocuments) {
-    auditPortal(session.employeeNumber, "personnel-record.document.access-denied", "employee",
-      String(request.params.employeeNumber || ""), "write");
+    auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
+      "PERSONNEL_DOCUMENT_WRITE_DENIED", ["documents"]);
     throw httpError(403, "Personalakt-Dokumente dürfen mit diesem Zugang nicht hinzugefügt werden.", "PERSONNEL_DOCUMENT_WRITE_DENIED");
   }
   const employeeNumber = String(request.params.employeeNumber || "").trim();
-  assertSessionEmployeeScope(session, employeeNumber);
+  assertPersonnelRecordEmployeeScope(session, employeeNumber, request, ["documents"]);
   if (!db.prepare("SELECT 1 FROM employees WHERE personnel_number = ?").get(employeeNumber)) {
+    auditPersonnelRecordDenied(session, employeeNumber, request, "EMPLOYEE_NOT_FOUND", ["documents"]);
     throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
   }
   const { fields, document } = await parsePersonnelDocumentMultipart(request);
@@ -17042,14 +17458,17 @@ app.post("/api/portal/v1/personnel-records/:employeeNumber/documents", async (re
 app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/content", (request, response) => {
   const { session, access } = requirePersonnelRecordSession(request);
   if (!access.canReadDocuments) {
-    auditPortal(session.employeeNumber, "personnel-record.document.access-denied", "employee",
-      String(request.params.employeeNumber || ""), "read");
+    auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
+      "PERSONNEL_DOCUMENT_READ_DENIED", ["documents"]);
     throw httpError(403, "Personalakt-Dokumente dürfen mit diesem Zugang nicht geöffnet werden.", "PERSONNEL_DOCUMENT_READ_DENIED");
   }
   const employeeNumber = String(request.params.employeeNumber || "").trim();
-  assertSessionEmployeeScope(session, employeeNumber);
+  assertPersonnelRecordEmployeeScope(session, employeeNumber, request, ["documents"]);
   const metadata = personnelRecordDocumentMetadata(employeeNumber, request.params.documentId);
-  if (!metadata) throw httpError(404, "Das Personalakt-Dokument wurde nicht gefunden.", "PERSONNEL_DOCUMENT_NOT_FOUND");
+  if (!metadata) {
+    auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]);
+    throw httpError(404, "Das Personalakt-Dokument wurde nicht gefunden.", "PERSONNEL_DOCUMENT_NOT_FOUND");
+  }
   let prepared;
   try {
     prepared = readPersonnelRecordDocument(metadata);
@@ -17065,14 +17484,17 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/
 app.delete("/api/portal/v1/personnel-records/:employeeNumber/documents/:documentId", (request, response) => {
   const { session, access } = requirePersonnelRecordSession(request, { write: true });
   if (!access.canWriteDocuments) {
-    auditPortal(session.employeeNumber, "personnel-record.document.access-denied", "employee",
-      String(request.params.employeeNumber || ""), "delete");
+    auditPersonnelRecordDenied(session, request.params.employeeNumber, request,
+      "PERSONNEL_DOCUMENT_WRITE_DENIED", ["documents"]);
     throw httpError(403, "Personalakt-Dokumente dürfen mit diesem Zugang nicht gelöscht werden.", "PERSONNEL_DOCUMENT_WRITE_DENIED");
   }
   const employeeNumber = String(request.params.employeeNumber || "").trim();
-  assertSessionEmployeeScope(session, employeeNumber);
+  assertPersonnelRecordEmployeeScope(session, employeeNumber, request, ["documents"]);
   const metadata = personnelRecordDocumentMetadata(employeeNumber, request.params.documentId);
-  if (!metadata) throw httpError(404, "Das Personalakt-Dokument wurde nicht gefunden.", "PERSONNEL_DOCUMENT_NOT_FOUND");
+  if (!metadata) {
+    auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_DOCUMENT_NOT_FOUND", ["documents"]);
+    throw httpError(404, "Das Personalakt-Dokument wurde nicht gefunden.", "PERSONNEL_DOCUMENT_NOT_FOUND");
+  }
   const purgedPayload = purgedPersonnelRecordDocumentPayload(metadata);
   amuMutationInProgress += 1;
   try {
