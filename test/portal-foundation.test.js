@@ -1274,14 +1274,23 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
       body: JSON.stringify({ id: "03", name: "Delegiert angelegt", minStaff: 1, daySettings, timeTrackingEnabled: false, active: true }),
     });
-    assert.equal(createDelegatedLocation.status, 201, await createDelegatedLocation.clone().text());
-    assert.ok((await createDelegatedLocation.json()).some((location) => location.id === "03"));
+    assert.equal(createDelegatedLocation.status, 403, await createDelegatedLocation.clone().text());
+    assert.equal((await createDelegatedLocation.json()).code, "PORTAL_PERMISSION_DENIED");
+    const createLocationAsAdmin = await fetch(`${url}/api/locations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ id: "03", name: "Administrativ angelegt", minStaff: 1, daySettings, timeTrackingEnabled: false, active: true }),
+    });
+    assert.equal(createLocationAsAdmin.status, 201, await createLocationAsAdmin.clone().text());
+    const createdLocation = (await createLocationAsAdmin.json()).find((location) => location.id === "03");
+    assert.ok(createdLocation);
+    assert.ok(createdLocation.cost_center_id);
     const updateDelegatedLocation = await fetch(`${url}/api/locations/03`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
       body: JSON.stringify({ id: "03", name: "Delegiert gespeichert", minStaff: 2, daySettings, timeTrackingEnabled: false, active: true }),
     });
-    assert.equal(updateDelegatedLocation.status, 200, await updateDelegatedLocation.clone().text());
+    assert.equal(updateDelegatedLocation.status, 403, await updateDelegatedLocation.clone().text());
 
     const remoteDepartmentResponse = await fetch(`${url}/api/departments`, {
       method: "POST",

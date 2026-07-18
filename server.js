@@ -1196,6 +1196,7 @@ function createSchema() {
     CREATE TABLE IF NOT EXISTS shifts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       employee_number TEXT NOT NULL,
+      location_id TEXT,
       department_id INTEGER,
       shift_date TEXT NOT NULL,
       start_time TEXT NOT NULL,
@@ -1205,6 +1206,8 @@ function createSchema() {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
         ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
       FOREIGN KEY (department_id) REFERENCES departments(id)
         ON UPDATE CASCADE ON DELETE SET NULL
     );
@@ -1976,13 +1979,13 @@ function migrateLegacySchema() {
     createSchema();
     db.exec(`
       INSERT INTO employees
-        (personnel_number, full_name, nickname, color, contracted_hours, active, created_at)
-      SELECT CAST(id AS TEXT), name, name, color, contracted_hours, active, created_at
+        (personnel_number, full_name, nickname, color, contracted_hours, home_location_id, active, created_at)
+      SELECT CAST(id AS TEXT), name, name, color, contracted_hours, '01', active, created_at
       FROM employees_legacy;
 
       INSERT INTO shifts
-        (id, employee_number, shift_date, start_time, end_time, area, note, created_at)
-      SELECT id, CAST(employee_id AS TEXT), shift_date, start_time, end_time, area, note, created_at
+        (id, employee_number, location_id, shift_date, start_time, end_time, area, note, created_at)
+      SELECT id, CAST(employee_id AS TEXT), '01', shift_date, start_time, end_time, area, note, created_at
       FROM shifts_legacy;
 
       DROP TABLE shifts_legacy;
@@ -2009,13 +2012,20 @@ const legacySchemaMigrationRequired = tableExists("employees") && !columnExists(
 const portalMobileBaselineMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.60-portal-mobile-foundation' LIMIT 1").get();
 const costCenterMigrationId = "v0.71-cost-centers-personnel";
+const shiftLocationMigrationId = "v0.71-shift-locations";
 const costCenterMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(costCenterMigrationId)
   || !tableExists("cost_centers")
   || !columnExists("employees", "cost_center_id")
   || !columnExists("locations", "cost_center_id");
+const shiftLocationMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(shiftLocationMigrationId)
+  || !columnExists("shifts", "location_id")
+  || !db.prepare("PRAGMA foreign_key_list(shifts)").all()
+    .some((row) => row.from === "location_id" && row.table === "locations" && row.to === "id");
 if (databaseExistedBeforeOpen && (portalMobileBaselineMigrationRequired || protectedPersonnelMigrationRequired
-  || unreleasedSicknessDraftSchemaPresent || legacySchemaMigrationRequired || costCenterMigrationRequired)) {
+  || unreleasedSicknessDraftSchemaPresent || legacySchemaMigrationRequired || costCenterMigrationRequired
+  || shiftLocationMigrationRequired)) {
   createInternalDatabaseBackup("pre-migration");
 }
 
@@ -2047,6 +2057,7 @@ if (legacySchemaMigrationRequired) {
   createSchema();
 }
 createSchema();
+ensureColumn("shifts", "location_id", "TEXT");
 ensureColumn("integration_connections", "revision", "INTEGER NOT NULL DEFAULT 1");
 ensureColumn("integration_deliveries", "connection_revision", "INTEGER NOT NULL DEFAULT 1");
 ensureColumn("integration_deliveries", "connection_fingerprint", "TEXT NOT NULL DEFAULT ''");
@@ -2956,6 +2967,142 @@ function migrateCostCenters() {
 }
 
 migrateCostCenters();
+
+function installShiftLocationIntegrityTriggers() {
+  db.exec(`
+    DROP TRIGGER IF EXISTS trg_shifts_location_supplied;
+    DROP TRIGGER IF EXISTS trg_shifts_location_default;
+    DROP TRIGGER IF EXISTS trg_shifts_location_update;
+    DROP TRIGGER IF EXISTS trg_shifts_department_location_insert;
+    DROP TRIGGER IF EXISTS trg_shifts_department_location_update;
+
+    CREATE TRIGGER trg_shifts_location_supplied
+    BEFORE INSERT ON shifts
+    WHEN TRIM(COALESCE(NEW.location_id, '')) <> ''
+      AND NOT EXISTS (SELECT 1 FROM locations WHERE id = NEW.location_id)
+    BEGIN
+      SELECT RAISE(ABORT, 'SHIFT_LOCATION_INVALID');
+    END;
+
+    CREATE TRIGGER trg_shifts_location_default
+    AFTER INSERT ON shifts
+    WHEN TRIM(COALESCE(NEW.location_id, '')) = ''
+    BEGIN
+      UPDATE shifts
+      SET location_id = COALESCE(
+        (SELECT d.location_id FROM departments d WHERE d.id = NEW.department_id),
+        (SELECT e.home_location_id FROM employees e WHERE e.personnel_number = NEW.employee_number)
+      )
+      WHERE id = NEW.id;
+      SELECT CASE WHEN TRIM(COALESCE((SELECT location_id FROM shifts WHERE id = NEW.id), '')) = ''
+        THEN RAISE(ABORT, 'SHIFT_LOCATION_REQUIRED') END;
+    END;
+
+    CREATE TRIGGER trg_shifts_location_update
+    BEFORE UPDATE OF location_id ON shifts
+    WHEN TRIM(COALESCE(NEW.location_id, '')) = ''
+      OR NOT EXISTS (SELECT 1 FROM locations WHERE id = NEW.location_id)
+    BEGIN
+      SELECT RAISE(ABORT, 'SHIFT_LOCATION_REQUIRED');
+    END;
+
+    CREATE TRIGGER trg_shifts_department_location_insert
+    BEFORE INSERT ON shifts
+    WHEN NEW.department_id IS NOT NULL
+      AND TRIM(COALESCE(NEW.location_id, '')) <> ''
+      AND NOT EXISTS (
+        SELECT 1 FROM departments d
+        WHERE d.id = NEW.department_id AND d.location_id = NEW.location_id
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'SHIFT_DEPARTMENT_LOCATION_CONFLICT');
+    END;
+
+    CREATE TRIGGER trg_shifts_department_location_update
+    BEFORE UPDATE OF location_id, department_id ON shifts
+    WHEN NEW.department_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM departments d
+        WHERE d.id = NEW.department_id AND d.location_id = NEW.location_id
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'SHIFT_DEPARTMENT_LOCATION_CONFLICT');
+    END;
+  `);
+}
+
+function shiftLocationForeignKeyPresent() {
+  return db.prepare("PRAGMA foreign_key_list(shifts)").all()
+    .some((row) => row.from === "location_id" && row.table === "locations" && row.to === "id");
+}
+
+function migrateShiftLocations() {
+  db.prepare(`
+    UPDATE shifts
+    SET location_id = COALESCE(
+      (SELECT d.location_id FROM departments d WHERE d.id = shifts.department_id),
+      (SELECT e.home_location_id FROM employees e WHERE e.personnel_number = shifts.employee_number)
+    )
+    WHERE TRIM(COALESCE(location_id, '')) = ''
+      OR NOT EXISTS (SELECT 1 FROM locations l WHERE l.id = shifts.location_id)
+  `).run();
+  const invalid = Number(db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM shifts s
+    LEFT JOIN locations l ON l.id = s.location_id
+    LEFT JOIN departments d ON d.id = s.department_id
+    WHERE l.id IS NULL
+       OR (s.department_id IS NOT NULL AND (d.id IS NULL OR d.location_id <> s.location_id))
+  `).get().count || 0);
+  if (invalid) throw new Error(`Einsatzfilialen-Migration unvollständig: ${invalid} Dienst(e).`);
+
+  if (!shiftLocationForeignKeyPresent()) {
+    db.exec("PRAGMA foreign_keys = OFF");
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      db.exec(`
+        CREATE TABLE shifts_v071 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          employee_number TEXT NOT NULL,
+          location_id TEXT,
+          department_id INTEGER,
+          shift_date TEXT NOT NULL,
+          start_time TEXT NOT NULL,
+          end_time TEXT NOT NULL,
+          area TEXT NOT NULL DEFAULT '',
+          note TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+            ON UPDATE CASCADE ON DELETE CASCADE,
+          FOREIGN KEY (location_id) REFERENCES locations(id)
+            ON UPDATE CASCADE ON DELETE RESTRICT,
+          FOREIGN KEY (department_id) REFERENCES departments(id)
+            ON UPDATE CASCADE ON DELETE SET NULL
+        );
+        INSERT INTO shifts_v071
+          (id, employee_number, location_id, department_id, shift_date, start_time, end_time, area, note, created_at)
+        SELECT id, employee_number, location_id, department_id, shift_date, start_time, end_time, area, note, created_at
+        FROM shifts;
+        DROP TABLE shifts;
+        ALTER TABLE shifts_v071 RENAME TO shifts;
+      `);
+      db.exec("COMMIT");
+    } catch (error) {
+      try { db.exec("ROLLBACK"); } catch {}
+      throw error;
+    } finally {
+      db.exec("PRAGMA foreign_keys = ON");
+    }
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_shifts_date ON shifts(shift_date)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_shifts_employee ON shifts(employee_number)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_shifts_location_date ON shifts(location_id, shift_date)");
+  db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+    .run(shiftLocationMigrationId, packageMetadata.version);
+  installShiftLocationIntegrityTriggers();
+}
+
+migrateShiftLocations();
 
 function freezeLegacyLocationBranding() {
   const migrationId = "v0.53.1-branch-branding-snapshots";
@@ -4244,9 +4391,12 @@ function enforceAdminApiAccess(request, _response, next) {
     let permission = usbProvisioningRoute ? "usb:provision" : "schedule:read";
     const integrationRoute = /^\/integrations(?:\/|$)/.test(request.path);
     const personnelDirectoryRoute = /^\/personnel-directory(?:\/|$)/.test(request.path);
+    const personnelVacationRoute = /^\/personnel-vacations(?:\/|$)/.test(request.path);
     const costCenterRoute = /^\/cost-centers(?:\/|$)/.test(request.path);
     if (personnelDirectoryRoute) {
       permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "personnel:central:read" : "personnel:central:write";
+    } else if (personnelVacationRoute) {
+      permission = "personnel:central:read";
     } else if (costCenterRoute) {
       permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "cost_centers:read" : "cost_centers:write";
     } else if (integrationRoute) {
@@ -4489,6 +4639,7 @@ function installationFeaturesForApiPath(apiPath) {
   const required = new Set();
   if (/^\/(?:schedule(?:$|\/|\.pdf$|-note(?:\/|$)|-preview\.pdf$)|shifts(?:\/|$)|week-options(?:\/|$)|global-day-blocks(?:\/|$)|auto-plan(?:\/|$)|portal\/v1\/me\/schedule(?:\/|$)|mobile\/v1\/me\/schedule(?:\/|$))/.test(requestPath)) required.add("schedule");
   if (/^\/(?:vacations?(?:$|\/|\.pdf$|-preview\.pdf$)|vacation-entitlements(?:\/|$))/.test(requestPath)) required.add("vacation");
+  if (/^\/personnel-vacations(?:\/|$)/.test(requestPath)) required.add("vacation");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:absence(?:-|\/|$)|vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$)|time-off(?:-|\/|$)|approved-time-off(?:\/|$)|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))/.test(requestPath)) required.add("requests");
   if (/^\/portal\/v1\/(?:me\/)?(?:vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$))/.test(requestPath)) required.add("vacation");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:wifi-automation|wifi-suggestions)|portal\/v1\/wifi-automation|wifi(?:-|\/|$)|integrations\/wifi)/.test(requestPath)) required.add("wifiSuggestions");
@@ -7344,7 +7495,7 @@ function validateVacationRequestDates(employeeNumber, body) {
     throw httpError(400, "Bitte einen gültigen Urlaubszeitraum eingeben.");
   }
   const availability = evaluateVacationRequest(employeeNumber, { dateFrom, dateTo });
-  if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
+  if (!availability.allowed) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
   const overlapping = db.prepare(`
     SELECT id FROM vacation_requests
     WHERE employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr','approved')
@@ -7374,6 +7525,38 @@ function employeeRequestContext(employeeNumber, date = null, options = {}) {
     employee,
     locationId: employee.home_location_id || getLocations(true)[0]?.id || "01",
     departmentId,
+  };
+}
+
+function employeeTimeTrackingContext(employeeNumber, date = null, options = {}) {
+  const context = employeeRequestContext(employeeNumber, date, options);
+  if (!date) return context;
+  const latestEntry = db.prepare(`
+    SELECT location_id, department_id
+    FROM time_entries
+    WHERE employee_number = ? AND work_date = ? AND voided_at IS NULL
+    ORDER BY entry_timestamp DESC, id DESC
+    LIMIT 1
+  `).get(employeeNumber, date);
+  if (latestEntry?.location_id) {
+    return {
+      ...context,
+      locationId: latestEntry.location_id,
+      departmentId: Number(latestEntry.department_id || 0) || null,
+    };
+  }
+  const plannedContext = db.prepare(`
+    SELECT location_id, department_id
+    FROM shifts
+    WHERE employee_number = ? AND shift_date = ?
+    ORDER BY start_time, id
+    LIMIT 1
+  `).get(employeeNumber, date);
+  if (!plannedContext?.location_id) return context;
+  return {
+    ...context,
+    locationId: plannedContext.location_id,
+    departmentId: Number(plannedContext.department_id || 0) || null,
   };
 }
 
@@ -7481,7 +7664,7 @@ function plannedDayMetrics(employeeNumber, date, locationId, departmentId = null
     LEFT JOIN departments d ON d.id = s.department_id
     WHERE s.employee_number = ? AND s.shift_date = ?
       AND (? IS NULL OR s.department_id = ?)
-      AND (? = 0 OR COALESCE(d.location_id, e.home_location_id) = ?)
+      AND (? = 0 OR s.location_id = ?)
     ORDER BY s.start_time, s.id
   `).all(employeeNumber, date, departmentId, departmentId, filterLocation ? 1 : 0, locationId)
     .map((shift) => ({ ...shift, ...shiftMetrics(shift, settings) }));
@@ -7597,7 +7780,7 @@ function invalidateTimeDayReviewsForRange(locationId, dateFrom, dateTo, departme
 }
 
 function evaluateTimeDay(employeeNumber, date, now = new Date(), departmentId = null, providedEntries = null, evaluationOptions = {}) {
-  const context = employeeRequestContext(employeeNumber, date, { includeInactive: evaluationOptions.includeInactive === true });
+  const context = employeeTimeTrackingContext(employeeNumber, date, { includeInactive: evaluationOptions.includeInactive === true });
   const evaluationLocationId = String(evaluationOptions.locationId || context.locationId);
   const filterLocation = evaluationOptions.filterLocation === true;
   const location = validateLocationExists(evaluationLocationId);
@@ -7742,13 +7925,27 @@ function findStaleOpenTimeEntry(employeeNumber, today) {
 
 function timeTrackingDayStatus(employeeNumber, date = viennaTodayIso(), now = new Date(), options = {}) {
   if (!isIsoDate(date)) throw httpError(400, "Bitte ein gültiges Datum auswählen.", "TIME_ENTRY_DATE_INVALID");
-  const context = employeeRequestContext(employeeNumber, date);
+  const baseContext = employeeTimeTrackingContext(employeeNumber, date);
+  const departmentFilterId = options.departmentId === undefined
+    ? null
+    : (Number(options.departmentId || 0) || null);
+  const context = {
+    ...baseContext,
+    locationId: String(options.locationId || baseContext.locationId),
+    departmentId: options.departmentId === undefined ? baseContext.departmentId : departmentFilterId,
+  };
   const location = validateLocationExists(context.locationId);
-  const entries = timeEntriesForDay(employeeNumber, date);
+  const entries = timeEntriesForDay(employeeNumber, date).filter((entry) => (
+    (!options.filterLocation || String(entry.location_id || baseContext.locationId) === context.locationId)
+      && (!departmentFilterId || Number(entry.department_id || 0) === departmentFilterId)
+  ));
   const latestToday = entries.at(-1) || null;
   const today = viennaTodayIso(now);
   const staleEntry = findStaleOpenTimeEntry(employeeNumber, today);
-  const evaluation = evaluateTimeDay(employeeNumber, date, now, options.departmentId || null);
+  const evaluation = evaluateTimeDay(employeeNumber, date, now, departmentFilterId, entries, {
+    locationId: context.locationId,
+    filterLocation: options.filterLocation === true,
+  });
   const state = staleEntry && date === today ? "attention" : evaluation.actual.state;
   const trackingEnabled = Boolean(location.time_tracking_enabled);
   const access = options.access || { allowed: options.accessAllowed !== false, mode: location.time_tracking_access_mode || "anywhere", reason: "" };
@@ -7762,7 +7959,7 @@ function timeTrackingDayStatus(employeeNumber, date = viennaTodayIso(), now = ne
     enabled: trackingEnabled,
     locationId: context.locationId,
     locationName: location.name,
-    departmentId: options.departmentId || context.departmentId,
+    departmentId: context.departmentId,
     accessMode: access.mode,
     accessAllowed: access.allowed,
     state,
@@ -7783,7 +7980,7 @@ function timeTrackingDayStatus(employeeNumber, date = viennaTodayIso(), now = ne
         : "",
     allowedActions,
     ...evaluation,
-    entries: entries.filter((entry) => !options.departmentId || Number(entry.department_id || 0) === Number(options.departmentId)).map((entry) => ({
+    entries: entries.map((entry) => ({
       id: Number(entry.id),
       type: entry.entry_type,
       label: timeEntryLabels[entry.entry_type] || entry.entry_type,
@@ -7796,10 +7993,10 @@ function timeTrackingDayStatus(employeeNumber, date = viennaTodayIso(), now = ne
 
 function timeEntryDepartment(employeeNumber, date, action, now, entries = []) {
   const latestDepartment = Number(entries.at(-1)?.department_id || 0) || null;
-  if (action !== "clock_in") return latestDepartment || employeeRequestContext(employeeNumber, date).departmentId;
+  if (action !== "clock_in") return latestDepartment || employeeTimeTrackingContext(employeeNumber, date).departmentId;
   const localTime = viennaNowLocal(now).slice(11, 16);
   return scheduledTimeEntryDepartment(employeeNumber, date, localTime)
-    || employeeRequestContext(employeeNumber, date).departmentId;
+    || employeeTimeTrackingContext(employeeNumber, date).departmentId;
 }
 
 function scheduledTimeEntryDepartment(employeeNumber, date, localTime) {
@@ -7852,7 +8049,7 @@ function bookTimeEntry(employeeNumber, action, now = new Date(), options = {}) {
     if (!before.allowedActions.includes(action)) {
       throw httpError(409, "Diese Buchung passt nicht zum aktuellen Zeiterfassungsstatus. Bitte die Anzeige aktualisieren.", "TIME_ENTRY_STATE_CONFLICT");
     }
-    const context = employeeRequestContext(employeeNumber, date);
+    const context = employeeTimeTrackingContext(employeeNumber, date);
     context.departmentId = timeEntryDepartment(employeeNumber, date, action, now, timeEntriesForDay(employeeNumber, date));
     const timestamp = now.toISOString();
     const result = db.prepare(`
@@ -7934,9 +8131,9 @@ function timePresenceForContext(session, context, date = viennaTodayIso(), now =
   assertSessionContextScope(session, context);
   const employees = db.prepare(`
     SELECT personnel_number, full_name, nickname, color, home_location_id, preferred_department_id
-    FROM employees WHERE active = 1 AND home_location_id = ?
-  `).all(context.locationId)
-    .filter((employee) => !context.departmentId || employeeRequestContext(employee.personnel_number, date).departmentId === context.departmentId)
+    FROM employees WHERE active = 1
+  `).all()
+    .filter((employee) => employeeHasTimeContextActivity(employee, context, date))
     .sort((left, right) => left.personnel_number.localeCompare(right.personnel_number, "de", { numeric: true }));
   return {
     date,
@@ -7952,28 +8149,37 @@ function timePresenceForContext(session, context, date = viennaTodayIso(), now =
       fullName: employee.full_name,
       nickname: employee.nickname,
       color: employee.color,
-      ...timeTrackingDayStatus(employee.personnel_number, date, now, { departmentId: context.departmentId }),
+      ...timeTrackingDayStatus(employee.personnel_number, date, now, {
+        locationId: context.locationId,
+        departmentId: context.departmentId,
+        filterLocation: true,
+      }),
     })),
   };
 }
 
 function employeeHasTimeContextActivity(employee, context, date) {
-  if (employee.home_location_id !== context.locationId) return false;
-  if (!context.departmentId) return true;
-  if (Number(employee.preferred_department_id || 0) === Number(context.departmentId)) return true;
+  if (employee.home_location_id === context.locationId) {
+    if (!context.departmentId) return true;
+    if (Number(employee.preferred_department_id || 0) === Number(context.departmentId)) return true;
+  }
+  const departmentClause = context.departmentId ? "AND department_id = ?" : "";
+  const shiftValues = context.departmentId
+    ? [employee.personnel_number, date, context.locationId, context.departmentId]
+    : [employee.personnel_number, date, context.locationId];
+  const entryValues = context.departmentId
+    ? [employee.personnel_number, date, context.locationId, context.departmentId]
+    : [employee.personnel_number, date, context.locationId];
   return Boolean(db.prepare(`
     SELECT 1
     WHERE EXISTS (
       SELECT 1 FROM shifts
-      WHERE employee_number = ? AND shift_date = ? AND department_id = ?
+      WHERE employee_number = ? AND shift_date = ? AND location_id = ? ${departmentClause}
     ) OR EXISTS (
       SELECT 1 FROM time_entries
-      WHERE employee_number = ? AND work_date = ? AND department_id = ? AND voided_at IS NULL
+      WHERE employee_number = ? AND work_date = ? AND location_id = ? ${departmentClause} AND voided_at IS NULL
     )
-  `).get(
-    employee.personnel_number, date, context.departmentId,
-    employee.personnel_number, date, context.departmentId,
-  ));
+  `).get(...shiftValues, ...entryValues));
 }
 
 function timeDayEvaluationsForContext(session, context, date = viennaTodayIso(), now = new Date()) {
@@ -7982,16 +8188,19 @@ function timeDayEvaluationsForContext(session, context, date = viennaTodayIso(),
   const employees = db.prepare(`
     SELECT personnel_number, full_name, nickname, color, home_location_id, preferred_department_id
     FROM employees
-    WHERE active = 1 AND home_location_id = ?
+    WHERE active = 1
     ORDER BY CAST(personnel_number AS INTEGER), personnel_number
-  `).all(context.locationId)
+  `).all()
     .filter((employee) => employeeHasTimeContextActivity(employee, context, date));
   const evaluations = employees.map((employee) => ({
     employeeNumber: employee.personnel_number,
     fullName: employee.full_name,
     nickname: employee.nickname,
     color: employee.color,
-    ...evaluateTimeDay(employee.personnel_number, date, now, context.departmentId),
+    ...evaluateTimeDay(employee.personnel_number, date, now, context.departmentId, null, {
+      locationId: context.locationId,
+      filterLocation: true,
+    }),
   }));
   return {
     date,
@@ -8032,11 +8241,17 @@ function setTimeDayReview(session, context, employeeNumber, date, body = {}, now
       fullName: employee.full_name,
       nickname: employee.nickname,
       color: employee.color,
-      ...evaluateTimeDay(employeeNumber, date, now, context.departmentId),
+      ...evaluateTimeDay(employeeNumber, date, now, context.departmentId, null, {
+        locationId: context.locationId,
+        filterLocation: true,
+      }),
     };
   }
   const note = stripEmoji(String(body.note || "").trim()).slice(0, 500);
-  const evaluation = evaluateTimeDay(employeeNumber, date, now, context.departmentId);
+  const evaluation = evaluateTimeDay(employeeNumber, date, now, context.departmentId, null, {
+    locationId: context.locationId,
+    filterLocation: true,
+  });
   const snapshot = {
     evaluationVersion: evaluation.evaluationVersion,
     evaluationHash: evaluation.evaluationHash,
@@ -8070,7 +8285,10 @@ function setTimeDayReview(session, context, employeeNumber, date, body = {}, now
     fullName: employee.full_name,
     nickname: employee.nickname,
     color: employee.color,
-    ...evaluateTimeDay(employeeNumber, date, now, context.departmentId),
+    ...evaluateTimeDay(employeeNumber, date, now, context.departmentId, null, {
+      locationId: context.locationId,
+      filterLocation: true,
+    }),
   };
 }
 
@@ -8141,7 +8359,7 @@ function activeTimeEntriesForRange(employeeNumber, dateFrom, dateTo, departmentI
   `).all(employeeNumber, dateFrom, dateTo, departmentId, departmentId);
 }
 
-function timeSummaryForEmployee(employeeNumber, dateFrom, dateTo, period = "range", now = new Date(), departmentId = null) {
+function timeSummaryForEmployee(employeeNumber, dateFrom, dateTo, period = "range", now = new Date(), departmentId = null, evaluationOptions = {}) {
   if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom || daysBetweenInclusive(dateFrom, dateTo) > 370) {
     throw httpError(400, "Bitte einen gültigen Auswertungszeitraum von höchstens 370 Tagen wählen.", "TIME_SUMMARY_RANGE_INVALID");
   }
@@ -8151,7 +8369,9 @@ function timeSummaryForEmployee(employeeNumber, dateFrom, dateTo, period = "rang
   `).get(employeeNumber);
   if (!employee) throw httpError(404, "Das aktive Teammitglied wurde nicht gefunden.");
   const entriesByDate = new Map();
-  for (const entry of activeTimeEntriesForRange(employeeNumber, dateFrom, dateTo, departmentId)) {
+  for (const entry of activeTimeEntriesForRange(employeeNumber, dateFrom, dateTo, departmentId)
+    .filter((item) => !evaluationOptions.filterLocation
+      || String(item.location_id || employee.home_location_id) === String(evaluationOptions.locationId || employee.home_location_id))) {
     if (!entriesByDate.has(entry.work_date)) entriesByDate.set(entry.work_date, []);
     entriesByDate.get(entry.work_date).push(entry);
   }
@@ -8160,13 +8380,14 @@ function timeSummaryForEmployee(employeeNumber, dateFrom, dateTo, period = "rang
     `WHERE c.employee_number = ? AND c.correction_date BETWEEN ? AND ? AND c.status <> 'withdrawn'
        AND (? IS NULL OR c.department_id = ?)`,
     [employeeNumber, dateFrom, dateTo, departmentId, departmentId],
-  )) {
+  ).filter((item) => !evaluationOptions.filterLocation
+    || String(item.locationId || employee.home_location_id) === String(evaluationOptions.locationId || employee.home_location_id))) {
     if (!correctionsByDate.has(correction.correctionDate)) correctionsByDate.set(correction.correctionDate, correction);
   }
   const days = [];
   for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
     const entries = entriesByDate.get(date) || [];
-    const evaluation = evaluateTimeDay(employeeNumber, date, now, departmentId, entries);
+    const evaluation = evaluateTimeDay(employeeNumber, date, now, departmentId, entries, evaluationOptions);
     days.push({
       ...evaluation,
       date,
@@ -8255,7 +8476,7 @@ function validateProposedTimeEntries(correctionDate, entriesValue, now = new Dat
 }
 
 function timeCorrectionDepartmentScope(employeeNumber, correctionDate, originalEntries = null) {
-  const fallback = employeeRequestContext(employeeNumber, correctionDate);
+  const fallback = employeeTimeTrackingContext(employeeNumber, correctionDate);
   const entries = originalEntries || timeEntriesForDay(employeeNumber, correctionDate);
   const departmentIds = new Set(entries.map((entry) => Number(entry.department_id || 0)).filter(Boolean));
   for (const row of db.prepare(`
@@ -8738,7 +8959,7 @@ function mobileHomePayload(session, request = null, now = new Date()) {
   };
   if (session.permissions?.includes("own_time:read")) {
     try {
-      const context = employeeRequestContext(session.employeeNumber, date);
+      const context = employeeTimeTrackingContext(session.employeeNumber, date);
       const location = validateLocationExists(context.locationId);
       const access = request ? timeTrackingRequestAccess(request, location) : undefined;
       const day = timeTrackingDayStatus(session.employeeNumber, date, now, access ? { access } : {});
@@ -8917,15 +9138,213 @@ function requestBlackoutReason(blackout, requestLabel) {
   return `${requestLabel} ist von ${blackout.dateFrom} bis ${blackout.dateTo} für ${scope} gesperrt${reason}`;
 }
 
-function evaluateVacationRequest(employeeNumber, body) {
+function vacationEmployeeGovernanceContext(employeeNumber) {
+  const row = db.prepare(`
+    SELECT e.personnel_number, e.home_location_id, e.preferred_department_id, e.cost_center_id,
+           ec.type AS employee_cost_center_type, l.cost_center_id AS location_cost_center_id,
+           lc.type AS location_cost_center_type
+    FROM employees e
+    LEFT JOIN cost_centers ec ON ec.id = e.cost_center_id
+    LEFT JOIN locations l ON l.id = e.home_location_id
+    LEFT JOIN cost_centers lc ON lc.id = l.cost_center_id
+    WHERE e.personnel_number = ? AND e.active = 1
+  `).get(employeeNumber);
+  if (!row) return null;
+  const locationId = String(row.home_location_id || "").trim();
+  const departmentId = Number(row.preferred_department_id || 0) || null;
+  return {
+    employeeNumber: row.personnel_number,
+    locationId,
+    departmentId,
+    costCenterId: String(row.cost_center_id || ""),
+    branchPlanned: Boolean(locationId && (
+      row.location_cost_center_type === "branch" || row.employee_cost_center_type === "branch"
+    )),
+  };
+}
+
+function vacationShiftLocationExpression(alias = "s", employeeAlias = "e", departmentAlias = "d") {
+  return columnExists("shifts", "location_id")
+    ? `COALESCE(${alias}.location_id, ${departmentAlias}.location_id, ${employeeAlias}.home_location_id)`
+    : `COALESCE(${departmentAlias}.location_id, ${employeeAlias}.home_location_id)`;
+}
+
+function vacationCoverageInputForDate(employeeNumber, date, context, excludeGroupId = null) {
+  const optionRows = db.prepare(`
+    SELECT id, group_id, employee_number, option_type, all_day, start_time, end_time
+    FROM week_options
+    WHERE ? BETWEEN date_from AND date_to
+  `).all(date).filter((option) => !excludeGroupId || vacationGroupKey(option) !== excludeGroupId);
+  const unavailableFromSickness = activeSicknessEmployeeNumbers(date, { includeEmployeeNumber: employeeNumber });
+  const capacityEmployees = db.prepare(`
+    SELECT personnel_number, fixed_workdays, preferred_department_id
+    FROM employees
+    WHERE active = 1 AND home_location_id = ?
+  `).all(context.locationId).filter((employee) => employeeCanWorkOnDate(employee, date));
+  const shiftLocation = vacationShiftLocationExpression("s", "e", "d");
+  const shifts = db.prepare(`
+    SELECT s.employee_number, s.department_id, s.start_time, s.end_time
+    FROM shifts s
+    JOIN employees e ON e.personnel_number = s.employee_number
+    LEFT JOIN departments d ON d.id = s.department_id
+    WHERE s.shift_date = ? AND ${shiftLocation} = ?
+  `).all(date, context.locationId);
+  return { optionRows, unavailableFromSickness, capacityEmployees, shifts };
+}
+
+function vacationUnavailableAt(input, employeeNumber, pointTime, nextPointTime) {
+  const unavailable = new Set(input.unavailableFromSickness);
+  unavailable.add(employeeNumber);
+  for (const option of input.optionRows) {
+    if (optionIsAllDay(option) || optionOverlapsTime(option, pointTime, nextPointTime)) {
+      unavailable.add(option.employee_number);
+    }
+  }
+  return unavailable;
+}
+
+function vacationCoverageCountsAt(input, unavailable, context, pointTime) {
+  const capacity = input.capacityEmployees.filter((employee) => !unavailable.has(employee.personnel_number));
+  const scheduled = input.shifts.filter((shift) => shift.start_time <= pointTime && shift.end_time > pointTime
+    && !unavailable.has(shift.employee_number));
+  return {
+    locationCapacity: new Set(capacity.map((employee) => employee.personnel_number)).size,
+    departmentCapacity: context.departmentId
+      ? new Set(capacity.filter((employee) => Number(employee.preferred_department_id || 0) === Number(context.departmentId))
+        .map((employee) => employee.personnel_number)).size
+      : 0,
+    locationScheduled: new Set(scheduled.map((shift) => shift.employee_number)).size,
+    departmentScheduled: context.departmentId
+      ? new Set(scheduled.filter((shift) => Number(shift.department_id || 0) === Number(context.departmentId))
+        .map((shift) => shift.employee_number)).size
+      : 0,
+  };
+}
+
+function assessVacationAvailability(employeeNumber, body = {}) {
   const dateFrom = String(body.dateFrom || "");
   const dateTo = String(body.dateTo || "");
-  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) {
-    return { trafficLight: "red", allowed: false, reason: "Bitte einen gültigen Urlaubszeitraum eingeben." };
+  const excludeGroupId = String(body.excludeGroupId || "").trim() || null;
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom || daysBetweenInclusive(dateFrom, dateTo) > 366) {
+    return {
+      trafficLight: "red", allowed: false, code: "VACATION_DATES_INVALID",
+      reason: "Bitte einen gültigen Urlaubszeitraum von höchstens 366 Kalendertagen eingeben.",
+      manualReview: false, blockingSlots: [], contexts: [],
+    };
   }
-  const blackout = findRequestBlackout(employeeNumber, "vacation", dateFrom, dateTo);
-  if (blackout) return { trafficLight: "red", allowed: false, reason: requestBlackoutReason(blackout, "Urlaub") };
-  return { trafficLight: "green", allowed: true, reason: "Für diesen Zeitraum besteht keine Antragssperre." };
+  const context = vacationEmployeeGovernanceContext(employeeNumber);
+  if (!context) {
+    return {
+      trafficLight: "red", allowed: false, code: "VACATION_EMPLOYEE_NOT_FOUND",
+      reason: "Das aktive Teammitglied wurde nicht gefunden.", manualReview: false, blockingSlots: [], contexts: [],
+    };
+  }
+  if (context.locationId) {
+    const blackout = findRequestBlackout(employeeNumber, "vacation", dateFrom, dateTo);
+    if (blackout) {
+      return {
+        trafficLight: "red", allowed: false, code: "REQUEST_BLACKOUT",
+        reason: requestBlackoutReason(blackout, "Urlaub"), manualReview: false,
+        blockingSlots: [], contexts: [{ locationId: context.locationId, departmentId: context.departmentId }],
+      };
+    }
+  }
+  if (!context.branchPlanned) {
+    return {
+      trafficLight: "green", allowed: true, code: "VACATION_NO_BRANCH_STAFFING",
+      reason: "Für diesen Zeitraum besteht keine Antragssperre; eine Filial-Mindestbesetzung ist nicht anzuwenden.",
+      manualReview: false, blockingSlots: [], contexts: [],
+    };
+  }
+
+  const settings = settingsForLocation(context.locationId);
+  const departmentRequired = context.departmentId
+    ? Number(db.prepare("SELECT min_staff FROM departments WHERE id = ? AND location_id = ? AND active = 1")
+      .get(context.departmentId, context.locationId)?.min_staff || 0)
+    : 0;
+  const blockingSlots = [];
+  let requiresManualReview = false;
+  let checkedSlots = 0;
+  for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
+    if (isVacationHoliday(date, context.locationId) || getGlobalDayBlockForDate(date, context.locationId)) continue;
+    const config = dayConfiguration(date, settings, { locationId: context.locationId, departmentId: null });
+    if (!config?.open || !isTime(config.minFrom) || !isTime(config.minTo) || config.minTo <= config.minFrom) continue;
+    const locationRequired = Number(config.minStaff || 0);
+    if (locationRequired <= 0 && departmentRequired <= 0) continue;
+    const input = vacationCoverageInputForDate(employeeNumber, date, context, excludeGroupId);
+    const hasConcretePlan = input.shifts.length > 0;
+    for (let minute = timeToMinutes(config.minFrom); minute < timeToMinutes(config.minTo); minute += 15) {
+      checkedSlots += 1;
+      const pointTime = minutesToTime(minute);
+      const nextPointTime = minutesToTime(Math.min(timeToMinutes(config.minTo), minute + 15));
+      const unavailable = vacationUnavailableAt(input, employeeNumber, pointTime, nextPointTime);
+      const counts = vacationCoverageCountsAt(input, unavailable, context, pointTime);
+      const capacityEnough = counts.locationCapacity >= locationRequired
+        && (!context.departmentId || counts.departmentCapacity >= departmentRequired);
+      const scheduleEnough = hasConcretePlan && counts.locationScheduled >= locationRequired
+        && (!context.departmentId || counts.departmentScheduled >= departmentRequired);
+      if (scheduleEnough) continue;
+      if (capacityEnough) {
+        requiresManualReview = true;
+        continue;
+      }
+      if (blockingSlots.length < 12) {
+        blockingSlots.push({
+          date, time: pointTime, locationId: context.locationId, departmentId: context.departmentId,
+          locationCount: hasConcretePlan ? counts.locationScheduled : counts.locationCapacity,
+          locationRequired, departmentCount: hasConcretePlan ? counts.departmentScheduled : counts.departmentCapacity,
+          departmentRequired, planState: hasConcretePlan ? "incomplete" : "not_planned",
+        });
+      }
+    }
+  }
+  if (blockingSlots.length) {
+    const first = blockingSlots[0];
+    const departmentText = context.departmentId && first.departmentRequired > first.departmentCount
+      ? `; die Abteilung erreicht ${first.departmentCount} von ${first.departmentRequired}` : "";
+    return {
+      trafficLight: "red", allowed: false, code: "VACATION_STAFFING_INSUFFICIENT",
+      reason: `Am ${first.date} um ${first.time} Uhr ist die Mindestbesetzung nicht gesichert (${first.locationCount} von ${first.locationRequired}${departmentText}).`,
+      manualReview: true, blockingSlots,
+      contexts: [{ locationId: context.locationId, departmentId: context.departmentId }],
+    };
+  }
+  if (requiresManualReview) {
+    return {
+      trafficLight: "yellow", allowed: true, code: "VACATION_STAFFING_MANUAL_REVIEW",
+      reason: "Die verfügbare Personalkapazität reicht aus; der konkrete Dienstplan ist noch unvollständig und muss bei der Freigabe geprüft werden.",
+      manualReview: true, blockingSlots: [],
+      contexts: [{ locationId: context.locationId, departmentId: context.departmentId }], checkedSlots,
+    };
+  }
+  return {
+    trafficLight: "green", allowed: true, code: "VACATION_STAFFING_CONFIRMED",
+    reason: "Antragssperren und Mindestbesetzung sind nach dem aktuellen Plan geprüft.",
+    manualReview: false, blockingSlots: [],
+    contexts: [{ locationId: context.locationId, departmentId: context.departmentId }], checkedSlots,
+  };
+}
+
+function evaluateVacationRequest(employeeNumber, body) {
+  return assessVacationAvailability(employeeNumber, body);
+}
+
+function assertVacationGovernanceAvailable(employeeNumber, vacation, excludeGroupId = null) {
+  const assessment = assessVacationAvailability(employeeNumber, {
+    dateFrom: vacation.dateFrom || vacation.date_from,
+    dateTo: vacation.dateTo || vacation.date_to,
+    excludeGroupId,
+  });
+  if (!assessment.allowed) {
+    const error = httpError(409, assessment.reason, assessment.code || "VACATION_NOT_POSSIBLE");
+    error.details = {
+      trafficLight: assessment.trafficLight,
+      manualReview: Boolean(assessment.manualReview),
+      blockingSlots: assessment.blockingSlots || [],
+    };
+    throw error;
+  }
+  return assessment;
 }
 
 function staffingCountAt(locationId, departmentId, date, pointTime, excludedEmployeeNumber) {
@@ -8936,7 +9355,7 @@ function staffingCountAt(locationId, departmentId, date, pointTime, excludedEmpl
   return Number(db.prepare(`
     SELECT COUNT(DISTINCT s.employee_number) AS count
     FROM shifts s JOIN employees e ON e.personnel_number = s.employee_number
-    WHERE s.shift_date = ? AND e.home_location_id = ?
+    WHERE s.shift_date = ? AND s.location_id = ?
       AND s.start_time <= ? AND s.end_time > ? AND s.employee_number <> ?
       ${departmentClause}
   `).get(...values).count || 0);
@@ -9077,16 +9496,16 @@ function insertApprovedTimeOff(entry) {
   db.prepare("UPDATE time_off_requests SET original_shifts_json = ? WHERE id = ?")
     .run(JSON.stringify(shifts), entry.id);
   const insertShift = db.prepare(`
-    INSERT INTO shifts (employee_number, department_id, shift_date, start_time, end_time, area, note)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO shifts (employee_number, location_id, department_id, shift_date, start_time, end_time, area, note)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
   for (const shift of shifts) {
     db.prepare("DELETE FROM shifts WHERE id = ?").run(shift.id);
     if (!allDay && shift.start_time < entry.start_time) {
-      insertShift.run(shift.employee_number, shift.department_id, shift.shift_date, shift.start_time, entry.start_time, shift.area, shift.note);
+      insertShift.run(shift.employee_number, shift.location_id, shift.department_id, shift.shift_date, shift.start_time, entry.start_time, shift.area, shift.note);
     }
     if (!allDay && shift.end_time > entry.end_time) {
-      insertShift.run(shift.employee_number, shift.department_id, shift.shift_date, entry.end_time, shift.end_time, shift.area, shift.note);
+      insertShift.run(shift.employee_number, shift.location_id, shift.department_id, shift.shift_date, entry.end_time, shift.end_time, shift.area, shift.note);
     }
   }
   const groupId = `za-request-${entry.id}`;
@@ -9116,9 +9535,10 @@ function restoreApprovedTimeOff(entry) {
         AND start_time >= ? AND end_time <= ?
     `).run(original.employee_number, original.shift_date, original.department_id, original.start_time, original.end_time);
     db.prepare(`
-      INSERT INTO shifts (employee_number, department_id, shift_date, start_time, end_time, area, note)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(original.employee_number, original.department_id, original.shift_date, original.start_time, original.end_time, original.area || "", original.note || "");
+      INSERT INTO shifts (employee_number, location_id, department_id, shift_date, start_time, end_time, area, note)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(original.employee_number, original.location_id, original.department_id, original.shift_date,
+      original.start_time, original.end_time, original.area || "", original.note || "");
   }
 }
 
@@ -9452,8 +9872,7 @@ function staffingCountAtAvailable(locationId, departmentId, date, pointTime, exc
     SELECT DISTINCT s.employee_number
     FROM shifts s
     JOIN employees e ON e.personnel_number = s.employee_number
-    LEFT JOIN departments d ON d.id = s.department_id
-    WHERE s.shift_date = ? AND COALESCE(d.location_id, e.home_location_id) = ?
+    WHERE s.shift_date = ? AND s.location_id = ?
       AND s.start_time <= ? AND s.end_time > ?
       ${departmentClause}
   `).all(...values);
@@ -9467,11 +9886,8 @@ function evaluateSicknessStaffingRisk(employeeNumber, startDate, expectedEnd, co
   `).get(employeeNumber, dateFrom)?.date_to || "";
   const dateTo = isIsoDate(expectedEnd) ? expectedEnd : (isIsoDate(latestPlannedDate) ? latestPlannedDate : startDate);
   const shifts = db.prepare(`
-    SELECT s.shift_date, s.start_time, s.end_time, s.department_id,
-           COALESCE(d.location_id, e.home_location_id) AS location_id
+    SELECT s.shift_date, s.start_time, s.end_time, s.department_id, s.location_id
     FROM shifts s
-    JOIN employees e ON e.personnel_number = s.employee_number
-    LEFT JOIN departments d ON d.id = s.department_id
     WHERE s.employee_number = ? AND s.shift_date BETWEEN ? AND ?
     ORDER BY s.shift_date, s.start_time, s.id
   `).all(employeeNumber, dateFrom, dateTo);
@@ -10157,9 +10573,11 @@ function mobileSchedulePayload(session, weekValue = "") {
   const weekStart = getMonday(weekValue || currentWeekStart());
   const weekEnd = addDays(weekStart, 6);
   const shifts = db.prepare(`
-    SELECT s.id, s.shift_date, s.start_time, s.end_time, s.area, s.note, s.department_id,
-           d.name AS department_name
-    FROM shifts s LEFT JOIN departments d ON d.id = s.department_id
+    SELECT s.id, s.shift_date, s.start_time, s.end_time, s.area, s.note, s.location_id, s.department_id,
+           l.name AS location_name, d.name AS department_name
+    FROM shifts s
+    LEFT JOIN locations l ON l.id = s.location_id
+    LEFT JOIN departments d ON d.id = s.department_id
     WHERE s.employee_number = ? AND s.shift_date BETWEEN ? AND ?
     ORDER BY s.shift_date, s.start_time, s.id
   `).all(session.employeeNumber, weekStart, weekEnd).map((shift) => ({
@@ -10169,6 +10587,8 @@ function mobileSchedulePayload(session, weekValue = "") {
     endTime: shift.end_time,
     area: shift.area || "",
     note: shift.note || "",
+    locationId: shift.location_id || session.homeLocationId || "",
+    locationName: shift.location_name || "",
     departmentId: Number(shift.department_id || 0) || null,
     departmentName: shift.department_name || "",
   }));
@@ -10193,6 +10613,7 @@ function mobileSchedulePayload(session, weekValue = "") {
     calendarWeek: getIsoWeek(weekStart),
     timezone: "Europe/Vienna",
     locationId: session.homeLocationId || "",
+    homeLocationId: session.homeLocationId || "",
     shifts,
     options,
   };
@@ -11246,16 +11667,28 @@ function employeeLocationFilterSql(context, alias = "e") {
 
 function scheduleEmployeeFilterSql(context, weekStart, weekEnd, alias = "e") {
   const prefix = alias ? `${alias}.` : "";
-  if (!context.departmentId) return employeeLocationFilterSql(context, alias);
+  if (!context.departmentId) {
+    return {
+      sql: `(${prefix}home_location_id = ? OR EXISTS (
+        SELECT 1
+        FROM shifts sx
+        WHERE sx.employee_number = ${prefix}personnel_number
+          AND sx.location_id = ?
+          AND sx.shift_date BETWEEN ? AND ?
+      ))`,
+      values: [context.locationId, context.locationId, weekStart, weekEnd],
+    };
+  }
   return {
-    sql: `${prefix}home_location_id = ? AND (${prefix}preferred_department_id = ? OR EXISTS (
+    sql: `((${prefix}home_location_id = ? AND ${prefix}preferred_department_id = ?) OR EXISTS (
       SELECT 1
       FROM shifts sx
       WHERE sx.employee_number = ${prefix}personnel_number
+        AND sx.location_id = ?
         AND sx.shift_date BETWEEN ? AND ?
         AND sx.department_id = ?
     ))`,
-    values: [context.locationId, context.departmentId, weekStart, weekEnd, context.departmentId],
+    values: [context.locationId, context.departmentId, context.locationId, weekStart, weekEnd, context.departmentId],
   };
 }
 
@@ -11594,7 +12027,7 @@ function validateEmployee(body, isNew, options = {}) {
     };
 }
 
-function validateShift(body) {
+function validateShift(body, contextInput = {}) {
   const employeeNumber = String(body.employeeNumber || "").trim();
   const shiftDate = String(body.date || "");
   const startTime = String(body.startTime || "");
@@ -11602,6 +12035,11 @@ function validateShift(body) {
   const area = String(body.area || "").trim();
   const note = String(body.note || "").trim();
   const departmentId = normalizeDepartmentId(body.departmentId ?? body.department_id, true);
+  const submittedLocationId = String(
+    body.locationId ?? body.location_id ?? body.location
+      ?? contextInput.locationId ?? contextInput.location_id ?? contextInput.location ?? "",
+  ).trim();
+  const existingId = Number(contextInput.existingId || 0);
 
   if (!employeeNumber) throw httpError(400, "Bitte ein Teammitglied auswählen.");
   if (!isIsoDate(shiftDate)) throw httpError(400, "Das Datum ist ungültig.");
@@ -11610,13 +12048,19 @@ function validateShift(body) {
   if (!employee) {
     throw httpError(404, "Die ausgewählte Person wurde nicht gefunden.");
   }
-  if (departmentId) validateDepartmentExists(departmentId, employee.home_location_id);
+  const department = departmentId ? validateDepartmentExists(departmentId) : null;
+  const locationId = submittedLocationId
+    ? normalizeLocationId(submittedLocationId)
+    : String(department?.location_id || employee.home_location_id || "").trim();
+  if (!locationId) throw httpError(400, "Bitte eine Einsatzfiliale auswählen.", "SHIFT_LOCATION_REQUIRED");
+  validateLocationExists(locationId);
+  if (department) validateDepartmentExists(departmentId, locationId);
   if (!employeeCanWorkOnDate(employee, shiftDate)) {
     throw httpError(409, `${employee.nickname} hat an diesem Wochentag keinen fix vereinbarten Arbeitstag.`);
   }
-  const settings = settingsForLocation(employee.home_location_id);
+  const settings = settingsForLocation(locationId);
   assertDateEditable(shiftDate, settings);
-  const globalBlock = getGlobalDayBlockForDate(shiftDate, employee.home_location_id);
+  const globalBlock = getGlobalDayBlockForDate(shiftDate, locationId);
   if (globalBlock) {
     throw httpError(409, `Dieser Tag ist für alle gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.`);
   }
@@ -11646,8 +12090,54 @@ function validateShift(body) {
   if (activeSicknessEmployeeNumbers(shiftDate).has(employeeNumber)) {
     throw httpError(409, `${employee.nickname} ist an diesem Tag krankgemeldet.`, "SICKNESS_SHIFT_CONFLICT");
   }
+  const otherLocationShift = db.prepare(`
+    SELECT s.id, s.start_time, s.end_time, s.location_id, l.name AS location_name
+    FROM shifts s
+    LEFT JOIN locations l ON l.id = s.location_id
+    WHERE s.employee_number = ? AND s.shift_date = ? AND s.id <> ? AND s.location_id <> ?
+    LIMIT 1
+  `).get(employeeNumber, shiftDate, existingId, locationId);
+  if (otherLocationShift) {
+    throw httpError(
+      409,
+      `${employee.nickname} ist an diesem Tag bereits in ${otherLocationShift.location_name || "einer anderen Filiale"} eingeteilt.`,
+      "SHIFT_LOCATION_DAY_CONFLICT",
+    );
+  }
+  const overlappingShift = db.prepare(`
+    SELECT s.id, s.start_time, s.end_time, s.location_id, l.name AS location_name
+    FROM shifts s
+    LEFT JOIN locations l ON l.id = s.location_id
+    WHERE s.employee_number = ? AND s.shift_date = ? AND s.id <> ?
+      AND s.start_time < ? AND ? < s.end_time
+    LIMIT 1
+  `).get(employeeNumber, shiftDate, existingId, endTime, startTime);
+  if (overlappingShift) {
+    const locationText = overlappingShift.location_name ? ` in ${overlappingShift.location_name}` : "";
+    throw httpError(
+      409,
+      `${employee.nickname} ist von ${overlappingShift.start_time} bis ${overlappingShift.end_time} Uhr bereits${locationText} eingeteilt.`,
+      "SHIFT_TIME_CONFLICT",
+    );
+  }
 
-  return { employeeNumber, departmentId, shiftDate, startTime, endTime, area, note };
+  return { employeeNumber, locationId, departmentId, shiftDate, startTime, endTime, area, note };
+}
+
+function assertShiftEmployeeAssignmentScope(session, shift, existing = null) {
+  if (sessionHasGlobalScope(session)) return;
+  const homeLocationId = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?")
+    .get(shift.employeeNumber)?.home_location_id;
+  if (homeLocationId === shift.locationId) return;
+  const alreadyAssignedHere = existing
+    && existing.employee_number === shift.employeeNumber
+    && existing.location_id === shift.locationId;
+  if (alreadyAssignedHere) return;
+  throw httpError(
+    403,
+    "Filialfremde Teammitglieder können nur durch eine unternehmensweit zuständige Rolle zugeteilt werden.",
+    "SHIFT_FOREIGN_EMPLOYEE_SCOPE_DENIED",
+  );
 }
 
 const alwaysFullDayOptionTypes = new Set(["vacation", "sick", "branch", "vocational_school", "special_leave"]);
@@ -11829,15 +12319,16 @@ function buildSaturdayServiceStats(weekStart, context, employees, currentWeekShi
   if (!employeeNumbers.length || !settingEnabled(settings, "show_saturday_service_stats")) {
     return { byEmployee: {}, estimated: false };
   }
-  const employeeFilter = employeeLocationFilterSql(context, "e");
+  const employeePlaceholders = employeeNumbers.map(() => "?").join(",");
   const departmentValue = context.departmentId ? [context.departmentId] : [];
   const earliest = db.prepare(`
     SELECT MIN(s.shift_date) AS first_date
     FROM shifts s
     JOIN employees e ON e.personnel_number = s.employee_number
-    WHERE e.active = 1 AND ${employeeFilter.sql}
+    WHERE e.active = 1 AND s.location_id = ?
+      AND s.employee_number IN (${employeePlaceholders})
       ${context.departmentId ? "AND s.department_id = ?" : ""}
-  `).get(...employeeFilter.values, ...departmentValue)?.first_date;
+  `).get(context.locationId, ...employeeNumbers, ...departmentValue)?.first_date;
   const saturdayDate = addDays(weekStart, 5);
   const currentSaturdayStaff = new Set(
     currentWeekShifts
@@ -11863,10 +12354,11 @@ function buildSaturdayServiceStats(weekStart, context, employees, currentWeekShi
         FROM shifts s
         JOIN employees e ON e.personnel_number = s.employee_number
         WHERE s.shift_date BETWEEN ? AND ?
-          AND e.active = 1 AND ${employeeFilter.sql}
+          AND e.active = 1 AND s.location_id = ?
+          AND s.employee_number IN (${employeePlaceholders})
           AND ${saturdayShiftFilterSql(context, "s")}
         GROUP BY s.employee_number
-      `).all(observedStart, endDate, ...employeeFilter.values, ...departmentValue);
+      `).all(observedStart, endDate, context.locationId, ...employeeNumbers, ...departmentValue);
       for (const row of rows) values[row.employee_number] = Number(row.count || 0);
     }
     const estimated = !complete;
@@ -11935,13 +12427,13 @@ function getSchedule(weekValue, contextInput = {}, session = null) {
     : [weekStart, weekEnd, context.locationId];
   const shifts = db
     .prepare(`
-      SELECT s.id, s.employee_number, s.department_id, s.shift_date, s.start_time, s.end_time,
+      SELECT s.id, s.employee_number, s.location_id, s.department_id, s.shift_date, s.start_time, s.end_time,
              s.area, s.note, e.full_name, e.nickname, e.color, d.name AS department_name
       FROM shifts s
       JOIN employees e ON e.personnel_number = s.employee_number
       LEFT JOIN departments d ON d.id = s.department_id
       WHERE s.shift_date BETWEEN ? AND ?
-        AND e.home_location_id = ?
+        AND s.location_id = ?
         ${shiftDepartmentFilter}
       ORDER BY s.shift_date, s.start_time, CAST(s.employee_number AS INTEGER), s.employee_number
     `)
@@ -12244,6 +12736,151 @@ function getVacationPlan(yearValue, contextInput = {}, session = null) {
   };
 }
 
+function getCentralVacationPlan(yearValue, filters = {}) {
+  const year = validateYear(yearValue);
+  const yearStart = `${year}-01-01`;
+  const yearEnd = `${year}-12-31`;
+  const today = viennaTodayIso();
+  const consumedEnd = today < yearStart ? null : today > yearEnd ? yearEnd : today;
+  const costCenterId = String(filters.costCenterId || filters.cost_center_id || "").trim();
+  const locationId = String(filters.locationId || filters.location || "").trim();
+  const departmentId = normalizeDepartmentId(filters.departmentId ?? filters.department, true);
+  const includeInactive = String(filters.includeInactive ?? "1") !== "0";
+  if (costCenterId) validateCostCenterExists(costCenterId, { allowInactive: true });
+  if (locationId) validateLocationExists(normalizeLocationId(locationId));
+  if (departmentId) validateDepartmentExists(departmentId, locationId || null);
+
+  const where = [includeInactive ? "1 = 1" : "e.active = 1"];
+  const values = [];
+  if (costCenterId) { where.push("e.cost_center_id = ?"); values.push(costCenterId); }
+  if (locationId) { where.push("e.home_location_id = ?"); values.push(locationId); }
+  if (departmentId) { where.push("e.preferred_department_id = ?"); values.push(departmentId); }
+  const employees = db.prepare(`
+    SELECT e.personnel_number, e.full_name, e.nickname, e.color, e.contracted_hours,
+           e.target_workdays_per_week, e.position_id, e.home_location_id, e.preferred_department_id,
+           e.cost_center_id, e.active, p.name AS position_name,
+           l.name AS home_location_name, d.name AS preferred_department_name,
+           c.code AS cost_center_code, c.name AS cost_center_name, c.type AS cost_center_type
+    FROM employees e
+    LEFT JOIN positions p ON p.id = e.position_id
+    LEFT JOIN locations l ON l.id = e.home_location_id
+    LEFT JOIN departments d ON d.id = e.preferred_department_id
+    LEFT JOIN cost_centers c ON c.id = e.cost_center_id
+    WHERE ${where.join(" AND ")}
+    ORDER BY c.sort_order, c.code COLLATE NOCASE, CAST(e.personnel_number AS INTEGER), e.personnel_number
+  `).all(...values).map(serializeEmployee);
+  const employeeLookup = new Map(employees.map((employee) => [employee.personnel_number, employee]));
+  const employeeNumbers = [...employeeLookup.keys()];
+  const entitlements = Object.fromEntries(employeeNumbers.map((employeeNumber) => [employeeNumber, 0]));
+  const entitlementsSaved = Object.fromEntries(employeeNumbers.map((employeeNumber) => [employeeNumber, false]));
+  for (const row of db.prepare("SELECT employee_number, days FROM vacation_entitlements WHERE year = ?").all(year)) {
+    if (!employeeLookup.has(row.employee_number)) continue;
+    entitlements[row.employee_number] = Number(row.days || 0);
+    entitlementsSaved[row.employee_number] = true;
+  }
+
+  const grouped = new Map();
+  if (employeeNumbers.length) {
+    const placeholders = employeeNumbers.map(() => "?").join(",");
+    const rows = db.prepare(`
+      SELECT o.id, o.group_id, o.employee_number, o.date_from, o.date_to, o.note,
+             CASE
+               WHEN EXISTS (
+                 SELECT 1 FROM vacation_requests vr
+                 WHERE vr.vacation_group_id = o.group_id AND vr.status = 'approved'
+               ) THEN 'approved_request'
+               WHEN EXISTS (
+                 SELECT 1 FROM vacation_requests vr
+                 WHERE vr.vacation_group_id = o.group_id
+               ) THEN 'request'
+               ELSE 'direct'
+             END AS source
+      FROM week_options o
+      WHERE o.option_type = 'vacation' AND o.date_from <= ? AND o.date_to >= ?
+        AND o.employee_number IN (${placeholders})
+      ORDER BY o.date_from, CAST(o.employee_number AS INTEGER), o.employee_number, o.id
+    `).all(yearEnd, yearStart, ...employeeNumbers);
+    for (const row of rows) {
+      const key = vacationGroupKey(row);
+      const employee = employeeLookup.get(row.employee_number);
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.date_from = existing.date_from < row.date_from ? existing.date_from : row.date_from;
+        existing.date_to = existing.date_to > row.date_to ? existing.date_to : row.date_to;
+        existing.has_note ||= Boolean(String(row.note || "").trim());
+        existing.ids.push(Number(row.id));
+        continue;
+      }
+      grouped.set(key, {
+        group_id: key,
+        employee_number: row.employee_number,
+        nickname: employee?.nickname || "",
+        full_name: employee?.full_name || "",
+        color: employee?.color || "#0b84c6",
+        cost_center_id: employee?.cost_center_id || "",
+        cost_center_code: employee?.cost_center_code || "",
+        cost_center_name: employee?.cost_center_name || "",
+        home_location_id: employee?.home_location_id || "",
+        home_location_name: employee?.home_location_name || "",
+        preferred_department_id: employee?.preferred_department_id || null,
+        preferred_department_name: employee?.preferred_department_name || "",
+        date_from: row.date_from,
+        date_to: row.date_to,
+        source: row.source || "direct",
+        has_note: Boolean(String(row.note || "").trim()),
+        ids: [Number(row.id)],
+      });
+    }
+  }
+  const vacations = [...grouped.values()].map((vacation) => {
+    const employee = employeeLookup.get(vacation.employee_number);
+    const employeeLocationId = employee?.home_location_id || null;
+    const settings = employeeLocationId ? settingsForLocation(employeeLocationId) : getSettings();
+    const clippedFrom = vacation.date_from < yearStart ? yearStart : vacation.date_from;
+    const clippedTo = vacation.date_to > yearEnd ? yearEnd : vacation.date_to;
+    return {
+      ...vacation,
+      days: vacationDayCount(clippedFrom, clippedTo, settings, employeeLocationId),
+      calendar_days: daysBetweenInclusive(clippedFrom, clippedTo),
+    };
+  }).sort((left, right) => left.date_from.localeCompare(right.date_from)
+    || left.cost_center_code.localeCompare(right.cost_center_code, "de-AT")
+    || left.employee_number.localeCompare(right.employee_number, "de-AT", { numeric: true }));
+
+  const totals = Object.fromEntries(employees.map((employee) => {
+    const employeeVacations = vacations.filter((vacation) => vacation.employee_number === employee.personnel_number);
+    const planned = employeeVacations.reduce((sum, vacation) => sum + Number(vacation.days || 0), 0);
+    let consumed = 0;
+    if (consumedEnd) {
+      const settings = employee.home_location_id ? settingsForLocation(employee.home_location_id) : getSettings();
+      for (const vacation of employeeVacations.filter((entry) => entry.date_from <= consumedEnd)) {
+        const from = vacation.date_from < yearStart ? yearStart : vacation.date_from;
+        const to = vacation.date_to > consumedEnd ? consumedEnd : vacation.date_to;
+        if (to >= from) consumed += vacationDayCount(from, to, settings, employee.home_location_id || null);
+      }
+    }
+    const entitlement = Number(entitlements[employee.personnel_number] || 0);
+    return [employee.personnel_number, {
+      entitlement, entitlement_saved: Boolean(entitlementsSaved[employee.personnel_number]),
+      used: planned, planned, consumed, remaining: entitlement - planned,
+    }];
+  }));
+  return {
+    year,
+    scope: "global",
+    filters: { costCenterId, locationId, departmentId, includeInactive },
+    employees,
+    entitlements,
+    entitlementsSaved,
+    vacations,
+    approvedVacations: vacations,
+    totals,
+    costCenters: getCostCenters(true),
+    locations: getLocations(true),
+    privacy: { notesIncluded: false },
+  };
+}
+
 function validateVacationEntry(body, excludeGroupId = null) {
   const employeeNumber = String(body.employeeNumber || "").trim();
   const dateFrom = String(body.dateFrom || "");
@@ -12312,8 +12949,7 @@ function validateGlobalDayBlock(body, existingId = 0) {
   const shiftCount = db.prepare(`
     SELECT COUNT(*) AS count
     FROM shifts s
-    JOIN employees e ON e.personnel_number = s.employee_number
-    WHERE s.shift_date = ? AND e.home_location_id = ?
+    WHERE s.shift_date = ? AND s.location_id = ?
   `).get(blockDate, context.locationId).count;
   if (Number(shiftCount) > 0) {
     throw httpError(409, "Für diesen Tag sind bereits Dienste eingetragen. Bitte zuerst die Dienste entfernen.");
@@ -12453,15 +13089,17 @@ function insertVacationEntries(vacation, groupId) {
 function createVacationEntries(vacation) {
   const groupId = createVacationGroupId();
   let created = 0;
+  let assessment = null;
   db.exec("BEGIN");
   try {
+    assessment = assertVacationGovernanceAvailable(vacation.employeeNumber, vacation);
     created = insertVacationEntries(vacation, groupId);
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;
   }
-  return { groupId, created };
+  return { groupId, created, assessment };
 }
 
 function vacationGroupExists(groupId) {
@@ -12474,8 +13112,10 @@ function vacationGroupExists(groupId) {
 
 function replaceVacationGroup(groupId, vacation) {
   let created = 0;
+  let assessment = null;
   db.exec("BEGIN");
   try {
+    assessment = assertVacationGovernanceAvailable(vacation.employeeNumber, vacation, groupId);
     deleteVacationGroup(groupId);
     created = insertVacationEntries(vacation, groupId);
     db.exec("COMMIT");
@@ -12483,7 +13123,7 @@ function replaceVacationGroup(groupId, vacation) {
     db.exec("ROLLBACK");
     throw error;
   }
-  return { groupId, created };
+  return { groupId, created, assessment };
 }
 
 function deleteVacationGroup(groupId) {
@@ -13587,9 +14227,8 @@ function payrollEmployeesForContext(context, dateFrom, dateTo) {
        )
        OR EXISTS (
          SELECT 1 FROM shifts s
-         LEFT JOIN departments d ON d.id = s.department_id
          WHERE s.employee_number = e.personnel_number
-           AND COALESCE(d.location_id, e.home_location_id) = ?
+           AND s.location_id = ?
            AND s.shift_date BETWEEN ? AND ?
        )
        OR EXISTS (
@@ -15348,7 +15987,7 @@ app.post("/api/locations", (request, response) => {
     || location.timeTrackingAllowedNetworks || location.timeTrackingVarianceMinutes !== 15) {
     assertRequestPermission(request, "time:settings");
   }
-  if (location.costCenterSubmitted) requireAdminHrOrLocal(request, "cost_centers:write");
+  requireAdminHrOrLocal(request, "cost_centers:write");
   const actor = request.portalSession?.employeeNumber || "local";
   db.exec("BEGIN IMMEDIATE");
   try {
@@ -15449,6 +16088,17 @@ app.put("/api/departments/:id", (request, response) => {
   assertSessionContextScope(request.portalSession, { locationId: existing.location_id, departmentId: id });
   const department = validateDepartmentPayload(request.body, id);
   assertSessionContextScope(request.portalSession, { locationId: department.locationId, departmentId: id });
+  if (existing.location_id !== department.locationId) {
+    const referencedShiftCount = Number(db.prepare("SELECT COUNT(*) AS count FROM shifts WHERE department_id = ?")
+      .get(id)?.count || 0);
+    if (referencedShiftCount) {
+      throw httpError(
+        409,
+        "Eine Abteilung mit vorhandenen Diensten kann nicht in eine andere Filiale verschoben werden.",
+        "SHIFT_DEPARTMENT_LOCATION_CONFLICT",
+      );
+    }
+  }
   try {
     const result = db.prepare("UPDATE departments SET location_id = ?, name = ?, min_staff = ?, active = ? WHERE id = ?")
       .run(department.locationId, department.name, department.minStaff, department.active, id);
@@ -16658,13 +17308,11 @@ function locationDashboardPayload(actor, requestedDate) {
     if (location) location.activeTeamCount = Number(entry.count || 0);
   }
   const scheduledCounts = db.prepare(`
-    SELECT COALESCE(d.location_id, e.home_location_id) AS location_id,
-           COUNT(DISTINCT s.employee_number) AS count
+    SELECT s.location_id, COUNT(DISTINCT s.employee_number) AS count
     FROM shifts s
     JOIN employees e ON e.personnel_number = s.employee_number AND e.active = 1
-    LEFT JOIN departments d ON d.id = s.department_id
     WHERE s.shift_date = ?
-    GROUP BY COALESCE(d.location_id, e.home_location_id)
+    GROUP BY s.location_id
   `).all(date);
   for (const entry of scheduledCounts) {
     const location = locationLookup.get(String(entry.location_id));
@@ -17524,8 +18172,10 @@ app.get("/api/portal/v1/me/schedule", (request, response) => {
   const weekEnd = addDays(weekStart, 6);
   const shifts = db.prepare(`
     SELECT s.id, s.shift_date, s.start_time, s.end_time, s.area, s.note,
-           d.name AS department_name
-    FROM shifts s LEFT JOIN departments d ON d.id = s.department_id
+           s.location_id, l.name AS location_name, s.department_id, d.name AS department_name
+    FROM shifts s
+    LEFT JOIN locations l ON l.id = s.location_id
+    LEFT JOIN departments d ON d.id = s.department_id
     WHERE s.employee_number = ? AND s.shift_date BETWEEN ? AND ?
     ORDER BY s.shift_date, s.start_time
   `).all(session.employeeNumber, weekStart, weekEnd);
@@ -18878,8 +19528,10 @@ app.post("/api/portal/v1/me/vacation-change-requests", (request, response) => {
     if (!isIsoDate(requestedFrom) || !isIsoDate(requestedTo) || requestedTo < requestedFrom) {
       throw httpError(400, "Bitte einen gültigen neuen Urlaubszeitraum eingeben.");
     }
-    const availability = evaluateVacationRequest(session.employeeNumber, { dateFrom: requestedFrom, dateTo: requestedTo });
-    if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
+    const availability = evaluateVacationRequest(session.employeeNumber, {
+      dateFrom: requestedFrom, dateTo: requestedTo, excludeGroupId: groupId,
+    });
+    if (!availability.allowed) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
   }
   const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
   const result = db.prepare(`
@@ -18950,7 +19602,7 @@ app.put("/api/portal/v1/me/vacation-requests/:id", (request, response) => {
   const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
   if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) throw httpError(400, "Bitte einen gültigen Urlaubszeitraum eingeben.");
   const availability = evaluateVacationRequest(session.employeeNumber, { dateFrom, dateTo });
-  if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
+  if (!availability.allowed) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
   const overlapping = db.prepare(`SELECT id FROM vacation_requests WHERE employee_number = ? AND id <> ?
     AND status IN ('pending','pending_local','preliminary_local','pending_hr','approved') AND date_from <= ? AND date_to >= ? LIMIT 1`)
     .get(session.employeeNumber, entry.id, dateTo, dateFrom);
@@ -19009,11 +19661,12 @@ app.put("/api/portal/v1/vacation-requests/:id/decision", (request, response) => 
   let groupId = null;
   if (decision === "approved") {
     const availability = evaluateVacationRequest(entry.employee_number, { dateFrom: entry.date_from, dateTo: entry.date_to });
-    if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
+    if (!availability.allowed) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
     const vacation = validateVacationEntry({ employeeNumber: entry.employee_number, dateFrom: entry.date_from, dateTo: entry.date_to, note: entry.note });
     groupId = createVacationGroupId();
     db.exec("BEGIN");
     try {
+      assertVacationGovernanceAvailable(entry.employee_number, vacation);
       insertVacationEntries(vacation, groupId);
       db.prepare(`
         UPDATE vacation_requests SET status = 'approved', decided_by = ?, decided_at = CURRENT_TIMESTAMP,
@@ -19116,10 +19769,9 @@ app.get("/api/portal/v1/absence-requests", (request, response) => {
 });
 
 function finalizeVacationRequest(entry, actor, note) {
-  const availability = evaluateVacationRequest(entry.employee_number, { dateFrom: entry.date_from, dateTo: entry.date_to });
-  if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
   const vacation = validateVacationEntry({ employeeNumber: entry.employee_number, dateFrom: entry.date_from, dateTo: entry.date_to, note: entry.note });
   const groupId = entry.vacation_group_id || createVacationGroupId();
+  assertVacationGovernanceAvailable(entry.employee_number, vacation, entry.vacation_group_id || null);
   insertVacationEntries(vacation, groupId);
   db.prepare(`
     UPDATE vacation_requests SET status = 'approved', approval_stage = 'complete', decision_note = ?,
@@ -19197,14 +19849,13 @@ function finalizeVacationChangeRequest(entry, actor, note) {
   if (!current) throw httpError(409, "Der ursprüngliche Urlaub besteht nicht mehr.");
   let replacement = null;
   if (entry.request_type === "change") {
-    const availability = evaluateVacationRequest(entry.employee_number, { dateFrom: entry.requested_date_from, dateTo: entry.requested_date_to });
-    if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
     replacement = validateVacationEntry({
       employeeNumber: entry.employee_number,
       dateFrom: entry.requested_date_from,
       dateTo: entry.requested_date_to,
       note: entry.note || current.note,
     }, entry.vacation_group_id);
+    assertVacationGovernanceAvailable(entry.employee_number, replacement, entry.vacation_group_id);
   }
   deleteVacationGroup(entry.vacation_group_id);
   if (replacement) insertVacationEntries(replacement, entry.vacation_group_id);
@@ -19384,8 +20035,11 @@ app.put("/api/portal/v1/vacation-change-requests/:id/decision", (request, respon
     if (!current) throw httpError(409, "Der ursprüngliche Urlaub besteht nicht mehr.");
     let replacement = null;
     if (entry.request_type === "change") {
-      const availability = evaluateVacationRequest(entry.employee_number, { dateFrom: entry.requested_date_from, dateTo: entry.requested_date_to });
-      if (!availability.allowed) throw httpError(409, availability.reason, "REQUEST_BLACKOUT");
+      const availability = evaluateVacationRequest(entry.employee_number, {
+        dateFrom: entry.requested_date_from, dateTo: entry.requested_date_to,
+        excludeGroupId: entry.vacation_group_id,
+      });
+      if (!availability.allowed) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
       replacement = validateVacationEntry({
         employeeNumber: entry.employee_number,
         dateFrom: entry.requested_date_from,
@@ -19395,6 +20049,7 @@ app.put("/api/portal/v1/vacation-change-requests/:id/decision", (request, respon
     }
     db.exec("BEGIN");
     try {
+      if (replacement) assertVacationGovernanceAvailable(entry.employee_number, replacement, entry.vacation_group_id);
       deleteVacationGroup(entry.vacation_group_id);
       if (replacement) insertVacationEntries(replacement, entry.vacation_group_id);
       db.prepare(`
@@ -19524,7 +20179,7 @@ app.get("/api/mobile/v1/me/time-entries", (request, response) => {
     throw httpError(400, "Bitte ein gültiges Datum auswählen.", "TIME_ENTRY_DATE_INVALID");
   }
   const date = dateValue || viennaTodayIso();
-  const context = employeeRequestContext(session.employeeNumber, date);
+  const context = employeeTimeTrackingContext(session.employeeNumber, date);
   const access = timeTrackingRequestAccess(request, validateLocationExists(context.locationId));
   const status = timeTrackingDayStatus(session.employeeNumber, date, new Date(), { access });
   if (!session.permissions.includes("own_time:write")) status.allowedActions = [];
@@ -19534,7 +20189,7 @@ app.get("/api/mobile/v1/me/time-entries", (request, response) => {
 app.post("/api/mobile/v1/me/time-entries", (request, response) => {
   const session = requireMobileSession(request, "own_time:write");
   const now = new Date();
-  const context = employeeRequestContext(session.employeeNumber, viennaTodayIso(now));
+  const context = employeeTimeTrackingContext(session.employeeNumber, viennaTodayIso(now));
   const access = timeTrackingRequestAccess(request, validateLocationExists(context.locationId));
   const result = bookTimeEntry(session.employeeNumber, String(request.body?.type || ""), now, {
     access,
@@ -19549,7 +20204,7 @@ app.post("/api/mobile/v1/me/time-entries", (request, response) => {
 app.get("/api/portal/v1/me/time-entries", (request, response) => {
   const session = requirePortalSession(request, "own_time:read");
   const date = isIsoDate(request.query.date) ? String(request.query.date) : viennaTodayIso();
-  const context = employeeRequestContext(session.employeeNumber, date);
+  const context = employeeTimeTrackingContext(session.employeeNumber, date);
   const access = timeTrackingRequestAccess(request, validateLocationExists(context.locationId));
   response.json({ status: timeTrackingDayStatus(session.employeeNumber, date, new Date(), { access }) });
 });
@@ -19557,7 +20212,7 @@ app.get("/api/portal/v1/me/time-entries", (request, response) => {
 app.post("/api/portal/v1/me/time-entries", (request, response) => {
   const session = requirePortalSession(request, "own_time:write");
   assertPortalCsrf(request);
-  const context = employeeRequestContext(session.employeeNumber, viennaTodayIso());
+  const context = employeeTimeTrackingContext(session.employeeNumber, viennaTodayIso());
   const access = timeTrackingRequestAccess(request, validateLocationExists(context.locationId));
   response.status(201).json({ status: bookTimeEntry(session.employeeNumber, String(request.body?.type || ""), new Date(), { access }) });
 });
@@ -19612,9 +20267,22 @@ app.get("/api/portal/v1/time-summary", (request, response) => {
   `) : null;
   const employees = db.prepare(`
     SELECT personnel_number, full_name, nickname, color, preferred_department_id
-    FROM employees WHERE active = 1 AND home_location_id = ?
+    FROM employees
+    WHERE active = 1 AND (
+      home_location_id = ?
+      OR EXISTS (
+        SELECT 1 FROM shifts s
+        WHERE s.employee_number = employees.personnel_number
+          AND s.location_id = ? AND s.shift_date BETWEEN ? AND ?
+      )
+      OR EXISTS (
+        SELECT 1 FROM time_entries t
+        WHERE t.employee_number = employees.personnel_number
+          AND t.location_id = ? AND t.work_date BETWEEN ? AND ? AND t.voided_at IS NULL
+      )
+    )
     ORDER BY CAST(personnel_number AS INTEGER), personnel_number
-  `).all(context.locationId)
+  `).all(context.locationId, context.locationId, dateFrom, dateTo, context.locationId, dateFrom, dateTo)
     .filter((employee) => !context.departmentId
       || Number(employee.preferred_department_id || 0) === Number(context.departmentId)
       || Boolean(departmentActivity.get(
@@ -19622,7 +20290,10 @@ app.get("/api/portal/v1/time-summary", (request, response) => {
         employee.personnel_number, dateFrom, dateTo, context.departmentId,
       )))
     .map((employee) => {
-      const summary = timeSummaryForEmployee(employee.personnel_number, dateFrom, dateTo, "range", new Date(), context.departmentId);
+      const summary = timeSummaryForEmployee(employee.personnel_number, dateFrom, dateTo, "range", new Date(), context.departmentId, {
+        locationId: context.locationId,
+        filterLocation: true,
+      });
       return {
         employeeNumber: employee.personnel_number,
         fullName: employee.full_name,
@@ -20604,13 +21275,15 @@ app.put("/api/settings", (request, response) => {
 });
 
 app.post("/api/shifts", (request, response) => {
-  const shift = validateShift(request.body);
-  const locationId = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(shift.employeeNumber)?.home_location_id;
-  assertSessionContextScope(request.portalSession, { locationId, departmentId: shift.departmentId });
+  const shift = validateShift(request.body, {
+    locationId: request.body.locationId ?? request.body.location_id ?? request.body.location,
+  });
+  assertSessionContextScope(request.portalSession, { locationId: shift.locationId, departmentId: shift.departmentId });
+  assertShiftEmployeeAssignmentScope(request.portalSession, shift);
   const result = db.prepare(`
-    INSERT INTO shifts (employee_number, department_id, shift_date, start_time, end_time, area, note)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(shift.employeeNumber, shift.departmentId, shift.shiftDate, shift.startTime, shift.endTime, shift.area, shift.note);
+    INSERT INTO shifts (employee_number, location_id, department_id, shift_date, start_time, end_time, area, note)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(shift.employeeNumber, shift.locationId, shift.departmentId, shift.shiftDate, shift.startTime, shift.endTime, shift.area, shift.note);
   invalidateTimeDayReview(shift.employeeNumber, shift.shiftDate);
   refreshSicknessStaffingAfterPlanningChange();
   response.status(201).json({ id: Number(result.lastInsertRowid), ...shift });
@@ -20618,18 +21291,21 @@ app.post("/api/shifts", (request, response) => {
 
 app.put("/api/shifts/:id", (request, response) => {
   const id = Number(request.params.id);
-  const existing = db.prepare("SELECT s.employee_number, s.shift_date, s.department_id, e.home_location_id FROM shifts s JOIN employees e ON e.personnel_number = s.employee_number WHERE s.id = ?").get(id);
+  const existing = db.prepare("SELECT employee_number, location_id, shift_date, department_id FROM shifts WHERE id = ?").get(id);
   if (!existing) throw httpError(404, "Der Dienst wurde nicht gefunden.");
-  assertSessionContextScope(request.portalSession, { locationId: existing.home_location_id, departmentId: existing.department_id });
-  assertDateEditable(existing.shift_date, settingsForLocation(existing.home_location_id));
-  const shift = validateShift(request.body);
-  const nextLocationId = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(shift.employeeNumber)?.home_location_id;
-  assertSessionContextScope(request.portalSession, { locationId: nextLocationId, departmentId: shift.departmentId });
+  assertSessionContextScope(request.portalSession, { locationId: existing.location_id, departmentId: existing.department_id });
+  assertDateEditable(existing.shift_date, settingsForLocation(existing.location_id));
+  const shift = validateShift(request.body, {
+    locationId: request.body.locationId ?? request.body.location_id ?? existing.location_id,
+    existingId: id,
+  });
+  assertSessionContextScope(request.portalSession, { locationId: shift.locationId, departmentId: shift.departmentId });
+  assertShiftEmployeeAssignmentScope(request.portalSession, shift, existing);
   const result = db.prepare(`
     UPDATE shifts
-    SET employee_number = ?, department_id = ?, shift_date = ?, start_time = ?, end_time = ?, area = ?, note = ?
+    SET employee_number = ?, location_id = ?, department_id = ?, shift_date = ?, start_time = ?, end_time = ?, area = ?, note = ?
     WHERE id = ?
-  `).run(shift.employeeNumber, shift.departmentId, shift.shiftDate, shift.startTime, shift.endTime, shift.area, shift.note, id);
+  `).run(shift.employeeNumber, shift.locationId, shift.departmentId, shift.shiftDate, shift.startTime, shift.endTime, shift.area, shift.note, id);
   if (!result.changes) throw httpError(404, "Der Dienst wurde nicht gefunden.");
   invalidateTimeDayReview(existing.employee_number, existing.shift_date);
   invalidateTimeDayReview(shift.employeeNumber, shift.shiftDate);
@@ -20639,10 +21315,10 @@ app.put("/api/shifts/:id", (request, response) => {
 
 app.delete("/api/shifts/:id", (request, response) => {
   const id = Number(request.params.id);
-  const existing = db.prepare("SELECT s.employee_number, s.shift_date, s.department_id, e.home_location_id FROM shifts s JOIN employees e ON e.personnel_number = s.employee_number WHERE s.id = ?").get(id);
+  const existing = db.prepare("SELECT employee_number, location_id, shift_date, department_id FROM shifts WHERE id = ?").get(id);
   if (!existing) throw httpError(404, "Der Dienst wurde nicht gefunden.");
-  assertSessionContextScope(request.portalSession, { locationId: existing.home_location_id, departmentId: existing.department_id });
-  assertDateEditable(existing.shift_date, settingsForLocation(existing.home_location_id));
+  assertSessionContextScope(request.portalSession, { locationId: existing.location_id, departmentId: existing.department_id });
+  assertDateEditable(existing.shift_date, settingsForLocation(existing.location_id));
   const result = db.prepare("DELETE FROM shifts WHERE id = ?").run(id);
   if (!result.changes) throw httpError(404, "Der Dienst wurde nicht gefunden.");
   invalidateTimeDayReview(existing.employee_number, existing.shift_date);
@@ -20663,7 +21339,7 @@ app.delete("/api/schedule", (request, response) => {
   const result = db.prepare(`
     DELETE FROM shifts
     WHERE shift_date BETWEEN ? AND ?
-      AND employee_number IN (SELECT personnel_number FROM employees WHERE home_location_id = ?)
+      AND location_id = ?
       ${departmentFilter}
   `).run(...params);
   invalidateTimeDayReviewsForRange(context.locationId, weekStart, weekEnd, context.departmentId);
@@ -20789,6 +21465,17 @@ app.get("/api/vacations", (request, response) => {
   response.json(getVacationPlan(request.query.year, request.query, request.portalSession));
 });
 
+app.get("/api/personnel-vacations", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "personnel:central:read");
+  if (actor.employeeNumber !== "local" && !actor.permissions?.includes("vacation:read")) {
+    throw httpError(403, "Für die zentrale Urlaubsübersicht fehlt die Urlaubs-Leseberechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  if (!sessionHasGlobalScope(actor)) {
+    throw httpError(403, "Die zentrale Urlaubsübersicht ist nur mit globalem Zuständigkeitsbereich verfügbar.", "PORTAL_SCOPE_DENIED");
+  }
+  response.json(getCentralVacationPlan(request.query.year, request.query));
+});
+
 app.put("/api/vacation-entitlements", (request, response) => {
   const year = validateYear(request.body.year);
   const entries = Array.isArray(request.body.entries) ? request.body.entries : [];
@@ -20829,6 +21516,7 @@ app.post("/api/vacations", (request, response) => {
   const result = createVacationEntries(vacation);
   response.status(201).json({
     groupId: result.groupId,
+    assessment: result.assessment,
     plan: getVacationPlan(new Date(`${vacation.dateFrom}T12:00:00Z`).getUTCFullYear(), request.body, request.portalSession),
   });
 });
@@ -20845,6 +21533,7 @@ app.put("/api/vacations/:groupId", (request, response) => {
   const result = replaceVacationGroup(groupId, vacation);
   response.json({
     groupId: result.groupId,
+    assessment: result.assessment,
     plan: getVacationPlan(new Date(`${vacation.dateFrom}T12:00:00Z`).getUTCFullYear(), request.body, request.portalSession),
   });
 });
@@ -20906,8 +21595,8 @@ app.post("/api/schedule/auto", (request, response) => {
     ORDER BY CAST(e.personnel_number AS INTEGER), e.personnel_number
   `).all(...employeeFilter.values);
   const insertShift = db.prepare(`
-    INSERT INTO shifts (employee_number, department_id, shift_date, start_time, end_time, area, note)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO shifts (employee_number, location_id, department_id, shift_date, start_time, end_time, area, note)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   db.exec("BEGIN");
@@ -20920,7 +21609,7 @@ app.post("/api/schedule/auto", (request, response) => {
       db.prepare(`
         DELETE FROM shifts
         WHERE shift_date BETWEEN ? AND ?
-          AND employee_number IN (SELECT personnel_number FROM employees WHERE home_location_id = ?)
+          AND location_id = ?
           ${departmentFilter}
       `).run(...params);
     }
@@ -20930,11 +21619,10 @@ app.post("/api/schedule/auto", (request, response) => {
       ? [weekStart, weekEnd, context.locationId, context.departmentId]
       : [weekStart, weekEnd, context.locationId];
     const existingShifts = db.prepare(`
-      SELECT s.employee_number, s.department_id, s.shift_date, s.start_time, s.end_time
+      SELECT s.employee_number, s.location_id, s.department_id, s.shift_date, s.start_time, s.end_time
       FROM shifts s
-      JOIN employees e ON e.personnel_number = s.employee_number
       WHERE s.shift_date BETWEEN ? AND ?
-        AND e.home_location_id = ?
+        AND s.location_id = ?
         ${shiftDepartmentFilter}
     `).all(...existingShiftValues);
     const options = db.prepare(`
@@ -21038,6 +21726,7 @@ app.post("/api/schedule/auto", (request, response) => {
         if (!candidate) break;
         insertShift.run(
           employee.personnel_number,
+          context.locationId,
           automaticDepartmentId(employee),
           date,
           candidate.shift.start_time,
@@ -21087,6 +21776,7 @@ app.post("/api/schedule/auto", (request, response) => {
         if (!candidate) continue;
         insertShift.run(
           employee.personnel_number,
+          context.locationId,
           automaticDepartmentId(employee),
           date,
           candidate.shift.start_time,

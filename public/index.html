@@ -43,20 +43,34 @@
           <button class="nav-item hidden" data-view="rightsDashboard" id="rightsDashboardNavButton">
             <span class="nav-symbol">◇</span><span>Dashboards</span>
           </button>
-          <div class="nav-branch">
-            <button type="button" class="nav-disclosure expanded" data-nav-toggle="planning" aria-label="Dienstplanung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
-            <button class="nav-item active" data-view="planning">
-              <span class="nav-symbol">▦</span><span>Dienstplanung</span>
+          <section class="nav-module" id="filialManagementNav" aria-label="Filialverwaltung">
+            <button type="button" class="nav-module-toggle expanded" id="filialManagementToggle" data-nav-toggle="filialManagement" aria-controls="filialManagementNavChildren" aria-expanded="true">
+              <span class="nav-module-chevron" aria-hidden="true"></span><span class="nav-symbol" aria-hidden="true">⌂</span><span>Filialverwaltung</span>
             </button>
-          </div>
-          <div class="nav-children" id="planningNavChildren"></div>
-          <div class="nav-branch">
-            <button type="button" class="nav-disclosure expanded" data-nav-toggle="vacations" aria-label="Urlaubsplanung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
-            <button class="nav-item" data-view="vacations">
-              <span class="nav-symbol">☀</span><span>Urlaubsplanung</span>
-            </button>
-          </div>
-          <div class="nav-children" id="vacationNavChildren"></div>
+            <div class="nav-module-children" id="filialManagementNavChildren">
+              <button class="nav-item nav-module-route" data-view="personnel" id="filialTeamsNavButton">
+                <span class="nav-symbol">◎</span><span>Teams &amp; Standorte</span>
+              </button>
+              <div class="nav-submodule">
+                <div class="nav-branch">
+                  <button type="button" class="nav-disclosure expanded" data-nav-toggle="planning" aria-controls="planningNavChildren" aria-label="Dienstplanung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
+                  <button class="nav-item active" data-view="planning" id="planningNavButton">
+                    <span class="nav-symbol">▦</span><span>Dienstplanung</span>
+                  </button>
+                </div>
+                <div class="nav-children" id="planningNavChildren"></div>
+              </div>
+              <div class="nav-submodule">
+                <div class="nav-branch">
+                  <button type="button" class="nav-disclosure expanded" data-nav-toggle="vacations" aria-controls="vacationNavChildren" aria-label="Urlaubsplanung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
+                  <button class="nav-item" data-view="vacations" id="vacationsNavButton">
+                    <span class="nav-symbol">☀</span><span>Urlaubsplanung</span>
+                  </button>
+                </div>
+                <div class="nav-children" id="vacationNavChildren"></div>
+              </div>
+            </div>
+          </section>
           <button class="nav-item request-nav-item" data-view="requests" id="requestsNavButton">
             <span class="nav-symbol">✓</span><span>Anträge</span><strong class="nav-count hidden" id="requestsNavCount">0</strong>
           </button>
@@ -65,9 +79,6 @@
           </button>
           <button class="nav-item hidden" data-view="personnelAdministration" id="personnelAdministrationNavButton">
             <span class="nav-symbol">◎</span><span>Personalverwaltung</span>
-          </button>
-          <button class="nav-item" data-view="personnel">
-            <span class="nav-symbol">⌂</span><span>Filialverwaltung</span>
           </button>
           <button class="nav-item" data-view="settings">
             <span class="nav-symbol">⚙</span><span>Einstellungen</span>
@@ -284,11 +295,12 @@
           </header>
 
           <div class="settings-tabs personnel-administration-tabs" role="tablist">
-            <button class="settings-tab active" data-personnel-administration-tab="employees">Mitarbeitende</button>
-            <button class="settings-tab" data-personnel-administration-tab="costCenters">Kostenstellen</button>
+            <button class="settings-tab active" id="personnelDirectoryTab" type="button" role="tab" aria-controls="personnelDirectorySection" aria-selected="true" data-personnel-administration-tab="employees">Mitarbeitende</button>
+            <button class="settings-tab" id="costCentersTab" type="button" role="tab" aria-controls="costCenterSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="costCenters">Kostenstellen</button>
+            <button class="settings-tab hidden" id="centralVacationsTab" type="button" role="tab" aria-controls="centralVacationSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="vacations">Urlaube</button>
           </div>
 
-          <section class="personnel-administration-section active" id="personnelDirectorySection">
+          <section class="personnel-administration-section active" id="personnelDirectorySection" role="tabpanel" aria-labelledby="personnelDirectoryTab">
             <div class="personnel-administration-summary" id="personnelAdministrationSummary" aria-live="polite"></div>
             <div class="employee-toolbar personnel-directory-toolbar">
               <div><h2>Mitarbeitende</h2><p>Unternehmensweite Übersicht ohne sensible Personalakt-Daten.</p></div>
@@ -307,13 +319,31 @@
             </div>
           </section>
 
-          <section class="personnel-administration-section" id="costCenterSection">
+          <section class="personnel-administration-section" id="costCenterSection" role="tabpanel" aria-labelledby="costCentersTab">
             <div class="employee-toolbar cost-center-toolbar">
               <div><h2>Kostenstellen</h2><p>Verwaltung, Filialen, Produktion und weitere Unternehmensbereiche eindeutig zuordnen.</p></div>
               <button class="primary-button hidden" id="addCostCenterButton" type="button">+ Kostenstelle anlegen</button>
             </div>
             <p class="calculation-note">Kostenstellen werden nicht endgültig gelöscht. Vor der Deaktivierung müssen bestehende Zuordnungen verschoben werden; historische Daten bleiben erhalten.</p>
             <div class="cost-center-list" id="costCenterList"><p class="settings-note">Kostenstellen werden geladen.</p></div>
+          </section>
+
+          <section class="personnel-administration-section" id="centralVacationSection" role="tabpanel" aria-labelledby="centralVacationsTab">
+            <div class="employee-toolbar central-vacation-toolbar">
+              <div><h2>Urlaube im Unternehmen</h2><p>Genehmigte und direkt erfasste Urlaube aller Kostenstellen – ohne die Planungsregeln der Filialen zu umgehen.</p></div>
+            </div>
+            <div class="personnel-administration-summary central-vacation-summary" id="centralVacationSummary" aria-live="polite"></div>
+            <div class="personnel-directory-filters central-vacation-filters">
+              <label class="field"><span>Suchen</span><input id="centralVacationSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer, Name oder Filiale" /></label>
+              <label class="field"><span>Kostenstelle</span><select id="centralVacationCostCenterFilter"><option value="">Alle Kostenstellen</option></select></label>
+              <label class="field"><span>Jahr</span><input id="centralVacationYear" type="number" min="2000" max="2100" step="1" /></label>
+            </div>
+            <div class="personnel-directory-table-wrap central-vacation-table-wrap">
+              <table class="personnel-directory-table central-vacation-table">
+                <thead><tr><th>Zeitraum</th><th>Personalnr.</th><th>Name</th><th>Kostenstelle</th><th>Filiale / Abteilung</th><th>Tage</th><th>Quelle</th></tr></thead>
+                <tbody id="centralVacationList"><tr><td colspan="7">Urlaubsdaten werden beim Öffnen geladen.</td></tr></tbody>
+              </table>
+            </div>
           </section>
         </section>
 
@@ -362,6 +392,8 @@
                   <div class="inline-fields">
                     <label class="field"><span>Filial-ID</span><input id="locationId" maxlength="2" pattern="[0-9]{2}" placeholder="01" required /></label>
                     <label class="field"><span>Name</span><input id="locationName" maxlength="80" placeholder="Hauptstandort" required /></label>
+                    <label class="field" id="locationCostCenterField"><span>Kostenstelle</span><select id="locationCostCenter" required></select><small>Die buchhalterische Zuordnung der Filiale.</small></label>
+                    <div class="field hidden" id="locationCostCenterReadonly"><span>Kostenstelle</span><strong>Noch nicht zugeordnet</strong><small>Die Zuordnung kann nur von der Personalleitung oder Administration geändert werden.</small></div>
                     <label class="field"><span>Mindestbesetzung</span><input id="locationMinStaff" type="number" min="0" max="99" step="1" value="0" /></label>
                   </div>
                   <label class="switch-row"><span><strong>Aktiv</strong><small>In Navigation und Planung anzeigen.</small></span><input id="locationActive" type="checkbox" checked /></label>
