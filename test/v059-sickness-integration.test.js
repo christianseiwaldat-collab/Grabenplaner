@@ -468,13 +468,16 @@ test("v0.59: filialfremder Einsatz steuert Besetzungsrisiko, effektive Leserecht
   assert.equal(deploymentAum.payload.report.location_id, "92");
   assert.equal(deploymentAum.payload.report.department_id, departmentB);
   const homeAumList = await request("/api/portal/v1/amu-reports", { auth: managerAuth });
-  assert.equal(homeAumList.response.status, 403, JSON.stringify(homeAumList.payload));
+  assert.equal(homeAumList.response.status, 200, JSON.stringify(homeAumList.payload));
+  assert.equal(homeAumList.payload.reports.some((entry) => Number(entry.id) === Number(deploymentAum.payload.report.id)), false);
   const deploymentAumList = await request("/api/portal/v1/amu-reports", { auth: foreignManagerAuth });
-  assert.equal(deploymentAumList.response.status, 403, JSON.stringify(deploymentAumList.payload));
+  assert.equal(deploymentAumList.response.status, 200, JSON.stringify(deploymentAumList.payload));
+  assert.equal(deploymentAumList.payload.reports.some((entry) => Number(entry.id) === Number(deploymentAum.payload.report.id)), true);
+  assert.equal(Object.hasOwn(deploymentAumList.payload.reports[0], "identity_check"), false);
   const deploymentDocumentId = deploymentAum.payload.report.documents[0].id;
-  const deniedDocument = await request(`/api/portal/v1/amu-reports/${deploymentAum.payload.report.id}/documents/${deploymentDocumentId}/content`, { auth: foreignManagerAuth });
-  assert.equal(deniedDocument.response.status, 403, JSON.stringify(deniedDocument.payload));
-  assert.ok(db.prepare("SELECT 1 FROM audit_log WHERE actor = '594' AND action = 'amu.document.access.denied' AND entity_id = ?").get(deploymentDocumentId));
+  const allowedDocument = await request(`/api/portal/v1/amu-reports/${deploymentAum.payload.report.id}/documents/${deploymentDocumentId}/content`, { auth: foreignManagerAuth });
+  assert.equal(allowedDocument.response.status, 200, JSON.stringify(allowedDocument.payload));
+  assert.ok(db.prepare("SELECT 1 FROM audit_log WHERE actor = '594' AND action = 'amu.document.download' AND entity_id = ?").get(deploymentDocumentId));
   const deploymentStatusView = await request("/api/portal/v1/sickness-cases", { auth: foreignManagerAuth });
   const deploymentCaseSummary = deploymentStatusView.payload.cases.find((entry) => entry.id === caseId);
   assert.equal(deploymentCaseSummary.employee_note, "");
@@ -498,7 +501,8 @@ test("v0.59: filialfremder Einsatz steuert Besetzungsrisiko, effektive Leserecht
   assert.equal(directCrossCases.payload.cases[0].location_id, "92");
   assert.equal(directCrossCases.payload.cases[0].department_id, departmentB);
   const directCrossReports = await request("/api/portal/v1/amu-reports", { auth: foreignManagerAuth });
-  assert.equal(directCrossReports.response.status, 403, JSON.stringify(directCrossReports.payload));
+  assert.equal(directCrossReports.response.status, 200, JSON.stringify(directCrossReports.payload));
+  assert.equal(directCrossReports.payload.reports.some((entry) => Number(entry.id) === Number(directCrossAum.payload.report.id)), true);
 });
 
 test("v0.59: AUM ohne Enddatum bleibt verschlüsselt und eine Rückkehrmeldung beendet die Verfügbarkeit eindeutig", async () => {
@@ -723,7 +727,9 @@ test("v0.59: direkter AUM-Upload legt einen geschuetzten Krankenstandsfall an un
   assert.equal(blocked.payload.code, "SICKNESS_SHIFT_CONFLICT");
 
   const delegated = await request("/api/portal/v1/amu-reports", { auth: delegatedReaderAuth });
-  assert.equal(delegated.response.status, 403, JSON.stringify(delegated.payload));
+  assert.equal(delegated.response.status, 200, JSON.stringify(delegated.payload));
+  assert.deepEqual(delegated.payload.reports, []);
+  assert.equal(delegated.payload.access.available, false);
   const hr = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
   assert.equal(hr.response.status, 200, JSON.stringify(hr.payload));
   assert.equal(hr.payload.reports.some((entry) => Number(entry.id) === Number(direct.payload.report.id)), true);
@@ -1135,7 +1141,7 @@ test("AUM Block 4: Stufe-A-Kontingent, rückwirkende AUM-Pflicht und Krankenstun
 });
 
 test("AUM Block 5: nur der serverseitig vollständig bestätigte Stufe-A-Fall wird automatisch erledigt", async () => {
-  const { hrAuth } = auth;
+  const { hrAuth, managerAuth } = auth;
   const automaticEmployee = session("614", "employee");
   const trustBEmployee = session("615", "employee");
   const dateFallbackEmployee = session("616", "employee");
@@ -1236,7 +1242,9 @@ test("AUM Block 5: nur der serverseitig vollständig bestätigte Stufe-A-Fall wi
     const dateProtected = afterFallbacks.payload.reports.find((entry) => Number(entry.id) === Number(spoofedConfirmation.payload.report.id));
     assert.equal(trustBProtected.automatic_review.reason, "trust_level_not_a");
     assert.equal(dateProtected.automatic_review.reason, "dates_not_detected");
-    assert.equal(afterFallbacks.payload.pendingCount >= 2, true);
+    assert.equal(afterFallbacks.payload.pendingCount, 0);
+    const localPending = await request("/api/portal/v1/amu-reports", { auth: managerAuth });
+    assert.equal(localPending.payload.pendingCount >= 2, true);
     assert.ok(db.prepare("SELECT 1 FROM audit_log WHERE action = 'amu.report.auto-review.deferred' AND entity_id = ?").get(String(spoofedConfirmation.payload.report.id)));
   } finally {
     delete process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT;

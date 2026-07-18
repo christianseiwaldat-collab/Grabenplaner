@@ -566,6 +566,12 @@
               <p class="settings-note">Wird ein Fall länger als erlaubt, ist die AUM rückwirkend für den gesamten Zeitraum erforderlich. Eine später geprüfte AUM gibt das verbrauchte Kontingent wieder frei.</p>
               <label class="switch-row"><span><strong>Korrekt erkannte AUM bei Vertrauensstufe A automatisch erledigen</strong><small>Nur bei exaktem SV-Abgleich, plausiblen und vom Teammitglied bestätigten Datumswerten sowie erfolgreicher Datei- und Sicherheitsprüfung.</small></span><input id="amuAutoReviewTrustA" type="checkbox" /></label>
               <div class="form-actions-inline"><span class="settings-note" id="amuSettingsHint"></span><button class="primary-button" id="saveAmuSettingsButton" type="button">AUM-Einstellungen speichern</button></div>
+              <section class="amu-access-policy" aria-labelledby="amuAccessPolicyTitle">
+                <div class="amu-access-policy-heading"><div><span class="eyebrow">Zugriff &amp; Zuständigkeit</span><h3 id="amuAccessPolicyTitle">Filialleitungen</h3></div><span class="status-badge">PL+</span></div>
+                <label class="switch-row"><span><strong>AUM im eigenen Filialbereich standardmäßig öffnen und prüfen</strong><small>Wird der Zugriff entzogen, übernimmt die Personalleitung automatisch die offene Bearbeitung. Abteilungsleitungen erhalten dadurch keinen Dokumentzugriff.</small></span><input id="amuManagerDefaultAccess" type="checkbox" /></label>
+                <div class="amu-manager-access-list" id="amuManagerAccessList"><p class="settings-note">Zugriffsregeln werden geladen.</p></div>
+                <div class="form-actions-inline"><span class="settings-note" id="amuAccessPolicyHint"></span><button class="primary-button" id="saveAmuAccessPolicyButton" type="button">AUM-Zugriffe speichern</button></div>
+              </section>
             </div>
             <div class="settings-card" id="greetingSettingsCard">
               <div class="card-heading"><div class="card-icon">Hallo</div><div><h2>Persönliche Begrüßungen</h2><p>Abwechslungsreiche Starttexte im Mitarbeiterportal – ohne medizinische Details oder sensible Abwesenheitsdaten.</p></div></div>
