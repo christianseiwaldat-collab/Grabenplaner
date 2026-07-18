@@ -132,12 +132,16 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "schedule:read", label: "Dienstpläne lesen", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
   { id: "schedule:write", label: "Dienstpläne bearbeiten", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
   { id: "settings:write", label: "Planungs- und Grundeinstellungen bearbeiten", group: "Dienstplanung", warningLevel: "high", hrDelegable: true },
-  { id: "employees:read", label: "Teamstammdaten lesen", group: "Teams & Standorte", warningLevel: "normal", hrDelegable: true },
-  { id: "employees:display:write", label: "Teamfarben bearbeiten", description: "Nur die Farbe im Dienstplan; Name, Sollzeit und Personalstammdaten bleiben geschützt.", group: "Teams & Standorte", warningLevel: "normal", hrDelegable: true },
-  { id: "employees:write", label: "Teamstammdaten vollständig bearbeiten", description: "Umfasst Namen, Sollstunden und weitere Personalstammdaten.", group: "Teams & Standorte", warningLevel: "critical" },
-  { id: "departments:write", label: "Abteilungen anlegen und bearbeiten", group: "Teams & Standorte", warningLevel: "normal", hrDelegable: true },
-  { id: "positions:write", label: "Positionen anlegen, bearbeiten und löschen", group: "Teams & Standorte", warningLevel: "high", hrDelegable: true },
-  { id: "locations:write", label: "Standorte vollständig bearbeiten", group: "Teams & Standorte", warningLevel: "critical" },
+  { id: "employees:read", label: "Teamstammdaten lesen", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true },
+  { id: "employees:display:write", label: "Teamfarben bearbeiten", description: "Nur die Farbe im Dienstplan; Name, Sollzeit und Personalstammdaten bleiben geschützt.", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true },
+  { id: "employees:write", label: "Teamstammdaten vollständig bearbeiten", description: "Umfasst Namen, Sollstunden und weitere Personalstammdaten.", group: "Filialverwaltung", warningLevel: "critical" },
+  { id: "personnel:central:read", label: "Zentrale Personalverwaltung lesen", description: "Unternehmensweite Personalübersicht ohne Inhalte des geschützten Personalakts.", group: "Personalverwaltung", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:central:write", label: "Zentrale Personalzuordnungen bearbeiten", description: "Kostenstellen und filialunabhängige Beschäftigte unternehmensweit verwalten.", group: "Personalverwaltung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "cost_centers:read", label: "Kostenstellen lesen", group: "Personalverwaltung", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "cost_centers:write", label: "Kostenstellen verwalten", description: "Kostenstellen anlegen, ändern und archivieren.", group: "Personalverwaltung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "departments:write", label: "Abteilungen anlegen und bearbeiten", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true },
+  { id: "positions:write", label: "Positionen anlegen, bearbeiten und löschen", group: "Filialverwaltung", warningLevel: "high", hrDelegable: true },
+  { id: "locations:write", label: "Standorte vollständig bearbeiten", group: "Filialverwaltung", warningLevel: "critical" },
   { id: "time:read", label: "Zeiterfassung des Bereichs lesen", group: "Zeit & Abwesenheit", warningLevel: "normal", hrDelegable: true },
   { id: "time:review", label: "Zeitbuchungen prüfen und korrigieren", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true },
   { id: "time:settings", label: "Regeln der Zeiterfassung verwalten", description: "Buchungsort und Abweichungstoleranz je Standort.", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true },
@@ -269,6 +273,7 @@ const portalDashboardPermissionDetails = Object.freeze([
 
 const portalGlobalPermissionIds = new Set([
   "settings:write", "positions:write", "hr:approve", "hr:settings", "sickness:settings",
+  "personnel:central:read", "personnel:central:write", "cost_centers:read", "cost_centers:write",
   "personnel:sensitive:read", "personnel:sensitive:write",
   "amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit",
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
@@ -361,6 +366,10 @@ const builtinPortalRoles = [
       "own_sickness:create",
       "own_sickness:read",
       "employees:read",
+      "personnel:central:read",
+      "personnel:central:write",
+      "cost_centers:read",
+      "cost_centers:write",
       "schedule:read",
       "schedule:write",
       "time:read",
@@ -428,6 +437,10 @@ const builtinPortalRoles = [
       "own_sickness:create",
       "own_sickness:read",
       "employees:read",
+      "personnel:central:read",
+      "personnel:central:write",
+      "cost_centers:read",
+      "cost_centers:write",
       "schedule:read",
       "time:read",
       "time:review",
@@ -483,6 +496,7 @@ builtinPortalRoles.push(
       "own_vacation:read", "own_vacation:request", "own_amu:create", "own_amu:read", "own_amu:withdraw",
       "own_sickness:create", "own_sickness:read",
       "employees:read", "schedule:read", "rights:read", "rights:write",
+      "personnel:central:read", "personnel:central:write", "cost_centers:read", "cost_centers:write",
       "employees:write",
       "operation_mode:write", "backup:write", "update:write", "system:write", "users:write",
       "usb:provision",
@@ -1039,9 +1053,25 @@ function ensureColumn(table, column, definition) {
 
 function createSchema() {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS cost_centers (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL COLLATE NOCASE UNIQUE,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'other'
+        CHECK(type IN ('branch','administration','production','other')),
+      description TEXT NOT NULL DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS locations (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      cost_center_id TEXT,
       min_staff INTEGER NOT NULL DEFAULT 0,
       day_settings_json TEXT NOT NULL DEFAULT '',
       time_tracking_enabled INTEGER NOT NULL DEFAULT 0,
@@ -1049,7 +1079,9 @@ function createSchema() {
       time_tracking_allowed_networks TEXT NOT NULL DEFAULT '',
       time_tracking_variance_minutes INTEGER NOT NULL DEFAULT 15,
       active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (cost_center_id) REFERENCES cost_centers(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
     );
 
     CREATE TABLE IF NOT EXISTS location_branding (
@@ -1093,12 +1125,15 @@ function createSchema() {
       sickness_without_aum_enabled INTEGER NOT NULL DEFAULT 0,
       home_location_id TEXT,
       preferred_department_id INTEGER,
+      cost_center_id TEXT,
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (home_location_id) REFERENCES locations(id)
         ON UPDATE CASCADE ON DELETE SET NULL,
       FOREIGN KEY (preferred_department_id) REFERENCES departments(id)
-        ON UPDATE CASCADE ON DELETE SET NULL
+        ON UPDATE CASCADE ON DELETE SET NULL,
+      FOREIGN KEY (cost_center_id) REFERENCES cost_centers(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
     );
 
     CREATE TABLE IF NOT EXISTS personnel_sensitive_records (
@@ -1146,6 +1181,9 @@ function createSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_personnel_field_permissions_role
       ON personnel_field_permissions(role_id, field_key);
+
+    CREATE INDEX IF NOT EXISTS idx_cost_centers_active_sort
+      ON cost_centers(active, sort_order, code);
 
     CREATE TABLE IF NOT EXISTS positions (
       id TEXT PRIMARY KEY,
@@ -1970,8 +2008,14 @@ const unreleasedSicknessDraftSchemaPresent = tableExists("sickness_cases")
 const legacySchemaMigrationRequired = tableExists("employees") && !columnExists("employees", "personnel_number");
 const portalMobileBaselineMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.60-portal-mobile-foundation' LIMIT 1").get();
+const costCenterMigrationId = "v0.71-cost-centers-personnel";
+const costCenterMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(costCenterMigrationId)
+  || !tableExists("cost_centers")
+  || !columnExists("employees", "cost_center_id")
+  || !columnExists("locations", "cost_center_id");
 if (databaseExistedBeforeOpen && (portalMobileBaselineMigrationRequired || protectedPersonnelMigrationRequired
-  || unreleasedSicknessDraftSchemaPresent || legacySchemaMigrationRequired)) {
+  || unreleasedSicknessDraftSchemaPresent || legacySchemaMigrationRequired || costCenterMigrationRequired)) {
   createInternalDatabaseBackup("pre-migration");
 }
 
@@ -2046,6 +2090,10 @@ if (!columnExists("employees", "home_location_id")) {
 if (!columnExists("employees", "preferred_department_id")) {
   db.exec("ALTER TABLE employees ADD COLUMN preferred_department_id INTEGER");
 }
+ensureColumn("employees", "cost_center_id", "TEXT");
+ensureColumn("locations", "cost_center_id", "TEXT");
+db.exec("CREATE INDEX IF NOT EXISTS idx_employees_cost_center ON employees(cost_center_id, active, personnel_number)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_locations_cost_center ON locations(cost_center_id, active, id)");
 if (tableExists("locations") && !columnExists("locations", "min_staff")) {
   db.exec("ALTER TABLE locations ADD COLUMN min_staff INTEGER NOT NULL DEFAULT 0");
 }
@@ -2773,14 +2821,141 @@ function ensureDefaultLocation() {
     db.prepare("INSERT INTO locations (id, name, day_settings_json, active) VALUES ('01', 'Hauptstandort', ?, 1)")
       .run(JSON.stringify(legacyDaySettingsSnapshot()));
   }
-  const defaultLocation = db.prepare("SELECT id FROM locations ORDER BY active DESC, id LIMIT 1").get();
-  if (defaultLocation) {
-    db.prepare("UPDATE employees SET home_location_id = ? WHERE home_location_id IS NULL OR home_location_id = ''")
-      .run(defaultLocation.id);
-  }
 }
 
 ensureDefaultLocation();
+
+function installCostCenterIntegrityTriggers() {
+  db.exec(`
+    DROP TRIGGER IF EXISTS trg_locations_cost_center_supplied;
+    DROP TRIGGER IF EXISTS trg_locations_cost_center_default;
+    DROP TRIGGER IF EXISTS trg_locations_cost_center_update;
+    DROP TRIGGER IF EXISTS trg_employees_cost_center_supplied;
+    DROP TRIGGER IF EXISTS trg_employees_cost_center_default;
+    DROP TRIGGER IF EXISTS trg_employees_cost_center_update;
+
+    CREATE TRIGGER trg_locations_cost_center_supplied
+    BEFORE INSERT ON locations
+    WHEN TRIM(COALESCE(NEW.cost_center_id, '')) <> ''
+      AND NOT EXISTS (SELECT 1 FROM cost_centers WHERE id = NEW.cost_center_id AND active = 1)
+    BEGIN
+      SELECT RAISE(ABORT, 'COST_CENTER_INVALID');
+    END;
+
+    CREATE TRIGGER trg_locations_cost_center_default
+    AFTER INSERT ON locations
+    WHEN TRIM(COALESCE(NEW.cost_center_id, '')) = ''
+    BEGIN
+      UPDATE locations
+      SET cost_center_id = COALESCE(
+        (SELECT id FROM cost_centers WHERE active = 1 AND type = 'administration' ORDER BY sort_order, code LIMIT 1),
+        (SELECT id FROM cost_centers WHERE active = 1 ORDER BY sort_order, code LIMIT 1)
+      )
+      WHERE id = NEW.id;
+      SELECT CASE WHEN TRIM(COALESCE((SELECT cost_center_id FROM locations WHERE id = NEW.id), '')) = ''
+        THEN RAISE(ABORT, 'COST_CENTER_REQUIRED') END;
+    END;
+
+    CREATE TRIGGER trg_locations_cost_center_update
+    BEFORE UPDATE OF cost_center_id ON locations
+    WHEN TRIM(COALESCE(NEW.cost_center_id, '')) = ''
+      OR NOT EXISTS (SELECT 1 FROM cost_centers WHERE id = NEW.cost_center_id AND active = 1)
+    BEGIN
+      SELECT RAISE(ABORT, 'COST_CENTER_REQUIRED');
+    END;
+
+    CREATE TRIGGER trg_employees_cost_center_supplied
+    BEFORE INSERT ON employees
+    WHEN TRIM(COALESCE(NEW.cost_center_id, '')) <> ''
+      AND NOT EXISTS (SELECT 1 FROM cost_centers WHERE id = NEW.cost_center_id AND active = 1)
+    BEGIN
+      SELECT RAISE(ABORT, 'COST_CENTER_INVALID');
+    END;
+
+    CREATE TRIGGER trg_employees_cost_center_default
+    AFTER INSERT ON employees
+    WHEN TRIM(COALESCE(NEW.cost_center_id, '')) = ''
+    BEGIN
+      UPDATE employees
+      SET cost_center_id = COALESCE(
+        (SELECT l.cost_center_id FROM locations l
+          JOIN cost_centers c ON c.id = l.cost_center_id
+          WHERE l.id = NEW.home_location_id LIMIT 1),
+        (SELECT id FROM cost_centers WHERE active = 1 AND type = 'administration' ORDER BY sort_order, code LIMIT 1),
+        (SELECT id FROM cost_centers WHERE active = 1 ORDER BY sort_order, code LIMIT 1)
+      )
+      WHERE personnel_number = NEW.personnel_number;
+      SELECT CASE WHEN TRIM(COALESCE((SELECT cost_center_id FROM employees WHERE personnel_number = NEW.personnel_number), '')) = ''
+        THEN RAISE(ABORT, 'COST_CENTER_REQUIRED') END;
+    END;
+
+    CREATE TRIGGER trg_employees_cost_center_update
+    BEFORE UPDATE OF cost_center_id ON employees
+    WHEN TRIM(COALESCE(NEW.cost_center_id, '')) = ''
+      OR NOT EXISTS (SELECT 1 FROM cost_centers WHERE id = NEW.cost_center_id AND active = 1)
+    BEGIN
+      SELECT RAISE(ABORT, 'COST_CENTER_REQUIRED');
+    END;
+  `);
+}
+
+function migrateCostCenters() {
+  const insertCostCenter = db.prepare(`
+    INSERT OR IGNORE INTO cost_centers
+      (id, code, name, type, description, active, sort_order, created_by, updated_by)
+    VALUES (?, ?, ?, ?, '', 1, ?, 'migration', 'migration')
+  `);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    insertCostCenter.run("cc-administration", "VERW", "Verwaltung", "administration", 10);
+    const administrationId = db.prepare("SELECT id FROM cost_centers WHERE code = ? COLLATE NOCASE").get("VERW")?.id
+      || db.prepare("SELECT id FROM cost_centers WHERE type = 'administration' ORDER BY active DESC, sort_order, code LIMIT 1").get()?.id;
+    if (!administrationId) throw new Error("COST_CENTER_ADMINISTRATION_REQUIRED");
+
+    for (const location of db.prepare("SELECT id, name, cost_center_id FROM locations ORDER BY id").all()) {
+      const code = `FIL${String(location.id).toUpperCase()}`;
+      insertCostCenter.run(`cc-location-${location.id}`, code, String(location.name || code), "branch",
+        100 + (Number(location.id) || 0));
+      const costCenterId = db.prepare("SELECT id FROM cost_centers WHERE code = ? COLLATE NOCASE").get(code)?.id
+        || administrationId;
+      const currentValid = location.cost_center_id
+        && db.prepare("SELECT 1 FROM cost_centers WHERE id = ?").get(location.cost_center_id);
+      if (!currentValid) db.prepare("UPDATE locations SET cost_center_id = ? WHERE id = ?").run(costCenterId, location.id);
+    }
+
+    db.prepare(`
+      UPDATE employees
+      SET cost_center_id = COALESCE(
+        (SELECT l.cost_center_id FROM locations l WHERE l.id = employees.home_location_id),
+        ?
+      )
+      WHERE TRIM(COALESCE(cost_center_id, '')) = ''
+        OR NOT EXISTS (SELECT 1 FROM cost_centers c WHERE c.id = employees.cost_center_id)
+    `).run(administrationId);
+    db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+      .run(costCenterMigrationId, packageMetadata.version);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  installCostCenterIntegrityTriggers();
+  const invalidLocations = Number(db.prepare(`
+    SELECT COUNT(*) AS count FROM locations l
+    LEFT JOIN cost_centers c ON c.id = l.cost_center_id
+    WHERE c.id IS NULL
+  `).get().count || 0);
+  const invalidEmployees = Number(db.prepare(`
+    SELECT COUNT(*) AS count FROM employees e
+    LEFT JOIN cost_centers c ON c.id = e.cost_center_id
+    WHERE c.id IS NULL
+  `).get().count || 0);
+  if (invalidLocations || invalidEmployees) {
+    throw new Error(`Kostenstellen-Migration unvollständig: ${invalidLocations} Standorte, ${invalidEmployees} Beschäftigte.`);
+  }
+}
+
+migrateCostCenters();
 
 function freezeLegacyLocationBranding() {
   const migrationId = "v0.53.1-branch-branding-snapshots";
@@ -2855,11 +3030,16 @@ function loadSporthandelDemoProfile() {
 
 function seedSporthandelDemo() {
   const profile = loadSporthandelDemoProfile();
+  const insertCostCenter = db.prepare(`
+    INSERT OR IGNORE INTO cost_centers
+      (id, code, name, type, description, active, sort_order, created_by, updated_by)
+    VALUES (?, ?, ?, 'branch', 'Demodaten', 1, ?, 'demo-profile', 'demo-profile')
+  `);
   const insertLocation = db.prepare(`
     INSERT INTO locations
-      (id, name, min_staff, day_settings_json, time_tracking_enabled, time_tracking_access_mode,
+      (id, name, cost_center_id, min_staff, day_settings_json, time_tracking_enabled, time_tracking_access_mode,
        time_tracking_allowed_networks, time_tracking_variance_minutes, active)
-    VALUES (?, ?, ?, ?, 1, 'anywhere', '', 15, 1)
+    VALUES (?, ?, ?, ?, ?, 1, 'anywhere', '', 15, 1)
   `);
   const insertDepartment = db.prepare(`
     INSERT INTO departments (location_id, name, min_staff, active, sort_order)
@@ -2889,7 +3069,10 @@ function seedSporthandelDemo() {
 
     const departmentIds = new Map();
     for (const location of profile.locations) {
-      insertLocation.run(location.id, location.name, Number(location.minStaff || 0), JSON.stringify(demoLocationDaySettings(location)));
+      const costCenterCode = `FIL${String(location.id).toUpperCase()}`;
+      insertCostCenter.run(`cc-location-${location.id}`, costCenterCode, location.name, 100 + (Number(location.id) || 0));
+      const costCenterId = db.prepare("SELECT id FROM cost_centers WHERE code = ? COLLATE NOCASE").get(costCenterCode)?.id;
+      insertLocation.run(location.id, location.name, costCenterId, Number(location.minStaff || 0), JSON.stringify(demoLocationDaySettings(location)));
       for (const [index, departmentName] of location.departments.entries()) {
         const result = insertDepartment.run(location.id, departmentName, 1, index + 1);
         departmentIds.set(`${location.id}:${departmentName}`, Number(result.lastInsertRowid));
@@ -3612,6 +3795,9 @@ function assertSessionEmployeeScope(session, employeeNumber) {
   if (sessionHasGlobalScope(session)) return;
   const employee = db.prepare("SELECT home_location_id, preferred_department_id FROM employees WHERE personnel_number = ?").get(employeeNumber);
   if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.");
+  if (!String(employee.home_location_id || "").trim()) {
+    throw httpError(403, "Filialunabhängige Beschäftigte liegen außerhalb des zugewiesenen Bereichs.", "PORTAL_SCOPE_DENIED");
+  }
   assertSessionContextScope(session, { locationId: employee.home_location_id, departmentId: employee.preferred_department_id });
 }
 
@@ -4057,7 +4243,13 @@ function enforceAdminApiAccess(request, _response, next) {
     const usbProvisioningRoute = /^\/usb-provisioning(?:\/|$)/.test(request.path);
     let permission = usbProvisioningRoute ? "usb:provision" : "schedule:read";
     const integrationRoute = /^\/integrations(?:\/|$)/.test(request.path);
-    if (integrationRoute) {
+    const personnelDirectoryRoute = /^\/personnel-directory(?:\/|$)/.test(request.path);
+    const costCenterRoute = /^\/cost-centers(?:\/|$)/.test(request.path);
+    if (personnelDirectoryRoute) {
+      permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "personnel:central:read" : "personnel:central:write";
+    } else if (costCenterRoute) {
+      permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "cost_centers:read" : "cost_centers:write";
+    } else if (integrationRoute) {
       if (/^\/integrations\/personnel-import(?:\/|$)/.test(request.path)) permission = "employees:import";
       else if (/^\/integrations\/connections\/[^/]+\/sql\/inspect\/?$/.test(request.path)) permission = "employees:import";
       else if (/^\/integrations\/connections(?:\/|$)/.test(request.path)) {
@@ -5911,6 +6103,15 @@ function validateAmuPolicy(body = {}) {
   };
 }
 
+function deactivateEmployeePortalAccess(employeeNumber, reason = "employee_deactivated") {
+  const normalizedEmployeeNumber = String(employeeNumber || "");
+  db.prepare("UPDATE portal_users SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE employee_number = ?")
+    .run(normalizedEmployeeNumber);
+  db.prepare("UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND revoked_at IS NULL")
+    .run(normalizedEmployeeNumber);
+  revokeMobileSessionsForEmployee(normalizedEmployeeNumber, reason);
+}
+
 const AMU_LOCAL_ACCESS_MODES = new Set(["inherit", "allow", "deny"]);
 
 function managerAmuRoleDefaultEnabled() {
@@ -6822,9 +7023,41 @@ function actorCanManagePortalRole(actor, targetRole) {
 
 function assertPortalUserIsMutable(target, actor) {
   if (!target) throw httpError(404, "Der Zugang wurde nicht gefunden.");
-  if (target.role === "developer" || target.role_locked) {
+  if (target.role === "developer") {
     auditPortal(actor?.employeeNumber || "system", "portal.developer.protected", "portal_user", target.employee_number || "", "mutation-denied");
     throw httpError(403, "Der Developer-Zugang ist geschützt und kann nur mit dem lokalen Entwicklerwerkzeug geändert werden.", "PORTAL_DEVELOPER_PROTECTED");
+  }
+  if (target.role_locked) {
+    auditPortal(actor?.employeeNumber || "system", "portal.role-locked.protected", "portal_user", target.employee_number || "", "mutation-denied");
+    throw httpError(403, "Dieser geschützte Zugang kann nicht über die App geändert werden.", "PORTAL_ROLE_LOCKED");
+  }
+}
+
+function personnelMutationActor(actor) {
+  return actor || { employeeNumber: "local", role: "admin", permissions: [] };
+}
+
+function assertEmployeeDestructiveMutationAllowed(actor, employeeNumber) {
+  const normalizedActor = personnelMutationActor(actor);
+  const target = db.prepare(`
+    SELECT employee_number, role, role_locked, active
+    FROM portal_users WHERE employee_number = ?
+  `).get(String(employeeNumber || ""));
+  if (!target) return;
+  assertPortalUserIsMutable(target, normalizedActor);
+  if (!actorCanManagePortalRole(normalizedActor, target.role)) {
+    auditPortal(normalizedActor.employeeNumber, "employee.destructive-mutation.denied", "employee", target.employee_number,
+      JSON.stringify({ targetRole: target.role }));
+    throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
+  }
+  if (target.role === "admin" && target.active) {
+    const otherSystemOwners = Number(db.prepare(`
+      SELECT COUNT(*) AS count FROM portal_users
+      WHERE role IN ('developer','admin') AND active = 1 AND employee_number <> ?
+    `).get(target.employee_number).count);
+    if (!otherSystemOwners) {
+      throw httpError(409, "Mindestens ein aktiver Developer- oder Admin-Zugang muss bestehen bleiben.", "PORTAL_SYSTEM_OWNER_REQUIRED");
+    }
   }
 }
 
@@ -6899,6 +7132,9 @@ function validatePersonnelAccessProfile(actor, payload, employee = {}) {
   const permissions = submittedPermissions.filter((permission) => !rolePermissions.has(permission));
   const homeLocationId = String(employee.homeLocationId || employee.home_location_id || "").trim();
   const preferredDepartmentId = Number(employee.preferredDepartmentId || employee.preferred_department_id || 0) || null;
+  if (["manager", "department_manager"].includes(role) && !homeLocationId) {
+    throw httpError(400, "Für eine Leitungsrolle muss zuerst eine Stammfiliale hinterlegt werden.", "PORTAL_SCOPE_REQUIRED");
+  }
   if (role === "department_manager" && !preferredDepartmentId) {
     throw httpError(400, "Für eine Abteilungsleitung muss zuerst eine bevorzugte Abteilung hinterlegt werden.", "PORTAL_SCOPE_REQUIRED");
   }
@@ -10049,9 +10285,115 @@ function settingEnabled(settings, key) {
   return settings[key] === "1";
 }
 
+const costCenterTypeCatalog = Object.freeze([
+  { id: "branch", label: "Filiale" },
+  { id: "administration", label: "Verwaltung" },
+  { id: "production", label: "Produktion" },
+  { id: "other", label: "Sonstiges" },
+]);
+const costCenterTypes = new Set(costCenterTypeCatalog.map((entry) => entry.id));
+
+function serializeCostCenter(row) {
+  return {
+    id: String(row.id),
+    code: String(row.code || ""),
+    name: String(row.name || ""),
+    type: costCenterTypes.has(row.type) ? row.type : "other",
+    description: String(row.description || ""),
+    active: Boolean(row.active),
+    sortOrder: Number(row.sort_order || 0),
+    employeeCount: Number(row.employee_count || 0),
+    activeEmployeeCount: Number(row.active_employee_count || 0),
+    locationCount: Number(row.location_count || 0),
+    createdBy: String(row.created_by || ""),
+    updatedBy: String(row.updated_by || ""),
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function getCostCenters(includeInactive = true) {
+  return db.prepare(`
+    SELECT c.*,
+      (SELECT COUNT(*) FROM employees e WHERE e.cost_center_id = c.id) AS employee_count,
+      (SELECT COUNT(*) FROM employees e WHERE e.cost_center_id = c.id AND e.active = 1) AS active_employee_count,
+      (SELECT COUNT(*) FROM locations l WHERE l.cost_center_id = c.id) AS location_count
+    FROM cost_centers c
+    ${includeInactive ? "" : "WHERE c.active = 1"}
+    ORDER BY c.active DESC, c.sort_order, c.code COLLATE NOCASE
+  `).all().map(serializeCostCenter);
+}
+
+function validateCostCenterExists(value, options = {}) {
+  const id = String(value || "").trim();
+  if (!id) throw httpError(400, "Bitte eine Kostenstelle auswählen.", "COST_CENTER_REQUIRED");
+  const row = db.prepare("SELECT * FROM cost_centers WHERE id = ?").get(id);
+  if (!row) throw httpError(404, "Die Kostenstelle wurde nicht gefunden.", "COST_CENTER_NOT_FOUND");
+  if (!options.allowInactive && !row.active) {
+    throw httpError(409, "Die Kostenstelle ist archiviert und kann nicht neu zugeordnet werden.", "COST_CENTER_INACTIVE");
+  }
+  return row;
+}
+
+function validateCostCenterPayload(body = {}, existing = null) {
+  const code = String(body.code ?? existing?.code ?? "").trim().toUpperCase();
+  const name = String(body.name ?? existing?.name ?? "").trim().replace(/\s+/g, " ");
+  const type = String(body.type ?? existing?.type ?? "other").trim();
+  const description = String(body.description ?? existing?.description ?? "").trim();
+  const active = body.active === undefined ? Boolean(existing?.active ?? true) : body.active !== false;
+  const sortOrder = Number(body.sortOrder ?? body.sort_order ?? existing?.sort_order ?? 0);
+  if (!/^[A-Z0-9][A-Z0-9._-]{0,29}$/.test(code)) {
+    throw httpError(400, "Der Kostenstellencode muss aus 1 bis 30 Buchstaben, Ziffern, Punkten, Strichen oder Unterstrichen bestehen.", "COST_CENTER_CODE_INVALID");
+  }
+  if (!name || name.length > 100) {
+    throw httpError(400, "Der Name der Kostenstelle muss 1 bis 100 Zeichen lang sein.", "COST_CENTER_NAME_INVALID");
+  }
+  if (!costCenterTypes.has(type)) throw httpError(400, "Der Kostenstellentyp ist ungültig.", "COST_CENTER_TYPE_INVALID");
+  if (description.length > 500) throw httpError(400, "Die Beschreibung darf höchstens 500 Zeichen lang sein.", "COST_CENTER_DESCRIPTION_INVALID");
+  if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 9999) {
+    throw httpError(400, "Die Sortierung der Kostenstelle muss zwischen 0 und 9999 liegen.", "COST_CENTER_SORT_INVALID");
+  }
+  return { code, name, type, description, active: active ? 1 : 0, sortOrder };
+}
+
+function defaultCostCenterId(locationId = "") {
+  const locationCostCenter = locationId ? db.prepare(`
+    SELECT c.id FROM locations l JOIN cost_centers c ON c.id = l.cost_center_id
+    WHERE l.id = ? AND c.active = 1
+  `).get(String(locationId))?.id : "";
+  return locationCostCenter
+    || db.prepare("SELECT id FROM cost_centers WHERE active = 1 AND type = 'administration' ORDER BY sort_order, code LIMIT 1").get()?.id
+    || db.prepare("SELECT id FROM cost_centers WHERE active = 1 ORDER BY sort_order, code LIMIT 1").get()?.id
+    || "";
+}
+
+function ensureBranchCostCenterForLocation(location, actor = "system") {
+  const code = `FIL${String(location.id || "").toUpperCase()}`;
+  const existing = db.prepare("SELECT id FROM cost_centers WHERE code = ? COLLATE NOCASE").get(code);
+  if (existing) return existing.id;
+  let id = `cc-location-${location.id}`;
+  if (db.prepare("SELECT 1 FROM cost_centers WHERE id = ?").get(id)) id = `cc-${crypto.randomUUID()}`;
+  db.prepare(`
+    INSERT INTO cost_centers
+      (id, code, name, type, description, active, sort_order, created_by, updated_by)
+    VALUES (?, ?, ?, 'branch', '', 1, ?, ?, ?)
+  `).run(id, code, String(location.name || code), 100 + (Number(location.id) || 0), actor, actor);
+  auditPortal(actor, "cost-center.create", "cost_center", id, JSON.stringify({ code, type: "branch", automatic: true }));
+  return id;
+}
+
+function sessionCanManageCentralPersonnel(session, permission = "personnel:central:write") {
+  if (!getPortalStatus().portalEnabled) return true;
+  return Boolean(session && RIGHTS_ADMIN_PORTAL_ROLES.has(session.role) && session.permissions?.includes(permission));
+}
+
 function serializeLocation(row, departments = []) {
   return {
     ...row,
+    cost_center_id: row.cost_center_id || "",
+    cost_center_code: row.cost_center_code || "",
+    cost_center_name: row.cost_center_name || "",
+    cost_center_type: row.cost_center_type || "",
     min_staff: Number(row.min_staff || 0),
     day_settings: daySettingsFromLocation(row.id),
     time_tracking_enabled: Boolean(row.time_tracking_enabled),
@@ -10090,12 +10432,14 @@ function getPositions() {
 function getLocations(includeInactive = true) {
   const locationRows = db
     .prepare(`
-      SELECT id, name, min_staff, day_settings_json, time_tracking_enabled,
-             time_tracking_access_mode, time_tracking_allowed_networks, time_tracking_variance_minutes,
-             active, created_at
-      FROM locations
-      ${includeInactive ? "" : "WHERE active = 1"}
-      ORDER BY active DESC, id
+      SELECT l.id, l.name, l.cost_center_id, c.code AS cost_center_code, c.name AS cost_center_name,
+             c.type AS cost_center_type, l.min_staff, l.day_settings_json, l.time_tracking_enabled,
+             l.time_tracking_access_mode, l.time_tracking_allowed_networks, l.time_tracking_variance_minutes,
+             l.active, l.created_at
+      FROM locations l
+      LEFT JOIN cost_centers c ON c.id = l.cost_center_id
+      ${includeInactive ? "" : "WHERE l.active = 1"}
+      ORDER BY l.active DESC, l.id
     `)
     .all();
   const departmentRows = db
@@ -10145,7 +10489,7 @@ function normalizeDepartmentId(value, allowEmpty = true) {
 
 function validateLocationExists(locationId) {
   const location = db.prepare(`
-    SELECT id, name, min_staff, time_tracking_enabled, time_tracking_access_mode,
+    SELECT id, name, cost_center_id, min_staff, time_tracking_enabled, time_tracking_access_mode,
            time_tracking_allowed_networks, time_tracking_variance_minutes, active
     FROM locations WHERE id = ?
   `).get(locationId);
@@ -10198,6 +10542,9 @@ function validateLocationPayload(body, isNew = false) {
   if (!Number.isInteger(timeTrackingVarianceMinutes) || timeTrackingVarianceMinutes < 0 || timeTrackingVarianceMinutes > 240) {
     throw httpError(400, "Die Toleranz der Zeiterfassung muss zwischen 0 und 240 Minuten liegen.");
   }
+  const costCenterSubmitted = own(body, "costCenterId") || own(body, "cost_center_id");
+  const costCenterId = costCenterSubmitted ? String(body.costCenterId ?? body.cost_center_id ?? "").trim() : "";
+  if (costCenterSubmitted) validateCostCenterExists(costCenterId);
   return {
     id,
     name,
@@ -10207,7 +10554,9 @@ function validateLocationPayload(body, isNew = false) {
     timeTrackingAccessMode,
     timeTrackingAllowedNetworks: normalizeTimeTrackingNetworks(body.timeTrackingAllowedNetworks ?? body.time_tracking_allowed_networks),
     timeTrackingVarianceMinutes,
-    active: body.active === false ? 0 : 1,
+    costCenterSubmitted,
+    costCenterId,
+    active: body.active === false || body.active === 0 ? 0 : 1,
   };
 }
 
@@ -11159,6 +11508,10 @@ function serializeEmployee(row, options = {}) {
     home_location_name: row.home_location_name || "",
     preferred_department_id: row.preferred_department_id ? Number(row.preferred_department_id) : null,
     preferred_department_name: row.preferred_department_name || "",
+    cost_center_id: row.cost_center_id || "",
+    cost_center_code: row.cost_center_code || "",
+    cost_center_name: row.cost_center_name || "",
+    cost_center_type: row.cost_center_type || "",
     active: Boolean(row.active),
     sickness_without_aum_enabled: Boolean(row.sickness_without_aum_enabled),
   };
@@ -11184,10 +11537,22 @@ function validateEmployee(body, isNew, options = {}) {
   const sicknessWithoutAumEnabled = body.sicknessWithoutAumEnabled === true
     || body.sickness_without_aum_enabled === true || Number(body.sickness_without_aum_enabled) === 1;
   const allowedPreferredDays = ["", "monday", "tuesday", "wednesday", "thursday", "friday"];
-  const homeLocationId = normalizeLocationId(body.homeLocationId || body.home_location_id || "01");
-  validateLocationExists(homeLocationId);
+  const homeLocationSubmitted = own(body, "homeLocationId") || own(body, "home_location_id");
+  const homeLocationValue = homeLocationSubmitted
+    ? String(body.homeLocationId ?? body.home_location_id ?? "").trim()
+    : String(options.defaultHomeLocationId ?? (isNew ? "01" : "")).trim();
+  const homeLocationId = homeLocationValue ? normalizeLocationId(homeLocationValue) : null;
+  if (homeLocationId) validateLocationExists(homeLocationId);
   const preferredDepartmentId = normalizeDepartmentId(body.preferredDepartmentId ?? body.preferred_department_id, true);
+  if (preferredDepartmentId && !homeLocationId) {
+    throw httpError(400, "Ohne Stammfiliale kann keine bevorzugte Abteilung zugeordnet werden.", "EMPLOYEE_DEPARTMENT_WITHOUT_LOCATION");
+  }
   if (preferredDepartmentId) validateDepartmentExists(preferredDepartmentId, homeLocationId);
+  const costCenterSubmitted = own(body, "costCenterId") || own(body, "cost_center_id");
+  const costCenterId = costCenterSubmitted
+    ? String(body.costCenterId ?? body.cost_center_id ?? "").trim()
+    : String(options.defaultCostCenterId || defaultCostCenterId(homeLocationId)).trim();
+  validateCostCenterExists(costCenterId, { allowInactive: costCenterId === options.allowInactiveCostCenterId });
   if (!db.prepare("SELECT 1 FROM positions WHERE id = ?").get(positionId)) {
     throw httpError(400, "Bitte eine gültige Position auswählen.");
   }
@@ -11223,9 +11588,10 @@ function validateEmployee(body, isNew, options = {}) {
     timeConfirmationLevel,
     sicknessWithoutAumEnabled: sicknessWithoutAumEnabled ? 1 : 0,
     homeLocationId,
-    preferredDepartmentId,
-    active: body.active === false ? 0 : 1,
-  };
+      preferredDepartmentId,
+      costCenterId,
+      active: body.active === false || body.active === 0 ? 0 : 1,
+    };
 }
 
 function validateShift(body) {
@@ -12727,8 +13093,12 @@ function integrationProfileById(id, direction = "", kind = "", options = {}) {
 }
 
 function personnelImportReferenceData(actor = null) {
+  const centralPersonnelAccess = sessionCanManageCentralPersonnel(actor);
   return {
     positions: getPositions().map((position) => ({ id: position.id, name: position.name, active: true })),
+    costCenters: (centralPersonnelAccess ? getCostCenters(true) : []).map((costCenter) => ({
+      id: costCenter.id, code: costCenter.code, name: costCenter.name, type: costCenter.type, active: costCenter.active,
+    })),
     locations: getLocationsForSession(actor, true).map((location) => ({
       id: location.id,
       name: location.name,
@@ -12743,7 +13113,7 @@ function employeeImportRow(personnelNumber) {
     SELECT personnel_number, full_name, nickname, color, contracted_hours, target_workdays_per_week,
            preferred_day_off, fixed_workdays, position_id, time_confirmation_level,
            sickness_without_aum_enabled, home_location_id,
-           preferred_department_id, active
+           preferred_department_id, cost_center_id, active
     FROM employees WHERE personnel_number = ?
   `).get(personnelNumber);
 }
@@ -12753,7 +13123,7 @@ function employeeImportRowsCaseInsensitive(personnelNumber) {
     SELECT personnel_number, full_name, nickname, color, contracted_hours, target_workdays_per_week,
            preferred_day_off, fixed_workdays, position_id, time_confirmation_level,
            sickness_without_aum_enabled, home_location_id,
-           preferred_department_id, active
+           preferred_department_id, cost_center_id, active
     FROM employees WHERE personnel_number = ? COLLATE NOCASE
     ORDER BY personnel_number
   `).all(personnelNumber);
@@ -12766,7 +13136,7 @@ function employeeImportFingerprint(row) {
     normalizeTargetWorkdays(row.target_workdays_per_week), row.preferred_day_off || "",
     row.fixed_workdays || "", row.position_id || "", row.time_confirmation_level || "C",
     Number(row.sickness_without_aum_enabled || 0), row.home_location_id || "",
-    Number(row.preferred_department_id || 0), Number(row.active || 0),
+    Number(row.preferred_department_id || 0), row.cost_center_id || "", Number(row.active || 0),
   ]));
 }
 
@@ -12784,6 +13154,7 @@ function importFieldMapped(mapping, ...fields) {
 
 function resolvePersonnelImportCandidate(incoming, mapping, existing, actor) {
   const creating = !existing;
+  const centralPersonnelAccess = sessionCanManageCentralPersonnel(actor);
   if (existing) {
     assertSessionContextScope(actor, {
       locationId: existing.home_location_id,
@@ -12804,6 +13175,7 @@ function resolvePersonnelImportCandidate(incoming, mapping, existing, actor) {
     sicknessWithoutAumEnabled: Boolean(existing.sickness_without_aum_enabled),
     homeLocationId: existing.home_location_id,
     preferredDepartmentId: existing.preferred_department_id || "",
+    costCenterId: existing.cost_center_id,
     active: Boolean(existing.active),
   } : {
     personnelNumber: incoming.personnelNumber,
@@ -12819,6 +13191,7 @@ function resolvePersonnelImportCandidate(incoming, mapping, existing, actor) {
     sicknessWithoutAumEnabled: false,
     homeLocationId: incoming.homeLocationId,
     preferredDepartmentId: incoming.preferredDepartmentId,
+    costCenterId: incoming.costCenterId,
     active: incoming.active,
   };
   const use = (field) => creating || importFieldMapped(mapping, field);
@@ -12838,10 +13211,18 @@ function resolvePersonnelImportCandidate(incoming, mapping, existing, actor) {
     base.positionId = position.id;
   }
   if (creating || importFieldMapped(mapping, "homeLocationId", "homeLocationName")) {
-    const location = incoming.homeLocationId && references.locations.find((item) => item.id === incoming.homeLocationId)
-      || (incoming.homeLocationName ? uniqueReferenceByName(references.locations, incoming.homeLocationName, "Der Standort") : null);
-    if (!location) throw httpError(400, "Bitte einen g\u00fcltigen Standardstandort ausw\u00e4hlen.", "IMPORT_LOCATION_REQUIRED");
-    base.homeLocationId = location.id;
+    const hasLocationReference = Boolean(incoming.homeLocationId || incoming.homeLocationName);
+    if (!hasLocationReference) {
+      if (!centralPersonnelAccess) {
+        throw httpError(400, "Bitte einen g\u00fcltigen Standardstandort ausw\u00e4hlen.", "IMPORT_LOCATION_REQUIRED");
+      }
+      base.homeLocationId = "";
+    } else {
+      const location = incoming.homeLocationId && references.locations.find((item) => item.id === incoming.homeLocationId)
+        || (incoming.homeLocationName ? uniqueReferenceByName(references.locations, incoming.homeLocationName, "Der Standort") : null);
+      if (!location) throw httpError(400, "Bitte einen g\u00fcltigen Standardstandort ausw\u00e4hlen.", "IMPORT_LOCATION_REQUIRED");
+      base.homeLocationId = location.id;
+    }
   }
   if (creating || importFieldMapped(mapping, "preferredDepartmentId", "preferredDepartmentName")) {
     const location = references.locations.find((item) => item.id === base.homeLocationId);
@@ -12854,7 +13235,28 @@ function resolvePersonnelImportCandidate(incoming, mapping, existing, actor) {
       base.preferredDepartmentId = department.id;
     }
   }
-  const candidate = validateEmployee(base, creating, { defaultTimeConfirmationLevel: existing?.time_confirmation_level || "C" });
+  if (creating || importFieldMapped(mapping, "costCenterId")) {
+    if (importFieldMapped(mapping, "costCenterId") && !centralPersonnelAccess) {
+      throw httpError(403, "Kostenstellen können nur in der zentralen Personalverwaltung importiert werden.", "PERSONNEL_CENTRAL_WRITE_REQUIRED");
+    }
+    const submittedCostCenterId = String(incoming.costCenterId || "").trim();
+    if (submittedCostCenterId) {
+      const costCenter = references.costCenters.find((item) => item.id === submittedCostCenterId);
+      if (!costCenter) throw httpError(400, "Bitte eine gültige Kostenstellen-ID zuordnen.", "IMPORT_COST_CENTER_INVALID");
+      base.costCenterId = costCenter.id;
+    } else {
+      base.costCenterId = defaultCostCenterId(base.homeLocationId);
+    }
+  }
+  const candidate = validateEmployee(base, creating, {
+    defaultTimeConfirmationLevel: existing?.time_confirmation_level || "C",
+    defaultHomeLocationId: existing?.home_location_id || "",
+    defaultCostCenterId: existing?.cost_center_id || defaultCostCenterId(base.homeLocationId),
+    allowInactiveCostCenterId: existing?.cost_center_id || "",
+  });
+  if (existing && existing.active && !candidate.active) {
+    assertEmployeeDestructiveMutationAllowed(actor, existing.personnel_number);
+  }
   assertSessionContextScope(actor, { locationId: candidate.homeLocationId, departmentId: candidate.preferredDepartmentId });
   return candidate;
 }
@@ -12933,6 +13335,7 @@ function personnelImportPreview(actor, inspection, body = {}) {
           sickness_without_aum_enabled: candidate.sicknessWithoutAumEnabled,
           home_location_id: candidate.homeLocationId,
           preferred_department_id: candidate.preferredDepartmentId,
+          cost_center_id: candidate.costCenterId,
           active: candidate.active,
         })) {
           action = "skip";
@@ -13010,13 +13413,13 @@ function applyPersonnelImport(actor, preview) {
     INSERT INTO employees
       (personnel_number, full_name, nickname, color, contracted_hours, target_workdays_per_week,
        preferred_day_off, fixed_workdays, position_id, time_confirmation_level, sickness_without_aum_enabled,
-       home_location_id, preferred_department_id, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       home_location_id, preferred_department_id, cost_center_id, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const updateEmployee = db.prepare(`
     UPDATE employees SET full_name = ?, nickname = ?, color = ?, contracted_hours = ?, target_workdays_per_week = ?,
       preferred_day_off = ?, fixed_workdays = ?, position_id = ?, time_confirmation_level = ?,
-      sickness_without_aum_enabled = ?, home_location_id = ?, preferred_department_id = ?, active = ?
+      sickness_without_aum_enabled = ?, home_location_id = ?, preferred_department_id = ?, cost_center_id = ?, active = ?
     WHERE personnel_number = ?
   `);
   const runId = crypto.randomUUID();
@@ -13040,16 +13443,22 @@ function applyPersonnelImport(actor, preview) {
       }
       const validated = validateEmployee(candidate, row.action === "create", { defaultTimeConfirmationLevel: candidate.timeConfirmationLevel || "C" });
       assertSessionContextScope(actor, { locationId: validated.homeLocationId, departmentId: validated.preferredDepartmentId });
+      if (row.action === "update" && current.active && !validated.active) {
+        assertEmployeeDestructiveMutationAllowed(actor, current.personnel_number);
+      }
       if (row.action === "create") {
         createEmployee.run(validated.personnelNumber, validated.fullName, validated.nickname, validated.color,
           validated.contractedHours, validated.targetWorkdaysPerWeek, validated.preferredDayOff, validated.fixedWorkdays,
           validated.positionId, validated.timeConfirmationLevel, validated.sicknessWithoutAumEnabled,
-          validated.homeLocationId, validated.preferredDepartmentId, validated.active);
+          validated.homeLocationId, validated.preferredDepartmentId, validated.costCenterId, validated.active);
       } else {
         updateEmployee.run(validated.fullName, validated.nickname, validated.color, validated.contractedHours,
           validated.targetWorkdaysPerWeek, validated.preferredDayOff, validated.fixedWorkdays, validated.positionId,
           validated.timeConfirmationLevel, validated.sicknessWithoutAumEnabled, validated.homeLocationId,
-          validated.preferredDepartmentId, validated.active, validated.personnelNumber);
+          validated.preferredDepartmentId, validated.costCenterId, validated.active, validated.personnelNumber);
+        if (current.active && !validated.active) {
+          deactivateEmployeePortalAccess(validated.personnelNumber);
+        }
       }
     }
     insertIntegrationRun({
@@ -14939,13 +15348,19 @@ app.post("/api/locations", (request, response) => {
     || location.timeTrackingAllowedNetworks || location.timeTrackingVarianceMinutes !== 15) {
     assertRequestPermission(request, "time:settings");
   }
+  if (location.costCenterSubmitted) requireAdminHrOrLocal(request, "cost_centers:write");
+  const actor = request.portalSession?.employeeNumber || "local";
+  db.exec("BEGIN IMMEDIATE");
   try {
+    const costCenterId = location.costCenterSubmitted
+      ? validateCostCenterExists(location.costCenterId).id
+      : ensureBranchCostCenterForLocation(location, actor);
     db.prepare(`
       INSERT INTO locations
-        (id, name, min_staff, day_settings_json, time_tracking_enabled, time_tracking_access_mode,
+        (id, name, cost_center_id, min_staff, day_settings_json, time_tracking_enabled, time_tracking_access_mode,
          time_tracking_allowed_networks, time_tracking_variance_minutes, active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(location.id, location.name, location.minStaff, JSON.stringify(location.daySettings), location.timeTrackingEnabled,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(location.id, location.name, costCenterId, location.minStaff, JSON.stringify(location.daySettings), location.timeTrackingEnabled,
       location.timeTrackingAccessMode, location.timeTrackingAllowedNetworks, location.timeTrackingVarianceMinutes, location.active);
     if (!sessionHasGlobalScope(request.portalSession)) {
       db.prepare(`
@@ -14954,7 +15369,11 @@ app.post("/api/locations", (request, response) => {
       `).run(request.portalSession.employeeNumber, location.id, request.portalSession.employeeNumber);
       request.portalSession.scopes = [...(request.portalSession.scopes || []), { locationId: location.id, departmentId: null }];
     }
+    auditPortal(actor, "location.cost-center.assign", "location", location.id,
+      JSON.stringify({ costCenterBefore: null, costCenterAfter: costCenterId }));
+    db.exec("COMMIT");
   } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
     if (String(error.message).includes("UNIQUE")) throw httpError(409, "Diese Filial-ID ist bereits vergeben.");
     throw error;
   }
@@ -14978,14 +15397,20 @@ app.put("/api/locations/:id", (request, response) => {
     || String(current.time_tracking_allowed_networks || "") !== location.timeTrackingAllowedNetworks
     || Number(current.time_tracking_variance_minutes ?? 15) !== location.timeTrackingVarianceMinutes;
   if (timeSettingsChanged) assertRequestPermission(request, "time:settings");
+  const costCenterId = location.costCenterSubmitted ? location.costCenterId : current.cost_center_id;
+  if (costCenterId !== current.cost_center_id) requireAdminHrOrLocal(request, "cost_centers:write");
   const result = db.prepare(`
     UPDATE locations
-    SET name = ?, min_staff = ?, day_settings_json = ?, time_tracking_enabled = ?,
+    SET name = ?, cost_center_id = ?, min_staff = ?, day_settings_json = ?, time_tracking_enabled = ?,
         time_tracking_access_mode = ?, time_tracking_allowed_networks = ?, time_tracking_variance_minutes = ?, active = ?
     WHERE id = ?
-  `).run(location.name, location.minStaff, JSON.stringify(location.daySettings), location.timeTrackingEnabled,
+  `).run(location.name, costCenterId, location.minStaff, JSON.stringify(location.daySettings), location.timeTrackingEnabled,
     location.timeTrackingAccessMode, location.timeTrackingAllowedNetworks, location.timeTrackingVarianceMinutes, location.active, id);
   if (!result.changes) throw httpError(404, "Die Filiale wurde nicht gefunden.");
+  if (costCenterId !== current.cost_center_id) {
+    auditPortal(request.portalSession?.employeeNumber || "local", "location.cost-center.assign", "location", id,
+      JSON.stringify({ costCenterBefore: current.cost_center_id || null, costCenterAfter: costCenterId }));
+  }
   response.json(getLocationsForSession(request.portalSession, true));
 });
 
@@ -15033,6 +15458,134 @@ app.put("/api/departments/:id", (request, response) => {
     throw error;
   }
   response.json(getLocationsForSession(request.portalSession, true));
+});
+
+function assertCostCenterCanBeArchived(id) {
+  const assignments = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM employees WHERE cost_center_id = ?) AS employees,
+      (SELECT COUNT(*) FROM locations WHERE cost_center_id = ?) AS locations
+  `).get(id, id);
+  if (Number(assignments.employees || 0) || Number(assignments.locations || 0)) {
+    const error = httpError(409, "Eine belegte Kostenstelle kann nicht archiviert werden. Bitte zuerst alle Beschäftigten und Standorte neu zuordnen.", "COST_CENTER_IN_USE");
+    error.details = { employees: Number(assignments.employees || 0), locations: Number(assignments.locations || 0) };
+    throw error;
+  }
+}
+
+app.get("/api/cost-centers", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "cost_centers:read");
+  response.json({
+    costCenters: getCostCenters(request.query.includeInactive !== "0"),
+    types: costCenterTypeCatalog,
+    canWrite: sessionCanManageCentralPersonnel(actor, "cost_centers:write"),
+  });
+});
+
+app.post("/api/cost-centers", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "cost_centers:write");
+  const value = validateCostCenterPayload(request.body || {});
+  const id = `cc-${crypto.randomUUID()}`;
+  try {
+    db.prepare(`
+      INSERT INTO cost_centers
+        (id, code, name, type, description, active, sort_order, created_by, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, value.code, value.name, value.type, value.description, value.active, value.sortOrder,
+      actor.employeeNumber, actor.employeeNumber);
+  } catch (error) {
+    if (String(error.message).includes("UNIQUE")) {
+      throw httpError(409, "Dieser Kostenstellencode ist bereits vergeben.", "COST_CENTER_DUPLICATE");
+    }
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "cost-center.create", "cost_center", id,
+    JSON.stringify({ code: value.code, type: value.type, active: Boolean(value.active) }));
+  response.status(201).json({ costCenter: getCostCenters(true).find((entry) => entry.id === id) });
+});
+
+app.put("/api/cost-centers/:id", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "cost_centers:write");
+  const id = String(request.params.id || "").trim();
+  const existing = db.prepare("SELECT * FROM cost_centers WHERE id = ?").get(id);
+  if (!existing) throw httpError(404, "Die Kostenstelle wurde nicht gefunden.", "COST_CENTER_NOT_FOUND");
+  if (own(request.body || {}, "code")
+    && String(request.body.code || "").trim().toUpperCase() !== String(existing.code || "").trim().toUpperCase()) {
+    throw httpError(409, "Der Kostenstellencode bleibt nach dem Anlegen unveränderlich.", "COST_CENTER_CODE_IMMUTABLE");
+  }
+  const value = validateCostCenterPayload(request.body || {}, existing);
+  if (existing.active && !value.active) assertCostCenterCanBeArchived(id);
+  try {
+    db.prepare(`
+      UPDATE cost_centers
+      SET code = ?, name = ?, type = ?, description = ?, active = ?, sort_order = ?,
+          updated_by = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(value.code, value.name, value.type, value.description, value.active, value.sortOrder,
+      actor.employeeNumber, id);
+  } catch (error) {
+    if (String(error.message).includes("UNIQUE")) {
+      throw httpError(409, "Dieser Kostenstellencode ist bereits vergeben.", "COST_CENTER_DUPLICATE");
+    }
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "cost-center.update", "cost_center", id, JSON.stringify({
+    codeBefore: existing.code,
+    codeAfter: value.code,
+    typeBefore: existing.type,
+    typeAfter: value.type,
+    activeBefore: Boolean(existing.active),
+    activeAfter: Boolean(value.active),
+  }));
+  response.json({ costCenter: getCostCenters(true).find((entry) => entry.id === id) });
+});
+
+app.delete("/api/cost-centers/:id", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "cost_centers:write");
+  const id = String(request.params.id || "").trim();
+  const existing = db.prepare("SELECT * FROM cost_centers WHERE id = ?").get(id);
+  if (!existing) throw httpError(404, "Die Kostenstelle wurde nicht gefunden.", "COST_CENTER_NOT_FOUND");
+  if (existing.active) assertCostCenterCanBeArchived(id);
+  db.prepare(`
+    UPDATE cost_centers SET active = 0, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+  `).run(actor.employeeNumber, id);
+  auditPortal(actor.employeeNumber, "cost-center.archive", "cost_center", id,
+    JSON.stringify({ code: existing.code, activeBefore: Boolean(existing.active), activeAfter: false }));
+  response.status(204).end();
+});
+
+app.get("/api/personnel-directory", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "personnel:central:read");
+  const employees = db.prepare(`
+    SELECT e.personnel_number, e.full_name, e.nickname, e.color, e.contracted_hours,
+           e.target_workdays_per_week, e.preferred_day_off, e.fixed_workdays, e.position_id,
+           e.time_confirmation_level, e.sickness_without_aum_enabled,
+           e.home_location_id, e.preferred_department_id, e.cost_center_id, e.active,
+           l.name AS home_location_name, d.name AS preferred_department_name, p.name AS position_name,
+           c.code AS cost_center_code, c.name AS cost_center_name, c.type AS cost_center_type,
+           u.role AS portal_role, r.name AS portal_role_name,
+           CASE WHEN u.employee_number IS NULL THEN 0 ELSE 1 END AS portal_configured,
+           CASE WHEN u.active = 1 THEN 1 ELSE 0 END AS portal_active
+    FROM employees e
+    LEFT JOIN locations l ON l.id = e.home_location_id
+    LEFT JOIN departments d ON d.id = e.preferred_department_id
+    LEFT JOIN positions p ON p.id = e.position_id
+    LEFT JOIN cost_centers c ON c.id = e.cost_center_id
+    LEFT JOIN portal_users u ON u.employee_number = e.personnel_number
+    LEFT JOIN portal_roles r ON r.id = u.role
+    ORDER BY e.active DESC, c.sort_order, c.code COLLATE NOCASE,
+             CAST(e.personnel_number AS INTEGER), e.personnel_number
+  `).all().map((row) => ({
+    ...serializeEmployee(row, {
+      includeTimeConfirmationLevel: sessionCanViewTimeConfirmationLevel(actor),
+      includeSicknessAllowance: sessionCanManageTimeConfirmationLevel(actor),
+    }),
+    portal_role: row.portal_role || "employee",
+    portal_role_name: row.portal_role_name || "Mitarbeiter",
+    portal_configured: Boolean(row.portal_configured),
+    portal_active: Boolean(row.portal_active),
+  }));
+  response.json({ employees, costCenters: getCostCenters(true) });
 });
 
 function positionSlug(name) {
@@ -15111,13 +15664,15 @@ app.get("/api/employees", (request, response) => {
         SELECT e.personnel_number, e.full_name, e.nickname, e.color, e.contracted_hours,
                e.target_workdays_per_week, e.preferred_day_off, e.fixed_workdays, e.position_id,
                e.time_confirmation_level, e.sickness_without_aum_enabled,
-               e.home_location_id, e.preferred_department_id,
+               e.home_location_id, e.preferred_department_id, e.cost_center_id,
                e.active, l.name AS home_location_name, d.name AS preferred_department_name,
-               p.name AS position_name
+               p.name AS position_name, c.code AS cost_center_code, c.name AS cost_center_name,
+               c.type AS cost_center_type
         FROM employees e
         LEFT JOIN locations l ON l.id = e.home_location_id
         LEFT JOIN departments d ON d.id = e.preferred_department_id
         LEFT JOIN positions p ON p.id = e.position_id
+        LEFT JOIN cost_centers c ON c.id = e.cost_center_id
         ORDER BY e.active DESC, CAST(e.personnel_number AS INTEGER), e.personnel_number
       `)
       .all().map((row) => ({
@@ -15137,6 +15692,16 @@ app.get("/api/employees", (request, response) => {
 });
 
 app.post("/api/employees", (request, response) => {
+  const centralWrite = sessionCanManageCentralPersonnel(request.portalSession);
+  const homeLocationSubmitted = own(request.body, "homeLocationId") || own(request.body, "home_location_id");
+  const submittedHomeLocation = String(request.body.homeLocationId ?? request.body.home_location_id ?? "").trim();
+  const costCenterSubmitted = own(request.body, "costCenterId") || own(request.body, "cost_center_id");
+  if (!centralWrite && homeLocationSubmitted && !submittedHomeLocation) {
+    throw httpError(403, "Filialunabhängige Beschäftigte können nur in der zentralen Personalverwaltung angelegt werden.", "PERSONNEL_CENTRAL_WRITE_REQUIRED");
+  }
+  if (!centralWrite && costCenterSubmitted) {
+    throw httpError(403, "Kostenstellen können nur in der zentralen Personalverwaltung zugeordnet werden.", "PERSONNEL_CENTRAL_WRITE_REQUIRED");
+  }
   const employee = validateEmployee(request.body, true);
   const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
   if (!canManageTimeConfirmationLevel) {
@@ -15158,8 +15723,8 @@ app.post("/api/employees", (request, response) => {
       INSERT INTO employees
         (personnel_number, full_name, nickname, color, contracted_hours, target_workdays_per_week,
          preferred_day_off, fixed_workdays, position_id, time_confirmation_level, sickness_without_aum_enabled,
-         home_location_id, preferred_department_id, active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         home_location_id, preferred_department_id, cost_center_id, active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       employee.personnelNumber,
       employee.fullName,
@@ -15174,9 +15739,13 @@ app.post("/api/employees", (request, response) => {
       employee.sicknessWithoutAumEnabled,
       employee.homeLocationId,
       employee.preferredDepartmentId,
+      employee.costCenterId,
       employee.active,
     );
     applyPersonnelAccessProfile(request.portalSession, accessProfile);
+    if (!employee.active) {
+      deactivateEmployeePortalAccess(employee.personnelNumber);
+    }
     persistPersonnelRecordMutation(personnelRecordMutation, "create");
     db.exec("COMMIT");
   } catch (error) {
@@ -15187,6 +15756,7 @@ app.post("/api/employees", (request, response) => {
   auditPortal(request.portalSession?.employeeNumber || "local", "employee.create", "employee", employee.personnelNumber,
     JSON.stringify({
       timeConfirmationLevel: employee.timeConfirmationLevel,
+      costCenterId: employee.costCenterId,
       personnelRecordFields: personnelRecordMutation?.changedFields || [],
     }));
   reconcileOpenAmuResponsibilities(request.portalSession?.employeeNumber || "local");
@@ -15210,10 +15780,22 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
   }
   assertSessionEmployeeScope(request.portalSession, personnelNumber);
   const existing = db.prepare(`
-    SELECT time_confirmation_level, sickness_without_aum_enabled, target_workdays_per_week
+    SELECT time_confirmation_level, sickness_without_aum_enabled, target_workdays_per_week,
+           home_location_id, preferred_department_id, cost_center_id, active
     FROM employees WHERE personnel_number = ?
   `).get(personnelNumber);
   if (!existing) throw httpError(404, "Die Person wurde nicht gefunden.");
+  const centralWrite = sessionCanManageCentralPersonnel(request.portalSession);
+  const homeLocationSubmitted = own(request.body, "homeLocationId") || own(request.body, "home_location_id");
+  const submittedHomeLocation = String(request.body.homeLocationId ?? request.body.home_location_id ?? existing.home_location_id ?? "").trim();
+  const costCenterSubmitted = own(request.body, "costCenterId") || own(request.body, "cost_center_id");
+  const submittedCostCenter = String(request.body.costCenterId ?? request.body.cost_center_id ?? existing.cost_center_id ?? "").trim();
+  if (!centralWrite && homeLocationSubmitted && !submittedHomeLocation) {
+    throw httpError(403, "Filialunabhängige Beschäftigte können nur in der zentralen Personalverwaltung verwaltet werden.", "PERSONNEL_CENTRAL_WRITE_REQUIRED");
+  }
+  if (!centralWrite && costCenterSubmitted && submittedCostCenter !== String(existing.cost_center_id || "")) {
+    throw httpError(403, "Kostenstellen können nur in der zentralen Personalverwaltung geändert werden.", "PERSONNEL_CENTRAL_WRITE_REQUIRED");
+  }
   const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
   const employee = validateEmployee({
     ...request.body,
@@ -15224,20 +15806,28 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
     ...((canManageTimeConfirmationLevel && (Object.hasOwn(request.body, "sicknessWithoutAumEnabled")
       || Object.hasOwn(request.body, "sickness_without_aum_enabled")))
       ? {} : { sicknessWithoutAumEnabled: Boolean(existing.sickness_without_aum_enabled) }),
-  }, false, { defaultTimeConfirmationLevel: existing.time_confirmation_level || "C" });
+  }, false, {
+    defaultTimeConfirmationLevel: existing.time_confirmation_level || "C",
+    defaultHomeLocationId: existing.home_location_id || "",
+    defaultCostCenterId: existing.cost_center_id || "",
+    allowInactiveCostCenterId: existing.cost_center_id || "",
+  });
   assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
   const accessProfile = validatePersonnelAccessProfile(request.portalSession, request.body.accessProfile, {
     ...employee,
     personnelNumber,
   });
   const personnelRecordMutation = preparePersonnelRecordMutation(request, personnelNumber, request.body.personnelRecord);
+  if (existing.active && !employee.active) {
+    assertEmployeeDestructiveMutationAllowed(request.portalSession, personnelNumber);
+  }
   db.exec("BEGIN");
   try {
     const result = db.prepare(`
       UPDATE employees
       SET full_name = ?, nickname = ?, color = ?, contracted_hours = ?, target_workdays_per_week = ?,
           preferred_day_off = ?, fixed_workdays = ?, position_id = ?, time_confirmation_level = ?,
-          sickness_without_aum_enabled = ?, home_location_id = ?, preferred_department_id = ?, active = ?
+          sickness_without_aum_enabled = ?, home_location_id = ?, preferred_department_id = ?, cost_center_id = ?, active = ?
       WHERE personnel_number = ?
     `).run(
       employee.fullName,
@@ -15252,11 +15842,15 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
       employee.sicknessWithoutAumEnabled,
       employee.homeLocationId,
       employee.preferredDepartmentId,
+      employee.costCenterId,
       employee.active,
       personnelNumber,
     );
     if (!result.changes) throw httpError(404, "Die Person wurde nicht gefunden.");
     applyPersonnelAccessProfile(request.portalSession, accessProfile);
+    if (existing.active && !employee.active) {
+      deactivateEmployeePortalAccess(personnelNumber);
+    }
     persistPersonnelRecordMutation(personnelRecordMutation, "update");
     db.exec("COMMIT");
   } catch (error) {
@@ -15271,6 +15865,9 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
       targetWorkdaysAfter: employee.targetWorkdaysPerWeek,
       sicknessWithoutAumBefore: Boolean(existing.sickness_without_aum_enabled),
       sicknessWithoutAumAfter: Boolean(employee.sicknessWithoutAumEnabled),
+      costCenterBefore: String(existing.cost_center_id || ""),
+      costCenterAfter: employee.costCenterId,
+      portalAccessDisabled: Boolean(existing.active && !employee.active),
       personnelRecordFields: personnelRecordMutation?.changedFields || [],
     }));
   reconcileOpenAmuResponsibilities(request.portalSession?.employeeNumber || "local");
@@ -15302,10 +15899,7 @@ app.patch("/api/employees/:personnelNumber/display", (request, response) => {
 
 app.delete("/api/employees/:personnelNumber", (request, response) => {
   assertSessionEmployeeScope(request.portalSession, request.params.personnelNumber);
-  const protectedUser = db.prepare("SELECT employee_number, role, role_locked FROM portal_users WHERE employee_number = ?").get(request.params.personnelNumber);
-  if (protectedUser && (protectedUser.role === "developer" || protectedUser.role_locked)) {
-    throw httpError(403, "Das Teammitglied ist mit dem geschützten Developer-Zugang verbunden und kann nicht gelöscht werden.", "PORTAL_DEVELOPER_PROTECTED");
-  }
+  assertEmployeeDestructiveMutationAllowed(request.portalSession, request.params.personnelNumber);
   const protectedDocuments = tableExists("personnel_record_documents")
     ? Number(db.prepare(`
       SELECT COUNT(*) AS count FROM personnel_record_documents
@@ -15848,6 +16442,7 @@ const UI_PREFERENCE_VIEWS = Object.freeze([
   "requests",
   "timeTracking",
   "vacations",
+  "personnelAdministration",
   "personnel",
   "rightsDashboard",
   "settings",
@@ -19239,7 +19834,7 @@ async function verifyUsbCreator(request, employeeNumber, password) {
     SELECT u.employee_number, u.password_hash, u.role,
            e.personnel_number, e.full_name, e.nickname, e.color, e.contracted_hours,
            e.preferred_day_off, e.fixed_workdays, e.position_id, e.time_confirmation_level,
-           e.home_location_id, e.preferred_department_id, e.active
+           e.home_location_id, e.preferred_department_id, e.cost_center_id, e.active
     FROM portal_users u
     JOIN employees e ON e.personnel_number = u.employee_number
     WHERE u.employee_number = ? AND u.active = 1 AND e.active = 1
@@ -19359,7 +19954,7 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
         SELECT personnel_number, full_name, nickname, color, contracted_hours, target_workdays_per_week,
                preferred_day_off, fixed_workdays, position_id, time_confirmation_level,
                sickness_without_aum_enabled, home_location_id,
-               preferred_department_id, active
+               preferred_department_id, cost_center_id, active
         FROM employees WHERE personnel_number = ?
       `).get(sourceNumber);
       if (!employee) throw httpError(404, `Teammitglied ${sourceNumber} wurde nicht gefunden.`, "USB_EMPLOYEE_NOT_FOUND");
@@ -19393,6 +19988,7 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
         sickness_without_aum_enabled: 0,
         home_location_id: homeLocationId,
         preferred_department_id: preferredDepartmentId,
+        cost_center_id: defaultCostCenterId(homeLocationId),
         active: 1,
       };
     }

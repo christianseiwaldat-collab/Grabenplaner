@@ -63,8 +63,11 @@
           <button class="nav-item hidden" data-view="timeTracking" id="timeTrackingNavButton">
             <span class="nav-symbol">◷</span><span>Zeiterfassung</span>
           </button>
+          <button class="nav-item hidden" data-view="personnelAdministration" id="personnelAdministrationNavButton">
+            <span class="nav-symbol">◎</span><span>Personalverwaltung</span>
+          </button>
           <button class="nav-item" data-view="personnel">
-            <span class="nav-symbol">◎</span><span>Teams &amp; Standorte</span>
+            <span class="nav-symbol">⌂</span><span>Filialverwaltung</span>
           </button>
           <button class="nav-item" data-view="settings">
             <span class="nav-symbol">⚙</span><span>Einstellungen</span>
@@ -74,7 +77,7 @@
         <div class="sidebar-summary">
           <span class="eyebrow">Aktive Teammitglieder</span>
           <strong id="sidebarEmployeeCount">0</strong>
-          <p>Stammdaten unter Teams &amp; Standorte.</p>
+          <p>Filialteams und zentrale Stammdaten.</p>
         </div>
 
         <div class="sidebar-actions" aria-label="Ansicht und System">
@@ -274,10 +277,50 @@
           </section>
         </section>
 
+        <section id="personnelAdministrationView" class="view">
+          <header class="settings-header">
+            <div><span class="eyebrow">Zentrale Stammdaten</span><h1>Personalverwaltung</h1><p class="subtitle">Alle Beschäftigten und Kostenstellen übersichtlich und geschützt verwalten.</p></div>
+            <div class="page-theme-switch" role="group" aria-label="Darstellung der Personalverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
+          </header>
+
+          <div class="settings-tabs personnel-administration-tabs" role="tablist">
+            <button class="settings-tab active" data-personnel-administration-tab="employees">Mitarbeitende</button>
+            <button class="settings-tab" data-personnel-administration-tab="costCenters">Kostenstellen</button>
+          </div>
+
+          <section class="personnel-administration-section active" id="personnelDirectorySection">
+            <div class="personnel-administration-summary" id="personnelAdministrationSummary" aria-live="polite"></div>
+            <div class="employee-toolbar personnel-directory-toolbar">
+              <div><h2>Mitarbeitende</h2><p>Unternehmensweite Übersicht ohne sensible Personalakt-Daten.</p></div>
+              <button class="primary-button hidden" id="addCentralEmployeeButton" type="button">+ Mitarbeiter anlegen</button>
+            </div>
+            <div class="personnel-directory-filters">
+              <label class="field"><span>Suchen</span><input id="personnelDirectorySearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer oder Name" /></label>
+              <label class="field"><span>Kostenstelle</span><select id="personnelDirectoryCostCenterFilter"><option value="">Alle Kostenstellen</option></select></label>
+              <label class="field"><span>Status</span><select id="personnelDirectoryStatusFilter"><option value="active">Aktiv</option><option value="inactive">Inaktiv</option><option value="unassigned">Ohne Kostenstelle</option><option value="all">Alle</option></select></label>
+            </div>
+            <div class="personnel-directory-table-wrap">
+              <table class="personnel-directory-table">
+                <thead><tr><th>Personalnr.</th><th>Name</th><th>Position</th><th>Kostenstelle</th><th>Filiale / Abteilung</th><th>Wochen-Soll</th><th>Status</th><th></th></tr></thead>
+                <tbody id="personnelDirectoryBody"><tr><td colspan="8">Personalstammdaten werden geladen.</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="personnel-administration-section" id="costCenterSection">
+            <div class="employee-toolbar cost-center-toolbar">
+              <div><h2>Kostenstellen</h2><p>Verwaltung, Filialen, Produktion und weitere Unternehmensbereiche eindeutig zuordnen.</p></div>
+              <button class="primary-button hidden" id="addCostCenterButton" type="button">+ Kostenstelle anlegen</button>
+            </div>
+            <p class="calculation-note">Kostenstellen werden nicht endgültig gelöscht. Vor der Deaktivierung müssen bestehende Zuordnungen verschoben werden; historische Daten bleiben erhalten.</p>
+            <div class="cost-center-list" id="costCenterList"><p class="settings-note">Kostenstellen werden geladen.</p></div>
+          </section>
+        </section>
+
         <section id="personnelView" class="view">
           <header class="settings-header">
-            <div><span class="eyebrow">Teams &amp; Standorte</span><h1>Team &amp; Standorte</h1><p class="subtitle">Stammdaten, Stammfilialen und Abteilungen zentral verwalten.</p></div>
-            <div class="page-theme-switch" role="group" aria-label="Darstellung von Team und Standorten"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
+            <div><span class="eyebrow">Filialen &amp; Teams</span><h1>Filialverwaltung</h1><p class="subtitle">Filialteams, Standorte, Öffnungszeiten und Abteilungen verwalten.</p></div>
+            <div class="page-theme-switch" role="group" aria-label="Darstellung der Filialverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
           </header>
 
           <div class="settings-tabs personnel-tabs" role="tablist">
@@ -712,8 +755,8 @@
               <div class="position-list" id="positionList"></div>
             </div>
             <div class="settings-card" id="personnelViewSettingsCard">
-              <div class="card-heading"><div class="card-icon">Team</div><div><h2>Personalansicht</h2><p>Darstellung der Stammdaten unter Teams &amp; Standorte.</p></div></div>
-              <label class="switch-row"><span><strong>Inaktive Teammitglieder anzeigen</strong><small>Blendet inaktive Stammdaten unter Teams &amp; Standorte ein.</small></span><input id="showInactivePersonnel" type="checkbox" /></label>
+              <div class="card-heading"><div class="card-icon">Team</div><div><h2>Filialteam-Ansicht</h2><p>Darstellung der Teamstammdaten in der Filialverwaltung.</p></div></div>
+              <label class="switch-row"><span><strong>Inaktive Teammitglieder anzeigen</strong><small>Blendet inaktive Stammdaten in der Filialverwaltung ein.</small></span><input id="showInactivePersonnel" type="checkbox" /></label>
               <label class="switch-row"><span><strong>Samstagsstatistik anzeigen</strong><small>Zeigt in den Wochenstunden, wie oft ein Teammitglied zuletzt samstags mindestens 2 Stunden eingeteilt war.</small></span><input id="showSaturdayServiceStats" type="checkbox" /></label>
             </div>
             <div class="settings-card full-span" id="trustLevelSettingsCard">
@@ -1047,7 +1090,8 @@
           <label class="field"><span>Personalnummer</span><input id="employeeNumber" required /></label>
           <label class="field"><span>Wochen-Sollzeit</span><div class="unit-input"><input id="employeeHours" type="number" min="0" max="80" step="0.25" required /><em>Stunden</em></div></label>
           <label class="field"><span>Soll-Arbeitstage pro Woche</span><div class="unit-input"><input id="employeeTargetWorkdays" type="number" min="1" max="6" step="1" required /><em>Tage</em></div><small>Grundlage für die unveränderlich gespeicherte Krankenstandszeit je vorgesehenem Arbeitstag.</small></label>
-          <label class="field"><span>Stammfiliale</span><select id="employeeHomeLocation" required></select></label>
+          <label class="field"><span>Kostenstelle</span><select id="employeeCostCenter" required></select><small id="employeeCostCenterHint">Eine Kostenstelle ist für jeden Personalstamm erforderlich.</small></label>
+          <label class="field"><span>Stammfiliale</span><select id="employeeHomeLocation"></select><small id="employeeHomeLocationHint">Für Verwaltung, Geschäftsleitung oder Produktion kann die Stammfiliale entfallen.</small></label>
           <label class="field"><span>Position</span><select id="employeePosition" required></select></label>
           <label class="field" id="employeeTimeConfirmationLevelField"><span>Vertrauensstufe</span><select id="employeeTimeConfirmationLevel" required><option value="A">Stufe A · Wochenabschluss</option><option value="B">Stufe B · spätestens nach 3 Tagen</option><option value="C">Stufe C · täglich bis 12:00 Uhr</option></select><small>Unabhängig von Position und Rolle; steuert künftig die Bestätigungsfrist automatischer Zeitvorschläge.</small></label>
           <label class="switch-row full-width hidden" id="employeeSicknessWithoutAumField"><span><strong>Persönliches Kontingent ohne AUM freischalten</strong><small id="employeeSicknessWithoutAumHint">Wirksam nur bei Vertrauensstufe A und aktivierter Unternehmensregel.</small></span><input id="employeeSicknessWithoutAumEnabled" type="checkbox" /></label>
@@ -1146,6 +1190,21 @@
           </section>
         </div>
         <div class="modal-actions"><button type="button" class="danger-button hidden" id="deleteEmployeeButton">Teammitglied löschen</button><span></span><button type="button" class="secondary-button" data-close="employeeModal">Abbrechen</button><button type="submit" class="primary-button">Speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="costCenterModal">
+      <form id="costCenterForm" autocomplete="off">
+        <div class="modal-header"><div><span class="eyebrow">Personalverwaltung</span><h2 id="costCenterModalTitle">Kostenstelle anlegen</h2><p>Der Code bleibt nach der Anlage unveränderbar, damit Auswertungen und Exporte eindeutig bleiben.</p></div><button type="button" class="close-button" data-close="costCenterModal">×</button></div>
+        <input id="costCenterId" type="hidden" />
+        <div class="form-grid">
+          <label class="field"><span>Code</span><input id="costCenterCode" maxlength="30" pattern="[A-Za-z0-9._-]+" placeholder="z. B. VERW" required /></label>
+          <label class="field"><span>Typ</span><select id="costCenterType" required><option value="branch">Filiale</option><option value="administration">Verwaltung</option><option value="production">Produktion</option><option value="other">Sonstige</option></select></label>
+          <label class="field full-width"><span>Bezeichnung</span><input id="costCenterName" maxlength="100" placeholder="z. B. Verwaltung" required /></label>
+          <label class="field full-width"><span>Beschreibung</span><textarea id="costCenterDescription" rows="3" maxlength="600" placeholder="Optional"></textarea></label>
+          <label class="switch-row full-width"><span><strong>Aktiv</strong><small>Aktive Kostenstellen können neuen oder bestehenden Mitarbeitenden zugeordnet werden.</small></span><input id="costCenterActive" type="checkbox" checked /></label>
+        </div>
+        <div class="modal-actions"><button type="button" class="danger-button hidden" id="deactivateCostCenterButton">Deaktivieren</button><span></span><button type="button" class="secondary-button" data-close="costCenterModal">Abbrechen</button><button type="submit" class="primary-button" id="costCenterSubmitButton">Kostenstelle anlegen</button></div>
       </form>
     </dialog>
 

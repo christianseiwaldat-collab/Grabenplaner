@@ -106,7 +106,8 @@ test("v0.71: Jede Hauptseite bietet eine eigene gespeicherte Darstellung", () =>
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const script = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
   const styles = fs.readFileSync(path.join(__dirname, "..", "public", "styles.css"), "utf8");
-  assert.equal((html.match(/class="page-theme-switch/g) || []).length, 7);
+  assert.equal((html.match(/class="page-theme-switch/g) || []).length, 8);
+  assert.match(script, /personnelAdministration:\s*"light"/);
   assert.match(html, /id="dashboardFontSize"/);
   assert.match(script, /loadUiPreferences/);
   assert.match(script, /formatAmuPeriod/);
@@ -122,26 +123,33 @@ test("v0.71: Seitendarstellungen und Dashboard-Schriftgröße sind benutzerbezog
   const defaults = await requestJson("/api/portal/v1/ui-preferences", { session: admin });
   assert.equal(defaults.response.status, 200, JSON.stringify(defaults.payload));
   assert.equal(defaults.payload.pageThemes.planning, "light");
+  assert.equal(defaults.payload.pageThemes.personnelAdministration, "light");
   assert.equal(defaults.payload.pageThemes.rightsDashboard, "light");
   assert.equal(defaults.payload.dashboardFontSize, "standard");
 
   const changed = await requestJson("/api/portal/v1/ui-preferences", {
     method: "PUT",
     session: admin,
-    body: { pageThemes: { planning: "dark", rightsDashboard: "dark" }, dashboardFontSize: "large" },
+    body: {
+      pageThemes: { planning: "dark", personnelAdministration: "dark", rightsDashboard: "dark" },
+      dashboardFontSize: "large",
+    },
   });
   assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
   assert.equal(changed.payload.pageThemes.planning, "dark");
+  assert.equal(changed.payload.pageThemes.personnelAdministration, "dark");
   assert.equal(changed.payload.pageThemes.rightsDashboard, "dark");
   assert.equal(changed.payload.dashboardFontSize, "large");
 
   const refreshed = await requestJson("/api/portal/v1/ui-preferences", { session: admin });
   assert.equal(refreshed.payload.pageThemes.planning, "dark");
+  assert.equal(refreshed.payload.pageThemes.personnelAdministration, "dark");
   assert.equal(refreshed.payload.dashboardFontSize, "large");
 
   const managerDefaults = await requestJson("/api/portal/v1/ui-preferences", { session: manager });
   assert.equal(managerDefaults.response.status, 200, JSON.stringify(managerDefaults.payload));
   assert.equal(managerDefaults.payload.pageThemes.planning, "light");
+  assert.equal(managerDefaults.payload.pageThemes.personnelAdministration, "light");
   assert.equal(managerDefaults.payload.dashboardFontSize, "standard");
 });
 
