@@ -363,6 +363,11 @@ test("v0.71 Block 6: Filialleitung bleibt trotz employees:write von globalen Dat
     VALUES (?, 'employees:write', 'test', CURRENT_TIMESTAMP)
     ON CONFLICT(employee_number, permission) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
   `).run(MANAGER);
+  db.prepare(`
+    INSERT INTO portal_permission_grants (employee_number, permission, granted_by, updated_at)
+    VALUES (?, 'locations:write', 'test', CURRENT_TIMESTAMP)
+    ON CONFLICT(employee_number, permission) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
+  `).run(MANAGER);
   const directory = await request("/api/personnel-directory", { auth: manager });
   assert.equal(directory.response.status, 403, directory.text);
   const centers = await request("/api/cost-centers", { auth: manager });
@@ -374,6 +379,15 @@ test("v0.71 Block 6: Filialleitung bleibt trotz employees:write von globalen Dat
   });
   assert.equal(create.response.status, 403, create.text);
   assert.equal(db.prepare("SELECT 1 FROM cost_centers WHERE code = 'V071-DENIED'").get(), undefined);
+
+  const locationCreate = await request("/api/locations", {
+    method: "POST",
+    auth: manager,
+    body: { id: "98", name: "Nicht erlaubte Filiale", minStaff: 1, active: true },
+  });
+  assert.equal(locationCreate.response.status, 403, locationCreate.text);
+  assert.equal(db.prepare("SELECT 1 FROM locations WHERE id = '98'").get(), undefined);
+  assert.equal(db.prepare("SELECT 1 FROM cost_centers WHERE code = 'FIL98'").get(), undefined);
 });
 
 test("v0.71 Block 6: Zentrale Liste ist global, additiv und enthaelt keine sensiblen Personalaktdaten", async () => {
