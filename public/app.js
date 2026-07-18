@@ -68,6 +68,7 @@ const state = {
   selectedRequest: null,
   allEmployees: [],
   personnelRecord: null,
+  employeePersonnelRecord: null,
   updateStatus: null,
   selectedColor: "#0b84c6",
   integrations: {
@@ -151,7 +152,7 @@ const elements = Object.fromEntries(
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount",
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
-    "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint",
+    "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeHomeLocation", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
     "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
@@ -3404,8 +3405,56 @@ async function submitStaleTimeCorrection(event) {
   }
 }
 
+function personnelRecordField(name, label, value, editable, attributes = "", spanTwo = false) {
+  const protectedAttributes = String(attributes || "").replace(/\s*autocomplete="[^"]*"/gi, "");
+  return `<label class="field${spanTwo ? " personnel-record-span-two" : ""}"><span>${escapeHtml(label)}</span><input name="${escapeHtml(name)}" value="${escapeHtml(value || "")}" autocomplete="off" data-1p-ignore="true" data-lpignore="true" ${protectedAttributes} ${editable ? "" : "disabled"} /></label>`;
+}
+
+function personnelRecordArea(name, label, value, editable) {
+  return `<label class="field personnel-record-span-two"><span>${escapeHtml(label)}</span><textarea name="${escapeHtml(name)}" rows="3" maxlength="2000" autocomplete="off" data-1p-ignore="true" data-lpignore="true" ${editable ? "" : "disabled"}>${escapeHtml(value || "")}</textarea></label>`;
+}
+
+function personnelRecordDetails(title, eyebrow, editable, content, className = "") {
+  return `<details class="personnel-record-details ${className}" open><summary><span><small>${escapeHtml(eyebrow)}</small><strong>${escapeHtml(title)}</strong></span><span class="status-badge ${editable ? "approved" : "inactive"}">${editable ? "Bearbeitbar" : "Nur lesen"}</span></summary><div class="personnel-record-details-body">${content}</div></details>`;
+}
+
+function personnelDocumentDate(value) {
+  if (!value) return "Kein Dokumentdatum";
+  const parsed = new Date(`${String(value).slice(0, 10)}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? "Kein Dokumentdatum" : new Intl.DateTimeFormat("de-AT").format(parsed);
+}
+
+function renderPersonnelDocuments(employeeNumber, result, access) {
+  const canReadDocuments = access.canReadDocuments ?? access.canReadSensitive;
+  const canWriteDocuments = access.canWriteDocuments ?? access.canWriteSensitive;
+  if (!canReadDocuments) return "";
+  const entries = (Array.isArray(result.documents) ? result.documents : []).map((document) => {
+    const id = String(document.id || "");
+    const title = document.title || document.original_name || document.original_filename || "Personalakt-Dokument";
+    const category = document.category_label || document.category || "Sonstiges";
+    const description = document.description ? `<p>${escapeHtml(document.description)}</p>` : "";
+    return `<article class="personnel-document-entry"><div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(category)} · ${escapeHtml(personnelDocumentDate(document.document_date || document.documentDate))}</small>${description}</div><div class="personnel-document-actions"><a class="secondary-button compact-button" href="/api/portal/v1/personnel-records/${encodeURIComponent(employeeNumber)}/documents/${encodeURIComponent(id)}/content" target="_blank" rel="noopener">Öffnen</a>${canWriteDocuments ? `<button type="button" class="danger-button compact-button" data-delete-personnel-document="${escapeHtml(id)}">Löschen</button>` : ""}</div></article>`;
+  }).join("");
+  const upload = canWriteDocuments ? `
+    <div class="personnel-document-upload">
+      <div class="personnel-record-field-grid">
+        <label class="field"><span>Kategorie</span><select name="personnelDocumentCategory"><option value="contract">Dienstvertrag</option><option value="amendment">Vertragsänderung / Vereinbarung</option><option value="certificate">Zeugnis / Nachweis</option><option value="training">Schulung</option><option value="identity">Identitätsnachweis</option><option value="payroll">Lohnverrechnung</option><option value="other">Sonstiges</option></select></label>
+        <label class="field"><span>Dokumentdatum</span><input name="personnelDocumentDate" type="date" /></label>
+        <label class="field personnel-record-span-two"><span>Titel</span><input name="personnelDocumentTitle" maxlength="160" /></label>
+        <label class="field personnel-record-span-two"><span>Beschreibung</span><textarea name="personnelDocumentDescription" rows="2" maxlength="600" placeholder="Optional"></textarea></label>
+        <label class="field personnel-record-span-two"><span>PDF oder Bild · höchstens 15 MB</span><input name="personnelDocumentFile" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff" /></label>
+      </div>
+      <div class="personnel-document-upload-actions"><button type="button" class="primary-button compact-button" data-upload-personnel-document>Dokument geschützt hochladen</button></div>
+    </div>` : "";
+  return personnelRecordDetails("Personalakt-Dokumente", "Geschützte Ablage", canWriteDocuments,
+    `<div class="personnel-document-list">${entries || '<p class="settings-note">Noch keine allgemeinen Personalakt-Dokumente vorhanden.</p>'}</div>${upload}`,
+    "sensitive-personnel-section");
+}
+
 async function openPersonnelRecord(employeeNumber) {
   if (!elements.personnelRecordModal) return;
+  const requestToken = Symbol(`personnel-record-${employeeNumber}`);
+  state.personnelRecordRequestToken = requestToken;
   state.personnelRecord = null;
   elements.personnelRecordTitle.textContent = `Personalakt · ${employeeNumber}`;
   elements.personnelRecordContent.innerHTML = '<p class="settings-note">Einträge werden geladen.</p>';
@@ -3415,50 +3464,83 @@ async function openPersonnelRecord(employeeNumber) {
   if (!elements.personnelRecordModal.open) elements.personnelRecordModal.showModal();
   try {
     const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(employeeNumber)}`);
+    if (!elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
     state.personnelRecord = { employeeNumber, result };
     const employee = result.employee || {};
     const access = result.access || {};
-    const profile = result.profile || {};
+    const record = normalizeProtectedPersonnelRecord(result.profile || {});
+    const sensitive = record.sensitive;
     elements.personnelRecordTitle.textContent = `${employee.personnel_number || employeeNumber} · ${employee.nickname || employee.full_name || "Personalakt"}`;
-    const phoneSection = access.canReadPhone ? `
-      <section class="personnel-record-section">
-        <div class="personnel-record-section-heading"><div><span class="eyebrow">Kontaktdaten</span><h3>Telefonnummer</h3></div>${access.canWritePhone ? '<span class="status-badge approved">Bearbeitbar</span>' : '<span class="status-badge inactive">Nur lesen</span>'}</div>
-        <label class="field"><span>Telefonnummer</span><input name="personnelPhone" type="tel" maxlength="40" value="${escapeHtml(profile.phone || "")}" ${access.canWritePhone ? "" : "disabled"} autocomplete="tel" /></label>
-        ${access.phoneWriteRequiresTrustA && !access.canWritePhone ? '<p class="calculation-note">Leitungen benötigen für Änderungen ein ausdrücklich vergebenes Schreibrecht und die eigene Vertrauensstufe A.</p>' : ""}
-      </section>` : "";
-    const sensitive = profile.sensitive || {};
-    const address = sensitive.address || {};
-    const sensitiveSection = access.canReadSensitive ? `
-      <section class="personnel-record-section sensitive-personnel-section">
-        <div class="personnel-record-section-heading"><div><span class="eyebrow">Besonders geschützt</span><h3>Sensible MA-Daten</h3></div>${access.canWriteSensitive ? '<span class="status-badge approved">Bearbeitbar</span>' : '<span class="status-badge inactive">Nur lesen</span>'}</div>
-        <div class="personnel-record-field-grid">
-          <label class="field"><span>SV-Nummer</span><input name="socialSecurityNumber" inputmode="numeric" maxlength="13" value="${escapeHtml(sensitive.socialSecurityNumber || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
-          <label class="field"><span>Kontoinhaber/-in</span><input name="accountHolder" maxlength="120" value="${escapeHtml(sensitive.accountHolder || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
-          <label class="field personnel-record-span-two"><span>IBAN</span><input name="iban" maxlength="34" value="${escapeHtml(sensitive.iban || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
-          <label class="field"><span>BIC</span><input name="bic" maxlength="11" value="${escapeHtml(sensitive.bic || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
-          <label class="field personnel-record-span-two"><span>Straße und Hausnummer</span><input name="street" maxlength="160" value="${escapeHtml(address.street || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
-          <label class="field"><span>Postleitzahl</span><input name="postalCode" maxlength="20" value="${escapeHtml(address.postalCode || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
-          <label class="field"><span>Ort</span><input name="city" maxlength="100" value="${escapeHtml(address.city || "")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
-          <label class="field personnel-record-span-two"><span>Land</span><input name="country" maxlength="80" value="${escapeHtml(address.country || "Österreich")}" ${access.canWriteSensitive ? "" : "disabled"} autocomplete="off" /></label>
-        </div>
-        <p class="calculation-note">Die Werte werden verschlüsselt gespeichert. Die SV-Nummer ist außerhalb des geschützten Personalakts nicht sichtbar.</p>
-      </section>` : "";
+
+    const contactSection = access.canReadPhone ? personnelRecordDetails("Kontaktdaten", "Kontakt", access.canWritePhone, `
+      <div class="personnel-record-field-grid">
+        ${personnelRecordField("personnelPhone", "Telefonnummer", record.phone, access.canWritePhone, 'type="tel" maxlength="40" autocomplete="tel"')}
+        ${access.canReadSensitive ? personnelRecordField("alternatePhone", "Weitere Telefonnummer", sensitive.alternatePhone, access.canWriteSensitive, 'type="tel" maxlength="40"') : ""}
+        ${access.canReadSensitive ? personnelRecordField("privateEmail", "Private E-Mail", sensitive.privateEmail, access.canWriteSensitive, 'type="email" maxlength="160" autocomplete="email"', true) : ""}
+      </div>${access.phoneWriteRequiresTrustA && !access.canWritePhone ? '<p class="calculation-note">Leitungen benötigen für Änderungen ein ausdrücklich vergebenes Schreibrecht und die eigene Vertrauensstufe A.</p>' : ""}`) : "";
+
+    const identitySection = access.canReadSensitive ? personnelRecordDetails("Persönliche Daten", "Identität", access.canWriteSensitive, `
+      <div class="personnel-record-field-grid">
+        ${personnelRecordField("firstName", "Vorname", sensitive.identity.firstName, access.canWriteSensitive, 'maxlength="100" autocomplete="given-name"')}
+        ${personnelRecordField("lastName", "Nachname", sensitive.identity.lastName, access.canWriteSensitive, 'maxlength="100" autocomplete="family-name"')}
+        ${personnelRecordField("previousName", "Früherer Name", sensitive.identity.previousName, access.canWriteSensitive, 'maxlength="120"')}
+        ${personnelRecordField("salutation", "Anrede", sensitive.identity.salutation, access.canWriteSensitive, 'maxlength="40"')}
+        ${personnelRecordField("title", "Titel", sensitive.identity.title, access.canWriteSensitive, 'maxlength="80"')}
+        ${personnelRecordField("birthDate", "Geburtsdatum", sensitive.identity.birthDate, access.canWriteSensitive, 'type="date"')}
+        ${personnelRecordField("birthPlace", "Geburtsort", sensitive.identity.birthPlace, access.canWriteSensitive, 'maxlength="120"')}
+        ${personnelRecordField("nationality", "Staatsangehörigkeit", sensitive.identity.nationality, access.canWriteSensitive, 'maxlength="80"')}
+      </div>`) : "";
+
+    const emergencySection = access.canReadSensitive ? personnelRecordDetails("Notfallkontakt", "Kontakt", access.canWriteSensitive, `
+      <div class="personnel-record-field-grid">
+        ${personnelRecordField("emergencyName", "Name", sensitive.emergencyContact.name, access.canWriteSensitive, 'maxlength="120"')}
+        ${personnelRecordField("emergencyRelationship", "Beziehung", sensitive.emergencyContact.relationship, access.canWriteSensitive, 'maxlength="80"')}
+        ${personnelRecordField("emergencyPhone", "Telefonnummer", sensitive.emergencyContact.phone, access.canWriteSensitive, 'type="tel" maxlength="40"', true)}
+      </div>`) : "";
+
+    const protectedSection = access.canReadSensitive ? personnelRecordDetails("SV, Bank & Adresse", "Besonders geschützt", access.canWriteSensitive, `
+      <div class="personnel-record-field-grid">
+        ${personnelRecordField("socialSecurityNumber", "SV-Nummer", sensitive.socialSecurityNumber, access.canWriteSensitive, 'inputmode="numeric" maxlength="13" autocomplete="off"')}
+        ${personnelRecordField("accountHolder", "Kontoinhaber/-in", sensitive.accountHolder, access.canWriteSensitive, 'maxlength="120" autocomplete="off"')}
+        ${personnelRecordField("iban", "IBAN", sensitive.iban, access.canWriteSensitive, 'maxlength="34" autocomplete="off"', true)}
+        ${personnelRecordField("bic", "BIC", sensitive.bic, access.canWriteSensitive, 'maxlength="11" autocomplete="off"')}
+        ${personnelRecordField("street", "Straße und Hausnummer", sensitive.address.street, access.canWriteSensitive, 'maxlength="160" autocomplete="street-address"', true)}
+        ${personnelRecordField("addressSupplement", "Adresszusatz", sensitive.address.supplement, access.canWriteSensitive, 'maxlength="120"', true)}
+        ${personnelRecordField("postalCode", "Postleitzahl", sensitive.address.postalCode, access.canWriteSensitive, 'maxlength="20" autocomplete="postal-code"')}
+        ${personnelRecordField("city", "Ort", sensitive.address.city, access.canWriteSensitive, 'maxlength="100" autocomplete="address-level2"')}
+        ${personnelRecordField("state", "Bundesland", sensitive.address.state, access.canWriteSensitive, 'maxlength="100" autocomplete="address-level1"')}
+        ${personnelRecordField("country", "Land", sensitive.address.country, access.canWriteSensitive, 'maxlength="80" autocomplete="country-name"')}
+      </div><p class="calculation-note">Diese Werte werden verschlüsselt gespeichert und niemals in Teamlisten ausgegeben.</p>`, "sensitive-personnel-section") : "";
+
+    const employmentSection = access.canReadSensitive ? personnelRecordDetails("Beschäftigung & Vertrag", "Vertragsdaten", access.canWriteSensitive, `
+      <div class="personnel-record-field-grid">
+        ${personnelRecordField("employmentStartDate", "Eintrittsdatum", sensitive.employment.startDate, access.canWriteSensitive, 'type="date"')}
+        ${personnelRecordField("employmentEndDate", "Austrittsdatum", sensitive.employment.endDate, access.canWriteSensitive, 'type="date"')}
+        ${personnelRecordField("fixedTermEnd", "Befristet bis", sensitive.employment.fixedTermEnd, access.canWriteSensitive, 'type="date"')}
+        ${personnelRecordField("probationEnd", "Probezeit bis", sensitive.employment.probationEnd, access.canWriteSensitive, 'type="date"')}
+        ${personnelRecordField("employmentType", "Beschäftigungsart", sensitive.employment.employmentType, access.canWriteSensitive, 'maxlength="100"')}
+        ${personnelRecordField("contractType", "Vertragsart", sensitive.employment.contractType, access.canWriteSensitive, 'maxlength="100"')}
+        ${personnelRecordField("employmentStatus", "Beschäftigungsstatus", sensitive.employment.employmentStatus, access.canWriteSensitive, 'maxlength="80"')}
+        ${personnelRecordField("collectiveAgreement", "Kollektivvertrag", sensitive.employment.collectiveAgreement, access.canWriteSensitive, 'maxlength="160"')}
+        ${personnelRecordField("classification", "Einstufung", sensitive.employment.classification, access.canWriteSensitive, 'maxlength="120"')}
+        ${personnelRecordField("payrollGroup", "Lohnverrechnungsgruppe", sensitive.employment.payrollGroup, access.canWriteSensitive, 'maxlength="120"')}
+        ${personnelRecordArea("employmentNotes", "Interne Hinweise", sensitive.employment.notes, access.canWriteSensitive)}
+      </div>`) : "";
+
     const reportEntries = (result.reports || []).map((report) => {
       const documents = (report.documents || []).map((document) => result.canOpenFiles
         ? `<a class="secondary-button compact-button" href="/api/portal/v1/amu-reports/${report.id}/documents/${encodeURIComponent(document.id)}/content" target="_blank" rel="noopener">${escapeHtml(document.original_name || "Dokument")} öffnen</a>`
         : `<span class="status-badge inactive">${escapeHtml(document.original_name || "Dokument")} · kein Dateizugriff</span>`).join("");
-      const period = formatAmuPeriod(report);
-      return `<article class="personnel-record-entry"><div><strong>${period}</strong><small>${escapeHtml(report.location_name || "")}${report.department_name ? ` · ${escapeHtml(report.department_name)}` : ""} · ${escapeHtml(amuReportStatusLabel(report))}</small>${report.employee_note ? `<p>${escapeHtml(report.employee_note)}</p>` : ""}</div><div class="amu-document-links">${documents || "Kein aktives Dokument"}</div></article>`;
+      return `<article class="personnel-record-entry"><div><strong>${formatAmuPeriod(report)}</strong><small>${escapeHtml(report.location_name || "")}${report.department_name ? ` · ${escapeHtml(report.department_name)}` : ""} · ${escapeHtml(amuReportStatusLabel(report))}</small>${report.employee_note ? `<p>${escapeHtml(report.employee_note)}</p>` : ""}</div><div class="amu-document-links">${documents || "Kein aktives Dokument"}</div></article>`;
     }).join("");
-    const amuSection = access.canReadAmu ? `
-      <section class="personnel-record-section">
-        <div class="personnel-record-section-heading"><div><span class="eyebrow">Dokumente & Verlauf</span><h3>Arbeitsunfähigkeitsmeldungen</h3></div>${result.canOpenFiles ? '<span class="status-badge approved">Dateizugriff</span>' : '<span class="status-badge inactive">Metadaten</span>'}</div>
-        <div class="personnel-record-report-list">${reportEntries || '<p class="settings-note">Noch keine Arbeitsunfähigkeitsmeldungen im Personalakt.</p>'}</div>
-      </section>` : "";
-    elements.personnelRecordContent.innerHTML = `${phoneSection}${sensitiveSection}${amuSection}`
+    const amuSection = access.canReadAmu ? personnelRecordDetails("Arbeitsunfähigkeitsmeldungen", "AUM · Dokumente & Verlauf", false,
+      `<div class="personnel-record-report-list">${reportEntries || '<p class="settings-note">Noch keine Arbeitsunfähigkeitsmeldungen im Personalakt.</p>'}</div>`) : "";
+    const documentSection = renderPersonnelDocuments(employeeNumber, result, access);
+    elements.personnelRecordContent.innerHTML = `${contactSection}${identitySection}${emergencySection}${protectedSection}${employmentSection}${documentSection}${amuSection}`
       || '<p class="settings-note">Für diesen Personalakt sind keine Bereiche freigegeben.</p>';
     elements.savePersonnelRecordButton.classList.toggle("hidden", !access.canWritePhone && !access.canWriteSensitive);
   } catch (error) {
+    if (!elements.personnelRecordModal.open || state.personnelRecordRequestToken !== requestToken) return;
     state.personnelRecord = null;
     elements.personnelRecordContent.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
   }
@@ -3469,30 +3551,24 @@ async function savePersonnelRecord(event) {
   const current = state.personnelRecord;
   if (!current) return;
   const access = current.result?.access || {};
+  const fields = elements.personnelRecordForm.elements;
+  const value = (name) => String(fields.namedItem(name)?.value || "").trim();
   const body = {};
-  if (access.canWritePhone) body.phone = elements.personnelRecordForm.elements.personnelPhone?.value || "";
+  if (access.canWritePhone) body.phone = value("personnelPhone");
   if (access.canWriteSensitive) {
-    const fields = elements.personnelRecordForm.elements;
     body.sensitive = {
-      socialSecurityNumber: fields.socialSecurityNumber?.value || "",
-      iban: fields.iban?.value || "",
-      bic: fields.bic?.value || "",
-      accountHolder: fields.accountHolder?.value || "",
-      address: {
-        street: fields.street?.value || "",
-        postalCode: fields.postalCode?.value || "",
-        city: fields.city?.value || "",
-        country: fields.country?.value || "",
-      },
+      identity: { firstName: value("firstName"), lastName: value("lastName"), previousName: value("previousName"), salutation: value("salutation"), title: value("title"), birthDate: value("birthDate"), birthPlace: value("birthPlace"), nationality: value("nationality") },
+      alternatePhone: value("alternatePhone"), privateEmail: value("privateEmail"),
+      emergencyContact: { name: value("emergencyName"), relationship: value("emergencyRelationship"), phone: value("emergencyPhone") },
+      socialSecurityNumber: value("socialSecurityNumber"), iban: value("iban"), bic: value("bic"), accountHolder: value("accountHolder"),
+      address: { street: value("street"), supplement: value("addressSupplement"), postalCode: value("postalCode"), city: value("city"), state: value("state"), country: value("country") },
+      employment: { startDate: value("employmentStartDate"), endDate: value("employmentEndDate"), fixedTermEnd: value("fixedTermEnd"), probationEnd: value("probationEnd"), employmentType: value("employmentType"), contractType: value("contractType"), employmentStatus: value("employmentStatus"), collectiveAgreement: value("collectiveAgreement"), classification: value("classification"), payrollGroup: value("payrollGroup"), notes: value("employmentNotes") },
     };
   }
   elements.savePersonnelRecordButton.disabled = true;
   elements.personnelRecordMessage.classList.add("hidden");
   try {
-    const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}`, {
-      method: "PUT",
-      body: JSON.stringify(body),
-    });
+    const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}`, { method: "PUT", body: JSON.stringify(body) });
     showToast(result.changedFields?.length ? "Der Personalakt wurde verschlüsselt gespeichert." : "Es waren keine Änderungen zu speichern.");
     await openPersonnelRecord(current.employeeNumber);
   } catch (error) {
@@ -3500,6 +3576,47 @@ async function savePersonnelRecord(event) {
     elements.personnelRecordMessage.classList.remove("hidden");
   } finally {
     elements.savePersonnelRecordButton.disabled = false;
+  }
+}
+
+async function uploadPersonnelDocument() {
+  const current = state.personnelRecord;
+  if (!current) return;
+  const fields = elements.personnelRecordForm.elements;
+  const file = fields.namedItem("personnelDocumentFile")?.files?.[0];
+  const title = String(fields.namedItem("personnelDocumentTitle")?.value || "").trim();
+  if (!file) return showToast("Bitte ein PDF oder Bild auswählen.", true);
+  if (!title) return showToast("Bitte einen Dokumenttitel eingeben.", true);
+  if (file.size > 15 * 1024 * 1024) return showToast("Die Datei darf höchstens 15 MB groß sein.", true);
+  const button = elements.personnelRecordContent.querySelector("[data-upload-personnel-document]");
+  const formData = new FormData();
+  formData.append("category", String(fields.namedItem("personnelDocumentCategory")?.value || "other"));
+  formData.append("title", title);
+  formData.append("documentDate", String(fields.namedItem("personnelDocumentDate")?.value || ""));
+  formData.append("description", String(fields.namedItem("personnelDocumentDescription")?.value || "").trim());
+  formData.append("document", file, file.name);
+  if (button) button.disabled = true;
+  try {
+    const response = await rawApi(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}/documents`, { method: "POST", body: formData });
+    await response.json().catch(() => ({}));
+    showToast("Das Dokument wurde geschützt gespeichert.");
+    await openPersonnelRecord(current.employeeNumber);
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    if (button?.isConnected) button.disabled = false;
+  }
+}
+
+async function deletePersonnelDocument(documentId) {
+  const current = state.personnelRecord;
+  if (!current || !documentId || !confirm("Dieses Personalakt-Dokument wirklich löschen?")) return;
+  try {
+    await api(`/api/portal/v1/personnel-records/${encodeURIComponent(current.employeeNumber)}/documents/${encodeURIComponent(documentId)}`, { method: "DELETE" });
+    showToast("Das Dokument wurde gelöscht.");
+    await openPersonnelRecord(current.employeeNumber);
+  } catch (error) {
+    showToast(error.message, true);
   }
 }
 
@@ -5137,6 +5254,221 @@ function syncEmployeeSicknessAllowanceField() {
     : "Die Freigabe bleibt gespeichert, wird aber erst mit Vertrauensstufe A wirksam.";
 }
 
+function canWriteSensitivePersonnelRecord() {
+  return !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("personnel:sensitive:write");
+}
+
+function normalizeProtectedPersonnelRecord(profile = {}, { defaultCountry = false } = {}) {
+  const sensitive = profile.sensitive && typeof profile.sensitive === "object" ? profile.sensitive : {};
+  const identity = sensitive.identity && typeof sensitive.identity === "object" ? sensitive.identity : {};
+  const emergencyContact = sensitive.emergencyContact && typeof sensitive.emergencyContact === "object"
+    ? sensitive.emergencyContact : {};
+  const address = sensitive.address && typeof sensitive.address === "object" ? sensitive.address : {};
+  const employment = sensitive.employment && typeof sensitive.employment === "object" ? sensitive.employment : {};
+  return {
+    phone: String(profile.phone || ""),
+    sensitive: {
+      identity: {
+        firstName: String(identity.firstName || ""),
+        lastName: String(identity.lastName || ""),
+        previousName: String(identity.previousName || ""),
+        salutation: String(identity.salutation || ""),
+        title: String(identity.title || ""),
+        birthDate: String(identity.birthDate || ""),
+        birthPlace: String(identity.birthPlace || ""),
+        nationality: String(identity.nationality || ""),
+      },
+      alternatePhone: String(sensitive.alternatePhone || ""),
+      privateEmail: String(sensitive.privateEmail || ""),
+      emergencyContact: {
+        name: String(emergencyContact.name || ""),
+        relationship: String(emergencyContact.relationship || ""),
+        phone: String(emergencyContact.phone || ""),
+      },
+      socialSecurityNumber: String(sensitive.socialSecurityNumber || ""),
+      iban: String(sensitive.iban || ""),
+      bic: String(sensitive.bic || ""),
+      accountHolder: String(sensitive.accountHolder || ""),
+      address: {
+        street: String(address.street || ""),
+        supplement: String(address.supplement || ""),
+        postalCode: String(address.postalCode || ""),
+        city: String(address.city || ""),
+        state: String(address.state || ""),
+        country: String(address.country ?? (defaultCountry ? "Österreich" : "")),
+      },
+      employment: {
+        startDate: String(employment.startDate || ""),
+        endDate: String(employment.endDate || ""),
+        fixedTermEnd: String(employment.fixedTermEnd || ""),
+        probationEnd: String(employment.probationEnd || ""),
+        employmentType: String(employment.employmentType || ""),
+        contractType: String(employment.contractType || ""),
+        employmentStatus: String(employment.employmentStatus || ""),
+        collectiveAgreement: String(employment.collectiveAgreement || ""),
+        classification: String(employment.classification || ""),
+        payrollGroup: String(employment.payrollGroup || ""),
+        notes: String(employment.notes || ""),
+      },
+    },
+  };
+}
+
+function employeeRecordControl(name) {
+  return elements.employeeForm?.elements?.namedItem(name) || null;
+}
+
+function fillEmployeeProtectedRecord(profile = {}) {
+  const record = normalizeProtectedPersonnelRecord(profile);
+  const { sensitive } = record;
+  const values = {
+    employeeRecordPhone: record.phone,
+    employeeRecordFirstName: sensitive.identity.firstName,
+    employeeRecordLastName: sensitive.identity.lastName,
+    employeeRecordPreviousName: sensitive.identity.previousName,
+    employeeRecordSalutation: sensitive.identity.salutation,
+    employeeRecordTitle: sensitive.identity.title,
+    employeeRecordBirthDate: sensitive.identity.birthDate,
+    employeeRecordBirthPlace: sensitive.identity.birthPlace,
+    employeeRecordNationality: sensitive.identity.nationality,
+    employeeRecordAlternatePhone: sensitive.alternatePhone,
+    employeeRecordPrivateEmail: sensitive.privateEmail,
+    employeeRecordEmergencyName: sensitive.emergencyContact.name,
+    employeeRecordEmergencyRelationship: sensitive.emergencyContact.relationship,
+    employeeRecordEmergencyPhone: sensitive.emergencyContact.phone,
+    employeeRecordSocialSecurityNumber: sensitive.socialSecurityNumber,
+    employeeRecordIban: sensitive.iban,
+    employeeRecordBic: sensitive.bic,
+    employeeRecordAccountHolder: sensitive.accountHolder,
+    employeeRecordStreet: sensitive.address.street,
+    employeeRecordAddressSupplement: sensitive.address.supplement,
+    employeeRecordPostalCode: sensitive.address.postalCode,
+    employeeRecordCity: sensitive.address.city,
+    employeeRecordState: sensitive.address.state,
+    employeeRecordCountry: sensitive.address.country,
+    employeeRecordStartDate: sensitive.employment.startDate,
+    employeeRecordEndDate: sensitive.employment.endDate,
+    employeeRecordFixedTermEnd: sensitive.employment.fixedTermEnd,
+    employeeRecordProbationEnd: sensitive.employment.probationEnd,
+    employeeRecordEmploymentType: sensitive.employment.employmentType,
+    employeeRecordContractType: sensitive.employment.contractType,
+    employeeRecordEmploymentStatus: sensitive.employment.employmentStatus,
+    employeeRecordCollectiveAgreement: sensitive.employment.collectiveAgreement,
+    employeeRecordClassification: sensitive.employment.classification,
+    employeeRecordPayrollGroup: sensitive.employment.payrollGroup,
+    employeeRecordNotes: sensitive.employment.notes,
+  };
+  for (const [name, value] of Object.entries(values)) {
+    const control = employeeRecordControl(name);
+    if (control) control.value = value;
+  }
+}
+
+function personnelRecordPatch(before = {}, after = {}) {
+  const patch = {};
+  for (const [key, nextValue] of Object.entries(after)) {
+    const previousValue = before?.[key];
+    if (nextValue && typeof nextValue === "object" && !Array.isArray(nextValue)) {
+      const nested = personnelRecordPatch(previousValue && typeof previousValue === "object" ? previousValue : {}, nextValue);
+      if (Object.keys(nested).length) patch[key] = nested;
+    } else if (String(nextValue ?? "") !== String(previousValue ?? "")) {
+      patch[key] = nextValue;
+    }
+  }
+  return patch;
+}
+
+function clearEmployeeProtectedRecord() {
+  state.employeePersonnelRecord = null;
+  elements.employeeProtectedRecord?.querySelectorAll("input,textarea").forEach((control) => { control.value = ""; });
+  if (elements.employeeProtectedRecord) elements.employeeProtectedRecord.open = false;
+}
+
+function clearPersonnelRecordDialog() {
+  state.personnelRecordRequestToken = null;
+  state.personnelRecord = null;
+  if (elements.personnelRecordContent) elements.personnelRecordContent.replaceChildren();
+  if (elements.personnelRecordMessage) elements.personnelRecordMessage.textContent = "";
+}
+
+function setEmployeeProtectedRecordDisabled(disabled) {
+  elements.employeeProtectedRecord?.querySelectorAll("input,select,textarea").forEach((control) => {
+    control.disabled = disabled;
+  });
+}
+
+function collectEmployeeProtectedRecord() {
+  const value = (name) => String(employeeRecordControl(name)?.value || "").trim();
+  return {
+    phone: value("employeeRecordPhone"),
+    sensitive: {
+      identity: {
+        firstName: value("employeeRecordFirstName"),
+        lastName: value("employeeRecordLastName"),
+        previousName: value("employeeRecordPreviousName"),
+        salutation: value("employeeRecordSalutation"),
+        title: value("employeeRecordTitle"),
+        birthDate: value("employeeRecordBirthDate"),
+        birthPlace: value("employeeRecordBirthPlace"),
+        nationality: value("employeeRecordNationality"),
+      },
+      alternatePhone: value("employeeRecordAlternatePhone"),
+      privateEmail: value("employeeRecordPrivateEmail"),
+      emergencyContact: {
+        name: value("employeeRecordEmergencyName"),
+        relationship: value("employeeRecordEmergencyRelationship"),
+        phone: value("employeeRecordEmergencyPhone"),
+      },
+      socialSecurityNumber: value("employeeRecordSocialSecurityNumber"),
+      iban: value("employeeRecordIban"),
+      bic: value("employeeRecordBic"),
+      accountHolder: value("employeeRecordAccountHolder"),
+      address: {
+        street: value("employeeRecordStreet"),
+        supplement: value("employeeRecordAddressSupplement"),
+        postalCode: value("employeeRecordPostalCode"),
+        city: value("employeeRecordCity"),
+        state: value("employeeRecordState"),
+        country: value("employeeRecordCountry"),
+      },
+      employment: {
+        startDate: value("employeeRecordStartDate"),
+        endDate: value("employeeRecordEndDate"),
+        fixedTermEnd: value("employeeRecordFixedTermEnd"),
+        probationEnd: value("employeeRecordProbationEnd"),
+        employmentType: value("employeeRecordEmploymentType"),
+        contractType: value("employeeRecordContractType"),
+        employmentStatus: value("employeeRecordEmploymentStatus"),
+        collectiveAgreement: value("employeeRecordCollectiveAgreement"),
+        classification: value("employeeRecordClassification"),
+        payrollGroup: value("employeeRecordPayrollGroup"),
+        notes: value("employeeRecordNotes"),
+      },
+    },
+  };
+}
+
+async function loadEmployeeProtectedRecord(employeeNumber) {
+  const requestedEmployee = String(employeeNumber || "");
+  state.employeePersonnelRecord = { employeeNumber: requestedEmployee, loaded: false };
+  setEmployeeProtectedRecordDisabled(true);
+  if (elements.employeeProtectedRecordHint) elements.employeeProtectedRecordHint.textContent = "Geschützte Daten werden geladen …";
+  try {
+    const result = await api(`/api/portal/v1/personnel-records/${encodeURIComponent(requestedEmployee)}`);
+    if (String(document.querySelector("#employeeNumber")?.value || "") !== requestedEmployee || !elements.employeeModal?.open) return;
+    const initial = normalizeProtectedPersonnelRecord(result.profile || {});
+    fillEmployeeProtectedRecord(initial);
+    state.employeePersonnelRecord = { employeeNumber: requestedEmployee, loaded: true, initial };
+    if (elements.employeeProtectedRecordHint) elements.employeeProtectedRecordHint.textContent = "Die Angaben werden verschlüsselt im Personalakt gespeichert.";
+    setEmployeeProtectedRecordDisabled(false);
+  } catch (error) {
+    if (String(document.querySelector("#employeeNumber")?.value || "") !== requestedEmployee || !elements.employeeModal?.open) return;
+    state.employeePersonnelRecord = { employeeNumber: requestedEmployee, loaded: false };
+    if (elements.employeeProtectedRecordHint) elements.employeeProtectedRecordHint.textContent = `Personalakt konnte nicht geladen werden: ${error.message}`;
+  }
+}
+
 function openEmployeeModal(employee = null) {
   const permissions = state.portalSession?.user?.permissions || [];
   const fullAccess = !state.portalStatus?.portalEnabled || permissions.includes("employees:write");
@@ -5144,6 +5476,7 @@ function openEmployeeModal(employee = null) {
   if (!fullAccess && !displayAccess) return;
   state.employeeEditMode = fullAccess ? "full" : "display";
   elements.employeeForm.reset();
+  state.employeePersonnelRecord = null;
   elements.employeeHomeLocation.innerHTML = (state.locations || []).map((location) =>
     `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`,
   ).join("");
@@ -5175,6 +5508,24 @@ function openEmployeeModal(employee = null) {
   renderEmployeeAccessProfile(employee);
   updateColorPicker(employee?.color || "#0b84c6");
   const displayOnly = state.employeeEditMode === "display";
+  const canEditProtectedRecord = fullAccess && canWriteSensitivePersonnelRecord();
+  elements.employeeProtectedRecord?.classList.toggle("hidden", !canEditProtectedRecord);
+  if (elements.employeeProtectedRecord) elements.employeeProtectedRecord.open = false;
+  elements.employeeProtectedRecord?.querySelectorAll("input,textarea").forEach((control) => {
+    control.setAttribute("autocomplete", "off");
+    control.setAttribute("data-1p-ignore", "true");
+    control.setAttribute("data-lpignore", "true");
+  });
+  if (canEditProtectedRecord) {
+    if (employee) loadEmployeeProtectedRecord(employee.personnel_number);
+    else {
+      const initial = normalizeProtectedPersonnelRecord({ sensitive: { address: { country: "Österreich" } } });
+      fillEmployeeProtectedRecord(initial);
+      state.employeePersonnelRecord = { employeeNumber: "", loaded: true, initial };
+      setEmployeeProtectedRecordDisabled(false);
+      if (elements.employeeProtectedRecordHint) elements.employeeProtectedRecordHint.textContent = "Die Angaben werden verschlüsselt gemeinsam mit dem neuen Teammitglied gespeichert.";
+    }
+  }
   const protectedControls = [
     "employeeName", "employeeNickname", "employeeHours", "employeeTargetWorkdays", "employeeHomeLocation", "employeePosition",
     "employeeTimeConfirmationLevel", "employeePreferredDepartment", "employeePreferredDay", "employeeActive",
@@ -5507,6 +5858,11 @@ async function saveEmployee(event) {
   if (canManageWifiAutomationSettings()) {
     body.timeConfirmationLevel = elements.employeeTimeConfirmationLevel.value;
     body.sicknessWithoutAumEnabled = elements.employeeSicknessWithoutAumEnabled.checked;
+  }
+  if (canWriteSensitivePersonnelRecord() && state.employeeEditMode === "full" && state.employeePersonnelRecord?.loaded) {
+    const currentPersonnelRecord = collectEmployeeProtectedRecord();
+    const recordPatch = personnelRecordPatch(state.employeePersonnelRecord.initial || {}, currentPersonnelRecord);
+    if (!isEdit || Object.keys(recordPatch).length) body.personnelRecord = isEdit ? recordPatch : currentPersonnelRecord;
   }
   const editedEmployee = state.allEmployees.find((employee) => employee.personnel_number === number) || null;
   if (canEditEmployeeAccessProfile(editedEmployee)) {
@@ -7374,6 +7730,8 @@ document.querySelector(".main-nav").addEventListener("click", (event) => {
   loadAll();
 });
 document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => document.querySelector(`#${button.dataset.close}`).close()));
+elements.employeeModal?.addEventListener("close", clearEmployeeProtectedRecord);
+elements.personnelRecordModal?.addEventListener("close", clearPersonnelRecordDialog);
 document.querySelector("#previousWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, -7); loadAll(); });
 document.querySelector("#nextWeek").addEventListener("click", () => { state.weekStart = addDays(state.weekStart, 7); loadAll(); });
 document.querySelector("#todayButton").addEventListener("click", () => { state.weekStart = getMonday(new Date()); loadAll(); });
@@ -7501,6 +7859,15 @@ document.querySelector("#optionDateTo").addEventListener("change", () => {
 });
 elements.employeeForm.addEventListener("submit", saveEmployee);
 elements.personnelRecordForm?.addEventListener("submit", savePersonnelRecord);
+elements.personnelRecordContent?.addEventListener("click", (event) => {
+  const uploadButton = event.target.closest("[data-upload-personnel-document]");
+  if (uploadButton) {
+    uploadPersonnelDocument();
+    return;
+  }
+  const deleteButton = event.target.closest("[data-delete-personnel-document]");
+  if (deleteButton) deletePersonnelDocument(deleteButton.dataset.deletePersonnelDocument);
+});
 elements.shiftForm.addEventListener("submit", saveShift);
 elements.optionForm.addEventListener("submit", saveOption);
 elements.autoPlanForm.addEventListener("submit", createAutomaticPlan);

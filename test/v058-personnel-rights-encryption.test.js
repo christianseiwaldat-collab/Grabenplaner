@@ -506,7 +506,7 @@ test("v0.70 Block 2: Personalakt-Oberfläche trennt Kontakt, sensible Daten und 
   const styles = fs.readFileSync(path.join(__dirname, "..", "public", "styles.css"), "utf8");
   assert.match(html, /id="personnelRecordForm"/);
   assert.match(html, /id="savePersonnelRecordButton"/);
-  assert.match(script, /name="socialSecurityNumber"/);
+  assert.match(script, /personnelRecordField\("socialSecurityNumber"/);
   assert.match(script, /personnel:sensitive:read/);
   assert.match(script, /phoneWriteRequiresTrustA/);
   assert.match(styles, /\.personnel-record-field-grid/);
