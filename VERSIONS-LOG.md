@@ -1,5 +1,16 @@
 # Grabenplaner Versions-Log
 
+## v0.71 Beta
+
+- Jede Hauptseite kann ihre eigene gespeicherte helle oder dunkle Darstellung verwenden; die technische Fußzeile folgt dem gewählten Erscheinungsbild.
+- Die neue Dashboard-Zentrale bündelt Rechte, Standardprozesse, eigene Prozesse und eine anordenbare Filialübersicht mit datensparsamen Abwesenheitsinformationen.
+- Der Personalakt wurde um verschlüsselte persönliche, vertragliche, Kontakt- und Beschäftigungsdaten sowie verschlüsselte Dokumente erweitert.
+- Feldgenaue Rollenmatrizen steuern für Filial- und Abteilungsleitungen getrennt, welche Personalakt-Daten verborgen, lesbar oder bearbeitbar sind.
+- Eine zentrale Personalverwaltung mit frei verwaltbaren Kostenstellen bildet auch Beschäftigte außerhalb von Filialteams ab.
+- Filialverwaltung, Einsatzfilialen und die zentrale Urlaubsübersicht berücksichtigen Standort, Abteilung, Mindestbesetzung, Sperren und bestätigte Ersatzdienste.
+- Personalleitung und Administration können eigene grafische Prozesse mit Bedingungen, Zuständigkeiten, Aufgaben und datensparsamen Benachrichtigungen definieren.
+- AUM-Dokumentzugriff und Fallzuständigkeit werden serverseitig nach Rolle, Bereich und ausdrücklicher Freigabe durchgesetzt.
+
 ## v0.70 Beta
 
 - AUM-Dokumente und erkannte Gesundheitsdaten sind serverseitig besonders geschützt; Zugriffe werden nachvollziehbar protokolliert.

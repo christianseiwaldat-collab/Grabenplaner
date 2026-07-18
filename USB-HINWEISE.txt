@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.70 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.71 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,22 +13,15 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Version v0.70 Beta:
-  - Service-Patch: Portable Updates kopieren verschachtelte Laufzeitordner vollständig.
-  - Der Neustart wird erst nach erfolgreicher Bereitschaftsprüfung als abgeschlossen gemeldet.
-  - Grafisches Rechte-Dashboard für Personalleitung, Admin, IT-Admin und Developer.
-  - Nachvollziehbarer Weg von Person und Rolle über Standort oder Abteilung zu den wirksamen Rechten.
-  - Getrennte Darstellung von Rollenrechten, individuellen Zusatzrechten und Bereichsgrenzen.
-  - Suche und Filter nach Teammitglied, Recht, Rolle, Standort, Abteilung und Rechteart.
-  - Grafische Standardwege für Urlaub, ZA, Krankheit/AUM, Tagesprüfung und Lohnübergabe.
-  - Prozessschritte erklären Zuständigkeit, aktive Einstellung und benötigte Rechte.
-  - Standortbezogene Zeitregeln werden direkt für die gewählte Filiale dargestellt.
-  - Konfigurationsprüfung unterscheidet geprüfte Punkte, Hinweise und echte Blocker.
-  - Folgenlose Simulation zeigt alternative Freigabe- und Bearbeitungswege ohne Datenänderung.
-  - Gewählte Prozesswege können als PDF-Dokumentation ausgegeben werden.
-  - Eigene helle oder dunkle Darstellung ausschließlich für das Rechte-Dashboard.
-  - Wiederverwendbare, an die geprüfte Quelle gebundene SQL-Importprofile.
-  - Versionierte JSON-Schnittstellenverträge für lesende Personalübernahme und kontrollierte Lohnübergabe.
+Version v0.71 Beta:
+  - Gespeicherte helle oder dunkle Darstellung je Hauptseite und einstellbare Dashboard-Schriftgröße.
+  - Neue Dashboard-Zentrale mit Rechte-, Prozess- und Filialübersicht sowie persönlicher Filialreihenfolge.
+  - Erweiterter, verschlüsselter Personalakt mit feldgenauen Lese- und Bearbeitungsrechten.
+  - Zentrale Personalverwaltung und Kostenstellen für Filialen, Verwaltung und weitere Betriebe.
+  - Filialverwaltung mit Einsatzfilialen, Abteilungen und standortbezogener Urlaubsprüfung.
+  - Globale Urlaubsübersicht ohne Umgehung von Mindestbesetzung, Sperren oder Bereichsrechten.
+  - Eigene grafische Prozesse mit Zuständigkeiten, Bedingungen und internen oder externen Hinweisen.
+  - AUM-Zugriff und Fallzuständigkeit lassen sich für lokale Leitungen sicher steuern.
 
 USB-Stick-Assistent:
   - In Lokal-, LAN- und HTTPS-Betrieb für Developer, IT-Admin oder Admin verfügbar,
