@@ -59,6 +59,12 @@ const optionNames = {
 const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const statusLabels = { pending: "Offen", submitted: "Übermittelt", reported: "Gemeldet", aum_received: "AUM vorhanden", not_required: "AUM nicht erforderlich", recovered: "Wieder arbeitsfähig", pending_local: "Offen", preliminary_local: "Vorläufig genehmigt", pending_hr: "Wartet auf Personalleitung", approved: "Genehmigt", rejected: "Abgelehnt", cancelled: "Storniert", withdrawn: "Zurückgezogen", reviewed: "Geprüft", returned: "Ergänzung erforderlich", warning: "Besetzung prüfen", yellow: "AUM überfällig", red: "Rot eskaliert" };
 
+function amuReportStatusText(report) {
+  return report?.review_mode === "automatic"
+    ? "Automatisch geprüft und zugeordnet"
+    : statusLabels[report?.status] || report?.status || "";
+}
+
 function applyDeviceMode() {
   const compact = window.matchMedia("(max-width: 720px)").matches;
   const touch = window.matchMedia("(pointer: coarse)").matches;
@@ -2473,7 +2479,7 @@ function renderAmuReports() {
     const documents = report.documents || [];
     const canWithdraw = ["pending", "submitted", "pending_local", "returned"].includes(report.status);
     const period = `${dateText(report.incapacity_from)}${report.incapacity_to ? `–${dateText(report.incapacity_to)}` : " · Ende offen"}`;
-    return `<article class="request-item amu-report" data-amu-report-id="${Number(report.id)}"><div><strong>${period}</strong>${report.employee_note ? `<span>${esc(report.employee_note)}</span>` : ""}<span class="status ${esc(report.status)}">${esc(statusLabels[report.status] || report.status)}</span><div class="document-links">${documents.map((document) => { const size = document.byte_size || document.size; return `<a href="/api/portal/v1/me/amu-reports/${Number(report.id)}/documents/${encodeURIComponent(String(document.id))}/content" target="_blank" rel="noopener">${esc(document.original_filename || document.original_name || document.filename || "Dokument")}${size ? ` · ${formatBytes(size)}` : ""}</a>`; }).join("")}</div></div>${canWithdraw ? '<button class="cancel-request" data-withdraw-amu type="button">Zurückziehen</button>' : ""}</article>`;
+    return `<article class="request-item amu-report" data-amu-report-id="${Number(report.id)}"><div><strong>${period}</strong>${report.employee_note ? `<span>${esc(report.employee_note)}</span>` : ""}<span class="status ${esc(report.status)}">${esc(amuReportStatusText(report))}</span><div class="document-links">${documents.map((document) => { const size = document.byte_size || document.size; return `<a href="/api/portal/v1/me/amu-reports/${Number(report.id)}/documents/${encodeURIComponent(String(document.id))}/content" target="_blank" rel="noopener">${esc(document.original_filename || document.original_name || document.filename || "Dokument")}${size ? ` · ${formatBytes(size)}` : ""}</a>`; }).join("")}</div></div>${canWithdraw ? '<button class="cancel-request" data-withdraw-amu type="button">Zurückziehen</button>' : ""}</article>`;
   }).join("") : '<p class="empty-state">Noch keine AUM-Meldung vorhanden.</p>';
 }
 

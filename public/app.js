@@ -150,7 +150,7 @@ const elements = Object.fromEntries(
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan",
-    "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuSettingsHint", "saveAmuSettingsButton",
+    "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
     "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
@@ -2292,7 +2292,8 @@ async function loadAmuSettings() {
     elements.sicknessAumAllowanceEnabled.checked = policy.aumAllowance?.enabled === true;
     elements.sicknessAumAllowanceMaxCases.value = Number(policy.aumAllowance?.maxCasesPerYear ?? 3);
     elements.sicknessAumAllowanceMaxDays.value = Number(policy.aumAllowance?.maxCalendarDaysPerCase ?? 1);
-    [elements.amuUploadMaxMb, elements.amuStoredMaxMb, elements.amuConvertImagesToPdf, elements.amuGrayscaleImages, elements.amuOcrEnabled, elements.sicknessLocalWarningDays, elements.sicknessHrWarningDays, elements.sicknessAumAllowanceEnabled, elements.sicknessAumAllowanceMaxCases, elements.sicknessAumAllowanceMaxDays, elements.saveAmuSettingsButton]
+    elements.amuAutoReviewTrustA.checked = policy.autoReviewTrustA === true;
+    [elements.amuUploadMaxMb, elements.amuStoredMaxMb, elements.amuConvertImagesToPdf, elements.amuGrayscaleImages, elements.amuOcrEnabled, elements.sicknessLocalWarningDays, elements.sicknessHrWarningDays, elements.sicknessAumAllowanceEnabled, elements.sicknessAumAllowanceMaxCases, elements.sicknessAumAllowanceMaxDays, elements.amuAutoReviewTrustA, elements.saveAmuSettingsButton]
       .forEach((control) => { if (control) control.disabled = !result.canChange; });
     elements.amuSettingsHint.textContent = result.canChange ? "Änderbar durch Admin oder Personalleitung." : "Nur Admin oder Personalleitung kann diese Werte ändern.";
   } catch (error) {
@@ -2318,6 +2319,7 @@ async function saveAmuSettings() {
           maxCasesPerYear: Number(elements.sicknessAumAllowanceMaxCases.value),
           maxCalendarDaysPerCase: Number(elements.sicknessAumAllowanceMaxDays.value),
         },
+        autoReviewTrustA: elements.amuAutoReviewTrustA.checked,
       }),
     });
     state.amuPolicy = result.policy;
@@ -3118,7 +3120,7 @@ async function openPersonnelRecord(employeeNumber) {
         ? `<a class="secondary-button compact-button" href="/api/portal/v1/amu-reports/${report.id}/documents/${encodeURIComponent(document.id)}/content" target="_blank" rel="noopener">${escapeHtml(document.original_name || "Dokument")} öffnen</a>`
         : `<span class="status-badge inactive">${escapeHtml(document.original_name || "Dokument")} · kein Dateizugriff</span>`).join("");
       const period = `${formatDate(report.incapacity_from)}–${report.incapacity_to ? formatDate(report.incapacity_to) : "offen"}`;
-      return `<article class="personnel-record-entry"><div><strong>${period}</strong><small>${escapeHtml(report.location_name || "")}${report.department_name ? ` · ${escapeHtml(report.department_name)}` : ""} · ${escapeHtml(requestStatusLabels[report.status] || report.status)}</small>${report.employee_note ? `<p>${escapeHtml(report.employee_note)}</p>` : ""}</div><div class="amu-document-links">${documents || "Kein aktives Dokument"}</div></article>`;
+      return `<article class="personnel-record-entry"><div><strong>${period}</strong><small>${escapeHtml(report.location_name || "")}${report.department_name ? ` · ${escapeHtml(report.department_name)}` : ""} · ${escapeHtml(amuReportStatusLabel(report))}</small>${report.employee_note ? `<p>${escapeHtml(report.employee_note)}</p>` : ""}</div><div class="amu-document-links">${documents || "Kein aktives Dokument"}</div></article>`;
     }).join("");
     const amuSection = access.canReadAmu ? `
       <section class="personnel-record-section">
@@ -3186,6 +3188,12 @@ const requestStatusLabels = {
   returned: "Ergänzung erforderlich",
 };
 
+function amuReportStatusLabel(report) {
+  return report?.review_mode === "automatic"
+    ? "Automatisch geprüft und zugeordnet"
+    : requestStatusLabels[report?.status] || report?.status || "";
+}
+
 function renderRequestNavigation() {
   const counts = state.requestCounts;
   const sicknessEnabled = state.portalStatus?.installationFeatures?.sicknessAmu !== false;
@@ -3233,7 +3241,7 @@ function renderManagerRequests() {
         : `<span>${escapeHtml(document.original_name || "Dokument")} · ${Math.max(1, Math.round(Number(document.size || 0) / 1024))} KB</span>`).join("");
       return `<article class="manager-request-row amu-request-row" data-amu-report="${report.id}">
         <span class="employee-dot" style="--employee-color:${escapeHtml(report.color || "#507267")}"></span>
-        <div><strong><span class="request-kind-badge amu">AUM</span> ${escapeHtml(report.employee_number)} · ${escapeHtml(report.nickname || report.full_name)}</strong><small>${formatDate(report.incapacity_from)}–${formatDate(report.incapacity_to)} · ${escapeHtml(report.location_name || "")}${report.employee_note ? ` · ${escapeHtml(report.employee_note)}` : ""}</small><small><span class="request-status ${escapeHtml(report.status)}">${escapeHtml(requestStatusLabels[report.status] || report.status)}</span>${report.reviewed_by ? ` · geprüft von ${escapeHtml(report.reviewed_by)}` : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</small><div class="amu-document-links">${files}</div></div>
+        <div><strong><span class="request-kind-badge amu">AUM</span> ${escapeHtml(report.employee_number)} · ${escapeHtml(report.nickname || report.full_name)}</strong><small>${formatDate(report.incapacity_from)}–${formatDate(report.incapacity_to)} · ${escapeHtml(report.location_name || "")}${report.employee_note ? ` · ${escapeHtml(report.employee_note)}` : ""}</small><small><span class="request-status ${escapeHtml(report.status)}">${escapeHtml(amuReportStatusLabel(report))}</span>${report.reviewed_by && report.review_mode !== "automatic" ? ` · geprüft von ${escapeHtml(report.reviewed_by)}` : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</small><div class="amu-document-links">${files}</div></div>
         ${canReview && ["submitted", "returned"].includes(report.status) ? '<button class="secondary-button" data-open-amu-action type="button">AUM bearbeiten</button>' : ""}
       </article>`;
     }).join("") : '<p class="settings-note">Für diesen Filter gibt es keine Arbeitsunfähigkeitsmeldungen.</p>';
@@ -3291,7 +3299,7 @@ function openAmuAction(id) {
   elements.requestActionNote.value = "";
   elements.requestEditFields.classList.add("hidden");
   elements.requestActionHistory.innerHTML = report.reviewed_by
-    ? `<div><strong>${escapeHtml(report.reviewed_by)} · ${escapeHtml(requestStatusLabels[report.status] || report.status)}</strong><span>${report.reviewed_at ? escapeHtml(new Date(report.reviewed_at).toLocaleString("de-AT")) : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</span></div>`
+    ? `<div><strong>${report.review_mode === "automatic" ? "Grabenplaner-Automatik" : escapeHtml(report.reviewed_by)} · ${escapeHtml(amuReportStatusLabel(report))}</strong><span>${report.reviewed_at ? escapeHtml(new Date(report.reviewed_at).toLocaleString("de-AT")) : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</span></div>`
     : '<p>Noch keine Prüfung protokolliert.</p>';
   const canOpenFiles = !state.portalStatus?.portalEnabled || state.amuCanOpenFiles === true;
   elements.requestActionDocuments.classList.remove("hidden");

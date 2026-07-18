@@ -177,6 +177,9 @@ test.before(async () => {
   insertEmployee("611", "Identität Ohne Stammdaten", "91", departmentA);
   insertEmployee("612", "AUM Kontingent", "91", departmentA);
   insertEmployee("613", "AUM Dauer", "91", departmentA);
+  insertEmployee("614", "AUM Automatik", "91", departmentA);
+  insertEmployee("615", "AUM Manuell B", "91", departmentA);
+  insertEmployee("616", "AUM Datumsprüfung", "91", departmentA);
 
   const employeeAuth = session("591", "employee");
   const managerAuth = session("593", "manager");
@@ -1128,5 +1131,115 @@ test("AUM Block 4: Stufe-A-Kontingent, rückwirkende AUM-Pflicht und Krankenstun
     assert.equal(durationView.payload.aumAllowance.remainingCases, 2);
   } finally {
     await updateSettings(currentPolicy.aumAllowance || { enabled: false, maxCasesPerYear: 3, maxCalendarDaysPerCase: 1 });
+  }
+});
+
+test("AUM Block 5: nur der serverseitig vollständig bestätigte Stufe-A-Fall wird automatisch erledigt", async () => {
+  const { hrAuth } = auth;
+  const automaticEmployee = session("614", "employee");
+  const trustBEmployee = session("615", "employee");
+  const dateFallbackEmployee = session("616", "employee");
+  const socialSecurityNumbers = {
+    "614": "1018020290",
+    "615": "1026020290",
+    "616": "1034020290",
+  };
+  const today = mostRecentPlanningDate();
+  const germanDate = (isoDate) => isoDate.split("-").reverse().join(".");
+
+  db.prepare("UPDATE employees SET time_confirmation_level = 'A' WHERE personnel_number IN ('614', '616')").run();
+  db.prepare("UPDATE employees SET time_confirmation_level = 'B' WHERE personnel_number = '615'").run();
+  for (const employeeNumber of ["614", "615", "616"]) {
+    const profile = await request(`/api/portal/v1/personnel-records/${employeeNumber}`, {
+      method: "PUT",
+      auth: hrAuth,
+      body: { sensitive: { socialSecurityNumber: socialSecurityNumbers[employeeNumber] } },
+    });
+    assert.equal(profile.response.status, 200, JSON.stringify(profile.payload));
+  }
+
+  const previousSettings = await request("/api/portal/v1/amu-settings", { auth: hrAuth });
+  const currentPolicy = previousSettings.payload.policy;
+  const savePolicy = (autoReviewTrustA) => request("/api/portal/v1/amu-settings", {
+    method: "PUT",
+    auth: hrAuth,
+    body: {
+      uploadMaxMb: currentPolicy.uploadMaxMb,
+      storedMaxMb: currentPolicy.storedMaxMb,
+      convertImagesToPdf: currentPolicy.convertImagesToPdf,
+      grayscaleImages: currentPolicy.grayscaleImages,
+      ocrEnabled: currentPolicy.ocrEnabled,
+      localWarningDays: currentPolicy.localWarningDays,
+      hrWarningDays: currentPolicy.hrWarningDays,
+      aumAllowance: currentPolicy.aumAllowance,
+      autoReviewTrustA,
+    },
+  });
+
+  try {
+    const configured = await savePolicy(true);
+    assert.equal(configured.response.status, 200, JSON.stringify(configured.payload));
+    assert.equal(configured.payload.policy.autoReviewTrustA, true);
+
+    process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = `Versicherungsnummer: ${socialSecurityNumbers["614"]}\nArbeitsunfähig von ${germanDate(today)} bis ${germanDate(today)}`;
+    const automatic = await uploadAum(automaticEmployee, {
+      incapacityFrom: today,
+      incapacityTo: today,
+      directSicknessReport: "1",
+      ocrAssisted: "1",
+      ocrConfirmed: "1",
+    });
+    assert.equal(automatic.response.status, 201, JSON.stringify(automatic.payload));
+    assert.equal(automatic.payload.report.status, "reviewed");
+    assert.equal(automatic.payload.report.review_mode, "automatic");
+    assert.equal(Object.hasOwn(automatic.payload.report, "automatic_review"), false);
+
+    const protectedList = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
+    const protectedAutomatic = protectedList.payload.reports.find((entry) => Number(entry.id) === Number(automatic.payload.report.id));
+    assert.equal(protectedAutomatic.review_mode, "automatic");
+    assert.equal(protectedAutomatic.automatic_review.completed, true);
+    assert.equal(protectedAutomatic.automatic_review.reason, "all_criteria_met");
+    assert.equal(protectedAutomatic.identity_check.status, "matched");
+    assert.equal(JSON.stringify(protectedAutomatic).includes(socialSecurityNumbers["614"]), false);
+    assert.equal(Object.hasOwn(protectedAutomatic.automatic_review, "dateFrom"), false);
+    assert.equal(Object.hasOwn(protectedAutomatic.automatic_review, "dateTo"), false);
+    assert.ok(db.prepare("SELECT 1 FROM audit_log WHERE action = 'amu.report.auto-review' AND entity_id = ?").get(String(automatic.payload.report.id)));
+
+    const ownCases = await request("/api/portal/v1/me/sickness-cases", { auth: automaticEmployee });
+    assert.equal(ownCases.payload.cases[0].aum_allowance.reason, "aum_reviewed");
+
+    process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = `Versicherungsnummer: ${socialSecurityNumbers["615"]}\nArbeitsunfähig von ${germanDate(today)} bis ${germanDate(today)}`;
+    const trustBFallback = await uploadAum(trustBEmployee, {
+      incapacityFrom: today,
+      incapacityTo: today,
+      directSicknessReport: "1",
+      ocrAssisted: "1",
+      ocrConfirmed: "1",
+    });
+    assert.equal(trustBFallback.response.status, 201, JSON.stringify(trustBFallback.payload));
+    assert.equal(trustBFallback.payload.report.status, "submitted");
+    assert.equal(trustBFallback.payload.report.review_mode, "pending");
+
+    process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = `Versicherungsnummer: ${socialSecurityNumbers["616"]}`;
+    const spoofedConfirmation = await uploadAum(dateFallbackEmployee, {
+      incapacityFrom: today,
+      incapacityTo: today,
+      directSicknessReport: "1",
+      ocrAssisted: "1",
+      ocrConfirmed: "1",
+    });
+    assert.equal(spoofedConfirmation.response.status, 201, JSON.stringify(spoofedConfirmation.payload));
+    assert.equal(spoofedConfirmation.payload.report.status, "submitted");
+
+    const afterFallbacks = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
+    const trustBProtected = afterFallbacks.payload.reports.find((entry) => Number(entry.id) === Number(trustBFallback.payload.report.id));
+    const dateProtected = afterFallbacks.payload.reports.find((entry) => Number(entry.id) === Number(spoofedConfirmation.payload.report.id));
+    assert.equal(trustBProtected.automatic_review.reason, "trust_level_not_a");
+    assert.equal(dateProtected.automatic_review.reason, "dates_not_detected");
+    assert.equal(afterFallbacks.payload.pendingCount >= 2, true);
+    assert.ok(db.prepare("SELECT 1 FROM audit_log WHERE action = 'amu.report.auto-review.deferred' AND entity_id = ?").get(String(spoofedConfirmation.payload.report.id)));
+  } finally {
+    delete process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT;
+    await savePolicy(currentPolicy.autoReviewTrustA === true);
   }
 });
