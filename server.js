@@ -10,7 +10,8 @@ const net = require("node:net");
 const { promisify } = require("node:util");
 const { createAmuStorage, syncEncryptedFilesBackup } = require("./lib/amu-storage");
 const { prepareAmuDocument } = require("./lib/amu-processing");
-const { evaluateAumIdentity } = require("./lib/amu-identity-check");
+const { evaluateAumEvidence } = require("./lib/amu-identity-check");
+const { evaluateAutomaticAumReview } = require("./lib/amu-auto-review");
 const {
   ALLOWANCE_VERSION,
   VALUATION_VERSION,
@@ -2009,13 +2010,13 @@ function timingSafeLookupEqual(left, right) {
   return crypto.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(actual, "hex"));
 }
 
-async function evaluateUploadedAumIdentity(employeeNumber, documents) {
+async function evaluateUploadedAumEvidence(employeeNumber, documents) {
   const normalizedEmployeeNumber = String(employeeNumber || "");
   const readStoredLookup = () => String(db.prepare(`
     SELECT social_security_lookup FROM personnel_sensitive_records WHERE employee_number = ?
   `).get(normalizedEmployeeNumber)?.social_security_lookup || "");
   const storedLookup = readStoredLookup();
-  return evaluateAumIdentity(documents, {
+  return evaluateAumEvidence(documents, {
     profileConfigured: Boolean(storedLookup),
     compareCandidate(candidate) {
       const candidateLookup = personnelSensitiveLookup("social-security-number", candidate);
@@ -4776,6 +4777,7 @@ function getAmuPolicy() {
       maxCalendarDaysPerCase: Number.isFinite(parsedAllowanceDays)
         ? Math.min(3, Math.max(1, Math.trunc(parsedAllowanceDays))) : 1,
     },
+    autoReviewTrustA: settings.amu_auto_review_trust_a_enabled === "1",
   };
 }
 
@@ -5487,6 +5489,9 @@ function validateAmuPolicy(body = {}) {
       maxCasesPerYear,
       maxCalendarDaysPerCase,
     },
+    autoReviewTrustA: body.autoReviewTrustA === undefined
+      ? currentPolicy.autoReviewTrustA
+      : body.autoReviewTrustA === true,
   };
 }
 
@@ -8325,6 +8330,11 @@ function serializeAmuReports(rows, { includeIdentityCheck = false } = {}) {
       withdrawn_at: payload.withdrawnAt || null,
       identity_check: includeIdentityCheck
         ? payload.identityCheck || { status: "not_checked", checkedAt: null, engineVersion: null }
+        : undefined,
+      review_mode: payload.automaticReview?.completed === true
+        ? "automatic" : row.status === "reviewed" ? "manual" : "pending",
+      automatic_review: includeIdentityCheck
+        ? payload.automaticReview || null
         : undefined,
       protected_payload: undefined,
       documents: documents.get(Number(row.id)) || [],
@@ -14639,6 +14649,7 @@ function rightsDashboardProcesses() {
           { label: "PL-Eskalation", value: `nach ${amuPolicy.hrWarningDays} Tag(en)`, tone: "critical" },
           { label: "Lokale OCR", value: amuPolicy.ocrEnabled ? "Aktiv" : "Deaktiviert", tone: amuPolicy.ocrEnabled ? "positive" : "neutral" },
           { label: "Stufe A ohne AUM", value: amuPolicy.aumAllowance.enabled ? `${amuPolicy.aumAllowance.maxCasesPerYear} Fall/Fälle · max. ${amuPolicy.aumAllowance.maxCalendarDaysPerCase} Tag(e)` : "Deaktiviert", tone: amuPolicy.aumAllowance.enabled ? "positive" : "neutral" },
+          { label: "Sichere Auto-Prüfung", value: amuPolicy.autoReviewTrustA ? "Stufe A aktiv" : "Deaktiviert", tone: amuPolicy.autoReviewTrustA ? "positive" : "neutral" },
           { label: "AUM-Dateizugriff", value: "PL+ mit Zusatzrecht", tone: "positive" },
         ],
         simulations: [
@@ -14653,7 +14664,7 @@ function rightsDashboardProcesses() {
           { id: "document", title: "AUM direkt oder später nachreichen", actor: "Teammitglied", type: "actor", state: "conditional", description: "Foto oder PDF kann bei der Krankmeldung oder nachträglich sicher hochgeladen werden; ein offenes Enddatum ist zulässig.", setting: `Upload bis ${amuPolicy.uploadMaxMb} MB, Speicherung bis ${amuPolicy.storedMaxMb} MB.`, permissions: ["own_amu:create"], settingsTarget: { tab: "access", label: "AUM-Einstellungen öffnen" } },
           { id: "ocr", title: "Datumswerte lokal erkennen", actor: "Grabenplaner", type: "system", state: amuPolicy.ocrEnabled ? "active" : "bypassed", description: amuPolicy.ocrEnabled ? "Die lokale OCR schlägt Beginn und Ende zur menschlichen Bestätigung vor." : "Die lokale OCR ist deaktiviert; Datumswerte werden manuell bestätigt.", setting: amuPolicy.ocrEnabled ? "OCR erstellt nur bearbeitbare Vorschläge." : "Keine automatische Datenerkennung.", permissions: [], settingsTarget: { tab: "access", label: "AUM-Einstellungen öffnen" } },
           { id: "secure_storage", title: "Dokument geschützt speichern", actor: "Grabenplaner", type: "system", state: "active", description: "AUM-Dokumente und Personalakt werden getrennt verschlüsselt gespeichert und revisionsfähig zugeordnet.", setting: amuPolicy.grayscaleImages ? "Bilder werden platzsparend in Graustufen verarbeitet." : "Farbinformationen bleiben erhalten.", permissions: [] },
-          { id: "review", title: "Fall fachlich prüfen", actor: "Personalleitung", type: "approval", state: "active", description: "Filial- und Abteilungsleitung sehen ausschließlich Zeitraum, Status und Planungswirkung. Das Dokument bleibt geschützten PL+-Rollen mit ausdrücklichem Leserecht vorbehalten.", setting: "AUM-Dateizugriff ist nicht an lokale Leitungen delegierbar.", permissions: ["amu:metadata:read", "amu:file:read", "amu:review"], settingsTarget: { tab: "access", label: "AUM-Einstellungen öffnen" } },
+          { id: "review", title: "Automatisch oder fachlich prüfen", actor: amuPolicy.autoReviewTrustA ? "Grabenplaner / Personalleitung" : "Personalleitung", type: "approval", state: amuPolicy.autoReviewTrustA ? "conditional" : "active", description: amuPolicy.autoReviewTrustA ? "Nur ein vollständig bestätigter Stufe-A-Fall mit exaktem SV- und Datumsabgleich sowie sauberer Datei wird automatisch erledigt. Jeder unsichere Fall bleibt zur PL-Prüfung offen." : "Filial- und Abteilungsleitung sehen ausschließlich Zeitraum, Status und Planungswirkung. Das Dokument bleibt geschützten PL+-Rollen mit ausdrücklichem Leserecht vorbehalten.", setting: amuPolicy.autoReviewTrustA ? "Automatische Prüfung ist aktiv; die manuelle Rückfallebene bleibt erhalten." : "AUM-Dateizugriff ist nicht an lokale Leitungen delegierbar.", permissions: ["amu:metadata:read", "amu:file:read", "amu:review"], settingsTarget: { tab: "access", label: "AUM-Einstellungen öffnen" } },
           { id: "completion", title: "Arbeitsfähigkeit abschließen", actor: "Teammitglied oder Personalleitung", type: "finish", state: "active", description: "Ein bestätigtes Enddatum oder eine Rückkehrmeldung beendet die Nichtverfügbarkeit nachvollziehbar.", setting: "Ohne Enddatum bleibt der Krankenstandsfall offen.", permissions: ["own_sickness:read"] },
         ],
       }),
@@ -15597,6 +15608,7 @@ app.put("/api/portal/v1/amu-settings", (request, response) => {
     sickness_aum_allowance_enabled: policy.aumAllowance.enabled ? "1" : "0",
     sickness_aum_allowance_max_cases: String(policy.aumAllowance.maxCasesPerYear),
     sickness_aum_allowance_max_days: String(policy.aumAllowance.maxCalendarDaysPerCase),
+    amu_auto_review_trust_a_enabled: policy.autoReviewTrustA ? "1" : "0",
   };
   const upsert = db.prepare(`
     INSERT INTO portal_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -15813,6 +15825,7 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
   const retentionDays = Math.min(3650, Math.max(30, Number(getPortalSettings().amu_retention_days || 730)));
   const saved = [];
   let identityCheck = null;
+  let dateEvidence = null;
   let createdSicknessCaseId = 0;
   let committed = false;
   amuMutationInProgress += 1;
@@ -15836,7 +15849,9 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
     }
     // Die lokale Datums-Erkennung ist optional. Der geschützte serverseitige
     // Abgleich mit der tatsächlich hochgeladenen Datei bleibt davon unabhängig.
-    identityCheck = await evaluateUploadedAumIdentity(session.employeeNumber, documents);
+    const documentEvidence = await evaluateUploadedAumEvidence(session.employeeNumber, documents);
+    identityCheck = documentEvidence.identity;
+    dateEvidence = documentEvidence.dates;
     if (identityCheck.status === "mismatch") {
       auditPortal(session.employeeNumber, "amu.identity.reject", "protected_record",
         protectedPortalEntityId("employee", session.employeeNumber), JSON.stringify({ status: "mismatch" }));
@@ -15918,22 +15933,42 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
       }
       const reportRetentionBase = incapacityTo
         || (linkedPayload?.status === "recovered" ? linkedPayload.returnToWorkDate : "");
+      const automaticReviewDecision = evaluateAutomaticAumReview({
+        enabled: policy.autoReviewTrustA,
+        trustLevelAtReport: linkedPayload?.aumAllowance?.trustLevelAtReport || "",
+        identityStatus: identityCheck.status,
+        dateEvidence,
+        submittedDateFrom: incapacityFrom,
+        submittedDateTo: incapacityTo,
+        ocrAssisted,
+        ocrConfirmed,
+        scanStatuses: saved.map((item) => item.scanStatus),
+      });
+      const automaticReview = {
+        version: automaticReviewDecision.version,
+        completed: automaticReviewDecision.completed,
+        reason: automaticReviewDecision.reason,
+        criteria: automaticReviewDecision.criteria,
+        evaluatedAt: new Date().toISOString(),
+      };
+      const reportStatus = automaticReview.completed ? "reviewed" : "submitted";
       const reportResult = db.prepare(`
         INSERT INTO amu_reports
           (sickness_case_id, employee_number, location_id, department_id, incapacity_from, incapacity_to, employee_note, status, retention_until, protected_payload)
-        VALUES (?, ?, ?, ?, '', '', '', 'submitted', NULL, '')
-      `).run(linkedSicknessCase?.id || null, session.employeeNumber, reportContext.locationId, reportContext.departmentId);
+        VALUES (?, ?, ?, ?, '', '', '', ?, NULL, '')
+      `).run(linkedSicknessCase?.id || null, session.employeeNumber, reportContext.locationId, reportContext.departmentId, reportStatus);
       const reportId = Number(reportResult.lastInsertRowid);
       const reportPayload = storage.protectRecord(JSON.stringify({
         incapacityFrom,
         incapacityTo,
         employeeNote,
-        reviewedBy: "",
-        reviewedAt: "",
+        reviewedBy: automaticReview.completed ? "system" : "",
+        reviewedAt: automaticReview.completed ? automaticReview.evaluatedAt : "",
         reviewNote: "",
         retentionUntil: isIsoDate(reportRetentionBase) ? addDays(reportRetentionBase, retentionDays) : "",
         withdrawnAt: "",
         identityCheck,
+        automaticReview,
         ocrDateAssisted: ocrAssisted,
         ocrDateConfirmed: ocrAssisted && ocrConfirmed,
       }), amuReportProtectionContext({ id: reportId, employee_number: session.employeeNumber }));
@@ -15977,7 +16012,7 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
         const sicknessRetentionBase = sicknessPayload.returnToWorkDate || sicknessPayload.expectedEnd
           || incapacityTo || sicknessPayload.startDate;
         sicknessPayload.retentionUntil = addDays(sicknessRetentionBase, sicknessCaseRetentionDays());
-        reconcileSicknessPayloadRules(sicknessPayload, new Date());
+        reconcileSicknessPayloadRules(sicknessPayload, new Date(), { aumReviewed: automaticReview.completed });
         db.prepare(`
           UPDATE sickness_cases SET status_lookup = ?, protected_payload = ?, purge_after = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
         `).run(sicknessStatusLookup(nextStatus), protectJson(sicknessPayload, sicknessCaseProtectionContext(linkedSicknessCase)),
@@ -15986,6 +16021,13 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
       auditPortal(session.employeeNumber, "amu.report.create", "amu_report", String(reportId), JSON.stringify({ locationId: reportContext.locationId, documentCount: saved.length }));
       auditPortal(session.employeeNumber, "amu.identity.check", "amu_report", String(reportId),
         JSON.stringify({ status: identityCheck.status }));
+      auditPortal(automaticReview.completed ? "system" : session.employeeNumber,
+        automaticReview.completed ? "amu.report.auto-review" : "amu.report.auto-review.deferred",
+        "amu_report", String(reportId), JSON.stringify({
+          version: automaticReview.version,
+          reason: automaticReview.reason,
+          criteria: automaticReview.criteria,
+        }));
       db.exec("COMMIT");
       committed = true;
       if (createdSicknessCaseId) {
@@ -16002,17 +16044,26 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
         reconcileSicknessStaffingRisk(sicknessCaseMetadata(linkedSicknessCase.id));
       }
       const report = amuReportMetadata(reportId);
-      const recipients = new Set([
-        ...requestReviewerRecipients(reportContext.locationId, reportContext.departmentId, "local", session.employeeNumber),
-        ...requestReviewerRecipients(reportContext.locationId, reportContext.departmentId, "hr", session.employeeNumber),
-      ]);
-      for (const recipient of recipients) {
-        createPortalNotification(recipient, "protected.update", "Neue geschützte Meldung", "Bitte im geschützten Portal anmelden.", {
-          target: "/portal.html?tab=leadershipApprovals",
+      if (automaticReview.completed) {
+        createPortalNotification(session.employeeNumber, "protected.update", "AUM automatisch geprüft", "Die AUM wurde sicher zugeordnet und abgeschlossen.", {
+          target: "/portal.html?tab=amu",
           entityType: "protected_record",
           entityId: protectedPortalEntityId("amu-report", reportId),
-          dedupeKey: protectedPortalDedupeKey(["amu", reportId, "submitted", recipient]),
+          dedupeKey: protectedPortalDedupeKey(["amu", reportId, "auto-reviewed", session.employeeNumber]),
         });
+      } else {
+        const recipients = new Set([
+          ...requestReviewerRecipients(reportContext.locationId, reportContext.departmentId, "local", session.employeeNumber),
+          ...requestReviewerRecipients(reportContext.locationId, reportContext.departmentId, "hr", session.employeeNumber),
+        ]);
+        for (const recipient of recipients) {
+          createPortalNotification(recipient, "protected.update", "Neue geschützte Meldung", "Bitte im geschützten Portal anmelden.", {
+            target: "/portal.html?tab=leadershipApprovals",
+            entityType: "protected_record",
+            entityId: protectedPortalEntityId("amu-report", reportId),
+            dedupeKey: protectedPortalDedupeKey(["amu", reportId, "submitted", recipient]),
+          });
+        }
       }
       response.status(201).json({ report: serializeAmuReports([report])[0] });
     } catch (error) {

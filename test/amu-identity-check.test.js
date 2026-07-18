@@ -5,6 +5,8 @@ const test = require("node:test");
 
 const {
   ENGINE_VERSION,
+  datesFromTexts,
+  evaluateAumEvidence,
   evaluateAumIdentity,
   identityFromTexts,
 } = require("../lib/amu-identity-check");
@@ -98,6 +100,50 @@ test("lässt fehlende OCR-Treffer kontrolliert zur manuellen Prüfung offen", as
     });
     assert.equal(result.status, "not_detected");
     assert.equal(Object.hasOwn(result, "candidate"), false);
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+    if (previousFixture === undefined) delete process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT;
+    else process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = previousFixture;
+  }
+});
+
+test("leitet für die Automatik nur einen vollständigen, sicheren AUM-Zeitraum ab", () => {
+  assert.deepEqual(datesFromTexts(["Arbeitsunfähig von 10.07.2026 bis 17.07.2026"]), {
+    status: "detected",
+    dateFrom: "2026-07-10",
+    dateTo: "2026-07-17",
+  });
+  assert.deepEqual(datesFromTexts(["Arbeitsunfähig seit 10.07.2026"]), {
+    status: "not_detected",
+    dateFrom: "",
+    dateTo: "",
+  });
+  assert.deepEqual(datesFromTexts([
+    "Arbeitsunfähig von 10.07.2026 bis 17.07.2026",
+    "Arbeitsunfähig von 18.07.2026 bis 19.07.2026",
+  ]), {
+    status: "not_detected",
+    dateFrom: "",
+    dateTo: "",
+  });
+});
+
+test("wertet SV-Nummer und Zeitraum serverseitig aus demselben Dokumenttext aus", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousFixture = process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT;
+  process.env.NODE_ENV = "test";
+  process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = `Versicherungsnummer: ${MATCHING_NUMBER}\nArbeitsunfähig von 10.07.2026 bis 17.07.2026`;
+  try {
+    const evidence = await evaluateAumEvidence([], {
+      profileConfigured: true,
+      compareCandidate: (value) => value === MATCHING_NUMBER,
+    });
+    assert.equal(evidence.identity.status, "matched");
+    assert.equal(evidence.dates.status, "detected");
+    assert.equal(evidence.dates.dateFrom, "2026-07-10");
+    assert.equal(evidence.dates.dateTo, "2026-07-17");
+    assert.doesNotMatch(JSON.stringify(evidence), /1000010190|Versicherungsnummer|Arbeitsunfähig/i);
   } finally {
     if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = previousNodeEnv;

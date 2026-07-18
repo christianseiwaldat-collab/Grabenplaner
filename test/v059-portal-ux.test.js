@@ -127,6 +127,19 @@ test("AUM Block 4: Mitarbeiterportal zeigt Kontingent und gespeicherte Krankenst
   assert.match(portalSource, /item\.aum_allowance\?\.required === false/);
 });
 
+test("AUM Block 5: PL-Schalter und automatischer Prüfstatus sind verständlich sichtbar", () => {
+  const adminHtml = fs.readFileSync(path.join(projectRoot, "public", "index.html"), "utf8");
+  const adminSource = fs.readFileSync(path.join(projectRoot, "public", "app.js"), "utf8");
+  const portalSource = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
+
+  assert.match(adminHtml, /id="amuAutoReviewTrustA"/);
+  assert.match(adminHtml, /Korrekt erkannte AUM bei Vertrauensstufe A automatisch erledigen/);
+  assert.match(adminSource, /autoReviewTrustA: elements\.amuAutoReviewTrustA\.checked/);
+  assert.match(adminSource, /Automatisch geprüft und zugeordnet/);
+  assert.match(portalSource, /report\?\.review_mode === "automatic"/);
+  assert.match(portalSource, /Automatisch geprüft und zugeordnet/);
+});
+
 test("Portal: Rückkehr von der Handy-Kamera hält den AUM-Bereich aktiv", () => {
   const source = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
   const selectionBlock = source.match(/function handleAmuFileSelection\(event\) \{[\s\S]+?\n\}/);
