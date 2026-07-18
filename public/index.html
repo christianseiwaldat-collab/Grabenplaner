@@ -497,13 +497,14 @@
             </section>
           </div>
 
-          <section class="rights-dashboard-process-panel hidden" id="rightsDashboardProcessesPanel" aria-label="Standardprozesse">
+          <section class="rights-dashboard-process-panel hidden" id="rightsDashboardProcessesPanel" aria-label="Standard- und eigene Prozesse">
             <div class="rights-process-toolbar">
-              <div><span class="eyebrow">Aktueller Regelstand</span><h2>Standardprozesse</h2><p>Prüfen, folgenlos simulieren und als lesbare Prozessdokumentation ausgeben.</p></div>
+              <div><span class="eyebrow">Aktueller Regelstand</span><h2>Standard- und eigene Prozesse</h2><p>Vorgegebene Abläufe prüfen und eigene, nachvollziehbare Prozesswege für den Betrieb gestalten.</p></div>
               <div class="rights-process-toolbar-controls">
                 <label><span>Standortbezug</span><select id="rightsProcessLocation"><option value="">Erster aktiver Standort</option></select></label>
                 <label><span>Simulation</span><select id="rightsProcessScenario"><option value="current">Aktuelle Konfiguration</option></select></label>
                 <button class="secondary-button" id="rightsProcessExportPdf" type="button">Prozess als PDF</button>
+                <button class="primary-button hidden" id="addCustomProcessButton" type="button">Eigenen Prozess anlegen</button>
               </div>
             </div>
             <section class="rights-process-validation" aria-label="Konfigurationsprüfung">
@@ -517,6 +518,7 @@
               </aside>
               <section class="rights-process-detail" aria-live="polite">
                 <div class="rights-process-heading"><div><span class="eyebrow">Ablauf &amp; Zuständigkeit</span><h2 id="rightsProcessTitle">Prozess</h2><p id="rightsProcessSummary"></p></div><span class="status-badge" id="rightsProcessStatus">Aktiv</span></div>
+                <div class="rights-custom-process-actions hidden" id="rightsCustomProcessActions" aria-label="Eigenen Prozess verwalten"></div>
                 <div class="rights-process-simulation-note" id="rightsProcessSimulationNote"><strong>Aktuelle Konfiguration</strong><span>Die Simulation verändert keine gespeicherten Daten.</span></div>
                 <div class="rights-process-rules" id="rightsProcessRules" aria-label="Aktuell wirksame Regeln"></div>
                 <div class="rights-process-flow-layout">
@@ -1484,6 +1486,33 @@
         <div class="rights-editor-permissions" id="rightsEditorPermissions"></div>
         <p class="calculation-note" id="rightsEditorHint">Zusatzrechte gelten innerhalb der bereits zugewiesenen Filiale beziehungsweise Abteilung.</p>
         <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="rightsEditorModal">Abbrechen</button><button type="submit" class="primary-button" id="saveRightsEditorButton">Rechte speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal custom-process-modal" id="customProcessModal">
+      <form method="dialog" id="customProcessForm" autocomplete="off">
+        <div class="modal-header"><div><span class="eyebrow">Eigener Prozess</span><h2 id="customProcessModalTitle">Prozess anlegen</h2><p>Ablauf, Zuständigkeiten und Benachrichtigungswege nachvollziehbar festlegen.</p></div><button type="button" class="close-button" data-close="customProcessModal">×</button></div>
+        <input id="customProcessId" type="hidden" />
+        <div class="form-grid custom-process-basics">
+          <label class="field full-width"><span>Titel</span><input id="customProcessTitle" minlength="3" maxlength="120" placeholder="z. B. Notbesetzung in einer Filiale" required /></label>
+          <label class="field"><span>Kurzzeichen</span><input id="customProcessSymbol" maxlength="5" placeholder="z. B. NB" required /><small>1 bis 5 Buchstaben oder Ziffern.</small></label>
+          <label class="field"><span>Status</span><select id="customProcessStatus"><option value="draft">Entwurf</option><option value="active">Aktiv</option></select></label>
+          <label class="field full-width"><span>Beschreibung</span><textarea id="customProcessDescription" rows="3" maxlength="600" placeholder="Wann und wofür wird dieser Prozess verwendet?" required></textarea></label>
+          <label class="field"><span>Geltungsbereich</span><select id="customProcessScopeType"><option value="company">Gesamtes Unternehmen</option><option value="location">Bestimmte Filiale</option><option value="department">Bestimmte Abteilung</option></select></label>
+          <label class="field hidden" id="customProcessScopeLocationField"><span>Filiale</span><select id="customProcessScopeLocation"></select></label>
+          <label class="field hidden" id="customProcessScopeDepartmentField"><span>Abteilung</span><select id="customProcessScopeDepartment"></select></label>
+          <label class="field"><span>Auslöser</span><select id="customProcessTriggerType"><option value="manual">Manuell</option><option value="staffing_shortfall">Mindestbesetzung unterschritten</option></select></label>
+          <label class="field hidden" id="customProcessShortfallField"><span>Mindestfehlbestand</span><input id="customProcessMinimumShortfall" type="number" min="1" max="99" step="1" value="1" /><small>Wie viele Personen mindestens zur Sollbesetzung fehlen müssen.</small></label>
+        </div>
+        <p class="calculation-note">E-Mail und SMS werden nur an verifizierte Empfänger und über eingerichtete Anbieter versendet. Der interne Hinweis bleibt davon unabhängig.</p>
+
+        <section class="custom-process-step-editor" aria-labelledby="customProcessStepsHeading">
+          <div class="custom-process-step-editor-heading"><div><span class="eyebrow">Ablauf</span><h3 id="customProcessStepsHeading">Geordnete Prozessschritte</h3><p>Jeder Schritt benennt Aufgabe, Zuständigkeit, Bedingung und erlaubte Verständigungswege.</p></div><button type="button" class="secondary-button" id="addCustomProcessStepButton">Schritt hinzufügen</button></div>
+          <div id="customProcessSteps"></div>
+        </section>
+        <datalist id="customProcessResponsibilityOptions"><option value="department_manager">Abteilungsleitung</option><option value="manager">Filialleitung</option><option value="hr">Personalleitung</option><option value="admin">Administration</option><option value="it_admin">IT-Administration</option><option value="developer">Developer</option></datalist>
+        <p class="message hidden" id="customProcessMessage"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="customProcessModal">Abbrechen</button><button type="submit" class="primary-button" id="saveCustomProcessButton">Prozess speichern</button></div>
       </form>
     </dialog>
 

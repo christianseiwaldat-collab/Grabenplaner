@@ -160,7 +160,8 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "amu:audit", label: "AUM-Prüfprotokoll lesen", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "sickness:read", label: "Krankmeldungen im eigenen Bereich lesen", group: "AUM", warningLevel: "high", hrDelegable: true },
   { id: "sickness:settings", label: "Krankmeldungs- und AUM-Fristen verwalten", group: "AUM", warningLevel: "critical" },
-  { id: "notifications:settings", label: "Eigene Besetzungswarnungen konfigurieren", group: "AUM", warningLevel: "normal", hrDelegable: true },
+  { id: "notifications:settings", label: "Eigene externe Warnungen und Prozessmeldungen konfigurieren", group: "AUM", warningLevel: "normal", hrDelegable: true },
+  { id: "processes:write", label: "Eigene Prozesse und Benachrichtigungsregeln verwalten", description: "Unternehmensweite Prozessdefinitionen anlegen, aktivieren, auslösen und archivieren.", group: "Zugänge & Rechte", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "integrations:read", label: "Schnittstellen und Laufprotokolle lesen", group: "Import & Lohnverrechnung", warningLevel: "high" },
   { id: "integrations:profiles:write", label: "Import- und Exportprofile verwalten", group: "Import & Lohnverrechnung", warningLevel: "high" },
   { id: "integrations:connections:read", label: "Direkte Verbindungen lesen", group: "Import & Lohnverrechnung", warningLevel: "high" },
@@ -257,7 +258,7 @@ const portalDashboardPermissionDetails = Object.freeze([
   { id: "own_amu:withdraw", label: "Eigene AUM-Meldung zurückziehen", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "own_sickness:create", label: "Eigene Krankmeldung erfassen", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "own_sickness:read", label: "Eigene Krankmeldungen lesen", group: "Eigene Daten", scopeBehavior: "self" },
-  { id: "notifications:settings", label: "Eigene Besetzungswarnungen konfigurieren", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "notifications:settings", label: "Eigene externe Warnungen und Prozessmeldungen konfigurieren", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "amu:local:manage", label: "AUM im eigenen Filialbereich öffnen und prüfen", description: "Standortgebundenes Grundrecht der Filialleitung; die Personalleitung kann den Zugriff rollenweit oder persönlich entziehen.", group: "AUM", warningLevel: "critical", scopeBehavior: "organizational" },
   { id: "wifi:settings", label: "WLAN-Zeitvorschläge verwalten", group: "Zeit & Abwesenheit", scopeBehavior: "global" },
   { id: "users:write", label: "Portal-Zugänge verwalten", group: "Zugänge & Rechte", scopeBehavior: "global" },
@@ -276,6 +277,7 @@ const portalGlobalPermissionIds = new Set([
   "personnel:central:read", "personnel:central:write", "cost_centers:read", "cost_centers:write",
   "personnel:sensitive:read", "personnel:sensitive:write",
   "amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit",
+  "processes:write",
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
   "integrations:connections:write", "integrations:credentials:write", "branding:read", "branding:write",
   "operation_mode:write", "backup:write", "update:write", "system:write", "wifi:settings",
@@ -410,6 +412,7 @@ const builtinPortalRoles = [
       "sickness:read",
       "sickness:settings",
       "notifications:settings",
+      "processes:write",
       "integrations:read",
       "integrations:profiles:write",
       "integrations:connections:read",
@@ -473,6 +476,7 @@ const builtinPortalRoles = [
       "sickness:read",
       "sickness:settings",
       "notifications:settings",
+      "processes:write",
       "integrations:read",
       "integrations:profiles:write",
       "integrations:connections:read",
@@ -502,6 +506,7 @@ builtinPortalRoles.push(
       "usb:provision",
       "roles:read", "roles:write", "audit:read", "scopes:write", "wifi:settings",
       "hr:settings", "sickness:read", "sickness:settings", "notifications:settings",
+      "processes:write",
       "integrations:read", "integrations:profiles:write", "integrations:connections:read",
       "integrations:connections:write", "integrations:credentials:write", "employees:import",
     ],
@@ -1799,6 +1804,7 @@ function createSchema() {
       employee_number TEXT NOT NULL,
       channel TEXT NOT NULL,
       enabled INTEGER NOT NULL DEFAULT 0,
+      process_notifications_enabled INTEGER NOT NULL DEFAULT 0,
       earliest_time TEXT NOT NULL DEFAULT '08:00',
       protected_destination TEXT NOT NULL DEFAULT '',
       verified_at TEXT,
@@ -1912,6 +1918,107 @@ function createSchema() {
       FOREIGN KEY (profile_id) REFERENCES integration_profiles(id) ON DELETE SET NULL
     );
 
+    CREATE TABLE IF NOT EXISTS custom_processes (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      symbol TEXT NOT NULL DEFAULT 'P',
+      description TEXT NOT NULL DEFAULT '',
+      scope_type TEXT NOT NULL DEFAULT 'company'
+        CHECK(scope_type IN ('company','location','department')),
+      location_id TEXT,
+      department_id INTEGER,
+      trigger_type TEXT NOT NULL DEFAULT 'manual'
+        CHECK(trigger_type IN ('manual','staffing_shortfall')),
+      trigger_minimum_shortfall INTEGER NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'draft'
+        CHECK(status IN ('draft','active','archived')),
+      revision INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      archived_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (department_id) REFERENCES departments(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS custom_process_steps (
+      id TEXT PRIMARY KEY,
+      process_id TEXT NOT NULL,
+      sort_order INTEGER NOT NULL,
+      step_type TEXT NOT NULL
+        CHECK(step_type IN ('actor','system','decision','approval','finish')),
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      responsibility_type TEXT NOT NULL DEFAULT 'system'
+        CHECK(responsibility_type IN ('system','role','employee')),
+      responsibility_reference TEXT NOT NULL DEFAULT '',
+      responsibility_label TEXT NOT NULL DEFAULT '',
+      condition_type TEXT NOT NULL DEFAULT 'always'
+        CHECK(condition_type IN ('always','when','optional')),
+      condition_text TEXT NOT NULL DEFAULT '',
+      notification_channels TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(process_id, sort_order),
+      FOREIGN KEY (process_id) REFERENCES custom_processes(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS custom_process_revisions (
+      process_id TEXT NOT NULL,
+      revision INTEGER NOT NULL,
+      snapshot_json TEXT NOT NULL,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (process_id, revision),
+      FOREIGN KEY (process_id) REFERENCES custom_processes(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS custom_process_runs (
+      id TEXT PRIMARY KEY,
+      process_id TEXT NOT NULL,
+      process_revision INTEGER NOT NULL,
+      trigger_type TEXT NOT NULL,
+      trigger_key TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'open'
+        CHECK(status IN ('open','resolved')),
+      location_id TEXT,
+      department_id INTEGER,
+      triggered_by TEXT NOT NULL DEFAULT '',
+      activation_count INTEGER NOT NULL DEFAULT 1,
+      resolved_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (process_id) REFERENCES custom_processes(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (department_id) REFERENCES departments(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS custom_process_run_steps (
+      run_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      sort_order INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending','active','completed','skipped')),
+      activated_at TEXT,
+      completed_at TEXT,
+      completed_by TEXT NOT NULL DEFAULT '',
+      completion_note TEXT NOT NULL DEFAULT '',
+      completion_request_id TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (run_id, step_id),
+      FOREIGN KEY (run_id) REFERENCES custom_process_runs(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       actor TEXT NOT NULL DEFAULT '',
@@ -1955,6 +2062,12 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_integration_connections_kind ON integration_connections(kind, active, name);
     CREATE INDEX IF NOT EXISTS idx_integration_deliveries_started ON integration_deliveries(started_at DESC, status);
     CREATE INDEX IF NOT EXISTS idx_integration_deliveries_connection ON integration_deliveries(connection_id, started_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_custom_processes_status ON custom_processes(status, updated_at, title);
+    CREATE INDEX IF NOT EXISTS idx_custom_processes_scope ON custom_processes(scope_type, location_id, department_id, status);
+    CREATE INDEX IF NOT EXISTS idx_custom_process_steps_process ON custom_process_steps(process_id, sort_order);
+    CREATE INDEX IF NOT EXISTS idx_custom_process_revisions_process ON custom_process_revisions(process_id, revision DESC);
+    CREATE INDEX IF NOT EXISTS idx_custom_process_runs_process ON custom_process_runs(process_id, status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_custom_process_run_steps_status ON custom_process_run_steps(run_id, status, sort_order);
     CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
     CREATE INDEX IF NOT EXISTS idx_portal_users_role_active ON portal_users(role, active);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_employee ON portal_sessions(employee_number, expires_at);
@@ -2058,6 +2171,9 @@ if (legacySchemaMigrationRequired) {
 }
 createSchema();
 ensureColumn("shifts", "location_id", "TEXT");
+ensureColumn("sickness_notification_preferences", "process_notifications_enabled", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("custom_process_runs", "activation_count", "INTEGER NOT NULL DEFAULT 1");
+ensureColumn("custom_process_run_steps", "completion_request_id", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("integration_connections", "revision", "INTEGER NOT NULL DEFAULT 1");
 ensureColumn("integration_deliveries", "connection_revision", "INTEGER NOT NULL DEFAULT 1");
 ensureColumn("integration_deliveries", "connection_fingerprint", "TEXT NOT NULL DEFAULT ''");
@@ -2820,6 +2936,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.68-dashboard-validation", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.69-integration-contracts", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.71-custom-processes-notifications", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -5865,12 +5983,17 @@ function runSicknessEscalationSweep(now = new Date()) {
 }
 
 function refreshSicknessStaffingAfterPlanningChange(now = new Date()) {
+  let result = { checked: 0, alerts: 0 };
   try {
-    return runSicknessEscalationSweep(now);
+    result = runSicknessEscalationSweep(now);
   } catch (error) {
     console.error("Krankmeldungs-Besetzungsprüfung nach Dienstplanänderung fehlgeschlagen:", error);
-    return { checked: 0, alerts: 0, error: true };
+    result = { checked: 0, alerts: 0, error: true };
   }
+  try { reconcileCustomProcessTriggers(now); } catch (error) {
+    console.error("Eigene Prozessauslöser nach Dienstplanänderung fehlgeschlagen:", error);
+  }
+  return result;
 }
 
 const SICKNESS_NOTIFICATION_CHANNELS = Object.freeze(["email", "sms", "whatsapp"]);
@@ -5897,7 +6020,7 @@ function normalizedNotificationDestination(channel, value) {
 
 function sicknessNotificationPreferences(employeeNumber) {
   const rows = db.prepare(`
-    SELECT employee_number, channel, enabled, earliest_time, protected_destination, verified_at,
+    SELECT employee_number, channel, enabled, process_notifications_enabled, earliest_time, protected_destination, verified_at,
            verification_expires_at, verification_attempts, updated_at
     FROM sickness_notification_preferences WHERE employee_number = ?
   `).all(employeeNumber);
@@ -5911,6 +6034,7 @@ function sicknessNotificationPreferences(employeeNumber) {
     }
     channels[channel] = {
       enabled: Boolean(row?.enabled),
+      processEnabled: Boolean(row?.process_notifications_enabled),
       destination,
       earliestTime: isTime(row?.earliest_time) ? row.earliest_time : "08:00",
       verifiedAt: row?.verified_at || null,
@@ -5930,9 +6054,10 @@ function saveSicknessNotificationPreferences(employeeNumber, body = {}) {
   const values = SICKNESS_NOTIFICATION_CHANNELS.map((channel) => {
     const input = submitted[channel] || {};
     const enabled = input.enabled === true;
+    const processEnabled = input.processEnabled === true;
     const destination = normalizedNotificationDestination(channel, input.destination);
-    if (enabled && !destination) {
-      throw httpError(400, "Für jeden aktivierten Warnkanal muss ein Empfänger hinterlegt sein.", "SICKNESS_NOTIFICATION_DESTINATION_REQUIRED");
+    if ((enabled || processEnabled) && !destination) {
+      throw httpError(400, "Für jeden aktivierten externen Kanal muss ein Empfänger hinterlegt sein.", "SICKNESS_NOTIFICATION_DESTINATION_REQUIRED");
     }
     const existing = existingByChannel.get(channel);
     const previousDestination = existing?.protected_destination
@@ -5940,11 +6065,11 @@ function saveSicknessNotificationPreferences(employeeNumber, body = {}) {
       : "";
     const unchanged = destination && destination === previousDestination;
     const verifiedAt = unchanged ? (existing?.verified_at || null) : null;
-    if (enabled && !verifiedAt) {
+    if ((enabled || processEnabled) && !verifiedAt) {
       throw httpError(409, "Bitte dieses Ziel zuerst mit dem sechsstelligen Einmalcode bestätigen.", "SICKNESS_NOTIFICATION_VERIFICATION_REQUIRED");
     }
     return {
-      channel, enabled, destination, verifiedAt,
+      channel, enabled, processEnabled, destination, verifiedAt,
       verificationHash: unchanged ? (existing?.verification_hash || "") : "",
       verificationSalt: unchanged ? (existing?.verification_salt || "") : "",
       verificationExpiresAt: unchanged ? (existing?.verification_expires_at || null) : null,
@@ -5954,12 +6079,13 @@ function saveSicknessNotificationPreferences(employeeNumber, body = {}) {
   });
   const upsert = db.prepare(`
     INSERT INTO sickness_notification_preferences
-      (employee_number, channel, enabled, earliest_time, protected_destination, verified_at,
+      (employee_number, channel, enabled, process_notifications_enabled, earliest_time, protected_destination, verified_at,
        verification_hash, verification_salt, verification_expires_at, verification_attempts,
        verification_sent_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(employee_number, channel) DO UPDATE SET
-      enabled = excluded.enabled, earliest_time = excluded.earliest_time,
+      enabled = excluded.enabled, process_notifications_enabled = excluded.process_notifications_enabled,
+      earliest_time = excluded.earliest_time,
       protected_destination = excluded.protected_destination, verified_at = excluded.verified_at,
       verification_hash = excluded.verification_hash, verification_salt = excluded.verification_salt,
       verification_expires_at = excluded.verification_expires_at,
@@ -5972,12 +6098,16 @@ function saveSicknessNotificationPreferences(employeeNumber, body = {}) {
     for (const value of values) {
       const context = sicknessPreferenceProtectionContext({ employee_number: employeeNumber, channel: value.channel });
       const protectedDestination = value.destination ? protectJson({ destination: value.destination }, context) : "";
-      upsert.run(employeeNumber, value.channel, value.enabled ? 1 : 0, earliestTime, protectedDestination,
+      upsert.run(employeeNumber, value.channel, value.enabled ? 1 : 0, value.processEnabled ? 1 : 0, earliestTime, protectedDestination,
         value.verifiedAt, value.verificationHash, value.verificationSalt, value.verificationExpiresAt,
         value.verificationAttempts, value.verificationSentAt);
     }
     auditPortal(employeeNumber, "sickness.notification-preferences.update", "portal_user", employeeNumber,
-      JSON.stringify({ channels: values.filter((value) => value.enabled).map((value) => value.channel), earliestTime }));
+      JSON.stringify({
+        staffingChannels: values.filter((value) => value.enabled).map((value) => value.channel),
+        processChannels: values.filter((value) => value.processEnabled).map((value) => value.channel),
+        earliestTime,
+      }));
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -6142,6 +6272,26 @@ async function processOutboundNotificationJobs(now = new Date()) {
     if (!claimed.changes) continue;
     try {
       const payload = parseProtectedJson(job.protected_payload, outboundNotificationProtectionContext(job));
+      if (payload.notificationKind === "custom_process") {
+        const current = customProcessExternalJobValid(job, payload);
+        if (!current) {
+          db.prepare(`
+            UPDATE outbound_notification_jobs
+            SET status = 'cancelled', purge_after = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `).run(addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_CANCELLED_RETENTION_DAYS), job.id);
+          continue;
+        }
+        await externalNotificationAdapter.sendProcessAlert({ channel: job.channel, recipient: current.destination });
+        db.prepare(`
+          UPDATE outbound_notification_jobs SET status = 'sent', attempts = attempts + 1,
+            last_error_code = '', sent_at = CURRENT_TIMESTAMP, purge_after = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+        `).run(addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_RETENTION_DAYS), job.id);
+        auditPortal("system", "custom-process.external-notification.sent", "outbound_notification_job", job.id,
+          JSON.stringify({ channel: job.channel, processId: payload.processId }));
+        sent += 1;
+        continue;
+      }
       if (payload.sicknessCaseId && !sicknessStaffingAlertIsOpen(payload.sicknessCaseId)) {
         db.prepare(`
           UPDATE outbound_notification_jobs
@@ -9188,13 +9338,14 @@ function vacationCoverageInputForDate(employeeNumber, date, context, excludeGrou
     JOIN employees e ON e.personnel_number = s.employee_number
     LEFT JOIN departments d ON d.id = s.department_id
     WHERE s.shift_date = ? AND ${shiftLocation} = ?
+      AND e.active = 1
   `).all(date, context.locationId);
   return { optionRows, unavailableFromSickness, capacityEmployees, shifts };
 }
 
 function vacationUnavailableAt(input, employeeNumber, pointTime, nextPointTime) {
   const unavailable = new Set(input.unavailableFromSickness);
-  unavailable.add(employeeNumber);
+  if (employeeNumber) unavailable.add(employeeNumber);
   for (const option of input.optionRows) {
     if (optionIsAllDay(option) || optionOverlapsTime(option, pointTime, nextPointTime)) {
       unavailable.add(option.employee_number);
@@ -17384,7 +17535,1063 @@ function locationDashboardPayload(actor, requestedDate) {
   };
 }
 
-function rightsDashboardProcesses() {
+const CUSTOM_PROCESS_STATUS = new Set(["draft", "active", "archived"]);
+const CUSTOM_PROCESS_SCOPES = new Set(["company", "location", "department"]);
+const CUSTOM_PROCESS_TRIGGERS = new Set(["manual", "staffing_shortfall"]);
+const CUSTOM_PROCESS_STEP_TYPES = new Set(["actor", "system", "decision", "approval", "finish"]);
+const CUSTOM_PROCESS_RESPONSIBILITIES = new Set(["system", "role", "employee"]);
+const CUSTOM_PROCESS_CONDITIONS = new Set(["always", "when", "optional"]);
+const CUSTOM_PROCESS_NOTIFICATION_CHANNELS = new Set(["internal", "email", "sms"]);
+const CUSTOM_PROCESS_MAX_STEPS = 30;
+
+function customProcessInputObject(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw httpError(400, `${label} ist ungültig.`, "CUSTOM_PROCESS_INPUT_INVALID");
+  }
+  return value;
+}
+
+function assertCustomProcessKeys(input, allowed, label) {
+  const unexpected = Object.keys(input).filter((key) => !allowed.has(key));
+  if (unexpected.length) {
+    throw httpError(400, `${label} enthält nicht unterstützte Felder.`, "CUSTOM_PROCESS_INPUT_INVALID");
+  }
+}
+
+function customProcessText(value, { label, min = 0, max }) {
+  const normalized = stripEmoji(String(value ?? ""))
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (normalized.length < min || normalized.length > max) {
+    throw httpError(400, `${label} muss zwischen ${min} und ${max} Zeichen lang sein.`, "CUSTOM_PROCESS_INPUT_INVALID");
+  }
+  return normalized;
+}
+
+function customProcessScope(input = {}) {
+  const scope = customProcessInputObject(input, "Der Geltungsbereich");
+  assertCustomProcessKeys(scope, new Set(["type", "locationId", "departmentId"]), "Der Geltungsbereich");
+  const type = String(scope.type || "company").trim();
+  if (!CUSTOM_PROCESS_SCOPES.has(type)) {
+    throw httpError(400, "Der Geltungsbereich ist ungültig.", "CUSTOM_PROCESS_SCOPE_INVALID");
+  }
+  const submittedLocationId = String(scope.locationId || "").trim();
+  const submittedDepartmentId = Number(scope.departmentId || 0) || null;
+  if (type === "company") {
+    if (submittedLocationId || submittedDepartmentId) {
+      throw httpError(400, "Ein unternehmensweiter Prozess darf keinen versteckten Standortbezug enthalten.", "CUSTOM_PROCESS_SCOPE_INVALID");
+    }
+    return { type, locationId: null, departmentId: null, label: "Gesamtes Unternehmen" };
+  }
+  if (type === "location") {
+    if (!submittedLocationId || submittedDepartmentId) {
+      throw httpError(400, "Bitte genau eine aktive Filiale auswählen.", "CUSTOM_PROCESS_SCOPE_INVALID");
+    }
+    const location = db.prepare("SELECT id, name FROM locations WHERE id = ? AND active = 1").get(submittedLocationId);
+    if (!location) throw httpError(400, "Die ausgewählte Filiale ist nicht aktiv oder nicht vorhanden.", "CUSTOM_PROCESS_SCOPE_INVALID");
+    return { type, locationId: String(location.id), departmentId: null, label: location.name };
+  }
+  if (!submittedDepartmentId) {
+    throw httpError(400, "Bitte eine aktive Abteilung auswählen.", "CUSTOM_PROCESS_SCOPE_INVALID");
+  }
+  const department = db.prepare(`
+    SELECT d.id, d.name, d.location_id, l.name AS location_name
+    FROM departments d JOIN locations l ON l.id = d.location_id
+    WHERE d.id = ? AND d.active = 1 AND l.active = 1
+  `).get(submittedDepartmentId);
+  if (!department || (submittedLocationId && submittedLocationId !== String(department.location_id))) {
+    throw httpError(400, "Die ausgewählte Abteilung gehört nicht zur aktiven Filiale.", "CUSTOM_PROCESS_SCOPE_INVALID");
+  }
+  return {
+    type,
+    locationId: String(department.location_id),
+    departmentId: Number(department.id),
+    label: `${department.location_name} · ${department.name}`,
+  };
+}
+
+function customProcessResponsibilityLabel(type, reference, scope) {
+  if (type === "system") return "Grabenplaner";
+  if (type === "role") {
+    const role = getPortalRoles().find((entry) => entry.id === reference);
+    if (!role) throw httpError(400, "Die zuständige App-Rolle ist nicht vorhanden.", "CUSTOM_PROCESS_RESPONSIBILITY_INVALID");
+    return role.name;
+  }
+  const employee = db.prepare(`
+    SELECT e.personnel_number, e.full_name, e.home_location_id, e.preferred_department_id,
+           u.active AS access_active, u.password_hash
+    FROM employees e JOIN portal_users u ON u.employee_number = e.personnel_number
+    WHERE e.personnel_number = ? AND e.active = 1
+  `).get(reference);
+  if (!employee || !employee.access_active || !String(employee.password_hash || "").trim()) {
+    throw httpError(400, "Die zuständige Person hat keinen aktiven Portal-Zugang.", "CUSTOM_PROCESS_RESPONSIBILITY_INVALID");
+  }
+  if (scope.type === "location" && String(employee.home_location_id || "") !== scope.locationId) {
+    const explicit = db.prepare("SELECT 1 FROM portal_access_scopes WHERE employee_number = ? AND location_id = ? LIMIT 1")
+      .get(reference, scope.locationId);
+    if (!explicit && !["hr", "admin", "it_admin", "developer"].includes(db.prepare("SELECT role FROM portal_users WHERE employee_number = ?").get(reference)?.role)) {
+      throw httpError(400, "Die zuständige Person ist der ausgewählten Filiale nicht zugeordnet.", "CUSTOM_PROCESS_RESPONSIBILITY_INVALID");
+    }
+  }
+  if (scope.type === "department" && Number(employee.preferred_department_id || 0) !== scope.departmentId) {
+    const explicit = db.prepare("SELECT 1 FROM portal_access_scopes WHERE employee_number = ? AND location_id = ? AND department_id = ? LIMIT 1")
+      .get(reference, scope.locationId, scope.departmentId);
+    if (!explicit && !["hr", "admin", "it_admin", "developer"].includes(db.prepare("SELECT role FROM portal_users WHERE employee_number = ?").get(reference)?.role)) {
+      throw httpError(400, "Die zuständige Person ist der ausgewählten Abteilung nicht zugeordnet.", "CUSTOM_PROCESS_RESPONSIBILITY_INVALID");
+    }
+  }
+  return `${employee.full_name || reference} · ${reference}`;
+}
+
+function normalizeCustomProcessStep(input, index, scope, usedIds) {
+  const step = customProcessInputObject(input, `Prozessschritt ${index + 1}`);
+  assertCustomProcessKeys(step, new Set([
+    "id", "type", "title", "description", "responsibilityType", "responsibilityReference",
+    "conditionType", "conditionText", "notificationChannels",
+  ]), `Prozessschritt ${index + 1}`);
+  let id = String(step.id || "").trim();
+  if (!id) id = crypto.randomUUID();
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(id) || usedIds.has(id)) {
+    throw httpError(400, "Jeder Prozessschritt benötigt eine eindeutige technische ID.", "CUSTOM_PROCESS_STEP_INVALID");
+  }
+  usedIds.add(id);
+  const type = String(step.type || "actor").trim();
+  if (!CUSTOM_PROCESS_STEP_TYPES.has(type)) throw httpError(400, "Der Schritttyp ist ungültig.", "CUSTOM_PROCESS_STEP_INVALID");
+  const title = customProcessText(step.title, { label: "Der Schritttitel", min: 2, max: 120 });
+  const description = customProcessText(step.description, { label: "Die Schrittbeschreibung", max: 600 });
+  const responsibilityType = String(step.responsibilityType || (type === "system" ? "system" : "role")).trim();
+  if (!CUSTOM_PROCESS_RESPONSIBILITIES.has(responsibilityType)) {
+    throw httpError(400, "Die Zuständigkeit des Prozessschritts ist ungültig.", "CUSTOM_PROCESS_RESPONSIBILITY_INVALID");
+  }
+  const responsibilityReference = responsibilityType === "system"
+    ? ""
+    : customProcessText(step.responsibilityReference, { label: "Die Zuständigkeitsreferenz", min: 1, max: 80 });
+  const responsibilityLabel = customProcessResponsibilityLabel(responsibilityType, responsibilityReference, scope);
+  const conditionType = String(step.conditionType || "always").trim();
+  if (!CUSTOM_PROCESS_CONDITIONS.has(conditionType)) throw httpError(400, "Die Bedingungsart ist ungültig.", "CUSTOM_PROCESS_CONDITION_INVALID");
+  const conditionText = conditionType === "always"
+    ? ""
+    : customProcessText(step.conditionText, { label: "Die Bedingungsbeschreibung", min: conditionType === "when" ? 2 : 0, max: 400 });
+  if (!Array.isArray(step.notificationChannels)) {
+    throw httpError(400, "Die Benachrichtigungskanäle sind ungültig.", "CUSTOM_PROCESS_NOTIFICATION_INVALID");
+  }
+  const notificationChannels = [...new Set(step.notificationChannels.map((channel) => String(channel || "").trim()))];
+  if (notificationChannels.some((channel) => !CUSTOM_PROCESS_NOTIFICATION_CHANNELS.has(channel))) {
+    throw httpError(400, "Ein Benachrichtigungskanal ist nicht freigegeben.", "CUSTOM_PROCESS_NOTIFICATION_INVALID");
+  }
+  if (responsibilityType === "system" && notificationChannels.length) {
+    throw httpError(400, "Ein reiner Systemschritt kann keine Person benachrichtigen.", "CUSTOM_PROCESS_NOTIFICATION_INVALID");
+  }
+  if (conditionType !== "always" && notificationChannels.length) {
+    throw httpError(400, "Automatische Verständigungen sind nur bei eindeutig immer ausgeführten Schritten zulässig.", "CUSTOM_PROCESS_NOTIFICATION_CONDITIONAL");
+  }
+  return {
+    id, type, title, description, responsibilityType, responsibilityReference, responsibilityLabel,
+    conditionType, conditionText, notificationChannels, sortOrder: index + 1,
+  };
+}
+
+function normalizeCustomProcessInput(body = {}, { allowArchived = false } = {}) {
+  const input = customProcessInputObject(body, "Die Prozessdefinition");
+  assertCustomProcessKeys(input, new Set(["title", "symbol", "description", "summary", "status", "scope", "trigger", "steps", "revision"]), "Die Prozessdefinition");
+  const title = customProcessText(input.title, { label: "Der Prozessname", min: 3, max: 120 });
+  const rawSymbol = customProcessText(input.symbol || "P", { label: "Das Kurzzeichen", min: 1, max: 5 }).toUpperCase();
+  if (!/^[\p{L}\p{N}]{1,5}$/u.test(rawSymbol)) throw httpError(400, "Das Kurzzeichen darf nur Buchstaben und Ziffern enthalten.", "CUSTOM_PROCESS_INPUT_INVALID");
+  const description = customProcessText(input.description ?? input.summary, { label: "Die Prozessbeschreibung", max: 600 });
+  const status = String(input.status || "draft").trim();
+  if (!CUSTOM_PROCESS_STATUS.has(status) || (!allowArchived && status === "archived")) {
+    throw httpError(400, "Der Prozessstatus ist ungültig.", "CUSTOM_PROCESS_STATUS_INVALID");
+  }
+  const scope = customProcessScope(input.scope || { type: "company" });
+  const triggerInput = customProcessInputObject(input.trigger || { type: "manual", minimumShortfall: 1 }, "Der Prozessauslöser");
+  assertCustomProcessKeys(triggerInput, new Set(["type", "minimumShortfall"]), "Der Prozessauslöser");
+  const triggerType = String(triggerInput.type || "manual").trim();
+  const minimumShortfall = Number(triggerInput.minimumShortfall ?? 1);
+  if (!CUSTOM_PROCESS_TRIGGERS.has(triggerType) || !Number.isInteger(minimumShortfall) || minimumShortfall < 1 || minimumShortfall > 99) {
+    throw httpError(400, "Der Prozessauslöser ist ungültig.", "CUSTOM_PROCESS_TRIGGER_INVALID");
+  }
+  if (!Array.isArray(input.steps) || input.steps.length < 2 || input.steps.length > CUSTOM_PROCESS_MAX_STEPS) {
+    throw httpError(400, `Ein eigener Prozess benötigt 2 bis ${CUSTOM_PROCESS_MAX_STEPS} Schritte.`, "CUSTOM_PROCESS_STEPS_INVALID");
+  }
+  const usedIds = new Set();
+  const steps = input.steps.map((step, index) => normalizeCustomProcessStep(step, index, scope, usedIds));
+  if (status === "active" && !steps.some((step) => step.type === "finish")) {
+    throw httpError(422, "Ein aktiver Prozess benötigt einen klaren Abschlussschritt.", "CUSTOM_PROCESS_ACTIVATION_INVALID");
+  }
+  return { title, symbol: rawSymbol, description, status, scope, trigger: { type: triggerType, minimumShortfall }, steps };
+}
+
+function customProcessRows({ includeArchived = false } = {}) {
+  const processes = db.prepare(`
+    SELECT * FROM custom_processes ${includeArchived ? "" : "WHERE status <> 'archived'"}
+    ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'draft' THEN 1 ELSE 2 END, title COLLATE NOCASE, created_at
+  `).all();
+  const selectSteps = db.prepare("SELECT * FROM custom_process_steps WHERE process_id = ? ORDER BY sort_order, id");
+  return processes.map((process) => ({ process, steps: selectSteps.all(process.id) }));
+}
+
+function customProcessScopeFromRow(row) {
+  try {
+    return { ...customProcessScope({
+      type: row.scope_type,
+      locationId: row.location_id || "",
+      departmentId: row.department_id || null,
+    }), valid: true };
+  } catch {
+    return {
+      type: CUSTOM_PROCESS_SCOPES.has(row.scope_type) ? row.scope_type : "company",
+      locationId: row.location_id || null,
+      departmentId: Number(row.department_id || 0) || null,
+      label: "Geltungsbereich nicht mehr verfügbar",
+      valid: false,
+    };
+  }
+}
+
+function customProcessDashboardDefinition(row, stepRows = []) {
+  const scope = customProcessScopeFromRow(row);
+  const steps = stepRows.map((step) => {
+    let notificationChannels = [];
+    try {
+      const parsed = JSON.parse(step.notification_channels || "[]");
+      if (Array.isArray(parsed)) notificationChannels = parsed.filter((channel) => CUSTOM_PROCESS_NOTIFICATION_CHANNELS.has(channel));
+    } catch {}
+    const conditionLabel = step.condition_type === "always"
+      ? "Immer"
+      : step.condition_type === "when"
+        ? `Wenn: ${step.condition_text}`
+        : step.condition_text ? `Optional: ${step.condition_text}` : "Optionaler Schritt";
+    return {
+      id: step.id,
+      type: step.step_type,
+      title: step.title,
+      description: step.description,
+      responsibilityType: step.responsibility_type,
+      responsibilityReference: step.responsibility_reference,
+      responsibilityLabel: step.responsibility_label,
+      conditionType: step.condition_type,
+      conditionText: step.condition_text,
+      notificationChannels,
+      actor: step.responsibility_label || "Grabenplaner",
+      state: step.condition_type === "always" ? "active" : "conditional",
+      setting: conditionLabel,
+      permissions: [],
+    };
+  });
+  const notifications = steps.reduce((sum, step) => sum + step.notificationChannels.length, 0);
+  const triggerLabel = row.trigger_type === "staffing_shortfall"
+    ? `Notbesetzung ab ${row.trigger_minimum_shortfall} fehlender Person(en)`
+    : "Manuell durch PL+";
+  return {
+    id: row.id,
+    source: "custom",
+    revision: Number(row.revision || 1),
+    status: row.status,
+    statusLabel: row.status === "active" ? "Ablauf aktiv" : row.status === "draft" ? "Entwurf" : "Archiviert",
+    enabled: row.status === "active",
+    symbol: row.symbol,
+    title: row.title,
+    description: row.description,
+    summary: row.description,
+    locationSensitive: false,
+    scope: { type: scope.type, locationId: scope.locationId, departmentId: scope.departmentId, label: scope.label, valid: scope.valid !== false },
+    trigger: { type: row.trigger_type, minimumShortfall: Number(row.trigger_minimum_shortfall || 1), label: triggerLabel },
+    rules: [
+      { label: "Geltungsbereich", value: scope.label, tone: "neutral" },
+      { label: "Auslöser", value: triggerLabel, tone: row.trigger_type === "staffing_shortfall" ? "attention" : "neutral" },
+      { label: "Benachrichtigungen", value: String(notifications), tone: notifications ? "positive" : "neutral" },
+      { label: "Status", value: row.status === "active" ? "Aktiv" : row.status === "draft" ? "Entwurf" : "Archiviert", tone: row.status === "active" ? "positive" : "neutral" },
+    ],
+    simulations: [{ id: "current", label: "Gespeicherter Ablauf", description: "Die Vorschau verändert keine gespeicherten Daten.", stepStates: {} }],
+    steps,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function customProcessesForDashboard() {
+  return customProcessRows().map(({ process, steps }) => customProcessDashboardDefinition(process, steps));
+}
+
+function customProcessEditorCatalog(actor) {
+  const canManage = actor?.employeeNumber === "local"
+    || (RIGHTS_ADMIN_PORTAL_ROLES.has(actor?.role) && actor?.permissions?.includes("processes:write"));
+  const roles = getPortalRoles().map((role) => ({ id: role.id, name: role.name }));
+  const employees = db.prepare(`
+    SELECT e.personnel_number, e.full_name, u.role, e.home_location_id, e.preferred_department_id
+    FROM employees e JOIN portal_users u ON u.employee_number = e.personnel_number
+    WHERE e.active = 1 AND u.active = 1 AND TRIM(COALESCE(u.password_hash, '')) <> ''
+    ORDER BY e.personnel_number COLLATE NOCASE
+  `).all().map((employee) => ({
+    employeeNumber: String(employee.personnel_number),
+    fullName: employee.full_name || String(employee.personnel_number),
+    role: employee.role,
+    locationId: employee.home_location_id || null,
+    departmentId: Number(employee.preferred_department_id || 0) || null,
+  }));
+  const locations = getLocations(false).map((location) => ({
+    id: String(location.id), name: location.name,
+    departments: (location.departments || []).filter((department) => department.active).map((department) => ({ id: Number(department.id), name: department.name })),
+  }));
+  return {
+    canManageCustomProcesses: canManage,
+    statuses: ["draft", "active"],
+    scopes: ["company", "location", "department"],
+    triggers: ["manual", "staffing_shortfall"],
+    notificationChannels: ["internal", "email", "sms"],
+    providers: externalNotificationProviderStatus(),
+    roles,
+    employees,
+    locations,
+  };
+}
+
+function insertCustomProcessSteps(processId, steps) {
+  const insert = db.prepare(`
+    INSERT INTO custom_process_steps
+      (id, process_id, sort_order, step_type, title, description, responsibility_type,
+       responsibility_reference, responsibility_label, condition_type, condition_text, notification_channels)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const step of steps) {
+    insert.run(step.id, processId, step.sortOrder, step.type, step.title, step.description,
+      step.responsibilityType, step.responsibilityReference, step.responsibilityLabel,
+      step.conditionType, step.conditionText, JSON.stringify(step.notificationChannels));
+  }
+}
+
+function assertCustomProcessStepIdsAvailable(steps, processId = null) {
+  const ids = [...new Set((steps || []).map((step) => String(step?.id || "").trim()).filter(Boolean))];
+  if (!ids.length) return;
+  const placeholders = ids.map(() => "?").join(",");
+  const parameters = [...ids];
+  let processFilter = "";
+  if (processId) {
+    processFilter = " AND process_id <> ?";
+    parameters.push(String(processId));
+  }
+  const conflict = db.prepare(`
+    SELECT id FROM custom_process_steps
+    WHERE id IN (${placeholders})${processFilter}
+    LIMIT 1
+  `).get(...parameters);
+  if (conflict) {
+    throw httpError(409, "Eine technische Schritt-ID wird bereits von einem anderen Prozess verwendet.", "CUSTOM_PROCESS_STEP_ID_CONFLICT");
+  }
+}
+
+function customProcessById(id, { includeArchived = false } = {}) {
+  const process = db.prepare(`SELECT * FROM custom_processes WHERE id = ? ${includeArchived ? "" : "AND status <> 'archived'"}`).get(id);
+  if (!process) return null;
+  const steps = db.prepare("SELECT * FROM custom_process_steps WHERE process_id = ? ORDER BY sort_order, id").all(id);
+  return { process, steps, dto: customProcessDashboardDefinition(process, steps) };
+}
+
+function persistCustomProcessRevision(processId, actor = "system") {
+  const bundle = customProcessById(processId, { includeArchived: true });
+  if (!bundle) throw httpError(404, "Der eigene Prozess wurde nicht gefunden.", "CUSTOM_PROCESS_NOT_FOUND");
+  const snapshot = JSON.stringify(bundle.dto);
+  db.prepare(`
+    INSERT OR IGNORE INTO custom_process_revisions
+      (process_id, revision, snapshot_json, created_by)
+    VALUES (?, ?, ?, ?)
+  `).run(processId, Number(bundle.process.revision || 1), snapshot, String(actor || "system"));
+  return bundle.dto;
+}
+
+function customProcessRevisionDefinition(processId, revision) {
+  const row = db.prepare(`
+    SELECT snapshot_json FROM custom_process_revisions
+    WHERE process_id = ? AND revision = ?
+  `).get(String(processId || ""), Number(revision || 0));
+  if (!row?.snapshot_json) return null;
+  try {
+    const value = JSON.parse(row.snapshot_json);
+    if (!value || typeof value !== "object" || value.id !== String(processId) || Number(value.revision) !== Number(revision)
+        || !Array.isArray(value.steps)) return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function customProcessRunBundle(run) {
+  const dto = customProcessRevisionDefinition(run?.process_id, run?.process_revision);
+  if (!dto) return null;
+  return {
+    process: {
+      id: dto.id,
+      revision: Number(dto.revision || run.process_revision || 1),
+      title: dto.title,
+      status: dto.status,
+      trigger_type: dto.trigger?.type || run.trigger_type,
+    },
+    dto,
+  };
+}
+
+function backfillCustomProcessRevisionSnapshots() {
+  if (!tableExists("custom_processes") || !tableExists("custom_process_revisions")) return 0;
+  let inserted = 0;
+  for (const { process } of customProcessRows({ includeArchived: true })) {
+    const exists = db.prepare("SELECT 1 FROM custom_process_revisions WHERE process_id = ? AND revision = ?")
+      .get(process.id, Number(process.revision || 1));
+    if (exists) continue;
+    persistCustomProcessRevision(process.id, "migration");
+    inserted += 1;
+  }
+  return inserted;
+}
+
+function createCustomProcess(actor, body) {
+  const value = normalizeCustomProcessInput(body);
+  const id = `custom-${crypto.randomUUID()}`;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    assertCustomProcessStepIdsAvailable(value.steps);
+    db.prepare(`
+      INSERT INTO custom_processes
+        (id, title, symbol, description, scope_type, location_id, department_id, trigger_type,
+         trigger_minimum_shortfall, status, created_by, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, value.title, value.symbol, value.description, value.scope.type, value.scope.locationId,
+      value.scope.departmentId, value.trigger.type, value.trigger.minimumShortfall, value.status,
+      actor.employeeNumber, actor.employeeNumber);
+    insertCustomProcessSteps(id, value.steps);
+    persistCustomProcessRevision(id, actor.employeeNumber);
+    auditPortal(actor.employeeNumber, "custom-process.create", "custom_process", id,
+      JSON.stringify({ status: value.status, revision: 1, scope: value.scope.type, stepCount: value.steps.length, trigger: value.trigger.type }));
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  return customProcessById(id).dto;
+}
+
+function updateCustomProcess(actor, id, body) {
+  const revision = Number(body?.revision);
+  if (!Number.isInteger(revision) || revision < 1) throw httpError(400, "Die Prozessrevision fehlt.", "CUSTOM_PROCESS_REVISION_REQUIRED");
+  const existing = customProcessById(id);
+  if (!existing) throw httpError(404, "Der eigene Prozess wurde nicht gefunden.", "CUSTOM_PROCESS_NOT_FOUND");
+  if (Number(existing.process.revision) !== revision) throw httpError(409, "Der Prozess wurde zwischenzeitlich geändert. Bitte neu laden.", "CUSTOM_PROCESS_REVISION_CONFLICT");
+  const value = normalizeCustomProcessInput(body);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    assertCustomProcessStepIdsAvailable(value.steps, id);
+    const updated = db.prepare(`
+      UPDATE custom_processes SET
+        title = ?, symbol = ?, description = ?, scope_type = ?, location_id = ?, department_id = ?,
+        trigger_type = ?, trigger_minimum_shortfall = ?, status = ?, revision = revision + 1,
+        updated_by = ?, archived_at = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND revision = ? AND status <> 'archived'
+    `).run(value.title, value.symbol, value.description, value.scope.type, value.scope.locationId,
+      value.scope.departmentId, value.trigger.type, value.trigger.minimumShortfall, value.status,
+      actor.employeeNumber, id, revision);
+    if (!updated.changes) throw httpError(409, "Der Prozess wurde zwischenzeitlich geändert. Bitte neu laden.", "CUSTOM_PROCESS_REVISION_CONFLICT");
+    db.prepare("DELETE FROM custom_process_steps WHERE process_id = ?").run(id);
+    insertCustomProcessSteps(id, value.steps);
+    persistCustomProcessRevision(id, actor.employeeNumber);
+    auditPortal(actor.employeeNumber, "custom-process.update", "custom_process", id,
+      JSON.stringify({ status: value.status, revision: revision + 1, scope: value.scope.type, stepCount: value.steps.length, trigger: value.trigger.type }));
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  return customProcessById(id).dto;
+}
+
+function setCustomProcessStatus(actor, id, body = {}) {
+  const status = String(body.status || "").trim();
+  const revision = Number(body.revision);
+  if (!CUSTOM_PROCESS_STATUS.has(status) || !Number.isInteger(revision) || revision < 1) {
+    throw httpError(400, "Status oder Prozessrevision ist ungültig.", "CUSTOM_PROCESS_STATUS_INVALID");
+  }
+  const existing = customProcessById(id, { includeArchived: true });
+  if (!existing) throw httpError(404, "Der eigene Prozess wurde nicht gefunden.", "CUSTOM_PROCESS_NOT_FOUND");
+  if (existing.process.status === "archived") throw httpError(409, "Ein archivierter Prozess kann nicht mehr geändert werden.", "CUSTOM_PROCESS_ARCHIVED");
+  if (Number(existing.process.revision) !== revision) throw httpError(409, "Der Prozess wurde zwischenzeitlich geändert. Bitte neu laden.", "CUSTOM_PROCESS_REVISION_CONFLICT");
+  if (status === "active") {
+    normalizeCustomProcessInput({
+      title: existing.process.title,
+      symbol: existing.process.symbol,
+      description: existing.process.description,
+      status,
+      scope: { type: existing.process.scope_type, locationId: existing.process.location_id, departmentId: existing.process.department_id },
+      trigger: { type: existing.process.trigger_type, minimumShortfall: existing.process.trigger_minimum_shortfall },
+      steps: existing.dto.steps.map((step) => ({
+        id: step.id, type: step.type, title: step.title, description: step.description,
+        responsibilityType: step.responsibilityType, responsibilityReference: step.responsibilityReference,
+        conditionType: step.conditionType, conditionText: step.conditionText,
+        notificationChannels: step.notificationChannels,
+      })),
+    });
+  }
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const updated = db.prepare(`
+      UPDATE custom_processes SET status = ?, revision = revision + 1, updated_by = ?,
+        archived_at = CASE WHEN ? = 'archived' THEN CURRENT_TIMESTAMP ELSE NULL END,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND revision = ? AND status <> 'archived'
+    `).run(status, actor.employeeNumber, status, id, revision);
+    if (!updated.changes) throw httpError(409, "Der Prozess wurde zwischenzeitlich geändert. Bitte neu laden.", "CUSTOM_PROCESS_REVISION_CONFLICT");
+    persistCustomProcessRevision(id, actor.employeeNumber);
+    auditPortal(actor.employeeNumber, status === "archived" ? "custom-process.archive" : "custom-process.status.update",
+      "custom_process", id, JSON.stringify({ status, revision: revision + 1 }));
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  if (status === "archived") {
+    const openRuns = db.prepare("SELECT * FROM custom_process_runs WHERE process_id = ? AND status = 'open'").all(id);
+    for (const run of openRuns) resolveCustomProcessRun(run);
+    return { id, status, revision: revision + 1 };
+  }
+  return customProcessById(id).dto;
+}
+
+backfillCustomProcessRevisionSnapshots();
+
+function customProcessLookup(kind, value) {
+  return crypto.createHash("sha256")
+    .update(`grabenplaner-custom-process-v1\0${String(kind || "")}\0${String(value ?? "")}`)
+    .digest("hex");
+}
+
+function customProcessRunPublic(row) {
+  return {
+    id: row.id,
+    processId: row.process_id,
+    processRevision: Number(row.process_revision || 1),
+    triggerType: row.trigger_type,
+    status: row.status,
+    locationId: row.location_id || null,
+    departmentId: Number(row.department_id || 0) || null,
+    activationCount: Math.max(1, Number(row.activation_count || 1)),
+    createdAt: row.created_at,
+    resolvedAt: row.resolved_at || null,
+  };
+}
+
+function customProcessEffectiveScope(bundle, context = {}) {
+  const base = bundle.dto.scope;
+  if (base.type !== "company") return base;
+  const locationId = String(context.locationId || "").trim();
+  const departmentId = Number(context.departmentId || 0) || null;
+  if (!locationId) return base;
+  return { type: departmentId ? "department" : "location", locationId, departmentId };
+}
+
+function customProcessScopeIsActive(scope) {
+  if (!scope || scope.valid === false) return false;
+  if (scope.type === "company") return true;
+  const locationId = String(scope.locationId || "").trim();
+  if (!locationId) return false;
+  if (scope.type === "location") {
+    return Boolean(db.prepare("SELECT 1 FROM locations WHERE id = ? AND active = 1").get(locationId));
+  }
+  const departmentId = Number(scope.departmentId || 0) || null;
+  if (scope.type !== "department" || !departmentId) return false;
+  return Boolean(db.prepare(`
+    SELECT 1 FROM departments d JOIN locations l ON l.id = d.location_id
+    WHERE d.id = ? AND d.location_id = ? AND d.active = 1 AND l.active = 1
+  `).get(departmentId, locationId));
+}
+
+function customProcessPortalUserInScope(user, scope) {
+  if (!scope || scope.type === "company" || ["hr", "admin", "it_admin", "developer"].includes(user.role)) return true;
+  const explicitScopes = db.prepare(`
+    SELECT location_id, department_id FROM portal_access_scopes WHERE employee_number = ?
+  `).all(user.employee_number);
+  const scopes = explicitScopes.length
+    ? explicitScopes
+    : [{ location_id: user.home_location_id, department_id: user.role === "department_manager" ? user.preferred_department_id : null }];
+  return scopes.some((entry) => String(entry.location_id || "") === String(scope.locationId || "")
+    && (scope.type !== "department"
+      || !entry.department_id
+      || Number(entry.department_id) === Number(scope.departmentId)));
+}
+
+function customProcessRecipients(bundle, step, context = {}) {
+  if (!step || step.responsibilityType === "system") return [];
+  const scope = customProcessEffectiveScope(bundle, context);
+  if (!customProcessScopeIsActive(scope)) return [];
+  const users = db.prepare(`
+    SELECT u.employee_number, u.role, e.home_location_id, e.preferred_department_id
+    FROM portal_users u JOIN employees e ON e.personnel_number = u.employee_number
+    WHERE u.active = 1 AND e.active = 1 AND TRIM(COALESCE(u.password_hash, '')) <> ''
+    ORDER BY u.employee_number
+  `).all();
+  return users.filter((user) => {
+    if (step.responsibilityType === "role" && user.role !== step.responsibilityReference) return false;
+    if (step.responsibilityType === "employee" && String(user.employee_number) !== String(step.responsibilityReference)) return false;
+    return customProcessPortalUserInScope(user, scope);
+  }).map((user) => String(user.employee_number));
+}
+
+function customProcessExternalJobValid(job, payload) {
+  const run = db.prepare("SELECT * FROM custom_process_runs WHERE id = ? AND process_id = ? AND status = 'open'")
+    .get(payload.runId, payload.processId);
+  if (!run || Number(run.process_revision) !== Number(payload.processRevision)
+      || Number(run.activation_count || 1) !== Number(payload.activationCount || 1)) return null;
+  const bundle = customProcessRunBundle(run);
+  if (!bundle) return null;
+  const step = bundle.dto.steps.find((entry) => entry.id === payload.stepId);
+  if (!step?.notificationChannels?.includes(job.channel)) return null;
+  const runStep = db.prepare(`
+    SELECT status FROM custom_process_run_steps WHERE run_id = ? AND step_id = ?
+  `).get(run.id, step.id);
+  if (runStep?.status !== "active") return null;
+  if (!customProcessRecipients(bundle, step, run).includes(String(payload.recipientEmployeeNumber))) return null;
+  const preference = db.prepare(`
+    SELECT employee_number, channel, process_notifications_enabled, protected_destination, verified_at, updated_at
+    FROM sickness_notification_preferences
+    WHERE employee_number = ? AND channel = ? AND process_notifications_enabled = 1 AND verified_at IS NOT NULL
+  `).get(payload.recipientEmployeeNumber, job.channel);
+  if (!preference?.protected_destination || String(preference.updated_at || "") !== String(payload.preferenceRevision || "")) return null;
+  let destination = "";
+  try {
+    destination = parseProtectedJson(
+      preference.protected_destination,
+      sicknessPreferenceProtectionContext(preference),
+    ).destination || "";
+  } catch {
+    return null;
+  }
+  if (!destination || destination !== payload.destination) return null;
+  return { destination, bundle, run, step };
+}
+
+function queueCustomProcessExternalNotification(bundle, run, step, recipient, channel) {
+  const provider = externalNotificationProviderStatus()[channel];
+  const preference = db.prepare(`
+    SELECT employee_number, channel, process_notifications_enabled, earliest_time, protected_destination, verified_at, updated_at
+    FROM sickness_notification_preferences
+    WHERE employee_number = ? AND channel = ? AND process_notifications_enabled = 1 AND verified_at IS NOT NULL
+  `).get(recipient, channel);
+  if (!provider?.available || !preference?.protected_destination) return { queued: false, blocked: true };
+  let destination = "";
+  try {
+    destination = parseProtectedJson(
+      preference.protected_destination,
+      sicknessPreferenceProtectionContext(preference),
+    ).destination || "";
+  } catch {
+    return { queued: false, blocked: true };
+  }
+  if (!destination) return { queued: false, blocked: true };
+  const id = crypto.randomUUID();
+  const recipientLookup = customProcessLookup("recipient", recipient);
+  const entityLookup = customProcessLookup("run", run.id);
+  const activationCount = Math.max(1, Number(run.activation_count || 1));
+  const dedupeLookup = customProcessLookup("delivery", `${run.id}:${activationCount}:${step.id}:${recipient}:${channel}`);
+  const notBefore = externalAlertNotBefore({ reportAt: run.created_at, sendAfter: preference.earliest_time || "08:00" }).notBefore;
+  const payload = protectJson({
+    notificationKind: "custom_process",
+    destination,
+    recipientEmployeeNumber: recipient,
+    preferenceRevision: preference.updated_at,
+    processId: bundle.process.id,
+    processRevision: Number(bundle.process.revision),
+    activationCount,
+    runId: run.id,
+    stepId: step.id,
+  }, outboundNotificationProtectionContext({ id, recipient_lookup: recipientLookup }));
+  const inserted = db.prepare(`
+    INSERT OR IGNORE INTO outbound_notification_jobs
+      (id, recipient_lookup, channel, entity_lookup, protected_payload, not_before, purge_after, dedupe_lookup)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, recipientLookup, channel, entityLookup, payload, notBefore,
+    addDays(notBefore.slice(0, 10), OUTBOUND_NOTIFICATION_RETENTION_DAYS), dedupeLookup);
+  return { queued: Boolean(inserted.changes), blocked: false };
+}
+
+function emitCustomProcessStepNotifications(bundle, run, step) {
+  let internal = 0;
+  let external = 0;
+  let blocked = 0;
+  if (!step?.notificationChannels?.length) return { internal, external, blocked };
+  const activationCount = Math.max(1, Number(run.activation_count || 1));
+  const recipients = customProcessRecipients(bundle, step, run);
+  for (const recipient of recipients) {
+    if (step.notificationChannels.includes("internal")) {
+      const created = createPortalNotification(recipient, "custom_process", "Neue Prozessaufgabe",
+        `${bundle.process.title}: ${step.title}`, {
+          target: `/portal.html?tab=processTasks&run=${encodeURIComponent(run.id)}&step=${encodeURIComponent(step.id)}`,
+          entityType: "custom_process_run",
+          entityId: run.id,
+          dedupeKey: `custom-process:${run.id}:${activationCount}:${step.id}`,
+        });
+      if (created) internal += 1;
+    }
+    for (const channel of step.notificationChannels.filter((entry) => entry !== "internal")) {
+      const result = queueCustomProcessExternalNotification(bundle, run, step, recipient, channel);
+      if (result.queued) external += 1;
+      if (result.blocked) blocked += 1;
+    }
+  }
+  return { internal, external, blocked };
+}
+
+function ensureCustomProcessRunSteps(run, bundle) {
+  const existing = Number(db.prepare("SELECT COUNT(*) AS count FROM custom_process_run_steps WHERE run_id = ?")
+    .get(run.id)?.count || 0);
+  if (existing) return;
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO custom_process_run_steps (run_id, step_id, sort_order)
+    VALUES (?, ?, ?)
+  `);
+  for (const [index, step] of bundle.dto.steps.entries()) insert.run(run.id, step.id, index + 1);
+}
+
+function ensureCustomProcessRunProgress(run) {
+  const freshRun = db.prepare("SELECT * FROM custom_process_runs WHERE id = ? AND status = 'open'").get(run.id);
+  if (!freshRun) return { completed: true, notifications: { internal: 0, external: 0, blocked: 0 } };
+  const bundle = customProcessRunBundle(freshRun);
+  if (!bundle) throw httpError(503, "Die gespeicherte Prozessrevision ist nicht verfügbar.", "CUSTOM_PROCESS_REVISION_UNAVAILABLE");
+  ensureCustomProcessRunSteps(freshRun, bundle);
+  while (true) {
+    const activeState = db.prepare(`
+      SELECT * FROM custom_process_run_steps WHERE run_id = ? AND status = 'active'
+      ORDER BY sort_order LIMIT 1
+    `).get(freshRun.id);
+    if (activeState) {
+      const activeStep = bundle.dto.steps.find((step) => step.id === activeState.step_id);
+      if (!activeStep) throw httpError(503, "Ein gespeicherter Prozessschritt ist nicht verfügbar.", "CUSTOM_PROCESS_STEP_UNAVAILABLE");
+      return { completed: false, step: activeStep, notifications: emitCustomProcessStepNotifications(bundle, freshRun, activeStep) };
+    }
+    const pending = db.prepare(`
+      SELECT * FROM custom_process_run_steps WHERE run_id = ? AND status = 'pending'
+      ORDER BY sort_order LIMIT 1
+    `).get(freshRun.id);
+    if (!pending) {
+      resolveCustomProcessRun(freshRun, { cancelOpenSteps: false });
+      return { completed: true, notifications: { internal: 0, external: 0, blocked: 0 } };
+    }
+    const step = bundle.dto.steps.find((entry) => entry.id === pending.step_id);
+    if (!step) throw httpError(503, "Ein gespeicherter Prozessschritt ist nicht verfügbar.", "CUSTOM_PROCESS_STEP_UNAVAILABLE");
+    if (step.responsibilityType === "system") {
+      db.prepare(`
+        UPDATE custom_process_run_steps SET status = 'completed', activated_at = COALESCE(activated_at, CURRENT_TIMESTAMP),
+          completed_at = CURRENT_TIMESTAMP, completed_by = 'system', updated_at = CURRENT_TIMESTAMP
+        WHERE run_id = ? AND step_id = ? AND status = 'pending'
+      `).run(freshRun.id, step.id);
+      continue;
+    }
+    const activated = db.prepare(`
+      UPDATE custom_process_run_steps SET status = 'active', activated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE run_id = ? AND step_id = ? AND status = 'pending'
+    `).run(freshRun.id, step.id);
+    if (!activated.changes) continue;
+    return { completed: false, step, notifications: emitCustomProcessStepNotifications(bundle, freshRun, step) };
+  }
+}
+
+function createOrReopenCustomProcessRun(bundle, {
+  triggerKey,
+  triggeredBy,
+  locationId = null,
+  departmentId = null,
+  reopenResolved = true,
+}) {
+  const existing = db.prepare("SELECT * FROM custom_process_runs WHERE trigger_key = ?").get(triggerKey);
+  if (existing) {
+    if (existing.process_id !== bundle.process.id || Number(existing.process_revision) !== Number(bundle.process.revision)) {
+      throw httpError(409, "Die Auslösekennung wurde bereits für einen anderen Prozess verwendet.", "CUSTOM_PROCESS_TRIGGER_CONFLICT");
+    }
+    if (existing.status === "resolved" && reopenResolved) {
+      db.prepare(`
+        UPDATE custom_process_runs SET status = 'open', activation_count = activation_count + 1,
+          resolved_at = NULL, triggered_by = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND status = 'resolved'
+      `).run(triggeredBy, existing.id);
+      db.prepare("DELETE FROM custom_process_run_steps WHERE run_id = ?").run(existing.id);
+      return { row: db.prepare("SELECT * FROM custom_process_runs WHERE id = ?").get(existing.id), created: false, reopened: true };
+    }
+    return { row: existing, created: false, reopened: false };
+  }
+  const id = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO custom_process_runs
+      (id, process_id, process_revision, trigger_type, trigger_key, location_id, department_id, triggered_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, bundle.process.id, bundle.process.revision, bundle.process.trigger_type, triggerKey,
+    locationId || null, departmentId || null, triggeredBy);
+  return { row: db.prepare("SELECT * FROM custom_process_runs WHERE id = ?").get(id), created: true, reopened: false };
+}
+
+function triggerCustomProcess(actor, id, body = {}) {
+  const input = customProcessInputObject(body, "Die Prozessauslösung");
+  assertCustomProcessKeys(input, new Set(["idempotencyKey"]), "Die Prozessauslösung");
+  const bundle = customProcessById(id);
+  if (!bundle) throw httpError(404, "Der eigene Prozess wurde nicht gefunden.", "CUSTOM_PROCESS_NOT_FOUND");
+  if (bundle.process.status !== "active") throw httpError(409, "Nur aktive Prozesse können ausgelöst werden.", "CUSTOM_PROCESS_NOT_ACTIVE");
+  if (!customProcessScopeIsActive(bundle.dto.scope)) {
+    throw httpError(409, "Der Geltungsbereich des Prozesses ist nicht mehr aktiv.", "CUSTOM_PROCESS_SCOPE_INACTIVE");
+  }
+  const suppliedKey = String(input.idempotencyKey || "").trim();
+  if (!/^[A-Za-z0-9._:-]{8,120}$/.test(suppliedKey)) {
+    throw httpError(400, "Die Auslösekennung ist ungültig.", "CUSTOM_PROCESS_TRIGGER_KEY_INVALID");
+  }
+  const triggerKey = customProcessLookup("manual-run", `${id}:${suppliedKey}`);
+  const result = createOrReopenCustomProcessRun(bundle, {
+    triggerKey,
+    triggeredBy: actor.employeeNumber,
+    reopenResolved: false,
+  });
+  const progress = ensureCustomProcessRunProgress(result.row);
+  const notifications = progress.notifications;
+  if (result.created || result.reopened) {
+    auditPortal(actor.employeeNumber, "custom-process.trigger", "custom_process_run", result.row.id,
+      JSON.stringify({ processId: id, revision: bundle.process.revision, trigger: "manual", ...notifications }));
+  }
+  return { run: customProcessRunPublic(result.row), notifications, duplicate: !result.created && !result.reopened };
+}
+
+function customProcessStaffingContexts(bundle, date) {
+  const scope = bundle.dto.scope;
+  if (scope?.valid === false) return [];
+  const locationRows = scope.type === "company"
+    ? db.prepare("SELECT id FROM locations WHERE active = 1 ORDER BY id").all()
+    : db.prepare("SELECT id FROM locations WHERE id = ? AND active = 1").all(scope.locationId);
+  const contexts = [];
+  for (const locationRow of locationRows) {
+    const locationId = String(locationRow.id || "");
+    if (!locationId) continue;
+    if (isVacationHoliday(date, locationId) || getGlobalDayBlockForDate(date, locationId)) continue;
+    const day = dayConfiguration(date, settingsForLocation(locationId), { locationId, departmentId: null });
+    if (!day?.open || !isTime(day.minFrom) || !isTime(day.minTo) || day.minTo <= day.minFrom) continue;
+    const department = scope.type === "department"
+      ? db.prepare("SELECT id, min_staff FROM departments WHERE id = ? AND location_id = ? AND active = 1")
+        .get(scope.departmentId, locationId)
+      : null;
+    if (scope.type === "department" && !department) continue;
+    const departmentId = department ? Number(department.id) : null;
+    const required = department ? Number(department.min_staff || 0) : Number(day.minStaff || 0);
+    if (required <= 0) continue;
+    const context = { locationId, departmentId };
+    const input = vacationCoverageInputForDate(null, date, context);
+    let worstShortfall = 0;
+    let firstCriticalTime = "";
+    const fromMinute = timeToMinutes(day.minFrom);
+    const toMinute = timeToMinutes(day.minTo);
+    for (let minute = fromMinute; minute < toMinute; minute += 15) {
+      const pointTime = minutesToTime(minute);
+      const nextPointTime = minutesToTime(Math.min(toMinute, minute + 15));
+      const unavailable = vacationUnavailableAt(input, null, pointTime, nextPointTime);
+      const counts = vacationCoverageCountsAt(input, unavailable, context, pointTime);
+      const available = departmentId ? counts.departmentScheduled : counts.locationScheduled;
+      const shortfall = Math.max(0, required - available);
+      if (shortfall > worstShortfall) {
+        worstShortfall = shortfall;
+        firstCriticalTime = pointTime;
+      }
+    }
+    if (worstShortfall >= bundle.process.trigger_minimum_shortfall) {
+      contexts.push({ locationId, departmentId, shortfall: worstShortfall, firstCriticalTime });
+    }
+  }
+  return contexts;
+}
+
+function resolveCustomProcessRun(run, { cancelOpenSteps = true } = {}) {
+  if (cancelOpenSteps) {
+    db.prepare(`
+      UPDATE custom_process_run_steps SET status = 'skipped', completed_at = CURRENT_TIMESTAMP,
+        completed_by = 'system', updated_at = CURRENT_TIMESTAMP
+      WHERE run_id = ? AND status IN ('pending','active')
+    `).run(run.id);
+  }
+  db.prepare(`
+    UPDATE custom_process_runs SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND status = 'open'
+  `).run(run.id);
+  db.prepare(`
+    UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+    WHERE entity_type = 'custom_process_run' AND entity_id = ?
+  `).run(run.id);
+  db.prepare(`
+    UPDATE outbound_notification_jobs SET status = 'cancelled', purge_after = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE entity_lookup = ? AND status = 'pending'
+  `).run(addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_CANCELLED_RETENTION_DAYS), customProcessLookup("run", run.id));
+}
+
+function reconcileCustomProcessTriggers(now = new Date()) {
+  if (!tableExists("custom_processes")) return { checked: 0, triggered: 0, resolved: 0 };
+  const date = viennaTodayIso(now);
+  const activeKeys = new Set();
+  let checked = 0;
+  let triggered = 0;
+  for (const bundle of customProcessRows().filter(({ process }) => process.status === "active" && process.trigger_type === "staffing_shortfall")
+    .map(({ process, steps }) => ({ process, steps, dto: customProcessDashboardDefinition(process, steps) }))) {
+    checked += 1;
+    for (const context of customProcessStaffingContexts(bundle, date)) {
+      const triggerKey = customProcessLookup("staffing-run", `${bundle.process.id}:${bundle.process.revision}:${date}:${context.locationId}:${context.departmentId || 0}`);
+      activeKeys.add(triggerKey);
+      const result = createOrReopenCustomProcessRun(bundle, { triggerKey, triggeredBy: "system", ...context });
+      const progress = ensureCustomProcessRunProgress(result.row);
+      if (result.created || result.reopened) {
+        auditPortal("system", "custom-process.trigger", "custom_process_run", result.row.id,
+          JSON.stringify({ processId: bundle.process.id, revision: bundle.process.revision, trigger: "staffing_shortfall", shortfall: context.shortfall, ...progress.notifications }));
+        triggered += 1;
+      }
+    }
+  }
+  let resolved = 0;
+  const openRuns = db.prepare(`
+    SELECT r.* FROM custom_process_runs r JOIN custom_processes p ON p.id = r.process_id
+    WHERE r.status = 'open' AND r.trigger_type = 'staffing_shortfall'
+  `).all();
+  for (const run of openRuns) {
+    if (activeKeys.has(run.trigger_key)) continue;
+    resolveCustomProcessRun(run);
+    resolved += 1;
+  }
+  let retried = 0;
+  const remainingRuns = db.prepare("SELECT * FROM custom_process_runs WHERE status = 'open' ORDER BY created_at, id").all();
+  for (const run of remainingRuns) {
+    const bundle = customProcessRunBundle(run);
+    if (!bundle) continue;
+    const scope = customProcessEffectiveScope(bundle, run);
+    if (!customProcessScopeIsActive(scope)) {
+      resolveCustomProcessRun(run);
+      resolved += 1;
+      continue;
+    }
+    const progress = ensureCustomProcessRunProgress(run);
+    retried += Number(progress.notifications?.external || 0);
+  }
+  return { checked, triggered, resolved, retried };
+}
+
+function customProcessRunScopeLabel(run, bundle) {
+  if (run.department_id) {
+    const row = db.prepare(`
+      SELECT d.name AS department_name, l.name AS location_name
+      FROM departments d JOIN locations l ON l.id = d.location_id WHERE d.id = ?
+    `).get(run.department_id);
+    if (row) return `${row.location_name} · ${row.department_name}`;
+  }
+  if (run.location_id) {
+    const row = db.prepare("SELECT name FROM locations WHERE id = ?").get(run.location_id);
+    if (row) return row.name;
+  }
+  return bundle.dto.scope?.label || "Gesamtes Unternehmen";
+}
+
+function customProcessTasksForEmployee(employeeNumber) {
+  const runs = db.prepare(`
+    SELECT r.*, rs.step_id, rs.status AS step_status, rs.activated_at, rs.sort_order
+    FROM custom_process_runs r
+    JOIN custom_process_run_steps rs ON rs.run_id = r.id AND rs.status = 'active'
+    WHERE r.status = 'open'
+    ORDER BY COALESCE(rs.activated_at, r.created_at) DESC, r.created_at DESC
+  `).all();
+  const items = [];
+  for (const run of runs) {
+    const bundle = customProcessRunBundle(run);
+    if (!bundle) continue;
+    const step = bundle.dto.steps.find((entry) => entry.id === run.step_id);
+    if (!step || !customProcessRecipients(bundle, step, run).includes(String(employeeNumber))) continue;
+    const counts = db.prepare(`
+      SELECT COUNT(*) AS total,
+        SUM(CASE WHEN status IN ('completed','skipped') THEN 1 ELSE 0 END) AS finished
+      FROM custom_process_run_steps WHERE run_id = ?
+    `).get(run.id);
+    items.push({
+      runId: run.id,
+      processId: run.process_id,
+      processRevision: Number(run.process_revision || 1),
+      activationCount: Math.max(1, Number(run.activation_count || 1)),
+      processTitle: bundle.dto.title,
+      processSymbol: bundle.dto.symbol,
+      stepId: step.id,
+      stepTitle: step.title,
+      stepDescription: step.description,
+      conditionType: step.conditionType,
+      conditionText: step.conditionText,
+      canSkip: step.conditionType !== "always",
+      scopeLabel: customProcessRunScopeLabel(run, bundle),
+      progress: { finished: Number(counts?.finished || 0), total: Number(counts?.total || bundle.dto.steps.length) },
+      position: Number(run.sort_order || 1),
+      stepCount: Number(counts?.total || bundle.dto.steps.length),
+      status: "active",
+      canComplete: true,
+      activatedAt: run.activated_at || run.created_at,
+      assignedAt: run.activated_at || run.created_at,
+      createdAt: run.created_at,
+    });
+  }
+  return items;
+}
+
+function completeCustomProcessTask(actor, runId, stepId, body = {}) {
+  const input = customProcessInputObject(body, "Die Prozessaufgabe");
+  assertCustomProcessKeys(input, new Set(["action", "note", "idempotencyKey", "activationCount"]), "Die Prozessaufgabe");
+  const action = String(input.action || "complete").trim();
+  if (!new Set(["complete", "skip"]).has(action)) {
+    throw httpError(400, "Die Aufgabenentscheidung ist ungültig.", "CUSTOM_PROCESS_TASK_ACTION_INVALID");
+  }
+  const idempotencyKey = String(input.idempotencyKey || "").trim();
+  if (!/^[A-Za-z0-9._:-]{8,120}$/.test(idempotencyKey)) {
+    throw httpError(400, "Die Bearbeitungskennung ist ungültig.", "CUSTOM_PROCESS_TASK_IDEMPOTENCY_INVALID");
+  }
+  const activationCount = Number(input.activationCount);
+  if (!Number.isInteger(activationCount) || activationCount < 1) {
+    throw httpError(400, "Die Prozessaktivierung ist ungültig.", "CUSTOM_PROCESS_TASK_ACTIVATION_INVALID");
+  }
+  const note = customProcessText(input.note, { label: "Die Aufgabenbemerkung", max: 500 });
+  const run = db.prepare("SELECT * FROM custom_process_runs WHERE id = ?").get(String(runId || ""));
+  if (!run) throw httpError(404, "Die Prozessaufgabe wurde nicht gefunden.", "CUSTOM_PROCESS_TASK_NOT_FOUND");
+  if (Math.max(1, Number(run.activation_count || 1)) !== activationCount) {
+    throw httpError(409, "Diese Prozessaufgabe gehört zu einer früheren Aktivierung.", "CUSTOM_PROCESS_TASK_ACTIVATION_CONFLICT");
+  }
+  const bundle = customProcessRunBundle(run);
+  const step = bundle?.dto.steps.find((entry) => entry.id === String(stepId || ""));
+  const state = db.prepare(`
+    SELECT * FROM custom_process_run_steps WHERE run_id = ? AND step_id = ?
+  `).get(run.id, String(stepId || ""));
+  if (state && ["completed", "skipped"].includes(state.status)
+      && state.completed_by === String(actor.employeeNumber) && state.completion_request_id === idempotencyKey) {
+    return { ok: true, duplicate: true, run: customProcessRunPublic(run) };
+  }
+  if (!bundle || !step || !state || !customProcessRecipients(bundle, step, run).includes(String(actor.employeeNumber))) {
+    throw httpError(404, "Die Prozessaufgabe wurde nicht gefunden.", "CUSTOM_PROCESS_TASK_NOT_FOUND");
+  }
+  if (run.status !== "open" || state.status !== "active") {
+    throw httpError(409, "Die Prozessaufgabe wurde bereits bearbeitet.", "CUSTOM_PROCESS_TASK_CONFLICT");
+  }
+  if (action === "skip" && step.conditionType === "always") {
+    throw httpError(400, "Ein verpflichtender Prozessschritt kann nicht übersprungen werden.", "CUSTOM_PROCESS_TASK_SKIP_FORBIDDEN");
+  }
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const updated = db.prepare(`
+      UPDATE custom_process_run_steps SET status = ?, completed_at = CURRENT_TIMESTAMP,
+        completed_by = ?, completion_note = ?, completion_request_id = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE run_id = ? AND step_id = ? AND status = 'active'
+    `).run(action === "skip" ? "skipped" : "completed", actor.employeeNumber, note, idempotencyKey, run.id, step.id);
+    if (!updated.changes) throw httpError(409, "Die Prozessaufgabe wurde bereits bearbeitet.", "CUSTOM_PROCESS_TASK_CONFLICT");
+    db.prepare(`
+      UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+      WHERE recipient_employee_number = ? AND dedupe_key = ?
+    `).run(actor.employeeNumber, `custom-process:${run.id}:${Math.max(1, Number(run.activation_count || 1))}:${step.id}`);
+    const progress = ensureCustomProcessRunProgress(run);
+    auditPortal(actor.employeeNumber, action === "skip" ? "custom-process.task.skip" : "custom-process.task.complete",
+      "custom_process_run", run.id, JSON.stringify({ processId: run.process_id, revision: run.process_revision, stepId: step.id }));
+    db.exec("COMMIT");
+    return { ok: true, run: customProcessRunPublic(db.prepare("SELECT * FROM custom_process_runs WHERE id = ?").get(run.id)), progress };
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
+function rightsDashboardProcesses(actor = null) {
   const features = installationFeatures();
   const portalSettings = getPortalSettings();
   const amuPolicy = getAmuPolicy();
@@ -17415,6 +18622,7 @@ function rightsDashboardProcesses() {
   return {
     generatedAt: new Date().toISOString(),
     locations,
+    capabilities: customProcessEditorCatalog(actor),
     processes: [
       process({
         id: "vacation",
@@ -17550,6 +18758,7 @@ function rightsDashboardProcesses() {
           { id: "audit", title: "Ergebnis protokollieren", actor: "Grabenplaner", type: "finish", state: "active", description: "Status, Zeit, Zielrevision, Zeilenzahl und Prüfsumme bleiben nachvollziehbar; fachliche Nutzdaten werden nicht in das Audit kopiert.", setting: "Unterbrochene Übertragungen werden als unklar markiert und nicht still wiederholt.", permissions: ["integrations:read"] },
         ],
       }),
+      ...customProcessesForDashboard(),
     ],
   };
 }
@@ -17611,6 +18820,40 @@ function rightsDashboardProcessValidation(processDashboard) {
     !payroll?.enabled ? "Die Schnittstellenfunktion ist im Installationsprofil nicht freigeschaltet." : profileCount ? "Der strukturierte Datei-Export kann vorbereitet werden." : "Vor einem wiederholbaren Lohnexport sollte ein geprüftes Exportprofil gespeichert werden.", "integrations");
   add("payroll", "delivery", "info", targetCount ? `${targetCount} sichere(s) HTTPS-Ziel(e) aktiv` : "Datei-Export ohne direktes HTTPS-Ziel",
     targetCount ? "Nach erfolgreicher Vorprüfung kann eine kontrollierte Direktübergabe verwendet werden." : "Das ist zulässig: CSV- und Excel-Ausgabe bleiben auch ohne direkte Verbindung verfügbar.", "integrations");
+
+  const providerStatus = externalNotificationProviderStatus();
+  for (const custom of processDashboard.processes.filter((process) => process.source === "custom")) {
+    const processState = custom.status === "active" ? "ok" : "info";
+    add(custom.id, custom.steps[0]?.id || "definition", processState,
+      custom.status === "active" ? `${custom.title} ist aktiv` : `${custom.title} ist als Entwurf gespeichert`,
+      custom.status === "active" ? "Der Prozess kann mit seinem festgelegten Auslöser gestartet werden." : "Entwürfe lösen keine Aufgaben oder Benachrichtigungen aus.");
+    if (custom.scope?.valid === false) {
+      add(custom.id, custom.steps[0]?.id || "scope", custom.status === "active" ? "blocker" : "warning",
+        "Geltungsbereich ist nicht mehr verfügbar",
+        "Filiale oder Abteilung wurde deaktiviert. Bitte den Prozess als Entwurf speichern und neu zuordnen.");
+    }
+    const bundle = customProcessById(custom.id);
+    if (bundle) {
+      for (const step of custom.steps.filter((entry) => entry.responsibilityType !== "system")) {
+        const recipientCount = customProcessRecipients(bundle, step).length;
+        if (!recipientCount) {
+          add(custom.id, step.id, custom.status === "active" ? "warning" : "info",
+            `Keine aktive Zuständigkeit für „${step.title}“`,
+            "Die gewählte Rolle oder Person hat im Geltungsbereich derzeit keinen aktiven Portal-Zugang.");
+        }
+      }
+    }
+    const externalChannels = new Set(custom.steps.flatMap((step) => step.notificationChannels || []).filter((channel) => channel !== "internal"));
+    for (const channel of externalChannels) {
+      const available = Boolean(providerStatus[channel]?.available);
+      add(custom.id, custom.steps.find((step) => step.notificationChannels?.includes(channel))?.id || "notification",
+        available ? "ok" : "warning",
+        available ? `${channel.toUpperCase()}-Versand ist eingerichtet` : `${channel.toUpperCase()}-Versand ist noch nicht eingerichtet`,
+        available
+          ? "Externe Hinweise werden ausschließlich an verifizierte persönliche Ziele und mit neutralem Nachrichtentext gesendet."
+          : "Der interne Hinweis bleibt verfügbar; externe Zustellungen warten auf die Einrichtung durch die Firmen-IT.");
+    }
+  }
 
   const summary = { ok: 0, warning: 0, blocker: 0, info: 0 };
   for (const check of checks) summary[check.severity] += 1;
@@ -17735,7 +18978,7 @@ function rightsDashboardPayload(actor) {
     };
   });
   const effectivePermissions = users.flatMap((user) => user.permissions.filter((permission) => permission.effective));
-  const processDashboard = rightsDashboardProcesses();
+  const processDashboard = rightsDashboardProcesses(actor);
   processDashboard.validation = rightsDashboardProcessValidation(processDashboard);
   return {
     generatedAt: new Date().toISOString(),
@@ -17907,6 +19150,42 @@ app.get("/api/portal/v1/rights-dashboard", (request, response) => {
   response.json(rightsDashboardPayload(actor));
 });
 
+app.get("/api/portal/v1/custom-processes", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "rights:read");
+  const includeArchived = request.query.includeArchived === "1"
+    && (actor.employeeNumber === "local" || actor.permissions?.includes("processes:write"));
+  response.json({
+    processes: customProcessRows({ includeArchived }).map(({ process, steps }) => customProcessDashboardDefinition(process, steps)),
+    capabilities: customProcessEditorCatalog(actor),
+  });
+});
+
+app.post("/api/portal/v1/custom-processes", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "processes:write");
+  const process = createCustomProcess(actor, request.body || {});
+  try { reconcileCustomProcessTriggers(); } catch (error) { console.error("Eigene Prozessauslöser konnten nach dem Anlegen nicht geprüft werden:", error); }
+  response.status(201).json(process);
+});
+
+app.put("/api/portal/v1/custom-processes/:id", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "processes:write");
+  const process = updateCustomProcess(actor, String(request.params.id || ""), request.body || {});
+  try { reconcileCustomProcessTriggers(); } catch (error) { console.error("Eigene Prozessauslöser konnten nach dem Speichern nicht geprüft werden:", error); }
+  response.json(process);
+});
+
+app.put("/api/portal/v1/custom-processes/:id/status", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "processes:write");
+  const process = setCustomProcessStatus(actor, String(request.params.id || ""), request.body || {});
+  try { reconcileCustomProcessTriggers(); } catch (error) { console.error("Eigene Prozessauslöser konnten nach dem Statuswechsel nicht geprüft werden:", error); }
+  response.json(process);
+});
+
+app.post("/api/portal/v1/custom-processes/:id/trigger", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "processes:write");
+  response.json(triggerCustomProcess(actor, String(request.params.id || ""), request.body || {}));
+});
+
 app.get("/api/portal/v1/dashboards/locations", (request, response) => {
   const actor = requireAdminHrOrLocal(request, "rights:read");
   response.json(locationDashboardPayload(actor, request.query.date));
@@ -17919,8 +19198,8 @@ app.put("/api/portal/v1/dashboards/locations/preferences", (request, response) =
 });
 
 app.get("/api/portal/v1/rights-dashboard/process-export.pdf", (request, response) => {
-  requireAdminHrOrLocal(request, "rights:read");
-  const processDashboard = rightsDashboardProcesses();
+  const actor = requireAdminHrOrLocal(request, "rights:read");
+  const processDashboard = rightsDashboardProcesses(actor);
   const validation = rightsDashboardProcessValidation(processDashboard);
   processDashboard.validation = validation;
   const requestedProcessId = String(request.query.process || "vacation");
@@ -18191,6 +19470,25 @@ app.get("/api/portal/v1/me/schedule", (request, response) => {
 app.get(["/api/portal/v1/me/absence-history", "/api/portal/v1/me/absence-requests"], (request, response) => {
   const session = requirePortalSession(request, "own_vacation:read");
   response.json({ items: absenceHistoryForEmployee(session.employeeNumber) });
+});
+
+app.get("/api/portal/v1/me/process-tasks", (request, response) => {
+  const session = requirePortalSession(request);
+  const items = customProcessTasksForEmployee(session.employeeNumber);
+  response.json({
+    available: true,
+    items,
+    tasks: items,
+    summary: { openCount: items.length, activeRuns: new Set(items.map((item) => item.runId)).size },
+  });
+});
+
+app.post("/api/portal/v1/me/process-tasks/:runId/:stepId/complete", (request, response) => {
+  const session = requirePortalSession(request);
+  assertPortalCsrf(request);
+  const body = { ...(request.body || {}) };
+  if (!body.idempotencyKey) body.idempotencyKey = String(request.get("Idempotency-Key") || "");
+  response.json(completeCustomProcessTask(session, String(request.params.runId || ""), String(request.params.stepId || ""), body));
 });
 
 app.get("/api/portal/v1/me/notifications", (request, response) => {
@@ -23053,6 +24351,15 @@ function startServer() {
     try { purgeExpiredAmuDocuments(); } catch (error) { console.error("AUM-Aufbewahrungsprüfung fehlgeschlagen:", error); }
     try { purgeExpiredSicknessData(); } catch (error) { console.error("Krankmeldungs-Aufbewahrungsprüfung fehlgeschlagen:", error); }
     try { runSicknessEscalationSweep(); } catch (error) { console.error("Krankmeldungs-Fristenprüfung fehlgeschlagen:", error); }
+    try { reconcileCustomProcessTriggers(); } catch (error) { console.error("Eigene Prozessauslöser konnten nicht geprüft werden:", error); }
+    try {
+      const interrupted = db.prepare(`
+        UPDATE outbound_notification_jobs
+        SET status = 'unknown', last_error_code = 'INTERRUPTED_DELIVERY', updated_at = CURRENT_TIMESTAMP
+        WHERE status = 'processing'
+      `).run().changes;
+      if (interrupted) auditPortal("system", "outbound-notification.interrupted", "outbound_notification_job", "", JSON.stringify({ interrupted }));
+    } catch (error) { console.error("Unterbrochene Benachrichtigungen konnten nicht markiert werden:", error); }
     processOutboundNotificationJobs().catch((error) => console.error("Externe Warnmeldungen konnten nicht verarbeitet werden:", error));
     retentionInterval = setInterval(() => {
       try { reconcileOrphanAmuBlobs(); } catch (error) { console.error("Dokumentenabgleich fehlgeschlagen:", error); }
@@ -23062,6 +24369,7 @@ function startServer() {
     retentionInterval.unref();
     sicknessSweepInterval = setInterval(() => {
       try { runSicknessEscalationSweep(); } catch (error) { console.error("Krankmeldungs-Fristenprüfung fehlgeschlagen:", error); }
+      try { reconcileCustomProcessTriggers(); } catch (error) { console.error("Eigene Prozessauslöser konnten nicht geprüft werden:", error); }
     }, 60 * 1000);
     sicknessSweepInterval.unref();
     notificationDispatchInterval = setInterval(() => {
@@ -23180,6 +24488,8 @@ module.exports = {
   parseProtectedJson,
   purgeExpiredSicknessData,
   runSicknessEscalationSweep,
+  processOutboundNotificationJobs,
+  reconcileCustomProcessTriggers,
   installationFeatures,
   installationFeaturesForApiPath,
   minimizedPayrollApiPayload,

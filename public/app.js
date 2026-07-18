@@ -55,6 +55,11 @@ const state = {
   rightsDashboardSelectedProcessStepId: "",
   rightsProcessLocationId: "",
   rightsProcessScenarioIds: {},
+  editingCustomProcessId: "",
+  editingCustomProcessRevision: null,
+  customProcessDraftSteps: [],
+  customProcessTriggerPending: new Set(),
+  customProcessTriggerIdempotencyKeys: new Map(),
   brandingAssignments: [],
   brandingPreference: null,
   brandingFormDirty: false,
@@ -185,7 +190,8 @@ const elements = Object.fromEntries(
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
-    "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
+    "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
+    "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "dashboardFontSize",
@@ -2950,7 +2956,9 @@ function rightsProcessWithScenario(process) {
 
 function populateRightsProcessScenarios(process) {
   if (!elements.rightsProcessScenario || !process) return;
-  const scenarios = process.simulations || [];
+  const scenarios = process.simulations?.length
+    ? process.simulations
+    : [{ id: "current", label: "Aktueller Ablauf", description: "Gespeicherte Prozessdefinition.", stepStates: {} }];
   const scenario = rightsProcessScenario(process);
   elements.rightsProcessScenario.innerHTML = scenarios.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}</option>`).join("");
   elements.rightsProcessScenario.value = scenario.id;
@@ -2958,7 +2966,7 @@ function populateRightsProcessScenarios(process) {
 }
 
 function rightsProcessStepState(process, step) {
-  if (!process.enabled) return "inactive";
+  if (process.source === "custom" ? customProcessStatusValue(process) !== "active" : !process.enabled) return "inactive";
   if (step.stateRule === "timeTrackingEnabled") return rightsProcessLocation()?.timeTrackingEnabled ? "active" : "inactive";
   return step.state || "active";
 }
@@ -2993,9 +3001,349 @@ function rightsProcessStepSetting(process, step) {
 }
 
 function rightsProcessStatus(process) {
+  if (process.source === "custom") return ({ active: "Aktiv", draft: "Entwurf", archived: "Archiviert" })[process.status] || process.statusLabel || "Entwurf";
   if (!process.enabled) return process.statusLabel;
   if (process.id === "time_review") return rightsProcessLocation()?.timeTrackingEnabled ? "Am Standort aktiv" : "Am Standort deaktiviert";
   return process.statusLabel;
+}
+
+function canManageCustomProcesses() {
+  return rightsProcessDashboard()?.capabilities?.canManageCustomProcesses === true;
+}
+
+function customProcessLocationOptions() {
+  const dashboardLocations = rightsProcessDashboard()?.capabilities?.locations || rightsProcessDashboard()?.locations || [];
+  const fullLocations = state.locations || [];
+  return dashboardLocations.map((location) => {
+    const fullLocation = fullLocations.find((entry) => String(entry.id) === String(location.id));
+    return { ...location, departments: fullLocation?.departments || location.departments || [] };
+  });
+}
+
+function customProcessStatusValue(process) {
+  if (process?.status) return process.status;
+  return process?.enabled ? "active" : "draft";
+}
+
+function customProcessScopeLabel(process) {
+  const scope = process?.scope || {};
+  if (scope.label) return scope.label;
+  if (scope.type === "department") return [scope.locationName, scope.departmentName].filter(Boolean).join(" · ") || "Bestimmte Abteilung";
+  if (scope.type === "location") return scope.locationName || "Bestimmte Filiale";
+  return "Gesamtes Unternehmen";
+}
+
+function customProcessTriggerLabel(process) {
+  const trigger = process?.trigger || {};
+  return trigger.type === "staffing_shortfall"
+    ? `Mindestbesetzung · ab ${Number(trigger.minimumShortfall || 1)} fehlend`
+    : "Manuell";
+}
+
+function customProcessDisplayRules(process) {
+  if ((process.rules || []).length) return process.rules;
+  return [
+    { label: "Bereich", value: customProcessScopeLabel(process), tone: "neutral" },
+    { label: "Auslöser", value: customProcessTriggerLabel(process), tone: process.trigger?.type === "staffing_shortfall" ? "attention" : "neutral" },
+    { label: "Revision", value: String(process.revision || 1), tone: "neutral" },
+    { label: "Status", value: rightsProcessStatus(process), tone: customProcessStatusValue(process) === "active" ? "positive" : "attention" },
+  ];
+}
+
+function customProcessStepId() {
+  return `step-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+}
+
+function emptyCustomProcessStep() {
+  return {
+    id: customProcessStepId(),
+    type: "actor",
+    title: "",
+    description: "",
+    responsibilityType: "role",
+    responsibilityReference: "manager",
+    conditionType: "always",
+    conditionText: "",
+    notificationChannels: ["internal"],
+  };
+}
+
+function defaultCustomProcessSteps() {
+  return [
+    { ...emptyCustomProcessStep(), title: "Situation prüfen", description: "Auslöser, Geltungsbereich und nächsten Handlungsbedarf nachvollziehbar prüfen." },
+    { ...emptyCustomProcessStep(), type: "finish", title: "Prozess abschließen", description: "Ergebnis dokumentieren und den Prozess nachvollziehbar abschließen.", notificationChannels: [] },
+  ];
+}
+
+function normalizeCustomProcessStep(step = {}) {
+  const responsibility = step.responsibility || {};
+  const condition = step.condition || {};
+  const channels = step.notificationChannels || step.notification?.channels || step.channels || [];
+  return {
+    id: String(step.id || customProcessStepId()),
+    type: String(step.type || "actor"),
+    title: String(step.title || ""),
+    description: String(step.description || ""),
+    responsibilityType: String(step.responsibilityType || responsibility.type || responsibility.kind || "role"),
+    responsibilityReference: String(step.responsibilityReference || responsibility.reference || responsibility.ref || ""),
+    conditionType: String(step.conditionType || condition.type || condition.kind || "always"),
+    conditionText: String(step.conditionText || condition.text || ""),
+    notificationChannels: [...new Set((Array.isArray(channels) ? channels : [channels]).filter((channel) => ["internal", "email", "sms"].includes(channel)))],
+  };
+}
+
+function customProcessStepTypeOptions(selected) {
+  const types = [
+    ["actor", "Aufgabe"], ["approval", "Freigabe"], ["decision", "Entscheidung"],
+    ["system", "Systemprüfung"], ["finish", "Abschluss"],
+  ];
+  return types.map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`).join("");
+}
+
+function renderCustomProcessStepsEditor() {
+  if (!elements.customProcessSteps) return;
+  const steps = state.customProcessDraftSteps;
+  elements.customProcessSteps.innerHTML = steps.length ? steps.map((step, index) => {
+    const normalized = normalizeCustomProcessStep(step);
+    const notificationDisabled = normalized.responsibilityType === "system" || normalized.conditionType !== "always";
+    const channelCheckbox = (channel, label) => `<label><input type="checkbox" data-custom-step-channel="${channel}" ${!notificationDisabled && normalized.notificationChannels.includes(channel) ? "checked" : ""} ${notificationDisabled ? "disabled" : ""} />${label}</label>`;
+    return `<article class="custom-process-step-card" data-custom-process-step="${escapeHtmlAttribute(normalized.id)}">
+      <header><span class="custom-process-step-number">${index + 1}</span><div><strong>${escapeHtml(normalized.title || `Schritt ${index + 1}`)}</strong><small>${escapeHtml(normalized.description || "Aufgabe und Zuständigkeit ergänzen")}</small></div><div class="custom-process-step-order"><button type="button" data-custom-step-move="-1" ${index === 0 ? "disabled" : ""} aria-label="Schritt nach oben">↑</button><button type="button" data-custom-step-move="1" ${index === steps.length - 1 ? "disabled" : ""} aria-label="Schritt nach unten">↓</button><button type="button" class="danger" data-custom-step-remove aria-label="Schritt löschen">×</button></div></header>
+      <div class="custom-process-step-fields">
+        <label class="field"><span>Typ</span><select data-custom-step-field="type">${customProcessStepTypeOptions(normalized.type)}</select></label>
+        <label class="field"><span>Titel</span><input data-custom-step-field="title" minlength="2" maxlength="120" value="${escapeHtmlAttribute(normalized.title)}" required /></label>
+        <label class="field full-width"><span>Beschreibung</span><textarea data-custom-step-field="description" rows="2" maxlength="600" required>${escapeHtml(normalized.description)}</textarea></label>
+        <label class="field"><span>Verantwortungsart</span><select data-custom-step-field="responsibilityType"><option value="role" ${normalized.responsibilityType === "role" ? "selected" : ""}>App-Rolle</option><option value="employee" ${normalized.responsibilityType === "employee" ? "selected" : ""}>Bestimmte Person</option><option value="system" ${normalized.responsibilityType === "system" ? "selected" : ""}>System</option></select></label>
+        <label class="field ${normalized.responsibilityType === "system" ? "hidden" : ""}" data-custom-responsibility-reference><span>Referenz</span><input data-custom-step-field="responsibilityReference" list="customProcessResponsibilityOptions" maxlength="80" value="${escapeHtmlAttribute(normalized.responsibilityReference)}" placeholder="${normalized.responsibilityType === "employee" ? "Personalnummer" : "z. B. manager"}" ${normalized.responsibilityType === "system" ? "" : "required"} /></label>
+        <label class="field"><span>Bedingung</span><select data-custom-step-field="conditionType"><option value="always" ${normalized.conditionType === "always" ? "selected" : ""}>Immer</option><option value="when" ${normalized.conditionType === "when" ? "selected" : ""}>Wenn Bedingung erfüllt</option><option value="optional" ${normalized.conditionType === "optional" ? "selected" : ""}>Optional</option></select></label>
+        <label class="field ${normalized.conditionType === "always" ? "hidden" : ""}" data-custom-condition-text><span>Bedingungstext</span><input data-custom-step-field="conditionText" maxlength="400" value="${escapeHtmlAttribute(normalized.conditionText)}" placeholder="Verständlich beschreiben" ${normalized.conditionType === "when" ? "required" : ""} /></label>
+        <fieldset class="custom-process-channel-options full-width"><legend>Verständigung nach diesem Schritt</legend>${channelCheckbox("internal", "Intern im Grabenplaner")}${channelCheckbox("email", "E-Mail")}${channelCheckbox("sms", "SMS")}</fieldset>
+      </div>
+    </article>`;
+  }).join("") : "<p class=\"calculation-note\">Mindestens einen Prozessschritt hinzufügen.</p>";
+}
+
+function syncCustomProcessStepsFromEditor() {
+  if (!elements.customProcessSteps) return;
+  state.customProcessDraftSteps = [...elements.customProcessSteps.querySelectorAll("[data-custom-process-step]")].map((card) => {
+    const value = (name) => card.querySelector(`[data-custom-step-field="${name}"]`)?.value?.trim() || "";
+    return {
+      id: card.dataset.customProcessStep,
+      type: value("type"),
+      title: value("title"),
+      description: value("description"),
+      responsibilityType: value("responsibilityType"),
+      responsibilityReference: value("responsibilityReference"),
+      conditionType: value("conditionType"),
+      conditionText: value("conditionText"),
+      notificationChannels: [...card.querySelectorAll("[data-custom-step-channel]:checked")].map((input) => input.dataset.customStepChannel),
+    };
+  });
+}
+
+function populateCustomProcessDepartments(selected = "") {
+  if (!elements.customProcessScopeDepartment) return;
+  const location = customProcessLocationOptions().find((entry) => String(entry.id) === String(elements.customProcessScopeLocation.value));
+  const departments = (location?.departments || []).filter((department) => department.active !== false);
+  elements.customProcessScopeDepartment.innerHTML = departments.length
+    ? departments.map((department) => `<option value="${escapeHtmlAttribute(String(department.id))}">${escapeHtml(department.name)}</option>`).join("")
+    : "<option value=\"\">Keine aktive Abteilung</option>";
+  if (departments.some((department) => String(department.id) === String(selected))) elements.customProcessScopeDepartment.value = String(selected);
+}
+
+function populateCustomProcessResponsibilityOptions() {
+  if (!elements.customProcessResponsibilityOptions) return;
+  const capabilities = rightsProcessDashboard()?.capabilities || {};
+  const roles = capabilities.roles || [];
+  const scopeType = elements.customProcessScopeType?.value || "company";
+  const locationId = String(elements.customProcessScopeLocation?.value || "");
+  const departmentId = String(elements.customProcessScopeDepartment?.value || "");
+  const employees = (capabilities.employees || []).filter((employee) => {
+    if (scopeType === "company" || ["hr", "admin", "it_admin", "developer"].includes(employee.role)) return true;
+    if (String(employee.locationId || "") !== locationId) return false;
+    return scopeType !== "department" || String(employee.departmentId || "") === departmentId;
+  });
+  elements.customProcessResponsibilityOptions.innerHTML = [
+    ...roles.map((role) => `<option value="${escapeHtmlAttribute(role.id)}">${escapeHtml(`Rolle · ${role.name || role.id}`)}</option>`),
+    ...employees.map((employee) => `<option value="${escapeHtmlAttribute(employee.employeeNumber)}">${escapeHtml(`Person · ${employee.employeeNumber} · ${employee.fullName}`)}</option>`),
+  ].join("");
+}
+
+function updateCustomProcessScopeFields(selectedDepartment = "") {
+  const scopeType = elements.customProcessScopeType.value;
+  const needsLocation = ["location", "department"].includes(scopeType);
+  const needsDepartment = scopeType === "department";
+  elements.customProcessScopeLocationField.classList.toggle("hidden", !needsLocation);
+  elements.customProcessScopeLocation.required = needsLocation;
+  elements.customProcessScopeDepartmentField.classList.toggle("hidden", !needsDepartment);
+  elements.customProcessScopeDepartment.required = needsDepartment;
+  populateCustomProcessDepartments(selectedDepartment);
+  populateCustomProcessResponsibilityOptions();
+}
+
+function updateCustomProcessTriggerFields() {
+  const needsShortfall = elements.customProcessTriggerType.value === "staffing_shortfall";
+  elements.customProcessShortfallField.classList.toggle("hidden", !needsShortfall);
+  elements.customProcessMinimumShortfall.required = needsShortfall;
+}
+
+function setCustomProcessMessage(message = "", error = false) {
+  if (!elements.customProcessMessage) return;
+  elements.customProcessMessage.textContent = message;
+  elements.customProcessMessage.classList.toggle("hidden", !message);
+  elements.customProcessMessage.classList.toggle("error", error);
+}
+
+function openCustomProcessEditor(process = null) {
+  if (!canManageCustomProcesses() || !elements.customProcessModal) return;
+  state.editingCustomProcessId = process?.source === "custom" ? String(process.id) : "";
+  state.editingCustomProcessRevision = process?.revision ?? null;
+  elements.customProcessId.value = state.editingCustomProcessId;
+  elements.customProcessModalTitle.textContent = state.editingCustomProcessId ? "Eigenen Prozess bearbeiten" : "Eigenen Prozess anlegen";
+  elements.customProcessTitle.value = process?.title || "";
+  elements.customProcessSymbol.value = process?.symbol || "";
+  elements.customProcessDescription.value = process?.description || process?.summary || "";
+  elements.customProcessStatus.value = ["active", "draft"].includes(process?.status) ? process.status : "draft";
+  elements.customProcessScopeType.value = process?.scope?.type || "company";
+  const locations = customProcessLocationOptions();
+  elements.customProcessScopeLocation.innerHTML = locations.length
+    ? locations.map((location) => `<option value="${escapeHtmlAttribute(String(location.id))}">${escapeHtml(`${location.id} · ${location.name}`)}</option>`).join("")
+    : "<option value=\"\">Kein aktiver Standort</option>";
+  if (locations.some((location) => String(location.id) === String(process?.scope?.locationId))) elements.customProcessScopeLocation.value = String(process.scope.locationId);
+  updateCustomProcessScopeFields(process?.scope?.departmentId || "");
+  elements.customProcessTriggerType.value = process?.trigger?.type || "manual";
+  elements.customProcessMinimumShortfall.value = String(process?.trigger?.minimumShortfall || 1);
+  updateCustomProcessTriggerFields();
+  state.customProcessDraftSteps = (process?.steps || defaultCustomProcessSteps()).map(normalizeCustomProcessStep);
+  renderCustomProcessStepsEditor();
+  setCustomProcessMessage();
+  elements.customProcessModal.showModal();
+}
+
+function customProcessPayload() {
+  syncCustomProcessStepsFromEditor();
+  const scopeType = elements.customProcessScopeType.value;
+  const triggerType = elements.customProcessTriggerType.value;
+  return {
+    title: elements.customProcessTitle.value.trim(),
+    symbol: elements.customProcessSymbol.value.trim().toUpperCase(),
+    description: elements.customProcessDescription.value.trim(),
+    status: elements.customProcessStatus.value,
+    revision: state.editingCustomProcessRevision ?? undefined,
+    scope: {
+      type: scopeType,
+      locationId: ["location", "department"].includes(scopeType) ? elements.customProcessScopeLocation.value : null,
+      departmentId: scopeType === "department" ? elements.customProcessScopeDepartment.value : null,
+    },
+    trigger: {
+      type: triggerType,
+      minimumShortfall: triggerType === "staffing_shortfall" ? Number(elements.customProcessMinimumShortfall.value || 1) : 1,
+    },
+    steps: state.customProcessDraftSteps.map((step) => ({
+      id: step.id,
+      type: step.type,
+      title: step.title,
+      description: step.description,
+      responsibilityType: step.responsibilityType,
+      responsibilityReference: step.responsibilityType === "system" ? "" : step.responsibilityReference,
+      conditionType: step.conditionType,
+      conditionText: step.conditionType === "always" ? "" : step.conditionText,
+      notificationChannels: step.notificationChannels,
+    })),
+  };
+}
+
+async function saveCustomProcess(event) {
+  event.preventDefault();
+  const payload = customProcessPayload();
+  if (payload.steps.length < 2) return setCustomProcessMessage("Bitte mindestens zwei Prozessschritte hinzufügen.", true);
+  if (payload.status === "active" && !payload.steps.some((step) => step.type === "finish")) return setCustomProcessMessage("Ein aktiver Prozess benötigt einen klaren Abschlussschritt.", true);
+  if (payload.steps.some((step) => !step.title || (step.responsibilityType !== "system" && !step.responsibilityReference) || (step.conditionType === "when" && !step.conditionText))) {
+    return setCustomProcessMessage("Bitte alle Pflichtangaben der Prozessschritte vervollständigen.", true);
+  }
+  const id = state.editingCustomProcessId;
+  elements.saveCustomProcessButton.disabled = true;
+  setCustomProcessMessage(id ? "Prozess wird gespeichert …" : "Prozess wird angelegt …");
+  try {
+    const result = await api(id ? `/api/portal/v1/custom-processes/${encodeURIComponent(id)}` : "/api/portal/v1/custom-processes", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(payload),
+    });
+    const saved = result?.process || result;
+    if (saved?.id) state.rightsDashboardSelectedProcessId = String(saved.id);
+    elements.customProcessModal.close();
+    await loadRightsDashboard();
+    showToast(id ? "Der eigene Prozess wurde gespeichert." : "Der eigene Prozess wurde angelegt.");
+  } catch (error) {
+    setCustomProcessMessage(error.message, true);
+  } finally {
+    elements.saveCustomProcessButton.disabled = false;
+  }
+}
+
+async function changeCustomProcessStatus(process, status) {
+  const actionLabel = status === "archived" ? "archivieren" : status === "active" ? "aktivieren" : "als Entwurf speichern";
+  if (status === "archived" && !confirm(`„${process.title}“ wirklich archivieren? Laufhistorie und Definition bleiben erhalten.`)) return;
+  try {
+    const result = await api(`/api/portal/v1/custom-processes/${encodeURIComponent(process.id)}/status`, {
+      method: "PUT",
+      body: JSON.stringify({ status, revision: process.revision }),
+    });
+    const updated = result?.process || result;
+    if (updated?.id) state.rightsDashboardSelectedProcessId = String(updated.id);
+    await loadRightsDashboard();
+    showToast(`Der Prozess wurde ${actionLabel === "archivieren" ? "archiviert" : actionLabel === "aktivieren" ? "aktiviert" : "als Entwurf gespeichert"}.`);
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function triggerCustomProcess(process) {
+  const processId = String(process?.id || "");
+  if (!processId || state.customProcessTriggerPending.has(processId)) return;
+  if (!confirm(`„${process.title}“ jetzt manuell auslösen? Zuständige Personen können dadurch verständigt werden.`)) return;
+  const idempotencyKey = state.customProcessTriggerIdempotencyKeys.get(processId)
+    || globalThis.crypto?.randomUUID?.()
+    || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  state.customProcessTriggerIdempotencyKeys.set(processId, idempotencyKey);
+  state.customProcessTriggerPending.add(processId);
+  renderRightsCustomProcessActions(process);
+  try {
+    const result = await api(`/api/portal/v1/custom-processes/${encodeURIComponent(processId)}/trigger`, {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify({ idempotencyKey }),
+    });
+    state.customProcessTriggerIdempotencyKeys.delete(processId);
+    const queued = Number(result?.notifications?.internal || 0) + Number(result?.notifications?.external || 0);
+    showToast(result?.duplicate
+      ? "Diese Auslösung wurde bereits verarbeitet; es wurde kein zweiter Lauf gestartet."
+      : `Der Prozess wurde ausgelöst${queued ? ` · ${queued} Verständigung(en) vorgemerkt` : ""}.`);
+  } catch (error) {
+    showToast(`${error.message} Beim erneuten Versuch wird dieselbe Vorgangs-ID verwendet.`, true);
+  } finally {
+    state.customProcessTriggerPending.delete(processId);
+    const current = (rightsProcessDashboard()?.processes || []).find((entry) => String(entry.id) === processId) || process;
+    renderRightsCustomProcessActions(current);
+  }
+}
+
+function renderRightsCustomProcessActions(process) {
+  if (!elements.rightsCustomProcessActions) return;
+  const canManage = canManageCustomProcesses();
+  const custom = process?.source === "custom";
+  elements.rightsCustomProcessActions.classList.toggle("hidden", !custom || !canManage);
+  if (!custom || !canManage) {
+    elements.rightsCustomProcessActions.innerHTML = "";
+    return;
+  }
+  const status = customProcessStatusValue(process);
+  const toggleStatus = status === "active" ? "draft" : "active";
+  const triggerPending = state.customProcessTriggerPending.has(String(process.id));
+  elements.rightsCustomProcessActions.innerHTML = `
+    <span><strong>Eigener Prozess</strong><small>Revision ${escapeHtml(String(process.revision || 1))} · ${escapeHtml(customProcessScopeLabel(process))}</small></span>
+    <button type="button" class="secondary-button" data-custom-process-action="edit">Bearbeiten</button>
+    <button type="button" class="secondary-button" data-custom-process-action="status" data-custom-process-status="${toggleStatus}">${toggleStatus === "active" ? "Aktivieren" : "Als Entwurf setzen"}</button>
+    <button type="button" class="secondary-button" data-custom-process-action="trigger" ${status === "active" && !triggerPending ? "" : "disabled"}>${triggerPending ? "Wird ausgelöst …" : "Manuell auslösen"}</button>
+    <button type="button" class="danger-button" data-custom-process-action="archive" ${status === "archived" ? "disabled" : ""}>Archivieren</button>`;
 }
 
 function renderRightsProcessExplanation(process, step) {
@@ -3014,7 +3362,7 @@ function renderRightsProcessExplanation(process, step) {
     ? `<button type="button" class="rights-process-action" data-rights-process-permission="${escapeHtml(step.permissions[0])}">Recht in Übersicht zeigen</button>`
     : "";
   const effect = stateValue === "active"
-    ? "Teil des aktuell wirksamen Standardwegs."
+    ? `Teil des aktuell wirksamen ${process.source === "custom" ? "eigenen Prozesswegs" : "Standardwegs"}.`
     : stateValue === "conditional"
       ? "Wird nur ausgelöst, wenn die beschriebene Bedingung eintritt."
       : stateValue === "bypassed"
@@ -3049,17 +3397,27 @@ function renderRightsProcessDashboard() {
   const dashboard = rightsProcessDashboard();
   if (!dashboard || !elements.rightsProcessList) return;
   const processes = dashboard.processes || [];
+  elements.addCustomProcessButton?.classList.toggle("hidden", !canManageCustomProcesses());
   if (!processes.some((process) => process.id === state.rightsDashboardSelectedProcessId)) {
     state.rightsDashboardSelectedProcessId = processes[0]?.id || "";
     state.rightsDashboardSelectedProcessStepId = "";
   }
   const selectedDefinition = processes.find((process) => process.id === state.rightsDashboardSelectedProcessId);
-  elements.rightsProcessList.innerHTML = processes.length ? processes.map((process) => {
+  const processButton = (process) => {
     const selected = process.id === state.rightsDashboardSelectedProcessId;
     const status = rightsProcessStatus(process);
-    return `<button type="button" class="rights-process-item ${process.enabled ? "" : "disabled"} ${selected ? "selected" : ""}" data-rights-process="${escapeHtml(process.id)}" aria-pressed="${selected}"><span class="rights-process-item-mark">${escapeHtml(process.symbol)}</span><span class="rights-process-item-copy"><strong>${escapeHtml(process.title)}</strong><small>${escapeHtml(status)}</small></span></button>`;
-  }).join("") : "<p class=\"settings-note\">Keine Prozessdefinitionen verfügbar.</p>";
-  if (!selectedDefinition) return;
+    const active = process.source === "custom" ? customProcessStatusValue(process) === "active" : process.enabled;
+    return `<button type="button" class="rights-process-item ${process.source === "custom" ? "custom" : "standard"} ${active ? "" : "disabled"} ${selected ? "selected" : ""}" data-rights-process="${escapeHtmlAttribute(process.id)}" aria-pressed="${selected}"><span class="rights-process-item-mark">${escapeHtml(process.symbol)}</span><span class="rights-process-item-copy"><strong>${escapeHtml(process.title)}</strong><small>${escapeHtml(status)}${process.source === "custom" ? ` · Revision ${escapeHtml(String(process.revision || 1))}` : ""}</small></span></button>`;
+  };
+  const standardProcesses = processes.filter((process) => process.source !== "custom");
+  const customProcesses = processes.filter((process) => process.source === "custom");
+  elements.rightsProcessList.innerHTML = processes.length
+    ? `${standardProcesses.length ? `<section class="rights-process-list-group"><span>Standardprozesse</span>${standardProcesses.map(processButton).join("")}</section>` : ""}${customProcesses.length ? `<section class="rights-process-list-group custom"><span>Eigene Prozesse</span>${customProcesses.map(processButton).join("")}</section>` : canManageCustomProcesses() ? '<section class="rights-process-list-group custom"><span>Eigene Prozesse</span><p class="settings-note">Noch kein eigener Prozess angelegt.</p></section>' : ""}`
+    : "<p class=\"settings-note\">Keine Prozessdefinitionen verfügbar.</p>";
+  if (!selectedDefinition) {
+    renderRightsCustomProcessActions(null);
+    return;
+  }
   populateRightsProcessScenarios(selectedDefinition);
   const selectedProcess = rightsProcessWithScenario(selectedDefinition);
   elements.rightsProcessLocation.disabled = !selectedProcess.locationSensitive;
@@ -3067,9 +3425,13 @@ function renderRightsProcessDashboard() {
   elements.rightsProcessSummary.textContent = selectedProcess.summary;
   const processStatus = rightsProcessStatus(selectedProcess);
   elements.rightsProcessStatus.textContent = processStatus;
-  elements.rightsProcessStatus.classList.toggle("inactive", !selectedProcess.enabled || processStatus.includes("deaktiviert"));
-  elements.rightsProcessSimulationNote.innerHTML = `<strong>${escapeHtml(selectedProcess.scenario.label)}</strong><span>${escapeHtml(selectedProcess.scenario.description)} · Nur Vorschau, keine gespeicherten Daten werden verändert.</span>`;
-  elements.rightsProcessRules.innerHTML = (selectedProcess.rules || []).map((rule) => `<article class="rights-process-rule ${escapeHtml(rule.tone || "neutral")}"><span>${escapeHtml(rule.label)}</span><strong>${escapeHtml(rightsProcessRuleValue(rule))}</strong></article>`).join("");
+  const processActive = selectedProcess.source === "custom" ? customProcessStatusValue(selectedProcess) === "active" : selectedProcess.enabled;
+  elements.rightsProcessStatus.classList.toggle("inactive", !processActive || processStatus.includes("deaktiviert"));
+  elements.rightsProcessSimulationNote.innerHTML = selectedProcess.source === "custom"
+    ? `<strong>${escapeHtml(selectedProcess.scenario.label)}</strong><span>${escapeHtml(selectedProcess.scenario.description)} · Eigener Prozess, Revision ${escapeHtml(String(selectedProcess.revision || 1))}.</span>`
+    : `<strong>${escapeHtml(selectedProcess.scenario.label)}</strong><span>${escapeHtml(selectedProcess.scenario.description)} · Nur Vorschau, keine gespeicherten Daten werden verändert.</span>`;
+  elements.rightsProcessRules.innerHTML = customProcessDisplayRules(selectedProcess).map((rule) => `<article class="rights-process-rule ${escapeHtml(rule.tone || "neutral")}"><span>${escapeHtml(rule.label)}</span><strong>${escapeHtml(rightsProcessRuleValue(rule))}</strong></article>`).join("");
+  renderRightsCustomProcessActions(selectedProcess);
   if (!(selectedProcess.steps || []).some((step) => step.id === state.rightsDashboardSelectedProcessStepId)) {
     state.rightsDashboardSelectedProcessStepId = selectedProcess.steps?.[0]?.id || "";
   }
@@ -3133,6 +3495,8 @@ async function loadRightsDashboard() {
     setRightsDashboardMode(state.rightsDashboardMode);
   } catch (error) {
     state.rightsDashboard = null;
+    elements.addCustomProcessButton?.classList.add("hidden");
+    elements.rightsCustomProcessActions?.classList.add("hidden");
     elements.rightsDashboardUserList.innerHTML = `<p class="settings-note">${escapeHtml(error.status === 403 ? "Die Dashboards sind nur für Personalleitung, Admin, IT-Admin und Developer verfügbar." : error.message)}</p>`;
     elements.rightsDashboardEmpty?.classList.remove("hidden");
     elements.rightsDashboardSelection?.classList.add("hidden");
@@ -5778,6 +6142,12 @@ function applyRequestedView() {
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
     document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
   }
+  if (requestedView === "rightsDashboard") {
+    const dashboardMode = parameters.get("dashboard");
+    if (["locations", "rights", "processes"].includes(dashboardMode)) state.rightsDashboardMode = dashboardMode;
+    const processId = parameters.get("process");
+    if (processId) state.rightsDashboardSelectedProcessId = processId.slice(0, 120);
+  }
   const contextChanged = restoreRememberedOverallContext(requestedView);
   setView(requestedView);
   if (contextChanged) loadAll();
@@ -8282,6 +8652,78 @@ elements.rightsProcessScenario?.addEventListener("change", () => {
   renderRightsProcessDashboard();
 });
 elements.rightsProcessExportPdf?.addEventListener("click", exportRightsProcessPdf);
+elements.addCustomProcessButton?.addEventListener("click", () => openCustomProcessEditor());
+elements.customProcessForm?.addEventListener("submit", saveCustomProcess);
+elements.customProcessScopeType?.addEventListener("change", () => updateCustomProcessScopeFields());
+elements.customProcessScopeLocation?.addEventListener("change", () => {
+  populateCustomProcessDepartments();
+  populateCustomProcessResponsibilityOptions();
+});
+elements.customProcessScopeDepartment?.addEventListener("change", populateCustomProcessResponsibilityOptions);
+elements.customProcessTriggerType?.addEventListener("change", updateCustomProcessTriggerFields);
+elements.addCustomProcessStepButton?.addEventListener("click", () => {
+  syncCustomProcessStepsFromEditor();
+  if (state.customProcessDraftSteps.length >= 30) return showToast("Ein eigener Prozess kann höchstens 30 Schritte enthalten.", true);
+  state.customProcessDraftSteps.push(emptyCustomProcessStep());
+  renderCustomProcessStepsEditor();
+  elements.customProcessSteps.querySelector("[data-custom-process-step]:last-child input[data-custom-step-field=\"title\"]")?.focus();
+});
+elements.customProcessSteps?.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-custom-process-step]");
+  if (!card) return;
+  syncCustomProcessStepsFromEditor();
+  const index = state.customProcessDraftSteps.findIndex((step) => step.id === card.dataset.customProcessStep);
+  if (index < 0) return;
+  const move = event.target.closest("[data-custom-step-move]");
+  if (move) {
+    const target = index + Number(move.dataset.customStepMove || 0);
+    if (target >= 0 && target < state.customProcessDraftSteps.length) {
+      const [step] = state.customProcessDraftSteps.splice(index, 1);
+      state.customProcessDraftSteps.splice(target, 0, step);
+      renderCustomProcessStepsEditor();
+    }
+    return;
+  }
+  if (event.target.closest("[data-custom-step-remove]")) {
+    state.customProcessDraftSteps.splice(index, 1);
+    renderCustomProcessStepsEditor();
+  }
+});
+elements.customProcessSteps?.addEventListener("input", (event) => {
+  const card = event.target.closest("[data-custom-process-step]");
+  if (!card) return;
+  if (event.target.matches('[data-custom-step-field="title"]')) card.querySelector("header strong").textContent = event.target.value || "Unbenannter Schritt";
+  if (event.target.matches('[data-custom-step-field="description"]')) card.querySelector("header small").textContent = event.target.value || "Aufgabe und Zuständigkeit ergänzen";
+});
+elements.customProcessSteps?.addEventListener("change", (event) => {
+  const card = event.target.closest("[data-custom-process-step]");
+  if (!card) return;
+  if (event.target.matches('[data-custom-step-field="responsibilityType"]')) {
+    const field = card.querySelector("[data-custom-responsibility-reference]");
+    const input = field.querySelector("input");
+    const hidden = event.target.value === "system";
+    field.classList.toggle("hidden", hidden);
+    input.required = !hidden;
+    input.placeholder = event.target.value === "employee" ? "Personalnummer" : "z. B. manager";
+    const notificationDisabled = hidden || card.querySelector('[data-custom-step-field="conditionType"]')?.value !== "always";
+    card.querySelectorAll("[data-custom-step-channel]").forEach((channel) => {
+      channel.disabled = notificationDisabled;
+      if (notificationDisabled) channel.checked = false;
+    });
+  }
+  if (event.target.matches('[data-custom-step-field="conditionType"]')) {
+    const field = card.querySelector("[data-custom-condition-text]");
+    const input = field.querySelector("input");
+    const hidden = event.target.value === "always";
+    field.classList.toggle("hidden", hidden);
+    input.required = event.target.value === "when";
+    const disabled = event.target.value !== "always" || card.querySelector('[data-custom-step-field="responsibilityType"]')?.value === "system";
+    card.querySelectorAll("[data-custom-step-channel]").forEach((channel) => {
+      channel.disabled = disabled;
+      if (disabled) channel.checked = false;
+    });
+  }
+});
 elements.rightsProcessValidationList?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-rights-validation-process]");
   if (!button) return;
@@ -8302,6 +8744,16 @@ elements.rightsProcessTimeline?.addEventListener("click", (event) => {
   if (!button) return;
   state.rightsDashboardSelectedProcessStepId = button.dataset.rightsProcessStep;
   renderRightsProcessDashboard();
+});
+elements.rightsCustomProcessActions?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-custom-process-action]");
+  if (!button || button.disabled) return;
+  const process = (rightsProcessDashboard()?.processes || []).find((entry) => entry.id === state.rightsDashboardSelectedProcessId && entry.source === "custom");
+  if (!process) return;
+  if (button.dataset.customProcessAction === "edit") openCustomProcessEditor(process);
+  if (button.dataset.customProcessAction === "status") changeCustomProcessStatus(process, button.dataset.customProcessStatus);
+  if (button.dataset.customProcessAction === "archive") changeCustomProcessStatus(process, "archived");
+  if (button.dataset.customProcessAction === "trigger") triggerCustomProcess(process);
 });
 elements.rightsProcessExplanation?.addEventListener("click", (event) => {
   const settingsButton = event.target.closest("[data-rights-process-settings-tab]");
