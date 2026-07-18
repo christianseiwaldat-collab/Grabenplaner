@@ -5,6 +5,7 @@ const test = require("node:test");
 
 const {
   SMTP_OPTIONAL_PACKAGE,
+  PROCESS_ALERT_TEXT,
   STAFFING_ALERT_SUBJECT,
   STAFFING_ALERT_TEXT,
   createExternalNotificationAdapter,
@@ -76,6 +77,27 @@ test("SMS- und WhatsApp-Webhooks erhalten ausschließlich den neutralen Besetzun
   });
   assert.equal(calls[0].options.headers.authorization, "Bearer sms-secret");
   assert.equal(calls[0].options.redirect, "error");
+});
+
+test("Eigene Prozesse versenden extern nur den neutralen Anmeldehinweis", async () => {
+  const calls = [];
+  const adapter = createExternalNotificationAdapter({
+    configuration: { sms: { enabled: true, url: "https://notify.example.test/sms", token: "sms-secret" } },
+    fetchImplementation: async (url, options) => { calls.push({ url, options }); return { ok: true }; },
+  });
+  await adapter.sendProcessAlert({
+    channel: "sms",
+    recipient: "+436601234567",
+    processTitle: "Vertraulicher Notfallprozess",
+    employeeNumber: "252",
+  });
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    event: "process_notification",
+    channel: "sms",
+    recipient: "+436601234567",
+    message: PROCESS_ALERT_TEXT,
+  });
+  assert.doesNotMatch(calls[0].options.body, /Notfallprozess|252/);
 });
 
 test("Zielbestätigung sendet nur Einmalcode und neutralen Verifizierungstext", async () => {
