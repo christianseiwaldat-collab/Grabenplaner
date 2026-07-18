@@ -14645,6 +14645,204 @@ function rightsDashboardThemeForActor(actor) {
   return uiPreferencesForActor(actor).pageThemes.rightsDashboard;
 }
 
+const LOCATION_DASHBOARD_ORDER_PREFERENCE = "dashboard_location_order";
+const locationDashboardCategoryCatalog = Object.freeze([
+  { id: "sick", label: "Krankenstand", tone: "danger" },
+  { id: "vacation", label: "Urlaub", tone: "vacation" },
+  { id: "time_off", label: "Zeitausgleich", tone: "warning" },
+  { id: "training", label: "Schule / Schulung", tone: "info" },
+  { id: "branch", label: "Andere Filiale", tone: "branch" },
+  { id: "other", label: "Sonstiges", tone: "neutral" },
+]);
+
+function locationDashboardCategory(optionType) {
+  if (optionType === "sick") return "sick";
+  if (optionType === "vacation") return "vacation";
+  if (optionType === "time_off") return "time_off";
+  if (["vocational_school", "school"].includes(optionType)) return "training";
+  if (optionType === "branch") return "branch";
+  return "other";
+}
+
+function locationDashboardOrderForActor(actor, validLocationIds = []) {
+  if (!actor?.employeeNumber || actor.employeeNumber === "local") return [];
+  const stored = db.prepare(`
+    SELECT value FROM portal_user_preferences
+    WHERE employee_number = ? AND preference_key = ?
+  `).get(actor.employeeNumber, LOCATION_DASHBOARD_ORDER_PREFERENCE)?.value;
+  if (!stored) return [];
+  try {
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+    const valid = new Set(validLocationIds.map(String));
+    return [...new Set(parsed.map((value) => String(value || "").trim()))]
+      .filter((locationId) => valid.has(locationId));
+  } catch {
+    return [];
+  }
+}
+
+function validateLocationDashboardOrder(input) {
+  if (!Array.isArray(input)) {
+    throw httpError(400, "Bitte eine gültige Filialreihenfolge übermitteln.", "DASHBOARD_LOCATION_ORDER_INVALID");
+  }
+  const submitted = input.map((value) => String(value || "").trim());
+  if (submitted.some((value) => !value) || new Set(submitted).size !== submitted.length || submitted.length > 250) {
+    throw httpError(400, "Bitte eine gültige Filialreihenfolge übermitteln.", "DASHBOARD_LOCATION_ORDER_INVALID");
+  }
+  if (!submitted.length) return [];
+  const placeholders = submitted.map(() => "?").join(",");
+  const existing = new Set(db.prepare(`SELECT id FROM locations WHERE active = 1 AND id IN (${placeholders})`).all(...submitted).map((row) => String(row.id)));
+  if (submitted.some((locationId) => !existing.has(locationId))) {
+    throw httpError(400, "Die Filialreihenfolge enthält einen unbekannten oder inaktiven Standort.", "DASHBOARD_LOCATION_ORDER_INVALID");
+  }
+  return submitted;
+}
+
+function saveLocationDashboardOrder(actor, input) {
+  const locationOrder = validateLocationDashboardOrder(input);
+  if (actor.employeeNumber !== "local") {
+    db.prepare(`
+      INSERT INTO portal_user_preferences (employee_number, preference_key, value, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(employee_number, preference_key) DO UPDATE SET
+        value = excluded.value,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(actor.employeeNumber, LOCATION_DASHBOARD_ORDER_PREFERENCE, JSON.stringify(locationOrder));
+    auditPortal(actor.employeeNumber, "dashboard.locations.order.update", "portal_user_preference", actor.employeeNumber,
+      JSON.stringify({ locationOrder }));
+  }
+  return locationOrder;
+}
+
+function locationDashboardPayload(actor, requestedDate) {
+  const date = requestedDate ? String(requestedDate) : viennaTodayIso();
+  if (!isIsoDate(date)) {
+    throw httpError(400, "Bitte ein gültiges Datum für die Filialübersicht auswählen.", "DASHBOARD_DATE_INVALID");
+  }
+  const locations = db.prepare(`
+    SELECT id, name, min_staff
+    FROM locations
+    WHERE active = 1
+    ORDER BY id COLLATE NOCASE, name COLLATE NOCASE
+  `).all().map((location) => ({
+    id: String(location.id),
+    name: location.name,
+    minStaff: Math.max(0, Number(location.min_staff || 0)),
+    departments: [],
+    activeTeamCount: 0,
+    scheduledCount: 0,
+    absences: [],
+  }));
+  const locationLookup = new Map(locations.map((location) => [location.id, location]));
+  const departments = db.prepare(`
+    SELECT id, location_id, name, min_staff
+    FROM departments
+    WHERE active = 1
+    ORDER BY location_id COLLATE NOCASE, sort_order, name COLLATE NOCASE
+  `).all();
+  for (const department of departments) {
+    locationLookup.get(String(department.location_id))?.departments.push({
+      id: Number(department.id),
+      name: department.name,
+      minStaff: Math.max(0, Number(department.min_staff || 0)),
+    });
+  }
+  for (const location of locations) {
+    const day = dayConfiguration(date, settingsForLocation(location.id), { locationId: location.id });
+    location.open = Boolean(day?.open);
+    location.openingHours = day?.open ? { start: day.start, end: day.end } : null;
+    location.minStaff = day?.open ? Math.max(0, Number(day.minStaff || 0)) : 0;
+  }
+  const activeTeamCounts = db.prepare(`
+    SELECT home_location_id AS location_id, COUNT(*) AS count
+    FROM employees
+    WHERE active = 1 AND home_location_id IS NOT NULL
+    GROUP BY home_location_id
+  `).all();
+  for (const entry of activeTeamCounts) {
+    const location = locationLookup.get(String(entry.location_id));
+    if (location) location.activeTeamCount = Number(entry.count || 0);
+  }
+  const scheduledCounts = db.prepare(`
+    SELECT COALESCE(d.location_id, e.home_location_id) AS location_id,
+           COUNT(DISTINCT s.employee_number) AS count
+    FROM shifts s
+    JOIN employees e ON e.personnel_number = s.employee_number AND e.active = 1
+    LEFT JOIN departments d ON d.id = s.department_id
+    WHERE s.shift_date = ?
+    GROUP BY COALESCE(d.location_id, e.home_location_id)
+  `).all(date);
+  for (const entry of scheduledCounts) {
+    const location = locationLookup.get(String(entry.location_id));
+    if (location) location.scheduledCount = Number(entry.count || 0);
+  }
+  const optionRows = db.prepare(`
+    SELECT o.id, o.employee_number, o.option_type, o.all_day, o.start_time, o.end_time,
+           e.full_name, e.nickname, e.color, e.home_location_id,
+           d.name AS department_name
+    FROM week_options o
+    JOIN employees e ON e.personnel_number = o.employee_number AND e.active = 1
+    LEFT JOIN departments d ON d.id = e.preferred_department_id
+    WHERE o.date_from <= ? AND o.date_to >= ? AND e.home_location_id IS NOT NULL
+    ORDER BY e.home_location_id COLLATE NOCASE, e.personnel_number COLLATE NOCASE, o.id
+  `).all(date, date);
+  for (const option of optionRows) {
+    const location = locationLookup.get(String(option.home_location_id));
+    if (!location) continue;
+    const category = locationDashboardCategory(option.option_type);
+    location.absences.push({
+      id: Number(option.id),
+      employeeNumber: String(option.employee_number),
+      fullName: option.full_name || "",
+      nickname: option.nickname || option.full_name || String(option.employee_number),
+      color: option.color || "#26785f",
+      departmentName: option.department_name || "",
+      category,
+      label: locationDashboardCategoryCatalog.find((entry) => entry.id === category)?.label || "Sonstiges",
+      allDay: Boolean(option.all_day),
+      startTime: option.all_day ? null : option.start_time || null,
+      endTime: option.all_day ? null : option.end_time || null,
+    });
+  }
+  const requestedOrder = locationDashboardOrderForActor(actor, locations.map((location) => location.id));
+  const orderIndex = new Map(requestedOrder.map((locationId, index) => [locationId, index]));
+  locations.sort((left, right) => {
+    const leftIndex = orderIndex.has(left.id) ? orderIndex.get(left.id) : Number.MAX_SAFE_INTEGER;
+    const rightIndex = orderIndex.has(right.id) ? orderIndex.get(right.id) : Number.MAX_SAFE_INTEGER;
+    return leftIndex - rightIndex || left.id.localeCompare(right.id, "de-AT", { numeric: true }) || left.name.localeCompare(right.name, "de-AT");
+  });
+  const categories = locationDashboardCategoryCatalog.map((category) => ({
+    ...category,
+    count: locations.reduce((sum, location) => sum + location.absences.filter((entry) => entry.category === category.id).length, 0),
+  }));
+  for (const location of locations) {
+    location.counts = Object.fromEntries(locationDashboardCategoryCatalog.map((category) => [category.id,
+      location.absences.filter((entry) => entry.category === category.id).length]));
+    location.status = !location.open
+      ? "closed"
+      : location.minStaff > 0 && location.scheduledCount < location.minStaff
+      ? "critical"
+      : location.minStaff > 0 && location.scheduledCount === location.minStaff
+        ? "attention"
+        : "ok";
+  }
+  return {
+    date,
+    generatedAt: new Date().toISOString(),
+    actor: { employeeNumber: actor.employeeNumber, role: actor.role },
+    preferences: { locationOrder: locations.map((location) => location.id) },
+    summary: {
+      activeLocations: locations.length,
+      scheduledEmployees: locations.reduce((sum, location) => sum + location.scheduledCount, 0),
+      absentEntries: categories.reduce((sum, category) => sum + category.count, 0),
+      criticalLocations: locations.filter((location) => location.status === "critical").length,
+    },
+    categories,
+    locations,
+  };
+}
+
 function rightsDashboardProcesses() {
   const features = installationFeatures();
   const portalSettings = getPortalSettings();
@@ -15139,6 +15337,17 @@ app.put("/api/portal/v1/ui-preferences", (request, response) => {
 app.get("/api/portal/v1/rights-dashboard", (request, response) => {
   const actor = requireAdminHrOrLocal(request, "rights:read");
   response.json(rightsDashboardPayload(actor));
+});
+
+app.get("/api/portal/v1/dashboards/locations", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "rights:read");
+  response.json(locationDashboardPayload(actor, request.query.date));
+});
+
+app.put("/api/portal/v1/dashboards/locations/preferences", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "rights:read");
+  const locationOrder = saveLocationDashboardOrder(actor, request.body?.locationOrder);
+  response.json({ locationOrder });
 });
 
 app.get("/api/portal/v1/rights-dashboard/process-export.pdf", (request, response) => {

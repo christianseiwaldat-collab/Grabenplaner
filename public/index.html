@@ -40,6 +40,9 @@
         </div>
 
         <nav class="main-nav" aria-label="Hauptnavigation">
+          <button class="nav-item hidden" data-view="rightsDashboard" id="rightsDashboardNavButton">
+            <span class="nav-symbol">◇</span><span>Dashboards</span>
+          </button>
           <div class="nav-branch">
             <button type="button" class="nav-disclosure expanded" data-nav-toggle="planning" aria-label="Dienstplanung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
             <button class="nav-item active" data-view="planning">
@@ -62,9 +65,6 @@
           </button>
           <button class="nav-item" data-view="personnel">
             <span class="nav-symbol">◎</span><span>Teams &amp; Standorte</span>
-          </button>
-          <button class="nav-item hidden" data-view="rightsDashboard" id="rightsDashboardNavButton">
-            <span class="nav-symbol">◇</span><span>Rechte-Dashboard</span>
           </button>
           <button class="nav-item" data-view="settings">
             <span class="nav-symbol">⚙</span><span>Einstellungen</span>
@@ -364,13 +364,14 @@
 
         <section id="rightsDashboardView" class="view rights-dashboard" data-dashboard-theme="light">
           <header class="topbar rights-dashboard-topbar">
-            <div><span class="eyebrow">Rollen &amp; Berechtigungen</span><h1>Rechte-Dashboard</h1><p class="subtitle">Wirksame Rechte und ihre Herkunft verständlich nachvollziehen.</p></div>
+            <div><span class="eyebrow">Übersicht &amp; Steuerung</span><h1>Dashboards</h1><p class="subtitle">Filialsituation, wirksame Rechte und Standardprozesse verständlich im Blick behalten.</p></div>
             <div class="rights-dashboard-header-actions">
-              <div class="rights-dashboard-mode-switch" role="tablist" aria-label="Bereich des Rechte-Dashboards">
-                <button type="button" role="tab" data-rights-dashboard-mode="rights" aria-selected="true">Rechteübersicht</button>
+              <div class="rights-dashboard-mode-switch" role="tablist" aria-label="Dashboard-Bereich">
+                <button type="button" role="tab" data-rights-dashboard-mode="locations" aria-selected="true">Filialübersicht</button>
+                <button type="button" role="tab" data-rights-dashboard-mode="rights" aria-selected="false">Rechteübersicht</button>
                 <button type="button" role="tab" data-rights-dashboard-mode="processes" aria-selected="false">Prozesswege</button>
               </div>
-              <div class="page-theme-switch dashboard-theme-switch" role="group" aria-label="Darstellung des Rechte-Dashboards">
+              <div class="page-theme-switch dashboard-theme-switch" role="group" aria-label="Darstellung der Dashboards">
                 <span>Darstellung</span>
                 <button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button>
                 <button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button>
@@ -378,7 +379,21 @@
             </div>
           </header>
 
-          <div id="rightsDashboardRightsPanel">
+          <section class="location-dashboard-panel" id="rightsDashboardLocationsPanel" aria-label="Aktuelle Filialübersicht">
+            <div class="location-dashboard-toolbar">
+              <div><span class="eyebrow">Tageslage</span><h2>Filialübersicht</h2><p>Besetzung und Abwesenheiten aller aktiven Filialen – ohne vertrauliche Dokument- oder Bemerkungsinhalte.</p></div>
+              <div class="location-dashboard-toolbar-controls">
+                <label><span>Datum</span><input id="locationDashboardDate" type="date" /></label>
+                <button class="secondary-button" id="refreshLocationDashboard" type="button">Aktualisieren</button>
+              </div>
+            </div>
+            <section class="location-dashboard-summary" id="locationDashboardSummary" aria-label="Zusammenfassung der Filialsituation"></section>
+            <div class="location-dashboard-filters" id="locationDashboardFilters" aria-label="Abwesenheitsarten filtern"></div>
+            <p class="location-dashboard-order-hint">Filialkarten am Griff verschieben oder mit den Pfeiltasten anordnen. Die Reihenfolge wird nur für den aktuellen Benutzer gespeichert.</p>
+            <div class="location-dashboard-grid" id="locationDashboardGrid" aria-live="polite"><p class="settings-note">Filialübersicht wird geladen.</p></div>
+          </section>
+
+          <div class="hidden" id="rightsDashboardRightsPanel">
             <section class="rights-dashboard-summary" id="rightsDashboardSummary" aria-label="Zusammenfassung der Rechtevergaben"></section>
 
             <section class="rights-dashboard-filterbar" aria-label="Rechte-Dashboard filtern">
