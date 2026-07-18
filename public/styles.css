@@ -870,6 +870,43 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
 .rights-permission.additional-right { box-shadow:inset 3px 0 #f2b936; }
 .rights-permission.locked-right:not(.base-right) { opacity:.72; }
 .rights-permission input:disabled { cursor:not-allowed; }
+.personnel-field-rights-card { align-self:start; }
+.personnel-field-role { max-width:330px; margin:15px 0 10px; }
+.personnel-field-rights-legend { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.personnel-field-rights-legend span { padding:5px 8px; border-radius:999px; font-size:8px; font-weight:800; }
+.personnel-field-rights-legend .hidden-level { color:#65706c; background:#e7ebe9; }
+.personnel-field-rights-legend .read-level { color:#315b6f; background:#e5f1f6; }
+.personnel-field-rights-legend .write-level { color:#17633f; background:#def2e7; }
+.personnel-field-rights-matrix { display:grid; gap:8px; min-width:0; margin-top:12px; }
+.personnel-field-rights-group { min-width:0; border:1px solid var(--line); border-radius:13px; background:var(--surface-soft); overflow:hidden; }
+.personnel-field-rights-group > summary { display:grid; grid-template-columns:minmax(0,1fr) 22px; align-items:center; gap:8px; padding:11px 12px; cursor:pointer; list-style:none; }
+.personnel-field-rights-group > summary::-webkit-details-marker { display:none; }
+.personnel-field-rights-group > summary > span:first-child { min-width:0; }
+.personnel-field-rights-group > summary strong,.personnel-field-rights-group > summary small { display:block; }
+.personnel-field-rights-group > summary strong { font-size:9.5px; }
+.personnel-field-rights-group > summary small { margin-top:2px; color:var(--muted); font-size:7.5px; }
+.personnel-field-rights-group > summary > span:last-child { display:grid; place-items:center; width:22px; height:22px; border-radius:7px; color:var(--green); background:color-mix(in srgb,var(--green) 12%,transparent); font-size:16px; font-weight:900; transition:transform .15s ease; }
+.personnel-field-rights-group[open] > summary { border-bottom:1px solid var(--line); }
+.personnel-field-rights-group[open] > summary > span:last-child { transform:rotate(90deg); }
+.personnel-field-rights-list { display:grid; gap:6px; padding:9px; }
+.personnel-field-right-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(112px,138px); align-items:center; gap:10px; min-width:0; padding:8px 9px; border:1px solid color-mix(in srgb,var(--line) 80%,transparent); border-radius:10px; background:var(--surface); }
+.personnel-field-right-name { min-width:0; }
+.personnel-field-right-name strong,.personnel-field-right-name small { display:block; overflow-wrap:anywhere; }
+.personnel-field-right-name strong { font-size:8.8px; }
+.personnel-field-right-name small { margin-top:2px; color:#775407; font-size:8px; line-height:1.35; }
+.personnel-field-right-row select { min-width:0; height:34px; padding:6px 28px 6px 8px; font-size:8px; }
+.personnel-field-right-row[data-field-access-level="hidden"] { opacity:.72; }
+.personnel-field-right-row[data-field-access-level="read"] { border-left:3px solid #6d9caf; }
+.personnel-field-right-row[data-field-access-level="write"] { border-left:3px solid var(--green); }
+.personnel-record-field-readonly { opacity:.82; }
+.personnel-record-field-readonly > span::after { content:" · nur lesen"; color:var(--muted); font-size:.88em; font-weight:650; }
+.personnel-record-field-readonly :is(input,textarea) { cursor:not-allowed; }
+.personnel-field-dashboard-group > p { margin:4px 0 11px; color:var(--rd-muted); font-size:var(--rd-font-sm,9px); }
+.personnel-field-dashboard-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.rights-dashboard .personnel-field-dashboard-access { cursor:default; }
+.rights-dashboard .personnel-field-dashboard-access:hover { border-color:var(--rd-line); background:var(--rd-surface-soft); }
+.personnel-field-dashboard-access.read .permission-origin { background:#6d9caf; }
+.personnel-field-dashboard-access.write .permission-origin { background:var(--rd-accent); }
 .mobile-module-settings { display:grid; gap:14px; }
 .mobile-role-card { min-width:0; padding:14px 16px; border:1px solid var(--line); border-radius:15px; background:var(--surface-muted); }
 .mobile-role-card > strong { display:block; margin-bottom:10px; }
@@ -1143,6 +1180,10 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
   .rights-editor-modal { width:calc(100vw - 18px); }
   .rights-editor-modal form { padding:18px; }
   .rights-editor-legend { gap:8px 12px; }
+  .personnel-field-role { max-width:none; }
+  .personnel-field-right-row { grid-template-columns:minmax(0,1fr) minmax(105px,125px); gap:7px; }
+  .personnel-field-rights-list { padding:7px; }
+  .personnel-field-dashboard-list { grid-template-columns:1fr; }
   .personnel-record-entry { padding:13px; }
   .personnel-record-section { padding:13px; }
   .personnel-record-section-heading { align-items:stretch; flex-direction:column; }
@@ -1530,6 +1571,10 @@ html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .employe
 html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .pdf-live-preview iframe { border-color:var(--line); background:#fff; }
 html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .page-theme-switch { border-color:var(--line); background:var(--surface); }
 html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .page-theme-switch button[aria-pressed="true"] { color:#10241d; background:#79d0ad; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .personnel-field-rights-legend .hidden-level { color:#b5c0bc; background:#2b3733; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .personnel-field-rights-legend .read-level { color:#b7d8e4; background:#263b43; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .personnel-field-rights-legend .write-level { color:#bce8d4; background:#244035; }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .personnel-field-right-name small { color:#f0d582; }
 
 /* Die technische Fußzeile folgt immer der aktiven Seitendarstellung. */
 html[data-active-page-theme="dark"] .system-footer { color:#a5b2ad; border-color:#34443e; background:#1b2522; }

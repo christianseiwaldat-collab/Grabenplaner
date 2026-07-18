@@ -373,6 +373,10 @@ test("v0.71 Block 4: geschützte Personalaktdaten und Dokumente bleiben auf PL+ 
   assert.equal(itDenied.response.status, 403, itDenied.text);
 
   const manager = session("104", "manager");
+  db.prepare(`
+    INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
+    VALUES ('104', ?, 0, 'test')
+  `).run(locationId);
   const managerView = await request("/api/portal/v1/personnel-records/8715", { auth: manager });
   assert.equal(managerView.response.status, 200, managerView.text);
   assert.equal(managerView.payload.profile.sensitive, null);

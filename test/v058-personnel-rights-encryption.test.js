@@ -365,7 +365,8 @@ test("v0.70 Block 2: sensible Personalaktfelder werden verschlüsselt gespeicher
   });
   assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
   assert.deepEqual(saved.payload.changedFields.sort(), [
-    "accountHolder", "bic", "city", "iban", "phone", "postalCode", "socialSecurityNumber", "street",
+    "accountHolder", "address.city", "address.postalCode", "address.street", "bic", "iban", "phone",
+    "socialSecurityNumber",
   ]);
 
   const stored = db.prepare("SELECT * FROM personnel_sensitive_records WHERE employee_number = '102'").get();
@@ -402,6 +403,10 @@ test("v0.70 Block 2: Leitungen sehen nur Telefon und benötigen Schreibrecht plu
     body: { phone: "+43 512 555111", sensitive: { socialSecurityNumber: "1238010190" } },
   });
   const manager = session("104", "manager");
+  db.prepare(`
+    INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
+    VALUES ('104', ?, 0, 'test')
+  `).run(locationId);
   const visible = await request("/api/portal/v1/personnel-records/102", { auth: manager });
   assert.equal(visible.response.status, 200, JSON.stringify(visible.payload));
   assert.equal(visible.payload.profile.phone, "+43 512 555111");
