@@ -1,9 +1,5 @@
 # Grabenplaner
 
-<p align="center">
-  <img src="public/assets/grabenplaner-logo.svg" alt="Grabenplaner – Dienst- und Urlaubsplanung" width="430">
-</p>
-
 <p align="center"><strong>Dienstplanung, Abwesenheiten und Zeiterfassung – passend für eine Filiale oder eine ganze Organisation.</strong></p>
 
 <p align="center"><strong>Datenschutzfreundlich entwickelt – für einen DSGVO-konformen Betrieb konzipiert.</strong></p>
