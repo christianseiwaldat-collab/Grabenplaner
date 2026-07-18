@@ -615,6 +615,14 @@
               <div class="mobile-module-settings" id="mobileLeadershipModuleSettings"></div>
               <div class="form-actions-inline"><span class="settings-note" id="mobileLeadershipSettingsHint">Maximal sechs Elemente je Rolle.</span><button class="primary-button" id="saveMobileLeadershipSettingsButton" type="button">Mobile Ansicht speichern</button></div>
             </div>
+            <div class="settings-card personnel-field-rights-card">
+              <div class="card-heading"><div class="card-icon">Akt</div><div><h2>Personalakt-Feldrechte</h2><p>Für Filial- und Abteilungsleitungen je Feld festlegen, ob es verborgen, lesbar oder bearbeitbar ist.</p></div></div>
+              <label class="field personnel-field-role"><span>Leitungsebene</span><select id="personnelFieldRightsRole" aria-label="Leitungsebene auswählen"></select></label>
+              <div class="personnel-field-rights-legend" aria-label="Bedeutung der Zugriffsstufen"><span class="hidden-level">Verborgen</span><span class="read-level">Nur lesen</span><span class="write-level">Bearbeiten</span></div>
+              <p class="settings-note security-note">Verborgene Werte werden nicht an den Browser übertragen. „Nur lesen“ zeigt sie grau und unveränderbar; „Bearbeiten“ erlaubt Änderungen innerhalb der zugewiesenen Filiale beziehungsweise Abteilung.</p>
+              <div class="personnel-field-rights-matrix" id="personnelFieldRightsMatrix"><p class="settings-note">Feldrechte werden geladen.</p></div>
+              <div class="form-actions-inline"><span class="settings-note" id="personnelFieldRightsHint">Die Rollenmatrix gilt für alle Zugänge dieser Leitungsebene.</span><button class="primary-button" id="savePersonnelFieldRightsButton" type="button">Feldrechte speichern</button></div>
+            </div>
           </section>
 
           <section id="brandingSettings" class="settings-section settings-two-column">
