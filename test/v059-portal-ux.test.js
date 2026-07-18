@@ -83,10 +83,61 @@ test("v0.59: lokale Datenerkennung verarbeitet gespeicherte Fotos und PDFs vor d
 
   assert.match(html, /id="amuDocuments"[^>]*accept="application\/pdf,image\/jpeg/);
   assert.match(html, /src="\/amu-pdf-client\.js"/);
-  assert.match(source, /async function recognizeAmuFiles\(files\)/);
+  assert.match(source, /async function recognizeAmuFiles\(files, contextName = "amu"\)/);
   assert.match(source, /isPdfFile\(file\)[\s\S]*?ensureAmuPdfClient\(\)\.recognize/);
-  assert.match(source, /\[\.\.\.\(el\.amuCamera\?\.files \|\| \[\]\), \.\.\.\(el\.amuDocuments\?\.files \|\| \[\]\)\]/);
+  assert.match(source, /for \(const contextName of \["amu", "sickness"\]\)/);
   assert.doesNotMatch(source, /async function recognizeAmuImage/);
+});
+
+test("AUM Block 3: Krankmeldung kann ein Dokument direkt mit denselben Uploadregeln senden", () => {
+  const html = fs.readFileSync(path.join(projectRoot, "public", "portal.html"), "utf8");
+  const source = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
+
+  assert.match(html, /id="sicknessAmuPanel"[\s\S]*?AUM direkt mitsenden/);
+  assert.match(html, /id="sicknessAmuDocuments"[^>]*data-amu-context="sickness"/);
+  assert.match(html, /id="sicknessAmuCamera"[^>]*capture="environment"/);
+  assert.match(source, /async function uploadAmuForContext/);
+  assert.match(source, /uploadAmuForContext\("sickness"/);
+  assert.match(source, /body\.append\("directSicknessReport", "1"\)/);
+  assert.match(source, /selectedAmuFiles\("sickness"\)/);
+});
+
+test("AUM Block 4: PL-Regel, persönliche Freigabe und Soll-Arbeitstage sind bedienbar", () => {
+  const adminHtml = fs.readFileSync(path.join(projectRoot, "public", "index.html"), "utf8");
+  const adminSource = fs.readFileSync(path.join(projectRoot, "public", "app.js"), "utf8");
+
+  assert.match(adminHtml, /id="sicknessAumAllowanceEnabled"/);
+  assert.match(adminHtml, /id="sicknessAumAllowanceMaxCases"[^>]*max="20"/);
+  assert.match(adminHtml, /id="sicknessAumAllowanceMaxDays"[^>]*max="3"/);
+  assert.match(adminHtml, /id="employeeTargetWorkdays"[^>]*min="1"[^>]*max="6"/);
+  assert.match(adminHtml, /id="employeeSicknessWithoutAumEnabled"/);
+  assert.match(adminSource, /aumAllowance:\s*\{[\s\S]*?maxCasesPerYear:[\s\S]*?maxCalendarDaysPerCase:/);
+  assert.match(adminSource, /function syncEmployeeSicknessAllowanceField/);
+  assert.match(adminSource, /targetWorkdaysPerWeek: Number\(elements\.employeeTargetWorkdays\.value\)/);
+});
+
+test("AUM Block 4: Mitarbeiterportal zeigt Kontingent und gespeicherte Krankenstandszeit", () => {
+  const portalHtml = fs.readFileSync(path.join(projectRoot, "public", "portal.html"), "utf8");
+  const portalSource = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
+
+  assert.match(portalHtml, /id="sicknessAumAllowance"/);
+  assert.match(portalSource, /Ohne AUM möglich · noch \$\{allowance\.remainingCases\}/);
+  assert.match(portalSource, /AUM laut aktueller Unternehmensregel erforderlich/);
+  assert.match(portalSource, /Angerechnete Krankenstandszeit:/);
+  assert.match(portalSource, /item\.aum_allowance\?\.required === false/);
+});
+
+test("AUM Block 5: PL-Schalter und automatischer Prüfstatus sind verständlich sichtbar", () => {
+  const adminHtml = fs.readFileSync(path.join(projectRoot, "public", "index.html"), "utf8");
+  const adminSource = fs.readFileSync(path.join(projectRoot, "public", "app.js"), "utf8");
+  const portalSource = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
+
+  assert.match(adminHtml, /id="amuAutoReviewTrustA"/);
+  assert.match(adminHtml, /Korrekt erkannte AUM bei Vertrauensstufe A automatisch erledigen/);
+  assert.match(adminSource, /autoReviewTrustA: elements\.amuAutoReviewTrustA\.checked/);
+  assert.match(adminSource, /Automatisch geprüft und zugeordnet/);
+  assert.match(portalSource, /report\?\.review_mode === "automatic"/);
+  assert.match(portalSource, /Automatisch geprüft und zugeordnet/);
 });
 
 test("Portal: Rückkehr von der Handy-Kamera hält den AUM-Bereich aktiv", () => {

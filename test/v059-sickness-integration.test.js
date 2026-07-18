@@ -95,6 +95,13 @@ function offsetDate(value, days) {
   return date.toISOString().slice(0, 10);
 }
 
+function protectedBlobCount() {
+  const directory = path.join(process.env.GRABENPLANER_DATA_DIR, "amu");
+  if (!fs.existsSync(directory)) return 0;
+  return fs.readdirSync(directory, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".amu")).length;
+}
+
 async function uploadAum(auth, fields = {}) {
   const form = new FormData();
   for (const [name, value] of Object.entries(fields)) {
@@ -165,6 +172,14 @@ test.before(async () => {
   insertEmployee("606", "Getrennter Krankenstand", "91", departmentA);
   insertEmployee("607", "Neue Krankmeldung", "91", departmentA);
   insertEmployee("608", "Zeitprüfung Krank", "91", departmentA);
+  insertEmployee("609", "Identität Treffer", "91", departmentA);
+  insertEmployee("610", "Identität Manuell", "91", departmentA);
+  insertEmployee("611", "Identität Ohne Stammdaten", "91", departmentA);
+  insertEmployee("612", "AUM Kontingent", "91", departmentA);
+  insertEmployee("613", "AUM Dauer", "91", departmentA);
+  insertEmployee("614", "AUM Automatik", "91", departmentA);
+  insertEmployee("615", "AUM Manuell B", "91", departmentA);
+  insertEmployee("616", "AUM Datumsprüfung", "91", departmentA);
 
   const employeeAuth = session("591", "employee");
   const managerAuth = session("593", "manager");
@@ -323,6 +338,8 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
   const managerList = await request("/api/portal/v1/sickness-cases", { auth: managerAuth });
   assert.equal(managerList.response.status, 200, JSON.stringify(managerList.payload));
   assert.deepEqual(managerList.payload.cases.map((entry) => entry.id), [caseId]);
+  assert.equal(managerList.payload.cases[0].employee_note, "");
+  assert.equal(managerList.payload.cases[0].amu_status, "required");
 
   const foreignList = await request("/api/portal/v1/sickness-cases", { auth: foreignManagerAuth });
   assert.equal(foreignList.response.status, 200, JSON.stringify(foreignList.payload));
@@ -331,6 +348,7 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
   const hrList = await request("/api/portal/v1/sickness-cases", { auth: hrAuth });
   assert.equal(hrList.response.status, 200, JSON.stringify(hrList.payload));
   assert.deepEqual(hrList.payload.cases.map((entry) => entry.id), [caseId]);
+  assert.equal(hrList.payload.cases[0].employee_note, confidentialNote);
 
   const employeeLeadershipList = await request("/api/portal/v1/sickness-cases", { auth: employeeAuth });
   assert.equal(employeeLeadershipList.response.status, 403);
@@ -338,6 +356,7 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
   const ownList = await request("/api/portal/v1/me/sickness-cases", { auth: employeeAuth });
   assert.equal(ownList.response.status, 200, JSON.stringify(ownList.payload));
   assert.deepEqual(ownList.payload.cases.map((entry) => entry.id), [caseId]);
+  assert.equal(ownList.payload.cases[0].employee_note, confidentialNote);
 
   // app.listen() statt startServer(): Der Queue-Dispatcher wird in diesem Test nie gestartet.
   const finalJob = db.prepare("SELECT status, attempts, sent_at FROM outbound_notification_jobs WHERE id = ?").get(queued[0].id);
@@ -449,11 +468,18 @@ test("v0.59: filialfremder Einsatz steuert Besetzungsrisiko, effektive Leserecht
   assert.equal(deploymentAum.payload.report.location_id, "92");
   assert.equal(deploymentAum.payload.report.department_id, departmentB);
   const homeAumList = await request("/api/portal/v1/amu-reports", { auth: managerAuth });
-  assert.equal(homeAumList.response.status, 200, JSON.stringify(homeAumList.payload));
-  assert.equal(homeAumList.payload.reports.some((entry) => Number(entry.id) === Number(deploymentAum.payload.report.id)), false);
+  assert.equal(homeAumList.response.status, 403, JSON.stringify(homeAumList.payload));
   const deploymentAumList = await request("/api/portal/v1/amu-reports", { auth: foreignManagerAuth });
-  assert.equal(deploymentAumList.response.status, 200, JSON.stringify(deploymentAumList.payload));
-  assert.equal(deploymentAumList.payload.reports.some((entry) => Number(entry.id) === Number(deploymentAum.payload.report.id)), true);
+  assert.equal(deploymentAumList.response.status, 403, JSON.stringify(deploymentAumList.payload));
+  const deploymentDocumentId = deploymentAum.payload.report.documents[0].id;
+  const deniedDocument = await request(`/api/portal/v1/amu-reports/${deploymentAum.payload.report.id}/documents/${deploymentDocumentId}/content`, { auth: foreignManagerAuth });
+  assert.equal(deniedDocument.response.status, 403, JSON.stringify(deniedDocument.payload));
+  assert.ok(db.prepare("SELECT 1 FROM audit_log WHERE actor = '594' AND action = 'amu.document.access.denied' AND entity_id = ?").get(deploymentDocumentId));
+  const deploymentStatusView = await request("/api/portal/v1/sickness-cases", { auth: foreignManagerAuth });
+  const deploymentCaseSummary = deploymentStatusView.payload.cases.find((entry) => entry.id === caseId);
+  assert.equal(deploymentCaseSummary.employee_note, "");
+  assert.equal(deploymentCaseSummary.amu_status, "received");
+  assert.ok(Object.hasOwn(deploymentCaseSummary, "staffing_risk"));
 
   const directCrossEmployee = session("605", "employee");
   insertShift.run("605", departmentB, shiftDate, shiftStart, shiftEnd);
@@ -472,7 +498,7 @@ test("v0.59: filialfremder Einsatz steuert Besetzungsrisiko, effektive Leserecht
   assert.equal(directCrossCases.payload.cases[0].location_id, "92");
   assert.equal(directCrossCases.payload.cases[0].department_id, departmentB);
   const directCrossReports = await request("/api/portal/v1/amu-reports", { auth: foreignManagerAuth });
-  assert.equal(directCrossReports.payload.reports.some((entry) => Number(entry.id) === Number(directCrossAum.payload.report.id)), true);
+  assert.equal(directCrossReports.response.status, 403, JSON.stringify(directCrossReports.payload));
 });
 
 test("v0.59: AUM ohne Enddatum bleibt verschlüsselt und eine Rückkehrmeldung beendet die Verfügbarkeit eindeutig", async () => {
@@ -581,7 +607,7 @@ test("v0.59: AUM ohne Enddatum bleibt verschlüsselt und eine Rückkehrmeldung b
 
   const returnDayConfig = daySettings()[["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
     [new Date(`${returnDate}T12:00:00Z`).getUTCDay()]];
-  if (returnDayConfig.open) {
+  if (returnDayConfig.open && new Date(`${returnDate}T12:00:00Z`).getUTCDay() !== 0) {
     const allowedFromReturn = await request("/api/shifts", {
       method: "POST",
       auth: managerAuth,
@@ -636,7 +662,9 @@ test("v0.59: ein gemeldetes AUM-Ende begrenzt die Nichtverfügbarkeit ohne zusä
   const employee = session("592", "employee");
   const { managerAuth, departmentA } = auth;
   const startDate = mostRecentPlanningDate();
-  const nextDate = offsetDate(startDate, 1);
+  const firstFollowingDate = offsetDate(startDate, 1);
+  const nextDate = new Date(`${firstFollowingDate}T12:00:00Z`).getUTCDay() === 0
+    ? offsetDate(firstFollowingDate, 1) : firstFollowingDate;
   const created = await request("/api/portal/v1/me/sickness-cases", {
     method: "POST", auth: employee, body: { startDate, note: "" },
   });
@@ -677,6 +705,7 @@ test("v0.59: direkter AUM-Upload legt einen geschuetzten Krankenstandsfall an un
   const ownCases = await request("/api/portal/v1/me/sickness-cases", { auth: employee });
   const directCase = ownCases.payload.cases.find((entry) => entry.id === caseId);
   assert.equal(directCase.status, "aum_received");
+  assert.equal(directCase.amu_status, "received");
   assert.equal(directCase.start_date, startDate);
   assert.equal(directCase.expected_end, "");
 
@@ -694,11 +723,19 @@ test("v0.59: direkter AUM-Upload legt einen geschuetzten Krankenstandsfall an un
   assert.equal(blocked.payload.code, "SICKNESS_SHIFT_CONFLICT");
 
   const delegated = await request("/api/portal/v1/amu-reports", { auth: delegatedReaderAuth });
-  assert.equal(delegated.response.status, 200, JSON.stringify(delegated.payload));
-  assert.equal(delegated.payload.reports.some((entry) => Number(entry.id) === Number(direct.payload.report.id)), false);
+  assert.equal(delegated.response.status, 403, JSON.stringify(delegated.payload));
   const hr = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
   assert.equal(hr.response.status, 200, JSON.stringify(hr.payload));
   assert.equal(hr.payload.reports.some((entry) => Number(entry.id) === Number(direct.payload.report.id)), true);
+  const reviewed = await request(`/api/portal/v1/amu-reports/${direct.payload.report.id}/review`, {
+    method: "PUT", auth: hrAuth, body: { action: "reviewed", note: "Geprüft" },
+  });
+  assert.equal(reviewed.response.status, 200, JSON.stringify(reviewed.payload));
+  const managerSummary = await request("/api/portal/v1/sickness-cases", { auth: managerAuth });
+  const reviewedCase = managerSummary.payload.cases.find((entry) => entry.id === caseId);
+  assert.equal(reviewedCase.employee_note, "");
+  assert.equal(reviewedCase.amu_status, "reviewed");
+  assert.ok(Object.hasOwn(reviewedCase, "staffing_risk"));
 });
 
 test("v0.59: ein nachgereichtes AUM korrigiert eine zu frueh gemeldete Arbeitsfaehigkeit", async () => {
@@ -729,13 +766,14 @@ test("v0.59: ein nachgereichtes AUM korrigiert eine zu frueh gemeldete Arbeitsfa
   assert.equal(corrected.return_to_work_date, "");
   assert.equal(corrected.expected_end, returnDate);
 
+  const blockedDate = new Date(`${returnDate}T12:00:00Z`).getUTCDay() === 0 ? startDate : returnDate;
   const day = daySettings()[["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
-    [new Date(`${returnDate}T12:00:00Z`).getUTCDay()]];
+    [new Date(`${blockedDate}T12:00:00Z`).getUTCDay()]];
   const blocked = await request("/api/shifts", {
     method: "POST",
     auth: managerAuth,
     body: {
-      employeeNumber: "601", departmentId: departmentA, date: returnDate,
+      employeeNumber: "601", departmentId: departmentA, date: blockedDate,
       startTime: day.start, endTime: day.end, area: "Korrigierte Rückkehr", note: "",
     },
   });
@@ -846,8 +884,8 @@ test("v0.59: ein späterer getrennter AUM-Zeitraum erzeugt einen neuen Krankenst
 
 test("v0.59: eine neue Krankmeldung nach einem begrenzten früheren Zeitraum ist zulässig", async () => {
   const employee = session("607", "employee");
-  const firstDate = offsetDate(mostRecentPlanningDate(), -20);
-  const laterDate = offsetDate(firstDate, 10);
+  const firstDate = offsetDate(mostRecentPlanningDate(), -4);
+  const laterDate = offsetDate(firstDate, 2);
   const first = await request("/api/portal/v1/me/sickness-cases", {
     method: "POST", auth: employee, body: { startDate: firstDate, expectedEnd: firstDate, note: "" },
   });
@@ -894,4 +932,314 @@ test("v0.59: eine nachträgliche Krankmeldung macht eine bestehende Zeitprüfung
   assert.ok(employeeDay);
   assert.equal(employeeDay.review.stale, true);
   assert.equal(employeeDay.code, "excused_absence");
+});
+
+test("AUM Block 3: direkter Anhang prüft die tatsächliche Datei gegen den geschützten Personalakt", async () => {
+  const { hrAuth } = auth;
+  const matchingEmployee = session("609", "employee");
+  const manualEmployee = session("610", "employee");
+  const noProfileEmployee = session("611", "employee");
+  const socialSecurityNumber = "1238010190";
+  const manualSocialSecurityNumber = "1009311299";
+  const foreignSocialSecurityNumber = "1000000005";
+  const today = mostRecentPlanningDate();
+
+  for (const [employeeNumber, number] of [["609", socialSecurityNumber], ["610", manualSocialSecurityNumber]]) {
+    const profile = await request(`/api/portal/v1/personnel-records/${employeeNumber}`, {
+      method: "PUT",
+      auth: hrAuth,
+      body: { sensitive: { socialSecurityNumber: number } },
+    });
+    assert.equal(profile.response.status, 200, JSON.stringify(profile.payload));
+  }
+
+  try {
+    process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = `Versicherungsnummer: ${socialSecurityNumber}`;
+    const matched = await uploadAum(matchingEmployee, {
+      incapacityFrom: today,
+      incapacityTo: today,
+      sicknessNote: "Direkt mit AUM gemeldet",
+      directSicknessReport: "1",
+    });
+    assert.equal(matched.response.status, 201, JSON.stringify(matched.payload));
+    assert.equal(Object.hasOwn(matched.payload.report, "identity_check"), false);
+    assert.equal(JSON.stringify(matched.payload).includes(socialSecurityNumber), false);
+    const ownCases = await request("/api/portal/v1/me/sickness-cases", { auth: matchingEmployee });
+    assert.equal(ownCases.payload.cases.length, 1);
+    assert.equal(ownCases.payload.cases[0].status, "aum_received");
+
+    const protectedList = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
+    assert.equal(protectedList.response.status, 200, JSON.stringify(protectedList.payload));
+    const matchedForHr = protectedList.payload.reports.find((entry) => Number(entry.id) === Number(matched.payload.report.id));
+    assert.deepEqual(matchedForHr.identity_check.status, "matched");
+    assert.equal(JSON.stringify(matchedForHr).includes(socialSecurityNumber), false);
+
+    db.prepare(`
+      INSERT INTO portal_settings (key, value, updated_at) VALUES ('amu_ocr_enabled', '0', CURRENT_TIMESTAMP)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+    `).run();
+    const matchedWithoutLocalDateOcr = await uploadAum(matchingEmployee, {
+      incapacityFrom: offsetDate(today, -1),
+    });
+    assert.equal(matchedWithoutLocalDateOcr.response.status, 201, JSON.stringify(matchedWithoutLocalDateOcr.payload));
+    const protectedListWithoutLocalDateOcr = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
+    assert.equal(
+      protectedListWithoutLocalDateOcr.payload.reports.find(
+        (entry) => Number(entry.id) === Number(matchedWithoutLocalDateOcr.payload.report.id),
+      ).identity_check.status,
+      "matched",
+    );
+    db.prepare("UPDATE portal_settings SET value = '1', updated_at = CURRENT_TIMESTAMP WHERE key = 'amu_ocr_enabled'").run();
+
+    process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = "Keine eindeutig beschriftete SV-Nummer";
+    const manual = await uploadAum(manualEmployee, { incapacityFrom: today });
+    assert.equal(manual.response.status, 201, JSON.stringify(manual.payload));
+    const manualList = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
+    assert.equal(manualList.payload.reports.find((entry) => Number(entry.id) === Number(manual.payload.report.id)).identity_check.status, "not_detected");
+
+    process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = `SV-Nummer ${socialSecurityNumber}`;
+    const missingProfile = await uploadAum(noProfileEmployee, { incapacityFrom: today });
+    assert.equal(missingProfile.response.status, 201, JSON.stringify(missingProfile.payload));
+    const profileList = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
+    assert.equal(profileList.payload.reports.find((entry) => Number(entry.id) === Number(missingProfile.payload.report.id)).identity_check.status, "profile_missing");
+
+    const reportsBeforeMismatch = db.prepare("SELECT COUNT(*) AS count FROM amu_reports").get().count;
+    const documentsBeforeMismatch = db.prepare("SELECT COUNT(*) AS count FROM amu_documents").get().count;
+    const blobsBeforeMismatch = protectedBlobCount();
+    process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = `Sozialversicherungsnummer ${foreignSocialSecurityNumber}`;
+    const mismatch = await uploadAum(manualEmployee, { incapacityFrom: offsetDate(today, -1) });
+    assert.equal(mismatch.response.status, 422, JSON.stringify(mismatch.payload));
+    assert.equal(mismatch.payload.code, "AMU_SOCIAL_SECURITY_MISMATCH");
+    assert.equal(JSON.stringify(mismatch.payload).includes(foreignSocialSecurityNumber), false);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM amu_reports").get().count, reportsBeforeMismatch);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM amu_documents").get().count, documentsBeforeMismatch);
+    assert.equal(protectedBlobCount(), blobsBeforeMismatch);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE detail LIKE ? OR detail LIKE ?").get(
+      `%${socialSecurityNumber}%`, `%${foreignSocialSecurityNumber}%`,
+    ).count, 0);
+  } finally {
+    db.prepare("UPDATE portal_settings SET value = '1', updated_at = CURRENT_TIMESTAMP WHERE key = 'amu_ocr_enabled'").run();
+    delete process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT;
+  }
+});
+
+test("AUM Block 4: Stufe-A-Kontingent, rückwirkende AUM-Pflicht und Krankenstunden bleiben nachvollziehbar", async () => {
+  const { hrAuth, managerAuth, departmentA } = auth;
+  const allowanceEmployee = session("612", "employee");
+  const durationEmployee = session("613", "employee");
+  db.prepare(`
+    UPDATE employees SET contracted_hours = 32, target_workdays_per_week = 5,
+      time_confirmation_level = 'A', sickness_without_aum_enabled = 1,
+      preferred_day_off = '', fixed_workdays = ''
+    WHERE personnel_number IN ('612', '613')
+  `).run();
+
+  const previousSettings = await request("/api/portal/v1/amu-settings", { auth: hrAuth });
+  assert.equal(previousSettings.response.status, 200, JSON.stringify(previousSettings.payload));
+  const currentPolicy = previousSettings.payload.policy;
+  const updateSettings = async (aumAllowance) => request("/api/portal/v1/amu-settings", {
+    method: "PUT",
+    auth: hrAuth,
+    body: {
+      uploadMaxMb: currentPolicy.uploadMaxMb,
+      storedMaxMb: currentPolicy.storedMaxMb,
+      convertImagesToPdf: currentPolicy.convertImagesToPdf,
+      grayscaleImages: currentPolicy.grayscaleImages,
+      ocrEnabled: currentPolicy.ocrEnabled,
+      localWarningDays: currentPolicy.localWarningDays,
+      hrWarningDays: currentPolicy.hrWarningDays,
+      aumAllowance,
+    },
+  });
+
+  try {
+    const invalid = await updateSettings({ enabled: true, maxCasesPerYear: 2, maxCalendarDaysPerCase: 4 });
+    assert.equal(invalid.response.status, 400, JSON.stringify(invalid.payload));
+
+    const configured = await updateSettings({ enabled: true, maxCasesPerYear: 2, maxCalendarDaysPerCase: 1 });
+    assert.equal(configured.response.status, 200, JSON.stringify(configured.payload));
+
+    const today = mostRecentPlanningDate();
+    const dates = [offsetDate(today, -1), offsetDate(today, -2), offsetDate(today, -3)];
+    const createdCases = [];
+    for (const date of dates) {
+      const created = await request("/api/portal/v1/me/sickness-cases", {
+        method: "POST", auth: allowanceEmployee, body: { startDate: date, expectedEnd: date, note: "" },
+      });
+      assert.equal(created.response.status, 201, JSON.stringify(created.payload));
+      createdCases.push(created.payload.case);
+    }
+    assert.equal(createdCases[0].aum_allowance.required, false);
+    assert.equal(createdCases[0].aum_allowance.consumes_quota, true);
+    assert.equal(createdCases[0].sickness_valuation.minutes_per_workday, 384);
+    assert.equal(createdCases[0].sickness_valuation.total_minutes, 384);
+    assert.equal(createdCases[1].aum_allowance.required, false);
+    assert.equal(createdCases[2].aum_allowance.required, true);
+    assert.equal(createdCases[2].aum_allowance.reason, "quota_exhausted");
+
+    const ownCases = await request("/api/portal/v1/me/sickness-cases", { auth: allowanceEmployee });
+    assert.equal(ownCases.response.status, 200, JSON.stringify(ownCases.payload));
+    assert.equal(ownCases.payload.aumAllowance.usedCases, 2);
+    assert.equal(ownCases.payload.aumAllowance.remainingCases, 0);
+    assert.equal(ownCases.payload.aumAllowance.maxCalendarDaysPerCase, 1);
+
+    const firstDate = dates[0];
+    const monday = (() => {
+      const date = new Date(`${firstDate}T12:00:00Z`);
+      const day = date.getUTCDay() || 7;
+      date.setUTCDate(date.getUTCDate() - day + 1);
+      return date.toISOString().slice(0, 10);
+    })();
+    const schedule = await request(`/api/schedule?week=${monday}&location=91&department=${departmentA}`, { auth: managerAuth });
+    assert.equal(schedule.response.status, 200, JSON.stringify(schedule.payload));
+    assert.equal(schedule.payload.sicknessCreditTotals["612"], 1152);
+
+    const evaluation = await request(`/api/portal/v1/time-day-evaluations?locationId=91&departmentId=${departmentA}&date=${firstDate}`, {
+      auth: managerAuth,
+    });
+    assert.equal(evaluation.response.status, 200, JSON.stringify(evaluation.payload));
+    const employeeDay = evaluation.payload.dayReview.evaluations.find((entry) => entry.employeeNumber === "612");
+    assert.equal(employeeDay.absenceCreditedMinutes, 384);
+    assert.equal(employeeDay.excused.label, "Krankenstand");
+
+    const aum = await uploadAum(allowanceEmployee, {
+      incapacityFrom: firstDate, incapacityTo: firstDate, sicknessCaseId: createdCases[0].id,
+    });
+    assert.equal(aum.response.status, 201, JSON.stringify(aum.payload));
+    const reviewed = await request(`/api/portal/v1/amu-reports/${aum.payload.report.id}/review`, {
+      method: "PUT", auth: hrAuth, body: { action: "reviewed", note: "Geprüft" },
+    });
+    assert.equal(reviewed.response.status, 200, JSON.stringify(reviewed.payload));
+    const afterReview = await request("/api/portal/v1/me/sickness-cases", { auth: allowanceEmployee });
+    assert.equal(afterReview.payload.aumAllowance.usedCases, 1);
+    assert.equal(afterReview.payload.aumAllowance.remainingCases, 1);
+    assert.equal(afterReview.payload.cases.find((entry) => Number(entry.id) === Number(createdCases[0].id)).aum_allowance.reason, "aum_reviewed");
+
+    const durationStart = today;
+    const durationCase = await request("/api/portal/v1/me/sickness-cases", {
+      method: "POST", auth: durationEmployee, body: { startDate: durationStart, expectedEnd: "", note: "" },
+    });
+    assert.equal(durationCase.response.status, 201, JSON.stringify(durationCase.payload));
+    assert.equal(durationCase.payload.case.aum_allowance.required, false);
+    runSicknessEscalationSweep(new Date(`${offsetDate(durationStart, 1)}T12:00:00+02:00`));
+    const durationView = await request("/api/portal/v1/me/sickness-cases", { auth: durationEmployee });
+    assert.equal(durationView.response.status, 200, JSON.stringify(durationView.payload));
+    assert.equal(durationView.payload.cases[0].aum_allowance.required, true);
+    assert.equal(durationView.payload.cases[0].aum_allowance.reason, "duration_exceeded");
+    assert.equal(durationView.payload.cases[0].aum_allowance.consumes_quota, false);
+    assert.equal(durationView.payload.aumAllowance.usedCases, 0);
+    assert.equal(durationView.payload.aumAllowance.remainingCases, 2);
+  } finally {
+    await updateSettings(currentPolicy.aumAllowance || { enabled: false, maxCasesPerYear: 3, maxCalendarDaysPerCase: 1 });
+  }
+});
+
+test("AUM Block 5: nur der serverseitig vollständig bestätigte Stufe-A-Fall wird automatisch erledigt", async () => {
+  const { hrAuth } = auth;
+  const automaticEmployee = session("614", "employee");
+  const trustBEmployee = session("615", "employee");
+  const dateFallbackEmployee = session("616", "employee");
+  const socialSecurityNumbers = {
+    "614": "1018020290",
+    "615": "1026020290",
+    "616": "1034020290",
+  };
+  const today = mostRecentPlanningDate();
+  const germanDate = (isoDate) => isoDate.split("-").reverse().join(".");
+
+  db.prepare("UPDATE employees SET time_confirmation_level = 'A' WHERE personnel_number IN ('614', '616')").run();
+  db.prepare("UPDATE employees SET time_confirmation_level = 'B' WHERE personnel_number = '615'").run();
+  for (const employeeNumber of ["614", "615", "616"]) {
+    const profile = await request(`/api/portal/v1/personnel-records/${employeeNumber}`, {
+      method: "PUT",
+      auth: hrAuth,
+      body: { sensitive: { socialSecurityNumber: socialSecurityNumbers[employeeNumber] } },
+    });
+    assert.equal(profile.response.status, 200, JSON.stringify(profile.payload));
+  }
+
+  const previousSettings = await request("/api/portal/v1/amu-settings", { auth: hrAuth });
+  const currentPolicy = previousSettings.payload.policy;
+  const savePolicy = (autoReviewTrustA) => request("/api/portal/v1/amu-settings", {
+    method: "PUT",
+    auth: hrAuth,
+    body: {
+      uploadMaxMb: currentPolicy.uploadMaxMb,
+      storedMaxMb: currentPolicy.storedMaxMb,
+      convertImagesToPdf: currentPolicy.convertImagesToPdf,
+      grayscaleImages: currentPolicy.grayscaleImages,
+      ocrEnabled: currentPolicy.ocrEnabled,
+      localWarningDays: currentPolicy.localWarningDays,
+      hrWarningDays: currentPolicy.hrWarningDays,
+      aumAllowance: currentPolicy.aumAllowance,
+      autoReviewTrustA,
+    },
+  });
+
+  try {
+    const configured = await savePolicy(true);
+    assert.equal(configured.response.status, 200, JSON.stringify(configured.payload));
+    assert.equal(configured.payload.policy.autoReviewTrustA, true);
+
+    process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = `Versicherungsnummer: ${socialSecurityNumbers["614"]}\nArbeitsunfähig von ${germanDate(today)} bis ${germanDate(today)}`;
+    const automatic = await uploadAum(automaticEmployee, {
+      incapacityFrom: today,
+      incapacityTo: today,
+      directSicknessReport: "1",
+      ocrAssisted: "1",
+      ocrConfirmed: "1",
+    });
+    assert.equal(automatic.response.status, 201, JSON.stringify(automatic.payload));
+    assert.equal(automatic.payload.report.status, "reviewed");
+    assert.equal(automatic.payload.report.review_mode, "automatic");
+    assert.equal(Object.hasOwn(automatic.payload.report, "automatic_review"), false);
+
+    const protectedList = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
+    const protectedAutomatic = protectedList.payload.reports.find((entry) => Number(entry.id) === Number(automatic.payload.report.id));
+    assert.equal(protectedAutomatic.review_mode, "automatic");
+    assert.equal(protectedAutomatic.automatic_review.completed, true);
+    assert.equal(protectedAutomatic.automatic_review.reason, "all_criteria_met");
+    assert.equal(protectedAutomatic.identity_check.status, "matched");
+    assert.equal(JSON.stringify(protectedAutomatic).includes(socialSecurityNumbers["614"]), false);
+    assert.equal(Object.hasOwn(protectedAutomatic.automatic_review, "dateFrom"), false);
+    assert.equal(Object.hasOwn(protectedAutomatic.automatic_review, "dateTo"), false);
+    assert.ok(db.prepare("SELECT 1 FROM audit_log WHERE action = 'amu.report.auto-review' AND entity_id = ?").get(String(automatic.payload.report.id)));
+
+    const ownCases = await request("/api/portal/v1/me/sickness-cases", { auth: automaticEmployee });
+    assert.equal(ownCases.payload.cases[0].aum_allowance.reason, "aum_reviewed");
+
+    process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = `Versicherungsnummer: ${socialSecurityNumbers["615"]}\nArbeitsunfähig von ${germanDate(today)} bis ${germanDate(today)}`;
+    const trustBFallback = await uploadAum(trustBEmployee, {
+      incapacityFrom: today,
+      incapacityTo: today,
+      directSicknessReport: "1",
+      ocrAssisted: "1",
+      ocrConfirmed: "1",
+    });
+    assert.equal(trustBFallback.response.status, 201, JSON.stringify(trustBFallback.payload));
+    assert.equal(trustBFallback.payload.report.status, "submitted");
+    assert.equal(trustBFallback.payload.report.review_mode, "pending");
+
+    process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT = `Versicherungsnummer: ${socialSecurityNumbers["616"]}`;
+    const spoofedConfirmation = await uploadAum(dateFallbackEmployee, {
+      incapacityFrom: today,
+      incapacityTo: today,
+      directSicknessReport: "1",
+      ocrAssisted: "1",
+      ocrConfirmed: "1",
+    });
+    assert.equal(spoofedConfirmation.response.status, 201, JSON.stringify(spoofedConfirmation.payload));
+    assert.equal(spoofedConfirmation.payload.report.status, "submitted");
+
+    const afterFallbacks = await request("/api/portal/v1/amu-reports", { auth: hrAuth });
+    const trustBProtected = afterFallbacks.payload.reports.find((entry) => Number(entry.id) === Number(trustBFallback.payload.report.id));
+    const dateProtected = afterFallbacks.payload.reports.find((entry) => Number(entry.id) === Number(spoofedConfirmation.payload.report.id));
+    assert.equal(trustBProtected.automatic_review.reason, "trust_level_not_a");
+    assert.equal(dateProtected.automatic_review.reason, "dates_not_detected");
+    assert.equal(afterFallbacks.payload.pendingCount >= 2, true);
+    assert.ok(db.prepare("SELECT 1 FROM audit_log WHERE action = 'amu.report.auto-review.deferred' AND entity_id = ?").get(String(spoofedConfirmation.payload.report.id)));
+  } finally {
+    delete process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT;
+    await savePolicy(currentPolicy.autoReviewTrustA === true);
+  }
 });

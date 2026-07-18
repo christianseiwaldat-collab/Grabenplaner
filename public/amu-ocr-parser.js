@@ -39,6 +39,11 @@
     "voraussichtlich",
     "einschliesslich",
   ];
+  const SOCIAL_SECURITY_LABEL = /\b(?:sv|vers|versicherungs|sozialversicherungs)\s*(?:nummer|nr)\b/;
+  const SOCIAL_SECURITY_SEQUENCE = new RegExp(
+    `(^|[^${OCR_DIGIT_CLASS}])(([${OCR_DIGIT_CLASS}])(?:[\\s.\\/-]{0,3}[${OCR_DIGIT_CLASS}]){9})(?![${OCR_DIGIT_CLASS}])`,
+    "g",
+  );
 
   function clamp(value, minimum, maximum) {
     return Math.max(minimum, Math.min(maximum, value));
@@ -98,6 +103,56 @@
       .replace(/[Il|!]/g, "1")
       .replace(/[Ss]/g, "5")
       .replace(/[Bb]/g, "8");
+  }
+
+  function validSocialSecurityNumber(value) {
+    const normalized = ocrDigits(String(value || "").replace(/[^0-9OoQqIl|!SsBb]/g, ""));
+    if (!/^\d{10}$/.test(normalized)) return "";
+    const digits = [...normalized].map(Number);
+    const weights = [3, 7, 9, 0, 5, 8, 4, 2, 1, 6];
+    const checksum = digits.reduce((sum, digit, index) => sum + (digit * weights[index]), 0) % 11;
+    return checksum !== 10 && checksum === digits[3] ? normalized : "";
+  }
+
+  function socialSecurityCandidates(rawLine) {
+    const candidates = [];
+    SOCIAL_SECURITY_SEQUENCE.lastIndex = 0;
+    let match;
+    while ((match = SOCIAL_SECURITY_SEQUENCE.exec(String(rawLine || "")))) {
+      const normalized = validSocialSecurityNumber(match[2]);
+      if (normalized) candidates.push(normalized);
+      if (!match[0].length) SOCIAL_SECURITY_SEQUENCE.lastIndex += 1;
+    }
+    return [...new Set(candidates)];
+  }
+
+  function extractAumIdentity(ocrInput) {
+    const rawText = typeof ocrInput === "string" ? ocrInput : String(ocrInput && ocrInput.text || "");
+    const rawLines = rawText.replace(/\r/g, "").split("\n").slice(0, 500);
+    const found = [];
+    for (let index = 0; index < rawLines.length; index += 1) {
+      const folded = canonicalizeLine(rawLines[index]);
+      const labeled = SOCIAL_SECURITY_LABEL.test(folded);
+      const previousLabeled = index > 0 && SOCIAL_SECURITY_LABEL.test(canonicalizeLine(rawLines[index - 1]));
+      if (!labeled && !previousLabeled) continue;
+      for (const value of socialSecurityCandidates(rawLines[index])) {
+        found.push({ value, confidence: labeled ? 0.98 : 0.86 });
+      }
+    }
+    const unique = [...new Set(found.map((entry) => entry.value))];
+    if (unique.length > 1) {
+      return {
+        socialSecurityNumber: "",
+        socialSecurityConfidence: 0,
+        socialSecurityStatus: "ambiguous",
+      };
+    }
+    const match = unique.length ? found.find((entry) => entry.value === unique[0]) : null;
+    return {
+      socialSecurityNumber: match?.value || "",
+      socialSecurityConfidence: match?.confidence || 0,
+      socialSecurityStatus: match ? "detected" : "not_detected",
+    };
   }
 
   function referenceYear(options) {
@@ -277,6 +332,7 @@
       line,
       candidates.filter((candidate) => candidate.lineIndex === lineIndex),
     ));
+    const identity = extractAumIdentity(rawText);
     if (invalidExplicitChronology) {
       return {
         dateFrom: "",
@@ -288,6 +344,7 @@
         autoFill: false,
         requiresConfirmation: true,
         warnings: ["chronology_invalid"],
+        ...identity,
       };
     }
     const starts = candidates.map((candidate) => scoreCandidate(candidate, "start", lineInfo, options))
@@ -327,11 +384,14 @@
       autoFill,
       requiresConfirmation: true,
       warnings,
+      ...identity,
     };
   }
 
   return Object.freeze({
     extractAumDates,
+    extractAumIdentity,
     parseDateParts: validIsoDate,
+    parseSocialSecurityNumber: validSocialSecurityNumber,
   });
 }));

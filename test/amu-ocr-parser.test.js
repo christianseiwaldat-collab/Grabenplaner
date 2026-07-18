@@ -3,7 +3,12 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { extractAumDates, parseDateParts } = require("../public/amu-ocr-parser");
+const {
+  extractAumDates,
+  extractAumIdentity,
+  parseDateParts,
+  parseSocialSecurityNumber,
+} = require("../public/amu-ocr-parser");
 
 const REFERENCE_DATE = "2026-07-14T12:00:00Z";
 
@@ -117,4 +122,50 @@ test("akzeptiert auch das Textfeld eines Tesseract-Ergebnisobjekts", () => {
   const result = extractAumDates({ text: "Krankenstand ab 09.07.2026\nVoraussichtlich bis 12.07.2026" }, { referenceDate: REFERENCE_DATE });
   assert.equal(result.dateFrom, "2026-07-09");
   assert.equal(result.dateTo, "2026-07-12");
+});
+
+test("erkennt eine klar beschriftete, formal gültige österreichische SV-Nummer", () => {
+  const result = extractAumIdentity([
+    "Versicherungsnummer: 1000 010190",
+    "Arbeitsunfähig von 10.07.2026 bis 17.07.2026",
+  ].join("\n"));
+
+  assert.deepEqual(result, {
+    socialSecurityNumber: "1000010190",
+    socialSecurityConfidence: 0.98,
+    socialSecurityStatus: "detected",
+  });
+  assert.equal(parseSocialSecurityNumber("1000 010190"), "1000010190");
+});
+
+test("erkennt die SV-Nummer auch in der Folgezeile einer eindeutigen Beschriftung", () => {
+  const result = extractAumIdentity("Sozialversicherungsnummer\n1000-010190");
+  assert.equal(result.socialSecurityNumber, "1000010190");
+  assert.equal(result.socialSecurityStatus, "detected");
+  assert.equal(result.socialSecurityConfidence, 0.86);
+});
+
+test("verwirft formal ungültige und unbeschriftete Ziffernfolgen", () => {
+  assert.equal(parseSocialSecurityNumber("1000 010191"), "");
+  assert.deepEqual(extractAumIdentity("Versicherungsnummer: 1000 010191"), {
+    socialSecurityNumber: "",
+    socialSecurityConfidence: 0,
+    socialSecurityStatus: "not_detected",
+  });
+  assert.equal(extractAumIdentity("Referenz 1000010190").socialSecurityStatus, "not_detected");
+});
+
+test("liefert bei mehreren gültigen SV-Nummern nur einen mehrdeutigen Status", () => {
+  const result = extractAumIdentity([
+    "Versicherungsnummer: 1000 010190",
+    "SV-Nr.: 1009 311299",
+    "Diagnose: nicht weitergeben",
+  ].join("\n"));
+
+  assert.deepEqual(result, {
+    socialSecurityNumber: "",
+    socialSecurityConfidence: 0,
+    socialSecurityStatus: "ambiguous",
+  });
+  assert.doesNotMatch(JSON.stringify(result), /Diagnose|weitergeben|Versicherungsnummer/i);
 });

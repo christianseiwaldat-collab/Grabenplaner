@@ -102,6 +102,10 @@
       dateFrom: Boolean(dateFrom && (result.autoFillFields?.dateFrom === true || (complete && result.autoFill === true))),
       dateTo: Boolean(chronological && dateTo && (result.autoFillFields?.dateTo === true || (complete && result.autoFill === true))),
     });
+    const socialSecurityStatus = ["detected", "not_detected", "ambiguous"].includes(String(result.socialSecurityStatus || ""))
+      ? String(result.socialSecurityStatus) : "not_detected";
+    const socialSecurityNumber = socialSecurityStatus === "detected" && /^\d{10}$/.test(String(result.socialSecurityNumber || ""))
+      ? String(result.socialSecurityNumber) : "";
     if (complete) {
       for (const transient of ["no_date_detected", "period_incomplete"]) {
         const index = warnings.indexOf(transient);
@@ -122,15 +126,30 @@
         && dateFromConfidence >= 0.72 && dateToConfidence >= 0.72,
       requiresConfirmation: true,
       warnings: Object.freeze(warnings),
+      socialSecurityNumber,
+      socialSecurityConfidence: socialSecurityNumber ? clamp(result.socialSecurityConfidence) : 0,
+      socialSecurityStatus: socialSecurityNumber ? "detected" : socialSecurityStatus === "ambiguous" ? "ambiguous" : "not_detected",
     });
   }
 
   function mergeDerivedResults(results, additionalWarnings = []) {
     const candidates = results.map((entry) => sanitizeDerivedResult(entry));
+    const identityValues = [...new Set(candidates
+      .filter((entry) => entry.socialSecurityStatus === "detected" && entry.socialSecurityNumber)
+      .map((entry) => entry.socialSecurityNumber))];
+    const identity = identityValues.length === 1
+      ? candidates.filter((entry) => entry.socialSecurityNumber === identityValues[0])
+        .sort((left, right) => right.socialSecurityConfidence - left.socialSecurityConfidence)[0]
+      : null;
+    const identityFields = {
+      socialSecurityNumber: identity?.socialSecurityNumber || "",
+      socialSecurityConfidence: identity?.socialSecurityConfidence || 0,
+      socialSecurityStatus: identityValues.length > 1 ? "ambiguous" : identity ? "detected" : "not_detected",
+    };
     const complete = candidates
       .filter((entry) => entry.complete)
       .sort((left, right) => right.confidence - left.confidence)[0];
-    if (complete) return sanitizeDerivedResult(complete, additionalWarnings);
+    if (complete) return sanitizeDerivedResult({ ...complete, ...identityFields }, additionalWarnings);
 
     const bestField = (field) => candidates
       .filter((entry) => entry[field])
@@ -163,6 +182,7 @@
       autoFill: Boolean(chronological && dateFrom && dateTo && autoFillFields.dateFrom && autoFillFields.dateTo
         && fieldConfidence.dateFrom >= 0.72 && fieldConfidence.dateTo >= 0.72),
       warnings: mergedWarnings,
+      ...identityFields,
     });
   }
 
@@ -337,7 +357,8 @@
           referenceDate: recognitionOptions.referenceDate,
         }));
         digitalText = "";
-        if (digitalResult.complete || !scannedPages.length || !recognizeCanvas) {
+        const digitalResultComplete = digitalResult.complete && digitalResult.socialSecurityStatus === "detected";
+        if (digitalResultComplete || !scannedPages.length || !recognizeCanvas) {
           const fallbackWarnings = !digitalResult.complete && scannedPages.length && !recognizeCanvas
             ? [...warnings, "pdf_ocr_unavailable"]
             : warnings;
@@ -387,7 +408,7 @@
           currentCanvas.height = 0;
           currentCanvas = null;
           const merged = mergeDerivedResults(candidates, warnings);
-          if (merged.complete) return merged;
+          if (merged.complete && merged.socialSecurityStatus === "detected") return merged;
         }
         return mergeDerivedResults(candidates, warnings);
       } catch (error) {

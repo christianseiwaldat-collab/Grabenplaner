@@ -10,6 +10,18 @@ const net = require("node:net");
 const { promisify } = require("node:util");
 const { createAmuStorage, syncEncryptedFilesBackup } = require("./lib/amu-storage");
 const { prepareAmuDocument } = require("./lib/amu-processing");
+const { evaluateAumEvidence } = require("./lib/amu-identity-check");
+const { evaluateAutomaticAumReview } = require("./lib/amu-auto-review");
+const {
+  ALLOWANCE_VERSION,
+  VALUATION_VERSION,
+  createAumAllowanceSnapshot,
+  createSicknessValuationSnapshot,
+  creditedMinutesForDate,
+  extendSicknessValuationSnapshot,
+  normalizeTargetWorkdays,
+  reconcileAumAllowanceSnapshot,
+} = require("./lib/sickness-valuation");
 const {
   validateSicknessDeadlines,
   sicknessDeadlineState,
@@ -133,11 +145,15 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "vacation:approve", label: "Urlaubs- und ZA-Anträge bearbeiten", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true },
   { id: "hr:approve", label: "Verbindliche PL-Freigaben erteilen", group: "Zeit & Abwesenheit", warningLevel: "critical" },
   { id: "hr:settings", label: "Antrags- und AUM-Regeln verwalten", group: "Zeit & Abwesenheit", warningLevel: "critical" },
-  { id: "amu:metadata:read", label: "AUM-Metadaten und Personalakt lesen", group: "AUM", warningLevel: "high", hrDelegable: true },
-  { id: "amu:file:read", label: "AUM-Dokumente öffnen", group: "AUM", warningLevel: "critical" },
-  { id: "amu:review", label: "AUM-Meldungen prüfen", group: "AUM", warningLevel: "critical" },
-  { id: "amu:delete", label: "AUM-Meldungen löschen", group: "AUM", warningLevel: "critical" },
-  { id: "amu:audit", label: "AUM-Prüfprotokoll lesen", group: "AUM", warningLevel: "critical" },
+  { id: "personnel:sensitive:read", label: "Sensible MA-Daten lesen", description: "SV-Nummer, Bankverbindung und Wohnadresse; nur Personalleitung oder ausdrücklich berechtigte höhere Rollen.", group: "Personalakt", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:sensitive:write", label: "Sensible MA-Daten bearbeiten", description: "SV-Nummer, Bankverbindung und Wohnadresse verschlüsselt pflegen.", group: "Personalakt", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:phone:read", label: "Telefonnummern im eigenen Bereich lesen", group: "Personalakt", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:phone:write", label: "Telefonnummern im eigenen Bereich bearbeiten", description: "Bei Filial- und Abteilungsleitungen zusätzlich nur mit eigener Vertrauensstufe A.", group: "Personalakt", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "amu:metadata:read", label: "Geschützte AUM-Metadaten lesen", description: "Nur Personalleitung und höhere geschützte Rollen; nicht an Filial- oder Abteilungsleitung delegierbar.", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "amu:file:read", label: "AUM-Dokumente öffnen", description: "Besonders geschütztes Zusatzrecht für Personalleitung und höhere Rollen.", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "amu:review", label: "AUM-Meldungen prüfen", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "amu:delete", label: "AUM-Meldungen löschen", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "amu:audit", label: "AUM-Prüfprotokoll lesen", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "sickness:read", label: "Krankmeldungen im eigenen Bereich lesen", group: "AUM", warningLevel: "high", hrDelegable: true },
   { id: "sickness:settings", label: "Krankmeldungs- und AUM-Fristen verwalten", group: "AUM", warningLevel: "critical" },
   { id: "notifications:settings", label: "Eigene Besetzungswarnungen konfigurieren", group: "AUM", warningLevel: "normal", hrDelegable: true },
@@ -158,6 +174,24 @@ const delegablePortalPermissionCatalog = Object.freeze([
 ]);
 const delegablePortalPermissions = new Set(delegablePortalPermissionCatalog.map((entry) => entry.id));
 const hrDelegablePortalPermissions = new Set(delegablePortalPermissionCatalog.filter((entry) => entry.hrDelegable).map((entry) => entry.id));
+const protectedAmuPermissionIds = new Set(["amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit"]);
+const protectedAmuRoleIds = new Set(["hr", "admin", "it_admin", "developer"]);
+const permissionEligibleRoles = new Map(delegablePortalPermissionCatalog
+  .filter((entry) => Array.isArray(entry.eligibleRoles))
+  .map((entry) => [entry.id, new Set(entry.eligibleRoles)]));
+
+function portalPermissionAllowedForRole(permission, role) {
+  const eligibleRoles = permissionEligibleRoles.get(String(permission || ""));
+  return !eligibleRoles || eligibleRoles.has(String(role || ""));
+}
+
+function portalPermissionRoleRestrictionError(permissions) {
+  const restricted = Array.isArray(permissions) ? permissions : [];
+  if (restricted.length && restricted.every((permission) => protectedAmuPermissionIds.has(permission))) {
+    return httpError(403, "Geschützte AUM-Rechte dürfen nur Personalleitung und höheren Rollen zugewiesen werden.", "AMU_PERMISSION_ROLE_RESTRICTED");
+  }
+  return httpError(403, "Diese Personalakt-Rechte sind für die gewählte App-Rolle nicht zulässig.", "PORTAL_PERMISSION_ROLE_RESTRICTED");
+}
 
 const portalDashboardPermissionDetails = Object.freeze([
   { id: "own_schedule:read", label: "Eigenen Dienstplan lesen", group: "Eigene Daten", scopeBehavior: "self" },
@@ -186,6 +220,8 @@ const portalDashboardPermissionDetails = Object.freeze([
 
 const portalGlobalPermissionIds = new Set([
   "settings:write", "positions:write", "hr:approve", "hr:settings", "sickness:settings",
+  "personnel:sensitive:read", "personnel:sensitive:write",
+  "amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit",
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
   "integrations:connections:write", "integrations:credentials:write", "branding:read", "branding:write",
   "operation_mode:write", "backup:write", "update:write", "system:write", "wifi:settings",
@@ -237,9 +273,9 @@ const builtinPortalRoles = [
       "time:review",
       "vacation:read",
       "vacation:approve",
-      "amu:metadata:read",
       "sickness:read",
       "notifications:settings",
+      "personnel:phone:read",
       "scopes:write",
     ],
   },
@@ -254,7 +290,7 @@ const builtinPortalRoles = [
       "own_sickness:create", "own_sickness:read",
       "employees:read", "schedule:read", "schedule:write",
       "time:read", "time:review", "vacation:read", "vacation:approve",
-      "amu:metadata:read", "sickness:read", "notifications:settings",
+      "sickness:read", "notifications:settings",
     ],
   },
   {
@@ -303,6 +339,10 @@ const builtinPortalRoles = [
       "audit:read",
       "hr:approve",
       "hr:settings",
+      "personnel:sensitive:read",
+      "personnel:sensitive:write",
+      "personnel:phone:read",
+      "personnel:phone:write",
       "amu:metadata:read",
       "amu:file:read",
       "amu:review",
@@ -358,6 +398,10 @@ const builtinPortalRoles = [
       "locations:write",
       "departments:write",
       "positions:write",
+      "personnel:sensitive:read",
+      "personnel:sensitive:write",
+      "personnel:phone:read",
+      "personnel:phone:write",
       "amu:metadata:read",
       "amu:file:read",
       "amu:review",
@@ -447,10 +491,12 @@ const defaultPortalSettings = {
   amu_stored_max_mb: "2",
   amu_convert_images_to_pdf: "1",
   amu_grayscale_images: "1",
-  amu_manager_file_access: "0",
   amu_ocr_enabled: "1",
   sickness_local_warning_days: "2",
   sickness_hr_warning_days: "3",
+  sickness_aum_allowance_enabled: "0",
+  sickness_aum_allowance_max_cases: "3",
+  sickness_aum_allowance_max_days: "1",
   wifi_minimum_presence_minutes: "5",
   wifi_absence_grace_minutes: "30",
   trust_levels_enabled: "1",
@@ -944,10 +990,12 @@ function createSchema() {
       nickname TEXT NOT NULL,
       color TEXT NOT NULL DEFAULT '#0b84c6',
       contracted_hours REAL NOT NULL DEFAULT 38.5,
+      target_workdays_per_week INTEGER NOT NULL DEFAULT 5,
       preferred_day_off TEXT,
       fixed_workdays TEXT NOT NULL DEFAULT '',
       position_id TEXT NOT NULL DEFAULT 'verkaufsmitarbeiter',
       time_confirmation_level TEXT NOT NULL DEFAULT 'C',
+      sickness_without_aum_enabled INTEGER NOT NULL DEFAULT 0,
       home_location_id TEXT,
       preferred_department_id INTEGER,
       active INTEGER NOT NULL DEFAULT 1,
@@ -957,6 +1005,21 @@ function createSchema() {
       FOREIGN KEY (preferred_department_id) REFERENCES departments(id)
         ON UPDATE CASCADE ON DELETE SET NULL
     );
+
+    CREATE TABLE IF NOT EXISTS personnel_sensitive_records (
+      employee_number TEXT PRIMARY KEY,
+      social_security_lookup TEXT NOT NULL DEFAULT '',
+      protected_payload TEXT NOT NULL,
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_personnel_sensitive_sv_lookup
+      ON personnel_sensitive_records(social_security_lookup)
+      WHERE TRIM(social_security_lookup) <> '';
 
     CREATE TABLE IF NOT EXISTS positions (
       id TEXT PRIMARY KEY,
@@ -1833,6 +1896,8 @@ if (!columnExists("employees", "position_id")) {
   db.exec("ALTER TABLE employees ADD COLUMN position_id TEXT NOT NULL DEFAULT 'verkaufsmitarbeiter'");
 }
 ensureColumn("employees", "time_confirmation_level", "TEXT NOT NULL DEFAULT 'C'");
+ensureColumn("employees", "target_workdays_per_week", "INTEGER NOT NULL DEFAULT 5");
+ensureColumn("employees", "sickness_without_aum_enabled", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("wifi_time_suggestions", "confirmed_start_at", "TEXT");
 ensureColumn("wifi_time_suggestions", "confirmed_end_at", "TEXT");
 ensureColumn("wifi_time_suggestions", "confirmed_break_start_at", "TEXT");
@@ -1908,6 +1973,95 @@ function amuDocumentProtectionContext(row) {
     field: "payload",
     employeeNumber: String(row.employee_number || ""),
   };
+}
+
+function personnelSensitiveProtectionContext(row) {
+  return {
+    namespace: "personnel-sensitive-record",
+    recordId: String(row.employee_number || ""),
+    field: "payload",
+    employeeNumber: String(row.employee_number || ""),
+  };
+}
+
+function emptyPersonnelSensitiveProfile() {
+  return {
+    socialSecurityNumber: "",
+    iban: "",
+    bic: "",
+    accountHolder: "",
+    address: { street: "", postalCode: "", city: "", country: "Österreich" },
+    phone: "",
+  };
+}
+
+function personnelSensitiveLookup(kind, value) {
+  const key = amuEncryptionConfiguration?.key;
+  if (!key) throw httpError(503, "Der geschützte Personalakt-Index ist nicht verfügbar.", "PERSONNEL_INDEX_UNAVAILABLE");
+  return crypto.createHmac("sha256", key)
+    .update(`grabenplaner-personnel-index-v1\0${String(kind || "")}\0${String(value ?? "")}`)
+    .digest("hex");
+}
+
+function timingSafeLookupEqual(left, right) {
+  const expected = String(left || "");
+  const actual = String(right || "");
+  if (!/^[0-9a-f]{64}$/i.test(expected) || !/^[0-9a-f]{64}$/i.test(actual)) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(actual, "hex"));
+}
+
+async function evaluateUploadedAumEvidence(employeeNumber, documents) {
+  const normalizedEmployeeNumber = String(employeeNumber || "");
+  const readStoredLookup = () => String(db.prepare(`
+    SELECT social_security_lookup FROM personnel_sensitive_records WHERE employee_number = ?
+  `).get(normalizedEmployeeNumber)?.social_security_lookup || "");
+  const storedLookup = readStoredLookup();
+  return evaluateAumEvidence(documents, {
+    profileConfigured: Boolean(storedLookup),
+    compareCandidate(candidate) {
+      const candidateLookup = personnelSensitiveLookup("social-security-number", candidate);
+      return timingSafeLookupEqual(readStoredLookup(), candidateLookup);
+    },
+  });
+}
+
+function personnelSensitiveProfile(employeeNumber) {
+  const row = db.prepare(`
+    SELECT employee_number, protected_payload
+    FROM personnel_sensitive_records WHERE employee_number = ?
+  `).get(String(employeeNumber || ""));
+  if (!row) return emptyPersonnelSensitiveProfile();
+  const payload = parseProtectedJson(row.protected_payload, personnelSensitiveProtectionContext(row));
+  const address = payload.address && typeof payload.address === "object" && !Array.isArray(payload.address)
+    ? payload.address : {};
+  return {
+    socialSecurityNumber: String(payload.socialSecurityNumber || ""),
+    iban: String(payload.iban || ""),
+    bic: String(payload.bic || ""),
+    accountHolder: String(payload.accountHolder || ""),
+    address: {
+      street: String(address.street || ""),
+      postalCode: String(address.postalCode || ""),
+      city: String(address.city || ""),
+      country: String(address.country || "Österreich"),
+    },
+    phone: String(payload.phone || ""),
+  };
+}
+
+function verifyProtectedSensitivePersonnelRecords() {
+  if (!tableExists("personnel_sensitive_records")) return 0;
+  const rows = db.prepare(`
+    SELECT employee_number, protected_payload
+    FROM personnel_sensitive_records ORDER BY employee_number
+  `).all();
+  for (const row of rows) {
+    if (!String(row.protected_payload || "").startsWith("enc:v2:")) {
+      throw httpError(503, "Sensible Personalakt-Daten liegen nicht im erwarteten verschlüsselten Format vor.", "PERSONNEL_RECORD_INTEGRITY_FAILED");
+    }
+    parseProtectedJson(row.protected_payload, personnelSensitiveProtectionContext(row));
+  }
+  return rows.length;
 }
 
 function sicknessCaseProtectionContext(row) {
@@ -2029,6 +2183,7 @@ function migrateProtectedPersonnelRecords() {
 }
 
 migrateProtectedPersonnelRecords();
+verifyProtectedSensitivePersonnelRecords();
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_work_date ON time_entries(employee_number, work_date, entry_timestamp)");
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_mobile_request ON time_entries(employee_number, client_request_id) WHERE client_request_id IS NOT NULL");
 db.exec("CREATE INDEX IF NOT EXISTS idx_mobile_sessions_employee ON mobile_sessions(employee_number, refresh_expires_at)");
@@ -2273,6 +2428,19 @@ for (const role of builtinPortalRoles) {
   upsertPortalRole.run(role.id, role.name, role.description, JSON.stringify(role.permissions), role.sortOrder);
 }
 db.prepare("UPDATE portal_users SET role_locked = 1 WHERE role = 'developer'").run();
+db.prepare(`
+  DELETE FROM portal_permission_grants
+  WHERE permission IN (
+    'amu:metadata:read','amu:file:read','amu:review','amu:delete','amu:audit',
+    'personnel:sensitive:read','personnel:sensitive:write'
+  )
+    AND EXISTS (
+      SELECT 1 FROM portal_users u
+      WHERE u.employee_number = portal_permission_grants.employee_number
+        AND u.role NOT IN ('hr','admin','it_admin','developer')
+    )
+`).run();
+db.prepare("UPDATE portal_settings SET value = '0', updated_at = CURRENT_TIMESTAMP WHERE key = 'amu_manager_file_access'").run();
 db.exec("BEGIN");
 try {
   db.prepare(`
@@ -2318,6 +2486,12 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.59-sickness-ocr-notifications", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.60-portal-mobile-foundation", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.70-aum-security-foundation", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.70-sensitive-personnel-records", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.70-sickness-allowance-valuation", packageMetadata.version);
 const integrationFeatureMigrationId = "v0.63-import-payroll-integrations";
 if (!db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(integrationFeatureMigrationId)) {
   const stored = db.prepare("SELECT value FROM settings WHERE key = 'installation_features'").get()?.value;
@@ -2671,14 +2845,14 @@ function parseAmuMultipart(request, { maxFileBytes = 10 * 1024 * 1024, totalMaxB
           let filename = plainFilename || "";
           if (encodedFilename) { try { filename = decodeURIComponent(encodedFilename); } catch {} }
           partCount += 1;
-          if (partCount > 9) throw httpError(413, "Das AUM-Formular enthält zu viele Teile.", "AMU_TOO_MANY_PARTS");
+          if (partCount > 12) throw httpError(413, "Das AUM-Formular enthält zu viele Teile.", "AMU_TOO_MANY_PARTS");
           if (filename && name === "documents") {
             if (data.length > maxFileBytes) throw httpError(413, `Eine AUM-Datei darf höchstens ${Math.ceil(maxFileBytes / 1024 / 1024)} MB groß sein.`, "AMU_DOCUMENT_TOO_LARGE");
             documents.push({ originalName: filename, buffer: Buffer.from(data) });
             if (documents.length > 3) throw httpError(413, "Pro AUM sind höchstens drei Dateien möglich.", "AMU_TOO_MANY_DOCUMENTS");
           } else if (!filename && [
             "incapacityFrom", "incapacityTo", "employeeNote",
-            "sicknessCaseId", "ocrAssisted", "ocrConfirmed",
+            "sicknessCaseId", "sicknessNote", "directSicknessReport", "ocrAssisted", "ocrConfirmed",
           ].includes(name)) {
             if (data.length > 4096) throw httpError(413, "Ein AUM-Textfeld ist zu groß.", "AMU_FIELD_TOO_LARGE");
             fields[name] = data.toString("utf8");
@@ -3037,7 +3211,8 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
   if (!scopes.length && !GLOBAL_SCOPE_PORTAL_ROLES.has(session.role) && session.home_location_id) {
     scopes.push({ locationId: session.home_location_id, departmentId: session.role === "department_manager" ? (Number(session.preferred_department_id) || null) : null });
   }
-  const rolePermissions = parsePortalPermissions(session.permissions);
+  const rolePermissions = parsePortalPermissions(session.permissions)
+    .filter((permission) => portalPermissionAllowedForRole(permission, session.role));
   const grantedPermissions = portalPermissionGrantsForEmployee(session.employee_number);
   return {
     id: session.id,
@@ -3269,7 +3444,8 @@ function mobileSessionPrincipal(row) {
   if (!scopes.length && !GLOBAL_SCOPE_PORTAL_ROLES.has(row.role) && row.home_location_id) {
     scopes.push({ locationId: row.home_location_id, departmentId: row.role === "department_manager" ? (Number(row.preferred_department_id) || null) : null });
   }
-  const rolePermissions = parsePortalPermissions(row.permissions);
+  const rolePermissions = parsePortalPermissions(row.permissions)
+    .filter((permission) => portalPermissionAllowedForRole(permission, row.role));
   const grantedPermissions = portalPermissionGrantsForEmployee(row.employee_number);
   return {
     id: row.id,
@@ -3708,7 +3884,7 @@ function installationFeaturesForApiPath(apiPath) {
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:absence(?:-|\/|$)|vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$)|time-off(?:-|\/|$)|approved-time-off(?:\/|$)|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))/.test(requestPath)) required.add("requests");
   if (/^\/portal\/v1\/(?:me\/)?(?:vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$))/.test(requestPath)) required.add("vacation");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:wifi-automation|wifi-suggestions)|portal\/v1\/wifi-automation|wifi(?:-|\/|$)|integrations\/wifi)/.test(requestPath)) required.add("wifiSuggestions");
-  if (/^\/(?:portal\/v1\/(?:me\/)?(?:amu|sickness)|portal\/v1\/(?:amu|sickness)|portal\/v1\/personnel-records|amu(?:-|\/|$)|sickness(?:-|\/|$))/.test(requestPath)) required.add("sicknessAmu");
+  if (/^\/(?:portal\/v1\/(?:me\/)?(?:amu|sickness)|portal\/v1\/(?:amu|sickness)|amu(?:-|\/|$)|sickness(?:-|\/|$))/.test(requestPath)) required.add("sicknessAmu");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence)|time(?:-|\/|$)|mobile\/v1\/(?:time|me\/time-entries))/.test(requestPath)) required.add("timeTracking");
   if (/^\/(?:portal\/v1\/me(?:\/|$)|mobile\/v1\/(?:bootstrap|me(?:\/|$))|portal\/v1\/(?:greeting-settings|mobile-layout|leadership\/overview))/.test(requestPath)) required.add("employeePortal");
   if (/^\/integrations\/(?:personnel-import|payroll-export|profiles|runs|connections|contracts)(?:\/|$)/.test(requestPath)) required.add("integrations");
@@ -4580,6 +4756,8 @@ function getAmuPolicy() {
   let hrWarningDays = Number.isFinite(parsedHrWarningDays)
     ? Math.min(60, Math.max(1, Math.trunc(parsedHrWarningDays)))
     : 3;
+  const parsedAllowanceCases = Number(settings.sickness_aum_allowance_max_cases);
+  const parsedAllowanceDays = Number(settings.sickness_aum_allowance_max_days);
   if (localWarningDays >= hrWarningDays) {
     localWarningDays = 2;
     hrWarningDays = 3;
@@ -4589,10 +4767,17 @@ function getAmuPolicy() {
     storedMaxMb,
     convertImagesToPdf: settings.amu_convert_images_to_pdf !== "0",
     grayscaleImages: settings.amu_grayscale_images !== "0",
-    managerFileAccess: settings.amu_manager_file_access === "1",
     ocrEnabled: settings.amu_ocr_enabled !== "0",
     localWarningDays,
     hrWarningDays,
+    aumAllowance: {
+      enabled: settings.sickness_aum_allowance_enabled === "1",
+      maxCasesPerYear: Number.isFinite(parsedAllowanceCases)
+        ? Math.min(20, Math.max(1, Math.trunc(parsedAllowanceCases))) : 3,
+      maxCalendarDaysPerCase: Number.isFinite(parsedAllowanceDays)
+        ? Math.min(3, Math.max(1, Math.trunc(parsedAllowanceDays))) : 1,
+    },
+    autoReviewTrustA: settings.amu_auto_review_trust_a_enabled === "1",
   };
 }
 
@@ -4881,12 +5066,13 @@ function runSicknessEscalationSweep(now = new Date()) {
     SELECT * FROM sickness_cases WHERE status_lookup IN (?, ?, ?) ORDER BY created_at, id
   `).all(sicknessStatusLookup("reported"), sicknessStatusLookup("aum_received"), sicknessStatusLookup("recovered"));
   let alerts = 0;
-  for (const row of rows) {
+  for (const originalRow of rows) {
+    const row = reconcileSicknessCaseRules(originalRow, now);
     const staffing = reconcileSicknessStaffingRisk(row, now);
     if (staffing.created) alerts += 1;
     const payload = sicknessCasePayload(row);
-    const stillRequiresAum = payload.status === "reported"
-      || (payload.status === "recovered" && !payload.aumReceivedAt);
+    const stillRequiresAum = payload.aumAllowance?.required !== false && (payload.status === "reported"
+      || (payload.status === "recovered" && !payload.aumReceivedAt));
     if (!stillRequiresAum) continue;
     if (!payload.startDate) continue;
     const state = sicknessDeadlineState({
@@ -5280,23 +5466,202 @@ function validateAmuPolicy(body = {}) {
   } catch (error) {
     throw httpError(400, error.message, error.code || "SICKNESS_DEADLINE_INVALID");
   }
+  const requestedAllowance = body.aumAllowance && typeof body.aumAllowance === "object"
+    ? body.aumAllowance : currentPolicy.aumAllowance;
+  const maxCasesPerYear = Number(requestedAllowance.maxCasesPerYear);
+  const maxCalendarDaysPerCase = Number(requestedAllowance.maxCalendarDaysPerCase);
+  if (!Number.isInteger(maxCasesPerYear) || maxCasesPerYear < 1 || maxCasesPerYear > 20) {
+    throw httpError(400, "Die Zahl der Krankenstandsfälle ohne AUM muss zwischen 1 und 20 liegen.", "AMU_POLICY_INVALID");
+  }
+  if (!Number.isInteger(maxCalendarDaysPerCase) || maxCalendarDaysPerCase < 1 || maxCalendarDaysPerCase > 3) {
+    throw httpError(400, "Ein Krankenstandsfall ohne AUM darf höchstens drei Kalendertage umfassen.", "AMU_POLICY_INVALID");
+  }
   return {
     uploadMaxMb: Math.round(uploadMaxMb * 2) / 2,
     storedMaxMb: Math.round(storedMaxMb * 2) / 2,
     convertImagesToPdf: body.convertImagesToPdf !== false,
     grayscaleImages: body.grayscaleImages !== false,
-    managerFileAccess: body.managerFileAccess === true,
     ocrEnabled: body.ocrEnabled !== false,
     localWarningDays: deadlines.localDays,
     hrWarningDays: deadlines.hrDays,
+    aumAllowance: {
+      enabled: requestedAllowance.enabled === true,
+      maxCasesPerYear,
+      maxCalendarDaysPerCase,
+    },
+    autoReviewTrustA: body.autoReviewTrustA === undefined
+      ? currentPolicy.autoReviewTrustA
+      : body.autoReviewTrustA === true,
   };
 }
 
 function actorCanReadAmuFiles(session) {
   if (!session) return false;
-  if (session.employeeNumber === "local" || HR_DECISION_PORTAL_ROLES.has(session.role)) return true;
-  if (session.permissions?.includes("amu:file:read")) return true;
-  return ["manager", "department_manager"].includes(session.role) && getAmuPolicy().managerFileAccess;
+  if (session.employeeNumber === "local") return true;
+  return protectedAmuRoleIds.has(session.role) && session.permissions?.includes("amu:file:read");
+}
+
+function actorCanReadAmuSensitiveMetadata(session) {
+  if (!session) return false;
+  if (session.employeeNumber === "local") return true;
+  return protectedAmuRoleIds.has(session.role) && session.permissions?.includes("amu:metadata:read");
+}
+
+function actorCanReadPersonnelSensitiveData(session) {
+  if (!session) return false;
+  if (session.employeeNumber === "local") return true;
+  return portalPermissionAllowedForRole("personnel:sensitive:read", session.role)
+    && session.permissions?.includes("personnel:sensitive:read");
+}
+
+function actorCanWritePersonnelSensitiveData(session) {
+  if (!session) return false;
+  if (session.employeeNumber === "local") return true;
+  return portalPermissionAllowedForRole("personnel:sensitive:write", session.role)
+    && session.permissions?.includes("personnel:sensitive:write");
+}
+
+function actorCanReadPersonnelPhone(session) {
+  if (!session) return false;
+  if (session.employeeNumber === "local") return true;
+  return portalPermissionAllowedForRole("personnel:phone:read", session.role)
+    && session.permissions?.includes("personnel:phone:read");
+}
+
+function actorCanWritePersonnelPhone(session) {
+  if (!session) return false;
+  if (session.employeeNumber === "local") return true;
+  if (!portalPermissionAllowedForRole("personnel:phone:write", session.role)
+    || !session.permissions?.includes("personnel:phone:write")) return false;
+  if (!["manager", "department_manager"].includes(session.role)) return true;
+  const actor = db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = ?")
+    .get(session.employeeNumber);
+  return getTrustLevelPolicy().enabled && normalizeTimeConfirmationLevel(actor?.time_confirmation_level) === "A";
+}
+
+function personnelRecordAccess(session) {
+  const canWriteSensitive = actorCanWritePersonnelSensitiveData(session);
+  const canWritePhone = actorCanWritePersonnelPhone(session);
+  const canReadSensitive = actorCanReadPersonnelSensitiveData(session) || canWriteSensitive;
+  const canReadPhone = actorCanReadPersonnelPhone(session) || canWritePhone;
+  const canReadAmu = installationFeatureEnabled("sicknessAmu") && actorCanReadAmuSensitiveMetadata(session);
+  return {
+    canReadSensitive,
+    canWriteSensitive,
+    canReadPhone,
+    canWritePhone,
+    canReadAmu,
+    canOpenFiles: canReadAmu && actorCanReadAmuFiles(session),
+    phoneWriteRequiresTrustA: ["manager", "department_manager"].includes(session?.role || ""),
+  };
+}
+
+function requirePersonnelRecordSession(request, { write = false } = {}) {
+  let session;
+  if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) {
+    session = {
+      employeeNumber: "local",
+      role: "admin",
+      permissions: builtinPortalRoles.find((role) => role.id === "admin")?.permissions || [],
+      scopes: [],
+    };
+  } else {
+    session = requirePortalSession(request);
+    if (session.mustChangePassword) {
+      throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+    }
+  }
+  if (write) assertPortalCsrf(request);
+  const access = personnelRecordAccess(session);
+  if (!access.canReadSensitive && !access.canReadPhone && !access.canReadAmu) {
+    throw httpError(403, "Für den Personalakt fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  return { session, access };
+}
+
+function normalizePersonnelField(value, maximumLength) {
+  return stripEmoji(String(value ?? "").trim().replace(/\s+/g, " ")).slice(0, maximumLength);
+}
+
+function normalizeSocialSecurityNumber(value) {
+  const normalized = String(value ?? "").replace(/\D/g, "");
+  if (!normalized) return "";
+  if (!/^\d{10}$/.test(normalized)) {
+    throw httpError(400, "Die SV-Nummer muss aus genau 10 Ziffern bestehen.", "PERSONNEL_SOCIAL_SECURITY_INVALID");
+  }
+  const digits = [...normalized].map(Number);
+  const weights = [3, 7, 9, 0, 5, 8, 4, 2, 1, 6];
+  const checksum = digits.reduce((sum, digit, index) => sum + (digit * weights[index]), 0) % 11;
+  if (checksum === 10 || checksum !== digits[3]) {
+    throw httpError(400, "Die Prüfziffer der SV-Nummer ist ungültig.", "PERSONNEL_SOCIAL_SECURITY_INVALID");
+  }
+  return normalized;
+}
+
+function normalizeIban(value) {
+  const normalized = String(value ?? "").replace(/\s+/g, "").toUpperCase();
+  if (!normalized) return "";
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(normalized)) {
+    throw httpError(400, "Bitte eine gültige IBAN eingeben.", "PERSONNEL_IBAN_INVALID");
+  }
+  const rearranged = `${normalized.slice(4)}${normalized.slice(0, 4)}`;
+  let remainder = 0;
+  for (const character of rearranged) {
+    const expanded = /\d/.test(character) ? character : String(character.charCodeAt(0) - 55);
+    for (const digit of expanded) remainder = ((remainder * 10) + Number(digit)) % 97;
+  }
+  if (remainder !== 1) throw httpError(400, "Die Prüfziffer der IBAN ist ungültig.", "PERSONNEL_IBAN_INVALID");
+  return normalized;
+}
+
+function normalizeBic(value) {
+  const normalized = String(value ?? "").replace(/\s+/g, "").toUpperCase();
+  if (normalized && !/^[A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?$/.test(normalized)) {
+    throw httpError(400, "Bitte einen gültigen BIC mit 8 oder 11 Zeichen eingeben.", "PERSONNEL_BIC_INVALID");
+  }
+  return normalized;
+}
+
+function normalizePersonnelPhone(value) {
+  const normalized = normalizePersonnelField(value, 40);
+  if (normalized && !/^\+?[0-9][0-9\s()/.-]{4,38}$/.test(normalized)) {
+    throw httpError(400, "Bitte eine gültige Telefonnummer eingeben.", "PERSONNEL_PHONE_INVALID");
+  }
+  return normalized;
+}
+
+function validatePersonnelSensitiveInput(value = {}) {
+  const address = value.address && typeof value.address === "object" && !Array.isArray(value.address)
+    ? value.address : {};
+  return {
+    socialSecurityNumber: normalizeSocialSecurityNumber(value.socialSecurityNumber),
+    iban: normalizeIban(value.iban),
+    bic: normalizeBic(value.bic),
+    accountHolder: normalizePersonnelField(value.accountHolder, 120),
+    address: {
+      street: normalizePersonnelField(address.street, 160),
+      postalCode: normalizePersonnelField(address.postalCode, 20),
+      city: normalizePersonnelField(address.city, 100),
+      country: normalizePersonnelField(address.country, 80) || "Österreich",
+    },
+  };
+}
+
+function changedPersonnelProfileFields(before, after) {
+  const fieldValues = (profile) => ({
+    socialSecurityNumber: profile.socialSecurityNumber || "",
+    iban: profile.iban || "",
+    bic: profile.bic || "",
+    accountHolder: profile.accountHolder || "",
+    street: profile.address?.street || "",
+    postalCode: profile.address?.postalCode || "",
+    city: profile.address?.city || "",
+    country: profile.address?.country || "",
+    phone: profile.phone || "",
+  });
+  const left = fieldValues(before);
+  const right = fieldValues(after);
+  return Object.keys(right).filter((field) => left[field] !== right[field]);
 }
 
 function parsePortalPermissions(value) {
@@ -5310,11 +5675,12 @@ function parsePortalPermissions(value) {
 
 function portalPermissionGrantsForEmployee(employeeNumber) {
   if (!employeeNumber || !tableExists("portal_permission_grants")) return [];
+  const role = db.prepare("SELECT role FROM portal_users WHERE employee_number = ?").get(String(employeeNumber))?.role || "employee";
   return db.prepare(`
     SELECT permission FROM portal_permission_grants
     WHERE employee_number = ? ORDER BY permission
   `).all(String(employeeNumber)).map((row) => row.permission)
-    .filter((permission) => delegablePortalPermissions.has(permission));
+    .filter((permission) => delegablePortalPermissions.has(permission) && portalPermissionAllowedForRole(permission, role));
 }
 
 function manageablePortalPermissionsForActor(actor) {
@@ -5355,7 +5721,8 @@ function getPortalRoles() {
       name: role.name,
       description: role.description || "",
       builtin: Boolean(role.builtin),
-      permissions: parsePortalPermissions(role.permissions),
+      permissions: parsePortalPermissions(role.permissions)
+        .filter((permission) => portalPermissionAllowedForRole(permission, role.id)),
       sortOrder: Number(role.sort_order || 0),
       protected: protectedRole,
       assignable: !protectedRole,
@@ -5454,6 +5821,10 @@ function validatePersonnelAccessProfile(actor, payload, employee = {}) {
   const invalidPermissions = submittedPermissions.filter((permission) => !delegablePortalPermissions.has(permission));
   if (invalidPermissions.length) {
     throw httpError(403, `Diese Rechte dürfen nicht vergeben werden: ${invalidPermissions.join(", ")}`, "PORTAL_PERMISSION_NOT_DELEGABLE");
+  }
+  const roleRestrictedPermissions = submittedPermissions.filter((permission) => !portalPermissionAllowedForRole(permission, role));
+  if (roleRestrictedPermissions.length) {
+    throw portalPermissionRoleRestrictionError(roleRestrictedPermissions);
   }
   const rolePermissions = new Set(getPortalRoles().find((entry) => entry.id === role)?.permissions || []);
   const permissions = submittedPermissions.filter((permission) => !rolePermissions.has(permission));
@@ -5850,7 +6221,15 @@ function excusedTimeForEmployeeDate(employeeNumber, date, locationId, activeSick
     ORDER BY all_day DESC, start_time
   `).all(employeeNumber, date);
   if ((activeSickness || activeSicknessEmployeeNumbers(date)).has(employeeNumber)) {
-    return { excused: true, label: "Krankenstand", options };
+    const credit = sicknessCreditForEmployeeDate(employeeNumber, date);
+    return {
+      excused: true,
+      label: "Krankenstand",
+      options,
+      creditedMinutes: credit.minutes,
+      sicknessCaseId: credit.caseId,
+      valuationVersion: credit.valuationVersion,
+    };
   }
   const allDayOptions = options.filter((option) => Boolean(option.all_day));
   if (allDayOptions.length) {
@@ -5858,10 +6237,11 @@ function excusedTimeForEmployeeDate(employeeNumber, date, locationId, activeSick
       excused: true,
       label: allDayOptions.map((option) => optionLabel(option.option_type)).join(", "),
       options,
+      creditedMinutes: 0,
     };
   }
-  if (isVacationHoliday(date, locationId)) return { excused: true, label: "Feiertag", options: [] };
-  return { excused: false, label: "", options };
+  if (isVacationHoliday(date, locationId)) return { excused: true, label: "Feiertag", options: [], creditedMinutes: 0 };
+  return { excused: false, label: "", options, creditedMinutes: 0 };
 }
 
 function serializeTimeDayReview(row) {
@@ -5968,6 +6348,7 @@ function evaluateTimeDay(employeeNumber, date, now = new Date(), departmentId = 
     entries: entries.map((entry) => [entry.id, entry.department_id, entry.entry_type, entry.entry_timestamp]),
     excused: excused.options.map((option) => [option.option_type, option.all_day, option.start_time, option.end_time]),
     excusedStatus: excused.excused ? excused.label || "excused" : "",
+    excusedCreditedMinutes: Number(excused.creditedMinutes || 0),
     holiday: excused.label === "Feiertag",
     rules: [
       toleranceMinutes,
@@ -6004,6 +6385,7 @@ function evaluateTimeDay(employeeNumber, date, now = new Date(), departmentId = 
     severity,
     issues,
     excused,
+    absenceCreditedMinutes: Number(excused.creditedMinutes || 0),
     pendingCorrection,
     planned,
     actual,
@@ -7540,6 +7922,196 @@ function sicknessCasePayload(row) {
   return parseProtectedJson(row.protected_payload, sicknessCaseProtectionContext(row));
 }
 
+function sicknessCaseEffectiveEnd(payload, asOfDate = viennaTodayIso()) {
+  if (!payload?.startDate) return "";
+  if (payload.status === "recovered" && isIsoDate(payload.returnToWorkDate)) {
+    const finalSicknessDate = addDays(payload.returnToWorkDate, -1);
+    return finalSicknessDate >= payload.startDate ? finalSicknessDate : payload.startDate;
+  }
+  if (isIsoDate(payload.expectedEnd)) return payload.expectedEnd;
+  return isIsoDate(asOfDate) && asOfDate >= payload.startDate ? asOfDate : payload.startDate;
+}
+
+function sicknessContractForEmployee(employeeNumber) {
+  return db.prepare(`
+    SELECT personnel_number, contracted_hours, target_workdays_per_week, preferred_day_off,
+           fixed_workdays, time_confirmation_level, sickness_without_aum_enabled, home_location_id
+    FROM employees WHERE personnel_number = ?
+  `).get(String(employeeNumber || "")) || {
+    personnel_number: String(employeeNumber || ""), contracted_hours: 0, target_workdays_per_week: 5,
+    preferred_day_off: "", fixed_workdays: "", time_confirmation_level: "C",
+    sickness_without_aum_enabled: 0, home_location_id: "",
+  };
+}
+
+function usedSicknessAllowanceCases(employeeNumber, policyYear, excludeCaseId = null) {
+  const rows = db.prepare(`
+    SELECT id, employee_lookup, protected_payload FROM sickness_cases
+    WHERE status_lookup IN (?, ?, ?)
+  `).all(sicknessStatusLookup("reported"), sicknessStatusLookup("aum_received"), sicknessStatusLookup("recovered"));
+  let used = 0;
+  for (const row of rows) {
+    if (excludeCaseId != null && Number(row.id) === Number(excludeCaseId)) continue;
+    let payload;
+    try { payload = sicknessCasePayload(row); } catch { continue; }
+    if (String(payload.employeeNumber || "") !== String(employeeNumber || "")) continue;
+    if (Number(payload.aumAllowance?.policyYear || 0) !== Number(policyYear || 0)) continue;
+    if (payload.aumAllowance?.consumesQuota === true) used += 1;
+  }
+  return used;
+}
+
+function sicknessAllowanceSummary(employeeNumber) {
+  const employee = sicknessContractForEmployee(employeeNumber);
+  const policy = getAmuPolicy().aumAllowance;
+  const policyYear = Number(viennaTodayIso().slice(0, 4));
+  const usedCases = usedSicknessAllowanceCases(employeeNumber, policyYear);
+  const effectiveLevel = effectiveTimeConfirmationLevel(employee.time_confirmation_level);
+  let reason = "eligible";
+  if (!policy.enabled) reason = "policy_disabled";
+  else if (!employee.sickness_without_aum_enabled) reason = "employee_disabled";
+  else if (effectiveLevel !== "A") reason = "trust_level";
+  else if (usedCases >= policy.maxCasesPerYear) reason = "quota_exhausted";
+  return {
+    enabled: policy.enabled,
+    eligible: reason === "eligible",
+    reason,
+    maxCasesPerYear: policy.maxCasesPerYear,
+    maxCalendarDaysPerCase: policy.maxCalendarDaysPerCase,
+    policyYear,
+    usedCases,
+    remainingCases: Math.max(0, policy.maxCasesPerYear - usedCases),
+  };
+}
+
+function sicknessValuationDayContext(employeeNumber, date, locationId) {
+  const weekStart = getMonday(date);
+  const weekEnd = addDays(weekStart, 6);
+  const plannedShift = Boolean(db.prepare(`
+    SELECT 1 FROM shifts WHERE employee_number = ? AND shift_date = ? LIMIT 1
+  `).get(employeeNumber, date));
+  const weekHasPlan = Boolean(db.prepare(`
+    SELECT 1 FROM shifts WHERE employee_number = ? AND shift_date BETWEEN ? AND ? LIMIT 1
+  `).get(employeeNumber, weekStart, weekEnd));
+  return {
+    plannedShift,
+    weekHasPlan,
+    holiday: isVacationHoliday(date, locationId || null),
+  };
+}
+
+function extendSicknessValuationForPayload(payload, employee, effectiveEnd, { legacyBackfill = false } = {}) {
+  if (!payload?.startDate || !effectiveEnd) return payload;
+  let snapshot = payload.timeValuation;
+  if (!snapshot || snapshot.version !== VALUATION_VERSION) {
+    snapshot = createSicknessValuationSnapshot({
+      contractedHours: employee.contracted_hours,
+      targetWorkdays: employee.target_workdays_per_week,
+      fixedWorkdays: parseFixedWorkdays(employee.fixed_workdays),
+      preferredDayOff: employee.preferred_day_off,
+      capturedAt: payload.reportedAt || new Date().toISOString(),
+      legacyBackfill,
+    });
+  }
+  payload.timeValuation = extendSicknessValuationSnapshot(snapshot, {
+    startDate: payload.startDate,
+    endDate: effectiveEnd,
+    dayContext: (date) => sicknessValuationDayContext(payload.employeeNumber, date, payload.locationId || employee.home_location_id),
+  });
+  return payload;
+}
+
+function initializeSicknessCaseRules(payload, { hasAum = false, now = new Date() } = {}) {
+  const employee = sicknessContractForEmployee(payload.employeeNumber);
+  const effectiveEnd = sicknessCaseEffectiveEnd(payload, viennaTodayIso(now));
+  const policy = getAmuPolicy().aumAllowance;
+  const policyYear = Number(String(payload.startDate || "").slice(0, 4));
+  payload.aumAllowance = createAumAllowanceSnapshot({
+    policy,
+    employeeEnabled: Boolean(employee.sickness_without_aum_enabled),
+    trustLevel: effectiveTimeConfirmationLevel(employee.time_confirmation_level),
+    usedCases: usedSicknessAllowanceCases(payload.employeeNumber, policyYear),
+    startDate: payload.startDate,
+    endDate: effectiveEnd,
+    evaluatedAt: now.toISOString(),
+    hasAum,
+  });
+  return extendSicknessValuationForPayload(payload, employee, effectiveEnd);
+}
+
+function reconcileSicknessPayloadRules(payload, now = new Date(), { aumReviewed = false } = {}) {
+  const employee = sicknessContractForEmployee(payload.employeeNumber);
+  const effectiveEnd = sicknessCaseEffectiveEnd(payload, viennaTodayIso(now));
+  extendSicknessValuationForPayload(payload, employee, effectiveEnd, { legacyBackfill: !payload.timeValuation });
+  if (!payload.aumAllowance || payload.aumAllowance.version !== ALLOWANCE_VERSION) {
+    payload.aumAllowance = createAumAllowanceSnapshot({
+      policy: { enabled: false, maxCasesPerYear: getAmuPolicy().aumAllowance.maxCasesPerYear, maxCalendarDaysPerCase: getAmuPolicy().aumAllowance.maxCalendarDaysPerCase },
+      employeeEnabled: false,
+      trustLevel: "C",
+      usedCases: 0,
+      startDate: payload.startDate,
+      endDate: effectiveEnd,
+      evaluatedAt: payload.reportedAt || now.toISOString(),
+      hasAum: Boolean(payload.aumReceivedAt),
+    });
+    if (!payload.aumReceivedAt) payload.aumAllowance.reason = "legacy_case";
+  }
+  payload.aumAllowance = reconcileAumAllowanceSnapshot(payload.aumAllowance, {
+    startDate: payload.startDate,
+    endDate: effectiveEnd,
+    evaluatedAt: now.toISOString(),
+    aumReviewed,
+  });
+  return payload;
+}
+
+function reconcileSicknessCaseRules(row, now = new Date(), { aumReviewed = false, actor = "system" } = {}) {
+  if (!row) return row;
+  const before = sicknessCasePayload(row);
+  const payload = reconcileSicknessPayloadRules(structuredClone(before), now, { aumReviewed });
+  if (JSON.stringify(before) === JSON.stringify(payload)) return row;
+  db.prepare("UPDATE sickness_cases SET protected_payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    .run(protectJson(payload, sicknessCaseProtectionContext(row)), row.id);
+  if (JSON.stringify(before.aumAllowance || null) !== JSON.stringify(payload.aumAllowance || null)) {
+    auditPortal(actor, "sickness.allowance.reconcile", "protected_record",
+      protectedPortalEntityId("sickness-case", row.id), JSON.stringify({
+        requiredBefore: before.aumAllowance?.required !== false,
+        requiredAfter: payload.aumAllowance?.required !== false,
+        reasonBefore: before.aumAllowance?.reason || "legacy",
+        reasonAfter: payload.aumAllowance?.reason || "",
+        quotaReleased: before.aumAllowance?.consumesQuota === true && payload.aumAllowance?.consumesQuota !== true,
+      }));
+  }
+  return sicknessCaseMetadata(row.id);
+}
+
+function sicknessCreditForEmployeeDate(employeeNumber, date) {
+  const rows = db.prepare(`
+    SELECT * FROM sickness_cases WHERE status_lookup IN (?, ?, ?)
+    ORDER BY created_at DESC, id DESC
+  `).all(sicknessStatusLookup("reported"), sicknessStatusLookup("aum_received"), sicknessStatusLookup("recovered"));
+  for (const row of rows) {
+    let payload;
+    try { payload = sicknessCasePayload(row); } catch { continue; }
+    if (String(payload.employeeNumber || "") !== String(employeeNumber || "") || !sicknessCaseCoversDate(row, date)) continue;
+    return {
+      caseId: Number(row.id),
+      minutes: creditedMinutesForDate(payload.timeValuation, date),
+      valuationVersion: payload.timeValuation?.version || "",
+    };
+  }
+  return { caseId: null, minutes: 0, valuationVersion: "" };
+}
+
+function sicknessCreditsForRange(employeeNumber, dateFrom, dateTo) {
+  const credits = [];
+  for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
+    const credit = sicknessCreditForEmployeeDate(employeeNumber, date);
+    if (credit.caseId != null) credits.push({ date, ...credit });
+  }
+  return credits;
+}
+
 function sicknessCaseCoversDate(row, date) {
   if (!row) return false;
   const payload = sicknessCasePayload(row);
@@ -7655,8 +8227,19 @@ function serializeSicknessCases(rows, { includeNote = true } = {}) {
   const alertStatement = db.prepare(`
     SELECT * FROM sickness_alerts WHERE sickness_case_id = ? ORDER BY id
   `);
+  const amuStatusStatement = db.prepare(`
+    SELECT status FROM amu_reports
+    WHERE sickness_case_id = ? AND status NOT IN ('withdrawn','purged')
+    ORDER BY submitted_at DESC, id DESC
+  `);
   return rows.map((row) => {
     const payload = sicknessCasePayload(row);
+    const reportStatuses = amuStatusStatement.all(row.id).map((report) => String(report.status || ""));
+    const amuStatus = reportStatuses.includes("reviewed")
+      ? "reviewed"
+      : reportStatuses.some((status) => ["submitted", "returned"].includes(status)) || payload.status === "aum_received"
+        ? "received"
+        : payload.aumAllowance?.required === false ? "not_required" : "required";
     const alerts = alertStatement.all(row.id).map((alertRow) => {
       const alert = sicknessAlertPayload(alertRow);
       return {
@@ -7688,6 +8271,23 @@ function serializeSicknessCases(rows, { includeNote = true } = {}) {
       expected_end: payload.expectedEnd || "",
       return_to_work_date: payload.returnToWorkDate || "",
       employee_note: includeNote ? (payload.note || "") : "",
+      amu_status: amuStatus,
+      aum_allowance: payload.aumAllowance ? {
+        required: payload.aumAllowance.required !== false,
+        reason: payload.aumAllowance.reason || "",
+        consumes_quota: payload.aumAllowance.consumesQuota === true,
+        calendar_days: Number(payload.aumAllowance.calendarDays || 0),
+        max_calendar_days: Number(payload.aumAllowance.maxCalendarDaysPerCase || 0),
+        remaining_cases_after: Number(payload.aumAllowance.remainingCasesAfter || 0),
+      } : null,
+      sickness_valuation: payload.timeValuation ? {
+        minutes_per_workday: Number(payload.timeValuation.minutesPerWorkday || 0),
+        total_minutes: Number(payload.timeValuation.totalMinutes || 0),
+        credited_dates: (payload.timeValuation.creditedDates || []).map((entry) => ({
+          date: entry.date,
+          minutes: Number(entry.minutes || 0),
+        })),
+      } : null,
       staffing_risk: payload.staffingRisk || { atRisk: false, plannedShiftCount: 0, worstShortfall: 0, slots: [] },
       severity,
       alerts,
@@ -7713,7 +8313,7 @@ function assertSicknessCaseScope(session, row) {
   if (!allowed) throw httpError(403, "Diese Krankmeldung gehört nicht zum eigenen Verantwortungsbereich.", "PORTAL_PERMISSION_DENIED");
 }
 
-function serializeAmuReports(rows) {
+function serializeAmuReports(rows, { includeIdentityCheck = false } = {}) {
   const documents = amuDocumentsForReports(rows.map((row) => row.id));
   return rows.map((row) => {
     const payload = parseProtectedJson(row.protected_payload, amuReportProtectionContext(row));
@@ -7728,6 +8328,14 @@ function serializeAmuReports(rows) {
       review_note: payload.reviewNote || "",
       retention_until: payload.retentionUntil || null,
       withdrawn_at: payload.withdrawnAt || null,
+      identity_check: includeIdentityCheck
+        ? payload.identityCheck || { status: "not_checked", checkedAt: null, engineVersion: null }
+        : undefined,
+      review_mode: payload.automaticReview?.completed === true
+        ? "automatic" : row.status === "reviewed" ? "manual" : "pending",
+      automatic_review: includeIdentityCheck
+        ? payload.automaticReview || null
+        : undefined,
       protected_payload: undefined,
       documents: documents.get(Number(row.id)) || [],
     };
@@ -9296,6 +9904,7 @@ function shiftMetrics(shift, settings) {
 function serializeEmployee(row, options = {}) {
   const serialized = {
     ...row,
+    target_workdays_per_week: normalizeTargetWorkdays(row.target_workdays_per_week),
     fixed_workdays: row.fixed_workdays || "",
     position_id: row.position_id || "verkaufsmitarbeiter",
     position_name: row.position_name || "Verkaufsmitarbeiter",
@@ -9307,8 +9916,10 @@ function serializeEmployee(row, options = {}) {
     preferred_department_id: row.preferred_department_id ? Number(row.preferred_department_id) : null,
     preferred_department_name: row.preferred_department_name || "",
     active: Boolean(row.active),
+    sickness_without_aum_enabled: Boolean(row.sickness_without_aum_enabled),
   };
   if (options.includeTimeConfirmationLevel === false) delete serialized.time_confirmation_level;
+  if (options.includeSicknessAllowance === false) delete serialized.sickness_without_aum_enabled;
   return serialized;
 }
 
@@ -9318,12 +9929,16 @@ function validateEmployee(body, isNew, options = {}) {
   const nickname = String(body.nickname || "").trim();
   const color = /^#[0-9a-f]{6}$/i.test(body.color || "") ? body.color : "#0b84c6";
   const contractedHours = Number(body.contractedHours);
+  const submittedTargetWorkdays = Number(body.targetWorkdaysPerWeek ?? body.target_workdays_per_week ?? 5);
+  const targetWorkdaysPerWeek = normalizeTargetWorkdays(submittedTargetWorkdays);
   const preferredDayOff = String(body.preferredDayOff || "").trim();
   const fixedWorkdays = normalizeFixedWorkdays(body.fixedWorkdays ?? body.fixed_workdays);
   const positionId = String(body.positionId || body.position_id || "verkaufsmitarbeiter").trim() || "verkaufsmitarbeiter";
   const submittedTimeConfirmationLevel = body.timeConfirmationLevel ?? body.time_confirmation_level
     ?? options.defaultTimeConfirmationLevel ?? "C";
   const timeConfirmationLevel = String(submittedTimeConfirmationLevel).trim().toUpperCase();
+  const sicknessWithoutAumEnabled = body.sicknessWithoutAumEnabled === true
+    || body.sickness_without_aum_enabled === true || Number(body.sickness_without_aum_enabled) === 1;
   const allowedPreferredDays = ["", "monday", "tuesday", "wednesday", "thursday", "friday"];
   const homeLocationId = normalizeLocationId(body.homeLocationId || body.home_location_id || "01");
   validateLocationExists(homeLocationId);
@@ -9341,6 +9956,9 @@ function validateEmployee(body, isNew, options = {}) {
   if (!Number.isFinite(contractedHours) || contractedHours < 0 || contractedHours > 80) {
     throw httpError(400, "Die Wochen-Sollzeit muss zwischen 0 und 80 Stunden liegen.");
   }
+  if (!Number.isInteger(submittedTargetWorkdays) || submittedTargetWorkdays < 1 || submittedTargetWorkdays > 6) {
+    throw httpError(400, "Die vertraglichen Soll-Arbeitstage müssen zwischen 1 und 6 liegen.", "EMPLOYEE_TARGET_WORKDAYS_INVALID");
+  }
   if (!allowedPreferredDays.includes(preferredDayOff)) {
     throw httpError(400, "Der bevorzugte freie Tag ist ungültig.");
   }
@@ -9354,10 +9972,12 @@ function validateEmployee(body, isNew, options = {}) {
     nickname,
     color,
     contractedHours,
+    targetWorkdaysPerWeek,
     preferredDayOff: preferredDayOff || null,
     fixedWorkdays: fixedWorkdays.join(","),
     positionId,
     timeConfirmationLevel,
+    sicknessWithoutAumEnabled: sicknessWithoutAumEnabled ? 1 : 0,
     homeLocationId,
     preferredDepartmentId,
     active: body.active === false ? 0 : 1,
@@ -9686,7 +10306,8 @@ function getSchedule(weekValue, contextInput = {}, session = null) {
   const employees = db
     .prepare(`
       SELECT e.personnel_number, e.full_name, e.nickname, e.color, e.contracted_hours,
-             e.preferred_day_off, e.fixed_workdays, e.position_id, e.home_location_id, e.preferred_department_id,
+             e.target_workdays_per_week, e.preferred_day_off, e.fixed_workdays, e.position_id,
+             e.home_location_id, e.preferred_department_id,
              e.active, l.name AS home_location_name, d.name AS preferred_department_name,
              p.name AS position_name
       FROM employees e
@@ -9747,18 +10368,24 @@ function getSchedule(weekValue, contextInput = {}, session = null) {
     soft_pending: true,
   }));
   weekOptions.push(...pendingTimeOff);
+  const sicknessCredits = employees.flatMap((employee) => sicknessCreditsForRange(employee.personnel_number, weekStart, weekEnd)
+    .filter((credit) => !weekOptions.some((option) => option.employee_number === employee.personnel_number
+      && option.option_type === "sick" && credit.date >= option.date_from && credit.date <= option.date_to))
+    .map((credit) => ({ employee_number: employee.personnel_number, ...credit })));
 
   const totals = {};
   const plannedTotals = {};
   const inStoreTotals = {};
   const bonusTotals = {};
   const optionCreditTotals = {};
+  const sicknessCreditTotals = {};
   for (const employee of employees) {
     totals[employee.personnel_number] = 0;
     plannedTotals[employee.personnel_number] = 0;
     inStoreTotals[employee.personnel_number] = 0;
     bonusTotals[employee.personnel_number] = 0;
     optionCreditTotals[employee.personnel_number] = 0;
+    sicknessCreditTotals[employee.personnel_number] = 0;
   }
   for (const shift of shifts) {
     totals[shift.employee_number] =
@@ -9777,6 +10404,13 @@ function getSchedule(weekValue, contextInput = {}, session = null) {
       (optionCreditTotals[option.employee_number] || 0) + option.credited_minutes;
     totals[option.employee_number] =
       (totals[option.employee_number] || 0) + option.credited_minutes;
+  }
+  for (const credit of sicknessCredits) {
+    sicknessCreditTotals[credit.employee_number] =
+      (sicknessCreditTotals[credit.employee_number] || 0) + credit.minutes;
+    optionCreditTotals[credit.employee_number] =
+      (optionCreditTotals[credit.employee_number] || 0) + credit.minutes;
+    totals[credit.employee_number] = (totals[credit.employee_number] || 0) + credit.minutes;
   }
   const saturdayStats = buildSaturdayServiceStats(weekStart, context, employees, shifts, settings);
   const creditedHolidayDates = new Set();
@@ -9827,6 +10461,8 @@ function getSchedule(weekValue, contextInput = {}, session = null) {
     inStoreTotals,
     bonusTotals,
     optionCreditTotals,
+    sicknessCredits,
+    sicknessCreditTotals,
     saturdayStats,
   };
 }
@@ -10860,8 +11496,9 @@ function personnelImportReferenceData(actor = null) {
 
 function employeeImportRow(personnelNumber) {
   return db.prepare(`
-    SELECT personnel_number, full_name, nickname, color, contracted_hours, preferred_day_off,
-           fixed_workdays, position_id, time_confirmation_level, home_location_id,
+    SELECT personnel_number, full_name, nickname, color, contracted_hours, target_workdays_per_week,
+           preferred_day_off, fixed_workdays, position_id, time_confirmation_level,
+           sickness_without_aum_enabled, home_location_id,
            preferred_department_id, active
     FROM employees WHERE personnel_number = ?
   `).get(personnelNumber);
@@ -10869,8 +11506,9 @@ function employeeImportRow(personnelNumber) {
 
 function employeeImportRowsCaseInsensitive(personnelNumber) {
   return db.prepare(`
-    SELECT personnel_number, full_name, nickname, color, contracted_hours, preferred_day_off,
-           fixed_workdays, position_id, time_confirmation_level, home_location_id,
+    SELECT personnel_number, full_name, nickname, color, contracted_hours, target_workdays_per_week,
+           preferred_day_off, fixed_workdays, position_id, time_confirmation_level,
+           sickness_without_aum_enabled, home_location_id,
            preferred_department_id, active
     FROM employees WHERE personnel_number = ? COLLATE NOCASE
     ORDER BY personnel_number
@@ -10881,8 +11519,9 @@ function employeeImportFingerprint(row) {
   if (!row) return "";
   return sha256(JSON.stringify([
     row.personnel_number, row.full_name, row.nickname, row.color, Number(row.contracted_hours),
-    row.preferred_day_off || "", row.fixed_workdays || "", row.position_id || "",
-    row.time_confirmation_level || "C", row.home_location_id || "",
+    normalizeTargetWorkdays(row.target_workdays_per_week), row.preferred_day_off || "",
+    row.fixed_workdays || "", row.position_id || "", row.time_confirmation_level || "C",
+    Number(row.sickness_without_aum_enabled || 0), row.home_location_id || "",
     Number(row.preferred_department_id || 0), Number(row.active || 0),
   ]));
 }
@@ -10913,10 +11552,12 @@ function resolvePersonnelImportCandidate(incoming, mapping, existing, actor) {
     nickname: existing.nickname,
     color: existing.color,
     contractedHours: Number(existing.contracted_hours),
+    targetWorkdaysPerWeek: normalizeTargetWorkdays(existing.target_workdays_per_week),
     preferredDayOff: existing.preferred_day_off || "",
     fixedWorkdays: String(existing.fixed_workdays || "").split(",").filter(Boolean),
     positionId: existing.position_id,
     timeConfirmationLevel: existing.time_confirmation_level || "C",
+    sicknessWithoutAumEnabled: Boolean(existing.sickness_without_aum_enabled),
     homeLocationId: existing.home_location_id,
     preferredDepartmentId: existing.preferred_department_id || "",
     active: Boolean(existing.active),
@@ -10926,10 +11567,12 @@ function resolvePersonnelImportCandidate(incoming, mapping, existing, actor) {
     nickname: incoming.nickname,
     color: incoming.color,
     contractedHours: incoming.contractedHours,
+    targetWorkdaysPerWeek: 5,
     preferredDayOff: incoming.preferredDayOff,
     fixedWorkdays: incoming.fixedWorkdays,
     positionId: incoming.positionId,
     timeConfirmationLevel: "C",
+    sicknessWithoutAumEnabled: false,
     homeLocationId: incoming.homeLocationId,
     preferredDepartmentId: incoming.preferredDepartmentId,
     active: incoming.active,
@@ -11038,10 +11681,12 @@ function personnelImportPreview(actor, inspection, body = {}) {
           nickname: candidate.nickname,
           color: candidate.color,
           contracted_hours: candidate.contractedHours,
+          target_workdays_per_week: candidate.targetWorkdaysPerWeek,
           preferred_day_off: candidate.preferredDayOff,
           fixed_workdays: candidate.fixedWorkdays,
           position_id: candidate.positionId,
           time_confirmation_level: candidate.timeConfirmationLevel,
+          sickness_without_aum_enabled: candidate.sicknessWithoutAumEnabled,
           home_location_id: candidate.homeLocationId,
           preferred_department_id: candidate.preferredDepartmentId,
           active: candidate.active,
@@ -11119,13 +11764,15 @@ function applyPersonnelImport(actor, preview) {
   if (preview.summary.errors) throw httpError(422, "Der Import enth\u00e4lt noch fehlerhafte Zeilen.", "IMPORT_HAS_ERRORS");
   const createEmployee = db.prepare(`
     INSERT INTO employees
-      (personnel_number, full_name, nickname, color, contracted_hours, preferred_day_off, fixed_workdays,
-       position_id, time_confirmation_level, home_location_id, preferred_department_id, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (personnel_number, full_name, nickname, color, contracted_hours, target_workdays_per_week,
+       preferred_day_off, fixed_workdays, position_id, time_confirmation_level, sickness_without_aum_enabled,
+       home_location_id, preferred_department_id, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const updateEmployee = db.prepare(`
-    UPDATE employees SET full_name = ?, nickname = ?, color = ?, contracted_hours = ?, preferred_day_off = ?,
-      fixed_workdays = ?, position_id = ?, time_confirmation_level = ?, home_location_id = ?, preferred_department_id = ?, active = ?
+    UPDATE employees SET full_name = ?, nickname = ?, color = ?, contracted_hours = ?, target_workdays_per_week = ?,
+      preferred_day_off = ?, fixed_workdays = ?, position_id = ?, time_confirmation_level = ?,
+      sickness_without_aum_enabled = ?, home_location_id = ?, preferred_department_id = ?, active = ?
     WHERE personnel_number = ?
   `);
   const runId = crypto.randomUUID();
@@ -11151,12 +11798,14 @@ function applyPersonnelImport(actor, preview) {
       assertSessionContextScope(actor, { locationId: validated.homeLocationId, departmentId: validated.preferredDepartmentId });
       if (row.action === "create") {
         createEmployee.run(validated.personnelNumber, validated.fullName, validated.nickname, validated.color,
-          validated.contractedHours, validated.preferredDayOff, validated.fixedWorkdays, validated.positionId,
-          validated.timeConfirmationLevel, validated.homeLocationId, validated.preferredDepartmentId, validated.active);
+          validated.contractedHours, validated.targetWorkdaysPerWeek, validated.preferredDayOff, validated.fixedWorkdays,
+          validated.positionId, validated.timeConfirmationLevel, validated.sicknessWithoutAumEnabled,
+          validated.homeLocationId, validated.preferredDepartmentId, validated.active);
       } else {
         updateEmployee.run(validated.fullName, validated.nickname, validated.color, validated.contractedHours,
-          validated.preferredDayOff, validated.fixedWorkdays, validated.positionId, validated.timeConfirmationLevel,
-          validated.homeLocationId, validated.preferredDepartmentId, validated.active, validated.personnelNumber);
+          validated.targetWorkdaysPerWeek, validated.preferredDayOff, validated.fixedWorkdays, validated.positionId,
+          validated.timeConfirmationLevel, validated.sicknessWithoutAumEnabled, validated.homeLocationId,
+          validated.preferredDepartmentId, validated.active, validated.personnelNumber);
       }
     }
     insertIntegrationRun({
@@ -11246,10 +11895,12 @@ function payrollAbsencesForDay(employee, date, locationId, activeSickness = null
     };
   });
   const weekDay = new Date(`${date}T12:00:00Z`).getUTCDay();
-  if (weekDay >= 1 && weekDay <= 5 && (activeSickness || activeSicknessEmployeeNumbers(date)).has(employeeNumber) && !absences.some((absence) => absence.internalCode === "sickness")) {
+  const sicknessCredit = sicknessCreditForEmployeeDate(employeeNumber, date);
+  if (sicknessCredit.minutes > 0 && (activeSickness || activeSicknessEmployeeNumbers(date)).has(employeeNumber)
+    && !absences.some((absence) => absence.internalCode === "sickness")) {
     absences.push({
-      internalCode: "sickness", referenceType: "sickness_case", referenceId: null,
-      quantityMinutes: Math.round((Number(employee.contracted_hours || 0) * 60) / 5), quantityDays: 1,
+      internalCode: "sickness", referenceType: "sickness_case", referenceId: sicknessCredit.caseId,
+      quantityMinutes: sicknessCredit.minutes, quantityDays: 1,
       unit: "days", allDay: true, startTime: "", endTime: "",
     });
   }
@@ -11272,7 +11923,8 @@ function payrollAbsencesForDay(employee, date, locationId, activeSickness = null
 
 function payrollEmployeesForContext(context, dateFrom, dateTo) {
   const employees = db.prepare(`
-    SELECT e.personnel_number, e.full_name, e.contracted_hours, e.home_location_id, e.preferred_department_id, e.active
+    SELECT e.personnel_number, e.full_name, e.contracted_hours, e.target_workdays_per_week,
+           e.home_location_id, e.preferred_department_id, e.active
     FROM employees e
     WHERE (e.active = 1 AND e.home_location_id = ?)
        OR EXISTS (
@@ -12739,6 +13391,24 @@ function importedDatabaseHasColumn(importedDatabase, tableName, columnName) {
 function verifyImportedProtectedPersonnelPayloads(importedDatabase) {
   const storage = requireAmuStorage();
   let verified = 0;
+  if (importedDatabaseHasColumn(importedDatabase, "personnel_sensitive_records", "protected_payload")) {
+    const profiles = importedDatabase.prepare(`
+      SELECT employee_number, protected_payload
+      FROM personnel_sensitive_records
+      ORDER BY employee_number
+    `).all();
+    for (const profile of profiles) {
+      if (!profile.protected_payload) throw new Error("missing protected personnel profile payload");
+      const payload = storage.unprotectRecord(
+        profile.protected_payload,
+        personnelSensitiveProtectionContext(profile),
+        { allowLegacy: true },
+      );
+      const parsed = JSON.parse(payload);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected personnel profile payload");
+      verified += 1;
+    }
+  }
   if (importedDatabaseHasColumn(importedDatabase, "amu_reports", "protected_payload")) {
     const reports = importedDatabase.prepare(`
       SELECT id, employee_lookup, protected_payload
@@ -12921,7 +13591,7 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   }
   if (importedProtectedPayloadError) {
     fs.rmSync(importPath, { force: true });
-    throw httpError(409, "Die geschützten Personalakt-Daten dieses Backups gehören zu einem anderen Schlüsselsatz. Bitte die vollständige Datenbank- und AUM-Sicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
+    throw httpError(409, "Die geschützten Personalakt-Daten dieses Backups gehören zu einem anderen Schlüsselsatz. Bitte die vollständige Datenbank und die zugehörige private Datensicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
   }
   if (importedIntegrationCredentialError) {
     fs.rmSync(importPath, { force: true });
@@ -13171,7 +13841,8 @@ app.get("/api/employees", (request, response) => {
   let employees = db
       .prepare(`
         SELECT e.personnel_number, e.full_name, e.nickname, e.color, e.contracted_hours,
-               e.preferred_day_off, e.fixed_workdays, e.position_id, e.time_confirmation_level,
+               e.target_workdays_per_week, e.preferred_day_off, e.fixed_workdays, e.position_id,
+               e.time_confirmation_level, e.sickness_without_aum_enabled,
                e.home_location_id, e.preferred_department_id,
                e.active, l.name AS home_location_name, d.name AS preferred_department_name,
                p.name AS position_name
@@ -13184,6 +13855,7 @@ app.get("/api/employees", (request, response) => {
       .all().map((row) => ({
         ...serializeEmployee(row, {
           includeTimeConfirmationLevel: sessionCanViewTimeConfirmationLevel(session),
+          includeSicknessAllowance: sessionCanManageTimeConfirmationLevel(session),
         }),
         portal_access: portalAccessProfileForEmployee(row.personnel_number),
       }));
@@ -13199,26 +13871,32 @@ app.get("/api/employees", (request, response) => {
 app.post("/api/employees", (request, response) => {
   const employee = validateEmployee(request.body, true);
   const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
-  if (!canManageTimeConfirmationLevel) employee.timeConfirmationLevel = "C";
+  if (!canManageTimeConfirmationLevel) {
+    employee.timeConfirmationLevel = "C";
+    employee.sicknessWithoutAumEnabled = 0;
+  }
   assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
   const accessProfile = validatePersonnelAccessProfile(request.portalSession, request.body.accessProfile, employee);
   db.exec("BEGIN");
   try {
     db.prepare(`
       INSERT INTO employees
-        (personnel_number, full_name, nickname, color, contracted_hours, preferred_day_off, fixed_workdays,
-         position_id, time_confirmation_level, home_location_id, preferred_department_id, active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (personnel_number, full_name, nickname, color, contracted_hours, target_workdays_per_week,
+         preferred_day_off, fixed_workdays, position_id, time_confirmation_level, sickness_without_aum_enabled,
+         home_location_id, preferred_department_id, active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       employee.personnelNumber,
       employee.fullName,
       employee.nickname,
       employee.color,
       employee.contractedHours,
+      employee.targetWorkdaysPerWeek,
       employee.preferredDayOff,
       employee.fixedWorkdays,
       employee.positionId,
       employee.timeConfirmationLevel,
+      employee.sicknessWithoutAumEnabled,
       employee.homeLocationId,
       employee.preferredDepartmentId,
       employee.active,
@@ -13237,20 +13915,31 @@ app.post("/api/employees", (request, response) => {
     active: Boolean(employee.active),
     portal_access: portalAccessProfileForEmployee(employee.personnelNumber),
   };
-  if (!canManageTimeConfirmationLevel) delete responseEmployee.timeConfirmationLevel;
+  if (!canManageTimeConfirmationLevel) {
+    delete responseEmployee.timeConfirmationLevel;
+    delete responseEmployee.sicknessWithoutAumEnabled;
+  }
   response.status(201).json(responseEmployee);
 });
 
 app.put("/api/employees/:personnelNumber", (request, response) => {
   const personnelNumber = request.params.personnelNumber;
   assertSessionEmployeeScope(request.portalSession, personnelNumber);
-  const existing = db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = ?").get(personnelNumber);
+  const existing = db.prepare(`
+    SELECT time_confirmation_level, sickness_without_aum_enabled, target_workdays_per_week
+    FROM employees WHERE personnel_number = ?
+  `).get(personnelNumber);
   if (!existing) throw httpError(404, "Die Person wurde nicht gefunden.");
   const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
   const employee = validateEmployee({
     ...request.body,
     personnelNumber,
+    targetWorkdaysPerWeek: request.body.targetWorkdaysPerWeek ?? request.body.target_workdays_per_week
+      ?? existing.target_workdays_per_week ?? 5,
     ...(canManageTimeConfirmationLevel ? {} : { timeConfirmationLevel: existing.time_confirmation_level || "C" }),
+    ...((canManageTimeConfirmationLevel && (Object.hasOwn(request.body, "sicknessWithoutAumEnabled")
+      || Object.hasOwn(request.body, "sickness_without_aum_enabled")))
+      ? {} : { sicknessWithoutAumEnabled: Boolean(existing.sickness_without_aum_enabled) }),
   }, false, { defaultTimeConfirmationLevel: existing.time_confirmation_level || "C" });
   assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
   const accessProfile = validatePersonnelAccessProfile(request.portalSession, request.body.accessProfile, {
@@ -13261,18 +13950,21 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
   try {
     const result = db.prepare(`
       UPDATE employees
-      SET full_name = ?, nickname = ?, color = ?, contracted_hours = ?, preferred_day_off = ?, fixed_workdays = ?,
-          position_id = ?, time_confirmation_level = ?, home_location_id = ?, preferred_department_id = ?, active = ?
+      SET full_name = ?, nickname = ?, color = ?, contracted_hours = ?, target_workdays_per_week = ?,
+          preferred_day_off = ?, fixed_workdays = ?, position_id = ?, time_confirmation_level = ?,
+          sickness_without_aum_enabled = ?, home_location_id = ?, preferred_department_id = ?, active = ?
       WHERE personnel_number = ?
     `).run(
       employee.fullName,
       employee.nickname,
       employee.color,
       employee.contractedHours,
+      employee.targetWorkdaysPerWeek,
       employee.preferredDayOff,
       employee.fixedWorkdays,
       employee.positionId,
       employee.timeConfirmationLevel,
+      employee.sicknessWithoutAumEnabled,
       employee.homeLocationId,
       employee.preferredDepartmentId,
       employee.active,
@@ -13289,6 +13981,10 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
     JSON.stringify({
       timeConfirmationLevelBefore: existing.time_confirmation_level || "C",
       timeConfirmationLevelAfter: employee.timeConfirmationLevel,
+      targetWorkdaysBefore: normalizeTargetWorkdays(existing.target_workdays_per_week),
+      targetWorkdaysAfter: employee.targetWorkdaysPerWeek,
+      sicknessWithoutAumBefore: Boolean(existing.sickness_without_aum_enabled),
+      sicknessWithoutAumAfter: Boolean(employee.sicknessWithoutAumEnabled),
     }));
   const responseEmployee = {
     ...employee,
@@ -13296,7 +13992,10 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
     active: Boolean(employee.active),
     portal_access: portalAccessProfileForEmployee(personnelNumber),
   };
-  if (!canManageTimeConfirmationLevel) delete responseEmployee.timeConfirmationLevel;
+  if (!canManageTimeConfirmationLevel) {
+    delete responseEmployee.timeConfirmationLevel;
+    delete responseEmployee.sicknessWithoutAumEnabled;
+  }
   response.json(responseEmployee);
 });
 
@@ -13949,7 +14648,9 @@ function rightsDashboardProcesses() {
           { label: "Lokaler Hinweis", value: `nach ${amuPolicy.localWarningDays} Tag(en)`, tone: "attention" },
           { label: "PL-Eskalation", value: `nach ${amuPolicy.hrWarningDays} Tag(en)`, tone: "critical" },
           { label: "Lokale OCR", value: amuPolicy.ocrEnabled ? "Aktiv" : "Deaktiviert", tone: amuPolicy.ocrEnabled ? "positive" : "neutral" },
-          { label: "Dateizugriff Leitung", value: amuPolicy.managerFileAccess ? "Freigegeben" : "Nur Personalleitung", tone: amuPolicy.managerFileAccess ? "attention" : "positive" },
+          { label: "Stufe A ohne AUM", value: amuPolicy.aumAllowance.enabled ? `${amuPolicy.aumAllowance.maxCasesPerYear} Fall/Fälle · max. ${amuPolicy.aumAllowance.maxCalendarDaysPerCase} Tag(e)` : "Deaktiviert", tone: amuPolicy.aumAllowance.enabled ? "positive" : "neutral" },
+          { label: "Sichere Auto-Prüfung", value: amuPolicy.autoReviewTrustA ? "Stufe A aktiv" : "Deaktiviert", tone: amuPolicy.autoReviewTrustA ? "positive" : "neutral" },
+          { label: "AUM-Dateizugriff", value: "PL+ mit Zusatzrecht", tone: "positive" },
         ],
         simulations: [
           { id: "current", label: "Aktuelle Konfiguration", description: "Zeigt Krankmeldung, optionale Nachreichung und fachliche Prüfung.", stepStates: {} },
@@ -13959,10 +14660,11 @@ function rightsDashboardProcesses() {
         steps: [
           { id: "report", title: "Krank melden", actor: "Teammitglied", type: "actor", state: "active", description: "Der Krankenstand wird mit Startdatum gemeldet; eine vorhandene AUM kann sofort mitgesendet werden.", setting: "Die Meldung ist unabhängig vom aktuellen Arbeitsort möglich.", permissions: ["own_sickness:create"] },
           { id: "staffing", title: "Besetzung und Hinweise prüfen", actor: "Grabenplaner", type: "system", state: "active", description: "Die Person wird als nicht einsetzbar berücksichtigt; bei gefährdeter Mindestbesetzung können geschützte Warnungen entstehen.", setting: `Lokale Warnung nach ${amuPolicy.localWarningDays}, PL-Eskalation nach ${amuPolicy.hrWarningDays} Tag(en).`, permissions: ["sickness:read", "notifications:settings"] },
+          { id: "allowance", title: "AUM-Pflicht und Krankenstandszeit bewerten", actor: "Grabenplaner", type: "decision", state: amuPolicy.aumAllowance.enabled ? "conditional" : "bypassed", description: amuPolicy.aumAllowance.enabled ? "Für persönlich freigeschaltete Teammitglieder der Stufe A werden Jahreskontingent und Höchstdauer geprüft. Die Vertragswerte werden am Fall gespeichert." : "Ohne aktivierte Stufe-A-Regel ist eine AUM nach der allgemeinen Unternehmensregel erforderlich.", setting: amuPolicy.aumAllowance.enabled ? `Maximal ${amuPolicy.aumAllowance.maxCasesPerYear} Fall/Fälle pro Jahr und ${amuPolicy.aumAllowance.maxCalendarDaysPerCase} Kalendertag(e) je Fall.` : "Stufe-A-Kontingent ist deaktiviert.", permissions: [], settingsTarget: { tab: "access", label: "AUM-Einstellungen öffnen" } },
           { id: "document", title: "AUM direkt oder später nachreichen", actor: "Teammitglied", type: "actor", state: "conditional", description: "Foto oder PDF kann bei der Krankmeldung oder nachträglich sicher hochgeladen werden; ein offenes Enddatum ist zulässig.", setting: `Upload bis ${amuPolicy.uploadMaxMb} MB, Speicherung bis ${amuPolicy.storedMaxMb} MB.`, permissions: ["own_amu:create"], settingsTarget: { tab: "access", label: "AUM-Einstellungen öffnen" } },
           { id: "ocr", title: "Datumswerte lokal erkennen", actor: "Grabenplaner", type: "system", state: amuPolicy.ocrEnabled ? "active" : "bypassed", description: amuPolicy.ocrEnabled ? "Die lokale OCR schlägt Beginn und Ende zur menschlichen Bestätigung vor." : "Die lokale OCR ist deaktiviert; Datumswerte werden manuell bestätigt.", setting: amuPolicy.ocrEnabled ? "OCR erstellt nur bearbeitbare Vorschläge." : "Keine automatische Datenerkennung.", permissions: [], settingsTarget: { tab: "access", label: "AUM-Einstellungen öffnen" } },
           { id: "secure_storage", title: "Dokument geschützt speichern", actor: "Grabenplaner", type: "system", state: "active", description: "AUM-Dokumente und Personalakt werden getrennt verschlüsselt gespeichert und revisionsfähig zugeordnet.", setting: amuPolicy.grayscaleImages ? "Bilder werden platzsparend in Graustufen verarbeitet." : "Farbinformationen bleiben erhalten.", permissions: [] },
-          { id: "review", title: "Fall fachlich prüfen", actor: "Personalleitung", type: "approval", state: "active", description: amuPolicy.managerFileAccess ? "Berechtigte Leitungen können zusätzlich die freigegebenen Dokumente einsehen." : "Filial- und Abteilungsleitung sehen den Fallstatus, aber nicht das AUM-Dokument.", setting: amuPolicy.managerFileAccess ? "Dokumentzugriff für berechtigte Leitung aktiv." : "AUM-Datei bleibt auf Personalleitung und höhere Rechte begrenzt.", permissions: ["amu:metadata:read", "amu:file:read", "amu:review"], settingsTarget: { tab: "access", label: "AUM-Einstellungen öffnen" } },
+          { id: "review", title: "Automatisch oder fachlich prüfen", actor: amuPolicy.autoReviewTrustA ? "Grabenplaner / Personalleitung" : "Personalleitung", type: "approval", state: amuPolicy.autoReviewTrustA ? "conditional" : "active", description: amuPolicy.autoReviewTrustA ? "Nur ein vollständig bestätigter Stufe-A-Fall mit exaktem SV- und Datumsabgleich sowie sauberer Datei wird automatisch erledigt. Jeder unsichere Fall bleibt zur PL-Prüfung offen." : "Filial- und Abteilungsleitung sehen ausschließlich Zeitraum, Status und Planungswirkung. Das Dokument bleibt geschützten PL+-Rollen mit ausdrücklichem Leserecht vorbehalten.", setting: amuPolicy.autoReviewTrustA ? "Automatische Prüfung ist aktiv; die manuelle Rückfallebene bleibt erhalten." : "AUM-Dateizugriff ist nicht an lokale Leitungen delegierbar.", permissions: ["amu:metadata:read", "amu:file:read", "amu:review"], settingsTarget: { tab: "access", label: "AUM-Einstellungen öffnen" } },
           { id: "completion", title: "Arbeitsfähigkeit abschließen", actor: "Teammitglied oder Personalleitung", type: "finish", state: "active", description: "Ein bestätigtes Enddatum oder eine Rückkehrmeldung beendet die Nichtverfügbarkeit nachvollziehbar.", setting: "Ohne Enddatum bleibt der Krankenstandsfall offen.", permissions: ["own_sickness:read"] },
         ],
       }),
@@ -14383,6 +15085,10 @@ app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
   if (invalid.length) {
     throw httpError(403, `Diese Rechte dürfen durch den aktuellen Zugang nicht vergeben werden: ${invalid.join(", ")}`, "PORTAL_PERMISSION_NOT_DELEGABLE");
   }
+  const roleRestricted = submitted.filter((permission) => !portalPermissionAllowedForRole(permission, target.role));
+  if (roleRestricted.length) {
+    throw portalPermissionRoleRestrictionError(roleRestricted);
+  }
   const before = portalPermissionGrantsForEmployee(employeeNumber);
   db.exec("BEGIN");
   try {
@@ -14671,7 +15377,12 @@ app.post("/api/portal/v1/me/sickness-notification-preferences/verification/confi
 
 app.get("/api/portal/v1/me/sickness-cases", (request, response) => {
   const session = requirePortalSession(request, "own_sickness:read");
-  response.json({ cases: ownSicknessCases(session.employeeNumber), policy: getAmuPolicy() });
+  runSicknessEscalationSweep();
+  response.json({
+    cases: ownSicknessCases(session.employeeNumber),
+    policy: getAmuPolicy(),
+    aumAllowance: sicknessAllowanceSummary(session.employeeNumber),
+  });
 });
 
 app.post("/api/portal/v1/me/sickness-cases", (request, response) => {
@@ -14681,8 +15392,8 @@ app.post("/api/portal/v1/me/sickness-cases", (request, response) => {
   const expectedEnd = String(request.body.expectedEnd || "");
   const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
   const today = viennaTodayIso();
-  if (!isIsoDate(startDate) || startDate > today || startDate < addDays(today, -365)) {
-    throw httpError(400, "Bitte ein gültiges Beginn-Datum bis einschließlich heute eingeben.", "SICKNESS_DATE_INVALID");
+  if (!isIsoDate(startDate) || startDate > today || startDate < addDays(today, -5)) {
+    throw httpError(400, "Der Beginn der Krankmeldung darf heute oder höchstens fünf Tage zurückliegen.", "SICKNESS_DATE_INVALID");
   }
   if (expectedEnd && (!isIsoDate(expectedEnd) || expectedEnd < startDate || expectedEnd > addDays(startDate, 365))) {
     throw httpError(400, "Das voraussichtliche Ende muss am oder nach dem Beginn liegen.", "SICKNESS_DATE_INVALID");
@@ -14715,7 +15426,7 @@ app.post("/api/portal/v1/me/sickness-cases", (request, response) => {
       VALUES (?, ?, '', ?)
     `).run(employeeLookup, sicknessStatusLookup("reported"), purgeAfter);
     caseId = Number(result.lastInsertRowid);
-    const protectedPayload = protectJson({
+    const sicknessPayload = initializeSicknessCaseRules({
       startDate,
       expectedEnd,
       note,
@@ -14731,7 +15442,9 @@ app.post("/api/portal/v1/me/sickness-cases", (request, response) => {
       localDeadlineDate: deadlines.localDeadlineDate,
       hrDeadlineDate: deadlines.hrDeadlineDate,
       staffingRisk,
-    }, sicknessCaseProtectionContext({ id: caseId, employee_lookup: employeeLookup }));
+    }, { hasAum: false, now: new Date(reportedAt) });
+    const protectedPayload = protectJson(sicknessPayload,
+      sicknessCaseProtectionContext({ id: caseId, employee_lookup: employeeLookup }));
     db.prepare("UPDATE sickness_cases SET protected_payload = ? WHERE id = ?").run(protectedPayload, caseId);
     db.exec("COMMIT");
   } catch (error) {
@@ -14751,8 +15464,15 @@ app.post("/api/portal/v1/me/sickness-cases", (request, response) => {
     });
     if (riskAlert.created) queueExternalStaffingAlerts(row, riskRecipients, reportedAt);
   }
+  const createdPayload = sicknessCasePayload(row);
   auditPortal(`protected:${sicknessEmployeeLookup(session.employeeNumber)}`, "protected.record.create", "protected_record",
-    protectedPortalEntityId("sickness-case", caseId), JSON.stringify({ staffingRisk: staffingRisk.atRisk, plannedShiftCount: staffingRisk.plannedShiftCount }));
+    protectedPortalEntityId("sickness-case", caseId), JSON.stringify({
+      staffingRisk: staffingRisk.atRisk,
+      plannedShiftCount: staffingRisk.plannedShiftCount,
+      aumRequired: createdPayload.aumAllowance?.required !== false,
+      allowanceConsumed: createdPayload.aumAllowance?.consumesQuota === true,
+      creditedSicknessMinutes: Number(createdPayload.timeValuation?.totalMinutes || 0),
+    }));
   runSicknessEscalationSweep();
   response.status(201).json({ case: serializeSicknessCases([sicknessCaseMetadata(caseId)])[0] });
 });
@@ -14804,6 +15524,7 @@ app.post("/api/portal/v1/me/sickness-cases/:id/return-to-work", (request, respon
   payload.returnToWorkDate = returnDate;
   payload.closedAt = closedAt;
   payload.retentionUntil = retentionUntil;
+  reconcileSicknessPayloadRules(payload, new Date(closedAt));
   db.exec("BEGIN IMMEDIATE");
   try {
     const result = db.prepare(`
@@ -14841,7 +15562,7 @@ app.get("/api/portal/v1/sickness-cases", (request, response) => {
     if (sicknessCasePayload(row).status === "withdrawn") return false;
     try { assertSicknessCaseScope(session, row); return true; } catch { return false; }
   });
-  const cases = serializeSicknessCases(rows);
+  const cases = serializeSicknessCases(rows, { includeNote: actorCanReadAmuSensitiveMetadata(session) });
   response.json({
     cases,
     pendingCount: cases.filter((entry) => entry.status === "reported" || ["yellow", "red", "warning"].includes(entry.severity)).length,
@@ -14881,10 +15602,13 @@ app.put("/api/portal/v1/amu-settings", (request, response) => {
     amu_stored_max_mb: String(policy.storedMaxMb),
     amu_convert_images_to_pdf: policy.convertImagesToPdf ? "1" : "0",
     amu_grayscale_images: policy.grayscaleImages ? "1" : "0",
-    amu_manager_file_access: policy.managerFileAccess ? "1" : "0",
     amu_ocr_enabled: policy.ocrEnabled ? "1" : "0",
     sickness_local_warning_days: String(policy.localWarningDays),
     sickness_hr_warning_days: String(policy.hrWarningDays),
+    sickness_aum_allowance_enabled: policy.aumAllowance.enabled ? "1" : "0",
+    sickness_aum_allowance_max_cases: String(policy.aumAllowance.maxCasesPerYear),
+    sickness_aum_allowance_max_days: String(policy.aumAllowance.maxCalendarDaysPerCase),
+    amu_auto_review_trust_a_enabled: policy.autoReviewTrustA ? "1" : "0",
   };
   const upsert = db.prepare(`
     INSERT INTO portal_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -14904,7 +15628,7 @@ app.put("/api/portal/v1/amu-settings", (request, response) => {
 });
 
 app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) => {
-  const session = requirePortalAdminOrLocal(request, "amu:metadata:read");
+  const { session, access } = requirePersonnelRecordSession(request);
   const employeeNumber = String(request.params.employeeNumber || "").trim();
   assertSessionEmployeeScope(session, employeeNumber);
   const employee = db.prepare(`
@@ -14915,30 +15639,106 @@ app.get("/api/portal/v1/personnel-records/:employeeNumber", (request, response) 
     WHERE e.personnel_number = ?
   `).get(employeeNumber);
   if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
-  let reports = db.prepare(`
-    SELECT r.*, e.full_name, e.nickname, e.color, e.preferred_department_id,
-           l.name AS location_name, d.name AS department_name
-    FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
-    JOIN locations l ON l.id = r.location_id LEFT JOIN departments d ON d.id = r.department_id
-    WHERE r.employee_number = ? AND r.status <> 'purged'
-    ORDER BY r.submitted_at DESC, r.id DESC
-  `).all(employeeNumber);
-  reports = reports.filter((report) => sessionCanAccessAmuReport(session, report));
-  const serialized = serializeAmuReports(reports)
-    .sort((left, right) => String(right.incapacity_from).localeCompare(String(left.incapacity_from)) || Number(right.id) - Number(left.id));
-  const canOpenFiles = actorCanReadAmuFiles(session);
-  if (!canOpenFiles) {
-    for (const report of serialized) {
-      report.employee_note = "";
-      report.review_note = "";
-      report.documents = report.documents.map(({ id, detected_mime, size, byte_size, scan_status, status, created_at }, index) => ({
-        id, original_name: `Dokument ${index + 1}`, original_filename: `Dokument ${index + 1}`, detected_mime, size, byte_size,
-        scan_status, status, created_at, content_access: false,
-      }));
+  const protectedProfile = access.canReadPhone || access.canReadSensitive
+    ? personnelSensitiveProfile(employeeNumber) : emptyPersonnelSensitiveProfile();
+  let serialized = [];
+  if (access.canReadAmu) {
+    let reports = db.prepare(`
+      SELECT r.*, e.full_name, e.nickname, e.color, e.preferred_department_id,
+             l.name AS location_name, d.name AS department_name
+      FROM amu_reports r JOIN employees e ON e.personnel_number = r.employee_number
+      JOIN locations l ON l.id = r.location_id LEFT JOIN departments d ON d.id = r.department_id
+      WHERE r.employee_number = ? AND r.status <> 'purged'
+      ORDER BY r.submitted_at DESC, r.id DESC
+    `).all(employeeNumber);
+    reports = reports.filter((report) => sessionCanAccessAmuReport(session, report));
+    serialized = serializeAmuReports(reports, { includeIdentityCheck: access.canReadSensitive })
+      .sort((left, right) => String(right.incapacity_from).localeCompare(String(left.incapacity_from)) || Number(right.id) - Number(left.id));
+    if (!access.canOpenFiles) {
+      for (const report of serialized) {
+        report.employee_note = "";
+        report.review_note = "";
+        report.documents = report.documents.map(({ id, detected_mime, size, byte_size, scan_status, status, created_at }, index) => ({
+          id, original_name: `Dokument ${index + 1}`, original_filename: `Dokument ${index + 1}`, detected_mime, size, byte_size,
+          scan_status, status, created_at, content_access: false,
+        }));
+      }
     }
   }
-  auditPortal(session.employeeNumber, "personnel-record.view", "employee", employeeNumber, `entries=${serialized.length}`);
-  response.json({ employee, reports: serialized, canOpenFiles });
+  const sections = [access.canReadPhone ? "phone" : "", access.canReadSensitive ? "sensitive" : "", access.canReadAmu ? "amu" : ""].filter(Boolean);
+  auditPortal(session.employeeNumber, "personnel-record.view", "employee", employeeNumber,
+    JSON.stringify({ sections, amuEntries: serialized.length }));
+  response.json({
+    employee,
+    profile: {
+      phone: access.canReadPhone ? protectedProfile.phone : null,
+      sensitive: access.canReadSensitive ? {
+        socialSecurityNumber: protectedProfile.socialSecurityNumber,
+        iban: protectedProfile.iban,
+        bic: protectedProfile.bic,
+        accountHolder: protectedProfile.accountHolder,
+        address: protectedProfile.address,
+      } : null,
+    },
+    reports: serialized,
+    access,
+    canOpenFiles: access.canOpenFiles,
+  });
+});
+
+app.put("/api/portal/v1/personnel-records/:employeeNumber", (request, response) => {
+  const { session, access } = requirePersonnelRecordSession(request, { write: true });
+  const employeeNumber = String(request.params.employeeNumber || "").trim();
+  assertSessionEmployeeScope(session, employeeNumber);
+  const employee = db.prepare("SELECT personnel_number FROM employees WHERE personnel_number = ?").get(employeeNumber);
+  if (!employee) throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
+  const hasSensitiveInput = Object.prototype.hasOwnProperty.call(request.body || {}, "sensitive");
+  const hasPhoneInput = Object.prototype.hasOwnProperty.call(request.body || {}, "phone");
+  if (!hasSensitiveInput && !hasPhoneInput) {
+    throw httpError(400, "Es wurden keine Personalakt-Daten übermittelt.", "PERSONNEL_RECORD_INPUT_REQUIRED");
+  }
+  if (hasSensitiveInput && !access.canWriteSensitive) {
+    throw httpError(403, "Sensible MA-Daten dürfen mit diesem Zugang nicht bearbeitet werden.", "PERSONNEL_SENSITIVE_WRITE_DENIED");
+  }
+  if (hasPhoneInput && !access.canWritePhone) {
+    const message = access.phoneWriteRequiresTrustA
+      ? "Telefonnummern dürfen durch Leitungen nur mit Vertrauensstufe A und ausdrücklich vergebenem Schreibrecht geändert werden."
+      : "Die Telefonnummer darf mit diesem Zugang nicht bearbeitet werden.";
+    throw httpError(403, message, "PERSONNEL_PHONE_WRITE_DENIED");
+  }
+  const before = personnelSensitiveProfile(employeeNumber);
+  const next = {
+    ...before,
+    ...(hasSensitiveInput ? validatePersonnelSensitiveInput(request.body.sensitive || {}) : {}),
+    phone: hasPhoneInput ? normalizePersonnelPhone(request.body.phone) : before.phone,
+  };
+  const changedFields = changedPersonnelProfileFields(before, next);
+  if (!changedFields.length) {
+    return response.json({ ok: true, changedFields: [], access });
+  }
+  const socialSecurityLookup = next.socialSecurityNumber
+    ? personnelSensitiveLookup("social-security-number", next.socialSecurityNumber) : "";
+  const protectedPayload = protectJson(next, personnelSensitiveProtectionContext({ employee_number: employeeNumber }));
+  try {
+    db.prepare(`
+      INSERT INTO personnel_sensitive_records
+        (employee_number, social_security_lookup, protected_payload, updated_by, updated_at)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(employee_number) DO UPDATE SET
+        social_security_lookup = excluded.social_security_lookup,
+        protected_payload = excluded.protected_payload,
+        updated_by = excluded.updated_by,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(employeeNumber, socialSecurityLookup, protectedPayload, session.employeeNumber);
+  } catch (error) {
+    if (String(error.message || "").includes("UNIQUE")) {
+      throw httpError(409, "Diese SV-Nummer ist bereits einem anderen Personalakt zugeordnet.", "PERSONNEL_SOCIAL_SECURITY_DUPLICATE");
+    }
+    throw error;
+  }
+  auditPortal(session.employeeNumber, "personnel-record.update", "employee", employeeNumber,
+    JSON.stringify({ fields: changedFields }));
+  response.json({ ok: true, changedFields, access });
 });
 
 app.get("/api/portal/v1/me/amu-reports", (request, response) => {
@@ -14984,10 +15784,18 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
   const incapacityFrom = String(fields.incapacityFrom || "").trim();
   const incapacityTo = String(fields.incapacityTo || "").trim();
   const employeeNote = stripEmoji(String(fields.employeeNote || "").trim()).slice(0, 500);
+  const sicknessNote = stripEmoji(String(fields.sicknessNote || "").trim()).slice(0, 500);
+  const directSicknessReport = String(fields.directSicknessReport || "") === "1";
   const ocrAssisted = String(fields.ocrAssisted || "") === "1";
   const ocrConfirmed = String(fields.ocrConfirmed || "") === "1";
   if (!isIsoDate(incapacityFrom) || (incapacityTo && (!isIsoDate(incapacityTo) || incapacityTo < incapacityFrom))) {
     throw httpError(400, "Bitte einen gültigen Zeitraum der Arbeitsunfähigkeit eingeben.", "AMU_DATE_INVALID");
+  }
+  if (directSicknessReport) {
+    const today = viennaTodayIso();
+    if (incapacityFrom > today || incapacityFrom < addDays(today, -5)) {
+      throw httpError(400, "Der Beginn der Krankmeldung darf heute oder höchstens fünf Tage zurückliegen.", "SICKNESS_DATE_INVALID");
+    }
   }
   if (!documents.length || documents.length > 3) {
     throw httpError(400, "Bitte mindestens eine und höchstens drei PDF- oder Bilddateien auswählen.", "AMU_DOCUMENTS_REQUIRED");
@@ -15016,6 +15824,8 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
   let reportContext = employeeRequestContext(session.employeeNumber, incapacityFrom);
   const retentionDays = Math.min(3650, Math.max(30, Number(getPortalSettings().amu_retention_days || 730)));
   const saved = [];
+  let identityCheck = null;
+  let dateEvidence = null;
   let createdSicknessCaseId = 0;
   let committed = false;
   amuMutationInProgress += 1;
@@ -15036,6 +15846,16 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
         maxBytes: maxStoredBytes,
       });
       saved.push({ ...stored, processing: prepared.processing, converted: prepared.converted, sourceMime: prepared.sourceMime });
+    }
+    // Die lokale Datums-Erkennung ist optional. Der geschützte serverseitige
+    // Abgleich mit der tatsächlich hochgeladenen Datei bleibt davon unabhängig.
+    const documentEvidence = await evaluateUploadedAumEvidence(session.employeeNumber, documents);
+    identityCheck = documentEvidence.identity;
+    dateEvidence = documentEvidence.dates;
+    if (identityCheck.status === "mismatch") {
+      auditPortal(session.employeeNumber, "amu.identity.reject", "protected_record",
+        protectedPortalEntityId("employee", session.employeeNumber), JSON.stringify({ status: "mismatch" }));
+      throw httpError(422, "Die AUM konnte der eigenen Personalakte nicht eindeutig zugeordnet werden. Bitte das Dokument prüfen oder die Personalleitung kontaktieren.", "AMU_SOCIAL_SECURITY_MISMATCH");
     }
     db.exec("BEGIN");
     try {
@@ -15092,7 +15912,7 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
         linkedPayload = {
           startDate: incapacityFrom,
           expectedEnd: incapacityTo,
-          note: "",
+          note: sicknessNote || employeeNote,
           employeeNumber: session.employeeNumber,
           locationId: effectiveContext.locationId,
           departmentId: effectiveContext.departmentId,
@@ -15106,27 +15926,51 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
           hrDeadlineDate: deadlines.hrDeadlineDate,
           staffingRisk,
         };
+        initializeSicknessCaseRules(linkedPayload, { hasAum: true, now: new Date(reportedAt) });
         db.prepare("UPDATE sickness_cases SET protected_payload = ? WHERE id = ?").run(protectJson(linkedPayload,
           sicknessCaseProtectionContext({ id: createdSicknessCaseId, employee_lookup: employeeLookup })), createdSicknessCaseId);
         linkedSicknessCase = sicknessCaseMetadata(createdSicknessCaseId);
       }
       const reportRetentionBase = incapacityTo
         || (linkedPayload?.status === "recovered" ? linkedPayload.returnToWorkDate : "");
+      const automaticReviewDecision = evaluateAutomaticAumReview({
+        enabled: policy.autoReviewTrustA,
+        trustLevelAtReport: linkedPayload?.aumAllowance?.trustLevelAtReport || "",
+        identityStatus: identityCheck.status,
+        dateEvidence,
+        submittedDateFrom: incapacityFrom,
+        submittedDateTo: incapacityTo,
+        ocrAssisted,
+        ocrConfirmed,
+        scanStatuses: saved.map((item) => item.scanStatus),
+      });
+      const automaticReview = {
+        version: automaticReviewDecision.version,
+        completed: automaticReviewDecision.completed,
+        reason: automaticReviewDecision.reason,
+        criteria: automaticReviewDecision.criteria,
+        evaluatedAt: new Date().toISOString(),
+      };
+      const reportStatus = automaticReview.completed ? "reviewed" : "submitted";
       const reportResult = db.prepare(`
         INSERT INTO amu_reports
           (sickness_case_id, employee_number, location_id, department_id, incapacity_from, incapacity_to, employee_note, status, retention_until, protected_payload)
-        VALUES (?, ?, ?, ?, '', '', '', 'submitted', NULL, '')
-      `).run(linkedSicknessCase?.id || null, session.employeeNumber, reportContext.locationId, reportContext.departmentId);
+        VALUES (?, ?, ?, ?, '', '', '', ?, NULL, '')
+      `).run(linkedSicknessCase?.id || null, session.employeeNumber, reportContext.locationId, reportContext.departmentId, reportStatus);
       const reportId = Number(reportResult.lastInsertRowid);
       const reportPayload = storage.protectRecord(JSON.stringify({
         incapacityFrom,
         incapacityTo,
         employeeNote,
-        reviewedBy: "",
-        reviewedAt: "",
+        reviewedBy: automaticReview.completed ? "system" : "",
+        reviewedAt: automaticReview.completed ? automaticReview.evaluatedAt : "",
         reviewNote: "",
         retentionUntil: isIsoDate(reportRetentionBase) ? addDays(reportRetentionBase, retentionDays) : "",
         withdrawnAt: "",
+        identityCheck,
+        automaticReview,
+        ocrDateAssisted: ocrAssisted,
+        ocrDateConfirmed: ocrAssisted && ocrConfirmed,
       }), amuReportProtectionContext({ id: reportId, employee_number: session.employeeNumber }));
       db.prepare("UPDATE amu_reports SET protected_payload = ? WHERE id = ?").run(reportPayload, reportId);
       const insertDocument = db.prepare(`
@@ -15168,12 +16012,22 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
         const sicknessRetentionBase = sicknessPayload.returnToWorkDate || sicknessPayload.expectedEnd
           || incapacityTo || sicknessPayload.startDate;
         sicknessPayload.retentionUntil = addDays(sicknessRetentionBase, sicknessCaseRetentionDays());
+        reconcileSicknessPayloadRules(sicknessPayload, new Date(), { aumReviewed: automaticReview.completed });
         db.prepare(`
           UPDATE sickness_cases SET status_lookup = ?, protected_payload = ?, purge_after = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
         `).run(sicknessStatusLookup(nextStatus), protectJson(sicknessPayload, sicknessCaseProtectionContext(linkedSicknessCase)),
           sicknessPayload.retentionUntil, linkedSicknessCase.id);
       }
       auditPortal(session.employeeNumber, "amu.report.create", "amu_report", String(reportId), JSON.stringify({ locationId: reportContext.locationId, documentCount: saved.length }));
+      auditPortal(session.employeeNumber, "amu.identity.check", "amu_report", String(reportId),
+        JSON.stringify({ status: identityCheck.status }));
+      auditPortal(automaticReview.completed ? "system" : session.employeeNumber,
+        automaticReview.completed ? "amu.report.auto-review" : "amu.report.auto-review.deferred",
+        "amu_report", String(reportId), JSON.stringify({
+          version: automaticReview.version,
+          reason: automaticReview.reason,
+          criteria: automaticReview.criteria,
+        }));
       db.exec("COMMIT");
       committed = true;
       if (createdSicknessCaseId) {
@@ -15190,17 +16044,26 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
         reconcileSicknessStaffingRisk(sicknessCaseMetadata(linkedSicknessCase.id));
       }
       const report = amuReportMetadata(reportId);
-      const recipients = new Set([
-        ...requestReviewerRecipients(reportContext.locationId, reportContext.departmentId, "local", session.employeeNumber),
-        ...requestReviewerRecipients(reportContext.locationId, reportContext.departmentId, "hr", session.employeeNumber),
-      ]);
-      for (const recipient of recipients) {
-        createPortalNotification(recipient, "protected.update", "Neue geschützte Meldung", "Bitte im geschützten Portal anmelden.", {
-          target: "/portal.html?tab=leadershipApprovals",
+      if (automaticReview.completed) {
+        createPortalNotification(session.employeeNumber, "protected.update", "AUM automatisch geprüft", "Die AUM wurde sicher zugeordnet und abgeschlossen.", {
+          target: "/portal.html?tab=amu",
           entityType: "protected_record",
           entityId: protectedPortalEntityId("amu-report", reportId),
-          dedupeKey: protectedPortalDedupeKey(["amu", reportId, "submitted", recipient]),
+          dedupeKey: protectedPortalDedupeKey(["amu", reportId, "auto-reviewed", session.employeeNumber]),
         });
+      } else {
+        const recipients = new Set([
+          ...requestReviewerRecipients(reportContext.locationId, reportContext.departmentId, "local", session.employeeNumber),
+          ...requestReviewerRecipients(reportContext.locationId, reportContext.departmentId, "hr", session.employeeNumber),
+        ]);
+        for (const recipient of recipients) {
+          createPortalNotification(recipient, "protected.update", "Neue geschützte Meldung", "Bitte im geschützten Portal anmelden.", {
+            target: "/portal.html?tab=leadershipApprovals",
+            entityType: "protected_record",
+            entityId: protectedPortalEntityId("amu-report", reportId),
+            dedupeKey: protectedPortalDedupeKey(["amu", reportId, "submitted", recipient]),
+          });
+        }
       }
       response.status(201).json({ report: serializeAmuReports([report])[0] });
     } catch (error) {
@@ -15213,6 +16076,7 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
         try { storage.deleteBlob(item.storageKey); } catch {}
       }
     }
+    if (error.status) throw error;
     if (error.code?.startsWith?.("AMU_")) {
       const status = error.code.includes("TOO_LARGE") || error.code.includes("LIMIT")
         ? 413
@@ -15289,7 +16153,7 @@ app.get("/api/portal/v1/amu-reports", (request, response) => {
     ORDER BY r.submitted_at DESC, r.id DESC
   `).all();
   const scopedRows = rows.filter((row) => sessionCanAccessAmuReport(session, row));
-  const reports = serializeAmuReports(scopedRows);
+  const reports = serializeAmuReports(scopedRows, { includeIdentityCheck: actorCanReadAmuSensitiveMetadata(session) });
   const canOpenFiles = actorCanReadAmuFiles(session);
   if (!canOpenFiles) {
     for (const report of reports) {
@@ -15318,6 +16182,10 @@ app.put("/api/portal/v1/amu-reports/:id/review", (request, response) => {
   db.prepare(`
     UPDATE amu_reports SET status = ?, protected_payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
   `).run(action, protectJson(protectedPayload, amuReportProtectionContext(report)), report.id);
+  if (report.sickness_case_id) {
+    const sicknessRow = sicknessCaseMetadata(report.sickness_case_id);
+    if (sicknessRow) reconcileSicknessCaseRules(sicknessRow, new Date(), { aumReviewed: true, actor: session.employeeNumber });
+  }
   auditPortal(session.employeeNumber, `amu.report.${action}`, "amu_report", String(report.id));
   db.prepare("UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE entity_type = 'protected_record' AND entity_id = ?")
     .run(protectedPortalEntityId("amu-report", report.id));
@@ -15327,14 +16195,20 @@ app.put("/api/portal/v1/amu-reports/:id/review", (request, response) => {
     entityId: protectedPortalEntityId("amu-report", report.id),
     dedupeKey: protectedPortalDedupeKey(["amu", report.id, action, session.employeeNumber]),
   });
-  response.json({ report: serializeAmuReports([amuReportMetadata(report.id)])[0] });
+  response.json({ report: serializeAmuReports([amuReportMetadata(report.id)], { includeIdentityCheck: actorCanReadAmuSensitiveMetadata(session) })[0] });
 });
 
 app.get("/api/portal/v1/amu-reports/:reportId/documents/:documentId/content", (request, response) => {
-  const session = requirePortalAdminOrLocal(request, "amu:metadata:read");
-  if (!actorCanReadAmuFiles(session)) throw httpError(403, "AUM-Dateien dürfen von diesem Zugang nicht geöffnet werden.", "PORTAL_PERMISSION_DENIED");
+  const session = requirePortalReadOrLocal(request, "");
+  if (!actorCanReadAmuSensitiveMetadata(session) || !actorCanReadAmuFiles(session)) {
+    auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", String(request.params.documentId), "missing-protected-file-right");
+    throw httpError(403, "AUM-Dateien dürfen von diesem Zugang nicht geöffnet werden.", "PORTAL_PERMISSION_DENIED");
+  }
   const document = amuDocumentMetadata(request.params.reportId, request.params.documentId);
-  if (!document) throw httpError(404, "Das AUM-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
+  if (!document) {
+    auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", String(request.params.documentId), "not-found");
+    throw httpError(404, "Das AUM-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
+  }
   assertAmuReportScope(session, document);
   auditPortal(session.employeeNumber, "amu.document.download", "amu_document", document.id);
   sendAmuDocument(response, document);
@@ -16663,8 +17537,9 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
     let employee;
     if (sourceNumber) {
       employee = db.prepare(`
-        SELECT personnel_number, full_name, nickname, color, contracted_hours, preferred_day_off,
-               fixed_workdays, position_id, time_confirmation_level, home_location_id,
+        SELECT personnel_number, full_name, nickname, color, contracted_hours, target_workdays_per_week,
+               preferred_day_off, fixed_workdays, position_id, time_confirmation_level,
+               sickness_without_aum_enabled, home_location_id,
                preferred_department_id, active
         FROM employees WHERE personnel_number = ?
       `).get(sourceNumber);
@@ -16691,10 +17566,12 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
         nickname,
         color,
         contracted_hours: contractedHours,
+        target_workdays_per_week: 5,
         preferred_day_off: null,
         fixed_workdays: "",
         position_id: positionId,
         time_confirmation_level: "C",
+        sickness_without_aum_enabled: 0,
         home_location_id: homeLocationId,
         preferred_department_id: preferredDepartmentId,
         active: 1,
@@ -17677,6 +18554,13 @@ app.post("/api/schedule/auto", (request, response) => {
       totals[option.employee_number] =
         (totals[option.employee_number] || 0) +
         optionMinutesPerDay(option, option.contracted_hours) * countCreditedOptionDays(option, settings, context.locationId);
+    }
+    for (const employee of employees) {
+      for (const credit of sicknessCreditsForRange(employee.personnel_number, weekStart, weekEnd)) {
+        const alreadyEntered = options.some((option) => option.employee_number === employee.personnel_number
+          && option.option_type === "sick" && credit.date >= option.date_from && credit.date <= option.date_to);
+        if (!alreadyEntered) totals[employee.personnel_number] = (totals[employee.personnel_number] || 0) + credit.minutes;
+      }
     }
     const creditedHolidayDates = new Set();
     for (const holiday of publicHolidaysForRange(weekStart, weekEnd)) {

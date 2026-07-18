@@ -849,7 +849,7 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const updateAmuSettings = await fetch(`${url}/api/portal/v1/amu-settings`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
-      body: JSON.stringify({ uploadMaxMb: 8, storedMaxMb: 2, convertImagesToPdf: true, grayscaleImages: true, managerFileAccess: false }),
+      body: JSON.stringify({ uploadMaxMb: 8, storedMaxMb: 2, convertImagesToPdf: true, grayscaleImages: true }),
     });
     assert.equal(updateAmuSettings.status, 200, await updateAmuSettings.clone().text());
     const personnelRecord = await fetch(`${url}/api/portal/v1/personnel-records/102`, { headers: { Cookie: admin.cookie } });
@@ -857,6 +857,11 @@ test("LAN-Pilot: Admin, Mitarbeiter-Login und Urlaubsfreigabe funktionieren durc
     const personnelRecordData = await personnelRecord.json();
     assert.equal(personnelRecordData.canOpenFiles, true);
     assert.ok(personnelRecordData.reports.some((report) => report.id === amuUpload.report.id));
+    const adminAmuContent = await fetch(`${url}/api/portal/v1/amu-reports/${amuUpload.report.id}/documents/${amuDocument.id}/content`, { headers: { Cookie: admin.cookie } });
+    assert.equal(adminAmuContent.status, 200, await adminAmuContent.clone().text());
+    const auditDatabase = new DatabaseSync(childDatabase);
+    assert.ok(auditDatabase.prepare("SELECT 1 FROM audit_log WHERE actor = '101' AND action = 'amu.document.download' AND entity_id = ?").get(amuDocument.id));
+    auditDatabase.close();
 
     const adminAmuResponse = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: admin.cookie } });
     assert.equal(adminAmuResponse.status, 200, await adminAmuResponse.clone().text());
@@ -1096,6 +1101,10 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     assert.equal(rightsPayload.catalog.some((permission) => permission.id === "developer:system"), false);
     assert.ok(rightsPayload.users.some((user) => user.employeeNumber === "102" && user.role === "employee" && user.manageable));
     assert.ok(rightsPayload.users.some((user) => user.employeeNumber === "104" && user.role === "manager" && user.manageable));
+    const managerRightsProfile = rightsPayload.users.find((user) => user.employeeNumber === "104");
+    assert.equal(managerRightsProfile.rolePermissions.includes("amu:metadata:read"), false);
+    assert.deepEqual(rightsPayload.catalog.find((permission) => permission.id === "amu:file:read").eligibleRoles,
+      ["hr", "admin", "it_admin", "developer"]);
     assert.ok(rightsPayload.users.some((user) => user.employeeNumber === "103" && !user.manageable));
     const itAdminRights = await fetch(`${url}/api/portal/v1/rights`, { headers: { Cookie: itAdmin.cookie } });
     assert.equal(itAdminRights.status, 200, await itAdminRights.clone().text());
@@ -1480,38 +1489,38 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
 
     const managerPersonnelRecord = await fetch(`${url}/api/portal/v1/personnel-records/104`, { headers: { Cookie: manager.cookie } });
     assert.equal(managerPersonnelRecord.status, 200, await managerPersonnelRecord.clone().text());
-    const managerPersonnelRecordData = await managerPersonnelRecord.json();
-    assert.ok(managerPersonnelRecordData.reports.some((report) => report.id === localAmuId));
-    assert.equal(managerPersonnelRecordData.reports.some((report) => report.id === remoteAmuId), false);
+    const managerPersonnelPayload = await managerPersonnelRecord.json();
+    assert.equal(managerPersonnelPayload.profile.phone, "");
+    assert.equal(managerPersonnelPayload.profile.sensitive, null);
+    assert.deepEqual(managerPersonnelPayload.reports, []);
+    assert.equal(managerPersonnelPayload.access.canReadPhone, true);
+    assert.equal(managerPersonnelPayload.access.canReadAmu, false);
 
     const managerAmuOverview = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: manager.cookie } });
-    assert.equal(managerAmuOverview.status, 200, await managerAmuOverview.clone().text());
-    const managerAmuOverviewData = await managerAmuOverview.json();
-    assert.equal(managerAmuOverviewData.canOpenFiles, false);
-    assert.ok(managerAmuOverviewData.reports.some((report) => report.id === localAmuId));
-    assert.equal(managerAmuOverviewData.reports.some((report) => report.id === remoteAmuId), false);
-    assert.equal(managerAmuOverviewData.reports.find((report) => report.id === localAmuId).employee_note, "");
-    assert.equal(managerAmuOverviewData.reports.find((report) => report.id === localAmuId).review_note, "");
+    assert.equal(managerAmuOverview.status, 403, await managerAmuOverview.clone().text());
 
     const departmentManagerLegacyAmu = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: departmentManager.cookie } });
-    assert.equal(departmentManagerLegacyAmu.status, 200, await departmentManagerLegacyAmu.clone().text());
-    assert.equal((await departmentManagerLegacyAmu.json()).reports.some((report) => report.id === localAmuId), false);
+    assert.equal(departmentManagerLegacyAmu.status, 403, await departmentManagerLegacyAmu.clone().text());
     const departmentManagerLegacyRecord = await fetch(`${url}/api/portal/v1/personnel-records/104`, { headers: { Cookie: departmentManager.cookie } });
-    assert.equal(departmentManagerLegacyRecord.status, 200, await departmentManagerLegacyRecord.clone().text());
-    assert.equal((await departmentManagerLegacyRecord.json()).reports.some((report) => report.id === localAmuId), false);
+    assert.equal(departmentManagerLegacyRecord.status, 403, await departmentManagerLegacyRecord.clone().text());
 
-    const enableManagerAmuFiles = await fetch(`${url}/api/portal/v1/amu-settings`, {
+    const obsoleteManagerAmuSetting = await fetch(`${url}/api/portal/v1/amu-settings`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
       body: JSON.stringify({ uploadMaxMb: 10, storedMaxMb: 2, convertImagesToPdf: true, grayscaleImages: true, managerFileAccess: true }),
     });
-    assert.equal(enableManagerAmuFiles.status, 200, await enableManagerAmuFiles.clone().text());
-    const managerAmuFilesEnabled = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: manager.cookie } });
-    assert.equal(managerAmuFilesEnabled.status, 200, await managerAmuFilesEnabled.clone().text());
-    const managerAmuFilesEnabledData = await managerAmuFilesEnabled.json();
-    assert.equal(managerAmuFilesEnabledData.canOpenFiles, true);
-    assert.equal(managerAmuFilesEnabledData.reports.find((report) => report.id === localAmuId).employee_note, "Interne Notiz");
-    assert.equal(managerAmuFilesEnabledData.reports.find((report) => report.id === localAmuId).review_note, "Leitungsnotiz");
+    assert.equal(obsoleteManagerAmuSetting.status, 200, await obsoleteManagerAmuSetting.clone().text());
+    assert.equal(Object.hasOwn((await obsoleteManagerAmuSetting.json()).policy, "managerFileAccess"), false);
+    const managerAmuStillDenied = await fetch(`${url}/api/portal/v1/amu-reports`, { headers: { Cookie: manager.cookie } });
+    assert.equal(managerAmuStillDenied.status, 403, await managerAmuStillDenied.clone().text());
+
+    const protectedRightCannotBeDelegated = await fetch(`${url}/api/portal/v1/rights/104`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ permissions: ["amu:file:read"] }),
+    });
+    assert.equal(protectedRightCannotBeDelegated.status, 403, await protectedRightCannotBeDelegated.clone().text());
+    assert.equal((await protectedRightCannotBeDelegated.json()).code, "AMU_PERMISSION_ROLE_RESTRICTED");
 
     const remoteBlackoutResponse = await fetch(`${url}/api/portal/v1/request-blackouts`, {
       method: "POST",
