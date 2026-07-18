@@ -31,6 +31,9 @@ const state = {
   timeCorrections: [],
   rightsManagement: null,
   rightsDashboard: null,
+  locationDashboard: null,
+  locationDashboardFilter: "all",
+  locationDashboardDraggingId: "",
   rightsDashboardSelectedEmployeeNumber: "",
   rightsDashboardSelectedPermissionId: "",
   rightsDashboardTheme: "light",
@@ -44,7 +47,7 @@ const state = {
     settings: "light",
   },
   dashboardFontSize: "standard",
-  rightsDashboardMode: "rights",
+  rightsDashboardMode: "locations",
   rightsDashboardSelectedProcessId: "vacation",
   rightsDashboardSelectedProcessStepId: "",
   rightsProcessLocationId: "",
@@ -155,7 +158,7 @@ const elements = Object.fromEntries(
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
-    "rightsDashboardRightsPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
+    "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "serverDiagnostics", "refreshServerDiagnosticsButton",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
@@ -2147,15 +2150,144 @@ function renderRightsDashboard() {
   if (selected) renderRightsDashboardSelection(selected);
 }
 
+function locationDashboardStorageKey() {
+  return `grabenplaner:dashboard-location-order:${uiPreferenceActorKey()}`;
+}
+
+function locationDashboardOrderedLocations(payload = state.locationDashboard) {
+  const locations = [...(payload?.locations || [])];
+  let preferred = payload?.preferences?.locationOrder || [];
+  if (payload?.actor?.employeeNumber === "local") {
+    try {
+      const stored = JSON.parse(localStorage.getItem(locationDashboardStorageKey()) || "[]");
+      if (Array.isArray(stored)) preferred = stored;
+    } catch {}
+  }
+  const validIds = new Set(locations.map((location) => String(location.id)));
+  const order = [...new Set(preferred.map(String))].filter((locationId) => validIds.has(locationId));
+  for (const location of locations) if (!order.includes(String(location.id))) order.push(String(location.id));
+  const locationLookup = new Map(locations.map((location) => [String(location.id), location]));
+  return order.map((locationId) => locationLookup.get(locationId)).filter(Boolean);
+}
+
+function locationDashboardStatus(location) {
+  if (location.status === "closed") return { label: "Geschlossen", tone: "closed" };
+  if (location.status === "critical") return { label: "Unter Mindestbesetzung", tone: "critical" };
+  if (location.status === "attention") return { label: "Mindestbesetzung", tone: "attention" };
+  return { label: "Besetzung im Plan", tone: "ok" };
+}
+
+function locationDashboardAbsenceTime(entry) {
+  return entry.allDay || !entry.startTime || !entry.endTime ? "ganztägig" : `${entry.startTime}–${entry.endTime} Uhr`;
+}
+
+function renderLocationDashboard() {
+  const dashboard = state.locationDashboard;
+  if (!dashboard || !elements.locationDashboardGrid) return;
+  const summaryCards = [
+    ["Aktive Filialen", dashboard.summary.activeLocations, "in der Übersicht"],
+    ["Eingeteilt", dashboard.summary.scheduledEmployees, `am ${formatDate(dashboard.date)}`],
+    ["Abwesenheiten", dashboard.summary.absentEntries, "betriebliche Einträge"],
+    ["Kritische Filialen", dashboard.summary.criticalLocations, "unter Mindestbesetzung"],
+  ];
+  elements.locationDashboardSummary.innerHTML = summaryCards.map(([label, value, hint]) => `<article class="rights-dashboard-stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong><small>${escapeHtml(hint)}</small></article>`).join("");
+  const allCount = (dashboard.categories || []).reduce((sum, category) => sum + Number(category.count || 0), 0);
+  const filters = [{ id: "all", label: "Alle", count: allCount, tone: "all" }, ...(dashboard.categories || [])];
+  if (!filters.some((filter) => filter.id === state.locationDashboardFilter)) state.locationDashboardFilter = "all";
+  elements.locationDashboardFilters.innerHTML = filters.map((filter) => `<button type="button" class="location-dashboard-filter ${escapeHtml(filter.tone || filter.id)}" data-location-dashboard-filter="${escapeHtml(filter.id)}" aria-pressed="${state.locationDashboardFilter === filter.id}"><span>${escapeHtml(filter.label)}</span><strong>${escapeHtml(String(filter.count || 0))}</strong></button>`).join("");
+  const locations = locationDashboardOrderedLocations(dashboard);
+  dashboard.locations = locations;
+  dashboard.preferences = { ...(dashboard.preferences || {}), locationOrder: locations.map((location) => String(location.id)) };
+  elements.locationDashboardGrid.innerHTML = locations.length ? locations.map((location, index) => {
+    const status = locationDashboardStatus(location);
+    const absences = (location.absences || []).filter((entry) => state.locationDashboardFilter === "all" || entry.category === state.locationDashboardFilter);
+    const departmentNames = (location.departments || []).map((department) => department.name);
+    const staffingText = !location.open
+      ? "Filiale an diesem Tag geschlossen"
+      : location.minStaff > 0
+      ? `${location.scheduledCount} eingeteilt · mindestens ${location.minStaff}`
+      : `${location.scheduledCount} eingeteilt · keine Mindestzahl hinterlegt`;
+    const absenceRows = absences.length ? absences.map((entry) => {
+      const color = /^#[0-9a-f]{6}$/i.test(entry.color || "") ? entry.color : "#26785f";
+      return `<li class="location-dashboard-absence ${escapeHtml(entry.category)}"><span class="location-dashboard-person-color" style="--employee-color:${color}"></span><span><strong>${escapeHtml(`${entry.employeeNumber} · ${entry.nickname}`)}</strong><small>${escapeHtml([entry.label, entry.departmentName, locationDashboardAbsenceTime(entry)].filter(Boolean).join(" · "))}</small></span></li>`;
+    }).join("") : `<li class="location-dashboard-empty-row">${state.locationDashboardFilter === "all" ? "Keine Abwesenheit eingetragen." : "Keine passende Abwesenheit in dieser Filiale."}</li>`;
+    return `<article class="location-dashboard-card ${escapeHtml(status.tone)}" draggable="true" data-location-dashboard-card="${escapeHtml(String(location.id))}">
+      <header><button type="button" class="location-dashboard-drag-handle" aria-label="${escapeHtml(`${location.name} verschieben`)}" title="Filialkarte verschieben">⠿</button><div><span class="eyebrow">Filiale ${escapeHtml(String(location.id))}</span><h3>${escapeHtml(location.name)}</h3></div><span class="location-dashboard-status ${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span></header>
+      <div class="location-dashboard-staffing"><strong>${escapeHtml(staffingText)}</strong><small>${escapeHtml(`${location.activeTeamCount} aktive Teammitglieder${departmentNames.length ? ` · ${departmentNames.join(", ")}` : ""}`)}</small></div>
+      <div class="location-dashboard-counts">${(dashboard.categories || []).filter((category) => Number(location.counts?.[category.id] || 0) > 0).map((category) => `<span class="${escapeHtml(category.tone || category.id)}">${escapeHtml(category.label)} <strong>${escapeHtml(String(location.counts[category.id]))}</strong></span>`).join("") || "<span>Keine Abwesenheiten</span>"}</div>
+      <ul class="location-dashboard-absence-list">${absenceRows}</ul>
+      <footer><button type="button" class="location-dashboard-move" data-location-dashboard-move="-1" ${index === 0 ? "disabled" : ""} aria-label="${escapeHtml(`${location.name} nach vorne verschieben`)}">←</button><span>Position ${index + 1} von ${locations.length}</span><button type="button" class="location-dashboard-move" data-location-dashboard-move="1" ${index === locations.length - 1 ? "disabled" : ""} aria-label="${escapeHtml(`${location.name} nach hinten verschieben`)}">→</button></footer>
+    </article>`;
+  }).join("") : "<p class=\"settings-note\">Es sind keine aktiven Filialen vorhanden.</p>";
+}
+
+async function loadLocationDashboard() {
+  if (!elements.locationDashboardGrid) return;
+  const date = elements.locationDashboardDate?.value || toIsoDate(new Date());
+  if (elements.locationDashboardDate && !elements.locationDashboardDate.value) elements.locationDashboardDate.value = date;
+  elements.locationDashboardGrid.innerHTML = "<p class=\"settings-note\">Filialübersicht wird geladen.</p>";
+  try {
+    state.locationDashboard = await api(`/api/portal/v1/dashboards/locations?date=${encodeURIComponent(date)}`);
+    if (elements.locationDashboardDate) elements.locationDashboardDate.value = state.locationDashboard.date;
+    renderLocationDashboard();
+  } catch (error) {
+    state.locationDashboard = null;
+    elements.locationDashboardGrid.innerHTML = `<p class="settings-note">${escapeHtml(error.status === 403 ? "Die Filialübersicht ist nur für Personalleitung, Admin, IT-Admin und Developer verfügbar." : error.message)}</p>`;
+    if (elements.locationDashboardSummary) elements.locationDashboardSummary.innerHTML = "";
+    if (elements.locationDashboardFilters) elements.locationDashboardFilters.innerHTML = "";
+  }
+}
+
+async function saveLocationDashboardOrder(previousOrder = []) {
+  const locationOrder = (state.locationDashboard?.locations || []).map((location) => String(location.id));
+  localStorage.setItem(locationDashboardStorageKey(), JSON.stringify(locationOrder));
+  try {
+    const result = await api("/api/portal/v1/dashboards/locations/preferences", {
+      method: "PUT",
+      body: JSON.stringify({ locationOrder }),
+    });
+    if (state.locationDashboard) state.locationDashboard.preferences = { ...(state.locationDashboard.preferences || {}), locationOrder: result.locationOrder || locationOrder };
+    showToast("Die Filialreihenfolge wurde gespeichert.");
+  } catch (error) {
+    if (state.locationDashboard && previousOrder.length) {
+      const lookup = new Map(state.locationDashboard.locations.map((location) => [String(location.id), location]));
+      state.locationDashboard.locations = previousOrder.map((locationId) => lookup.get(String(locationId))).filter(Boolean);
+      state.locationDashboard.preferences = { ...(state.locationDashboard.preferences || {}), locationOrder: previousOrder };
+      localStorage.setItem(locationDashboardStorageKey(), JSON.stringify(previousOrder));
+      renderLocationDashboard();
+    }
+    showToast(error.message, true);
+  }
+}
+
+function reorderLocationDashboardCard(locationId, targetIndex) {
+  if (!state.locationDashboard) return;
+  const locations = [...state.locationDashboard.locations];
+  const fromIndex = locations.findIndex((location) => String(location.id) === String(locationId));
+  if (fromIndex < 0) return;
+  const boundedIndex = Math.max(0, Math.min(locations.length - 1, targetIndex));
+  if (fromIndex === boundedIndex) return;
+  const previousOrder = locations.map((location) => String(location.id));
+  const [moved] = locations.splice(fromIndex, 1);
+  locations.splice(boundedIndex, 0, moved);
+  state.locationDashboard.locations = locations;
+  state.locationDashboard.preferences = { ...(state.locationDashboard.preferences || {}), locationOrder: locations.map((location) => String(location.id)) };
+  localStorage.setItem(locationDashboardStorageKey(), JSON.stringify(state.locationDashboard.preferences.locationOrder));
+  renderLocationDashboard();
+  saveLocationDashboardOrder(previousOrder);
+}
+
 function setRightsDashboardMode(mode) {
-  const normalized = mode === "processes" ? "processes" : "rights";
+  const normalized = ["locations", "rights", "processes"].includes(mode) ? mode : "locations";
   state.rightsDashboardMode = normalized;
   document.querySelectorAll("[data-rights-dashboard-mode]").forEach((button) => {
     button.setAttribute("aria-selected", String(button.dataset.rightsDashboardMode === normalized));
   });
+  elements.rightsDashboardLocationsPanel?.classList.toggle("hidden", normalized !== "locations");
   elements.rightsDashboardRightsPanel?.classList.toggle("hidden", normalized !== "rights");
   elements.rightsDashboardProcessesPanel?.classList.toggle("hidden", normalized !== "processes");
   if (normalized === "processes") renderRightsProcessDashboard();
+  if (normalized === "locations" && !state.locationDashboard) loadLocationDashboard();
 }
 
 function rightsProcessDashboard() {
@@ -2376,10 +2508,11 @@ async function loadRightsDashboard() {
     renderRightsProcessValidation();
     renderRightsDashboardSummary();
     renderRightsDashboard();
+    await loadLocationDashboard();
     setRightsDashboardMode(state.rightsDashboardMode);
   } catch (error) {
     state.rightsDashboard = null;
-    elements.rightsDashboardUserList.innerHTML = `<p class="settings-note">${escapeHtml(error.status === 403 ? "Das Rechte-Dashboard ist nur für Personalleitung, Admin, IT-Admin und Developer verfügbar." : error.message)}</p>`;
+    elements.rightsDashboardUserList.innerHTML = `<p class="settings-note">${escapeHtml(error.status === 403 ? "Die Dashboards sind nur für Personalleitung, Admin, IT-Admin und Developer verfügbar." : error.message)}</p>`;
     elements.rightsDashboardEmpty?.classList.remove("hidden");
     elements.rightsDashboardSelection?.classList.add("hidden");
   }
@@ -6817,6 +6950,50 @@ document.querySelectorAll("button[data-page-theme-choice]").forEach((button) => 
 }));
 elements.dashboardFontSize?.addEventListener("change", () => applyDashboardFontSize(elements.dashboardFontSize.value));
 document.querySelectorAll("button[data-rights-dashboard-mode]").forEach((button) => button.addEventListener("click", () => setRightsDashboardMode(button.dataset.rightsDashboardMode)));
+elements.refreshLocationDashboard?.addEventListener("click", loadLocationDashboard);
+elements.locationDashboardDate?.addEventListener("change", loadLocationDashboard);
+elements.locationDashboardFilters?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-location-dashboard-filter]");
+  if (!button) return;
+  state.locationDashboardFilter = button.dataset.locationDashboardFilter || "all";
+  renderLocationDashboard();
+});
+elements.locationDashboardGrid?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-location-dashboard-move]");
+  const card = button?.closest("[data-location-dashboard-card]");
+  if (!button || !card || button.disabled || !state.locationDashboard) return;
+  const currentIndex = state.locationDashboard.locations.findIndex((location) => String(location.id) === card.dataset.locationDashboardCard);
+  reorderLocationDashboardCard(card.dataset.locationDashboardCard, currentIndex + Number(button.dataset.locationDashboardMove || 0));
+});
+elements.locationDashboardGrid?.addEventListener("dragstart", (event) => {
+  const card = event.target.closest("[data-location-dashboard-card]");
+  if (!card) return;
+  state.locationDashboardDraggingId = card.dataset.locationDashboardCard;
+  card.classList.add("dragging");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", state.locationDashboardDraggingId);
+});
+elements.locationDashboardGrid?.addEventListener("dragover", (event) => {
+  const card = event.target.closest("[data-location-dashboard-card]");
+  if (!card || card.dataset.locationDashboardCard === state.locationDashboardDraggingId) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  elements.locationDashboardGrid.querySelectorAll(".drag-target").forEach((item) => item.classList.remove("drag-target"));
+  card.classList.add("drag-target");
+});
+elements.locationDashboardGrid?.addEventListener("drop", (event) => {
+  const card = event.target.closest("[data-location-dashboard-card]");
+  if (!card || !state.locationDashboardDraggingId || !state.locationDashboard) return;
+  event.preventDefault();
+  const draggedLocationId = state.locationDashboardDraggingId;
+  state.locationDashboardDraggingId = "";
+  const targetIndex = state.locationDashboard.locations.findIndex((location) => String(location.id) === card.dataset.locationDashboardCard);
+  reorderLocationDashboardCard(draggedLocationId, targetIndex);
+});
+elements.locationDashboardGrid?.addEventListener("dragend", () => {
+  state.locationDashboardDraggingId = "";
+  elements.locationDashboardGrid.querySelectorAll(".dragging,.drag-target").forEach((item) => item.classList.remove("dragging", "drag-target"));
+});
 elements.rightsDashboardSearch?.addEventListener("input", renderRightsDashboard);
 elements.rightsDashboardRoleFilter?.addEventListener("change", renderRightsDashboard);
 elements.rightsDashboardLocationFilter?.addEventListener("change", () => {
