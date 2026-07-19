@@ -1,0 +1,12 @@
+[Unit]
+Description=Quartalsweiser isolierter Grabenplaner Offsite-Wiederherstellungstest
+
+[Timer]
+OnCalendar=*-01,04,07,10-02 05:15:00
+RandomizedDelaySec=60min
+Persistent=true
+AccuracySec=1min
+Unit=grabenplaner-offsite-restore-test.service
+
+[Install]
+WantedBy=timers.target

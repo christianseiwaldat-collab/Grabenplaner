@@ -36,6 +36,21 @@ done
 gp_require_root
 (( confirmed == 1 )) || gp_die "Die Deinstallation erfordert die ausdrueckliche Option --yes."
 gp_require_command systemctl
+
+# Das optionale Offsite-Modul besitzt eigene Secrets, Binaries und einen
+# Stagingbereich. Seine Entfernung muss bewusst ueber den eigenen, strikt
+# getrennten Uninstaller erfolgen; der Core-Uninstaller darf diese Daten nie
+# implizit entfernen oder unbrauchbar zuruecklassen.
+offsite_configured=0
+if [[ -f /etc/grabenplaner/grabenplaner.env && ! -L /etc/grabenplaner/grabenplaner.env ]] \
+  && grep -Fqx 'GRABENPLANER_OFFSITE_CONFIGURED=1' /etc/grabenplaner/grabenplaner.env; then
+  offsite_configured=1
+fi
+if (( offsite_configured == 1 )) || gp_systemd_unit_exists grabenplaner-offsite-upload.service \
+  || gp_systemd_unit_exists grabenplaner-offsite-check.service \
+  || gp_systemd_unit_exists grabenplaner-offsite-restore-test.service; then
+  gp_die "Das optionale Offsite-Modul ist noch eingerichtet. Bitte zuerst sudo /usr/local/sbin/grabenplaner-offsite-uninstall --yes ausfuehren."
+fi
 gp_acquire_maintenance_lock
 app_dir="$(gp_safe_absolute_path "$app_arg" "App-Ordner")"
 [[ "$(basename -- "$app_dir")" == "app" && "$(basename -- "$(dirname -- "$app_dir")")" == "grabenplaner" ]] \

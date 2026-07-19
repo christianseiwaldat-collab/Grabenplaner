@@ -39,6 +39,7 @@ const {
   verifyCommittedBackup,
   writeBackupCommitMarker,
 } = require("./lib/backup-commit");
+const { readOffsiteBackupStatus } = require("./lib/offsite-backup-status");
 const {
   assertRuntimeConfiguration,
   createBoundedRateLimitStore,
@@ -13394,6 +13395,10 @@ function serverDiagnostics() {
   const externalBackupReady = settingEnabled(settings, "external_backup_enabled") && backupHealth.writable
     && latestExternalBackup?.committed === true
     && latestExternalBackupAgeHours !== null && latestExternalBackupAgeHours <= backupFreshnessHours;
+  const offsiteConfigured = String(process.env.GRABENPLANER_OFFSITE_CONFIGURED || "").trim() === "1";
+  const offsiteStatus = readOffsiteBackupStatus({ configured: offsiteConfigured });
+  const offsiteApplicable = serverModeActive || offsiteConfigured || offsiteStatus.statusAvailable;
+  const offsite = { ...offsiteStatus, applicable: offsiteApplicable };
   const amu = amuStorage ? amuStorage.diagnostics() : { ok: false, writable: false, error: amuStorageStartupError };
   const protectedIntegrationConnectionCount = Number(db.prepare("SELECT COUNT(*) AS count FROM integration_connections WHERE protected_credentials <> '' AND active = 1").get().count || 0);
   const integrationSecretsReady = protectedIntegrationConnectionCount === 0 || Boolean(integrationSecretVault);
@@ -13414,6 +13419,11 @@ function serverDiagnostics() {
   if (externalDirectory && path.parse(path.resolve(databasePath)).root.toLowerCase() === path.parse(path.resolve(externalDirectory)).root.toLowerCase()) warnings.push("Datenbank und externes Backup liegen auf demselben Laufwerk.");
   if (!amu.ok) warnings.push(`Der geschützte AUM-Speicher ist nicht betriebsbereit${amu.error ? `: ${amu.error}` : "."}`);
   if (!integrationSecretsReady) warnings.push("Für aktive direkte Verbindungen fehlt der geschützte Integrationsschlüssel.");
+  if (serverModeActive && !offsite.configured) {
+    warnings.push("Das verschlüsselte Offsite-Backup ist noch nicht eingerichtet.");
+  } else if (offsite.configured && offsite.state !== "ok") {
+    warnings.push(`Das verschlüsselte Offsite-Backup benötigt Aufmerksamkeit${offsite.lastErrorCode ? ` (${offsite.lastErrorCode})` : ""}.`);
+  }
   if (serverModeActive && serviceControlToken.length < 32) warnings.push("Der sichere Token für den Windows-Dienststopp fehlt.");
   const lockedAccounts = Number(db.prepare("SELECT COUNT(*) AS count FROM portal_users WHERE locked_until > CURRENT_TIMESTAMP").get().count || 0);
   if (lockedAccounts) warnings.push(`${lockedAccounts} Zugang/Zugänge sind derzeit gesperrt.`);
@@ -13467,6 +13477,7 @@ function serverDiagnostics() {
       latestExternalAgeHours: latestExternalBackupAgeHours,
       retentionCount: backupKeep,
       lastVerified: Boolean(lastBackup?.appBackup?.verified || lastBackup?.externalBackup?.verified),
+      offsite,
     },
     productionChecks,
     pilotChecks: productionChecks,
@@ -15386,6 +15397,7 @@ async function buildUpdateStatus() {
 app.get("/api/system-info", (request, response) => {
   const settings = getSettings();
   const privileged = !getPortalStatus().portalEnabled || request.portalSession?.permissions?.includes("system:write");
+  const diagnosticsAllowed = !getPortalStatus().portalEnabled || request.portalSession?.permissions?.includes("settings:write");
   const sqliteVersion = db.prepare("SELECT sqlite_version() AS version").get().version;
   const serverTime = new Intl.DateTimeFormat("de-AT", {
     day: "2-digit",
@@ -15416,7 +15428,7 @@ app.get("/api/system-info", (request, response) => {
     appVersion: packageMetadata.version,
     appVersionLabel: APP_VERSION_LABEL,
     portal: getPortalStatus(),
-    serverDiagnostics: privileged ? serverDiagnostics() : null,
+    serverDiagnostics: diagnosticsAllowed ? serverDiagnostics() : null,
     runtimeDrive: privileged ? runtimeDriveInfo() : null,
   });
 });
