@@ -33,6 +33,13 @@ const {
 } = require("./lib/external-notifications");
 const { acquireDatabaseLock, lockPathForDatabase, releaseDatabaseLock } = require("./lib/database-lock");
 const {
+  listCommittedBackups,
+  listLegacyBackupPairs,
+  pruneCommittedBackups,
+  verifyCommittedBackup,
+  writeBackupCommitMarker,
+} = require("./lib/backup-commit");
+const {
   assertRuntimeConfiguration,
   createBoundedRateLimitStore,
   parseBackupKeep,
@@ -968,17 +975,15 @@ function verifyProtectedBackupPair(databaseFile, backupDirectory, expectedDataba
   return { requiredStorageKeys, manifest: verified.manifest };
 }
 
+function verifyBackupPairPaths(paths, marker = null) {
+  return verifyProtectedBackupPair(paths.databasePath, paths.protectedDirectory, {
+    fileName: path.basename(paths.databasePath),
+    sha256: marker?.database?.sha256 || paths.databaseSha256,
+  });
+}
+
 function pruneDatabaseBackups(backupDirectory, keep = 30) {
-  const backups = fs
-    .readdirSync(backupDirectory)
-    .filter((name) => /^dienstplan-.*\.db$/.test(name))
-    .map((name) => ({ name, path: path.join(backupDirectory, name), time: fs.statSync(path.join(backupDirectory, name)).mtimeMs }))
-    .sort((a, b) => b.time - a.time);
-  for (const oldBackup of backups.slice(keep)) {
-    const pairedAmuDirectory = path.join(backupDirectory, `${path.basename(oldBackup.name, ".db")}.amu`);
-    fs.rmSync(oldBackup.path, { force: true });
-    fs.rmSync(pairedAmuDirectory, { recursive: true, force: true });
-  }
+  return pruneCommittedBackups(backupDirectory, keep, { verifyPair: verifyBackupPairPaths });
 }
 
 function createDatabaseBackupToDirectory(backupDirectory, reason = "automatic", kind = "external") {
@@ -987,9 +992,10 @@ function createDatabaseBackupToDirectory(backupDirectory, reason = "automatic", 
   if (!amuStorage) throw new Error("Ohne betriebsbereiten AUM-Speicher wird kein unvollständiger Sicherungspunkt erstellt.");
   verifyActiveProtectedDocumentBlobs();
   fs.mkdirSync(backupDirectory, { recursive: true });
-  const snapshotName = `dienstplan-${backupTimestamp()}`;
+  const snapshotName = `dienstplan-${backupTimestamp()}-${crypto.randomBytes(6).toString("hex")}`;
   const target = path.join(backupDirectory, `${snapshotName}.db`);
   const amuTarget = path.join(backupDirectory, `${snapshotName}.amu`);
+  const markerTarget = path.join(backupDirectory, `${snapshotName}.complete.json`);
   const nonce = crypto.randomUUID();
   const temporaryDatabase = `${target}.partial-${nonce}`;
   const temporaryAmu = `${amuTarget}.partial-${nonce}`;
@@ -1011,16 +1017,24 @@ function createDatabaseBackupToDirectory(backupDirectory, reason = "automatic", 
     });
     fs.renameSync(temporaryAmu, amuTarget);
     fs.renameSync(temporaryDatabase, target);
+    writeBackupCommitMarker({
+      backupDirectory,
+      snapshot: snapshotName,
+      databaseSha256: databaseHash,
+      protectedFiles: amuBackup?.fileCount || 0,
+    });
+    verifyCommittedBackup(backupDirectory, path.basename(markerTarget), { verifyPair: verifyBackupPairPaths });
     if (amuBackup) amuBackup.targetDirectory = amuTarget;
   } catch (error) {
     safeRemoveFile(temporaryDatabase);
     fs.rmSync(temporaryAmu, { recursive: true, force: true });
     fs.rmSync(amuTarget, { recursive: true, force: true });
     safeRemoveFile(target);
+    safeRemoveFile(markerTarget);
     throw error;
   }
   pruneDatabaseBackups(backupDirectory, backupKeep);
-  return { path: target, createdAt: new Date().toISOString(), reason, kind, verified: true, amuBackup };
+  return { path: target, marker: markerTarget, createdAt: new Date().toISOString(), reason, kind, verified: true, committed: true, amuBackup };
 }
 
 function createInternalDatabaseBackup(reason = "automatic") {
@@ -13329,13 +13343,20 @@ function directoryDiagnostics(directory) {
 
 function latestDatabaseBackup(backupDirectory) {
   try {
-    return fs.readdirSync(backupDirectory)
-      .filter((name) => /^dienstplan-.*\.db$/.test(name))
-      .map((name) => {
-        const modified = fs.statSync(path.join(backupDirectory, name)).mtime;
-        return { name, modifiedAt: modified.toISOString(), modifiedMs: modified.getTime() };
-      })
-      .sort((left, right) => right.modifiedMs - left.modifiedMs)[0] || null;
+    const committed = listCommittedBackups(backupDirectory, { verifyPair: verifyBackupPairPaths, limit: 1 })[0];
+    const legacy = listLegacyBackupPairs(backupDirectory, { verifyPair: verifyBackupPairPaths, limit: 1 })[0];
+    const selected = [committed, legacy].filter(Boolean).sort((left, right) => right.modifiedMs - left.modifiedMs)[0];
+    if (!selected) return null;
+    return {
+      name: path.basename(selected.databasePath),
+      path: selected.databasePath,
+      marker: selected.markerPath,
+      modifiedAt: selected.modifiedAt,
+      modifiedMs: selected.modifiedMs,
+      committed: selected.committed,
+      legacy: selected.legacy,
+      verified: selected.verified,
+    };
   } catch { return null; }
 }
 
@@ -13371,6 +13392,7 @@ function serverDiagnostics() {
   const latestExternalBackupAgeHours = latestExternalBackup ? Math.max(0, (Date.now() - latestExternalBackup.modifiedMs) / 3600000) : null;
   const backupFreshnessHours = Math.max(6, Number(settings.backup_interval_hours || 2) * 3);
   const externalBackupReady = settingEnabled(settings, "external_backup_enabled") && backupHealth.writable
+    && latestExternalBackup?.committed === true
     && latestExternalBackupAgeHours !== null && latestExternalBackupAgeHours <= backupFreshnessHours;
   const amu = amuStorage ? amuStorage.diagnostics() : { ok: false, writable: false, error: amuStorageStartupError };
   const protectedIntegrationConnectionCount = Number(db.prepare("SELECT COUNT(*) AS count FROM integration_connections WHERE protected_credentials <> '' AND active = 1").get().count || 0);
@@ -13387,6 +13409,7 @@ function serverDiagnostics() {
     warnings.push(`Mindestens ein benötigtes Server-Datenverzeichnis ist nicht beschreibbar: ${failedDirectories.join(", ")}.`);
   }
   if (settingEnabled(settings, "external_backup_enabled") && !backupHealth.writable) warnings.push("Das externe Backupziel ist nicht beschreibbar.");
+  if (latestExternalBackup?.legacy) warnings.push("Das neueste externe Legacy-Backup bleibt erhalten, besitzt aber noch keinen atomaren Commitmarker.");
   if (latestExternalBackupAgeHours === null || latestExternalBackupAgeHours > backupFreshnessHours) warnings.push("Es wurde kein ausreichend aktuelles verifiziertes externes Datenbank-Backup gefunden.");
   if (externalDirectory && path.parse(path.resolve(databasePath)).root.toLowerCase() === path.parse(path.resolve(externalDirectory)).root.toLowerCase()) warnings.push("Datenbank und externes Backup liegen auf demselben Laufwerk.");
   if (!amu.ok) warnings.push(`Der geschützte AUM-Speicher ist nicht betriebsbereit${amu.error ? `: ${amu.error}` : "."}`);
@@ -24525,6 +24548,8 @@ module.exports = {
   validateUsbEmployees,
   usbProvisioningAvailability,
   createDatabaseBackupToDirectory,
+  latestDatabaseBackup,
+  pruneDatabaseBackups,
   verifyActiveProtectedDocumentBlobs,
   verifyProtectedBackupPair,
   finalizeDeletedPersonnelRecordDocuments,

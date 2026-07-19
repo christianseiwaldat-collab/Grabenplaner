@@ -89,6 +89,7 @@ test("v0.72 Linux installer requires every trusted maintenance verifier", () => 
   const installer = read("server-tools", "linux", "install-grabenplaner-server.sh");
   for (const required of [
     "lib/amu-storage.js",
+    "lib/backup-commit.js",
     "server-tools/linux/lib/common.sh",
     "server-tools/linux/lib/backup-snapshot.js",
     "server-tools/linux/lib/hold-database-lock.js",

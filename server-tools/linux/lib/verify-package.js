@@ -150,6 +150,7 @@ function main() {
     "server.js",
     "package.json",
     "pnpm-lock.yaml",
+    "lib/backup-commit.js",
     "lib/database-lock.js",
     "lib/amu-storage.js",
     "server-tools/linux/backup-grabenplaner.sh",
