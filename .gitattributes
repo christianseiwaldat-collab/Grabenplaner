@@ -1,2 +1,7 @@
 *.pdf binary
 *.webp binary
+*.sh text eol=lf
+server-tools/linux/*.sh.in text eol=lf
+server-tools/linux/*.service.in text eol=lf
+server-tools/linux/Caddyfile.in text eol=lf
+server-tools/linux/*.env.example text eol=lf

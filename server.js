@@ -637,6 +637,8 @@ const publicUrl = String(process.env.GRABENPLANER_PUBLIC_URL || runtimeConfig.pu
 const trustProxySetting = String(process.env.GRABENPLANER_TRUST_PROXY || runtimeConfig.trustProxy || "loopback").trim() || "loopback";
 const serviceControlToken = String(process.env.GRABENPLANER_SERVICE_CONTROL_TOKEN || "").trim();
 const deploymentKind = String(process.env.GRABENPLANER_DEPLOYMENT_KIND || "local").trim().toLowerCase() || "local";
+const bootstrapToken = String(process.env.GRABENPLANER_BOOTSTRAP_TOKEN || "").trim();
+const productionBootstrapActive = deploymentKind === "production" && configuredOperationMode === "local";
 const codespacesForwardingDomain = String(process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || "app.github.dev")
   .trim().toLowerCase();
 const app = express();
@@ -672,6 +674,7 @@ const runtimeConfiguration = {
   forcePortal: process.env.GRABENPLANER_FORCE_PORTAL,
   allowUnscannedAmu: process.env.GRABENPLANER_ALLOW_UNSCANNED_AMU,
   testAmuScanner: process.env.GRABENPLANER_TEST_AMU_SCANNER,
+  bootstrapToken,
 };
 assertRuntimeConfiguration(runtimeConfiguration);
 
@@ -722,7 +725,9 @@ function requestOriginAllowed(request, origin) {
 if (serverModeActive) app.set("trust proxy", trustProxySetting);
 
 function portalPasswordMinLength() {
-  return serverModeActive ? SERVER_PORTAL_PASSWORD_MIN_LENGTH : LOCAL_PORTAL_PASSWORD_MIN_LENGTH;
+  return serverModeActive || deploymentKind === "production"
+    ? SERVER_PORTAL_PASSWORD_MIN_LENGTH
+    : LOCAL_PORTAL_PASSWORD_MIN_LENGTH;
 }
 
 fs.mkdirSync(path.dirname(databasePath), { recursive: true });
@@ -3439,6 +3444,17 @@ app.use((request, response, next) => {
     const origin = String(request.headers.origin || "").replace(/\/$/, "");
     if (origin && publicUrl && !requestOriginAllowed(request, origin)) {
       response.status(403).json({ error: "Die Anfrage stammt nicht von der konfigurierten Serveradresse.", code: "ORIGIN_NOT_ALLOWED" });
+      return;
+    }
+  }
+  if (productionBootstrapActive && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+    const provided = String(request.headers["x-grabenplaner-bootstrap-token"] || "");
+    const valid = bootstrapToken.length >= 32 && safeHashEquals(provided, bootstrapToken);
+    if (!valid) {
+      response.status(403).json({
+        error: "Fuer die geschuetzte Admin-Ersteinrichtung fehlt der einmalige Bootstrap-Schluessel.",
+        code: "BOOTSTRAP_TOKEN_REQUIRED",
+      });
       return;
     }
   }
@@ -15178,8 +15194,7 @@ app.post("/api/service/stop", (request, response) => {
     throw httpError(404, "Der Dienststeuerungs-Endpunkt ist nicht verfügbar.", "SERVICE_CONTROL_UNAVAILABLE");
   }
   const provided = String(request.headers["x-grabenplaner-service-token"] || "");
-  const valid = provided.length === serviceControlToken.length
-    && crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(serviceControlToken));
+  const valid = safeHashEquals(provided, serviceControlToken);
   if (!valid) {
     auditPortal("service", "service.stop.denied", "system", "server");
     throw httpError(403, "Die Dienststeuerung wurde abgelehnt.", "SERVICE_CONTROL_DENIED");

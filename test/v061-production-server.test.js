@@ -26,6 +26,7 @@ function productionConfiguration(overrides = {}) {
     forcePortal: "",
     allowUnscannedAmu: "",
     testAmuScanner: "",
+    bootstrapToken: "",
     ...overrides,
   };
 }
@@ -63,6 +64,17 @@ test("v0.61: produktive Serverkonfiguration ist strikt und testbare Sondermodi b
   for (const [override, expected] of invalidConfigurations) {
     assert.match(runtimeValidationErrors(productionConfiguration(override)).join(" "), expected);
   }
+});
+
+test("v0.72: produktiver Loopback-Bootstrap verlangt einen einmaligen Schluessel", () => {
+  assert.deepEqual(runtimeValidationErrors(productionConfiguration({
+    operationMode: "local",
+    bootstrapToken: "b".repeat(48),
+  })), []);
+  assert.match(runtimeValidationErrors(productionConfiguration({
+    operationMode: "local",
+    bootstrapToken: "zu-kurz",
+  })).join(" "), /BOOTSTRAP_TOKEN.*32 Zeichen/i);
 });
 
 test("v0.61: Port und Backup-Aufbewahrung werden ohne stille Teilwerte gelesen", () => {
