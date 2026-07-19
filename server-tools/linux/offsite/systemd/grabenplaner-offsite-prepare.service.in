@@ -1,0 +1,35 @@
+[Unit]
+Description=Grabenplaner Offsite-Staging konsistent vorbereiten
+Documentation=https://github.com/christianseiwaldat-collab/Grabenplaner/blob/main/SERVERBETRIEB.md
+After=local-fs.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/opt/grabenplaner-offsite/module/grabenplaner-offsite-prepare.sh
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=127.0.0.0/8
+IPAddressAllow=::1/128
+UMask=0077
+ReadWritePaths=/var/lib/grabenplaner /var/backups/grabenplaner /var/lib/grabenplaner-offsite /run/grabenplaner /run/grabenplaner-offsite
+TimeoutStartSec=20min
+
+[Install]
+WantedBy=multi-user.target

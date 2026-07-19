@@ -167,7 +167,39 @@ try {
         Copy-Item -LiteralPath $sourceFile -Destination $destination -Force
     }
 
-    foreach ($required in @('server.js', 'package.json', 'pnpm-lock.yaml', 'SERVERBETRIEB.md', 'server-tools\server.env.example', 'server-tools\caddy\Caddyfile.example')) {
+    foreach ($required in @(
+        'server.js',
+        'package.json',
+        'pnpm-lock.yaml',
+        'SERVERBETRIEB.md',
+        'server-tools\server.env.example',
+        'server-tools\caddy\Caddyfile.example',
+        'server-tools\linux\offsite\module-schema.json',
+        'server-tools\linux\offsite\grabenplaner-offsite-check.sh',
+        'server-tools\linux\offsite\grabenplaner-offsite-pre-update.sh',
+        'server-tools\linux\offsite\grabenplaner-offsite-prepare.sh',
+        'server-tools\linux\offsite\grabenplaner-offsite-read-secret.sh',
+        'server-tools\linux\offsite\grabenplaner-offsite-rclone-wrapper.sh',
+        'server-tools\linux\offsite\grabenplaner-offsite-restore-test.sh',
+        'server-tools\linux\offsite\grabenplaner-offsite-upload.sh',
+        'server-tools\linux\offsite\install-grabenplaner-offsite.sh',
+        'server-tools\linux\offsite\uninstall-grabenplaner-offsite.sh',
+        'server-tools\linux\offsite\test-grabenplaner-offsite.sh',
+        'server-tools\linux\offsite\lib\offsite-common.sh',
+        'server-tools\linux\offsite\lib\offsite-contract.js',
+        'server-tools\linux\offsite\lib\offsite-restore-verify.js',
+        'server-tools\linux\offsite\lib\offsite-retention-verify.js',
+        'server-tools\linux\offsite\lib\offsite-stage.js',
+        'server-tools\linux\offsite\lib\offsite-status.js',
+        'server-tools\linux\offsite\lib\offsite-setup-rclone-wrapper.sh',
+        'server-tools\linux\offsite\systemd\grabenplaner-offsite-prepare.service.in',
+        'server-tools\linux\offsite\systemd\grabenplaner-offsite-upload.service.in',
+        'server-tools\linux\offsite\systemd\grabenplaner-offsite-upload.timer.in',
+        'server-tools\linux\offsite\systemd\grabenplaner-offsite-check.service.in',
+        'server-tools\linux\offsite\systemd\grabenplaner-offsite-check.timer.in',
+        'server-tools\linux\offsite\systemd\grabenplaner-offsite-restore-test.service.in',
+        'server-tools\linux\offsite\systemd\grabenplaner-offsite-restore-test.timer.in'
+    )) {
         if (-not (Test-Path -LiteralPath (Join-Path $buildRoot $required) -PathType Leaf)) {
             throw "Pflichtdatei fehlt im Linux-Serverpaket: $required"
         }

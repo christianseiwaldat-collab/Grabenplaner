@@ -269,6 +269,32 @@ const crypto = require("node:crypto");
 const root = path.resolve(process.argv[2]);
 const manifestPath = path.join(root, "grabenplaner-server-manifest.json");
 const fail = (message) => { console.error(message); process.exit(1); };
+const expectedOffsiteArtifacts = [
+  "server-tools/linux/offsite/grabenplaner-offsite-check.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-pre-update.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-prepare.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-read-secret.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-rclone-wrapper.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-restore-test.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-upload.sh",
+  "server-tools/linux/offsite/install-grabenplaner-offsite.sh",
+  "server-tools/linux/offsite/lib/offsite-common.sh",
+  "server-tools/linux/offsite/lib/offsite-contract.js",
+  "server-tools/linux/offsite/lib/offsite-restore-verify.js",
+  "server-tools/linux/offsite/lib/offsite-retention-verify.js",
+  "server-tools/linux/offsite/lib/offsite-stage.js",
+  "server-tools/linux/offsite/lib/offsite-status.js",
+  "server-tools/linux/offsite/lib/offsite-setup-rclone-wrapper.sh",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-check.service.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-check.timer.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-prepare.service.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-restore-test.service.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-restore-test.timer.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-upload.service.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-upload.timer.in",
+  "server-tools/linux/offsite/uninstall-grabenplaner-offsite.sh",
+  "server-tools/linux/offsite/test-grabenplaner-offsite.sh",
+];
 if (!fs.existsSync(manifestPath)) fail("Das Manifest fehlt in der Archivwurzel.");
 let manifest;
 try { manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8").replace(/^\uFEFF/, "")); } catch { fail("Das Manifest ist kein gueltiges JSON."); }
@@ -297,6 +323,7 @@ for (const required of [
   "server-tools/linux/lib/verify-backup.js",
   "server-tools/linux/lib/verify-install-tree.js",
   "server-tools/linux/lib/verify-package.js",
+  ...expectedOffsiteArtifacts,
 ]) {
   if (!fs.statSync(path.join(root, required), { throwIfNoEntry: false })?.isFile()) fail(`Pflichtdatei fehlt: ${required}`);
 }
@@ -317,6 +344,16 @@ if (runtimeContract?.format !== "grabenplaner-linux-runtime-contract" || runtime
   || runtimeContract.managedArtifacts.length !== expectedRuntimeArtifacts.length
   || expectedRuntimeArtifacts.some((relative) => !runtimeContract.managedArtifacts.includes(relative))) {
   fail("Der Linux-Runtimevertrag v1 ist ungueltig.");
+}
+const offsiteSchemaPath = path.join(root, "server-tools/linux/offsite/module-schema.json");
+let offsiteContract;
+try { offsiteContract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, "")); } catch { fail("Der optionale Offsite-Modulvertrag ist nicht lesbar."); }
+if (offsiteContract?.format !== "grabenplaner-linux-offsite-module-contract" || offsiteContract?.schemaVersion !== 1
+  || offsiteContract?.moduleVersion !== 1 || offsiteContract?.activationPolicy !== "explicit-root-setup"
+  || !Array.isArray(offsiteContract?.managedArtifacts) || offsiteContract.managedArtifacts.length !== expectedOffsiteArtifacts.length
+  || expectedOffsiteArtifacts.some((relative) => !offsiteContract.managedArtifacts.includes(relative))
+  || offsiteContract.managedArtifacts.some((relative) => typeof relative !== "string" || !relative.startsWith("server-tools/linux/offsite/") || relative.includes("\\") || relative.split("/").some((part) => !part || part === "." || part === ".."))) {
+  fail("Der optionale Offsite-Modulvertrag ist ungueltig.");
 }
 const allowedRootFiles = new Set([
   "server.js", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
