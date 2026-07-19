@@ -66,3 +66,37 @@ test("v0.72 Linux server documentation recommends Ubuntu without removing Window
   assert.match(documentation, /Zielaufbau unter Windows/);
   assert.match(documentation, /WinSW/);
 });
+
+test("v0.72 Linux bootstrap stays private until public HTTPS readiness succeeds", () => {
+  const installer = read("server-tools", "linux", "install-grabenplaner-server.sh");
+  const bootstrap = read("server-tools", "linux", "grabenplaner-bootstrap-admin.sh.in");
+  const environment = read("server-tools", "linux", "grabenplaner.env.example");
+  const caddy = read("server-tools", "linux", "Caddyfile.in");
+
+  assert.match(environment, /^GRABENPLANER_BOOTSTRAP_TOKEN=\{\{BOOTSTRAP_TOKEN\}\}$/m);
+  assert.match(bootstrap, /http:\/\/127\.0\.0\.1:\{\{PORT\}\}\/\?bootstrap=\$\{encoded_token\}/);
+  assert.match(bootstrap, /wait_for_public_ready/);
+  assert.match(bootstrap, /clear_bootstrap_token/);
+  assert.match(bootstrap, /recover_to_bootstrap/);
+  assert.ok(bootstrap.indexOf("if ! wait_for_public_ready") < bootstrap.indexOf("if ! clear_bootstrap_token"));
+  assert.match(installer, /wait_for_public_ready \|\| fail/);
+  assert.match(installer, /IFS= read -r first_line/);
+  assert.match(installer, /CADDY_CONFIG_WRITTEN=1\r?\ninstall/);
+  assert.match(caddy, /@serviceStop path \/api\/service\/stop \/api\/service\/stop\/\*/);
+});
+
+test("v0.72 Linux installer requires every trusted maintenance verifier", () => {
+  const installer = read("server-tools", "linux", "install-grabenplaner-server.sh");
+  for (const required of [
+    "lib/amu-storage.js",
+    "server-tools/linux/lib/common.sh",
+    "server-tools/linux/lib/backup-snapshot.js",
+    "server-tools/linux/lib/hold-database-lock.js",
+    "server-tools/linux/lib/restore-backup.js",
+    "server-tools/linux/lib/verify-backup.js",
+    "server-tools/linux/lib/verify-install-tree.js",
+    "server-tools/linux/lib/verify-package.js",
+  ]) {
+    assert.match(installer, new RegExp(required.replaceAll(".", "\\.")));
+  }
+});

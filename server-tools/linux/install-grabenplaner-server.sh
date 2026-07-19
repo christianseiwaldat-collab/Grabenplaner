@@ -19,6 +19,7 @@ readonly APP_UNIT="/etc/systemd/system/grabenplaner.service"
 readonly BOOTSTRAP_UNIT="/etc/systemd/system/grabenplaner-bootstrap.service"
 readonly CADDY_CONFIG="/etc/caddy/Caddyfile"
 readonly BOOTSTRAP_COMMAND="/usr/local/sbin/grabenplaner-bootstrap-admin"
+readonly CADDY_MANAGED_MARKER="# Managed by Grabenplaner. Local changes may be replaced by the installer."
 readonly MANIFEST_NAME="grabenplaner-server-manifest.json"
 readonly EXPECTED_PNPM_VERSION="11.7.0"
 readonly MAX_ARCHIVE_BYTES=$((2 * 1024 * 1024 * 1024))
@@ -37,7 +38,10 @@ APP_SWAPPED=0
 CADDY_CONFIG_REPLACED=0
 CADDY_CONFIG_BACKUP=""
 CADDY_CONFIG_WRITTEN=0
-RUNTIME_FILES_INSTALLED=0
+APP_UNIT_WRITTEN=0
+BOOTSTRAP_UNIT_WRITTEN=0
+BOOTSTRAP_COMMAND_WRITTEN=0
+UNIT_TEMP=""
 PNPM_COMMAND=()
 
 fail() {
@@ -68,6 +72,9 @@ TEXT
 
 cleanup() {
   local exit_code=$?
+  if [[ -n "$UNIT_TEMP" ]]; then
+    rm -f -- "$UNIT_TEMP"
+  fi
   if [[ -n "$STAGE_ROOT" && -d "$STAGE_ROOT" ]]; then
     rm -rf --one-file-system -- "$STAGE_ROOT"
   fi
@@ -79,12 +86,16 @@ cleanup() {
     cp --preserve=mode,timestamps,ownership -- "$CADDY_CONFIG_BACKUP" "$CADDY_CONFIG"
     systemctl restart caddy.service >/dev/null 2>&1 || true
   elif [[ $exit_code -ne 0 && $CADDY_CONFIG_WRITTEN -eq 1 && -f "$CADDY_CONFIG" ]] \
-    && grep -q '^# Managed by Grabenplaner\.' "$CADDY_CONFIG"; then
+    && caddy_config_is_managed; then
     systemctl disable --now caddy.service >/dev/null 2>&1 || true
     rm -f -- "$CADDY_CONFIG"
   fi
-  if [[ $exit_code -ne 0 && $RUNTIME_FILES_INSTALLED -eq 1 ]]; then
-    rm -f -- "$APP_UNIT" "$BOOTSTRAP_UNIT" "$BOOTSTRAP_COMMAND"
+  if [[ $exit_code -ne 0 ]]; then
+    [[ $APP_UNIT_WRITTEN -eq 0 ]] || rm -f -- "$APP_UNIT"
+    [[ $BOOTSTRAP_UNIT_WRITTEN -eq 0 ]] || rm -f -- "$BOOTSTRAP_UNIT"
+    [[ $BOOTSTRAP_COMMAND_WRITTEN -eq 0 ]] || rm -f -- "$BOOTSTRAP_COMMAND"
+  fi
+  if [[ $exit_code -ne 0 && ( $APP_UNIT_WRITTEN -eq 1 || $BOOTSTRAP_UNIT_WRITTEN -eq 1 ) ]]; then
     systemctl daemon-reload >/dev/null 2>&1 || true
   fi
   if [[ $exit_code -ne 0 ]]; then
@@ -99,6 +110,13 @@ cleanup() {
   exit "$exit_code"
 }
 trap cleanup EXIT
+
+caddy_config_is_managed() {
+  local first_line=""
+  [[ -f "$CADDY_CONFIG" && ! -L "$CADDY_CONFIG" ]] || return 1
+  IFS= read -r first_line <"$CADDY_CONFIG" || true
+  [[ "$first_line" == "$CADDY_MANAGED_MARKER" ]]
+}
 
 need_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Erforderlicher Befehl fehlt: $1"
@@ -120,6 +138,7 @@ render_template() {
   content="${content//\{\{WIFI_IDENTITY_KEY\}\}/${WIFI_IDENTITY_KEY-}}"
   content="${content//\{\{WIFI_WEBHOOK_SECRET\}\}/${WIFI_WEBHOOK_SECRET-}}"
   content="${content//\{\{SERVICE_CONTROL_TOKEN\}\}/${SERVICE_CONTROL_TOKEN-}}"
+  content="${content//\{\{BOOTSTRAP_TOKEN\}\}/${BOOTSTRAP_TOKEN-}}"
   printf '%s\n' "$content" >"$destination"
   if grep -Eq '\{\{[A-Z0-9_]+\}\}' "$destination"; then
     fail "Nicht ersetzter Platzhalter in der Vorlage: $source"
@@ -263,12 +282,19 @@ if (!Array.isArray(manifest.files) || !manifest.files.length) fail("Die Manifest
 const packageJsonPath = path.join(root, "package.json");
 const lockPath = path.join(root, "pnpm-lock.yaml");
 for (const required of [
-  "server.js", "package.json", "pnpm-lock.yaml", "lib/database-lock.js",
+  "server.js", "package.json", "pnpm-lock.yaml", "lib/database-lock.js", "lib/amu-storage.js",
   "server-tools/linux/backup-grabenplaner.sh",
   "server-tools/linux/stop-grabenplaner-server.sh",
   "server-tools/linux/test-grabenplaner-server.sh",
   "server-tools/linux/update-grabenplaner-server.sh",
   "server-tools/linux/uninstall-grabenplaner-server.sh",
+  "server-tools/linux/lib/common.sh",
+  "server-tools/linux/lib/backup-snapshot.js",
+  "server-tools/linux/lib/hold-database-lock.js",
+  "server-tools/linux/lib/restore-backup.js",
+  "server-tools/linux/lib/verify-backup.js",
+  "server-tools/linux/lib/verify-install-tree.js",
+  "server-tools/linux/lib/verify-package.js",
 ]) {
   if (!fs.statSync(path.join(root, required), { throwIfNoEntry: false })?.isFile()) fail(`Pflichtdatei fehlt: ${required}`);
 }
@@ -365,6 +391,20 @@ wait_for_health() {
   return 1
 }
 
+wait_for_public_ready() {
+  local deadline=$((SECONDS + 120))
+  while (( SECONDS < deadline )); do
+    if curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 5 \
+      -- "${PUBLIC_URL%/}/api/health/ready" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  journalctl -u caddy.service --no-pager -n 40 >&2 || true
+  journalctl -u grabenplaner.service --no-pager -n 40 >&2 || true
+  return 1
+}
+
 while (($#)); do
   case "$1" in
     --package) [[ $# -ge 2 ]] || fail "Wert fuer --package fehlt."; PACKAGE_PATH=$2; shift 2 ;;
@@ -418,7 +458,7 @@ validate_zip_entries
 [[ -f "$SCRIPT_DIR/grabenplaner.service.in" && -f "$SCRIPT_DIR/grabenplaner-bootstrap.service.in" \
   && -f "$SCRIPT_DIR/Caddyfile.in" && -f "$SCRIPT_DIR/grabenplaner.env.example" \
   && -f "$SCRIPT_DIR/grabenplaner-bootstrap-admin.sh.in" ]] || fail "Die Linux-Laufzeitvorlagen sind unvollstaendig."
-if [[ -s "$CADDY_CONFIG" ]] && ! grep -q '^# Managed by Grabenplaner\.' "$CADDY_CONFIG"; then
+if [[ -s "$CADDY_CONFIG" ]] && ! caddy_config_is_managed; then
   [[ $REPLACE_CADDY_CONFIG -eq 1 ]] || fail "Die vorhandene Caddy-Konfiguration wird nicht von Grabenplaner verwaltet. Fuer einen dedizierten Server ist --replace-caddy-config erforderlich."
 fi
 systemctl cat caddy.service >/dev/null 2>&1 || fail "Der installierte Caddy-systemd-Dienst fehlt."
@@ -450,13 +490,14 @@ if [[ ! -f "$ENV_FILE" ]]; then
   WIFI_IDENTITY_KEY="$(random_base64 32)"
   WIFI_WEBHOOK_SECRET="$(random_base64 48)"
   SERVICE_CONTROL_TOKEN="$(random_base64 48)"
+  BOOTSTRAP_TOKEN="$(random_base64 32)"
   ENV_TEMP="$(mktemp "$CONFIG_ROOT/.grabenplaner.env.XXXXXX")"
   chmod 0600 "$ENV_TEMP"
   render_template "$SCRIPT_DIR/grabenplaner.env.example" "$ENV_TEMP"
   mv -- "$ENV_TEMP" "$ENV_FILE"
   chown root:root "$ENV_FILE"
   chmod 0600 "$ENV_FILE"
-  unset AMU_KEY INTEGRATION_KEY WIFI_IDENTITY_KEY WIFI_WEBHOOK_SECRET SERVICE_CONTROL_TOKEN
+  unset AMU_KEY INTEGRATION_KEY WIFI_IDENTITY_KEY WIFI_WEBHOOK_SECRET SERVICE_CONTROL_TOKEN BOOTSTRAP_TOKEN
 else
   [[ "$(stat -c %a "$ENV_FILE")" == "600" && "$(stat -c %U:%G "$ENV_FILE")" == "root:root" ]] \
     || fail "Die bestehende Umgebungsdatei muss root:root gehoeren und Modus 0600 haben."
@@ -475,6 +516,7 @@ else
   validate_secret_bytes GRABENPLANER_WIFI_IDENTITY_KEY 32
   validate_secret_bytes GRABENPLANER_WIFI_WEBHOOK_SECRET 48
   [[ "$(environment_value GRABENPLANER_SERVICE_CONTROL_TOKEN | wc -c)" -ge 32 ]] || fail "Der Dienststeuerungs-Token ist zu kurz."
+  validate_secret_bytes GRABENPLANER_BOOTSTRAP_TOKEN 32
 fi
 
 SCANNER_PROBE="$(mktemp "$DATA_ROOT/private/.scanner-probe.XXXXXX")"
@@ -536,12 +578,14 @@ APP_SWAPPED=1
 
 UNIT_TEMP="$(mktemp)"
 render_template "$SCRIPT_DIR/grabenplaner.service.in" "$UNIT_TEMP"
+APP_UNIT_WRITTEN=1
 install -o root -g root -m 0644 "$UNIT_TEMP" "$APP_UNIT"
 render_template "$SCRIPT_DIR/grabenplaner-bootstrap.service.in" "$UNIT_TEMP"
+BOOTSTRAP_UNIT_WRITTEN=1
 install -o root -g root -m 0644 "$UNIT_TEMP" "$BOOTSTRAP_UNIT"
 render_template "$SCRIPT_DIR/grabenplaner-bootstrap-admin.sh.in" "$UNIT_TEMP"
+BOOTSTRAP_COMMAND_WRITTEN=1
 install -o root -g root -m 0750 "$UNIT_TEMP" "$BOOTSTRAP_COMMAND"
-RUNTIME_FILES_INSTALLED=1
 render_template "$SCRIPT_DIR/Caddyfile.in" "$UNIT_TEMP"
 caddy validate --config "$UNIT_TEMP" --adapter caddyfile >/dev/null
 if [[ -s "$CADDY_CONFIG" ]]; then
@@ -550,9 +594,10 @@ if [[ -s "$CADDY_CONFIG" ]]; then
   cp --preserve=mode,timestamps,ownership -- "$CADDY_CONFIG" "$CADDY_CONFIG_BACKUP"
   CADDY_CONFIG_REPLACED=1
 fi
-install -o root -g root -m 0644 "$UNIT_TEMP" "$CADDY_CONFIG"
 CADDY_CONFIG_WRITTEN=1
+install -o root -g root -m 0644 "$UNIT_TEMP" "$CADDY_CONFIG"
 rm -f -- "$UNIT_TEMP"
+UNIT_TEMP=""
 systemctl daemon-reload
 
 if command -v systemd-analyze >/dev/null 2>&1; then
@@ -566,23 +611,11 @@ if [[ $START_AFTER_INSTALL -eq 1 ]]; then
     wait_for_health grabenplaner.service ready || fail "Die Produktions-Bereitschaftspruefung ist nicht gruen."
     systemctl enable caddy.service >/dev/null
     systemctl restart caddy.service
+    wait_for_public_ready || fail "Die oeffentliche HTTPS-Bereitschaftspruefung ist nicht gruen."
     printf 'Grabenplaner %s wurde installiert und als HTTPS-Dienst gestartet.\n' "$APP_VERSION"
   else
-    systemctl disable --now grabenplaner.service caddy.service >/dev/null 2>&1 || true
-    systemctl start grabenplaner-bootstrap.service
-    wait_for_health grabenplaner-bootstrap.service live || fail "Der lokale Bootstrap-Dienst wurde nicht betriebsbereit."
     printf 'Grabenplaner %s wurde installiert.\n\n' "$APP_VERSION"
-    "$BOOTSTRAP_COMMAND" status >/dev/null || true
-    cat <<TEXT
-Die frische Instanz lauscht fuer die Admin-Ersteinrichtung nur auf 127.0.0.1.
-Oeffne einen SSH-Tunnel und rufe danach lokal http://127.0.0.1:${PORT} auf:
-
-  ssh -L ${PORT}:127.0.0.1:${PORT} <server-benutzer>@<server>
-
-Lege zuerst das eigene Teammitglied und danach den Admin-Zugang an. Abschliessen mit:
-
-  sudo grabenplaner-bootstrap-admin finish
-TEXT
+    "$BOOTSTRAP_COMMAND" start
   fi
 else
   systemctl disable --now grabenplaner-bootstrap.service grabenplaner.service caddy.service >/dev/null 2>&1 || true
