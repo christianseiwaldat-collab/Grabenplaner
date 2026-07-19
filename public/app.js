@@ -1,3 +1,31 @@
+(() => {
+  const storageKey = "grabenplaner-bootstrap-token";
+  const parameters = new URLSearchParams(window.location.search);
+  const suppliedToken = String(parameters.get("bootstrap") || "").trim();
+  let inMemoryToken = "";
+  if (suppliedToken.length >= 32) {
+    inMemoryToken = suppliedToken;
+    try { window.sessionStorage.setItem(storageKey, suppliedToken); } catch {}
+    parameters.delete("bootstrap");
+    const query = parameters.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+  }
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = (input, options = {}) => {
+    let bootstrapToken = inMemoryToken;
+    try { bootstrapToken ||= window.sessionStorage.getItem(storageKey) || ""; } catch {}
+    if (bootstrapToken.length < 32) return originalFetch(input, options);
+    const target = new URL(typeof input === "string" || input instanceof URL ? input : input.url, window.location.href);
+    if (target.origin !== window.location.origin) return originalFetch(input, options);
+    const method = String(options.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
+    if (["GET", "HEAD", "OPTIONS"].includes(method)) return originalFetch(input, options);
+    const headers = new Headers(input instanceof Request ? input.headers : undefined);
+    new Headers(options.headers || {}).forEach((value, name) => headers.set(name, value));
+    headers.set("X-Grabenplaner-Bootstrap-Token", bootstrapToken);
+    return originalFetch(input, { ...options, headers });
+  };
+})();
+
 const state = {
   weekStart: getMonday(new Date()),
   vacationYear: new Date().getFullYear(),
@@ -814,6 +842,10 @@ async function logoutPortal() {
 }
 
 function openAdminSetup() {
+  if (state.portalStatus?.adminSetupAvailable !== true) {
+    showToast("Die Admin-Ersteinrichtung ist nur im lokalen Einrichtungsmodus verfügbar.", true);
+    return;
+  }
   const employees = (state.allEmployees || []).filter((employee) => employee.active);
   elements.adminSetupEmployee.innerHTML = employees.map((employee) =>
     `<option value="${escapeHtml(employee.personnel_number)}">${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.nickname || employee.full_name)}</option>`,
@@ -1201,7 +1233,7 @@ function renderTimeline() {
             const top = ((barStart - start) / range) * 100;
             const height = Math.max(2.5, ((barEnd - barStart) / range) * 100);
             const departmentLabel = shift.department_name || shift.area || "";
-            return `<button class="shift-bar" type="button" data-shift-id="${shift.id}" style="top:${top}%;height:${height}%;--employee-color:${employee.color}" title="${shift.start_time}–${shift.end_time} · ${formatHours(shift.counted_minutes)}${departmentLabel ? ` · ${escapeHtml(departmentLabel)}` : ""}" aria-label="${escapeHtml(employee.nickname)} ${shift.start_time} bis ${shift.end_time}">${departmentLabel ? `<span>${escapeHtml(departmentLabel)}</span>` : ""}</button>`;
+            return `<button class="shift-bar" type="button" data-shift-id="${shift.id}" style="top:${top}%;height:${height}%;--employee-color:${employee.color};--employee-contrast:${contrastColor(employee.color)}" title="${shift.start_time}–${shift.end_time} · ${formatHours(shift.counted_minutes)}${departmentLabel ? ` · ${escapeHtml(departmentLabel)}` : ""}" aria-label="${escapeHtml(employee.nickname)} ${shift.start_time} bis ${shift.end_time}">${departmentLabel ? `<span>${escapeHtml(departmentLabel)}</span>` : ""}</button>`;
           }).join("");
           const unavailableLabel = locked
             ? "gesperrt"
@@ -2208,7 +2240,7 @@ async function loadPortalUsers() {
     elements.accessSettingsHint.textContent = state.portalStatus?.adminSetupState === "configured"
       ? "Startpasswörter werden nie angezeigt. Ein neu gesetztes Passwort muss beim ersten Login geändert werden."
       : "Zuerst einen Admin einrichten; danach können weitere Zugänge vorbereitet werden.";
-    elements.adminSetupButton.classList.toggle("hidden", state.portalStatus?.adminSetupState === "configured");
+    elements.adminSetupButton.classList.toggle("hidden", !state.portalStatus?.adminSetupAvailable);
     elements.portalUserList.innerHTML = state.portalUsers.map((user) => {
       const scope = user.scopes?.[0] || { locationId: user.homeLocationId || state.locations[0]?.id || "", departmentId: user.preferredDepartmentId || "" };
       const locations = state.locations.map((location) => `<option value="${escapeHtml(location.id)}" ${location.id === scope.locationId ? "selected" : ""}>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("");

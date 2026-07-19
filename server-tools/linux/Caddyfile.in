@@ -1,0 +1,31 @@
+# Managed by Grabenplaner. Local changes may be replaced by the installer.
+{
+	admin off
+}
+
+{{PUBLIC_HOST}} {
+	encode zstd gzip
+
+	# The internal service-control endpoint must never be public.
+	@serviceStop {
+		path_regexp serviceStopPath (?i)^/api/service/stop(?:/.*)?$
+	}
+	respond @serviceStop 404
+
+	reverse_proxy {{UPSTREAM}} {
+		health_uri /api/health/live
+		health_interval 30s
+		health_timeout 5s
+	}
+
+	header -Server
+
+	log {
+		output file "{{CADDY_LOG_PATH}}" {
+			roll_size 10MiB
+			roll_keep 10
+			roll_keep_for 720h
+		}
+		format json
+	}
+}

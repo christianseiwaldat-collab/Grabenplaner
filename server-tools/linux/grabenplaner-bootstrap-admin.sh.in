@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+readonly APP_SERVICE="grabenplaner.service"
+readonly BOOTSTRAP_SERVICE="grabenplaner-bootstrap.service"
+readonly CADDY_SERVICE="caddy.service"
+readonly NODE_EXECUTABLE="{{NODE_EXECUTABLE}}"
+readonly DATABASE_PATH="/var/lib/grabenplaner/data/dienstplan.db"
+readonly ENV_FILE="/etc/grabenplaner/grabenplaner.env"
+readonly HEALTH_URL="http://127.0.0.1:{{PORT}}/api/health/live"
+readonly PUBLIC_READY_URL="{{PUBLIC_URL}}/api/health/ready"
+readonly BOOTSTRAP_TOKEN_KEY="GRABENPLANER_BOOTSTRAP_TOKEN"
+
+fail() {
+  printf 'Fehler: %s\n' "$*" >&2
+  exit 1
+}
+
+require_root() {
+  [[ ${EUID:-$(id -u)} -eq 0 ]] || fail "Dieser Befehl muss mit sudo ausgefuehrt werden."
+}
+
+wait_for_health() {
+  local endpoint=$1 attempt
+  for attempt in $(seq 1 60); do
+    if curl --fail --silent --show-error --max-time 2 "${HEALTH_URL%/live}/${endpoint}" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+wait_for_public_ready() {
+  local deadline=$((SECONDS + 120))
+  while (( SECONDS < deadline )); do
+    if curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 5 \
+      -- "$PUBLIC_READY_URL" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
+assert_secure_environment() {
+  [[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] || fail "Die geschuetzte Serverkonfiguration fehlt."
+  [[ "$(stat -c %u:%g -- "$ENV_FILE")" == "0:0" && "$(stat -c %a -- "$ENV_FILE")" == "600" ]] \
+    || fail "Die Serverkonfiguration muss root:root gehoeren und Modus 0600 verwenden."
+}
+
+environment_value() {
+  local key=$1
+  awk -F= -v wanted="$key" '$1 == wanted { print substr($0, index($0, "=") + 1); exit }' "$ENV_FILE"
+}
+
+bootstrap_token() {
+  local token
+  assert_secure_environment
+  token="$(environment_value "$BOOTSTRAP_TOKEN_KEY")"
+  [[ ${#token} -ge 32 ]] || fail "Der einmalige Bootstrap-Schluessel fehlt oder wurde bereits verbraucht."
+  printf '%s' "$token"
+}
+
+print_bootstrap_instructions() {
+  local token encoded_token
+  token="$(bootstrap_token)"
+  encoded_token="$(printf '%s' "$token" | "$NODE_EXECUTABLE" -e \
+    'const fs=require("node:fs");process.stdout.write(encodeURIComponent(fs.readFileSync(0,"utf8")));')"
+  cat <<TEXT
+Der einmalige Admin-Bootstrap laeuft ausschliesslich auf 127.0.0.1.
+
+1. Auf dem eigenen PC einen SSH-Tunnel oeffnen:
+   ssh -L {{PORT}}:127.0.0.1:{{PORT}} <server-benutzer>@<server>
+2. Im lokalen Browser diese einmalige, nur fuer root sichtbare Adresse oeffnen:
+   http://127.0.0.1:{{PORT}}/?bootstrap=${encoded_token}
+3. Zuerst das eigene Teammitglied, danach den Admin-Zugang anlegen.
+4. Anschliessend am Server ausfuehren:
+   sudo grabenplaner-bootstrap-admin finish
+
+Es wurde kein Standardpasswort erzeugt und Caddy bleibt bis zum vollstaendig
+erfolgreichen HTTPS-Bereitschaftstest ausgeschaltet.
+TEXT
+}
+
+clear_bootstrap_token() {
+  local count temporary
+  [[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] || return 1
+  [[ "$(stat -c %u:%g -- "$ENV_FILE")" == "0:0" && "$(stat -c %a -- "$ENV_FILE")" == "600" ]] || return 1
+  count="$(grep -c "^${BOOTSTRAP_TOKEN_KEY}=" "$ENV_FILE" || true)"
+  [[ "$count" -eq 1 ]] || return 1
+  temporary="$(mktemp "/etc/grabenplaner/.grabenplaner.env.XXXXXX")" || return 1
+  if ! chmod 0600 "$temporary" || ! chown root:root "$temporary" || ! awk -v key="$BOOTSTRAP_TOKEN_KEY" '
+    index($0, key "=") == 1 { print key "="; next }
+    { print }
+  ' "$ENV_FILE" >"$temporary" || ! mv -- "$temporary" "$ENV_FILE"; then
+    rm -f -- "$temporary"
+    return 1
+  fi
+}
+
+admin_is_configured() {
+  [[ -f "$DATABASE_PATH" ]] || return 1
+  runuser -u grabenplaner -- "$NODE_EXECUTABLE" - "$DATABASE_PATH" <<'NODE' >/dev/null
+const { DatabaseSync } = require("node:sqlite");
+const databasePath = process.argv[2];
+let database;
+try {
+  database = new DatabaseSync(databasePath, { readOnly: true });
+  const row = database.prepare(`
+    SELECT COUNT(*) AS count
+    FROM portal_users
+    WHERE active = 1 AND role IN ('developer', 'it_admin', 'admin')
+  `).get();
+  process.exit(Number(row?.count || 0) > 0 ? 0 : 1);
+} catch {
+  process.exit(1);
+} finally {
+  try { database?.close(); } catch {}
+}
+NODE
+}
+
+start_bootstrap() {
+  bootstrap_token >/dev/null
+  systemctl disable --now "$APP_SERVICE" >/dev/null 2>&1 || true
+  systemctl disable --now "$CADDY_SERVICE" >/dev/null 2>&1 || true
+  systemctl start "$BOOTSTRAP_SERVICE"
+  if ! wait_for_health live; then
+    journalctl -u "$BOOTSTRAP_SERVICE" --no-pager -n 30 >&2 || true
+    fail "Der lokale Bootstrap-Dienst wurde nicht betriebsbereit."
+  fi
+  print_bootstrap_instructions
+}
+
+recover_to_bootstrap() {
+  local reason=$1
+  systemctl disable --now "$CADDY_SERVICE" "$APP_SERVICE" >/dev/null 2>&1 || true
+  if ! systemctl start "$BOOTSTRAP_SERVICE" || ! wait_for_health live; then
+    journalctl -u "$BOOTSTRAP_SERVICE" --no-pager -n 40 >&2 || true
+    fail "${reason} Auch die sichere Rueckkehr zum lokalen Bootstrap ist fehlgeschlagen; Caddy bleibt ausgeschaltet."
+  fi
+  printf 'Der Produktionsstart wurde sicher zurueckgesetzt: %s\n\n' "$reason" >&2
+  print_bootstrap_instructions >&2
+  fail "Caddy bleibt ausgeschaltet. Ursache beheben und danach den Abschluss erneut ausfuehren."
+}
+
+finish_bootstrap() {
+  bootstrap_token >/dev/null
+  admin_is_configured || fail "Es wurde noch kein aktiver Admin-Zugang eingerichtet."
+  systemctl disable --now "$CADDY_SERVICE" >/dev/null 2>&1 || true
+  systemctl stop "$BOOTSTRAP_SERVICE"
+  if ! /usr/local/sbin/grabenplaner-backup --node "$NODE_EXECUTABLE"; then
+    recover_to_bootstrap "Die verpflichtende erste Sicherung ist fehlgeschlagen."
+  fi
+  systemctl enable "$APP_SERVICE" >/dev/null
+  if ! systemctl restart "$APP_SERVICE" || ! wait_for_health ready; then
+    journalctl -u "$APP_SERVICE" --no-pager -n 40 >&2 || true
+    recover_to_bootstrap "Die interne Produktions-Bereitschaftspruefung ist nicht gruen."
+  fi
+  systemctl enable "$CADDY_SERVICE" >/dev/null
+  if ! systemctl restart "$CADDY_SERVICE"; then
+    journalctl -u "$CADDY_SERVICE" --no-pager -n 40 >&2 || true
+    recover_to_bootstrap "Caddy konnte nicht gestartet werden."
+  fi
+  if ! wait_for_public_ready; then
+    journalctl -u "$CADDY_SERVICE" --no-pager -n 40 >&2 || true
+    journalctl -u "$APP_SERVICE" --no-pager -n 40 >&2 || true
+    recover_to_bootstrap "Die oeffentliche HTTPS-Bereitschaftspruefung ist fehlgeschlagen."
+  fi
+  if ! clear_bootstrap_token; then
+    recover_to_bootstrap "Der einmalige Bootstrap-Schluessel konnte nicht sicher verbraucht werden."
+  fi
+  printf '%s\n' "Admin-Bootstrap abgeschlossen. HTTPS ist geprueft und der einmalige Bootstrap-Schluessel wurde verbraucht."
+}
+
+show_status() {
+  printf 'Admin eingerichtet: '
+  if admin_is_configured; then printf 'ja\n'; else printf 'nein\n'; fi
+  systemctl --no-pager --full status "$BOOTSTRAP_SERVICE" "$APP_SERVICE" "$CADDY_SERVICE" || true
+}
+
+require_root
+case "${1:-}" in
+  start) start_bootstrap ;;
+  finish) finish_bootstrap ;;
+  status) show_status ;;
+  *) fail "Aufruf: grabenplaner-bootstrap-admin {start|finish|status}" ;;
+esac
