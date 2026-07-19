@@ -123,6 +123,8 @@ const state = {
   personnelRecord: null,
   personnelRecordDirtyFields: new Set(),
   employeePersonnelRecord: null,
+  serverStatus: null,
+  serverDiagnostics: null,
   updateStatus: null,
   selectedColor: "#0b84c6",
   integrations: {
@@ -220,7 +222,7 @@ const elements = Object.fromEntries(
     "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
-    "serverDiagnostics", "refreshServerDiagnosticsButton",
+    "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "databaseBackupSettingsCard", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "dashboardFontSize",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
@@ -666,7 +668,11 @@ function applyRoleVisibility() {
   const timeReadAccess = lanActive && permissions.includes("time:read") && state.portalStatus?.capabilities?.timeTracking;
   const wifiSettingsAccess = !lanActive || permissions.includes("wifi:settings");
   const greetingSettingsAccess = !lanActive || (globalAdministration && permissions.includes("hr:settings"));
-  const backupImportAccess = !lanActive || ["developer", "it_admin"].includes(role);
+  const diagnosticsTechnicalAccess = !lanActive || permissions.includes("system:diagnostics:technical");
+  const diagnosticsReadAccess = !lanActive || diagnosticsTechnicalAccess || permissions.includes("system:diagnostics:read");
+  const backupWriteAccess = !lanActive || permissions.includes("backup:write");
+  const backupConfigurationAccess = backupWriteAccess;
+  const backupImportAccess = !serverActive && (!lanActive || ["developer", "it_admin"].includes(role));
   const usbProvisioningAccess = ["developer", "it_admin", "admin"].includes(role)
     && (!lanActive || permissions.includes("usb:provision"));
   const integrationsEnabled = features.integrations !== false;
@@ -691,7 +697,7 @@ function applyRoleVisibility() {
   elements.requestsNavButton?.classList.toggle("hidden", features.requests === false);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess || features.timeTracking === false);
   elements.rightsDashboardNavButton?.classList.toggle("hidden", !rightsAccess);
-  const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess || operationModeAccess || wifiSettingsAccess || usbProvisioningAccess || integrationAccess;
+  const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess || operationModeAccess || wifiSettingsAccess || usbProvisioningAccess || integrationAccess || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
     general: settingsAccess || operationModeAccess,
@@ -704,14 +710,15 @@ function applyRoleVisibility() {
     access: (scopeAccess || permissions.includes("users:write") || globalAdministration)
       && (features.employeePortal !== false || features.requests !== false || features.sicknessAmu !== false),
     rights: rightsAccess,
-    backup: !lanActive || permissions.some((permission) => ["backup:write", "update:write", "system:write"].includes(permission)),
+    backup: diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess,
     usbProvisioning: usbProvisioningAccess,
   };
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("hidden", !settingsTabs[button.dataset.settingsTab]));
   const timeTrackingTabActive = document.querySelector('[data-settings-tab="timeTracking"]')?.classList.contains("active");
   const integrationTabActive = document.querySelector('[data-settings-tab="integrations"]')?.classList.contains("active");
   const usbTabActive = document.querySelector('[data-settings-tab="usbProvisioning"]')?.classList.contains("active");
-  elements.saveSettingsButton?.classList.toggle("hidden", !settingsAccess || integrationTabActive || usbTabActive || (timeTrackingTabActive && !settingsAccess));
+  const backupTabActive = document.querySelector('[data-settings-tab="backup"]')?.classList.contains("active");
+  elements.saveSettingsButton?.classList.toggle("hidden", (!settingsAccess && !backupTabActive) || integrationTabActive || usbTabActive || (timeTrackingTabActive && !settingsAccess) || (backupTabActive && !backupConfigurationAccess));
   elements.saveOperationModeButton?.classList.toggle("hidden", !operationModeAccess || settingsAccess);
   const privilegedServerRole = ["developer", "it_admin", "admin"].includes(role);
   const canExit = serverActive
@@ -761,7 +768,15 @@ function applyRoleVisibility() {
   elements.amuSettingsCard?.classList.toggle("hidden", lanActive && !permissions.includes("hr:settings"));
   if (features.sicknessAmu === false) elements.amuSettingsCard?.classList.add("hidden");
   elements.greetingSettingsCard?.classList.toggle("hidden", !greetingSettingsAccess || features.employeePortal === false);
+  elements.serverDiagnosticsCard?.classList.toggle("hidden", !(diagnosticsReadAccess || diagnosticsTechnicalAccess));
+  elements.refreshServerDiagnosticsButton?.classList.toggle("hidden", !(diagnosticsReadAccess || diagnosticsTechnicalAccess));
+  elements.databaseBackupSettingsCard?.classList.toggle("hidden", !backupWriteAccess);
+  elements.backupRestoreGuidanceCard?.classList.toggle("hidden", !(serverActive && diagnosticsTechnicalAccess));
   document.querySelector("#backupImportCard")?.classList.toggle("hidden", !backupImportAccess);
+  [document.querySelector("#externalBackupEnabled"), document.querySelector("#backupDirectory"), document.querySelector("#backupIntervalHours")]
+    .forEach((input) => { if (input) input.disabled = !backupConfigurationAccess; });
+  const createBackupButton = document.querySelector("#createBackupButton");
+  if (createBackupButton) createBackupButton.disabled = !backupWriteAccess;
   elements.delegationSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.generalSettings?.querySelectorAll(".settings-card:not(.operation-mode-card)").forEach((card) => card.classList.toggle("hidden", !settingsAccess));
   if (globalAdministration) elements.viewBehaviorSettingsCard?.classList.remove("hidden");
@@ -1622,34 +1637,129 @@ function renderOffsiteBackupDiagnostics(offsite) {
     </section>`;
 }
 
-function renderServerDiagnostics(info) {
-  if (!elements.serverDiagnostics || !info) return;
-  const statusClass = info.ready ? "ok" : "warning";
-  const productionChecks = Array.isArray(info.productionChecks) ? info.productionChecks : [];
-  const warnings = info.warnings?.length
-    ? `<div class="diagnostic-warnings">${info.warnings.map((warning) => `<p>${escapeHtml(warning)}</p>`).join("")}</div>`
-    : '<p class="diagnostic-all-clear">Keine Warnungen in der aktuellen Konfiguration.</p>';
+const serverMonitorCheckLabels = {
+  appService: "App-Dienst",
+  proxyService: "HTTPS-Proxy",
+  live: "Live-Prüfung",
+  ready: "Ready-Prüfung",
+  publicReady: "Öffentliche Ready-Prüfung",
+  hsts: "HSTS",
+  contentSecurityPolicy: "Content-Security-Policy",
+  contentTypeOptions: "Content-Type-Schutz",
+  referrerPolicy: "Referrer-Policy",
+  tlsCertificate: "TLS-Zertifikat",
+  sqlite: "SQLite",
+  backupFresh: "Sicherungsalter",
+  backupIntegrity: "Sicherungsintegrität",
+  amuScanner: "AUM-Virenscanner",
+  caddyConfiguration: "Caddy-Konfiguration",
+  offsite: "Offsite-Sicherung",
+  diskSpace: "Freier Speicher",
+  monitorTimer: "Monitor-Zeitplan",
+  monitorStatusProtection: "Schutz der Statusdatei",
+};
+
+function renderGlobalServerAlert(status) {
+  if (!elements.serverAlertBanner) return;
+  const alerts = Array.isArray(status?.alerts) ? [...status.alerts] : [];
+  const priority = { critical: 3, warning: 2, info: 1 };
+  alerts.sort((left, right) => (priority[right.severity] || 0) - (priority[left.severity] || 0));
+  const alert = alerts[0];
+  elements.serverAlertBanner.classList.toggle("hidden", !alert);
+  elements.serverAlertBanner.classList.toggle("critical", alert?.severity === "critical");
+  elements.serverAlertBanner.classList.toggle("warning", alert?.severity !== "critical");
+  if (!alert) return;
+  elements.serverAlertTitle.textContent = alert.title || "Serverzustand prüfen";
+  elements.serverAlertMessage.textContent = `${alert.message || "Eine technische Warnung benötigt Aufmerksamkeit."}${alerts.length > 1 ? ` · ${alerts.length - 1} weitere Meldung(en)` : ""}`;
+}
+
+function backupPointText(point) {
+  if (!point?.available) return "noch kein bestätigter Sicherungsstand";
+  if (point.timestampValid === false) return "Zeitstempel unplausibel · bitte prüfen";
+  return `${diagnosticTimestamp(point.createdAt)}${diagnosticAge(point.ageHours)}${point.verified ? " · geprüft" : ""}`;
+}
+
+function renderMonitorDiagnostics(monitor) {
+  if (!monitor?.configured) return "";
+  const failed = Array.isArray(monitor.failedChecks) ? monitor.failedChecks : [];
+  const failedText = failed.length
+    ? failed.map((id) => serverMonitorCheckLabels[id] || id).join(", ")
+    : "keine offenen Prüfpunkte";
+  const stateLabel = monitor.state === "ok" ? "Erfolgreich" : monitor.state === "error" ? "Fehler" : "Prüfen";
+  const recovery = monitor.recovery || {};
+  const recoveryText = recovery.successful ? "automatischer Wiederanlauf erfolgreich"
+    : recovery.suppressed ? "Wiederanlauf aus Sicherheitsgründen unterdrückt"
+      : recovery.attempted ? "Wiederanlauf versucht" : "kein Wiederanlauf erforderlich";
+  return `
+    <section class="monitor-diagnostics ${monitor.state === "ok" ? "ok" : "warning"}">
+      <div class="offsite-diagnostics-heading"><div><span class="eyebrow">Automatische Betriebsüberwachung</span><strong>Server-Monitor</strong><small>${escapeHtml(failedText)}</small></div><span class="status-badge ${monitor.state === "ok" ? "active" : "inactive"}">${escapeHtml(stateLabel)}</span></div>
+      <div class="diagnostic-grid">
+        <span><small>Letzter vollständiger Lauf</small><strong>${escapeHtml(diagnosticTimestamp(monitor.generatedAt))}${escapeHtml(diagnosticAge(monitor.ageHours))}</strong></span>
+        <span><small>Live-Fehler in Folge</small><strong>${Number(monitor.consecutiveLiveFailures || 0)}</strong></span>
+        <span><small>Letzter Neustart</small><strong>${escapeHtml(diagnosticTimestamp(monitor.lastRestartAt))}</strong></span>
+        <span><small>Wiederanlauf</small><strong>${escapeHtml(recoveryText)}</strong></span>
+      </div>
+      ${monitor.lastErrorCode ? `<p class="offsite-diagnostic-error"><strong>Fehlercode:</strong> ${escapeHtml(monitor.lastErrorCode)}</p>` : ""}
+    </section>`;
+}
+
+function renderServerDiagnostics(status, technical = null) {
+  if (!elements.serverDiagnostics || !status) return;
+  const alerts = Array.isArray(status.alerts) ? status.alerts : [];
+  const alertMarkup = alerts.length
+    ? `<div class="diagnostic-alerts">${alerts.map((alert) => `<article class="${escapeHtml(alert.severity || "warning")}"><strong>${escapeHtml(alert.title || "Serverzustand prüfen")}</strong><span>${escapeHtml(alert.message || "")}</span></article>`).join("")}</div>`
+    : '<p class="diagnostic-all-clear">Keine Warnungen in der aktuellen Betriebsübersicht.</p>';
+  const offsite = status.backups?.offsite || {};
+  const recovery = status.recovery || {};
+  const recoveryState = recovery.isolatedRestoreTestPending ? "warning" : "ok";
+  const technicalChecks = Array.isArray(technical?.productionChecks) ? technical.productionChecks : [];
+  const technicalMarkup = technical ? `
+    <details class="technical-diagnostics">
+      <summary>Technische Details anzeigen</summary>
+      <div class="diagnostic-grid">
+        <span><small>HTTPS-Pflicht</small><strong>${technical.httpsRequired ? "aktiv" : "nur Servermodus"}</strong></span>
+        <span><small>Passwortminimum</small><strong>${Number(technical.passwordMinLength || 6)} Zeichen</strong></span>
+        <span><small>SQLite</small><strong>${escapeHtml(technical.database?.journalMode || "–")} · ${Number(technical.database?.busyTimeoutMs || 0)} ms</strong></span>
+        <span><small>Integrität</small><strong>${escapeHtml(technical.database?.integrity || "unbekannt")}</strong></span>
+        <span><small>Migration</small><strong>${escapeHtml(technical.database?.migration?.id || "–")}</strong></span>
+        <span><small>Instanzschutz</small><strong>${technical.instanceLock?.held ? "aktiv" : technical.instanceLock?.enabled ? "beim Serverstart" : "nicht nötig"}</strong></span>
+        <span><small>Aktive Sitzungen</small><strong>${Number(technical.security?.activeSessions || 0)}</strong></span>
+        <span><small>AUM-Speicher</small><strong>${technical.storage?.amu?.ok ? "verschlüsselt bereit" : "nicht bereit"}</strong></span>
+      </div>
+      <div class="pilot-checklist"><strong>Technische Serverprüfung</strong>${technicalChecks.map((check) => `<span class="${check.ok ? "ok" : "warning"}"><i>${check.ok ? "✓" : "!"}</i><b>${escapeHtml(check.label)}</b><small>${escapeHtml(check.detail || "")}</small></span>`).join("")}</div>
+    </details>` : "";
   elements.serverDiagnostics.innerHTML = `
-    <div class="diagnostic-summary ${statusClass}"><strong>${info.ready ? "Betriebsbereit" : "Konfiguration prüfen"}</strong><span>${escapeHtml(operationModeLabel(info.mode))}${info.publicUrl ? ` · ${escapeHtml(info.publicUrl)}` : ""}</span></div>
-    <div class="diagnostic-grid">
-      <span><small>HTTPS-Pflicht</small><strong>${info.httpsRequired ? "aktiv" : "nur Servermodus"}</strong></span>
-      <span><small>Passwortminimum</small><strong>${Number(info.passwordMinLength || 6)} Zeichen</strong></span>
-      <span><small>SQLite</small><strong>${escapeHtml(info.database?.journalMode || "–")} · ${Number(info.database?.busyTimeoutMs || 0)} ms</strong></span>
-      <span><small>Integrität</small><strong>${escapeHtml(info.database?.integrity || "unbekannt")}</strong></span>
-      <span><small>Migration</small><strong>${escapeHtml(info.database?.migration?.id || "–")}</strong></span>
-      <span><small>Instanzschutz</small><strong>${info.instanceLock?.held ? "aktiv" : info.instanceLock?.enabled ? "beim Serverstart" : "nicht nötig"}</strong></span>
-      <span><small>Aktive Sitzungen</small><strong>${Number(info.security?.activeSessions || 0)}</strong></span>
-      <span><small>Letztes Backup geprüft</small><strong>${info.backups?.lastVerified ? "ja" : "noch ausständig"}</strong></span>
-      <span><small>AUM-Speicher</small><strong>${info.storage?.amu?.ok ? "verschlüsselt bereit" : "nicht bereit"}</strong></span>
-      <span><small>Backupziel</small><strong>${info.backups?.externalWritable ? "beschreibbar" : "prüfen"}</strong></span>
+    <div class="diagnostic-readiness-grid">
+      <article class="${status.live?.ok ? "ok" : "warning"}"><small>Live</small><strong>${status.live?.ok ? "Prozess erreichbar" : "Nicht erreichbar"}</strong><span>Die Anwendung beantwortet Anfragen.</span></article>
+      <article class="${status.ready?.ok ? "ok" : "warning"}"><small>Ready</small><strong>${status.ready?.ok ? "Betriebsbereit" : "Nicht betriebsbereit"}</strong><span>${escapeHtml(operationModeLabel(status.mode))}${status.publicUrl ? ` · ${escapeHtml(status.publicUrl)}` : ""}</span></article>
     </div>
-    ${renderOffsiteBackupDiagnostics(info.backups?.offsite)}
-    <div class="pilot-checklist"><strong>Server-Betriebsprüfung</strong>${productionChecks.map((check) => `<span class="${check.ok ? "ok" : "warning"}"><i>${check.ok ? "✓" : "!"}</i><b>${escapeHtml(check.label)}</b><small>${escapeHtml(check.detail || "")}</small></span>`).join("")}</div>${warnings}`;
+    <div class="diagnostic-grid backup-status-grid">
+      <span><small>Interne Sicherung</small><strong>${escapeHtml(backupPointText(status.backups?.internal))}</strong></span>
+      <span><small>Getrennte lokale Sicherung</small><strong>${escapeHtml(status.backups?.external?.enabled ? backupPointText(status.backups.external) : "deaktiviert")}</strong></span>
+      <span><small>Externes Sicherungsziel</small><strong>${status.backups?.external?.enabled ? (status.backups.external.writable ? "beschreibbar" : "nicht beschreibbar") : "nicht aktiv"}</strong></span>
+      <span><small>Letzte Statusprüfung</small><strong>${escapeHtml(diagnosticTimestamp(status.checkedAt))}</strong></span>
+    </div>
+    ${renderOffsiteBackupDiagnostics(offsite)}
+    ${renderMonitorDiagnostics(status.monitor)}
+    <section class="recovery-diagnostics ${recoveryState}">
+      <div><span class="eyebrow">Wiederherstellungsnachweis</span><strong>Isolierter Test-Restore</strong><small>${recovery.isolatedRestoreTestPending ? "Noch ausständig, überfällig oder zuletzt fehlgeschlagen." : "Der letzte isolierte Wiederherstellungstest ist bestätigt."}</small></div>
+      <span><strong>${escapeHtml(diagnosticTimestamp(recovery.isolatedRestoreTestAt))}${escapeHtml(diagnosticAge(recovery.isolatedRestoreTestAgeHours))}</strong><small>Produktive Wiederherstellungen bleiben ein beaufsichtigter Wartungsvorgang.</small></span>
+    </section>
+    ${alertMarkup}
+    ${technicalMarkup}`;
+  renderGlobalServerAlert(status);
 }
 
 async function refreshServerDiagnostics() {
   try {
-    renderServerDiagnostics(await api("/api/server-diagnostics"));
+    const permissions = state.portalSession?.user?.permissions || [];
+    const localAccess = state.portalStatus?.portalEnabled !== true;
+    const technicalAccess = localAccess || permissions.includes("system:diagnostics:technical");
+    const status = await api("/api/server-status");
+    const technical = technicalAccess ? await api("/api/server-diagnostics") : null;
+    state.serverStatus = status;
+    state.serverDiagnostics = technical;
+    renderServerDiagnostics(status, technical);
   } catch (error) {
     if (elements.serverDiagnostics) elements.serverDiagnostics.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
   }
@@ -1665,7 +1775,7 @@ async function loadSystemInfo() {
     const appName = branding.appName || info.appName || "Grabenplaner";
     elements.versionLabel.innerHTML = `<strong>${escapeHtml(appName)}</strong> ${escapeHtml(info.appVersionLabel)}`;
     elements.sidebarVersion.textContent = info.appVersionLabel;
-    if (elements.appBackupDirectoryText) elements.appBackupDirectoryText.textContent = info.appBackupDirectory || "app\\backups";
+    if (elements.appBackupDirectoryText) elements.appBackupDirectoryText.textContent = info.appBackupDirectory || "geschützter interner Sicherungsbereich";
     const backupCreatedAt = info.lastBackup?.createdAt || info.lastBackup?.externalBackup?.createdAt || info.lastBackup?.appBackup?.createdAt;
     elements.systemData.innerHTML = `
       <span><strong>Serverzeit</strong> ${escapeHtml(info.serverTime)} Uhr</span>
@@ -1675,11 +1785,14 @@ async function loadSystemInfo() {
       <span><strong>SQLite</strong> ${escapeHtml(info.sqliteVersion)}</span>
       <span><strong>System</strong> ${escapeHtml(info.platform)}</span>
       <span><strong>Datenbank</strong> ${escapeHtml(info.database)}</span>
-      <span><strong>App-Backup</strong> ${escapeHtml(info.appBackupDirectory || "app\\backups")}</span>
-      <span><strong>PC-Backup</strong> ${info.externalBackupEnabled ? escapeHtml(info.backupDirectory) : "deaktiviert"}</span>
+      <span><strong>Interne Sicherung</strong> ${escapeHtml(info.appBackupDirectory || "geschützter App-Datenbereich")}</span>
+      <span><strong>Lokales Sicherungsziel</strong> ${info.externalBackupEnabled ? escapeHtml(info.backupDirectory || "konfiguriert") : "deaktiviert"}</span>
       <span><strong>Letztes Backup</strong> ${backupCreatedAt ? escapeHtml(new Intl.DateTimeFormat("de-AT", { dateStyle: "short", timeStyle: "short" }).format(new Date(backupCreatedAt))) : "noch ausständig"}</span>
       <span><strong>Laufzeit</strong> ${uptimeHours} h ${uptimeMinutes} min</span>`;
-    renderServerDiagnostics(info.serverDiagnostics);
+    state.serverStatus = info.serverStatus || null;
+    state.serverDiagnostics = info.serverDiagnostics || null;
+    if (info.serverStatus) renderServerDiagnostics(info.serverStatus, info.serverDiagnostics || null);
+    else renderGlobalServerAlert(null);
   } catch {
     elements.systemData.textContent = "Technische Daten konnten nicht geladen werden.";
   }
@@ -6253,7 +6366,10 @@ function setSettingsTab(tab) {
   elements.usbProvisioningSettings?.classList.toggle("active", tab === "usbProvisioning");
   const canSaveGeneralSettings = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("settings:write");
-  elements.saveSettingsButton?.classList.toggle("hidden", ["integrations", "usbProvisioning"].includes(tab) || !canSaveGeneralSettings);
+  const canSaveBackupSettings = !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("backup:write");
+  elements.saveSettingsButton?.classList.toggle("hidden", ["integrations", "usbProvisioning"].includes(tab)
+    || (tab === "backup" ? !canSaveBackupSettings : !canSaveGeneralSettings));
   if (tab === "access") {
     loadPortalUsers();
     loadAmuSettings();
@@ -6267,6 +6383,7 @@ function setSettingsTab(tab) {
   if (tab === "rights") loadRightsManagement();
   if (tab === "integrations") loadIntegrations().catch((error) => showToast(error.message, true));
   if (tab === "timeTracking") loadWifiAutomationSettings();
+  if (tab === "backup") refreshServerDiagnostics();
   if (tab === "personnel") loadTrustLevelSettings();
   if (tab === "branding") Promise.all([loadManagementBrandingPreference(), loadBrandingAssignments()]).then(() => renderSettings()).catch((error) => showToast(error.message, true));
   if (tab === "usbProvisioning") {
@@ -7578,7 +7695,7 @@ async function createManualBackup() {
     const backup = await api("/api/backup", { method: "POST" });
     await loadSystemInfo();
     const paths = [backup.appBackup?.path, backup.externalBackup?.path].filter(Boolean);
-    showToast(paths.length > 1 ? "Backups erstellt: intern und lokale PC-Sicherung." : `Backup erstellt: ${paths[0] || backup.path}`);
+    showToast(paths.length > 1 ? "Sicherungen erstellt: intern und am zusätzlichen lokalen Ziel." : `Sicherung erstellt: ${paths[0] || backup.path}`);
   } catch (error) { showToast(error.message, true); }
 }
 
@@ -8335,6 +8452,25 @@ async function saveOperationMode() {
   }
 }
 
+async function saveBackupSettings() {
+  try {
+    await api("/api/backup/settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        externalBackupEnabled: document.querySelector("#externalBackupEnabled").checked,
+        backupDirectory: document.querySelector("#backupDirectory").value,
+        backupIntervalHours: Number(document.querySelector("#backupIntervalHours").value),
+      }),
+    });
+    showToast("Backup-Einstellungen wurden gespeichert.");
+    await Promise.all([loadAll(), loadSystemInfo()]);
+    return true;
+  } catch (error) {
+    showToast(error.message, true);
+    return false;
+  }
+}
+
 async function saveSettings(silent = false) {
   try {
     const permissions = state.portalSession?.user?.permissions || [];
@@ -8530,6 +8666,11 @@ elements.publicServerModeOption?.addEventListener("click", () => {
   showToast("Der Serverbetrieb wird aus Sicherheitsgründen ausschließlich über die geschützte Serverkonfiguration aktiviert.");
 });
 elements.refreshServerDiagnosticsButton?.addEventListener("click", refreshServerDiagnostics);
+elements.serverAlertBanner?.addEventListener("click", () => {
+  setView("settings");
+  setSettingsTab("backup");
+  elements.serverDiagnosticsCard?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
 elements.currentWeekAutoLock?.addEventListener("change", updateWeekLockSettings);
 elements.currentWeekLockMode?.addEventListener("change", updateWeekLockSettings);
 elements.currentWeekLockDay?.addEventListener("change", updateWeekLockSettings);
@@ -9224,7 +9365,9 @@ elements.centralVacationYear?.addEventListener("change", async (event) => {
 elements.addCostCenterButton?.addEventListener("click", () => openCostCenterModal());
 elements.costCenterForm?.addEventListener("submit", saveCostCenter);
 elements.deactivateCostCenterButton?.addEventListener("click", deactivateCostCenter);
-document.querySelector("#saveSettingsButton").addEventListener("click", () => saveSettings(false));
+document.querySelector("#saveSettingsButton").addEventListener("click", () => (
+  elements.backupSettings?.classList.contains("active") ? saveBackupSettings() : saveSettings(false)
+));
 elements.locationForm.addEventListener("submit", saveLocation);
 elements.departmentForm.addEventListener("submit", saveDepartment);
 elements.addLocationButton?.addEventListener("click", async () => {

@@ -46,9 +46,11 @@ for template in "$OFFSITE_MODULE_ROOT"/systemd/*.in; do
 done
 systemctl daemon-reload
 
-for command_name in grabenplaner-offsite-pre-update grabenplaner-offsite-prepare grabenplaner-offsite-test grabenplaner-offsite-uninstall; do
+for command_name in grabenplaner-offsite-pre-update grabenplaner-offsite-prepare grabenplaner-offsite-test grabenplaner-offsite-uninstall grabenplaner-recovery; do
   command_path="/usr/local/sbin/$command_name"
-  if [[ -L "$command_path" && "$(readlink -f -- "$command_path")" == "$OFFSITE_MODULE_ROOT/"* ]]; then
+  expected_recovery="$OFFSITE_APP_ROOT/server-tools/linux/recovery/grabenplaner-recovery.sh"
+  if [[ -L "$command_path" && ( "$(readlink -f -- "$command_path")" == "$OFFSITE_MODULE_ROOT/"* \
+    || ( "$command_name" == "grabenplaner-recovery" && "$(readlink -f -- "$command_path")" == "$expected_recovery" ) ) ]]; then
     rm -f -- "$command_path"
   elif [[ -e "$command_path" || -L "$command_path" ]]; then
     offsite_warn "Ein fremder oder veraenderter Offsite-Befehl bleibt erhalten: $command_path"

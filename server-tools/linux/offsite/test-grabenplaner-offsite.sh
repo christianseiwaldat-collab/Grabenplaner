@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd -P)"
 source "$SCRIPT_DIR/lib/offsite-common.sh"
 
 offsite_require_root
-for command_name in awk flock getent mktemp rm runuser sha256sum stat systemctl; do offsite_require_command "$command_name"; done
+for command_name in awk flock getent mktemp readlink rm runuser sha256sum stat systemctl; do offsite_require_command "$command_name"; done
 failures=0
 ok() { printf 'OK\t%s\t%s\n' "$1" "$2"; }
 fail() { printf 'FEHLER\t%s\t%s\n' "$1" "$2"; failures=$((failures + 1)); }
@@ -56,6 +56,14 @@ else
   fail "Dienstbenutzergruppen" "unerwartete Zusatzgruppe vorhanden"
 fi
 if offsite_assert_group_isolation >/dev/null 2>&1; then ok "Gruppenisolation" "keine fremden Konten"; else fail "Gruppenisolation" "fremdes Konto oder GID-Belegung"; fi
+recovery_command="$OFFSITE_APP_ROOT/server-tools/linux/recovery/grabenplaner-recovery.sh"
+recovery_link="/usr/local/sbin/grabenplaner-recovery"
+if [[ -f "$recovery_command" && ! -L "$recovery_command" && -L "$recovery_link" \
+  && "$(readlink -f -- "$recovery_link")" == "$recovery_command" ]]; then
+  ok "Recovery-Befehl" "ueberwachte list/prepare/verify/apply-Phasen installiert"
+else
+  fail "Recovery-Befehl" "fehlt oder zeigt nicht auf das installierte Serverpaket"
+fi
 for timer in grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer; do
   if systemctl is-enabled --quiet "$timer" && systemctl is-active --quiet "$timer"; then ok "Timer $timer" "aktiv"; else fail "Timer $timer" "nicht aktiv"; fi
 done

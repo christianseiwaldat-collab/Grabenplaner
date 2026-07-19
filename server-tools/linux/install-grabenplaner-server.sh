@@ -17,6 +17,11 @@ readonly CONFIG_ROOT="/etc/grabenplaner"
 readonly ENV_FILE="${CONFIG_ROOT}/grabenplaner.env"
 readonly APP_UNIT="/etc/systemd/system/grabenplaner.service"
 readonly BOOTSTRAP_UNIT="/etc/systemd/system/grabenplaner-bootstrap.service"
+readonly MONITOR_UNIT="/etc/systemd/system/grabenplaner-monitor.service"
+readonly MONITOR_TIMER="/etc/systemd/system/grabenplaner-monitor.timer"
+readonly MONITOR_STATUS_ROOT="/var/lib/grabenplaner-monitor"
+readonly MONITOR_STATUS_FILE="${MONITOR_STATUS_ROOT}/status.json"
+readonly MONITOR_STATUS_GROUP="grabenplaner-monitor-status"
 readonly CADDY_CONFIG="/etc/caddy/Caddyfile"
 readonly BOOTSTRAP_COMMAND="/usr/local/sbin/grabenplaner-bootstrap-admin"
 readonly CADDY_MANAGED_MARKER="# Managed by Grabenplaner. Local changes may be replaced by the installer."
@@ -40,6 +45,8 @@ CADDY_CONFIG_BACKUP=""
 CADDY_CONFIG_WRITTEN=0
 APP_UNIT_WRITTEN=0
 BOOTSTRAP_UNIT_WRITTEN=0
+MONITOR_UNIT_WRITTEN=0
+MONITOR_TIMER_WRITTEN=0
 BOOTSTRAP_COMMAND_WRITTEN=0
 UNIT_TEMP=""
 PNPM_COMMAND=()
@@ -79,7 +86,8 @@ cleanup() {
     rm -rf --one-file-system -- "$STAGE_ROOT"
   fi
   if [[ $exit_code -ne 0 && $APP_SWAPPED -eq 1 ]]; then
-    systemctl disable --now grabenplaner.service grabenplaner-bootstrap.service >/dev/null 2>&1 || true
+    systemctl disable --now grabenplaner-monitor.timer grabenplaner-monitor.service \
+      grabenplaner.service grabenplaner-bootstrap.service >/dev/null 2>&1 || true
     rm -rf --one-file-system -- "$APP_ROOT"
   fi
   if [[ $exit_code -ne 0 && $CADDY_CONFIG_REPLACED -eq 1 && -n "$CADDY_CONFIG_BACKUP" && -f "$CADDY_CONFIG_BACKUP" ]]; then
@@ -93,14 +101,17 @@ cleanup() {
   if [[ $exit_code -ne 0 ]]; then
     [[ $APP_UNIT_WRITTEN -eq 0 ]] || rm -f -- "$APP_UNIT"
     [[ $BOOTSTRAP_UNIT_WRITTEN -eq 0 ]] || rm -f -- "$BOOTSTRAP_UNIT"
+    [[ $MONITOR_UNIT_WRITTEN -eq 0 ]] || rm -f -- "$MONITOR_UNIT"
+    [[ $MONITOR_TIMER_WRITTEN -eq 0 ]] || rm -f -- "$MONITOR_TIMER"
     [[ $BOOTSTRAP_COMMAND_WRITTEN -eq 0 ]] || rm -f -- "$BOOTSTRAP_COMMAND"
   fi
-  if [[ $exit_code -ne 0 && ( $APP_UNIT_WRITTEN -eq 1 || $BOOTSTRAP_UNIT_WRITTEN -eq 1 ) ]]; then
+  if [[ $exit_code -ne 0 && ( $APP_UNIT_WRITTEN -eq 1 || $BOOTSTRAP_UNIT_WRITTEN -eq 1 \
+    || $MONITOR_UNIT_WRITTEN -eq 1 || $MONITOR_TIMER_WRITTEN -eq 1 ) ]]; then
     systemctl daemon-reload >/dev/null 2>&1 || true
   fi
   if [[ $exit_code -ne 0 ]]; then
     local maintenance_name target
-    for maintenance_name in backup stop test update uninstall; do
+    for maintenance_name in backup monitor stop test update uninstall; do
       target="$(readlink -- "/usr/local/sbin/grabenplaner-${maintenance_name}" 2>/dev/null || true)"
       if [[ -n "$target" && ( "$target" == "$APP_ROOT" || "$target" == "$APP_ROOT/"* ) ]]; then
         rm -f -- "/usr/local/sbin/grabenplaner-${maintenance_name}"
@@ -295,6 +306,18 @@ const expectedOffsiteArtifacts = [
   "server-tools/linux/offsite/uninstall-grabenplaner-offsite.sh",
   "server-tools/linux/offsite/test-grabenplaner-offsite.sh",
 ];
+const expectedMonitorArtifacts = [
+  "server-tools/linux/monitor/lib/monitor-status.js",
+  "server-tools/linux/monitor/run-grabenplaner-monitor.sh",
+  "server-tools/linux/grabenplaner-monitor.service.in",
+  "server-tools/linux/grabenplaner-monitor.timer.in",
+];
+const expectedRecoveryArtifacts = [
+  "server-tools/linux/recovery/grabenplaner-recovery.sh",
+  "server-tools/linux/recovery/lib/recovery-apply.js",
+  "server-tools/linux/recovery/lib/recovery-metadata.js",
+  "server-tools/linux/recovery/lib/recovery-verify.js",
+];
 if (!fs.existsSync(manifestPath)) fail("Das Manifest fehlt in der Archivwurzel.");
 let manifest;
 try { manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8").replace(/^\uFEFF/, "")); } catch { fail("Das Manifest ist kein gueltiges JSON."); }
@@ -312,6 +335,7 @@ for (const required of [
   "server-tools/linux/backup-grabenplaner.sh",
   "server-tools/linux/stop-grabenplaner-server.sh",
   "server-tools/linux/test-grabenplaner-server.sh",
+  "server-tools/linux/migrate-grabenplaner-runtime-v2.sh",
   "server-tools/linux/update-grabenplaner-server.sh",
   "server-tools/linux/uninstall-grabenplaner-server.sh",
   "server-tools/linux/runtime-schema.json",
@@ -323,6 +347,8 @@ for (const required of [
   "server-tools/linux/lib/verify-backup.js",
   "server-tools/linux/lib/verify-install-tree.js",
   "server-tools/linux/lib/verify-package.js",
+  ...expectedMonitorArtifacts,
+  ...expectedRecoveryArtifacts,
   ...expectedOffsiteArtifacts,
 ]) {
   if (!fs.statSync(path.join(root, required), { throwIfNoEntry: false })?.isFile()) fail(`Pflichtdatei fehlt: ${required}`);
@@ -336,14 +362,16 @@ const expectedRuntimeArtifacts = [
   "server-tools/linux/grabenplaner-bootstrap-admin.sh.in",
   "server-tools/linux/grabenplaner-bootstrap.service.in",
   "server-tools/linux/grabenplaner.env.example",
+  "server-tools/linux/grabenplaner-monitor.service.in",
+  "server-tools/linux/grabenplaner-monitor.timer.in",
   "server-tools/linux/grabenplaner.service.in",
 ];
 if (runtimeContract?.format !== "grabenplaner-linux-runtime-contract" || runtimeContract?.schemaVersion !== 1
-  || runtimeContract?.deploymentSchemaVersion !== 1 || runtimeContract?.migrationPolicy !== "explicit-maintenance"
+  || runtimeContract?.deploymentSchemaVersion !== 2 || runtimeContract?.migrationPolicy !== "explicit-maintenance"
   || !Array.isArray(runtimeContract?.managedArtifacts)
   || runtimeContract.managedArtifacts.length !== expectedRuntimeArtifacts.length
   || expectedRuntimeArtifacts.some((relative) => !runtimeContract.managedArtifacts.includes(relative))) {
-  fail("Der Linux-Runtimevertrag v1 ist ungueltig.");
+  fail("Der Linux-Runtimevertrag v2 ist ungueltig.");
 }
 const offsiteSchemaPath = path.join(root, "server-tools/linux/offsite/module-schema.json");
 let offsiteContract;
@@ -485,7 +513,7 @@ fi
 [[ "$EXPECTED_SHA256" =~ ^[A-Fa-f0-9]{64}$ ]] || fail "Eine feste SHA256-Pruefsumme ist erforderlich."
 [[ "$PORT" =~ ^[0-9]+$ ]] && (( PORT >= 1 && PORT <= 65535 )) || fail "--port muss zwischen 1 und 65535 liegen."
 
-for command in awk base64 caddy chmod chown clamscan cp curl date dirname du find getent grep groupadd head id install journalctl ln mktemp mv readlink rm runuser seq sha256sum sleep stat systemctl tr uname unzip useradd wc; do
+for command in awk base64 caddy chmod chown clamscan cp curl date dirname du find getent grep groupadd head id install journalctl ln mktemp mv readlink rm runuser seq sha256sum sleep stat systemctl tr uname unzip useradd usermod wc; do
   need_command "$command"
 done
 validate_os
@@ -510,6 +538,7 @@ ACTUAL_SHA256="$(sha256sum -- "$PACKAGE_PATH" | awk '{ print $1 }')"
 validate_zip_entries
 
 [[ -f "$SCRIPT_DIR/grabenplaner.service.in" && -f "$SCRIPT_DIR/grabenplaner-bootstrap.service.in" \
+  && -f "$SCRIPT_DIR/grabenplaner-monitor.service.in" && -f "$SCRIPT_DIR/grabenplaner-monitor.timer.in" \
   && -f "$SCRIPT_DIR/Caddyfile.in" && -f "$SCRIPT_DIR/grabenplaner.env.example" \
   && -f "$SCRIPT_DIR/grabenplaner-bootstrap-admin.sh.in" ]] || fail "Die Linux-Laufzeitvorlagen sind unvollstaendig."
 if [[ -s "$CADDY_CONFIG" ]] && ! caddy_config_is_managed; then
@@ -524,6 +553,12 @@ if ! id "$SERVICE_USER" >/dev/null 2>&1; then
   useradd --system --gid "$SERVICE_GROUP" --home-dir "$DATA_ROOT" --shell /usr/sbin/nologin "$SERVICE_USER"
 fi
 [[ "$(id -gn "$SERVICE_USER")" == "$SERVICE_GROUP" ]] || fail "Der bestehende Benutzer grabenplaner verwendet eine unerwartete Hauptgruppe."
+getent group "$MONITOR_STATUS_GROUP" >/dev/null 2>&1 || groupadd --system "$MONITOR_STATUS_GROUP"
+if ! id -nG "$SERVICE_USER" | tr ' ' '\n' | grep -Fxq "$MONITOR_STATUS_GROUP"; then
+  usermod --append --groups "$MONITOR_STATUS_GROUP" "$SERVICE_USER"
+fi
+id -nG "$SERVICE_USER" | tr ' ' '\n' | grep -Fxq "$MONITOR_STATUS_GROUP" \
+  || fail "Der App-Benutzer konnte nicht lesend der Monitor-Statusgruppe zugeordnet werden."
 getent group "$BUILD_GROUP" >/dev/null 2>&1 || groupadd --system "$BUILD_GROUP"
 if ! id "$BUILD_USER" >/dev/null 2>&1; then
   useradd --system --gid "$BUILD_GROUP" --home-dir "$CACHE_ROOT" --shell /usr/sbin/nologin "$BUILD_USER"
@@ -537,6 +572,11 @@ install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0750 \
 install -d -o "$BUILD_USER" -g "$BUILD_GROUP" -m 0750 "$CACHE_ROOT" "$CACHE_ROOT/pnpm" "$CACHE_ROOT/corepack"
 install -d -o caddy -g caddy -m 0750 "$LOG_ROOT/caddy"
 install -d -o root -g root -m 0700 "$CONFIG_ROOT"
+if [[ -e "$MONITOR_STATUS_ROOT" || -L "$MONITOR_STATUS_ROOT" ]]; then
+  [[ -d "$MONITOR_STATUS_ROOT" && ! -L "$MONITOR_STATUS_ROOT" ]] \
+    || fail "Der Monitorstatuspfad ist kein sicherer lokaler Ordner."
+fi
+install -d -o root -g "$MONITOR_STATUS_GROUP" -m 0750 "$MONITOR_STATUS_ROOT"
 
 if [[ ! -f "$ENV_FILE" ]]; then
   AMU_KEY="$(random_base64 32)"
@@ -626,9 +666,16 @@ find "$STAGE_ROOT/source" -type d -exec chmod 0750 {} +
 find "$STAGE_ROOT/source" -type f -perm /111 -exec chmod 0750 {} +
 find "$STAGE_ROOT/source" -type f ! -perm /111 -exec chmod 0640 {} +
 
+systemctl disable --now grabenplaner-monitor.timer grabenplaner-monitor.service >/dev/null 2>&1 || true
 systemctl stop grabenplaner-bootstrap.service grabenplaner.service >/dev/null 2>&1 || true
 mv -- "$STAGE_ROOT/source" "$APP_ROOT"
 APP_SWAPPED=1
+
+monitor_status_gid="$(getent group "$MONITOR_STATUS_GROUP" | awk -F: '{print $3}')"
+[[ "$monitor_status_gid" =~ ^[0-9]+$ ]] || fail "Die Monitor-Statusgruppe konnte nicht sicher aufgeloest werden."
+monitor_status_helper="$APP_ROOT/server-tools/linux/monitor/lib/monitor-status.js"
+[[ -f "$monitor_status_helper" && ! -L "$monitor_status_helper" ]] || fail "Der Monitorstatus-Helfer fehlt im installierten Paket."
+"$NODE_EXECUTABLE" "$monitor_status_helper" --status-file "$MONITOR_STATUS_FILE" --status-gid "$monitor_status_gid" initialize >/dev/null
 
 UNIT_TEMP="$(mktemp)"
 render_template "$SCRIPT_DIR/grabenplaner.service.in" "$UNIT_TEMP"
@@ -637,6 +684,12 @@ install -o root -g root -m 0644 "$UNIT_TEMP" "$APP_UNIT"
 render_template "$SCRIPT_DIR/grabenplaner-bootstrap.service.in" "$UNIT_TEMP"
 BOOTSTRAP_UNIT_WRITTEN=1
 install -o root -g root -m 0644 "$UNIT_TEMP" "$BOOTSTRAP_UNIT"
+render_template "$SCRIPT_DIR/grabenplaner-monitor.service.in" "$UNIT_TEMP"
+MONITOR_UNIT_WRITTEN=1
+install -o root -g root -m 0644 "$UNIT_TEMP" "$MONITOR_UNIT"
+render_template "$SCRIPT_DIR/grabenplaner-monitor.timer.in" "$UNIT_TEMP"
+MONITOR_TIMER_WRITTEN=1
+install -o root -g root -m 0644 "$UNIT_TEMP" "$MONITOR_TIMER"
 render_template "$SCRIPT_DIR/grabenplaner-bootstrap-admin.sh.in" "$UNIT_TEMP"
 BOOTSTRAP_COMMAND_WRITTEN=1
 install -o root -g root -m 0750 "$UNIT_TEMP" "$BOOTSTRAP_COMMAND"
@@ -655,7 +708,7 @@ UNIT_TEMP=""
 systemctl daemon-reload
 
 if command -v systemd-analyze >/dev/null 2>&1; then
-  systemd-analyze verify "$APP_UNIT" "$BOOTSTRAP_UNIT" >/dev/null
+  systemd-analyze verify "$APP_UNIT" "$BOOTSTRAP_UNIT" "$MONITOR_UNIT" "$MONITOR_TIMER" >/dev/null
 fi
 
 if [[ $START_AFTER_INSTALL -eq 1 ]]; then
@@ -666,18 +719,20 @@ if [[ $START_AFTER_INSTALL -eq 1 ]]; then
     systemctl enable caddy.service >/dev/null
     systemctl restart caddy.service
     wait_for_public_ready || fail "Die oeffentliche HTTPS-Bereitschaftspruefung ist nicht gruen."
+    systemctl enable --now grabenplaner-monitor.timer >/dev/null
     printf 'Grabenplaner %s wurde installiert und als HTTPS-Dienst gestartet.\n' "$APP_VERSION"
   else
     printf 'Grabenplaner %s wurde installiert.\n\n' "$APP_VERSION"
     "$BOOTSTRAP_COMMAND" start
   fi
 else
-  systemctl disable --now grabenplaner-bootstrap.service grabenplaner.service caddy.service >/dev/null 2>&1 || true
+  systemctl disable --now grabenplaner-monitor.timer grabenplaner-monitor.service \
+    grabenplaner-bootstrap.service grabenplaner.service caddy.service >/dev/null 2>&1 || true
   printf 'Grabenplaner %s wurde installiert; die Dienste wurden nicht gestartet.\n' "$APP_VERSION"
 fi
 
-command_names=(backup stop test update uninstall)
-command_files=(backup-grabenplaner.sh stop-grabenplaner-server.sh test-grabenplaner-server.sh update-grabenplaner-server.sh uninstall-grabenplaner-server.sh)
+command_names=(backup monitor stop test update uninstall)
+command_files=(backup-grabenplaner.sh monitor/run-grabenplaner-monitor.sh stop-grabenplaner-server.sh test-grabenplaner-server.sh update-grabenplaner-server.sh uninstall-grabenplaner-server.sh)
 for index in "${!command_names[@]}"; do
   command_name="${command_names[$index]}"
   command_source="${APP_ROOT}/server-tools/linux/${command_files[$index]}"

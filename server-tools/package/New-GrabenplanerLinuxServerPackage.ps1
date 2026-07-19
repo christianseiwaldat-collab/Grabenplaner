@@ -198,7 +198,16 @@ try {
         'server-tools\linux\offsite\systemd\grabenplaner-offsite-check.service.in',
         'server-tools\linux\offsite\systemd\grabenplaner-offsite-check.timer.in',
         'server-tools\linux\offsite\systemd\grabenplaner-offsite-restore-test.service.in',
-        'server-tools\linux\offsite\systemd\grabenplaner-offsite-restore-test.timer.in'
+        'server-tools\linux\offsite\systemd\grabenplaner-offsite-restore-test.timer.in',
+        'server-tools\linux\grabenplaner-monitor.service.in',
+        'server-tools\linux\grabenplaner-monitor.timer.in',
+        'server-tools\linux\monitor\lib\monitor-status.js',
+        'server-tools\linux\monitor\run-grabenplaner-monitor.sh',
+        'server-tools\linux\migrate-grabenplaner-runtime-v2.sh',
+        'server-tools\linux\recovery\grabenplaner-recovery.sh',
+        'server-tools\linux\recovery\lib\recovery-apply.js',
+        'server-tools\linux\recovery\lib\recovery-metadata.js',
+        'server-tools\linux\recovery\lib\recovery-verify.js'
     )) {
         if (-not (Test-Path -LiteralPath (Join-Path $buildRoot $required) -PathType Leaf)) {
             throw "Pflichtdatei fehlt im Linux-Serverpaket: $required"

@@ -61,6 +61,11 @@ source /etc/os-release
 systemctl show-environment >/dev/null 2>&1 || offsite_die "Ein aktives systemd wird benoetigt."
 [[ -d "$OFFSITE_APP_ROOT" && ! -L "$OFFSITE_APP_ROOT" && -f "$OFFSITE_APP_ENV" && ! -L "$OFFSITE_APP_ENV" ]] \
   || offsite_die "Zuerst muss der Grabenplaner-Ubuntu-Server installiert werden."
+recovery_command="$OFFSITE_APP_ROOT/server-tools/linux/recovery/grabenplaner-recovery.sh"
+[[ -f "$recovery_command" && ! -L "$recovery_command" ]] || offsite_die "Der ueberwachte Recovery-Befehl fehlt im installierten Serverpaket."
+recovery_command_mode="$(stat --format='%a' -- "$recovery_command")"
+[[ "$(stat --format='%u:%h' -- "$recovery_command")" == "0:1" && $((8#$recovery_command_mode & 022)) -eq 0 \
+  && $((8#$recovery_command_mode & 0111)) -ne 0 ]] || offsite_die "Der Recovery-Befehl hat unsichere Dateirechte."
 
 secure_source() {
   local source="$1" label="$2" strict_secret="${3:-0}" resolved owner group mode links
@@ -236,6 +241,7 @@ commit_started=0
 restic_had_original=0
 rclone_had_original=0
 legacy_wrapper_had_original=0
+recovery_command_had_original=0
 config_had_original=0
 status_had_original=0
 declare -a timer_was_enabled=(0 0 0)
@@ -255,6 +261,7 @@ cleanup() {
         [grabenplaner-offsite-prepare]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-prepare.sh"
         [grabenplaner-offsite-test]="$OFFSITE_MODULE_ROOT/test-grabenplaner-offsite.sh"
         [grabenplaner-offsite-uninstall]="$OFFSITE_MODULE_ROOT/uninstall-grabenplaner-offsite.sh"
+        [grabenplaner-recovery]="$recovery_command"
       )
       for command_name in "${!rollback_commands[@]}"; do
         command_path="/usr/local/sbin/$command_name"
@@ -262,6 +269,10 @@ cleanup() {
           rm -f -- "$command_path"
         fi
       done
+    fi
+    if (( recovery_command_had_original == 0 )); then
+      recovery_link="/usr/local/sbin/grabenplaner-recovery"
+      if [[ -L "$recovery_link" && "$(readlink -- "$recovery_link")" == "$recovery_command" ]]; then rm -f -- "$recovery_link"; fi
     fi
     [[ -d "$OFFSITE_MODULE_ROOT" && ! -L "$OFFSITE_MODULE_ROOT" ]] && rm -rf --one-file-system -- "$OFFSITE_MODULE_ROOT"
     if [[ -n "$module_previous" && -d "$module_previous" && ! -L "$module_previous" ]]; then mv -T -- "$module_previous" "$OFFSITE_MODULE_ROOT"; fi
@@ -499,6 +510,7 @@ declare -A expected_commands=(
   [grabenplaner-offsite-prepare]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-prepare.sh"
   [grabenplaner-offsite-test]="$OFFSITE_MODULE_ROOT/test-grabenplaner-offsite.sh"
   [grabenplaner-offsite-uninstall]="$OFFSITE_MODULE_ROOT/uninstall-grabenplaner-offsite.sh"
+  [grabenplaner-recovery]="$recovery_command"
 )
 for command_name in "${!expected_commands[@]}"; do
   command_path="/usr/local/sbin/$command_name"
@@ -506,6 +518,7 @@ for command_name in "${!expected_commands[@]}"; do
     [[ -d "$OFFSITE_MODULE_ROOT" && ! -L "$OFFSITE_MODULE_ROOT" && -L "$command_path" \
       && "$(readlink -- "$command_path")" == "${expected_commands[$command_name]}" ]] \
       || offsite_die "Ein fremder Offsite-Befehl wuerde ueberschrieben."
+    [[ "$command_name" == "grabenplaner-recovery" ]] && recovery_command_had_original=1
   fi
 done
 if [[ -d "$OFFSITE_MODULE_ROOT" && ! -L "$OFFSITE_MODULE_ROOT" ]]; then
@@ -549,6 +562,7 @@ declare -A commands=(
   [grabenplaner-offsite-prepare]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-prepare.sh"
   [grabenplaner-offsite-test]="$OFFSITE_MODULE_ROOT/test-grabenplaner-offsite.sh"
   [grabenplaner-offsite-uninstall]="$OFFSITE_MODULE_ROOT/uninstall-grabenplaner-offsite.sh"
+  [grabenplaner-recovery]="$recovery_command"
 )
 for command_name in "${!commands[@]}"; do
   ln -sfn -- "${commands[$command_name]}" "/usr/local/sbin/$command_name"

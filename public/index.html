@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.73 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.74 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -110,6 +110,11 @@
       </aside>
 
       <main class="main-content">
+        <button class="server-alert-banner hidden" id="serverAlertBanner" type="button" aria-live="polite">
+          <span class="server-alert-symbol" aria-hidden="true">!</span>
+          <span><strong id="serverAlertTitle">Serverzustand prüfen</strong><small id="serverAlertMessage">Eine technische Warnung benötigt Aufmerksamkeit.</small></span>
+          <em>Details öffnen</em>
+        </button>
         <section id="planningView" class="view active">
           <header class="topbar">
             <div>
@@ -546,7 +551,7 @@
             <button class="settings-tab" data-settings-tab="integrations">Import &amp; Lohnverrechnung</button>
             <button class="settings-tab" data-settings-tab="access">Zugänge</button>
             <button class="settings-tab" data-settings-tab="rights">Rechtemanagement</button>
-            <button class="settings-tab" data-settings-tab="backup">Datenbank</button>
+            <button class="settings-tab" data-settings-tab="backup">System &amp; Backups</button>
             <button class="settings-tab hidden" id="usbProvisioningTab" data-settings-tab="usbProvisioning">USB-Stick</button>
           </div>
 
@@ -913,16 +918,16 @@
           </section>
 
           <section id="backupSettings" class="settings-section settings-two-column">
-            <div class="settings-card full-settings-card server-diagnostics-card">
-              <div class="card-heading"><div class="card-icon">Server</div><div><h2>Server-Betriebsprüfung</h2><p>Prüft HTTPS-Konfiguration, SQLite, Migrationen, Instanzschutz, Sitzungen sowie lokale und verschlüsselte Offsite-Backups.</p></div></div>
+            <div class="settings-card full-settings-card server-diagnostics-card hidden" id="serverDiagnosticsCard">
+              <div class="card-heading"><div class="card-icon">Server</div><div><h2>Serverzustand &amp; Wiederherstellbarkeit</h2><p>Zeigt Live- und Betriebsbereitschaft, lokale Sicherungen, verschlüsselte Offsite-Kopien sowie automatische Prüf- und Wiederherstellungsnachweise.</p></div></div>
               <div class="server-diagnostics" id="serverDiagnostics"><p class="settings-note">Diagnosedaten werden geladen.</p></div>
               <div class="backup-actions"><button type="button" class="secondary-button" id="refreshServerDiagnosticsButton">Diagnose aktualisieren</button></div>
             </div>
-            <div class="settings-card full-settings-card">
-              <div class="card-heading"><div class="card-icon">DB</div><div><h2>Datenbank & Backups</h2><p>Beim Programmstart wird immer eine interne Sicherung in app\backups erstellt. Zusätzlich kann lokal am PC regelmäßig gesichert werden.</p></div></div>
-              <div class="database-backup-path"><span>Interne Startsicherung</span><strong id="appBackupDirectoryText">app\backups</strong></div>
-              <label class="switch-row"><span><strong>Zusätzliche lokale PC-Sicherung aktiv</strong><small>Standardmäßig in den eigenen Dokumenten unter grabenplaner-backups.</small></span><input id="externalBackupEnabled" type="checkbox" /></label>
-              <label class="field full-width"><span>Lokaler Backup-Ordner am PC</span><input id="backupDirectory" placeholder="C:\Users\...\Documents\grabenplaner-backups" /></label>
+            <div class="settings-card full-settings-card hidden" id="databaseBackupSettingsCard">
+              <div class="card-heading"><div class="card-icon">DB</div><div><h2>Datenbank &amp; Backups</h2><p>Beim Programmstart entsteht eine interne Sicherung. Zusätzlich kann ein getrenntes lokales Sicherungsziel regelmäßig verwendet werden.</p></div></div>
+              <div class="database-backup-path"><span>Interne Startsicherung</span><strong id="appBackupDirectoryText">geschützter interner Sicherungsbereich</strong></div>
+              <label class="switch-row"><span><strong>Zusätzliches lokales Sicherungsziel aktiv</strong><small>Für Serverinstallationen muss die IT ein getrenntes, geschütztes Ziel konfigurieren.</small></span><input id="externalBackupEnabled" type="checkbox" /></label>
+              <label class="field full-width"><span>Lokales Sicherungsziel</span><input id="backupDirectory" placeholder="Von der technischen Administration festgelegter Sicherungspfad" /></label>
               <div class="inline-fields">
                 <label class="field"><span>Backup-Intervall</span><div class="unit-input"><input id="backupIntervalHours" type="number" min="1" max="6" step="1" /><em>Stunden</em></div></label>
                 <div class="backup-actions">
@@ -931,7 +936,11 @@
               </div>
               <p class="settings-note">Standard: alle 2 Stunden, einstellbar von 1 bis 6 Stunden. Die letzten 30 Sicherungen bleiben je Backup-Ordner erhalten.</p>
             </div>
-            <div class="settings-card full-settings-card" id="backupImportCard">
+            <div class="settings-card full-settings-card hidden" id="backupRestoreGuidanceCard">
+              <div class="card-heading"><div class="card-icon">Restore</div><div><h2>Wiederherstellung im Wartungsfenster</h2><p>Im laufenden HTTPS-Serverbetrieb ist ein Datenbankimport absichtlich gesperrt. Datenbank, verschlüsselte Dokumentablage und zugehörige Schlüssel müssen gemeinsam durch die technische Administration wiederhergestellt und geprüft werden.</p></div></div>
+              <div class="maintenance-guidance"><strong>Kein Browser-Schnellrestore</strong><span>Die produktive Übernahme erfolgt beaufsichtigt mit den Server-Wartungswerkzeugen. Vor dem Austausch wird ein Sicherheitsstand erstellt; danach müssen Integrität, Live- und Ready-Prüfung erfolgreich sein.</span></div>
+            </div>
+            <div class="settings-card full-settings-card hidden" id="backupImportCard">
               <div class="card-heading"><div class="card-icon">Import</div><div><h2>Backup importieren</h2><p>Import ersetzt die aktuelle Datenbank nach einem Neustart. Vorher wird automatisch ein Sicherheitsbackup erstellt.</p></div></div>
               <div class="import-mode-options">
                 <label class="choice-row"><input type="radio" name="backupImportMode" value="preserve-branding" checked /><span><strong>Datenbank importieren, aktuelles Branding behalten</strong><small>Empfohlen: Dienstplan-Daten werden ersetzt, Firmenlogo/PDF-Branding bleiben wie aktuell.</small></span></label>
@@ -1090,7 +1099,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.73 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.74 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
