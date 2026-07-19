@@ -7,6 +7,11 @@ const path = require("node:path");
 const SNAPSHOT_ID = /^[a-f0-9]{64}$/;
 const RECOVERY_ID = /^[a-f0-9]{64}$/;
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,190}$/;
+const NON_ROOT_PROGRAMMATIC_TEST_POLICY = Object.freeze({ name: "non-root-programmatic-test" });
+
+// This policy is intentionally available only to direct module callers. None of
+// the recovery CLIs accepts a flag or environment value that can select it.
+const __internalTestOnly = Object.freeze({ nonRootOwnershipPolicy: NON_ROOT_PROGRAMMATIC_TEST_POLICY });
 
 function fail(message) { throw new Error(message); }
 function sha256File(file) {
@@ -82,7 +87,12 @@ function parseStats(file) {
   return { totalSize, totalFileCount };
 }
 
-function assertFrozenTree(root, { requireRootOwner = process.platform === "linux" } = {}) {
+function requiresRootOwnership(policy) {
+  return process.platform === "linux" && policy !== NON_ROOT_PROGRAMMATIC_TEST_POLICY;
+}
+
+function assertFrozenTree(root, internalPolicy) {
+  const requireRootOwner = requiresRootOwnership(internalPolicy);
   const resolvedRoot = path.resolve(root);
   if (!path.isAbsolute(root) || resolvedRoot === path.parse(resolvedRoot).root) fail("Der Recovery-Baum ist ungueltig.");
   const files = [];
@@ -201,11 +211,11 @@ function checkBinding(receiptFile, repositoryIdFile, installationIdFile, expecte
   return { ok: true, repositoryId, installationId, installationHost: receipt.installationHost, sourcePath: receipt.sourcePath };
 }
 
-function safetyReceipt(output, safetyRoot, recoveryId, snapshotId) {
+function safetyReceipt(output, safetyRoot, recoveryId, snapshotId, internalPolicy) {
   const normalizedRecovery = String(recoveryId || "").toLowerCase();
   const normalizedSnapshot = String(snapshotId || "").toLowerCase();
   if (!RECOVERY_ID.test(normalizedRecovery) || !SNAPSHOT_ID.test(normalizedSnapshot)) fail("Der Sicherheitsbeleg hat ungueltige Kennungen.");
-  const files = assertFrozenTree(safetyRoot);
+  const files = assertFrozenTree(safetyRoot, internalPolicy);
   if (!files.length) fail("Der Sicherheitsbeleg darf keinen leeren Live-Zustand bestaetigen.");
   const receipt = {
     format: "grabenplaner-pre-restore-safety",
@@ -315,4 +325,4 @@ if (require.main === module) {
   try { main(); } catch (error) { process.stderr.write(`${error?.message || "Recovery-Metadatenpruefung fehlgeschlagen."}\n`); process.exitCode = 1; }
 }
 
-module.exports = { assertFrozenTree, checkBinding, parseStats, safetyReceipt, selectExact, selectLatest, snapshots, validateReceipt };
+module.exports = { __internalTestOnly, assertFrozenTree, checkBinding, parseStats, safetyReceipt, selectExact, selectLatest, snapshots, validateReceipt };

@@ -6,7 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { DatabaseSync } = require("node:sqlite");
-const { assertFrozenTree } = require("./recovery-metadata.js");
+const { __internalTestOnly, assertFrozenTree } = require("./recovery-metadata.js");
 
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
 const HASH = /^[a-f0-9]{64}$/;
@@ -99,9 +99,11 @@ function compareSemver(leftValue, rightValue) {
   return 0;
 }
 
-function readEnvironment(file) {
+function readEnvironment(file, internalPolicy) {
   const stat = regular(file, { maximumBytes: 64 * 1024 });
-  if (process.platform === "linux" && (stat.uid !== 0 || (stat.mode & 0o077) !== 0)) {
+  const requireRootOwner = process.platform === "linux"
+    && internalPolicy !== __internalTestOnly.nonRootOwnershipPolicy;
+  if (process.platform === "linux" && ((requireRootOwner && stat.uid !== 0) || (stat.mode & 0o077) !== 0)) {
     fail("Die Recovery-Schluesseldatei ist unzulaessig.");
   }
   const values = new Map();
@@ -256,13 +258,13 @@ function assertCompatibility(database, sourcePackage, targetPackage, sourceRunti
   return { sourceVersion, targetVersion, deploymentSchemaVersion: sourceRuntime.deploymentSchemaVersion };
 }
 
-async function verifyRecovery(options) {
+async function verifyRecovery(options, internalPolicy) {
   const stage = path.resolve(options.stage);
   const stageStat = fs.lstatSync(stage);
   if (!path.isAbsolute(options.stage) || stage === path.parse(stage).root || !stageStat.isDirectory() || stageStat.isSymbolicLink()) {
     fail("Der Recovery-Baum ist unzulaessig.");
   }
-  const frozenFiles = assertFrozenTree(stage);
+  const frozenFiles = assertFrozenTree(stage, internalPolicy);
   const stageOutput = JSON.parse(runNode(path.resolve(options.stageHelper), ["verify", stage]));
   for (const name of ["database", "documents", "commitMarker"]) {
     const resolved = path.resolve(String(stageOutput[name] || ""));
@@ -277,7 +279,7 @@ async function verifyRecovery(options) {
   const targetPackage = readJson(path.resolve(options.targetPackage), { maximumBytes: 1024 * 1024 });
   const sourceRuntime = readJson(path.join(stage, "recovery", "runtime-schema.json"), { maximumBytes: 256 * 1024 });
   const targetRuntime = readJson(path.resolve(options.targetRuntime), { maximumBytes: 256 * 1024 });
-  const environment = encryptionConfiguration(readEnvironment(path.resolve(options.environment)));
+  const environment = encryptionConfiguration(readEnvironment(path.resolve(options.environment), internalPolicy));
   const { validateEncryptionKeyForStorage, createAmuStorage } = require(path.resolve(options.amuModule));
   validateEncryptionKeyForStorage({
     sourceDirectory: stageOutput.documents,
