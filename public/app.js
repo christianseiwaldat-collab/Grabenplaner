@@ -1,3 +1,31 @@
+(() => {
+  const storageKey = "grabenplaner-bootstrap-token";
+  const parameters = new URLSearchParams(window.location.search);
+  const suppliedToken = String(parameters.get("bootstrap") || "").trim();
+  let inMemoryToken = "";
+  if (suppliedToken.length >= 32) {
+    inMemoryToken = suppliedToken;
+    try { window.sessionStorage.setItem(storageKey, suppliedToken); } catch {}
+    parameters.delete("bootstrap");
+    const query = parameters.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+  }
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = (input, options = {}) => {
+    let bootstrapToken = inMemoryToken;
+    try { bootstrapToken ||= window.sessionStorage.getItem(storageKey) || ""; } catch {}
+    if (bootstrapToken.length < 32) return originalFetch(input, options);
+    const target = new URL(typeof input === "string" || input instanceof URL ? input : input.url, window.location.href);
+    if (target.origin !== window.location.origin) return originalFetch(input, options);
+    const method = String(options.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
+    if (["GET", "HEAD", "OPTIONS"].includes(method)) return originalFetch(input, options);
+    const headers = new Headers(input instanceof Request ? input.headers : undefined);
+    new Headers(options.headers || {}).forEach((value, name) => headers.set(name, value));
+    headers.set("X-Grabenplaner-Bootstrap-Token", bootstrapToken);
+    return originalFetch(input, { ...options, headers });
+  };
+})();
+
 const state = {
   weekStart: getMonday(new Date()),
   vacationYear: new Date().getFullYear(),
