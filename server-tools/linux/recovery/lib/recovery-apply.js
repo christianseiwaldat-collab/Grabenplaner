@@ -4,7 +4,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
-const { assertFrozenTree, safetyReceipt: writeSafetyReceipt, validateReceipt } = require("./recovery-metadata.js");
+const { __internalTestOnly, assertFrozenTree, safetyReceipt: writeSafetyReceipt, validateReceipt } = require("./recovery-metadata.js");
 
 const HASH = /^[a-f0-9]{64}$/;
 const RECOVERY_ID = /^[a-f0-9]{64}$/;
@@ -138,12 +138,15 @@ function fsyncFile(file) {
   try { fs.fsyncSync(descriptor); } finally { fs.closeSync(descriptor); }
 }
 
-function createSafetySnapshot({ safetyRoot, safetyReceipt, recoveryId, snapshotId, targets }) {
+function createSafetySnapshot({ safetyRoot, safetyReceipt, recoveryId, snapshotId, targets }, internalPolicy) {
   const root = path.resolve(safetyRoot);
   const receipt = assertChild(safetyReceipt, root, "Vorab-Sicherheitsbeleg");
   const rootStat = fs.lstatSync(root);
   if (root === path.parse(root).root || !rootStat.isDirectory() || rootStat.isSymbolicLink()
-    || (process.platform === "linux" && (rootStat.uid !== 0 || (rootStat.mode & 0o077) !== 0))
+    || (process.platform === "linux" && (
+      (internalPolicy !== __internalTestOnly.nonRootOwnershipPolicy && rootStat.uid !== 0)
+      || (rootStat.mode & 0o077) !== 0
+    ))
     || fs.readdirSync(root).length !== 0 || path.dirname(receipt) !== root) {
     fail("Der permanente Vorab-Sicherheitsbereich ist unzulaessig oder nicht leer.");
   }
@@ -173,7 +176,7 @@ function createSafetySnapshot({ safetyRoot, safetyReceipt, recoveryId, snapshotI
   if (branding && pathExists(branding.target)) copyDirectory(branding.target, path.join(live, "branding-kits"));
   freezeTree(live);
   fsyncTree(live);
-  const result = writeSafetyReceipt(receipt, live, recoveryId, snapshotId);
+  const result = writeSafetyReceipt(receipt, live, recoveryId, snapshotId, internalPolicy);
   fsyncDirectory(root);
   fsyncDirectory(path.dirname(root));
   fsyncDirectory(path.dirname(path.dirname(root)));
@@ -218,14 +221,14 @@ function sourcePaths(stage) {
   return { database, documents, runtimeConfig: pathExists(runtimeConfig) ? runtimeConfig : null, branding: pathExists(branding) ? branding : null };
 }
 
-function verifySafetyReceipt(file, safetyRoot, recoveryId, snapshotId) {
+function verifySafetyReceipt(file, safetyRoot, recoveryId, snapshotId, internalPolicy) {
   const receipt = readJson(file, { maximumBytes: 8 * 1024 * 1024 });
   if (receipt?.format !== "grabenplaner-pre-restore-safety" || receipt?.schemaVersion !== 1
     || receipt.recoveryId !== recoveryId || receipt.snapshotId !== snapshotId
     || !HASH.test(String(receipt.treeSha256 || "")) || !Array.isArray(receipt.files) || !receipt.files.length) {
     fail("Der unveraenderliche Vorab-Sicherheitsbeleg fehlt oder passt nicht.");
   }
-  const files = assertFrozenTree(path.resolve(safetyRoot));
+  const files = assertFrozenTree(path.resolve(safetyRoot), internalPolicy);
   const treeSha256 = crypto.createHash("sha256")
     .update(files.map((item) => `${item.path}\0${item.bytes}\0${item.sha256}\n`).join(""), "utf8").digest("hex");
   if (JSON.stringify(files) !== JSON.stringify(receipt.files) || treeSha256 !== receipt.treeSha256) {
@@ -248,12 +251,12 @@ function parseArguments(argv) {
   return values;
 }
 
-function applyRecovery(values) {
+function applyRecovery(values, internalPolicy) {
   const recoveryId = String(values["recovery-id"] || "").toLowerCase();
   const snapshotId = String(values.snapshot || "").toLowerCase();
   if (!RECOVERY_ID.test(recoveryId) || !HASH.test(snapshotId)) fail("Die Recovery-Kennungen sind ungueltig.");
   const stage = path.resolve(values.stage);
-  assertFrozenTree(stage);
+  assertFrozenTree(stage, internalPolicy);
   const prepared = validateReceipt(readJson(path.resolve(values["prepared-receipt"]), { maximumBytes: 256 * 1024 }), "prepared", recoveryId, snapshotId);
   const verified = validateReceipt(readJson(path.resolve(values["verified-receipt"]), { maximumBytes: 256 * 1024 }), "verified", recoveryId, snapshotId);
   if (prepared.databaseSha256 !== verified.databaseSha256 || prepared.stageManifestSha256 !== verified.stageManifestSha256) {
@@ -330,8 +333,8 @@ function applyRecovery(values) {
       recoveryId,
       snapshotId,
       targets,
-    });
-    safety = verifySafetyReceipt(safetyReceiptPath, path.join(safetyRoot, "live"), recoveryId, snapshotId);
+    }, internalPolicy);
+    safety = verifySafetyReceipt(safetyReceiptPath, path.join(safetyRoot, "live"), recoveryId, snapshotId, internalPolicy);
     for (const item of targets) {
       if (pathExists(item.target)) {
         fs.renameSync(item.target, item.previous);

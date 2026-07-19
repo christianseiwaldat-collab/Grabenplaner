@@ -17,7 +17,8 @@ const databaseLockModule = path.join(root, "lib/database-lock.js");
 const { createAmuStorage, syncEncryptedFilesBackup } = require(amuModule);
 const { verifyRecovery } = require("../server-tools/linux/recovery/lib/recovery-verify.js");
 const { applyRecovery } = require("../server-tools/linux/recovery/lib/recovery-apply.js");
-const { assertFrozenTree } = require("../server-tools/linux/recovery/lib/recovery-metadata.js");
+const { __internalTestOnly } = require("../server-tools/linux/recovery/lib/recovery-metadata.js");
+const nonRootPolicy = __internalTestOnly.nonRootOwnershipPolicy;
 
 function sha256(file) { return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex"); }
 function writeJson(file, value) { fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`); }
@@ -103,11 +104,12 @@ test("v0.74 performs full frozen-stage, SQLite, document, key and compatibility 
       "GRABENPLANER_AMU_KEY_ID=server-v1", `GRABENPLANER_AMU_KEY=${built.key}`,
       "GRABENPLANER_INTEGRATION_KEY_ID=server-v1", `GRABENPLANER_INTEGRATION_KEY=${Buffer.alloc(32, 8).toString("base64")}`, "",
     ].join("\n"));
+    fs.chmodSync(environment, 0o600);
     freezeTree(stage);
     const result = await verifyRecovery({
       stage, stageHelper, backupVerifier, amuModule, integrationModule, environment,
       targetPackage, targetRuntime, scratchRoot: temporary, output,
-    });
+    }, nonRootPolicy);
     assert.equal(result.ok, true);
     assert.equal(result.databaseSha256, built.databaseSha256);
     assert.equal(result.sourceAppVersion, "0.73.0-beta");
@@ -157,7 +159,7 @@ test("v0.74 apply keeps the former live database and documents under the exact r
       stage, "prepared-receipt": prepared, "verified-receipt": verified, "safety-receipt": safetyReceipt,
       "safety-root": safetyRoot, "recovery-id": recoveryId, snapshot: snapshotId, "data-root": dataRoot,
       database: liveDatabase, "amu-module": amuModule, "database-lock-module": databaseLockModule, output,
-    });
+    }, nonRootPolicy);
     assert.equal(result.state, "applied");
     const restored = new DatabaseSync(liveDatabase, { readOnly: true });
     assert.equal(restored.prepare("SELECT value FROM recovery_marker").get().value, "restored");
@@ -214,7 +216,7 @@ test("v0.74 apply restores the former live state when the durable application re
       "safety-root": safetyRoot, "recovery-id": recoveryId, snapshot: snapshotId, "data-root": dataRoot,
       database: liveDatabase, "amu-module": amuModule, "database-lock-module": databaseLockModule,
       output: path.join(receiptBlocker, "applied.json"),
-    }));
+    }, nonRootPolicy));
     const restoredFormer = new DatabaseSync(liveDatabase, { readOnly: true });
     assert.equal(restoredFormer.prepare("SELECT value FROM recovery_marker").get().value, "former-live");
     restoredFormer.close();

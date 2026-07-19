@@ -7,6 +7,8 @@ const path = require("node:path");
 const test = require("node:test");
 const { DatabaseSync } = require("node:sqlite");
 const { assertCompatibility, compareSemver, readEnvironment } = require("../server-tools/linux/recovery/lib/recovery-verify.js");
+const { __internalTestOnly } = require("../server-tools/linux/recovery/lib/recovery-metadata.js");
+const nonRootPolicy = __internalTestOnly.nonRootOwnershipPolicy;
 
 test("v0.74 compares stable and prerelease app versions without allowing a newer recovery source", () => {
   assert.equal(compareSemver("0.74.0-beta", "0.74.0-beta"), 0);
@@ -36,9 +38,18 @@ test("v0.74 reads recovery keys without evaluating shell content and rejects dup
   const environment = path.join(temporary, "grabenplaner.env");
   try {
     fs.writeFileSync(environment, "GRABENPLANER_AMU_KEY_ID=server-v1\nGRABENPLANER_AMU_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\nUNRELATED=$(touch /tmp/must-not-run)\n");
-    const values = readEnvironment(environment);
+    fs.chmodSync(environment, 0o600);
+    const values = readEnvironment(environment, nonRootPolicy);
     assert.equal(values.get("UNRELATED"), "$(touch /tmp/must-not-run)");
+    if (process.platform === "linux" && typeof process.getuid === "function" && process.getuid() !== 0) {
+      assert.throws(() => readEnvironment(environment), /unzulaessig/);
+    }
+    fs.chmodSync(environment, 0o640);
+    if (process.platform === "linux") {
+      assert.throws(() => readEnvironment(environment, nonRootPolicy), /unzulaessig/);
+    }
+    fs.chmodSync(environment, 0o600);
     fs.writeFileSync(environment, "GRABENPLANER_AMU_KEY_ID=a\nGRABENPLANER_AMU_KEY_ID=b\n");
-    assert.throws(() => readEnvironment(environment), /doppelte/);
+    assert.throws(() => readEnvironment(environment, nonRootPolicy), /doppelte/);
   } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
 });

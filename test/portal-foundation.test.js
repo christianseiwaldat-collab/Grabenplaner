@@ -1725,6 +1725,8 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     NODE_ENV: "test",
     GRABENPLANER_TEST_AMU_SCANNER: "clean",
     GRABENPLANER_SERVICE_CONTROL_TOKEN: serviceControlToken,
+    GRABENPLANER_MONITOR_CONFIGURED: "1",
+    GRABENPLANER_MONITOR_STATUS_FILE: path.join(childRoot, "missing-monitor-status.json"),
   };
   const child = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
     cwd: path.join(__dirname, ".."), windowsHide: true, env: serverEnvironment, stdio: ["ignore", "pipe", "pipe"],
@@ -1900,7 +1902,14 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     assert.equal(diagnostics.database.journalMode, "wal");
     assert.equal(diagnostics.database.busyTimeoutMs, 5000);
     assert.equal(diagnostics.instanceLock.held, true);
-    assert.ok(diagnostics.productionChecks.every((check) => check.ok), JSON.stringify(diagnostics.productionChecks));
+    const monitorCheck = diagnostics.productionChecks.find((check) => check.id === "monitor");
+    const blockingChecks = diagnostics.productionChecks.filter((check) => check.id !== "monitor");
+    assert.ok(blockingChecks.every((check) => check.ok), JSON.stringify(blockingChecks));
+    assert.equal(monitorCheck?.ok, false);
+    assert.equal(diagnostics.monitor.configured, true);
+    assert.equal(diagnostics.monitor.blocksMainReadiness, false);
+    assert.equal(diagnostics.monitor.lastErrorCode, "MONITOR_STATUS_FILE_MISSING");
+    assert.ok(diagnostics.alerts.some((alert) => alert.id === "SERVER_MONITOR_ATTENTION"));
     assert.equal(diagnostics.backups.retentionCount, 30);
     assert.equal(typeof diagnostics.backups.offsite?.configured, "boolean");
     assert.equal("statusPath" in diagnostics.backups.offsite, false);

@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { __internalTestOnly, assertFrozenTree } = require("../server-tools/linux/recovery/lib/recovery-metadata.js");
 
 const root = path.resolve(__dirname, "..");
 const helper = path.join(root, "server-tools/linux/recovery/lib/recovery-metadata.js");
@@ -15,6 +16,7 @@ const recoveryId = "c".repeat(64);
 const installationId = "d".repeat(32);
 const host = `grabenplaner-${installationId}`;
 const sourcePath = "/var/lib/grabenplaner-offsite/staging/current";
+const nonRootPolicy = __internalTestOnly.nonRootOwnershipPolicy;
 
 function run(args) {
   return childProcess.spawnSync(process.execPath, [helper, ...args], { encoding: "utf8" });
@@ -85,23 +87,35 @@ test("v0.74 frozen-tree validation rejects writable files, symlinks and hardlink
     fs.writeFileSync(file, "payload");
     fs.chmodSync(file, 0o400);
     fs.chmodSync(tree, 0o500);
-    assert.equal(run(["frozen-tree", tree]).status, 0);
+    assert.doesNotThrow(() => assertFrozenTree(tree, nonRootPolicy));
+    const productionCli = run(["frozen-tree", tree]);
+    if (process.platform === "linux" && typeof process.getuid === "function" && process.getuid() !== 0) {
+      assert.notEqual(productionCli.status, 0);
+    } else {
+      assert.equal(productionCli.status, 0, productionCli.stderr);
+    }
     fs.chmodSync(file, 0o600);
-    assert.notEqual(run(["frozen-tree", tree]).status, 0);
+    assert.throws(() => assertFrozenTree(tree, nonRootPolicy), /nicht unveraenderlich|Hardlinks/);
     fs.chmodSync(file, 0o400);
     const link = path.join(tree, "linked.db");
     try {
+      fs.chmodSync(tree, 0o700);
       fs.symlinkSync(file, link, "file");
-      assert.notEqual(run(["frozen-tree", tree]).status, 0);
+      fs.chmodSync(tree, 0o500);
+      assert.throws(() => assertFrozenTree(tree, nonRootPolicy), /Symbolische Links/);
+      fs.chmodSync(tree, 0o700);
       fs.unlinkSync(link);
+      fs.chmodSync(tree, 0o500);
     } catch (error) {
-      if (error.code === "EPERM") context.diagnostic("Symlink-Erzeugung ist auf diesem Windows-Host nicht freigegeben.");
+      if (["EPERM", "EACCES"].includes(error.code)) context.diagnostic("Symlink-Erzeugung ist auf diesem Host nicht freigegeben.");
       else throw error;
     }
     const hardlink = path.join(tree, "hard.db");
     try {
+      fs.chmodSync(tree, 0o700);
       fs.linkSync(file, hardlink);
-      assert.notEqual(run(["frozen-tree", tree]).status, 0);
+      fs.chmodSync(tree, 0o500);
+      assert.throws(() => assertFrozenTree(tree, nonRootPolicy), /Hardlinks/);
     } catch (error) {
       if (!["EPERM", "EACCES"].includes(error.code)) throw error;
     }
