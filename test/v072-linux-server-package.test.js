@@ -93,6 +93,7 @@ test("v0.72 Linux installer requires every trusted maintenance verifier", () => 
     "server-tools/linux/lib/common.sh",
     "server-tools/linux/lib/backup-snapshot.js",
     "server-tools/linux/lib/hold-database-lock.js",
+    "server-tools/linux/lib/prune-backups.js",
     "server-tools/linux/lib/restore-backup.js",
     "server-tools/linux/lib/verify-backup.js",
     "server-tools/linux/lib/verify-install-tree.js",

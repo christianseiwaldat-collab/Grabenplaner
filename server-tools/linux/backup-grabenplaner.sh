@@ -149,51 +149,47 @@ find "$target_amu" -type d -exec chmod 0750 -- {} +
 find "$target_amu" -type f -exec chmod 0640 -- {} +
 
 verification_json="$(cat -- "$result_file")"
-"$node" - "$marker_file" "$snapshot" "$(basename -- "$target_database")" "$(basename -- "$target_amu")" "$verification_json" <<'NODE'
+"$node" - "$marker_file" "$snapshot" "$target_database" "$target_amu" "$verification_json" <<'NODE'
+const crypto = require("node:crypto");
 const fs = require("node:fs");
-const [file, snapshot, databaseFile, documentsDirectory, raw] = process.argv.slice(2);
+const path = require("node:path");
+const [file, snapshot, databasePath, documentsPath, raw] = process.argv.slice(2);
 const verification = JSON.parse(raw);
+const databaseStat = fs.lstatSync(databasePath);
+const manifestPath = path.join(documentsPath, "manifest.json");
+const manifestStat = fs.lstatSync(manifestPath);
+const sha256File = (target) => crypto.createHash("sha256").update(fs.readFileSync(target)).digest("hex");
+if (!databaseStat.isFile() || databaseStat.isSymbolicLink() || !manifestStat.isFile() || manifestStat.isSymbolicLink()
+  || !Number.isSafeInteger(verification.fileCount) || verification.fileCount < 0
+  || sha256File(databasePath) !== verification.databaseSha256) throw new Error("Der Sicherungsbeleg konnte nicht sicher erzeugt werden.");
+const committedAt = new Date().toISOString();
 fs.writeFileSync(file, `${JSON.stringify({
   format: "grabenplaner-backup-commit",
   schemaVersion: 1,
   snapshot,
-  committedAt: new Date().toISOString(),
-  database: { fileName: databaseFile, sha256: verification.databaseSha256 },
-  protectedDocuments: { directoryName: documentsDirectory, files: verification.fileCount },
+  committedAt,
+  database: { fileName: path.basename(databasePath), sha256: verification.databaseSha256, bytes: databaseStat.size },
+  protectedDocuments: {
+    directoryName: path.basename(documentsPath),
+    files: verification.fileCount,
+    manifestFileName: "manifest.json",
+    manifestSha256: sha256File(manifestPath),
+    manifestBytes: manifestStat.size,
+  },
+  verification: { status: "verified", verifiedAt: committedAt },
 }, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
 NODE
 chown "root:$service_group" -- "$marker_file"
 chmod 0640 -- "$marker_file"
 mv -T -- "$marker_file" "$target_marker"
-snapshot_committed=1
-
-mapfile -t old_markers < <(
-  find "$backup_dir" -maxdepth 1 -type f -name 'dienstplan-*.complete.json' -printf '%T@ %p\n' \
-    | sort --numeric-sort --reverse \
-    | tail --lines "+$((keep + 1))" \
-    | cut --delimiter=' ' --fields=2-
-)
-for old_marker in "${old_markers[@]}"; do
-  [[ -n "$old_marker" ]] || continue
-  gp_path_is_same_or_child "$old_marker" "$backup_dir" || gp_die "Aufbewahrungsmarker verlaesst den Backupordner: $old_marker"
-  old_snapshot="$(basename -- "$old_marker" .complete.json)"
-  [[ "$old_snapshot" =~ ^dienstplan-[0-9TZ.-]+-[0-9a-f]{12}$ ]] || gp_die "Ungueltiger Sicherungsmarker: $old_marker"
-  old_database="$backup_dir/$old_snapshot.db"
-  gp_path_is_same_or_child "$old_database" "$backup_dir" || gp_die "Aufbewahrungspfad verlaesst den Backupordner: $old_database"
-  old_amu="$backup_dir/$old_snapshot.amu"
-  rm -f -- "$old_marker"
-  if [[ -f "$old_database" && ! -L "$old_database" ]]; then rm -f -- "$old_database"; fi
-  if [[ -d "$old_amu" && ! -L "$old_amu" ]]; then
-    gp_path_is_same_or_child "$old_amu" "$backup_dir" || gp_die "Dokument-Backup verlaesst den Backupordner: $old_amu"
-    rm -rf -- "$old_amu"
-  elif [[ -e "$old_amu" ]]; then
-    gp_warn "Unzulaessiger gekoppelter Pfad wurde nicht entfernt: $old_amu"
-  fi
-done
-
 verifier="$app_dir/server-tools/linux/lib/verify-backup.js"
 "$node" "$verifier" "$target_database" "$target_amu" "$amu_module" "$target_marker" >/dev/null \
   || gp_die "Der veroeffentlichte Sicherungspunkt konnte nicht erneut verifiziert werden."
+snapshot_committed=1
+pruner="$app_dir/server-tools/linux/lib/prune-backups.js"
+[[ -f "$pruner" && ! -L "$pruner" ]] || gp_die "Das vertrauenswuerdige Aufbewahrungsmodul fehlt."
+"$node" "$pruner" "$backup_dir" "$keep" "$verifier" "$amu_module" >/dev/null \
+  || gp_die "Die verifizierte Backup-Aufbewahrung konnte nicht sicher ausgefuehrt werden."
 "$node" - "$target_database" "$target_amu" "$target_marker" "$verification_json" <<'NODE'
 const [database, documents, marker, raw] = process.argv.slice(2);
 const verification = JSON.parse(raw);

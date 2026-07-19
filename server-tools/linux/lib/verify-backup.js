@@ -5,12 +5,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
 
+const MAX_MARKER_BYTES = 64 * 1024;
+
 function sha256File(filePath) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
 
-function main() {
-  const [databasePath, amuBackupDirectory, amuModule, commitMarkerPath] = process.argv.slice(2);
+function verifyBackup(databasePath, amuBackupDirectory, amuModule, commitMarkerPath) {
   if (![databasePath, amuBackupDirectory, amuModule].every(Boolean)) throw new Error("Pruefparameter fehlen.");
   const { verifyBackupReferences } = require(path.resolve(amuModule));
   const database = new DatabaseSync(path.resolve(databasePath), { readOnly: true });
@@ -38,28 +39,50 @@ function main() {
   if (commitMarkerPath) {
     const markerPath = path.resolve(commitMarkerPath);
     const markerStat = fs.lstatSync(markerPath);
-    if (!markerStat.isFile() || markerStat.isSymbolicLink()) throw new Error("Der Sicherungsmarker ist unzulaessig.");
+    if (!markerStat.isFile() || markerStat.isSymbolicLink() || markerStat.size <= 0 || markerStat.size > MAX_MARKER_BYTES) {
+      throw new Error("Der Sicherungsmarker ist unzulaessig.");
+    }
     const marker = JSON.parse(fs.readFileSync(markerPath, "utf8").replace(/^\uFEFF/, ""));
     const snapshot = path.basename(databasePath, path.extname(databasePath));
+    const databaseStat = fs.lstatSync(databasePath);
+    const manifestPath = path.join(amuBackupDirectory, "manifest.json");
+    const manifestStat = fs.lstatSync(manifestPath);
     if (marker?.format !== "grabenplaner-backup-commit" || marker?.schemaVersion !== 1
       || marker?.snapshot !== snapshot || !Number.isFinite(Date.parse(String(marker?.committedAt || "")))
       || marker?.database?.fileName !== path.basename(databasePath)
       || String(marker?.database?.sha256 || "").toLowerCase() !== actualSha256
-      || marker?.protectedDocuments?.directoryName !== path.basename(amuBackupDirectory)) {
+      || marker?.database?.bytes !== databaseStat.size
+      || marker?.protectedDocuments?.directoryName !== path.basename(amuBackupDirectory)
+      || !Number.isSafeInteger(marker?.protectedDocuments?.files) || marker.protectedDocuments.files < 0
+      || marker.protectedDocuments.files !== verified.verified.length
+      || marker?.protectedDocuments?.manifestFileName !== "manifest.json"
+      || String(marker?.protectedDocuments?.manifestSha256 || "").toLowerCase() !== sha256File(manifestPath)
+      || marker?.protectedDocuments?.manifestBytes !== manifestStat.size
+      || marker?.verification?.status !== "verified"
+      || !Number.isFinite(Date.parse(String(marker?.verification?.verifiedAt || "")))) {
       throw new Error("Der Sicherungsmarker passt nicht zum DB-/Dokumentpaar.");
     }
   }
-  process.stdout.write(`${JSON.stringify({
+  return {
     ok: true,
     databaseSha256: actualSha256,
     protectedFiles: verified.verified.length,
     requiredStorageKeys: requiredStorageKeys.length,
-  })}\n`);
+  };
 }
 
-try {
-  main();
-} catch (error) {
-  console.error(error?.message || "Backup-Pruefung fehlgeschlagen.");
-  process.exitCode = 1;
+function main() {
+  const result = verifyBackup(...process.argv.slice(2));
+  process.stdout.write(`${JSON.stringify(result)}\n`);
 }
+
+if (require.main === module) {
+  try {
+    main();
+  } catch (error) {
+    console.error(error?.message || "Backup-Pruefung fehlgeschlagen.");
+    process.exitCode = 1;
+  }
+}
+
+module.exports = { verifyBackup };
