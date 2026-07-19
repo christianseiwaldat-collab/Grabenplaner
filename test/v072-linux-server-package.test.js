@@ -82,7 +82,7 @@ test("v0.72 Linux bootstrap stays private until public HTTPS readiness succeeds"
   assert.match(installer, /wait_for_public_ready \|\| fail/);
   assert.match(installer, /IFS= read -r first_line/);
   assert.match(installer, /CADDY_CONFIG_WRITTEN=1\r?\ninstall/);
-  assert.match(caddy, /@serviceStop path \/api\/service\/stop \/api\/service\/stop\/\*/);
+  assert.match(caddy, /path_regexp serviceStopPath \(\?i\)\^\/api\/service\/stop/);
 });
 
 test("v0.72 Linux installer requires every trusted maintenance verifier", () => {

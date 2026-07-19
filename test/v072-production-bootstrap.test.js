@@ -40,12 +40,15 @@ function waitForExit(child) {
 
 test("v0.72 browser bootstrap keeps the one-time key local and sends it only on mutations", () => {
   const application = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
+  const server = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
 
   assert.match(application, /parameters\.delete\("bootstrap"\)/);
   assert.match(application, /window\.history\.replaceState/);
   assert.match(application, /target\.origin !== window\.location\.origin/);
   assert.match(application, /\["GET", "HEAD", "OPTIONS"\]\.includes\(method\)/);
   assert.match(application, /X-Grabenplaner-Bootstrap-Token/);
+  assert.match(server, /role IN \('developer','it_admin','admin'\)/);
+  assert.match(server, /if \(serverModeActive \|\| !isLoopbackRequest\(request\)\)/);
 });
 
 test("v0.72 production bootstrap enforces the server password minimum on loopback", { timeout: 40_000 }, async () => {
@@ -64,6 +67,8 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
     GRABENPLANER_OPERATION_MODE: "local",
     GRABENPLANER_DEPLOYMENT_KIND: "production",
     GRABENPLANER_BOOTSTRAP_TOKEN: bootstrapToken,
+    GRABENPLANER_AMU_KEY_ID: "server-test-v1",
+    GRABENPLANER_AMU_KEY: Buffer.alloc(32, 17).toString("base64"),
   };
   for (const key of ["GRABENPLANER_SEED_DEMO", "GRABENPLANER_DEMO_PROFILE", "GRABENPLANER_FORCE_PORTAL"]){
     delete environment[key];
@@ -87,10 +92,12 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
 
     const database = new DatabaseSync(databasePath);
     try {
-      database.prepare(`
+      const insertEmployee = database.prepare(`
         INSERT INTO employees (personnel_number, full_name, nickname, color, contracted_hours, active)
-        VALUES ('900', 'Server Admin', 'Admin', '#26755c', 40, 1)
-      `).run();
+        VALUES (?, ?, ?, '#26755c', 40, 1)
+      `);
+      insertEmployee.run("900", "Server Admin", "Admin");
+      insertEmployee.run("901", "Zweites Teammitglied", "Team");
     } finally {
       database.close();
     }
@@ -114,6 +121,16 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
     assert.equal(authorizedSetupResponse.status, 400, await authorizedSetupResponse.clone().text());
     assert.match((await authorizedSetupResponse.json()).error, /mindestens 10 Zeichen/i);
 
+    const completedSetupResponse = await fetch(`${origin}/api/portal/v1/setup/admin`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Grabenplaner-Bootstrap-Token": bootstrapToken,
+      },
+      body: JSON.stringify({ employeeNumber: "900", password: "ServerPasswort123!" }),
+    });
+    assert.equal(completedSetupResponse.status, 201, await completedSetupResponse.clone().text());
+
     const exitResponse = await fetch(`${origin}/api/system/exit`, {
       method: "POST",
       headers: {
@@ -124,6 +141,51 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
     });
     assert.equal(exitResponse.status, 200, await exitResponse.clone().text());
     assert.equal(await waitForExit(child), 0, stderr);
+
+    const serverPort = await freePort();
+    const serverChild = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
+      cwd: path.join(__dirname, ".."),
+      env: {
+        ...environment,
+        PORT: String(serverPort),
+        GRABENPLANER_OPERATION_MODE: "server",
+        GRABENPLANER_PUBLIC_URL: "https://plan.example.test",
+        GRABENPLANER_TRUST_PROXY: "loopback",
+        GRABENPLANER_SERVICE_CONTROL_TOKEN: "service-control-test-token-0123456789abcdef",
+      },
+      windowsHide: true,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let serverStderr = "";
+    serverChild.stderr.on("data", (chunk) => { serverStderr += chunk.toString(); });
+    const serverOrigin = `http://127.0.0.1:${serverPort}`;
+    try {
+      try {
+        await waitForServer(`${serverOrigin}/api/health/live`, serverChild);
+      } catch (error) {
+        throw new Error(`${error.message}\n${serverStderr}`);
+      }
+      const serverDatabase = new DatabaseSync(databasePath);
+      try {
+        serverDatabase.prepare("UPDATE portal_users SET active = 0 WHERE employee_number = '900'").run();
+      } finally {
+        serverDatabase.close();
+      }
+      const publicSetupResponse = await fetch(`${serverOrigin}/api/portal/v1/setup/admin`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Forwarded-Proto": "https",
+        },
+        body: JSON.stringify({ employeeNumber: "901", password: "AngreiferPasswort123!" }),
+      });
+      assert.equal(publicSetupResponse.status, 403, await publicSetupResponse.clone().text());
+      assert.match((await publicSetupResponse.json()).error, /lokalen Einrichtungsmodus/i);
+    } finally {
+      if (serverChild.exitCode === null) serverChild.kill();
+      await waitForExit(serverChild);
+      assert.doesNotMatch(serverStderr, /SERVER_RUNTIME_CONFIGURATION_INVALID/);
+    }
   } finally {
     if (child.exitCode === null) child.kill();
     fs.rmSync(root, { recursive: true, force: true });

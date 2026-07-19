@@ -842,6 +842,10 @@ async function logoutPortal() {
 }
 
 function openAdminSetup() {
+  if (state.portalStatus?.adminSetupAvailable !== true) {
+    showToast("Die Admin-Ersteinrichtung ist nur im lokalen Einrichtungsmodus verfügbar.", true);
+    return;
+  }
   const employees = (state.allEmployees || []).filter((employee) => employee.active);
   elements.adminSetupEmployee.innerHTML = employees.map((employee) =>
     `<option value="${escapeHtml(employee.personnel_number)}">${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.nickname || employee.full_name)}</option>`,
@@ -2236,7 +2240,7 @@ async function loadPortalUsers() {
     elements.accessSettingsHint.textContent = state.portalStatus?.adminSetupState === "configured"
       ? "Startpasswörter werden nie angezeigt. Ein neu gesetztes Passwort muss beim ersten Login geändert werden."
       : "Zuerst einen Admin einrichten; danach können weitere Zugänge vorbereitet werden.";
-    elements.adminSetupButton.classList.toggle("hidden", state.portalStatus?.adminSetupState === "configured");
+    elements.adminSetupButton.classList.toggle("hidden", !state.portalStatus?.adminSetupAvailable);
     elements.portalUserList.innerHTML = state.portalUsers.map((user) => {
       const scope = user.scopes?.[0] || { locationId: user.homeLocationId || state.locations[0]?.id || "", departmentId: user.preferredDepartmentId || "" };
       const locations = state.locations.map((location) => `<option value="${escapeHtml(location.id)}" ${location.id === scope.locationId ? "selected" : ""}>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("");
