@@ -288,6 +288,7 @@ for (const required of [
   "server-tools/linux/test-grabenplaner-server.sh",
   "server-tools/linux/update-grabenplaner-server.sh",
   "server-tools/linux/uninstall-grabenplaner-server.sh",
+  "server-tools/linux/runtime-schema.json",
   "server-tools/linux/lib/common.sh",
   "server-tools/linux/lib/backup-snapshot.js",
   "server-tools/linux/lib/hold-database-lock.js",
@@ -301,6 +302,21 @@ for (const required of [
 const metadata = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
 if (String(metadata.version) !== String(manifest.appVersion)) fail("Manifest- und App-Version stimmen nicht ueberein.");
 if (metadata.packageManager !== "pnpm@11.7.0") fail("package.json fordert nicht die freigegebene pnpm-Version.");
+const runtimeContract = JSON.parse(fs.readFileSync(path.join(root, "server-tools/linux/runtime-schema.json"), "utf8").replace(/^\uFEFF/, ""));
+const expectedRuntimeArtifacts = [
+  "server-tools/linux/Caddyfile.in",
+  "server-tools/linux/grabenplaner-bootstrap-admin.sh.in",
+  "server-tools/linux/grabenplaner-bootstrap.service.in",
+  "server-tools/linux/grabenplaner.env.example",
+  "server-tools/linux/grabenplaner.service.in",
+];
+if (runtimeContract?.format !== "grabenplaner-linux-runtime-contract" || runtimeContract?.schemaVersion !== 1
+  || runtimeContract?.deploymentSchemaVersion !== 1 || runtimeContract?.migrationPolicy !== "explicit-maintenance"
+  || !Array.isArray(runtimeContract?.managedArtifacts)
+  || runtimeContract.managedArtifacts.length !== expectedRuntimeArtifacts.length
+  || expectedRuntimeArtifacts.some((relative) => !runtimeContract.managedArtifacts.includes(relative))) {
+  fail("Der Linux-Runtimevertrag v1 ist ungueltig.");
+}
 const allowedRootFiles = new Set([
   "server.js", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
   "README.md", "LICENSE.md", "SECURITY.md", "SERVERBETRIEB.md",

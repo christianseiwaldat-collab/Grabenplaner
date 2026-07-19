@@ -120,19 +120,21 @@ NODE
 )" || true
 if [[ "$database_check" == "ok" ]]; then check_ok "SQLite quick_check" "ok"; else check_fail "SQLite quick_check" "fehlgeschlagen"; fi
 
-latest_backup="$(find "$backup_dir" -maxdepth 1 -type f -name 'dienstplan-*.db' -printf '%T@ %p\n' | sort --numeric-sort --reverse | head --lines 1 | cut --delimiter=' ' --fields=2-)"
-if [[ -n "$latest_backup" ]]; then
-  age_seconds=$(( $(date +%s) - $(stat --format='%Y' -- "$latest_backup") ))
+latest_marker="$(find "$backup_dir" -maxdepth 1 -type f -name 'dienstplan-*.complete.json' -printf '%T@ %p\n' | sort --numeric-sort --reverse | head --lines 1 | cut --delimiter=' ' --fields=2-)"
+if [[ -n "$latest_marker" ]]; then
+  latest_snapshot="$(basename -- "$latest_marker" .complete.json)"
+  latest_backup="$backup_dir/$latest_snapshot.db"
+  paired_amu="$backup_dir/$latest_snapshot.amu"
+  age_seconds=$(( $(date +%s) - $(stat --format='%Y' -- "$latest_marker") ))
   if (( age_seconds <= maximum_backup_age_hours * 3600 )); then
     check_ok "Backup-Aktualitaet" "$(basename -- "$latest_backup"), $((age_seconds / 3600))h alt"
   else
     check_fail "Backup-Aktualitaet" "aelter als ${maximum_backup_age_hours}h"
   fi
-  paired_amu="${latest_backup%.db}.amu"
   verifier="$app_dir/server-tools/linux/lib/verify-backup.js"
   amu_module="$app_dir/lib/amu-storage.js"
-  if [[ -f "$verifier" && -f "$amu_module" && -d "$paired_amu" ]] \
-    && "$node" "$verifier" "$latest_backup" "$paired_amu" "$amu_module" >/dev/null; then
+  if [[ -f "$verifier" && -f "$amu_module" && -f "$latest_backup" && -d "$paired_amu" ]] \
+    && "$node" "$verifier" "$latest_backup" "$paired_amu" "$amu_module" "$latest_marker" >/dev/null; then
     check_ok "Backup DB-/Dokumentkopplung" "Manifest, Hashes und Referenzen stimmen"
   else
     check_fail "Backup DB-/Dokumentkopplung" "Integritaetspruefung fehlgeschlagen"

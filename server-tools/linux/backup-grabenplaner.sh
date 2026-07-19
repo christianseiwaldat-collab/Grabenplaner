@@ -100,19 +100,31 @@ done
 
 install -d -m 0750 -o "$service_user" -g "$service_group" -- "$backup_dir"
 timestamp="$(date --utc '+%Y-%m-%dT%H-%M-%S-%3N')"
-snapshot="dienstplan-$timestamp"
+runtime_directory="$(gp_prepare_runtime_directory)"
+snapshot="dienstplan-$timestamp-$("$node" -e 'process.stdout.write(require("node:crypto").randomBytes(6).toString("hex"))')"
 target_database="$backup_dir/$snapshot.db"
 target_amu="$backup_dir/$snapshot.amu"
-partial_database="$backup_dir/.$snapshot-$$.partial.db"
-partial_amu="$backup_dir/.$snapshot-$$.partial.amu"
-result_file="$backup_dir/.$snapshot-$$.result.json"
+target_marker="$backup_dir/$snapshot.complete.json"
+staging_directory="$(mktemp --directory --tmpdir="$runtime_directory" backup-stage.XXXXXXXX)"
+result_file="$(mktemp --tmpdir="$runtime_directory" backup-result.XXXXXXXX)"
+marker_file="$(mktemp --tmpdir="$runtime_directory" backup-marker.XXXXXXXX)"
+chown "$service_user:$service_group" -- "$staging_directory"
+chmod 0750 -- "$staging_directory"
+chmod 0600 -- "$result_file" "$marker_file"
+partial_database="$staging_directory/$snapshot.db"
+partial_amu="$staging_directory/$snapshot.amu"
 snapshot_committed=0
 
 cleanup() {
-  rm -f -- "$partial_database" "$result_file"
-  if [[ -d "$partial_amu" && ! -L "$partial_amu" ]]; then rm -rf -- "$partial_amu"; fi
+  if [[ -f "$result_file" && ! -L "$result_file" ]]; then rm -f -- "$result_file"; fi
+  if [[ -f "$marker_file" && ! -L "$marker_file" ]]; then rm -f -- "$marker_file"; fi
+  if [[ -d "$staging_directory" && ! -L "$staging_directory" ]] \
+    && gp_path_is_same_or_child "$staging_directory" "$runtime_directory"; then
+    rm -rf -- "$staging_directory"
+  fi
   if (( snapshot_committed == 0 )); then
-    rm -f -- "$target_database"
+    if [[ -f "$target_marker" && ! -L "$target_marker" ]]; then rm -f -- "$target_marker"; fi
+    if [[ -f "$target_database" && ! -L "$target_database" ]]; then rm -f -- "$target_database"; fi
     if [[ -d "$target_amu" && ! -L "$target_amu" ]]; then rm -rf -- "$target_amu"; fi
   fi
 }
@@ -128,26 +140,49 @@ fi
 [[ -s "$partial_database" && -d "$partial_amu" && -f "$partial_amu/manifest.json" ]] \
   || gp_die "Der Sicherungshelfer lieferte keinen vollstaendigen Sicherungspunkt."
 
-mv -- "$partial_amu" "$target_amu"
-mv -- "$partial_database" "$target_database"
+mv -T -- "$partial_amu" "$target_amu"
+mv -T -- "$partial_database" "$target_database"
 chown "$service_user:$service_group" -- "$target_database"
 chmod 0640 -- "$target_database"
 chown -R "$service_user:$service_group" -- "$target_amu"
 find "$target_amu" -type d -exec chmod 0750 -- {} +
 find "$target_amu" -type f -exec chmod 0640 -- {} +
+
+verification_json="$(cat -- "$result_file")"
+"$node" - "$marker_file" "$snapshot" "$(basename -- "$target_database")" "$(basename -- "$target_amu")" "$verification_json" <<'NODE'
+const fs = require("node:fs");
+const [file, snapshot, databaseFile, documentsDirectory, raw] = process.argv.slice(2);
+const verification = JSON.parse(raw);
+fs.writeFileSync(file, `${JSON.stringify({
+  format: "grabenplaner-backup-commit",
+  schemaVersion: 1,
+  snapshot,
+  committedAt: new Date().toISOString(),
+  database: { fileName: databaseFile, sha256: verification.databaseSha256 },
+  protectedDocuments: { directoryName: documentsDirectory, files: verification.fileCount },
+}, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+NODE
+chown "root:$service_group" -- "$marker_file"
+chmod 0640 -- "$marker_file"
+mv -T -- "$marker_file" "$target_marker"
 snapshot_committed=1
 
-mapfile -t old_backups < <(
-  find "$backup_dir" -maxdepth 1 -type f -name 'dienstplan-*.db' -printf '%T@ %p\n' \
+mapfile -t old_markers < <(
+  find "$backup_dir" -maxdepth 1 -type f -name 'dienstplan-*.complete.json' -printf '%T@ %p\n' \
     | sort --numeric-sort --reverse \
     | tail --lines "+$((keep + 1))" \
     | cut --delimiter=' ' --fields=2-
 )
-for old_database in "${old_backups[@]}"; do
-  [[ -n "$old_database" ]] || continue
+for old_marker in "${old_markers[@]}"; do
+  [[ -n "$old_marker" ]] || continue
+  gp_path_is_same_or_child "$old_marker" "$backup_dir" || gp_die "Aufbewahrungsmarker verlaesst den Backupordner: $old_marker"
+  old_snapshot="$(basename -- "$old_marker" .complete.json)"
+  [[ "$old_snapshot" =~ ^dienstplan-[0-9TZ.-]+-[0-9a-f]{12}$ ]] || gp_die "Ungueltiger Sicherungsmarker: $old_marker"
+  old_database="$backup_dir/$old_snapshot.db"
   gp_path_is_same_or_child "$old_database" "$backup_dir" || gp_die "Aufbewahrungspfad verlaesst den Backupordner: $old_database"
-  old_amu="${old_database%.db}.amu"
-  rm -f -- "$old_database"
+  old_amu="$backup_dir/$old_snapshot.amu"
+  rm -f -- "$old_marker"
+  if [[ -f "$old_database" && ! -L "$old_database" ]]; then rm -f -- "$old_database"; fi
   if [[ -d "$old_amu" && ! -L "$old_amu" ]]; then
     gp_path_is_same_or_child "$old_amu" "$backup_dir" || gp_die "Dokument-Backup verlaesst den Backupordner: $old_amu"
     rm -rf -- "$old_amu"
@@ -156,14 +191,17 @@ for old_database in "${old_backups[@]}"; do
   fi
 done
 
-verification_json="$(cat -- "$result_file")"
-"$node" - "$target_database" "$target_amu" "$verification_json" <<'NODE'
-const [database, documents, raw] = process.argv.slice(2);
+verifier="$app_dir/server-tools/linux/lib/verify-backup.js"
+"$node" "$verifier" "$target_database" "$target_amu" "$amu_module" "$target_marker" >/dev/null \
+  || gp_die "Der veroeffentlichte Sicherungspunkt konnte nicht erneut verifiziert werden."
+"$node" - "$target_database" "$target_amu" "$target_marker" "$verification_json" <<'NODE'
+const [database, documents, marker, raw] = process.argv.slice(2);
 const verification = JSON.parse(raw);
 process.stdout.write(`${JSON.stringify({
   ok: true,
   path: database,
   amuBackup: documents,
+  commitMarker: marker,
   sha256: verification.databaseSha256,
   protectedFiles: verification.fileCount,
   requiredStorageKeys: verification.requiredStorageKeys,

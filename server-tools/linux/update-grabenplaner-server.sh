@@ -15,7 +15,9 @@ Verwendung:
 Das Werkzeug laedt niemals selbst ein Update herunter. Es akzeptiert nur ein
 lokales Linux-x64-Serverpaket, prueft Paket- und Einzeldatei-Hashes, erstellt
 vor dem Austausch ein gekoppeltes DB-/Dokumentbackup und rollt bei einem
-fehlgeschlagenen Healthcheck automatisch zurueck.
+fehlgeschlagenen Healthcheck automatisch zurueck. Aendert ein Paket den
+versionierten systemd-/Caddy-/Bootstrap-/Env-Runtimevertrag, wird es vor jeder
+Aenderung mit dem Hinweis auf eine explizite Servermigration abgelehnt.
 EOF
 }
 
@@ -162,6 +164,7 @@ rollback_root="$maintenance_root/previous-app"
 staged_package="$maintenance_root/update-package.zip"
 entries_file="$maintenance_root/archive-entries.txt"
 manifest_result_file="$maintenance_root/manifest-result.json"
+installed_runtime_result_file="$maintenance_root/installed-runtime-result.json"
 backup_result_file="$maintenance_root/backup-result.json"
 database_lock_state="$maintenance_root/database-lock"
 install -d -m 0700 -o "$service_user" -g "$service_group" -- "$database_lock_state"
@@ -183,6 +186,8 @@ candidate_version=""
 old_version="$("$node" -p "require(process.argv[1]).version" "$app_dir/package.json")"
 rollback_data_ok=1
 rollback_public_ok=1
+rollback_app_ok=1
+rollback_stop_ok=1
 
 write_receipt() {
   local status="$1"
@@ -190,9 +195,9 @@ write_receipt() {
   install -d -m 0750 -o root -g "$service_group" -- "$history_dir"
   local receipt="$history_dir/update-$(date --utc '+%Y-%m-%dT%H-%M-%S-%3N').json"
   "$node" - "$receipt" "$status" "$old_version" "$candidate_version" "$(basename -- "$package")" "$actual_package_sha256" \
-    "$backup_database" "$error_text" "$rollback_data_ok" "$rollback_public_ok" <<'NODE'
+    "$backup_database" "$error_text" "$rollback_stop_ok" "$rollback_app_ok" "$rollback_data_ok" "$rollback_public_ok" <<'NODE'
 const fs = require("node:fs");
-const [file, status, previousVersion, requestedVersion, packageFile, packageSha256, backupFile, error, rollbackData, rollbackPublic] = process.argv.slice(2);
+const [file, status, previousVersion, requestedVersion, packageFile, packageSha256, backupFile, error, rollbackStop, rollbackApp, rollbackData, rollbackPublic] = process.argv.slice(2);
 fs.writeFileSync(file, `${JSON.stringify({
   status,
   completedAt: new Date().toISOString(),
@@ -202,6 +207,8 @@ fs.writeFileSync(file, `${JSON.stringify({
   packageSha256,
   backupFile: backupFile || null,
   error: error || null,
+  rollbackServiceStopped: rollbackStop === "1",
+  rollbackAppReady: rollbackApp === "1",
   rollbackDataReady: rollbackData === "1",
   rollbackPublicReady: rollbackPublic === "1",
 }, null, 2)}\n`, { encoding: "utf8", mode: 0o640 });
@@ -267,15 +274,40 @@ start_database_lock() {
 rollback_update() {
   set +e
   gp_warn "Das Update ist fehlgeschlagen; automatischer Rollback wird ausgefuehrt."
+  rollback_stop_ok=0
   systemctl stop "$service" >/dev/null 2>&1
-  release_database_lock
-  if (( old_app_moved == 1 )) && [[ -d "$rollback_root" && ! -L "$rollback_root" ]]; then
-    if [[ -d "$app_dir" && ! -L "$app_dir" ]]; then rm -rf -- "$app_dir"; fi
-    mv -- "$rollback_root" "$app_dir"
-    old_app_moved=0
+  rollback_service_state="$(systemctl is-active "$service" 2>/dev/null || true)"
+  if [[ "$rollback_service_state" == "inactive" || "$rollback_service_state" == "failed" ]]; then
+    rollback_stop_ok=1
+  else
+    gp_log ERROR "$service konnte fuer den Rollback nicht sicher beendet werden (Status: ${rollback_service_state:-unbekannt}). App und Daten werden nicht destruktiv veraendert."
   fi
-  rollback_data_ok=1
-  if (( new_service_started == 1 )) && [[ -n "$backup_database" && -f "$backup_database" && -d "$backup_amu" ]]; then
+  release_database_lock
+  rollback_app_ok="$rollback_stop_ok"
+  if (( rollback_stop_ok == 1 && old_app_moved == 1 )) && [[ -d "$rollback_root" && ! -L "$rollback_root" ]]; then
+    rollback_app_ok=0
+    replacement_removed=1
+    if [[ -e "$app_dir" || -L "$app_dir" ]]; then
+      replacement_removed=0
+      if [[ -d "$app_dir" && ! -L "$app_dir" ]] && rm -rf -- "$app_dir" && [[ ! -e "$app_dir" && ! -L "$app_dir" ]]; then
+        replacement_removed=1
+      else
+        gp_log ERROR "Der fehlgeschlagene neue App-Baum konnte nicht sicher entfernt werden; die vorherige App bleibt unter $rollback_root erhalten."
+      fi
+    fi
+    if (( replacement_removed == 1 )) && mv -T -- "$rollback_root" "$app_dir" \
+      && [[ -d "$app_dir" && ! -L "$app_dir" && ! -e "$rollback_root" ]]; then
+      rollback_app_ok=1
+      old_app_moved=0
+    else
+      gp_log ERROR "Der vorherige App-Baum konnte nicht vollstaendig zurueckverschoben werden; das Wartungsverzeichnis bleibt erhalten."
+    fi
+  elif (( rollback_stop_ok == 1 && old_app_moved == 1 )); then
+    rollback_app_ok=0
+    gp_log ERROR "Der vorherige App-Baum fehlt oder ist unzulaessig; das Wartungsverzeichnis bleibt zur Analyse erhalten."
+  fi
+  rollback_data_ok="$rollback_stop_ok"
+  if (( rollback_app_ok == 1 && new_service_started == 1 )) && [[ -n "$backup_database" && -f "$backup_database" && -d "$backup_amu" ]]; then
     rollback_helper="$app_dir/server-tools/linux/lib/restore-backup.js"
     if [[ -f "$rollback_helper" ]] && (cd -- "$data_dir" && runuser --user "$service_user" -- env -i PATH="/usr/local/bin:/usr/bin:/bin" NODE_ENV=production \
       "$node" "$rollback_helper" "$backup_database" "$backup_amu" "$database" "$amu_dir" \
@@ -289,7 +321,7 @@ rollback_update() {
     fi
   fi
   rollback_public_ok=0
-  if (( rollback_data_ok == 1 )) && [[ -d "$app_dir" ]]; then
+  if (( rollback_app_ok == 1 && rollback_data_ok == 1 )) && [[ -d "$app_dir" && ! -L "$app_dir" ]]; then
     systemctl start "$service"
     if gp_wait_ready "$internal_ready_url" "$health_timeout" && gp_wait_ready "$public_ready_url" "$health_timeout"; then
       rollback_public_ok=1
@@ -298,7 +330,9 @@ rollback_update() {
       gp_log ERROR "Die vorherige Version ist nach dem Rollback nicht HTTPS-bereit."
     fi
   fi
-  write_receipt "rolled-back" "Updateprozess mit Exitcode $1 fehlgeschlagen." >/dev/null 2>&1
+  rollback_status="rolled-back"
+  if (( rollback_stop_ok == 0 || rollback_app_ok == 0 || rollback_data_ok == 0 || rollback_public_ok == 0 )); then rollback_status="rollback-incomplete"; fi
+  write_receipt "$rollback_status" "Updateprozess mit Exitcode $1 fehlgeschlagen." >/dev/null 2>&1
 }
 
 cleanup() {
@@ -309,7 +343,7 @@ cleanup() {
     rollback_update "$exit_code"
   fi
   if [[ -d "$maintenance_root" && ! -L "$maintenance_root" ]] && gp_path_is_same_or_child "$maintenance_root" "$app_parent"; then
-    if (( update_committed == 1 || old_app_moved == 0 )); then rm -rf -- "$maintenance_root"; fi
+    if (( update_committed == 1 || (old_app_moved == 0 && rollback_app_ok == 1) )); then rm -rf -- "$maintenance_root"; fi
   fi
   exit "$exit_code"
 }
@@ -325,27 +359,72 @@ chown "$build_user:$build_group" -- "$extract_root"
 chmod 0750 -- "$extract_root"
 
 gp_info "Pruefe ZIP-Struktur und entpackte Maximalgroesse."
-unzip -Z1 "$staged_package" >"$entries_file"
+zip_summary="$(unzip -Z -t "$staged_package")" || gp_die "Das ZIP-Zentralverzeichnis kann nicht gelesen werden."
+declared_entry_count="$(printf '%s\n' "$zip_summary" | awk '/files?, .* bytes uncompressed/ { print $1; exit }')"
+declared_expanded_bytes="$(printf '%s\n' "$zip_summary" | awk '/files?, .* bytes uncompressed/ { print $3; exit }')"
+[[ "$declared_entry_count" =~ ^[0-9]+$ && "$declared_expanded_bytes" =~ ^[0-9]+$ ]] \
+  || gp_die "Die ZIP-Groessenangaben sind ungueltig."
+(( declared_entry_count > 0 && declared_entry_count <= 100000 )) || gp_die "Das ZIP enthaelt keine oder zu viele Eintraege."
+(( declared_expanded_bytes <= maximum_expanded_bytes )) || gp_die "Das entpackte Paket ueberschreitet die freigegebene Maximalgroesse."
+zip_listing="$(unzip -Z -l "$staged_package")" || gp_die "Die ZIP-Dateitypen koennen nicht gelesen werden."
+parsed_modes=0
+while IFS= read -r mode; do
+  ((parsed_modes += 1))
+  case "${mode:0:1}" in
+    -|d) ;;
+    *) gp_die "Links, Sockets und Spezialdateien sind im Serverpaket nicht erlaubt." ;;
+  esac
+done < <(printf '%s\n' "$zip_listing" | awk '$1 ~ /^[-dlbcps]/ && $2 ~ /^[0-9]/ { print $1 }')
+(( parsed_modes == declared_entry_count )) || gp_die "Nicht alle ZIP-Dateitypen konnten sicher bestimmt werden."
+unzip -tq "$staged_package" >/dev/null || gp_die "Das Server-ZIP ist beschaedigt oder unvollstaendig."
+unzip -Z1 "$staged_package" >"$entries_file" || gp_die "Die ZIP-Dateiliste kann nicht gelesen werden."
 declare -A archive_entries=()
+entry_count=0
 while IFS= read -r entry; do
-  [[ -n "$entry" && "$entry" != /* && "$entry" != *\\* && "$entry" != *$'\r'* ]] || gp_die "Unzulaessiger ZIP-Pfad: $entry"
-  entry_guard="/$entry/"
-  [[ "$entry_guard" != *"/../"* && "$entry_guard" != *"/./"* ]] || gp_die "ZIP-Pfad verlaesst den Stagingordner: $entry"
-  [[ -z "${archive_entries[$entry]+x}" ]] || gp_die "Doppelter ZIP-Pfad: $entry"
-  archive_entries["$entry"]=1
+  ((entry_count += 1))
+  normalized_entry="${entry#./}"
+  [[ -n "$normalized_entry" ]] || continue
+  [[ ! "$entry" =~ [[:cntrl:]] && "$normalized_entry" != /* && "$normalized_entry" != *\\* ]] \
+    || gp_die "Ungueltiger ZIP-Pfad im Serverpaket."
+  normalized_entry="${normalized_entry%/}"
+  [[ -n "$normalized_entry" && -z "${archive_entries[$normalized_entry]+x}" ]] || gp_die "Doppelter ZIP-Pfad im Serverpaket."
+  archive_entries["$normalized_entry"]=1
+  IFS=/ read -ra path_segments <<<"$normalized_entry"
+  for path_segment in "${path_segments[@]}"; do
+    [[ -n "$path_segment" && "$path_segment" != "." && "$path_segment" != ".." ]] || gp_die "Ein ZIP-Pfad ist nicht kanonisch."
+  done
 done <"$entries_file"
-(( ${#archive_entries[@]} > 0 && ${#archive_entries[@]} <= 100000 )) || gp_die "Das ZIP enthaelt keine oder zu viele Eintraege."
-if zipinfo -l "$staged_package" | awk '$1 ~ /^[lhbcp]/ { found=1 } END { exit(found ? 0 : 1) }'; then
-  gp_die "Symbolische Links, Hardlinks und Spezialdateien sind im Serverpaket nicht erlaubt."
-fi
-expanded_bytes="$(unzip -l "$staged_package" | tail --lines 1 | awk '{print $1}')"
-[[ "$expanded_bytes" =~ ^[0-9]+$ ]] || gp_die "Die entpackte Paketgroesse konnte nicht sicher bestimmt werden."
-(( expanded_bytes <= maximum_expanded_bytes )) || gp_die "Das entpackte Paket ueberschreitet die freigegebene Maximalgroesse."
+(( entry_count == declared_entry_count )) || gp_die "ZIP-Dateiliste und Zentralverzeichnis sind inkonsistent."
 (cd -- "$build_cache" && runuser --user "$build_user" -- unzip -qq "$staged_package" -d "$extract_root")
 actual_expanded_bytes="$(du --bytes --summarize "$extract_root" | awk '{print $1}')"
 (( actual_expanded_bytes <= maximum_expanded_bytes )) || gp_die "Die tatsaechlich entpackte Paketgroesse ist zu gross."
 
 "$node" "$trusted_package_verifier" "$extract_root" >"$manifest_result_file" || gp_die "Die Einzeldatei- und Manifestpruefung ist fehlgeschlagen."
+"$node" "$trusted_package_verifier" --runtime-contract "$app_dir" >"$installed_runtime_result_file" \
+  || gp_die "Der installierte Linux-Runtimevertrag ist ungueltig; das Update erfordert eine explizite Serverwartung."
+runtime_gate="$("$node" - "$installed_runtime_result_file" "$manifest_result_file" <<'NODE'
+const fs = require("node:fs");
+const [installedFile, candidateFile] = process.argv.slice(2);
+const installed = JSON.parse(fs.readFileSync(installedFile, "utf8"));
+const candidate = JSON.parse(fs.readFileSync(candidateFile, "utf8")).runtimeContract;
+if (!candidate) process.stdout.write("invalid-candidate");
+else if (installed.deploymentSchemaVersion !== candidate.deploymentSchemaVersion) {
+  process.stdout.write(`migration-required:${installed.deploymentSchemaVersion}->${candidate.deploymentSchemaVersion}`);
+} else if (installed.fingerprint !== candidate.fingerprint) {
+  process.stdout.write("schema-not-incremented");
+} else process.stdout.write("compatible");
+NODE
+)"
+case "$runtime_gate" in
+  compatible) ;;
+  migration-required:*)
+    gp_die "Das Update aendert den Linux-Deploymentvertrag ($runtime_gate). systemd, Caddy, Bootstrap und Env werden nicht blind ueberschrieben; bitte die freigegebene Servermigration ausfuehren."
+    ;;
+  schema-not-incremented)
+    gp_die "Runtime-Artefakte wurden geaendert, ohne die Deployment-Schemaversion zu erhoehen. Das Paket wird aus Sicherheitsgruenden abgelehnt."
+    ;;
+  *) gp_die "Der Runtimevertrag des Updatepakets konnte nicht sicher verglichen werden." ;;
+esac
 candidate_version="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).appVersion))' "$manifest_result_file")"
 required_pnpm="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).packageManager).split("@").pop())' "$manifest_result_file")"
 if (( allow_downgrade == 0 )); then
