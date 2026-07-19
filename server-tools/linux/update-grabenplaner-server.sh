@@ -43,6 +43,8 @@ backup_keep_arg=""
 health_timeout=120
 maximum_expanded_bytes=2147483648
 allow_downgrade=0
+lock_already_held=0
+commit_marker_arg=""
 
 while (($#)); do
   case "$1" in
@@ -68,6 +70,11 @@ while (($#)); do
     --health-timeout) health_timeout="${2:?Wert fuer --health-timeout fehlt}"; shift 2 ;;
     --maximum-expanded-bytes) maximum_expanded_bytes="${2:?Wert fehlt}"; shift 2 ;;
     --allow-downgrade-or-reinstall) allow_downgrade=1; shift ;;
+    # Ausschliesslich fuer die versionierte Runtime-Migration. FD 9 muss dabei
+    # bereits auf der echten root-only Wartungssperre liegen und wird unten
+    # nochmals mit flock validiert.
+    --lock-already-held) lock_already_held=1; shift ;;
+    --commit-marker) commit_marker_arg="${2:?Wert fuer --commit-marker fehlt}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) gp_die "Unbekannte Option: $1" ;;
   esac
@@ -81,6 +88,8 @@ for command_name in realpath readlink flock sha256sum unzip zipinfo systemctl cu
 [[ "$maximum_expanded_bytes" =~ ^[0-9]+$ ]] && (( maximum_expanded_bytes >= 1048576 && maximum_expanded_bytes <= 4294967296 )) \
   || gp_die "--maximum-expanded-bytes liegt ausserhalb des erlaubten Bereichs."
 [[ -z "$sha256_arg" || -z "$sha256_file_arg" ]] || gp_die "--sha256 und --sha256-file duerfen nicht gleichzeitig verwendet werden."
+[[ -z "$commit_marker_arg" || "$lock_already_held" -eq 1 ]] \
+  || gp_die "--commit-marker ist ausschliesslich innerhalb einer uebernommenen Runtime-Migrationssperre erlaubt."
 
 gp_load_env_file "$env_file"
 app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
@@ -130,6 +139,16 @@ if [[ -n "$sha256_file" ]]; then
 fi
 gp_validate_sha256 "$sha256_arg"
 actual_package_sha256=""
+commit_marker=""
+if [[ -n "$commit_marker_arg" ]]; then
+  commit_marker="$(gp_safe_absolute_path "$commit_marker_arg" "Updater-Commitmarker")"
+  commit_marker_parent="$(dirname -- "$commit_marker")"
+  [[ "$commit_marker_parent" == "/opt/grabenplaner/".runtime-v2-migration.* \
+    && -d "$commit_marker_parent" && ! -L "$commit_marker_parent" \
+    && "$(stat --format='%u:%g:%a' -- "$commit_marker_parent")" == "0:0:711" \
+    && ! -e "$commit_marker" && ! -L "$commit_marker" ]] \
+    || gp_die "Der Updater-Commitmarker ist nicht sicher an die Runtime-v2-Migration gebunden."
+fi
 
 gp_path_is_same_or_child "$database" "$data_dir" || gp_die "DB_PATH muss innerhalb des geschuetzten Datenordners liegen."
 gp_path_is_same_or_child "$amu_dir" "$data_dir" || gp_die "Der Dokumentordner muss innerhalb des geschuetzten Datenordners liegen."
@@ -216,6 +235,28 @@ NODE
   chown "root:$service_group" -- "$receipt"
   chmod 0640 -- "$receipt"
   printf '%s\n' "$receipt"
+}
+
+commit_marker_is_valid() {
+  [[ -n "$commit_marker" && -f "$commit_marker" && ! -L "$commit_marker" ]] || return 1
+  "$node" - "$commit_marker" "$candidate_version" "$actual_package_sha256" <<'NODE' >/dev/null
+const fs=require("node:fs");const [file,version,sha]=process.argv.slice(2);
+const stat=fs.lstatSync(file);const value=JSON.parse(fs.readFileSync(file,"utf8"));
+if(!stat.isFile()||stat.isSymbolicLink()||stat.uid!==0||(stat.mode&0o077)!==0||value?.format!=="grabenplaner-update-commit"||value?.schemaVersion!==1||value?.status!=="committed"||value?.installedVersion!==version||value?.packageSha256!==sha||!Number.isFinite(Date.parse(value?.committedAt||"")))process.exit(1);
+NODE
+}
+
+write_commit_marker() {
+  [[ -n "$commit_marker" ]] || return 0
+  "$node" - "$commit_marker" "$candidate_version" "$actual_package_sha256" "$receipt" <<'NODE'
+const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
+const [file,installedVersion,packageSha256,receipt]=process.argv.slice(2);
+const parent=path.dirname(file);const temporary=path.join(parent,`.updater-commit.${process.pid}.${crypto.randomBytes(6).toString("hex")}`);
+const payload={format:"grabenplaner-update-commit",schemaVersion:1,status:"committed",committedAt:new Date().toISOString(),installedVersion,packageSha256,updateReceipt:path.basename(receipt)};
+let fd,dir;
+try{fd=fs.openSync(temporary,fs.constants.O_CREAT|fs.constants.O_EXCL|fs.constants.O_WRONLY,0o600);fs.writeFileSync(fd,`${JSON.stringify(payload,null,2)}\n`);fs.fsyncSync(fd);fs.closeSync(fd);fd=undefined;fs.chownSync(temporary,0,0);fs.chmodSync(temporary,0o600);fs.renameSync(temporary,file);dir=fs.openSync(parent,fs.constants.O_RDONLY);fs.fsyncSync(dir);}finally{if(fd!==undefined)try{fs.closeSync(fd)}catch{}if(dir!==undefined)try{fs.closeSync(dir)}catch{}try{fs.unlinkSync(temporary)}catch{}}
+NODE
+  commit_marker_is_valid || gp_die "Der dauerhafte Updater-Commitmarker konnte nicht bestaetigt werden."
 }
 
 database_lock_process_is_expected() {
@@ -339,6 +380,7 @@ cleanup() {
   local exit_code=$?
   trap - EXIT
   release_database_lock
+  if (( update_committed == 0 )) && commit_marker_is_valid; then update_committed=1; fi
   if (( exit_code != 0 && services_touched == 1 && update_committed == 0 )); then
     rollback_update "$exit_code"
   fi
@@ -502,7 +544,15 @@ clamscan --recursive --infected --no-summary -- "$extract_root" >/dev/null \
   || gp_die "ClamAV hat das Updatepaket abgelehnt oder konnte es nicht vollstaendig pruefen."
 gp_apply_app_permissions "$extract_root" "$service_group"
 
-gp_acquire_maintenance_lock
+if (( lock_already_held == 1 )); then
+  inherited_lock_target="$(readlink -f -- /proc/$$/fd/9 2>/dev/null || true)"
+  expected_lock_target="$(gp_resolve_path "$GP_DEFAULT_MAINTENANCE_LOCK")"
+  [[ "$inherited_lock_target" == "$expected_lock_target" ]] \
+    || gp_die "Die uebernommene Wartungssperre ist nicht eindeutig gebunden."
+  flock --nonblock 9 || gp_die "Die uebernommene Wartungssperre ist nicht aktiv."
+else
+  gp_acquire_maintenance_lock
+fi
 services_touched=1
 gp_stop_service "$service" 150
 create_exact_local_backup
@@ -544,6 +594,7 @@ gp_start_service "$service"
 gp_wait_ready "$internal_ready_url" "$health_timeout" || gp_die "Die neue App wurde intern nicht rechtzeitig betriebsbereit."
 gp_wait_ready "$public_ready_url" "$health_timeout" || gp_die "Der oeffentliche HTTPS-Readinesscheck ist fehlgeschlagen."
 receipt="$(write_receipt "success")"
+write_commit_marker
 update_committed=1
 
 "$node" - "$old_version" "$candidate_version" "$actual_package_sha256" "$backup_database" "$receipt" "$public_ready_url" <<'NODE'

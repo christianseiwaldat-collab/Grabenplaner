@@ -5,6 +5,8 @@ IFS=$'\n\t'
 readonly APP_SERVICE="grabenplaner.service"
 readonly BOOTSTRAP_SERVICE="grabenplaner-bootstrap.service"
 readonly CADDY_SERVICE="caddy.service"
+readonly MONITOR_TIMER="grabenplaner-monitor.timer"
+readonly MONITOR_SERVICE="grabenplaner-monitor.service"
 readonly NODE_EXECUTABLE="{{NODE_EXECUTABLE}}"
 readonly DATABASE_PATH="/var/lib/grabenplaner/data/dienstplan.db"
 readonly ENV_FILE="/etc/grabenplaner/grabenplaner.env"
@@ -124,6 +126,7 @@ NODE
 
 start_bootstrap() {
   bootstrap_token >/dev/null
+  systemctl disable --now "$MONITOR_TIMER" "$MONITOR_SERVICE" >/dev/null 2>&1 || true
   systemctl disable --now "$APP_SERVICE" >/dev/null 2>&1 || true
   systemctl disable --now "$CADDY_SERVICE" >/dev/null 2>&1 || true
   systemctl start "$BOOTSTRAP_SERVICE"
@@ -136,7 +139,7 @@ start_bootstrap() {
 
 recover_to_bootstrap() {
   local reason=$1
-  systemctl disable --now "$CADDY_SERVICE" "$APP_SERVICE" >/dev/null 2>&1 || true
+  systemctl disable --now "$MONITOR_TIMER" "$MONITOR_SERVICE" "$CADDY_SERVICE" "$APP_SERVICE" >/dev/null 2>&1 || true
   if ! systemctl start "$BOOTSTRAP_SERVICE" || ! wait_for_health live; then
     journalctl -u "$BOOTSTRAP_SERVICE" --no-pager -n 40 >&2 || true
     fail "${reason} Auch die sichere Rueckkehr zum lokalen Bootstrap ist fehlgeschlagen; Caddy bleibt ausgeschaltet."
@@ -172,13 +175,14 @@ finish_bootstrap() {
   if ! clear_bootstrap_token; then
     recover_to_bootstrap "Der einmalige Bootstrap-Schluessel konnte nicht sicher verbraucht werden."
   fi
+  systemctl enable --now "$MONITOR_TIMER" >/dev/null
   printf '%s\n' "Admin-Bootstrap abgeschlossen. HTTPS ist geprueft und der einmalige Bootstrap-Schluessel wurde verbraucht."
 }
 
 show_status() {
   printf 'Admin eingerichtet: '
   if admin_is_configured; then printf 'ja\n'; else printf 'nein\n'; fi
-  systemctl --no-pager --full status "$BOOTSTRAP_SERVICE" "$APP_SERVICE" "$CADDY_SERVICE" || true
+  systemctl --no-pager --full status "$BOOTSTRAP_SERVICE" "$APP_SERVICE" "$CADDY_SERVICE" "$MONITOR_TIMER" || true
 }
 
 require_root

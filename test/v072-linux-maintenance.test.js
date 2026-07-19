@@ -52,7 +52,7 @@ test("v0.72 updater strictly checks ZIP metadata and gates runtime migrations", 
   assert.match(updater, /old_app_moved == 0 && rollback_app_ok == 1/);
 });
 
-test("v0.72 runtime contract is versioned and cryptographically fingerprinted", () => {
+test("Linux runtime contract is versioned and cryptographically fingerprinted", () => {
   const result = spawnSync(process.execPath, [
     path.join(root, "server-tools/linux/lib/verify-package.js"),
     "--runtime-contract",
@@ -60,9 +60,9 @@ test("v0.72 runtime contract is versioned and cryptographically fingerprinted", 
   ], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   const contract = JSON.parse(result.stdout);
-  assert.equal(contract.deploymentSchemaVersion, 1);
+  assert.equal(contract.deploymentSchemaVersion, 2);
   assert.match(contract.fingerprint, /^[0-9a-f]{64}$/);
-  assert.equal(contract.managedArtifacts.length, 5);
+  assert.equal(contract.managedArtifacts.length, 7);
 
   const schema = JSON.parse(read("server-tools/linux/runtime-schema.json"));
   assert.equal(schema.format, "grabenplaner-linux-runtime-contract");
@@ -70,5 +70,5 @@ test("v0.72 runtime contract is versioned and cryptographically fingerprinted", 
 
   const installer = read("server-tools/linux/install-grabenplaner-server.sh");
   assert.match(installer, /server-tools\/linux\/runtime-schema\.json/);
-  assert.match(installer, /Der Linux-Runtimevertrag v1 ist ungueltig/);
+  assert.match(installer, /Der Linux-Runtimevertrag v2 ist ungueltig/);
 });

@@ -1,5 +1,16 @@
 # Grabenplaner Versions-Log
 
+## v0.74 Beta
+
+- Eine gehärtete systemd-Prüfung kontrolliert den Ubuntu-Server alle fünf Minuten und schreibt ausschließlich einen redigierten, manipulationsgeschützten Status für die Anwendung.
+- Nur drei aufeinanderfolgende Fehler der internen Live-Prüfung dürfen einen begrenzten automatischen Neustart auslösen; Ready-, Backup-, Offsite- oder Speicherwarnungen führen niemals selbstständig zu einem Neustart.
+- Neue getrennte Rechte steuern die redigierte Betriebsübersicht und technische Diagnosedetails. Warnungen erscheinen für berechtigte Personen direkt im Grabenplaner, ohne interne Pfade oder Geheimnisse offenzulegen.
+- Sicherungszeitpunkte in der Zukunft gelten nicht mehr als aktuell; bei mehreren Sicherungszielen wird tatsächlich der neueste verifizierbare Stand ermittelt.
+- Der quartalsweise Offsite-Test stellt einen exakt gebundenen Snapshot in einen isolierten, schreibgeschützten Prüfbereich wieder her und dokumentiert das Ergebnis nachvollziehbar.
+- Eine produktive Ubuntu-Wiederherstellung erfolgt ausschließlich als Root-Vorgang in den Phasen Auflisten, Vorbereiten, Prüfen und Anwenden. Snapshot und Vorgangskennung müssen ausdrücklich bestätigt werden; vor dem Austausch bleibt der bisherige Datenstand als Sicherheitskopie erhalten.
+- Nach einer Wiederherstellung bleiben Grabenplaner und Caddy absichtlich beendet, bis die verantwortliche Administration Daten und Dienste geprüft und bewusst wieder freigegeben hat.
+- Der Linux-Runtimevertrag wurde für die neuen Monitor-Dienste auf Deployment-Schema 2 angehoben. Der Wechsel von einer bestehenden v0.73-Serverinstallation benötigt daher die dokumentierte Wartungsmigration statt eines stillen In-place-Updates.
+
 ## v0.73 Beta
 
 - Optionales Ubuntu-Offsite-Modul überträgt ausschließlich vollständig verifizierte lokale Datenbank-/Dokument-Sicherungspunkte verschlüsselt mit Restic über rclone zu Google Drive; die Live-Datenbank bleibt auf dem lokalen Linux-Dateisystem.

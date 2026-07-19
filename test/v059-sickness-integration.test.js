@@ -1080,7 +1080,13 @@ test("AUM Block 4: Stufe-A-Kontingent, rückwirkende AUM-Pflicht und Krankenstun
     assert.equal(configured.response.status, 200, JSON.stringify(configured.payload));
 
     const today = mostRecentPlanningDate();
-    const dates = [offsetDate(today, -1), offsetDate(today, -2), offsetDate(today, -3)];
+    const dates = [];
+    for (let offset = -1; dates.length < 3 && offset >= -7; offset -= 1) {
+      const candidate = offsetDate(today, offset);
+      const weekday = new Date(`${candidate}T12:00:00Z`).getUTCDay();
+      if (weekday >= 1 && weekday <= 5) dates.push(candidate);
+    }
+    assert.equal(dates.length, 3);
     const createdCases = [];
     for (const date of dates) {
       const created = await request("/api/portal/v1/me/sickness-cases", {
@@ -1104,15 +1110,19 @@ test("AUM Block 4: Stufe-A-Kontingent, rückwirkende AUM-Pflicht und Krankenstun
     assert.equal(ownCases.payload.aumAllowance.maxCalendarDaysPerCase, 1);
 
     const firstDate = dates[0];
-    const monday = (() => {
-      const date = new Date(`${firstDate}T12:00:00Z`);
+    const mondays = [...new Set(dates.map((value) => {
+      const date = new Date(`${value}T12:00:00Z`);
       const day = date.getUTCDay() || 7;
       date.setUTCDate(date.getUTCDate() - day + 1);
       return date.toISOString().slice(0, 10);
-    })();
-    const schedule = await request(`/api/schedule?week=${monday}&location=91&department=${departmentA}`, { auth: managerAuth });
-    assert.equal(schedule.response.status, 200, JSON.stringify(schedule.payload));
-    assert.equal(schedule.payload.sicknessCreditTotals["612"], 1152);
+    }))];
+    let sicknessCreditTotal = 0;
+    for (const monday of mondays) {
+      const schedule = await request(`/api/schedule?week=${monday}&location=91&department=${departmentA}`, { auth: managerAuth });
+      assert.equal(schedule.response.status, 200, JSON.stringify(schedule.payload));
+      sicknessCreditTotal += Number(schedule.payload.sicknessCreditTotals["612"] || 0);
+    }
+    assert.equal(sicknessCreditTotal, 1152);
 
     const evaluation = await request(`/api/portal/v1/time-day-evaluations?locationId=91&departmentId=${departmentA}&date=${firstDate}`, {
       auth: managerAuth,
