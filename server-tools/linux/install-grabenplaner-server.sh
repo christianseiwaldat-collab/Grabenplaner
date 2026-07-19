@@ -1,0 +1,605 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly SERVICE_USER="grabenplaner"
+readonly SERVICE_GROUP="grabenplaner"
+readonly BUILD_USER="grabenplaner-build"
+readonly BUILD_GROUP="grabenplaner-build"
+readonly APP_PARENT="/opt/grabenplaner"
+readonly APP_ROOT="${APP_PARENT}/app"
+readonly DATA_ROOT="/var/lib/grabenplaner"
+readonly CACHE_ROOT="/var/cache/grabenplaner"
+readonly LOG_ROOT="/var/log/grabenplaner"
+readonly BACKUP_ROOT="/var/backups/grabenplaner"
+readonly CONFIG_ROOT="/etc/grabenplaner"
+readonly ENV_FILE="${CONFIG_ROOT}/grabenplaner.env"
+readonly APP_UNIT="/etc/systemd/system/grabenplaner.service"
+readonly BOOTSTRAP_UNIT="/etc/systemd/system/grabenplaner-bootstrap.service"
+readonly CADDY_CONFIG="/etc/caddy/Caddyfile"
+readonly BOOTSTRAP_COMMAND="/usr/local/sbin/grabenplaner-bootstrap-admin"
+readonly MANIFEST_NAME="grabenplaner-server-manifest.json"
+readonly EXPECTED_PNPM_VERSION="11.7.0"
+readonly MAX_ARCHIVE_BYTES=$((2 * 1024 * 1024 * 1024))
+readonly MAX_EXTRACTED_BYTES=$((4 * 1024 * 1024 * 1024))
+
+PACKAGE_PATH=""
+EXPECTED_SHA256=""
+SHA256_FILE=""
+PUBLIC_URL=""
+PORT="3000"
+NODE_EXECUTABLE=""
+START_AFTER_INSTALL=1
+REPLACE_CADDY_CONFIG=0
+STAGE_ROOT=""
+APP_SWAPPED=0
+CADDY_CONFIG_REPLACED=0
+CADDY_CONFIG_BACKUP=""
+CADDY_CONFIG_WRITTEN=0
+RUNTIME_FILES_INSTALLED=0
+PNPM_COMMAND=()
+
+fail() {
+  printf 'Fehler: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'TEXT'
+Aufruf:
+  sudo bash install-grabenplaner-server.sh \
+    --package /pfad/Grabenplaner-Server-...-linux-x64.zip \
+    (--sha256 <64-hex> | --sha256-file /pfad/datei.sha256) \
+    --public-url https://beta.example.org [Optionen]
+
+Optionen:
+  --port <1-65535>       Interner Loopback-Port (Standard: 3000)
+  --node <pfad>          Node.js-Binary (Standard: aus PATH)
+  --replace-caddy-config Vorhandene Caddy-Konfiguration root-only sichern
+                         und auf diesem dedizierten Server ersetzen
+  --no-start             Dienste nur installieren, noch nicht starten
+  --help                 Diese Hilfe anzeigen
+
+Das Skript laedt selbst keine Binaries herunter. Der explizite, eingefrorene
+pnpm-Produktionsinstall darf Pakete aus der konfigurierten Registry beziehen.
+TEXT
+}
+
+cleanup() {
+  local exit_code=$?
+  if [[ -n "$STAGE_ROOT" && -d "$STAGE_ROOT" ]]; then
+    rm -rf --one-file-system -- "$STAGE_ROOT"
+  fi
+  if [[ $exit_code -ne 0 && $APP_SWAPPED -eq 1 ]]; then
+    systemctl disable --now grabenplaner.service grabenplaner-bootstrap.service >/dev/null 2>&1 || true
+    rm -rf --one-file-system -- "$APP_ROOT"
+  fi
+  if [[ $exit_code -ne 0 && $CADDY_CONFIG_REPLACED -eq 1 && -n "$CADDY_CONFIG_BACKUP" && -f "$CADDY_CONFIG_BACKUP" ]]; then
+    cp --preserve=mode,timestamps,ownership -- "$CADDY_CONFIG_BACKUP" "$CADDY_CONFIG"
+    systemctl restart caddy.service >/dev/null 2>&1 || true
+  elif [[ $exit_code -ne 0 && $CADDY_CONFIG_WRITTEN -eq 1 && -f "$CADDY_CONFIG" ]] \
+    && grep -q '^# Managed by Grabenplaner\.' "$CADDY_CONFIG"; then
+    systemctl disable --now caddy.service >/dev/null 2>&1 || true
+    rm -f -- "$CADDY_CONFIG"
+  fi
+  if [[ $exit_code -ne 0 && $RUNTIME_FILES_INSTALLED -eq 1 ]]; then
+    rm -f -- "$APP_UNIT" "$BOOTSTRAP_UNIT" "$BOOTSTRAP_COMMAND"
+    systemctl daemon-reload >/dev/null 2>&1 || true
+  fi
+  if [[ $exit_code -ne 0 ]]; then
+    local maintenance_name target
+    for maintenance_name in backup stop test update uninstall; do
+      target="$(readlink -- "/usr/local/sbin/grabenplaner-${maintenance_name}" 2>/dev/null || true)"
+      if [[ -n "$target" && ( "$target" == "$APP_ROOT" || "$target" == "$APP_ROOT/"* ) ]]; then
+        rm -f -- "/usr/local/sbin/grabenplaner-${maintenance_name}"
+      fi
+    done
+  fi
+  exit "$exit_code"
+}
+trap cleanup EXIT
+
+need_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "Erforderlicher Befehl fehlt: $1"
+}
+
+render_template() {
+  local source=$1 destination=$2 content
+  [[ -f "$source" ]] || fail "Vorlage fehlt: $source"
+  content="$(<"$source")"
+  content="${content//\{\{PUBLIC_URL\}\}/$PUBLIC_URL}"
+  content="${content//\{\{PUBLIC_HOST\}\}/$PUBLIC_HOST}"
+  content="${content//\{\{UPSTREAM\}\}/127.0.0.1:$PORT}"
+  content="${content//\{\{PORT\}\}/$PORT}"
+  content="${content//\{\{NODE_EXECUTABLE\}\}/$NODE_EXECUTABLE}"
+  content="${content//\{\{CLAMSCAN_EXECUTABLE\}\}/$CLAMSCAN_EXECUTABLE}"
+  content="${content//\{\{CADDY_LOG_PATH\}\}/\/var\/log\/grabenplaner\/caddy\/access.log}"
+  content="${content//\{\{AMU_KEY\}\}/${AMU_KEY-}}"
+  content="${content//\{\{INTEGRATION_KEY\}\}/${INTEGRATION_KEY-}}"
+  content="${content//\{\{WIFI_IDENTITY_KEY\}\}/${WIFI_IDENTITY_KEY-}}"
+  content="${content//\{\{WIFI_WEBHOOK_SECRET\}\}/${WIFI_WEBHOOK_SECRET-}}"
+  content="${content//\{\{SERVICE_CONTROL_TOKEN\}\}/${SERVICE_CONTROL_TOKEN-}}"
+  printf '%s\n' "$content" >"$destination"
+  if grep -Eq '\{\{[A-Z0-9_]+\}\}' "$destination"; then
+    fail "Nicht ersetzter Platzhalter in der Vorlage: $source"
+  fi
+}
+
+random_base64() {
+  local bytes=$1
+  head -c "$bytes" /dev/urandom | base64 | tr -d '\n'
+}
+
+environment_value() {
+  local key=$1
+  awk -F= -v wanted="$key" '$1 == wanted { print substr($0, index($0, "=") + 1); exit }' "$ENV_FILE"
+}
+
+require_environment_value() {
+  local key=$1 expected=${2-} value
+  value="$(environment_value "$key")"
+  [[ -n "$value" ]] || fail "Die bestehende Konfiguration enthaelt keinen Wert fuer $key."
+  if [[ -n "$expected" && "$value" != "$expected" ]]; then
+    fail "Die bestehende Konfiguration verwendet fuer $key einen anderen Wert."
+  fi
+}
+
+validate_secret_bytes() {
+  local key=$1 expected_bytes=$2 value decoded_bytes
+  value="$(environment_value "$key")"
+  [[ -n "$value" ]] || fail "Die bestehende Konfiguration enthaelt keinen geheimen Wert fuer $key."
+  decoded_bytes="$(printf '%s' "$value" | base64 --decode 2>/dev/null | wc -c)" || fail "$key ist kein gueltiger Base64-Wert."
+  [[ "$decoded_bytes" -eq "$expected_bytes" ]] || fail "$key hat nicht die erforderliche Laenge."
+}
+
+validate_node_version() {
+  local version major minor patch architecture
+  version="$($NODE_EXECUTABLE --version)"
+  version="${version#v}"
+  IFS=. read -r major minor patch <<<"$version"
+  [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ ]] || fail "Node.js meldet eine ungueltige Version."
+  if (( major < 22 || (major == 22 && minor < 13) )); then
+    fail "Node.js >=22.13.0 ist erforderlich; gefunden wurde $version."
+  fi
+  architecture="$($NODE_EXECUTABLE -p 'process.arch')"
+  [[ "$architecture" == "x64" ]] || fail "Die Node.js-Runtime muss fuer x64 gebaut sein; gefunden wurde $architecture."
+}
+
+resolve_pnpm() {
+  local version
+  if command -v pnpm >/dev/null 2>&1; then
+    PNPM_COMMAND=("$(command -v pnpm)")
+  elif command -v corepack >/dev/null 2>&1; then
+    PNPM_COMMAND=("$(command -v corepack)" pnpm)
+  else
+    fail "pnpm $EXPECTED_PNPM_VERSION oder Corepack ist erforderlich."
+  fi
+  version="$(runuser -u "$BUILD_USER" -- env \
+    HOME="$CACHE_ROOT" XDG_CACHE_HOME="$CACHE_ROOT" PNPM_HOME="$CACHE_ROOT/pnpm" COREPACK_HOME="$CACHE_ROOT/corepack" \
+    PATH="$(dirname "$NODE_EXECUTABLE"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    "${PNPM_COMMAND[@]}" --version)"
+  [[ "$version" == "$EXPECTED_PNPM_VERSION" ]] || fail "pnpm $EXPECTED_PNPM_VERSION ist erforderlich; gefunden wurde $version."
+}
+
+validate_os() {
+  [[ -r /etc/os-release ]] || fail "Die Betriebssystemkennung /etc/os-release fehlt."
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  [[ "${ID:-}" == "ubuntu" ]] || fail "Der Installer unterstuetzt Ubuntu Server."
+  case "${VERSION_ID:-}" in
+    24.04|26.04) ;;
+    *) fail "Unterstuetzt werden Ubuntu 24.04 LTS und 26.04 LTS; gefunden wurde ${VERSION_ID:-unbekannt}." ;;
+  esac
+  [[ "$(uname -m)" == "x86_64" ]] || fail "Dieses Serverpaket ist fuer x86_64 bestimmt."
+}
+
+validate_public_url() {
+  PUBLIC_HOST="$($NODE_EXECUTABLE - "$PUBLIC_URL" <<'NODE'
+const value = process.argv[2];
+let url;
+try { url = new URL(value); } catch { process.exit(1); }
+if (url.protocol !== "https:" || url.username || url.password || url.port || url.pathname !== "/" || url.search || url.hash) process.exit(1);
+if (!/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/i.test(url.hostname) || !url.hostname.includes(".")) process.exit(1);
+process.stdout.write(url.hostname.toLowerCase());
+NODE
+)" || fail "--public-url muss eine HTTPS-Adresse ohne Port, Pfad, Zugangsdaten, Abfrage oder Fragment sein."
+}
+
+validate_zip_entries() {
+  local entry normalized count=0 summary declared_count declared_bytes listing mode parsed_modes=0
+  declare -A seen_entries=()
+  summary="$(unzip -Z -t "$PACKAGE_PATH")" || fail "Das ZIP-Zentralverzeichnis kann nicht gelesen werden."
+  declared_count="$(printf '%s\n' "$summary" | awk '/files?, .* bytes uncompressed/ { print $1; exit }')"
+  declared_bytes="$(printf '%s\n' "$summary" | awk '/files?, .* bytes uncompressed/ { print $3; exit }')"
+  [[ "$declared_count" =~ ^[0-9]+$ && "$declared_bytes" =~ ^[0-9]+$ ]] || fail "Die ZIP-Groessenangaben sind ungueltig."
+  (( declared_count > 0 && declared_count <= 100000 )) || fail "Das Serverpaket enthaelt zu viele oder keine Eintraege."
+  (( declared_bytes <= MAX_EXTRACTED_BYTES )) || fail "Das Serverpaket wuerde entpackt mehr als 4 GiB belegen."
+  listing="$(unzip -Z -l "$PACKAGE_PATH")" || fail "Die ZIP-Dateitypen koennen nicht gelesen werden."
+  while IFS= read -r mode; do
+    ((parsed_modes += 1))
+    case "${mode:0:1}" in
+      -|d) ;;
+      *) fail "Links und Spezialdateien sind im Serverpaket nicht erlaubt." ;;
+    esac
+  done < <(printf '%s\n' "$listing" | awk '$1 ~ /^[-dlbcps]/ && $2 ~ /^[0-9]/ { print $1 }')
+  (( parsed_modes == declared_count )) || fail "Nicht alle ZIP-Dateitypen konnten sicher bestimmt werden."
+  unzip -tq "$PACKAGE_PATH" >/dev/null || fail "Das Server-ZIP ist beschaedigt oder unvollstaendig."
+  while IFS= read -r entry; do
+    ((count += 1))
+    (( count <= 100000 )) || fail "Das Serverpaket enthaelt zu viele Eintraege."
+    normalized="${entry#./}"
+    [[ -n "$normalized" ]] || continue
+    [[ ! "$entry" =~ [[:cntrl:]] && "$normalized" != /* && "$normalized" != *\\* ]] || fail "Ungueltiger ZIP-Pfad im Serverpaket."
+    normalized="${normalized%/}"
+    [[ -n "$normalized" && -z "${seen_entries[$normalized]+x}" ]] || fail "Doppelter ZIP-Pfad im Serverpaket."
+    seen_entries[$normalized]=1
+    IFS=/ read -ra parts <<<"$normalized"
+    for segment in "${parts[@]}"; do
+      [[ -n "$segment" && "$segment" != "." && "$segment" != ".." ]] || fail "Ein ZIP-Pfad ist nicht kanonisch."
+    done
+  done < <(unzip -Z1 "$PACKAGE_PATH")
+  (( count == declared_count )) || fail "ZIP-Dateiliste und Zentralverzeichnis sind inkonsistent."
+}
+
+validate_manifest() {
+  APP_VERSION="$($NODE_EXECUTABLE - "$STAGE_ROOT/source" <<'NODE'
+const fs = require("node:fs");
+const path = require("node:path");
+const crypto = require("node:crypto");
+const root = path.resolve(process.argv[2]);
+const manifestPath = path.join(root, "grabenplaner-server-manifest.json");
+const fail = (message) => { console.error(message); process.exit(1); };
+if (!fs.existsSync(manifestPath)) fail("Das Manifest fehlt in der Archivwurzel.");
+let manifest;
+try { manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8").replace(/^\uFEFF/, "")); } catch { fail("Das Manifest ist kein gueltiges JSON."); }
+if (manifest.format !== "grabenplaner-server-package" || manifest.schemaVersion !== 1) fail("Das Manifestformat wird nicht unterstuetzt.");
+if (manifest.platform !== "linux" || manifest.architecture !== "x64" || manifest.dependenciesMode !== "source-install") fail("Das Paket ist kein Linux-x64-Quellpaket.");
+if (manifest.minimumNode !== ">=22.13.0" || manifest.packageManager !== "pnpm@11.7.0") fail("Die Laufzeitvorgaben des Pakets sind unerwartet.");
+if (manifest.nodeRuntimeIncluded !== false || manifest.nodeRuntimeSha256 !== null) fail("Ein Linux-Quellpaket darf keine Node-Runtime enthalten.");
+if (!/^[0-9a-f]{7,64}$/i.test(String(manifest.sourceCommit || ""))) fail("Der Quellcommit im Manifest ist ungueltig.");
+if (!Number.isFinite(Date.parse(String(manifest.createdAt || "")))) fail("Der Erstellzeitpunkt im Manifest ist ungueltig.");
+if (!Array.isArray(manifest.files) || !manifest.files.length) fail("Die Manifestdateiliste fehlt.");
+const packageJsonPath = path.join(root, "package.json");
+const lockPath = path.join(root, "pnpm-lock.yaml");
+for (const required of [
+  "server.js", "package.json", "pnpm-lock.yaml", "lib/database-lock.js",
+  "server-tools/linux/backup-grabenplaner.sh",
+  "server-tools/linux/stop-grabenplaner-server.sh",
+  "server-tools/linux/test-grabenplaner-server.sh",
+  "server-tools/linux/update-grabenplaner-server.sh",
+  "server-tools/linux/uninstall-grabenplaner-server.sh",
+]) {
+  if (!fs.statSync(path.join(root, required), { throwIfNoEntry: false })?.isFile()) fail(`Pflichtdatei fehlt: ${required}`);
+}
+const metadata = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+if (String(metadata.version) !== String(manifest.appVersion)) fail("Manifest- und App-Version stimmen nicht ueberein.");
+if (metadata.packageManager !== "pnpm@11.7.0") fail("package.json fordert nicht die freigegebene pnpm-Version.");
+const allowedRootFiles = new Set([
+  "server.js", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
+  "README.md", "LICENSE.md", "SECURITY.md", "SERVERBETRIEB.md",
+]);
+const allowedRootDirectories = new Set(["lib", "public", "server-tools"]);
+const forbiddenTopLevels = new Set([
+  ".git", ".github", ".devcontainer", "backups", "data", "demo", "docs",
+  "node_modules", "output", "release", "runtime", "scripts", "test", "tmp", "usb-backups",
+]);
+function forbiddenPackagePath(relative) {
+  const normalized = relative.replaceAll("\\", "/").replace(/^\.\//, "");
+  const lower = normalized.toLowerCase();
+  const top = lower.split("/", 1)[0];
+  if (forbiddenTopLevels.has(top)) return true;
+  if (/(^|\/)(\.env(?:$|\.)|\.npmrc$|\.pnpm-store(?:$|\/)|__pycache__(?:$|\/))/.test(lower)) return true;
+  if (/\.(?:db|sqlite|sqlite3|amu|pfx|p12|pem|key|crt)$/.test(lower)) return true;
+  if (/(^|\/)(?:branding-kits?|customer-branding|kundenbranding)(?:\/|$)/.test(lower)) return true;
+  if (/(?:lamprechter|photo[-_ ]?straub|foto[-_ ]?straub|united[-_ ]?camera)/.test(lower)) return true;
+  const slash = normalized.indexOf("/");
+  if (slash < 0) return !allowedRootFiles.has(normalized);
+  return !allowedRootDirectories.has(normalized.slice(0, slash));
+}
+const expected = new Map();
+for (const item of manifest.files) {
+  const relative = String(item?.path || "");
+  if (!relative || relative.includes("\\") || path.posix.isAbsolute(relative) || path.posix.normalize(relative) !== relative || relative.split("/").includes("..")) fail("Ungueltiger Manifestpfad.");
+  if (forbiddenPackagePath(relative)) fail(`Im neutralen Serverpaket ist ein Pfad nicht erlaubt: ${relative}`);
+  if (expected.has(relative)) fail("Doppelter Manifestpfad.");
+  const candidate = path.resolve(root, ...relative.split("/"));
+  if (candidate !== root && !candidate.startsWith(`${root}${path.sep}`)) fail("Manifestpfad verlaesst das Paket.");
+  const stat = fs.statSync(candidate, { throwIfNoEntry: false });
+  if (!stat?.isFile() || stat.size !== Number(item.bytes)) fail(`Manifestdatei fehlt oder hat eine falsche Groesse: ${relative}`);
+  const hash = crypto.createHash("sha256").update(fs.readFileSync(candidate)).digest("hex");
+  if (hash !== String(item.sha256 || "").toLowerCase()) fail(`Manifestpruefsumme stimmt nicht: ${relative}`);
+  expected.set(relative, true);
+}
+function walk(directory, prefix = "") {
+  const found = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) found.push(...walk(path.join(directory, entry.name), relative));
+    else if (entry.isFile() && relative !== "grabenplaner-server-manifest.json") found.push(relative);
+    else if (entry.isSymbolicLink()) fail(`Symbolischer Link im Quellpaket: ${relative}`);
+  }
+  return found;
+}
+const actual = walk(root);
+if (actual.length !== expected.size || actual.some((relative) => !expected.has(relative))) fail("Paketinhalt und Manifestdateiliste stimmen nicht ueberein.");
+process.stdout.write(String(manifest.appVersion));
+NODE
+)" || fail "Die Manifestpruefung ist fehlgeschlagen."
+}
+
+validate_installed_dependencies() {
+  runuser -u "$BUILD_USER" -- env NODE_ENV=production HOME="$CACHE_ROOT" "$NODE_EXECUTABLE" - "$STAGE_ROOT/source" <<'NODE' >/dev/null
+const path = require("node:path");
+const root = process.argv[2];
+const metadata = require(path.join(root, "package.json"));
+for (const dependency of Object.keys(metadata.dependencies || {})) require.resolve(dependency, { paths: [root] });
+require(require.resolve("express", { paths: [root] }));
+require(require.resolve("sharp", { paths: [root] }));
+require(require.resolve("pdfkit", { paths: [root] }));
+process.stdout.write("dependencies-ok");
+NODE
+}
+
+admin_is_configured() {
+  [[ -f "$DATA_ROOT/data/dienstplan.db" ]] || return 1
+  runuser -u "$SERVICE_USER" -- "$NODE_EXECUTABLE" - "$DATA_ROOT/data/dienstplan.db" <<'NODE' >/dev/null
+const { DatabaseSync } = require("node:sqlite");
+let database;
+try {
+  database = new DatabaseSync(process.argv[2], { readOnly: true });
+  const row = database.prepare("SELECT COUNT(*) AS count FROM portal_users WHERE active = 1 AND role IN ('developer','it_admin','admin')").get();
+  process.exit(Number(row?.count || 0) > 0 ? 0 : 1);
+} catch { process.exit(1); }
+finally { try { database?.close(); } catch {} }
+NODE
+}
+
+wait_for_health() {
+  local service=$1 endpoint=$2 attempt
+  for attempt in $(seq 1 60); do
+    if curl --fail --silent --max-time 2 "http://127.0.0.1:${PORT}/api/health/${endpoint}" >/dev/null 2>&1; then return 0; fi
+    sleep 1
+  done
+  journalctl -u "$service" --no-pager -n 40 >&2 || true
+  return 1
+}
+
+while (($#)); do
+  case "$1" in
+    --package) [[ $# -ge 2 ]] || fail "Wert fuer --package fehlt."; PACKAGE_PATH=$2; shift 2 ;;
+    --sha256) [[ $# -ge 2 ]] || fail "Wert fuer --sha256 fehlt."; EXPECTED_SHA256=$2; shift 2 ;;
+    --sha256-file) [[ $# -ge 2 ]] || fail "Wert fuer --sha256-file fehlt."; SHA256_FILE=$2; shift 2 ;;
+    --public-url) [[ $# -ge 2 ]] || fail "Wert fuer --public-url fehlt."; PUBLIC_URL=$2; shift 2 ;;
+    --port) [[ $# -ge 2 ]] || fail "Wert fuer --port fehlt."; PORT=$2; shift 2 ;;
+    --node) [[ $# -ge 2 ]] || fail "Wert fuer --node fehlt."; NODE_EXECUTABLE=$2; shift 2 ;;
+    --replace-caddy-config) REPLACE_CADDY_CONFIG=1; shift ;;
+    --no-start) START_AFTER_INSTALL=0; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *) fail "Unbekannte Option: $1" ;;
+  esac
+done
+
+[[ ${EUID:-$(id -u)} -eq 0 ]] || fail "Der Installer muss mit sudo ausgefuehrt werden."
+[[ -n "$PACKAGE_PATH" && -f "$PACKAGE_PATH" ]] || fail "Ein lokales Server-ZIP muss mit --package angegeben werden."
+[[ -n "$PUBLIC_URL" ]] || fail "--public-url fehlt."
+[[ -z "$EXPECTED_SHA256" || -z "$SHA256_FILE" ]] || fail "Nur --sha256 oder --sha256-file verwenden."
+if [[ -n "$SHA256_FILE" ]]; then
+  [[ -f "$SHA256_FILE" ]] || fail "Die SHA256-Datei wurde nicht gefunden."
+  EXPECTED_SHA256="$(awk 'NR == 1 { print $1 }' "$SHA256_FILE")"
+fi
+[[ "$EXPECTED_SHA256" =~ ^[A-Fa-f0-9]{64}$ ]] || fail "Eine feste SHA256-Pruefsumme ist erforderlich."
+[[ "$PORT" =~ ^[0-9]+$ ]] && (( PORT >= 1 && PORT <= 65535 )) || fail "--port muss zwischen 1 und 65535 liegen."
+
+for command in awk base64 caddy chmod chown clamscan cp curl date dirname du find getent grep groupadd head id install journalctl ln mktemp mv readlink rm runuser seq sha256sum sleep stat systemctl tr uname unzip useradd wc; do
+  need_command "$command"
+done
+validate_os
+if [[ -z "$NODE_EXECUTABLE" ]]; then
+  need_command node
+  NODE_EXECUTABLE="$(command -v node)"
+fi
+NODE_EXECUTABLE="$(readlink -f -- "$NODE_EXECUTABLE")"
+[[ -x "$NODE_EXECUTABLE" ]] || fail "Das Node.js-Binary ist nicht ausfuehrbar."
+validate_node_version
+CLAMSCAN_EXECUTABLE="$(readlink -f -- "$(command -v clamscan)")"
+validate_public_url
+
+install -d -o root -g root -m 0755 "$APP_PARENT"
+STAGE_ROOT="$(mktemp -d "$APP_PARENT/.install.XXXXXX")"
+chmod 0700 "$STAGE_ROOT"
+install -o root -g root -m 0600 "$PACKAGE_PATH" "$STAGE_ROOT/package.zip"
+PACKAGE_PATH="$STAGE_ROOT/package.zip"
+[[ "$(stat -c %s -- "$PACKAGE_PATH")" -le "$MAX_ARCHIVE_BYTES" ]] || fail "Das Serverpaket ist groesser als 2 GiB."
+ACTUAL_SHA256="$(sha256sum -- "$PACKAGE_PATH" | awk '{ print $1 }')"
+[[ "${ACTUAL_SHA256,,}" == "${EXPECTED_SHA256,,}" ]] || fail "Die SHA256-Pruefsumme des Serverpakets stimmt nicht."
+validate_zip_entries
+
+[[ -f "$SCRIPT_DIR/grabenplaner.service.in" && -f "$SCRIPT_DIR/grabenplaner-bootstrap.service.in" \
+  && -f "$SCRIPT_DIR/Caddyfile.in" && -f "$SCRIPT_DIR/grabenplaner.env.example" \
+  && -f "$SCRIPT_DIR/grabenplaner-bootstrap-admin.sh.in" ]] || fail "Die Linux-Laufzeitvorlagen sind unvollstaendig."
+if [[ -s "$CADDY_CONFIG" ]] && ! grep -q '^# Managed by Grabenplaner\.' "$CADDY_CONFIG"; then
+  [[ $REPLACE_CADDY_CONFIG -eq 1 ]] || fail "Die vorhandene Caddy-Konfiguration wird nicht von Grabenplaner verwaltet. Fuer einen dedizierten Server ist --replace-caddy-config erforderlich."
+fi
+systemctl cat caddy.service >/dev/null 2>&1 || fail "Der installierte Caddy-systemd-Dienst fehlt."
+id caddy >/dev/null 2>&1 || fail "Der Systembenutzer caddy fehlt."
+[[ ! -e "$APP_ROOT" ]] || fail "Grabenplaner ist bereits installiert. Fuer bestehende Installationen grabenplaner-update verwenden."
+
+getent group "$SERVICE_GROUP" >/dev/null 2>&1 || groupadd --system "$SERVICE_GROUP"
+if ! id "$SERVICE_USER" >/dev/null 2>&1; then
+  useradd --system --gid "$SERVICE_GROUP" --home-dir "$DATA_ROOT" --shell /usr/sbin/nologin "$SERVICE_USER"
+fi
+[[ "$(id -gn "$SERVICE_USER")" == "$SERVICE_GROUP" ]] || fail "Der bestehende Benutzer grabenplaner verwendet eine unerwartete Hauptgruppe."
+getent group "$BUILD_GROUP" >/dev/null 2>&1 || groupadd --system "$BUILD_GROUP"
+if ! id "$BUILD_USER" >/dev/null 2>&1; then
+  useradd --system --gid "$BUILD_GROUP" --home-dir "$CACHE_ROOT" --shell /usr/sbin/nologin "$BUILD_USER"
+fi
+[[ "$(id -gn "$BUILD_USER")" == "$BUILD_GROUP" ]] || fail "Der bestehende Build-Benutzer verwendet eine unerwartete Hauptgruppe."
+
+install -d -o root -g root -m 0755 "$APP_PARENT" "$LOG_ROOT"
+install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0750 \
+  "$DATA_ROOT" "$DATA_ROOT/data" "$DATA_ROOT/private" "$DATA_ROOT/branding-kits" "$DATA_ROOT/backups" \
+  "$BACKUP_ROOT" "$LOG_ROOT/app"
+install -d -o "$BUILD_USER" -g "$BUILD_GROUP" -m 0750 "$CACHE_ROOT" "$CACHE_ROOT/pnpm" "$CACHE_ROOT/corepack"
+install -d -o caddy -g caddy -m 0750 "$LOG_ROOT/caddy"
+install -d -o root -g root -m 0700 "$CONFIG_ROOT"
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  AMU_KEY="$(random_base64 32)"
+  INTEGRATION_KEY="$(random_base64 32)"
+  WIFI_IDENTITY_KEY="$(random_base64 32)"
+  WIFI_WEBHOOK_SECRET="$(random_base64 48)"
+  SERVICE_CONTROL_TOKEN="$(random_base64 48)"
+  ENV_TEMP="$(mktemp "$CONFIG_ROOT/.grabenplaner.env.XXXXXX")"
+  chmod 0600 "$ENV_TEMP"
+  render_template "$SCRIPT_DIR/grabenplaner.env.example" "$ENV_TEMP"
+  mv -- "$ENV_TEMP" "$ENV_FILE"
+  chown root:root "$ENV_FILE"
+  chmod 0600 "$ENV_FILE"
+  unset AMU_KEY INTEGRATION_KEY WIFI_IDENTITY_KEY WIFI_WEBHOOK_SECRET SERVICE_CONTROL_TOKEN
+else
+  [[ "$(stat -c %a "$ENV_FILE")" == "600" && "$(stat -c %U:%G "$ENV_FILE")" == "root:root" ]] \
+    || fail "Die bestehende Umgebungsdatei muss root:root gehoeren und Modus 0600 haben."
+  require_environment_value NODE_ENV production
+  require_environment_value GRABENPLANER_OPERATION_MODE server
+  require_environment_value GRABENPLANER_DEPLOYMENT_KIND production
+  require_environment_value GRABENPLANER_PUBLIC_URL "$PUBLIC_URL"
+  require_environment_value GRABENPLANER_HOST 127.0.0.1
+  require_environment_value GRABENPLANER_TRUST_PROXY loopback
+  require_environment_value PORT "$PORT"
+  require_environment_value GRABENPLANER_DATA_DIR "$DATA_ROOT"
+  require_environment_value DB_PATH "$DATA_ROOT/data/dienstplan.db"
+  require_environment_value BACKUP_DIR "$BACKUP_ROOT"
+  validate_secret_bytes GRABENPLANER_AMU_KEY 32
+  validate_secret_bytes GRABENPLANER_INTEGRATION_KEY 32
+  validate_secret_bytes GRABENPLANER_WIFI_IDENTITY_KEY 32
+  validate_secret_bytes GRABENPLANER_WIFI_WEBHOOK_SECRET 48
+  [[ "$(environment_value GRABENPLANER_SERVICE_CONTROL_TOKEN | wc -c)" -ge 32 ]] || fail "Der Dienststeuerungs-Token ist zu kurz."
+fi
+
+SCANNER_PROBE="$(mktemp "$DATA_ROOT/private/.scanner-probe.XXXXXX")"
+printf '%s\n' 'Grabenplaner ClamAV readiness probe' >"$SCANNER_PROBE"
+chown "$SERVICE_USER:$SERVICE_GROUP" "$SCANNER_PROBE"
+chmod 0600 "$SCANNER_PROBE"
+if ! runuser -u "$SERVICE_USER" -- "$CLAMSCAN_EXECUTABLE" --no-summary -- "$SCANNER_PROBE" >/dev/null; then
+  rm -f -- "$SCANNER_PROBE"
+  fail "ClamAV konnte den sauberen Preflight nicht erfolgreich pruefen."
+fi
+rm -f -- "$SCANNER_PROBE"
+
+chown root:"$BUILD_GROUP" "$STAGE_ROOT"
+chmod 0750 "$STAGE_ROOT"
+chown root:"$BUILD_GROUP" "$STAGE_ROOT/package.zip"
+chmod 0640 "$STAGE_ROOT/package.zip"
+install -d -o "$BUILD_USER" -g "$BUILD_GROUP" -m 0750 "$STAGE_ROOT/source"
+runuser -u "$BUILD_USER" -- unzip -q "$STAGE_ROOT/package.zip" -d "$STAGE_ROOT/source"
+[[ -z "$(find "$STAGE_ROOT/source" ! -type f ! -type d -print -quit)" ]] || fail "Links und Spezialdateien sind im Quellpaket nicht erlaubt."
+[[ "$(du -sb "$STAGE_ROOT/source" | awk '{ print $1 }')" -le "$MAX_EXTRACTED_BYTES" ]] || fail "Das entpackte Serverpaket ist groesser als 4 GiB."
+[[ -f "$STAGE_ROOT/source/$MANIFEST_NAME" ]] || fail "Das Serverpaket-Manifest fehlt in der Archivwurzel."
+validate_manifest
+resolve_pnpm
+
+chown -R "$BUILD_USER:$BUILD_GROUP" "$STAGE_ROOT/source"
+runuser -u "$BUILD_USER" -- env \
+  HOME="$CACHE_ROOT" XDG_CACHE_HOME="$CACHE_ROOT" PNPM_HOME="$CACHE_ROOT/pnpm" COREPACK_HOME="$CACHE_ROOT/corepack" \
+  PATH="$(dirname "$NODE_EXECUTABLE"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+  NODE_ENV=production "${PNPM_COMMAND[@]}" install --prod --frozen-lockfile --config.node-linker=hoisted --reporter=append-only
+runuser -u "$BUILD_USER" -- "$NODE_EXECUTABLE" --check "$STAGE_ROOT/source/server.js" >/dev/null
+validate_installed_dependencies
+
+# pnpm may create internal links; every resulting target must stay inside the app.
+runuser -u "$BUILD_USER" -- "$NODE_EXECUTABLE" - "$STAGE_ROOT/source" <<'NODE' >/dev/null
+const fs = require("node:fs");
+const path = require("node:path");
+const root = path.resolve(process.argv[2]);
+function walk(directory) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const candidate = path.join(directory, entry.name);
+    if (entry.isSymbolicLink()) {
+      const target = fs.realpathSync(candidate);
+      if (target !== root && !target.startsWith(`${root}${path.sep}`)) process.exit(1);
+    } else if (entry.isDirectory()) walk(candidate);
+  }
+}
+walk(root);
+NODE
+
+chown -hR root:"$SERVICE_GROUP" "$STAGE_ROOT/source"
+chmod -R o-rwx "$STAGE_ROOT/source"
+find "$STAGE_ROOT/source" -type d -exec chmod 0750 {} +
+find "$STAGE_ROOT/source" -type f -perm /111 -exec chmod 0750 {} +
+find "$STAGE_ROOT/source" -type f ! -perm /111 -exec chmod 0640 {} +
+
+systemctl stop grabenplaner-bootstrap.service grabenplaner.service >/dev/null 2>&1 || true
+mv -- "$STAGE_ROOT/source" "$APP_ROOT"
+APP_SWAPPED=1
+
+UNIT_TEMP="$(mktemp)"
+render_template "$SCRIPT_DIR/grabenplaner.service.in" "$UNIT_TEMP"
+install -o root -g root -m 0644 "$UNIT_TEMP" "$APP_UNIT"
+render_template "$SCRIPT_DIR/grabenplaner-bootstrap.service.in" "$UNIT_TEMP"
+install -o root -g root -m 0644 "$UNIT_TEMP" "$BOOTSTRAP_UNIT"
+render_template "$SCRIPT_DIR/grabenplaner-bootstrap-admin.sh.in" "$UNIT_TEMP"
+install -o root -g root -m 0750 "$UNIT_TEMP" "$BOOTSTRAP_COMMAND"
+RUNTIME_FILES_INSTALLED=1
+render_template "$SCRIPT_DIR/Caddyfile.in" "$UNIT_TEMP"
+caddy validate --config "$UNIT_TEMP" --adapter caddyfile >/dev/null
+if [[ -s "$CADDY_CONFIG" ]]; then
+  install -d -o root -g root -m 0700 "$CONFIG_ROOT/caddy-backup"
+  CADDY_CONFIG_BACKUP="${CONFIG_ROOT}/caddy-backup/Caddyfile.pre-grabenplaner.$(date -u +%Y%m%dT%H%M%SZ)"
+  cp --preserve=mode,timestamps,ownership -- "$CADDY_CONFIG" "$CADDY_CONFIG_BACKUP"
+  CADDY_CONFIG_REPLACED=1
+fi
+install -o root -g root -m 0644 "$UNIT_TEMP" "$CADDY_CONFIG"
+CADDY_CONFIG_WRITTEN=1
+rm -f -- "$UNIT_TEMP"
+systemctl daemon-reload
+
+if command -v systemd-analyze >/dev/null 2>&1; then
+  systemd-analyze verify "$APP_UNIT" "$BOOTSTRAP_UNIT" >/dev/null
+fi
+
+if [[ $START_AFTER_INSTALL -eq 1 ]]; then
+  if admin_is_configured; then
+    systemctl enable grabenplaner.service >/dev/null
+    systemctl restart grabenplaner.service
+    wait_for_health grabenplaner.service ready || fail "Die Produktions-Bereitschaftspruefung ist nicht gruen."
+    systemctl enable caddy.service >/dev/null
+    systemctl restart caddy.service
+    printf 'Grabenplaner %s wurde installiert und als HTTPS-Dienst gestartet.\n' "$APP_VERSION"
+  else
+    systemctl disable --now grabenplaner.service caddy.service >/dev/null 2>&1 || true
+    systemctl start grabenplaner-bootstrap.service
+    wait_for_health grabenplaner-bootstrap.service live || fail "Der lokale Bootstrap-Dienst wurde nicht betriebsbereit."
+    printf 'Grabenplaner %s wurde installiert.\n\n' "$APP_VERSION"
+    "$BOOTSTRAP_COMMAND" status >/dev/null || true
+    cat <<TEXT
+Die frische Instanz lauscht fuer die Admin-Ersteinrichtung nur auf 127.0.0.1.
+Oeffne einen SSH-Tunnel und rufe danach lokal http://127.0.0.1:${PORT} auf:
+
+  ssh -L ${PORT}:127.0.0.1:${PORT} <server-benutzer>@<server>
+
+Lege zuerst das eigene Teammitglied und danach den Admin-Zugang an. Abschliessen mit:
+
+  sudo grabenplaner-bootstrap-admin finish
+TEXT
+  fi
+else
+  systemctl disable --now grabenplaner-bootstrap.service grabenplaner.service caddy.service >/dev/null 2>&1 || true
+  printf 'Grabenplaner %s wurde installiert; die Dienste wurden nicht gestartet.\n' "$APP_VERSION"
+fi
+
+command_names=(backup stop test update uninstall)
+command_files=(backup-grabenplaner.sh stop-grabenplaner-server.sh test-grabenplaner-server.sh update-grabenplaner-server.sh uninstall-grabenplaner-server.sh)
+for index in "${!command_names[@]}"; do
+  command_name="${command_names[$index]}"
+  command_source="${APP_ROOT}/server-tools/linux/${command_files[$index]}"
+  [[ -f "$command_source" ]] || fail "Installiertes Wartungsskript fehlt: $command_source"
+  ln -sfn -- "$command_source" "/usr/local/sbin/grabenplaner-${command_name}"
+done
+
+# A successful installation no longer needs automatic cleanup.
+APP_SWAPPED=0
+if [[ -n "$CADDY_CONFIG_BACKUP" ]]; then
+  printf 'Die vorherige Caddy-Konfiguration wurde root-only gesichert: %s\n' "$CADDY_CONFIG_BACKUP"
+fi
