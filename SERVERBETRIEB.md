@@ -14,6 +14,7 @@ Die bereitgestellten Werkzeuge ersetzen nicht die betriebliche Prüfung von Doma
 - Protokolle: systemd-Journal sowie `/var/log/grabenplaner/app` und `/var/log/grabenplaner/caddy`
 - lokale Sicherungspunkte: `/var/backups/grabenplaner`
 - optionaler Offsite-Status: `/var/lib/grabenplaner-offsite/status.json`; private Arbeitsdaten des Moduls liegen ebenfalls im gesonderten, root-verwalteten Modulpfad
+- redigierter Monitorstatus: `/var/lib/grabenplaner-monitor/status.json`; nur `root` schreibt, der App-Dienst besitzt ausschließlich Lesezugriff
 - Anwendung: `127.0.0.1:3000`
 - öffentlicher Zugang: ausschließlich Caddy auf Port 443
 
@@ -54,7 +55,7 @@ Die kontrollierte Erstinstallation verwendet das geprüfte Paket und seine verö
 
 ```bash
 sudo bash server-tools/linux/install-grabenplaner-server.sh \
-  --package /pfad/Grabenplaner-Server-v0.73.0-beta-linux-x64.zip \
+  --package /pfad/Grabenplaner-Server-v0.74.0-beta-linux-x64.zip \
   --sha256 '<veröffentlichter SHA256-Wert>' \
   --public-url https://beta.example.at \
   --replace-caddy-config
@@ -107,6 +108,7 @@ Die Installation stellt absichtlich kleine, mit `sudo` auszuführende Wartungsbe
 ```bash
 sudo grabenplaner-backup
 sudo grabenplaner-test
+sudo grabenplaner-monitor
 sudo grabenplaner-stop
 sudo grabenplaner-update --package /pfad/neues-paket.zip --sha256 '<SHA256>'
 sudo grabenplaner-uninstall --yes
@@ -114,9 +116,14 @@ sudo grabenplaner-uninstall --yes
 
 - `grabenplaner-backup` erstellt und prüft einen gekoppelten Sicherungspunkt aus SQLite-Datenbank und verschlüsselter Dokumentablage.
 - `grabenplaner-test` prüft Dienste, interne und öffentliche Erreichbarkeit, TLS, Caddy, Datenbankintegrität und Sicherungsalter.
+- `grabenplaner-monitor` führt dieselbe freigegebene Betriebsprüfung für den systemd-Timer aus und veröffentlicht nur fest definierte Prüfergebnisse ohne URLs, Pfade oder Antwortinhalte.
 - `grabenplaner-stop` beendet die Anwendung kontrolliert und prüft, dass der interne Listener geschlossen ist.
 - `grabenplaner-update` lädt nichts selbst herunter. Es akzeptiert nur ein lokales Linux-Serverpaket samt SHA-256, sichert vor dem Austausch und rollt bei fehlgeschlagener Bereitschaftsprüfung automatisch zurück.
 - `grabenplaner-uninstall --yes` entfernt App-Code, eigene systemd-Units und Befehlslinks. Daten, Schlüsselkonfiguration, Logs und Backups bleiben erhalten; Caddy selbst wird nicht deinstalliert und eine zuvor gesicherte, gültige Konfiguration wird wiederhergestellt.
+
+`grabenplaner-monitor.timer` startet die Prüfung alle fünf Minuten. Ausschließlich drei aufeinanderfolgende Fehler des internen Live-Endpunkts dürfen `grabenplaner.service` einmalig neu starten; zwischen zwei solchen Versuchen liegen mindestens 30 Minuten. Fehler von Ready, HTTPS, Sicherungen, Offsite-Ziel, Speicherplatz oder Virenscanner erzeugen nur einen Wartungsalarm und niemals einen automatischen Neustart. Der Monitorstatus ist kein Bestandteil des Ready-Endpunkts und kann deshalb keine Rückkopplung erzeugen.
+
+Das Deployment-Schema der Linux-Laufzeit wurde für v0.74 von 1 auf 2 angehoben. Ein bestehender v0.73-Server darf daher nicht mit einem stillen In-place-Update auf v0.74 wechseln: `grabenplaner-update` beendet den Vorgang mit `migration-required`. Die verantwortliche IT verwendet im Wartungsfenster ausschließlich das im geprüften v0.74-Linux-Paket enthaltene root-only Werkzeug `server-tools/linux/migrate-grabenplaner-runtime-v2.sh`. Aufruf, Sicherheitsprüfungen und Fehlerbehandlung sind in [`server-tools/linux/RUNTIME-MIGRATIONS.md`](server-tools/linux/RUNTIME-MIGRATIONS.md) beschrieben; ein erneuter Admin-Bootstrap ist weder nötig noch zulässig.
 
 Die lokalen Sicherungspunkte schützen vor fehlerhaften Updates und ermöglichen einen kontrollierten Wiederanlauf. Das folgende optionale Modul ergänzt sie um eine räumlich getrennte, verschlüsselte Kopie; es ersetzt die lokalen Sicherungen nicht.
 
@@ -213,7 +220,7 @@ Die systemd-Dienste verwenden einen gemeinsamen Wartungs- und Repository-Lock. E
 
 Die feste Restic-Aufbewahrung beträgt **14 tägliche, 8 wöchentliche und 12 monatliche Sicherungsstände**. Upload, Vollprüfung und Restore-Test sind getrennte Dienste. Ein fehlgeschlagener Upload löst keine Aufräumaktion aus. Prüffehler werden nicht automatisch repariert; vor einem manuellen `unlock`, `forget`, `prune` oder einer Wiederherstellung muss ausgeschlossen sein, dass noch ein anderer Vorgang läuft.
 
-Der monatliche Vollcheck liest die Repository-Daten vollständig und kann abhängig von Datenmenge und Verbindung längere Zeit dauern. Der quartalsweise Restore-Test stellt in einen isolierten Bereich unter `/var/lib/grabenplaner-offsite` wieder her, prüft Kopplung, Hashes, SQLite und Dokumentmanifest und verändert keine produktiven Daten.
+Der monatliche Vollcheck liest die Repository-Daten vollständig und kann abhängig von Datenmenge und Verbindung längere Zeit dauern. Der quartalsweise Restore-Test wählt den neuesten exakt gebundenen Snapshot, stellt ihn in einen isolierten, anschließend schreibgeschützten Bereich unter `/var/lib/grabenplaner-offsite` wieder her und prüft Repository-/Installationsbindung, Hashes, SQLite, Dokumentmanifest und Recovery-Schlüssel. Er verändert keine produktiven Daten. Ein Start der Anwendung innerhalb dieses Prüfbereichs erfolgt bewusst noch nicht, solange kein nachweislich nebenwirkungsfreier isolierter App-Testmodus existiert.
 
 #### Updates und Statusdiagnose
 
@@ -231,7 +238,21 @@ Die Hauptanwendung bleibt bei einem vorübergehenden Offsite-Fehler erreichbar. 
 
 #### Wiederherstellung und Schutzgrenze
 
-Eine echte Wiederherstellung wird nie direkt in den Live-Pfad gestartet. Die IT stellt den gewünschten Restic-Snapshot zunächst in ein neues, Root-geschütztes Staging-Verzeichnis wieder her, prüft Abschlussmanifest, Hashes, SQLite-Integrität und Entschlüsselbarkeit der Dokumente und erstellt zusätzlich einen aktuellen lokalen Sicherheitsstand. Erst danach werden Grabenplaner und Caddy im Wartungsfenster gestoppt und die geprüften Daten in einem beaufsichtigten Recovery-Ablauf mit dem paketgeprüften lokalen Restore-Helfer übernommen. Diese produktive Übernahme ist bewusst kein automatischer Timerjob; der quartalsweise Restore-Test ersetzt ihre ausdrückliche Freigabe nicht.
+Eine echte Wiederherstellung wird nie direkt in den Live-Pfad gestartet und ist nicht über den Browser möglich. Nach Einrichtung des Offsite-Moduls steht der Root-Befehl `grabenplaner-recovery` bereit. Die IT verwendet stets eine vollständige Snapshot-ID und eine selbst erzeugte, noch nicht verwendete 64-stellige Recovery-ID:
+
+```bash
+sudo grabenplaner-recovery list
+sudo grabenplaner-recovery prepare --snapshot '<64_HEX>' --recovery-id '<64_HEX>'
+sudo grabenplaner-recovery verify  --snapshot '<64_HEX>' --recovery-id '<64_HEX>'
+sudo systemctl stop caddy.service grabenplaner.service
+sudo grabenplaner-recovery apply \
+  --snapshot '<64_HEX>' --recovery-id '<64_HEX>' \
+  --confirm-snapshot '<64_HEX>' --confirm-recovery '<64_HEX>'
+```
+
+Es gibt absichtlich kein implizites `latest` für eine produktive Wiederherstellung. `prepare` bindet Repository, Installation, Host, Tag, Quellpfad und exakten Snapshot, prüft freien Speicher und friert den geladenen Baum root-only ein. `verify` kontrolliert den unveränderten Stand erneut, einschließlich Manifest, Hashes, SQLite-Integrität sowie Entschlüsselbarkeit der geschützten Dokumente und Integrationsdaten. `apply` verlangt zwei identische Bestätigungen, aktive Wartungs- und Repository-Sperren sowie vollständig beendete App- und Caddy-Dienste. Vor dem Austausch entsteht ein dauerhafter, root-only Vorab-Sicherheitsbeleg; der bisherige Live-Stand bleibt zusätzlich unter der Recovery-ID erhalten.
+
+Nach `apply` werden weder Grabenplaner noch Caddy automatisch gestartet. Die IT prüft zuerst die Belege und Daten lokal, startet anschließend bewusst `grabenplaner.service`, führt `sudo grabenplaner-test` aus und gibt erst danach mit `caddy.service` den öffentlichen Zugriff wieder frei. Der quartalsweise Restore-Test ersetzt diese ausdrückliche Freigabe nicht.
 
 Google Drive ist ein räumlich getrenntes und durch Restic verschlüsseltes Backupziel, aber **kein WORM- oder Object-Lock-Speicher**. Netzwerkzugriffe des Moduls laufen unter einem eigenen, nicht interaktiven Benutzer und über einen fest installierten rclone-Wrapper. Für die Aufbewahrung benötigt das hinterlegte Drive-Credential dennoch Schreib- und Löschzugriff. Ein Angreifer mit vollständiger Root-Kontrolle über den VPS könnte rclone außerhalb dieses Ablaufs verwenden und entfernte Sicherungen löschen. Für Schutz gegen dieses Szenario ist ein getrennt administriertes Backup-Gateway oder ein technisch unveränderliches Ziel mit eigener Berechtigungsgrenze erforderlich.
 
@@ -398,7 +419,7 @@ Für den Paketbau wird die in `package.json` festgelegte pnpm-Version benötigt.
 Das geprüfte Paket wird am Server in einer als Administrator gestarteten PowerShell zusammen mit seiner veröffentlichten Prüfsumme eingespielt:
 
 ```powershell
-$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.73.0-beta-windows-x64.zip'
+$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.74.0-beta-windows-x64.zip'
 $sha256 = ((Get-Content "$package.sha256" -Raw).Trim() -split '\s+')[0]
 
 .\server-tools\windows\Update-GrabenplanerServer.ps1 `

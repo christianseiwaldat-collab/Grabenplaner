@@ -168,9 +168,14 @@ test("Built-in-Rollen werden aktualisiert und eigene Rollen bleiben erhalten", (
   assert.ok(employee.permissions.includes("own_schedule:read"));
   assert.ok(employee.permissions.includes("own_vacation:request"));
   assert.ok(roles.some((role) => role.id === "hr" && role.name === "Personalleitung" && role.permissions.includes("hr:approve")));
-  assert.ok(roles.some((role) => role.id === "admin" && role.permissions.includes("rights:write") && role.permissions.includes("branding:write")));
+  assert.ok(roles.some((role) => role.id === "admin" && role.permissions.includes("rights:write")
+    && role.permissions.includes("branding:write") && role.permissions.includes("system:diagnostics:read")
+    && role.permissions.includes("system:diagnostics:technical")));
   assert.ok(roles.some((role) => role.id === "hr" && role.permissions.includes("rights:write") && role.permissions.includes("operation_mode:write")));
-  assert.ok(roles.some((role) => role.id === "it_admin" && role.permissions.includes("rights:write") && role.permissions.includes("update:write") && role.permissions.includes("employees:write")));
+  assert.ok(roles.some((role) => role.id === "hr" && !role.permissions.includes("system:diagnostics:read") && !role.permissions.includes("system:diagnostics:technical")));
+  assert.ok(roles.some((role) => role.id === "it_admin" && role.permissions.includes("rights:write")
+    && role.permissions.includes("update:write") && role.permissions.includes("employees:write")
+    && role.permissions.includes("system:diagnostics:read") && role.permissions.includes("system:diagnostics:technical")));
   assert.ok(roles.some((role) => role.id === "developer" && role.protected && !role.assignable && role.permissions.includes("developer:system")));
   assert.equal(custom.name, "Eigene Prüferrolle");
   assert.deepEqual(custom.permissions, ["audit:read"]);
@@ -1111,6 +1116,59 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const itAdminRightsPayload = await itAdminRights.json();
     assert.ok(itAdminRightsPayload.catalog.every((permission) => permission.editable));
     assert.ok(itAdminRightsPayload.users.some((user) => user.employeeNumber === "102" && user.manageable));
+    const diagnosticsReadPermission = itAdminRightsPayload.catalog.find((permission) => permission.id === "system:diagnostics:read");
+    const diagnosticsTechnicalPermission = itAdminRightsPayload.catalog.find((permission) => permission.id === "system:diagnostics:technical");
+    assert.deepEqual(diagnosticsReadPermission.eligibleRoles, ["hr", "admin", "it_admin", "developer"]);
+    assert.deepEqual(diagnosticsTechnicalPermission.eligibleRoles, ["hr", "admin", "it_admin", "developer"]);
+    assert.equal(rightsPayload.catalog.find((permission) => permission.id === "system:diagnostics:read").editable, false);
+
+    const hrStatusDenied = await fetch(`${url}/api/server-status`, { headers: { Cookie: hr.cookie } });
+    assert.equal(hrStatusDenied.status, 403, await hrStatusDenied.clone().text());
+    const hrDiagnosticsDenied = await fetch(`${url}/api/server-diagnostics`, { headers: { Cookie: hr.cookie } });
+    assert.equal(hrDiagnosticsDenied.status, 403, await hrDiagnosticsDenied.clone().text());
+
+    const grantHrStatusRead = await fetch(`${url}/api/portal/v1/rights/103`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: itAdmin.cookie, "X-CSRF-Token": itAdmin.csrf },
+      body: JSON.stringify({ permissions: ["system:diagnostics:read"] }),
+    });
+    assert.equal(grantHrStatusRead.status, 200, await grantHrStatusRead.clone().text());
+    const delegatedHrStatus = await fetch(`${url}/api/server-status`, { headers: { Cookie: hr.cookie } });
+    assert.equal(delegatedHrStatus.status, 200, await delegatedHrStatus.clone().text());
+    const delegatedHrTechnicalDenied = await fetch(`${url}/api/server-diagnostics`, { headers: { Cookie: hr.cookie } });
+    assert.equal(delegatedHrTechnicalDenied.status, 403, await delegatedHrTechnicalDenied.clone().text());
+    const clearHrStatusRead = await fetch(`${url}/api/portal/v1/rights/103`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: itAdmin.cookie, "X-CSRF-Token": itAdmin.csrf },
+      body: JSON.stringify({ permissions: [] }),
+    });
+    assert.equal(clearHrStatusRead.status, 200, await clearHrStatusRead.clone().text());
+
+    const itAdminStatusResponse = await fetch(`${url}/api/server-status`, { headers: { Cookie: itAdmin.cookie } });
+    assert.equal(itAdminStatusResponse.status, 200, await itAdminStatusResponse.clone().text());
+    const itAdminStatus = await itAdminStatusResponse.json();
+    assert.deepEqual(Object.keys(itAdminStatus.live), ["ok"]);
+    assert.deepEqual(Object.keys(itAdminStatus.ready), ["ok"]);
+    assert.ok(Array.isArray(itAdminStatus.alerts));
+    const redactedStatusJson = JSON.stringify(itAdminStatus);
+    for (const forbidden of [testRoot, databasePath, backupPath, "dataRoot", "appDirectory", "externalDirectory", "rootDirectory", "keyId", "pid"]) {
+      assert.equal(redactedStatusJson.includes(forbidden), false, forbidden);
+    }
+    const itAdminDiagnosticsResponse = await fetch(`${url}/api/server-diagnostics`, { headers: { Cookie: itAdmin.cookie } });
+    assert.equal(itAdminDiagnosticsResponse.status, 200, await itAdminDiagnosticsResponse.clone().text());
+    assert.equal(typeof (await itAdminDiagnosticsResponse.json()).process.pid, "number");
+    const itAdminBackupSettings = await fetch(`${url}/api/backup/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: itAdmin.cookie, "X-CSRF-Token": itAdmin.csrf },
+      body: JSON.stringify({ externalBackupEnabled: true, backupDirectory: backupPath, backupIntervalHours: 2 }),
+    });
+    assert.equal(itAdminBackupSettings.status, 200, await itAdminBackupSettings.clone().text());
+    const hrBackupSettingsDenied = await fetch(`${url}/api/backup/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: hr.cookie, "X-CSRF-Token": hr.csrf },
+      body: JSON.stringify({ externalBackupEnabled: true, backupDirectory: backupPath, backupIntervalHours: 2 }),
+    });
+    assert.equal(hrBackupSettingsDenied.status, 403, await hrBackupSettingsDenied.clone().text());
 
     const grantEmployeeTechnicalRights = await fetch(`${url}/api/portal/v1/rights/102`, {
       method: "PUT",
@@ -1129,8 +1187,11 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const employeeSystemInfo = await fetch(`${url}/api/system-info`, { headers: { Cookie: employee.cookie } });
     assert.equal(employeeSystemInfo.status, 200, await employeeSystemInfo.clone().text());
     const employeeSystemInfoData = await employeeSystemInfo.json();
-    assert.notEqual(employeeSystemInfoData.runtimeDrive, null);
+    assert.equal(employeeSystemInfoData.runtimeDrive, null);
+    assert.equal(employeeSystemInfoData.serverStatus, null);
     assert.equal(employeeSystemInfoData.serverDiagnostics, null);
+    const employeeStatusDenied = await fetch(`${url}/api/server-status`, { headers: { Cookie: employee.cookie } });
+    assert.equal(employeeStatusDenied.status, 403, await employeeStatusDenied.clone().text());
     const employeeDiagnosticsDenied = await fetch(`${url}/api/server-diagnostics`, { headers: { Cookie: employee.cookie } });
     assert.equal(employeeDiagnosticsDenied.status, 403, await employeeDiagnosticsDenied.clone().text());
     const employeeBrandingAccess = await fetch(`${url}/api/branding/assignments`, { headers: { Cookie: employee.cookie, "X-CSRF-Token": employee.csrf } });
@@ -1664,6 +1725,8 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     NODE_ENV: "test",
     GRABENPLANER_TEST_AMU_SCANNER: "clean",
     GRABENPLANER_SERVICE_CONTROL_TOKEN: serviceControlToken,
+    GRABENPLANER_MONITOR_CONFIGURED: "1",
+    GRABENPLANER_MONITOR_STATUS_FILE: path.join(childRoot, "missing-monitor-status.json"),
   };
   const child = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
     cwd: path.join(__dirname, ".."), windowsHide: true, env: serverEnvironment, stdio: ["ignore", "pipe", "pipe"],
@@ -1839,7 +1902,14 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     assert.equal(diagnostics.database.journalMode, "wal");
     assert.equal(diagnostics.database.busyTimeoutMs, 5000);
     assert.equal(diagnostics.instanceLock.held, true);
-    assert.ok(diagnostics.productionChecks.every((check) => check.ok), JSON.stringify(diagnostics.productionChecks));
+    const monitorCheck = diagnostics.productionChecks.find((check) => check.id === "monitor");
+    const blockingChecks = diagnostics.productionChecks.filter((check) => check.id !== "monitor");
+    assert.ok(blockingChecks.every((check) => check.ok), JSON.stringify(blockingChecks));
+    assert.equal(monitorCheck?.ok, false);
+    assert.equal(diagnostics.monitor.configured, true);
+    assert.equal(diagnostics.monitor.blocksMainReadiness, false);
+    assert.equal(diagnostics.monitor.lastErrorCode, "MONITOR_STATUS_FILE_MISSING");
+    assert.ok(diagnostics.alerts.some((alert) => alert.id === "SERVER_MONITOR_ATTENTION"));
     assert.equal(diagnostics.backups.retentionCount, 30);
     assert.equal(typeof diagnostics.backups.offsite?.configured, "boolean");
     assert.equal("statusPath" in diagnostics.backups.offsite, false);

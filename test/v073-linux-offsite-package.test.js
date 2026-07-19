@@ -16,6 +16,8 @@ const coreRuntimeArtifacts = [
   "server-tools/linux/grabenplaner-bootstrap-admin.sh.in",
   "server-tools/linux/grabenplaner-bootstrap.service.in",
   "server-tools/linux/grabenplaner.env.example",
+  "server-tools/linux/grabenplaner-monitor.service.in",
+  "server-tools/linux/grabenplaner-monitor.timer.in",
   "server-tools/linux/grabenplaner.service.in",
 ];
 
@@ -46,18 +48,18 @@ const offsiteArtifacts = [
   "server-tools/linux/offsite/test-grabenplaner-offsite.sh",
 ];
 
-test("v0.73 keeps the five core runtime artifacts separate from the optional offsite contract", () => {
+test("Linux runtime artifacts stay separate from the optional offsite contract", () => {
   const runtime = readJson("server-tools/linux/runtime-schema.json");
   const offsite = readJson("server-tools/linux/offsite/module-schema.json");
 
   assert.deepEqual([...runtime.managedArtifacts].sort(), [...coreRuntimeArtifacts].sort());
-  assert.equal(runtime.managedArtifacts.length, 5);
+  assert.equal(runtime.managedArtifacts.length, 7);
   assert.equal(offsite.activationPolicy, "explicit-root-setup");
   assert.deepEqual([...offsite.managedArtifacts].sort(), [...offsiteArtifacts].sort());
   for (const relative of offsiteArtifacts) assert.ok(fs.statSync(path.join(root, relative)).isFile(), `Fehlt: ${relative}`);
 });
 
-test("v0.73 package verifier validates the separate offsite module without changing the core runtime result", () => {
+test("package verifier validates the separate offsite module without changing the core runtime result", () => {
   const verifier = path.join(root, "server-tools/linux/lib/verify-package.js");
   const result = childProcess.spawnSync(process.execPath, [verifier, "--runtime-contract", root], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);

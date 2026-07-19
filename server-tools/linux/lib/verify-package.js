@@ -37,6 +37,13 @@ const expectedOffsiteArtifacts = [
   "server-tools/linux/offsite/test-grabenplaner-offsite.sh",
 ];
 
+const expectedRecoveryArtifacts = [
+  "server-tools/linux/recovery/grabenplaner-recovery.sh",
+  "server-tools/linux/recovery/lib/recovery-apply.js",
+  "server-tools/linux/recovery/lib/recovery-metadata.js",
+  "server-tools/linux/recovery/lib/recovery-verify.js",
+];
+
 function sha256File(filePath) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
@@ -111,6 +118,11 @@ function readRuntimeContract() {
     "server-tools/linux/grabenplaner.env.example",
     "server-tools/linux/grabenplaner.service.in",
   ]);
+  const requiredV2 = new Set([
+    ...requiredV1,
+    "server-tools/linux/grabenplaner-monitor.service.in",
+    "server-tools/linux/grabenplaner-monitor.timer.in",
+  ]);
   const artifacts = new Map();
   for (const raw of contract.managedArtifacts) {
     const relative = String(raw || "");
@@ -122,9 +134,11 @@ function readRuntimeContract() {
     if (!artifactStat.isFile() || artifactStat.isSymbolicLink()) throw new Error(`Runtime-Artefakt fehlt oder ist unzulaessig: ${relative}`);
     artifacts.set(relative, sha256File(target));
   }
-  if (contract.deploymentSchemaVersion === 1
-    && (artifacts.size !== requiredV1.size || [...requiredV1].some((relative) => !artifacts.has(relative)))) {
-    throw new Error("Der Runtimevertrag v1 enthaelt nicht exakt die freigegebenen Deployment-Artefakte.");
+  const requiredArtifacts = contract.deploymentSchemaVersion === 1 ? requiredV1
+    : contract.deploymentSchemaVersion === 2 ? requiredV2 : null;
+  if (!requiredArtifacts || artifacts.size !== requiredArtifacts.size
+    || [...requiredArtifacts].some((relative) => !artifacts.has(relative))) {
+    throw new Error("Der Runtimevertrag enthaelt nicht exakt die freigegebenen Deployment-Artefakte.");
   }
   const fingerprint = crypto.createHash("sha256")
     .update([...artifacts].sort(([left], [right]) => left.localeCompare(right)).map(([relative, hash]) => `${relative}\0${hash}\n`).join(""))
@@ -218,6 +232,7 @@ function main() {
     "server-tools/linux/backup-grabenplaner.sh",
     "server-tools/linux/stop-grabenplaner-server.sh",
     "server-tools/linux/test-grabenplaner-server.sh",
+    "server-tools/linux/migrate-grabenplaner-runtime-v2.sh",
     "server-tools/linux/update-grabenplaner-server.sh",
     "server-tools/linux/uninstall-grabenplaner-server.sh",
     "server-tools/linux/runtime-schema.json",
@@ -229,6 +244,11 @@ function main() {
     "server-tools/linux/lib/verify-backup.js",
     "server-tools/linux/lib/verify-install-tree.js",
     "server-tools/linux/lib/verify-package.js",
+    "server-tools/linux/monitor/lib/monitor-status.js",
+    "server-tools/linux/monitor/run-grabenplaner-monitor.sh",
+    "server-tools/linux/grabenplaner-monitor.service.in",
+    "server-tools/linux/grabenplaner-monitor.timer.in",
+    ...expectedRecoveryArtifacts,
     ...expectedOffsiteArtifacts,
   ];
   const expected = new Map();

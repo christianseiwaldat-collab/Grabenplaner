@@ -18,6 +18,10 @@ caddy_service="$GP_DEFAULT_CADDY_SERVICE"
 caddyfile="/etc/caddy/Caddyfile"
 maximum_backup_age_hours=6
 minimum_certificate_days=14
+monitor_mode=0
+monitor_timer="grabenplaner-monitor.timer"
+monitor_status_file="/var/lib/grabenplaner-monitor/status.json"
+monitor_status_group="grabenplaner-monitor-status"
 
 while (($#)); do
   case "$1" in
@@ -33,6 +37,7 @@ while (($#)); do
     --caddyfile) caddyfile="${2:?Wert fuer --caddyfile fehlt}"; shift 2 ;;
     --maximum-backup-age-hours) maximum_backup_age_hours="${2:?Wert fehlt}"; shift 2 ;;
     --minimum-certificate-days) minimum_certificate_days="${2:?Wert fehlt}"; shift 2 ;;
+    --monitor-mode) monitor_mode=1; shift ;;
     -h|--help)
       printf '%s\n' "Verwendung: sudo ./test-grabenplaner-server.sh [--public-url https://...] [weitere Optionen]"
       exit 0
@@ -47,7 +52,7 @@ done
   || gp_die "Die Zertifikatsreserve muss zwischen 1 und 365 Tagen liegen."
 
 gp_require_root
-for command_name in curl openssl systemctl stat find sort date df caddy readlink; do gp_require_command "$command_name"; done
+for command_name in curl openssl systemctl stat find sort date df caddy readlink getent; do gp_require_command "$command_name"; done
 gp_load_env_file "$env_file"
 
 app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
@@ -68,13 +73,24 @@ failures=0
 check_ok() { printf 'OK\t%s\t%s\n' "$1" "$2"; }
 check_fail() { printf 'FEHLER\t%s\t%s\n' "$1" "$2"; failures=$((failures + 1)); }
 
-for unit in "$service" "$caddy_service"; do
+for unit in "$service" "$caddy_service" "$monitor_timer"; do
   if gp_systemd_unit_exists "$unit" && systemctl is-active --quiet "$unit"; then
     check_ok "Dienst $unit" "aktiv"
   else
     check_fail "Dienst $unit" "nicht aktiv oder nicht installiert"
   fi
 done
+
+monitor_status_gid="$(getent group "$monitor_status_group" | awk -F: '{print $3}')"
+monitor_status_helper="$app_dir/server-tools/linux/monitor/lib/monitor-status.js"
+if [[ "$monitor_status_gid" =~ ^[0-9]+$ && -f "$monitor_status_file" && ! -L "$monitor_status_file" \
+  && "$(stat --format='%u:%g:%a:%h' -- "$monitor_status_file")" == "0:$monitor_status_gid:640:1" \
+  && -f "$monitor_status_helper" && ! -L "$monitor_status_helper" ]] \
+  && "$node" "$monitor_status_helper" --status-file "$monitor_status_file" --status-gid "$monitor_status_gid" inspect >/dev/null 2>&1; then
+  check_ok "Monitor-Statusschutz" "root-verwaltet und schemafest"
+else
+  check_fail "Monitor-Statusschutz" "fehlt oder ist nicht sicher lesbar"
+fi
 
 if gp_url_reports_ready "$internal_live_url" 8; then check_ok "Interne Liveness" "$internal_live_url"; else check_fail "Interne Liveness" "nicht erreichbar"; fi
 if gp_url_reports_ready "$internal_ready_url" 8; then check_ok "Interne Readiness" "$internal_ready_url"; else check_fail "Interne Readiness" "nicht bereit"; fi
@@ -91,7 +107,10 @@ if curl --fail --silent --show-error --max-time 15 --dump-header "$headers_file"
   if grep -Eqi '^X-Content-Type-Options:[[:space:]]*nosniff' "$headers_file"; then check_ok "X-Content-Type-Options" "nosniff"; else check_fail "X-Content-Type-Options" "Header fehlt oder ist falsch"; fi
   if grep -Eqi '^Referrer-Policy:' "$headers_file"; then check_ok "Referrer-Policy" "gesetzt"; else check_fail "Referrer-Policy" "Header fehlt"; fi
 else
-  check_fail "HTTPS-Sicherheitsheader" "Antwort konnte nicht gelesen werden"
+  check_fail "HSTS" "Antwort konnte nicht gelesen werden"
+  check_fail "Content-Security-Policy" "Antwort konnte nicht gelesen werden"
+  check_fail "X-Content-Type-Options" "Antwort konnte nicht gelesen werden"
+  check_fail "Referrer-Policy" "Antwort konnte nicht gelesen werden"
 fi
 
 readarray -t public_endpoint < <("$node" - "$public_url" <<'NODE'
@@ -126,7 +145,10 @@ if [[ -n "$latest_marker" ]]; then
   latest_backup="$backup_dir/$latest_snapshot.db"
   paired_amu="$backup_dir/$latest_snapshot.amu"
   age_seconds=$(( $(date +%s) - $(stat --format='%Y' -- "$latest_marker") ))
-  if (( age_seconds <= maximum_backup_age_hours * 3600 )); then
+  if (( age_seconds < -300 )); then
+    check_fail "Backup-Aktualitaet" "Zeitstempel liegt unplausibel in der Zukunft"
+  elif (( age_seconds <= maximum_backup_age_hours * 3600 )); then
+    (( age_seconds < 0 )) && age_seconds=0
     check_ok "Backup-Aktualitaet" "$(basename -- "$latest_backup"), $((age_seconds / 3600))h alt"
   else
     check_fail "Backup-Aktualitaet" "aelter als ${maximum_backup_age_hours}h"
@@ -156,7 +178,36 @@ if [[ -n "$scanner_result" ]]; then check_ok "AUM-Virenscanner" "$scanner_result
 
 if caddy validate --config "$caddyfile" --adapter caddyfile >/dev/null 2>&1; then check_ok "Caddy-Konfiguration" "gueltig"; else check_fail "Caddy-Konfiguration" "Validierung fehlgeschlagen"; fi
 
-if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" ]]; then
+if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && "$monitor_mode" -eq 1 ]]; then
+  offsite_status_file="/var/lib/grabenplaner-offsite/status.json"
+  offsite_status_group="grabenplaner-offsite-status"
+  offsite_status_reader="$app_dir/lib/offsite-backup-status.js"
+  offsite_status_gid="$(getent group "$offsite_status_group" | awk -F: '{print $3}')"
+  offsite_timer_ok=1
+  for offsite_timer in grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer; do
+    if ! systemctl is-enabled --quiet "$offsite_timer" || ! systemctl is-active --quiet "$offsite_timer"; then
+      offsite_timer_ok=0
+    fi
+  done
+  offsite_status_current=0
+  if [[ "$offsite_status_gid" =~ ^[0-9]+$ && -f "$offsite_status_file" && ! -L "$offsite_status_file" \
+    && "$(stat --format='%u:%g:%a:%h' -- "$offsite_status_file")" == "0:$offsite_status_gid:640:1" \
+    && -f "$offsite_status_reader" && ! -L "$offsite_status_reader" ]] \
+    && "$node" - "$offsite_status_reader" "$offsite_status_file" <<'NODE' >/dev/null 2>&1
+const [readerPath, statusPath] = process.argv.slice(2);
+const { readOffsiteBackupStatus } = require(readerPath);
+const diagnostics = readOffsiteBackupStatus({ configured: true, statusPath });
+if (!diagnostics.statusAvailable || diagnostics.state !== "ok" || diagnostics.blocksMainReadiness !== false) process.exit(1);
+NODE
+  then
+    offsite_status_current=1
+  fi
+  if (( offsite_timer_ok == 1 && offsite_status_current == 1 )); then
+    check_ok "Offsite-Sicherung" "lokaler Status und Timer sind aktuell"
+  else
+    check_fail "Offsite-Sicherung" "lokaler Status oder Timer erfordert Aufmerksamkeit"
+  fi
+elif [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" ]]; then
   offsite_test_command="/usr/local/sbin/grabenplaner-offsite-test"
   if [[ "${GRABENPLANER_OFFSITE_STATUS_FILE:-}" != "/var/lib/grabenplaner-offsite/status.json" ]]; then
     check_fail "Offsite-Sicherung" "Konfiguration unvollstaendig"
