@@ -6,6 +6,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const { createAmuStorage } = require("../lib/amu-storage");
 
 const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v071-personnel-"));
@@ -24,6 +25,8 @@ const {
   db,
   createDatabaseBackupToDirectory,
   finalizeDeletedPersonnelRecordDocuments,
+  latestDatabaseBackup,
+  pruneDatabaseBackups,
   releaseInstanceLockForTests,
 } = require("../server");
 
@@ -513,13 +516,68 @@ test("v0.71 Block 4: Sicherungspunkte enthalten alle aktiven geschützten Dokume
   const backupDirectory = path.join(testRoot, "verified-backup");
   const backup = createDatabaseBackupToDirectory(backupDirectory, "test", "test");
   assert.equal(backup.verified, true);
+  assert.equal(backup.committed, true);
   assert.equal(fs.existsSync(backup.path), true);
+  assert.equal(fs.existsSync(backup.marker), true);
+  assert.equal(latestDatabaseBackup(backupDirectory).committed, true);
+  const verifierPath = path.join(__dirname, "..", "server-tools", "linux", "lib", "verify-backup.js");
+  const amuModulePath = path.join(__dirname, "..", "lib", "amu-storage.js");
+  const malformedMarker = path.join(backupDirectory, "malformed-marker.json");
+  const malformedPayload = JSON.parse(fs.readFileSync(backup.marker, "utf8"));
+  malformedPayload.protectedDocuments.files = -1;
+  fs.writeFileSync(malformedMarker, `${JSON.stringify(malformedPayload)}\n`);
+  const malformedVerification = spawnSync(process.execPath, [
+    verifierPath,
+    backup.path,
+    path.join(backupDirectory, `${path.basename(backup.path, ".db")}.amu`),
+    amuModulePath,
+    malformedMarker,
+  ], { encoding: "utf8" });
+  assert.notEqual(malformedVerification.status, 0);
+  fs.writeFileSync(malformedMarker, `${JSON.stringify(malformedPayload)}${" ".repeat(65 * 1024)}`);
+  const oversizedVerification = spawnSync(process.execPath, [
+    verifierPath,
+    backup.path,
+    path.join(backupDirectory, `${path.basename(backup.path, ".db")}.amu`),
+    amuModulePath,
+    malformedMarker,
+  ], { encoding: "utf8" });
+  assert.notEqual(oversizedVerification.status, 0);
+  fs.rmSync(malformedMarker, { force: true });
   const manifest = JSON.parse(fs.readFileSync(path.join(
     backupDirectory,
     `${path.basename(backup.path, ".db")}.amu`,
     "manifest.json",
   ), "utf8"));
   assert.ok(manifest.files.some((entry) => entry.storageKey === stored.storage_key));
+
+  const invalidNew = createDatabaseBackupToDirectory(backupDirectory, "test-invalid-new", "test");
+  fs.appendFileSync(invalidNew.path, "tampered");
+  const pruneResult = spawnSync(process.execPath, [
+    path.join(__dirname, "..", "server-tools", "linux", "lib", "prune-backups.js"),
+    backupDirectory,
+    "1",
+    verifierPath,
+    amuModulePath,
+  ], { encoding: "utf8" });
+  assert.equal(pruneResult.status, 0, pruneResult.stderr);
+  assert.equal(JSON.parse(pruneResult.stdout).valid, 1);
+  assert.equal(fs.existsSync(backup.marker), true);
+  assert.equal(fs.existsSync(invalidNew.marker), true);
+  assert.equal(latestDatabaseBackup(backupDirectory).marker, backup.marker);
+
+  const legacyDirectory = path.join(testRoot, "legacy-backup");
+  fs.mkdirSync(legacyDirectory);
+  const legacyDatabase = path.join(legacyDirectory, path.basename(backup.path));
+  const legacyDocuments = path.join(legacyDirectory, `${path.basename(backup.path, ".db")}.amu`);
+  fs.copyFileSync(backup.path, legacyDatabase);
+  fs.cpSync(path.join(backupDirectory, `${path.basename(backup.path, ".db")}.amu`), legacyDocuments, { recursive: true });
+  const legacy = latestDatabaseBackup(legacyDirectory);
+  assert.equal(legacy.legacy, true);
+  assert.equal(legacy.committed, false);
+  pruneDatabaseBackups(legacyDirectory, 0);
+  assert.equal(fs.existsSync(legacyDatabase), true);
+  assert.equal(fs.existsSync(legacyDocuments), true);
 
   const encrypted = fs.readFileSync(blobPath);
   fs.rmSync(blobPath);

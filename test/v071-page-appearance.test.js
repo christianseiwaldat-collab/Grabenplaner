@@ -113,6 +113,12 @@ test("v0.71: Jede Hauptseite bietet eine eigene gespeicherte Darstellung", () =>
   assert.match(script, /formatAmuPeriod/);
   assert.doesNotMatch(script, /formatDate\(report\.incapacity_to\)/);
   assert.match(styles, /data-active-page-theme="dark"[^\n]*\.system-footer/);
+  assert.match(styles, /data-active-page-theme="dark"[^\n]*#planningView \.day-body/);
+  assert.match(styles, /data-active-page-theme="dark"\] \.view\.active:not\(\.rights-dashboard\) :is\([\s\S]{0,900}\.integration-contract-row/);
+  assert.match(styles, /data-active-page-theme="dark"\] \.view\.active:not\(\.rights-dashboard\) :is\([\s\S]{0,900}\.wifi-location-mapping-row/);
+  assert.match(styles, /data-active-page-theme="dark"\] \.view\.active:not\(\.rights-dashboard\) :is\([\s\S]{0,900}\.pilot-checklist/);
+  assert.match(styles, /data-active-page-theme="dark"\] :is\(\.settings-tabs,\.timeline-scroll/);
+  assert.match(script, /--employee-contrast:\$\{contrastColor\(employee\.color\)\}/);
   assert.match(styles, /data-dashboard-font-size="standard"/);
 });
 

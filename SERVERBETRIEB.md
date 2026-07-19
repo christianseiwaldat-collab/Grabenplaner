@@ -2,7 +2,121 @@
 
 Der HTTPS-Serverbetrieb ist für eine zentrale, von der Firmen-IT verwaltete Grabenplaner-Instanz vorgesehen. Die Node.js-Anwendung läuft ausschließlich auf `127.0.0.1`; Browser greifen nur über Caddy und eine freigegebene HTTPS-Adresse darauf zu. Lokalbetrieb und LAN-Host bleiben davon unabhängig.
 
-Die bereitgestellten Werkzeuge bilden einen produktionsnahen Windows-Einzelserver ab. Sie ersetzen nicht die betriebliche Prüfung von Domain, DNS, Firewall, Zertifikat, Dienstkonten, Virenscanner, Backupziel und Wiederanlaufplan durch die verantwortliche IT.
+Unterstützt werden **Ubuntu 24.04 LTS und Ubuntu 26.04 LTS auf x86-64**; für neue Beta-Server wird Ubuntu 26.04 LTS empfohlen. Die vorhandenen Windows-Werkzeuge bleiben unterstützt. Auf beiden Plattformen gelten dieselben Sicherheitsgrenzen: eine lokale SQLite-Datenbank, genau eine aktive Grabenplaner-Instanz, Caddy als einziger öffentlicher Zugang sowie getrennte Programm-, Daten-, Schlüssel- und Backupbereiche.
+
+Die bereitgestellten Werkzeuge ersetzen nicht die betriebliche Prüfung von Domain, DNS, Firewall, Zertifikat, Dienstkonten, Virenscanner, Backupziel und Wiederanlaufplan durch die verantwortliche IT.
+
+## Zielaufbau unter Ubuntu 24.04/26.04 LTS
+
+- Programmdateien: `/opt/grabenplaner/app`
+- Datenbank, Branding und verschlüsselte Dokumente: `/var/lib/grabenplaner`
+- geschützte Dienstkonfiguration: `/etc/grabenplaner/grabenplaner.env`
+- Protokolle: systemd-Journal sowie `/var/log/grabenplaner/app` und `/var/log/grabenplaner/caddy`
+- lokale Sicherungspunkte: `/var/backups/grabenplaner`; ein externes, verschlüsseltes Backupziel folgt getrennt
+- Anwendung: `127.0.0.1:3000`
+- öffentlicher Zugang: ausschließlich Caddy auf Port 443
+
+Die Anwendung läuft als eigener, nicht interaktiv anmeldbarer Benutzer `grabenplaner`. Caddy bleibt davon getrennt und erhält keinen Zugriff auf SQLite, Branding, Schlüssel oder AUM-Dokumente. `systemd` ersetzt WinSW, UFW ersetzt die Windows-Firewallverwaltung und ClamAV übernimmt die lokale Prüfung hochgeladener Dokumente. Der Normalbetrieb verwendet `grabenplaner.service` und den von Ubuntu bereitgestellten `caddy.service`.
+
+Die SQLite-Datenbank muss auf einem lokalen Linux-Dateisystem liegen. Netzlaufwerke, FUSE-Cloudmounts und synchronisierte Ordner sind als aktiver Datenbankpfad nicht zulässig.
+
+### Voraussetzungen unter Ubuntu
+
+- Ubuntu 24.04 oder 26.04 LTS x86-64 mit allen Sicherheitsaktualisierungen
+- Node.js gemäß `engines.node` in `package.json` und die dort festgeschriebene pnpm-Version
+- Caddy, systemd, UFW, ClamAV und `unzip`
+- feste Domain mit korrektem DNS-Eintrag und erreichbaren Ports 80/443
+- lokales Backupziel sowie dokumentierter Wiederanlauf- und Wiederherstellungstest
+- SSH-Zugang nur für die zuständige Administration, vorzugsweise mit Schlüsselanmeldung
+
+Das Linux-Release ist bewusst ein **Quellpaket ohne `node_modules` und ohne gebündelte Node-Runtime**. Native Abhängigkeiten wie `sharp` müssen für Linux gebaut beziehungsweise aus den freigegebenen Linux-Paketen bezogen werden. Der Installationsablauf führt deshalb auf dem Ubuntu-Zielsystem exakt folgenden, durch den Lockfile gebundenen Produktionsinstall aus:
+
+```bash
+pnpm install --prod --frozen-lockfile --config.node-linker=hoisted
+```
+
+Dadurch gelangen keine unter Windows gebauten nativen Module auf den Linux-Server. Das Paket enthält keine Datenbank, Geheimnisse, realen Branding-Kits oder kundenspezifischen Dateien.
+
+### Neutrales Linux-Serverpaket bauen
+
+Der plattformneutrale Paketbauer kann auf dem Windows-Entwicklungsrechner in PowerShell ausgeführt werden:
+
+```powershell
+.\server-tools\package\New-GrabenplanerLinuxServerPackage.ps1 `
+  -OutputDirectory '.\release\server-linux'
+```
+
+Er akzeptiert ausschließlich einen sauberen Git-Checkout, übernimmt nur freigegebene versionierte Laufzeitdateien und erzeugt ein deterministisches `linux-x64.zip` samt SHA256-Datei. Im Archivroot liegt `grabenplaner-server-manifest.json` mit Dateiprüfsummen, Quellcommit, Mindestversionen und `dependenciesMode: source-install`. Vor der Installation müssen ZIP und veröffentlichte SHA256-Prüfsumme miteinander verglichen werden.
+
+Die kontrollierte Erstinstallation verwendet das geprüfte Paket und seine veröffentlichte Prüfsumme:
+
+```bash
+sudo bash server-tools/linux/install-grabenplaner-server.sh \
+  --package /pfad/Grabenplaner-Server-v0.72.0-beta-linux-x64.zip \
+  --sha256 '<veröffentlichter SHA256-Wert>' \
+  --public-url https://beta.example.at \
+  --replace-caddy-config
+```
+
+Der Linux-Installer ist für einen dedizierten Grabenplaner-Server vorgesehen. Findet er ein nicht von Grabenplaner verwaltetes Caddyfile, bricht er ohne `--replace-caddy-config` ab. Mit dieser ausdrücklichen Option sichert er die bestehende Datei root-only unter `/etc/grabenplaner/caddy-backup/` und ersetzt sie erst danach. Eine gemeinsam mit anderen Anwendungen verwaltete Caddy-Konfiguration muss die IT außerhalb des Installers integrieren und prüfen.
+
+Eine neue Installation erzeugt keine voreingestellten Zugangsdaten. Sie startet zunächst `grabenplaner-bootstrap.service` ausschließlich auf Loopback und gibt eine einmalige, nur für `root` lesbare Bootstrap-Adresse aus. Die erste Administration wird über einen SSH-Tunnel angelegt:
+
+```bash
+ssh -L 3000:127.0.0.1:3000 admin@server.example.at
+```
+
+Danach wird im lokalen Browser die vom Installer ausgegebene Adresse im Format `http://127.0.0.1:3000/?bootstrap=<einmaliger-token>` geöffnet. Nach dem Anlegen des eigenen Teammitglieds und des Admin-Zugangs schließt folgender Befehl die Ersteinrichtung ab:
+
+```bash
+sudo grabenplaner-bootstrap-admin finish
+```
+
+Der Abschluss gilt erst als erfolgreich, wenn ein erster gekoppelter Datenbank-/Dokument-Sicherungspunkt erstellt wurde, die interne Ready-Prüfung grün ist, Caddy läuft, die öffentliche HTTPS-Ready-Prüfung erfolgreich war und der Bootstrap-Token atomar verbraucht wurde. Scheitert ein Schritt, bleibt Caddy ausgeschaltet und das Werkzeug kehrt in den lokalen Bootstrapmodus zurück. Der Bootstrap-Port darf niemals durch UFW oder eine Contabo-Firewall öffentlich freigegeben werden.
+
+### Servervariablen unter Ubuntu
+
+Die vollständige neutrale Linux-Vorlage liegt in `server-tools/linux/grabenplaner.env.example`. Der Installer rendert sie nach `/etc/grabenplaner/grabenplaner.env`, setzt `root:root` und Modus `0600` und erzeugt alle Schlüssel und Tokens lokal. Der Dienst erhält die Werte über systemd, kann die Datei selbst aber nicht lesen. Für Ubuntu werden insbesondere lokale Linux-Pfade verwendet:
+
+```text
+NODE_ENV=production
+GRABENPLANER_OPERATION_MODE=server
+GRABENPLANER_DEPLOYMENT_KIND=production
+GRABENPLANER_PUBLIC_URL=https://beta.example.at
+GRABENPLANER_HOST=127.0.0.1
+GRABENPLANER_TRUST_PROXY=loopback
+GRABENPLANER_DATA_DIR=/var/lib/grabenplaner
+DB_PATH=/var/lib/grabenplaner/data/dienstplan.db
+BACKUP_DIR=/var/backups/grabenplaner
+GRABENPLANER_AMU_KEY_ID=server-v1
+GRABENPLANER_AMU_KEY=<geheimer 32-Byte-Schlüssel als Base64>
+GRABENPLANER_INTEGRATION_KEY_ID=server-v1
+GRABENPLANER_INTEGRATION_KEY=<separater geheimer 32-Byte-Schlüssel als Base64>
+GRABENPLANER_SERVICE_CONTROL_TOKEN=<geheimer zufälliger Dienststeuerungs-Token>
+GRABENPLANER_BOOTSTRAP_TOKEN=<einmaliger, nach erfolgreichem Abschluss geleerter Token>
+```
+
+Schlüssel und Tokens gehören weder in SQLite noch in das Programmverzeichnis, ein Image, ein Git-Repository oder ein Serverpaket.
+
+### Betrieb und Wartung unter Ubuntu
+
+Die Installation stellt absichtlich kleine, mit `sudo` auszuführende Wartungsbefehle bereit:
+
+```bash
+sudo grabenplaner-backup
+sudo grabenplaner-test
+sudo grabenplaner-stop
+sudo grabenplaner-update --package /pfad/neues-paket.zip --sha256 '<SHA256>'
+sudo grabenplaner-uninstall --yes
+```
+
+- `grabenplaner-backup` erstellt und prüft einen gekoppelten Sicherungspunkt aus SQLite-Datenbank und verschlüsselter Dokumentablage.
+- `grabenplaner-test` prüft Dienste, interne und öffentliche Erreichbarkeit, TLS, Caddy, Datenbankintegrität und Sicherungsalter.
+- `grabenplaner-stop` beendet die Anwendung kontrolliert und prüft, dass der interne Listener geschlossen ist.
+- `grabenplaner-update` lädt nichts selbst herunter. Es akzeptiert nur ein lokales Linux-Serverpaket samt SHA-256, sichert vor dem Austausch und rollt bei fehlgeschlagener Bereitschaftsprüfung automatisch zurück.
+- `grabenplaner-uninstall --yes` entfernt App-Code, eigene systemd-Units und Befehlslinks. Daten, Schlüsselkonfiguration, Logs und Backups bleiben erhalten; Caddy selbst wird nicht deinstalliert und eine zuvor gesicherte, gültige Konfiguration wird wiederhergestellt.
+
+Die Sicherungen aus Block 1 liegen lokal auf demselben Server. Sie schützen vor fehlerhaften Updates und ermöglichen einen kontrollierten Wiederanlauf, ersetzen aber kein räumlich getrenntes, manipulationsgeschütztes Backup. Die verschlüsselte Off-Host-Sicherung mit Restic/rclone und regelmäßigem Restore-Test ist für Block 2 des Serverausbaus vorgesehen.
 
 ## Zielaufbau unter Windows
 
@@ -31,7 +145,7 @@ Der Einrichtungsassistent trennt Reverse-Proxy und Anwendung auch auf Betriebssy
 
 Die erzeugten Dienstkonfigurationen enthalten Schlüssel beziehungsweise Dienststeuerungswerte und werden deshalb mit eingeschränkten ACLs gespeichert. Die Firmen-IT muss die gesetzten Rechte vor der Freigabe kontrollieren und darf den Datenordner nicht allgemein für Benutzer oder Netzwerkfreigaben öffnen.
 
-## Voraussetzungen
+## Voraussetzungen unter Windows
 
 - Windows-Server oder dauerhaft verfügbarer Windows-PC
 - feste Domain und passende DNS-/Firewallfreigabe
@@ -44,7 +158,7 @@ Die erzeugten Dienstkonfigurationen enthalten Schlüssel beziehungsweise Diensts
 
 Grabenplaner lädt Caddy oder WinSW nicht selbst herunter. Die Beispiele unter `server-tools` enthalten keine Firmenwerte, Zertifikate oder Zugangsdaten.
 
-## Vorbereitung
+## Vorbereitung unter Windows
 
 1. Grabenplaner vollständig in den vorgesehenen Programmordner kopieren.
 2. Admin zunächst im Lokal- oder LAN-Betrieb einrichten.
@@ -73,7 +187,7 @@ Danach erfolgt der kontrollierte Durchlauf mit `-RegisterServices`. Dabei müsse
 
 `-StartServices` startet beide Dienste nur auf ausdrücklichen Wunsch. Der Assistent lädt nichts herunter.
 
-## Servervariablen
+## Servervariablen unter Windows
 
 Die vollständige neutrale Vorlage liegt in `server-tools/server.env.example`. Wesentlich sind:
 
@@ -167,7 +281,7 @@ Für den Paketbau wird die in `package.json` festgelegte pnpm-Version benötigt.
 Das geprüfte Paket wird am Server in einer als Administrator gestarteten PowerShell zusammen mit seiner veröffentlichten Prüfsumme eingespielt:
 
 ```powershell
-$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.71.0-beta-windows-x64.zip'
+$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.72.0-beta-windows-x64.zip'
 $sha256 = ((Get-Content "$package.sha256" -Raw).Trim() -split '\s+')[0]
 
 .\server-tools\windows\Update-GrabenplanerServer.ps1 `
