@@ -7,6 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { syncEncryptedFilesBackup } = require("./lib/amu-storage");
 const { acquireDatabaseLock, releaseDatabaseLock } = require("./lib/database-lock");
+const { pruneCommittedBackups, verifyCommittedBackup, writeBackupCommitMarker } = require("./lib/backup-commit");
 const packageMetadata = require("./package.json");
 
 const configuredDataRoot = String(process.env.GRABENPLANER_DATA_ROOT || "").trim();
@@ -30,9 +31,10 @@ function resolveBackupDirectory(value) {
 
 function createPairedBackup(database, backupDirectory, timestamp, label) {
   fs.mkdirSync(backupDirectory, { recursive: true });
-  const snapshotName = `dienstplan-${timestamp}`;
+  const snapshotName = `dienstplan-${timestamp}-${crypto.randomBytes(6).toString("hex")}`;
   const target = path.join(backupDirectory, `${snapshotName}.db`);
   const protectedTarget = path.join(backupDirectory, `${snapshotName}.amu`);
+  const markerTarget = path.join(backupDirectory, `${snapshotName}.complete.json`);
   const nonce = crypto.randomUUID();
   const temporaryDatabase = `${target}.partial-${nonce}`;
   const temporaryProtected = `${protectedTarget}.partial-${nonce}`;
@@ -43,33 +45,32 @@ function createPairedBackup(database, backupDirectory, timestamp, label) {
     const escapedTarget = temporaryDatabase.replaceAll("\\", "/").replaceAll("'", "''");
     database.exec(`VACUUM INTO '${escapedTarget}'`);
     const databaseHash = crypto.createHash("sha256").update(fs.readFileSync(temporaryDatabase)).digest("hex");
-    syncEncryptedFilesBackup({
+    const protectedBackup = syncEncryptedFilesBackup({
       sourceDirectory: protectedDocumentsDirectory,
       targetDirectory: temporaryProtected,
       manifestMetadata: { database: { fileName: path.basename(target), sha256: databaseHash } },
     });
     fs.renameSync(temporaryProtected, protectedTarget);
     fs.renameSync(temporaryDatabase, target);
+    writeBackupCommitMarker({
+      backupDirectory,
+      snapshot: snapshotName,
+      databaseSha256: databaseHash,
+      protectedFiles: protectedBackup.fileCount,
+    });
+    verifyCommittedBackup(backupDirectory, path.basename(markerTarget));
   } catch (error) {
     fs.rmSync(temporaryDatabase, { force: true });
     fs.rmSync(temporaryProtected, { recursive: true, force: true });
     fs.rmSync(target, { force: true });
     fs.rmSync(protectedTarget, { recursive: true, force: true });
+    fs.rmSync(markerTarget, { force: true });
     throw error;
   }
 
-  const backups = fs.readdirSync(backupDirectory)
-    .filter((name) => /^dienstplan-.*\.db$/.test(name))
-    .map((name) => ({
-      path: path.join(backupDirectory, name),
-      time: fs.statSync(path.join(backupDirectory, name)).mtimeMs,
-    }))
-    .sort((a, b) => b.time - a.time);
-  for (const oldBackup of backups.slice(30)) {
-    fs.rmSync(oldBackup.path, { force: true });
-    fs.rmSync(path.join(backupDirectory, `${path.basename(oldBackup.path, ".db")}.amu`), { recursive: true, force: true });
-  }
-  console.log(`${label}: ${target} + ${protectedTarget}`);
+  pruneCommittedBackups(backupDirectory, 30);
+  console.log(`${label}: ${target} + ${protectedTarget} + ${markerTarget}`);
+  return { path: target, protectedDirectory: protectedTarget, marker: markerTarget, committed: true };
 }
 
 function main() {
@@ -102,4 +103,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { main, resolveBackupDirectory };
+module.exports = { createPairedBackup, main, resolveBackupDirectory };

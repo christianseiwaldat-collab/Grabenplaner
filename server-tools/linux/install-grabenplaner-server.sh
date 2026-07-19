@@ -282,7 +282,7 @@ if (!Array.isArray(manifest.files) || !manifest.files.length) fail("Die Manifest
 const packageJsonPath = path.join(root, "package.json");
 const lockPath = path.join(root, "pnpm-lock.yaml");
 for (const required of [
-  "server.js", "package.json", "pnpm-lock.yaml", "lib/database-lock.js", "lib/amu-storage.js",
+  "server.js", "package.json", "pnpm-lock.yaml", "lib/backup-commit.js", "lib/database-lock.js", "lib/amu-storage.js",
   "server-tools/linux/backup-grabenplaner.sh",
   "server-tools/linux/stop-grabenplaner-server.sh",
   "server-tools/linux/test-grabenplaner-server.sh",

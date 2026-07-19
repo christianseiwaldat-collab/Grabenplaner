@@ -24,6 +24,8 @@ const {
   db,
   createDatabaseBackupToDirectory,
   finalizeDeletedPersonnelRecordDocuments,
+  latestDatabaseBackup,
+  pruneDatabaseBackups,
   releaseInstanceLockForTests,
 } = require("../server");
 
@@ -513,13 +515,29 @@ test("v0.71 Block 4: Sicherungspunkte enthalten alle aktiven geschützten Dokume
   const backupDirectory = path.join(testRoot, "verified-backup");
   const backup = createDatabaseBackupToDirectory(backupDirectory, "test", "test");
   assert.equal(backup.verified, true);
+  assert.equal(backup.committed, true);
   assert.equal(fs.existsSync(backup.path), true);
+  assert.equal(fs.existsSync(backup.marker), true);
+  assert.equal(latestDatabaseBackup(backupDirectory).committed, true);
   const manifest = JSON.parse(fs.readFileSync(path.join(
     backupDirectory,
     `${path.basename(backup.path, ".db")}.amu`,
     "manifest.json",
   ), "utf8"));
   assert.ok(manifest.files.some((entry) => entry.storageKey === stored.storage_key));
+
+  const legacyDirectory = path.join(testRoot, "legacy-backup");
+  fs.mkdirSync(legacyDirectory);
+  const legacyDatabase = path.join(legacyDirectory, path.basename(backup.path));
+  const legacyDocuments = path.join(legacyDirectory, `${path.basename(backup.path, ".db")}.amu`);
+  fs.copyFileSync(backup.path, legacyDatabase);
+  fs.cpSync(path.join(backupDirectory, `${path.basename(backup.path, ".db")}.amu`), legacyDocuments, { recursive: true });
+  const legacy = latestDatabaseBackup(legacyDirectory);
+  assert.equal(legacy.legacy, true);
+  assert.equal(legacy.committed, false);
+  pruneDatabaseBackups(legacyDirectory, 0);
+  assert.equal(fs.existsSync(legacyDatabase), true);
+  assert.equal(fs.existsSync(legacyDocuments), true);
 
   const encrypted = fs.readFileSync(blobPath);
   fs.rmSync(blobPath);
