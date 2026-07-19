@@ -4,8 +4,10 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const root = path.resolve(process.argv[2] || "");
+const runtimeOnly = process.argv[2] === "--runtime-contract";
+const root = path.resolve(process.argv[runtimeOnly ? 3 : 2] || "");
 const manifestPath = path.join(root, "grabenplaner-server-manifest.json");
+const runtimeSchemaPath = path.join(root, "server-tools", "linux", "runtime-schema.json");
 
 function sha256File(filePath) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
@@ -64,9 +66,58 @@ function assertMinimumNode(range) {
   }
 }
 
+function readRuntimeContract() {
+  const stat = fs.lstatSync(runtimeSchemaPath);
+  if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Der versionierte Linux-Runtimevertrag fehlt oder ist unzulaessig.");
+  const contract = JSON.parse(fs.readFileSync(runtimeSchemaPath, "utf8").replace(/^\uFEFF/, ""));
+  if (contract?.format !== "grabenplaner-linux-runtime-contract" || contract?.schemaVersion !== 1
+    || !Number.isSafeInteger(contract?.deploymentSchemaVersion) || contract.deploymentSchemaVersion < 1
+    || contract?.migrationPolicy !== "explicit-maintenance" || !Array.isArray(contract?.managedArtifacts)
+    || contract.managedArtifacts.length < 5 || contract.managedArtifacts.length > 32) {
+    throw new Error("Der Linux-Runtimevertrag wird nicht unterstuetzt.");
+  }
+  const requiredV1 = new Set([
+    "server-tools/linux/Caddyfile.in",
+    "server-tools/linux/grabenplaner-bootstrap-admin.sh.in",
+    "server-tools/linux/grabenplaner-bootstrap.service.in",
+    "server-tools/linux/grabenplaner.env.example",
+    "server-tools/linux/grabenplaner.service.in",
+  ]);
+  const artifacts = new Map();
+  for (const raw of contract.managedArtifacts) {
+    const relative = String(raw || "");
+    if (!safeRelativePath(relative) || !/^server-tools\/linux\/(?:[a-z0-9._-]+\.in|grabenplaner\.env\.example)$/i.test(relative)
+      || artifacts.has(relative)) throw new Error(`Ungueltiges Runtime-Artefakt: ${relative || "(leer)"}`);
+    const target = path.resolve(root, ...relative.split("/"));
+    if (!target.startsWith(`${root}${path.sep}`)) throw new Error("Ein Runtime-Artefakt verlaesst die App-Wurzel.");
+    const artifactStat = fs.lstatSync(target);
+    if (!artifactStat.isFile() || artifactStat.isSymbolicLink()) throw new Error(`Runtime-Artefakt fehlt oder ist unzulaessig: ${relative}`);
+    artifacts.set(relative, sha256File(target));
+  }
+  if (contract.deploymentSchemaVersion === 1
+    && (artifacts.size !== requiredV1.size || [...requiredV1].some((relative) => !artifacts.has(relative)))) {
+    throw new Error("Der Runtimevertrag v1 enthaelt nicht exakt die freigegebenen Deployment-Artefakte.");
+  }
+  const fingerprint = crypto.createHash("sha256")
+    .update([...artifacts].sort(([left], [right]) => left.localeCompare(right)).map(([relative, hash]) => `${relative}\0${hash}\n`).join(""))
+    .digest("hex");
+  return {
+    schemaVersion: contract.schemaVersion,
+    deploymentSchemaVersion: contract.deploymentSchemaVersion,
+    migrationPolicy: contract.migrationPolicy,
+    fingerprint,
+    managedArtifacts: [...artifacts.keys()].sort(),
+  };
+}
+
 function main() {
   const rootStat = fs.lstatSync(root);
   if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error("Der Paket-Stagingordner ist ungueltig.");
+  const runtimeContract = readRuntimeContract();
+  if (runtimeOnly) {
+    process.stdout.write(`${JSON.stringify(runtimeContract)}\n`);
+    return;
+  }
   const manifestStat = fs.lstatSync(manifestPath);
   if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) throw new Error("Das Paketmanifest fehlt oder ist unzulaessig.");
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8").replace(/^\uFEFF/, ""));
@@ -106,6 +157,7 @@ function main() {
     "server-tools/linux/test-grabenplaner-server.sh",
     "server-tools/linux/update-grabenplaner-server.sh",
     "server-tools/linux/uninstall-grabenplaner-server.sh",
+    "server-tools/linux/runtime-schema.json",
     "server-tools/linux/lib/common.sh",
     "server-tools/linux/lib/backup-snapshot.js",
     "server-tools/linux/lib/hold-database-lock.js",
@@ -143,6 +195,7 @@ function main() {
     packageManager: manifest.packageManager,
     manifestSha256: sha256File(manifestPath),
     fileCount: expected.size,
+    runtimeContract,
   })}\n`);
 }
 

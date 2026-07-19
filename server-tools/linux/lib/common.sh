@@ -15,6 +15,7 @@ GP_DEFAULT_SERVICE_GROUP="grabenplaner"
 GP_DEFAULT_BUILD_USER="grabenplaner-build"
 GP_DEFAULT_BUILD_GROUP="grabenplaner-build"
 GP_DEFAULT_BUILD_CACHE="/var/cache/grabenplaner"
+GP_DEFAULT_RUNTIME_DIR="/run/grabenplaner"
 GP_DEFAULT_MAINTENANCE_LOCK="/run/grabenplaner/maintenance.lock"
 
 gp_log() {
@@ -106,21 +107,27 @@ gp_load_env_file() {
   set +a
 }
 
+gp_prepare_runtime_directory() {
+  local runtime_directory owner group mode
+  runtime_directory="$(gp_safe_absolute_path "${1:-$GP_DEFAULT_RUNTIME_DIR}" "Laufzeitverzeichnis")"
+  if [[ -e "$runtime_directory" || -L "$runtime_directory" ]]; then
+    [[ -d "$runtime_directory" && ! -L "$runtime_directory" ]] || gp_die "Das Laufzeitverzeichnis ist unzulaessig."
+  else
+    install -d -m 0755 -o root -g root -- "$runtime_directory"
+  fi
+  owner="$(stat --format='%u' -- "$runtime_directory")"
+  group="$(stat --format='%g' -- "$runtime_directory")"
+  mode="$(stat --format='%a' -- "$runtime_directory")"
+  [[ "$owner" == "0" && "$group" == "0" ]] || gp_die "Das Laufzeitverzeichnis muss root:root gehoeren."
+  (( (8#$mode & 022) == 0 )) || gp_die "Das Laufzeitverzeichnis darf fuer Gruppe oder andere Benutzer nicht beschreibbar sein."
+  printf '%s\n' "$runtime_directory"
+}
+
 gp_acquire_maintenance_lock() {
-  local lock_path lock_directory directory_owner directory_group directory_mode lock_owner lock_group
+  local lock_path lock_directory lock_owner lock_group
   gp_require_command flock
   lock_path="$(gp_safe_absolute_path "${1:-$GP_DEFAULT_MAINTENANCE_LOCK}" "Wartungssperre")"
-  lock_directory="$(dirname -- "$lock_path")"
-  if [[ -e "$lock_directory" || -L "$lock_directory" ]]; then
-    [[ -d "$lock_directory" && ! -L "$lock_directory" ]] || gp_die "Das Laufzeitverzeichnis der Wartungssperre ist unzulaessig."
-  else
-    install -d -m 0755 -o root -g root -- "$lock_directory"
-  fi
-  directory_owner="$(stat --format='%u' -- "$lock_directory")"
-  directory_group="$(stat --format='%g' -- "$lock_directory")"
-  directory_mode="$(stat --format='%a' -- "$lock_directory")"
-  [[ "$directory_owner" == "0" && "$directory_group" == "0" ]] || gp_die "Das Laufzeitverzeichnis muss root:root gehoeren."
-  (( (8#$directory_mode & 022) == 0 )) || gp_die "Das Laufzeitverzeichnis darf fuer Gruppe oder andere Benutzer nicht beschreibbar sein."
+  lock_directory="$(gp_prepare_runtime_directory "$(dirname -- "$lock_path")")"
   if [[ -e "$lock_path" || -L "$lock_path" ]]; then
     [[ -f "$lock_path" && ! -L "$lock_path" ]] || gp_die "Die Wartungssperre ist keine regulaere Datei."
     lock_owner="$(stat --format='%u' -- "$lock_path")"

@@ -10,7 +10,7 @@ function sha256File(filePath) {
 }
 
 function main() {
-  const [databasePath, amuBackupDirectory, amuModule] = process.argv.slice(2);
+  const [databasePath, amuBackupDirectory, amuModule, commitMarkerPath] = process.argv.slice(2);
   if (![databasePath, amuBackupDirectory, amuModule].every(Boolean)) throw new Error("Pruefparameter fehlen.");
   const { verifyBackupReferences } = require(path.resolve(amuModule));
   const database = new DatabaseSync(path.resolve(databasePath), { readOnly: true });
@@ -34,6 +34,20 @@ function main() {
   if (verified.manifest?.database?.fileName !== expectedFileName
     || String(verified.manifest?.database?.sha256 || "").toLowerCase() !== actualSha256) {
     throw new Error("Datenbank und geschuetzte Dateien gehoeren nicht zum selben Sicherungspunkt.");
+  }
+  if (commitMarkerPath) {
+    const markerPath = path.resolve(commitMarkerPath);
+    const markerStat = fs.lstatSync(markerPath);
+    if (!markerStat.isFile() || markerStat.isSymbolicLink()) throw new Error("Der Sicherungsmarker ist unzulaessig.");
+    const marker = JSON.parse(fs.readFileSync(markerPath, "utf8").replace(/^\uFEFF/, ""));
+    const snapshot = path.basename(databasePath, path.extname(databasePath));
+    if (marker?.format !== "grabenplaner-backup-commit" || marker?.schemaVersion !== 1
+      || marker?.snapshot !== snapshot || !Number.isFinite(Date.parse(String(marker?.committedAt || "")))
+      || marker?.database?.fileName !== path.basename(databasePath)
+      || String(marker?.database?.sha256 || "").toLowerCase() !== actualSha256
+      || marker?.protectedDocuments?.directoryName !== path.basename(amuBackupDirectory)) {
+      throw new Error("Der Sicherungsmarker passt nicht zum DB-/Dokumentpaar.");
+    }
   }
   process.stdout.write(`${JSON.stringify({
     ok: true,
