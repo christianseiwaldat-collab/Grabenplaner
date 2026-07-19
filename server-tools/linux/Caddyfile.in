@@ -7,7 +7,9 @@
 	encode zstd gzip
 
 	# The internal service-control endpoint must never be public.
-	@serviceStop path /api/service/stop /api/service/stop/*
+	@serviceStop {
+		path_regexp serviceStopPath (?i)^/api/service/stop(?:/.*)?$
+	}
 	respond @serviceStop 404
 
 	reverse_proxy {{UPSTREAM}} {

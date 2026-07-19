@@ -7510,7 +7510,7 @@ function getPortalStatus(locationId = "", request = null) {
   const configuredAdmin = db.prepare(`
     SELECT 1
     FROM portal_users
-    WHERE active = 1 AND role IN ('developer','admin') AND TRIM(password_hash) <> ''
+    WHERE active = 1 AND role IN ('developer','it_admin','admin') AND TRIM(password_hash) <> ''
     LIMIT 1
   `).get();
   return {
@@ -7521,7 +7521,7 @@ function getPortalStatus(locationId = "", request = null) {
     serverModeAvailable: SERVER_MODE_STATUS === "active",
     loginRequired: portalEnabled,
     adminSetupState: configuredAdmin ? "configured" : "not-configured",
-    adminSetupAvailable: !configuredAdmin,
+    adminSetupAvailable: !configuredAdmin && !serverModeActive,
     localOnly: loopbackHosts.has(HOST.toLowerCase()),
     listenHost: HOST,
     port: PORT,
@@ -17083,7 +17083,9 @@ app.post("/api/portal/v1/auth/branding", (request, response) => {
 });
 
 app.post("/api/portal/v1/setup/admin", async (request, response) => {
-  if (!isLoopbackRequest(request)) throw httpError(403, "Die Admin-Ersteinrichtung ist nur direkt am Grabenplaner-PC möglich.");
+  if (serverModeActive || !isLoopbackRequest(request)) {
+    throw httpError(403, "Die Admin-Ersteinrichtung ist nur im lokalen Einrichtungsmodus direkt am Grabenplaner-PC möglich.");
+  }
   if (getPortalStatus().adminSetupState === "configured") throw httpError(409, "Die Admin-Ersteinrichtung wurde bereits abgeschlossen.");
   const employeeNumber = String(request.body.employeeNumber || "").trim();
   const employee = db.prepare("SELECT personnel_number, full_name FROM employees WHERE personnel_number = ? AND active = 1").get(employeeNumber);
