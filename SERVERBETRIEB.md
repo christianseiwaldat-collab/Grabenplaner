@@ -12,7 +12,8 @@ Die bereitgestellten Werkzeuge ersetzen nicht die betriebliche Prüfung von Doma
 - Datenbank, Branding und verschlüsselte Dokumente: `/var/lib/grabenplaner`
 - geschützte Dienstkonfiguration: `/etc/grabenplaner/grabenplaner.env`
 - Protokolle: systemd-Journal sowie `/var/log/grabenplaner/app` und `/var/log/grabenplaner/caddy`
-- lokale Sicherungspunkte: `/var/backups/grabenplaner`; ein externes, verschlüsseltes Backupziel folgt getrennt
+- lokale Sicherungspunkte: `/var/backups/grabenplaner`
+- optionaler Offsite-Status: `/var/lib/grabenplaner-offsite/status.json`; private Arbeitsdaten des Moduls liegen ebenfalls im gesonderten, root-verwalteten Modulpfad
 - Anwendung: `127.0.0.1:3000`
 - öffentlicher Zugang: ausschließlich Caddy auf Port 443
 
@@ -25,6 +26,7 @@ Die SQLite-Datenbank muss auf einem lokalen Linux-Dateisystem liegen. Netzlaufwe
 - Ubuntu 24.04 oder 26.04 LTS x86-64 mit allen Sicherheitsaktualisierungen
 - Node.js gemäß `engines.node` in `package.json` und die dort festgeschriebene pnpm-Version
 - Caddy, systemd, UFW, ClamAV und `unzip`
+- für das optionale Offsite-Modul: von der IT bereitgestellte Restic-/rclone-Binaries samt geprüfter SHA-256-Prüfsummen und ein getrenntes Google-Drive-Ziel
 - feste Domain mit korrektem DNS-Eintrag und erreichbaren Ports 80/443
 - lokales Backupziel sowie dokumentierter Wiederanlauf- und Wiederherstellungstest
 - SSH-Zugang nur für die zuständige Administration, vorzugsweise mit Schlüsselanmeldung
@@ -52,7 +54,7 @@ Die kontrollierte Erstinstallation verwendet das geprüfte Paket und seine verö
 
 ```bash
 sudo bash server-tools/linux/install-grabenplaner-server.sh \
-  --package /pfad/Grabenplaner-Server-v0.72.0-beta-linux-x64.zip \
+  --package /pfad/Grabenplaner-Server-v0.73.0-beta-linux-x64.zip \
   --sha256 '<veröffentlichter SHA256-Wert>' \
   --public-url https://beta.example.at \
   --replace-caddy-config
@@ -116,7 +118,122 @@ sudo grabenplaner-uninstall --yes
 - `grabenplaner-update` lädt nichts selbst herunter. Es akzeptiert nur ein lokales Linux-Serverpaket samt SHA-256, sichert vor dem Austausch und rollt bei fehlgeschlagener Bereitschaftsprüfung automatisch zurück.
 - `grabenplaner-uninstall --yes` entfernt App-Code, eigene systemd-Units und Befehlslinks. Daten, Schlüsselkonfiguration, Logs und Backups bleiben erhalten; Caddy selbst wird nicht deinstalliert und eine zuvor gesicherte, gültige Konfiguration wird wiederhergestellt.
 
-Die Sicherungen aus Block 1 liegen lokal auf demselben Server. Sie schützen vor fehlerhaften Updates und ermöglichen einen kontrollierten Wiederanlauf, ersetzen aber kein räumlich getrenntes, manipulationsgeschütztes Backup. Die verschlüsselte Off-Host-Sicherung mit Restic/rclone und regelmäßigem Restore-Test ist für Block 2 des Serverausbaus vorgesehen.
+Die lokalen Sicherungspunkte schützen vor fehlerhaften Updates und ermöglichen einen kontrollierten Wiederanlauf. Das folgende optionale Modul ergänzt sie um eine räumlich getrennte, verschlüsselte Kopie; es ersetzt die lokalen Sicherungen nicht.
+
+### Verschlüsseltes Offsite-Backup mit Restic/rclone
+
+Das Offsite-Modul ist Bestandteil des neutralen Ubuntu-Serverpakets, bleibt nach der normalen Serverinstallation aber vollständig inaktiv. Es wird ausschließlich durch eine bewusste Root-Einrichtung aktiviert. Der Grabenplaner-Dienst benötigt keinen Zugriff auf Google-Zugangsdaten oder das Restic-Passwort.
+
+Der Datenfluss ist fest getrennt:
+
+1. `grabenplaner-backup` erstellt unter `/var/backups/grabenplaner` einen vollständigen, gekoppelten Sicherungspunkt aus SQLite-Datenbank, verschlüsselter Dokumentablage und Abschlussmanifest.
+2. Das Offsite-Modul prüft diesen Sicherungspunkt erneut und übernimmt ausschließlich das vollständige Tripel in den privaten Staging-Bereich `/var/lib/grabenplaner-offsite/staging/current`.
+3. Restic verschlüsselt den Staging-Inhalt und überträgt das Repository über rclone zu Google Drive.
+4. Die Live-Datenbank unter `/var/lib/grabenplaner` wird weder direkt durch Restic gelesen noch auf ein Cloud-, FUSE- oder Netzlaufwerk verschoben.
+
+#### Google Drive und Recovery vorbereiten
+
+Für das Backup ist ein separates Google-Konto oder ein eigener, ausschließlich für Grabenplaner freigegebener Drive-Bereich zu verwenden. Bei der [rclone-Einrichtung für Google Drive](https://rclone.org/drive/) muss der enge OAuth-Umfang `drive.file` gesetzt sein; andere Backendtypen oder Drive-Umfänge weist der Installer zurück. Die rclone-Konfiguration wird auf einem geschützten Administrationsgerät erstellt, mit einem eigenen Konfigurationspasswort verschlüsselt und anschließend als Datei bereitgestellt. Die Einrichtung speichert keine Zugangsdaten in SQLite oder im App-Verzeichnis.
+
+Vor der Aktivierung muss ein getrenntes Offline-Recovery-Set angelegt und probeweise gelesen werden. Es umfasst mindestens:
+
+- das Restic-Passwort;
+- die verschlüsselte rclone-Konfiguration und ihr Konfigurationspasswort;
+- die zur Anmeldung beziehungsweise Wiederherstellung des separaten Google-Kontos nötigen Informationen;
+- die Grabenplaner-Schlüssel aus der geschützten Dienstkonfiguration, insbesondere den Schlüssel der verschlüsselten Dokumentablage;
+- die öffentliche Repository- und Installationskennung sowie eine kurze Wiederherstellungsanleitung.
+
+Dieses Recovery-Set darf nicht im Restic-Repository, im Release-ZIP, in SQLite oder ausschließlich auf demselben VPS liegen.
+
+#### Gepinnte Werkzeuge installieren und Modul aktivieren
+
+Restic und rclone werden nicht automatisch aus dem Internet geladen und nicht im Grabenplaner-Paket gebündelt. Die verantwortliche IT lädt freigegebene Versionen aus den offiziellen [Restic-Releases](https://github.com/restic/restic/releases) beziehungsweise [rclone-Downloads](https://rclone.org/downloads/), prüft die Hersteller-Prüfsummen beziehungsweise Signaturen und übergibt dem Installer zusätzlich die konkret erwartete SHA-256-Prüfsumme. Der Installer übernimmt nur reguläre Root-Dateien, deren Hash exakt übereinstimmt.
+
+Die folgenden Dateien werden vor dem Aufruf root-only gespeichert und mit Modus `0600` geschützt:
+
+- Restic-Passwort;
+- rclone-Konfiguration;
+- rclone-Konfigurationspasswort.
+
+Eine erstmalige, ausdrücklich gewünschte Initialisierung sieht beispielsweise so aus:
+
+```bash
+sudo server-tools/linux/offsite/install-grabenplaner-offsite.sh \
+  --restic /root/grabenplaner-setup/restic \
+  --restic-sha256 '<64-stelliger-SHA256-Wert>' \
+  --rclone /root/grabenplaner-setup/rclone \
+  --rclone-sha256 '<64-stelliger-SHA256-Wert>' \
+  --restic-password /root/grabenplaner-setup/restic-password \
+  --rclone-config /root/grabenplaner-setup/rclone.conf \
+  --rclone-config-password /root/grabenplaner-setup/rclone-config-password \
+  --repository 'rclone:gpdrive:grabenplaner/<stabile-installationskennung>' \
+  --initialize-repository
+```
+
+`--initialize-repository` darf nur für ein neues, dafür bestimmtes und leeres Ziel verwendet werden. Bei einer Neuinstallation des Servers oder bei einer Wiederanbindung an ein vorhandenes Repository wird die Option weggelassen. Ein Authentifizierungs-, Netzwerk- oder Passwortfehler darf niemals durch eine automatische Neuinitialisierung übergangen werden.
+
+Die Installation legt die gepinnten Binaries unter `/opt/grabenplaner-offsite/bin`, die Root-Konfiguration unter `/etc/grabenplaner/offsite` und den privaten Betriebszustand unter `/var/lib/grabenplaner-offsite` ab. Repository-Adresse, Zugangsdaten und interne Dateipfade werden nicht in die Browserdiagnose übernommen.
+
+Der eingerichtete Zustand wird mit folgendem Befehl geprüft:
+
+```bash
+sudo grabenplaner-offsite-test
+```
+
+Vor der betrieblichen Freigabe werden einmalig ein Upload, die vollständige Datenprüfung und danach der isolierte Restore-Test ausgeführt. Die Befehle warten jeweils auf den Abschluss und müssen ohne Fehler enden:
+
+```bash
+sudo systemctl start grabenplaner-offsite-upload.service
+sudo grabenplaner-offsite-test
+sudo systemctl start grabenplaner-offsite-check.service
+sudo systemctl start grabenplaner-offsite-restore-test.service
+sudo grabenplaner-offsite-test
+```
+
+Timer und technische Protokolle kontrolliert die IT beispielsweise mit `systemctl list-timers 'grabenplaner-offsite-*'` und `journalctl -u grabenplaner-offsite-upload.service`. Protokolle dürfen nicht zusammen mit Geheimdateien oder einer unredigierten rclone-Konfiguration weitergegeben werden.
+
+Eine bewusste Deaktivierung und Entfernung des Moduls erfolgt getrennt vom Grabenplaner-Kern:
+
+```bash
+sudo grabenplaner-offsite-uninstall --yes
+```
+
+Der Offsite-Uninstaller löscht keine lokalen Grabenplaner-Nutzdaten und kein entferntes Restic-Repository. Die geschützte Repository-Konfiguration, Zugangsdaten und vorhandene Stagingdaten bleiben für eine kontrollierte Wiederanbindung beziehungsweise Wiederherstellung erhalten. Recovery-Geheimnisse und das entfernte Repository werden ausschließlich nach dem freigegebenen betrieblichen Löschkonzept behandelt.
+
+#### Zeitplan, Aufbewahrung und Prüfungen
+
+Die systemd-Dienste verwenden einen gemeinsamen Wartungs- und Repository-Lock. Es findet keine automatische Restic-Entsperrung statt.
+
+| Aufgabe | systemd-Einheit | Standardzeit |
+|---|---|---|
+| verifizierten Sicherungspunkt vorbereiten | `grabenplaner-offsite-prepare.service` | durch Upload oder Vorab-Update ausgelöst |
+| verschlüsselt hochladen und Aufbewahrung anwenden | `grabenplaner-offsite-upload.timer` | täglich etwa 02:35 Uhr, mit zufälliger Verzögerung |
+| Repository vollständig lesen und prüfen | `grabenplaner-offsite-check.timer` | monatlich am 1. etwa 04:15 Uhr, mit zufälliger Verzögerung |
+| isolierte Testwiederherstellung | `grabenplaner-offsite-restore-test.timer` | quartalsweise am 2. Januar, April, Juli und Oktober etwa 05:15 Uhr, mit zufälliger Verzögerung |
+
+Die feste Restic-Aufbewahrung beträgt **14 tägliche, 8 wöchentliche und 12 monatliche Sicherungsstände**. Upload, Vollprüfung und Restore-Test sind getrennte Dienste. Ein fehlgeschlagener Upload löst keine Aufräumaktion aus. Prüffehler werden nicht automatisch repariert; vor einem manuellen `unlock`, `forget`, `prune` oder einer Wiederherstellung muss ausgeschlossen sein, dass noch ein anderer Vorgang läuft.
+
+Der monatliche Vollcheck liest die Repository-Daten vollständig und kann abhängig von Datenmenge und Verbindung längere Zeit dauern. Der quartalsweise Restore-Test stellt in einen isolierten Bereich unter `/var/lib/grabenplaner-offsite` wieder her, prüft Kopplung, Hashes, SQLite und Dokumentmanifest und verändert keine produktiven Daten.
+
+#### Updates und Statusdiagnose
+
+Ist das Offsite-Modul eingerichtet, erstellt `grabenplaner-update` zunächst bei kurz gestopptem Dienst einen verifizierten lokalen Sicherungspunkt. Anschließend wird die bisherige App wieder gestartet und bleibt während der unter Umständen längeren Google-Drive-Übertragung erreichbar. Erst wenn diese Offsite-Kopie bestätigt ist, stoppt der Updater den Dienst erneut, erstellt unmittelbar vor dem App-Tausch einen zweiten aktuellen lokalen Rollback-Sicherungspunkt und ersetzt die Programmdateien. Ist Google Drive nicht erreichbar oder scheitert die Repository-Prüfung, wird der Austausch nicht begonnen; die bisherige App bleibt beziehungsweise wird wieder in Betrieb genommen.
+
+Der neutrale Status liegt unter `/var/lib/grabenplaner-offsite/status.json`. `grabenplaner-test` und die berechtigte Serverdiagnose zeigen daraus insbesondere:
+
+- ob das Modul eingerichtet ist;
+- Zeitpunkt und Ergebnis des letzten Uploads;
+- Zeitpunkt und Ergebnis der letzten vollständigen Prüfung;
+- Zeitpunkt und Ergebnis des letzten Restore-Tests;
+- das Alter dieser Betriebsbelege sowie einen neutralen Fehlercode.
+
+Die Hauptanwendung bleibt bei einem vorübergehenden Offsite-Fehler erreichbar. Der Fehler ist dennoch ein Wartungsalarm und muss behoben werden, bevor Updates oder der sichere Wiederanlauf als vollständig abgesichert gelten.
+
+#### Wiederherstellung und Schutzgrenze
+
+Eine echte Wiederherstellung wird nie direkt in den Live-Pfad gestartet. Die IT stellt den gewünschten Restic-Snapshot zunächst in ein neues, Root-geschütztes Staging-Verzeichnis wieder her, prüft Abschlussmanifest, Hashes, SQLite-Integrität und Entschlüsselbarkeit der Dokumente und erstellt zusätzlich einen aktuellen lokalen Sicherheitsstand. Erst danach werden Grabenplaner und Caddy im Wartungsfenster gestoppt und die geprüften Daten in einem beaufsichtigten Recovery-Ablauf mit dem paketgeprüften lokalen Restore-Helfer übernommen. Diese produktive Übernahme ist bewusst kein automatischer Timerjob; der quartalsweise Restore-Test ersetzt ihre ausdrückliche Freigabe nicht.
+
+Google Drive ist ein räumlich getrenntes und durch Restic verschlüsseltes Backupziel, aber **kein WORM- oder Object-Lock-Speicher**. Netzwerkzugriffe des Moduls laufen unter einem eigenen, nicht interaktiven Benutzer und über einen fest installierten rclone-Wrapper. Für die Aufbewahrung benötigt das hinterlegte Drive-Credential dennoch Schreib- und Löschzugriff. Ein Angreifer mit vollständiger Root-Kontrolle über den VPS könnte rclone außerhalb dieses Ablaufs verwenden und entfernte Sicherungen löschen. Für Schutz gegen dieses Szenario ist ein getrennt administriertes Backup-Gateway oder ein technisch unveränderliches Ziel mit eigener Berechtigungsgrenze erforderlich.
 
 ## Zielaufbau unter Windows
 
@@ -281,7 +398,7 @@ Für den Paketbau wird die in `package.json` festgelegte pnpm-Version benötigt.
 Das geprüfte Paket wird am Server in einer als Administrator gestarteten PowerShell zusammen mit seiner veröffentlichten Prüfsumme eingespielt:
 
 ```powershell
-$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.72.0-beta-windows-x64.zip'
+$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.73.0-beta-windows-x64.zip'
 $sha256 = ((Get-Content "$package.sha256" -Raw).Trim() -split '\s+')[0]
 
 .\server-tools\windows\Update-GrabenplanerServer.ps1 `

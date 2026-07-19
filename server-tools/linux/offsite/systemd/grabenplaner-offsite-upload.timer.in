@@ -1,0 +1,12 @@
+[Unit]
+Description=Taegliches Grabenplaner Offsite-Backup
+
+[Timer]
+OnCalendar=*-*-* 02:35:00
+RandomizedDelaySec=20min
+Persistent=true
+AccuracySec=1min
+Unit=grabenplaner-offsite-upload.service
+
+[Install]
+WantedBy=timers.target

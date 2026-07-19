@@ -1,5 +1,15 @@
 # Grabenplaner Versions-Log
 
+## v0.73 Beta
+
+- Optionales Ubuntu-Offsite-Modul überträgt ausschließlich vollständig verifizierte lokale Datenbank-/Dokument-Sicherungspunkte verschlüsselt mit Restic über rclone zu Google Drive; die Live-Datenbank bleibt auf dem lokalen Linux-Dateisystem.
+- Die Einrichtung verwendet separat bereitgestellte, gepinnte Restic-/rclone-Binaries und akzeptiert sie nur zusammen mit der jeweils erwarteten SHA-256-Prüfsumme.
+- Zugangsdaten und Wiederherstellungsgeheimnisse liegen außerhalb von App, SQLite, Release-Paket und Offsite-Repository; ein getrenntes Offline-Recovery-Set bleibt Voraussetzung.
+- Tägliche Uploads, monatliche vollständige Repository-Prüfungen und quartalsweise Wiederherstellungstests werden über getrennte systemd-Dienste und -Timer ausgeführt.
+- Die feste Aufbewahrung umfasst 14 tägliche, 8 wöchentliche und 12 monatliche Sicherungsstände. Vor Updates wird ein kurzer lokaler Snapshot extern gesichert, während die bisherige App für die Netzübertragung wieder erreichbar ist; unmittelbar vor dem App-Tausch entsteht ein zweiter aktueller lokaler Rollback-Snapshot.
+- Eine datensparsame Statusdiagnose zeigt Einrichtung, letzten Upload, Prüfung und Restore-Test, ohne Repository-Adresse, Zugangsdaten oder interne Dateipfade offenzulegen.
+- Google Drive ist ein räumlich getrenntes, verschlüsseltes Backupziel, aber kein unveränderlicher WORM-Speicher. Ein kompromittierter Server mit gültigem Drive-Schreibzugang kann das Ziel weiterhin gefährden.
+
 ## v0.72 Beta
 
 - Ubuntu 24.04 und 26.04 LTS auf x86-64 werden als offizielle Plattformen für den zentralen HTTPS-Serverbetrieb unterstützt; für neue Beta-Server wird Ubuntu 26.04 LTS empfohlen.

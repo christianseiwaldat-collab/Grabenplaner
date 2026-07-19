@@ -1571,6 +1571,57 @@ function operationModeLabel(mode) {
   return mode === "server" ? "HTTPS-Server" : mode === "lan" ? "LAN-Host" : "Lokal";
 }
 
+function diagnosticTimestamp(value) {
+  if (!value) return "noch ausständig";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "unbekannt";
+  return new Intl.DateTimeFormat("de-AT", { dateStyle: "short", timeStyle: "short" }).format(date);
+}
+
+function diagnosticAge(value) {
+  const hours = Number(value);
+  if (!Number.isFinite(hours)) return "";
+  if (hours < 1) return " · vor weniger als 1 h";
+  if (hours < 48) return ` · vor ${Math.round(hours)} h`;
+  return ` · vor ${Math.round(hours / 24)} Tagen`;
+}
+
+function renderOffsiteBackupDiagnostics(offsite) {
+  if (!offsite?.applicable) return "";
+  const configured = Boolean(offsite?.configured);
+  const state = configured ? String(offsite?.state || "warning") : "unconfigured";
+  const stateLabel = state === "ok" ? "Geschützt" : state === "error" ? "Fehler" : configured ? "Prüfen" : "Nicht eingerichtet";
+  const summary = String(offsite?.summary || (configured
+    ? (state === "ok"
+      ? "Die verschlüsselte externe Sicherung ist aktuell."
+      : "Die externe Sicherung oder eine Wiederherstellungsprüfung benötigt Aufmerksamkeit. Der Grabenplaner bleibt erreichbar.")
+    : "Für diesen Server ist noch kein verschlüsseltes Offsite-Backup eingerichtet."));
+  const retention = offsite?.retention || {};
+  const unresolved = offsite?.unresolvedFailures || {};
+  const unresolvedLabels = [
+    unresolved.backup ? "tägliche Sicherung" : "",
+    unresolved.fullCheck ? "Monatsprüfung" : "",
+    unresolved.restoreTest ? "Test-Wiederherstellung" : "",
+  ].filter(Boolean);
+  const failure = offsite?.lastErrorCode
+    ? `${offsite.lastErrorCode} · ${diagnosticTimestamp(offsite?.lastFailureAt)}`
+    : unresolvedLabels.length ? `Offen: ${unresolvedLabels.join(", ")}` : "";
+  const snapshotDetail = offsite?.lastSnapshotId ? ` · ${escapeHtml(offsite.lastSnapshotId)}` : "";
+  return `
+    <section class="offsite-diagnostics ${state === "ok" ? "ok" : "warning"}">
+      <div class="offsite-diagnostics-heading"><div><span class="eyebrow">Verschlüsselte externe Sicherung</span><strong>Offsite-Backup</strong><small>${escapeHtml(summary)}</small></div><span class="status-badge ${state === "ok" ? "active" : "inactive"}">${escapeHtml(stateLabel)}</span></div>
+      <div class="diagnostic-grid offsite-diagnostic-grid">
+        <span><small>Letzter Snapshot</small><strong>${escapeHtml(diagnosticTimestamp(offsite?.lastSuccessAt))}${escapeHtml(diagnosticAge(offsite?.agesHours?.backup))}${snapshotDetail}</strong></span>
+        <span><small>Repository-Prüfung</small><strong>${escapeHtml(diagnosticTimestamp(offsite?.lastRepositoryCheckAt))}${escapeHtml(diagnosticAge(offsite?.agesHours?.repositoryCheck))}</strong></span>
+        <span><small>Vollständiger Monatscheck</small><strong>${escapeHtml(diagnosticTimestamp(offsite?.lastFullCheckAt))}${escapeHtml(diagnosticAge(offsite?.agesHours?.fullCheck))}</strong></span>
+        <span><small>Isolierter Test-Restore</small><strong>${escapeHtml(diagnosticTimestamp(offsite?.lastRestoreTestAt))}${escapeHtml(diagnosticAge(offsite?.agesHours?.restoreTest))}</strong></span>
+        <span><small>Letzter Versuch</small><strong>${escapeHtml(diagnosticTimestamp(offsite?.lastAttemptAt))}${escapeHtml(diagnosticAge(offsite?.agesHours?.attempt))}</strong></span>
+        <span><small>Aufbewahrung</small><strong>${Number(retention.daily || 14)} täglich · ${Number(retention.weekly || 8)} wöchentlich · ${Number(retention.monthly || 12)} monatlich</strong></span>
+      </div>
+      ${failure ? `<p class="offsite-diagnostic-error"><strong>Letzter Fehler:</strong> ${escapeHtml(failure)}</p>` : ""}
+    </section>`;
+}
+
 function renderServerDiagnostics(info) {
   if (!elements.serverDiagnostics || !info) return;
   const statusClass = info.ready ? "ok" : "warning";
@@ -1592,6 +1643,7 @@ function renderServerDiagnostics(info) {
       <span><small>AUM-Speicher</small><strong>${info.storage?.amu?.ok ? "verschlüsselt bereit" : "nicht bereit"}</strong></span>
       <span><small>Backupziel</small><strong>${info.backups?.externalWritable ? "beschreibbar" : "prüfen"}</strong></span>
     </div>
+    ${renderOffsiteBackupDiagnostics(info.backups?.offsite)}
     <div class="pilot-checklist"><strong>Server-Betriebsprüfung</strong>${productionChecks.map((check) => `<span class="${check.ok ? "ok" : "warning"}"><i>${check.ok ? "✓" : "!"}</i><b>${escapeHtml(check.label)}</b><small>${escapeHtml(check.detail || "")}</small></span>`).join("")}</div>${warnings}`;
 }
 

@@ -1,0 +1,12 @@
+[Unit]
+Description=Monatliche vollstaendige Grabenplaner Offsite-Pruefung
+
+[Timer]
+OnCalendar=*-*-01 04:15:00
+RandomizedDelaySec=45min
+Persistent=true
+AccuracySec=1min
+Unit=grabenplaner-offsite-check.service
+
+[Install]
+WantedBy=timers.target

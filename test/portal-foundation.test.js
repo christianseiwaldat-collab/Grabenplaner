@@ -1115,17 +1115,24 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const grantEmployeeTechnicalRights = await fetch(`${url}/api/portal/v1/rights/102`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: itAdmin.cookie, "X-CSRF-Token": itAdmin.csrf },
-      body: JSON.stringify({ permissions: ["schedule:read", "branding:read", "branding:write", "employees:write", "hr:approve", "backup:write", "update:write"] }),
+      body: JSON.stringify({ permissions: ["schedule:read", "branding:read", "branding:write", "employees:write", "hr:approve", "backup:write", "update:write", "system:write"] }),
     });
     assert.equal(grantEmployeeTechnicalRights.status, 200, await grantEmployeeTechnicalRights.clone().text());
     const employeeWithTechnicalRights = (await grantEmployeeTechnicalRights.json()).users.find((user) => user.employeeNumber === "102");
-    assert.deepEqual(employeeWithTechnicalRights.grantedPermissions, ["backup:write", "branding:read", "branding:write", "employees:write", "hr:approve", "schedule:read", "update:write"]);
+    assert.deepEqual(employeeWithTechnicalRights.grantedPermissions, ["backup:write", "branding:read", "branding:write", "employees:write", "hr:approve", "schedule:read", "system:write", "update:write"]);
     const employeeSessionWithGrants = await fetch(`${url}/api/portal/v1/session`, { headers: { Cookie: employee.cookie } });
     assert.equal(employeeSessionWithGrants.status, 200, await employeeSessionWithGrants.clone().text());
     const employeeEffectivePermissions = (await employeeSessionWithGrants.json()).user.permissions;
-    for (const permission of ["employees:write", "hr:approve", "backup:write", "update:write"]) {
+    for (const permission of ["employees:write", "hr:approve", "backup:write", "update:write", "system:write"]) {
       assert.ok(employeeEffectivePermissions.includes(permission), `${permission} fehlt in ${employeeEffectivePermissions.join(", ")}`);
     }
+    const employeeSystemInfo = await fetch(`${url}/api/system-info`, { headers: { Cookie: employee.cookie } });
+    assert.equal(employeeSystemInfo.status, 200, await employeeSystemInfo.clone().text());
+    const employeeSystemInfoData = await employeeSystemInfo.json();
+    assert.notEqual(employeeSystemInfoData.runtimeDrive, null);
+    assert.equal(employeeSystemInfoData.serverDiagnostics, null);
+    const employeeDiagnosticsDenied = await fetch(`${url}/api/server-diagnostics`, { headers: { Cookie: employee.cookie } });
+    assert.equal(employeeDiagnosticsDenied.status, 403, await employeeDiagnosticsDenied.clone().text());
     const employeeBrandingAccess = await fetch(`${url}/api/branding/assignments`, { headers: { Cookie: employee.cookie, "X-CSRF-Token": employee.csrf } });
     assert.equal(employeeBrandingAccess.status, 200, await employeeBrandingAccess.clone().text());
 
@@ -1834,6 +1841,17 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     assert.equal(diagnostics.instanceLock.held, true);
     assert.ok(diagnostics.productionChecks.every((check) => check.ok), JSON.stringify(diagnostics.productionChecks));
     assert.equal(diagnostics.backups.retentionCount, 30);
+    assert.equal(typeof diagnostics.backups.offsite?.configured, "boolean");
+    assert.equal("statusPath" in diagnostics.backups.offsite, false);
+    assert.equal("repository" in diagnostics.backups.offsite, false);
+    const adminSystemInfo = await fetch(`${url}/api/system-info`, { headers: { ...secureHeaders, Cookie: cookie } });
+    assert.equal(adminSystemInfo.status, 200, await adminSystemInfo.clone().text());
+    assert.equal(typeof (await adminSystemInfo.json()).serverDiagnostics?.backups?.offsite?.configured, "boolean");
+    for (const endpoint of ["/api/health", "/api/health/ready"]) {
+      const healthResponse = await fetch(`${url}${endpoint}`, { headers: secureHeaders });
+      assert.equal(healthResponse.status, 200, await healthResponse.clone().text());
+      assert.deepEqual(await healthResponse.json(), { ok: true });
+    }
 
     const shortPasswordResponse = await fetch(`${url}/api/portal/v1/users/102`, {
       method: "PUT", headers: { ...secureHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf },
