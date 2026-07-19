@@ -33,8 +33,8 @@ const {
 } = require("./lib/external-notifications");
 const { acquireDatabaseLock, lockPathForDatabase, releaseDatabaseLock } = require("./lib/database-lock");
 const {
-  listCommittedBackups,
-  listLegacyBackupPairs,
+  listCommittedBackupMetadata,
+  listLegacyBackupMetadata,
   pruneCommittedBackups,
   verifyCommittedBackup,
   writeBackupCommitMarker,
@@ -13343,8 +13343,8 @@ function directoryDiagnostics(directory) {
 
 function latestDatabaseBackup(backupDirectory) {
   try {
-    const committed = listCommittedBackups(backupDirectory, { verifyPair: verifyBackupPairPaths, limit: 1 })[0];
-    const legacy = listLegacyBackupPairs(backupDirectory, { verifyPair: verifyBackupPairPaths, limit: 1 })[0];
+    const committed = listCommittedBackupMetadata(backupDirectory, { limit: 1 })[0];
+    const legacy = listLegacyBackupMetadata(backupDirectory, { limit: 1 })[0];
     const selected = [committed, legacy].filter(Boolean).sort((left, right) => right.modifiedMs - left.modifiedMs)[0];
     if (!selected) return null;
     return {

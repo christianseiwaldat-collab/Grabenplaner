@@ -5,7 +5,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { syncEncryptedFilesBackup } = require("./lib/amu-storage");
+const { syncEncryptedFilesBackup, verifyBackupReferences } = require("./lib/amu-storage");
 const { acquireDatabaseLock, releaseDatabaseLock } = require("./lib/database-lock");
 const { pruneCommittedBackups, verifyCommittedBackup, writeBackupCommitMarker } = require("./lib/backup-commit");
 const packageMetadata = require("./package.json");
@@ -27,6 +27,26 @@ function resolveBackupDirectory(value) {
   if (raw === "~") return os.homedir();
   if (raw.startsWith("~/") || raw.startsWith("~\\")) return path.join(os.homedir(), raw.slice(2));
   return raw;
+}
+
+function verifyStandaloneBackupPair(paths) {
+  const database = new DatabaseSync(paths.databasePath, { readOnly: true });
+  const requiredStorageKeys = [];
+  try {
+    const quickCheck = database.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
+    if (quickCheck.length !== 1 || quickCheck[0] !== "ok") {
+      throw new Error(`SQLite quick_check: ${quickCheck.join("; ")}`);
+    }
+    const hasTable = (name) => Boolean(database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
+    for (const table of ["amu_documents", "personnel_record_documents"]) {
+      if (!hasTable(table)) continue;
+      requiredStorageKeys.push(...database.prepare(`SELECT storage_key FROM ${table} WHERE status = 'active'`).all()
+        .map((row) => row.storage_key));
+    }
+  } finally {
+    database.close();
+  }
+  verifyBackupReferences({ backupDirectory: paths.protectedDirectory, requiredStorageKeys });
 }
 
 function createPairedBackup(database, backupDirectory, timestamp, label) {
@@ -58,7 +78,7 @@ function createPairedBackup(database, backupDirectory, timestamp, label) {
       databaseSha256: databaseHash,
       protectedFiles: protectedBackup.fileCount,
     });
-    verifyCommittedBackup(backupDirectory, path.basename(markerTarget));
+    verifyCommittedBackup(backupDirectory, path.basename(markerTarget), { verifyPair: verifyStandaloneBackupPair });
   } catch (error) {
     fs.rmSync(temporaryDatabase, { force: true });
     fs.rmSync(temporaryProtected, { recursive: true, force: true });
@@ -68,7 +88,7 @@ function createPairedBackup(database, backupDirectory, timestamp, label) {
     throw error;
   }
 
-  pruneCommittedBackups(backupDirectory, 30);
+  pruneCommittedBackups(backupDirectory, 30, { verifyPair: verifyStandaloneBackupPair });
   console.log(`${label}: ${target} + ${protectedTarget} + ${markerTarget}`);
   return { path: target, protectedDirectory: protectedTarget, marker: markerTarget, committed: true };
 }
@@ -103,4 +123,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { createPairedBackup, main, resolveBackupDirectory };
+module.exports = { createPairedBackup, main, resolveBackupDirectory, verifyStandaloneBackupPair };
