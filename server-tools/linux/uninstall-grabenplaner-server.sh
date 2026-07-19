@@ -9,6 +9,8 @@ source "$SCRIPT_DIR/lib/common.sh"
 app_arg="$GP_DEFAULT_APP_DIR"
 service="$GP_DEFAULT_SERVICE"
 bootstrap_service="grabenplaner-bootstrap.service"
+monitor_service="grabenplaner-monitor.service"
+monitor_timer="grabenplaner-monitor.timer"
 caddy_config="/etc/caddy/Caddyfile"
 confirmed=0
 
@@ -24,8 +26,8 @@ while (($#)); do
 Verwendung: sudo ./uninstall-grabenplaner-server.sh --yes [Optionen]
 
 Entfernt App-Code, Grabenplaner-systemd-Units und die eigenen Befehlslinks.
-Datenbank, Dokumente, geheime Konfiguration, Logs und Backups bleiben immer
-erhalten. Caddy selbst wird niemals deinstalliert.
+Datenbank, Dokumente, geheime Konfiguration, Logs, Backups und der bisherige
+Monitorstatus bleiben immer erhalten. Caddy selbst wird niemals deinstalliert.
 EOF
       exit 0
       ;;
@@ -56,7 +58,7 @@ app_dir="$(gp_safe_absolute_path "$app_arg" "App-Ordner")"
 [[ "$(basename -- "$app_dir")" == "app" && "$(basename -- "$(dirname -- "$app_dir")")" == "grabenplaner" ]] \
   || gp_die "Sicherheitsabbruch: Der App-Ordner muss auf .../grabenplaner/app enden."
 
-for unit in "$service" "$bootstrap_service"; do
+for unit in "$monitor_timer" "$monitor_service" "$service" "$bootstrap_service"; do
   if gp_systemd_unit_exists "$unit"; then
     systemctl stop "$unit" 2>/dev/null || true
     systemctl disable "$unit" 2>/dev/null || true
@@ -68,7 +70,7 @@ for unit in "$service" "$bootstrap_service"; do
   fi
 done
 systemctl daemon-reload
-systemctl reset-failed "$service" "$bootstrap_service" 2>/dev/null || true
+systemctl reset-failed "$monitor_timer" "$monitor_service" "$service" "$bootstrap_service" 2>/dev/null || true
 
 bootstrap_command="/usr/local/sbin/grabenplaner-bootstrap-admin"
 if [[ -f "$bootstrap_command" && ! -L "$bootstrap_command" ]] \
@@ -81,6 +83,7 @@ fi
 
 declare -A command_targets=(
   [grabenplaner-backup]="$app_dir/server-tools/linux/backup-grabenplaner.sh"
+  [grabenplaner-monitor]="$app_dir/server-tools/linux/monitor/run-grabenplaner-monitor.sh"
   [grabenplaner-stop]="$app_dir/server-tools/linux/stop-grabenplaner-server.sh"
   [grabenplaner-test]="$app_dir/server-tools/linux/test-grabenplaner-server.sh"
   [grabenplaner-update]="$app_dir/server-tools/linux/update-grabenplaner-server.sh"
@@ -134,4 +137,4 @@ if [[ -n "$caddy_config" ]]; then
 fi
 
 if [[ -d "$app_dir" && ! -L "$app_dir" ]]; then rm -rf -- "$app_dir"; fi
-gp_info "Grabenplaner-App und Dienste wurden entfernt. Daten, Schluessel, Logs und Backups bleiben erhalten."
+gp_info "Grabenplaner-App und Dienste wurden entfernt. Daten, Schluessel, Logs, Backups und Monitorstatus bleiben erhalten."

@@ -12,15 +12,15 @@ test("v0.73 exposes redacted offsite diagnostics only through the protected serv
   const server = read("server.js");
   assert.match(server, /require\("\.\/lib\/offsite-backup-status"\)/);
   assert.match(server, /GRABENPLANER_OFFSITE_CONFIGURED/);
-  assert.match(server, /requirePortalAdminOrLocal\(request, "settings:write"\)[\s\S]*response\.json\(serverDiagnostics\(\)\)/);
-  assert.match(server, /const diagnosticsAllowed = [^\n]+settings:write/);
-  assert.match(server, /serverDiagnostics: diagnosticsAllowed \? serverDiagnostics\(\) : null/);
+  assert.match(server, /requirePortalAdminOrLocal\(request, "system:diagnostics:technical"\)[\s\S]*response\.json\(serverDiagnostics\(\)\)/);
+  assert.match(server, /const diagnosticsAllowed = [^\n]+system:diagnostics:technical/);
+  assert.match(server, /serverDiagnostics: diagnosticsAllowed \? diagnosticSnapshot : null/);
   assert.match(server, /backups:\s*\{[\s\S]*offsite,/);
   assert.match(server, /Das verschlüsselte Offsite-Backup ist noch nicht eingerichtet/);
 
   const readinessExpression = server.match(/ready:\s*startupIntegrity[\s\S]*?serviceControlToken\.length >= 32\)\),/);
   assert.ok(readinessExpression, "Readiness-Ausdruck fehlt");
-  assert.doesNotMatch(readinessExpression[0], /offsite/i);
+  assert.doesNotMatch(readinessExpression[0], /offsite|monitor/i);
   assert.match(server, /response\.status\(diagnostics\.ready \? 200 : 503\)\.json\(\{ ok: diagnostics\.ready \}\)/);
 });
 
@@ -39,5 +39,5 @@ test("v0.73 renders backup age, repository check, full check and isolated restor
   assert.doesNotMatch(client, /offsite\?\.(?:repository|statusPath|account|token|password)/);
   assert.match(styles, /\.offsite-diagnostics/);
   assert.match(styles, /data-active-page-theme="dark"[\s\S]+\.offsite-diagnostics/);
-  assert.match(html, /verschlüsselte Offsite-Backups/);
+  assert.match(html, /verschlüsselte Offsite-(?:Backups|Kopien)/);
 });
