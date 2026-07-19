@@ -1201,7 +1201,7 @@ function renderTimeline() {
             const top = ((barStart - start) / range) * 100;
             const height = Math.max(2.5, ((barEnd - barStart) / range) * 100);
             const departmentLabel = shift.department_name || shift.area || "";
-            return `<button class="shift-bar" type="button" data-shift-id="${shift.id}" style="top:${top}%;height:${height}%;--employee-color:${employee.color}" title="${shift.start_time}–${shift.end_time} · ${formatHours(shift.counted_minutes)}${departmentLabel ? ` · ${escapeHtml(departmentLabel)}` : ""}" aria-label="${escapeHtml(employee.nickname)} ${shift.start_time} bis ${shift.end_time}">${departmentLabel ? `<span>${escapeHtml(departmentLabel)}</span>` : ""}</button>`;
+            return `<button class="shift-bar" type="button" data-shift-id="${shift.id}" style="top:${top}%;height:${height}%;--employee-color:${employee.color};--employee-contrast:${contrastColor(employee.color)}" title="${shift.start_time}–${shift.end_time} · ${formatHours(shift.counted_minutes)}${departmentLabel ? ` · ${escapeHtml(departmentLabel)}` : ""}" aria-label="${escapeHtml(employee.nickname)} ${shift.start_time} bis ${shift.end_time}">${departmentLabel ? `<span>${escapeHtml(departmentLabel)}</span>` : ""}</button>`;
           }).join("");
           const unavailableLabel = locked
             ? "gesperrt"
