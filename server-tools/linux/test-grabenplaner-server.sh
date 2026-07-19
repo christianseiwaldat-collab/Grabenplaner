@@ -47,7 +47,7 @@ done
   || gp_die "Die Zertifikatsreserve muss zwischen 1 und 365 Tagen liegen."
 
 gp_require_root
-for command_name in curl openssl systemctl stat find sort date df caddy; do gp_require_command "$command_name"; done
+for command_name in curl openssl systemctl stat find sort date df caddy readlink; do gp_require_command "$command_name"; done
 gp_load_env_file "$env_file"
 
 app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
@@ -155,6 +155,23 @@ NODE
 if [[ -n "$scanner_result" ]]; then check_ok "AUM-Virenscanner" "$scanner_result"; else check_fail "AUM-Virenscanner" "ClamAV nicht betriebsbereit"; fi
 
 if caddy validate --config "$caddyfile" --adapter caddyfile >/dev/null 2>&1; then check_ok "Caddy-Konfiguration" "gueltig"; else check_fail "Caddy-Konfiguration" "Validierung fehlgeschlagen"; fi
+
+if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" ]]; then
+  offsite_test_command="/usr/local/sbin/grabenplaner-offsite-test"
+  if [[ "${GRABENPLANER_OFFSITE_STATUS_FILE:-}" != "/var/lib/grabenplaner-offsite/status.json" ]]; then
+    check_fail "Offsite-Sicherung" "Konfiguration unvollstaendig"
+  elif [[ ! -x "$offsite_test_command" ]]; then
+    check_fail "Offsite-Sicherung" "eingerichteter Selbsttest fehlt"
+  elif [[ "$(readlink -f -- "$offsite_test_command")" != "/opt/grabenplaner-offsite/module/test-grabenplaner-offsite.sh" ]]; then
+    check_fail "Offsite-Sicherung" "Selbsttest hat kein freigegebenes Ziel"
+  elif "$offsite_test_command" >/dev/null 2>&1; then
+    check_ok "Offsite-Sicherung" "eingerichtet und Selbsttest erfolgreich"
+  else
+    check_fail "Offsite-Sicherung" "eingerichteter Selbsttest fehlgeschlagen"
+  fi
+else
+  check_ok "Offsite-Sicherung" "nicht eingerichtet"
+fi
 
 available_kib="$(df --output=avail "$data_dir" | tail --lines 1 | tr -d '[:space:]')"
 if [[ "$available_kib" =~ ^[0-9]+$ ]] && (( available_kib >= 1048576 )); then

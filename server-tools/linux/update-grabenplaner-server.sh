@@ -74,7 +74,7 @@ while (($#)); do
 done
 
 gp_require_root
-for command_name in realpath flock sha256sum unzip zipinfo systemctl curl find sort stat du getent clamscan runuser; do gp_require_command "$command_name"; done
+for command_name in realpath readlink flock sha256sum unzip zipinfo systemctl curl find sort stat du getent clamscan runuser; do gp_require_command "$command_name"; done
 [[ "$(uname -m)" == "x86_64" ]] || gp_die "Das Serverpaket wird derzeit nur auf Linux x86_64 unterstuetzt."
 [[ -n "$package_arg" ]] || gp_die "--package ist erforderlich."
 [[ "$health_timeout" =~ ^[0-9]+$ ]] && (( health_timeout >= 30 && health_timeout <= 600 )) || gp_die "--health-timeout muss zwischen 30 und 600 liegen."
@@ -349,6 +349,17 @@ cleanup() {
 }
 trap cleanup EXIT
 
+create_exact_local_backup() {
+  local backup_script="$app_dir/server-tools/linux/backup-grabenplaner.sh"
+  [[ -x "$backup_script" ]] || gp_die "Installiertes Linux-Backupwerkzeug fehlt: $backup_script"
+  "$backup_script" --env-file "$env_file" --app-dir "$app_dir" --data-dir "$data_dir" --database "$database" \
+    --backup-dir "$backup_dir" --keep "$backup_keep" --service "$service" --node "$node" \
+    --service-user "$service_user" --service-group "$service_group" --lock-already-held >"$backup_result_file"
+  backup_database="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).path))' "$backup_result_file")"
+  backup_amu="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).amuBackup))' "$backup_result_file")"
+  [[ -f "$backup_database" && -d "$backup_amu" ]] || gp_die "Das Sicherheitsbackup vor dem Update ist unvollstaendig."
+}
+
 install -m 0600 -o root -g root -- "$package" "$staged_package"
 actual_package_sha256="$(gp_sha256 "$staged_package")"
 [[ "$actual_package_sha256" == "${sha256_arg,,}" ]] \
@@ -425,6 +436,37 @@ case "$runtime_gate" in
     ;;
   *) gp_die "Der Runtimevertrag des Updatepakets konnte nicht sicher verglichen werden." ;;
 esac
+if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" ]]; then
+  installed_offsite_receipt="/etc/grabenplaner/offsite/installed-contract.json"
+  [[ -f "$installed_offsite_receipt" && ! -L "$installed_offsite_receipt" \
+    && "$(stat --format='%u:%g:%a:%h' -- "$installed_offsite_receipt")" == "0:0:600:1" ]] \
+    || gp_die "Der Installationsbeleg des eingerichteten Offsite-Moduls ist ungueltig."
+  offsite_module_gate="$("$node" - "$manifest_result_file" "$installed_offsite_receipt" <<'NODE'
+const fs = require("node:fs");
+const [candidateFile, installedFile] = process.argv.slice(2);
+const candidate = JSON.parse(fs.readFileSync(candidateFile, "utf8")).offsiteModule;
+const installed = JSON.parse(fs.readFileSync(installedFile, "utf8"));
+const validFingerprint = (value) => /^[a-f0-9]{64}$/.test(String(value || ""));
+if (!candidate || candidate.activationPolicy !== "explicit-root-setup" || candidate.moduleVersion !== 1
+  || !validFingerprint(candidate.fingerprint)
+  || installed.format !== "grabenplaner-linux-offsite-installed-contract" || installed.schemaVersion !== 1
+  || installed.moduleVersion !== 1 || !validFingerprint(installed.fingerprint)) {
+  process.stdout.write("invalid");
+} else if (candidate.moduleVersion !== installed.moduleVersion || candidate.fingerprint !== installed.fingerprint) {
+  process.stdout.write(`migration-required:${installed.moduleVersion}->${candidate.moduleVersion}`);
+} else {
+  process.stdout.write("compatible");
+}
+NODE
+)"
+  case "$offsite_module_gate" in
+    compatible) ;;
+    migration-required:*)
+      gp_die "Das Update aendert das eingerichtete Offsite-Modul ($offsite_module_gate). Bitte zuerst die explizit freigegebene Offsite-Migration ausfuehren."
+      ;;
+    *) gp_die "Der Vertrag des eingerichteten Offsite-Moduls konnte nicht sicher verglichen werden." ;;
+  esac
+fi
 candidate_version="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).appVersion))' "$manifest_result_file")"
 required_pnpm="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).packageManager).split("@").pop())' "$manifest_result_file")"
 if (( allow_downgrade == 0 )); then
@@ -463,15 +505,32 @@ gp_apply_app_permissions "$extract_root" "$service_group"
 gp_acquire_maintenance_lock
 services_touched=1
 gp_stop_service "$service" 150
+create_exact_local_backup
 
-backup_script="$app_dir/server-tools/linux/backup-grabenplaner.sh"
-[[ -x "$backup_script" ]] || gp_die "Installiertes Linux-Backupwerkzeug fehlt: $backup_script"
-"$backup_script" --env-file "$env_file" --app-dir "$app_dir" --data-dir "$data_dir" --database "$database" \
-  --backup-dir "$backup_dir" --keep "$backup_keep" --service "$service" --node "$node" \
-  --service-user "$service_user" --service-group "$service_group" --lock-already-held >"$backup_result_file"
-backup_database="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).path))' "$backup_result_file")"
-backup_amu="$("$node" -e 'const fs=require("node:fs"); process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).amuBackup))' "$backup_result_file")"
-[[ -f "$backup_database" && -d "$backup_amu" ]] || gp_die "Das Sicherheitsbackup vor dem Update ist unvollstaendig."
+# Das Offsite-Modul wird ausschliesslich durch seine root-only Einrichtung
+# aktiviert. Der Hook bekommt nur den bereits verifizierten lokalen
+# Sicherungsbeleg; ein fehlgeschlagener Upload bricht das Update vor dem
+# App-Tausch ab und loest damit den normalen Rollback aus.
+if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" ]]; then
+  [[ "${GRABENPLANER_OFFSITE_STATUS_FILE:-}" == "/var/lib/grabenplaner-offsite/status.json" ]] \
+    || gp_die "Die Offsite-Konfiguration ist unvollstaendig oder unzulaessig."
+  offsite_pre_update_hook="/usr/local/sbin/grabenplaner-offsite-pre-update"
+  [[ -x "$offsite_pre_update_hook" ]] || gp_die "Der eingerichtete Offsite-Pre-Update-Hook fehlt oder ist nicht ausfuehrbar."
+  offsite_pre_update_target="$(readlink -f -- "$offsite_pre_update_hook")"
+  [[ "$offsite_pre_update_target" == "/opt/grabenplaner-offsite/module/grabenplaner-offsite-pre-update.sh" \
+    && -f "$offsite_pre_update_target" && ! -L "$offsite_pre_update_target" ]] \
+    || gp_die "Der eingerichtete Offsite-Pre-Update-Hook hat kein freigegebenes Ziel."
+  gp_info "Starte den bisherigen Grabenplaner vor der externen Uebertragung wieder."
+  gp_start_service "$service"
+  gp_wait_ready "$internal_ready_url" "$health_timeout" || gp_die "Der bisherige Grabenplaner wurde vor der Offsite-Sicherung intern nicht wieder bereit."
+  gp_wait_ready "$public_ready_url" "$health_timeout" || gp_die "Der bisherige Grabenplaner wurde vor der Offsite-Sicherung oeffentlich nicht wieder bereit."
+  gp_info "Uebertrage den exakt verifizierten lokalen Sicherungspunkt vor dem App-Update ins Offsite-Repository."
+  "$offsite_pre_update_hook" --backup-result "$backup_result_file" --lock-already-held \
+    || gp_die "Die Offsite-Sicherung vor dem Update ist fehlgeschlagen; das App-Update wurde nicht begonnen."
+  gp_info "Erstelle unmittelbar vor dem App-Tausch einen aktuellen lokalen Rollback-Sicherungspunkt."
+  gp_stop_service "$service" 150
+  create_exact_local_backup
+fi
 
 start_database_lock
 mv -- "$app_dir" "$rollback_root"
