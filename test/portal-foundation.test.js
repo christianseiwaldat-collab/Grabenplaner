@@ -1693,14 +1693,15 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     assert.equal(status.httpsRequired, true);
     assert.equal(status.publicUrl, publicAddress);
     assert.equal(status.passwordMinLength, 10);
-    assert.equal(status.usbProvisioning.hostCapable, true);
+    const windowsUsbHost = process.platform === "win32";
+    assert.equal(status.usbProvisioning.hostCapable, windowsUsbHost);
     assert.equal(status.usbProvisioning.available, false);
-    assert.equal(status.usbProvisioning.reasonCode, "USB_HOST_CONSOLE_REQUIRED");
+    assert.equal(status.usbProvisioning.reasonCode, windowsUsbHost ? "USB_HOST_CONSOLE_REQUIRED" : "USB_WINDOWS_REQUIRED");
 
     const hostSecureHeaders = { ...secureHeaders, "X-Forwarded-For": "127.0.0.1" };
     const hostStatusResponse = await fetch(`${url}/api/portal/v1/status`, { headers: hostSecureHeaders });
     assert.equal(hostStatusResponse.status, 200, await hostStatusResponse.clone().text());
-    assert.equal((await hostStatusResponse.json()).usbProvisioning.available, true);
+    assert.equal((await hostStatusResponse.json()).usbProvisioning.available, windowsUsbHost);
     const remoteStatusResponse = await fetch(`${url}/api/portal/v1/status`, {
       headers: { ...secureHeaders, "X-Forwarded-For": "203.0.113.44" },
     });
@@ -1719,102 +1720,110 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     const csrfCookie = setCookies.map((value) => value.split(";", 1)[0]).find((value) => value.startsWith("grabenplaner_csrf="));
     const csrf = decodeURIComponent(csrfCookie.split("=").slice(1).join("="));
 
-    const usbStatusWithoutActionHeader = await fetch(`${url}/api/usb-provisioning/status`, {
-      headers: { ...hostSecureHeaders, Cookie: cookie },
-    });
-    assert.equal(usbStatusWithoutActionHeader.status, 403, await usbStatusWithoutActionHeader.clone().text());
-    assert.equal((await usbStatusWithoutActionHeader.json()).code, "USB_ACTION_HEADER_REQUIRED");
-    const usbStatusCrossSite = await fetch(`${url}/api/usb-provisioning/status`, {
-      headers: {
-        ...hostSecureHeaders,
-        Cookie: cookie,
-        "Sec-Fetch-Site": "cross-site",
-        "X-Grabenplaner-USB-Action": "provisioning",
-      },
-    });
-    assert.equal(usbStatusCrossSite.status, 403, await usbStatusCrossSite.clone().text());
-    assert.equal((await usbStatusCrossSite.json()).code, "USB_ORIGIN_REQUIRED");
+    if (windowsUsbHost) {
+      const usbStatusWithoutActionHeader = await fetch(`${url}/api/usb-provisioning/status`, {
+        headers: { ...hostSecureHeaders, Cookie: cookie },
+      });
+      assert.equal(usbStatusWithoutActionHeader.status, 403, await usbStatusWithoutActionHeader.clone().text());
+      assert.equal((await usbStatusWithoutActionHeader.json()).code, "USB_ACTION_HEADER_REQUIRED");
+      const usbStatusCrossSite = await fetch(`${url}/api/usb-provisioning/status`, {
+        headers: {
+          ...hostSecureHeaders,
+          Cookie: cookie,
+          "Sec-Fetch-Site": "cross-site",
+          "X-Grabenplaner-USB-Action": "provisioning",
+        },
+      });
+      assert.equal(usbStatusCrossSite.status, 403, await usbStatusCrossSite.clone().text());
+      assert.equal((await usbStatusCrossSite.json()).code, "USB_ORIGIN_REQUIRED");
 
-    const usbGuideResponse = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
-      method: "POST",
-      headers: {
-        ...hostSecureHeaders,
-        "Content-Type": "application/json",
-        Cookie: cookie,
-        "X-CSRF-Token": csrf,
-        "X-Grabenplaner-USB-Action": "provisioning",
-      },
-      body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
-    });
-    assert.equal(usbGuideResponse.status, 200, await usbGuideResponse.clone().text());
-    assert.equal(usbGuideResponse.headers.get("content-type"), "application/pdf");
-    assert.ok((await usbGuideResponse.arrayBuffer()).byteLength > 1000);
+      const usbGuideResponse = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
+        method: "POST",
+        headers: {
+          ...hostSecureHeaders,
+          "Content-Type": "application/json",
+          Cookie: cookie,
+          "X-CSRF-Token": csrf,
+          "X-Grabenplaner-USB-Action": "provisioning",
+        },
+        body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
+      });
+      assert.equal(usbGuideResponse.status, 200, await usbGuideResponse.clone().text());
+      assert.equal(usbGuideResponse.headers.get("content-type"), "application/pdf");
+      assert.ok((await usbGuideResponse.arrayBuffer()).byteLength > 1000);
 
-    const usbGuideWithoutActionHeader = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
-      method: "POST",
-      headers: { ...hostSecureHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf },
-      body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
-    });
-    assert.equal(usbGuideWithoutActionHeader.status, 403, await usbGuideWithoutActionHeader.clone().text());
-    assert.equal((await usbGuideWithoutActionHeader.json()).code, "USB_ACTION_HEADER_REQUIRED");
+      const usbGuideWithoutActionHeader = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
+        method: "POST",
+        headers: { ...hostSecureHeaders, "Content-Type": "application/json", Cookie: cookie, "X-CSRF-Token": csrf },
+        body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
+      });
+      assert.equal(usbGuideWithoutActionHeader.status, 403, await usbGuideWithoutActionHeader.clone().text());
+      assert.equal((await usbGuideWithoutActionHeader.json()).code, "USB_ACTION_HEADER_REQUIRED");
 
-    const usbGuideWithoutCsrf = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
-      method: "POST",
-      headers: {
-        ...hostSecureHeaders,
-        "Content-Type": "application/json",
-        Cookie: cookie,
-        "X-Grabenplaner-USB-Action": "provisioning",
-      },
-      body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
-    });
-    assert.equal(usbGuideWithoutCsrf.status, 403, await usbGuideWithoutCsrf.clone().text());
-    assert.equal((await usbGuideWithoutCsrf.json()).code, "PORTAL_CSRF_INVALID");
+      const usbGuideWithoutCsrf = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
+        method: "POST",
+        headers: {
+          ...hostSecureHeaders,
+          "Content-Type": "application/json",
+          Cookie: cookie,
+          "X-Grabenplaner-USB-Action": "provisioning",
+        },
+        body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
+      });
+      assert.equal(usbGuideWithoutCsrf.status, 403, await usbGuideWithoutCsrf.clone().text());
+      assert.equal((await usbGuideWithoutCsrf.json()).code, "PORTAL_CSRF_INVALID");
 
-    const usbGuideWithoutOrigin = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
-      method: "POST",
-      headers: {
-        "X-Forwarded-Proto": "https",
-        "X-Forwarded-For": "127.0.0.1",
-        "Content-Type": "application/json",
-        Cookie: cookie,
-        "X-CSRF-Token": csrf,
-        "X-Grabenplaner-USB-Action": "provisioning",
-      },
-      body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
-    });
-    assert.equal(usbGuideWithoutOrigin.status, 403, await usbGuideWithoutOrigin.clone().text());
-    assert.equal((await usbGuideWithoutOrigin.json()).code, "USB_ORIGIN_REQUIRED");
+      const usbGuideWithoutOrigin = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
+        method: "POST",
+        headers: {
+          "X-Forwarded-Proto": "https",
+          "X-Forwarded-For": "127.0.0.1",
+          "Content-Type": "application/json",
+          Cookie: cookie,
+          "X-CSRF-Token": csrf,
+          "X-Grabenplaner-USB-Action": "provisioning",
+        },
+        body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
+      });
+      assert.equal(usbGuideWithoutOrigin.status, 403, await usbGuideWithoutOrigin.clone().text());
+      assert.equal((await usbGuideWithoutOrigin.json()).code, "USB_ORIGIN_REQUIRED");
 
-    const usbGuideCrossSite = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
-      method: "POST",
-      headers: {
-        ...hostSecureHeaders,
-        "Sec-Fetch-Site": "cross-site",
-        "Content-Type": "application/json",
-        Cookie: cookie,
-        "X-CSRF-Token": csrf,
-        "X-Grabenplaner-USB-Action": "provisioning",
-      },
-      body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
-    });
-    assert.equal(usbGuideCrossSite.status, 403, await usbGuideCrossSite.clone().text());
-    assert.equal((await usbGuideCrossSite.json()).code, "USB_ORIGIN_REQUIRED");
+      const usbGuideCrossSite = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
+        method: "POST",
+        headers: {
+          ...hostSecureHeaders,
+          "Sec-Fetch-Site": "cross-site",
+          "Content-Type": "application/json",
+          Cookie: cookie,
+          "X-CSRF-Token": csrf,
+          "X-Grabenplaner-USB-Action": "provisioning",
+        },
+        body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
+      });
+      assert.equal(usbGuideCrossSite.status, 403, await usbGuideCrossSite.clone().text());
+      assert.equal((await usbGuideCrossSite.json()).code, "USB_ORIGIN_REQUIRED");
 
-    const remoteUsbGuideResponse = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
-      method: "POST",
-      headers: {
-        ...secureHeaders,
-        "X-Forwarded-For": "203.0.113.44",
-        "Content-Type": "application/json",
-        Cookie: cookie,
-        "X-CSRF-Token": csrf,
-        "X-Grabenplaner-USB-Action": "provisioning",
-      },
-      body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
-    });
-    assert.equal(remoteUsbGuideResponse.status, 403, await remoteUsbGuideResponse.clone().text());
-    assert.equal((await remoteUsbGuideResponse.json()).code, "USB_HOST_CONSOLE_REQUIRED");
+      const remoteUsbGuideResponse = await fetch(`${url}/api/usb-provisioning/first-steps.pdf`, {
+        method: "POST",
+        headers: {
+          ...secureHeaders,
+          "X-Forwarded-For": "203.0.113.44",
+          "Content-Type": "application/json",
+          Cookie: cookie,
+          "X-CSRF-Token": csrf,
+          "X-Grabenplaner-USB-Action": "provisioning",
+        },
+        body: JSON.stringify({ profile: "planning-vacation", primaryBrandingKitId: "neutral" }),
+      });
+      assert.equal(remoteUsbGuideResponse.status, 403, await remoteUsbGuideResponse.clone().text());
+      assert.equal((await remoteUsbGuideResponse.json()).code, "USB_HOST_CONSOLE_REQUIRED");
+    } else {
+      const linuxUsbResponse = await fetch(`${url}/api/usb-provisioning/status`, {
+        headers: { ...hostSecureHeaders, Cookie: cookie, "X-Grabenplaner-USB-Action": "provisioning" },
+      });
+      assert.equal(linuxUsbResponse.status, 403, await linuxUsbResponse.clone().text());
+      assert.equal((await linuxUsbResponse.json()).code, "USB_WINDOWS_REQUIRED");
+    }
 
     const diagnosticsResponse = await fetch(`${url}/api/server-diagnostics`, { headers: { ...secureHeaders, Cookie: cookie } });
     assert.equal(diagnosticsResponse.status, 200, await diagnosticsResponse.clone().text());
