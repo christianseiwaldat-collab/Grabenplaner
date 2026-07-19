@@ -2,11 +2,11 @@
 
 Der HTTPS-Serverbetrieb ist für eine zentrale, von der Firmen-IT verwaltete Grabenplaner-Instanz vorgesehen. Die Node.js-Anwendung läuft ausschließlich auf `127.0.0.1`; Browser greifen nur über Caddy und eine freigegebene HTTPS-Adresse darauf zu. Lokalbetrieb und LAN-Host bleiben davon unabhängig.
 
-Für neue Beta-Server wird **Ubuntu 26.04 LTS** empfohlen. Die vorhandenen Windows-Werkzeuge bleiben unterstützt. Auf beiden Plattformen gelten dieselben Sicherheitsgrenzen: eine lokale SQLite-Datenbank, genau eine aktive Grabenplaner-Instanz, Caddy als einziger öffentlicher Zugang sowie getrennte Programm-, Daten-, Schlüssel- und Backupbereiche.
+Unterstützt werden **Ubuntu 24.04 LTS und Ubuntu 26.04 LTS auf x86-64**; für neue Beta-Server wird Ubuntu 26.04 LTS empfohlen. Die vorhandenen Windows-Werkzeuge bleiben unterstützt. Auf beiden Plattformen gelten dieselben Sicherheitsgrenzen: eine lokale SQLite-Datenbank, genau eine aktive Grabenplaner-Instanz, Caddy als einziger öffentlicher Zugang sowie getrennte Programm-, Daten-, Schlüssel- und Backupbereiche.
 
 Die bereitgestellten Werkzeuge ersetzen nicht die betriebliche Prüfung von Domain, DNS, Firewall, Zertifikat, Dienstkonten, Virenscanner, Backupziel und Wiederanlaufplan durch die verantwortliche IT.
 
-## Zielaufbau unter Ubuntu 26.04 LTS
+## Zielaufbau unter Ubuntu 24.04/26.04 LTS
 
 - Programmdateien: `/opt/grabenplaner/app`
 - Datenbank, Branding und verschlüsselte Dokumente: `/var/lib/grabenplaner`
@@ -22,7 +22,7 @@ Die SQLite-Datenbank muss auf einem lokalen Linux-Dateisystem liegen. Netzlaufwe
 
 ### Voraussetzungen unter Ubuntu
 
-- Ubuntu 26.04 LTS x86-64 mit allen Sicherheitsaktualisierungen
+- Ubuntu 24.04 oder 26.04 LTS x86-64 mit allen Sicherheitsaktualisierungen
 - Node.js gemäß `engines.node` in `package.json` und die dort festgeschriebene pnpm-Version
 - Caddy, systemd, UFW, ClamAV und `unzip`
 - feste Domain mit korrektem DNS-Eintrag und erreichbaren Ports 80/443
@@ -54,20 +54,29 @@ Die kontrollierte Erstinstallation verwendet das geprüfte Paket und seine verö
 sudo bash server-tools/linux/install-grabenplaner-server.sh \
   --package /pfad/Grabenplaner-Server-v0.72.0-beta-linux-x64.zip \
   --sha256 '<veröffentlichter SHA256-Wert>' \
-  --public-url https://beta.example.at
+  --public-url https://beta.example.at \
+  --replace-caddy-config
 ```
 
-Eine neue Installation erzeugt keine voreingestellten Zugangsdaten. Sie startet zunächst `grabenplaner-bootstrap.service` ausschließlich auf Loopback. Die erste Administration wird über einen SSH-Tunnel angelegt:
+Der Linux-Installer ist für einen dedizierten Grabenplaner-Server vorgesehen. Findet er ein nicht von Grabenplaner verwaltetes Caddyfile, bricht er ohne `--replace-caddy-config` ab. Mit dieser ausdrücklichen Option sichert er die bestehende Datei root-only unter `/etc/grabenplaner/caddy-backup/` und ersetzt sie erst danach. Eine gemeinsam mit anderen Anwendungen verwaltete Caddy-Konfiguration muss die IT außerhalb des Installers integrieren und prüfen.
+
+Eine neue Installation erzeugt keine voreingestellten Zugangsdaten. Sie startet zunächst `grabenplaner-bootstrap.service` ausschließlich auf Loopback und gibt eine einmalige, nur für `root` lesbare Bootstrap-Adresse aus. Die erste Administration wird über einen SSH-Tunnel angelegt:
 
 ```bash
 ssh -L 3000:127.0.0.1:3000 admin@server.example.at
 ```
 
-Nach der Ersteinrichtung beendet `sudo grabenplaner-bootstrap-admin finish` den Bootstrapmodus und aktiviert den abgesicherten HTTPS-Betrieb. Der Bootstrap-Port darf niemals durch UFW oder eine Contabo-Firewall öffentlich freigegeben werden.
+Danach wird im lokalen Browser die vom Installer ausgegebene Adresse im Format `http://127.0.0.1:3000/?bootstrap=<einmaliger-token>` geöffnet. Nach dem Anlegen des eigenen Teammitglieds und des Admin-Zugangs schließt folgender Befehl die Ersteinrichtung ab:
+
+```bash
+sudo grabenplaner-bootstrap-admin finish
+```
+
+Der Abschluss gilt erst als erfolgreich, wenn ein erster gekoppelter Datenbank-/Dokument-Sicherungspunkt erstellt wurde, die interne Ready-Prüfung grün ist, Caddy läuft, die öffentliche HTTPS-Ready-Prüfung erfolgreich war und der Bootstrap-Token atomar verbraucht wurde. Scheitert ein Schritt, bleibt Caddy ausgeschaltet und das Werkzeug kehrt in den lokalen Bootstrapmodus zurück. Der Bootstrap-Port darf niemals durch UFW oder eine Contabo-Firewall öffentlich freigegeben werden.
 
 ### Servervariablen unter Ubuntu
 
-Die vollständige neutrale Vorlage liegt in `server-tools/server.env.example`. Für Ubuntu werden insbesondere lokale Linux-Pfade verwendet:
+Die vollständige neutrale Linux-Vorlage liegt in `server-tools/linux/grabenplaner.env.example`. Der Installer rendert sie nach `/etc/grabenplaner/grabenplaner.env`, setzt `root:root` und Modus `0600` und erzeugt alle Schlüssel und Tokens lokal. Der Dienst erhält die Werte über systemd, kann die Datei selbst aber nicht lesen. Für Ubuntu werden insbesondere lokale Linux-Pfade verwendet:
 
 ```text
 NODE_ENV=production
@@ -84,9 +93,30 @@ GRABENPLANER_AMU_KEY=<geheimer 32-Byte-Schlüssel als Base64>
 GRABENPLANER_INTEGRATION_KEY_ID=server-v1
 GRABENPLANER_INTEGRATION_KEY=<separater geheimer 32-Byte-Schlüssel als Base64>
 GRABENPLANER_SERVICE_CONTROL_TOKEN=<geheimer zufälliger Dienststeuerungs-Token>
+GRABENPLANER_BOOTSTRAP_TOKEN=<einmaliger, nach erfolgreichem Abschluss geleerter Token>
 ```
 
-Die Datei `/etc/grabenplaner/grabenplaner.env` darf ausschließlich für `root` und den Grabenplaner-Dienst lesbar sein. Schlüssel und Tokens gehören weder in SQLite noch in das Programmverzeichnis, ein Image, ein Git-Repository oder ein Serverpaket.
+Schlüssel und Tokens gehören weder in SQLite noch in das Programmverzeichnis, ein Image, ein Git-Repository oder ein Serverpaket.
+
+### Betrieb und Wartung unter Ubuntu
+
+Die Installation stellt absichtlich kleine, mit `sudo` auszuführende Wartungsbefehle bereit:
+
+```bash
+sudo grabenplaner-backup
+sudo grabenplaner-test
+sudo grabenplaner-stop
+sudo grabenplaner-update --package /pfad/neues-paket.zip --sha256 '<SHA256>'
+sudo grabenplaner-uninstall --yes
+```
+
+- `grabenplaner-backup` erstellt und prüft einen gekoppelten Sicherungspunkt aus SQLite-Datenbank und verschlüsselter Dokumentablage.
+- `grabenplaner-test` prüft Dienste, interne und öffentliche Erreichbarkeit, TLS, Caddy, Datenbankintegrität und Sicherungsalter.
+- `grabenplaner-stop` beendet die Anwendung kontrolliert und prüft, dass der interne Listener geschlossen ist.
+- `grabenplaner-update` lädt nichts selbst herunter. Es akzeptiert nur ein lokales Linux-Serverpaket samt SHA-256, sichert vor dem Austausch und rollt bei fehlgeschlagener Bereitschaftsprüfung automatisch zurück.
+- `grabenplaner-uninstall --yes` entfernt App-Code, eigene systemd-Units und Befehlslinks. Daten, Schlüsselkonfiguration, Logs und Backups bleiben erhalten; Caddy selbst wird nicht deinstalliert und eine zuvor gesicherte, gültige Konfiguration wird wiederhergestellt.
+
+Die Sicherungen aus Block 1 liegen lokal auf demselben Server. Sie schützen vor fehlerhaften Updates und ermöglichen einen kontrollierten Wiederanlauf, ersetzen aber kein räumlich getrenntes, manipulationsgeschütztes Backup. Die verschlüsselte Off-Host-Sicherung mit Restic/rclone und regelmäßigem Restore-Test ist für Block 2 des Serverausbaus vorgesehen.
 
 ## Zielaufbau unter Windows
 

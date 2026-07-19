@@ -2,10 +2,12 @@
 
 ## v0.72 Beta
 
-- Ubuntu 26.04 LTS wird als offizielle Plattform für den zentralen HTTPS-Serverbetrieb unterstützt; die vorhandenen Windows-Werkzeuge bleiben verfügbar.
+- Ubuntu 24.04 und 26.04 LTS auf x86-64 werden als offizielle Plattformen für den zentralen HTTPS-Serverbetrieb unterstützt; für neue Beta-Server wird Ubuntu 26.04 LTS empfohlen.
 - systemd, Caddy und ClamAV ersetzen unter Linux die Windows-spezifischen Dienst-, Proxy- und Virenscannerbausteine.
 - Ein eigener, nicht interaktiver Grabenplaner-Dienstbenutzer sowie getrennte Programm-, Daten-, Protokoll-, Sicherungs- und Geheimnisverzeichnisse begrenzen die Zugriffsrechte.
 - Linux-Wartungswerkzeuge unterstützen kontrollierte Installation, Dienststopp, Betriebsprüfung, konsistente Sicherung und Updates mit automatischem Rollback.
+- Die einmalige Admin-Ersteinrichtung bleibt auf Loopback beschränkt und schaltet HTTPS erst nach erster Sicherung sowie interner und öffentlicher Ready-Prüfung frei.
+- Block 1 verwendet lokale, gekoppelte Sicherungspunkte; eine verschlüsselte Off-Host-Sicherung mit Restore-Test ist für den nächsten Serverblock vorgesehen.
 - Ein neutrales Linux-Serverpaket enthält weder Arbeitsdaten noch kundenspezifische Brandings oder Geheimnisse und wird über Dateimanifest und SHA-256-Prüfsumme abgesichert.
 - Die automatisierten Prüfungen laufen sowohl unter Windows als auch unter Linux; Linux-Shellskripte werden zusätzlich auf Syntaxfehler geprüft.
 - Der Dark Mode verwendet in Planung und Verwaltungsbereichen durchgängig kontrastreiche dunkle Oberflächen, Statusfarben und Scrollleisten.
