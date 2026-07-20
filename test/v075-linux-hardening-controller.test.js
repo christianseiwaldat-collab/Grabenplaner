@@ -76,7 +76,7 @@ test("v0.75 arms rollback before mutation and allows SSH before UFW activation",
 
 test("v0.75 journald migration refuses foreign old or new targets before mutation", () => {
   const preflight = section("configured_preflight", "write_private_value");
-  assert.match(preflight, /cmp -s -- "\$TEMPLATE_ROOT\/zz-grabenplaner-journald\.conf" "\$JOURNALD_DROPIN"/);
+  assert.match(preflight, /cmp -s -- "\$TEMPLATE_ROOT\/60-grabenplaner-journald\.conf" "\$JOURNALD_DROPIN"/);
   assert.match(preflight, /cmp -s -- "\$TEMPLATE_ROOT\/60-grabenplaner-journald\.conf" "\$JOURNALD_LEGACY_DROPIN"/);
   assert.match(preflight, /fremd oder veraendert/);
   assert.doesNotMatch(preflight, /rm -f|hardening_atomic_install|systemctl restart/);
@@ -119,7 +119,7 @@ test("v0.75 validates APT and migrates journald priority transactionally in both
   const intendedNew = install.indexOf("record_intended_file_state \"$transaction_directory\" journald");
   const intendedLegacy = install.indexOf("record_intended_absent_state \"$transaction_directory\" journald-legacy");
   const journal = install.indexOf("write_apply_journal \"$transaction_directory\" journald_in_progress");
-  const installNew = install.indexOf('hardening_atomic_install "$TEMPLATE_ROOT/zz-grabenplaner-journald.conf"');
+  const installNew = install.indexOf('hardening_atomic_install "$TEMPLATE_ROOT/60-grabenplaner-journald.conf" "$JOURNALD_DROPIN"');
   const validateLegacy = install.indexOf('cmp -s -- "$TEMPLATE_ROOT/60-grabenplaner-journald.conf"');
   const removeLegacy = install.indexOf('rm -f -- "$JOURNALD_LEGACY_DROPIN"');
   const validateEffective = install.indexOf("validate_effective_journald_configuration");

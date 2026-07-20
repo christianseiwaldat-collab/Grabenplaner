@@ -11,6 +11,7 @@ source "$SOURCE_MODULE_ROOT/lib/hardening-common.sh"
 
 readonly SYSTEMD_ROOT="/etc/systemd/system"
 readonly HARDENING_UNINSTALL_COMMAND="/usr/local/sbin/grabenplaner-host-security-uninstall"
+readonly ACTIVE_TRANSACTION_FILE="$HARDENING_STATE_ROOT/active-transaction"
 
 SOURCE_CONTRACT_FILE=""
 STAGED_CONTRACT_FILE=""
@@ -238,10 +239,12 @@ SOURCE_CONTRACT_FILE="$(mktemp)"
 
 hardening_acquire_controller_lock fail-fast 0 \
   || hardening_die "Eine andere Host-Sicherheitsoperation ist bereits aktiv."
-preflight_existing_installation
-hardening_secure_roots
 [[ ! -e "$HARDENING_PENDING_FILE" && ! -L "$HARDENING_PENDING_FILE" ]] \
   || hardening_die "Eine Hardening-Transaktion ist noch offen; die Installation bleibt unveraendert."
+[[ ! -e "$ACTIVE_TRANSACTION_FILE" && ! -L "$ACTIVE_TRANSACTION_FILE" ]] \
+  || hardening_die "Aktives Host-Hardening muss vor einer Modulinstallation mit dem installierten Controller zurueckgerollt werden."
+preflight_existing_installation
+hardening_secure_roots
 
 STAGED_MODULE_ROOT="$(mktemp -d /opt/grabenplaner-hardening/.module.XXXXXXXX)"
 chmod 0700 "$STAGED_MODULE_ROOT"

@@ -425,7 +425,7 @@ check_sysctl() {
 }
 
 check_journald() {
-  local template="$MODULE_ROOT/templates/zz-grabenplaner-journald.conf"
+  local template="$MODULE_ROOT/templates/60-grabenplaner-journald.conf"
   local effective="" node journald_ok=true
   if ! command -v systemd-analyze >/dev/null 2>&1 \
     || [[ ! -f "$template" || -L "$template" ]] \

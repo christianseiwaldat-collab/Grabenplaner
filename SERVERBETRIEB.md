@@ -133,6 +133,23 @@ sudo bash server-tools/linux/hardening/install-grabenplaner-host-hardening.sh
 sudo grabenplaner-host-security audit
 ```
 
+Ein App-Update ersetzt ein bereits unter `/opt/grabenplaner-hardening/module` installiertes Sicherheitsmodul absichtlich nicht. Weicht dessen kryptografischer Vertragsfingerprint vom neuen Paket ab, ist deshalb folgende explizite Modulwartung erforderlich; ein noch ausstehender oder bestaetigter Hostzustand wird dabei niemals mit einem neuen Controller weiterverwendet. Modulversion 1 bleibt als Paketbruecke erhalten, waehrend Vertragsfingerprint und exakte Dateiliste jeden konkreten Modulstand eindeutig binden:
+
+```bash
+# Nur falls eine Transaktion noch aussteht oder bestaetigt aktiv ist:
+sudo grabenplaner-host-security rollback --transaction 64HEX
+
+# Beide Befehle muessen ohne Ausgabe erfolgreich sein:
+sudo test ! -e /var/lib/grabenplaner-host-security/pending-transaction
+sudo test ! -e /var/lib/grabenplaner-host-security/active-transaction
+
+sudo grabenplaner-host-security-uninstall
+sudo bash server-tools/linux/hardening/install-grabenplaner-host-hardening.sh
+sudo grabenplaner-host-security audit
+```
+
+Erst danach wird eine neue Host-Sicherheitstransaktion mit `plan` und `apply` begonnen. Die ausgegebene Transaktionskennung wird ausschliesslich aus einer neu geoeffneten zweiten SSH-Sitzung mit `confirm --transaction 64HEX` bestaetigt. Modulordner, Vertragsbeleg oder Transaktionsdateien duerfen nicht manuell geloescht oder zwischen Modulstaenden kopiert werden.
+
 Das Modul lädt keine Programme aus dem Internet. `openssh-server`, `ufw` und `unattended-upgrades` müssen deshalb zuvor aus den freigegebenen Ubuntu-Paketquellen installiert und geprüft sein. Der Audit kontrolliert unter anderem Schlüssel-SSH, Firewall, öffentliche Ports, automatische Sicherheitsaktualisierungen, Kernel-Schutzwerte, Journalbegrenzung, Dienstkonten, Geheimnisdateien, fehlgeschlagene Units und Zeitsynchronisierung. Seine Statusdatei enthält ausschließlich fest definierte Wahrheitswerte und Zeitangaben; IP-Adressen, Benutzernamen, Ports, Pfade und Diagnosefreitext werden nicht an die Anwendung weitergegeben.
 
 Vor einer Aktivierung wird aus einer bestehenden Schlüssel-SSH-Sitzung ein folgenloser Plan geprüft. `USER`, `PORT` und `CIDR` sind durch den tatsächlichen nicht privilegierten Sudo-Admin, den bereits verwendeten SSH-Port und einen möglichst engen administrativen Quellbereich zu ersetzen:
