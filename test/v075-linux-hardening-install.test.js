@@ -10,9 +10,11 @@ const root = path.resolve(__dirname, "..");
 const hardeningRoot = path.join(root, "server-tools", "linux", "hardening");
 const installerPath = path.join(hardeningRoot, "install-grabenplaner-host-hardening.sh");
 const uninstallerPath = path.join(hardeningRoot, "uninstall-grabenplaner-host-hardening.sh");
+const controllerPath = path.join(hardeningRoot, "grabenplaner-host-security.sh");
 const commonPath = path.join(hardeningRoot, "lib", "hardening-common.sh");
 const installer = fs.readFileSync(installerPath, "utf8");
 const uninstaller = fs.readFileSync(uninstallerPath, "utf8");
+const controller = fs.readFileSync(controllerPath, "utf8");
 const common = fs.readFileSync(commonPath, "utf8");
 const systemdRoot = path.join(hardeningRoot, "systemd");
 const auditService = fs.readFileSync(path.join(systemdRoot, "grabenplaner-host-security-audit.service.in"), "utf8");
@@ -24,6 +26,14 @@ function executableLines(source) {
   return source.split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith("#"));
+}
+
+function extractShellFunction(source, name) {
+  const start = source.indexOf(`${name}() {`);
+  assert.notEqual(start, -1, `missing shell function ${name}`);
+  const end = source.indexOf("\n}", start);
+  assert.notEqual(end, -1, `unterminated shell function ${name}`);
+  return source.slice(start, end + 2);
 }
 
 test("v0.75 hardening installer validates then copies only contract artifacts", () => {
@@ -80,6 +90,65 @@ test("v0.75 installer rejects foreign or drifted units before installation mutat
   assert.match(installer, /FragmentPath/);
   assert.match(installer, /cmp -s -- "\$HARDENING_MODULE_ROOT\/systemd\/\$source_name" "\$installed"/);
   assert.match(installer, /Eine gleichnamige fremde Systemd-Einheit verhindert die Installation/);
+});
+
+test("v0.75 six nounset path initializations remain separate from their local declarations", () => {
+  assert.match(extractShellFunction(installer, "preflight_existing_unit"),
+    /local source_name="\$1" unit_name="\$2" installed fragment=""\n\s+local predecessor_expected="\$3"\n\s+installed="\$SYSTEMD_ROOT\/\$unit_name"/);
+  assert.match(extractShellFunction(uninstaller, "assert_matching_unit"),
+    /local source_name="\$1" unit_name="\$2" installed fragment=""\n\s+installed="\$SYSTEMD_ROOT\/\$unit_name"/);
+  assert.match(extractShellFunction(controller, "record_post_apply_state"),
+    /local transaction_directory="\$1" manifest temporary key target hash uid gid mode\n\s+manifest="\$transaction_directory\/post-apply\.tsv"/);
+  assert.match(extractShellFunction(controller, "intended_record_for_key"),
+    /local transaction_directory="\$1" key="\$2" file record\n\s+file="\$transaction_directory\/intended\/\$key\.tsv"/);
+  assert.match(extractShellFunction(controller, "restore_permit_record_for_key"),
+    /local transaction_directory="\$1" key="\$2" file record\n\s+file="\$transaction_directory\/restore-permits\/\$key\.tsv"/);
+  assert.match(extractShellFunction(controller, "backup_file"),
+    /local transaction_directory="\$1" key="\$2" target="\$3" backup metadata uid gid mode\n\s+backup="\$transaction_directory\/backups\/\$key"/);
+});
+
+test("v0.75 corrected installer, uninstaller and controller paths run under nounset", (context) => {
+  const probe = spawnSync("bash", ["--version"], { encoding: "utf8" });
+  if (probe.error?.code === "ENOENT") {
+    context.skip("Bash is not installed on this test host");
+    return;
+  }
+  assert.equal(probe.status, 0, probe.stderr || probe.error?.message);
+
+  const fixture = [
+    "set -Eeuo pipefail",
+    'temporary="$(mktemp -d)"',
+    "trap 'rm -rf -- \"$temporary\"' EXIT",
+    'SYSTEMD_ROOT="$temporary/systemd"',
+    'HARDENING_MODULE_ROOT="$temporary/module"',
+    'mkdir -p -- "$SYSTEMD_ROOT" "$HARDENING_MODULE_ROOT/systemd"',
+    'hardening_die() { printf \'%s\\n\' "$1" >&2; return 97; }',
+    'fragment_path=""',
+    'systemctl() { printf \'%s\' "$fragment_path"; }',
+    extractShellFunction(installer, "preflight_existing_unit"),
+    'preflight_existing_unit "fixture.service.in" "fixture.service" false',
+    'printf \'fixture\\n\' >"$HARDENING_MODULE_ROOT/systemd/fixture.service.in"',
+    'cp -- "$HARDENING_MODULE_ROOT/systemd/fixture.service.in" "$SYSTEMD_ROOT/fixture.service"',
+    'fragment_path="$SYSTEMD_ROOT/fixture.service"',
+    'stat() { printf \'0:0:644:1\\n\'; }',
+    extractShellFunction(uninstaller, "assert_matching_unit"),
+    'assert_matching_unit "fixture.service.in" "fixture.service"',
+    extractShellFunction(controller, "record_post_apply_state"),
+    'if record_post_apply_state "$temporary/missing"; then exit 81; fi',
+    'private_file_is_secure() { return 1; }',
+    extractShellFunction(controller, "intended_record_for_key"),
+    'if intended_record_for_key "$temporary/transaction" fixture; then exit 82; fi',
+    extractShellFunction(controller, "restore_permit_record_for_key"),
+    'if restore_permit_record_for_key "$temporary/transaction" fixture; then exit 83; fi',
+    'mkdir -p -- "$temporary/transaction/backups"',
+    ': >"$temporary/transaction/hashes.tsv"',
+    'chmod() { return 0; }',
+    'chown() { return 0; }',
+    extractShellFunction(controller, "backup_file"),
+    'backup_file "$temporary/transaction" fixture "$temporary/not-present"',
+  ].join("\n");
+  const result = spawnSync("bash", ["-s"], { input: fixture, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
 });
 
 test("v0.75 hardening installer deploys four units but enables only the audit timer", () => {
