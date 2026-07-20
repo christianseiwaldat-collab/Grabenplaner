@@ -1,0 +1,11 @@
+[Unit]
+Description=Safety rollback for unconfirmed Grabenplaner host security changes
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+Persistent=true
+Unit=grabenplaner-host-security-rollback.service
+
+[Install]
+WantedBy=timers.target

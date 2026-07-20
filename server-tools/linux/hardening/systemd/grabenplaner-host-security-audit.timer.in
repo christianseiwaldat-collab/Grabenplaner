@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily Grabenplaner host security audit
+
+[Timer]
+OnBootSec=10min
+OnCalendar=daily
+RandomizedDelaySec=30min
+Persistent=true
+Unit=grabenplaner-host-security-audit.service
+
+[Install]
+WantedBy=timers.target

@@ -41,6 +41,7 @@ const {
 } = require("./lib/backup-commit");
 const { readOffsiteBackupStatus } = require("./lib/offsite-backup-status");
 const { readServerMonitorStatus } = require("./lib/server-monitor-status");
+const { readHostSecurityStatus } = require("./lib/host-security-status");
 const {
   assertRuntimeConfiguration,
   createBoundedRateLimitStore,
@@ -13452,6 +13453,10 @@ function serverDiagnostics() {
   const monitorConfigured = monitorConfiguration === "1"
     || (monitorConfiguration !== "0" && serverModeActive && process.platform === "linux");
   const monitor = readServerMonitorStatus({ configured: monitorConfigured });
+  const hostSecurityConfiguration = String(process.env.GRABENPLANER_HOST_SECURITY_CONFIGURED || "").trim();
+  const hostSecurity = readHostSecurityStatus({
+    configured: hostSecurityConfiguration === "1" ? true : (hostSecurityConfiguration === "0" ? false : undefined),
+  });
   const amu = amuStorage ? amuStorage.diagnostics() : { ok: false, writable: false, error: amuStorageStartupError };
   const protectedIntegrationConnectionCount = Number(db.prepare("SELECT COUNT(*) AS count FROM integration_connections WHERE protected_credentials <> '' AND active = 1").get().count || 0);
   const integrationSecretsReady = protectedIntegrationConnectionCount === 0 || Boolean(integrationSecretVault);
@@ -13489,6 +13494,14 @@ function serverDiagnostics() {
   if (monitor.configured && monitor.state !== "ok") {
     addAlert("SERVER_MONITOR_ATTENTION", monitor.state === "error" ? "critical" : "warning", "Automatische Serverprüfung meldet ein Problem", "Mindestens eine automatische Serverprüfung ist fehlgeschlagen, unvollständig oder überfällig.", "monitoring");
   }
+  if (hostSecurity.configured && hostSecurity.state !== "ok") {
+    const message = hostSecurity.pendingConfirmation
+      ? "Eine Host-Sicherheitstransaktion wartet auf die Bestätigung aus einer zweiten SSH-Sitzung oder wird automatisch zurückgesetzt."
+      : hostSecurity.rebootRequired
+        ? "Für eingespielte Ubuntu-Sicherheitsaktualisierungen ist ein kontrollierter Neustart im Wartungsfenster erforderlich."
+        : "Mindestens eine redigierte Ubuntu-Host-Sicherheitsprüfung benötigt Aufmerksamkeit.";
+    addAlert("HOST_SECURITY_ATTENTION", hostSecurity.state === "error" ? "critical" : "warning", "Ubuntu-Host-Sicherheit prüfen", message, "security");
+  }
   if (serverModeActive && serviceControlToken.length < 32) addAlert("SERVICE_CONTROL_TOKEN_MISSING", "critical", "Dienststeuerung nicht abgesichert", "Der sichere Token für die Dienststeuerung fehlt.", "security");
   const lockedAccounts = Number(db.prepare("SELECT COUNT(*) AS count FROM portal_users WHERE locked_until > CURRENT_TIMESTAMP").get().count || 0);
   if (lockedAccounts) addAlert("PORTAL_ACCOUNTS_LOCKED", "warning", "Zugänge vorübergehend gesperrt", `${lockedAccounts} Zugang/Zugänge sind derzeit wegen fehlgeschlagener Anmeldungen gesperrt.`, "security");
@@ -13507,6 +13520,7 @@ function serverDiagnostics() {
     { id: "scanner", label: "AUM-Virenscanner", ok: !amu.requireScanner || (amu.scannerChecked && amu.scannerAvailable && amu.ok), detail: amu.scannerEngine || (amu.scannerChecked ? "nicht verfügbar" : "Prüfung läuft") },
     { id: "service-stop", label: "Dienststopp", ok: serviceControlToken.length >= 32, detail: serviceControlToken.length >= 32 ? "Token konfiguriert" : "Token fehlt" },
     ...(monitor.configured ? [{ id: "monitor", label: "Automatische Serverprüfung", ok: monitor.state === "ok", detail: monitor.generatedAt || monitor.lastErrorCode || "noch kein Status" }] : []),
+    ...(hostSecurity.configured ? [{ id: "host-security", label: "Ubuntu-Host-Sicherheit", ok: hostSecurity.state === "ok", detail: hostSecurity.checkedAt || hostSecurity.lastErrorCode || "noch kein Status" }] : []),
   ];
   return {
     ready: startupIntegrity.length === 1 && startupIntegrity[0] === "ok" && dataHealth.writable
@@ -13551,6 +13565,7 @@ function serverDiagnostics() {
       offsite,
     },
     monitor,
+    hostSecurity,
     productionChecks,
     pilotChecks: productionChecks,
     security: {
@@ -13579,6 +13594,7 @@ function publicBackupPoint(backup, ageHours, timestampValid) {
 function serverStatusSummary(diagnostics = serverDiagnostics()) {
   const offsite = diagnostics.backups?.offsite || {};
   const monitor = diagnostics.monitor || {};
+  const hostSecurity = diagnostics.hostSecurity || {};
   return {
     checkedAt: new Date().toISOString(),
     mode: diagnostics.mode,
@@ -13658,6 +13674,17 @@ function serverStatusSummary(diagnostics = serverDiagnostics()) {
         suppressed: monitor.recovery?.suppressed === true,
       },
       lastErrorCode: monitor.lastErrorCode || null,
+    },
+    hostSecurity: {
+      configured: hostSecurity.configured === true,
+      statusAvailable: hostSecurity.statusAvailable === true,
+      state: String(hostSecurity.state || "unconfigured"),
+      checkedAt: hostSecurity.checkedAt || null,
+      ageHours: Number.isFinite(hostSecurity.ageHours) ? hostSecurity.ageHours : null,
+      pendingConfirmation: hostSecurity.pendingConfirmation === true,
+      rebootRequired: hostSecurity.rebootRequired === true,
+      failedChecks: Array.isArray(hostSecurity.failedChecks) ? hostSecurity.failedChecks.map(String) : [],
+      lastErrorCode: hostSecurity.lastErrorCode || null,
     },
     recovery: {
       isolatedRestoreTestAt: offsite.lastRestoreTestAt || null,
@@ -24529,7 +24556,7 @@ app.get("/api/vacations-preview.pdf", (request, response) => {
 app.use((error, request, response, _next) => {
   const status = Number.isInteger(error.status) && error.status >= 400 && error.status <= 599 ? error.status : 500;
   const requestId = request.grabenplanerRequestId || crypto.randomUUID();
-  if (status >= 500) console.error(`[${requestId}] ${request.method} ${request.originalUrl || request.path}`, error);
+  if (status >= 500) console.error(`[${requestId}] ${request.method} ${request.path}`, error);
   if (response.headersSent) {
     _next(error);
     return;
