@@ -95,7 +95,7 @@ restore_file "$absent_transaction" ssh "$target"
 # fails before the journald stage, both the absent target and its parent are
 # already the exact predecessor and rollback must remain idempotent.
 missing_parent="$base/etc/systemd/journald.conf.d"
-missing_target="$missing_parent/60-grabenplaner-journald.conf"
+missing_target="$missing_parent/zz-grabenplaner-journald.conf"
 missing_transaction="$base/missing-parent-transaction"
 mkdir -p -- "$base/etc/systemd" "$missing_transaction/backups"
 chmod 0755 -- "$base/etc/systemd"

@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
@@ -8,6 +9,15 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const helperPath = path.join(root, "server-tools", "linux", "hardening", "lib", "hardening-policy.js");
 const policy = require(helperPath);
+const journaldTemplate = fs.readFileSync(path.join(
+  root,
+  "server-tools", "linux", "hardening", "templates", "60-grabenplaner-journald.conf",
+), "utf8");
+const journaldManagedPath = "/etc/systemd/journald.conf.d/zz-grabenplaner-journald.conf";
+
+function mergedJournald(...fragments) {
+  return fragments.map(({ source, body }) => `# ${source}\n${body.trim()}\n`).join("\n");
+}
 
 test("v0.75 hardening policy strictly parses IPv4 and IPv6 addresses", () => {
   assert.equal(policy.parseIpAddress("192.0.2.17").family, 4);
@@ -73,6 +83,78 @@ test("v0.75 restricts ports, administrative usernames and transaction identifier
   assert.equal(policy.isValidTransactionId(transactionId), true);
   for (const invalid of [transactionId.toUpperCase(), transactionId.slice(1), `${transactionId}0`, "g".repeat(64), null]) {
     assert.equal(policy.isValidTransactionId(invalid), false);
+  }
+});
+
+test("v0.75 journald policy accepts Ubuntu 24 and Ubuntu 26 vendor ordering only when the managed values win", () => {
+  const managed = { source: journaldManagedPath, body: journaldTemplate };
+  const ubuntu24 = mergedJournald(
+    { source: "/etc/systemd/journald.conf", body: "[Journal]\nStorage=auto" },
+    managed,
+  );
+  assert.deepEqual(policy.validateJournaldConfiguration({
+    mergedConfig: ubuntu24,
+    template: journaldTemplate,
+    managedPath: journaldManagedPath,
+  }), { configuredCount: 10, managedAssignmentsLast: true });
+
+  const ubuntu26 = mergedJournald(
+    { source: "/etc/systemd/journald.conf", body: "[Journal]\nStorage=auto" },
+    {
+      source: "/usr/lib/systemd/journald.conf.d/syslog.conf",
+      body: "[Journal]\nForwardToSyslog=yes",
+    },
+    managed,
+    {
+      source: "/etc/systemd/journald.conf.d/zzz-unrelated.conf",
+      body: "[Journal]\nMaxLevelStore=info",
+    },
+  );
+  assert.doesNotThrow(() => policy.validateJournaldConfiguration({
+    mergedConfig: ubuntu26,
+    template: journaldTemplate,
+    managedPath: journaldManagedPath,
+  }));
+});
+
+test("v0.75 journald policy rejects later overrides and malformed managed fragments", () => {
+  const prefix = [
+    { source: "/etc/systemd/journald.conf", body: "[Journal]\nStorage=auto" },
+    {
+      source: "/usr/lib/systemd/journald.conf.d/syslog.conf",
+      body: "[Journal]\nForwardToSyslog=yes",
+    },
+  ];
+  const managed = { source: journaldManagedPath, body: journaldTemplate };
+  const validate = (mergedConfig, template = journaldTemplate, managedPath = journaldManagedPath) => (
+    policy.validateJournaldConfiguration({ mergedConfig, template, managedPath })
+  );
+
+  for (const value of ["yes", "no"]) {
+    assert.throws(() => validate(mergedJournald(
+      ...prefix,
+      managed,
+      {
+        source: "/etc/systemd/journald.conf.d/zzz-foreign.conf",
+        body: `[Journal]\nForwardToSyslog=${value}`,
+      },
+    )), /overridden later/);
+  }
+
+  assert.throws(() => validate(mergedJournald(...prefix)), /missing or duplicated/);
+  assert.throws(() => validate(mergedJournald(...prefix, managed, managed)), /missing or duplicated/);
+  assert.throws(() => validate(
+    mergedJournald(...prefix, {
+      source: journaldManagedPath,
+      body: journaldTemplate.replace("ForwardToSyslog=no", "ForwardToSyslog=yes"),
+    }),
+  ), /invalid or overridden/);
+  assert.throws(() => validate(
+    mergedJournald(...prefix, managed),
+    `${journaldTemplate}\nForwardToSyslog=no\n`,
+  ), /template is invalid/);
+  for (const invalidPath of ["relative.conf", "/etc/../bad.conf", "/etc//bad.conf", `${journaldManagedPath}\n`]) {
+    assert.throws(() => validate(mergedJournald(...prefix, managed), journaldTemplate, invalidPath), /path is invalid/);
   }
 });
 
