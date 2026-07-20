@@ -100,11 +100,12 @@ main { width:min(1180px,calc(100% - 30px)); margin:26px auto 60px; }
 .approved-vacation-item button { padding:8px 10px; color:var(--green); background:#e4efe9; font-size:11px; font-weight:800; }
 .approved-vacation-item .vacation-cancel { color:var(--danger); background:#faecea; }
 .pending-change { margin-top:7px !important; color:#9a6b12 !important; font-weight:750; }
-dialog { width:min(520px,calc(100% - 28px)); max-height:min(90dvh,820px); padding:0; border:0; border-radius:18px; overflow:hidden; box-shadow:0 24px 80px rgba(20,43,35,.28); }
+dialog { width:min(520px,calc(100% - 28px)); max-width:calc(100vw - 28px); max-height:min(90dvh,820px); padding:0; border:0; border-radius:18px; overflow:hidden; box-shadow:0 24px 80px rgba(20,43,35,.28); }
 dialog::backdrop { background:rgba(20,38,32,.5); backdrop-filter:blur(3px); }
-dialog form { display:grid; gap:14px; max-height:min(90dvh,820px); padding:24px; overflow-y:auto; overscroll-behavior:contain; }
+dialog form { display:grid; gap:14px; min-width:0; max-width:100%; max-height:min(90dvh,820px); padding:24px; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; }
+dialog form > *,dialog :is(input,select,textarea,button) { min-width:0; max-width:100%; }
 .dialog-heading { display:flex; justify-content:space-between; gap:12px; }.dialog-heading h2 { margin:0; }.dialog-heading button { width:32px; height:32px; font-size:22px; background:#edf1ee; }
-.dialog-actions { display:flex; justify-content:flex-end; gap:8px; padding-top:8px; }.dialog-actions button { padding:9px 12px; }
+.dialog-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; min-width:0; max-width:100%; padding-top:8px; }.dialog-actions button { min-width:0; max-width:100%; padding:9px 12px; white-space:normal; }
 .history-card { padding:20px; }
 .history-toolbar { display:grid; grid-template-columns:repeat(2,minmax(0,220px)); gap:10px; margin-bottom:16px; }
 .history-list { display:grid; gap:9px; }

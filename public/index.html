@@ -1139,8 +1139,8 @@
           <label class="field" id="employeeTimeConfirmationLevelField"><span>Vertrauensstufe</span><select id="employeeTimeConfirmationLevel" required><option value="A">Stufe A · Wochenabschluss</option><option value="B">Stufe B · spätestens nach 3 Tagen</option><option value="C">Stufe C · täglich bis 12:00 Uhr</option></select><small>Unabhängig von Position und Rolle; steuert künftig die Bestätigungsfrist automatischer Zeitvorschläge.</small></label>
           <label class="switch-row full-width hidden" id="employeeSicknessWithoutAumField"><span><strong>Persönliches Kontingent ohne AUM freischalten</strong><small id="employeeSicknessWithoutAumHint">Wirksam nur bei Vertrauensstufe A und aktivierter Unternehmensregel.</small></span><input id="employeeSicknessWithoutAumEnabled" type="checkbox" /></label>
           <label class="field"><span>Bevorzugte Abteilung</span><select id="employeePreferredDepartment"><option value="">Keine Abteilung</option></select></label>
-          <label class="field full-width"><span>Bevorzugter freier Tag</span><select id="employeePreferredDay"><option value="">Kein bevorzugter Tag</option><option value="monday">Montag</option><option value="tuesday">Dienstag</option><option value="wednesday">Mittwoch</option><option value="thursday">Donnerstag</option><option value="friday">Freitag</option></select></label>
-          <div class="field full-width"><span>Dienstvertraglich vereinbarte fixe Arbeitstage</span>
+          <label class="field modal-span-2"><span>Bevorzugter freier Tag</span><select id="employeePreferredDay"><option value="">Kein bevorzugter Tag</option><option value="monday">Montag</option><option value="tuesday">Dienstag</option><option value="wednesday">Mittwoch</option><option value="thursday">Donnerstag</option><option value="friday">Freitag</option></select></label>
+          <div class="field modal-span-3"><span>Dienstvertraglich vereinbarte fixe Arbeitstage</span>
             <div class="weekday-checks">
               <label><input type="checkbox" name="employeeFixedWorkday" value="monday" /> Mo</label>
               <label><input type="checkbox" name="employeeFixedWorkday" value="tuesday" /> Di</label>
@@ -1150,9 +1150,9 @@
               <label><input type="checkbox" name="employeeFixedWorkday" value="saturday" /> Sa</label>
             </div>
           </div>
-          <label class="field full-width"><span>Name</span><input id="employeeName" required /></label>
-          <label class="field full-width"><span>Spitzname / Anzeige im Dienstplan</span><input id="employeeNickname" required /></label>
-          <label class="field full-width"><span>Farbe im Dienstplan</span>
+          <label class="field modal-span-2"><span>Name</span><input id="employeeName" required /></label>
+          <label class="field modal-span-2"><span>Spitzname / Anzeige im Dienstplan</span><input id="employeeNickname" required /></label>
+          <label class="field modal-span-2"><span>Farbe im Dienstplan</span>
             <div class="rgb-color-picker">
               <input id="employeeColorPicker" type="color" value="#0b84c6" />
               <input id="employeeColorHex" maxlength="7" value="#0b84c6" aria-label="RGB-Farbwert" />
@@ -1365,7 +1365,7 @@
           <div class="form-grid">
             <label class="field"><span>Quelle</span><select id="personnelImportSourceType"><option value="file">CSV- oder Excel-Datei</option><option value="sql">Freigegebene SQL-View</option></select></label>
             <label class="field" id="personnelImportSqlConnectionField"><span>SQL-Personalquelle</span><select id="personnelImportSqlConnection"><option value="">Verbindung auswählen</option></select></label>
-            <label class="field full-width" id="personnelImportFileField"><span>CSV- oder Excel-Datei</span><input id="personnelImportFile" type="file" accept=".csv,.tsv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label>
+            <label class="field modal-span-3" id="personnelImportFileField"><span>CSV- oder Excel-Datei</span><input id="personnelImportFile" type="file" accept=".csv,.tsv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label>
             <label class="field"><span>Gespeichertes Profil</span><select id="personnelImportProfile"><option value="">Ohne Profil / automatisch erkennen</option></select></label>
             <label class="field"><span>Vorhandene Personalnummer</span><select id="personnelImportDuplicateStrategy"><option value="skip">Überspringen (empfohlen)</option><option value="update">Stammdaten aktualisieren</option></select></label>
             <label class="field"><span>Standardstandort für neue Personen</span><select id="personnelImportDefaultLocation"></select></label>
@@ -1421,7 +1421,7 @@
             <label class="field"><span>Instanz (optional)</span><input id="integrationSqlInstance" maxlength="128" /></label>
             <label class="field"><span>Schema</span><input id="integrationSqlSchema" maxlength="128" value="dbo" /></label>
             <label class="field"><span>View</span><input id="integrationSqlView" maxlength="128" /></label>
-            <label class="field full-width"><span>Freigegebene Spalten</span><textarea id="integrationSqlAllowedColumns" rows="3" maxlength="12900" placeholder="Personalnummer, Vorname, Nachname, Sollstunden"></textarea><small>Nur diese Spalten werden gelesen; durch Komma oder neue Zeile trennen.</small></label>
+            <label class="field modal-span-3"><span>Freigegebene Spalten</span><textarea id="integrationSqlAllowedColumns" rows="3" maxlength="12900" placeholder="Personalnummer, Vorname, Nachname, Sollstunden"></textarea><small>Nur diese Spalten werden gelesen; durch Komma oder neue Zeile trennen.</small></label>
             <label class="field"><span>Transportverschlüsselung</span><select id="integrationSqlTls"><option value="verify_full">Zertifikat vollständig prüfen</option></select></label>
             <label class="field"><span>Zeitlimit</span><div class="unit-input"><input id="integrationSqlTimeout" type="number" min="1000" max="30000" step="1000" value="10000" /><em>ms</em></div></label>
             <label class="field"><span>Maximale Vorschau</span><div class="unit-input"><input id="integrationSqlRowLimit" type="number" min="1" max="5000" value="1000" /><em>Zeilen</em></div></label>
@@ -1432,7 +1432,7 @@
         <section class="integration-connection-fields hidden" id="integrationApiFields">
           <h3>HTTPS-JSON-Ziel</h3>
           <div class="form-grid">
-            <label class="field full-width"><span>HTTPS-Adresse</span><input id="integrationApiEndpoint" type="url" maxlength="2048" placeholder="https://lohn.example.at/api/import" /></label>
+            <label class="field modal-span-3"><span>HTTPS-Adresse</span><input id="integrationApiEndpoint" type="url" maxlength="2048" placeholder="https://lohn.example.at/api/import" /></label>
             <label class="field"><span>Authentifizierung</span><select id="integrationApiAuthentication"><option value="none">Keine</option><option value="bearer">Bearer-Token</option><option value="api_key">API-Key im Header</option><option value="basic">Benutzername und Passwort</option></select></label>
             <label class="field" id="integrationApiKeyHeaderField"><span>API-Key-Header</span><input id="integrationApiKeyHeader" maxlength="80" value="X-API-Key" /></label>
             <label class="field"><span>Zeitlimit</span><div class="unit-input"><input id="integrationApiTimeout" type="number" min="1000" max="30000" step="1000" value="10000" /><em>ms</em></div></label>
@@ -1503,10 +1503,10 @@
         <div class="modal-header"><div><span class="eyebrow">Eigener Prozess</span><h2 id="customProcessModalTitle">Prozess anlegen</h2><p>Ablauf, Zuständigkeiten und Benachrichtigungswege nachvollziehbar festlegen.</p></div><button type="button" class="close-button" data-close="customProcessModal">×</button></div>
         <input id="customProcessId" type="hidden" />
         <div class="form-grid custom-process-basics">
-          <label class="field full-width"><span>Titel</span><input id="customProcessTitle" minlength="3" maxlength="120" placeholder="z. B. Notbesetzung in einer Filiale" required /></label>
+          <label class="field modal-span-3"><span>Titel</span><input id="customProcessTitle" minlength="3" maxlength="120" placeholder="z. B. Notbesetzung in einer Filiale" required /></label>
           <label class="field"><span>Kurzzeichen</span><input id="customProcessSymbol" maxlength="5" placeholder="z. B. NB" required /><small>1 bis 5 Buchstaben oder Ziffern.</small></label>
           <label class="field"><span>Status</span><select id="customProcessStatus"><option value="draft">Entwurf</option><option value="active">Aktiv</option></select></label>
-          <label class="field full-width"><span>Beschreibung</span><textarea id="customProcessDescription" rows="3" maxlength="600" placeholder="Wann und wofür wird dieser Prozess verwendet?" required></textarea></label>
+          <label class="field modal-span-3"><span>Beschreibung</span><textarea id="customProcessDescription" rows="3" maxlength="600" placeholder="Wann und wofür wird dieser Prozess verwendet?" required></textarea></label>
           <label class="field"><span>Geltungsbereich</span><select id="customProcessScopeType"><option value="company">Gesamtes Unternehmen</option><option value="location">Bestimmte Filiale</option><option value="department">Bestimmte Abteilung</option></select></label>
           <label class="field hidden" id="customProcessScopeLocationField"><span>Filiale</span><select id="customProcessScopeLocation"></select></label>
           <label class="field hidden" id="customProcessScopeDepartmentField"><span>Abteilung</span><select id="customProcessScopeDepartment"></select></label>
