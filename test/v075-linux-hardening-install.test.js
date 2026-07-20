@@ -49,6 +49,8 @@ test("v0.75 hardening installer validates then copies only contract artifacts", 
   assert.match(installer, /hardening_atomic_install "\$SOURCE_CONTRACT_FILE" "\$HARDENING_INSTALLED_CONTRACT" 0600/);
   assert.match(installer, /\*\.sh\) mode=0755/);
   assert.match(installer, /\*\) mode=0644/);
+  assert.match(installer, /JSON\.stringify\(installed\) !== JSON\.stringify\(source\)/);
+  assert.match(installer, /weicht vom freigegebenen Quellvertrag ab/);
 });
 
 test("v0.75 installer and uninstaller hold the shared controller lock across state checks", () => {

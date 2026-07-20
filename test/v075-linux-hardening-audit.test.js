@@ -179,11 +179,13 @@ test("v0.75 unattended upgrades permit only security and ESM security origins", 
   );
 });
 
-test("v0.75 journald audit evaluates the Journal section with last assignment wins", () => {
-  assert.match(audit, /\^\\\[Journal\\\]\[\[:space:\]\]\*\$/);
-  assert.match(audit, /section="Journal"/);
-  assert.match(audit, /section == "Journal"/);
-  assert.match(audit, /value=substr/);
+test("v0.75 journald audit verifies the exact last-writer policy and completed migration", () => {
+  assert.match(audit, /JOURNALD_LEGACY_DROPIN="\/etc\/systemd\/journald\.conf\.d\/60-grabenplaner-journald\.conf"/);
+  assert.match(audit, /JOURNALD_DROPIN="\/etc\/systemd\/journald\.conf\.d\/zz-grabenplaner-journald\.conf"/);
+  assert.match(audit, /validateJournaldConfiguration/);
+  assert.match(audit, /LC_ALL=C SYSTEMD_COLORS=0 SYSTEMD_PAGER=cat systemd-analyze cat-config/);
+  assert.match(audit, /root_readonly_config_file "\$JOURNALD_DROPIN"/);
+  assert.match(audit, /\[\[ -e "\$JOURNALD_LEGACY_DROPIN" \|\| -L "\$JOURNALD_LEGACY_DROPIN" \]\]/);
   assert.match(audit, /systemctl is-active --quiet systemd-journald\.service/);
 });
 

@@ -65,7 +65,7 @@ function parseSchema(moduleRoot) {
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Der Hardening-Modulvertrag fehlt.");
   const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8").replace(/^\uFEFF/, ""));
   if (schema.format !== "grabenplaner-linux-hardening-module-contract" || schema.schemaVersion !== 1
-    || schema.moduleVersion !== 1 || schema.activationPolicy !== "explicit-root-two-session"
+    || schema.moduleVersion !== 2 || schema.activationPolicy !== "explicit-root-two-session"
     || !Array.isArray(schema.managedArtifacts) || schema.managedArtifacts.length < 12 || schema.managedArtifacts.length > 48) {
     throw new Error("Der Hardening-Modulvertrag wird nicht unterstuetzt.");
   }
@@ -93,8 +93,8 @@ function moduleContract(moduleRoot) {
     .digest("hex");
   return {
     format: "grabenplaner-linux-hardening-installed-contract",
-    schemaVersion: 1,
-    moduleVersion: 1,
+    schemaVersion: schema.schemaVersion,
+    moduleVersion: schema.moduleVersion,
     schemaSha256: digest(schemaPath),
     fingerprint,
     files: sortedFiles
@@ -119,7 +119,8 @@ function verifyInstalled(moduleRoot, receiptPath, options = {}) {
   }
   const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8").replace(/^\uFEFF/, ""));
   const current = moduleContract(moduleRoot);
-  if (receipt.format !== current.format || receipt.schemaVersion !== 1 || receipt.moduleVersion !== 1
+  if (receipt.format !== current.format || receipt.schemaVersion !== current.schemaVersion
+    || receipt.moduleVersion !== current.moduleVersion
     || receipt.schemaSha256 !== current.schemaSha256 || receipt.fingerprint !== current.fingerprint
     || JSON.stringify(receipt.files) !== JSON.stringify(current.files)) {
     throw new Error("Das installierte Hardening-Modul stimmt nicht mit seinem Beleg ueberein.");

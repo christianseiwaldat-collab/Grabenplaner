@@ -349,6 +349,68 @@ function validateUfwPolicy({ addedRules, status, sshPort, allowedSources, requir
   return Object.freeze({ configuredCount: added.size, effectiveCount: effective.size, complete: requireComplete });
 }
 
+function journaldTemplateAssignments(template) {
+  const text = requireSafeMultiline(template, "Journald template");
+  const expected = new Map();
+  let section = "";
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#") || line.startsWith(";")) continue;
+    const sectionMatch = /^\[([^\]]+)\]$/.exec(line);
+    if (sectionMatch) { section = sectionMatch[1]; continue; }
+    if (section !== "Journal") continue;
+    const assignment = /^([A-Za-z][A-Za-z0-9]*)\s*=\s*(\S(?:.*\S)?)$/.exec(line);
+    if (!assignment || expected.has(assignment[1])) throw new TypeError("Journald template is invalid.");
+    expected.set(assignment[1], assignment[2]);
+  }
+  if (expected.size === 0) throw new TypeError("Journald template is invalid.");
+  return expected;
+}
+
+function validateJournaldConfiguration({ mergedConfig, template, managedPath }) {
+  const merged = requireSafeMultiline(mergedConfig, "Journald merged configuration");
+  if (typeof managedPath !== "string" || managedPath.trim() !== managedPath
+    || !managedPath.startsWith("/") || managedPath.includes("//")
+    || managedPath.split("/").some((part, index) => index > 0 && (!part || part === "." || part === ".."))
+    || /[\u0000-\u001f\u007f]/.test(managedPath)) {
+    throw new TypeError("Journald managed path is invalid.");
+  }
+  const expected = journaldTemplateAssignments(template);
+  const managedCounts = new Map([...expected.keys()].map((key) => [key, 0]));
+  const lastAssignments = new Map();
+  let source = "";
+  let section = "";
+  let managedMarkers = 0;
+
+  for (const rawLine of merged.split(/\r?\n/)) {
+    const sourceMatch = /^#\s+(\/\S+)\s*$/.exec(rawLine);
+    if (sourceMatch) {
+      source = sourceMatch[1];
+      section = "";
+      if (source === managedPath) managedMarkers += 1;
+      continue;
+    }
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#") || line.startsWith(";")) continue;
+    const sectionMatch = /^\[([^\]]+)\]$/.exec(line);
+    if (sectionMatch) { section = sectionMatch[1]; continue; }
+    if (section !== "Journal") continue;
+    const assignment = /^([A-Za-z][A-Za-z0-9]*)\s*=\s*(\S(?:.*\S)?)$/.exec(line);
+    if (!assignment || !expected.has(assignment[1])) continue;
+    lastAssignments.set(assignment[1], { value: assignment[2], source });
+    if (source === managedPath) managedCounts.set(assignment[1], managedCounts.get(assignment[1]) + 1);
+  }
+
+  if (managedMarkers !== 1) throw new TypeError("Journald managed fragment is missing or duplicated.");
+  for (const [key, value] of expected) {
+    const actual = lastAssignments.get(key);
+    if (managedCounts.get(key) !== 1 || actual?.source !== managedPath || actual.value !== value) {
+      throw new TypeError("Journald effective policy is invalid or overridden later.");
+    }
+  }
+  return Object.freeze({ configuredCount: expected.size, managedAssignmentsLast: true });
+}
+
 function isClientAllowed(clientIp, allowedSources) {
   const client = parseIpAddress(clientIp);
   // Validate every configured source before deciding. A matching first entry must
@@ -513,6 +575,7 @@ module.exports = {
   parsePort,
   runCli,
   validateAllowedSources,
+  validateJournaldConfiguration,
   validateUfwPolicy,
   validateSession,
 };

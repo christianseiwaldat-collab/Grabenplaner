@@ -10,7 +10,8 @@ umask 077
 readonly CONTROLLER_NAME="grabenplaner-host-security"
 readonly SSH_DROPIN="/etc/ssh/sshd_config.d/00-grabenplaner-hardening.conf"
 readonly SYSCTL_DROPIN="/etc/sysctl.d/60-grabenplaner-sysctl.conf"
-readonly JOURNALD_DROPIN="/etc/systemd/journald.conf.d/60-grabenplaner-journald.conf"
+readonly JOURNALD_LEGACY_DROPIN="/etc/systemd/journald.conf.d/60-grabenplaner-journald.conf"
+readonly JOURNALD_DROPIN="/etc/systemd/journald.conf.d/zz-grabenplaner-journald.conf"
 readonly UNATTENDED_DROPIN="/etc/apt/apt.conf.d/60grabenplaner-unattended-upgrades"
 readonly AUTO_UPGRADES_DROPIN="/etc/apt/apt.conf.d/60grabenplaner-auto-upgrades"
 readonly UFW_USER_RULES="/etc/ufw/user.rules"
@@ -20,7 +21,7 @@ readonly UFW_DEFAULT="/etc/default/ufw"
 readonly ACTIVE_TRANSACTION_FILE="/var/lib/grabenplaner-host-security/active-transaction"
 readonly AUTOMATIC_ROLLBACK_LOCK_WAIT_SECONDS=50
 readonly ROLLBACK_CONFIRMATION_SECONDS=600
-readonly -a MANAGED_KEYS=(ssh sysctl journald unattended auto-upgrades ufw-user ufw-user6 ufw-config ufw-default)
+readonly -a MANAGED_KEYS=(ssh sysctl journald journald-legacy unattended auto-upgrades ufw-user ufw-user6 ufw-config ufw-default)
 readonly -a UFW_MANAGED_KEYS=(ufw-user ufw-user6 ufw-config ufw-default)
 
 # Installed operation uses the immutable module copy. The local fallback only
@@ -432,6 +433,16 @@ configured_preflight() {
   ufw_plan_preflight "$CONFIG_SSH_PORT" "${CONFIG_SOURCES[@]}"
   validate_effective_ufw_policy baseline "$CONFIG_SSH_PORT" "${CONFIG_SOURCES[@]}" \
     || hardening_die "Bestehende UFW-Freigaben sind breiter als die geplante Host-Sicherheitspolicy."
+  if [[ -e "$JOURNALD_DROPIN" || -L "$JOURNALD_DROPIN" ]]; then
+    root_readonly_configuration_file "$JOURNALD_DROPIN" \
+      && cmp -s -- "$TEMPLATE_ROOT/zz-grabenplaner-journald.conf" "$JOURNALD_DROPIN" \
+      || hardening_die "Eine vorhandene Journal-Konfiguration am neuen Ziel ist fremd oder veraendert."
+  fi
+  if [[ -e "$JOURNALD_LEGACY_DROPIN" || -L "$JOURNALD_LEGACY_DROPIN" ]]; then
+    root_readonly_configuration_file "$JOURNALD_LEGACY_DROPIN" \
+      && cmp -s -- "$TEMPLATE_ROOT/60-grabenplaner-journald.conf" "$JOURNALD_LEGACY_DROPIN" \
+      || hardening_die "Eine alte Journal-Konfiguration ist fremd oder veraendert und wird nicht migriert."
+  fi
 }
 
 write_private_value() {
@@ -466,6 +477,7 @@ managed_target_for_key() {
     ssh) printf '%s\n' "$SSH_DROPIN" ;;
     sysctl) printf '%s\n' "$SYSCTL_DROPIN" ;;
     journald) printf '%s\n' "$JOURNALD_DROPIN" ;;
+    journald-legacy) printf '%s\n' "$JOURNALD_LEGACY_DROPIN" ;;
     unattended) printf '%s\n' "$UNATTENDED_DROPIN" ;;
     auto-upgrades) printf '%s\n' "$AUTO_UPGRADES_DROPIN" ;;
     ufw-user) printf '%s\n' "$UFW_USER_RULES" ;;
@@ -561,6 +573,19 @@ record_intended_file_state() {
   write_private_value "$intended_directory/$key.tsv" "$record"
 }
 
+record_intended_absent_state() {
+  local transaction_directory="$1" key="$2" intended_directory record
+  intended_directory="$transaction_directory/intended"
+  if [[ ! -e "$intended_directory" && ! -L "$intended_directory" ]]; then
+    install -d -o root -g root -m 0700 -- "$intended_directory"
+  fi
+  [[ -d "$intended_directory" && ! -L "$intended_directory" \
+    && "$(stat --format='%u:%g:%a' -- "$intended_directory")" == "0:0:700" ]] || return 1
+  record="$(printf '%s\tabsent\t-\t0\t0\t0' "$key")"
+  validate_manifest_record "$record" "$key" || return 1
+  write_private_value "$intended_directory/$key.tsv" "$record"
+}
+
 record_intended_current_state() {
   local transaction_directory="$1" key="$2" target uid gid mode
   target="$(managed_target_for_key "$key")" || return 1
@@ -643,6 +668,7 @@ backup_host_configuration() {
   backup_file "$transaction_directory" ssh "$SSH_DROPIN"
   backup_file "$transaction_directory" sysctl "$SYSCTL_DROPIN"
   backup_file "$transaction_directory" journald "$JOURNALD_DROPIN"
+  backup_file "$transaction_directory" journald-legacy "$JOURNALD_LEGACY_DROPIN"
   backup_file "$transaction_directory" unattended "$UNATTENDED_DROPIN"
   backup_file "$transaction_directory" auto-upgrades "$AUTO_UPGRADES_DROPIN"
   backup_file "$transaction_directory" ufw-user "$UFW_USER_RULES"
@@ -1013,25 +1039,25 @@ validate_effective_sysctl_configuration() {
 }
 
 validate_effective_journald_configuration() {
-  local merged line key expected actual
-  merged="$(systemd-analyze cat-config systemd/journald.conf 2>/dev/null)" || return 1
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ -n "$line" && "$line" != \#* && "$line" != \[* ]] || continue
-    key="${line%%=*}"
-    expected="${line#*=}"
-    key="$(awk '{$1=$1; print}' <<<"$key")"
-    expected="$(awk '{$1=$1; print}' <<<"$expected")"
-    actual="$(awk -F= -v wanted="$key" '
-      /^\[Journal\][[:space:]]*$/ { section="Journal"; next }
-      /^\[/ { section="other"; next }
-      section == "Journal" {
-        current=$1; gsub(/^[[:space:]]+|[[:space:]]+$/, "", current)
-        if (current == wanted) { value=substr($0, index($0, "=")+1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); found=1 }
-      }
-      END { if (!found) exit 1; print value }
-    ' <<<"$merged")" || return 1
-    [[ "$actual" == "$expected" ]] || return 1
-  done <"$TEMPLATE_ROOT/60-grabenplaner-journald.conf"
+  local merged node
+  [[ ! -e "$JOURNALD_LEGACY_DROPIN" && ! -L "$JOURNALD_LEGACY_DROPIN" ]] || return 1
+  root_readonly_configuration_file "$JOURNALD_DROPIN" || return 1
+  merged="$(LC_ALL=C SYSTEMD_COLORS=0 SYSTEMD_PAGER=cat systemd-analyze cat-config systemd/journald.conf 2>/dev/null)" || return 1
+  node="$(hardening_node)" || return 1
+  printf '%s\0%s' "$merged" "$(<"$TEMPLATE_ROOT/zz-grabenplaner-journald.conf")" | "$node" -e '
+const fs = require("node:fs");
+const policy = require(process.argv[1]);
+const input = fs.readFileSync(0);
+const separator = input.indexOf(0);
+if (separator < 0) process.exit(1);
+try {
+  policy.validateJournaldConfiguration({
+    mergedConfig: input.subarray(0, separator).toString("utf8"),
+    template: input.subarray(separator + 1).toString("utf8"),
+    managedPath: process.argv[2],
+  });
+} catch { process.exit(1); }
+' "$POLICY_FILE" "$JOURNALD_DROPIN" || return 1
   systemctl is-active --quiet systemd-journald.service
 }
 
@@ -1061,9 +1087,17 @@ install_managed_templates() {
     || hardening_die "Eine spaetere sysctl-Konfiguration ueberschreibt das Sicherheitsprofil."
   write_apply_journal "$transaction_directory" sysctl_complete
 
-  record_intended_file_state "$transaction_directory" journald "$TEMPLATE_ROOT/60-grabenplaner-journald.conf" 0 0 644
+  record_intended_file_state "$transaction_directory" journald "$TEMPLATE_ROOT/zz-grabenplaner-journald.conf" 0 0 644
+  record_intended_absent_state "$transaction_directory" journald-legacy
   write_apply_journal "$transaction_directory" journald_in_progress
-  hardening_atomic_install "$TEMPLATE_ROOT/60-grabenplaner-journald.conf" "$JOURNALD_DROPIN" 0644
+  hardening_atomic_install "$TEMPLATE_ROOT/zz-grabenplaner-journald.conf" "$JOURNALD_DROPIN" 0644
+  if [[ -e "$JOURNALD_LEGACY_DROPIN" || -L "$JOURNALD_LEGACY_DROPIN" ]]; then
+    root_readonly_configuration_file "$JOURNALD_LEGACY_DROPIN" \
+      && cmp -s -- "$TEMPLATE_ROOT/60-grabenplaner-journald.conf" "$JOURNALD_LEGACY_DROPIN" \
+      || hardening_die "Die alte Journal-Konfiguration wurde waehrend der Migration veraendert."
+    rm -f -- "$JOURNALD_LEGACY_DROPIN"
+    sync -f "$(dirname -- "$JOURNALD_LEGACY_DROPIN")"
+  fi
   systemctl restart systemd-journald.service
   systemctl is-active --quiet systemd-journald.service \
     || hardening_die "Die begrenzte Journal-Konfiguration konnte nicht aktiviert werden."
@@ -1104,6 +1138,7 @@ restore_host_configuration() {
   if ((sysctl_restored == 1)) && ! sysctl --system >>"$log" 2>&1; then ((errors += 1)); fi
 
   if ! restore_file "$transaction_directory" journald "$JOURNALD_DROPIN"; then journald_restored=0; ((errors += 1)); fi
+  if ! restore_file "$transaction_directory" journald-legacy "$JOURNALD_LEGACY_DROPIN"; then journald_restored=0; ((errors += 1)); fi
   if ((journald_restored == 1)); then
     if ! systemctl restart systemd-journald.service >>"$log" 2>&1; then
       ((errors += 1))
