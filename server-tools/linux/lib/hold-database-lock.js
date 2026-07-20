@@ -11,9 +11,14 @@ if (![modulePath, databasePath, readyPath].every(Boolean)) {
 
 let handle;
 let finished = false;
+// Do not rely on stdin to keep this maintenance helper alive. Non-interactive
+// shells redirect stdin of background jobs to /dev/null, which otherwise lets
+// Node exit immediately after publishing the ready PID.
+const keepAlive = setInterval(() => {}, 60_000);
 function finish(exitCode = 0) {
   if (finished) return;
   finished = true;
+  clearInterval(keepAlive);
   try {
     if (handle) require(path.resolve(modulePath)).releaseDatabaseLock(handle);
   } finally {
@@ -32,4 +37,3 @@ try {
 
 process.on("SIGTERM", () => finish(0));
 process.on("SIGINT", () => finish(0));
-process.stdin.resume();

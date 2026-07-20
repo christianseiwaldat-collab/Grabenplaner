@@ -135,7 +135,7 @@ else
   check_fail "TLS-Zertifikat" "ungueltig, nicht erreichbar oder laeuft zu frueh ab"
 fi
 
-database_check="$("$node" - "$database" <<'NODE' 2>&1
+database_check="$(NODE_NO_WARNINGS=1 "$node" - "$database" <<'NODE' 2>&1
 const { DatabaseSync } = require("node:sqlite");
 const db = new DatabaseSync(process.argv[2], { readOnly: true });
 try {
