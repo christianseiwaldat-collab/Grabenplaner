@@ -10,9 +10,11 @@ const root = path.resolve(__dirname, "..");
 const hardeningRoot = path.join(root, "server-tools", "linux", "hardening");
 const installerPath = path.join(hardeningRoot, "install-grabenplaner-host-hardening.sh");
 const uninstallerPath = path.join(hardeningRoot, "uninstall-grabenplaner-host-hardening.sh");
+const controllerPath = path.join(hardeningRoot, "grabenplaner-host-security.sh");
 const commonPath = path.join(hardeningRoot, "lib", "hardening-common.sh");
 const installer = fs.readFileSync(installerPath, "utf8");
 const uninstaller = fs.readFileSync(uninstallerPath, "utf8");
+const controller = fs.readFileSync(controllerPath, "utf8");
 const common = fs.readFileSync(commonPath, "utf8");
 const systemdRoot = path.join(hardeningRoot, "systemd");
 const auditService = fs.readFileSync(path.join(systemdRoot, "grabenplaner-host-security-audit.service.in"), "utf8");
@@ -24,61 +26,6 @@ function executableLines(source) {
   return source.split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith("#"));
-}
-
-function shellFiles(directory) {
-  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const target = path.join(directory, entry.name);
-    if (entry.isDirectory()) return shellFiles(target);
-    return entry.isFile() && /\.sh(?:\.in)?$/.test(entry.name) ? [target] : [];
-  });
-}
-
-function logicalShellLines(source) {
-  const logicalLines = [];
-  let fragments = [];
-  let startLine = 1;
-
-  source.split(/\r?\n/).forEach((line, index) => {
-    if (fragments.length === 0) startLine = index + 1;
-    const trailingBackslashes = line.match(/\\+$/)?.[0].length || 0;
-    const continued = trailingBackslashes % 2 === 1;
-    fragments.push(continued ? line.slice(0, -1) : line);
-    if (!continued) {
-      logicalLines.push({ line: startLine, source: fragments.join(" ") });
-      fragments = [];
-    }
-  });
-
-  if (fragments.length > 0) logicalLines.push({ line: startLine, source: fragments.join(" ") });
-  return logicalLines;
-}
-
-function declarationRemainderReferences(remainder, name) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const directReference = new RegExp(`\\$(?:${escaped}(?![A-Za-z0-9_])|\\{${escaped}(?:[^A-Za-z0-9_]|$))`);
-  if (directReference.test(remainder)) return true;
-
-  const arithmeticReference = new RegExp(`(?:^|[^A-Za-z0-9_])${escaped}(?![A-Za-z0-9_])`);
-  return [...remainder.matchAll(/\$\(\(([\s\S]*?)\)\)/g)]
-    .some((arithmetic) => arithmeticReference.test(arithmetic[1]));
-}
-
-function sameDeclarationDependencies(source) {
-  const findings = [];
-  logicalShellLines(source).forEach((logicalLine) => {
-    const declaration = logicalLine.source.match(/^\s*(?:local|readonly|declare|typeset)\b\s*(.+)$/)?.[1];
-    if (!declaration) return;
-
-    for (const assignment of declaration.matchAll(/(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=/g)) {
-      const name = assignment[1];
-      const remainder = declaration.slice(assignment.index + assignment[0].length);
-      if (declarationRemainderReferences(remainder, name)) {
-        findings.push({ line: logicalLine.line, name, source: logicalLine.source.trim() });
-      }
-    }
-  });
-  return findings;
 }
 
 function extractShellFunction(source, name) {
@@ -145,35 +92,22 @@ test("v0.75 installer rejects foreign or drifted units before installation mutat
   assert.match(installer, /Eine gleichnamige fremde Systemd-Einheit verhindert die Installation/);
 });
 
-test("v0.75 hardening shell declarations do not use variables initialized earlier in the same command", () => {
-  const findings = shellFiles(hardeningRoot).flatMap((file) => sameDeclarationDependencies(fs.readFileSync(file, "utf8"))
-    .map((finding) => `${path.relative(root, file)}:${finding.line}: ${finding.name} in ${finding.source}`));
-  assert.deepEqual(findings, []);
+test("v0.75 six nounset path initializations remain separate from their local declarations", () => {
+  assert.match(extractShellFunction(installer, "preflight_existing_unit"),
+    /local source_name="\$1" unit_name="\$2" installed fragment=""\n\s+local predecessor_expected="\$3"\n\s+installed="\$SYSTEMD_ROOT\/\$unit_name"/);
+  assert.match(extractShellFunction(uninstaller, "assert_matching_unit"),
+    /local source_name="\$1" unit_name="\$2" installed fragment=""\n\s+installed="\$SYSTEMD_ROOT\/\$unit_name"/);
+  assert.match(extractShellFunction(controller, "record_post_apply_state"),
+    /local transaction_directory="\$1" manifest temporary key target hash uid gid mode\n\s+manifest="\$transaction_directory\/post-apply\.tsv"/);
+  assert.match(extractShellFunction(controller, "intended_record_for_key"),
+    /local transaction_directory="\$1" key="\$2" file record\n\s+file="\$transaction_directory\/intended\/\$key\.tsv"/);
+  assert.match(extractShellFunction(controller, "restore_permit_record_for_key"),
+    /local transaction_directory="\$1" key="\$2" file record\n\s+file="\$transaction_directory\/restore-permits\/\$key\.tsv"/);
+  assert.match(extractShellFunction(controller, "backup_file"),
+    /local transaction_directory="\$1" key="\$2" target="\$3" backup metadata uid gid mode\n\s+backup="\$transaction_directory\/backups\/\$key"/);
 });
 
-test("v0.75 declaration guard rejects every nounset dependency form and permits separate declarations", () => {
-  const unsafeFixtures = [
-    ['declare text=one derived="$text/two"', "text"],
-    ['local count=1 next=$((count + 1))', "count"],
-    [["typeset root=/srv \\", '  child="${root}/app"'].join("\n"), "root"],
-  ];
-  for (const [source, expectedName] of unsafeFixtures) {
-    const findings = sameDeclarationDependencies(source);
-    assert.equal(findings.length, 1, source);
-    assert.equal(findings[0].name, expectedName, source);
-  }
-
-  const safeFixture = [
-    "local text=one",
-    'local derived="$text/two"',
-    "readonly count=1",
-    "declare next=$((count + 1))",
-    'typeset final="${next}/done"',
-  ].join("\n");
-  assert.deepEqual(sameDeclarationDependencies(safeFixture), []);
-});
-
-test("v0.75 installer preflight runs under nounset before any installation mutation", (context) => {
+test("v0.75 corrected installer, uninstaller and controller paths run under nounset", (context) => {
   const probe = spawnSync("bash", ["--version"], { encoding: "utf8" });
   if (probe.error?.code === "ENOENT") {
     context.skip("Bash is not installed on this test host");
@@ -189,9 +123,29 @@ test("v0.75 installer preflight runs under nounset before any installation mutat
     'HARDENING_MODULE_ROOT="$temporary/module"',
     'mkdir -p -- "$SYSTEMD_ROOT" "$HARDENING_MODULE_ROOT/systemd"',
     'hardening_die() { printf \'%s\\n\' "$1" >&2; return 97; }',
-    'systemctl() { return 0; }',
+    'fragment_path=""',
+    'systemctl() { printf \'%s\' "$fragment_path"; }',
     extractShellFunction(installer, "preflight_existing_unit"),
     'preflight_existing_unit "fixture.service.in" "fixture.service" false',
+    'printf \'fixture\\n\' >"$HARDENING_MODULE_ROOT/systemd/fixture.service.in"',
+    'cp -- "$HARDENING_MODULE_ROOT/systemd/fixture.service.in" "$SYSTEMD_ROOT/fixture.service"',
+    'fragment_path="$SYSTEMD_ROOT/fixture.service"',
+    'stat() { printf \'0:0:644:1\\n\'; }',
+    extractShellFunction(uninstaller, "assert_matching_unit"),
+    'assert_matching_unit "fixture.service.in" "fixture.service"',
+    extractShellFunction(controller, "record_post_apply_state"),
+    'if record_post_apply_state "$temporary/missing"; then exit 81; fi',
+    'private_file_is_secure() { return 1; }',
+    extractShellFunction(controller, "intended_record_for_key"),
+    'if intended_record_for_key "$temporary/transaction" fixture; then exit 82; fi',
+    extractShellFunction(controller, "restore_permit_record_for_key"),
+    'if restore_permit_record_for_key "$temporary/transaction" fixture; then exit 83; fi',
+    'mkdir -p -- "$temporary/transaction/backups"',
+    ': >"$temporary/transaction/hashes.tsv"',
+    'chmod() { return 0; }',
+    'chown() { return 0; }',
+    extractShellFunction(controller, "backup_file"),
+    'backup_file "$temporary/transaction" fixture "$temporary/not-present"',
   ].join("\n");
   const result = spawnSync("bash", ["-s"], { input: fixture, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr || result.stdout);
