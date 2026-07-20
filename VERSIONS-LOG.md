@@ -12,6 +12,7 @@
 - Die Installationsbaumprüfung lehnt reguläre Dateien mit zusätzlichen Hardlinks ab und verhindert so auch unabhängig von pnpm eine Metadatenkopplung zwischen Staging und fremden Dateibäumen.
 - Der Linux-Paketbau berechnet Datei- und Archivprüfsummen editionsunabhängig über die .NET-Kryptobibliothek.
 - Betriebsanleitung und automatisierte Prüfungen wurden an diese zusätzliche Schutzgrenze angepasst.
+- Der einmalige Ubuntu-Admin-Bootstrap startet im Serverbetrieb nur mit einem ausschließlich in der Bootstrap-Unit gesetzten Modussignal, exakter Loopback-Bindung und starkem Einmal-Token; der normale Dienst kann durch einen verbliebenen Token nicht freigeschaltet werden.
 
 ## v0.75 Beta
 

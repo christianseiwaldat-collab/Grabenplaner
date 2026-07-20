@@ -75,10 +75,16 @@ test("v0.72 Linux bootstrap stays private until public HTTPS readiness succeeds"
   const installer = read("server-tools", "linux", "install-grabenplaner-server.sh");
   const updater = read("server-tools", "linux", "update-grabenplaner-server.sh");
   const bootstrap = read("server-tools", "linux", "grabenplaner-bootstrap-admin.sh.in");
+  const bootstrapUnit = read("server-tools", "linux", "grabenplaner-bootstrap.service.in");
+  const normalUnit = read("server-tools", "linux", "grabenplaner.service.in");
   const environment = read("server-tools", "linux", "grabenplaner.env.example");
   const caddy = read("server-tools", "linux", "Caddyfile.in");
 
   assert.match(environment, /^GRABENPLANER_BOOTSTRAP_TOKEN=\{\{BOOTSTRAP_TOKEN\}\}$/m);
+  assert.match(bootstrapUnit, /^Environment=GRABENPLANER_BOOTSTRAP_MODE=1$/m);
+  assert.match(bootstrapUnit, /^Environment=GRABENPLANER_OPERATION_MODE=server$/m);
+  assert.doesNotMatch(bootstrapUnit, /^Environment=GRABENPLANER_PUBLIC_URL=/m);
+  assert.doesNotMatch(normalUnit, /GRABENPLANER_BOOTSTRAP_MODE/);
   assert.match(bootstrap, /http:\/\/127\.0\.0\.1:\{\{PORT\}\}\/\?bootstrap=\$\{encoded_token\}/);
   assert.match(bootstrap, /wait_for_public_ready/);
   assert.match(bootstrap, /clear_bootstrap_token/);

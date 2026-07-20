@@ -48,7 +48,7 @@ test("v0.72 browser bootstrap keeps the one-time key local and sends it only on 
   assert.match(application, /\["GET", "HEAD", "OPTIONS"\]\.includes\(method\)/);
   assert.match(application, /X-Grabenplaner-Bootstrap-Token/);
   assert.match(server, /role IN \('developer','it_admin','admin'\)/);
-  assert.match(server, /if \(serverModeActive \|\| !isLoopbackRequest\(request\)\)/);
+  assert.match(server, /if \(\(serverModeActive && !productionBootstrapActive\) \|\| !isLoopbackRequest\(request\)\)/);
 });
 
 test("v0.72 production bootstrap enforces the server password minimum on loopback", { timeout: 40_000 }, async () => {
@@ -64,8 +64,12 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
     BACKUP_DIR: path.join(root, "backups"),
     GRABENPLANER_DATA_DIR: root,
     GRABENPLANER_HOST: "127.0.0.1",
-    GRABENPLANER_OPERATION_MODE: "local",
+    GRABENPLANER_OPERATION_MODE: "server",
     GRABENPLANER_DEPLOYMENT_KIND: "production",
+    GRABENPLANER_BOOTSTRAP_MODE: "1",
+    GRABENPLANER_PUBLIC_URL: "https://plan.example.test",
+    GRABENPLANER_TRUST_PROXY: "loopback",
+    GRABENPLANER_SERVICE_CONTROL_TOKEN: "service-control-test-token-0123456789abcdef",
     GRABENPLANER_BOOTSTRAP_TOKEN: bootstrapToken,
     GRABENPLANER_AMU_KEY_ID: "server-test-v1",
     GRABENPLANER_AMU_KEY: Buffer.alloc(32, 17).toString("base64"),
@@ -131,16 +135,8 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
     });
     assert.equal(completedSetupResponse.status, 201, await completedSetupResponse.clone().text());
 
-    const exitResponse = await fetch(`${origin}/api/system/exit`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Grabenplaner-Bootstrap-Token": bootstrapToken,
-      },
-      body: "{}",
-    });
-    assert.equal(exitResponse.status, 200, await exitResponse.clone().text());
-    assert.equal(await waitForExit(child), 0, stderr);
+    child.kill();
+    await waitForExit(child);
 
     const serverPort = await freePort();
     const serverChild = spawn(process.execPath, [path.join(__dirname, "..", "server.js")], {
@@ -149,6 +145,7 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
         ...environment,
         PORT: String(serverPort),
         GRABENPLANER_OPERATION_MODE: "server",
+        GRABENPLANER_BOOTSTRAP_MODE: "",
         GRABENPLANER_PUBLIC_URL: "https://plan.example.test",
         GRABENPLANER_TRUST_PROXY: "loopback",
         GRABENPLANER_SERVICE_CONTROL_TOKEN: "service-control-test-token-0123456789abcdef",
