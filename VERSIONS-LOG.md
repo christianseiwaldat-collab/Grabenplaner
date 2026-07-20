@@ -8,6 +8,8 @@
 - Sämtliche Schritte des isolierten Build-Benutzers wechseln vor dem Rechteabstieg in den zugänglichen Staging-Quellordner; ein gesperrtes Administrator-Heimatverzeichnis kann die Installation daher nicht mehr blockieren.
 - Der Ubuntu-Installer setzt Ausführungsrechte nach einer plattformneutralen ZIP-Extraktion ausschließlich für verifizierte Bash-Werkzeuge unter `server-tools/linux`; andere Archivdateien erhalten dadurch kein pauschales Ausführungsrecht.
 - Schlägt die Erstinstallation nach dem Caddyfile-Tausch fehl, stellt der Rollback neben der Datei auch den zuvor erfassten Aktivierungs- und Laufzustand von Caddy wieder her; ein zuvor inaktiver Dienst wird nicht mehr unbeabsichtigt gestartet.
+- Erstinstallation und Serverupdate verwenden nun je Transaktion einen eigenen, anschließend gelöschten pnpm-Store sowie echten Kopierimport. Spätere Besitz- und Modusänderungen am App-Baum können dadurch keine wiederverwendeten Cache-Inodes mehr beschädigen.
+- Die Installationsbaumprüfung lehnt reguläre Dateien mit zusätzlichen Hardlinks ab und verhindert so auch unabhängig von pnpm eine Metadatenkopplung zwischen Staging und fremden Dateibäumen.
 - Der Linux-Paketbau berechnet Datei- und Archivprüfsummen editionsunabhängig über die .NET-Kryptobibliothek.
 - Betriebsanleitung und automatisierte Prüfungen wurden an diese zusätzliche Schutzgrenze angepasst.
 

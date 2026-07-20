@@ -25,6 +25,9 @@ function visit(directory) {
       directories += 1;
       visit(target);
     } else if (stat.isFile()) {
+      if (stat.nlink !== 1) {
+        throw new Error(`Hardlink im Installationsbaum ist nicht erlaubt: ${path.relative(root, target)}`);
+      }
       files += 1;
     } else {
       throw new Error(`Unzulaessiger Dateityp im Installationsbaum: ${path.relative(root, target)}`);

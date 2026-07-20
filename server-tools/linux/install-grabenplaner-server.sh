@@ -793,6 +793,7 @@ chmod 0750 "$STAGE_ROOT"
 chown root:"$BUILD_GROUP" "$STAGE_ROOT/package.zip"
 chmod 0640 "$STAGE_ROOT/package.zip"
 install -d -o "$BUILD_USER" -g "$BUILD_GROUP" -m 0750 "$STAGE_ROOT/source"
+install -d -o "$BUILD_USER" -g "$BUILD_GROUP" -m 0700 "$STAGE_ROOT/pnpm-store"
 run_as_build_user "$STAGE_ROOT/source" unzip -q "$STAGE_ROOT/package.zip" -d "$STAGE_ROOT/source"
 [[ -z "$(find "$STAGE_ROOT/source" ! -type f ! -type d -print -quit)" ]] || fail "Links und Spezialdateien sind im Quellpaket nicht erlaubt."
 [[ "$(du -sb "$STAGE_ROOT/source" | awk '{ print $1 }')" -le "$MAX_EXTRACTED_BYTES" ]] || fail "Das entpackte Serverpaket ist groesser als 4 GiB."
@@ -805,7 +806,8 @@ chown -R "$BUILD_USER:$BUILD_GROUP" "$STAGE_ROOT/source"
 run_as_build_user "$STAGE_ROOT/source" env \
   HOME="$CACHE_ROOT" XDG_CACHE_HOME="$CACHE_ROOT" PNPM_HOME="$CACHE_ROOT/pnpm" COREPACK_HOME="$CACHE_ROOT/corepack" \
   PATH="$(dirname "$NODE_EXECUTABLE"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-  NODE_ENV=production "${PNPM_COMMAND[@]}" install --prod --frozen-lockfile --config.node-linker=hoisted --reporter=append-only
+  NODE_ENV=production "${PNPM_COMMAND[@]}" install --prod --frozen-lockfile --config.node-linker=hoisted \
+    --store-dir "$STAGE_ROOT/pnpm-store" --package-import-method=copy --reporter=append-only
 run_as_build_user "$STAGE_ROOT/source" "$NODE_EXECUTABLE" --check "$STAGE_ROOT/source/server.js" >/dev/null
 validate_installed_dependencies
 
@@ -821,6 +823,7 @@ function walk(directory) {
       const target = fs.realpathSync(candidate);
       if (target !== root && !target.startsWith(`${root}${path.sep}`)) process.exit(1);
     } else if (entry.isDirectory()) walk(candidate);
+    else if (entry.isFile() && fs.lstatSync(candidate).nlink !== 1) process.exit(1);
   }
 }
 walk(root);
