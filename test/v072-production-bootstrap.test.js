@@ -118,6 +118,7 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Origin: origin,
         "X-Grabenplaner-Bootstrap-Token": bootstrapToken,
       },
       body: JSON.stringify({ employeeNumber: "900", password: "123456" }),
@@ -125,10 +126,23 @@ test("v0.72 production bootstrap enforces the server password minimum on loopbac
     assert.equal(authorizedSetupResponse.status, 400, await authorizedSetupResponse.clone().text());
     assert.match((await authorizedSetupResponse.json()).error, /mindestens 10 Zeichen/i);
 
+    const wrongOriginResponse = await fetch(`${origin}/api/portal/v1/setup/admin`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: `http://127.0.0.1:${port + 1}`,
+        "X-Grabenplaner-Bootstrap-Token": bootstrapToken,
+      },
+      body: JSON.stringify({ employeeNumber: "900", password: "ServerPasswort123!" }),
+    });
+    assert.equal(wrongOriginResponse.status, 403, await wrongOriginResponse.clone().text());
+    assert.equal((await wrongOriginResponse.json()).code, "ORIGIN_NOT_ALLOWED");
+
     const completedSetupResponse = await fetch(`${origin}/api/portal/v1/setup/admin`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Origin: origin,
         "X-Grabenplaner-Bootstrap-Token": bootstrapToken,
       },
       body: JSON.stringify({ employeeNumber: "900", password: "ServerPasswort123!" }),

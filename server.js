@@ -45,6 +45,7 @@ const { readHostSecurityStatus } = require("./lib/host-security-status");
 const {
   assertRuntimeConfiguration,
   createBoundedRateLimitStore,
+  isBootstrapRequestOriginAllowed,
   isServerBootstrapStartupAllowed,
   parseBackupKeep,
   parseServerPort,
@@ -3471,8 +3472,18 @@ app.use((request, response, next) => {
     }
   }
   if (serverModeActive && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
-    const origin = String(request.headers.origin || "").replace(/\/$/, "");
-    if (origin && publicUrl && !requestOriginAllowed(request, origin)) {
+    const originHeader = String(request.headers.origin || "");
+    const bootstrapOriginAllowed = isBootstrapRequestOriginAllowed({
+      bootstrapActive: productionBootstrapActive,
+      loopbackRequest: isLoopbackRequest(request),
+      origin: originHeader,
+      port: PORT,
+    });
+    const origin = originHeader.replace(/\/$/, "");
+    const originAllowed = productionBootstrapActive
+      ? bootstrapOriginAllowed
+      : requestOriginAllowed(request, origin);
+    if (origin && publicUrl && !originAllowed) {
       response.status(403).json({ error: "Die Anfrage stammt nicht von der konfigurierten Serveradresse.", code: "ORIGIN_NOT_ALLOWED" });
       return;
     }

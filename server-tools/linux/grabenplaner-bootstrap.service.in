@@ -2,7 +2,7 @@
 Description=Grabenplaner one-time local admin bootstrap
 Documentation=https://github.com/christian-seiwald-at/grabenplaner
 After=network.target
-Conflicts=grabenplaner.service
+Conflicts=grabenplaner.service caddy.service
 
 [Service]
 Type=simple
