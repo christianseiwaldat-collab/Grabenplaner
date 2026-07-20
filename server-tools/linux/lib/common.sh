@@ -87,24 +87,44 @@ gp_assert_separate_trees() {
 }
 
 gp_assert_secure_env_file() {
-  local file owner group mode
-  file="$(gp_existing_file "$1" "Umgebungsdatei")"
+  local requested file owner group mode links
+  requested="${1:-}"
+  [[ -n "$requested" && "$requested" == /* ]] || gp_die "Die Umgebungsdatei muss ein absoluter lokaler Linux-Pfad sein."
+  [[ -f "$requested" && ! -L "$requested" ]] || gp_die "Die Umgebungsdatei muss eine regulaere Datei sein und darf kein Link sein: $requested"
+  file="$(gp_existing_file "$requested" "Umgebungsdatei")"
   owner="$(stat --format='%u' -- "$file")"
   group="$(stat --format='%g' -- "$file")"
   mode="$(stat --format='%a' -- "$file")"
+  links="$(stat --format='%h' -- "$file")"
   [[ "$owner" == "0" && "$group" == "0" ]] || gp_die "Die Umgebungsdatei muss root:root gehoeren: $file"
   [[ "$mode" == "600" ]] || gp_die "Die geheime Umgebungsdatei muss exakt Modus 0600 verwenden: $file"
+  [[ "$links" == "1" ]] || gp_die "Die geheime Umgebungsdatei darf keine zusaetzlichen Hardlinks besitzen: $file"
 }
 
 gp_load_env_file() {
-  local file="${1:-$GP_DEFAULT_ENV_FILE}"
+  local file="${1:-$GP_DEFAULT_ENV_FILE}" line key value line_number=0
+  local -A seen_keys=()
   gp_assert_secure_env_file "$file"
-  # Die Datei wird durch den root-only Installer erzeugt und darf deshalb die
-  # von systemd unterstuetzten einfachen KEY=VALUE-Zeilen enthalten.
-  set -a
-  # shellcheck disable=SC1090
-  source "$file"
-  set +a
+
+  # Die root-only Datei wird absichtlich nicht als Shellcode ausgewertet.
+  # Erlaubt sind nur Kommentare, Leerzeilen und einfache KEY=VALUE-Zeilen;
+  # der komplette Teil hinter dem ersten Gleichheitszeichen bleibt literal.
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line_number=$((line_number + 1))
+    line="${line%$'\r'}"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] \
+      || gp_die "Ungueltige Zeile ${line_number} in der Umgebungsdatei; erwartet wird KEY=VALUE."
+    key="${BASH_REMATCH[1]}"
+    value="${BASH_REMATCH[2]}"
+    [[ ! ${seen_keys[$key]+vorhanden} ]] \
+      || gp_die "Der Schluessel $key ist in der Umgebungsdatei doppelt vorhanden."
+    seen_keys["$key"]=1
+    # -g schreibt bewusst in die aufrufende Shell-Umgebung, ohne gleichnamige
+    # lokale Parservariablen (z. B. line_number) zu ueberschreiben.
+    declare -gx -- "$key=$value" \
+      || gp_die "Der Schluessel $key konnte nicht sicher uebernommen werden."
+  done < "$file"
 }
 
 gp_prepare_runtime_directory() {

@@ -1,0 +1,17 @@
+[Unit]
+Description=Rollback unconfirmed Grabenplaner host security transaction
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/sbin/grabenplaner-host-security rollback-pending --automatic
+TimeoutStartSec=10min
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes

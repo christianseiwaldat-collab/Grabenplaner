@@ -15,6 +15,7 @@ Die bereitgestellten Werkzeuge ersetzen nicht die betriebliche Prüfung von Doma
 - lokale Sicherungspunkte: `/var/backups/grabenplaner`
 - optionaler Offsite-Status: `/var/lib/grabenplaner-offsite/status.json`; private Arbeitsdaten des Moduls liegen ebenfalls im gesonderten, root-verwalteten Modulpfad
 - redigierter Monitorstatus: `/var/lib/grabenplaner-monitor/status.json`; nur `root` schreibt, der App-Dienst besitzt ausschließlich Lesezugriff
+- optionaler, redigierter Host-Sicherheitsstatus: `/var/lib/grabenplaner-host-security/status.json`; Transaktionsdaten bleiben davon getrennt root-only
 - Anwendung: `127.0.0.1:3000`
 - öffentlicher Zugang: ausschließlich Caddy auf Port 443
 
@@ -55,7 +56,7 @@ Die kontrollierte Erstinstallation verwendet das geprüfte Paket und seine verö
 
 ```bash
 sudo bash server-tools/linux/install-grabenplaner-server.sh \
-  --package /pfad/Grabenplaner-Server-v0.74.0-beta-linux-x64.zip \
+  --package /pfad/Grabenplaner-Server-v0.75.0-beta-linux-x64.zip \
   --sha256 '<veröffentlichter SHA256-Wert>' \
   --public-url https://beta.example.at \
   --replace-caddy-config
@@ -75,7 +76,7 @@ Danach wird im lokalen Browser die vom Installer ausgegebene Adresse im Format `
 sudo grabenplaner-bootstrap-admin finish
 ```
 
-Der Abschluss gilt erst als erfolgreich, wenn ein erster gekoppelter Datenbank-/Dokument-Sicherungspunkt erstellt wurde, die interne Ready-Prüfung grün ist, Caddy läuft, die öffentliche HTTPS-Ready-Prüfung erfolgreich war und der Bootstrap-Token atomar verbraucht wurde. Scheitert ein Schritt, bleibt Caddy ausgeschaltet und das Werkzeug kehrt in den lokalen Bootstrapmodus zurück. Der Bootstrap-Port darf niemals durch UFW oder eine Contabo-Firewall öffentlich freigegeben werden.
+Der Abschluss gilt erst als erfolgreich, wenn ein erster gekoppelter Datenbank-/Dokument-Sicherungspunkt erstellt wurde, die interne Ready-Prüfung grün ist, Caddy läuft, die öffentliche HTTPS-Ready-Prüfung erfolgreich war und der Bootstrap-Token atomar verbraucht wurde. Scheitert ein Schritt, bleibt Caddy ausgeschaltet und das Werkzeug kehrt in den lokalen Bootstrapmodus zurück. Der Bootstrap-Port darf niemals durch UFW oder eine Provider-/Cloud-Firewall öffentlich freigegeben werden.
 
 ### Servervariablen unter Ubuntu
 
@@ -122,6 +123,53 @@ sudo grabenplaner-uninstall --yes
 - `grabenplaner-uninstall --yes` entfernt App-Code, eigene systemd-Units und Befehlslinks. Daten, Schlüsselkonfiguration, Logs und Backups bleiben erhalten; Caddy selbst wird nicht deinstalliert und eine zuvor gesicherte, gültige Konfiguration wird wiederhergestellt.
 
 `grabenplaner-monitor.timer` startet die Prüfung alle fünf Minuten. Ausschließlich drei aufeinanderfolgende Fehler des internen Live-Endpunkts dürfen `grabenplaner.service` einmalig neu starten; zwischen zwei solchen Versuchen liegen mindestens 30 Minuten. Fehler von Ready, HTTPS, Sicherungen, Offsite-Ziel, Speicherplatz oder Virenscanner erzeugen nur einen Wartungsalarm und niemals einen automatischen Neustart. Der Monitorstatus ist kein Bestandteil des Ready-Endpunkts und kann deshalb keine Rückkopplung erzeugen.
+
+### Ubuntu-Host absichern
+
+Das Linux-Paket enthält ein eigenständiges Host-Sicherheitsmodul. Die normale Grabenplaner-Installation aktiviert es nicht und verändert weder SSH noch UFW. Auch der Modulinstaller führt zunächst nur einen täglichen, lesenden Audit ein:
+
+```bash
+sudo bash server-tools/linux/hardening/install-grabenplaner-host-hardening.sh
+sudo grabenplaner-host-security audit
+```
+
+Das Modul lädt keine Programme aus dem Internet. `openssh-server`, `ufw` und `unattended-upgrades` müssen deshalb zuvor aus den freigegebenen Ubuntu-Paketquellen installiert und geprüft sein. Der Audit kontrolliert unter anderem Schlüssel-SSH, Firewall, öffentliche Ports, automatische Sicherheitsaktualisierungen, Kernel-Schutzwerte, Journalbegrenzung, Dienstkonten, Geheimnisdateien, fehlgeschlagene Units und Zeitsynchronisierung. Seine Statusdatei enthält ausschließlich fest definierte Wahrheitswerte und Zeitangaben; IP-Adressen, Benutzernamen, Ports, Pfade und Diagnosefreitext werden nicht an die Anwendung weitergegeben.
+
+Vor einer Aktivierung wird aus einer bestehenden Schlüssel-SSH-Sitzung ein folgenloser Plan geprüft. `USER`, `PORT` und `CIDR` sind durch den tatsächlichen nicht privilegierten Sudo-Admin, den bereits verwendeten SSH-Port und einen möglichst engen administrativen Quellbereich zu ersetzen:
+
+```bash
+sudo grabenplaner-host-security plan \
+  --admin USER \
+  --ssh-port PORT \
+  --source CIDR
+```
+
+Der Plan bricht ab, wenn die aktuelle SSH-Sitzung nicht zum Admin, Port und Quellbereich passt, kein sicherer `authorized_keys`-Zugang nachweisbar ist, Sudo-Rechte fehlen, `sshd -t` beziehungsweise die sitzungsbezogene effektive SSH-Konfiguration fehlschlagen oder UFW die vorgesehenen Regeln nicht akzeptiert.
+
+Die tatsächliche Aktivierung bleibt ein bewusster Root-Vorgang im angekündigten Wartungsfenster:
+
+```bash
+sudo grabenplaner-host-security apply \
+  --admin USER \
+  --ssh-port PORT \
+  --source CIDR
+```
+
+Für dieses Wartungsfenster gilt eine klare Betriebsgrenze: Nur der verantwortliche, vertrauenswürdige Root-Administrator arbeitet an der Hostkonfiguration. SSH-, UFW-, APT-, sysctl- und Journald-Dateien dürfen bis zum Abschluss von Bestätigung oder Rollback nicht parallel durch andere Root-Prozesse geändert werden. Das Modul prüft seine Zielzustände unmittelbar vor atomaren Ersetzungen und bricht bei Fremddrift ab; gegen ein bereits kompromittiertes Root-Konto kann es den Host selbst nicht absichern.
+
+Vor der ersten Änderung werden die verwalteten Hostdateien samt Prüfsummen gesichert und ein persistenter Zehn-Minuten-Rollback aktiviert. UFW erhält zuerst die eingeschränkte Freigabe für den bereits verwendeten SSH-Port, danach die öffentlichen Caddy-Ports 80 und 443. Eingehende und weitergeleitete Verbindungen sind standardmäßig gesperrt, ausgehende Verbindungen erlaubt; die Firewall wird nicht zurückgesetzt. Das Modul ergänzt und entfernt im normalen Ablauf ausschließlich seine eigenen Regeln und löscht fremde Regeln nicht gezielt. Erkennt der Rollback nachträgliche Änderungen an der gesicherten UFW-Konfiguration, verweigert er die automatische Wiederherstellung, statt diese Änderungen zu überschreiben. Port 3000 bleibt intern und darf weder in UFW noch in der Provider-/Cloud-Firewall freigegeben werden.
+
+Die erste SSH-Sitzung bleibt geöffnet. Erst nach erfolgreichem `apply` wird eine **neue zweite Schlüssel-SSH-Sitzung** geöffnet. In dieser zweiten Sitzung wird die ausgegebene 64-stellige Transaktionskennung bestätigt:
+
+```bash
+sudo grabenplaner-host-security confirm --transaction 64HEX
+```
+
+Nur eine nach der Änderung geöffnete, ebenfalls zur freigegebenen Quelle passende Sitzung darf bestätigen. Ohne Bestätigung setzt der Sicherheitstimer die verwalteten SSH-, UFW-, APT-, sysctl- und Journald-Werte automatisch zurück. Ein bestätigter Stand kann später weiterhin bewusst mit `rollback --transaction 64HEX` zurückgenommen werden; erst danach darf das Modul deinstalliert werden.
+
+Das SSH-Profil deaktiviert Root- und Passwortanmeldung, behält aber lokales TCP-Forwarding für den geschützten Bootstrap-Tunnel. Ubuntu-Sicherheitsaktualisierungen werden automatisch installiert, ein Serverneustart jedoch niemals automatisch ausgelöst. `/run/reboot-required` erscheint stattdessen als Wartungshinweis. Journald bleibt persistent, komprimiert und mengen- sowie zeitlich begrenzt. Die Kernelwerte vermeiden bewusst Eingriffe in IPv6, Routing oder Cloud-Netzwerkfunktionen.
+
+Die erstmalige Aktivierung auf dem realen Zielsystem, die Provider-/Cloud-Firewall, DNS, Caddy-Zertifikat und ein echter Rücksetztest gehören zum anschließenden Go-live-Block und werden nicht auf dem Entwicklungs-PC simuliert.
 
 Das Deployment-Schema der Linux-Laufzeit wurde für v0.74 von 1 auf 2 angehoben. Ein bestehender v0.73-Server darf daher nicht mit einem stillen In-place-Update auf v0.74 wechseln: `grabenplaner-update` beendet den Vorgang mit `migration-required`. Die verantwortliche IT verwendet im Wartungsfenster ausschließlich das im geprüften v0.74-Linux-Paket enthaltene root-only Werkzeug `server-tools/linux/migrate-grabenplaner-runtime-v2.sh`. Aufruf, Sicherheitsprüfungen und Fehlerbehandlung sind in [`server-tools/linux/RUNTIME-MIGRATIONS.md`](server-tools/linux/RUNTIME-MIGRATIONS.md) beschrieben; ein erneuter Admin-Bootstrap ist weder nötig noch zulässig.
 
@@ -419,7 +467,7 @@ Für den Paketbau wird die in `package.json` festgelegte pnpm-Version benötigt.
 Das geprüfte Paket wird am Server in einer als Administrator gestarteten PowerShell zusammen mit seiner veröffentlichten Prüfsumme eingespielt:
 
 ```powershell
-$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.74.0-beta-windows-x64.zip'
+$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.75.0-beta-windows-x64.zip'
 $sha256 = ((Get-Content "$package.sha256" -Raw).Trim() -split '\s+')[0]
 
 .\server-tools\windows\Update-GrabenplanerServer.ps1 `

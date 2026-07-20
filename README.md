@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.74 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
+  <strong>v0.75 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -34,9 +34,9 @@
 | GitHub-Aktualisierungscheck | Ja | Ja | Ja |
 | Automatisches Portable-Update | Ja | Ja, am Host-PC | Nein, kontrolliert durch die IT |
 | Zugriff | Nur auf diesem Gerät | Im vertrauenswürdigen Firmennetz | Über Internet oder Intranet per HTTPS |
-| Produktstatus | Verfügbar | Verfügbar | IT-verwalteter Produktivbetrieb |
+| Produktstatus | Verfügbar | Verfügbar | IT-verwalteter Beta-Serverbetrieb; produktive Freigabe nach Go-live-Prüfung |
 
-Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Dienst- und Urlaubsplanung an einem Gerät. Im LAN-Host-Modus liegt die Datenbank ausschließlich am Host-PC; Mitarbeitende können sich im Firmen-LAN oder -WLAN anmelden und dort auch die Zeiterfassung verwenden. Der HTTPS-Server erweitert dieses Modell um geschützten Zugriff von außerhalb. Unterstützt werden Ubuntu 24.04 und 26.04 LTS auf x86-64 mit Caddy, systemd, getrennten Dienstrechten und ClamAV; für neue Beta-Server wird Ubuntu 26.04 LTS empfohlen. Unter Ubuntu kann ein optionales Restic-/rclone-Modul verifizierte lokale Sicherungspunkte täglich verschlüsselt zu Google Drive übertragen. Eine automatische Serverprüfung meldet Störungen redigiert in der Oberfläche; Wiederherstellungen bleiben ein bewusst beaufsichtigter, mehrstufiger Vorgang. Die vorhandenen Windows-Werkzeuge bleiben verfügbar. Die konkrete Domain-, Firewall-, Zertifikats- und Betriebskonfiguration muss vor der Freigabe durch die zuständige IT geprüft werden. Details stehen in [SERVERBETRIEB.md](SERVERBETRIEB.md).
+Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Dienst- und Urlaubsplanung an einem Gerät. Im LAN-Host-Modus liegt die Datenbank ausschließlich am Host-PC; Mitarbeitende können sich im Firmen-LAN oder -WLAN anmelden und dort auch die Zeiterfassung verwenden. Der HTTPS-Server erweitert dieses Modell um geschützten Zugriff von außerhalb. Unterstützt werden Ubuntu 24.04 und 26.04 LTS auf x86-64 mit Caddy, systemd, getrennten Dienstrechten und ClamAV; für neue Beta-Server wird Ubuntu 26.04 LTS empfohlen. Unter Ubuntu kann ein optionales Restic-/rclone-Modul verifizierte lokale Sicherungspunkte täglich verschlüsselt zu Google Drive übertragen. Eine automatische Serverprüfung meldet Störungen redigiert in der Oberfläche; Wiederherstellungen bleiben ein bewusst beaufsichtigter, mehrstufiger Vorgang. Ein getrenntes Host-Sicherheitsmodul prüft SSH, UFW, automatische Sicherheitsaktualisierungen, Kernel- und Journalvorgaben. Aktivierende Änderungen bleiben ein ausdrücklicher Root-Vorgang mit Sicherheitsrollback und Bestätigung aus einer zweiten SSH-Sitzung. Die vorhandenen Windows-Werkzeuge bleiben verfügbar. Die konkrete Domain-, Firewall-, Zertifikats- und Betriebskonfiguration muss vor der Freigabe durch die zuständige IT geprüft werden. Details stehen in [SERVERBETRIEB.md](SERVERBETRIEB.md).
 
 ## Planung, Verwaltung und Mitarbeiterportal
 
@@ -103,7 +103,7 @@ Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Diens
 - Rollen- und Rechtemanagement mit personenbezogenen Zusatzrechten, Bereichsgrenzen sowie grafischer Prozessübersicht mit Konfigurationsprüfung, folgenloser Simulation und PDF-Dokumentation
 - Standortbezogene Branding-Kits für unterschiedliche Filialauftritte
 - Lokale SQLite-Datenbank ohne externen Datenbankserver
-- Integriertes Backup-System, optional verschlüsselte Restic-/rclone-Offsite-Sicherung für Ubuntu-Server und GitHub-basierter Aktualisierungscheck
+- Integriertes Backup-System, optional verschlüsselte Restic-/rclone-Offsite-Sicherung, transaktionales Ubuntu-Host-Hardening und GitHub-basierter Aktualisierungscheck
 - Windows-Host-Assistent für vorkonfigurierte USB-Sticks mit Funktionsprofil, Team, Rollen, Branding-Kits und anpassbarer „Erste Schritte“-PDF; nutzbar aus Lokal-, LAN- und HTTPS-Betrieb direkt am Host
 
 ## Schutz sensibler Personalakt-Daten
@@ -120,8 +120,8 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 
 ## Schnellstart unter Windows
 
-1. Die portable ZIP-Datei unter [Grabenplaner v0.74 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.74-beta) herunterladen und entpacken.
-2. `Grabenplaner v0.74 Beta starten.cmd` doppelt anklicken.
+1. Die portable ZIP-Datei unter [Grabenplaner v0.75 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.75-beta) herunterladen und entpacken.
+2. `Grabenplaner v0.75 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.
@@ -143,6 +143,7 @@ Aktualisierungen werden über GitHub geprüft und als Portable-ZIP direkt über 
 | Authentifizierung | Rollen, Browser-Sitzungen mit CSRF-Schutz, rotierende native Geräte-Sitzungen und bereichsbezogene Berechtigungen |
 | HTTPS-Serverbetrieb | IT-verwalteter Ubuntu- oder Windows-Einzelserver mit Caddy, automatischer Live-/Ready-Prüfung sowie kontrolliertem Update, Backup und Restore |
 | Ubuntu-Offsite-Backup | Optionales Restic-Repository über rclone mit verschlüsselter Google-Drive-Kopie, Statusdiagnose, Integritätsprüfung und beaufsichtigter Wiederherstellung |
+| Ubuntu-Host-Sicherheit | Separates, paketgebundenes Audit-/Hardening-Modul für Schlüssel-SSH, UFW, Sicherheitsupdates, Kernel- und Journalvorgaben mit Zwei-Sitzungs-Bestätigung und automatischem Rollback |
 
 Für lokale Entwicklung wird Node.js 22.13 oder neuer benötigt:
 

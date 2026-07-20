@@ -52,6 +52,16 @@ function Test-AllowedTrackedRuntimePath([string]$RelativePath) {
         $normalized.StartsWith('server-tools/')
 }
 
+function Get-Sha256Text([string]$Value) {
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [Text.Encoding]::UTF8.GetBytes($Value)
+        return ([BitConverter]::ToString($algorithm.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $algorithm.Dispose()
+    }
+}
+
 function Remove-TemporaryTreeBestEffort([string]$Path, [string]$ExpectedParent) {
     $resolved = [System.IO.Path]::GetFullPath($Path)
     $parentPrefix = [System.IO.Path]::GetFullPath($ExpectedParent).TrimEnd('\') + '\'
@@ -101,6 +111,31 @@ function Write-DeterministicZip([string]$SourceRoot, [string]$ArchivePath) {
 
 $sourceRoot = Resolve-SafeDirectory -Path $SourceDirectory -MustExist
 $outputRoot = Resolve-SafeDirectory -Path $OutputDirectory
+$hardeningPrefix = 'server-tools/linux/hardening/'
+$expectedHardeningArtifacts = @(
+    'server-tools/linux/hardening/grabenplaner-host-security.sh',
+    'server-tools/linux/hardening/install-grabenplaner-host-hardening.sh',
+    'server-tools/linux/hardening/lib/hardening-common.sh',
+    'server-tools/linux/hardening/lib/hardening-contract.js',
+    'server-tools/linux/hardening/lib/hardening-policy.js',
+    'server-tools/linux/hardening/module-schema.json',
+    'server-tools/linux/hardening/systemd/grabenplaner-host-security-audit.service.in',
+    'server-tools/linux/hardening/systemd/grabenplaner-host-security-audit.timer.in',
+    'server-tools/linux/hardening/systemd/grabenplaner-host-security-rollback.service.in',
+    'server-tools/linux/hardening/systemd/grabenplaner-host-security-rollback.timer.in',
+    'server-tools/linux/hardening/templates/00-grabenplaner-hardening.conf',
+    'server-tools/linux/hardening/templates/60grabenplaner-auto-upgrades',
+    'server-tools/linux/hardening/templates/60grabenplaner-unattended-upgrades',
+    'server-tools/linux/hardening/templates/60-grabenplaner-journald.conf',
+    'server-tools/linux/hardening/templates/60-grabenplaner-sysctl.conf',
+    'server-tools/linux/hardening/test-grabenplaner-host-hardening.sh',
+    'server-tools/linux/hardening/uninstall-grabenplaner-host-hardening.sh'
+)
+$expectedHardeningDirectories = @(
+    'server-tools/linux/hardening/lib',
+    'server-tools/linux/hardening/systemd',
+    'server-tools/linux/hardening/templates'
+)
 $sourcePrefixForOutput = $sourceRoot.TrimEnd('\') + '\'
 if ($outputRoot -eq $sourceRoot) { throw 'Der Ausgabeordner darf nicht dem Quellordner entsprechen.' }
 if ($outputRoot.StartsWith($sourcePrefixForOutput, [StringComparison]::OrdinalIgnoreCase)) {
@@ -167,7 +202,7 @@ try {
         Copy-Item -LiteralPath $sourceFile -Destination $destination -Force
     }
 
-    foreach ($required in @(
+    $requiredPackageFiles = @(
         'server.js',
         'package.json',
         'pnpm-lock.yaml',
@@ -208,10 +243,82 @@ try {
         'server-tools\linux\recovery\lib\recovery-apply.js',
         'server-tools\linux\recovery\lib\recovery-metadata.js',
         'server-tools\linux\recovery\lib\recovery-verify.js'
-    )) {
+    ) + $expectedHardeningArtifacts
+    foreach ($required in $requiredPackageFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $buildRoot $required) -PathType Leaf)) {
             throw "Pflichtdatei fehlt im Linux-Serverpaket: $required"
         }
+    }
+
+    $hardeningTreeRoot = Join-Path $buildRoot 'server-tools\linux\hardening'
+    $hardeningTreeRootItem = Get-Item -LiteralPath $hardeningTreeRoot -Force
+    if (-not $hardeningTreeRootItem.PSIsContainer -or
+        (($hardeningTreeRootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+        throw 'Der optionale Hardening-Modulordner ist unzulaessig.'
+    }
+    $actualHardeningFiles = @()
+    $actualHardeningDirectories = @()
+    foreach ($item in Get-ChildItem -LiteralPath $hardeningTreeRoot -Recurse -Force) {
+        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Links und Reparse-Points sind im Hardening-Modul nicht erlaubt: $($item.FullName)"
+        }
+        $relative = $item.FullName.Substring($buildRoot.TrimEnd('\').Length + 1).Replace('\', '/')
+        if ($item.PSIsContainer) { $actualHardeningDirectories += $relative }
+        elseif ($item -is [IO.FileInfo]) { $actualHardeningFiles += $relative }
+        else { throw "Unzulaessiger Dateityp im Hardening-Modul: $relative" }
+    }
+    $actualHardeningFiles = [string[]]$actualHardeningFiles
+    $actualHardeningDirectories = [string[]]$actualHardeningDirectories
+    $sortedExpectedHardeningFiles = [string[]]$expectedHardeningArtifacts.Clone()
+    $sortedExpectedHardeningDirectories = [string[]]$expectedHardeningDirectories.Clone()
+    [Array]::Sort($actualHardeningFiles, [StringComparer]::Ordinal)
+    [Array]::Sort($actualHardeningDirectories, [StringComparer]::Ordinal)
+    [Array]::Sort($sortedExpectedHardeningFiles, [StringComparer]::Ordinal)
+    [Array]::Sort($sortedExpectedHardeningDirectories, [StringComparer]::Ordinal)
+    if (($actualHardeningFiles -join "`0") -cne ($sortedExpectedHardeningFiles -join "`0") -or
+        ($actualHardeningDirectories -join "`0") -cne ($sortedExpectedHardeningDirectories -join "`0")) {
+        throw 'Der Hardening-Modulbaum enthaelt nicht exakt die freigegebenen Dateien und Verzeichnisse.'
+    }
+
+    $hardeningSchemaPath = Join-Path $buildRoot 'server-tools\linux\hardening\module-schema.json'
+    $hardeningSchema = Get-Content -LiteralPath $hardeningSchemaPath -Raw -Encoding utf8 | ConvertFrom-Json
+    $hardeningSchemaKeys = @($hardeningSchema.PSObject.Properties.Name | Sort-Object)
+    $expectedHardeningSchemaKeys = @('activationPolicy', 'format', 'managedArtifacts', 'moduleVersion', 'schemaVersion')
+    if (($hardeningSchemaKeys -join "`0") -cne ($expectedHardeningSchemaKeys -join "`0") -or
+        [string]$hardeningSchema.format -cne 'grabenplaner-linux-hardening-module-contract' -or
+        [int]$hardeningSchema.schemaVersion -ne 1 -or [int]$hardeningSchema.moduleVersion -ne 1 -or
+        [string]$hardeningSchema.activationPolicy -cne 'explicit-root-two-session') {
+        throw 'Der separate Hardening-Modulvertrag wird nicht unterstuetzt.'
+    }
+    $declaredHardeningArtifacts = @($hardeningSchema.managedArtifacts | ForEach-Object { [string]$_ })
+    if ($declaredHardeningArtifacts.Count -ne $expectedHardeningArtifacts.Count) {
+        throw 'Der Hardening-Modulvertrag enthaelt nicht exakt die freigegebenen Artefakte.'
+    }
+    for ($index = 0; $index -lt $expectedHardeningArtifacts.Count; $index++) {
+        if ($declaredHardeningArtifacts[$index] -cne $expectedHardeningArtifacts[$index]) {
+            throw 'Der Hardening-Modulvertrag enthaelt nicht exakt die freigegebenen Artefakte.'
+        }
+    }
+    $sortedHardeningArtifacts = [string[]]$expectedHardeningArtifacts.Clone()
+    [Array]::Sort($sortedHardeningArtifacts, [StringComparer]::Ordinal)
+    $hardeningContractFiles = @()
+    $hardeningFingerprintPayload = [Text.StringBuilder]::new()
+    foreach ($relative in $sortedHardeningArtifacts) {
+        $candidate = Join-Path $buildRoot $relative.Replace('/', '\')
+        $hash = (Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash.ToLowerInvariant()
+        [void]$hardeningFingerprintPayload.Append($relative).Append([char]0).Append($hash).Append("`n")
+        $hardeningContractFiles += [ordered]@{
+            path = $relative.Substring($hardeningPrefix.Length)
+            sha256 = $hash
+        }
+    }
+    $hardeningModuleContract = [ordered]@{
+        format = 'grabenplaner-linux-hardening-installed-contract'
+        schemaVersion = 1
+        moduleVersion = 1
+        schemaSha256 = (Get-FileHash -LiteralPath $hardeningSchemaPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        fingerprint = Get-Sha256Text -Value $hardeningFingerprintPayload.ToString()
+        files = $hardeningContractFiles
     }
     foreach ($forbidden in @('node_modules', 'runtime', 'data', 'backups', '.env')) {
         if (Test-Path -LiteralPath (Join-Path $buildRoot $forbidden)) { throw "Verbotener Paketinhalt erkannt: $forbidden" }
@@ -239,6 +346,7 @@ try {
         createdAt = $sourceTimestamp
         nodeRuntimeIncluded = $false
         nodeRuntimeSha256 = $null
+        hardeningModule = $hardeningModuleContract
         files = $manifestFiles
     }
     $manifestJson = $manifest | ConvertTo-Json -Depth 7
@@ -253,6 +361,10 @@ try {
     $roundtripManifest = Get-Content -LiteralPath $roundtripManifestPath -Raw -Encoding utf8 | ConvertFrom-Json
     if ($roundtripManifest.format -ne 'grabenplaner-server-package' -or [int]$roundtripManifest.schemaVersion -ne 1) {
         throw 'Das Linux-Paketmanifest ist nicht mit dem Server-Updater kompatibel.'
+    }
+    if ([string]$roundtripManifest.hardeningModule.fingerprint -cne [string]$hardeningModuleContract.fingerprint -or
+        [string]$roundtripManifest.hardeningModule.schemaSha256 -cne [string]$hardeningModuleContract.schemaSha256) {
+        throw 'Der Hardening-Modulvertrag hat den ZIP-Roundtrip nicht unveraendert ueberstanden.'
     }
     foreach ($item in $roundtripManifest.files) {
         $candidate = Join-Path $roundtripRoot ([string]$item.path).Replace('/', '\')

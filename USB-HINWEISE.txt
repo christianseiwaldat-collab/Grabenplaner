@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.74 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.75 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,17 +13,11 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Version v0.74 Beta:
-  - Der Ubuntu-Server prueft Anwendung, HTTPS, Sicherungen, Speicher und
-    Systemdienste automatisch in einem geschuetzten Fuenf-Minuten-Takt.
-  - Warnungen werden im Grabenplaner redigiert angezeigt; technische Details
-    bleiben einem gesonderten Administrationsrecht vorbehalten.
-  - Eine Wiederherstellung aus dem verschluesselten Offsite-Repository erfolgt
-    beaufsichtigt in vier ausdruecklichen Phasen. Vor dem Austausch wird der
-    bisherige Datenstand nochmals als Sicherheitskopie erhalten.
-  - Der Ubuntu-HTTPS-Server unterstützt ein getrennt eingerichtetes, verschlüsseltes
-    Offsite-Backup mit automatischen Integritäts- und Wiederherstellungsprüfungen.
-    Der lokale beziehungsweise portable Betrieb bleibt davon unverändert.
+Version v0.75 Beta:
+  - Der optionale Ubuntu-Serverbetrieb wurde um redigierte Zustandsprüfungen,
+    beaufsichtigte Wiederherstellung und ein getrennt aktivierbares
+    Host-Sicherheitsmodul erweitert. Die portable Windows-Version bleibt davon
+    unverändert. Einrichtung und Sicherheitsgrenzen stehen in SERVERBETRIEB.md.
   - Verbesserte Kontraste für die dunkle Darstellung, insbesondere in
     Dienstplanung, Einstellungen und technischen Übersichten.
   - Gespeicherte helle oder dunkle Darstellung je Hauptseite und einstellbare Dashboard-Schriftgröße.
