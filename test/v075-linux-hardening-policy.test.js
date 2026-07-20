@@ -11,7 +11,7 @@ const helperPath = path.join(root, "server-tools", "linux", "hardening", "lib", 
 const policy = require(helperPath);
 const journaldTemplate = fs.readFileSync(path.join(
   root,
-  "server-tools", "linux", "hardening", "templates", "zz-grabenplaner-journald.conf",
+  "server-tools", "linux", "hardening", "templates", "60-grabenplaner-journald.conf",
 ), "utf8");
 const journaldManagedPath = "/etc/systemd/journald.conf.d/zz-grabenplaner-journald.conf";
 

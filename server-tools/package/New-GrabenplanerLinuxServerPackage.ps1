@@ -143,7 +143,6 @@ $expectedHardeningArtifacts = @(
     'server-tools/linux/hardening/templates/60grabenplaner-auto-upgrades',
     'server-tools/linux/hardening/templates/60grabenplaner-unattended-upgrades',
     'server-tools/linux/hardening/templates/60-grabenplaner-journald.conf',
-    'server-tools/linux/hardening/templates/zz-grabenplaner-journald.conf',
     'server-tools/linux/hardening/templates/60-grabenplaner-sysctl.conf',
     'server-tools/linux/hardening/test-grabenplaner-host-hardening.sh',
     'server-tools/linux/hardening/uninstall-grabenplaner-host-hardening.sh'
@@ -303,7 +302,7 @@ try {
     $expectedHardeningSchemaKeys = @('activationPolicy', 'format', 'managedArtifacts', 'moduleVersion', 'schemaVersion')
     if (($hardeningSchemaKeys -join "`0") -cne ($expectedHardeningSchemaKeys -join "`0") -or
         [string]$hardeningSchema.format -cne 'grabenplaner-linux-hardening-module-contract' -or
-        [int]$hardeningSchema.schemaVersion -ne 1 -or [int]$hardeningSchema.moduleVersion -ne 2 -or
+        [int]$hardeningSchema.schemaVersion -ne 1 -or [int]$hardeningSchema.moduleVersion -ne 1 -or
         [string]$hardeningSchema.activationPolicy -cne 'explicit-root-two-session') {
         throw 'Der separate Hardening-Modulvertrag wird nicht unterstuetzt.'
     }

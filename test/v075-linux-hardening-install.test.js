@@ -21,6 +21,7 @@ const auditService = fs.readFileSync(path.join(systemdRoot, "grabenplaner-host-s
 const auditTimer = fs.readFileSync(path.join(systemdRoot, "grabenplaner-host-security-audit.timer.in"), "utf8");
 const rollbackService = fs.readFileSync(path.join(systemdRoot, "grabenplaner-host-security-rollback.service.in"), "utf8");
 const rollbackTimer = fs.readFileSync(path.join(systemdRoot, "grabenplaner-host-security-rollback.timer.in"), "utf8");
+const serverDocumentation = fs.readFileSync(path.join(root, "SERVERBETRIEB.md"), "utf8");
 
 function executableLines(source) {
   return source.split(/\r?\n/)
@@ -53,6 +54,16 @@ test("v0.75 hardening installer validates then copies only contract artifacts", 
   assert.match(installer, /weicht vom freigegebenen Quellvertrag ab/);
 });
 
+test("v0.75.1 documents the explicit fingerprint-changing module maintenance", () => {
+  const rollback = serverDocumentation.indexOf("grabenplaner-host-security rollback --transaction");
+  const uninstall = serverDocumentation.indexOf("grabenplaner-host-security-uninstall", rollback);
+  const install = serverDocumentation.indexOf("install-grabenplaner-host-hardening.sh", uninstall);
+  const audit = serverDocumentation.indexOf("grabenplaner-host-security audit", install);
+  assert.ok(rollback >= 0 && uninstall > rollback && install > uninstall && audit > install);
+  assert.match(serverDocumentation, /App-Update ersetzt ein bereits .* installiertes Sicherheitsmodul absichtlich nicht/);
+  assert.match(serverDocumentation, /Transaktionsdateien duerfen nicht manuell geloescht/);
+});
+
 test("v0.75 installer and uninstaller hold the shared controller lock across state checks", () => {
   assert.match(common, /HARDENING_CONTROLLER_LOCK="\/run\/grabenplaner-host-security\/controller\.lock"/);
   assert.match(common, /hardening_acquire_controller_lock\(\)/);
@@ -66,14 +77,30 @@ test("v0.75 installer and uninstaller hold the shared controller lock across sta
   assert.doesNotMatch(common, /chmod 0600 -- "\$HARDENING_CONTROLLER_LOCK"/);
   const installLock = installer.indexOf("hardening_acquire_controller_lock");
   const installPending = installer.indexOf('[[ ! -e "$HARDENING_PENDING_FILE"');
+  const installActive = installer.indexOf('[[ ! -e "$ACTIVE_TRANSACTION_FILE"');
+  const installPreflight = installer.indexOf("preflight_existing_installation", installLock);
+  const installRoots = installer.indexOf("hardening_secure_roots", installLock);
   const uninstallLock = uninstaller.indexOf("hardening_acquire_controller_lock");
   const uninstallPending = uninstaller.indexOf('[[ ! -e "$HARDENING_PENDING_FILE"');
-  assert.ok(installLock >= 0 && installLock < installPending);
+  assert.ok(installLock >= 0 && installLock < installPending && installPending < installActive);
+  assert.ok(installActive < installPreflight && installActive < installRoots);
   assert.ok(uninstallLock >= 0 && uninstallLock < uninstallPending);
   assert.match(installer, /hardening_acquire_controller_lock fail-fast 0/);
   assert.match(uninstaller, /hardening_acquire_controller_lock fail-fast 0/);
   assert.doesNotMatch(installer, /flock\s+--unlock|flock\s+-u/);
   assert.doesNotMatch(uninstaller, /flock\s+--unlock|flock\s+-u/);
+});
+
+test("v0.75.1 installer refuses pending and active transactions before any installation mutation", () => {
+  const lock = installer.indexOf("hardening_acquire_controller_lock");
+  const pending = installer.indexOf('[[ ! -e "$HARDENING_PENDING_FILE"', lock);
+  const active = installer.indexOf('[[ ! -e "$ACTIVE_TRANSACTION_FILE"', lock);
+  const preflight = installer.indexOf("preflight_existing_installation", lock);
+  const mutation = installer.indexOf("hardening_secure_roots", lock);
+  assert.match(installer, /readonly ACTIVE_TRANSACTION_FILE="\$HARDENING_STATE_ROOT\/active-transaction"/);
+  assert.ok(lock >= 0 && pending > lock && active > pending);
+  assert.ok(active < preflight && preflight < mutation);
+  assert.match(installer, /Aktives Host-Hardening muss vor einer Modulinstallation mit dem installierten Controller zurueckgerollt werden/);
 });
 
 test("v0.75 preserves the delegated read-only status directory", () => {

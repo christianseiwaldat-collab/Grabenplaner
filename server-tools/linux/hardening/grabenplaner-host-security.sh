@@ -435,7 +435,7 @@ configured_preflight() {
     || hardening_die "Bestehende UFW-Freigaben sind breiter als die geplante Host-Sicherheitspolicy."
   if [[ -e "$JOURNALD_DROPIN" || -L "$JOURNALD_DROPIN" ]]; then
     root_readonly_configuration_file "$JOURNALD_DROPIN" \
-      && cmp -s -- "$TEMPLATE_ROOT/zz-grabenplaner-journald.conf" "$JOURNALD_DROPIN" \
+      && cmp -s -- "$TEMPLATE_ROOT/60-grabenplaner-journald.conf" "$JOURNALD_DROPIN" \
       || hardening_die "Eine vorhandene Journal-Konfiguration am neuen Ziel ist fremd oder veraendert."
   fi
   if [[ -e "$JOURNALD_LEGACY_DROPIN" || -L "$JOURNALD_LEGACY_DROPIN" ]]; then
@@ -1044,7 +1044,7 @@ validate_effective_journald_configuration() {
   root_readonly_configuration_file "$JOURNALD_DROPIN" || return 1
   merged="$(LC_ALL=C SYSTEMD_COLORS=0 SYSTEMD_PAGER=cat systemd-analyze cat-config systemd/journald.conf 2>/dev/null)" || return 1
   node="$(hardening_node)" || return 1
-  printf '%s\0%s' "$merged" "$(<"$TEMPLATE_ROOT/zz-grabenplaner-journald.conf")" | "$node" -e '
+  printf '%s\0%s' "$merged" "$(<"$TEMPLATE_ROOT/60-grabenplaner-journald.conf")" | "$node" -e '
 const fs = require("node:fs");
 const policy = require(process.argv[1]);
 const input = fs.readFileSync(0);
@@ -1087,10 +1087,10 @@ install_managed_templates() {
     || hardening_die "Eine spaetere sysctl-Konfiguration ueberschreibt das Sicherheitsprofil."
   write_apply_journal "$transaction_directory" sysctl_complete
 
-  record_intended_file_state "$transaction_directory" journald "$TEMPLATE_ROOT/zz-grabenplaner-journald.conf" 0 0 644
+  record_intended_file_state "$transaction_directory" journald "$TEMPLATE_ROOT/60-grabenplaner-journald.conf" 0 0 644
   record_intended_absent_state "$transaction_directory" journald-legacy
   write_apply_journal "$transaction_directory" journald_in_progress
-  hardening_atomic_install "$TEMPLATE_ROOT/zz-grabenplaner-journald.conf" "$JOURNALD_DROPIN" 0644
+  hardening_atomic_install "$TEMPLATE_ROOT/60-grabenplaner-journald.conf" "$JOURNALD_DROPIN" 0644
   if [[ -e "$JOURNALD_LEGACY_DROPIN" || -L "$JOURNALD_LEGACY_DROPIN" ]]; then
     root_readonly_configuration_file "$JOURNALD_LEGACY_DROPIN" \
       && cmp -s -- "$TEMPLATE_ROOT/60-grabenplaner-journald.conf" "$JOURNALD_LEGACY_DROPIN" \

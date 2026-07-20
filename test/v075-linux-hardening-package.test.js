@@ -12,6 +12,25 @@ const root = path.resolve(__dirname, "..");
 const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 const schema = JSON.parse(read("server-tools/linux/hardening/module-schema.json"));
 const hardeningRoot = path.join(root, "server-tools", "linux", "hardening");
+const legacyV075HardeningArtifacts = [
+  "server-tools/linux/hardening/grabenplaner-host-security.sh",
+  "server-tools/linux/hardening/install-grabenplaner-host-hardening.sh",
+  "server-tools/linux/hardening/lib/hardening-common.sh",
+  "server-tools/linux/hardening/lib/hardening-contract.js",
+  "server-tools/linux/hardening/lib/hardening-policy.js",
+  "server-tools/linux/hardening/module-schema.json",
+  "server-tools/linux/hardening/systemd/grabenplaner-host-security-audit.service.in",
+  "server-tools/linux/hardening/systemd/grabenplaner-host-security-audit.timer.in",
+  "server-tools/linux/hardening/systemd/grabenplaner-host-security-rollback.service.in",
+  "server-tools/linux/hardening/systemd/grabenplaner-host-security-rollback.timer.in",
+  "server-tools/linux/hardening/templates/00-grabenplaner-hardening.conf",
+  "server-tools/linux/hardening/templates/60grabenplaner-auto-upgrades",
+  "server-tools/linux/hardening/templates/60grabenplaner-unattended-upgrades",
+  "server-tools/linux/hardening/templates/60-grabenplaner-journald.conf",
+  "server-tools/linux/hardening/templates/60-grabenplaner-sysctl.conf",
+  "server-tools/linux/hardening/test-grabenplaner-host-hardening.sh",
+  "server-tools/linux/hardening/uninstall-grabenplaner-host-hardening.sh",
+];
 
 function withHardeningCopy(callback) {
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-hardening-contract-"));
@@ -97,10 +116,22 @@ test("v0.75 hardening contract rejects obsolete module schemas instead of reinte
   withHardeningCopy((moduleRoot) => {
     const schemaPath = path.join(moduleRoot, "module-schema.json");
     const obsolete = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
-    obsolete.moduleVersion = 1;
+    obsolete.moduleVersion = 2;
     fs.writeFileSync(schemaPath, `${JSON.stringify(obsolete, null, 2)}\n`, "utf8");
     assert.throws(() => moduleContract(moduleRoot), /wird nicht unterstuetzt/);
   });
+});
+
+test("v0.75.1 hardening package remains acceptable to the installed v0.75 verifier", () => {
+  const { moduleContract } = require(path.join(hardeningRoot, "lib", "hardening-contract.js"));
+  assert.equal(schema.schemaVersion, 1);
+  assert.equal(schema.moduleVersion, 1);
+  assert.deepEqual(schema.managedArtifacts, legacyV075HardeningArtifacts);
+  assert.equal(fs.existsSync(path.join(hardeningRoot, "templates", "zz-grabenplaner-journald.conf")), false);
+  const contract = moduleContract(hardeningRoot);
+  assert.equal(contract.schemaVersion, 1);
+  assert.equal(contract.moduleVersion, 1);
+  assert.equal(contract.files.length, legacyV075HardeningArtifacts.length);
 });
 
 test("v0.75 package verifier rejects an extra hardening file or directory", () => {
@@ -204,13 +235,8 @@ test("v0.75 hardening package schema stays exact and explicitly activated", () =
   assert.deepEqual(Object.keys(schema).sort(), ["activationPolicy", "format", "managedArtifacts", "moduleVersion", "schemaVersion"]);
   assert.equal(schema.format, "grabenplaner-linux-hardening-module-contract");
   assert.equal(schema.schemaVersion, 1);
-  assert.equal(schema.moduleVersion, 2);
+  assert.equal(schema.moduleVersion, 1);
   assert.equal(schema.activationPolicy, "explicit-root-two-session");
   assert.equal(new Set(schema.managedArtifacts).size, schema.managedArtifacts.length);
   assert.ok(schema.managedArtifacts.every((relative) => relative.startsWith("server-tools/linux/hardening/")));
-  assert.equal(
-    read("server-tools/linux/hardening/templates/60-grabenplaner-journald.conf"),
-    read("server-tools/linux/hardening/templates/zz-grabenplaner-journald.conf"),
-    "The legacy signature and the prioritized replacement must describe the same policy.",
-  );
 });

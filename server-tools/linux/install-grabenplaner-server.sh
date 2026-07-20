@@ -393,7 +393,6 @@ const expectedHardeningArtifacts = [
   "server-tools/linux/hardening/templates/60grabenplaner-auto-upgrades",
   "server-tools/linux/hardening/templates/60grabenplaner-unattended-upgrades",
   "server-tools/linux/hardening/templates/60-grabenplaner-journald.conf",
-  "server-tools/linux/hardening/templates/zz-grabenplaner-journald.conf",
   "server-tools/linux/hardening/templates/60-grabenplaner-sysctl.conf",
   "server-tools/linux/hardening/test-grabenplaner-host-hardening.sh",
   "server-tools/linux/hardening/uninstall-grabenplaner-host-hardening.sh",
@@ -518,7 +517,7 @@ let hardeningSchema;
 try { hardeningSchema = JSON.parse(fs.readFileSync(hardeningSchemaPath, "utf8").replace(/^\uFEFF/, "")); } catch { fail("Der optionale Hardening-Modulvertrag ist nicht lesbar."); }
 if (JSON.stringify(Object.keys(hardeningSchema || {}).sort()) !== JSON.stringify(["activationPolicy", "format", "managedArtifacts", "moduleVersion", "schemaVersion"])
   || hardeningSchema?.format !== "grabenplaner-linux-hardening-module-contract" || hardeningSchema?.schemaVersion !== 1
-  || hardeningSchema?.moduleVersion !== 2 || hardeningSchema?.activationPolicy !== "explicit-root-two-session"
+  || hardeningSchema?.moduleVersion !== 1 || hardeningSchema?.activationPolicy !== "explicit-root-two-session"
   || !Array.isArray(hardeningSchema?.managedArtifacts) || hardeningSchema.managedArtifacts.length !== expectedHardeningArtifacts.length
   || expectedHardeningArtifacts.some((relative, index) => hardeningSchema.managedArtifacts[index] !== relative)) {
   fail("Der optionale Hardening-Modulvertrag ist ungueltig.");
