@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.75.1 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.75.2 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,24 +13,19 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Version v0.75.1 Beta:
-  - Die Bestätigung einer angewendeten Ubuntu-Host-Härtung akzeptiert nur eine
-    eigenständige neue SSH-Verbindung. Eine lediglich per OpenSSH-Multiplexing
-    geöffnete Sitzung über dieselbe bestehende Verbindung wird zurückgewiesen.
-  - Der optionale Ubuntu-Serverbetrieb wurde um redigierte Zustandsprüfungen,
-    beaufsichtigte Wiederherstellung und ein getrennt aktivierbares
-    Host-Sicherheitsmodul erweitert. Die portable Windows-Version bleibt davon
-    unverändert. Einrichtung und Sicherheitsgrenzen stehen in SERVERBETRIEB.md.
-  - Verbesserte Kontraste für die dunkle Darstellung, insbesondere in
-    Dienstplanung, Einstellungen und technischen Übersichten.
-  - Gespeicherte helle oder dunkle Darstellung je Hauptseite und einstellbare Dashboard-Schriftgröße.
-  - Neue Dashboard-Zentrale mit Rechte-, Prozess- und Filialübersicht sowie persönlicher Filialreihenfolge.
-  - Erweiterter, verschlüsselter Personalakt mit feldgenauen Lese- und Bearbeitungsrechten.
-  - Zentrale Personalverwaltung und Kostenstellen für Filialen, Verwaltung und weitere Betriebe.
-  - Filialverwaltung mit Einsatzfilialen, Abteilungen und standortbezogener Urlaubsprüfung.
-  - Globale Urlaubsübersicht ohne Umgehung von Mindestbesetzung, Sperren oder Bereichsrechten.
-  - Eigene grafische Prozesse mit Zuständigkeiten, Bedingungen und internen oder externen Hinweisen.
-  - AUM-Zugriff und Fallzuständigkeit lassen sich für lokale Leitungen sicher steuern.
+Version v0.75.2 Beta:
+  - Verwaltungs- und Personal-Pop-ups reagieren auf 4K-, Full-HD- und mobile
+    Ansichten und vermeiden horizontale Scrollbalken.
+  - Standortkarten, Leerzustände, Rechtekarten und Dialog-Scrollbalken wurden
+    für den Darkmode überarbeitet.
+  - Team- und Mitarbeitendenlisten bieten eine gespeicherte Spaltenauswahl und
+    natürliche auf- beziehungsweise absteigende Sortierung.
+  - Die Seitenleiste bündelt Mitarbeitende, Anträge, Zeiterfassung,
+    Kostenstellen und unternehmensweite Urlaube rechteabhängig unter
+    „Personalverwaltung“.
+  - Einstellungen bleiben außerhalb des scrollbaren Hauptmenüs erreichbar.
+  - Im HTTPS-Serverbetrieb meldet der untere Button den Benutzer ab, ohne den
+    Serverdienst zu beenden.
 
 USB-Stick-Assistent:
   - In Lokal-, LAN- und HTTPS-Betrieb für Developer, IT-Admin oder Admin verfügbar,

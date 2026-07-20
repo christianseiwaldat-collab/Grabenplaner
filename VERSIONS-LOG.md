@@ -1,5 +1,15 @@
 # Grabenplaner Versions-Log
 
+## v0.75.2 Beta · Funktionspatch
+
+- Verwaltungs- und Personal-Pop-ups passen ihre Spaltenzahl nun an 4K-, Full-HD- und mobile Ansichten an und vermeiden horizontale Scrollbalken.
+- Die Standortübersicht verwendet auf breiten Ansichten ein kompaktes Zweispaltenraster; neutrale Leerzustände und Dialog-Scrollbalken folgen auch im Darkmode dem gewählten Erscheinungsbild.
+- Team- und zentrale Mitarbeitendenliste teilen eine benutzerbezogen gespeicherte Spaltenauswahl. Angezeigte Personalaktfelder bleiben auf die jeweiligen Leserechte begrenzt.
+- Ein Klick auf eine Spaltenüberschrift sortiert natürlich aufsteigend, der nächste Klick absteigend; Personalnummern werden numerisch beziehungsweise alphanumerisch eingeordnet.
+- Die Seitenleiste bündelt Mitarbeitende, Anträge, Zeiterfassung, Kostenstellen und die unternehmensweite Urlaubsansicht unter einer aufklappbaren Personalverwaltung. Jeder Unterpunkt wird nur mit dem dafür erforderlichen Recht angezeigt.
+- Das bisherige Feld „Aktive Teammitglieder“ entfällt. Einstellungen bleiben an seiner Stelle dauerhaft außerhalb des scrollbaren Hauptmenüs erreichbar.
+- Im HTTPS-Serverbetrieb meldet der untere Seitenleisten-Button den aktuellen Benutzer ab, ohne den Serverdienst zu beenden.
+
 ## v0.75.1 Beta · Sicherheitsupdate
 
 - Die über `/usr/local/sbin` veröffentlichten Linux-Wartungsbefehle lösen ihr tatsächliches App-Skript nun vor relativen Bibliothekszugriffen kanonisch auf; fremde oder nicht reguläre Symlinkziele werden vor der Ausführung abgelehnt.

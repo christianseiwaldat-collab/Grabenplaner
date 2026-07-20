@@ -18,7 +18,7 @@ function between(source, start, end) {
   return source.slice(startIndex, endIndex);
 }
 
-test("v0.75.1 Navigation: Personalverwaltung bündelt ausschließlich berechtigte Fachbereiche", () => {
+test("v0.75.2 Navigation: Personalverwaltung bündelt ausschließlich berechtigte Fachbereiche", () => {
   const navigation = between(html, '<section class="nav-module hidden" id="personnelAdministrationNav"', "</nav>");
   assert.match(navigation, /id="personnelAdministrationToggle"[^>]*data-nav-toggle="personnelAdministration"[^>]*aria-controls="personnelAdministrationNavChildren"/);
   assert.match(navigation, /<button(?=[^>]*id="personnelDirectoryNavButton")(?=[^>]*data-personnel-administration-route="employees")[^>]*>/);
@@ -32,7 +32,7 @@ test("v0.75.1 Navigation: Personalverwaltung bündelt ausschließlich berechtigt
   assert.ok(navigation.indexOf("costCentersNavButton") < navigation.indexOf("centralVacationsNavButton"));
 });
 
-test("v0.75.1 Navigation: zentrale Punkte folgen ihren eigenen Leserechten", () => {
+test("v0.75.2 Navigation: zentrale Punkte folgen ihren eigenen Leserechten", () => {
   const accessHelpers = between(app, "function canReadCentralPersonnel()", "function applyRoleVisibility()");
   const costCenterHelper = between(accessHelpers, "function canReadCostCenters()", "function canWriteCostCenters()");
   assert.match(costCenterHelper, /cost_centers:read/);
@@ -50,7 +50,7 @@ test("v0.75.1 Navigation: zentrale Punkte folgen ihren eigenen Leserechten", () 
   assert.match(visibility, /personnelModuleAccess = personnelAdministrationViewAccess \|\| requestReadAccess \|\| timeReadAccess/);
 });
 
-test("v0.75.1 Navigation: Personal-Unterseiten sind aufklappbar, adressierbar und eindeutig aktiv", () => {
+test("v0.75.2 Navigation: Personal-Unterseiten sind aufklappbar, adressierbar und eindeutig aktiv", () => {
   const groups = between(app, "function navigationGroups()", "function setNavigationCurrent");
   assert.match(groups, /personnelAdministration:\s*\{\s*toggle:\s*elements\.personnelAdministrationToggle,\s*children:\s*elements\.personnelAdministrationNavChildren\s*\}/);
   const contextualNavigation = between(app, "function renderContextNavigation()", "function renderHeader()");
@@ -63,7 +63,7 @@ test("v0.75.1 Navigation: Personal-Unterseiten sind aufklappbar, adressierbar un
   assert.match(requestedView, /\["employees", "costCenters", "vacations"\]\.includes\(requestedSection\)/);
 });
 
-test("v0.75.1 Navigation: Teamstatus entfällt und Einstellungen bleiben außerhalb des Scrollmenüs erreichbar", () => {
+test("v0.75.2 Navigation: Teamstatus entfällt und Einstellungen bleiben außerhalb des Scrollmenüs erreichbar", () => {
   assert.doesNotMatch(html, /sidebar-summary|sidebarEmployeeCount|Aktive Teammitglieder/);
   const afterNavigation = html.slice(html.indexOf("</nav>"), html.indexOf('<div class="sidebar-actions"'));
   assert.match(afterNavigation, /class="sidebar-settings-shortcut"/);
