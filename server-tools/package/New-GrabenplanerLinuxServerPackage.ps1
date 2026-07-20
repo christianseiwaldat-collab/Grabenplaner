@@ -202,7 +202,7 @@ try {
         Copy-Item -LiteralPath $sourceFile -Destination $destination -Force
     }
 
-    foreach ($required in @(
+    $requiredPackageFiles = @(
         'server.js',
         'package.json',
         'pnpm-lock.yaml',
@@ -242,9 +242,9 @@ try {
         'server-tools\linux\recovery\grabenplaner-recovery.sh',
         'server-tools\linux\recovery\lib\recovery-apply.js',
         'server-tools\linux\recovery\lib\recovery-metadata.js',
-        'server-tools\linux\recovery\lib\recovery-verify.js',
-        $expectedHardeningArtifacts
-    )) {
+        'server-tools\linux\recovery\lib\recovery-verify.js'
+    ) + $expectedHardeningArtifacts
+    foreach ($required in $requiredPackageFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $buildRoot $required) -PathType Leaf)) {
             throw "Pflichtdatei fehlt im Linux-Serverpaket: $required"
         }

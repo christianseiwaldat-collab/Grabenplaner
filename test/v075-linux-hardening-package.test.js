@@ -160,6 +160,27 @@ test("v0.75 package integration never activates host hardening implicitly", () =
   assert.doesNotMatch(installer, /sshd?\s+-t/);
 });
 
+test("v0.75 Linux package builder expands the complete hardening artifact list", {
+  skip: process.platform !== "win32" ? "PowerShell-Paketbau wird im Windows-Job geprüft." : false,
+}, () => {
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v075-package-build-"));
+  try {
+    const builder = path.join(root, "server-tools", "package", "New-GrabenplanerLinuxServerPackage.ps1");
+    const result = spawnSync("powershell.exe", [
+      "-NoProfile",
+      "-ExecutionPolicy", "Bypass",
+      "-File", builder,
+      "-SourceDirectory", root,
+      "-OutputDirectory", temporaryRoot,
+    ], { encoding: "utf8", timeout: 120_000 });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.ok(fs.existsSync(path.join(temporaryRoot, "Grabenplaner-Server-v0.75.0-beta-linux-x64.zip")));
+    assert.ok(fs.existsSync(path.join(temporaryRoot, "Grabenplaner-Server-v0.75.0-beta-linux-x64.zip.sha256")));
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
 test("v0.75 hardening package schema stays exact and explicitly activated", () => {
   assert.deepEqual(Object.keys(schema).sort(), ["activationPolicy", "format", "managedArtifacts", "moduleVersion", "schemaVersion"]);
   assert.equal(schema.format, "grabenplaner-linux-hardening-module-contract");
