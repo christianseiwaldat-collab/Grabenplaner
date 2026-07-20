@@ -317,31 +317,41 @@ ufw_is_active() {
   LC_ALL=C ufw status 2>/dev/null | grep -qx 'Status: active'
 }
 
+root_readonly_configuration_file() {
+  local file="$1"
+  [[ -f "$file" && ! -L "$file" \
+    && "$(stat --format='%u:%g:%a:%h' -- "$file")" == "0:0:644:1" ]]
+}
+
 validate_effective_ufw_policy() {
-  local mode="$1" port="$2" node added status baseline="" baseline_payload=""
+  local mode="$1" port="$2" node added status defaults baseline="" baseline_payload=""
   shift 2
   [[ "$mode" == baseline || "$mode" == complete ]] || return 1
   node="$(hardening_node)" || return 1
   added="$(LC_ALL=C ufw show added 2>/dev/null)" || return 1
   status="$(LC_ALL=C ufw status verbose 2>/dev/null)" || return 1
+  root_readonly_configuration_file "$UFW_DEFAULT" || return 1
+  defaults="$(<"$UFW_DEFAULT")" || return 1
   if [[ -n "$UFW_TRANSITION_BASELINE_FILE" ]]; then
     private_file_is_secure "$UFW_TRANSITION_BASELINE_FILE" || return 1
     baseline="$(<"$UFW_TRANSITION_BASELINE_FILE")" || return 1
     baseline_payload="1$baseline"
   fi
-  printf '%s\0%s\0%s' "$added" "$status" "$baseline_payload" | "$node" -e '
+  printf '%s\0%s\0%s\0%s' "$added" "$status" "$baseline_payload" "$defaults" | "$node" -e '
 const fs = require("node:fs");
 const policy = require(process.argv[1]);
 const input = fs.readFileSync(0);
 const first = input.indexOf(0);
 const second = input.indexOf(0, first + 1);
-if (first < 0 || second < 0) process.exit(1);
+const third = input.indexOf(0, second + 1);
+if (first < 0 || second < 0 || third < 0) process.exit(1);
 try {
   policy.validateUfwPolicy({
     addedRules: input.subarray(0, first).toString("utf8"),
     status: input.subarray(first + 1, second).toString("utf8"),
     baselineAddedRules: input.length > second + 1 && input[second + 1] === 49
-      ? input.subarray(second + 2).toString("utf8") : null,
+      ? input.subarray(second + 2, third).toString("utf8") : null,
+    ufwDefaults: input.subarray(third + 1).toString("utf8"),
     sshPort: process.argv[3],
     allowedSources: process.argv.slice(4),
     requireComplete: process.argv[2] === "complete",
@@ -656,6 +666,27 @@ restore_parent_is_secure() {
   [[ "$resolved" == "$parent" ]]
 }
 
+absent_restore_parent_is_safe() {
+  local parent="$1" ancestor="$1" next
+  [[ "$parent" == /* ]] || return 1
+  if [[ -e "$parent" || -L "$parent" ]]; then
+    restore_parent_is_secure "$parent"
+    return
+  fi
+
+  # An absent predecessor does not require recreating a directory which did
+  # not exist before apply. Still prove that every missing path component is
+  # genuinely absent (not a dangling link) and that the closest existing
+  # ancestor is the canonical, root-owned, non-writable host directory.
+  while [[ ! -e "$ancestor" && ! -L "$ancestor" ]]; do
+    next="$(dirname -- "$ancestor")" || return 1
+    [[ "$next" != "$ancestor" ]] || return 1
+    ancestor="$next"
+  done
+  [[ ! -L "$ancestor" ]] || return 1
+  restore_parent_is_secure "$ancestor"
+}
+
 current_target_is_restore_permitted() {
   local transaction_directory="$1" key="$2" target="$3" backup_record="$4"
   local manifest record state_file state=""
@@ -691,6 +722,16 @@ restore_file() {
   validate_manifest_record "$record" "$key" || return 1
   IFS=$'\t' read -r _ state hash uid gid mode <<<"$record"
   parent="$(dirname -- "$target")" || return 1
+
+  if [[ "$state" == absent && ! -e "$target" && ! -L "$target" ]]; then
+    absent_restore_parent_is_safe "$parent" || return 1
+    [[ ! -e "$target" && ! -L "$target" ]] || return 1
+    absent_restore_parent_is_safe "$parent" || return 1
+    if [[ -d "$parent" ]]; then sync -f "$parent" || return 1; fi
+    [[ ! -e "$target" && ! -L "$target" ]] || return 1
+    return
+  fi
+
   restore_parent_is_secure "$parent" || return 1
 
   if [[ "$state" == present ]]; then
@@ -723,10 +764,6 @@ restore_file() {
     sync -f "$parent" || return 1
     file_matches_manifest_record "$target" "$record"
   elif [[ "$state" == absent ]]; then
-    if [[ ! -e "$target" && ! -L "$target" ]]; then
-      sync -f "$parent"
-      return
-    fi
     current_target_is_restore_permitted "$transaction_directory" "$key" "$target" "$record" || return 1
     restore_parent_is_secure "$parent" \
       && current_target_is_restore_permitted "$transaction_directory" "$key" "$target" "$record" \

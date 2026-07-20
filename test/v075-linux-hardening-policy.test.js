@@ -103,6 +103,66 @@ test("v0.75 UFW policy accepts only exact managed ingress and preserves foreign 
   }), /invalid|changed|not allowed/);
 });
 
+test("v0.75 UFW policy accepts Ubuntu 26.04's fail-closed disabled routed state", () => {
+  const source = "178.165.178.81/32";
+  const added = `Added user rules (see 'ufw status' for running firewall):
+ufw allow from 178.165.178.81 to any port 22 proto tcp comment 'Grabenplaner managed SSH'
+ufw allow 80/tcp comment 'Grabenplaner managed HTTP'
+ufw allow 443/tcp comment 'Grabenplaner managed HTTPS'`;
+  const status = `Status: active
+Logging: on (low)
+Default: deny (incoming), allow (outgoing), disabled (routed)
+New profiles: skip
+
+To                         Action      From
+--                         ------      ----
+22/tcp                     ALLOW IN    178.165.178.81             # Grabenplaner managed SSH
+80/tcp                     ALLOW IN    Anywhere                   # Grabenplaner managed HTTP
+443/tcp                    ALLOW IN    Anywhere                   # Grabenplaner managed HTTPS
+80/tcp (v6)                ALLOW IN    Anywhere (v6)              # Grabenplaner managed HTTP
+443/tcp (v6)               ALLOW IN    Anywhere (v6)              # Grabenplaner managed HTTPS`;
+  const ufwDefaults = `IPV6=yes
+DEFAULT_INPUT_POLICY="DROP"
+DEFAULT_OUTPUT_POLICY="ACCEPT"
+DEFAULT_FORWARD_POLICY="DROP"
+DEFAULT_APPLICATION_POLICY="SKIP"`;
+
+  assert.deepEqual(policy.validateUfwPolicy({
+    addedRules: added,
+    status,
+    sshPort: 22,
+    allowedSources: [source],
+    requireComplete: true,
+    ufwDefaults,
+  }), { configuredCount: 3, effectiveCount: 3, complete: true });
+
+  for (const routedPolicy of ["allow", "reject", "skip"]) {
+    assert.throws(() => policy.validateUfwPolicy({
+      addedRules: added,
+      status: status.replace("disabled (routed)", `${routedPolicy} (routed)`),
+      sshPort: 22,
+      allowedSources: [source],
+      requireComplete: true,
+      ufwDefaults,
+    }), /invalid/);
+  }
+
+  for (const invalidDefaults of [
+    ufwDefaults.replace('DEFAULT_FORWARD_POLICY="DROP"', 'DEFAULT_FORWARD_POLICY="ACCEPT"'),
+    ufwDefaults.replace('DEFAULT_FORWARD_POLICY="DROP"\n', ""),
+    `${ufwDefaults}\nDEFAULT_FORWARD_POLICY="DROP"`,
+  ]) {
+    assert.throws(() => policy.validateUfwPolicy({
+      addedRules: added,
+      status,
+      sshPort: 22,
+      allowedSources: [source],
+      requireComplete: true,
+      ufwDefaults: invalidDefaults,
+    }), /invalid/);
+  }
+});
+
 test("v0.75 UFW denial fixtures fail closed for broad, intersecting ranges and profiles", () => {
   const source = "203.0.113.0/24";
   const safeBase = "Added user rules (see 'ufw status' for running firewall):\nufw deny 25/tcp";

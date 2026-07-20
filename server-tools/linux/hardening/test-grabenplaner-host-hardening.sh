@@ -13,6 +13,7 @@ readonly STATUS_READER_GROUP="grabenplaner-monitor-status"
 readonly GRABENPLANER_ENV_FILE="/etc/grabenplaner/grabenplaner.env"
 readonly APT_PERIODIC_FILE="/etc/apt/apt.conf.d/60grabenplaner-auto-upgrades"
 readonly APT_UNATTENDED_FILE="/etc/apt/apt.conf.d/60grabenplaner-unattended-upgrades"
+readonly UFW_DEFAULT_FILE="/etc/default/ufw"
 readonly ACTIVE_TRANSACTION_FILE="$HARDENING_STATE_ROOT/active-transaction"
 readonly POLICY_FILE="$MODULE_ROOT/lib/hardening-policy.js"
 
@@ -279,19 +280,23 @@ check_ssh() {
 }
 
 validate_transaction_ufw_policy() {
-  local added="$1" status="$2" node
+  local added="$1" status="$2" defaults node
   [[ "$TRANSACTION_POLICY_AVAILABLE" == true ]] || return 1
+  root_readonly_config_file "$UFW_DEFAULT_FILE" || return 1
+  defaults="$(<"$UFW_DEFAULT_FILE")" || return 1
   node="$(hardening_node)" || return 1
-  printf '%s\0%s' "$added" "$status" | "$node" -e '
+  printf '%s\0%s\0%s' "$added" "$status" "$defaults" | "$node" -e '
 const fs = require("node:fs");
 const policy = require(process.argv[1]);
 const input = fs.readFileSync(0);
-const separator = input.indexOf(0);
-if (separator < 0) process.exit(1);
+const first = input.indexOf(0);
+const second = input.indexOf(0, first + 1);
+if (first < 0 || second < 0) process.exit(1);
 try {
   policy.validateUfwPolicy({
-    addedRules: input.subarray(0, separator).toString("utf8"),
-    status: input.subarray(separator + 1).toString("utf8"),
+    addedRules: input.subarray(0, first).toString("utf8"),
+    status: input.subarray(first + 1, second).toString("utf8"),
+    ufwDefaults: input.subarray(second + 1).toString("utf8"),
     sshPort: process.argv[2],
     allowedSources: process.argv.slice(3),
     requireComplete: true,

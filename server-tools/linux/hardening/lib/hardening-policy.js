@@ -258,16 +258,36 @@ function analyzeAddedRules(output, sshPort, allowedSourceKeys) {
   return { managed: found, foreign };
 }
 
+function validateUfwDefaultPolicies(output) {
+  const defaults = requireSafeMultiline(output, "UFW defaults");
+  const expected = new Map([
+    ["DEFAULT_INPUT_POLICY", "DROP"],
+    ["DEFAULT_OUTPUT_POLICY", "ACCEPT"],
+    ["DEFAULT_FORWARD_POLICY", "DROP"],
+  ]);
+  for (const [key, value] of expected) {
+    const assignments = defaults.split(/\r?\n/).filter((line) => new RegExp(`^[ \\t]*${key}[ \\t]*=`).test(line));
+    if (assignments.length !== 1
+      || !new RegExp(`^[ \\t]*${key}[ \\t]*=[ \\t]*"${value}"[ \\t]*(?:#.*)?$`).test(assignments[0])) {
+      throw new TypeError("UFW default policy file is invalid.");
+    }
+  }
+}
+
 function analyzeStatusRules(output, sshPort, allowedSourceKeys, requireComplete) {
   const status = requireSafeMultiline(output, "UFW status");
   const active = /^Status:\s+active$/m.test(status);
+  // UFW 0.36.2 reports "disabled (routed)" when kernel forwarding is
+  // disabled. That is an equally fail-closed effective state; when routing is
+  // enabled, the managed DROP policy is reported as "deny (routed)" instead.
+  const defaultMatch = /^Default:\s+deny\s+\(incoming\),\s+allow\s+\(outgoing\),\s+(deny|disabled)\s+\(routed\)$/m.exec(status);
   if (requireComplete && (!active
     || !/^Logging:\s+on\s+\(low\)$/m.test(status)
-    || !/^Default:\s+deny\s+\(incoming\),\s+allow\s+\(outgoing\),\s+deny\s+\(routed\)$/m.test(status))) {
+    || !defaultMatch)) {
     throw new TypeError("UFW effective policy is invalid.");
   }
   const found = new Set();
-  if (!active) return found;
+  if (!active) return Object.freeze({ found, routedDisabled: false });
   for (const rawLine of status.split(/\r?\n/)) {
     const line = rawLine.replace(/\s+\(v6\)/g, "").trim();
     const match = /^(\S+)\s+(ALLOW|LIMIT|DENY|REJECT)\s+(IN|OUT|FWD)\s+(.+?)(?:\s+#.*)?$/.exec(line);
@@ -296,10 +316,10 @@ function analyzeStatusRules(output, sshPort, allowedSourceKeys, requireComplete)
     }, sshPort, allowedSourceKeys);
     if (classification !== null) found.add(classification);
   }
-  return found;
+  return Object.freeze({ found, routedDisabled: defaultMatch?.[1] === "disabled" });
 }
 
-function validateUfwPolicy({ addedRules, status, sshPort, allowedSources, requireComplete = false, baselineAddedRules = null }) {
+function validateUfwPolicy({ addedRules, status, sshPort, allowedSources, requireComplete = false, baselineAddedRules = null, ufwDefaults = null }) {
   const port = parsePort(sshPort);
   const sources = validateAllowedSources(allowedSources, { requireNonEmpty: true });
   const allowedSourceKeys = new Set(sources.map((source) => (
@@ -307,7 +327,9 @@ function validateUfwPolicy({ addedRules, status, sshPort, allowedSources, requir
   )));
   const addedAnalysis = analyzeAddedRules(addedRules, port, allowedSourceKeys);
   const added = addedAnalysis.managed;
-  const effective = analyzeStatusRules(status, port, allowedSourceKeys, requireComplete);
+  const effectiveAnalysis = analyzeStatusRules(status, port, allowedSourceKeys, requireComplete);
+  const effective = effectiveAnalysis.found;
+  if (requireComplete && effectiveAnalysis.routedDisabled) validateUfwDefaultPolicies(ufwDefaults);
   const expected = new Set(["web:80", "web:443", ...[...allowedSourceKeys].map((source) => `ssh:${source}`)]);
   for (const rule of added) if (!expected.has(rule)) throw new TypeError("UFW configured rule is invalid.");
   for (const rule of effective) if (!expected.has(rule) || !added.has(rule)) throw new TypeError("UFW effective rule is invalid.");

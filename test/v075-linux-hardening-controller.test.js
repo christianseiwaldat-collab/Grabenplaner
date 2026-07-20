@@ -286,6 +286,8 @@ test("v0.75 gates UFW, APT, sysctl and journald before confirmation", () => {
   const ufwRestore = restore.indexOf('restore_file "$transaction_directory" ufw-user');
   assert.ok(ufwRecheck >= 0 && ufwRestore > ufwRecheck);
   assert.match(controller, /apt-daily\.timer apt-daily-upgrade\.timer/);
+  assert.match(controller, /root_readonly_configuration_file "\$UFW_DEFAULT"/);
+  assert.match(controller, /ufwDefaults:/);
   assert.match(controller, /systemd-analyze cat-config systemd\/journald\.conf/);
   assert.match(controller, /sysctl -n "\$key"/);
 });
