@@ -202,8 +202,8 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "personnelAdministrationNavButton", "rightsDashboardNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
-    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarEmployeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "centralVacationsNavButton", "settingsNavButton", "rightsDashboardNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField",
@@ -633,8 +633,7 @@ function canWriteCentralPersonnel() {
 
 function canReadCostCenters() {
   return !state.portalStatus?.portalEnabled
-    || state.portalSession?.user?.permissions?.includes("cost_centers:read") === true
-    || canReadCentralPersonnel();
+    || state.portalSession?.user?.permissions?.includes("cost_centers:read") === true;
 }
 
 function canWriteCostCenters() {
@@ -647,6 +646,34 @@ function canReadCentralVacations() {
     !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("vacation:read") === true
   );
+}
+
+function canReadManagerRequests() {
+  return !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("vacation:read") === true;
+}
+
+function canReadManagedTimeTracking() {
+  if (!state.portalStatus?.portalEnabled || !state.portalStatus?.capabilities?.timeTracking) return false;
+  const permissions = state.portalSession?.user?.permissions || [];
+  return permissions.includes("time:read") || permissions.includes("time:review");
+}
+
+function canOpenPersonnelAdministrationView() {
+  return canReadCentralPersonnel() || canReadCostCenters() || canReadCentralVacations();
+}
+
+function firstAccessiblePersonnelAdministrationTab() {
+  if (canReadCentralPersonnel()) return "employees";
+  if (canReadCostCenters()) return "costCenters";
+  if (canReadCentralVacations()) return "vacations";
+  return "";
+}
+
+function canOpenPersonnelAdministrationTab(tab) {
+  return (tab === "employees" && canReadCentralPersonnel())
+    || (tab === "costCenters" && canReadCostCenters())
+    || (tab === "vacations" && canReadCentralVacations());
 }
 
 function applyRoleVisibility() {
@@ -668,7 +695,7 @@ function applyRoleVisibility() {
   const operationModeAccess = !lanActive || permissions.includes("operation_mode:write");
   const scopeAccess = permissions.includes("scopes:write");
   const employeeReadAccess = employeeWriteAccess || employeeDisplayWriteAccess || permissions.includes("employees:read");
-  const timeReadAccess = lanActive && permissions.includes("time:read") && state.portalStatus?.capabilities?.timeTracking;
+  const timeReadAccess = canReadManagedTimeTracking() && features.timeTracking !== false;
   const wifiSettingsAccess = !lanActive || permissions.includes("wifi:settings");
   const greetingSettingsAccess = !lanActive || (globalAdministration && permissions.includes("hr:settings"));
   const diagnosticsTechnicalAccess = !lanActive || permissions.includes("system:diagnostics:technical");
@@ -694,11 +721,17 @@ function applyRoleVisibility() {
   const costCenterReadAccess = canReadCostCenters();
   const costCenterWriteAccess = canWriteCostCenters();
   const centralVacationReadAccess = canReadCentralVacations() && features.vacation !== false;
-  elements.personnelAdministrationNavButton?.classList.toggle("hidden", !centralPersonnelReadAccess);
+  const requestReadAccess = canReadManagerRequests() && features.requests !== false;
+  const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess || centralVacationReadAccess;
+  const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
+  elements.personnelAdministrationNav?.classList.toggle("hidden", !personnelModuleAccess);
+  elements.personnelDirectoryNavButton?.classList.toggle("hidden", !centralPersonnelReadAccess);
+  elements.costCentersNavButton?.classList.toggle("hidden", !costCenterReadAccess);
+  elements.centralVacationsNavButton?.classList.toggle("hidden", !centralVacationReadAccess);
   document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
   document.querySelectorAll('[data-view="vacations"]').forEach((button) => button.classList.toggle("hidden", features.vacation === false));
-  elements.requestsNavButton?.classList.toggle("hidden", features.requests === false);
-  elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess || features.timeTracking === false);
+  elements.requestsNavButton?.classList.toggle("hidden", !requestReadAccess);
+  elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
   elements.rightsDashboardNavButton?.classList.toggle("hidden", !rightsAccess);
   const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess || operationModeAccess || wifiSettingsAccess || usbProvisioningAccess || integrationAccess || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
@@ -733,6 +766,7 @@ function applyRoleVisibility() {
   document.querySelector('[data-personnel-tab="locations"]')?.classList.toggle("hidden", !locationWriteAccess);
   document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !(employeeWriteAccess && centralPersonnelWriteAccess));
   elements.addCentralEmployeeButton?.classList.toggle("hidden", !centralPersonnelWriteAccess);
+  document.querySelector('[data-personnel-administration-tab="employees"]')?.classList.toggle("hidden", !centralPersonnelReadAccess);
   document.querySelector('[data-personnel-administration-tab="costCenters"]')?.classList.toggle("hidden", !costCenterReadAccess);
   elements.centralVacationsTab?.classList.toggle("hidden", !centralVacationReadAccess);
   elements.addCostCenterButton?.classList.toggle("hidden", !costCenterWriteAccess);
@@ -785,9 +819,12 @@ function applyRoleVisibility() {
   if (globalAdministration) elements.viewBehaviorSettingsCard?.classList.remove("hidden");
   [elements.localModeOption, elements.serverModeOption, elements.publicServerModeOption].forEach((button) => { if (button) button.disabled = !operationModeAccess; });
   if (!locationWriteAccess && state.personnelTab === "locations") setPersonnelTab("employees");
-  if (!costCenterReadAccess && state.personnelAdministrationTab === "costCenters") setPersonnelAdministrationTab("employees");
-  if (!centralVacationReadAccess && state.personnelAdministrationTab === "vacations") setPersonnelAdministrationTab("employees");
-  if (!centralPersonnelReadAccess && state.currentView === "personnelAdministration") setView("planning");
+  if (!canOpenPersonnelAdministrationTab(state.personnelAdministrationTab)) {
+    setPersonnelAdministrationTab(firstAccessiblePersonnelAdministrationTab());
+  }
+  if (!personnelAdministrationViewAccess && state.currentView === "personnelAdministration") setView("planning");
+  if (!requestReadAccess && state.currentView === "requests") setView("planning");
+  if (!timeReadAccess && state.currentView === "timeTracking") setView("planning");
   renderSidebarSession();
 }
 
@@ -1049,7 +1086,7 @@ async function loadAll() {
     state.departmentId = schedule.context?.departmentId ? String(schedule.context.departmentId) : "";
     state.vacationYear = vacationData.year;
     render();
-    if (portalStatus?.installationFeatures?.requests !== false) {
+    if (portalStatus?.installationFeatures?.requests !== false && canReadManagerRequests()) {
       loadManagerVacationRequests();
       loadRequestBlackouts();
     }
@@ -1079,11 +1116,13 @@ function navigationGroups() {
     filialManagement: { toggle: elements.filialManagementToggle, children: elements.filialManagementNavChildren },
     planning: { toggle: document.querySelector('[data-nav-toggle="planning"]'), children: elements.planningNavChildren },
     vacations: { toggle: document.querySelector('[data-nav-toggle="vacations"]'), children: elements.vacationNavChildren },
+    personnelAdministration: { toggle: elements.personnelAdministrationToggle, children: elements.personnelAdministrationNavChildren },
   };
 }
 
 function setNavigationCurrent(element, current) {
   if (!element) return;
+  element.classList.toggle("active", current);
   if (current) element.setAttribute("aria-current", "page");
   else element.removeAttribute("aria-current");
 }
@@ -1122,6 +1161,19 @@ function renderContextNavigation() {
   elements.vacationNavChildren.innerHTML = showVacationChildren ? locations.map((location) => `
     <button type="button" class="nav-child ${state.currentView === "vacations" && location.id === state.locationId ? "active" : ""}" ${state.currentView === "vacations" && location.id === state.locationId ? 'aria-current="page"' : ""} data-context-view="vacations" data-location-id="${escapeHtml(location.id)}" data-department-id="${departmentOnly ? escapeHtml(String(location.departments?.[0]?.id || "")) : ""}">${escapeHtml(location.name)}</button>
   `).join("") : "";
+
+  const personnelModuleVisible = !elements.personnelAdministrationNav?.classList.contains("hidden");
+  const personnelViewActive = ["personnelAdministration", "requests", "timeTracking"].includes(state.currentView);
+  elements.personnelAdministrationNav?.classList.toggle("contains-active", personnelViewActive);
+  applyNavigationGroupState("personnelAdministration", personnelModuleVisible);
+  setNavigationCurrent(elements.personnelDirectoryNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "employees");
+  setNavigationCurrent(elements.costCentersNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "costCenters");
+  setNavigationCurrent(elements.centralVacationsNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "vacations");
+  setNavigationCurrent(elements.requestsNavButton, state.currentView === "requests");
+  setNavigationCurrent(elements.timeTrackingNavButton, state.currentView === "timeTracking");
 }
 
 function renderHeader() {
@@ -1155,7 +1207,6 @@ function renderSummary() {
   elements.inStoreHours.textContent = formatHours(inStoreMinutes);
   elements.optionCount.textContent = state.data.weekOptions.length + (state.data.globalDayBlocks || []).length;
   elements.employeeCount.textContent = state.data.employees.length;
-  elements.sidebarEmployeeCount.textContent = state.data.employees.length;
   const settings = state.data.settings;
   elements.breakRuleHint.textContent = settings.break_rule_enabled === "1"
     ? `Pause: ${Number(settings.break_after_minutes) / 60} h → ${settings.break_duration_minutes} min`
@@ -2042,7 +2093,7 @@ function costCenterTypeLabel(type) {
 }
 
 async function loadPersonnelAdministration({ force = false } = {}) {
-  if (!canReadCentralPersonnel() || state.personnelAdministrationLoading) return;
+  if (!canOpenPersonnelAdministrationView() || state.personnelAdministrationLoading) return;
   if (state.personnelAdministrationLoaded && !force) {
     renderPersonnelAdministration();
     return;
@@ -2051,7 +2102,7 @@ async function loadPersonnelAdministration({ force = false } = {}) {
   if (elements.personnelDirectoryBody) elements.personnelDirectoryBody.innerHTML = '<tr><td colspan="8">Personalstammdaten werden geladen.</td></tr>';
   try {
     const [directoryPayload, costCenterPayload] = await Promise.all([
-      api("/api/personnel-directory"),
+      canReadCentralPersonnel() ? api("/api/personnel-directory") : Promise.resolve([]),
       canReadCostCenters()
         ? api("/api/cost-centers?includeInactive=1").catch((error) => {
           if ([403, 404].includes(error.status)) return [];
@@ -2270,17 +2321,19 @@ function renderCentralVacations() {
 }
 
 function renderPersonnelAdministration() {
-  if (!canReadCentralPersonnel()) return;
-  renderPersonnelAdministrationSummary();
-  renderPersonnelDirectory();
-  renderCostCenters();
-  if (state.centralVacationLoadedYear !== null) renderCentralVacations();
+  if (!canOpenPersonnelAdministrationView()) return;
+  if (canReadCentralPersonnel()) {
+    renderPersonnelAdministrationSummary();
+    renderPersonnelDirectory();
+  }
+  if (canReadCostCenters()) renderCostCenters();
+  if (canReadCentralVacations() && state.centralVacationLoadedYear !== null) renderCentralVacations();
 }
 
 function setPersonnelAdministrationTab(tab) {
-  const normalized = tab === "costCenters" && canReadCostCenters()
-    ? "costCenters"
-    : tab === "vacations" && canReadCentralVacations() ? "vacations" : "employees";
+  const normalized = canOpenPersonnelAdministrationTab(tab)
+    ? tab
+    : firstAccessiblePersonnelAdministrationTab();
   state.personnelAdministrationTab = normalized;
   document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => {
     const active = button.dataset.personnelAdministrationTab === normalized;
@@ -2292,6 +2345,7 @@ function setPersonnelAdministrationTab(tab) {
   elements.costCenterSection?.classList.toggle("active", normalized === "costCenters");
   elements.centralVacationSection?.classList.toggle("active", normalized === "vacations");
   elements.personnelDisplayColumnsButton?.classList.toggle("hidden", normalized !== "employees");
+  if (state.currentView === "personnelAdministration") renderContextNavigation();
   if (normalized === "vacations") loadCentralVacations().catch((error) => showToast(error.message, true));
 }
 
@@ -6535,14 +6589,20 @@ async function deliverPayrollExport() {
 function setView(view) {
   const features = state.portalStatus?.installationFeatures || {};
   if ((view === "vacations" && features.vacation === false)
-    || (view === "requests" && features.requests === false)
-    || (view === "timeTracking" && features.timeTracking === false)
-    || (view === "personnelAdministration" && elements.personnelAdministrationNavButton?.classList.contains("hidden"))
+    || (view === "requests" && (features.requests === false || !canReadManagerRequests()))
+    || (view === "timeTracking" && (features.timeTracking === false || !canReadManagedTimeTracking()))
+    || (view === "personnelAdministration" && !canOpenPersonnelAdministrationView())
     || (view === "rightsDashboard" && elements.rightsDashboardNavButton?.classList.contains("hidden"))) view = "planning";
   state.currentView = view;
+  if (view === "personnelAdministration") setPersonnelAdministrationTab(state.personnelAdministrationTab);
   if (timePresenceRefreshTimer) clearInterval(timePresenceRefreshTimer);
   timePresenceRefreshTimer = null;
-  document.querySelectorAll(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
+  document.querySelectorAll(".nav-item").forEach((button) => {
+    const personnelRoute = button.dataset.personnelAdministrationRoute;
+    const active = button.dataset.view === view
+      && (!personnelRoute || personnelRoute === state.personnelAdministrationTab);
+    button.classList.toggle("active", active);
+  });
   renderContextNavigation();
   elements.planningView.classList.toggle("active", view === "planning");
   elements.requestsView.classList.toggle("active", view === "requests");
@@ -6577,6 +6637,12 @@ function applyRequestedView() {
     const requestedKind = parameters.get("kind");
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
     document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
+  }
+  if (requestedView === "personnelAdministration") {
+    const requestedSection = parameters.get("section");
+    if (["employees", "costCenters", "vacations"].includes(requestedSection)) {
+      state.personnelAdministrationTab = requestedSection;
+    }
   }
   if (requestedView === "rightsDashboard") {
     const dashboardMode = parameters.get("dashboard");
@@ -8877,6 +8943,9 @@ function showToast(message, error = false) {
 
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
   const view = button.dataset.view;
+  if (button.dataset.personnelAdministrationRoute) {
+    setPersonnelAdministrationTab(button.dataset.personnelAdministrationRoute);
+  }
   const contextChanged = restoreRememberedOverallContext(view);
   setView(view);
   if (contextChanged) loadAll();

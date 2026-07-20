@@ -71,24 +71,34 @@
               </div>
             </div>
           </section>
-          <button class="nav-item request-nav-item" data-view="requests" id="requestsNavButton">
-            <span class="nav-symbol">✓</span><span>Anträge</span><strong class="nav-count hidden" id="requestsNavCount">0</strong>
-          </button>
-          <button class="nav-item hidden" data-view="timeTracking" id="timeTrackingNavButton">
-            <span class="nav-symbol">◷</span><span>Zeiterfassung</span>
-          </button>
-          <button class="nav-item hidden" data-view="personnelAdministration" id="personnelAdministrationNavButton">
-            <span class="nav-symbol">◎</span><span>Personalverwaltung</span>
-          </button>
-          <button class="nav-item" data-view="settings">
-            <span class="nav-symbol">⚙</span><span>Einstellungen</span>
-          </button>
+          <section class="nav-module hidden" id="personnelAdministrationNav" aria-label="Personalverwaltung">
+            <button type="button" class="nav-module-toggle expanded" id="personnelAdministrationToggle" data-nav-toggle="personnelAdministration" aria-controls="personnelAdministrationNavChildren" aria-expanded="true">
+              <span class="nav-module-chevron" aria-hidden="true"></span><span class="nav-symbol" aria-hidden="true">◎</span><span>Personalverwaltung</span>
+            </button>
+            <div class="nav-module-children" id="personnelAdministrationNavChildren">
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="employees" id="personnelDirectoryNavButton">
+                <span class="nav-symbol">◉</span><span>Mitarbeitende</span>
+              </button>
+              <button class="nav-item nav-module-route request-nav-item hidden" data-view="requests" id="requestsNavButton">
+                <span class="nav-symbol">✓</span><span>Anträge</span><strong class="nav-count hidden" id="requestsNavCount">0</strong>
+              </button>
+              <button class="nav-item nav-module-route hidden" data-view="timeTracking" id="timeTrackingNavButton">
+                <span class="nav-symbol">◷</span><span>Zeiterfassung</span>
+              </button>
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="costCenters" id="costCentersNavButton">
+                <span class="nav-symbol">▦</span><span>Kostenstellen</span>
+              </button>
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="vacations" id="centralVacationsNavButton">
+                <span class="nav-symbol">☀</span><span>Urlaube (Unternehmen)</span>
+              </button>
+            </div>
+          </section>
         </nav>
 
-        <div class="sidebar-summary">
-          <span class="eyebrow">Aktive Teammitglieder</span>
-          <strong id="sidebarEmployeeCount">0</strong>
-          <p>Filialteams und zentrale Stammdaten.</p>
+        <div class="sidebar-settings-shortcut">
+          <button class="nav-item" data-view="settings" id="settingsNavButton">
+            <span class="nav-symbol">⚙</span><span>Einstellungen</span>
+          </button>
         </div>
 
         <div class="sidebar-actions" aria-label="Ansicht und System">
