@@ -2,7 +2,7 @@
 Description=Grabenplaner one-time local admin bootstrap
 Documentation=https://github.com/christian-seiwald-at/grabenplaner
 After=network.target
-Conflicts=grabenplaner.service
+Conflicts=grabenplaner.service caddy.service
 
 [Service]
 Type=simple
@@ -10,8 +10,8 @@ User=grabenplaner
 Group=grabenplaner
 WorkingDirectory=/opt/grabenplaner/app
 EnvironmentFile=/etc/grabenplaner/grabenplaner.env
-Environment=GRABENPLANER_OPERATION_MODE=local
-Environment=GRABENPLANER_PUBLIC_URL=
+Environment=GRABENPLANER_BOOTSTRAP_MODE=1
+Environment=GRABENPLANER_OPERATION_MODE=server
 Environment=GRABENPLANER_HOST=127.0.0.1
 Environment=GRABENPLANER_TRUST_PROXY=loopback
 ExecStartPre=/usr/bin/test -x {{NODE_EXECUTABLE}}
