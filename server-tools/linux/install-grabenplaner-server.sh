@@ -537,8 +537,8 @@ for (const relative of hardeningSchema.managedArtifacts) {
 const sortedHardeningArtifacts = [...hardeningArtifacts].sort(([left], [right]) => ordinalCompare(left, right));
 const hardeningModuleContract = {
   format: "grabenplaner-linux-hardening-installed-contract",
-  schemaVersion: 1,
-  moduleVersion: 1,
+  schemaVersion: hardeningSchema.schemaVersion,
+  moduleVersion: hardeningSchema.moduleVersion,
   schemaSha256: sha256File(hardeningSchemaPath),
   fingerprint: crypto.createHash("sha256")
     .update(sortedHardeningArtifacts.map(([relative, hash]) => `${relative}\0${hash}\n`).join(""))
