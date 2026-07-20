@@ -78,6 +78,8 @@ const state = {
     settings: "light",
   },
   dashboardFontSize: "standard",
+  employeeDisplayColumns: [],
+  employeeDisplaySort: { key: "personnel_number", direction: "asc" },
   rightsDashboardMode: "locations",
   rightsDashboardSelectedProcessId: "vacation",
   rightsDashboardSelectedProcessStepId: "",
@@ -200,16 +202,17 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "personnelAdministrationNavButton", "rightsDashboardNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
-    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarEmployeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "centralVacationsNavButton", "settingsNavButton", "rightsDashboardNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField",
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount",
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
-    "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeeHomeLocation", "employeeHomeLocationHint", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "addCostCenterButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList",
+    "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeeHomeLocation", "employeeHomeLocationHint", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
+    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "addCostCenterButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList",
+    "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationCostCenterField", "locationCostCenter", "locationCostCenterReadonly", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
     "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
@@ -630,8 +633,7 @@ function canWriteCentralPersonnel() {
 
 function canReadCostCenters() {
   return !state.portalStatus?.portalEnabled
-    || state.portalSession?.user?.permissions?.includes("cost_centers:read") === true
-    || canReadCentralPersonnel();
+    || state.portalSession?.user?.permissions?.includes("cost_centers:read") === true;
 }
 
 function canWriteCostCenters() {
@@ -644,6 +646,34 @@ function canReadCentralVacations() {
     !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("vacation:read") === true
   );
+}
+
+function canReadManagerRequests() {
+  return !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("vacation:read") === true;
+}
+
+function canReadManagedTimeTracking() {
+  if (!state.portalStatus?.portalEnabled || !state.portalStatus?.capabilities?.timeTracking) return false;
+  const permissions = state.portalSession?.user?.permissions || [];
+  return permissions.includes("time:read") || permissions.includes("time:review");
+}
+
+function canOpenPersonnelAdministrationView() {
+  return canReadCentralPersonnel() || canReadCostCenters() || canReadCentralVacations();
+}
+
+function firstAccessiblePersonnelAdministrationTab() {
+  if (canReadCentralPersonnel()) return "employees";
+  if (canReadCostCenters()) return "costCenters";
+  if (canReadCentralVacations()) return "vacations";
+  return "";
+}
+
+function canOpenPersonnelAdministrationTab(tab) {
+  return (tab === "employees" && canReadCentralPersonnel())
+    || (tab === "costCenters" && canReadCostCenters())
+    || (tab === "vacations" && canReadCentralVacations());
 }
 
 function applyRoleVisibility() {
@@ -665,7 +695,7 @@ function applyRoleVisibility() {
   const operationModeAccess = !lanActive || permissions.includes("operation_mode:write");
   const scopeAccess = permissions.includes("scopes:write");
   const employeeReadAccess = employeeWriteAccess || employeeDisplayWriteAccess || permissions.includes("employees:read");
-  const timeReadAccess = lanActive && permissions.includes("time:read") && state.portalStatus?.capabilities?.timeTracking;
+  const timeReadAccess = canReadManagedTimeTracking() && features.timeTracking !== false;
   const wifiSettingsAccess = !lanActive || permissions.includes("wifi:settings");
   const greetingSettingsAccess = !lanActive || (globalAdministration && permissions.includes("hr:settings"));
   const diagnosticsTechnicalAccess = !lanActive || permissions.includes("system:diagnostics:technical");
@@ -691,11 +721,17 @@ function applyRoleVisibility() {
   const costCenterReadAccess = canReadCostCenters();
   const costCenterWriteAccess = canWriteCostCenters();
   const centralVacationReadAccess = canReadCentralVacations() && features.vacation !== false;
-  elements.personnelAdministrationNavButton?.classList.toggle("hidden", !centralPersonnelReadAccess);
+  const requestReadAccess = canReadManagerRequests() && features.requests !== false;
+  const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess || centralVacationReadAccess;
+  const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
+  elements.personnelAdministrationNav?.classList.toggle("hidden", !personnelModuleAccess);
+  elements.personnelDirectoryNavButton?.classList.toggle("hidden", !centralPersonnelReadAccess);
+  elements.costCentersNavButton?.classList.toggle("hidden", !costCenterReadAccess);
+  elements.centralVacationsNavButton?.classList.toggle("hidden", !centralVacationReadAccess);
   document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
   document.querySelectorAll('[data-view="vacations"]').forEach((button) => button.classList.toggle("hidden", features.vacation === false));
-  elements.requestsNavButton?.classList.toggle("hidden", features.requests === false);
-  elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess || features.timeTracking === false);
+  elements.requestsNavButton?.classList.toggle("hidden", !requestReadAccess);
+  elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
   elements.rightsDashboardNavButton?.classList.toggle("hidden", !rightsAccess);
   const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess || operationModeAccess || wifiSettingsAccess || usbProvisioningAccess || integrationAccess || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
@@ -720,16 +756,17 @@ function applyRoleVisibility() {
   const backupTabActive = document.querySelector('[data-settings-tab="backup"]')?.classList.contains("active");
   elements.saveSettingsButton?.classList.toggle("hidden", (!settingsAccess && !backupTabActive) || integrationTabActive || usbTabActive || (timeTrackingTabActive && !settingsAccess) || (backupTabActive && !backupConfigurationAccess));
   elements.saveOperationModeButton?.classList.toggle("hidden", !operationModeAccess || settingsAccess);
-  const privilegedServerRole = ["developer", "it_admin", "admin"].includes(role);
   const canExit = serverActive
-    ? privilegedServerRole && permissions.includes("system:write")
+    ? Boolean(state.portalSession?.user)
     : !lanActive || permissions.includes("system:write");
   elements.systemExitButton?.classList.toggle("hidden", !canExit);
-  if (elements.systemExitButton) elements.systemExitButton.querySelector("span").textContent = serverActive ? "Server beenden" : "Beenden";
+  elements.systemExitButton?.classList.toggle("logout-mode", serverActive);
+  if (elements.systemExitButton) elements.systemExitButton.querySelector("span").textContent = serverActive ? "Logout" : "Beenden";
   elements.updateCheckButton?.classList.toggle("hidden", lanActive && !permissions.includes("update:write"));
   document.querySelector('[data-personnel-tab="locations"]')?.classList.toggle("hidden", !locationWriteAccess);
   document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !(employeeWriteAccess && centralPersonnelWriteAccess));
   elements.addCentralEmployeeButton?.classList.toggle("hidden", !centralPersonnelWriteAccess);
+  document.querySelector('[data-personnel-administration-tab="employees"]')?.classList.toggle("hidden", !centralPersonnelReadAccess);
   document.querySelector('[data-personnel-administration-tab="costCenters"]')?.classList.toggle("hidden", !costCenterReadAccess);
   elements.centralVacationsTab?.classList.toggle("hidden", !centralVacationReadAccess);
   elements.addCostCenterButton?.classList.toggle("hidden", !costCenterWriteAccess);
@@ -782,9 +819,12 @@ function applyRoleVisibility() {
   if (globalAdministration) elements.viewBehaviorSettingsCard?.classList.remove("hidden");
   [elements.localModeOption, elements.serverModeOption, elements.publicServerModeOption].forEach((button) => { if (button) button.disabled = !operationModeAccess; });
   if (!locationWriteAccess && state.personnelTab === "locations") setPersonnelTab("employees");
-  if (!costCenterReadAccess && state.personnelAdministrationTab === "costCenters") setPersonnelAdministrationTab("employees");
-  if (!centralVacationReadAccess && state.personnelAdministrationTab === "vacations") setPersonnelAdministrationTab("employees");
-  if (!centralPersonnelReadAccess && state.currentView === "personnelAdministration") setView("planning");
+  if (!canOpenPersonnelAdministrationTab(state.personnelAdministrationTab)) {
+    setPersonnelAdministrationTab(firstAccessiblePersonnelAdministrationTab());
+  }
+  if (!personnelAdministrationViewAccess && state.currentView === "personnelAdministration") setView("planning");
+  if (!requestReadAccess && state.currentView === "requests") setView("planning");
+  if (!timeReadAccess && state.currentView === "timeTracking") setView("planning");
   renderSidebarSession();
 }
 
@@ -1046,7 +1086,7 @@ async function loadAll() {
     state.departmentId = schedule.context?.departmentId ? String(schedule.context.departmentId) : "";
     state.vacationYear = vacationData.year;
     render();
-    if (portalStatus?.installationFeatures?.requests !== false) {
+    if (portalStatus?.installationFeatures?.requests !== false && canReadManagerRequests()) {
       loadManagerVacationRequests();
       loadRequestBlackouts();
     }
@@ -1076,11 +1116,13 @@ function navigationGroups() {
     filialManagement: { toggle: elements.filialManagementToggle, children: elements.filialManagementNavChildren },
     planning: { toggle: document.querySelector('[data-nav-toggle="planning"]'), children: elements.planningNavChildren },
     vacations: { toggle: document.querySelector('[data-nav-toggle="vacations"]'), children: elements.vacationNavChildren },
+    personnelAdministration: { toggle: elements.personnelAdministrationToggle, children: elements.personnelAdministrationNavChildren },
   };
 }
 
 function setNavigationCurrent(element, current) {
   if (!element) return;
+  element.classList.toggle("active", current);
   if (current) element.setAttribute("aria-current", "page");
   else element.removeAttribute("aria-current");
 }
@@ -1119,6 +1161,19 @@ function renderContextNavigation() {
   elements.vacationNavChildren.innerHTML = showVacationChildren ? locations.map((location) => `
     <button type="button" class="nav-child ${state.currentView === "vacations" && location.id === state.locationId ? "active" : ""}" ${state.currentView === "vacations" && location.id === state.locationId ? 'aria-current="page"' : ""} data-context-view="vacations" data-location-id="${escapeHtml(location.id)}" data-department-id="${departmentOnly ? escapeHtml(String(location.departments?.[0]?.id || "")) : ""}">${escapeHtml(location.name)}</button>
   `).join("") : "";
+
+  const personnelModuleVisible = !elements.personnelAdministrationNav?.classList.contains("hidden");
+  const personnelViewActive = ["personnelAdministration", "requests", "timeTracking"].includes(state.currentView);
+  elements.personnelAdministrationNav?.classList.toggle("contains-active", personnelViewActive);
+  applyNavigationGroupState("personnelAdministration", personnelModuleVisible);
+  setNavigationCurrent(elements.personnelDirectoryNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "employees");
+  setNavigationCurrent(elements.costCentersNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "costCenters");
+  setNavigationCurrent(elements.centralVacationsNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "vacations");
+  setNavigationCurrent(elements.requestsNavButton, state.currentView === "requests");
+  setNavigationCurrent(elements.timeTrackingNavButton, state.currentView === "timeTracking");
 }
 
 function renderHeader() {
@@ -1152,7 +1207,6 @@ function renderSummary() {
   elements.inStoreHours.textContent = formatHours(inStoreMinutes);
   elements.optionCount.textContent = state.data.weekOptions.length + (state.data.globalDayBlocks || []).length;
   elements.employeeCount.textContent = state.data.employees.length;
-  elements.sidebarEmployeeCount.textContent = state.data.employees.length;
   const settings = state.data.settings;
   elements.breakRuleHint.textContent = settings.break_rule_enabled === "1"
     ? `Pause: ${Number(settings.break_after_minutes) / 60} h → ${settings.break_duration_minutes} min`
@@ -1853,6 +1907,135 @@ function personnelRecordAvailableInUi() {
   ].includes(permission)) === true;
 }
 
+const EMPLOYEE_DISPLAY_COLUMNS = Object.freeze([
+  { id: "color", label: "Farbe", group: "Dienstplanung" },
+  { id: "personnel_number", label: "Personalnr.", group: "Stammdaten" },
+  { id: "name", label: "Name", group: "Stammdaten" },
+  { id: "nickname", label: "Dienstplan-Name", group: "Dienstplanung" },
+  { id: "position", label: "Position", group: "Stammdaten" },
+  { id: "cost_center", label: "Kostenstelle", group: "Zuordnung" },
+  { id: "assignment", label: "Filiale / Abteilung", group: "Zuordnung" },
+  { id: "location", label: "Filiale", group: "Zuordnung" },
+  { id: "department", label: "Abteilung", group: "Zuordnung" },
+  { id: "workload", label: "Wochen-Soll / Tage", group: "Arbeitszeit" },
+  { id: "preferred_day", label: "Freier Tag", group: "Arbeitszeit" },
+  { id: "fixed_days", label: "Fixe Tage", group: "Arbeitszeit" },
+  { id: "status", label: "Status", group: "Stammdaten" },
+  { id: "phone", label: "Telefonnummer", group: "Freigegebener Personalakt", fieldKey: "phone" },
+  { id: "private_email", label: "Private E-Mail", group: "Freigegebener Personalakt", fieldKey: "privateEmail" },
+  { id: "employment_start", label: "Eintrittsdatum", group: "Freigegebener Personalakt", fieldKey: "employment.startDate", date: true },
+  { id: "employment_end", label: "Austrittsdatum", group: "Freigegebener Personalakt", fieldKey: "employment.endDate", date: true },
+  { id: "fixed_term_end", label: "Befristet bis", group: "Freigegebener Personalakt", fieldKey: "employment.fixedTermEnd", date: true },
+  { id: "probation_end", label: "Probezeit bis", group: "Freigegebener Personalakt", fieldKey: "employment.probationEnd", date: true },
+  { id: "employment_type", label: "Beschäftigungsart", group: "Freigegebener Personalakt", fieldKey: "employment.employmentType" },
+  { id: "contract_type", label: "Vertragsart", group: "Freigegebener Personalakt", fieldKey: "employment.contractType" },
+  { id: "employment_status", label: "Beschäftigungsstatus", group: "Freigegebener Personalakt", fieldKey: "employment.employmentStatus" },
+  { id: "collective_agreement", label: "Kollektivvertrag", group: "Freigegebener Personalakt", fieldKey: "employment.collectiveAgreement" },
+  { id: "classification", label: "Einstufung", group: "Freigegebener Personalakt", fieldKey: "employment.classification" },
+  { id: "payroll_group", label: "Lohn-/Gehaltsgruppe", group: "Freigegebener Personalakt", fieldKey: "employment.payrollGroup" },
+]);
+const DEFAULT_EMPLOYEE_DISPLAY_COLUMNS = Object.freeze([
+  "color", "personnel_number", "name", "nickname", "position", "assignment", "workload", "preferred_day", "fixed_days", "status",
+]);
+const employeeDisplayCollator = new Intl.Collator("de-AT", { numeric: true, sensitivity: "base" });
+
+function availableEmployeeDisplayColumns() {
+  const localAccess = !state.portalStatus?.portalEnabled;
+  const fieldAccess = state.portalSession?.user?.personnelRecordAccess?.fieldAccess || {};
+  return EMPLOYEE_DISPLAY_COLUMNS.filter((column) => !column.fieldKey || localAccess || ["read", "write"].includes(fieldAccess[column.fieldKey]));
+}
+
+function normalizeEmployeeDisplayColumns(columns) {
+  const available = new Set(availableEmployeeDisplayColumns().map((column) => column.id));
+  const submitted = Array.isArray(columns) ? columns : [];
+  const normalized = [...new Set(submitted.map(String).filter((column) => available.has(column)))];
+  if (normalized.length) return normalized;
+  const defaults = DEFAULT_EMPLOYEE_DISPLAY_COLUMNS.filter((column) => available.has(column));
+  return defaults.length ? defaults : ["name"];
+}
+
+function normalizeEmployeeDisplaySort(sort = {}) {
+  const known = new Set(EMPLOYEE_DISPLAY_COLUMNS.map((column) => column.id));
+  const key = known.has(String(sort?.key || "")) ? String(sort.key) : "personnel_number";
+  return { key, direction: sort?.direction === "desc" ? "desc" : "asc" };
+}
+
+function employeeDisplayProfileValue(employee, fieldKey) {
+  return String(fieldKey || "").split(".").reduce((value, segment) => value && typeof value === "object" ? value[segment] : "", employee?.personnel_display || "") ?? "";
+}
+
+function employeeDisplayRawValue(employee, columnId) {
+  const column = EMPLOYEE_DISPLAY_COLUMNS.find((entry) => entry.id === columnId);
+  if (column?.fieldKey) return employeeDisplayProfileValue(employee, column.fieldKey);
+  if (columnId === "color") return employee.color || "";
+  if (columnId === "personnel_number") return employee.personnel_number || "";
+  if (columnId === "name") return employee.full_name || employee.nickname || "";
+  if (columnId === "nickname") return employee.nickname || "";
+  if (columnId === "position") return employee.position_name || "";
+  if (columnId === "cost_center") return [employee.cost_center_code, employee.cost_center_name].filter(Boolean).join(" · ");
+  if (columnId === "assignment") return [employee.home_location_name || employee.home_location_id, employee.preferred_department_name].filter(Boolean).join(" · ");
+  if (columnId === "location") return employee.home_location_name || employee.home_location_id || "";
+  if (columnId === "department") return employee.preferred_department_name || "";
+  if (columnId === "workload") return Number(employee.contracted_hours || 0);
+  if (columnId === "preferred_day") return preferredDayLabels[employee.preferred_day_off] || "";
+  if (columnId === "fixed_days") return formatFixedWorkdays(employee.fixed_workdays);
+  if (columnId === "status") return employee.active ? "Aktiv" : "Inaktiv";
+  return "";
+}
+
+function employeeDisplayCell(employee, column) {
+  const raw = employeeDisplayRawValue(employee, column.id);
+  if (column.id === "color") return `<span class="employee-color" style="background:${escapeHtmlAttribute(employee.color || "#6b7b75")}"></span>`;
+  if (column.id === "personnel_number") return `<strong>${escapeHtml(raw || "–")}</strong>`;
+  if (column.id === "status") return `<span class="status-badge ${employee.active ? "" : "inactive"}">${employee.active ? "Aktiv" : "Inaktiv"}</span>`;
+  if (column.id === "cost_center") return `<span class="status-badge ${employee.cost_center_id ? "" : "warning"}">${escapeHtml(raw || "Nicht zugeordnet")}</span>`;
+  if (column.id === "workload") return `${escapeHtml(String(employee.contracted_hours || 0).replace(".", ","))} h · ${Number(employee.target_workdays_per_week || 5)} T.`;
+  if (column.date) return raw ? escapeHtml(formatDate(String(raw))) : "–";
+  return escapeHtml(String(raw || "–"));
+}
+
+function sortedEmployeesForDisplay(employees) {
+  const sort = normalizeEmployeeDisplaySort(state.employeeDisplaySort);
+  const direction = sort.direction === "desc" ? -1 : 1;
+  return employees.slice().sort((left, right) => {
+    const result = employeeDisplayCollator.compare(String(employeeDisplayRawValue(left, sort.key) ?? ""), String(employeeDisplayRawValue(right, sort.key) ?? ""));
+    if (result) return result * direction;
+    return employeeDisplayCollator.compare(String(left.personnel_number || ""), String(right.personnel_number || ""));
+  });
+}
+
+function employeeDisplayHeader(columns) {
+  const sort = normalizeEmployeeDisplaySort(state.employeeDisplaySort);
+  return `<tr>${columns.map((column) => {
+    const active = sort.key === column.id;
+    const ariaSort = active ? (sort.direction === "asc" ? "ascending" : "descending") : "none";
+    const indicator = active ? `<span aria-hidden="true">${sort.direction === "asc" ? "↑" : "↓"}</span>` : "";
+    return `<th aria-sort="${ariaSort}"><button type="button" class="employee-sort-button" data-employee-sort="${escapeHtmlAttribute(column.id)}">${escapeHtml(column.label)}${indicator}</button></th>`;
+  }).join("")}<th><span class="visually-hidden">Aktionen</span></th></tr>`;
+}
+
+function applyEmployeeDisplayTableLayout(table, columns) {
+  if (!table) return;
+  table.style.setProperty("--employee-column-count", String(columns.length + 1));
+}
+
+function renderEmployeeColumnOptions() {
+  if (!elements.employeeColumnOptions) return;
+  const selected = new Set(normalizeEmployeeDisplayColumns(state.employeeDisplayColumns));
+  const grouped = availableEmployeeDisplayColumns().reduce((result, column) => {
+    if (!result.has(column.group)) result.set(column.group, []);
+    result.get(column.group).push(column);
+    return result;
+  }, new Map());
+  elements.employeeColumnOptions.innerHTML = [...grouped.entries()].map(([group, columns]) => `<fieldset><legend>${escapeHtml(group)}</legend><div>${columns.map((column) => `<label class="employee-column-option"><input type="checkbox" name="employeeDisplayColumn" value="${escapeHtmlAttribute(column.id)}" ${selected.has(column.id) ? "checked" : ""} /><span>${escapeHtml(column.label)}</span></label>`).join("")}</div></fieldset>`).join("");
+}
+
+function openEmployeeColumnsModal() {
+  state.employeeDisplayColumns = normalizeEmployeeDisplayColumns(state.employeeDisplayColumns);
+  renderEmployeeColumnOptions();
+  elements.employeeColumnsModal?.showModal();
+}
+
 function apiList(payload, keys = []) {
   if (Array.isArray(payload)) return payload;
   for (const key of keys) {
@@ -1910,7 +2093,7 @@ function costCenterTypeLabel(type) {
 }
 
 async function loadPersonnelAdministration({ force = false } = {}) {
-  if (!canReadCentralPersonnel() || state.personnelAdministrationLoading) return;
+  if (!canOpenPersonnelAdministrationView() || state.personnelAdministrationLoading) return;
   if (state.personnelAdministrationLoaded && !force) {
     renderPersonnelAdministration();
     return;
@@ -1919,7 +2102,7 @@ async function loadPersonnelAdministration({ force = false } = {}) {
   if (elements.personnelDirectoryBody) elements.personnelDirectoryBody.innerHTML = '<tr><td colspan="8">Personalstammdaten werden geladen.</td></tr>';
   try {
     const [directoryPayload, costCenterPayload] = await Promise.all([
-      api("/api/personnel-directory"),
+      canReadCentralPersonnel() ? api("/api/personnel-directory") : Promise.resolve([]),
       canReadCostCenters()
         ? api("/api/cost-centers?includeInactive=1").catch((error) => {
           if ([403, 404].includes(error.status)) return [];
@@ -1983,29 +2166,25 @@ function renderPersonnelDirectory() {
   } else {
     state.personnelDirectoryCostCenterFilter = "";
   }
-  const rows = filteredPersonnelDirectory();
+  const columns = normalizeEmployeeDisplayColumns(state.employeeDisplayColumns)
+    .map((id) => availableEmployeeDisplayColumns().find((column) => column.id === id))
+    .filter(Boolean);
+  state.employeeDisplayColumns = columns.map((column) => column.id);
+  if (elements.personnelDirectoryHead) elements.personnelDirectoryHead.innerHTML = employeeDisplayHeader(columns);
+  applyEmployeeDisplayTableLayout(elements.personnelDirectoryTable, columns);
+  const rows = sortedEmployeesForDisplay(filteredPersonnelDirectory());
   const canEdit = canWriteCentralPersonnel();
   const canOpenRecord = personnelRecordAvailableInUi();
   elements.personnelDirectoryBody.innerHTML = rows.length ? rows.map((employee) => {
-    const costCenter = employee.cost_center_id
-      ? [employee.cost_center_code, employee.cost_center_name].filter(Boolean).join(" · ") || "Zugeordnet"
-      : "Nicht zugeordnet";
-    const location = [employee.home_location_name || employee.home_location_id, employee.preferred_department_name].filter(Boolean).join(" · ") || "Keine Stammfiliale";
     const actions = [
       canEdit ? `<button type="button" class="edit-button" data-central-edit-employee="${escapeHtmlAttribute(employee.personnel_number)}">Stammdaten</button>` : "",
       canOpenRecord ? `<button type="button" class="edit-button" data-central-personnel-record="${escapeHtmlAttribute(employee.personnel_number)}">Personalakt</button>` : "",
     ].filter(Boolean).join("");
     return `<tr class="${employee.cost_center_id ? "" : "personnel-directory-unassigned"}">
-      <td data-label="Personalnr."><strong>${escapeHtml(employee.personnel_number)}</strong></td>
-      <td data-label="Name"><strong>${escapeHtml(employee.full_name || employee.nickname || "–")}</strong>${employee.nickname && employee.nickname !== employee.full_name ? `<small>${escapeHtml(employee.nickname)}</small>` : ""}</td>
-      <td data-label="Position">${escapeHtml(employee.position_name || "–")}</td>
-      <td data-label="Kostenstelle"><span class="status-badge ${employee.cost_center_id ? "" : "warning"}">${escapeHtml(costCenter)}</span></td>
-      <td data-label="Filiale / Abteilung">${escapeHtml(location)}</td>
-      <td data-label="Wochen-Soll">${escapeHtml(String(employee.contracted_hours).replace(".", ","))} h · ${Number(employee.target_workdays_per_week || 5)} T.</td>
-      <td data-label="Status"><span class="status-badge ${employee.active ? "" : "inactive"}">${employee.active ? "Aktiv" : "Inaktiv"}</span></td>
+      ${columns.map((column) => `<td data-label="${escapeHtmlAttribute(column.label)}">${employeeDisplayCell(employee, column)}</td>`).join("")}
       <td data-label="Aktionen"><span class="table-actions">${actions || "–"}</span></td>
     </tr>`;
-  }).join("") : '<tr><td colspan="8" class="personnel-directory-empty">Keine passenden Mitarbeitenden gefunden.</td></tr>';
+  }).join("") : `<tr><td colspan="${columns.length + 1}" class="personnel-directory-empty">Keine passenden Mitarbeitenden gefunden.</td></tr>`;
 }
 
 function renderCostCenters() {
@@ -2142,17 +2321,19 @@ function renderCentralVacations() {
 }
 
 function renderPersonnelAdministration() {
-  if (!canReadCentralPersonnel()) return;
-  renderPersonnelAdministrationSummary();
-  renderPersonnelDirectory();
-  renderCostCenters();
-  if (state.centralVacationLoadedYear !== null) renderCentralVacations();
+  if (!canOpenPersonnelAdministrationView()) return;
+  if (canReadCentralPersonnel()) {
+    renderPersonnelAdministrationSummary();
+    renderPersonnelDirectory();
+  }
+  if (canReadCostCenters()) renderCostCenters();
+  if (canReadCentralVacations() && state.centralVacationLoadedYear !== null) renderCentralVacations();
 }
 
 function setPersonnelAdministrationTab(tab) {
-  const normalized = tab === "costCenters" && canReadCostCenters()
-    ? "costCenters"
-    : tab === "vacations" && canReadCentralVacations() ? "vacations" : "employees";
+  const normalized = canOpenPersonnelAdministrationTab(tab)
+    ? tab
+    : firstAccessiblePersonnelAdministrationTab();
   state.personnelAdministrationTab = normalized;
   document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => {
     const active = button.dataset.personnelAdministrationTab === normalized;
@@ -2163,6 +2344,8 @@ function setPersonnelAdministrationTab(tab) {
   elements.personnelDirectorySection?.classList.toggle("active", normalized === "employees");
   elements.costCenterSection?.classList.toggle("active", normalized === "costCenters");
   elements.centralVacationSection?.classList.toggle("active", normalized === "vacations");
+  elements.personnelDisplayColumnsButton?.classList.toggle("hidden", normalized !== "employees");
+  if (state.currentView === "personnelAdministration") renderContextNavigation();
   if (normalized === "vacations") loadCentralVacations().catch((error) => showToast(error.message, true));
 }
 
@@ -2230,23 +2413,19 @@ async function deactivateCostCenter() {
 
 function renderEmployees() {
   const showInactive = state.data?.settings?.show_inactive_personnel !== "0";
-  const employees = showInactive ? state.allEmployees : state.allEmployees.filter((employee) => employee.active);
+  const employees = sortedEmployeesForDisplay(showInactive ? state.allEmployees : state.allEmployees.filter((employee) => employee.active));
   const canEditFull = !state.portalStatus?.portalEnabled || state.portalSession?.user?.permissions?.includes("employees:write");
   const canEditDisplay = canEditFull || state.portalSession?.user?.permissions?.includes("employees:display:write");
   const canReadPersonnelRecord = personnelRecordAvailableInUi();
+  const columns = normalizeEmployeeDisplayColumns(state.employeeDisplayColumns)
+    .map((id) => availableEmployeeDisplayColumns().find((column) => column.id === id))
+    .filter(Boolean);
+  state.employeeDisplayColumns = columns.map((column) => column.id);
+  if (elements.employeeTableHead) elements.employeeTableHead.innerHTML = employeeDisplayHeader(columns);
+  applyEmployeeDisplayTableLayout(elements.employeeTable, columns);
   elements.employeeTableBody.innerHTML = employees.map((employee) => `
     <tr>
-      <td><span class="employee-color" style="background:${employee.color}"></span></td>
-      <td><strong>${escapeHtml(employee.personnel_number)}</strong></td>
-      <td>${escapeHtml(employee.full_name)}</td>
-      <td>${escapeHtml(employee.nickname)}</td>
-      <td>${escapeHtml(employee.position_name || "Verkaufsmitarbeiter")}</td>
-      <td>${escapeHtml(employee.home_location_name || employee.home_location_id || "–")}</td>
-      <td>${escapeHtml(employee.preferred_department_name || "–")}</td>
-      <td>${String(employee.contracted_hours).replace(".", ",")} h · ${Number(employee.target_workdays_per_week || 5)} T.</td>
-      <td>${preferredDayLabels[employee.preferred_day_off] || "–"}</td>
-      <td>${escapeHtml(formatFixedWorkdays(employee.fixed_workdays))}</td>
-      <td><span class="status-badge ${employee.active ? "" : "inactive"}">${employee.active ? "Aktiv" : "Inaktiv"}</span></td>
+      ${columns.map((column) => `<td data-label="${escapeHtmlAttribute(column.label)}">${employeeDisplayCell(employee, column)}</td>`).join("")}
       <td><span class="table-actions">${canReadPersonnelRecord ? `<button type="button" class="edit-button" data-personnel-record="${escapeHtml(employee.personnel_number)}">Personalakt</button>` : ""}${canEditDisplay ? `<button type="button" class="edit-button" data-edit-employee="${escapeHtml(employee.personnel_number)}">${canEditFull ? "Bearbeiten" : "Farbe ändern"}</button>` : ""}</span></td>
     </tr>`).join("");
 }
@@ -2700,6 +2879,14 @@ function dashboardFontSizeStorageKey() {
   return `grabenplaner:dashboard-font-size:${uiPreferenceActorKey()}`;
 }
 
+function employeeDisplayColumnsStorageKey() {
+  return `grabenplaner:employee-display-columns:${uiPreferenceActorKey()}`;
+}
+
+function employeeDisplaySortStorageKey() {
+  return `grabenplaner:employee-display-sort:${uiPreferenceActorKey()}`;
+}
+
 function pageViewElement(view) {
   return ({
     planning: elements.planningView,
@@ -2757,6 +2944,16 @@ async function loadUiPreferences() {
   }
   const storedFontSize = localOnly ? localStorage.getItem(dashboardFontSizeStorageKey()) : "";
   applyDashboardFontSize(storedFontSize || preferences?.dashboardFontSize || "standard");
+  let storedColumns = preferences?.employeeDisplayColumns;
+  let storedSort = preferences?.employeeDisplaySort;
+  if (localOnly) {
+    try { storedColumns = JSON.parse(localStorage.getItem(employeeDisplayColumnsStorageKey()) || "null"); } catch {}
+    try { storedSort = JSON.parse(localStorage.getItem(employeeDisplaySortStorageKey()) || "null"); } catch {}
+  }
+  state.employeeDisplayColumns = normalizeEmployeeDisplayColumns(storedColumns);
+  state.employeeDisplaySort = normalizeEmployeeDisplaySort(storedSort);
+  renderEmployees();
+  if (state.personnelAdministrationLoaded) renderPersonnelDirectory();
   applyActivePageAppearance();
 }
 
@@ -2797,6 +2994,62 @@ async function saveDashboardFontSize(value, { silent = false } = {}) {
     if (!silent) showToast(error.message, true);
     throw error;
   }
+}
+
+async function saveEmployeeDisplayPreferences({ columns = state.employeeDisplayColumns, sort = state.employeeDisplaySort, silent = false } = {}) {
+  const previousColumns = [...state.employeeDisplayColumns];
+  const previousSort = { ...state.employeeDisplaySort };
+  state.employeeDisplayColumns = normalizeEmployeeDisplayColumns(columns);
+  state.employeeDisplaySort = normalizeEmployeeDisplaySort(sort);
+  if (!state.employeeDisplayColumns.includes(state.employeeDisplaySort.key)) {
+    state.employeeDisplaySort = {
+      key: state.employeeDisplayColumns.includes("personnel_number") ? "personnel_number" : state.employeeDisplayColumns[0],
+      direction: "asc",
+    };
+  }
+  localStorage.setItem(employeeDisplayColumnsStorageKey(), JSON.stringify(state.employeeDisplayColumns));
+  localStorage.setItem(employeeDisplaySortStorageKey(), JSON.stringify(state.employeeDisplaySort));
+  renderEmployees();
+  if (state.personnelAdministrationLoaded) renderPersonnelDirectory();
+  try {
+    const result = await api("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      body: JSON.stringify({ employeeDisplayColumns: state.employeeDisplayColumns, employeeDisplaySort: state.employeeDisplaySort }),
+    });
+    state.employeeDisplayColumns = normalizeEmployeeDisplayColumns(result.employeeDisplayColumns || state.employeeDisplayColumns);
+    state.employeeDisplaySort = normalizeEmployeeDisplaySort(result.employeeDisplaySort || state.employeeDisplaySort);
+    if (!silent) showToast("Die Mitarbeitendenansicht wurde gespeichert.");
+  } catch (error) {
+    state.employeeDisplayColumns = previousColumns;
+    state.employeeDisplaySort = previousSort;
+    localStorage.setItem(employeeDisplayColumnsStorageKey(), JSON.stringify(previousColumns));
+    localStorage.setItem(employeeDisplaySortStorageKey(), JSON.stringify(previousSort));
+    renderEmployees();
+    if (state.personnelAdministrationLoaded) renderPersonnelDirectory();
+    if (!silent) showToast(error.message, true);
+    throw error;
+  }
+}
+
+async function submitEmployeeColumns(event) {
+  event.preventDefault();
+  const selected = [...elements.employeeColumnsForm.querySelectorAll('input[name="employeeDisplayColumn"]:checked')].map((input) => input.value);
+  if (!selected.length) return showToast("Bitte mindestens eine Anzeigespalte auswählen.", true);
+  await saveEmployeeDisplayPreferences({ columns: selected });
+  elements.employeeColumnsModal.close();
+}
+
+function resetEmployeeColumns() {
+  state.employeeDisplayColumns = normalizeEmployeeDisplayColumns(DEFAULT_EMPLOYEE_DISPLAY_COLUMNS);
+  renderEmployeeColumnOptions();
+}
+
+function changeEmployeeDisplaySort(columnId) {
+  const current = normalizeEmployeeDisplaySort(state.employeeDisplaySort);
+  const next = current.key === columnId
+    ? { key: columnId, direction: current.direction === "asc" ? "desc" : "asc" }
+    : { key: columnId, direction: "asc" };
+  saveEmployeeDisplayPreferences({ sort: next, silent: true }).catch(() => {});
 }
 
 function rightsDashboardThemeStorageKey() {
@@ -6336,14 +6589,20 @@ async function deliverPayrollExport() {
 function setView(view) {
   const features = state.portalStatus?.installationFeatures || {};
   if ((view === "vacations" && features.vacation === false)
-    || (view === "requests" && features.requests === false)
-    || (view === "timeTracking" && features.timeTracking === false)
-    || (view === "personnelAdministration" && elements.personnelAdministrationNavButton?.classList.contains("hidden"))
+    || (view === "requests" && (features.requests === false || !canReadManagerRequests()))
+    || (view === "timeTracking" && (features.timeTracking === false || !canReadManagedTimeTracking()))
+    || (view === "personnelAdministration" && !canOpenPersonnelAdministrationView())
     || (view === "rightsDashboard" && elements.rightsDashboardNavButton?.classList.contains("hidden"))) view = "planning";
   state.currentView = view;
+  if (view === "personnelAdministration") setPersonnelAdministrationTab(state.personnelAdministrationTab);
   if (timePresenceRefreshTimer) clearInterval(timePresenceRefreshTimer);
   timePresenceRefreshTimer = null;
-  document.querySelectorAll(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
+  document.querySelectorAll(".nav-item").forEach((button) => {
+    const personnelRoute = button.dataset.personnelAdministrationRoute;
+    const active = button.dataset.view === view
+      && (!personnelRoute || personnelRoute === state.personnelAdministrationTab);
+    button.classList.toggle("active", active);
+  });
   renderContextNavigation();
   elements.planningView.classList.toggle("active", view === "planning");
   elements.requestsView.classList.toggle("active", view === "requests");
@@ -6378,6 +6637,12 @@ function applyRequestedView() {
     const requestedKind = parameters.get("kind");
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
     document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
+  }
+  if (requestedView === "personnelAdministration") {
+    const requestedSection = parameters.get("section");
+    if (["employees", "costCenters", "vacations"].includes(requestedSection)) {
+      state.personnelAdministrationTab = requestedSection;
+    }
   }
   if (requestedView === "rightsDashboard") {
     const dashboardMode = parameters.get("dashboard");
@@ -6439,6 +6704,7 @@ function setPersonnelTab(tab) {
   document.querySelectorAll("[data-personnel-tab]").forEach((button) => button.classList.toggle("active", button.dataset.personnelTab === tab));
   elements.employeeSettings.classList.toggle("active", tab === "employees");
   elements.locationSettings.classList.toggle("active", tab === "locations");
+  elements.teamDisplayColumnsButton?.classList.toggle("hidden", tab !== "employees");
 }
 
 function updateColorPicker(color) {
@@ -7815,9 +8081,8 @@ async function handleUpdateButton() {
 
 async function exitApplication() {
   const serverActive = state.portalStatus?.operationMode === "server";
-  const question = serverActive
-    ? "Den Grabenplaner-Server wirklich sicher beenden? Andere angemeldete Personen verlieren dabei die Verbindung."
-    : "Grabenplaner sicher beenden? Danach kannst du dieses Browserfenster schließen.";
+  if (serverActive) return logoutPortal();
+  const question = "Grabenplaner sicher beenden? Danach kannst du dieses Browserfenster schließen.";
   if (!confirm(question)) return;
   if (elements.systemExitButton) elements.systemExitButton.disabled = true;
   try {
@@ -7825,11 +8090,9 @@ async function exitApplication() {
       method: "POST",
       body: JSON.stringify({}),
     });
-    showToast(result.message || (serverActive ? "Der Server wird beendet." : "Grabenplaner wird beendet."));
+    showToast(result.message || "Grabenplaner wird beendet.");
     setTimeout(() => {
-      document.body.innerHTML = serverActive
-        ? '<main class="shutdown-screen"><h1>Grabenplaner-Server wurde beendet.</h1><p>Du kannst dieses Fenster schließen.</p></main>'
-        : '<main class="shutdown-screen"><h1>Grabenplaner wurde beendet.</h1><p>Du kannst dieses Fenster schließen. Den USB-Stick bitte bei Bedarf selbst über Windows sicher auswerfen.</p></main>';
+      document.body.innerHTML = '<main class="shutdown-screen"><h1>Grabenplaner wurde beendet.</h1><p>Du kannst dieses Fenster schließen. Den USB-Stick bitte bei Bedarf selbst über Windows sicher auswerfen.</p></main>';
     }, 900);
   } catch (error) {
     if (elements.systemExitButton) elements.systemExitButton.disabled = false;
@@ -8680,6 +8943,9 @@ function showToast(message, error = false) {
 
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
   const view = button.dataset.view;
+  if (button.dataset.personnelAdministrationRoute) {
+    setPersonnelAdministrationTab(button.dataset.personnelAdministrationRoute);
+  }
   const contextChanged = restoreRememberedOverallContext(view);
   setView(view);
   if (contextChanged) loadAll();
@@ -9055,6 +9321,14 @@ document.addEventListener("click", (event) => {
 });
 elements.updateCheckButton?.addEventListener("click", handleUpdateButton);
 elements.systemExitButton?.addEventListener("click", exitApplication);
+elements.teamDisplayColumnsButton?.addEventListener("click", openEmployeeColumnsModal);
+elements.personnelDisplayColumnsButton?.addEventListener("click", openEmployeeColumnsModal);
+elements.employeeColumnsForm?.addEventListener("submit", submitEmployeeColumns);
+elements.resetEmployeeColumnsButton?.addEventListener("click", resetEmployeeColumns);
+[elements.employeeTableHead, elements.personnelDirectoryHead].forEach((head) => head?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-employee-sort]");
+  if (button) changeEmployeeDisplaySort(button.dataset.employeeSort);
+}));
 elements.exportBrandingButton?.addEventListener("click", exportBrandingKit);
 elements.importBrandingButton?.addEventListener("click", importBrandingKit);
 ["brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt"].forEach((id) => {

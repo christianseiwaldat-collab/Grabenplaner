@@ -132,6 +132,8 @@ test("v0.71: Seitendarstellungen und Dashboard-Schriftgröße sind benutzerbezog
   assert.equal(defaults.payload.pageThemes.personnelAdministration, "light");
   assert.equal(defaults.payload.pageThemes.rightsDashboard, "light");
   assert.equal(defaults.payload.dashboardFontSize, "standard");
+  assert.ok(defaults.payload.employeeDisplayColumns.includes("name"));
+  assert.deepEqual(defaults.payload.employeeDisplaySort, { key: "personnel_number", direction: "asc" });
 
   const changed = await requestJson("/api/portal/v1/ui-preferences", {
     method: "PUT",
@@ -139,6 +141,8 @@ test("v0.71: Seitendarstellungen und Dashboard-Schriftgröße sind benutzerbezog
     body: {
       pageThemes: { planning: "dark", personnelAdministration: "dark", rightsDashboard: "dark" },
       dashboardFontSize: "large",
+      employeeDisplayColumns: ["name", "phone", "assignment"],
+      employeeDisplaySort: { key: "name", direction: "desc" },
     },
   });
   assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
@@ -146,17 +150,22 @@ test("v0.71: Seitendarstellungen und Dashboard-Schriftgröße sind benutzerbezog
   assert.equal(changed.payload.pageThemes.personnelAdministration, "dark");
   assert.equal(changed.payload.pageThemes.rightsDashboard, "dark");
   assert.equal(changed.payload.dashboardFontSize, "large");
+  assert.deepEqual(changed.payload.employeeDisplayColumns, ["name", "phone", "assignment"]);
+  assert.deepEqual(changed.payload.employeeDisplaySort, { key: "name", direction: "desc" });
 
   const refreshed = await requestJson("/api/portal/v1/ui-preferences", { session: admin });
   assert.equal(refreshed.payload.pageThemes.planning, "dark");
   assert.equal(refreshed.payload.pageThemes.personnelAdministration, "dark");
   assert.equal(refreshed.payload.dashboardFontSize, "large");
+  assert.deepEqual(refreshed.payload.employeeDisplayColumns, ["name", "phone", "assignment"]);
+  assert.deepEqual(refreshed.payload.employeeDisplaySort, { key: "name", direction: "desc" });
 
   const managerDefaults = await requestJson("/api/portal/v1/ui-preferences", { session: manager });
   assert.equal(managerDefaults.response.status, 200, JSON.stringify(managerDefaults.payload));
   assert.equal(managerDefaults.payload.pageThemes.planning, "light");
   assert.equal(managerDefaults.payload.pageThemes.personnelAdministration, "light");
   assert.equal(managerDefaults.payload.dashboardFontSize, "standard");
+  assert.ok(managerDefaults.payload.employeeDisplayColumns.includes("name"));
 });
 
 test("v0.71: Ungültige Darstellungswerte und anonyme Zugriffe werden abgewiesen", async () => {
@@ -173,6 +182,18 @@ test("v0.71: Ungültige Darstellungswerte und anonyme Zugriffe werden abgewiesen
     body: { dashboardFontSize: "enormous" },
   });
   assert.equal(invalidSize.response.status, 400, JSON.stringify(invalidSize.payload));
+  const invalidColumns = await requestJson("/api/portal/v1/ui-preferences", {
+    method: "PUT",
+    session: admin,
+    body: { employeeDisplayColumns: ["name", "social_security_number"] },
+  });
+  assert.equal(invalidColumns.response.status, 400, JSON.stringify(invalidColumns.payload));
+  const invalidSort = await requestJson("/api/portal/v1/ui-preferences", {
+    method: "PUT",
+    session: admin,
+    body: { employeeDisplaySort: { key: "name", direction: "sideways" } },
+  });
+  assert.equal(invalidSort.response.status, 400, JSON.stringify(invalidSort.payload));
   const anonymous = await requestJson("/api/portal/v1/ui-preferences");
   assert.equal(anonymous.response.status, 401, JSON.stringify(anonymous.payload));
 });

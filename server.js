@@ -237,6 +237,11 @@ const personnelFieldCatalog = Object.freeze([
   { key: "documents", label: "Personalakt-Dokumente", group: "Dokumente", sensitive: true, documentClass: true },
 ]);
 const personnelFieldKeys = new Set(personnelFieldCatalog.map((field) => field.key));
+const personnelDisplayFieldKeys = Object.freeze([
+  "phone", "privateEmail", "employment.startDate", "employment.endDate", "employment.fixedTermEnd",
+  "employment.probationEnd", "employment.employmentType", "employment.contractType", "employment.employmentStatus",
+  "employment.collectiveAgreement", "employment.classification", "employment.payrollGroup",
+]);
 const personnelEmploymentDateFieldKeys = Object.freeze([
   "employment.startDate",
   "employment.endDate",
@@ -6725,6 +6730,16 @@ function personnelFieldEffectiveAccess(session) {
     if (!trustA) matrix.phone = "read";
   }
   return applyPersonnelFieldAccessDependencies(matrix);
+}
+
+function personnelDisplayProfile(employeeNumber, session) {
+  const fieldAccess = personnelFieldEffectiveAccess(session);
+  const allowed = personnelDisplayFieldKeys.filter((fieldKey) => fieldAccess[fieldKey] !== "hidden");
+  if (!allowed.length) return {};
+  const profile = personnelSensitiveProfile(employeeNumber);
+  const result = {};
+  for (const fieldKey of allowed) setPersonnelPathValue(result, fieldKey, personnelPathValue(profile, fieldKey) ?? "");
+  return result;
 }
 
 function personnelFieldRightsPayload(actor) {
@@ -16698,6 +16713,7 @@ app.get("/api/personnel-directory", (request, response) => {
       includeTimeConfirmationLevel: sessionCanViewTimeConfirmationLevel(actor),
       includeSicknessAllowance: sessionCanManageTimeConfirmationLevel(actor),
     }),
+    personnel_display: personnelDisplayProfile(row.personnel_number, actor),
     portal_role: row.portal_role || "employee",
     portal_role_name: row.portal_role_name || "Mitarbeiter",
     portal_configured: Boolean(row.portal_configured),
@@ -16776,7 +16792,9 @@ app.delete("/api/positions/:id", (request, response) => {
 });
 
 app.get("/api/employees", (request, response) => {
-  const session = request.portalSession;
+  const session = request.portalSession || (!getPortalStatus().portalEnabled && isLoopbackRequest(request)
+    ? { employeeNumber: "local", role: "admin", permissions: [], scopes: [] }
+    : null);
   let employees = db
       .prepare(`
         SELECT e.personnel_number, e.full_name, e.nickname, e.color, e.contracted_hours,
@@ -16806,6 +16824,10 @@ app.get("/api/employees", (request, response) => {
     employees = employees.filter((employee) => locations.has(employee.home_location_id)
       && (session.role !== "department_manager" || departments.has(Number(employee.preferred_department_id || 0))));
   }
+  employees = employees.map((employee) => ({
+    ...employee,
+    personnel_display: personnelDisplayProfile(employee.personnel_number, session),
+  }));
   response.json(employees);
 });
 
@@ -17569,6 +17591,15 @@ const UI_PREFERENCE_VIEWS = Object.freeze([
 ]);
 const UI_PAGE_THEMES = new Set(["light", "dark"]);
 const DASHBOARD_FONT_SIZES = new Set(["compact", "standard", "large"]);
+const UI_EMPLOYEE_DISPLAY_COLUMNS = new Set([
+  "color", "personnel_number", "name", "nickname", "position", "cost_center", "assignment", "location", "department",
+  "workload", "preferred_day", "fixed_days", "status", "phone", "private_email", "employment_start", "employment_end",
+  "fixed_term_end", "probation_end", "employment_type", "contract_type", "employment_status", "collective_agreement",
+  "classification", "payroll_group",
+]);
+const UI_DEFAULT_EMPLOYEE_DISPLAY_COLUMNS = Object.freeze([
+  "color", "personnel_number", "name", "nickname", "position", "assignment", "workload", "preferred_day", "fixed_days", "status",
+]);
 
 function uiPreferenceActor(request, { write = false } = {}) {
   if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) {
@@ -17582,12 +17613,14 @@ function uiPreferenceActor(request, { write = false } = {}) {
 function uiPreferencesForActor(actor, overrides = {}) {
   const pageThemes = Object.fromEntries(UI_PREFERENCE_VIEWS.map((view) => [view, "light"]));
   let dashboardFontSize = "standard";
+  let employeeDisplayColumns = [...UI_DEFAULT_EMPLOYEE_DISPLAY_COLUMNS];
+  let employeeDisplaySort = { key: "personnel_number", direction: "asc" };
   if (actor?.employeeNumber && actor.employeeNumber !== "local") {
     const rows = db.prepare(`
       SELECT preference_key, value FROM portal_user_preferences
       WHERE employee_number = ? AND (
         preference_key LIKE 'page_theme_%'
-        OR preference_key IN ('rights_dashboard_theme', 'dashboard_font_size')
+        OR preference_key IN ('rights_dashboard_theme', 'dashboard_font_size', 'employee_display_columns', 'employee_display_sort')
       )
     `).all(actor.employeeNumber);
     const lookup = new Map(rows.map((row) => [row.preference_key, row.value]));
@@ -17599,15 +17632,31 @@ function uiPreferencesForActor(actor, overrides = {}) {
     if (DASHBOARD_FONT_SIZES.has(lookup.get("dashboard_font_size"))) {
       dashboardFontSize = lookup.get("dashboard_font_size");
     }
+    try {
+      const storedColumns = JSON.parse(lookup.get("employee_display_columns") || "null");
+      if (Array.isArray(storedColumns) && storedColumns.length && storedColumns.every((column) => UI_EMPLOYEE_DISPLAY_COLUMNS.has(String(column)))) {
+        employeeDisplayColumns = [...new Set(storedColumns.map(String))];
+      }
+    } catch {}
+    try {
+      const storedSort = JSON.parse(lookup.get("employee_display_sort") || "null");
+      if (storedSort && UI_EMPLOYEE_DISPLAY_COLUMNS.has(String(storedSort.key)) && ["asc", "desc"].includes(storedSort.direction)) {
+        employeeDisplaySort = { key: String(storedSort.key), direction: storedSort.direction };
+      }
+    } catch {}
   }
   for (const [view, theme] of Object.entries(overrides.pageThemes || {})) {
     if (UI_PREFERENCE_VIEWS.includes(view) && UI_PAGE_THEMES.has(theme)) pageThemes[view] = theme;
   }
   if (DASHBOARD_FONT_SIZES.has(overrides.dashboardFontSize)) dashboardFontSize = overrides.dashboardFontSize;
+  if (Array.isArray(overrides.employeeDisplayColumns)) employeeDisplayColumns = [...overrides.employeeDisplayColumns];
+  if (overrides.employeeDisplaySort) employeeDisplaySort = { ...overrides.employeeDisplaySort };
   return {
     actor: actor?.employeeNumber || "local",
     pageThemes,
     dashboardFontSize,
+    employeeDisplayColumns,
+    employeeDisplaySort,
   };
 }
 
@@ -17627,7 +17676,20 @@ function saveUiPreferencesForActor(actor, input = {}) {
   if (dashboardFontSize !== undefined && !DASHBOARD_FONT_SIZES.has(dashboardFontSize)) {
     throw httpError(400, "Bitte eine gültige Dashboard-Schriftgröße auswählen.", "UI_PREFERENCES_INVALID");
   }
-  if (!Object.keys(pageThemes).length && dashboardFontSize === undefined) {
+  const employeeDisplayColumns = input.employeeDisplayColumns === undefined ? undefined : input.employeeDisplayColumns;
+  if (employeeDisplayColumns !== undefined && (!Array.isArray(employeeDisplayColumns) || !employeeDisplayColumns.length
+    || employeeDisplayColumns.length > UI_EMPLOYEE_DISPLAY_COLUMNS.size
+    || new Set(employeeDisplayColumns.map(String)).size !== employeeDisplayColumns.length
+    || employeeDisplayColumns.some((column) => !UI_EMPLOYEE_DISPLAY_COLUMNS.has(String(column))))) {
+    throw httpError(400, "Bitte gültige Anzeigespalten übermitteln.", "UI_PREFERENCES_INVALID");
+  }
+  const employeeDisplaySort = input.employeeDisplaySort === undefined ? undefined : input.employeeDisplaySort;
+  if (employeeDisplaySort !== undefined && (!employeeDisplaySort || typeof employeeDisplaySort !== "object" || Array.isArray(employeeDisplaySort)
+    || !UI_EMPLOYEE_DISPLAY_COLUMNS.has(String(employeeDisplaySort.key || ""))
+    || !["asc", "desc"].includes(String(employeeDisplaySort.direction || "")))) {
+    throw httpError(400, "Bitte eine gültige Sortierung übermitteln.", "UI_PREFERENCES_INVALID");
+  }
+  if (!Object.keys(pageThemes).length && dashboardFontSize === undefined && employeeDisplayColumns === undefined && employeeDisplaySort === undefined) {
     throw httpError(400, "Es wurde keine Darstellung zum Speichern übermittelt.", "UI_PREFERENCES_INVALID");
   }
   if (actor.employeeNumber !== "local") {
@@ -17645,13 +17707,15 @@ function saveUiPreferencesForActor(actor, input = {}) {
         if (view === "rightsDashboard") store.run(actor.employeeNumber, "rights_dashboard_theme", theme);
       }
       if (dashboardFontSize !== undefined) store.run(actor.employeeNumber, "dashboard_font_size", dashboardFontSize);
+      if (employeeDisplayColumns !== undefined) store.run(actor.employeeNumber, "employee_display_columns", JSON.stringify(employeeDisplayColumns.map(String)));
+      if (employeeDisplaySort !== undefined) store.run(actor.employeeNumber, "employee_display_sort", JSON.stringify({ key: String(employeeDisplaySort.key), direction: String(employeeDisplaySort.direction) }));
       db.exec("COMMIT");
     } catch (error) {
       try { db.exec("ROLLBACK"); } catch {}
       throw error;
     }
   }
-  return uiPreferencesForActor(actor, { pageThemes, dashboardFontSize });
+  return uiPreferencesForActor(actor, { pageThemes, dashboardFontSize, employeeDisplayColumns, employeeDisplaySort });
 }
 
 function rightsDashboardThemeForActor(actor) {

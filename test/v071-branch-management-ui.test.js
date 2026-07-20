@@ -20,7 +20,7 @@ function between(source, start, end) {
 }
 
 test("v0.71 Block 7 UI: Filialverwaltung fasst Teams, Dienst- und Urlaubsplanung barrierearm zusammen", () => {
-  const navigation = between(html, '<section class="nav-module" id="filialManagementNav"', '<button class="nav-item request-nav-item"');
+  const navigation = between(html, '<section class="nav-module" id="filialManagementNav"', '<section class="nav-module hidden" id="personnelAdministrationNav"');
   assert.match(navigation, /aria-label="Filialverwaltung"/);
   assert.match(navigation, /id="filialManagementToggle"[^>]*data-nav-toggle="filialManagement"[^>]*aria-controls="filialManagementNavChildren"[^>]*aria-expanded="true"/);
   assert.match(navigation, /id="filialManagementNavChildren"/);

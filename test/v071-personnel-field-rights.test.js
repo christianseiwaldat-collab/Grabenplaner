@@ -338,6 +338,40 @@ test("v0.71 Block 5: Migration und sichere Leitungsstandards sind vollständig",
   assert.equal(departmentDefault.response.status, 403, departmentDefault.text);
 });
 
+test("Mitarbeitendenlisten liefern nur ausdrücklich lesbare Personalaktfelder", async () => {
+  const hr = session("103", "hr");
+  const profile = await saveProfile(TARGET_A, hr, "LISTE");
+  const manager = session(MANAGER, "manager");
+
+  const defaultList = await request("/api/employees", { auth: manager });
+  assert.equal(defaultList.response.status, 200, defaultList.text);
+  const defaultTarget = defaultList.payload.find((employee) => employee.personnel_number === TARGET_A);
+  assert.equal(defaultTarget.personnel_display.phone, profile.phone);
+  assert.equal(Object.hasOwn(defaultTarget.personnel_display, "privateEmail"), false);
+  assert.equal(Object.hasOwn(defaultTarget.personnel_display, "employment"), false);
+  assert.equal(defaultList.payload.some((employee) => employee.personnel_number === TARGET_REMOTE), false);
+
+  const rights = await rightsPayload(hr);
+  const changed = await saveMatrix(hr, "manager", completeMatrix(rights, "manager", {
+    "privateEmail": "read",
+    "employment.startDate": "read",
+  }));
+  assert.equal(changed.response.status, 200, changed.text);
+
+  const delegatedList = await request("/api/employees", { auth: manager });
+  const delegatedTarget = delegatedList.payload.find((employee) => employee.personnel_number === TARGET_A);
+  assert.equal(delegatedTarget.personnel_display.privateEmail, profile.sensitive.privateEmail);
+  assert.equal(delegatedTarget.personnel_display.employment.startDate, profile.sensitive.employment.startDate);
+  assert.equal(Object.hasOwn(delegatedTarget.personnel_display, "emergencyContact"), false);
+  assert.equal(Object.hasOwn(delegatedTarget.personnel_display, "socialSecurityNumber"), false);
+
+  const centralList = await request("/api/personnel-directory", { auth: hr });
+  assert.equal(centralList.response.status, 200, centralList.text);
+  const centralTarget = centralList.payload.employees.find((employee) => employee.personnel_number === TARGET_A);
+  assert.equal(centralTarget.personnel_display.privateEmail, profile.sensitive.privateEmail);
+  assert.equal(Object.hasOwn(centralTarget.personnel_display, "socialSecurityNumber"), false);
+});
+
 test("v0.71 Block 5: PL+ verwaltet nur vollständige und gültige Rollenmatrizen atomar", async () => {
   const hr = session("103", "hr");
   const rights = await rightsPayload(hr);

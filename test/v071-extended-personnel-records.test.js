@@ -291,10 +291,15 @@ test("v0.71 Block 4: Personalakt wird vollständig, partiell und ohne Klartext-L
 
   const employeeList = await request("/api/employees", { auth: hr });
   assert.equal(employeeList.response.status, 200, employeeList.text);
+  const listedEmployee = employeeList.payload.find((employee) => employee.personnel_number === "8711");
+  assert.equal(listedEmployee.personnel_display.privateEmail, personnelRecord.sensitive.privateEmail);
+  assert.equal(Object.hasOwn(listedEmployee.personnel_display, "socialSecurityNumber"), false);
+  assert.equal(Object.hasOwn(listedEmployee.personnel_display, "iban"), false);
+  assert.equal(Object.hasOwn(listedEmployee.personnel_display, "address"), false);
+  assert.equal(Object.hasOwn(listedEmployee.personnel_display, "emergencyContact"), false);
   assertSecretsAbsent(JSON.stringify(employeeList.payload), [
     personnelRecord.sensitive.socialSecurityNumber,
     personnelRecord.sensitive.iban,
-    personnelRecord.sensitive.privateEmail,
     personnelRecord.sensitive.address.street,
     `Neu-${marker}`,
   ], "Mitarbeiterliste");
