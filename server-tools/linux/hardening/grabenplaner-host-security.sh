@@ -499,7 +499,8 @@ file_matches_manifest_record() {
 }
 
 record_post_apply_state() {
-  local transaction_directory="$1" manifest="$transaction_directory/post-apply.tsv" temporary key target hash uid gid mode
+  local transaction_directory="$1" manifest temporary key target hash uid gid mode
+  manifest="$transaction_directory/post-apply.tsv"
   [[ ! -e "$manifest" && ! -L "$manifest" ]] || return 1
   temporary="$(mktemp "$transaction_directory/.post-apply.XXXXXXXX")" || return 1
   : >"$temporary" || { rm -f -- "$temporary"; return 1; }
@@ -561,7 +562,8 @@ record_intended_current_state() {
 }
 
 intended_record_for_key() {
-  local transaction_directory="$1" key="$2" file="$transaction_directory/intended/$key.tsv" record
+  local transaction_directory="$1" key="$2" file record
+  file="$transaction_directory/intended/$key.tsv"
   private_file_is_secure "$file" || return 1
   IFS= read -r record <"$file" || return 1
   validate_manifest_record "$record" "$key" || return 1
@@ -569,7 +571,8 @@ intended_record_for_key() {
 }
 
 restore_permit_record_for_key() {
-  local transaction_directory="$1" key="$2" file="$transaction_directory/restore-permits/$key.tsv" record
+  local transaction_directory="$1" key="$2" file record
+  file="$transaction_directory/restore-permits/$key.tsv"
   private_file_is_secure "$file" || return 1
   IFS= read -r record <"$file" || return 1
   validate_manifest_record "$record" "$key" || return 1
@@ -600,7 +603,8 @@ record_restore_permitted_current_state() {
 }
 
 backup_file() {
-  local transaction_directory="$1" key="$2" target="$3" backup="$transaction_directory/backups/$key" metadata uid gid mode
+  local transaction_directory="$1" key="$2" target="$3" backup metadata uid gid mode
+  backup="$transaction_directory/backups/$key"
   metadata="$transaction_directory/hashes.tsv"
   if [[ -e "$target" || -L "$target" ]]; then
     [[ -f "$target" && ! -L "$target" && "$(stat --format='%h' -- "$target")" == "1" ]] \
