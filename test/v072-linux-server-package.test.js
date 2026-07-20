@@ -73,6 +73,7 @@ test("v0.72 Linux server documentation recommends Ubuntu without removing Window
 
 test("v0.72 Linux bootstrap stays private until public HTTPS readiness succeeds", () => {
   const installer = read("server-tools", "linux", "install-grabenplaner-server.sh");
+  const updater = read("server-tools", "linux", "update-grabenplaner-server.sh");
   const bootstrap = read("server-tools", "linux", "grabenplaner-bootstrap-admin.sh.in");
   const environment = read("server-tools", "linux", "grabenplaner.env.example");
   const caddy = read("server-tools", "linux", "Caddyfile.in");
@@ -84,11 +85,38 @@ test("v0.72 Linux bootstrap stays private until public HTTPS readiness succeeds"
   assert.match(bootstrap, /recover_to_bootstrap/);
   assert.ok(bootstrap.indexOf("if ! wait_for_public_ready") < bootstrap.indexOf("if ! clear_bootstrap_token"));
   assert.match(installer, /wait_for_public_ready \|\| fail/);
-  assert.match(installer, /run_as_build_user "\$STAGE_ROOT\/source" env[\s\S]+"\$\{PNPM_COMMAND\[@\]\}" install --prod --frozen-lockfile/);
+  assert.match(installer, /install -d -o "\$BUILD_USER" -g "\$BUILD_GROUP" -m 0700 "\$STAGE_ROOT\/pnpm-store"/);
+  assert.match(installer, /run_as_build_user "\$STAGE_ROOT\/source" env[\s\S]+"\$\{PNPM_COMMAND\[@\]\}" install --prod --frozen-lockfile[\s\S]+--store-dir "\$STAGE_ROOT\/pnpm-store" --package-import-method=copy/);
   assert.doesNotMatch(installer, /"\$\{PNPM_COMMAND\[@\]\}" --dir/);
+  assert.doesNotMatch(installer, /--store-dir "\$CACHE_ROOT/);
+  assert.match(installer, /entry\.isFile\(\) && fs\.lstatSync\(candidate\)\.nlink !== 1/);
+  assert.match(updater, /pnpm_store="\$maintenance_root\/pnpm-store"/);
+  assert.match(updater, /install -d -m 0700 -o "\$build_user" -g "\$build_group" -- "\$pnpm_store"/);
+  assert.match(updater, /--store-dir "\$pnpm_store" --package-import-method=copy/);
+  assert.doesNotMatch(updater, /--store-dir "\$build_cache/);
   assert.match(installer, /IFS= read -r first_line/);
   assert.match(installer, /CADDY_CONFIG_WRITTEN=1\r?\ninstall/);
   assert.match(caddy, /path_regexp serviceStopPath \(\?i\)\^\/api\/service\/stop/);
+});
+
+test("v0.72 Linux install-tree verification rejects hardlinked package files", (context) => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-install-tree-hardlink-"));
+  context.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, "source.txt");
+  const hardlink = path.join(temporary, "linked.txt");
+  fs.writeFileSync(source, "shared-inode\n");
+  fs.linkSync(source, hardlink);
+  assert.equal(fs.statSync(source).ino, fs.statSync(hardlink).ino);
+  assert.equal(fs.statSync(source).nlink, 2);
+
+  const verifier = path.join(root, "server-tools", "linux", "lib", "verify-install-tree.js");
+  const rejected = spawnSync(process.execPath, [verifier, temporary], { encoding: "utf8" });
+  assert.notEqual(rejected.status, 0, "Ein geteilter Store-/Installations-Inode muss abgelehnt werden.");
+  assert.match(rejected.stderr, /Hardlink im Installationsbaum/);
+
+  fs.unlinkSync(hardlink);
+  const accepted = spawnSync(process.execPath, [verifier, temporary], { encoding: "utf8" });
+  assert.equal(accepted.status, 0, accepted.stderr);
 });
 
 test("v0.72 Linux installer moves build commands out of an unreadable caller directory", {
