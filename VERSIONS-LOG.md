@@ -2,6 +2,7 @@
 
 ## v0.75.1 Beta · Sicherheitsupdate
 
+- Die über `/usr/local/sbin` veröffentlichten Linux-Wartungsbefehle lösen ihr tatsächliches App-Skript nun vor relativen Bibliothekszugriffen kanonisch auf; fremde oder nicht reguläre Symlinkziele werden vor der Ausführung abgelehnt.
 - Sechs betroffene Installations-, Deinstallations- und Controllerfunktionen der Ubuntu-Host-Härtung initialisieren voneinander abhängige lokale Bash-Variablen nun in getrennten Schritten; gezielte Regressionstests sichern diese `set -u`-Pfade ab.
 - Die Bestätigung einer angewendeten Ubuntu-Host-Härtung ist nur noch über eine eigenständige neue SSH-Verbindung möglich.
 - Eine lediglich per OpenSSH-Multiplexing über dieselbe bestehende TCP-Verbindung geöffnete Sitzung wird nicht mehr als unabhängige Kontrollverbindung akzeptiert.

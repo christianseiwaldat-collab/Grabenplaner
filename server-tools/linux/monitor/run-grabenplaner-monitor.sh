@@ -2,7 +2,14 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-readonly SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
+readonly SCRIPT_SOURCE="${BASH_SOURCE[0]}"
+readonly EXPECTED_COMMAND_TARGET="/opt/grabenplaner/app/server-tools/linux/monitor/run-grabenplaner-monitor.sh"
+SCRIPT_PATH="$(readlink -f -- "$SCRIPT_SOURCE" 2>/dev/null || true)"
+[[ -n "$SCRIPT_PATH" && -f "$SCRIPT_PATH" && ! -L "$SCRIPT_PATH" ]] \
+  || { printf '%s\n' "Das Wartungsskript konnte nicht sicher aufgeloest werden." >&2; exit 1; }
+[[ ! -L "$SCRIPT_SOURCE" || "$SCRIPT_PATH" == "$EXPECTED_COMMAND_TARGET" ]] \
+  || { printf '%s\n' "Der Wartungsbefehl zeigt nicht auf die erwartete Grabenplaner-Installation." >&2; exit 1; }
+readonly SCRIPT_PATH
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd -P)"
 # shellcheck source=server-tools/linux/lib/common.sh
 source "$SCRIPT_DIR/../lib/common.sh"
