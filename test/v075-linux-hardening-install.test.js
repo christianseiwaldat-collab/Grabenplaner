@@ -26,6 +26,39 @@ function executableLines(source) {
     .filter((line) => line && !line.startsWith("#"));
 }
 
+function shellFiles(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const target = path.join(directory, entry.name);
+    if (entry.isDirectory()) return shellFiles(target);
+    return entry.isFile() && /\.sh(?:\.in)?$/.test(entry.name) ? [target] : [];
+  });
+}
+
+function sameDeclarationDependencies(source) {
+  const findings = [];
+  source.split(/\r?\n/).forEach((line, index) => {
+    const declaration = line.match(/^\s*(?:local|readonly)\s+(.+)$/)?.[1];
+    if (!declaration) return;
+
+    for (const assignment of declaration.matchAll(/(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=/g)) {
+      const name = assignment[1];
+      const remainder = declaration.slice(assignment.index + assignment[0].length);
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const reference = new RegExp(`\\$(?:${escaped}(?![A-Za-z0-9_])|\\{${escaped}(?:[^A-Za-z0-9_]|$))`);
+      if (reference.test(remainder)) findings.push({ line: index + 1, name, source: line.trim() });
+    }
+  });
+  return findings;
+}
+
+function extractShellFunction(source, name) {
+  const start = source.indexOf(`${name}() {`);
+  assert.notEqual(start, -1, `missing shell function ${name}`);
+  const end = source.indexOf("\n}", start);
+  assert.notEqual(end, -1, `unterminated shell function ${name}`);
+  return source.slice(start, end + 2);
+}
+
 test("v0.75 hardening installer validates then copies only contract artifacts", () => {
   const contractIndex = installer.indexOf('contract "$SOURCE_MODULE_ROOT"');
   const firstMutationIndex = installer.indexOf("hardening_secure_roots");
@@ -80,6 +113,36 @@ test("v0.75 installer rejects foreign or drifted units before installation mutat
   assert.match(installer, /FragmentPath/);
   assert.match(installer, /cmp -s -- "\$HARDENING_MODULE_ROOT\/systemd\/\$source_name" "\$installed"/);
   assert.match(installer, /Eine gleichnamige fremde Systemd-Einheit verhindert die Installation/);
+});
+
+test("v0.75 hardening shell declarations do not use variables initialized earlier in the same command", () => {
+  const findings = shellFiles(hardeningRoot).flatMap((file) => sameDeclarationDependencies(fs.readFileSync(file, "utf8"))
+    .map((finding) => `${path.relative(root, file)}:${finding.line}: ${finding.name} in ${finding.source}`));
+  assert.deepEqual(findings, []);
+});
+
+test("v0.75 installer preflight runs under nounset before any installation mutation", (context) => {
+  const probe = spawnSync("bash", ["--version"], { encoding: "utf8" });
+  if (probe.error?.code === "ENOENT") {
+    context.skip("Bash is not installed on this test host");
+    return;
+  }
+  assert.equal(probe.status, 0, probe.stderr || probe.error?.message);
+
+  const fixture = [
+    "set -Eeuo pipefail",
+    'temporary="$(mktemp -d)"',
+    "trap 'rm -rf -- \"$temporary\"' EXIT",
+    'SYSTEMD_ROOT="$temporary/systemd"',
+    'HARDENING_MODULE_ROOT="$temporary/module"',
+    'mkdir -p -- "$SYSTEMD_ROOT" "$HARDENING_MODULE_ROOT/systemd"',
+    'hardening_die() { printf \'%s\\n\' "$1" >&2; return 97; }',
+    'systemctl() { return 0; }',
+    extractShellFunction(installer, "preflight_existing_unit"),
+    'preflight_existing_unit "fixture.service.in" "fixture.service" false',
+  ].join("\n");
+  const result = spawnSync("bash", ["-s"], { input: fixture, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
 });
 
 test("v0.75 hardening installer deploys four units but enables only the audit timer", () => {

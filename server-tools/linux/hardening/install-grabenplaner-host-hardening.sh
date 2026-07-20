@@ -98,8 +98,9 @@ install_systemd_unit() {
 }
 
 preflight_existing_unit() {
-  local source_name="$1" unit_name="$2" installed="$SYSTEMD_ROOT/$unit_name" fragment=""
+  local source_name="$1" unit_name="$2" installed fragment=""
   local predecessor_expected="$3"
+  installed="$SYSTEMD_ROOT/$unit_name"
   fragment="$(systemctl show --property=FragmentPath --value "$unit_name" 2>/dev/null || true)"
   if [[ "$predecessor_expected" == true ]]; then
     [[ -f "$installed" && ! -L "$installed" \
