@@ -5,6 +5,7 @@
 - Die Bestätigung einer angewendeten Ubuntu-Host-Härtung ist nur noch über eine eigenständige neue SSH-Verbindung möglich.
 - Eine lediglich per OpenSSH-Multiplexing über dieselbe bestehende TCP-Verbindung geöffnete Sitzung wird nicht mehr als unabhängige Kontrollverbindung akzeptiert.
 - Die Ubuntu-Erstinstallation installiert Produktionsabhängigkeiten nun ausdrücklich im geprüften Paket-Staging statt im aufrufenden Arbeitsordner.
+- Sämtliche Schritte des isolierten Build-Benutzers wechseln vor dem Rechteabstieg in den zugänglichen Staging-Quellordner; ein gesperrtes Administrator-Heimatverzeichnis kann die Installation daher nicht mehr blockieren.
 - Der Linux-Paketbau berechnet Datei- und Archivprüfsummen editionsunabhängig über die .NET-Kryptobibliothek.
 - Betriebsanleitung und automatisierte Prüfungen wurden an diese zusätzliche Schutzgrenze angepasst.
 

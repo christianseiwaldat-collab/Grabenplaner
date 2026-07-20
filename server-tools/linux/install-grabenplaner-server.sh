@@ -56,6 +56,17 @@ fail() {
   exit 1
 }
 
+run_as_build_user() {
+  local working_directory="$1"
+  shift
+  [[ -d "$working_directory" && ! -L "$working_directory" ]] \
+    || fail "Der Arbeitsordner fuer den Build-Benutzer ist ungueltig."
+  (
+    cd -- "$working_directory"
+    runuser -u "$BUILD_USER" -- "$@"
+  )
+}
+
 usage() {
   cat <<'TEXT'
 Aufruf:
@@ -205,7 +216,7 @@ resolve_pnpm() {
   else
     fail "pnpm $EXPECTED_PNPM_VERSION oder Corepack ist erforderlich."
   fi
-  version="$(runuser -u "$BUILD_USER" -- env \
+  version="$(run_as_build_user "$STAGE_ROOT/source" env \
     HOME="$CACHE_ROOT" XDG_CACHE_HOME="$CACHE_ROOT" PNPM_HOME="$CACHE_ROOT/pnpm" COREPACK_HOME="$CACHE_ROOT/corepack" \
     PATH="$(dirname "$NODE_EXECUTABLE"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     "${PNPM_COMMAND[@]}" --version)"
@@ -543,7 +554,7 @@ NODE
 }
 
 validate_installed_dependencies() {
-  runuser -u "$BUILD_USER" -- env NODE_ENV=production HOME="$CACHE_ROOT" "$NODE_EXECUTABLE" - "$STAGE_ROOT/source" <<'NODE' >/dev/null
+  run_as_build_user "$STAGE_ROOT/source" env NODE_ENV=production HOME="$CACHE_ROOT" "$NODE_EXECUTABLE" - "$STAGE_ROOT/source" <<'NODE' >/dev/null
 const path = require("node:path");
 const root = process.argv[2];
 const metadata = require(path.join(root, "package.json"));
@@ -734,7 +745,7 @@ chmod 0750 "$STAGE_ROOT"
 chown root:"$BUILD_GROUP" "$STAGE_ROOT/package.zip"
 chmod 0640 "$STAGE_ROOT/package.zip"
 install -d -o "$BUILD_USER" -g "$BUILD_GROUP" -m 0750 "$STAGE_ROOT/source"
-runuser -u "$BUILD_USER" -- unzip -q "$STAGE_ROOT/package.zip" -d "$STAGE_ROOT/source"
+run_as_build_user "$STAGE_ROOT/source" unzip -q "$STAGE_ROOT/package.zip" -d "$STAGE_ROOT/source"
 [[ -z "$(find "$STAGE_ROOT/source" ! -type f ! -type d -print -quit)" ]] || fail "Links und Spezialdateien sind im Quellpaket nicht erlaubt."
 [[ "$(du -sb "$STAGE_ROOT/source" | awk '{ print $1 }')" -le "$MAX_EXTRACTED_BYTES" ]] || fail "Das entpackte Serverpaket ist groesser als 4 GiB."
 [[ -f "$STAGE_ROOT/source/$MANIFEST_NAME" ]] || fail "Das Serverpaket-Manifest fehlt in der Archivwurzel."
@@ -742,15 +753,15 @@ validate_manifest
 resolve_pnpm
 
 chown -R "$BUILD_USER:$BUILD_GROUP" "$STAGE_ROOT/source"
-runuser -u "$BUILD_USER" -- env \
+run_as_build_user "$STAGE_ROOT/source" env \
   HOME="$CACHE_ROOT" XDG_CACHE_HOME="$CACHE_ROOT" PNPM_HOME="$CACHE_ROOT/pnpm" COREPACK_HOME="$CACHE_ROOT/corepack" \
   PATH="$(dirname "$NODE_EXECUTABLE"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-  NODE_ENV=production "${PNPM_COMMAND[@]}" --dir "$STAGE_ROOT/source" install --prod --frozen-lockfile --config.node-linker=hoisted --reporter=append-only
-runuser -u "$BUILD_USER" -- "$NODE_EXECUTABLE" --check "$STAGE_ROOT/source/server.js" >/dev/null
+  NODE_ENV=production "${PNPM_COMMAND[@]}" install --prod --frozen-lockfile --config.node-linker=hoisted --reporter=append-only
+run_as_build_user "$STAGE_ROOT/source" "$NODE_EXECUTABLE" --check "$STAGE_ROOT/source/server.js" >/dev/null
 validate_installed_dependencies
 
 # pnpm may create internal links; every resulting target must stay inside the app.
-runuser -u "$BUILD_USER" -- "$NODE_EXECUTABLE" - "$STAGE_ROOT/source" <<'NODE' >/dev/null
+run_as_build_user "$STAGE_ROOT/source" "$NODE_EXECUTABLE" - "$STAGE_ROOT/source" <<'NODE' >/dev/null
 const fs = require("node:fs");
 const path = require("node:path");
 const root = path.resolve(process.argv[2]);
