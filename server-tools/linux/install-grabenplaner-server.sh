@@ -908,7 +908,8 @@ command_files=(backup-grabenplaner.sh monitor/run-grabenplaner-monitor.sh stop-g
 for index in "${!command_names[@]}"; do
   command_name="${command_names[$index]}"
   command_source="${APP_ROOT}/server-tools/linux/${command_files[$index]}"
-  [[ -f "$command_source" ]] || fail "Installiertes Wartungsskript fehlt: $command_source"
+  [[ -f "$command_source" && ! -L "$command_source" ]] \
+    || fail "Installiertes Wartungsskript fehlt oder ist kein regulaeres App-Artefakt: $command_source"
   ln -sfn -- "$command_source" "/usr/local/sbin/grabenplaner-${command_name}"
 done
 
