@@ -90,6 +90,42 @@ restore_file "$absent_transaction" ssh "$target"
 [[ ! -e "$target" && ! -L "$target" ]]
 restore_file "$absent_transaction" ssh "$target"
 [[ ! -e "$target" && ! -L "$target" ]]
+
+# Ubuntu does not create /etc/systemd/journald.conf.d by default. If apply
+# fails before the journald stage, both the absent target and its parent are
+# already the exact predecessor and rollback must remain idempotent.
+missing_parent="$base/etc/systemd/journald.conf.d"
+missing_target="$missing_parent/60-grabenplaner-journald.conf"
+missing_transaction="$base/missing-parent-transaction"
+mkdir -p -- "$base/etc/systemd" "$missing_transaction/backups"
+chmod 0755 -- "$base/etc/systemd"
+chmod 0700 -- "$missing_transaction" "$missing_transaction/backups"
+printf 'journald\tabsent\t-\t0\t0\t0\n' >"$missing_transaction/hashes.tsv"
+chmod 0600 -- "$missing_transaction/hashes.tsv"
+chown root:root -- "$missing_transaction/hashes.tsv"
+[[ ! -e "$missing_parent" && ! -L "$missing_parent" ]]
+restore_file "$missing_transaction" journald "$missing_target"
+restore_file "$missing_transaction" journald "$missing_target"
+[[ ! -e "$missing_parent" && ! -L "$missing_parent" ]]
+
+mkdir -p -- "$base/redirected-parent"
+ln -s -- "$base/redirected-parent" "$missing_parent"
+if restore_file "$missing_transaction" journald "$missing_target"; then
+  echo "restore unexpectedly trusted a symlinked missing parent" >&2
+  exit 1
+fi
+rm -f -- "$missing_parent"
+chmod 0777 -- "$base/etc/systemd"
+if restore_file "$missing_transaction" journald "$missing_target"; then
+  echo "restore unexpectedly trusted a writable existing ancestor" >&2
+  exit 1
+fi
+chmod 0755 -- "$base/etc/systemd"
+ln -s -- "$base/does-not-exist" "$missing_parent"
+if restore_file "$missing_transaction" journald "$missing_target"; then
+  echo "restore unexpectedly trusted a dangling parent symlink" >&2
+  exit 1
+fi
 `;
 
   const command = sudo || "bash";
