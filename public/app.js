@@ -1659,6 +1659,19 @@ const serverMonitorCheckLabels = {
   monitorStatusProtection: "Schutz der Statusdatei",
 };
 
+const hostSecurityCheckLabels = {
+  ssh: "SSH-Schlüsselzugang",
+  firewall: "UFW-Firewall",
+  publicPorts: "Öffentliche Ports",
+  automaticUpdates: "Sicherheitsaktualisierungen",
+  sysctl: "Kernel-Schutzwerte",
+  journald: "Systemprotokolle",
+  accountProtection: "Dienstkonten",
+  secretFiles: "Geheimnisdateien",
+  failedUnits: "Systemdienste",
+  timeSync: "Zeitsynchronisierung",
+};
+
 function renderGlobalServerAlert(status) {
   if (!elements.serverAlertBanner) return;
   const alerts = Array.isArray(status?.alerts) ? [...status.alerts] : [];
@@ -1703,6 +1716,31 @@ function renderMonitorDiagnostics(monitor) {
     </section>`;
 }
 
+function renderHostSecurityDiagnostics(hostSecurity) {
+  if (!hostSecurity?.configured && !hostSecurity?.statusAvailable) return "";
+  const failed = Array.isArray(hostSecurity.failedChecks) ? hostSecurity.failedChecks : [];
+  const failedText = failed.length
+    ? failed.map((id) => hostSecurityCheckLabels[id] || id).join(", ")
+    : "keine offenen Prüfpunkte";
+  const stateLabel = !hostSecurity.configured ? "Nicht aktiviert"
+    : hostSecurity.state === "ok" ? "Geschützt" : hostSecurity.state === "error" ? "Fehler" : "Prüfen";
+  const transactionText = hostSecurity.pendingConfirmation
+    ? "Bestätigung aus zweiter SSH-Sitzung ausständig"
+    : "keine offene Sicherheitstransaktion";
+  const rebootText = hostSecurity.rebootRequired ? "im Wartungsfenster erforderlich" : "derzeit nicht erforderlich";
+  return `
+    <section class="monitor-diagnostics ${hostSecurity.state === "ok" || !hostSecurity.configured ? "ok" : "warning"}">
+      <div class="offsite-diagnostics-heading"><div><span class="eyebrow">Ubuntu-Host</span><strong>Host-Sicherheit</strong><small>${escapeHtml(failedText)}</small></div><span class="status-badge ${hostSecurity.state === "ok" ? "active" : "inactive"}">${escapeHtml(stateLabel)}</span></div>
+      <div class="diagnostic-grid">
+        <span><small>Letzte Prüfung</small><strong>${escapeHtml(diagnosticTimestamp(hostSecurity.checkedAt))}${escapeHtml(diagnosticAge(hostSecurity.ageHours))}</strong></span>
+        <span><small>Sicherheitstransaktion</small><strong>${escapeHtml(transactionText)}</strong></span>
+        <span><small>Neustart</small><strong>${escapeHtml(rebootText)}</strong></span>
+        <span><small>Statusdatei</small><strong>${hostSecurity.statusAvailable ? "geschützt verfügbar" : "nicht verfügbar"}</strong></span>
+      </div>
+      ${hostSecurity.lastErrorCode ? `<p class="offsite-diagnostic-error"><strong>Fehlercode:</strong> ${escapeHtml(hostSecurity.lastErrorCode)}</p>` : ""}
+    </section>`;
+}
+
 function renderServerDiagnostics(status, technical = null) {
   if (!elements.serverDiagnostics || !status) return;
   const alerts = Array.isArray(status.alerts) ? status.alerts : [];
@@ -1710,6 +1748,7 @@ function renderServerDiagnostics(status, technical = null) {
     ? `<div class="diagnostic-alerts">${alerts.map((alert) => `<article class="${escapeHtml(alert.severity || "warning")}"><strong>${escapeHtml(alert.title || "Serverzustand prüfen")}</strong><span>${escapeHtml(alert.message || "")}</span></article>`).join("")}</div>`
     : '<p class="diagnostic-all-clear">Keine Warnungen in der aktuellen Betriebsübersicht.</p>';
   const offsite = status.backups?.offsite || {};
+  const hostSecurity = status.hostSecurity || {};
   const recovery = status.recovery || {};
   const recoveryState = recovery.isolatedRestoreTestPending ? "warning" : "ok";
   const technicalChecks = Array.isArray(technical?.productionChecks) ? technical.productionChecks : [];
@@ -1741,6 +1780,7 @@ function renderServerDiagnostics(status, technical = null) {
     </div>
     ${renderOffsiteBackupDiagnostics(offsite)}
     ${renderMonitorDiagnostics(status.monitor)}
+    ${renderHostSecurityDiagnostics(hostSecurity)}
     <section class="recovery-diagnostics ${recoveryState}">
       <div><span class="eyebrow">Wiederherstellungsnachweis</span><strong>Isolierter Test-Restore</strong><small>${recovery.isolatedRestoreTestPending ? "Noch ausständig, überfällig oder zuletzt fehlgeschlagen." : "Der letzte isolierte Wiederherstellungstest ist bestätigt."}</small></div>
       <span><strong>${escapeHtml(diagnosticTimestamp(recovery.isolatedRestoreTestAt))}${escapeHtml(diagnosticAge(recovery.isolatedRestoreTestAgeHours))}</strong><small>Produktive Wiederherstellungen bleiben ein beaufsichtigter Wartungsvorgang.</small></span>

@@ -1,5 +1,16 @@
 # Grabenplaner Versions-Log
 
+## v0.75 Beta
+
+- Ein separates Ubuntu-Host-Sicherheitsmodul prüft SSH, UFW, automatische Sicherheitsaktualisierungen, Kernel-Schutzwerte, systemd-Journal und besonders geschützte Konfigurationsdateien.
+- Die normale Serverinstallation aktiviert keine Firewall- oder SSH-Änderung. Der Sicherheitsplan bleibt zunächst vollständig lesend und muss von der verantwortlichen IT ausdrücklich als Root-Vorgang angewendet werden.
+- Vor einer SSH-/UFW-Änderung werden verwaltete Einstellungen gesichert und ein automatischer Rücksetz-Timer gestartet. Erst eine zweite, weiterhin funktionierende Schlüssel-SSH-Sitzung darf die Transaktion bestätigen.
+- SSH bleibt auf den bereits verwendeten Port beschränkt; der Bootstrap-Port 3000 wird niemals öffentlich freigegeben. UFW-Regeln werden ohne Firewall-Reset ergänzt. Das Modul löscht fremde Regeln nicht gezielt und verweigert einen Rollback bei nachträglichem UFW-Drift, statt fremde Änderungen zu überschreiben.
+- Unattended Upgrades installiert freigegebene Ubuntu-Sicherheitsaktualisierungen ohne automatischen Neustart. Ein notwendiger Neustart wird als Wartungshinweis gemeldet.
+- Das systemd-Journal erhält begrenzte Aufbewahrungs- und Größenwerte. Der an Grabenplaner übergebene Sicherheitsstatus enthält keine IP-Adressen, Benutzernamen, internen Pfade, Diagnosefreitexte oder Geheimnisse; technische Transaktionsprotokolle bleiben davon getrennt und root-only.
+- Geheime Linux-Umgebungsdateien werden nicht mehr als Shellcode geladen, sondern als striktes, literales `KEY=VALUE`-Format geparst. Fehlerprotokolle geben keine URL-Abfragewerte aus.
+- Der Linux-Laufzeitvertrag bleibt bei Deployment-Schema 2. Das optionale Sicherheitsmodul besitzt einen eigenen, paketgebundenen Vertrag und erfordert keine Laufzeitmigration.
+
 ## v0.74 Beta
 
 - Eine gehärtete systemd-Prüfung kontrolliert den Ubuntu-Server alle fünf Minuten und schreibt ausschließlich einen redigierten, manipulationsgeschützten Status für die Anwendung.

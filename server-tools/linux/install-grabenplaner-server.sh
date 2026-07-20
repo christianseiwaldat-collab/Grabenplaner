@@ -318,6 +318,74 @@ const expectedRecoveryArtifacts = [
   "server-tools/linux/recovery/lib/recovery-metadata.js",
   "server-tools/linux/recovery/lib/recovery-verify.js",
 ];
+const hardeningPrefix = "server-tools/linux/hardening/";
+const expectedHardeningArtifacts = [
+  "server-tools/linux/hardening/grabenplaner-host-security.sh",
+  "server-tools/linux/hardening/install-grabenplaner-host-hardening.sh",
+  "server-tools/linux/hardening/lib/hardening-common.sh",
+  "server-tools/linux/hardening/lib/hardening-contract.js",
+  "server-tools/linux/hardening/lib/hardening-policy.js",
+  "server-tools/linux/hardening/module-schema.json",
+  "server-tools/linux/hardening/systemd/grabenplaner-host-security-audit.service.in",
+  "server-tools/linux/hardening/systemd/grabenplaner-host-security-audit.timer.in",
+  "server-tools/linux/hardening/systemd/grabenplaner-host-security-rollback.service.in",
+  "server-tools/linux/hardening/systemd/grabenplaner-host-security-rollback.timer.in",
+  "server-tools/linux/hardening/templates/00-grabenplaner-hardening.conf",
+  "server-tools/linux/hardening/templates/60grabenplaner-auto-upgrades",
+  "server-tools/linux/hardening/templates/60grabenplaner-unattended-upgrades",
+  "server-tools/linux/hardening/templates/60-grabenplaner-journald.conf",
+  "server-tools/linux/hardening/templates/60-grabenplaner-sysctl.conf",
+  "server-tools/linux/hardening/test-grabenplaner-host-hardening.sh",
+  "server-tools/linux/hardening/uninstall-grabenplaner-host-hardening.sh",
+];
+const expectedHardeningDirectories = new Set(["lib", "systemd", "templates"]);
+const sha256File = (filePath) => crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+const ordinalCompare = (left, right) => (left === right ? 0 : left < right ? -1 : 1);
+function assertExactHardeningTree() {
+  const moduleRoot = path.join(root, "server-tools", "linux", "hardening");
+  const moduleStat = fs.lstatSync(moduleRoot, { throwIfNoEntry: false });
+  if (!moduleStat?.isDirectory() || moduleStat.isSymbolicLink()) fail("Der optionale Hardening-Modulordner ist unzulaessig.");
+  const expectedFiles = new Set(expectedHardeningArtifacts.map((relative) => relative.slice(hardeningPrefix.length)));
+  const actualFiles = new Set();
+  const actualDirectories = new Set();
+  function inspect(directory, prefix = "") {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const target = path.join(directory, entry.name);
+      const stat = fs.lstatSync(target);
+      if (stat.isSymbolicLink()) fail(`Symbolischer Link im Hardening-Modul: ${relative}`);
+      if (stat.isDirectory()) {
+        if (!expectedHardeningDirectories.has(relative)) fail(`Nicht manifestiertes Hardening-Verzeichnis: ${relative}`);
+        actualDirectories.add(relative);
+        inspect(target, relative);
+      } else if (stat.isFile()) {
+        if (!expectedFiles.has(relative)) fail(`Nicht manifestierte Hardening-Moduldatei: ${relative}`);
+        actualFiles.add(relative);
+      } else {
+        fail(`Unzulaessiger Dateityp im Hardening-Modul: ${relative}`);
+      }
+    }
+  }
+  inspect(moduleRoot);
+  if (actualFiles.size !== expectedFiles.size || [...expectedFiles].some((relative) => !actualFiles.has(relative))) {
+    fail("Der Hardening-Modulbaum enthaelt nicht exakt die freigegebenen Dateien.");
+  }
+  if (actualDirectories.size !== expectedHardeningDirectories.size
+    || [...expectedHardeningDirectories].some((relative) => !actualDirectories.has(relative))) {
+    fail("Der Hardening-Modulbaum enthaelt nicht exakt die freigegebenen Verzeichnisse.");
+  }
+}
+function hardeningContractMatches(candidate, expected) {
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)
+    || JSON.stringify(Object.keys(candidate).sort()) !== JSON.stringify(["files", "fingerprint", "format", "moduleVersion", "schemaSha256", "schemaVersion"])) return false;
+  if (candidate.format !== expected.format || candidate.schemaVersion !== expected.schemaVersion
+    || candidate.moduleVersion !== expected.moduleVersion || candidate.schemaSha256 !== expected.schemaSha256
+    || candidate.fingerprint !== expected.fingerprint || !Array.isArray(candidate.files)
+    || candidate.files.length !== expected.files.length) return false;
+  return candidate.files.every((item, index) => item && typeof item === "object" && !Array.isArray(item)
+    && JSON.stringify(Object.keys(item).sort()) === JSON.stringify(["path", "sha256"])
+    && item.path === expected.files[index].path && item.sha256 === expected.files[index].sha256);
+}
 if (!fs.existsSync(manifestPath)) fail("Das Manifest fehlt in der Archivwurzel.");
 let manifest;
 try { manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8").replace(/^\uFEFF/, "")); } catch { fail("Das Manifest ist kein gueltiges JSON."); }
@@ -350,6 +418,7 @@ for (const required of [
   ...expectedMonitorArtifacts,
   ...expectedRecoveryArtifacts,
   ...expectedOffsiteArtifacts,
+  ...expectedHardeningArtifacts,
 ]) {
   if (!fs.statSync(path.join(root, required), { throwIfNoEntry: false })?.isFile()) fail(`Pflichtdatei fehlt: ${required}`);
 }
@@ -382,6 +451,43 @@ if (offsiteContract?.format !== "grabenplaner-linux-offsite-module-contract" || 
   || expectedOffsiteArtifacts.some((relative) => !offsiteContract.managedArtifacts.includes(relative))
   || offsiteContract.managedArtifacts.some((relative) => typeof relative !== "string" || !relative.startsWith("server-tools/linux/offsite/") || relative.includes("\\") || relative.split("/").some((part) => !part || part === "." || part === ".."))) {
   fail("Der optionale Offsite-Modulvertrag ist ungueltig.");
+}
+const hardeningSchemaPath = path.join(root, "server-tools/linux/hardening/module-schema.json");
+assertExactHardeningTree();
+let hardeningSchema;
+try { hardeningSchema = JSON.parse(fs.readFileSync(hardeningSchemaPath, "utf8").replace(/^\uFEFF/, "")); } catch { fail("Der optionale Hardening-Modulvertrag ist nicht lesbar."); }
+if (JSON.stringify(Object.keys(hardeningSchema || {}).sort()) !== JSON.stringify(["activationPolicy", "format", "managedArtifacts", "moduleVersion", "schemaVersion"])
+  || hardeningSchema?.format !== "grabenplaner-linux-hardening-module-contract" || hardeningSchema?.schemaVersion !== 1
+  || hardeningSchema?.moduleVersion !== 1 || hardeningSchema?.activationPolicy !== "explicit-root-two-session"
+  || !Array.isArray(hardeningSchema?.managedArtifacts) || hardeningSchema.managedArtifacts.length !== expectedHardeningArtifacts.length
+  || expectedHardeningArtifacts.some((relative, index) => hardeningSchema.managedArtifacts[index] !== relative)) {
+  fail("Der optionale Hardening-Modulvertrag ist ungueltig.");
+}
+const hardeningArtifacts = new Map();
+for (const relative of hardeningSchema.managedArtifacts) {
+  if (typeof relative !== "string" || !relative.startsWith(hardeningPrefix) || relative.includes("\\")
+    || relative.split("/").some((part) => !part || part === "." || part === "..") || hardeningArtifacts.has(relative)) {
+    fail("Der optionale Hardening-Modulvertrag enthaelt einen ungueltigen Pfad.");
+  }
+  const target = path.resolve(root, ...relative.split("/"));
+  if (!target.startsWith(`${root}${path.sep}`)) fail("Ein Hardening-Modulartefakt verlaesst das Paket.");
+  const targetStat = fs.lstatSync(target, { throwIfNoEntry: false });
+  if (!targetStat?.isFile() || targetStat.isSymbolicLink()) fail(`Hardening-Modulartefakt fehlt oder ist unzulaessig: ${relative}`);
+  hardeningArtifacts.set(relative, sha256File(target));
+}
+const sortedHardeningArtifacts = [...hardeningArtifacts].sort(([left], [right]) => ordinalCompare(left, right));
+const hardeningModuleContract = {
+  format: "grabenplaner-linux-hardening-installed-contract",
+  schemaVersion: 1,
+  moduleVersion: 1,
+  schemaSha256: sha256File(hardeningSchemaPath),
+  fingerprint: crypto.createHash("sha256")
+    .update(sortedHardeningArtifacts.map(([relative, hash]) => `${relative}\0${hash}\n`).join(""))
+    .digest("hex"),
+  files: sortedHardeningArtifacts.map(([relative, sha256]) => ({ path: relative.slice(hardeningPrefix.length), sha256 })),
+};
+if (!hardeningContractMatches(manifest.hardeningModule, hardeningModuleContract)) {
+  fail("Der Hardening-Fingerprint im Paketmanifest stimmt nicht mit dem separaten Modulvertrag ueberein.");
 }
 const allowedRootFiles = new Set([
   "server.js", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",

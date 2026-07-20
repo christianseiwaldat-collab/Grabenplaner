@@ -1,0 +1,25 @@
+{
+  "format": "grabenplaner-linux-hardening-module-contract",
+  "schemaVersion": 1,
+  "moduleVersion": 1,
+  "activationPolicy": "explicit-root-two-session",
+  "managedArtifacts": [
+    "server-tools/linux/hardening/grabenplaner-host-security.sh",
+    "server-tools/linux/hardening/install-grabenplaner-host-hardening.sh",
+    "server-tools/linux/hardening/lib/hardening-common.sh",
+    "server-tools/linux/hardening/lib/hardening-contract.js",
+    "server-tools/linux/hardening/lib/hardening-policy.js",
+    "server-tools/linux/hardening/module-schema.json",
+    "server-tools/linux/hardening/systemd/grabenplaner-host-security-audit.service.in",
+    "server-tools/linux/hardening/systemd/grabenplaner-host-security-audit.timer.in",
+    "server-tools/linux/hardening/systemd/grabenplaner-host-security-rollback.service.in",
+    "server-tools/linux/hardening/systemd/grabenplaner-host-security-rollback.timer.in",
+    "server-tools/linux/hardening/templates/00-grabenplaner-hardening.conf",
+    "server-tools/linux/hardening/templates/60grabenplaner-auto-upgrades",
+    "server-tools/linux/hardening/templates/60grabenplaner-unattended-upgrades",
+    "server-tools/linux/hardening/templates/60-grabenplaner-journald.conf",
+    "server-tools/linux/hardening/templates/60-grabenplaner-sysctl.conf",
+    "server-tools/linux/hardening/test-grabenplaner-host-hardening.sh",
+    "server-tools/linux/hardening/uninstall-grabenplaner-host-hardening.sh"
+  ]
+}
