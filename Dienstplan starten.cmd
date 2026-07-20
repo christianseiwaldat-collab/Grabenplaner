@@ -1,3 +1,3 @@
 @echo off
 cd /d "%~dp0"
-call "Grabenplaner v0.74 Beta starten.cmd"
+call "Grabenplaner v0.75 Beta starten.cmd"
