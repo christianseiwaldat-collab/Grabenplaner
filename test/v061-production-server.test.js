@@ -5,6 +5,8 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const {
   createBoundedRateLimitStore,
+  isBootstrapRequestOriginAllowed,
+  isServerBootstrapStartupAllowed,
   parseBackupKeep,
   parseServerPort,
   runtimeValidationErrors,
@@ -75,6 +77,55 @@ test("v0.72: produktiver Loopback-Bootstrap verlangt einen einmaligen Schluessel
     operationMode: "local",
     bootstrapToken: "zu-kurz",
   })).join(" "), /BOOTSTRAP_TOKEN.*32 Zeichen/i);
+});
+
+test("v0.75.1: Server-Bootstrap ohne Admin braucht Modus, exakten Loopback-Host und starken Token", () => {
+  const valid = {
+    operationMode: "server",
+    bootstrapMode: "1",
+    host: "127.0.0.1",
+    bootstrapToken: "b".repeat(48),
+  };
+  assert.equal(isServerBootstrapStartupAllowed(valid), true);
+  for (const invalid of [
+    { ...valid, bootstrapMode: "" },
+    { ...valid, bootstrapMode: "true" },
+    { ...valid, host: "localhost" },
+    { ...valid, host: "::1" },
+    { ...valid, host: "0.0.0.0" },
+    { ...valid, bootstrapToken: "" },
+    { ...valid, bootstrapToken: "zu-kurz" },
+    { ...valid, operationMode: "local" },
+  ]) {
+    assert.equal(isServerBootstrapStartupAllowed(invalid), false);
+  }
+  assert.equal(isServerBootstrapStartupAllowed({
+    ...valid,
+    bootstrapMode: "",
+    bootstrapToken: "t".repeat(64),
+  }), false, "Ein Token allein darf den normalen Serverstart nicht freigeben.");
+});
+
+test("v0.75.1: Bootstrap-Browser-Origin ist an exakte Tunneladresse und Loopback gebunden", () => {
+  const valid = {
+    bootstrapActive: true,
+    loopbackRequest: true,
+    origin: "http://127.0.0.1:3000",
+    port: 3000,
+  };
+  assert.equal(isBootstrapRequestOriginAllowed(valid), true);
+  for (const invalid of [
+    { ...valid, bootstrapActive: false },
+    { ...valid, loopbackRequest: false },
+    { ...valid, origin: "http://localhost:3000" },
+    { ...valid, origin: "http://[::1]:3000" },
+    { ...valid, origin: "http://127.0.0.1:3001" },
+    { ...valid, origin: "http://127.0.0.1:3000/" },
+    { ...valid, origin: "https://127.0.0.1:3000" },
+    { ...valid, port: "ungueltig" },
+  ]) {
+    assert.equal(isBootstrapRequestOriginAllowed(invalid), false);
+  }
 });
 
 test("v0.61: Port und Backup-Aufbewahrung werden ohne stille Teilwerte gelesen", () => {
