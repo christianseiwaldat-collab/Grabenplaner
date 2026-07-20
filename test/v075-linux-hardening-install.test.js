@@ -34,18 +34,48 @@ function shellFiles(directory) {
   });
 }
 
+function logicalShellLines(source) {
+  const logicalLines = [];
+  let fragments = [];
+  let startLine = 1;
+
+  source.split(/\r?\n/).forEach((line, index) => {
+    if (fragments.length === 0) startLine = index + 1;
+    const trailingBackslashes = line.match(/\\+$/)?.[0].length || 0;
+    const continued = trailingBackslashes % 2 === 1;
+    fragments.push(continued ? line.slice(0, -1) : line);
+    if (!continued) {
+      logicalLines.push({ line: startLine, source: fragments.join(" ") });
+      fragments = [];
+    }
+  });
+
+  if (fragments.length > 0) logicalLines.push({ line: startLine, source: fragments.join(" ") });
+  return logicalLines;
+}
+
+function declarationRemainderReferences(remainder, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const directReference = new RegExp(`\\$(?:${escaped}(?![A-Za-z0-9_])|\\{${escaped}(?:[^A-Za-z0-9_]|$))`);
+  if (directReference.test(remainder)) return true;
+
+  const arithmeticReference = new RegExp(`(?:^|[^A-Za-z0-9_])${escaped}(?![A-Za-z0-9_])`);
+  return [...remainder.matchAll(/\$\(\(([\s\S]*?)\)\)/g)]
+    .some((arithmetic) => arithmeticReference.test(arithmetic[1]));
+}
+
 function sameDeclarationDependencies(source) {
   const findings = [];
-  source.split(/\r?\n/).forEach((line, index) => {
-    const declaration = line.match(/^\s*(?:local|readonly)\s+(.+)$/)?.[1];
+  logicalShellLines(source).forEach((logicalLine) => {
+    const declaration = logicalLine.source.match(/^\s*(?:local|readonly|declare|typeset)\b\s*(.+)$/)?.[1];
     if (!declaration) return;
 
     for (const assignment of declaration.matchAll(/(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=/g)) {
       const name = assignment[1];
       const remainder = declaration.slice(assignment.index + assignment[0].length);
-      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const reference = new RegExp(`\\$(?:${escaped}(?![A-Za-z0-9_])|\\{${escaped}(?:[^A-Za-z0-9_]|$))`);
-      if (reference.test(remainder)) findings.push({ line: index + 1, name, source: line.trim() });
+      if (declarationRemainderReferences(remainder, name)) {
+        findings.push({ line: logicalLine.line, name, source: logicalLine.source.trim() });
+      }
     }
   });
   return findings;
@@ -119,6 +149,28 @@ test("v0.75 hardening shell declarations do not use variables initialized earlie
   const findings = shellFiles(hardeningRoot).flatMap((file) => sameDeclarationDependencies(fs.readFileSync(file, "utf8"))
     .map((finding) => `${path.relative(root, file)}:${finding.line}: ${finding.name} in ${finding.source}`));
   assert.deepEqual(findings, []);
+});
+
+test("v0.75 declaration guard rejects every nounset dependency form and permits separate declarations", () => {
+  const unsafeFixtures = [
+    ['declare text=one derived="$text/two"', "text"],
+    ['local count=1 next=$((count + 1))', "count"],
+    [["typeset root=/srv \\", '  child="${root}/app"'].join("\n"), "root"],
+  ];
+  for (const [source, expectedName] of unsafeFixtures) {
+    const findings = sameDeclarationDependencies(source);
+    assert.equal(findings.length, 1, source);
+    assert.equal(findings[0].name, expectedName, source);
+  }
+
+  const safeFixture = [
+    "local text=one",
+    'local derived="$text/two"',
+    "readonly count=1",
+    "declare next=$((count + 1))",
+    'typeset final="${next}/done"',
+  ].join("\n");
+  assert.deepEqual(sameDeclarationDependencies(safeFixture), []);
 });
 
 test("v0.75 installer preflight runs under nounset before any installation mutation", (context) => {
