@@ -71,24 +71,34 @@
               </div>
             </div>
           </section>
-          <button class="nav-item request-nav-item" data-view="requests" id="requestsNavButton">
-            <span class="nav-symbol">✓</span><span>Anträge</span><strong class="nav-count hidden" id="requestsNavCount">0</strong>
-          </button>
-          <button class="nav-item hidden" data-view="timeTracking" id="timeTrackingNavButton">
-            <span class="nav-symbol">◷</span><span>Zeiterfassung</span>
-          </button>
-          <button class="nav-item hidden" data-view="personnelAdministration" id="personnelAdministrationNavButton">
-            <span class="nav-symbol">◎</span><span>Personalverwaltung</span>
-          </button>
-          <button class="nav-item" data-view="settings">
-            <span class="nav-symbol">⚙</span><span>Einstellungen</span>
-          </button>
+          <section class="nav-module hidden" id="personnelAdministrationNav" aria-label="Personalverwaltung">
+            <button type="button" class="nav-module-toggle expanded" id="personnelAdministrationToggle" data-nav-toggle="personnelAdministration" aria-controls="personnelAdministrationNavChildren" aria-expanded="true">
+              <span class="nav-module-chevron" aria-hidden="true"></span><span class="nav-symbol" aria-hidden="true">◎</span><span>Personalverwaltung</span>
+            </button>
+            <div class="nav-module-children" id="personnelAdministrationNavChildren">
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="employees" id="personnelDirectoryNavButton">
+                <span class="nav-symbol">◉</span><span>Mitarbeitende</span>
+              </button>
+              <button class="nav-item nav-module-route request-nav-item hidden" data-view="requests" id="requestsNavButton">
+                <span class="nav-symbol">✓</span><span>Anträge</span><strong class="nav-count hidden" id="requestsNavCount">0</strong>
+              </button>
+              <button class="nav-item nav-module-route hidden" data-view="timeTracking" id="timeTrackingNavButton">
+                <span class="nav-symbol">◷</span><span>Zeiterfassung</span>
+              </button>
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="costCenters" id="costCentersNavButton">
+                <span class="nav-symbol">▦</span><span>Kostenstellen</span>
+              </button>
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="vacations" id="centralVacationsNavButton">
+                <span class="nav-symbol">☀</span><span>Urlaube (Unternehmen)</span>
+              </button>
+            </div>
+          </section>
         </nav>
 
-        <div class="sidebar-summary">
-          <span class="eyebrow">Aktive Teammitglieder</span>
-          <strong id="sidebarEmployeeCount">0</strong>
-          <p>Filialteams und zentrale Stammdaten.</p>
+        <div class="sidebar-settings-shortcut">
+          <button class="nav-item" data-view="settings" id="settingsNavButton">
+            <span class="nav-symbol">⚙</span><span>Einstellungen</span>
+          </button>
         </div>
 
         <div class="sidebar-actions" aria-label="Ansicht und System">
@@ -296,7 +306,7 @@
         <section id="personnelAdministrationView" class="view">
           <header class="settings-header">
             <div><span class="eyebrow">Zentrale Stammdaten</span><h1>Personalverwaltung</h1><p class="subtitle">Alle Beschäftigten und Kostenstellen übersichtlich und geschützt verwalten.</p></div>
-            <div class="page-theme-switch" role="group" aria-label="Darstellung der Personalverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
+            <div class="settings-header-actions"><button class="display-columns-button" id="personnelDisplayColumnsButton" type="button">Anzeigespalten</button><div class="page-theme-switch" role="group" aria-label="Darstellung der Personalverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div></div>
           </header>
 
           <div class="settings-tabs personnel-administration-tabs" role="tablist">
@@ -308,7 +318,7 @@
           <section class="personnel-administration-section active" id="personnelDirectorySection" role="tabpanel" aria-labelledby="personnelDirectoryTab">
             <div class="personnel-administration-summary" id="personnelAdministrationSummary" aria-live="polite"></div>
             <div class="employee-toolbar personnel-directory-toolbar">
-              <div><h2>Mitarbeitende</h2><p>Unternehmensweite Übersicht ohne sensible Personalakt-Daten.</p></div>
+              <div><h2>Mitarbeitende</h2><p>Unternehmensweite Übersicht mit ausschließlich freigegebenen Angaben. Die Spaltenauswahl gilt auch für die Teamansicht.</p></div>
               <button class="primary-button hidden" id="addCentralEmployeeButton" type="button">+ Mitarbeiter anlegen</button>
             </div>
             <div class="personnel-directory-filters">
@@ -317,8 +327,8 @@
               <label class="field"><span>Status</span><select id="personnelDirectoryStatusFilter"><option value="active">Aktiv</option><option value="inactive">Inaktiv</option><option value="unassigned">Ohne Kostenstelle</option><option value="all">Alle</option></select></label>
             </div>
             <div class="personnel-directory-table-wrap">
-              <table class="personnel-directory-table">
-                <thead><tr><th>Personalnr.</th><th>Name</th><th>Position</th><th>Kostenstelle</th><th>Filiale / Abteilung</th><th>Wochen-Soll</th><th>Status</th><th></th></tr></thead>
+              <table class="personnel-directory-table" id="personnelDirectoryTable">
+                <thead id="personnelDirectoryHead"><tr><th>Personalnr.</th><th>Name</th><th>Position</th><th>Kostenstelle</th><th>Filiale / Abteilung</th><th>Wochen-Soll</th><th>Status</th><th></th></tr></thead>
                 <tbody id="personnelDirectoryBody"><tr><td colspan="8">Personalstammdaten werden geladen.</td></tr></tbody>
               </table>
             </div>
@@ -355,7 +365,7 @@
         <section id="personnelView" class="view">
           <header class="settings-header">
             <div><span class="eyebrow">Filialen &amp; Teams</span><h1>Filialverwaltung</h1><p class="subtitle">Filialteams, Standorte, Öffnungszeiten und Abteilungen verwalten.</p></div>
-            <div class="page-theme-switch" role="group" aria-label="Darstellung der Filialverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
+            <div class="settings-header-actions"><button class="display-columns-button" id="teamDisplayColumnsButton" type="button">Anzeigespalten</button><div class="page-theme-switch" role="group" aria-label="Darstellung der Filialverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div></div>
           </header>
 
           <div class="settings-tabs personnel-tabs" role="tablist">
@@ -369,8 +379,8 @@
               <button class="primary-button" id="addEmployeeButton">+ Teammitglied anlegen</button>
             </div>
             <div class="employee-table-wrap">
-              <table class="employee-table">
-                <thead><tr><th>Farbe</th><th>Personalnr.</th><th>Name</th><th>Dienstplan</th><th>Position</th><th>Filiale</th><th>Abteilung</th><th>Wochen-Soll / Tage</th><th>Freier Tag</th><th>Fixe Tage</th><th>Status</th><th></th></tr></thead>
+              <table class="employee-table" id="employeeTable">
+                <thead id="employeeTableHead"><tr><th>Farbe</th><th>Personalnr.</th><th>Name</th><th>Dienstplan</th><th>Position</th><th>Filiale</th><th>Abteilung</th><th>Wochen-Soll / Tage</th><th>Freier Tag</th><th>Fixe Tage</th><th>Status</th><th></th></tr></thead>
                 <tbody id="employeeTableBody"></tbody>
               </table>
             </div>
@@ -1125,6 +1135,15 @@
       </form>
     </dialog>
 
+    <dialog class="modal wide-modal employee-columns-modal" id="employeeColumnsModal">
+      <form id="employeeColumnsForm">
+        <div class="modal-header"><div><span class="eyebrow">Mitarbeitendenansicht</span><h2>Anzeigespalten auswählen</h2><p>Es werden nur Felder angeboten, die du mit deinem aktuellen Zugang lesen darfst.</p></div><button type="button" class="close-button" data-close="employeeColumnsModal">×</button></div>
+        <div class="employee-column-options" id="employeeColumnOptions"></div>
+        <p class="calculation-note">Die Auswahl und die Sortierung gelten gemeinsam für „Team“ und „Personalverwaltung · Mitarbeitende“.</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" id="resetEmployeeColumnsButton">Standard wiederherstellen</button><span></span><button type="button" class="secondary-button" data-close="employeeColumnsModal">Abbrechen</button><button type="submit" class="primary-button">Übernehmen</button></div>
+      </form>
+    </dialog>
+
     <dialog class="modal wide-modal employee-modal" id="employeeModal">
       <form method="dialog" id="employeeForm" autocomplete="off">
         <div class="modal-header"><div><span class="eyebrow">Personalstammdaten</span><h2 id="employeeModalTitle">Teammitglied anlegen</h2></div><button type="button" class="close-button" data-close="employeeModal">×</button></div>
@@ -1139,8 +1158,8 @@
           <label class="field" id="employeeTimeConfirmationLevelField"><span>Vertrauensstufe</span><select id="employeeTimeConfirmationLevel" required><option value="A">Stufe A · Wochenabschluss</option><option value="B">Stufe B · spätestens nach 3 Tagen</option><option value="C">Stufe C · täglich bis 12:00 Uhr</option></select><small>Unabhängig von Position und Rolle; steuert künftig die Bestätigungsfrist automatischer Zeitvorschläge.</small></label>
           <label class="switch-row full-width hidden" id="employeeSicknessWithoutAumField"><span><strong>Persönliches Kontingent ohne AUM freischalten</strong><small id="employeeSicknessWithoutAumHint">Wirksam nur bei Vertrauensstufe A und aktivierter Unternehmensregel.</small></span><input id="employeeSicknessWithoutAumEnabled" type="checkbox" /></label>
           <label class="field"><span>Bevorzugte Abteilung</span><select id="employeePreferredDepartment"><option value="">Keine Abteilung</option></select></label>
-          <label class="field full-width"><span>Bevorzugter freier Tag</span><select id="employeePreferredDay"><option value="">Kein bevorzugter Tag</option><option value="monday">Montag</option><option value="tuesday">Dienstag</option><option value="wednesday">Mittwoch</option><option value="thursday">Donnerstag</option><option value="friday">Freitag</option></select></label>
-          <div class="field full-width"><span>Dienstvertraglich vereinbarte fixe Arbeitstage</span>
+          <label class="field modal-span-2"><span>Bevorzugter freier Tag</span><select id="employeePreferredDay"><option value="">Kein bevorzugter Tag</option><option value="monday">Montag</option><option value="tuesday">Dienstag</option><option value="wednesday">Mittwoch</option><option value="thursday">Donnerstag</option><option value="friday">Freitag</option></select></label>
+          <div class="field modal-span-3"><span>Dienstvertraglich vereinbarte fixe Arbeitstage</span>
             <div class="weekday-checks">
               <label><input type="checkbox" name="employeeFixedWorkday" value="monday" /> Mo</label>
               <label><input type="checkbox" name="employeeFixedWorkday" value="tuesday" /> Di</label>
@@ -1150,9 +1169,9 @@
               <label><input type="checkbox" name="employeeFixedWorkday" value="saturday" /> Sa</label>
             </div>
           </div>
-          <label class="field full-width"><span>Name</span><input id="employeeName" required /></label>
-          <label class="field full-width"><span>Spitzname / Anzeige im Dienstplan</span><input id="employeeNickname" required /></label>
-          <label class="field full-width"><span>Farbe im Dienstplan</span>
+          <label class="field modal-span-2"><span>Name</span><input id="employeeName" required /></label>
+          <label class="field modal-span-2"><span>Spitzname / Anzeige im Dienstplan</span><input id="employeeNickname" required /></label>
+          <label class="field modal-span-2"><span>Farbe im Dienstplan</span>
             <div class="rgb-color-picker">
               <input id="employeeColorPicker" type="color" value="#0b84c6" />
               <input id="employeeColorHex" maxlength="7" value="#0b84c6" aria-label="RGB-Farbwert" />
@@ -1365,7 +1384,7 @@
           <div class="form-grid">
             <label class="field"><span>Quelle</span><select id="personnelImportSourceType"><option value="file">CSV- oder Excel-Datei</option><option value="sql">Freigegebene SQL-View</option></select></label>
             <label class="field" id="personnelImportSqlConnectionField"><span>SQL-Personalquelle</span><select id="personnelImportSqlConnection"><option value="">Verbindung auswählen</option></select></label>
-            <label class="field full-width" id="personnelImportFileField"><span>CSV- oder Excel-Datei</span><input id="personnelImportFile" type="file" accept=".csv,.tsv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label>
+            <label class="field modal-span-3" id="personnelImportFileField"><span>CSV- oder Excel-Datei</span><input id="personnelImportFile" type="file" accept=".csv,.tsv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label>
             <label class="field"><span>Gespeichertes Profil</span><select id="personnelImportProfile"><option value="">Ohne Profil / automatisch erkennen</option></select></label>
             <label class="field"><span>Vorhandene Personalnummer</span><select id="personnelImportDuplicateStrategy"><option value="skip">Überspringen (empfohlen)</option><option value="update">Stammdaten aktualisieren</option></select></label>
             <label class="field"><span>Standardstandort für neue Personen</span><select id="personnelImportDefaultLocation"></select></label>
@@ -1421,7 +1440,7 @@
             <label class="field"><span>Instanz (optional)</span><input id="integrationSqlInstance" maxlength="128" /></label>
             <label class="field"><span>Schema</span><input id="integrationSqlSchema" maxlength="128" value="dbo" /></label>
             <label class="field"><span>View</span><input id="integrationSqlView" maxlength="128" /></label>
-            <label class="field full-width"><span>Freigegebene Spalten</span><textarea id="integrationSqlAllowedColumns" rows="3" maxlength="12900" placeholder="Personalnummer, Vorname, Nachname, Sollstunden"></textarea><small>Nur diese Spalten werden gelesen; durch Komma oder neue Zeile trennen.</small></label>
+            <label class="field modal-span-3"><span>Freigegebene Spalten</span><textarea id="integrationSqlAllowedColumns" rows="3" maxlength="12900" placeholder="Personalnummer, Vorname, Nachname, Sollstunden"></textarea><small>Nur diese Spalten werden gelesen; durch Komma oder neue Zeile trennen.</small></label>
             <label class="field"><span>Transportverschlüsselung</span><select id="integrationSqlTls"><option value="verify_full">Zertifikat vollständig prüfen</option></select></label>
             <label class="field"><span>Zeitlimit</span><div class="unit-input"><input id="integrationSqlTimeout" type="number" min="1000" max="30000" step="1000" value="10000" /><em>ms</em></div></label>
             <label class="field"><span>Maximale Vorschau</span><div class="unit-input"><input id="integrationSqlRowLimit" type="number" min="1" max="5000" value="1000" /><em>Zeilen</em></div></label>
@@ -1432,7 +1451,7 @@
         <section class="integration-connection-fields hidden" id="integrationApiFields">
           <h3>HTTPS-JSON-Ziel</h3>
           <div class="form-grid">
-            <label class="field full-width"><span>HTTPS-Adresse</span><input id="integrationApiEndpoint" type="url" maxlength="2048" placeholder="https://lohn.example.at/api/import" /></label>
+            <label class="field modal-span-3"><span>HTTPS-Adresse</span><input id="integrationApiEndpoint" type="url" maxlength="2048" placeholder="https://lohn.example.at/api/import" /></label>
             <label class="field"><span>Authentifizierung</span><select id="integrationApiAuthentication"><option value="none">Keine</option><option value="bearer">Bearer-Token</option><option value="api_key">API-Key im Header</option><option value="basic">Benutzername und Passwort</option></select></label>
             <label class="field" id="integrationApiKeyHeaderField"><span>API-Key-Header</span><input id="integrationApiKeyHeader" maxlength="80" value="X-API-Key" /></label>
             <label class="field"><span>Zeitlimit</span><div class="unit-input"><input id="integrationApiTimeout" type="number" min="1000" max="30000" step="1000" value="10000" /><em>ms</em></div></label>
@@ -1503,10 +1522,10 @@
         <div class="modal-header"><div><span class="eyebrow">Eigener Prozess</span><h2 id="customProcessModalTitle">Prozess anlegen</h2><p>Ablauf, Zuständigkeiten und Benachrichtigungswege nachvollziehbar festlegen.</p></div><button type="button" class="close-button" data-close="customProcessModal">×</button></div>
         <input id="customProcessId" type="hidden" />
         <div class="form-grid custom-process-basics">
-          <label class="field full-width"><span>Titel</span><input id="customProcessTitle" minlength="3" maxlength="120" placeholder="z. B. Notbesetzung in einer Filiale" required /></label>
+          <label class="field modal-span-3"><span>Titel</span><input id="customProcessTitle" minlength="3" maxlength="120" placeholder="z. B. Notbesetzung in einer Filiale" required /></label>
           <label class="field"><span>Kurzzeichen</span><input id="customProcessSymbol" maxlength="5" placeholder="z. B. NB" required /><small>1 bis 5 Buchstaben oder Ziffern.</small></label>
           <label class="field"><span>Status</span><select id="customProcessStatus"><option value="draft">Entwurf</option><option value="active">Aktiv</option></select></label>
-          <label class="field full-width"><span>Beschreibung</span><textarea id="customProcessDescription" rows="3" maxlength="600" placeholder="Wann und wofür wird dieser Prozess verwendet?" required></textarea></label>
+          <label class="field modal-span-3"><span>Beschreibung</span><textarea id="customProcessDescription" rows="3" maxlength="600" placeholder="Wann und wofür wird dieser Prozess verwendet?" required></textarea></label>
           <label class="field"><span>Geltungsbereich</span><select id="customProcessScopeType"><option value="company">Gesamtes Unternehmen</option><option value="location">Bestimmte Filiale</option><option value="department">Bestimmte Abteilung</option></select></label>
           <label class="field hidden" id="customProcessScopeLocationField"><span>Filiale</span><select id="customProcessScopeLocation"></select></label>
           <label class="field hidden" id="customProcessScopeDepartmentField"><span>Abteilung</span><select id="customProcessScopeDepartment"></select></label>
