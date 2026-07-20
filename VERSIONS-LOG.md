@@ -2,7 +2,7 @@
 
 ## v0.75.1 Beta · Sicherheitsupdate
 
-- Installations-, Deinstallations- und Controllerfunktionen der Ubuntu-Host-Härtung initialisieren voneinander abhängige lokale Bash-Variablen nun in getrennten Schritten; der gesamte Hardening-Skriptbaum wird zusätzlich gegen diesen `set -u`-Fehlertyp geprüft.
+- Sechs betroffene Installations-, Deinstallations- und Controllerfunktionen der Ubuntu-Host-Härtung initialisieren voneinander abhängige lokale Bash-Variablen nun in getrennten Schritten; gezielte Regressionstests sichern diese `set -u`-Pfade ab.
 - Die Bestätigung einer angewendeten Ubuntu-Host-Härtung ist nur noch über eine eigenständige neue SSH-Verbindung möglich.
 - Eine lediglich per OpenSSH-Multiplexing über dieselbe bestehende TCP-Verbindung geöffnete Sitzung wird nicht mehr als unabhängige Kontrollverbindung akzeptiert.
 - Die Ubuntu-Erstinstallation installiert Produktionsabhängigkeiten nun ausdrücklich im geprüften Paket-Staging statt im aufrufenden Arbeitsordner.
