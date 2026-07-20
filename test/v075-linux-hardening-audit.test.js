@@ -119,7 +119,10 @@ test("v0.75 firewall audit combines UFW transaction rules with listener isolatio
   assert.match(audit, /validate_transaction_ufw_policy/);
   assert.match(audit, /ufw show added/);
   assert.match(audit, /ufw status verbose/);
+  assert.match(audit, /UFW_DEFAULT_FILE="\/etc\/default\/ufw"/);
+  assert.match(audit, /root_readonly_config_file "\$UFW_DEFAULT_FILE"/);
   assert.match(audit, /policy\.validateUfwPolicy/);
+  assert.match(audit, /ufwDefaults:/);
   assert.match(audit, /requireComplete: true/);
   assert.match(audit, /TRANSACTION_SSH_PORT/);
   assert.match(audit, /TRANSACTION_SOURCES/);
