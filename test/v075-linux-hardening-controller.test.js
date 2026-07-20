@@ -48,10 +48,11 @@ test("v0.75 controller never resets UFW or deletes foreign firewall rules", () =
 
 test("v0.75 arms rollback before mutation and allows SSH before UFW activation", () => {
   const apply = section("apply_command", "load_transaction_session_policy");
+  const preflight = apply.indexOf("configured_preflight");
   const timer = apply.indexOf('start_rollback_guard "$transaction_id"');
   const firewall = apply.indexOf('apply_ufw_rules "$transaction_directory"');
   const templates = apply.indexOf('install_managed_templates "$transaction_directory"');
-  assert.ok(timer >= 0 && firewall > timer && templates > firewall);
+  assert.ok(preflight >= 0 && timer > preflight && firewall > timer && templates > firewall);
 
   const guard = section("start_rollback_guard", "apply_ufw_rules");
   assert.match(guard, /systemctl enable --now "\$HARDENING_ROLLBACK_TIMER"/);
@@ -71,6 +72,14 @@ test("v0.75 arms rollback before mutation and allows SSH before UFW activation",
   assert.match(confirm, /systemctl disable --now "\$HARDENING_ROLLBACK_TIMER"[\s\S]*?\bsync\b/);
   assert.match(rollback, /systemctl disable --now "\$HARDENING_ROLLBACK_TIMER"[\s\S]*?\bsync\b/);
   assert.match(confirm, /systemctl enable --now "\$HARDENING_ROLLBACK_TIMER"[\s\S]*?sync/);
+});
+
+test("v0.75 journald migration refuses foreign old or new targets before mutation", () => {
+  const preflight = section("configured_preflight", "write_private_value");
+  assert.match(preflight, /cmp -s -- "\$TEMPLATE_ROOT\/zz-grabenplaner-journald\.conf" "\$JOURNALD_DROPIN"/);
+  assert.match(preflight, /cmp -s -- "\$TEMPLATE_ROOT\/60-grabenplaner-journald\.conf" "\$JOURNALD_LEGACY_DROPIN"/);
+  assert.match(preflight, /fremd oder veraendert/);
+  assert.doesNotMatch(preflight, /rm -f|hardening_atomic_install|systemctl restart/);
 });
 
 test("v0.75 validates SSH syntax and effective policy before reload without changing its port", () => {
@@ -97,14 +106,35 @@ test("v0.75 validates SSH syntax and effective policy before reload without chan
   ]) assert.ok(controller.includes(`'${directive}'`), `Effektive SSH-Pruefung fehlt: ${directive}`);
 });
 
-test("v0.75 validates APT and applies journald changes in both directions", () => {
+test("v0.75 validates APT and migrates journald priority transactionally in both directions", () => {
   const install = section("install_managed_templates", "restore_host_configuration");
   assert.match(install, /validate_effective_apt_configuration/);
   assert.match(controller, /apt-config dump/);
   assert.match(controller, /APT muss exakt Security und ESM-Security verwenden/);
   assert.match(install, /systemctl restart systemd-journald\.service/);
+  assert.match(controller, /JOURNALD_LEGACY_DROPIN="\/etc\/systemd\/journald\.conf\.d\/60-grabenplaner-journald\.conf"/);
+  assert.match(controller, /JOURNALD_DROPIN="\/etc\/systemd\/journald\.conf\.d\/zz-grabenplaner-journald\.conf"/);
+  assert.match(controller, /validateJournaldConfiguration/);
+  assert.match(controller, /LC_ALL=C SYSTEMD_COLORS=0 SYSTEMD_PAGER=cat systemd-analyze cat-config/);
+  const intendedNew = install.indexOf("record_intended_file_state \"$transaction_directory\" journald");
+  const intendedLegacy = install.indexOf("record_intended_absent_state \"$transaction_directory\" journald-legacy");
+  const journal = install.indexOf("write_apply_journal \"$transaction_directory\" journald_in_progress");
+  const installNew = install.indexOf('hardening_atomic_install "$TEMPLATE_ROOT/zz-grabenplaner-journald.conf"');
+  const validateLegacy = install.indexOf('cmp -s -- "$TEMPLATE_ROOT/60-grabenplaner-journald.conf"');
+  const removeLegacy = install.indexOf('rm -f -- "$JOURNALD_LEGACY_DROPIN"');
+  const validateEffective = install.indexOf("validate_effective_journald_configuration");
+  assert.ok(intendedNew >= 0 && intendedLegacy > intendedNew && journal > intendedLegacy
+    && installNew > journal && validateLegacy > installNew && removeLegacy > validateLegacy
+    && validateEffective > removeLegacy);
+  const backup = section("backup_host_configuration", "restore_parent_is_secure");
+  assert.match(backup, /backup_file "\$transaction_directory" journald "\$JOURNALD_DROPIN"/);
+  assert.match(backup, /backup_file "\$transaction_directory" journald-legacy "\$JOURNALD_LEGACY_DROPIN"/);
   const restore = section("restore_host_configuration", "rollback_transaction");
   assert.match(restore, /systemctl restart systemd-journald\.service/);
+  assert.ok(
+    restore.indexOf('restore_file "$transaction_directory" journald "$JOURNALD_DROPIN"')
+      < restore.indexOf('restore_file "$transaction_directory" journald-legacy "$JOURNALD_LEGACY_DROPIN"'),
+  );
   assert.match(controller, /apt-config awk cmp/);
   assert.match(controller, /sshd ssh-keygen stat sudo sync sysctl systemctl systemd-analyze ufw/);
 });
@@ -180,7 +210,7 @@ test("v0.75 rollback fully preflights drift and aggregates restore failures", ()
   assert.match(rollback, /write_transaction_state "\$transaction_directory" rolled_back/);
 
   const restoreSection = section("restore_host_configuration", "finalize_rollback_success");
-  for (const key of ["ssh", "sysctl", "journald", "unattended", "auto-upgrades", "ufw-user", "ufw-user6", "ufw-config", "ufw-default"]) {
+  for (const key of ["ssh", "sysctl", "journald", "journald-legacy", "unattended", "auto-upgrades", "ufw-user", "ufw-user6", "ufw-config", "ufw-default"]) {
     assert.ok(restoreSection.includes(`restore_file "$transaction_directory" ${key}`), `Best-effort-Restore fehlt: ${key}`);
   }
   assert.match(restoreSection, /errors \+= 1/g);

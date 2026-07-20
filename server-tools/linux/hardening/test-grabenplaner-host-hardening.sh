@@ -14,6 +14,8 @@ readonly GRABENPLANER_ENV_FILE="/etc/grabenplaner/grabenplaner.env"
 readonly APT_PERIODIC_FILE="/etc/apt/apt.conf.d/60grabenplaner-auto-upgrades"
 readonly APT_UNATTENDED_FILE="/etc/apt/apt.conf.d/60grabenplaner-unattended-upgrades"
 readonly UFW_DEFAULT_FILE="/etc/default/ufw"
+readonly JOURNALD_LEGACY_DROPIN="/etc/systemd/journald.conf.d/60-grabenplaner-journald.conf"
+readonly JOURNALD_DROPIN="/etc/systemd/journald.conf.d/zz-grabenplaner-journald.conf"
 readonly ACTIVE_TRANSACTION_FILE="$HARDENING_STATE_ROOT/active-transaction"
 readonly POLICY_FILE="$MODULE_ROOT/lib/hardening-policy.js"
 
@@ -423,37 +425,33 @@ check_sysctl() {
 }
 
 check_journald() {
-  local template="$MODULE_ROOT/templates/60-grabenplaner-journald.conf"
-  local effective="" line key expected actual journald_ok=true
+  local template="$MODULE_ROOT/templates/zz-grabenplaner-journald.conf"
+  local effective="" node journald_ok=true
   if ! command -v systemd-analyze >/dev/null 2>&1 \
     || [[ ! -f "$template" || -L "$template" ]] \
-    || ! effective="$(LC_ALL=C systemd-analyze cat-config systemd/journald.conf 2>/dev/null)"; then
+    || [[ -e "$JOURNALD_LEGACY_DROPIN" || -L "$JOURNALD_LEGACY_DROPIN" ]] \
+    || ! root_readonly_config_file "$JOURNALD_DROPIN" \
+    || ! effective="$(LC_ALL=C SYSTEMD_COLORS=0 SYSTEMD_PAGER=cat systemd-analyze cat-config systemd/journald.conf 2>/dev/null)"; then
     record_error journald "Die wirksame Journal-Konfiguration konnte nicht gelesen werden."
     return
   fi
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    line="$(trim_value "${line%%#*}")"
-    [[ -n "$line" && "$line" != \[*\] ]] || continue
-    key="$(trim_value "${line%%=*}")"
-    expected="$(trim_value "${line#*=}")"
-    if ! actual="$(awk -F= -v wanted="$key" '
-      /^\[Journal\][[:space:]]*$/ { section="Journal"; next }
-      /^\[/ { section="other"; next }
-      section == "Journal" {
-        name=$1
-        gsub(/^[[:space:]]+|[[:space:]]+$/, "", name)
-        if (name == wanted) {
-          value=substr($0, index($0, "=")+1)
-          gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
-          found=1
-        }
-      }
-      END { if (!found) exit 1; print value }
-    ' <<<"$effective")" || [[ "$actual" != "$expected" ]]; then
-      journald_ok=false
-      break
-    fi
-  done <"$template"
+  node="$(hardening_node)" || journald_ok=false
+  if [[ "$journald_ok" == true ]] && ! printf '%s\0%s' "$effective" "$(<"$template")" | "$node" -e '
+const fs = require("node:fs");
+const policy = require(process.argv[1]);
+const input = fs.readFileSync(0);
+const separator = input.indexOf(0);
+if (separator < 0) process.exit(1);
+try {
+  policy.validateJournaldConfiguration({
+    mergedConfig: input.subarray(0, separator).toString("utf8"),
+    template: input.subarray(separator + 1).toString("utf8"),
+    managedPath: process.argv[2],
+  });
+} catch { process.exit(1); }
+' "$POLICY_FILE" "$JOURNALD_DROPIN"; then
+    journald_ok=false
+  fi
   if [[ "$journald_ok" == true ]] && systemctl is-active --quiet systemd-journald.service; then
     record_ok journald "Die wirksame Journal-Aufbewahrung entspricht dem Profil."
   else

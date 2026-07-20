@@ -1,7 +1,7 @@
 {
   "format": "grabenplaner-linux-hardening-module-contract",
   "schemaVersion": 1,
-  "moduleVersion": 1,
+  "moduleVersion": 2,
   "activationPolicy": "explicit-root-two-session",
   "managedArtifacts": [
     "server-tools/linux/hardening/grabenplaner-host-security.sh",
@@ -18,6 +18,7 @@
     "server-tools/linux/hardening/templates/60grabenplaner-auto-upgrades",
     "server-tools/linux/hardening/templates/60grabenplaner-unattended-upgrades",
     "server-tools/linux/hardening/templates/60-grabenplaner-journald.conf",
+    "server-tools/linux/hardening/templates/zz-grabenplaner-journald.conf",
     "server-tools/linux/hardening/templates/60-grabenplaner-sysctl.conf",
     "server-tools/linux/hardening/test-grabenplaner-host-hardening.sh",
     "server-tools/linux/hardening/uninstall-grabenplaner-host-hardening.sh"

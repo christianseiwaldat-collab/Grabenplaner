@@ -143,6 +143,7 @@ $expectedHardeningArtifacts = @(
     'server-tools/linux/hardening/templates/60grabenplaner-auto-upgrades',
     'server-tools/linux/hardening/templates/60grabenplaner-unattended-upgrades',
     'server-tools/linux/hardening/templates/60-grabenplaner-journald.conf',
+    'server-tools/linux/hardening/templates/zz-grabenplaner-journald.conf',
     'server-tools/linux/hardening/templates/60-grabenplaner-sysctl.conf',
     'server-tools/linux/hardening/test-grabenplaner-host-hardening.sh',
     'server-tools/linux/hardening/uninstall-grabenplaner-host-hardening.sh'
@@ -302,7 +303,7 @@ try {
     $expectedHardeningSchemaKeys = @('activationPolicy', 'format', 'managedArtifacts', 'moduleVersion', 'schemaVersion')
     if (($hardeningSchemaKeys -join "`0") -cne ($expectedHardeningSchemaKeys -join "`0") -or
         [string]$hardeningSchema.format -cne 'grabenplaner-linux-hardening-module-contract' -or
-        [int]$hardeningSchema.schemaVersion -ne 1 -or [int]$hardeningSchema.moduleVersion -ne 1 -or
+        [int]$hardeningSchema.schemaVersion -ne 1 -or [int]$hardeningSchema.moduleVersion -ne 2 -or
         [string]$hardeningSchema.activationPolicy -cne 'explicit-root-two-session') {
         throw 'Der separate Hardening-Modulvertrag wird nicht unterstuetzt.'
     }
@@ -330,8 +331,8 @@ try {
     }
     $hardeningModuleContract = [ordered]@{
         format = 'grabenplaner-linux-hardening-installed-contract'
-        schemaVersion = 1
-        moduleVersion = 1
+        schemaVersion = [int]$hardeningSchema.schemaVersion
+        moduleVersion = [int]$hardeningSchema.moduleVersion
         schemaSha256 = Get-Sha256File -Path $hardeningSchemaPath
         fingerprint = Get-Sha256Text -Value $hardeningFingerprintPayload.ToString()
         files = $hardeningContractFiles
@@ -378,7 +379,9 @@ try {
     if ($roundtripManifest.format -ne 'grabenplaner-server-package' -or [int]$roundtripManifest.schemaVersion -ne 1) {
         throw 'Das Linux-Paketmanifest ist nicht mit dem Server-Updater kompatibel.'
     }
-    if ([string]$roundtripManifest.hardeningModule.fingerprint -cne [string]$hardeningModuleContract.fingerprint -or
+    if ([int]$roundtripManifest.hardeningModule.schemaVersion -ne [int]$hardeningModuleContract.schemaVersion -or
+        [int]$roundtripManifest.hardeningModule.moduleVersion -ne [int]$hardeningModuleContract.moduleVersion -or
+        [string]$roundtripManifest.hardeningModule.fingerprint -cne [string]$hardeningModuleContract.fingerprint -or
         [string]$roundtripManifest.hardeningModule.schemaSha256 -cne [string]$hardeningModuleContract.schemaSha256) {
         throw 'Der Hardening-Modulvertrag hat den ZIP-Roundtrip nicht unveraendert ueberstanden.'
     }
