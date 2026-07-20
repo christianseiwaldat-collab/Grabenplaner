@@ -84,6 +84,7 @@ test("v0.72 Linux bootstrap stays private until public HTTPS readiness succeeds"
   assert.match(bootstrapUnit, /^Environment=GRABENPLANER_BOOTSTRAP_MODE=1$/m);
   assert.match(bootstrapUnit, /^Environment=GRABENPLANER_OPERATION_MODE=server$/m);
   assert.doesNotMatch(bootstrapUnit, /^Environment=GRABENPLANER_PUBLIC_URL=/m);
+  assert.match(bootstrapUnit, /^Conflicts=grabenplaner\.service caddy\.service$/m);
   assert.doesNotMatch(normalUnit, /GRABENPLANER_BOOTSTRAP_MODE/);
   assert.match(bootstrap, /http:\/\/127\.0\.0\.1:\{\{PORT\}\}\/\?bootstrap=\$\{encoded_token\}/);
   assert.match(bootstrap, /wait_for_public_ready/);
