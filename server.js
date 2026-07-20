@@ -45,6 +45,7 @@ const { readHostSecurityStatus } = require("./lib/host-security-status");
 const {
   assertRuntimeConfiguration,
   createBoundedRateLimitStore,
+  isServerBootstrapStartupAllowed,
   parseBackupKeep,
   parseServerPort,
   runtimeValidationErrors,
@@ -652,7 +653,7 @@ const trustProxySetting = String(process.env.GRABENPLANER_TRUST_PROXY || runtime
 const serviceControlToken = String(process.env.GRABENPLANER_SERVICE_CONTROL_TOKEN || "").trim();
 const deploymentKind = String(process.env.GRABENPLANER_DEPLOYMENT_KIND || "local").trim().toLowerCase() || "local";
 const bootstrapToken = String(process.env.GRABENPLANER_BOOTSTRAP_TOKEN || "").trim();
-const productionBootstrapActive = deploymentKind === "production" && configuredOperationMode === "local";
+const bootstrapMode = String(process.env.GRABENPLANER_BOOTSTRAP_MODE || "").trim();
 const codespacesForwardingDomain = String(process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || "app.github.dev")
   .trim().toLowerCase();
 const app = express();
@@ -662,6 +663,12 @@ const backupKeep = parseBackupKeep(process.env.GRABENPLANER_BACKUP_KEEP, 30);
 const configuredHost = configuredOperationMode === "lan" ? "0.0.0.0" : "127.0.0.1";
 const HOST = String(process.env.GRABENPLANER_HOST || configuredHost).trim() || "127.0.0.1";
 const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1"]);
+const productionBootstrapActive = deploymentKind === "production" && isServerBootstrapStartupAllowed({
+  operationMode: configuredOperationMode,
+  bootstrapMode,
+  host: HOST,
+  bootstrapToken,
+});
 const dataRootDirectory = serverModeActive || configuredDataRoot ? serverDataRoot : __dirname;
 const dataDirectory = serverModeActive || configuredDataRoot ? path.join(dataRootDirectory, "data") : portableDataDirectory;
 const databasePath = process.env.DB_PATH || path.join(dataDirectory, "dienstplan.db");
@@ -688,6 +695,7 @@ const runtimeConfiguration = {
   forcePortal: process.env.GRABENPLANER_FORCE_PORTAL,
   allowUnscannedAmu: process.env.GRABENPLANER_ALLOW_UNSCANNED_AMU,
   testAmuScanner: process.env.GRABENPLANER_TEST_AMU_SCANNER,
+  bootstrapMode,
   bootstrapToken,
 };
 assertRuntimeConfiguration(runtimeConfiguration);
@@ -3456,7 +3464,8 @@ app.use((request, response, next) => {
     const loopbackServiceEndpoint = isLoopbackRequest(request)
       && ((request.method === "GET" && ["/api/health", "/api/health/live", "/api/health/ready"].includes(request.path))
         || (request.method === "POST" && request.path === "/api/service/stop"));
-    if (!loopbackServiceEndpoint) {
+    const loopbackBootstrapRequest = productionBootstrapActive && isLoopbackRequest(request);
+    if (!loopbackServiceEndpoint && !loopbackBootstrapRequest) {
       response.status(426).json({ error: "Der öffentliche Serverbetrieb akzeptiert ausschließlich HTTPS.", code: "HTTPS_REQUIRED" });
       return;
     }
@@ -7539,7 +7548,7 @@ function getPortalStatus(locationId = "", request = null) {
   const portalSettings = getPortalSettings();
   const features = installationFeatures(settings);
   const networkRuntimeActive = serverModeActive || !loopbackHosts.has(HOST.toLowerCase()) || process.env.GRABENPLANER_FORCE_PORTAL === "1";
-  const portalEnabled = networkRuntimeActive && SERVER_MODE_STATUS === "active";
+  const portalEnabled = !productionBootstrapActive && networkRuntimeActive && SERVER_MODE_STATUS === "active";
   const configuredAdmin = db.prepare(`
     SELECT 1
     FROM portal_users
@@ -7554,7 +7563,7 @@ function getPortalStatus(locationId = "", request = null) {
     serverModeAvailable: SERVER_MODE_STATUS === "active",
     loginRequired: portalEnabled,
     adminSetupState: configuredAdmin ? "configured" : "not-configured",
-    adminSetupAvailable: !configuredAdmin && !serverModeActive,
+    adminSetupAvailable: !configuredAdmin && (!serverModeActive || productionBootstrapActive),
     localOnly: loopbackHosts.has(HOST.toLowerCase()),
     listenHost: HOST,
     port: PORT,
@@ -17360,7 +17369,7 @@ app.post("/api/portal/v1/auth/branding", (request, response) => {
 });
 
 app.post("/api/portal/v1/setup/admin", async (request, response) => {
-  if (serverModeActive || !isLoopbackRequest(request)) {
+  if ((serverModeActive && !productionBootstrapActive) || !isLoopbackRequest(request)) {
     throw httpError(403, "Die Admin-Ersteinrichtung ist nur im lokalen Einrichtungsmodus direkt am Grabenplaner-PC möglich.");
   }
   if (getPortalStatus().adminSetupState === "configured") throw httpError(409, "Die Admin-Ersteinrichtung wurde bereits abgeschlossen.");
@@ -24615,7 +24624,7 @@ function validateServerStartup(portalStatus) {
     if (!parsedPublicUrl || parsedPublicUrl.protocol !== "https:" || parsedPublicUrl.username || parsedPublicUrl.password || parsedPublicUrl.pathname !== "/" || parsedPublicUrl.search || parsedPublicUrl.hash) {
       throw new Error("Serverbetrieb abgebrochen: GRABENPLANER_PUBLIC_URL muss eine gültige öffentliche HTTPS-Adresse enthalten.");
     }
-    if (portalStatus.adminSetupState !== "configured") {
+    if (portalStatus.adminSetupState !== "configured" && !productionBootstrapActive) {
       throw new Error("Serverbetrieb abgebrochen: Zuerst im Lokal- oder LAN-Betrieb einen Admin-Zugang einrichten.");
     }
     if (serviceControlToken.length < 32) {
