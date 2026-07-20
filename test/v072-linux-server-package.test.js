@@ -50,7 +50,9 @@ test("v0.72 Linux package: ZIP output is reproducible and roundtrip-verified", (
   assert.match(builder, /Sort-Object/);
   assert.match(builder, /ExtractToDirectory/);
   assert.match(builder, /Manifestpruefsumme stimmt nicht/);
-  assert.match(builder, /Get-FileHash[^\n]+SHA256/);
+  assert.match(builder, /function Get-Sha256File/);
+  assert.match(builder, /Security\.Cryptography\.SHA256/);
+  assert.doesNotMatch(builder, /Get-FileHash/);
   assert.match(builder, /GetTempPath\(\).*GrabenplanerLinuxServerPackage/s);
   assert.match(builder, /if \(\$archiveOwned\).*Remove-Item -LiteralPath \$archivePath/s);
 });
@@ -80,6 +82,7 @@ test("v0.72 Linux bootstrap stays private until public HTTPS readiness succeeds"
   assert.match(bootstrap, /recover_to_bootstrap/);
   assert.ok(bootstrap.indexOf("if ! wait_for_public_ready") < bootstrap.indexOf("if ! clear_bootstrap_token"));
   assert.match(installer, /wait_for_public_ready \|\| fail/);
+  assert.match(installer, /"\$\{PNPM_COMMAND\[@\]\}" --dir "\$STAGE_ROOT\/source" install --prod --frozen-lockfile/);
   assert.match(installer, /IFS= read -r first_line/);
   assert.match(installer, /CADDY_CONFIG_WRITTEN=1\r?\ninstall/);
   assert.match(caddy, /path_regexp serviceStopPath \(\?i\)\^\/api\/service\/stop/);
