@@ -62,6 +62,22 @@ function Get-Sha256Text([string]$Value) {
     }
 }
 
+function Get-Sha256File([string]$Path) {
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::Open(
+        $Path,
+        [IO.FileMode]::Open,
+        [IO.FileAccess]::Read,
+        [IO.FileShare]::Read
+    )
+    try {
+        return ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $stream.Dispose()
+        $algorithm.Dispose()
+    }
+}
+
 function Remove-TemporaryTreeBestEffort([string]$Path, [string]$ExpectedParent) {
     $resolved = [System.IO.Path]::GetFullPath($Path)
     $parentPrefix = [System.IO.Path]::GetFullPath($ExpectedParent).TrimEnd('\') + '\'
@@ -305,7 +321,7 @@ try {
     $hardeningFingerprintPayload = [Text.StringBuilder]::new()
     foreach ($relative in $sortedHardeningArtifacts) {
         $candidate = Join-Path $buildRoot $relative.Replace('/', '\')
-        $hash = (Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash.ToLowerInvariant()
+        $hash = Get-Sha256File -Path $candidate
         [void]$hardeningFingerprintPayload.Append($relative).Append([char]0).Append($hash).Append("`n")
         $hardeningContractFiles += [ordered]@{
             path = $relative.Substring($hardeningPrefix.Length)
@@ -316,7 +332,7 @@ try {
         format = 'grabenplaner-linux-hardening-installed-contract'
         schemaVersion = 1
         moduleVersion = 1
-        schemaSha256 = (Get-FileHash -LiteralPath $hardeningSchemaPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        schemaSha256 = Get-Sha256File -Path $hardeningSchemaPath
         fingerprint = Get-Sha256Text -Value $hardeningFingerprintPayload.ToString()
         files = $hardeningContractFiles
     }
@@ -330,7 +346,7 @@ try {
             [ordered]@{
                 path = $_.FullName.Substring($buildPrefix.Length).Replace('\', '/')
                 bytes = [int64]$_.Length
-                sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                sha256 = Get-Sha256File -Path $_.FullName
             }
         } | Sort-Object { $_.path })
     $manifest = [ordered]@{
@@ -369,12 +385,12 @@ try {
     foreach ($item in $roundtripManifest.files) {
         $candidate = Join-Path $roundtripRoot ([string]$item.path).Replace('/', '\')
         if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { throw "Manifestdatei fehlt nach dem Roundtrip: $($item.path)" }
-        $actual = (Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash.ToLowerInvariant()
+        $actual = Get-Sha256File -Path $candidate
         if ($actual -ne [string]$item.sha256) { throw "Manifestpruefsumme stimmt nicht: $($item.path)" }
     }
     if (Test-Path -LiteralPath (Join-Path $roundtripRoot 'node_modules')) { throw 'node_modules darf nicht im Linux-Quellpaket enthalten sein.' }
 
-    $packageSha256 = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $packageSha256 = Get-Sha256File -Path $archivePath
     $hashOwned = $true
     [IO.File]::WriteAllText($hashPath, "$packageSha256 *$archiveName`n", [Text.ASCIIEncoding]::new())
     $packageComplete = $true
