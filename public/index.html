@@ -296,7 +296,7 @@
         <section id="personnelAdministrationView" class="view">
           <header class="settings-header">
             <div><span class="eyebrow">Zentrale Stammdaten</span><h1>Personalverwaltung</h1><p class="subtitle">Alle Beschäftigten und Kostenstellen übersichtlich und geschützt verwalten.</p></div>
-            <div class="page-theme-switch" role="group" aria-label="Darstellung der Personalverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
+            <div class="settings-header-actions"><button class="display-columns-button" id="personnelDisplayColumnsButton" type="button">Anzeigespalten</button><div class="page-theme-switch" role="group" aria-label="Darstellung der Personalverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div></div>
           </header>
 
           <div class="settings-tabs personnel-administration-tabs" role="tablist">
@@ -308,7 +308,7 @@
           <section class="personnel-administration-section active" id="personnelDirectorySection" role="tabpanel" aria-labelledby="personnelDirectoryTab">
             <div class="personnel-administration-summary" id="personnelAdministrationSummary" aria-live="polite"></div>
             <div class="employee-toolbar personnel-directory-toolbar">
-              <div><h2>Mitarbeitende</h2><p>Unternehmensweite Übersicht ohne sensible Personalakt-Daten.</p></div>
+              <div><h2>Mitarbeitende</h2><p>Unternehmensweite Übersicht mit ausschließlich freigegebenen Angaben. Die Spaltenauswahl gilt auch für die Teamansicht.</p></div>
               <button class="primary-button hidden" id="addCentralEmployeeButton" type="button">+ Mitarbeiter anlegen</button>
             </div>
             <div class="personnel-directory-filters">
@@ -317,8 +317,8 @@
               <label class="field"><span>Status</span><select id="personnelDirectoryStatusFilter"><option value="active">Aktiv</option><option value="inactive">Inaktiv</option><option value="unassigned">Ohne Kostenstelle</option><option value="all">Alle</option></select></label>
             </div>
             <div class="personnel-directory-table-wrap">
-              <table class="personnel-directory-table">
-                <thead><tr><th>Personalnr.</th><th>Name</th><th>Position</th><th>Kostenstelle</th><th>Filiale / Abteilung</th><th>Wochen-Soll</th><th>Status</th><th></th></tr></thead>
+              <table class="personnel-directory-table" id="personnelDirectoryTable">
+                <thead id="personnelDirectoryHead"><tr><th>Personalnr.</th><th>Name</th><th>Position</th><th>Kostenstelle</th><th>Filiale / Abteilung</th><th>Wochen-Soll</th><th>Status</th><th></th></tr></thead>
                 <tbody id="personnelDirectoryBody"><tr><td colspan="8">Personalstammdaten werden geladen.</td></tr></tbody>
               </table>
             </div>
@@ -355,7 +355,7 @@
         <section id="personnelView" class="view">
           <header class="settings-header">
             <div><span class="eyebrow">Filialen &amp; Teams</span><h1>Filialverwaltung</h1><p class="subtitle">Filialteams, Standorte, Öffnungszeiten und Abteilungen verwalten.</p></div>
-            <div class="page-theme-switch" role="group" aria-label="Darstellung der Filialverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
+            <div class="settings-header-actions"><button class="display-columns-button" id="teamDisplayColumnsButton" type="button">Anzeigespalten</button><div class="page-theme-switch" role="group" aria-label="Darstellung der Filialverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div></div>
           </header>
 
           <div class="settings-tabs personnel-tabs" role="tablist">
@@ -369,8 +369,8 @@
               <button class="primary-button" id="addEmployeeButton">+ Teammitglied anlegen</button>
             </div>
             <div class="employee-table-wrap">
-              <table class="employee-table">
-                <thead><tr><th>Farbe</th><th>Personalnr.</th><th>Name</th><th>Dienstplan</th><th>Position</th><th>Filiale</th><th>Abteilung</th><th>Wochen-Soll / Tage</th><th>Freier Tag</th><th>Fixe Tage</th><th>Status</th><th></th></tr></thead>
+              <table class="employee-table" id="employeeTable">
+                <thead id="employeeTableHead"><tr><th>Farbe</th><th>Personalnr.</th><th>Name</th><th>Dienstplan</th><th>Position</th><th>Filiale</th><th>Abteilung</th><th>Wochen-Soll / Tage</th><th>Freier Tag</th><th>Fixe Tage</th><th>Status</th><th></th></tr></thead>
                 <tbody id="employeeTableBody"></tbody>
               </table>
             </div>
@@ -1122,6 +1122,15 @@
           <label class="field"><span>Startpasswort (optional)</span><span class="password-field"><input id="usbDraftPassword" type="password" minlength="6" autocomplete="new-password" /><button type="button" data-password-toggle="usbDraftPassword">Anzeigen</button></span><small>Ohne Startpasswort wird noch kein Portalzugang aktiviert.</small></label>
         </div>
         <div class="modal-actions"><span></span><button type="button" class="secondary-button" data-close="usbEmployeeDraftModal">Abbrechen</button><button type="submit" class="primary-button">Entwurf übernehmen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal employee-columns-modal" id="employeeColumnsModal">
+      <form id="employeeColumnsForm">
+        <div class="modal-header"><div><span class="eyebrow">Mitarbeitendenansicht</span><h2>Anzeigespalten auswählen</h2><p>Es werden nur Felder angeboten, die du mit deinem aktuellen Zugang lesen darfst.</p></div><button type="button" class="close-button" data-close="employeeColumnsModal">×</button></div>
+        <div class="employee-column-options" id="employeeColumnOptions"></div>
+        <p class="calculation-note">Die Auswahl und die Sortierung gelten gemeinsam für „Team“ und „Personalverwaltung · Mitarbeitende“.</p>
+        <div class="modal-actions"><button type="button" class="secondary-button" id="resetEmployeeColumnsButton">Standard wiederherstellen</button><span></span><button type="button" class="secondary-button" data-close="employeeColumnsModal">Abbrechen</button><button type="submit" class="primary-button">Übernehmen</button></div>
       </form>
     </dialog>
 
