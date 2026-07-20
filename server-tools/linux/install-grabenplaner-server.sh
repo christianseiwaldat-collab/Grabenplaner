@@ -43,6 +43,9 @@ APP_SWAPPED=0
 CADDY_CONFIG_REPLACED=0
 CADDY_CONFIG_BACKUP=""
 CADDY_CONFIG_WRITTEN=0
+CADDY_SERVICE_STATE_CAPTURED=0
+CADDY_WAS_ACTIVE=0
+CADDY_WAS_ENABLED=0
 APP_UNIT_WRITTEN=0
 BOOTSTRAP_UNIT_WRITTEN=0
 MONITOR_UNIT_WRITTEN=0
@@ -65,6 +68,24 @@ run_as_build_user() {
     cd -- "$working_directory"
     runuser -u "$BUILD_USER" -- "$@"
   )
+}
+
+normalize_verified_archive_modes() {
+  local source_root="$1" linux_tools_root script first_line script_count=0
+  linux_tools_root="$source_root/server-tools/linux"
+  [[ -d "$linux_tools_root" && ! -L "$linux_tools_root" ]] \
+    || fail "Der verifizierte Linux-Werkzeugordner fehlt oder ist ungueltig."
+  find "$source_root" -type d -exec chmod 0750 {} +
+  find "$source_root" -type f -exec chmod 0640 {} +
+  while IFS= read -r -d '' script; do
+    first_line=""
+    IFS= read -r first_line <"$script" || true
+    [[ "$first_line" == '#!/usr/bin/env bash' ]] \
+      || fail "Ein freigegebenes Linux-Shellwerkzeug besitzt keinen gueltigen Bash-Interpreter."
+    chmod 0750 -- "$script"
+    script_count=$((script_count + 1))
+  done < <(find "$linux_tools_root" -type f -name '*.sh' -print0)
+  (( script_count > 0 )) || fail "Das Serverpaket enthaelt keine freigegebenen Linux-Shellwerkzeuge."
 }
 
 usage() {
@@ -101,14 +122,7 @@ cleanup() {
       grabenplaner.service grabenplaner-bootstrap.service >/dev/null 2>&1 || true
     rm -rf --one-file-system -- "$APP_ROOT"
   fi
-  if [[ $exit_code -ne 0 && $CADDY_CONFIG_REPLACED -eq 1 && -n "$CADDY_CONFIG_BACKUP" && -f "$CADDY_CONFIG_BACKUP" ]]; then
-    cp --preserve=mode,timestamps,ownership -- "$CADDY_CONFIG_BACKUP" "$CADDY_CONFIG"
-    systemctl restart caddy.service >/dev/null 2>&1 || true
-  elif [[ $exit_code -ne 0 && $CADDY_CONFIG_WRITTEN -eq 1 && -f "$CADDY_CONFIG" ]] \
-    && caddy_config_is_managed; then
-    systemctl disable --now caddy.service >/dev/null 2>&1 || true
-    rm -f -- "$CADDY_CONFIG"
-  fi
+  [[ $exit_code -eq 0 ]] || rollback_caddy_configuration
   if [[ $exit_code -ne 0 ]]; then
     [[ $APP_UNIT_WRITTEN -eq 0 ]] || rm -f -- "$APP_UNIT"
     [[ $BOOTSTRAP_UNIT_WRITTEN -eq 0 ]] || rm -f -- "$BOOTSTRAP_UNIT"
@@ -138,6 +152,40 @@ caddy_config_is_managed() {
   [[ -f "$CADDY_CONFIG" && ! -L "$CADDY_CONFIG" ]] || return 1
   IFS= read -r first_line <"$CADDY_CONFIG" || true
   [[ "$first_line" == "$CADDY_MANAGED_MARKER" ]]
+}
+
+capture_caddy_service_state() {
+  CADDY_WAS_ACTIVE=0
+  CADDY_WAS_ENABLED=0
+  if systemctl is-active --quiet caddy.service; then CADDY_WAS_ACTIVE=1; fi
+  if systemctl is-enabled --quiet caddy.service; then CADDY_WAS_ENABLED=1; fi
+  CADDY_SERVICE_STATE_CAPTURED=1
+}
+
+restore_caddy_service_state() {
+  [[ $CADDY_SERVICE_STATE_CAPTURED -eq 1 ]] || return 0
+  if [[ $CADDY_WAS_ACTIVE -eq 1 ]]; then
+    systemctl restart caddy.service >/dev/null 2>&1 || true
+  else
+    systemctl stop caddy.service >/dev/null 2>&1 || true
+  fi
+  if [[ $CADDY_WAS_ENABLED -eq 1 ]]; then
+    systemctl enable caddy.service >/dev/null 2>&1 || true
+  else
+    systemctl disable caddy.service >/dev/null 2>&1 || true
+  fi
+}
+
+rollback_caddy_configuration() {
+  local configuration_changed=0
+  if [[ $CADDY_CONFIG_REPLACED -eq 1 && -n "$CADDY_CONFIG_BACKUP" && -f "$CADDY_CONFIG_BACKUP" ]]; then
+    cp --preserve=mode,timestamps,ownership -- "$CADDY_CONFIG_BACKUP" "$CADDY_CONFIG"
+    configuration_changed=1
+  elif [[ $CADDY_CONFIG_WRITTEN -eq 1 && -f "$CADDY_CONFIG" ]] && caddy_config_is_managed; then
+    rm -f -- "$CADDY_CONFIG"
+    configuration_changed=1
+  fi
+  [[ $configuration_changed -eq 0 ]] || restore_caddy_service_state
 }
 
 need_command() {
@@ -750,6 +798,7 @@ run_as_build_user "$STAGE_ROOT/source" unzip -q "$STAGE_ROOT/package.zip" -d "$S
 [[ "$(du -sb "$STAGE_ROOT/source" | awk '{ print $1 }')" -le "$MAX_EXTRACTED_BYTES" ]] || fail "Das entpackte Serverpaket ist groesser als 4 GiB."
 [[ -f "$STAGE_ROOT/source/$MANIFEST_NAME" ]] || fail "Das Serverpaket-Manifest fehlt in der Archivwurzel."
 validate_manifest
+normalize_verified_archive_modes "$STAGE_ROOT/source"
 resolve_pnpm
 
 chown -R "$BUILD_USER:$BUILD_GROUP" "$STAGE_ROOT/source"
@@ -782,6 +831,8 @@ chmod -R o-rwx "$STAGE_ROOT/source"
 find "$STAGE_ROOT/source" -type d -exec chmod 0750 {} +
 find "$STAGE_ROOT/source" -type f -perm /111 -exec chmod 0750 {} +
 find "$STAGE_ROOT/source" -type f ! -perm /111 -exec chmod 0640 {} +
+[[ -x "$STAGE_ROOT/source/server-tools/linux/monitor/run-grabenplaner-monitor.sh" ]] \
+  || fail "Das freigegebene Monitorwerkzeug ist nach der Berechtigungssetzung nicht ausfuehrbar."
 
 systemctl disable --now grabenplaner-monitor.timer grabenplaner-monitor.service >/dev/null 2>&1 || true
 systemctl stop grabenplaner-bootstrap.service grabenplaner.service >/dev/null 2>&1 || true
@@ -812,6 +863,7 @@ BOOTSTRAP_COMMAND_WRITTEN=1
 install -o root -g root -m 0750 "$UNIT_TEMP" "$BOOTSTRAP_COMMAND"
 render_template "$SCRIPT_DIR/Caddyfile.in" "$UNIT_TEMP"
 caddy validate --config "$UNIT_TEMP" --adapter caddyfile >/dev/null
+capture_caddy_service_state
 if [[ -s "$CADDY_CONFIG" ]]; then
   install -d -o root -g root -m 0700 "$CONFIG_ROOT/caddy-backup"
   CADDY_CONFIG_BACKUP="${CONFIG_ROOT}/caddy-backup/Caddyfile.pre-grabenplaner.$(date -u +%Y%m%dT%H%M%SZ)"

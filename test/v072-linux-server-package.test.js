@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
@@ -134,6 +135,106 @@ run_as_build_user "$base/staging-source" "${process.execPath}" -e \
     env: { ...process.env, LC_ALL: "C" },
   });
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+});
+
+test("v0.72 Linux installer restores trusted shell modes after ZIP extraction", {
+  skip: process.platform !== "linux",
+}, (context) => {
+  const installer = read("server-tools", "linux", "install-grabenplaner-server.sh");
+  const helper = installer.match(/^normalize_verified_archive_modes\(\) \{[\s\S]*?^\}/m)?.[0];
+  assert.ok(helper, "Helfer fuer vertrauenswuerdige Linux-Ausfuehrungsrechte wurde nicht gefunden.");
+  assert.match(helper, /server-tools\/linux/);
+  assert.match(helper, /-type f -name '\*\.sh'/);
+  assert.match(helper, /find "\$source_root" -type f -exec chmod 0640/);
+  assert.doesNotMatch(helper, /-perm \/111/);
+  assert.doesNotMatch(helper, /find "\$source_root" -type f -name '\*\.sh'/);
+  assert.match(installer, /validate_manifest\r?\nnormalize_verified_archive_modes "\$STAGE_ROOT\/source"\r?\nresolve_pnpm/);
+  assert.match(installer, /NODE_ENV=production "\$\{PNPM_COMMAND\[@\]\}" install[\s\S]+find "\$STAGE_ROOT\/source" -type f -perm \/111 -exec chmod 0750/);
+
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-linux-zip-modes-"));
+  context.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+  const source = path.join(temporary, "source");
+  const extracted = path.join(temporary, "extracted");
+  const trustedScript = path.join(source, "server-tools", "linux", "monitor", "run-grabenplaner-monitor.sh");
+  const untrustedScript = path.join(source, "public", "untrusted.sh");
+  fs.mkdirSync(path.dirname(trustedScript), { recursive: true });
+  fs.mkdirSync(path.dirname(untrustedScript), { recursive: true });
+  fs.writeFileSync(trustedScript, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o644 });
+  fs.writeFileSync(untrustedScript, "#!/usr/bin/env bash\nexit 0\n", { mode: 0o644 });
+  fs.chmodSync(trustedScript, 0o644);
+  fs.chmodSync(untrustedScript, 0o755);
+
+  const archive = path.join(temporary, "windows-like.zip");
+  const zip = spawnSync("zip", ["-q", "-r", archive, "."], { cwd: source, encoding: "utf8" });
+  assert.equal(zip.status, 0, zip.stderr || zip.error?.message);
+  fs.mkdirSync(extracted);
+  const unzip = spawnSync("unzip", ["-q", archive, "-d", extracted], { encoding: "utf8" });
+  assert.equal(unzip.status, 0, unzip.stderr || unzip.error?.message);
+  const extractedTrusted = path.join(extracted, "server-tools", "linux", "monitor", "run-grabenplaner-monitor.sh");
+  const extractedUntrusted = path.join(extracted, "public", "untrusted.sh");
+  assert.equal(fs.statSync(extractedTrusted).mode & 0o111, 0, "ZIP-Fixture muss ohne Unix-Execute-Bits ankommen.");
+  assert.notEqual(fs.statSync(extractedUntrusted).mode & 0o111, 0, "ZIP-Fixture muss auch ein nicht freigegebenes Execute-Bit abbilden.");
+
+  const script = `
+set -Eeuo pipefail
+fail() { echo "$*" >&2; exit 1; }
+${helper}
+normalize_verified_archive_modes "$1"
+`;
+  const result = spawnSync("bash", ["-s", "--", extracted], { input: script, encoding: "utf8" });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.notEqual(fs.statSync(extractedTrusted).mode & 0o111, 0, "Verifiziertes Linux-Shellwerkzeug muss ausfuehrbar werden.");
+  assert.equal(fs.statSync(extractedUntrusted).mode & 0o111, 0, "Shell-Dateien ausserhalb des engen Linux-Werkzeugpfads bleiben nicht ausfuehrbar.");
+});
+
+test("v0.72 failed install keeps a previously inactive Caddy service inactive", {
+  skip: process.platform !== "linux",
+}, (context) => {
+  const installer = read("server-tools", "linux", "install-grabenplaner-server.sh");
+  const capture = installer.match(/^capture_caddy_service_state\(\) \{[\s\S]*?^\}/m)?.[0];
+  const restore = installer.match(/^restore_caddy_service_state\(\) \{[\s\S]*?^\}/m)?.[0];
+  const rollback = installer.match(/^rollback_caddy_configuration\(\) \{[\s\S]*?^\}/m)?.[0];
+  assert.ok(capture && restore && rollback, "Caddy-Rollback-Helfer wurden nicht gefunden.");
+  assert.match(installer, /capture_caddy_service_state\r?\nif \[\[ -s "\$CADDY_CONFIG" \]\]/);
+
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-caddy-rollback-"));
+  context.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+  const current = path.join(temporary, "Caddyfile");
+  const backup = path.join(temporary, "Caddyfile.backup");
+  const calls = path.join(temporary, "systemctl.log");
+  fs.writeFileSync(current, "managed\n");
+  fs.writeFileSync(backup, "original\n");
+
+  const script = `
+set -Eeuo pipefail
+CADDY_CONFIG="$1"
+CADDY_CONFIG_BACKUP="$2"
+SYSTEMCTL_LOG="$3"
+CADDY_CONFIG_REPLACED=1
+CADDY_CONFIG_WRITTEN=1
+CADDY_SERVICE_STATE_CAPTURED=0
+CADDY_WAS_ACTIVE=1
+CADDY_WAS_ENABLED=1
+caddy_config_is_managed() { return 0; }
+systemctl() {
+  case "$1" in
+    is-active|is-enabled) return 1 ;;
+    *) printf '%s\n' "$*" >>"$SYSTEMCTL_LOG" ;;
+  esac
+}
+${capture}
+${restore}
+${rollback}
+capture_caddy_service_state
+rollback_caddy_configuration
+`;
+  const result = spawnSync("bash", ["-s", "--", current, backup, calls], { input: script, encoding: "utf8" });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(fs.readFileSync(current, "utf8"), "original\n");
+  const serviceCalls = fs.readFileSync(calls, "utf8");
+  assert.match(serviceCalls, /^stop caddy\.service$/m);
+  assert.match(serviceCalls, /^disable caddy\.service$/m);
+  assert.doesNotMatch(serviceCalls, /^(?:start|restart|enable) caddy\.service$/m);
 });
 
 test("v0.72 Linux installer requires every trusted maintenance verifier", () => {
