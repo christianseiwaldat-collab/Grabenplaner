@@ -179,6 +179,7 @@ maintenance_root="$(mktemp --directory --tmpdir="$app_parent" .grabenplaner-upda
 chown root:root -- "$maintenance_root"
 chmod 0711 -- "$maintenance_root"
 extract_root="$maintenance_root/extract"
+pnpm_store="$maintenance_root/pnpm-store"
 rollback_root="$maintenance_root/previous-app"
 staged_package="$maintenance_root/update-package.zip"
 entries_file="$maintenance_root/archive-entries.txt"
@@ -410,6 +411,7 @@ chown "root:$build_group" -- "$staged_package"
 chmod 0640 -- "$staged_package"
 chown "$build_user:$build_group" -- "$extract_root"
 chmod 0750 -- "$extract_root"
+install -d -m 0700 -o "$build_user" -g "$build_group" -- "$pnpm_store"
 
 gp_info "Pruefe ZIP-Struktur und entpackte Maximalgroesse."
 zip_summary="$(unzip -Z -t "$staged_package")" || gp_die "Das ZIP-Zentralverzeichnis kann nicht gelesen werden."
@@ -527,7 +529,8 @@ chmod 0750 -- "$extract_root"
 (cd -- "$build_cache" && runuser --user "$build_user" -- env -i \
   HOME="$build_cache" XDG_CACHE_HOME="$build_cache" PNPM_HOME="$build_cache/pnpm" COREPACK_HOME="$build_cache/corepack" \
   PATH="$(dirname -- "$node"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" NODE_ENV=production \
-  "$pnpm_program" "${pnpm_arguments[@]}" --dir "$extract_root" install --prod --frozen-lockfile --config.node-linker=hoisted)
+  "$pnpm_program" "${pnpm_arguments[@]}" --dir "$extract_root" install --prod --frozen-lockfile \
+    --config.node-linker=hoisted --store-dir "$pnpm_store" --package-import-method=copy)
 [[ -d "$extract_root/node_modules" && ! -L "$extract_root/node_modules" ]] || gp_die "node_modules fehlt nach dem Produktionsinstall."
 "$node" "$trusted_tree_verifier" "$extract_root" >/dev/null || gp_die "Der installierte Abhaengigkeitsbaum enthaelt unzulaessige Links oder Dateitypen."
 (cd -- "$build_cache" && runuser --user "$build_user" -- env -i PATH="$(dirname -- "$node"):/usr/local/bin:/usr/bin:/bin" NODE_ENV=production \
