@@ -56,7 +56,7 @@ Die kontrollierte Erstinstallation verwendet das geprüfte Paket und seine verö
 
 ```bash
 sudo bash server-tools/linux/install-grabenplaner-server.sh \
-  --package /pfad/Grabenplaner-Server-v0.75.0-beta-linux-x64.zip \
+  --package /pfad/Grabenplaner-Server-v0.75.1-beta-linux-x64.zip \
   --sha256 '<veröffentlichter SHA256-Wert>' \
   --public-url https://beta.example.at \
   --replace-caddy-config
@@ -165,7 +165,7 @@ Die erste SSH-Sitzung bleibt geöffnet. Erst nach erfolgreichem `apply` wird ein
 sudo grabenplaner-host-security confirm --transaction 64HEX
 ```
 
-Nur eine nach der Änderung geöffnete, ebenfalls zur freigegebenen Quelle passende Sitzung darf bestätigen. Ohne Bestätigung setzt der Sicherheitstimer die verwalteten SSH-, UFW-, APT-, sysctl- und Journald-Werte automatisch zurück. Ein bestätigter Stand kann später weiterhin bewusst mit `rollback --transaction 64HEX` zurückgenommen werden; erst danach darf das Modul deinstalliert werden.
+Nur eine nach der Änderung geöffnete, ebenfalls zur freigegebenen Quelle passende und technisch eigenständige SSH-Verbindung darf bestätigen. Öffne sie ohne SSH-Multiplexing, beispielsweise mit `ssh -o ControlMaster=no -o ControlPath=none ...`; ein zusätzlicher Kanal derselben TCP-Verbindung wird serverseitig abgewiesen. Ohne Bestätigung setzt der Sicherheitstimer die verwalteten SSH-, UFW-, APT-, sysctl- und Journald-Werte automatisch zurück. Ein bestätigter Stand kann später weiterhin bewusst mit `rollback --transaction 64HEX` zurückgenommen werden; erst danach darf das Modul deinstalliert werden.
 
 Das SSH-Profil deaktiviert Root- und Passwortanmeldung, behält aber lokales TCP-Forwarding für den geschützten Bootstrap-Tunnel. Ubuntu-Sicherheitsaktualisierungen werden automatisch installiert, ein Serverneustart jedoch niemals automatisch ausgelöst. `/run/reboot-required` erscheint stattdessen als Wartungshinweis. Journald bleibt persistent, komprimiert und mengen- sowie zeitlich begrenzt. Die Kernelwerte vermeiden bewusst Eingriffe in IPv6, Routing oder Cloud-Netzwerkfunktionen.
 
@@ -467,7 +467,7 @@ Für den Paketbau wird die in `package.json` festgelegte pnpm-Version benötigt.
 Das geprüfte Paket wird am Server in einer als Administrator gestarteten PowerShell zusammen mit seiner veröffentlichten Prüfsumme eingespielt:
 
 ```powershell
-$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.75.0-beta-windows-x64.zip'
+$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.75.1-beta-windows-x64.zip'
 $sha256 = ((Get-Content "$package.sha256" -Raw).Trim() -split '\s+')[0]
 
 .\server-tools\windows\Update-GrabenplanerServer.ps1 `
