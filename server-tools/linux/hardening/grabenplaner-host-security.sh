@@ -210,8 +210,17 @@ require_live_ssh_session() {
   SESSION_CLIENT_IP="$client_ip"
   SESSION_SERVER_IP="$server_ip"
   SESSION_SERVER_PORT="$server_port"
+  SESSION_CONNECTION_FINGERPRINT="$(printf '%s' "$SSH_CONNECTION" | sha256sum --binary | awk '{print tolower($1)}')"
+  policy_validate_transaction "$SESSION_CONNECTION_FINGERPRINT" || hardening_die "Die SSH-Verbindung konnte nicht sicher gebunden werden."
   SESSION_FINGERPRINT="$(printf '%s\0%s' "$SSH_TTY" "$SSH_CONNECTION" | sha256sum --binary | awk '{print tolower($1)}')"
   policy_validate_transaction "$SESSION_FINGERPRINT" || hardening_die "Die SSH-Sitzung konnte nicht sicher gebunden werden."
+}
+
+ssh_connection_is_independent() {
+  local current_connection_fingerprint="$1" first_connection_fingerprint="$2"
+  [[ "$current_connection_fingerprint" =~ ^[0-9a-f]{64}$ ]] \
+    && [[ "$first_connection_fingerprint" =~ ^[0-9a-f]{64}$ ]] \
+    && [[ "$current_connection_fingerprint" != "$first_connection_fingerprint" ]]
 }
 
 admin_key_sudo_preflight() {
@@ -762,9 +771,16 @@ preflight_rollback_transaction() {
     return 1
   fi
 
-  for key in admin ssh-port client-ip server-ip first-session.sha256 created-epoch sources ufw-was-active ufw-added-before rollback-deadline-epoch; do
+  for key in admin ssh-port client-ip server-ip first-connection.sha256 first-session.sha256 created-epoch sources ufw-was-active ufw-added-before rollback-deadline-epoch; do
     private_file_is_secure "$transaction_directory/$key" || return 1
   done
+  # Apply creates this boundary only after all managed mutations. Its absence
+  # must not prevent rollback when apply is killed before reaching that point;
+  # once present, however, unsafe metadata is always rejected.
+  if [[ -e "$transaction_directory/confirmation-not-before-epoch" \
+    || -L "$transaction_directory/confirmation-not-before-epoch" ]]; then
+    private_file_is_secure "$transaction_directory/confirmation-not-before-epoch" || return 1
+  fi
   ROLLBACK_ADMIN="$(read_private_value "$transaction_directory/admin")" || return 1
   ROLLBACK_CLIENT_IP="$(read_private_value "$transaction_directory/client-ip")" || return 1
   ROLLBACK_SERVER_IP="$(read_private_value "$transaction_directory/server-ip")" || return 1
@@ -1172,7 +1188,7 @@ apply_command() {
     || hardening_die "Die aktive Host-Sicherheitspolicy muss vor einer neuen Anwendung ausdruecklich zurueckgerollt werden."
   configured_preflight
 
-  local transaction_id transaction_directory created_epoch sources_content
+  local transaction_id transaction_directory created_epoch confirmation_not_before_epoch sources_content
   transaction_id="$(generate_transaction_id)"
   transaction_directory="$(transaction_directory "$transaction_id")"
   install -d -o root -g root -m 0700 -- "$transaction_directory"
@@ -1181,6 +1197,7 @@ apply_command() {
   write_private_value "$transaction_directory/ssh-port" "$CONFIG_SSH_PORT"
   write_private_value "$transaction_directory/client-ip" "$SESSION_CLIENT_IP"
   write_private_value "$transaction_directory/server-ip" "$SESSION_SERVER_IP"
+  write_private_value "$transaction_directory/first-connection.sha256" "$SESSION_CONNECTION_FINGERPRINT"
   write_private_value "$transaction_directory/first-session.sha256" "$SESSION_FINGERPRINT"
   write_private_value "$transaction_directory/created-epoch" "$created_epoch"
   sources_content="$(printf '%s\n' "${CONFIG_SOURCES[@]}")"
@@ -1208,6 +1225,11 @@ apply_command() {
   record_post_apply_state "$transaction_directory" \
     || hardening_die "Der manipulationssichere Nachweis des angewendeten Hostzustands konnte nicht gespeichert werden."
   write_apply_journal "$transaction_directory" complete
+  # Confirmation must come from an SSH transport created after every managed
+  # mutation and the durable post-apply record. TTY ctime has second precision,
+  # therefore confirm deliberately requires a strictly later second.
+  confirmation_not_before_epoch="$(date --utc '+%s')"
+  write_private_value "$transaction_directory/confirmation-not-before-epoch" "$confirmation_not_before_epoch"
   write_transaction_state "$transaction_directory" pending_confirmation
   refresh_audit_status
 
@@ -1248,18 +1270,26 @@ confirm_command() {
   policy_validate_transaction "$transaction_id" || hardening_die "Die Transaktions-ID ist ungueltig."
   common_preflight
   acquire_controller_lock
-  local pending transaction_directory first_session created_epoch tty_epoch effective confirmation_complete=0
+  local pending transaction_directory first_connection first_session confirmation_not_before_epoch tty_epoch effective confirmation_complete=0
   pending="$(read_private_value "$HARDENING_PENDING_FILE")"
   [[ "$pending" == "$transaction_id" ]] || hardening_die "Diese Transaktion wartet nicht auf Bestaetigung."
   transaction_directory="$(transaction_directory "$transaction_id")"
   load_transaction_session_policy "$transaction_directory"
   require_live_ssh_session "$CONFIG_ADMIN" "$CONFIG_SSH_PORT" "${CONFIG_SOURCES[@]}"
   admin_key_sudo_preflight "$CONFIG_ADMIN"
+  first_connection="$(read_private_value "$transaction_directory/first-connection.sha256")"
+  policy_validate_transaction "$first_connection" \
+    || hardening_die "Der gespeicherte SSH-Verbindungsnachweis ist ungueltig."
+  ssh_connection_is_independent "$SESSION_CONNECTION_FINGERPRINT" "$first_connection" \
+    || hardening_die "Die Bestaetigung muss ueber eine eigenstaendige neue SSH-Verbindung erfolgen."
   first_session="$(read_private_value "$transaction_directory/first-session.sha256")"
+  policy_validate_transaction "$first_session" \
+    || hardening_die "Der gespeicherte SSH-Sitzungsnachweis ist ungueltig."
   [[ "$SESSION_FINGERPRINT" != "$first_session" ]] || hardening_die "Die Bestaetigung muss aus einer zweiten SSH-Sitzung erfolgen."
-  created_epoch="$(read_private_value "$transaction_directory/created-epoch")"
+  confirmation_not_before_epoch="$(read_private_value "$transaction_directory/confirmation-not-before-epoch")"
   tty_epoch="$(stat --format='%Z' -- "$SSH_TTY")"
-  [[ "$created_epoch" =~ ^[0-9]+$ && "$tty_epoch" =~ ^[0-9]+$ && "$tty_epoch" -ge "$created_epoch" ]] \
+  [[ "$confirmation_not_before_epoch" =~ ^[0-9]+$ && "$tty_epoch" =~ ^[0-9]+$ \
+    && "$tty_epoch" -gt "$confirmation_not_before_epoch" ]] \
     || hardening_die "Die zweite SSH-Sitzung wurde nicht nach der Aenderung geoeffnet."
   sshd -t >/dev/null 2>"$transaction_directory/confirm-private.log" \
     || hardening_die "Die SSH-Konfiguration ist vor der Bestaetigung ungueltig."

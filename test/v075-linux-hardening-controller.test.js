@@ -115,10 +115,17 @@ test("v0.75 requires admin key, sudo and a newly opened second SSH session", () 
   assert.match(controller, /"\$\{SUDO_USER:-\}" == "\$admin"/);
   assert.match(controller, /SSH_TTY/);
   assert.match(controller, /SSH_CONNECTION/);
+  assert.match(controller, /SESSION_CONNECTION_FINGERPRINT=.*SSH_CONNECTION/);
+  assert.match(controller, /first-connection\.sha256/);
+  assert.match(controller, /ssh_connection_is_independent "\$SESSION_CONNECTION_FINGERPRINT" "\$first_connection"/);
+  assert.match(controller, /eigenstaendige neue SSH-Verbindung/);
+  assert.match(controller, /policy_validate_transaction "\$first_connection"/);
   assert.match(controller, /policy_validate_session "\$client_ip" "\$@"/);
   assert.match(controller, /SESSION_FINGERPRINT/);
   assert.match(controller, /"\$SESSION_FINGERPRINT" != "\$first_session"/);
-  assert.match(controller, /"\$tty_epoch" -ge "\$created_epoch"/);
+  assert.match(controller, /policy_validate_transaction "\$first_session"/);
+  assert.match(controller, /confirmation-not-before-epoch/);
+  assert.match(controller, /"\$tty_epoch" -gt "\$confirmation_not_before_epoch"/);
   assert.match(controller, /transactionId":"%s"/);
   assert.match(controller, /\^\[0-9a-f\]\{64\}\$/);
 });
@@ -143,8 +150,9 @@ test("v0.75 rejects policy stacking and records an exact post-apply state", () =
   assert.doesNotMatch(controller, /previous-active/);
   const install = apply.indexOf('install_managed_templates "$transaction_directory"');
   const postState = apply.indexOf('record_post_apply_state "$transaction_directory"');
+  const confirmationBoundary = apply.indexOf('write_private_value "$transaction_directory/confirmation-not-before-epoch"');
   const pending = apply.indexOf('write_transaction_state "$transaction_directory" pending_confirmation');
-  assert.ok(install >= 0 && postState > install && pending > postState);
+  assert.ok(install >= 0 && postState > install && confirmationBoundary > postState && pending > confirmationBoundary);
 
   const record = section("record_post_apply_state", "backup_file");
   assert.match(record, /post-apply\.tsv/);
@@ -158,6 +166,7 @@ test("v0.75 rollback fully preflights drift and aggregates restore failures", ()
   const preflight = section("preflight_rollback_transaction", "write_transaction_state");
   assert.match(preflight, /post-apply\.tsv/);
   assert.match(preflight, /hashes\.tsv/);
+  assert.match(preflight, /private_file_is_secure "\$transaction_directory\/confirmation-not-before-epoch"/);
   assert.match(preflight, /file_matches_manifest_record/);
   assert.match(preflight, /state" == rollback_in_progress/);
   assert.match(preflight, /private_file_is_secure/);
@@ -303,6 +312,26 @@ test("v0.75 pure Bash guards reject a second SSH port and unsafe predecessor rec
     'validate_manifest_record "$good" ssh',
     '! validate_manifest_record "$bad_uid" ssh',
     '! validate_manifest_record "$bad_mode" ssh',
+  ].join("\n");
+  const result = spawnSync("bash", ["-c", script, "test", controllerPath], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test("v0.75 confirmation rejects a reused SSH connection fingerprint", (context) => {
+  const probe = spawnSync("bash", ["--version"], { encoding: "utf8" });
+  if (probe.error?.code === "ENOENT") {
+    context.skip("Bash is not installed on this test host");
+    return;
+  }
+  const firstConnection = "1".repeat(64);
+  const independentConnection = "2".repeat(64);
+  const script = [
+    'source "$1"',
+    `first_connection=${firstConnection}`,
+    `independent_connection=${independentConnection}`,
+    '! ssh_connection_is_independent "$first_connection" "$first_connection"',
+    'ssh_connection_is_independent "$independent_connection" "$first_connection"',
+    '! ssh_connection_is_independent invalid "$first_connection"',
   ].join("\n");
   const result = spawnSync("bash", ["-c", script, "test", controllerPath], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
