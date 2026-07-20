@@ -745,7 +745,7 @@ chown -R "$BUILD_USER:$BUILD_GROUP" "$STAGE_ROOT/source"
 runuser -u "$BUILD_USER" -- env \
   HOME="$CACHE_ROOT" XDG_CACHE_HOME="$CACHE_ROOT" PNPM_HOME="$CACHE_ROOT/pnpm" COREPACK_HOME="$CACHE_ROOT/corepack" \
   PATH="$(dirname "$NODE_EXECUTABLE"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-  NODE_ENV=production "${PNPM_COMMAND[@]}" install --prod --frozen-lockfile --config.node-linker=hoisted --reporter=append-only
+  NODE_ENV=production "${PNPM_COMMAND[@]}" --dir "$STAGE_ROOT/source" install --prod --frozen-lockfile --config.node-linker=hoisted --reporter=append-only
 runuser -u "$BUILD_USER" -- "$NODE_EXECUTABLE" --check "$STAGE_ROOT/source/server.js" >/dev/null
 validate_installed_dependencies
 
