@@ -255,6 +255,7 @@ try {
         'server-tools\linux\monitor\lib\monitor-status.js',
         'server-tools\linux\monitor\run-grabenplaner-monitor.sh',
         'server-tools\linux\migrate-grabenplaner-runtime-v2.sh',
+        'server-tools\linux\lib\offsite-update-compat.js',
         'server-tools\linux\recovery\grabenplaner-recovery.sh',
         'server-tools\linux\recovery\lib\recovery-apply.js',
         'server-tools\linux\recovery\lib\recovery-metadata.js',

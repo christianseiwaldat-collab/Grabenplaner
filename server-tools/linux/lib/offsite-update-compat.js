@@ -1,0 +1,78 @@
+"use strict";
+
+const crypto = require("node:crypto");
+const fs = require("node:fs");
+
+const HASH = /^[a-f0-9]{64}$/;
+const PREFIX = "server-tools/linux/offsite/";
+const INSTALLER = "install-grabenplaner-offsite.sh";
+
+function safeRelative(value) {
+  return typeof value === "string" && value && !value.includes("\\") && !value.startsWith("/")
+    && value.split("/").every((part) => part && part !== "." && part !== "..");
+}
+
+function fingerprint(files) {
+  return crypto.createHash("sha256")
+    .update([...files].sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, hash]) => `${PREFIX}${name}\0${hash}\n`).join(""))
+    .digest("hex");
+}
+
+function classify(candidateEnvelope, installed) {
+  const candidate = candidateEnvelope?.offsiteModule;
+  if (!candidate || candidate.schemaVersion !== 1 || candidate.moduleVersion !== 1
+    || candidate.activationPolicy !== "explicit-root-setup" || !HASH.test(String(candidate.fingerprint || ""))
+    || !HASH.test(String(candidate.installerSha256 || "")) || !Array.isArray(candidate.managedArtifacts)
+    || installed?.format !== "grabenplaner-linux-offsite-installed-contract" || installed.schemaVersion !== 1
+    || installed.moduleVersion !== 1 || !HASH.test(String(installed.fingerprint || ""))
+    || !Array.isArray(installed.files)) return "invalid";
+
+  const expectedPaths = candidate.managedArtifacts.map((value) => {
+    const full = String(value || "");
+    if (!full.startsWith(PREFIX)) return "";
+    const relative = full.slice(PREFIX.length);
+    return safeRelative(relative) ? relative : "";
+  });
+  if (expectedPaths.some((value) => !value) || new Set(expectedPaths).size !== expectedPaths.length
+    || expectedPaths.length !== installed.files.length || !expectedPaths.includes(INSTALLER)) {
+    return "invalid";
+  }
+
+  const expected = new Set(expectedPaths);
+  const installedFiles = new Map();
+  for (const item of installed.files) {
+    const relative = String(item?.path || "");
+    const sha256 = String(item?.sha256 || "");
+    if (!safeRelative(relative) || !expected.has(relative) || installedFiles.has(relative) || !HASH.test(sha256)) {
+      return "invalid";
+    }
+    installedFiles.set(relative, sha256);
+  }
+  if (installedFiles.size !== expected.size || [...expected].some((relative) => !installedFiles.has(relative))) return "invalid";
+  if (fingerprint(installedFiles) !== installed.fingerprint) return "invalid";
+  if (candidate.fingerprint === installed.fingerprint) {
+    return installedFiles.get(INSTALLER) === candidate.installerSha256 ? "compatible" : "invalid";
+  }
+
+  const candidateFiles = new Map(installedFiles);
+  candidateFiles.set(INSTALLER, candidate.installerSha256);
+  return fingerprint(candidateFiles) === candidate.fingerprint
+    ? "compatible-installer-only"
+    : `migration-required:${installed.moduleVersion}->${candidate.moduleVersion}`;
+}
+
+if (require.main === module) {
+  try {
+    const [candidatePath, installedPath] = process.argv.slice(2);
+    if (!candidatePath || !installedPath) throw new Error("Dateipfade fehlen.");
+    const candidate = JSON.parse(fs.readFileSync(candidatePath, "utf8"));
+    const installed = JSON.parse(fs.readFileSync(installedPath, "utf8"));
+    process.stdout.write(classify(candidate, installed));
+  } catch {
+    process.stdout.write("invalid");
+    process.exitCode = 1;
+  }
+}
+
+module.exports = { classify, fingerprint };

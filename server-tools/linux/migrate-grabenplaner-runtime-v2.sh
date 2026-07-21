@@ -73,9 +73,21 @@ done
 [[ -z "$sha256_arg" || -z "$sha256_file_arg" ]] || gp_die "--sha256 und --sha256-file duerfen nicht gemeinsam verwendet werden."
 [[ "$health_timeout" =~ ^[0-9]+$ ]] && (( health_timeout >= 30 && health_timeout <= 600 )) \
   || gp_die "--health-timeout muss zwischen 30 und 600 liegen."
-[[ -r /etc/os-release && ! -L /etc/os-release ]] || gp_die "Ubuntu konnte nicht sicher erkannt werden."
+os_release_source="$(realpath --canonicalize-existing -- /etc/os-release)" \
+  || gp_die "Ubuntu konnte nicht sicher erkannt werden."
+case "$os_release_source" in
+  /etc/os-release|/usr/lib/os-release) ;;
+  *) gp_die "Die Betriebssystemkennung verweist auf einen unerwarteten Pfad." ;;
+esac
+[[ -f "$os_release_source" && ! -L "$os_release_source" ]] \
+  || gp_die "Ubuntu konnte nicht sicher erkannt werden."
+[[ "$(stat --format='%u:%g:%h' -- "$os_release_source")" == "0:0:1" ]] \
+  || gp_die "Die Betriebssystemkennung hat unsichere Dateirechte."
+os_release_mode="$(stat --format='%a' -- "$os_release_source")"
+(( (8#$os_release_mode & 022) == 0 )) \
+  || gp_die "Die Betriebssystemkennung hat unsichere Dateirechte."
 # shellcheck disable=SC1091
-source /etc/os-release
+source "$os_release_source"
 [[ "${ID:-}" == "ubuntu" && "${VERSION_ID:-}" =~ ^(24\.04|26\.04)$ && "$(uname -m)" == "x86_64" ]] \
   || gp_die "Die Runtime-v2-Migration unterstuetzt Ubuntu 24.04/26.04 auf x86_64."
 

@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.75.3 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.75.4 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,7 +13,12 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Version v0.75.3 Beta:
+Version v0.75.4 Beta:
+  - Der Linux-Updater bereitet eine eng begrenzte, sichere Kompatibilitaetsbruecke
+    fuer reine Aenderungen am Offsite-Installationswerkzeug vor.
+  - Die Runtime-v2-Migration erkennt die standardmaessige, sichere Ubuntu-
+    Verknuepfung /etc/os-release -> /usr/lib/os-release korrekt.
+  - Zusaetzlich bleiben alle Verbesserungen aus v0.75.3 Beta enthalten.
   - Der Ubuntu-Wartungslock bleibt auch in nicht interaktiven Serverupdates
     zuverlässig aktiv und beendet sich nicht mehr vorzeitig.
   - Die SQLite-Serverprüfung trennt experimentelle Node-Hinweise vom eigentlichen

@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.75.4 Beta · Server-Kompatibilitätsupdate
+
+- Der Linux-Updater erhält eine eng begrenzte Kompatibilitätsbrücke für reine Änderungen am noch nicht aktivierten Offsite-Installationswerkzeug.
+- Bereits eingerichtete Offsite-Laufzeitdateien und ihr Installationsbeleg bleiben unverändert; andere Moduländerungen verlangen weiterhin ausdrücklich eine Migration.
+- Die einmalige Runtime-v2-Migration erkennt sowohl eine reguläre `/etc/os-release` als auch den unter Ubuntu üblichen, sicheren Verweis auf `/usr/lib/os-release` und prüft den aufgelösten Systempfad weiterhin streng.
+
 ## v0.75.3 Beta · Serviceupdate
 
 - Der Linux-Wartungslock verwendet einen eigenen Keep-Alive-Timer und bleibt dadurch auch bei nicht interaktiven Hintergrundprozessen bis zur kontrollierten Freigabe aktiv.
