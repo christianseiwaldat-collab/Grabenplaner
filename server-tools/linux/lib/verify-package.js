@@ -245,6 +245,7 @@ function readOffsiteModuleContract() {
     schemaVersion: contract.schemaVersion,
     moduleVersion: contract.moduleVersion,
     activationPolicy: contract.activationPolicy,
+    installerSha256: artifacts.get("server-tools/linux/offsite/install-grabenplaner-offsite.sh"),
     fingerprint: crypto.createHash("sha256")
       .update([...artifacts].sort(([left], [right]) => left.localeCompare(right)).map(([relative, hash]) => `${relative}\0${hash}\n`).join(""))
       .digest("hex"),
@@ -364,6 +365,7 @@ function main() {
     "server-tools/linux/lib/common.sh",
     "server-tools/linux/lib/backup-snapshot.js",
     "server-tools/linux/lib/hold-database-lock.js",
+    "server-tools/linux/lib/offsite-update-compat.js",
     "server-tools/linux/lib/prune-backups.js",
     "server-tools/linux/lib/restore-backup.js",
     "server-tools/linux/lib/verify-backup.js",

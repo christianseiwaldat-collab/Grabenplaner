@@ -24,7 +24,8 @@ test("v0.73 runs the pre-update offsite hook only after the exact local backup a
   assert.match(update, /\/opt\/grabenplaner-offsite\/module\/grabenplaner-offsite-pre-update\.sh/);
   assert.match(update, /Offsite-Sicherung vor dem Update ist fehlgeschlagen/);
   assert.match(update, /installed-contract\.json/);
-  assert.match(update, /candidate\.fingerprint !== installed\.fingerprint/);
+  assert.match(update, /offsite-update-compat\.js/);
+  assert.match(update, /compatible\|compatible-installer-only/);
   assert.match(update, /explizit freigegebene Offsite-Migration/);
   const preUpdate = read("server-tools/linux/offsite/grabenplaner-offsite-pre-update.sh");
   assert.match(preUpdate, /offsite_acquire_repository_lock/);

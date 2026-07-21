@@ -469,6 +469,7 @@ for (const required of [
   "server-tools/linux/lib/common.sh",
   "server-tools/linux/lib/backup-snapshot.js",
   "server-tools/linux/lib/hold-database-lock.js",
+  "server-tools/linux/lib/offsite-update-compat.js",
   "server-tools/linux/lib/prune-backups.js",
   "server-tools/linux/lib/restore-backup.js",
   "server-tools/linux/lib/verify-backup.js",

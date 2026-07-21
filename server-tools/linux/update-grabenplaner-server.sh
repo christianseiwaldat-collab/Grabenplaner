@@ -493,26 +493,17 @@ if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" ]]; then
   [[ -f "$installed_offsite_receipt" && ! -L "$installed_offsite_receipt" \
     && "$(stat --format='%u:%g:%a:%h' -- "$installed_offsite_receipt")" == "0:0:600:1" ]] \
     || gp_die "Der Installationsbeleg des eingerichteten Offsite-Moduls ist ungueltig."
-  offsite_module_gate="$("$node" - "$manifest_result_file" "$installed_offsite_receipt" <<'NODE'
-const fs = require("node:fs");
-const [candidateFile, installedFile] = process.argv.slice(2);
-const candidate = JSON.parse(fs.readFileSync(candidateFile, "utf8")).offsiteModule;
-const installed = JSON.parse(fs.readFileSync(installedFile, "utf8"));
-const validFingerprint = (value) => /^[a-f0-9]{64}$/.test(String(value || ""));
-if (!candidate || candidate.activationPolicy !== "explicit-root-setup" || candidate.moduleVersion !== 1
-  || !validFingerprint(candidate.fingerprint)
-  || installed.format !== "grabenplaner-linux-offsite-installed-contract" || installed.schemaVersion !== 1
-  || installed.moduleVersion !== 1 || !validFingerprint(installed.fingerprint)) {
-  process.stdout.write("invalid");
-} else if (candidate.moduleVersion !== installed.moduleVersion || candidate.fingerprint !== installed.fingerprint) {
-  process.stdout.write(`migration-required:${installed.moduleVersion}->${candidate.moduleVersion}`);
-} else {
-  process.stdout.write("compatible");
-}
-NODE
-)"
+  offsite_gate_helper="$SCRIPT_DIR/lib/offsite-update-compat.js"
+  [[ -f "$offsite_gate_helper" && ! -L "$offsite_gate_helper" \
+    && "$(stat --format='%u:%g:%h' -- "$offsite_gate_helper")" == "0:0:1" ]] \
+    || gp_die "Die installierte Offsite-Kompatibilitaetspruefung ist ungueltig."
+  offsite_gate_helper_mode="$(stat --format='%a' -- "$offsite_gate_helper")"
+  (( (8#$offsite_gate_helper_mode & 022) == 0 )) \
+    || gp_die "Die installierte Offsite-Kompatibilitaetspruefung hat unsichere Dateirechte."
+  offsite_module_gate="$("$node" "$offsite_gate_helper" "$manifest_result_file" "$installed_offsite_receipt")" \
+    || gp_die "Der Vertrag des eingerichteten Offsite-Moduls konnte nicht sicher verglichen werden."
   case "$offsite_module_gate" in
-    compatible) ;;
+    compatible|compatible-installer-only) ;;
     migration-required:*)
       gp_die "Das Update aendert das eingerichtete Offsite-Modul ($offsite_module_gate). Bitte zuerst die explizit freigegebene Offsite-Migration ausfuehren."
       ;;
