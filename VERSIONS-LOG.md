@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.75.3 Beta · Server-Wartungspatch
+
+- Der Linux-Wartungslock verwendet einen eigenen Keep-Alive-Timer und bleibt dadurch auch bei nicht interaktiven Hintergrundprozessen bis zur kontrollierten Freigabe aktiv.
+- Serverupdates können den gekoppelten Datenbank-/Dokumentsicherungspunkt nun zuverlässig halten, statt wegen eines vorzeitig beendeten Lock-Helfers automatisch zurückzurollen.
+- Die SQLite-Schnellprüfung unterdrückt ausschließlich den experimentellen Node-Hinweis; echte Prüffehler bleiben sichtbar und führen weiterhin zu einer fehlgeschlagenen Serverdiagnose.
+- Ein eigener Regressionstest startet den Wartungslock mit geschlossenem Standardeingang und prüft, dass er erst auf das vorgesehene Beendigungssignal reagiert.
+
 ## v0.75.2 Beta · Funktionspatch
 
 - Verwaltungs- und Personal-Pop-ups passen ihre Spaltenzahl nun an 4K-, Full-HD- und mobile Ansichten an und vermeiden horizontale Scrollbalken.
