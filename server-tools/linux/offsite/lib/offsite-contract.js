@@ -4,8 +4,8 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const CURRENT_MODULE_VERSION = 2;
-const SUPPORTED_INSTALLED_MODULE_VERSIONS = new Set([1, CURRENT_MODULE_VERSION]);
+const CURRENT_MODULE_VERSION = 3;
+const SUPPORTED_INSTALLED_MODULE_VERSIONS = new Set([1, 2, CURRENT_MODULE_VERSION]);
 
 function digest(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");

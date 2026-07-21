@@ -1,5 +1,15 @@
 # Grabenplaner Versions-Log
 
+## v0.77 Beta · System-Center und technischer Vertrauensindex
+
+- Das neue System-Center steht als erster Dashboard-Bereich bereit und zeigt Server, SQLite, Sicherungen, Wiederherstellung, TLS, Benachrichtigungen, Speicher und Updates in acht nachvollziehbaren Nachweiskarten.
+- Der technische Vertrauensindex wird ausschließlich serverseitig aus gewichteten Prüfpunkten und ihrer Evidenzabdeckung berechnet. Kritische Befunde oder unvollständige Nachweise begrenzen den Wert; unbekannte Prüfungen werden niemals als Erfolg gewertet.
+- Die vollständig geprüfte, signierte Recovery-Assurance-Historie erscheint als redigierte Timeline mit den einzelnen Laufphasen. Interne Pfade, Geheimnisse und vollständige Snapshot-Kennungen bleiben verborgen.
+- IT-Admin und Developer sowie ausdrücklich berechtigte Admins können nach einer Sicherheitsbestätigung einen manuellen Lauf anfordern. Ein root-eigener, streng schema- und ratenbegrenzter systemd-Socket-Broker startet ausschließlich die fest vorgegebene Assurance-Unit und vermittelt keinen Shell- oder allgemeinen Dienstzugriff.
+- Dashboard-Zugriff, technische Ressourcen und Startrecht sind getrennt berechtigt. Reine Diagnosezugänge lösen keine unzulässigen Nebenabfragen des Rechte- oder Personalbereichs aus.
+- Darkmode, gespeicherte Dashboard-Schriftgröße und responsive Darstellung gelten auch für das System-Center.
+- Der isolierte App-Smoke-Test, nächtliche Vollautomatismus, Benachrichtigungen und Langzeitdiagramme bleiben bewusst Block 3 vorbehalten.
+
 ## v0.76 Beta · Recovery-Assurance-Fundament
 
 - Vollständige Assurance-Läufe werden in einer Ed25519-signierten und über SHA-256 verketteten Historie protokolliert; die Anwendung erhält ausschließlich einen redigierten Lesestatus.

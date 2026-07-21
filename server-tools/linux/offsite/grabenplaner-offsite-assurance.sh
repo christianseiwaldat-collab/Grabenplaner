@@ -27,7 +27,7 @@ while (($#)); do
 done
 
 case "$trigger" in
-  scheduled-weekly|oauth-config-changed|offsite-config-changed|binary-changed|offsite-module-changed|app-updated|server-updated|manual-cli) ;;
+  scheduled-weekly|oauth-config-changed|offsite-config-changed|binary-changed|offsite-module-changed|app-updated|server-updated|manual-cli|manual-admin-ui) ;;
   *) offsite_die "Der Recovery-Assurance-Ausloeser ist nicht freigegeben." ;;
 esac
 
