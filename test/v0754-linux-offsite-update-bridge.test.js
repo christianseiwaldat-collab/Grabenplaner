@@ -147,5 +147,9 @@ test("v0.75.4 package verifier emits the candidate installer SHA-256", () => {
     path.join(root, "server-tools", "linux", "offsite", installer),
   )).digest("hex");
   assert.equal(result.offsiteModule.installerSha256, expected);
-  assert.equal(result.offsiteModule.fingerprint, "f328605401c5e5a7522cd1d70f9b9c78d3ba81221323aebfa04a35b7b6794acf");
+  const expectedFiles = result.offsiteModule.managedArtifacts.map((relative) => [
+    relative.slice(prefix.length),
+    crypto.createHash("sha256").update(fs.readFileSync(path.join(root, relative))).digest("hex"),
+  ]);
+  assert.equal(result.offsiteModule.fingerprint, fingerprint(expectedFiles));
 });
