@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.76 Beta · Recovery-Assurance-Fundament
+
+- Vollständige Assurance-Läufe werden in einer Ed25519-signierten und über SHA-256 verketteten Historie protokolliert; die Anwendung erhält ausschließlich einen redigierten Lesestatus.
+- Die IT kann einen vollständigen Lauf bewusst per Root-Befehl starten. Eine sichere OAuth-Neuanbindung und ein erfolgreich abgeschlossenes App-Update stellen jeweils automatisch einen anschließenden Lauf in die Warteschlange.
+- Google Drive verlangt einen eigenen Google-OAuth-Client und ausschließlich den engen Umfang `drive.file`; gemeinsam verwendete Standard-Clients oder abweichende Umfänge werden abgelehnt.
+- Ein root-only Werkzeug exportiert und verifiziert ein Offline-Recovery-Set samt vollständiger signierter Historie als geschützten Zwischenstand. Die verantwortliche IT muss es anschließend stark verschlüsselt auf ein getrenntes Administrationsgerät übertragen, dort prüfen und die Serverkopie löschen.
+- Der Offsite-Modulvertrag steigt von Version 1 auf 2. Bestehende Installationen benötigen eine ausdrückliche Reinstallation beziehungsweise Migration; ein stilles Kernupdate wird verweigert.
+- Dieser erste von drei Blöcken enthält noch keinen nächtlichen Assurance-Automatismus, keinen isolierten App-Smoke-Test und keine System-Center-, Historien- oder Vertrauensindex-Oberfläche.
+
 ## v0.75.7 Beta · Ubuntu-Offsite-Kompatibilitätsupdate
 
 - Die vier root-gestützten Offsite-Dienste verzichten unter Ubuntu 26.04 auf die redundanten systemd-Zeilen `User=root` und `Group=root`. Sie starten weiterhin mit systemds sicherem Root-Standard, können danach aber zuverlässig zum unprivilegierten App- beziehungsweise Uploaderkonto wechseln.

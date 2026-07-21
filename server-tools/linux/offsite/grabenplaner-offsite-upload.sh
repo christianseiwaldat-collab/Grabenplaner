@@ -42,7 +42,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-(( lock_already_held == 1 )) || offsite_acquire_repository_lock
+if (( lock_already_held == 1 )); then
+  offsite_assert_inherited_repository_lock
+else
+  offsite_acquire_repository_lock
+fi
 offsite_status attempt >/dev/null
 repository_config="$operation_root/repository-config.json"
 if ! offsite_verify_repository_identity "$uploader_credentials" "$repository_config"; then

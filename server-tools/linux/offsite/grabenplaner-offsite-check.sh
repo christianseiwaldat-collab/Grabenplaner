@@ -7,6 +7,18 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd -P)"
 # shellcheck source=server-tools/linux/offsite/lib/offsite-common.sh
 source "$SCRIPT_DIR/lib/offsite-common.sh"
 
+lock_already_held=0
+while (($#)); do
+  case "$1" in
+    --lock-already-held) lock_already_held=1; shift ;;
+    -h|--help)
+      printf '%s\n' "Verwendung: sudo grabenplaner-offsite-check [--lock-already-held]"
+      exit 0
+      ;;
+    *) offsite_die "Unbekannte Option." ;;
+  esac
+done
+
 offsite_require_root
 for command_name in awk flock mktemp rm runuser sha256sum stat; do offsite_require_command "$command_name"; done
 offsite_assert_runtime_binaries
@@ -20,7 +32,11 @@ cleanup() {
   offsite_remove_uploader_credentials "$uploader_credentials" 2>/dev/null || true
 }
 trap cleanup EXIT
-offsite_acquire_repository_lock
+if (( lock_already_held == 1 )); then
+  offsite_assert_inherited_repository_lock
+else
+  offsite_acquire_repository_lock
+fi
 
 if ! offsite_verify_repository_identity "$uploader_credentials" "$operation_root/repository-config.json"; then
   offsite_fixed_failure FULL_CHECK_REPOSITORY_ID_MISMATCH "Die Identitaet des Offsite-Repositorys konnte fuer die Vollpruefung nicht bestaetigt werden."

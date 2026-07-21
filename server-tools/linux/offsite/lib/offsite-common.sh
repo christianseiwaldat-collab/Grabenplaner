@@ -18,6 +18,9 @@ readonly OFFSITE_REPOSITORY_LOCK="$OFFSITE_RUN_ROOT/repository.lock"
 readonly OFFSITE_CONFIG_ROOT="/etc/grabenplaner/offsite"
 readonly OFFSITE_STATUS_ROOT="$OFFSITE_STATE_ROOT"
 readonly OFFSITE_STATUS_FILE="$OFFSITE_STATE_ROOT/status.json"
+readonly OFFSITE_ASSURANCE_ROOT="/var/lib/grabenplaner-assurance"
+readonly OFFSITE_ASSURANCE_HISTORY="$OFFSITE_ASSURANCE_ROOT/history"
+readonly OFFSITE_ASSURANCE_LOCK="$OFFSITE_RUN_ROOT/assurance.lock"
 readonly OFFSITE_APP_ROOT="/opt/grabenplaner/app"
 readonly OFFSITE_DATA_ROOT="/var/lib/grabenplaner"
 readonly OFFSITE_BACKUP_ROOT="/var/backups/grabenplaner"
@@ -36,6 +39,8 @@ readonly OFFSITE_LEGACY_RCLONE_WRAPPER="$OFFSITE_BIN_ROOT/grabenplaner-rclone"
 readonly OFFSITE_BINARY_PINS="$OFFSITE_CONFIG_ROOT/binary-pins.json"
 readonly OFFSITE_READER="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-read-secret.sh"
 readonly OFFSITE_STATUS_HELPER="$OFFSITE_MODULE_ROOT/lib/offsite-status.js"
+readonly OFFSITE_RCLONE_POLICY_HELPER="$OFFSITE_MODULE_ROOT/lib/offsite-rclone-policy.js"
+readonly OFFSITE_ASSURANCE_HISTORY_HELPER="$OFFSITE_MODULE_ROOT/lib/assurance-history.js"
 readonly OFFSITE_STAGE_HELPER="$OFFSITE_MODULE_ROOT/lib/offsite-stage.js"
 readonly OFFSITE_REPOSITORY_ID_FILE="$OFFSITE_CONFIG_ROOT/repository-id"
 readonly OFFSITE_RETENTION_DAILY=14
@@ -184,6 +189,30 @@ offsite_assert_persistent_rclone_config() {
     || offsite_die "Die persistente rclone-Konfiguration hat eine unzulaessige Groesse."
 }
 
+offsite_repository_remote() {
+  local credentials="$1"
+  "$OFFSITE_NODE" - "$credentials/repository" <<'NODE'
+const fs = require("node:fs");
+const value = fs.readFileSync(process.argv[2], "utf8").trim();
+const match = value.match(/^rclone:([A-Za-z0-9][A-Za-z0-9_-]{0,63}):[A-Za-z0-9][A-Za-z0-9._/-]{0,511}$/);
+if (!match) process.exit(1);
+process.stdout.write(match[1]);
+NODE
+}
+
+offsite_assert_dedicated_rclone_oauth() {
+  local credentials="$1" remote
+  offsite_assert_persistent_rclone_config
+  remote="$(offsite_repository_remote "$credentials")" \
+    || offsite_die "Das eingerichtete rclone-Remote ist ungueltig."
+  # Nur die von rclone selbst redigierte, ausgewaehlte Remote-Sektion wird
+  # fluechtig ueber stdin geprueft. Weder Client-ID noch Secret oder Token
+  # gelangen in Argumente, Dateien, Statusmeldungen oder RAS-Belege.
+  offsite_run_as_uploader "$credentials" "$OFFSITE_RCLONE_WRAPPER" config redacted "$remote" 2>/dev/null \
+    | "$OFFSITE_NODE" "$OFFSITE_RCLONE_POLICY_HELPER" "$remote" >/dev/null \
+    || offsite_die "Fuer die Offsite-Sicherung ist ein eigener Google-OAuth-Client mit Scope drive.file erforderlich."
+}
+
 offsite_assert_group_isolation() {
   local uploader_gid status_gid uploader_primary status_primary uploader_members status_members
   uploader_gid="$(getent group "$OFFSITE_GROUP" | awk -F: '{print $3}')"
@@ -238,6 +267,49 @@ offsite_acquire_repository_lock() {
   flock --wait 14400 8 || offsite_die "Ein anderer Offsite-Repository-Vorgang konnte nicht innerhalb des Wartungsfensters abgeschlossen werden."
 }
 
+offsite_acquire_assurance_lock() {
+  offsite_require_command flock
+  offsite_prepare_run_root
+  if [[ -e "$OFFSITE_ASSURANCE_LOCK" || -L "$OFFSITE_ASSURANCE_LOCK" ]]; then
+    [[ -f "$OFFSITE_ASSURANCE_LOCK" && ! -L "$OFFSITE_ASSURANCE_LOCK" ]] \
+      || offsite_die "Die Recovery-Assurance-Sperre ist unsicher."
+    chown root:root -- "$OFFSITE_ASSURANCE_LOCK"
+    chmod 0600 -- "$OFFSITE_ASSURANCE_LOCK"
+  else
+    install -m 0600 -o root -g root /dev/null "$OFFSITE_ASSURANCE_LOCK"
+  fi
+  exec 7<>"$OFFSITE_ASSURANCE_LOCK"
+  flock --wait 14400 7 \
+    || offsite_die "Ein anderer Recovery-Assurance-Lauf konnte nicht innerhalb des Wartungsfensters abgeschlossen werden."
+}
+
+offsite_assert_inherited_lock() {
+  local expected="$1"
+  local descriptor="$2"
+  local label="$3"
+  local descriptor_target
+
+  [[ "$descriptor" =~ ^[0-9]+$ && -e "/proc/$$/fd/$descriptor" ]] \
+    || offsite_die "$label wurde nicht vom kontrollierenden Elternprozess uebernommen."
+  descriptor_target="$(readlink -f -- "/proc/$$/fd/$descriptor")" \
+    || offsite_die "$label konnte nicht sicher aufgeloest werden."
+  [[ "$descriptor_target" == "$expected" ]] \
+    || offsite_die "$label verweist nicht auf die freigegebene Sperrdatei."
+  # Auf derselben offenen Dateibeschreibung ist flock idempotent. Sollte ein
+  # kontrollierter Root-Aufrufer FD zwar korrekt geoeffnet, aber noch nicht
+  # gesperrt haben, wird die Sperre hier fail-closed vor der Arbeit erworben.
+  flock --nonblock "$descriptor" \
+    || offsite_die "$label wird nicht vom kontrollierenden Elternprozess gehalten."
+}
+
+offsite_assert_inherited_repository_lock() {
+  offsite_assert_inherited_lock "$OFFSITE_REPOSITORY_LOCK" 8 "Die Repository-Sperre"
+}
+
+offsite_assert_inherited_assurance_lock() {
+  offsite_assert_inherited_lock "$OFFSITE_ASSURANCE_LOCK" 7 "Die Recovery-Assurance-Sperre"
+}
+
 offsite_run_as_uploader() {
   local credentials="$1"
   shift
@@ -280,6 +352,38 @@ offsite_status() {
   status_gid="$(getent group "$OFFSITE_STATUS_GROUP" | awk -F: '{print $3}')"
   [[ "$status_gid" =~ ^[0-9]+$ ]] || offsite_die "Die Offsite-Statusgruppe konnte nicht sicher aufgeloest werden."
   "$OFFSITE_NODE" "$OFFSITE_STATUS_HELPER" --status-file "$OFFSITE_STATUS_FILE" --status-gid "$status_gid" "$@"
+}
+
+offsite_assurance_history() {
+  local status_gid
+  offsite_require_root
+  status_gid="$(getent group "$OFFSITE_STATUS_GROUP" | awk -F: '{print $3}')"
+  [[ "$status_gid" =~ ^[0-9]+$ ]] \
+    || offsite_die "Die Recovery-Assurance-Statusgruppe konnte nicht sicher aufgeloest werden."
+  "$OFFSITE_NODE" "$OFFSITE_ASSURANCE_HISTORY_HELPER" "$@" \
+    --root "$OFFSITE_ASSURANCE_ROOT" --status-gid "$status_gid"
+}
+
+# Der Aufrufer muss die Assurance-Sperre bereits halten. Das Ereignis wird vor
+# dem asynchronen systemd-Start geschrieben, damit eine unterbrochene Queue
+# niemals einen alten erfolgreichen RAS-Status stehen laesst.
+offsite_record_assurance_queue() {
+  local event_type="$1"
+  local trigger="$2"
+  local app_version="$3"
+  local run_id
+
+  offsite_assert_inherited_assurance_lock
+  case "$event_type:$trigger" in
+    configuration-change-queued:oauth-config-changed|configuration-change-queued:offsite-config-changed|configuration-change-queued:binary-changed|configuration-change-queued:offsite-module-changed|update-queued:app-updated|update-queued:server-updated) ;;
+    *) offsite_die "Das Recovery-Assurance-Queue-Ereignis ist nicht freigegeben." ;;
+  esac
+  [[ "$app_version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]] \
+    || offsite_die "Die App-Version des Recovery-Assurance-Queue-Ereignisses ist ungueltig."
+  run_id="$($OFFSITE_NODE -e 'process.stdout.write(require("node:crypto").randomUUID())')" \
+    || offsite_die "Die Recovery-Assurance-Queue-Kennung konnte nicht erzeugt werden."
+  offsite_assurance_history record --event-type "$event_type" --run-id "$run_id" \
+    --trigger "$trigger" --app-version "$app_version" >/dev/null
 }
 
 offsite_fixed_failure() {
