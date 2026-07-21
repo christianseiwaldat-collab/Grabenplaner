@@ -14,11 +14,15 @@ Daten:
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
 Version v0.75.6 Beta:
-  - Linux-Sicherungspunkte werden in einer eigenen kurzlebigen, unprivilegierten
-    systemd-Einheit erstellt. Die Schutzregeln des Offsite-Vorbereitungsdienstes
-    bleiben dabei vollstaendig aktiv.
-  - Dadurch funktionieren geplante Offsite-Uploads auch mit den strengeren
-    Prozessgrenzen von Ubuntu 26.04 zuverlaessig.
+  - Linux-Sicherungspunkte bleiben vollstaendig an den gehaerteten Offsite-
+    Vorbereitungsdienst und dessen Wartungssperre gebunden.
+  - Fuer Ubuntu 26.04 entfaellt ausschliesslich die mit dem notwendigen lokalen
+    Benutzerwechsel kollidierende systemd-Echtzeitsperre. Echtzeitprioritaeten
+    und CAP_SYS_NICE sowie die uebrigen Dateisystem-, Geraete-, Netzwerk- und
+    Prozessgrenzen bleiben gesperrt.
+  - Bereits konfigurierte Offsite-Module muessen vor dem Update ausdruecklich
+    deaktiviert und danach neu aktiviert werden. Repository, Zugangsdaten und
+    bestehende Sicherungsstaende bleiben erhalten.
   - Zusaetzlich bleiben alle Verbesserungen aus v0.75.5 Beta enthalten.
   - Der Offsite-Installer erkennt den unter Ubuntu 24.04 und 26.04 ueblichen,
     sicheren Verweis /etc/os-release -> /usr/lib/os-release korrekt.
