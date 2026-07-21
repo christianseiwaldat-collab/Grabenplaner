@@ -398,7 +398,8 @@ test("RAS reader handles unconfigured, empty, future-dated and operational failu
 });
 
 test("RAS reader accepts the exact history emitted by the privileged writer", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-assurance-contract-"));
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-assurance-contract-"));
+  const root = path.join(parent, "assurance");
   const statusGid = process.platform === "win32" ? 0 : process.getgid();
   const policy = assuranceWriter.__internalTestOnly.policy;
   try {
@@ -433,6 +434,6 @@ test("RAS reader accepts the exact history emitted by the privileged writer", ()
     assert.equal(result.state, "ok");
     assert.equal(result.eventCount, 7);
   } finally {
-    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(parent, { recursive: true, force: true });
   }
 });
