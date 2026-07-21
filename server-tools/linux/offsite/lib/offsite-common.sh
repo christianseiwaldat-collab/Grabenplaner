@@ -29,6 +29,7 @@ readonly OFFSITE_APP_SERVICE="grabenplaner.service"
 readonly OFFSITE_USER="grabenplaner-offsite"
 readonly OFFSITE_GROUP="grabenplaner-offsite"
 readonly OFFSITE_STATUS_GROUP="grabenplaner-offsite-status"
+readonly OFFSITE_CONTROL_GROUP="grabenplaner-assurance-control"
 readonly OFFSITE_APP_USER="grabenplaner"
 readonly OFFSITE_APP_GROUP="grabenplaner"
 readonly OFFSITE_RESTIC="$OFFSITE_BIN_ROOT/restic"
@@ -226,6 +227,22 @@ offsite_assert_group_isolation() {
   [[ "$uploader_primary" == "$OFFSITE_USER" && -z "$status_primary" && -z "$uploader_members" \
     && "$status_members" == "$OFFSITE_APP_USER,$OFFSITE_USER" ]] \
     || offsite_die "Eine Offsite-Gruppe enthaelt unerwartete Konten."
+}
+
+offsite_assert_control_group_isolation() {
+  local control_gid uploader_gid status_gid app_gid control_primary control_members
+  control_gid="$(getent group "$OFFSITE_CONTROL_GROUP" | awk -F: '{print $3}')"
+  uploader_gid="$(getent group "$OFFSITE_GROUP" | awk -F: '{print $3}')"
+  status_gid="$(getent group "$OFFSITE_STATUS_GROUP" | awk -F: '{print $3}')"
+  app_gid="$(getent group "$OFFSITE_APP_GROUP" | awk -F: '{print $3}')"
+  [[ "$control_gid" =~ ^[0-9]+$ && "$uploader_gid" =~ ^[0-9]+$ && "$status_gid" =~ ^[0-9]+$ \
+    && "$app_gid" =~ ^[0-9]+$ && "$control_gid" != "$uploader_gid" && "$control_gid" != "$status_gid" \
+    && "$control_gid" != "$app_gid" ]] \
+    || offsite_die "Die Recovery-Assurance-Steuerungsgruppe ist nicht sicher isoliert."
+  control_primary="$(getent passwd | awk -F: -v gid="$control_gid" '$4==gid {print $1}' | sort | paste -sd, -)"
+  control_members="$(getent group "$OFFSITE_CONTROL_GROUP" | awk -F: '{print $4}' | tr ',' '\n' | sed '/^$/d' | sort | paste -sd, -)"
+  [[ -z "$control_primary" && "$control_members" == "$OFFSITE_APP_USER" ]] \
+    || offsite_die "Die Recovery-Assurance-Steuerungsgruppe enthaelt unerwartete Konten."
 }
 
 offsite_installation_host() {

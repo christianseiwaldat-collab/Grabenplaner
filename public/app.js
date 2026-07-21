@@ -61,6 +61,8 @@ const state = {
   timeCorrections: [],
   rightsManagement: null,
   rightsDashboard: null,
+  systemCenter: null,
+  systemCenterLoading: false,
   locationDashboard: null,
   locationDashboardFilter: "all",
   locationDashboardDraggingId: "",
@@ -80,7 +82,7 @@ const state = {
   dashboardFontSize: "standard",
   employeeDisplayColumns: [],
   employeeDisplaySort: { key: "personnel_number", direction: "asc" },
-  rightsDashboardMode: "locations",
+  rightsDashboardMode: "systemCenter",
   rightsDashboardSelectedProcessId: "vacation",
   rightsDashboardSelectedProcessStepId: "",
   rightsProcessLocationId: "",
@@ -222,7 +224,7 @@ const elements = Object.fromEntries(
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
-    "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
+    "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
     "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "databaseBackupSettingsCard", "backupRestoreGuidanceCard",
@@ -676,6 +678,26 @@ function canOpenPersonnelAdministrationTab(tab) {
     || (tab === "vacations" && canReadCentralVacations());
 }
 
+function canReadGovernanceDashboards() {
+  if (!state.portalStatus?.portalEnabled) return true;
+  const role = state.portalSession?.user?.role || "";
+  const permissions = state.portalSession?.user?.permissions || [];
+  return ["developer", "it_admin", "admin", "hr"].includes(role) && permissions.includes("rights:read");
+}
+
+function canReadSystemCenter() {
+  if (!state.portalStatus?.portalEnabled) return true;
+  const permissions = state.portalSession?.user?.permissions || [];
+  return permissions.includes("system:diagnostics:read") || permissions.includes("system:diagnostics:technical");
+}
+
+function accessibleDashboardModes() {
+  return [
+    ...(canReadSystemCenter() ? ["systemCenter"] : []),
+    ...(canReadGovernanceDashboards() ? ["locations", "rights", "processes"] : []),
+  ];
+}
+
 function applyRoleVisibility() {
   const permissions = state.portalSession?.user?.permissions || [];
   const features = state.portalStatus?.installationFeatures || {};
@@ -732,7 +754,13 @@ function applyRoleVisibility() {
   document.querySelectorAll('[data-view="vacations"]').forEach((button) => button.classList.toggle("hidden", features.vacation === false));
   elements.requestsNavButton?.classList.toggle("hidden", !requestReadAccess);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
-  elements.rightsDashboardNavButton?.classList.toggle("hidden", !rightsAccess);
+  const systemCenterAccess = diagnosticsReadAccess || diagnosticsTechnicalAccess;
+  elements.rightsDashboardNavButton?.classList.toggle("hidden", !(rightsAccess || systemCenterAccess));
+  document.querySelectorAll('[data-dashboard-capability="rights"]').forEach((button) => button.classList.toggle("hidden", !rightsAccess));
+  document.querySelectorAll('[data-dashboard-capability="system"]').forEach((button) => button.classList.toggle("hidden", !systemCenterAccess));
+  if (!accessibleDashboardModes().includes(state.rightsDashboardMode)) {
+    state.rightsDashboardMode = accessibleDashboardModes()[0] || "systemCenter";
+  }
   const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess || operationModeAccess || wifiSettingsAccess || usbProvisioningAccess || integrationAccess || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
@@ -3390,17 +3418,315 @@ function reorderLocationDashboardCard(locationId, targetIndex) {
   saveLocationDashboardOrder(previousOrder);
 }
 
-function setRightsDashboardMode(mode) {
-  const normalized = ["locations", "rights", "processes"].includes(mode) ? mode : "locations";
+const systemCenterPhaseLabels = Object.freeze({
+  oauthPolicy: "Google-OAuth-Richtlinie",
+  oauthPolicyPassed: "Google-OAuth-Richtlinie",
+  "oauth-policy-passed": "Google-OAuth-Richtlinie",
+  backup: "Sicherung und Upload",
+  backupPassed: "Sicherung und Upload",
+  "backup-passed": "Sicherung und Upload",
+  repositoryCheck: "Repository-Prüfung",
+  repositoryCheckPassed: "Repository-Prüfung",
+  "repository-check-passed": "Repository-Prüfung",
+  restoreTest: "Isolierter Daten-Restore",
+  restoreTestPassed: "Isolierter Daten-Restore",
+  "restore-test-passed": "Isolierter Daten-Restore",
+  applicationSmoke: "Isolierter App-Start",
+  applicationSmokeNotRun: "Isolierter App-Start",
+  "application-smoke-not-run": "Isolierter App-Start",
+});
+
+const systemCenterTriggerLabels = Object.freeze({
+  "manual-cli": "Manuell gestartet",
+  "manual-admin-ui": "Im System-Center gestartet",
+  "scheduled-weekly": "Regelmäßige Prüfung",
+  "oauth-config-changed": "OAuth-Konfiguration geändert",
+  "offsite-config-changed": "Offsite-Konfiguration geändert",
+  "binary-changed": "Sicherungswerkzeug geändert",
+  "offsite-module-changed": "Offsite-Modul geändert",
+  "app-updated": "Grabenplaner aktualisiert",
+  "server-updated": "Server aktualisiert",
+});
+
+function systemCenterVisualState(value, fallback = "neutral") {
+  const normalized = String(value || "").toLowerCase();
+  if (["ok", "pass", "success", "successful", "passed", "complete", "completed", "healthy", "high", "very-high"].includes(normalized)) return "ok";
+  if (["critical", "fail", "error", "failed", "failure", "unhealthy"].includes(normalized)) return "critical";
+  if (["warning", "pending", "queued", "running", "in-progress", "attention", "medium"].includes(normalized)) return "warning";
+  if (["unknown", "unverified", "not_applicable", "not-applicable", "not applicable"].includes(normalized)) return "neutral";
+  return fallback;
+}
+
+function systemCenterStateCopy(state) {
+  if (state === "ok") return { icon: "✓", label: "Bestätigt" };
+  if (state === "critical") return { icon: "!", label: "Kritisch" };
+  if (state === "warning") return { icon: "…", label: "Prüfen" };
+  return { icon: "–", label: "Nicht nachgewiesen" };
+}
+
+function systemCenterCheckState(status, ids) {
+  const checks = new Map((status?.checks || []).map((check) => [String(check.id || ""), check.ok === true]));
+  const present = ids.filter((id) => checks.has(id));
+  if (!present.length) return "neutral";
+  return present.every((id) => checks.get(id)) ? "ok" : "critical";
+}
+
+function fallbackSystemCenterFactors(payload) {
+  const status = payload?.status || {};
+  const assurance = payload?.recoveryAssurance || status.recoveryAssurance || {};
+  const offsite = status.backups?.offsite || {};
+  const recovery = status.recovery || {};
+  const platformState = systemCenterCheckState(status, ["https", "monitor", "host-security"]);
+  return [
+    {
+      id: "core", label: "Kernbetrieb & SQLite",
+      state: status.live?.ok && status.ready?.ok && systemCenterCheckState(status, ["database", "data"]) !== "critical" ? "ok" : "critical",
+      detail: status.ready?.ok ? "Anwendung und Datenbank sind betriebsbereit." : "Mindestens ein Kernbestandteil benötigt Aufmerksamkeit.",
+    },
+    {
+      id: "backup", label: "Sicherung & Offsite",
+      state: offsite.configured ? systemCenterVisualState(offsite.state, "warning") : "neutral",
+      detail: offsite.configured ? `Letzter Sicherungsstand: ${diagnosticTimestamp(offsite.lastSuccessAt)}` : "Offsite-Sicherung ist nicht eingerichtet.",
+    },
+    {
+      id: "history", label: "Signierte Prüfkette",
+      state: assurance.integrityVerified ? "ok" : assurance.configured ? "critical" : "neutral",
+      detail: assurance.integrityVerified ? `${Number(assurance.eventCount || 0)} Ereignisse kryptografisch bestätigt.` : "Noch keine bestätigte Prüfkette verfügbar.",
+    },
+    {
+      id: "restore", label: "Isolierter Daten-Restore",
+      state: recovery.isolatedRestoreTestPending ? "warning" : recovery.isolatedRestoreTestAt ? "ok" : "neutral",
+      detail: recovery.isolatedRestoreTestAt ? `Zuletzt ${diagnosticTimestamp(recovery.isolatedRestoreTestAt)}.` : "Noch kein Wiederherstellungsnachweis vorhanden.",
+    },
+    {
+      id: "application-smoke", label: "Isolierter App-Start",
+      state: "neutral",
+      detail: "Die isolierte App-Startprüfung folgt im nächsten Ausbau.",
+    },
+    {
+      id: "platform", label: "HTTPS, Hostschutz & Monitor",
+      state: platformState,
+      detail: platformState === "ok" ? "Die verfügbaren Plattformprüfungen sind bestätigt." : platformState === "critical" ? "Mindestens eine Plattformprüfung ist fehlgeschlagen." : "Noch kein vollständiger Plattformnachweis verfügbar.",
+    },
+  ];
+}
+
+function normalizedSystemCenterFactors(payload) {
+  const supplied = Array.isArray(payload?.trustIndex?.cards)
+    ? payload.trustIndex.cards
+    : Array.isArray(payload?.trustIndex?.factors) ? payload.trustIndex.factors : [];
+  return (supplied.length ? supplied : fallbackSystemCenterFactors(payload)).map((factor, index) => {
+    const weight = Number(factor.possiblePoints ?? factor.weight);
+    const earned = Number(factor.earnedPoints ?? factor.earned ?? factor.points);
+    const coverage = Number(factor.coverage);
+    return {
+      id: String(factor.id || `factor-${index + 1}`),
+      label: String(factor.label || factor.title || "Technischer Nachweis"),
+      detail: String(factor.detail || factor.summary || "Für diesen Nachweis liegen keine weiteren Details vor."),
+      state: systemCenterVisualState(factor.state || factor.status, "neutral"),
+      weight: Number.isFinite(weight) ? weight : null,
+      earned: Number.isFinite(earned) ? earned : null,
+      coverage: Number.isFinite(coverage) ? Math.max(0, Math.min(100, Math.round(coverage))) : null,
+      evidenceAt: factor.evidenceAt || null,
+      checks: Array.isArray(factor.checks) ? factor.checks : [],
+    };
+  });
+}
+
+function systemCenterPhaseEntries(run) {
+  const source = run?.phases;
+  if (Array.isArray(source)) {
+    return source.filter(Boolean).map((phase, index) => {
+      const value = typeof phase === "object" ? phase : { state: phase };
+      return {
+        id: String(value.id || value.eventType || `phase-${index + 1}`),
+        label: String(value.label || systemCenterPhaseLabels[value.id] || systemCenterPhaseLabels[value.eventType] || "Prüfschritt"),
+        state: systemCenterVisualState(value.state || value.status || (value.ok === true ? "ok" : ""), "neutral"),
+      };
+    });
+  }
+  if (!source || typeof source !== "object") return [];
+  return Object.entries(source).map(([id, phase]) => {
+    const value = phase && typeof phase === "object" ? phase : { state: phase };
+    const explicitState = value.state || value.status || (value.ok === true ? "ok" : value.ok === false ? "failed" : "");
+    return {
+      id,
+      label: String(value.label || systemCenterPhaseLabels[id] || "Prüfschritt"),
+      state: systemCenterVisualState(explicitState, "neutral"),
+    };
+  });
+}
+
+function renderSystemCenterRun(run) {
+  const stateName = systemCenterVisualState(run?.state || run?.status, "neutral");
+  const stateCopy = systemCenterStateCopy(stateName);
+  const startedAt = run?.startedAt || run?.occurredAt || null;
+  const finishedAt = run?.finishedAt || run?.completedAt || null;
+  const identifier = String(run?.runIdPrefix || run?.idPrefix || "").slice(0, 12);
+  const trigger = systemCenterTriggerLabels[run?.trigger] || String(run?.trigger || "Technische Prüfung");
+  const phases = systemCenterPhaseEntries(run);
+  return `<article class="system-center-run ${stateName}">
+    <div class="system-center-run-track"><span aria-hidden="true">${stateCopy.icon}</span></div>
+    <div class="system-center-run-copy">
+      <header><div><strong>${escapeHtml(trigger)}</strong><small>${escapeHtml(diagnosticTimestamp(startedAt))}${finishedAt ? ` · abgeschlossen ${escapeHtml(diagnosticTimestamp(finishedAt))}` : ""}${identifier ? ` · Lauf ${escapeHtml(identifier)}` : ""}</small></div><span class="system-center-state ${stateName}">${escapeHtml(stateCopy.label)}</span></header>
+      ${phases.length ? `<ol class="system-center-run-phases">${phases.map((phase) => {
+        const phaseCopy = systemCenterStateCopy(phase.state);
+        return `<li class="${phase.state}"><i aria-hidden="true">${phaseCopy.icon}</i><span>${escapeHtml(phase.label)}</span><small>${escapeHtml(phaseCopy.label)}</small></li>`;
+      }).join("")}</ol>` : '<p class="system-center-run-empty">Für diesen Eintrag sind keine einzelnen Prüfschritte vorhanden.</p>'}
+      ${run?.errorCode ? `<p class="system-center-run-error"><strong>Fehlercode:</strong> ${escapeHtml(run.errorCode)}</p>` : ""}
+    </div>
+  </article>`;
+}
+
+function systemCenterByteLabel(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value < 0) return "Nicht verfügbar";
+  if (value < 1024 ** 2) return `${Math.round(value / 1024)} KB`;
+  if (value < 1024 ** 3) return `${(value / 1024 ** 2).toFixed(value >= 100 * 1024 ** 2 ? 0 : 1)} MB`;
+  return `${(value / 1024 ** 3).toFixed(value >= 10 * 1024 ** 3 ? 0 : 1)} GB`;
+}
+
+function systemCenterUptimeLabel(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value < 0) return "Nicht verfügbar";
+  const days = Math.floor(value / 86400);
+  const hours = Math.floor((value % 86400) / 3600);
+  return days ? `${days} T. ${hours} Std.` : `${hours} Std. ${Math.floor((value % 3600) / 60)} Min.`;
+}
+
+function systemCenterResourceCards(resources) {
+  if (!resources || typeof resources !== "object") return "";
+  const metrics = [
+    { label: "Serverlaufzeit", value: systemCenterUptimeLabel(resources.uptimeSeconds), detail: "Seit dem letzten App-Start" },
+    { label: "CPU", value: Number.isFinite(resources.cpu?.loadAverageOneMinute) ? `${resources.cpu.loadAverageOneMinute} Last` : "Aktiv", detail: `${Number(resources.cpu?.logicalProcessors || 0)} logische Prozessoren` },
+    { label: "Arbeitsspeicher", value: Number.isFinite(resources.memory?.usedPercent) ? `${resources.memory.usedPercent}% belegt` : "Nicht verfügbar", detail: `${systemCenterByteLabel(resources.memory?.freeBytes)} frei` },
+    { label: "Freier Speicher", value: systemCenterByteLabel(resources.storage?.freeBytes), detail: `Datenbank ${systemCenterByteLabel(resources.storage?.databaseBytes)}` },
+  ];
+  return `<section class="system-center-resources" aria-label="Aktuelle technische Ressourcen">${metrics.map((metric) => `<article><small>${escapeHtml(metric.label)}</small><strong>${escapeHtml(metric.value)}</strong><span>${escapeHtml(metric.detail)}</span></article>`).join("")}</section>`;
+}
+
+function renderSystemCenter(payload) {
+  if (!elements.systemCenterContent) return;
+  const trust = payload?.trustIndex || {};
+  const numericScore = Number(trust.score);
+  const hasScore = Number.isFinite(numericScore);
+  const score = hasScore ? Math.max(0, Math.min(100, Math.round(numericScore))) : null;
+  const scoreState = systemCenterVisualState(trust.state || trust.status,
+    score === null ? "neutral" : score >= 80 ? "ok" : score >= 60 ? "warning" : "critical");
+  const scoreCopy = systemCenterStateCopy(scoreState);
+  const scoreLabel = String(trust.label || (score === null ? "Noch nicht berechenbar" : score >= 90 ? "Sehr hoher Nachweis" : score >= 75 ? "Hoher Nachweis" : score >= 60 ? "Eingeschränkter Nachweis" : "Kritischer Nachweis"));
+  const factors = normalizedSystemCenterFactors(payload);
+  const assurance = payload?.recoveryAssurance || payload?.status?.recoveryAssurance || {};
+  const runs = Array.isArray(assurance.recentRuns) ? assurance.recentRuns : [];
+  const alerts = Array.isArray(payload?.status?.alerts) ? payload.status.alerts.slice(0, 3) : [];
+  const disclaimer = String(trust.disclaimer || "Der Index ist ein transparenter technischer Betriebsnachweis und keine Garantie oder statistische Ausfallwahrscheinlichkeit.");
+  elements.systemCenterContent.setAttribute("aria-busy", "false");
+  elements.systemCenterContent.innerHTML = `
+    <section class="system-center-hero ${scoreState}">
+      <div class="system-center-score" role="img" aria-label="Technischer Vertrauensindex: ${score === null ? "nicht berechenbar" : `${score} von 100`}" style="--system-center-score:${score ?? 0}">
+        <span aria-hidden="true">${score === null ? "–" : score}</span><small aria-hidden="true">${score === null ? "" : "/ 100"}</small>
+      </div>
+      <div class="system-center-hero-copy"><span class="eyebrow">Technischer Vertrauensindex</span><h2>${escapeHtml(scoreLabel)}</h2><p>${escapeHtml(trust.summary || trust.detail || "Die Bewertung entsteht ausschließlich aus aktuell prüfbaren technischen Nachweisen.")}</p><small>${escapeHtml(disclaimer)}</small></div>
+      <span class="system-center-state ${scoreState}"><i aria-hidden="true">${scoreCopy.icon}</i>${escapeHtml(scoreCopy.label)}</span>
+    </section>
+    ${alerts.length ? `<section class="system-center-alerts" aria-label="Aktuelle Systemhinweise">${alerts.map((alert) => {
+      const alertState = systemCenterVisualState(alert.severity, "warning");
+      const alertCopy = systemCenterStateCopy(alertState);
+      return `<article class="${alertState}"><i aria-hidden="true">${alertCopy.icon}</i><div><strong>${escapeHtml(alert.title || "Systemzustand prüfen")}</strong><span>${escapeHtml(alert.message || "Ein technischer Nachweis benötigt Aufmerksamkeit.")}</span></div></article>`;
+    }).join("")}</section>` : ""}
+    ${systemCenterResourceCards(payload?.resources)}
+    <section class="system-center-factor-grid" aria-label="Bestandteile des technischen Vertrauensindex">${factors.map((factor) => {
+      const copy = systemCenterStateCopy(factor.state);
+      const points = factor.weight !== null && factor.earned !== null ? `${factor.earned} / ${factor.weight} Punkte` : copy.label;
+      const evidence = factor.evidenceAt ? `Nachweis ${diagnosticTimestamp(factor.evidenceAt)}` : "Kein datierter Nachweis";
+      const coverage = factor.coverage === null ? "" : `<span class="system-center-coverage"><i style="--coverage:${factor.coverage}%"></i><small>${factor.coverage}% Abdeckung</small></span>`;
+      const checks = factor.checks.length
+        ? `<ul class="system-center-card-checks">${factor.checks.slice(0, 4).map((check) => {
+          const checkState = systemCenterVisualState(check?.state || check?.status || (check?.ok === true ? "pass" : check?.ok === false ? "fail" : "unknown"), "neutral");
+          const checkCopy = systemCenterStateCopy(checkState);
+          const checkLabel = typeof check === "string" ? check : check?.label || check?.name || check?.id || "Prüfung";
+          return `<li class="${checkState}"><i aria-hidden="true">${checkCopy.icon}</i><span>${escapeHtml(checkLabel)}</span></li>`;
+        }).join("")}</ul>`
+        : "";
+      return `<article class="system-center-factor ${factor.state}"><header><span aria-hidden="true">${copy.icon}</span><small>${escapeHtml(points)}</small></header><strong>${escapeHtml(factor.label)}</strong><p>${escapeHtml(factor.detail)}</p>${coverage}${checks}<footer><span class="system-center-state ${factor.state}">${escapeHtml(copy.label)}</span><small>${escapeHtml(evidence)}</small></footer></article>`;
+    }).join("")}</section>
+    <section class="system-center-history">
+      <div class="system-center-section-heading"><div><span class="eyebrow">Signierte Prüfhistorie</span><h2>Recovery-Assurance-Läufe</h2><p>Die angezeigten Läufe wurden serverseitig aus der vollständig geprüften Signaturkette zusammengefasst.</p></div><span>${Number(assurance.eventCount || 0)} bestätigte Ereignisse</span></div>
+      <div class="system-center-run-list">${runs.length ? runs.map(renderSystemCenterRun).join("") : '<div class="system-center-empty"><strong>Noch kein vollständiger Lauf</strong><p>Sobald ein Recovery-Assurance-Test ausgeführt wurde, erscheint hier sein nachvollziehbarer Ablauf.</p></div>'}</div>
+    </section>`;
+}
+
+function applySystemCenterControls(payload) {
+  const capabilities = payload?.capabilities || {};
+  const manualRun = payload?.manualRun || {};
+  const allowed = capabilities.canRunRecoveryAssurance === true || manualRun.allowed === true;
+  const busy = manualRun.busy === true || state.systemCenterLoading;
+  elements.startRecoveryAssurance?.classList.toggle("hidden", !allowed);
+  if (elements.startRecoveryAssurance) {
+    elements.startRecoveryAssurance.disabled = busy || manualRun.available === false;
+    elements.startRecoveryAssurance.textContent = manualRun.busy ? "Recovery-Test läuft" : "Recovery-Test starten";
+    elements.startRecoveryAssurance.title = String(manualRun.reason || "Startet eine vollständige, isolierte Wiederherstellungsprüfung.");
+  }
+  if (elements.refreshSystemCenter) elements.refreshSystemCenter.disabled = state.systemCenterLoading;
+}
+
+async function loadSystemCenter({ silent = false } = {}) {
+  if (!canReadSystemCenter() || state.systemCenterLoading || !elements.systemCenterContent) return;
+  state.systemCenterLoading = true;
+  elements.systemCenterContent.setAttribute("aria-busy", "true");
+  if (!silent && !state.systemCenter) elements.systemCenterContent.innerHTML = '<p class="settings-note">System-Center wird geladen.</p>';
+  applySystemCenterControls(state.systemCenter);
+  try {
+    const payload = await api("/api/portal/v1/system-center");
+    state.systemCenter = payload;
+    renderSystemCenter(payload);
+    if (elements.systemCenterUpdated) elements.systemCenterUpdated.textContent = `Stand ${diagnosticTimestamp(payload.generatedAt)}`;
+  } catch (error) {
+    if (!silent || !state.systemCenter) {
+      elements.systemCenterContent.innerHTML = `<div class="system-center-empty critical"><strong>System-Center nicht verfügbar</strong><p>${escapeHtml(error.message)}</p></div>`;
+    }
+  } finally {
+    state.systemCenterLoading = false;
+    elements.systemCenterContent.setAttribute("aria-busy", "false");
+    applySystemCenterControls(state.systemCenter);
+  }
+}
+
+async function startRecoveryAssurance() {
+  if (!state.systemCenter?.capabilities?.canRunRecoveryAssurance && state.systemCenter?.manualRun?.allowed !== true) return;
+  if (!confirm("Jetzt einen vollständigen Recovery-Assurance-Test starten? Die Prüfung erstellt einen Sicherungsstand und kann längere Zeit dauern.")) return;
+  const button = elements.startRecoveryAssurance;
+  if (button) { button.disabled = true; button.textContent = "Wird eingereiht …"; }
+  try {
+    const result = await api("/api/portal/v1/system-center/recovery-assurance/run", {
+      method: "POST",
+      body: JSON.stringify({ confirmation: "RECOVERY_ASSURANCE_START" }),
+    });
+    showToast(result?.message || "Der Recovery-Assurance-Test wurde sicher eingereiht.");
+    state.systemCenter = null;
+    window.setTimeout(() => loadSystemCenter(), 1200);
+  } catch (error) {
+    showToast(error.message, true);
+    applySystemCenterControls(state.systemCenter);
+  }
+}
+
+function setRightsDashboardMode(mode, { load = true } = {}) {
+  const allowedModes = accessibleDashboardModes();
+  const normalized = allowedModes.includes(mode) ? mode : (allowedModes[0] || "systemCenter");
   state.rightsDashboardMode = normalized;
   document.querySelectorAll("[data-rights-dashboard-mode]").forEach((button) => {
     button.setAttribute("aria-selected", String(button.dataset.rightsDashboardMode === normalized));
   });
+  elements.systemCenterPanel?.classList.toggle("hidden", normalized !== "systemCenter");
   elements.rightsDashboardLocationsPanel?.classList.toggle("hidden", normalized !== "locations");
   elements.rightsDashboardRightsPanel?.classList.toggle("hidden", normalized !== "rights");
   elements.rightsDashboardProcessesPanel?.classList.toggle("hidden", normalized !== "processes");
   if (normalized === "processes") renderRightsProcessDashboard();
-  if (normalized === "locations" && !state.locationDashboard) loadLocationDashboard();
+  if (!load) return;
+  if (normalized === "systemCenter") loadSystemCenter();
+  else if (!state.rightsDashboard) loadGovernanceDashboards();
+  else if (normalized === "locations" && !state.locationDashboard) loadLocationDashboard();
 }
 
 function rightsProcessDashboard() {
@@ -3966,8 +4292,9 @@ function exportRightsProcessPdf() {
   link.remove();
 }
 
-async function loadRightsDashboard() {
+async function loadGovernanceDashboards() {
   if (!elements.rightsDashboardView) return;
+  if (!canReadGovernanceDashboards()) return;
   try {
     const [dashboard, personnelFieldRights] = await Promise.all([
       api("/api/portal/v1/rights-dashboard"),
@@ -3982,7 +4309,7 @@ async function loadRightsDashboard() {
     renderRightsDashboardSummary();
     renderRightsDashboard();
     await loadLocationDashboard();
-    setRightsDashboardMode(state.rightsDashboardMode);
+    setRightsDashboardMode(state.rightsDashboardMode, { load: false });
   } catch (error) {
     state.rightsDashboard = null;
     elements.addCustomProcessButton?.classList.add("hidden");
@@ -3991,6 +4318,17 @@ async function loadRightsDashboard() {
     elements.rightsDashboardEmpty?.classList.remove("hidden");
     elements.rightsDashboardSelection?.classList.add("hidden");
   }
+}
+
+async function loadRightsDashboard() {
+  if (!elements.rightsDashboardView) return;
+  applyRightsDashboardTheme(state.pageThemes.rightsDashboard || "light");
+  const modes = accessibleDashboardModes();
+  const selected = modes.includes(state.rightsDashboardMode) ? state.rightsDashboardMode : modes[0];
+  if (!selected) return;
+  setRightsDashboardMode(selected, { load: false });
+  if (selected === "systemCenter") await loadSystemCenter();
+  else await loadGovernanceDashboards();
 }
 
 async function saveMobileLeadershipSettings() {
@@ -6646,7 +6984,7 @@ function applyRequestedView() {
   }
   if (requestedView === "rightsDashboard") {
     const dashboardMode = parameters.get("dashboard");
-    if (["locations", "rights", "processes"].includes(dashboardMode)) state.rightsDashboardMode = dashboardMode;
+    if (["systemCenter", "locations", "rights", "processes"].includes(dashboardMode)) state.rightsDashboardMode = dashboardMode;
     const processId = parameters.get("process");
     if (processId) state.rightsDashboardSelectedProcessId = processId.slice(0, 120);
   }
@@ -9107,6 +9445,8 @@ document.querySelectorAll("button[data-page-theme-choice]").forEach((button) => 
 }));
 elements.dashboardFontSize?.addEventListener("change", () => applyDashboardFontSize(elements.dashboardFontSize.value));
 document.querySelectorAll("button[data-rights-dashboard-mode]").forEach((button) => button.addEventListener("click", () => setRightsDashboardMode(button.dataset.rightsDashboardMode)));
+elements.refreshSystemCenter?.addEventListener("click", () => loadSystemCenter());
+elements.startRecoveryAssurance?.addEventListener("click", startRecoveryAssurance);
 elements.refreshLocationDashboard?.addEventListener("click", loadLocationDashboard);
 elements.locationDashboardDate?.addEventListener("change", loadLocationDashboard);
 elements.locationDashboardFilters?.addEventListener("click", (event) => {

@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const HASH = /^[a-f0-9]{64}$/;
 const PREFIX = "server-tools/linux/offsite/";
 const INSTALLER = "install-grabenplaner-offsite.sh";
-const SUPPORTED_MODULE_VERSIONS = new Set([1, 2]);
+const SUPPORTED_MODULE_VERSIONS = new Set([1, 2, 3]);
 const LEGACY_V1_ARTIFACTS = Object.freeze([
   "grabenplaner-offsite-check.sh",
   "grabenplaner-offsite-pre-update.sh",
@@ -23,6 +23,38 @@ const LEGACY_V1_ARTIFACTS = Object.freeze([
   "lib/offsite-stage.js",
   "lib/offsite-status.js",
   "lib/offsite-setup-rclone-wrapper.sh",
+  "systemd/grabenplaner-offsite-check.service.in",
+  "systemd/grabenplaner-offsite-check.timer.in",
+  "systemd/grabenplaner-offsite-prepare.service.in",
+  "systemd/grabenplaner-offsite-restore-test.service.in",
+  "systemd/grabenplaner-offsite-restore-test.timer.in",
+  "systemd/grabenplaner-offsite-upload.service.in",
+  "systemd/grabenplaner-offsite-upload.timer.in",
+  "uninstall-grabenplaner-offsite.sh",
+  "test-grabenplaner-offsite.sh",
+]);
+const LEGACY_V2_ARTIFACTS = Object.freeze([
+  "grabenplaner-offsite-assurance.sh",
+  "grabenplaner-offsite-check.sh",
+  "grabenplaner-offsite-pre-update.sh",
+  "grabenplaner-offsite-prepare.sh",
+  "grabenplaner-offsite-read-secret.sh",
+  "grabenplaner-offsite-rclone-wrapper.sh",
+  "grabenplaner-offsite-recovery-set.sh",
+  "grabenplaner-offsite-rebind-rclone.sh",
+  "grabenplaner-offsite-restore-test.sh",
+  "grabenplaner-offsite-upload.sh",
+  "install-grabenplaner-offsite.sh",
+  "lib/offsite-common.sh",
+  "lib/offsite-contract.js",
+  "lib/assurance-history.js",
+  "lib/offsite-rclone-policy.js",
+  "lib/offsite-restore-verify.js",
+  "lib/offsite-retention-verify.js",
+  "lib/offsite-stage.js",
+  "lib/offsite-status.js",
+  "lib/offsite-setup-rclone-wrapper.sh",
+  "systemd/grabenplaner-offsite-assurance@.service.in",
   "systemd/grabenplaner-offsite-check.service.in",
   "systemd/grabenplaner-offsite-check.timer.in",
   "systemd/grabenplaner-offsite-prepare.service.in",
@@ -66,8 +98,13 @@ function classify(candidateEnvelope, installed) {
     return "invalid";
   }
   const legacyV1 = new Set(LEGACY_V1_ARTIFACTS);
+  const legacyV2 = new Set(LEGACY_V2_ARTIFACTS);
   if (candidate.moduleVersion === 1
     && (expectedPaths.length !== legacyV1.size || expectedPaths.some((relative) => !legacyV1.has(relative)))) {
+    return "invalid";
+  }
+  if (candidate.moduleVersion === 2
+    && (expectedPaths.length !== legacyV2.size || expectedPaths.some((relative) => !legacyV2.has(relative)))) {
     return "invalid";
   }
   if (candidate.moduleVersion < installed.moduleVersion) return "invalid";
@@ -83,7 +120,9 @@ function classify(candidateEnvelope, installed) {
     installedFiles.set(relative, sha256);
   }
   if (fingerprint(installedFiles) !== installed.fingerprint) return "invalid";
-  const installedExpected = installed.moduleVersion === 1 ? legacyV1 : new Set(expectedPaths);
+  const installedExpected = installed.moduleVersion === 1
+    ? legacyV1
+    : installed.moduleVersion === 2 ? legacyV2 : new Set(expectedPaths);
   if (installedFiles.size !== installedExpected.size
     || [...installedExpected].some((relative) => !installedFiles.has(relative))) return "invalid";
   if (candidate.moduleVersion !== installed.moduleVersion) {

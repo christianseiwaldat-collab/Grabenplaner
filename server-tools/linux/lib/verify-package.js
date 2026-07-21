@@ -26,6 +26,7 @@ const expectedOffsiteArtifacts = [
   "server-tools/linux/offsite/lib/offsite-common.sh",
   "server-tools/linux/offsite/lib/offsite-contract.js",
   "server-tools/linux/offsite/lib/assurance-history.js",
+  "server-tools/linux/offsite/lib/assurance-control-broker.js",
   "server-tools/linux/offsite/lib/offsite-rclone-policy.js",
   "server-tools/linux/offsite/lib/offsite-restore-verify.js",
   "server-tools/linux/offsite/lib/offsite-retention-verify.js",
@@ -33,6 +34,8 @@ const expectedOffsiteArtifacts = [
   "server-tools/linux/offsite/lib/offsite-status.js",
   "server-tools/linux/offsite/lib/offsite-setup-rclone-wrapper.sh",
   "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance@.service.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control.socket.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control@.service.in",
   "server-tools/linux/offsite/systemd/grabenplaner-offsite-check.service.in",
   "server-tools/linux/offsite/systemd/grabenplaner-offsite-check.timer.in",
   "server-tools/linux/offsite/systemd/grabenplaner-offsite-prepare.service.in",
@@ -230,7 +233,7 @@ function readOffsiteModuleContract() {
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Der optionale Offsite-Modulvertrag fehlt oder ist unzulaessig.");
   const contract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, ""));
   if (contract?.format !== "grabenplaner-linux-offsite-module-contract" || contract?.schemaVersion !== 1
-    || contract?.moduleVersion !== 2 || contract?.activationPolicy !== "explicit-root-setup"
+    || contract?.moduleVersion !== 3 || contract?.activationPolicy !== "explicit-root-setup"
     || !Array.isArray(contract?.managedArtifacts) || contract.managedArtifacts.length !== expectedOffsiteArtifacts.length
     || expectedOffsiteArtifacts.some((relative) => !contract.managedArtifacts.includes(relative))) {
     throw new Error("Der optionale Offsite-Modulvertrag wird nicht unterstuetzt.");

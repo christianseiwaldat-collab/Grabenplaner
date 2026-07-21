@@ -32,6 +32,7 @@ const TRIGGERS = Object.freeze([
   "app-updated",
   "server-updated",
   "manual-cli",
+  "manual-admin-ui",
 ]);
 const ERROR_CODES = Object.freeze([
   "ASSURANCE_RUN_FAILED",

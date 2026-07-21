@@ -21,7 +21,7 @@ while (($#)); do
 done
 offsite_require_root
 (( confirmed == 1 )) || offsite_die "Die Deaktivierung erfordert die ausdrueckliche Option --yes."
-for command_name in chmod chown cmp install mktemp readlink rm systemctl; do offsite_require_command "$command_name"; done
+for command_name in awk chmod chown cmp getent gpasswd groupdel install mktemp paste readlink rm sed sort systemctl tr; do offsite_require_command "$command_name"; done
 offsite_assert_installed_contract
 core_common="$OFFSITE_APP_ROOT/server-tools/linux/lib/common.sh"
 [[ -f "$core_common" && ! -L "$core_common" ]] || offsite_die "Die verifizierte Core-Wartungssperre fehlt."
@@ -31,7 +31,8 @@ gp_acquire_maintenance_lock
 offsite_acquire_assurance_lock
 offsite_acquire_repository_lock
 
-for unit in 'grabenplaner-offsite-assurance@*.service' \
+for unit in 'grabenplaner-offsite-assurance-control@*.service' grabenplaner-offsite-assurance-control.socket \
+  'grabenplaner-offsite-assurance@*.service' \
   grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer \
   grabenplaner-offsite-upload.service grabenplaner-offsite-prepare.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
   systemctl disable --now "$unit" >/dev/null 2>&1 || true
@@ -47,6 +48,18 @@ for template in "$OFFSITE_MODULE_ROOT"/systemd/*.in; do
   fi
 done
 systemctl daemon-reload
+
+# The control group is part of the v3 privilege boundary, not persistent user
+# data. Remove it completely so an uninstalled module leaves no dormant path
+# from the application account to a root socket.
+offsite_assert_control_group_isolation
+gpasswd --delete "$OFFSITE_APP_USER" "$OFFSITE_CONTROL_GROUP" >/dev/null
+control_gid="$(getent group "$OFFSITE_CONTROL_GROUP" | awk -F: '{print $3}')"
+control_primary="$(getent passwd | awk -F: -v gid="$control_gid" '$4==gid {print $1}' | sort | paste -sd, -)"
+control_members="$(getent group "$OFFSITE_CONTROL_GROUP" | awk -F: '{print $4}' | tr ',' '\n' | sed '/^$/d' | sort | paste -sd, -)"
+[[ -z "$control_primary" && -z "$control_members" ]] \
+  || offsite_die "Die Recovery-Assurance-Steuerungsgruppe konnte nicht sicher geleert werden."
+groupdel "$OFFSITE_CONTROL_GROUP"
 
 for command_name in grabenplaner-offsite-assurance grabenplaner-offsite-pre-update grabenplaner-offsite-prepare \
   grabenplaner-offsite-recovery-set grabenplaner-offsite-rebind-rclone \
