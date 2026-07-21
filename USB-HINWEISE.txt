@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.75.5 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.75.6 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,7 +13,13 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Version v0.75.5 Beta:
+Version v0.75.6 Beta:
+  - Linux-Sicherungspunkte werden in einer eigenen kurzlebigen, unprivilegierten
+    systemd-Einheit erstellt. Die Schutzregeln des Offsite-Vorbereitungsdienstes
+    bleiben dabei vollstaendig aktiv.
+  - Dadurch funktionieren geplante Offsite-Uploads auch mit den strengeren
+    Prozessgrenzen von Ubuntu 26.04 zuverlaessig.
+  - Zusaetzlich bleiben alle Verbesserungen aus v0.75.5 Beta enthalten.
   - Der Offsite-Installer erkennt den unter Ubuntu 24.04 und 26.04 ueblichen,
     sicheren Verweis /etc/os-release -> /usr/lib/os-release korrekt.
   - Zielpfad, Dateityp, Besitzrechte, Hardlink-Anzahl und Schreibrechte der
