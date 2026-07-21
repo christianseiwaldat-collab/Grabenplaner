@@ -2,10 +2,10 @@
 
 ## v0.75.6 Beta · Offsite-Sicherungsupdate
 
-- Der gekoppelte Datenbank-/Dokumentsicherungspunkt für Offsite-Uploads entsteht in einer eigenen kurzlebigen, unprivilegierten systemd-Einheit statt durch einen innerhalb des gehärteten Vorbereitungsdienstes blockierten Benutzerwechsel.
-- `NoNewPrivileges`, `RestrictRealtime`, `RestrictSUIDSGID` und die übrigen Schutzgrenzen des Offsite-Vorbereitungsdienstes bleiben vollständig aktiv.
-- Der Snapshot-Prozess erhält zusätzlich keinen Netzwerkzugriff, keine Heimverzeichnisse und nur eine minimale Geräte- und Prozessumgebung.
-- Das Update enthält keine Datenbankmigration und verändert keine bestehenden Sicherungsstände.
+- Der gekoppelte Datenbank-/Dokumentsicherungspunkt bleibt vollständig an den gehärteten Offsite-Vorbereitungsdienst und dessen Wartungssperre gebunden.
+- Für Ubuntu 26.04 entfällt ausschließlich die mit dem notwendigen lokalen Benutzerwechsel kollidierende systemd-Echtzeitsperre des Vorbereitungsdienstes. Echtzeitprioritäten und `CAP_SYS_NICE` bleiben gesperrt; `NoNewPrivileges`, `RestrictSUIDSGID`, Dateisystem-, Geräte- und Netzwerkgrenzen bleiben aktiv.
+- Bereits konfigurierte Offsite-Installationen müssen das optionale Modul vor diesem Update ausdrücklich deaktivieren und anschließend neu aktivieren. Repository, Zugangsdaten und bestehende Sicherungsstände bleiben dabei erhalten.
+- Das Update enthält keine Datenbankmigration und verändert keine Planungsdaten oder bestehenden Sicherungsstände.
 
 ## v0.75.5 Beta · Offsite-Serviceupdate
 

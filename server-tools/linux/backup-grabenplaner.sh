@@ -63,7 +63,7 @@ gp_require_root
 gp_require_command realpath
 gp_require_command flock
 gp_require_command sha256sum
-gp_require_command systemd-run
+gp_require_command runuser
 gp_require_command getent
 gp_load_env_file "$env_file"
 
@@ -139,16 +139,10 @@ cleanup() {
 trap cleanup EXIT
 
 gp_info "Erstelle gekoppelten und verifizierten SQLite-/Dokumentsicherungspunkt."
-if ! systemd-run --quiet --wait --pipe --collect \
-  --uid="$service_user" --gid="$service_group" --working-directory="$data_dir" \
-  --setenv=PATH=/usr/local/bin:/usr/bin:/bin --setenv=NODE_ENV=production \
-  --property=NoNewPrivileges=yes --property=PrivateDevices=yes --property=PrivateTmp=yes \
-  --property=ProtectHome=yes --property=RestrictAddressFamilies=AF_UNIX --property=IPAddressDeny=any \
-  --property=LockPersonality=yes --property=RestrictRealtime=yes --property=RestrictSUIDSGID=yes \
-  --property=SystemCallArchitectures=native --property=UMask=0077 \
+if ! (cd -- "$data_dir" && runuser --user "$service_user" -- env -i PATH="/usr/local/bin:/usr/bin:/bin" NODE_ENV=production \
   "$node" "$helper" \
   "$database" "$partial_database" "$database_lock_module" "$amu_module" \
-  "$amu_dir" "$partial_amu" "$(basename -- "$target_database")" >"$result_file"; then
+  "$amu_dir" "$partial_amu" "$(basename -- "$target_database")") >"$result_file"; then
   gp_die "Der gekoppelte Sicherungspunkt konnte nicht erstellt werden."
 fi
 [[ -s "$partial_database" && -d "$partial_amu" && -f "$partial_amu/manifest.json" ]] \
