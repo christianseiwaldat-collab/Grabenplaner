@@ -50,6 +50,10 @@ function assertSafeOsReleaseContract(relativePath, dieFunction) {
   );
 }
 
-test("v0.75.4 runtime migration accepts only the canonical Ubuntu os-release paths", () => {
+test("v0.75.5 runtime migration accepts only the canonical Ubuntu os-release paths", () => {
   assertSafeOsReleaseContract("server-tools/linux/migrate-grabenplaner-runtime-v2.sh", "gp_die");
+});
+
+test("v0.75.5 offsite installer accepts only the canonical Ubuntu os-release paths", () => {
+  assertSafeOsReleaseContract("server-tools/linux/offsite/install-grabenplaner-offsite.sh", "offsite_die");
 });

@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.75.5 Beta · Offsite-Serviceupdate
+
+- Der optionale Offsite-Installer erkennt den unter Ubuntu 24.04 und 26.04 üblichen, sicheren Verweis `/etc/os-release` auf `/usr/lib/os-release` korrekt.
+- Vor dem Einlesen werden der kanonische Zielpfad, Dateityp, Besitzrechte, Hardlink-Anzahl und Schreibrechte der Systemkennung weiterhin streng geprüft.
+- Bereits konfigurierte Offsite-Installationen auf v0.75.3 müssen zuerst die Kompatibilitätsbrücke v0.75.4 installieren; noch nicht konfigurierte Server können direkt aktualisiert werden.
+- Das Update enthält keine Datenbankmigration und verändert weder Planungsdaten noch vorhandene Sicherungsstände.
+
 ## v0.75.4 Beta · Server-Kompatibilitätsupdate
 
 - Der Linux-Updater erhält eine eng begrenzte Kompatibilitätsbrücke für reine Änderungen am noch nicht aktivierten Offsite-Installationswerkzeug.
