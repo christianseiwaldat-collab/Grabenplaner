@@ -1,6 +1,6 @@
 # Grabenplaner Versions-Log
 
-## v0.75.3 Beta · Server-Wartungspatch
+## v0.75.3 Beta · Serviceupdate
 
 - Der Linux-Wartungslock verwendet einen eigenen Keep-Alive-Timer und bleibt dadurch auch bei nicht interaktiven Hintergrundprozessen bis zur kontrollierten Freigabe aktiv.
 - Serverupdates können den gekoppelten Datenbank-/Dokumentsicherungspunkt nun zuverlässig halten, statt wegen eines vorzeitig beendeten Lock-Helfers automatisch zurückzurollen.
