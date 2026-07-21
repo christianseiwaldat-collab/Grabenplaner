@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.75.6 Beta · Offsite-Sicherungsupdate
+
+- Der gekoppelte Datenbank-/Dokumentsicherungspunkt für Offsite-Uploads entsteht in einer eigenen kurzlebigen, unprivilegierten systemd-Einheit statt durch einen innerhalb des gehärteten Vorbereitungsdienstes blockierten Benutzerwechsel.
+- `NoNewPrivileges`, `RestrictRealtime`, `RestrictSUIDSGID` und die übrigen Schutzgrenzen des Offsite-Vorbereitungsdienstes bleiben vollständig aktiv.
+- Der Snapshot-Prozess erhält zusätzlich keinen Netzwerkzugriff, keine Heimverzeichnisse und nur eine minimale Geräte- und Prozessumgebung.
+- Das Update enthält keine Datenbankmigration und verändert keine bestehenden Sicherungsstände.
+
 ## v0.75.5 Beta · Offsite-Serviceupdate
 
 - Der optionale Offsite-Installer erkennt den unter Ubuntu 24.04 und 26.04 üblichen, sicheren Verweis `/etc/os-release` auf `/usr/lib/os-release` korrekt.
