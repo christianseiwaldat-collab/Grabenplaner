@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.75.6 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.75.7 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,13 +13,16 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Version v0.75.6 Beta:
+Version v0.75.7 Beta:
+  - Die root-gestuetzten Offsite-Dienste verzichten unter Ubuntu 26.04 auf die
+    redundanten systemd-Zeilen User=root und Group=root. Sie starten weiterhin
+    mit systemds sicherem Root-Standard und koennen danach zu den getrennten,
+    unprivilegierten App- und Uploaderkonten wechseln.
+  - Alle Prozess-, Adressfamilien-, Dateisystem-, Geraete-, Kernel-, Netzwerk-
+    und Wartungssperren aus v0.75.6 bleiben vollstaendig aktiv.
+  - Zusaetzlich bleiben alle Verbesserungen aus v0.75.6 Beta enthalten.
   - Linux-Sicherungspunkte bleiben vollstaendig an den gehaerteten Offsite-
     Vorbereitungsdienst und dessen Wartungssperre gebunden.
-  - Fuer Ubuntu 26.04 entfaellt ausschliesslich die mit dem notwendigen lokalen
-    Benutzerwechsel kollidierende systemd-Echtzeitsperre. Echtzeitprioritaeten
-    und CAP_SYS_NICE sowie die uebrigen Dateisystem-, Geraete-, Netzwerk- und
-    Prozessgrenzen bleiben gesperrt.
   - Bereits konfigurierte Offsite-Module muessen vor dem Update ausdruecklich
     deaktiviert und danach neu aktiviert werden. Repository, Zugangsdaten und
     bestehende Sicherungsstaende bleiben erhalten.

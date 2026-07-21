@@ -7,8 +7,6 @@ Requires=grabenplaner-offsite-prepare.service
 
 [Service]
 Type=oneshot
-User=root
-Group=root
 ExecStart=/opt/grabenplaner-offsite/module/grabenplaner-offsite-upload.sh
 LoadCredential=repository:/etc/grabenplaner/offsite/repository
 LoadCredential=repository-id:/etc/grabenplaner/offsite/repository-id

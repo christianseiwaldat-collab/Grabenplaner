@@ -6,8 +6,6 @@ After=network-online.target grabenplaner-offsite-upload.service
 
 [Service]
 Type=oneshot
-User=root
-Group=root
 ExecStart=/opt/grabenplaner-offsite/module/grabenplaner-offsite-check.sh
 LoadCredential=repository:/etc/grabenplaner/offsite/repository
 LoadCredential=repository-id:/etc/grabenplaner/offsite/repository-id

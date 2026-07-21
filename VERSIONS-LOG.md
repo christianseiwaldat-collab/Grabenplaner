@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.75.7 Beta · Ubuntu-Offsite-Kompatibilitätsupdate
+
+- Die vier root-gestützten Offsite-Dienste verzichten unter Ubuntu 26.04 auf die redundanten systemd-Zeilen `User=root` und `Group=root`. Sie starten weiterhin mit systemds sicherem Root-Standard, können danach aber zuverlässig zum unprivilegierten App- beziehungsweise Uploaderkonto wechseln.
+- `NoNewPrivileges`, `RestrictRealtime`, `RestrictSUIDSGID`, erlaubte Adressfamilien sowie Datei-, Geräte-, Kernel-, Netzwerk- und Wartungssperren bleiben vollständig aktiv.
+- Bereits konfigurierte Offsite-Installationen müssen das optionale Modul vor diesem Update ausdrücklich deaktivieren und anschließend ohne Repository-Neuinitialisierung wieder anbinden.
+- Das Update enthält keine Datenbankmigration und verändert keine Planungsdaten oder bestehenden Sicherungsstände.
+
 ## v0.75.6 Beta · Offsite-Sicherungsupdate
 
 - Der gekoppelte Datenbank-/Dokumentsicherungspunkt bleibt vollständig an den gehärteten Offsite-Vorbereitungsdienst und dessen Wartungssperre gebunden.
