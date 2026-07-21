@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd -P)"
 source "$SCRIPT_DIR/lib/offsite-common.sh"
 
 offsite_require_root
-for command_name in awk flock getent mktemp readlink rm runuser sha256sum stat systemctl; do offsite_require_command "$command_name"; done
+for command_name in awk chmod chown flock getent id install mktemp readlink rm runuser sha256sum stat systemctl; do offsite_require_command "$command_name"; done
 failures=0
 ok() { printf 'OK\t%s\t%s\n' "$1" "$2"; }
 fail() { printf 'FEHLER\t%s\t%s\n' "$1" "$2"; failures=$((failures + 1)); }
@@ -48,7 +48,7 @@ else
   fail "Binaerversionen" "Version oder Plattform weicht vom Installationsbeleg ab"
 fi
 
-if offsite_assert_persistent_rclone_config >/dev/null 2>&1; then ok "rclone OAuth" "verschluesselt und persistent"; else fail "rclone OAuth" "Konfiguration oder Rechte ungueltig"; fi
+if offsite_assert_persistent_rclone_config >/dev/null 2>&1; then ok "rclone-Konfiguration" "verschluesselt und persistent"; else fail "rclone-Konfiguration" "Datei oder Rechte ungueltig"; fi
 groups="$(id -Gn "$OFFSITE_USER" 2>/dev/null || true)"
 if [[ "$groups" == "$OFFSITE_GROUP $OFFSITE_STATUS_GROUP" || "$groups" == "$OFFSITE_STATUS_GROUP $OFFSITE_GROUP" ]]; then
   ok "Dienstbenutzergruppen" "nur Uploader- und Statusgruppe"
@@ -64,11 +64,40 @@ if [[ -f "$recovery_command" && ! -L "$recovery_command" && -L "$recovery_link" 
 else
   fail "Recovery-Befehl" "fehlt oder zeigt nicht auf das installierte Serverpaket"
 fi
+rebind_command="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-rebind-rclone.sh"
+rebind_link="/usr/local/sbin/grabenplaner-offsite-rebind-rclone"
+if [[ -f "$rebind_command" && ! -L "$rebind_command" && -L "$rebind_link" \
+  && "$(readlink -f -- "$rebind_link")" == "$rebind_command" ]]; then
+  ok "OAuth-Neuanbindung" "root-only Wartungsbefehl installiert"
+else
+  fail "OAuth-Neuanbindung" "Wartungsbefehl fehlt oder zeigt nicht auf das installierte Modul"
+fi
+assurance_command="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-assurance.sh"
+assurance_link="/usr/local/sbin/grabenplaner-offsite-assurance"
+if [[ -f "$assurance_command" && ! -L "$assurance_command" && -L "$assurance_link" \
+  && "$(readlink -f -- "$assurance_link")" == "$assurance_command" ]]; then
+  ok "Recovery Assurance" "root-only Pruefbefehl installiert"
+else
+  fail "Recovery Assurance" "Pruefbefehl fehlt oder zeigt nicht auf das installierte Modul"
+fi
+recovery_set_command="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-recovery-set.sh"
+recovery_set_link="/usr/local/sbin/grabenplaner-offsite-recovery-set"
+if [[ -f "$recovery_set_command" && ! -L "$recovery_set_command" && -L "$recovery_set_link" \
+  && "$(readlink -f -- "$recovery_set_link")" == "$recovery_set_command" ]]; then
+  ok "Offline-Recovery-Set" "root-only Export- und Pruefbefehl installiert"
+else
+  fail "Offline-Recovery-Set" "Befehl fehlt oder zeigt nicht auf das installierte Modul"
+fi
 for timer in grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer; do
   if systemctl is-enabled --quiet "$timer" && systemctl is-active --quiet "$timer"; then ok "Timer $timer" "aktiv"; else fail "Timer $timer" "nicht aktiv"; fi
 done
 
 status_gid="$(getent group "$OFFSITE_STATUS_GROUP" | awk -F: '{print $3}')"
+if [[ "$status_gid" =~ ^[0-9]+$ ]] && offsite_assurance_history inspect >/dev/null 2>&1; then
+  ok "Assurance-Verlauf" "Signaturen, Kette und Dateirechte gueltig"
+else
+  fail "Assurance-Verlauf" "Signaturkette fehlt oder ist ungueltig"
+fi
 if [[ "$status_gid" =~ ^[0-9]+$ && -f "$OFFSITE_STATUS_FILE" && ! -L "$OFFSITE_STATUS_FILE" \
   && "$(stat --format='%u:%g:%a:%h' -- "$OFFSITE_STATUS_FILE")" == "0:$status_gid:640:1" ]] \
   && "$OFFSITE_NODE" "$OFFSITE_STATUS_HELPER" --status-file "$OFFSITE_STATUS_FILE" --status-gid "$status_gid" inspect >/dev/null 2>&1
@@ -80,6 +109,11 @@ fi
 
 credentials="$(offsite_make_uploader_credentials "$OFFSITE_CONFIG_ROOT")"
 offsite_acquire_repository_lock
+if offsite_assert_dedicated_rclone_oauth "$credentials" >/dev/null 2>&1; then
+  ok "Google OAuth" "eigener Client und Scope drive.file bestaetigt"
+else
+  fail "Google OAuth" "eigener Client fehlt oder Richtlinie nicht bestaetigt"
+fi
 if offsite_verify_repository_identity "$credentials" "$operation_root/repository.json"; then
   ok "Repository-Identitaet" "gepinnt und erreichbar"
 else

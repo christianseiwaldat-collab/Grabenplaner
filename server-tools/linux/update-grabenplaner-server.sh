@@ -599,6 +599,30 @@ receipt="$(write_receipt "success")"
 write_commit_marker
 update_committed=1
 
+# Nach einem bereits erfolgreich und atomar abgeschlossenen App-Update wird
+# zuerst ein signierter, fuer die App sichtbarer Queue-Beleg geschrieben und
+# danach der komplette Recovery-Assurance-Lauf asynchron eingeplant. Ein Fehler
+# an dieser Stelle darf das gesunde neue Release nicht mehr zurueckrollen.
+if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" ]]; then
+  offsite_common="/opt/grabenplaner-offsite/module/lib/offsite-common.sh"
+  if ! (
+    [[ -f "$offsite_common" && ! -L "$offsite_common" ]] || exit 1
+    offsite_common_mode="$(stat --format='%a' -- "$offsite_common")"
+    [[ "$(stat --format='%u:%g:%h' -- "$offsite_common")" == "0:0:1" \
+      && $((8#$offsite_common_mode & 022)) -eq 0 ]] || exit 1
+    # shellcheck source=server-tools/linux/offsite/lib/offsite-common.sh
+    source "$offsite_common"
+    offsite_acquire_assurance_lock
+    offsite_assert_runtime_binaries
+    offsite_record_assurance_queue update-queued app-updated "$candidate_version"
+  ); then
+    gp_warn "Das erfolgreiche App-Update konnte nicht im signierten Recovery-Assurance-Verlauf vorgemerkt werden."
+  fi
+  if ! systemctl start --no-block grabenplaner-offsite-assurance@app-updated.service >/dev/null; then
+    gp_warn "Die Recovery-Assurance-Pruefung nach dem App-Update konnte nicht eingeplant werden."
+  fi
+fi
+
 "$node" - "$old_version" "$candidate_version" "$actual_package_sha256" "$backup_database" "$receipt" "$public_ready_url" <<'NODE'
 const [previousVersion, installedVersion, packageSha256, backup, receipt, publicReadiness] = process.argv.slice(2);
 process.stdout.write(`${JSON.stringify({

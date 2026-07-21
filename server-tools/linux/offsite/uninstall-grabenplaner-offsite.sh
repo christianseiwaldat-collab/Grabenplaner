@@ -21,16 +21,18 @@ while (($#)); do
 done
 offsite_require_root
 (( confirmed == 1 )) || offsite_die "Die Deaktivierung erfordert die ausdrueckliche Option --yes."
-for command_name in cmp mktemp readlink rm systemctl; do offsite_require_command "$command_name"; done
+for command_name in chmod chown cmp install mktemp readlink rm systemctl; do offsite_require_command "$command_name"; done
 offsite_assert_installed_contract
 core_common="$OFFSITE_APP_ROOT/server-tools/linux/lib/common.sh"
 [[ -f "$core_common" && ! -L "$core_common" ]] || offsite_die "Die verifizierte Core-Wartungssperre fehlt."
 # shellcheck source=server-tools/linux/lib/common.sh
 source "$core_common"
 gp_acquire_maintenance_lock
+offsite_acquire_assurance_lock
 offsite_acquire_repository_lock
 
-for unit in grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer \
+for unit in 'grabenplaner-offsite-assurance@*.service' \
+  grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer \
   grabenplaner-offsite-upload.service grabenplaner-offsite-prepare.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
   systemctl disable --now "$unit" >/dev/null 2>&1 || true
 done
@@ -46,7 +48,9 @@ for template in "$OFFSITE_MODULE_ROOT"/systemd/*.in; do
 done
 systemctl daemon-reload
 
-for command_name in grabenplaner-offsite-pre-update grabenplaner-offsite-prepare grabenplaner-offsite-test grabenplaner-offsite-uninstall grabenplaner-recovery; do
+for command_name in grabenplaner-offsite-assurance grabenplaner-offsite-pre-update grabenplaner-offsite-prepare \
+  grabenplaner-offsite-recovery-set grabenplaner-offsite-rebind-rclone \
+  grabenplaner-offsite-test grabenplaner-offsite-uninstall grabenplaner-recovery; do
   command_path="/usr/local/sbin/$command_name"
   expected_recovery="$OFFSITE_APP_ROOT/server-tools/linux/recovery/grabenplaner-recovery.sh"
   if [[ -L "$command_path" && ( "$(readlink -f -- "$command_path")" == "$OFFSITE_MODULE_ROOT/"* \
