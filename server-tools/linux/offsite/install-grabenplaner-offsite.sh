@@ -53,9 +53,21 @@ for command_name in awk chown chmod cmp cp curl cut dirname find getent grep gro
   offsite_require_command "$command_name"
 done
 [[ -x "$OFFSITE_NODE" ]] || offsite_die "Node.js muss unter /usr/bin/node installiert sein."
-[[ -f /etc/os-release && ! -L /etc/os-release ]] || offsite_die "Ubuntu konnte nicht sicher erkannt werden."
+os_release_source="$(realpath --canonicalize-existing -- /etc/os-release)" \
+  || offsite_die "Ubuntu konnte nicht sicher erkannt werden."
+case "$os_release_source" in
+  /etc/os-release|/usr/lib/os-release) ;;
+  *) offsite_die "Ubuntu verwendet einen unerwarteten Systempfad." ;;
+esac
+[[ -f "$os_release_source" && ! -L "$os_release_source" ]] \
+  || offsite_die "Ubuntu konnte nicht sicher erkannt werden."
+[[ "$(stat --format='%u:%g:%h' -- "$os_release_source")" == "0:0:1" ]] \
+  || offsite_die "Die Ubuntu-Systemkennung hat unsichere Besitzrechte."
+os_release_mode="$(stat --format='%a' -- "$os_release_source")"
+(( (8#$os_release_mode & 022) == 0 )) \
+  || offsite_die "Die Ubuntu-Systemkennung darf nicht durch Gruppe oder andere Benutzer beschreibbar sein."
 # shellcheck disable=SC1091
-source /etc/os-release
+source "$os_release_source"
 [[ "${ID:-}" == "ubuntu" && "${VERSION_ID:-}" =~ ^(24\.04|26\.04)$ ]] \
   || offsite_die "Unterstuetzt werden Ubuntu 24.04 LTS und Ubuntu 26.04 LTS."
 systemctl show-environment >/dev/null 2>&1 || offsite_die "Ein aktives systemd wird benoetigt."
