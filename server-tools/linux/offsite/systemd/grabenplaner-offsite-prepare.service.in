@@ -6,8 +6,6 @@ Conflicts=shutdown.target
 
 [Service]
 Type=oneshot
-User=root
-Group=root
 ExecStart=/opt/grabenplaner-offsite/module/grabenplaner-offsite-prepare.sh
 NoNewPrivileges=yes
 ProtectSystem=strict
@@ -19,6 +17,7 @@ ProtectKernelModules=yes
 ProtectKernelLogs=yes
 ProtectControlGroups=yes
 ProtectClock=yes
+RestrictRealtime=yes
 RestrictSUIDSGID=yes
 CapabilityBoundingSet=~CAP_SYS_NICE
 LimitRTPRIO=0

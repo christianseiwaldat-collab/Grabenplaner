@@ -56,7 +56,7 @@ Die kontrollierte Erstinstallation verwendet das geprüfte Paket und seine verö
 
 ```bash
 sudo bash server-tools/linux/install-grabenplaner-server.sh \
-  --package /pfad/Grabenplaner-Server-v0.75.6-beta-linux-x64.zip \
+  --package /pfad/Grabenplaner-Server-v0.75.7-beta-linux-x64.zip \
   --sha256 '<veröffentlichter SHA256-Wert>' \
   --public-url https://beta.example.at \
   --replace-caddy-config
@@ -291,7 +291,7 @@ Der monatliche Vollcheck liest die Repository-Daten vollständig und kann abhän
 
 Ist das Offsite-Modul eingerichtet, erstellt `grabenplaner-update` zunächst bei kurz gestopptem Dienst einen verifizierten lokalen Sicherungspunkt. Anschließend wird die bisherige App wieder gestartet und bleibt während der unter Umständen längeren Google-Drive-Übertragung erreichbar. Erst wenn diese Offsite-Kopie bestätigt ist, stoppt der Updater den Dienst erneut, erstellt unmittelbar vor dem App-Tausch einen zweiten aktuellen lokalen Rollback-Sicherungspunkt und ersetzt die Programmdateien. Ist Google Drive nicht erreichbar oder scheitert die Repository-Prüfung, wird der Austausch nicht begonnen; die bisherige App bleibt beziehungsweise wird wieder in Betrieb genommen.
 
-Für das einmalige Ubuntu-26.04-Kompatibilitätsupdate auf v0.75.6 muss ein bereits eingerichtetes Offsite-Modul vor dem Kernupdate ausdrücklich mit `sudo grabenplaner-offsite-uninstall --yes` deaktiviert und danach mit den geschützten vorhandenen Zugangsdaten erneut installiert werden. Das externe Repository darf dabei **nicht** neu initialisiert werden. Repository, Repository-ID, Installations-ID, Geheimdateien, lokales Staging und vorhandene Sicherungsstände bleiben bei der Deaktivierung erhalten; die drei Identitätsdateien werden vor und nach der Wiederanbindung bytegleich geprüft.
+Für das einmalige Ubuntu-26.04-Kompatibilitätsupdate auf v0.75.7 muss ein bereits eingerichtetes Offsite-Modul vor dem Kernupdate ausdrücklich mit `sudo grabenplaner-offsite-uninstall --yes` deaktiviert und danach mit den geschützten vorhandenen Zugangsdaten erneut installiert werden. Das externe Repository darf dabei **nicht** neu initialisiert werden. Repository, Repository-ID, Installations-ID, Geheimdateien, lokales Staging und vorhandene Sicherungsstände bleiben bei der Deaktivierung erhalten; die drei Identitätsdateien werden vor und nach der Wiederanbindung bytegleich geprüft.
 
 Der neutrale Status liegt unter `/var/lib/grabenplaner-offsite/status.json`. `grabenplaner-test` und die berechtigte Serverdiagnose zeigen daraus insbesondere:
 
@@ -486,7 +486,7 @@ Für den Paketbau wird die in `package.json` festgelegte pnpm-Version benötigt.
 Das geprüfte Paket wird am Server in einer als Administrator gestarteten PowerShell zusammen mit seiner veröffentlichten Prüfsumme eingespielt:
 
 ```powershell
-$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.75.6-beta-windows-x64.zip'
+$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.75.7-beta-windows-x64.zip'
 $sha256 = ((Get-Content "$package.sha256" -Raw).Trim() -split '\s+')[0]
 
 .\server-tools\windows\Update-GrabenplanerServer.ps1 `
