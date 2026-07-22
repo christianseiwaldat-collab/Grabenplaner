@@ -52,6 +52,17 @@ test("v0.76 accepts only the dedicated Google Drive OAuth policy", () => {
   });
 });
 
+test("v0.78.3 accepts rclone's own redaction comment and inactive empty team_drive field", () => {
+  const result = run(`${validConfig({}, ["team_drive ="])}# token expires at a redacted time\n`);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    ok: true,
+    dedicatedClient: true,
+    provider: "google-drive",
+    scope: "drive.file",
+  });
+});
+
 test("v0.76 rejects shared-client, incomplete and non-drive.file configurations", () => {
   for (const input of [
     validConfig({ client_id: null, client_secret: null }),
@@ -83,6 +94,17 @@ test("v0.76 rejects alternate authentication and unapproved configuration fields
     "unknown_option",
   ]) {
     assertRejected(run(validConfig({}, [`${key} = XXX`])));
+  }
+});
+
+test("v0.78.3 rejects active, duplicated or disguised shared-drive settings", () => {
+  for (const input of [
+    validConfig({}, ["team_drive = XXX"]),
+    validConfig({}, ["team_drive =", "team_drive ="]),
+    validConfig({}, ["team_drive = shared-drive-id"]),
+    validConfig({}, ["unknown_option ="]),
+  ]) {
+    assertRejected(run(input));
   }
 });
 

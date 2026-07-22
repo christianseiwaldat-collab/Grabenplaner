@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.78.3 Beta · Reale rclone-Policy-Ausgabe
+
+- Die Prüfung des eigenen Google-OAuth-Clients verarbeitet die von rclone selbst erzeugten Kommentarzeilen korrekt.
+- Das inaktive leere Feld `team_drive` wird akzeptiert; ein belegtes, dupliziertes oder verschleiertes Shared-Drive-Ziel bleibt gesperrt.
+- Eigene Client-ID, eigenes Client-Secret, `drive.file` und redigiertes Token bleiben weiterhin zwingende Voraussetzungen.
+
 ## v0.78.2 Beta · Verschlüsselte rclone-Konfigurationen
 
 - Der Ubuntu-Offsite-Installer und die sichere OAuth-Neuanbindung akzeptieren nun den offiziellen rclone-Kommentarvorspann vor dem Verschlüsselungsmarker.
