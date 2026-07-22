@@ -228,11 +228,19 @@ if [[ -e "$OFFSITE_STATUS_FILE" || -L "$OFFSITE_STATUS_FILE" ]]; then
     || offsite_die "Der vorhandene Offsite-Status ist ungueltig."
 fi
 
+installed_module_version=0
 if [[ -e "$OFFSITE_MODULE_ROOT" || -L "$OFFSITE_MODULE_ROOT" ]]; then
   offsite_assert_regular_root_file "$OFFSITE_CONFIG_ROOT/installed-contract.json"
   "$OFFSITE_NODE" "$SCRIPT_DIR/lib/offsite-contract.js" verify-installed \
     "$OFFSITE_MODULE_ROOT" "$OFFSITE_CONFIG_ROOT/installed-contract.json" >/dev/null \
     || offsite_die "Das vorhandene Offsite-Modul stimmt nicht mit seinem Installationsbeleg ueberein."
+  installed_module_version="$("$OFFSITE_NODE" - "$OFFSITE_CONFIG_ROOT/installed-contract.json" <<'NODE'
+const fs = require("node:fs");
+const value = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+if (![1, 2, 3, 4].includes(value.moduleVersion)) process.exit(1);
+process.stdout.write(String(value.moduleVersion));
+NODE
+)" || offsite_die "Die installierte Offsite-Modulversion ist nicht migrationsfaehig."
 fi
 
 install -d -m 0755 -o root -g root -- "$OFFSITE_ROOT" "$OFFSITE_BIN_ROOT"
@@ -261,8 +269,8 @@ assurance_root_had_original=0
 assurance_root_initialized=0
 config_had_original=0
 status_had_original=0
-declare -a timer_was_enabled=(0 0 0)
-declare -a timer_was_active=(0 0 0)
+declare -a timer_was_enabled=(0 0 0 0)
+declare -a timer_was_active=(0 0 0 0)
 timers_paused=0
 control_group_created=0
 control_member_added=0
@@ -292,8 +300,8 @@ cleanup() {
   if (( setup_complete == 0 && commit_started == 1 )); then
     for unit in 'grabenplaner-offsite-assurance-control@*.service' grabenplaner-offsite-assurance-control.socket \
       'grabenplaner-offsite-assurance@*.service' \
-      grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer \
-      grabenplaner-offsite-upload.service grabenplaner-offsite-prepare.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
+      grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer \
+      grabenplaner-offsite-application-smoke.service grabenplaner-offsite-upload.service grabenplaner-offsite-prepare.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
       systemctl disable --now "$unit" >/dev/null 2>&1 || true
     done
     if [[ -z "$module_previous" ]]; then
@@ -350,7 +358,8 @@ cleanup() {
     install -d -m 0700 -o root -g root -- "$OFFSITE_CONFIG_ROOT"
     if (( config_had_original == 1 )); then cp --archive -- "$rollback_root/config/." "$OFFSITE_CONFIG_ROOT/"; fi
     for unit_name in grabenplaner-offsite-assurance-control.socket 'grabenplaner-offsite-assurance-control@.service' \
-      'grabenplaner-offsite-assurance@.service' \
+      'grabenplaner-offsite-assurance@.service' grabenplaner-offsite-assurance.timer \
+      grabenplaner-offsite-application-smoke.service \
       grabenplaner-offsite-prepare.service grabenplaner-offsite-upload.service grabenplaner-offsite-upload.timer \
       grabenplaner-offsite-check.service grabenplaner-offsite-check.timer \
       grabenplaner-offsite-restore-test.service grabenplaner-offsite-restore-test.timer; do
@@ -370,8 +379,8 @@ cleanup() {
   rollback_control_group
   if (( setup_complete == 0 && timers_paused == 1 )); then
     systemctl daemon-reload >/dev/null 2>&1 || true
-    timers=(grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer)
-    for index in 0 1 2; do
+    timers=(grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer)
+    for index in 0 1 2 3; do
       (( timer_was_enabled[index] == 1 )) && systemctl enable "${timers[index]}" >/dev/null 2>&1 || true
       (( timer_was_active[index] == 1 )) && systemctl start "${timers[index]}" >/dev/null 2>&1 || true
     done
@@ -393,9 +402,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Module v3 adds exactly one narrowly scoped privilege bridge. During an
-# upgrade from v2 this group is created transactionally; any later installer
-# failure removes the membership and the group again before the app restarts.
+# Module v4 adds the isolated application-smoke service and the persistent
+# nightly assurance timer. Existing verified v1, v2 and v3 modules are migrated
+# transactionally without reinitializing credentials, repository or history.
+if (( installed_module_version >= 1 && installed_module_version <= 3 )); then
+  offsite_info "Das verifizierte Offsite-Modul v${installed_module_version} wird kontrolliert auf v4 migriert."
+fi
 if getent group "$OFFSITE_CONTROL_GROUP" >/dev/null; then
   control_gid="$(getent group "$OFFSITE_CONTROL_GROUP" | awk -F: '{print $3}')"
   control_primary="$(getent passwd | awk -F: -v gid="$control_gid" '$4==gid {print $1}' | sort | paste -sd, -)"
@@ -493,8 +505,8 @@ core_common="$OFFSITE_APP_ROOT/server-tools/linux/lib/common.sh"
 [[ -f "$core_common" && ! -L "$core_common" ]] || offsite_die "Die verifizierte Core-Wartungssperre fehlt."
 # shellcheck source=server-tools/linux/lib/common.sh
 source "$core_common"
-timers=(grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer)
-for index in 0 1 2; do
+timers=(grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer)
+for index in 0 1 2 3; do
   systemctl is-enabled --quiet "${timers[index]}" && timer_was_enabled[index]=1 || true
   systemctl is-active --quiet "${timers[index]}" && timer_was_active[index]=1 || true
   systemctl disable --now "${timers[index]}" >/dev/null 2>&1 || true
@@ -593,7 +605,7 @@ for template in "$module_candidate"/systemd/*.in; do
     fi
   fi
 done
-for service_name in 'grabenplaner-offsite-assurance-control@*.service' grabenplaner-offsite-prepare.service grabenplaner-offsite-upload.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
+for service_name in 'grabenplaner-offsite-assurance-control@*.service' 'grabenplaner-offsite-assurance@*.service' grabenplaner-offsite-application-smoke.service grabenplaner-offsite-prepare.service grabenplaner-offsite-upload.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
   deadline=$((SECONDS + 14400))
   while systemctl is-active --quiet "$service_name"; do
     (( SECONDS < deadline )) || offsite_die "Ein laufender Offsite-Vorgang wurde nicht rechtzeitig abgeschlossen."
@@ -696,7 +708,7 @@ mv -f -- "$env_temporary" "$OFFSITE_APP_ENV"
 if (( status_configured_before == 0 )); then offsite_status configured >/dev/null; fi
 systemctl daemon-reload
 systemctl enable --now grabenplaner-offsite-assurance-control.socket \
-  grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer >/dev/null
+  grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer >/dev/null
 systemctl restart "$OFFSITE_APP_SERVICE"
 systemctl is-active --quiet "$OFFSITE_APP_SERVICE" || offsite_die "Der Grabenplaner-Dienst konnte nach der Offsite-Aktivierung nicht gestartet werden."
 systemctl is-active --quiet grabenplaner-offsite-assurance-control.socket \

@@ -104,6 +104,11 @@ function healthyInput({ appSmoke = null, emailConfigured = false } = {}) {
       alerts: [],
     },
     updateStatus: { ok: true, updateAvailable: false, checkedAt: NOW, latestUrl: "https://secret.example/release" },
+    automationStatus: {
+      state: "healthy",
+      reasonCode: "AUTOMATION_CURRENT",
+      lastRunAt: RESTORE_AT,
+    },
     notificationProviders: {
       email: emailConfigured
         ? { configured: true, valid: true, available: true, host: "smtp.secret.example" }

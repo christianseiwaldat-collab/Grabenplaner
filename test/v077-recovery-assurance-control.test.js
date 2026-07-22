@@ -116,6 +116,7 @@ test("app client rejects contradictory or oversized broker responses", () => {
     code: "ASSURANCE_REQUEST_ACCEPTED",
     acceptedAt: "2026-07-22T12:00:00.000Z",
     retryAfterSeconds: null,
+    scheduler: client.untrustedScheduler(),
   };
   assert.equal(client.parseResponse(Buffer.from(`${JSON.stringify(accepted)}\n`), requestId).accepted, true);
   assert.throws(() => client.parseResponse(Buffer.from(`${JSON.stringify({ ...accepted, acceptedAt: null })}\n`), requestId), {
@@ -147,6 +148,7 @@ test("app client exposes only BUSY, RATE_LIMITED and UNAVAILABLE control errors"
           code: protocolCode,
           acceptedAt: null,
           retryAfterSeconds,
+          scheduler: client.untrustedScheduler(),
         })}\n`));
       });
       await new Promise((resolve, reject) => server.once("error", reject).listen(socketPath, resolve));

@@ -39,7 +39,7 @@ offsite_require_root
 offsite_status failure --code RESTORE_TEST_FAILED --summary "Der isolierte Offsite-Wiederherstellungstest ist fehlgeschlagen." >/dev/null \
   || offsite_die "Der Restore-Teststatus konnte nicht sicher begonnen werden."
 started_at="$(date --utc '+%Y-%m-%dT%H:%M:%SZ')"
-for command_name in awk chown chmod df dirname find flock getent grep install mktemp readlink realpath rm runuser sha256sum stat sync tail tr; do
+for command_name in awk chown chmod cp df dirname find flock getent grep install mktemp readlink realpath rm runuser sha256sum stat sync systemctl tail tr; do
   offsite_require_command "$command_name"
 done
 
@@ -68,10 +68,16 @@ restore_root="$(mktemp --directory --tmpdir="$OFFSITE_RESTORE_ROOT" .restore.XXX
 operation_root="$(mktemp --directory --tmpdir="$OFFSITE_STATE_ROOT" .restore-operation.XXXXXXXX)"
 receipt_root="$OFFSITE_RESTORE_ROOT/receipts"
 restore_test_complete=0
+smoke_root_owned=0
 chown "$OFFSITE_USER:$OFFSITE_GROUP" -- "$restore_root"
 chmod 0700 -- "$restore_root" "$operation_root"
 cleanup() {
   local status=$?
+  systemctl stop "$OFFSITE_SMOKE_SERVICE" >/dev/null 2>&1 || true
+  systemctl reset-failed "$OFFSITE_SMOKE_SERVICE" >/dev/null 2>&1 || true
+  if (( smoke_root_owned == 1 )) && [[ -d "$OFFSITE_SMOKE_ROOT" && ! -L "$OFFSITE_SMOKE_ROOT" ]]; then
+    rm -rf --one-file-system -- "$OFFSITE_SMOKE_ROOT" 2>/dev/null || true
+  fi
   chown root:root -- "$restore_root" 2>/dev/null || true
   chmod 0700 -- "$restore_root" 2>/dev/null || true
   if (( restore_test_complete == 0 )); then
@@ -141,6 +147,77 @@ restored_stage="$restore_root${OFFSITE_STAGE_CURRENT}"
   --scratch-root "$operation_root" --output "$operation_root/verification.json" >/dev/null 2>&1 \
   || offsite_fixed_failure RESTORE_TEST_FAILED "Der isolierte Offsite-Wiederherstellungstest ist fehlgeschlagen."
 
+application_smoke_passed=0
+if [[ -n "$assurance_result" ]]; then
+  # Die Anwendung erhaelt ausschliesslich eine Kopie des bereits verifizierten
+  # Restore-Stands. Eine eigene PrivateNetwork-systemd-Unit sperrt Live-Daten,
+  # Secrets, externe Netze und produktive Ports vollstaendig aus.
+  systemctl stop "$OFFSITE_SMOKE_SERVICE" >/dev/null 2>&1 || true
+  systemctl reset-failed "$OFFSITE_SMOKE_SERVICE" >/dev/null 2>&1 || true
+  if [[ -e "$OFFSITE_SMOKE_ROOT" || -L "$OFFSITE_SMOKE_ROOT" ]]; then
+    [[ -d "$OFFSITE_SMOKE_ROOT" && ! -L "$OFFSITE_SMOKE_ROOT" ]] \
+      || offsite_fixed_failure RESTORE_TEST_FAILED "Der isolierte App-Smoke-Testpfad ist unsicher."
+    rm -rf --one-file-system -- "$OFFSITE_SMOKE_ROOT"
+  fi
+  smoke_uid="$(id -u "$OFFSITE_USER")"
+  smoke_gid="$(getent group "$OFFSITE_GROUP" | awk -F: '{print $3}')"
+  [[ "$smoke_uid" =~ ^[0-9]+$ && "$smoke_gid" =~ ^[0-9]+$ ]] \
+    || offsite_fixed_failure RESTORE_TEST_FAILED "Das isolierte Smoke-Test-Dienstkonto fehlt."
+  install -d -m 0700 -o "$OFFSITE_USER" -g "$OFFSITE_GROUP" \
+    "$OFFSITE_SMOKE_ROOT" "$OFFSITE_SMOKE_ROOT/home" "$OFFSITE_SMOKE_ROOT/data-root" \
+    "$OFFSITE_SMOKE_ROOT/data-root/data" "$OFFSITE_SMOKE_ROOT/data-root/private"
+  smoke_root_owned=1
+  "$OFFSITE_NODE" "$OFFSITE_STAGE_HELPER" verify "$restored_stage" >"$operation_root/smoke-stage.json" \
+    || offsite_fixed_failure RESTORE_TEST_FAILED "Der App-Smoke-Quellstand ist ungueltig."
+  readarray -t smoke_sources < <("$OFFSITE_NODE" - "$operation_root/smoke-stage.json" "$restored_stage" <<'NODE'
+const fs = require("node:fs");
+const path = require("node:path");
+const [file, stageValue] = process.argv.slice(2);
+const stage = path.resolve(stageValue);
+const value = JSON.parse(fs.readFileSync(file, "utf8"));
+const database = path.resolve(String(value.database || ""));
+const documents = path.resolve(String(value.documents || ""));
+if (!database.startsWith(`${stage}${path.sep}`) || !documents.startsWith(`${stage}${path.sep}`)) process.exit(1);
+process.stdout.write(`${database}\n${documents}\n`);
+NODE
+  ) || offsite_fixed_failure RESTORE_TEST_FAILED "Der App-Smoke-Quellstand ist ungueltig."
+  (( ${#smoke_sources[@]} == 2 )) \
+    || offsite_fixed_failure RESTORE_TEST_FAILED "Der App-Smoke-Quellstand ist unvollstaendig."
+  smoke_source_database="${smoke_sources[0]}"
+  smoke_source_documents="${smoke_sources[1]}"
+  restored_database_before="$(sha256sum --binary -- "$smoke_source_database" | awk '{print tolower($1)}')"
+  cp --reflink=never -- "$smoke_source_database" "$OFFSITE_SMOKE_ROOT/data-root/data/dienstplan.db"
+  "$OFFSITE_NODE" - "$OFFSITE_APP_ROOT/lib/amu-storage.js" "$smoke_source_documents" \
+    "$OFFSITE_SMOKE_ROOT/data-root/private/amu" <<'NODE'
+const [amuModule, documents, target] = process.argv.slice(2);
+require(amuModule).restoreEncryptedFilesBackup({ backupDirectory: documents, targetDirectory: target });
+NODE
+  chown -R --no-dereference "$OFFSITE_USER:$OFFSITE_GROUP" -- "$OFFSITE_SMOKE_ROOT"
+  find "$OFFSITE_SMOKE_ROOT" -xdev -type d -exec chmod 0700 -- {} +
+  find "$OFFSITE_SMOKE_ROOT" -xdev -type f -exec chmod 0600 -- {} +
+  set +e
+  systemctl start "$OFFSITE_SMOKE_SERVICE" >/dev/null 2>&1
+  smoke_service_status=$?
+  set -e
+  # systemctl start wartet auf das Ende der oneshot-Unit. Danach wird der
+  # Dienst-Cgroup nochmals explizit gestoppt und der direkte Elternpfad dem
+  # unprivilegierten Konto entzogen. Der Verifier liest das Ergebnis nur noch
+  # ueber einen O_NOFOLLOW-Dateideskriptor mit Identitaetspruefung davor/danach.
+  systemctl stop "$OFFSITE_SMOKE_SERVICE" >/dev/null 2>&1 || true
+  systemctl reset-failed "$OFFSITE_SMOKE_SERVICE" >/dev/null 2>&1 || true
+  chown --no-dereference root:root -- "$OFFSITE_SMOKE_ROOT"
+  chmod 0500 -- "$OFFSITE_SMOKE_ROOT"
+  [[ "$(stat --format='%u:%g:%a' -- "$OFFSITE_SMOKE_ROOT")" == "0:0:500" ]] \
+    || offsite_fixed_failure RESTORE_TEST_FAILED "Der isolierte App-Smoke-Testpfad konnte nicht versiegelt werden."
+  smoke_result="$OFFSITE_SMOKE_ROOT/result.json"
+  application_smoke_passed="$("$OFFSITE_NODE" "$OFFSITE_MODULE_ROOT/lib/application-smoke.js" \
+    --verify-result "$smoke_result" "$smoke_uid" "$smoke_gid" "$smoke_service_status")" \
+    || application_smoke_passed=0
+  restored_database_after="$(sha256sum --binary -- "$smoke_source_database" | awk '{print tolower($1)}')"
+  [[ "$restored_database_before" == "$restored_database_after" ]] \
+    || offsite_fixed_failure RESTORE_TEST_FAILED "Der verifizierte Restore-Stand wurde beim App-Smoke-Test veraendert."
+fi
+
 if [[ -e "$receipt_root" || -L "$receipt_root" ]]; then
   [[ -d "$receipt_root" && ! -L "$receipt_root" && "$(stat --format='%u:%g:%a' -- "$receipt_root")" == "0:0:700" ]] \
     || offsite_fixed_failure RESTORE_TEST_FAILED "Der isolierte Offsite-Wiederherstellungstest ist fehlgeschlagen."
@@ -161,8 +238,8 @@ if [[ -n "$assurance_result" ]]; then
   [[ "$receipt_sha256" =~ ^[a-f0-9]{64}$ ]] \
     || offsite_fixed_failure RESTORE_TEST_FAILED "Der isolierte Offsite-Wiederherstellungstest ist fehlgeschlagen."
   result_temporary="$assurance_parent/.restore-result.$$"
-  (umask 077; printf '{"snapshotIdPrefix":"%s","receiptSha256":"%s"}\n' \
-    "${snapshot_id:0:12}" "$receipt_sha256" >"$result_temporary")
+  (umask 077; printf '{"snapshotIdPrefix":"%s","receiptSha256":"%s","applicationSmokePassed":%s}\n' \
+    "${snapshot_id:0:12}" "$receipt_sha256" "$([[ "$application_smoke_passed" == "1" ]] && printf true || printf false)" >"$result_temporary")
   chmod 0600 -- "$result_temporary"
   sync -f "$result_temporary"
   mv -- "$result_temporary" "$assurance_result"
@@ -171,5 +248,9 @@ fi
 
 offsite_status restore-test >/dev/null
 restore_test_complete=1
-offsite_info "Der quartalsweise isolierte Offsite-Wiederherstellungstest war erfolgreich; Snapshotnachweis: ${snapshot_id:0:12}."
-offsite_info "Ein App-Smoke-Test wurde bewusst nicht gestartet, solange kein nebenwirkungsfreier isolierter Recovery-Testmodus existiert."
+if [[ -n "$assurance_result" ]]; then
+  offsite_info "Der isolierte Recovery-Assurance-Restore war erfolgreich; Snapshotnachweis: ${snapshot_id:0:12}."
+  offsite_info "Der App-Smoke-Test lief in einem getrennten Loopback-Netz ohne Zugriff auf Live-Daten oder Secrets."
+else
+  offsite_info "Der quartalsweise isolierte Offsite-Wiederherstellungstest war erfolgreich; Snapshotnachweis: ${snapshot_id:0:12}."
+fi

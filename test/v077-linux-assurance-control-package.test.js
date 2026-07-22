@@ -17,8 +17,8 @@ const socketUnit = read("server-tools/linux/offsite/systemd/grabenplaner-offsite
 const serviceUnit = read("server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control@.service.in");
 const packageBuilder = read("server-tools/package/New-GrabenplanerLinuxServerPackage.ps1");
 
-test("offsite module v3 packages the complete fixed RAS control bridge", () => {
-  assert.equal(schema.moduleVersion, 3);
+test("offsite module v4 retains the complete fixed RAS control bridge", () => {
+  assert.equal(schema.moduleVersion, 4);
   for (const relative of [
     "server-tools/linux/offsite/lib/assurance-control-broker.js",
     "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control.socket.in",
@@ -50,10 +50,10 @@ test("systemd exposes only a group-scoped Unix socket and a hardened root broker
   assert.match(serviceUnit, /ReadWritePaths=\/run\/grabenplaner-assurance-control/);
 });
 
-test("installer migrates v2 to v3 transactionally and rollback removes the new privilege", () => {
+test("installer retains the transactional privilege bridge and rollback removes the new privilege", () => {
   assert.match(common, /OFFSITE_CONTROL_GROUP="grabenplaner-assurance-control"/);
   assert.match(common, /control_members" == "\$OFFSITE_APP_USER"/);
-  assert.match(installer, /Module v3 adds exactly one narrowly scoped privilege bridge/);
+  assert.match(installer, /OFFSITE_CONTROL_GROUP/);
   assert.match(installer, /groupadd --system "\$OFFSITE_CONTROL_GROUP"/);
   assert.match(installer, /usermod --append --groups "\$OFFSITE_CONTROL_GROUP" "\$OFFSITE_APP_USER"/);
   assert.match(installer, /rollback_control_group/);

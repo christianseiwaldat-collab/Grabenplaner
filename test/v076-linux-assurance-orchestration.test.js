@@ -24,7 +24,7 @@ test("v0.76 runs the exact signed assurance phases in the approved order", () =>
     "backup-passed",
     "repository-check-passed",
     "restore-test-passed",
-    "application-smoke-not-run",
+    "application-smoke-passed",
     "full-assurance-passed",
   ];
   let cursor = -1;
@@ -34,7 +34,7 @@ test("v0.76 runs the exact signed assurance phases in the approved order", () =>
     cursor = next;
   }
   assert.match(assurance, /record_event full-assurance-failed --error-code "\$failure_code"/);
-  for (const code of ["CONFIGURATION_VERIFY_FAILED", "PREPARE_FAILED", "UPLOAD_FAILED", "FULL_CHECK_FAILED", "RESTORE_TEST_FAILED"]) {
+  for (const code of ["CONFIGURATION_VERIFY_FAILED", "PREPARE_FAILED", "UPLOAD_FAILED", "FULL_CHECK_FAILED", "RESTORE_TEST_FAILED", "APPLICATION_SMOKE_FAILED"]) {
     assert.match(assurance, new RegExp(`failure_code="${code}"`));
   }
 });
@@ -95,19 +95,24 @@ test("v0.76 records configuration or module installation before it queues assura
   assert.match(installer, /offsite_warn "Die erfolgreiche Offsite-Einrichtung konnte nicht im signierten Recovery-Assurance-Verlauf vorgemerkt werden\."/);
 });
 
-test("v0.76 installs a hardened parameterized service without adding a schedule", () => {
+test("v0.78 retains the hardened parameterized service and adds a persistent nightly schedule", () => {
   assert.match(unit, /ExecStart=.*--trigger %i/);
   assert.match(unit, /NoNewPrivileges=yes/);
   assert.match(unit, /ProtectSystem=strict/);
   assert.match(unit, /ProtectHome=yes/);
   assert.match(unit, /ReadWritePaths=.*\/var\/lib\/grabenplaner-assurance/);
   assert.match(unit, /TimeoutStartSec=40h/);
-  assert.equal(fs.existsSync(path.join(root, "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance.timer.in")), false);
+  const timer = fs.readFileSync(path.join(root, "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance.timer.in"), "utf8");
+  assert.match(timer, /OnCalendar=\*-\*-\* 03:45:00/);
+  assert.match(timer, /RandomizedDelaySec=90min/);
+  assert.match(timer, /FixedRandomDelay=true/);
+  assert.match(timer, /Persistent=true/);
+  assert.match(timer, /Unit=grabenplaner-offsite-assurance@scheduled-nightly\.service/);
 });
 
 test("v0.76 accepts only allowlisted trigger names and fixed evidence fields", () => {
   for (const trigger of [
-    "scheduled-weekly", "oauth-config-changed", "offsite-config-changed", "binary-changed",
+    "scheduled-weekly", "scheduled-nightly", "oauth-config-changed", "offsite-config-changed", "binary-changed",
     "offsite-module-changed", "app-updated", "server-updated", "manual-cli",
   ]) assert.match(assurance, new RegExp(trigger));
   for (const forbidden of ["client_secret", "client-id", "access_token", "refresh_token", "password="]) {

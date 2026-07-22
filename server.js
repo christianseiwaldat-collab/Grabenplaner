@@ -49,6 +49,13 @@ const {
 } = require("./lib/recovery-assurance-status");
 const { buildSystemTrustIndex } = require("./lib/system-trust-index");
 const {
+  buildSystemCenterTrendPayload,
+  createSystemCenterMetricsStore,
+  deriveAutomationStatus,
+  planSystemCenterNotificationSync,
+  systemCenterRecoveryAlert,
+} = require("./lib/system-center-metrics");
+const {
   DEFAULT_SOCKET_PATH: DEFAULT_ASSURANCE_CONTROL_SOCKET_PATH,
   recoveryAssuranceControlStatus,
   requestRecoveryAssuranceRun,
@@ -898,7 +905,10 @@ function safeRemoveFile(filePath) {
 }
 
 function cleanupPortableInstallRoot() {
-  if (serverModeActive) return;
+  // A recovery smoke starts the installed application code against copied
+  // restore data in a read-only systemd sandbox. It must never attempt the
+  // portable Windows package cleanup against /opt/grabenplaner/app.
+  if (serverModeActive || deploymentKind === "recovery-smoke") return;
   safeRemoveFile(path.join(__dirname, "public", "assets", ["lamp", "rechter_logo.webp"].join("")));
   if (fs.existsSync(path.join(__dirname, ".git"))) return;
 
@@ -958,6 +968,7 @@ let scannerProbeInterval = null;
 let sicknessSweepInterval = null;
 let notificationDispatchInterval = null;
 let rateLimitCleanupInterval = null;
+let systemCenterHealthInterval = null;
 
 function verifyDatabaseFile(filePath) {
   const verification = new DatabaseSync(filePath, { readOnly: true });
@@ -19590,6 +19601,15 @@ const SYSTEM_CENTER_UPDATE_FAILURE_CACHE_MS = 60 * 1000;
 const SYSTEM_CENTER_UPDATE_TIMEOUT_MS = 4 * 1000;
 const SYSTEM_CENTER_TECHNICAL_CACHE_MS = 2 * 1000;
 const SYSTEM_CENTER_CONTROL_CACHE_MS = 750;
+const SYSTEM_CENTER_HEALTH_SYNC_MS = 15 * 60 * 1000;
+const systemCenterMetricsStore = createSystemCenterMetricsStore(db);
+let systemCenterNotificationState = {
+  state: "quiet",
+  pending: 0,
+  failedRecoveryRuns: 0,
+  lastNotifiedAt: null,
+  recipientsCount: 0,
+};
 let systemCenterUpdateCache = { expiresAt: 0, inFlight: null, value: null };
 
 function redactedSystemCenterUpdateFailure(checkedAt = new Date().toISOString()) {
@@ -19676,6 +19696,12 @@ function systemCenterTechnicalFingerprint() {
   return watched.map((candidate) => `${candidate}:${systemCenterFileStamp(candidate)}`).join("|");
 }
 
+const systemCenterControlCache = createSystemCenterTechnicalCache({
+  ttlMs: SYSTEM_CENTER_CONTROL_CACHE_MS,
+  fingerprint: () => systemCenterFileStamp(DEFAULT_ASSURANCE_CONTROL_SOCKET_PATH),
+  load: recoveryAssuranceControlStatus,
+});
+
 const systemCenterTechnicalCache = createSystemCenterTechnicalCache({
   ttlMs: SYSTEM_CENTER_TECHNICAL_CACHE_MS,
   fingerprint: systemCenterTechnicalFingerprint,
@@ -19683,28 +19709,32 @@ const systemCenterTechnicalCache = createSystemCenterTechnicalCache({
     const diagnostics = serverDiagnostics();
     const status = serverStatusSummary(diagnostics);
     const notificationStatus = externalNotificationProviderStatus();
-    const updateStatus = await systemCenterUpdateStatus();
+    const [updateStatus, control] = await Promise.all([
+      systemCenterUpdateStatus(),
+      systemCenterControlCache.read(),
+    ]);
+    diagnostics.recoveryAssurance.scheduler = control.scheduler;
+    const automation = deriveAutomationStatus(diagnostics.recoveryAssurance, { now: new Date() });
+    const resources = systemCenterResourceSummary(diagnostics);
+    const trustIndex = buildSystemTrustIndex({
+      diagnostics,
+      status,
+      updateStatus,
+      notificationStatus,
+      automationStatus: automation,
+      now: new Date(),
+    });
     return {
       diagnostics,
       status,
       notificationStatus,
       updateStatus,
-      resources: systemCenterResourceSummary(diagnostics),
-      trustIndex: buildSystemTrustIndex({
-        diagnostics,
-        status,
-        updateStatus,
-        notificationStatus,
-        now: new Date(),
-      }),
+      resources,
+      automation,
+      control,
+      trustIndex,
     };
   },
-});
-
-const systemCenterControlCache = createSystemCenterTechnicalCache({
-  ttlMs: SYSTEM_CENTER_CONTROL_CACHE_MS,
-  fingerprint: () => systemCenterFileStamp(DEFAULT_ASSURANCE_CONTROL_SOCKET_PATH),
-  load: recoveryAssuranceControlStatus,
 });
 
 function systemCenterManualReason({ permissionAllowed, configured, serverEligible, control }) {
@@ -19714,6 +19744,121 @@ function systemCenterManualReason({ permissionAllowed, configured, serverEligibl
   if (control?.busy) return "Ein Recovery-Assurance-Test läuft bereits.";
   if (!control?.available) return "Die geschützte Recovery-Steuerung ist derzeit nicht verfügbar.";
   return "Startet einen vollständigen, isolierten Sicherungs- und Wiederherstellungsnachweis.";
+}
+
+function systemCenterNotificationRecipients() {
+  return db.prepare(`
+    SELECT employee_number, role FROM portal_users
+    WHERE active = 1 AND role IN ('it_admin','developer')
+    ORDER BY employee_number
+  `).all().filter((row) => {
+    const access = portalAccessProfileForEmployee(row.employee_number);
+    return access.active && ["it_admin", "developer"].includes(access.role)
+      && access.effectivePermissions.includes("system:diagnostics:technical")
+      && access.effectivePermissions.includes("system:recovery:run");
+  }).map((row) => row.employee_number);
+}
+
+function systemCenterAlert(technical) {
+  return systemCenterRecoveryAlert({
+    enabled: serverModeActive,
+    recoveryAssurance: technical.diagnostics?.recoveryAssurance,
+    automation: technical.automation,
+  });
+}
+
+function synchronizeSystemCenterNotifications(technical) {
+  const recipients = systemCenterNotificationRecipients();
+  const alert = systemCenterAlert(technical);
+  const existing = db.prepare(`
+    SELECT id, recipient_employee_number, dedupe_key, read_at FROM portal_notifications
+    WHERE event_type = 'system.recovery.alert'
+  `).all().map((row) => ({
+    id: row.id,
+    recipient: row.recipient_employee_number,
+    dedupeKey: row.dedupe_key,
+    readAt: row.read_at,
+  }));
+  const plan = planSystemCenterNotificationSync({ alert, recipients, existing });
+  const closeNotification = db.prepare(`
+    UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+    WHERE id = ? AND read_at IS NULL
+  `);
+  for (const id of plan.closeIds) closeNotification.run(id);
+  if (alert) {
+    for (const employeeNumber of plan.createRecipients) {
+      createPortalNotification(employeeNumber, "system.recovery.alert", alert.title, alert.message, {
+        target: "/?view=rightsDashboard",
+        entityType: "system_recovery",
+        entityId: alert.kind,
+        dedupeKey: plan.dedupeKey,
+        // The same unresolved incident may have been acknowledged manually.
+        // Reactivate its single deduplicated row instead of creating a stream
+        // of new notifications. Once the incident clears, recurrence may
+        // reactivate that same row again.
+        reactivate: true,
+      });
+    }
+  }
+  const latest = db.prepare(`
+    SELECT MAX(created_at) AS created_at FROM portal_notifications
+    WHERE event_type = 'system.recovery.alert'
+  `).get();
+  const failedRecoveryRuns = Array.isArray(technical.diagnostics?.recoveryAssurance?.trendRuns)
+    ? technical.diagnostics.recoveryAssurance.trendRuns.filter((run) => run.status === "failed").length : 0;
+  const notifiedMilliseconds = latest?.created_at
+    ? Date.parse(`${String(latest.created_at).replace(" ", "T")}Z`) : Number.NaN;
+  systemCenterNotificationState = {
+    state: alert ? "critical" : recipients.length ? "healthy" : "attention",
+    pending: alert ? 1 : 0,
+    failedRecoveryRuns,
+    lastNotifiedAt: Number.isFinite(notifiedMilliseconds) ? new Date(notifiedMilliseconds).toISOString() : null,
+    recipientsCount: recipients.length,
+  };
+  return systemCenterNotificationState;
+}
+
+function updateSystemCenterOperationalState(technical) {
+  if (serverModeActive) {
+    systemCenterMetricsStore.record({
+      trustIndex: technical.trustIndex,
+      resources: technical.resources,
+      automation: technical.automation,
+      now: new Date(),
+    });
+    synchronizeSystemCenterNotifications(technical);
+  }
+  const metrics = systemCenterMetricsStore.read();
+  return {
+    trends: buildSystemCenterTrendPayload({
+      trustSamples: metrics.samples,
+      recoveryRuns: technical.diagnostics?.recoveryAssurance?.trendRuns,
+      integrityVerified: metrics.integrityVerified,
+    }),
+    notifications: systemCenterNotificationState,
+  };
+}
+
+function readSystemCenterOperationalState(technical) {
+  const metrics = systemCenterMetricsStore.read();
+  return {
+    trends: buildSystemCenterTrendPayload({
+      trustSamples: metrics.samples,
+      recoveryRuns: technical.diagnostics?.recoveryAssurance?.trendRuns,
+      integrityVerified: metrics.integrityVerified,
+    }),
+    notifications: systemCenterNotificationState,
+  };
+}
+
+let systemCenterHealthSyncInFlight = null;
+async function synchronizeSystemCenterHealth() {
+  if (!serverModeActive) return null;
+  if (systemCenterHealthSyncInFlight) return systemCenterHealthSyncInFlight;
+  systemCenterHealthSyncInFlight = systemCenterTechnicalCache.read()
+    .then((technical) => updateSystemCenterOperationalState(technical))
+    .finally(() => { systemCenterHealthSyncInFlight = null; });
+  return systemCenterHealthSyncInFlight;
 }
 
 async function systemCenterPayload(actor) {
@@ -19726,10 +19871,11 @@ async function systemCenterPayload(actor) {
   const configured = diagnostics.recoveryAssurance?.configured === true;
   const permissionAllowed = technicalDiagnostics && runPermission;
   const control = permissionAllowed && serverEligible && configured
-    ? await systemCenterControlCache.read()
+    ? (technical.control || await systemCenterControlCache.read())
     : { available: false, busy: false, reason: null };
+  const operational = readSystemCenterOperationalState(technical);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: new Date().toISOString(),
     trustIndex: technical.trustIndex,
     status,
@@ -19739,6 +19885,24 @@ async function systemCenterPayload(actor) {
         ? status.recoveryAssurance.recentRuns : [],
     },
     resources: technicalDiagnostics ? technical.resources : null,
+    automation: technical.automation,
+    trends: technicalDiagnostics ? operational.trends : {
+      ...operational.trends,
+      points: operational.trends.points.map((point) => ({
+        at: point.at,
+        trustScore: point.trustScore,
+        databaseBytes: null,
+        backupDurationSeconds: point.backupDurationSeconds,
+        recoveryDurationSeconds: point.recoveryDurationSeconds,
+      })),
+    },
+    notifications: technicalDiagnostics ? operational.notifications : {
+      state: operational.notifications.state,
+      pending: operational.notifications.pending,
+      failedRecoveryRuns: operational.notifications.failedRecoveryRuns,
+      lastNotifiedAt: null,
+      recipientsCount: null,
+    },
     capabilities: {
       technicalDiagnostics,
       canRunRecoveryAssurance: permissionAllowed && serverEligible && configured,
@@ -25027,6 +25191,17 @@ function startServer() {
       if (interrupted) auditPortal("system", "outbound-notification.interrupted", "outbound_notification_job", "", JSON.stringify({ interrupted }));
     } catch (error) { console.error("Unterbrochene Benachrichtigungen konnten nicht markiert werden:", error); }
     processOutboundNotificationJobs().catch((error) => console.error("Externe Warnmeldungen konnten nicht verarbeitet werden:", error));
+    if (serverModeActive) {
+      synchronizeSystemCenterHealth().catch((error) => {
+        console.error("System-Center-Status konnte nicht synchronisiert werden:", String(error?.code || "SYSTEM_CENTER_SYNC_FAILED"));
+      });
+      systemCenterHealthInterval = setInterval(() => {
+        synchronizeSystemCenterHealth().catch((error) => {
+          console.error("System-Center-Status konnte nicht synchronisiert werden:", String(error?.code || "SYSTEM_CENTER_SYNC_FAILED"));
+        });
+      }, SYSTEM_CENTER_HEALTH_SYNC_MS);
+      systemCenterHealthInterval.unref();
+    }
     retentionInterval = setInterval(() => {
       try { reconcileOrphanAmuBlobs(); } catch (error) { console.error("Dokumentenabgleich fehlgeschlagen:", error); }
       try { purgeExpiredAmuDocuments(); } catch (error) { console.error("AUM-Aufbewahrungsprüfung fehlgeschlagen:", error); }
@@ -25101,6 +25276,7 @@ function shutdown({ reason = "signal", skipBackup = false, exitCode = 0 } = {}) 
   if (sicknessSweepInterval) clearInterval(sicknessSweepInterval);
   if (notificationDispatchInterval) clearInterval(notificationDispatchInterval);
   if (rateLimitCleanupInterval) clearInterval(rateLimitCleanupInterval);
+  if (systemCenterHealthInterval) clearInterval(systemCenterHealthInterval);
   if (!server) {
     finish();
     return;

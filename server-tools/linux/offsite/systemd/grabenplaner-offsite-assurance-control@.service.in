@@ -16,6 +16,9 @@ UMask=0077
 TimeoutStartSec=12s
 TimeoutStopSec=5s
 RuntimeMaxSec=15s
+RuntimeDirectory=grabenplaner-offsite
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
 
 NoNewPrivileges=yes
 ProtectSystem=strict
@@ -42,4 +45,4 @@ DevicePolicy=closed
 CapabilityBoundingSet=
 AmbientCapabilities=
 SystemCallArchitectures=native
-ReadWritePaths=/run/grabenplaner-assurance-control
+ReadWritePaths=/run/grabenplaner-assurance-control /run/grabenplaner-offsite
