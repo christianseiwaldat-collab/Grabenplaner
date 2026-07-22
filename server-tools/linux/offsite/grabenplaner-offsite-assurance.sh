@@ -27,7 +27,7 @@ while (($#)); do
 done
 
 case "$trigger" in
-  scheduled-weekly|oauth-config-changed|offsite-config-changed|binary-changed|offsite-module-changed|app-updated|server-updated|manual-cli|manual-admin-ui) ;;
+  scheduled-nightly|scheduled-weekly|oauth-config-changed|offsite-config-changed|binary-changed|offsite-module-changed|app-updated|server-updated|manual-cli|manual-admin-ui) ;;
   *) offsite_die "Der Recovery-Assurance-Ausloeser ist nicht freigegeben." ;;
 esac
 
@@ -137,21 +137,26 @@ const file = process.argv[2];
 const before = fs.lstatSync(file);
 if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1 || before.size < 2 || before.size > 1024) process.exit(1);
 const value = JSON.parse(fs.readFileSync(file, "utf8"));
-if (Object.keys(value).sort().join(",") !== "receiptSha256,snapshotIdPrefix"
+if (Object.keys(value).sort().join(",") !== "applicationSmokePassed,receiptSha256,snapshotIdPrefix"
   || !/^[a-f0-9]{12}$/.test(String(value.snapshotIdPrefix || ""))
-  || !/^[a-f0-9]{64}$/.test(String(value.receiptSha256 || ""))) process.exit(1);
-process.stdout.write(`${value.snapshotIdPrefix}\n${value.receiptSha256}\n`);
+  || !/^[a-f0-9]{64}$/.test(String(value.receiptSha256 || ""))
+  || typeof value.applicationSmokePassed !== "boolean") process.exit(1);
+process.stdout.write(`${value.snapshotIdPrefix}\n${value.receiptSha256}\n${value.applicationSmokePassed ? "1" : "0"}\n`);
 NODE
 ) || offsite_die "Der Restore-Testnachweis ist nicht sicher lesbar."
-(( ${#restore_evidence[@]} == 2 )) || offsite_die "Der Restore-Testnachweis ist unvollstaendig."
+(( ${#restore_evidence[@]} == 3 )) || offsite_die "Der Restore-Testnachweis ist unvollstaendig."
 [[ "${restore_evidence[0]}" == "$snapshot_prefix" ]] \
   || offsite_die "Backup- und Restore-Testnachweis beziehen sich nicht auf denselben Snapshot."
 receipt_sha256="${restore_evidence[1]}"
 record_event restore-test-passed --snapshot-prefix "$snapshot_prefix" --receipt-sha256 "$receipt_sha256"
 
-# v0.76 dokumentiert diese Grenze ausdruecklich. Der nebenwirkungsfreie,
-# isolierte App-Start folgt erst mit dem spaeteren vollautomatischen RAS-Ausbau.
-record_event application-smoke-not-run --snapshot-prefix "$snapshot_prefix" --receipt-sha256 "$receipt_sha256"
+failure_code="APPLICATION_SMOKE_FAILED"
+if [[ "${restore_evidence[2]}" == "1" ]]; then
+  record_event application-smoke-passed --snapshot-prefix "$snapshot_prefix" --receipt-sha256 "$receipt_sha256"
+else
+  record_event application-smoke-failed --snapshot-prefix "$snapshot_prefix" --receipt-sha256 "$receipt_sha256"
+  offsite_die "Der isolierte Recovery-App-Smoke-Test ist fehlgeschlagen."
+fi
 record_event full-assurance-passed --snapshot-prefix "$snapshot_prefix" --receipt-sha256 "$receipt_sha256"
 completed=1
 offsite_info "Der signierte Recovery-Assurance-Lauf wurde erfolgreich abgeschlossen."

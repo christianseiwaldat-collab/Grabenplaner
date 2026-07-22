@@ -3432,6 +3432,10 @@ const systemCenterPhaseLabels = Object.freeze({
   restoreTestPassed: "Isolierter Daten-Restore",
   "restore-test-passed": "Isolierter Daten-Restore",
   applicationSmoke: "Isolierter App-Start",
+  applicationSmokePassed: "Isolierter App-Start",
+  applicationSmokeFailed: "Isolierter App-Start",
+  "application-smoke-passed": "Isolierter App-Start",
+  "application-smoke-failed": "Isolierter App-Start",
   applicationSmokeNotRun: "Isolierter App-Start",
   "application-smoke-not-run": "Isolierter App-Start",
 });
@@ -3439,6 +3443,7 @@ const systemCenterPhaseLabels = Object.freeze({
 const systemCenterTriggerLabels = Object.freeze({
   "manual-cli": "Manuell gestartet",
   "manual-admin-ui": "Im System-Center gestartet",
+  "scheduled-nightly": "Nächtliche Automatik",
   "scheduled-weekly": "Regelmäßige Prüfung",
   "oauth-config-changed": "OAuth-Konfiguration geändert",
   "offsite-config-changed": "Offsite-Konfiguration geändert",
@@ -3605,6 +3610,113 @@ function systemCenterResourceCards(resources) {
   return `<section class="system-center-resources" aria-label="Aktuelle technische Ressourcen">${metrics.map((metric) => `<article><small>${escapeHtml(metric.label)}</small><strong>${escapeHtml(metric.value)}</strong><span>${escapeHtml(metric.detail)}</span></article>`).join("")}</section>`;
 }
 
+function systemCenterDurationLabel(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value < 0) return "Nicht verfügbar";
+  if (value < 60) return `${Math.round(value)} Sek.`;
+  const minutes = Math.floor(value / 60);
+  const remainder = Math.round(value % 60);
+  if (minutes < 60) return remainder ? `${minutes} Min. ${remainder} Sek.` : `${minutes} Min.`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours} Std. ${minutes % 60} Min.`;
+}
+
+function renderSystemCenterOperations(automation, notifications) {
+  const schedule = automation && typeof automation === "object" ? automation : {};
+  const delivery = notifications && typeof notifications === "object" ? notifications : {};
+  const automationState = systemCenterVisualState(schedule.overdue === true ? "critical" : schedule.state,
+    schedule.enabled === false ? "neutral" : "warning");
+  const automationCopy = systemCenterStateCopy(automationState);
+  const smokeState = systemCenterVisualState(schedule.applicationSmokeState, "neutral");
+  const smokeCopy = systemCenterStateCopy(smokeState);
+  const notificationState = systemCenterVisualState(delivery.state,
+    Number(delivery.failedRecoveryRuns || 0) > 0 ? "critical" : Number(delivery.pending || 0) > 0 ? "warning" : "neutral");
+  const notificationCopy = systemCenterStateCopy(notificationState);
+  const recipientsVisible = delivery.recipientsCount !== null && delivery.recipientsCount !== undefined
+    && Number.isFinite(Number(delivery.recipientsCount));
+  const recipients = recipientsVisible ? Math.max(0, Number(delivery.recipientsCount)) : null;
+  const pending = Math.max(0, Number(delivery.pending || 0));
+  const failedRecoveryRuns = Math.max(0, Number(delivery.failedRecoveryRuns || 0));
+  return `<section class="system-center-operations" aria-label="Automatik und Eskalation">
+    <article class="system-center-operation ${automationState}">
+      <header><div><span class="eyebrow">Automatische Prüfung</span><h2>Nächtliche Recovery Assurance</h2></div><span class="system-center-state ${automationState}"><i aria-hidden="true">${automationCopy.icon}</i>${escapeHtml(automationCopy.label)}</span></header>
+      <p>${schedule.enabled === false ? "Die automatische Prüfung ist auf diesem System nicht aktiv." : escapeHtml(schedule.scheduleLabel || "Tägliche Ausführung mit zufälliger Startverzögerung und geschützter Parallelitätssperre.")}</p>
+      <dl><div><dt>Letzter Lauf</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.lastRunAt))}</dd></div><div><dt>Nächster Lauf</dt><dd>${escapeHtml(diagnosticTimestamp(schedule.nextRunAt))}</dd></div><div><dt>Isolierter App-Start</dt><dd><span class="system-center-inline-state ${smokeState}"><i aria-hidden="true">${smokeCopy.icon}</i>${escapeHtml(smokeCopy.label)}</span></dd></div></dl>
+      ${schedule.overdue === true ? '<strong class="system-center-operation-warning">Der automatische Nachweis ist überfällig und benötigt Aufmerksamkeit.</strong>' : ""}
+    </article>
+    <article class="system-center-operation ${notificationState}">
+      <header><div><span class="eyebrow">Interne Eskalation</span><h2>Warnungen an die IT</h2></div><span class="system-center-state ${notificationState}"><i aria-hidden="true">${notificationCopy.icon}</i>${escapeHtml(notificationCopy.label)}</span></header>
+      <p>Fehlgeschlagene oder überfällige Nachweise werden dedupliziert an berechtigte IT-Verantwortliche gemeldet. Empfängerdaten bleiben im System-Center verborgen.</p>
+      <dl><div><dt>Offen</dt><dd>${pending}</dd></div><div><dt>Fehlgeschlagene Recovery-Läufe</dt><dd>${failedRecoveryRuns}</dd></div><div><dt>Berechtigte Empfänger</dt><dd>${recipients === null ? "Geschützt" : recipients}</dd></div><div><dt>Letzte Meldung</dt><dd>${escapeHtml(diagnosticTimestamp(delivery.lastNotifiedAt))}</dd></div></dl>
+    </article>
+  </section>`;
+}
+
+function normalizedSystemCenterTrendPoints(trends) {
+  const source = Array.isArray(trends?.points) ? trends.points : [];
+  return source.map((point) => {
+    const at = typeof point?.at === "string" && Number.isFinite(Date.parse(point.at)) ? point.at : null;
+    if (!at) return null;
+    const numeric = (value) => {
+      if (value === null || value === undefined || value === "") return null;
+      const number = Number(value);
+      return Number.isFinite(number) && number >= 0 ? number : null;
+    };
+    return {
+      at,
+      trustScore: numeric(point.trustScore),
+      databaseBytes: numeric(point.databaseBytes),
+      backupDurationSeconds: numeric(point.backupDurationSeconds),
+      recoveryDurationSeconds: numeric(point.recoveryDurationSeconds),
+    };
+  }).filter(Boolean).sort((left, right) => Date.parse(left.at) - Date.parse(right.at)).slice(-120);
+}
+
+function renderSystemCenterSparkline(points, { key, label, formatter, colorClass }) {
+  const series = points.filter((point) => Number.isFinite(point[key]));
+  if (!series.length) return `<article class="system-center-trend-card empty"><small>${escapeHtml(label)}</small><strong>Noch keine Werte</strong><span>Der Verlauf entsteht automatisch aus künftigen Systemprüfungen.</span></article>`;
+  const values = series.map((point) => point[key]);
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+  const span = maximum - minimum || Math.max(1, maximum * 0.05);
+  const width = 320;
+  const height = 88;
+  const padding = 8;
+  const coordinates = series.map((point, index) => {
+    const x = series.length === 1 ? width / 2 : padding + (index / (series.length - 1)) * (width - padding * 2);
+    const y = height - padding - ((point[key] - minimum) / span) * (height - padding * 2);
+    return { x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) };
+  });
+  const first = series[0];
+  const last = series[series.length - 1];
+  const delta = last[key] - first[key];
+  const deltaText = Math.abs(delta) < 0.01 ? "stabil" : `${delta > 0 ? "+" : ""}${escapeHtml(formatter(delta, { delta: true }))}`;
+  const pointsAttribute = coordinates.map((point) => `${point.x},${point.y}`).join(" ");
+  const latest = coordinates[coordinates.length - 1];
+  return `<article class="system-center-trend-card ${escapeHtml(colorClass)}">
+    <header><div><small>${escapeHtml(label)}</small><strong>${escapeHtml(formatter(last[key]))}</strong></div><span>${deltaText}</span></header>
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(label)}: ${escapeHtml(formatter(first[key]))} bis ${escapeHtml(formatter(last[key]))}"><path d="M ${padding} ${height - padding} H ${width - padding}" aria-hidden="true"></path><polyline points="${pointsAttribute}" aria-hidden="true"></polyline><circle cx="${latest.x}" cy="${latest.y}" r="4" aria-hidden="true"></circle></svg>
+    <footer><span>${escapeHtml(diagnosticTimestamp(first.at))}</span><span>${series.length} Messpunkte</span><span>${escapeHtml(diagnosticTimestamp(last.at))}</span></footer>
+  </article>`;
+}
+
+function renderSystemCenterTrends(trends) {
+  const points = normalizedSystemCenterTrendPoints(trends);
+  const retentionDays = Math.max(0, Number(trends?.retentionDays || 0));
+  const integrityState = points.length && trends?.integrityVerified === true
+    ? "ok" : trends?.integrityVerified === false ? "critical" : "neutral";
+  const integrityCopy = systemCenterStateCopy(integrityState);
+  return `<section class="system-center-trends" aria-label="Technische Langzeittrends">
+    <div class="system-center-section-heading"><div><span class="eyebrow">Begrenzte Langzeitwerte</span><h2>Entwicklung des Systemzustands</h2><p>Die Messreihe enthält ausschließlich technische Kennzahlen und keine Personal-, Pfad- oder Zugangsdaten.</p></div><span class="system-center-state ${integrityState}"><i aria-hidden="true">${integrityCopy.icon}</i>${escapeHtml(integrityCopy.label)}${retentionDays ? ` · ${retentionDays} Tage` : ""}</span></div>
+    <div class="system-center-trend-grid">
+      ${renderSystemCenterSparkline(points, { key: "trustScore", label: "Vertrauensindex", formatter: (value) => `${Math.round(value)} / 100`, colorClass: "trust" })}
+      ${renderSystemCenterSparkline(points, { key: "databaseBytes", label: "Datenbankgröße", formatter: (value) => systemCenterByteLabel(Math.abs(value)), colorClass: "database" })}
+      ${renderSystemCenterSparkline(points, { key: "backupDurationSeconds", label: "Sicherungsdauer", formatter: (value) => systemCenterDurationLabel(Math.abs(value)), colorClass: "backup" })}
+      ${renderSystemCenterSparkline(points, { key: "recoveryDurationSeconds", label: "Wiederherstellungsdauer", formatter: (value) => systemCenterDurationLabel(Math.abs(value)), colorClass: "recovery" })}
+    </div>
+  </section>`;
+}
+
 function renderSystemCenter(payload) {
   if (!elements.systemCenterContent) return;
   const trust = payload?.trustIndex || {};
@@ -3635,6 +3747,8 @@ function renderSystemCenter(payload) {
       return `<article class="${alertState}"><i aria-hidden="true">${alertCopy.icon}</i><div><strong>${escapeHtml(alert.title || "Systemzustand prüfen")}</strong><span>${escapeHtml(alert.message || "Ein technischer Nachweis benötigt Aufmerksamkeit.")}</span></div></article>`;
     }).join("")}</section>` : ""}
     ${systemCenterResourceCards(payload?.resources)}
+    ${renderSystemCenterOperations(payload?.automation, payload?.notifications)}
+    ${renderSystemCenterTrends(payload?.trends)}
     <section class="system-center-factor-grid" aria-label="Bestandteile des technischen Vertrauensindex">${factors.map((factor) => {
       const copy = systemCenterStateCopy(factor.state);
       const points = factor.weight !== null && factor.earned !== null ? `${factor.earned} / ${factor.weight} Punkte` : copy.label;

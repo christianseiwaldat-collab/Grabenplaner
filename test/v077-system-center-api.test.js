@@ -17,6 +17,7 @@ process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
 
 const packageMetadata = require("../package.json");
+const serverSource = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
 const nativeFetch = global.fetch;
 global.fetch = (input, init) => {
   if (String(input).startsWith("https://api.github.com/repos/")) {
@@ -101,7 +102,7 @@ test("v0.77: System-Center liefert redigierten Status, acht Karten und keine fal
   const admin = ensureTestUser("9701", "admin");
   const result = await requestJson("/api/portal/v1/system-center", { session: admin });
   assert.equal(result.response.status, 200, JSON.stringify(result.payload));
-  assert.equal(result.payload.schemaVersion, 1);
+  assert.equal(result.payload.schemaVersion, 2);
   assert.equal(result.payload.capabilities.technicalDiagnostics, true);
   assert.equal(result.payload.capabilities.canRunRecoveryAssurance, false);
   assert.equal(result.payload.manualRun.allowed, false);
@@ -110,6 +111,10 @@ test("v0.77: System-Center liefert redigierten Status, acht Karten und keine fal
   assert.ok(result.payload.trustIndex.score < 100);
   assert.match(result.payload.trustIndex.disclaimer, /keine (?:Verfügbarkeits)?garantie/i);
   assert.ok(Array.isArray(result.payload.recoveryAssurance.recentRuns));
+  assert.equal(result.payload.automation.state, "unconfigured");
+  assert.ok(Array.isArray(result.payload.trends.points));
+  assert.equal(result.payload.trends.integrityVerified, true);
+  assert.equal(result.payload.notifications.state, "quiet");
   const serialized = JSON.stringify(result.payload);
   for (const forbidden of [testRoot, "GRABENPLANER_", "password", "privateDataDirectory", "appBackupDirectory"]) {
     assert.equal(serialized.includes(forbidden), false, forbidden);
@@ -140,4 +145,24 @@ test("v0.77: Dashboard und manueller Start sind getrennt berechtigt", async () =
 
   const anonymous = await requestJson("/api/portal/v1/system-center");
   assert.equal(anonymous.response.status, 401, JSON.stringify(anonymous.payload));
+});
+
+test("v0.78: reine Leseberechtigung bleibt redigiert und GET ist nebenwirkungsfrei", async () => {
+  const hr = ensureTestUser("9704", "hr");
+  db.prepare(`
+    INSERT OR IGNORE INTO portal_permission_grants (employee_number, permission, granted_by)
+    VALUES ('9704', 'system:diagnostics:read', '9703')
+  `).run();
+  const metricsBefore = Number(db.prepare("SELECT COUNT(*) AS count FROM system_center_trust_metrics").get().count);
+  const notificationsBefore = Number(db.prepare("SELECT COUNT(*) AS count FROM portal_notifications").get().count);
+  const result = await requestJson("/api/portal/v1/system-center", { session: hr });
+  assert.equal(result.response.status, 200, JSON.stringify(result.payload));
+  assert.equal(result.payload.capabilities.technicalDiagnostics, false);
+  assert.equal(result.payload.resources, null);
+  assert.equal(result.payload.notifications.lastNotifiedAt, null);
+  assert.equal(result.payload.notifications.recipientsCount, null);
+  assert.ok(result.payload.trends.points.every((point) => point.databaseBytes === null));
+  assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM system_center_trust_metrics").get().count), metricsBefore);
+  assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM portal_notifications").get().count), notificationsBefore);
+  assert.match(serverSource, /createPortalNotification\(employeeNumber,\s*"system\.recovery\.alert",[\s\S]{0,1000}?reactivate:\s*true/);
 });
