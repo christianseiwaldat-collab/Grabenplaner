@@ -21,12 +21,14 @@ function parseRedactedConfig(text, expectedRemote) {
   if (!REMOTE_NAME_PATTERN.test(expectedRemote) || text.includes("\0")) return null;
 
   const values = new Map();
+  const seenKeys = new Set();
   let sectionCount = 0;
   let currentSection = "";
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) continue;
+    if (line.startsWith("#")) continue;
 
     const sectionMatch = line.match(/^\[([A-Za-z0-9][A-Za-z0-9_-]{0,63})\]$/);
     if (sectionMatch) {
@@ -40,7 +42,12 @@ function parseRedactedConfig(text, expectedRemote) {
     const keyMatch = line.match(/^([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/);
     if (!keyMatch) return null;
     const [, key, value] = keyMatch;
-    if (!REQUIRED_VALUES.has(key) || values.has(key)) return null;
+    if (seenKeys.has(key)) return null;
+    seenKeys.add(key);
+    // rclone emits this inactive shared-drive field even when it is empty.
+    // Any value would change the repository target and remains forbidden.
+    if (key === "team_drive" && value === "") continue;
+    if (!REQUIRED_VALUES.has(key)) return null;
     values.set(key, value);
   }
 
