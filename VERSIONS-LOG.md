@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.78.5 Beta · Isolierter Recovery-App-Smoke-Test
+
+- Der gehärtete systemd-Dienst referenziert nur tatsächlich vorhandene geschützte Offsite-Pfade; dadurch kann sein eigener Mount-Namespace zuverlässig aufgebaut werden.
+- Produktivdaten, Zugangsdaten, Sicherungen, Restore-Arbeitsstände und der signierte Assurance-Verlauf bleiben für den isolierten App-Start weiterhin unzugänglich.
+- Ein Regressionstest verhindert, dass der entfernte Legacy-Pfad erneut in den Sicherheitsvertrag aufgenommen wird.
+
 ## v0.78.4 Beta · Geschützte Recovery-Assurance-Credentials
 
 - Der Recovery-Assurance-Hauptlauf überführt systemd-Credentials vor der OAuth-Prüfung in ein kurzlebiges, nur für den eingeschränkten Offsite-Dienst lesbares Verzeichnis.
