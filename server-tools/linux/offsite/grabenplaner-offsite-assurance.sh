@@ -76,6 +76,7 @@ completed=0
 failure_code="ASSURANCE_RUN_FAILED"
 snapshot_prefix=""
 receipt_sha256=""
+policy_credentials=""
 
 record_event() {
   local event_type="$1"
@@ -91,6 +92,9 @@ cleanup() {
   if (( started == 1 && completed == 0 )); then
     record_event full-assurance-failed --error-code "$failure_code" >/dev/null 2>&1 || true
   fi
+  if [[ -n "$policy_credentials" ]]; then
+    offsite_remove_uploader_credentials "$policy_credentials" >/dev/null 2>&1 || true
+  fi
   rm -rf --one-file-system -- "$operation_root" 2>/dev/null || true
   exit "$status"
 }
@@ -103,7 +107,11 @@ started=1
 
 failure_code="CONFIGURATION_VERIFY_FAILED"
 credentials_source="$(offsite_credentials_directory)"
-offsite_assert_dedicated_rclone_oauth "$credentials_source"
+policy_credentials="$(offsite_make_uploader_credentials "$credentials_source")"
+offsite_assert_dedicated_rclone_oauth "$policy_credentials"
+offsite_remove_uploader_credentials "$policy_credentials" \
+  || offsite_die "Die fluechtigen OAuth-Pruefcredentials konnten nicht sicher entfernt werden."
+policy_credentials=""
 record_event oauth-policy-passed
 
 failure_code="PREPARE_FAILED"
