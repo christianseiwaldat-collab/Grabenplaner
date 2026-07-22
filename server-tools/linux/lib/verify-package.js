@@ -11,7 +11,7 @@ const runtimeSchemaPath = path.join(root, "server-tools", "linux", "runtime-sche
 const offsiteSchemaPath = path.join(root, "server-tools", "linux", "offsite", "module-schema.json");
 const hardeningSchemaPath = path.join(root, "server-tools", "linux", "hardening", "module-schema.json");
 
-const expectedOffsiteArtifacts = [
+const offsiteV1Artifacts = Object.freeze([
   "server-tools/linux/offsite/grabenplaner-offsite-check.sh",
   "server-tools/linux/offsite/grabenplaner-offsite-pre-update.sh",
   "server-tools/linux/offsite/grabenplaner-offsite-prepare.sh",
@@ -36,7 +36,50 @@ const expectedOffsiteArtifacts = [
   "server-tools/linux/offsite/systemd/grabenplaner-offsite-upload.timer.in",
   "server-tools/linux/offsite/uninstall-grabenplaner-offsite.sh",
   "server-tools/linux/offsite/test-grabenplaner-offsite.sh",
-];
+]);
+const offsiteV4Artifacts = Object.freeze([
+  "server-tools/linux/offsite/grabenplaner-offsite-application-smoke.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-assurance.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-check.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-pre-update.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-prepare.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-read-secret.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-rclone-wrapper.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-recovery-set.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-restore-test.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-upload.sh",
+  "server-tools/linux/offsite/install-grabenplaner-offsite.sh",
+  "server-tools/linux/offsite/lib/application-smoke.js",
+  "server-tools/linux/offsite/lib/assurance-control-broker.js",
+  "server-tools/linux/offsite/lib/assurance-history.js",
+  "server-tools/linux/offsite/lib/offsite-common.sh",
+  "server-tools/linux/offsite/lib/offsite-contract.js",
+  "server-tools/linux/offsite/lib/offsite-rclone-policy.js",
+  "server-tools/linux/offsite/lib/offsite-restore-verify.js",
+  "server-tools/linux/offsite/lib/offsite-retention-verify.js",
+  "server-tools/linux/offsite/lib/offsite-setup-rclone-wrapper.sh",
+  "server-tools/linux/offsite/lib/offsite-stage.js",
+  "server-tools/linux/offsite/lib/offsite-status.js",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-application-smoke.service.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control.socket.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control@.service.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance.timer.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance@.service.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-check.service.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-check.timer.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-prepare.service.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-restore-test.service.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-restore-test.timer.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-upload.service.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-upload.timer.in",
+  "server-tools/linux/offsite/test-grabenplaner-offsite.sh",
+  "server-tools/linux/offsite/uninstall-grabenplaner-offsite.sh",
+]);
+const offsiteArtifactsByVersion = new Map([
+  [1, offsiteV1Artifacts],
+  [4, offsiteV4Artifacts],
+]);
 
 const expectedRecoveryArtifacts = [
   "server-tools/linux/recovery/grabenplaner-recovery.sh",
@@ -223,8 +266,9 @@ function readOffsiteModuleContract() {
   const stat = fs.lstatSync(offsiteSchemaPath);
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Der optionale Offsite-Modulvertrag fehlt oder ist unzulaessig.");
   const contract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, ""));
+  const expectedOffsiteArtifacts = offsiteArtifactsByVersion.get(contract?.moduleVersion);
   if (contract?.format !== "grabenplaner-linux-offsite-module-contract" || contract?.schemaVersion !== 1
-    || contract?.moduleVersion !== 1 || contract?.activationPolicy !== "explicit-root-setup"
+    || !expectedOffsiteArtifacts || contract?.activationPolicy !== "explicit-root-setup"
     || !Array.isArray(contract?.managedArtifacts) || contract.managedArtifacts.length !== expectedOffsiteArtifacts.length
     || expectedOffsiteArtifacts.some((relative) => !contract.managedArtifacts.includes(relative))) {
     throw new Error("Der optionale Offsite-Modulvertrag wird nicht unterstuetzt.");
@@ -376,7 +420,7 @@ function main() {
     "server-tools/linux/grabenplaner-monitor.service.in",
     "server-tools/linux/grabenplaner-monitor.timer.in",
     ...expectedRecoveryArtifacts,
-    ...expectedOffsiteArtifacts,
+    ...offsiteModuleContract.managedArtifacts,
     ...expectedHardeningArtifacts,
   ];
   const expected = new Map();
