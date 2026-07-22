@@ -216,17 +216,23 @@ test("application smoke receives only copied recovery data and a secret-free loc
 });
 
 test("application smoke is a private-network, hard-timeout unit without live data or secret access", () => {
-  assert.match(smokeUnit, /User=grabenplaner-offsite/);
+  assert.match(smokeUnit, /^User=grabenplaner-offsite$/m);
+  assert.equal((smokeUnit.match(/^User=/gm) || []).length, 1);
   assert.doesNotMatch(smokeUnit, /^User=grabenplaner$/m);
   assert.match(smokeUnit, /^Group=grabenplaner-offsite$/m);
+  assert.equal((smokeUnit.match(/^Group=/gm) || []).length, 1);
   assert.match(smokeUnit, /^SupplementaryGroups=grabenplaner$/m);
   assert.equal((smokeUnit.match(/^SupplementaryGroups=/gm) || []).length, 1);
   assert.match(smokeUnit, /PrivateNetwork=yes/);
   assert.match(smokeUnit, /IPAddressAllow=localhost/);
   assert.match(smokeUnit, /IPAddressDeny=any/);
   assert.match(smokeUnit, /ProtectSystem=strict/);
-  assert.match(smokeUnit, /ReadWritePaths=\/var\/lib\/grabenplaner-offsite\/application-smoke/);
-  assert.match(smokeUnit, /InaccessiblePaths=.*\/etc\/grabenplaner .*\/var\/lib\/grabenplaner .*\/var\/backups\/grabenplaner/);
+  assert.match(smokeUnit, /^ReadOnlyPaths=\/opt\/grabenplaner\/app \/opt\/grabenplaner-offsite\/module$/m);
+  assert.equal((smokeUnit.match(/^ReadOnlyPaths=/gm) || []).length, 1);
+  assert.match(smokeUnit, /^ReadWritePaths=\/var\/lib\/grabenplaner-offsite\/application-smoke$/m);
+  assert.equal((smokeUnit.match(/^ReadWritePaths=/gm) || []).length, 1);
+  assert.doesNotMatch(smokeUnit, /^ReadWritePaths=.*(?:\/opt\/grabenplaner\/app|\/var\/log\/grabenplaner)/m);
+  assert.match(smokeUnit, /InaccessiblePaths=.*\/etc\/grabenplaner .*\/var\/lib\/grabenplaner .*\/var\/backups\/grabenplaner .*\/var\/log\/grabenplaner/);
   assert.match(smokeUnit, /\/var\/lib\/grabenplaner-offsite\/restore-tests(?:\s|$)/m);
   assert.match(smokeUnit, /\/var\/lib\/grabenplaner-offsite\/uploader-home(?:\s|$)/m);
   assert.match(smokeUnit, /\/var\/lib\/grabenplaner-offsite\/credentials(?:\s|$)/m);
