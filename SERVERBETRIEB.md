@@ -57,7 +57,7 @@ Die kontrollierte Erstinstallation verwendet das geprüfte Paket und seine verö
 
 ```bash
 sudo bash server-tools/linux/install-grabenplaner-server.sh \
-  --package /pfad/Grabenplaner-Server-v0.77.0-beta-linux-x64.zip \
+  --package /pfad/Grabenplaner-Server-v0.78.0-beta-linux-x64.zip \
   --sha256 '<veröffentlichter SHA256-Wert>' \
   --public-url https://beta.example.at \
   --replace-caddy-config
@@ -266,7 +266,7 @@ Der eingerichtete Zustand wird mit folgendem Befehl geprüft:
 sudo grabenplaner-offsite-test
 ```
 
-#### Recovery Assurance und System-Center v0.77
+#### Recovery Assurance und System-Center v0.78
 
 Das Recovery-Assurance-Fundament zeichnet jeden vollständigen Prüfablauf in einer Ed25519-signierten, über SHA-256 verketteten Historie auf. Nur `root` darf neue Ereignisse schreiben; der private Signaturschlüssel bleibt root-only. Öffentlicher Prüfschlüssel, Historie und signierter Kopf sind für den App-Dienst ausschließlich lesbar. Die Anwendung prüft die gesamte Kette und gibt nur einen redigierten Status ohne Geheimnisse, interne Pfade oder vollständige Snapshot-Kennung aus.
 
@@ -278,7 +278,7 @@ Ein beaufsichtigter vollständiger Lauf wird bewusst gestartet mit:
 sudo grabenplaner-offsite-assurance --trigger manual-cli
 ```
 
-Der Lauf prüft OAuth-Richtlinie, neuen Sicherungspunkt und Upload, vollständige Repository-Lesbarkeit sowie die isolierte Datenwiederherstellung. Die wiederhergestellte Anwendung wird in v0.77 **noch nicht** gestartet; dieser Schritt wird ausdrücklich als `application-smoke-not-run` belegt. Ein fehlgeschlagener Teil erzeugt einen festen Fehlercode und niemals einen fälschlich erfolgreichen Gesamtstatus.
+Der Lauf prüft OAuth-Richtlinie, neuen Sicherungspunkt und Upload, vollständige Repository-Lesbarkeit, die isolierte Datenwiederherstellung sowie den Start der installierten Anwendung mit einer isolierten Kopie der wiederhergestellten Daten. Der App-Smoke-Test läuft getrennt vom Live-System unter dem unprivilegierten Offsite-Dienstkonto, ausschließlich auf Loopback, ohne externen Netzwerkzugang und mit eigener temporärer Datenbank sowie Datenablage. Live-Daten, produktive Schlüssel und öffentliche Ports bleiben unzugänglich. Erfolg und Fehler werden als `application-smoke-passed` beziehungsweise `application-smoke-failed` signiert; ein fehlgeschlagener Teil erzeugt einen festen Fehlercode und niemals einen fälschlich erfolgreichen Gesamtstatus.
 
 Eine neue, vollständig vorbereitete rclone-Konfiguration kann transaktional angebunden werden. Der Befehl prüft vor dem Austausch insbesondere den eigenen OAuth-Client, `drive.file`, Repository-Identität und Testzugriff; bei einem Fehler bleibt die bisherige Konfiguration aktiv:
 
@@ -289,9 +289,13 @@ sudo grabenplaner-offsite-rebind-rclone \
   --yes
 ```
 
-Nach einer erfolgreich abgeschlossenen OAuth-Neuanbindung und nach einem erfolgreichen App-Update wird automatisch ein neuer Assurance-Lauf über systemd in die Warteschlange gestellt. Er wartet auf die gemeinsamen Wartungssperren und läuft nicht parallel zu Update, Upload oder Wiederherstellung. v0.77 richtet bewusst noch keinen nächtlichen Assurance-Timer ein.
+Nach einer erfolgreich abgeschlossenen OAuth-Neuanbindung und nach einem erfolgreichen App-Update wird automatisch ein neuer Assurance-Lauf über systemd in die Warteschlange gestellt. Zusätzlich startet `grabenplaner-offsite-assurance.timer` täglich die feste Instanz `grabenplaner-offsite-assurance@scheduled-nightly.service`. Der persistente Timer holt einen verpassten Lauf nach und verteilt den Start über eine zufällige Verzögerung. Eine globale Assurance-Sperre sowie die bestehenden Wartungssperren verhindern Parallelbetrieb mit Update, Upload oder Wiederherstellung.
+
+Die nächtliche Ausführung bedeutet keine automatische produktive Wiederherstellung. Sie arbeitet nur im isolierten Testbereich, besitzt harte Zeitgrenzen und entfernt temporäre Laufdaten auch nach einem Fehler. Eine echte Rücksicherung in den Live-Pfad bleibt weiterhin ein ausdrücklich beaufsichtigter Root-Vorgang.
 
 Das System-Center liest ausschließlich redigierte Diagnosen und die vollständig verifizierte Signaturkette. Sein technischer Vertrauensindex bewertet acht fest definierte Bereiche mit transparenter Punktegewichtung und Evidenzabdeckung. Unbekannte Prüfungen erhalten keine Punkte; kritische Befunde und unzureichende Nachweise begrenzen den Gesamtwert. Der Index ist weder eine Verfügbarkeitsgarantie noch eine statistische Ausfallwahrscheinlichkeit.
+
+Zusätzlich speichert die Anwendung eine begrenzte technische Messreihe für Vertrauensindex, Datenbankgröße sowie Sicherungs- und Wiederherstellungsdauer. Die Darstellung enthält keine Personal-, Empfänger-, Pfad- oder Zugangsdaten. Fehlgeschlagene oder überfällige Recovery-Nachweise erzeugen deduplizierte interne Warnungen für IT-Admin und Developer; der Status zeigt ausschließlich Anzahl und Zeitpunkt, niemals Empfängeridentitäten.
 
 Ein manueller Lauf aus der Weboberfläche erfordert neben technischer Diagnoseberechtigung das gesonderte kritische Recht `system:recovery:run`. Dieses Recht gehört standardmäßig nur IT-Admin und Developer; ein Admin kann es ausdrücklich erhalten. Die Node.js-Anwendung besitzt weder `sudo`- noch Shell-Rechte. Sie übermittelt stattdessen eine fest formatierte lokale Anfrage über einen root-eigenen Unix-Socket. Der kurzlebige systemd-Broker akzeptiert ausschließlich die freigegebene Startaktion, prüft Socketrechte, Schema, Parallelbetrieb und eine root-seitige Sperrfrist und startet nur die feste Assurance-Unit. Browserwerte können weder Unitnamen noch Pfade, Befehle oder Auslöser bestimmen.
 
@@ -325,20 +329,21 @@ Die systemd-Dienste verwenden einen gemeinsamen Wartungs- und Repository-Lock. E
 | verschlüsselt hochladen und Aufbewahrung anwenden | `grabenplaner-offsite-upload.timer` | täglich etwa 02:35 Uhr, mit zufälliger Verzögerung |
 | Repository vollständig lesen und prüfen | `grabenplaner-offsite-check.timer` | monatlich am 1. etwa 04:15 Uhr, mit zufälliger Verzögerung |
 | isolierte Testwiederherstellung | `grabenplaner-offsite-restore-test.timer` | quartalsweise am 2. Januar, April, Juli und Oktober etwa 05:15 Uhr, mit zufälliger Verzögerung |
+| vollständiger Recovery-Assurance-Lauf samt App-Smoke | `grabenplaner-offsite-assurance.timer` | täglich, persistent und mit zufälliger Verzögerung |
 
 Die feste Restic-Aufbewahrung beträgt **14 tägliche, 8 wöchentliche und 12 monatliche Sicherungsstände**. Upload, Vollprüfung und Restore-Test sind getrennte Dienste. Ein fehlgeschlagener Upload löst keine Aufräumaktion aus. Prüffehler werden nicht automatisch repariert; vor einem manuellen `unlock`, `forget`, `prune` oder einer Wiederherstellung muss ausgeschlossen sein, dass noch ein anderer Vorgang läuft.
 
-Der monatliche Vollcheck liest die Repository-Daten vollständig und kann abhängig von Datenmenge und Verbindung längere Zeit dauern. Der quartalsweise Restore-Test wählt den neuesten exakt gebundenen Snapshot, stellt ihn in einen isolierten, anschließend schreibgeschützten Bereich unter `/var/lib/grabenplaner-offsite` wieder her und prüft Repository-/Installationsbindung, Hashes, SQLite, Dokumentmanifest und Recovery-Schlüssel. Er verändert keine produktiven Daten. Ein Start der Anwendung innerhalb dieses Prüfbereichs erfolgt bewusst noch nicht, solange kein nachweislich nebenwirkungsfreier isolierter App-Testmodus existiert.
+Der monatliche Vollcheck liest die Repository-Daten vollständig und kann abhängig von Datenmenge und Verbindung längere Zeit dauern. Der quartalsweise Restore-Test wählt den neuesten exakt gebundenen Snapshot, stellt ihn in einen isolierten, anschließend schreibgeschützten Bereich unter `/var/lib/grabenplaner-offsite` wieder her und prüft Repository-/Installationsbindung, Hashes, SQLite, Dokumentmanifest und Recovery-Schlüssel. Er verändert keine produktiven Daten. Der tägliche Assurance-Lauf ergänzt diese Datenprüfung um einen nebenwirkungsfreien, zeitlich begrenzten App-Smoke-Test in einem eigenen temporären Bereich.
 
 #### Updates und Statusdiagnose
 
 Ist das Offsite-Modul eingerichtet, erstellt `grabenplaner-update` zunächst bei kurz gestopptem Dienst einen verifizierten lokalen Sicherungspunkt. Anschließend wird die bisherige App wieder gestartet und bleibt während der unter Umständen längeren Google-Drive-Übertragung erreichbar. Erst wenn diese Offsite-Kopie bestätigt ist, stoppt der Updater den Dienst erneut, erstellt unmittelbar vor dem App-Tausch einen zweiten aktuellen lokalen Rollback-Sicherungspunkt und ersetzt die Programmdateien. Ist Google Drive nicht erreichbar oder scheitert die Repository-Prüfung, wird der Austausch nicht begonnen; die bisherige App bleibt beziehungsweise wird wieder in Betrieb genommen.
 
-Mit v0.77 steigt der eigenständige Offsite-Modulvertrag von Version 2 auf Version 3. Ein bereits eingerichtetes Modul wird nicht still durch das Kernupdate verändert: `grabenplaner-update` beendet den Vorgang andernfalls mit `migration-required`. Das alte Modul wird für diesen Übergang **nicht deinstalliert**.
+Mit v0.78 steigt der eigenständige Offsite-Modulvertrag von Version 3 auf Version 4. Ein bereits eingerichtetes Modul wird nicht still durch das Kernupdate verändert: `grabenplaner-update` beendet den Vorgang andernfalls mit `migration-required`. Das alte Modul wird für diesen Übergang **nicht deinstalliert**.
 
-Im beaufsichtigten Wartungsfenster wird zuerst das neue Linux-Paket vollständig verifiziert und getrennt entpackt. Danach wird dessen v3-`install-grabenplaner-offsite.sh` gegen die noch laufende bisherige App ausgeführt. Verwendet werden dieselben geprüften Restic-/rclone-Binaries, Geheimdateien, Repository-Adresse und Installationskennungen wie bisher; `--initialize-repository` darf bei dieser Migration keinesfalls gesetzt werden. Der Installer verifiziert den bestehenden v2-Vertrag, pausiert die betroffenen Timer, migriert Modul, systemd-Units und die dedizierte Steuerungsgruppe transaktional und stellt bei einem Fehler den v2-Zustand wieder her.
+Im beaufsichtigten Wartungsfenster wird zuerst das neue Linux-Paket vollständig verifiziert und getrennt entpackt. Danach wird dessen v4-`install-grabenplaner-offsite.sh` gegen die noch laufende bisherige App ausgeführt. Verwendet werden dieselben geprüften Restic-/rclone-Binaries, Geheimdateien, Repository-Adresse und Installationskennungen wie bisher; `--initialize-repository` darf bei dieser Migration keinesfalls gesetzt werden. Der Installer verifiziert den bestehenden v3-Vertrag, pausiert die betroffenen Timer, migriert Modul und systemd-Units transaktional und stellt bei einem Fehler den v3-Zustand wieder her.
 
-Erst wenn `sudo grabenplaner-offsite-test` und der ausgelöste vollständige Assurance-Lauf erfolgreich abgeschlossen sind, wird das Kernupdate gestartet. Der Updater findet dann bereits Modulversion 3 vor und darf fortfahren. Repository, Repository-ID, Installations-ID, Geheimdateien, lokales Staging und vorhandene Sicherungsstände bleiben dabei erhalten.
+Erst wenn `sudo grabenplaner-offsite-test` und der ausgelöste vollständige Assurance-Lauf einschließlich App-Smoke erfolgreich abgeschlossen sind, wird das Kernupdate gestartet. Der Updater findet dann bereits Modulversion 4 vor und darf fortfahren. Repository, Repository-ID, Installations-ID, Geheimdateien, lokales Staging und vorhandene Sicherungsstände bleiben dabei erhalten.
 
 Der neutrale Status liegt unter `/var/lib/grabenplaner-offsite/status.json`. `grabenplaner-test` und die berechtigte Serverdiagnose zeigen daraus insbesondere:
 
@@ -533,7 +538,7 @@ Für den Paketbau wird die in `package.json` festgelegte pnpm-Version benötigt.
 Das geprüfte Paket wird am Server in einer als Administrator gestarteten PowerShell zusammen mit seiner veröffentlichten Prüfsumme eingespielt:
 
 ```powershell
-$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.77.0-beta-windows-x64.zip'
+$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.78.0-beta-windows-x64.zip'
 $sha256 = ((Get-Content "$package.sha256" -Raw).Trim() -split '\s+')[0]
 
 .\server-tools\windows\Update-GrabenplanerServer.ps1 `

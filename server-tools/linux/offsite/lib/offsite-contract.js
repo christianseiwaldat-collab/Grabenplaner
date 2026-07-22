@@ -4,8 +4,64 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const CURRENT_MODULE_VERSION = 3;
-const SUPPORTED_INSTALLED_MODULE_VERSIONS = new Set([1, 2, CURRENT_MODULE_VERSION]);
+const CURRENT_MODULE_VERSION = 4;
+const SUPPORTED_INSTALLED_MODULE_VERSIONS = new Set([1, 2, 3, CURRENT_MODULE_VERSION]);
+const LEGACY_V1_ARTIFACTS = Object.freeze([
+  "grabenplaner-offsite-check.sh", "grabenplaner-offsite-pre-update.sh", "grabenplaner-offsite-prepare.sh",
+  "grabenplaner-offsite-read-secret.sh", "grabenplaner-offsite-rclone-wrapper.sh",
+  "grabenplaner-offsite-restore-test.sh", "grabenplaner-offsite-upload.sh", "install-grabenplaner-offsite.sh",
+  "lib/offsite-common.sh", "lib/offsite-contract.js", "lib/offsite-restore-verify.js",
+  "lib/offsite-retention-verify.js", "lib/offsite-stage.js", "lib/offsite-status.js",
+  "lib/offsite-setup-rclone-wrapper.sh", "systemd/grabenplaner-offsite-check.service.in",
+  "systemd/grabenplaner-offsite-check.timer.in", "systemd/grabenplaner-offsite-prepare.service.in",
+  "systemd/grabenplaner-offsite-restore-test.service.in", "systemd/grabenplaner-offsite-restore-test.timer.in",
+  "systemd/grabenplaner-offsite-upload.service.in", "systemd/grabenplaner-offsite-upload.timer.in",
+  "uninstall-grabenplaner-offsite.sh", "test-grabenplaner-offsite.sh",
+]);
+const LEGACY_V2_ARTIFACTS = Object.freeze([
+  "grabenplaner-offsite-assurance.sh", "grabenplaner-offsite-check.sh", "grabenplaner-offsite-pre-update.sh",
+  "grabenplaner-offsite-prepare.sh", "grabenplaner-offsite-read-secret.sh", "grabenplaner-offsite-rclone-wrapper.sh",
+  "grabenplaner-offsite-recovery-set.sh", "grabenplaner-offsite-rebind-rclone.sh",
+  "grabenplaner-offsite-restore-test.sh", "grabenplaner-offsite-upload.sh", "install-grabenplaner-offsite.sh",
+  "lib/offsite-common.sh", "lib/offsite-contract.js", "lib/assurance-history.js", "lib/offsite-rclone-policy.js",
+  "lib/offsite-restore-verify.js", "lib/offsite-retention-verify.js", "lib/offsite-stage.js",
+  "lib/offsite-status.js", "lib/offsite-setup-rclone-wrapper.sh",
+  "systemd/grabenplaner-offsite-assurance@.service.in", "systemd/grabenplaner-offsite-check.service.in",
+  "systemd/grabenplaner-offsite-check.timer.in", "systemd/grabenplaner-offsite-prepare.service.in",
+  "systemd/grabenplaner-offsite-restore-test.service.in", "systemd/grabenplaner-offsite-restore-test.timer.in",
+  "systemd/grabenplaner-offsite-upload.service.in", "systemd/grabenplaner-offsite-upload.timer.in",
+  "uninstall-grabenplaner-offsite.sh", "test-grabenplaner-offsite.sh",
+]);
+const LEGACY_V3_ARTIFACTS = Object.freeze([
+  ...LEGACY_V2_ARTIFACTS,
+  "lib/assurance-control-broker.js",
+  "systemd/grabenplaner-offsite-assurance-control.socket.in",
+  "systemd/grabenplaner-offsite-assurance-control@.service.in",
+]);
+const MODULE_V4_ARTIFACTS = Object.freeze([
+  ...LEGACY_V3_ARTIFACTS,
+  "grabenplaner-offsite-application-smoke.sh",
+  "lib/application-smoke.js",
+  "systemd/grabenplaner-offsite-application-smoke.service.in",
+  "systemd/grabenplaner-offsite-assurance.timer.in",
+]);
+const VERSION_ARTIFACTS = new Map([
+  [1, new Set(LEGACY_V1_ARTIFACTS)], [2, new Set(LEGACY_V2_ARTIFACTS)],
+  [3, new Set(LEGACY_V3_ARTIFACTS)], [4, new Set(MODULE_V4_ARTIFACTS)],
+]);
+
+function assertExactArtifactContract(moduleVersion, fullArtifacts) {
+  const prefix = "server-tools/linux/offsite/";
+  const expected = VERSION_ARTIFACTS.get(moduleVersion);
+  const relative = Array.isArray(fullArtifacts) ? fullArtifacts.map((entry) => {
+    const value = String(entry || "");
+    return value.startsWith(prefix) ? value.slice(prefix.length) : "";
+  }) : [];
+  if (!expected || relative.length !== expected.size || new Set(relative).size !== relative.length
+    || relative.some((entry) => !safeRelative(entry) || !expected.has(entry))) {
+    throw new Error("Der Offsite-Modulvertrag enthaelt nicht exakt die freigegebenen Dateien.");
+  }
+}
 
 function digest(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
@@ -26,6 +82,7 @@ function moduleContract(sourceRoot) {
     || !Array.isArray(schema.managedArtifacts) || schema.managedArtifacts.length < 15 || schema.managedArtifacts.length > 64) {
     throw new Error("Der Offsite-Modulvertrag wird nicht unterstuetzt.");
   }
+  assertExactArtifactContract(schema.moduleVersion, schema.managedArtifacts);
   const prefix = "server-tools/linux/offsite/";
   const files = new Map();
   for (const fullRelative of schema.managedArtifacts) {
@@ -76,6 +133,7 @@ function verifyInstalled(moduleRoot, receiptPath) {
     || schema.activationPolicy !== "explicit-root-setup" || !Array.isArray(schema.managedArtifacts)) {
     throw new Error("Der installierte Modulvertrag wird nicht unterstuetzt.");
   }
+  assertExactArtifactContract(schema.moduleVersion, schema.managedArtifacts);
   const prefix = "server-tools/linux/offsite/";
   const expected = new Set(schema.managedArtifacts.map((relative) => {
     if (!String(relative).startsWith(prefix) || !safeRelative(String(relative).slice(prefix.length))) {

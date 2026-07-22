@@ -93,9 +93,29 @@ if [[ -f "$recovery_set_command" && ! -L "$recovery_set_command" && -L "$recover
 else
   fail "Offline-Recovery-Set" "Befehl fehlt oder zeigt nicht auf das installierte Modul"
 fi
-for timer in grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer; do
+for timer in grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer; do
   if systemctl is-enabled --quiet "$timer" && systemctl is-active --quiet "$timer"; then ok "Timer $timer" "aktiv"; else fail "Timer $timer" "nicht aktiv"; fi
 done
+
+smoke_unit="grabenplaner-offsite-application-smoke.service"
+smoke_properties="$(systemctl show "$smoke_unit" --property=LoadState,User,Group,PrivateNetwork,NoNewPrivileges,ProtectSystem,TimeoutStartUSec --value 2>/dev/null || true)"
+if systemctl cat "$smoke_unit" >/dev/null 2>&1 \
+  && systemctl cat "$smoke_unit" | grep -Fq 'InaccessiblePaths=/etc/grabenplaner /var/lib/grabenplaner /var/backups/grabenplaner' \
+  && systemctl cat "$smoke_unit" | grep -Fq 'ReadWritePaths=/var/lib/grabenplaner-offsite/application-smoke' \
+  && systemctl cat "$smoke_unit" | grep -Fq '/var/lib/grabenplaner-offsite/uploader-home' \
+  && systemctl cat "$smoke_unit" | grep -Fq 'MemoryMax=768M' \
+  && systemctl cat "$smoke_unit" | grep -Fq 'MemorySwapMax=0' \
+  && systemctl cat "$smoke_unit" | grep -Fq 'TasksMax=128' \
+  && systemctl cat "$smoke_unit" | grep -Fq 'LimitNOFILE=1024' \
+  && systemctl cat "$smoke_unit" | grep -Fq 'CPUQuota=100%' \
+  && systemctl cat "$smoke_unit" | grep -Fq 'IOWeight=10' \
+  && systemctl cat "$smoke_unit" | grep -Fq '/var/lib/grabenplaner-offsite/restore-tests' \
+  && ! systemctl cat "$smoke_unit" | grep -Fq '/var/lib/grabenplaner-offsite/restore-test ' \
+  && [[ "$smoke_properties" == *"loaded"* && "$smoke_properties" == *"grabenplaner"* && "$smoke_properties" == *"yes"* && "$smoke_properties" == *"strict"* ]]; then
+  ok "Isolierter App-Smoke" "PrivateNetwork, feste Pfade und harte Laufzeitgrenze aktiv"
+else
+  fail "Isolierter App-Smoke" "systemd-Sicherheitsvertrag ist unvollstaendig"
+fi
 
 control_socket_unit="grabenplaner-offsite-assurance-control.socket"
 control_socket_root="/run/grabenplaner-assurance-control"

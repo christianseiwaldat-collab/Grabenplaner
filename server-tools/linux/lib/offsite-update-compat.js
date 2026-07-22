@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const HASH = /^[a-f0-9]{64}$/;
 const PREFIX = "server-tools/linux/offsite/";
 const INSTALLER = "install-grabenplaner-offsite.sh";
-const SUPPORTED_MODULE_VERSIONS = new Set([1, 2, 3]);
+const SUPPORTED_MODULE_VERSIONS = new Set([1, 2, 3, 4]);
 const LEGACY_V1_ARTIFACTS = Object.freeze([
   "grabenplaner-offsite-check.sh",
   "grabenplaner-offsite-pre-update.sh",
@@ -65,6 +65,25 @@ const LEGACY_V2_ARTIFACTS = Object.freeze([
   "uninstall-grabenplaner-offsite.sh",
   "test-grabenplaner-offsite.sh",
 ]);
+const LEGACY_V3_ARTIFACTS = Object.freeze([
+  ...LEGACY_V2_ARTIFACTS,
+  "lib/assurance-control-broker.js",
+  "systemd/grabenplaner-offsite-assurance-control.socket.in",
+  "systemd/grabenplaner-offsite-assurance-control@.service.in",
+]);
+const MODULE_V4_ARTIFACTS = Object.freeze([
+  ...LEGACY_V3_ARTIFACTS,
+  "grabenplaner-offsite-application-smoke.sh",
+  "lib/application-smoke.js",
+  "systemd/grabenplaner-offsite-application-smoke.service.in",
+  "systemd/grabenplaner-offsite-assurance.timer.in",
+]);
+const VERSION_ARTIFACTS = new Map([
+  [1, new Set(LEGACY_V1_ARTIFACTS)],
+  [2, new Set(LEGACY_V2_ARTIFACTS)],
+  [3, new Set(LEGACY_V3_ARTIFACTS)],
+  [4, new Set(MODULE_V4_ARTIFACTS)],
+]);
 
 function safeRelative(value) {
   return typeof value === "string" && value && !value.includes("\\") && !value.startsWith("/")
@@ -97,14 +116,9 @@ function classify(candidateEnvelope, installed) {
     || !expectedPaths.includes(INSTALLER)) {
     return "invalid";
   }
-  const legacyV1 = new Set(LEGACY_V1_ARTIFACTS);
-  const legacyV2 = new Set(LEGACY_V2_ARTIFACTS);
-  if (candidate.moduleVersion === 1
-    && (expectedPaths.length !== legacyV1.size || expectedPaths.some((relative) => !legacyV1.has(relative)))) {
-    return "invalid";
-  }
-  if (candidate.moduleVersion === 2
-    && (expectedPaths.length !== legacyV2.size || expectedPaths.some((relative) => !legacyV2.has(relative)))) {
+  const candidateExpected = VERSION_ARTIFACTS.get(candidate.moduleVersion);
+  if (!candidateExpected || expectedPaths.length !== candidateExpected.size
+    || expectedPaths.some((relative) => !candidateExpected.has(relative))) {
     return "invalid";
   }
   if (candidate.moduleVersion < installed.moduleVersion) return "invalid";
@@ -120,9 +134,8 @@ function classify(candidateEnvelope, installed) {
     installedFiles.set(relative, sha256);
   }
   if (fingerprint(installedFiles) !== installed.fingerprint) return "invalid";
-  const installedExpected = installed.moduleVersion === 1
-    ? legacyV1
-    : installed.moduleVersion === 2 ? legacyV2 : new Set(expectedPaths);
+  const installedExpected = VERSION_ARTIFACTS.get(installed.moduleVersion);
+  if (!installedExpected) return "invalid";
   if (installedFiles.size !== installedExpected.size
     || [...installedExpected].some((relative) => !installedFiles.has(relative))) return "invalid";
   if (candidate.moduleVersion !== installed.moduleVersion) {

@@ -1,0 +1,14 @@
+[Unit]
+Description=Naechtliche vollstaendige Grabenplaner Recovery-Assurance
+Documentation=https://github.com/christianseiwaldat-collab/Grabenplaner/blob/main/SERVERBETRIEB.md
+
+[Timer]
+OnCalendar=*-*-* 03:45:00
+RandomizedDelaySec=90min
+FixedRandomDelay=true
+Persistent=true
+AccuracySec=5min
+Unit=grabenplaner-offsite-assurance@scheduled-nightly.service
+
+[Install]
+WantedBy=timers.target
