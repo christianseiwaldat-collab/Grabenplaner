@@ -141,7 +141,9 @@ const resticValue = read(restic, 16, 4096).toString("utf8");
 const resticLine = resticValue.endsWith("\n") ? resticValue.slice(0, -1) : resticValue;
 if (Buffer.byteLength(resticLine, "utf8") < 16 || /[\r\n]/.test(resticLine)) process.exit(1);
 const configValue = read(config, 32, 1024 * 1024).toString("utf8");
-if (!configValue.startsWith("RCLONE_ENCRYPT_V0:")) process.exit(1);
+// rclone may prepend its official explanatory comment to an encrypted config.
+// Permit only blank/comment lines before the marker; arbitrary clear text stays rejected.
+if (!/^(?:(?:[ \t]*#[^\r\n]*|[ \t]*)\r?\n)*RCLONE_ENCRYPT_V0:/.test(configValue)) process.exit(1);
 const passwordValue = read(password, 16, 1024).toString("utf8");
 if (/\r|\n/.test(passwordValue.trimEnd()) || !passwordValue.trim()) process.exit(1);
 NODE
