@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.78.6 Beta · Isolierter Lesezugriff auf den App-Code
+
+- Nur der Recovery-App-Smoke-Dienst erhält für seine Laufzeit die zusätzliche Gruppe des Grabenplaner-Dienstes und kann dadurch den schreibgeschützten App-Code betreten.
+- Das Offsite-Dienstkonto erhält keine dauerhafte Gruppenmitgliedschaft; Produktivdaten, Konfiguration, Sicherungen und Offsite-Geheimnisse bleiben im privaten Mount-Namespace ausdrücklich unzugänglich.
+- Regressionstests binden die Laufzeitgruppe an genau diese gehärtete Unit und erhalten alle bisherigen Namespace-Sperren.
+
 ## v0.78.5 Beta · Isolierter Recovery-App-Smoke-Test
 
 - Der gehärtete systemd-Dienst referenziert nur tatsächlich vorhandene geschützte Offsite-Pfade; dadurch kann sein eigener Mount-Namespace zuverlässig aufgebaut werden.
