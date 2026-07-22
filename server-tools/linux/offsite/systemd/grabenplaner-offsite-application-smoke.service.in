@@ -48,6 +48,7 @@ MemoryMax=768M
 MemorySwapMax=0
 TasksMax=128
 LimitNOFILE=1024
+LimitCORE=0
 CPUQuota=100%
 CPUWeight=10
 IOWeight=10
