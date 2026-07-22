@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const { DatabaseSync } = require("node:sqlite");
 
 const root = path.resolve(__dirname, "..");
 const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
@@ -19,7 +20,7 @@ const uninstaller = read("server-tools/linux/offsite/uninstall-grabenplaner-offs
 const selfTest = read("server-tools/linux/offsite/test-grabenplaner-offsite.sh");
 const server = read("server.js");
 const applicationSmokeSource = read("server-tools/linux/offsite/lib/application-smoke.js");
-const { childEnvironment, SMOKE_ROOT, DATABASE, verifiedApplicationSmokeResult } = require(path.join(
+const { childEnvironment, sanitizeSmokeDatabase, SMOKE_ROOT, DATABASE, verifiedApplicationSmokeResult } = require(path.join(
   root, "server-tools/linux/offsite/lib/application-smoke.js",
 ));
 const broker = require(path.join(root, "server-tools/linux/offsite/lib/assurance-control-broker.js"));
@@ -194,25 +195,146 @@ test("broker schema v2 always carries scheduler evidence while legacy schema v1 
   assert.equal(legacy.schemaVersion, 1);
 });
 
-test("application smoke receives only copied recovery data and a secret-free local environment", () => {
+test("application smoke uses one-run server credentials without inheriting live secrets", () => {
   const environment = childEnvironment(43123);
-  assert.equal(environment.GRABENPLANER_OPERATION_MODE, "local");
+  const secondEnvironment = childEnvironment(43123);
+  assert.equal(environment.NODE_ENV, "test");
+  assert.equal(environment.GRABENPLANER_OPERATION_MODE, "server");
   assert.equal(environment.GRABENPLANER_DEPLOYMENT_KIND, "recovery-smoke");
+  assert.equal(environment.GRABENPLANER_PUBLIC_URL, "https://recovery-smoke.invalid");
   assert.equal(environment.GRABENPLANER_HOST, "127.0.0.1");
   assert.equal(environment.PORT, "43123");
   assert.equal(environment.GRABENPLANER_DATA_DIR, path.join(SMOKE_ROOT, "data-root"));
   assert.equal(environment.DB_PATH, DATABASE);
   assert.equal(environment.GRABENPLANER_OFFSITE_CONFIGURED, "0");
-  const serialized = JSON.stringify(environment).toLowerCase();
-  for (const forbidden of ["password", "secret", "token", "smtp", "rclone", "restic", "/etc/grabenplaner"]) {
-    assert.equal(serialized.includes(forbidden), false, forbidden);
+  assert.equal("GRABENPLANER_ALLOW_UNSCANNED_AMU" in environment, false);
+  assert.equal(environment.GRABENPLANER_TEST_AMU_SCANNER, "clean");
+  for (const key of [environment.GRABENPLANER_AMU_KEY, environment.GRABENPLANER_INTEGRATION_KEY]) {
+    const decoded = Buffer.from(key, "base64");
+    assert.equal(decoded.length, 32);
+    assert.equal(decoded.toString("base64"), key);
+  }
+  assert.ok(environment.GRABENPLANER_SERVICE_CONTROL_TOKEN.length >= 32);
+  assert.ok(environment.GRABENPLANER_WIFI_WEBHOOK_SECRET.length >= 32);
+  for (const key of [
+    "GRABENPLANER_AMU_KEY", "GRABENPLANER_INTEGRATION_KEY",
+    "GRABENPLANER_SERVICE_CONTROL_TOKEN", "GRABENPLANER_WIFI_WEBHOOK_SECRET",
+  ]) {
+    assert.notEqual(environment[key], secondEnvironment[key], key);
+  }
+  const serializedValues = JSON.stringify(Object.values(environment)).toLowerCase();
+  for (const forbidden of ["smtp", "rclone", "restic", "/etc/grabenplaner", "production-secret"]) {
+    assert.equal(serializedValues.includes(forbidden), false, forbidden);
   }
   assert.match(restore, /cp --reflink=never -- "\$smoke_source_database" "\$OFFSITE_SMOKE_ROOT\/data-root\/data\/dienstplan\.db"/);
-  assert.match(restore, /restoreEncryptedFilesBackup\(\{ backupDirectory: documents, targetDirectory: target \}\)/);
+  assert.match(restore, /application-smoke\.js" --sanitize-database/);
+  assert.doesNotMatch(restore, /restoreEncryptedFilesBackup\(\{ backupDirectory: documents, targetDirectory: target \}\)/);
+  assert.doesNotMatch(restore, /smoke_source_documents|data-root\/private\/amu/);
+  assert.match(restore, /\$\{#smoke_sources\[@\]\} == 1/);
+  assert.ok(restore.indexOf('"$RECOVERY_VERIFY"') < restore.indexOf("--sanitize-database"));
   assert.match(restore, /restored_database_before/);
   assert.match(restore, /restored_database_after/);
   assert.match(restore, /Der verifizierte Restore-Stand wurde beim App-Smoke-Test veraendert/);
   assert.match(server, /if \(serverModeActive \|\| deploymentKind === "recovery-smoke"\) return;/);
+});
+
+test("application smoke sanitizes every known protected domain but preserves operational rows", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-sanitize-"));
+  const databaseFile = path.join(directory, "dienstplan.db");
+  let database = new DatabaseSync(databaseFile);
+  try {
+    database.exec(`
+      PRAGMA foreign_keys=ON;
+      CREATE TABLE employees (personnel_number TEXT PRIMARY KEY, full_name TEXT NOT NULL);
+      CREATE TABLE personnel_sensitive_records (employee_number TEXT PRIMARY KEY, protected_payload TEXT NOT NULL);
+      CREATE TABLE personnel_record_documents (id TEXT PRIMARY KEY, employee_number TEXT, protected_payload TEXT NOT NULL);
+      CREATE TABLE sickness_cases (id INTEGER PRIMARY KEY, protected_payload TEXT NOT NULL);
+      CREATE TABLE sickness_alerts (id TEXT PRIMARY KEY, sickness_case_id INTEGER, protected_payload TEXT NOT NULL,
+        FOREIGN KEY (sickness_case_id) REFERENCES sickness_cases(id));
+      CREATE TABLE amu_reports (id INTEGER PRIMARY KEY, sickness_case_id INTEGER, protected_payload TEXT NOT NULL,
+        FOREIGN KEY (sickness_case_id) REFERENCES sickness_cases(id));
+      CREATE TABLE amu_documents (id TEXT PRIMARY KEY, report_id INTEGER, protected_payload TEXT NOT NULL,
+        FOREIGN KEY (report_id) REFERENCES amu_reports(id));
+      CREATE TABLE sickness_notification_preferences (employee_number TEXT, protected_destination TEXT NOT NULL);
+      CREATE TABLE outbound_notification_jobs (id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL);
+      CREATE TABLE integration_connections (id TEXT PRIMARY KEY, active INTEGER NOT NULL,
+        protected_credentials TEXT NOT NULL, credential_key_id TEXT NOT NULL);
+      CREATE TABLE integration_deliveries (id TEXT PRIMARY KEY, connection_id TEXT NOT NULL,
+        FOREIGN KEY (connection_id) REFERENCES integration_connections(id) ON DELETE RESTRICT);
+      CREATE TABLE portal_notifications (id TEXT PRIMARY KEY, message TEXT NOT NULL);
+      INSERT INTO employees VALUES ('101', 'Demo Person');
+      INSERT INTO personnel_sensitive_records VALUES ('101', 'enc:v2:sensitive');
+      INSERT INTO personnel_record_documents VALUES ('doc', '101', 'enc:v2:document');
+      INSERT INTO sickness_cases VALUES (1, 'enc:v2:case');
+      INSERT INTO sickness_alerts VALUES ('alert', 1, 'enc:v2:alert');
+      INSERT INTO amu_reports VALUES (1, 1, 'enc:v2:report');
+      INSERT INTO amu_documents VALUES ('amu', 1, 'enc:v2:amu');
+      INSERT INTO sickness_notification_preferences VALUES ('101', 'enc:v2:destination');
+      INSERT INTO outbound_notification_jobs VALUES ('job', 'enc:v2:job');
+      INSERT INTO integration_connections VALUES ('connection', 1, 'gp-integration-secret:v1:value', 'live-key');
+      INSERT INTO integration_deliveries VALUES ('delivery', 'connection');
+      INSERT INTO portal_notifications VALUES ('notice', 'Nicht fuer den Smoke-Test');
+    `);
+  } finally {
+    database.close();
+    database = null;
+  }
+
+  try {
+    assert.equal(sanitizeSmokeDatabase(databaseFile), true);
+    database = new DatabaseSync(databaseFile, { readOnly: true });
+    assert.deepEqual(
+      database.prepare("SELECT * FROM employees").all().map((row) => ({ ...row })),
+      [{ personnel_number: "101", full_name: "Demo Person" }],
+    );
+    for (const table of [
+      "personnel_sensitive_records", "personnel_record_documents", "sickness_cases", "sickness_alerts",
+      "amu_reports", "amu_documents", "sickness_notification_preferences", "outbound_notification_jobs",
+      "portal_notifications",
+    ]) assert.equal(database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 0, table);
+    assert.deepEqual(
+      { ...database.prepare("SELECT id, active, protected_credentials, credential_key_id FROM integration_connections").get() },
+      { id: "connection", active: 0, protected_credentials: "", credential_key_id: "" },
+    );
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM integration_deliveries").get().count, 1);
+    assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
+    assert.deepEqual(database.prepare("PRAGMA integrity_check").all().map((row) => Object.values(row)[0]), ["ok"]);
+  } finally {
+    if (database) database.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("application smoke refuses unknown future protected columns before cleanup", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-unknown-"));
+  const databaseFile = path.join(directory, "dienstplan.db");
+  const database = new DatabaseSync(databaseFile);
+  database.exec("CREATE TABLE future_sensitive_domain (id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL); INSERT INTO future_sensitive_domain VALUES ('1', 'enc:v3:future')");
+  database.close();
+  try {
+    assert.throws(() => sanitizeSmokeDatabase(databaseFile), /SMOKE_PRECONDITION_FAILED/);
+    const verify = new DatabaseSync(databaseFile, { readOnly: true });
+    assert.equal(verify.prepare("SELECT protected_payload FROM future_sensitive_domain").get().protected_payload, "enc:v3:future");
+    verify.close();
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("application smoke refuses hard-linked database copies without changing their source", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-linked-"));
+  const source = path.join(directory, "source.db");
+  const linked = path.join(directory, "linked.db");
+  const database = new DatabaseSync(source);
+  database.exec("CREATE TABLE employees (personnel_number TEXT PRIMARY KEY); INSERT INTO employees VALUES ('101')");
+  database.close();
+  fs.linkSync(source, linked);
+  const before = crypto.createHash("sha256").update(fs.readFileSync(source)).digest("hex");
+  try {
+    assert.throws(() => sanitizeSmokeDatabase(linked), /SMOKE_PRECONDITION_FAILED/);
+    assert.equal(crypto.createHash("sha256").update(fs.readFileSync(source)).digest("hex"), before);
+    const verify = new DatabaseSync(source, { readOnly: true });
+    assert.equal(verify.prepare("SELECT COUNT(*) AS count FROM employees").get().count, 1);
+    verify.close();
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
 test("application smoke is a private-network, hard-timeout unit without live data or secret access", () => {
@@ -246,6 +368,7 @@ test("application smoke is a private-network, hard-timeout unit without live dat
   assert.match(smokeUnit, /^MemorySwapMax=0$/m);
   assert.match(smokeUnit, /^TasksMax=128$/m);
   assert.match(smokeUnit, /^LimitNOFILE=1024$/m);
+  assert.match(smokeUnit, /^LimitCORE=0$/m);
   assert.match(smokeUnit, /^CPUQuota=100%$/m);
   assert.match(smokeUnit, /^CPUWeight=10$/m);
   assert.match(smokeUnit, /^IOWeight=10$/m);

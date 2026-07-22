@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.78.7 Beta · Sicherer Recovery-App-Smoke mit älteren Live-Daten
+
+- Der exakte Offsite-Restore wird weiterhin zuerst vollständig mit den produktiven Schlüsseln, Dokumenten und Integritätsprüfungen verifiziert.
+- Der nachfolgende unprivilegierte App-Smoke startet im Servermodus mit einmaligen Testschlüsseln und ausschließlich einer sicher bereinigten Datenbankkopie; echte AUM-Dateien und Live-Geheimnisse bleiben unzugänglich.
+- Unbekannte künftige geschützte Datenbankfelder führen vor der Bereinigung zu einem sicheren Abbruch; zusätzliche Regressionstests prüfen Datenminimierung, Isolation und den vollständigen Erhalt des verifizierten Restore-Stands.
+
 ## v0.78.6 Beta · Isolierter Lesezugriff auf den App-Code
 
 - Nur der Recovery-App-Smoke-Dienst erhält für seine Laufzeit die zusätzliche Gruppe des Grabenplaner-Dienstes und kann dadurch den schreibgeschützten App-Code betreten.

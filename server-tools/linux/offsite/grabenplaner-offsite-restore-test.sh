@@ -149,9 +149,11 @@ restored_stage="$restore_root${OFFSITE_STAGE_CURRENT}"
 
 application_smoke_passed=0
 if [[ -n "$assurance_result" ]]; then
-  # Die Anwendung erhaelt ausschliesslich eine Kopie des bereits verifizierten
-  # Restore-Stands. Eine eigene PrivateNetwork-systemd-Unit sperrt Live-Daten,
-  # Secrets, externe Netze und produktive Ports vollstaendig aus.
+  # Die Root-Pruefung oben hat den exakten Restore-Stand samt geschuetzten
+  # Datensaetzen und Dokumenten bereits mit den echten Schluesseln verifiziert.
+  # Die unprivilegierte Anwendung erhaelt danach nur eine bereinigte Kopie der
+  # Datenbank und einmalige Testschluessel. Live-Secrets, echte AUM-Dateien,
+  # externe Netze und produktive Ports bleiben vollstaendig ausgesperrt.
   systemctl stop "$OFFSITE_SMOKE_SERVICE" >/dev/null 2>&1 || true
   systemctl reset-failed "$OFFSITE_SMOKE_SERVICE" >/dev/null 2>&1 || true
   if [[ -e "$OFFSITE_SMOKE_ROOT" || -L "$OFFSITE_SMOKE_ROOT" ]]; then
@@ -163,7 +165,7 @@ if [[ -n "$assurance_result" ]]; then
   smoke_gid="$(getent group "$OFFSITE_GROUP" | awk -F: '{print $3}')"
   [[ "$smoke_uid" =~ ^[0-9]+$ && "$smoke_gid" =~ ^[0-9]+$ ]] \
     || offsite_fixed_failure RESTORE_TEST_FAILED "Das isolierte Smoke-Test-Dienstkonto fehlt."
-  install -d -m 0700 -o "$OFFSITE_USER" -g "$OFFSITE_GROUP" \
+  install -d -m 0700 -o root -g root \
     "$OFFSITE_SMOKE_ROOT" "$OFFSITE_SMOKE_ROOT/home" "$OFFSITE_SMOKE_ROOT/data-root" \
     "$OFFSITE_SMOKE_ROOT/data-root/data" "$OFFSITE_SMOKE_ROOT/data-root/private"
   smoke_root_owned=1
@@ -176,22 +178,17 @@ const [file, stageValue] = process.argv.slice(2);
 const stage = path.resolve(stageValue);
 const value = JSON.parse(fs.readFileSync(file, "utf8"));
 const database = path.resolve(String(value.database || ""));
-const documents = path.resolve(String(value.documents || ""));
-if (!database.startsWith(`${stage}${path.sep}`) || !documents.startsWith(`${stage}${path.sep}`)) process.exit(1);
-process.stdout.write(`${database}\n${documents}\n`);
+if (!database.startsWith(`${stage}${path.sep}`)) process.exit(1);
+process.stdout.write(`${database}\n`);
 NODE
   ) || offsite_fixed_failure RESTORE_TEST_FAILED "Der App-Smoke-Quellstand ist ungueltig."
-  (( ${#smoke_sources[@]} == 2 )) \
+  (( ${#smoke_sources[@]} == 1 )) \
     || offsite_fixed_failure RESTORE_TEST_FAILED "Der App-Smoke-Quellstand ist unvollstaendig."
   smoke_source_database="${smoke_sources[0]}"
-  smoke_source_documents="${smoke_sources[1]}"
   restored_database_before="$(sha256sum --binary -- "$smoke_source_database" | awk '{print tolower($1)}')"
   cp --reflink=never -- "$smoke_source_database" "$OFFSITE_SMOKE_ROOT/data-root/data/dienstplan.db"
-  "$OFFSITE_NODE" - "$OFFSITE_APP_ROOT/lib/amu-storage.js" "$smoke_source_documents" \
-    "$OFFSITE_SMOKE_ROOT/data-root/private/amu" <<'NODE'
-const [amuModule, documents, target] = process.argv.slice(2);
-require(amuModule).restoreEncryptedFilesBackup({ backupDirectory: documents, targetDirectory: target });
-NODE
+  "$OFFSITE_NODE" "$OFFSITE_MODULE_ROOT/lib/application-smoke.js" --sanitize-database >/dev/null \
+    || offsite_fixed_failure RESTORE_TEST_FAILED "Die isolierte App-Smoke-Datenbank konnte nicht sicher bereinigt werden."
   chown -R --no-dereference "$OFFSITE_USER:$OFFSITE_GROUP" -- "$OFFSITE_SMOKE_ROOT"
   find "$OFFSITE_SMOKE_ROOT" -xdev -type d -exec chmod 0700 -- {} +
   find "$OFFSITE_SMOKE_ROOT" -xdev -type f -exec chmod 0600 -- {} +

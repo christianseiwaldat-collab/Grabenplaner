@@ -7,7 +7,7 @@ set "NODE_EXE=%~dp0runtime\node.exe"
 if not exist "%NODE_EXE%" set "NODE_EXE=node"
 
 for /f "usebackq delims=" %%V in (`"%NODE_EXE%" -e "const v=require('./package.json').version; const m=String(v).match(/^(\d+)\.(\d+)\.(\d+)-beta/); console.log(m ? ('v' + m[1] + '.' + m[2] + (m[3] === '0' ? '' : '.' + m[3]) + ' Beta') : 'v' + v)"`) do set "APP_VERSION=%%V"
-if "%APP_VERSION%"=="" set "APP_VERSION=v0.78.6 Beta"
+if "%APP_VERSION%"=="" set "APP_VERSION=v0.78.7 Beta"
 
 title Grabenplaner %APP_VERSION%
 
