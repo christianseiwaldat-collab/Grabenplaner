@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.76 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.77 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -457,9 +457,10 @@
             <div><span class="eyebrow">Übersicht &amp; Steuerung</span><h1>Dashboards</h1><p class="subtitle">Filialsituation, wirksame Rechte und Standardprozesse verständlich im Blick behalten.</p></div>
             <div class="rights-dashboard-header-actions">
               <div class="rights-dashboard-mode-switch" role="tablist" aria-label="Dashboard-Bereich">
-                <button type="button" role="tab" data-rights-dashboard-mode="locations" aria-selected="true">Filialübersicht</button>
-                <button type="button" role="tab" data-rights-dashboard-mode="rights" aria-selected="false">Rechteübersicht</button>
-                <button type="button" role="tab" data-rights-dashboard-mode="processes" aria-selected="false">Prozesswege</button>
+                <button type="button" role="tab" data-rights-dashboard-mode="systemCenter" data-dashboard-capability="system" aria-selected="true">System-Center</button>
+                <button type="button" role="tab" data-rights-dashboard-mode="locations" data-dashboard-capability="rights" aria-selected="false">Filialübersicht</button>
+                <button type="button" role="tab" data-rights-dashboard-mode="rights" data-dashboard-capability="rights" aria-selected="false">Rechteübersicht</button>
+                <button type="button" role="tab" data-rights-dashboard-mode="processes" data-dashboard-capability="rights" aria-selected="false">Prozesswege</button>
               </div>
               <div class="page-theme-switch dashboard-theme-switch" role="group" aria-label="Darstellung der Dashboards">
                 <span>Darstellung</span>
@@ -469,7 +470,21 @@
             </div>
           </header>
 
-          <section class="location-dashboard-panel" id="rightsDashboardLocationsPanel" aria-label="Aktuelle Filialübersicht">
+          <section class="system-center-panel" id="systemCenterPanel" aria-label="System-Center">
+            <div class="system-center-toolbar">
+              <div><span class="eyebrow">Nachweisbarer Systemzustand</span><h2>System-Center</h2><p>Server, Sicherungen und Wiederherstellbarkeit auf Basis redigierter, serverseitig geprüfter Nachweise.</p></div>
+              <div class="system-center-actions">
+                <span id="systemCenterUpdated">Noch nicht aktualisiert</span>
+                <button class="secondary-button" id="refreshSystemCenter" type="button">Aktualisieren</button>
+                <button class="primary-button hidden" id="startRecoveryAssurance" type="button">Recovery-Test starten</button>
+              </div>
+            </div>
+            <div class="system-center-content" id="systemCenterContent" aria-live="polite" aria-busy="true">
+              <p class="settings-note">System-Center wird geladen.</p>
+            </div>
+          </section>
+
+          <section class="location-dashboard-panel hidden" id="rightsDashboardLocationsPanel" aria-label="Aktuelle Filialübersicht">
             <div class="location-dashboard-toolbar">
               <div><span class="eyebrow">Tageslage</span><h2>Filialübersicht</h2><p>Besetzung und Abwesenheiten aller aktiven Filialen – ohne vertrauliche Dokument- oder Bemerkungsinhalte.</p></div>
               <div class="location-dashboard-toolbar-controls">
@@ -1109,7 +1124,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.76 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.77 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

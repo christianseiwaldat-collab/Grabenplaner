@@ -39,10 +39,29 @@ const {
   verifyCommittedBackup,
   writeBackupCommitMarker,
 } = require("./lib/backup-commit");
-const { readOffsiteBackupStatus } = require("./lib/offsite-backup-status");
-const { readRecoveryAssuranceStatus } = require("./lib/recovery-assurance-status");
-const { readServerMonitorStatus } = require("./lib/server-monitor-status");
-const { readHostSecurityStatus } = require("./lib/host-security-status");
+const {
+  DEFAULT_STATUS_PATH: DEFAULT_OFFSITE_STATUS_PATH,
+  readOffsiteBackupStatus,
+} = require("./lib/offsite-backup-status");
+const {
+  DEFAULT_HEAD_PATH: DEFAULT_ASSURANCE_HEAD_PATH,
+  readRecoveryAssuranceStatus,
+} = require("./lib/recovery-assurance-status");
+const { buildSystemTrustIndex } = require("./lib/system-trust-index");
+const {
+  DEFAULT_SOCKET_PATH: DEFAULT_ASSURANCE_CONTROL_SOCKET_PATH,
+  recoveryAssuranceControlStatus,
+  requestRecoveryAssuranceRun,
+} = require("./lib/recovery-assurance-control-client");
+const {
+  DEFAULT_STATUS_PATH: DEFAULT_MONITOR_STATUS_PATH,
+  readServerMonitorStatus,
+} = require("./lib/server-monitor-status");
+const {
+  DEFAULT_STATUS_PATH: DEFAULT_HOST_SECURITY_STATUS_PATH,
+  readHostSecurityStatus,
+} = require("./lib/host-security-status");
+const { createSystemCenterTechnicalCache } = require("./lib/system-center-technical-cache");
 const {
   assertRuntimeConfiguration,
   createBoundedRateLimitStore,
@@ -189,6 +208,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "backup:write", label: "Datenbanksicherungen verwalten", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "system:diagnostics:read", label: "Serverzustand lesen", description: "Redigierte Betriebs-, Sicherungs- und Wiederherstellungswarnungen ohne interne Pfade lesen.", group: "System & Verwaltung", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "system:diagnostics:technical", label: "Technische Serverdiagnose lesen", description: "Interne Laufzeit-, Speicher- und Wartungsdetails für die technische Administration lesen.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "system:recovery:run", label: "Recovery-Assurance-Prüfung starten", description: "Einen vollständigen, isolierten Sicherungs- und Wiederherstellungsnachweis am Ubuntu-Server anfordern.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
   { id: "update:write", label: "Grabenplaner aktualisieren", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "system:write", label: "App neu starten oder beenden", group: "System & Verwaltung", warningLevel: "critical" },
 ]);
@@ -300,7 +320,7 @@ const portalGlobalPermissionIds = new Set([
   "processes:write",
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
   "integrations:connections:write", "integrations:credentials:write", "branding:read", "branding:write",
-  "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "update:write", "system:write", "wifi:settings",
+  "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "update:write", "system:write", "wifi:settings",
   "users:write", "roles:read", "roles:write", "rights:read", "rights:write", "scopes:write",
   "audit:read", "usb:provision", "developer:system",
 ]);
@@ -524,7 +544,7 @@ builtinPortalRoles.push(
       "employees:read", "schedule:read", "rights:read", "rights:write",
       "personnel:central:read", "personnel:central:write", "cost_centers:read", "cost_centers:write",
       "employees:write",
-      "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "update:write", "system:write", "users:write",
+      "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "update:write", "system:write", "users:write",
       "usb:provision",
       "roles:read", "roles:write", "audit:read", "scopes:write", "wifi:settings",
       "hr:settings", "sickness:read", "sickness:settings", "notifications:settings",
@@ -538,7 +558,7 @@ builtinPortalRoles.push(
     name: "Developer",
     description: "Geschützter technischer Superuser; nur über das lokale Entwicklerwerkzeug bindbar.",
     sortOrder: 40,
-    permissions: [...adminPortalRole.permissions, "integrations:connections:write", "integrations:credentials:write", "developer:system"],
+    permissions: [...adminPortalRole.permissions, "integrations:connections:write", "integrations:credentials:write", "system:recovery:run", "developer:system"],
   },
 );
 
@@ -13595,6 +13615,7 @@ function serverDiagnostics() {
     process: { pid: process.pid, uptimeSeconds: Math.floor(process.uptime()), startedAt: new Date(Date.now() - process.uptime() * 1000).toISOString() },
     storage: { dataRoot: dataRootDirectory, data: dataHealth, amu },
     backups: {
+      freshnessHours: backupFreshnessHours,
       appDirectory: appBackupDirectory,
       externalEnabled: settingEnabled(settings, "external_backup_enabled"),
       externalDirectory,
@@ -13666,6 +13687,8 @@ function serverStatusSummary(diagnostics = serverDiagnostics()) {
       ok: check.ok === true,
     })),
     backups: {
+      freshnessHours: Number.isFinite(diagnostics.backups?.freshnessHours)
+        ? diagnostics.backups.freshnessHours : null,
       internal: publicBackupPoint(
         diagnostics.backups?.latestApp,
         diagnostics.backups?.latestAppAgeHours,
@@ -13745,11 +13768,15 @@ function serverStatusSummary(diagnostics = serverDiagnostics()) {
       severity: ["info", "warning", "critical"].includes(recoveryAssurance.severity)
         ? recoveryAssurance.severity : "info",
       generatedAt: recoveryAssurance.generatedAt || null,
+      ageHours: Number.isFinite(recoveryAssurance.ageHours) ? recoveryAssurance.ageHours : null,
+      maximumAgeHours: Number.isFinite(recoveryAssurance.maximumAgeHours) ? recoveryAssurance.maximumAgeHours : null,
+      stale: recoveryAssurance.stale === true,
       eventCount: Number(recoveryAssurance.eventCount || 0),
       lastSequence: Number(recoveryAssurance.lastSequence || 0),
       lastErrorCode: recoveryAssurance.lastErrorCode || null,
       summary: String(recoveryAssurance.summary || "Recovery Assurance ist nicht eingerichtet."),
       events: Array.isArray(recoveryAssurance.events) ? recoveryAssurance.events : [],
+      recentRuns: Array.isArray(recoveryAssurance.recentRuns) ? recoveryAssurance.recentRuns : [],
     },
     recovery: {
       isolatedRestoreTestAt: offsite.lastRestoreTestAt || null,
@@ -19556,6 +19583,232 @@ app.get("/api/portal/v1/ui-preferences", (request, response) => {
 app.put("/api/portal/v1/ui-preferences", (request, response) => {
   const actor = uiPreferenceActor(request, { write: true });
   response.json(saveUiPreferencesForActor(actor, request.body || {}));
+});
+
+const SYSTEM_CENTER_UPDATE_CACHE_MS = 10 * 60 * 1000;
+const SYSTEM_CENTER_UPDATE_FAILURE_CACHE_MS = 60 * 1000;
+const SYSTEM_CENTER_UPDATE_TIMEOUT_MS = 4 * 1000;
+const SYSTEM_CENTER_TECHNICAL_CACHE_MS = 2 * 1000;
+const SYSTEM_CENTER_CONTROL_CACHE_MS = 750;
+let systemCenterUpdateCache = { expiresAt: 0, inFlight: null, value: null };
+
+function redactedSystemCenterUpdateFailure(checkedAt = new Date().toISOString()) {
+  return { ok: false, updateAvailable: null, checkedAt };
+}
+
+async function systemCenterUpdateStatus() {
+  const now = Date.now();
+  if (systemCenterUpdateCache.value && systemCenterUpdateCache.expiresAt > now) {
+    return systemCenterUpdateCache.value;
+  }
+  if (systemCenterUpdateCache.inFlight) return systemCenterUpdateCache.inFlight;
+  const checkedAt = new Date(now).toISOString();
+  const check = Promise.resolve()
+    .then(() => buildUpdateStatus())
+    .then((status) => ({
+      ok: status?.ok === true,
+      updateAvailable: typeof status?.updateAvailable === "boolean" ? status.updateAvailable : null,
+      currentVersion: String(status?.currentVersion || packageMetadata.version),
+      latestVersion: String(status?.latestVersion || ""),
+      checkedAt,
+    }))
+    .catch(() => redactedSystemCenterUpdateFailure(checkedAt));
+  const timeout = new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(redactedSystemCenterUpdateFailure(checkedAt)), SYSTEM_CENTER_UPDATE_TIMEOUT_MS);
+    if (typeof timer.unref === "function") timer.unref();
+  });
+  systemCenterUpdateCache.inFlight = Promise.race([check, timeout]);
+  try {
+    const value = await systemCenterUpdateCache.inFlight;
+    systemCenterUpdateCache = {
+      expiresAt: now + (value.ok ? SYSTEM_CENTER_UPDATE_CACHE_MS : SYSTEM_CENTER_UPDATE_FAILURE_CACHE_MS),
+      inFlight: null,
+      value,
+    };
+    return value;
+  } finally {
+    if (systemCenterUpdateCache.inFlight) systemCenterUpdateCache.inFlight = null;
+  }
+}
+
+function systemCenterResourceSummary(diagnostics) {
+  let databaseBytes = null;
+  try { databaseBytes = fs.statSync(databasePath).size; } catch { databaseBytes = null; }
+  const totalMemoryBytes = os.totalmem();
+  const freeMemoryBytes = os.freemem();
+  return {
+    uptimeSeconds: Math.max(0, Math.floor(process.uptime())),
+    cpu: {
+      logicalProcessors: os.cpus().length,
+      loadAverageOneMinute: process.platform === "linux" ? Number(os.loadavg()[0].toFixed(2)) : null,
+    },
+    memory: {
+      totalBytes: totalMemoryBytes,
+      freeBytes: freeMemoryBytes,
+      usedPercent: totalMemoryBytes > 0
+        ? Math.max(0, Math.min(100, Math.round(((totalMemoryBytes - freeMemoryBytes) / totalMemoryBytes) * 100)))
+        : null,
+    },
+    storage: {
+      freeBytes: Number.isFinite(diagnostics.storage?.data?.freeBytes)
+        ? diagnostics.storage.data.freeBytes : null,
+      databaseBytes: Number.isFinite(databaseBytes) ? databaseBytes : null,
+    },
+  };
+}
+
+function systemCenterFileStamp(candidate) {
+  try {
+    const stat = fs.lstatSync(path.resolve(String(candidate || "")));
+    return `${stat.dev}:${stat.ino}:${stat.mode}:${stat.size}:${stat.mtimeMs}`;
+  } catch {
+    return "missing";
+  }
+}
+
+function systemCenterTechnicalFingerprint() {
+  const watched = [
+    process.env.GRABENPLANER_OFFSITE_STATUS_FILE || DEFAULT_OFFSITE_STATUS_PATH,
+    process.env.GRABENPLANER_MONITOR_STATUS_FILE || DEFAULT_MONITOR_STATUS_PATH,
+    process.env.GRABENPLANER_HOST_SECURITY_STATUS_FILE || DEFAULT_HOST_SECURITY_STATUS_PATH,
+    DEFAULT_ASSURANCE_HEAD_PATH,
+  ];
+  return watched.map((candidate) => `${candidate}:${systemCenterFileStamp(candidate)}`).join("|");
+}
+
+const systemCenterTechnicalCache = createSystemCenterTechnicalCache({
+  ttlMs: SYSTEM_CENTER_TECHNICAL_CACHE_MS,
+  fingerprint: systemCenterTechnicalFingerprint,
+  load: async () => {
+    const diagnostics = serverDiagnostics();
+    const status = serverStatusSummary(diagnostics);
+    const notificationStatus = externalNotificationProviderStatus();
+    const updateStatus = await systemCenterUpdateStatus();
+    return {
+      diagnostics,
+      status,
+      notificationStatus,
+      updateStatus,
+      resources: systemCenterResourceSummary(diagnostics),
+      trustIndex: buildSystemTrustIndex({
+        diagnostics,
+        status,
+        updateStatus,
+        notificationStatus,
+        now: new Date(),
+      }),
+    };
+  },
+});
+
+const systemCenterControlCache = createSystemCenterTechnicalCache({
+  ttlMs: SYSTEM_CENTER_CONTROL_CACHE_MS,
+  fingerprint: () => systemCenterFileStamp(DEFAULT_ASSURANCE_CONTROL_SOCKET_PATH),
+  load: recoveryAssuranceControlStatus,
+});
+
+function systemCenterManualReason({ permissionAllowed, configured, serverEligible, control }) {
+  if (!permissionAllowed) return "Für diesen Zugang ist kein manueller Recovery-Test freigeschaltet.";
+  if (!serverEligible) return "Manuelle Recovery-Tests sind ausschließlich am eingerichteten Ubuntu-Server verfügbar.";
+  if (!configured) return "Recovery Assurance ist auf diesem Server noch nicht vollständig eingerichtet.";
+  if (control?.busy) return "Ein Recovery-Assurance-Test läuft bereits.";
+  if (!control?.available) return "Die geschützte Recovery-Steuerung ist derzeit nicht verfügbar.";
+  return "Startet einen vollständigen, isolierten Sicherungs- und Wiederherstellungsnachweis.";
+}
+
+async function systemCenterPayload(actor) {
+  const technical = await systemCenterTechnicalCache.read();
+  const { diagnostics, status } = technical;
+  const technicalDiagnostics = actor.permissions?.includes("system:diagnostics:technical") === true;
+  const runPermission = actor.permissions?.includes("system:recovery:run") === true
+    && ["admin", "it_admin", "developer"].includes(actor.role);
+  const serverEligible = serverModeActive && process.platform === "linux";
+  const configured = diagnostics.recoveryAssurance?.configured === true;
+  const permissionAllowed = technicalDiagnostics && runPermission;
+  const control = permissionAllowed && serverEligible && configured
+    ? await systemCenterControlCache.read()
+    : { available: false, busy: false, reason: null };
+  return {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    trustIndex: technical.trustIndex,
+    status,
+    recoveryAssurance: {
+      ...status.recoveryAssurance,
+      recentRuns: Array.isArray(status.recoveryAssurance?.recentRuns)
+        ? status.recoveryAssurance.recentRuns : [],
+    },
+    resources: technicalDiagnostics ? technical.resources : null,
+    capabilities: {
+      technicalDiagnostics,
+      canRunRecoveryAssurance: permissionAllowed && serverEligible && configured,
+    },
+    manualRun: {
+      available: control.available === true,
+      allowed: permissionAllowed && serverEligible && configured,
+      busy: control.busy === true,
+      reason: systemCenterManualReason({ permissionAllowed, configured, serverEligible, control }),
+      reasonCode: control.reason || null,
+    },
+  };
+}
+
+app.get("/api/portal/v1/system-center", async (request, response) => {
+  const actor = requirePortalAnyPermission(request, ["system:diagnostics:read", "system:diagnostics:technical"]);
+  response.json(await systemCenterPayload(actor));
+});
+
+app.post("/api/portal/v1/system-center/recovery-assurance/run", async (request, response) => {
+  const actor = requirePortalAdminOrLocal(request, "system:recovery:run");
+  if (actor.employeeNumber === "local" || !serverModeActive || process.platform !== "linux") {
+    throw httpError(409, "Der manuelle Recovery-Test ist ausschließlich am eingerichteten Ubuntu-Server verfügbar.", "RECOVERY_ASSURANCE_SERVER_REQUIRED");
+  }
+  if (!["admin", "it_admin", "developer"].includes(actor.role)
+    || !actor.permissions?.includes("system:diagnostics:technical")) {
+    throw httpError(403, "Für den manuellen Recovery-Test fehlt die technische Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  const body = request.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || Object.keys(body).length !== 1 || body.confirmation !== "RECOVERY_ASSURANCE_START") {
+    throw httpError(400, "Der Recovery-Test wurde nicht eindeutig bestätigt.", "RECOVERY_ASSURANCE_CONFIRMATION_REQUIRED");
+  }
+  const diagnostics = serverDiagnostics();
+  if (diagnostics.recoveryAssurance?.configured !== true) {
+    throw httpError(409, "Recovery Assurance ist auf diesem Server noch nicht vollständig eingerichtet.", "RECOVERY_ASSURANCE_NOT_CONFIGURED");
+  }
+  if (diagnostics.recoveryAssurance?.statusAvailable === true
+    && diagnostics.recoveryAssurance?.integrityVerified !== true) {
+    throw httpError(409, "Die signierte Recovery-Historie muss vor einem neuen Lauf technisch geprüft werden.", "RECOVERY_ASSURANCE_HISTORY_INVALID");
+  }
+  const requestId = crypto.randomUUID();
+  systemCenterControlCache.invalidate();
+  try {
+    const result = await requestRecoveryAssuranceRun({ requestId });
+    systemCenterTechnicalCache.invalidate();
+    systemCenterControlCache.invalidate();
+    auditPortal(actor.employeeNumber, "system.recovery_assurance.request.accepted", "recovery_assurance", requestId,
+      JSON.stringify({ result: "accepted" }));
+    response.status(202).json({
+      ok: true,
+      code: "RECOVERY_ASSURANCE_QUEUED",
+      requestId,
+      status: "queued",
+      acceptedAt: result.acceptedAt,
+      message: "Der Recovery-Assurance-Test wurde sicher eingereiht.",
+    });
+  } catch (error) {
+    systemCenterControlCache.invalidate();
+    const code = String(error?.code || "UNAVAILABLE");
+    const retryAfterSeconds = Number.isSafeInteger(error?.retryAfterSeconds)
+      ? Math.max(1, Math.min(900, error.retryAfterSeconds)) : null;
+    const outcome = code === "BUSY" ? "busy" : code === "RATE_LIMITED" ? "rate_limited" : "unavailable";
+    auditPortal(actor.employeeNumber, `system.recovery_assurance.request.${outcome}`, "recovery_assurance", requestId,
+      JSON.stringify({ result: outcome }));
+    if (retryAfterSeconds) response.setHeader("Retry-After", String(retryAfterSeconds));
+    if (code === "BUSY") throw httpError(409, "Ein Recovery-Assurance-Test läuft bereits.", "RECOVERY_ASSURANCE_BUSY");
+    if (code === "RATE_LIMITED") throw httpError(429, "Der letzte Recovery-Test liegt noch zu kurz zurück. Bitte später erneut versuchen.", "RECOVERY_ASSURANCE_RATE_LIMITED");
+    throw httpError(503, "Die geschützte Recovery-Steuerung ist derzeit nicht verfügbar.", "RECOVERY_ASSURANCE_CONTROL_UNAVAILABLE");
+  }
 });
 
 app.get("/api/portal/v1/rights-dashboard", (request, response) => {
