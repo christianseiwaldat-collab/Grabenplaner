@@ -112,6 +112,7 @@ if systemctl cat "$smoke_unit" >/dev/null 2>&1 \
   && systemctl cat "$smoke_unit" | grep -Fq 'MemorySwapMax=0' \
   && systemctl cat "$smoke_unit" | grep -Fq 'TasksMax=128' \
   && systemctl cat "$smoke_unit" | grep -Fq 'LimitNOFILE=1024' \
+  && systemctl cat "$smoke_unit" | grep -Fq 'LimitCORE=0' \
   && systemctl cat "$smoke_unit" | grep -Fq 'CPUQuota=100%' \
   && systemctl cat "$smoke_unit" | grep -Fq 'IOWeight=10' \
   && systemctl cat "$smoke_unit" | grep -Fq '/var/lib/grabenplaner-offsite/restore-tests' \
