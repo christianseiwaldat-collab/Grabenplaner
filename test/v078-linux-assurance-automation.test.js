@@ -218,6 +218,9 @@ test("application smoke receives only copied recovery data and a secret-free loc
 test("application smoke is a private-network, hard-timeout unit without live data or secret access", () => {
   assert.match(smokeUnit, /User=grabenplaner-offsite/);
   assert.doesNotMatch(smokeUnit, /^User=grabenplaner$/m);
+  assert.match(smokeUnit, /^Group=grabenplaner-offsite$/m);
+  assert.match(smokeUnit, /^SupplementaryGroups=grabenplaner$/m);
+  assert.equal((smokeUnit.match(/^SupplementaryGroups=/gm) || []).length, 1);
   assert.match(smokeUnit, /PrivateNetwork=yes/);
   assert.match(smokeUnit, /IPAddressAllow=localhost/);
   assert.match(smokeUnit, /IPAddressDeny=any/);

@@ -7,6 +7,10 @@ After=network.target
 Type=oneshot
 User=grabenplaner-offsite
 Group=grabenplaner-offsite
+# Nur diese isolierte Unit darf den root:grabenplaner-App-Code lesen. Das
+# Dienstkonto erhaelt dadurch keine dauerhafte Gruppenmitgliedschaft; Live-Daten
+# und Konfiguration bleiben weiterhin per InaccessiblePaths gesperrt.
+SupplementaryGroups=grabenplaner
 WorkingDirectory=/opt/grabenplaner/app
 ExecStart=/opt/grabenplaner-offsite/module/grabenplaner-offsite-application-smoke.sh
 NoNewPrivileges=yes
