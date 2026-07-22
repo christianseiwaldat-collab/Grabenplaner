@@ -129,11 +129,11 @@ function managedBlobFingerprint(schemaRelativePath) {
   return { paths: managedArtifacts, fingerprint: sha(payload) };
 }
 
-test("v0.75.8: Bridge hält die Git-Blobs von Runtime 2, Offsite v1 und Hardening v1 bytegleich", () => {
+test("v0.75.9: Bridge hält die Git-Blobs von Runtime 2, Offsite v1 und Hardening v1 bytegleich", () => {
   const result = spawnSync(process.execPath, [verifier, "--runtime-contract", root], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   const contract = JSON.parse(result.stdout);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version, "0.75.8-beta");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version, "0.75.9-beta");
   assert.equal(contract.deploymentSchemaVersion, 2);
   assert.equal(contract.offsiteModule.moduleVersion, 1);
   assert.equal(contract.hardeningModule.moduleVersion, 1);
@@ -149,7 +149,7 @@ test("v0.75.8: Bridge hält die Git-Blobs von Runtime 2, Offsite v1 und Hardenin
   assert.equal(hardening.fingerprint, "483eb5126cf8b75c5b71ac0c36878ab2d22d01e3056e59ab441c12a842721c6a");
 });
 
-test("v0.75.8: Compat akzeptiert exakt v1 und v4 und erzwingt die Migration 1 nach 4", () => {
+test("v0.75.9: Compat akzeptiert exakt v1 und v4 und erzwingt die Migration 1 nach 4", () => {
   assert.equal(classify(candidate(1, V1_PATHS, "v1"), installed(1, V1_PATHS, "v1")), "compatible");
   assert.equal(classify(candidate(4, V4_PATHS, "v4"), installed(4, V4_PATHS, "v4")), "compatible");
   assert.equal(classify(candidate(4, V4_PATHS, "v4"), installed(1, V1_PATHS, "v1")), "migration-required:1->4");
@@ -158,18 +158,35 @@ test("v0.75.8: Compat akzeptiert exakt v1 und v4 und erzwingt die Migration 1 na
   assert.equal(classify(candidate(4, V4_PATHS.slice(1), "v4"), installed(1, V1_PATHS, "v1")), "invalid");
 });
 
-const bridgePackageRoot = process.env.GRABENPLANER_V0758_PACKAGE_ROOT;
+test("v0.75.9: Updater vertraut dem Helper nur im eigenen root:Dienstgruppe-Schutzvertrag", () => {
+  const updater = fs.readFileSync(
+    path.join(root, "server-tools", "linux", "update-grabenplaner-server.sh"),
+    "utf8",
+  );
+  const common = fs.readFileSync(path.join(root, "server-tools", "linux", "lib", "common.sh"), "utf8");
+
+  assert.match(common, /chown -R "root:\$group" -- "\$path"/);
+  assert.match(common, /find "\$path" -type f ! -perm \/111 -exec chmod 0640/);
+  assert.match(updater, /service_group_gid="\$\(getent group "\$service_group"/);
+  assert.match(updater, /\[\[ "\$service_group_gid" =~ \^\[0-9\]\+\$ \]\]/);
+  assert.match(updater, /\[\[ -f "\$offsite_gate_helper" && ! -L "\$offsite_gate_helper"/);
+  assert.match(updater, /stat --format='%u:%g:%h' -- "\$offsite_gate_helper"\)" == "0:\$service_group_gid:1"/);
+  assert.doesNotMatch(updater, /offsite_gate_helper[\s\S]{0,300}"0:0:1"/);
+  assert.match(updater, /8#\$offsite_gate_helper_mode & 022/);
+});
+
+const bridgePackageRoot = process.env.GRABENPLANER_V0759_PACKAGE_ROOT;
 const originalVerifier = process.env.GRABENPLANER_V0757_VERIFIER;
-test("v0.75.8: originaler v0.75.7-Verifier akzeptiert das fertige Bridge-Paket", {
+test("v0.75.9: originaler v0.75.7-Verifier akzeptiert das fertige Bridge-Paket", {
   skip: !(bridgePackageRoot && originalVerifier),
 }, () => {
   const result = spawnSync(process.execPath, [originalVerifier, bridgePackageRoot], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(JSON.parse(result.stdout).appVersion, "0.75.8-beta");
+  assert.equal(JSON.parse(result.stdout).appVersion, "0.75.9-beta");
 });
 
 const v078PackageRoot = process.env.GRABENPLANER_V078_PACKAGE_ROOT;
-test("v0.75.8: Bridge-Verifier akzeptiert das finale v0.78-Paket", { skip: !v078PackageRoot }, () => {
+test("v0.75.9: Bridge-Verifier akzeptiert das finale v0.78-Paket", { skip: !v078PackageRoot }, () => {
   const result = spawnSync(process.execPath, [verifier, v078PackageRoot], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   const verified = JSON.parse(result.stdout);
