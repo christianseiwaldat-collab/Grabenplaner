@@ -6,11 +6,12 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("v0.78.5: Paket, Launcher, UI und aktuelle Dokumentation bleiben konsistent", () => {
+test("v0.78.6: Paket, Launcher, UI und aktuelle Dokumentation bleiben konsistent", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.78.5-beta");
+  assert.equal(packageJson.version, "0.78.6-beta");
 
-  assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.78.5 Beta starten.cmd")), true);
+  assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.78.6 Beta starten.cmd")), true);
+  assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.78.5 Beta starten.cmd")), false);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.78.4 Beta starten.cmd")), false);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.78.3 Beta starten.cmd")), false);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.78.2 Beta starten.cmd")), false);
@@ -23,11 +24,12 @@ test("v0.78.5: Paket, Launcher, UI und aktuelle Dokumentation bleiben konsistent
   const usbNotes = read("USB-HINWEISE.txt");
   const versionLog = read("VERSIONS-LOG.md");
 
-  assert.match(indexHtml, /v0\.78\.5 Beta/);
-  assert.match(readme, /v0\.78\.5 Beta/);
+  assert.match(indexHtml, /v0\.78\.6 Beta/);
+  assert.match(readme, /v0\.78\.6 Beta/);
   assert.match(readme, /nächtliche Recovery-Assurance-Automatik/);
   assert.match(serverDocs, /Recovery Assurance und System-Center v0\.78/);
-  assert.match(usbNotes, /Version v0\.78\.5 Beta/);
+  assert.match(usbNotes, /Version v0\.78\.6 Beta/);
+  assert.match(versionLog, /v0\.78\.6 Beta/);
   assert.match(versionLog, /v0\.78\.5 Beta/);
   assert.match(versionLog, /v0\.78\.4 Beta/);
   assert.match(versionLog, /v0\.78\.3 Beta/);
