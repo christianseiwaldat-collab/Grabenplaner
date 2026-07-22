@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.78.1 Beta · Linux-Updater-Berechtigungskorrektur
+
+- Die Offsite-Kompatibilitätsprüfung akzeptiert nun exakt die vom Linux-Updater selbst gesetzte, schreibgeschützte Eigentümerstruktur `root:<Dienstgruppe>`.
+- Root-Eigentum, eine eindeutige Datei ohne Hardlink sowie der Schutz vor Schreibzugriffen durch Gruppe und Andere bleiben zwingend.
+- Recovery Assurance, System-Center, Runtime-Schema 2 und Offsite-Modulvertrag v4 bleiben gegenüber v0.78 unverändert.
+
 ## v0.78 Beta · Automatisierte Recovery Assurance
 
 - Ein persistenter systemd-Timer startet täglich einen vollständigen, zufällig verzögerten Recovery-Assurance-Lauf. Eine globale Sperre und die vorhandenen Wartungssperren verhindern Parallelbetrieb mit Update, Upload oder Wiederherstellung.
