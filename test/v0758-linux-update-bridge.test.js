@@ -108,18 +108,45 @@ function candidate(version, paths, seed) {
   } };
 }
 
-test("v0.75.8: Bridge bleibt bytegleich auf Runtime 2, Offsite v1 und Hardening v1", () => {
+function managedBlobFingerprint(schemaRelativePath) {
+  const schema = JSON.parse(fs.readFileSync(path.join(root, schemaRelativePath), "utf8"));
+  const managedArtifacts = schema.managedArtifacts.slice().sort();
+  const result = spawnSync("git", ["ls-files", "-s", "--", ...managedArtifacts], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const blobs = new Map(result.stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => {
+    const match = line.match(/^\d+ ([0-9a-f]{40,64}) \d+\t(.+)$/);
+    assert.ok(match, `Unerwarteter Git-Indexeintrag: ${line}`);
+    return [match[2].replace(/\\/g, "/"), match[1]];
+  }));
+  assert.equal(blobs.size, managedArtifacts.length);
+  const payload = managedArtifacts.map((relative) => {
+    assert.ok(blobs.has(relative), `Verwaltetes Git-Blob fehlt: ${relative}`);
+    return `${relative}\0${blobs.get(relative)}\n`;
+  }).join("");
+  return { paths: managedArtifacts, fingerprint: sha(payload) };
+}
+
+test("v0.75.8: Bridge hält die Git-Blobs von Runtime 2, Offsite v1 und Hardening v1 bytegleich", () => {
   const result = spawnSync(process.execPath, [verifier, "--runtime-contract", root], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   const contract = JSON.parse(result.stdout);
   assert.equal(JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version, "0.75.8-beta");
   assert.equal(contract.deploymentSchemaVersion, 2);
-  assert.equal(contract.fingerprint, "c0769637c5ec9e38f75b2a685af8f336a57ed9bf429ab887160036eb55fd9cc0");
   assert.equal(contract.offsiteModule.moduleVersion, 1);
-  assert.equal(contract.offsiteModule.fingerprint, "0b48388e022a98a086ca7830b128dca2e50502ccec9260cd3c7e7ade05d07680");
-  assert.equal(contract.offsiteModule.installerSha256, "e1384321c85242a77920a0a23fb54d8f08b520fc2a0e199dabda558af9459552");
   assert.equal(contract.hardeningModule.moduleVersion, 1);
-  assert.equal(contract.hardeningModule.fingerprint, "e917ee0355874ce08f8ab096335ea6b533d151a4e9ab2bc4755d4f940682f91d");
+
+  const runtime = managedBlobFingerprint("server-tools/linux/runtime-schema.json");
+  const offsite = managedBlobFingerprint("server-tools/linux/offsite/module-schema.json");
+  const hardening = managedBlobFingerprint("server-tools/linux/hardening/module-schema.json");
+  assert.equal(runtime.paths.length, 7);
+  assert.equal(runtime.fingerprint, "6d41a3478aea65096cbd5b06dbc8ba787d69cb4e4bcc568e2712121c576762fd");
+  assert.equal(offsite.paths.length, 24);
+  assert.equal(offsite.fingerprint, "f024baadf6ba64a07ba9138e58daa9d893dc6268027b3dff29424fe11f4da569");
+  assert.equal(hardening.paths.length, 17);
+  assert.equal(hardening.fingerprint, "483eb5126cf8b75c5b71ac0c36878ab2d22d01e3056e59ab441c12a842721c6a");
 });
 
 test("v0.75.8: Compat akzeptiert exakt v1 und v4 und erzwingt die Migration 1 nach 4", () => {
