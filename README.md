@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.78.4 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
+  <strong>v0.78.5 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -131,8 +131,8 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 
 ## Schnellstart unter Windows
 
-1. Die portable ZIP-Datei unter [Grabenplaner v0.78.4 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.78.4-beta) herunterladen und entpacken.
-2. `Grabenplaner v0.78.4 Beta starten.cmd` doppelt anklicken.
+1. Die portable ZIP-Datei unter [Grabenplaner v0.78.5 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.78.5-beta) herunterladen und entpacken.
+2. `Grabenplaner v0.78.5 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.

@@ -226,6 +226,8 @@ test("application smoke is a private-network, hard-timeout unit without live dat
   assert.match(smokeUnit, /InaccessiblePaths=.*\/etc\/grabenplaner .*\/var\/lib\/grabenplaner .*\/var\/backups\/grabenplaner/);
   assert.match(smokeUnit, /\/var\/lib\/grabenplaner-offsite\/restore-tests(?:\s|$)/m);
   assert.match(smokeUnit, /\/var\/lib\/grabenplaner-offsite\/uploader-home(?:\s|$)/m);
+  assert.match(smokeUnit, /\/var\/lib\/grabenplaner-offsite\/credentials(?:\s|$)/m);
+  assert.doesNotMatch(smokeUnit, /\/var\/lib\/grabenplaner-offsite\/rclone-config(?:\s|$)/m);
   assert.doesNotMatch(smokeUnit, /\/var\/lib\/grabenplaner-offsite\/restore-test(?:\s|$)/m);
   assert.match(smokeUnit, /TimeoutStartSec=120s/);
   assert.match(smokeUnit, /RuntimeMaxSec=120s/);
