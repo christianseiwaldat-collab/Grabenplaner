@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.75.9 Beta · Linux-Updater-Berechtigungskorrektur
+
+- Die Offsite-Kompatibilitätsprüfung akzeptiert nun exakt die vom Linux-Updater selbst gesetzte, schreibgeschützte Eigentümerstruktur `root:<Dienstgruppe>`.
+- Root-Eigentum, eindeutige Datei ohne Hardlink sowie der Schutz vor Schreibzugriffen durch Gruppe und Andere bleiben zwingend.
+- Deployment-Schema 2 sowie sämtliche Offsite-v1-, Runtime- und Hardening-Artefakte bleiben unverändert.
+
 ## v0.75.8 Beta · Technische Linux-Update-Bridge
 
 - Vertrauenswürdige Linux-Paketprüfung akzeptiert ausschließlich die exakt freigegebenen Offsite-Verträge v1 und v4.
