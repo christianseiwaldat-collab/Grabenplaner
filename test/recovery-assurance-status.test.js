@@ -12,6 +12,8 @@ const {
   HEAD_FORMAT,
   SCHEMA_VERSION,
   MAX_RETURNED_EVENTS,
+  MAX_RETURNED_RUNS,
+  DEFAULT_MAXIMUM_RUN_AGE_HOURS,
   canonicalHash,
   eventUnsigned,
   headUnsigned,
@@ -170,6 +172,47 @@ test("RAS reader verifies the complete signed chain but returns at most 30 redac
     for (const forbiddenKey of ["previousHash", "eventHash", "signature", "keyId", "path", "account", "oauth", "secret"]) {
       assert.equal(serialized.toLowerCase().includes(`\"${forbiddenKey.toLowerCase()}\"`), false, forbiddenKey);
     }
+  } finally { cleanup(fixture); }
+});
+
+test("RAS reader aggregates complete redacted runs before applying the history limit", () => {
+  const fixture = makeFixture(0);
+  try {
+    let occurredAt = Date.parse("2026-07-20T00:00:00.000Z");
+    for (let runIndex = 0; runIndex < MAX_RETURNED_RUNS + 3; runIndex += 1) {
+      const runId = crypto.randomUUID();
+      for (const eventType of [
+        "full-assurance-started",
+        "oauth-policy-passed",
+        "backup-passed",
+        "repository-check-passed",
+        "restore-test-passed",
+        "application-smoke-not-run",
+        "full-assurance-passed",
+      ]) {
+        occurredAt += 1_000;
+        addSignedEvent(fixture, {
+          eventType,
+          runId,
+          trigger: runIndex === MAX_RETURNED_RUNS + 2 ? "manual-admin-ui" : "scheduled-weekly",
+          occurredAt: new Date(occurredAt).toISOString(),
+          evidence: eventType === "full-assurance-passed"
+            ? { snapshotIdPrefix: runIndex.toString(16).padStart(12, "0"), receiptSha256: runIndex.toString(16).padStart(64, "0"), appVersion: "0.77.0-beta" }
+            : {},
+        });
+      }
+    }
+    const result = readRecoveryAssuranceStatus({ ...fixture.options, now: new Date("2026-07-20T03:00:00.000Z") });
+    assert.equal(result.recentRuns.length, MAX_RETURNED_RUNS);
+    assert.equal(result.recentRuns[0].trigger, "manual-admin-ui");
+    assert.equal(result.recentRuns[0].status, "passed");
+    assert.equal(result.recentRuns[0].phases.length, 5);
+    assert.equal(result.recentRuns[0].phases.at(-1).status, "not_run");
+    assert.equal(result.recentRuns[0].durationSeconds, 6);
+    assert.equal(result.recentRuns[0].snapshotIdPrefix.length, 12);
+    assert.equal(result.recentRuns[0].receiptSha256Prefix.length, 12);
+    assert.equal(Object.hasOwn(result.recentRuns[0], "runId"), false);
+    assert.doesNotMatch(JSON.stringify(result.recentRuns), /receiptSha256"|eventHash|signature|keyId/);
   } finally { cleanup(fixture); }
 });
 
@@ -395,6 +438,27 @@ test("RAS reader handles unconfigured, empty, future-dated and operational failu
       assert.equal(result.lastErrorCode, null);
     } finally { cleanup(fixture); }
   });
+
+  await t.test("an otherwise valid but too old passed run is reported as stale", () => {
+    const fixture = makeFixture(7);
+    try {
+      const result = readRecoveryAssuranceStatus({
+        ...fixture.options,
+        now: new Date("2027-01-01T00:00:00.000Z"),
+        maximumRunAgeHours: 24,
+      });
+      assert.equal(result.integrityVerified, true, JSON.stringify(result));
+      assert.equal(result.state, "warning");
+      assert.equal(result.stale, true);
+      assert.ok(result.ageHours > 24);
+      assert.equal(result.maximumAgeHours, 24);
+      assert.equal(result.severity, "warning");
+    } finally { cleanup(fixture); }
+  });
+});
+
+test("RAS freshness default covers the quarterly restore cadence", () => {
+  assert.equal(DEFAULT_MAXIMUM_RUN_AGE_HOURS, 24 * 100);
 });
 
 test("RAS reader accepts the exact history emitted by the privileged writer", () => {

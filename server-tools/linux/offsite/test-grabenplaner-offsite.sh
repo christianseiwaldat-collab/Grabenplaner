@@ -56,6 +56,11 @@ else
   fail "Dienstbenutzergruppen" "unerwartete Zusatzgruppe vorhanden"
 fi
 if offsite_assert_group_isolation >/dev/null 2>&1; then ok "Gruppenisolation" "keine fremden Konten"; else fail "Gruppenisolation" "fremdes Konto oder GID-Belegung"; fi
+if offsite_assert_control_group_isolation >/dev/null 2>&1; then
+  ok "RAS-Steuerungsgruppe" "ausschliesslich dem Grabenplaner-Dienstkonto zugewiesen"
+else
+  fail "RAS-Steuerungsgruppe" "fremdes Konto oder unsichere GID-Belegung"
+fi
 recovery_command="$OFFSITE_APP_ROOT/server-tools/linux/recovery/grabenplaner-recovery.sh"
 recovery_link="/usr/local/sbin/grabenplaner-recovery"
 if [[ -f "$recovery_command" && ! -L "$recovery_command" && -L "$recovery_link" \
@@ -91,6 +96,39 @@ fi
 for timer in grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer; do
   if systemctl is-enabled --quiet "$timer" && systemctl is-active --quiet "$timer"; then ok "Timer $timer" "aktiv"; else fail "Timer $timer" "nicht aktiv"; fi
 done
+
+control_socket_unit="grabenplaner-offsite-assurance-control.socket"
+control_socket_root="/run/grabenplaner-assurance-control"
+control_socket_path="$control_socket_root/request.sock"
+control_gid="$(getent group "$OFFSITE_CONTROL_GROUP" | awk -F: '{print $3}')"
+if systemctl is-enabled --quiet "$control_socket_unit" && systemctl is-active --quiet "$control_socket_unit"; then
+  ok "RAS-Steuerungssocket" "aktiv und beim Systemstart aktiviert"
+else
+  fail "RAS-Steuerungssocket" "nicht aktiv oder nicht aktiviert"
+fi
+if [[ "$control_gid" =~ ^[0-9]+$ && -d "$control_socket_root" && ! -L "$control_socket_root" \
+  && -S "$control_socket_path" && ! -L "$control_socket_path" \
+  && "$(stat --format='%u:%g:%a' -- "$control_socket_root")" == "0:0:755" \
+  && "$(stat --format='%u:%g:%a:%h' -- "$control_socket_path")" == "0:$control_gid:660:1" ]]; then
+  ok "RAS-Socketrechte" "root und dedizierte Steuerungsgruppe, Modus 0660"
+else
+  fail "RAS-Socketrechte" "Pfad, Besitz oder Modus weicht vom Sicherheitsvertrag ab"
+fi
+control_client="$OFFSITE_APP_ROOT/lib/recovery-assurance-control-client.js"
+if [[ -f "$control_client" && ! -L "$control_client" ]] && runuser --user "$OFFSITE_APP_USER" -- env -i PATH=/usr/bin:/bin \
+  "$OFFSITE_NODE" - "$control_client" <<'NODE' >/dev/null 2>&1
+const client = require(process.argv[2]);
+client.recoveryAssuranceControlStatus({ timeoutMs: 3000 })
+  .then((status) => {
+    if (!status || status.available !== true || typeof status.busy !== "boolean" || status.reason !== null && typeof status.reason !== "string") process.exitCode = 1;
+  })
+  .catch(() => { process.exitCode = 1; });
+NODE
+then
+  ok "RAS-Steuerungsprotokoll" "redigierter Status als App-Dienstkonto abrufbar"
+else
+  fail "RAS-Steuerungsprotokoll" "Socket oder Statusprotokoll nicht sicher nutzbar"
+fi
 
 status_gid="$(getent group "$OFFSITE_STATUS_GROUP" | awk -F: '{print $3}')"
 if [[ "$status_gid" =~ ^[0-9]+$ ]] && offsite_assurance_history inspect >/dev/null 2>&1; then

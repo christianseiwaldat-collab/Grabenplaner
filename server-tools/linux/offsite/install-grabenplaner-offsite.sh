@@ -49,7 +49,7 @@ while (($#)); do
 done
 
 offsite_require_root
-for command_name in awk chown chmod cmp cp curl cut dirname find getent grep groupadd id install ln mktemp mv openssl paste readlink realpath rm runuser sed sha256sum sleep sort stat systemctl tr useradd usermod wc; do
+for command_name in awk chown chmod cmp cp curl cut dirname find flock getent gpasswd grep groupadd groupdel id install ln mktemp mv openssl paste readlink realpath rm runuser sed sha256sum sleep sort stat systemctl tr useradd usermod wc; do
   offsite_require_command "$command_name"
 done
 [[ -x "$OFFSITE_NODE" ]] || offsite_die "Node.js muss unter /usr/bin/node installiert sein."
@@ -264,11 +264,34 @@ status_had_original=0
 declare -a timer_was_enabled=(0 0 0)
 declare -a timer_was_active=(0 0 0)
 timers_paused=0
+control_group_created=0
+control_member_added=0
+control_socket="grabenplaner-offsite-assurance-control.socket"
+control_socket_was_enabled=0
+control_socket_was_active=0
+control_socket_paused=0
 setup_complete=0
+rollback_control_group() {
+  (( setup_complete == 0 )) || return 0
+  if (( control_member_added == 1 || control_group_created == 1 )) && getent group "$OFFSITE_CONTROL_GROUP" >/dev/null; then
+    gpasswd --delete "$OFFSITE_APP_USER" "$OFFSITE_CONTROL_GROUP" >/dev/null 2>&1 || true
+    control_member_added=0
+  fi
+  if (( control_group_created == 1 )) && getent group "$OFFSITE_CONTROL_GROUP" >/dev/null; then
+    control_gid="$(getent group "$OFFSITE_CONTROL_GROUP" | awk -F: '{print $3}')"
+    control_primary="$(getent passwd | awk -F: -v gid="$control_gid" '$4==gid {print $1}' | sort | paste -sd, -)"
+    control_members="$(getent group "$OFFSITE_CONTROL_GROUP" | awk -F: '{print $4}' | tr ',' '\n' | sed '/^$/d' | sort | paste -sd, -)"
+    [[ -z "$control_primary" && -z "$control_members" ]] \
+      || offsite_die "Die neu angelegte Recovery-Assurance-Steuerungsgruppe konnte nicht sicher zurueckgerollt werden."
+    groupdel "$OFFSITE_CONTROL_GROUP"
+    control_group_created=0
+  fi
+}
 cleanup() {
   local status=$?
   if (( setup_complete == 0 && commit_started == 1 )); then
-    for unit in 'grabenplaner-offsite-assurance@*.service' \
+    for unit in 'grabenplaner-offsite-assurance-control@*.service' grabenplaner-offsite-assurance-control.socket \
+      'grabenplaner-offsite-assurance@*.service' \
       grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer \
       grabenplaner-offsite-upload.service grabenplaner-offsite-prepare.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
       systemctl disable --now "$unit" >/dev/null 2>&1 || true
@@ -326,7 +349,8 @@ cleanup() {
     rm -rf --one-file-system -- "$OFFSITE_CONFIG_ROOT"
     install -d -m 0700 -o root -g root -- "$OFFSITE_CONFIG_ROOT"
     if (( config_had_original == 1 )); then cp --archive -- "$rollback_root/config/." "$OFFSITE_CONFIG_ROOT/"; fi
-    for unit_name in 'grabenplaner-offsite-assurance@.service' \
+    for unit_name in grabenplaner-offsite-assurance-control.socket 'grabenplaner-offsite-assurance-control@.service' \
+      'grabenplaner-offsite-assurance@.service' \
       grabenplaner-offsite-prepare.service grabenplaner-offsite-upload.service grabenplaner-offsite-upload.timer \
       grabenplaner-offsite-check.service grabenplaner-offsite-check.timer \
       grabenplaner-offsite-restore-test.service grabenplaner-offsite-restore-test.timer; do
@@ -340,8 +364,10 @@ cleanup() {
       rm -f -- "$OFFSITE_STATUS_FILE"
     fi
     systemctl daemon-reload >/dev/null 2>&1 || true
+    rollback_control_group
     systemctl restart "$OFFSITE_APP_SERVICE" >/dev/null 2>&1 || true
   fi
+  rollback_control_group
   if (( setup_complete == 0 && timers_paused == 1 )); then
     systemctl daemon-reload >/dev/null 2>&1 || true
     timers=(grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer)
@@ -349,6 +375,11 @@ cleanup() {
       (( timer_was_enabled[index] == 1 )) && systemctl enable "${timers[index]}" >/dev/null 2>&1 || true
       (( timer_was_active[index] == 1 )) && systemctl start "${timers[index]}" >/dev/null 2>&1 || true
     done
+  fi
+  if (( setup_complete == 0 && control_socket_paused == 1 )); then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    (( control_socket_was_enabled == 1 )) && systemctl enable "$control_socket" >/dev/null 2>&1 || true
+    (( control_socket_was_active == 1 )) && systemctl start "$control_socket" >/dev/null 2>&1 || true
   fi
   [[ -f "$contract_receipt" && ! -L "$contract_receipt" ]] && rm -f -- "$contract_receipt"
   [[ -n "$setup_credentials" ]] && offsite_remove_uploader_credentials "$setup_credentials" 2>/dev/null || true
@@ -361,6 +392,26 @@ cleanup() {
   exit "$status"
 }
 trap cleanup EXIT
+
+# Module v3 adds exactly one narrowly scoped privilege bridge. During an
+# upgrade from v2 this group is created transactionally; any later installer
+# failure removes the membership and the group again before the app restarts.
+if getent group "$OFFSITE_CONTROL_GROUP" >/dev/null; then
+  control_gid="$(getent group "$OFFSITE_CONTROL_GROUP" | awk -F: '{print $3}')"
+  control_primary="$(getent passwd | awk -F: -v gid="$control_gid" '$4==gid {print $1}' | sort | paste -sd, -)"
+  control_members="$(getent group "$OFFSITE_CONTROL_GROUP" | awk -F: '{print $4}' | tr ',' '\n' | sed '/^$/d' | sort | paste -sd, -)"
+  [[ -z "$control_primary" && ( -z "$control_members" || "$control_members" == "$OFFSITE_APP_USER" ) ]] \
+    || offsite_die "Die vorhandene Recovery-Assurance-Steuerungsgruppe enthaelt unerwartete Konten."
+else
+  control_group_created=1
+  groupadd --system "$OFFSITE_CONTROL_GROUP"
+  control_members=""
+fi
+if [[ "$control_members" != "$OFFSITE_APP_USER" ]]; then
+  control_member_added=1
+  usermod --append --groups "$OFFSITE_CONTROL_GROUP" "$OFFSITE_APP_USER"
+fi
+offsite_assert_control_group_isolation
 
 "$OFFSITE_NODE" "$SCRIPT_DIR/lib/offsite-contract.js" contract "$SCRIPT_DIR" >"$contract_receipt" \
   || offsite_die "Der Offsite-Modulvertrag konnte nicht verifiziert werden."
@@ -449,6 +500,13 @@ for index in 0 1 2; do
   systemctl disable --now "${timers[index]}" >/dev/null 2>&1 || true
 done
 timers_paused=1
+if [[ "$(systemctl show --property=LoadState --value "$control_socket" 2>/dev/null || true)" != "not-found" ]]; then
+  systemctl is-enabled --quiet "$control_socket" && control_socket_was_enabled=1 || true
+  systemctl is-active --quiet "$control_socket" && control_socket_was_active=1 || true
+  systemctl disable --now "$control_socket" >/dev/null 2>&1 || true
+fi
+systemctl stop 'grabenplaner-offsite-assurance-control@*.service' >/dev/null 2>&1 || true
+control_socket_paused=1
 gp_acquire_maintenance_lock
 offsite_acquire_assurance_lock
 offsite_acquire_repository_lock
@@ -535,7 +593,7 @@ for template in "$module_candidate"/systemd/*.in; do
     fi
   fi
 done
-for service_name in grabenplaner-offsite-prepare.service grabenplaner-offsite-upload.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
+for service_name in 'grabenplaner-offsite-assurance-control@*.service' grabenplaner-offsite-prepare.service grabenplaner-offsite-upload.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
   deadline=$((SECONDS + 14400))
   while systemctl is-active --quiet "$service_name"; do
     (( SECONDS < deadline )) || offsite_die "Ein laufender Offsite-Vorgang wurde nicht rechtzeitig abgeschlossen."
@@ -637,9 +695,12 @@ mv -f -- "$env_temporary" "$OFFSITE_APP_ENV"
 
 if (( status_configured_before == 0 )); then offsite_status configured >/dev/null; fi
 systemctl daemon-reload
-systemctl enable --now grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer >/dev/null
+systemctl enable --now grabenplaner-offsite-assurance-control.socket \
+  grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer >/dev/null
 systemctl restart "$OFFSITE_APP_SERVICE"
 systemctl is-active --quiet "$OFFSITE_APP_SERVICE" || offsite_die "Der Grabenplaner-Dienst konnte nach der Offsite-Aktivierung nicht gestartet werden."
+systemctl is-active --quiet grabenplaner-offsite-assurance-control.socket \
+  || offsite_die "Der abgesicherte Recovery-Assurance-Steuerungssocket wurde nicht aktiviert."
 app_port="$("$OFFSITE_NODE" - "$OFFSITE_APP_ENV" <<'NODE'
 const fs = require("node:fs");
 const matches = fs.readFileSync(process.argv[2], "utf8").split(/\r?\n/).filter((line) => /^PORT=/.test(line));
