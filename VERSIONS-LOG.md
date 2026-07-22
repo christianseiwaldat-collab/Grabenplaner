@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.75.8 Beta · Technische Linux-Update-Bridge
+
+- Vertrauenswürdige Linux-Paketprüfung akzeptiert ausschließlich die exakt freigegebenen Offsite-Verträge v1 und v4.
+- Ein bestehendes Offsite-Modul v1 wird vor dem Sprung auf v4 ausdrücklich als migrationspflichtig erkannt; das Live-Modul wird dabei nicht stillschweigend verändert.
+- Deployment-Schema 2 sowie sämtliche Offsite-v1-, Runtime- und Hardening-Artefakte bleiben bytegleich zu v0.75.7.
+
 ## v0.75.7 Beta · Ubuntu-Offsite-Kompatibilitätsupdate
 
 - Die vier root-gestützten Offsite-Dienste verzichten unter Ubuntu 26.04 auf die redundanten systemd-Zeilen `User=root` und `Group=root`. Sie starten weiterhin mit systemds sicherem Root-Standard, können danach aber zuverlässig zum unprivilegierten App- beziehungsweise Uploaderkonto wechseln.
