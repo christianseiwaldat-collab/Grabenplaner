@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.78.2 Beta · Verschlüsselte rclone-Konfigurationen
+
+- Der Ubuntu-Offsite-Installer und die sichere OAuth-Neuanbindung akzeptieren nun den offiziellen rclone-Kommentarvorspann vor dem Verschlüsselungsmarker.
+- Ausschließlich leere Zeilen und Kommentarzeilen sind vor `RCLONE_ENCRYPT_V0:` zulässig; unverschlüsselte oder gemischte Konfigurationen bleiben gesperrt.
+- Regressionstests decken das offizielle Format sowie manipulierte Klartextvorspänne für beide sicherheitskritischen Eingabepfade ab.
+
 ## v0.78.1 Beta · Linux-Updater-Berechtigungskorrektur
 
 - Die Offsite-Kompatibilitätsprüfung akzeptiert nun exakt die vom Linux-Updater selbst gesetzte, schreibgeschützte Eigentümerstruktur `root:<Dienstgruppe>`.
