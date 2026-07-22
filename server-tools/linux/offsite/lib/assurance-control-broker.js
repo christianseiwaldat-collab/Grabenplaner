@@ -9,11 +9,18 @@ const path = require("node:path");
 const REQUEST_FORMAT = "grabenplaner-assurance-control-request";
 const RESPONSE_FORMAT = "grabenplaner-assurance-control-response";
 const STATE_FORMAT = "grabenplaner-assurance-control-state";
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
+const STATE_SCHEMA_VERSION = 1;
+const SUPPORTED_SCHEMA_VERSIONS = new Set([1, 2]);
 const MAX_REQUEST_BYTES = 1024;
 const RATE_LIMIT_SECONDS = 15 * 60;
 const SYSTEMCTL = "/usr/bin/systemctl";
+const DATE = "/usr/bin/date";
+const FLOCK = "/usr/bin/flock";
 const ASSURANCE_UNIT = "grabenplaner-offsite-assurance@manual-admin-ui.service";
+const ASSURANCE_TIMER = "grabenplaner-offsite-assurance.timer";
+const ASSURANCE_TIMER_FRAGMENT = "/etc/systemd/system/grabenplaner-offsite-assurance.timer";
+const ASSURANCE_LOCK = "/run/grabenplaner-offsite/assurance.lock";
 const STATE_PATH = "/run/grabenplaner-assurance-control/state.json";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const REQUEST_KEYS = new Set(["action", "format", "requestId", "schemaVersion"]);
@@ -56,7 +63,8 @@ function parseRequest(buffer) {
   let value;
   try { value = JSON.parse(text.slice(0, -1)); }
   catch { fail("ASSURANCE_REQUEST_INVALID"); }
-  if (!exactKeys(value, REQUEST_KEYS) || value.format !== REQUEST_FORMAT || value.schemaVersion !== SCHEMA_VERSION
+  if (!exactKeys(value, REQUEST_KEYS) || value.format !== REQUEST_FORMAT
+    || !SUPPORTED_SCHEMA_VERSIONS.has(value.schemaVersion)
     || !["start-manual-assurance", "status"].includes(value.action)
     || !UUID_PATTERN.test(String(value.requestId || ""))) {
     fail("ASSURANCE_REQUEST_INVALID");
@@ -66,15 +74,142 @@ function parseRequest(buffer) {
 
 function response(requestId, code, options = {}) {
   const accepted = options.accepted === true;
-  return {
+  const schemaVersion = SUPPORTED_SCHEMA_VERSIONS.has(options.schemaVersion)
+    ? options.schemaVersion
+    : SCHEMA_VERSION;
+  const value = {
     format: RESPONSE_FORMAT,
-    schemaVersion: SCHEMA_VERSION,
+    schemaVersion,
     requestId: UUID_PATTERN.test(String(requestId || "")) ? requestId : crypto.randomUUID(),
     accepted,
     code,
     acceptedAt: accepted ? options.acceptedAt : null,
     retryAfterSeconds: code === "ASSURANCE_REQUEST_RATE_LIMITED" ? options.retryAfterSeconds : null,
   };
+  if (schemaVersion === 2) value.scheduler = normalizeSchedulerEvidence(options.scheduler);
+  return value;
+}
+
+function untrustedSchedulerEvidence() {
+  return {
+    evidenceTrusted: false,
+    timerInstalled: false,
+    timerEnabled: false,
+    nextElapse: null,
+    checkedAt: null,
+  };
+}
+
+function normalizeSchedulerEvidence(value) {
+  const keys = new Set(["evidenceTrusted", "timerInstalled", "timerEnabled", "nextElapse", "checkedAt"]);
+  if (!exactKeys(value, keys) || typeof value.evidenceTrusted !== "boolean"
+    || typeof value.timerInstalled !== "boolean" || typeof value.timerEnabled !== "boolean"
+    || (value.nextElapse !== null && !canonicalUtcTimestamp(value.nextElapse))
+    || (value.checkedAt !== null && !canonicalUtcTimestamp(value.checkedAt))) {
+    return untrustedSchedulerEvidence();
+  }
+  if (!value.evidenceTrusted) return untrustedSchedulerEvidence();
+  if (!value.timerInstalled && (value.timerEnabled || value.nextElapse !== null)) return untrustedSchedulerEvidence();
+  if (value.timerEnabled && (!value.timerInstalled || value.nextElapse === null)) return untrustedSchedulerEvidence();
+  if (value.checkedAt === null) return untrustedSchedulerEvidence();
+  return { ...value };
+}
+
+function strictCommandLine(result, acceptedStatuses = new Set([0])) {
+  if (!result || result.error || !acceptedStatuses.has(result.status) || typeof result.stdout !== "string"
+    || Buffer.byteLength(result.stdout, "utf8") > 128 || result.stdout.includes("\0") || result.stdout.includes("\r")) {
+    fail("ASSURANCE_CONTROL_FAILED");
+  }
+  const text = result.stdout.endsWith("\n") ? result.stdout.slice(0, -1) : result.stdout;
+  if (!text || text.includes("\n")) fail("ASSURANCE_CONTROL_FAILED");
+  return text;
+}
+
+function schedulerSystemctlValue(property, options = {}) {
+  const runner = options.schedulerSpawnSync || childProcess.spawnSync;
+  const result = runner(SYSTEMCTL, ["show", `--property=${property}`, "--value", ASSURANCE_TIMER], {
+    encoding: "utf8",
+    timeout: 3000,
+    maxBuffer: 256,
+    stdio: ["ignore", "pipe", "ignore"],
+    env: { LANG: "C", LC_ALL: "C", PATH: "/usr/bin:/bin" },
+  });
+  return strictCommandLine(result);
+}
+
+function canonicalizeSystemdTimestamp(value, options = {}) {
+  const runner = options.dateSpawnSync || childProcess.spawnSync;
+  const result = runner(DATE, ["--date", value, "--utc", "+%Y-%m-%dT%H:%M:%S.000Z"], {
+    encoding: "utf8",
+    timeout: 3000,
+    maxBuffer: 256,
+    stdio: ["ignore", "pipe", "ignore"],
+    env: { LANG: "C", LC_ALL: "C", PATH: "/usr/bin:/bin" },
+  });
+  const canonical = strictCommandLine(result);
+  if (!canonicalUtcTimestamp(canonical)) fail("ASSURANCE_CONTROL_FAILED");
+  return canonical;
+}
+
+function schedulerEvidence(options = {}) {
+  try {
+    const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
+    const checkedAt = new Date(nowMs).toISOString();
+    if (!canonicalUtcTimestamp(checkedAt)) fail("ASSURANCE_CONTROL_FAILED");
+    const loadState = schedulerSystemctlValue("LoadState", options);
+    if (loadState === "not-found") {
+      return normalizeSchedulerEvidence({
+        evidenceTrusted: true,
+        timerInstalled: false,
+        timerEnabled: false,
+        nextElapse: null,
+        checkedAt,
+      });
+    }
+    if (loadState !== "loaded") fail("ASSURANCE_CONTROL_FAILED");
+    if (schedulerSystemctlValue("FragmentPath", options) !== ASSURANCE_TIMER_FRAGMENT) {
+      fail("ASSURANCE_CONTROL_FAILED");
+    }
+
+    const runner = options.schedulerSpawnSync || childProcess.spawnSync;
+    const enabledResult = runner(SYSTEMCTL, ["is-enabled", ASSURANCE_TIMER], {
+      encoding: "utf8",
+      timeout: 3000,
+      maxBuffer: 256,
+      stdio: ["ignore", "pipe", "ignore"],
+      env: { LANG: "C", LC_ALL: "C", PATH: "/usr/bin:/bin" },
+    });
+    const enabledState = strictCommandLine(enabledResult, new Set([0, 1]));
+    const enabled = enabledResult.status === 0 && enabledState === "enabled";
+    const disabled = enabledResult.status === 1 && enabledState === "disabled";
+    if (!enabled && !disabled) fail("ASSURANCE_CONTROL_FAILED");
+
+    const activeResult = runner(SYSTEMCTL, ["is-active", ASSURANCE_TIMER], {
+      encoding: "utf8",
+      timeout: 3000,
+      maxBuffer: 256,
+      stdio: ["ignore", "pipe", "ignore"],
+      env: { LANG: "C", LC_ALL: "C", PATH: "/usr/bin:/bin" },
+    });
+    const activeState = strictCommandLine(activeResult, new Set([0, 3]));
+    const active = activeResult.status === 0 && activeState === "active";
+    const inactive = activeResult.status === 3 && activeState === "inactive";
+    if (!active && !inactive) fail("ASSURANCE_CONTROL_FAILED");
+
+    const operational = enabled && active;
+    const nextElapse = operational
+      ? canonicalizeSystemdTimestamp(schedulerSystemctlValue("NextElapseUSecRealtime", options), options)
+      : null;
+    return normalizeSchedulerEvidence({
+      evidenceTrusted: true,
+      timerInstalled: true,
+      timerEnabled: operational,
+      nextElapse,
+      checkedAt,
+    });
+  } catch {
+    return untrustedSchedulerEvidence();
+  }
 }
 
 function assertStateDirectory(statePath, options = {}) {
@@ -107,7 +242,7 @@ function readRateLimitState(statePath = STATE_PATH, options = {}) {
       fail("ASSURANCE_CONTROL_FAILED");
     }
     const value = JSON.parse(fs.readFileSync(descriptor, "utf8"));
-    if (!exactKeys(value, STATE_KEYS) || value.format !== STATE_FORMAT || value.schemaVersion !== SCHEMA_VERSION
+    if (!exactKeys(value, STATE_KEYS) || value.format !== STATE_FORMAT || value.schemaVersion !== STATE_SCHEMA_VERSION
       || !UUID_PATTERN.test(String(value.lastRequestId || "")) || !canonicalUtcTimestamp(value.lastAcceptedAt)) {
       fail("ASSURANCE_CONTROL_FAILED");
     }
@@ -122,7 +257,7 @@ function readRateLimitState(statePath = STATE_PATH, options = {}) {
 
 function writeRateLimitState(statePath, value, options = {}) {
   const directory = assertStateDirectory(statePath, options);
-  if (!exactKeys(value, STATE_KEYS) || value.format !== STATE_FORMAT || value.schemaVersion !== SCHEMA_VERSION
+  if (!exactKeys(value, STATE_KEYS) || value.format !== STATE_FORMAT || value.schemaVersion !== STATE_SCHEMA_VERSION
     || !UUID_PATTERN.test(String(value.lastRequestId || "")) || !canonicalUtcTimestamp(value.lastAcceptedAt)) {
     fail("ASSURANCE_CONTROL_FAILED");
   }
@@ -164,11 +299,46 @@ function systemctlValue(property, options = {}) {
 }
 
 function assuranceUnitBusy(options = {}) {
+  if ((typeof options.globalLockBusy === "boolean" || !options.spawnSync) && globalAssuranceBusy(options)) return true;
   if (systemctlValue("LoadState", options) !== "loaded") fail("ASSURANCE_CONTROL_FAILED");
   const activeState = systemctlValue("ActiveState", options);
   if (["active", "activating", "reloading", "deactivating"].includes(activeState)) return true;
   if (!["inactive", "failed"].includes(activeState)) fail("ASSURANCE_CONTROL_FAILED");
   return false;
+}
+
+function assertAssuranceLockBoundary(lockPath = ASSURANCE_LOCK, options = {}) {
+  const directory = path.dirname(path.resolve(lockPath));
+  let directoryStat;
+  try { directoryStat = fs.lstatSync(directory); }
+  catch { fail("ASSURANCE_CONTROL_FAILED"); }
+  if (!directoryStat.isDirectory() || directoryStat.isSymbolicLink()
+    || (process.platform !== "win32" && ((directoryStat.mode & 0o7777) !== 0o755 || directoryStat.uid !== 0 || directoryStat.gid !== 0))) {
+    fail("ASSURANCE_CONTROL_FAILED");
+  }
+  if (!fs.existsSync(lockPath)) return;
+  let lockStat;
+  try { lockStat = fs.lstatSync(lockPath); }
+  catch { fail("ASSURANCE_CONTROL_FAILED"); }
+  if (!lockStat.isFile() || lockStat.isSymbolicLink() || lockStat.nlink !== 1
+    || (process.platform !== "win32" && ((lockStat.mode & 0o7777) !== 0o600 || lockStat.uid !== 0 || lockStat.gid !== 0))) {
+    fail("ASSURANCE_CONTROL_FAILED");
+  }
+}
+
+function globalAssuranceBusy(options = {}) {
+  if (typeof options.globalLockBusy === "boolean") return options.globalLockBusy;
+  assertAssuranceLockBoundary(options.assuranceLock || ASSURANCE_LOCK, options);
+  const runner = options.lockSpawnSync || childProcess.spawnSync;
+  const result = runner(FLOCK, ["--nonblock", "--close", options.assuranceLock || ASSURANCE_LOCK, "/usr/bin/true"], {
+    timeout: 3000,
+    stdio: "ignore",
+    env: { LANG: "C", LC_ALL: "C", PATH: "/usr/bin:/bin" },
+  });
+  if (result.error) fail("ASSURANCE_CONTROL_FAILED");
+  if (result.status === 0) return false;
+  if (result.status === 1) return true;
+  fail("ASSURANCE_CONTROL_FAILED");
 }
 
 function startAssuranceUnit(options = {}) {
@@ -187,12 +357,16 @@ function handleRequest(buffer, options = {}) {
   catch (error) {
     return response(null, error?.code === "ASSURANCE_REQUEST_INVALID" ? error.code : "ASSURANCE_CONTROL_FAILED");
   }
+  const responseOptions = {
+    schemaVersion: request.schemaVersion,
+    scheduler: request.schemaVersion === 2 ? schedulerEvidence(options) : undefined,
+  };
   try {
     const busy = assuranceUnitBusy(options);
     if (request.action === "status") {
-      return response(request.requestId, busy ? "ASSURANCE_REQUEST_BUSY" : "ASSURANCE_CONTROL_READY");
+      return response(request.requestId, busy ? "ASSURANCE_REQUEST_BUSY" : "ASSURANCE_CONTROL_READY", responseOptions);
     }
-    if (busy) return response(request.requestId, "ASSURANCE_REQUEST_BUSY");
+    if (busy) return response(request.requestId, "ASSURANCE_REQUEST_BUSY", responseOptions);
     const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
     const now = new Date(nowMs);
     if (!Number.isFinite(now.getTime())) fail("ASSURANCE_CONTROL_FAILED");
@@ -203,6 +377,7 @@ function handleRequest(buffer, options = {}) {
       if (!Number.isSafeInteger(elapsedSeconds) || elapsedSeconds < 0) fail("ASSURANCE_CONTROL_FAILED");
       if (elapsedSeconds < RATE_LIMIT_SECONDS) {
         return response(request.requestId, "ASSURANCE_REQUEST_RATE_LIMITED", {
+          ...responseOptions,
           retryAfterSeconds: RATE_LIMIT_SECONDS - elapsedSeconds,
         });
       }
@@ -213,14 +388,18 @@ function handleRequest(buffer, options = {}) {
     // unbounded retry storm against the privileged broker.
     writeRateLimitState(statePath, {
       format: STATE_FORMAT,
-      schemaVersion: SCHEMA_VERSION,
+      schemaVersion: STATE_SCHEMA_VERSION,
       lastAcceptedAt: acceptedAt,
       lastRequestId: request.requestId,
     }, options);
     startAssuranceUnit(options);
-    return response(request.requestId, "ASSURANCE_REQUEST_ACCEPTED", { accepted: true, acceptedAt });
+    return response(request.requestId, "ASSURANCE_REQUEST_ACCEPTED", {
+      ...responseOptions,
+      accepted: true,
+      acceptedAt,
+    });
   } catch {
-    return response(request.requestId, "ASSURANCE_CONTROL_FAILED");
+    return response(request.requestId, "ASSURANCE_CONTROL_FAILED", responseOptions);
   }
 }
 
@@ -258,18 +437,24 @@ if (require.main === module) main().catch(() => { process.exitCode = 1; });
 
 module.exports = {
   ASSURANCE_UNIT,
+  ASSURANCE_TIMER,
+  ASSURANCE_TIMER_FRAGMENT,
   MAX_REQUEST_BYTES,
   RATE_LIMIT_SECONDS,
   REQUEST_FORMAT,
   RESPONSE_FORMAT,
   SCHEMA_VERSION,
   STATE_FORMAT,
+  STATE_SCHEMA_VERSION,
   AssuranceControlBrokerError,
+  assertAssuranceLockBoundary,
   assuranceUnitBusy,
+  globalAssuranceBusy,
   handleRequest,
   parseRequest,
   readRateLimitState,
   response,
+  schedulerEvidence,
   startAssuranceUnit,
   writeRateLimitState,
 };

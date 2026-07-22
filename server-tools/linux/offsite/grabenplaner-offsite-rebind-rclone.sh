@@ -84,6 +84,7 @@ core_common="$OFFSITE_APP_ROOT/server-tools/linux/lib/common.sh"
 source "$core_common"
 
 timers=(
+  grabenplaner-offsite-assurance.timer
   grabenplaner-offsite-upload.timer
   grabenplaner-offsite-check.timer
   grabenplaner-offsite-restore-test.timer
@@ -94,8 +95,8 @@ services=(
   grabenplaner-offsite-check.service
   grabenplaner-offsite-restore-test.service
 )
-declare -a timer_was_enabled=(0 0 0)
-declare -a timer_was_active=(0 0 0)
+declare -a timer_was_enabled=(0 0 0 0)
+declare -a timer_was_active=(0 0 0 0)
 timers_paused=0
 operation_root=""
 setup_root=""
@@ -109,7 +110,7 @@ preserve_operation_root=0
 
 restore_timer_state() {
   local index
-  for index in 0 1 2; do
+  for index in 0 1 2 3; do
     if (( timer_was_enabled[index] == 1 )); then
       systemctl enable "${timers[index]}" >/dev/null 2>&1 || return 1
     fi
@@ -199,7 +200,7 @@ trap cleanup EXIT
 
 gp_acquire_maintenance_lock
 offsite_acquire_assurance_lock
-for index in 0 1 2; do
+for index in 0 1 2 3; do
   load_state="$(systemctl show --property=LoadState --value "${timers[index]}" 2>/dev/null)" \
     || offsite_die "Ein erforderlicher Offsite-Timer fehlt."
   [[ -n "$load_state" && "$load_state" != "not-found" ]] \
@@ -208,7 +209,7 @@ for index in 0 1 2; do
   systemctl is-active --quiet "${timers[index]}" && timer_was_active[index]=1 || true
 done
 timers_paused=1
-for index in 0 1 2; do
+for index in 0 1 2 3; do
   systemctl disable --now "${timers[index]}" >/dev/null \
     || offsite_die "Ein Offsite-Timer konnte nicht kontrolliert pausiert werden."
 done

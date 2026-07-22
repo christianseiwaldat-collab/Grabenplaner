@@ -29,6 +29,9 @@ IPAddressDeny=any
 IPAddressAllow=127.0.0.0/8
 IPAddressAllow=::1/128
 UMask=0077
+RuntimeDirectory=grabenplaner-offsite
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
 ReadWritePaths=/var/lib/grabenplaner /var/backups/grabenplaner /var/lib/grabenplaner-offsite /run/grabenplaner /run/grabenplaner-offsite
 TimeoutStartSec=20min
 

@@ -45,7 +45,14 @@ const legacyV1Artifacts = [
   "uninstall-grabenplaner-offsite.sh",
   "test-grabenplaner-offsite.sh",
 ];
-const legacyV2Artifacts = relativeArtifacts.filter((relative) => ![
+const v4Artifacts = [
+  "grabenplaner-offsite-application-smoke.sh",
+  "lib/application-smoke.js",
+  "systemd/grabenplaner-offsite-application-smoke.service.in",
+  "systemd/grabenplaner-offsite-assurance.timer.in",
+];
+const legacyV3Artifacts = relativeArtifacts.filter((relative) => !v4Artifacts.includes(relative));
+const legacyV2Artifacts = legacyV3Artifacts.filter((relative) => ![
   "lib/assurance-control-broker.js",
   "systemd/grabenplaner-offsite-assurance-control.socket.in",
   "systemd/grabenplaner-offsite-assurance-control@.service.in",
@@ -106,31 +113,42 @@ test("v0.75.4 offsite bridge requires migration when another managed artifact ch
 
   assert.equal(
     classify(candidateContract(candidateFiles), installedContract(installedFiles)),
-    "migration-required:3->3",
+    "migration-required:4->4",
   );
 });
 
-test("offsite bridge recognizes the exact v1 contract as an explicit v1 to v3 migration", () => {
+test("offsite bridge recognizes the exact v1 contract as an explicit v1 to v4 migration", () => {
   const installedV1Files = baseFiles(legacyV1Artifacts);
   const candidateV2Files = baseFiles();
   assert.equal(
     classify(candidateContract(candidateV2Files), installedContract(installedV1Files, 1)),
-    "migration-required:1->3",
+    "migration-required:1->4",
   );
 
   const forgedV1Files = installedV1Files.with(0, ["lib/not-a-v1-artifact.js", sha256("forged")]);
   assert.equal(classify(candidateContract(candidateV2Files), installedContract(forgedV1Files, 1)), "invalid");
 });
 
-test("offsite bridge recognizes the exact v2 contract as an explicit v2 to v3 migration", () => {
+test("offsite bridge recognizes the exact v2 contract as an explicit v2 to v4 migration", () => {
   const installedV2Files = baseFiles(legacyV2Artifacts);
   assert.equal(
     classify(candidateContract(baseFiles()), installedContract(installedV2Files, 2)),
-    "migration-required:2->3",
+    "migration-required:2->4",
   );
 
   const forgedV2Files = installedV2Files.with(0, ["lib/not-a-v2-artifact.js", sha256("forged")]);
   assert.equal(classify(candidateContract(baseFiles()), installedContract(forgedV2Files, 2)), "invalid");
+});
+
+test("offsite bridge recognizes only the exact v3 contract for a v3 to v4 migration", () => {
+  const installedV3Files = baseFiles(legacyV3Artifacts);
+  assert.equal(
+    classify(candidateContract(baseFiles()), installedContract(installedV3Files, 3)),
+    "migration-required:3->4",
+  );
+
+  const forgedV3Files = installedV3Files.with(0, ["lib/not-a-v3-artifact.js", sha256("forged")]);
+  assert.equal(classify(candidateContract(baseFiles()), installedContract(forgedV3Files, 3)), "invalid");
 });
 
 test("v0.75.4 offsite bridge rejects incomplete, duplicate, or manipulated contracts", async (t) => {

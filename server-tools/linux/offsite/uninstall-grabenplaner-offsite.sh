@@ -21,7 +21,7 @@ while (($#)); do
 done
 offsite_require_root
 (( confirmed == 1 )) || offsite_die "Die Deaktivierung erfordert die ausdrueckliche Option --yes."
-for command_name in awk chmod chown cmp getent gpasswd groupdel install mktemp paste readlink rm sed sort systemctl tr; do offsite_require_command "$command_name"; done
+for command_name in awk chmod chown cmp getent gpasswd groupdel id install mktemp paste readlink rm sed sort stat systemctl tr; do offsite_require_command "$command_name"; done
 offsite_assert_installed_contract
 core_common="$OFFSITE_APP_ROOT/server-tools/linux/lib/common.sh"
 [[ -f "$core_common" && ! -L "$core_common" ]] || offsite_die "Die verifizierte Core-Wartungssperre fehlt."
@@ -33,10 +33,19 @@ offsite_acquire_repository_lock
 
 for unit in 'grabenplaner-offsite-assurance-control@*.service' grabenplaner-offsite-assurance-control.socket \
   'grabenplaner-offsite-assurance@*.service' \
-  grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer \
-  grabenplaner-offsite-upload.service grabenplaner-offsite-prepare.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
+  grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer \
+  grabenplaner-offsite-application-smoke.service grabenplaner-offsite-upload.service grabenplaner-offsite-prepare.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
   systemctl disable --now "$unit" >/dev/null 2>&1 || true
 done
+
+if [[ -e "$OFFSITE_SMOKE_ROOT" || -L "$OFFSITE_SMOKE_ROOT" ]]; then
+  smoke_uid="$(id -u "$OFFSITE_USER")"
+  smoke_gid="$(getent group "$OFFSITE_GROUP" | awk -F: '{print $3}')"
+  [[ -d "$OFFSITE_SMOKE_ROOT" && ! -L "$OFFSITE_SMOKE_ROOT" \
+    && "$(stat --format='%u:%g:%a' -- "$OFFSITE_SMOKE_ROOT")" == "$smoke_uid:$smoke_gid:700" ]] \
+    || offsite_die "Der temporaere App-Smoke-Testpfad ist unsicher und wurde nicht entfernt."
+  rm -rf --one-file-system -- "$OFFSITE_SMOKE_ROOT"
+fi
 
 for template in "$OFFSITE_MODULE_ROOT"/systemd/*.in; do
   unit_name="$(basename -- "$template" .in)"

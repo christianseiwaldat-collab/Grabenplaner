@@ -216,6 +216,40 @@ test("RAS reader aggregates complete redacted runs before applying the history l
   } finally { cleanup(fixture); }
 });
 
+test("RAS reader accepts the signed nightly smoke evidence and derives bounded trends", () => {
+  const fixture = makeFixture(0);
+  try {
+    const runId = crypto.randomUUID();
+    const phases = [
+      "full-assurance-started",
+      "oauth-policy-passed",
+      "backup-passed",
+      "repository-check-passed",
+      "restore-test-passed",
+      "application-smoke-passed",
+      "full-assurance-passed",
+    ];
+    phases.forEach((eventType, index) => addSignedEvent(fixture, {
+      eventType,
+      runId,
+      trigger: "scheduled-nightly",
+      occurredAt: new Date(Date.parse("2026-07-20T00:00:00.000Z") + (index * 60_000)).toISOString(),
+      evidence: eventType === "full-assurance-passed" ? {
+        snapshotIdPrefix: "0123456789ab",
+        receiptSha256: "a".repeat(64),
+        appVersion: "0.78.0-beta",
+      } : {},
+    }));
+    const result = readRecoveryAssuranceStatus(fixture.options);
+    assert.equal(result.integrityVerified, true, JSON.stringify(result));
+    assert.equal(result.recentRuns[0].trigger, "scheduled-nightly");
+    assert.equal(result.recentRuns[0].phases.at(-1).id, "application-smoke-passed");
+    assert.equal(result.trendRuns.length, 1);
+    assert.equal(result.trendRuns[0].applicationSmokeState, "passed");
+    assert.equal(JSON.stringify(result.trendRuns).includes(runId), false);
+  } finally { cleanup(fixture); }
+});
+
 test("RAS reader returns a critical diagnostic instead of throwing on modified, missing or reordered evidence", async (t) => {
   await t.test("modified payload", () => {
     const fixture = makeFixture();

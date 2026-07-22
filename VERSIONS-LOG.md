@@ -1,5 +1,15 @@
 # Grabenplaner Versions-Log
 
+## v0.78 Beta · Automatisierte Recovery Assurance
+
+- Ein persistenter systemd-Timer startet täglich einen vollständigen, zufällig verzögerten Recovery-Assurance-Lauf. Eine globale Sperre und die vorhandenen Wartungssperren verhindern Parallelbetrieb mit Update, Upload oder Wiederherstellung.
+- Nach der isolierten Datenwiederherstellung startet eine gehärtete systemd-Unit die installierte Anwendung mit einer isolierten Kopie der wiederhergestellten Daten. Sie läuft unter dem unprivilegierten Offsite-Dienstkonto, ausschließlich auf Loopback, ohne externen Netzwerkzugang und ohne Zugriff auf Live-Daten oder produktive Schlüssel.
+- App-Smoke-Erfolg und -Fehler werden als `application-smoke-passed` beziehungsweise `application-smoke-failed` in der signierten, verketteten Nachweishistorie festgehalten. Harte Zeitgrenzen und vollständiges Aufräumen verhindern verwaiste Testinstanzen.
+- Das System-Center zeigt Automatikzustand, letzten und nächsten Lauf, App-Smoke-Nachweis sowie begrenzte technische Langzeittrends für Vertrauensindex, Datenbankgröße, Sicherungs- und Wiederherstellungsdauer.
+- Fehlgeschlagene oder überfällige Nachweise erzeugen deduplizierte interne Warnungen für IT-Admin und Developer. Die Oberfläche zeigt nur Status und Anzahlen, aber keine Empfänger, internen Pfade oder Zugangsdaten.
+- Der technische Vertrauensindex berücksichtigt den echten App-Smoke und den aktuellen Automatikzustand. Fehlende, veraltete oder ungeprüfte Evidenz wird weiterhin niemals als Erfolg dargestellt.
+- Der optionale Ubuntu-Offsite-Modulvertrag steigt beaufsichtigt von Version 3 auf Version 4. Repository, Kennungen, Geheimdateien und bestehende Sicherungsstände bleiben erhalten; ein stilles Kernupdate über die Modulgrenze bleibt gesperrt.
+
 ## v0.77 Beta · System-Center und technischer Vertrauensindex
 
 - Das neue System-Center steht als erster Dashboard-Bereich bereit und zeigt Server, SQLite, Sicherungen, Wiederherstellung, TLS, Benachrichtigungen, Speicher und Updates in acht nachvollziehbaren Nachweiskarten.

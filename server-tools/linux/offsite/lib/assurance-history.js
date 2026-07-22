@@ -18,12 +18,15 @@ const EVENT_TYPES = Object.freeze([
   "repository-check-passed",
   "restore-test-passed",
   "application-smoke-not-run",
+  "application-smoke-passed",
+  "application-smoke-failed",
   "full-assurance-passed",
   "full-assurance-failed",
   "configuration-change-queued",
   "update-queued",
 ]);
 const TRIGGERS = Object.freeze([
+  "scheduled-nightly",
   "scheduled-weekly",
   "oauth-config-changed",
   "offsite-config-changed",
@@ -35,6 +38,7 @@ const TRIGGERS = Object.freeze([
   "manual-admin-ui",
 ]);
 const ERROR_CODES = Object.freeze([
+  "APPLICATION_SMOKE_FAILED",
   "ASSURANCE_RUN_FAILED",
   "CONFIGURATION_VERIFY_FAILED",
   "FULL_CHECK_FAILED",
@@ -53,14 +57,19 @@ const CONFIGURATION_TRIGGERS = new Set([
 ]);
 const UPDATE_TRIGGERS = new Set(["app-updated", "server-updated"]);
 const TERMINAL_EVENTS = new Set(["full-assurance-passed", "full-assurance-failed"]);
-const PHASE_EVENTS = Object.freeze([
+const PHASE_PREFIX_EVENTS = Object.freeze([
   "oauth-policy-passed",
   "backup-passed",
   "repository-check-passed",
   "restore-test-passed",
-  "application-smoke-not-run",
 ]);
-const PHASE_EVENT_SET = new Set(PHASE_EVENTS);
+const APPLICATION_PHASE_EVENTS = Object.freeze([
+  "application-smoke-not-run",
+  "application-smoke-passed",
+  "application-smoke-failed",
+]);
+const PHASE_EVENTS = Object.freeze([...PHASE_PREFIX_EVENTS, "application-smoke-passed"]);
+const PHASE_EVENT_SET = new Set([...PHASE_PREFIX_EVENTS, ...APPLICATION_PHASE_EVENTS]);
 const HASH_PATTERN = /^[a-f0-9]{64}$/;
 const SHORT_HASH_PATTERN = /^[a-f0-9]{12}$/;
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -489,8 +498,11 @@ function validateHistorySemantics(events) {
         || Date.parse(payload.occurredAt) < Date.parse(state.started.payload.occurredAt)) {
         fail("ASSURANCE_RUN_ORDER_INVALID", "Eine Assurance-Pruefphase ist widerspruechlich.");
       }
-      const phaseIndex = PHASE_EVENTS.indexOf(payload.eventType);
-      if (phaseIndex !== state.phases.size) {
+      const phaseIndex = PHASE_PREFIX_EVENTS.indexOf(payload.eventType);
+      const applicationPhase = APPLICATION_PHASE_EVENTS.includes(payload.eventType);
+      const existingApplicationPhase = APPLICATION_PHASE_EVENTS.some((phase) => state.phases.has(phase));
+      if ((phaseIndex >= 0 && phaseIndex !== state.phases.size)
+        || (applicationPhase && (state.phases.size !== PHASE_PREFIX_EVENTS.length || existingApplicationPhase))) {
         fail("ASSURANCE_RUN_ORDER_INVALID", "Die Assurance-Pruefphasen sind nicht in der freigegebenen Reihenfolge.");
       }
       state.phases.set(payload.eventType, event);
@@ -499,9 +511,14 @@ function validateHistorySemantics(events) {
         || Date.parse(payload.occurredAt) < Date.parse(state.started.payload.occurredAt)) {
         fail("ASSURANCE_RUN_ORDER_INVALID", "Der Abschluss eines Assurance-Laufs ist widerspruechlich.");
       }
+      const successfulApplicationPhase = state.phases.has("application-smoke-passed")
+        || state.phases.has("application-smoke-not-run");
       if (payload.eventType === "full-assurance-passed"
-        && PHASE_EVENTS.some((phase) => !state.phases.has(phase))) {
+        && (PHASE_PREFIX_EVENTS.some((phase) => !state.phases.has(phase)) || !successfulApplicationPhase)) {
         fail("ASSURANCE_RUN_INCOMPLETE", "Ein erfolgreicher Assurance-Lauf benoetigt alle freigegebenen Pruefphasen.");
+      }
+      if ((payload.errorCode === "APPLICATION_SMOKE_FAILED") !== state.phases.has("application-smoke-failed")) {
+        fail("ASSURANCE_RUN_ORDER_INVALID", "App-Smoke-Phase und Assurance-Fehlercode stimmen nicht ueberein.");
       }
       state.terminal = event;
     } else if (state.terminal) {
@@ -650,16 +667,24 @@ function appendEvent({ root = DEFAULT_ROOT, statusGid, eventType, runId, trigger
     if (!run.started || run.started.payload.trigger !== payload.trigger) {
       fail("ASSURANCE_RUN_ORDER_INVALID", "Der Assurance-Lauf kann ohne passenden Start nicht abgeschlossen werden.");
     }
+    const successfulApplicationPhase = run.phases.has("application-smoke-passed")
+      || run.phases.has("application-smoke-not-run");
     if (payload.eventType === "full-assurance-passed"
-      && PHASE_EVENTS.some((phase) => !run.phases.has(phase))) {
+      && (PHASE_PREFIX_EVENTS.some((phase) => !run.phases.has(phase)) || !successfulApplicationPhase)) {
       fail("ASSURANCE_RUN_INCOMPLETE", "Ein erfolgreicher Assurance-Lauf benoetigt alle freigegebenen Pruefphasen.");
+    }
+    if ((payload.errorCode === "APPLICATION_SMOKE_FAILED") !== run.phases.has("application-smoke-failed")) {
+      fail("ASSURANCE_RUN_ORDER_INVALID", "App-Smoke-Phase und Assurance-Fehlercode stimmen nicht ueberein.");
     }
   } else if (PHASE_EVENT_SET.has(payload.eventType)) {
     if (!run.started || run.started.payload.trigger !== payload.trigger || run.phases.has(payload.eventType)) {
       fail("ASSURANCE_RUN_ORDER_INVALID", "Die Assurance-Pruefphase kann nicht erfasst werden.");
     }
-    const phaseIndex = PHASE_EVENTS.indexOf(payload.eventType);
-    if (phaseIndex !== run.phases.size) {
+    const phaseIndex = PHASE_PREFIX_EVENTS.indexOf(payload.eventType);
+    const applicationPhase = APPLICATION_PHASE_EVENTS.includes(payload.eventType);
+    const existingApplicationPhase = APPLICATION_PHASE_EVENTS.some((phase) => run.phases.has(phase));
+    if ((phaseIndex >= 0 && phaseIndex !== run.phases.size)
+      || (applicationPhase && (run.phases.size !== PHASE_PREFIX_EVENTS.length || existingApplicationPhase))) {
       fail("ASSURANCE_RUN_ORDER_INVALID", "Die Assurance-Pruefphase ist nicht in der freigegebenen Reihenfolge.");
     }
   } else if (run.terminal) {
