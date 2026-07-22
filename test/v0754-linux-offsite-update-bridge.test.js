@@ -199,7 +199,9 @@ test("v0.75.4 updater uses the installed root-protected helper and accepts both 
 
   assert.match(updater, /offsite_gate_helper="\$SCRIPT_DIR\/lib\/offsite-update-compat\.js"/);
   assert.match(updater, /\[\[ -f "\$offsite_gate_helper" && ! -L "\$offsite_gate_helper"/);
-  assert.match(updater, /stat --format='%u:%g:%h' -- "\$offsite_gate_helper"\)" == "0:0:1"/);
+  assert.match(updater, /service_group_gid="\$\(getent group "\$service_group" \| awk -F: 'NR == 1 \{ print \$3 \}'\)"/);
+  assert.match(updater, /\[\[ "\$service_group_gid" =~ \^\[0-9\]\+\$ \]\]/);
+  assert.match(updater, /stat --format='%u:%g:%h' -- "\$offsite_gate_helper"\)" == "0:\$service_group_gid:1"/);
   assert.match(updater, /offsite_gate_helper_mode="\$\(stat --format='%a' -- "\$offsite_gate_helper"\)"/);
   assert.match(updater, /8#\$offsite_gate_helper_mode & 022/);
   assert.match(updater, /"\$node" "\$offsite_gate_helper" "\$manifest_result_file" "\$installed_offsite_receipt"/);
