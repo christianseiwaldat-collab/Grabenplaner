@@ -1,10 +1,12 @@
 "use strict";
 
 const fs = require("node:fs");
+const crypto = require("node:crypto");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { DatabaseSync } = require("node:sqlite");
 
 const APP_ROOT = "/opt/grabenplaner/app";
 const SMOKE_ROOT = "/var/lib/grabenplaner-offsite/application-smoke";
@@ -19,6 +21,27 @@ const START_TIMEOUT_MS = 90_000;
 const STOP_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_BYTES = 4096;
 const MAX_RESULT_BYTES = 2048;
+const PROTECTED_COLUMNS = new Set([
+  "amu_documents.protected_payload",
+  "amu_reports.protected_payload",
+  "integration_connections.protected_credentials",
+  "outbound_notification_jobs.protected_payload",
+  "personnel_record_documents.protected_payload",
+  "personnel_sensitive_records.protected_payload",
+  "sickness_alerts.protected_payload",
+  "sickness_cases.protected_payload",
+  "sickness_notification_preferences.protected_destination",
+]);
+const PROTECTED_ROW_TABLES = Object.freeze([
+  "amu_documents",
+  "personnel_record_documents",
+  "sickness_alerts",
+  "outbound_notification_jobs",
+  "amu_reports",
+  "sickness_cases",
+  "sickness_notification_preferences",
+  "personnel_sensitive_records",
+]);
 const REASONS = new Set([
   "CHILD_EXITED",
   "HEALTH_INVALID",
@@ -128,6 +151,72 @@ function reserveLoopbackPort() {
   });
 }
 
+function quoteIdentifier(value) {
+  return `"${String(value).replaceAll('"', '""')}"`;
+}
+
+function tableColumns(database, table) {
+  return new Set(database.prepare(`PRAGMA table_info(${quoteIdentifier(table)})`).all()
+    .map((column) => String(column.name || "")));
+}
+
+function sanitizeSmokeDatabase(databaseFile = DATABASE) {
+  assertRegular(databaseFile, 16 * 1024 * 1024 * 1024);
+  const database = new DatabaseSync(databaseFile);
+  let transactionOpen = false;
+  try {
+    const tables = database.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+      ORDER BY name
+    `).all().map((row) => String(row.name || ""));
+    const tableSet = new Set(tables);
+    const observedProtectedColumns = new Set();
+    for (const table of tables) {
+      for (const column of tableColumns(database, table)) {
+        if (column.startsWith("protected_")) observedProtectedColumns.add(`${table}.${column}`);
+      }
+    }
+    for (const column of observedProtectedColumns) {
+      if (!PROTECTED_COLUMNS.has(column)) throw new Error("SMOKE_PRECONDITION_FAILED");
+    }
+
+    database.exec("PRAGMA secure_delete=ON; PRAGMA journal_mode=DELETE; PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE");
+    transactionOpen = true;
+    for (const table of PROTECTED_ROW_TABLES) {
+      if (tableSet.has(table)) database.exec(`DELETE FROM ${quoteIdentifier(table)}`);
+    }
+    if (tableSet.has("integration_connections")) {
+      const available = tableColumns(database, "integration_connections");
+      const assignments = ["protected_credentials = ''"];
+      if (available.has("credential_key_id")) assignments.push("credential_key_id = ''");
+      if (available.has("active")) assignments.push("active = 0");
+      database.exec(`UPDATE integration_connections SET ${assignments.join(", ")}`);
+    }
+    if (tableSet.has("portal_notifications")) database.exec("DELETE FROM portal_notifications");
+    database.exec("COMMIT");
+    transactionOpen = false;
+    database.exec("VACUUM");
+
+    const integrity = database.prepare("PRAGMA integrity_check").all().map((row) => String(Object.values(row)[0] || ""));
+    if (integrity.length !== 1 || integrity[0] !== "ok") throw new Error("SMOKE_PRECONDITION_FAILED");
+    if (database.prepare("PRAGMA foreign_key_check").all().length !== 0) throw new Error("SMOKE_PRECONDITION_FAILED");
+    const freelist = Number(Object.values(database.prepare("PRAGMA freelist_count").get())[0]);
+    if (freelist !== 0) throw new Error("SMOKE_PRECONDITION_FAILED");
+  } catch (error) {
+    if (transactionOpen) {
+      try { database.exec("ROLLBACK"); } catch { /* fail closed below */ }
+    }
+    throw error;
+  } finally {
+    database.close();
+  }
+  for (const suffix of ["-journal", "-shm", "-wal"]) {
+    if (fs.existsSync(`${databaseFile}${suffix}`)) throw new Error("SMOKE_PRECONDITION_FAILED");
+  }
+  return true;
+}
+
 function healthRequest(port, pathname) {
   return new Promise((resolve) => {
     const request = http.get({ host: "127.0.0.1", port, path: pathname, timeout: 1500 }, (response) => {
@@ -169,10 +258,18 @@ function childEnvironment(port) {
     LOGNAME: process.env.LOGNAME || "grabenplaner-offsite",
     LANG: "C.UTF-8",
     TZ: "UTC",
-    NODE_ENV: "production",
+    NODE_ENV: "test",
     PORT: String(port),
-    GRABENPLANER_OPERATION_MODE: "local",
+    GRABENPLANER_OPERATION_MODE: "server",
     GRABENPLANER_DEPLOYMENT_KIND: "recovery-smoke",
+    GRABENPLANER_PUBLIC_URL: "https://recovery-smoke.invalid",
+    GRABENPLANER_SERVICE_CONTROL_TOKEN: crypto.randomBytes(48).toString("base64url"),
+    GRABENPLANER_AMU_KEY_ID: "recovery-smoke",
+    GRABENPLANER_AMU_KEY: crypto.randomBytes(32).toString("base64"),
+    GRABENPLANER_INTEGRATION_KEY_ID: "recovery-smoke",
+    GRABENPLANER_INTEGRATION_KEY: crypto.randomBytes(32).toString("base64"),
+    GRABENPLANER_WIFI_WEBHOOK_SECRET: crypto.randomBytes(48).toString("base64url"),
+    GRABENPLANER_TEST_AMU_SCANNER: "clean",
     GRABENPLANER_HOST: "127.0.0.1",
     GRABENPLANER_TRUST_PROXY: "loopback",
     GRABENPLANER_DATA_DIR: DATA_ROOT,
@@ -238,7 +335,18 @@ async function main() {
 }
 
 if (require.main === module) {
-  if (process.argv[2] === "--verify-result") {
+  if (process.argv[2] === "--sanitize-database") {
+    try {
+      if (process.platform !== "linux" || typeof process.geteuid !== "function" || process.geteuid() !== 0
+        || process.argv.length !== 3 || fs.existsSync(RESULT)) throw new Error("SMOKE_PRECONDITION_FAILED");
+      assertDirectory(SMOKE_ROOT);
+      assertDirectory(DATA_ROOT);
+      assertDirectory(path.dirname(DATABASE));
+      if (fs.lstatSync(DATABASE).uid !== 0) throw new Error("SMOKE_PRECONDITION_FAILED");
+      sanitizeSmokeDatabase();
+      process.stdout.write("1");
+    } catch { process.exitCode = 1; }
+  } else if (process.argv[2] === "--verify-result") {
     try {
       if (process.argv.length !== 7 || !/^\d+$/.test(process.argv[4]) || !/^\d+$/.test(process.argv[5])
         || !/^\d+$/.test(process.argv[6])) throw new Error("SMOKE_RESULT_INVALID");
@@ -267,6 +375,9 @@ module.exports = {
   STOP_TIMEOUT_MS,
   MAX_RESULT_BYTES,
   REASONS,
+  PROTECTED_COLUMNS,
+  PROTECTED_ROW_TABLES,
   childEnvironment,
+  sanitizeSmokeDatabase,
   verifiedApplicationSmokeResult,
 };
