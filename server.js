@@ -40,6 +40,7 @@ const {
   writeBackupCommitMarker,
 } = require("./lib/backup-commit");
 const { readOffsiteBackupStatus } = require("./lib/offsite-backup-status");
+const { readRecoveryAssuranceStatus } = require("./lib/recovery-assurance-status");
 const { readServerMonitorStatus } = require("./lib/server-monitor-status");
 const { readHostSecurityStatus } = require("./lib/host-security-status");
 const {
@@ -13484,6 +13485,7 @@ function serverDiagnostics() {
   const offsiteStatus = readOffsiteBackupStatus({ configured: offsiteConfigured });
   const offsiteApplicable = serverModeActive || offsiteConfigured || offsiteStatus.statusAvailable;
   const offsite = { ...offsiteStatus, applicable: offsiteApplicable };
+  const recoveryAssurance = readRecoveryAssuranceStatus({ configured: offsiteConfigured });
   const monitorConfiguration = String(process.env.GRABENPLANER_MONITOR_CONFIGURED || "").trim();
   const monitorConfigured = monitorConfiguration === "1"
     || (monitorConfiguration !== "0" && serverModeActive && process.platform === "linux");
@@ -13526,6 +13528,17 @@ function serverDiagnostics() {
   } else if (offsite.configured && offsite.state !== "ok") {
     addAlert("OFFSITE_BACKUP_ATTENTION", offsite.state === "error" ? "critical" : "warning", "Offsite-Sicherung prüfen", "Die verschlüsselte Offsite-Sicherung oder eine Wiederherstellungsprüfung benötigt Aufmerksamkeit.", "backup");
   }
+  if (recoveryAssurance.configured && recoveryAssurance.state !== "ok") {
+    addAlert(
+      "RECOVERY_ASSURANCE_ATTENTION",
+      recoveryAssurance.state === "error" ? "critical" : "warning",
+      "Recovery Assurance prüfen",
+      recoveryAssurance.integrityVerified
+        ? "Der letzte vollständige Recovery-Assurance-Lauf ist offen oder fehlgeschlagen."
+        : "Die signierte Recovery-Prüfhistorie konnte nicht sicher bestätigt werden.",
+      "backup",
+    );
+  }
   if (monitor.configured && monitor.state !== "ok") {
     addAlert("SERVER_MONITOR_ATTENTION", monitor.state === "error" ? "critical" : "warning", "Automatische Serverprüfung meldet ein Problem", "Mindestens eine automatische Serverprüfung ist fehlgeschlagen, unvollständig oder überfällig.", "monitoring");
   }
@@ -13556,6 +13569,7 @@ function serverDiagnostics() {
     { id: "service-stop", label: "Dienststopp", ok: serviceControlToken.length >= 32, detail: serviceControlToken.length >= 32 ? "Token konfiguriert" : "Token fehlt" },
     ...(monitor.configured ? [{ id: "monitor", label: "Automatische Serverprüfung", ok: monitor.state === "ok", detail: monitor.generatedAt || monitor.lastErrorCode || "noch kein Status" }] : []),
     ...(hostSecurity.configured ? [{ id: "host-security", label: "Ubuntu-Host-Sicherheit", ok: hostSecurity.state === "ok", detail: hostSecurity.checkedAt || hostSecurity.lastErrorCode || "noch kein Status" }] : []),
+    ...(recoveryAssurance.configured ? [{ id: "recovery-assurance", label: "Recovery Assurance", ok: recoveryAssurance.state === "ok" && recoveryAssurance.integrityVerified === true, detail: recoveryAssurance.generatedAt || recoveryAssurance.lastErrorCode || "noch kein signierter Lauf" }] : []),
   ];
   return {
     ready: startupIntegrity.length === 1 && startupIntegrity[0] === "ok" && dataHealth.writable
@@ -13601,6 +13615,7 @@ function serverDiagnostics() {
     },
     monitor,
     hostSecurity,
+    recoveryAssurance,
     productionChecks,
     pilotChecks: productionChecks,
     security: {
@@ -13630,6 +13645,7 @@ function serverStatusSummary(diagnostics = serverDiagnostics()) {
   const offsite = diagnostics.backups?.offsite || {};
   const monitor = diagnostics.monitor || {};
   const hostSecurity = diagnostics.hostSecurity || {};
+  const recoveryAssurance = diagnostics.recoveryAssurance || {};
   return {
     checkedAt: new Date().toISOString(),
     mode: diagnostics.mode,
@@ -13720,6 +13736,20 @@ function serverStatusSummary(diagnostics = serverDiagnostics()) {
       rebootRequired: hostSecurity.rebootRequired === true,
       failedChecks: Array.isArray(hostSecurity.failedChecks) ? hostSecurity.failedChecks.map(String) : [],
       lastErrorCode: hostSecurity.lastErrorCode || null,
+    },
+    recoveryAssurance: {
+      configured: recoveryAssurance.configured === true,
+      state: String(recoveryAssurance.state || "unconfigured"),
+      statusAvailable: recoveryAssurance.statusAvailable === true,
+      integrityVerified: recoveryAssurance.integrityVerified === true,
+      severity: ["info", "warning", "critical"].includes(recoveryAssurance.severity)
+        ? recoveryAssurance.severity : "info",
+      generatedAt: recoveryAssurance.generatedAt || null,
+      eventCount: Number(recoveryAssurance.eventCount || 0),
+      lastSequence: Number(recoveryAssurance.lastSequence || 0),
+      lastErrorCode: recoveryAssurance.lastErrorCode || null,
+      summary: String(recoveryAssurance.summary || "Recovery Assurance ist nicht eingerichtet."),
+      events: Array.isArray(recoveryAssurance.events) ? recoveryAssurance.events : [],
     },
     recovery: {
       isolatedRestoreTestAt: offsite.lastRestoreTestAt || null,

@@ -254,6 +254,11 @@ restic_had_original=0
 rclone_had_original=0
 legacy_wrapper_had_original=0
 recovery_command_had_original=0
+rebind_command_had_original=0
+assurance_command_had_original=0
+recovery_set_command_had_original=0
+assurance_root_had_original=0
+assurance_root_initialized=0
 config_had_original=0
 status_had_original=0
 declare -a timer_was_enabled=(0 0 0)
@@ -263,14 +268,18 @@ setup_complete=0
 cleanup() {
   local status=$?
   if (( setup_complete == 0 && commit_started == 1 )); then
-    for unit in grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer \
+    for unit in 'grabenplaner-offsite-assurance@*.service' \
+      grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer \
       grabenplaner-offsite-upload.service grabenplaner-offsite-prepare.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
       systemctl disable --now "$unit" >/dev/null 2>&1 || true
     done
     if [[ -z "$module_previous" ]]; then
       declare -A rollback_commands=(
+        [grabenplaner-offsite-assurance]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-assurance.sh"
         [grabenplaner-offsite-pre-update]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-pre-update.sh"
         [grabenplaner-offsite-prepare]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-prepare.sh"
+        [grabenplaner-offsite-recovery-set]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-recovery-set.sh"
+        [grabenplaner-offsite-rebind-rclone]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-rebind-rclone.sh"
         [grabenplaner-offsite-test]="$OFFSITE_MODULE_ROOT/test-grabenplaner-offsite.sh"
         [grabenplaner-offsite-uninstall]="$OFFSITE_MODULE_ROOT/uninstall-grabenplaner-offsite.sh"
         [grabenplaner-recovery]="$recovery_command"
@@ -288,6 +297,21 @@ cleanup() {
     fi
     [[ -d "$OFFSITE_MODULE_ROOT" && ! -L "$OFFSITE_MODULE_ROOT" ]] && rm -rf --one-file-system -- "$OFFSITE_MODULE_ROOT"
     if [[ -n "$module_previous" && -d "$module_previous" && ! -L "$module_previous" ]]; then mv -T -- "$module_previous" "$OFFSITE_MODULE_ROOT"; fi
+    rebind_link="/usr/local/sbin/grabenplaner-offsite-rebind-rclone"
+    if (( rebind_command_had_original == 0 )) && [[ -L "$rebind_link" \
+      && "$(readlink -- "$rebind_link")" == "$OFFSITE_MODULE_ROOT/grabenplaner-offsite-rebind-rclone.sh" ]]; then
+      rm -f -- "$rebind_link"
+    fi
+    assurance_link="/usr/local/sbin/grabenplaner-offsite-assurance"
+    if (( assurance_command_had_original == 0 )) && [[ -L "$assurance_link" \
+      && "$(readlink -- "$assurance_link")" == "$OFFSITE_MODULE_ROOT/grabenplaner-offsite-assurance.sh" ]]; then
+      rm -f -- "$assurance_link"
+    fi
+    recovery_set_link="/usr/local/sbin/grabenplaner-offsite-recovery-set"
+    if (( recovery_set_command_had_original == 0 )) && [[ -L "$recovery_set_link" \
+      && "$(readlink -- "$recovery_set_link")" == "$OFFSITE_MODULE_ROOT/grabenplaner-offsite-recovery-set.sh" ]]; then
+      rm -f -- "$recovery_set_link"
+    fi
     for entry in "restic:$OFFSITE_RESTIC:$restic_had_original" "rclone:$OFFSITE_RCLONE:$rclone_had_original" "legacy-wrapper:$OFFSITE_LEGACY_RCLONE_WRAPPER:$legacy_wrapper_had_original"; do
       IFS=: read -r backup_name target had_original <<<"$entry"
       if (( had_original == 1 )); then install -m 0755 -o root -g root -- "$rollback_root/$backup_name" "$target"; else rm -f -- "$target"; fi
@@ -302,7 +326,8 @@ cleanup() {
     rm -rf --one-file-system -- "$OFFSITE_CONFIG_ROOT"
     install -d -m 0700 -o root -g root -- "$OFFSITE_CONFIG_ROOT"
     if (( config_had_original == 1 )); then cp --archive -- "$rollback_root/config/." "$OFFSITE_CONFIG_ROOT/"; fi
-    for unit_name in grabenplaner-offsite-prepare.service grabenplaner-offsite-upload.service grabenplaner-offsite-upload.timer \
+    for unit_name in 'grabenplaner-offsite-assurance@.service' \
+      grabenplaner-offsite-prepare.service grabenplaner-offsite-upload.service grabenplaner-offsite-upload.timer \
       grabenplaner-offsite-check.service grabenplaner-offsite-check.timer \
       grabenplaner-offsite-restore-test.service grabenplaner-offsite-restore-test.timer; do
       rm -f -- "/etc/systemd/system/$unit_name"
@@ -329,6 +354,10 @@ cleanup() {
   [[ -n "$setup_credentials" ]] && offsite_remove_uploader_credentials "$setup_credentials" 2>/dev/null || true
   [[ -n "$operation_root" && -d "$operation_root" && ! -L "$operation_root" ]] && rm -rf --one-file-system -- "$operation_root"
   [[ -d "$module_candidate" && ! -L "$module_candidate" ]] && rm -rf --one-file-system -- "$module_candidate"
+  if (( setup_complete == 0 && assurance_root_initialized == 1 && assurance_root_had_original == 0 )) \
+    && [[ -d "$OFFSITE_ASSURANCE_ROOT" && ! -L "$OFFSITE_ASSURANCE_ROOT" ]]; then
+    rm -rf --one-file-system -- "$OFFSITE_ASSURANCE_ROOT"
+  fi
   exit "$status"
 }
 trap cleanup EXIT
@@ -350,11 +379,12 @@ chmod 0755 -- "$module_candidate"
 operation_root="$(mktemp --directory --tmpdir="$OFFSITE_RUN_ROOT" setup.XXXXXXXX)"
 chown "root:$OFFSITE_GROUP" -- "$operation_root"
 chmod 0750 -- "$operation_root"
+install -d -m 0700 -o "$OFFSITE_USER" -g "$OFFSITE_GROUP" -- "$operation_root/config"
 install -m 0755 -o root -g root -- "$restic_source" "$operation_root/restic"
 install -m 0755 -o root -g root -- "$rclone_source" "$operation_root/rclone"
 install -m 0755 -o root -g root -- "$SCRIPT_DIR/grabenplaner-offsite-read-secret.sh" "$operation_root/read-secret"
 install -m 0755 -o root -g root -- "$SCRIPT_DIR/lib/offsite-setup-rclone-wrapper.sh" "$operation_root/rclone-wrapper"
-install -m 0600 -o "$OFFSITE_USER" -g "$OFFSITE_GROUP" -- "$rclone_config_source" "$operation_root/rclone.conf"
+install -m 0600 -o "$OFFSITE_USER" -g "$OFFSITE_GROUP" -- "$rclone_config_source" "$operation_root/config/rclone.conf"
 
 restic_version_output="$operation_root/restic-version.txt"
 rclone_version_output="$operation_root/rclone-version.txt"
@@ -420,16 +450,11 @@ for index in 0 1 2; do
 done
 timers_paused=1
 gp_acquire_maintenance_lock
+offsite_acquire_assurance_lock
 offsite_acquire_repository_lock
-setup_run "$operation_root/rclone-wrapper" config redacted >"$operation_root/rclone-redacted.conf" 2>"$operation_root/rclone.error" \
-  || offsite_die "Die verschluesselte rclone-Konfiguration ist ungueltig."
-"$OFFSITE_NODE" - "$operation_root/rclone-redacted.conf" "$rclone_remote" <<'NODE' \
-  || offsite_die "Das gewaehlte rclone-Remote muss Google Drive mit Scope drive.file verwenden."
-const fs=require("node:fs");const [file,remote]=process.argv.slice(2);const text=fs.readFileSync(file,"utf8");
-const escaped=remote.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");const section=text.match(new RegExp(`(?:^|\\n)\\[${escaped}\\]\\r?\\n([\\s\\S]*?)(?=\\n\\[|$)`));
-if(!section)process.exit(1);const values=new Map();for(const line of section[1].split(/\r?\n/)){const m=line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/);if(m)values.set(m[1],m[2]);}
-if(values.get("type")!=="drive"||values.get("scope")!=="drive.file")process.exit(1);
-NODE
+setup_run "$operation_root/rclone-wrapper" config redacted "$rclone_remote" 2>/dev/null \
+  | "$OFFSITE_NODE" "$module_candidate/lib/offsite-rclone-policy.js" "$rclone_remote" >/dev/null \
+  || offsite_die "Das gewaehlte rclone-Remote benoetigt einen eigenen Google-OAuth-Client mit Scope drive.file."
 
 repository_config="$operation_root/repository-config.json"
 set +e
@@ -517,9 +542,19 @@ for service_name in grabenplaner-offsite-prepare.service grabenplaner-offsite-up
     sleep 2
   done
 done
+if [[ -e "$OFFSITE_ASSURANCE_ROOT" || -L "$OFFSITE_ASSURANCE_ROOT" ]]; then
+  assurance_root_had_original=1
+fi
+"$OFFSITE_NODE" "$module_candidate/lib/assurance-history.js" init \
+  --root "$OFFSITE_ASSURANCE_ROOT" --status-gid "$status_gid" >/dev/null \
+  || offsite_die "Der signierte Recovery-Assurance-Verlauf konnte nicht sicher initialisiert werden."
+assurance_root_initialized=1
 declare -A expected_commands=(
+  [grabenplaner-offsite-assurance]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-assurance.sh"
   [grabenplaner-offsite-pre-update]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-pre-update.sh"
   [grabenplaner-offsite-prepare]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-prepare.sh"
+  [grabenplaner-offsite-recovery-set]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-recovery-set.sh"
+  [grabenplaner-offsite-rebind-rclone]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-rebind-rclone.sh"
   [grabenplaner-offsite-test]="$OFFSITE_MODULE_ROOT/test-grabenplaner-offsite.sh"
   [grabenplaner-offsite-uninstall]="$OFFSITE_MODULE_ROOT/uninstall-grabenplaner-offsite.sh"
   [grabenplaner-recovery]="$recovery_command"
@@ -531,6 +566,9 @@ for command_name in "${!expected_commands[@]}"; do
       && "$(readlink -- "$command_path")" == "${expected_commands[$command_name]}" ]] \
       || offsite_die "Ein fremder Offsite-Befehl wuerde ueberschrieben."
     [[ "$command_name" == "grabenplaner-recovery" ]] && recovery_command_had_original=1
+    [[ "$command_name" == "grabenplaner-offsite-rebind-rclone" ]] && rebind_command_had_original=1
+    [[ "$command_name" == "grabenplaner-offsite-assurance" ]] && assurance_command_had_original=1
+    [[ "$command_name" == "grabenplaner-offsite-recovery-set" ]] && recovery_set_command_had_original=1
   fi
 done
 if [[ -d "$OFFSITE_MODULE_ROOT" && ! -L "$OFFSITE_MODULE_ROOT" ]]; then
@@ -548,7 +586,7 @@ if [[ -f "$OFFSITE_RCLONE_CONFIG" && ! -L "$OFFSITE_RCLONE_CONFIG" ]]; then
   rclone_previous="$OFFSITE_CREDENTIAL_STATE_ROOT/.rclone.previous.$$"
   mv -- "$OFFSITE_RCLONE_CONFIG" "$rclone_previous"
 fi
-install -m 0600 -o "$OFFSITE_USER" -g "$OFFSITE_GROUP" -- "$operation_root/rclone.conf" "$OFFSITE_RCLONE_CONFIG"
+install -m 0600 -o "$OFFSITE_USER" -g "$OFFSITE_GROUP" -- "$operation_root/config/rclone.conf" "$OFFSITE_RCLONE_CONFIG"
 offsite_assert_persistent_rclone_config
 
 for name in repository repository-id installation-id restic-password rclone-config-password; do
@@ -570,8 +608,11 @@ for template in "$OFFSITE_MODULE_ROOT"/systemd/*.in; do
   install -m 0644 -o root -g root -- "$template" "/etc/systemd/system/$unit_name"
 done
 declare -A commands=(
+  [grabenplaner-offsite-assurance]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-assurance.sh"
   [grabenplaner-offsite-pre-update]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-pre-update.sh"
   [grabenplaner-offsite-prepare]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-prepare.sh"
+  [grabenplaner-offsite-recovery-set]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-recovery-set.sh"
+  [grabenplaner-offsite-rebind-rclone]="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-rebind-rclone.sh"
   [grabenplaner-offsite-test]="$OFFSITE_MODULE_ROOT/test-grabenplaner-offsite.sh"
   [grabenplaner-offsite-uninstall]="$OFFSITE_MODULE_ROOT/uninstall-grabenplaner-offsite.sh"
   [grabenplaner-recovery]="$recovery_command"
@@ -611,7 +652,21 @@ NODE
 gp_wait_ready "http://127.0.0.1:${app_port}/api/health/ready" 120 \
   || offsite_die "Der Grabenplaner hat nach der Offsite-Aktivierung die Bereitschaftspruefung nicht bestanden."
 
+# Ab hier ist die neue Offsite-Konfiguration gesund und committed. Ein Fehler
+# beim nachgelagerten RAS-Queueing darf diesen betriebsbereiten Stand nicht mehr
+# zurueckrollen; der Installer meldet ihn deutlich und die Pruefung kann manuell
+# erneut gestartet werden.
 setup_complete=1
+assurance_trigger="offsite-config-changed"
+[[ -n "$module_previous" ]] && assurance_trigger="offsite-module-changed"
+app_version="$($OFFSITE_NODE -e 'const value=require("/opt/grabenplaner/app/package.json");const version=String(value.version||"");if(!/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(version))process.exit(1);process.stdout.write(version)')" \
+  || offsite_die "Die installierte App-Version ist fuer Recovery Assurance ungueltig."
+if ! (offsite_record_assurance_queue configuration-change-queued "$assurance_trigger" "$app_version"); then
+  offsite_warn "Die erfolgreiche Offsite-Einrichtung konnte nicht im signierten Recovery-Assurance-Verlauf vorgemerkt werden."
+fi
+if ! systemctl start --no-block "grabenplaner-offsite-assurance@${assurance_trigger}.service" >/dev/null; then
+  offsite_warn "Die Recovery-Assurance-Pruefung nach der Offsite-Einrichtung konnte nicht eingeplant werden."
+fi
 [[ -n "$module_previous" && -d "$module_previous" && ! -L "$module_previous" ]] && rm -rf --one-file-system -- "$module_previous"
 [[ -n "$rclone_previous" && -f "$rclone_previous" && ! -L "$rclone_previous" ]] && rm -f -- "$rclone_previous"
 offsite_info "Das optionale verschluesselte Offsite-Modul wurde idempotent eingerichtet."

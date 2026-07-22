@@ -4,6 +4,9 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
+const CURRENT_MODULE_VERSION = 2;
+const SUPPORTED_INSTALLED_MODULE_VERSIONS = new Set([1, CURRENT_MODULE_VERSION]);
+
 function digest(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
@@ -19,7 +22,7 @@ function moduleContract(sourceRoot) {
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Der Offsite-Modulvertrag fehlt.");
   const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8").replace(/^\uFEFF/, ""));
   if (schema.format !== "grabenplaner-linux-offsite-module-contract" || schema.schemaVersion !== 1
-    || schema.moduleVersion !== 1 || schema.activationPolicy !== "explicit-root-setup"
+    || schema.moduleVersion !== CURRENT_MODULE_VERSION || schema.activationPolicy !== "explicit-root-setup"
     || !Array.isArray(schema.managedArtifacts) || schema.managedArtifacts.length < 15 || schema.managedArtifacts.length > 64) {
     throw new Error("Der Offsite-Modulvertrag wird nicht unterstuetzt.");
   }
@@ -56,7 +59,8 @@ function verifyInstalled(moduleRoot, receiptPath) {
   const receiptStat = fs.lstatSync(receiptPath);
   if (!receiptStat.isFile() || receiptStat.isSymbolicLink()) throw new Error("Der Installationsbeleg fehlt.");
   const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8").replace(/^\uFEFF/, ""));
-  if (receipt.format !== "grabenplaner-linux-offsite-installed-contract" || receipt.schemaVersion !== 1 || receipt.moduleVersion !== 1
+  if (receipt.format !== "grabenplaner-linux-offsite-installed-contract" || receipt.schemaVersion !== 1
+    || !SUPPORTED_INSTALLED_MODULE_VERSIONS.has(receipt.moduleVersion)
     || !Array.isArray(receipt.files) || !/^[a-f0-9]{64}$/.test(String(receipt.fingerprint || ""))
     || !/^[a-f0-9]{64}$/.test(String(receipt.schemaSha256 || ""))) {
     throw new Error("Der Installationsbeleg ist ungueltig.");
@@ -68,7 +72,8 @@ function verifyInstalled(moduleRoot, receiptPath) {
   }
   const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8").replace(/^\uFEFF/, ""));
   if (schema.format !== "grabenplaner-linux-offsite-module-contract" || schema.schemaVersion !== 1
-    || schema.moduleVersion !== 1 || schema.activationPolicy !== "explicit-root-setup" || !Array.isArray(schema.managedArtifacts)) {
+    || schema.moduleVersion !== receipt.moduleVersion || !SUPPORTED_INSTALLED_MODULE_VERSIONS.has(schema.moduleVersion)
+    || schema.activationPolicy !== "explicit-root-setup" || !Array.isArray(schema.managedArtifacts)) {
     throw new Error("Der installierte Modulvertrag wird nicht unterstuetzt.");
   }
   const prefix = "server-tools/linux/offsite/";
@@ -110,7 +115,7 @@ try {
   const [command, first, second] = process.argv.slice(2);
   if (command === "contract") {
     const result = moduleContract(path.resolve(first || ""));
-    process.stdout.write(`${JSON.stringify({ format: "grabenplaner-linux-offsite-installed-contract", schemaVersion: 1, moduleVersion: 1, ...result }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ format: "grabenplaner-linux-offsite-installed-contract", schemaVersion: 1, moduleVersion: CURRENT_MODULE_VERSION, ...result }, null, 2)}\n`);
   } else if (command === "verify-installed") {
     process.stdout.write(`${JSON.stringify(verifyInstalled(path.resolve(first || ""), path.resolve(second || "")))}\n`);
   } else {

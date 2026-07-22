@@ -14,6 +14,7 @@ Die bereitgestellten Werkzeuge ersetzen nicht die betriebliche Prüfung von Doma
 - Protokolle: systemd-Journal sowie `/var/log/grabenplaner/app` und `/var/log/grabenplaner/caddy`
 - lokale Sicherungspunkte: `/var/backups/grabenplaner`
 - optionaler Offsite-Status: `/var/lib/grabenplaner-offsite/status.json`; private Arbeitsdaten des Moduls liegen ebenfalls im gesonderten, root-verwalteten Modulpfad
+- signierte Recovery-Assurance-Historie: `/var/lib/grabenplaner-assurance`; nur `root` schreibt, die Anwendung liest ausschließlich den redigierten Status
 - redigierter Monitorstatus: `/var/lib/grabenplaner-monitor/status.json`; nur `root` schreibt, der App-Dienst besitzt ausschließlich Lesezugriff
 - optionaler, redigierter Host-Sicherheitsstatus: `/var/lib/grabenplaner-host-security/status.json`; Transaktionsdaten bleiben davon getrennt root-only
 - Anwendung: `127.0.0.1:3000`
@@ -28,7 +29,7 @@ Die SQLite-Datenbank muss auf einem lokalen Linux-Dateisystem liegen. Netzlaufwe
 - Ubuntu 24.04 oder 26.04 LTS x86-64 mit allen Sicherheitsaktualisierungen
 - Node.js gemäß `engines.node` in `package.json` und die dort festgeschriebene pnpm-Version
 - Caddy, systemd, UFW, ClamAV und `unzip`
-- für das optionale Offsite-Modul: von der IT bereitgestellte Restic-/rclone-Binaries samt geprüfter SHA-256-Prüfsummen und ein getrenntes Google-Drive-Ziel
+- für das optionale Offsite-Modul: von der IT bereitgestellte Restic-/rclone-Binaries samt geprüfter SHA-256-Prüfsummen, ein eigener Google-OAuth-Client mit `drive.file` und ein getrenntes Google-Drive-Ziel
 - feste Domain mit korrektem DNS-Eintrag und erreichbaren Ports 80/443
 - lokales Backupziel sowie dokumentierter Wiederanlauf- und Wiederherstellungstest
 - SSH-Zugang nur für die zuständige Administration, vorzugsweise mit Schlüsselanmeldung
@@ -56,7 +57,7 @@ Die kontrollierte Erstinstallation verwendet das geprüfte Paket und seine verö
 
 ```bash
 sudo bash server-tools/linux/install-grabenplaner-server.sh \
-  --package /pfad/Grabenplaner-Server-v0.75.7-beta-linux-x64.zip \
+  --package /pfad/Grabenplaner-Server-v0.76.0-beta-linux-x64.zip \
   --sha256 '<veröffentlichter SHA256-Wert>' \
   --public-url https://beta.example.at \
   --replace-caddy-config
@@ -205,7 +206,7 @@ Der Datenfluss ist fest getrennt:
 
 #### Google Drive und Recovery vorbereiten
 
-Für das Backup ist ein separates Google-Konto oder ein eigener, ausschließlich für Grabenplaner freigegebener Drive-Bereich zu verwenden. Bei der [rclone-Einrichtung für Google Drive](https://rclone.org/drive/) muss der enge OAuth-Umfang `drive.file` gesetzt sein; andere Backendtypen oder Drive-Umfänge weist der Installer zurück. Die rclone-Konfiguration wird auf einem geschützten Administrationsgerät erstellt, mit einem eigenen Konfigurationspasswort verschlüsselt und anschließend als Datei bereitgestellt. Die Einrichtung speichert keine Zugangsdaten in SQLite oder im App-Verzeichnis.
+Für das Backup ist ein separates Google-Konto oder ein eigener, ausschließlich für Grabenplaner freigegebener Drive-Bereich zu verwenden. In der [Google Cloud Console](https://console.cloud.google.com/) wird dafür ein eigener OAuth-Client angelegt; der gemeinsam verwendete rclone-Standardclient ist nicht zulässig. Bei der [rclone-Einrichtung für Google Drive](https://rclone.org/drive/) muss außerdem der enge OAuth-Umfang `drive.file` gesetzt sein. Fehlende explizite Client-ID/Client-Secret, andere Backendtypen oder andere Drive-Umfänge weist das Modul zurück. Technisch lässt sich damit der gemeinsam genutzte rclone-Standardclient ausschließen; die organisatorische Eigentümerschaft des explizit eingetragenen OAuth-Clients muss die verantwortliche IT zusätzlich direkt in der Google Cloud Console bestätigen und dokumentieren. Die rclone-Konfiguration wird auf einem geschützten Administrationsgerät erstellt, mit einem eigenen Konfigurationspasswort verschlüsselt und anschließend als Datei bereitgestellt. Die Einrichtung speichert keine Zugangsdaten in SQLite oder im App-Verzeichnis.
 
 Vor der Aktivierung muss ein getrenntes Offline-Recovery-Set angelegt und probeweise gelesen werden. Es umfasst mindestens:
 
@@ -213,9 +214,22 @@ Vor der Aktivierung muss ein getrenntes Offline-Recovery-Set angelegt und probew
 - die verschlüsselte rclone-Konfiguration und ihr Konfigurationspasswort;
 - die zur Anmeldung beziehungsweise Wiederherstellung des separaten Google-Kontos nötigen Informationen;
 - die Grabenplaner-Schlüssel aus der geschützten Dienstkonfiguration, insbesondere den Schlüssel der verschlüsselten Dokumentablage;
-- die öffentliche Repository- und Installationskennung sowie eine kurze Wiederherstellungsanleitung.
+- die öffentliche Repository- und Installationskennung sowie eine kurze Wiederherstellungsanleitung;
+- die vollständige signierte Recovery-Assurance-Historie samt signiertem Kopf, öffentlichem Prüfschlüssel und privatem Fortsetzungsschlüssel;
+- die geprüften Binary-Pins und den installierten Offsite-Modulvertrag.
 
 Dieses Recovery-Set darf nicht im Restic-Repository, im Release-ZIP, in SQLite oder ausschließlich auf demselben VPS liegen.
+
+Nach der Offsite-Einrichtung kann die IT den vollständigen root-only Zwischenstand erzeugen und vor beziehungsweise nach der Übertragung prüfen:
+
+```bash
+sudo grabenplaner-offsite-recovery-set export \
+  --output /root/grabenplaner-recovery-set-DATUM --yes
+sudo grabenplaner-offsite-recovery-set verify \
+  --input /root/grabenplaner-recovery-set-DATUM
+```
+
+Der Exportordner ist noch kein dauerhaft sicher abgelegtes Recovery-Set. Er enthält bewusst auch die vollständige signierte Historie und deren privaten Fortsetzungsschlüssel. Er muss daher unmittelbar stark verschlüsselt auf ein getrenntes Administrationsgerät übertragen, dort erneut geprüft und anschließend vom Server gelöscht werden. Google-Kontowiederherstellung, zuständige IT-Kontakte und der betriebliche Zugriff auf das Administrationsgerät werden bewusst außerhalb des automatischen Exports dokumentiert.
 
 #### Gepinnte Werkzeuge installieren und Modul aktivieren
 
@@ -251,6 +265,29 @@ Der eingerichtete Zustand wird mit folgendem Befehl geprüft:
 ```bash
 sudo grabenplaner-offsite-test
 ```
+
+#### Recovery Assurance v0.76
+
+Das Recovery-Assurance-Fundament zeichnet jeden vollständigen Prüfablauf in einer Ed25519-signierten, über SHA-256 verketteten Historie auf. Nur `root` darf neue Ereignisse schreiben; der private Signaturschlüssel bleibt root-only. Öffentlicher Prüfschlüssel, Historie und signierter Kopf sind für den App-Dienst ausschließlich lesbar. Die Anwendung prüft die gesamte Kette und gibt nur einen redigierten Status ohne Geheimnisse, interne Pfade oder vollständige Snapshot-Kennung aus.
+
+Ein beaufsichtigter vollständiger Lauf wird bewusst gestartet mit:
+
+```bash
+sudo grabenplaner-offsite-assurance --trigger manual-cli
+```
+
+Der Lauf prüft OAuth-Richtlinie, neuen Sicherungspunkt und Upload, vollständige Repository-Lesbarkeit sowie die isolierte Datenwiederherstellung. Die wiederhergestellte Anwendung wird in v0.76 **noch nicht** gestartet; dieser Schritt wird ausdrücklich als `application-smoke-not-run` belegt. Ein fehlgeschlagener Teil erzeugt einen festen Fehlercode und niemals einen fälschlich erfolgreichen Gesamtstatus.
+
+Eine neue, vollständig vorbereitete rclone-Konfiguration kann transaktional angebunden werden. Der Befehl prüft vor dem Austausch insbesondere den eigenen OAuth-Client, `drive.file`, Repository-Identität und Testzugriff; bei einem Fehler bleibt die bisherige Konfiguration aktiv:
+
+```bash
+sudo grabenplaner-offsite-rebind-rclone \
+  --rclone-config /root/geschuetzt/rclone.conf \
+  --rclone-config-password /root/geschuetzt/rclone-config-password \
+  --yes
+```
+
+Nach einer erfolgreich abgeschlossenen OAuth-Neuanbindung und nach einem erfolgreichen App-Update wird automatisch ein neuer Assurance-Lauf über systemd in die Warteschlange gestellt. Er wartet auf die gemeinsamen Wartungssperren und läuft nicht parallel zu Update, Upload oder Wiederherstellung. v0.76 richtet bewusst noch keinen nächtlichen Assurance-Timer ein. System-Center, Historienansicht und Vertrauensindex folgen in den nächsten Entwicklungsblöcken.
 
 Vor der betrieblichen Freigabe werden einmalig ein Upload, die vollständige Datenprüfung und danach der isolierte Restore-Test ausgeführt. Die Befehle warten jeweils auf den Abschluss und müssen ohne Fehler enden:
 
@@ -291,7 +328,7 @@ Der monatliche Vollcheck liest die Repository-Daten vollständig und kann abhän
 
 Ist das Offsite-Modul eingerichtet, erstellt `grabenplaner-update` zunächst bei kurz gestopptem Dienst einen verifizierten lokalen Sicherungspunkt. Anschließend wird die bisherige App wieder gestartet und bleibt während der unter Umständen längeren Google-Drive-Übertragung erreichbar. Erst wenn diese Offsite-Kopie bestätigt ist, stoppt der Updater den Dienst erneut, erstellt unmittelbar vor dem App-Tausch einen zweiten aktuellen lokalen Rollback-Sicherungspunkt und ersetzt die Programmdateien. Ist Google Drive nicht erreichbar oder scheitert die Repository-Prüfung, wird der Austausch nicht begonnen; die bisherige App bleibt beziehungsweise wird wieder in Betrieb genommen.
 
-Für das einmalige Ubuntu-26.04-Kompatibilitätsupdate auf v0.75.7 muss ein bereits eingerichtetes Offsite-Modul vor dem Kernupdate ausdrücklich mit `sudo grabenplaner-offsite-uninstall --yes` deaktiviert und danach mit den geschützten vorhandenen Zugangsdaten erneut installiert werden. Das externe Repository darf dabei **nicht** neu initialisiert werden. Repository, Repository-ID, Installations-ID, Geheimdateien, lokales Staging und vorhandene Sicherungsstände bleiben bei der Deaktivierung erhalten; die drei Identitätsdateien werden vor und nach der Wiederanbindung bytegleich geprüft.
+Mit v0.76 steigt der eigenständige Offsite-Modulvertrag von Version 1 auf Version 2. Ein bereits eingerichtetes Modul wird nicht still durch das Kernupdate verändert: `grabenplaner-update` beendet den Vorgang mit `migration-required`. Die beaufsichtigte Reihenfolge im Wartungsfenster ist daher fest: zuerst mit Modulversion 1 einen aktuellen Upload und die Repository-Prüfung erfolgreich abschließen, dann Modulversion 1 mit `sudo grabenplaner-offsite-uninstall --yes` deaktivieren, anschließend die Anwendung auf v0.76 aktualisieren und erst danach Modulversion 2 aus der verifizierten v0.76-Installation mit den geschützten vorhandenen Zugangsdaten sowie einer rclone-Konfiguration mit eigenem Google-OAuth-Client wieder einrichten. Das externe Repository darf dabei **nicht** neu initialisiert werden. Repository, Repository-ID, Installations-ID, Geheimdateien, lokales Staging und vorhandene Sicherungsstände bleiben bei der Deaktivierung erhalten und werden vor der Wiederfreigabe kontrolliert. Während dieses ausdrücklich beaufsichtigten Übergangs ist das Offsite-Modul vorübergehend deaktiviert; das Wartungsfenster wird erst nach erfolgreichem Modultest und einem vollständigen Assurance-Lauf beendet.
 
 Der neutrale Status liegt unter `/var/lib/grabenplaner-offsite/status.json`. `grabenplaner-test` und die berechtigte Serverdiagnose zeigen daraus insbesondere:
 
@@ -486,7 +523,7 @@ Für den Paketbau wird die in `package.json` festgelegte pnpm-Version benötigt.
 Das geprüfte Paket wird am Server in einer als Administrator gestarteten PowerShell zusammen mit seiner veröffentlichten Prüfsumme eingespielt:
 
 ```powershell
-$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.75.7-beta-windows-x64.zip'
+$package = 'C:\IT-Freigabe\Grabenplaner-Server-v0.76.0-beta-windows-x64.zip'
 $sha256 = ((Get-Content "$package.sha256" -Raw).Trim() -split '\s+')[0]
 
 .\server-tools\windows\Update-GrabenplanerServer.ps1 `

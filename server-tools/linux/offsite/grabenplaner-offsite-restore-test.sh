@@ -16,6 +16,22 @@ readonly RECOVERY_DATABASE_LOCK_MODULE="$OFFSITE_APP_ROOT/lib/database-lock.js"
 readonly RECOVERY_TARGET_PACKAGE="$OFFSITE_APP_ROOT/package.json"
 readonly RECOVERY_TARGET_RUNTIME="$OFFSITE_APP_ROOT/server-tools/linux/runtime-schema.json"
 
+assurance_result=""
+lock_already_held=0
+while (($#)); do
+  case "$1" in
+    --assurance-result) assurance_result="${2:?Wert fuer --assurance-result fehlt}"; shift 2 ;;
+    --lock-already-held) lock_already_held=1; shift ;;
+    -h|--help)
+      printf '%s\n' "Verwendung: sudo grabenplaner-offsite-restore-test [--lock-already-held] [--assurance-result PFAD]"
+      exit 0
+      ;;
+    *) offsite_die "Unbekannte Option." ;;
+  esac
+done
+[[ -z "$assurance_result" || "$lock_already_held" -eq 1 ]] \
+  || offsite_die "Ein Assurance-Ergebnispfad ist nur innerhalb der uebernommenen Repository-Sperre erlaubt."
+
 offsite_require_root
 # Ab diesem Punkt darf kein alter erfolgreicher Quartalsstatus mehr sichtbar
 # bleiben. Der geschuetzte Statuspfad wird bewusst vor dem restlichen
@@ -23,9 +39,20 @@ offsite_require_root
 offsite_status failure --code RESTORE_TEST_FAILED --summary "Der isolierte Offsite-Wiederherstellungstest ist fehlgeschlagen." >/dev/null \
   || offsite_die "Der Restore-Teststatus konnte nicht sicher begonnen werden."
 started_at="$(date --utc '+%Y-%m-%dT%H:%M:%SZ')"
-for command_name in awk chown chmod df find flock getent grep install mktemp readlink rm runuser sha256sum stat tail tr; do
+for command_name in awk chown chmod df dirname find flock getent grep install mktemp readlink realpath rm runuser sha256sum stat sync tail tr; do
   offsite_require_command "$command_name"
 done
+
+if [[ -n "$assurance_result" ]]; then
+  assurance_result="$(realpath --canonicalize-missing -- "$assurance_result")" \
+    || offsite_die "Der Assurance-Ergebnispfad ist ungueltig."
+  assurance_parent="$(dirname -- "$assurance_result")"
+  [[ "$assurance_result" == "$OFFSITE_RUN_ROOT/assurance."*/restore-result.json \
+    && -d "$assurance_parent" && ! -L "$assurance_parent" \
+    && "$(stat --format='%u:%g:%a' -- "$assurance_parent")" == "0:0:700" \
+    && ! -e "$assurance_result" && ! -L "$assurance_result" ]] \
+    || offsite_die "Der Assurance-Ergebnispfad ist nicht freigegeben."
+fi
 offsite_assert_runtime_binaries
 for helper in "$RECOVERY_METADATA" "$RECOVERY_VERIFY" "$RECOVERY_INTEGRATION_MODULE" \
   "$RECOVERY_DATABASE_LOCK_MODULE" "$RECOVERY_TARGET_PACKAGE" "$RECOVERY_TARGET_RUNTIME"; do
@@ -55,7 +82,11 @@ cleanup() {
   exit "$status"
 }
 trap cleanup EXIT
-offsite_acquire_repository_lock
+if (( lock_already_held == 1 )); then
+  offsite_assert_inherited_repository_lock
+else
+  offsite_acquire_repository_lock
+fi
 
 if ! offsite_verify_repository_identity "$uploader_credentials" "$operation_root/repository-config.json"; then
   offsite_fixed_failure RESTORE_TEST_REPOSITORY_ID_MISMATCH "Die Identitaet des Offsite-Repositorys konnte fuer den Restore-Test nicht bestaetigt werden."
@@ -69,7 +100,7 @@ fi
   || offsite_fixed_failure RESTORE_TEST_FAILED "Der isolierte Offsite-Wiederherstellungstest ist fehlgeschlagen."
 snapshot_id="$("$OFFSITE_NODE" -e 'const fs=require("node:fs");const v=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(!/^[a-f0-9]{64}$/.test(String(v.id||"")))process.exit(1);process.stdout.write(v.id)' "$operation_root/snapshot.json")" \
   || offsite_fixed_failure RESTORE_TEST_FAILED "Der isolierte Offsite-Wiederherstellungstest ist fehlgeschlagen."
-offsite_info "Quartalspruefung des exakten Offsite-Snapshots $snapshot_id."
+offsite_info "Quartalspruefung des exakten Offsite-Snapshotnachweises ${snapshot_id:0:12}."
 
 if ! offsite_restic "$uploader_credentials" stats --mode restore-size --json "$snapshot_id" >"$operation_root/stats.json"; then
   offsite_fixed_failure RESTORE_TEST_FAILED "Der isolierte Offsite-Wiederherstellungstest ist fehlgeschlagen."
@@ -125,7 +156,20 @@ receipt_file="$receipt_root/restore-test-$(date --utc '+%Y%m%dT%H%M%SZ')-${snaps
   || offsite_fixed_failure RESTORE_TEST_FAILED "Der isolierte Offsite-Wiederherstellungstest ist fehlgeschlagen."
 chmod 0400 -- "$receipt_file"
 
+if [[ -n "$assurance_result" ]]; then
+  receipt_sha256="$(sha256sum --binary -- "$receipt_file" | awk '{print tolower($1)}')"
+  [[ "$receipt_sha256" =~ ^[a-f0-9]{64}$ ]] \
+    || offsite_fixed_failure RESTORE_TEST_FAILED "Der isolierte Offsite-Wiederherstellungstest ist fehlgeschlagen."
+  result_temporary="$assurance_parent/.restore-result.$$"
+  (umask 077; printf '{"snapshotIdPrefix":"%s","receiptSha256":"%s"}\n' \
+    "${snapshot_id:0:12}" "$receipt_sha256" >"$result_temporary")
+  chmod 0600 -- "$result_temporary"
+  sync -f "$result_temporary"
+  mv -- "$result_temporary" "$assurance_result"
+  sync -f "$assurance_parent"
+fi
+
 offsite_status restore-test >/dev/null
 restore_test_complete=1
-offsite_info "Der quartalsweise isolierte Offsite-Wiederherstellungstest war erfolgreich; exakter Snapshot: $snapshot_id."
+offsite_info "Der quartalsweise isolierte Offsite-Wiederherstellungstest war erfolgreich; Snapshotnachweis: ${snapshot_id:0:12}."
 offsite_info "Ein App-Smoke-Test wurde bewusst nicht gestartet, solange kein nebenwirkungsfreier isolierter Recovery-Testmodus existiert."

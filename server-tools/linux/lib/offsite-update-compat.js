@@ -6,6 +6,33 @@ const fs = require("node:fs");
 const HASH = /^[a-f0-9]{64}$/;
 const PREFIX = "server-tools/linux/offsite/";
 const INSTALLER = "install-grabenplaner-offsite.sh";
+const SUPPORTED_MODULE_VERSIONS = new Set([1, 2]);
+const LEGACY_V1_ARTIFACTS = Object.freeze([
+  "grabenplaner-offsite-check.sh",
+  "grabenplaner-offsite-pre-update.sh",
+  "grabenplaner-offsite-prepare.sh",
+  "grabenplaner-offsite-read-secret.sh",
+  "grabenplaner-offsite-rclone-wrapper.sh",
+  "grabenplaner-offsite-restore-test.sh",
+  "grabenplaner-offsite-upload.sh",
+  "install-grabenplaner-offsite.sh",
+  "lib/offsite-common.sh",
+  "lib/offsite-contract.js",
+  "lib/offsite-restore-verify.js",
+  "lib/offsite-retention-verify.js",
+  "lib/offsite-stage.js",
+  "lib/offsite-status.js",
+  "lib/offsite-setup-rclone-wrapper.sh",
+  "systemd/grabenplaner-offsite-check.service.in",
+  "systemd/grabenplaner-offsite-check.timer.in",
+  "systemd/grabenplaner-offsite-prepare.service.in",
+  "systemd/grabenplaner-offsite-restore-test.service.in",
+  "systemd/grabenplaner-offsite-restore-test.timer.in",
+  "systemd/grabenplaner-offsite-upload.service.in",
+  "systemd/grabenplaner-offsite-upload.timer.in",
+  "uninstall-grabenplaner-offsite.sh",
+  "test-grabenplaner-offsite.sh",
+]);
 
 function safeRelative(value) {
   return typeof value === "string" && value && !value.includes("\\") && !value.startsWith("/")
@@ -21,11 +48,11 @@ function fingerprint(files) {
 
 function classify(candidateEnvelope, installed) {
   const candidate = candidateEnvelope?.offsiteModule;
-  if (!candidate || candidate.schemaVersion !== 1 || candidate.moduleVersion !== 1
+  if (!candidate || candidate.schemaVersion !== 1 || !SUPPORTED_MODULE_VERSIONS.has(candidate.moduleVersion)
     || candidate.activationPolicy !== "explicit-root-setup" || !HASH.test(String(candidate.fingerprint || ""))
     || !HASH.test(String(candidate.installerSha256 || "")) || !Array.isArray(candidate.managedArtifacts)
     || installed?.format !== "grabenplaner-linux-offsite-installed-contract" || installed.schemaVersion !== 1
-    || installed.moduleVersion !== 1 || !HASH.test(String(installed.fingerprint || ""))
+    || !SUPPORTED_MODULE_VERSIONS.has(installed.moduleVersion) || !HASH.test(String(installed.fingerprint || ""))
     || !Array.isArray(installed.files)) return "invalid";
 
   const expectedPaths = candidate.managedArtifacts.map((value) => {
@@ -35,22 +62,34 @@ function classify(candidateEnvelope, installed) {
     return safeRelative(relative) ? relative : "";
   });
   if (expectedPaths.some((value) => !value) || new Set(expectedPaths).size !== expectedPaths.length
-    || expectedPaths.length !== installed.files.length || !expectedPaths.includes(INSTALLER)) {
+    || !expectedPaths.includes(INSTALLER)) {
     return "invalid";
   }
+  const legacyV1 = new Set(LEGACY_V1_ARTIFACTS);
+  if (candidate.moduleVersion === 1
+    && (expectedPaths.length !== legacyV1.size || expectedPaths.some((relative) => !legacyV1.has(relative)))) {
+    return "invalid";
+  }
+  if (candidate.moduleVersion < installed.moduleVersion) return "invalid";
 
   const expected = new Set(expectedPaths);
   const installedFiles = new Map();
   for (const item of installed.files) {
     const relative = String(item?.path || "");
     const sha256 = String(item?.sha256 || "");
-    if (!safeRelative(relative) || !expected.has(relative) || installedFiles.has(relative) || !HASH.test(sha256)) {
+    if (!safeRelative(relative) || installedFiles.has(relative) || !HASH.test(sha256)) {
       return "invalid";
     }
     installedFiles.set(relative, sha256);
   }
-  if (installedFiles.size !== expected.size || [...expected].some((relative) => !installedFiles.has(relative))) return "invalid";
   if (fingerprint(installedFiles) !== installed.fingerprint) return "invalid";
+  const installedExpected = installed.moduleVersion === 1 ? legacyV1 : new Set(expectedPaths);
+  if (installedFiles.size !== installedExpected.size
+    || [...installedExpected].some((relative) => !installedFiles.has(relative))) return "invalid";
+  if (candidate.moduleVersion !== installed.moduleVersion) {
+    return `migration-required:${installed.moduleVersion}->${candidate.moduleVersion}`;
+  }
+  if (expectedPaths.length !== installed.files.length || installedFiles.size !== expected.size) return "invalid";
   if (candidate.fingerprint === installed.fingerprint) {
     return installedFiles.get(INSTALLER) === candidate.installerSha256 ? "compatible" : "invalid";
   }
