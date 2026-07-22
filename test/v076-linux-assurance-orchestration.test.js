@@ -39,6 +39,18 @@ test("v0.76 runs the exact signed assurance phases in the approved order", () =>
   }
 });
 
+test("assurance copies root-only systemd credentials for its unprivileged OAuth policy check", () => {
+  const source = assurance.indexOf('credentials_source="$(offsite_credentials_directory)"');
+  const prepared = assurance.indexOf('policy_credentials="$(offsite_make_uploader_credentials "$credentials_source")"', source);
+  const checked = assurance.indexOf('offsite_assert_dedicated_rclone_oauth "$policy_credentials"', prepared);
+  const removed = assurance.indexOf('offsite_remove_uploader_credentials "$policy_credentials"', checked);
+  const cleared = assurance.indexOf('policy_credentials=""', removed);
+  const recorded = assurance.indexOf("record_event oauth-policy-passed", cleared);
+  assert.ok(source > 0 && prepared > source && checked > prepared && removed > checked && cleared > removed && recorded > cleared);
+  assert.doesNotMatch(assurance, /offsite_assert_dedicated_rclone_oauth "\$credentials_source"/);
+  assert.match(assurance, /cleanup\(\)[\s\S]*offsite_remove_uploader_credentials "\$policy_credentials"/);
+});
+
 test("v0.76 serializes assurance through one repository lock and never exposes full snapshot identifiers", () => {
   assert.match(common, /exec 7<>"\$OFFSITE_ASSURANCE_LOCK"[\s\S]*flock --wait 14400 7/);
   const maintenance = assurance.indexOf('exec 6<>"$maintenance_lock"');
