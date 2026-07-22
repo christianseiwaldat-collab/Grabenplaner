@@ -7,6 +7,10 @@ After=network.target
 Type=oneshot
 User=grabenplaner-offsite
 Group=grabenplaner-offsite
+# Nur diese isolierte Unit darf den root:grabenplaner-App-Code lesen. Das
+# Dienstkonto erhaelt dadurch keine dauerhafte Gruppenmitgliedschaft; Live-Daten
+# und Konfiguration bleiben weiterhin per InaccessiblePaths gesperrt.
+SupplementaryGroups=grabenplaner
 WorkingDirectory=/opt/grabenplaner/app
 ExecStart=/opt/grabenplaner-offsite/module/grabenplaner-offsite-application-smoke.sh
 NoNewPrivileges=yes
@@ -51,7 +55,7 @@ Nice=10
 OOMPolicy=stop
 ReadOnlyPaths=/opt/grabenplaner/app /opt/grabenplaner-offsite/module
 ReadWritePaths=/var/lib/grabenplaner-offsite/application-smoke
-InaccessiblePaths=/etc/grabenplaner /var/lib/grabenplaner /var/backups/grabenplaner /var/lib/grabenplaner-assurance /run/grabenplaner-assurance-control /var/lib/grabenplaner-offsite/credentials /var/lib/grabenplaner-offsite/uploader-home /var/lib/grabenplaner-offsite/staging /var/lib/grabenplaner-offsite/restore-tests /var/lib/grabenplaner-offsite/status.json
+InaccessiblePaths=/etc/grabenplaner /var/lib/grabenplaner /var/backups/grabenplaner /var/log/grabenplaner /var/lib/grabenplaner-assurance /run/grabenplaner-assurance-control /var/lib/grabenplaner-offsite/credentials /var/lib/grabenplaner-offsite/uploader-home /var/lib/grabenplaner-offsite/staging /var/lib/grabenplaner-offsite/restore-tests /var/lib/grabenplaner-offsite/status.json
 TimeoutStartSec=120s
 TimeoutStopSec=15s
 RuntimeMaxSec=120s

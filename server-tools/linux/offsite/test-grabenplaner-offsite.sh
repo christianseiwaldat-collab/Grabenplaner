@@ -99,9 +99,14 @@ done
 
 smoke_unit="grabenplaner-offsite-application-smoke.service"
 smoke_properties="$(systemctl show "$smoke_unit" --property=LoadState,User,Group,PrivateNetwork,NoNewPrivileges,ProtectSystem,TimeoutStartUSec --value 2>/dev/null || true)"
+smoke_supplementary_groups="$(systemctl show "$smoke_unit" --property=SupplementaryGroups --value 2>/dev/null || true)"
 if systemctl cat "$smoke_unit" >/dev/null 2>&1 \
-  && systemctl cat "$smoke_unit" | grep -Fq 'InaccessiblePaths=/etc/grabenplaner /var/lib/grabenplaner /var/backups/grabenplaner' \
-  && systemctl cat "$smoke_unit" | grep -Fq 'ReadWritePaths=/var/lib/grabenplaner-offsite/application-smoke' \
+  && systemctl cat "$smoke_unit" | grep -Fxq 'SupplementaryGroups=grabenplaner' \
+  && [[ "$smoke_supplementary_groups" == "grabenplaner" ]] \
+  && systemctl cat "$smoke_unit" | grep -Fq 'InaccessiblePaths=/etc/grabenplaner /var/lib/grabenplaner /var/backups/grabenplaner /var/log/grabenplaner' \
+  && systemctl cat "$smoke_unit" | grep -Eq '^InaccessiblePaths=([^[:space:]]+[[:space:]]+)*/var/log/grabenplaner([[:space:]]|$)' \
+  && systemctl cat "$smoke_unit" | grep -Fxq 'ReadOnlyPaths=/opt/grabenplaner/app /opt/grabenplaner-offsite/module' \
+  && systemctl cat "$smoke_unit" | grep -Fxq 'ReadWritePaths=/var/lib/grabenplaner-offsite/application-smoke' \
   && systemctl cat "$smoke_unit" | grep -Fq '/var/lib/grabenplaner-offsite/uploader-home' \
   && systemctl cat "$smoke_unit" | grep -Fq 'MemoryMax=768M' \
   && systemctl cat "$smoke_unit" | grep -Fq 'MemorySwapMax=0' \
