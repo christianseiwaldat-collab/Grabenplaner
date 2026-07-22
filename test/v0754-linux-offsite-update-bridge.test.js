@@ -19,31 +19,57 @@ const schema = JSON.parse(fs.readFileSync(
 
 const sha256 = (value) => crypto.createHash("sha256").update(String(value)).digest("hex");
 const relativeArtifacts = schema.managedArtifacts.map((relative) => relative.slice(prefix.length));
+const legacyV1Artifacts = [
+  "grabenplaner-offsite-check.sh",
+  "grabenplaner-offsite-pre-update.sh",
+  "grabenplaner-offsite-prepare.sh",
+  "grabenplaner-offsite-read-secret.sh",
+  "grabenplaner-offsite-rclone-wrapper.sh",
+  "grabenplaner-offsite-restore-test.sh",
+  "grabenplaner-offsite-upload.sh",
+  "install-grabenplaner-offsite.sh",
+  "lib/offsite-common.sh",
+  "lib/offsite-contract.js",
+  "lib/offsite-restore-verify.js",
+  "lib/offsite-retention-verify.js",
+  "lib/offsite-stage.js",
+  "lib/offsite-status.js",
+  "lib/offsite-setup-rclone-wrapper.sh",
+  "systemd/grabenplaner-offsite-check.service.in",
+  "systemd/grabenplaner-offsite-check.timer.in",
+  "systemd/grabenplaner-offsite-prepare.service.in",
+  "systemd/grabenplaner-offsite-restore-test.service.in",
+  "systemd/grabenplaner-offsite-restore-test.timer.in",
+  "systemd/grabenplaner-offsite-upload.service.in",
+  "systemd/grabenplaner-offsite-upload.timer.in",
+  "uninstall-grabenplaner-offsite.sh",
+  "test-grabenplaner-offsite.sh",
+];
 
-function baseFiles() {
-  return relativeArtifacts.map((relative) => [relative, sha256(`installed:${relative}`)]);
+function baseFiles(artifacts = relativeArtifacts) {
+  return artifacts.map((relative) => [relative, sha256(`installed:${relative}`)]);
 }
 
-function installedContract(entries = baseFiles()) {
+function installedContract(entries = baseFiles(), moduleVersion = schema.moduleVersion) {
   return {
     format: "grabenplaner-linux-offsite-installed-contract",
     schemaVersion: 1,
-    moduleVersion: 1,
+    moduleVersion,
     fingerprint: fingerprint(entries),
     files: entries.map(([relative, hash]) => ({ path: relative, sha256: hash })),
   };
 }
 
-function candidateContract(entries = baseFiles()) {
+function candidateContract(entries = baseFiles(), moduleVersion = schema.moduleVersion, artifacts = relativeArtifacts) {
   const hashes = new Map(entries);
   return {
     offsiteModule: {
       schemaVersion: 1,
-      moduleVersion: 1,
+      moduleVersion,
       activationPolicy: "explicit-root-setup",
       fingerprint: fingerprint(entries),
       installerSha256: hashes.get(installer),
-      managedArtifacts: relativeArtifacts.map((relative) => `${prefix}${relative}`),
+      managedArtifacts: artifacts.map((relative) => `${prefix}${relative}`),
     },
   };
 }
@@ -75,8 +101,20 @@ test("v0.75.4 offsite bridge requires migration when another managed artifact ch
 
   assert.equal(
     classify(candidateContract(candidateFiles), installedContract(installedFiles)),
-    "migration-required:1->1",
+    "migration-required:2->2",
   );
+});
+
+test("v0.76 offsite bridge recognizes the exact v1 contract as an explicit v1 to v2 migration", () => {
+  const installedV1Files = baseFiles(legacyV1Artifacts);
+  const candidateV2Files = baseFiles();
+  assert.equal(
+    classify(candidateContract(candidateV2Files), installedContract(installedV1Files, 1)),
+    "migration-required:1->2",
+  );
+
+  const forgedV1Files = installedV1Files.with(0, ["lib/not-a-v1-artifact.js", sha256("forged")]);
+  assert.equal(classify(candidateContract(candidateV2Files), installedContract(forgedV1Files, 1)), "invalid");
 });
 
 test("v0.75.4 offsite bridge rejects incomplete, duplicate, or manipulated contracts", async (t) => {
