@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.78.4 Beta · Geschützte Recovery-Assurance-Credentials
+
+- Der Recovery-Assurance-Hauptlauf überführt systemd-Credentials vor der OAuth-Prüfung in ein kurzlebiges, nur für den eingeschränkten Offsite-Dienst lesbares Verzeichnis.
+- Die flüchtige Kopie wird unmittelbar nach erfolgreicher Prüfung sowie bei jedem Fehlerpfad zuverlässig entfernt.
+- Upload, Vollprüfung, Restore-Test und Assurance verwenden damit denselben gehärteten Berechtigungsvertrag, ohne Zugangsdaten offenzulegen.
+
 ## v0.78.3 Beta · Reale rclone-Policy-Ausgabe
 
 - Die Prüfung des eigenen Google-OAuth-Clients verarbeitet die von rclone selbst erzeugten Kommentarzeilen korrekt.
