@@ -59,8 +59,9 @@ const fs = require("node:fs");
 const [configFile, passwordFile] = process.argv.slice(2);
 const config = fs.readFileSync(configFile);
 const password = fs.readFileSync(passwordFile);
+const configText = config.toString("utf8");
 if (config.length < 32 || config.length > 1024 * 1024 || config.includes(0)
-  || !config.toString("utf8").startsWith("RCLONE_ENCRYPT_V0:")) process.exit(1);
+  || !/^(?:(?:[ \t]*#[^\r\n]*|[ \t]*)\r?\n)*RCLONE_ENCRYPT_V0:/.test(configText)) process.exit(1);
 if (password.length < 16 || password.length > 1024 || password.includes(0)) process.exit(1);
 const passwordText = password.toString("utf8");
 if (!passwordText.trim() || /[\r\n]/.test(passwordText.trimEnd())) process.exit(1);
