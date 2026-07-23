@@ -130,8 +130,11 @@ test("v0.66: Migration und Dashboard-Oberfläche sind vollständig vorhanden", (
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const script = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
   const styles = fs.readFileSync(path.join(__dirname, "..", "public", "styles.css"), "utf8");
-  for (const marker of ["rightsDashboardView", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter"]) assert.match(html, new RegExp(marker));
-  for (const marker of ["loadRightsDashboard", "renderRightsDashboardSelection", "saveRightsDashboardTheme"]) assert.match(script, new RegExp(marker));
+  for (const marker of ["rightsDashboardView", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "revoked-origin"]) assert.match(html, new RegExp(marker));
+  for (const marker of ["loadRightsDashboard", "renderRightsDashboardSelection", "saveRightsDashboardTheme", "rightsDashboardPermissionRevoked"]) assert.match(script, new RegExp(marker));
+  assert.match(html, /<option value="revoked">Entzogene Rechte<\/option>/);
+  assert.match(script, /origin === "revoked"/);
+  assert.match(styles, /rights-dashboard-permission\.revoked/);
   assert.match(styles, /rights-dashboard\[data-dashboard-theme="dark"\]/);
 });
 

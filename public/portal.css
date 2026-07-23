@@ -286,6 +286,14 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
 .leadership-request-actions .danger-action { color:white; background:var(--danger); }
 .leadership-request-actions .secondary-action { color:var(--warning); background:#fff0c8; }
 .leadership-request-actions .primary-action { color:white; background:var(--green); }
+.leadership-sickness-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:12px 0; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); }
+.leadership-sickness-fields legend { padding:0 5px; font-size:11px; font-weight:850; }
+.leadership-sickness-fields > small { grid-column:1/-1; color:var(--muted); line-height:1.45; }
+.request-event-history { display:grid; gap:7px; max-height:180px; margin:12px 0; overflow:auto; }
+.request-event-history article { padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:var(--surface-soft); }
+.request-event-history strong,.request-event-history small { display:block; }
+.request-event-history small { margin-top:3px; color:var(--muted); }
+.leadership-request-documents { display:flex; flex-wrap:wrap; gap:7px; margin:12px 0; }
 @media (max-width:850px) { .schedule-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.vacation-layout { grid-template-columns:1fr; }.portal-user-copy { display:none; }.portal-tabs { overflow-x:auto; scrollbar-width:none; }.portal-tabs::-webkit-scrollbar { display:none; }.portal-tabs button { flex:0 0 auto; min-width:112px; }.approved-vacation-item { grid-template-columns:1fr 1fr; }.approved-vacation-item > div { grid-column:1 / -1; }.history-item { grid-template-columns:1fr auto; }.history-item > div:first-child { grid-column:1 / -1; }.history-item-status { justify-items:start; }.history-item-status small { text-align:left; } }
 @media (max-width:850px) { .sickness-preferences-card { grid-template-columns:1fr; }.notification-channel-row { grid-template-columns:minmax(130px,.55fr) minmax(240px,1.45fr); }.notification-channel-setup,.notification-verification-row { grid-column:1 / -1; } }
 @media (max-width:850px) { .time-tracking-layout { grid-template-columns:1fr; }.time-clock-card,.time-day-card { padding:20px; } }
@@ -327,6 +335,7 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
   .leadership-more-grid { grid-template-columns:1fr; }
   .leadership-more-grid button,.leadership-more-grid a { min-height:86px; padding:14px; }
   .leadership-request-actions button { flex:1 1 120px; min-height:44px; }
+  .leadership-sickness-fields { grid-template-columns:1fr; }
   .process-tasks-heading { align-items:stretch; }
   .process-tasks-heading .text-button { align-self:flex-start; }
   .process-task-summary { gap:5px; }
