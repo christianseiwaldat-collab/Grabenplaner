@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.80.1 Beta · Recovery-Assurance-Servicepatch
+
+- Der isolierte App-Smoke bereinigt nun auch die verschlüsselten Ereignisse der revisionssicheren Fallverwaltung, ohne produktive Gesundheits- oder Personaldaten in den Testlauf zu übernehmen.
+- Die Recovery-Assurance-Sperre wird auch beim automatischen Nachweis nach einem erfolgreichen Serverupdate eindeutig im ausführenden Subprozess geprüft.
+- Fehlerdetails bleiben ausschließlich im geschützten Serverjournal; der redigierte Systemstatus verwendet weiterhin nur fest definierte, neutrale Fehlertexte.
+
 ## v0.80 Beta · Entziehbare Rollenrechte und revisionssichere Fallverwaltung
 
 - Personalleitung und höhere Rollen können nun auch Rollen-Grundrechte personenbezogen entziehen. Entzüge haben Vorrang vor Rollen- und Zusatzrechten, wirken in Browser und Mobile identisch und widerrufen bestehende Sitzungen sofort.

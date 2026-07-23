@@ -69,7 +69,8 @@ test("v0.76 serializes assurance through one repository lock and never exposes f
     assert.match(child, /lock_already_held == 1[\s\S]*offsite_assert_inherited_repository_lock[\s\S]*else[\s\S]*offsite_acquire_repository_lock/);
   }
   assert.match(common, /offsite_assert_inherited_lock\(\)/);
-  assert.match(common, /\/proc\/\$\$\/fd\/\$descriptor/);
+  assert.match(common, /process_id="\$\{BASHPID:-\$\$\}"/);
+  assert.match(common, /\/proc\/\$process_id\/fd\/\$descriptor/);
   assert.match(common, /descriptor_target" == "\$expected"/);
   assert.match(common, /flock --nonblock "\$descriptor"/);
   assert.doesNotMatch(assurance, /--snapshot-id|snapshotId[^P]/);
@@ -78,6 +79,12 @@ test("v0.76 serializes assurance through one repository lock and never exposes f
   assert.match(restore, /receiptSha256/);
   assert.doesNotMatch(restore, /offsite_info[^\n]*\$snapshot_id/);
   assert.match(restore, /offsite_info[^\n]*\$\{snapshot_id:0:12\}/);
+});
+
+test("offsite failures keep detailed diagnostics in the root journal and publish only canonical status text", () => {
+  assert.match(common, /offsite_status failure --code "\$code" >\/dev\/null \|\| true/);
+  assert.doesNotMatch(common, /offsite_status failure --code "\$code" --summary "\$summary"/);
+  assert.match(common, /offsite_die "\$summary"/);
 });
 
 test("v0.76 queues automatic assurance only after a committed update or OAuth rebind", () => {

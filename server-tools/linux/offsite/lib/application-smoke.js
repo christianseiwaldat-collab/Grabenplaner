@@ -28,6 +28,7 @@ const PROTECTED_COLUMNS = new Set([
   "outbound_notification_jobs.protected_payload",
   "personnel_record_documents.protected_payload",
   "personnel_sensitive_records.protected_payload",
+  "protected_case_events.protected_payload",
   "sickness_alerts.protected_payload",
   "sickness_cases.protected_payload",
   "sickness_notification_preferences.protected_destination",
@@ -35,6 +36,7 @@ const PROTECTED_COLUMNS = new Set([
 const PROTECTED_ROW_TABLES = Object.freeze([
   "amu_documents",
   "personnel_record_documents",
+  "protected_case_events",
   "sickness_alerts",
   "outbound_notification_jobs",
   "amu_reports",
