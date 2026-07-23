@@ -48,11 +48,12 @@ const state = {
   approvalDelegations: [],
   requestBlackouts: [],
   absenceRequests: [],
+  sicknessCases: [],
   amuReports: [],
   amuCanOpenFiles: false,
   amuCanReview: false,
   amuAccess: null,
-  requestCounts: { vacation: 0, timeOff: 0, amu: 0, total: 0 },
+  requestCounts: { vacation: 0, timeOff: 0, sickness: 0, amu: 0, total: 0 },
   requestKindTab: "vacation",
   currentView: "planning",
   timePresence: null,
@@ -101,6 +102,7 @@ const state = {
   personnelFieldRightsDirtyRoles: new Set(),
   personnelFieldRightsDrafts: {},
   selectedRightsEmployeeNumber: "",
+  rightsEditorReturnFocus: null,
   employeeAccessDraft: new Set(),
   amuPolicy: null,
   amuAccessPolicy: null,
@@ -108,6 +110,8 @@ const state = {
   trustLevelSettings: null,
   greetingSettings: null,
   selectedRequest: null,
+  selectedSicknessCase: null,
+  selectedAmuReport: null,
   allEmployees: [],
   personnelDirectory: [],
   costCenters: [],
@@ -223,7 +227,7 @@ const elements = Object.fromEntries(
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
-    "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
+    "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
@@ -233,7 +237,7 @@ const elements = Object.fromEntries(
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
-    "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton",
+    "requestActionModal", "requestActionForm", "requestActionTitle", "requestActionSummary", "requestActionHistory", "requestActionDocuments", "requestActionNote", "requestEditFields", "requestEditDateFromField", "requestEditDateToField", "requestEditTimeField", "requestEditDateFrom", "requestEditDateTo", "requestEditStartTime", "requestEditEndTime", "changeApprovedRequestButton", "cancelApprovedRequestButton", "sicknessCaseFields", "sicknessExpectedEnd", "sicknessReturnDate", "sicknessCaseHint",
     "loginGate", "loginBrandLogo", "adminLoginForm", "adminLoginPersonnelNumber", "adminLoginPassword", "adminLoginError", "portalLogoutButton", "employeePortalLink", "deploymentBanner", "personnelRecordModal", "personnelRecordForm", "personnelRecordTitle", "personnelRecordContent", "personnelRecordMessage", "savePersonnelRecordButton",
     "timeCorrectionModal", "timeCorrectionForm", "timeCorrectionTitle", "timeCorrectionEmployee", "timeCorrectionWorkDate", "timeCorrectionEmployeeLabel", "timeCorrectionDateLabel", "timeCorrectionClockOutTime", "timeCorrectionMessage",
     "timeCorrectionReviewModal", "timeCorrectionReviewForm", "timeCorrectionReviewId", "timeCorrectionReviewSummary", "timeCorrectionReviewEntries", "addTimeCorrectionReviewEntry", "timeCorrectionReviewNote", "timeCorrectionReviewMessage",
@@ -2689,28 +2693,172 @@ function renderRightsManagement() {
   const filtered = users.filter((user) => !query || [user.employeeNumber, user.fullName, user.nickname, user.roleName]
     .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(query)));
   elements.rightsManagementHint.textContent = users.length
-    ? `${filtered.length} von ${users.length} Teammitgliedern angezeigt. Zusatzrechte ergänzen die Grundrechte der jeweiligen Rolle.`
+    ? `${filtered.length} von ${users.length} Teammitgliedern angezeigt. Grundrechte können persönlich eingeschränkt und zusätzliche Rechte gezielt vergeben werden.`
     : "Es sind noch keine aktiven Teammitglieder vorhanden.";
   elements.rightsUserList.innerHTML = filtered.length ? filtered.map((user) => {
     const additionalCount = (user.grantedPermissions || []).length;
+    const revokedCount = (user.deniedPermissions || []).length;
     const personnelLevels = Object.values(user.personnelFieldAccess || {});
     const personnelSummary = ["manager", "department_manager"].includes(user.role) && personnelLevels.length
       ? `<small>Personalakt effektiv · ${personnelLevels.filter((level) => level === "read").length} lesen · ${personnelLevels.filter((level) => level === "write").length} bearbeiten</small>` : "";
     const location = state.locations.find((item) => item.id === user.homeLocationId);
-    const status = !user.configured ? "Portal-Zugang noch nicht eingerichtet" : !user.active ? "Portal-Zugang inaktiv" : user.manageable ? "Zusatzrechte können bearbeitet werden" : "Rechte nur zur Ansicht";
+    const status = !user.configured ? "Portal-Zugang noch nicht eingerichtet" : !user.active ? "Portal-Zugang inaktiv" : user.manageable ? "Persönliche Rechte können bearbeitet werden" : "Rechte nur zur Ansicht";
     return `<article class="rights-user-card" data-rights-user="${escapeHtml(user.employeeNumber)}">
-      <div class="rights-user-heading"><div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${escapeHtml(user.roleName || user.role)} · ${escapeHtml(location?.name || user.homeLocationId || "Kein Standort")} · ${additionalCount} Zusatzrecht${additionalCount === 1 ? "" : "e"}</small>${personnelSummary}<small>${escapeHtml(status)}</small></div><button class="secondary-button" type="button" data-edit-user-rights>${user.manageable ? "Rechte bearbeiten" : "Rechte ansehen"}</button></div>
+      <div class="rights-user-heading"><div><strong>${escapeHtml(user.employeeNumber)} · ${escapeHtml(user.nickname || user.fullName)}</strong><small>${escapeHtml(user.roleName || user.role)} · ${escapeHtml(location?.name || user.homeLocationId || "Kein Standort")} · ${additionalCount} hinzugefügt · ${revokedCount} entzogen</small>${personnelSummary}<small>${escapeHtml(status)}</small></div><button class="secondary-button" type="button" data-edit-user-rights>${user.manageable ? "Rechte bearbeiten" : "Rechte ansehen"}</button></div>
     </article>`;
   }).join("") : '<p class="settings-note rights-empty-search">Kein Teammitglied entspricht dieser Suche.</p>';
+}
+
+const rightsEditorOrganizationalPermissionIds = new Set([
+  "schedule:read", "schedule:write",
+  "employees:read", "employees:display:write", "employees:write",
+  "departments:write", "locations:write",
+  "time:read", "time:review", "time:settings",
+  "vacation:read", "vacation:approve",
+  "personnel:phone:read", "personnel:phone:write",
+  "sickness:read", "sickness:manage", "amu:local:manage",
+]);
+
+function selectedRightsEditorUser() {
+  return (state.rightsManagement?.users || []).find((entry) => entry.employeeNumber === state.selectedRightsEmployeeNumber) || null;
+}
+
+function rightsEditorEffectivePermissionSet(user) {
+  const deniedPermissions = new Set(user?.deniedPermissions || []);
+  if (Array.isArray(user?.effectivePermissions)) return new Set(user.effectivePermissions);
+  return new Set([...(user?.rolePermissions || []), ...(user?.grantedPermissions || [])]
+    .filter((permission) => !deniedPermissions.has(permission)));
+}
+
+function rightsEditorPermissionIsOrganizational(permissionId) {
+  const permission = (state.rightsManagement?.catalog || []).find((entry) => entry.id === permissionId);
+  return permission?.scopeBehavior === "organizational"
+    || (permission?.scopeBehavior !== "global" && rightsEditorOrganizationalPermissionIds.has(permissionId));
+}
+
+function rightsEditorAnnounce(message) {
+  if (!elements.rightsEditorAnnouncement) return;
+  elements.rightsEditorAnnouncement.textContent = "";
+  window.requestAnimationFrame(() => { elements.rightsEditorAnnouncement.textContent = message; });
+}
+
+function updateRightsEditorPermissionStatus(input) {
+  if (!input) return;
+  const label = input.closest(".rights-permission");
+  const status = label?.querySelector("[data-rights-permission-status]");
+  if (!label || !status) return;
+  const isRolePermission = input.dataset.rolePermission === "true";
+  label.classList.toggle("base-right", isRolePermission && input.checked);
+  label.classList.toggle("additional-right", !isRolePermission && input.checked);
+  label.classList.toggle("revoked-right", isRolePermission && !input.checked);
+  label.classList.toggle("unassigned-right", !isRolePermission && !input.checked);
+  status.textContent = isRolePermission
+    ? input.checked ? "Grundrecht der Rolle" : "Individuell entzogen"
+    : input.checked ? "Individuell hinzugefügt" : "Nicht vergeben";
+}
+
+function rightsEditorScopeContext(user) {
+  const scopes = Array.isArray(user?.scopes) ? user.scopes : [];
+  const departmentScope = scopes.find((scope) => Number(scope.departmentId || 0) > 0);
+  const locationScope = scopes.find((scope) => scope.locationId);
+  const locationId = String(departmentScope?.locationId || locationScope?.locationId || user?.homeLocationId || "");
+  const departmentId = Number(departmentScope?.departmentId || user?.preferredDepartmentId || 0) || null;
+  const location = state.locations.find((entry) => String(entry.id) === locationId);
+  const department = (location?.departments || []).find((entry) => Number(entry.id) === departmentId);
+  const explicitMode = departmentScope ? "department" : locationScope ? "location" : "";
+  const safeDefaultMode = ["employee", "department_manager"].includes(user?.role) ? "department" : "location";
+  return {
+    locationId,
+    departmentId,
+    location,
+    department,
+    mode: explicitMode || safeDefaultMode,
+  };
+}
+
+function rightsEditorHasOrganizationalPermissions() {
+  return [...elements.rightsEditorPermissions.querySelectorAll('input[data-rights-permission]:checked')]
+    .some((input) => rightsEditorPermissionIsOrganizational(input.value));
+}
+
+function rightsEditorSelectedScope() {
+  const user = selectedRightsEditorUser();
+  if (!user || elements.rightsEditorScope?.classList.contains("hidden")) {
+    return Array.isArray(user?.scopes) ? user.scopes : [];
+  }
+  const context = rightsEditorScopeContext(user);
+  const selectedMode = elements.rightsEditorForm.querySelector('input[name="rightsEditorScopeMode"]:checked')?.value || "";
+  if (!context.locationId || !selectedMode) return null;
+  if (selectedMode === "department") {
+    if (!context.departmentId) return null;
+    return [{ locationId: context.locationId, departmentId: context.departmentId }];
+  }
+  return [{ locationId: context.locationId, departmentId: null }];
+}
+
+function refreshRightsEditorSaveState() {
+  const user = selectedRightsEditorUser();
+  if (!elements.saveRightsEditorButton) return;
+  elements.saveRightsEditorButton.disabled = !user?.manageable || rightsEditorSelectedScope() === null;
+}
+
+function refreshRightsEditorScope() {
+  const user = selectedRightsEditorUser();
+  if (!user || !elements.rightsEditorScope) return;
+  const context = rightsEditorScopeContext(user);
+  const hasOrganizationalPermissions = rightsEditorHasOrganizationalPermissions();
+  elements.rightsEditorScope.classList.toggle("hidden", !hasOrganizationalPermissions);
+  elements.rightsEditorDepartmentScopeLabel.textContent = `Nur eigene Abteilung · ${context.department?.name || "nicht zugeordnet"}`;
+  elements.rightsEditorLocationScopeLabel.textContent = `Gesamte Filiale · ${context.location?.name || context.locationId || "nicht zugeordnet"}`;
+  const departmentInput = elements.rightsEditorForm.querySelector('input[name="rightsEditorScopeMode"][value="department"]');
+  const locationInput = elements.rightsEditorForm.querySelector('input[name="rightsEditorScopeMode"][value="location"]');
+  const scopeInputs = [departmentInput, locationInput].filter(Boolean);
+  for (const input of scopeInputs) input.disabled = !user.manageable;
+  if (departmentInput) departmentInput.disabled ||= !context.departmentId;
+  if (locationInput) locationInput.disabled ||= !context.locationId;
+  if (hasOrganizationalPermissions && !scopeInputs.some((input) => input.checked)) {
+    const preferred = context.mode === "department" ? departmentInput : locationInput;
+    if (preferred && !preferred.disabled) preferred.checked = true;
+  }
+  elements.rightsEditorScopeHint.textContent = !hasOrganizationalPermissions
+    ? "Für die aktuell wirksamen Rechte ist kein Standortbereich erforderlich."
+    : !context.locationId
+      ? "Bitte zuerst eine Stammfiliale zuweisen."
+      : !context.departmentId && ["employee", "department_manager"].includes(user.role)
+        ? "Für den sicheren Abteilungsbereich fehlt noch eine zugewiesene Abteilung. Alternativ kann ausdrücklich die gesamte Filiale gewählt werden."
+        : "Standortbezogene Rechte gelten ausschließlich im ausgewählten Bereich.";
+  refreshRightsEditorSaveState();
+}
+
+function enforceRightsEditorScheduleDependency(changedInput, announce = true) {
+  const readInput = elements.rightsEditorPermissions.querySelector('input[data-rights-permission][value="schedule:read"]');
+  const writeInput = elements.rightsEditorPermissions.querySelector('input[data-rights-permission][value="schedule:write"]');
+  if (!readInput || !writeInput) return;
+  if (changedInput === readInput && !readInput.checked && writeInput.checked) {
+    writeInput.checked = false;
+    updateRightsEditorPermissionStatus(writeInput);
+    if (announce) rightsEditorAnnounce("Dienstpläne bearbeiten wurde ebenfalls entzogen, weil das Leserecht fehlt.");
+  } else if (changedInput === writeInput && writeInput.checked && !readInput.checked) {
+    if (readInput.disabled) {
+      writeInput.checked = false;
+      updateRightsEditorPermissionStatus(writeInput);
+      if (announce) rightsEditorAnnounce("Dienstpläne bearbeiten kann ohne verwaltbares Leserecht nicht vergeben werden.");
+    } else {
+      readInput.checked = true;
+      updateRightsEditorPermissionStatus(readInput);
+      if (announce) rightsEditorAnnounce("Dienstpläne lesen wurde automatisch ergänzt.");
+    }
+  }
 }
 
 function openRightsEditor(employeeNumber) {
   const result = state.rightsManagement || {};
   const user = (result.users || []).find((entry) => entry.employeeNumber === employeeNumber);
   if (!user || !elements.rightsEditorModal) return;
+  state.rightsEditorReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   state.selectedRightsEmployeeNumber = employeeNumber;
   const rolePermissions = new Set(user.rolePermissions || []);
-  const grantedPermissions = new Set(user.grantedPermissions || []);
+  const effectivePermissions = rightsEditorEffectivePermissionSet(user);
   const location = state.locations.find((item) => item.id === user.homeLocationId);
   elements.rightsEditorTitle.textContent = `${user.employeeNumber} · ${user.nickname || user.fullName}`;
   elements.rightsEditorSummary.textContent = `${user.roleName || user.role} · ${location?.name || user.homeLocationId || "Kein Standort"}`;
@@ -2723,31 +2871,33 @@ function openRightsEditor(employeeNumber) {
   elements.rightsEditorPermissions.innerHTML = [...groups.entries()].map(([group, permissions]) => `
     <section class="rights-permission-group"><h3>${escapeHtml(group)}</h3><div class="rights-permission-grid">${permissions.map((permission) => {
       const baseRight = rolePermissions.has(permission.id);
-      const additionalRight = grantedPermissions.has(permission.id);
+      const effectiveRight = effectivePermissions.has(permission.id);
       const roleEligible = !Array.isArray(permission.eligibleRoles) || permission.eligibleRoles.includes(user.role);
-      const editable = Boolean(user.manageable && permission.editable && roleEligible && !baseRight);
-      const lockedRight = !user.manageable || !permission.editable || !roleEligible;
+      const editable = Boolean(user.manageable && permission.editable && roleEligible);
+      const lockedRight = !editable;
       const warningLevel = permission.warningLevel || "normal";
       const statusText = baseRight
-        ? "Grundrecht der Rolle"
-        : additionalRight
-          ? lockedRight ? "Individuell vergeben · nur zur Ansicht" : "Individuell vergeben"
-          : !roleEligible
-            ? "Nur für Personalleitung und höhere geschützte Rollen"
-          : !user.manageable
-            ? "Für die aktuelle Rolle nur zur Ansicht"
-            : !permission.editable
-              ? "Nur durch IT-Admin oder höhere Ebene änderbar"
-              : permission.description || "Optionales Zusatzrecht";
-      return `<label class="rights-permission ${warningLevel === "critical" ? "critical" : warningLevel === "high" ? "sensitive" : ""} ${baseRight ? "base-right" : ""} ${additionalRight && !baseRight ? "additional-right" : ""} ${lockedRight ? "locked-right" : ""}"><input type="checkbox" data-additional-permission value="${escapeHtml(permission.id)}" ${baseRight || additionalRight ? "checked" : ""} ${editable ? "" : "disabled"} /><span><strong>${escapeHtml(permission.label || permission.id)}</strong><small>${escapeHtml(statusText)}</small></span></label>`;
+        ? effectiveRight ? "Grundrecht der Rolle" : "Individuell entzogen"
+        : effectiveRight ? "Individuell hinzugefügt" : "Nicht vergeben";
+      const stateClass = baseRight
+        ? effectiveRight ? "base-right" : "revoked-right"
+        : effectiveRight ? "additional-right" : "unassigned-right";
+      return `<label class="rights-permission ${warningLevel === "critical" ? "critical" : warningLevel === "high" ? "sensitive" : ""} ${stateClass} ${lockedRight ? "locked-right" : ""}"><input type="checkbox" data-rights-permission data-role-permission="${baseRight}" value="${escapeHtml(permission.id)}" ${effectiveRight ? "checked" : ""} ${editable ? "" : "disabled"} /><span><strong>${escapeHtml(permission.label || permission.id)}</strong><small data-rights-permission-status>${escapeHtml(statusText)}</small>${permission.description ? `<small class="rights-permission-description">${escapeHtml(permission.description)}</small>` : ""}</span></label>`;
     }).join("")}</div></section>`).join("");
-  elements.saveRightsEditorButton.disabled = !user.manageable;
+  const scheduleWriteInput = elements.rightsEditorPermissions.querySelector('input[data-rights-permission][value="schedule:write"]');
+  if (scheduleWriteInput?.checked) enforceRightsEditorScheduleDependency(scheduleWriteInput, false);
+  const context = rightsEditorScopeContext(user);
+  elements.rightsEditorForm.querySelectorAll('input[name="rightsEditorScopeMode"]').forEach((input) => {
+    input.checked = input.value === context.mode;
+  });
   elements.rightsEditorHint.textContent = !user.configured
     ? "Bitte zuerst unter Zugänge einen Portal-Zugang einrichten."
     : !user.manageable
       ? "Dieser Zugang ist für die aktuelle Rolle geschützt oder liegt außerhalb ihrer Verwaltungsebene."
-      : "Zusatzrechte gelten sofort, ergänzen die Grundrolle und bleiben an den zugewiesenen Standort beziehungsweise die Abteilung gebunden.";
+      : "Aktivierte Rollenrechte bleiben wirksam; abgewählte Rollenrechte werden persönlich entzogen. Änderungen gelten sofort.";
+  refreshRightsEditorScope();
   elements.rightsEditorModal.showModal();
+  window.requestAnimationFrame(() => elements.rightsEditorTitle?.focus());
 }
 
 function renderMobileLeadershipSettings() {
@@ -2872,16 +3022,31 @@ async function saveUserRights(event) {
   event.preventDefault();
   const employeeNumber = state.selectedRightsEmployeeNumber;
   if (!employeeNumber) return;
-  const permissions = [...elements.rightsEditorPermissions.querySelectorAll('input[data-additional-permission]:checked:not(:disabled)')].map((input) => input.value);
+  const inputs = [...elements.rightsEditorPermissions.querySelectorAll('input[data-rights-permission]:not(:disabled)')];
+  const grantedPermissions = inputs
+    .filter((input) => input.dataset.rolePermission !== "true" && input.checked)
+    .map((input) => input.value);
+  const deniedPermissions = inputs
+    .filter((input) => input.dataset.rolePermission === "true" && !input.checked)
+    .map((input) => input.value);
+  const scopes = rightsEditorSelectedScope();
+  if (scopes === null) {
+    rightsEditorAnnounce("Bitte zuerst einen gültigen Verantwortungsbereich auswählen.");
+    return;
+  }
+  elements.saveRightsEditorButton.disabled = true;
   try {
     state.rightsManagement = await api(`/api/portal/v1/rights/${encodeURIComponent(employeeNumber)}`, {
       method: "PUT",
-      body: JSON.stringify({ permissions }),
+      body: JSON.stringify({ grantedPermissions, deniedPermissions, scopes }),
     });
     elements.rightsEditorModal.close();
     renderRightsManagement();
-    showToast(`Zusatzrechte für ${employeeNumber} wurden gespeichert.`);
-  } catch (error) { showToast(error.message, true); }
+    showToast(`Persönliche Rechte für ${employeeNumber} wurden gespeichert.`);
+  } catch (error) {
+    showToast(error.message, true);
+    refreshRightsEditorSaveState();
+  }
 }
 
 const UI_APPEARANCE_VIEWS = Object.freeze([
@@ -3122,7 +3287,7 @@ function populateRightsDashboardFilters() {
 
 function rightsDashboardPermissionMatches(permission, search) {
   if (!search) return true;
-  return [permission.id, permission.label, permission.description, permission.group, permission.originLabel, permission.coverage?.label]
+  return [permission.id, permission.label, permission.description, permission.group, permission.originLabel, rightsDashboardPermissionOriginLabel(permission), permission.coverage?.label]
     .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(search));
 }
 
@@ -3130,6 +3295,20 @@ function rightsDashboardIdentityMatches(user, search) {
   if (!search) return true;
   return [user.employeeNumber, user.fullName, user.nickname, user.roleName, user.scope.label]
     .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(search));
+}
+
+function rightsDashboardPermissionRevoked(permission) {
+  return Boolean(permission && (
+    permission.origin === "revoked"
+    || permission.revoked === true
+    || permission.policyState === "denied"
+  ));
+}
+
+function rightsDashboardPermissionOriginLabel(permission) {
+  if (rightsDashboardPermissionRevoked(permission)) return "Individuell entzogen";
+  if (permission?.origin === "delegated") return "Individuell hinzugefügt";
+  return permission?.originLabel || "Grundrecht der Rolle";
 }
 
 function rightsDashboardPersonnelFieldContext(user) {
@@ -3143,7 +3322,7 @@ function rightsDashboardVisiblePersonnelFields(user) {
   const context = rightsDashboardPersonnelFieldContext(user);
   if (!context) return [];
   const origin = elements.rightsDashboardOriginFilter?.value || "";
-  if (origin === "delegated") return [];
+  if (["delegated", "revoked"].includes(origin)) return [];
   const search = String(elements.rightsDashboardSearch?.value || "").trim().toLocaleLowerCase("de-AT");
   const identityMatch = rightsDashboardIdentityMatches(user, search);
   return (context.payload.fields || []).filter((field) => {
@@ -3168,12 +3347,14 @@ function rightsDashboardFilteredUsers() {
     if (locationId && user.scope.type !== "global" && !(user.scope.entries || []).some((scope) => String(scope.locationId) === locationId)) return false;
     if (departmentId && user.scope.type !== "global" && !(user.scope.entries || []).some((scope) => String(scope.departmentId || "") === departmentId)) return false;
     const visiblePersonnelFields = rightsDashboardVisiblePersonnelFields(user);
-    if (origin === "role" && !user.permissions.some((permission) => permission.origin === "role") && !visiblePersonnelFields.length) return false;
-    if (origin === "delegated" && !user.permissions.some((permission) => permission.origin === "delegated")) return false;
-    if (origin === "restricted" && !user.permissions.some((permission) => permission.coverage?.restricted) && !visiblePersonnelFields.length) return false;
+    const permissions = user.permissions || [];
+    if (origin === "role" && !permissions.some((permission) => permission.origin === "role" && !rightsDashboardPermissionRevoked(permission)) && !visiblePersonnelFields.length) return false;
+    if (origin === "delegated" && !permissions.some((permission) => permission.origin === "delegated" && !rightsDashboardPermissionRevoked(permission))) return false;
+    if (origin === "revoked" && !permissions.some(rightsDashboardPermissionRevoked)) return false;
+    if (origin === "restricted" && !permissions.some((permission) => permission.coverage?.restricted) && !visiblePersonnelFields.length) return false;
     if (!search) return true;
     return rightsDashboardIdentityMatches(user, search)
-      || user.permissions.some((permission) => rightsDashboardPermissionMatches(permission, search))
+      || permissions.some((permission) => rightsDashboardPermissionMatches(permission, search))
       || visiblePersonnelFields.length > 0;
   });
 }
@@ -3182,9 +3363,11 @@ function rightsDashboardVisiblePermissions(user) {
   const search = String(elements.rightsDashboardSearch?.value || "").trim().toLocaleLowerCase("de-AT");
   const origin = elements.rightsDashboardOriginFilter?.value || "";
   const identityMatch = rightsDashboardIdentityMatches(user, search);
-  return user.permissions.filter((permission) => {
-    if (origin === "role" && permission.origin !== "role") return false;
-    if (origin === "delegated" && permission.origin !== "delegated") return false;
+  return (user.permissions || []).filter((permission) => {
+    const revoked = rightsDashboardPermissionRevoked(permission);
+    if (origin === "role" && (permission.origin !== "role" || revoked)) return false;
+    if (origin === "delegated" && (permission.origin !== "delegated" || revoked)) return false;
+    if (origin === "revoked" && !revoked) return false;
     if (origin === "restricted" && !permission.coverage?.restricted) return false;
     return !search || identityMatch || rightsDashboardPermissionMatches(permission, search);
   });
@@ -3193,10 +3376,14 @@ function rightsDashboardVisiblePermissions(user) {
 function renderRightsDashboardSummary() {
   if (!elements.rightsDashboardSummary || !state.rightsDashboard) return;
   const summary = state.rightsDashboard.summary;
+  const revokedRights = Number(summary.revokedRights ?? state.rightsDashboard.users
+    .flatMap((user) => user.permissions || [])
+    .filter(rightsDashboardPermissionRevoked).length);
   const cards = [
     ["Teammitglieder", summary.teamMembers, "aktive Stammdaten im Dashboard"],
     ["Aktive Zugänge", summary.activeAccesses, "mit eingerichtetem Portal-Zugang"],
     ["Zusatzrechte", summary.delegatedRights, "individuell ergänzte Berechtigungen"],
+    ["Entzogen", revokedRights, "persönlich deaktivierte Rollenrechte"],
     ["Bereichsgebunden", summary.scopedRights, "auf Person, Filiale oder Abteilung begrenzt"],
   ];
   elements.rightsDashboardSummary.innerHTML = cards.map(([label, value, hint]) => `<article class="rights-dashboard-stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong><small>${escapeHtml(hint)}</small></article>`).join("");
@@ -3208,14 +3395,17 @@ function renderRightsDashboardExplanation(user, permission) {
     elements.rightsDashboardExplanation.innerHTML = "<strong>Recht anklicken</strong><p>Die Erklärung zeigt Herkunft, Geltungsbereich und aktuellen Status.</p>";
     return;
   }
-  const status = permission.effective
+  const revoked = rightsDashboardPermissionRevoked(permission);
+  const status = revoked
+    ? "Persönlich entzogen und nicht wirksam"
+    : permission.effective
     ? "Wirksam"
     : user.accessActive ? "Ohne wirksamen Bereich" : "Nicht wirksam, da der Zugang inaktiv oder nicht vollständig eingerichtet ist";
   elements.rightsDashboardExplanation.innerHTML = `
     <strong>${escapeHtml(permission.label)}</strong>
     <p>${escapeHtml(permission.description || "Für dieses technische Recht ist keine zusätzliche Beschreibung hinterlegt.")}</p>
     <dl>
-      <dt>Herkunft</dt><dd>${escapeHtml(permission.originLabel)}</dd>
+      <dt>Herkunft</dt><dd>${escapeHtml(rightsDashboardPermissionOriginLabel(permission))}</dd>
       <dt>Geltungsbereich</dt><dd>${escapeHtml(permission.coverage?.label || "Nicht festgelegt")}</dd>
       <dt>Status</dt><dd>${escapeHtml(status)}</dd>
       <dt>Technischer Schlüssel</dt><dd><code>${escapeHtml(permission.id)}</code></dd>
@@ -3250,7 +3440,7 @@ function renderRightsDashboardSelection(user) {
     ["Person", user.fullName || user.nickname || "Teammitglied", `Personalnummer ${user.employeeNumber}`],
     ["Rolle", user.roleName, user.roleDescription || "Grundrechte aus der App-Rolle"],
     ["Bereich", user.scope.label, scopeSource],
-    ["Wirksame Rechte", String(user.counts.effective), `${user.counts.role} Grundrechte · ${user.counts.delegated} Zusatzrechte`],
+    ["Wirksame Rechte", String(user.counts.effective), `${user.counts.role} Grundrechte · ${user.counts.delegated} hinzugefügt · ${Number(user.counts.revoked || 0)} entzogen`],
   ];
   elements.rightsDashboardPath.innerHTML = nodes.map(([label, value, hint]) => `<article class="rights-dashboard-node"><span>${escapeHtml(label)}</span><strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong><small>${escapeHtml(hint)}</small></article>`).join("");
 
@@ -3263,8 +3453,9 @@ function renderRightsDashboardSelection(user) {
   const permissionMatrix = grouped.size
     ? [...grouped.entries()].map(([group, permissions]) => `<section class="rights-dashboard-group"><h3>${escapeHtml(group)}</h3><div class="rights-dashboard-permission-grid">${permissions.map((permission) => {
       const selected = permission.id === state.rightsDashboardSelectedPermissionId;
-      const classes = ["rights-dashboard-permission", permission.origin === "delegated" ? "delegated" : "", permission.coverage?.restricted ? "restricted" : "", permission.effective ? "" : "inactive", selected ? "selected" : ""].filter(Boolean).join(" ");
-      return `<button type="button" class="${classes}" data-rights-dashboard-permission="${escapeHtml(permission.id)}" aria-pressed="${selected}"><span class="permission-origin"></span><span><strong>${escapeHtml(permission.label)}</strong><small>${escapeHtml(`${permission.origin === "delegated" ? "Zusatzrecht" : "Grundrecht"} · ${permission.coverage?.label || "ohne Bereich"}`)}</small></span></button>`;
+      const revoked = rightsDashboardPermissionRevoked(permission);
+      const classes = ["rights-dashboard-permission", permission.origin === "delegated" && !revoked ? "delegated" : "", revoked ? "revoked" : "", permission.coverage?.restricted ? "restricted" : "", permission.effective ? "" : "inactive", selected ? "selected" : ""].filter(Boolean).join(" ");
+      return `<button type="button" class="${classes}" data-rights-dashboard-permission="${escapeHtml(permission.id)}" aria-pressed="${selected}"><span class="permission-origin"></span><span><strong>${escapeHtml(permission.label)}</strong><small>${escapeHtml(`${rightsDashboardPermissionOriginLabel(permission)} · ${permission.coverage?.label || "ohne Bereich"}`)}</small></span></button>`;
     }).join("")}</div></section>`).join("")
     : personnelFieldMatrix ? "" : "<p class=\"settings-note\">Für diese Filterung sind keine Rechte sichtbar.</p>";
   elements.rightsDashboardMatrix.innerHTML = `${permissionMatrix}${personnelFieldMatrix}`;
@@ -3283,7 +3474,8 @@ function renderRightsDashboard() {
   }
   elements.rightsDashboardUserList.innerHTML = users.length ? users.map((user) => {
     const selected = user.employeeNumber === state.rightsDashboardSelectedEmployeeNumber;
-    return `<button type="button" class="rights-dashboard-user ${user.accessActive ? "" : "inactive"} ${selected ? "selected" : ""}" data-rights-dashboard-user="${escapeHtml(user.employeeNumber)}" aria-pressed="${selected}"><span class="rights-dashboard-user-mark">${escapeHtml(user.employeeNumber)}</span><span class="rights-dashboard-user-copy"><strong>${escapeHtml(user.fullName || user.nickname || "Teammitglied")}</strong><small>${escapeHtml(`${user.roleName} · ${user.scope.label}`)}</small></span><span class="rights-dashboard-user-count">${escapeHtml(String(user.counts.effective))}</span></button>`;
+    const revokedCount = Number(user.counts.revoked || 0);
+    return `<button type="button" class="rights-dashboard-user ${user.accessActive ? "" : "inactive"} ${selected ? "selected" : ""}" data-rights-dashboard-user="${escapeHtml(user.employeeNumber)}" aria-pressed="${selected}"><span class="rights-dashboard-user-mark">${escapeHtml(user.employeeNumber)}</span><span class="rights-dashboard-user-copy"><strong>${escapeHtml(user.fullName || user.nickname || "Teammitglied")}</strong><small>${escapeHtml(`${user.roleName} · ${user.scope.label}`)}</small></span><span class="rights-dashboard-user-count" title="${escapeHtml(`${user.counts.effective} wirksam${revokedCount ? ` · ${revokedCount} entzogen` : ""}`)}">${escapeHtml(String(user.counts.effective))}${revokedCount ? `<small>−${escapeHtml(String(revokedCount))}</small>` : ""}</span></button>`;
   }).join("") : "<p class=\"settings-note\">Keine Personen entsprechen der aktuellen Filterung.</p>";
   const selected = users.find((user) => user.employeeNumber === state.rightsDashboardSelectedEmployeeNumber);
   elements.rightsDashboardEmpty?.classList.toggle("hidden", Boolean(selected));
@@ -4905,19 +5097,39 @@ async function loadManagerVacationRequests() {
   if (!elements.managerVacationRequestList) return;
   try {
     const sicknessEnabled = state.portalStatus?.installationFeatures?.sicknessAmu !== false;
-    const [result, workflow, amu] = await Promise.all([
+    const [requestsResult, workflowResult, amuResult, sicknessResult] = await Promise.allSettled([
       api("/api/portal/v1/absence-requests"),
       api("/api/portal/v1/workflow-settings"),
       sicknessEnabled ? api("/api/portal/v1/amu-reports") : Promise.resolve({ reports: [], pendingCount: 0, canOpenFiles: false }),
+      sicknessEnabled ? api("/api/portal/v1/sickness-cases") : Promise.resolve({ cases: [], pendingCount: 0 }),
     ]);
+    const firstUnexpectedError = [requestsResult, workflowResult, amuResult, sicknessResult]
+      .find((entry) => entry.status === "rejected" && entry.reason?.status !== 403);
+    if (firstUnexpectedError) throw firstUnexpectedError.reason;
+    const result = requestsResult.status === "fulfilled" ? requestsResult.value : { requests: [], counts: { vacation: 0, timeOff: 0, total: 0 } };
+    const workflow = workflowResult.status === "fulfilled" ? workflowResult.value : (state.workflowSettings || { vacationHrApprovalRequired: false, canChange: false });
+    const amu = amuResult.status === "fulfilled"
+      ? amuResult.value
+      : { reports: [], pendingCount: 0, canOpenFiles: false, canReview: false, access: { available: false } };
+    const sickness = sicknessResult.status === "fulfilled" ? sicknessResult.value : { cases: [], pendingCount: 0, available: false };
+    if ([requestsResult, amuResult, sicknessResult].every((entry) => entry.status === "rejected")) {
+      throw requestsResult.reason || sicknessResult.reason || amuResult.reason;
+    }
     state.absenceRequests = result.requests || [];
+    state.sicknessCases = sickness.cases || [];
     state.amuReports = amu.reports || [];
     state.amuCanOpenFiles = amu.canOpenFiles === true;
     state.amuCanReview = amu.canReview === true;
     state.amuAccess = amu.access || null;
     const absenceCounts = result.counts || { vacation: 0, timeOff: 0, total: 0 };
     const amuCount = Number(amu.pendingCount || state.amuReports.filter((item) => item.status === "submitted").length);
-    state.requestCounts = { ...absenceCounts, amu: amuCount, total: Number(absenceCounts.total || 0) + amuCount };
+    const sicknessCount = Number(sickness.pendingCount || state.sicknessCases.filter((item) => ["reported", "aum_received"].includes(item.status)).length);
+    state.requestCounts = {
+      ...absenceCounts,
+      sickness: sicknessCount,
+      amu: amuCount,
+      total: Number(absenceCounts.total || 0) + sicknessCount + amuCount,
+    };
     state.workflowSettings = workflow;
     if (elements.vacationHrApprovalRequired) elements.vacationHrApprovalRequired.checked = workflow.vacationHrApprovalRequired;
     renderRequestNavigation();
@@ -5616,6 +5828,9 @@ const requestStatusLabels = {
   submitted: "Eingereicht",
   reviewed: "Geprüft",
   returned: "Ergänzung erforderlich",
+  reported: "Krank gemeldet",
+  aum_received: "AUM eingelangt",
+  recovered: "Abgeschlossen",
 };
 
 function amuReportStatusLabel(report) {
@@ -5628,18 +5843,22 @@ function renderRequestNavigation() {
   const counts = state.requestCounts;
   const sicknessEnabled = state.portalStatus?.installationFeatures?.sicknessAmu !== false;
   const amuAvailable = sicknessEnabled && state.amuAccess?.available !== false;
-  document.querySelectorAll('[data-request-kind-tab="amu"]').forEach((button) => button.classList.toggle("hidden", !amuAvailable));
-  if (!amuAvailable && state.requestKindTab === "amu") state.requestKindTab = "vacation";
+  const sicknessAvailable = sicknessEnabled && (!state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("sickness:read"));
+  const sicknessAndAmuAvailable = sicknessAvailable || amuAvailable;
+  document.querySelectorAll('[data-request-kind-tab="amu"]').forEach((button) => button.classList.toggle("hidden", !sicknessAndAmuAvailable));
+  if (!sicknessAndAmuAvailable && state.requestKindTab === "amu") state.requestKindTab = "vacation";
   document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
   elements.requestsNavCount.textContent = counts.total;
   elements.requestsNavCount.classList.toggle("hidden", !counts.total);
   elements.requestsNavButton.classList.toggle("attention", counts.total > 0);
   elements.vacationRequestCount.textContent = counts.vacation;
   elements.timeOffRequestCount.textContent = counts.timeOff;
-  elements.amuRequestCount.textContent = amuAvailable ? counts.amu || 0 : 0;
+  elements.amuRequestCount.textContent = sicknessAndAmuAvailable ? Number(counts.sickness || 0) + Number(counts.amu || 0) : 0;
   elements.requestWorkflowSummary.innerHTML = `
     <article><span>Urlaub offen</span><strong>${counts.vacation}</strong></article>
     <article><span>ZA offen</span><strong>${counts.timeOff}</strong></article>
+    ${sicknessAvailable ? `<article><span>Krankenstände offen</span><strong>${counts.sickness || 0}</strong></article>` : ""}
     ${amuAvailable ? `<article><span>AUM neu</span><strong>${counts.amu || 0}</strong></article>` : ""}
     <article><span>Urlaubs-Zweitfreigabe</span><strong>${state.workflowSettings?.vacationHrApprovalRequired ? "Aktiv" : "Nicht aktiv"}</strong>${state.workflowSettings?.canChange ? `<button type="button" class="text-action" data-toggle-hr-workflow>${state.workflowSettings.vacationHrApprovalRequired ? "Deaktivieren" : "Aktivieren"}</button>` : ""}</article>`;
 }
@@ -5654,6 +5873,9 @@ async function toggleHrWorkflow(required) {
 }
 
 function requestIsActionable(request) {
+  if (request?.capabilities && Object.prototype.hasOwnProperty.call(request.capabilities, "decide")) {
+    return request.capabilities.decide === true;
+  }
   if (!["pending_local", "preliminary_local", "pending_hr"].includes(request.status)) return false;
   const role = state.portalSession?.user?.role;
   if (request.approval_stage === "hr") return role === "hr" || role === "admin" || !state.portalStatus?.portalEnabled;
@@ -5663,21 +5885,49 @@ function requestIsActionable(request) {
 function renderManagerRequests() {
   const statusFilter = elements.requestStatusFilter.value || "actionable";
   if (state.requestKindTab === "amu") {
-    const reports = state.amuReports.filter((report) => statusFilter === "all" ? true : statusFilter === "actionable" ? ["submitted", "returned"].includes(report.status) : report.status === statusFilter);
-    const canOpenFiles = !state.portalStatus?.portalEnabled || state.amuCanOpenFiles === true;
-    const canReview = !state.portalStatus?.portalEnabled || state.amuCanReview === true;
-    elements.managerVacationRequestList.innerHTML = reports.length ? reports.map((report) => {
-      const files = (report.documents || []).map((document) => canOpenFiles
-        ? `<a href="/api/portal/v1/amu-reports/${report.id}/documents/${encodeURIComponent(document.id)}/content" target="_blank" rel="noopener">${escapeHtml(document.original_name || "Dokument")} · ${Math.max(1, Math.round(Number(document.size || 0) / 1024))} KB</a>`
-        : `<span>${escapeHtml(document.original_name || "Dokument")} · ${Math.max(1, Math.round(Number(document.size || 0) / 1024))} KB</span>`).join("");
+    const reports = state.amuReports.filter((report) => statusFilter === "all"
+      ? true
+      : statusFilter === "actionable"
+        ? report.capabilities?.review === true
+          || report.capabilities?.returnForCompletion === true
+          || report.capabilities?.addNote === true
+        : report.status === statusFilter);
+    const sicknessCases = state.sicknessCases.filter((entry) => statusFilter === "all"
+      ? true
+      : statusFilter === "actionable"
+        ? entry.capabilities?.update === true
+          || entry.capabilities?.close === true
+          || entry.capabilities?.correctClosed === true
+        : entry.status === statusFilter);
+    const sicknessRows = sicknessCases.map((entry) => {
+      const capabilities = entry.capabilities || {};
+      const returnText = entry.return_to_work_date
+        ? ` · wieder arbeitsfähig ab ${formatDate(entry.return_to_work_date)}`
+        : entry.expected_end ? ` · voraussichtlich bis ${formatDate(entry.expected_end)}` : " · Ende offen";
+      const aumLabels = { required: "AUM erforderlich", received: "AUM eingelangt", reviewed: "AUM geprüft", not_required: "AUM nicht erforderlich" };
+      const risk = entry.staffing_risk?.atRisk ? ` · Mindestbesetzung gefährdet${entry.staffing_risk.worstShortfall ? ` (−${Number(entry.staffing_risk.worstShortfall)})` : ""}` : "";
+      return `<article class="manager-request-row sickness-case-row" data-sickness-case="${entry.id}">
+        <span class="employee-dot" style="--employee-color:${escapeHtml(entry.color || "#507267")}"></span>
+        <div><strong><span class="request-kind-badge sickness">Krank</span> ${escapeHtml(entry.employee_number)} · ${escapeHtml(entry.nickname || entry.full_name)}</strong><small>ab ${formatDate(entry.start_date)}${returnText} · ${escapeHtml(entry.location_name || "")}${entry.department_name ? ` · ${escapeHtml(entry.department_name)}` : ""}</small><small><span class="request-status ${escapeHtml(entry.status)}">${escapeHtml(requestStatusLabels[entry.status] || entry.status)}</span> · ${escapeHtml(aumLabels[entry.amu_status] || entry.amu_status || "AUM-Status offen")}${risk ? escapeHtml(risk) : ""}</small></div>
+        ${capabilities.view === true ? '<button class="secondary-button" data-open-sickness-action type="button">Fall öffnen</button>' : ""}
+      </article>`;
+    });
+    const reportRows = reports.map((report) => {
+      const capabilities = report.capabilities || {};
+      const reportCanOpenFiles = capabilities.openFiles === true;
+      const files = reportCanOpenFiles
+        ? (report.documents || []).map((document) => `<a href="/api/portal/v1/amu-reports/${report.id}/documents/${encodeURIComponent(document.id)}/content" target="_blank" rel="noopener">${escapeHtml(document.original_name || "Dokument")} · ${Math.max(1, Math.round(Number(document.size || 0) / 1024))} KB</a>`).join("")
+        : (report.documents || []).length ? "<span>Dokument geschützt · kein Dateizugriff</span>" : "";
       const responsibility = report.responsibility || {};
-      const reportCanReview = canReview && responsibility.can_review !== false;
+      const reportCanOpen = capabilities.view === true;
       return `<article class="manager-request-row amu-request-row" data-amu-report="${report.id}">
         <span class="employee-dot" style="--employee-color:${escapeHtml(report.color || "#507267")}"></span>
         <div><strong><span class="request-kind-badge amu">AUM</span> ${escapeHtml(report.employee_number)} · ${escapeHtml(report.nickname || report.full_name)}</strong><small>${formatAmuPeriod(report)} · ${escapeHtml(report.location_name || "")}${report.employee_note ? ` · ${escapeHtml(report.employee_note)}` : ""}</small><small><span class="request-status ${escapeHtml(report.status)}">${escapeHtml(amuReportStatusLabel(report))}</span>${responsibility.label ? ` · zuständig: ${escapeHtml(responsibility.label)}` : ""}${report.reviewed_by && report.review_mode !== "automatic" ? ` · geprüft von ${escapeHtml(report.reviewed_by)}` : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</small><div class="amu-document-links">${files}</div></div>
-        ${reportCanReview && ["submitted", "returned"].includes(report.status) ? '<button class="secondary-button" data-open-amu-action type="button">AUM bearbeiten</button>' : ""}
+        ${reportCanOpen ? '<button class="secondary-button" data-open-amu-action type="button">AUM öffnen</button>' : ""}
       </article>`;
-    }).join("") : '<p class="settings-note">Für diesen Filter gibt es keine Arbeitsunfähigkeitsmeldungen.</p>';
+    });
+    const rows = [...sicknessRows, ...reportRows];
+    elements.managerVacationRequestList.innerHTML = rows.length ? rows.join("") : '<p class="settings-note">Für diesen Filter gibt es keine Krankmeldungen oder Arbeitsunfähigkeitsmeldungen.</p>';
     return;
   }
   const isTimeOff = state.requestKindTab === "time_off";
@@ -5689,11 +5939,12 @@ function renderManagerRequests() {
   elements.managerVacationRequestList.innerHTML = requests.length ? requests.map((request) => {
       const details = managerRequestDetails(request);
       const approvals = [request.local_approved_by ? `Filiale: ${escapeHtml(request.local_approved_by)}` : "", request.hr_approved_by ? `PL: ${escapeHtml(request.hr_approved_by)}` : ""].filter(Boolean).join(" · ");
+      const canOpen = request.capabilities?.view === true;
       return `
       <article class="manager-request-row" data-manager-request="${request.id}" data-request-kind="${escapeHtml(request.kind)}">
         <span class="employee-dot" style="--employee-color:${escapeHtml(request.color || "#507267")}"></span>
         <div><strong><span class="request-kind-badge ${escapeHtml(request.kind)}">${escapeHtml(details.label)}</span> ${escapeHtml(request.employee_number)} · ${escapeHtml(request.nickname || request.full_name)}</strong><small>${details.text}${request.note ? ` · ${escapeHtml(request.note)}` : ""}</small><small><span class="request-status ${escapeHtml(request.status)}">${escapeHtml(requestStatusLabels[request.status] || request.status)}</span>${approvals ? ` · ${approvals}` : ""}${request.decision_note ? ` · ${escapeHtml(request.decision_note)}` : ""}</small></div>
-        <button class="secondary-button" data-open-request-action type="button">Antrag bearbeiten</button>
+        ${canOpen ? '<button class="secondary-button" data-open-request-action type="button">Antrag öffnen</button>' : ""}
       </article>
     `; }).join("") : '<p class="settings-note">Für diesen Filter gibt es keine Anträge.</p>';
 }
@@ -5726,32 +5977,141 @@ function openAmuAction(id) {
   const report = state.amuReports.find((item) => Number(item.id) === Number(id));
   if (!report) return;
   state.selectedRequest = null;
+  state.selectedSicknessCase = null;
   state.selectedAmuReport = report;
-  elements.requestActionTitle.textContent = "AUM bearbeiten";
+  elements.requestActionTitle.textContent = "AUM-Fall";
   elements.requestActionSummary.textContent = `${report.employee_number} · ${report.nickname || report.full_name} · ${formatAmuPeriod(report)}`;
   elements.requestActionNote.value = "";
   elements.requestEditFields.classList.add("hidden");
+  elements.sicknessCaseFields.classList.add("hidden");
   elements.requestActionHistory.innerHTML = report.reviewed_by
     ? `<div><strong>${report.review_mode === "automatic" ? "Grabenplaner-Automatik" : escapeHtml(report.reviewed_by)} · ${escapeHtml(amuReportStatusLabel(report))}</strong><span>${report.reviewed_at ? escapeHtml(new Date(report.reviewed_at).toLocaleString("de-AT")) : ""}${report.review_note ? ` · ${escapeHtml(report.review_note)}` : ""}</span></div>`
     : '<p>Noch keine Prüfung protokolliert.</p>';
-  const canOpenFiles = !state.portalStatus?.portalEnabled || state.amuCanOpenFiles === true;
+  const canOpenFiles = report.capabilities?.openFiles === true;
   elements.requestActionDocuments.classList.remove("hidden");
-  elements.requestActionDocuments.innerHTML = (report.documents || []).map((document) => canOpenFiles
-    ? `<a class="secondary-button" href="/api/portal/v1/amu-reports/${report.id}/documents/${encodeURIComponent(document.id)}/content" target="_blank" rel="noopener">${escapeHtml(document.original_name || "Dokument")} öffnen</a>`
-    : `<span>${escapeHtml(document.original_name || "Dokument")}</span>`).join("");
+  elements.requestActionDocuments.innerHTML = canOpenFiles
+    ? (report.documents || []).map((document) => `<a class="secondary-button" href="/api/portal/v1/amu-reports/${report.id}/documents/${encodeURIComponent(document.id)}/content" target="_blank" rel="noopener">${escapeHtml(document.original_name || "Dokument")} öffnen</a>`).join("")
+    : (report.documents || []).length ? "<span>Dokument geschützt · kein Dateizugriff</span>" : "";
   document.querySelectorAll("[data-request-action]").forEach((button) => button.classList.add("hidden"));
-  document.querySelectorAll("[data-amu-action]").forEach((button) => button.classList.toggle("hidden", !["submitted", "returned"].includes(report.status)));
+  document.querySelectorAll("[data-sickness-action]").forEach((button) => button.classList.add("hidden"));
+  const capabilities = report.capabilities || {};
+  document.querySelectorAll("[data-amu-action]").forEach((button) => {
+    const action = button.dataset.amuAction;
+    const allowed = action === "review"
+      ? capabilities.review === true && ["submitted", "returned"].includes(report.status)
+      : action === "return"
+        ? capabilities.returnForCompletion === true
+        : capabilities.addNote === true;
+    button.classList.toggle("hidden", !allowed);
+  });
   elements.requestActionModal.showModal();
 }
 
 async function reviewAmu(action) {
   const report = state.selectedAmuReport;
   if (!report) return;
+  const note = elements.requestActionNote.value.trim();
+  if (["return", "add_note"].includes(action) && !note) {
+    showToast(action === "return" ? "Bitte begründen, welche Ergänzung benötigt wird." : "Bitte einen Vermerk eingeben.", true);
+    return;
+  }
   try {
-    await api(`/api/portal/v1/amu-reports/${report.id}/review`, { method: "PUT", body: JSON.stringify({ action, note: elements.requestActionNote.value }) });
+    await api(`/api/portal/v1/amu-reports/${report.id}/action`, {
+      method: "PUT",
+      body: JSON.stringify({
+        action,
+        note,
+        expectedRevision: report.revision,
+        expectedStatus: report.status,
+      }),
+    });
     elements.requestActionModal.close();
     state.selectedAmuReport = null;
-    showToast("Die AUM wurde als geprüft markiert.");
+    showToast(action === "review" ? "Die AUM wurde als geprüft markiert." : action === "return" ? "Die AUM wurde zur Ergänzung zurückgegeben." : "Der Vermerk wurde revisionssicher gespeichert.");
+    await loadAll();
+  } catch (error) { showToast(error.message, true); }
+}
+
+function sicknessCaseHistoryHtml(events = []) {
+  return events.length ? events.map((event) => {
+    const actor = event.actor_employee_number || event.actorEmployeeNumber || event.actor || "System";
+    const action = event.action_label || event.actionLabel || event.action || "Bearbeitet";
+    const timestamp = event.created_at || event.createdAt || event.occurred_at || event.occurredAt;
+    const note = event.note || event.reason || "";
+    return `<div><strong>${escapeHtml(actor)} · ${escapeHtml(action)}</strong><span>${timestamp ? escapeHtml(new Date(timestamp).toLocaleString("de-AT")) : ""}${note ? ` · ${escapeHtml(note)}` : ""}</span></div>`;
+  }).join("") : "<p>Noch keine Fallbearbeitung protokolliert.</p>";
+}
+
+function populateSicknessCaseAction(entry, events = []) {
+  state.selectedSicknessCase = entry;
+  elements.requestActionTitle.textContent = "Krankmeldungsfall bearbeiten";
+  elements.requestActionSummary.textContent = `${entry.employee_number} · ${entry.nickname || entry.full_name} · krank ab ${formatDate(entry.start_date)}`;
+  elements.requestActionHistory.innerHTML = sicknessCaseHistoryHtml(events);
+  elements.requestActionDocuments.classList.add("hidden");
+  elements.requestActionDocuments.innerHTML = "";
+  elements.requestEditFields.classList.add("hidden");
+  elements.sicknessCaseFields.classList.remove("hidden");
+  elements.sicknessExpectedEnd.value = entry.expected_end || "";
+  elements.sicknessExpectedEnd.min = entry.start_date || "";
+  elements.sicknessReturnDate.value = entry.return_to_work_date || toIsoDate(new Date());
+  elements.sicknessReturnDate.min = entry.start_date || "";
+  elements.requestActionNote.value = "";
+  elements.sicknessCaseHint.textContent = entry.amu_status === "required"
+    ? "Das Rückkehrdatum beendet den Krankenstand. Die weiterhin erforderliche AUM bleibt davon unabhängig offen."
+    : "Das Rückkehrdatum beendet den Krankenstand; der AUM-Status wird unabhängig und nachvollziehbar weitergeführt.";
+  document.querySelectorAll("[data-request-action],[data-amu-action]").forEach((button) => button.classList.add("hidden"));
+  const capabilities = entry.capabilities || {};
+  document.querySelectorAll("[data-sickness-action]").forEach((button) => {
+    const action = button.dataset.sicknessAction;
+    const allowed = action === "update" ? capabilities.update === true
+      : action === "close" ? capabilities.close === true
+        : capabilities.correctClosed === true;
+    button.classList.toggle("hidden", !allowed);
+  });
+}
+
+async function openSicknessAction(id) {
+  const entry = state.sicknessCases.find((item) => Number(item.id) === Number(id));
+  if (!entry) return;
+  state.selectedRequest = null;
+  state.selectedAmuReport = null;
+  populateSicknessCaseAction(entry);
+  if (!elements.requestActionModal.open) elements.requestActionModal.showModal();
+  try {
+    const result = await api(`/api/portal/v1/sickness-cases/${encodeURIComponent(entry.id)}`);
+    populateSicknessCaseAction(result.case || entry, result.events || []);
+  } catch (error) {
+    elements.requestActionHistory.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+  }
+}
+
+async function decideSicknessCase(action) {
+  const entry = state.selectedSicknessCase;
+  if (!entry) return;
+  const note = elements.requestActionNote.value.trim();
+  if (action === "correct_closed" && !note) {
+    showToast("Eine Korrektur eines abgeschlossenen Falls benötigt eine Begründung.", true);
+    return;
+  }
+  if (action === "close" && !elements.sicknessReturnDate.value) {
+    showToast("Bitte das Datum der Wiederaufnahme der Arbeit eingeben.", true);
+    return;
+  }
+  try {
+    await api(`/api/portal/v1/sickness-cases/${encodeURIComponent(entry.id)}/action`, {
+      method: "PUT",
+      body: JSON.stringify({
+        action,
+        expectedRevision: entry.revision,
+        expectedStatus: entry.status,
+        expectedEnd: elements.sicknessExpectedEnd.value,
+        returnDate: elements.sicknessReturnDate.value,
+        note,
+      }),
+    });
+    elements.requestActionModal.close();
+    state.selectedSicknessCase = null;
+    showToast(action === "close" ? "Der Krankenstand wurde geschlossen." : action === "correct_closed" ? "Der Abschluss wurde nachvollziehbar korrigiert." : "Die Falldaten wurden gespeichert.");
     await loadAll();
   } catch (error) { showToast(error.message, true); }
 }
@@ -5760,13 +6120,18 @@ function openRequestAction(id, kind) {
   const request = state.absenceRequests.find((item) => Number(item.id) === Number(id) && item.kind === kind);
   if (!request) return;
   state.selectedRequest = request;
+  state.selectedSicknessCase = null;
   state.selectedAmuReport = null;
   const details = managerRequestDetails(request);
   elements.requestActionTitle.textContent = `${details.label} bearbeiten`;
   elements.requestActionSummary.textContent = `${request.employee_number} · ${request.nickname || request.full_name} · ${details.text}`;
   elements.requestActionNote.value = "";
-  const approved = request.status === "approved";
-  elements.requestEditFields.classList.toggle("hidden", !approved);
+  const capabilities = request.capabilities || {};
+  const canDecide = capabilities.decide === true;
+  const canUpdate = capabilities.update === true;
+  const canClose = capabilities.close === true;
+  elements.requestEditFields.classList.toggle("hidden", !canUpdate);
+  elements.sicknessCaseFields.classList.add("hidden");
   const timeOff = request.kind === "time_off";
   elements.requestEditDateFromField.querySelector("span").textContent = timeOff ? "Neues Datum" : "Neu von";
   elements.requestEditDateToField.classList.toggle("hidden", timeOff && !request.all_day);
@@ -5779,10 +6144,15 @@ function openRequestAction(id, kind) {
   elements.requestActionDocuments.classList.add("hidden");
   elements.requestActionDocuments.innerHTML = "";
   document.querySelectorAll("[data-amu-action]").forEach((button) => button.classList.add("hidden"));
+  document.querySelectorAll("[data-sickness-action]").forEach((button) => button.classList.add("hidden"));
   document.querySelectorAll("[data-request-action]").forEach((button) => {
     const action = button.dataset.requestAction;
-    const hidden = request.status === "approved" ? !["change", "cancel"].includes(action) : ["change", "cancel"].includes(action) || (request.approval_stage === "hr" && action === "preliminary");
-    button.classList.toggle("hidden", hidden);
+    const allowed = action === "change"
+      ? canUpdate
+      : action === "cancel"
+        ? canClose
+        : canDecide && !(request.approval_stage === "hr" && action === "preliminary");
+    button.classList.toggle("hidden", !allowed);
   });
   elements.requestActionModal.showModal();
 }
@@ -8827,9 +9197,52 @@ function usbRoleOptions(selectedRole, { departmentId = null } = {}) {
   return allowed.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === effectiveRole ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("");
 }
 
-function usbPermissionOptions(selected = []) {
+function usbRolePermissionIds(role) {
+  const catalogIds = new Set((state.portalPermissionCatalog || []).map((permission) => permission.id));
+  return (state.portalRoles.find((entry) => entry.id === role)?.permissions || [])
+    .filter((permission) => catalogIds.has(permission));
+}
+
+function usbPermissionOptions(selected = [], role = "employee") {
   const values = new Set(selected);
-  return (state.portalPermissionCatalog || []).map((permission) => `<label><input type="checkbox" value="${escapeHtml(permission.id)}" ${values.has(permission.id) ? "checked" : ""} /><span>${escapeHtml(permission.label)}</span></label>`).join("");
+  const rolePermissions = new Set(usbRolePermissionIds(role));
+  return (state.portalPermissionCatalog || [])
+    .filter((permission) => !rolePermissions.has(permission.id)
+      && (!Array.isArray(permission.eligibleRoles) || permission.eligibleRoles.includes(role)))
+    .map((permission) => `<label><input type="checkbox" data-usb-additional-permission value="${escapeHtml(permission.id)}" ${values.has(permission.id) ? "checked" : ""} /><span>${escapeHtml(permission.label)}</span></label>`).join("")
+    || '<span class="settings-note">Keine zusätzlichen Rechte verfügbar.</span>';
+}
+
+function usbRolePermissionOptions(role, denied = []) {
+  const deniedPermissions = new Set(denied);
+  const catalog = new Map((state.portalPermissionCatalog || []).map((permission) => [permission.id, permission]));
+  return usbRolePermissionIds(role).map((permissionId) => {
+    const permission = catalog.get(permissionId);
+    return `<label><input type="checkbox" data-usb-base-permission value="${escapeHtml(permissionId)}" ${deniedPermissions.has(permissionId) ? "" : "checked"} /><span>${escapeHtml(permission?.label || permissionId)}</span></label>`;
+  }).join("") || '<span class="settings-note">Diese Rolle hat keine anpassbaren Grundrechte.</span>';
+}
+
+function usbScopeMode(scopes, role, preferredDepartmentId) {
+  const explicit = Array.isArray(scopes) ? scopes.find((scope) => scope?.locationId) : null;
+  if (explicit) return Number(explicit.departmentId || 0) ? "department" : "location";
+  if (role === "manager") return "location";
+  return Number(preferredDepartmentId || 0) ? "department" : "";
+}
+
+function usbScopeOptions({ scopes = [], role = "employee", preferredDepartmentId = null } = {}) {
+  const mode = usbScopeMode(scopes, role, preferredDepartmentId);
+  const departmentAvailable = Boolean(Number(preferredDepartmentId || 0));
+  return `<option value="" ${mode ? "" : "selected"}>Kein Bereich</option>
+    <option value="department" ${mode === "department" ? "selected" : ""} ${departmentAvailable ? "" : "disabled"}>Eigene Abteilung</option>
+    <option value="location" ${mode === "location" ? "selected" : ""}>Gesamte Filiale</option>`;
+}
+
+function usbScopesFromRow(row) {
+  const locationId = String(row.dataset.usbHomeLocation || "");
+  const departmentId = Number(row.dataset.usbPreferredDepartment || 0) || null;
+  const mode = row.querySelector("[data-usb-scope-mode]")?.value || "";
+  if (!locationId || !mode) return [];
+  return [{ locationId, departmentId: mode === "department" ? departmentId : null }];
 }
 
 function captureUsbEmployeeRows() {
@@ -8838,10 +9251,13 @@ function captureUsbEmployeeRows() {
     const selected = Boolean(row.querySelector("[data-usb-employee-selected]")?.checked);
     if (selected) state.usbProvisioning.selectedEmployees.add(number);
     else state.usbProvisioning.selectedEmployees.delete(number);
+    const role = row.querySelector("[data-usb-role]")?.value || "employee";
     state.usbProvisioning.employeeOverrides.set(number, {
-      role: row.querySelector("[data-usb-role]")?.value || "employee",
+      role,
       startPassword: row.querySelector("[data-usb-start-password]")?.value || "",
-      additionalPermissions: [...row.querySelectorAll(".usb-rights-grid input:checked")].map((input) => input.value),
+      additionalPermissions: [...row.querySelectorAll("input[data-usb-additional-permission]:checked")].map((input) => input.value),
+      deniedPermissions: [...row.querySelectorAll("input[data-usb-base-permission]:not(:checked)")].map((input) => input.value),
+      scopes: usbScopesFromRow(row),
     });
   }
 }
@@ -8859,22 +9275,27 @@ function renderUsbEmployees() {
     const selected = creator || state.usbProvisioning.selectedEmployees.has(number);
     const override = state.usbProvisioning.employeeOverrides.get(number) || {};
     const role = creator ? "admin" : (override.role || employee.portal_access?.role || "employee");
-    return `<article class="usb-team-row" data-usb-employee="${escapeHtml(number)}" data-usb-source="${escapeHtml(number)}">
+    const deniedPermissions = override.deniedPermissions ?? employee.portal_access?.deniedPermissions ?? [];
+    const scopes = override.scopes ?? employee.portal_access?.scopes ?? [];
+    return `<article class="usb-team-row" data-usb-employee="${escapeHtml(number)}" data-usb-source="${escapeHtml(number)}" data-usb-home-location="${escapeHtml(employee.home_location_id || "")}" data-usb-preferred-department="${escapeHtml(String(employee.preferred_department_id || ""))}">
       <label class="usb-team-identity"><input data-usb-employee-selected type="checkbox" ${selected ? "checked" : ""} ${creator ? "disabled" : ""} /><span><strong>${escapeHtml(number)} · ${escapeHtml(employee.full_name)}</strong><small>${escapeHtml(employee.nickname)} · ${escapeHtml(employee.home_location_name || employee.home_location_id || "")}</small></span></label>
       <select data-usb-role ${creator ? "disabled" : ""}>${creator ? '<option value="admin" selected>Admin</option>' : usbRoleOptions(role, { departmentId: employee.preferred_department_id })}</select>
       <input data-usb-start-password type="password" minlength="6" autocomplete="new-password" value="${escapeHtml(override.startPassword || "")}" placeholder="Startpasswort optional" ${creator ? "disabled" : ""} />
-      ${creator ? '<span class="status-badge">Admin · Pflicht</span>' : `<details><summary>Zusatzrechte</summary><div class="usb-rights-grid">${usbPermissionOptions(override.additionalPermissions || employee.portal_access?.grantedPermissions || [])}</div></details>`}
+      ${creator ? '<span class="status-badge">Admin · Pflicht</span>' : `<div class="usb-draft-actions"><select data-usb-scope-mode aria-label="Planungsbereich">${usbScopeOptions({ scopes, role, preferredDepartmentId: employee.preferred_department_id })}</select><details><summary>Grundrechte</summary><div class="usb-rights-grid">${usbRolePermissionOptions(role, deniedPermissions)}</div></details><details><summary>Zusatzrechte</summary><div class="usb-rights-grid">${usbPermissionOptions(override.additionalPermissions ?? employee.portal_access?.grantedPermissions ?? [], role)}</div></details></div>`}
     </article>`;
   });
   const draftRows = state.usbProvisioning.employeeDrafts.filter((draft) => selectedLocations.has(String(draft.homeLocationId || ""))
     && (!query || `${draft.personnelNumber} ${draft.fullName} ${draft.nickname}`.toLocaleLowerCase("de").includes(query))).map((draft) => {
     const override = state.usbProvisioning.employeeOverrides.get(draft.personnelNumber) || {};
     const selected = state.usbProvisioning.selectedEmployees.has(draft.personnelNumber);
-    return `<article class="usb-team-row" data-usb-employee="${escapeHtml(draft.personnelNumber)}" data-usb-draft="1">
+    const role = override.role || draft.role || "employee";
+    const deniedPermissions = override.deniedPermissions ?? draft.deniedPermissions ?? [];
+    const scopes = override.scopes ?? draft.scopes ?? [];
+    return `<article class="usb-team-row" data-usb-employee="${escapeHtml(draft.personnelNumber)}" data-usb-draft="1" data-usb-home-location="${escapeHtml(draft.homeLocationId || "")}" data-usb-preferred-department="${escapeHtml(String(draft.preferredDepartmentId || ""))}">
     <label class="usb-team-identity"><input data-usb-employee-selected type="checkbox" ${selected ? "checked" : ""} /><span><strong>${escapeHtml(draft.personnelNumber)} · ${escapeHtml(draft.fullName)}</strong><small>${escapeHtml(draft.nickname)} · nur Zielstick</small></span></label>
-    <select data-usb-role>${usbRoleOptions(override.role || draft.role, { departmentId: draft.preferredDepartmentId })}</select>
+    <select data-usb-role>${usbRoleOptions(role, { departmentId: draft.preferredDepartmentId })}</select>
     <input data-usb-start-password type="password" minlength="6" autocomplete="new-password" value="${escapeHtml(override.startPassword ?? draft.startPassword ?? "")}" placeholder="Startpasswort optional" />
-    <div class="usb-draft-actions"><details><summary>Zusatzrechte</summary><div class="usb-rights-grid">${usbPermissionOptions(override.additionalPermissions || draft.additionalPermissions || [])}</div></details><button type="button" class="text-action" data-usb-edit-draft="${escapeHtml(draft.personnelNumber)}">Bearbeiten</button><button type="button" class="text-action danger-text" data-usb-remove-draft="${escapeHtml(draft.personnelNumber)}">Entfernen</button></div>
+    <div class="usb-draft-actions"><select data-usb-scope-mode aria-label="Planungsbereich">${usbScopeOptions({ scopes, role, preferredDepartmentId: draft.preferredDepartmentId })}</select><details><summary>Grundrechte</summary><div class="usb-rights-grid">${usbRolePermissionOptions(role, deniedPermissions)}</div></details><details><summary>Zusatzrechte</summary><div class="usb-rights-grid">${usbPermissionOptions(override.additionalPermissions ?? draft.additionalPermissions ?? [], role)}</div></details><button type="button" class="text-action" data-usb-edit-draft="${escapeHtml(draft.personnelNumber)}">Bearbeiten</button><button type="button" class="text-action danger-text" data-usb-remove-draft="${escapeHtml(draft.personnelNumber)}">Entfernen</button></div>
   </article>`;
   });
   elements.usbEmployeeSelection.innerHTML = [...rows, ...draftRows].join("") || '<p class="settings-note">Keine Teammitglieder gefunden.</p>';
@@ -9017,7 +9438,9 @@ function collectUsbEmployees() {
       sourcePersonnelNumber: row.dataset.usbSource || "",
       role: row.querySelector("[data-usb-role]")?.value || "employee",
       startPassword: row.querySelector("[data-usb-start-password]")?.value || "",
-      additionalPermissions: [...row.querySelectorAll(".usb-rights-grid input:checked")].map((input) => input.value),
+      additionalPermissions: [...row.querySelectorAll("input[data-usb-additional-permission]:checked")].map((input) => input.value),
+      deniedPermissions: [...row.querySelectorAll("input[data-usb-base-permission]:not(:checked)")].map((input) => input.value),
+      scopes: usbScopesFromRow(row),
     };
   });
 }
@@ -9129,6 +9552,8 @@ function saveUsbEmployeeDraft(event) {
     role: elements.usbDraftRole.value,
     startPassword: elements.usbDraftPassword.value,
     additionalPermissions: [],
+    deniedPermissions: [],
+    scopes: [],
   };
   if (!/^\d{1,12}$/.test(draft.personnelNumber) || !draft.fullName || !draft.nickname) {
     showToast("Bitte Personalnummer, Namen und Spitznamen vollständig eingeben.", true);
@@ -9153,6 +9578,8 @@ function saveUsbEmployeeDraft(event) {
     role: draft.role,
     startPassword: draft.startPassword,
     additionalPermissions: state.usbProvisioning.employeeOverrides.get(draft.personnelNumber)?.additionalPermissions || [],
+    deniedPermissions: state.usbProvisioning.employeeOverrides.get(draft.personnelNumber)?.deniedPermissions || [],
+    scopes: state.usbProvisioning.employeeOverrides.get(draft.personnelNumber)?.scopes || [],
   });
   state.usbProvisioning.selectedEmployees.add(draft.personnelNumber);
   elements.usbEmployeeDraftModal.close();
@@ -9512,6 +9939,9 @@ elements.managerVacationRequestList?.addEventListener("click", (event) => {
   const amuButton = event.target.closest("[data-open-amu-action]");
   const amuRow = amuButton?.closest("[data-amu-report]");
   if (amuButton && amuRow) openAmuAction(amuRow.dataset.amuReport);
+  const sicknessButton = event.target.closest("[data-open-sickness-action]");
+  const sicknessRow = sicknessButton?.closest("[data-sickness-case]");
+  if (sicknessButton && sicknessRow) openSicknessAction(sicknessRow.dataset.sicknessCase);
 });
 document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.addEventListener("click", () => {
   state.requestKindTab = button.dataset.requestKindTab;
@@ -9531,6 +9961,26 @@ elements.rightsEmployeeSearch?.addEventListener("input", renderRightsManagement)
 elements.rightsUserList?.addEventListener("click", (event) => {
   const card = event.target.closest("[data-rights-user]");
   if (card && event.target.closest("[data-edit-user-rights]")) openRightsEditor(card.dataset.rightsUser);
+});
+elements.rightsEditorPermissions?.addEventListener("change", (event) => {
+  const input = event.target.closest('input[data-rights-permission]');
+  if (!input) return;
+  enforceRightsEditorScheduleDependency(input);
+  updateRightsEditorPermissionStatus(input);
+  refreshRightsEditorScope();
+});
+elements.rightsEditorScope?.addEventListener("change", (event) => {
+  const input = event.target.closest('input[name="rightsEditorScopeMode"]');
+  if (!input) return;
+  refreshRightsEditorSaveState();
+  rightsEditorAnnounce(input.value === "department"
+    ? "Verantwortungsbereich auf die eigene Abteilung begrenzt."
+    : "Verantwortungsbereich auf die gesamte Filiale erweitert.");
+});
+elements.rightsEditorModal?.addEventListener("close", () => {
+  const returnFocus = state.rightsEditorReturnFocus;
+  state.rightsEditorReturnFocus = null;
+  if (returnFocus?.isConnected) returnFocus.focus();
 });
 elements.rightsEditorForm?.addEventListener("submit", saveUserRights);
 elements.personnelFieldRightsRole?.addEventListener("change", (event) => {
@@ -9752,6 +10202,8 @@ elements.requestActionForm?.addEventListener("click", (event) => {
   if (button) decideVacationRequest(button.dataset.requestAction);
   const amuButton = event.target.closest("[data-amu-action]");
   if (amuButton) reviewAmu(amuButton.dataset.amuAction);
+  const sicknessButton = event.target.closest("[data-sickness-action]");
+  if (sicknessButton) decideSicknessCase(sicknessButton.dataset.sicknessAction);
 });
 elements.requestBlackoutForm?.addEventListener("submit", saveRequestBlackout);
 elements.addRequestBlackoutButton?.addEventListener("click", () => { resetRequestBlackoutForm(); elements.requestBlackoutForm.classList.remove("hidden"); });
@@ -9850,7 +10302,17 @@ elements.usbLocationSelection?.addEventListener("change", (event) => {
 });
 elements.usbAddLocationButton?.addEventListener("click", () => { setView("personnel"); setPersonnelTab("locations"); showToast("Standorte können hier verwaltet werden. Danach zum USB-Assistenten zurückkehren."); });
 elements.usbEmployeeSearch?.addEventListener("input", () => { captureUsbEmployeeRows(); renderUsbEmployees(); });
-elements.usbEmployeeSelection?.addEventListener("change", () => { captureUsbEmployeeRows(); updateUsbSummary(); });
+elements.usbEmployeeSelection?.addEventListener("change", (event) => {
+  const changedRole = event.target.closest("[data-usb-role]");
+  captureUsbEmployeeRows();
+  if (changedRole) {
+    const row = changedRole.closest("[data-usb-employee]");
+    const override = state.usbProvisioning.employeeOverrides.get(row?.dataset.usbEmployee || "");
+    if (override) override.deniedPermissions = [];
+    renderUsbEmployees();
+  }
+  updateUsbSummary();
+});
 elements.usbEmployeeSelection?.addEventListener("click", (event) => {
   const editButton = event.target.closest("[data-usb-edit-draft]");
   if (editButton) {

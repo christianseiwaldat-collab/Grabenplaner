@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.79 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.80 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,14 +13,15 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
-Version v0.79 Beta:
-  - Die Mobile-API unterstuetzt nun Urlaubs- und ZA-Antraege,
-    Krankmeldungen, geschuetzte AUM-Uploads und Benachrichtigungen.
-  - UUID-Idempotenz schuetzt schreibende App-Aktionen bei instabilen
-    Mobilfunkverbindungen vor Doppelanlagen.
-  - Die App erhaelt zu AUM-Dokumenten nur redigierte Metadaten; ein
-    Dokument-Download ist ueber die Mobile-API nicht vorgesehen.
-  - Der eigenstaendige Android-/iOS-Client wird getrennt versioniert.
+Version v0.80 Beta:
+  - Grundrechte einer Rolle koennen pro Person wirksam entzogen und
+    zusaetzliche Rechte weiterhin gezielt vergeben werden.
+  - Planungsrechte lassen sich auf die eigene Abteilung begrenzen oder
+    ausdruecklich fuer die gesamte Stammfiliale freigeben.
+  - Offene und abgeschlossene Antraege, Krankmeldungen und AUM-Faelle
+    bleiben fuer berechtigte Leitungen nachvollziehbar bearbeitbar.
+  - Filialleitungsvertretungen koennen zeitlich begrenzt auch einer
+    Abteilungsleitung die notwendige Fallbearbeitung ermoeglichen.
 
 Recovery Assurance seit v0.78 Beta:
   - Das Ubuntu-Offsite-Modul fuehrt eine kryptografisch signierte und

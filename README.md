@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.79 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
+  <strong>v0.80 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -67,7 +67,7 @@ Das System-Center zeigt zusätzlich den Automatikzustand, begrenzte Langzeittren
     <td width="50%" valign="top">
       <img src="docs/readme/rechtemanagement.webp" alt="Rollen und personenbezogene Rechte im Grabenplaner" width="420">
       <h3>Rechte passend zur Organisation</h3>
-      <p>Rollen bilden den sicheren Ausgangspunkt. Berechtigte Stellen können zusätzliche Rechte gezielt pro Person und innerhalb des zugewiesenen Bereichs vergeben.</p>
+      <p>Rollen bilden den sicheren Ausgangspunkt. Berechtigte Stellen können Grundrechte pro Person entziehen, Zusatzrechte vergeben und den wirksamen Bereich sicher auf eine Abteilung oder ausdrücklich auf die gesamte Filiale begrenzen.</p>
     </td>
     <td width="50%" valign="top">
       <img src="docs/readme/branding-kits.webp" alt="Branding-Kits und standortbezogene Zuweisung" width="420">
@@ -111,6 +111,8 @@ Das System-Center zeigt zusätzlich den Automatikzustand, begrenzte Langzeittren
 - Mobil optimiertes Leitungsportal mit konfigurierbaren Kernfunktionen
 - Versionierte Mobile-API mit sicherer Geräteanmeldung, Standortbranding, persönlichem Dienstplan, Zeiterfassung, Abwesenheitsanträgen, Krankmeldung/AUM und Benachrichtigungen für den eigenständigen Android-/iOS-Client
 - Rollen- und Rechtemanagement mit personenbezogenen Zusatzrechten, Bereichsgrenzen sowie grafischer Prozessübersicht mit Konfigurationsprüfung, folgenloser Simulation und PDF-Dokumentation
+- Entziehbare Rollen-Grundrechte mit sofortigem Sitzungswiderruf sowie getrennten Planungsbereichen für eigene Abteilung und gesamte Filiale
+- Revisionssichere Fallverwaltung für offene und abgeschlossene Anträge, Krankmeldungen und AUMs mit delegierter Filialleitungsvertretung
 - Standortbezogene Branding-Kits für unterschiedliche Filialauftritte
 - Lokale SQLite-Datenbank ohne externen Datenbankserver
 - Integriertes Backup-System, optional verschlüsselte Restic-/rclone-Offsite-Sicherung, transaktionales Ubuntu-Host-Hardening und GitHub-basierter Aktualisierungscheck
@@ -131,8 +133,8 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 
 ## Schnellstart unter Windows
 
-1. Die portable ZIP-Datei unter [Grabenplaner v0.79 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.79-beta) herunterladen und entpacken.
-2. `Grabenplaner v0.79 Beta starten.cmd` doppelt anklicken.
+1. Die portable ZIP-Datei unter [Grabenplaner v0.80 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.80-beta) herunterladen und entpacken.
+2. `Grabenplaner v0.80 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.

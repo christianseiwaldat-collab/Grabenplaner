@@ -198,6 +198,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "amu:delete", label: "AUM-Meldungen löschen", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "amu:audit", label: "AUM-Prüfprotokoll lesen", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "sickness:read", label: "Krankmeldungen im eigenen Bereich lesen", group: "AUM", warningLevel: "high", hrDelegable: true },
+  { id: "sickness:manage", label: "Krankmeldungen im eigenen Bereich bearbeiten", description: "Filialleitungen bearbeiten Krankmeldungen im zugewiesenen Bereich; Abteilungsleitungen nur mit ausdrücklichem Zusatzrecht und wirksamer Filialleitungsvertretung.", group: "AUM", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "sickness:settings", label: "Krankmeldungs- und AUM-Fristen verwalten", group: "AUM", warningLevel: "critical" },
   { id: "notifications:settings", label: "Eigene externe Warnungen und Prozessmeldungen konfigurieren", group: "AUM", warningLevel: "normal", hrDelegable: true },
   { id: "processes:write", label: "Eigene Prozesse und Benachrichtigungsregeln verwalten", description: "Unternehmensweite Prozessdefinitionen anlegen, aktivieren, auslösen und archivieren.", group: "Zugänge & Rechte", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -218,6 +219,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "system:recovery:run", label: "Recovery-Assurance-Prüfung starten", description: "Einen vollständigen, isolierten Sicherungs- und Wiederherstellungsnachweis am Ubuntu-Server anfordern.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
   { id: "update:write", label: "Grabenplaner aktualisieren", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "system:write", label: "App neu starten oder beenden", group: "System & Verwaltung", warningLevel: "critical" },
+  { id: "amu:local:manage", label: "AUM im eigenen Verantwortungsbereich öffnen und prüfen", description: "Grundrecht der Filialleitung; für Abteilungsleitungen nur ausdrücklich und bei wirksamer Filialleitungsvertretung.", group: "AUM", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
 ]);
 const delegablePortalPermissions = new Set(delegablePortalPermissionCatalog.map((entry) => entry.id));
 const hrDelegablePortalPermissions = new Set(delegablePortalPermissionCatalog.filter((entry) => entry.hrDelegable).map((entry) => entry.id));
@@ -377,6 +379,7 @@ const builtinPortalRoles = [
       "vacation:read",
       "vacation:approve",
       "sickness:read",
+      "sickness:manage",
       "amu:local:manage",
       "notifications:settings",
       "personnel:phone:read",
@@ -459,6 +462,7 @@ const builtinPortalRoles = [
       "amu:delete",
       "amu:audit",
       "sickness:read",
+      "sickness:manage",
       "sickness:settings",
       "notifications:settings",
       "processes:write",
@@ -523,6 +527,7 @@ const builtinPortalRoles = [
       "amu:delete",
       "amu:audit",
       "sickness:read",
+      "sickness:manage",
       "sickness:settings",
       "notifications:settings",
       "processes:write",
@@ -554,7 +559,7 @@ builtinPortalRoles.push(
       "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "update:write", "system:write", "users:write",
       "usb:provision",
       "roles:read", "roles:write", "audit:read", "scopes:write", "wifi:settings",
-      "hr:settings", "sickness:read", "sickness:settings", "notifications:settings",
+      "hr:settings", "sickness:read", "sickness:manage", "sickness:settings", "notifications:settings",
       "processes:write",
       "integrations:read", "integrations:profiles:write", "integrations:connections:read",
       "integrations:connections:write", "integrations:credentials:write", "employees:import",
@@ -1492,6 +1497,17 @@ function createSchema() {
         ON UPDATE CASCADE ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS portal_permission_denials (
+      employee_number TEXT NOT NULL,
+      permission TEXT NOT NULL,
+      denied_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (employee_number, permission),
+      FOREIGN KEY (employee_number) REFERENCES portal_users(employee_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS amu_local_access_overrides (
       employee_number TEXT PRIMARY KEY,
       access_mode TEXT NOT NULL DEFAULT 'inherit'
@@ -1820,6 +1836,7 @@ function createSchema() {
 
     CREATE TABLE IF NOT EXISTS amu_reports (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      revision INTEGER NOT NULL DEFAULT 1,
       sickness_case_id INTEGER,
       employee_number TEXT NOT NULL,
       location_id TEXT NOT NULL,
@@ -1872,12 +1889,23 @@ function createSchema() {
 
     CREATE TABLE IF NOT EXISTS sickness_cases (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      revision INTEGER NOT NULL DEFAULT 1,
       employee_lookup TEXT NOT NULL,
       status_lookup TEXT NOT NULL,
       protected_payload TEXT NOT NULL,
       purge_after TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS protected_case_events (
+      id TEXT PRIMARY KEY,
+      entity_kind TEXT NOT NULL CHECK(entity_kind IN ('sickness','amu')),
+      entity_id INTEGER NOT NULL,
+      action_lookup TEXT NOT NULL,
+      actor_lookup TEXT NOT NULL,
+      protected_payload TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS sickness_alerts (
@@ -2150,6 +2178,7 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_integration_profiles_kind ON integration_profiles(direction, kind, active, name);
     CREATE INDEX IF NOT EXISTS idx_integration_runs_started ON integration_runs(started_at DESC, direction, kind);
     CREATE INDEX IF NOT EXISTS idx_integration_runs_actor ON integration_runs(actor_employee_number, started_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_portal_permission_denials_employee ON portal_permission_denials(employee_number, permission);
     CREATE INDEX IF NOT EXISTS idx_integration_connections_kind ON integration_connections(kind, active, name);
     CREATE INDEX IF NOT EXISTS idx_integration_deliveries_started ON integration_deliveries(started_at DESC, status);
     CREATE INDEX IF NOT EXISTS idx_integration_deliveries_connection ON integration_deliveries(connection_id, started_at DESC);
@@ -2238,7 +2267,7 @@ if (unreleasedSicknessDraftSchemaPresent) {
   db.exec("BEGIN IMMEDIATE");
   try {
     if (tableExists("amu_reports") && columnExists("amu_reports", "sickness_case_id")) {
-      db.prepare("UPDATE amu_reports SET sickness_case_id = NULL").run();
+      db.prepare("UPDATE amu_reports SET sickness_case_id = NULL, revision = revision + 1").run();
     }
     db.exec(`
       DROP TABLE IF EXISTS outbound_notification_jobs;
@@ -2358,9 +2387,12 @@ ensureColumn("time_day_reviews", "snapshot_json", "TEXT NOT NULL DEFAULT '{}'");
 ensureColumn("time_day_reviews", "department_key", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("amu_reports", "department_id", "INTEGER");
 ensureColumn("amu_reports", "sickness_case_id", "INTEGER");
+ensureColumn("amu_reports", "revision", "INTEGER NOT NULL DEFAULT 1");
 ensureColumn("amu_reports", "protected_payload", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("amu_documents", "protected_payload", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("sickness_cases", "revision", "INTEGER NOT NULL DEFAULT 1");
 db.exec("CREATE INDEX IF NOT EXISTS idx_amu_reports_sickness_case ON amu_reports(sickness_case_id)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_protected_case_events_entity ON protected_case_events(entity_kind, entity_id, created_at, id)");
 
 function amuReportProtectionContext(row) {
   return {
@@ -2567,6 +2599,15 @@ function sicknessCaseProtectionContext(row) {
   };
 }
 
+function protectedCaseEventProtectionContext(row) {
+  return {
+    namespace: "protected-case-event",
+    recordId: String(row.id),
+    field: "payload",
+    employeeNumber: String(row.actor_lookup || ""),
+  };
+}
+
 function sicknessAlertProtectionContext(row) {
   return {
     namespace: "sickness-alert",
@@ -2633,7 +2674,7 @@ function migrateProtectedPersonnelRecords() {
   const updateReport = db.prepare(`
     UPDATE amu_reports SET protected_payload = ?, incapacity_from = '', incapacity_to = '', employee_note = '',
       reviewed_by = NULL, reviewed_at = NULL, review_note = '', retention_until = NULL, withdrawn_at = NULL,
-      updated_at = CURRENT_TIMESTAMP
+      revision = revision + 1, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `);
   const updateDocument = db.prepare(`
@@ -3033,6 +3074,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.69-integration-contracts", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.71-custom-processes-notifications", packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run("v0.80-revocable-role-rights", packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -4096,19 +4139,13 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
   `).get(sha256(token), now);
   if (!session) return null;
   if (touch) db.prepare("UPDATE portal_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?").run(session.id);
-  const scopes = GLOBAL_SCOPE_PORTAL_ROLES.has(session.role) ? [] : db.prepare(`
-    SELECT location_id, department_id FROM portal_access_scopes
-    WHERE employee_number = ? ORDER BY location_id, department_id
-  `).all(session.employee_number).map((scope) => ({ locationId: scope.location_id, departmentId: Number(scope.department_id || 0) || null }));
-  if (!scopes.length && !GLOBAL_SCOPE_PORTAL_ROLES.has(session.role) && session.home_location_id) {
-    scopes.push({ locationId: session.home_location_id, departmentId: session.role === "department_manager" ? (Number(session.preferred_department_id) || null) : null });
-  }
-  const rolePermissions = parsePortalPermissions(session.permissions)
-    .filter((permission) => portalPermissionAllowedForRole(permission, session.role));
-  const grantedPermissions = portalPermissionGrantsForEmployee(session.employee_number);
-  const effectivePermissions = [...new Set([...rolePermissions, ...grantedPermissions])]
-    .filter((permission) => permission !== "amu:local:manage"
-      || managerAmuAccessEffective(session.employee_number, session.role));
+  const scopes = portalAccessScopesForPrincipal({
+    employeeNumber: session.employee_number,
+    role: session.role,
+    homeLocationId: session.home_location_id,
+    preferredDepartmentId: session.preferred_department_id,
+  });
+  const permissionState = effectivePortalPermissionState(session.employee_number, session.role, session.permissions);
   return {
     id: session.id,
     employeeNumber: session.employee_number,
@@ -4121,9 +4158,10 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
     role: session.role,
     roleName: session.role_name || session.role,
     roleLocked: Boolean(session.role_locked),
-    permissions: effectivePermissions,
-    rolePermissions,
-    grantedPermissions,
+    permissions: permissionState.effectivePermissions,
+    rolePermissions: permissionState.rolePermissions,
+    grantedPermissions: permissionState.grantedPermissions,
+    deniedPermissions: permissionState.deniedPermissions,
     scopes,
     mustChangePassword: Boolean(session.must_change_password),
     expiresAt: session.expires_at,
@@ -4147,6 +4185,7 @@ function publicPortalUser(session) {
     permissions: session.permissions,
     rolePermissions: session.rolePermissions || [],
     grantedPermissions: session.grantedPermissions || [],
+    deniedPermissions: session.deniedPermissions || [],
     scopes: session.scopes || [],
     mustChangePassword: session.mustChangePassword,
     personnelRecordAccess: {
@@ -4422,19 +4461,13 @@ function validateMobileDevice(input = {}) {
 
 function mobileSessionPrincipal(row) {
   if (!row) return null;
-  const scopes = GLOBAL_SCOPE_PORTAL_ROLES.has(row.role) ? [] : db.prepare(`
-    SELECT location_id, department_id FROM portal_access_scopes
-    WHERE employee_number = ? ORDER BY location_id, department_id
-  `).all(row.employee_number).map((scope) => ({ locationId: scope.location_id, departmentId: Number(scope.department_id || 0) || null }));
-  if (!scopes.length && !GLOBAL_SCOPE_PORTAL_ROLES.has(row.role) && row.home_location_id) {
-    scopes.push({ locationId: row.home_location_id, departmentId: row.role === "department_manager" ? (Number(row.preferred_department_id) || null) : null });
-  }
-  const rolePermissions = parsePortalPermissions(row.permissions)
-    .filter((permission) => portalPermissionAllowedForRole(permission, row.role));
-  const grantedPermissions = portalPermissionGrantsForEmployee(row.employee_number);
-  const effectivePermissions = [...new Set([...rolePermissions, ...grantedPermissions])]
-    .filter((permission) => permission !== "amu:local:manage"
-      || managerAmuAccessEffective(row.employee_number, row.role));
+  const scopes = portalAccessScopesForPrincipal({
+    employeeNumber: row.employee_number,
+    role: row.role,
+    homeLocationId: row.home_location_id,
+    preferredDepartmentId: row.preferred_department_id,
+  });
+  const permissionState = effectivePortalPermissionState(row.employee_number, row.role, row.permissions);
   return {
     id: row.id,
     mobileSessionId: row.id,
@@ -4448,9 +4481,10 @@ function mobileSessionPrincipal(row) {
     role: row.role,
     roleName: row.role_name || row.role,
     roleLocked: Boolean(row.role_locked),
-    permissions: effectivePermissions,
-    rolePermissions,
-    grantedPermissions,
+    permissions: permissionState.effectivePermissions,
+    rolePermissions: permissionState.rolePermissions,
+    grantedPermissions: permissionState.grantedPermissions,
+    deniedPermissions: permissionState.deniedPermissions,
     scopes,
     mustChangePassword: Boolean(row.must_change_password),
     expiresAt: row.access_expires_at,
@@ -4677,6 +4711,13 @@ function revokeMobileSessionsForEmployee(employeeNumber, reason = "access_change
   return exceptSessionId
     ? db.prepare(query).run(String(reason).slice(0, 80), String(employeeNumber), String(exceptSessionId)).changes
     : db.prepare(query).run(String(reason).slice(0, 80), String(employeeNumber)).changes;
+}
+
+function revokePortalSessionsForEmployee(employeeNumber) {
+  return db.prepare(`
+    UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP
+    WHERE employee_number = ? AND revoked_at IS NULL
+  `).run(String(employeeNumber || "")).changes;
 }
 
 function createMobileSession(employeeNumber, device, now = new Date()) {
@@ -6037,22 +6078,20 @@ function sicknessNotificationRecipients(payload, stage = "local", excludeEmploye
   const recipients = [];
   for (const user of users) {
     if (!user.employee_number || user.employee_number === excludeEmployeeNumber) continue;
-    const permissions = new Set([
-      ...parsePortalPermissions(user.role_permissions),
-      ...portalPermissionGrantsForEmployee(user.employee_number),
-    ]);
+    const permissions = new Set(effectivePortalPermissionState(
+      user.employee_number,
+      user.role,
+      user.role_permissions,
+    ).effectivePermissions);
     if (!permissions.has("sickness:read")) continue;
     const globalScope = GLOBAL_SCOPE_PORTAL_ROLES.has(user.role);
     if (stage === "hr" && !globalScope) continue;
-    let scopes = scopesByEmployee.get(user.employee_number) || [];
-    if (!scopes.length && !globalScope && user.home_location_id) {
-      scopes = [{
-        locationId: user.home_location_id,
-        departmentId: user.role === "department_manager"
-          ? (Number(user.preferred_department_id || 0) || null)
-          : null,
-      }];
-    }
+    const scopes = portalAccessScopesForPrincipal({
+      employeeNumber: user.employee_number,
+      role: user.role,
+      homeLocationId: user.home_location_id,
+      preferredDepartmentId: user.preferred_department_id,
+    });
     if (portalScopeMatchesAnyContext(user.role, scopes, contexts)) recipients.push(user.employee_number);
   }
   return [...new Set(recipients)];
@@ -6220,7 +6259,7 @@ function reconcileSicknessStaffingRisk(row, now = new Date()) {
   payload.staffingRisk = nextRisk;
   if (payloadChanged) {
     row.protected_payload = protectJson(payload, sicknessCaseProtectionContext(row));
-    db.prepare("UPDATE sickness_cases SET protected_payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    db.prepare("UPDATE sickness_cases SET protected_payload = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
       .run(row.protected_payload, row.id);
   }
   if (!nextRisk.atRisk) {
@@ -6647,9 +6686,14 @@ function purgeExpiredSicknessData(today = viennaTodayIso()) {
       db.prepare(`
         DELETE FROM portal_notifications WHERE entity_type = 'protected_record' AND entity_id = ?
       `).run(protectedPortalEntityId("sickness-case", row.id));
-      cases += db.prepare(`
+      const removed = db.prepare(`
         DELETE FROM sickness_cases WHERE id = ? AND purge_after < ? AND status_lookup NOT IN (?, ?)
       `).run(row.id, today, ...activeStatuses).changes;
+      if (removed) {
+        db.prepare("DELETE FROM protected_case_events WHERE entity_kind = 'sickness' AND entity_id = ?")
+          .run(row.id);
+        cases += removed;
+      }
     }
     db.exec("COMMIT");
   } catch (error) {
@@ -6733,18 +6777,77 @@ function managerAmuAccessOverride(employeeNumber) {
 }
 
 function managerAmuAccessEffective(employeeNumber, role = "manager") {
-  if (String(role || "") !== "manager") return false;
+  const normalizedRole = String(role || "");
+  if (!["manager", "department_manager"].includes(normalizedRole)) return false;
   const mode = managerAmuAccessOverride(employeeNumber);
   if (mode === "allow") return true;
   if (mode === "deny") return false;
+  if (normalizedRole === "department_manager") return true;
   return managerAmuRoleDefaultEnabled();
 }
 
+function portalPermissionExplicitlyDenied(employeeNumber, permission) {
+  if (!tableExists("portal_permission_denials")) return false;
+  return Boolean(db.prepare(`
+    SELECT 1 FROM portal_permission_denials WHERE employee_number = ? AND permission = ? LIMIT 1
+  `).get(String(employeeNumber || ""), String(permission || "")));
+}
+
+function departmentManagerSubstitutionActive(employeeNumber, locationId, date = viennaTodayIso()) {
+  const delegated = db.prepare(`
+    SELECT 1 FROM approval_delegations
+    WHERE location_id = ? AND delegate_employee_number = ? AND active = 1
+      AND date_from <= ? AND date_to >= ? LIMIT 1
+  `).get(String(locationId || ""), String(employeeNumber || ""), date, date);
+  if (delegated) return true;
+  const managerPresent = db.prepare(`
+    SELECT u.employee_number FROM portal_users u
+    JOIN employees e ON e.personnel_number = u.employee_number
+    WHERE u.role = 'manager' AND u.active = 1 AND e.active = 1
+      AND e.home_location_id = ?
+      AND NOT EXISTS (
+        SELECT 1 FROM week_options w WHERE w.employee_number = u.employee_number
+          AND ? BETWEEN w.date_from AND w.date_to
+          AND w.option_type IN ('vacation','sick','time_off','branch')
+      )
+    LIMIT 1
+  `).get(String(locationId || ""), date);
+  return !managerPresent;
+}
+
+function sessionMatchesOrganizationalContext(session, locationId, departmentId = null) {
+  if (sessionHasGlobalScope(session)) return true;
+  const matching = (session?.scopes || []).filter((scope) => String(scope.locationId) === String(locationId || ""));
+  if (!matching.length) return false;
+  if (matching.some((scope) => !Number(scope.departmentId || 0))) return true;
+  return Boolean(departmentId && matching.some((scope) => Number(scope.departmentId) === Number(departmentId)));
+}
+
+function sessionCanManageLocalContext(session, { locationId, departmentId = null, permission, date = viennaTodayIso() } = {}) {
+  if (!session) return false;
+  if (session.employeeNumber === "local") return true;
+  if (!session.permissions?.includes(permission)) return false;
+  if (sessionHasGlobalScope(session)) return true;
+  if (!sessionMatchesOrganizationalContext(session, locationId, departmentId)) return false;
+  if (session.role === "manager") return true;
+  if (session.role !== "department_manager" || !departmentId) return false;
+  const hasDepartmentScope = (session.scopes || []).some((scope) =>
+    String(scope.locationId) === String(locationId || "")
+      && Number(scope.departmentId || 0) === Number(departmentId));
+  return hasDepartmentScope
+    && departmentManagerSubstitutionActive(session.employeeNumber, locationId, date);
+}
+
 function sessionHasLocalAmuAccess(session) {
-  if (!session || session.employeeNumber === "local" || session.role !== "manager") return false;
-  return session.permissions?.includes("amu:local:manage")
-    && session.permissions?.includes("sickness:read")
-    && managerAmuAccessEffective(session.employeeNumber, session.role);
+  if (!session || session.employeeNumber === "local") return false;
+  if (!["manager", "department_manager"].includes(session.role)) return false;
+  if (!session.permissions?.includes("amu:local:manage")
+    || !session.permissions?.includes("sickness:read")
+    || portalPermissionExplicitlyDenied(session.employeeNumber, "amu:local:manage")) return false;
+  if (managerAmuAccessOverride(session.employeeNumber) === "deny") return false;
+  return session.role === "manager"
+    ? managerAmuAccessEffective(session.employeeNumber, session.role)
+    : true;
 }
 
 function managerAmuAccessPolicyPayload() {
@@ -7570,6 +7673,45 @@ function portalPermissionGrantsForEmployee(employeeNumber) {
     .filter((permission) => delegablePortalPermissions.has(permission) && portalPermissionAllowedForRole(permission, role));
 }
 
+function portalPermissionDenialsForEmployee(employeeNumber) {
+  if (!employeeNumber || !tableExists("portal_permission_denials")) return [];
+  return db.prepare(`
+    SELECT permission FROM portal_permission_denials
+    WHERE employee_number = ? ORDER BY permission
+  `).all(String(employeeNumber)).map((row) => row.permission)
+    .filter((permission) => delegablePortalPermissions.has(permission));
+}
+
+function effectivePortalPermissionState(employeeNumber, role, rolePermissionsValue) {
+  const rolePermissions = (Array.isArray(rolePermissionsValue)
+    ? rolePermissionsValue
+    : parsePortalPermissions(rolePermissionsValue))
+    .filter((permission) => portalPermissionAllowedForRole(permission, role));
+  const grantedPermissions = portalPermissionGrantsForEmployee(employeeNumber);
+  const deniedPermissions = portalPermissionDenialsForEmployee(employeeNumber);
+  const denied = new Set(deniedPermissions);
+  const effectivePermissions = [...new Set([...rolePermissions, ...grantedPermissions])]
+    .filter((permission) => !denied.has(permission))
+    .filter((permission) => permission !== "amu:local:manage"
+      || managerAmuAccessEffective(employeeNumber, role));
+  return { rolePermissions, grantedPermissions, deniedPermissions, effectivePermissions };
+}
+
+function portalAccessScopesForPrincipal({ employeeNumber, role, homeLocationId, preferredDepartmentId }) {
+  if (GLOBAL_SCOPE_PORTAL_ROLES.has(role)) return [];
+  const scopes = db.prepare(`
+    SELECT location_id, department_id FROM portal_access_scopes
+    WHERE employee_number = ? ORDER BY location_id, department_id
+  `).all(String(employeeNumber || "")).map((scope) => ({
+    locationId: scope.location_id,
+    departmentId: Number(scope.department_id || 0) || null,
+  }));
+  if (scopes.length || !homeLocationId) return scopes;
+  if (role === "manager") return [{ locationId: homeLocationId, departmentId: null }];
+  const departmentId = Number(preferredDepartmentId || 0) || null;
+  return departmentId ? [{ locationId: homeLocationId, departmentId }] : [];
+}
+
 function manageablePortalPermissionsForActor(actor) {
   if (!actor) return new Set();
   if (actor.employeeNumber === "local" || ["developer", "admin", "it_admin"].includes(actor.role)) {
@@ -7692,17 +7834,25 @@ function portalAccessProfileForEmployee(employeeNumber) {
   const roleId = user?.role || "employee";
   const role = getPortalRoles().find((entry) => entry.id === roleId)
     || getPortalRoles().find((entry) => entry.id === "employee");
-  const rolePermissions = role?.permissions || parsePortalPermissions(user?.permissions);
-  const grantedPermissions = user ? portalPermissionGrantsForEmployee(employeeNumber) : [];
+  const permissionState = user
+    ? effectivePortalPermissionState(employeeNumber, roleId, role?.permissions || user?.permissions)
+    : {
+      rolePermissions: role?.permissions || [],
+      grantedPermissions: [],
+      deniedPermissions: [],
+      effectivePermissions: role?.permissions || [],
+    };
   return {
     configured: Boolean(user),
     role: roleId,
     roleName: user?.role_name || role?.name || "Mitarbeiter",
     roleLocked: Boolean(user?.role_locked) || roleId === "developer",
     active: user ? Boolean(user.active) : false,
-    rolePermissions,
-    grantedPermissions,
-    effectivePermissions: [...new Set([...rolePermissions, ...grantedPermissions])],
+    rolePermissions: permissionState.rolePermissions,
+    grantedPermissions: permissionState.grantedPermissions,
+    deniedPermissions: permissionState.deniedPermissions,
+    effectivePermissions: permissionState.effectivePermissions,
+    scopes: user ? explicitPortalAccessScopesForEmployee(employeeNumber) : [],
   };
 }
 
@@ -7774,6 +7924,7 @@ function applyPersonnelAccessProfile(actor, profile) {
     ON CONFLICT(employee_number) DO UPDATE SET role = excluded.role, updated_at = CURRENT_TIMESTAMP
   `).run(profile.employeeNumber, profile.role);
   db.prepare("DELETE FROM portal_permission_grants WHERE employee_number = ?").run(profile.employeeNumber);
+  db.prepare("DELETE FROM portal_permission_denials WHERE employee_number = ?").run(profile.employeeNumber);
   const insertGrant = db.prepare(`
     INSERT INTO portal_permission_grants (employee_number, permission, granted_by, updated_at)
     VALUES (?, ?, ?, CURRENT_TIMESTAMP)
@@ -7793,6 +7944,7 @@ function applyPersonnelAccessProfile(actor, profile) {
     grantsBefore: before?.grantedPermissions || [],
     grantsAfter: after.grantedPermissions,
   }));
+  revokePortalSessionsForEmployee(profile.employeeNumber);
   revokeMobileSessionsForEmployee(profile.employeeNumber, "access_profile_changed");
 }
 
@@ -7873,6 +8025,28 @@ function requirePortalReadOrLocal(request, permission = "schedule:read") {
   return requirePortalSession(request, permission);
 }
 
+function requirePortalAnyPermissionOrLocal(request, permissions = [], { csrf = false } = {}) {
+  const requested = [...new Set((Array.isArray(permissions) ? permissions : [permissions])
+    .map((permission) => String(permission || "").trim()).filter(Boolean))];
+  if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) {
+    return {
+      employeeNumber: "local",
+      role: "admin",
+      permissions: builtinPortalRoles.find((role) => role.id === "admin")?.permissions || requested,
+      scopes: [],
+    };
+  }
+  const session = requirePortalSession(request);
+  if (session.mustChangePassword) {
+    throw httpError(428, "Bitte zuerst das persönliche Startpasswort ändern.", "PORTAL_PASSWORD_CHANGE_REQUIRED");
+  }
+  if (requested.length && !requested.some((permission) => session.permissions?.includes(permission))) {
+    throw httpError(403, "Für diese Aktion fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  if (csrf) assertPortalCsrf(request);
+  return session;
+}
+
 function requireAdminHrOrLocal(request, permission) {
   const session = requirePortalAdminOrLocal(request, permission);
   if (session.employeeNumber !== "local" && !RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)) {
@@ -7941,6 +8115,7 @@ function portalUsersForAdmin() {
     homeLocationId: row.home_location_id || "",
     preferredDepartmentId: Number(row.preferred_department_id || 0) || null,
     grantedPermissions: portalPermissionGrantsForEmployee(row.personnel_number),
+    deniedPermissions: portalPermissionDenialsForEmployee(row.personnel_number),
     scopes: db.prepare("SELECT location_id, department_id FROM portal_access_scopes WHERE employee_number = ? ORDER BY location_id, department_id")
       .all(row.personnel_number).map((scope) => ({ locationId: scope.location_id, departmentId: Number(scope.department_id || 0) || null })),
   }));
@@ -10262,12 +10437,61 @@ function reconcileSicknessPayloadRules(payload, now = new Date(), { aumReviewed 
   return payload;
 }
 
+function rebuildSicknessPayloadRules(payload, now = new Date()) {
+  const employee = sicknessContractForEmployee(payload.employeeNumber);
+  const effectiveEnd = sicknessCaseEffectiveEnd(payload, viennaTodayIso(now));
+  const captured = payload.timeValuation && payload.timeValuation.version === VALUATION_VERSION
+    ? {
+      ...payload.timeValuation,
+      creditedDates: [],
+      totalMinutes: 0,
+    }
+    : createSicknessValuationSnapshot({
+      contractedHours: employee.contracted_hours,
+      targetWorkdays: employee.target_workdays_per_week,
+      fixedWorkdays: parseFixedWorkdays(employee.fixed_workdays),
+      preferredDayOff: employee.preferred_day_off,
+      capturedAt: payload.reportedAt || now.toISOString(),
+    });
+  payload.timeValuation = extendSicknessValuationSnapshot(captured, {
+    startDate: payload.startDate,
+    endDate: effectiveEnd,
+    dayContext: (date) => sicknessValuationDayContext(payload.employeeNumber, date,
+      payload.locationId || employee.home_location_id),
+  });
+  const previous = payload.aumAllowance || {};
+  const hasReviewedAum = previous.reason === "aum_reviewed" || Boolean(previous.releasedAt && previous.releaseReason === "aum_reviewed");
+  payload.aumAllowance = createAumAllowanceSnapshot({
+    policy: {
+      enabled: previous.policyEnabledAtReport === true,
+      maxCasesPerYear: Number(previous.maxCasesPerYear || getAmuPolicy().aumAllowance.maxCasesPerYear),
+      maxCalendarDaysPerCase: Number(previous.maxCalendarDaysPerCase || getAmuPolicy().aumAllowance.maxCalendarDaysPerCase),
+    },
+    employeeEnabled: previous.employeeEnabledAtReport === true,
+    trustLevel: previous.trustLevelAtReport || "C",
+    usedCases: Number(previous.usedCasesBefore || 0),
+    startDate: payload.startDate,
+    endDate: effectiveEnd,
+    evaluatedAt: now.toISOString(),
+    hasAum: Boolean(payload.aumReceivedAt),
+  });
+  if (hasReviewedAum) {
+    payload.aumAllowance = reconcileAumAllowanceSnapshot(payload.aumAllowance, {
+      startDate: payload.startDate,
+      endDate: effectiveEnd,
+      evaluatedAt: now.toISOString(),
+      aumReviewed: true,
+    });
+  }
+  return payload;
+}
+
 function reconcileSicknessCaseRules(row, now = new Date(), { aumReviewed = false, actor = "system" } = {}) {
   if (!row) return row;
   const before = sicknessCasePayload(row);
   const payload = reconcileSicknessPayloadRules(structuredClone(before), now, { aumReviewed });
   if (JSON.stringify(before) === JSON.stringify(payload)) return row;
-  db.prepare("UPDATE sickness_cases SET protected_payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+  db.prepare("UPDATE sickness_cases SET protected_payload = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
     .run(protectJson(payload, sicknessCaseProtectionContext(row)), row.id);
   if (JSON.stringify(before.aumAllowance || null) !== JSON.stringify(payload.aumAllowance || null)) {
     auditPortal(actor, "sickness.allowance.reconcile", "protected_record",
@@ -10416,7 +10640,70 @@ function evaluateSicknessStaffingRisk(employeeNumber, startDate, expectedEnd, co
   };
 }
 
-function serializeSicknessCases(rows, { includeNote = true } = {}) {
+function appendProtectedCaseEvent(entityKind, entityId, action, actorEmployeeNumber, details = {}) {
+  const id = crypto.randomUUID();
+  const actorLookup = sicknessLookup("case-event-actor", String(actorEmployeeNumber || ""));
+  const row = { id, actor_lookup: actorLookup };
+  const payload = protectJson({
+    actorEmployeeNumber: String(actorEmployeeNumber || ""),
+    note: stripEmoji(String(details.note || "").trim()).slice(0, 500),
+    previousStatus: String(details.previousStatus || ""),
+    nextStatus: String(details.nextStatus || ""),
+    changedFields: Array.isArray(details.changedFields) ? details.changedFields.map(String).slice(0, 20) : [],
+    occurredAt: new Date().toISOString(),
+  }, protectedCaseEventProtectionContext(row));
+  db.prepare(`
+    INSERT INTO protected_case_events
+      (id, entity_kind, entity_id, action_lookup, actor_lookup, protected_payload)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, entityKind, Number(entityId), sicknessLookup(`case-event-${entityKind}`, action), actorLookup, payload);
+  return id;
+}
+
+function protectedCaseEvents(entityKind, entityId, { includeNote = true } = {}) {
+  const events = db.prepare(`
+    SELECT * FROM protected_case_events
+    WHERE entity_kind = ? AND entity_id = ?
+    ORDER BY created_at, id
+  `).all(entityKind, Number(entityId)).map((row) => {
+    const payload = parseProtectedJson(row.protected_payload, protectedCaseEventProtectionContext(row));
+    return {
+      id: row.id,
+      action: sicknessLookup(`case-event-${entityKind}`, "update") === row.action_lookup ? "update"
+        : sicknessLookup(`case-event-${entityKind}`, "close") === row.action_lookup ? "close"
+          : sicknessLookup(`case-event-${entityKind}`, "correct_closed") === row.action_lookup ? "correct_closed"
+            : sicknessLookup(`case-event-${entityKind}`, "review") === row.action_lookup ? "review"
+              : sicknessLookup(`case-event-${entityKind}`, "return") === row.action_lookup ? "return"
+                : sicknessLookup(`case-event-${entityKind}`, "add_note") === row.action_lookup ? "add_note" : "event",
+      actor_employee_number: payload.actorEmployeeNumber || "",
+      note: includeNote ? (payload.note || "") : "",
+      previous_status: payload.previousStatus || "",
+      next_status: payload.nextStatus || "",
+      changed_fields: Array.isArray(payload.changedFields) ? payload.changedFields : [],
+      created_at: payload.occurredAt || row.created_at,
+    };
+  });
+  return events.sort((left, right) => String(left.created_at).localeCompare(String(right.created_at))
+    || String(left.id).localeCompare(String(right.id)));
+}
+
+function sicknessCaseCapabilities(session, row) {
+  const payload = sicknessCasePayload(row);
+  const canManage = sessionCanManageLocalContext(session, {
+    locationId: payload.locationId,
+    departmentId: Number(payload.departmentId || 0) || null,
+    permission: "sickness:manage",
+  });
+  const open = ["reported", "aum_received"].includes(payload.status);
+  return {
+    view: true,
+    update: canManage && open,
+    close: canManage && open,
+    correctClosed: canManage && payload.status === "recovered",
+  };
+}
+
+function serializeSicknessCases(rows, { includeNote = true, session = null } = {}) {
   const alertStatement = db.prepare(`
     SELECT * FROM sickness_alerts WHERE sickness_case_id = ? ORDER BY id
   `);
@@ -10449,6 +10736,7 @@ function serializeSicknessCases(rows, { includeNote = true } = {}) {
         : openAlerts.some((alert) => alert.kind === "staffing_risk") ? "warning" : "normal";
     return {
       id: Number(row.id),
+      revision: Number(row.revision || 1),
       employee_number: payload.employeeNumber || "",
       full_name: employee.full_name || "",
       nickname: employee.nickname || "",
@@ -10484,6 +10772,7 @@ function serializeSicknessCases(rows, { includeNote = true } = {}) {
       staffing_risk: payload.staffingRisk || { atRisk: false, plannedShiftCount: 0, worstShortfall: 0, slots: [] },
       severity,
       alerts,
+      capabilities: session ? sicknessCaseCapabilities(session, row) : undefined,
     };
   });
 }
@@ -10506,13 +10795,14 @@ function assertSicknessCaseScope(session, row) {
   if (!allowed) throw httpError(403, "Diese Krankmeldung gehört nicht zum eigenen Verantwortungsbereich.", "PORTAL_PERMISSION_DENIED");
 }
 
-function serializeAmuReports(rows, { includeIdentityCheck = false } = {}) {
+function serializeAmuReports(rows, { includeIdentityCheck = false, session = null } = {}) {
   const documents = amuDocumentsForReports(rows.map((row) => row.id));
   return rows.map((row) => {
     const payload = parseProtectedJson(row.protected_payload, amuReportProtectionContext(row));
     return {
       ...row,
       id: Number(row.id),
+      revision: Number(row.revision || 1),
       incapacity_from: payload.incapacityFrom || "",
       incapacity_to: payload.incapacityTo || "",
       employee_note: payload.employeeNote || "",
@@ -10531,8 +10821,19 @@ function serializeAmuReports(rows, { includeIdentityCheck = false } = {}) {
         : undefined,
       protected_payload: undefined,
       documents: documents.get(Number(row.id)) || [],
+      capabilities: session ? amuReportCapabilities(session, row) : undefined,
     };
   });
+}
+
+function redactAmuReportFileMetadata(report, session) {
+  if (actorCanReadAmuFiles(session)) return report;
+  return {
+    ...report,
+    employee_note: "",
+    review_note: "",
+    documents: report.documents?.length ? [{ present: true, content_access: false }] : [],
+  };
 }
 
 function ownAmuReports(employeeNumber) {
@@ -10561,13 +10862,31 @@ function sessionCanAccessAmuReport(session, report) {
       || (report.department_id != null && Number(scope.departmentId) === Number(report.department_id))));
 }
 
+function sessionCanUseLocalAmuForReport(session, report) {
+  if (!sessionHasLocalAmuAccess(session) || !sessionCanAccessAmuReport(session, report)) return false;
+  if (session.role === "manager") return true;
+  return sessionCanManageLocalContext(session, {
+    locationId: report.location_id,
+    departmentId: Number(report.department_id || 0) || null,
+    permission: "amu:local:manage",
+  });
+}
+
 function sessionCanListAmuReport(session, report) {
   if (!sessionCanAccessAmuReport(session, report)) return false;
-  return !(sessionHasLocalAmuAccess(session) && ["withdrawn", "purged"].includes(String(report.status || "")));
+  if (sessionHasLocalAmuAccess(session) && !sessionCanUseLocalAmuForReport(session, report)) return false;
+  return String(report.status || "") !== "purged";
 }
 
 function managerProfileMatchesAmuReport(user, report) {
   if (!user || user.role !== "manager" || !user.active || !user.employeeActive || !user.passwordConfigured) return false;
+  const rolePermissions = db.prepare("SELECT permissions FROM portal_roles WHERE id = ?").get(user.role)?.permissions || "[]";
+  const effectivePermissions = effectivePortalPermissionState(
+    user.employeeNumber,
+    user.role,
+    rolePermissions,
+  ).effectivePermissions;
+  if (!effectivePermissions.includes("amu:local:manage") || !effectivePermissions.includes("sickness:read")) return false;
   if (!managerAmuAccessEffective(user.employeeNumber, user.role)) return false;
   const scopes = user.scopes?.length
     ? user.scopes
@@ -10577,10 +10896,26 @@ function managerProfileMatchesAmuReport(user, report) {
       || (report.department_id != null && Number(scope.departmentId) === Number(report.department_id))));
 }
 
+function departmentManagerProfileMatchesAmuReport(user, report) {
+  if (!user || user.role !== "department_manager" || !user.active || !user.employeeActive || !user.passwordConfigured) return false;
+  const rolePermissions = db.prepare("SELECT permissions FROM portal_roles WHERE id = ?").get(user.role)?.permissions || "[]";
+  const effectivePermissions = effectivePortalPermissionState(
+    user.employeeNumber,
+    user.role,
+    rolePermissions,
+  ).effectivePermissions;
+  if (!effectivePermissions.includes("amu:local:manage") || !effectivePermissions.includes("sickness:read")) return false;
+  const scoped = (user.scopes || []).some((scope) =>
+    String(scope.locationId) === String(report.location_id)
+      && Number(scope.departmentId || 0) === Number(report.department_id || 0));
+  return scoped && departmentManagerSubstitutionActive(user.employeeNumber, report.location_id);
+}
+
 function localAmuReviewerRecipients(report) {
   if (!report) return [];
   return portalUsersForAdmin()
-    .filter((user) => managerProfileMatchesAmuReport(user, report))
+    .filter((user) => managerProfileMatchesAmuReport(user, report)
+      || departmentManagerProfileMatchesAmuReport(user, report))
     .map((user) => user.employeeNumber)
     .filter((employeeNumber) => employeeNumber && employeeNumber !== report.employee_number);
 }
@@ -10618,6 +10953,22 @@ function amuResponsibilityForActor(report, session) {
   };
 }
 
+function amuReportCapabilities(session, report) {
+  const responsibility = amuResponsibilityForActor(report, session);
+  const localAuthorized = sessionHasLocalAmuAccess(session)
+    ? sessionCanUseLocalAmuForReport(session, report)
+    : sessionCanAccessAmuReport(session, report);
+  const canManage = localAuthorized && responsibility.can_review;
+  const status = String(report?.status || "");
+  return {
+    view: localAuthorized && status !== "purged",
+    openFiles: localAuthorized && actorCanReadAmuFiles(session) && !["withdrawn", "purged"].includes(status),
+    review: canManage && ["submitted", "returned"].includes(status),
+    returnForCompletion: canManage && status === "submitted",
+    addNote: canManage && status !== "purged",
+  };
+}
+
 function persistAmuResponsibility(report, routing, actor = "system") {
   if (!report?.protected_payload) return false;
   const payload = parseProtectedJson(report.protected_payload, amuReportProtectionContext(report));
@@ -10633,7 +10984,7 @@ function persistAmuResponsibility(report, routing, actor = "system") {
     && JSON.stringify(previous?.assignedTo || []) === JSON.stringify(next.assignedTo);
   if (unchanged) return false;
   payload.routing = next;
-  db.prepare("UPDATE amu_reports SET protected_payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+  db.prepare("UPDATE amu_reports SET protected_payload = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
     .run(protectJson(payload, amuReportProtectionContext(report)), report.id);
   auditPortal(actor, "amu.report.responsibility.update", "protected_record",
     protectedPortalEntityId("amu-report", report.id), JSON.stringify({
@@ -10801,15 +11152,26 @@ function purgeExpiredAmuDocuments(today = viennaTodayIso()) {
       purged += 1;
     }
     const updateReport = db.prepare(`
-      UPDATE amu_reports SET status = 'purged', protected_payload = ?, updated_at = CURRENT_TIMESTAMP
+      UPDATE amu_reports SET status = 'purged', protected_payload = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND NOT EXISTS (SELECT 1 FROM amu_documents d WHERE d.report_id = amu_reports.id AND d.status <> 'purged')
     `);
-    for (const report of expiringReports) {
-      const purgedPayload = protectJson({
-        incapacityFrom: "", incapacityTo: "", employeeNote: "", reviewedBy: "", reviewedAt: "",
-        reviewNote: "", retentionUntil: "", withdrawnAt: "",
-      }, amuReportProtectionContext(report));
-      updateReport.run(purgedPayload, report.id);
+    const deleteEvents = db.prepare(
+      "DELETE FROM protected_case_events WHERE entity_kind = 'amu' AND entity_id = ?",
+    );
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      for (const report of expiringReports) {
+        const purgedPayload = protectJson({
+          incapacityFrom: "", incapacityTo: "", employeeNote: "", reviewedBy: "", reviewedAt: "",
+          reviewNote: "", retentionUntil: "", withdrawnAt: "",
+        }, amuReportProtectionContext(report));
+        const result = updateReport.run(purgedPayload, report.id);
+        if (result.changes) deleteEvents.run(report.id);
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      try { db.exec("ROLLBACK"); } catch {}
+      throw error;
     }
   } finally {
     amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
@@ -11354,13 +11716,23 @@ function getLocationsForSession(session, includeInactive = true) {
   const canReadTimeSettings = !session || session.employeeNumber === "local" || session.permissions?.includes("time:settings");
   const visibleLocation = (location) => canReadTimeSettings ? location : { ...location, time_tracking_allowed_networks: "" };
   if (sessionHasGlobalScope(session)) return locations.map(visibleLocation);
-  const allowed = new Map((session.scopes || []).map((scope) => [`${scope.locationId}:${scope.departmentId || 0}`, scope]));
-  return locations.filter((location) => [...allowed.keys()].some((key) => key.startsWith(`${location.id}:`))).map((location) => ({
-    ...visibleLocation(location),
-    departments: session.role === "department_manager"
-      ? location.departments.filter((department) => allowed.has(`${location.id}:${department.id}`))
-      : location.departments,
-  }));
+  const allowed = new Map();
+  for (const scope of session.scopes || []) {
+    const key = String(scope.locationId || "");
+    if (!allowed.has(key)) allowed.set(key, { wholeLocation: false, departmentIds: new Set() });
+    const entry = allowed.get(key);
+    if (scope.departmentId) entry.departmentIds.add(Number(scope.departmentId));
+    else entry.wholeLocation = true;
+  }
+  return locations.filter((location) => allowed.has(String(location.id))).map((location) => {
+    const scope = allowed.get(String(location.id));
+    return {
+      ...visibleLocation(location),
+      departments: scope.wholeLocation
+        ? location.departments
+        : location.departments.filter((department) => scope.departmentIds.has(Number(department.id))),
+    };
+  });
 }
 
 function normalizeLocationId(value) {
@@ -17087,10 +17459,19 @@ app.get("/api/employees", (request, response) => {
         portal_access: portalAccessProfileForEmployee(row.personnel_number),
       }));
   if (!sessionHasGlobalScope(session)) {
-    const locations = new Set((session.scopes || []).map((scope) => scope.locationId));
-    const departments = new Set((session.scopes || []).map((scope) => Number(scope.departmentId || 0)).filter(Boolean));
-    employees = employees.filter((employee) => locations.has(employee.home_location_id)
-      && (session.role !== "department_manager" || departments.has(Number(employee.preferred_department_id || 0))));
+    const scopesByLocation = new Map();
+    for (const scope of session.scopes || []) {
+      const locationId = String(scope.locationId || "");
+      if (!scopesByLocation.has(locationId)) scopesByLocation.set(locationId, { wholeLocation: false, departmentIds: new Set() });
+      const entry = scopesByLocation.get(locationId);
+      if (scope.departmentId) entry.departmentIds.add(Number(scope.departmentId));
+      else entry.wholeLocation = true;
+    }
+    employees = employees.filter((employee) => {
+      const scope = scopesByLocation.get(String(employee.home_location_id || ""));
+      return Boolean(scope && (scope.wholeLocation
+        || scope.departmentIds.has(Number(employee.preferred_department_id || 0))));
+    });
   }
   employees = employees.map((employee) => ({
     ...employee,
@@ -17803,10 +18184,10 @@ function rightsDashboardScopes(user, locationLookup, departmentLookup) {
   }
   const assigned = Array.isArray(user.scopes) && user.scopes.length
     ? user.scopes.map((scope) => ({ ...scope, source: "assigned" }))
-    : user.homeLocationId
+    : user.homeLocationId && (user.role === "manager" || user.preferredDepartmentId)
       ? [{
           locationId: user.homeLocationId,
-          departmentId: user.role === "department_manager" ? user.preferredDepartmentId : null,
+          departmentId: user.role === "manager" ? null : user.preferredDepartmentId,
           source: "home",
         }]
       : [];
@@ -19574,13 +19955,15 @@ function rightsDashboardPayload(actor) {
     const role = roleLookup.get(user.role) || roleLookup.get("employee") || { id: "employee", name: "Mitarbeiter", permissions: [] };
     const rolePermissions = new Set(role.permissions || []);
     const grantedPermissions = new Set(user.grantedPermissions || []);
+    const deniedPermissions = new Set(user.deniedPermissions || []);
     const scope = rightsDashboardScopes(user, locationLookup, departmentLookup);
     const accessActive = Boolean(user.configured && user.active && user.passwordConfigured);
-    const assignedPermissionIds = [...new Set([...rolePermissions, ...grantedPermissions])].sort();
+    const assignedPermissionIds = [...new Set([...rolePermissions, ...grantedPermissions, ...deniedPermissions])].sort();
+    const effectivePermissionIds = assignedPermissionIds.filter((permissionId) => !deniedPermissions.has(permissionId));
     const personnelFieldAccess = personnelFieldEffectiveAccess({
       employeeNumber: user.employeeNumber,
       role: role.id,
-      permissions: assignedPermissionIds,
+      permissions: effectivePermissionIds,
     });
     const permissions = assignedPermissionIds.map((permissionId) => {
       const permission = catalogLookup.get(permissionId) || {
@@ -19589,6 +19972,7 @@ function rightsDashboardPayload(actor) {
       };
       const origin = rolePermissions.has(permissionId) ? "role" : "delegated";
       const coverage = rightsDashboardCoverage(permission, user, scope);
+      const explicitlyDenied = deniedPermissions.has(permissionId);
       const policyEffective = permissionId !== "amu:local:manage"
         || managerAmuAccessEffective(user.employeeNumber, user.role);
       return {
@@ -19600,8 +19984,12 @@ function rightsDashboardPayload(actor) {
         origin,
         originLabel: origin === "role" ? `Grundrecht der Rolle ${role.name}` : "Individuelles Zusatzrecht",
         coverage,
-        effective: accessActive && coverage.type !== "none" && policyEffective,
-        policyState: permissionId === "amu:local:manage"
+        denied: explicitlyDenied,
+        revoked: explicitlyDenied,
+        effective: accessActive && coverage.type !== "none" && policyEffective && !explicitlyDenied,
+        policyState: explicitlyDenied
+          ? "denied"
+          : permissionId === "amu:local:manage"
           ? (policyEffective ? "allowed" : "denied")
           : "not_applicable",
       };
@@ -19625,6 +20013,8 @@ function rightsDashboardPayload(actor) {
         role: permissions.filter((permission) => permission.effective && permission.origin === "role").length,
         delegated: permissions.filter((permission) => permission.effective && permission.origin === "delegated").length,
         restricted: permissions.filter((permission) => permission.effective && permission.coverage.restricted).length,
+        denied: permissions.filter((permission) => permission.denied).length,
+        revoked: permissions.filter((permission) => permission.revoked).length,
       },
     };
   });
@@ -19640,6 +20030,7 @@ function rightsDashboardPayload(actor) {
       activeAccesses: users.filter((user) => user.accessActive).length,
       delegatedRights: effectivePermissions.filter((permission) => permission.origin === "delegated").length,
       scopedRights: effectivePermissions.filter((permission) => permission.coverage.restricted).length,
+      revokedRights: users.reduce((sum, user) => sum + user.counts.revoked, 0),
     },
     roles: roles.map((role) => ({ id: role.id, name: role.name, description: role.description || "" })),
     locations: locations.map((location) => ({
@@ -19658,10 +20049,15 @@ function rightsManagementPayload(actor) {
     .filter((user) => user.employeeActive)
     .map((user) => {
       const rolePermissions = roles.get(user.role)?.permissions || [];
-      const effectivePermissions = [...new Set([...rolePermissions, ...(user.grantedPermissions || [])])];
+      const denied = new Set(user.deniedPermissions || []);
+      const effectivePermissions = [...new Set([...rolePermissions, ...(user.grantedPermissions || [])])]
+        .filter((permission) => !denied.has(permission))
+        .filter((permission) => permission !== "amu:local:manage"
+          || managerAmuAccessEffective(user.employeeNumber, user.role));
       return {
         ...user,
         rolePermissions,
+        deniedPermissions: [...denied].sort(),
         effectivePermissions,
         personnelFieldAccess: personnelFieldEffectiveAccess({
           employeeNumber: user.employeeNumber,
@@ -20251,6 +20647,68 @@ app.put("/api/portal/v1/rights-dashboard/preferences", (request, response) => {
   response.json({ theme });
 });
 
+function explicitPortalAccessScopesForEmployee(employeeNumber) {
+  return db.prepare(`
+    SELECT location_id, department_id FROM portal_access_scopes
+    WHERE employee_number = ? ORDER BY location_id, department_id
+  `).all(String(employeeNumber || "")).map((scope) => ({
+    locationId: scope.location_id,
+    departmentId: Number(scope.department_id || 0) || null,
+  }));
+}
+
+function normalizeRightsScopesForTarget(target, submittedScopes, projectedPermissions) {
+  if (GLOBAL_SCOPE_PORTAL_ROLES.has(target.role)) {
+    if (Array.isArray(submittedScopes) && submittedScopes.length) {
+      throw httpError(400, "Globale Rollen benötigen keine Standort- oder Abteilungszuweisung.", "PORTAL_SCOPE_GLOBAL_ROLE");
+    }
+    return [];
+  }
+  const scheduleAccess = projectedPermissions.includes("schedule:read") || projectedPermissions.includes("schedule:write");
+  const source = Array.isArray(submittedScopes)
+    ? submittedScopes
+    : explicitPortalAccessScopesForEmployee(target.employeeNumber);
+  let scopes = source.map((scope) => ({
+    locationId: normalizeLocationId(scope?.locationId),
+    departmentId: normalizeDepartmentId(scope?.departmentId, true),
+  }));
+  if (!scopes.length && scheduleAccess && target.homeLocationId) {
+    const preferredDepartmentId = Number(target.preferredDepartmentId || 0) || null;
+    if (target.role === "manager" || preferredDepartmentId) {
+      scopes = [{
+        locationId: target.homeLocationId,
+        departmentId: target.role === "manager" ? null : preferredDepartmentId,
+      }];
+    }
+  }
+  const unique = new Map();
+  for (const scope of scopes) {
+    if (scope.locationId !== target.homeLocationId) {
+      throw httpError(403, "Planungsrechte dürfen nur für die eigene Stammfiliale vergeben werden.", "PORTAL_SCOPE_HOME_LOCATION_REQUIRED");
+    }
+    validateLocationExists(scope.locationId);
+    if (scope.departmentId) validateDepartmentExists(scope.departmentId, scope.locationId);
+    unique.set(`${scope.locationId}:${scope.departmentId || 0}`, scope);
+  }
+  scopes = [...unique.values()];
+  if (scheduleAccess && !scopes.length) {
+    throw httpError(400,
+      "Für Dienstplanrechte muss mindestens die eigene Abteilung oder die gesamte Stammfiliale zugewiesen werden.",
+      "PORTAL_SCOPE_REQUIRED");
+  }
+  return scopes;
+}
+
+function rightsMutationSnapshot(employeeNumber, role, rolePermissions) {
+  const permissionState = effectivePortalPermissionState(employeeNumber, role, rolePermissions);
+  return {
+    grantedPermissions: permissionState.grantedPermissions,
+    deniedPermissions: permissionState.deniedPermissions,
+    effectivePermissions: permissionState.effectivePermissions,
+    scopes: explicitPortalAccessScopesForEmployee(employeeNumber),
+  };
+}
+
 app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
   const actor = requireAdminHrOrLocal(request, "rights:write");
   const employeeNumber = String(request.params.employeeNumber || "").trim();
@@ -20259,10 +20717,25 @@ app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
   if (!actorCanManagePermissionGrants(actor, target)) throw httpError(403, target.role === "developer"
     ? "Der Developer-Zugang ist geschützt und kann nicht über die App verändert werden."
     : "Für diesen Zugang dürfen keine individuellen Rechte geändert werden.", target.role === "developer" ? "PORTAL_DEVELOPER_PROTECTED" : "PORTAL_ROLE_HIERARCHY_DENIED");
-  if (!Array.isArray(request.body.permissions)) throw httpError(400, "Bitte eine gültige Rechteauswahl übermitteln.");
-  const submitted = [...new Set(request.body.permissions.map((value) => String(value || "").trim()).filter(Boolean))];
+  const grantsInput = Array.isArray(request.body.grantedPermissions)
+    ? request.body.grantedPermissions
+    : request.body.permissions;
+  if (!Array.isArray(grantsInput)) throw httpError(400, "Bitte eine gültige Rechteauswahl übermitteln.");
+  const submitted = [...new Set(grantsInput.map((value) => String(value || "").trim()).filter(Boolean))];
+  const denialInputProvided = Object.prototype.hasOwnProperty.call(request.body || {}, "deniedPermissions");
+  if (denialInputProvided && !Array.isArray(request.body.deniedPermissions)) {
+    throw httpError(400, "Bitte eine gültige Auswahl entzogener Grundrechte übermitteln.");
+  }
+  const submittedDenials = denialInputProvided
+    ? [...new Set(request.body.deniedPermissions.map((value) => String(value || "").trim()).filter(Boolean))]
+    : portalPermissionDenialsForEmployee(employeeNumber);
   const manageablePermissions = manageablePortalPermissionsForActor(actor);
-  const invalid = submitted.filter((permission) => !manageablePermissions.has(permission));
+  const currentGrants = new Set(portalPermissionGrantsForEmployee(employeeNumber));
+  const currentDenials = new Set(portalPermissionDenialsForEmployee(employeeNumber));
+  const invalid = [
+    ...submitted.filter((permission) => !manageablePermissions.has(permission) && !currentGrants.has(permission)),
+    ...submittedDenials.filter((permission) => !manageablePermissions.has(permission) && !currentDenials.has(permission)),
+  ];
   if (invalid.length) {
     throw httpError(403, `Diese Rechte dürfen durch den aktuellen Zugang nicht vergeben werden: ${invalid.join(", ")}`, "PORTAL_PERMISSION_NOT_DELEGABLE");
   }
@@ -20270,7 +20743,40 @@ app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
   if (roleRestricted.length) {
     throw portalPermissionRoleRestrictionError(roleRestricted);
   }
-  const before = portalPermissionGrantsForEmployee(employeeNumber);
+  const rolePermissions = getPortalRoles().find((role) => role.id === target.role)?.permissions || [];
+  const rolePermissionSet = new Set(rolePermissions);
+  const invalidDenials = submittedDenials.filter((permission) => !rolePermissionSet.has(permission));
+  if (invalidDenials.length) {
+    throw httpError(400,
+      `Nur Grundrechte der aktuellen Rolle können entzogen werden: ${invalidDenials.join(", ")}`,
+      "PORTAL_PERMISSION_DENIAL_NOT_ROLE_BASED");
+  }
+  const normalizedDenials = new Set([
+    ...[...currentDenials].filter((permission) => !manageablePermissions.has(permission)),
+    ...submittedDenials.filter((permission) => manageablePermissions.has(permission)),
+  ]);
+  if (normalizedDenials.has("schedule:read") && rolePermissionSet.has("schedule:write")) {
+    normalizedDenials.add("schedule:write");
+  }
+  const projectedPermissions = [...new Set([
+    ...rolePermissions,
+    ...[...currentGrants].filter((permission) => !manageablePermissions.has(permission)),
+    ...submitted.filter((permission) => manageablePermissions.has(permission)),
+  ])]
+    .filter((permission) => !normalizedDenials.has(permission));
+  if (projectedPermissions.includes("schedule:write") && !projectedPermissions.includes("schedule:read")) {
+    throw httpError(400,
+      "Dienstpläne können nur bearbeitet werden, wenn das Leserecht ebenfalls wirksam ist.",
+      "PORTAL_PERMISSION_DEPENDENCY");
+  }
+  const scopesInputProvided = Object.prototype.hasOwnProperty.call(request.body || {}, "scopes");
+  if (scopesInputProvided && !Array.isArray(request.body.scopes)) {
+    throw httpError(400, "Bitte eine gültige Bereichsauswahl übermitteln.", "PORTAL_SCOPE_INVALID");
+  }
+  const scopes = normalizeRightsScopesForTarget(target,
+    scopesInputProvided ? request.body.scopes : undefined,
+    projectedPermissions);
+  const before = rightsMutationSnapshot(employeeNumber, target.role, rolePermissions);
   db.exec("BEGIN");
   try {
     const remove = db.prepare("DELETE FROM portal_permission_grants WHERE employee_number = ? AND permission = ?");
@@ -20279,15 +20785,40 @@ app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
       INSERT INTO portal_permission_grants (employee_number, permission, granted_by, updated_at)
       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
     `);
-    for (const permission of submitted) insert.run(employeeNumber, permission, actor.employeeNumber);
+    for (const permission of submitted.filter((entry) => manageablePermissions.has(entry))) {
+      insert.run(employeeNumber, permission, actor.employeeNumber);
+    }
+    if (denialInputProvided) {
+      const removeDenial = db.prepare("DELETE FROM portal_permission_denials WHERE employee_number = ? AND permission = ?");
+      for (const permission of manageablePermissions) removeDenial.run(employeeNumber, permission);
+      const insertDenial = db.prepare(`
+        INSERT INTO portal_permission_denials (employee_number, permission, denied_by, updated_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      `);
+      for (const permission of [...normalizedDenials].filter((entry) => manageablePermissions.has(entry))) {
+        insertDenial.run(employeeNumber, permission, actor.employeeNumber);
+      }
+    }
+    if (scopesInputProvided) {
+      db.prepare("DELETE FROM portal_access_scopes WHERE employee_number = ?").run(employeeNumber);
+      const insertScope = db.prepare(`
+        INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
+        VALUES (?, ?, ?, ?)
+      `);
+      for (const scope of scopes) {
+        insertScope.run(employeeNumber, scope.locationId, scope.departmentId || 0, actor.employeeNumber);
+      }
+    }
+    revokePortalSessionsForEmployee(employeeNumber);
+    revokeMobileSessionsForEmployee(employeeNumber, "rights_changed");
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;
   }
-  const after = portalPermissionGrantsForEmployee(employeeNumber);
-  revokeMobileSessionsForEmployee(employeeNumber, "permissions_changed");
+  const after = rightsMutationSnapshot(employeeNumber, target.role, rolePermissions);
   auditPortal(actor.employeeNumber, "portal.rights.update", "portal_user", employeeNumber, JSON.stringify({ before, after }));
+  if (scopesInputProvided) reconcileOpenAmuResponsibilities(actor.employeeNumber);
   response.json(rightsManagementPayload(actor));
 });
 
@@ -20325,6 +20856,7 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", (request, response) => {
     for (const scope of scopes) insert.run(employeeNumber, scope.locationId, scope.departmentId || 0, actor.employeeNumber);
     db.exec("COMMIT");
   } catch (error) { db.exec("ROLLBACK"); throw error; }
+  revokePortalSessionsForEmployee(employeeNumber);
   revokeMobileSessionsForEmployee(employeeNumber, "scopes_changed");
   auditPortal(actor.employeeNumber, "portal.scope.update", "portal_user", employeeNumber, JSON.stringify(scopes));
   reconcileOpenAmuResponsibilities(actor.employeeNumber);
@@ -20376,7 +20908,12 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       password_changed_at = CASE WHEN ? <> '' THEN CURRENT_TIMESTAMP ELSE portal_users.password_changed_at END,
       updated_at = CURRENT_TIMESTAMP
   `).run(employeeNumber, passwordHash, role, active, mustChangePassword, password, password);
-  if (!active || password) db.prepare("UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND revoked_at IS NULL").run(employeeNumber);
+  if (existingUser?.role && existingUser.role !== role) {
+    db.prepare("DELETE FROM portal_permission_denials WHERE employee_number = ?").run(employeeNumber);
+  }
+  if (!active || password || (existingUser?.role && existingUser.role !== role)) {
+    revokePortalSessionsForEmployee(employeeNumber);
+  }
   revokeMobileSessionsForEmployee(employeeNumber, "account_changed");
   auditPortal(actor.employeeNumber, "portal.user.update", "portal_user", employeeNumber, JSON.stringify({ role, active: Boolean(active), passwordReset: Boolean(password) }));
   reconcileOpenAmuResponsibilities(actor.employeeNumber);
@@ -20647,7 +21184,7 @@ function createOwnSicknessCase(session, body = {}) {
     }, { hasAum: false, now: new Date(reportedAt) });
     const protectedPayload = protectJson(sicknessPayload,
       sicknessCaseProtectionContext({ id: caseId, employee_lookup: employeeLookup }));
-    db.prepare("UPDATE sickness_cases SET protected_payload = ? WHERE id = ?").run(protectedPayload, caseId);
+    db.prepare("UPDATE sickness_cases SET protected_payload = ?, revision = revision + 1 WHERE id = ?").run(protectedPayload, caseId);
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -20695,7 +21232,7 @@ function withdrawOwnSicknessCase(session, caseId) {
   payload.closedAt = new Date().toISOString();
   payload.retentionUntil = addDays(viennaTodayIso(), 30);
   const result = db.prepare(`
-    UPDATE sickness_cases SET status_lookup = ?, protected_payload = ?, purge_after = ?, updated_at = CURRENT_TIMESTAMP
+    UPDATE sickness_cases SET status_lookup = ?, protected_payload = ?, purge_after = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND status_lookup = ?
   `).run(sicknessStatusLookup("withdrawn"), protectJson(payload, sicknessCaseProtectionContext(row)), payload.retentionUntil,
     row.id, sicknessStatusLookup("reported"));
@@ -20716,6 +21253,157 @@ app.post("/api/portal/v1/me/sickness-cases/:id/withdraw", (request, response) =>
   response.json(withdrawOwnSicknessCase(session, request.params.id));
 });
 
+function updateLinkedAmuRetentionForSicknessCase(caseId, retentionUntil) {
+  const linkedReports = db.prepare(`
+    SELECT * FROM amu_reports WHERE sickness_case_id = ? AND status <> 'purged'
+  `).all(Number(caseId));
+  const updateReport = db.prepare(`
+    UPDATE amu_reports
+    SET protected_payload = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `);
+  for (const report of linkedReports) {
+    const reportPayload = parseProtectedJson(report.protected_payload, amuReportProtectionContext(report));
+    reportPayload.retentionUntil = retentionUntil;
+    updateReport.run(protectJson(reportPayload, amuReportProtectionContext(report)), report.id);
+  }
+}
+
+function applySicknessCaseAction(row, {
+  action,
+  actorEmployeeNumber,
+  expectedRevision,
+  expectedStatus,
+  expectedEnd,
+  returnDate,
+  note = "",
+  employeeLookup = "",
+  auditActor = "",
+} = {}) {
+  if (!row) throw httpError(404, "Die Krankmeldung wurde nicht gefunden.", "SICKNESS_CASE_NOT_FOUND");
+  const payload = sicknessCasePayload(row);
+  const currentStatus = String(payload.status || "");
+  const revision = Number(expectedRevision);
+  const normalizedExpectedStatus = String(expectedStatus || "");
+  if (!Number.isInteger(revision) || revision < 1 || !normalizedExpectedStatus) {
+    throw httpError(400, "Revision und erwarteter Status fehlen.", "SICKNESS_CASE_VERSION_REQUIRED");
+  }
+  if (Number(row.revision || 1) !== revision || currentStatus !== normalizedExpectedStatus) {
+    throw httpError(409, "Die Krankmeldung wurde zwischenzeitlich bearbeitet. Bitte neu laden.", "SICKNESS_CASE_STALE");
+  }
+
+  const normalizedAction = String(action || "");
+  const eventNote = stripEmoji(String(note || "").trim()).slice(0, 500);
+  const changedFields = [];
+  let nextStatus = currentStatus;
+  let retentionUntil = payload.retentionUntil || row.purge_after
+    || addDays(viennaTodayIso(), sicknessCaseRetentionDays());
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  if (normalizedAction === "update") {
+    if (!["reported", "aum_received"].includes(currentStatus)) {
+      throw httpError(409, "Nur offene Krankmeldungen können bearbeitet werden.", "SICKNESS_CASE_CLOSED");
+    }
+    if (expectedEnd !== undefined) {
+      const normalizedEnd = String(expectedEnd || "").trim();
+      if (normalizedEnd && (!isIsoDate(normalizedEnd) || normalizedEnd < payload.startDate
+        || normalizedEnd > addDays(payload.startDate, 365))) {
+        throw httpError(400, "Das voraussichtliche Ende ist ungültig.", "SICKNESS_DATE_INVALID");
+      }
+      if (String(payload.expectedEnd || "") !== normalizedEnd) {
+        payload.expectedEnd = normalizedEnd;
+        changedFields.push("expectedEnd");
+      }
+    }
+    if (!changedFields.length && !eventNote) {
+      throw httpError(400, "Bitte eine Änderung oder eine Bearbeitungsnotiz eingeben.", "SICKNESS_CASE_ACTION_EMPTY");
+    }
+    rebuildSicknessPayloadRules(payload, now);
+    retentionUntil = addDays(payload.expectedEnd || payload.startDate, sicknessCaseRetentionDays());
+    payload.retentionUntil = retentionUntil;
+  } else if (normalizedAction === "close" || normalizedAction === "correct_closed") {
+    if (normalizedAction === "close" && !["reported", "aum_received"].includes(currentStatus)) {
+      throw httpError(409, "Diese Krankmeldung ist bereits abgeschlossen.", "SICKNESS_CASE_CLOSED");
+    }
+    if (normalizedAction === "correct_closed" && currentStatus !== "recovered") {
+      throw httpError(409, "Nur ein bereits geschlossener Fall kann begründet korrigiert werden.", "SICKNESS_CASE_NOT_CLOSED");
+    }
+    const normalizedReturnDate = String(returnDate || "").trim();
+    if (!isIsoDate(normalizedReturnDate) || normalizedReturnDate < payload.startDate
+      || normalizedReturnDate > addDays(viennaTodayIso(), 31)) {
+      throw httpError(400, "Bitte ein gültiges Datum für die Wiederaufnahme der Arbeit eingeben.", "SICKNESS_RETURN_DATE_INVALID");
+    }
+    if (normalizedAction === "correct_closed" && !eventNote) {
+      throw httpError(400, "Für die Korrektur eines geschlossenen Falls ist eine Begründung erforderlich.", "SICKNESS_CASE_REASON_REQUIRED");
+    }
+    if (String(payload.returnToWorkDate || "") !== normalizedReturnDate) changedFields.push("returnToWorkDate");
+    payload.status = "recovered";
+    payload.returnToWorkDate = normalizedReturnDate;
+    payload.closedAt = normalizedAction === "close" ? nowIso : (payload.closedAt || nowIso);
+    retentionUntil = addDays(normalizedReturnDate, sicknessCaseRetentionDays());
+    payload.retentionUntil = retentionUntil;
+    rebuildSicknessPayloadRules(payload, now);
+    nextStatus = "recovered";
+  } else {
+    throw httpError(400, "Die Bearbeitungsaktion ist ungültig.", "SICKNESS_CASE_ACTION_INVALID");
+  }
+
+  const employeeCondition = employeeLookup ? " AND employee_lookup = ?" : "";
+  const parameters = [
+    sicknessStatusLookup(nextStatus),
+    protectJson(payload, sicknessCaseProtectionContext(row)),
+    retentionUntil,
+    Number(row.id),
+    revision,
+    sicknessStatusLookup(currentStatus),
+  ];
+  if (employeeLookup) parameters.push(employeeLookup);
+
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = db.prepare(`
+      UPDATE sickness_cases
+      SET status_lookup = ?, protected_payload = ?, purge_after = ?,
+          revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND revision = ? AND status_lookup = ?${employeeCondition}
+    `).run(...parameters);
+    if (!result.changes) {
+      throw httpError(409, "Die Krankmeldung wurde zwischenzeitlich bearbeitet. Bitte neu laden.", "SICKNESS_CASE_STALE");
+    }
+    if (["close", "correct_closed"].includes(normalizedAction)) {
+      updateLinkedAmuRetentionForSicknessCase(row.id, retentionUntil);
+    }
+    appendProtectedCaseEvent("sickness", row.id, normalizedAction, actorEmployeeNumber, {
+      note: eventNote,
+      previousStatus: currentStatus,
+      nextStatus,
+      changedFields,
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+
+  if (nextStatus === "recovered") resolveSicknessAlerts(row.id);
+  let updatedCase = sicknessCaseMetadata(row.id);
+  reconcileSicknessStaffingRisk(updatedCase);
+  updatedCase = sicknessCaseMetadata(row.id);
+  auditPortal(auditActor || actorEmployeeNumber, `sickness.case.${normalizedAction}`, "protected_record",
+    protectedPortalEntityId("sickness-case", row.id), JSON.stringify({
+      previousStatus: currentStatus,
+      nextStatus,
+      changedFields,
+      reasonProvided: Boolean(eventNote),
+    }));
+  if (normalizedAction === "close") {
+    notifySicknessRecipients(updatedCase, { stage: "local", kind: "return_to_work" });
+  }
+  runSicknessEscalationSweep();
+  return updatedCase;
+}
+
 function returnToWorkOwnSicknessCase(session, caseId, body = {}) {
   const row = db.prepare(`
     SELECT * FROM sickness_cases
@@ -20723,47 +21411,16 @@ function returnToWorkOwnSicknessCase(session, caseId, body = {}) {
   `).get(Number(caseId), sicknessEmployeeLookup(session.employeeNumber),
     sicknessStatusLookup("reported"), sicknessStatusLookup("aum_received"));
   if (!row) throw httpError(404, "Die offene Krankmeldung wurde nicht gefunden.", "SICKNESS_CASE_NOT_FOUND");
-  const payload = sicknessCasePayload(row);
-  const returnDate = String(body.returnDate || "").trim();
-  if (!isIsoDate(returnDate) || returnDate < payload.startDate || returnDate > addDays(viennaTodayIso(), 31)) {
-    throw httpError(400, "Bitte ein gültiges Datum für die Wiederaufnahme der Arbeit eingeben.", "SICKNESS_RETURN_DATE_INVALID");
-  }
-  const closedAt = new Date().toISOString();
-  const retentionUntil = addDays(returnDate, sicknessCaseRetentionDays());
-  payload.status = "recovered";
-  payload.returnToWorkDate = returnDate;
-  payload.closedAt = closedAt;
-  payload.retentionUntil = retentionUntil;
-  reconcileSicknessPayloadRules(payload, new Date(closedAt));
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    const result = db.prepare(`
-      UPDATE sickness_cases SET status_lookup = ?, protected_payload = ?, purge_after = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND employee_lookup = ? AND status_lookup IN (?, ?)
-    `).run(sicknessStatusLookup("recovered"), protectJson(payload, sicknessCaseProtectionContext(row)), retentionUntil,
-      row.id, sicknessEmployeeLookup(session.employeeNumber), sicknessStatusLookup("reported"), sicknessStatusLookup("aum_received"));
-    if (!result.changes) throw httpError(409, "Die Krankmeldung wurde zwischenzeitlich bearbeitet.", "SICKNESS_CASE_ALREADY_UPDATED");
-    const linkedReports = db.prepare(`
-      SELECT * FROM amu_reports WHERE sickness_case_id = ? AND status <> 'purged'
-    `).all(row.id);
-    const updateReport = db.prepare("UPDATE amu_reports SET protected_payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?");
-    for (const report of linkedReports) {
-      const reportPayload = parseProtectedJson(report.protected_payload, amuReportProtectionContext(report));
-      reportPayload.retentionUntil = retentionUntil;
-      updateReport.run(protectJson(reportPayload, amuReportProtectionContext(report)), report.id);
-    }
-    db.exec("COMMIT");
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
-  }
-  auditPortal(`protected:${sicknessEmployeeLookup(session.employeeNumber)}`, "protected.record.return-to-work", "protected_record",
-    protectedPortalEntityId("sickness-case", row.id));
-  const updatedCase = sicknessCaseMetadata(row.id);
-  reconcileSicknessStaffingRisk(updatedCase);
-  notifySicknessRecipients(updatedCase, { stage: "local", kind: "return_to_work" });
-  runSicknessEscalationSweep();
-  return { case: serializeSicknessCases([updatedCase])[0] };
+  const sharedUpdatedCase = applySicknessCaseAction(row, {
+    action: "close",
+    actorEmployeeNumber: session.employeeNumber,
+    auditActor: `protected:${sicknessEmployeeLookup(session.employeeNumber)}`,
+    expectedRevision: Number(row.revision || 1),
+    expectedStatus: sicknessCasePayload(row).status,
+    returnDate: body.returnDate,
+    employeeLookup: sicknessEmployeeLookup(session.employeeNumber),
+  });
+  return { case: serializeSicknessCases([sharedUpdatedCase])[0] };
 }
 
 app.post("/api/portal/v1/me/sickness-cases/:id/return-to-work", (request, response) => {
@@ -20773,15 +21430,62 @@ app.post("/api/portal/v1/me/sickness-cases/:id/return-to-work", (request, respon
 });
 
 app.get("/api/portal/v1/sickness-cases", (request, response) => {
-  const session = requirePortalAdminOrLocal(request, "sickness:read");
+  const session = requirePortalAnyPermissionOrLocal(request, ["sickness:read", "sickness:manage"]);
   const rows = db.prepare("SELECT * FROM sickness_cases ORDER BY created_at DESC, id DESC").all().filter((row) => {
-    if (sicknessCasePayload(row).status === "withdrawn") return false;
     try { assertSicknessCaseScope(session, row); return true; } catch { return false; }
   });
-  const cases = serializeSicknessCases(rows, { includeNote: actorCanReadAmuSensitiveMetadata(session) });
+  const cases = serializeSicknessCases(rows, {
+    includeNote: actorCanReadAmuSensitiveMetadata(session),
+    session,
+  });
   response.json({
     cases,
-    pendingCount: cases.filter((entry) => entry.status === "reported" || ["yellow", "red", "warning"].includes(entry.severity)).length,
+    pendingCount: cases.filter((entry) => ["reported", "aum_received"].includes(entry.status)
+      || ["yellow", "red", "warning"].includes(entry.severity)).length,
+  });
+});
+
+app.get("/api/portal/v1/sickness-cases/:id", (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(request, ["sickness:read", "sickness:manage"]);
+  const row = sicknessCaseMetadata(request.params.id);
+  assertSicknessCaseScope(session, row);
+  response.json({
+    case: serializeSicknessCases([row], {
+      includeNote: actorCanReadAmuSensitiveMetadata(session),
+      session,
+    })[0],
+    events: protectedCaseEvents("sickness", row.id),
+  });
+});
+
+app.put("/api/portal/v1/sickness-cases/:id/action", (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(request, ["sickness:manage"], { csrf: true });
+  const row = sicknessCaseMetadata(request.params.id);
+  assertSicknessCaseScope(session, row);
+  const payload = sicknessCasePayload(row);
+  if (!sessionCanManageLocalContext(session, {
+    locationId: payload.locationId,
+    departmentId: Number(payload.departmentId || 0) || null,
+    permission: "sickness:manage",
+  })) {
+    throw httpError(403, "Dieser Krankheitsfall gehört nicht zum bearbeitbaren Verantwortungsbereich.", "PORTAL_PERMISSION_DENIED");
+  }
+  const updated = applySicknessCaseAction(row, {
+    action: request.body?.action,
+    actorEmployeeNumber: session.employeeNumber,
+    expectedRevision: request.body?.expectedRevision,
+    expectedStatus: request.body?.expectedStatus,
+    expectedEnd: Object.prototype.hasOwnProperty.call(request.body || {}, "expectedEnd")
+      ? request.body.expectedEnd : undefined,
+    returnDate: request.body?.returnDate,
+    note: request.body?.note,
+  });
+  response.json({
+    case: serializeSicknessCases([updated], {
+      includeNote: actorCanReadAmuSensitiveMetadata(session),
+      session,
+    })[0],
+    events: protectedCaseEvents("sickness", updated.id),
   });
 });
 
@@ -21295,7 +21999,7 @@ async function createOwnAmuReport(session, { fields, documents }) {
           staffingRisk,
         };
         initializeSicknessCaseRules(linkedPayload, { hasAum: true, now: new Date(reportedAt) });
-        db.prepare("UPDATE sickness_cases SET protected_payload = ? WHERE id = ?").run(protectJson(linkedPayload,
+        db.prepare("UPDATE sickness_cases SET protected_payload = ?, revision = revision + 1 WHERE id = ?").run(protectJson(linkedPayload,
           sicknessCaseProtectionContext({ id: createdSicknessCaseId, employee_lookup: employeeLookup })), createdSicknessCaseId);
         linkedSicknessCase = sicknessCaseMetadata(createdSicknessCaseId);
       }
@@ -21340,7 +22044,7 @@ async function createOwnAmuReport(session, { fields, documents }) {
         ocrDateAssisted: ocrAssisted,
         ocrDateConfirmed: ocrAssisted && ocrConfirmed,
       }), amuReportProtectionContext({ id: reportId, employee_number: session.employeeNumber }));
-      db.prepare("UPDATE amu_reports SET protected_payload = ? WHERE id = ?").run(reportPayload, reportId);
+      db.prepare("UPDATE amu_reports SET protected_payload = ?, revision = revision + 1 WHERE id = ?").run(reportPayload, reportId);
       const insertDocument = db.prepare(`
         INSERT INTO amu_documents
           (id, report_id, storage_key, original_filename, detected_mime, byte_size, sha256, scan_status,
@@ -21382,7 +22086,7 @@ async function createOwnAmuReport(session, { fields, documents }) {
         sicknessPayload.retentionUntil = addDays(sicknessRetentionBase, sicknessCaseRetentionDays());
         reconcileSicknessPayloadRules(sicknessPayload, new Date(), { aumReviewed: automaticReview.completed });
         db.prepare(`
-          UPDATE sickness_cases SET status_lookup = ?, protected_payload = ?, purge_after = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+          UPDATE sickness_cases SET status_lookup = ?, protected_payload = ?, purge_after = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?
         `).run(sicknessStatusLookup(nextStatus), protectJson(sicknessPayload, sicknessCaseProtectionContext(linkedSicknessCase)),
           sicknessPayload.retentionUntil, linkedSicknessCase.id);
       }
@@ -21469,7 +22173,7 @@ function withdrawOwnAmuReport(session, reportId) {
   db.exec("BEGIN");
   try {
     db.prepare(`
-      UPDATE amu_reports SET status = 'withdrawn', protected_payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+      UPDATE amu_reports SET status = 'withdrawn', protected_payload = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?
     `).run(protectJson(protectedPayload, amuReportProtectionContext(report)), report.id);
     db.prepare("UPDATE amu_documents SET status = 'deleted', deleted_by = ?, deleted_at = CURRENT_TIMESTAMP WHERE report_id = ? AND status = 'active'")
       .run(session.employeeNumber, report.id);
@@ -21489,7 +22193,7 @@ function withdrawOwnAmuReport(session, reportId) {
         const linkedPayload = sicknessCasePayload(linked);
         if (linkedPayload.status === "aum_received") linkedPayload.status = "reported";
         linkedPayload.aumReceivedAt = "";
-        db.prepare("UPDATE sickness_cases SET status_lookup = ?, protected_payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+        db.prepare("UPDATE sickness_cases SET status_lookup = ?, protected_payload = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
           .run(sicknessStatusLookup(linkedPayload.status), protectJson(linkedPayload, sicknessCaseProtectionContext(linked)), linked.id);
       }
       runSicknessEscalationSweep();
@@ -21516,6 +22220,104 @@ app.get("/api/portal/v1/me/amu-reports/:reportId/documents/:documentId/content",
   sendAmuDocument(response, document, prepared);
 });
 
+function applyAmuReportAction(report, session, {
+  action,
+  expectedRevision,
+  expectedStatus,
+  note = "",
+} = {}) {
+  if (!report) throw httpError(404, "Die Arbeitsunfähigkeitsmeldung wurde nicht gefunden.", "AMU_REPORT_NOT_FOUND");
+  assertAmuReportScope(session, report);
+  if (sessionHasLocalAmuAccess(session) && !sessionCanUseLocalAmuForReport(session, report)) {
+    throw httpError(403, "Diese AUM gehört nicht zum bearbeitbaren Verantwortungsbereich.", "PORTAL_PERMISSION_DENIED");
+  }
+  const capabilities = amuReportCapabilities(session, report);
+  const normalizedAction = action === "reviewed" ? "review" : String(action || "");
+  const revision = Number(expectedRevision);
+  const status = String(expectedStatus || "");
+  if (!Number.isInteger(revision) || revision < 1 || !status) {
+    throw httpError(400, "Revision und erwarteter Status fehlen.", "AMU_REPORT_VERSION_REQUIRED");
+  }
+  if (Number(report.revision || 1) !== revision || String(report.status || "") !== status) {
+    throw httpError(409, "Die AUM wurde zwischenzeitlich bearbeitet. Bitte neu laden.", "AMU_REPORT_STALE");
+  }
+  const eventNote = stripEmoji(String(note || "").trim()).slice(0, 500);
+  const protectedPayload = parseProtectedJson(report.protected_payload, amuReportProtectionContext(report));
+  let nextStatus = status;
+  const changedFields = [];
+  if (normalizedAction === "review") {
+    if (!capabilities.review) throw httpError(403, "Diese AUM darf nicht geprüft werden.", "PORTAL_PERMISSION_DENIED");
+    nextStatus = "reviewed";
+    protectedPayload.reviewedBy = session.employeeNumber;
+    protectedPayload.reviewedAt = new Date().toISOString();
+    protectedPayload.reviewNote = eventNote;
+    changedFields.push("reviewStatus");
+  } else if (normalizedAction === "return") {
+    if (!capabilities.returnForCompletion) {
+      throw httpError(403, "Diese AUM darf nicht zur Ergänzung zurückgegeben werden.", "PORTAL_PERMISSION_DENIED");
+    }
+    if (!eventNote) throw httpError(400, "Bitte den Grund für die Rückgabe angeben.", "AMU_REPORT_REASON_REQUIRED");
+    nextStatus = "returned";
+    protectedPayload.reviewedBy = session.employeeNumber;
+    protectedPayload.reviewedAt = new Date().toISOString();
+    protectedPayload.reviewNote = eventNote;
+    changedFields.push("reviewStatus");
+  } else if (normalizedAction === "add_note") {
+    if (!capabilities.addNote) throw httpError(403, "Zu dieser AUM darf keine Notiz ergänzt werden.", "PORTAL_PERMISSION_DENIED");
+    if (!eventNote) throw httpError(400, "Bitte eine ergänzende Notiz eingeben.", "AMU_REPORT_REASON_REQUIRED");
+  } else {
+    throw httpError(400, "Die Bearbeitungsaktion ist ungültig.", "AMU_REPORT_ACTION_INVALID");
+  }
+
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = db.prepare(`
+      UPDATE amu_reports
+      SET status = ?, protected_payload = ?, revision = revision + 1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND revision = ? AND status = ?
+    `).run(nextStatus, protectJson(protectedPayload, amuReportProtectionContext(report)),
+      report.id, revision, status);
+    if (!result.changes) {
+      throw httpError(409, "Die AUM wurde zwischenzeitlich bearbeitet. Bitte neu laden.", "AMU_REPORT_STALE");
+    }
+    appendProtectedCaseEvent("amu", report.id, normalizedAction, session.employeeNumber, {
+      note: eventNote,
+      previousStatus: status,
+      nextStatus,
+      changedFields,
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+
+  if (normalizedAction === "review" && report.sickness_case_id) {
+    const sicknessRow = sicknessCaseMetadata(report.sickness_case_id);
+    if (sicknessRow) {
+      reconcileSicknessCaseRules(sicknessRow, new Date(), { aumReviewed: true, actor: session.employeeNumber });
+    }
+  }
+  auditPortal(session.employeeNumber, `amu.report.${normalizedAction}`, "protected_record",
+    protectedPortalEntityId("amu-report", report.id), JSON.stringify({
+      previousStatus: status,
+      nextStatus,
+      reasonProvided: Boolean(eventNote),
+    }));
+  db.prepare(`
+    UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+    WHERE entity_type = 'protected_record' AND entity_id = ?
+  `).run(protectedPortalEntityId("amu-report", report.id));
+  createPortalNotification(report.employee_number, "protected.update", "Geschützte Meldung aktualisiert",
+    "Bitte im geschützten Portal anmelden.", {
+      target: "/portal.html?tab=amu",
+      entityType: "protected_record",
+      entityId: protectedPortalEntityId("amu-report", report.id),
+      dedupeKey: protectedPortalDedupeKey(["amu", report.id, normalizedAction, session.employeeNumber, revision]),
+    });
+  return amuReportMetadata(report.id);
+}
+
 app.get("/api/portal/v1/amu-reports", (request, response) => {
   const session = requirePortalReadOrLocal(request, "sickness:read");
   const canListReports = actorCanListAmuReports(session);
@@ -21537,20 +22339,15 @@ app.get("/api/portal/v1/amu-reports", (request, response) => {
   `).all();
   const scopedRows = rows.filter((row) => sessionCanListAmuReport(session, row));
   const rowLookup = new Map(scopedRows.map((row) => [Number(row.id), row]));
-  const reports = serializeAmuReports(scopedRows, { includeIdentityCheck: actorCanReadAmuSensitiveMetadata(session) })
+  const reports = serializeAmuReports(scopedRows, {
+    includeIdentityCheck: actorCanReadAmuSensitiveMetadata(session),
+    session,
+  })
     .map((report) => ({
       ...report,
       responsibility: amuResponsibilityForActor(rowLookup.get(Number(report.id)), session),
-    }));
-  if (!canOpenFiles) {
-    for (const report of reports) {
-      report.employee_note = "";
-      report.review_note = "";
-      report.documents = report.documents.map(({ id, detected_mime, size, byte_size, scan_status, status, created_at }, index) => ({
-        id, original_name: `Dokument ${index + 1}`, original_filename: `Dokument ${index + 1}`, detected_mime, size, byte_size, scan_status, status, created_at, content_access: false,
-      }));
-    }
-  }
+    }))
+    .map((report) => redactAmuReportFileMetadata(report, session));
   response.json({
     reports,
     pendingCount: reports.filter((item) => ["submitted", "returned"].includes(item.status)
@@ -21562,6 +22359,53 @@ app.get("/api/portal/v1/amu-reports", (request, response) => {
       mode: sessionHasLocalAmuAccess(session) ? "local_manager" : "protected_global",
       label: sessionHasLocalAmuAccess(session) ? "Filialleitung im eigenen Bereich" : "Geschützter Gesamtzugriff",
     },
+  });
+});
+
+app.get("/api/portal/v1/amu-reports/:id", (request, response) => {
+  const session = requirePortalReadOrLocal(request, "sickness:read");
+  if (!actorCanListAmuReports(session)) {
+    throw httpError(403, "AUM-Fälle dürfen von diesem Zugang nicht geöffnet werden.", "PORTAL_PERMISSION_DENIED");
+  }
+  const report = amuReportMetadata(request.params.id);
+  if (!report || !sessionCanListAmuReport(session, report)) {
+    throw httpError(404, "Die Arbeitsunfähigkeitsmeldung wurde nicht gefunden.", "AMU_REPORT_NOT_FOUND");
+  }
+  let serialized = serializeAmuReports([report], {
+    includeIdentityCheck: actorCanReadAmuSensitiveMetadata(session),
+    session,
+  })[0];
+  serialized = redactAmuReportFileMetadata(serialized, session);
+  response.json({
+    report: {
+      ...serialized,
+      responsibility: amuResponsibilityForActor(report, session),
+    },
+    events: protectedCaseEvents("amu", report.id),
+  });
+});
+
+app.put("/api/portal/v1/amu-reports/:id/action", (request, response) => {
+  const session = requirePortalReadOrLocal(request, "sickness:read");
+  assertPortalCsrf(request);
+  if (!actorCanListAmuReports(session)) {
+    throw httpError(403, "AUM-Fälle dürfen von diesem Zugang nicht bearbeitet werden.", "PORTAL_PERMISSION_DENIED");
+  }
+  const report = amuReportMetadata(request.params.id);
+  if (!report || !sessionCanListAmuReport(session, report)) {
+    throw httpError(404, "Die Arbeitsunfähigkeitsmeldung wurde nicht gefunden.", "AMU_REPORT_NOT_FOUND");
+  }
+  const updated = applyAmuReportAction(report, session, request.body || {});
+  const serialized = redactAmuReportFileMetadata(serializeAmuReports([updated], {
+    includeIdentityCheck: actorCanReadAmuSensitiveMetadata(session),
+    session,
+  })[0], session);
+  response.json({
+    report: {
+      ...serialized,
+      responsibility: amuResponsibilityForActor(updated, session),
+    },
+    events: protectedCaseEvents("amu", updated.id),
   });
 });
 
@@ -21577,33 +22421,22 @@ app.put("/api/portal/v1/amu-reports/:id/review", (request, response) => {
   if (!report || !["submitted", "returned"].includes(report.status)) throw httpError(409, "Diese Arbeitsunfähigkeitsmeldung ist bereits abgeschlossen.");
   const action = String(request.body.action || "reviewed");
   if (action !== "reviewed") throw httpError(400, "Bitte die Arbeitsunfähigkeitsmeldung als geprüft markieren.");
-  const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
-  const protectedPayload = parseProtectedJson(report.protected_payload, amuReportProtectionContext(report));
-  protectedPayload.reviewedBy = session.employeeNumber;
-  protectedPayload.reviewedAt = new Date().toISOString();
-  protectedPayload.reviewNote = note;
-  db.prepare(`
-    UPDATE amu_reports SET status = ?, protected_payload = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-  `).run(action, protectJson(protectedPayload, amuReportProtectionContext(report)), report.id);
-  if (report.sickness_case_id) {
-    const sicknessRow = sicknessCaseMetadata(report.sickness_case_id);
-    if (sicknessRow) reconcileSicknessCaseRules(sicknessRow, new Date(), { aumReviewed: true, actor: session.employeeNumber });
-  }
-  auditPortal(session.employeeNumber, `amu.report.${action}`, "amu_report", String(report.id));
-  db.prepare("UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE entity_type = 'protected_record' AND entity_id = ?")
-    .run(protectedPortalEntityId("amu-report", report.id));
-  createPortalNotification(report.employee_number, "protected.update", "Geschützte Meldung aktualisiert", "Bitte im geschützten Portal anmelden.", {
-    target: "/portal.html?tab=amu",
-    entityType: "protected_record",
-    entityId: protectedPortalEntityId("amu-report", report.id),
-    dedupeKey: protectedPortalDedupeKey(["amu", report.id, action, session.employeeNumber]),
+  const updatedReport = applyAmuReportAction(report, session, {
+    action: "review",
+    expectedRevision: Number(report.revision || 1),
+    expectedStatus: report.status,
+    note: request.body.note,
   });
-  const updatedReport = amuReportMetadata(report.id);
+  const serialized = redactAmuReportFileMetadata(serializeAmuReports([updatedReport], {
+    includeIdentityCheck: actorCanReadAmuSensitiveMetadata(session),
+    session,
+  })[0], session);
   response.json({
     report: {
-      ...serializeAmuReports([updatedReport], { includeIdentityCheck: actorCanReadAmuSensitiveMetadata(session) })[0],
+      ...serialized,
       responsibility: amuResponsibilityForActor(updatedReport, session),
     },
+    events: protectedCaseEvents("amu", updatedReport.id),
   });
 });
 
@@ -21619,6 +22452,10 @@ app.get("/api/portal/v1/amu-reports/:reportId/documents/:documentId/content", (r
     throw httpError(404, "Das AUM-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
   }
   assertAmuReportScope(session, document);
+  if (sessionHasLocalAmuAccess(session) && !sessionCanUseLocalAmuForReport(session, document)) {
+    auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", document.id, "local-scope-inactive");
+    throw httpError(403, "Diese AUM gehört nicht zum aktuellen Verantwortungsbereich.", "PORTAL_PERMISSION_DENIED");
+  }
   if (sessionHasLocalAmuAccess(session) && ["withdrawn", "purged"].includes(String(document.report_status || ""))) {
     auditPortal(session.employeeNumber, "amu.document.access.denied", "amu_document", document.id, "withdrawn");
     throw httpError(404, "Das AUM-Dokument wurde nicht gefunden.", "AMU_DOCUMENT_NOT_FOUND");
@@ -22032,9 +22869,44 @@ app.put("/api/portal/v1/vacation-requests/:id/decision", (request, response) => 
   response.json({ ok: true, id: entry.id, status: decision, vacationGroupId: groupId });
 });
 
+function sessionCanReadAbsenceEntry(session, entry) {
+  const isTimeOff = String(entry.kind || "").startsWith("time_off");
+  const permissions = isTimeOff ? ["time:read", "time:review"] : ["vacation:read", "vacation:approve"];
+  if (session?.employeeNumber !== "local" && !permissions.some((permission) => session?.permissions?.includes(permission))) {
+    return false;
+  }
+  if (session?.employeeNumber === "local" || sessionHasGlobalScope(session)) return true;
+  const employee = db.prepare(`
+    SELECT home_location_id, preferred_department_id FROM employees WHERE personnel_number = ?
+  `).get(String(entry.employee_number || "")) || {};
+  const locationId = String(entry.location_id || entry.scoped_location_id || employee.home_location_id || "");
+  const departmentId = Number(entry.preferred_department_id || employee.preferred_department_id || 0) || null;
+  return sessionMatchesOrganizationalContext(session, locationId, departmentId);
+}
+
+function absenceEntryCapabilities(session, entry) {
+  const isTimeOff = String(entry.kind || "").startsWith("time_off");
+  const permission = isTimeOff ? "time:review" : "vacation:approve";
+  const employee = db.prepare(`
+    SELECT home_location_id, preferred_department_id FROM employees WHERE personnel_number = ?
+  `).get(String(entry.employee_number || "")) || {};
+  const locationId = String(entry.location_id || entry.scoped_location_id || employee.home_location_id || "");
+  const departmentId = Number(entry.preferred_department_id || employee.preferred_department_id || 0) || null;
+  const canManage = sessionCanManageLocalContext(session, { locationId, departmentId, permission });
+  const status = String(entry.status || "");
+  return {
+    view: sessionCanReadAbsenceEntry(session, entry),
+    decide: canManage && ["pending", "pending_local", "preliminary_local", "pending_hr"].includes(status),
+    update: canManage && status === "approved",
+    close: canManage && status === "approved",
+  };
+}
+
 app.get("/api/portal/v1/absence-requests", (request, response) => {
-  const session = requirePortalAdminOrLocal(request, "vacation:read");
-  const scoped = !sessionHasGlobalScope(session);
+  const session = requirePortalAnyPermissionOrLocal(request, [
+    "vacation:read", "vacation:approve", "time:read", "time:review",
+  ]);
+  const scoped = false;
   const scopeSql = scoped ? "AND COALESCE(v.location_id, e.home_location_id) = ?" : "";
   const scopeParams = scoped ? [session.scopes?.[0]?.locationId || session.homeLocationId] : [];
   const vacationRequests = db.prepare(`
@@ -22088,11 +22960,9 @@ app.get("/api/portal/v1/absence-requests", (request, response) => {
     kind: row.request_type === "cancel" ? "time_off_cancel" : "time_off_change",
     decisions: requestDecisionHistory("time_off_change", row.id),
   }));
-  let requests = [...vacationRequests, ...timeOffRequests, ...changeRequests, ...timeOffChangeRequests];
-  if (session.role === "department_manager") {
-    const departments = new Set((session.scopes || []).map((scope) => Number(scope.departmentId || 0)).filter(Boolean));
-    requests = requests.filter((entry) => departments.has(Number(entry.preferred_department_id || 0)));
-  }
+  let requests = [...vacationRequests, ...timeOffRequests, ...changeRequests, ...timeOffChangeRequests]
+    .filter((entry) => sessionCanReadAbsenceEntry(session, entry))
+    .map((entry) => ({ ...entry, capabilities: absenceEntryCapabilities(session, entry) }));
   requests = requests
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || Number(b.id) - Number(a.id));
   const actionable = requests.filter((entry) => {
@@ -23700,12 +24570,61 @@ async function validateUsbEmployees(inputEmployees, selectedLocations, creator) 
     const password = String(input.startPassword || "");
     const additionalPermissions = [...new Set((Array.isArray(input.additionalPermissions) ? input.additionalPermissions : [])
       .map(String).filter((permission) => delegablePortalPermissions.has(permission)))];
+    const rolePermissions = new Set(getPortalRoles().find((entry) => entry.id === role)?.permissions || []);
+    const deniedPermissions = new Set((Array.isArray(input.deniedPermissions) ? input.deniedPermissions : [])
+      .map(String).filter((permission) => delegablePortalPermissions.has(permission)));
+    const invalidDenials = [...deniedPermissions].filter((permission) => !rolePermissions.has(permission));
+    if (invalidDenials.length) {
+      throw httpError(400,
+        `Auf dem USB-Profil können nur Grundrechte der Rolle entzogen werden: ${invalidDenials.join(", ")}`,
+        "USB_EMPLOYEE_PERMISSION_DENIAL_INVALID");
+    }
+    if (deniedPermissions.has("schedule:read") && rolePermissions.has("schedule:write")) {
+      deniedPermissions.add("schedule:write");
+    }
+    const projectedPermissions = [...new Set([...rolePermissions, ...additionalPermissions])]
+      .filter((permission) => !deniedPermissions.has(permission));
+    if (projectedPermissions.includes("schedule:write") && !projectedPermissions.includes("schedule:read")) {
+      throw httpError(400,
+        "Dienstpläne können auf dem USB-Profil nur bearbeitet werden, wenn das Leserecht ebenfalls wirksam ist.",
+        "USB_EMPLOYEE_PERMISSION_DEPENDENCY");
+    }
+    let scopes = Array.isArray(input.scopes) ? input.scopes.map((scope) => ({
+      locationId: normalizeLocationId(scope?.locationId),
+      departmentId: normalizeDepartmentId(scope?.departmentId, true),
+    })) : [];
+    if (!scopes.length && ["manager", "department_manager"].includes(role)) {
+      scopes = [{
+        locationId: String(employee.home_location_id || ""),
+        departmentId: role === "department_manager" ? Number(employee.preferred_department_id || 0) || null : null,
+      }];
+    }
+    if (!scopes.length && (projectedPermissions.includes("schedule:read") || projectedPermissions.includes("schedule:write"))
+      && employee.preferred_department_id) {
+      scopes = [{
+        locationId: String(employee.home_location_id || ""),
+        departmentId: Number(employee.preferred_department_id),
+      }];
+    }
+    for (const scope of scopes) {
+      if (scope.locationId !== String(employee.home_location_id || "")) {
+        throw httpError(400, "USB-Bereichsrechte müssen zur Stammfiliale des Teammitglieds gehören.", "USB_EMPLOYEE_SCOPE_INVALID");
+      }
+      if (scope.departmentId) validateDepartmentExists(scope.departmentId, scope.locationId);
+    }
+    if ((projectedPermissions.includes("schedule:read") || projectedPermissions.includes("schedule:write")) && !scopes.length) {
+      throw httpError(400,
+        "Für Dienstplanrechte muss auf dem USB-Profil die eigene Abteilung oder die gesamte Stammfiliale zugewiesen werden.",
+        "USB_EMPLOYEE_SCOPE_REQUIRED");
+    }
     result.push({
       ...employee,
       personnelNumber,
       role,
       passwordHash: password ? await hashPortalPassword(password) : "",
       additionalPermissions,
+      deniedPermissions: [...deniedPermissions],
+      scopes,
     });
   }
   return result;
@@ -26204,6 +27123,10 @@ module.exports = {
   get server() { return server; },
   getPortalStatus,
   getPortalRoles,
+  portalSessionFromRequest,
+  mobileSessionPrincipal,
+  mobileSessionRow,
+  effectivePortalPermissionState,
   hashPortalPassword,
   verifyPortalPassword,
   ipMatchesNetwork,
@@ -26223,6 +27146,7 @@ module.exports = {
   serverStatusSummary,
   migrateProtectedPersonnelRecords,
   parseProtectedJson,
+  purgeExpiredAmuDocuments,
   purgeExpiredSicknessData,
   runSicknessEscalationSweep,
   processOutboundNotificationJobs,
