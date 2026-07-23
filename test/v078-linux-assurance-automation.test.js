@@ -20,7 +20,14 @@ const uninstaller = read("server-tools/linux/offsite/uninstall-grabenplaner-offs
 const selfTest = read("server-tools/linux/offsite/test-grabenplaner-offsite.sh");
 const server = read("server.js");
 const applicationSmokeSource = read("server-tools/linux/offsite/lib/application-smoke.js");
-const { childEnvironment, sanitizeSmokeDatabase, SMOKE_ROOT, DATABASE, verifiedApplicationSmokeResult } = require(path.join(
+const {
+  childEnvironment,
+  PROTECTED_COLUMNS,
+  sanitizeSmokeDatabase,
+  SMOKE_ROOT,
+  DATABASE,
+  verifiedApplicationSmokeResult,
+} = require(path.join(
   root, "server-tools/linux/offsite/lib/application-smoke.js",
 ));
 const broker = require(path.join(root, "server-tools/linux/offsite/lib/assurance-control-broker.js"));
@@ -265,6 +272,43 @@ test("application smoke sanitizes every known protected domain but preserves ope
         FOREIGN KEY (report_id) REFERENCES amu_reports(id));
       CREATE TABLE sickness_notification_preferences (employee_number TEXT, protected_destination TEXT NOT NULL);
       CREATE TABLE outbound_notification_jobs (id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL);
+      CREATE TABLE privacy_requests (
+        id TEXT PRIMARY KEY,
+        employee_number TEXT NOT NULL,
+        protected_payload TEXT NOT NULL
+      );
+      CREATE TABLE privacy_request_events (
+        id TEXT PRIMARY KEY,
+        request_id TEXT NOT NULL,
+        protected_payload TEXT NOT NULL,
+        FOREIGN KEY (request_id) REFERENCES privacy_requests(id) ON DELETE RESTRICT
+      );
+      CREATE TABLE vacation_account_revisions (
+        id TEXT PRIMARY KEY,
+        employee_number TEXT NOT NULL,
+        calculation_json TEXT NOT NULL
+      );
+      CREATE TABLE vacation_account_events (
+        id TEXT PRIMARY KEY,
+        account_revision_id TEXT NOT NULL,
+        FOREIGN KEY (account_revision_id) REFERENCES vacation_account_revisions(id) ON DELETE RESTRICT
+      );
+      CREATE TABLE vacation_history_events (
+        id TEXT PRIMARY KEY,
+        employee_number TEXT NOT NULL,
+        snapshot_json TEXT NOT NULL
+      );
+      CREATE TABLE time_record_statements (
+        id TEXT PRIMARY KEY,
+        employee_number TEXT NOT NULL,
+        snapshot_json TEXT NOT NULL
+      );
+      CREATE TABLE time_record_statement_events (
+        id TEXT PRIMARY KEY,
+        statement_id TEXT NOT NULL,
+        FOREIGN KEY (statement_id) REFERENCES time_record_statements(id) ON DELETE RESTRICT
+      );
+      CREATE TABLE retention_preview_runs (id TEXT PRIMARY KEY, result_json TEXT NOT NULL);
       CREATE TABLE integration_connections (id TEXT PRIMARY KEY, active INTEGER NOT NULL,
         protected_credentials TEXT NOT NULL, credential_key_id TEXT NOT NULL);
       CREATE TABLE integration_deliveries (id TEXT PRIMARY KEY, connection_id TEXT NOT NULL,
@@ -280,6 +324,14 @@ test("application smoke sanitizes every known protected domain but preserves ope
       INSERT INTO amu_documents VALUES ('amu', 1, 'enc:v2:amu');
       INSERT INTO sickness_notification_preferences VALUES ('101', 'enc:v2:destination');
       INSERT INTO outbound_notification_jobs VALUES ('job', 'enc:v2:job');
+      INSERT INTO privacy_requests VALUES ('privacy', '101', 'enc:v2:privacy');
+      INSERT INTO privacy_request_events VALUES ('privacy-event', 'privacy', 'enc:v2:privacy-event');
+      INSERT INTO vacation_account_revisions VALUES ('vacation', '101', 'enc:v2:vacation');
+      INSERT INTO vacation_account_events VALUES ('vacation-event', 'vacation');
+      INSERT INTO vacation_history_events VALUES ('vacation-history', '101', 'enc:v2:vacation-history');
+      INSERT INTO time_record_statements VALUES ('statement', '101', 'enc:v2:statement');
+      INSERT INTO time_record_statement_events VALUES ('statement-event', 'statement');
+      INSERT INTO retention_preview_runs VALUES ('retention', 'enc:v2:retention');
       INSERT INTO integration_connections VALUES ('connection', 1, 'gp-integration-secret:v1:value', 'live-key');
       INSERT INTO integration_deliveries VALUES ('delivery', 'connection');
       INSERT INTO portal_notifications VALUES ('notice', 'Nicht fuer den Smoke-Test');
@@ -300,8 +352,20 @@ test("application smoke sanitizes every known protected domain but preserves ope
       "personnel_sensitive_records", "personnel_record_documents", "sickness_cases", "sickness_alerts",
       "protected_case_events",
       "amu_reports", "amu_documents", "sickness_notification_preferences", "outbound_notification_jobs",
+      "privacy_request_events", "privacy_requests",
+      "vacation_account_events", "vacation_account_revisions",
+      "vacation_history_events",
+      "time_record_statement_events", "time_record_statements", "retention_preview_runs",
       "portal_notifications",
     ]) assert.equal(database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 0, table);
+    for (const column of [
+      "privacy_requests.protected_payload",
+      "privacy_request_events.protected_payload",
+      "vacation_account_revisions.calculation_json",
+      "vacation_history_events.snapshot_json",
+      "time_record_statements.snapshot_json",
+      "retention_preview_runs.result_json",
+    ]) assert.equal(PROTECTED_COLUMNS.has(column), true, column);
     assert.deepEqual(
       { ...database.prepare("SELECT id, active, protected_credentials, credential_key_id FROM integration_connections").get() },
       { id: "connection", active: 0, protected_credentials: "", credential_key_id: "" },

@@ -28,10 +28,16 @@ const PROTECTED_COLUMNS = new Set([
   "outbound_notification_jobs.protected_payload",
   "personnel_record_documents.protected_payload",
   "personnel_sensitive_records.protected_payload",
+  "privacy_request_events.protected_payload",
+  "privacy_requests.protected_payload",
   "protected_case_events.protected_payload",
+  "retention_preview_runs.result_json",
   "sickness_alerts.protected_payload",
   "sickness_cases.protected_payload",
   "sickness_notification_preferences.protected_destination",
+  "time_record_statements.snapshot_json",
+  "vacation_account_revisions.calculation_json",
+  "vacation_history_events.snapshot_json",
 ]);
 const PROTECTED_ROW_TABLES = Object.freeze([
   "amu_documents",
@@ -43,6 +49,14 @@ const PROTECTED_ROW_TABLES = Object.freeze([
   "sickness_cases",
   "sickness_notification_preferences",
   "personnel_sensitive_records",
+  "privacy_request_events",
+  "privacy_requests",
+  "vacation_account_events",
+  "vacation_account_revisions",
+  "vacation_history_events",
+  "time_record_statement_events",
+  "time_record_statements",
+  "retention_preview_runs",
 ]);
 const REASONS = new Set([
   "CHILD_EXITED",
@@ -176,7 +190,10 @@ function sanitizeSmokeDatabase(databaseFile = DATABASE) {
     const observedProtectedColumns = new Set();
     for (const table of tables) {
       for (const column of tableColumns(database, table)) {
-        if (column.startsWith("protected_")) observedProtectedColumns.add(`${table}.${column}`);
+        const qualifiedColumn = `${table}.${column}`;
+        if (column.startsWith("protected_") || PROTECTED_COLUMNS.has(qualifiedColumn)) {
+          observedProtectedColumns.add(qualifiedColumn);
+        }
       }
     }
     for (const column of observedProtectedColumns) {

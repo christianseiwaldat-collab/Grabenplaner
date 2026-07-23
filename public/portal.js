@@ -40,6 +40,13 @@ const portalState = {
   timeCorrections: [],
   timeTrackingLoading: false,
   timeTrackingBooking: false,
+  privacyRequests: [],
+  privacyRequestTypes: [],
+  privacyRequestsLoading: false,
+  vacationAccount: null,
+  vacationAccountYear: String(new Date().getFullYear()),
+  timeRecordStatements: [],
+  timeRecordStatementsMonth: "",
   wifiAutomation: null,
   wifiAutomationLoading: false,
   home: null,
@@ -72,6 +79,31 @@ const optionNames = {
 };
 const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const statusLabels = { pending: "Offen", submitted: "Übermittelt", reported: "Gemeldet", aum_received: "AUM vorhanden", not_required: "AUM nicht erforderlich", recovered: "Wieder arbeitsfähig", pending_local: "Offen", preliminary_local: "Vorläufig genehmigt", pending_hr: "Wartet auf Personalleitung", approved: "Genehmigt", rejected: "Abgelehnt", cancelled: "Storniert", withdrawn: "Zurückgezogen", reviewed: "Geprüft", returned: "Ergänzung erforderlich", warning: "Besetzung prüfen", yellow: "AUM überfällig", red: "Rot eskaliert" };
+const privacyRequestStatusLabels = {
+  received: "Eingelangt",
+  identity_pending: "Identität wird geprüft",
+  in_review: "In Bearbeitung",
+  extended: "Frist dokumentiert verlängert",
+  approved: "Genehmigt",
+  partially_approved: "Teilweise genehmigt",
+  rejected: "Abgelehnt",
+  fulfilled: "Erledigt",
+  partially_fulfilled: "Teilweise erledigt",
+  withdrawn: "Zurückgezogen",
+};
+const privacyIdentityStatusLabels = {
+  pending: "Identitätsprüfung offen",
+  verified: "Identität bestätigt",
+  insufficient: "Weitere Identitätsprüfung nötig",
+};
+const defaultPrivacyRequestTypes = [
+  { id: "access", label: "Auskunft" },
+  { id: "rectification", label: "Berichtigung" },
+  { id: "erasure", label: "Löschung" },
+  { id: "restriction", label: "Einschränkung" },
+  { id: "portability", label: "Datenübertragbarkeit" },
+  { id: "objection", label: "Widerspruch" },
+];
 
 function amuReportStatusText(report) {
   return report?.review_mode === "automatic"
@@ -98,6 +130,9 @@ const el = Object.fromEntries([
   "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeWeighted", "timePause", "timeDifference", "timeTrackingIssues", "timeEntryList",
   "wifiAutomationCard", "wifiAutomationAvailability", "wifiAutomationToggle", "wifiConfirmationLevel", "wifiSuggestionWarning", "wifiSuggestionList", "wifiAutomationMessage",
   "timePeriodHeading", "timePeriodSummary", "timePeriodList", "previousTimePeriod", "currentTimePeriod", "nextTimePeriod",
+  "privacyRequestsCard", "privacyRequestsNotice", "privacyRequestForm", "privacyRequestType", "privacyRequestSubmit", "privacyRequestMessage", "privacyRequestsRefresh", "privacyExportHint", "privacyRequestList",
+  "vacationAccountCard", "vacationAccountYear", "vacationAccountSummary", "vacationAccountNotice",
+  "timeRecordStatementsPanel", "timeRecordStatementList",
   "leadershipTeamTab", "leadershipApprovalsTab", "leadershipMoreTab", "leadershipTeamView", "leadershipApprovalsView", "leadershipMoreView",
   "leadershipTeamRefresh", "leadershipApprovalsRefresh", "leadershipContextFields", "leadershipLocation", "leadershipDepartment", "leadershipApprovalContextFields", "leadershipApprovalLocation", "leadershipApprovalDepartment", "leadershipPresenceSummary", "leadershipPresenceList", "leadershipApprovalList",
   "leadershipSettingsButton", "leadershipDesktopLink", "timeCorrectionDialog", "timeCorrectionForm", "timeCorrectionId", "timeCorrectionDate", "timeCorrectionDateText", "timeCorrectionEntries", "timeCorrectionNote", "timeCorrectionMessage", "addTimeCorrectionEntry",
@@ -228,6 +263,15 @@ function timeText(value) {
   return new Intl.DateTimeFormat("de-AT", { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
+function timestampText(value) {
+  if (!value) return "–";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "–";
+  return new Intl.DateTimeFormat("de-AT", {
+    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+  }).format(date);
+}
+
 function durationText(value, signed = false) {
   const minutes = Math.round(Number(value) || 0);
   const absolute = Math.abs(minutes);
@@ -322,6 +366,10 @@ function applyPortalCapabilities() {
 
 function portalUser() {
   return portalState.session?.user || null;
+}
+
+function hasPortalPermission(permission) {
+  return portalUser()?.permissions?.includes(permission) === true;
 }
 
 const leadershipPortalPermissions = new Set([
@@ -580,6 +628,8 @@ async function loadPortalData() {
     loadAbsenceHistory(), loadNotifications(), loadProcessTasks(), loadSicknessCases(), loadAmuReports(), loadAmuSettings(),
   ];
   if (timeTrackingCapabilityEnabled()) requests.push(loadTimeTracking());
+  if (hasPortalPermission("own_privacy_requests:read")) requests.push(loadPrivacyRequests());
+  if (hasPortalPermission("own_vacation:read")) requests.push(loadVacationAccount());
   await Promise.allSettled(requests);
 }
 
@@ -600,10 +650,173 @@ async function loadPortalHome() {
   renderPortalGreeting();
 }
 
+function renderPrivacyRequestTypes() {
+  if (!el.privacyRequestType) return;
+  const types = portalState.privacyRequestTypes.length
+    ? portalState.privacyRequestTypes
+    : defaultPrivacyRequestTypes;
+  const selected = el.privacyRequestType.value;
+  el.privacyRequestType.innerHTML = types
+    .filter((item) => item?.id && item?.label)
+    .map((item) => `<option value="${esc(item.id)}">${esc(item.label)}</option>`)
+    .join("");
+  if (types.some((item) => item.id === selected)) el.privacyRequestType.value = selected;
+}
+
+function privacyRequestTypeLabel(type) {
+  const types = portalState.privacyRequestTypes.length
+    ? portalState.privacyRequestTypes
+    : defaultPrivacyRequestTypes;
+  return types.find((item) => item.id === type)?.label || type || "Datenschutzanfrage";
+}
+
+function privacyRequestStatusTone(status) {
+  if (["approved", "partially_approved", "fulfilled", "partially_fulfilled"].includes(status)) return "approved";
+  if (status === "rejected") return "rejected";
+  if (status === "withdrawn") return "withdrawn";
+  return "pending";
+}
+
+function renderPrivacyRequests() {
+  if (!el.privacyRequestList || !hasPortalPermission("own_privacy_requests:read")) return;
+  if (portalState.privacyRequestsLoading) {
+    el.privacyRequestList.innerHTML = '<p class="empty-state">Datenschutzanfragen werden geladen.</p>';
+    return;
+  }
+  const requests = portalState.privacyRequests;
+  el.privacyRequestList.innerHTML = requests.length ? requests.map((request) => {
+    const identity = privacyIdentityStatusLabels[request.identityStatus] || request.identityStatus || "Identitätsprüfung offen";
+    const scope = Array.isArray(request.scope) && request.scope.length
+      ? `<small>${request.scope.length === 1 ? "1 Datenbereich" : `${request.scope.length} Datenbereiche`}</small>`
+      : "";
+    const due = request.dueAt ? `<small>Zieltermin: ${esc(timestampText(request.dueAt))}</small>` : "";
+    const canWithdraw = hasPortalPermission("own_privacy_requests:create")
+      && !["rejected", "fulfilled", "partially_fulfilled", "withdrawn"].includes(request.status);
+    const canExport = hasPortalPermission("own_privacy_export:read")
+      && request.identityStatus === "verified"
+      && ["approved", "partially_approved", "fulfilled", "partially_fulfilled"].includes(request.status);
+    return `<article class="privacy-request-item">
+      <div><strong>${esc(privacyRequestTypeLabel(request.type))}</strong><small>Eingelangt: ${esc(timestampText(request.receivedAt))}</small>${due}${scope}<small>${esc(identity)}</small></div>
+      <div class="privacy-request-actions">
+        <span class="status ${privacyRequestStatusTone(request.status)}">${esc(privacyRequestStatusLabels[request.status] || request.status || "Offen")}</span>
+        ${canExport ? `<a class="text-button" href="/api/portal/v1/self/privacy-requests/${encodeURIComponent(String(request.id))}/export">Datenauskunft laden</a>` : ""}
+        ${canWithdraw ? `<button class="cancel-request" data-withdraw-privacy-request="${esc(request.id)}" type="button">Zurücknehmen</button>` : ""}
+      </div>
+    </article>`;
+  }).join("") : '<p class="empty-state">Du hast noch keine Datenschutzanfrage eingereicht.</p>';
+}
+
+async function loadPrivacyRequests() {
+  if (!hasPortalPermission("own_privacy_requests:read") || portalState.privacyRequestsLoading) return;
+  portalState.privacyRequestsLoading = true;
+  let loadError = "";
+  renderPrivacyRequests();
+  try {
+    const data = await api("/api/portal/v1/self/privacy-requests");
+    portalState.privacyRequests = Array.isArray(data.requests) ? data.requests : [];
+    portalState.privacyRequestTypes = Array.isArray(data.requestTypes) && data.requestTypes.length
+      ? data.requestTypes
+      : defaultPrivacyRequestTypes;
+    el.privacyRequestsNotice.textContent = data.notice
+      || "Jede Anfrage wird nach einer Identitätsprüfung manuell bearbeitet und nachvollziehbar entschieden.";
+    renderPrivacyRequestTypes();
+  } catch (error) {
+    portalState.privacyRequests = [];
+    loadError = error.message;
+  } finally {
+    portalState.privacyRequestsLoading = false;
+    if (loadError) {
+      el.privacyRequestList.innerHTML = `<p class="empty-state">${esc(loadError)}</p>`;
+    } else {
+      renderPrivacyRequests();
+    }
+  }
+}
+
+async function submitPrivacyRequest(event) {
+  event.preventDefault();
+  if (!hasPortalPermission("own_privacy_requests:create") || !el.privacyRequestType.value) return;
+  el.privacyRequestSubmit.disabled = true;
+  message(el.privacyRequestMessage, "");
+  try {
+    const result = await api("/api/portal/v1/self/privacy-requests", {
+      method: "POST",
+      body: JSON.stringify({ type: el.privacyRequestType.value }),
+    });
+    message(
+      el.privacyRequestMessage,
+      "Die Anfrage wurde sicher eingereicht. Identität, Umfang und mögliche Ausnahmen werden manuell geprüft.",
+    );
+    if (hasPortalPermission("own_privacy_requests:read")) {
+      await loadPrivacyRequests();
+    } else if (result?.request) {
+      el.privacyRequestsNotice.textContent = "Die Anfrage wurde eingereicht und wird manuell bearbeitet.";
+    }
+  } catch (error) {
+    message(el.privacyRequestMessage, error.message, true);
+  } finally {
+    el.privacyRequestSubmit.disabled = false;
+  }
+}
+
+async function withdrawPrivacyRequest(id) {
+  if (!id || !hasPortalPermission("own_privacy_requests:create")) return;
+  if (!confirm("Diese Datenschutzanfrage wirklich zurücknehmen?")) return;
+  try {
+    await api(`/api/portal/v1/self/privacy-requests/${encodeURIComponent(String(id))}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "withdraw" }),
+    });
+    message(el.privacyRequestMessage, "Die Datenschutzanfrage wurde zurückgenommen.");
+    await loadPrivacyRequests();
+  } catch (error) {
+    message(el.privacyRequestMessage, error.message, true);
+  }
+}
+
 function showLogin(error = "") {
   el.portalLogin.classList.remove("hidden");
   el.portalApp.classList.add("hidden");
   message(el.loginError, error, Boolean(error));
+}
+
+function applySelfServiceVisibility() {
+  const canCreatePrivacyRequest = hasPortalPermission("own_privacy_requests:create");
+  const canReadPrivacyRequests = hasPortalPermission("own_privacy_requests:read");
+  const canReadPrivacyExports = hasPortalPermission("own_privacy_export:read");
+  el.privacyRequestsCard?.classList.toggle(
+    "hidden",
+    !canCreatePrivacyRequest && !canReadPrivacyRequests && !canReadPrivacyExports,
+  );
+  el.privacyRequestForm?.classList.toggle("hidden", !canCreatePrivacyRequest);
+  el.privacyRequestList?.closest(".privacy-request-history")?.classList.toggle(
+    "hidden",
+    !canReadPrivacyRequests && !canReadPrivacyExports,
+  );
+  el.privacyRequestList?.classList.toggle("hidden", !canReadPrivacyRequests);
+  el.privacyRequestsRefresh?.classList.toggle("hidden", !canReadPrivacyRequests);
+  el.privacyExportHint?.classList.toggle("hidden", !canReadPrivacyExports);
+  if (canCreatePrivacyRequest && !canReadPrivacyRequests && el.privacyRequestsNotice) {
+    el.privacyRequestsNotice.textContent = "Jede Anfrage wird nach einer Identitätsprüfung manuell bearbeitet und nachvollziehbar entschieden.";
+  }
+  el.vacationAccountCard?.classList.toggle("hidden", !hasPortalPermission("own_vacation:read"));
+  if (!hasPortalPermission("own_time_record:read")) {
+    el.timeRecordStatementsPanel?.classList.add("hidden");
+  }
+  renderPrivacyRequestTypes();
+}
+
+function populateVacationAccountYears() {
+  if (!el.vacationAccountYear) return;
+  const currentYear = new Date().getFullYear();
+  const requested = Number(portalState.vacationAccountYear) || currentYear;
+  const years = Array.from({ length: 7 }, (_, index) => currentYear + 1 - index);
+  if (!years.includes(requested)) years.push(requested);
+  years.sort((left, right) => right - left);
+  el.vacationAccountYear.innerHTML = years
+    .map((year) => `<option value="${year}" ${year === requested ? "selected" : ""}>${year}</option>`)
+    .join("");
+  portalState.vacationAccountYear = String(requested);
 }
 
 function showPortal(session) {
@@ -619,6 +832,8 @@ function showPortal(session) {
   el.sicknessNotificationPreferencesCard?.classList.toggle("hidden", !session.user.permissions.includes("notifications:settings"));
   document.querySelector('[data-leadership-kind="sickness"]')?.classList.toggle("hidden", !session.user.permissions.includes("sickness:read"));
   el.passwordDialog.dataset.required = session.user.mustChangePassword ? "true" : "false";
+  populateVacationAccountYears();
+  applySelfServiceVisibility();
   applyMobileLeadershipLayout();
   if (session.user.mustChangePassword) setTimeout(() => el.passwordDialog.showModal(), 100);
 }
@@ -667,9 +882,15 @@ function setTab(tab) {
   el.leadershipApprovalsView?.classList.toggle("active", tab === "leadershipApprovals");
   el.leadershipMoreView?.classList.toggle("active", tab === "leadershipMore");
   if (tab === "timeOff") loadTimeOffRequests();
-  if (tab === "settings") loadWifiAutomation();
+  if (tab === "settings") {
+    loadWifiAutomation();
+    if (hasPortalPermission("own_privacy_requests:read")) loadPrivacyRequests();
+  }
   if (tab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking(), loadTimeSummary(), loadTimeCorrections()]);
-  if (tab === "vacation") loadVacationRequests();
+  if (tab === "vacation") {
+    loadVacationRequests();
+    if (hasPortalPermission("own_vacation:read")) loadVacationAccount();
+  }
   if (tab === "history") Promise.allSettled([loadAbsenceHistory(), loadApprovedVacations()]);
   if (tab === "amu") Promise.allSettled([loadSicknessCases(), loadAmuReports(), loadAmuSettings()]);
   if (tab === "processTasks") loadProcessTasks();
@@ -1037,8 +1258,73 @@ async function loadTimeSummary() {
     const parameters = new URLSearchParams({ period: portalState.timePeriod, anchor: portalState.timePeriodAnchor });
     portalState.timeSummary = normalizedTimeSummary(await api(`/api/portal/v1/me/time-summary?${parameters}`));
     renderTimeSummary();
+    await loadTimeRecordStatements();
   } catch (error) {
     el.timePeriodList.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
+    if (portalState.timePeriod === "month" && hasPortalPermission("own_time_record:read")) {
+      await loadTimeRecordStatements();
+    }
+  }
+}
+
+function timeRecordStatementStatusLabel(status) {
+  return ({
+    finalized: "Finalisiert",
+    superseded: "Ersetzt",
+    revoked: "Zurückgezogen",
+  })[status] || status || "Finalisiert";
+}
+
+function renderTimeRecordStatements() {
+  if (!el.timeRecordStatementsPanel || !el.timeRecordStatementList) return;
+  const visible = portalState.timePeriod === "month" && hasPortalPermission("own_time_record:read");
+  el.timeRecordStatementsPanel.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  const statements = portalState.timeRecordStatements.filter((statement) => statement?.status === "finalized");
+  el.timeRecordStatementList.innerHTML = statements.length ? statements.map((statement) => {
+    const completeness = statement.completeness === "complete"
+      ? "Vollständig"
+      : statement.completeness === "incomplete" ? "Unvollständig" : statement.completeness || "";
+    const finalized = statement.finalizedAt || statement.createdAt;
+    const download = statement.downloadAvailable
+      ? `<a class="text-button time-record-download" href="/api/portal/v1/self/time-record-statements/${encodeURIComponent(String(statement.id))}/download">PDF herunterladen</a>`
+      : '<span class="time-record-unavailable">Noch kein Download verfügbar</span>';
+    return `<article class="time-record-statement">
+      <div>
+        <strong>Monatsnachweis · Revision ${esc(statement.revision ?? 1)}</strong>
+        <small>${finalized ? `Finalisiert: ${esc(timestampText(finalized))}` : "Finalisiert"}</small>
+        ${completeness ? `<small>${esc(completeness)}</small>` : ""}
+      </div>
+      <div class="time-record-actuals" aria-label="Tatsächliche Arbeitszeit">
+        <span>Ist-Zeit<strong>${durationText(statement.actualMinutes)}</strong></span>
+        <span>Pausen<strong>${durationText(statement.breakMinutes)}</strong></span>
+      </div>
+      <span class="status approved">${esc(timeRecordStatementStatusLabel(statement.status))}</span>
+      ${download}
+    </article>`;
+  }).join("") : '<p class="empty-state">Für diesen Monat liegt noch kein finalisierter Arbeitszeitnachweis vor.</p>';
+}
+
+async function loadTimeRecordStatements() {
+  if (!el.timeRecordStatementsPanel || !hasPortalPermission("own_time_record:read") || portalState.timePeriod !== "month") {
+    el.timeRecordStatementsPanel?.classList.add("hidden");
+    portalState.timeRecordStatements = [];
+    portalState.timeRecordStatementsMonth = "";
+    return;
+  }
+  const month = String(portalState.timePeriodAnchor || iso(new Date())).slice(0, 7);
+  portalState.timeRecordStatementsMonth = month;
+  el.timeRecordStatementsPanel.classList.remove("hidden");
+  el.timeRecordStatementList.innerHTML = '<p class="empty-state">Monatsnachweise werden geladen.</p>';
+  try {
+    const data = await api(`/api/portal/v1/self/time-record-statements?month=${encodeURIComponent(month)}`);
+    if (portalState.timeRecordStatementsMonth !== month) return;
+    portalState.timeRecordStatements = Array.isArray(data.statements) ? data.statements : [];
+    renderTimeRecordStatements();
+  } catch (error) {
+    if (portalState.timeRecordStatementsMonth !== month) return;
+    portalState.timeRecordStatements = [];
+    el.timeRecordStatementList.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
   }
 }
 
@@ -1828,6 +2114,71 @@ async function checkVacation() {
       updateTraffic(el.vacationCheck, portalState.vacationCheck, "");
     }
   }, 180);
+}
+
+function vacationExpiryText(account = {}) {
+  const status = String(account.expiryStatus || "");
+  const date = account.expiryCandidateOn ? dateText(account.expiryCandidateOn) : "";
+  if (status === "not_due") return date ? `Verfallsprüfung frühestens ab ${date}` : "Noch nicht zur Verfallsprüfung fällig";
+  if (status === "manual_review") return date ? `Manuelle Verfallsprüfung seit ${date}` : "Manuelle Verfallsprüfung erforderlich";
+  if (status === "candidate_with_evidence") return date ? `Verfallskandidat ab ${date} · manuell prüfen` : "Verfallskandidat · manuell prüfen";
+  if (status === "expired") return date ? `Verfallsprüfung seit ${date}` : "Verfallsprüfung erforderlich";
+  if (status === "candidate") return date ? `Mögliche Verfallsprüfung ab ${date}` : "Mögliche Verfallsprüfung";
+  if (status === "protected") return "Derzeit kein Verfallskandidat";
+  if (status === "none" || status === "not_applicable") return "Keine Verfallsprüfung ausgewiesen";
+  return date ? `Prüfdatum: ${date}` : "";
+}
+
+function renderVacationAccount() {
+  if (!el.vacationAccountCard || !hasPortalPermission("own_vacation:read")) return;
+  el.vacationAccountCard.classList.remove("hidden");
+  const account = portalState.vacationAccount;
+  if (!account) {
+    el.vacationAccountSummary.innerHTML = '<p class="empty-state">Für dieses Urlaubsjahr ist noch kein bestätigtes Urlaubskonto vorhanden.</p>';
+    return;
+  }
+  const expiry = vacationExpiryText(account);
+  el.vacationAccountSummary.innerHTML = `
+    <div class="vacation-account-primary">
+      <article><span>Anspruch</span><strong>${numberText(account.totalDays)} Tage</strong></article>
+      <article><span>Bereits konsumiert</span><strong>${numberText(account.consumedDays)} Tage</strong></article>
+      <article><span>Insgesamt geplant</span><strong>${numberText(account.plannedDays ?? account.consumedDays)} Tage</strong></article>
+      <article class="vacation-remaining"><span>Nach Planung verfügbar</span><strong>${numberText(account.remainingDays)} Tage</strong></article>
+    </div>
+    <div class="vacation-account-details">
+      <span>EU-Mindestanspruch<strong>${numberText(account.euMinimumDays)} Tage</strong></span>
+      <span>Zusätzlicher Anspruch<strong>${numberText(account.nationalAdditionalDays)} Tage</strong></span>
+      <span>Stand<strong>Revision ${esc(account.revision ?? 1)}</strong></span>
+      ${expiry ? `<span>Hinweis<strong>${esc(expiry)}</strong></span>` : ""}
+    </div>`;
+}
+
+function numberText(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "0";
+  return new Intl.NumberFormat("de-AT", { maximumFractionDigits: 2 }).format(numeric);
+}
+
+async function loadVacationAccount() {
+  if (!hasPortalPermission("own_vacation:read") || !el.vacationAccountCard) return;
+  const year = String(Number(portalState.vacationAccountYear) || new Date().getFullYear());
+  portalState.vacationAccountYear = year;
+  el.vacationAccountCard.classList.remove("hidden");
+  el.vacationAccountSummary.innerHTML = '<p class="empty-state">Urlaubsstand wird geladen.</p>';
+  el.vacationAccountNotice.textContent = "";
+  try {
+    const data = await api(`/api/portal/v1/self/vacation-account?year=${encodeURIComponent(year)}`);
+    if (portalState.vacationAccountYear !== year) return;
+    portalState.vacationAccount = data.account || null;
+    el.vacationAccountNotice.textContent = data.notice
+      || "Der ausgewiesene Stand basiert auf dem bestätigten Urlaubskonto dieses Urlaubsjahres.";
+    renderVacationAccount();
+  } catch (error) {
+    if (portalState.vacationAccountYear !== year) return;
+    portalState.vacationAccount = null;
+    el.vacationAccountSummary.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
+    el.vacationAccountNotice.textContent = "";
+  }
 }
 
 async function loadVacationRequests() {
@@ -3038,6 +3389,17 @@ document.querySelector(".portal-tabs")?.addEventListener("keydown", (event) => {
   setTab(tabs[next].dataset.tab);
 });
 el.timeTrackingRefresh.addEventListener("click", () => Promise.allSettled([loadPortalHome(), loadTimeTracking()]));
+el.privacyRequestForm?.addEventListener("submit", submitPrivacyRequest);
+el.privacyRequestsRefresh?.addEventListener("click", loadPrivacyRequests);
+el.privacyRequestList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-withdraw-privacy-request]");
+  if (button) withdrawPrivacyRequest(button.dataset.withdrawPrivacyRequest);
+});
+el.vacationAccountYear?.addEventListener("change", () => {
+  portalState.vacationAccountYear = el.vacationAccountYear.value;
+  portalState.vacationAccount = null;
+  loadVacationAccount();
+});
 el.wifiAutomationToggle?.addEventListener("change", setWifiAutomationPreference);
 el.wifiSuggestionList?.addEventListener("click", (event) => {
   const action = event.target.closest("[data-wifi-confirm],[data-wifi-reject]");

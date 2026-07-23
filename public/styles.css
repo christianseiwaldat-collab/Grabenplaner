@@ -2319,3 +2319,253 @@ html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .display
   .day-settings-row { grid-template-areas:"day" "service" "lunch" "minimum" "period"; grid-template-columns:1fr; }
   .employee-column-options,.employee-column-options fieldset > div { grid-template-columns:1fr; }
 }
+
+/* Datenschutz-Governance, Urlaubskonten und Monatsnachweise */
+.tab-count {
+  display:inline-grid;
+  place-items:center;
+  min-width:19px;
+  min-height:19px;
+  margin-left:5px;
+  padding:0 5px;
+  border-radius:999px;
+  color:#fff;
+  background:#c48612;
+  font-size:8px;
+  line-height:1;
+}
+
+.privacy-toolbar-actions,
+.privacy-governance-toolbar,
+.privacy-preview-form,
+.governance-dialog-toolbar,
+.governance-card-actions {
+  display:flex;
+  align-items:end;
+  justify-content:space-between;
+  gap:10px;
+  min-width:0;
+}
+.privacy-governance-toolbar { align-items:center; margin:14px 0; }
+.privacy-governance-toolbar > :first-child { flex:1 1 420px; }
+.privacy-preview-form { justify-content:flex-start; margin:14px 0; }
+.privacy-preview-form .field,
+.governance-dialog-toolbar .field { flex:0 1 240px; margin:0; }
+.governance-dialog-toolbar { justify-content:flex-start; margin:2px 0 13px; }
+
+.privacy-retention-summary,
+.governance-summary {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+  margin:12px 0;
+}
+.privacy-retention-summary { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.privacy-retention-summary > article,
+.governance-summary > article {
+  min-width:0;
+  padding:13px 14px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  color:var(--ink);
+  background:var(--surface-soft);
+}
+.privacy-retention-summary span,
+.privacy-retention-summary small,
+.governance-summary span,
+.governance-summary small { display:block; color:var(--muted); font-size:9px; }
+.privacy-retention-summary strong,
+.governance-summary strong { display:block; margin:4px 0 2px; overflow-wrap:anywhere; font-size:16px; }
+
+.privacy-retention-list,
+.privacy-preview-result,
+.governance-list,
+.data-subject-request-list,
+.request-event-history { display:grid; gap:10px; min-width:0; }
+.privacy-retention-rule,
+.governance-record-card,
+.data-subject-request-card,
+.privacy-holds,
+.request-event-history > article {
+  min-width:0;
+  padding:14px;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:13px;
+  color:var(--ink);
+  background:var(--surface-soft);
+}
+.privacy-retention-rule-heading,
+.governance-record-heading,
+.data-subject-request-card-heading {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  min-width:0;
+}
+.privacy-retention-rule-heading > div,
+.governance-record-heading > div,
+.data-subject-request-card-heading > div { min-width:0; }
+.privacy-retention-rule h3,
+.governance-record-card h3,
+.data-subject-request-card h3 { margin:0; overflow-wrap:anywhere; font-size:14px; }
+.data-subject-request-card-heading small { display:block; margin-top:3px; color:var(--muted); font-size:8.5px; overflow-wrap:anywhere; }
+.privacy-retention-rule dl,
+.data-subject-request-facts {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:9px;
+  margin:12px 0 0;
+}
+.privacy-retention-rule dl > div,
+.data-subject-request-facts > div {
+  min-width:0;
+  padding:9px 10px;
+  border-radius:9px;
+  background:var(--surface);
+}
+.privacy-retention-rule dl > .wide { grid-column:span 2; }
+.privacy-retention-rule dt,
+.data-subject-request-facts dt { color:var(--muted); font-size:8px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; }
+.privacy-retention-rule dd,
+.data-subject-request-facts dd { margin:3px 0 0; overflow-wrap:anywhere; font-size:9.5px; font-weight:700; }
+.data-subject-request-facts dd small { display:block; margin-top:3px; color:var(--muted); font-size:8px; }
+.data-subject-request-facts dd small.warning { color:#8c6508; }
+.data-subject-request-facts dd small.critical { color:#b24a38; }
+.data-subject-request-facts dd small.active { color:#267258; }
+
+.governance-record-metrics {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+  margin:12px 0 8px;
+}
+.governance-record-metrics > span { min-width:0; padding:9px 10px; border-radius:9px; background:var(--surface); }
+.governance-record-metrics small { display:block; color:var(--muted); font-size:8px; }
+.governance-record-metrics strong { display:block; margin-top:3px; font-size:13px; overflow-wrap:anywhere; }
+.governance-record-card > p { margin:7px 0 0; color:var(--muted); font-size:9px; line-height:1.5; }
+
+.privacy-holds { padding:0; }
+.privacy-holds > summary { padding:12px 14px; font-size:10px; font-weight:800; cursor:pointer; }
+.privacy-holds > div { display:grid; gap:7px; padding:0 14px 14px; }
+.governance-source-editor {
+  margin-top:14px;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:13px;
+  color:var(--ink);
+  background:var(--surface-soft);
+}
+.governance-source-editor > summary { padding:12px 14px; font-size:10px; font-weight:800; cursor:pointer; }
+.governance-source-editor > .form-grid { padding:0 14px 14px; }
+.privacy-holds article,
+.privacy-preview-assessments article {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  min-width:0;
+  padding:9px 10px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:var(--surface);
+}
+.privacy-holds article > div,
+.privacy-preview-assessments article > div { min-width:0; }
+.privacy-holds small,
+.privacy-preview-assessments small { display:block; margin-top:2px; color:var(--muted); font-size:8px; overflow-wrap:anywhere; }
+.privacy-preview-assessments { display:grid; gap:7px; margin-top:11px; }
+.governance-generation-errors {
+  padding:11px 13px;
+  border:1px solid color-mix(in srgb,var(--coral) 50%,var(--line));
+  border-radius:11px;
+  color:#8e3c2d;
+  background:var(--coral-soft);
+}
+.governance-generation-errors ul { margin:6px 0 0; padding-left:18px; font-size:9px; line-height:1.5; }
+
+.governance-card-actions { align-items:center; margin-top:11px; padding-top:10px; border-top:1px solid var(--line); }
+.governance-card-actions > span { min-width:0; color:var(--muted); font-size:8.5px; overflow-wrap:anywhere; }
+.governance-card-actions button { flex:0 0 auto; }
+.governance-record-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:7px; min-width:0; }
+.governance-record-actions :is(button,a) { min-height:34px; }
+.data-subject-request-detail { display:grid; gap:12px; }
+.request-event-history h3 { margin:2px 0 0; font-size:12px; }
+.request-event-history > article { display:grid; grid-template-columns:minmax(100px,.7fr) minmax(140px,1fr) minmax(80px,.5fr); gap:9px; padding:10px 12px; }
+.request-event-history > article span,
+.request-event-history > article small { color:var(--muted); font-size:8.5px; }
+.request-event-history > article strong { font-size:9.5px; text-transform:capitalize; }
+
+.status-badge.critical { color:#9d392a; background:#f9d8d1; }
+.governance-dialog { width:min(980px,calc(100vw - 28px)); }
+#monthlyTimeRecordActionModal { width:min(720px,calc(100vw - 28px)); }
+.governance-dialog > form { min-width:0; overflow-x:hidden; }
+.governance-dialog :is(.governance-summary,.governance-list,.data-subject-request-detail) { min-width:0; }
+
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(
+  .privacy-retention-summary > article,
+  .governance-summary > article,
+  .privacy-retention-rule,
+  .governance-record-card,
+  .data-subject-request-card,
+  .privacy-holds,
+  .request-event-history > article
+) { color:var(--ink); border-color:var(--line); background:var(--surface-soft); }
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(
+  .privacy-retention-rule dl > div,
+  .data-subject-request-facts > div,
+  .governance-record-metrics > span,
+  .privacy-holds article,
+  .privacy-preview-assessments article
+) { color:var(--ink); border-color:var(--line); background:var(--surface); }
+html[data-active-page-theme="dark"] :is(.governance-dialog,.governance-dialog form) :is(
+  .governance-summary > article,
+  .governance-record-card,
+  .governance-source-editor,
+  .request-event-history > article,
+  .privacy-preview-assessments article
+) { color:#edf4f1; border-color:#40524b; background:#202d29; }
+html[data-active-page-theme="dark"] :is(.governance-dialog,.governance-dialog form) :is(
+  .governance-record-metrics > span,
+  .data-subject-request-facts > div
+) { color:#edf4f1; background:#24322d; }
+html[data-active-page-theme="dark"] .status-badge.critical { color:var(--danger-ink); background:var(--danger-surface); }
+html[data-active-page-theme="dark"] .data-subject-request-facts dd small.warning { color:var(--warning-ink); }
+html[data-active-page-theme="dark"] .data-subject-request-facts dd small.critical { color:var(--danger-ink); }
+html[data-active-page-theme="dark"] .data-subject-request-facts dd small.active { color:var(--success-ink); }
+html[data-active-page-theme="dark"] .governance-generation-errors { color:var(--danger-ink); border-color:#7f4b42; background:var(--danger-surface); }
+
+@media (max-width:1100px) {
+  .privacy-retention-summary,
+  .governance-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .privacy-retention-rule dl,
+  .data-subject-request-facts { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+
+@media (max-width:760px) {
+  .privacy-toolbar-actions,
+  .privacy-governance-toolbar,
+  .privacy-preview-form,
+  .governance-dialog-toolbar,
+  .governance-card-actions { align-items:stretch; flex-direction:column; }
+  .privacy-toolbar-actions button,
+  .privacy-governance-toolbar button,
+  .privacy-preview-form button,
+  .governance-dialog-toolbar button,
+  .governance-card-actions button { width:100%; }
+  .governance-record-actions { width:100%; }
+  .governance-record-actions :is(button,a) { width:100%; }
+  .privacy-preview-form .field,
+  .governance-dialog-toolbar .field { flex-basis:auto; width:100%; }
+  .privacy-retention-summary,
+  .governance-summary,
+  .privacy-retention-rule dl,
+  .data-subject-request-facts,
+  .governance-record-metrics { grid-template-columns:1fr; }
+  .privacy-retention-rule dl > .wide { grid-column:auto; }
+  .privacy-retention-rule-heading,
+  .governance-record-heading,
+  .data-subject-request-card-heading { align-items:flex-start; flex-direction:column; }
+  .request-event-history > article { grid-template-columns:1fr; }
+}

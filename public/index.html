@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.81 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.82 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -90,6 +90,9 @@
               </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="vacations" id="centralVacationsNavButton">
                 <span class="nav-symbol">☀</span><span>Urlaube (Unternehmen)</span>
+              </button>
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="dataRequests" id="dataSubjectRequestsNavButton">
+                <span class="nav-symbol">§</span><span>Datenanfragen</span><strong class="nav-count hidden" id="dataSubjectRequestsNavCount">0</strong>
               </button>
             </div>
           </section>
@@ -249,7 +252,7 @@
           <section class="vacation-panel time-summary-panel">
             <div class="vacation-panel-heading">
               <div><h2>Arbeitszeitübersicht</h2><p>Plan, Ist, gewertete Zeit und Abweichung für einen frei wählbaren Zeitraum.</p></div>
-              <div class="time-summary-controls"><label class="field"><span>Von</span><input id="timeSummaryFrom" type="date" /></label><label class="field"><span>Bis</span><input id="timeSummaryTo" type="date" /></label><button type="button" class="secondary-button" id="loadTimeSummaryButton">Auswerten</button></div>
+              <div class="time-summary-controls"><label class="field"><span>Von</span><input id="timeSummaryFrom" type="date" /></label><label class="field"><span>Bis</span><input id="timeSummaryTo" type="date" /></label><button type="button" class="secondary-button" id="loadTimeSummaryButton">Auswerten</button><button type="button" class="secondary-button hidden" id="monthlyTimeRecordsButton">Monatsnachweise</button></div>
             </div>
             <div class="time-summary-list" id="timeSummaryList"><p class="settings-note">Zeitraum auswählen und auswerten.</p></div>
           </section>
@@ -329,6 +332,7 @@
             <button class="settings-tab active" id="personnelDirectoryTab" type="button" role="tab" aria-controls="personnelDirectorySection" aria-selected="true" data-personnel-administration-tab="employees">Mitarbeitende</button>
             <button class="settings-tab" id="costCentersTab" type="button" role="tab" aria-controls="costCenterSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="costCenters">Kostenstellen</button>
             <button class="settings-tab hidden" id="centralVacationsTab" type="button" role="tab" aria-controls="centralVacationSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="vacations">Urlaube</button>
+            <button class="settings-tab hidden" id="dataSubjectRequestsTab" type="button" role="tab" aria-controls="dataSubjectRequestsSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="dataRequests">Datenanfragen <span class="tab-count hidden" id="dataSubjectRequestsTabCount">0</span></button>
           </div>
 
           <section class="personnel-administration-section active" id="personnelDirectorySection" role="tabpanel" aria-labelledby="personnelDirectoryTab">
@@ -362,6 +366,7 @@
           <section class="personnel-administration-section" id="centralVacationSection" role="tabpanel" aria-labelledby="centralVacationsTab">
             <div class="employee-toolbar central-vacation-toolbar">
               <div><h2>Urlaube im Unternehmen</h2><p>Genehmigte und direkt erfasste Urlaube aller Kostenstellen – ohne die Planungsregeln der Filialen zu umgehen.</p></div>
+              <button class="secondary-button hidden" id="vacationAccountsButton" type="button">Urlaubskonten</button>
             </div>
             <div class="personnel-administration-summary central-vacation-summary" id="centralVacationSummary" aria-live="polite"></div>
             <div class="personnel-directory-filters central-vacation-filters">
@@ -375,6 +380,20 @@
                 <tbody id="centralVacationList"><tr><td colspan="7">Urlaubsdaten werden beim Öffnen geladen.</td></tr></tbody>
               </table>
             </div>
+          </section>
+
+          <section class="personnel-administration-section" id="dataSubjectRequestsSection" role="tabpanel" aria-labelledby="dataSubjectRequestsTab">
+            <div class="employee-toolbar data-subject-request-toolbar">
+              <div><h2>Datenanfragen</h2><p>Betroffenenanfragen mit Status und Frist nachvollziehbar bearbeiten. Die Oberfläche unterstützt die Prüfung, ersetzt aber keine rechtliche Einzelfallbewertung.</p></div>
+              <div class="privacy-toolbar-actions"><button class="secondary-button" id="refreshDataSubjectRequestsButton" type="button">Aktualisieren</button><button class="primary-button hidden" id="addDataSubjectRequestButton" type="button">+ Anfrage erfassen</button></div>
+            </div>
+            <div class="personnel-administration-summary data-subject-request-summary" id="dataSubjectRequestSummary" aria-live="polite"></div>
+            <div class="personnel-directory-filters data-subject-request-filters">
+              <label class="field"><span>Suchen</span><input id="dataSubjectRequestSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer oder Anfrage-ID" /></label>
+              <label class="field"><span>Status</span><select id="dataSubjectRequestStatusFilter"><option value="">Alle Status</option><option value="actionable">Zu bearbeiten</option><option value="received">Eingelangt</option><option value="identity_pending">Identität offen</option><option value="in_review">In Prüfung</option><option value="extended">Frist verlängert</option><option value="approved">Genehmigt</option><option value="partially_approved">Teilweise genehmigt</option><option value="rejected">Abgelehnt</option><option value="fulfilled">Erfüllt</option><option value="partially_fulfilled">Teilweise erfüllt</option><option value="withdrawn">Zurückgezogen</option></select></label>
+              <label class="field"><span>Art</span><select id="dataSubjectRequestTypeFilter"><option value="">Alle Arten</option></select></label>
+            </div>
+            <div class="data-subject-request-list" id="dataSubjectRequestList" aria-live="polite"><p class="settings-note">Datenanfragen werden beim Öffnen geladen.</p></div>
           </section>
         </section>
 
@@ -592,6 +611,7 @@
             <button class="settings-tab" data-settings-tab="integrations">Import &amp; Lohnverrechnung</button>
             <button class="settings-tab" data-settings-tab="access">Zugänge</button>
             <button class="settings-tab" data-settings-tab="rights">Rechtemanagement</button>
+            <button class="settings-tab hidden" data-settings-tab="dataProtection">Datenschutz</button>
             <button class="settings-tab" data-settings-tab="backup">System &amp; Backups</button>
             <button class="settings-tab hidden" id="usbProvisioningTab" data-settings-tab="usbProvisioning">USB-Stick</button>
           </div>
@@ -958,6 +978,32 @@
             </div>
           </section>
 
+          <section id="dataProtectionSettings" class="settings-section settings-two-column">
+            <div class="settings-card full-span" id="retentionPolicyCard">
+              <div class="card-heading"><div class="card-icon">DS</div><div><h2>Aufbewahrungsregeln</h2><p>Versionierte Regeln und Schutzsperren für personenbezogene Daten prüfen.</p></div></div>
+              <p class="settings-note security-note">Grabenplaner unterstützt die strukturierte Prüfung und Dokumentation. Die Anzeige ist keine pauschale Datenschutz- oder Compliance-Zusage. Aufbewahrung personenbezogener Daten und technische Backup-Aufbewahrung bleiben getrennte Verfahren.</p>
+              <div class="privacy-governance-toolbar">
+                <div id="retentionPolicyNotice" class="settings-note" aria-live="polite">Aufbewahrungsregeln werden beim Öffnen geladen.</div>
+                <div class="governance-record-actions">
+                  <button class="secondary-button hidden" id="addRetentionHoldButton" type="button">Schutzsperre anlegen</button>
+                  <button class="primary-button hidden" id="addRetentionRuleButton" type="button">Regelversion anlegen</button>
+                  <button class="secondary-button" id="refreshRetentionPoliciesButton" type="button">Aktualisieren</button>
+                </div>
+              </div>
+              <div class="privacy-retention-summary" id="retentionPolicySummary" aria-live="polite"></div>
+              <div class="privacy-retention-list" id="retentionPolicyList"><p class="settings-note">Noch keine Regeln geladen.</p></div>
+            </div>
+            <div class="settings-card full-span hidden" id="retentionPreviewCard">
+              <div class="card-heading"><div class="card-icon">Lupe</div><div><h2>Reine Löschvorschau</h2><p>Zeigt ausschließlich mögliche Kandidaten und Schutzgründe. Es wird nichts gelöscht oder verändert.</p></div></div>
+              <form class="privacy-preview-form" id="retentionPreviewForm">
+                <label class="field"><span>Prüfstand</span><input id="retentionPreviewAsOf" type="date" /></label>
+                <button class="primary-button" id="runRetentionPreviewButton" type="submit">Vorschau berechnen</button>
+              </form>
+              <p class="calculation-note">Jeder Kandidat bleibt vor einer späteren, gesonderten Umsetzung manuell zu prüfen. Aktive Schutzsperren müssen berücksichtigt werden. Diese Oberfläche bietet bewusst keine Lösch-Schaltfläche.</p>
+              <div class="privacy-preview-result" id="retentionPreviewResult" aria-live="polite"><p class="settings-note">Noch keine Vorschau berechnet.</p></div>
+            </div>
+          </section>
+
           <section id="backupSettings" class="settings-section settings-two-column">
             <div class="settings-card full-settings-card server-diagnostics-card hidden" id="serverDiagnosticsCard">
               <div class="card-heading"><div class="card-icon">Server</div><div><h2>Serverzustand &amp; Wiederherstellbarkeit</h2><p>Zeigt Live- und Betriebsbereitschaft, lokale Sicherungen, verschlüsselte Offsite-Kopien sowie automatische Prüf- und Wiederherstellungsnachweise.</p></div></div>
@@ -1140,7 +1186,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.81 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.82 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -1526,6 +1572,115 @@
           <div class="calculation-note full-width" id="vacationCalculation"></div>
         </div>
         <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="vacationModal">Abbrechen</button><button type="submit" class="primary-button" id="vacationSubmitButton">Urlaub speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal governance-dialog" id="vacationAccountsModal">
+      <form method="dialog">
+        <div class="modal-header"><div><span class="eyebrow">Zentrale Urlaubsverwaltung</span><h2>Urlaubskonten</h2><p>Ansprüche, Verbrauch und mögliche Verfallsprüfungen für ein Kalenderjahr nachvollziehen.</p></div><button type="button" class="close-button" data-close="vacationAccountsModal" aria-label="Urlaubskonten schließen">×</button></div>
+        <div class="governance-dialog-toolbar"><label class="field"><span>Jahr</span><input id="vacationAccountsYear" type="number" min="2000" max="2100" step="1" /></label><button class="secondary-button" id="loadVacationAccountsButton" type="button">Konten laden</button></div>
+        <p class="calculation-note">Die Darstellung unterstützt die Prüfung. Ein angezeigter Stichtag oder Hinweis ist keine automatische Verfallsentscheidung und ersetzt keine Prüfung des konkreten Falls.</p>
+        <div class="governance-summary" id="vacationAccountsSummary" aria-live="polite"></div>
+        <div class="governance-list vacation-accounts-list" id="vacationAccountsList" aria-live="polite"><p class="settings-note">Urlaubskonten werden geladen.</p></div>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="primary-button" data-close="vacationAccountsModal">Schließen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal governance-dialog" id="monthlyTimeRecordsModal">
+      <form method="dialog">
+        <div class="modal-header"><div><span class="eyebrow">Geprüfte Arbeitszeit</span><h2>Monatsnachweise</h2><p>Monatliche Nachweise beruhen auf erfassten und geprüften Ist-Zeiten. Eine geplante Dienstzeit wird nicht als Ist-Arbeitszeit übernommen.</p></div><button type="button" class="close-button" data-close="monthlyTimeRecordsModal" aria-label="Monatsnachweise schließen">×</button></div>
+        <div class="governance-dialog-toolbar"><label class="field"><span>Monat</span><input id="monthlyTimeRecordsMonth" type="month" /></label><button class="secondary-button" id="loadMonthlyTimeRecordsButton" type="button">Nachweise laden</button><button class="primary-button hidden" id="generateMonthlyTimeRecordsButton" type="button">Nachweise erzeugen</button></div>
+        <p class="calculation-note">„Erzeugen“ erstellt ausschließlich Nachweise im vorgesehenen Prüfstatus. Offene oder unvollständige Ist-Buchungen bleiben als prüfbedürftig gekennzeichnet.</p>
+        <div class="governance-summary" id="monthlyTimeRecordsSummary" aria-live="polite"></div>
+        <div class="governance-list monthly-time-records-list" id="monthlyTimeRecordsList" aria-live="polite"><p class="settings-note">Monatsnachweise werden geladen.</p></div>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="primary-button" data-close="monthlyTimeRecordsModal">Schließen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal governance-dialog" id="monthlyTimeRecordActionModal">
+      <form id="monthlyTimeRecordActionForm" autocomplete="off">
+        <div class="modal-header"><div><span class="eyebrow">Ist-Arbeitszeit</span><h2 id="monthlyTimeRecordActionTitle">Monatsnachweis prüfen</h2><p id="monthlyTimeRecordActionSummary"></p></div><button type="button" class="close-button" data-close="monthlyTimeRecordActionModal" aria-label="Prüfung schließen">×</button></div>
+        <input id="monthlyTimeRecordActionId" type="hidden" />
+        <input id="monthlyTimeRecordActionType" type="hidden" />
+        <input id="monthlyTimeRecordActionDecision" type="hidden" />
+        <label class="field full-width" id="monthlyTimeRecordActionNoteField"><span>Prüfvermerk</span><textarea id="monthlyTimeRecordActionNote" rows="4" maxlength="2000"></textarea><small>Der Vermerk dokumentiert die fachliche Prüfung der tatsächlichen Buchungen und Pausen.</small></label>
+        <p class="calculation-note">Dieser Schritt überschreibt keinen bestehenden Nachweis. Grabenplaner legt eine neue, unveränderliche Revision an; Dienstplanwerte bleiben vollständig von der Ist-Zeit getrennt.</p>
+        <p class="message hidden" id="monthlyTimeRecordActionMessage" aria-live="polite"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="monthlyTimeRecordActionModal">Abbrechen</button><button type="submit" class="primary-button" id="saveMonthlyTimeRecordActionButton">Prüfung dokumentieren</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal governance-dialog" id="retentionRuleModal">
+      <form id="retentionRuleForm" autocomplete="off">
+        <div class="modal-header"><div><span class="eyebrow">Datenschutz · Aufbewahrung</span><h2 id="retentionRuleModalTitle">Regelversion anlegen</h2><p>Jede gespeicherte Version bleibt unveränderlich. Eine spätere Korrektur erfolgt als weitere Version.</p></div><button type="button" class="close-button" data-close="retentionRuleModal" aria-label="Regelversion schließen">×</button></div>
+        <div class="form-grid">
+          <label class="field"><span>Regel-ID</span><input id="retentionRuleId" maxlength="128" pattern="[A-Za-z0-9][A-Za-z0-9._:@/-]*" required /><small>Eindeutige technische Kennung dieser Version.</small></label>
+          <label class="field"><span>Version</span><input id="retentionRuleVersion" type="number" min="1" max="999999" step="1" required /></label>
+          <label class="field"><span>Datenkategorie</span><input id="retentionRuleCategory" maxlength="128" pattern="[A-Za-z0-9][A-Za-z0-9._:@/-]*" required /></label>
+          <label class="field"><span>Status</span><select id="retentionRuleStatus"><option value="draft">Entwurf</option><option value="active">Aktiv</option><option value="retired">Außer Kraft</option></select></label>
+          <label class="field full-width"><span>Titel</span><input id="retentionRuleTitle" maxlength="300" required /></label>
+          <label class="field"><span>Gültig ab</span><input id="retentionRuleValidFrom" type="date" required /></label>
+          <label class="field"><span>Gültig bis</span><input id="retentionRuleValidTo" type="date" /></label>
+          <label class="field"><span>Fristbeginn</span><select id="retentionRuleStartTrigger"><option value="record_created">Erstellung des Datensatzes</option><option value="record_closed">Abschluss des Datensatzes</option><option value="case_resolved">Abschluss des Falls</option><option value="employment_ended">Ende des Arbeitsverhältnisses</option><option value="contract_ended">Vertragsende</option><option value="purpose_ended">Ende des Verwendungszwecks</option><option value="custom_event">Dokumentiertes Einzelereignis</option></select></label>
+          <label class="field"><span>Vorgesehene Folge</span><select id="retentionRuleDisposition"><option value="manual_review">Manuelle Prüfung</option><option value="delete">Löschung nach gesonderter Freigabe</option><option value="anonymize">Anonymisierung nach gesonderter Freigabe</option><option value="archive">Archivierung nach gesonderter Freigabe</option></select></label>
+          <label class="field"><span>Aufbewahrungsdauer</span><input id="retentionRuleDurationValue" type="number" min="1" max="36500" step="1" required /></label>
+          <label class="field"><span>Einheit</span><select id="retentionRuleDurationUnit"><option value="days">Tage</option><option value="months">Monate</option><option value="years">Jahre</option></select></label>
+        </div>
+        <details class="governance-source-editor">
+          <summary>Dokumentierte Quelle</summary>
+          <div class="form-grid">
+            <label class="field"><span>Quellen-ID</span><input id="retentionRuleSourceId" maxlength="128" pattern="[A-Za-z0-9][A-Za-z0-9._:@/-]*" required /></label>
+            <label class="field"><span>Geltungsbereich</span><input id="retentionRuleSourceJurisdiction" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9._:@/-]*" required /></label>
+            <label class="field"><span>Herausgebende Stelle</span><input id="retentionRuleSourceAuthority" maxlength="300" required /></label>
+            <label class="field"><span>Fundstelle</span><input id="retentionRuleSourceReference" maxlength="500" /></label>
+            <label class="field full-width"><span>Quellentitel</span><input id="retentionRuleSourceTitle" maxlength="500" required /></label>
+            <label class="field full-width"><span>HTTPS-URL</span><input id="retentionRuleSourceUrl" type="url" maxlength="1000" inputmode="url" required /></label>
+          </div>
+        </details>
+        <p class="calculation-note">Aktive Regeln und Rechtsgrundlagen müssen vor der Verwendung fachlich und rechtlich geprüft werden. Die Regel löst weiterhin keine automatische Löschung aus.</p>
+        <p class="message hidden" id="retentionRuleMessage" aria-live="polite"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="retentionRuleModal">Abbrechen</button><button type="submit" class="primary-button" id="saveRetentionRuleButton">Regelversion speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal governance-dialog" id="retentionHoldModal">
+      <form id="retentionHoldForm" autocomplete="off">
+        <div class="modal-header"><div><span class="eyebrow">Datenschutz · Schutzsperre</span><h2>Legal Hold anlegen</h2><p>Schützt zugeordnete Datensätze vor einer Aufbewahrungskandidatur, solange die Sperre aktiv ist.</p></div><button type="button" class="close-button" data-close="retentionHoldModal" aria-label="Schutzsperre schließen">×</button></div>
+        <div class="form-grid">
+          <label class="field"><span>Datenkategorie</span><input id="retentionHoldCategory" maxlength="128" pattern="[A-Za-z0-9][A-Za-z0-9._:@/-]*" required /></label>
+          <label class="field"><span>Personalnummer (optional)</span><input id="retentionHoldEmployeeNumber" maxlength="40" /></label>
+          <label class="field full-width"><span>Grundcode</span><input id="retentionHoldReasonCode" maxlength="128" pattern="[A-Za-z0-9][A-Za-z0-9._:@/-]*" placeholder="z. B. laufendes_verfahren" required /><small>Kurze, sachliche Kennung; keine sensiblen Falldetails eintragen.</small></label>
+          <label class="field"><span>Gültig ab</span><input id="retentionHoldValidFrom" type="date" required /></label>
+          <label class="field"><span>Gültig bis (optional)</span><input id="retentionHoldValidTo" type="date" /></label>
+        </div>
+        <p class="calculation-note">Eine Freigabe beendet nur die Schutzsperre. Sie löscht keine Daten und startet keinen automatischen Löschlauf.</p>
+        <p class="message hidden" id="retentionHoldMessage" aria-live="polite"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="retentionHoldModal">Abbrechen</button><button type="submit" class="primary-button" id="saveRetentionHoldButton">Schutzsperre anlegen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal governance-dialog" id="dataSubjectRequestModal">
+      <form id="dataSubjectRequestForm" autocomplete="off">
+        <div class="modal-header"><div><span class="eyebrow">Datenschutz</span><h2 id="dataSubjectRequestModalTitle">Datenanfrage erfassen</h2><p>Identität, Umfang, Frist und Bearbeitungsschritte nachvollziehbar dokumentieren.</p></div><button type="button" class="close-button" data-close="dataSubjectRequestModal" aria-label="Datenanfrage schließen">×</button></div>
+        <input id="dataSubjectRequestId" type="hidden" />
+        <div class="form-grid" id="dataSubjectRequestCreateFields">
+          <label class="field"><span>Personalnummer</span><input id="dataSubjectRequestEmployeeNumber" maxlength="40" required /></label>
+          <label class="field"><span>Art der Anfrage</span><select id="dataSubjectRequestType" required></select></label>
+          <label class="field full-width"><span>Umfang</span><textarea id="dataSubjectRequestScope" rows="3" maxlength="1000" placeholder="Ein Bereich pro Zeile, z. B. Personalstammdaten"></textarea><small>Leer lassen, wenn der Umfang erst gemeinsam geklärt werden muss.</small></label>
+        </div>
+        <section class="data-subject-request-detail hidden" id="dataSubjectRequestDetail">
+          <div class="governance-summary" id="dataSubjectRequestDetailSummary"></div>
+          <div class="request-event-history" id="dataSubjectRequestEventHistory"></div>
+          <div class="form-grid">
+            <label class="field"><span>Nächster Schritt</span><select id="dataSubjectRequestAction"></select></label>
+            <label class="field hidden" id="dataSubjectRequestIdentityField"><span>Identitätsprüfung</span><select id="dataSubjectRequestIdentityStatus"><option value="verified">Identität ausreichend bestätigt</option><option value="insufficient">Weitere Prüfung erforderlich</option></select></label>
+            <label class="field hidden" id="dataSubjectRequestExtensionField"><span>Verlängerung</span><select id="dataSubjectRequestExtensionMonths"><option value="1">1 Monat</option><option value="2">2 Monate</option></select></label>
+            <label class="field full-width"><span>Begründung / Nachweis</span><textarea id="dataSubjectRequestActionNote" rows="3" maxlength="2000" placeholder="Für die gewählte Aktion erforderliche, sachliche Dokumentation"></textarea></label>
+          </div>
+        </section>
+        <p class="calculation-note">Grabenplaner unterstützt Fristen und Dokumentation. Die Bearbeitung und Entscheidung bleiben eine verantwortliche menschliche Prüfung.</p>
+        <p class="message hidden" id="dataSubjectRequestMessage" aria-live="polite"></p>
+        <div class="modal-actions"><button type="button" class="secondary-button hidden" id="downloadDataSubjectRequestExportButton">Datenauskunft herunterladen</button><span></span><button type="button" class="secondary-button" data-close="dataSubjectRequestModal">Abbrechen</button><button type="submit" class="primary-button" id="saveDataSubjectRequestButton">Anfrage erfassen</button></div>
       </form>
     </dialog>
 
