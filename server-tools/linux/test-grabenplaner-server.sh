@@ -184,7 +184,23 @@ NODE
 )" || true
 if [[ -n "$scanner_result" ]]; then check_ok "AUM-Virenscanner" "$scanner_result"; else check_fail "AUM-Virenscanner" "ClamAV nicht betriebsbereit"; fi
 
-if caddy validate --config "$caddyfile" --adapter caddyfile >/dev/null 2>&1; then check_ok "Caddy-Konfiguration" "gueltig"; else check_fail "Caddy-Konfiguration" "Validierung fehlgeschlagen"; fi
+caddy_validation_ok=0
+if [[ -n "${RUNTIME_DIRECTORY:-}" ]]; then
+  install -d -m 0700 "$RUNTIME_DIRECTORY/caddy-config" "$RUNTIME_DIRECTORY/caddy-data"
+  if HOME="$RUNTIME_DIRECTORY" \
+    XDG_CONFIG_HOME="$RUNTIME_DIRECTORY/caddy-config" \
+    XDG_DATA_HOME="$RUNTIME_DIRECTORY/caddy-data" \
+    caddy validate --config "$caddyfile" --adapter caddyfile >/dev/null 2>&1; then
+    caddy_validation_ok=1
+  fi
+elif caddy validate --config "$caddyfile" --adapter caddyfile >/dev/null 2>&1; then
+  caddy_validation_ok=1
+fi
+if [[ "$caddy_validation_ok" -eq 1 ]]; then
+  check_ok "Caddy-Konfiguration" "gueltig"
+else
+  check_fail "Caddy-Konfiguration" "Validierung fehlgeschlagen"
+fi
 
 if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" && "$monitor_mode" -eq 1 ]]; then
   offsite_status_file="/var/lib/grabenplaner-offsite/status.json"

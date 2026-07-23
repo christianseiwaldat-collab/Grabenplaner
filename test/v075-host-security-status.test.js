@@ -34,6 +34,16 @@ test("v0.75 accepts only the exact redacted host-security status schema", () => 
   assert.throws(() => parseHostSecurityStatus(validStatus({ pendingConfirmation: true })), /widerspruechlich/);
 });
 
+test("v0.80 accepts RFC3339 nanoseconds emitted by Ubuntu coreutils", () => {
+  const parsed = parseHostSecurityStatus(validStatus({
+    checkedAt: "2026-07-22T22:08:00.412111564Z",
+  }));
+  assert.equal(parsed.checkedAt, "2026-07-22T22:08:00.412Z");
+  assert.throws(() => parseHostSecurityStatus(validStatus({
+    checkedAt: "2026-07-22T22:08:00.4121115640Z",
+  })), /ungueltig/);
+});
+
 test("v0.75 never exposes paths, users, ports or source addresses in host-security status", () => {
   const parsed = parseHostSecurityStatus(validStatus());
   const serialized = JSON.stringify(parsed);
