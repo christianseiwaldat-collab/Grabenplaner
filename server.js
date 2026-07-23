@@ -1451,6 +1451,25 @@ function createSchema() {
         ON UPDATE CASCADE ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS mobile_mutation_receipts (
+      employee_number TEXT NOT NULL,
+      idempotency_key TEXT NOT NULL,
+      operation TEXT NOT NULL,
+      request_sha256 TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('in_progress','completed')),
+      entity_type TEXT NOT NULL DEFAULT '',
+      entity_id TEXT NOT NULL DEFAULT '',
+      action_completed_at TEXT,
+      http_status INTEGER,
+      response_json TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at TEXT NOT NULL,
+      PRIMARY KEY (employee_number, idempotency_key),
+      FOREIGN KEY (employee_number) REFERENCES portal_users(employee_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS portal_access_scopes (
       employee_number TEXT NOT NULL,
       location_id TEXT NOT NULL,
@@ -2326,6 +2345,9 @@ ensureColumn("time_entries", "void_reason", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("time_entries", "correction_id", "INTEGER");
 ensureColumn("time_entries", "client_request_id", "TEXT");
 ensureColumn("time_entries", "mobile_session_id", "TEXT");
+ensureColumn("mobile_mutation_receipts", "entity_type", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("mobile_mutation_receipts", "entity_id", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("mobile_mutation_receipts", "action_completed_at", "TEXT");
 ensureColumn("time_corrections", "location_id", "TEXT");
 ensureColumn("time_corrections", "department_id", "INTEGER");
 ensureColumn("time_corrections", "request_note", "TEXT NOT NULL DEFAULT ''");
@@ -2661,6 +2683,7 @@ db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_work_date ON time_entries(e
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_mobile_request ON time_entries(employee_number, client_request_id) WHERE client_request_id IS NOT NULL");
 db.exec("CREATE INDEX IF NOT EXISTS idx_mobile_sessions_employee ON mobile_sessions(employee_number, refresh_expires_at)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_mobile_sessions_expiry ON mobile_sessions(refresh_expires_at, revoked_at)");
+db.exec("CREATE INDEX IF NOT EXISTS idx_mobile_mutation_receipts_expiry ON mobile_mutation_receipts(expires_at)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_mobile_refresh_history_consumed ON mobile_refresh_token_history(consumed_at)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_location_date ON time_entries(location_id, work_date, entry_timestamp)");
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_corrections_context ON time_corrections(location_id, department_id, status, correction_date)");
@@ -3497,6 +3520,10 @@ app.use((request, response, next) => {
   if ((serverModeActive && request.path.startsWith("/api/"))
     || request.path.startsWith("/api/portal/") || request.path.startsWith("/api/mobile/")) {
     response.setHeader("Cache-Control", "no-store");
+  }
+  if (request.path.startsWith("/api/mobile/v1/me/")) {
+    response.setHeader("Cache-Control", "private, no-store, max-age=0");
+    response.setHeader("Pragma", "no-cache");
   }
   if (serverModeActive && !request.secure) {
     const loopbackServiceEndpoint = isLoopbackRequest(request)
@@ -4469,6 +4496,174 @@ function requireMobileSession(request, permission = "", { allowPasswordChange = 
     throw httpError(403, "Fuer diese Aktion fehlt die Berechtigung.", "MOBILE_PERMISSION_DENIED");
   }
   return session;
+}
+
+function requireMobileAnyPermission(request, permissions = [], options = {}) {
+  const session = requireMobileSession(request, "", options);
+  if (!permissions.some((permission) => session.permissions.includes(permission))) {
+    throw httpError(403, "Fuer diese Aktion fehlt die Berechtigung.", "MOBILE_PERMISSION_DENIED");
+  }
+  return session;
+}
+
+const MOBILE_IDEMPOTENCY_TTL_DAYS = 14;
+const MOBILE_IDEMPOTENCY_STALE_MS = 2 * 60 * 1000;
+const MOBILE_IDEMPOTENCY_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function mobileReceiptTimestampMs(value) {
+  const source = String(value || "").trim();
+  if (!source) return Number.NaN;
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(source)
+    ? `${source.replace(" ", "T")}Z`
+    : source;
+  return new Date(normalized).getTime();
+}
+
+function requireMobileIdempotencyKey(request) {
+  const value = String(request.get("Idempotency-Key") || "").trim();
+  if (!MOBILE_IDEMPOTENCY_UUID.test(value)) {
+    throw httpError(400, "Fuer diese App-Aktion wird ein gueltiger UUID-Idempotency-Key benoetigt.",
+      "MOBILE_IDEMPOTENCY_KEY_REQUIRED");
+  }
+  return value.toLowerCase();
+}
+
+function mobileMutationReceiptPayload(payload) {
+  const serialized = JSON.stringify(payload ?? {});
+  if (Buffer.byteLength(serialized, "utf8") > 16 * 1024) {
+    throw new Error("Die sichere mobile Empfangsbestaetigung ist zu gross.");
+  }
+  return serialized;
+}
+
+function mobileMutationResponse(body, receipt) {
+  return { mobileMutationEnvelope: true, body, receipt };
+}
+
+async function executeMobileMutation(request, response, session, operation, payload, action, successStatus = 200, options = {}) {
+  const idempotencyKey = requireMobileIdempotencyKey(request);
+  const requestSha256 = payloadSha256({ operation, payload });
+  const now = new Date();
+  const expiresAt = addDays(now.toISOString().slice(0, 10), MOBILE_IDEMPOTENCY_TTL_DAYS);
+  db.prepare("DELETE FROM mobile_mutation_receipts WHERE expires_at < ?").run(now.toISOString().slice(0, 10));
+
+  const existing = db.prepare(`
+    SELECT operation, request_sha256, status, entity_type, entity_id, action_completed_at,
+           http_status, response_json, created_at, updated_at
+    FROM mobile_mutation_receipts
+    WHERE employee_number = ? AND idempotency_key = ?
+  `).get(session.employeeNumber, idempotencyKey);
+  if (existing) {
+    if (existing.operation !== operation || existing.request_sha256 !== requestSha256) {
+      throw httpError(409, "Dieser Idempotency-Key wurde bereits fuer eine andere App-Aktion verwendet.",
+        "MOBILE_IDEMPOTENCY_CONFLICT");
+    }
+    if (existing.status === "in_progress") {
+      if (existing.action_completed_at && existing.response_json) {
+        const receipt = JSON.parse(existing.response_json || "{}");
+        if (existing.entity_id && receipt.id == null) receipt.id = existing.entity_id;
+        if (existing.entity_type && !receipt.entityType) receipt.entityType = existing.entity_type;
+        const replayBody = typeof options.replay === "function" ? await options.replay(receipt) : receipt;
+        const receiptJson = mobileMutationReceiptPayload(receipt);
+        const finalized = db.prepare(`
+          UPDATE mobile_mutation_receipts
+          SET status = 'completed', http_status = ?, response_json = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE employee_number = ? AND idempotency_key = ? AND status = 'in_progress' AND action_completed_at IS NOT NULL
+        `).run(successStatus, receiptJson, session.employeeNumber, idempotencyKey);
+        if (!finalized.changes) {
+          const concurrent = db.prepare(`
+            SELECT status FROM mobile_mutation_receipts
+            WHERE employee_number = ? AND idempotency_key = ?
+          `).get(session.employeeNumber, idempotencyKey);
+          if (concurrent?.status !== "completed") {
+            throw httpError(503,
+              "Die Empfangsbestaetigung konnte noch nicht abgeschlossen werden. Bitte mit demselben Idempotency-Key wiederholen.",
+              "MOBILE_IDEMPOTENCY_FINALIZATION_PENDING");
+          }
+        }
+        response.setHeader("Idempotency-Replayed", "true");
+        response.status(successStatus).json(replayBody);
+        return;
+      }
+      const startedAt = mobileReceiptTimestampMs(existing.updated_at || existing.created_at);
+      if (Number.isFinite(startedAt) && now.getTime() - startedAt >= MOBILE_IDEMPOTENCY_STALE_MS) {
+        response.setHeader("Retry-After", "30");
+        throw httpError(409,
+          "Der vorherige Verarbeitungsstand ist unklar. Die App behaelt denselben Idempotency-Key; eine Doppelanlage wird nicht versucht.",
+          "MOBILE_IDEMPOTENCY_RECOVERY_REQUIRED");
+      }
+      response.setHeader("Retry-After", "2");
+      throw httpError(409, "Diese App-Aktion wird bereits verarbeitet.", "MOBILE_IDEMPOTENCY_IN_PROGRESS");
+    }
+    response.setHeader("Idempotency-Replayed", "true");
+    const receipt = JSON.parse(existing.response_json || "{}");
+    const replayBody = typeof options.replay === "function" ? await options.replay(receipt) : receipt;
+    response.status(Number(existing.http_status || successStatus)).json(replayBody);
+    return;
+  }
+
+  try {
+    db.prepare(`
+      INSERT INTO mobile_mutation_receipts
+        (employee_number, idempotency_key, operation, request_sha256, status, expires_at)
+      VALUES (?, ?, ?, ?, 'in_progress', ?)
+    `).run(session.employeeNumber, idempotencyKey, operation, requestSha256, expiresAt);
+  } catch (error) {
+    if (String(error.code || "").includes("SQLITE_CONSTRAINT")) {
+      throw httpError(409, "Diese App-Aktion wird bereits verarbeitet.", "MOBILE_IDEMPOTENCY_IN_PROGRESS");
+    }
+    throw error;
+  }
+
+  let actionCompleted = false;
+  let actionReceipt = null;
+  let actionReceiptJson = "";
+  try {
+    const result = await action();
+    actionCompleted = true;
+    const body = result?.mobileMutationEnvelope === true ? result.body : result;
+    const receipt = result?.mobileMutationEnvelope === true ? result.receipt : result;
+    actionReceipt = receipt;
+    const receiptJson = mobileMutationReceiptPayload(receipt);
+    actionReceiptJson = receiptJson;
+    const entityId = String(receipt?.id ?? "");
+    const entityType = String(receipt?.entityType || options.entityType || operation.split(/[.:]/, 1)[0] || "").slice(0, 80);
+    const finalized = db.prepare(`
+      UPDATE mobile_mutation_receipts
+      SET status = 'completed', entity_type = ?, entity_id = ?, action_completed_at = CURRENT_TIMESTAMP,
+          http_status = ?, response_json = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE employee_number = ? AND idempotency_key = ? AND status = 'in_progress'
+    `).run(entityType, entityId, successStatus, receiptJson, session.employeeNumber, idempotencyKey);
+    if (!finalized.changes) throw new Error("Mobile Mutation Receipt konnte nicht finalisiert werden.");
+    response.status(successStatus).json(body);
+  } catch (error) {
+    if (!actionCompleted) {
+      db.prepare(`
+        DELETE FROM mobile_mutation_receipts
+        WHERE employee_number = ? AND idempotency_key = ? AND status = 'in_progress'
+      `).run(session.employeeNumber, idempotencyKey);
+    } else {
+      try {
+        db.prepare(`
+          UPDATE mobile_mutation_receipts
+          SET entity_type = ?, entity_id = ?, action_completed_at = COALESCE(action_completed_at, CURRENT_TIMESTAMP),
+              http_status = ?, response_json = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE employee_number = ? AND idempotency_key = ? AND status = 'in_progress'
+        `).run(
+          String(actionReceipt?.entityType || options.entityType || operation.split(/[.:]/, 1)[0] || "").slice(0, 80),
+          String(actionReceipt?.id ?? ""),
+          successStatus,
+          actionReceiptJson || mobileMutationReceiptPayload(actionReceipt),
+          session.employeeNumber,
+          idempotencyKey,
+        );
+      } catch {}
+      throw httpError(503,
+        "Die App-Aktion wurde verarbeitet, ihre Empfangsbestaetigung aber noch nicht abgeschlossen. Bitte mit demselben Idempotency-Key wiederholen.",
+        "MOBILE_IDEMPOTENCY_FINALIZATION_PENDING");
+    }
+    throw error;
+  }
 }
 
 function mobileTokenSet(accessToken, accessExpiresAt, refreshToken, refreshExpiresAt) {
@@ -9182,8 +9377,11 @@ function mobileNavigationPayload(session, status = getPortalStatus()) {
     modules = [
       status.capabilities.timeTracking && permissions.includes("own_time:read") ? "timeTracking" : "",
       permissions.includes("own_schedule:read") ? "schedule" : "",
-      permissions.some((permission) => ["own_vacation:read", "own_vacation:request", "own_time:correction_request"].includes(permission)) ? "requests" : "",
+      permissions.some((permission) => [
+        "own_vacation:read", "own_vacation:request", "own_time:read", "own_time:write", "own_time:correction_request",
+      ].includes(permission)) ? "requests" : "",
       permissions.some((permission) => ["own_sickness:create", "own_amu:create", "own_amu:read"].includes(permission)) ? "sicknessAndAmu" : "",
+      status.capabilities.notifications ? "notifications" : "",
       "settings",
     ].filter(Boolean);
   }
@@ -9828,10 +10026,12 @@ function requestDecisionHistory(kind, id) {
   `).all(kind, Number(id));
 }
 
-function absenceHistoryForEmployee(employeeNumber) {
+function absenceHistoryForEmployee(employeeNumber, access = {}) {
+  const vacationRead = access.vacationRead !== false;
+  const timeOffRead = access.timeOffRead !== false;
   const visibleSince = addMonths(viennaTodayIso(), -6);
-  const vacations = db.prepare(`
-    SELECT id, date_from, date_to, note, status, approval_stage, decision_note,
+  const vacations = vacationRead ? db.prepare(`
+    SELECT id, vacation_group_id, date_from, date_to, note, status, approval_stage, decision_note,
            local_approved_by, local_approved_at, hr_approved_by, hr_approved_at,
            decided_by, decided_at, created_at, updated_at
     FROM vacation_requests WHERE employee_number = ?
@@ -9839,8 +10039,8 @@ function absenceHistoryForEmployee(employeeNumber) {
     ...item,
     kind: "vacation",
     decisions: requestDecisionHistory("vacation", item.id),
-  }));
-  const timeOff = db.prepare(`
+  })) : [];
+  const timeOff = timeOffRead ? db.prepare(`
     SELECT id, request_date, COALESCE(date_from, request_date) AS date_from, COALESCE(date_to, request_date) AS date_to,
            all_day, start_time, end_time, note, status, approval_type, approval_stage,
            traffic_light, check_reason, decision_note, local_approved_by, local_approved_at,
@@ -9850,8 +10050,8 @@ function absenceHistoryForEmployee(employeeNumber) {
     ...item,
     kind: "time_off",
     decisions: requestDecisionHistory("time_off", item.id),
-  }));
-  const changes = db.prepare(`
+  })) : [];
+  const changes = vacationRead ? db.prepare(`
     SELECT id, vacation_group_id, request_type, original_date_from, original_date_to,
            requested_date_from, requested_date_to, note, status, approval_stage, decision_note,
            local_approved_by, local_approved_at, hr_approved_by, hr_approved_at,
@@ -9861,8 +10061,8 @@ function absenceHistoryForEmployee(employeeNumber) {
     ...item,
     kind: item.request_type === "cancel" ? "vacation_cancel" : "vacation_change",
     decisions: requestDecisionHistory("vacation_change", item.id),
-  }));
-  const timeOffChanges = db.prepare(`
+  })) : [];
+  const timeOffChanges = timeOffRead ? db.prepare(`
     SELECT c.id, c.original_request_id, c.request_type, c.requested_date_from,
            c.requested_date_to, c.requested_all_day, c.requested_start_time,
            c.requested_end_time, c.note, c.status, c.approval_type, c.approval_stage,
@@ -9879,7 +10079,7 @@ function absenceHistoryForEmployee(employeeNumber) {
     ...item,
     kind: item.request_type === "cancel" ? "time_off_cancel" : "time_off_change",
     decisions: requestDecisionHistory("time_off_change", item.id),
-  }));
+  })) : [];
   return [...vacations, ...timeOff, ...changes, ...timeOffChanges]
     .filter((item) => ["pending", "pending_local", "preliminary_local", "pending_hr"].includes(item.status)
       || String(item.date_to || item.request_date || item.requested_date_to || item.original_date_to || item.created_at).slice(0, 10) >= visibleSince)
@@ -20389,12 +20589,10 @@ app.get("/api/portal/v1/me/sickness-cases", (request, response) => {
   });
 });
 
-app.post("/api/portal/v1/me/sickness-cases", (request, response) => {
-  const session = requirePortalSession(request, "own_sickness:create");
-  assertPortalCsrf(request);
-  const startDate = String(request.body.startDate || "");
-  const expectedEnd = String(request.body.expectedEnd || "");
-  const note = stripEmoji(String(request.body.note || "").trim()).slice(0, 500);
+function createOwnSicknessCase(session, body = {}) {
+  const startDate = String(body.startDate || "");
+  const expectedEnd = String(body.expectedEnd || "");
+  const note = stripEmoji(String(body.note || "").trim()).slice(0, 500);
   const today = viennaTodayIso();
   if (!isIsoDate(startDate) || startDate > today || startDate < addDays(today, -5)) {
     throw httpError(400, "Der Beginn der Krankmeldung darf heute oder höchstens fünf Tage zurückliegen.", "SICKNESS_DATE_INVALID");
@@ -20478,15 +20676,19 @@ app.post("/api/portal/v1/me/sickness-cases", (request, response) => {
       creditedSicknessMinutes: Number(createdPayload.timeValuation?.totalMinutes || 0),
     }));
   runSicknessEscalationSweep();
-  response.status(201).json({ case: serializeSicknessCases([sicknessCaseMetadata(caseId)])[0] });
-});
+  return { case: serializeSicknessCases([sicknessCaseMetadata(caseId)])[0] };
+}
 
-app.post("/api/portal/v1/me/sickness-cases/:id/withdraw", (request, response) => {
+app.post("/api/portal/v1/me/sickness-cases", (request, response) => {
   const session = requirePortalSession(request, "own_sickness:create");
   assertPortalCsrf(request);
+  response.status(201).json(createOwnSicknessCase(session, request.body || {}));
+});
+
+function withdrawOwnSicknessCase(session, caseId) {
   const row = db.prepare(`
     SELECT * FROM sickness_cases WHERE id = ? AND employee_lookup = ? AND status_lookup = ?
-  `).get(Number(request.params.id), sicknessEmployeeLookup(session.employeeNumber), sicknessStatusLookup("reported"));
+  `).get(Number(caseId), sicknessEmployeeLookup(session.employeeNumber), sicknessStatusLookup("reported"));
   if (!row) throw httpError(404, "Die offene Krankmeldung wurde nicht gefunden.", "SICKNESS_CASE_NOT_FOUND");
   const payload = sicknessCasePayload(row);
   payload.status = "withdrawn";
@@ -20505,20 +20707,24 @@ app.post("/api/portal/v1/me/sickness-cases/:id/withdraw", (request, response) =>
     .run(addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_CANCELLED_RETENTION_DAYS), sicknessOutboundEntityLookup(row.id));
   auditPortal(`protected:${sicknessEmployeeLookup(session.employeeNumber)}`, "protected.record.withdraw", "protected_record",
     protectedPortalEntityId("sickness-case", row.id));
-  response.json({ ok: true });
-});
+  return { id: Number(row.id), status: "withdrawn" };
+}
 
-app.post("/api/portal/v1/me/sickness-cases/:id/return-to-work", (request, response) => {
+app.post("/api/portal/v1/me/sickness-cases/:id/withdraw", (request, response) => {
   const session = requirePortalSession(request, "own_sickness:create");
   assertPortalCsrf(request);
+  response.json(withdrawOwnSicknessCase(session, request.params.id));
+});
+
+function returnToWorkOwnSicknessCase(session, caseId, body = {}) {
   const row = db.prepare(`
     SELECT * FROM sickness_cases
     WHERE id = ? AND employee_lookup = ? AND status_lookup IN (?, ?)
-  `).get(Number(request.params.id), sicknessEmployeeLookup(session.employeeNumber),
+  `).get(Number(caseId), sicknessEmployeeLookup(session.employeeNumber),
     sicknessStatusLookup("reported"), sicknessStatusLookup("aum_received"));
   if (!row) throw httpError(404, "Die offene Krankmeldung wurde nicht gefunden.", "SICKNESS_CASE_NOT_FOUND");
   const payload = sicknessCasePayload(row);
-  const returnDate = String(request.body.returnDate || "").trim();
+  const returnDate = String(body.returnDate || "").trim();
   if (!isIsoDate(returnDate) || returnDate < payload.startDate || returnDate > addDays(viennaTodayIso(), 31)) {
     throw httpError(400, "Bitte ein gültiges Datum für die Wiederaufnahme der Arbeit eingeben.", "SICKNESS_RETURN_DATE_INVALID");
   }
@@ -20557,7 +20763,13 @@ app.post("/api/portal/v1/me/sickness-cases/:id/return-to-work", (request, respon
   reconcileSicknessStaffingRisk(updatedCase);
   notifySicknessRecipients(updatedCase, { stage: "local", kind: "return_to_work" });
   runSicknessEscalationSweep();
-  response.json({ case: serializeSicknessCases([updatedCase])[0] });
+  return { case: serializeSicknessCases([updatedCase])[0] };
+}
+
+app.post("/api/portal/v1/me/sickness-cases/:id/return-to-work", (request, response) => {
+  const session = requirePortalSession(request, "own_sickness:create");
+  assertPortalCsrf(request);
+  response.json(returnToWorkOwnSicknessCase(session, request.params.id, request.body || {}));
 });
 
 app.get("/api/portal/v1/sickness-cases", (request, response) => {
@@ -20931,18 +21143,12 @@ function findLinkableSicknessCase(employeeNumber, incapacityFrom, incapacityTo =
   ).find((row) => sicknessCaseLinksToRange(row, incapacityFrom, incapacityTo)) || null;
 }
 
-app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
-  const session = requirePortalSession(request, "own_amu:create");
-  assertPortalCsrf(request);
+async function createOwnAmuReport(session, { fields, documents }) {
   if (shutdownStarted) throw httpError(503, "Grabenplaner wird gerade sicher beendet. Bitte den Upload danach erneut versuchen.", "SERVER_SHUTTING_DOWN");
   const storage = requireAmuStorage();
   const policy = getAmuPolicy();
   const maxInputBytes = Math.round(policy.uploadMaxMb * 1024 * 1024);
   const maxStoredBytes = Math.round(policy.storedMaxMb * 1024 * 1024);
-  const { fields, documents } = await parseAmuMultipart(request, {
-    maxFileBytes: maxInputBytes,
-    totalMaxBytes: (maxInputBytes * 3) + (1024 * 1024),
-  });
   const incapacityFrom = String(fields.incapacityFrom || "").trim();
   const incapacityTo = String(fields.incapacityTo || "").trim();
   const employeeNote = stripEmoji(String(fields.employeeNote || "").trim()).slice(0, 500);
@@ -21216,7 +21422,7 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
       } else {
         synchronizeAmuResponsibility(report, session.employeeNumber);
       }
-      response.status(201).json({ report: serializeAmuReports([report])[0] });
+      return { report: serializeAmuReports([report])[0] };
     } catch (error) {
       if (!committed) db.exec("ROLLBACK");
       throw error;
@@ -21238,14 +21444,24 @@ app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
   } finally {
     amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
   }
+}
+
+app.post("/api/portal/v1/me/amu-reports", async (request, response) => {
+  const session = requirePortalSession(request, "own_amu:create");
+  assertPortalCsrf(request);
+  const policy = getAmuPolicy();
+  const maxInputBytes = Math.round(policy.uploadMaxMb * 1024 * 1024);
+  const parsed = await parseAmuMultipart(request, {
+    maxFileBytes: maxInputBytes,
+    totalMaxBytes: (maxInputBytes * 3) + (1024 * 1024),
+  });
+  response.status(201).json(await createOwnAmuReport(session, parsed));
 });
 
-app.post("/api/portal/v1/me/amu-reports/:id/withdraw", (request, response) => {
-  const session = requirePortalSession(request, "own_amu:withdraw");
-  assertPortalCsrf(request);
+function withdrawOwnAmuReport(session, reportId) {
   const report = db.prepare(`
     SELECT * FROM amu_reports WHERE id = ? AND employee_number = ? AND status IN ('submitted','returned')
-  `).get(Number(request.params.id), session.employeeNumber);
+  `).get(Number(reportId), session.employeeNumber);
   if (!report) throw httpError(404, "Die offene Arbeitsunfähigkeitsmeldung wurde nicht gefunden.", "AMU_REPORT_NOT_FOUND");
   const protectedPayload = parseProtectedJson(report.protected_payload, amuReportProtectionContext(report));
   protectedPayload.withdrawnAt = new Date().toISOString();
@@ -21279,7 +21495,13 @@ app.post("/api/portal/v1/me/amu-reports/:id/withdraw", (request, response) => {
       runSicknessEscalationSweep();
     }
   }
-  response.json({ ok: true });
+  return { id: Number(report.id), status: "withdrawn" };
+}
+
+app.post("/api/portal/v1/me/amu-reports/:id/withdraw", (request, response) => {
+  const session = requirePortalSession(request, "own_amu:withdraw");
+  assertPortalCsrf(request);
+  response.json(withdrawOwnAmuReport(session, request.params.id));
 });
 
 app.get("/api/portal/v1/me/amu-reports/:reportId/documents/:documentId/content", (request, response) => {
@@ -21524,18 +21746,7 @@ app.put("/api/portal/v1/me/time-off-requests/:id", (request, response) => {
 app.delete("/api/portal/v1/me/time-off-requests/:id", (request, response) => {
   const session = requirePortalSession(request, "own_time:write");
   assertPortalCsrf(request);
-  const entry = db.prepare("SELECT * FROM time_off_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')")
-    .get(Number(request.params.id), session.employeeNumber);
-  if (!entry) throw httpError(404, "Der offene ZA-Antrag wurde nicht gefunden.");
-  db.exec("BEGIN");
-  try {
-    db.prepare("UPDATE time_off_requests SET status = 'withdrawn', approval_stage = 'complete', decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-      .run(session.employeeNumber, entry.id);
-    recordRequestDecision("time_off", entry.id, "employee", "withdraw", session.employeeNumber, "");
-    db.exec("COMMIT");
-  } catch (error) { db.exec("ROLLBACK"); throw error; }
-  resolveRequestReviewNotifications("time_off", entry.id);
-  auditPortal(session.employeeNumber, "time_off.request.withdraw", "time_off_request", request.params.id);
+  withdrawOwnTimeOffRequest(session, request.params.id);
   response.status(204).end();
 });
 
@@ -21614,10 +21825,14 @@ app.delete("/api/portal/v1/me/time-off-change-requests/:id", (request, response)
     WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')`)
     .get(Number(request.params.id), session.employeeNumber);
   if (!entry) throw httpError(404, "Der offene Änderungs- oder Stornoantrag wurde nicht gefunden.");
-  db.prepare(`UPDATE time_off_change_requests SET status = 'withdrawn', approval_stage = 'complete',
-    decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-    .run(session.employeeNumber, entry.id);
-  recordRequestDecision("time_off_change", entry.id, "employee", "withdraw", session.employeeNumber, "");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`UPDATE time_off_change_requests SET status = 'withdrawn', approval_stage = 'complete',
+      decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(session.employeeNumber, entry.id);
+    recordRequestDecision("time_off_change", entry.id, "employee", "withdraw", session.employeeNumber, "");
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
   resolveRequestReviewNotifications("time_off_change", entry.id);
   auditPortal(session.employeeNumber, "time_off.change_request.withdraw", "time_off_change_request", String(entry.id));
   response.status(204).end();
@@ -22298,6 +22513,683 @@ app.post("/api/portal/v1/me/wifi-suggestions/:id/reject", (request, response) =>
   assertPortalCsrf(request);
   rejectWifiSuggestion(session, request.params.id, request.body?.reason || "");
   response.json(wifiAutomationEmployeePayload(session, new Date()));
+});
+
+function ownVacationRequests(employeeNumber) {
+  return db.prepare(`
+    SELECT id, date_from, date_to, note, status, approval_stage, decision_note,
+           local_approved_by, local_approved_at, hr_approved_by, hr_approved_at,
+           decided_by, decided_at, created_at, updated_at
+    FROM vacation_requests WHERE employee_number = ?
+      AND (status IN ('pending','pending_local','preliminary_local','pending_hr') OR date_to >= ?)
+    ORDER BY created_at DESC, id DESC
+  `).all(employeeNumber, addMonths(viennaTodayIso(), -6));
+}
+
+function createOwnVacationRequest(session, body = {}) {
+  const vacation = validateVacationRequestDates(session.employeeNumber, body);
+  const locationId = employeeRequestContext(session.employeeNumber, vacation.dateFrom).locationId;
+  const result = db.prepare(`
+    INSERT INTO vacation_requests (employee_number, location_id, date_from, date_to, note, status, approval_stage)
+    VALUES (?, ?, ?, ?, ?, 'pending_local', 'local')
+  `).run(vacation.employeeNumber, locationId, vacation.dateFrom, vacation.dateTo, vacation.note);
+  const id = Number(result.lastInsertRowid);
+  auditPortal(session.employeeNumber, "vacation.request.create", "vacation_request", String(id));
+  notifyRequestReviewers({ id, employee_number: session.employeeNumber, location_id: locationId }, "vacation", "local", session.employeeNumber);
+  return { id, status: "pending" };
+}
+
+function updateOwnVacationRequest(session, requestId, body = {}) {
+  const entry = db.prepare("SELECT * FROM vacation_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')")
+    .get(Number(requestId), session.employeeNumber);
+  if (!entry) throw httpError(404, "Der offene Urlaubsantrag wurde nicht gefunden.", "VACATION_REQUEST_NOT_FOUND");
+  const dateFrom = String(body.dateFrom || "");
+  const dateTo = String(body.dateTo || "");
+  const note = stripEmoji(String(body.note || "").trim()).slice(0, 500);
+  if (!isIsoDate(dateFrom) || !isIsoDate(dateTo) || dateTo < dateFrom) {
+    throw httpError(400, "Bitte einen gueltigen Urlaubszeitraum eingeben.", "VACATION_DATES_INVALID");
+  }
+  const availability = evaluateVacationRequest(session.employeeNumber, { dateFrom, dateTo, excludeGroupId: `request-${entry.id}` });
+  if (!availability.allowed) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
+  const overlapping = db.prepare(`SELECT id FROM vacation_requests WHERE employee_number = ? AND id <> ?
+    AND status IN ('pending','pending_local','preliminary_local','pending_hr','approved') AND date_from <= ? AND date_to >= ? LIMIT 1`)
+    .get(session.employeeNumber, entry.id, dateTo, dateFrom);
+  if (overlapping) throw httpError(409, "Fuer diesen Zeitraum besteht bereits ein Urlaubsantrag.", "VACATION_REQUEST_OVERLAP");
+  db.prepare(`UPDATE vacation_requests SET date_from = ?, date_to = ?, note = ?, status = 'pending_local', approval_stage = 'local',
+    decision_note = '', local_approved_by = NULL, local_approved_at = NULL, hr_approved_by = NULL, hr_approved_at = NULL,
+    decided_by = NULL, decided_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+    .run(dateFrom, dateTo, note, entry.id);
+  recordRequestDecision("vacation", entry.id, "employee", "change", session.employeeNumber, note);
+  resolveRequestReviewNotifications("vacation", entry.id);
+  notifyRequestReviewers(entry, "vacation", "local", session.employeeNumber);
+  return { id: entry.id, status: "pending" };
+}
+
+function withdrawOwnVacationRequest(session, requestId) {
+  const entry = db.prepare("SELECT * FROM vacation_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')")
+    .get(Number(requestId), session.employeeNumber);
+  if (!entry) throw httpError(404, "Der offene Urlaubsantrag wurde nicht gefunden.", "VACATION_REQUEST_NOT_FOUND");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = db.prepare(`UPDATE vacation_requests
+      SET status = 'withdrawn', approval_stage = 'complete', decided_by = ?,
+          decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')`)
+      .run(session.employeeNumber, entry.id);
+    if (!result.changes) throw httpError(409, "Der Urlaubsantrag wurde bereits bearbeitet.", "VACATION_REQUEST_CHANGED");
+    recordRequestDecision("vacation", entry.id, "employee", "withdraw", session.employeeNumber, "");
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  resolveRequestReviewNotifications("vacation", entry.id);
+  auditPortal(session.employeeNumber, "vacation.request.withdraw", "vacation_request", String(entry.id));
+  return { id: entry.id, status: "withdrawn" };
+}
+
+function createOwnVacationChangeRequest(session, body = {}) {
+  const groupId = String(body.vacationGroupId || body.groupId || "").trim();
+  const requestType = String(body.requestType || "");
+  if (!groupId || !["change", "cancel"].includes(requestType)) {
+    throw httpError(400, "Bitte eine gueltige Urlaubsaenderung auswaehlen.", "VACATION_CHANGE_INVALID");
+  }
+  const vacation = approvedVacationsForEmployee(session.employeeNumber, "1900-01-01").find((item) => item.groupId === groupId);
+  if (!vacation) throw httpError(404, "Der genehmigte Urlaub wurde nicht gefunden.", "VACATION_NOT_FOUND");
+  if (db.prepare(`SELECT id FROM vacation_change_requests
+    WHERE employee_number = ? AND vacation_group_id = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr') LIMIT 1`)
+    .get(session.employeeNumber, groupId)) {
+    throw httpError(409, "Fuer diesen Urlaub besteht bereits ein offener Aenderungs- oder Stornoantrag.", "VACATION_CHANGE_EXISTS");
+  }
+  let requestedFrom = null;
+  let requestedTo = null;
+  if (requestType === "change") {
+    requestedFrom = String(body.dateFrom || "");
+    requestedTo = String(body.dateTo || "");
+    if (!isIsoDate(requestedFrom) || !isIsoDate(requestedTo) || requestedTo < requestedFrom) {
+      throw httpError(400, "Bitte einen gueltigen neuen Urlaubszeitraum eingeben.", "VACATION_DATES_INVALID");
+    }
+    const availability = evaluateVacationRequest(session.employeeNumber, { dateFrom: requestedFrom, dateTo: requestedTo, excludeGroupId: groupId });
+    if (!availability.allowed) throw httpError(409, availability.reason, availability.code || "VACATION_NOT_POSSIBLE");
+  }
+  const note = stripEmoji(String(body.note || "").trim()).slice(0, 500);
+  const result = db.prepare(`INSERT INTO vacation_change_requests
+    (employee_number, vacation_group_id, request_type, original_date_from, original_date_to,
+     requested_date_from, requested_date_to, note, status, approval_stage)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_local', 'local')`)
+    .run(session.employeeNumber, groupId, requestType, vacation.dateFrom, vacation.dateTo, requestedFrom, requestedTo, note);
+  const id = Number(result.lastInsertRowid);
+  auditPortal(session.employeeNumber, `vacation.${requestType}.request`, "vacation_change_request", String(id));
+  notifyRequestReviewers({ id, employee_number: session.employeeNumber, location_id: employeeRequestContext(session.employeeNumber, vacation.dateFrom).locationId },
+    "vacation_change", "local", session.employeeNumber);
+  return { id, status: "pending" };
+}
+
+function withdrawOwnVacationChangeRequest(session, changeId) {
+  const entry = db.prepare("SELECT * FROM vacation_change_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')")
+    .get(Number(changeId), session.employeeNumber);
+  if (!entry) throw httpError(404, "Der offene Aenderungs- oder Stornoantrag wurde nicht gefunden.", "VACATION_CHANGE_NOT_FOUND");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = db.prepare(`UPDATE vacation_change_requests
+      SET status = 'withdrawn', approval_stage = 'complete', decided_by = ?,
+          decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')`)
+      .run(session.employeeNumber, entry.id);
+    if (!result.changes) throw httpError(409, "Der Antrag wurde bereits bearbeitet.", "VACATION_CHANGE_CHANGED");
+    recordRequestDecision("vacation_change", entry.id, "employee", "withdraw", session.employeeNumber, "");
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  resolveRequestReviewNotifications("vacation_change", entry.id);
+  auditPortal(session.employeeNumber, "vacation.change_request.withdraw", "vacation_change_request", String(entry.id));
+  return { id: Number(entry.id), status: "withdrawn" };
+}
+
+function ownTimeOffRequests(employeeNumber) {
+  return db.prepare(`
+    SELECT id, request_date, COALESCE(date_from, request_date) AS date_from, COALESCE(date_to, request_date) AS date_to,
+           all_day, start_time, end_time, note, status, approval_type, approval_stage,
+           traffic_light, check_reason, decision_note, local_approved_by, local_approved_at,
+           hr_approved_by, hr_approved_at, decided_by, decided_at, created_at, updated_at
+    FROM time_off_requests WHERE employee_number = ?
+      AND (status IN ('pending','pending_local','preliminary_local','pending_hr') OR COALESCE(date_to, request_date) >= ?)
+    ORDER BY COALESCE(date_from, request_date) DESC, created_at DESC
+  `).all(employeeNumber, addMonths(viennaTodayIso(), -6));
+}
+
+function ownTimeOffSlots(employeeNumber, date) {
+  if (!isIsoDate(date)) throw httpError(400, "Bitte zuerst ein gueltiges Datum auswaehlen.", "TIME_OFF_DATE_INVALID");
+  const context = employeeRequestContext(employeeNumber, date);
+  const hours = operatingHours(date, settingsForLocation(context.locationId));
+  const block = getGlobalDayBlockForDate(date, context.locationId);
+  if (!hours || block) {
+    return {
+      date,
+      closed: true,
+      reason: block?.reason || block?.holiday_name || "An diesem Tag ist die Filiale geschlossen.",
+      openingTime: null,
+      closingTime: null,
+      slots: [],
+      startTimes: [],
+      endTimes: [],
+    };
+  }
+  const values = [];
+  for (let minute = timeToMinutes(hours.start); minute <= timeToMinutes(hours.end); minute += 15) values.push(minutesToTime(minute));
+  return {
+    date,
+    closed: false,
+    start: hours.start,
+    end: hours.end,
+    openingTime: hours.start,
+    closingTime: hours.end,
+    startTimes: values.slice(0, -1),
+    endTimes: values.slice(1),
+    slots: values.slice(0, -1).map((startTime, index) => ({
+      startTime,
+      endTime: values[index + 1],
+      allowed: true,
+      reason: "",
+    })),
+  };
+}
+
+function normalizedTimeOffInput(body = {}) {
+  const dateFrom = String(body.date || body.requestDate || body.dateFrom || "");
+  const dateTo = String(body.dateTo || dateFrom);
+  const allDay = body.allDay === true || dateTo !== dateFrom;
+  return {
+    dateFrom, dateTo, allDay,
+    startTime: allDay ? "00:00" : String(body.startTime || ""),
+    endTime: allDay ? "23:59" : String(body.endTime || ""),
+    note: stripEmoji(String(body.note || "").trim()).slice(0, 500),
+    approvalType: body.approvalType === "hr" ? "hr" : "local",
+  };
+}
+
+function createOwnTimeOffRequest(session, body = {}) {
+  const check = evaluateTimeOffRequest(session.employeeNumber, body);
+  if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+  const input = normalizedTimeOffInput(body);
+  const locationId = employeeRequestContext(session.employeeNumber, input.dateFrom).locationId;
+  const result = db.prepare(`INSERT INTO time_off_requests
+    (employee_number, location_id, request_date, date_from, date_to, all_day, start_time, end_time, note, approval_type, approval_stage, status, traffic_light, check_reason)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'local', 'pending_local', ?, ?)`)
+    .run(session.employeeNumber, locationId, input.dateFrom, input.dateFrom, input.dateTo, input.allDay ? 1 : 0,
+      input.startTime, input.endTime, input.note, input.approvalType, check.trafficLight, check.reason);
+  const id = Number(result.lastInsertRowid);
+  auditPortal(session.employeeNumber, "time_off.request.create", "time_off_request", String(id), JSON.stringify(check));
+  notifyRequestReviewers({ id, employee_number: session.employeeNumber, location_id: locationId }, "time_off", "local", session.employeeNumber);
+  return { id, status: "pending", check };
+}
+
+function updateOwnTimeOffRequest(session, requestId, body = {}) {
+  const entry = db.prepare("SELECT * FROM time_off_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')")
+    .get(Number(requestId), session.employeeNumber);
+  if (!entry) throw httpError(404, "Der offene ZA-Antrag wurde nicht gefunden.", "TIME_OFF_REQUEST_NOT_FOUND");
+  const check = evaluateTimeOffRequest(session.employeeNumber, { ...body, excludeRequestId: entry.id });
+  if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+  const input = normalizedTimeOffInput(body);
+  db.prepare(`UPDATE time_off_requests SET request_date = ?, date_from = ?, date_to = ?, all_day = ?, start_time = ?, end_time = ?, note = ?, approval_type = ?,
+    status = 'pending_local', approval_stage = 'local', traffic_light = ?, check_reason = ?, decision_note = '', local_approved_by = NULL,
+    local_approved_at = NULL, hr_approved_by = NULL, hr_approved_at = NULL, decided_by = NULL, decided_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+    .run(input.dateFrom, input.dateFrom, input.dateTo, input.allDay ? 1 : 0, input.startTime, input.endTime,
+      input.note, input.approvalType, check.trafficLight, check.reason, entry.id);
+  recordRequestDecision("time_off", entry.id, "employee", "change", session.employeeNumber, input.note);
+  resolveRequestReviewNotifications("time_off", entry.id);
+  notifyRequestReviewers(entry, "time_off", "local", session.employeeNumber);
+  return { id: entry.id, status: "pending", check };
+}
+
+function withdrawOwnTimeOffRequest(session, requestId) {
+  const entry = db.prepare("SELECT * FROM time_off_requests WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')")
+    .get(Number(requestId), session.employeeNumber);
+  if (!entry) throw httpError(404, "Der offene ZA-Antrag wurde nicht gefunden.", "TIME_OFF_REQUEST_NOT_FOUND");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = db.prepare(`UPDATE time_off_requests
+      SET status = 'withdrawn', approval_stage = 'complete', decided_by = ?,
+          decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')`)
+      .run(session.employeeNumber, entry.id);
+    if (!result.changes) throw httpError(409, "Der ZA-Antrag wurde bereits bearbeitet.", "TIME_OFF_REQUEST_CHANGED");
+    recordRequestDecision("time_off", entry.id, "employee", "withdraw", session.employeeNumber, "");
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  resolveRequestReviewNotifications("time_off", entry.id);
+  auditPortal(session.employeeNumber, "time_off.request.withdraw", "time_off_request", String(entry.id));
+  return { id: entry.id, status: "withdrawn" };
+}
+
+function createOwnTimeOffChangeRequest(session, body = {}) {
+  const originalRequestId = Number(body.requestId || body.originalRequestId || 0);
+  const requestType = String(body.requestType || "");
+  if (!Number.isInteger(originalRequestId) || !["change", "cancel"].includes(requestType)) {
+    throw httpError(400, "Bitte eine gueltige ZA-Aenderung auswaehlen.", "TIME_OFF_CHANGE_INVALID");
+  }
+  const original = db.prepare(`SELECT * FROM time_off_requests
+    WHERE id = ? AND employee_number = ? AND status = 'approved' AND COALESCE(date_to, request_date) >= ?`)
+    .get(originalRequestId, session.employeeNumber, viennaTodayIso());
+  if (!original) throw httpError(404, "Der genehmigte Zeitausgleich wurde nicht gefunden.", "TIME_OFF_REQUEST_NOT_FOUND");
+  if (db.prepare(`SELECT id FROM time_off_change_requests
+    WHERE original_request_id = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr') LIMIT 1`).get(original.id)) {
+    throw httpError(409, "Fuer diesen Zeitausgleich besteht bereits ein offener Aenderungs- oder Stornoantrag.", "TIME_OFF_CHANGE_EXISTS");
+  }
+  let input = { dateFrom: null, dateTo: null, allDay: false, startTime: null, endTime: null, note: stripEmoji(String(body.note || "").trim()).slice(0, 500) };
+  if (requestType === "change") {
+    input = { ...normalizedTimeOffInput(body), note: stripEmoji(String(body.note || "").trim()).slice(0, 500) };
+    const check = evaluateTimeOffRequest(session.employeeNumber, {
+      date: input.dateFrom, dateFrom: input.dateFrom, dateTo: input.dateTo, allDay: input.allDay,
+      startTime: input.startTime, endTime: input.endTime, excludeRequestId: original.id,
+    });
+    if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
+  }
+  const result = db.prepare(`INSERT INTO time_off_change_requests
+    (employee_number, location_id, original_request_id, request_type, requested_date_from, requested_date_to,
+     requested_all_day, requested_start_time, requested_end_time, note, status, approval_type, approval_stage)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_local', ?, 'local')`)
+    .run(session.employeeNumber, original.location_id, original.id, requestType, input.dateFrom, input.dateTo,
+      input.allDay ? 1 : 0, input.startTime, input.endTime, input.note, original.approval_type || "local");
+  const id = Number(result.lastInsertRowid);
+  recordRequestDecision("time_off_change", id, "employee", requestType, session.employeeNumber, input.note);
+  auditPortal(session.employeeNumber, `time_off.${requestType}.request`, "time_off_change_request", String(id));
+  notifyRequestReviewers({ id, employee_number: session.employeeNumber, location_id: original.location_id }, "time_off_change", "local", session.employeeNumber);
+  return { id, status: "pending" };
+}
+
+function withdrawOwnTimeOffChangeRequest(session, changeId) {
+  const entry = db.prepare(`SELECT * FROM time_off_change_requests
+    WHERE id = ? AND employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')`)
+    .get(Number(changeId), session.employeeNumber);
+  if (!entry) throw httpError(404, "Der offene Aenderungs- oder Stornoantrag wurde nicht gefunden.", "TIME_OFF_CHANGE_NOT_FOUND");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = db.prepare(`UPDATE time_off_change_requests
+      SET status = 'withdrawn', approval_stage = 'complete', decided_by = ?,
+          decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')`)
+      .run(session.employeeNumber, entry.id);
+    if (!result.changes) throw httpError(409, "Der Antrag wurde bereits bearbeitet.", "TIME_OFF_CHANGE_CHANGED");
+    recordRequestDecision("time_off_change", entry.id, "employee", "withdraw", session.employeeNumber, "");
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  resolveRequestReviewNotifications("time_off_change", entry.id);
+  auditPortal(session.employeeNumber, "time_off.change_request.withdraw", "time_off_change_request", String(entry.id));
+  return { id: Number(entry.id), status: "withdrawn" };
+}
+
+function mobileNotificationPage(employeeNumber, query = {}) {
+  const limit = Math.min(100, Math.max(1, Number(query.limit || 30) || 30));
+  let beforeRowId = Number.MAX_SAFE_INTEGER;
+  if (query.cursor) {
+    try {
+      const decoded = JSON.parse(Buffer.from(String(query.cursor), "base64url").toString("utf8"));
+      if (!Number.isInteger(decoded.before) || decoded.before <= 0) throw new Error();
+      beforeRowId = decoded.before;
+    } catch {
+      throw httpError(400, "Der Benachrichtigungs-Cursor ist ungueltig.", "MOBILE_CURSOR_INVALID");
+    }
+  }
+  const unreadOnly = String(query.unread || "") === "1";
+  const rows = db.prepare(`
+    SELECT rowid AS cursor_rowid, id, event_type, title, message, entity_type, entity_id, read_at, created_at
+    FROM portal_notifications
+    WHERE recipient_employee_number = ? AND rowid < ? ${unreadOnly ? "AND read_at IS NULL" : ""}
+    ORDER BY rowid DESC LIMIT ?
+  `).all(employeeNumber, beforeRowId, limit + 1);
+  const hasMore = rows.length > limit;
+  const page = rows.slice(0, limit);
+  const nextCursor = hasMore
+    ? Buffer.from(JSON.stringify({ before: Number(page.at(-1).cursor_rowid) }), "utf8").toString("base64url")
+    : null;
+  const notifications = page.map(({ cursor_rowid, ...item }) => ({ ...item, request_id: item.entity_id || null }));
+  const unreadCount = Number(db.prepare("SELECT COUNT(*) AS count FROM portal_notifications WHERE recipient_employee_number = ? AND read_at IS NULL")
+    .get(employeeNumber).count || 0);
+  return { notifications, unreadCount, nextCursor, hasMore };
+}
+
+function markOwnNotificationRead(session, notificationId) {
+  const result = db.prepare(`UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+    WHERE id = ? AND recipient_employee_number = ?`).run(String(notificationId), session.employeeNumber);
+  if (!result.changes) throw httpError(404, "Die Benachrichtigung wurde nicht gefunden.", "NOTIFICATION_NOT_FOUND");
+  return { id: String(notificationId), read: true };
+}
+
+function markAllOwnNotificationsRead(session) {
+  const result = db.prepare("UPDATE portal_notifications SET read_at = CURRENT_TIMESTAMP WHERE recipient_employee_number = ? AND read_at IS NULL")
+    .run(session.employeeNumber);
+  return { read: true, updated: Number(result.changes || 0) };
+}
+
+function mobileOwnAmuReport(report) {
+  if (!report) return null;
+  return {
+    id: Number(report.id),
+    sickness_case_id: report.sickness_case_id == null ? null : Number(report.sickness_case_id),
+    status: String(report.status || ""),
+    incapacity_from: String(report.incapacity_from || ""),
+    incapacity_to: String(report.incapacity_to || "") || null,
+    employee_note: String(report.employee_note || ""),
+    submitted_at: report.submitted_at || report.created_at,
+    reviewed_at: report.reviewed_at || null,
+    review_mode: report.review_mode || "pending",
+    documents: (report.documents || []).map((document) => ({
+      id: String(document.id),
+      original_name: String(document.original_name || "Dokument"),
+      detected_mime: String(document.detected_mime || "application/octet-stream"),
+      byte_size: Number(document.byte_size || document.size || 0),
+      scan_status: String(document.scan_status || ""),
+      status: String(document.status || ""),
+      created_at: document.created_at,
+    })),
+  };
+}
+
+function ownMobileAmuReports(employeeNumber) {
+  return ownAmuReports(employeeNumber).map(mobileOwnAmuReport);
+}
+
+function mobileAbsenceMutationPayload(employeeNumber, id, category, replayed = false, changeRequest = false) {
+  const request = absenceHistoryForEmployee(employeeNumber).find((item) => Number(item.id) === Number(id)
+    && (category === "vacation" ? String(item.kind).startsWith("vacation") : String(item.kind).startsWith("time_off"))
+    && (changeRequest ? /_(?:change|cancel)$/.test(String(item.kind)) : !/_(?:change|cancel)$/.test(String(item.kind)))) || null;
+  if (!request) {
+    throw httpError(409, "Der App-Antrag ist fuer die Wiederholung nicht mehr verfuegbar.", "MOBILE_IDEMPOTENCY_REPLAY_UNAVAILABLE");
+  }
+  return { ok: true, request, items: [request], replayed };
+}
+
+app.get(["/api/mobile/v1/me/absence-requests", "/api/mobile/v1/me/absences"], (request, response) => {
+  const session = requireMobileAnyPermission(request, ["own_vacation:read", "own_time:read", "own_sickness:read"]);
+  const access = {
+    vacationRead: session.permissions.includes("own_vacation:read"),
+    vacationWrite: session.permissions.includes("own_vacation:request"),
+    timeOffRead: session.permissions.includes("own_time:read"),
+    timeOffWrite: session.permissions.includes("own_time:write"),
+  };
+  response.json({
+    access,
+    items: absenceHistoryForEmployee(session.employeeNumber, access),
+    sicknessCases: session.permissions.includes("own_sickness:read") ? ownSicknessCases(session.employeeNumber) : [],
+  });
+});
+
+app.post("/api/mobile/v1/me/vacation-check", (request, response) => {
+  const session = requireMobileSession(request, "own_vacation:request");
+  const body = request.body || {};
+  response.json({
+    ...evaluateVacationRequest(session.employeeNumber, body),
+    dateFrom: String(body.dateFrom || ""),
+    dateTo: String(body.dateTo || body.dateFrom || ""),
+  });
+});
+
+app.get("/api/mobile/v1/me/vacation-requests", (request, response) => {
+  const session = requireMobileSession(request, "own_vacation:read");
+  const pendingChanges = db.prepare(`
+    SELECT id, vacation_group_id, request_type, original_date_from, original_date_to,
+           requested_date_from, requested_date_to, note, status, created_at
+    FROM vacation_change_requests
+    WHERE employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')
+    ORDER BY created_at DESC
+  `).all(session.employeeNumber);
+  response.json({
+    requests: ownVacationRequests(session.employeeNumber),
+    approved: approvedVacationsForEmployee(session.employeeNumber, viennaTodayIso()),
+    pendingChanges,
+  });
+});
+
+app.post("/api/mobile/v1/me/vacation-requests", async (request, response) => {
+  const session = requireMobileSession(request, "own_vacation:request");
+  await executeMobileMutation(request, response, session, "vacation.create", request.body || {},
+    () => {
+      const result = createOwnVacationRequest(session, request.body || {});
+      return mobileMutationResponse(mobileAbsenceMutationPayload(session.employeeNumber, result.id, "vacation"), { id: result.id });
+    }, 201, { replay: (receipt) => mobileAbsenceMutationPayload(session.employeeNumber, receipt.id, "vacation", true) });
+});
+
+app.put("/api/mobile/v1/me/vacation-requests/:id", async (request, response) => {
+  const session = requireMobileSession(request, "own_vacation:request");
+  await executeMobileMutation(request, response, session, `vacation.update:${Number(request.params.id)}`, request.body || {},
+    () => {
+      const result = updateOwnVacationRequest(session, request.params.id, request.body || {});
+      return mobileMutationResponse(mobileAbsenceMutationPayload(session.employeeNumber, result.id, "vacation"), { id: result.id });
+    }, 200, { replay: (receipt) => mobileAbsenceMutationPayload(session.employeeNumber, receipt.id, "vacation", true) });
+});
+
+app.post("/api/mobile/v1/me/vacation-requests/:id/withdraw", async (request, response) => {
+  const session = requireMobileSession(request, "own_vacation:request");
+  await executeMobileMutation(request, response, session, `vacation.withdraw:${Number(request.params.id)}`, {},
+    () => {
+      const result = withdrawOwnVacationRequest(session, request.params.id);
+      return mobileMutationResponse(mobileAbsenceMutationPayload(session.employeeNumber, result.id, "vacation"), { id: result.id });
+    }, 200, { replay: (receipt) => mobileAbsenceMutationPayload(session.employeeNumber, receipt.id, "vacation", true) });
+});
+
+app.post("/api/mobile/v1/me/vacation-change-requests", async (request, response) => {
+  const session = requireMobileSession(request, "own_vacation:request");
+  await executeMobileMutation(request, response, session, "vacation.change", request.body || {},
+    () => {
+      const result = createOwnVacationChangeRequest(session, request.body || {});
+      return mobileMutationResponse(mobileAbsenceMutationPayload(session.employeeNumber, result.id, "vacation", false, true), { id: result.id });
+    }, 201, { replay: (receipt) => mobileAbsenceMutationPayload(session.employeeNumber, receipt.id, "vacation", true, true) });
+});
+
+app.post("/api/mobile/v1/me/vacation-change-requests/:id/withdraw", async (request, response) => {
+  const session = requireMobileSession(request, "own_vacation:request");
+  await executeMobileMutation(request, response, session, `vacation.change.withdraw:${Number(request.params.id)}`, {},
+    () => {
+      const result = withdrawOwnVacationChangeRequest(session, request.params.id);
+      return mobileMutationResponse(mobileAbsenceMutationPayload(session.employeeNumber, result.id, "vacation", false, true), { id: result.id });
+    }, 200, { replay: (receipt) => mobileAbsenceMutationPayload(session.employeeNumber, receipt.id, "vacation", true, true) });
+});
+
+app.get("/api/mobile/v1/me/time-off-slots", (request, response) => {
+  const session = requireMobileSession(request, "own_time:read");
+  response.json(ownTimeOffSlots(session.employeeNumber, String(request.query.date || "")));
+});
+
+app.post("/api/mobile/v1/me/time-off-check", (request, response) => {
+  const session = requireMobileSession(request, "own_time:write");
+  const body = request.body || {};
+  response.json({
+    ...evaluateTimeOffRequest(session.employeeNumber, body),
+    dateFrom: String(body.dateFrom || body.date || body.requestDate || ""),
+    dateTo: String(body.dateTo || body.dateFrom || body.date || body.requestDate || ""),
+  });
+});
+
+app.get("/api/mobile/v1/me/time-off-requests", (request, response) => {
+  const session = requireMobileSession(request, "own_time:read");
+  const approved = db.prepare(`
+    SELECT id, request_date, COALESCE(date_from, request_date) AS date_from,
+           COALESCE(date_to, request_date) AS date_to, all_day, start_time, end_time,
+           note, approval_type, local_approved_by, hr_approved_by, decided_by, decided_at
+    FROM time_off_requests
+    WHERE employee_number = ? AND status = 'approved' AND COALESCE(date_to, request_date) >= ?
+    ORDER BY COALESCE(date_from, request_date), start_time, id
+  `).all(session.employeeNumber, viennaTodayIso());
+  const pendingChanges = db.prepare(`
+    SELECT id, original_request_id, request_type, requested_date_from, requested_date_to,
+           requested_all_day, requested_start_time, requested_end_time, note, status, created_at
+    FROM time_off_change_requests
+    WHERE employee_number = ? AND status IN ('pending','pending_local','preliminary_local','pending_hr')
+    ORDER BY created_at DESC
+  `).all(session.employeeNumber);
+  response.json({ requests: ownTimeOffRequests(session.employeeNumber), approved, pendingChanges });
+});
+
+app.post("/api/mobile/v1/me/time-off-requests", async (request, response) => {
+  const session = requireMobileSession(request, "own_time:write");
+  await executeMobileMutation(request, response, session, "time_off.create", request.body || {},
+    () => {
+      const result = createOwnTimeOffRequest(session, request.body || {});
+      return mobileMutationResponse(mobileAbsenceMutationPayload(session.employeeNumber, result.id, "time_off"), { id: result.id });
+    }, 201, { replay: (receipt) => mobileAbsenceMutationPayload(session.employeeNumber, receipt.id, "time_off", true) });
+});
+
+app.put("/api/mobile/v1/me/time-off-requests/:id", async (request, response) => {
+  const session = requireMobileSession(request, "own_time:write");
+  await executeMobileMutation(request, response, session, `time_off.update:${Number(request.params.id)}`, request.body || {},
+    () => {
+      const result = updateOwnTimeOffRequest(session, request.params.id, request.body || {});
+      return mobileMutationResponse(mobileAbsenceMutationPayload(session.employeeNumber, result.id, "time_off"), { id: result.id });
+    }, 200, { replay: (receipt) => mobileAbsenceMutationPayload(session.employeeNumber, receipt.id, "time_off", true) });
+});
+
+app.post("/api/mobile/v1/me/time-off-requests/:id/withdraw", async (request, response) => {
+  const session = requireMobileSession(request, "own_time:write");
+  await executeMobileMutation(request, response, session, `time_off.withdraw:${Number(request.params.id)}`, {},
+    () => {
+      const result = withdrawOwnTimeOffRequest(session, request.params.id);
+      return mobileMutationResponse(mobileAbsenceMutationPayload(session.employeeNumber, result.id, "time_off"), { id: result.id });
+    }, 200, { replay: (receipt) => mobileAbsenceMutationPayload(session.employeeNumber, receipt.id, "time_off", true) });
+});
+
+app.post("/api/mobile/v1/me/time-off-change-requests", async (request, response) => {
+  const session = requireMobileSession(request, "own_time:write");
+  await executeMobileMutation(request, response, session, "time_off.change", request.body || {},
+    () => {
+      const result = createOwnTimeOffChangeRequest(session, request.body || {});
+      return mobileMutationResponse(mobileAbsenceMutationPayload(session.employeeNumber, result.id, "time_off", false, true), { id: result.id });
+    }, 201, { replay: (receipt) => mobileAbsenceMutationPayload(session.employeeNumber, receipt.id, "time_off", true, true) });
+});
+
+app.post("/api/mobile/v1/me/time-off-change-requests/:id/withdraw", async (request, response) => {
+  const session = requireMobileSession(request, "own_time:write");
+  await executeMobileMutation(request, response, session, `time_off.change.withdraw:${Number(request.params.id)}`, {},
+    () => {
+      const result = withdrawOwnTimeOffChangeRequest(session, request.params.id);
+      return mobileMutationResponse(mobileAbsenceMutationPayload(session.employeeNumber, result.id, "time_off", false, true), { id: result.id });
+    }, 200, { replay: (receipt) => mobileAbsenceMutationPayload(session.employeeNumber, receipt.id, "time_off", true, true) });
+});
+
+app.get("/api/mobile/v1/me/sickness-cases", (request, response) => {
+  const session = requireMobileSession(request, "own_sickness:read");
+  runSicknessEscalationSweep();
+  response.json({ cases: ownSicknessCases(session.employeeNumber), policy: getAmuPolicy(), aumAllowance: sicknessAllowanceSummary(session.employeeNumber) });
+});
+
+app.post("/api/mobile/v1/me/sickness-cases", async (request, response) => {
+  const session = requireMobileSession(request, "own_sickness:create");
+  await executeMobileMutation(request, response, session, "sickness.create", request.body || {}, () => {
+    const result = createOwnSicknessCase(session, request.body || {});
+    return mobileMutationResponse({ case: result.case }, { id: result.case.id });
+  }, 201, {
+    replay: (receipt) => {
+      const row = sicknessCaseMetadata(receipt.id);
+      if (!row || sicknessCasePayload(row).employeeNumber !== session.employeeNumber) {
+        throw httpError(409, "Die wiederholte Krankmeldung ist nicht mehr verfuegbar.", "MOBILE_IDEMPOTENCY_REPLAY_UNAVAILABLE");
+      }
+      return { case: serializeSicknessCases([row])[0] };
+    },
+  });
+});
+
+app.post("/api/mobile/v1/me/sickness-cases/:id/withdraw", async (request, response) => {
+  const session = requireMobileSession(request, "own_sickness:create");
+  await executeMobileMutation(request, response, session, `sickness.withdraw:${Number(request.params.id)}`, {},
+    () => {
+      const result = withdrawOwnSicknessCase(session, request.params.id);
+      return mobileMutationResponse({ cases: ownSicknessCases(session.employeeNumber) }, { id: result.id });
+    }, 200, { replay: () => ({ cases: ownSicknessCases(session.employeeNumber) }) });
+});
+
+app.post("/api/mobile/v1/me/sickness-cases/:id/return-to-work", async (request, response) => {
+  const session = requireMobileSession(request, "own_sickness:create");
+  await executeMobileMutation(request, response, session, `sickness.return_to_work:${Number(request.params.id)}`, request.body || {}, () => {
+    const result = returnToWorkOwnSicknessCase(session, request.params.id, request.body || {});
+    return mobileMutationResponse({ case: result.case }, { id: result.case.id });
+  }, 200, {
+    replay: (receipt) => {
+      const row = sicknessCaseMetadata(receipt.id);
+      if (!row || sicknessCasePayload(row).employeeNumber !== session.employeeNumber) {
+        throw httpError(409, "Die wiederholte Gesundmeldung ist nicht mehr verfuegbar.", "MOBILE_IDEMPOTENCY_REPLAY_UNAVAILABLE");
+      }
+      return { case: serializeSicknessCases([row])[0] };
+    },
+  });
+});
+
+app.get("/api/mobile/v1/me/amu-reports", (request, response) => {
+  const session = requireMobileSession(request, "own_amu:read");
+  const policy = getAmuPolicy();
+  response.json({
+    reports: ownMobileAmuReports(session.employeeNumber),
+    limits: {
+      maximumFiles: 3,
+      maximumUploadBytesPerFile: Math.round(policy.uploadMaxMb * 1024 * 1024),
+      acceptedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/tiff"],
+    },
+    documentDownloadAvailable: false,
+  });
+});
+
+app.post("/api/mobile/v1/me/amu-reports", async (request, response) => {
+  const session = requireMobileSession(request, "own_amu:create");
+  const policy = getAmuPolicy();
+  const maxInputBytes = Math.round(policy.uploadMaxMb * 1024 * 1024);
+  const parsed = await parseAmuMultipart(request, {
+    maxFileBytes: maxInputBytes,
+    totalMaxBytes: (maxInputBytes * 3) + (1024 * 1024),
+  });
+  const fingerprint = {
+    fields: parsed.fields,
+    documents: parsed.documents.map((document) => ({
+      sha256: sha256(document.buffer),
+      byteSize: document.buffer.length,
+    })),
+  };
+  await executeMobileMutation(request, response, session, "amu.create", fingerprint, async () => {
+    const result = await createOwnAmuReport(session, parsed);
+    return mobileMutationResponse({ report: mobileOwnAmuReport(result.report), replayed: false }, { id: result.report.id });
+  }, 201, {
+    replay: (receipt) => {
+      const report = amuReportMetadata(receipt.id);
+      if (!report || report.employee_number !== session.employeeNumber) {
+        throw httpError(409, "Die wiederholte AUM-Uebermittlung ist nicht mehr verfuegbar.", "MOBILE_IDEMPOTENCY_REPLAY_UNAVAILABLE");
+      }
+      return { report: mobileOwnAmuReport(serializeAmuReports([report])[0]), replayed: true };
+    },
+  });
+});
+
+app.post("/api/mobile/v1/me/amu-reports/:id/withdraw", async (request, response) => {
+  const session = requireMobileSession(request, "own_amu:withdraw");
+  await executeMobileMutation(request, response, session, `amu.withdraw:${Number(request.params.id)}`, {},
+    () => {
+      const result = withdrawOwnAmuReport(session, request.params.id);
+      return mobileMutationResponse({ ok: true, report: null, reports: ownMobileAmuReports(session.employeeNumber), replayed: false }, { id: result.id });
+    }, 200, {
+      replay: () => ({ ok: true, report: null, reports: ownMobileAmuReports(session.employeeNumber), replayed: true }),
+    });
+});
+
+app.get("/api/mobile/v1/me/notifications", (request, response) => {
+  const session = requireMobileSession(request);
+  response.json(mobileNotificationPage(session.employeeNumber, request.query || {}));
+});
+
+app.post("/api/mobile/v1/me/notifications/:id/read", async (request, response) => {
+  const session = requireMobileSession(request);
+  await executeMobileMutation(request, response, session, `notification.read:${String(request.params.id)}`, {},
+    () => markOwnNotificationRead(session, request.params.id));
+});
+
+app.post("/api/mobile/v1/me/notifications/read-all", async (request, response) => {
+  const session = requireMobileSession(request);
+  await executeMobileMutation(request, response, session, "notification.read_all", {},
+    () => markAllOwnNotificationsRead(session));
 });
 
 app.get("/api/mobile/v1/me/time-entries", (request, response) => {

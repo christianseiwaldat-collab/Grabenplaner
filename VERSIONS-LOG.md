@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.79 Beta · Mobile Selbstverwaltung für Abwesenheiten und AUM
+
+- Die versionierte Mobile-API unterstützt Urlaub, Zeitausgleich, Krankmeldungen, geschützte AUM-Uploads und persönliche Benachrichtigungen für den eigenständigen Android-/iOS-Client.
+- Urlaub und ZA bleiben getrennt berechtigt; die App erhält nur eigene, für den jeweiligen Zugriff freigegebene Daten und redigierte AUM-Metadaten ohne Dokument-Download.
+- Schreibende App-Aktionen verwenden UUID-Idempotenz. Wiederholungen nach Verbindungsabbrüchen erzeugen keine Doppelanträge; unklare oder noch laufende Zustände werden sicher fortgesetzt.
+- Rücknahmen schreiben Status und Entscheidungsverlauf atomar. Benachrichtigungen werden erst nach erfolgreichem Abschluss des Fachvorgangs aufgelöst.
+- Der eigenständig versionierte Mobile-Client v0.4 Alpha ergänzt smartphonegerechte Antrags-, Krankmeldungs-/AUM- und Benachrichtigungsansichten mit sicherer Kamera- und Dateiauswahl.
+
 ## v0.78.7 Beta · Sicherer Recovery-App-Smoke mit älteren Live-Daten
 
 - Der exakte Offsite-Restore wird weiterhin zuerst vollständig mit den produktiven Schlüsseln, Dokumenten und Integritätsprüfungen verifiziert.
