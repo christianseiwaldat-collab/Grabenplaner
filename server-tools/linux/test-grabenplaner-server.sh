@@ -187,11 +187,27 @@ if [[ -n "$scanner_result" ]]; then check_ok "AUM-Virenscanner" "$scanner_result
 caddy_validation_ok=0
 if [[ -n "${RUNTIME_DIRECTORY:-}" ]]; then
   install -d -m 0700 "$RUNTIME_DIRECTORY/caddy-config" "$RUNTIME_DIRECTORY/caddy-data"
-  if HOME="$RUNTIME_DIRECTORY" \
-    XDG_CONFIG_HOME="$RUNTIME_DIRECTORY/caddy-config" \
-    XDG_DATA_HOME="$RUNTIME_DIRECTORY/caddy-data" \
-    caddy validate --config "$caddyfile" --adapter caddyfile >/dev/null 2>&1; then
-    caddy_validation_ok=1
+  caddy_raw_config="$RUNTIME_DIRECTORY/caddy-raw.json"
+  caddy_validation_config="$RUNTIME_DIRECTORY/caddy-validation.json"
+  if caddy adapt --config "$caddyfile" --adapter caddyfile >"$caddy_raw_config" 2>/dev/null; then
+    if "$node" - "$caddy_raw_config" "$caddy_validation_config" <<'NODE' >/dev/null 2>&1
+const fs = require("node:fs");
+const [source, target] = process.argv.slice(2);
+const config = JSON.parse(fs.readFileSync(source, "utf8"));
+if (!config || typeof config !== "object" || Array.isArray(config)) process.exit(1);
+for (const entry of Object.values(config.logging?.logs || {})) {
+  if (entry && typeof entry === "object" && !Array.isArray(entry)) delete entry.writer;
+}
+fs.writeFileSync(target, JSON.stringify(config), { mode: 0o600, flag: "wx" });
+NODE
+    then
+      if HOME="$RUNTIME_DIRECTORY" \
+        XDG_CONFIG_HOME="$RUNTIME_DIRECTORY/caddy-config" \
+        XDG_DATA_HOME="$RUNTIME_DIRECTORY/caddy-data" \
+        caddy validate --config "$caddy_validation_config" >/dev/null 2>&1; then
+        caddy_validation_ok=1
+      fi
+    fi
   fi
 elif caddy validate --config "$caddyfile" --adapter caddyfile >/dev/null 2>&1; then
   caddy_validation_ok=1

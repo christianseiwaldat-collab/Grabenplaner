@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.80.4 Beta · Caddy-Nachweis im Mehrdienst-Host
+
+- Der gehärtete Systemmonitor prüft die vollständige Caddy-Konfiguration auch auf gemeinsam genutzten Hosts, ohne Schreibrechte auf Protokollordner anderer Anwendungen zu benötigen.
+- Für die isolierte Validierung werden ausschließlich die Dateiausgaben der adaptierten Prüfkopie entfernt; Routing, TLS, Proxyziele und alle übrigen Caddy-Module werden weiterhin vollständig provisioniert.
+- Die tatsächliche Caddy-Laufzeit, öffentliche HTTPS-Bereitschaft und Sicherheitsheader bleiben getrennte verpflichtende Nachweise.
+
 ## v0.80.3 Beta · Ubuntu-Systemnachweise
 
 - Host-Sicherheitsnachweise akzeptieren nun die von Ubuntu 26.04 ausgegebenen RFC3339-Zeitstempel mit Nanosekunden und normalisieren sie sicher auf Millisekunden.

@@ -121,5 +121,9 @@ test("v0.80 gives sandboxed Caddy validation private writable runtime storage", 
   assert.match(script, /HOME="\$RUNTIME_DIRECTORY"/);
   assert.match(script, /XDG_CONFIG_HOME="\$RUNTIME_DIRECTORY\/caddy-config"/);
   assert.match(script, /XDG_DATA_HOME="\$RUNTIME_DIRECTORY\/caddy-data"/);
+  assert.match(script, /caddy adapt --config "\$caddyfile" --adapter caddyfile/);
+  assert.match(script, /delete entry\.writer/);
+  assert.match(script, /caddy validate --config "\$caddy_validation_config"/);
+  assert.doesNotMatch(script, /caddy validate --config "\$caddy_validation_config" --adapter json/);
   assert.match(script, /caddy_validation_ok/);
 });
