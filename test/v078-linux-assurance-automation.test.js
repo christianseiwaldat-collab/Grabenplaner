@@ -40,6 +40,13 @@ test("v0.78 packages module v4 and migrates only verified v1, v2 or v3 installat
   assert.match(installer, /for template in "\$OFFSITE_MODULE_ROOT"\/systemd\/\*\.in/);
 });
 
+test("offsite installer accepts the app-managed private backup mode without broadening it", () => {
+  assert.match(installer, /backup_root_contract=.*stat --format='%u:%g:%a'/);
+  assert.match(installer, /backup_root_contract" == "\$app_uid:\$app_gid:700"/);
+  assert.match(installer, /backup_root_contract" == "\$app_uid:\$app_gid:750"/);
+  assert.doesNotMatch(installer, /chmod\s+0?750[^\n]*OFFSITE_BACKUP_ROOT/);
+});
+
 test("nightly assurance is persistent, randomized and bound to one fixed allowlisted unit", () => {
   assert.match(timer, /OnCalendar=\*-\*-\* 03:45:00/);
   assert.match(timer, /RandomizedDelaySec=90min/);

@@ -133,7 +133,7 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 
 ## Schnellstart unter Windows
 
-1. Die portable ZIP-Datei unter [Grabenplaner v0.80.1 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.80.1-beta) herunterladen und entpacken.
+1. Die portable ZIP-Datei unter [Grabenplaner v0.80.2 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.80.2-beta) herunterladen und entpacken.
 2. `Grabenplaner v0.80 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
