@@ -11,13 +11,18 @@ const portalHtml = fs.readFileSync(path.join(root, "public", "portal.html"), "ut
 const portalSource = fs.readFileSync(path.join(root, "public", "portal.js"), "utf8");
 
 function sourceFunction(source, name, nextName) {
-  const pattern = new RegExp(`function ${name}\\([\\s\\S]+?(?=\\n\\n(?:async )?function ${nextName}\\()`);
+  const pattern = new RegExp(`function ${name}\\([\\s\\S]+?(?=\\r?\\n\\r?\\n(?:async )?function ${nextName}\\()`);
   const match = source.match(pattern);
   assert.ok(match, `${name} konnte nicht aus dem Quelltext gelesen werden`);
   const context = {};
   vm.runInNewContext(`${match[0]}\nthis.result = ${name};`, context);
   return context.result;
 }
+
+test("UI-Funktionsprüfung unterstützt LF- und CRLF-Zeilenenden", () => {
+  const crlfSource = portalSource.replace(/\r?\n/g, "\r\n");
+  assert.equal(typeof sourceFunction(crlfSource, "leadershipDialogActions", "openLeadershipRequest"), "function");
+});
 
 test("Fallverwaltung zeigt offene und abgeschlossene Krankheits- und AUM-Status", () => {
   for (const status of ["reported", "aum_received", "recovered", "submitted", "returned", "reviewed", "withdrawn", "all"]) {
