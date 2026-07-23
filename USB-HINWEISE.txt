@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.80 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.81 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -12,6 +12,16 @@ Voraussetzung:
 Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
+
+Version v0.81 Beta:
+  - Die Dienstplanung zeigt eine quellenbelegte Pruefung der geplanten
+    Arbeitszeit, Pausen sowie taeglichen und woechentlichen Ruhezeiten.
+  - Der sichere Standard ist ein nicht blockierender Monitorbetrieb.
+    Ohne bestaetigte Profilanwendbarkeit bleibt das Ergebnis manuell zu
+    pruefen.
+  - Regelprofile und Pruefergebnisse sind versioniert und nachvollziehbar.
+    Die Planpruefung ersetzt keine rechtliche Einzelfallpruefung.
+  - Zusaetzlich bleiben alle Verbesserungen aus v0.80 Beta enthalten.
 
 Version v0.80 Beta:
   - Grundrechte einer Rolle koennen pro Person wirksam entzogen und

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.80 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
+  <strong>v0.81 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -47,6 +47,14 @@ Vollständige Recovery-Assurance-Läufe werden weiterhin in einer Ed25519-signie
 v0.78 ergänzt die vollständige, nächtliche Recovery-Assurance-Automatik. Jeder Lauf stellt einen Sicherungsstand außerhalb des Live-Systems wieder her, startet die installierte Anwendung gegen eine isolierte Kopie dieser Daten und hält das Ergebnis in der signierten Nachweiskette fest. Ein zufällig verzögerter systemd-Timer verhindert starre Lastspitzen; Sperren, Zeitgrenzen und vollständiges Aufräumen schützen den Produktivbetrieb.
 
 Das System-Center zeigt zusätzlich den Automatikzustand, begrenzte Langzeittrends und den redigierten Eskalationsstatus. Fehlgeschlagene oder überfällige Nachweise erzeugen deduplizierte interne Warnungen für IT-Admin und Developer. Ein erfolgreicher Sicherungslauf allein wird weiterhin niemals als erfolgreich getestete Wiederherstellung ausgegeben.
+
+## Arbeitszeit-Regelprüfung in v0.81 Beta
+
+Die Dienstplanung enthält eine versionierte, quellenbelegte Prüfung österreichischer Planarbeitszeit. Sie bewertet unter anderem geplante Tages- und Wochenzeiten, Pausen, tägliche und wöchentliche Ruhe sowie Sonn- und Feiertagsarbeit. Planzeit und tatsächlich erfasste Arbeitszeit bleiben technisch strikt getrennt.
+
+Neue Installationen starten bewusst im **Monitorbetrieb**. Solange Alter, Branche und betriebliche Anwendbarkeit eines Profils nicht durch eine berechtigte Stelle bestätigt wurden, erscheinen Befunde als manuell zu prüfen und blockieren keine Planung. Profilfassungen, verwendete Quellen, Prüfergebnisse und begründete Ausnahmen werden nachvollziehbar gespeichert. Die technische Prüfung ist eine Planungshilfe; sie ersetzt weder Rechtsberatung noch die Prüfung des anwendbaren Kollektivvertrags oder betrieblicher Sonderregeln.
+
+Technische Details, Grenzen und der amtliche Quellenkatalog stehen in [Arbeitszeit-Regelprüfung](docs/ARBEITSZEIT-REGELPRUEFUNG.md).
 
 ## Planung, Verwaltung und Mitarbeiterportal
 
@@ -100,6 +108,7 @@ Das System-Center zeigt zusätzlich den Automatikzustand, begrenzte Langzeittren
 - Urlaubsplanung mit Jahres-, Quartals- und Monatsübersicht
 - PDF-Export für Dienstpläne, Abteilungspläne und Urlaubsübersichten
 - Wochenstundenübersicht, Plan-/Ist-Vergleich, Pausenhinweise und Samstagswertung
+- Versionierte österreichische Planarbeitszeit-Regelprüfung mit Monitorbetrieb, Quellenbelegen und nachvollziehbaren Prüfreceipts
 - Mitarbeiterportal mit Urlaubs- und ZA-Anträgen, gemeinsamem Krankmeldungs-/AUM-Ablauf, lokaler Dokumenterkennung und Zeiterfassung
 - Persönliche Portal-Einstellungen für Passwort und freiwillige WLAN-Zeitvorschläge
 - Datenschutzneutrale, konfigurierbare Begrüßungen für Arbeitstag, Urlaubsrückkehr und Genesung
@@ -133,8 +142,8 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 
 ## Schnellstart unter Windows
 
-1. Die portable ZIP-Datei unter [Grabenplaner v0.80.4 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.80.4-beta) herunterladen und entpacken.
-2. `Grabenplaner v0.80 Beta starten.cmd` doppelt anklicken.
+1. Die portable ZIP-Datei unter [Grabenplaner Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
+2. `Grabenplaner v0.81 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.
