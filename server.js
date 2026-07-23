@@ -139,6 +139,28 @@ const { createIntegrationSecretVault } = require("./lib/integration-secret-vault
 const { createSqlViewSource } = require("./lib/sql-view-source");
 const { createIdempotencyKey, createSafeApiDelivery, payloadSha256 } = require("./lib/safe-api-delivery");
 const { CONTRACT_IDS, contractById, contractSha256, contractSummaries } = require("./lib/integration-contracts");
+const {
+  BUILTIN_WORK_RULE_PROFILES,
+  SOURCE_CATALOG: WORK_RULE_SOURCE_CATALOG,
+  WORK_RULE_ENGINE_VERSION,
+  canonicalSha256: workRuleSha256,
+  evaluatePlannedSchedule,
+  getProfile: getBuiltinWorkRuleProfile,
+  getRuleCatalog,
+  summarize: summarizeWorkRuleFindings,
+} = require("./lib/work-rules");
+const {
+  getWorkRuleEvaluation,
+  getWorkRuleProfileVersion,
+  listWorkRuleAssignments,
+  listWorkRuleEvaluations,
+  listWorkRuleProfiles,
+  profileVersionId,
+  recordWorkRuleEvaluation,
+  resolveWorkRuleAssignmentFromList,
+  saveWorkRuleAssignment,
+  seedBuiltinWorkRuleProfiles,
+} = require("./lib/work-rules/store");
 const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
@@ -210,6 +232,10 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "employees:import", label: "Personalstammdaten importieren", description: "CSV-/Excel-Import mit Vorschau; sensible Personalaktfelder sind ausgeschlossen.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "payroll:export", label: "Lohnverrechnungsdaten exportieren", description: "Zeit-, Abwesenheits- und Zuschlagsdaten als CSV oder Excel ausgeben.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "payroll:deliver", label: "Lohnverrechnungsdaten sicher übertragen", description: "Ausschließlich final geprüfte und minimierte Daten an ein vorkonfiguriertes HTTPS-Ziel übergeben.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
+  { id: "work_rules:read", label: "Arbeitszeit-Regelprüfungen lesen", description: "Quellenbelegte Hinweise zur Dienstplanung lesen; keine pauschale Rechtsfreigabe.", group: "Arbeitszeitregeln", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "work_rules:manage", label: "Arbeitszeit-Regelprofile verwalten", description: "Versionierte Profile und deren Geltungsbereich verwalten.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "work_rules:exception", label: "Begründete Regelausnahmen dokumentieren", description: "Ausschließlich ausdrücklich übersteuerbare Hinweise mit Grund und Nachweis behandeln.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "work_rules:audit", label: "Arbeitszeit-Regelprotokoll lesen", description: "Unveränderliche Bewertungen, Profilversionen und Ausnahmen nachvollziehen.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "branding:read", label: "Branding-Verwaltung lesen", group: "System & Verwaltung", warningLevel: "high" },
   { id: "branding:write", label: "Brandings verwalten und zuweisen", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "operation_mode:write", label: "Betriebsmodus umschalten", group: "System & Verwaltung", warningLevel: "critical" },
@@ -329,6 +355,7 @@ const portalGlobalPermissionIds = new Set([
   "processes:write",
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
   "integrations:connections:write", "integrations:credentials:write", "branding:read", "branding:write",
+  "work_rules:manage", "work_rules:exception", "work_rules:audit",
   "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "update:write", "system:write", "wifi:settings",
   "users:write", "roles:read", "roles:write", "rights:read", "rights:write", "scopes:write",
   "audit:read", "usb:provision", "developer:system",
@@ -374,6 +401,7 @@ const builtinPortalRoles = [
       "employees:read",
       "schedule:read",
       "schedule:write",
+      "work_rules:read",
       "time:read",
       "time:review",
       "vacation:read",
@@ -396,6 +424,7 @@ const builtinPortalRoles = [
       "own_vacation:read", "own_vacation:request", "own_amu:create", "own_amu:read", "own_amu:withdraw",
       "own_sickness:create", "own_sickness:read",
       "employees:read", "schedule:read", "schedule:write",
+      "work_rules:read",
       "time:read", "time:review", "vacation:read", "vacation:approve",
       "sickness:read", "notifications:settings",
     ],
@@ -424,6 +453,10 @@ const builtinPortalRoles = [
       "cost_centers:write",
       "schedule:read",
       "schedule:write",
+      "work_rules:read",
+      "work_rules:manage",
+      "work_rules:exception",
+      "work_rules:audit",
       "time:read",
       "time:review",
       "time:settings",
@@ -498,6 +531,10 @@ const builtinPortalRoles = [
       "cost_centers:read",
       "cost_centers:write",
       "schedule:read",
+      "work_rules:read",
+      "work_rules:manage",
+      "work_rules:exception",
+      "work_rules:audit",
       "time:read",
       "time:review",
       "time:settings",
@@ -554,6 +591,7 @@ builtinPortalRoles.push(
       "own_vacation:read", "own_vacation:request", "own_amu:create", "own_amu:read", "own_amu:withdraw",
       "own_sickness:create", "own_sickness:read",
       "employees:read", "schedule:read", "rights:read", "rights:write",
+      "work_rules:read", "work_rules:manage", "work_rules:exception", "work_rules:audit",
       "personnel:central:read", "personnel:central:write", "cost_centers:read", "cost_centers:write",
       "employees:write",
       "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "update:write", "system:write", "users:write",
@@ -2148,6 +2186,105 @@ function createSchema() {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS work_rule_profiles (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      jurisdiction TEXT NOT NULL DEFAULT 'AT',
+      sector TEXT NOT NULL DEFAULT 'general',
+      builtin INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'draft'
+        CHECK(status IN ('draft','active','retired')),
+      current_version_id TEXT,
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS work_rule_profile_versions (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL,
+      version TEXT NOT NULL,
+      layer TEXT NOT NULL
+        CHECK(layer IN ('law','sector','collective_agreement','company','contract')),
+      status TEXT NOT NULL DEFAULT 'draft'
+        CHECK(status IN ('draft','published','retired')),
+      valid_from TEXT NOT NULL,
+      valid_to TEXT,
+      rules_json TEXT NOT NULL,
+      sources_json TEXT NOT NULL,
+      content_sha256 TEXT NOT NULL,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      published_at TEXT,
+      UNIQUE(profile_id, version),
+      FOREIGN KEY (profile_id) REFERENCES work_rule_profiles(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS work_rule_assignments (
+      id TEXT PRIMARY KEY,
+      profile_version_id TEXT NOT NULL,
+      scope_type TEXT NOT NULL DEFAULT 'installation'
+        CHECK(scope_type IN ('installation','location','department','employee')),
+      scope_key TEXT NOT NULL DEFAULT '',
+      valid_from TEXT NOT NULL,
+      valid_to TEXT,
+      enforcement_mode TEXT NOT NULL DEFAULT 'monitor'
+        CHECK(enforcement_mode IN ('monitor','enforced')),
+      applicability_confirmed INTEGER NOT NULL DEFAULT 0,
+      confirmed_by TEXT NOT NULL DEFAULT '',
+      confirmed_at TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (profile_version_id) REFERENCES work_rule_profile_versions(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS work_rule_evaluation_runs (
+      id TEXT PRIMARY KEY,
+      target_type TEXT NOT NULL
+        CHECK(target_type IN ('planned_schedule','actual_time')),
+      scope_type TEXT NOT NULL,
+      scope_key TEXT NOT NULL DEFAULT '',
+      period_from TEXT NOT NULL,
+      period_to TEXT NOT NULL,
+      profile_version_ids_json TEXT NOT NULL,
+      input_sha256 TEXT NOT NULL,
+      result_sha256 TEXT NOT NULL,
+      result_json TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      outcome TEXT NOT NULL
+        CHECK(outcome IN ('pass','attention','manual_review','blocked')),
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS work_rule_exceptions (
+      id TEXT PRIMARY KEY,
+      evaluation_id TEXT NOT NULL,
+      finding_fingerprint TEXT NOT NULL,
+      rule_id TEXT NOT NULL,
+      profile_version_id TEXT NOT NULL,
+      exception_type TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      evidence TEXT NOT NULL DEFAULT '',
+      state TEXT NOT NULL DEFAULT 'active'
+        CHECK(state IN ('active','revoked','expired')),
+      valid_from TEXT NOT NULL,
+      valid_to TEXT,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      revoked_by TEXT,
+      revoked_at TEXT,
+      FOREIGN KEY (evaluation_id) REFERENCES work_rule_evaluation_runs(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (profile_version_id) REFERENCES work_rule_profile_versions(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
     CREATE TABLE IF NOT EXISTS schema_migrations (
       id TEXT PRIMARY KEY,
       app_version TEXT NOT NULL,
@@ -2189,6 +2326,14 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_custom_process_runs_process ON custom_process_runs(process_id, status, created_at);
     CREATE INDEX IF NOT EXISTS idx_custom_process_run_steps_status ON custom_process_run_steps(run_id, status, sort_order);
     CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
+    CREATE INDEX IF NOT EXISTS idx_work_rule_versions_profile_validity
+      ON work_rule_profile_versions(profile_id, status, valid_from, valid_to);
+    CREATE INDEX IF NOT EXISTS idx_work_rule_assignments_scope_validity
+      ON work_rule_assignments(scope_type, scope_key, active, valid_from, valid_to);
+    CREATE INDEX IF NOT EXISTS idx_work_rule_evaluations_period
+      ON work_rule_evaluation_runs(target_type, period_from, period_to, created_at);
+    CREATE INDEX IF NOT EXISTS idx_work_rule_exceptions_finding
+      ON work_rule_exceptions(finding_fingerprint, state, valid_from, valid_to);
     CREATE INDEX IF NOT EXISTS idx_portal_users_role_active ON portal_users(role, active);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_employee ON portal_sessions(employee_number, expires_at);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_expiry ON portal_sessions(expires_at, revoked_at);
@@ -2196,6 +2341,19 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_mobile_sessions_expiry ON mobile_sessions(refresh_expires_at, revoked_at);
     CREATE INDEX IF NOT EXISTS idx_mobile_refresh_history_consumed ON mobile_refresh_token_history(consumed_at);
     CREATE INDEX IF NOT EXISTS idx_portal_permission_grants_employee ON portal_permission_grants(employee_number, permission);
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_profile_versions_immutable_update
+    BEFORE UPDATE ON work_rule_profile_versions
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule profile versions are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_profile_versions_immutable_delete
+    BEFORE DELETE ON work_rule_profile_versions
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule profile versions are immutable');
+    END;
+
   `);
 }
 
@@ -2233,6 +2391,78 @@ function migrateLegacySchema() {
   }
 }
 
+function ensureWorkRuleEvaluationReceiptIntegrity() {
+  if (!tableExists("work_rule_evaluation_runs")
+    || !columnExists("work_rule_evaluation_runs", "receipt_sha256")) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.exec(`
+      DROP TRIGGER IF EXISTS trg_work_rule_evaluations_immutable_update;
+      DROP TRIGGER IF EXISTS trg_work_rule_evaluations_immutable_delete;
+    `);
+    const legacyRows = db.prepare(`
+      SELECT *
+      FROM work_rule_evaluation_runs
+      WHERE TRIM(COALESCE(receipt_sha256, '')) = ''
+      ORDER BY created_at, id
+    `).all();
+    const updateReceipt = db.prepare(`
+      UPDATE work_rule_evaluation_runs
+      SET receipt_sha256 = ?
+      WHERE id = ? AND TRIM(COALESCE(receipt_sha256, '')) = ''
+    `);
+    for (const row of legacyRows) {
+      let result;
+      let profileVersionIds;
+      try {
+        result = JSON.parse(row.result_json);
+        profileVersionIds = JSON.parse(row.profile_version_ids_json);
+      } catch {
+        throw new Error(`Der bestehende Prüfbeleg ${row.id} kann nicht sicher migriert werden.`);
+      }
+      if (!result || typeof result !== "object" || Array.isArray(result)
+        || !Array.isArray(profileVersionIds)
+        || workRuleSha256(result) !== row.result_sha256) {
+        throw new Error(`Der bestehende Prüfbeleg ${row.id} hat keine gültige Ergebnis-Prüfsumme.`);
+      }
+      const receiptSha256 = workRuleSha256({
+        schemaVersion: 1,
+        id: row.id,
+        targetType: row.target_type,
+        scopeType: row.scope_type,
+        scopeKey: row.scope_key,
+        periodFrom: row.period_from,
+        periodTo: row.period_to,
+        profileVersionIds,
+        inputSha256: row.input_sha256,
+        resultSha256: row.result_sha256,
+        outcome: row.outcome,
+        result,
+        createdBy: row.created_by,
+        createdAt: row.created_at,
+      });
+      updateReceipt.run(receiptSha256, row.id);
+    }
+    db.exec(`
+      CREATE TRIGGER trg_work_rule_evaluations_immutable_update
+      BEFORE UPDATE ON work_rule_evaluation_runs
+      BEGIN
+        SELECT RAISE(ABORT, 'work rule evaluation receipts are immutable');
+      END;
+
+      CREATE TRIGGER trg_work_rule_evaluations_immutable_delete
+      BEFORE DELETE ON work_rule_evaluation_runs
+      BEGIN
+        SELECT RAISE(ABORT, 'work rule evaluation receipts are immutable');
+      END;
+    `);
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
 const protectedPersonnelMigrationRequired = tableExists("amu_reports") && (
   !columnExists("amu_reports", "protected_payload")
   || !columnExists("amu_documents", "protected_payload")
@@ -2246,6 +2476,7 @@ const portalMobileBaselineMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.60-portal-mobile-foundation' LIMIT 1").get();
 const costCenterMigrationId = "v0.71-cost-centers-personnel";
 const shiftLocationMigrationId = "v0.71-shift-locations";
+const workRuleMigrationId = "v0.81-austrian-work-rule-engine";
 const costCenterMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(costCenterMigrationId)
   || !tableExists("cost_centers")
@@ -2256,9 +2487,17 @@ const shiftLocationMigrationRequired = !tableExists("schema_migrations")
   || !columnExists("shifts", "location_id")
   || !db.prepare("PRAGMA foreign_key_list(shifts)").all()
     .some((row) => row.from === "location_id" && row.table === "locations" && row.to === "id");
+const workRuleMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(workRuleMigrationId)
+  || !tableExists("work_rule_profiles")
+  || !tableExists("work_rule_profile_versions")
+  || !tableExists("work_rule_assignments")
+  || !tableExists("work_rule_evaluation_runs")
+  || !columnExists("work_rule_evaluation_runs", "receipt_sha256")
+  || !tableExists("work_rule_exceptions");
 if (databaseExistedBeforeOpen && (portalMobileBaselineMigrationRequired || protectedPersonnelMigrationRequired
   || unreleasedSicknessDraftSchemaPresent || legacySchemaMigrationRequired || costCenterMigrationRequired
-  || shiftLocationMigrationRequired)) {
+  || shiftLocationMigrationRequired || workRuleMigrationRequired)) {
   createInternalDatabaseBackup("pre-migration");
 }
 
@@ -2297,6 +2536,8 @@ ensureColumn("custom_process_run_steps", "completion_request_id", "TEXT NOT NULL
 ensureColumn("integration_connections", "revision", "INTEGER NOT NULL DEFAULT 1");
 ensureColumn("integration_deliveries", "connection_revision", "INTEGER NOT NULL DEFAULT 1");
 ensureColumn("integration_deliveries", "connection_fingerprint", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("work_rule_evaluation_runs", "receipt_sha256", "TEXT NOT NULL DEFAULT ''");
+ensureWorkRuleEvaluationReceiptIntegrity();
 if (!columnExists("week_options", "group_id")) {
   db.exec("ALTER TABLE week_options ADD COLUMN group_id TEXT");
 }
@@ -3076,6 +3317,14 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run("v0.71-custom-processes-notifications", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.80-revocable-role-rights", packageMetadata.version);
+seedBuiltinWorkRuleProfiles(
+  db,
+  BUILTIN_WORK_RULE_PROFILES,
+  WORK_RULE_SOURCE_CATALOG,
+  { actor: "system" },
+);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run(workRuleMigrationId, packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -4203,6 +4452,12 @@ function sessionHasGlobalScope(session) {
   return !session || session.employeeNumber === "local" || GLOBAL_SCOPE_PORTAL_ROLES.has(session.role);
 }
 
+function sessionCanReadWorkRules(session) {
+  return !session
+    || session.employeeNumber === "local"
+    || session.permissions?.includes("work_rules:read");
+}
+
 function assertSessionContextScope(session, input = {}) {
   if (sessionHasGlobalScope(session)) return;
   const locationId = String(input.locationId || input.location || "").trim();
@@ -4850,10 +5105,21 @@ function enforceAdminApiAccess(request, _response, next) {
     const usbProvisioningRoute = /^\/usb-provisioning(?:\/|$)/.test(request.path);
     let permission = usbProvisioningRoute ? "usb:provision" : "schedule:read";
     const integrationRoute = /^\/integrations(?:\/|$)/.test(request.path);
+    const workRuleRoute = /^\/work-rules(?:\/|$)/.test(request.path);
     const personnelDirectoryRoute = /^\/personnel-directory(?:\/|$)/.test(request.path);
     const personnelVacationRoute = /^\/personnel-vacations(?:\/|$)/.test(request.path);
     const costCenterRoute = /^\/cost-centers(?:\/|$)/.test(request.path);
-    if (personnelDirectoryRoute) {
+    if (workRuleRoute) {
+      if (/^\/work-rules\/exceptions(?:\/|$)/.test(request.path)) {
+        permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "work_rules:audit" : "work_rules:exception";
+      } else if (/^\/work-rules\/evaluations(?:\/|$)/.test(request.path)) {
+        permission = "work_rules:audit";
+      } else if (/^\/work-rules\/evaluate\/?$/.test(request.path)) {
+        permission = "work_rules:read";
+      } else {
+        permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "work_rules:read" : "work_rules:manage";
+      }
+    } else if (personnelDirectoryRoute) {
       permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "personnel:central:read" : "personnel:central:write";
     } else if (personnelVacationRoute) {
       permission = "personnel:central:read";
@@ -10130,7 +10396,7 @@ function approvedVacationsForEmployee(employeeNumber, fromDate = `${new Date().g
   return [...grouped.values()];
 }
 
-function insertApprovedTimeOff(entry) {
+function insertApprovedTimeOff(entry, actor = "system") {
   const dateFrom = entry.date_from || entry.request_date;
   const dateTo = entry.date_to || entry.request_date;
   const allDay = Boolean(entry.all_day) || dateTo !== dateFrom;
@@ -10166,10 +10432,11 @@ function insertApprovedTimeOff(entry) {
     firstId ||= Number(result.lastInsertRowid);
     segmentStart = addDays(segmentEnd, 1);
   }
+  recordWorkRuleEvaluationsForShiftChanges(shifts, actor);
   return firstId;
 }
 
-function restoreApprovedTimeOff(entry) {
+function restoreApprovedTimeOff(entry, actor = "system") {
   let originals = [];
   try { originals = JSON.parse(entry.original_shifts_json || "[]"); } catch {}
   db.prepare("DELETE FROM week_options WHERE group_id = ? OR id = ?").run(`za-request-${entry.id}`, entry.option_id || 0);
@@ -10185,6 +10452,44 @@ function restoreApprovedTimeOff(entry) {
     `).run(original.employee_number, original.location_id, original.department_id, original.shift_date,
       original.start_time, original.end_time, original.area || "", original.note || "");
   }
+  recordWorkRuleEvaluationsForShiftChanges(originals, actor);
+}
+
+function recordWorkRuleEvaluationsForShiftChanges(shiftRows, actor = "system") {
+  const targets = new Map();
+  for (const shift of Array.isArray(shiftRows) ? shiftRows : []) {
+    const employeeNumber = String(shift.employee_number || shift.employeeNumber || "").trim();
+    const locationId = String(shift.location_id || shift.locationId || "").trim();
+    const shiftDate = String(shift.shift_date || shift.shiftDate || shift.date || "");
+    if (!employeeNumber || !locationId || !isIsoDate(shiftDate)) continue;
+    const departmentId = Number(shift.department_id || shift.departmentId || 0) || null;
+    const weekStart = getMonday(shiftDate);
+    const key = `${weekStart}|${locationId}|${departmentId || ""}|${employeeNumber}`;
+    targets.set(key, { weekStart, locationId, departmentId, employeeNumber });
+  }
+  const recorded = [];
+  for (const target of targets.values()) {
+    const employee = db.prepare(`
+      SELECT personnel_number, full_name, nickname, home_location_id, preferred_department_id
+      FROM employees
+      WHERE personnel_number = ?
+    `).get(target.employeeNumber);
+    if (!employee) continue;
+    const context = resolvePlanningContext({
+      locationId: target.locationId,
+      departmentId: target.departmentId,
+    });
+    const evaluated = evaluateScheduleWorkRules(target.weekStart, context, [employee]);
+    assertWorkRuleAssessmentAllowsMutation(evaluated.assessment);
+    const assessment = recordScheduleWorkRuleEvaluation(
+      target.weekStart,
+      context,
+      [employee],
+      actor,
+    );
+    recorded.push({ ...target, assessment });
+  }
+  return recorded;
 }
 
 function recordRequestDecision(kind, id, stage, action, actor, note = "") {
@@ -13240,6 +13545,467 @@ function buildSaturdayServiceStats(weekStart, context, employees, currentWeekShi
   };
 }
 
+function workRuleEvaluationRange(weekStart) {
+  return {
+    start: addDays(weekStart, -(16 * 7)),
+    end: addDays(weekStart, 6),
+  };
+}
+
+function workRuleFindingTouchesPeriod(finding, periodFrom, periodTo) {
+  const scope = finding?.scope || {};
+  const evidence = finding?.evidence || {};
+  const date = String(scope.date || evidence.date || "");
+  if (isIsoDate(date)) return date >= periodFrom && date <= periodTo;
+  const from = String(scope.start || scope.weekStart || scope.from || "").slice(0, 10);
+  const to = String(scope.end || scope.weekEnd || scope.to || "").slice(0, 10);
+  if (isIsoDate(from) && isIsoDate(to)) return from <= periodTo && to >= periodFrom;
+  return ["employee", "evaluation_range"].includes(scope.type)
+    || ["at.applicability.adult", "at.input.shift"].includes(finding?.ruleId);
+}
+
+function presentWorkRuleFinding(finding, employeeNumber, employeeName, catalog, periodFrom, periodTo) {
+  const displayState = finding.state === "pass"
+    ? "pass"
+    : (finding.state === "unknown"
+      ? "manual_review"
+      : (finding.effectiveEnforcement === "block" ? "blocked" : "attention"));
+  return {
+    ...finding,
+    resultState: finding.state,
+    state: displayState,
+    title: catalog.rules[finding.ruleId]?.title || finding.ruleId,
+    employeeNumber,
+    employeeName,
+    periodFrom,
+    periodTo,
+  };
+}
+
+function scheduleWorkRuleFacts(weekStart, context, employees, candidateShift = null) {
+  const range = workRuleEvaluationRange(weekStart);
+  const employeeNumbers = [...new Set(employees.map((employee) => String(employee.personnel_number)))];
+  if (!employeeNumbers.length) {
+    return { range, employees: [], shifts: [], holidays: [], candidateShift: null };
+  }
+  const placeholders = employeeNumbers.map(() => "?").join(",");
+  let shifts = db.prepare(`
+    SELECT id, employee_number, location_id, department_id, shift_date, start_time, end_time
+    FROM shifts
+    WHERE employee_number IN (${placeholders})
+      AND shift_date BETWEEN ? AND ?
+    ORDER BY employee_number, shift_date, start_time, id
+  `).all(...employeeNumbers, range.start, range.end);
+
+  if (candidateShift) {
+    const candidateId = Number(candidateShift.id || 0);
+    if (candidateId) shifts = shifts.filter((shift) => Number(shift.id) !== candidateId);
+    shifts.push({
+      id: candidateId ? `candidate-${candidateId}` : "candidate-new",
+      employee_number: candidateShift.employeeNumber,
+      location_id: candidateShift.locationId,
+      department_id: candidateShift.departmentId,
+      shift_date: candidateShift.shiftDate,
+      start_time: candidateShift.startTime,
+      end_time: candidateShift.endTime,
+    });
+  }
+
+  const normalizedShifts = shifts.map((shift) => {
+    const metrics = shiftMetrics(shift, settingsForLocation(shift.location_id || context.locationId));
+    return {
+      id: String(shift.id),
+      employeeId: String(shift.employee_number),
+      date: shift.shift_date,
+      startTime: shift.start_time,
+      endTime: shift.end_time,
+      breakMinutes: metrics.break_minutes,
+      breakSource: metrics.lunch_break_minutes > 0 ? "planned_window" : (metrics.break_minutes > 0 ? "configured_assumption" : "none"),
+      locationId: String(shift.location_id || ""),
+      departmentId: shift.department_id ? Number(shift.department_id) : null,
+    };
+  });
+  const holidays = getGlobalDayBlocksForRange(range.start, range.end, context.locationId)
+    .filter((block) => block.is_public_holiday)
+    .map((block) => block.block_date);
+  return {
+    range,
+    employees: employeeNumbers,
+    shifts: normalizedShifts,
+    holidays,
+    candidateShift: candidateShift ? {
+      employeeNumber: candidateShift.employeeNumber,
+      date: candidateShift.shiftDate,
+      startTime: candidateShift.startTime,
+      endTime: candidateShift.endTime,
+    } : null,
+  };
+}
+
+function workRuleEvaluationEmployees(employees, candidateShift = null) {
+  const result = Array.isArray(employees) ? [...employees] : [];
+  const candidateEmployeeNumber = String(candidateShift?.employeeNumber || "").trim();
+  if (!candidateEmployeeNumber
+    || result.some((employee) => String(employee.personnel_number) === candidateEmployeeNumber)) return result;
+  const candidateEmployee = db.prepare(`
+    SELECT personnel_number, full_name, nickname, home_location_id, preferred_department_id
+    FROM employees
+    WHERE personnel_number = ? AND active = 1
+  `).get(candidateEmployeeNumber);
+  if (candidateEmployee) result.push(candidateEmployee);
+  return result;
+}
+
+function workRuleAssignmentGroups(facts, context, employeeNumber, assignments) {
+  const groups = new Map();
+  const defaultProfile = getBuiltinWorkRuleProfile("at-retail-adult-monitor");
+  const defaultAssignment = {
+    id: null,
+    profileId: defaultProfile.id,
+    profileVersionId: profileVersionId(defaultProfile),
+    enforcementMode: "monitor",
+    applicabilityConfirmed: false,
+  };
+  const employeeShifts = facts.shifts.filter((shift) => shift.employeeId === employeeNumber);
+  for (let date = facts.range.start; date <= facts.range.end; date = addDays(date, 1)) {
+    const dateShifts = employeeShifts.filter((shift) => shift.date === date);
+    const dateContexts = new Map();
+    if (dateShifts.length) {
+      for (const shift of dateShifts) {
+        const value = {
+          locationId: String(shift.locationId || context.locationId),
+          departmentId: Number(shift.departmentId || 0) || null,
+        };
+        const key = `${value.locationId}|${value.departmentId || ""}`;
+        if (!dateContexts.has(key)) dateContexts.set(key, { ...value, shiftIds: [] });
+        dateContexts.get(key).shiftIds.push(String(shift.id));
+      }
+    } else {
+      dateContexts.set(`${context.locationId}|${context.departmentId || ""}`, {
+        locationId: context.locationId,
+        departmentId: context.departmentId,
+        shiftIds: [],
+      });
+    }
+    for (const dateContext of dateContexts.values()) {
+      const assignment = resolveWorkRuleAssignmentFromList(assignments, {
+        date,
+        locationId: dateContext.locationId,
+        departmentId: dateContext.departmentId,
+        employeeNumber,
+      }) || defaultAssignment;
+      const key = [
+        assignment.profileVersionId,
+        assignment.enforcementMode || "monitor",
+        assignment.applicabilityConfirmed === true ? "confirmed" : "unconfirmed",
+      ].join("|");
+      if (!groups.has(key)) {
+        groups.set(key, {
+          assignmentIds: new Set(),
+          dates: new Set(),
+          shiftIds: new Set(),
+          profileVersionId: assignment.profileVersionId,
+          enforcementMode: assignment.enforcementMode || "monitor",
+          applicabilityConfirmed: assignment.applicabilityConfirmed === true,
+        });
+      }
+      const group = groups.get(key);
+      if (assignment.id) group.assignmentIds.add(assignment.id);
+      group.dates.add(date);
+      for (const shiftId of dateContext.shiftIds) group.shiftIds.add(shiftId);
+    }
+  }
+  return [...groups.values()];
+}
+
+function workRuleFindingAppliesToDates(finding, dates, targetFrom, targetTo) {
+  const assignedDates = dates instanceof Set ? dates : new Set(dates || []);
+  const containsRange = (from, to = from) => {
+    if (!isIsoDate(from) || !isIsoDate(to)) return false;
+    for (let date = from; date <= to; date = addDays(date, 1)) {
+      if (!assignedDates.has(date)) return false;
+    }
+    return true;
+  };
+  const scope = finding?.scope || {};
+  const evidence = finding?.evidence || {};
+  const directDate = String(scope.date || evidence.date || "").slice(0, 10);
+  if (isIsoDate(directDate)) return assignedDates.has(directDate);
+  const from = String(scope.start || scope.weekStart || scope.from || "").slice(0, 10);
+  const to = String(scope.end || scope.weekEnd || scope.to || "").slice(0, 10);
+  if (isIsoDate(from)) return containsRange(from, isIsoDate(to) ? to : from);
+  for (const date of assignedDates) {
+    if (date >= targetFrom && date <= targetTo) return true;
+  }
+  return false;
+}
+
+function workRuleAssignmentBoundaryFinding(profileEvaluations, employeeNumber, range) {
+  if (!Array.isArray(profileEvaluations) || profileEvaluations.length < 2) return null;
+  const assignments = profileEvaluations.map((entry) => {
+    const dates = [...entry.dates].sort();
+    return {
+      profileVersionId: entry.profileVersionId,
+      enforcementMode: entry.enforcementMode,
+      applicabilityConfirmed: entry.applicabilityConfirmed,
+      dateFrom: dates[0] || null,
+      dateTo: dates.at(-1) || null,
+    };
+  });
+  const primary = profileEvaluations[0];
+  const core = {
+    ruleId: "at.system.profile-boundary",
+    profileId: primary.profile.id,
+    profileVersion: primary.profile.version,
+    state: "unknown",
+    severity: "warning",
+    baseEnforcement: "manual_review",
+    effectiveEnforcement: profileEvaluations.some((entry) => entry.enforcementMode === "enforced")
+      ? "manual_review"
+      : "advisory",
+    message: "Im Prüfzeitraum wechseln Regelprofil oder Durchsetzungsmodus. Wochen-, Durchschnitts- und Ruhezeitgrenzen müssen an der Profilgrenze fachlich geprüft werden.",
+    scope: {
+      type: "evaluation_range",
+      start: range.start,
+      end: range.end,
+    },
+    evidence: {
+      metric: "profile_assignment_continuity",
+      employeeNumber,
+      assignments,
+    },
+    sourceRefs: [],
+  };
+  return { ...core, fingerprint: workRuleSha256(core) };
+}
+
+function evaluateScheduleWorkRules(weekStart, context, employees, candidateShift = null) {
+  const evaluationEmployees = workRuleEvaluationEmployees(employees, candidateShift);
+  const facts = scheduleWorkRuleFacts(weekStart, context, evaluationEmployees, candidateShift);
+  const weekEnd = addDays(weekStart, 6);
+  const catalog = getRuleCatalog();
+  const assignments = listWorkRuleAssignments(db);
+  const employeeResults = evaluationEmployees.map((employee) => {
+    const employeeNumber = String(employee.personnel_number);
+    const sensitive = personnelSensitiveProfile(employeeNumber);
+    const groups = workRuleAssignmentGroups(facts, context, employeeNumber, assignments);
+    const profileEvaluations = groups.map((group) => {
+      const version = getWorkRuleProfileVersion(db, group.profileVersionId);
+      const profile = version?.profile || getBuiltinWorkRuleProfile(
+        version?.profileId || String(group.profileVersionId || "").split("@")[0],
+      );
+      if (!profile) throw new Error(`Die zugewiesene Regelprofil-Version ${group.profileVersionId} ist nicht auswertbar.`);
+      const evaluated = evaluatePlannedSchedule({
+        basis: "planned_schedule",
+        profileId: profile.id,
+        profile,
+        enforcementMode: group.enforcementMode,
+        shifts: facts.shifts.filter((shift) => (
+          shift.employeeId === employeeNumber && group.shiftIds.has(String(shift.id))
+        )),
+        employee: {
+          id: employeeNumber,
+          birthDate: sensitive.identity.birthDate || undefined,
+        },
+        rangeStart: [...group.dates].sort()[0] || facts.range.start,
+        rangeEnd: [...group.dates].sort().at(-1) || facts.range.end,
+        holidays: facts.holidays,
+        applicabilityConfirmed: group.applicabilityConfirmed,
+        timeZone: "Europe/Vienna",
+        ruleDefinitions: version?.rules,
+        sourceCatalog: version?.sources,
+      });
+      return {
+        ...group,
+        assignmentIds: [...group.assignmentIds],
+        shiftIds: [...group.shiftIds],
+        profile,
+        sources: version?.sources || [],
+        result: {
+          ...evaluated,
+          findings: evaluated.findings.filter((finding) => workRuleFindingAppliesToDates(
+            finding,
+            group.dates,
+            weekStart,
+            weekEnd,
+          )),
+        },
+      };
+    });
+    const findings = profileEvaluations.flatMap((entry) => entry.result.findings);
+    const boundaryFinding = workRuleAssignmentBoundaryFinding(
+      profileEvaluations,
+      employeeNumber,
+      facts.range,
+    );
+    if (boundaryFinding) findings.push(boundaryFinding);
+    const primary = profileEvaluations.find((entry) => (
+      [...entry.dates].some((date) => date >= weekStart && date <= weekEnd)
+    )) || profileEvaluations[0];
+    const resultCore = {
+      engineVersion: WORK_RULE_ENGINE_VERSION,
+      catalogVersion: catalog.version,
+      basis: "planned_schedule",
+      timeZone: "Europe/Vienna",
+      profile: primary?.result.profile || { id: "unassigned", version: "unknown" },
+      enforcementMode: profileEvaluations.some((entry) => entry.result.enforcementMode === "enforced")
+        ? "enforced"
+        : "monitor",
+      range: { start: facts.range.start, end: facts.range.end, valid: true },
+      employeeId: employeeNumber,
+      findings,
+      profileAssignments: profileEvaluations.map((entry) => ({
+        assignmentIds: entry.assignmentIds,
+        profileVersionId: entry.profileVersionId,
+        enforcementMode: entry.enforcementMode,
+        applicabilityConfirmed: entry.applicabilityConfirmed,
+        dates: [...entry.dates].sort(),
+      })),
+    };
+    const result = {
+      ...resultCore,
+      summary: summarizeWorkRuleFindings(findings),
+      fingerprint: workRuleSha256(resultCore),
+      legalNotice: catalog.legalNotice,
+    };
+    return {
+      employeeNumber,
+      employeeName: employee.nickname || employee.full_name || employeeNumber,
+      profileVersionIds: profileEvaluations.map((entry) => entry.profileVersionId),
+      profileEvaluations: profileEvaluations.map((entry) => ({
+        profileVersionId: entry.profileVersionId,
+        profile: entry.profile,
+        sources: entry.sources,
+      })),
+      result,
+    };
+  });
+
+  const allFindings = employeeResults.flatMap((entry) => entry.result.findings);
+  const presentationFindings = [];
+  for (const entry of employeeResults) {
+    const applicability = entry.result.findings.find((finding) => finding.ruleId === "at.applicability.adult");
+    const profileUnconfirmed = applicability?.evidence?.reason === "profile_not_confirmed";
+    const candidates = profileUnconfirmed
+      ? [applicability]
+      : entry.result.findings.filter((finding) => (
+        finding.state !== "pass" && workRuleFindingTouchesPeriod(finding, weekStart, weekEnd)
+      ));
+    const seen = new Set();
+    for (const finding of candidates.filter(Boolean)) {
+      const key = `${finding.ruleId}|${finding.scope?.type || ""}|${finding.scope?.date || finding.scope?.weekStart || finding.scope?.start || ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      presentationFindings.push(presentWorkRuleFinding(
+        finding,
+        entry.employeeNumber,
+        entry.employeeName,
+        catalog,
+        weekStart,
+        weekEnd,
+      ));
+    }
+  }
+
+  const hasBlocked = allFindings.some((finding) => finding.state === "fail" && finding.effectiveEnforcement === "block");
+  const hasUnknown = allFindings.some((finding) => finding.state === "unknown");
+  const hasManual = allFindings.some((finding) => finding.state === "fail"
+    && ["manual_review", "exception_required", "acknowledge"].includes(finding.baseEnforcement));
+  const hasFailure = allFindings.some((finding) => finding.state === "fail");
+  const outcome = hasBlocked ? "blocked" : ((hasUnknown || hasManual) ? "manual_review" : (hasFailure ? "attention" : "pass"));
+  const employeeOutcome = (entry) => {
+    const findings = entry.result.findings;
+    if (findings.some((finding) => finding.state === "fail" && finding.effectiveEnforcement === "block")) return "blocked";
+    if (findings.some((finding) => finding.state === "unknown"
+      || (finding.state === "fail" && ["manual_review", "exception_required", "acknowledge"].includes(finding.baseEnforcement)))) return "manualReview";
+    if (findings.some((finding) => finding.state === "fail")) return "attention";
+    return "pass";
+  };
+  const counts = { pass: 0, attention: 0, manualReview: 0, blocked: 0 };
+  for (const entry of employeeResults) counts[employeeOutcome(entry)] += 1;
+  const profiles = [...new Map(employeeResults.flatMap((entry) => entry.profileEvaluations).map((entry) => {
+    const builtin = BUILTIN_WORK_RULE_PROFILES[entry.profile.id];
+    return [entry.profileVersionId, {
+      id: entry.profile.id,
+      version: entry.profile.version,
+      versionId: entry.profileVersionId,
+      name: catalog.profiles[entry.profile.id]?.title || entry.profile.title || entry.profile.id,
+      title: catalog.profiles[entry.profile.id]?.title || entry.profile.title || entry.profile.id,
+      layer: builtin?.applicability?.sector ? "Branchenprofil" : "Gesetzliches Profil",
+      sources: entry.sources.length ? entry.sources : (builtin?.sources || []),
+    }];
+  })).values()].filter((profile) => profile.id);
+  const sources = [...new Map(presentationFindings.flatMap((finding) => finding.sourceRefs || [])
+    .map((source) => [source.id, source])).values()];
+  const mode = employeeResults.some((entry) => entry.result.enforcementMode === "enforced") ? "enforced" : "monitor";
+  const assessment = {
+    engineVersion: WORK_RULE_ENGINE_VERSION,
+    catalogVersion: catalog.version,
+    targetType: "planned_schedule",
+    mode,
+    outcome,
+    periodFrom: weekStart,
+    periodTo: weekEnd,
+    evaluatedEmployees: employeeResults.length,
+    counts,
+    profiles,
+    findings: presentationFindings,
+    sources,
+    disclaimer: catalog.legalNotice,
+  };
+  const receipt = {
+    ...assessment,
+    evaluationRange: facts.range,
+    employeeResults,
+  };
+  return {
+    assessment,
+    receipt,
+    inputSha256: workRuleSha256(facts),
+    profileVersionIds: profiles.map((profile) => profile.versionId).filter(Boolean),
+  };
+}
+
+function recordScheduleWorkRuleEvaluation(weekStart, context, employees, actor, candidateShift = null) {
+  const evaluated = evaluateScheduleWorkRules(weekStart, context, employees, candidateShift);
+  if (!evaluated.profileVersionIds.length) return evaluated.assessment;
+  recordWorkRuleEvaluation(db, {
+    targetType: "planned_schedule",
+    scopeType: context.departmentId ? "department" : "location",
+    scopeKey: context.departmentId ? String(context.departmentId) : String(context.locationId),
+    periodFrom: weekStart,
+    periodTo: addDays(weekStart, 6),
+    profileVersionIds: evaluated.profileVersionIds,
+    inputSha256: evaluated.inputSha256,
+    result: evaluated.receipt,
+    outcome: evaluated.assessment.outcome,
+    actor,
+  });
+  return evaluated.assessment;
+}
+
+function assertWorkRuleAssessmentAllowsMutation(assessment) {
+  if (assessment?.outcome === "blocked") {
+    throw httpError(
+      409,
+      "Die geplante Änderung verletzt eine aktiv durchgesetzte Arbeitszeitregel. Details stehen in der Arbeitszeit-Regelprüfung.",
+      "WORK_RULE_PLAN_BLOCKED",
+    );
+  }
+}
+
+function runWorkRuleMutationTransaction(callback) {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const value = callback();
+    db.exec("COMMIT");
+    return value;
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
 function getSchedule(weekValue, contextInput = {}, session = null) {
   const weekStart = getMonday(isIsoDate(weekValue) ? weekValue : undefined);
   const weekEnd = addDays(weekStart, 6);
@@ -13382,6 +14148,9 @@ function getSchedule(weekValue, contextInput = {}, session = null) {
       totals[employee.personnel_number] = (totals[employee.personnel_number] || 0) + credit;
     }
   }
+  const workRuleAssessment = sessionCanReadWorkRules(session)
+    ? evaluateScheduleWorkRules(weekStart, context, employees).assessment
+    : null;
 
   return {
     weekStart,
@@ -13410,6 +14179,7 @@ function getSchedule(weekValue, contextInput = {}, session = null) {
     sicknessCredits,
     sicknessCreditTotals,
     saturdayStats,
+    workRuleAssessment,
   };
 }
 
@@ -17054,6 +17824,256 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
     preserveBranding,
   });
   scheduleBackupImport(importPath);
+});
+
+app.get("/api/work-rules/catalog", (_request, response) => {
+  response.json(getRuleCatalog());
+});
+
+app.get("/api/work-rules/profiles", (_request, response) => {
+  response.json({
+    engineVersion: WORK_RULE_ENGINE_VERSION,
+    profiles: listWorkRuleProfiles(db),
+  });
+});
+
+function workRuleAssignmentVisibleToSession(session, assignment) {
+  if (sessionHasGlobalScope(session) || assignment.scopeType === "installation") return true;
+  const scopes = Array.isArray(session?.scopes) ? session.scopes : [];
+  if (assignment.scopeType === "location") {
+    return scopes.some((scope) => scope.locationId === assignment.scopeKey);
+  }
+  if (assignment.scopeType === "department") {
+    const department = db.prepare("SELECT location_id FROM departments WHERE id = ?").get(Number(assignment.scopeKey));
+    return Boolean(department && scopes.some((scope) => (
+      scope.locationId === department.location_id
+      && (!Number(scope.departmentId || 0) || Number(scope.departmentId) === Number(assignment.scopeKey))
+    )));
+  }
+  if (assignment.scopeType === "employee") {
+    const employee = db.prepare(`
+      SELECT home_location_id, preferred_department_id
+      FROM employees
+      WHERE personnel_number = ?
+    `).get(assignment.scopeKey);
+    return Boolean(employee && scopes.some((scope) => (
+      scope.locationId === employee.home_location_id
+      && (!Number(scope.departmentId || 0)
+        || Number(scope.departmentId) === Number(employee.preferred_department_id || 0))
+    )));
+  }
+  return false;
+}
+
+app.get("/api/work-rules/assignments", (request, response) => {
+  const assignments = listWorkRuleAssignments(db, {
+    includeInactive: String(request.query.includeInactive || "") === "1",
+  }).filter((assignment) => workRuleAssignmentVisibleToSession(request.portalSession, assignment));
+  response.json({
+    assignments,
+  });
+});
+
+app.post("/api/work-rules/assignments", (request, response) => {
+  const validFrom = String(request.body.validFrom || "");
+  const validTo = String(request.body.validTo || "");
+  if (!isIsoDate(validFrom) || (validTo && (!isIsoDate(validTo) || validTo < validFrom))) {
+    throw httpError(400, "Bitte einen gültigen Geltungszeitraum für das Regelprofil angeben.");
+  }
+  const actor = request.portalSession?.employeeNumber || "local";
+  let assignment;
+  try {
+    assignment = saveWorkRuleAssignment(db, {
+      ...request.body,
+      validFrom,
+      validTo: validTo || null,
+    }, actor);
+  } catch (error) {
+    if (error instanceof TypeError) throw httpError(400, error.message);
+    throw error;
+  }
+  auditPortal(actor, "work-rule.assignment.save", "work_rule_assignment", assignment.id, JSON.stringify({
+    profileVersionId: assignment.profileVersionId,
+    scopeType: assignment.scopeType,
+    scopeKey: assignment.scopeKey,
+    validFrom: assignment.validFrom,
+    validTo: assignment.validTo,
+    enforcementMode: assignment.enforcementMode,
+    applicabilityConfirmed: assignment.applicabilityConfirmed,
+  }));
+  response.status(201).json(assignment);
+});
+
+app.get("/api/work-rules/evaluations", (request, response) => {
+  response.json({
+    evaluations: listWorkRuleEvaluations(db, { limit: request.query.limit }),
+  });
+});
+
+app.post("/api/work-rules/evaluate", (request, response) => {
+  if (request.body.targetType && request.body.targetType !== "planned_schedule") {
+    throw httpError(400, "Diese Prüfung bewertet ausschließlich geplante Dienste, keine Ist-Zeiterfassung.");
+  }
+  const weekStart = getMonday(isIsoDate(request.body.weekStart) ? request.body.weekStart : request.body?.shift?.date);
+  const context = resolvePlanningContext(request.body);
+  assertSessionContextScope(request.portalSession, context);
+  const schedule = getSchedule(weekStart, context, request.portalSession);
+  const submittedValue = request.body.shift ?? request.body.candidateShift;
+  const submitted = submittedValue && typeof submittedValue === "object" ? submittedValue : null;
+  let candidate = null;
+  if (submitted) {
+    const id = Number(submitted.id || 0);
+    const existing = id
+      ? db.prepare(`
+        SELECT employee_number, location_id, department_id, shift_date
+        FROM shifts
+        WHERE id = ?
+      `).get(id)
+      : null;
+    if (id && !existing) throw httpError(404, "Der bestehende Dienst wurde nicht gefunden.");
+    if (existing) {
+      assertSessionContextScope(request.portalSession, {
+        locationId: existing.location_id,
+        departmentId: existing.department_id,
+      });
+    }
+    candidate = validateShift({
+      ...submitted,
+      locationId: submitted.locationId ?? context.locationId,
+      departmentId: submitted.departmentId ?? context.departmentId,
+    }, {
+      locationId: context.locationId,
+      existingId: id,
+    });
+    if (id) candidate.id = id;
+    assertShiftEmployeeAssignmentScope(request.portalSession, candidate, existing);
+  }
+  const evaluated = evaluateScheduleWorkRules(weekStart, context, schedule.employees, candidate);
+  response.json({
+    ...evaluated.assessment,
+    candidate: candidate ? {
+      employeeNumber: candidate.employeeNumber,
+      date: candidate.shiftDate,
+      startTime: candidate.startTime,
+      endTime: candidate.endTime,
+    } : null,
+  });
+});
+
+app.get("/api/work-rules/exceptions", (request, response) => {
+  const state = ["active", "revoked", "expired"].includes(String(request.query.state))
+    ? String(request.query.state) : "";
+  const rows = db.prepare(`
+    SELECT id, evaluation_id, finding_fingerprint, rule_id, profile_version_id,
+           exception_type, reason, evidence, state, valid_from, valid_to,
+           created_by, created_at, revoked_by, revoked_at
+    FROM work_rule_exceptions
+    ${state ? "WHERE state = ?" : ""}
+    ORDER BY created_at DESC, id DESC
+    LIMIT 200
+  `).all(...(state ? [state] : []));
+  response.json({ exceptions: rows.map((row) => ({
+    id: row.id,
+    evaluationId: row.evaluation_id,
+    findingFingerprint: row.finding_fingerprint,
+    ruleId: row.rule_id,
+    profileVersionId: row.profile_version_id,
+    exceptionType: row.exception_type,
+    reason: row.reason,
+    evidence: row.evidence,
+    state: row.state,
+    validFrom: row.valid_from,
+    validTo: row.valid_to,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    revokedBy: row.revoked_by,
+    revokedAt: row.revoked_at,
+  })) });
+});
+
+app.post("/api/work-rules/exceptions", (request, response) => {
+  const evaluationId = String(request.body.evaluationId || "");
+  const findingFingerprint = String(request.body.findingFingerprint || "");
+  const reason = String(request.body.reason || "").trim();
+  const validFrom = String(request.body.validFrom || "");
+  const validTo = String(request.body.validTo || "");
+  if (!evaluationId || !/^[a-f0-9]{64}$/i.test(findingFingerprint)) {
+    throw httpError(400, "Bewertung oder Regelbefund fehlt für die Ausnahme.");
+  }
+  if (reason.length < 10) throw httpError(400, "Bitte die Ausnahme nachvollziehbar begründen.");
+  if (!isIsoDate(validFrom) || (validTo && (!isIsoDate(validTo) || validTo < validFrom))) {
+    throw httpError(400, "Bitte einen gültigen Zeitraum für die Ausnahme angeben.");
+  }
+  let evaluation;
+  try {
+    evaluation = getWorkRuleEvaluation(db, evaluationId);
+  } catch {
+    throw httpError(409, "Die Integrität der zugrunde liegenden Regelprüfung ist nicht bestätigt.");
+  }
+  if (!evaluation) throw httpError(404, "Die zugrunde liegende Regelprüfung wurde nicht gefunden.");
+  const storedResult = evaluation.result;
+  const matchedFinding = (storedResult.employeeResults || [])
+    .flatMap((entry) => entry.result?.findings || [])
+    .find((finding) => finding.fingerprint === findingFingerprint);
+  if (!matchedFinding) throw httpError(409, "Der Regelbefund stimmt nicht mehr mit der gespeicherten Prüfung überein.");
+  if (matchedFinding.baseEnforcement !== "exception_required") {
+    throw httpError(409, "Für diesen Regelbefund ist keine dokumentierte Ausnahme vorgesehen.");
+  }
+  const profileVersionIdValue = `${matchedFinding.profileId}@${matchedFinding.profileVersion}`;
+  if (!db.prepare("SELECT 1 FROM work_rule_profile_versions WHERE id = ?").get(profileVersionIdValue)) {
+    throw httpError(409, "Die zugehörige Regelprofil-Version ist nicht mehr verfügbar.");
+  }
+  const actor = request.portalSession?.employeeNumber || "local";
+  const id = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO work_rule_exceptions
+      (id, evaluation_id, finding_fingerprint, rule_id, profile_version_id,
+       exception_type, reason, evidence, valid_from, valid_to, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    evaluationId,
+    findingFingerprint,
+    matchedFinding.ruleId,
+    profileVersionIdValue,
+    String(request.body.exceptionType || "documented_exception"),
+    reason,
+    String(request.body.evidence || "").trim(),
+    validFrom,
+    validTo || null,
+    actor,
+  );
+  auditPortal(actor, "work-rule.exception.create", "work_rule_exception", id, JSON.stringify({
+    evaluationId,
+    findingFingerprint,
+    ruleId: matchedFinding.ruleId,
+    validFrom,
+    validTo: validTo || null,
+  }));
+  response.status(201).json({ id, state: "active" });
+});
+
+app.post("/api/work-rules/exceptions/:id/revoke", (request, response) => {
+  const id = String(request.params.id || "");
+  const reason = String(request.body.reason || "").trim();
+  if (reason.length < 10) throw httpError(400, "Bitte den Widerruf nachvollziehbar begründen.");
+  const existing = db.prepare(`
+    SELECT id, state FROM work_rule_exceptions WHERE id = ?
+  `).get(id);
+  if (!existing) throw httpError(404, "Die dokumentierte Ausnahme wurde nicht gefunden.");
+  if (existing.state !== "active") throw httpError(409, "Nur eine aktive Ausnahme kann widerrufen werden.");
+  const actor = request.portalSession?.employeeNumber || "local";
+  db.prepare(`
+    UPDATE work_rule_exceptions
+    SET state = 'revoked', revoked_by = ?, revoked_at = CURRENT_TIMESTAMP,
+        evidence = CASE
+          WHEN TRIM(evidence) = '' THEN ?
+          ELSE evidence || CHAR(10) || ?
+        END
+    WHERE id = ? AND state = 'active'
+  `).run(actor, `Widerruf: ${reason}`, `Widerruf: ${reason}`, id);
+  auditPortal(actor, "work-rule.exception.revoke", "work_rule_exception", id, JSON.stringify({ reason }));
+  response.json({ id, state: "revoked" });
 });
 
 app.get("/api/schedule", (request, response) => {
@@ -23004,7 +24024,7 @@ function finalizeTimeOffRequest(entry, actor, note) {
     excludeRequestId: entry.id,
   });
   if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
-  const optionId = insertApprovedTimeOff(entry);
+  const optionId = insertApprovedTimeOff(entry, actor);
   db.prepare(`
     UPDATE time_off_requests SET status = 'approved', approval_stage = 'complete', option_id = ?,
       traffic_light = ?, check_reason = ?, decision_note = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP,
@@ -23031,7 +24051,7 @@ function finalizeTimeOffChangeRequest(entry, actor, note) {
     if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
   }
 
-  restoreApprovedTimeOff(original);
+  restoreApprovedTimeOff(original, actor);
   if (entry.request_type === "cancel") {
     db.prepare(`UPDATE time_off_requests SET status = 'cancelled', approval_stage = 'complete', option_id = NULL,
       original_shifts_json = '[]', decision_note = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP,
@@ -23047,7 +24067,7 @@ function finalizeTimeOffChangeRequest(entry, actor, note) {
       allDay ? "23:59" : entry.requested_end_time, entry.note || "", entry.note || "",
       check.trafficLight, check.reason, note, actor, original.id);
     original = db.prepare("SELECT * FROM time_off_requests WHERE id = ?").get(original.id);
-    const optionId = insertApprovedTimeOff(original);
+    const optionId = insertApprovedTimeOff(original, actor);
     db.prepare("UPDATE time_off_requests SET option_id = ?, status = 'approved', approval_stage = 'complete', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
       .run(optionId, original.id);
   }
@@ -23150,7 +24170,7 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", (request, response) 
           || (!allDay && (!isTime(startTime) || !isTime(endTime) || endTime <= startTime))) {
           throw httpError(400, "Bitte einen gültigen neuen ZA-Zeitraum eingeben.");
         }
-        restoreApprovedTimeOff(entry);
+        restoreApprovedTimeOff(entry, session.employeeNumber);
         db.prepare(`UPDATE time_off_requests SET request_date = ?, date_from = ?, date_to = ?, all_day = ?, start_time = ?, end_time = ?, note = CASE WHEN ? <> '' THEN ? ELSE note END, option_id = NULL, original_shifts_json = '[]', updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
           .run(dateFrom, dateFrom, dateTo, allDay ? 1 : 0, startTime, endTime, note, note, entry.id);
         entry = db.prepare("SELECT * FROM time_off_requests WHERE id = ?").get(entry.id);
@@ -23166,7 +24186,7 @@ app.put("/api/portal/v1/absence-requests/:kind/:id/action", (request, response) 
         result = finalizeVacationRequest(entry, session.employeeNumber, note);
       } else throw httpError(409, "Dieser Vorgang kann nicht direkt geändert werden.");
     } else if (action === "cancel" && entry.status === "approved") {
-      if (kind === "time_off") restoreApprovedTimeOff(entry);
+      if (kind === "time_off") restoreApprovedTimeOff(entry, session.employeeNumber);
       else if (kind === "vacation") deleteVacationGroup(entry.vacation_group_id);
       else throw httpError(409, "Dieser Vorgang kann nicht direkt storniert werden.");
       db.prepare(`UPDATE ${table} SET status = 'cancelled', approval_stage = 'complete', decision_note = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
@@ -23211,7 +24231,7 @@ app.put("/api/portal/v1/time-off-requests/:id/decision", (request, response) => 
     if (!check.allowed) throw httpError(409, check.reason, "TIME_OFF_NOT_POSSIBLE");
     db.exec("BEGIN");
     try {
-      optionId = insertApprovedTimeOff(entry);
+      optionId = insertApprovedTimeOff(entry, session.employeeNumber);
       db.prepare(`
         UPDATE time_off_requests SET status = 'approved', option_id = ?, traffic_light = ?, check_reason = ?,
           decided_by = ?, decided_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?
@@ -25217,15 +26237,34 @@ app.post("/api/shifts", (request, response) => {
   const shift = validateShift(request.body, {
     locationId: request.body.locationId ?? request.body.location_id ?? request.body.location,
   });
-  assertSessionContextScope(request.portalSession, { locationId: shift.locationId, departmentId: shift.departmentId });
+  const context = resolvePlanningContext({ locationId: shift.locationId, departmentId: shift.departmentId });
+  const weekStart = getMonday(shift.shiftDate);
+  assertSessionContextScope(request.portalSession, context);
   assertShiftEmployeeAssignmentScope(request.portalSession, shift);
-  const result = db.prepare(`
-    INSERT INTO shifts (employee_number, location_id, department_id, shift_date, start_time, end_time, area, note)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(shift.employeeNumber, shift.locationId, shift.departmentId, shift.shiftDate, shift.startTime, shift.endTime, shift.area, shift.note);
-  invalidateTimeDayReview(shift.employeeNumber, shift.shiftDate);
+  const scheduleBefore = getSchedule(weekStart, context, request.portalSession);
+  const evaluationEmployees = workRuleEvaluationEmployees(scheduleBefore.employees, shift);
+  const preview = evaluateScheduleWorkRules(weekStart, context, evaluationEmployees, shift).assessment;
+  assertWorkRuleAssessmentAllowsMutation(preview);
+  const saved = runWorkRuleMutationTransaction(() => {
+    const result = db.prepare(`
+      INSERT INTO shifts (employee_number, location_id, department_id, shift_date, start_time, end_time, area, note)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(shift.employeeNumber, shift.locationId, shift.departmentId, shift.shiftDate, shift.startTime, shift.endTime, shift.area, shift.note);
+    invalidateTimeDayReview(shift.employeeNumber, shift.shiftDate);
+    const workRuleAssessment = recordScheduleWorkRuleEvaluation(
+      weekStart,
+      context,
+      evaluationEmployees,
+      request.portalSession?.employeeNumber || "local",
+    );
+    return { id: Number(result.lastInsertRowid), workRuleAssessment };
+  });
   refreshSicknessStaffingAfterPlanningChange();
-  response.status(201).json({ id: Number(result.lastInsertRowid), ...shift });
+  response.status(201).json({
+    id: saved.id,
+    ...shift,
+    workRuleAssessment: sessionCanReadWorkRules(request.portalSession) ? saved.workRuleAssessment : null,
+  });
 });
 
 app.put("/api/shifts/:id", (request, response) => {
@@ -25238,18 +26277,40 @@ app.put("/api/shifts/:id", (request, response) => {
     locationId: request.body.locationId ?? request.body.location_id ?? existing.location_id,
     existingId: id,
   });
-  assertSessionContextScope(request.portalSession, { locationId: shift.locationId, departmentId: shift.departmentId });
+  const context = resolvePlanningContext({ locationId: shift.locationId, departmentId: shift.departmentId });
+  const weekStart = getMonday(shift.shiftDate);
+  assertSessionContextScope(request.portalSession, context);
   assertShiftEmployeeAssignmentScope(request.portalSession, shift, existing);
-  const result = db.prepare(`
-    UPDATE shifts
-    SET employee_number = ?, location_id = ?, department_id = ?, shift_date = ?, start_time = ?, end_time = ?, area = ?, note = ?
-    WHERE id = ?
-  `).run(shift.employeeNumber, shift.locationId, shift.departmentId, shift.shiftDate, shift.startTime, shift.endTime, shift.area, shift.note, id);
-  if (!result.changes) throw httpError(404, "Der Dienst wurde nicht gefunden.");
-  invalidateTimeDayReview(existing.employee_number, existing.shift_date);
-  invalidateTimeDayReview(shift.employeeNumber, shift.shiftDate);
+  const scheduleBefore = getSchedule(weekStart, context, request.portalSession);
+  const evaluationEmployees = workRuleEvaluationEmployees(scheduleBefore.employees, shift);
+  const preview = evaluateScheduleWorkRules(weekStart, context, evaluationEmployees, { id, ...shift }).assessment;
+  assertWorkRuleAssessmentAllowsMutation(preview);
+  const workRuleAssessment = runWorkRuleMutationTransaction(() => {
+    const result = db.prepare(`
+      UPDATE shifts
+      SET employee_number = ?, location_id = ?, department_id = ?, shift_date = ?, start_time = ?, end_time = ?, area = ?, note = ?
+      WHERE id = ?
+    `).run(shift.employeeNumber, shift.locationId, shift.departmentId, shift.shiftDate, shift.startTime, shift.endTime, shift.area, shift.note, id);
+    if (!result.changes) throw httpError(404, "Der Dienst wurde nicht gefunden.");
+    invalidateTimeDayReview(existing.employee_number, existing.shift_date);
+    invalidateTimeDayReview(shift.employeeNumber, shift.shiftDate);
+    const records = recordWorkRuleEvaluationsForShiftChanges(
+      [existing, shift],
+      request.portalSession?.employeeNumber || "local",
+    );
+    return records.find((entry) => (
+      entry.weekStart === weekStart
+      && entry.locationId === String(shift.locationId)
+      && Number(entry.departmentId || 0) === Number(shift.departmentId || 0)
+      && entry.employeeNumber === String(shift.employeeNumber)
+    ))?.assessment || preview;
+  });
   refreshSicknessStaffingAfterPlanningChange();
-  response.json({ id, ...shift });
+  response.json({
+    id,
+    ...shift,
+    workRuleAssessment: sessionCanReadWorkRules(request.portalSession) ? workRuleAssessment : null,
+  });
 });
 
 app.delete("/api/shifts/:id", (request, response) => {
@@ -25258,9 +26319,20 @@ app.delete("/api/shifts/:id", (request, response) => {
   if (!existing) throw httpError(404, "Der Dienst wurde nicht gefunden.");
   assertSessionContextScope(request.portalSession, { locationId: existing.location_id, departmentId: existing.department_id });
   assertDateEditable(existing.shift_date, settingsForLocation(existing.location_id));
-  const result = db.prepare("DELETE FROM shifts WHERE id = ?").run(id);
-  if (!result.changes) throw httpError(404, "Der Dienst wurde nicht gefunden.");
-  invalidateTimeDayReview(existing.employee_number, existing.shift_date);
+  const context = resolvePlanningContext({ locationId: existing.location_id, departmentId: existing.department_id });
+  const weekStart = getMonday(existing.shift_date);
+  const scheduleBefore = getSchedule(weekStart, context, request.portalSession);
+  runWorkRuleMutationTransaction(() => {
+    const result = db.prepare("DELETE FROM shifts WHERE id = ?").run(id);
+    if (!result.changes) throw httpError(404, "Der Dienst wurde nicht gefunden.");
+    invalidateTimeDayReview(existing.employee_number, existing.shift_date);
+    recordScheduleWorkRuleEvaluation(
+      weekStart,
+      context,
+      scheduleBefore.employees,
+      request.portalSession?.employeeNumber || "local",
+    );
+  });
   refreshSicknessStaffingAfterPlanningChange();
   response.status(204).end();
 });
@@ -25275,15 +26347,30 @@ app.delete("/api/schedule", (request, response) => {
   const params = context.departmentId
     ? [weekStart, weekEnd, context.locationId, context.departmentId]
     : [weekStart, weekEnd, context.locationId];
-  const result = db.prepare(`
-    DELETE FROM shifts
-    WHERE shift_date BETWEEN ? AND ?
-      AND location_id = ?
-      ${departmentFilter}
-  `).run(...params);
-  invalidateTimeDayReviewsForRange(context.locationId, weekStart, weekEnd, context.departmentId);
+  const scheduleBefore = getSchedule(weekStart, context, request.portalSession);
+  const saved = runWorkRuleMutationTransaction(() => {
+    const result = db.prepare(`
+      DELETE FROM shifts
+      WHERE shift_date BETWEEN ? AND ?
+        AND location_id = ?
+        ${departmentFilter}
+    `).run(...params);
+    invalidateTimeDayReviewsForRange(context.locationId, weekStart, weekEnd, context.departmentId);
+    const workRuleAssessment = recordScheduleWorkRuleEvaluation(
+      weekStart,
+      context,
+      scheduleBefore.employees,
+      request.portalSession?.employeeNumber || "local",
+    );
+    return { deleted: Number(result.changes), workRuleAssessment };
+  });
   refreshSicknessStaffingAfterPlanningChange();
-  response.json({ deleted: Number(result.changes), weekStart, weekEnd });
+  response.json({
+    deleted: saved.deleted,
+    weekStart,
+    weekEnd,
+    workRuleAssessment: sessionCanReadWorkRules(request.portalSession) ? saved.workRuleAssessment : null,
+  });
 });
 
 app.post("/api/week-options", (request, response) => {
@@ -25733,12 +26820,27 @@ app.post("/api/schedule/auto", (request, response) => {
       }
     });
 
+    const schedulePreview = getSchedule(weekStart, context, request.portalSession);
+    const evaluatedPreview = evaluateScheduleWorkRules(weekStart, context, schedulePreview.employees);
+    assertWorkRuleAssessmentAllowsMutation(evaluatedPreview.assessment);
     invalidateTimeDayReviewsForRange(context.locationId, weekStart, weekEnd, context.departmentId);
+    const workRuleAssessment = recordScheduleWorkRuleEvaluation(
+      weekStart,
+      context,
+      schedulePreview.employees,
+      request.portalSession?.employeeNumber || "local",
+    );
     db.exec("COMMIT");
     refreshSicknessStaffingAfterPlanningChange();
-    response.json({ created, warnings, schedule: getSchedule(weekStart, context, request.portalSession) });
+    const schedule = getSchedule(weekStart, context, request.portalSession);
+    response.json({
+      created,
+      warnings,
+      schedule,
+      workRuleAssessment: sessionCanReadWorkRules(request.portalSession) ? workRuleAssessment : null,
+    });
   } catch (error) {
-    db.exec("ROLLBACK");
+    try { db.exec("ROLLBACK"); } catch {}
     throw error;
   }
 });
@@ -27169,5 +28271,6 @@ module.exports = {
   verifyActiveProtectedDocumentBlobs,
   verifyProtectedBackupPair,
   finalizeDeletedPersonnelRecordDocuments,
+  ensureWorkRuleEvaluationReceiptIntegrity,
   releaseInstanceLockForTests,
 };

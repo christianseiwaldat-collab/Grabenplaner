@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.81 Beta · Österreichische Planarbeitszeit-Regelprüfung
+
+- Die Dienstplanung prüft geplante Arbeitszeit erstmals mit versionierten österreichischen Regelprofilen für Tages- und Wochenzeit, Pausen, tägliche und wöchentliche Ruhe sowie Sonn- und Feiertagsarbeit.
+- Neue Installationen verwenden einen nicht blockierenden Monitorbetrieb. Ohne bestätigte Alters-, Branchen- und Profilanwendbarkeit bleibt das Ergebnis ausdrücklich manuell zu prüfen.
+- Unveränderliche Profilfassungen, amtliche Quellen, deterministische Befund-Fingerprints und gespeicherte Prüfreceipts machen spätere Bewertungen nachvollziehbar.
+- Die Wochenansicht und der Dienst-Dialog zeigen kompakte Regelhinweise, Quellen und den wirksamen Modus. Planzeit und Ist-Zeiterfassung bleiben strikt getrennt.
+- Ausschließlich dafür vorgesehene Befunde können mit Begründung, Gültigkeitszeitraum und Auditspur als Ausnahme dokumentiert werden.
+- Der Regelprüfer ist eine technische Planungshilfe und keine Rechtsberatung oder Bestätigung vollständiger Rechtskonformität. Kollektivvertragliche und betriebliche Sonderregeln bleiben bis zur fachlichen Bestätigung unzuweisbar.
+
 ## v0.80.4 Beta · Caddy-Nachweis im Mehrdienst-Host
 
 - Der gehärtete Systemmonitor prüft die vollständige Caddy-Konfiguration auch auf gemeinsam genutzten Hosts, ohne Schreibrechte auf Protokollordner anderer Anwendungen zu benötigen.
