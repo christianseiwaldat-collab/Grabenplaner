@@ -402,7 +402,7 @@ test("v0.70 Block 2: Leitungen sehen nur Telefon und benötigen Schreibrecht plu
     method: "PUT", auth: hr,
     body: { phone: "+43 512 555111", sensitive: { socialSecurityNumber: "1238010190" } },
   });
-  const manager = session("104", "manager");
+  let manager = session("104", "manager");
   db.prepare(`
     INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
     VALUES ('104', ?, 0, 'test')
@@ -424,6 +424,7 @@ test("v0.70 Block 2: Leitungen sehen nur Telefon und benötigen Schreibrecht plu
     method: "PUT", auth: hr, body: { permissions: ["personnel:phone:write"] },
   });
   assert.equal(delegated.response.status, 200, JSON.stringify(delegated.payload));
+  manager = session("104", "manager");
   const withoutTrustA = await request("/api/portal/v1/personnel-records/102", {
     method: "PUT", auth: manager, body: { phone: "+43 512 555222" },
   });

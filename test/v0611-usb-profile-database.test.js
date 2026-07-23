@@ -25,6 +25,7 @@ function schema(database) {
     CREATE TABLE employees (personnel_number TEXT PRIMARY KEY, full_name TEXT, nickname TEXT, color TEXT, contracted_hours REAL, preferred_day_off TEXT, fixed_workdays TEXT, position_id TEXT, time_confirmation_level TEXT, home_location_id TEXT, preferred_department_id INTEGER, cost_center_id TEXT, active INTEGER, created_at TEXT);
     CREATE TABLE portal_users (employee_number TEXT PRIMARY KEY, password_hash TEXT, role TEXT, role_locked INTEGER, active INTEGER, must_change_password INTEGER, last_login_at TEXT, password_changed_at TEXT, failed_login_attempts INTEGER, locked_until TEXT, created_at TEXT, updated_at TEXT);
     CREATE TABLE portal_permission_grants (employee_number TEXT, permission TEXT, granted_by TEXT, created_at TEXT, updated_at TEXT, PRIMARY KEY(employee_number, permission));
+    CREATE TABLE portal_permission_denials (employee_number TEXT, permission TEXT, denied_by TEXT, created_at TEXT, updated_at TEXT, PRIMARY KEY(employee_number, permission));
     CREATE TABLE portal_access_scopes (employee_number TEXT, location_id TEXT, department_id INTEGER, assigned_by TEXT, created_at TEXT, PRIMARY KEY(employee_number, location_id, department_id));
     CREATE TABLE custom_processes (id TEXT PRIMARY KEY, title TEXT, symbol TEXT, description TEXT, scope_type TEXT, location_id TEXT, department_id INTEGER, trigger_type TEXT, trigger_minimum_shortfall INTEGER, status TEXT, revision INTEGER, created_by TEXT, updated_by TEXT, archived_at TEXT, created_at TEXT, updated_at TEXT);
     CREATE TABLE custom_process_steps (id TEXT PRIMARY KEY, process_id TEXT, sort_order INTEGER, step_type TEXT, title TEXT, description TEXT, responsibility_type TEXT, responsibility_reference TEXT, responsibility_label TEXT, condition_type TEXT, condition_text TEXT, notification_channels TEXT, created_at TEXT, updated_at TEXT);
@@ -102,16 +103,64 @@ test("USB-Profil erzeugt nur Stammdaten und setzt den Ersteller als Admin", () =
   source.close();
   target.close();
 
+  const employeeInput = {
+    personnelNumber: "500",
+    fullName: "Demo Person",
+    nickname: "Demo",
+    color: "#654321",
+    contractedHours: 30,
+    positionId: "verkaufsmitarbeiter",
+    homeLocationId: "18",
+    preferredDepartmentId: 1,
+    costCenterId: "cc18",
+    role: "department_manager",
+    passwordHash: "scrypt-v1$demo$hash",
+    additionalPermissions: ["schedule:read"],
+    deniedPermissions: ["schedule:write"],
+  };
+  const creatorInput = {
+    personnelNumber: "101",
+    passwordHash: "scrypt-v1$creator$hash",
+    employee: {
+      personnel_number: "101",
+      full_name: "Alex Beispiel",
+      nickname: "Alex",
+      color: "#123456",
+      contracted_hours: 40,
+      fixed_workdays: "",
+      position_id: "verkaufsmitarbeiter",
+      time_confirmation_level: "A",
+      home_location_id: "18",
+      preferred_department_id: 1,
+      cost_center_id: "cc18",
+      active: 1,
+    },
+  };
   const readSource = new DatabaseSync(sourcePath);
+  const invalidTargetPath = path.join(directory, "invalid-target.db");
+  const invalidTarget = new DatabaseSync(invalidTargetPath);
+  schema(invalidTarget);
+  invalidTarget.close();
+  assert.throws(() => populateUsbProfileDatabase({
+    sourceDatabase: readSource,
+    targetDatabasePath: invalidTargetPath,
+    selectedLocationIds: ["18"],
+    employees: [{ ...employeeInput, scopes: [{ locationId: "99", departmentId: 2 }] }],
+    creator: creatorInput,
+    primaryBranding: { kitId: "muster", companyName: "Muster GmbH" },
+    enabledFeatures: ["schedule"],
+    permissionCatalog: ["schedule:read", "schedule:write"],
+  }), /Bereichsrechte.*Stammfiliale/);
+
   const result = populateUsbProfileDatabase({
     sourceDatabase: readSource,
     targetDatabasePath: targetPath,
     selectedLocationIds: ["18"],
-    employees: [{ personnelNumber: "500", fullName: "Demo Person", nickname: "Demo", color: "#654321", contractedHours: 30, positionId: "verkaufsmitarbeiter", homeLocationId: "18", preferredDepartmentId: 1, costCenterId: "cc18", role: "department_manager", passwordHash: "scrypt-v1$demo$hash", additionalPermissions: ["schedule:read"] }],
-    creator: { personnelNumber: "101", passwordHash: "scrypt-v1$creator$hash", employee: { personnel_number: "101", full_name: "Alex Beispiel", nickname: "Alex", color: "#123456", contracted_hours: 40, fixed_workdays: "", position_id: "verkaufsmitarbeiter", time_confirmation_level: "A", home_location_id: "18", preferred_department_id: 1, cost_center_id: "cc18", active: 1 } },
+    employees: [employeeInput],
+    creator: creatorInput,
     primaryBranding: { kitId: "muster", companyName: "Muster GmbH", logoUrl: "/branding-kits/muster/assets/logo.svg", iconUrl: "/assets/webicon.svg", logoAlt: "Muster", adminEmail: "admin@example.test" },
     enabledFeatures: ["schedule", "vacation"],
-    permissionCatalog: ["schedule:read"],
+    permissionCatalog: ["schedule:read", "schedule:write"],
   });
   readSource.close();
 
@@ -127,6 +176,9 @@ test("USB-Profil erzeugt nur Stammdaten und setzt den Ersteller als Admin", () =
   ]);
   assert.deepEqual(check.prepare("SELECT employee_number, location_id, department_id FROM portal_access_scopes").all().map((row) => ({ ...row })), [
     { employee_number: "500", location_id: "18", department_id: 1 },
+  ]);
+  assert.deepEqual(check.prepare("SELECT employee_number, permission FROM portal_permission_denials").all().map((row) => ({ ...row })), [
+    { employee_number: "500", permission: "schedule:write" },
   ]);
   assert.equal(check.prepare("SELECT value FROM settings WHERE key='operation_mode'").get().value, "local");
   assert.equal(check.prepare("SELECT value FROM settings WHERE key='backup_directory'").get().value, "%GRABENPLANER_ROOT%\\Backups");

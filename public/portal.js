@@ -101,7 +101,7 @@ const el = Object.fromEntries([
   "leadershipTeamTab", "leadershipApprovalsTab", "leadershipMoreTab", "leadershipTeamView", "leadershipApprovalsView", "leadershipMoreView",
   "leadershipTeamRefresh", "leadershipApprovalsRefresh", "leadershipContextFields", "leadershipLocation", "leadershipDepartment", "leadershipApprovalContextFields", "leadershipApprovalLocation", "leadershipApprovalDepartment", "leadershipPresenceSummary", "leadershipPresenceList", "leadershipApprovalList",
   "leadershipSettingsButton", "leadershipDesktopLink", "timeCorrectionDialog", "timeCorrectionForm", "timeCorrectionId", "timeCorrectionDate", "timeCorrectionDateText", "timeCorrectionEntries", "timeCorrectionNote", "timeCorrectionMessage", "addTimeCorrectionEntry",
-  "leadershipRequestDialog", "leadershipRequestForm", "leadershipRequestTitle", "leadershipRequestSummary", "leadershipCorrectionEntries", "addLeadershipCorrectionEntry", "leadershipRequestNote", "leadershipRequestMessage", "leadershipRequestActions",
+  "leadershipRequestDialog", "leadershipRequestForm", "leadershipRequestTitle", "leadershipRequestSummary", "leadershipRequestHistory", "leadershipRequestDocuments", "leadershipSicknessFields", "leadershipSicknessExpectedEnd", "leadershipSicknessReturnDate", "leadershipCorrectionEntries", "addLeadershipCorrectionEntry", "leadershipRequestNote", "leadershipRequestMessage", "leadershipRequestActions",
   "scheduleHeading", "scheduleGrid", "previousWeek", "currentWeek", "nextWeek",
   "timeOffRequestForm", "timeOffFormTitle", "timeOffDate", "timeOffDateTo", "timeOffDateToField", "timeOffTimeFields", "timeOffStart", "timeOffEnd", "timeOffNote", "timeOffCheck", "timeOffMessage",
   "timeOffSubmitButton", "cancelTimeOffEdit", "timeOffArchiveToggle", "timeOffRequestList", "vacationRequestForm", "vacationFormTitle", "vacationDateFrom", "vacationDateTo", "vacationNote",
@@ -386,7 +386,7 @@ function normalizedMobileModules(value) {
 function mobileModuleAllowed(module, permissions = portalUser()?.permissions || []) {
   if (module === "time") return permissions.includes("own_time:read") && timeTrackingCapabilityEnabled();
   if (module === "presence") return permissions.includes("time:read");
-  if (module === "approvals") return permissions.some((permission) => ["vacation:read", "vacation:approve", "time:review", "amu:metadata:read", "amu:review", "sickness:read"].includes(permission));
+  if (module === "approvals") return permissions.some((permission) => ["vacation:read", "vacation:approve", "time:review", "amu:metadata:read", "amu:review", "amu:local:manage", "sickness:read", "sickness:manage"].includes(permission));
   if (module === "schedule") return permissions.includes("own_schedule:read");
   if (module === "requests") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:correction_request"].includes(permission));
   return module === "more";
@@ -1282,9 +1282,9 @@ function amuIdentityStatusText(report) {
 function renderLeadershipApprovals() {
   const kind = portalState.leadershipKind;
   let items = [];
-  if (kind === "absence") items = portalState.leadershipRequests.filter(leadershipRequestActionable).filter(leadershipItemInContext);
-  else if (kind === "sickness") items = portalState.leadershipSicknessCases.filter((entry) => entry.status !== "withdrawn").filter(leadershipItemInContext);
-  else if (kind === "amu") items = portalState.leadershipAmuReports.filter((report) => ["submitted", "returned"].includes(report.status)).filter(leadershipItemInContext);
+  if (kind === "absence") items = portalState.leadershipRequests.filter(leadershipItemInContext);
+  else if (kind === "sickness") items = portalState.leadershipSicknessCases.filter(leadershipItemInContext);
+  else if (kind === "amu") items = portalState.leadershipAmuReports.filter(leadershipItemInContext);
   else {
     const overview = portalState.leadershipOverview || {};
     items = overview.timeCorrections || overview.time_corrections || overview.corrections || [];
@@ -1304,8 +1304,9 @@ function renderLeadershipApprovals() {
       ? ({ red: "Rot eskaliert", yellow: "AUM überfällig", warning: "Besetzung prüfen", normal: amuStatusText }[status] || amuStatusText)
       : (statusLabels[item.status] || item.status || "Offen");
     const identity = kind === "amu" ? amuIdentityStatusText(item) : "";
-    return `<article class="leadership-request-row sickness-severity-${esc(status)}" data-leadership-request-id="${esc(item.id)}" data-leadership-request-kind="${esc(kind)}"><div><strong>${esc(label)} · ${esc(employeeNumber)} · ${esc(name)}</strong><small>${esc(period)}${item.note || item.employee_note ? ` · ${esc(item.note || item.employee_note)}` : ""}${identity ? ` · ${esc(identity)}` : ""}${esc(risk)}</small><span class="status ${esc(status)}">${esc(statusText)}</span></div><button type="button" data-open-leadership-request>${kind === "sickness" ? "Ansehen" : "Bearbeiten"}</button></article>`;
-  }).join("") : '<p class="empty-state">Derzeit ist in diesem Bereich nichts zu bearbeiten.</p>';
+    const canOpen = kind === "time_correction" || item.capabilities?.view === true;
+    return `<article class="leadership-request-row sickness-severity-${esc(status)}" data-leadership-request-id="${esc(item.id)}" data-leadership-request-kind="${esc(kind)}"><div><strong>${esc(label)} · ${esc(employeeNumber)} · ${esc(name)}</strong><small>${esc(period)}${item.note || item.employee_note ? ` · ${esc(item.note || item.employee_note)}` : ""}${identity ? ` · ${esc(identity)}` : ""}${esc(risk)}</small><span class="status ${esc(status)}">${esc(statusText)}</span></div>${canOpen ? '<button type="button" data-open-leadership-request>Öffnen</button>' : ""}</article>`;
+  }).join("") : '<p class="empty-state">Für diesen Bereich sind keine offenen oder abgeschlossenen Fälle vorhanden.</p>';
 }
 
 async function loadLeadershipApprovals() {
@@ -1317,13 +1318,13 @@ async function loadLeadershipApprovals() {
   portalState.leadershipSicknessCases = [];
   portalState.leadershipOverview = null;
   const permissions = portalUser()?.permissions || [];
-  const canUseProtectedAmuArea = permissions.includes("amu:metadata:read") || permissions.includes("amu:review");
+  const canUseProtectedAmuArea = permissions.includes("amu:metadata:read") || permissions.includes("amu:review") || permissions.includes("amu:local:manage");
   document.querySelector('[data-leadership-kind="amu"]')?.classList.toggle("hidden", !canUseProtectedAmuArea);
   if (portalState.leadershipKind === "amu" && !canUseProtectedAmuArea) portalState.leadershipKind = "sickness";
   document.querySelectorAll("[data-leadership-kind]").forEach((button) => button.classList.toggle("active", button.dataset.leadershipKind === portalState.leadershipKind));
   const tasks = [{ kind: "time_correction", request: api(`/api/portal/v1/leadership/overview?${leadershipQuery()}`).then((result) => { portalState.leadershipOverview = normalizedLeadershipOverview(result); }) }];
   if (permissions.includes("vacation:read") || permissions.includes("time:review")) tasks.push({ kind: "absence", request: api(`/api/portal/v1/absence-requests?${leadershipQuery()}`).then((result) => { portalState.leadershipRequests = result.requests || []; }) });
-  if (permissions.includes("amu:metadata:read") || permissions.includes("amu:review")) tasks.push({ kind: "amu", request: api(`/api/portal/v1/amu-reports?${leadershipQuery()}`).then((result) => { portalState.leadershipAmuReports = result.reports || []; }) });
+  if (permissions.includes("amu:metadata:read") || permissions.includes("amu:review") || permissions.includes("amu:local:manage")) tasks.push({ kind: "amu", request: api(`/api/portal/v1/amu-reports?${leadershipQuery()}`).then((result) => { portalState.leadershipAmuReports = result.reports || []; }) });
   if (permissions.includes("sickness:read")) tasks.push({ kind: "sickness", request: api(`/api/portal/v1/sickness-cases?${leadershipQuery()}`).then((result) => { portalState.leadershipSicknessCases = result.cases || []; }) });
   const results = await Promise.allSettled(tasks.map((task) => task.request));
   const activeFailure = results.find((result, index) => result.status === "rejected" && tasks[index].kind === portalState.leadershipKind);
@@ -1348,9 +1349,70 @@ function findLeadershipRequest(id, kind) {
   return portalState.leadershipRequests.find((item) => String(item.id) === String(id));
 }
 
-function openLeadershipRequest(id, kind) {
-  const request = findLeadershipRequest(id, kind);
+function leadershipEventHistoryHtml(events = []) {
+  return events.length ? events.map((event) => {
+    const actor = event.actor_employee_number || event.actorEmployeeNumber || event.actor || "System";
+    const action = event.action_label || event.actionLabel || event.action || "Bearbeitet";
+    const timestamp = event.created_at || event.createdAt || event.occurred_at || event.occurredAt;
+    const note = event.note || event.reason || "";
+    return `<article><strong>${esc(actor)} · ${esc(action)}</strong><small>${timestamp ? esc(new Date(timestamp).toLocaleString("de-AT")) : ""}${note ? ` · ${esc(note)}` : ""}</small></article>`;
+  }).join("") : "";
+}
+
+function leadershipDialogActions(request, kind) {
+  const capabilities = request.capabilities || {};
+  if (kind === "sickness") {
+    return [
+      ...(capabilities.update === true ? [["update", "Falldaten speichern", "secondary-action"]] : []),
+      ...(capabilities.close === true ? [["close", "Krankenstand schließen", "primary-action"]] : []),
+      ...(capabilities.correctClosed === true ? [["correct_closed", "Abschluss korrigieren", "primary-action"]] : []),
+    ];
+  }
+  if (kind === "amu") {
+    return [
+      ...(capabilities.returnForCompletion === true ? [["return", "Ergänzung anfordern", "secondary-action"]] : []),
+      ...(capabilities.review === true ? [["review", "Als geprüft markieren", "primary-action"]] : []),
+      ...(capabilities.addNote === true ? [["add_note", "Vermerk speichern", "secondary-action"]] : []),
+    ];
+  }
+  if (kind === "time_correction") return [["reject", "Ablehnen", "danger-action"], ["approve", "Genehmigen", "primary-action"]];
+  return [
+    ...(capabilities.decide === true || capabilities.reject === true ? [["reject", "Ablehnen", "danger-action"]] : []),
+    ...((capabilities.decide === true || capabilities.preliminary === true) && request.status !== "pending_hr"
+      ? [["preliminary", "Vorläufig", "secondary-action"]] : []),
+    ...(capabilities.decide === true || capabilities.approve === true ? [["approve", "Genehmigen / weiterleiten", "primary-action"]] : []),
+    ...(capabilities.update === true || capabilities.change === true ? [["change", "Änderung speichern", "primary-action"]] : []),
+    ...(capabilities.close === true || capabilities.cancel === true ? [["cancel", "Genehmigten Antrag stornieren", "danger-action"]] : []),
+  ];
+}
+
+async function openLeadershipRequest(id, kind) {
+  let request = findLeadershipRequest(id, kind);
   if (!request) return;
+  let events = [];
+  if (kind === "sickness") {
+    try {
+      const result = await api(`/api/portal/v1/sickness-cases/${encodeURIComponent(request.id)}`);
+      request = result.case || request;
+      events = result.events || [];
+      const index = portalState.leadershipSicknessCases.findIndex((entry) => String(entry.id) === String(request.id));
+      if (index >= 0) portalState.leadershipSicknessCases[index] = request;
+    } catch (error) {
+      message(el.leadershipRequestMessage, error.message, true);
+      return;
+    }
+  } else if (kind === "amu") {
+    try {
+      const result = await api(`/api/portal/v1/amu-reports/${encodeURIComponent(request.id)}`);
+      request = result.report || request;
+      events = result.events || [];
+      const index = portalState.leadershipAmuReports.findIndex((entry) => String(entry.id) === String(request.id));
+      if (index >= 0) portalState.leadershipAmuReports[index] = request;
+    } catch (error) {
+      message(el.leadershipRequestMessage, error.message, true);
+      return;
+    }
+  }
   portalState.selectedLeadershipRequest = { request, kind };
   const employeeNumber = request.employee_number || request.employeeNumber || "";
   const name = request.nickname || request.full_name || request.fullName || "";
@@ -1363,23 +1425,33 @@ function openLeadershipRequest(id, kind) {
   const identityDetails = kind === "amu" && amuIdentityStatusText(request)
     ? `<p class="message ${request.identity_check?.status === "matched" ? "success" : "warning"}">${esc(amuIdentityStatusText(request))}</p>` : "";
   el.leadershipRequestSummary.innerHTML = `<strong>${esc(employeeNumber)} · ${esc(name)}</strong><p>${esc(requestPeriod)}</p>${request.note || request.employee_note ? `<p>${esc(request.note || request.employee_note)}</p>` : ""}${identityDetails}${sicknessDetails}`;
+  el.leadershipRequestHistory.innerHTML = leadershipEventHistoryHtml(events);
+  el.leadershipRequestHistory.classList.toggle("hidden", !events.length);
+  const canOpenAmuFiles = kind === "amu" && request.capabilities?.openFiles === true;
+  el.leadershipRequestDocuments.innerHTML = canOpenAmuFiles
+    ? (request.documents || []).map((document) => `<a href="/api/portal/v1/amu-reports/${Number(request.id)}/documents/${encodeURIComponent(String(document.id))}/content" target="_blank" rel="noopener">${esc(document.original_name || "AUM-Dokument")} öffnen</a>`).join("")
+    : "";
+  el.leadershipRequestDocuments.classList.toggle("hidden", !canOpenAmuFiles || !(request.documents || []).length);
   el.leadershipRequestNote.value = "";
+  el.leadershipSicknessFields.classList.toggle("hidden", kind !== "sickness");
+  if (kind === "sickness") {
+    el.leadershipSicknessExpectedEnd.value = request.expected_end || "";
+    el.leadershipSicknessExpectedEnd.min = request.start_date || "";
+    el.leadershipSicknessReturnDate.value = request.return_to_work_date || iso(new Date());
+    el.leadershipSicknessReturnDate.min = request.start_date || "";
+  }
   el.leadershipCorrectionEntries.innerHTML = "";
   el.leadershipCorrectionEntries.classList.toggle("hidden", kind !== "time_correction");
   el.addLeadershipCorrectionEntry.classList.toggle("hidden", kind !== "time_correction");
-  el.leadershipRequestNote.closest("label")?.classList.toggle("hidden", kind === "sickness");
+  el.leadershipRequestNote.closest("label")?.classList.remove("hidden");
   if (kind === "time_correction") {
     const requested = correctionRequestedChange(request);
     const entries = request.proposedEntries || request.proposed_entries || requested.proposedEntries || requested.entries || [];
     entries.forEach((entry) => appendCorrectionEntry({ ...entry, time: correctionEntryTime(entry, correctionDate(request)) }, el.leadershipCorrectionEntries));
   }
   message(el.leadershipRequestMessage, "");
-  const actions = kind === "sickness" ? [] : kind === "amu"
-    ? [["reviewed", "Als geprüft markieren", "primary-action"]]
-    : kind === "time_correction"
-      ? [["reject", "Ablehnen", "danger-action"], ["approve", "Genehmigen", "primary-action"]]
-      : [["reject", "Ablehnen", "danger-action"], ...(request.status !== "pending_hr" ? [["preliminary", "Vorläufig", "secondary-action"]] : []), ["approve", "Genehmigen / weiterleiten", "primary-action"]];
-  el.leadershipRequestActions.innerHTML = `<button type="button" data-close-leadership-request>${kind === "sickness" ? "Schließen" : "Abbrechen"}</button>${actions.map(([action, label, className]) => `<button class="${className}" data-leadership-action="${action}" type="button">${label}</button>`).join("")}`;
+  const actions = leadershipDialogActions(request, kind);
+  el.leadershipRequestActions.innerHTML = `<button type="button" data-close-leadership-request>Dialog schließen</button>${actions.map(([action, label, className]) => `<button class="${className}" data-leadership-action="${action}" type="button">${label}</button>`).join("")}`;
   el.leadershipRequestDialog.showModal();
 }
 
@@ -1389,9 +1461,32 @@ async function decideLeadershipRequest(action) {
   const { request, kind } = selected;
   let url;
   let body;
-  if (kind === "amu") {
-    url = `/api/portal/v1/amu-reports/${request.id}/review`;
-    body = { action: "reviewed", note: el.leadershipRequestNote.value };
+  const note = el.leadershipRequestNote.value.trim();
+  if (kind === "sickness") {
+    if (action === "correct_closed" && !note) {
+      message(el.leadershipRequestMessage, "Eine Korrektur eines abgeschlossenen Falls benötigt eine Begründung.", true);
+      return;
+    }
+    if (action === "close" && !el.leadershipSicknessReturnDate.value) {
+      message(el.leadershipRequestMessage, "Bitte das Datum der Wiederaufnahme der Arbeit eingeben.", true);
+      return;
+    }
+    url = `/api/portal/v1/sickness-cases/${request.id}/action`;
+    body = {
+      action,
+      expectedRevision: request.revision,
+      expectedStatus: request.status,
+      expectedEnd: el.leadershipSicknessExpectedEnd.value,
+      returnDate: el.leadershipSicknessReturnDate.value,
+      note,
+    };
+  } else if (kind === "amu") {
+    if (["return", "add_note"].includes(action) && !note) {
+      message(el.leadershipRequestMessage, action === "return" ? "Bitte die benötigte Ergänzung beschreiben." : "Bitte einen Vermerk eingeben.", true);
+      return;
+    }
+    url = `/api/portal/v1/amu-reports/${request.id}/action`;
+    body = { action, note, expectedRevision: request.revision, expectedStatus: request.status };
   } else if (kind === "time_correction") {
     url = `/api/portal/v1/time-corrections/${request.id}/decision`;
     const proposedEntries = [...el.leadershipCorrectionEntries.querySelectorAll(".correction-entry-row")].map((row) => ({
@@ -1402,12 +1497,12 @@ async function decideLeadershipRequest(action) {
       message(el.leadershipRequestMessage, "Bitte die korrigierte Buchungsfolge vollständig eintragen.", true);
       return;
     }
-    body = { action, decision: action === "approve" ? "approved" : "rejected", note: el.leadershipRequestNote.value, entries: proposedEntries, proposedEntries };
+    body = { action, decision: action === "approve" ? "approved" : "rejected", note, entries: proposedEntries, proposedEntries };
   } else {
     const requestKind = ["vacation_change", "vacation_cancel"].includes(request.kind) ? "vacation_change"
       : ["time_off_change", "time_off_cancel"].includes(request.kind) ? "time_off_change" : request.kind;
     url = `/api/portal/v1/absence-requests/${requestKind}/${request.id}/action`;
-    body = { action, note: el.leadershipRequestNote.value };
+    body = { action, note };
   }
   try {
     await api(url, { method: "PUT", body: JSON.stringify(body) });

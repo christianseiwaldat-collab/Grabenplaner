@@ -74,3 +74,49 @@ test("v0.61.1 USB-Rollen: Abteilungsleitung benoetigt zwingend eine gueltige Abt
     { code: "USB_EMPLOYEE_DEPARTMENT_REQUIRED" },
   );
 });
+
+test("v0.80 USB-Rechte: entzogenes Dienstplan-Leserecht entzieht auch das Schreibrecht", async () => {
+  const employee = db.prepare(`
+    SELECT personnel_number, home_location_id
+    FROM employees
+    WHERE active = 1 AND home_location_id IS NOT NULL
+    ORDER BY personnel_number LIMIT 1
+  `).get();
+  assert.ok(employee);
+  const [validated] = await validateUsbEmployees(
+    [{
+      sourcePersonnelNumber: employee.personnel_number,
+      role: "manager",
+      deniedPermissions: ["schedule:read"],
+    }],
+    [employee.home_location_id],
+    { personnelNumber: "999999", role: "admin" },
+  );
+  assert.deepEqual(
+    validated.deniedPermissions.filter((permission) => permission.startsWith("schedule:")).sort(),
+    ["schedule:read", "schedule:write"],
+  );
+  assert.deepEqual(validated.scopes, [{ locationId: employee.home_location_id, departmentId: null }]);
+});
+
+test("v0.80 USB-Rechte: Dienstplan-Zusatzrecht ohne gueltigen Bereich wird abgewiesen", async () => {
+  const employee = db.prepare(`
+    SELECT personnel_number, home_location_id
+    FROM employees
+    WHERE active = 1 AND home_location_id IS NOT NULL AND preferred_department_id IS NULL
+    ORDER BY personnel_number LIMIT 1
+  `).get();
+  assert.ok(employee);
+  await assert.rejects(
+    validateUsbEmployees(
+      [{
+        sourcePersonnelNumber: employee.personnel_number,
+        role: "employee",
+        additionalPermissions: ["schedule:read"],
+      }],
+      [employee.home_location_id],
+      { personnelNumber: "999999", role: "admin" },
+    ),
+    { code: "USB_EMPLOYEE_SCOPE_REQUIRED" },
+  );
+});
