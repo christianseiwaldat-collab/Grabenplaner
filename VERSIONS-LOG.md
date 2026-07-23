@@ -1,5 +1,10 @@
 # Grabenplaner Versions-Log
 
+## v0.80.2 Beta · Ubuntu-Offsite-Vertragskorrektur
+
+- Der Offsite-Installer akzeptiert den vom laufenden Grabenplaner bewusst privat gehaltenen Backup-Ordner mit Modus `0700` ebenso wie den ursprünglichen Installationsmodus `0750`.
+- Eigentümer, Dienstgruppe und alle übrigen Serverpfade bleiben weiterhin exakt geprüft; der Installer erweitert bestehende Zugriffsrechte nicht.
+
 ## v0.80.1 Beta · Recovery-Assurance-Servicepatch
 
 - Der isolierte App-Smoke bereinigt nun auch die verschlüsselten Ereignisse der revisionssicheren Fallverwaltung, ohne produktive Gesundheits- oder Personaldaten in den Testlauf zu übernehmen.

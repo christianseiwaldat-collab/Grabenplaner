@@ -177,6 +177,7 @@ offsite_gid="$(getent group "$OFFSITE_GROUP" | awk -F: '{print $3}')"
 status_gid="$(getent group "$OFFSITE_STATUS_GROUP" | awk -F: '{print $3}')"
 app_uid="$(id -u "$OFFSITE_APP_USER")"
 app_gid="$(getent group "$OFFSITE_APP_GROUP" | awk -F: '{print $3}')"
+backup_root_contract="$(stat --format='%u:%g:%a' -- "$OFFSITE_BACKUP_ROOT" 2>/dev/null || true)"
 [[ "$offsite_uid" =~ ^[0-9]+$ && "$offsite_gid" =~ ^[0-9]+$ && "$status_gid" =~ ^[0-9]+$ \
   && "$app_uid" =~ ^[0-9]+$ && "$app_gid" =~ ^[0-9]+$ ]] || offsite_die "Die Dienstkonten konnten nicht sicher aufgeloest werden."
 
@@ -185,7 +186,8 @@ app_gid="$(getent group "$OFFSITE_APP_GROUP" | awk -F: '{print $3}')"
   || offsite_die "Ein benoetigter Server-Basispfad ist unsicher."
 [[ "$(stat --format='%u:%g:%a' -- /etc/grabenplaner)" == "0:0:700" \
   && "$(stat --format='%u:%g:%a' -- "$OFFSITE_DATA_ROOT")" == "$app_uid:$app_gid:750" \
-  && "$(stat --format='%u:%g:%a' -- "$OFFSITE_BACKUP_ROOT")" == "$app_uid:$app_gid:750" ]] \
+  && ( "$backup_root_contract" == "$app_uid:$app_gid:700" \
+    || "$backup_root_contract" == "$app_uid:$app_gid:750" ) ]] \
   || offsite_die "Ein benoetigter Server-Basispfad weicht vom Rechtevertrag ab."
 
 assert_existing_directory "$OFFSITE_ROOT" 0 0 755
