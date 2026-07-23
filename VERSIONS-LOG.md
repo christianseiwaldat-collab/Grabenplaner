@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.80.3 Beta · Ubuntu-Systemnachweise
+
+- Host-Sicherheitsnachweise akzeptieren nun die von Ubuntu 26.04 ausgegebenen RFC3339-Zeitstempel mit Nanosekunden und normalisieren sie sicher auf Millisekunden.
+- Die Caddy-Prüfung des gehärteten Systemmonitors verwendet ausschließlich private, beschreibbare Laufzeitverzeichnisse. Dadurch entstehen unter `ProtectHome` und `PrivateTmp` keine falschen Warnungen mehr.
+- Beide Korrekturen betreffen ausschließlich die technische Nachweisbewertung; Recovery-Sicherungen und Produktivdaten bleiben unverändert.
+
 ## v0.80.2 Beta · Ubuntu-Offsite-Vertragskorrektur
 
 - Der Offsite-Installer akzeptiert den vom laufenden Grabenplaner bewusst privat gehaltenen Backup-Ordner mit Modus `0700` ebenso wie den ursprünglichen Installationsmodus `0750`.

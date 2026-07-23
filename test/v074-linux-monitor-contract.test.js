@@ -114,3 +114,12 @@ test("v0.74 grabenplaner-test has a local monitor mode without five-minute remot
   assert.match(script, /offsite_timer_ok/);
   assert.ok(script.indexOf('"$monitor_mode" -eq 1') < script.indexOf('"$offsite_test_command"'));
 });
+
+test("v0.80 gives sandboxed Caddy validation private writable runtime storage", () => {
+  const script = read("server-tools/linux/test-grabenplaner-server.sh");
+  assert.match(script, /RUNTIME_DIRECTORY/);
+  assert.match(script, /HOME="\$RUNTIME_DIRECTORY"/);
+  assert.match(script, /XDG_CONFIG_HOME="\$RUNTIME_DIRECTORY\/caddy-config"/);
+  assert.match(script, /XDG_DATA_HOME="\$RUNTIME_DIRECTORY\/caddy-data"/);
+  assert.match(script, /caddy_validation_ok/);
+});
