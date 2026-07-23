@@ -360,6 +360,14 @@
       <form id="leadershipRequestForm">
         <div class="dialog-heading"><div><span class="eyebrow">Leitungsansicht</span><h2 id="leadershipRequestTitle">Antrag bearbeiten</h2></div><button type="button" data-close-leadership-request>×</button></div>
         <div class="history-detail-summary" id="leadershipRequestSummary"></div>
+        <div class="request-event-history hidden" id="leadershipRequestHistory"></div>
+        <div class="document-links leadership-request-documents hidden" id="leadershipRequestDocuments"></div>
+        <fieldset class="leadership-sickness-fields hidden" id="leadershipSicknessFields">
+          <legend>Krankmeldungsfall</legend>
+          <label><span>Voraussichtlich krank bis</span><input id="leadershipSicknessExpectedEnd" type="date" /></label>
+          <label><span>Wieder arbeitsfähig ab</span><input id="leadershipSicknessReturnDate" type="date" /></label>
+          <small>Der Abschluss beendet den Krankenstand. Eine noch erforderliche AUM bleibt unabhängig davon offen.</small>
+        </fieldset>
         <div class="correction-entry-editor hidden" id="leadershipCorrectionEntries"></div>
         <button class="text-button correction-add-entry hidden" id="addLeadershipCorrectionEntry" type="button">+ Buchung ergänzen</button>
         <label><span>Bemerkung</span><textarea id="leadershipRequestNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>

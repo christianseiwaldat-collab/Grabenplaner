@@ -1083,13 +1083,13 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     });
     assert.equal(departmentManagerScopeResponse.status, 200, await departmentManagerScopeResponse.clone().text());
 
-    const manager = await login("104", "445566");
+    let manager = await login("104", "445566");
     await changePassword(manager, "445566", "665544");
     const departmentManager = await login("105", "556677");
     await changePassword(departmentManager, "556677", "776655");
-    const employee = await login("102", "223344");
+    let employee = await login("102", "223344");
     await changePassword(employee, "223344", "554433");
-    const hr = await login("103", "334455");
+    let hr = await login("103", "334455");
     await changePassword(hr, "334455", "887766");
     const itAdmin = await login("106", "667788");
     await changePassword(itAdmin, "667788", "998877");
@@ -1133,6 +1133,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       body: JSON.stringify({ permissions: ["system:diagnostics:read"] }),
     });
     assert.equal(grantHrStatusRead.status, 200, await grantHrStatusRead.clone().text());
+    hr = await login("103", "887766");
     const delegatedHrStatus = await fetch(`${url}/api/server-status`, { headers: { Cookie: hr.cookie } });
     assert.equal(delegatedHrStatus.status, 200, await delegatedHrStatus.clone().text());
     const delegatedHrTechnicalDenied = await fetch(`${url}/api/server-diagnostics`, { headers: { Cookie: hr.cookie } });
@@ -1143,6 +1144,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       body: JSON.stringify({ permissions: [] }),
     });
     assert.equal(clearHrStatusRead.status, 200, await clearHrStatusRead.clone().text());
+    hr = await login("103", "887766");
 
     const itAdminStatusResponse = await fetch(`${url}/api/server-status`, { headers: { Cookie: itAdmin.cookie } });
     assert.equal(itAdminStatusResponse.status, 200, await itAdminStatusResponse.clone().text());
@@ -1173,11 +1175,16 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const grantEmployeeTechnicalRights = await fetch(`${url}/api/portal/v1/rights/102`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: itAdmin.cookie, "X-CSRF-Token": itAdmin.csrf },
-      body: JSON.stringify({ permissions: ["schedule:read", "branding:read", "branding:write", "employees:write", "hr:approve", "backup:write", "update:write", "system:write"] }),
+      body: JSON.stringify({
+        grantedPermissions: ["schedule:read", "branding:read", "branding:write", "employees:write", "hr:approve", "backup:write", "update:write", "system:write"],
+        deniedPermissions: [],
+        scopes: [{ locationId: "01", departmentId: firstDepartment.id }],
+      }),
     });
     assert.equal(grantEmployeeTechnicalRights.status, 200, await grantEmployeeTechnicalRights.clone().text());
     const employeeWithTechnicalRights = (await grantEmployeeTechnicalRights.json()).users.find((user) => user.employeeNumber === "102");
     assert.deepEqual(employeeWithTechnicalRights.grantedPermissions, ["backup:write", "branding:read", "branding:write", "employees:write", "hr:approve", "schedule:read", "system:write", "update:write"]);
+    employee = await login("102", "554433");
     const employeeSessionWithGrants = await fetch(`${url}/api/portal/v1/session`, { headers: { Cookie: employee.cookie } });
     assert.equal(employeeSessionWithGrants.status, 200, await employeeSessionWithGrants.clone().text());
     const employeeEffectivePermissions = (await employeeSessionWithGrants.json()).user.permissions;
@@ -1210,6 +1217,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       body: JSON.stringify({ role: "hr", active: true }),
     });
     assert.equal(restoreHrByItAdmin.status, 200, await restoreHrByItAdmin.clone().text());
+    hr = await login("103", "887766");
     const developerRoleCannotBeAssigned = await fetch(`${url}/api/portal/v1/users/106`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
@@ -1250,6 +1258,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const grantedManager = (await grantManagerTechnicalRights.json()).users.find((user) => user.employeeNumber === "104");
     assert.deepEqual(grantedManager.grantedPermissions, ["departments:write", "employees:display:write", "locations:write", "operation_mode:write"]);
 
+    manager = await login("104", "665544");
     const managerSessionWithGrant = await fetch(`${url}/api/portal/v1/session`, { headers: { Cookie: manager.cookie } });
     assert.equal(managerSessionWithGrant.status, 200, await managerSessionWithGrant.clone().text());
     assert.ok((await managerSessionWithGrant.json()).user.permissions.includes("employees:display:write"));
@@ -1386,6 +1395,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
       body: JSON.stringify({ permissions: [] }),
     });
     assert.equal(revokeManagerRights.status, 200, await revokeManagerRights.clone().text());
+    manager = await login("104", "665544");
     const updateAfterRevoke = await fetch(`${url}/api/employees/104/display`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },

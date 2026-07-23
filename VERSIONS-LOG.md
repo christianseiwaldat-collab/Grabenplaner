@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.80 Beta · Entziehbare Rollenrechte und revisionssichere Fallverwaltung
+
+- Personalleitung und höhere Rollen können nun auch Rollen-Grundrechte personenbezogen entziehen. Entzüge haben Vorrang vor Rollen- und Zusatzrechten, wirken in Browser und Mobile identisch und widerrufen bestehende Sitzungen sofort.
+- Standortbezogene Rechte werden ausdrücklich auf die eigene Abteilung oder die gesamte Stammfiliale begrenzt. Ohne zugewiesene Abteilung entsteht bei Mitarbeitenden und Abteilungsleitungen niemals stillschweigend ein Filialrecht.
+- Berechtigte Leitungen können offene und abgeschlossene Anträge, Krankmeldungen und AUM-Fälle weiterhin öffnen. Krankenstände lassen sich schließen und abgeschlossene Fälle begründet sowie revisionssicher korrigieren.
+- Abteilungsleitungen bearbeiten Krankmeldungen und lokale AUMs nur mit ausdrücklichem Zusatzrecht, passendem Abteilungsscope und wirksamer Filialleitungsvertretung.
+- Falländerungen verwenden optimistische Revisionen, verschlüsselte append-only Ereignisverläufe und serverseitige Bereichsprüfungen. Entzogene AUM-Dateirechte entfernen auch Dokumentmetadaten aus der Antwort.
+
 ## v0.79 Beta · Mobile Selbstverwaltung für Abwesenheiten und AUM
 
 - Die versionierte Mobile-API unterstützt Urlaub, Zeitausgleich, Krankmeldungen, geschützte AUM-Uploads und persönliche Benachrichtigungen für den eigenständigen Android-/iOS-Client.

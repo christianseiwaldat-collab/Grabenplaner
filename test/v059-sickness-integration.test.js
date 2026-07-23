@@ -195,17 +195,27 @@ test.before(async () => {
   insertEmployee("615", "AUM Manuell B", "91", departmentA);
   insertEmployee("616", "AUM Datumsprüfung", "91", departmentA);
 
+  insertEmployee("617", "Maria Case", "91", departmentA);
+  insertEmployee("618", "Department Delegate", "91", departmentA);
+  insertEmployee("619", "Delegated Case", "91", departmentA);
+
   const employeeAuth = session("591", "employee");
   const managerAuth = session("593", "manager");
   const foreignManagerAuth = session("594", "manager");
   const hrAuth = session("595", "hr");
   const crossLocationEmployeeAuth = session("596", "employee");
   const delegatedReaderAuth = session("599", "employee");
+  const caseEmployeeAuth = session("617", "employee");
+  const departmentManagerAuth = session("618", "department_manager");
+  const delegatedCaseEmployeeAuth = session("619", "employee");
   db.prepare("INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by) VALUES ('593', '91', ?, 'test')").run(departmentA);
   db.prepare("INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by) VALUES ('594', '92', ?, 'test')").run(departmentB);
   db.prepare("INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by) VALUES ('599', '92', ?, 'test')").run(departmentB);
   db.prepare("INSERT INTO portal_permission_grants (employee_number, permission, granted_by) VALUES ('599', 'sickness:read', 'test')").run();
   db.prepare("INSERT INTO portal_permission_grants (employee_number, permission, granted_by) VALUES ('599', 'amu:metadata:read', 'test')").run();
+  db.prepare("INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by) VALUES ('618', '91', ?, 'test')").run(departmentA);
+  db.prepare("INSERT INTO portal_permission_grants (employee_number, permission, granted_by) VALUES ('618', 'sickness:read', 'test')").run();
+  db.prepare("INSERT INTO portal_permission_grants (employee_number, permission, granted_by) VALUES ('618', 'sickness:manage', 'test')").run();
 
   await new Promise((resolve, reject) => {
     httpServer = app.listen(0, "127.0.0.1", resolve);
@@ -214,6 +224,7 @@ test.before(async () => {
   baseUrl = `http://127.0.0.1:${httpServer.address().port}`;
   auth = {
     employeeAuth, managerAuth, foreignManagerAuth, hrAuth, crossLocationEmployeeAuth, delegatedReaderAuth,
+    caseEmployeeAuth, departmentManagerAuth, delegatedCaseEmployeeAuth,
     departmentA, departmentB,
   };
 });
@@ -378,10 +389,19 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
 
   db.prepare("UPDATE sickness_cases SET purge_after = '2000-01-01' WHERE id = ?").run(caseId);
   db.prepare("UPDATE outbound_notification_jobs SET purge_after = '2000-01-01' WHERE id = ?").run(queued[0].id);
+  db.prepare(`
+    INSERT INTO protected_case_events
+      (id, entity_kind, entity_id, action_lookup, actor_lookup, protected_payload)
+    VALUES ('sickness-retention-event', 'sickness', ?, 'test-action', 'test-actor', 'enc:v2:test')
+  `).run(caseId);
   const activePurge = purgeExpiredSicknessData("2026-07-14");
   assert.equal(activePurge.cases, 0);
   assert.equal(activePurge.jobs, 1);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM sickness_cases WHERE id = ?").get(caseId).count, 1);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM protected_case_events
+    WHERE entity_kind = 'sickness' AND entity_id = ?
+  `).get(caseId).count, 1);
   const withdrawn = await request(`/api/portal/v1/me/sickness-cases/${caseId}/withdraw`, {
     method: "POST", auth: employeeAuth, body: {},
   });
@@ -390,6 +410,10 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
   const purged = purgeExpiredSicknessData("2026-07-14");
   assert.equal(purged.cases, 1);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM sickness_cases WHERE id = ?").get(caseId).count, 0);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM protected_case_events
+    WHERE entity_kind = 'sickness' AND entity_id = ?
+  `).get(caseId).count, 0);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM sickness_alerts WHERE sickness_case_id = ?").get(caseId).count, 0);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM outbound_notification_jobs WHERE id = ?").get(queued[0].id).count, 0);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM portal_notifications WHERE recipient_employee_number = '593'").get().count, 0);
@@ -1274,4 +1298,152 @@ test("AUM Block 5: nur der serverseitig vollständig bestätigte Stufe-A-Fall wi
     delete process.env.GRABENPLANER_TEST_AMU_IDENTITY_TEXT;
     await savePolicy(currentPolicy.autoReviewTrustA === true);
   }
+});
+
+test("Fallbearbeitung: FL, delegierte AL und PL bearbeiten Krankmeldungen revisionssicher und datensparsam", async () => {
+  const {
+    managerAuth,
+    foreignManagerAuth,
+    hrAuth,
+    caseEmployeeAuth,
+    departmentManagerAuth,
+    delegatedCaseEmployeeAuth,
+  } = auth;
+  const today = mostRecentPlanningDate();
+
+  const created = await request("/api/portal/v1/me/sickness-cases", {
+    method: "POST",
+    auth: caseEmployeeAuth,
+    body: { startDate: today, expectedEnd: "", note: "Private medizinische Angabe" },
+  });
+  assert.equal(created.response.status, 201, JSON.stringify(created.payload));
+  const caseId = Number(created.payload.case.id);
+
+  const managerDetail = await request(`/api/portal/v1/sickness-cases/${caseId}`, { auth: managerAuth });
+  assert.equal(managerDetail.response.status, 200, JSON.stringify(managerDetail.payload));
+  assert.equal(managerDetail.payload.case.employee_note, "");
+  assert.equal(managerDetail.payload.case.capabilities.close, true);
+
+  const foreignClose = await request(`/api/portal/v1/sickness-cases/${caseId}/action`, {
+    method: "PUT",
+    auth: foreignManagerAuth,
+    body: {
+      action: "close",
+      expectedRevision: managerDetail.payload.case.revision,
+      expectedStatus: managerDetail.payload.case.status,
+      returnDate: today,
+      note: "Fremder Bereich",
+    },
+  });
+  assert.equal(foreignClose.response.status, 403, JSON.stringify(foreignClose.payload));
+
+  const closed = await request(`/api/portal/v1/sickness-cases/${caseId}/action`, {
+    method: "PUT",
+    auth: managerAuth,
+    body: {
+      action: "close",
+      expectedRevision: managerDetail.payload.case.revision,
+      expectedStatus: managerDetail.payload.case.status,
+      returnDate: today,
+      note: "RÃ¼ckkehr bestÃ¤tigt",
+    },
+  });
+  assert.equal(closed.response.status, 200, JSON.stringify(closed.payload));
+  assert.equal(closed.payload.case.status, "recovered");
+  assert.equal(closed.payload.case.capabilities.correctClosed, true);
+  assert.equal(closed.payload.events.at(-1).action, "close");
+  assert.equal(closed.payload.events.at(-1).actor_employee_number, "593");
+
+  const stale = await request(`/api/portal/v1/sickness-cases/${caseId}/action`, {
+    method: "PUT",
+    auth: managerAuth,
+    body: {
+      action: "close",
+      expectedRevision: managerDetail.payload.case.revision,
+      expectedStatus: managerDetail.payload.case.status,
+      returnDate: today,
+    },
+  });
+  assert.equal(stale.response.status, 409, JSON.stringify(stale.payload));
+  assert.equal(stale.payload.code, "SICKNESS_CASE_STALE");
+
+  const corrected = await request(`/api/portal/v1/sickness-cases/${caseId}/action`, {
+    method: "PUT",
+    auth: hrAuth,
+    body: {
+      action: "correct_closed",
+      expectedRevision: closed.payload.case.revision,
+      expectedStatus: closed.payload.case.status,
+      returnDate: offsetDate(today, 1),
+      note: "BegrÃ¼ndete Korrektur durch PL",
+    },
+  });
+  assert.equal(corrected.response.status, 200, JSON.stringify(corrected.payload));
+  assert.equal(corrected.payload.case.return_to_work_date, offsetDate(today, 1));
+  assert.equal(corrected.payload.events.at(-1).action, "correct_closed");
+
+  const encryptedEvents = db.prepare(`
+    SELECT protected_payload FROM protected_case_events WHERE entity_kind = 'sickness' AND entity_id = ?
+  `).all(caseId);
+  assert.equal(encryptedEvents.length >= 2, true);
+  assert.equal(encryptedEvents.every((entry) => String(entry.protected_payload).startsWith("enc:v2:")), true);
+  assert.equal(encryptedEvents.some((entry) => String(entry.protected_payload).includes("Korrektur")), false);
+
+  const delegatedCreated = await request("/api/portal/v1/me/sickness-cases", {
+    method: "POST",
+    auth: delegatedCaseEmployeeAuth,
+    body: { startDate: today, expectedEnd: "", note: "" },
+  });
+  assert.equal(delegatedCreated.response.status, 201, JSON.stringify(delegatedCreated.payload));
+  const delegatedId = Number(delegatedCreated.payload.case.id);
+  const beforeDelegation = await request(`/api/portal/v1/sickness-cases/${delegatedId}`, {
+    auth: departmentManagerAuth,
+  });
+  assert.equal(beforeDelegation.response.status, 200, JSON.stringify(beforeDelegation.payload));
+  assert.equal(beforeDelegation.payload.case.capabilities.close, false);
+
+  db.prepare(`
+    INSERT INTO approval_delegations
+      (location_id, delegate_employee_number, date_from, date_to, note, created_by)
+    VALUES ('91', '618', ?, ?, 'Testvertretung', '595')
+  `).run(today, today);
+  const withDelegation = await request(`/api/portal/v1/sickness-cases/${delegatedId}`, {
+    auth: departmentManagerAuth,
+  });
+  assert.equal(withDelegation.response.status, 200, JSON.stringify(withDelegation.payload));
+  assert.equal(withDelegation.payload.case.capabilities.close, true);
+  const delegatedClosed = await request(`/api/portal/v1/sickness-cases/${delegatedId}/action`, {
+    method: "PUT",
+    auth: departmentManagerAuth,
+    body: {
+      action: "close",
+      expectedRevision: withDelegation.payload.case.revision,
+      expectedStatus: withDelegation.payload.case.status,
+      returnDate: today,
+      note: "Vertretungsentscheidung",
+    },
+  });
+  assert.equal(delegatedClosed.response.status, 200, JSON.stringify(delegatedClosed.payload));
+  assert.equal(delegatedClosed.payload.case.status, "recovered");
+
+  insertEmployee("620", "Denied Notification", "91", auth.departmentA);
+  const deniedNotificationEmployee = session("620", "employee");
+  const notificationCountBefore = Number(db.prepare(`
+    SELECT COUNT(*) AS count FROM portal_notifications WHERE recipient_employee_number = '593'
+  `).get().count || 0);
+  db.prepare(`
+    INSERT INTO portal_permission_denials (employee_number, permission, denied_by)
+    VALUES ('593', 'sickness:read', '595')
+  `).run();
+  const denialCase = await request("/api/portal/v1/me/sickness-cases", {
+    method: "POST",
+    auth: deniedNotificationEmployee,
+    body: { startDate: today, expectedEnd: "", note: "" },
+  });
+  assert.equal(denialCase.response.status, 201, JSON.stringify(denialCase.payload));
+  const notificationCountAfter = Number(db.prepare(`
+    SELECT COUNT(*) AS count FROM portal_notifications WHERE recipient_employee_number = '593'
+  `).get().count || 0);
+  assert.equal(notificationCountAfter, notificationCountBefore);
+  db.prepare("DELETE FROM portal_permission_denials WHERE employee_number = '593' AND permission = 'sickness:read'").run();
 });

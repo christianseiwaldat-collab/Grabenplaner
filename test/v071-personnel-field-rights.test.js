@@ -1099,7 +1099,7 @@ test("v0.71 Block 5: UI nutzt Feldrechte, Capability und ausschließlich dirty S
   assert.match(source, /state\.personnelRecordDirtyFields\.has\(fieldKey\)\s*&&\s*mode\(fieldKey\)\s*===\s*"write"\s*&&\s*fields\.namedItem\(inputName\)/);
   assert.match(source, /personnelRecordContent\?\.addEventListener\("input"[\s\S]*!event\.target\.disabled[\s\S]*personnelRecordDirtyFields\.add\(field\.dataset\.personnelFieldKey\)/);
   assert.match(source, /function rightsDashboardVisiblePersonnelFields\(user\)/);
-  assert.match(source, /if \(origin === "delegated"\) return \[\]/);
+  assert.match(source, /if \(\["delegated", "revoked"\]\.includes\(origin\)\) return \[\]/);
   assert.match(source, /const visiblePersonnelFields = rightsDashboardVisiblePersonnelFields\(user\)/);
   assert.match(source, /const fields = rightsDashboardVisiblePersonnelFields\(user\)/);
   assert.match(source, /const personnelFieldMatrix = renderPersonnelFieldRightsDashboard\(user\)/);

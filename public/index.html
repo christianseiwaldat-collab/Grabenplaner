@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.79 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.80 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -190,14 +190,14 @@
 
         <section id="requestsView" class="view">
           <header class="topbar">
-            <div><span class="eyebrow">Freigaben</span><h1>Anträge</h1><p class="subtitle">Urlaub und Zeitausgleich prüfen, bearbeiten und vollständig nachvollziehen.</p></div>
+            <div><span class="eyebrow">Freigaben</span><h1>Anträge & Fälle</h1><p class="subtitle">Urlaub, Zeitausgleich, Krankmeldungen und AUM prüfen, bearbeiten und vollständig nachvollziehen.</p></div>
             <div class="topbar-actions"><button type="button" class="secondary-button" id="refreshRequestsButton">Aktualisieren</button><div class="page-theme-switch" role="group" aria-label="Darstellung der Anträge"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div></div>
           </header>
           <section class="request-workflow-summary" id="requestWorkflowSummary"></section>
           <section class="vacation-panel request-management-panel">
             <div class="request-management-toolbar">
-              <div class="request-kind-tabs"><button class="active" data-request-kind-tab="vacation" type="button">Urlaub <span id="vacationRequestCount">0</span></button><button data-request-kind-tab="time_off" type="button">Zeitausgleich <span id="timeOffRequestCount">0</span></button><button data-request-kind-tab="amu" type="button">AUM <span id="amuRequestCount">0</span></button></div>
-              <label class="field request-status-filter"><span>Status</span><select id="requestStatusFilter"><option value="actionable">Zu bearbeiten</option><option value="pending_local">Offen</option><option value="preliminary_local">Vorläufig genehmigt</option><option value="pending_hr">Wartet auf Personalleitung</option><option value="approved">Genehmigt</option><option value="rejected">Abgelehnt</option><option value="cancelled">Storniert</option><option value="all">Alle</option></select></label>
+              <div class="request-kind-tabs"><button class="active" data-request-kind-tab="vacation" type="button">Urlaub <span id="vacationRequestCount">0</span></button><button data-request-kind-tab="time_off" type="button">Zeitausgleich <span id="timeOffRequestCount">0</span></button><button data-request-kind-tab="amu" type="button">Krank & AUM <span id="amuRequestCount">0</span></button></div>
+              <label class="field request-status-filter"><span>Status</span><select id="requestStatusFilter"><option value="actionable">Zu bearbeiten</option><option value="pending_local">Offen</option><option value="preliminary_local">Vorläufig genehmigt</option><option value="pending_hr">Wartet auf Personalleitung</option><option value="approved">Genehmigt</option><option value="rejected">Abgelehnt</option><option value="cancelled">Storniert</option><option value="reported">Krank gemeldet</option><option value="aum_received">AUM eingelangt</option><option value="recovered">Abgeschlossen</option><option value="withdrawn">Zurückgezogen</option><option value="submitted">AUM eingereicht</option><option value="returned">AUM zu ergänzen</option><option value="reviewed">AUM geprüft</option><option value="all">Alle</option></select></label>
             </div>
             <div class="manager-request-list" id="managerVacationRequestList"><p class="settings-note">Anträge werden geladen.</p></div>
           </section>
@@ -506,7 +506,7 @@
               <label><span>App-Rolle</span><select id="rightsDashboardRoleFilter"><option value="">Alle Rollen</option></select></label>
               <label><span>Standort</span><select id="rightsDashboardLocationFilter"><option value="">Alle Standorte</option></select></label>
               <label><span>Abteilung</span><select id="rightsDashboardDepartmentFilter"><option value="">Alle Abteilungen</option></select></label>
-              <label><span>Rechteart</span><select id="rightsDashboardOriginFilter"><option value="">Alle Rechtearten</option><option value="role">Grundrechte</option><option value="delegated">Zusatzrechte</option><option value="restricted">Bereichsgebunden</option></select></label>
+              <label><span>Rechteart</span><select id="rightsDashboardOriginFilter"><option value="">Alle Rechtearten</option><option value="role">Grundrechte</option><option value="delegated">Zusatzrechte</option><option value="revoked">Entzogene Rechte</option><option value="restricted">Bereichsgebunden</option></select></label>
             </section>
 
             <section class="rights-dashboard-workspace">
@@ -519,7 +519,7 @@
                 <div class="hidden" id="rightsDashboardSelection">
                   <div class="rights-dashboard-section-heading"><div><span class="eyebrow">Wirksame Berechtigungen</span><h2 id="rightsDashboardPersonTitle">Teammitglied</h2><p id="rightsDashboardPersonSubtitle"></p></div><span class="status-badge" id="rightsDashboardAccessStatus">Aktiv</span></div>
                   <div class="rights-dashboard-path" id="rightsDashboardPath" aria-label="Weg der Rechtevergabe"></div>
-                  <div class="rights-dashboard-legend"><span><i class="role-origin"></i> Grundrecht der Rolle</span><span><i class="delegated-origin"></i> Individuelles Zusatzrecht</span><span><i class="restricted-origin"></i> Auf eigenen Bereich beschränkt</span></div>
+                  <div class="rights-dashboard-legend"><span><i class="role-origin"></i> Grundrecht der Rolle</span><span><i class="delegated-origin"></i> Individuell hinzugefügt</span><span><i class="revoked-origin"></i> Individuell entzogen</span><span><i class="restricted-origin"></i> Auf eigenen Bereich beschränkt</span></div>
                   <div class="rights-dashboard-matrix" id="rightsDashboardMatrix"></div>
                   <aside class="rights-dashboard-explanation" id="rightsDashboardExplanation"><strong>Recht anklicken</strong><p>Die Erklärung zeigt Herkunft, Geltungsbereich und aktuellen Status.</p></aside>
                 </div>
@@ -711,8 +711,8 @@
 
           <section id="rightsSettings" class="settings-section settings-two-column">
             <div class="settings-card">
-              <div class="card-heading"><div class="card-icon">R</div><div><h2>Rechtemanagement</h2><p>Individuelle Zusatzrechte unabhängig von Position und Grundrolle vergeben.</p></div></div>
-              <p class="settings-note security-note">Grundrechte der Rolle bleiben erhalten. IT-Admin verwaltet den vollständigen Zusatzrechte-Katalog; die Personalleitung ausschließlich freigegebene fachliche Rechte. Der Developer-Zugang bleibt geschützt.</p>
+              <div class="card-heading"><div class="card-icon">R</div><div><h2>Rechtemanagement</h2><p>Grundrechte persönlich einschränken und zusätzliche Rechte gezielt vergeben.</p></div></div>
+              <p class="settings-note security-note">Verwaltbare Grundrechte können persönlich entzogen und später wiederhergestellt werden. IT-Admin verwaltet den vollständigen Rechtekatalog; die Personalleitung ausschließlich freigegebene fachliche Rechte. Der Developer-Zugang bleibt geschützt.</p>
               <label class="field rights-search-field"><span>Teammitglied suchen</span><input id="rightsEmployeeSearch" type="search" inputmode="search" autocomplete="off" placeholder="Personalnummer oder Name" /></label>
               <p class="settings-note" id="rightsManagementHint">Rechte werden geladen.</p>
               <div class="rights-user-list" id="rightsUserList"></div>
@@ -1124,7 +1124,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.79 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.80 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -1524,10 +1524,19 @@
 
     <dialog class="modal wide-modal rights-editor-modal" id="rightsEditorModal">
       <form method="dialog" id="rightsEditorForm">
-        <div class="modal-header"><div><span class="eyebrow">Individuelle Zusatzrechte</span><h2 id="rightsEditorTitle">Rechte bearbeiten</h2><p id="rightsEditorSummary"></p></div><button type="button" class="close-button" data-close="rightsEditorModal">×</button></div>
-        <div class="rights-editor-legend"><span><i class="role-right-dot"></i> Grundrecht der Rolle</span><span><i class="additional-right-dot"></i> Individuelles Zusatzrecht</span><span><i class="locked-right-dot"></i> Nur durch IT-Admin oder höhere Ebene änderbar</span></div>
+        <div class="modal-header"><div><span class="eyebrow">Persönliches Rechteprofil</span><h2 id="rightsEditorTitle" tabindex="-1">Rechte bearbeiten</h2><p id="rightsEditorSummary"></p></div><button type="button" class="close-button" data-close="rightsEditorModal" aria-label="Rechteeditor schließen">×</button></div>
+        <div class="rights-editor-legend" aria-label="Bedeutung der Rechtezustände"><span><i class="role-right-dot"></i> Grundrecht der Rolle</span><span><i class="additional-right-dot"></i> Individuell hinzugefügt</span><span><i class="revoked-right-dot"></i> Individuell entzogen</span><span><i class="unassigned-right-dot"></i> Nicht vergeben</span><span><i class="locked-right-dot"></i> Für diesen Zugang nicht änderbar</span></div>
         <div class="rights-editor-permissions" id="rightsEditorPermissions"></div>
-        <p class="calculation-note" id="rightsEditorHint">Zusatzrechte gelten innerhalb der bereits zugewiesenen Filiale beziehungsweise Abteilung.</p>
+        <fieldset class="rights-editor-scope hidden" id="rightsEditorScope">
+          <legend>Verantwortungsbereich</legend>
+          <p id="rightsEditorScopeHint">Standortbezogene Rechte gelten nur im ausgewählten Bereich.</p>
+          <div class="rights-editor-scope-options">
+            <label><input type="radio" name="rightsEditorScopeMode" value="department" /><span><strong id="rightsEditorDepartmentScopeLabel">Nur eigene Abteilung</strong><small>Sicherer Standard für Mitarbeitende und Abteilungsleitungen.</small></span></label>
+            <label><input type="radio" name="rightsEditorScopeMode" value="location" /><span><strong id="rightsEditorLocationScopeLabel">Gesamte Filiale</strong><small>Erweitert die wirksamen Standortrechte auf alle Abteilungen der Filiale.</small></span></label>
+          </div>
+        </fieldset>
+        <p class="calculation-note" id="rightsEditorHint">Persönliche Anpassungen gelten sofort und bleiben an den ausgewählten Verantwortungsbereich gebunden.</p>
+        <p class="visually-hidden" id="rightsEditorAnnouncement" role="status" aria-live="polite" aria-atomic="true"></p>
         <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="rightsEditorModal">Abbrechen</button><button type="submit" class="primary-button" id="saveRightsEditorButton">Rechte speichern</button></div>
       </form>
     </dialog>
@@ -1565,8 +1574,16 @@
         <div class="request-action-history" id="requestActionHistory"></div>
         <div class="request-action-documents hidden" id="requestActionDocuments"></div>
         <div class="form-grid hidden" id="requestEditFields"><label class="field" id="requestEditDateFromField"><span>Neu von</span><input id="requestEditDateFrom" type="date" /></label><label class="field" id="requestEditDateToField"><span>Neu bis</span><input id="requestEditDateTo" type="date" /></label><label class="field hidden" id="requestEditTimeField"><span>Neue Uhrzeit</span><span class="request-time-fields"><input id="requestEditStartTime" type="time" step="900" /><span>–</span><input id="requestEditEndTime" type="time" step="900" /></span></label></div>
+        <fieldset class="request-case-fields hidden" id="sicknessCaseFields">
+          <legend>Krankmeldungsfall</legend>
+          <div class="form-grid">
+            <label class="field"><span>Voraussichtlich krank bis</span><input id="sicknessExpectedEnd" type="date" /></label>
+            <label class="field"><span>Wieder arbeitsfähig ab</span><input id="sicknessReturnDate" type="date" /></label>
+          </div>
+          <p class="calculation-note" id="sicknessCaseHint">Das Rückkehrdatum beendet den Krankenstand. Eine noch erforderliche AUM bleibt unabhängig davon offen.</p>
+        </fieldset>
         <label class="field full-width"><span>Entscheidungsbemerkung</span><textarea id="requestActionNote" rows="4" maxlength="500" placeholder="Optional"></textarea></label>
-        <div class="request-action-buttons"><button class="danger-button" data-request-action="reject" type="button">Ablehnen</button><button class="secondary-button" data-request-action="preliminary" type="button">Vorläufig genehmigen</button><button class="primary-button" data-request-action="approve" type="button">Genehmigen / weiterleiten</button><button class="primary-button hidden" data-request-action="change" id="changeApprovedRequestButton" type="button">Änderung speichern</button><button class="secondary-button hidden" data-request-action="cancel" id="cancelApprovedRequestButton" type="button">Genehmigten Antrag stornieren</button><button class="primary-button hidden" data-amu-action="reviewed" type="button">Als geprüft markieren</button></div>
+        <div class="request-action-buttons"><button class="danger-button" data-request-action="reject" type="button">Ablehnen</button><button class="secondary-button" data-request-action="preliminary" type="button">Vorläufig genehmigen</button><button class="primary-button" data-request-action="approve" type="button">Genehmigen / weiterleiten</button><button class="primary-button hidden" data-request-action="change" id="changeApprovedRequestButton" type="button">Änderung speichern</button><button class="secondary-button hidden" data-request-action="cancel" id="cancelApprovedRequestButton" type="button">Genehmigten Antrag stornieren</button><button class="secondary-button hidden" data-sickness-action="update" type="button">Falldaten speichern</button><button class="primary-button hidden" data-sickness-action="close" type="button">Krankenstand schließen</button><button class="primary-button hidden" data-sickness-action="correct_closed" type="button">Abschluss korrigieren</button><button class="primary-button hidden" data-amu-action="review" type="button">Als geprüft markieren</button><button class="secondary-button hidden" data-amu-action="return" type="button">Ergänzung anfordern</button><button class="secondary-button hidden" data-amu-action="add_note" type="button">Vermerk speichern</button></div>
       </form>
     </dialog>
 

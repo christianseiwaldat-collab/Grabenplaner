@@ -52,3 +52,13 @@ test("Mitarbeiterportal-Dialoge bleiben ebenfalls horizontal gekapselt", () => {
   assert.match(portalStyles, /dialog form\s*\{[^}]*min-width:0[^}]*max-width:100%[^}]*overflow-x:hidden[^}]*overflow-y:auto/);
   assert.match(portalStyles, /\.dialog-actions\s*\{[^}]*flex-wrap:wrap[^}]*max-width:100%/);
 });
+
+test("Rechteeditor bleibt mobil einspaltig und ohne horizontalen Bildlauf", () => {
+  assert.match(cssRule(".rights-editor-modal"), /overflow-x:hidden/);
+  assert.match(cssRule(".rights-editor-modal form"), /max-width:100%/);
+  assert.match(cssRule(".rights-editor-modal form"), /overflow-x:hidden/);
+  assert.match(cssRule(".rights-editor-permissions"), /overflow-x:hidden/);
+  assert.match(styles, /@media \(max-width: 600px\)[\s\S]*\.rights-editor-scope-options\s*\{\s*grid-template-columns:1fr/);
+  assert.match(styles, /\.rights-permission\s*\{[^}]*min-height:48px/);
+  assert.match(styles, /\.rights-editor-scope-options label\s*\{[^}]*min-height:50px/);
+});

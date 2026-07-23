@@ -18,7 +18,12 @@ process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
 process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
 
-const { app, db, releaseInstanceLockForTests } = require("../server");
+const {
+  app,
+  db,
+  purgeExpiredAmuDocuments,
+  releaseInstanceLockForTests,
+} = require("../server");
 
 let httpServer;
 let baseUrl;
@@ -217,6 +222,23 @@ test("v0.71: AUM-Zugriff folgt Filialscope, PL-Routing und persönlichen Ausnahm
   assert.equal(hrNorthReport.responsibility.stage, "local");
   assert.equal(hrNorthReport.responsibility.assigned_to_me, false);
 
+  db.prepare(`
+    INSERT INTO portal_permission_denials (employee_number, permission, denied_by)
+    VALUES ('7194', 'amu:file:read', 'test')
+  `).run();
+  const hrWithoutFileRight = await api("/api/portal/v1/amu-reports", { auth: hr });
+  assert.equal(hrWithoutFileRight.response.status, 200, JSON.stringify(hrWithoutFileRight.payload));
+  assert.equal(hrWithoutFileRight.payload.canOpenFiles, false);
+  const protectedDocumentPresence = reportFrom(hrWithoutFileRight.payload, firstNorthId).documents;
+  assert.deepEqual(protectedDocumentPresence, [{ present: true, content_access: false }]);
+  assert.equal(Object.hasOwn(protectedDocumentPresence[0], "id"), false);
+  assert.equal(Object.hasOwn(protectedDocumentPresence[0], "detected_mime"), false);
+  assert.equal(Object.hasOwn(protectedDocumentPresence[0], "size"), false);
+  db.prepare(`
+    DELETE FROM portal_permission_denials
+    WHERE employee_number = '7194' AND permission = 'amu:file:read'
+  `).run();
+
   const sameLocationDocument = await fetch(
     `${baseUrl}/api/portal/v1/amu-reports/${firstNorthId}/documents/${firstNorthDocumentId}/content`,
     { headers: { Cookie: managerNorth.cookie } },
@@ -228,6 +250,17 @@ test("v0.71: AUM-Zugriff folgt Filialscope, PL-Routing und persönlichen Ausnahm
   );
   assert.equal(crossLocationDocument.status, 403);
 
+  db.prepare(`
+    INSERT INTO portal_permission_denials (employee_number, permission, denied_by)
+    VALUES ('7191', 'amu:local:manage', '7194')
+  `).run();
+  const permissionDeniedManager = await api("/api/portal/v1/amu-reports", { auth: managerNorth });
+  assert.equal(permissionDeniedManager.response.status, 200, JSON.stringify(permissionDeniedManager.payload));
+  assert.deepEqual(permissionDeniedManager.payload.reports, []);
+  const permissionDeniedRouting = await api("/api/portal/v1/amu-reports", { auth: hr });
+  assert.equal(reportFrom(permissionDeniedRouting.payload, firstNorthId).responsibility.stage, "hr");
+  db.prepare("DELETE FROM portal_permission_denials WHERE employee_number = '7191' AND permission = 'amu:local:manage'").run();
+
   const departmentOverview = await api("/api/portal/v1/amu-reports", { auth: departmentManager });
   assert.equal(departmentOverview.response.status, 200, JSON.stringify(departmentOverview.payload));
   assert.deepEqual(departmentOverview.payload.reports, []);
@@ -237,6 +270,31 @@ test("v0.71: AUM-Zugriff folgt Filialscope, PL-Routing und persönlichen Ausnahm
     { headers: { Cookie: departmentManager.cookie } },
   );
   assert.equal(departmentDocument.status, 403);
+
+  db.prepare(`
+    INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+    VALUES ('7193', 'amu:local:manage', '7194')
+  `).run();
+  db.prepare(`
+    INSERT INTO approval_delegations
+      (location_id, delegate_employee_number, date_from, date_to, note, created_by)
+    VALUES ('171', '7193', ?, ?, 'AUM-Vertretung', '7194')
+  `).run(today, today);
+  const delegatedDepartmentOverview = await api("/api/portal/v1/amu-reports", { auth: departmentManager });
+  assert.equal(delegatedDepartmentOverview.response.status, 200, JSON.stringify(delegatedDepartmentOverview.payload));
+  assert.equal(
+    delegatedDepartmentOverview.payload.reports.some((report) => Number(report.id) === firstNorthId),
+    true,
+    JSON.stringify(delegatedDepartmentOverview.payload),
+  );
+  assert.equal(reportFrom(delegatedDepartmentOverview.payload, firstNorthId).capabilities.review, true);
+  const delegatedDocument = await fetch(
+    `${baseUrl}/api/portal/v1/amu-reports/${firstNorthId}/documents/${firstNorthDocumentId}/content`,
+    { headers: { Cookie: departmentManager.cookie } },
+  );
+  assert.equal(delegatedDocument.status, 200);
+  db.prepare("DELETE FROM approval_delegations WHERE delegate_employee_number = '7193'").run();
+  db.prepare("DELETE FROM portal_permission_grants WHERE employee_number = '7193' AND permission = 'amu:local:manage'").run();
 
   const managerCannotChangePolicy = await api("/api/portal/v1/amu-access-policy", {
     method: "PUT", auth: managerNorth, body: { managerDefault: false, overrides: [] },
@@ -263,6 +321,48 @@ test("v0.71: AUM-Zugriff folgt Filialscope, PL-Routing und persönlichen Ausnahm
   assert.equal(fallbackNorth.responsibility.can_review, true);
   assert.equal(fallbackSouth.responsibility.stage, "hr");
   assert.equal(fallbackSouth.responsibility.assigned_to_me, true);
+
+  const legacyRedactionUpload = await uploadAum(employeeNorthOne, today);
+  assert.equal(legacyRedactionUpload.response.status, 201, JSON.stringify(legacyRedactionUpload.payload));
+  const actionRedactionUpload = await uploadAum(employeeNorthOne, today);
+  assert.equal(actionRedactionUpload.response.status, 201, JSON.stringify(actionRedactionUpload.payload));
+  const legacyRedactionId = Number(legacyRedactionUpload.payload.report.id);
+  const actionRedactionId = Number(actionRedactionUpload.payload.report.id);
+  db.prepare(`
+    INSERT INTO portal_permission_denials (employee_number, permission, denied_by)
+    VALUES ('7194', 'amu:file:read', 'test')
+  `).run();
+  const legacyRedactedReview = await api(`/api/portal/v1/amu-reports/${legacyRedactionId}/review`, {
+    method: "PUT",
+    auth: hr,
+    body: { action: "reviewed", note: "Geschützte PL-Notiz" },
+  });
+  assert.equal(legacyRedactedReview.response.status, 200, JSON.stringify(legacyRedactedReview.payload));
+  assert.equal(legacyRedactedReview.payload.report.review_note, "");
+  assert.deepEqual(legacyRedactedReview.payload.report.documents, [{ present: true, content_access: false }]);
+  assert.equal(Object.hasOwn(legacyRedactedReview.payload.report.documents[0], "id"), false);
+  assert.equal(Object.hasOwn(legacyRedactedReview.payload.report.documents[0], "original_filename"), false);
+  const actionRedactionCurrent = await api(`/api/portal/v1/amu-reports/${actionRedactionId}`, { auth: hr });
+  assert.equal(actionRedactionCurrent.response.status, 200, JSON.stringify(actionRedactionCurrent.payload));
+  const actionRedactedReview = await api(`/api/portal/v1/amu-reports/${actionRedactionId}/action`, {
+    method: "PUT",
+    auth: hr,
+    body: {
+      action: "review",
+      expectedRevision: actionRedactionCurrent.payload.report.revision,
+      expectedStatus: actionRedactionCurrent.payload.report.status,
+      note: "Weitere geschützte PL-Notiz",
+    },
+  });
+  assert.equal(actionRedactedReview.response.status, 200, JSON.stringify(actionRedactedReview.payload));
+  assert.equal(actionRedactedReview.payload.report.review_note, "");
+  assert.deepEqual(actionRedactedReview.payload.report.documents, [{ present: true, content_access: false }]);
+  assert.equal(Object.hasOwn(actionRedactedReview.payload.report.documents[0], "id"), false);
+  assert.equal(Object.hasOwn(actionRedactedReview.payload.report.documents[0], "detected_mime"), false);
+  db.prepare(`
+    DELETE FROM portal_permission_denials
+    WHERE employee_number = '7194' AND permission = 'amu:file:read'
+  `).run();
 
   const allowNorthOnly = await api("/api/portal/v1/amu-access-policy", {
     method: "PUT",
@@ -309,6 +409,37 @@ test("v0.71: AUM-Zugriff folgt Filialscope, PL-Routing und persönlichen Ausnahm
   assert.equal(review.payload.report.status, "reviewed");
   assert.equal(review.payload.report.reviewed_by, "7191");
   assert.equal(Object.hasOwn(review.payload.report, "identity_check"), false);
+  const supplemented = await api(`/api/portal/v1/amu-reports/${firstNorthId}/action`, {
+    method: "PUT",
+    auth: managerNorth,
+    body: {
+      action: "add_note",
+      expectedRevision: review.payload.report.revision,
+      expectedStatus: review.payload.report.status,
+      note: "ErgÃ¤nzende Leitungsnotiz",
+    },
+  });
+  assert.equal(supplemented.response.status, 200, JSON.stringify(supplemented.payload));
+  assert.equal(supplemented.payload.report.status, "reviewed");
+  assert.equal(supplemented.payload.report.review_note, review.payload.report.review_note);
+  assert.equal(supplemented.payload.events.at(-1).action, "add_note");
+  const staleSupplement = await api(`/api/portal/v1/amu-reports/${firstNorthId}/action`, {
+    method: "PUT",
+    auth: managerNorth,
+    body: {
+      action: "add_note",
+      expectedRevision: review.payload.report.revision,
+      expectedStatus: review.payload.report.status,
+      note: "Veraltete ErgÃ¤nzung",
+    },
+  });
+  assert.equal(staleSupplement.response.status, 409, JSON.stringify(staleSupplement.payload));
+  assert.equal(staleSupplement.payload.code, "AMU_REPORT_STALE");
+  const protectedEvents = db.prepare(`
+    SELECT protected_payload FROM protected_case_events WHERE entity_kind = 'amu' AND entity_id = ?
+  `).all(firstNorthId);
+  assert.equal(protectedEvents.length >= 2, true);
+  assert.equal(protectedEvents.every((entry) => String(entry.protected_payload).startsWith("enc:v2:")), true);
 
   const withdrawnDocumentId = secondNorth.payload.report.documents[0].id;
   const withdrawn = await api(`/api/portal/v1/me/amu-reports/${secondNorthId}/withdraw`, {
@@ -316,7 +447,7 @@ test("v0.71: AUM-Zugriff folgt Filialscope, PL-Routing und persönlichen Ausnahm
   });
   assert.equal(withdrawn.response.status, 200, JSON.stringify(withdrawn.payload));
   const managerAfterWithdrawal = await api("/api/portal/v1/amu-reports", { auth: managerNorth });
-  assert.equal(managerAfterWithdrawal.payload.reports.some((report) => Number(report.id) === secondNorthId), false);
+  assert.equal(managerAfterWithdrawal.payload.reports.some((report) => Number(report.id) === secondNorthId), true);
   const withdrawnManagerDocument = await fetch(
     `${baseUrl}/api/portal/v1/amu-reports/${secondNorthId}/documents/${withdrawnDocumentId}/content`,
     { headers: { Cookie: managerNorth.cookie } },
@@ -324,4 +455,21 @@ test("v0.71: AUM-Zugriff folgt Filialscope, PL-Routing und persönlichen Ausnahm
   assert.equal(withdrawnManagerDocument.status, 404);
   const hrAfterWithdrawal = await api("/api/portal/v1/amu-reports", { auth: hr });
   assert.equal(hrAfterWithdrawal.payload.reports.some((report) => Number(report.id) === secondNorthId), true);
+
+  db.prepare(`
+    INSERT INTO protected_case_events
+      (id, entity_kind, entity_id, action_lookup, actor_lookup, protected_payload)
+    VALUES ('amu-retention-event', 'amu', ?, 'test-action', 'test-actor', 'enc:v2:test')
+  `).run(secondNorthId);
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM protected_case_events
+    WHERE entity_kind = 'amu' AND entity_id = ?
+  `).get(secondNorthId).count, 1);
+  const retentionPurge = purgeExpiredAmuDocuments("9999-12-31");
+  assert.equal(retentionPurge.purged > 0, true, JSON.stringify(retentionPurge));
+  assert.equal(db.prepare("SELECT status FROM amu_reports WHERE id = ?").get(secondNorthId).status, "purged");
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM protected_case_events
+    WHERE entity_kind = 'amu' AND entity_id = ?
+  `).get(secondNorthId).count, 0);
 });
