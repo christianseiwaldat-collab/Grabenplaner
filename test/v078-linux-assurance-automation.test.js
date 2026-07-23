@@ -249,6 +249,7 @@ test("application smoke sanitizes every known protected domain but preserves ope
       CREATE TABLE personnel_sensitive_records (employee_number TEXT PRIMARY KEY, protected_payload TEXT NOT NULL);
       CREATE TABLE personnel_record_documents (id TEXT PRIMARY KEY, employee_number TEXT, protected_payload TEXT NOT NULL);
       CREATE TABLE sickness_cases (id INTEGER PRIMARY KEY, protected_payload TEXT NOT NULL);
+      CREATE TABLE protected_case_events (id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL);
       CREATE TABLE sickness_alerts (id TEXT PRIMARY KEY, sickness_case_id INTEGER, protected_payload TEXT NOT NULL,
         FOREIGN KEY (sickness_case_id) REFERENCES sickness_cases(id));
       CREATE TABLE amu_reports (id INTEGER PRIMARY KEY, sickness_case_id INTEGER, protected_payload TEXT NOT NULL,
@@ -266,6 +267,7 @@ test("application smoke sanitizes every known protected domain but preserves ope
       INSERT INTO personnel_sensitive_records VALUES ('101', 'enc:v2:sensitive');
       INSERT INTO personnel_record_documents VALUES ('doc', '101', 'enc:v2:document');
       INSERT INTO sickness_cases VALUES (1, 'enc:v2:case');
+      INSERT INTO protected_case_events VALUES ('event', 'enc:v2:event');
       INSERT INTO sickness_alerts VALUES ('alert', 1, 'enc:v2:alert');
       INSERT INTO amu_reports VALUES (1, 1, 'enc:v2:report');
       INSERT INTO amu_documents VALUES ('amu', 1, 'enc:v2:amu');
@@ -289,6 +291,7 @@ test("application smoke sanitizes every known protected domain but preserves ope
     );
     for (const table of [
       "personnel_sensitive_records", "personnel_record_documents", "sickness_cases", "sickness_alerts",
+      "protected_case_events",
       "amu_reports", "amu_documents", "sickness_notification_preferences", "outbound_notification_jobs",
       "portal_notifications",
     ]) assert.equal(database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 0, table);

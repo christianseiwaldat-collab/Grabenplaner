@@ -307,10 +307,11 @@ offsite_assert_inherited_lock() {
   local descriptor="$2"
   local label="$3"
   local descriptor_target
+  local process_id="${BASHPID:-$$}"
 
-  [[ "$descriptor" =~ ^[0-9]+$ && -e "/proc/$$/fd/$descriptor" ]] \
+  [[ "$descriptor" =~ ^[0-9]+$ && -e "/proc/$process_id/fd/$descriptor" ]] \
     || offsite_die "$label wurde nicht vom kontrollierenden Elternprozess uebernommen."
-  descriptor_target="$(readlink -f -- "/proc/$$/fd/$descriptor")" \
+  descriptor_target="$(readlink -f -- "/proc/$process_id/fd/$descriptor")" \
     || offsite_die "$label konnte nicht sicher aufgeloest werden."
   [[ "$descriptor_target" == "$expected" ]] \
     || offsite_die "$label verweist nicht auf die freigegebene Sperrdatei."
@@ -408,6 +409,9 @@ offsite_record_assurance_queue() {
 offsite_fixed_failure() {
   local code="$1"
   local summary="$2"
-  offsite_status failure --code "$code" --summary "$summary" >/dev/null || true
+  # Der redigierte Status verwendet ausschliesslich die fest im Helper
+  # hinterlegte Zusammenfassung des Fehlercodes. Die genauere interne
+  # Fehlermeldung bleibt nur im root-geschuetzten Journal sichtbar.
+  offsite_status failure --code "$code" >/dev/null || true
   offsite_die "$summary"
 }
