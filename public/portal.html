@@ -45,7 +45,7 @@
         </nav>
 
         <section class="portal-view" id="settingsView" role="tabpanel">
-          <div class="view-heading"><div><span class="eyebrow">Persönlich</span><h1>Einstellungen</h1><p>Passwort und freiwillige Zeitvorschläge an einem Ort.</p></div></div>
+          <div class="view-heading"><div><span class="eyebrow">Persönlich</span><h1>Einstellungen</h1><p>Passwort, freiwillige Zeitvorschläge und Anfragen zu deinen Daten an einem Ort.</p></div></div>
           <div class="portal-settings-grid">
             <section class="portal-card portal-settings-card">
               <div><span class="eyebrow">Sicherheit</span><h2>Passwort</h2><p>Ändere dein persönliches Passwort und kontrolliere die Eingabe bei Bedarf mit „Anzeigen“.</p></div>
@@ -60,6 +60,25 @@
               <div class="wifi-suggestion-warning hidden" id="wifiSuggestionWarning"></div>
               <div class="wifi-suggestion-list" id="wifiSuggestionList"><p class="empty-state">Zeitvorschläge werden geladen.</p></div>
               <p class="message hidden" id="wifiAutomationMessage"></p>
+            </section>
+            <section class="portal-card portal-settings-card privacy-settings-card hidden" id="privacyRequestsCard">
+              <div class="privacy-settings-heading">
+                <div><span class="eyebrow">Meine Daten</span><h2>Datenschutzanfragen</h2><p id="privacyRequestsNotice">Anfragen werden geladen.</p></div>
+                <span class="privacy-manual-badge">Manuelle Prüfung</span>
+              </div>
+              <div class="privacy-data-layout">
+                <form class="privacy-request-form hidden" id="privacyRequestForm">
+                  <label><span>Art der Anfrage</span><select id="privacyRequestType" required><option value="">Wird geladen …</option></select></label>
+                  <p>Deine Identität und der konkrete Umfang werden vor einer Entscheidung geprüft. Das Absenden löst keine automatische Löschung oder Datenübertragung aus.</p>
+                  <button class="primary" id="privacyRequestSubmit" type="submit">Anfrage einreichen</button>
+                  <p class="message hidden" id="privacyRequestMessage" role="status" aria-live="polite"></p>
+                </form>
+                <div class="privacy-request-history">
+                  <div class="list-heading"><h3>Meine Anfragen</h3><button class="text-button hidden" id="privacyRequestsRefresh" type="button">Aktualisieren</button></div>
+                  <p class="privacy-export-hint hidden" id="privacyExportHint">Bereitgestellte Auskünfte und Datenpakete werden bei der jeweiligen Anfrage zum sicheren Abruf angezeigt.</p>
+                  <div class="privacy-request-list" id="privacyRequestList" aria-live="polite"><p class="empty-state">Anfragen werden geladen.</p></div>
+                </div>
+              </div>
             </section>
           </div>
         </section>
@@ -110,6 +129,11 @@
             </div>
             <div class="time-period-summary" id="timePeriodSummary"></div>
             <div class="time-period-list" id="timePeriodList"><p class="empty-state">Zeitraum wird geladen.</p></div>
+            <section class="time-record-statements hidden" id="timeRecordStatementsPanel" aria-live="polite">
+              <div class="list-heading"><div><span class="eyebrow">Finalisierte Monatsnachweise</span><h3>Meine Arbeitszeitnachweise</h3></div></div>
+              <p class="time-record-notice">Diese Nachweise enthalten ausschließlich tatsächliche Zeitbuchungen und freigegebene Korrekturen. Der Dienstplan wird niemals als Ist-Arbeitszeit übernommen.</p>
+              <div class="time-record-statement-list" id="timeRecordStatementList"><p class="empty-state">Monatsnachweise werden geladen.</p></div>
+            </section>
           </section>
         </section>
 
@@ -178,6 +202,11 @@
 
         <section class="portal-view" id="vacationView" role="tabpanel">
           <div class="view-heading"><div><span class="eyebrow">Selbstverwaltung</span><h1>Urlaub beantragen</h1><p>Der Antrag wird erst nach Genehmigung in die Urlaubsplanung übernommen.</p></div></div>
+          <section class="portal-card vacation-account-card hidden" id="vacationAccountCard" aria-live="polite">
+            <div class="vacation-account-heading"><div><span class="eyebrow">Urlaubsstand</span><h2>Mein Urlaubskonto</h2></div><label><span>Urlaubsjahr</span><select id="vacationAccountYear"></select></label></div>
+            <div class="vacation-account-summary" id="vacationAccountSummary"><p class="empty-state">Urlaubsstand wird geladen.</p></div>
+            <p class="vacation-account-notice" id="vacationAccountNotice"></p>
+          </section>
           <div class="vacation-layout">
             <form class="portal-card request-form" id="vacationRequestForm">
               <h2 id="vacationFormTitle">Neuer Antrag</h2>
