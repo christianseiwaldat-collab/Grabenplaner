@@ -1,5 +1,15 @@
 # Grabenplaner Versions-Log
 
+## v0.84 Beta · Pilot- und Abnahmenachweise
+
+- Das System-Center zeigt sechs getrennte Produktreife-Gates für Desktop-Pilot, mobile Browserabläufe, barrierearme Bedienung, Performance, Security und Recovery.
+- Browser-, Geräte-, Viewport- und Prüfinformationen werden als append-only Nachweise mit SHA-256-Beleg gespeichert. Manipulierte Nachweise verhindern bereits den sicheren App-Start.
+- Performance-Budgets von 3.000 ms am Desktop und 5.000 ms im mobilen Browser werden serverseitig geprüft; eine Überschreitung kann nicht als bestanden protokolliert werden.
+- Security und Recovery werden aus aktuellen technischen System-Center-Nachweisen abgeleitet und lassen sich nicht manuell grün schalten.
+- Technische und fachliche Abnahme bleiben getrennt, rollenbasiert und an Version sowie aktuellen Prüfstand gebunden. Neue Nachweise machen bestehende Abnahmen unaktuell.
+- Die Prüfgrundlagen verweisen auf WCAG 2.2 und OWASP ASVS 5.0.0, ohne daraus eine pauschale Zertifizierung oder Rechtskonformitätszusage abzuleiten.
+- Zusätzlich bleiben alle Verbesserungen aus v0.83 Beta enthalten.
+
 ## v0.83 Beta · Belegbare Monatsübergaben
 
 - Finalisierte persönliche Monats-Ist-Nachweise lassen sich als minimierte, verschlüsselte und unveränderliche Übergaberevision für die externe Lohnverrechnung bündeln. Planzeiten, Namen und sensible Personalaktdaten bleiben ausgeschlossen.

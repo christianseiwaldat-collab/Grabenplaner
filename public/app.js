@@ -5099,6 +5099,77 @@ function renderSystemCenterTrends(trends) {
   </section>`;
 }
 
+function productReadinessStateCopy(value) {
+  const state = systemCenterVisualState(value, "warning");
+  const copy = systemCenterStateCopy(state);
+  return { state, ...copy };
+}
+
+function productReadinessObservedAt(value) {
+  return value?.observedAt ? diagnosticTimestamp(value.observedAt) : "Noch nicht geprüft";
+}
+
+function renderProductReadiness(payload) {
+  const readiness = payload && typeof payload === "object" ? payload : null;
+  if (!readiness) return "";
+  const overall = productReadinessStateCopy(readiness.state === "accepted" ? "ok"
+    : readiness.state === "blocked" ? "critical" : "warning");
+  const capabilities = readiness.capabilities || {};
+  const manualGates = (readiness.gates || []).filter((gate) => Array.isArray(gate.checks));
+  const technicalGates = (readiness.gates || []).filter((gate) => !Array.isArray(gate.checks));
+  const acceptance = Array.isArray(readiness.acceptance) ? readiness.acceptance : [];
+  return `<section class="product-readiness" aria-label="Pilot- und Abnahmestatus">
+    <div class="system-center-section-heading">
+      <div><span class="eyebrow">Produktreife Richtung 1.0</span><h2>Pilot &amp; Abnahme</h2><p>Manuelle Browser- und Bedienungsprüfungen werden unveränderlich protokolliert. Security und Recovery stammen aus aktuellen technischen Nachweisen.</p></div>
+      <span class="system-center-state ${overall.state}"><i aria-hidden="true">${overall.icon}</i>${escapeHtml(overall.label)} · ${Number(readiness.counts?.passed || 0)}/${Number(readiness.counts?.total || 0)}</span>
+    </div>
+    <div class="product-readiness-gates">
+      ${technicalGates.map((gate) => {
+        const copy = productReadinessStateCopy(gate.state);
+        return `<article class="product-readiness-gate ${copy.state}">
+          <header><div><strong>${escapeHtml(gate.label)}</strong><small>${escapeHtml(gate.standard?.label || "Technischer Nachweis")}</small></div><span class="system-center-state ${copy.state}"><i aria-hidden="true">${copy.icon}</i>${escapeHtml(copy.label)}</span></header>
+          <p>${escapeHtml(gate.detail || "")}</p>
+          ${gate.standard?.url ? `<a href="${escapeHtml(gate.standard.url)}" target="_blank" rel="noreferrer">Prüfbasis öffnen</a>` : ""}
+        </article>`;
+      }).join("")}
+      ${manualGates.map((gate) => {
+        const copy = productReadinessStateCopy(gate.state);
+        return `<article class="product-readiness-gate ${copy.state}">
+          <header><div><strong>${escapeHtml(gate.label)}</strong><small>${escapeHtml(gate.standard?.label || `${gate.checks.length} Prüfschritte`)}</small></div><span class="system-center-state ${copy.state}"><i aria-hidden="true">${copy.icon}</i>${escapeHtml(copy.label)}</span></header>
+          <ul>${gate.checks.map((check) => {
+            const latest = check.latest || null;
+            const checkCopy = productReadinessStateCopy(latest?.outcome || "pending");
+            const performanceCheck = Number.isFinite(Number(check.budgetMs));
+            const measured = Number.isFinite(Number(latest?.measurement?.durationMs))
+              ? ` · ${Number(latest.measurement.durationMs)} ms` : "";
+            return `<li class="${checkCopy.state}">
+              <div><i aria-hidden="true">${checkCopy.icon}</i><span><strong>${escapeHtml(check.label)}</strong><small>${escapeHtml(productReadinessObservedAt(latest))}${escapeHtml(measured)}</small></span></div>
+              ${capabilities.canRecordEvidence ? `<span class="product-readiness-actions">
+                ${performanceCheck
+                  ? `<button type="button" class="secondary-button compact-button" data-readiness-measure="${escapeHtml(check.id)}" data-readiness-budget="${Number(check.budgetMs)}">Messen</button>`
+                  : `<button type="button" class="secondary-button compact-button" data-readiness-evidence="${escapeHtml(check.id)}" data-readiness-outcome="fail">Fehler</button><button type="button" class="primary-button compact-button" data-readiness-evidence="${escapeHtml(check.id)}" data-readiness-outcome="pass">Bestanden</button>`}
+              </span>` : ""}
+            </li>`;
+          }).join("")}</ul>
+        </article>`;
+      }).join("")}
+    </div>
+    <div class="product-readiness-acceptance">
+      ${acceptance.map((entry) => {
+        const copy = productReadinessStateCopy(entry.state);
+        const allowed = entry.discipline === "technical"
+          ? capabilities.canAcceptTechnical : capabilities.canAcceptOperational;
+        return `<article class="${copy.state}">
+          <div><span class="eyebrow">${escapeHtml(entry.label)}</span><strong>${entry.latest && entry.current ? `${escapeHtml(entry.latest.decidedBy)} · ${escapeHtml(diagnosticTimestamp(entry.latest.decidedAt))}` : "Für aktuellen Prüfstand offen"}</strong></div>
+          <span class="system-center-state ${copy.state}"><i aria-hidden="true">${copy.icon}</i>${escapeHtml(copy.label)}</span>
+          ${allowed ? `<button type="button" class="primary-button compact-button" data-readiness-acceptance="${escapeHtml(entry.discipline)}" ${readiness.state === "in_review" || readiness.counts?.failed ? "disabled" : ""}>Abnahme dokumentieren</button>` : ""}
+        </article>`;
+      }).join("")}
+    </div>
+    <p class="product-readiness-disclaimer">${escapeHtml(readiness.disclaimer || "")}</p>
+  </section>`;
+}
+
 function renderSystemCenter(payload) {
   if (!elements.systemCenterContent) return;
   const trust = payload?.trustIndex || {};
@@ -5131,6 +5202,7 @@ function renderSystemCenter(payload) {
     ${systemCenterResourceCards(payload?.resources)}
     ${renderSystemCenterOperations(payload?.automation, payload?.notifications)}
     ${renderSystemCenterTrends(payload?.trends)}
+    ${renderProductReadiness(payload?.productReadiness)}
     <section class="system-center-factor-grid" aria-label="Bestandteile des technischen Vertrauensindex">${factors.map((factor) => {
       const copy = systemCenterStateCopy(factor.state);
       const points = factor.weight !== null && factor.earned !== null ? `${factor.earned} / ${factor.weight} Punkte` : copy.label;
@@ -5204,6 +5276,89 @@ async function startRecoveryAssurance() {
   } catch (error) {
     showToast(error.message, true);
     applySystemCenterControls(state.systemCenter);
+  }
+}
+
+function productReadinessEnvironment() {
+  const userAgent = String(navigator.userAgent || "");
+  const browserMatch = userAgent.match(/(Edg|OPR|Chrome|CriOS|Firefox|FxiOS|Version)\/([\d.]+)/i);
+  const browserNames = {
+    Edg: "Edge", OPR: "Opera", Chrome: "Chrome", CriOS: "Chrome iOS",
+    Firefox: "Firefox", FxiOS: "Firefox iOS", Version: /Safari/i.test(userAgent) ? "Safari" : "Browser",
+  };
+  return {
+    platform: String(navigator.userAgentData?.platform || navigator.platform || ""),
+    browser: browserNames[browserMatch?.[1]] || "Browser",
+    browserVersion: String(browserMatch?.[2] || ""),
+    userAgent,
+    viewportWidth: Math.round(window.innerWidth),
+    viewportHeight: Math.round(window.innerHeight),
+    colorScheme: document.documentElement.dataset.activePageTheme === "dark" ? "dark" : "light",
+  };
+}
+
+async function saveProductReadinessEvidence(checkId, outcome, measurement = null) {
+  const definition = state.systemCenter?.productReadiness?.checks?.find((check) => check.id === checkId);
+  if (!definition) return;
+  const note = prompt(
+    `${definition.label}: kurze Prüfnotiz (optional)`,
+    outcome === "pass" ? "Kernablauf ohne kritischen Fehler abgeschlossen." : "Fehler im Pilotdurchlauf festgestellt.",
+  );
+  if (note === null) return;
+  try {
+    const readiness = await api("/api/portal/v1/product-readiness/evidence", {
+      method: "POST",
+      body: JSON.stringify({
+        checkId,
+        outcome,
+        environment: productReadinessEnvironment(),
+        measurement,
+        note,
+        observedAt: new Date().toISOString(),
+      }),
+    });
+    state.systemCenter.productReadiness = readiness;
+    renderSystemCenter(state.systemCenter);
+    showToast(outcome === "pass" ? "Pilotprüfung wurde als bestanden protokolliert." : "Fehlernachweis wurde protokolliert.", outcome !== "pass");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function measureProductReadiness(checkId, budgetMs) {
+  const navigation = performance.getEntriesByType("navigation")?.[0];
+  const durationMs = Number(navigation?.duration);
+  if (!Number.isFinite(durationMs) || durationMs < 0) {
+    showToast("Für diesen Seitenstart ist keine verlässliche Browsermessung verfügbar. Bitte die Seite neu laden.", true);
+    return;
+  }
+  const measured = Math.round(durationMs);
+  const outcome = measured <= Number(budgetMs) ? "pass" : "fail";
+  await saveProductReadinessEvidence(checkId, outcome, { durationMs: measured });
+}
+
+async function saveProductReadinessAcceptance(discipline) {
+  const readiness = state.systemCenter?.productReadiness;
+  const entry = readiness?.acceptance?.find((value) => value.discipline === discipline);
+  if (!entry) return;
+  if (!confirm(`${entry.label} für Grabenplaner ${readiness.releaseVersion} dokumentieren? Die Freigabe gilt nur für den angezeigten Prüfstand.`)) return;
+  const note = prompt("Abnahmenotiz (optional)", "Prüfstand fachlich beziehungsweise technisch kontrolliert.");
+  if (note === null) return;
+  try {
+    const updated = await api("/api/portal/v1/product-readiness/acceptances", {
+      method: "POST",
+      body: JSON.stringify({
+        discipline,
+        decision: "approved",
+        basisSha256: readiness.basisSha256,
+        note,
+      }),
+    });
+    state.systemCenter.productReadiness = updated;
+    renderSystemCenter(state.systemCenter);
+    showToast(`${entry.label} wurde nachvollziehbar dokumentiert.`);
+  } catch (error) {
+    showToast(error.message, true);
   }
 }
 
@@ -11523,6 +11678,20 @@ elements.dashboardFontSize?.addEventListener("change", () => applyDashboardFontS
 document.querySelectorAll("button[data-rights-dashboard-mode]").forEach((button) => button.addEventListener("click", () => setRightsDashboardMode(button.dataset.rightsDashboardMode)));
 elements.refreshSystemCenter?.addEventListener("click", () => loadSystemCenter());
 elements.startRecoveryAssurance?.addEventListener("click", startRecoveryAssurance);
+elements.systemCenterContent?.addEventListener("click", (event) => {
+  const evidence = event.target.closest("[data-readiness-evidence]");
+  if (evidence) {
+    saveProductReadinessEvidence(evidence.dataset.readinessEvidence, evidence.dataset.readinessOutcome);
+    return;
+  }
+  const measure = event.target.closest("[data-readiness-measure]");
+  if (measure) {
+    measureProductReadiness(measure.dataset.readinessMeasure, Number(measure.dataset.readinessBudget));
+    return;
+  }
+  const acceptance = event.target.closest("[data-readiness-acceptance]");
+  if (acceptance) saveProductReadinessAcceptance(acceptance.dataset.readinessAcceptance);
+});
 elements.refreshLocationDashboard?.addEventListener("click", loadLocationDashboard);
 elements.locationDashboardDate?.addEventListener("change", loadLocationDashboard);
 elements.locationDashboardFilters?.addEventListener("click", (event) => {
