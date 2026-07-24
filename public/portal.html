@@ -246,7 +246,6 @@
           <div class="loan-layout" id="loanWorkspace">
             <form class="portal-card request-form loan-issue-form" id="loanIssueForm">
               <div class="loan-card-heading"><div><span class="eyebrow">Neue Ausgabe</span><h2>Artikel ausleihen</h2></div><span class="loan-limit-badge">max. 5</span></div>
-              <label class="hidden" id="loanBorrowerField"><span>Teammitglied</span><select id="loanBorrower"></select></label>
               <div class="loan-item-editor" id="loanItemEditor"></div>
               <button class="text-button loan-add-item" id="loanAddItem" type="button">+ Weiteren Artikel hinzufügen</button>
               <div class="date-fields">
@@ -376,6 +375,26 @@
         </section>
         <p class="message hidden" id="loanReturnMessage"></p>
         <div class="dialog-actions"><button type="button" data-close-loan-return>Abbrechen</button><button class="primary" id="loanReturnSubmit" type="submit">Bestätigung anfordern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="loan-manage-dialog" id="loanManageDialog" aria-labelledby="loanManageTitle">
+      <form id="loanManageForm">
+        <div class="dialog-heading"><div><span class="eyebrow">Filialleitung</span><h2 id="loanManageTitle">Leihe bearbeiten</h2></div><button type="button" data-close-loan-manage aria-label="Dialog schließen">×</button></div>
+        <div class="history-detail-summary" id="loanManageSummary"></div>
+        <div class="loan-manage-fields">
+          <label><span>Geplante Rückgabe</span><input id="loanManageDueDate" type="date" /></label>
+          <label><span>Bemerkung zur Leihe</span><textarea id="loanManageNote" maxlength="1000" rows="2" placeholder="Optional"></textarea></label>
+        </div>
+        <div class="loan-manage-items" id="loanManageItems"></div>
+        <p class="form-note" id="loanManageActionHint"></p>
+        <p class="message hidden" id="loanManageMessage"></p>
+        <div class="dialog-actions loan-manage-actions">
+          <button type="button" data-close-loan-manage>Abbrechen</button>
+          <button class="danger-secondary hidden" id="loanManageClose" type="button">Ohne Rücknahmebeleg schließen</button>
+          <button class="text-button hidden" id="loanManageReopen" type="button">Wieder öffnen</button>
+          <button class="primary" id="loanManageSave" type="submit">Änderungen speichern</button>
+        </div>
       </form>
     </dialog>
 

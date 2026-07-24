@@ -7,7 +7,6 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const sharp = require("sharp");
-const { createF18Backup } = require("../test-support/f18-backup-fixture");
 
 const {
   hasValidGtinChecksum,
@@ -36,6 +35,7 @@ const {
 } = require("../server");
 
 const ADMIN = "v085-admin";
+const MANAGER = "v085-manager";
 const EMPLOYEE = "v085-employee";
 const WITNESS = "v085-witness";
 const OTHER = "v085-other";
@@ -43,6 +43,7 @@ let baseUrl;
 let httpServer;
 let locationId;
 let adminSession;
+let managerSession;
 let employeeSession;
 let witnessSession;
 let otherSession;
@@ -114,10 +115,12 @@ async function requestBinary(route, { session = employeeSession } = {}) {
 test.before(() => {
   locationId = String(db.prepare("SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1").get().id);
   ensureEmployee(ADMIN, "Ada Administration", "admin");
+  ensureEmployee(MANAGER, "Mara Filialleitung", "manager");
   ensureEmployee(EMPLOYEE, "Erika Beispiel", "employee");
   ensureEmployee(WITNESS, "Walter Beispiel", "employee");
   ensureEmployee(OTHER, "Olivia Ohne Bezug", "employee");
   adminSession = createSession(ADMIN);
+  managerSession = createSession(MANAGER);
   employeeSession = createSession(EMPLOYEE);
   witnessSession = createSession(WITNESS);
   otherSession = createSession(OTHER);
@@ -661,7 +664,169 @@ test("v0.85 eine abgelehnte Gegenprüfung lässt die Leihe offen und erlaubt ein
   assert.notEqual(requestedAgain.payload.confirmation.id, requested.payload.confirmation.id);
 });
 
-test("v0.85 Leihverwaltung, Fotobelege und Standortversand sind in beiden Oberflächen verankert", () => {
+test("neue Leihen werden serverseitig immer dem angemeldeten Mitarbeiter zugeordnet", async () => {
+  const denied = await request("/api/portal/v1/loans", {
+    method: "POST",
+    session: managerSession,
+    body: {
+      locationId,
+      borrowerEmployeeNumber: EMPLOYEE,
+      items: [{ articleNumber: "104405", conditionOut: "good" }],
+    },
+  });
+  assert.equal(denied.response.status, 403, JSON.stringify(denied.payload));
+  assert.equal(denied.payload.code, "LOAN_BORROWER_DENIED");
+
+  const own = await request("/api/portal/v1/loans", {
+    method: "POST",
+    session: managerSession,
+    body: {
+      locationId,
+      borrowerEmployeeNumber: MANAGER,
+      items: [{ articleNumber: "104405", conditionOut: "good" }],
+    },
+  });
+  assert.equal(own.response.status, 201, JSON.stringify(own.payload));
+  assert.equal(own.payload.loan.borrower.employeeNumber, MANAGER);
+  assert.equal(own.payload.loan.createdBy.employeeNumber, MANAGER);
+});
+
+test("Filialleitung kann Leihen revisionsgesichert bearbeiten, ohne Beleg schließen und wieder öffnen", async () => {
+  const issued = await request("/api/portal/v1/loans", {
+    method: "POST",
+    body: {
+      locationId,
+      dueDate: "2027-03-01",
+      notes: "Vor Bearbeitung",
+      items: [{
+        articleNumber: "104405",
+        serialNumber: "FL-TEST-1",
+        conditionOut: "good",
+        note: "mit Tasche",
+      }],
+    },
+  });
+  assert.equal(issued.response.status, 201, JSON.stringify(issued.payload));
+  const loanId = issued.payload.loan.id;
+  const issueDocumentId = issued.payload.loan.documents[0].id;
+
+  const denied = await request(`/api/portal/v1/loans/${loanId}/management`, {
+    method: "PUT",
+    body: {
+      expectedRevision: 1,
+      dueDate: "2027-03-02",
+      notes: "",
+      items: [{
+        position: 1,
+        serialNumber: "FL-TEST-1",
+        conditionOut: "good",
+        conditionReturn: "",
+        note: "",
+      }],
+    },
+  });
+  assert.equal(denied.response.status, 403);
+
+  const witnessHeartbeat = await request("/api/portal/v1/loans/return-confirmations/pending", {
+    session: witnessSession,
+  });
+  assert.equal(witnessHeartbeat.response.status, 200);
+  const pendingReturn = await request(`/api/portal/v1/loans/${loanId}/return`, {
+    method: "POST",
+    body: {
+      expectedRevision: 1,
+      witnessEmployeeNumber: WITNESS,
+      items: [{ position: 1, conditionReturn: "good", note: "" }],
+    },
+  });
+  assert.equal(pendingReturn.response.status, 202, JSON.stringify(pendingReturn.payload));
+
+  const edited = await request(`/api/portal/v1/loans/${loanId}/management`, {
+    method: "PUT",
+    session: managerSession,
+    body: {
+      expectedRevision: 1,
+      dueDate: "2027-03-15",
+      notes: "Durch FL ergänzt",
+      items: [{
+        position: 1,
+        serialNumber: "FL-TEST-1-KORR",
+        conditionOut: "used",
+        conditionReturn: "",
+        note: "Tasche und Ladegerät",
+      }],
+    },
+  });
+  assert.equal(edited.response.status, 200, JSON.stringify(edited.payload));
+  assert.equal(edited.payload.loan.revision, 2);
+  assert.equal(edited.payload.loan.dueDate, "2027-03-15");
+  assert.equal(edited.payload.loan.items[0].conditionOut, "used");
+  assert.equal(edited.payload.loan.pendingReturnConfirmation, null);
+  assert.equal(
+    db.prepare("SELECT status FROM loan_return_confirmations WHERE id = ?").get(
+      pendingReturn.payload.confirmation.id,
+    ).status,
+    "cancelled",
+  );
+
+  const closed = await request(`/api/portal/v1/loans/${loanId}/management/close`, {
+    method: "POST",
+    session: managerSession,
+    body: {
+      expectedRevision: 2,
+      dueDate: "2027-03-15",
+      notes: "Manuell geschlossen",
+      items: [{
+        position: 1,
+        serialNumber: "FL-TEST-1-KORR",
+        conditionOut: "used",
+        conditionReturn: "good",
+        note: "vollständig",
+      }],
+    },
+  });
+  assert.equal(closed.response.status, 200, JSON.stringify(closed.payload));
+  assert.equal(closed.payload.loan.status, "returned");
+  assert.equal(closed.payload.loan.revision, 3);
+  assert.equal(closed.payload.loan.returnWitness, null);
+  assert.equal(closed.payload.loan.borrowerReturnConfirmed, false);
+  assert.deepEqual(closed.payload.loan.documents.map((document) => document.id), [issueDocumentId]);
+  assert.equal(closed.payload.loan.events.at(-1).type, "manager_closed_without_document");
+
+  const reopened = await request(`/api/portal/v1/loans/${loanId}/management/reopen`, {
+    method: "POST",
+    session: managerSession,
+    body: { expectedRevision: 3 },
+  });
+  assert.equal(reopened.response.status, 200, JSON.stringify(reopened.payload));
+  assert.equal(reopened.payload.loan.status, "issued");
+  assert.equal(reopened.payload.loan.revision, 4);
+  assert.equal(reopened.payload.loan.items[0].conditionReturn, "");
+  assert.deepEqual(reopened.payload.loan.documents.map((document) => document.id), [issueDocumentId]);
+  assert.equal(reopened.payload.loan.events.at(-1).type, "manager_reopened");
+
+  const stale = await request(`/api/portal/v1/loans/${loanId}/management`, {
+    method: "PUT",
+    session: managerSession,
+    body: {
+      expectedRevision: 3,
+      dueDate: "",
+      notes: "",
+      items: [{
+        position: 1,
+        serialNumber: "",
+        conditionOut: "good",
+        conditionReturn: "",
+        note: "",
+      }],
+    },
+  });
+  assert.equal(stale.response.status, 409);
+  assert.equal(stale.payload.code, "LOAN_STALE");
+});
+
+test("Leihverwaltung und FL-Aktionen sind im Portal verankert, der F18-Import ist entfernt", () => {
+  const serverSource = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
   const adminHtml = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const adminSource = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
   const portalHtml = fs.readFileSync(path.join(__dirname, "..", "public", "portal.html"), "utf8");
@@ -671,123 +836,16 @@ test("v0.85 Leihverwaltung, Fotobelege und Standortversand sind in beiden Oberfl
   assert.match(adminHtml, /id="loansView"/);
   assert.match(adminHtml, /id="loanManagementSummary"/);
   assert.match(adminHtml, /id="loanSettingsCard"/);
-  assert.match(adminHtml, /id="f18MigrationCard"/);
+  assert.doesNotMatch(adminHtml, /id="f18MigrationCard"/);
+  assert.doesNotMatch(adminSource, /\/api\/portal\/v1\/loans\/migrations\/f18/);
+  assert.doesNotMatch(serverSource, /app\.(?:get|post)\("\/api\/portal\/v1\/loans\/migrations\/f18/);
   assert.match(adminSource, /\/api\/portal\/v1\/loans\/management\/summary/);
   assert.match(adminSource, /\/api\/portal\/v1\/loans\/documents\/\$\{encodeURIComponent\(documentId\)\}\/email/);
-  assert.match(adminSource, /\/api\/portal\/v1\/loans\/migrations\/f18\/preview/);
   assert.match(portalHtml, /id="loanIssuePhotos"/);
   assert.match(portalHtml, /id="loanReturnPhotos"/);
+  assert.match(portalHtml, /id="loanManageDialog"/);
+  assert.doesNotMatch(portalHtml, /id="loanBorrower"/);
   assert.match(portalSource, /uploadLoanPhotos/);
   assert.match(portalSource, /data-loan-photo-remove/);
-});
-
-test("v0.85 F18-Ablösung prüft, importiert und verhindert Dubletten", async () => {
-  const photo = await sharp({
-    create: {
-      width: 120,
-      height: 90,
-      channels: 3,
-      background: { r: 42, g: 122, b: 91 },
-    },
-  }).jpeg().toBuffer();
-  const sourcePhoto = "501/issue/item-1/ausgabe.jpg";
-  const backup = createF18Backup({
-    employees: [
-      { id: 1, employeeNumber: EMPLOYEE, name: "Erika Beispiel" },
-      { id: 2, employeeNumber: WITNESS, name: "Walter Beispiel" },
-    ],
-    loans: [
-      {
-        id: 501,
-        borrowerId: 1,
-        dueDate: "2026-08-01",
-        issuedAt: "2026-07-20T08:00:00+00:00",
-        notes: "F18-Testausleihe",
-        items: [{
-          position: 1,
-          articleNumber: "771001",
-          description: "F18 Demo-Kamera",
-          serialNumber: "F18-SN-501",
-        }],
-        photos: [{
-          phase: "issue",
-          itemPosition: 1,
-          filename: sourcePhoto,
-          originalName: "ausgabe.jpg",
-        }],
-      },
-      {
-        id: 502,
-        borrowerId: 1,
-        returnWitnessId: 2,
-        dueDate: "2026-07-22",
-        issuedAt: "2026-07-19T08:00:00+00:00",
-        returnedAt: "2026-07-21T16:00:00+00:00",
-        borrowerConfirmed: true,
-        returnCondition: "gut",
-        items: [{
-          position: 1,
-          articleNumber: "771002",
-          description: "F18 Demo-Objektiv",
-          serialNumber: "F18-SN-502",
-        }],
-      },
-    ],
-    photos: { [sourcePhoto]: photo },
-  });
-  const deniedForm = new FormData();
-  deniedForm.append("locationId", locationId);
-  deniedForm.append("backup", new Blob([backup], { type: "application/zip" }), "f18-test.zip");
-  const denied = await request("/api/portal/v1/loans/migrations/f18/preview", {
-    method: "POST",
-    session: employeeSession,
-    body: deniedForm,
-  });
-  assert.equal(denied.response.status, 403);
-
-  const previewForm = new FormData();
-  previewForm.append("locationId", locationId);
-  previewForm.append("backup", new Blob([backup], { type: "application/zip" }), "f18-test.zip");
-  const preview = await request("/api/portal/v1/loans/migrations/f18/preview", {
-    method: "POST",
-    session: adminSession,
-    body: previewForm,
-  });
-  assert.equal(preview.response.status, 200, JSON.stringify(preview.payload));
-  assert.equal(preview.payload.inspection.canImport, true);
-  assert.equal(preview.payload.inspection.summary.loans, 2);
-  assert.equal(preview.payload.suggestedMappings["1"], EMPLOYEE);
-  assert.equal(preview.payload.suggestedMappings["2"], WITNESS);
-
-  const applyForm = new FormData();
-  applyForm.append("locationId", locationId);
-  applyForm.append("expectedFingerprint", preview.payload.inspection.fingerprint);
-  applyForm.append("employeeMappings", JSON.stringify({ 1: EMPLOYEE, 2: WITNESS }));
-  applyForm.append("backup", new Blob([backup], { type: "application/zip" }), "f18-test.zip");
-  const applied = await request("/api/portal/v1/loans/migrations/f18/apply", {
-    method: "POST",
-    session: adminSession,
-    body: applyForm,
-  });
-  assert.equal(applied.response.status, 201, JSON.stringify(applied.payload));
-  assert.equal(applied.payload.alreadyImported, false);
-  assert.equal(applied.payload.run.summary.loans, 2);
-  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM loans WHERE legacy_id IN (501,502)").get().count, 2);
-  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM loan_photos photo JOIN loans loan ON loan.id = photo.loan_id WHERE loan.legacy_id = 501").get().count, 1);
-  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM loan_documents document JOIN loans loan ON loan.id = document.loan_id WHERE loan.legacy_id IN (501,502)").get().count, 3);
-  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM loan_migration_records").get().count, 2);
-
-  const replayForm = new FormData();
-  replayForm.append("locationId", locationId);
-  replayForm.append("expectedFingerprint", preview.payload.inspection.fingerprint);
-  replayForm.append("employeeMappings", JSON.stringify({ 1: EMPLOYEE, 2: WITNESS }));
-  replayForm.append("backup", new Blob([backup], { type: "application/zip" }), "f18-test.zip");
-  const replay = await request("/api/portal/v1/loans/migrations/f18/apply", {
-    method: "POST",
-    session: adminSession,
-    body: replayForm,
-  });
-  assert.equal(replay.response.status, 200, JSON.stringify(replay.payload));
-  assert.equal(replay.payload.alreadyImported, true);
-  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM loans WHERE legacy_id IN (501,502)").get().count, 2);
+  assert.match(portalSource, /\/management\/\$\{suffix\}/);
 });
