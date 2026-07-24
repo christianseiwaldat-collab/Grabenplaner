@@ -7,7 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const sharp = require("sharp");
-const { createF18Backup } = require("./helpers/f18-backup-fixture");
+const { createF18Backup } = require("../test-support/f18-backup-fixture");
 
 const {
   hasValidGtinChecksum,
