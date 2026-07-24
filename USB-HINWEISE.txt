@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.83 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.84 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -12,6 +12,18 @@ Voraussetzung:
 Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
+
+Version v0.84 Beta:
+  - Das System-Center fuehrt Pilot-, Browser-, Bedienungs-, Performance-,
+    Security- und Recovery-Nachweise in sechs transparenten Gates zusammen.
+  - Pilotnachweise und Abnahmen werden unveraenderlich mit SHA-256-Beleg
+    gespeichert. Ein neuer Pruefstand macht fruehere Abnahmen sichtbar
+    ungueltig.
+  - Desktop- und Mobilpruefungen erfassen Browser, Viewport und Darstellung;
+    Performance-Budgets werden serverseitig erzwungen.
+  - Technische und fachliche Abnahme bleiben getrennt. Der Status ist keine
+    pauschale Rechts-, Sicherheits- oder Barrierefreiheitsgarantie.
+  - Zusaetzlich bleiben alle Verbesserungen aus v0.83 Beta enthalten.
 
 Version v0.83 Beta:
   - Finalisierte persoenliche Monats-Ist-Nachweise koennen in einer

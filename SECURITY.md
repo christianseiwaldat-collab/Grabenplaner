@@ -60,6 +60,7 @@ Für dieses Projekt besteht derzeit kein Bug-Bounty-Programm.
 - Im produktiven HTTPS-Betrieb ist ein erreichbarer Virenscanner Voraussetzung für die Annahme von AUM-Dokumenten. Eine Test- oder Umgehungskonfiguration darf dort nicht verwendet werden.
 - Öffentliche Live- und Ready-Prüfungen geben keine internen Pfade oder Geheimnisse aus. Ausführliche Serverdiagnosen sind ausschließlich nach Anmeldung mit einem entsprechend berechtigten Konto verfügbar.
 - Serverupdates müssen in einem Wartungsfenster mit geprüfter Paket-Prüfsumme, vollständigem Vorab-Backup, anschließendem Ready-Check und vorbereitetem Rollback erfolgen.
+- Der Produktreife-Bereich kann Pilot-, Performance-, Security- und Recovery-Nachweise sowie getrennte technische und fachliche Abnahmen dokumentieren. Er orientiert sich für den Security-Rahmen an OWASP ASVS 5.0.0, ersetzt aber weder einen unabhängigen Security-Audit noch eine Zertifizierung. Beschädigte Nachweise führen beim Start zum sicheren Abbruch statt zu einem scheinbar grünen Status.
 - Reale Datenbanken, Branding-Kits mit internen Daten und AUM-Dokumente dürfen nicht in öffentliche Repositories oder Fehlerberichte hochgeladen werden.
 
 ## Umfang

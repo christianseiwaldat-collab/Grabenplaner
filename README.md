@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.83 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
+  <strong>v0.84 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -47,6 +47,14 @@ Vollständige Recovery-Assurance-Läufe werden weiterhin in einer Ed25519-signie
 v0.78 ergänzt die vollständige, nächtliche Recovery-Assurance-Automatik. Jeder Lauf stellt einen Sicherungsstand außerhalb des Live-Systems wieder her, startet die installierte Anwendung gegen eine isolierte Kopie dieser Daten und hält das Ergebnis in der signierten Nachweiskette fest. Ein zufällig verzögerter systemd-Timer verhindert starre Lastspitzen; Sperren, Zeitgrenzen und vollständiges Aufräumen schützen den Produktivbetrieb.
 
 Das System-Center zeigt zusätzlich den Automatikzustand, begrenzte Langzeittrends und den redigierten Eskalationsstatus. Fehlgeschlagene oder überfällige Nachweise erzeugen deduplizierte interne Warnungen für IT-Admin und Developer. Ein erfolgreicher Sicherungslauf allein wird weiterhin niemals als erfolgreich getestete Wiederherstellung ausgegeben.
+
+## Pilot und Abnahme in v0.84 Beta
+
+v0.84 ergänzt das System-Center um einen nachweisbasierten Produktreife-Bereich. Sechs getrennte Gates bündeln Desktop-Pilot, mobile Browserabläufe, barrierearme Bedienung, Performance-Budgets, Security-Audit und Recovery-Drill. Manuelle Prüfungen erfassen Browser, Plattform, Viewport, Darstellung und eine kurze Prüfnotiz; Performance-Ergebnisse über dem festgelegten Budget können serverseitig nicht als bestanden gespeichert werden.
+
+Nachweise sind append-only und besitzen einen SHA-256-Beleg. Die technische und fachliche Abnahme werden getrennt dokumentiert und gelten nur für die angezeigte Version und exakt diesen Prüfstand. Jeder neue oder geänderte Nachweis macht ältere Abnahmen sichtbar unaktuell. Security und Recovery werden nicht manuell grün geschaltet, sondern aus den aktuellen, serverseitigen System-Center- und Recovery-Assurance-Nachweisen abgeleitet.
+
+Die Bedienprüfungen orientieren sich an [WCAG 2.2](https://www.w3.org/TR/WCAG22/), der Security-Prüfrahmen an [OWASP ASVS 5.0.0](https://owasp.org/www-project-application-security-verification-standard/). Der Bereich dokumentiert einen begrenzten Pilot- und Abnahmestand; er ist keine pauschale Rechts-, Sicherheits- oder Barrierefreiheitsgarantie. Der vollständige Ablauf steht in [Pilot und Abnahme](docs/PILOT-UND-ABNAHME.md).
 
 ## Urlaub, Ist-Nachweise und Datenschutz-Governance in v0.82 Beta
 
@@ -143,6 +151,7 @@ Technische Details, Grenzen und der amtliche Quellenkatalog stehen in [Arbeitsze
 - Lokale SQLite-Datenbank ohne externen Datenbankserver
 - Integriertes Backup-System, optional verschlüsselte Restic-/rclone-Offsite-Sicherung, transaktionales Ubuntu-Host-Hardening und GitHub-basierter Aktualisierungscheck
 - System-Center mit transparentem technischem Vertrauensindex, signierter Recovery-Assurance-Timeline, begrenzten Langzeittrends, nächtlichem isoliertem App-Smoke-Test und deduplizierter interner Eskalation
+- Nachweisbasierter Produktreife-Bereich mit Desktop- und Mobilpilot, Bedienungs- und Performanceprüfungen sowie getrennten technischen und fachlichen Abnahmen
 - Windows-Host-Assistent für vorkonfigurierte USB-Sticks mit Funktionsprofil, Team, Rollen, Branding-Kits und anpassbarer „Erste Schritte“-PDF; nutzbar aus Lokal-, LAN- und HTTPS-Betrieb direkt am Host
 
 ## Schutz sensibler Personalakt-Daten
@@ -160,7 +169,7 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 ## Schnellstart unter Windows
 
 1. Die portable ZIP-Datei unter [Grabenplaner Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.83 Beta starten.cmd` doppelt anklicken.
+2. `Grabenplaner v0.84 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.
