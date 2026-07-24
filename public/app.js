@@ -186,6 +186,8 @@ window.addEventListener("resize", applyDeviceMode, { passive: true });
 
 let scheduleNoteQuill = null;
 let scheduleNoteSanitizing = false;
+let shiftRulePreviewTimer = null;
+let shiftRulePreviewRequest = null;
 
 const optionLabels = {
   vacation: "Urlaub",
@@ -210,7 +212,7 @@ const elements = Object.fromEntries(
   [
     "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "centralVacationsNavButton", "settingsNavButton", "rightsDashboardNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
-    "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "backupSettings", "rightsSettings", "employeeSettings",
+    "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField",
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount",
@@ -222,7 +224,7 @@ const elements = Object.fromEntries(
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationCostCenterField", "locationCostCenter", "locationCostCenterReadonly", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
     "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
-    "shiftModal", "shiftForm", "shiftModalTitle", "deleteShiftButton", "shiftCalculation", "shiftDepartment", "departmentPdfControl", "departmentPdfSelect", "departmentPdfButton",
+    "shiftModal", "shiftForm", "shiftModalTitle", "deleteShiftButton", "shiftCalculation", "shiftRulePreview", "shiftDepartment", "departmentPdfControl", "departmentPdfSelect", "departmentPdfButton",
     "optionsModal", "optionForm", "optionList", "optionsWeekLabel", "optionsWeekRange", "optionPreviousWeek", "optionNextWeek", "globalBlockDate", "globalBlockReason", "globalBlockHoliday", "globalBlockSubmitButton", "optionSubmitButton", "cancelOptionEditButton", "autoPlanModal",
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
@@ -1132,6 +1134,7 @@ function render() {
   renderContextNavigation();
   renderHeader();
   renderSummary();
+  renderWorkRuleAssessment();
   renderTimeline();
   renderRemarks();
   renderHoursOverview();
@@ -1256,6 +1259,183 @@ function renderSummary() {
     const selectedDepartment = elements.departmentPdfSelect.value || String(departments[0].id);
     elements.departmentPdfButton.href = `/api/schedule.pdf?week=${state.weekStart}&location=${encodeURIComponent(state.locationId)}&departmentId=${encodeURIComponent(selectedDepartment)}`;
   }
+}
+
+const workRuleStateLabels = {
+  pass: "Bestätigt",
+  attention: "Hinweis",
+  manual_review: "Manuell prüfen",
+  blocked: "Blockiert",
+  unknown: "Nicht abschließend prüfbar",
+};
+
+const workRuleEnforcementLabels = {
+  advisory: "Hinweis",
+  acknowledge: "Bestätigung erforderlich",
+  exception_required: "Ausnahme erforderlich",
+  block: "Blockierung",
+};
+
+const workRuleEvidenceLabels = {
+  actualMinutes: "Erfasste Minuten",
+  allowedMinutes: "Grenzwert",
+  breakMinutes: "Berücksichtigte Pause",
+  dailyMinutes: "Tageszeit",
+  weeklyMinutes: "Wochenzeit",
+  averageMinutes: "Durchschnitt",
+  restMinutes: "Ruhezeit",
+  requiredMinutes: "Erforderlich",
+  shiftCount: "Dienste",
+  date: "Datum",
+  from: "Von",
+  to: "Bis",
+};
+
+function normalizeWorkRuleAssessment(value) {
+  if (!value || typeof value !== "object") return null;
+  const findings = Array.isArray(value.findings) ? value.findings : [];
+  const counts = {
+    pass: Number(value.counts?.pass || 0),
+    attention: Number(value.counts?.attention || 0),
+    manualReview: Number(value.counts?.manualReview || 0),
+    blocked: Number(value.counts?.blocked || 0),
+  };
+  if (!value.counts) {
+    for (const finding of findings) {
+      if (finding?.state === "pass") counts.pass += 1;
+      else if (finding?.state === "blocked") counts.blocked += 1;
+      else if (finding?.state === "manual_review" || finding?.state === "unknown") counts.manualReview += 1;
+      else counts.attention += 1;
+    }
+  }
+  return {
+    ...value,
+    mode: value.mode === "enforced" ? "enforced" : "monitor",
+    outcome: ["pass", "attention", "manual_review", "blocked"].includes(value.outcome) ? value.outcome : "manual_review",
+    counts,
+    findings,
+    profiles: Array.isArray(value.profiles) ? value.profiles : [],
+  };
+}
+
+function safeWorkRuleSourceUrl(value) {
+  try {
+    const url = new URL(String(value || ""), window.location.href);
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function workRuleSourceLinks(sources) {
+  const uniqueSources = [...new Map(
+    (Array.isArray(sources) ? sources : [])
+      .map((source) => [safeWorkRuleSourceUrl(source?.url), source])
+      .filter(([url]) => Boolean(url)),
+  ).values()];
+  if (!uniqueSources.length) return "";
+  return `<div class="work-rule-sources"><span>Quellen</span>${uniqueSources.map((source) => {
+    const url = safeWorkRuleSourceUrl(source.url);
+    return `<a href="${escapeHtmlAttribute(url)}" target="_blank" rel="noreferrer noopener">${escapeHtml(source.title || new URL(url).hostname)}</a>`;
+  }).join("")}</div>`;
+}
+
+function workRuleEvidenceMarkup(evidence) {
+  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return "";
+  const entries = Object.entries(evidence)
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .slice(0, 8);
+  if (!entries.length) return "";
+  return `<dl class="work-rule-evidence">${entries.map(([key, value]) => {
+    const text = Array.isArray(value)
+      ? value.join(", ")
+      : typeof value === "object"
+        ? JSON.stringify(value)
+        : String(value);
+    return `<div><dt>${escapeHtml(workRuleEvidenceLabels[key] || key)}</dt><dd>${escapeHtml(text)}</dd></div>`;
+  }).join("")}</dl>`;
+}
+
+function workRuleFindingMarkup(finding, { compact = false } = {}) {
+  const stateValue = ["pass", "attention", "manual_review", "blocked"].includes(finding?.state)
+    ? finding.state
+    : "unknown";
+  const effectiveEnforcement = workRuleEnforcementLabels[finding?.effectiveEnforcement] || "Prüfhinweis";
+  const baseEnforcement = workRuleEnforcementLabels[finding?.baseEnforcement] || "";
+  const monitorDifference = finding?.effectiveEnforcement === "advisory"
+    && finding?.baseEnforcement
+    && finding.baseEnforcement !== finding.effectiveEnforcement;
+  const period = [finding?.periodFrom, finding?.periodTo].filter(Boolean);
+  const sourceRefs = Array.isArray(finding?.sourceRefs) ? finding.sourceRefs : [];
+  return `<article class="work-rule-finding ${escapeHtmlAttribute(stateValue)} ${compact ? "compact" : ""}">
+    <header>
+      <span class="work-rule-finding-state">${escapeHtml(workRuleStateLabels[stateValue])}</span>
+      <div><strong>${escapeHtml(finding?.title || finding?.ruleId || "Regelhinweis")}</strong>${period.length ? `<small>${escapeHtml(period.join(" – "))}</small>` : ""}</div>
+      <span class="work-rule-enforcement">${escapeHtml(effectiveEnforcement)}${monitorDifference ? `<small>regulär: ${escapeHtml(baseEnforcement)}</small>` : ""}</span>
+    </header>
+    ${finding?.message ? `<p>${escapeHtml(finding.message)}</p>` : ""}
+    ${compact ? "" : workRuleEvidenceMarkup(finding?.evidence)}
+    ${compact ? "" : workRuleSourceLinks(sourceRefs)}
+  </article>`;
+}
+
+function renderWorkRuleAssessment() {
+  if (!elements.workRuleAssessmentPanel) return;
+  const assessment = normalizeWorkRuleAssessment(state.data?.workRuleAssessment);
+  elements.workRuleAssessmentPanel.className = `work-rule-assessment ${assessment?.outcome || "unavailable"}`;
+  if (!assessment) {
+    elements.workRuleAssessmentSummary.textContent = "Für diese Woche liegt noch keine Regelprüfung vor.";
+    elements.workRuleModeBadge.textContent = "Monitorbetrieb – Planprüfung, keine Rechtsfreigabe";
+    elements.workRuleAssessmentCounts.innerHTML = "";
+    elements.workRuleAssessmentBody.innerHTML = '<p class="work-rule-assessment-empty">Die Planung bleibt bearbeitbar. Eine fehlende Prüfung ist keine Bestätigung der Arbeitszeitregeln.</p>';
+    elements.workRuleAssessmentPanel.open = false;
+    return;
+  }
+
+  const counts = assessment.counts;
+  const needsAttention = counts.attention + counts.manualReview + counts.blocked;
+  const modeLabel = assessment.mode === "enforced"
+    ? "Aktiver Regelbetrieb – Ergebnis vor dem Speichern beachten"
+    : "Monitorbetrieb – Planprüfung, keine Rechtsfreigabe";
+  elements.workRuleModeBadge.textContent = modeLabel;
+  elements.workRuleAssessmentSummary.textContent = needsAttention
+    ? `${needsAttention} Punkt${needsAttention === 1 ? "" : "e"} benötigen Aufmerksamkeit.`
+    : "Keine Hinweise in der aktuellen automatischen Planprüfung.";
+  elements.workRuleAssessmentCounts.innerHTML = `
+    <span class="pass"><strong>${counts.pass}</strong> bestätigt</span>
+    <span class="attention"><strong>${counts.attention}</strong> Hinweise</span>
+    <span class="manual_review"><strong>${counts.manualReview}</strong> prüfen</span>
+    <span class="blocked"><strong>${counts.blocked}</strong> blockiert</span>`;
+
+  const grouped = new Map();
+  for (const finding of assessment.findings) {
+    const employeeNumber = String(finding?.employeeNumber || "").trim();
+    const label = employeeNumber
+      ? `${finding.employeeName || "Teammitglied"} · ${employeeNumber}`
+      : "Wochenplan insgesamt";
+    if (!grouped.has(label)) grouped.set(label, []);
+    grouped.get(label).push(finding);
+  }
+  const findingGroups = [...grouped.entries()].map(([label, findings]) => `
+    <section class="work-rule-finding-group">
+      <h3>${escapeHtml(label)} <span>${findings.length}</span></h3>
+      <div>${findings.map((finding) => workRuleFindingMarkup(finding)).join("")}</div>
+    </section>`).join("");
+  const profileMarkup = assessment.profiles.length ? `
+    <details class="work-rule-profiles">
+      <summary>Verwendete Regelprofile (${assessment.profiles.length})</summary>
+      <div>${assessment.profiles.map((profile) => `
+        <article>
+          <strong>${escapeHtml(profile.name || profile.id || "Regelprofil")}</strong>
+          <small>${escapeHtml([profile.layer, profile.version].filter(Boolean).join(" · "))}</small>
+          ${workRuleSourceLinks(profile.sources)}
+        </article>`).join("")}</div>
+    </details>` : "";
+  elements.workRuleAssessmentBody.innerHTML = `
+    ${findingGroups || '<p class="work-rule-assessment-empty">Die automatische Prüfung hat keine einzelnen Hinweise ausgegeben.</p>'}
+    ${profileMarkup}
+    <p class="work-rule-disclaimer">${escapeHtml(assessment.disclaimer || "Die automatische Planprüfung unterstützt die Dienstplanung. Sie ersetzt keine rechtliche oder kollektivvertragliche Einzelfallprüfung.")}</p>`;
+  if (assessment.outcome !== "pass") elements.workRuleAssessmentPanel.open = true;
 }
 
 function renderTimeline() {
@@ -7956,12 +8136,102 @@ function openEmployeeModal(employee = null) {
   elements.employeeModal.showModal();
 }
 
+function shiftRuleFindingsForCandidate(assessmentValue, employeeNumber, dateValue) {
+  const assessment = normalizeWorkRuleAssessment(assessmentValue);
+  if (!assessment) return [];
+  const selectedEmployee = String(employeeNumber || "");
+  return assessment.findings.filter((finding) => {
+    if (String(finding?.employeeNumber || "") !== selectedEmployee) return false;
+    if (!dateValue) return true;
+    if (finding?.periodFrom && dateValue < String(finding.periodFrom).slice(0, 10)) return false;
+    if (finding?.periodTo && dateValue > String(finding.periodTo).slice(0, 10)) return false;
+    return true;
+  });
+}
+
+function renderShiftRulePreview(assessmentValue = state.data?.workRuleAssessment, { loading = false } = {}) {
+  if (!elements.shiftRulePreview) return;
+  const employeeNumber = document.querySelector("#shiftEmployee").value;
+  const dateValue = document.querySelector("#shiftDate").value;
+  const assessment = normalizeWorkRuleAssessment(assessmentValue);
+  const findings = shiftRuleFindingsForCandidate(assessment, employeeNumber, dateValue);
+  const employee = [...(state.data?.employees || []), ...state.allEmployees]
+    .find((item) => String(item.personnel_number) === String(employeeNumber));
+  const mode = assessment?.mode === "enforced" ? "Aktiver Regelbetrieb" : "Monitorbetrieb";
+  elements.shiftRulePreview.className = `shift-rule-preview full-width ${findings.some((finding) => finding.state === "blocked") ? "blocked" : findings.length ? "attention" : "pass"}`;
+  elements.shiftRulePreview.innerHTML = `
+    <div class="shift-rule-preview-heading">
+      <strong>Regelvorschau</strong>
+      <span>${escapeHtml(mode)}${loading ? " · wird aktualisiert …" : ""}</span>
+    </div>
+    ${findings.length
+      ? `<div class="shift-rule-preview-list">${findings.slice(0, 4).map((finding) => workRuleFindingMarkup(finding, { compact: true })).join("")}</div>`
+      : `<p>Für ${escapeHtml(employee?.nickname || employee?.full_name || employeeNumber || "das Teammitglied")} bestehen in der aktuellen Wochenprüfung keine passenden Hinweise. Das ist keine Rechtsfreigabe.</p>`}
+    ${findings.length > 4 ? `<small class="shift-rule-preview-more">+ ${findings.length - 4} weitere Hinweise in der Wochenprüfung</small>` : ""}`;
+}
+
+function currentShiftRuleCandidate() {
+  const employeeNumber = document.querySelector("#shiftEmployee").value;
+  const date = document.querySelector("#shiftDate").value;
+  const startTime = document.querySelector("#shiftStart").value;
+  const endTime = document.querySelector("#shiftEnd").value;
+  if (!employeeNumber || !date || !startTime || !endTime) return null;
+  return {
+    id: document.querySelector("#shiftId").value || null,
+    employeeNumber,
+    locationId: state.locationId,
+    departmentId: elements.shiftDepartment.value || "",
+    date,
+    startTime,
+    endTime,
+    area: document.querySelector("#shiftArea").value,
+    note: document.querySelector("#shiftNote").value,
+  };
+}
+
+function scheduleShiftRulePreview() {
+  clearTimeout(shiftRulePreviewTimer);
+  shiftRulePreviewRequest?.abort();
+  shiftRulePreviewRequest = null;
+  const candidateShift = currentShiftRuleCandidate();
+  renderShiftRulePreview(state.data?.workRuleAssessment, { loading: Boolean(candidateShift) });
+  if (!candidateShift) return;
+  shiftRulePreviewTimer = setTimeout(async () => {
+    const request = new AbortController();
+    shiftRulePreviewRequest = request;
+    try {
+      const result = await api("/api/work-rules/evaluate", {
+        method: "POST",
+        signal: request.signal,
+        body: JSON.stringify({
+          targetType: "planned_schedule",
+          preview: true,
+          weekStart: state.weekStart,
+          locationId: state.locationId,
+          departmentId: state.departmentId || "",
+          candidateShift,
+        }),
+      });
+      if (shiftRulePreviewRequest !== request) return;
+      const assessment = result?.workRuleAssessment || result?.assessment || result;
+      renderShiftRulePreview(assessment);
+    } catch {
+      if (shiftRulePreviewRequest === request) renderShiftRulePreview(state.data?.workRuleAssessment);
+    } finally {
+      if (shiftRulePreviewRequest === request) shiftRulePreviewRequest = null;
+    }
+  }, 420);
+}
+
 function calculateShiftPreview() {
   if (!state.data) return;
   const startValue = document.querySelector("#shiftStart").value;
   const endValue = document.querySelector("#shiftEnd").value;
   const dateValue = document.querySelector("#shiftDate").value;
-  if (!startValue || !endValue || !dateValue) return;
+  if (!startValue || !endValue || !dateValue) {
+    renderShiftRulePreview();
+    return;
+  }
   let start = timeToMinutes(startValue);
   let end = timeToMinutes(endValue);
   if (end <= start) end += 1440;
@@ -7983,6 +8253,7 @@ function calculateShiftPreview() {
     counted += bonus;
   }
   elements.shiftCalculation.textContent = `Planzeit ${formatHours(raw)} · Pause ${formatHours(pause)}${bonus ? ` · Samstagszuschlag +${formatHours(bonus)}` : ""} · Gewertet ${formatHours(counted)}`;
+  scheduleShiftRulePreview();
 }
 
 function canUseAllEmployeesForShiftPlanning() {
@@ -10534,14 +10805,22 @@ elements.departmentPdfSelect?.addEventListener("change", () => {
   elements.departmentPdfButton.href = `/api/schedule.pdf?week=${state.weekStart}&location=${encodeURIComponent(state.locationId)}&departmentId=${encodeURIComponent(selectedDepartment)}`;
 });
 document.querySelector("#shiftEmployee").addEventListener("change", () => {
-  if (document.querySelector("#shiftId").value) return;
-  const employeeNumber = document.querySelector("#shiftEmployee").value;
-  const employee = [...(state.data?.employees || []), ...state.allEmployees]
-    .find((item) => item.personnel_number === employeeNumber);
-  const departmentId = String(employee?.preferred_department_id || employee?.preferredDepartmentId || "");
-  if (departmentId && [...elements.shiftDepartment.options].some((option) => option.value === departmentId)) {
-    elements.shiftDepartment.value = departmentId;
+  if (!document.querySelector("#shiftId").value) {
+    const employeeNumber = document.querySelector("#shiftEmployee").value;
+    const employee = [...(state.data?.employees || []), ...state.allEmployees]
+      .find((item) => item.personnel_number === employeeNumber);
+    const departmentId = String(employee?.preferred_department_id || employee?.preferredDepartmentId || "");
+    if (departmentId && [...elements.shiftDepartment.options].some((option) => option.value === departmentId)) {
+      elements.shiftDepartment.value = departmentId;
+    }
   }
+  calculateShiftPreview();
+});
+elements.shiftDepartment.addEventListener("change", calculateShiftPreview);
+elements.shiftModal.addEventListener("close", () => {
+  clearTimeout(shiftRulePreviewTimer);
+  shiftRulePreviewRequest?.abort();
+  shiftRulePreviewRequest = null;
 });
 document.querySelector("#addEmployeeButton").addEventListener("click", async () => {
   if (canWriteCentralPersonnel() && !state.personnelAdministrationLoaded) await loadPersonnelAdministration();
