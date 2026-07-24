@@ -153,6 +153,7 @@ const {
   normalizeLoanReturnItems,
   normalizeLoanText,
 } = require("./lib/loan-workflow");
+const { renderLoanPdf } = require("./lib/loan-pdf");
 const { CONTRACT_IDS, contractById, contractSha256, contractSummaries } = require("./lib/integration-contracts");
 const {
   BUILTIN_WORK_RULE_PROFILES,
@@ -1182,6 +1183,10 @@ function protectedStorageReferencesFromDatabase(database) {
     keys.push(...database.prepare("SELECT storage_key FROM personnel_record_documents WHERE status = 'active'").all()
       .map((row) => String(row.storage_key || "").toLowerCase()));
   }
+  if (databaseHasTable(database, "loan_documents")) {
+    keys.push(...database.prepare("SELECT storage_key FROM loan_documents").all()
+      .map((row) => String(row.storage_key || "").toLowerCase()));
+  }
   if (keys.some((key) => !key) || new Set(keys).size !== keys.length) {
     throw new Error("Die Datenbank enthält ungültige oder doppelte Verweise auf geschützte Dokumente.");
   }
@@ -1445,12 +1450,15 @@ function createSchema() {
       article_lookup_provider TEXT NOT NULL DEFAULT 'none'
         CHECK(article_lookup_provider IN ('none','shopware_storefront')),
       article_lookup_base_url TEXT NOT NULL DEFAULT '',
+      document_recipient_employee_number TEXT,
       created_by TEXT NOT NULL DEFAULT '',
       updated_by TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (location_id) REFERENCES locations(id)
-        ON UPDATE CASCADE ON DELETE CASCADE
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (document_recipient_employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS loans (
@@ -1539,6 +1547,41 @@ function createSchema() {
       WHERE status = 'pending';
     CREATE INDEX IF NOT EXISTS idx_loan_return_confirmations_witness
       ON loan_return_confirmations(witness_employee_number, status, requested_at);
+
+    CREATE TABLE IF NOT EXISTS loan_documents (
+      id TEXT PRIMARY KEY,
+      loan_id TEXT NOT NULL,
+      document_type TEXT NOT NULL CHECK(document_type IN ('issue','return')),
+      loan_revision INTEGER NOT NULL CHECK(loan_revision >= 1),
+      storage_key TEXT NOT NULL UNIQUE,
+      filename TEXT NOT NULL,
+      detected_mime TEXT NOT NULL DEFAULT 'application/pdf'
+        CHECK(detected_mime = 'application/pdf'),
+      byte_size INTEGER NOT NULL CHECK(byte_size > 0),
+      sha256 TEXT NOT NULL CHECK(length(sha256) = 64),
+      created_by_employee_number TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(loan_id, document_type, loan_revision),
+      FOREIGN KEY (loan_id) REFERENCES loans(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (created_by_employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_loan_documents_loan
+      ON loan_documents(loan_id, created_at, document_type);
+
+    CREATE TRIGGER IF NOT EXISTS trg_loan_documents_immutable_update
+    BEFORE UPDATE ON loan_documents
+    BEGIN
+      SELECT RAISE(ABORT, 'loan documents are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_loan_documents_immutable_delete
+    BEFORE DELETE ON loan_documents
+    BEGIN
+      SELECT RAISE(ABORT, 'loan documents are immutable');
+    END;
 
     CREATE TABLE IF NOT EXISTS loan_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3214,9 +3257,12 @@ const loanModuleTables = Object.freeze([
   "loans",
   "loan_items",
   "loan_return_confirmations",
+  "loan_documents",
   "loan_events",
 ]);
 const loanModuleTriggerNames = Object.freeze([
+  "trg_loan_documents_immutable_update",
+  "trg_loan_documents_immutable_delete",
   "trg_loan_events_immutable_update",
   "trg_loan_events_immutable_delete",
 ]);
@@ -3462,6 +3508,7 @@ ensureColumn("integration_connections", "revision", "INTEGER NOT NULL DEFAULT 1"
 ensureColumn("integration_deliveries", "connection_revision", "INTEGER NOT NULL DEFAULT 1");
 ensureColumn("integration_deliveries", "connection_fingerprint", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("work_rule_evaluation_runs", "receipt_sha256", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("loan_location_settings", "document_recipient_employee_number", "TEXT");
 ensureWorkRuleEvaluationReceiptIntegrity();
 if (!columnExists("week_options", "group_id")) {
   db.exec("ALTER TABLE week_options ADD COLUMN group_id TEXT");
@@ -24453,9 +24500,14 @@ function loanLocationSettingRow(locationId) {
            COALESCE(s.article_lookup_enabled, 0) AS article_lookup_enabled,
            COALESCE(s.article_lookup_provider, 'none') AS article_lookup_provider,
            COALESCE(s.article_lookup_base_url, '') AS article_lookup_base_url,
+           COALESCE(s.document_recipient_employee_number, '') AS document_recipient_employee_number,
+           recipient.full_name AS document_recipient_full_name,
+           recipient.nickname AS document_recipient_nickname,
            s.updated_by, s.updated_at
     FROM locations l
     LEFT JOIN loan_location_settings s ON s.location_id = l.id
+    LEFT JOIN employees recipient
+      ON recipient.personnel_number = s.document_recipient_employee_number
     WHERE l.id = ?
   `).get(locationId);
 }
@@ -24472,6 +24524,10 @@ function publicLoanLocationSetting(row, { includeConfiguration = false } = {}) {
       provider: row.article_lookup_provider || "none",
       configured: Boolean(row.article_lookup_enabled && row.article_lookup_base_url),
     },
+    documentRecipient: row.document_recipient_employee_number ? {
+      employeeNumber: row.document_recipient_employee_number,
+      name: row.document_recipient_nickname || row.document_recipient_full_name || row.document_recipient_employee_number,
+    } : null,
     updatedBy: row.updated_by || "",
     updatedAt: row.updated_at || null,
   };
@@ -24706,9 +24762,14 @@ app.get("/api/portal/v1/loans/settings", (request, response) => {
            COALESCE(s.article_lookup_enabled, 0) AS article_lookup_enabled,
            COALESCE(s.article_lookup_provider, 'none') AS article_lookup_provider,
            COALESCE(s.article_lookup_base_url, '') AS article_lookup_base_url,
+           COALESCE(s.document_recipient_employee_number, '') AS document_recipient_employee_number,
+           recipient.full_name AS document_recipient_full_name,
+           recipient.nickname AS document_recipient_nickname,
            s.updated_by, s.updated_at
     FROM locations l
     LEFT JOIN loan_location_settings s ON s.location_id = l.id
+    LEFT JOIN employees recipient
+      ON recipient.personnel_number = s.document_recipient_employee_number
     ORDER BY l.id
   `).all().map((row) => publicLoanLocationSetting(row, { includeConfiguration: true }));
   response.json({
@@ -24742,16 +24803,48 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", (request, respons
       throw articleLookupHttpError(error);
     }
   }
+  const documentRecipientEmployeeNumber = String(
+    request.body?.documentRecipientEmployeeNumber || "",
+  ).trim();
+  if (documentRecipientEmployeeNumber) {
+    const recipient = db.prepare(`
+      SELECT u.employee_number, u.role, u.active, r.permissions,
+             e.home_location_id, e.preferred_department_id
+      FROM portal_users u
+      JOIN employees e ON e.personnel_number = u.employee_number
+      LEFT JOIN portal_roles r ON r.id = u.role
+      WHERE u.employee_number = ? AND u.active = 1 AND e.active = 1
+    `).get(documentRecipientEmployeeNumber);
+    const permissionState = recipient
+      ? effectivePortalPermissionState(recipient.employee_number, recipient.role, recipient.permissions)
+      : null;
+    const scopes = recipient ? portalAccessScopesForPrincipal({
+      employeeNumber: recipient.employee_number,
+      role: recipient.role,
+      homeLocationId: recipient.home_location_id,
+      preferredDepartmentId: recipient.preferred_department_id,
+    }) : [];
+    if (!recipient || !permissionState.effectivePermissions.includes("loans:documents:read")
+      || !portalScopeMatchesAnyContext(recipient.role, scopes, [{ locationId, departmentId: null }])) {
+      throw httpError(
+        400,
+        "Der Belegempfänger benötigt einen aktiven Zugang mit Leserecht für Leihdokumente an diesem Standort.",
+        "LOAN_DOCUMENT_RECIPIENT_INVALID",
+      );
+    }
+  }
   db.prepare(`
     INSERT INTO loan_location_settings
       (location_id, enabled, article_lookup_enabled, article_lookup_provider,
-       article_lookup_base_url, created_by, updated_by, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+       article_lookup_base_url, document_recipient_employee_number,
+       created_by, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(location_id) DO UPDATE SET
       enabled = excluded.enabled,
       article_lookup_enabled = excluded.article_lookup_enabled,
       article_lookup_provider = excluded.article_lookup_provider,
       article_lookup_base_url = excluded.article_lookup_base_url,
+      document_recipient_employee_number = excluded.document_recipient_employee_number,
       updated_by = excluded.updated_by,
       updated_at = CURRENT_TIMESTAMP
   `).run(
@@ -24760,6 +24853,7 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", (request, respons
     Number(lookupEnabled),
     provider,
     baseUrl,
+    documentRecipientEmployeeNumber || null,
     actor.employeeNumber,
     actor.employeeNumber,
   );
@@ -24768,6 +24862,7 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", (request, respons
     articleLookupEnabled: lookupEnabled,
     articleLookupProvider: provider,
     articleLookupOrigin: baseUrl ? new URL(baseUrl).origin : "",
+    documentRecipientEmployeeNumber,
   }));
   response.json({
     location: publicLoanLocationSetting(loanLocationSettingRow(locationId), { includeConfiguration: true }),
@@ -25105,6 +25200,191 @@ function loanEventRows(loanId) {
   `).all(String(loanId || "").trim());
 }
 
+function loanDocumentRows(loanId) {
+  return db.prepare(`
+    SELECT id, loan_id, document_type, loan_revision, filename, detected_mime,
+           byte_size, sha256, created_by_employee_number, created_at
+    FROM loan_documents
+    WHERE loan_id = ?
+    ORDER BY loan_revision, CASE document_type WHEN 'issue' THEN 0 ELSE 1 END, created_at
+  `).all(String(loanId || "").trim());
+}
+
+function loanDocumentRow(documentId) {
+  return db.prepare(`
+    SELECT document.*, loan.location_id, loan.borrower_employee_number,
+           loan.created_by_employee_number, loan.return_recorded_by_employee_number,
+           loan.return_witness_employee_number
+    FROM loan_documents document
+    JOIN loans loan ON loan.id = document.loan_id
+    WHERE document.id = ?
+  `).get(String(documentId || "").trim()) || null;
+}
+
+function publicLoanDocument(row) {
+  return {
+    id: row.id,
+    type: row.document_type,
+    label: row.document_type === "return" ? "Rücknahmebeleg" : "Ausgabebeleg",
+    revision: Number(row.loan_revision),
+    filename: row.filename,
+    byteSize: Number(row.byte_size),
+    sha256: row.sha256,
+    createdAt: row.created_at,
+    downloadUrl: `/api/portal/v1/loans/documents/${encodeURIComponent(row.id)}`,
+  };
+}
+
+function loanPdfBranding(locationId) {
+  const branding = brandingForLocation(locationId);
+  const source = mobileBrandingSourceForSession({
+    role: "employee",
+    homeLocationId: locationId,
+  });
+  return {
+    companyName: branding.companyName,
+    logo: localAssetPathFromUrl(branding.logoUrl),
+    colors: mobileBrandingTheme(source.raw),
+  };
+}
+
+function loanParticipant(employeeNumber) {
+  const employee = loanEmployeeRow(employeeNumber) || {};
+  return {
+    employeeNumber: String(employeeNumber || ""),
+    name: employee.nickname || employee.full_name || String(employeeNumber || ""),
+  };
+}
+
+async function prepareLoanDocument(spec, actorEmployeeNumber) {
+  const pdf = await renderLoanPdf(spec);
+  const typeLabel = spec.type === "return" ? "Ruecknahme" : "Ausgabe";
+  const filename = `Leihbeleg-${typeLabel}-${String(spec.loanId).slice(0, 8)}-R${Number(spec.revision)}.pdf`;
+  const stored = await requireAmuStorage().saveBuffer({
+    buffer: pdf,
+    originalName: filename,
+    maxBytes: 8 * 1024 * 1024,
+  });
+  return {
+    id: crypto.randomUUID(),
+    documentType: spec.type,
+    loanRevision: Number(spec.revision),
+    storageKey: stored.storageKey,
+    filename,
+    detectedMime: stored.detectedMime,
+    byteSize: stored.byteSize,
+    sha256: stored.sha256,
+    createdByEmployeeNumber: actorEmployeeNumber === "local" ? null : actorEmployeeNumber,
+    createdAt: stored.createdAt,
+  };
+}
+
+function insertPreparedLoanDocument(loanId, prepared) {
+  db.prepare(`
+    INSERT INTO loan_documents
+      (id, loan_id, document_type, loan_revision, storage_key, filename,
+       detected_mime, byte_size, sha256, created_by_employee_number, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    prepared.id,
+    loanId,
+    prepared.documentType,
+    prepared.loanRevision,
+    prepared.storageKey,
+    prepared.filename,
+    prepared.detectedMime,
+    prepared.byteSize,
+    prepared.sha256,
+    prepared.createdByEmployeeNumber,
+    prepared.createdAt,
+  );
+}
+
+function cleanupPreparedLoanDocument(prepared) {
+  if (!prepared?.storageKey) return;
+  try { requireAmuStorage().deleteBlob(prepared.storageKey); } catch {}
+}
+
+function fallbackLoanDocumentRecipient(locationId) {
+  const users = db.prepare(`
+    SELECT u.employee_number, u.role, r.permissions,
+           e.home_location_id, e.preferred_department_id
+    FROM portal_users u
+    JOIN employees e ON e.personnel_number = u.employee_number
+    LEFT JOIN portal_roles r ON r.id = u.role
+    WHERE u.active = 1 AND e.active = 1 AND TRIM(u.password_hash) <> ''
+    ORDER BY CASE u.role
+      WHEN 'developer' THEN 0 WHEN 'admin' THEN 1 WHEN 'it_admin' THEN 2 WHEN 'hr' THEN 3 ELSE 4 END,
+      CAST(u.employee_number AS INTEGER), u.employee_number
+  `).all();
+  for (const user of users) {
+    const permissions = effectivePortalPermissionState(
+      user.employee_number,
+      user.role,
+      user.permissions,
+    ).effectivePermissions;
+    if (!permissions.includes("loans:documents:read")) continue;
+    const scopes = portalAccessScopesForPrincipal({
+      employeeNumber: user.employee_number,
+      role: user.role,
+      homeLocationId: user.home_location_id,
+      preferredDepartmentId: user.preferred_department_id,
+    });
+    if (portalScopeMatchesAnyContext(user.role, scopes, [{ locationId, departmentId: null }])) {
+      return user.employee_number;
+    }
+  }
+  return "";
+}
+
+function loanDocumentRecipients(loan, documentType) {
+  const setting = loanLocationSettingRow(loan.location_id);
+  const configured = String(setting?.document_recipient_employee_number || "").trim();
+  const recipients = new Set([
+    loan.borrower_employee_number,
+    documentType === "return" ? loan.return_recorded_by_employee_number : loan.created_by_employee_number,
+    documentType === "return" ? loan.return_witness_employee_number : "",
+    configured || fallbackLoanDocumentRecipient(loan.location_id),
+  ].filter(Boolean));
+  return [...recipients];
+}
+
+function notifyLoanDocumentAvailable(loan, document) {
+  const publicDocument = publicLoanDocument(document);
+  for (const recipient of loanDocumentRecipients(loan, document.document_type)) {
+    createPortalNotification(
+      recipient,
+      "loan.document",
+      `${publicDocument.label} verfügbar`,
+      `Der Beleg für ${loan.borrower_employee_number} · ${loan.borrower_nickname || loan.borrower_full_name} wurde sicher abgelegt.`,
+      {
+        target: `/portal.html?tab=loan&loan=${encodeURIComponent(loan.id)}`,
+        entityType: "loan_document",
+        entityId: document.id,
+        dedupeKey: `loan-document:${document.id}:${recipient}`,
+      },
+    );
+  }
+}
+
+function assertLoanDocumentAccess(session, document) {
+  if (!document) {
+    throw httpError(404, "Der Leihbeleg wurde nicht gefunden.", "LOAN_DOCUMENT_NOT_FOUND");
+  }
+  if (session.employeeNumber === "local") return;
+  const participants = new Set([
+    document.borrower_employee_number,
+    document.created_by_employee_number,
+    document.return_recorded_by_employee_number,
+    document.return_witness_employee_number,
+  ].filter(Boolean));
+  if (participants.has(session.employeeNumber)) return;
+  if (!session.permissions?.includes("loans:documents:read")) {
+    throw httpError(403, "Für diesen Leihbeleg fehlt die Berechtigung.", "LOAN_DOCUMENT_DENIED");
+  }
+  assertSessionContextScope(session, { locationId: document.location_id });
+}
+
 function publicLoanItem(row) {
   return {
     id: row.id,
@@ -25170,6 +25450,7 @@ function publicLoan(row, { includeEvents = true } = {}) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     items: loanItemRows(row.id).map(publicLoanItem),
+    documents: loanDocumentRows(row.id).map(publicLoanDocument),
     events: includeEvents ? loanEventRows(row.id).map(publicLoanEvent) : [],
   };
 }
@@ -25386,7 +25667,36 @@ app.get("/api/portal/v1/loans/:loanId", (request, response) => {
   response.json({ loan: publicLoan(row) });
 });
 
-app.post("/api/portal/v1/loans", (request, response) => {
+app.get("/api/portal/v1/loans/documents/:documentId", (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(request, [
+    "loans:self:read",
+    "loans:location:read",
+    "loans:location:manage",
+    "loans:documents:read",
+  ]);
+  const document = loanDocumentRow(request.params.documentId);
+  assertLoanDocumentAccess(session, document);
+  const content = requireAmuStorage().readBuffer({
+    storageKey: document.storage_key,
+    byteSize: document.byte_size,
+    sha256: document.sha256,
+    detectedMime: document.detected_mime,
+    originalFilename: document.filename,
+  });
+  auditPortal(session.employeeNumber, "loan.document.read", "loan_document", document.id, JSON.stringify({
+    loanId: document.loan_id,
+    documentType: document.document_type,
+    revision: Number(document.loan_revision),
+  }));
+  response.setHeader("Content-Type", "application/pdf");
+  response.setHeader("Content-Disposition", contentDispositionHeader(document.filename));
+  response.setHeader("Cache-Control", "private, no-store, max-age=0");
+  response.setHeader("Pragma", "no-cache");
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.send(content);
+});
+
+app.post("/api/portal/v1/loans", async (request, response) => {
   const actor = requirePortalAnyPermissionOrLocal(
     request,
     ["loans:self:create", "loans:location:manage"],
@@ -25401,6 +25711,39 @@ app.post("/api/portal/v1/loans", (request, response) => {
   const recordedByEmployeeNumber = actor.employeeNumber === "local"
     ? borrower.personnel_number
     : actor.employeeNumber;
+  let preparedIssueDocument;
+  try {
+    preparedIssueDocument = await prepareLoanDocument({
+      type: "issue",
+      loanId,
+      revision: 1,
+      createdAt: now,
+      issuedAt: now,
+      dueDate: input.dueDate,
+      note: input.notes,
+      location: { id: setting.location_id, name: setting.location_name },
+      borrower: {
+        employeeNumber: borrower.personnel_number,
+        name: borrower.nickname || borrower.full_name,
+      },
+      recordedBy: loanParticipant(recordedByEmployeeNumber),
+      items: input.items.map((item, index) => ({
+        position: item.position,
+        articleNumber: item.articleNumber,
+        description: articles[index].description,
+        serialNumber: item.serialNumber,
+        conditionOut: item.conditionOut,
+        note: item.note,
+      })),
+      branding: loanPdfBranding(setting.location_id),
+    }, actor.employeeNumber);
+  } catch (error) {
+    throw httpError(
+      503,
+      `Der Ausgabebeleg konnte nicht sicher erstellt werden: ${String(error.message || error)}`,
+      "LOAN_DOCUMENT_CREATE_FAILED",
+    );
+  }
   db.exec("BEGIN IMMEDIATE");
   try {
     db.prepare(`
@@ -25442,9 +25785,16 @@ app.post("/api/portal/v1/loans", (request, response) => {
       itemCount: input.items.length,
       borrowerEmployeeNumber: borrower.personnel_number,
     });
+    insertPreparedLoanDocument(loanId, preparedIssueDocument);
+    appendLoanEvent(loanId, actor.employeeNumber, "document_created", 1, {
+      documentId: preparedIssueDocument.id,
+      documentType: preparedIssueDocument.documentType,
+      sha256: preparedIssueDocument.sha256,
+    });
     db.exec("COMMIT");
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
+    cleanupPreparedLoanDocument(preparedIssueDocument);
     throw error;
   }
   auditPortal(actor.employeeNumber, "loan.issue", "loan", loanId, JSON.stringify({
@@ -25466,7 +25816,10 @@ app.post("/api/portal/v1/loans", (request, response) => {
       },
     );
   }
-  response.status(201).json({ loan: publicLoan(loanRow(loanId)) });
+  const issuedLoan = loanRow(loanId);
+  const issueDocument = loanDocumentRow(preparedIssueDocument.id);
+  notifyLoanDocumentAvailable(issuedLoan, issueDocument);
+  response.status(201).json({ loan: publicLoan(issuedLoan) });
 });
 
 app.post("/api/portal/v1/loans/:loanId/return", (request, response) => {
@@ -25594,7 +25947,7 @@ app.post("/api/portal/v1/loans/:loanId/return", (request, response) => {
   });
 });
 
-app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", (request, response) => {
+app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", async (request, response) => {
   const actor = requirePortalAnyPermissionOrLocal(
     request,
     ["loans:self:read", "loans:self:return", "loans:location:manage"],
@@ -25702,6 +26055,47 @@ app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", (r
     throw loanWorkflowHttpError(error);
   }
   const nextRevision = Number(loan.revision) + 1;
+  const sourceItems = loanItemRows(loan.id);
+  let preparedReturnDocument;
+  try {
+    preparedReturnDocument = await prepareLoanDocument({
+      type: "return",
+      loanId: loan.id,
+      revision: nextRevision,
+      createdAt: respondedAt,
+      issuedAt: loan.issued_at,
+      returnedAt: respondedAt,
+      dueDate: loan.due_date,
+      note: [loan.notes, payload.note].filter(Boolean).join(" · "),
+      confirmationNote: responseNote,
+      location: { id: loan.location_id, name: loan.location_name },
+      borrower: {
+        employeeNumber: loan.borrower_employee_number,
+        name: loan.borrower_nickname || loan.borrower_full_name,
+      },
+      recordedBy: loanParticipant(confirmation.requested_by_employee_number),
+      witness: loanParticipant(actor.employeeNumber),
+      items: sourceItems.map((item) => {
+        const returned = returnedItems.find((entry) => Number(entry.position) === Number(item.position)) || {};
+        return {
+          position: item.position,
+          articleNumber: item.article_number,
+          description: item.description_snapshot,
+          serialNumber: item.serial_number,
+          conditionOut: item.condition_out,
+          conditionReturn: returned.conditionReturn,
+          note: [item.item_note, returned.note].filter(Boolean).join(" · "),
+        };
+      }),
+      branding: loanPdfBranding(loan.location_id),
+    }, actor.employeeNumber);
+  } catch (error) {
+    throw httpError(
+      503,
+      `Der Rücknahmebeleg konnte nicht sicher erstellt werden: ${String(error.message || error)}`,
+      "LOAN_DOCUMENT_CREATE_FAILED",
+    );
+  }
   db.exec("BEGIN IMMEDIATE");
   try {
     const result = db.prepare(`
@@ -25738,6 +26132,7 @@ app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", (r
     if (!confirmationResult.changes) {
       throw httpError(409, "Diese Rücknahmebestätigung wurde bereits bearbeitet.", "LOAN_RETURN_CONFIRMATION_CLOSED");
     }
+    insertPreparedLoanDocument(loan.id, preparedReturnDocument);
     appendLoanEvent(loan.id, actor.employeeNumber, "returned", nextRevision, {
       confirmationId: confirmation.id,
       requestedByEmployeeNumber: confirmation.requested_by_employee_number,
@@ -25747,9 +26142,15 @@ app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", (r
       responseNote,
       items: returnedItems,
     });
+    appendLoanEvent(loan.id, actor.employeeNumber, "document_created", nextRevision, {
+      documentId: preparedReturnDocument.id,
+      documentType: preparedReturnDocument.documentType,
+      sha256: preparedReturnDocument.sha256,
+    });
     db.exec("COMMIT");
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
+    cleanupPreparedLoanDocument(preparedReturnDocument);
     throw error;
   }
   auditPortal(actor.employeeNumber, "loan.return.confirm", "loan", loan.id, JSON.stringify({
@@ -25781,9 +26182,11 @@ app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", (r
       },
     );
   }
+  const returnedLoan = loanRow(loan.id);
+  notifyLoanDocumentAvailable(returnedLoan, loanDocumentRow(preparedReturnDocument.id));
   response.json({
     confirmation: publicLoanReturnConfirmation(loanReturnConfirmationRow(confirmation.id)),
-    loan: publicLoan(loanRow(loan.id)),
+    loan: publicLoan(returnedLoan),
   });
 });
 

@@ -3543,6 +3543,18 @@ function renderLoanList() {
     const canReturn = loan.status === "issued"
       && !loan.pendingReturnConfirmation
       && (canManage || (canReturnOwn && loan.borrower?.employeeNumber === ownNumber));
+    const canReadDocuments = portalState.loanStatus?.permissions?.documentsRead === true
+      || [
+        loan.borrower?.employeeNumber,
+        loan.createdBy?.employeeNumber,
+        loan.returnRecordedByEmployeeNumber,
+        loan.returnWitness?.employeeNumber,
+      ].includes(ownNumber);
+    const documents = canReadDocuments && Array.isArray(loan.documents) && loan.documents.length
+      ? `<div class="loan-documents">${loan.documents.map((document) =>
+        `<a href="${esc(document.downloadUrl)}" target="_blank" rel="noopener">${esc(document.label)} · R${esc(document.revision)}</a>`
+      ).join("")}</div>`
+      : "";
     const returnCopy = loan.returnWitness
       ? `<small>Rücknahme bestätigt durch ${esc(loan.returnWitness.employeeNumber)} · ${esc(loan.returnWitness.name)}</small>`
       : "";
@@ -3550,7 +3562,7 @@ function renderLoanList() {
       ? `<small class="loan-pending-confirmation">Bestätigung ausständig bei ${esc(loan.pendingReturnConfirmation.witness.employeeNumber)} · ${esc(loan.pendingReturnConfirmation.witness.name)} – gültig bis ${esc(timestampText(loan.pendingReturnConfirmation.expiresAt))}</small>`
       : "";
     return `<article class="loan-list-item">
-      <div class="loan-list-main"><span class="status ${loan.status === "returned" ? "approved" : "pending"}">${esc(loanStatusText(loan.status))}</span><strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><small>Ausgabe: ${esc(timestampText(loan.issuedAt || loan.createdAt))}${loan.dueDate ? ` · geplant bis ${esc(dateText(loan.dueDate))}` : ""}</small>${returnCopy}${pendingCopy}<ul>${items}</ul></div>
+      <div class="loan-list-main"><span class="status ${loan.status === "returned" ? "approved" : "pending"}">${esc(loanStatusText(loan.status))}</span><strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><small>Ausgabe: ${esc(timestampText(loan.issuedAt || loan.createdAt))}${loan.dueDate ? ` · geplant bis ${esc(dateText(loan.dueDate))}` : ""}</small>${returnCopy}${pendingCopy}<ul>${items}</ul>${documents}</div>
       ${canReturn ? `<button class="primary" data-loan-return="${esc(loan.id)}" type="button">Zurücknehmen</button>` : ""}
     </article>`;
   }).join("") : '<p class="empty-state">In diesem Bereich sind noch keine Leihvorgänge vorhanden.</p>';
@@ -3637,7 +3649,7 @@ async function submitLoanIssue(event) {
         })),
       }),
     });
-    message(el.loanIssueMessage, "Die Leihe wurde erfasst.");
+    message(el.loanIssueMessage, "Die Leihe und der Ausgabebeleg wurden erfasst.");
     resetLoanDraft();
     await loadLoans();
   } catch (error) {

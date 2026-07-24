@@ -36,12 +36,14 @@ const {
 const ADMIN = "v085-admin";
 const EMPLOYEE = "v085-employee";
 const WITNESS = "v085-witness";
+const OTHER = "v085-other";
 let baseUrl;
 let httpServer;
 let locationId;
 let adminSession;
 let employeeSession;
 let witnessSession;
+let otherSession;
 
 function ensureEmployee(employeeNumber, name, role) {
   db.prepare(`
@@ -99,14 +101,23 @@ async function request(route, { method = "GET", session = employeeSession, body 
   return { response, payload };
 }
 
+async function requestBinary(route, { session = employeeSession } = {}) {
+  const headers = {};
+  if (session) headers.Cookie = session.cookie;
+  const response = await fetch(`${baseUrl}${route}`, { headers });
+  return { response, buffer: Buffer.from(await response.arrayBuffer()) };
+}
+
 test.before(() => {
   locationId = String(db.prepare("SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1").get().id);
   ensureEmployee(ADMIN, "Ada Administration", "admin");
   ensureEmployee(EMPLOYEE, "Erika Beispiel", "employee");
   ensureEmployee(WITNESS, "Walter Beispiel", "employee");
+  ensureEmployee(OTHER, "Olivia Ohne Bezug", "employee");
   adminSession = createSession(ADMIN);
   employeeSession = createSession(EMPLOYEE);
   witnessSession = createSession(WITNESS);
+  otherSession = createSession(OTHER);
   return new Promise((resolve) => {
     httpServer = app.listen(0, "127.0.0.1", () => {
       baseUrl = `http://127.0.0.1:${httpServer.address().port}`;
@@ -185,7 +196,7 @@ test("v0.85 EAN und GTIN werden per Pr체fziffer erkannt und am Shopartikel best�
 });
 
 test("v0.85 Datenmodell trennt zentralen Artikelstamm, Standortfreigabe und Leihhistorie", () => {
-  for (const table of ["articles", "article_identifiers", "loan_location_settings", "loans", "loan_items", "loan_return_confirmations", "loan_events"]) {
+  for (const table of ["articles", "article_identifiers", "loan_location_settings", "loans", "loan_items", "loan_return_confirmations", "loan_documents", "loan_events"]) {
     assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table), table);
   }
   assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.85-loan-module-foundation'").get());
@@ -202,6 +213,15 @@ test("v0.85 Datenmodell trennt zentralen Artikelstamm, Standortfreigabe und Leih
   assert.throws(
     () => db.prepare("UPDATE loan_events SET event_type = 'changed' WHERE loan_id = ?").run(loanId),
     /loan events are immutable/,
+  );
+  db.prepare(`
+    INSERT INTO loan_documents
+      (id, loan_id, document_type, loan_revision, storage_key, filename, byte_size, sha256)
+    VALUES ('test-document', ?, 'issue', 1, 'aa/test-document.enc', 'Test.pdf', 10, ?)
+  `).run(loanId, "a".repeat(64));
+  assert.throws(
+    () => db.prepare("UPDATE loan_documents SET filename = 'Geaendert.pdf' WHERE id = 'test-document'").run(),
+    /loan documents are immutable/,
   );
 });
 
@@ -236,11 +256,13 @@ test("v0.85 PL-plus konfiguriert den Standort, Mitarbeitende d체rfen die Einstel
         provider: "shopware_storefront",
         baseUrl: "https://shop.lamprechter.com",
       },
+      documentRecipientEmployeeNumber: ADMIN,
     },
   });
   assert.equal(configured.response.status, 200, JSON.stringify(configured.payload));
   assert.equal(configured.payload.location.enabled, true);
   assert.equal(configured.payload.location.articleLookup.baseUrl, "https://shop.lamprechter.com");
+  assert.equal(configured.payload.location.documentRecipient.employeeNumber, ADMIN);
 
   const status = await request("/api/portal/v1/loans/status");
   assert.equal(status.response.status, 200, JSON.stringify(status.payload));
@@ -364,6 +386,12 @@ test("v0.85 Ausgabe, Live-Gegenpr체fung und best채tigte R체cknahme bilden einen 
   assert.equal(issued.payload.loan.status, "issued");
   assert.equal(issued.payload.loan.revision, 1);
   assert.equal(issued.payload.loan.items[0].quantity, 1);
+  assert.equal(issued.payload.loan.documents.length, 1);
+  assert.equal(issued.payload.loan.documents[0].type, "issue");
+  const issuePdf = await requestBinary(issued.payload.loan.documents[0].downloadUrl);
+  assert.equal(issuePdf.response.status, 200);
+  assert.equal(issuePdf.buffer.subarray(0, 4).toString("ascii"), "%PDF");
+  assert.equal(issuePdf.response.headers.get("cache-control"), "private, no-store, max-age=0");
 
   const open = await request(`/api/portal/v1/loans?scope=mine&status=open&locationId=${locationId}`);
   assert.equal(open.response.status, 200, JSON.stringify(open.payload));
@@ -437,11 +465,20 @@ test("v0.85 Ausgabe, Live-Gegenpr체fung und best채tigte R체cknahme bilden einen 
   assert.equal(returned.payload.loan.status, "returned");
   assert.equal(returned.payload.loan.revision, 2);
   assert.equal(returned.payload.loan.returnWitness.employeeNumber, WITNESS);
+  assert.deepEqual(returned.payload.loan.documents.map((document) => document.type), ["issue", "return"]);
   assert.deepEqual(returned.payload.loan.events.map((event) => event.type), [
     "issued",
+    "document_created",
     "return_confirmation_requested",
     "returned",
+    "document_created",
   ]);
+  const returnDocument = returned.payload.loan.documents.find((document) => document.type === "return");
+  const returnPdf = await requestBinary(returnDocument.downloadUrl, { session: witnessSession });
+  assert.equal(returnPdf.response.status, 200);
+  assert.equal(returnPdf.buffer.subarray(0, 4).toString("ascii"), "%PDF");
+  const deniedPdf = await requestBinary(returnDocument.downloadUrl, { session: otherSession });
+  assert.equal(deniedPdf.response.status, 403);
 
   const stale = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
     method: "POST",

@@ -44,6 +44,8 @@ v0.85 integriert die Leihe in das Mitarbeiterportal. Bis zu fünf Artikel könne
 
 Die Artikelauflösung erfolgt serverseitig über einen je Standort konfigurierbaren HTTPS-Shop. Eine gefundene Artikelbezeichnung wird im zentralen Artikelstamm zwischengespeichert; bei einer nicht erreichbaren oder erfolglosen Suche bleibt eine kontrollierte manuelle Eingabe möglich. Leihvorgänge verwenden unveränderliche Bezeichnungsschnappschüsse und eine append-only Ereignishistorie. Bei der Rücknahme muss ein zweites, aktuell im Mitarbeiterportal angemeldetes Teammitglied die erfassten Artikel und Zustände in einem sofort eingeblendeten Dialog bestätigen. Bis dahin bleibt die Leihe offen; Ablehnung, Ablauf und konkurrierende Änderungen werden nachvollziehbar behandelt.
 
+Für jede Ausgabe und jede bestätigte Rücknahme entsteht automatisch ein gebrandeter PDF-Beleg. Die Belege werden verschlüsselt gespeichert, mit SHA-256 gegen unbemerkte Veränderungen geprüft und in den Sicherungsreferenzen berücksichtigt. Beteiligte sowie ausdrücklich berechtigte Standortrollen können sie geschützt im Mitarbeiterportal abrufen; interne Benachrichtigungen informieren über neu verfügbare Dokumente.
+
 ## System-Center und Recovery Assurance in v0.78 Beta
 
 Das System-Center fasst Server, SQLite, Sicherungen, Wiederherstellung, TLS, Benachrichtigungen, Speicher und Updates in acht nachvollziehbaren Nachweiskarten zusammen. Ein serverseitig berechneter technischer Vertrauensindex zeigt Punktestand und Evidenzabdeckung transparent an. Fehlende oder veraltete Belege bleiben ausdrücklich unbekannt; kritische Befunde und unvollständige Nachweise deckeln den Index. Der Wert ist keine Verfügbarkeitsgarantie.
