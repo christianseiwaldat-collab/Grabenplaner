@@ -63,6 +63,17 @@ const PROTECTED_ROW_TABLES = Object.freeze([
   "time_record_statements",
   "retention_preview_runs",
 ]);
+const PROTECTED_DELETE_TRIGGERS = Object.freeze({
+  trg_payroll_handoff_events_immutable_delete: "payroll_handoff_events",
+  trg_payroll_handoffs_immutable_delete: "payroll_handoffs",
+  trg_privacy_request_events_immutable_delete: "privacy_request_events",
+  trg_retention_preview_runs_immutable_delete: "retention_preview_runs",
+  trg_time_record_statement_events_immutable_delete: "time_record_statement_events",
+  trg_time_record_statements_immutable_delete: "time_record_statements",
+  trg_vacation_account_events_immutable_delete: "vacation_account_events",
+  trg_vacation_account_revisions_immutable_delete: "vacation_account_revisions",
+  trg_vacation_history_events_immutable_delete: "vacation_history_events",
+});
 const REASONS = new Set([
   "CHILD_EXITED",
   "HEALTH_INVALID",
@@ -204,9 +215,28 @@ function sanitizeSmokeDatabase(databaseFile = DATABASE) {
     for (const column of observedProtectedColumns) {
       if (!PROTECTED_COLUMNS.has(column)) throw new Error("SMOKE_PRECONDITION_FAILED");
     }
+    const protectedTableSet = new Set(PROTECTED_ROW_TABLES);
+    const deleteTriggers = database.prepare(`
+      SELECT name, tbl_name, sql FROM sqlite_master
+      WHERE type = 'trigger'
+      ORDER BY name
+    `).all().filter((row) => {
+      const table = String(row.tbl_name || "");
+      const sql = String(row.sql || "");
+      return protectedTableSet.has(table) && /\bBEFORE\s+DELETE\s+ON\b/i.test(sql);
+    }).map((row) => {
+      const name = String(row.name || "");
+      const table = String(row.tbl_name || "");
+      const sql = String(row.sql || "");
+      if (PROTECTED_DELETE_TRIGGERS[name] !== table || !sql.trim()) {
+        throw new Error("SMOKE_PRECONDITION_FAILED");
+      }
+      return { name, sql };
+    });
 
     database.exec("PRAGMA secure_delete=ON; PRAGMA journal_mode=DELETE; PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE");
     transactionOpen = true;
+    for (const trigger of deleteTriggers) database.exec(`DROP TRIGGER ${quoteIdentifier(trigger.name)}`);
     for (const table of PROTECTED_ROW_TABLES) {
       if (tableSet.has(table)) database.exec(`DELETE FROM ${quoteIdentifier(table)}`);
     }
@@ -218,6 +248,7 @@ function sanitizeSmokeDatabase(databaseFile = DATABASE) {
       database.exec(`UPDATE integration_connections SET ${assignments.join(", ")}`);
     }
     if (tableSet.has("portal_notifications")) database.exec("DELETE FROM portal_notifications");
+    for (const trigger of deleteTriggers) database.exec(trigger.sql);
     database.exec("COMMIT");
     transactionOpen = false;
     database.exec("VACUUM");
