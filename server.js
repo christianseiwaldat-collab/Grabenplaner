@@ -277,8 +277,8 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "integrations:connections:write", label: "Direkte Verbindungen konfigurieren", description: "SQL-Quellen und HTTPS-Ziele ohne Offenlegung gespeicherter Zugangsdaten verwalten.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "integrations:credentials:write", label: "Zugangsdaten direkter Verbindungen ersetzen", description: "Geschützte Zugangsdaten neu setzen; gespeicherte Werte bleiben grundsätzlich unsichtbar.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "employees:import", label: "Personalstammdaten importieren", description: "CSV-/Excel-Import mit Vorschau; sensible Personalaktfelder sind ausgeschlossen.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
-  { id: "payroll:export", label: "Lohnverrechnungsdaten exportieren", description: "Zeit-, Abwesenheits- und Zuschlagsdaten als CSV oder Excel ausgeben.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
-  { id: "payroll:deliver", label: "Lohnverrechnungsdaten sicher übertragen", description: "Ausschließlich final geprüfte und minimierte Daten an ein vorkonfiguriertes HTTPS-Ziel übergeben.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
+  { id: "payroll:export", label: "Lohnverrechnungsdaten exportieren", description: "Zeit-, Abwesenheits- und Zuschlagsdaten ausgeben sowie belegbare Monatsübergaben erstellen.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
+  { id: "payroll:deliver", label: "Lohnverrechnungsdaten sicher übertragen", description: "Final geprüfte Daten kontrolliert übergeben und externe Übertragungsprotokolle dokumentieren.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "work_rules:read", label: "Arbeitszeit-Regelprüfungen lesen", description: "Quellenbelegte Hinweise zur Dienstplanung lesen; keine pauschale Rechtsfreigabe.", group: "Arbeitszeitregeln", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "work_rules:manage", label: "Arbeitszeit-Regelprofile verwalten", description: "Versionierte Profile und deren Geltungsbereich verwalten.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "work_rules:exception", label: "Begründete Regelausnahmen dokumentieren", description: "Ausschließlich ausdrücklich übersteuerbare Hinweise mit Grund und Nachweis behandeln.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -2161,6 +2161,37 @@ function createSchema() {
       FOREIGN KEY (profile_id) REFERENCES integration_profiles(id) ON DELETE SET NULL
     );
 
+    CREATE TABLE IF NOT EXISTS payroll_handoffs (
+      id TEXT PRIMARY KEY,
+      period_month TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      department_id TEXT NOT NULL DEFAULT '',
+      revision INTEGER NOT NULL,
+      payload_json TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      supersedes_id TEXT,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(period_month, location_id, department_id, revision),
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (supersedes_id) REFERENCES payroll_handoffs(id)
+        ON UPDATE RESTRICT ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS payroll_handoff_events (
+      id TEXT PRIMARY KEY,
+      handoff_id TEXT NOT NULL,
+      event_type TEXT NOT NULL
+        CHECK(event_type IN ('created','exported','external_transfer_marked','protocol_recorded','superseded')),
+      payload_json TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      actor_employee_number TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      FOREIGN KEY (handoff_id) REFERENCES payroll_handoffs(id)
+        ON UPDATE RESTRICT ON DELETE RESTRICT
+    );
+
     CREATE TABLE IF NOT EXISTS custom_processes (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -2588,6 +2619,10 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_integration_connections_kind ON integration_connections(kind, active, name);
     CREATE INDEX IF NOT EXISTS idx_integration_deliveries_started ON integration_deliveries(started_at DESC, status);
     CREATE INDEX IF NOT EXISTS idx_integration_deliveries_connection ON integration_deliveries(connection_id, started_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_payroll_handoffs_period
+      ON payroll_handoffs(period_month DESC, location_id, department_id, revision DESC);
+    CREATE INDEX IF NOT EXISTS idx_payroll_handoff_events
+      ON payroll_handoff_events(handoff_id, occurred_at, id);
     CREATE INDEX IF NOT EXISTS idx_custom_processes_status ON custom_processes(status, updated_at, title);
     CREATE INDEX IF NOT EXISTS idx_custom_processes_scope ON custom_processes(scope_type, location_id, department_id, status);
     CREATE INDEX IF NOT EXISTS idx_custom_process_steps_process ON custom_process_steps(process_id, sort_order);
@@ -2691,6 +2726,30 @@ function createSchema() {
     BEFORE DELETE ON time_record_statement_events
     BEGIN
       SELECT RAISE(ABORT, 'time record statement events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_payroll_handoffs_immutable_update
+    BEFORE UPDATE ON payroll_handoffs
+    BEGIN
+      SELECT RAISE(ABORT, 'payroll handoffs are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_payroll_handoffs_immutable_delete
+    BEFORE DELETE ON payroll_handoffs
+    BEGIN
+      SELECT RAISE(ABORT, 'payroll handoffs are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_payroll_handoff_events_immutable_update
+    BEFORE UPDATE ON payroll_handoff_events
+    BEGIN
+      SELECT RAISE(ABORT, 'payroll handoff events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_payroll_handoff_events_immutable_delete
+    BEFORE DELETE ON payroll_handoff_events
+    BEGIN
+      SELECT RAISE(ABORT, 'payroll handoff events are immutable');
     END;
 
     CREATE TRIGGER IF NOT EXISTS trg_retention_policy_versions_immutable_update
@@ -2866,12 +2925,15 @@ const shiftLocationMigrationId = "v0.71-shift-locations";
 const workRuleMigrationId = "v0.81-austrian-work-rule-engine";
 const privacyGovernanceMigrationId = "v0.82-leave-records-privacy";
 const vacationHistoryProtectionMigrationId = "v0.82-protected-vacation-history";
+const payrollHandoffMigrationId = "v0.83-payroll-handoffs";
 const privacyGovernanceTables = [
   "vacation_account_revisions",
   "vacation_account_events",
   "vacation_history_events",
   "time_record_statements",
   "time_record_statement_events",
+  "payroll_handoffs",
+  "payroll_handoff_events",
   "retention_policy_versions",
   "retention_preview_runs",
   "legal_holds",
@@ -2890,6 +2952,10 @@ const privacyGovernanceImmutableTriggers = [
   "trg_time_record_statements_immutable_delete",
   "trg_time_record_statement_events_immutable_update",
   "trg_time_record_statement_events_immutable_delete",
+  "trg_payroll_handoffs_immutable_update",
+  "trg_payroll_handoffs_immutable_delete",
+  "trg_payroll_handoff_events_immutable_update",
+  "trg_payroll_handoff_events_immutable_delete",
   "trg_retention_policy_versions_immutable_update",
   "trg_retention_policy_versions_immutable_delete",
   "trg_retention_preview_runs_immutable_update",
@@ -2903,6 +2969,8 @@ const privacyGovernanceImmutableTriggerMessages = Object.freeze({
   vacation_history_events: "vacation history events are immutable",
   time_record_statements: "time record statements are immutable",
   time_record_statement_events: "time record statement events are immutable",
+  payroll_handoffs: "payroll handoffs are immutable",
+  payroll_handoff_events: "payroll handoff events are immutable",
   retention_policy_versions: "retention policy versions are immutable",
   retention_preview_runs: "retention preview runs are immutable",
   privacy_request_events: "privacy request events are immutable",
@@ -2983,10 +3051,14 @@ const vacationHistoryProtectionMigrationRequired = tableExists("vacation_history
     LIMIT 1
   `).get())
 );
+const payrollHandoffMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(payrollHandoffMigrationId)
+  || !tableExists("payroll_handoffs")
+  || !tableExists("payroll_handoff_events");
 if (databaseExistedBeforeOpen && (portalMobileBaselineMigrationRequired || protectedPersonnelMigrationRequired
   || unreleasedSicknessDraftSchemaPresent || legacySchemaMigrationRequired || costCenterMigrationRequired
   || shiftLocationMigrationRequired || workRuleMigrationRequired || privacyGovernanceMigrationRequired
-  || vacationHistoryProtectionMigrationRequired)) {
+  || vacationHistoryProtectionMigrationRequired || payrollHandoffMigrationRequired)) {
   createInternalDatabaseBackup("pre-migration");
 }
 
@@ -3592,7 +3664,29 @@ function verifyProtectedGovernanceRecords() {
     verified += 1;
   }
 
+  for (const row of db.prepare(`
+    SELECT id, payload_json FROM payroll_handoffs
+    ORDER BY period_month, location_id, department_id, revision
+  `).all()) {
+    requireProtectedPayload(
+      row.payload_json,
+      "PAYROLL_HANDOFF_INTEGRITY_FAILED",
+      "Eine Monatsübergabe",
+    );
+  }
+  for (const row of db.prepare(`
+    SELECT id, payload_json FROM payroll_handoff_events
+    ORDER BY handoff_id, occurred_at, id
+  `).all()) {
+    requireProtectedPayload(
+      row.payload_json,
+      "PAYROLL_HANDOFF_EVENT_INTEGRITY_FAILED",
+      "Ein Monatsübergabe-Ereignis",
+    );
+  }
+
   verified += store.verifyAuxiliaryEventIntegrity();
+  verified += store.verifyPayrollHandoffIntegrity();
 
   for (const row of db.prepare(`
     SELECT id, result_json, result_sha256
@@ -4088,6 +4182,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run(workRuleMigrationId, packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run(privacyGovernanceMigrationId, packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run(payrollHandoffMigrationId, packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -5868,6 +5964,18 @@ function enforceAdminApiAccess(request, _response, next) {
     const usbProvisioningRoute = /^\/usb-provisioning(?:\/|$)/.test(request.path);
     let permission = usbProvisioningRoute ? "usb:provision" : "schedule:read";
     const integrationRoute = /^\/integrations(?:\/|$)/.test(request.path);
+    if (integrationRoute
+      && /^\/integrations\/payroll-handoffs\/?$/.test(request.path)
+      && ["GET", "HEAD", "OPTIONS"].includes(method)) {
+      const session = requirePortalAnyPermissionOrLocal(
+        request,
+        ["integrations:read", "payroll:export", "payroll:deliver"],
+        { csrf: true },
+      );
+      assertSessionContextScope(session, { ...request.query, ...request.body });
+      request.portalSession = session;
+      return next();
+    }
     const workRuleRoute = /^\/work-rules(?:\/|$)/.test(request.path);
     const privacyGovernanceRoute = /^\/privacy-governance(?:\/|$)/.test(request.path);
     const vacationAccountsRoute = /^\/vacation-accounts(?:\/|$)/.test(request.path);
@@ -5912,6 +6020,11 @@ function enforceAdminApiAccess(request, _response, next) {
       else if (/^\/integrations\/connections\/[^/]+\/sql\/inspect\/?$/.test(request.path)) permission = "employees:import";
       else if (/^\/integrations\/connections(?:\/|$)/.test(request.path)) {
         permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "integrations:connections:read" : "integrations:connections:write";
+      } else if (/^\/integrations\/payroll-handoffs\/preflight\/?$/.test(request.path)) permission = "payroll:export";
+      else if (/^\/integrations\/payroll-handoffs\/[^/]+\/events\/?$/.test(request.path)) permission = "payroll:deliver";
+      else if (/^\/integrations\/payroll-handoffs\/[^/]+\/file\/?$/.test(request.path)) permission = "payroll:export";
+      else if (/^\/integrations\/payroll-handoffs\/?$/.test(request.path)) {
+        permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "integrations:read" : "payroll:export";
       } else if (/^\/integrations\/payroll-export\/deliver\/?$/.test(request.path)) permission = "payroll:deliver";
       else if (/^\/integrations\/payroll-export\/deliveries\/?$/.test(request.path)) permission = "integrations:read";
       else if (/^\/integrations\/payroll-export(?:\/|$)/.test(request.path)) permission = "payroll:export";
@@ -6161,7 +6274,7 @@ function installationFeaturesForApiPath(apiPath) {
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:amu|sickness)|portal\/v1\/(?:amu|sickness)|amu(?:-|\/|$)|sickness(?:-|\/|$))/.test(requestPath)) required.add("sicknessAmu");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence)|time(?:-|\/|$)|mobile\/v1\/(?:time|me\/time-entries))/.test(requestPath)) required.add("timeTracking");
   if (/^\/(?:portal\/v1\/me(?:\/|$)|mobile\/v1\/(?:bootstrap|me(?:\/|$))|portal\/v1\/(?:greeting-settings|mobile-layout|leadership\/overview))/.test(requestPath)) required.add("employeePortal");
-  if (/^\/integrations\/(?:personnel-import|payroll-export|profiles|runs|connections|contracts)(?:\/|$)/.test(requestPath)) required.add("integrations");
+  if (/^\/integrations\/(?:personnel-import|payroll-export|payroll-handoffs|profiles|runs|connections|contracts)(?:\/|$)/.test(requestPath)) required.add("integrations");
   return [...required];
 }
 
@@ -17210,6 +17323,217 @@ function minimizedPayrollApiPayload(preflight, deliveryId, generatedAt) {
     dataSha256,
   };
 }
+
+function payrollHandoffPreflight(actor, body = {}) {
+  const month = String(body.month || "");
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    throw httpError(400, "Bitte einen gültigen Abrechnungsmonat auswählen.", "PAYROLL_HANDOFF_MONTH_INVALID");
+  }
+  const context = resolvePlanningContext({
+    locationId: body.locationId,
+    departmentId: body.departmentId || "",
+  });
+  assertSessionContextScope(actor, context);
+  const allStatements = requireGovernanceStore().listTimeStatements({ month, includeArchived: false });
+  const statementByEmployee = new Map(allStatements.map((statement) => [String(statement.employeeNumber), statement]));
+  const employees = db.prepare(`
+    SELECT personnel_number, active
+    FROM employees
+    WHERE home_location_id = ?
+      AND (? = '' OR preferred_department_id = ?)
+    ORDER BY CAST(personnel_number AS INTEGER), personnel_number
+  `).all(context.locationId, String(context.departmentId || ""), context.departmentId || "");
+  const relevant = employees.filter((employee) => employee.active || statementByEmployee.has(String(employee.personnel_number)));
+  const blockers = [];
+  const statements = [];
+  for (const employee of relevant) {
+    const statement = statementByEmployee.get(String(employee.personnel_number));
+    if (!statement) {
+      blockers.push({
+        code: "MONTHLY_STATEMENT_MISSING",
+        employeeNumber: String(employee.personnel_number),
+        message: "Für dieses Teammitglied fehlt der aktuelle Monatsnachweis.",
+      });
+      continue;
+    }
+    if (statement.status !== "finalized" || statement.archived) {
+      blockers.push({
+        code: "MONTHLY_STATEMENT_NOT_FINALIZED",
+        employeeNumber: String(employee.personnel_number),
+        statementId: statement.id,
+        status: statement.status,
+        message: "Der aktuelle Monatsnachweis ist noch nicht finalisiert.",
+      });
+      continue;
+    }
+    statements.push({
+      employeeId: String(employee.personnel_number),
+      statementId: statement.id,
+      statementRevision: Number(statement.revision),
+      statementReceiptSha256: statement.receiptSha256,
+      actualMinutes: Number(statement.actualMinutes || 0),
+      breakMinutes: Number(statement.breakMinutes || 0),
+      status: "finalized",
+    });
+  }
+  const fingerprint = sha256(JSON.stringify({
+    month,
+    context,
+    statements: statements.map((statement) => ({
+      employeeId: statement.employeeId,
+      statementId: statement.statementId,
+      receipt: statement.statementReceiptSha256,
+    })),
+    blockers: blockers.map(({ code, employeeNumber, statementId = "" }) => ({ code, employeeNumber, statementId })),
+  }));
+  return {
+    month,
+    context,
+    employeeCount: relevant.length,
+    finalizedCount: statements.length,
+    blockers,
+    statements,
+    fingerprint,
+    notice: "Die Übergabe enthält ausschließlich finalisierte tatsächliche Zeitnachweise. Sie berechnet weder Entgelt noch Sozialversicherungsbeiträge und ersetzt keine mBGM-Übermittlung.",
+  };
+}
+
+function publicPayrollHandoffPreflight(preflight) {
+  return {
+    month: preflight.month,
+    context: preflight.context,
+    employeeCount: preflight.employeeCount,
+    finalizedCount: preflight.finalizedCount,
+    blockers: preflight.blockers.slice(0, 200),
+    fingerprint: preflight.fingerprint,
+    notice: preflight.notice,
+  };
+}
+
+function payrollHandoffForActor(actor, id) {
+  const value = requireGovernanceStore().payrollHandoffRow(id);
+  if (!value) throw httpError(404, "Die Monatsübergabe wurde nicht gefunden.", "PAYROLL_HANDOFF_NOT_FOUND");
+  assertSessionContextScope(actor, {
+    locationId: value.handoff.scope.locationId,
+    departmentId: value.handoff.scope.departmentId || "",
+  });
+  return value;
+}
+
+app.post("/api/integrations/payroll-handoffs/preflight", (request, response) => {
+  const actor = integrationActor(request, "payroll:export");
+  response.json(publicPayrollHandoffPreflight(payrollHandoffPreflight(actor, request.body || {})));
+});
+
+app.get("/api/integrations/payroll-handoffs", (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(
+    request,
+    ["integrations:read", "payroll:export", "payroll:deliver"],
+    { csrf: true },
+  );
+  const accessibleLocations = new Set(getLocationsForSession(actor, true).map((location) => String(location.id)));
+  const month = String(request.query.month || "");
+  const locationId = String(request.query.locationId || "");
+  if (locationId && !accessibleLocations.has(locationId)) {
+    throw httpError(403, "Auf diesen Standort besteht kein Zugriff.", "PORTAL_SCOPE_FORBIDDEN");
+  }
+  const handoffs = requireGovernanceStore().listPayrollHandoffs({
+    month,
+    locationId,
+    includeSuperseded: String(request.query.includeSuperseded || "") === "1",
+  }).filter((handoff) => accessibleLocations.has(String(handoff.locationId)));
+  response.json({
+    handoffs,
+    completionRule: "Ohne erfasstes externes Protokoll bleibt die Übergabe offen.",
+    directEldaTransmission: false,
+  });
+});
+
+app.post("/api/integrations/payroll-handoffs", (request, response) => {
+  const actor = integrationActor(request, "payroll:export");
+  const preflight = payrollHandoffPreflight(actor, request.body || {});
+  if (!request.body.fingerprint || request.body.fingerprint !== preflight.fingerprint) {
+    throw httpError(409, "Die Monatsnachweise haben sich seit der Vorprüfung geändert. Bitte erneut prüfen.", "PAYROLL_HANDOFF_PREFLIGHT_STALE");
+  }
+  if (preflight.blockers.length) {
+    const error = httpError(
+      422,
+      "Die Monatsübergabe kann erst nach Finalisierung aller Monatsnachweise erstellt werden.",
+      "PAYROLL_HANDOFF_BLOCKED",
+    );
+    error.details = { blockers: preflight.blockers.slice(0, 200) };
+    throw error;
+  }
+  if (!preflight.statements.length) {
+    throw httpError(422, "Für diesen Umfang sind keine finalisierten Monatsnachweise vorhanden.", "PAYROLL_HANDOFF_EMPTY");
+  }
+  const value = requireGovernanceStore().createPayrollHandoffRecord({
+    month: preflight.month,
+    scope: {
+      locationId: preflight.context.locationId,
+      departmentId: preflight.context.departmentId || "",
+    },
+    statements: preflight.statements,
+    actor: actor.employeeNumber,
+  });
+  const summary = requireGovernanceStore().payrollHandoffSummary(value);
+  auditPortal(actor.employeeNumber, value.reused ? "integration.payroll.handoff.reused" : "integration.payroll.handoff.created",
+    "payroll_handoff", summary.id, JSON.stringify({
+      month: summary.month,
+      locationId: summary.locationId,
+      departmentId: summary.departmentId,
+      revision: summary.revision,
+      statementCount: summary.statementCount,
+      receiptSha256: summary.receiptSha256,
+    }));
+  response.status(value.reused ? 200 : 201).json({ handoff: summary, reused: Boolean(value.reused) });
+});
+
+app.get("/api/integrations/payroll-handoffs/:id/file", (request, response) => {
+  const actor = integrationActor(request, "payroll:export");
+  let value = payrollHandoffForActor(actor, request.params.id);
+  value = requireGovernanceStore().appendPayrollHandoffEvent(value.row.id, { eventType: "exported" }, actor.employeeNumber);
+  auditPortal(actor.employeeNumber, "integration.payroll.handoff.exported", "payroll_handoff", value.row.id,
+    JSON.stringify({ receiptSha256: value.handoff.receiptSha256 }));
+  const document = {
+    contract: CONTRACT_IDS.payrollPeriodHandoff,
+    handoff: value.handoff,
+    externalTransmission: {
+      required: true,
+      directEldaTransmissionByGrabenplaner: false,
+      completionRequiresExternalProtocol: true,
+    },
+  };
+  const fileName = `grabenplaner-monatsuebergabe-${value.handoff.month}-${value.handoff.scope.locationId}-r${value.handoff.revision}.json`;
+  response.setHeader("Content-Type", "application/json; charset=utf-8");
+  response.setHeader("Cache-Control", "private, no-store");
+  response.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+  response.send(`${JSON.stringify(document, null, 2)}\n`);
+});
+
+app.post("/api/integrations/payroll-handoffs/:id/events", (request, response) => {
+  const actor = integrationActor(request, "payroll:deliver");
+  const current = payrollHandoffForActor(actor, request.params.id);
+  const action = String(request.body?.action || "");
+  let eventType;
+  if (action === "mark_external_transfer") eventType = "external_transfer_marked";
+  else if (action === "record_protocol") eventType = "protocol_recorded";
+  else throw httpError(400, "Die gewünschte Übergabeaktion ist nicht unterstützt.", "PAYROLL_HANDOFF_ACTION_INVALID");
+  const value = requireGovernanceStore().appendPayrollHandoffEvent(current.row.id, {
+    eventType,
+    protocolResult: request.body?.protocolResult || "",
+    protocolNumber: request.body?.protocolNumber || "",
+    note: request.body?.note || "",
+  }, actor.employeeNumber);
+  const summary = requireGovernanceStore().payrollHandoffSummary(value);
+  auditPortal(actor.employeeNumber, `integration.payroll.handoff.${action}`, "payroll_handoff", summary.id,
+    JSON.stringify({
+      state: summary.state,
+      protocolResult: summary.protocolResult,
+      protocolNumber: summary.protocolNumber,
+    }));
+  response.json({ handoff: summary });
+});
 
 app.get("/api/integrations/contracts", (request, response) => {
   integrationActor(request, "integrations:read");

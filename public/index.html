@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.82 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.83 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -922,6 +922,22 @@
               <div class="integration-actions"><button class="secondary-button" id="payrollPreflightButton" type="button">Export prüfen</button><button class="secondary-button" id="payrollDeliverButton" type="button" disabled>Sicher übertragen</button><button class="primary-button" id="payrollDownloadButton" type="button" disabled>Datei erstellen</button></div>
               <div class="integration-preflight" id="payrollPreflightResult"><p class="settings-note">Vor dem Download werden Datenqualität und Freigabestatus geprüft.</p></div>
             </div>
+            <div class="settings-card full-span" id="payrollHandoffCard">
+              <div class="card-heading"><div class="card-icon">Monat</div><div><h2>Monatsübergaben &amp; externe Protokolle</h2><p>Finalisierte Ist-Zeitnachweise revisionssicher an Lohnverrechnung oder ELDA-Vorbereitung übergeben.</p></div></div>
+              <p class="settings-note security-note">Grabenplaner erzeugt hier einen belegbaren Zeitdaten-Übergabestand. Es werden weder Entgelt noch Sozialversicherungsbeiträge berechnet. Eine mBGM gilt erst nach externer ELDA-Übermittlung und geprüftem Protokoll als erstattet.</p>
+              <p class="settings-note">Eine ausgewählte Abteilung grenzt die betroffenen Teammitglieder ein. Die übergebenen Werte bleiben deren finalisierte persönliche Monats-Ist-Nachweise und werden nicht künstlich auf Abteilungen aufgeteilt.</p>
+              <div class="integration-export-grid">
+                <label class="field"><span>Abrechnungsmonat</span><input id="payrollHandoffMonth" type="month" /></label>
+                <label class="field"><span>Standort</span><select id="payrollHandoffLocation"></select></label>
+                <label class="field"><span>Abteilung</span><select id="payrollHandoffDepartment"><option value="">Gesamter Standort</option></select></label>
+              </div>
+              <div class="integration-actions">
+                <button class="secondary-button" id="payrollHandoffPreflightButton" type="button">Monatsnachweise prüfen</button>
+                <button class="primary-button" id="payrollHandoffCreateButton" type="button" disabled>Übergaberevision erstellen</button>
+              </div>
+              <div class="integration-preflight" id="payrollHandoffPreflightResult"><p class="settings-note">Zuerst werden Vollständigkeit und Finalisierung aller betroffenen Monatsnachweise geprüft.</p></div>
+              <div class="integration-handoff-list" id="payrollHandoffList"><p class="settings-note">Noch keine Monatsübergaben geladen.</p></div>
+            </div>
             <div class="settings-card" id="exportProfileCard">
               <div class="card-heading"><div class="card-icon">Mapping</div><div><h2>Exportprofile</h2><p>Spalten, Lohnarten-Aufbau und Dateiformat wiederverwenden.</p></div></div>
               <div class="integration-profile-list" id="exportProfileList"><p class="settings-note">Profile werden geladen.</p></div>
@@ -976,6 +992,18 @@
                 </section>
               </div>
             </div>
+            <dialog id="payrollHandoffProtocolModal" class="modal">
+              <form id="payrollHandoffProtocolForm" class="modal-card compact-modal">
+                <div class="modal-heading"><div><p class="eyebrow">EXTERNER NACHWEIS</p><h2>Übertragungsprotokoll erfassen</h2></div><button type="button" class="icon-button" data-close="payrollHandoffProtocolModal" aria-label="Schließen">×</button></div>
+                <input id="payrollHandoffProtocolId" type="hidden" />
+                <div class="calculation-note" id="payrollHandoffProtocolSummary"></div>
+                <label class="field"><span>Ergebnis laut Protokoll</span><select id="payrollHandoffProtocolResult" required><option value="accepted">Ohne W/N übernommen</option><option value="warning">W – Warnung, weitergeleitet</option><option value="not_accepted">N – Nichtübernahme, Korrektur nötig</option></select></label>
+                <label class="field"><span>Protokollnummer</span><input id="payrollHandoffProtocolNumber" maxlength="160" required autocomplete="off" /></label>
+                <label class="field"><span>Interne Notiz</span><textarea id="payrollHandoffProtocolNote" maxlength="1000" placeholder="Optional"></textarea></label>
+                <p class="settings-note" id="payrollHandoffProtocolMessage"></p>
+                <div class="modal-actions"><button type="button" class="secondary-button" data-close="payrollHandoffProtocolModal">Abbrechen</button><button class="primary-button" id="savePayrollHandoffProtocolButton" type="submit">Protokoll speichern</button></div>
+              </form>
+            </dialog>
           </section>
 
           <section id="dataProtectionSettings" class="settings-section settings-two-column">
@@ -1186,7 +1214,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.82 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.83 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

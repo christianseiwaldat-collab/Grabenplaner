@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.82 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
+  <strong>v0.83 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -55,6 +55,12 @@ v0.82 ergänzt versionierte, nachvollziehbare Governance-Bausteine für Urlaub, 
 Monatliche Arbeitszeitnachweise entstehen ausschließlich aus tatsächlichen Ist-Buchungen und deren revisionsfähigen Korrekturen. Dienstpläne bleiben Planzeit und werden nicht als geleistete Arbeitszeit ausgegeben. Unvollständige Nachweise lassen sich nicht sicher finalisieren.
 
 Aufbewahrungs- und Betroffenenrechts-Workflows arbeiten mit zweck- und kategorienbezogenen Prüfungen, Legal Holds, Fristen und nachvollziehbaren Entscheidungen. Eine Löschung wird niemals allein aufgrund eines Zeitablaufs automatisch durchgeführt. Diese technischen Funktionen unterstützen die verantwortliche Stelle, ersetzen aber weder die Prüfung des konkreten Arbeitsverhältnisses, des Kollektivvertrags und betrieblicher Regeln noch eine rechtliche Einzelfallbeurteilung. Details und offizielle Quellen stehen in [Urlaub, Arbeitszeit und Datenschutz](docs/URLAUB-ARBEITSZEIT-DATENSCHUTZ.md).
+
+## Belegbare Monatsübergaben in v0.83 Beta
+
+v0.83 bündelt ausschließlich finalisierte persönliche Monats-Ist-Nachweise zu einer unveränderlichen, verschlüsselten Übergaberevision für die externe Lohnverrechnung. Planzeiten, Namen, Bankdaten, SV-Nummern, Adressen, AUM- und Personalakt-Inhalte bleiben ausgeschlossen. Jede Revision besitzt einen SHA-256-Beleg; neue Werte ersetzen bestehende Übergaben nicht, sondern erzeugen eine nachvollziehbare Nachfolgerevision.
+
+Der Status bleibt nach dem Datei-Export ausdrücklich offen. Erst die dokumentierte externe Weitergabe und ein zugeordnetes Übertragungsprotokoll führen zu „übernommen“, „mit Warnung weitergeleitet“ oder „Korrektur erforderlich“. Grabenplaner berechnet dabei weder Entgelt noch Sozialversicherungsbeiträge und übermittelt nicht selbst an ELDA. Details, Grenzen und aktuelle amtliche Quellen stehen in [Monatsübergabe und externer ELDA-Nachweis](docs/LOHNUEBERGABE-UND-ELDA-NACHWEIS.md).
 
 ## Arbeitszeit-Regelprüfung in v0.81 Beta
 
@@ -119,6 +125,7 @@ Technische Details, Grenzen und der amtliche Quellenkatalog stehen in [Arbeitsze
 - Versionierte österreichische Planarbeitszeit-Regelprüfung mit Monitorbetrieb, Quellenbelegen und nachvollziehbaren Prüfreceipts
 - Versionierte Urlaubs-Governance mit getrenntem EU-Mindest- und nationalem Mehrurlaub, konservativen Vorschauen und manueller Verjährungsprüfung
 - Revisionsfähige Monatsnachweise ausschließlich aus tatsächlichen Ist-Buchungen sowie dokumentierte Aufbewahrungs- und Betroffenenrechts-Workflows
+- Verschlüsselte, unveränderliche Monatsübergaben finalisierter Ist-Nachweise mit SHA-256-Beleg, Revisionen und dokumentiertem externem Übertragungsprotokoll
 - Mitarbeiterportal mit Urlaubs- und ZA-Anträgen, gemeinsamem Krankmeldungs-/AUM-Ablauf, lokaler Dokumenterkennung und Zeiterfassung
 - Persönliche Portal-Einstellungen für Passwort und freiwillige WLAN-Zeitvorschläge
 - Datenschutzneutrale, konfigurierbare Begrüßungen für Arbeitstag, Urlaubsrückkehr und Genesung
@@ -153,7 +160,7 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 ## Schnellstart unter Windows
 
 1. Die portable ZIP-Datei unter [Grabenplaner Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.82 Beta starten.cmd` doppelt anklicken.
+2. `Grabenplaner v0.83 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.

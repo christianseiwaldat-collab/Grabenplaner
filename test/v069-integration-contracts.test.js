@@ -80,7 +80,11 @@ test.after(async () => {
 
 test("v0.69: Verträge sind versioniert, stabil gehasht und auf notwendige Daten begrenzt", () => {
   const summaries = contractSummaries();
-  assert.deepEqual(summaries.map((entry) => entry.id), [CONTRACT_IDS.personnelSqlView, CONTRACT_IDS.payrollHttpsJson]);
+  assert.deepEqual(summaries.map((entry) => entry.id), [
+    CONTRACT_IDS.personnelSqlView,
+    CONTRACT_IDS.payrollHttpsJson,
+    CONTRACT_IDS.payrollPeriodHandoff,
+  ]);
   for (const summary of summaries) {
     const contract = contractById(summary.id);
     assert.equal(summary.sha256, contractSha256(contract));
@@ -152,7 +156,7 @@ test("v0.69: Vertrags-API ist geschützt und liefert prüfbare JSON-Dokumente", 
   const itAdmin = session("101", "it_admin");
   const list = await request("/api/integrations/contracts", { auth: itAdmin });
   assert.equal(list.response.status, 200);
-  assert.equal(list.payload.contracts.length, 2);
+  assert.equal(list.payload.contracts.length, 3);
   assert.ok(list.payload.contracts.every((contract) => contract.documentUrl.endsWith("?download=1")));
 
   const downloaded = await request(`/api/integrations/contracts/${encodeURIComponent(CONTRACT_IDS.payrollHttpsJson)}?download=1`, { auth: itAdmin });

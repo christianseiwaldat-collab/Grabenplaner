@@ -266,6 +266,26 @@ function verifyProtectedRecords(database, storage) {
     }, { allowLegacy: false });
     verified += 1;
   }
+  for (const row of rowsIf(database, "payroll_handoffs", ["id", "payload_json"],
+    "SELECT id, payload_json FROM payroll_handoffs ORDER BY id")) {
+    protectedJson(storage, row.payload_json, {
+      namespace: "payroll-handoff",
+      recordId: String(row.id),
+      field: "payload",
+      employeeNumber: "system",
+    }, { allowLegacy: false });
+    verified += 1;
+  }
+  for (const row of rowsIf(database, "payroll_handoff_events", ["id", "payload_json"],
+    "SELECT id, payload_json FROM payroll_handoff_events ORDER BY id")) {
+    protectedJson(storage, row.payload_json, {
+      namespace: "payroll-handoff-event",
+      recordId: String(row.id),
+      field: "payload",
+      employeeNumber: "system",
+    }, { allowLegacy: false });
+    verified += 1;
+  }
   for (const row of rowsIf(database, "retention_preview_runs", ["id", "result_json"],
     "SELECT id, result_json FROM retention_preview_runs ORDER BY id")) {
     protectedJson(storage, row.result_json, {
