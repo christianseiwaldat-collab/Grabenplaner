@@ -10,6 +10,9 @@
 - Das responsive Mitarbeiterportal unterstützt Ausgabe, offene Leihen und die Rücknahme mit verpflichtender Live-Gegenprüfung durch ein zweites, gleichzeitig angemeldetes Teammitglied.
 - Ausgabebeleg und Rücknahmebeleg werden automatisch mit dem Standort-Branding erzeugt, verschlüsselt abgelegt, per SHA-256 geprüft und als unveränderliche Dokumentrevision geführt.
 - Beteiligte und ausdrücklich berechtigte Standortrollen erhalten den Beleg geschützt über die Grabenplaner-Plattform. Ein je Standort konfigurierbarer Hauptempfänger kann zusätzlich benachrichtigt werden.
+- Ausgabe- und Rücknahmefotos werden serverseitig aus JPG, PNG, WEBP, TIFF oder HEIF neu als verkleinertes JPEG erzeugt, von Metadaten bereinigt, verschlüsselt gespeichert und nur über geschützte, nicht zwischengespeicherte Routen ausgeliefert.
+- Die neue Leihverwaltung bündelt offene, bald fällige, überfällige und abgeschlossene Vorgänge samt Fotodokumentation, Belegrevisionen und Zustellstatus für berechtigte Leitungen.
+- Optional lassen sich PDF-Belege je Standort zusätzlich über einen ausdrücklich konfigurierten SMTP-Empfänger versenden. Zustellversuche bleiben append-only nachvollziehbar und können nach einem Fehler kontrolliert wiederholt werden.
 
 ## v0.84 Beta · Pilot- und Abnahmenachweise
 

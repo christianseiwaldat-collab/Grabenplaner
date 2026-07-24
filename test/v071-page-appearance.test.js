@@ -106,8 +106,9 @@ test("v0.71: Jede Hauptseite bietet eine eigene gespeicherte Darstellung", () =>
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const script = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
   const styles = fs.readFileSync(path.join(__dirname, "..", "public", "styles.css"), "utf8");
-  assert.equal((html.match(/class="page-theme-switch/g) || []).length, 8);
+  assert.equal((html.match(/class="page-theme-switch/g) || []).length, 9);
   assert.match(script, /personnelAdministration:\s*"light"/);
+  assert.match(script, /loans:\s*"light"/);
   assert.match(html, /id="dashboardFontSize"/);
   assert.match(script, /loadUiPreferences/);
   assert.match(script, /formatAmuPeriod/);
