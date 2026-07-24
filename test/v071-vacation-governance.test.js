@@ -185,6 +185,11 @@ test("v0.71 Block 7: direkte Urlaubsanlage kann Mindestbesetzung nicht umgehen u
   assert.equal(allowed.response.status, 201, allowed.text);
   assert.equal(allowed.payload.assessment.trafficLight, "yellow");
   assert.equal(allowed.payload.assessment.manualReview, true);
+  const history = db.prepare(`
+    SELECT snapshot_json FROM vacation_history_events
+    WHERE group_id = ? AND action = 'created'
+  `).get(allowed.payload.groupId);
+  assert.match(history.snapshot_json, /^enc:v2:/);
 });
 
 test("v0.71 Block 7: Antragssperre gilt auch für Direktanlage und fehlgeschlagene Freigabe rollt zurück", async () => {

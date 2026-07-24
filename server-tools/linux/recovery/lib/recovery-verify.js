@@ -213,6 +213,69 @@ function verifyProtectedRecords(database, storage) {
     protectedJson(storage, row.protected_payload, { namespace: "outbound-notification-job", recordId: String(row.id), field: "payload", employeeNumber: String(row.recipient_lookup) });
     verified += 1;
   }
+  for (const row of rowsIf(database, "privacy_requests", ["id", "employee_number", "protected_payload"],
+    "SELECT id, employee_number, protected_payload FROM privacy_requests ORDER BY id")) {
+    protectedJson(storage, row.protected_payload, {
+      namespace: "privacy-request",
+      recordId: String(row.id),
+      field: "state",
+      employeeNumber: String(row.employee_number),
+    }, { allowLegacy: false });
+    verified += 1;
+  }
+  for (const row of rowsIf(database, "privacy_request_events", ["id", "request_id", "protected_payload"], `
+    SELECT e.id, e.protected_payload, r.employee_number
+    FROM privacy_request_events e
+    JOIN privacy_requests r ON r.id = e.request_id
+    ORDER BY e.id`)) {
+    protectedJson(storage, row.protected_payload, {
+      namespace: "privacy-request-event",
+      recordId: String(row.id),
+      field: "payload",
+      employeeNumber: String(row.employee_number),
+    }, { allowLegacy: false });
+    verified += 1;
+  }
+  for (const row of rowsIf(database, "vacation_account_revisions", ["id", "employee_number", "calculation_json"],
+    "SELECT id, employee_number, calculation_json FROM vacation_account_revisions ORDER BY id")) {
+    protectedJson(storage, row.calculation_json, {
+      namespace: "vacation-account",
+      recordId: String(row.id),
+      field: "payload",
+      employeeNumber: String(row.employee_number),
+    }, { allowLegacy: false });
+    verified += 1;
+  }
+  for (const row of rowsIf(database, "vacation_history_events", ["id", "employee_number", "snapshot_json"],
+    "SELECT id, employee_number, snapshot_json FROM vacation_history_events ORDER BY id")) {
+    protectedJson(storage, row.snapshot_json, {
+      namespace: "vacation-history-event",
+      recordId: String(row.id),
+      field: "snapshot",
+      employeeNumber: String(row.employee_number),
+    }, { allowLegacy: false });
+    verified += 1;
+  }
+  for (const row of rowsIf(database, "time_record_statements", ["id", "employee_number", "snapshot_json"],
+    "SELECT id, employee_number, snapshot_json FROM time_record_statements ORDER BY id")) {
+    protectedJson(storage, row.snapshot_json, {
+      namespace: "time-record-statement",
+      recordId: String(row.id),
+      field: "payload",
+      employeeNumber: String(row.employee_number),
+    }, { allowLegacy: false });
+    verified += 1;
+  }
+  for (const row of rowsIf(database, "retention_preview_runs", ["id", "result_json"],
+    "SELECT id, result_json FROM retention_preview_runs ORDER BY id")) {
+    protectedJson(storage, row.result_json, {
+      namespace: "retention-preview",
+      recordId: String(row.id),
+      field: "payload",
+      employeeNumber: "system",
+    }, { allowLegacy: false });
+    verified += 1;
+  }
   return verified;
 }
 
@@ -353,4 +416,10 @@ if (require.main === module) {
     .catch((error) => { process.stderr.write(`${error?.message || "Recovery-Pruefung fehlgeschlagen."}\n`); process.exitCode = 1; });
 }
 
-module.exports = { assertCompatibility, compareSemver, readEnvironment, verifyRecovery };
+module.exports = {
+  assertCompatibility,
+  compareSemver,
+  readEnvironment,
+  verifyProtectedRecords,
+  verifyRecovery,
+};
