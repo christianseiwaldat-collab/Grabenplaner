@@ -6,11 +6,12 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("v0.81: Paket, Launcher, UI und aktuelle Dokumentation bleiben konsistent", () => {
+test("v0.82: Paket, Launcher, UI und aktuelle Dokumentation bleiben konsistent", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.81.0-beta");
+  assert.equal(packageJson.version, "0.82.0-beta");
 
-  assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.81 Beta starten.cmd")), true);
+  assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.82 Beta starten.cmd")), true);
+  assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.81 Beta starten.cmd")), false);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.80 Beta starten.cmd")), false);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.79 Beta starten.cmd")), false);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.78.7 Beta starten.cmd")), false);
@@ -27,16 +28,32 @@ test("v0.81: Paket, Launcher, UI und aktuelle Dokumentation bleiben konsistent",
   const serverDocs = read("SERVERBETRIEB.md");
   const usbNotes = read("USB-HINWEISE.txt");
   const versionLog = read("VERSIONS-LOG.md");
+  const governanceDocs = read("docs/URLAUB-ARBEITSZEIT-DATENSCHUTZ.md");
+  const genericLauncher = read("Dienstplan starten.cmd");
 
-  assert.match(indexHtml, /v0\.81 Beta/);
-  assert.match(readme, /v0\.81 Beta/);
+  assert.match(indexHtml, /v0\.82 Beta/);
+  assert.match(readme, /v0\.82 Beta/);
   assert.match(readme, /Arbeitszeit-Regelprüfung/);
   assert.match(readme, /Monitorbetrieb/);
+  assert.match(readme, /keine automatische Reduktion/);
+  assert.match(readme, /Dienstpläne bleiben Planzeit/);
   assert.match(readme, /Entziehbare Rollen-Grundrechte/);
   assert.match(readme, /Revisionssichere Fallverwaltung/);
   assert.match(readme, /nächtliche Recovery-Assurance-Automatik/);
   assert.match(serverDocs, /Recovery Assurance und System-Center v0\.78/);
-  assert.match(usbNotes, /Version v0\.81 Beta/);
+  assert.match(usbNotes, /Version v0\.82 Beta/);
+  assert.match(usbNotes, /keine automatische Reduktion/i);
+  assert.match(genericLauncher, /Grabenplaner v0\.82 Beta starten\.cmd/);
+  assert.match(governanceDocs, /Urlaubsgesetz § 2/);
+  assert.match(governanceDocs, /Urlaubsgesetz § 4/);
+  assert.match(governanceDocs, /Urlaubsgesetz § 8/);
+  assert.match(governanceDocs, /Arbeitszeitgesetz § 26/);
+  assert.match(governanceDocs, /Datenschutz-Grundverordnung/);
+  assert.match(governanceDocs, /Österreichische Datenschutzbehörde/);
+  assert.match(governanceDocs, /keine pauschale Zusage vollständiger Rechtskonformität/);
+  assert.match(governanceDocs, /Planzeit niemals als Ist-Zeit/);
+  assert.match(governanceDocs, /Löschung niemals automatisch/);
+  assert.match(versionLog, /v0\.82 Beta/);
   assert.match(versionLog, /v0\.81 Beta/);
   assert.match(versionLog, /v0\.80 Beta/);
   assert.match(versionLog, /v0\.79 Beta/);

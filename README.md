@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.81 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
+  <strong>v0.82 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -47,6 +47,14 @@ Vollständige Recovery-Assurance-Läufe werden weiterhin in einer Ed25519-signie
 v0.78 ergänzt die vollständige, nächtliche Recovery-Assurance-Automatik. Jeder Lauf stellt einen Sicherungsstand außerhalb des Live-Systems wieder her, startet die installierte Anwendung gegen eine isolierte Kopie dieser Daten und hält das Ergebnis in der signierten Nachweiskette fest. Ein zufällig verzögerter systemd-Timer verhindert starre Lastspitzen; Sperren, Zeitgrenzen und vollständiges Aufräumen schützen den Produktivbetrieb.
 
 Das System-Center zeigt zusätzlich den Automatikzustand, begrenzte Langzeittrends und den redigierten Eskalationsstatus. Fehlgeschlagene oder überfällige Nachweise erzeugen deduplizierte interne Warnungen für IT-Admin und Developer. Ein erfolgreicher Sicherungslauf allein wird weiterhin niemals als erfolgreich getestete Wiederherstellung ausgegeben.
+
+## Urlaub, Ist-Nachweise und Datenschutz-Governance in v0.82 Beta
+
+v0.82 ergänzt versionierte, nachvollziehbare Governance-Bausteine für Urlaub, tatsächliche Arbeitszeit, Aufbewahrung und Betroffenenrechte. Urlaubsansprüche werden je Urlaubsjahr in getrennten Komponenten für den unionsrechtlichen Mindesturlaub und nationalen Mehrurlaub geführt; Verbrauchsvorschauen verwenden die älteste valide Tranche zuerst. Mögliche Verjährungen bleiben ausschließlich manuell zu prüfende Kandidaten. Ohne dokumentierte Ermöglichung, Aufforderung und rechtzeitige Warnung erfolgt keine automatische Reduktion.
+
+Monatliche Arbeitszeitnachweise entstehen ausschließlich aus tatsächlichen Ist-Buchungen und deren revisionsfähigen Korrekturen. Dienstpläne bleiben Planzeit und werden nicht als geleistete Arbeitszeit ausgegeben. Unvollständige Nachweise lassen sich nicht sicher finalisieren.
+
+Aufbewahrungs- und Betroffenenrechts-Workflows arbeiten mit zweck- und kategorienbezogenen Prüfungen, Legal Holds, Fristen und nachvollziehbaren Entscheidungen. Eine Löschung wird niemals allein aufgrund eines Zeitablaufs automatisch durchgeführt. Diese technischen Funktionen unterstützen die verantwortliche Stelle, ersetzen aber weder die Prüfung des konkreten Arbeitsverhältnisses, des Kollektivvertrags und betrieblicher Regeln noch eine rechtliche Einzelfallbeurteilung. Details und offizielle Quellen stehen in [Urlaub, Arbeitszeit und Datenschutz](docs/URLAUB-ARBEITSZEIT-DATENSCHUTZ.md).
 
 ## Arbeitszeit-Regelprüfung in v0.81 Beta
 
@@ -109,6 +117,8 @@ Technische Details, Grenzen und der amtliche Quellenkatalog stehen in [Arbeitsze
 - PDF-Export für Dienstpläne, Abteilungspläne und Urlaubsübersichten
 - Wochenstundenübersicht, Plan-/Ist-Vergleich, Pausenhinweise und Samstagswertung
 - Versionierte österreichische Planarbeitszeit-Regelprüfung mit Monitorbetrieb, Quellenbelegen und nachvollziehbaren Prüfreceipts
+- Versionierte Urlaubs-Governance mit getrenntem EU-Mindest- und nationalem Mehrurlaub, konservativen Vorschauen und manueller Verjährungsprüfung
+- Revisionsfähige Monatsnachweise ausschließlich aus tatsächlichen Ist-Buchungen sowie dokumentierte Aufbewahrungs- und Betroffenenrechts-Workflows
 - Mitarbeiterportal mit Urlaubs- und ZA-Anträgen, gemeinsamem Krankmeldungs-/AUM-Ablauf, lokaler Dokumenterkennung und Zeiterfassung
 - Persönliche Portal-Einstellungen für Passwort und freiwillige WLAN-Zeitvorschläge
 - Datenschutzneutrale, konfigurierbare Begrüßungen für Arbeitstag, Urlaubsrückkehr und Genesung
@@ -143,7 +153,7 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 ## Schnellstart unter Windows
 
 1. Die portable ZIP-Datei unter [Grabenplaner Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.81 Beta starten.cmd` doppelt anklicken.
+2. `Grabenplaner v0.82 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.

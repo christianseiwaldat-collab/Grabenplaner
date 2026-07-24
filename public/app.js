@@ -121,6 +121,19 @@ const state = {
   centralVacationSearch: "",
   centralVacationLoadedYear: null,
   centralVacationLoading: false,
+  vacationAccounts: null,
+  vacationAccountsLoading: false,
+  monthlyTimeRecords: null,
+  monthlyTimeRecordsLoading: false,
+  retentionGovernance: null,
+  retentionPreviewLoading: false,
+  dataSubjectRequests: [],
+  dataSubjectRequestTypes: [],
+  dataSubjectRequestsLoading: false,
+  dataSubjectRequestSearch: "",
+  dataSubjectRequestStatusFilter: "",
+  dataSubjectRequestTypeFilter: "",
+  selectedDataSubjectRequest: null,
   personnelAdministrationLoaded: false,
   personnelAdministrationLoading: false,
   personnelAdministrationTab: "employees",
@@ -210,16 +223,16 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "centralVacationsNavButton", "settingsNavButton", "rightsDashboardNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
-    "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "backupSettings", "rightsSettings", "employeeSettings",
+    "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
     "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField",
-    "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount",
+    "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount", "vacationAccountsButton", "vacationAccountsModal", "vacationAccountsYear", "loadVacationAccountsButton", "vacationAccountsSummary", "vacationAccountsList",
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeeHomeLocation", "employeeHomeLocationHint", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "addCostCenterButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList",
+    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "addCostCenterButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
     "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationCostCenterField", "locationCostCenter", "locationCostCenterReadonly", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
@@ -244,7 +257,11 @@ const elements = Object.fromEntries(
     "timeCorrectionModal", "timeCorrectionForm", "timeCorrectionTitle", "timeCorrectionEmployee", "timeCorrectionWorkDate", "timeCorrectionEmployeeLabel", "timeCorrectionDateLabel", "timeCorrectionClockOutTime", "timeCorrectionMessage",
     "timeCorrectionReviewModal", "timeCorrectionReviewForm", "timeCorrectionReviewId", "timeCorrectionReviewSummary", "timeCorrectionReviewEntries", "addTimeCorrectionReviewEntry", "timeCorrectionReviewNote", "timeCorrectionReviewMessage",
     "timeDayReviewPanel", "timeReviewDate", "timeReviewFilter", "loadTimeDayReviewButton", "timeDayReviewSummary", "timeDayReviewList", "timeDayReviewModal", "timeDayReviewForm", "timeDayReviewTitle", "timeDayReviewDetail", "timeDayReviewEmployee", "timeDayReviewWorkDate", "timeDayReviewMetrics", "timeDayReviewIssues", "timeDayReviewNote", "timeDayReviewMessage", "removeTimeDayReviewButton",
-    "timeSummaryFrom", "timeSummaryTo", "loadTimeSummaryButton", "timeSummaryList", "timeCorrectionPanel", "timeCorrectionCount", "timeCorrectionRequestList",
+    "timeSummaryFrom", "timeSummaryTo", "loadTimeSummaryButton", "timeSummaryList", "timeCorrectionPanel", "timeCorrectionCount", "timeCorrectionRequestList", "monthlyTimeRecordsButton", "monthlyTimeRecordsModal", "monthlyTimeRecordsMonth", "loadMonthlyTimeRecordsButton", "generateMonthlyTimeRecordsButton", "monthlyTimeRecordsSummary", "monthlyTimeRecordsList", "monthlyTimeRecordActionModal", "monthlyTimeRecordActionForm", "monthlyTimeRecordActionTitle", "monthlyTimeRecordActionSummary", "monthlyTimeRecordActionId", "monthlyTimeRecordActionType", "monthlyTimeRecordActionDecision", "monthlyTimeRecordActionNoteField", "monthlyTimeRecordActionNote", "monthlyTimeRecordActionMessage", "saveMonthlyTimeRecordActionButton",
+    "retentionPolicyCard", "retentionPolicyNotice", "refreshRetentionPoliciesButton", "addRetentionRuleButton", "addRetentionHoldButton", "retentionPolicySummary", "retentionPolicyList", "retentionPreviewCard", "retentionPreviewForm", "retentionPreviewAsOf", "runRetentionPreviewButton", "retentionPreviewResult",
+    "retentionRuleModal", "retentionRuleForm", "retentionRuleModalTitle", "retentionRuleId", "retentionRuleVersion", "retentionRuleCategory", "retentionRuleStatus", "retentionRuleTitle", "retentionRuleValidFrom", "retentionRuleValidTo", "retentionRuleStartTrigger", "retentionRuleDisposition", "retentionRuleDurationValue", "retentionRuleDurationUnit", "retentionRuleSourceId", "retentionRuleSourceJurisdiction", "retentionRuleSourceAuthority", "retentionRuleSourceReference", "retentionRuleSourceTitle", "retentionRuleSourceUrl", "retentionRuleMessage", "saveRetentionRuleButton",
+    "retentionHoldModal", "retentionHoldForm", "retentionHoldCategory", "retentionHoldEmployeeNumber", "retentionHoldReasonCode", "retentionHoldValidFrom", "retentionHoldValidTo", "retentionHoldMessage", "saveRetentionHoldButton",
+    "dataSubjectRequestModal", "dataSubjectRequestForm", "dataSubjectRequestModalTitle", "dataSubjectRequestId", "dataSubjectRequestCreateFields", "dataSubjectRequestEmployeeNumber", "dataSubjectRequestType", "dataSubjectRequestScope", "dataSubjectRequestDetail", "dataSubjectRequestDetailSummary", "dataSubjectRequestEventHistory", "dataSubjectRequestAction", "dataSubjectRequestIdentityField", "dataSubjectRequestIdentityStatus", "dataSubjectRequestExtensionField", "dataSubjectRequestExtensionMonths", "dataSubjectRequestActionNote", "dataSubjectRequestMessage", "downloadDataSubjectRequestExportButton", "saveDataSubjectRequestButton",
     "brandLogo", "footerBrandLogo", "adminContactLink", "brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt", "brandingPreviewLogo", "brandingPreviewTitle", "brandingPreviewCompany", "brandingKitLibrary", "brandingAssignmentList", "exportBrandingButton", "brandingImportFile", "importBrandingButton", "toast",
     "usbProvisioningTab", "usbProvisioningSettings", "usbProvisioningAvailabilityCard", "usbProvisioningAvailability", "usbProvisioningAvailabilityBadge", "usbProvisioningAvailabilityTitle", "usbProvisioningAvailabilityText", "usbProvisioningWizard", "usbWizardDraftStatus", "usbInstallationProfile", "usbInstallationName", "usbModuleSelection", "usbPrimaryBranding", "usbPrimaryBrandingPreview", "usbAdditionalBrandings", "usbBrandingImportFile", "usbImportBrandingButton", "usbCreatorSummary", "usbCreatorEmployee", "usbCreatorPassword", "usbLocationSelection", "usbAddLocationButton", "usbEmployeeSearch", "usbAddEmployeeButton", "usbEmployeeSelection", "usbGuideTitle", "usbGuideIntroduction", "usbGuideNotes", "usbGuideContact", "usbGuideIncludeStartup", "usbGuideIncludeModules", "usbGuideIncludePdf", "usbGuideIncludeBackup", "usbGuidePreviewButton", "usbGuidePreviewFrame", "usbRefreshDrivesButton", "usbDriveList", "usbHideProgramFolder", "usbProtectProgramFiles", "usbProvisioningSummary", "usbFormatConfirmation", "usbFormatConfirmationHint", "usbProvisioningStartButton", "usbWizardActions", "usbWizardPreviousButton", "usbWizardStepHint", "usbWizardNextButton", "usbProvisioningProgressPanel", "usbProvisioningProgressTitle", "usbProvisioningProgressPercent", "usbProvisioningProgressTrack", "usbProvisioningProgressText", "usbProvisioningProgressSteps", "usbProvisioningResultPanel", "usbProvisioningResultText", "usbProvisioningResultDetails", "usbEmployeeDraftModal", "usbEmployeeDraftForm", "usbDraftPersonnelNumber", "usbDraftFullName", "usbDraftNickname", "usbDraftColor", "usbDraftContractedHours", "usbDraftPosition", "usbDraftLocation", "usbDraftDepartment", "usbDraftRole", "usbDraftPassword",
     "integrationConnectionsCard", "integrationConnectionList", "integrationDeliveryHistory", "addIntegrationConnectionButton", "integrationContractsCard", "integrationContractList",
@@ -656,6 +673,53 @@ function canReadCentralVacations() {
   );
 }
 
+function hasGovernancePermission(permission) {
+  return !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes(permission) === true;
+}
+
+function canReadVacationAccounts() {
+  return hasGovernancePermission("vacation_accounts:read");
+}
+
+function canManageVacationAccounts() {
+  return hasGovernancePermission("vacation_accounts:manage");
+}
+
+function canReadMonthlyTimeRecords() {
+  return hasGovernancePermission("time_records:read");
+}
+
+function canGenerateMonthlyTimeRecords() {
+  return hasGovernancePermission("time_records:generate");
+}
+
+function canReadRetentionGovernance() {
+  return hasGovernancePermission("retention:read");
+}
+
+function canManageRetentionGovernance() {
+  return hasGovernancePermission("retention:manage");
+}
+
+function canReadDataSubjectRequests() {
+  return hasGovernancePermission("data_subject_requests:read");
+}
+
+function canManageDataSubjectRequests() {
+  return hasGovernancePermission("data_subject_requests:manage");
+}
+
+function canExportDataSubjectRequests() {
+  return hasGovernancePermission("data_subject_requests:export");
+}
+
+function dataSubjectRequestCanBeExported(request) {
+  return canExportDataSubjectRequests()
+    && request?.identity?.status === "verified"
+    && ["approved", "partially_approved", "fulfilled", "partially_fulfilled"].includes(request?.status);
+}
+
 function canReadManagerRequests() {
   return !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("vacation:read") === true;
@@ -668,20 +732,22 @@ function canReadManagedTimeTracking() {
 }
 
 function canOpenPersonnelAdministrationView() {
-  return canReadCentralPersonnel() || canReadCostCenters() || canReadCentralVacations();
+  return canReadCentralPersonnel() || canReadCostCenters() || canReadCentralVacations() || canReadDataSubjectRequests();
 }
 
 function firstAccessiblePersonnelAdministrationTab() {
   if (canReadCentralPersonnel()) return "employees";
   if (canReadCostCenters()) return "costCenters";
   if (canReadCentralVacations()) return "vacations";
+  if (canReadDataSubjectRequests()) return "dataRequests";
   return "";
 }
 
 function canOpenPersonnelAdministrationTab(tab) {
   return (tab === "employees" && canReadCentralPersonnel())
     || (tab === "costCenters" && canReadCostCenters())
-    || (tab === "vacations" && canReadCentralVacations());
+    || (tab === "vacations" && canReadCentralVacations())
+    || (tab === "dataRequests" && canReadDataSubjectRequests());
 }
 
 function canReadGovernanceDashboards() {
@@ -749,13 +815,29 @@ function applyRoleVisibility() {
   const costCenterReadAccess = canReadCostCenters();
   const costCenterWriteAccess = canWriteCostCenters();
   const centralVacationReadAccess = canReadCentralVacations() && features.vacation !== false;
+  const vacationAccountsReadAccess = canReadVacationAccounts() && features.vacation !== false;
+  const timeRecordsReadAccess = canReadMonthlyTimeRecords() && features.timeTracking !== false;
+  const timeRecordsGenerateAccess = canGenerateMonthlyTimeRecords() && timeRecordsReadAccess;
+  const retentionReadAccess = canReadRetentionGovernance();
+  const retentionManageAccess = canManageRetentionGovernance() && retentionReadAccess;
+  const dataSubjectRequestsReadAccess = canReadDataSubjectRequests();
+  const dataSubjectRequestsManageAccess = canManageDataSubjectRequests() && dataSubjectRequestsReadAccess;
   const requestReadAccess = canReadManagerRequests() && features.requests !== false;
-  const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess || centralVacationReadAccess;
+  const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess
+    || centralVacationReadAccess || dataSubjectRequestsReadAccess;
   const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
   elements.personnelAdministrationNav?.classList.toggle("hidden", !personnelModuleAccess);
   elements.personnelDirectoryNavButton?.classList.toggle("hidden", !centralPersonnelReadAccess);
   elements.costCentersNavButton?.classList.toggle("hidden", !costCenterReadAccess);
   elements.centralVacationsNavButton?.classList.toggle("hidden", !centralVacationReadAccess);
+  elements.dataSubjectRequestsNavButton?.classList.toggle("hidden", !dataSubjectRequestsReadAccess);
+  elements.vacationAccountsButton?.classList.toggle("hidden", !vacationAccountsReadAccess);
+  elements.monthlyTimeRecordsButton?.classList.toggle("hidden", !timeRecordsReadAccess);
+  elements.generateMonthlyTimeRecordsButton?.classList.toggle("hidden", !timeRecordsGenerateAccess);
+  elements.addDataSubjectRequestButton?.classList.toggle("hidden", !dataSubjectRequestsManageAccess);
+  elements.addRetentionRuleButton?.classList.toggle("hidden", !retentionManageAccess);
+  elements.addRetentionHoldButton?.classList.toggle("hidden", !retentionManageAccess);
+  elements.retentionPreviewCard?.classList.toggle("hidden", !retentionManageAccess);
   document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
   document.querySelectorAll('[data-view="vacations"]').forEach((button) => button.classList.toggle("hidden", features.vacation === false));
   elements.requestsNavButton?.classList.toggle("hidden", !requestReadAccess);
@@ -767,7 +849,9 @@ function applyRoleVisibility() {
   if (!accessibleDashboardModes().includes(state.rightsDashboardMode)) {
     state.rightsDashboardMode = accessibleDashboardModes()[0] || "systemCenter";
   }
-  const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess || operationModeAccess || wifiSettingsAccess || usbProvisioningAccess || integrationAccess || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess;
+  const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess
+    || operationModeAccess || wifiSettingsAccess || usbProvisioningAccess || integrationAccess
+    || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess || retentionReadAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
     general: settingsAccess || operationModeAccess,
@@ -780,15 +864,20 @@ function applyRoleVisibility() {
     access: (scopeAccess || permissions.includes("users:write") || globalAdministration)
       && (features.employeePortal !== false || features.requests !== false || features.sicknessAmu !== false),
     rights: rightsAccess,
+    dataProtection: retentionReadAccess,
     backup: diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess,
     usbProvisioning: usbProvisioningAccess,
   };
   document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("hidden", !settingsTabs[button.dataset.settingsTab]));
   const timeTrackingTabActive = document.querySelector('[data-settings-tab="timeTracking"]')?.classList.contains("active");
   const integrationTabActive = document.querySelector('[data-settings-tab="integrations"]')?.classList.contains("active");
+  const dataProtectionTabActive = document.querySelector('[data-settings-tab="dataProtection"]')?.classList.contains("active");
   const usbTabActive = document.querySelector('[data-settings-tab="usbProvisioning"]')?.classList.contains("active");
   const backupTabActive = document.querySelector('[data-settings-tab="backup"]')?.classList.contains("active");
-  elements.saveSettingsButton?.classList.toggle("hidden", (!settingsAccess && !backupTabActive) || integrationTabActive || usbTabActive || (timeTrackingTabActive && !settingsAccess) || (backupTabActive && !backupConfigurationAccess));
+  elements.saveSettingsButton?.classList.toggle("hidden", (!settingsAccess && !backupTabActive)
+    || integrationTabActive || dataProtectionTabActive || usbTabActive
+    || (timeTrackingTabActive && !settingsAccess)
+    || (backupTabActive && !backupConfigurationAccess));
   elements.saveOperationModeButton?.classList.toggle("hidden", !operationModeAccess || settingsAccess);
   const canExit = serverActive
     ? Boolean(state.portalSession?.user)
@@ -803,6 +892,7 @@ function applyRoleVisibility() {
   document.querySelector('[data-personnel-administration-tab="employees"]')?.classList.toggle("hidden", !centralPersonnelReadAccess);
   document.querySelector('[data-personnel-administration-tab="costCenters"]')?.classList.toggle("hidden", !costCenterReadAccess);
   elements.centralVacationsTab?.classList.toggle("hidden", !centralVacationReadAccess);
+  elements.dataSubjectRequestsTab?.classList.toggle("hidden", !dataSubjectRequestsReadAccess);
   elements.addCostCenterButton?.classList.toggle("hidden", !costCenterWriteAccess);
   elements.addLocationButton?.classList.toggle("hidden", !(locationBaseWriteAccess && costCenterWriteAccess));
   elements.addDepartmentButton?.classList.toggle("hidden", !departmentWriteAccess);
@@ -1207,6 +1297,8 @@ function renderContextNavigation() {
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "costCenters");
   setNavigationCurrent(elements.centralVacationsNavButton,
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "vacations");
+  setNavigationCurrent(elements.dataSubjectRequestsNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "dataRequests");
   setNavigationCurrent(elements.requestsNavButton, state.currentView === "requests");
   setNavigationCurrent(elements.timeTrackingNavButton, state.currentView === "timeTracking");
 }
@@ -1725,9 +1817,14 @@ function renderVacations() {
   const employees = state.vacationData.employees || [];
   const savedMap = state.vacationData.entitlementsSaved || {};
   const missingEntitlements = employees.some((employee) => !savedMap[employee.personnel_number]);
-  const showEntitlementInputs = state.editingVacationEntitlements || missingEntitlements;
+  const canManageEntitlements = canManageVacationAccounts();
+  const showEntitlementInputs = canManageEntitlements
+    && (state.editingVacationEntitlements || missingEntitlements);
   elements.saveEntitlementsButton.classList.toggle("hidden", !showEntitlementInputs);
-  elements.editEntitlementsButton.classList.toggle("hidden", showEntitlementInputs || !employees.length);
+  elements.editEntitlementsButton.classList.toggle(
+    "hidden",
+    !canManageEntitlements || showEntitlementInputs || !employees.length,
+  );
   elements.vacationSummary.innerHTML = employees.length ? employees.map((employee) => {
     const totals = state.vacationData.totals[employee.personnel_number] || { entitlement: 0, used: 0, remaining: 0 };
     return `<article class="vacation-summary-card">
@@ -1822,6 +1919,10 @@ async function saveVacation(event) {
 }
 
 async function saveVacationEntitlements() {
+  if (!canManageVacationAccounts()) {
+    showToast("Für die Bearbeitung der Urlaubskonten fehlt die Berechtigung.", true);
+    return;
+  }
   try {
     const entries = Array.from(document.querySelectorAll("[data-vacation-entitlement]")).map((input) => ({
       employeeNumber: input.dataset.vacationEntitlement,
@@ -2532,6 +2633,908 @@ function renderCentralVacations() {
   }).join("") : '<tr><td colspan="7" class="personnel-directory-empty">Keine passenden Urlaubseinträge gefunden.</td></tr>';
 }
 
+function governanceEmployeeLabel(employeeNumber) {
+  const normalized = String(employeeNumber || "");
+  const employee = [...(state.personnelDirectory || []), ...(state.allEmployees || [])]
+    .find((item) => String(item.personnel_number ?? item.employeeNumber ?? "") === normalized);
+  const name = employee?.full_name || employee?.fullName || employee?.nickname || "";
+  return [normalized, name].filter(Boolean).join(" · ") || "Nicht zugeordnet";
+}
+
+function vacationAccountStatusLabel(value) {
+  return ({
+    confirmed: "Bestätigter Stand",
+    draft: "Entwurf",
+    manual_review: "Manuell prüfen",
+    active: "Aktiv",
+    closed: "Abgeschlossen",
+  })[String(value || "")] || String(value || "Prüfstatus offen");
+}
+
+function vacationExpiryStatus(value) {
+  return ({
+    protected: ["Geschützt", "active"],
+    not_due: ["Noch nicht fällig", "active"],
+    candidate: ["Mögliche Verfallsprüfung", "warning"],
+    manual_review: ["Manuell prüfen", "warning"],
+    evidence_incomplete: ["Nachweis prüfen", "warning"],
+    expired: ["Als verfallen dokumentiert", "inactive"],
+  })[String(value || "")] || ["Einzelfall prüfen", "warning"];
+}
+
+function renderVacationAccounts() {
+  if (!elements.vacationAccountsList || !canReadVacationAccounts()) return;
+  const payload = state.vacationAccounts || {};
+  const accounts = apiList(payload, ["accounts", "items"]);
+  const year = Number(payload.year || elements.vacationAccountsYear?.value || state.centralVacationYear);
+  const total = accounts.reduce((sum, account) => sum + Number(account.totalDays || 0), 0);
+  const consumed = accounts.reduce((sum, account) => sum + Number(account.consumedDays || 0), 0);
+  const remaining = accounts.reduce((sum, account) => sum + Number(account.remainingDays || 0), 0);
+  const reviewCount = accounts.filter((account) => ["candidate", "manual_review", "evidence_incomplete"]
+    .includes(String(account.expiryStatus || ""))).length;
+  elements.vacationAccountsSummary.innerHTML = [
+    ["Konten", accounts.length, `im Jahr ${year}`],
+    ["Anspruch", formatDaysLong(total), "dokumentierter Kontostand"],
+    ["Verbraucht", formatDaysLong(consumed), "gebuchte Urlaubstage"],
+    ["Verbleibend", formatDaysLong(remaining), `${reviewCount} Hinweis${reviewCount === 1 ? "" : "e"} zu prüfen`],
+  ].map(([label, value, note]) => `<article><span>${escapeHtml(String(label))}</span><strong>${escapeHtml(String(value))}</strong><small>${escapeHtml(String(note))}</small></article>`).join("");
+  elements.vacationAccountsList.innerHTML = accounts.length ? accounts.map((account) => {
+    const [expiryLabel, expiryClass] = vacationExpiryStatus(account.expiryStatus);
+    return `<article class="governance-record-card">
+      <div class="governance-record-heading">
+        <div><span class="eyebrow">Urlaubskonto ${escapeHtml(String(account.leaveYear || year))}</span><h3>${escapeHtml(governanceEmployeeLabel(account.employeeNumber))}</h3></div>
+        <span class="status-badge ${escapeHtml(expiryClass)}">${escapeHtml(expiryLabel)}</span>
+      </div>
+      <div class="governance-record-metrics">
+        <span><small>Anspruch</small><strong>${escapeHtml(formatDaysLong(Number(account.totalDays || 0)))}</strong></span>
+        <span><small>Verbraucht</small><strong>${escapeHtml(formatDaysLong(Number(account.consumedDays || 0)))}</strong></span>
+        <span><small>Rest</small><strong>${escapeHtml(formatDaysLong(Number(account.remainingDays || 0)))}</strong></span>
+      </div>
+      <p>${escapeHtml(vacationAccountStatusLabel(account.status))} · Revision ${escapeHtml(String(account.revision || 1))}${account.expiryCandidateOn ? ` · möglicher Prüfstichtag ${escapeHtml(formatDate(account.expiryCandidateOn))}` : ""}</p>
+    </article>`;
+  }).join("") : '<p class="settings-note">Für dieses Jahr sind noch keine Urlaubskonten vorhanden.</p>';
+}
+
+async function loadVacationAccounts({ force = false } = {}) {
+  if (!canReadVacationAccounts() || state.vacationAccountsLoading) return;
+  const year = Number(elements.vacationAccountsYear?.value || state.centralVacationYear || new Date().getFullYear());
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    showToast("Bitte ein gültiges Jahr für die Urlaubskonten auswählen.", true);
+    return;
+  }
+  if (!force && Number(state.vacationAccounts?.year) === year) {
+    renderVacationAccounts();
+    return;
+  }
+  state.vacationAccountsLoading = true;
+  if (elements.vacationAccountsList) elements.vacationAccountsList.innerHTML = '<p class="settings-note">Urlaubskonten werden geladen.</p>';
+  try {
+    state.vacationAccounts = await api(`/api/vacation-accounts?year=${encodeURIComponent(year)}`);
+    renderVacationAccounts();
+  } catch (error) {
+    if (elements.vacationAccountsList) elements.vacationAccountsList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    showToast(error.message, true);
+  } finally {
+    state.vacationAccountsLoading = false;
+  }
+}
+
+function openVacationAccounts() {
+  if (!canReadVacationAccounts() || !elements.vacationAccountsModal) return;
+  elements.vacationAccountsYear.value = Number(state.centralVacationYear || state.vacationYear || new Date().getFullYear());
+  elements.vacationAccountsModal.showModal();
+  loadVacationAccounts({ force: true });
+}
+
+function timeStatementStatusLabel(value) {
+  return ({
+    draft: "Entwurf",
+    reviewed: "Geprüft",
+    needs_correction: "Korrektur erforderlich",
+    finalized: "Abgeschlossen",
+    superseded: "Ersetzt",
+  })[String(value || "")] || String(value || "Prüfstatus offen");
+}
+
+function renderMonthlyTimeRecords(errors = []) {
+  if (!elements.monthlyTimeRecordsList || !canReadMonthlyTimeRecords()) return;
+  const payload = state.monthlyTimeRecords || {};
+  const latestByEmployee = new Map();
+  for (const statement of apiList(payload, ["statements", "items"])) {
+    const employeeNumber = String(statement.employeeNumber || "");
+    const existing = latestByEmployee.get(employeeNumber);
+    if (!existing || Number(statement.revision || 0) > Number(existing.revision || 0)) {
+      latestByEmployee.set(employeeNumber, statement);
+    }
+  }
+  const statements = [...latestByEmployee.values()].sort((left, right) =>
+    String(left.employeeNumber || "").localeCompare(String(right.employeeNumber || ""), "de-AT", { numeric: true }));
+  const month = String(payload.month || elements.monthlyTimeRecordsMonth?.value || "");
+  const completed = statements.filter((statement) => statement.status === "finalized").length;
+  const incomplete = statements.filter((statement) => statement.completeness !== "complete").length;
+  const actualMinutes = statements.reduce((sum, statement) => sum + Number(statement.actualMinutes || 0), 0);
+  elements.monthlyTimeRecordsSummary.innerHTML = [
+    ["Nachweise", statements.length, month || "ausgewählter Monat"],
+    ["Abgeschlossen", completed, "serverseitig belegter Status"],
+    ["Prüfbedarf", incomplete, "unvollständige Ist-Buchungen"],
+    ["Erfasste Ist-Zeit", formatHours(actualMinutes), "keine Planzeit"],
+  ].map(([label, value, note]) => `<article><span>${escapeHtml(String(label))}</span><strong>${escapeHtml(String(value))}</strong><small>${escapeHtml(String(note))}</small></article>`).join("");
+  const errorMarkup = Array.isArray(errors) && errors.length
+    ? `<section class="governance-generation-errors"><strong>${errors.length} Nachweis${errors.length === 1 ? "" : "e"} nicht erzeugt</strong><ul>${errors.map((item) => `<li>${escapeHtml(governanceEmployeeLabel(item.employeeNumber))}: ${escapeHtml(item.message || item.error || "Prüfung fehlgeschlagen")}</li>`).join("")}</ul></section>`
+    : "";
+  const recordsMarkup = statements.length ? statements.map((statement) => {
+    const complete = statement.completeness === "complete";
+    const status = timeStatementStatusLabel(statement.status);
+    const actions = [];
+    if (canGenerateMonthlyTimeRecords() && statement.status === "draft") {
+      if (complete) {
+        actions.push(`<button type="button" class="secondary-button" data-time-record-action="review" data-time-record-id="${escapeHtmlAttribute(statement.id)}" data-time-record-decision="approved">Ist-Zeiten prüfen</button>`);
+      }
+      actions.push(`<button type="button" class="secondary-button" data-time-record-action="review" data-time-record-id="${escapeHtmlAttribute(statement.id)}" data-time-record-decision="needs_correction">Korrektur erforderlich</button>`);
+    }
+    if (canGenerateMonthlyTimeRecords() && statement.status === "reviewed") {
+      actions.push(`<button type="button" class="primary-button" data-time-record-action="finalize" data-time-record-id="${escapeHtmlAttribute(statement.id)}">Nachweis abschließen</button>`);
+    }
+    if (statement.status === "finalized") {
+      actions.push(`<a class="secondary-button" href="/api/time-record-statements/${encodeURIComponent(String(statement.id))}/download">PDF herunterladen</a>`);
+    }
+    return `<article class="governance-record-card">
+      <div class="governance-record-heading">
+        <div><span class="eyebrow">Monatsnachweis ${escapeHtml(statement.month || month)}</span><h3>${escapeHtml(governanceEmployeeLabel(statement.employeeNumber))}</h3></div>
+        <span class="status-badge ${statement.status === "finalized" ? "active" : complete ? "" : "warning"}">${escapeHtml(status)}</span>
+      </div>
+      <div class="governance-record-metrics">
+        <span><small>Erfasste Ist-Zeit</small><strong>${escapeHtml(formatHours(Number(statement.actualMinutes || 0)))}</strong></span>
+        <span><small>Pausen</small><strong>${escapeHtml(formatHours(Number(statement.breakMinutes || 0)))}</strong></span>
+        <span><small>Prüfhinweise</small><strong>${Number(statement.issueCount || 0)}</strong></span>
+      </div>
+      <p>${complete ? "Ist-Buchungen vollständig" : "Ist-Buchungen unvollständig oder zu prüfen"} · Revision ${escapeHtml(String(statement.revision || 1))}${statement.finalizedAt ? ` · abgeschlossen ${escapeHtml(diagnosticTimestamp(statement.finalizedAt))}` : ` · erstellt ${escapeHtml(diagnosticTimestamp(statement.createdAt))}`}</p>
+      ${actions.length ? `<div class="governance-card-actions"><span>Jeder Bearbeitungsschritt erzeugt eine neue, unveränderliche Revision.</span><div class="governance-record-actions">${actions.join("")}</div></div>` : ""}
+    </article>`;
+  }).join("") : '<p class="settings-note">Für diesen Monat sind noch keine Monatsnachweise vorhanden.</p>';
+  elements.monthlyTimeRecordsList.innerHTML = `${errorMarkup}${recordsMarkup}`;
+}
+
+async function loadMonthlyTimeRecords({ force = false } = {}) {
+  if (!canReadMonthlyTimeRecords() || state.monthlyTimeRecordsLoading) return;
+  const month = String(elements.monthlyTimeRecordsMonth?.value || toIsoDate(new Date()).slice(0, 7));
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    showToast("Bitte einen gültigen Monat auswählen.", true);
+    return;
+  }
+  if (!force && state.monthlyTimeRecords?.month === month) {
+    renderMonthlyTimeRecords();
+    return;
+  }
+  state.monthlyTimeRecordsLoading = true;
+  if (elements.monthlyTimeRecordsList) elements.monthlyTimeRecordsList.innerHTML = '<p class="settings-note">Monatsnachweise werden geladen.</p>';
+  try {
+    state.monthlyTimeRecords = await api(`/api/time-record-statements?month=${encodeURIComponent(month)}`);
+    renderMonthlyTimeRecords();
+  } catch (error) {
+    if (elements.monthlyTimeRecordsList) elements.monthlyTimeRecordsList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    showToast(error.message, true);
+  } finally {
+    state.monthlyTimeRecordsLoading = false;
+  }
+}
+
+async function generateMonthlyTimeRecords() {
+  if (!canGenerateMonthlyTimeRecords() || state.monthlyTimeRecordsLoading) return;
+  const month = String(elements.monthlyTimeRecordsMonth?.value || "");
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    showToast("Bitte einen gültigen Monat auswählen.", true);
+    return;
+  }
+  state.monthlyTimeRecordsLoading = true;
+  elements.generateMonthlyTimeRecordsButton.disabled = true;
+  try {
+    const result = await api("/api/time-record-statements/generate", {
+      method: "POST",
+      body: JSON.stringify({ month }),
+    });
+    state.monthlyTimeRecords = { month, statements: apiList(result, ["statements", "items"]) };
+    renderMonthlyTimeRecords(result?.errors || []);
+    showToast(result?.errors?.length
+      ? "Nachweise wurden erzeugt; einzelne Fälle benötigen eine Prüfung."
+      : "Monatsnachweise wurden aus den Ist-Buchungen erzeugt.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    state.monthlyTimeRecordsLoading = false;
+    elements.generateMonthlyTimeRecordsButton.disabled = false;
+  }
+}
+
+function openMonthlyTimeRecordAction(statementId, action, decision = "") {
+  if (!canGenerateMonthlyTimeRecords() || state.monthlyTimeRecordsLoading || !statementId
+    || !elements.monthlyTimeRecordActionModal) return;
+  const statement = apiList(state.monthlyTimeRecords || {}, ["statements", "items"])
+    .find((item) => String(item.id) === String(statementId));
+  if (!statement) return;
+  const normalizedAction = action === "finalize" ? "finalize" : "review";
+  const normalizedDecision = decision === "needs_correction" ? "needs_correction" : "approved";
+  elements.monthlyTimeRecordActionForm.reset();
+  elements.monthlyTimeRecordActionId.value = String(statementId);
+  elements.monthlyTimeRecordActionType.value = normalizedAction;
+  elements.monthlyTimeRecordActionDecision.value = normalizedDecision;
+  elements.monthlyTimeRecordActionTitle.textContent = normalizedAction === "finalize"
+    ? "Monatsnachweis abschließen"
+    : normalizedDecision === "approved"
+      ? "Ist-Zeiten prüfen"
+      : "Korrekturbedarf dokumentieren";
+  elements.monthlyTimeRecordActionSummary.textContent = `${governanceEmployeeLabel(statement.employeeNumber)} · ${statement.month} · Revision ${statement.revision || 1}`;
+  elements.monthlyTimeRecordActionNoteField.classList.toggle("hidden", normalizedAction === "finalize");
+  elements.monthlyTimeRecordActionNote.value = normalizedDecision === "approved"
+    ? "Ist-Zeitbuchungen und Pausen wurden geprüft."
+    : "Die Ist-Zeitbuchungen benötigen eine nachvollziehbare Korrektur.";
+  elements.monthlyTimeRecordActionMessage.classList.add("hidden");
+  elements.monthlyTimeRecordActionMessage.textContent = "";
+  elements.saveMonthlyTimeRecordActionButton.textContent = normalizedAction === "finalize"
+    ? "Revisionssicher abschließen"
+    : "Prüfung dokumentieren";
+  elements.monthlyTimeRecordActionModal.showModal();
+}
+
+async function saveMonthlyTimeRecordAction(event) {
+  event.preventDefault();
+  if (!canGenerateMonthlyTimeRecords() || state.monthlyTimeRecordsLoading) return;
+  const statementId = elements.monthlyTimeRecordActionId.value;
+  const action = elements.monthlyTimeRecordActionType.value;
+  const decision = elements.monthlyTimeRecordActionDecision.value;
+  const body = { action };
+  if (action === "review") {
+    body.decision = decision === "needs_correction" ? "needs_correction" : "approved";
+    const defaultNote = body.decision === "approved"
+      ? "Ist-Zeitbuchungen und Pausen wurden geprüft."
+      : "Die Ist-Zeitbuchungen benötigen eine nachvollziehbare Korrektur.";
+    body.note = elements.monthlyTimeRecordActionNote.value.trim() || defaultNote;
+  }
+  state.monthlyTimeRecordsLoading = true;
+  elements.saveMonthlyTimeRecordActionButton.disabled = true;
+  try {
+    await api(`/api/time-record-statements/${encodeURIComponent(String(statementId))}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+    state.monthlyTimeRecords = null;
+    elements.monthlyTimeRecordActionModal.close();
+    showToast(action === "finalize"
+      ? "Der Monatsnachweis wurde revisionssicher abgeschlossen."
+      : body.decision === "approved"
+        ? "Die Prüfung der Ist-Zeiten wurde dokumentiert."
+        : "Der Korrekturbedarf wurde dokumentiert.");
+  } catch (error) {
+    elements.monthlyTimeRecordActionMessage.textContent = error.message;
+    elements.monthlyTimeRecordActionMessage.classList.remove("hidden");
+  } finally {
+    state.monthlyTimeRecordsLoading = false;
+    elements.saveMonthlyTimeRecordActionButton.disabled = false;
+    await loadMonthlyTimeRecords({ force: true });
+  }
+}
+
+function openMonthlyTimeRecords() {
+  if (!canReadMonthlyTimeRecords() || !elements.monthlyTimeRecordsModal) return;
+  elements.monthlyTimeRecordsMonth.value = toIsoDate(new Date()).slice(0, 7);
+  elements.monthlyTimeRecordsModal.showModal();
+  loadMonthlyTimeRecords({ force: true });
+}
+
+function dataSubjectRequestStatusLabel(value) {
+  return ({
+    received: "Eingelangt",
+    identity_pending: "Identität offen",
+    in_review: "In Prüfung",
+    extended: "Frist verlängert",
+    approved: "Genehmigt",
+    partially_approved: "Teilweise genehmigt",
+    rejected: "Abgelehnt",
+    fulfilled: "Erfüllt",
+    partially_fulfilled: "Teilweise erfüllt",
+    withdrawn: "Zurückgezogen",
+  })[String(value || "")] || String(value || "Status offen");
+}
+
+function dataSubjectRequestTypeLabel(value) {
+  const match = (state.dataSubjectRequestTypes || []).find((item) => item.id === value);
+  return match?.label || ({
+    access: "Auskunft",
+    rectification: "Berichtigung",
+    erasure: "Löschung",
+    restriction: "Einschränkung",
+    portability: "Datenübertragbarkeit",
+    objection: "Widerspruch",
+  })[String(value || "")] || String(value || "Datenanfrage");
+}
+
+function dataSubjectRequestIsActionable(request) {
+  return !["rejected", "fulfilled", "partially_fulfilled", "withdrawn"].includes(String(request?.status || ""));
+}
+
+function dataSubjectRequestDeadlineState(request) {
+  const due = new Date(request?.dueAt || request?.deadline?.extendedTargetAt || request?.deadline?.initialTargetAt || "");
+  if (!Number.isFinite(due.getTime()) || !dataSubjectRequestIsActionable(request)) return { className: "", label: "" };
+  const days = Math.ceil((due.getTime() - Date.now()) / 86_400_000);
+  if (days < 0) return { className: "critical", label: `${Math.abs(days)} Tag${Math.abs(days) === 1 ? "" : "e"} überfällig` };
+  if (days <= 7) return { className: "warning", label: `${days} Tag${days === 1 ? "" : "e"} verbleibend` };
+  return { className: "active", label: `${days} Tage verbleibend` };
+}
+
+function availableDataSubjectRequestActions(request) {
+  if (Array.isArray(request?.availableActions)) return request.availableActions.map(String);
+  return ({
+    received: ["verify_identity", "withdraw"],
+    identity_pending: ["verify_identity", "withdraw"],
+    in_review: ["extend", "approve", "reject", "withdraw"],
+    extended: ["approve", "reject", "withdraw"],
+    approved: ["complete", "withdraw"],
+    partially_approved: ["complete", "withdraw"],
+  })[String(request?.status || "")] || [];
+}
+
+function dataSubjectRequestActionLabel(action) {
+  return ({
+    verify_identity: "Identität prüfen",
+    extend: "Frist verlängern",
+    approve: "Genehmigen",
+    reject: "Ablehnen",
+    complete: "Als erfüllt abschließen",
+    withdraw: "Zurückziehen",
+  })[String(action || "")] || String(action || "");
+}
+
+function updateDataSubjectRequestCounts() {
+  const actionable = (state.dataSubjectRequests || []).filter(dataSubjectRequestIsActionable).length;
+  for (const counter of [elements.dataSubjectRequestsNavCount, elements.dataSubjectRequestsTabCount]) {
+    if (!counter) continue;
+    counter.textContent = String(actionable);
+    counter.classList.toggle("hidden", actionable === 0);
+  }
+}
+
+function filteredDataSubjectRequests() {
+  const search = String(state.dataSubjectRequestSearch || "").trim().toLocaleLowerCase("de-AT");
+  const status = String(state.dataSubjectRequestStatusFilter || "");
+  const type = String(state.dataSubjectRequestTypeFilter || "");
+  return (state.dataSubjectRequests || []).filter((request) => {
+    if (status === "actionable" && !dataSubjectRequestIsActionable(request)) return false;
+    if (status && status !== "actionable" && request.status !== status) return false;
+    if (type && request.type !== type) return false;
+    if (!search) return true;
+    return [request.id, request.employeeNumber, request.typeLabel, request.type, governanceEmployeeLabel(request.employeeNumber)]
+      .some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(search));
+  }).sort((left, right) => String(right.receivedAt || "").localeCompare(String(left.receivedAt || "")));
+}
+
+function renderDataSubjectRequests() {
+  if (!elements.dataSubjectRequestList || !canReadDataSubjectRequests()) return;
+  updateDataSubjectRequestCounts();
+  const total = state.dataSubjectRequests.length;
+  const actionable = state.dataSubjectRequests.filter(dataSubjectRequestIsActionable).length;
+  const overdue = state.dataSubjectRequests.filter((request) => dataSubjectRequestDeadlineState(request).className === "critical").length;
+  const identityPending = state.dataSubjectRequests.filter((request) => request.identityStatus === "pending"
+    || request.status === "identity_pending").length;
+  elements.dataSubjectRequestSummary.innerHTML = [
+    ["Anfragen", total, "dokumentierte Vorgänge"],
+    ["Zu bearbeiten", actionable, "nicht abgeschlossene Anfragen"],
+    ["Frist überschritten", overdue, "sofortige Einzelfallprüfung"],
+    ["Identität offen", identityPending, "vor einer Herausgabe prüfen"],
+  ].map(([label, value, note]) => `<article class="personnel-administration-stat"><span>${escapeHtml(String(label))}</span><strong>${Number(value)}</strong><small>${escapeHtml(String(note))}</small></article>`).join("");
+  const currentType = elements.dataSubjectRequestTypeFilter?.value || state.dataSubjectRequestTypeFilter;
+  if (elements.dataSubjectRequestTypeFilter) {
+    elements.dataSubjectRequestTypeFilter.innerHTML = `<option value="">Alle Arten</option>${state.dataSubjectRequestTypes
+      .map((item) => `<option value="${escapeHtmlAttribute(item.id)}">${escapeHtml(item.label)}</option>`).join("")}`;
+    elements.dataSubjectRequestTypeFilter.value = state.dataSubjectRequestTypes.some((item) => item.id === currentType) ? currentType : "";
+  }
+  const requests = filteredDataSubjectRequests();
+  elements.dataSubjectRequestList.innerHTML = requests.length ? requests.map((request) => {
+    const deadline = dataSubjectRequestDeadlineState(request);
+    const scope = Array.isArray(request.scope) && request.scope.length
+      ? request.scope.join(", ")
+      : "Umfang wird im Vorgang geprüft";
+    return `<article class="data-subject-request-card">
+      <div class="data-subject-request-card-heading">
+        <div><span class="eyebrow">${escapeHtml(dataSubjectRequestTypeLabel(request.type))}</span><h3>${escapeHtml(governanceEmployeeLabel(request.employeeNumber))}</h3><small>${escapeHtml(request.id || "Anfrage ohne Kennung")}</small></div>
+        <span class="status-badge ${dataSubjectRequestIsActionable(request) ? (deadline.className || "warning") : "inactive"}">${escapeHtml(dataSubjectRequestStatusLabel(request.status))}</span>
+      </div>
+      <dl class="data-subject-request-facts">
+        <div><dt>Eingang</dt><dd>${escapeHtml(diagnosticTimestamp(request.receivedAt))}</dd></div>
+        <div><dt>Frist</dt><dd>${escapeHtml(diagnosticTimestamp(request.dueAt))}${deadline.label ? `<small class="${escapeHtml(deadline.className)}">${escapeHtml(deadline.label)}</small>` : ""}</dd></div>
+        <div><dt>Identität</dt><dd>${escapeHtml(request.identityStatus === "verified" ? "Bestätigt" : request.identityStatus === "insufficient" ? "Weitere Prüfung" : "Offen")}</dd></div>
+        <div><dt>Umfang</dt><dd>${escapeHtml(scope)}</dd></div>
+      </dl>
+      <div class="governance-card-actions"><span>${request.updatedAt ? `Zuletzt geändert ${escapeHtml(diagnosticTimestamp(request.updatedAt))}` : ""}</span><button type="button" class="secondary-button" data-open-data-subject-request="${escapeHtmlAttribute(request.id)}">${canManageDataSubjectRequests() ? "Anfrage bearbeiten" : "Anfrage ansehen"}</button></div>
+    </article>`;
+  }).join("") : '<p class="settings-note">Keine Datenanfragen entsprechen den gewählten Filtern.</p>';
+}
+
+async function loadDataSubjectRequests({ force = false } = {}) {
+  if (!canReadDataSubjectRequests() || state.dataSubjectRequestsLoading) return;
+  if (!force && state.dataSubjectRequests.length) {
+    renderDataSubjectRequests();
+    return;
+  }
+  state.dataSubjectRequestsLoading = true;
+  if (elements.addDataSubjectRequestButton) elements.addDataSubjectRequestButton.disabled = true;
+  if (elements.dataSubjectRequestList) elements.dataSubjectRequestList.innerHTML = '<p class="settings-note">Datenanfragen werden geladen.</p>';
+  try {
+    const payload = await api("/api/privacy-governance/requests");
+    state.dataSubjectRequestTypes = apiList(payload, ["requestTypes", "types"]).map((item) => ({
+      id: String(item.id || item.value || ""),
+      label: String(item.label || item.id || ""),
+    })).filter((item) => item.id);
+    state.dataSubjectRequests = apiList(payload, ["requests", "items"]).map((request) => ({ ...request }));
+    renderDataSubjectRequests();
+  } catch (error) {
+    if (elements.dataSubjectRequestList) elements.dataSubjectRequestList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    showToast(error.message, true);
+  } finally {
+    state.dataSubjectRequestsLoading = false;
+    if (elements.addDataSubjectRequestButton) elements.addDataSubjectRequestButton.disabled = !canManageDataSubjectRequests();
+  }
+}
+
+function renderDataSubjectRequestDialog(request = null) {
+  const editing = Boolean(request?.id);
+  const canManage = canManageDataSubjectRequests();
+  elements.dataSubjectRequestId.value = request?.id || "";
+  elements.dataSubjectRequestModalTitle.textContent = editing ? "Datenanfrage prüfen" : "Datenanfrage erfassen";
+  elements.dataSubjectRequestCreateFields.classList.toggle("hidden", editing);
+  elements.dataSubjectRequestDetail.classList.toggle("hidden", !editing);
+  elements.saveDataSubjectRequestButton.classList.toggle("hidden", !canManage || (editing && !availableDataSubjectRequestActions(request).length));
+  elements.downloadDataSubjectRequestExportButton?.classList.toggle("hidden", !editing || !dataSubjectRequestCanBeExported(request));
+  if (elements.downloadDataSubjectRequestExportButton) elements.downloadDataSubjectRequestExportButton.disabled = false;
+  if (!editing) {
+    elements.dataSubjectRequestForm.reset();
+    elements.dataSubjectRequestType.innerHTML = state.dataSubjectRequestTypes
+      .map((item) => `<option value="${escapeHtmlAttribute(item.id)}">${escapeHtml(item.label)}</option>`).join("");
+    elements.saveDataSubjectRequestButton.textContent = "Anfrage erfassen";
+    return;
+  }
+  const deadline = dataSubjectRequestDeadlineState(request);
+  elements.dataSubjectRequestDetailSummary.innerHTML = [
+    ["Person", governanceEmployeeLabel(request.employeeNumber)],
+    ["Art", dataSubjectRequestTypeLabel(request.type)],
+    ["Status", dataSubjectRequestStatusLabel(request.status)],
+    ["Frist", `${diagnosticTimestamp(request.dueAt)}${deadline.label ? ` · ${deadline.label}` : ""}`],
+  ].map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join("");
+  const events = Array.isArray(request.events) ? request.events : [];
+  elements.dataSubjectRequestEventHistory.innerHTML = events.length
+    ? `<h3>Bearbeitungsverlauf</h3>${events.map((event) => `<article><span>${escapeHtml(diagnosticTimestamp(event.at))}</span><strong>${escapeHtml(String(event.type || "Dokumentierter Schritt").replaceAll("_", " "))}</strong><small>${escapeHtml(event.actor || "")}</small></article>`).join("")}`
+    : '<p class="settings-note">In dieser Übersicht werden Status, Frist und letzter Änderungszeitpunkt gezeigt. Weitere Nachweise verbleiben geschützt im Vorgang.</p>';
+  const actions = canManage ? availableDataSubjectRequestActions(request) : [];
+  elements.dataSubjectRequestAction.innerHTML = actions.map((action) => `<option value="${escapeHtmlAttribute(action)}">${escapeHtml(dataSubjectRequestActionLabel(action))}</option>`).join("");
+  elements.dataSubjectRequestAction.disabled = actions.length === 0;
+  elements.dataSubjectRequestActionNote.value = "";
+  elements.saveDataSubjectRequestButton.textContent = "Schritt dokumentieren";
+  updateDataSubjectRequestActionFields();
+}
+
+async function openDataSubjectRequest(request = null) {
+  if ((!request && !canManageDataSubjectRequests()) || !canReadDataSubjectRequests() || !elements.dataSubjectRequestModal) return;
+  state.selectedDataSubjectRequest = request;
+  elements.dataSubjectRequestMessage.classList.add("hidden");
+  elements.dataSubjectRequestMessage.textContent = "";
+  renderDataSubjectRequestDialog(request);
+  elements.dataSubjectRequestModal.showModal();
+  if (!request?.id) return;
+  try {
+    const detail = await api(`/api/privacy-governance/requests/${encodeURIComponent(request.id)}`);
+    const complete = {
+      ...request,
+      ...(detail?.summary || {}),
+      ...(detail?.request || {}),
+      employeeNumber: detail?.summary?.employeeNumber || detail?.request?.subjectId || request.employeeNumber,
+      typeLabel: detail?.summary?.typeLabel || request.typeLabel,
+      identityStatus: detail?.summary?.identityStatus || detail?.request?.identity?.status || request.identityStatus,
+      dueAt: detail?.summary?.dueAt || detail?.request?.deadline?.extendedTargetAt
+        || detail?.request?.deadline?.initialTargetAt || request.dueAt,
+    };
+    state.selectedDataSubjectRequest = complete;
+    if (elements.dataSubjectRequestModal.open) renderDataSubjectRequestDialog(complete);
+  } catch (error) {
+    elements.dataSubjectRequestMessage.textContent = error.message;
+    elements.dataSubjectRequestMessage.classList.remove("hidden");
+  }
+}
+
+async function downloadDataSubjectRequestExport() {
+  const request = state.selectedDataSubjectRequest;
+  if (!dataSubjectRequestCanBeExported(request) || !request?.id) return;
+  elements.downloadDataSubjectRequestExportButton.disabled = true;
+  elements.dataSubjectRequestMessage.classList.add("hidden");
+  try {
+    const response = await rawApi(
+      `/api/privacy-governance/requests/${encodeURIComponent(request.id)}/export`,
+    );
+    const subject = String(request.subjectId || request.employeeNumber || "Person")
+      .replace(/[^a-z0-9_-]/gi, "-");
+    await downloadFileResponse(response, `Datenauskunft-${subject}.json`);
+    showToast("Das genehmigte Datenauskunftspaket wurde heruntergeladen.");
+  } catch (error) {
+    elements.dataSubjectRequestMessage.textContent = error.message;
+    elements.dataSubjectRequestMessage.classList.remove("hidden");
+  } finally {
+    elements.downloadDataSubjectRequestExportButton.disabled = false;
+  }
+}
+
+function updateDataSubjectRequestActionFields() {
+  const action = elements.dataSubjectRequestAction?.value || "";
+  elements.dataSubjectRequestIdentityField?.classList.toggle("hidden", action !== "verify_identity");
+  elements.dataSubjectRequestExtensionField?.classList.toggle("hidden", action !== "extend");
+  const noteRequired = ["reject", "extend", "complete"].includes(action);
+  if (elements.dataSubjectRequestActionNote) elements.dataSubjectRequestActionNote.required = noteRequired;
+}
+
+async function saveDataSubjectRequest(event) {
+  event.preventDefault();
+  if (!canManageDataSubjectRequests()) return;
+  const id = elements.dataSubjectRequestId.value;
+  elements.saveDataSubjectRequestButton.disabled = true;
+  elements.dataSubjectRequestMessage.classList.add("hidden");
+  try {
+    if (!id) {
+      const scope = elements.dataSubjectRequestScope.value.split(/[\n,;]+/)
+        .map((item) => item.trim()).filter(Boolean);
+      const body = {
+        employeeNumber: elements.dataSubjectRequestEmployeeNumber.value.trim(),
+        type: elements.dataSubjectRequestType.value,
+      };
+      if (scope.length) body.scope = scope;
+      await api("/api/privacy-governance/requests", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      showToast("Datenanfrage wurde nachvollziehbar erfasst.");
+    } else {
+      const action = elements.dataSubjectRequestAction.value;
+      const note = elements.dataSubjectRequestActionNote.value.trim();
+      const body = { action };
+      if (action === "verify_identity") {
+        body.status = elements.dataSubjectRequestIdentityStatus.value;
+        body.reasonCode = body.status === "verified" ? "manual_identity_check" : "additional_evidence_needed";
+      } else if (action === "extend") {
+        body.months = Number(elements.dataSubjectRequestExtensionMonths.value);
+        body.reasonCode = "documented_complexity";
+        body.reason = note;
+      } else if (action === "approve") {
+        body.summary = note || "Der beantragte Umfang wurde durch eine berechtigte Person geprüft.";
+      } else if (action === "reject") {
+        body.reasonCode = "documented_exception";
+        body.reason = note;
+        body.summary = note;
+      } else if (action === "complete") {
+        body.reference = note;
+      } else if (action === "withdraw") {
+        body.reasonCode = "documented_withdrawal";
+      }
+      await api(`/api/privacy-governance/requests/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      showToast("Bearbeitungsschritt wurde dokumentiert.");
+    }
+    elements.dataSubjectRequestModal.close();
+    state.selectedDataSubjectRequest = null;
+    state.dataSubjectRequests = [];
+    await loadDataSubjectRequests({ force: true });
+  } catch (error) {
+    elements.dataSubjectRequestMessage.textContent = error.message;
+    elements.dataSubjectRequestMessage.classList.remove("hidden");
+  } finally {
+    elements.saveDataSubjectRequestButton.disabled = false;
+  }
+}
+
+function retentionStatusLabel(value) {
+  return ({ active: "Aktiv", draft: "Entwurf", retired: "Außer Kraft" })[String(value || "")]
+    || String(value || "Status offen");
+}
+
+function retentionTriggerLabel(value) {
+  return ({
+    record_created: "Erstellung des Datensatzes",
+    record_closed: "Abschluss des Datensatzes",
+    case_resolved: "Abschluss des Falls",
+    employment_ended: "Ende des Arbeitsverhältnisses",
+    contract_ended: "Vertragsende",
+    purpose_ended: "Ende des Verwendungszwecks",
+    custom_event: "Dokumentiertes Einzelereignis",
+  })[String(value || "")] || String(value || "Auslöser zu prüfen");
+}
+
+function retentionDispositionLabel(value) {
+  return ({
+    manual_review: "Manuelle Prüfung",
+    delete: "Löschung nach gesonderter Freigabe",
+    anonymize: "Anonymisierung nach gesonderter Freigabe",
+    archive: "Archivierung nach gesonderter Freigabe",
+  })[String(value || "")] || String(value || "Folgemaßnahme offen");
+}
+
+function retentionDurationLabel(retention = {}) {
+  const value = Number(retention.value || 0);
+  const unit = ({ days: value === 1 ? "Tag" : "Tage", months: value === 1 ? "Monat" : "Monate", years: value === 1 ? "Jahr" : "Jahre" })[retention.unit]
+    || retention.unit || "Einheit";
+  return `${new Intl.NumberFormat("de-AT").format(value)} ${unit}`;
+}
+
+function retentionGovernanceRules() {
+  return apiList(state.retentionGovernance || {}, ["rules", "items"]);
+}
+
+function openRetentionRuleDialog(template = null) {
+  if (!canManageRetentionGovernance() || !elements.retentionRuleModal) return;
+  const rules = retentionGovernanceRules();
+  const category = String(template?.category || "custom_records");
+  let version = Math.max(0, ...rules.filter((rule) => rule.category === category)
+    .map((rule) => Number(rule.version) || 0)) + 1;
+  const idBase = String(template?.id || `retention-${category}`).replace(/-v\d+$/i, "");
+  let id = `${idBase}-v${version}`;
+  while (rules.some((rule) => rule.id === id)) {
+    version += 1;
+    id = `${idBase}-v${version}`;
+  }
+  const source = template?.sources?.[0] || {
+    id: "eu-gdpr",
+    authority: "Europäische Union",
+    title: "Verordnung (EU) 2016/679 (Datenschutz-Grundverordnung)",
+    url: "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+    jurisdiction: "EU",
+    reference: "insbesondere Art. 5, 6, 17 und 30",
+  };
+  elements.retentionRuleForm.reset();
+  elements.retentionRuleModalTitle.textContent = template
+    ? `Neue Version · ${template.title || template.category}`
+    : "Regelversion anlegen";
+  elements.retentionRuleId.value = id;
+  elements.retentionRuleVersion.value = String(version);
+  elements.retentionRuleCategory.value = category;
+  elements.retentionRuleStatus.value = "draft";
+  elements.retentionRuleTitle.value = template?.title || "Neue Aufbewahrungsregel";
+  elements.retentionRuleValidFrom.value = toIsoDate(new Date());
+  elements.retentionRuleValidTo.value = "";
+  elements.retentionRuleStartTrigger.value = template?.startTrigger || "record_closed";
+  elements.retentionRuleDisposition.value = template?.disposition || "manual_review";
+  elements.retentionRuleDurationValue.value = String(template?.retention?.value || 1);
+  elements.retentionRuleDurationUnit.value = template?.retention?.unit || "years";
+  elements.retentionRuleSourceId.value = source.id || "";
+  elements.retentionRuleSourceJurisdiction.value = source.jurisdiction || "";
+  elements.retentionRuleSourceAuthority.value = source.authority || "";
+  elements.retentionRuleSourceReference.value = source.reference || "";
+  elements.retentionRuleSourceTitle.value = source.title || "";
+  elements.retentionRuleSourceUrl.value = source.url || "";
+  elements.retentionRuleMessage.textContent = "";
+  elements.retentionRuleMessage.classList.add("hidden");
+  elements.saveRetentionRuleButton.disabled = false;
+  elements.retentionRuleModal.showModal();
+}
+
+async function saveRetentionRule(event) {
+  event.preventDefault();
+  if (!canManageRetentionGovernance()) return;
+  elements.saveRetentionRuleButton.disabled = true;
+  elements.retentionRuleMessage.classList.add("hidden");
+  try {
+    const body = {
+      schemaVersion: 1,
+      id: elements.retentionRuleId.value.trim(),
+      version: String(Number(elements.retentionRuleVersion.value)),
+      category: elements.retentionRuleCategory.value.trim(),
+      title: elements.retentionRuleTitle.value.trim(),
+      status: elements.retentionRuleStatus.value,
+      validFrom: elements.retentionRuleValidFrom.value,
+      validTo: elements.retentionRuleValidTo.value || null,
+      sources: [{
+        id: elements.retentionRuleSourceId.value.trim(),
+        authority: elements.retentionRuleSourceAuthority.value.trim(),
+        title: elements.retentionRuleSourceTitle.value.trim(),
+        url: elements.retentionRuleSourceUrl.value.trim(),
+        jurisdiction: elements.retentionRuleSourceJurisdiction.value.trim(),
+        reference: elements.retentionRuleSourceReference.value.trim(),
+      }],
+      startTrigger: elements.retentionRuleStartTrigger.value,
+      retention: {
+        value: Number(elements.retentionRuleDurationValue.value),
+        unit: elements.retentionRuleDurationUnit.value,
+      },
+      disposition: elements.retentionRuleDisposition.value,
+      legalHold: { behavior: "exclude_while_active" },
+    };
+    await api("/api/privacy-governance/retention/rules", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    elements.retentionRuleModal.close();
+    state.retentionGovernance = null;
+    await loadRetentionGovernance({ force: true });
+    showToast("Die neue unveränderliche Regelversion wurde angelegt.");
+  } catch (error) {
+    elements.retentionRuleMessage.textContent = error.message;
+    elements.retentionRuleMessage.classList.remove("hidden");
+  } finally {
+    elements.saveRetentionRuleButton.disabled = false;
+  }
+}
+
+function openRetentionHoldDialog(category = "") {
+  if (!canManageRetentionGovernance() || !elements.retentionHoldModal) return;
+  elements.retentionHoldForm.reset();
+  elements.retentionHoldCategory.value = String(category || "");
+  elements.retentionHoldValidFrom.value = toIsoDate(new Date());
+  elements.retentionHoldMessage.textContent = "";
+  elements.retentionHoldMessage.classList.add("hidden");
+  elements.saveRetentionHoldButton.disabled = false;
+  elements.retentionHoldModal.showModal();
+}
+
+async function saveRetentionHold(event) {
+  event.preventDefault();
+  if (!canManageRetentionGovernance()) return;
+  elements.saveRetentionHoldButton.disabled = true;
+  elements.retentionHoldMessage.classList.add("hidden");
+  try {
+    const body = {
+      category: elements.retentionHoldCategory.value.trim(),
+      employeeNumber: elements.retentionHoldEmployeeNumber.value.trim(),
+      reasonCode: elements.retentionHoldReasonCode.value.trim(),
+      validFrom: elements.retentionHoldValidFrom.value,
+    };
+    if (elements.retentionHoldValidTo.value) body.validTo = elements.retentionHoldValidTo.value;
+    await api("/api/privacy-governance/retention/holds", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    elements.retentionHoldModal.close();
+    state.retentionGovernance = null;
+    await loadRetentionGovernance({ force: true });
+    showToast("Die Schutzsperre wurde angelegt.");
+  } catch (error) {
+    elements.retentionHoldMessage.textContent = error.message;
+    elements.retentionHoldMessage.classList.remove("hidden");
+  } finally {
+    elements.saveRetentionHoldButton.disabled = false;
+  }
+}
+
+async function releaseRetentionHold(id) {
+  if (!canManageRetentionGovernance() || !id) return;
+  if (!window.confirm("Diese aktive Schutzsperre wirklich freigeben? Es werden dadurch keine Daten gelöscht.")) return;
+  try {
+    await api(`/api/privacy-governance/retention/holds/${encodeURIComponent(id)}/release`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    state.retentionGovernance = null;
+    await loadRetentionGovernance({ force: true });
+    showToast("Die Schutzsperre wurde freigegeben.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+function renderRetentionPreview(preview) {
+  if (!elements.retentionPreviewResult) return;
+  if (!preview) {
+    elements.retentionPreviewResult.innerHTML = '<p class="settings-note">Noch keine Vorschau berechnet.</p>';
+    return;
+  }
+  const actual = preview.preview || preview;
+  const counts = actual.counts || preview.summary || {};
+  const assessments = apiList(actual, ["assessments", "items"]);
+  const candidates = apiList(actual, ["candidates"]);
+  elements.retentionPreviewResult.innerHTML = `
+    <div class="governance-summary">
+      ${[
+        ["Datensätze", Number(counts.records || assessments.length || 0)],
+        ["Vorschaukandidaten", Number(counts.candidates || candidates.length || 0)],
+        ["Schutzsperren", Number(counts.legalHold || 0)],
+        ["Manuell prüfen", Number(counts.manualReview || 0)],
+      ].map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${value}</strong></article>`).join("")}
+    </div>
+    <p class="settings-note">Prüfstand ${escapeHtml(formatDate(actual.asOf || preview.asOf))}${preview.createdAt ? ` · erstellt ${escapeHtml(diagnosticTimestamp(preview.createdAt))}` : ""}. Vorschau-only: Es wurde nichts gelöscht oder verändert.</p>
+    ${assessments.length ? `<div class="privacy-preview-assessments">${assessments.slice(0, 50).map((assessment) => {
+      const stateLabel = ({
+        candidate: "Möglicher Kandidat",
+        legal_hold: "Durch Schutzsperre ausgenommen",
+        manual_review: "Manuell prüfen",
+        not_due: "Frist läuft",
+      })[assessment.state] || assessment.state;
+      const className = assessment.state === "candidate" ? "warning"
+        : assessment.state === "legal_hold" ? "active"
+          : assessment.state === "manual_review" ? "critical" : "";
+      return `<article><div><strong>${escapeHtml(assessment.recordId || "Datensatz")}</strong><small>${escapeHtml(assessment.category || "")}${assessment.dueAt ? ` · rechnerischer Stichtag ${escapeHtml(formatDate(assessment.dueAt))}` : ""}</small></div><span class="status-badge ${escapeHtml(className)}">${escapeHtml(stateLabel)}</span></article>`;
+    }).join("")}</div>${assessments.length > 50 ? `<p class="settings-note">Weitere ${assessments.length - 50} Einträge sind im unveränderten serverseitigen Prüfnachweis enthalten.</p>` : ""}` : ""}`;
+}
+
+function renderRetentionGovernance() {
+  if (!canReadRetentionGovernance() || !elements.retentionPolicyList) return;
+  const payload = state.retentionGovernance || {};
+  const rules = apiList(payload, ["rules", "items"]);
+  const holds = apiList(payload, ["holds", "legalHolds"]);
+  const activeRules = rules.filter((rule) => rule.status === "active").length;
+  const activeHolds = holds.filter((hold) => hold.status === "active" || hold.active === true).length;
+  elements.retentionPolicyNotice.textContent = payload.notice
+    || "Die Regeln unterstützen eine dokumentierte Prüfung; konkrete Fristen und Rechtsgrundlagen sind im Einzelfall zu bestätigen.";
+  elements.retentionPolicySummary.innerHTML = [
+    ["Regelversionen", rules.length, `${activeRules} aktiv`],
+    ["Aktive Schutzsperren", activeHolds, "von einer Vorschau auszunehmen"],
+    ["Letzte Vorschau", payload.latestPreview ? formatDate(payload.latestPreview.asOf) : "Noch keine", payload.latestPreview ? diagnosticTimestamp(payload.latestPreview.createdAt) : "keine Ausführung"],
+  ].map(([label, value, note]) => `<article><span>${escapeHtml(String(label))}</span><strong>${escapeHtml(String(value))}</strong><small>${escapeHtml(String(note))}</small></article>`).join("");
+  const canManage = canManageRetentionGovernance();
+  const ruleMarkup = rules.length ? rules.map((rule) => `<article class="privacy-retention-rule">
+    <div class="privacy-retention-rule-heading"><div><span class="eyebrow">${escapeHtml(rule.category || "Datenkategorie")}</span><h3>${escapeHtml(rule.title || rule.id || "Aufbewahrungsregel")}</h3></div><span class="status-badge ${rule.status === "active" ? "active" : rule.status === "draft" ? "warning" : "inactive"}">${escapeHtml(retentionStatusLabel(rule.status))}</span></div>
+    <dl>
+      <div><dt>Version</dt><dd>${escapeHtml(String(rule.version || "–"))}</dd></div>
+      <div><dt>Gültigkeit</dt><dd>${escapeHtml(formatDate(rule.validFrom))}${rule.validTo ? ` – ${escapeHtml(formatDate(rule.validTo))}` : " – offen"}</dd></div>
+      <div><dt>Fristbeginn</dt><dd>${escapeHtml(retentionTriggerLabel(rule.startTrigger))}</dd></div>
+      <div><dt>Dauer</dt><dd>${escapeHtml(retentionDurationLabel(rule.retention))}</dd></div>
+      <div class="wide"><dt>Vorgesehene Folge</dt><dd>${escapeHtml(retentionDispositionLabel(rule.disposition))}</dd></div>
+    </dl>
+    ${canManage ? `<div class="governance-card-actions"><span>Bestehende Version unveränderlich</span><button type="button" class="secondary-button" data-new-retention-rule-version="${escapeHtmlAttribute(rule.id)}">Neue Version</button></div>` : ""}
+  </article>`).join("") : '<p class="settings-note">Noch keine versionierten Aufbewahrungsregeln vorhanden.</p>';
+  const holdsMarkup = holds.length ? `<details class="privacy-holds"><summary>Schutzsperren (${holds.length})</summary><div>${holds.map((hold) => {
+    const active = hold.status === "active" || hold.active === true;
+    const scope = hold.subjectId ? ` · Personalnummer ${hold.subjectId}` : "";
+    const validity = ` · ${formatDate(hold.validFrom)}${hold.validTo ? ` bis ${formatDate(hold.validTo)}` : " bis auf Widerruf"}`;
+    return `<article><div><strong>${escapeHtml(hold.category || "Kategorieübergreifend")}</strong><small>${escapeHtml(hold.reasonCode || hold.reason || "Dokumentierter Schutzgrund")}${escapeHtml(scope)}${escapeHtml(validity)}</small></div><div class="governance-record-actions"><span class="status-badge ${active ? "active" : "inactive"}">${active ? "Aktiv" : "Freigegeben"}</span>${canManage && active ? `<button type="button" class="secondary-button" data-release-retention-hold="${escapeHtmlAttribute(hold.id)}">Freigeben</button>` : ""}</div></article>`;
+  }).join("")}</div></details>` : "";
+  elements.retentionPolicyList.innerHTML = `${ruleMarkup}${holdsMarkup}`;
+  renderRetentionPreview(payload.latestPreview);
+}
+
+async function loadRetentionGovernance({ force = false } = {}) {
+  if (!canReadRetentionGovernance()) return;
+  if (!force && state.retentionGovernance) {
+    renderRetentionGovernance();
+    return;
+  }
+  if (elements.retentionPolicyList) elements.retentionPolicyList.innerHTML = '<p class="settings-note">Aufbewahrungsregeln werden geladen.</p>';
+  try {
+    state.retentionGovernance = await api("/api/privacy-governance/retention");
+    renderRetentionGovernance();
+  } catch (error) {
+    if (elements.retentionPolicyList) elements.retentionPolicyList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    showToast(error.message, true);
+  }
+}
+
+async function runRetentionPreview(event) {
+  event.preventDefault();
+  if (!canManageRetentionGovernance() || state.retentionPreviewLoading) return;
+  state.retentionPreviewLoading = true;
+  elements.runRetentionPreviewButton.disabled = true;
+  elements.retentionPreviewResult.innerHTML = '<p class="settings-note">Die reine Vorschau wird berechnet. Es wird nichts gelöscht.</p>';
+  try {
+    const asOf = elements.retentionPreviewAsOf.value;
+    const body = asOf ? { asOf } : {};
+    const result = await api("/api/privacy-governance/retention/preview", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const preview = result?.preview || result;
+    state.retentionGovernance = {
+      ...(state.retentionGovernance || {}),
+      latestPreview: {
+        ...(preview || {}),
+        preview: preview?.preview || preview,
+        summary: preview?.summary || preview?.counts,
+      },
+    };
+    renderRetentionGovernance();
+    renderRetentionPreview(state.retentionGovernance.latestPreview);
+    showToast("Die reine Löschvorschau wurde erstellt; es wurden keine Daten verändert.");
+  } catch (error) {
+    elements.retentionPreviewResult.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    showToast(error.message, true);
+  } finally {
+    state.retentionPreviewLoading = false;
+    elements.runRetentionPreviewButton.disabled = false;
+  }
+}
+
 function renderPersonnelAdministration() {
   if (!canOpenPersonnelAdministrationView()) return;
   if (canReadCentralPersonnel()) {
@@ -2540,6 +3543,7 @@ function renderPersonnelAdministration() {
   }
   if (canReadCostCenters()) renderCostCenters();
   if (canReadCentralVacations() && state.centralVacationLoadedYear !== null) renderCentralVacations();
+  if (canReadDataSubjectRequests()) renderDataSubjectRequests();
 }
 
 function setPersonnelAdministrationTab(tab) {
@@ -2556,9 +3560,11 @@ function setPersonnelAdministrationTab(tab) {
   elements.personnelDirectorySection?.classList.toggle("active", normalized === "employees");
   elements.costCenterSection?.classList.toggle("active", normalized === "costCenters");
   elements.centralVacationSection?.classList.toggle("active", normalized === "vacations");
+  elements.dataSubjectRequestsSection?.classList.toggle("active", normalized === "dataRequests");
   elements.personnelDisplayColumnsButton?.classList.toggle("hidden", normalized !== "employees");
   if (state.currentView === "personnelAdministration") renderContextNavigation();
   if (normalized === "vacations") loadCentralVacations().catch((error) => showToast(error.message, true));
+  if (normalized === "dataRequests") loadDataSubjectRequests().catch((error) => showToast(error.message, true));
 }
 
 function openCostCenterModal(costCenter = null) {
@@ -7642,7 +8648,8 @@ function applyRequestedView() {
   }
   if (requestedView === "personnelAdministration") {
     const requestedSection = parameters.get("section");
-    if (["employees", "costCenters", "vacations"].includes(requestedSection)) {
+    const establishedSection = ["employees", "costCenters", "vacations"].includes(requestedSection);
+    if (establishedSection || requestedSection === "dataRequests") {
       state.personnelAdministrationTab = requestedSection;
     }
   }
@@ -7667,6 +8674,7 @@ function setSettingsTab(tab) {
   elements.vacationSettings?.classList.toggle("active", tab === "vacation");
   elements.timeTrackingSettings?.classList.toggle("active", tab === "timeTracking");
   elements.integrationSettings?.classList.toggle("active", tab === "integrations");
+  elements.dataProtectionSettings?.classList.toggle("active", tab === "dataProtection");
   elements.accessSettings.classList.toggle("active", tab === "access");
   elements.rightsSettings?.classList.toggle("active", tab === "rights");
   elements.backupSettings.classList.toggle("active", tab === "backup");
@@ -7675,7 +8683,7 @@ function setSettingsTab(tab) {
     || state.portalSession?.user?.permissions?.includes("settings:write");
   const canSaveBackupSettings = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("backup:write");
-  elements.saveSettingsButton?.classList.toggle("hidden", ["integrations", "usbProvisioning"].includes(tab)
+  elements.saveSettingsButton?.classList.toggle("hidden", ["integrations", "dataProtection", "usbProvisioning"].includes(tab)
     || (tab === "backup" ? !canSaveBackupSettings : !canSaveGeneralSettings));
   if (tab === "access") {
     loadPortalUsers();
@@ -7689,6 +8697,12 @@ function setSettingsTab(tab) {
   }
   if (tab === "rights") loadRightsManagement();
   if (tab === "integrations") loadIntegrations().catch((error) => showToast(error.message, true));
+  if (tab === "dataProtection") {
+    if (elements.retentionPreviewAsOf && !elements.retentionPreviewAsOf.value) {
+      elements.retentionPreviewAsOf.value = toIsoDate(new Date());
+    }
+    loadRetentionGovernance().catch((error) => showToast(error.message, true));
+  }
   if (tab === "timeTracking") loadWifiAutomationSettings();
   if (tab === "backup") refreshServerDiagnostics();
   if (tab === "personnel") loadTrustLevelSettings();
@@ -10162,6 +11176,19 @@ elements.refreshTimePresenceButton?.addEventListener("click", () => Promise.all(
 elements.loadTimeDayReviewButton?.addEventListener("click", loadTimeDayReview);
 elements.timeReviewFilter?.addEventListener("change", renderTimeDayReview);
 elements.loadTimeSummaryButton?.addEventListener("click", loadTimeSummary);
+elements.monthlyTimeRecordsButton?.addEventListener("click", openMonthlyTimeRecords);
+elements.loadMonthlyTimeRecordsButton?.addEventListener("click", () => loadMonthlyTimeRecords({ force: true }));
+elements.generateMonthlyTimeRecordsButton?.addEventListener("click", generateMonthlyTimeRecords);
+elements.monthlyTimeRecordsList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-time-record-action]");
+  if (!button) return;
+  openMonthlyTimeRecordAction(
+    button.dataset.timeRecordId,
+    button.dataset.timeRecordAction,
+    button.dataset.timeRecordDecision,
+  );
+});
+elements.monthlyTimeRecordActionForm?.addEventListener("submit", saveMonthlyTimeRecordAction);
 elements.timeTrackingLocation?.addEventListener("change", () => {
   refreshTimePresenceDepartments();
   Promise.all([loadTimePresence(), loadTimeDayReview(), loadTimeSummary(), loadTimeCorrections()]);
@@ -10696,6 +11723,23 @@ elements.payrollDownloadButton?.addEventListener("click", downloadPayrollExport)
 elements.payrollDeliverButton?.addEventListener("click", deliverPayrollExport);
 elements.savePayrollProfileButton?.addEventListener("click", () => saveIntegrationProfile("export").catch((error) => showToast(error.message, true)));
 document.querySelectorAll("[data-settings-tab]").forEach((button) => button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab)));
+elements.refreshRetentionPoliciesButton?.addEventListener("click", () => loadRetentionGovernance({ force: true }));
+elements.addRetentionRuleButton?.addEventListener("click", () => openRetentionRuleDialog());
+elements.addRetentionHoldButton?.addEventListener("click", () => openRetentionHoldDialog());
+elements.retentionRuleForm?.addEventListener("submit", saveRetentionRule);
+elements.retentionHoldForm?.addEventListener("submit", saveRetentionHold);
+elements.retentionPolicyList?.addEventListener("click", (event) => {
+  const versionButton = event.target.closest("[data-new-retention-rule-version]");
+  if (versionButton) {
+    const rule = retentionGovernanceRules()
+      .find((item) => item.id === versionButton.dataset.newRetentionRuleVersion);
+    if (rule) openRetentionRuleDialog(rule);
+    return;
+  }
+  const releaseButton = event.target.closest("[data-release-retention-hold]");
+  if (releaseButton) releaseRetentionHold(releaseButton.dataset.releaseRetentionHold);
+});
+elements.retentionPreviewForm?.addEventListener("submit", runRetentionPreview);
 elements.saveWifiAutomationSettingsButton?.addEventListener("click", saveWifiAutomationSettings);
 elements.saveWifiLocationMappingsButton?.addEventListener("click", saveWifiLocationMappings);
 elements.saveWifiConfirmationLevelsButton?.addEventListener("click", saveWifiConfirmationLevels);
@@ -10772,6 +11816,7 @@ elements.vacationMonth.addEventListener("change", () => {
 elements.addVacationButton.addEventListener("click", openVacationModal);
 elements.saveEntitlementsButton.addEventListener("click", saveVacationEntitlements);
 elements.editEntitlementsButton.addEventListener("click", () => {
+  if (!canManageVacationAccounts()) return;
   state.editingVacationEntitlements = true;
   renderVacations();
 });
@@ -10871,6 +11916,31 @@ elements.centralVacationYear?.addEventListener("change", async (event) => {
   state.centralVacationLoadedYear = null;
   await loadCentralVacations({ force: true });
 });
+elements.vacationAccountsButton?.addEventListener("click", openVacationAccounts);
+elements.loadVacationAccountsButton?.addEventListener("click", () => loadVacationAccounts({ force: true }));
+elements.dataSubjectRequestSearch?.addEventListener("input", (event) => {
+  state.dataSubjectRequestSearch = event.target.value;
+  renderDataSubjectRequests();
+});
+elements.dataSubjectRequestStatusFilter?.addEventListener("change", (event) => {
+  state.dataSubjectRequestStatusFilter = event.target.value;
+  renderDataSubjectRequests();
+});
+elements.dataSubjectRequestTypeFilter?.addEventListener("change", (event) => {
+  state.dataSubjectRequestTypeFilter = event.target.value;
+  renderDataSubjectRequests();
+});
+elements.refreshDataSubjectRequestsButton?.addEventListener("click", () => loadDataSubjectRequests({ force: true }));
+elements.addDataSubjectRequestButton?.addEventListener("click", () => openDataSubjectRequest());
+elements.dataSubjectRequestList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-open-data-subject-request]");
+  if (!button) return;
+  const request = state.dataSubjectRequests.find((item) => item.id === button.dataset.openDataSubjectRequest);
+  if (request) openDataSubjectRequest(request);
+});
+elements.dataSubjectRequestAction?.addEventListener("change", updateDataSubjectRequestActionFields);
+elements.dataSubjectRequestForm?.addEventListener("submit", saveDataSubjectRequest);
+elements.downloadDataSubjectRequestExportButton?.addEventListener("click", downloadDataSubjectRequestExport);
 elements.addCostCenterButton?.addEventListener("click", () => openCostCenterModal());
 elements.costCenterForm?.addEventListener("submit", saveCostCenter);
 elements.deactivateCostCenterButton?.addEventListener("click", deactivateCostCenter);

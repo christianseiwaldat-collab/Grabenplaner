@@ -66,6 +66,21 @@ main { width:min(1180px,calc(100% - 30px)); margin:26px auto 60px; }
 .option-card { color:#754a13; background:#f7eedb; border-left:4px solid #c68b2b; }
 .empty-day { color:#99a29e; font-size:11px; }
 .vacation-layout { display:grid; grid-template-columns:minmax(280px,.8fr) minmax(360px,1.2fr); gap:15px; }
+.vacation-account-card { min-width:0; max-width:100%; margin-bottom:15px; padding:20px 22px; }
+.vacation-account-heading { align-items:end; margin-bottom:15px; }
+.vacation-account-heading h2 { margin-bottom:0; }
+.vacation-account-heading label { width:min(160px,100%); }
+.vacation-account-summary { display:grid; gap:10px; min-width:0; }
+.vacation-account-primary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+.vacation-account-primary article { min-width:0; padding:13px; border:1px solid var(--line); border-radius:11px; background:rgba(240,244,241,.78); }
+.vacation-account-primary article.vacation-remaining { border-color:#9fcab7; background:#e5f2eb; }
+.vacation-account-primary span,.vacation-account-primary strong,.vacation-account-details span,.vacation-account-details strong { display:block; }
+.vacation-account-primary span,.vacation-account-details span { color:var(--muted); font-size:10px; }
+.vacation-account-primary strong { margin-top:4px; color:var(--ink); font-size:19px; overflow-wrap:anywhere; }
+.vacation-account-details { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; }
+.vacation-account-details span { min-width:0; padding:9px 11px; border-radius:9px; background:rgba(244,246,243,.86); overflow-wrap:anywhere; }
+.vacation-account-details strong { margin-top:3px; color:var(--ink); font-size:11px; }
+.vacation-account-notice { margin:12px 0 0; font-size:11px; overflow-wrap:anywhere; }
 .request-form,.vacation-layout > section { padding:22px; }
 .date-fields { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:13px; }
 .request-form > label { margin-bottom:13px; }
@@ -156,6 +171,23 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
 .portal-settings-card p { margin-bottom:0; font-size:12px; }
 .portal-settings-card .primary { justify-self:start; }
 .portal-settings-grid .wifi-suggestion-card { margin-bottom:0; }
+.privacy-settings-card { grid-column:1 / -1; align-content:start; min-width:0; }
+.privacy-settings-heading,.vacation-account-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; min-width:0; }
+.privacy-settings-heading > div,.vacation-account-heading > div { min-width:0; }
+.privacy-manual-badge { flex:0 0 auto; padding:6px 9px; border:1px solid #d7c27d; border-radius:999px; color:#75520a; background:#fff3cf; font-size:10px; font-weight:850; white-space:nowrap; }
+.privacy-data-layout { display:grid; grid-template-columns:minmax(220px,.72fr) minmax(300px,1.28fr); gap:16px; min-width:0; }
+.privacy-request-form,.privacy-request-history { min-width:0; max-width:100%; }
+.privacy-request-form { display:grid; align-content:start; gap:12px; padding:16px; border:1px solid var(--line); border-radius:13px; background:rgba(240,244,241,.72); }
+.privacy-request-form p,.privacy-export-hint { margin:0; font-size:11px; overflow-wrap:anywhere; }
+.privacy-request-form .primary { width:max-content; max-width:100%; }
+.privacy-request-list { display:grid; gap:8px; min-width:0; }
+.privacy-request-item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:10px; min-width:0; padding:12px; border:1px solid var(--line); border-radius:11px; background:var(--paper); }
+.privacy-request-item > div { min-width:0; overflow-wrap:anywhere; }
+.privacy-request-item strong,.privacy-request-item small { display:block; }
+.privacy-request-item small { margin-top:4px; color:var(--muted); font-size:10px; line-height:1.4; }
+.privacy-request-actions { display:flex; flex-direction:column; align-items:flex-end; gap:7px; min-width:0; }
+.privacy-request-actions .status { margin-top:0 !important; white-space:nowrap; }
+.privacy-request-actions .text-button,.privacy-request-actions .cancel-request { max-width:100%; text-align:center; white-space:normal; }
 .wifi-suggestion-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
 .wifi-suggestion-heading h2 { margin:0 0 4px; }
 .wifi-suggestion-heading p { margin:0; font-size:12px; }
@@ -257,6 +289,19 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
 .time-period-day button { padding:8px 10px; color:var(--green); background:#e4efe9; font-size:10px; font-weight:800; }
 .time-period-correction { margin-top:4px; color:var(--warning) !important; font-weight:750; }
 .time-period-issues { margin-top:4px; color:var(--danger) !important; font-weight:750; }
+.time-record-statements { min-width:0; max-width:100%; margin-top:20px; padding-top:18px; border-top:1px solid var(--line); }
+.time-record-statements .list-heading h3 { margin:0; }
+.time-record-notice { margin:-4px 0 13px; padding:10px 12px; border-left:3px solid var(--green); border-radius:8px; background:rgba(228,239,233,.75); font-size:11px; overflow-wrap:anywhere; }
+.time-record-statement-list { display:grid; gap:8px; min-width:0; }
+.time-record-statement { display:grid; grid-template-columns:minmax(170px,1fr) auto auto auto; align-items:center; gap:12px; min-width:0; padding:12px; border:1px solid var(--line); border-radius:11px; background:var(--paper); }
+.time-record-statement > div { min-width:0; }
+.time-record-statement strong,.time-record-statement small { display:block; }
+.time-record-statement small { margin-top:3px; color:var(--muted); font-size:10px; overflow-wrap:anywhere; }
+.time-record-actuals { display:grid; grid-template-columns:repeat(2,minmax(76px,1fr)); gap:7px; }
+.time-record-actuals span { color:var(--muted); font-size:9px; }
+.time-record-actuals strong { margin-top:3px; color:var(--ink); font-size:13px; white-space:nowrap; }
+.time-record-download { display:inline-flex; align-items:center; justify-content:center; text-align:center; white-space:normal; }
+.time-record-unavailable { color:var(--muted); font-size:10px; text-align:right; }
 .correction-entry-editor { display:grid; gap:8px; }
 .correction-entry-row { display:grid; grid-template-columns:minmax(120px,1fr) minmax(110px,.7fr) auto; gap:8px; align-items:end; padding:9px; border:1px solid var(--line); border-radius:11px; background:#f7f9f7; }
 .correction-entry-row button { width:38px; min-height:42px; color:var(--danger); background:#fae9e7; font-weight:900; }
@@ -297,7 +342,7 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
 @media (max-width:850px) { .schedule-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.vacation-layout { grid-template-columns:1fr; }.portal-user-copy { display:none; }.portal-tabs { overflow-x:auto; scrollbar-width:none; }.portal-tabs::-webkit-scrollbar { display:none; }.portal-tabs button { flex:0 0 auto; min-width:112px; }.approved-vacation-item { grid-template-columns:1fr 1fr; }.approved-vacation-item > div { grid-column:1 / -1; }.history-item { grid-template-columns:1fr auto; }.history-item > div:first-child { grid-column:1 / -1; }.history-item-status { justify-items:start; }.history-item-status small { text-align:left; } }
 @media (max-width:850px) { .sickness-preferences-card { grid-template-columns:1fr; }.notification-channel-row { grid-template-columns:minmax(130px,.55fr) minmax(240px,1.45fr); }.notification-channel-setup,.notification-verification-row { grid-column:1 / -1; } }
 @media (max-width:850px) { .time-tracking-layout { grid-template-columns:1fr; }.time-clock-card,.time-day-card { padding:20px; } }
-@media (max-width:850px) { .portal-settings-grid { grid-template-columns:1fr; }.portal-settings-card { min-height:0; } }
+@media (max-width:850px) { .portal-settings-grid { grid-template-columns:1fr; }.portal-settings-card { min-height:0; }.privacy-settings-card { grid-column:auto; }.privacy-data-layout { grid-template-columns:1fr; }.vacation-account-primary,.vacation-account-details { grid-template-columns:repeat(2,minmax(0,1fr)); }.time-record-statement { grid-template-columns:minmax(0,1fr) auto; }.time-record-statement .time-record-actuals { grid-column:1 / -1; }.time-record-statement .time-record-download,.time-record-statement .time-record-unavailable { grid-column:1 / -1; justify-self:start; text-align:left; } }
 @media (max-width:980px) { .wifi-suggestion-row { grid-template-columns:repeat(2,minmax(0,1fr)); }.wifi-suggestion-row > div:first-child,.wifi-suggestion-actions { grid-column:1 / -1; }.wifi-suggestion-actions button { flex:1; } }
 @media (max-width:560px) { .portal-brand img { width:88px; height:40px; }.portal-brand > div { display:none; }.portal-header { align-items:center; }.portal-user { gap:5px; flex-wrap:nowrap; }.portal-user #adminAppLink { display:none !important; }.wide-label { display:none !important; }.compact-label { display:block !important; }.header-action { min-height:38px; padding:7px; font-size:9px; }.schedule-grid { grid-template-columns:1fr; }.view-heading { align-items:flex-start; flex-direction:column; }.date-fields,.history-toolbar { grid-template-columns:1fr; width:100%; }.request-mode { grid-template-columns:1fr; } }
 @media (max-width:430px) { .portal-settings-shortcut { width:38px; padding:7px 4px; overflow:hidden; color:transparent; font-size:0; }.portal-settings-shortcut::before { content:"⚙"; color:var(--green); font-size:18px; }.portal-settings-shortcut.active::before { color:white; } }
@@ -305,6 +350,7 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
 @media (max-width:560px) { .leadership-filter-tabs { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:560px) { .time-heading { align-items:stretch; }.time-heading .time-refresh-button { align-self:flex-start; }.time-clock-card,.time-day-card { padding:17px; }.time-state-heading { grid-template-columns:36px 1fr; gap:11px; }.time-state-indicator { width:32px; height:32px; border-width:9px; }.time-state-heading h2 { font-size:22px; }.time-action-grid { gap:7px; margin-top:18px; }.time-action { min-height:70px; padding:11px; }.time-summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }.time-summary > div { padding:10px 8px; }.time-summary strong { font-size:15px; }.time-entry-heading { align-items:flex-start; flex-direction:column; }.time-entry-heading small { text-align:left; } }
 @media (max-width:560px) { .wifi-suggestion-card { padding:16px; }.wifi-suggestion-heading { align-items:stretch; flex-direction:column; }.portal-switch { justify-content:space-between; }.wifi-suggestion-row { grid-template-columns:1fr 1fr; }.wifi-week-heading { align-items:stretch; flex-direction:column; }.wifi-week-confirm { width:100%; } }
+@media (max-width:560px) { .privacy-settings-heading,.vacation-account-heading { align-items:stretch; flex-direction:column; }.privacy-manual-badge { align-self:flex-start; }.privacy-request-item { grid-template-columns:1fr; }.privacy-request-actions { align-items:flex-start; }.vacation-account-heading label { width:100%; }.vacation-account-primary,.vacation-account-details { grid-template-columns:1fr; }.vacation-account-card { padding:17px; }.time-record-statement { grid-template-columns:1fr; }.time-record-statement .status { justify-self:start; }.time-record-actuals { grid-column:1; width:100%; } }
 @media (max-width:720px) { body { padding-bottom:calc(78px + env(safe-area-inset-bottom)); }.portal-header { min-height:58px; padding:8px 10px; }.portal-tabs { position:fixed; left:8px; right:8px; bottom:max(8px,env(safe-area-inset-bottom)); z-index:30; margin:0; padding:5px; flex-wrap:nowrap; overflow-x:auto; scroll-snap-type:x proximity; box-shadow:0 12px 35px rgba(25,53,43,.25); background:rgba(255,253,250,.97); backdrop-filter:blur(12px); }.portal-tabs button { flex:0 0 auto; min-width:94px; min-height:48px; padding:7px 10px; font-size:10px; scroll-snap-align:start; }.portal-card { border-radius:14px; }.request-form,.vacation-layout > section,.history-card { padding:17px; } main { width:min(100% - 20px,1180px); margin-top:18px; }.primary,.text-button,.approved-vacation-item button,.cancel-request,input,select { min-height:44px; }.request-item,.history-item { grid-template-columns:1fr; }.request-item button,.history-item button { width:100%; }.history-item-status { justify-items:start; }.dialog-actions { position:sticky; bottom:-24px; padding:10px 0 max(2px,env(safe-area-inset-bottom)); background:white; }.notification-button { flex-basis:38px; } }
 @media (max-width:720px) {
   .portal-tabs.mobile-leadership { display:grid; grid-template-columns:repeat(var(--mobile-module-count,6),minmax(0,1fr)); gap:2px; overflow:hidden; scroll-snap-type:none; }

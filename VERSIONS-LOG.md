@@ -1,5 +1,15 @@
 # Grabenplaner Versions-Log
 
+## v0.82 Beta · Urlaub, Ist-Nachweise und Datenschutz-Governance
+
+- Urlaubsansprüche können als versionierte, hashverkettete Nachweise mit getrenntem unionsrechtlichem Mindesturlaub und nationalem Mehrurlaub geführt werden. Verbrauchsvorschauen ordnen die älteste valide Tranche zuerst zu.
+- Die Vorschau für das erste Beschäftigungsjahr bleibt konservativ und erzeugt keinen Anspruch automatisch. Karenzverlängerungen werden bei möglichen Verjährungszeitpunkten berücksichtigt.
+- Ein möglicher Ablauf wird ausschließlich als manuell zu prüfender Verjährungskandidat ausgewiesen. Ohne Nachweis tatsächlicher Ermöglichung, erforderlicher Aufforderung und rechtzeitiger Warnung erfolgt keine automatische Reduktion.
+- Monatsnachweise entstehen nur aus tatsächlichen Zeitereignissen und append-only Korrekturen. Planzeit bleibt strikt von erfasster Ist-Zeit getrennt; unvollständige oder ungeprüfte Nachweise lassen sich nicht sicher finalisieren.
+- Aufbewahrungsregeln unterscheiden Datenkategorie, Fristbeginn, Zweck, Rechtsgrundlage und Legal Hold. Die Vorschau löscht, anonymisiert oder archiviert keine Daten automatisch.
+- Betroffenenrechtsfälle unterstützen Auskunft, Berichtigung, Löschprüfung und Einschränkung samt Fristen, Identitätsprüfung und dokumentiertem Abschluss. Gesetzliche Aufbewahrung und Rechtsansprüche bleiben fallbezogen zu prüfen.
+- Offizielle Quellenmetadaten und deterministische SHA-256-Belege unterstützen die spätere Nachvollziehbarkeit. Die Funktionen sind technische Governance-Hilfen und keine pauschale Zusage vollständiger Rechtskonformität.
+
 ## v0.81 Beta · Österreichische Planarbeitszeit-Regelprüfung
 
 - Die Dienstplanung prüft geplante Arbeitszeit erstmals mit versionierten österreichischen Regelprofilen für Tages- und Wochenzeit, Pausen, tägliche und wöchentliche Ruhe sowie Sonn- und Feiertagsarbeit.

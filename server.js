@@ -161,6 +161,44 @@ const {
   saveWorkRuleAssignment,
   seedBuiltinWorkRuleProfiles,
 } = require("./lib/work-rules/store");
+const {
+  OFFICIAL_RETENTION_SOURCES,
+  RETENTION_GOVERNANCE_NOTICE,
+  createRetentionRuleVersion,
+  previewRetentionCandidates,
+  verifyRetentionRuleVersion,
+} = require("./lib/retention-policy");
+const {
+  OFFICIAL_PRIVACY_SOURCES,
+  PRIVACY_REQUEST_GOVERNANCE_NOTICE,
+  PRIVACY_REQUEST_TYPES,
+  completePrivacyRequest,
+  createPrivacyRequest,
+  decidePrivacyRequest,
+  extendPrivacyRequestDeadline,
+  setPrivacyRequestIdentity,
+  verifyPrivacyRequest,
+  withdrawPrivacyRequest,
+} = require("./lib/privacy-requests");
+const {
+  OFFICIAL_LEAVE_SOURCES,
+  allocateLeaveConsumption,
+  appendLeaveLedgerEntry,
+  assessLeaveLimitation,
+  createLeaveLedger,
+  verifyLeaveLedger,
+} = require("./lib/leave-governance");
+const {
+  OFFICIAL_TIME_RECORD_SOURCES,
+  appendActualTimeEvent,
+  createActualTimeLedger,
+  createMonthlyTimeRecordStatement,
+  finalizeMonthlyTimeRecordStatement,
+  reviewMonthlyTimeRecordStatement,
+  supersedeMonthlyTimeRecordStatement,
+  verifyMonthlyTimeRecordStatement,
+} = require("./lib/time-record-statements");
+const { createGovernanceStore, PRIVACY_TYPE_LABELS } = require("./lib/governance-store");
 const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
@@ -208,8 +246,17 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "time:settings", label: "Regeln der Zeiterfassung verwalten", description: "Buchungsort und Abweichungstoleranz je Standort.", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true },
   { id: "vacation:read", label: "Urlaubs- und ZA-Anträge lesen", group: "Zeit & Abwesenheit", warningLevel: "normal", hrDelegable: true },
   { id: "vacation:approve", label: "Urlaubs- und ZA-Anträge bearbeiten", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true },
+  { id: "vacation_accounts:read", label: "Urlaubskonten und Anspruchsbelege lesen", description: "Versionierte Urlaubskonten mit getrenntem EU-Mindesturlaub und nationalem Mehrurlaub.", group: "Zeit & Abwesenheit", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "vacation_accounts:manage", label: "Urlaubskonten berichtigen und bestätigen", description: "Änderungen erfolgen ausschließlich als neue, nachvollziehbare Revision.", group: "Zeit & Abwesenheit", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: "time_records:read", label: "Monatliche Arbeitszeitnachweise lesen", description: "Ausschließlich tatsächliche Zeitbuchungen und nachvollziehbare Korrekturen.", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "time_records:generate", label: "Monatliche Arbeitszeitnachweise erstellen", description: "Entwurf und finalen Nachweis revisionssicher erzeugen.", group: "Zeit & Abwesenheit", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: "hr:approve", label: "Verbindliche PL-Freigaben erteilen", group: "Zeit & Abwesenheit", warningLevel: "critical" },
   { id: "hr:settings", label: "Antrags- und AUM-Regeln verwalten", group: "Zeit & Abwesenheit", warningLevel: "critical" },
+  { id: "retention:read", label: "Aufbewahrungsregeln und Vorschau lesen", description: "Kategoriebezogene Fristen, Prüfhinweise und Legal Holds lesen.", group: "Datenschutz", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "retention:manage", label: "Aufbewahrungsregeln versioniert verwalten", description: "Neue Regelversionen und Legal Holds anlegen; kein direkter Löschlauf.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: "data_subject_requests:read", label: "Betroffenenanfragen lesen", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "data_subject_requests:manage", label: "Betroffenenanfragen bearbeiten", description: "Identitätsprüfung, Fristen, Entscheidung und Maßnahmen dokumentieren.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: "data_subject_requests:export", label: "Datenauskunftspaket erzeugen", description: "Minimierte, geprüfte Auskunft mit Prüfsumme erzeugen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "personnel:sensitive:read", label: "Sensible MA-Daten lesen", description: "SV-Nummer, Bankverbindung und Wohnadresse; nur Personalleitung oder ausdrücklich berechtigte höhere Rollen.", group: "Personalakt", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "personnel:sensitive:write", label: "Sensible MA-Daten bearbeiten", description: "SV-Nummer, Bankverbindung und Wohnadresse verschlüsselt pflegen.", group: "Personalakt", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "personnel:phone:read", label: "Telefonnummern im eigenen Bereich lesen", group: "Personalakt", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
@@ -328,6 +375,10 @@ const portalDashboardPermissionDetails = Object.freeze([
   { id: "own_time:correction_request", label: "Eigene Zeitkorrektur beantragen", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "own_vacation:read", label: "Eigenen Urlaub lesen", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "own_vacation:request", label: "Eigenen Urlaub beantragen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "own_time_record:read", label: "Eigene monatliche Arbeitszeitnachweise lesen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "own_privacy_requests:create", label: "Eigene Datenschutzanfrage einreichen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "own_privacy_requests:read", label: "Eigene Datenschutzanfragen lesen", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "own_privacy_export:read", label: "Eigene bereitgestellte Datenauskunft abrufen", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "own_amu:create", label: "Eigene AUM hochladen", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "own_amu:read", label: "Eigene AUM-Meldungen lesen", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "own_amu:withdraw", label: "Eigene AUM-Meldung zurückziehen", group: "Eigene Daten", scopeBehavior: "self" },
@@ -351,6 +402,9 @@ const portalGlobalPermissionIds = new Set([
   "settings:write", "positions:write", "hr:approve", "hr:settings", "sickness:settings",
   "personnel:central:read", "personnel:central:write", "cost_centers:read", "cost_centers:write",
   "personnel:sensitive:read", "personnel:sensitive:write",
+  "vacation_accounts:read", "vacation_accounts:manage",
+  "retention:read", "retention:manage",
+  "data_subject_requests:read", "data_subject_requests:manage", "data_subject_requests:export",
   "amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit",
   "processes:write",
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
@@ -611,6 +665,34 @@ builtinPortalRoles.push(
     permissions: [...adminPortalRole.permissions, "integrations:connections:write", "integrations:credentials:write", "system:recovery:run", "developer:system"],
   },
 );
+
+function addBuiltinRolePermissions(roleId, permissions) {
+  const role = builtinPortalRoles.find((entry) => entry.id === roleId);
+  if (!role) return;
+  role.permissions = [...new Set([...(role.permissions || []), ...permissions])];
+}
+
+const ownGovernancePermissions = [
+  "own_time_record:read",
+  "own_privacy_requests:create",
+  "own_privacy_requests:read",
+  "own_privacy_export:read",
+];
+for (const role of builtinPortalRoles) addBuiltinRolePermissions(role.id, ownGovernancePermissions);
+for (const roleId of ["department_manager", "manager"]) {
+  addBuiltinRolePermissions(roleId, ["time_records:read", "time_records:generate"]);
+}
+for (const roleId of ["hr", "admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, [
+    "time_records:read", "time_records:generate",
+    "vacation_accounts:read", "vacation_accounts:manage",
+    "retention:read", "retention:manage",
+    "data_subject_requests:read", "data_subject_requests:manage", "data_subject_requests:export",
+  ]);
+}
+addBuiltinRolePermissions("it_admin", [
+  "time_records:read", "vacation_accounts:read", "retention:read", "data_subject_requests:read",
+]);
 
 const GLOBAL_SCOPE_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
 const RIGHTS_ADMIN_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
@@ -1158,6 +1240,10 @@ function createDatabaseBackup(reason = "automatic") {
 
 function tableExists(name) {
   return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
+}
+
+function triggerExists(name) {
+  return Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'trigger' AND name = ?").get(name));
 }
 
 function columnExists(table, column) {
@@ -2285,6 +2371,189 @@ function createSchema() {
         ON UPDATE CASCADE ON DELETE RESTRICT
     );
 
+    -- Governance-Historien bewahren die zum Ereignis gehörende Personalnummer
+    -- selbst dann, wenn ein Stammdatensatz außerhalb der Anwendung entfernt
+    -- wurde. Die Anwendung selbst deaktiviert Personen kontrolliert.
+    CREATE TABLE IF NOT EXISTS vacation_account_revisions (
+      id TEXT PRIMARY KEY,
+      employee_number TEXT NOT NULL,
+      leave_year INTEGER NOT NULL,
+      revision INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'confirmed'
+        CHECK(status IN ('draft','confirmed','superseded')),
+      total_days REAL NOT NULL,
+      eu_minimum_days REAL NOT NULL,
+      national_additional_days REAL NOT NULL,
+      weekly_workdays REAL NOT NULL,
+      leave_year_start TEXT NOT NULL,
+      leave_year_end TEXT NOT NULL,
+      expiry_candidate_on TEXT,
+      expiry_status TEXT NOT NULL DEFAULT 'manual_review'
+        CHECK(expiry_status IN ('not_due','manual_review','documented','not_applicable')),
+      calculation_json TEXT NOT NULL,
+      sources_json TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      supersedes_id TEXT,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(employee_number, leave_year, revision),
+      FOREIGN KEY (supersedes_id) REFERENCES vacation_account_revisions(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS vacation_account_events (
+      id TEXT PRIMARY KEY,
+      employee_number TEXT NOT NULL,
+      leave_year INTEGER NOT NULL,
+      account_revision_id TEXT NOT NULL,
+      event_type TEXT NOT NULL
+        CHECK(event_type IN ('opening','entitlement','carryover','consumption','correction','expiry_review','notice')),
+      tranche_type TEXT NOT NULL DEFAULT 'unallocated'
+        CHECK(tranche_type IN ('eu_minimum','national_additional','unallocated')),
+      amount_days REAL NOT NULL DEFAULT 0,
+      effective_on TEXT NOT NULL,
+      detail_json TEXT NOT NULL DEFAULT '{}',
+      receipt_sha256 TEXT NOT NULL,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (account_revision_id) REFERENCES vacation_account_revisions(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS vacation_history_events (
+      id TEXT PRIMARY KEY,
+      group_id TEXT NOT NULL,
+      employee_number TEXT NOT NULL,
+      action TEXT NOT NULL
+        CHECK(action IN ('created','replaced','deleted','approved','cancelled')),
+      snapshot_json TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS time_record_statements (
+      id TEXT PRIMARY KEY,
+      employee_number TEXT NOT NULL,
+      period_start TEXT NOT NULL,
+      period_end TEXT NOT NULL,
+      revision INTEGER NOT NULL,
+      status TEXT NOT NULL
+        CHECK(status IN ('draft','reviewed','needs_correction','finalized','superseded')),
+      source_sha256 TEXT NOT NULL,
+      snapshot_json TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      supersedes_id TEXT,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(employee_number, period_start, period_end, revision),
+      FOREIGN KEY (supersedes_id) REFERENCES time_record_statements(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS time_record_statement_events (
+      id TEXT PRIMARY KEY,
+      statement_id TEXT NOT NULL,
+      event_type TEXT NOT NULL
+        CHECK(event_type IN ('created','finalized','superseded','provided','downloaded')),
+      actor_employee_number TEXT NOT NULL DEFAULT '',
+      detail_json TEXT NOT NULL DEFAULT '{}',
+      receipt_sha256 TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (statement_id) REFERENCES time_record_statements(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS retention_policy_versions (
+      id TEXT PRIMARY KEY,
+      category TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft'
+        CHECK(status IN ('draft','active','retired')),
+      valid_from TEXT NOT NULL,
+      valid_to TEXT,
+      duration_days INTEGER,
+      start_trigger TEXT NOT NULL,
+      disposition TEXT NOT NULL DEFAULT 'manual_review'
+        CHECK(disposition IN ('manual_review','delete','anonymize','archive')),
+      legal_basis TEXT NOT NULL DEFAULT '',
+      source_json TEXT NOT NULL DEFAULT '[]',
+      configuration_json TEXT NOT NULL DEFAULT '{}',
+      receipt_sha256 TEXT NOT NULL,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(category, version)
+    );
+
+    CREATE TABLE IF NOT EXISTS retention_preview_runs (
+      id TEXT PRIMARY KEY,
+      as_of TEXT NOT NULL,
+      result_json TEXT NOT NULL,
+      result_sha256 TEXT NOT NULL,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS legal_holds (
+      id TEXT PRIMARY KEY,
+      category TEXT NOT NULL,
+      subject_employee_number TEXT,
+      reason TEXT NOT NULL,
+      valid_from TEXT NOT NULL,
+      valid_to TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      released_by TEXT,
+      released_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS privacy_requests (
+      id TEXT PRIMARY KEY,
+      employee_number TEXT NOT NULL,
+      request_type TEXT NOT NULL
+        CHECK(request_type IN ('access','rectification','erasure','restriction','portability','objection')),
+      status TEXT NOT NULL DEFAULT 'received'
+        CHECK(status IN ('received','identity_pending','in_review','extended','approved','partially_approved','rejected','fulfilled','partially_fulfilled','withdrawn')),
+      identity_status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(identity_status IN ('pending','verified','insufficient')),
+      received_at TEXT NOT NULL,
+      due_at TEXT NOT NULL,
+      extended_due_at TEXT,
+      assigned_to TEXT NOT NULL DEFAULT '',
+      protected_payload TEXT NOT NULL,
+      revision INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS privacy_request_events (
+      id TEXT PRIMARY KEY,
+      request_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      actor_employee_number TEXT NOT NULL DEFAULT '',
+      protected_payload TEXT NOT NULL,
+      previous_receipt_sha256 TEXT NOT NULL DEFAULT '',
+      receipt_sha256 TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (request_id) REFERENCES privacy_requests(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS privacy_export_receipts (
+      id TEXT PRIMARY KEY,
+      request_id TEXT NOT NULL,
+      employee_number TEXT NOT NULL,
+      format TEXT NOT NULL DEFAULT 'json',
+      content_sha256 TEXT NOT NULL,
+      categories_json TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      downloaded_at TEXT,
+      FOREIGN KEY (request_id) REFERENCES privacy_requests(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
     CREATE TABLE IF NOT EXISTS schema_migrations (
       id TEXT PRIMARY KEY,
       app_version TEXT NOT NULL,
@@ -2334,6 +2603,28 @@ function createSchema() {
       ON work_rule_evaluation_runs(target_type, period_from, period_to, created_at);
     CREATE INDEX IF NOT EXISTS idx_work_rule_exceptions_finding
       ON work_rule_exceptions(finding_fingerprint, state, valid_from, valid_to);
+    CREATE INDEX IF NOT EXISTS idx_vacation_account_employee_year
+      ON vacation_account_revisions(employee_number, leave_year, revision DESC);
+    CREATE INDEX IF NOT EXISTS idx_vacation_account_events_employee
+      ON vacation_account_events(employee_number, leave_year, effective_on);
+    CREATE INDEX IF NOT EXISTS idx_vacation_history_employee
+      ON vacation_history_events(employee_number, created_at);
+    CREATE INDEX IF NOT EXISTS idx_time_record_statements_employee_period
+      ON time_record_statements(employee_number, period_start, period_end, revision DESC);
+    CREATE INDEX IF NOT EXISTS idx_time_record_statement_events
+      ON time_record_statement_events(statement_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_retention_policy_category
+      ON retention_policy_versions(category, version DESC);
+    CREATE INDEX IF NOT EXISTS idx_legal_holds_scope
+      ON legal_holds(category, subject_employee_number, active, valid_from, valid_to);
+    CREATE INDEX IF NOT EXISTS idx_privacy_requests_employee
+      ON privacy_requests(employee_number, status, received_at);
+    CREATE INDEX IF NOT EXISTS idx_privacy_requests_due
+      ON privacy_requests(status, due_at, extended_due_at);
+    CREATE INDEX IF NOT EXISTS idx_privacy_request_events
+      ON privacy_request_events(request_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_privacy_export_receipts
+      ON privacy_export_receipts(request_id, expires_at);
     CREATE INDEX IF NOT EXISTS idx_portal_users_role_active ON portal_users(role, active);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_employee ON portal_sessions(employee_number, expires_at);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_expiry ON portal_sessions(expires_at, revoked_at);
@@ -2341,6 +2632,102 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_mobile_sessions_expiry ON mobile_sessions(refresh_expires_at, revoked_at);
     CREATE INDEX IF NOT EXISTS idx_mobile_refresh_history_consumed ON mobile_refresh_token_history(consumed_at);
     CREATE INDEX IF NOT EXISTS idx_portal_permission_grants_employee ON portal_permission_grants(employee_number, permission);
+
+    CREATE TRIGGER IF NOT EXISTS trg_vacation_account_revisions_immutable_update
+    BEFORE UPDATE ON vacation_account_revisions
+    BEGIN
+      SELECT RAISE(ABORT, 'vacation account revisions are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_vacation_account_revisions_immutable_delete
+    BEFORE DELETE ON vacation_account_revisions
+    BEGIN
+      SELECT RAISE(ABORT, 'vacation account revisions are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_vacation_account_events_immutable_update
+    BEFORE UPDATE ON vacation_account_events
+    BEGIN
+      SELECT RAISE(ABORT, 'vacation account events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_vacation_account_events_immutable_delete
+    BEFORE DELETE ON vacation_account_events
+    BEGIN
+      SELECT RAISE(ABORT, 'vacation account events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_vacation_history_events_immutable_update
+    BEFORE UPDATE ON vacation_history_events
+    BEGIN
+      SELECT RAISE(ABORT, 'vacation history events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_vacation_history_events_immutable_delete
+    BEFORE DELETE ON vacation_history_events
+    BEGIN
+      SELECT RAISE(ABORT, 'vacation history events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_time_record_statements_immutable_update
+    BEFORE UPDATE ON time_record_statements
+    BEGIN
+      SELECT RAISE(ABORT, 'time record statements are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_time_record_statements_immutable_delete
+    BEFORE DELETE ON time_record_statements
+    BEGIN
+      SELECT RAISE(ABORT, 'time record statements are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_time_record_statement_events_immutable_update
+    BEFORE UPDATE ON time_record_statement_events
+    BEGIN
+      SELECT RAISE(ABORT, 'time record statement events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_time_record_statement_events_immutable_delete
+    BEFORE DELETE ON time_record_statement_events
+    BEGIN
+      SELECT RAISE(ABORT, 'time record statement events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_retention_policy_versions_immutable_update
+    BEFORE UPDATE ON retention_policy_versions
+    BEGIN
+      SELECT RAISE(ABORT, 'retention policy versions are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_retention_policy_versions_immutable_delete
+    BEFORE DELETE ON retention_policy_versions
+    BEGIN
+      SELECT RAISE(ABORT, 'retention policy versions are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_retention_preview_runs_immutable_update
+    BEFORE UPDATE ON retention_preview_runs
+    BEGIN
+      SELECT RAISE(ABORT, 'retention preview runs are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_retention_preview_runs_immutable_delete
+    BEFORE DELETE ON retention_preview_runs
+    BEGIN
+      SELECT RAISE(ABORT, 'retention preview runs are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_privacy_request_events_immutable_update
+    BEFORE UPDATE ON privacy_request_events
+    BEGIN
+      SELECT RAISE(ABORT, 'privacy request events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_privacy_request_events_immutable_delete
+    BEFORE DELETE ON privacy_request_events
+    BEGIN
+      SELECT RAISE(ABORT, 'privacy request events are immutable');
+    END;
 
     CREATE TRIGGER IF NOT EXISTS trg_work_rule_profile_versions_immutable_update
     BEFORE UPDATE ON work_rule_profile_versions
@@ -2477,6 +2864,93 @@ const portalMobileBaselineMigrationRequired = !tableExists("schema_migrations")
 const costCenterMigrationId = "v0.71-cost-centers-personnel";
 const shiftLocationMigrationId = "v0.71-shift-locations";
 const workRuleMigrationId = "v0.81-austrian-work-rule-engine";
+const privacyGovernanceMigrationId = "v0.82-leave-records-privacy";
+const vacationHistoryProtectionMigrationId = "v0.82-protected-vacation-history";
+const privacyGovernanceTables = [
+  "vacation_account_revisions",
+  "vacation_account_events",
+  "vacation_history_events",
+  "time_record_statements",
+  "time_record_statement_events",
+  "retention_policy_versions",
+  "retention_preview_runs",
+  "legal_holds",
+  "privacy_requests",
+  "privacy_request_events",
+  "privacy_export_receipts",
+];
+const privacyGovernanceImmutableTriggers = [
+  "trg_vacation_account_revisions_immutable_update",
+  "trg_vacation_account_revisions_immutable_delete",
+  "trg_vacation_account_events_immutable_update",
+  "trg_vacation_account_events_immutable_delete",
+  "trg_vacation_history_events_immutable_update",
+  "trg_vacation_history_events_immutable_delete",
+  "trg_time_record_statements_immutable_update",
+  "trg_time_record_statements_immutable_delete",
+  "trg_time_record_statement_events_immutable_update",
+  "trg_time_record_statement_events_immutable_delete",
+  "trg_retention_policy_versions_immutable_update",
+  "trg_retention_policy_versions_immutable_delete",
+  "trg_retention_preview_runs_immutable_update",
+  "trg_retention_preview_runs_immutable_delete",
+  "trg_privacy_request_events_immutable_update",
+  "trg_privacy_request_events_immutable_delete",
+];
+const privacyGovernanceImmutableTriggerMessages = Object.freeze({
+  vacation_account_revisions: "vacation account revisions are immutable",
+  vacation_account_events: "vacation account events are immutable",
+  vacation_history_events: "vacation history events are immutable",
+  time_record_statements: "time record statements are immutable",
+  time_record_statement_events: "time record statement events are immutable",
+  retention_policy_versions: "retention policy versions are immutable",
+  retention_preview_runs: "retention preview runs are immutable",
+  privacy_request_events: "privacy request events are immutable",
+});
+const privacyGovernanceImmutableTriggerDefinitions = privacyGovernanceImmutableTriggers.map((name) => {
+  const operation = name.endsWith("_immutable_update") ? "UPDATE" : "DELETE";
+  const suffix = `_immutable_${operation.toLowerCase()}`;
+  const table = name.slice("trg_".length, -suffix.length);
+  return Object.freeze({
+    name,
+    table,
+    operation,
+    message: privacyGovernanceImmutableTriggerMessages[table],
+  });
+});
+
+function normalizeImmutableTriggerSql(sql) {
+  return String(sql || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\s*;\s*$/, "")
+    .replace(/^create trigger if not exists /i, "create trigger ")
+    .toLowerCase();
+}
+
+function privacyGovernanceImmutableTriggerMatches(definition) {
+  const stored = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?",
+  ).get(definition.name);
+  if (!stored?.sql || !definition.message) return false;
+  const expected = `
+    CREATE TRIGGER ${definition.name}
+    BEFORE ${definition.operation} ON ${definition.table}
+    BEGIN
+      SELECT RAISE(ABORT, '${definition.message}');
+    END
+  `;
+  return normalizeImmutableTriggerSql(stored.sql) === normalizeImmutableTriggerSql(expected);
+}
+
+function removeMalformedPrivacyGovernanceImmutableTriggers() {
+  for (const definition of privacyGovernanceImmutableTriggerDefinitions) {
+    if (triggerExists(definition.name)
+      && !privacyGovernanceImmutableTriggerMatches(definition)) {
+      db.exec(`DROP TRIGGER IF EXISTS "${definition.name}"`);
+    }
+  }
+}
 const costCenterMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(costCenterMigrationId)
   || !tableExists("cost_centers")
@@ -2495,10 +2969,29 @@ const workRuleMigrationRequired = !tableExists("schema_migrations")
   || !tableExists("work_rule_evaluation_runs")
   || !columnExists("work_rule_evaluation_runs", "receipt_sha256")
   || !tableExists("work_rule_exceptions");
+const privacyGovernanceMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(privacyGovernanceMigrationId)
+  || privacyGovernanceTables.some((name) => !tableExists(name))
+  || privacyGovernanceImmutableTriggerDefinitions.some(
+    (definition) => !privacyGovernanceImmutableTriggerMatches(definition),
+  );
+const vacationHistoryProtectionMigrationRequired = tableExists("vacation_history_events") && (
+  !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(vacationHistoryProtectionMigrationId)
+  || Boolean(db.prepare(`
+    SELECT 1 FROM vacation_history_events
+    WHERE snapshot_json NOT LIKE 'enc:v2:%'
+    LIMIT 1
+  `).get())
+);
 if (databaseExistedBeforeOpen && (portalMobileBaselineMigrationRequired || protectedPersonnelMigrationRequired
   || unreleasedSicknessDraftSchemaPresent || legacySchemaMigrationRequired || costCenterMigrationRequired
-  || shiftLocationMigrationRequired || workRuleMigrationRequired)) {
+  || shiftLocationMigrationRequired || workRuleMigrationRequired || privacyGovernanceMigrationRequired
+  || vacationHistoryProtectionMigrationRequired)) {
   createInternalDatabaseBackup("pre-migration");
+}
+
+if (privacyGovernanceMigrationRequired) {
+  removeMalformedPrivacyGovernanceImmutableTriggers();
 }
 
 if (unreleasedSicknessDraftSchemaPresent) {
@@ -2876,6 +3369,98 @@ function outboundNotificationProtectionContext(row) {
   };
 }
 
+function privacyRequestProtectionContext(row) {
+  return {
+    namespace: "privacy-request",
+    recordId: String(row.id || ""),
+    field: "state",
+    employeeNumber: String(row.employee_number || row.subjectId || ""),
+  };
+}
+
+function privacyRequestEventProtectionContext(row) {
+  return {
+    namespace: "privacy-request-event",
+    recordId: String(row.id || ""),
+    field: "event",
+    employeeNumber: String(row.employee_number || row.subjectId || ""),
+  };
+}
+
+function timeRecordStatementProtectionContext(row) {
+  return {
+    namespace: "time-record-statement",
+    recordId: String(row.id || ""),
+    field: "statement",
+    employeeNumber: String(row.employee_number || row.employeeId || ""),
+  };
+}
+
+function vacationAccountProtectionContext(row) {
+  return {
+    namespace: "vacation-account",
+    recordId: String(row.id || ""),
+    field: "ledger",
+    employeeNumber: String(row.employee_number || row.employeeId || ""),
+  };
+}
+
+function vacationHistoryProtectionContext(row) {
+  return {
+    namespace: "vacation-history-event",
+    recordId: String(row.id || ""),
+    field: "snapshot",
+    employeeNumber: String(row.employee_number || row.employeeNumber || ""),
+  };
+}
+
+function vacationHistoryReceiptBody(row, snapshot) {
+  return {
+    schemaVersion: 1,
+    id: String(row.id),
+    action: String(row.action),
+    groupId: String(row.group_id || row.groupId),
+    employeeNumber: String(row.employee_number || row.employeeNumber),
+    snapshot,
+    createdBy: String(row.created_by || row.createdBy || "system"),
+    createdAt: String(row.created_at || row.createdAt),
+  };
+}
+
+function parseVacationHistorySnapshot(row, { allowPlaintext = false } = {}) {
+  let snapshot;
+  if (String(row.snapshot_json || "").startsWith("enc:v2:")) {
+    snapshot = parseProtectedJson(row.snapshot_json, vacationHistoryProtectionContext(row));
+  } else {
+    if (!allowPlaintext) {
+      throw httpError(
+        503,
+        "Ein Urlaubshistorien-Ereignis liegt nicht im erwarteten verschlüsselten Format vor.",
+        "VACATION_HISTORY_INTEGRITY_FAILED",
+      );
+    }
+    try {
+      snapshot = JSON.parse(String(row.snapshot_json || ""));
+    } catch {
+      throw httpError(503, "Ein Urlaubshistorien-Ereignis ist beschädigt.", "VACATION_HISTORY_INTEGRITY_FAILED");
+    }
+  }
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)
+    || String(snapshot.groupId || "") !== String(row.group_id || "")
+    || String(snapshot.employeeNumber || "") !== String(row.employee_number || "")) {
+    throw httpError(503, "Ein Urlaubshistorien-Ereignis ist inkonsistent.", "VACATION_HISTORY_INTEGRITY_FAILED");
+  }
+  const receiptSha256 = sha256(JSON.stringify(vacationHistoryReceiptBody(row, snapshot)));
+  if (receiptSha256 !== String(row.receipt_sha256 || "")) {
+    throw httpError(
+      503,
+      "Ein Urlaubshistorien-Ereignis besitzt keinen gültigen Beleg.",
+      "VACATION_HISTORY_INTEGRITY_FAILED",
+    );
+  }
+  return snapshot;
+}
+
 function parseProtectedJson(value, context) {
   try {
     const text = requireAmuStorage().unprotectRecord(value, context);
@@ -2892,6 +3477,178 @@ function parseProtectedJson(value, context) {
 
 function protectJson(value, context) {
   return requireAmuStorage().protectRecord(JSON.stringify(value), context);
+}
+
+let governanceStoreInstance = null;
+
+function requireGovernanceStore() {
+  if (!governanceStoreInstance) {
+    governanceStoreInstance = createGovernanceStore({
+      db,
+      protectJson,
+      parseProtectedJson,
+    });
+  }
+  return governanceStoreInstance;
+}
+
+function migrateProtectedVacationHistoryRecords() {
+  if (!tableExists("vacation_history_events")) return { migrated: 0 };
+  const rows = db.prepare(`
+    SELECT id, group_id, employee_number, action, snapshot_json, receipt_sha256, created_by, created_at
+    FROM vacation_history_events
+    ORDER BY created_at, id
+  `).all();
+  const pending = rows.filter((row) => !String(row.snapshot_json || "").startsWith("enc:v2:"));
+  for (const row of pending) parseVacationHistorySnapshot(row, { allowPlaintext: true });
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.exec("DROP TRIGGER IF EXISTS trg_vacation_history_events_immutable_update");
+    const update = db.prepare("UPDATE vacation_history_events SET snapshot_json = ? WHERE id = ?");
+    for (const row of pending) {
+      const snapshot = parseVacationHistorySnapshot(row, { allowPlaintext: true });
+      update.run(protectJson(snapshot, vacationHistoryProtectionContext(row)), row.id);
+    }
+    db.exec(`
+      CREATE TRIGGER trg_vacation_history_events_immutable_update
+      BEFORE UPDATE ON vacation_history_events
+      BEGIN
+        SELECT RAISE(ABORT, 'vacation history events are immutable');
+      END
+    `);
+    db.prepare(`
+      INSERT OR REPLACE INTO schema_migrations (id, app_version, applied_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+    `).run(vacationHistoryProtectionMigrationId, packageMetadata.version);
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  return { migrated: pending.length };
+}
+
+function verifyProtectedGovernanceRecords() {
+  const store = requireGovernanceStore();
+  let verified = 0;
+  const requireProtectedPayload = (value, code, label) => {
+    if (!String(value || "").startsWith("enc:v2:")) {
+      throw httpError(503, `${label} liegt nicht im erwarteten verschlüsselten Format vor.`, code);
+    }
+  };
+
+  verified += store.retentionRuleRows().length;
+
+  for (const row of db.prepare(`
+    SELECT id, employee_number, protected_payload
+    FROM privacy_requests ORDER BY received_at, id
+  `).all()) {
+    requireProtectedPayload(
+      row.protected_payload,
+      "PRIVACY_REQUEST_INTEGRITY_FAILED",
+      "Ein Datenschutzantrag",
+    );
+    store.privacyRequestRow(row.id);
+    verified += 1;
+  }
+
+  for (const row of db.prepare(`
+    SELECT * FROM vacation_account_revisions
+    ORDER BY employee_number, leave_year, revision
+  `).all()) {
+    requireProtectedPayload(
+      row.calculation_json,
+      "VACATION_ACCOUNT_INTEGRITY_FAILED",
+      "Eine Urlaubskonto-Revision",
+    );
+    store.vacationSummary(row, { consumedDays: 0, plannedDays: 0 });
+    verified += 1;
+  }
+
+  for (const row of db.prepare(`
+    SELECT id, group_id, employee_number, action, snapshot_json, receipt_sha256, created_by, created_at
+    FROM vacation_history_events
+    ORDER BY created_at, id
+  `).all()) {
+    requireProtectedPayload(
+      row.snapshot_json,
+      "VACATION_HISTORY_INTEGRITY_FAILED",
+      "Ein Urlaubshistorien-Ereignis",
+    );
+    parseVacationHistorySnapshot(row);
+    verified += 1;
+  }
+
+  for (const row of db.prepare(`
+    SELECT id, snapshot_json
+    FROM time_record_statements ORDER BY employee_number, period_start, revision
+  `).all()) {
+    requireProtectedPayload(
+      row.snapshot_json,
+      "TIME_RECORD_STATEMENT_INTEGRITY_FAILED",
+      "Ein Arbeitszeitnachweis",
+    );
+    store.timeStatementRow(row.id);
+    verified += 1;
+  }
+
+  verified += store.verifyAuxiliaryEventIntegrity();
+
+  for (const row of db.prepare(`
+    SELECT id, result_json, result_sha256
+    FROM retention_preview_runs ORDER BY created_at, id
+  `).all()) {
+    requireProtectedPayload(
+      row.result_json,
+      "RETENTION_PREVIEW_INTEGRITY_FAILED",
+      "Eine Aufbewahrungsvorschau",
+    );
+    const preview = parseProtectedJson(row.result_json, {
+      namespace: "retention-preview",
+      recordId: String(row.id),
+      field: "payload",
+      employeeNumber: "system",
+    });
+    if (String(preview.receiptSha256 || "") !== String(row.result_sha256 || "")) {
+      throw httpError(
+        503,
+        "Eine gespeicherte Aufbewahrungsvorschau besitzt keinen gültigen Beleg.",
+        "RETENTION_PREVIEW_INTEGRITY_FAILED",
+      );
+    }
+    verified += 1;
+  }
+
+  // Die unveränderlichen Ereignisse werden ebenfalls entschlüsselt. So stoppt
+  // der Start kontrolliert, falls ein einzelner Governance-Beleg beschädigt ist.
+  for (const row of db.prepare(`
+    SELECT e.id, e.request_id, e.protected_payload, e.receipt_sha256, r.employee_number
+    FROM privacy_request_events e
+    JOIN privacy_requests r ON r.id = e.request_id
+    ORDER BY e.request_id, e.created_at, e.id
+  `).all()) {
+    requireProtectedPayload(
+      row.protected_payload,
+      "PRIVACY_REQUEST_EVENT_INTEGRITY_FAILED",
+      "Ein Datenschutzantrags-Ereignis",
+    );
+    const event = parseProtectedJson(row.protected_payload, {
+      namespace: "privacy-request-event",
+      recordId: String(row.id),
+      field: "payload",
+      employeeNumber: String(row.employee_number),
+    });
+    if (String(event.receiptSha256 || "") !== String(row.receipt_sha256 || "")) {
+      throw httpError(
+        503,
+        "Ein Datenschutzantrags-Ereignis besitzt keinen gültigen Beleg.",
+        "PRIVACY_REQUEST_EVENT_INTEGRITY_FAILED",
+      );
+    }
+    verified += 1;
+  }
+
+  return verified;
 }
 
 function migrateProtectedPersonnelRecords() {
@@ -2959,8 +3716,12 @@ function migrateProtectedPersonnelRecords() {
 }
 
 migrateProtectedPersonnelRecords();
+migrateProtectedVacationHistoryRecords();
 verifyProtectedSensitivePersonnelRecords();
 verifyProtectedPersonnelRecordDocuments();
+ensureDefaultRetentionRules("system");
+backfillVacationAccountsFromEntitlements("system");
+verifyProtectedGovernanceRecords();
 db.exec("CREATE INDEX IF NOT EXISTS idx_time_entries_work_date ON time_entries(employee_number, work_date, entry_timestamp)");
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_mobile_request ON time_entries(employee_number, client_request_id) WHERE client_request_id IS NOT NULL");
 db.exec("CREATE INDEX IF NOT EXISTS idx_mobile_sessions_employee ON mobile_sessions(employee_number, refresh_expires_at)");
@@ -3325,6 +4086,8 @@ seedBuiltinWorkRuleProfiles(
 );
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run(workRuleMigrationId, packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run(privacyGovernanceMigrationId, packageMetadata.version);
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -5106,10 +5869,29 @@ function enforceAdminApiAccess(request, _response, next) {
     let permission = usbProvisioningRoute ? "usb:provision" : "schedule:read";
     const integrationRoute = /^\/integrations(?:\/|$)/.test(request.path);
     const workRuleRoute = /^\/work-rules(?:\/|$)/.test(request.path);
+    const privacyGovernanceRoute = /^\/privacy-governance(?:\/|$)/.test(request.path);
+    const vacationAccountsRoute = /^\/vacation-accounts(?:\/|$)/.test(request.path);
+    const timeRecordStatementsRoute = /^\/time-record-statements(?:\/|$)/.test(request.path);
     const personnelDirectoryRoute = /^\/personnel-directory(?:\/|$)/.test(request.path);
     const personnelVacationRoute = /^\/personnel-vacations(?:\/|$)/.test(request.path);
     const costCenterRoute = /^\/cost-centers(?:\/|$)/.test(request.path);
-    if (workRuleRoute) {
+    if (privacyGovernanceRoute) {
+      if (/^\/privacy-governance\/retention(?:\/|$)/.test(request.path)) {
+        permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "retention:read" : "retention:manage";
+      } else {
+        permission = ["GET", "HEAD", "OPTIONS"].includes(method)
+          ? "data_subject_requests:read"
+          : "data_subject_requests:manage";
+      }
+    } else if (vacationAccountsRoute) {
+      permission = ["GET", "HEAD", "OPTIONS"].includes(method)
+        ? "vacation_accounts:read"
+        : "vacation_accounts:manage";
+    } else if (timeRecordStatementsRoute) {
+      permission = ["GET", "HEAD", "OPTIONS"].includes(method)
+        ? "time_records:read"
+        : "time_records:generate";
+    } else if (workRuleRoute) {
       if (/^\/work-rules\/exceptions(?:\/|$)/.test(request.path)) {
         permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "work_rules:audit" : "work_rules:exception";
       } else if (/^\/work-rules\/evaluations(?:\/|$)/.test(request.path)) {
@@ -5160,7 +5942,9 @@ function enforceAdminApiAccess(request, _response, next) {
         permission = "system:write";
       } else if (/^\/settings/.test(request.path)) {
         permission = "settings:write";
-      } else if (/^\/(vacations|vacation-entitlements)/.test(request.path)) {
+      } else if (/^\/vacation-entitlements(?:\/|$)/.test(request.path)) {
+        permission = "vacation_accounts:manage";
+      } else if (/^\/vacations(?:\/|$)/.test(request.path)) {
         permission = "vacation:approve";
       } else {
         permission = "schedule:write";
@@ -14700,7 +15484,78 @@ function insertVacationEntries(vacation, groupId) {
   return created;
 }
 
-function createVacationEntries(vacation) {
+function vacationGroupSnapshot(groupId) {
+  const rows = String(groupId).startsWith("legacy-")
+    ? db.prepare(`
+      SELECT id, employee_number, group_id, week_start, date_from, date_to, option_type, note,
+             credited_minutes_per_day, all_day, start_time, end_time, created_at
+      FROM week_options
+      WHERE id = ? AND option_type = 'vacation'
+      ORDER BY date_from, id
+    `).all(Number(String(groupId).replace("legacy-", "")))
+    : db.prepare(`
+      SELECT id, employee_number, group_id, week_start, date_from, date_to, option_type, note,
+             credited_minutes_per_day, all_day, start_time, end_time, created_at
+      FROM week_options
+      WHERE group_id = ? AND option_type = 'vacation'
+      ORDER BY date_from, id
+    `).all(groupId);
+  if (!rows.length) return null;
+  return {
+    groupId: String(groupId),
+    employeeNumber: rows[0].employee_number,
+    dateFrom: rows[0].date_from,
+    dateTo: rows.at(-1).date_to,
+    segments: rows.map((row) => ({
+      id: Number(row.id),
+      weekStart: row.week_start,
+      dateFrom: row.date_from,
+      dateTo: row.date_to,
+      note: row.note || "",
+      createdAt: row.created_at,
+    })),
+  };
+}
+
+function recordVacationHistory(action, groupId, snapshot, actor = "system") {
+  if (!snapshot?.employeeNumber) return null;
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  const receipt = {
+    schemaVersion: 1,
+    id,
+    action,
+    groupId: String(groupId),
+    employeeNumber: snapshot.employeeNumber,
+    snapshot,
+    createdBy: String(actor || "system"),
+    createdAt,
+  };
+  const receiptSha256 = sha256(JSON.stringify(receipt));
+  db.prepare(`
+    INSERT INTO vacation_history_events
+      (id, group_id, employee_number, action, snapshot_json, receipt_sha256, created_by, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, String(groupId), snapshot.employeeNumber, action, protectJson(snapshot, {
+    namespace: "vacation-history-event",
+    recordId: id,
+    field: "snapshot",
+    employeeNumber: String(snapshot.employeeNumber),
+  }),
+    receiptSha256, String(actor || "system"), createdAt);
+  return { ...receipt, receiptSha256 };
+}
+
+function deleteVacationRows(groupId) {
+  if (String(groupId).startsWith("legacy-")) {
+    const id = Number(String(groupId).replace("legacy-", ""));
+    if (!Number.isInteger(id)) return 0;
+    return db.prepare("DELETE FROM week_options WHERE id = ? AND option_type = 'vacation'").run(id).changes;
+  }
+  return db.prepare("DELETE FROM week_options WHERE group_id = ? AND option_type = 'vacation'").run(groupId).changes;
+}
+
+function createVacationEntries(vacation, actor = "system") {
   const groupId = createVacationGroupId();
   let created = 0;
   let assessment = null;
@@ -14708,6 +15563,7 @@ function createVacationEntries(vacation) {
   try {
     assessment = assertVacationGovernanceAvailable(vacation.employeeNumber, vacation);
     created = insertVacationEntries(vacation, groupId);
+    recordVacationHistory("created", groupId, vacationGroupSnapshot(groupId), actor);
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -14724,14 +15580,19 @@ function vacationGroupExists(groupId) {
   return Boolean(db.prepare("SELECT 1 FROM week_options WHERE group_id = ? AND option_type = 'vacation'").get(groupId));
 }
 
-function replaceVacationGroup(groupId, vacation) {
+function replaceVacationGroup(groupId, vacation, actor = "system") {
   let created = 0;
   let assessment = null;
   db.exec("BEGIN");
   try {
     assessment = assertVacationGovernanceAvailable(vacation.employeeNumber, vacation, groupId);
-    deleteVacationGroup(groupId);
+    const before = vacationGroupSnapshot(groupId);
+    deleteVacationRows(groupId);
     created = insertVacationEntries(vacation, groupId);
+    recordVacationHistory("replaced", groupId, {
+      ...vacationGroupSnapshot(groupId),
+      previous: before,
+    }, actor);
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -14740,13 +15601,11 @@ function replaceVacationGroup(groupId, vacation) {
   return { groupId, created, assessment };
 }
 
-function deleteVacationGroup(groupId) {
-  if (String(groupId).startsWith("legacy-")) {
-    const id = Number(String(groupId).replace("legacy-", ""));
-    if (!Number.isInteger(id)) return 0;
-    return db.prepare("DELETE FROM week_options WHERE id = ? AND option_type = 'vacation'").run(id).changes;
-  }
-  return db.prepare("DELETE FROM week_options WHERE group_id = ? AND option_type = 'vacation'").run(groupId).changes;
+function deleteVacationGroup(groupId, actor = "system", action = "deleted") {
+  const snapshot = vacationGroupSnapshot(groupId);
+  const changes = deleteVacationRows(groupId);
+  if (changes && snapshot) recordVacationHistory(action, groupId, snapshot, actor);
+  return changes;
 }
 
 function databasePragmaValue(name) {
@@ -17826,6 +18685,803 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   scheduleBackupImport(importPath);
 });
 
+function governanceSource(source) {
+  return {
+    id: source.id,
+    authority: source.authority,
+    title: source.title,
+    url: source.url,
+    jurisdiction: source.jurisdiction,
+    reference: source.reference || "",
+  };
+}
+
+function defaultRetentionRuleInputs() {
+  const gdprSource = governanceSource(OFFICIAL_RETENTION_SOURCES.eu_gdpr);
+  const azgSource = governanceSource(OFFICIAL_TIME_RECORD_SOURCES[0]);
+  const timeRecordRetentionSource = governanceSource(
+    OFFICIAL_TIME_RECORD_SOURCES.find(({ id }) => id === "at-usp-arbeitszeitaufzeichnungen")
+      || OFFICIAL_TIME_RECORD_SOURCES[0],
+  );
+  const urlgSource = governanceSource(OFFICIAL_LEAVE_SOURCES.find(({ id }) => id === "at-urlg-8")
+    || OFFICIAL_LEAVE_SOURCES[0]);
+  const base = {
+    schemaVersion: 1,
+    validFrom: "2026-01-01",
+    validTo: null,
+    legalHold: { behavior: "exclude_while_active" },
+    disposition: "manual_review",
+  };
+  return [
+    {
+      ...base,
+      id: "retention-time-records-v1",
+      version: "1",
+      category: "time_records",
+      title: "Arbeitszeitaufzeichnungen – gesetzliches Minimum und manuelle Prüfung",
+      status: "active",
+      sources: [azgSource, timeRecordRetentionSource, gdprSource],
+      startTrigger: "record_closed",
+      retention: { value: 1, unit: "years" },
+    },
+    {
+      ...base,
+      id: "retention-vacation-records-v1",
+      version: "1",
+      category: "vacation_records",
+      title: "Urlaubsaufzeichnungen – fachlich zu bestätigende Aufbewahrung",
+      status: "draft",
+      sources: [urlgSource, gdprSource],
+      startTrigger: "record_closed",
+      retention: { value: 2, unit: "years" },
+    },
+    {
+      ...base,
+      id: "retention-sickness-aum-v1",
+      version: "1",
+      category: "sickness_aum",
+      title: "Krankenstands- und AUM-Daten – zweckgebundene manuelle Prüfung",
+      status: "draft",
+      sources: [gdprSource],
+      startTrigger: "case_resolved",
+      retention: { value: 2, unit: "years" },
+    },
+    {
+      ...base,
+      id: "retention-privacy-requests-v1",
+      version: "1",
+      category: "privacy_requests",
+      title: "Betroffenenanfragen und Bearbeitungsnachweise",
+      status: "draft",
+      sources: [gdprSource],
+      startTrigger: "case_resolved",
+      retention: { value: 3, unit: "years" },
+    },
+  ];
+}
+
+function ensureDefaultRetentionRules(actor = "system") {
+  return requireGovernanceStore().seedRetentionRules(defaultRetentionRuleInputs(), actor);
+}
+
+function retentionPreviewRecords() {
+  const records = [];
+  for (const row of db.prepare(`
+    SELECT id, employee_number, entry_timestamp, created_at
+    FROM time_entries ORDER BY id LIMIT 50000
+  `).all()) {
+    records.push({
+      id: `time-entry:${row.id}`,
+      category: "time_records",
+      subjectId: row.employee_number,
+      startTrigger: "record_closed",
+      startAt: String(row.entry_timestamp || row.created_at).slice(0, 10),
+    });
+  }
+  for (const row of db.prepare(`
+    SELECT id, employee_number, created_at
+    FROM vacation_history_events ORDER BY created_at, id LIMIT 20000
+  `).all()) {
+    records.push({
+      id: `vacation-history:${row.id}`,
+      category: "vacation_records",
+      subjectId: row.employee_number,
+      startTrigger: "record_closed",
+      startAt: String(row.created_at).slice(0, 10),
+    });
+  }
+  for (const row of db.prepare(`
+    SELECT id, employee_number, received_at, updated_at, status
+    FROM privacy_requests ORDER BY received_at, id LIMIT 10000
+  `).all()) {
+    records.push({
+      id: row.id,
+      category: "privacy_requests",
+      subjectId: row.employee_number,
+      startTrigger: "case_resolved",
+      startAt: String(["fulfilled", "partially_fulfilled", "rejected", "withdrawn"].includes(row.status)
+        ? row.updated_at
+        : row.received_at).slice(0, 10),
+    });
+  }
+  for (const row of db.prepare(`
+    SELECT id, employee_number, submitted_at, updated_at, status
+    FROM amu_reports ORDER BY submitted_at, id LIMIT 10000
+  `).all()) {
+    records.push({
+      id: `amu-report:${row.id}`,
+      category: "sickness_aum",
+      subjectId: row.employee_number,
+      startTrigger: "case_resolved",
+      startAt: String(["approved", "rejected", "withdrawn", "purged"].includes(row.status)
+        ? row.updated_at
+        : row.submitted_at).slice(0, 10),
+    });
+  }
+  return records;
+}
+
+function openPrivacyRequestLegalHolds(asOf) {
+  const categories = ["time_records", "vacation_records", "sickness_aum", "privacy_requests"];
+  const rows = db.prepare(`
+    SELECT id, employee_number, received_at
+    FROM privacy_requests
+    WHERE status NOT IN ('fulfilled','partially_fulfilled','rejected','withdrawn')
+    ORDER BY id
+  `).all();
+  return rows.flatMap((row) => categories.map((category) => ({
+    id: `open-request-hold:${row.id}:${category}`,
+    status: "active",
+    recordId: "",
+    subjectId: row.employee_number,
+    category,
+    validFrom: String(row.received_at).slice(0, 10),
+    validTo: null,
+    reasonCode: "open_data_subject_request",
+  }))).filter((hold) => hold.validFrom <= asOf);
+}
+
+function privacyRequestTypeCatalog() {
+  return PRIVACY_REQUEST_TYPES.map((id) => ({ id, label: PRIVACY_TYPE_LABELS[id] || id }));
+}
+
+function privacyRequestScope(type, input) {
+  const supplied = Array.isArray(input) ? input.map((item) => String(item || "").trim()).filter(Boolean) : [];
+  if (supplied.length) return supplied;
+  if (type === "rectification") return ["personnel_master_data"];
+  if (type === "erasure" || type === "restriction") return ["all_personal_data"];
+  if (type === "objection") return ["processing_scope"];
+  return ["personnel_master_data", "time_records", "vacation_records", "sickness_metadata"];
+}
+
+function privacyRequestExportBundle(state) {
+  if (!state || state.identity?.status !== "verified"
+    || !["approved", "partially_approved", "fulfilled", "partially_fulfilled"].includes(state.status)) {
+    throw httpError(409, "Eine Datenauskunft setzt bestätigte Identität und eine dokumentierte Freigabe voraus.",
+      "PRIVACY_EXPORT_NOT_APPROVED");
+  }
+  const scope = new Set(state.decision?.approvedScope || []);
+  const employeeNumber = state.subjectId;
+  const bundle = {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    requestId: state.id,
+    subjectId: employeeNumber,
+    scope: [...scope],
+    notice: "Maschinenlesbare, auf die dokumentiert freigegebenen Kategorien begrenzte Auskunft. Keine automatische rechtliche Entscheidung.",
+    data: {},
+  };
+  if (scope.has("personnel_master_data") || scope.has("all_personal_data")) {
+    const employee = db.prepare(`
+      SELECT personnel_number, full_name, nickname, contracted_hours, target_workdays_per_week,
+             position_id, home_location_id, preferred_department_id, cost_center_id, active, created_at
+      FROM employees WHERE personnel_number = ?
+    `).get(employeeNumber);
+    const sensitive = personnelSensitiveProfile(employeeNumber);
+    bundle.data.personnelMasterData = employee ? {
+      ...employee,
+      sensitiveProfile: {
+        identity: sensitive.identity,
+        socialSecurityNumber: sensitive.socialSecurityNumber,
+        iban: sensitive.iban,
+        bic: sensitive.bic,
+        accountHolder: sensitive.accountHolder,
+        address: sensitive.address,
+        phone: sensitive.phone,
+        alternatePhone: sensitive.alternatePhone,
+        privateEmail: sensitive.privateEmail,
+        employment: sensitive.employment,
+      },
+    } : null;
+  }
+  if (scope.has("time_records") || scope.has("all_personal_data")) {
+    bundle.data.timeRecords = db.prepare(`
+      SELECT id, work_date, entry_type, entry_timestamp, source, note, created_at,
+             voided_at, void_reason, correction_id
+      FROM time_entries WHERE employee_number = ? ORDER BY work_date, entry_timestamp, id
+    `).all(employeeNumber);
+    bundle.data.timeCorrections = db.prepare(`
+      SELECT id, correction_date, requested_change, request_note, status, decision_note,
+             created_at, updated_at
+      FROM time_corrections WHERE employee_number = ? ORDER BY correction_date, id
+    `).all(employeeNumber);
+  }
+  if (scope.has("vacation_records") || scope.has("all_personal_data")) {
+    bundle.data.vacationEntitlements = db.prepare(`
+      SELECT year, days, updated_at FROM vacation_entitlements
+      WHERE employee_number = ? ORDER BY year
+    `).all(employeeNumber);
+    bundle.data.vacationHistory = db.prepare(`
+      SELECT id, group_id, employee_number, action, snapshot_json, receipt_sha256, created_by, created_at
+      FROM vacation_history_events WHERE employee_number = ? ORDER BY created_at, id
+    `).all(employeeNumber).map((row) => ({
+      group_id: row.group_id,
+      action: row.action,
+      snapshot: parseVacationHistorySnapshot(row),
+      receipt_sha256: row.receipt_sha256,
+      created_at: row.created_at,
+    }));
+  }
+  if (scope.has("sickness_metadata") || scope.has("all_personal_data")) {
+    bundle.data.sicknessMetadata = db.prepare(`
+      SELECT id, status, submitted_at, updated_at, retention_until, revision
+      FROM amu_reports WHERE employee_number = ? ORDER BY submitted_at, id
+    `).all(employeeNumber);
+  }
+  return bundle;
+}
+
+function recordPrivacyExportReceipt(state, bundle, actor) {
+  const content = Buffer.from(JSON.stringify(bundle, null, 2), "utf8");
+  const contentSha256 = crypto.createHash("sha256").update(content).digest("hex");
+  const id = `privacy-export:${crypto.randomUUID()}`;
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  db.prepare(`
+    INSERT INTO privacy_export_receipts
+      (id, request_id, employee_number, format, content_sha256, categories_json,
+       expires_at, created_by, created_at, downloaded_at)
+    VALUES (?, ?, ?, 'json', ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    state.id,
+    state.subjectId,
+    contentSha256,
+    JSON.stringify(bundle.scope),
+    expiresAt,
+    actor,
+    bundle.generatedAt,
+    bundle.generatedAt,
+  );
+  auditPortal(actor, "privacy-request.export", "privacy_request", state.id,
+    JSON.stringify({ exportId: id, contentSha256, categories: bundle.scope }));
+  return { id, content };
+}
+
+function sessionCanAccessEmployee(session, employeeNumber) {
+  if (session?.employeeNumber && String(session.employeeNumber) === String(employeeNumber)) return true;
+  try {
+    assertSessionEmployeeScope(session, employeeNumber);
+    return true;
+  } catch (error) {
+    if (Number(error?.status) === 403) return false;
+    throw error;
+  }
+}
+
+function vacationAccountsForYear(year, actor = "system", employeeNumber = "", session = null) {
+  const plan = getCentralVacationPlan(year, { includeInactive: 1 });
+  const accounts = [];
+  for (const employee of plan.employees) {
+    if (employeeNumber && employee.personnel_number !== employeeNumber) continue;
+    if (!sessionCanAccessEmployee(session, employee.personnel_number)) continue;
+    if (!plan.entitlementsSaved?.[employee.personnel_number]) continue;
+    const row = requireGovernanceStore().vacationAccountRow(employee.personnel_number, year);
+    if (!row) continue;
+    accounts.push(requireGovernanceStore().vacationSummary(row, {
+      consumedDays: Number(plan.totals?.[employee.personnel_number]?.consumed || 0),
+      plannedDays: Number(plan.totals?.[employee.personnel_number]?.planned || 0),
+    }));
+  }
+  return accounts;
+}
+
+function backfillVacationAccountsFromEntitlements(actor = "system") {
+  const entitlements = db.prepare(`
+    SELECT v.employee_number, v.year, v.days, e.target_workdays_per_week
+    FROM vacation_entitlements v
+    JOIN employees e ON e.personnel_number = v.employee_number
+    ORDER BY v.year, CAST(v.employee_number AS INTEGER), v.employee_number
+  `).all();
+  const store = requireGovernanceStore();
+  const accounts = [];
+  for (const entitlement of entitlements) {
+    let employmentStart = "";
+    try {
+      employmentStart = personnelSensitiveProfile(entitlement.employee_number).employment?.startDate || "";
+    } catch {}
+    accounts.push(store.ensureVacationAccount({
+      employeeNumber: entitlement.employee_number,
+      year: Number(entitlement.year),
+      totalDays: Number(entitlement.days || 0),
+      consumedDays: 0,
+      plannedDays: 0,
+      weeklyWorkdays: Number(entitlement.target_workdays_per_week || 5),
+      employmentStart,
+      actor,
+    }));
+  }
+  return accounts;
+}
+
+function timeEntriesForStatement(employeeNumber, month) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    throw httpError(400, "Bitte einen gültigen Monat im Format YYYY-MM auswählen.", "TIME_RECORD_MONTH_INVALID");
+  }
+  return db.prepare(`
+    SELECT id, employee_number, work_date, entry_type, entry_timestamp, source, note,
+           created_by, created_at
+    FROM time_entries
+    WHERE employee_number = ? AND work_date BETWEEN ? AND ? AND voided_at IS NULL
+    ORDER BY work_date, entry_timestamp, id
+  `).all(employeeNumber, `${month}-01`, monthEnd(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1));
+}
+
+function drawTimeRecordStatementPdf(response, statementRow, employee) {
+  const statement = statementRow.statement;
+  const doc = new PDFDocument({ size: "A4", margin: 42, info: {
+    Title: `Arbeitszeitnachweis ${statement.month}`,
+    Author: APP_NAME,
+  } });
+  response.type("application/pdf");
+  response.setHeader("Cache-Control", "private, no-store");
+  response.setHeader("Content-Disposition",
+    `attachment; filename="Arbeitszeitnachweis-${statement.employeeId}-${statement.month}.pdf"`);
+  doc.pipe(response);
+  doc.font("Helvetica-Bold").fontSize(18).text("Monatlicher Arbeitszeitnachweis");
+  doc.moveDown(0.4).font("Helvetica").fontSize(10)
+    .text(`${employee?.full_name || statement.employeeId} · Personalnummer ${statement.employeeId} · ${statement.month}`);
+  doc.moveDown(0.3).fillColor("#52606d")
+    .text("Ausschließlich tatsächliche Zeitbuchungen; Dienstplanwerte werden nicht als Ist-Zeit verwendet.");
+  doc.moveDown().fillColor("#111827");
+  for (const day of statement.days) {
+    if (doc.y > 730) doc.addPage();
+    doc.font("Helvetica-Bold").fontSize(10).text(day.workDate, { continued: true, width: 90 });
+    doc.font("Helvetica").text(
+      `  ${day.beginningAt ? new Date(day.beginningAt).toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Vienna" }) : "–"}`
+      + ` – ${day.endingAt ? new Date(day.endingAt).toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Vienna" }) : "offen"}`
+      + ` · Pause ${day.breakMinutes} min · Ist ${Math.floor(day.actualMinutes / 60)}:${String(day.actualMinutes % 60).padStart(2, "0")} h`,
+    );
+  }
+  doc.moveDown().font("Helvetica-Bold")
+    .text(`Summe Ist: ${Math.floor(statement.totals.actualMinutes / 60)}:${String(statement.totals.actualMinutes % 60).padStart(2, "0")} h`);
+  doc.font("Helvetica").fontSize(8).fillColor("#52606d")
+    .text(`Revision ${statement.revision} · Beleg ${statement.receiptSha256}`);
+  doc.end();
+}
+
+function governanceRouteError(error, fallbackStatus = 400) {
+  if (Number.isInteger(error?.status)) throw error;
+  throw httpError(fallbackStatus, error?.message || "Die Governance-Aktion konnte nicht ausgeführt werden.",
+    error?.code || "GOVERNANCE_ACTION_FAILED");
+}
+
+app.get("/api/privacy-governance/retention", (request, response) => {
+  requireAdminHrOrLocal(request, "retention:read");
+  try {
+    const store = requireGovernanceStore();
+    response.json({
+      notice: RETENTION_GOVERNANCE_NOTICE,
+      rules: store.retentionRuleRows(),
+      holds: store.legalHolds(),
+      latestPreview: store.latestRetentionPreview(),
+    });
+  } catch (error) {
+    governanceRouteError(error, 503);
+  }
+});
+
+app.post("/api/privacy-governance/retention/rules", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "retention:manage");
+  try {
+    const rule = requireGovernanceStore().insertRetentionRule(request.body, actor.employeeNumber);
+    auditPortal(actor.employeeNumber, "retention.rule.create", "retention_policy", rule.id,
+      JSON.stringify({ category: rule.category, version: rule.version, status: rule.status }));
+    response.status(201).json({ rule, notice: RETENTION_GOVERNANCE_NOTICE });
+  } catch (error) {
+    governanceRouteError(error, error?.code === "SQLITE_CONSTRAINT_UNIQUE" ? 409 : 400);
+  }
+});
+
+app.post("/api/privacy-governance/retention/preview", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "retention:manage");
+  const asOf = isIsoDate(request.body?.asOf) ? request.body.asOf : viennaTodayIso();
+  try {
+    const preview = requireGovernanceStore().previewRetention(
+      retentionPreviewRecords(),
+      asOf,
+      actor.employeeNumber,
+      openPrivacyRequestLegalHolds(asOf),
+    );
+    auditPortal(actor.employeeNumber, "retention.preview.create", "retention_preview", preview.id,
+      JSON.stringify({ asOf, counts: preview.counts, automaticExecution: false }));
+    response.status(201).json({ preview, notice: RETENTION_GOVERNANCE_NOTICE });
+  } catch (error) {
+    governanceRouteError(error);
+  }
+});
+
+app.post("/api/privacy-governance/retention/holds", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "retention:manage");
+  const category = String(request.body?.category || "").trim();
+  const employeeNumber = String(request.body?.employeeNumber || "").trim();
+  const reasonCode = String(request.body?.reasonCode || "").trim();
+  const validFrom = isIsoDate(request.body?.validFrom) ? request.body.validFrom : viennaTodayIso();
+  const validTo = request.body?.validTo ? String(request.body.validTo) : null;
+  if (!/^[a-zA-Z0-9._:@/-]{1,128}$/.test(category)
+    || !/^[a-zA-Z0-9._:@/-]{1,128}$/.test(reasonCode)
+    || (validTo && (!isIsoDate(validTo) || validTo < validFrom))) {
+    throw httpError(400, "Bitte Kategorie, Grundcode und Gültigkeit des Legal Holds prüfen.",
+      "RETENTION_HOLD_INVALID");
+  }
+  if (employeeNumber && !db.prepare("SELECT 1 FROM employees WHERE personnel_number = ?").get(employeeNumber)) {
+    throw httpError(404, "Das Teammitglied wurde nicht gefunden.");
+  }
+  const id = `legal-hold:${crypto.randomUUID()}`;
+  db.prepare(`
+    INSERT INTO legal_holds
+      (id, category, subject_employee_number, reason, valid_from, valid_to, active, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+  `).run(id, category, employeeNumber || null, reasonCode, validFrom, validTo, actor.employeeNumber);
+  auditPortal(actor.employeeNumber, "retention.hold.create", "legal_hold", id,
+    JSON.stringify({ category, employeeNumber, validFrom, validTo, reasonCode }));
+  response.status(201).json({ id, category, employeeNumber, reasonCode, validFrom, validTo, active: true });
+});
+
+app.post("/api/privacy-governance/retention/holds/:id/release", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "retention:manage");
+  const result = db.prepare(`
+    UPDATE legal_holds
+    SET active = 0, released_by = ?, released_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND active = 1
+  `).run(actor.employeeNumber, request.params.id);
+  if (!result.changes) throw httpError(404, "Der aktive Legal Hold wurde nicht gefunden.");
+  auditPortal(actor.employeeNumber, "retention.hold.release", "legal_hold", request.params.id);
+  response.json({ id: request.params.id, active: false });
+});
+
+app.get("/api/privacy-governance/requests", (request, response) => {
+  requireAdminHrOrLocal(request, "data_subject_requests:read");
+  try {
+    response.json({
+      notice: PRIVACY_REQUEST_GOVERNANCE_NOTICE,
+      requestTypes: privacyRequestTypeCatalog(),
+      requests: requireGovernanceStore().listPrivacyRequests(),
+    });
+  } catch (error) {
+    governanceRouteError(error, 503);
+  }
+});
+
+app.get("/api/privacy-governance/requests/:id", (request, response) => {
+  requireAdminHrOrLocal(request, "data_subject_requests:read");
+  try {
+    const value = requireGovernanceStore().privacyRequestRow(request.params.id);
+    if (!value) throw httpError(404, "Die Datenschutzanfrage wurde nicht gefunden.");
+    response.json({ request: value.state, summary: requireGovernanceStore().privacySummary(value.state, value.row) });
+  } catch (error) {
+    governanceRouteError(error, 503);
+  }
+});
+
+app.post("/api/privacy-governance/requests", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "data_subject_requests:manage");
+  const employeeNumber = String(request.body?.employeeNumber || "").trim();
+  const type = String(request.body?.type || "").trim();
+  if (!db.prepare("SELECT 1 FROM employees WHERE personnel_number = ?").get(employeeNumber)) {
+    throw httpError(404, "Das Teammitglied wurde nicht gefunden.");
+  }
+  if (!PRIVACY_REQUEST_TYPES.includes(type)) {
+    throw httpError(400, "Bitte ein unterstütztes Betroffenenrecht auswählen.");
+  }
+  try {
+    const created = requireGovernanceStore().createRequest({
+      employeeNumber,
+      type,
+      scope: privacyRequestScope(type, request.body?.scope),
+      channel: "other",
+    }, actor.employeeNumber);
+    auditPortal(actor.employeeNumber, "privacy-request.create", "privacy_request", created.state.id,
+      JSON.stringify({ subject: employeeNumber, type, channel: "other" }));
+    response.status(201).json({ request: created.summary, notice: PRIVACY_REQUEST_GOVERNANCE_NOTICE });
+  } catch (error) {
+    governanceRouteError(error);
+  }
+});
+
+app.patch("/api/privacy-governance/requests/:id", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "data_subject_requests:manage");
+  const action = String(request.body?.action || "").trim();
+  try {
+    const body = action === "reject"
+      ? { ...request.body, source: governanceSource(OFFICIAL_PRIVACY_SOURCES.eu_gdpr) }
+      : request.body;
+    const updated = requireGovernanceStore().transitionPrivacyRequest(
+      request.params.id,
+      action,
+      body,
+      actor.employeeNumber,
+    );
+    if (!updated) throw httpError(404, "Die Datenschutzanfrage wurde nicht gefunden.");
+    auditPortal(actor.employeeNumber, `privacy-request.${action}`, "privacy_request", updated.state.id,
+      JSON.stringify({ status: updated.state.status, automaticDecision: false }));
+    response.json({ request: updated.summary, notice: PRIVACY_REQUEST_GOVERNANCE_NOTICE });
+  } catch (error) {
+    governanceRouteError(error, error?.code?.includes("STATUS") ? 409 : 400);
+  }
+});
+
+app.get("/api/privacy-governance/requests/:id/export", (request, response) => {
+  const actor = requirePortalAdminOrLocal(request, "data_subject_requests:export");
+  try {
+    const value = requireGovernanceStore().privacyRequestRow(request.params.id);
+    if (!value) throw httpError(404, "Die Datenschutzanfrage wurde nicht gefunden.");
+    const bundle = privacyRequestExportBundle(value.state);
+    const exported = recordPrivacyExportReceipt(value.state, bundle, actor.employeeNumber);
+    response.type("application/json");
+    response.setHeader("Cache-Control", "private, no-store");
+    response.setHeader("Content-Disposition",
+      `attachment; filename="Datenauskunft-${value.state.subjectId}-${value.state.id.replace(/[^a-z0-9_-]/gi, "-")}.json"`);
+    response.send(exported.content);
+  } catch (error) {
+    governanceRouteError(error, error?.code === "PRIVACY_EXPORT_NOT_APPROVED" ? 409 : 503);
+  }
+});
+
+app.get("/api/vacation-accounts", (request, response) => {
+  const actor = requirePortalReadOrLocal(request, "vacation_accounts:read");
+  const year = validateYear(request.query.year);
+  try {
+    response.json({
+      year,
+      accounts: vacationAccountsForYear(year, actor.employeeNumber, "", actor),
+      notice: "Urlaubskonten werden versioniert geführt. Verjährung wird nur als manuell zu prüfender Kandidat ausgewiesen.",
+    });
+  } catch (error) {
+    governanceRouteError(error, 503);
+  }
+});
+
+app.get("/api/time-record-statements", (request, response) => {
+  const actor = requirePortalReadOrLocal(request, "time_records:read");
+  const month = String(request.query.month || viennaTodayIso().slice(0, 7));
+  const includeArchived = String(request.query.includeArchived || "") === "1";
+  try {
+    const statements = requireGovernanceStore().listTimeStatements({ month, includeArchived })
+      .filter((statement) => sessionCanAccessEmployee(actor, statement.employeeNumber));
+    response.json({
+      month,
+      statements,
+      archiveIncluded: includeArchived,
+      notice: "Monatsnachweise enthalten ausschließlich tatsächliche Zeitbuchungen und deren nachvollziehbare Korrekturen.",
+    });
+  } catch (error) {
+    governanceRouteError(error, error?.code === "TIME_RECORD_MONTH_INVALID" ? 400 : 503);
+  }
+});
+
+app.post("/api/time-record-statements/generate", (request, response) => {
+  const actor = requirePortalAdminOrLocal(request, "time_records:generate");
+  const month = String(request.body?.month || viennaTodayIso().slice(0, 7));
+  const selected = Array.isArray(request.body?.employeeNumbers)
+    ? new Set(request.body.employeeNumbers.map((value) => String(value)))
+    : null;
+  const employees = db.prepare(`
+    SELECT personnel_number FROM employees WHERE active = 1
+    ORDER BY CAST(personnel_number AS INTEGER), personnel_number
+  `).all().filter((employee) => (
+    (!selected || selected.has(employee.personnel_number))
+    && sessionCanAccessEmployee(actor, employee.personnel_number)
+  ));
+  const statements = [];
+  const errors = [];
+  for (const employee of employees) {
+    try {
+      statements.push(requireGovernanceStore().generateTimeStatement({
+        employeeNumber: employee.personnel_number,
+        month,
+        entries: timeEntriesForStatement(employee.personnel_number, month),
+        actor: actor.employeeNumber,
+      }));
+    } catch (error) {
+      errors.push({
+        employeeNumber: employee.personnel_number,
+        code: error?.code || "TIME_RECORD_GENERATION_FAILED",
+        message: error?.message || "Nachweis konnte nicht erzeugt werden.",
+      });
+    }
+  }
+  auditPortal(actor.employeeNumber, "time-record-statements.generate", "time_record_statement", month,
+    JSON.stringify({ generated: statements.length, errors: errors.length }));
+  response.status(errors.length && !statements.length ? 422 : 201).json({ month, statements, errors });
+});
+
+app.patch("/api/time-record-statements/:id", (request, response) => {
+  const actor = requirePortalAdminOrLocal(request, "time_records:generate");
+  const current = requireGovernanceStore().timeStatementRow(request.params.id);
+  if (!current) throw httpError(404, "Der Monatsnachweis wurde nicht gefunden.");
+  assertSessionEmployeeScope(actor, current.row.employee_number);
+  try {
+    const statement = requireGovernanceStore().transitionTimeStatement(
+      request.params.id,
+      String(request.body?.action || ""),
+      request.body || {},
+      actor.employeeNumber,
+    );
+    auditPortal(actor.employeeNumber, `time-record-statement.${request.body?.action}`, "time_record_statement",
+      request.params.id, JSON.stringify({ revision: statement.revision, status: statement.status }));
+    response.json({ statement });
+  } catch (error) {
+    governanceRouteError(error, error?.code?.includes("INCOMPLETE") ? 409 : 400);
+  }
+});
+
+app.get("/api/time-record-statements/:id/download", (request, response) => {
+  const actor = requirePortalReadOrLocal(request, "time_records:read");
+  try {
+    const value = requireGovernanceStore().timeStatementRow(request.params.id);
+    if (!value) throw httpError(404, "Der Monatsnachweis wurde nicht gefunden.");
+    assertSessionEmployeeScope(actor, value.row.employee_number);
+    if (value.archived && String(request.query.includeArchived || "") !== "1") {
+      throw httpError(409,
+        "Diese Monatsnachweis-Revision ist archiviert. Standardmäßig kann nur die aktuelle Revision geladen werden.",
+        "TIME_RECORD_STATEMENT_ARCHIVED");
+    }
+    if (value.statement.status !== "finalized") {
+      throw httpError(409, "Nur finalisierte Monatsnachweise können bereitgestellt werden.");
+    }
+    const employee = db.prepare("SELECT full_name FROM employees WHERE personnel_number = ?")
+      .get(value.row.employee_number);
+    response.setHeader("X-Grabenplaner-Record-State", value.archived ? "archived" : "current");
+    drawTimeRecordStatementPdf(response, value, employee);
+    auditPortal(actor.employeeNumber, "time-record-statement.download", "time_record_statement", value.row.id);
+  } catch (error) {
+    governanceRouteError(error, 503);
+  }
+});
+
+app.get("/api/portal/v1/self/privacy-requests", (request, response) => {
+  const session = requirePortalSession(request, "own_privacy_requests:read");
+  try {
+    response.json({
+      notice: PRIVACY_REQUEST_GOVERNANCE_NOTICE,
+      requestTypes: privacyRequestTypeCatalog(),
+      requests: requireGovernanceStore().listPrivacyRequests(session.employeeNumber),
+    });
+  } catch (error) {
+    governanceRouteError(error, 503);
+  }
+});
+
+app.post("/api/portal/v1/self/privacy-requests", (request, response) => {
+  const session = requirePortalSession(request, "own_privacy_requests:create");
+  assertPortalCsrf(request);
+  const type = String(request.body?.type || "").trim();
+  if (!PRIVACY_REQUEST_TYPES.includes(type)) {
+    throw httpError(400, "Bitte ein unterstütztes Betroffenenrecht auswählen.");
+  }
+  try {
+    const created = requireGovernanceStore().createRequest({
+      employeeNumber: session.employeeNumber,
+      type,
+      scope: privacyRequestScope(type, request.body?.scope),
+      channel: "portal",
+    });
+    auditPortal(session.employeeNumber, "privacy-request.self.create", "privacy_request", created.state.id,
+      JSON.stringify({ type, scope: created.state.scope }));
+    response.status(201).json({ request: created.summary, notice: PRIVACY_REQUEST_GOVERNANCE_NOTICE });
+  } catch (error) {
+    governanceRouteError(error);
+  }
+});
+
+app.patch("/api/portal/v1/self/privacy-requests/:id", (request, response) => {
+  const session = requirePortalSession(request, "own_privacy_requests:create");
+  assertPortalCsrf(request);
+  const current = requireGovernanceStore().privacyRequestRow(request.params.id);
+  if (!current || current.state.subjectId !== session.employeeNumber) {
+    throw httpError(404, "Die eigene Datenschutzanfrage wurde nicht gefunden.");
+  }
+  if (String(request.body?.action || "") !== "withdraw") {
+    throw httpError(403, "Im Mitarbeiterportal kann eine Datenschutzanfrage nur zurückgenommen werden.");
+  }
+  try {
+    const updated = requireGovernanceStore().transitionPrivacyRequest(
+      request.params.id,
+      "withdraw",
+      request.body,
+      session.employeeNumber,
+    );
+    auditPortal(session.employeeNumber, "privacy-request.self.withdraw", "privacy_request", request.params.id);
+    response.json({ request: updated.summary });
+  } catch (error) {
+    governanceRouteError(error, 409);
+  }
+});
+
+app.get("/api/portal/v1/self/privacy-requests/:id/export", (request, response) => {
+  const session = requirePortalSession(request, "own_privacy_export:read");
+  try {
+    const value = requireGovernanceStore().privacyRequestRow(request.params.id);
+    if (!value || value.state.subjectId !== session.employeeNumber) {
+      throw httpError(404, "Die eigene Datenschutzanfrage wurde nicht gefunden.");
+    }
+    const bundle = privacyRequestExportBundle(value.state);
+    const exported = recordPrivacyExportReceipt(value.state, bundle, session.employeeNumber);
+    response.type("application/json");
+    response.setHeader("Cache-Control", "private, no-store");
+    response.setHeader("Content-Disposition", `attachment; filename="Meine-Datenauskunft-${value.state.id.replace(/[^a-z0-9_-]/gi, "-")}.json"`);
+    response.send(exported.content);
+  } catch (error) {
+    governanceRouteError(error, error?.code === "PRIVACY_EXPORT_NOT_APPROVED" ? 409 : 503);
+  }
+});
+
+app.get("/api/portal/v1/self/vacation-account", (request, response) => {
+  const session = requirePortalSession(request, "own_vacation:read");
+  const year = validateYear(request.query.year);
+  try {
+    response.json({
+      year,
+      account: vacationAccountsForYear(year, session.employeeNumber, session.employeeNumber, session)[0] || null,
+      notice: "Der Stand basiert auf dem versionierten Urlaubskonto und den derzeit geplanten Urlaubstagen.",
+    });
+  } catch (error) {
+    governanceRouteError(error, 503);
+  }
+});
+
+app.get("/api/portal/v1/self/time-record-statements", (request, response) => {
+  const session = requirePortalSession(request, "own_time_record:read");
+  const month = String(request.query.month || viennaTodayIso().slice(0, 7));
+  try {
+    response.json({
+      month,
+      statements: requireGovernanceStore().listTimeStatements({
+        month,
+        employeeNumber: session.employeeNumber,
+        finalizedOnly: true,
+      }),
+    });
+  } catch (error) {
+    governanceRouteError(error, error?.code === "TIME_RECORD_MONTH_INVALID" ? 400 : 503);
+  }
+});
+
+app.get("/api/portal/v1/self/time-record-statements/:id/download", (request, response) => {
+  const session = requirePortalSession(request, "own_time_record:read");
+  try {
+    const value = requireGovernanceStore().timeStatementRow(request.params.id);
+    if (!value || value.row.employee_number !== session.employeeNumber) {
+      throw httpError(404, "Der eigene Monatsnachweis wurde nicht gefunden.");
+    }
+    if (value.archived) {
+      throw httpError(409,
+        "Diese Monatsnachweis-Revision wurde ersetzt. Im Portal ist nur die aktuelle Revision verfügbar.",
+        "TIME_RECORD_STATEMENT_ARCHIVED");
+    }
+    if (value.statement.status !== "finalized") {
+      throw httpError(409, "Nur finalisierte Monatsnachweise können abgerufen werden.");
+    }
+    const employee = db.prepare("SELECT full_name FROM employees WHERE personnel_number = ?")
+      .get(session.employeeNumber);
+    drawTimeRecordStatementPdf(response, value, employee);
+    auditPortal(session.employeeNumber, "time-record-statement.self.download",
+      "time_record_statement", value.row.id);
+  } catch (error) {
+    governanceRouteError(error, 503);
+  }
+});
+
 app.get("/api/work-rules/catalog", (_request, response) => {
   response.json(getRuleCatalog());
 });
@@ -18707,19 +20363,26 @@ app.patch("/api/employees/:personnelNumber/display", (request, response) => {
 });
 
 app.delete("/api/employees/:personnelNumber", (request, response) => {
-  assertSessionEmployeeScope(request.portalSession, request.params.personnelNumber);
-  assertEmployeeDestructiveMutationAllowed(request.portalSession, request.params.personnelNumber);
-  const protectedDocuments = tableExists("personnel_record_documents")
-    ? Number(db.prepare(`
-      SELECT COUNT(*) AS count FROM personnel_record_documents
-      WHERE employee_number = ? AND status <> 'purged'
-    `).get(request.params.personnelNumber)?.count || 0)
-    : 0;
-  if (protectedDocuments > 0) {
-    throw httpError(409, "Das Teammitglied besitzt noch geschützte Personalakt-Dokumente und kann deshalb nur deaktiviert werden.", "PERSONNEL_DOCUMENTS_PREVENT_DELETE");
+  const personnelNumber = String(request.params.personnelNumber || "").trim();
+  assertSessionEmployeeScope(request.portalSession, personnelNumber);
+  assertEmployeeDestructiveMutationAllowed(request.portalSession, personnelNumber);
+  const existing = db.prepare("SELECT personnel_number, active FROM employees WHERE personnel_number = ?").get(personnelNumber);
+  if (!existing) throw httpError(404, "Die Person wurde nicht gefunden.");
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("UPDATE employees SET active = 0 WHERE personnel_number = ?").run(personnelNumber);
+    deactivateEmployeePortalAccess(personnelNumber);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
   }
-  const result = db.prepare("DELETE FROM employees WHERE personnel_number = ?").run(request.params.personnelNumber);
-  if (!result.changes) throw httpError(404, "Die Person wurde nicht gefunden.");
+  auditPortal(request.portalSession?.employeeNumber || "local", "employee.deactivate", "employee", personnelNumber,
+    JSON.stringify({
+      previousActive: Boolean(existing.active),
+      reason: "controlled-deactivation",
+      personalHistoryPreserved: true,
+    }));
   reconcileOpenAmuResponsibilities(request.portalSession?.employeeNumber || "local");
   response.status(204).end();
 });
@@ -26503,9 +28166,13 @@ app.get("/api/personnel-vacations", (request, response) => {
 });
 
 app.put("/api/vacation-entitlements", (request, response) => {
+  const actor = requirePortalAdminOrLocal(request, "vacation_accounts:manage");
   const year = validateYear(request.body.year);
   const entries = Array.isArray(request.body.entries) ? request.body.entries : [];
-  const employeeExists = db.prepare("SELECT 1 FROM employees WHERE personnel_number = ?");
+  const employeeExists = db.prepare(`
+    SELECT personnel_number, target_workdays_per_week
+    FROM employees WHERE personnel_number = ?
+  `);
   const upsert = db.prepare(`
     INSERT INTO vacation_entitlements (employee_number, year, days, updated_at)
     VALUES (?, ?, ?, CURRENT_TIMESTAMP)
@@ -26518,14 +28185,29 @@ app.put("/api/vacation-entitlements", (request, response) => {
     for (const entry of entries) {
       const employeeNumber = String(entry.employeeNumber || "").trim();
       const days = Number(entry.days || 0);
-      if (!employeeExists.get(employeeNumber)) {
+      const employee = employeeExists.get(employeeNumber);
+      if (!employee) {
         throw httpError(404, "Ein ausgewähltes Teammitglied wurde nicht gefunden.");
       }
-      assertSessionEmployeeScope(request.portalSession, employeeNumber);
+      assertSessionEmployeeScope(actor, employeeNumber);
       if (!Number.isFinite(days) || days < 0 || days > 365) {
         throw httpError(400, "Der Jahresurlaub muss zwischen 0 und 365 Tagen liegen.");
       }
       upsert.run(employeeNumber, year, days);
+      let employmentStart = "";
+      try {
+        employmentStart = personnelSensitiveProfile(employeeNumber).employment?.startDate || "";
+      } catch {}
+      requireGovernanceStore().ensureVacationAccount({
+        employeeNumber,
+        year,
+        totalDays: days,
+        consumedDays: 0,
+        plannedDays: 0,
+        weeklyWorkdays: Number(employee.target_workdays_per_week || 5),
+        employmentStart,
+        actor: actor.employeeNumber,
+      });
     }
     db.exec("COMMIT");
   } catch (error) {
@@ -26533,13 +28215,13 @@ app.put("/api/vacation-entitlements", (request, response) => {
     throw error;
   }
 
-  response.json(getVacationPlan(year, request.body, request.portalSession));
+  response.json(getVacationPlan(year, request.body, actor));
 });
 
 app.post("/api/vacations", (request, response) => {
   const vacation = validateVacationEntry(request.body);
   assertSessionEmployeeScope(request.portalSession, vacation.employeeNumber);
-  const result = createVacationEntries(vacation);
+  const result = createVacationEntries(vacation, request.portalSession?.employeeNumber || "local");
   response.status(201).json({
     groupId: result.groupId,
     assessment: result.assessment,
@@ -26556,7 +28238,7 @@ app.put("/api/vacations/:groupId", (request, response) => {
   assertSessionEmployeeScope(request.portalSession, existingEmployee);
   const vacation = validateVacationEntry(request.body, groupId);
   assertSessionEmployeeScope(request.portalSession, vacation.employeeNumber);
-  const result = replaceVacationGroup(groupId, vacation);
+  const result = replaceVacationGroup(groupId, vacation, request.portalSession?.employeeNumber || "local");
   response.json({
     groupId: result.groupId,
     assessment: result.assessment,
@@ -26568,7 +28250,7 @@ app.delete("/api/vacations/:groupId", (request, response) => {
   const existingEmployee = db.prepare("SELECT employee_number FROM week_options WHERE group_id = ? LIMIT 1").get(request.params.groupId)?.employee_number;
   if (!existingEmployee) throw httpError(404, "Der Urlaubseintrag wurde nicht gefunden.");
   assertSessionEmployeeScope(request.portalSession, existingEmployee);
-  const result = deleteVacationGroup(request.params.groupId);
+  const result = deleteVacationGroup(request.params.groupId, request.portalSession?.employeeNumber || "local");
   if (!result) throw httpError(404, "Der Urlaubseintrag wurde nicht gefunden.");
   response.status(204).end();
 });
@@ -28091,8 +29773,6 @@ function startServer() {
     }
     scheduleAutomaticBackups();
     try { reconcileOrphanAmuBlobs(); } catch (error) { console.error("AUM-Abgleich fehlgeschlagen:", error); }
-    try { purgeExpiredAmuDocuments(); } catch (error) { console.error("AUM-Aufbewahrungsprüfung fehlgeschlagen:", error); }
-    try { purgeExpiredSicknessData(); } catch (error) { console.error("Krankmeldungs-Aufbewahrungsprüfung fehlgeschlagen:", error); }
     try { runSicknessEscalationSweep(); } catch (error) { console.error("Krankmeldungs-Fristenprüfung fehlgeschlagen:", error); }
     try { reconcileCustomProcessTriggers(); } catch (error) { console.error("Eigene Prozessauslöser konnten nicht geprüft werden:", error); }
     try {
@@ -28117,8 +29797,6 @@ function startServer() {
     }
     retentionInterval = setInterval(() => {
       try { reconcileOrphanAmuBlobs(); } catch (error) { console.error("Dokumentenabgleich fehlgeschlagen:", error); }
-      try { purgeExpiredAmuDocuments(); } catch (error) { console.error("AUM-Aufbewahrungsprüfung fehlgeschlagen:", error); }
-      try { purgeExpiredSicknessData(); } catch (error) { console.error("Krankmeldungs-Aufbewahrungsprüfung fehlgeschlagen:", error); }
     }, 24 * 60 * 60 * 1000);
     retentionInterval.unref();
     sicknessSweepInterval = setInterval(() => {
@@ -28270,6 +29948,7 @@ module.exports = {
   pruneDatabaseBackups,
   verifyActiveProtectedDocumentBlobs,
   verifyProtectedBackupPair,
+  verifyProtectedGovernanceRecords,
   finalizeDeletedPersonnelRecordDocuments,
   ensureWorkRuleEvaluationReceiptIntegrity,
   releaseInstanceLockForTests,
