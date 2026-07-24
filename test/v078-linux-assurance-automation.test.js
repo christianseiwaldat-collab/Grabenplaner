@@ -308,6 +308,16 @@ test("application smoke sanitizes every known protected domain but preserves ope
         statement_id TEXT NOT NULL,
         FOREIGN KEY (statement_id) REFERENCES time_record_statements(id) ON DELETE RESTRICT
       );
+      CREATE TABLE payroll_handoffs (
+        id TEXT PRIMARY KEY,
+        payload_json TEXT NOT NULL
+      );
+      CREATE TABLE payroll_handoff_events (
+        id TEXT PRIMARY KEY,
+        handoff_id TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        FOREIGN KEY (handoff_id) REFERENCES payroll_handoffs(id) ON DELETE RESTRICT
+      );
       CREATE TABLE retention_preview_runs (id TEXT PRIMARY KEY, result_json TEXT NOT NULL);
       CREATE TABLE integration_connections (id TEXT PRIMARY KEY, active INTEGER NOT NULL,
         protected_credentials TEXT NOT NULL, credential_key_id TEXT NOT NULL);
@@ -331,6 +341,8 @@ test("application smoke sanitizes every known protected domain but preserves ope
       INSERT INTO vacation_history_events VALUES ('vacation-history', '101', 'enc:v2:vacation-history');
       INSERT INTO time_record_statements VALUES ('statement', '101', 'enc:v2:statement');
       INSERT INTO time_record_statement_events VALUES ('statement-event', 'statement');
+      INSERT INTO payroll_handoffs VALUES ('handoff', 'enc:v2:handoff');
+      INSERT INTO payroll_handoff_events VALUES ('handoff-event', 'handoff', 'enc:v2:handoff-event');
       INSERT INTO retention_preview_runs VALUES ('retention', 'enc:v2:retention');
       INSERT INTO integration_connections VALUES ('connection', 1, 'gp-integration-secret:v1:value', 'live-key');
       INSERT INTO integration_deliveries VALUES ('delivery', 'connection');
@@ -356,6 +368,7 @@ test("application smoke sanitizes every known protected domain but preserves ope
       "vacation_account_events", "vacation_account_revisions",
       "vacation_history_events",
       "time_record_statement_events", "time_record_statements", "retention_preview_runs",
+      "payroll_handoff_events", "payroll_handoffs",
       "portal_notifications",
     ]) assert.equal(database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 0, table);
     for (const column of [
@@ -364,6 +377,8 @@ test("application smoke sanitizes every known protected domain but preserves ope
       "vacation_account_revisions.calculation_json",
       "vacation_history_events.snapshot_json",
       "time_record_statements.snapshot_json",
+      "payroll_handoffs.payload_json",
+      "payroll_handoff_events.payload_json",
       "retention_preview_runs.result_json",
     ]) assert.equal(PROTECTED_COLUMNS.has(column), true, column);
     assert.deepEqual(

@@ -163,6 +163,8 @@ const state = {
     inspection: null,
     preview: null,
     payrollPreflight: null,
+    payrollHandoffs: [],
+    payrollHandoffPreflight: null,
   },
   employeeEditMode: "full",
   personnelTab: "employees",
@@ -265,8 +267,9 @@ const elements = Object.fromEntries(
     "brandLogo", "footerBrandLogo", "adminContactLink", "brandingCompanyName", "brandingAdminEmail", "brandingLogoUrl", "brandingIconUrl", "brandingLogoAlt", "brandingPreviewLogo", "brandingPreviewTitle", "brandingPreviewCompany", "brandingKitLibrary", "brandingAssignmentList", "exportBrandingButton", "brandingImportFile", "importBrandingButton", "toast",
     "usbProvisioningTab", "usbProvisioningSettings", "usbProvisioningAvailabilityCard", "usbProvisioningAvailability", "usbProvisioningAvailabilityBadge", "usbProvisioningAvailabilityTitle", "usbProvisioningAvailabilityText", "usbProvisioningWizard", "usbWizardDraftStatus", "usbInstallationProfile", "usbInstallationName", "usbModuleSelection", "usbPrimaryBranding", "usbPrimaryBrandingPreview", "usbAdditionalBrandings", "usbBrandingImportFile", "usbImportBrandingButton", "usbCreatorSummary", "usbCreatorEmployee", "usbCreatorPassword", "usbLocationSelection", "usbAddLocationButton", "usbEmployeeSearch", "usbAddEmployeeButton", "usbEmployeeSelection", "usbGuideTitle", "usbGuideIntroduction", "usbGuideNotes", "usbGuideContact", "usbGuideIncludeStartup", "usbGuideIncludeModules", "usbGuideIncludePdf", "usbGuideIncludeBackup", "usbGuidePreviewButton", "usbGuidePreviewFrame", "usbRefreshDrivesButton", "usbDriveList", "usbHideProgramFolder", "usbProtectProgramFiles", "usbProvisioningSummary", "usbFormatConfirmation", "usbFormatConfirmationHint", "usbProvisioningStartButton", "usbWizardActions", "usbWizardPreviousButton", "usbWizardStepHint", "usbWizardNextButton", "usbProvisioningProgressPanel", "usbProvisioningProgressTitle", "usbProvisioningProgressPercent", "usbProvisioningProgressTrack", "usbProvisioningProgressText", "usbProvisioningProgressSteps", "usbProvisioningResultPanel", "usbProvisioningResultText", "usbProvisioningResultDetails", "usbEmployeeDraftModal", "usbEmployeeDraftForm", "usbDraftPersonnelNumber", "usbDraftFullName", "usbDraftNickname", "usbDraftColor", "usbDraftContractedHours", "usbDraftPosition", "usbDraftLocation", "usbDraftDepartment", "usbDraftRole", "usbDraftPassword",
     "integrationConnectionsCard", "integrationConnectionList", "integrationDeliveryHistory", "addIntegrationConnectionButton", "integrationContractsCard", "integrationContractList",
-    "employeeImportCard", "importProfileCard", "payrollExportCard", "exportProfileCard", "integrationInformationCard", "integrationHistoryCard", "openPersonnelImportButton", "importProfileList", "exportProfileList", "integrationHistory",
+    "employeeImportCard", "importProfileCard", "payrollExportCard", "payrollHandoffCard", "exportProfileCard", "integrationInformationCard", "integrationHistoryCard", "openPersonnelImportButton", "importProfileList", "exportProfileList", "integrationHistory",
     "payrollProfile", "payrollLocation", "payrollDepartment", "payrollDateFrom", "payrollDateTo", "payrollSourceMode", "payrollLayout", "payrollFormat", "payrollApiTargetField", "payrollApiTarget", "payrollDelimiter", "payrollDecimalSeparator", "payrollColumnSelection", "payrollWageCodeDetails", "payrollWageCodeMap", "payrollAllowDraft", "payrollProfileName", "savePayrollProfileButton", "payrollPreflightButton", "payrollDeliverButton", "payrollDownloadButton", "payrollPreflightResult",
+    "payrollHandoffMonth", "payrollHandoffLocation", "payrollHandoffDepartment", "payrollHandoffPreflightButton", "payrollHandoffCreateButton", "payrollHandoffPreflightResult", "payrollHandoffList", "payrollHandoffProtocolModal", "payrollHandoffProtocolForm", "payrollHandoffProtocolId", "payrollHandoffProtocolSummary", "payrollHandoffProtocolResult", "payrollHandoffProtocolNumber", "payrollHandoffProtocolNote", "payrollHandoffProtocolMessage", "savePayrollHandoffProtocolButton",
     "personnelImportModal", "personnelImportForm", "personnelImportProgress", "personnelImportFileStep", "personnelImportMappingStep", "personnelImportPreviewStep", "personnelImportSourceType", "personnelImportFileField", "personnelImportSqlConnectionField", "personnelImportSqlConnection", "personnelImportFile", "personnelImportProfile", "personnelImportDuplicateStrategy", "personnelImportDefaultLocation", "personnelImportDefaultDepartment", "personnelImportDefaultPosition", "personnelImportDefaultHours", "inspectPersonnelImportButton", "personnelImportSheet", "personnelImportHeaderRow", "personnelImportMapping", "personnelImportProfileName", "savePersonnelImportProfileButton", "previewPersonnelImportButton", "personnelImportSummary", "personnelImportPreviewBody", "personnelImportPreviewHint", "personnelImportMessage", "resetPersonnelImportButton", "backPersonnelImportButton", "applyPersonnelImportButton",
     "integrationConnectionModal", "integrationConnectionForm", "integrationConnectionTitle", "integrationConnectionId", "integrationConnectionKind", "integrationConnectionName", "integrationConnectionActive", "integrationConnectionScopeLocations", "integrationConnectionScopeDepartments", "integrationSqlFields", "integrationSqlHost", "integrationSqlPort", "integrationSqlDatabase", "integrationSqlInstance", "integrationSqlSchema", "integrationSqlView", "integrationSqlAllowedColumns", "integrationSqlTls", "integrationSqlTimeout", "integrationSqlRowLimit", "integrationApiFields", "integrationApiEndpoint", "integrationApiAuthentication", "integrationApiKeyHeaderField", "integrationApiKeyHeader", "integrationApiTimeout", "integrationApiRequestLimit", "integrationApiResponseLimit", "integrationCredentialPanel", "integrationCredentialTitle", "integrationCredentialStatus", "integrationSqlCredentials", "integrationApiCredentials", "integrationBearerTokenField", "integrationApiKeyField", "integrationBasicUsernameField", "integrationBasicPasswordField", "integrationCredentialUsername", "integrationCredentialPassword", "integrationCredentialToken", "integrationCredentialApiKey", "integrationCredentialBasicUsername", "integrationCredentialBasicPassword", "integrationConnectionMessage", "deleteIntegrationConnectionButton", "testIntegrationConnectionButton", "saveIntegrationConnectionButton",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
@@ -909,6 +912,7 @@ function applyRoleVisibility() {
   elements.employeeImportCard?.classList.toggle("hidden", !personnelImportAccess);
   elements.importProfileCard?.classList.toggle("hidden", !(integrationReadAccess || personnelImportAccess));
   elements.payrollExportCard?.classList.toggle("hidden", !payrollExportAccess);
+  elements.payrollHandoffCard?.classList.toggle("hidden", !(integrationReadAccess || payrollExportAccess));
   elements.exportProfileCard?.classList.toggle("hidden", !(integrationReadAccess || payrollExportAccess));
   elements.integrationHistoryCard?.classList.toggle("hidden", !integrationReadAccess);
   elements.integrationInformationCard?.classList.toggle("hidden", !integrationAccess);
@@ -8084,6 +8088,211 @@ function renderPayrollPreflight(result = null) {
   }
 }
 
+const payrollHandoffStateLabels = {
+  prepared: "Vorbereitet",
+  external_transfer_required: "Extern zu übermitteln",
+  protocol_pending: "Protokoll ausständig",
+  accepted: "Laut Protokoll übernommen",
+  accepted_with_warning: "W · weitergeleitet, Hinweis prüfen",
+  correction_required: "N · Korrektur erforderlich",
+  superseded: "Durch neue Revision ersetzt",
+};
+
+function renderPayrollHandoffContext() {
+  if (!elements.payrollHandoffLocation) return;
+  const locations = state.locations.filter((location) => location.active !== false);
+  const selected = elements.payrollHandoffLocation.value || state.locationId || locations[0]?.id || "";
+  elements.payrollHandoffLocation.innerHTML = locations.map((location) => `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("");
+  if (locations.some((location) => String(location.id) === String(selected))) elements.payrollHandoffLocation.value = selected;
+  renderPayrollHandoffDepartments();
+  if (!elements.payrollHandoffMonth.value) elements.payrollHandoffMonth.value = toIsoDate(new Date()).slice(0, 7);
+}
+
+function renderPayrollHandoffDepartments() {
+  if (!elements.payrollHandoffDepartment || !elements.payrollHandoffLocation) return;
+  const location = state.locations.find((item) => String(item.id) === String(elements.payrollHandoffLocation.value));
+  const selected = elements.payrollHandoffDepartment.value;
+  elements.payrollHandoffDepartment.innerHTML = `<option value="">Gesamter Standort</option>${(location?.departments || [])
+    .filter((department) => department.active !== false)
+    .map((department) => `<option value="${escapeHtml(department.id)}">${escapeHtml(department.name)}</option>`).join("")}`;
+  if ((location?.departments || []).some((department) => String(department.id) === String(selected))) {
+    elements.payrollHandoffDepartment.value = selected;
+  }
+}
+
+function invalidatePayrollHandoffPreflight() {
+  state.integrations.payrollHandoffPreflight = null;
+  if (elements.payrollHandoffCreateButton) elements.payrollHandoffCreateButton.disabled = true;
+  if (elements.payrollHandoffPreflightResult) {
+    elements.payrollHandoffPreflightResult.innerHTML = `<p class="settings-note">Zuerst werden Vollständigkeit und Finalisierung aller betroffenen Monatsnachweise geprüft.</p>`;
+  }
+}
+
+function renderPayrollHandoffPreflight(result = state.integrations.payrollHandoffPreflight) {
+  if (!elements.payrollHandoffPreflightResult) return;
+  if (!result) {
+    invalidatePayrollHandoffPreflight();
+    return;
+  }
+  const blockers = result.blockers || [];
+  const blockerList = blockers.slice(0, 100).map((blocker) => `<li><strong>${escapeHtml(blocker.employeeNumber || "–")}</strong> · ${escapeHtml(blocker.message || blocker.code)}</li>`).join("");
+  elements.payrollHandoffPreflightResult.innerHTML = `
+    <div class="integration-metrics"><span><strong>${Number(result.employeeCount || 0)}</strong> Teammitglieder</span><span><strong>${Number(result.finalizedCount || 0)}</strong> finalisierte Nachweise</span><span><strong>${blockers.length}</strong> offene Punkte</span></div>
+    ${blockers.length
+      ? `<div class="integration-alert error"><strong>Übergabe noch gesperrt</strong><span>Alle aktuellen Monatsnachweise müssen vollständig geprüft und finalisiert sein.</span></div><details open><summary>Offene Punkte</summary><ul>${blockerList}</ul></details>`
+      : `<div class="integration-alert ok"><strong>Monatsnachweise vollständig</strong><span>Eine unveränderliche Übergaberevision kann erstellt werden.</span></div>`}
+    <p class="settings-note">${escapeHtml(result.notice || "")}</p>
+  `;
+  elements.payrollHandoffCreateButton.disabled = blockers.length > 0 || !result.finalizedCount;
+}
+
+function renderPayrollHandoffs() {
+  if (!elements.payrollHandoffList) return;
+  const handoffs = state.integrations.payrollHandoffs || [];
+  if (!handoffs.length) {
+    elements.payrollHandoffList.innerHTML = `<p class="settings-note">Für die Auswahl besteht noch keine Monatsübergabe.</p>`;
+    return;
+  }
+  const canExport = hasIntegrationPermission("payroll:export");
+  const canDeliver = hasIntegrationPermission("payroll:deliver");
+  elements.payrollHandoffList.innerHTML = handoffs.map((handoff) => {
+    const stateClass = handoff.state === "accepted" ? ""
+      : handoff.state === "accepted_with_warning" || handoff.state === "protocol_pending" || handoff.state === "external_transfer_required" ? "warning"
+        : handoff.state === "correction_required" ? "error" : "inactive";
+    const protocol = handoff.protocolNumber
+      ? `<small>Protokoll ${escapeHtml(handoff.protocolNumber)} · ${escapeHtml(handoff.protocolRecordedBy || "–")} · ${escapeHtml(new Date(handoff.protocolRecordedAt).toLocaleString("de-AT"))}</small>`
+      : `<small>Beleg ${escapeHtml(String(handoff.receiptSha256 || "").slice(0, 16))}…</small>`;
+    return `<article class="integration-handoff-row">
+      <div class="integration-handoff-copy">
+        <span class="status-badge ${stateClass}">${escapeHtml(payrollHandoffStateLabels[handoff.state] || handoff.state)}</span>
+        <div><strong>${escapeHtml(handoff.month)} · Revision ${Number(handoff.revision)}</strong><small>${Number(handoff.statementCount)} Nachweise · ${escapeHtml(formatHours(Number(handoff.actualMinutes || 0)))}</small>${protocol}</div>
+      </div>
+      <div class="integration-profile-actions">
+        ${canExport && handoff.exportAvailable ? `<button class="secondary-button compact-button" type="button" data-payroll-handoff-download="${escapeHtml(handoff.id)}">JSON erstellen</button>` : ""}
+        ${canDeliver && handoff.state === "external_transfer_required" ? `<button class="secondary-button compact-button" type="button" data-payroll-handoff-transfer="${escapeHtml(handoff.id)}">Extern übergeben</button>` : ""}
+        ${canDeliver && handoff.state === "protocol_pending" ? `<button class="primary-button compact-button" type="button" data-payroll-handoff-protocol="${escapeHtml(handoff.id)}">Protokoll erfassen</button>` : ""}
+      </div>
+    </article>`;
+  }).join("");
+}
+
+async function loadPayrollHandoffs() {
+  if (!(hasIntegrationPermission("integrations:read")
+    || hasIntegrationPermission("payroll:export")
+    || hasIntegrationPermission("payroll:deliver"))
+    || !elements.payrollHandoffMonth) return;
+  const query = new URLSearchParams({
+    month: elements.payrollHandoffMonth.value,
+    locationId: elements.payrollHandoffLocation.value,
+  });
+  const result = await api(`/api/integrations/payroll-handoffs?${query.toString()}`);
+  state.integrations.payrollHandoffs = (result.handoffs || []).filter((handoff) => (
+    String(handoff.departmentId || "") === String(elements.payrollHandoffDepartment.value || "")
+  ));
+  renderPayrollHandoffs();
+}
+
+async function preflightPayrollHandoff() {
+  elements.payrollHandoffPreflightButton.disabled = true;
+  try {
+    const result = await api("/api/integrations/payroll-handoffs/preflight", {
+      method: "POST",
+      body: JSON.stringify({
+        month: elements.payrollHandoffMonth.value,
+        locationId: elements.payrollHandoffLocation.value,
+        departmentId: elements.payrollHandoffDepartment.value || null,
+      }),
+    });
+    state.integrations.payrollHandoffPreflight = result;
+    renderPayrollHandoffPreflight(result);
+  } catch (error) {
+    invalidatePayrollHandoffPreflight();
+    showToast(error.message, true);
+  } finally {
+    elements.payrollHandoffPreflightButton.disabled = false;
+  }
+}
+
+async function createPayrollHandoffRevision() {
+  const preflight = state.integrations.payrollHandoffPreflight;
+  if (!preflight || preflight.blockers?.length) return;
+  elements.payrollHandoffCreateButton.disabled = true;
+  try {
+    const result = await api("/api/integrations/payroll-handoffs", {
+      method: "POST",
+      body: JSON.stringify({
+        month: elements.payrollHandoffMonth.value,
+        locationId: elements.payrollHandoffLocation.value,
+        departmentId: elements.payrollHandoffDepartment.value || null,
+        fingerprint: preflight.fingerprint,
+      }),
+    });
+    showToast(result.reused ? "Die unveränderte Übergaberevision besteht bereits." : "Übergaberevision wurde beweissicher erstellt.");
+    invalidatePayrollHandoffPreflight();
+    await loadPayrollHandoffs();
+  } catch (error) {
+    showToast(error.message, true);
+    renderPayrollHandoffPreflight(preflight);
+  }
+}
+
+async function downloadPayrollHandoff(id) {
+  try {
+    const response = await rawApi(`/api/integrations/payroll-handoffs/${encodeURIComponent(id)}/file`);
+    await downloadFileResponse(response, "grabenplaner-monatsuebergabe.json");
+    await loadPayrollHandoffs();
+    showToast("Unveränderliche Monatsübergabe erstellt.");
+  } catch (error) { showToast(error.message, true); }
+}
+
+async function markPayrollHandoffTransferred(id) {
+  if (!confirm("Wurde diese unveränderte Datei tatsächlich an Lohnverrechnung beziehungsweise zur externen ELDA-Übermittlung übergeben?")) return;
+  try {
+    await api(`/api/integrations/payroll-handoffs/${encodeURIComponent(id)}/events`, {
+      method: "POST",
+      body: JSON.stringify({ action: "mark_external_transfer" }),
+    });
+    await loadPayrollHandoffs();
+    showToast("Externe Übergabe dokumentiert. Das Übertragungsprotokoll bleibt ausständig.");
+  } catch (error) { showToast(error.message, true); }
+}
+
+function openPayrollHandoffProtocol(id) {
+  const handoff = (state.integrations.payrollHandoffs || []).find((item) => item.id === id);
+  if (!handoff) return;
+  elements.payrollHandoffProtocolId.value = id;
+  elements.payrollHandoffProtocolResult.value = "accepted";
+  elements.payrollHandoffProtocolNumber.value = "";
+  elements.payrollHandoffProtocolNote.value = "";
+  elements.payrollHandoffProtocolSummary.textContent = `${handoff.month} · Revision ${handoff.revision} · ${handoff.statementCount} Nachweise`;
+  elements.payrollHandoffProtocolMessage.textContent = "Ohne Protokollnummer bleibt die Übergabe offen. W wird als weitergeleitet mit Warnung, N als korrekturpflichtige Nichtübernahme dokumentiert.";
+  elements.payrollHandoffProtocolModal.showModal();
+}
+
+async function savePayrollHandoffProtocol(event) {
+  event.preventDefault();
+  const id = elements.payrollHandoffProtocolId.value;
+  elements.savePayrollHandoffProtocolButton.disabled = true;
+  try {
+    await api(`/api/integrations/payroll-handoffs/${encodeURIComponent(id)}/events`, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "record_protocol",
+        protocolResult: elements.payrollHandoffProtocolResult.value,
+        protocolNumber: elements.payrollHandoffProtocolNumber.value.trim(),
+        note: elements.payrollHandoffProtocolNote.value.trim(),
+      }),
+    });
+    elements.payrollHandoffProtocolModal.close();
+    await loadPayrollHandoffs();
+    showToast("Externes Übertragungsprotokoll unveränderlich dokumentiert.");
+  } catch (error) {
+    elements.payrollHandoffProtocolMessage.textContent = error.message;
+  } finally {
+    elements.savePayrollHandoffProtocolButton.disabled = false;
+  }
+}
+
 async function loadIntegrations() {
   const requests = [];
   const keys = [];
@@ -8132,6 +8341,11 @@ async function loadIntegrations() {
   renderPayrollContextOptions();
   renderPayrollColumns();
   renderPayrollPreflight(state.integrations.payrollPreflight);
+  renderPayrollHandoffContext();
+  renderPayrollHandoffPreflight(state.integrations.payrollHandoffPreflight);
+  await loadPayrollHandoffs().catch((error) => {
+    if (elements.payrollHandoffList) elements.payrollHandoffList.innerHTML = `<p class="settings-note error">${escapeHtml(error.message)}</p>`;
+  });
   populatePersonnelImportDefaults();
 }
 
@@ -11722,6 +11936,30 @@ elements.payrollPreflightButton?.addEventListener("click", preflightPayrollExpor
 elements.payrollDownloadButton?.addEventListener("click", downloadPayrollExport);
 elements.payrollDeliverButton?.addEventListener("click", deliverPayrollExport);
 elements.savePayrollProfileButton?.addEventListener("click", () => saveIntegrationProfile("export").catch((error) => showToast(error.message, true)));
+elements.payrollHandoffLocation?.addEventListener("change", () => {
+  renderPayrollHandoffDepartments();
+  invalidatePayrollHandoffPreflight();
+  loadPayrollHandoffs().catch((error) => showToast(error.message, true));
+});
+elements.payrollHandoffDepartment?.addEventListener("change", () => {
+  invalidatePayrollHandoffPreflight();
+  loadPayrollHandoffs().catch((error) => showToast(error.message, true));
+});
+elements.payrollHandoffMonth?.addEventListener("change", () => {
+  invalidatePayrollHandoffPreflight();
+  loadPayrollHandoffs().catch((error) => showToast(error.message, true));
+});
+elements.payrollHandoffPreflightButton?.addEventListener("click", preflightPayrollHandoff);
+elements.payrollHandoffCreateButton?.addEventListener("click", createPayrollHandoffRevision);
+elements.payrollHandoffList?.addEventListener("click", (event) => {
+  const download = event.target.closest("[data-payroll-handoff-download]");
+  if (download) { downloadPayrollHandoff(download.dataset.payrollHandoffDownload); return; }
+  const transfer = event.target.closest("[data-payroll-handoff-transfer]");
+  if (transfer) { markPayrollHandoffTransferred(transfer.dataset.payrollHandoffTransfer); return; }
+  const protocol = event.target.closest("[data-payroll-handoff-protocol]");
+  if (protocol) openPayrollHandoffProtocol(protocol.dataset.payrollHandoffProtocol);
+});
+elements.payrollHandoffProtocolForm?.addEventListener("submit", savePayrollHandoffProtocol);
 document.querySelectorAll("[data-settings-tab]").forEach((button) => button.addEventListener("click", () => setSettingsTab(button.dataset.settingsTab)));
 elements.refreshRetentionPoliciesButton?.addEventListener("click", () => loadRetentionGovernance({ force: true }));
 elements.addRetentionRuleButton?.addEventListener("click", () => openRetentionRuleDialog());

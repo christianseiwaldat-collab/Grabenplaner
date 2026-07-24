@@ -1,9 +1,10 @@
-# Direkte Integrationen
+# Direkte Integrationen und belegbare Monatsübergaben
 
-Grabenplaner v0.69 ergänzt die vorhandenen CSV-/XLSX-Abläufe um zwei bewusst eng begrenzte, manuell ausgelöste Verbindungsarten:
+Grabenplaner unterstützt drei bewusst eng begrenzte, manuell ausgelöste Integrationsarten:
 
 - Personalstammdaten aus einer freigegebenen Microsoft-SQL-Server-View lesen
 - final geprüfte Lohnwerte an eine dokumentierte HTTPS-JSON-API übergeben
+- finalisierte persönliche Monats-Ist-Nachweise als belegbare Übergaberevision exportieren und ein externes Übertragungsprotokoll zuordnen
 
 Es gibt keine automatische Synchronisation. Jede Übernahme beziehungsweise Übergabe wird durch eine berechtigte Person ausgelöst und bleibt nachvollziehbar.
 
@@ -13,6 +14,7 @@ Jede direkte Verbindung ist fest an einen maschinenlesbaren Vertrag gebunden. Di
 
 - `grabenplaner.personnel-view.v1` beschreibt den schreibgeschützten Eingang notwendiger Personalstammdaten.
 - `grabenplaner.payroll.v1` beschreibt die minimierte, idempotente HTTPS-JSON-Übergabe final geprüfter Lohnwerte.
+- `grabenplaner.payroll-period.v2` beschreibt eine verschlüsselte, unveränderliche Monatsübergabe aus finalisierten persönlichen Ist-Zeitnachweisen.
 
 Der Vertrag kann nicht durch freie Eingaben auf einen fachfremden Datenweg umgestellt werden. Eine spätere Vertragsänderung erhält eine neue Version und muss bewusst in Grabenplaner implementiert und geprüft werden.
 
@@ -36,13 +38,32 @@ Der Transport erlaubt ausschließlich HTTPS, prüft alle DNS-Ergebnisse gegen pr
 
 Der technische Verbindungstest führt ausschließlich eine DNS-, Netzwerk- und TLS-Prüfung durch. Er sendet weder einen fachlichen HTTP-Aufruf noch Test- oder Lohndaten an das Zielsystem.
 
+## Belegbare Monatsübergabe
+
+Die Monatsübergabe ist eine kontrollierte Dateiübergabe und keine direkte ELDA-Schnittstelle. Vor dem Erstellen prüft Grabenplaner, ob für jedes betroffene aktive Teammitglied ein finalisierter Monats-Ist-Nachweis vorhanden ist. Planwerte, unvollständige oder nur geprüfte, aber nicht finalisierte Nachweise werden abgewiesen.
+
+Der verschlüsselte Datensatz und seine exportierte JSON-Datei enthalten ausschließlich Personalnummer, Nachweis-ID, Nachweisrevision, SHA-256-Beleg sowie tatsächliche Arbeits- und Pausenminuten. Namen, Planzeiten, Entgelt- und Beitragsgrundlagen, Bankdaten, SV-Nummern, Adressen, Telefonnummern, AUM- und Personalakt-Inhalte sind ausgeschlossen.
+
+Die Zustände bleiben ausdrücklich getrennt:
+
+- **Vorbereitet:** unveränderliche Revision vorhanden, noch keine Datei ausgegeben
+- **Extern zu übermitteln:** Datei wurde ausgegeben
+- **Protokoll ausständig:** externe Weitergabe wurde dokumentiert
+- **Übernommen:** externes Protokoll ohne W/N erfasst
+- **Mit Warnung weitergeleitet:** externer Status W erfasst
+- **Korrektur erforderlich:** externer Status N erfasst
+- **Ersetzt:** neue Revision mit aktualisierten finalisierten Monatsnachweisen vorhanden
+
+Ohne externes Protokoll gilt die Übergabe im Grabenplaner nicht als abgeschlossen. Das System berechnet weder Entgelt noch Sozialversicherungsbeiträge und bestätigt keine ordnungsgemäße mBGM-Erstattung. Die fachlichen Grenzen, amtlichen Quellen und der Wiederherstellungsnachweis stehen in [Monatsübergabe und externer ELDA-Nachweis](docs/LOHNUEBERGABE-UND-ELDA-NACHWEIS.md).
+
 ## Rechte
 
 - `Direkte Verbindungen lesen`: öffentliche Konfiguration und Status sehen
 - `Direkte Verbindungen konfigurieren`: SQL-Quellen und API-Ziele verwalten
 - `Zugangsdaten direkter Verbindungen ersetzen`: neue Geheimnisse setzen; vorhandene Werte werden nie angezeigt
 - `Personalstammdaten importieren`: SQL- oder Dateiimport prüfen und übernehmen
-- `Lohnverrechnungsdaten sicher übertragen`: final geprüfte Daten fachlich übergeben
+- `Lohnverrechnungsdaten exportieren`: final geprüfte Daten ausgeben sowie belegbare Monatsübergaben erstellen und herunterladen
+- `Lohnverrechnungsdaten sicher übertragen`: fachliche Übergaben auslösen sowie externe Weitergabe und Übertragungsprotokoll dokumentieren
 
 Standardmäßig konfigurieren Developer und IT-Admin die technischen Verbindungen und Zugangsdaten. Admin und Personalleitung können die öffentliche Konfiguration sehen und fachlich freigegebene Lohnwerte übergeben. Personenbezogene Zusatzrechte bleiben möglich, sollten aber sparsam vergeben werden.
 

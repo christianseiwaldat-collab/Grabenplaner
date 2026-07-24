@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.82 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.83 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -12,6 +12,15 @@ Voraussetzung:
 Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
+
+Version v0.83 Beta:
+  - Finalisierte persoenliche Monats-Ist-Nachweise koennen in einer
+    unveraenderlichen und verschluesselten Uebergaberevision gebuendelt werden.
+  - Jede Uebergabe besitzt einen SHA-256-Beleg. Planzeiten und sensible
+    Personalaktdaten bleiben ausgeschlossen.
+  - Export, externe Weitergabe und externes Protokoll werden getrennt
+    dokumentiert. Grabenplaner uebermittelt nicht selbst an ELDA.
+  - Zusaetzlich bleiben alle Verbesserungen aus v0.82 Beta enthalten.
 
 Version v0.82 Beta:
   - Urlaub wird in versionierten Nachweisen mit getrenntem EU-Mindesturlaub

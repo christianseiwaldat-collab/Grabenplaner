@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.83 Beta · Belegbare Monatsübergaben
+
+- Finalisierte persönliche Monats-Ist-Nachweise lassen sich als minimierte, verschlüsselte und unveränderliche Übergaberevision für die externe Lohnverrechnung bündeln. Planzeiten, Namen und sensible Personalaktdaten bleiben ausgeschlossen.
+- Jede Übergabe besitzt einen deterministischen SHA-256-Beleg und verweist auf die Belege ihrer Monatsnachweise. Neue Werte erzeugen eine Nachfolgerevision, statt einen bestehenden Stand zu überschreiben.
+- Datei-Export, dokumentierte externe Weitergabe und externes Übertragungsprotokoll sind getrennte, nachvollziehbare Ereignisse. Ohne Protokoll bleibt die Übergabe offen.
+- Die Protokollergebnisse unterscheiden Übernahme, Weiterleitung mit Warnung und korrekturpflichtige Nichtübernahme. Grabenplaner berechnet weder Entgelt noch Sozialversicherungsbeiträge und übermittelt nicht selbst an ELDA.
+- Linux Recovery Assurance entschlüsselt und prüft die neuen Übergabe- und Ereignisdatensätze im Wiederherstellungsstand. Der isolierte App-Smoke übernimmt keine echten Übergabeinhalte.
+
 ## v0.82 Beta · Urlaub, Ist-Nachweise und Datenschutz-Governance
 
 - Urlaubsansprüche können als versionierte, hashverkettete Nachweise mit getrenntem unionsrechtlichem Mindesturlaub und nationalem Mehrurlaub geführt werden. Verbrauchsvorschauen ordnen die älteste valide Tranche zuerst zu.
