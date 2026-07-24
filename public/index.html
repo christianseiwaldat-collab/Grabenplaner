@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.80 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.81 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -159,6 +159,22 @@
             <article class="summary-card"><span>Sonderfälle</span><strong id="optionCount">0</strong><small>Urlaub, krank, Filiale</small></article>
             <article class="summary-card"><span>Team</span><strong id="employeeCount">0</strong><small>aktive Teammitglieder</small></article>
           </section>
+
+          <details class="work-rule-assessment" id="workRuleAssessmentPanel">
+            <summary>
+              <span class="work-rule-assessment-icon" aria-hidden="true">✓</span>
+              <span class="work-rule-assessment-heading">
+                <strong>Arbeitszeit-Regelprüfung</strong>
+                <small id="workRuleAssessmentSummary">Planprüfung wird geladen.</small>
+              </span>
+              <span class="work-rule-mode-badge" id="workRuleModeBadge">Monitorbetrieb – Planprüfung, keine Rechtsfreigabe</span>
+              <span class="work-rule-assessment-counts" id="workRuleAssessmentCounts" aria-label="Prüfergebnis"></span>
+              <span class="work-rule-assessment-chevron" aria-hidden="true">›</span>
+            </summary>
+            <div class="work-rule-assessment-body" id="workRuleAssessmentBody" aria-live="polite">
+              <p class="work-rule-assessment-empty">Für diese Woche liegt noch keine Regelprüfung vor.</p>
+            </div>
+          </details>
 
           <section class="schedule-panel">
             <div class="schedule-heading">
@@ -1124,7 +1140,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.80 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.81 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -1298,6 +1314,10 @@
           <label class="field full-width"><span>Bereich / Filiale</span><input id="shiftArea" placeholder="Optional" /></label>
           <label class="field full-width"><span>Notiz</span><textarea id="shiftNote" rows="3" placeholder="Optional"></textarea></label>
           <div class="calculation-note full-width" id="shiftCalculation"></div>
+          <section class="shift-rule-preview full-width" id="shiftRulePreview" aria-live="polite">
+            <div class="shift-rule-preview-heading"><strong>Regelvorschau</strong><span>Monitorbetrieb</span></div>
+            <p>Teammitglied und Dienstzeit auswählen, um bestehende Hinweise für den Zeitraum zu sehen.</p>
+          </section>
         </div>
         <div class="modal-actions"><button type="button" class="danger-button hidden" id="deleteShiftButton">Dienst löschen</button><span></span><button type="button" class="secondary-button" data-close="shiftModal">Abbrechen</button><button type="submit" class="primary-button">Speichern</button></div>
       </form>
