@@ -141,9 +141,18 @@ const { createIdempotencyKey, createSafeApiDelivery, payloadSha256 } = require("
 const {
   ArticleCatalogError,
   fetchShopwareArticle,
+  normalizeArticleIdentifier,
   normalizeArticleNumber,
   storefrontBaseUrl,
 } = require("./lib/article-catalog");
+const {
+  LoanWorkflowError,
+  MAX_LOAN_ITEMS,
+  normalizeLoanDueDate,
+  normalizeLoanIssueItems,
+  normalizeLoanReturnItems,
+  normalizeLoanText,
+} = require("./lib/loan-workflow");
 const { CONTRACT_IDS, contractById, contractSha256, contractSummaries } = require("./lib/integration-contracts");
 const {
   BUILTIN_WORK_RULE_PROFILES,
@@ -1406,6 +1415,29 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_articles_active_description
       ON articles(active, description, article_number);
 
+    CREATE TABLE IF NOT EXISTS article_identifiers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      article_number TEXT NOT NULL,
+      identifier_type TEXT NOT NULL
+        CHECK(identifier_type IN ('ean8','upca','ean13','gtin14')),
+      identifier_value TEXT NOT NULL
+        CHECK(length(identifier_value) BETWEEN 8 AND 14
+          AND identifier_value NOT GLOB '*[^0-9]*'),
+      source_provider TEXT NOT NULL DEFAULT 'manual'
+        CHECK(source_provider IN ('manual','shopware_storefront','import')),
+      verified_at TEXT,
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(identifier_type, identifier_value),
+      FOREIGN KEY (article_number) REFERENCES articles(article_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_article_identifiers_article
+      ON article_identifiers(article_number, identifier_type, identifier_value);
+
     CREATE TABLE IF NOT EXISTS loan_location_settings (
       location_id TEXT PRIMARY KEY,
       enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)),
@@ -1479,6 +1511,34 @@ function createSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_loan_items_article
       ON loan_items(article_number, loan_id);
+
+    CREATE TABLE IF NOT EXISTS loan_return_confirmations (
+      id TEXT PRIMARY KEY,
+      loan_id TEXT NOT NULL,
+      requested_by_employee_number TEXT NOT NULL,
+      witness_employee_number TEXT NOT NULL,
+      expected_revision INTEGER NOT NULL CHECK(expected_revision >= 1),
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending','confirmed','rejected','expired','cancelled')),
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      requested_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at TEXT NOT NULL,
+      responded_at TEXT,
+      response_note TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (loan_id) REFERENCES loans(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (requested_by_employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (witness_employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_loan_return_confirmations_pending
+      ON loan_return_confirmations(loan_id)
+      WHERE status = 'pending';
+    CREATE INDEX IF NOT EXISTS idx_loan_return_confirmations_witness
+      ON loan_return_confirmations(witness_employee_number, status, requested_at);
 
     CREATE TABLE IF NOT EXISTS loan_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3149,9 +3209,11 @@ const productReadinessMigrationId = "v0.84-product-readiness";
 const loanModuleMigrationId = "v0.85-loan-module-foundation";
 const loanModuleTables = Object.freeze([
   "articles",
+  "article_identifiers",
   "loan_location_settings",
   "loans",
   "loan_items",
+  "loan_return_confirmations",
   "loan_events",
 ]);
 const loanModuleTriggerNames = Object.freeze([
@@ -24467,6 +24529,12 @@ function publicArticle(row) {
   return {
     articleNumber: row.article_number,
     description: row.description,
+    identifiers: articleIdentifierRows(row.article_number).map((identifier) => ({
+      type: identifier.identifier_type,
+      value: identifier.identifier_value,
+      sourceProvider: identifier.source_provider,
+      verifiedAt: identifier.verified_at || null,
+    })),
     sourceProvider: row.source_provider,
     sourceProductNumber: row.source_product_number || "",
     sourceUrl: row.source_url || "",
@@ -24483,6 +24551,27 @@ function articleRow(articleNumber) {
            source_url, source_fetched_at, active, created_at, updated_at
     FROM articles WHERE article_number = ?
   `).get(articleNumber);
+}
+
+function articleIdentifierRows(articleNumber) {
+  return db.prepare(`
+    SELECT identifier_type, identifier_value, source_provider, verified_at
+    FROM article_identifiers
+    WHERE article_number = ?
+    ORDER BY identifier_type, identifier_value
+  `).all(articleNumber);
+}
+
+function articleRowByIdentifier(identifier) {
+  if (identifier.type === "internal") return articleRow(identifier.value);
+  return db.prepare(`
+    SELECT article.article_number, article.description, article.source_provider,
+           article.source_product_number, article.source_url, article.source_fetched_at,
+           article.active, article.created_at, article.updated_at
+    FROM article_identifiers identifier
+    JOIN articles article ON article.article_number = identifier.article_number
+    WHERE identifier.identifier_type = ? AND identifier.identifier_value = ?
+  `).get(identifier.type, identifier.value);
 }
 
 function normalizedArticleDescription(value, { required = false } = {}) {
@@ -24530,10 +24619,40 @@ function saveArticleRecord(article, actorEmployeeNumber) {
   return articleRow(article.articleNumber);
 }
 
+function saveArticleIdentifier(articleNumber, identifier, sourceProvider, actorEmployeeNumber) {
+  if (!identifier || identifier.type === "internal") return;
+  const provider = ["manual", "shopware_storefront", "import"].includes(sourceProvider)
+    ? sourceProvider
+    : "manual";
+  db.prepare(`
+    INSERT INTO article_identifiers
+      (article_number, identifier_type, identifier_value, source_provider,
+       verified_at, created_by, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(identifier_type, identifier_value) DO UPDATE SET
+      article_number = excluded.article_number,
+      source_provider = excluded.source_provider,
+      verified_at = CURRENT_TIMESTAMP,
+      updated_by = excluded.updated_by,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(
+    articleNumber,
+    identifier.type,
+    identifier.value,
+    provider,
+    actorEmployeeNumber,
+    actorEmployeeNumber,
+  );
+}
+
 function articleLookupHttpError(error) {
   if (!(error instanceof ArticleCatalogError)) return error;
   const status = error.code === "ARTICLE_LOOKUP_NOT_FOUND" ? 404
-    : error.code === "ARTICLE_NUMBER_INVALID" ? 400
+    : [
+      "ARTICLE_NUMBER_INVALID",
+      "ARTICLE_IDENTIFIER_INVALID",
+      "ARTICLE_IDENTIFIER_CHECKSUM_INVALID",
+    ].includes(error.code) ? 400
       : error.code === "ARTICLE_LOOKUP_URL_INVALID" ? 503
         : 502;
   return httpError(status, error.message, error.code);
@@ -24669,11 +24788,20 @@ app.get("/api/portal/v1/loans/articles", (request, response) => {
     ? db.prepare(`
       SELECT article_number, description, source_provider, source_product_number,
              source_url, source_fetched_at, active, created_at, updated_at
-      FROM articles
-      WHERE active = 1 AND (article_number LIKE ? OR description LIKE ? COLLATE NOCASE)
+      FROM articles article
+      WHERE active = 1 AND (
+        article_number LIKE ?
+        OR description LIKE ? COLLATE NOCASE
+        OR EXISTS (
+          SELECT 1
+          FROM article_identifiers identifier
+          WHERE identifier.article_number = article.article_number
+            AND identifier.identifier_value LIKE ?
+        )
+      )
       ORDER BY CASE WHEN article_number = ? THEN 0 ELSE 1 END, description, article_number
       LIMIT 20
-    `).all(`${query}%`, `%${query}%`, query)
+    `).all(`${query}%`, `%${query}%`, `${query}%`, query)
     : [];
   response.json({
     location: publicLoanLocationSetting(setting),
@@ -24687,15 +24815,25 @@ app.post("/api/portal/v1/loans/articles/resolve", async (request, response) => {
     ["loans:self:create", "loans:location:manage"],
     { csrf: true },
   );
-  let articleNumber;
+  let identifier;
   try {
-    articleNumber = normalizeArticleNumber(request.body?.articleNumber);
+    identifier = normalizeArticleIdentifier(
+      request.body?.identifier ?? request.body?.articleNumber,
+    );
   } catch (error) {
     throw articleLookupHttpError(error);
   }
   const setting = enabledLoanLocationForSession(actor, request.body || {});
-  const existing = articleRow(articleNumber);
+  let existing = articleRowByIdentifier(identifier);
   const manualDescription = normalizedArticleDescription(request.body?.manualDescription);
+  let manualArticleNumber = "";
+  if (identifier.type !== "internal" && request.body?.manualArticleNumber) {
+    try {
+      manualArticleNumber = normalizeArticleNumber(request.body.manualArticleNumber);
+    } catch (error) {
+      throw articleLookupHttpError(error);
+    }
+  }
   let suggestion = null;
   let lookupWarning = null;
   let recordChanged = false;
@@ -24708,11 +24846,11 @@ app.post("/api/portal/v1/loans/articles/resolve", async (request, response) => {
         code: "ARTICLE_LOOKUP_NOT_CONFIGURED",
         message: "Die externe Artikelsuche ist für diesen Standort nicht vollständig eingerichtet.",
       };
-    } else if (!articleLookupIsFresh(existing)) {
+    } else if (!existing || (identifier.type === "internal" && !articleLookupIsFresh(existing))) {
       try {
         assertArticleLookupRateLimit(actor);
         configureSystemCertificateAuthorities();
-        suggestion = await fetchShopwareArticle(setting.article_lookup_base_url, articleNumber);
+        suggestion = await fetchShopwareArticle(setting.article_lookup_base_url, identifier.value);
       } catch (error) {
         const normalized = articleLookupHttpError(error);
         if (!(normalized?.status >= 400 && normalized?.status < 600)) throw normalized;
@@ -24723,17 +24861,27 @@ app.post("/api/portal/v1/loans/articles/resolve", async (request, response) => {
 
   let stored = existing;
   let preservedManualDescription = false;
-  if (manualDescription && !existing) {
-    stored = saveArticleRecord({
-      articleNumber,
-      description: manualDescription,
-      sourceProvider: "manual",
-    }, actor.employeeNumber);
+  if (manualDescription && !existing && (identifier.type === "internal" || manualArticleNumber)) {
+    const articleNumber = identifier.type === "internal" ? identifier.value : manualArticleNumber;
+    const canonicalExisting = articleRow(articleNumber);
+    if (canonicalExisting?.description) {
+      stored = canonicalExisting;
+      preservedManualDescription = true;
+    } else {
+      stored = saveArticleRecord({
+        articleNumber,
+        description: manualDescription,
+        sourceProvider: "manual",
+      }, actor.employeeNumber);
+    }
+    saveArticleIdentifier(articleNumber, identifier, "manual", actor.employeeNumber);
     recordChanged = true;
   } else if (manualDescription && existing) {
     preservedManualDescription = true;
   } else if (suggestion) {
-    if (existing?.source_provider === "manual" && existing.description) {
+    const canonicalExisting = existing || articleRow(suggestion.articleNumber);
+    if (canonicalExisting?.source_provider === "manual" && canonicalExisting.description) {
+      stored = canonicalExisting;
       preservedManualDescription = true;
     } else {
       stored = saveArticleRecord({
@@ -24742,9 +24890,26 @@ app.post("/api/portal/v1/loans/articles/resolve", async (request, response) => {
       }, actor.employeeNumber);
       recordChanged = true;
     }
+    saveArticleIdentifier(
+      stored.article_number,
+      suggestion.barcode
+        ? { type: suggestion.barcodeType, value: suggestion.barcode }
+        : identifier,
+      "shopware_storefront",
+      actor.employeeNumber,
+    );
+    recordChanged = true;
+    existing = stored;
   }
 
   if (!stored) {
+    if (identifier.type !== "internal" && !manualArticleNumber && lookupWarning) {
+      throw httpError(
+        lookupWarning.code === "ARTICLE_LOOKUP_NOT_FOUND" ? 404 : 502,
+        `${lookupWarning.message} Bitte die interne sechsstellige Artikelnummer und die Bezeichnung einmalig ergänzen.`,
+        lookupWarning.code,
+      );
+    }
     if (lookupWarning) throw httpError(
       lookupWarning.code === "ARTICLE_LOOKUP_NOT_FOUND" ? 404 : 502,
       `${lookupWarning.message} Die Artikelbezeichnung kann manuell ergänzt werden.`,
@@ -24758,18 +24923,867 @@ app.post("/api/portal/v1/loans/articles/resolve", async (request, response) => {
   }
 
   if (recordChanged) {
-    auditPortal(actor.employeeNumber, "loan.article.resolve", "article", articleNumber, JSON.stringify({
+    auditPortal(actor.employeeNumber, "loan.article.resolve", "article", stored.article_number, JSON.stringify({
       locationId: setting.location_id,
       sourceProvider: stored.source_provider,
+      identifierType: identifier.type,
+      identifierValue: identifier.value,
       externalLookup: Boolean(suggestion),
     }));
   }
   response.json({
     article: publicArticle(stored),
     suggestion,
+    resolvedIdentifier: identifier,
     preservedManualDescription,
-    cacheHit: articleLookupIsFresh(existing) && !suggestion,
+    cacheHit: Boolean(existing) && !suggestion,
     lookupWarning,
+  });
+});
+
+function loanWorkflowHttpError(error) {
+  if (!(error instanceof LoanWorkflowError)) return error;
+  return httpError(400, error.message, error.code || "LOAN_INPUT_INVALID");
+}
+
+function loanEmployeeRow(employeeNumber, { active = false } = {}) {
+  const row = db.prepare(`
+    SELECT personnel_number, full_name, nickname, home_location_id, preferred_department_id, active
+    FROM employees
+    WHERE personnel_number = ?${active ? " AND active = 1" : ""}
+  `).get(String(employeeNumber || "").trim());
+  return row || null;
+}
+
+function loanRow(loanId) {
+  return db.prepare(`
+    SELECT l.*, location.name AS location_name,
+           borrower.full_name AS borrower_full_name, borrower.nickname AS borrower_nickname,
+           creator.full_name AS creator_full_name, creator.nickname AS creator_nickname,
+           witness.full_name AS witness_full_name, witness.nickname AS witness_nickname
+    FROM loans l
+    JOIN locations location ON location.id = l.location_id
+    JOIN employees borrower ON borrower.personnel_number = l.borrower_employee_number
+    JOIN employees creator ON creator.personnel_number = l.created_by_employee_number
+    LEFT JOIN employees witness ON witness.personnel_number = l.return_witness_employee_number
+    WHERE l.id = ?
+  `).get(String(loanId || "").trim());
+}
+
+function expireLoanReturnConfirmations() {
+  return db.prepare(`
+    UPDATE loan_return_confirmations
+    SET status = 'expired', responded_at = COALESCE(responded_at, CURRENT_TIMESTAMP),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE status = 'pending' AND julianday(expires_at) <= julianday('now')
+  `).run().changes;
+}
+
+function loanReturnConfirmationRow(confirmationId) {
+  return db.prepare(`
+    SELECT confirmation.*,
+           requester.full_name AS requester_full_name,
+           requester.nickname AS requester_nickname,
+           witness.full_name AS witness_full_name,
+           witness.nickname AS witness_nickname
+    FROM loan_return_confirmations confirmation
+    JOIN employees requester
+      ON requester.personnel_number = confirmation.requested_by_employee_number
+    JOIN employees witness
+      ON witness.personnel_number = confirmation.witness_employee_number
+    WHERE confirmation.id = ?
+  `).get(String(confirmationId || "").trim()) || null;
+}
+
+function loanPendingReturnConfirmationRow(loanId) {
+  return db.prepare(`
+    SELECT confirmation.*,
+           requester.full_name AS requester_full_name,
+           requester.nickname AS requester_nickname,
+           witness.full_name AS witness_full_name,
+           witness.nickname AS witness_nickname
+    FROM loan_return_confirmations confirmation
+    JOIN employees requester
+      ON requester.personnel_number = confirmation.requested_by_employee_number
+    JOIN employees witness
+      ON witness.personnel_number = confirmation.witness_employee_number
+    WHERE confirmation.loan_id = ? AND confirmation.status = 'pending'
+      AND julianday(confirmation.expires_at) > julianday('now')
+    LIMIT 1
+  `).get(String(loanId || "").trim()) || null;
+}
+
+function parseLoanReturnConfirmationPayload(row) {
+  try {
+    const parsed = JSON.parse(String(row?.payload_json || "{}"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  } catch {}
+  return {};
+}
+
+function publicLoanReturnConfirmation(row, { includeLoan = true } = {}) {
+  if (!row) return null;
+  const payload = parseLoanReturnConfirmationPayload(row);
+  const loan = loanRow(row.loan_id);
+  const sourceItems = loan ? loanItemRows(loan.id) : [];
+  const returnedItems = Array.isArray(payload.items) ? payload.items : [];
+  const result = {
+    id: row.id,
+    loanId: row.loan_id,
+    status: row.status,
+    expectedRevision: Number(row.expected_revision),
+    requestedBy: {
+      employeeNumber: row.requested_by_employee_number,
+      name: row.requester_nickname || row.requester_full_name || row.requested_by_employee_number,
+    },
+    witness: {
+      employeeNumber: row.witness_employee_number,
+      name: row.witness_nickname || row.witness_full_name || row.witness_employee_number,
+    },
+    requestedAt: row.requested_at,
+    expiresAt: row.expires_at,
+    respondedAt: row.responded_at || null,
+    responseNote: row.response_note || "",
+    note: String(payload.note || ""),
+    borrowerConfirmed: Boolean(payload.borrowerConfirmed),
+    items: sourceItems.map((item) => {
+      const returned = returnedItems.find((entry) => Number(entry.position) === Number(item.position)) || {};
+      return {
+        ...publicLoanItem(item),
+        conditionReturn: returned.conditionReturn || "",
+        returnNote: returned.note || "",
+      };
+    }),
+  };
+  if (includeLoan && loan) {
+    result.loan = {
+      id: loan.id,
+      status: loan.status,
+      location: { id: loan.location_id, name: loan.location_name },
+      borrower: {
+        employeeNumber: loan.borrower_employee_number,
+        name: loan.borrower_nickname || loan.borrower_full_name,
+      },
+      revision: Number(loan.revision),
+    };
+  }
+  return result;
+}
+
+function employeeHasLivePortalSession(employeeNumber, maximumAgeSeconds = 15) {
+  const maximumAge = Math.max(5, Math.min(120, Number(maximumAgeSeconds) || 15));
+  return Boolean(db.prepare(`
+    SELECT 1
+    FROM portal_sessions
+    WHERE employee_number = ?
+      AND revoked_at IS NULL
+      AND julianday(expires_at) > julianday('now')
+      AND julianday(last_seen_at) >= julianday('now', ?)
+    LIMIT 1
+  `).get(
+    String(employeeNumber || "").trim(),
+    `-${maximumAge} seconds`,
+  ));
+}
+
+function loanItemRows(loanId) {
+  return db.prepare(`
+    SELECT id, position, article_number, description_snapshot, serial_number, quantity,
+           condition_out, condition_return, item_note, created_at, updated_at
+    FROM loan_items
+    WHERE loan_id = ?
+    ORDER BY position
+  `).all(String(loanId || "").trim());
+}
+
+function loanEventRows(loanId) {
+  return db.prepare(`
+    SELECT id, actor_employee_number, event_type, revision, payload_json, created_at
+    FROM loan_events
+    WHERE loan_id = ?
+    ORDER BY revision, id
+  `).all(String(loanId || "").trim());
+}
+
+function publicLoanItem(row) {
+  return {
+    id: row.id,
+    position: Number(row.position),
+    articleNumber: row.article_number,
+    description: row.description_snapshot,
+    serialNumber: row.serial_number || "",
+    quantity: Number(row.quantity || 1),
+    conditionOut: row.condition_out || "good",
+    conditionReturn: row.condition_return || "",
+    note: row.item_note || "",
+  };
+}
+
+function publicLoanEvent(row) {
+  let payload = {};
+  try {
+    const parsed = JSON.parse(String(row.payload_json || "{}"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) payload = parsed;
+  } catch {}
+  return {
+    id: Number(row.id),
+    actorEmployeeNumber: row.actor_employee_number || "",
+    type: row.event_type,
+    revision: Number(row.revision),
+    payload,
+    createdAt: row.created_at,
+  };
+}
+
+function publicLoan(row, { includeEvents = true } = {}) {
+  if (!row) return null;
+  const pendingReturnConfirmation = loanPendingReturnConfirmationRow(row.id);
+  return {
+    id: row.id,
+    location: {
+      id: row.location_id,
+      name: row.location_name,
+    },
+    borrower: {
+      employeeNumber: row.borrower_employee_number,
+      name: row.borrower_nickname || row.borrower_full_name,
+    },
+    createdBy: {
+      employeeNumber: row.created_by_employee_number,
+      name: row.creator_nickname || row.creator_full_name,
+    },
+    dueDate: row.due_date || null,
+    status: row.status,
+    notes: row.notes || "",
+    issuedAt: row.issued_at || null,
+    returnedAt: row.returned_at || null,
+    returnRecordedByEmployeeNumber: row.return_recorded_by_employee_number || "",
+    returnWitness: row.return_witness_employee_number ? {
+      employeeNumber: row.return_witness_employee_number,
+      name: row.witness_nickname || row.witness_full_name || row.return_witness_employee_number,
+    } : null,
+    pendingReturnConfirmation: pendingReturnConfirmation
+      ? publicLoanReturnConfirmation(pendingReturnConfirmation, { includeLoan: false })
+      : null,
+    borrowerReturnConfirmed: Boolean(row.borrower_return_confirmed),
+    revision: Number(row.revision || 1),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    items: loanItemRows(row.id).map(publicLoanItem),
+    events: includeEvents ? loanEventRows(row.id).map(publicLoanEvent) : [],
+  };
+}
+
+function loanCanManageLocation(session) {
+  return session?.employeeNumber === "local"
+    || session?.permissions?.includes("loans:location:manage") === true;
+}
+
+function assertLoanReadAccess(session, row) {
+  if (!row) throw httpError(404, "Der Leihvorgang wurde nicht gefunden.", "LOAN_NOT_FOUND");
+  if (row.borrower_employee_number === session.employeeNumber
+    && session.permissions?.includes("loans:self:read")) return;
+  if (session.employeeNumber === "local"
+    || session.permissions?.some((permission) => [
+      "loans:location:read",
+      "loans:location:manage",
+    ].includes(permission))) {
+    assertSessionContextScope(session, { locationId: row.location_id });
+    return;
+  }
+  throw httpError(403, "Dieser Leihvorgang liegt außerhalb des eigenen Bereichs.", "LOAN_SCOPE_DENIED");
+}
+
+function normalizeLoanNotes(value, maximumLength = 1000) {
+  try {
+    return normalizeLoanText(stripEmoji(String(value || "")), maximumLength);
+  } catch (error) {
+    throw loanWorkflowHttpError(error);
+  }
+}
+
+function normalizeLoanIssueBody(body) {
+  try {
+    return {
+      dueDate: normalizeLoanDueDate(body?.dueDate, {
+        minimum: viennaTodayIso(),
+        maximum: addDays(viennaTodayIso(), 3650),
+      }),
+      items: normalizeLoanIssueItems(body?.items),
+      notes: normalizeLoanText(stripEmoji(String(body?.notes || "")), 1000),
+    };
+  } catch (error) {
+    throw loanWorkflowHttpError(error);
+  }
+}
+
+function appendLoanEvent(loanId, actorEmployeeNumber, eventType, revision, payload = {}) {
+  db.prepare(`
+    INSERT INTO loan_events
+      (loan_id, actor_employee_number, event_type, revision, payload_json)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    loanId,
+    actorEmployeeNumber === "local" ? null : actorEmployeeNumber,
+    String(eventType),
+    Number(revision),
+    JSON.stringify(payload && typeof payload === "object" ? payload : {}),
+  );
+}
+
+function loanBorrowerForIssue(actor, setting, requestedEmployeeNumber) {
+  const requested = String(requestedEmployeeNumber || "").trim();
+  let employeeNumber = actor.employeeNumber;
+  if (loanCanManageLocation(actor) && requested) employeeNumber = requested;
+  if (actor.employeeNumber === "local" && !requested) {
+    throw httpError(
+      400,
+      "Bitte ein Teammitglied für die Leihe auswählen.",
+      "LOAN_BORROWER_REQUIRED",
+    );
+  }
+  const borrower = loanEmployeeRow(employeeNumber, { active: true });
+  if (!borrower) {
+    throw httpError(404, "Das ausgewählte Teammitglied wurde nicht gefunden.", "LOAN_BORROWER_NOT_FOUND");
+  }
+  if (String(borrower.home_location_id || "") !== String(setting.location_id)) {
+    throw httpError(
+      403,
+      "Das Teammitglied gehört nicht zum ausgewählten Standort.",
+      "LOAN_BORROWER_LOCATION_MISMATCH",
+    );
+  }
+  if (!loanCanManageLocation(actor) && borrower.personnel_number !== actor.employeeNumber) {
+    throw httpError(403, "Eine persönliche Leihe kann nur für den eigenen Zugang erfasst werden.", "LOAN_BORROWER_DENIED");
+  }
+  return borrower;
+}
+
+function articleRowsForLoan(items) {
+  const query = db.prepare(`
+    SELECT article_number, description, active
+    FROM articles
+    WHERE article_number = ?
+  `);
+  return items.map((item) => {
+    const article = query.get(item.articleNumber);
+    if (!article?.active || !String(article.description || "").trim()) {
+      throw httpError(
+        409,
+        `Position ${item.position}: Die Artikelbezeichnung muss zuerst aufgelöst oder manuell ergänzt werden.`,
+        "LOAN_ARTICLE_UNRESOLVED",
+      );
+    }
+    return article;
+  });
+}
+
+app.get("/api/portal/v1/loans/team-members", (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:self:return", "loans:location:manage"],
+  );
+  const locationId = loanLocationForSession(session, request.query);
+  const members = db.prepare(`
+    SELECT personnel_number, full_name, nickname
+    FROM employees
+    WHERE active = 1 AND home_location_id = ?
+    ORDER BY CAST(personnel_number AS INTEGER), personnel_number
+  `).all(locationId).map((row) => ({
+    employeeNumber: row.personnel_number,
+    name: row.nickname || row.full_name,
+    portalOpen: employeeHasLivePortalSession(row.personnel_number),
+  }));
+  response.json({ locationId, members });
+});
+
+app.get("/api/portal/v1/loans/return-confirmations/pending", (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:self:read", "loans:self:return", "loans:location:manage"],
+  );
+  if (session.employeeNumber === "local") {
+    response.json({ confirmations: [] });
+    return;
+  }
+  expireLoanReturnConfirmations();
+  const rows = db.prepare(`
+    SELECT confirmation.*,
+           requester.full_name AS requester_full_name,
+           requester.nickname AS requester_nickname,
+           witness.full_name AS witness_full_name,
+           witness.nickname AS witness_nickname
+    FROM loan_return_confirmations confirmation
+    JOIN employees requester
+      ON requester.personnel_number = confirmation.requested_by_employee_number
+    JOIN employees witness
+      ON witness.personnel_number = confirmation.witness_employee_number
+    WHERE confirmation.witness_employee_number = ?
+      AND confirmation.status = 'pending'
+      AND julianday(confirmation.expires_at) > julianday('now')
+    ORDER BY confirmation.requested_at
+  `).all(session.employeeNumber);
+  response.json({ confirmations: rows.map((row) => publicLoanReturnConfirmation(row)) });
+});
+
+app.get("/api/portal/v1/loans", (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:self:read", "loans:location:read", "loans:location:manage"],
+  );
+  const scope = String(request.query.scope || "mine").trim();
+  const status = String(request.query.status || "all").trim();
+  const parameters = [];
+  const conditions = [];
+  if (scope === "location") {
+    if (session.employeeNumber !== "local"
+      && !session.permissions?.some((permission) => [
+        "loans:location:read",
+        "loans:location:manage",
+      ].includes(permission))) {
+      throw httpError(403, "Für die Standortübersicht fehlt die Berechtigung.", "LOAN_SCOPE_DENIED");
+    }
+    const locationId = loanLocationForSession(session, request.query);
+    conditions.push("l.location_id = ?");
+    parameters.push(locationId);
+  } else if (scope === "mine") {
+    if (session.employeeNumber === "local") {
+      throw httpError(400, "Im Lokalbetrieb muss ein Standortbereich ausgewählt werden.", "LOAN_SCOPE_REQUIRED");
+    }
+    conditions.push("l.borrower_employee_number = ?");
+    parameters.push(session.employeeNumber);
+  } else {
+    throw httpError(400, "Der angeforderte Leihbereich ist ungültig.", "LOAN_SCOPE_INVALID");
+  }
+  if (status === "open") conditions.push("l.status = 'issued'");
+  else if (status === "history") conditions.push("l.status IN ('returned','cancelled')");
+  else if (status !== "all") throw httpError(400, "Der Leihstatus ist ungültig.", "LOAN_STATUS_INVALID");
+  const rows = db.prepare(`
+    SELECT l.*, location.name AS location_name,
+           borrower.full_name AS borrower_full_name, borrower.nickname AS borrower_nickname,
+           creator.full_name AS creator_full_name, creator.nickname AS creator_nickname,
+           witness.full_name AS witness_full_name, witness.nickname AS witness_nickname
+    FROM loans l
+    JOIN locations location ON location.id = l.location_id
+    JOIN employees borrower ON borrower.personnel_number = l.borrower_employee_number
+    JOIN employees creator ON creator.personnel_number = l.created_by_employee_number
+    LEFT JOIN employees witness ON witness.personnel_number = l.return_witness_employee_number
+    WHERE ${conditions.join(" AND ")}
+    ORDER BY CASE WHEN l.status = 'issued' THEN 0 ELSE 1 END,
+             COALESCE(l.returned_at, l.issued_at, l.created_at) DESC
+    LIMIT 100
+  `).all(...parameters);
+  response.json({ scope, status, loans: rows.map((row) => publicLoan(row)) });
+});
+
+app.get("/api/portal/v1/loans/:loanId", (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:self:read", "loans:location:read", "loans:location:manage"],
+  );
+  const row = loanRow(request.params.loanId);
+  assertLoanReadAccess(session, row);
+  response.json({ loan: publicLoan(row) });
+});
+
+app.post("/api/portal/v1/loans", (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:self:create", "loans:location:manage"],
+    { csrf: true },
+  );
+  const setting = enabledLoanLocationForSession(actor, request.body || {});
+  const borrower = loanBorrowerForIssue(actor, setting, request.body?.borrowerEmployeeNumber);
+  const input = normalizeLoanIssueBody(request.body || {});
+  const articles = articleRowsForLoan(input.items);
+  const loanId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const recordedByEmployeeNumber = actor.employeeNumber === "local"
+    ? borrower.personnel_number
+    : actor.employeeNumber;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`
+      INSERT INTO loans
+        (id, location_id, borrower_employee_number, created_by_employee_number,
+         due_date, status, notes, issued_at, revision, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'issued', ?, ?, 1, ?, ?)
+    `).run(
+      loanId,
+      setting.location_id,
+      borrower.personnel_number,
+      recordedByEmployeeNumber,
+      input.dueDate,
+      input.notes,
+      now,
+      now,
+      now,
+    );
+    const insertItem = db.prepare(`
+      INSERT INTO loan_items
+        (id, loan_id, position, article_number, description_snapshot, serial_number,
+         quantity, condition_out, item_note)
+      VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+    `);
+    input.items.forEach((item, index) => {
+      insertItem.run(
+        crypto.randomUUID(),
+        loanId,
+        item.position,
+        item.articleNumber,
+        String(articles[index].description).slice(0, 300),
+        item.serialNumber,
+        item.conditionOut,
+        item.note,
+      );
+    });
+    appendLoanEvent(loanId, actor.employeeNumber, "issued", 1, {
+      dueDate: input.dueDate,
+      itemCount: input.items.length,
+      borrowerEmployeeNumber: borrower.personnel_number,
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "loan.issue", "loan", loanId, JSON.stringify({
+    locationId: setting.location_id,
+    borrowerEmployeeNumber: borrower.personnel_number,
+    itemCount: input.items.length,
+  }));
+  if (borrower.personnel_number !== actor.employeeNumber) {
+    createPortalNotification(
+      borrower.personnel_number,
+      "loan.issued",
+      "Leihe erfasst",
+      `${input.items.length} ${input.items.length === 1 ? "Artikel wurde" : "Artikel wurden"} auf deinen Zugang ausgegeben.`,
+      {
+        target: `/portal.html?tab=loan&loan=${encodeURIComponent(loanId)}`,
+        entityType: "loan",
+        entityId: loanId,
+        dedupeKey: `loan:${loanId}:issued`,
+      },
+    );
+  }
+  response.status(201).json({ loan: publicLoan(loanRow(loanId)) });
+});
+
+app.post("/api/portal/v1/loans/:loanId/return", (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:self:return", "loans:location:manage"],
+    { csrf: true },
+  );
+  if (actor.employeeNumber === "local") {
+    throw httpError(
+      409,
+      "Die Live-Bestätigung benötigt einen persönlich angemeldeten Portalzugang.",
+      "LOAN_RETURN_PORTAL_LOGIN_REQUIRED",
+    );
+  }
+  const row = loanRow(request.params.loanId);
+  if (!row) throw httpError(404, "Der Leihvorgang wurde nicht gefunden.", "LOAN_NOT_FOUND");
+  const managesLocation = loanCanManageLocation(actor);
+  if (row.borrower_employee_number !== actor.employeeNumber && !managesLocation) {
+    throw httpError(403, "Nur die ausleihende Person kann diese Rücknahme erfassen.", "LOAN_RETURN_DENIED");
+  }
+  if (managesLocation) assertSessionContextScope(actor, { locationId: row.location_id });
+  const expectedRevision = Number(request.body?.expectedRevision);
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
+    throw httpError(400, "Die erwartete Revision fehlt.", "LOAN_VERSION_REQUIRED");
+  }
+  if (row.status !== "issued") {
+    throw httpError(409, "Dieser Leihvorgang ist nicht mehr offen.", "LOAN_ALREADY_CLOSED");
+  }
+  if (Number(row.revision) !== expectedRevision) {
+    throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
+  }
+  const witnessEmployeeNumber = String(request.body?.witnessEmployeeNumber || "").trim();
+  const witness = loanEmployeeRow(witnessEmployeeNumber, { active: true });
+  if (!witness || String(witness.home_location_id || "") !== String(row.location_id)
+    || witness.personnel_number === row.borrower_employee_number
+    || witness.personnel_number === actor.employeeNumber) {
+    throw httpError(
+      400,
+      "Bitte ein anderes aktives Teammitglied dieses Standorts als Rücknahmebestätigung auswählen.",
+      "LOAN_RETURN_WITNESS_INVALID",
+    );
+  }
+  if (!employeeHasLivePortalSession(witness.personnel_number)) {
+    throw httpError(
+      409,
+      `${witness.nickname || witness.full_name} muss das Mitarbeiterportal geöffnet haben, bevor die Rücknahme angefordert wird.`,
+      "LOAN_RETURN_WITNESS_OFFLINE",
+    );
+  }
+  let returnedItems;
+  try {
+    returnedItems = normalizeLoanReturnItems(request.body?.items, loanItemRows(row.id));
+  } catch (error) {
+    throw loanWorkflowHttpError(error);
+  }
+  const note = normalizeLoanNotes(request.body?.note, 1000);
+  expireLoanReturnConfirmations();
+  if (loanPendingReturnConfirmationRow(row.id)) {
+    throw httpError(
+      409,
+      "Für diese Leihe wartet bereits eine Rücknahme auf Bestätigung.",
+      "LOAN_RETURN_CONFIRMATION_PENDING",
+    );
+  }
+  const confirmationId = crypto.randomUUID();
+  const requestedAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  const borrowerConfirmed = actor.employeeNumber === row.borrower_employee_number
+    || request.body?.borrowerConfirmed === true;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const current = db.prepare("SELECT status, revision FROM loans WHERE id = ?").get(row.id);
+    if (current?.status !== "issued" || Number(current?.revision) !== expectedRevision) {
+      throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
+    }
+    db.prepare(`
+      INSERT INTO loan_return_confirmations
+        (id, loan_id, requested_by_employee_number, witness_employee_number,
+         expected_revision, status, payload_json, requested_at, expires_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+    `).run(
+      confirmationId,
+      row.id,
+      actor.employeeNumber,
+      witness.personnel_number,
+      expectedRevision,
+      JSON.stringify({ items: returnedItems, note, borrowerConfirmed }),
+      requestedAt,
+      expiresAt,
+      requestedAt,
+    );
+    appendLoanEvent(row.id, actor.employeeNumber, "return_confirmation_requested", expectedRevision, {
+      confirmationId,
+      witnessEmployeeNumber: witness.personnel_number,
+      expiresAt,
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "loan.return.request", "loan", row.id, JSON.stringify({
+    locationId: row.location_id,
+    borrowerEmployeeNumber: row.borrower_employee_number,
+    witnessEmployeeNumber: witness.personnel_number,
+    itemCount: returnedItems.length,
+    noteProvided: Boolean(note),
+  }));
+  createPortalNotification(
+    witness.personnel_number,
+    "loan.return_confirmation",
+    "Rücknahme bestätigen",
+    `${actor.nickname || actor.fullName || actor.employeeNumber} bittet um deine Gegenbestätigung.`,
+    {
+      target: `/portal.html?tab=loan&confirmation=${encodeURIComponent(confirmationId)}`,
+      entityType: "loan_return_confirmation",
+      entityId: confirmationId,
+      dedupeKey: `loan-return-confirmation:${confirmationId}`,
+    },
+  );
+  response.status(202).json({
+    loan: publicLoan(loanRow(row.id)),
+    confirmation: publicLoanReturnConfirmation(loanReturnConfirmationRow(confirmationId)),
+  });
+});
+
+app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:self:read", "loans:self:return", "loans:location:manage"],
+    { csrf: true },
+  );
+  if (actor.employeeNumber === "local") {
+    throw httpError(
+      409,
+      "Die Live-Bestätigung benötigt einen persönlich angemeldeten Portalzugang.",
+      "LOAN_RETURN_PORTAL_LOGIN_REQUIRED",
+    );
+  }
+  expireLoanReturnConfirmations();
+  const confirmation = loanReturnConfirmationRow(request.params.confirmationId);
+  if (!confirmation) {
+    throw httpError(404, "Die Rücknahmebestätigung wurde nicht gefunden.", "LOAN_RETURN_CONFIRMATION_NOT_FOUND");
+  }
+  if (confirmation.witness_employee_number !== actor.employeeNumber) {
+    throw httpError(
+      403,
+      "Nur das ausgewählte zweite Teammitglied darf diese Rücknahme bestätigen.",
+      "LOAN_RETURN_CONFIRMATION_DENIED",
+    );
+  }
+  if (confirmation.status !== "pending") {
+    throw httpError(
+      409,
+      confirmation.status === "expired"
+        ? "Diese Rücknahmebestätigung ist abgelaufen. Bitte neu anfordern."
+        : "Diese Rücknahmebestätigung wurde bereits bearbeitet.",
+      confirmation.status === "expired"
+        ? "LOAN_RETURN_CONFIRMATION_EXPIRED"
+        : "LOAN_RETURN_CONFIRMATION_CLOSED",
+    );
+  }
+  const decision = String(request.body?.decision || "").trim();
+  if (!["confirm", "reject"].includes(decision)) {
+    throw httpError(400, "Bitte die Rücknahme bestätigen oder ablehnen.", "LOAN_RETURN_DECISION_INVALID");
+  }
+  const responseNote = normalizeLoanNotes(request.body?.note, 500);
+  const respondedAt = new Date().toISOString();
+  const loan = loanRow(confirmation.loan_id);
+  if (!loan || loan.status !== "issued") {
+    throw httpError(409, "Der Leihvorgang ist nicht mehr offen.", "LOAN_ALREADY_CLOSED");
+  }
+  if (Number(loan.revision) !== Number(confirmation.expected_revision)) {
+    throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
+  }
+  const payload = parseLoanReturnConfirmationPayload(confirmation);
+
+  if (decision === "reject") {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const result = db.prepare(`
+        UPDATE loan_return_confirmations
+        SET status = 'rejected', responded_at = ?, response_note = ?, updated_at = ?
+        WHERE id = ? AND status = 'pending'
+      `).run(respondedAt, responseNote, respondedAt, confirmation.id);
+      if (!result.changes) {
+        throw httpError(409, "Diese Rücknahmebestätigung wurde bereits bearbeitet.", "LOAN_RETURN_CONFIRMATION_CLOSED");
+      }
+      appendLoanEvent(loan.id, actor.employeeNumber, "return_confirmation_rejected", loan.revision, {
+        confirmationId: confirmation.id,
+        requestedByEmployeeNumber: confirmation.requested_by_employee_number,
+        note: responseNote,
+      });
+      db.exec("COMMIT");
+    } catch (error) {
+      try { db.exec("ROLLBACK"); } catch {}
+      throw error;
+    }
+    auditPortal(actor.employeeNumber, "loan.return.reject", "loan", loan.id, JSON.stringify({
+      confirmationId: confirmation.id,
+      requestedByEmployeeNumber: confirmation.requested_by_employee_number,
+      noteProvided: Boolean(responseNote),
+    }));
+    createPortalNotification(
+      confirmation.requested_by_employee_number,
+      "loan.return_rejected",
+      "Rücknahme nicht bestätigt",
+      `${actor.nickname || actor.fullName || actor.employeeNumber} hat die Gegenbestätigung abgelehnt.`,
+      {
+        target: `/portal.html?tab=loan&loan=${encodeURIComponent(loan.id)}`,
+        entityType: "loan",
+        entityId: loan.id,
+        dedupeKey: `loan:${loan.id}:return-rejected:${confirmation.id}`,
+      },
+    );
+    db.prepare(`
+      UPDATE portal_notifications
+      SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+      WHERE recipient_employee_number = ? AND entity_type = 'loan_return_confirmation' AND entity_id = ?
+    `).run(actor.employeeNumber, confirmation.id);
+    response.json({
+      confirmation: publicLoanReturnConfirmation(loanReturnConfirmationRow(confirmation.id)),
+      loan: publicLoan(loanRow(loan.id)),
+    });
+    return;
+  }
+
+  let returnedItems;
+  try {
+    returnedItems = normalizeLoanReturnItems(payload.items, loanItemRows(loan.id));
+  } catch (error) {
+    throw loanWorkflowHttpError(error);
+  }
+  const nextRevision = Number(loan.revision) + 1;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = db.prepare(`
+      UPDATE loans
+      SET status = 'returned', returned_at = ?, return_recorded_by_employee_number = ?,
+          return_witness_employee_number = ?, borrower_return_confirmed = ?,
+          revision = revision + 1, updated_at = ?
+      WHERE id = ? AND status = 'issued' AND revision = ?
+    `).run(
+      respondedAt,
+      confirmation.requested_by_employee_number,
+      actor.employeeNumber,
+      Number(Boolean(payload.borrowerConfirmed)),
+      respondedAt,
+      loan.id,
+      confirmation.expected_revision,
+    );
+    if (!result.changes) {
+      throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
+    }
+    const updateItem = db.prepare(`
+      UPDATE loan_items
+      SET condition_return = ?, updated_at = ?
+      WHERE loan_id = ? AND position = ?
+    `);
+    returnedItems.forEach((item) => {
+      updateItem.run(item.conditionReturn, respondedAt, loan.id, item.position);
+    });
+    const confirmationResult = db.prepare(`
+      UPDATE loan_return_confirmations
+      SET status = 'confirmed', responded_at = ?, response_note = ?, updated_at = ?
+      WHERE id = ? AND status = 'pending'
+    `).run(respondedAt, responseNote, respondedAt, confirmation.id);
+    if (!confirmationResult.changes) {
+      throw httpError(409, "Diese Rücknahmebestätigung wurde bereits bearbeitet.", "LOAN_RETURN_CONFIRMATION_CLOSED");
+    }
+    appendLoanEvent(loan.id, actor.employeeNumber, "returned", nextRevision, {
+      confirmationId: confirmation.id,
+      requestedByEmployeeNumber: confirmation.requested_by_employee_number,
+      witnessEmployeeNumber: actor.employeeNumber,
+      borrowerConfirmed: Boolean(payload.borrowerConfirmed),
+      note: String(payload.note || ""),
+      responseNote,
+      items: returnedItems,
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "loan.return.confirm", "loan", loan.id, JSON.stringify({
+    confirmationId: confirmation.id,
+    requestedByEmployeeNumber: confirmation.requested_by_employee_number,
+    borrowerEmployeeNumber: loan.borrower_employee_number,
+    itemCount: returnedItems.length,
+  }));
+  db.prepare(`
+    UPDATE portal_notifications
+    SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
+    WHERE recipient_employee_number = ? AND entity_type = 'loan_return_confirmation' AND entity_id = ?
+  `).run(actor.employeeNumber, confirmation.id);
+  for (const recipient of new Set([
+    confirmation.requested_by_employee_number,
+    loan.borrower_employee_number,
+  ])) {
+    if (!recipient || recipient === actor.employeeNumber) continue;
+    createPortalNotification(
+      recipient,
+      "loan.returned",
+      "Leihe zurückgenommen",
+      `Die Rücknahme wurde von ${actor.employeeNumber} gegengeprüft und abgeschlossen.`,
+      {
+        target: `/portal.html?tab=loan&loan=${encodeURIComponent(loan.id)}`,
+        entityType: "loan",
+        entityId: loan.id,
+        dedupeKey: `loan:${loan.id}:returned:${nextRevision}:${recipient}`,
+      },
+    );
+  }
+  response.json({
+    confirmation: publicLoanReturnConfirmation(loanReturnConfirmationRow(confirmation.id)),
+    loan: publicLoan(loanRow(loan.id)),
   });
 });
 
