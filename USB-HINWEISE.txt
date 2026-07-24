@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.84 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.85 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -12,6 +12,16 @@ Voraussetzung:
 Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
+
+Version v0.85 Beta:
+  - Zentrales Artikel- und Leihdatenmodell mit exakt sechsstelligen
+    numerischen Artikelnummern.
+  - Sichere, je Standort konfigurierbare Shopware-Artikelsuche mit
+    kontrollierter manueller Rueckfalleingabe.
+  - Standortfreigaben, Funktionsprofile und getrennte Rollenrechte fuer das
+    kuenftige Leihmodul.
+  - Die vollstaendige Leihoberflaeche folgt in einem weiteren
+    Entwicklungsblock.
 
 Version v0.84 Beta:
   - Das System-Center fuehrt Pilot-, Browser-, Bedienungs-, Performance-,

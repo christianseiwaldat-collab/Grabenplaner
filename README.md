@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.84 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
+  <strong>v0.85 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -37,6 +37,18 @@
 | Produktstatus | Verfügbar | Verfügbar | IT-verwalteter Beta-Serverbetrieb; produktive Freigabe nach Go-live-Prüfung |
 
 Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Dienst- und Urlaubsplanung an einem Gerät. Im LAN-Host-Modus liegt die Datenbank ausschließlich am Host-PC; Mitarbeitende können sich im Firmen-LAN oder -WLAN anmelden und dort auch die Zeiterfassung verwenden. Der HTTPS-Server erweitert dieses Modell um geschützten Zugriff von außerhalb. Unterstützt werden Ubuntu 24.04 und 26.04 LTS auf x86-64 mit Caddy, systemd, getrennten Dienstrechten und ClamAV; für neue Beta-Server wird Ubuntu 26.04 LTS empfohlen. Unter Ubuntu kann ein optionales Restic-/rclone-Modul verifizierte lokale Sicherungspunkte täglich verschlüsselt zu Google Drive übertragen. Eine automatische Serverprüfung meldet Störungen redigiert in der Oberfläche; Wiederherstellungen bleiben ein bewusst beaufsichtigter, mehrstufiger Vorgang. Ein getrenntes Host-Sicherheitsmodul prüft SSH, UFW, automatische Sicherheitsaktualisierungen, Kernel- und Journalvorgaben. Aktivierende Änderungen bleiben ein ausdrücklicher Root-Vorgang mit Sicherheitsrollback und Bestätigung über eine eigenständige neue SSH-Verbindung. Die vorhandenen Windows-Werkzeuge bleiben verfügbar. Die konkrete Domain-, Firewall-, Zertifikats- und Betriebskonfiguration muss vor der Freigabe durch die zuständige IT geprüft werden. Details stehen in [SERVERBETRIEB.md](SERVERBETRIEB.md).
+
+## Leihmodul in v0.85 Beta
+
+v0.85 integriert die Leihe in das Mitarbeiterportal. Bis zu fünf Artikel können in einem Vorgang ausgegeben, als offene Leihe überblickt und gemeinsam zurückgenommen werden. Artikel werden zentral mit exakt sechsstelliger numerischer Artikelnummer geführt; zusätzlich werden gültige EAN/GTIN erkannt und nach einem bestätigten Abgleich lokal wiederverwendet. Standorte können die Leihe und eine optionale Shopware-Artikelsuche getrennt aktivieren; Funktionsprofile und Rollenrechte begrenzen den Zugriff.
+
+Die Artikelauflösung erfolgt serverseitig über einen je Standort konfigurierbaren HTTPS-Shop. Eine gefundene Artikelbezeichnung wird im zentralen Artikelstamm zwischengespeichert; bei einer nicht erreichbaren oder erfolglosen Suche bleibt eine kontrollierte manuelle Eingabe möglich. Leihvorgänge verwenden unveränderliche Bezeichnungsschnappschüsse und eine append-only Ereignishistorie. Bei der Rücknahme muss ein zweites, aktuell im Mitarbeiterportal angemeldetes Teammitglied die erfassten Artikel und Zustände in einem sofort eingeblendeten Dialog bestätigen. Bis dahin bleibt die Leihe offen; Ablehnung, Ablauf und konkurrierende Änderungen werden nachvollziehbar behandelt.
+
+Ausgabe- und Rücknahmefotos werden auf dem Server neu kodiert, verkleinert, von Metadaten bereinigt und verschlüsselt gespeichert. Beteiligte und berechtigte Leitungen können sie ausschließlich über geschützte, nicht zwischengespeicherte Routen öffnen. Eine neue Leihverwaltung zeigt offene, fällige und abgeschlossene Vorgänge standortbezogen an. PDF-Belege werden intern zugestellt; optional kann je Standort ein SMTP-Empfänger für den PDF-Anhang konfiguriert und ein fehlgeschlagener Versand nachvollziehbar wiederholt werden.
+
+Für die kontrollierte Ablösung einer bestehenden F18-Lagerware-Installation kann eine vollständige F18-Sicherungs-ZIP zunächst geprüft und anschließend einmalig einem Standort zugeordnet werden. Der Assistent kontrolliert Manifest, Dateihashes und SQLite-Integrität, verlangt eine ausdrückliche Mitarbeiterzuordnung und schützt vor einem doppelten Import. Details zum Cutover stehen in [docs/F18-ABLOESUNG.md](docs/F18-ABLOESUNG.md).
+
+Für jede Ausgabe und jede bestätigte Rücknahme entsteht automatisch ein gebrandeter PDF-Beleg. Die Belege werden verschlüsselt gespeichert, mit SHA-256 gegen unbemerkte Veränderungen geprüft und in den Sicherungsreferenzen berücksichtigt. Beteiligte sowie ausdrücklich berechtigte Standortrollen können sie geschützt im Mitarbeiterportal abrufen; interne Benachrichtigungen informieren über neu verfügbare Dokumente.
 
 ## System-Center und Recovery Assurance in v0.78 Beta
 
@@ -169,7 +181,7 @@ Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und ver
 ## Schnellstart unter Windows
 
 1. Die portable ZIP-Datei unter [Grabenplaner Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.84 Beta starten.cmd` doppelt anklicken.
+2. `Grabenplaner v0.85 Beta starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.

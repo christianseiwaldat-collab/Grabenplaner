@@ -339,7 +339,74 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
 .request-event-history strong,.request-event-history small { display:block; }
 .request-event-history small { margin-top:3px; color:var(--muted); }
 .leadership-request-documents { display:flex; flex-wrap:wrap; gap:7px; margin:12px 0; }
+.loan-layout { display:grid; grid-template-columns:minmax(380px,.9fr) minmax(420px,1.1fr); gap:15px; align-items:start; }
+.loan-issue-form,.loan-overview-card { min-width:0; padding:22px; }
+.loan-card-heading,.loan-list-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:15px; }
+.loan-card-heading h2,.loan-list-heading h2 { margin:0; }
+.loan-limit-badge { padding:5px 8px; border-radius:999px; color:var(--green-dark); background:#dff0e8; font-size:9px; font-weight:900; text-transform:uppercase; }
+.loan-item-editor,.loan-list,.loan-return-items { display:grid; gap:10px; }
+.loan-item-row { min-width:0; padding:13px; border:1px solid var(--line); border-radius:13px; background:rgba(244,247,244,.8); }
+.loan-item-row > header { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.loan-item-row > header strong { font-size:12px; }
+.loan-item-row > header button { width:30px; height:30px; color:var(--danger); background:#f8e8e6; font-size:18px; font-weight:850; }
+.loan-item-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.loan-identifier-field { grid-column:1 / -1; }
+.loan-identifier-field > div { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:7px; }
+.loan-resolved-article { display:grid; gap:3px; margin-top:9px; padding:9px 10px; border-left:3px solid var(--green); border-radius:8px; background:#e4f2eb; }
+.loan-resolved-article span { color:var(--green); font-size:9px; font-weight:900; text-transform:uppercase; }
+.loan-resolved-article strong { font-size:11px; overflow-wrap:anywhere; }
+.loan-item-error { margin:9px 0 0; color:var(--danger); font-size:10px; }
+.loan-manual-mapping { display:grid; grid-template-columns:minmax(120px,.45fr) minmax(180px,1fr); gap:8px; margin-top:10px; padding:10px; border:1px solid #e7c87b; border-radius:10px; background:#fff6dc; }
+.loan-manual-mapping > small { grid-column:1 / -1; color:#75540f; font-size:9px; }
+.loan-add-item { margin:11px 0 14px; }
+.loan-list-filters { display:grid; grid-template-columns:repeat(2,minmax(120px,1fr)); gap:7px; }
+.loan-list-filters label { min-width:0; }
+.loan-list-item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:12px; padding:13px; border:1px solid var(--line); border-radius:12px; background:rgba(250,251,249,.9); }
+.loan-list-main { min-width:0; }
+.loan-list-main > strong,.loan-list-main > small { display:block; }
+.loan-list-main > strong { margin:7px 0 3px; }
+.loan-list-main > small { margin-top:3px; color:var(--muted); font-size:10px; }
+.loan-list-main > .loan-pending-confirmation { margin-top:8px; padding:7px 9px; border-left:3px solid var(--warning); border-radius:7px; color:#74520d; background:#fff3cd; font-weight:750; }
+.loan-list-main ul { display:grid; gap:5px; margin:10px 0 0; padding:0; list-style:none; }
+.loan-list-main li { padding:8px 9px; border-radius:8px; background:#eff4f1; font-size:10px; }
+.loan-list-main li strong,.loan-list-main li small { display:block; overflow-wrap:anywhere; }
+.loan-list-main li small { margin-top:2px; color:var(--muted); }
+.loan-documents { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+.loan-documents a { padding:7px 9px; border:1px solid var(--green); border-radius:8px; color:var(--green-dark); background:#e4f2eb; font-size:9px; font-weight:850; text-decoration:none; }
+.loan-documents a:hover,.loan-documents a:focus-visible { color:#fff; background:var(--green); }
+.loan-return-dialog form,.loan-confirmation-dialog form { width:min(760px,calc(100vw - 32px)); }
+.loan-return-item { display:grid; grid-template-columns:minmax(180px,1fr) minmax(150px,.65fr) minmax(160px,.8fr); align-items:end; gap:9px; padding:11px; border:1px solid var(--line); border-radius:11px; background:#f7f9f7; }
+.loan-return-item strong,.loan-return-item small { display:block; }
+.loan-return-item small { margin-top:3px; color:var(--muted); font-size:10px; }
+.loan-confirmation-alert { margin:0 0 13px; padding:11px 13px; border-left:4px solid var(--warning); border-radius:10px; color:#644808; background:#fff2c8; font-weight:750; line-height:1.45; }
+.loan-confirmation-items { display:grid; gap:9px; margin:13px 0; }
+.loan-confirmation-item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:5px 12px; padding:11px; border:1px solid var(--line); border-radius:11px; background:var(--surface-soft); }
+.loan-confirmation-item strong,.loan-confirmation-item small { display:block; overflow-wrap:anywhere; }
+.loan-confirmation-item small { grid-column:1 / -1; color:var(--muted); font-size:10px; }
+.loan-condition-pill { padding:5px 8px; border-radius:999px; color:var(--green-dark); background:#dff0e8; font-size:9px; font-weight:850; }
+.loan-confirmation-actions { justify-content:space-between; }
+.loan-confirmation-actions .danger-secondary { color:var(--danger); border:1px solid currentColor; background:#fff; }
+.loan-photo-picker { display:grid; gap:10px; margin:14px 0; padding:13px; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); }
+.loan-photo-picker > div:first-child strong,.loan-photo-picker > div:first-child small { display:block; }
+.loan-photo-picker > div:first-child small { margin-top:3px; color:var(--muted); font-size:9px; line-height:1.45; }
+.loan-photo-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.loan-photo-button,.loan-camera-button { display:inline-flex; align-items:center; justify-content:center; min-height:39px; padding:0 13px; border:1px solid var(--green); border-radius:9px; color:var(--green-dark); background:#fff; font-size:10px; font-weight:850; cursor:pointer; }
+.loan-camera-button { color:#fff; background:var(--green); }
+.loan-photo-button input,.loan-camera-button input { position:absolute; width:1px; height:1px; overflow:hidden; opacity:0; pointer-events:none; }
+.loan-photo-selection { display:flex; flex-wrap:wrap; gap:6px; }
+.loan-photo-selection > small { color:var(--muted); font-size:9px; }
+.loan-photo-selection > span { display:grid; grid-template-columns:minmax(0,1fr) auto; position:relative; min-width:min(210px,100%); padding:7px 34px 7px 9px; border:1px solid var(--line); border-radius:9px; background:#fff; }
+.loan-photo-selection span strong { overflow:hidden; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.loan-photo-selection span small { color:var(--muted); font-size:8px; }
+.loan-photo-selection span button { position:absolute; top:50%; right:6px; width:24px; height:24px; padding:0; color:var(--danger); background:#f8e8e6; transform:translateY(-50%); }
+.loan-photo-gallery { display:grid; grid-template-columns:repeat(5,minmax(52px,84px)); gap:7px; margin-top:10px; }
+.loan-photo-gallery a { display:block; overflow:hidden; aspect-ratio:1; border:1px solid var(--line); border-radius:9px; background:#edf2ef; }
+.loan-photo-gallery img { width:100%; height:100%; object-fit:cover; }
+.loan-confirmation-photos { margin:13px 0; padding:12px; border:1px solid var(--line); border-radius:11px; background:var(--surface-soft); }
+.loan-confirmation-photos > strong { display:block; font-size:11px; }
+.loan-confirmation-photos > div > .loan-photo-gallery { grid-template-columns:repeat(4,minmax(58px,90px)); }
 @media (max-width:850px) { .schedule-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.vacation-layout { grid-template-columns:1fr; }.portal-user-copy { display:none; }.portal-tabs { overflow-x:auto; scrollbar-width:none; }.portal-tabs::-webkit-scrollbar { display:none; }.portal-tabs button { flex:0 0 auto; min-width:112px; }.approved-vacation-item { grid-template-columns:1fr 1fr; }.approved-vacation-item > div { grid-column:1 / -1; }.history-item { grid-template-columns:1fr auto; }.history-item > div:first-child { grid-column:1 / -1; }.history-item-status { justify-items:start; }.history-item-status small { text-align:left; } }
+@media (max-width:980px) { .loan-layout { grid-template-columns:1fr; }.loan-return-item { grid-template-columns:1fr 1fr; }.loan-return-item > div { grid-column:1 / -1; } }
 @media (max-width:850px) { .sickness-preferences-card { grid-template-columns:1fr; }.notification-channel-row { grid-template-columns:minmax(130px,.55fr) minmax(240px,1.45fr); }.notification-channel-setup,.notification-verification-row { grid-column:1 / -1; } }
 @media (max-width:850px) { .time-tracking-layout { grid-template-columns:1fr; }.time-clock-card,.time-day-card { padding:20px; } }
 @media (max-width:850px) { .portal-settings-grid { grid-template-columns:1fr; }.portal-settings-card { min-height:0; }.privacy-settings-card { grid-column:auto; }.privacy-data-layout { grid-template-columns:1fr; }.vacation-account-primary,.vacation-account-details { grid-template-columns:repeat(2,minmax(0,1fr)); }.time-record-statement { grid-template-columns:minmax(0,1fr) auto; }.time-record-statement .time-record-actuals { grid-column:1 / -1; }.time-record-statement .time-record-download,.time-record-statement .time-record-unavailable { grid-column:1 / -1; justify-self:start; text-align:left; } }
@@ -391,6 +458,16 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
   .process-task-card { padding:15px; }
   .process-task-completion { grid-template-columns:1fr; }
   .process-task-completion button { width:100%; }
+  .loan-heading { align-items:stretch; }
+  .loan-heading .text-button { align-self:flex-start; }
+  .loan-issue-form,.loan-overview-card { padding:16px; }
+  .loan-item-fields,.loan-manual-mapping,.loan-list-filters,.loan-return-item { grid-template-columns:1fr; }
+  .loan-manual-mapping > small,.loan-return-item > div { grid-column:1; }
+  .loan-list-heading { align-items:stretch; flex-direction:column; }
+  .loan-list-item { grid-template-columns:1fr; }
+  .loan-list-item > button { width:100%; min-height:42px; }
+  .loan-photo-actions > label { flex:1 1 120px; }
+  .loan-photo-gallery { grid-template-columns:repeat(4,minmax(0,1fr)); }
 }
 @media (max-width:850px) {
   .sickness-hub-grid,.amu-hub-card { grid-template-columns:1fr; }

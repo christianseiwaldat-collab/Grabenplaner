@@ -40,6 +40,7 @@
           <button data-tab="timeOff" type="button" role="tab" aria-selected="false" aria-controls="timeOffView" tabindex="-1">ZA</button>
           <button data-tab="vacation" type="button" role="tab" aria-selected="false" aria-controls="vacationView" tabindex="-1">Urlaub</button>
           <button data-tab="history" type="button" role="tab" aria-selected="false" aria-controls="historyView" tabindex="-1">Meine Anträge</button>
+          <button class="hidden" id="loanTab" data-tab="loan" type="button" role="tab" aria-selected="false" aria-controls="loanView" tabindex="-1">Leihe</button>
           <button data-tab="amu" type="button" role="tab" aria-selected="false" aria-controls="amuView" tabindex="-1">Krank &amp; AUM</button>
           <button class="hidden leadership-tab" id="leadershipMoreTab" data-tab="leadershipMore" data-mobile-module="more" type="button" role="tab" aria-selected="false" aria-controls="leadershipMoreView" tabindex="-1">Mehr</button>
         </nav>
@@ -166,6 +167,7 @@
             <button type="button" data-more-tab="timeOff"><strong>ZA beantragen</strong><span>Stundenweise, ganztägig oder mehrtägig</span></button>
             <button type="button" data-more-tab="vacation"><strong>Urlaub beantragen</strong><span>Neuen Urlaubsantrag einreichen</span></button>
             <button type="button" data-more-tab="amu"><strong>Krankmeldung &amp; AUM</strong><span>Krankmelden oder Dokument senden</span></button>
+            <button class="hidden" id="leadershipLoanShortcut" type="button" data-more-tab="loan"><strong>Leihe</strong><span>Artikel ausgeben, offene Leihen prüfen oder zurücknehmen</span></button>
             <button type="button" data-more-tab="processTasks"><strong>Meine Prozessaufgaben</strong><span>Offene Arbeitsschritte ansehen und abschließen</span></button>
             <button type="button" id="leadershipSettingsButton"><strong>Einstellungen</strong><span>Passwort und WLAN-Zeitvorschläge verwalten</span></button>
             <a id="leadershipDesktopLink" href="/?desktop=1"><strong>Desktop-Planung</strong><span>Vollständige Verwaltung am großen Bildschirm</span></a>
@@ -233,6 +235,48 @@
           </section>
           <div class="view-heading approved-heading"><div><span class="eyebrow">Urlaubsübersicht</span><h2>Genehmigter Urlaub</h2><p>Änderungen oder Stornierungen können hier zur Genehmigung eingereicht werden.</p></div></div>
           <section class="portal-card approved-vacation-card"><div class="approved-vacation-list" id="approvedVacationList"></div></section>
+        </section>
+
+        <section class="portal-view loan-view" id="loanView" role="tabpanel" aria-labelledby="loanTab">
+          <div class="view-heading loan-heading">
+            <div><span class="eyebrow">Mitarbeiterportal</span><h1>Leihe</h1><p>Bis zu fünf Artikel ausgeben, offene Leihen überblicken und die Rückgabe gemeinsam bestätigen.</p></div>
+            <button class="text-button" id="loanRefresh" type="button">Aktualisieren</button>
+          </div>
+          <p class="message hidden" id="loanAvailabilityMessage"></p>
+          <div class="loan-layout" id="loanWorkspace">
+            <form class="portal-card request-form loan-issue-form" id="loanIssueForm">
+              <div class="loan-card-heading"><div><span class="eyebrow">Neue Ausgabe</span><h2>Artikel ausleihen</h2></div><span class="loan-limit-badge">max. 5</span></div>
+              <label class="hidden" id="loanBorrowerField"><span>Teammitglied</span><select id="loanBorrower"></select></label>
+              <div class="loan-item-editor" id="loanItemEditor"></div>
+              <button class="text-button loan-add-item" id="loanAddItem" type="button">+ Weiteren Artikel hinzufügen</button>
+              <div class="date-fields">
+                <label><span>Geplante Rückgabe</span><input id="loanDueDate" type="date" /></label>
+                <label><span>Bemerkung</span><input id="loanIssueNote" maxlength="500" placeholder="Optional" /></label>
+              </div>
+              <section class="loan-photo-picker" aria-labelledby="loanIssuePhotoTitle">
+                <div><strong id="loanIssuePhotoTitle">Zustand bei Ausgabe fotografieren</strong><small>Optional · bis zu 9 Fotos · je 10 MB, zusammen 45 MB · Bilder werden verkleinert und geschützt gespeichert.</small></div>
+                <div class="loan-photo-actions">
+                  <label class="loan-photo-button">Fotos auswählen<input id="loanIssuePhotos" type="file" accept="image/jpeg,image/png,image/webp,image/tiff,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.tif,.tiff,.heic,.heif" multiple /></label>
+                  <label class="loan-camera-button">Kamera<input id="loanIssueCamera" type="file" accept="image/*" capture="environment" /></label>
+                </div>
+                <div class="loan-photo-selection" id="loanIssuePhotoSummary"></div>
+              </section>
+              <p class="form-note">Eingabe: sechsstellige interne Artikelnummer oder EAN/GTIN. Ein bestätigter EAN-Abgleich wird für die nächste Leihe gespeichert.</p>
+              <p class="message hidden" id="loanIssueMessage"></p>
+              <button class="primary" id="loanIssueSubmit" type="submit">Leihe erfassen</button>
+            </form>
+
+            <section class="portal-card loan-overview-card">
+              <div class="loan-list-heading">
+                <div><span class="eyebrow">Übersicht</span><h2>Leihvorgänge</h2></div>
+                <div class="loan-list-filters">
+                  <label class="hidden" id="loanScopeField"><span>Bereich</span><select id="loanScope"><option value="mine">Meine Leihen</option><option value="location">Standort</option></select></label>
+                  <label><span>Status</span><select id="loanStatusFilter"><option value="open">Offen</option><option value="history">Verlauf</option><option value="all">Alle</option></select></label>
+                </div>
+              </div>
+              <div class="loan-list" id="loanList"><p class="empty-state">Leihen werden geladen.</p></div>
+            </section>
+          </div>
         </section>
 
         <section class="portal-view" id="amuView" role="tabpanel">
@@ -312,6 +356,45 @@
         <p class="password-recommendation">Mindestens 6 Zeichen; Ziffern sind erlaubt. Ein längeres, schwer zu erratendes Passwort wird empfohlen.</p>
         <p class="message hidden" id="passwordMessage"></p>
         <div class="dialog-actions"><button type="button" data-close-dialog>Abbrechen</button><button class="primary" type="submit">Passwort speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="loan-return-dialog" id="loanReturnDialog" aria-labelledby="loanReturnTitle">
+      <form id="loanReturnForm">
+        <div class="dialog-heading"><div><span class="eyebrow">Rücknahme</span><h2 id="loanReturnTitle">Leihe zurücknehmen</h2></div><button type="button" data-close-loan-return aria-label="Dialog schließen">×</button></div>
+        <div class="history-detail-summary" id="loanReturnSummary"></div>
+        <div class="loan-return-items" id="loanReturnItems"></div>
+        <label><span>Zweites Teammitglied</span><select id="loanReturnWitness" required></select><small>Die Rücknahme wird durch ein anderes aktives Teammitglied desselben Standorts bestätigt.</small></label>
+        <label><span>Bemerkung zur Rückgabe</span><textarea id="loanReturnNote" maxlength="1000" rows="3" placeholder="Optional"></textarea></label>
+        <section class="loan-photo-picker" aria-labelledby="loanReturnPhotoTitle">
+          <div><strong id="loanReturnPhotoTitle">Zustand bei Rückgabe fotografieren</strong><small>Die ausgewählten Fotos werden dem zweiten Teammitglied vor der Bestätigung angezeigt.</small></div>
+          <div class="loan-photo-actions">
+            <label class="loan-photo-button">Fotos auswählen<input id="loanReturnPhotos" type="file" accept="image/jpeg,image/png,image/webp,image/tiff,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.tif,.tiff,.heic,.heif" multiple /></label>
+            <label class="loan-camera-button">Kamera<input id="loanReturnCamera" type="file" accept="image/*" capture="environment" /></label>
+          </div>
+          <div class="loan-photo-selection" id="loanReturnPhotoSummary"></div>
+        </section>
+        <p class="message hidden" id="loanReturnMessage"></p>
+        <div class="dialog-actions"><button type="button" data-close-loan-return>Abbrechen</button><button class="primary" id="loanReturnSubmit" type="submit">Bestätigung anfordern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="loan-confirmation-dialog" id="loanConfirmationDialog" aria-labelledby="loanConfirmationTitle">
+      <form id="loanConfirmationForm">
+        <div class="dialog-heading">
+          <div><span class="eyebrow">Live-Gegenprüfung</span><h2 id="loanConfirmationTitle">Rücknahme bestätigen</h2></div>
+        </div>
+        <p class="loan-confirmation-alert">Du wurdest als zweites Teammitglied ausgewählt. Bitte Artikel und Zustand prüfen, bevor du bestätigst.</p>
+        <div class="history-detail-summary" id="loanConfirmationSummary"></div>
+        <div class="loan-confirmation-items" id="loanConfirmationItems"></div>
+        <section class="loan-confirmation-photos hidden" id="loanConfirmationPhotos"><strong>Rückgabefotos</strong><div></div></section>
+        <label><span>Bemerkung zur Entscheidung</span><textarea id="loanConfirmationNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
+        <p class="form-note" id="loanConfirmationExpiry"></p>
+        <p class="message hidden" id="loanConfirmationMessage"></p>
+        <div class="dialog-actions loan-confirmation-actions">
+          <button class="danger-secondary" id="loanConfirmationReject" type="button">Ablehnen</button>
+          <button class="primary" id="loanConfirmationSubmit" type="submit">Rücknahme bestätigen</button>
+        </div>
       </form>
     </dialog>
 

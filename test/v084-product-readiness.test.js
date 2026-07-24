@@ -19,6 +19,7 @@ const {
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 const releaseVersion = "0.84.2-beta";
+const currentAppVersion = JSON.parse(read("package.json")).version;
 const instant = "2026-07-24T08:00:00.000Z";
 
 function environmentFor(checkId) {
@@ -293,7 +294,7 @@ test("v0.84: API protokolliert berechtigte Nachweise, weist unplausible Eingaben
       observedAt: new Date().toISOString(),
     });
     assert.equal(recorded.response.status, 201, JSON.stringify(recorded.payload));
-    assert.equal(recorded.payload.releaseVersion, releaseVersion);
+    assert.equal(recorded.payload.releaseVersion, currentAppVersion);
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM product_readiness_evidence").get().count, 1);
     assert.throws(
       () => db.prepare("UPDATE product_readiness_evidence SET outcome = 'fail'").run(),

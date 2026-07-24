@@ -64,6 +64,16 @@ const state = {
   rightsDashboard: null,
   systemCenter: null,
   systemCenterLoading: false,
+  loanManagement: null,
+  loanManagementLocationId: "",
+  loanManagementStatus: "open",
+  loanManagementLoading: false,
+  loanSettings: null,
+  loanSettingsLoading: false,
+  f18MigrationRuns: [],
+  f18MigrationPreview: null,
+  f18MigrationBackup: null,
+  f18MigrationLoading: false,
   locationDashboard: null,
   locationDashboardFilter: "all",
   locationDashboardDraggingId: "",
@@ -77,6 +87,7 @@ const state = {
     vacations: "light",
     personnelAdministration: "light",
     personnel: "light",
+    loans: "light",
     rightsDashboard: "light",
     settings: "light",
   },
@@ -225,7 +236,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -250,7 +261,7 @@ const elements = Object.fromEntries(
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
     "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "databaseBackupSettingsCard", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
-    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "dashboardFontSize",
+    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "dashboardFontSize", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList", "f18MigrationCard", "f18MigrationLocation", "f18MigrationBackup", "f18MigrationPreviewButton", "f18MigrationStatus", "f18MigrationPreview", "f18MigrationApplyButton", "f18MigrationHistory",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
@@ -734,6 +745,21 @@ function canReadManagedTimeTracking() {
   return permissions.includes("time:read") || permissions.includes("time:review");
 }
 
+function canReadLoanManagement() {
+  if (state.portalStatus?.installationFeatures?.loans === false) return false;
+  if (!state.portalStatus?.portalEnabled) return true;
+  const permissions = state.portalSession?.user?.permissions || [];
+  return permissions.includes("loans:location:read") || permissions.includes("loans:location:manage");
+}
+
+function canManageLoanSettings() {
+  if (state.portalStatus?.installationFeatures?.loans === false) return false;
+  if (!state.portalStatus?.portalEnabled) return true;
+  const permissions = state.portalSession?.user?.permissions || [];
+  return permissions.includes("loans:settings")
+    && ["developer", "it_admin", "admin", "hr"].includes(state.portalSession?.user?.role || "");
+}
+
 function canOpenPersonnelAdministrationView() {
   return canReadCentralPersonnel() || canReadCostCenters() || canReadCentralVacations() || canReadDataSubjectRequests();
 }
@@ -826,6 +852,8 @@ function applyRoleVisibility() {
   const dataSubjectRequestsReadAccess = canReadDataSubjectRequests();
   const dataSubjectRequestsManageAccess = canManageDataSubjectRequests() && dataSubjectRequestsReadAccess;
   const requestReadAccess = canReadManagerRequests() && features.requests !== false;
+  const loanManagementAccess = canReadLoanManagement();
+  const loanSettingsAccess = canManageLoanSettings();
   const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess
     || centralVacationReadAccess || dataSubjectRequestsReadAccess;
   const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
@@ -843,6 +871,7 @@ function applyRoleVisibility() {
   elements.retentionPreviewCard?.classList.toggle("hidden", !retentionManageAccess);
   document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
   document.querySelectorAll('[data-view="vacations"]').forEach((button) => button.classList.toggle("hidden", features.vacation === false));
+  elements.loanManagementNavButton?.classList.toggle("hidden", !loanManagementAccess);
   elements.requestsNavButton?.classList.toggle("hidden", !requestReadAccess);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
   const systemCenterAccess = diagnosticsReadAccess || diagnosticsTechnicalAccess;
@@ -854,7 +883,8 @@ function applyRoleVisibility() {
   }
   const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess
     || operationModeAccess || wifiSettingsAccess || usbProvisioningAccess || integrationAccess
-    || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess || retentionReadAccess;
+    || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess || retentionReadAccess
+    || loanSettingsAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
     general: settingsAccess || operationModeAccess,
@@ -908,6 +938,8 @@ function applyRoleVisibility() {
   elements.personnelViewSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.trustLevelSettingsCard?.classList.toggle("hidden", !wifiSettingsAccess || !globalAdministration);
   elements.viewBehaviorSettingsCard?.classList.toggle("hidden", !globalAdministration);
+  elements.loanSettingsCard?.classList.toggle("hidden", !loanSettingsAccess);
+  elements.f18MigrationCard?.classList.toggle("hidden", !loanSettingsAccess);
   elements.wifiSettingsCard?.classList.toggle("hidden", !wifiSettingsAccess || features.wifiSuggestions === false || features.timeTracking === false);
   elements.employeeImportCard?.classList.toggle("hidden", !personnelImportAccess);
   elements.importProfileCard?.classList.toggle("hidden", !(integrationReadAccess || personnelImportAccess));
@@ -945,6 +977,8 @@ function applyRoleVisibility() {
   elements.delegationSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.generalSettings?.querySelectorAll(".settings-card:not(.operation-mode-card)").forEach((card) => card.classList.toggle("hidden", !settingsAccess));
   if (globalAdministration) elements.viewBehaviorSettingsCard?.classList.remove("hidden");
+  if (loanSettingsAccess) elements.loanSettingsCard?.classList.remove("hidden");
+  if (loanSettingsAccess) elements.f18MigrationCard?.classList.remove("hidden");
   [elements.localModeOption, elements.serverModeOption, elements.publicServerModeOption].forEach((button) => { if (button) button.disabled = !operationModeAccess; });
   if (!locationWriteAccess && state.personnelTab === "locations") setPersonnelTab("employees");
   if (!canOpenPersonnelAdministrationTab(state.personnelAdministrationTab)) {
@@ -953,6 +987,7 @@ function applyRoleVisibility() {
   if (!personnelAdministrationViewAccess && state.currentView === "personnelAdministration") setView("planning");
   if (!requestReadAccess && state.currentView === "requests") setView("planning");
   if (!timeReadAccess && state.currentView === "timeTracking") setView("planning");
+  if (!loanManagementAccess && state.currentView === "loans") setView("planning");
   renderSidebarSession();
 }
 
@@ -1218,6 +1253,7 @@ async function loadAll() {
       loadManagerVacationRequests();
       loadRequestBlackouts();
     }
+    if (canReadLoanManagement()) loadLoanManagement();
   } catch (error) {
     showToast(error.message, true);
   }
@@ -1236,8 +1272,389 @@ function render() {
   renderPersonnelAdministration();
   renderEmployees();
   renderLocations();
+  renderLoanManagementFilters();
   renderPositions();
   renderSettings();
+}
+
+function loanDueStateLabel(value) {
+  return ({
+    open: "Offen",
+    due_soon: "Bald fällig",
+    due_today: "Heute fällig",
+    overdue: "Überfällig",
+    returned: "Zurückgegeben",
+  })[value] || "Offen";
+}
+
+function loanStatusLabel(value) {
+  return value === "returned" ? "Zurückgegeben"
+    : value === "cancelled" ? "Storniert"
+      : "Ausgegeben";
+}
+
+function loanManagementTimestamp(value) {
+  if (!value) return "–";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "–" : parsed.toLocaleString("de-AT");
+}
+
+function filteredLoanManagementRows() {
+  const loans = Array.isArray(state.loanManagement?.loans) ? state.loanManagement.loans : [];
+  const filter = state.loanManagementStatus || "open";
+  if (filter === "all") return loans;
+  if (filter === "history") return loans.filter((loan) => ["returned", "cancelled"].includes(loan.status));
+  if (filter === "overdue") return loans.filter((loan) => loan.status === "issued" && loan.dueState === "overdue");
+  if (filter === "due") return loans.filter((loan) => loan.status === "issued" && ["due_today", "due_soon"].includes(loan.dueState));
+  return loans.filter((loan) => loan.status === "issued");
+}
+
+function renderLoanManagement() {
+  if (!elements.loanManagementSummary || !elements.loanManagementList) return;
+  const payload = state.loanManagement;
+  const summary = payload?.summary || {};
+  const cards = [
+    ["Offen", summary.open || 0, "open"],
+    ["Überfällig", summary.overdue || 0, "overdue"],
+    ["Heute fällig", summary.dueToday || 0, "due_today"],
+    ["Bestätigung offen", summary.pendingConfirmation || 0, "confirmation"],
+    ["E-Mail fehlgeschlagen", summary.emailFailed || 0, "email_failed"],
+  ];
+  elements.loanManagementSummary.innerHTML = cards.map(([label, value, kind]) => `
+    <article class="loan-summary-card ${Number(value) > 0 ? kind : ""}"><span>${escapeHtml(label)}</span><strong>${Number(value) || 0}</strong></article>
+  `).join("");
+  const rows = filteredLoanManagementRows();
+  elements.loanManagementList.innerHTML = rows.length ? rows.map((loan) => {
+    const items = (loan.items || []).map((item) => `
+      <li><strong>${escapeHtml(item.articleNumber)} · ${escapeHtml(item.description)}</strong>${item.serialNumber ? `<small>Seriennummer ${escapeHtml(item.serialNumber)}</small>` : ""}</li>
+    `).join("");
+    const photos = (loan.photos || []);
+    const issuePhotos = photos.filter((photo) => photo.phase === "issue");
+    const returnPhotos = photos.filter((photo) => photo.phase === "return");
+    const photoLinks = photos.length ? `<div class="loan-management-photos">${photos.map((photo) => `
+      <a href="${escapeHtml(photo.contentUrl)}" target="_blank" rel="noopener" title="${photo.phase === "return" ? "Rückgabefoto" : "Ausgabefoto"} ${Number(photo.position)}"><img src="${escapeHtml(photo.contentUrl)}" alt="${photo.phase === "return" ? "Rückgabe" : "Ausgabe"} ${Number(photo.position)}" loading="lazy" /></a>
+    `).join("")}</div>` : "";
+    const documents = (loan.documents || []).map((document) => {
+      const failed = document.delivery?.emailStatus === "failed";
+      const sent = document.delivery?.emailStatus === "sent";
+      return `<div class="loan-management-document">
+        <a href="${escapeHtml(document.downloadUrl)}" target="_blank" rel="noopener">${escapeHtml(document.label)} · R${Number(document.revision)}</a>
+        <small>Intern ${Number(document.delivery?.internalSent || 0)}×${sent ? " · E-Mail versendet" : failed ? " · E-Mail fehlgeschlagen" : ""}</small>
+        ${failed ? `<button class="text-button" type="button" data-loan-document-email="${escapeHtml(document.id)}">E-Mail erneut senden</button>` : ""}
+      </div>`;
+    }).join("");
+    const dueClass = loan.status === "issued" ? loan.dueState : "returned";
+    return `<article class="loan-management-entry ${escapeHtml(dueClass)}">
+      <header>
+        <div><span class="loan-state-badge ${escapeHtml(dueClass)}">${escapeHtml(loan.status === "issued" ? loanDueStateLabel(loan.dueState) : loanStatusLabel(loan.status))}</span><h2>${escapeHtml(loan.borrower?.employeeNumber)} · ${escapeHtml(loan.borrower?.name)}</h2><p>${escapeHtml(loan.location?.id)} · ${escapeHtml(loan.location?.name)}</p></div>
+        <div class="loan-management-dates"><span>Ausgabe ${escapeHtml(loanManagementTimestamp(loan.issuedAt || loan.createdAt))}</span><strong>${loan.dueDate ? `Rückgabe ${escapeHtml(formatDate(loan.dueDate))}` : "Ohne Rückgabetermin"}</strong></div>
+      </header>
+      ${loan.pendingReturnConfirmation ? `<p class="loan-management-warning">Rücknahme wartet auf Bestätigung durch ${escapeHtml(loan.pendingReturnConfirmation.witness?.employeeNumber)} · ${escapeHtml(loan.pendingReturnConfirmation.witness?.name)}.</p>` : ""}
+      <div class="loan-management-body"><ul>${items}</ul><aside><span>${issuePhotos.length} Ausgabefoto(s) · ${returnPhotos.length} Rückgabefoto(s)</span>${photoLinks}</aside></div>
+      ${documents ? `<footer>${documents}</footer>` : ""}
+    </article>`;
+  }).join("") : `<p class="loan-management-empty">Für diese Auswahl sind keine Leihvorgänge vorhanden.</p>`;
+  const openCount = Number(summary.open || 0);
+  elements.loanManagementNavCount.textContent = String(openCount);
+  elements.loanManagementNavCount.classList.toggle("hidden", openCount < 1);
+  elements.loanManagementUpdated.textContent = payload?.generatedAt
+    ? `Stand ${loanManagementTimestamp(payload.generatedAt)}`
+    : "Noch nicht aktualisiert";
+}
+
+async function loadLoanManagement() {
+  if (!canReadLoanManagement() || state.loanManagementLoading) return;
+  state.loanManagementLoading = true;
+  elements.loanManagementList.innerHTML = '<p class="settings-note">Leihvorgänge werden geladen.</p>';
+  try {
+    const query = new URLSearchParams();
+    if (state.loanManagementLocationId) query.set("locationId", state.loanManagementLocationId);
+    state.loanManagement = await api(`/api/portal/v1/loans/management/summary${query.size ? `?${query}` : ""}`);
+    renderLoanManagement();
+  } catch (error) {
+    elements.loanManagementList.innerHTML = `<p class="loan-management-empty error">${escapeHtml(error.message)}</p>`;
+  } finally {
+    state.loanManagementLoading = false;
+  }
+}
+
+async function retryLoanDocumentEmail(documentId) {
+  try {
+    await api(`/api/portal/v1/loans/documents/${encodeURIComponent(documentId)}/email`, {
+      method: "POST",
+      body: "{}",
+    });
+    showToast("Der Beleg wurde per E-Mail versendet.");
+    await loadLoanManagement();
+  } catch (error) {
+    showToast(error.message, true);
+    await loadLoanManagement();
+  }
+}
+
+function renderLoanManagementFilters() {
+  if (!elements.loanManagementLocation) return;
+  const current = state.loanManagementLocationId;
+  elements.loanManagementLocation.innerHTML = '<option value="">Alle freigegebenen Standorte</option>' + activeLocations().map((location) =>
+    `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`
+  ).join("");
+  elements.loanManagementLocation.value = current;
+  elements.loanManagementStatus.value = state.loanManagementStatus;
+}
+
+function renderLoanSettings() {
+  if (!elements.loanSettingsList) return;
+  const settings = state.loanSettings?.locations || [];
+  const recipients = (state.allEmployees || []).filter((employee) =>
+    employee.active !== false
+    && employee.portal_access?.active
+    && employee.portal_access?.effectivePermissions?.includes("loans:documents:read")
+  );
+  elements.loanSettingsList.innerHTML = settings.length ? settings.map((location) => {
+    const provider = location.emailDelivery?.provider || {};
+    const selectedRecipient = location.documentRecipient?.employeeNumber || "";
+    return `<form class="loan-location-setting" data-loan-setting-location="${escapeHtml(location.locationId)}">
+      <header><div><span class="eyebrow">${escapeHtml(location.locationId)}</span><h3>${escapeHtml(location.locationName)}</h3></div><span class="status-badge ${location.enabled ? "active" : "inactive"}">${location.enabled ? "Aktiv" : "Inaktiv"}</span></header>
+      <label class="switch-row"><span><strong>Leihe aktiv</strong><small>Schaltet Ausgabe und Rücknahme für diesen Standort frei.</small></span><input name="enabled" type="checkbox" ${location.enabled ? "checked" : ""} /></label>
+      <label class="switch-row"><span><strong>Artikelbezeichnung nachschlagen</strong><small>Fragt die hinterlegte Shopware-Quelle nur bei Bedarf ab.</small></span><input name="lookupEnabled" type="checkbox" ${location.articleLookup?.enabled ? "checked" : ""} /></label>
+      <div class="loan-setting-fields">
+        <label class="field"><span>Artikelquelle</span><select name="lookupProvider"><option value="none">Keine externe Suche</option><option value="shopware_storefront" ${location.articleLookup?.provider === "shopware_storefront" ? "selected" : ""}>Shopware-Onlineshop</option></select></label>
+        <label class="field loan-setting-wide"><span>Basisadresse</span><input name="lookupBaseUrl" type="url" maxlength="1000" value="${escapeHtml(location.articleLookup?.baseUrl || "")}" placeholder="https://shop.example.com" /></label>
+        <label class="field"><span>Interner Belegempfänger</span><select name="documentRecipient"><option value="">Automatisch zuständige Leitung</option>${recipients.map((employee) => `<option value="${escapeHtml(employee.personnel_number)}" ${employee.personnel_number === selectedRecipient ? "selected" : ""}>${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.nickname || employee.full_name)}</option>`).join("")}</select></label>
+        <label class="field loan-setting-wide"><span>Zusätzliche Beleg-E-Mail</span><input name="emailRecipient" type="email" maxlength="320" value="${escapeHtml(location.emailDelivery?.recipient || "")}" placeholder="Optional" /></label>
+      </div>
+      <label class="switch-row"><span><strong>Beleg zusätzlich per E-Mail senden</strong><small>${provider.configured === false ? "SMTP ist noch nicht eingerichtet." : "PDF-Beleg wird verschlüsselt gelesen und als Anlage versendet."}</small></span><input name="emailEnabled" type="checkbox" ${location.emailDelivery?.enabled ? "checked" : ""} ${provider.configured === false ? "disabled" : ""} /></label>
+      <div class="form-actions-inline"><span class="settings-note" data-loan-setting-message></span><button class="primary-button" type="submit">Standort speichern</button></div>
+    </form>`;
+  }).join("") : '<p class="settings-note">Es sind noch keine Standorte vorhanden.</p>';
+  elements.loanSettingsHint.textContent = settings.length
+    ? `${settings.length} Standort${settings.length === 1 ? "" : "e"} verfügbar.`
+    : "Keine Standorte verfügbar.";
+}
+
+async function loadLoanSettings() {
+  if (!canManageLoanSettings() || state.loanSettingsLoading) return;
+  state.loanSettingsLoading = true;
+  elements.loanSettingsHint.textContent = "Leiheinstellungen werden geladen.";
+  try {
+    state.loanSettings = await api("/api/portal/v1/loans/settings");
+    renderLoanSettings();
+    renderF18MigrationLocations();
+  } catch (error) {
+    elements.loanSettingsHint.textContent = error.message;
+    elements.loanSettingsList.innerHTML = "";
+  } finally {
+    state.loanSettingsLoading = false;
+  }
+}
+
+async function saveLoanLocationSetting(form) {
+  const locationId = form?.dataset.loanSettingLocation;
+  if (!locationId) return;
+  const messageElement = form.querySelector("[data-loan-setting-message]");
+  const submit = form.querySelector('button[type="submit"]');
+  submit.disabled = true;
+  messageElement.textContent = "Wird gespeichert …";
+  try {
+    await api(`/api/portal/v1/loans/settings/locations/${encodeURIComponent(locationId)}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        enabled: form.elements.enabled.checked,
+        articleLookup: {
+          enabled: form.elements.lookupEnabled.checked,
+          provider: form.elements.lookupProvider.value,
+          baseUrl: form.elements.lookupBaseUrl.value,
+        },
+        documentRecipientEmployeeNumber: form.elements.documentRecipient.value,
+        emailDelivery: {
+          enabled: form.elements.emailEnabled.checked,
+          recipient: form.elements.emailRecipient.value,
+        },
+      }),
+    });
+    messageElement.textContent = "Gespeichert.";
+    await loadLoanSettings();
+    showToast(`Leiheinstellungen für ${locationId} wurden gespeichert.`);
+  } catch (error) {
+    messageElement.textContent = error.message;
+  } finally {
+    submit.disabled = false;
+  }
+}
+
+function renderF18MigrationHistory() {
+  if (!elements.f18MigrationHistory) return;
+  const runs = state.f18MigrationRuns || [];
+  elements.f18MigrationHistory.innerHTML = runs.length ? runs.map((run) => `
+    <article class="f18-migration-run">
+      <div><strong>${escapeHtml(run.locationId)} · ${escapeHtml(run.locationName)}</strong><small>${escapeHtml(run.sourceVersion || "F18")} · ${escapeHtml(loanManagementTimestamp(run.completedAt))}</small></div>
+      <span class="status-badge active">${run.summary.loans} Leihe${run.summary.loans === 1 ? "" : "n"}</span>
+      <small>Import durch ${escapeHtml(run.importedByEmployeeNumber || "lokale Administration")} · Prüfsumme ${escapeHtml(run.fingerprint.slice(0, 12))}…</small>
+    </article>
+  `).join("") : '<p class="settings-note">Noch keine F18-Ablösung abgeschlossen.</p>';
+}
+
+function renderF18MigrationLocations() {
+  if (!elements.f18MigrationLocation) return;
+  const current = elements.f18MigrationLocation.value;
+  const locations = state.loanSettings?.locations || [];
+  elements.f18MigrationLocation.innerHTML = locations.map((location) =>
+    `<option value="${escapeHtml(location.locationId)}">${escapeHtml(location.locationId)} · ${escapeHtml(location.locationName)}</option>`
+  ).join("");
+  if (locations.some((location) => location.locationId === current)) {
+    elements.f18MigrationLocation.value = current;
+  }
+}
+
+function renderF18MigrationPreview() {
+  if (!elements.f18MigrationPreview) return;
+  const preview = state.f18MigrationPreview;
+  elements.f18MigrationPreview.classList.toggle("hidden", !preview);
+  elements.f18MigrationApplyButton?.classList.add("hidden");
+  if (!preview) {
+    elements.f18MigrationPreview.innerHTML = "";
+    return;
+  }
+  const inspection = preview.inspection;
+  const summary = inspection.summary;
+  const requiredIds = new Set(preview.requiredSourceEmployeeIds || []);
+  const sourceEmployees = inspection.employees.filter((employee) => requiredIds.has(employee.id));
+  const options = (preview.targetEmployees || []).map((employee) =>
+    `<option value="${escapeHtml(employee.employeeNumber)}">${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.name)}${employee.active ? "" : " · inaktiv"}</option>`
+  ).join("");
+  const issues = [
+    ...(inspection.blockingIssues || []).map((message) => ({ type: "error", message })),
+    ...(inspection.warnings || []).map((message) => ({ type: "warning", message })),
+  ];
+  elements.f18MigrationPreview.innerHTML = `
+    <div class="f18-migration-summary">
+      <span><strong>${summary.loans}</strong><small>Leihen</small></span>
+      <span><strong>${summary.openLoans}</strong><small>offen</small></span>
+      <span><strong>${summary.returnedLoans}</strong><small>retourniert</small></span>
+      <span><strong>${summary.items}</strong><small>Artikel</small></span>
+      <span><strong>${summary.photos}</strong><small>Fotos</small></span>
+    </div>
+    <div class="f18-migration-source">
+      <strong>${escapeHtml(inspection.source.appVersion || "F18-Lagerware")}</strong>
+      <small>Sicherung vom ${inspection.source.createdAt ? escapeHtml(loanManagementTimestamp(inspection.source.createdAt)) : "unbekannten Zeitpunkt"} · SHA-256 ${escapeHtml(inspection.fingerprint.slice(0, 16))}…</small>
+    </div>
+    ${preview.existingRun ? `<p class="f18-migration-notice error">Dieser Standort wurde bereits am ${escapeHtml(loanManagementTimestamp(preview.existingRun.completedAt))} aus F18 übernommen. Ein zweiter Import ist gegen Dubletten gesperrt.</p>` : ""}
+    ${issues.length ? `<div class="f18-migration-issues">${issues.map((issue) => `<p class="${issue.type}">${escapeHtml(issue.message)}</p>`).join("")}</div>` : '<p class="f18-migration-notice success">Manifest, Dateihashes und SQLite-Datenbank wurden erfolgreich geprüft.</p>'}
+    <div class="f18-migration-mappings">
+      <h3>Mitarbeiter zuordnen</h3>
+      <p>Nur Personen, die in Leihvorgängen vorkommen, müssen zugeordnet werden.</p>
+      ${sourceEmployees.map((employee) => `<label class="field"><span>${escapeHtml(employee.employeeNumber || `ID ${employee.id}`)} · ${escapeHtml(employee.name)}</span><select data-f18-source-employee="${employee.id}"><option value="">Bitte zuordnen</option>${options}</select></label>`).join("")}
+    </div>
+  `;
+  sourceEmployees.forEach((employee) => {
+    const select = elements.f18MigrationPreview.querySelector(`[data-f18-source-employee="${employee.id}"]`);
+    const suggested = preview.suggestedMappings?.[String(employee.id)] || "";
+    if (select && suggested) select.value = suggested;
+  });
+  if (inspection.canImport && !preview.existingRun) {
+    elements.f18MigrationApplyButton?.classList.remove("hidden");
+  }
+}
+
+async function loadF18MigrationHistory() {
+  if (!canManageLoanSettings()) return;
+  try {
+    const payload = await api("/api/portal/v1/loans/migrations/f18");
+    state.f18MigrationRuns = payload.runs || [];
+    renderF18MigrationHistory();
+  } catch (error) {
+    if (elements.f18MigrationHistory) {
+      elements.f18MigrationHistory.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    }
+  }
+}
+
+async function previewF18Migration() {
+  if (state.f18MigrationLoading) return;
+  const file = elements.f18MigrationBackup?.files?.[0];
+  const locationId = elements.f18MigrationLocation?.value;
+  if (!file || !locationId) {
+    showToast("Bitte Zielstandort und F18-Sicherungs-ZIP auswählen.", true);
+    return;
+  }
+  state.f18MigrationLoading = true;
+  elements.f18MigrationPreviewButton.disabled = true;
+  elements.f18MigrationStatus.textContent = "Manifest, Dateihashes und Datenbank werden geprüft …";
+  try {
+    const form = new FormData();
+    form.append("locationId", locationId);
+    form.append("backup", file, file.name);
+    const response = await rawApi("/api/portal/v1/loans/migrations/f18/preview", {
+      method: "POST",
+      body: form,
+    });
+    state.f18MigrationPreview = await response.json();
+    state.f18MigrationBackup = file;
+    elements.f18MigrationStatus.textContent = state.f18MigrationPreview.inspection.canImport
+      ? "Die Sicherung wurde technisch geprüft. Bitte Mitarbeiterzuordnung kontrollieren."
+      : "Die Sicherung enthält Punkte, die vor dem Import behoben werden müssen.";
+    renderF18MigrationPreview();
+  } catch (error) {
+    state.f18MigrationPreview = null;
+    state.f18MigrationBackup = null;
+    elements.f18MigrationStatus.textContent = error.message;
+    renderF18MigrationPreview();
+    showToast(error.message, true);
+  } finally {
+    state.f18MigrationLoading = false;
+    elements.f18MigrationPreviewButton.disabled = false;
+  }
+}
+
+async function applyF18Migration() {
+  const preview = state.f18MigrationPreview;
+  const file = state.f18MigrationBackup;
+  if (!preview || !file || state.f18MigrationLoading) return;
+  const mappings = {};
+  elements.f18MigrationPreview.querySelectorAll("[data-f18-source-employee]").forEach((select) => {
+    mappings[select.dataset.f18SourceEmployee] = select.value;
+  });
+  const missing = [...elements.f18MigrationPreview.querySelectorAll("[data-f18-source-employee]")]
+    .find((select) => !select.value);
+  if (missing) {
+    showToast("Bitte alle verwendeten F18-Mitarbeiter zuordnen.", true);
+    missing.focus();
+    return;
+  }
+  const summary = preview.inspection.summary;
+  if (!window.confirm(
+    `${summary.loans} Leihen, ${summary.items} Artikel und ${summary.photos} Fotos einmalig in Standort ${preview.locationId} übernehmen?\n\nDas bisherige F18-System wird dadurch weder verändert noch beendet.`
+  )) return;
+  state.f18MigrationLoading = true;
+  elements.f18MigrationApplyButton.disabled = true;
+  elements.f18MigrationStatus.textContent = "Belege und Fotos werden geschützt übernommen …";
+  try {
+    const form = new FormData();
+    form.append("locationId", preview.locationId);
+    form.append("expectedFingerprint", preview.inspection.fingerprint);
+    form.append("employeeMappings", JSON.stringify(mappings));
+    form.append("backup", file, file.name);
+    const response = await rawApi("/api/portal/v1/loans/migrations/f18/apply", {
+      method: "POST",
+      body: form,
+    });
+    const payload = await response.json();
+    elements.f18MigrationStatus.textContent = payload.alreadyImported
+      ? "Diese Sicherung war bereits vollständig übernommen."
+      : `F18-Ablösung abgeschlossen: ${payload.run.summary.loans} Leihen wurden übernommen.`;
+    state.f18MigrationPreview = null;
+    state.f18MigrationBackup = null;
+    if (elements.f18MigrationBackup) elements.f18MigrationBackup.value = "";
+    renderF18MigrationPreview();
+    await Promise.all([loadF18MigrationHistory(), loadLoanManagement()]);
+    showToast("Die F18-Ablösung wurde nachvollziehbar abgeschlossen.");
+  } catch (error) {
+    elements.f18MigrationStatus.textContent = error.message;
+    showToast(error.message, true);
+  } finally {
+    state.f18MigrationLoading = false;
+    elements.f18MigrationApplyButton.disabled = false;
+  }
 }
 
 function navigationGroups() {
@@ -1270,10 +1687,11 @@ function applyNavigationGroupState(key, visible = true) {
 function renderContextNavigation() {
   const locations = activeLocations();
   const departmentOnly = state.portalSession?.user?.role === "department_manager";
-  const filialViewActive = ["personnel", "planning", "vacations"].includes(state.currentView);
+  const filialViewActive = ["personnel", "planning", "vacations", "loans"].includes(state.currentView);
   elements.filialManagementNav?.classList.toggle("contains-active", filialViewActive);
   applyNavigationGroupState("filialManagement", true);
   setNavigationCurrent(elements.filialTeamsNavButton, state.currentView === "personnel");
+  setNavigationCurrent(elements.loanManagementNavButton, state.currentView === "loans");
   setNavigationCurrent(elements.planningNavButton, state.currentView === "planning");
   setNavigationCurrent(elements.vacationsNavButton, state.currentView === "vacations");
   const planningContexts = locations.flatMap((location) => departmentOnly
@@ -4246,6 +4664,7 @@ const UI_APPEARANCE_VIEWS = Object.freeze([
   "vacations",
   "personnelAdministration",
   "personnel",
+  "loans",
   "rightsDashboard",
   "settings",
 ]);
@@ -4278,6 +4697,7 @@ function pageViewElement(view) {
     vacations: elements.vacationsView,
     personnelAdministration: elements.personnelAdministrationView,
     personnel: elements.personnelView,
+    loans: elements.loansView,
     rightsDashboard: elements.rightsDashboardView,
     settings: elements.settingsView,
   })[view] || null;
@@ -8969,6 +9389,7 @@ function setView(view) {
     || (view === "requests" && (features.requests === false || !canReadManagerRequests()))
     || (view === "timeTracking" && (features.timeTracking === false || !canReadManagedTimeTracking()))
     || (view === "personnelAdministration" && !canOpenPersonnelAdministrationView())
+    || (view === "loans" && !canReadLoanManagement())
     || (view === "rightsDashboard" && elements.rightsDashboardNavButton?.classList.contains("hidden"))) view = "planning";
   state.currentView = view;
   if (view === "personnelAdministration") setPersonnelAdministrationTab(state.personnelAdministrationTab);
@@ -8987,6 +9408,7 @@ function setView(view) {
   elements.vacationsView.classList.toggle("active", view === "vacations");
   elements.personnelAdministrationView?.classList.toggle("active", view === "personnelAdministration");
   elements.personnelView.classList.toggle("active", view === "personnel");
+  elements.loansView?.classList.toggle("active", view === "loans");
   elements.rightsDashboardView?.classList.toggle("active", view === "rightsDashboard");
   elements.settingsView.classList.toggle("active", view === "settings");
   applyActivePageAppearance();
@@ -8997,6 +9419,7 @@ function setView(view) {
   }
   if (view === "requests") loadManagerVacationRequests();
   if (view === "personnelAdministration") loadPersonnelAdministration();
+  if (view === "loans") loadLoanManagement();
   if (view === "rightsDashboard") loadRightsDashboard();
   if (view === "timeTracking") {
     initializeTimeSummaryDates();
@@ -9009,7 +9432,7 @@ function setView(view) {
 function applyRequestedView() {
   const parameters = new URLSearchParams(window.location.search);
   const requestedView = parameters.get("view");
-  if (!["planning", "requests", "timeTracking", "vacations", "personnelAdministration", "personnel", "rightsDashboard", "settings"].includes(requestedView)) return;
+  if (!["planning", "requests", "timeTracking", "vacations", "personnelAdministration", "personnel", "loans", "rightsDashboard", "settings"].includes(requestedView)) return;
   if (requestedView === "requests") {
     const requestedKind = parameters.get("kind");
     if (["vacation", "time_off", "amu"].includes(requestedKind)) state.requestKindTab = requestedKind;
@@ -9048,6 +9471,10 @@ function setSettingsTab(tab) {
   elements.rightsSettings?.classList.toggle("active", tab === "rights");
   elements.backupSettings.classList.toggle("active", tab === "backup");
   elements.usbProvisioningSettings?.classList.toggle("active", tab === "usbProvisioning");
+  if (tab === "general" && canManageLoanSettings()) {
+    loadLoanSettings();
+    loadF18MigrationHistory();
+  }
   const canSaveGeneralSettings = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("settings:write");
   const canSaveBackupSettings = !state.portalStatus?.portalEnabled
@@ -11670,6 +12097,41 @@ elements.personnelFieldRightsMatrix?.addEventListener("change", (event) => {
   personnelFieldGroupSummary(select.closest(".personnel-field-rights-group"));
 });
 elements.savePersonnelFieldRightsButton?.addEventListener("click", savePersonnelFieldRights);
+elements.loanManagementRefresh?.addEventListener("click", loadLoanManagement);
+elements.loanManagementLocation?.addEventListener("change", () => {
+  state.loanManagementLocationId = elements.loanManagementLocation.value;
+  loadLoanManagement();
+});
+elements.loanManagementStatus?.addEventListener("change", () => {
+  state.loanManagementStatus = elements.loanManagementStatus.value;
+  renderLoanManagement();
+});
+elements.loanManagementList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-loan-document-email]");
+  if (button && !button.disabled) retryLoanDocumentEmail(button.dataset.loanDocumentEmail);
+});
+elements.refreshLoanSettingsButton?.addEventListener("click", loadLoanSettings);
+elements.f18MigrationPreviewButton?.addEventListener("click", previewF18Migration);
+elements.f18MigrationApplyButton?.addEventListener("click", applyF18Migration);
+elements.f18MigrationBackup?.addEventListener("change", () => {
+  state.f18MigrationPreview = null;
+  state.f18MigrationBackup = null;
+  elements.f18MigrationStatus.textContent = "Noch keine Sicherung geprüft.";
+  renderF18MigrationPreview();
+});
+elements.f18MigrationLocation?.addEventListener("change", () => {
+  state.f18MigrationPreview = null;
+  state.f18MigrationBackup = null;
+  if (elements.f18MigrationBackup) elements.f18MigrationBackup.value = "";
+  elements.f18MigrationStatus.textContent = "Noch keine Sicherung geprüft.";
+  renderF18MigrationPreview();
+});
+elements.loanSettingsList?.addEventListener("submit", (event) => {
+  const form = event.target.closest("[data-loan-setting-location]");
+  if (!form) return;
+  event.preventDefault();
+  saveLoanLocationSetting(form);
+});
 document.querySelectorAll("button[data-page-theme-choice]").forEach((button) => button.addEventListener("click", () => {
   const view = button.closest(".view")?.id?.replace(/View$/, "") || state.currentView;
   savePageTheme(view, button.dataset.pageThemeChoice);
