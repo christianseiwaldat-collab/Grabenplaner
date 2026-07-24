@@ -8,7 +8,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 
 test("v0.84: Paket, Launcher, UI und aktuelle Dokumentation bleiben konsistent", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.84.1-beta");
+  assert.equal(packageJson.version, "0.84.2-beta");
 
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.84 Beta starten.cmd")), true);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.83 Beta starten.cmd")), false);
