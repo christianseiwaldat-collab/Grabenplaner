@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.85.1 Beta · Abschluss der F18-Ablösung und FL-Verwaltung
+
+- Neue Leihen können ausschließlich für den aktuell angemeldeten Mitarbeiter erfasst werden; die frühere Personenauswahl ist in Oberfläche und Serverlogik entfernt.
+- Die Rücknahme mit Live-Gegenprüfung bleibt auf ein zweites aktives Teammitglied derselben Filiale begrenzt.
+- Filialleitungen können Leihen revisionsgesichert bearbeiten, ohne Gegenbestätigung und ohne neuen Rücknahmebeleg schließen sowie später wieder öffnen.
+- Manuelle Leitungsaktionen erzeugen unveränderliche Verlaufseinträge. Bereits vorhandene Belege bleiben beim Wiederöffnen als historische Nachweise erhalten.
+- Nach der erfolgreich abgeschlossenen F18-Datenübernahme wurden der Importassistent in den Grundeinstellungen und seine API-Endpunkte entfernt.
+
 ## v0.85 Beta · Integriertes Leihmodul
 
 - Eine zentrale, wiederverwendbare Artikelentität führt ausschließlich sechsstellige numerische Artikelnummern und bewahrt führende Nullen.

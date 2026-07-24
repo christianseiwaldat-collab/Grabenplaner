@@ -154,6 +154,7 @@ const {
 const {
   LoanWorkflowError,
   MAX_LOAN_ITEMS,
+  normalizeLoanCondition,
   normalizeLoanDueDate,
   normalizeLoanIssueItems,
   normalizeLoanReturnItems,
@@ -25698,79 +25699,6 @@ function insertF18Migration(inspection, mappings, location, actor, artifacts) {
   `).get(runId);
 }
 
-app.get("/api/portal/v1/loans/migrations/f18", (request, response) => {
-  loanSettingsActor(request);
-  response.json({ runs: loanMigrationRunRows().map(publicLoanMigrationRun) });
-});
-
-app.post("/api/portal/v1/loans/migrations/f18/preview", async (request, response) => {
-  loanSettingsActor(request, { mutation: true });
-  const { fields, backup } = await parseF18MigrationMultipart(request);
-  const locationId = normalizeLocationId(fields.locationId);
-  validateLocationExists(locationId);
-  const inspection = inspectUploadedF18Backup(backup);
-  response.json(f18PreviewPayload(inspection, locationId));
-});
-
-app.post("/api/portal/v1/loans/migrations/f18/apply", async (request, response) => {
-  const actor = loanSettingsActor(request, { mutation: true });
-  const { fields, backup } = await parseF18MigrationMultipart(request);
-  const locationId = normalizeLocationId(fields.locationId);
-  const locationRow = validateLocationExists(locationId);
-  const inspection = inspectUploadedF18Backup(backup);
-  const expectedFingerprint = String(fields.expectedFingerprint || "").trim().toLowerCase();
-  if (!/^[a-f0-9]{64}$/.test(expectedFingerprint)
-    || expectedFingerprint !== inspection.fingerprint) {
-    throw httpError(
-      409,
-      "Die Sicherung stimmt nicht mit der geprüften Vorschau überein. Bitte erneut prüfen.",
-      "F18_FINGERPRINT_CHANGED",
-    );
-  }
-  const exactRun = db.prepare(`
-    SELECT run.*, location.name AS location_name
-    FROM loan_migration_runs run
-    JOIN locations location ON location.id = run.location_id
-    WHERE run.source_fingerprint = ?
-  `).get(inspection.fingerprint);
-  if (exactRun) {
-    response.json({ run: publicLoanMigrationRun(exactRun), alreadyImported: true });
-    return;
-  }
-  const existingLocationRun = db.prepare(`
-    SELECT run.*, location.name AS location_name
-    FROM loan_migration_runs run
-    JOIN locations location ON location.id = run.location_id
-    WHERE run.source_system = 'f18-lagerware' AND run.location_id = ?
-  `).get(locationId);
-  if (existingLocationRun) {
-    throw httpError(
-      409,
-      "Für diesen Standort wurde die F18-Ablösung bereits abgeschlossen. Ein zweiter Import ist zum Schutz vor Dubletten gesperrt.",
-      "F18_LOCATION_ALREADY_MIGRATED",
-    );
-  }
-  if (inspection.blockingIssues.length) {
-    throw httpError(
-      409,
-      `Die Sicherung ist noch nicht importierbar: ${inspection.blockingIssues[0]}`,
-      "F18_IMPORT_BLOCKED",
-    );
-  }
-  const mappings = parseF18EmployeeMappings(fields.employeeMappings);
-  validateF18EmployeeMappings(inspection, mappings);
-  const location = { id: locationId, name: locationRow.name || locationId };
-  const artifacts = await prepareF18MigrationArtifacts(inspection, mappings, location, actor);
-  const run = insertF18Migration(inspection, mappings, location, actor, artifacts);
-  auditPortal(actor.employeeNumber, "loan.migration.f18.completed", "loan_migration_run", run.id, JSON.stringify({
-    locationId,
-    sourceFingerprint: inspection.fingerprint,
-    sourceVersion: inspection.source.appVersion,
-    summary: inspection.summary,
-  }));
-  response.status(201).json({ run: publicLoanMigrationRun(run), alreadyImported: false });
-});
-
 app.get("/api/portal/v1/loans/articles", (request, response) => {
   const session = requirePortalAnyPermissionOrLocal(
     request,
@@ -26660,30 +26588,117 @@ function appendLoanEvent(loanId, actorEmployeeNumber, eventType, revision, paylo
   );
 }
 
-function loanBorrowerForIssue(actor, setting, requestedEmployeeNumber) {
-  const requested = String(requestedEmployeeNumber || "").trim();
-  let employeeNumber = actor.employeeNumber;
-  if (loanCanManageLocation(actor) && requested) employeeNumber = requested;
-  if (actor.employeeNumber === "local" && !requested) {
+function loanExpectedRevision(body) {
+  const expectedRevision = Number(body?.expectedRevision);
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
+    throw httpError(400, "Die erwartete Revision fehlt.", "LOAN_VERSION_REQUIRED");
+  }
+  return expectedRevision;
+}
+
+function assertLoanManagementAccess(actor, row) {
+  if (!row) throw httpError(404, "Der Leihvorgang wurde nicht gefunden.", "LOAN_NOT_FOUND");
+  if (!loanCanManageLocation(actor)) {
+    throw httpError(403, "Für die Bearbeitung fehlt die Standortberechtigung.", "LOAN_MANAGEMENT_DENIED");
+  }
+  assertSessionContextScope(actor, { locationId: row.location_id });
+}
+
+function normalizeLoanManagementBody(body, row, { requireReturnCondition = false } = {}) {
+  const storedItems = loanItemRows(row.id);
+  if (!Array.isArray(body?.items) || body.items.length !== storedItems.length) {
     throw httpError(
       400,
-      "Bitte ein Teammitglied für die Leihe auswählen.",
-      "LOAN_BORROWER_REQUIRED",
+      "Die Bearbeitung muss alle ausgeliehenen Artikel enthalten.",
+      "LOAN_MANAGEMENT_ITEMS_INVALID",
     );
   }
-  const borrower = loanEmployeeRow(employeeNumber, { active: true });
+  const byPosition = new Map();
+  for (const item of body.items) {
+    const position = Number(item?.position);
+    if (!Number.isInteger(position) || byPosition.has(position)) {
+      throw httpError(
+        400,
+        "Die Artikelpositionen sind unvollständig oder doppelt.",
+        "LOAN_MANAGEMENT_ITEMS_INVALID",
+      );
+    }
+    byPosition.set(position, item);
+  }
+  try {
+    return {
+      dueDate: normalizeLoanDueDate(body?.dueDate, {
+        maximum: addDays(viennaTodayIso(), 3650),
+      }),
+      notes: normalizeLoanText(stripEmoji(String(body?.notes || "")), 1000),
+      items: storedItems.map((stored) => {
+        const item = byPosition.get(Number(stored.position));
+        if (!item) {
+          throw httpError(
+            400,
+            "Die Bearbeitung muss alle ausgeliehenen Artikel enthalten.",
+            "LOAN_MANAGEMENT_ITEMS_INVALID",
+          );
+        }
+        return {
+          position: Number(stored.position),
+          serialNumber: normalizeLoanText(item.serialNumber, 100),
+          conditionOut: normalizeLoanCondition(item.conditionOut),
+          conditionReturn: normalizeLoanCondition(item.conditionReturn, {
+            required: requireReturnCondition,
+          }),
+          note: normalizeLoanText(item.note, 500),
+        };
+      }),
+    };
+  } catch (error) {
+    throw loanWorkflowHttpError(error);
+  }
+}
+
+function cancelPendingLoanReturnConfirmation(loanId, now, reason) {
+  expireLoanReturnConfirmations();
+  const pending = loanPendingReturnConfirmationRow(loanId);
+  if (!pending) return null;
+  db.prepare(`
+    UPDATE loan_return_confirmations
+    SET status = 'cancelled', responded_at = ?, response_note = ?, updated_at = ?
+    WHERE id = ? AND status = 'pending'
+  `).run(now, reason, now, pending.id);
+  db.prepare(`
+    UPDATE portal_notifications
+    SET read_at = COALESCE(read_at, ?)
+    WHERE entity_type = 'loan_return_confirmation' AND entity_id = ?
+  `).run(now, pending.id);
+  return pending.id;
+}
+
+function loanBorrowerForIssue(actor, setting, requestedEmployeeNumber) {
+  const requested = String(requestedEmployeeNumber || "").trim();
+  if (actor.employeeNumber === "local") {
+    throw httpError(
+      409,
+      "Eine neue Leihe benötigt einen persönlich angemeldeten Mitarbeiterzugang.",
+      "LOAN_ISSUE_PORTAL_LOGIN_REQUIRED",
+    );
+  }
+  if (requested && requested !== actor.employeeNumber) {
+    throw httpError(
+      403,
+      "Eine neue Leihe kann nur für den eigenen angemeldeten Zugang erfasst werden.",
+      "LOAN_BORROWER_DENIED",
+    );
+  }
+  const borrower = loanEmployeeRow(actor.employeeNumber, { active: true });
   if (!borrower) {
-    throw httpError(404, "Das ausgewählte Teammitglied wurde nicht gefunden.", "LOAN_BORROWER_NOT_FOUND");
+    throw httpError(404, "Der angemeldete Mitarbeiter wurde nicht gefunden.", "LOAN_BORROWER_NOT_FOUND");
   }
   if (String(borrower.home_location_id || "") !== String(setting.location_id)) {
     throw httpError(
       403,
-      "Das Teammitglied gehört nicht zum ausgewählten Standort.",
+      "Der angemeldete Mitarbeiter gehört nicht zum ausgewählten Standort.",
       "LOAN_BORROWER_LOCATION_MISMATCH",
     );
-  }
-  if (!loanCanManageLocation(actor) && borrower.personnel_number !== actor.employeeNumber) {
-    throw httpError(403, "Eine persönliche Leihe kann nur für den eigenen Zugang erfasst werden.", "LOAN_BORROWER_DENIED");
   }
   return borrower;
 }
@@ -27018,7 +27033,7 @@ app.post("/api/portal/v1/loans/documents/:documentId/email", async (request, res
 app.post("/api/portal/v1/loans", async (request, response) => {
   const actor = requirePortalAnyPermissionOrLocal(
     request,
-    ["loans:self:create", "loans:location:manage"],
+    ["loans:self:create"],
     { csrf: true },
   );
   const setting = enabledLoanLocationForSession(actor, request.body || {});
@@ -27027,9 +27042,7 @@ app.post("/api/portal/v1/loans", async (request, response) => {
   const articles = articleRowsForLoan(input.items);
   const loanId = crypto.randomUUID();
   const now = new Date().toISOString();
-  const recordedByEmployeeNumber = actor.employeeNumber === "local"
-    ? borrower.personnel_number
-    : actor.employeeNumber;
+  const recordedByEmployeeNumber = actor.employeeNumber;
   let preparedIssueDocument;
   try {
     preparedIssueDocument = await prepareLoanDocument({
@@ -27139,6 +27152,271 @@ app.post("/api/portal/v1/loans", async (request, response) => {
   const issueDocument = loanDocumentRow(preparedIssueDocument.id);
   await notifyLoanDocumentAvailable(issuedLoan, issueDocument);
   response.status(201).json({ loan: publicLoan(issuedLoan) });
+});
+
+app.put("/api/portal/v1/loans/:loanId/management", (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:location:manage"],
+    { csrf: true },
+  );
+  const row = loanRow(request.params.loanId);
+  assertLoanManagementAccess(actor, row);
+  const expectedRevision = loanExpectedRevision(request.body);
+  if (Number(row.revision) !== expectedRevision) {
+    throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
+  }
+  const input = normalizeLoanManagementBody(request.body, row, {
+    requireReturnCondition: row.status === "returned",
+  });
+  const now = new Date().toISOString();
+  const nextRevision = expectedRevision + 1;
+  let cancelledConfirmationId = null;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = db.prepare(`
+      UPDATE loans
+      SET due_date = ?, notes = ?, revision = revision + 1, updated_at = ?
+      WHERE id = ? AND revision = ?
+    `).run(input.dueDate, input.notes, now, row.id, expectedRevision);
+    if (!result.changes) {
+      throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
+    }
+    const updateItem = db.prepare(`
+      UPDATE loan_items
+      SET serial_number = ?, condition_out = ?, condition_return = ?,
+          item_note = ?, updated_at = ?
+      WHERE loan_id = ? AND position = ?
+    `);
+    input.items.forEach((item) => {
+      updateItem.run(
+        item.serialNumber,
+        item.conditionOut,
+        item.conditionReturn,
+        item.note,
+        now,
+        row.id,
+        item.position,
+      );
+    });
+    cancelledConfirmationId = cancelPendingLoanReturnConfirmation(
+      row.id,
+      now,
+      "Durch Bearbeitung der Filialleitung aufgehoben.",
+    );
+    appendLoanEvent(row.id, actor.employeeNumber, "manager_edited", nextRevision, {
+      previousRevision: expectedRevision,
+      status: row.status,
+      dueDate: input.dueDate,
+      notes: input.notes,
+      items: input.items,
+      cancelledConfirmationId,
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "loan.management.edit", "loan", row.id, JSON.stringify({
+    locationId: row.location_id,
+    borrowerEmployeeNumber: row.borrower_employee_number,
+    previousRevision: expectedRevision,
+    revision: nextRevision,
+    itemCount: input.items.length,
+    cancelledConfirmationId,
+  }));
+  response.json({ loan: publicLoan(loanRow(row.id)) });
+});
+
+app.post("/api/portal/v1/loans/:loanId/management/close", (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:location:manage"],
+    { csrf: true },
+  );
+  if (actor.employeeNumber === "local") {
+    throw httpError(
+      409,
+      "Das manuelle Schließen benötigt einen persönlich angemeldeten Leitungszugang.",
+      "LOAN_MANAGEMENT_PORTAL_LOGIN_REQUIRED",
+    );
+  }
+  const row = loanRow(request.params.loanId);
+  assertLoanManagementAccess(actor, row);
+  const expectedRevision = loanExpectedRevision(request.body);
+  if (row.status !== "issued") {
+    throw httpError(409, "Nur eine offene Leihe kann manuell geschlossen werden.", "LOAN_ALREADY_CLOSED");
+  }
+  if (Number(row.revision) !== expectedRevision) {
+    throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
+  }
+  const input = normalizeLoanManagementBody(request.body, row, { requireReturnCondition: true });
+  const now = new Date().toISOString();
+  const nextRevision = expectedRevision + 1;
+  let cancelledConfirmationId = null;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = db.prepare(`
+      UPDATE loans
+      SET due_date = ?, notes = ?, status = 'returned', returned_at = ?,
+          return_recorded_by_employee_number = ?, return_witness_employee_number = NULL,
+          borrower_return_confirmed = 0, revision = revision + 1, updated_at = ?
+      WHERE id = ? AND status = 'issued' AND revision = ?
+    `).run(
+      input.dueDate,
+      input.notes,
+      now,
+      actor.employeeNumber,
+      now,
+      row.id,
+      expectedRevision,
+    );
+    if (!result.changes) {
+      throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
+    }
+    const updateItem = db.prepare(`
+      UPDATE loan_items
+      SET serial_number = ?, condition_out = ?, condition_return = ?,
+          item_note = ?, updated_at = ?
+      WHERE loan_id = ? AND position = ?
+    `);
+    input.items.forEach((item) => {
+      updateItem.run(
+        item.serialNumber,
+        item.conditionOut,
+        item.conditionReturn,
+        item.note,
+        now,
+        row.id,
+        item.position,
+      );
+    });
+    cancelledConfirmationId = cancelPendingLoanReturnConfirmation(
+      row.id,
+      now,
+      "Durch manuelles Schließen der Filialleitung aufgehoben.",
+    );
+    appendLoanEvent(row.id, actor.employeeNumber, "manager_closed_without_document", nextRevision, {
+      previousRevision: expectedRevision,
+      returnRecordedByEmployeeNumber: actor.employeeNumber,
+      borrowerConfirmed: false,
+      witnessEmployeeNumber: "",
+      documentCreated: false,
+      dueDate: input.dueDate,
+      notes: input.notes,
+      items: input.items,
+      cancelledConfirmationId,
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "loan.management.close_without_document", "loan", row.id, JSON.stringify({
+    locationId: row.location_id,
+    borrowerEmployeeNumber: row.borrower_employee_number,
+    previousRevision: expectedRevision,
+    revision: nextRevision,
+    itemCount: input.items.length,
+    cancelledConfirmationId,
+  }));
+  if (row.borrower_employee_number !== actor.employeeNumber) {
+    createPortalNotification(
+      row.borrower_employee_number,
+      "loan.returned",
+      "Leihe durch Filialleitung geschlossen",
+      `Die Leihe wurde von ${actor.employeeNumber} ohne Gegenbestätigung und ohne neuen Rücknahmebeleg geschlossen.`,
+      {
+        target: `/portal.html?tab=loan&loan=${encodeURIComponent(row.id)}`,
+        entityType: "loan",
+        entityId: row.id,
+        dedupeKey: `loan:${row.id}:manager-closed:${nextRevision}`,
+      },
+    );
+  }
+  response.json({ loan: publicLoan(loanRow(row.id)) });
+});
+
+app.post("/api/portal/v1/loans/:loanId/management/reopen", (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:location:manage"],
+    { csrf: true },
+  );
+  const row = loanRow(request.params.loanId);
+  assertLoanManagementAccess(actor, row);
+  const expectedRevision = loanExpectedRevision(request.body);
+  if (!["returned", "cancelled"].includes(row.status)) {
+    throw httpError(409, "Nur eine geschlossene Leihe kann wieder geöffnet werden.", "LOAN_NOT_CLOSED");
+  }
+  if (Number(row.revision) !== expectedRevision) {
+    throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
+  }
+  const now = new Date().toISOString();
+  const nextRevision = expectedRevision + 1;
+  const previousItems = loanItemRows(row.id).map((item) => ({
+    position: Number(item.position),
+    conditionReturn: item.condition_return || "",
+  }));
+  const previousDocuments = loanDocumentRows(row.id).map((document) => ({
+    id: document.id,
+    type: document.document_type,
+    revision: Number(document.loan_revision),
+    sha256: document.sha256,
+  }));
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = db.prepare(`
+      UPDATE loans
+      SET status = 'issued', returned_at = NULL, return_recorded_by_employee_number = NULL,
+          return_witness_employee_number = NULL, borrower_return_confirmed = 0,
+          revision = revision + 1, updated_at = ?
+      WHERE id = ? AND status IN ('returned','cancelled') AND revision = ?
+    `).run(now, row.id, expectedRevision);
+    if (!result.changes) {
+      throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
+    }
+    db.prepare(`
+      UPDATE loan_items SET condition_return = '', updated_at = ? WHERE loan_id = ?
+    `).run(now, row.id);
+    appendLoanEvent(row.id, actor.employeeNumber, "manager_reopened", nextRevision, {
+      previousRevision: expectedRevision,
+      previousStatus: row.status,
+      previousReturnedAt: row.returned_at || null,
+      previousReturnRecordedByEmployeeNumber: row.return_recorded_by_employee_number || "",
+      previousWitnessEmployeeNumber: row.return_witness_employee_number || "",
+      previousBorrowerConfirmed: Boolean(row.borrower_return_confirmed),
+      previousItems,
+      preservedDocuments: previousDocuments,
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "loan.management.reopen", "loan", row.id, JSON.stringify({
+    locationId: row.location_id,
+    borrowerEmployeeNumber: row.borrower_employee_number,
+    previousRevision: expectedRevision,
+    revision: nextRevision,
+    previousStatus: row.status,
+    preservedDocumentCount: previousDocuments.length,
+  }));
+  if (row.borrower_employee_number !== actor.employeeNumber) {
+    createPortalNotification(
+      row.borrower_employee_number,
+      "loan.reopened",
+      "Leihe wieder geöffnet",
+      `Die Filialleitung hat eine geschlossene Leihe wieder geöffnet. Sie erscheint erneut unter den offenen Leihen.`,
+      {
+        target: `/portal.html?tab=loan&loan=${encodeURIComponent(row.id)}`,
+        entityType: "loan",
+        entityId: row.id,
+        dedupeKey: `loan:${row.id}:manager-reopened:${nextRevision}`,
+      },
+    );
+  }
+  response.json({ loan: publicLoan(loanRow(row.id)) });
 });
 
 app.post("/api/portal/v1/loans/:loanId/return", (request, response) => {
