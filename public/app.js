@@ -70,6 +70,10 @@ const state = {
   loanManagementLoading: false,
   loanSettings: null,
   loanSettingsLoading: false,
+  f18MigrationRuns: [],
+  f18MigrationPreview: null,
+  f18MigrationBackup: null,
+  f18MigrationLoading: false,
   locationDashboard: null,
   locationDashboardFilter: "all",
   locationDashboardDraggingId: "",
@@ -257,7 +261,7 @@ const elements = Object.fromEntries(
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
     "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "databaseBackupSettingsCard", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
-    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "dashboardFontSize", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
+    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "dashboardFontSize", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList", "f18MigrationCard", "f18MigrationLocation", "f18MigrationBackup", "f18MigrationPreviewButton", "f18MigrationStatus", "f18MigrationPreview", "f18MigrationApplyButton", "f18MigrationHistory",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
@@ -935,6 +939,7 @@ function applyRoleVisibility() {
   elements.trustLevelSettingsCard?.classList.toggle("hidden", !wifiSettingsAccess || !globalAdministration);
   elements.viewBehaviorSettingsCard?.classList.toggle("hidden", !globalAdministration);
   elements.loanSettingsCard?.classList.toggle("hidden", !loanSettingsAccess);
+  elements.f18MigrationCard?.classList.toggle("hidden", !loanSettingsAccess);
   elements.wifiSettingsCard?.classList.toggle("hidden", !wifiSettingsAccess || features.wifiSuggestions === false || features.timeTracking === false);
   elements.employeeImportCard?.classList.toggle("hidden", !personnelImportAccess);
   elements.importProfileCard?.classList.toggle("hidden", !(integrationReadAccess || personnelImportAccess));
@@ -973,6 +978,7 @@ function applyRoleVisibility() {
   elements.generalSettings?.querySelectorAll(".settings-card:not(.operation-mode-card)").forEach((card) => card.classList.toggle("hidden", !settingsAccess));
   if (globalAdministration) elements.viewBehaviorSettingsCard?.classList.remove("hidden");
   if (loanSettingsAccess) elements.loanSettingsCard?.classList.remove("hidden");
+  if (loanSettingsAccess) elements.f18MigrationCard?.classList.remove("hidden");
   [elements.localModeOption, elements.serverModeOption, elements.publicServerModeOption].forEach((button) => { if (button) button.disabled = !operationModeAccess; });
   if (!locationWriteAccess && state.personnelTab === "locations") setPersonnelTab("employees");
   if (!canOpenPersonnelAdministrationTab(state.personnelAdministrationTab)) {
@@ -1433,6 +1439,7 @@ async function loadLoanSettings() {
   try {
     state.loanSettings = await api("/api/portal/v1/loans/settings");
     renderLoanSettings();
+    renderF18MigrationLocations();
   } catch (error) {
     elements.loanSettingsHint.textContent = error.message;
     elements.loanSettingsList.innerHTML = "";
@@ -1472,6 +1479,181 @@ async function saveLoanLocationSetting(form) {
     messageElement.textContent = error.message;
   } finally {
     submit.disabled = false;
+  }
+}
+
+function renderF18MigrationHistory() {
+  if (!elements.f18MigrationHistory) return;
+  const runs = state.f18MigrationRuns || [];
+  elements.f18MigrationHistory.innerHTML = runs.length ? runs.map((run) => `
+    <article class="f18-migration-run">
+      <div><strong>${escapeHtml(run.locationId)} · ${escapeHtml(run.locationName)}</strong><small>${escapeHtml(run.sourceVersion || "F18")} · ${escapeHtml(loanManagementTimestamp(run.completedAt))}</small></div>
+      <span class="status-badge active">${run.summary.loans} Leihe${run.summary.loans === 1 ? "" : "n"}</span>
+      <small>Import durch ${escapeHtml(run.importedByEmployeeNumber || "lokale Administration")} · Prüfsumme ${escapeHtml(run.fingerprint.slice(0, 12))}…</small>
+    </article>
+  `).join("") : '<p class="settings-note">Noch keine F18-Ablösung abgeschlossen.</p>';
+}
+
+function renderF18MigrationLocations() {
+  if (!elements.f18MigrationLocation) return;
+  const current = elements.f18MigrationLocation.value;
+  const locations = state.loanSettings?.locations || [];
+  elements.f18MigrationLocation.innerHTML = locations.map((location) =>
+    `<option value="${escapeHtml(location.locationId)}">${escapeHtml(location.locationId)} · ${escapeHtml(location.locationName)}</option>`
+  ).join("");
+  if (locations.some((location) => location.locationId === current)) {
+    elements.f18MigrationLocation.value = current;
+  }
+}
+
+function renderF18MigrationPreview() {
+  if (!elements.f18MigrationPreview) return;
+  const preview = state.f18MigrationPreview;
+  elements.f18MigrationPreview.classList.toggle("hidden", !preview);
+  elements.f18MigrationApplyButton?.classList.add("hidden");
+  if (!preview) {
+    elements.f18MigrationPreview.innerHTML = "";
+    return;
+  }
+  const inspection = preview.inspection;
+  const summary = inspection.summary;
+  const requiredIds = new Set(preview.requiredSourceEmployeeIds || []);
+  const sourceEmployees = inspection.employees.filter((employee) => requiredIds.has(employee.id));
+  const options = (preview.targetEmployees || []).map((employee) =>
+    `<option value="${escapeHtml(employee.employeeNumber)}">${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.name)}${employee.active ? "" : " · inaktiv"}</option>`
+  ).join("");
+  const issues = [
+    ...(inspection.blockingIssues || []).map((message) => ({ type: "error", message })),
+    ...(inspection.warnings || []).map((message) => ({ type: "warning", message })),
+  ];
+  elements.f18MigrationPreview.innerHTML = `
+    <div class="f18-migration-summary">
+      <span><strong>${summary.loans}</strong><small>Leihen</small></span>
+      <span><strong>${summary.openLoans}</strong><small>offen</small></span>
+      <span><strong>${summary.returnedLoans}</strong><small>retourniert</small></span>
+      <span><strong>${summary.items}</strong><small>Artikel</small></span>
+      <span><strong>${summary.photos}</strong><small>Fotos</small></span>
+    </div>
+    <div class="f18-migration-source">
+      <strong>${escapeHtml(inspection.source.appVersion || "F18-Lagerware")}</strong>
+      <small>Sicherung vom ${inspection.source.createdAt ? escapeHtml(loanManagementTimestamp(inspection.source.createdAt)) : "unbekannten Zeitpunkt"} · SHA-256 ${escapeHtml(inspection.fingerprint.slice(0, 16))}…</small>
+    </div>
+    ${preview.existingRun ? `<p class="f18-migration-notice error">Dieser Standort wurde bereits am ${escapeHtml(loanManagementTimestamp(preview.existingRun.completedAt))} aus F18 übernommen. Ein zweiter Import ist gegen Dubletten gesperrt.</p>` : ""}
+    ${issues.length ? `<div class="f18-migration-issues">${issues.map((issue) => `<p class="${issue.type}">${escapeHtml(issue.message)}</p>`).join("")}</div>` : '<p class="f18-migration-notice success">Manifest, Dateihashes und SQLite-Datenbank wurden erfolgreich geprüft.</p>'}
+    <div class="f18-migration-mappings">
+      <h3>Mitarbeiter zuordnen</h3>
+      <p>Nur Personen, die in Leihvorgängen vorkommen, müssen zugeordnet werden.</p>
+      ${sourceEmployees.map((employee) => `<label class="field"><span>${escapeHtml(employee.employeeNumber || `ID ${employee.id}`)} · ${escapeHtml(employee.name)}</span><select data-f18-source-employee="${employee.id}"><option value="">Bitte zuordnen</option>${options}</select></label>`).join("")}
+    </div>
+  `;
+  sourceEmployees.forEach((employee) => {
+    const select = elements.f18MigrationPreview.querySelector(`[data-f18-source-employee="${employee.id}"]`);
+    const suggested = preview.suggestedMappings?.[String(employee.id)] || "";
+    if (select && suggested) select.value = suggested;
+  });
+  if (inspection.canImport && !preview.existingRun) {
+    elements.f18MigrationApplyButton?.classList.remove("hidden");
+  }
+}
+
+async function loadF18MigrationHistory() {
+  if (!canManageLoanSettings()) return;
+  try {
+    const payload = await api("/api/portal/v1/loans/migrations/f18");
+    state.f18MigrationRuns = payload.runs || [];
+    renderF18MigrationHistory();
+  } catch (error) {
+    if (elements.f18MigrationHistory) {
+      elements.f18MigrationHistory.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    }
+  }
+}
+
+async function previewF18Migration() {
+  if (state.f18MigrationLoading) return;
+  const file = elements.f18MigrationBackup?.files?.[0];
+  const locationId = elements.f18MigrationLocation?.value;
+  if (!file || !locationId) {
+    showToast("Bitte Zielstandort und F18-Sicherungs-ZIP auswählen.", true);
+    return;
+  }
+  state.f18MigrationLoading = true;
+  elements.f18MigrationPreviewButton.disabled = true;
+  elements.f18MigrationStatus.textContent = "Manifest, Dateihashes und Datenbank werden geprüft …";
+  try {
+    const form = new FormData();
+    form.append("locationId", locationId);
+    form.append("backup", file, file.name);
+    const response = await rawApi("/api/portal/v1/loans/migrations/f18/preview", {
+      method: "POST",
+      body: form,
+    });
+    state.f18MigrationPreview = await response.json();
+    state.f18MigrationBackup = file;
+    elements.f18MigrationStatus.textContent = state.f18MigrationPreview.inspection.canImport
+      ? "Die Sicherung wurde technisch geprüft. Bitte Mitarbeiterzuordnung kontrollieren."
+      : "Die Sicherung enthält Punkte, die vor dem Import behoben werden müssen.";
+    renderF18MigrationPreview();
+  } catch (error) {
+    state.f18MigrationPreview = null;
+    state.f18MigrationBackup = null;
+    elements.f18MigrationStatus.textContent = error.message;
+    renderF18MigrationPreview();
+    showToast(error.message, true);
+  } finally {
+    state.f18MigrationLoading = false;
+    elements.f18MigrationPreviewButton.disabled = false;
+  }
+}
+
+async function applyF18Migration() {
+  const preview = state.f18MigrationPreview;
+  const file = state.f18MigrationBackup;
+  if (!preview || !file || state.f18MigrationLoading) return;
+  const mappings = {};
+  elements.f18MigrationPreview.querySelectorAll("[data-f18-source-employee]").forEach((select) => {
+    mappings[select.dataset.f18SourceEmployee] = select.value;
+  });
+  const missing = [...elements.f18MigrationPreview.querySelectorAll("[data-f18-source-employee]")]
+    .find((select) => !select.value);
+  if (missing) {
+    showToast("Bitte alle verwendeten F18-Mitarbeiter zuordnen.", true);
+    missing.focus();
+    return;
+  }
+  const summary = preview.inspection.summary;
+  if (!window.confirm(
+    `${summary.loans} Leihen, ${summary.items} Artikel und ${summary.photos} Fotos einmalig in Standort ${preview.locationId} übernehmen?\n\nDas bisherige F18-System wird dadurch weder verändert noch beendet.`
+  )) return;
+  state.f18MigrationLoading = true;
+  elements.f18MigrationApplyButton.disabled = true;
+  elements.f18MigrationStatus.textContent = "Belege und Fotos werden geschützt übernommen …";
+  try {
+    const form = new FormData();
+    form.append("locationId", preview.locationId);
+    form.append("expectedFingerprint", preview.inspection.fingerprint);
+    form.append("employeeMappings", JSON.stringify(mappings));
+    form.append("backup", file, file.name);
+    const response = await rawApi("/api/portal/v1/loans/migrations/f18/apply", {
+      method: "POST",
+      body: form,
+    });
+    const payload = await response.json();
+    elements.f18MigrationStatus.textContent = payload.alreadyImported
+      ? "Diese Sicherung war bereits vollständig übernommen."
+      : `F18-Ablösung abgeschlossen: ${payload.run.summary.loans} Leihen wurden übernommen.`;
+    state.f18MigrationPreview = null;
+    state.f18MigrationBackup = null;
+    if (elements.f18MigrationBackup) elements.f18MigrationBackup.value = "";
+    renderF18MigrationPreview();
+    await Promise.all([loadF18MigrationHistory(), loadLoanManagement()]);
+    showToast("Die F18-Ablösung wurde nachvollziehbar abgeschlossen.");
+  } catch (error) {
+    elements.f18MigrationStatus.textContent = error.message;
+    showToast(error.message, true);
+  } finally {
+    state.f18MigrationLoading = false;
+    elements.f18MigrationApplyButton.disabled = false;
   }
 }
 
@@ -9289,7 +9471,10 @@ function setSettingsTab(tab) {
   elements.rightsSettings?.classList.toggle("active", tab === "rights");
   elements.backupSettings.classList.toggle("active", tab === "backup");
   elements.usbProvisioningSettings?.classList.toggle("active", tab === "usbProvisioning");
-  if (tab === "general" && canManageLoanSettings()) loadLoanSettings();
+  if (tab === "general" && canManageLoanSettings()) {
+    loadLoanSettings();
+    loadF18MigrationHistory();
+  }
   const canSaveGeneralSettings = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("settings:write");
   const canSaveBackupSettings = !state.portalStatus?.portalEnabled
@@ -11926,6 +12111,21 @@ elements.loanManagementList?.addEventListener("click", (event) => {
   if (button && !button.disabled) retryLoanDocumentEmail(button.dataset.loanDocumentEmail);
 });
 elements.refreshLoanSettingsButton?.addEventListener("click", loadLoanSettings);
+elements.f18MigrationPreviewButton?.addEventListener("click", previewF18Migration);
+elements.f18MigrationApplyButton?.addEventListener("click", applyF18Migration);
+elements.f18MigrationBackup?.addEventListener("change", () => {
+  state.f18MigrationPreview = null;
+  state.f18MigrationBackup = null;
+  elements.f18MigrationStatus.textContent = "Noch keine Sicherung geprüft.";
+  renderF18MigrationPreview();
+});
+elements.f18MigrationLocation?.addEventListener("change", () => {
+  state.f18MigrationPreview = null;
+  state.f18MigrationBackup = null;
+  if (elements.f18MigrationBackup) elements.f18MigrationBackup.value = "";
+  elements.f18MigrationStatus.textContent = "Noch keine Sicherung geprüft.";
+  renderF18MigrationPreview();
+});
 elements.loanSettingsList?.addEventListener("submit", (event) => {
   const form = event.target.closest("[data-loan-setting-location]");
   if (!form) return;

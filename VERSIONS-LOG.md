@@ -14,6 +14,9 @@
 - Die neue Leihverwaltung bündelt offene, bald fällige, überfällige und abgeschlossene Vorgänge samt Fotodokumentation, Belegrevisionen und Zustellstatus für berechtigte Leitungen.
 - Optional lassen sich PDF-Belege je Standort zusätzlich über einen ausdrücklich konfigurierten SMTP-Empfänger versenden. Zustellversuche bleiben append-only nachvollziehbar und können nach einem Fehler kontrolliert wiederholt werden.
 
+- Eine vollständige F18-Lagerware-Sicherung lässt sich mit Manifest-, SHA-256- und SQLite-Integritätsprüfung zunächst als Vorschau prüfen und anschließend einmalig je Zielstandort übernehmen. Mitarbeiter werden ausdrücklich zugeordnet; Leihen, Artikel, Fotos und neu erzeugte Grabenplaner-Belege werden nachvollziehbar importiert.
+- Der F18-Import ist gegen Dubletten geschützt und protokolliert seinen Abschluss unveränderlich. Das bisherige F18-System wird weder verändert noch automatisch beendet; die kontrollierte Abschaltung bleibt ein eigener administrativer Schritt.
+
 ## v0.84 Beta · Pilot- und Abnahmenachweise
 
 - Das System-Center zeigt sechs getrennte Produktreife-Gates für Desktop-Pilot, mobile Browserabläufe, barrierearme Bedienung, Performance, Security und Recovery.

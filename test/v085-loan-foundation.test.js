@@ -7,6 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const sharp = require("sharp");
+const { createF18Backup } = require("./helpers/f18-backup-fixture");
 
 const {
   hasValidGtinChecksum,
@@ -670,10 +671,123 @@ test("v0.85 Leihverwaltung, Fotobelege und Standortversand sind in beiden Oberfl
   assert.match(adminHtml, /id="loansView"/);
   assert.match(adminHtml, /id="loanManagementSummary"/);
   assert.match(adminHtml, /id="loanSettingsCard"/);
+  assert.match(adminHtml, /id="f18MigrationCard"/);
   assert.match(adminSource, /\/api\/portal\/v1\/loans\/management\/summary/);
   assert.match(adminSource, /\/api\/portal\/v1\/loans\/documents\/\$\{encodeURIComponent\(documentId\)\}\/email/);
+  assert.match(adminSource, /\/api\/portal\/v1\/loans\/migrations\/f18\/preview/);
   assert.match(portalHtml, /id="loanIssuePhotos"/);
   assert.match(portalHtml, /id="loanReturnPhotos"/);
   assert.match(portalSource, /uploadLoanPhotos/);
   assert.match(portalSource, /data-loan-photo-remove/);
+});
+
+test("v0.85 F18-Ablösung prüft, importiert und verhindert Dubletten", async () => {
+  const photo = await sharp({
+    create: {
+      width: 120,
+      height: 90,
+      channels: 3,
+      background: { r: 42, g: 122, b: 91 },
+    },
+  }).jpeg().toBuffer();
+  const sourcePhoto = "501/issue/item-1/ausgabe.jpg";
+  const backup = createF18Backup({
+    employees: [
+      { id: 1, employeeNumber: EMPLOYEE, name: "Erika Beispiel" },
+      { id: 2, employeeNumber: WITNESS, name: "Walter Beispiel" },
+    ],
+    loans: [
+      {
+        id: 501,
+        borrowerId: 1,
+        dueDate: "2026-08-01",
+        issuedAt: "2026-07-20T08:00:00+00:00",
+        notes: "F18-Testausleihe",
+        items: [{
+          position: 1,
+          articleNumber: "771001",
+          description: "F18 Demo-Kamera",
+          serialNumber: "F18-SN-501",
+        }],
+        photos: [{
+          phase: "issue",
+          itemPosition: 1,
+          filename: sourcePhoto,
+          originalName: "ausgabe.jpg",
+        }],
+      },
+      {
+        id: 502,
+        borrowerId: 1,
+        returnWitnessId: 2,
+        dueDate: "2026-07-22",
+        issuedAt: "2026-07-19T08:00:00+00:00",
+        returnedAt: "2026-07-21T16:00:00+00:00",
+        borrowerConfirmed: true,
+        returnCondition: "gut",
+        items: [{
+          position: 1,
+          articleNumber: "771002",
+          description: "F18 Demo-Objektiv",
+          serialNumber: "F18-SN-502",
+        }],
+      },
+    ],
+    photos: { [sourcePhoto]: photo },
+  });
+  const deniedForm = new FormData();
+  deniedForm.append("locationId", locationId);
+  deniedForm.append("backup", new Blob([backup], { type: "application/zip" }), "f18-test.zip");
+  const denied = await request("/api/portal/v1/loans/migrations/f18/preview", {
+    method: "POST",
+    session: employeeSession,
+    body: deniedForm,
+  });
+  assert.equal(denied.response.status, 403);
+
+  const previewForm = new FormData();
+  previewForm.append("locationId", locationId);
+  previewForm.append("backup", new Blob([backup], { type: "application/zip" }), "f18-test.zip");
+  const preview = await request("/api/portal/v1/loans/migrations/f18/preview", {
+    method: "POST",
+    session: adminSession,
+    body: previewForm,
+  });
+  assert.equal(preview.response.status, 200, JSON.stringify(preview.payload));
+  assert.equal(preview.payload.inspection.canImport, true);
+  assert.equal(preview.payload.inspection.summary.loans, 2);
+  assert.equal(preview.payload.suggestedMappings["1"], EMPLOYEE);
+  assert.equal(preview.payload.suggestedMappings["2"], WITNESS);
+
+  const applyForm = new FormData();
+  applyForm.append("locationId", locationId);
+  applyForm.append("expectedFingerprint", preview.payload.inspection.fingerprint);
+  applyForm.append("employeeMappings", JSON.stringify({ 1: EMPLOYEE, 2: WITNESS }));
+  applyForm.append("backup", new Blob([backup], { type: "application/zip" }), "f18-test.zip");
+  const applied = await request("/api/portal/v1/loans/migrations/f18/apply", {
+    method: "POST",
+    session: adminSession,
+    body: applyForm,
+  });
+  assert.equal(applied.response.status, 201, JSON.stringify(applied.payload));
+  assert.equal(applied.payload.alreadyImported, false);
+  assert.equal(applied.payload.run.summary.loans, 2);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM loans WHERE legacy_id IN (501,502)").get().count, 2);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM loan_photos photo JOIN loans loan ON loan.id = photo.loan_id WHERE loan.legacy_id = 501").get().count, 1);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM loan_documents document JOIN loans loan ON loan.id = document.loan_id WHERE loan.legacy_id IN (501,502)").get().count, 3);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM loan_migration_records").get().count, 2);
+
+  const replayForm = new FormData();
+  replayForm.append("locationId", locationId);
+  replayForm.append("expectedFingerprint", preview.payload.inspection.fingerprint);
+  replayForm.append("employeeMappings", JSON.stringify({ 1: EMPLOYEE, 2: WITNESS }));
+  replayForm.append("backup", new Blob([backup], { type: "application/zip" }), "f18-test.zip");
+  const replay = await request("/api/portal/v1/loans/migrations/f18/apply", {
+    method: "POST",
+    session: adminSession,
+    body: replayForm,
+  });
+  assert.equal(replay.response.status, 200, JSON.stringify(replay.payload));
+  assert.equal(replay.payload.alreadyImported, true);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM loans WHERE legacy_id IN (501,502)").get().count, 2);
 });
