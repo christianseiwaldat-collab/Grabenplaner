@@ -325,6 +325,30 @@ test("application smoke sanitizes every known protected domain but preserves ope
         FOREIGN KEY (handoff_id) REFERENCES payroll_handoffs(id) ON DELETE RESTRICT
       );
       CREATE TABLE retention_preview_runs (id TEXT PRIMARY KEY, result_json TEXT NOT NULL);
+      CREATE TABLE loans (id TEXT PRIMARY KEY);
+      CREATE TABLE loan_documents (
+        id TEXT PRIMARY KEY,
+        loan_id TEXT NOT NULL,
+        storage_key TEXT NOT NULL UNIQUE,
+        FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE RESTRICT
+      );
+      CREATE TABLE loan_photos (
+        id TEXT PRIMARY KEY,
+        loan_id TEXT NOT NULL,
+        storage_key TEXT NOT NULL UNIQUE,
+        FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE RESTRICT
+      );
+      CREATE TABLE loan_document_deliveries (
+        id TEXT PRIMARY KEY,
+        document_id TEXT NOT NULL,
+        FOREIGN KEY (document_id) REFERENCES loan_documents(id) ON DELETE RESTRICT
+      );
+      CREATE TRIGGER trg_loan_document_deliveries_immutable_delete BEFORE DELETE ON loan_document_deliveries
+        BEGIN SELECT RAISE(ABORT, 'loan document deliveries are immutable'); END;
+      CREATE TRIGGER trg_loan_documents_immutable_delete BEFORE DELETE ON loan_documents
+        BEGIN SELECT RAISE(ABORT, 'loan documents are immutable'); END;
+      CREATE TRIGGER trg_loan_photos_immutable_delete BEFORE DELETE ON loan_photos
+        BEGIN SELECT RAISE(ABORT, 'loan photos are immutable'); END;
       CREATE TRIGGER trg_payroll_handoff_events_immutable_delete BEFORE DELETE ON payroll_handoff_events
         BEGIN SELECT RAISE(ABORT, 'payroll handoff events are immutable'); END;
       CREATE TRIGGER trg_payroll_handoffs_immutable_delete BEFORE DELETE ON payroll_handoffs
@@ -369,6 +393,10 @@ test("application smoke sanitizes every known protected domain but preserves ope
       INSERT INTO payroll_handoffs VALUES ('handoff', 'enc:v2:handoff');
       INSERT INTO payroll_handoff_events VALUES ('handoff-event', 'handoff', 'enc:v2:handoff-event');
       INSERT INTO retention_preview_runs VALUES ('retention', 'enc:v2:retention');
+      INSERT INTO loans VALUES ('loan');
+      INSERT INTO loan_documents VALUES ('loan-document', 'loan', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+      INSERT INTO loan_photos VALUES ('loan-photo', 'loan', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
+      INSERT INTO loan_document_deliveries VALUES ('loan-delivery', 'loan-document');
       INSERT INTO integration_connections VALUES ('connection', 1, 'gp-integration-secret:v1:value', 'live-key');
       INSERT INTO integration_deliveries VALUES ('delivery', 'connection');
       INSERT INTO portal_notifications VALUES ('notice', 'Nicht fuer den Smoke-Test');
@@ -393,6 +421,7 @@ test("application smoke sanitizes every known protected domain but preserves ope
       "vacation_account_events", "vacation_account_revisions",
       "vacation_history_events",
       "time_record_statement_events", "time_record_statements", "retention_preview_runs",
+      "loan_document_deliveries", "loan_documents", "loan_photos",
       "payroll_handoff_events", "payroll_handoffs",
       "portal_notifications",
     ]) assert.equal(database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 0, table);
@@ -409,6 +438,9 @@ test("application smoke sanitizes every known protected domain but preserves ope
     for (const trigger of [
       "trg_payroll_handoff_events_immutable_delete",
       "trg_payroll_handoffs_immutable_delete",
+      "trg_loan_document_deliveries_immutable_delete",
+      "trg_loan_documents_immutable_delete",
+      "trg_loan_photos_immutable_delete",
       "trg_privacy_request_events_immutable_delete",
       "trg_retention_preview_runs_immutable_delete",
       "trg_time_record_statement_events_immutable_delete",
@@ -427,6 +459,7 @@ test("application smoke sanitizes every known protected domain but preserves ope
       { ...database.prepare("SELECT id, active, protected_credentials, credential_key_id FROM integration_connections").get() },
       { id: "connection", active: 0, protected_credentials: "", credential_key_id: "" },
     );
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM loans").get().count, 1);
     assert.equal(database.prepare("SELECT COUNT(*) AS count FROM integration_deliveries").get().count, 1);
     assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
     assert.deepEqual(database.prepare("PRAGMA integrity_check").all().map((row) => Object.values(row)[0]), ["ok"]);
