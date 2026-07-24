@@ -9,7 +9,7 @@ const {
   publicF18Inspection,
   readZipEntries,
 } = require("../lib/f18-loan-migration");
-const { createF18Backup, storedZip } = require("./helpers/f18-backup-fixture");
+const { createF18Backup, storedZip } = require("../test-support/f18-backup-fixture");
 
 function fixtureBackup() {
   return createF18Backup({
