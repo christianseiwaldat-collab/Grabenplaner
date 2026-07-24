@@ -1,5 +1,22 @@
 # Grabenplaner Versions-Log
 
+## v0.85 Beta · Integriertes Leihmodul
+
+- Eine zentrale, wiederverwendbare Artikelentität führt ausschließlich sechsstellige numerische Artikelnummern und bewahrt führende Nullen.
+- Leihvorgänge, Positionen und eine unveränderliche Ereignishistorie sind als eigenes Datenmodell vorbereitet; Bezeichnungsschnappschüsse halten den Stand zum Zeitpunkt der Ausgabe fest.
+- Standorte können das Leihmodul und die Artikelsuche getrennt aktivieren. Funktionsprofile und neue Rollenrechte schützen Selbstbedienung, Standortverwaltung, Dokumente und Einstellungen.
+- Die Artikelsuche kann je Standort einen HTTPS-Shopware-Storefront-Endpunkt verwenden. Ziele werden vor dem Abruf gegen unsichere lokale oder private Netze geprüft.
+- Gefundene Artikelbezeichnungen werden zentral zwischengespeichert. Eine kontrollierte manuelle Eingabe bleibt als Rückfallebene verfügbar und überschreibt bestehende Stammdaten nicht versehentlich.
+- Das responsive Mitarbeiterportal unterstützt Ausgabe, offene Leihen und die Rücknahme mit verpflichtender Live-Gegenprüfung durch ein zweites, gleichzeitig angemeldetes Teammitglied.
+- Ausgabebeleg und Rücknahmebeleg werden automatisch mit dem Standort-Branding erzeugt, verschlüsselt abgelegt, per SHA-256 geprüft und als unveränderliche Dokumentrevision geführt.
+- Beteiligte und ausdrücklich berechtigte Standortrollen erhalten den Beleg geschützt über die Grabenplaner-Plattform. Ein je Standort konfigurierbarer Hauptempfänger kann zusätzlich benachrichtigt werden.
+- Ausgabe- und Rücknahmefotos werden serverseitig aus JPG, PNG, WEBP, TIFF oder HEIF neu als verkleinertes JPEG erzeugt, von Metadaten bereinigt, verschlüsselt gespeichert und nur über geschützte, nicht zwischengespeicherte Routen ausgeliefert.
+- Die neue Leihverwaltung bündelt offene, bald fällige, überfällige und abgeschlossene Vorgänge samt Fotodokumentation, Belegrevisionen und Zustellstatus für berechtigte Leitungen.
+- Optional lassen sich PDF-Belege je Standort zusätzlich über einen ausdrücklich konfigurierten SMTP-Empfänger versenden. Zustellversuche bleiben append-only nachvollziehbar und können nach einem Fehler kontrolliert wiederholt werden.
+
+- Eine vollständige F18-Lagerware-Sicherung lässt sich mit Manifest-, SHA-256- und SQLite-Integritätsprüfung zunächst als Vorschau prüfen und anschließend einmalig je Zielstandort übernehmen. Mitarbeiter werden ausdrücklich zugeordnet; Leihen, Artikel, Fotos und neu erzeugte Grabenplaner-Belege werden nachvollziehbar importiert.
+- Der F18-Import ist gegen Dubletten geschützt und protokolliert seinen Abschluss unveränderlich. Das bisherige F18-System wird weder verändert noch automatisch beendet; die kontrollierte Abschaltung bleibt ein eigener administrativer Schritt.
+
 ## v0.84 Beta · Pilot- und Abnahmenachweise
 
 - Das System-Center zeigt sechs getrennte Produktreife-Gates für Desktop-Pilot, mobile Browserabläufe, barrierearme Bedienung, Performance, Security und Recovery.

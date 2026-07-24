@@ -63,6 +63,16 @@ const portalState = {
   editingTimeOffId: null,
   editingVacationId: null,
   timeOffArchive: false,
+  loanStatus: null,
+  loans: [],
+  loanTeamMembers: [],
+  loanDraftItems: [],
+  loanIssuePhotoFiles: [],
+  loanReturnPhotoFiles: [],
+  selectedLoan: null,
+  pendingLoanConfirmations: [],
+  activeLoanConfirmation: null,
+  loanConfirmationLoading: false,
 };
 
 const optionNames = {
@@ -125,6 +135,11 @@ window.addEventListener("resize", applyDeviceMode, { passive: true });
 const el = Object.fromEntries([
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
   "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "settingsView", "settingsPasswordButton", "scheduleView", "timeOffView",
+  "loanTab", "loanView", "leadershipLoanShortcut", "loanRefresh", "loanAvailabilityMessage", "loanWorkspace", "loanIssueForm", "loanBorrowerField", "loanBorrower",
+  "loanItemEditor", "loanAddItem", "loanDueDate", "loanIssueNote", "loanIssuePhotos", "loanIssueCamera", "loanIssuePhotoSummary", "loanIssueMessage", "loanIssueSubmit", "loanScopeField", "loanScope", "loanStatusFilter", "loanList",
+  "loanReturnDialog", "loanReturnForm", "loanReturnTitle", "loanReturnSummary", "loanReturnItems", "loanReturnWitness", "loanReturnNote", "loanReturnPhotos", "loanReturnCamera", "loanReturnPhotoSummary", "loanReturnMessage", "loanReturnSubmit",
+  "loanConfirmationDialog", "loanConfirmationForm", "loanConfirmationTitle", "loanConfirmationSummary", "loanConfirmationItems", "loanConfirmationNote",
+  "loanConfirmationPhotos", "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
   "processTasksTab", "processTasksTabCount", "processTasksView", "refreshProcessTasks", "processTaskSummary", "processTaskList",
   "vacationView", "historyView", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
   "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeWeighted", "timePause", "timeDifference", "timeTrackingIssues", "timeEntryList",
@@ -355,6 +370,18 @@ function wifiTimeSuggestionsCapabilityEnabled() {
   return portalState.status?.capabilities?.wifiTimeSuggestions === true;
 }
 
+function loanCapabilityEnabled() {
+  if (portalState.status?.capabilities?.loans !== true) return false;
+  const permissions = portalUser()?.permissions || [];
+  return permissions.some((permission) => [
+    "loans:self:read",
+    "loans:self:create",
+    "loans:self:return",
+    "loans:location:read",
+    "loans:location:manage",
+  ].includes(permission));
+}
+
 function applyPortalCapabilities() {
   const timeTrackingEnabled = timeTrackingCapabilityEnabled();
   el.timeTrackingTab?.classList.toggle("hidden", !timeTrackingEnabled);
@@ -362,6 +389,10 @@ function applyPortalCapabilities() {
   if (!timeTrackingEnabled && portalState.activeTab === "timeTracking") setTab("schedule");
   const sicknessEnabled = portalState.status?.capabilities?.sicknessReports === true;
   document.querySelector('[data-tab="amu"]')?.classList.toggle("hidden", !sicknessEnabled);
+  const loansEnabled = loanCapabilityEnabled();
+  el.loanTab?.classList.toggle("hidden", !loansEnabled);
+  el.leadershipLoanShortcut?.classList.toggle("hidden", !loansEnabled);
+  if (!loansEnabled && portalState.activeTab === "loan") setTab("schedule");
 }
 
 function portalUser() {
@@ -384,7 +415,7 @@ const leadershipPortalPermissions = new Set([
   "notifications:settings",
 ]);
 
-const mobileMoreSecondaryTabs = new Set(["timeOff", "vacation", "amu", "settings"]);
+const mobileMoreSecondaryTabs = new Set(["timeOff", "vacation", "amu", "loan", "settings"]);
 mobileMoreSecondaryTabs.add("processTasks");
 
 function syncPortalTabButtons(tab) {
@@ -520,7 +551,7 @@ function normalizedPortalTab(requested) {
   const aliases = { requests: "history", team: "leadershipTeam", approvals: "leadershipApprovals", more: "leadershipMore", time: "timeTracking" };
   const tab = aliases[requested] || requested;
   if (["leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) && !isLeadershipUser()) return "";
-  return ["settings", "schedule", "timeTracking", "processTasks", "timeOff", "vacation", "history", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
+  return ["settings", "schedule", "timeTracking", "processTasks", "timeOff", "vacation", "history", "loan", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
 }
 
 const portalTabStorageKey = "grabenplaner.portal.active-tab";
@@ -630,6 +661,7 @@ async function loadPortalData() {
   if (timeTrackingCapabilityEnabled()) requests.push(loadTimeTracking());
   if (hasPortalPermission("own_privacy_requests:read")) requests.push(loadPrivacyRequests());
   if (hasPortalPermission("own_vacation:read")) requests.push(loadVacationAccount());
+  if (loanCapabilityEnabled()) requests.push(loadLoanModule());
   await Promise.allSettled(requests);
 }
 
@@ -866,6 +898,7 @@ async function logout() {
 
 function setTab(tab) {
   if (tab === "timeTracking" && !timeTrackingCapabilityEnabled()) tab = "schedule";
+  if (tab === "loan" && !loanCapabilityEnabled()) tab = "schedule";
   portalState.activeTab = tab;
   rememberPortalTab(tab);
   syncPortalTabButtons(tab);
@@ -876,6 +909,7 @@ function setTab(tab) {
   el.timeOffView.classList.toggle("active", tab === "timeOff");
   el.vacationView.classList.toggle("active", tab === "vacation");
   el.historyView.classList.toggle("active", tab === "history");
+  el.loanView?.classList.toggle("active", tab === "loan");
   el.amuView.classList.toggle("active", tab === "amu");
   el.processTasksView?.classList.toggle("active", tab === "processTasks");
   el.leadershipTeamView?.classList.toggle("active", tab === "leadershipTeam");
@@ -892,6 +926,7 @@ function setTab(tab) {
     if (hasPortalPermission("own_vacation:read")) loadVacationAccount();
   }
   if (tab === "history") Promise.allSettled([loadAbsenceHistory(), loadApprovedVacations()]);
+  if (tab === "loan") loadLoanModule();
   if (tab === "amu") Promise.allSettled([loadSicknessCases(), loadAmuReports(), loadAmuSettings()]);
   if (tab === "processTasks") loadProcessTasks();
   if (tab === "leadershipTeam") loadLeadershipOverview();
@@ -3360,6 +3395,496 @@ function togglePassword(button) {
   button.setAttribute("aria-label", visible ? "Passwort anzeigen" : "Passwort verbergen");
 }
 
+const loanConditionLabels = {
+  good: "Sehr gut / vollständig",
+  used: "Gebrauchsspuren",
+  damaged: "Beschädigt",
+  incomplete: "Unvollständig",
+};
+
+function loanPhotoFiles(phase) {
+  return phase === "return" ? portalState.loanReturnPhotoFiles : portalState.loanIssuePhotoFiles;
+}
+
+function setLoanPhotoFiles(phase, files) {
+  if (phase === "return") portalState.loanReturnPhotoFiles = files;
+  else portalState.loanIssuePhotoFiles = files;
+  renderLoanPhotoSelection(phase);
+}
+
+function loanPhotoSize(bytes) {
+  const value = Number(bytes || 0);
+  return value >= 1024 * 1024
+    ? `${(value / 1024 / 1024).toFixed(1).replace(".", ",")} MB`
+    : `${Math.max(1, Math.round(value / 1024))} KB`;
+}
+
+function renderLoanPhotoSelection(phase) {
+  const node = phase === "return" ? el.loanReturnPhotoSummary : el.loanIssuePhotoSummary;
+  if (!node) return;
+  const files = loanPhotoFiles(phase);
+  node.innerHTML = files.length ? files.map((file, index) => `
+    <span><strong>${esc(file.name || `Foto ${index + 1}`)}</strong><small>${esc(loanPhotoSize(file.size))}</small><button type="button" data-loan-photo-remove="${index}" data-loan-photo-phase="${phase}" aria-label="Foto entfernen">×</button></span>
+  `).join("") : '<small>Noch keine Fotos ausgewählt.</small>';
+}
+
+function addLoanPhotoFiles(phase, fileList) {
+  const current = [...loanPhotoFiles(phase)];
+  const originalCount = current.length;
+  const incoming = [...(fileList || [])];
+  const allowedExtension = /\.(?:jpe?g|png|webp|tiff?|heic|heif)$/i;
+  for (const file of incoming) {
+    if (!String(file.type || "").startsWith("image/") && !allowedExtension.test(String(file.name || ""))) {
+      message(phase === "return" ? el.loanReturnMessage : el.loanIssueMessage, "Für Leihfotos werden ausschließlich Bilddateien unterstützt.", true);
+      continue;
+    }
+    if (Number(file.size || 0) > 10 * 1024 * 1024) {
+      message(phase === "return" ? el.loanReturnMessage : el.loanIssueMessage, `${file.name}: Das Foto ist größer als 10 MB.`, true);
+      continue;
+    }
+    if (current.length >= 9) break;
+    if (current.reduce((sum, selected) => sum + Number(selected.size || 0), 0) + Number(file.size || 0) > 45 * 1024 * 1024) {
+      message(phase === "return" ? el.loanReturnMessage : el.loanIssueMessage, "Die ausgewählten Fotos dürfen zusammen höchstens 45 MB groß sein.", true);
+      break;
+    }
+    current.push(file);
+  }
+  setLoanPhotoFiles(phase, current);
+  if (incoming.length && originalCount + incoming.length > 9) {
+    message(phase === "return" ? el.loanReturnMessage : el.loanIssueMessage, "Pro Ausgabe oder Rücknahme sind höchstens neun Fotos möglich.", true);
+  }
+}
+
+async function uploadLoanPhotos(loanId, phase, files) {
+  if (!files?.length) return null;
+  const data = new FormData();
+  data.set("phase", phase);
+  files.forEach((file) => data.append("photos", file, file.name || `${phase}-foto.jpg`));
+  return api(`/api/portal/v1/loans/${encodeURIComponent(loanId)}/photos`, {
+    method: "POST",
+    body: data,
+  });
+}
+
+function loanPhotoGallery(photos, phase = "") {
+  const selected = (photos || []).filter((photo) => !phase || photo.phase === phase);
+  if (!selected.length) return "";
+  return `<div class="loan-photo-gallery">${selected.map((photo, index) => `
+    <a href="${esc(photo.contentUrl)}" target="_blank" rel="noopener"><img src="${esc(photo.contentUrl)}" alt="${photo.phase === "return" ? "Rückgabefoto" : "Ausgabefoto"} ${index + 1}" loading="lazy" /></a>
+  `).join("")}</div>`;
+}
+
+function newLoanDraftItem() {
+  return {
+    identifier: "",
+    serialNumber: "",
+    conditionOut: "good",
+    note: "",
+    resolved: null,
+    busy: false,
+    error: "",
+    needsManual: false,
+    manualArticleNumber: "",
+    manualDescription: "",
+  };
+}
+
+function resetLoanDraft() {
+  portalState.loanDraftItems = [newLoanDraftItem()];
+  setLoanPhotoFiles("issue", []);
+  if (el.loanIssueForm) {
+    el.loanDueDate.value = "";
+    el.loanIssueNote.value = "";
+    el.loanIssuePhotos.value = "";
+    el.loanIssueCamera.value = "";
+  }
+  renderLoanDraftItems();
+}
+
+function loanConditionOptions(selected) {
+  return Object.entries(loanConditionLabels)
+    .map(([value, label]) => `<option value="${value}" ${value === selected ? "selected" : ""}>${esc(label)}</option>`)
+    .join("");
+}
+
+function renderLoanDraftItems() {
+  if (!el.loanItemEditor) return;
+  if (!portalState.loanDraftItems.length) portalState.loanDraftItems.push(newLoanDraftItem());
+  el.loanItemEditor.innerHTML = portalState.loanDraftItems.map((item, index) => {
+    const identifierLabel = item.resolved
+      ? `<div class="loan-resolved-article"><span>✓ Zugeordnet</span><strong>${esc(item.resolved.articleNumber)} · ${esc(item.resolved.description)}</strong></div>`
+      : "";
+    const manual = item.needsManual ? `<div class="loan-manual-mapping">
+      <label><span>Interne Artikelnummer</span><input data-loan-field="manualArticleNumber" data-loan-index="${index}" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" value="${esc(item.manualArticleNumber)}" placeholder="6-stellig" /></label>
+      <label><span>Artikelbezeichnung</span><input data-loan-field="manualDescription" data-loan-index="${index}" maxlength="300" value="${esc(item.manualDescription)}" placeholder="Einmalig ergänzen" /></label>
+      <small>Diese bestätigte Verbindung wird beim nächsten Scan automatisch verwendet.</small>
+    </div>` : "";
+    return `<article class="loan-item-row" data-loan-item="${index}">
+      <header><strong>Position ${index + 1}</strong>${portalState.loanDraftItems.length > 1 ? `<button type="button" data-loan-remove="${index}" aria-label="Position entfernen">×</button>` : ""}</header>
+      <div class="loan-item-fields">
+        <label class="loan-identifier-field"><span>Artikelnummer oder EAN</span><div><input data-loan-field="identifier" data-loan-index="${index}" inputmode="numeric" maxlength="14" pattern="[0-9]*" autocomplete="off" value="${esc(item.identifier)}" placeholder="6, 8, 12, 13 oder 14 Ziffern" /><button class="text-button" data-loan-resolve="${index}" type="button" ${item.busy ? "disabled" : ""}>${item.busy ? "Suche …" : "Zuordnen"}</button></div></label>
+        <label><span>Seriennummer</span><input data-loan-field="serialNumber" data-loan-index="${index}" maxlength="100" value="${esc(item.serialNumber)}" placeholder="Optional" /></label>
+        <label><span>Zustand</span><select data-loan-field="conditionOut" data-loan-index="${index}">${loanConditionOptions(item.conditionOut)}</select></label>
+        <label><span>Bemerkung</span><input data-loan-field="note" data-loan-index="${index}" maxlength="500" value="${esc(item.note)}" placeholder="Optional" /></label>
+      </div>
+      ${identifierLabel}
+      ${item.error ? `<p class="loan-item-error">${esc(item.error)}</p>` : ""}
+      ${manual}
+    </article>`;
+  }).join("");
+  el.loanAddItem?.classList.toggle("hidden", portalState.loanDraftItems.length >= 5);
+}
+
+async function resolveLoanDraftItem(index) {
+  const item = portalState.loanDraftItems[index];
+  if (!item || item.busy) return;
+  item.busy = true;
+  item.error = "";
+  renderLoanDraftItems();
+  try {
+    const result = await api("/api/portal/v1/loans/articles/resolve", {
+      method: "POST",
+      body: JSON.stringify({
+        locationId: portalState.loanStatus?.location?.id,
+        identifier: item.identifier,
+        manualArticleNumber: item.manualArticleNumber,
+        manualDescription: item.manualDescription,
+      }),
+    });
+    item.resolved = result.article;
+    item.needsManual = false;
+    item.error = result.lookupWarning?.message || "";
+  } catch (error) {
+    item.resolved = null;
+    item.error = error.message;
+    item.needsManual = ![
+      "ARTICLE_IDENTIFIER_INVALID",
+      "ARTICLE_IDENTIFIER_CHECKSUM_INVALID",
+      "ARTICLE_NUMBER_INVALID",
+    ].includes(error.code);
+  } finally {
+    item.busy = false;
+    renderLoanDraftItems();
+  }
+}
+
+function populateLoanTeamMembers() {
+  const members = portalState.loanTeamMembers;
+  const ownNumber = portalUser()?.employeeNumber || "";
+  if (el.loanBorrower) {
+    el.loanBorrower.innerHTML = members.map((member) =>
+      `<option value="${esc(member.employeeNumber)}">${esc(member.employeeNumber)} · ${esc(member.name)}</option>`,
+    ).join("");
+    if (members.some((member) => member.employeeNumber === ownNumber)) el.loanBorrower.value = ownNumber;
+  }
+}
+
+async function loadLoanTeamMembers() {
+  try {
+    const query = new URLSearchParams({ locationId: portalState.loanStatus?.location?.id || "" });
+    const result = await api(`/api/portal/v1/loans/team-members?${query}`);
+    portalState.loanTeamMembers = Array.isArray(result.members) ? result.members : [];
+  } catch {
+    portalState.loanTeamMembers = [];
+  }
+  populateLoanTeamMembers();
+}
+
+function loanStatusText(status) {
+  return {
+    draft: "Entwurf",
+    issued: "Offen",
+    returned: "Zurückgegeben",
+    cancelled: "Storniert",
+  }[status] || status || "";
+}
+
+function loanConditionText(condition) {
+  return {
+    good: "Einwandfrei",
+    used: "Gebrauchsspuren",
+    damaged: "Beschädigt",
+    incomplete: "Unvollständig",
+  }[condition] || condition || "Nicht angegeben";
+}
+
+function renderLoanList() {
+  if (!el.loanList) return;
+  const ownNumber = portalUser()?.employeeNumber || "";
+  const canManage = portalState.loanStatus?.permissions?.locationManage === true;
+  const canReturnOwn = portalState.loanStatus?.permissions?.ownReturn === true;
+  el.loanList.innerHTML = portalState.loans.length ? portalState.loans.map((loan) => {
+    const items = (loan.items || []).map((item) =>
+      `<li><strong>${esc(item.articleNumber)} · ${esc(item.description)}</strong>${item.serialNumber ? `<small>Seriennummer: ${esc(item.serialNumber)}</small>` : ""}</li>`,
+    ).join("");
+    const canReturn = loan.status === "issued"
+      && !loan.pendingReturnConfirmation
+      && (canManage || (canReturnOwn && loan.borrower?.employeeNumber === ownNumber));
+    const canReadDocuments = portalState.loanStatus?.permissions?.documentsRead === true
+      || [
+        loan.borrower?.employeeNumber,
+        loan.createdBy?.employeeNumber,
+        loan.returnRecordedByEmployeeNumber,
+        loan.returnWitness?.employeeNumber,
+      ].includes(ownNumber);
+    const documents = canReadDocuments && Array.isArray(loan.documents) && loan.documents.length
+      ? `<div class="loan-documents">${loan.documents.map((document) =>
+        `<a href="${esc(document.downloadUrl)}" target="_blank" rel="noopener">${esc(document.label)} · R${esc(document.revision)}</a>`
+      ).join("")}</div>`
+      : "";
+    const returnCopy = loan.returnWitness
+      ? `<small>Rücknahme bestätigt durch ${esc(loan.returnWitness.employeeNumber)} · ${esc(loan.returnWitness.name)}</small>`
+      : "";
+    const pendingCopy = loan.pendingReturnConfirmation
+      ? `<small class="loan-pending-confirmation">Bestätigung ausständig bei ${esc(loan.pendingReturnConfirmation.witness.employeeNumber)} · ${esc(loan.pendingReturnConfirmation.witness.name)} – gültig bis ${esc(timestampText(loan.pendingReturnConfirmation.expiresAt))}</small>`
+      : "";
+    const photos = loanPhotoGallery(loan.photos);
+    return `<article class="loan-list-item">
+      <div class="loan-list-main"><span class="status ${loan.status === "returned" ? "approved" : "pending"}">${esc(loanStatusText(loan.status))}</span><strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><small>Ausgabe: ${esc(timestampText(loan.issuedAt || loan.createdAt))}${loan.dueDate ? ` · geplant bis ${esc(dateText(loan.dueDate))}` : ""}</small>${returnCopy}${pendingCopy}<ul>${items}</ul>${photos}${documents}</div>
+      ${canReturn ? `<button class="primary" data-loan-return="${esc(loan.id)}" type="button">Zurücknehmen</button>` : ""}
+    </article>`;
+  }).join("") : '<p class="empty-state">In diesem Bereich sind noch keine Leihvorgänge vorhanden.</p>';
+}
+
+async function loadLoans() {
+  if (!portalState.loanStatus?.available) return;
+  const scope = el.loanScope?.value || "mine";
+  const status = el.loanStatusFilter?.value || "open";
+  const parameters = new URLSearchParams({
+    scope,
+    status,
+    locationId: portalState.loanStatus.location?.id || "",
+  });
+  try {
+    const result = await api(`/api/portal/v1/loans?${parameters}`);
+    portalState.loans = Array.isArray(result.loans) ? result.loans : [];
+    renderLoanList();
+  } catch (error) {
+    portalState.loans = [];
+    el.loanList.innerHTML = `<p class="empty-state">${esc(error.message)}</p>`;
+  }
+}
+
+async function loadLoanModule() {
+  if (!loanCapabilityEnabled() || !el.loanWorkspace) return;
+  try {
+    portalState.loanStatus = await api("/api/portal/v1/loans/status");
+    const available = portalState.loanStatus.available === true;
+    el.loanWorkspace.classList.toggle("hidden", !available);
+    message(
+      el.loanAvailabilityMessage,
+      available ? "" : "Die Leihe ist für deinen Standort noch nicht freigeschaltet.",
+      !available,
+    );
+    if (!available) return;
+    const canManage = portalState.loanStatus.permissions?.locationManage === true;
+    const canCreate = canManage || portalState.loanStatus.permissions?.ownCreate === true;
+    el.loanIssueForm?.classList.toggle("hidden", !canCreate);
+    el.loanBorrowerField?.classList.toggle("hidden", !canManage);
+    el.loanScopeField?.classList.toggle(
+      "hidden",
+      !canManage && portalState.loanStatus.permissions?.locationRead !== true,
+    );
+    const today = iso(new Date());
+    el.loanDueDate.min = today;
+    el.loanDueDate.max = addDays(today, 3650);
+    if (!portalState.loanDraftItems.length) resetLoanDraft();
+    await loadLoanTeamMembers();
+    await loadLoans();
+    await loadPendingLoanConfirmations();
+  } catch (error) {
+    portalState.loanStatus = null;
+    el.loanWorkspace.classList.add("hidden");
+    message(el.loanAvailabilityMessage, error.message, true);
+  }
+}
+
+async function submitLoanIssue(event) {
+  event.preventDefault();
+  if (!portalState.loanStatus?.available) return;
+  const unresolved = portalState.loanDraftItems.findIndex((item) => !item.resolved);
+  if (unresolved >= 0) {
+    message(el.loanIssueMessage, `Bitte Position ${unresolved + 1} zuerst eindeutig zuordnen.`, true);
+    return;
+  }
+  el.loanIssueSubmit.disabled = true;
+  message(el.loanIssueMessage, "");
+  try {
+    const result = await api("/api/portal/v1/loans", {
+      method: "POST",
+      body: JSON.stringify({
+        locationId: portalState.loanStatus.location?.id,
+        borrowerEmployeeNumber: portalState.loanStatus.permissions?.locationManage
+          ? el.loanBorrower.value
+          : portalUser()?.employeeNumber,
+        dueDate: el.loanDueDate.value,
+        notes: el.loanIssueNote.value,
+        items: portalState.loanDraftItems.map((item) => ({
+          articleNumber: item.resolved.articleNumber,
+          serialNumber: item.serialNumber,
+          conditionOut: item.conditionOut,
+          note: item.note,
+        })),
+      }),
+    });
+    let photoWarning = "";
+    if (portalState.loanIssuePhotoFiles.length) {
+      try {
+        await uploadLoanPhotos(result.loan.id, "issue", portalState.loanIssuePhotoFiles);
+      } catch (error) {
+        photoWarning = ` Die Leihe ist gespeichert, die Fotos konnten jedoch nicht ergänzt werden: ${error.message}`;
+      }
+    }
+    message(el.loanIssueMessage, `Die Leihe und der Ausgabebeleg wurden erfasst.${photoWarning}`, Boolean(photoWarning));
+    resetLoanDraft();
+    await loadLoans();
+  } catch (error) {
+    message(el.loanIssueMessage, error.message, true);
+  } finally {
+    el.loanIssueSubmit.disabled = false;
+  }
+}
+
+async function openLoanReturn(loanId) {
+  await loadLoanTeamMembers();
+  const loan = portalState.loans.find((item) => item.id === loanId);
+  if (!loan) return;
+  portalState.selectedLoan = loan;
+  el.loanReturnTitle.textContent = `Leihe von ${loan.borrower?.name || loan.borrower?.employeeNumber}`;
+  el.loanReturnSummary.innerHTML = `<strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><span>${loan.items.length} ${loan.items.length === 1 ? "Artikel" : "Artikel"} · Revision ${loan.revision}</span>`;
+  el.loanReturnItems.innerHTML = loan.items.map((item) => `<article class="loan-return-item" data-loan-return-position="${item.position}">
+    <div><strong>${esc(item.articleNumber)} · ${esc(item.description)}</strong>${item.serialNumber ? `<small>Seriennummer: ${esc(item.serialNumber)}</small>` : ""}</div>
+    <label><span>Zustand bei Rückgabe</span><select data-loan-return-condition="${item.position}">${loanConditionOptions(item.conditionOut || "good")}</select></label>
+    <label><span>Bemerkung</span><input data-loan-return-note="${item.position}" maxlength="500" placeholder="Optional" /></label>
+  </article>`).join("");
+  el.loanReturnWitness.innerHTML = '<option value="">Bitte auswählen</option>' + portalState.loanTeamMembers
+    .filter((member) => member.employeeNumber !== loan.borrower?.employeeNumber
+      && member.employeeNumber !== portalUser()?.employeeNumber)
+    .map((member) => `<option value="${esc(member.employeeNumber)}" ${member.portalOpen ? "" : "disabled"}>${esc(member.employeeNumber)} · ${esc(member.name)} · ${member.portalOpen ? "Portal geöffnet" : "Portal nicht geöffnet"}</option>`)
+    .join("");
+  el.loanReturnNote.value = "";
+  setLoanPhotoFiles("return", []);
+  el.loanReturnPhotos.value = "";
+  el.loanReturnCamera.value = "";
+  message(el.loanReturnMessage, "");
+  el.loanReturnDialog.showModal();
+}
+
+async function submitLoanReturn(event) {
+  event.preventDefault();
+  const loan = portalState.selectedLoan;
+  if (!loan) return;
+  el.loanReturnSubmit.disabled = true;
+  message(el.loanReturnMessage, "");
+  try {
+    if (portalState.loanReturnPhotoFiles.length) {
+      await uploadLoanPhotos(loan.id, "return", portalState.loanReturnPhotoFiles);
+      setLoanPhotoFiles("return", []);
+      el.loanReturnPhotos.value = "";
+      el.loanReturnCamera.value = "";
+    }
+    const result = await api(`/api/portal/v1/loans/${encodeURIComponent(loan.id)}/return`, {
+      method: "POST",
+      body: JSON.stringify({
+        expectedRevision: loan.revision,
+        witnessEmployeeNumber: el.loanReturnWitness.value,
+        borrowerConfirmed: loan.borrower?.employeeNumber === portalUser()?.employeeNumber,
+        note: el.loanReturnNote.value,
+        items: loan.items.map((item) => ({
+          position: item.position,
+          conditionReturn: el.loanReturnItems.querySelector(`[data-loan-return-condition="${item.position}"]`)?.value,
+          note: el.loanReturnItems.querySelector(`[data-loan-return-note="${item.position}"]`)?.value || "",
+        })),
+      }),
+    });
+    el.loanReturnDialog.close();
+    portalState.selectedLoan = null;
+    message(
+      el.loanAvailabilityMessage,
+      `Bestätigung bei ${result.confirmation.witness.employeeNumber} · ${result.confirmation.witness.name} angefordert. Die Leihe bleibt bis dahin offen.`,
+    );
+    await loadLoans();
+  } catch (error) {
+    message(el.loanReturnMessage, error.message, true);
+  } finally {
+    el.loanReturnSubmit.disabled = false;
+  }
+}
+
+function showLoanConfirmation(confirmation) {
+  if (!confirmation || !el.loanConfirmationDialog || el.loanConfirmationDialog.open) return;
+  portalState.activeLoanConfirmation = confirmation;
+  const borrower = confirmation.loan?.borrower || {};
+  el.loanConfirmationTitle.textContent = `Rücknahme von ${borrower.name || borrower.employeeNumber || "Teammitglied"}`;
+  el.loanConfirmationSummary.innerHTML = `
+    <strong>${esc(borrower.employeeNumber)} · ${esc(borrower.name)}</strong>
+    <span>Angefordert von ${esc(confirmation.requestedBy.employeeNumber)} · ${esc(confirmation.requestedBy.name)}</span>`;
+  el.loanConfirmationItems.innerHTML = (confirmation.items || []).map((item) => `
+    <article class="loan-confirmation-item">
+      <div>
+        <strong>${esc(item.articleNumber)} · ${esc(item.description)}</strong>
+        ${item.serialNumber ? `<small>Seriennummer: ${esc(item.serialNumber)}</small>` : ""}
+      </div>
+      <span class="loan-condition-pill">${esc(loanConditionText(item.conditionReturn))}</span>
+      ${item.returnNote ? `<small>Bemerkung: ${esc(item.returnNote)}</small>` : ""}
+    </article>`).join("");
+  const photos = (confirmation.photos || []);
+  el.loanConfirmationPhotos.classList.toggle("hidden", !photos.length);
+  el.loanConfirmationPhotos.querySelector("div").innerHTML = loanPhotoGallery(photos, "return");
+  el.loanConfirmationNote.value = "";
+  el.loanConfirmationExpiry.textContent = `Die Anfrage läuft um ${timestampText(confirmation.expiresAt)} ab. Ohne deine Bestätigung bleibt die Leihe offen.`;
+  message(el.loanConfirmationMessage, "");
+  el.loanConfirmationDialog.showModal();
+}
+
+function presentNextLoanConfirmation() {
+  if (el.loanConfirmationDialog?.open) return;
+  const next = portalState.pendingLoanConfirmations.find((confirmation) => confirmation.status === "pending");
+  if (next) showLoanConfirmation(next);
+}
+
+async function loadPendingLoanConfirmations({ present = true } = {}) {
+  if (!loanCapabilityEnabled() || portalState.loanConfirmationLoading) return;
+  portalState.loanConfirmationLoading = true;
+  try {
+    const result = await api("/api/portal/v1/loans/return-confirmations/pending");
+    portalState.pendingLoanConfirmations = Array.isArray(result.confirmations) ? result.confirmations : [];
+    if (present) presentNextLoanConfirmation();
+  } catch {
+    portalState.pendingLoanConfirmations = [];
+  } finally {
+    portalState.loanConfirmationLoading = false;
+  }
+}
+
+async function respondToLoanConfirmation(decision) {
+  const confirmation = portalState.activeLoanConfirmation;
+  if (!confirmation || !["confirm", "reject"].includes(decision)) return;
+  el.loanConfirmationSubmit.disabled = true;
+  el.loanConfirmationReject.disabled = true;
+  message(el.loanConfirmationMessage, "");
+  try {
+    await api(`/api/portal/v1/loans/return-confirmations/${encodeURIComponent(confirmation.id)}/respond`, {
+      method: "POST",
+      body: JSON.stringify({
+        decision,
+        note: el.loanConfirmationNote.value,
+      }),
+    });
+    el.loanConfirmationDialog.close();
+    portalState.activeLoanConfirmation = null;
+    portalState.pendingLoanConfirmations = portalState.pendingLoanConfirmations
+      .filter((entry) => entry.id !== confirmation.id);
+    if (portalState.loanStatus?.available) await loadLoans();
+    presentNextLoanConfirmation();
+  } catch (error) {
+    message(el.loanConfirmationMessage, error.message, true);
+  } finally {
+    el.loanConfirmationSubmit.disabled = false;
+    el.loanConfirmationReject.disabled = false;
+  }
+}
+
 el.portalLoginForm.addEventListener("submit", login);
 el.loginPersonnelNumber.addEventListener("input", scheduleLoginBrandingPreview);
 el.loginPersonnelNumber.addEventListener("blur", previewLoginBranding);
@@ -3479,6 +4004,73 @@ document.querySelectorAll("[data-more-tab]").forEach((button) => button.addEvent
 el.previousWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, -7); loadSchedule(); });
 el.nextWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, 7); loadSchedule(); });
 el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule(); });
+el.loanRefresh?.addEventListener("click", loadLoanModule);
+[["issue", el.loanIssuePhotos], ["issue", el.loanIssueCamera], ["return", el.loanReturnPhotos], ["return", el.loanReturnCamera]]
+  .forEach(([phase, input]) => input?.addEventListener("change", () => {
+    addLoanPhotoFiles(phase, input.files);
+    input.value = "";
+  }));
+[el.loanIssuePhotoSummary, el.loanReturnPhotoSummary].forEach((summary) => summary?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-loan-photo-remove]");
+  if (!button) return;
+  const files = [...loanPhotoFiles(button.dataset.loanPhotoPhase)];
+  files.splice(Number(button.dataset.loanPhotoRemove), 1);
+  setLoanPhotoFiles(button.dataset.loanPhotoPhase, files);
+}));
+el.loanAddItem?.addEventListener("click", () => {
+  if (portalState.loanDraftItems.length >= 5) return;
+  portalState.loanDraftItems.push(newLoanDraftItem());
+  renderLoanDraftItems();
+});
+el.loanItemEditor?.addEventListener("input", (event) => {
+  const field = event.target.closest("[data-loan-field]");
+  if (!field) return;
+  const item = portalState.loanDraftItems[Number(field.dataset.loanIndex)];
+  if (!item) return;
+  item[field.dataset.loanField] = field.value;
+  if (field.dataset.loanField === "identifier") {
+    item.identifier = item.identifier.replace(/\D/g, "").slice(0, 14);
+    field.value = item.identifier;
+    item.resolved = null;
+    item.error = "";
+    item.needsManual = false;
+  }
+});
+el.loanItemEditor?.addEventListener("change", (event) => {
+  const field = event.target.closest("[data-loan-field]");
+  if (!field) return;
+  const item = portalState.loanDraftItems[Number(field.dataset.loanIndex)];
+  if (item) item[field.dataset.loanField] = field.value;
+});
+el.loanItemEditor?.addEventListener("click", (event) => {
+  const resolveButton = event.target.closest("[data-loan-resolve]");
+  if (resolveButton) {
+    resolveLoanDraftItem(Number(resolveButton.dataset.loanResolve));
+    return;
+  }
+  const removeButton = event.target.closest("[data-loan-remove]");
+  if (!removeButton) return;
+  portalState.loanDraftItems.splice(Number(removeButton.dataset.loanRemove), 1);
+  renderLoanDraftItems();
+});
+el.loanIssueForm?.addEventListener("submit", submitLoanIssue);
+[el.loanScope, el.loanStatusFilter].forEach((field) => field?.addEventListener("change", loadLoans));
+el.loanList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-loan-return]");
+  if (button) openLoanReturn(button.dataset.loanReturn);
+});
+el.loanReturnForm?.addEventListener("submit", submitLoanReturn);
+el.loanConfirmationForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  respondToLoanConfirmation("confirm");
+});
+el.loanConfirmationReject?.addEventListener("click", () => respondToLoanConfirmation("reject"));
+el.loanConfirmationDialog?.addEventListener("cancel", (event) => event.preventDefault());
+document.querySelectorAll("[data-close-loan-return]").forEach((button) => button.addEventListener("click", () => {
+  el.loanReturnDialog.close();
+  portalState.selectedLoan = null;
+  setLoanPhotoFiles("return", []);
+}));
 el.timeOffRequestForm.addEventListener("submit", submitTimeOff);
 el.timeOffDate.addEventListener("change", loadTimeOffSlots);
 el.timeOffDate.addEventListener("change", updateTimeOffMode);
@@ -3609,8 +4201,15 @@ document.addEventListener("visibilitychange", () => {
     if (portalState.activeTab === "settings") loadWifiAutomation();
     if (portalState.activeTab === "leadershipTeam") loadLeadershipOverview();
     if (portalState.activeTab === "leadershipApprovals") loadLeadershipApprovals();
+    if (loanCapabilityEnabled()) loadPendingLoanConfirmations();
   }
 });
+setInterval(() => {
+  if (!document.hidden && portalState.session && loanCapabilityEnabled()) {
+    loadPendingLoanConfirmations();
+    if (portalState.activeTab === "loan" && portalState.loanStatus?.available) loadLoans();
+  }
+}, 5000);
 setInterval(() => {
   if (!document.hidden && portalState.session) Promise.allSettled([loadNotifications(), loadProcessTasks()]);
 }, 45000);
