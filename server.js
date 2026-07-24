@@ -199,6 +199,14 @@ const {
   verifyMonthlyTimeRecordStatement,
 } = require("./lib/time-record-statements");
 const { createGovernanceStore, PRIVACY_TYPE_LABELS } = require("./lib/governance-store");
+const {
+  PRODUCT_READINESS_CHECKS,
+  buildProductReadiness,
+  createAcceptance: createProductReadinessAcceptance,
+  createProductReadinessEvidence,
+  verifyAcceptance: verifyProductReadinessAcceptance,
+  verifyProductReadinessEvidence,
+} = require("./lib/product-readiness");
 const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
@@ -290,6 +298,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "system:diagnostics:read", label: "Serverzustand lesen", description: "Redigierte Betriebs-, Sicherungs- und Wiederherstellungswarnungen ohne interne Pfade lesen.", group: "System & Verwaltung", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "system:diagnostics:technical", label: "Technische Serverdiagnose lesen", description: "Interne Laufzeit-, Speicher- und Wartungsdetails für die technische Administration lesen.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "system:recovery:run", label: "Recovery-Assurance-Prüfung starten", description: "Einen vollständigen, isolierten Sicherungs- und Wiederherstellungsnachweis am Ubuntu-Server anfordern.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
+  { id: "system:readiness:review", label: "Pilotprüfungen und Abnahmen dokumentieren", description: "Versionierte Browser-, Bedienungs- und Performance-Nachweise erfassen sowie die fachliche oder technische Abnahme dokumentieren.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "update:write", label: "Grabenplaner aktualisieren", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "system:write", label: "App neu starten oder beenden", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "amu:local:manage", label: "AUM im eigenen Verantwortungsbereich öffnen und prüfen", description: "Grundrecht der Filialleitung; für Abteilungsleitungen nur ausdrücklich und bei wirksamer Filialleitungsvertretung.", group: "AUM", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
@@ -410,7 +419,7 @@ const portalGlobalPermissionIds = new Set([
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
   "integrations:connections:write", "integrations:credentials:write", "branding:read", "branding:write",
   "work_rules:manage", "work_rules:exception", "work_rules:audit",
-  "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "update:write", "system:write", "wifi:settings",
+  "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "system:readiness:review", "update:write", "system:write", "wifi:settings",
   "users:write", "roles:read", "roles:write", "rights:read", "rights:write", "scopes:write",
   "audit:read", "usb:provision", "developer:system",
 ]);
@@ -693,6 +702,9 @@ for (const roleId of ["hr", "admin", "developer"]) {
 addBuiltinRolePermissions("it_admin", [
   "time_records:read", "vacation_accounts:read", "retention:read", "data_subject_requests:read",
 ]);
+for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, ["system:readiness:review"]);
+}
 
 const GLOBAL_SCOPE_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
 const RIGHTS_ADMIN_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
@@ -2192,6 +2204,34 @@ function createSchema() {
         ON UPDATE RESTRICT ON DELETE RESTRICT
     );
 
+    CREATE TABLE IF NOT EXISTS product_readiness_evidence (
+      id TEXT PRIMARY KEY,
+      check_id TEXT NOT NULL,
+      outcome TEXT NOT NULL CHECK(outcome IN ('pass','fail')),
+      payload_json TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      observed_by TEXT NOT NULL,
+      observed_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS product_readiness_acceptances (
+      id TEXT PRIMARY KEY,
+      discipline TEXT NOT NULL CHECK(discipline IN ('technical','operational')),
+      decision TEXT NOT NULL CHECK(decision IN ('approved','rejected')),
+      release_version TEXT NOT NULL,
+      basis_sha256 TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      decided_by TEXT NOT NULL,
+      decided_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_product_readiness_evidence_latest
+      ON product_readiness_evidence(check_id, observed_at DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_product_readiness_acceptances_latest
+      ON product_readiness_acceptances(discipline, decided_at DESC, id DESC);
+
     CREATE TABLE IF NOT EXISTS custom_processes (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -2752,6 +2792,30 @@ function createSchema() {
       SELECT RAISE(ABORT, 'payroll handoff events are immutable');
     END;
 
+    CREATE TRIGGER IF NOT EXISTS trg_product_readiness_evidence_immutable_update
+    BEFORE UPDATE ON product_readiness_evidence
+    BEGIN
+      SELECT RAISE(ABORT, 'product readiness evidence is immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_product_readiness_evidence_immutable_delete
+    BEFORE DELETE ON product_readiness_evidence
+    BEGIN
+      SELECT RAISE(ABORT, 'product readiness evidence is immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_product_readiness_acceptances_immutable_update
+    BEFORE UPDATE ON product_readiness_acceptances
+    BEGIN
+      SELECT RAISE(ABORT, 'product readiness acceptances are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_product_readiness_acceptances_immutable_delete
+    BEFORE DELETE ON product_readiness_acceptances
+    BEGIN
+      SELECT RAISE(ABORT, 'product readiness acceptances are immutable');
+    END;
+
     CREATE TRIGGER IF NOT EXISTS trg_retention_policy_versions_immutable_update
     BEFORE UPDATE ON retention_policy_versions
     BEGIN
@@ -2926,6 +2990,7 @@ const workRuleMigrationId = "v0.81-austrian-work-rule-engine";
 const privacyGovernanceMigrationId = "v0.82-leave-records-privacy";
 const vacationHistoryProtectionMigrationId = "v0.82-protected-vacation-history";
 const payrollHandoffMigrationId = "v0.83-payroll-handoffs";
+const productReadinessMigrationId = "v0.84-product-readiness";
 const privacyGovernanceTables = [
   "vacation_account_revisions",
   "vacation_account_events",
@@ -2986,6 +3051,36 @@ const privacyGovernanceImmutableTriggerDefinitions = privacyGovernanceImmutableT
     message: privacyGovernanceImmutableTriggerMessages[table],
   });
 });
+const productReadinessTables = [
+  "product_readiness_evidence",
+  "product_readiness_acceptances",
+];
+const productReadinessImmutableTriggerDefinitions = [
+  {
+    name: "trg_product_readiness_evidence_immutable_update",
+    table: "product_readiness_evidence",
+    operation: "UPDATE",
+    message: "product readiness evidence is immutable",
+  },
+  {
+    name: "trg_product_readiness_evidence_immutable_delete",
+    table: "product_readiness_evidence",
+    operation: "DELETE",
+    message: "product readiness evidence is immutable",
+  },
+  {
+    name: "trg_product_readiness_acceptances_immutable_update",
+    table: "product_readiness_acceptances",
+    operation: "UPDATE",
+    message: "product readiness acceptances are immutable",
+  },
+  {
+    name: "trg_product_readiness_acceptances_immutable_delete",
+    table: "product_readiness_acceptances",
+    operation: "DELETE",
+    message: "product readiness acceptances are immutable",
+  },
+];
 
 function normalizeImmutableTriggerSql(sql) {
   return String(sql || "")
@@ -3015,6 +3110,28 @@ function removeMalformedPrivacyGovernanceImmutableTriggers() {
   for (const definition of privacyGovernanceImmutableTriggerDefinitions) {
     if (triggerExists(definition.name)
       && !privacyGovernanceImmutableTriggerMatches(definition)) {
+      db.exec(`DROP TRIGGER IF EXISTS "${definition.name}"`);
+    }
+  }
+}
+function productReadinessImmutableTriggerMatches(definition) {
+  const stored = db.prepare(
+    "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?",
+  ).get(definition.name);
+  if (!stored?.sql) return false;
+  const expected = `
+    CREATE TRIGGER ${definition.name}
+    BEFORE ${definition.operation} ON ${definition.table}
+    BEGIN
+      SELECT RAISE(ABORT, '${definition.message}');
+    END
+  `;
+  return normalizeImmutableTriggerSql(stored.sql) === normalizeImmutableTriggerSql(expected);
+}
+
+function removeMalformedProductReadinessImmutableTriggers() {
+  for (const definition of productReadinessImmutableTriggerDefinitions) {
+    if (triggerExists(definition.name) && !productReadinessImmutableTriggerMatches(definition)) {
       db.exec(`DROP TRIGGER IF EXISTS "${definition.name}"`);
     }
   }
@@ -3055,15 +3172,25 @@ const payrollHandoffMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(payrollHandoffMigrationId)
   || !tableExists("payroll_handoffs")
   || !tableExists("payroll_handoff_events");
+const productReadinessMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(productReadinessMigrationId)
+  || productReadinessTables.some((name) => !tableExists(name))
+  || productReadinessImmutableTriggerDefinitions.some(
+    (definition) => !productReadinessImmutableTriggerMatches(definition),
+  );
 if (databaseExistedBeforeOpen && (portalMobileBaselineMigrationRequired || protectedPersonnelMigrationRequired
   || unreleasedSicknessDraftSchemaPresent || legacySchemaMigrationRequired || costCenterMigrationRequired
   || shiftLocationMigrationRequired || workRuleMigrationRequired || privacyGovernanceMigrationRequired
-  || vacationHistoryProtectionMigrationRequired || payrollHandoffMigrationRequired)) {
+  || vacationHistoryProtectionMigrationRequired || payrollHandoffMigrationRequired
+  || productReadinessMigrationRequired)) {
   createInternalDatabaseBackup("pre-migration");
 }
 
 if (privacyGovernanceMigrationRequired) {
   removeMalformedPrivacyGovernanceImmutableTriggers();
+}
+if (productReadinessMigrationRequired) {
+  removeMalformedProductReadinessImmutableTriggers();
 }
 
 if (unreleasedSicknessDraftSchemaPresent) {
@@ -4184,6 +4311,11 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run(privacyGovernanceMigrationId, packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run(payrollHandoffMigrationId, packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run(productReadinessMigrationId, packageMetadata.version);
+
+productReadinessEvidenceRows();
+productReadinessAcceptanceRows();
 
 const startupIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
 if (!(startupIntegrity.length === 1 && startupIntegrity[0] === "ok")) {
@@ -23349,6 +23481,108 @@ function systemCenterManualReason({ permissionAllowed, configured, serverEligibl
   return "Startet einen vollständigen, isolierten Sicherungs- und Wiederherstellungsnachweis.";
 }
 
+function productReadinessIntegrityError(message, code) {
+  return httpError(503, message, code);
+}
+
+function productReadinessRequestError(error) {
+  if (String(error?.code || "").startsWith("PRODUCT_READINESS_")) {
+    return httpError(400, error.message, error.code);
+  }
+  return error;
+}
+
+function productReadinessEvidenceRows() {
+  return db.prepare(`
+    SELECT id, check_id, outcome, payload_json, receipt_sha256, observed_by, observed_at, created_at
+    FROM product_readiness_evidence
+    ORDER BY observed_at, id
+  `).all().map((row) => {
+    let value;
+    try { value = JSON.parse(row.payload_json); } catch {
+      throw productReadinessIntegrityError(
+        "Ein Pilotnachweis enthält ungültige Daten.",
+        "PRODUCT_READINESS_EVIDENCE_INTEGRITY_FAILED",
+      );
+    }
+    if (!verifyProductReadinessEvidence(value)
+      || value.id !== row.id
+      || value.checkId !== row.check_id
+      || value.outcome !== row.outcome
+      || value.receiptSha256 !== row.receipt_sha256
+      || value.observedBy !== row.observed_by
+      || value.observedAt !== row.observed_at
+      || value.createdAt !== row.created_at) {
+      throw productReadinessIntegrityError(
+        "Ein Pilotnachweis besitzt keine gültige Prüfsumme.",
+        "PRODUCT_READINESS_EVIDENCE_INTEGRITY_FAILED",
+      );
+    }
+    return value;
+  });
+}
+
+function productReadinessAcceptanceRows() {
+  return db.prepare(`
+    SELECT id, discipline, decision, release_version, basis_sha256, payload_json,
+           receipt_sha256, decided_by, decided_at
+    FROM product_readiness_acceptances
+    ORDER BY decided_at, id
+  `).all().map((row) => {
+    let value;
+    try { value = JSON.parse(row.payload_json); } catch {
+      throw productReadinessIntegrityError(
+        "Eine Abnahme enthält ungültige Daten.",
+        "PRODUCT_READINESS_ACCEPTANCE_INTEGRITY_FAILED",
+      );
+    }
+    if (!verifyProductReadinessAcceptance(value)
+      || value.id !== row.id
+      || value.discipline !== row.discipline
+      || value.decision !== row.decision
+      || value.releaseVersion !== row.release_version
+      || value.basisSha256 !== row.basis_sha256
+      || value.receiptSha256 !== row.receipt_sha256
+      || value.decidedBy !== row.decided_by
+      || value.decidedAt !== row.decided_at) {
+      throw productReadinessIntegrityError(
+        "Eine Abnahme besitzt keine gültige Prüfsumme.",
+        "PRODUCT_READINESS_ACCEPTANCE_INTEGRITY_FAILED",
+      );
+    }
+    return value;
+  });
+}
+
+function productReadinessCapabilities(actor) {
+  const local = actor.employeeNumber === "local";
+  const review = local || actor.permissions?.includes("system:readiness:review") === true;
+  return {
+    canRecordEvidence: review,
+    canAcceptTechnical: review && (local || ["admin", "it_admin", "developer"].includes(actor.role))
+      && (local || actor.permissions?.includes("system:diagnostics:technical") === true),
+    canAcceptOperational: review && (local || ["hr", "admin", "developer"].includes(actor.role)),
+  };
+}
+
+function productReadinessPayload(technical, actor) {
+  const report = buildProductReadiness({
+    evidence: productReadinessEvidenceRows(),
+    acceptances: productReadinessAcceptanceRows(),
+    trustIndex: technical.trustIndex,
+    recovery: {
+      applicationSmokeState: technical.automation?.applicationSmokeState || "unknown",
+    },
+    releaseVersion: packageMetadata.version,
+    generatedAt: new Date(),
+  });
+  return {
+    ...report,
+    checks: PRODUCT_READINESS_CHECKS,
+    capabilities: productReadinessCapabilities(actor),
+  };
+}
+
 function systemCenterNotificationRecipients() {
   return db.prepare(`
     SELECT employee_number, role FROM portal_users
@@ -23517,6 +23751,7 @@ async function systemCenterPayload(actor) {
       reason: systemCenterManualReason({ permissionAllowed, configured, serverEligible, control }),
       reasonCode: control.reason || null,
     },
+    productReadiness: productReadinessPayload(technical, actor),
   };
 }
 
@@ -28849,6 +29084,106 @@ app.post("/api/schedule/auto", (request, response) => {
     try { db.exec("ROLLBACK"); } catch {}
     throw error;
   }
+});
+
+app.get("/api/portal/v1/product-readiness", async (request, response) => {
+  const actor = requirePortalAnyPermission(request, [
+    "system:diagnostics:read",
+    "system:diagnostics:technical",
+    "system:readiness:review",
+  ]);
+  const technical = await systemCenterTechnicalCache.read();
+  response.json(productReadinessPayload(technical, actor));
+});
+
+app.post("/api/portal/v1/product-readiness/evidence", async (request, response) => {
+  const actor = requirePortalAdminOrLocal(request, "system:readiness:review");
+  let value;
+  try {
+    value = createProductReadinessEvidence(request.body || {}, {
+      actor: actor.employeeNumber,
+      releaseVersion: packageMetadata.version,
+      now: new Date(),
+    });
+  } catch (error) {
+    throw productReadinessRequestError(error);
+  }
+  db.prepare(`
+    INSERT INTO product_readiness_evidence
+      (id, check_id, outcome, payload_json, receipt_sha256, observed_by, observed_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    value.id,
+    value.checkId,
+    value.outcome,
+    JSON.stringify(value),
+    value.receiptSha256,
+    value.observedBy,
+    value.observedAt,
+    value.createdAt,
+  );
+  auditPortal(actor.employeeNumber, "system.readiness.evidence.recorded", "product_readiness",
+    value.id, JSON.stringify({ checkId: value.checkId, outcome: value.outcome }));
+  const technical = await systemCenterTechnicalCache.read();
+  response.status(201).json(productReadinessPayload(technical, actor));
+});
+
+app.post("/api/portal/v1/product-readiness/acceptances", async (request, response) => {
+  const actor = requirePortalAdminOrLocal(request, "system:readiness:review");
+  const capabilities = productReadinessCapabilities(actor);
+  const discipline = String(request.body?.discipline || "");
+  if (discipline === "technical" && !capabilities.canAcceptTechnical) {
+    throw httpError(403, "Für die technische Abnahme fehlt die technische Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  if (discipline === "operational" && !capabilities.canAcceptOperational) {
+    throw httpError(403, "Für die fachliche Abnahme fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  const technical = await systemCenterTechnicalCache.read();
+  const current = productReadinessPayload(technical, actor);
+  if (current.gates.some((gate) => gate.state !== "pass")) {
+    throw httpError(
+      409,
+      "Eine Abnahme ist erst möglich, wenn alle Pilot-, Security- und Recovery-Prüfungen bestanden sind.",
+      "PRODUCT_READINESS_GATES_INCOMPLETE",
+    );
+  }
+  if (String(request.body?.basisSha256 || "") !== current.basisSha256) {
+    throw httpError(
+      409,
+      "Der Prüfstand hat sich geändert. Bitte die Ansicht aktualisieren und erneut prüfen.",
+      "PRODUCT_READINESS_BASIS_STALE",
+    );
+  }
+  let value;
+  try {
+    value = createProductReadinessAcceptance(request.body || {}, {
+      actor: actor.employeeNumber,
+      releaseVersion: packageMetadata.version,
+      basisSha256: current.basisSha256,
+      now: new Date(),
+    });
+  } catch (error) {
+    throw productReadinessRequestError(error);
+  }
+  db.prepare(`
+    INSERT INTO product_readiness_acceptances
+      (id, discipline, decision, release_version, basis_sha256, payload_json,
+       receipt_sha256, decided_by, decided_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    value.id,
+    value.discipline,
+    value.decision,
+    value.releaseVersion,
+    value.basisSha256,
+    JSON.stringify(value),
+    value.receiptSha256,
+    value.decidedBy,
+    value.decidedAt,
+  );
+  auditPortal(actor.employeeNumber, `system.readiness.acceptance.${value.decision}`,
+    "product_readiness", value.id, JSON.stringify({ discipline: value.discipline }));
+  response.status(201).json(productReadinessPayload(technical, actor));
 });
 
 function formatDateGerman(isoDate, withYear = true) {

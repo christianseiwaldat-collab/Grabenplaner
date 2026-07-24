@@ -1747,6 +1747,38 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
 .system-center-trend-card.empty small { color:var(--rd-muted); font-size:7px; font-weight:850; text-transform:uppercase; letter-spacing:.05em; }
 .system-center-trend-card.empty strong { margin-top:7px; color:var(--rd-text); font-size:10px; }
 .system-center-trend-card.empty span { margin-top:5px; color:var(--rd-muted); font-size:7.5px; line-height:1.4; }
+.product-readiness { padding:18px; border:1px solid var(--rd-line); border-radius:17px; color:var(--rd-text); background:var(--rd-surface); }
+.product-readiness-gates { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; }
+.product-readiness-gate { min-width:0; padding:14px; border:1px solid var(--rd-line); border-top:4px solid var(--rd-restricted); border-radius:14px; background:var(--rd-surface-soft); }
+.product-readiness-gate.ok { border-top-color:var(--rd-good); }
+.product-readiness-gate.warning { border-top-color:var(--rd-warning); }
+.product-readiness-gate.critical { border-top-color:var(--rd-critical); }
+.product-readiness-gate > header { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.product-readiness-gate > header strong,.product-readiness-gate > header small { display:block; }
+.product-readiness-gate > header strong { color:var(--rd-text); font-size:10px; }
+.product-readiness-gate > header small { margin-top:3px; color:var(--rd-muted); font-size:7px; }
+.product-readiness-gate > p { margin:9px 0 0; color:var(--rd-muted); font-size:8px; line-height:1.5; }
+.product-readiness-gate > a { display:inline-block; margin-top:9px; color:var(--rd-accent); font-size:7.5px; font-weight:800; }
+.product-readiness-gate > ul { display:grid; gap:7px; margin:12px 0 0; padding:0; list-style:none; }
+.product-readiness-gate > ul > li { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; padding:8px; border:1px solid var(--rd-line); border-radius:10px; background:var(--rd-surface); }
+.product-readiness-gate > ul > li > div { display:grid; grid-template-columns:24px minmax(0,1fr); align-items:center; gap:7px; min-width:0; }
+.product-readiness-gate > ul > li > div > i { display:grid; place-items:center; width:24px; height:24px; border-radius:7px; color:var(--rd-muted); background:var(--rd-restricted-soft); font-style:normal; font-weight:900; }
+.product-readiness-gate > ul > li.ok > div > i { color:var(--rd-good); background:var(--rd-good-soft); }
+.product-readiness-gate > ul > li.warning > div > i { color:var(--rd-warning); background:var(--rd-warning-soft); }
+.product-readiness-gate > ul > li.critical > div > i { color:var(--rd-critical); background:var(--rd-critical-soft); }
+.product-readiness-gate > ul > li strong,.product-readiness-gate > ul > li small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.product-readiness-gate > ul > li strong { color:var(--rd-text); font-size:8px; }
+.product-readiness-gate > ul > li small { margin-top:3px; color:var(--rd-muted); font-size:6.8px; }
+.product-readiness-actions { display:flex; flex:0 0 auto; gap:5px; }
+.product-readiness-actions button { min-height:29px; padding:6px 9px; font-size:7px; }
+.product-readiness-acceptance { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; margin-top:11px; }
+.product-readiness-acceptance article { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:11px; min-width:0; padding:13px 14px; border:1px solid var(--rd-line); border-left:4px solid var(--rd-restricted); border-radius:13px; background:var(--rd-surface-soft); }
+.product-readiness-acceptance article.ok { border-left-color:var(--rd-good); }
+.product-readiness-acceptance article.warning { border-left-color:var(--rd-warning); }
+.product-readiness-acceptance article.critical { border-left-color:var(--rd-critical); }
+.product-readiness-acceptance article > div { min-width:0; }
+.product-readiness-acceptance article > div strong { display:block; overflow:hidden; margin-top:4px; color:var(--rd-text); font-size:8px; text-overflow:ellipsis; white-space:nowrap; }
+.product-readiness-disclaimer { margin:12px 0 0; color:var(--rd-muted); font-size:7px; line-height:1.45; }
 .system-center-factor-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:11px; }
 .system-center-factor { display:flex; flex-direction:column; min-width:0; min-height:210px; padding:15px; border:1px solid var(--rd-line); border-top:4px solid var(--rd-restricted); border-radius:15px; color:var(--rd-text); background:var(--rd-surface); }
 .system-center-factor.ok { border-top-color:var(--rd-good); }
@@ -1989,6 +2021,7 @@ html[data-active-page-theme="dark"] .custom-process-modal .custom-process-step-c
   .system-center-factor-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .system-center-trend-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .system-center-run-phases { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .product-readiness-acceptance { grid-template-columns:1fr; }
   .location-dashboard-grid { grid-template-columns:repeat(2,minmax(270px,1fr)); }
   .rights-dashboard-filterbar { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .rights-dashboard-filterbar label:first-child { grid-column:span 2; }
@@ -2041,6 +2074,12 @@ html[data-active-page-theme="dark"] .custom-process-modal .custom-process-step-c
   .system-center-factor-grid,.system-center-run-phases { grid-template-columns:1fr; }
   .system-center-trend-grid,.system-center-operation dl { grid-template-columns:1fr; }
   .system-center-resources { grid-template-columns:1fr; }
+  .product-readiness-gates { grid-template-columns:1fr; }
+  .product-readiness-gate > ul > li { align-items:flex-start; flex-direction:column; }
+  .product-readiness-actions { width:100%; }
+  .product-readiness-actions button { flex:1; }
+  .product-readiness-acceptance article { grid-template-columns:minmax(0,1fr) auto; }
+  .product-readiness-acceptance article > button { grid-column:1 / -1; width:100%; }
   .system-center-section-heading,.system-center-run-copy > header { align-items:flex-start; flex-direction:column; }
   .system-center-history,.system-center-trends { padding:14px; }
   .location-dashboard-grid { grid-template-columns:1fr; }
@@ -2254,11 +2293,11 @@ html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) .display
 .rights-dashboard[data-dashboard-font-size="compact"] { --rd-font-xs:6.7px; --rd-font-sm:7.5px; --rd-font-md:8.5px; --rd-font-lg:9px; --rd-font-title:15px; }
 .rights-dashboard[data-dashboard-font-size="standard"] { --rd-font-xs:8px; --rd-font-sm:9px; --rd-font-md:10px; --rd-font-lg:11px; --rd-font-title:17px; }
 .rights-dashboard[data-dashboard-font-size="large"] { --rd-font-xs:9.5px; --rd-font-sm:10.5px; --rd-font-md:11.5px; --rd-font-lg:13px; --rd-font-title:19px; }
-.rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-stat span,.rights-dashboard-filterbar label > span,.rights-dashboard-node span,.rights-dashboard-permission > span,.rights-process-rule span,.rights-process-validation-summary span,.rights-process-list-group > span,.location-dashboard-toolbar-controls label > span,.location-dashboard-status,.system-center-factor > header small,.system-center-coverage small,.system-center-factor > footer > small,.system-center-run-phases li span,.system-center-run-phases li small,.system-center-resources small,.system-center-operation dt,.system-center-trend-card > header small,.system-center-trend-card > footer) { font-size:var(--rd-font-xs); }
-.rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-stat small,.rights-dashboard-user-copy small,.rights-dashboard-node small,.rights-dashboard-permission small,.rights-dashboard-section-heading p,.rights-process-item-copy small,.rights-process-step-copy span,.rights-process-step-copy small,.rights-process-explanation dt,.rights-process-explanation dd,.rights-process-validation-item small,.rights-process-simulation-note,.rights-custom-process-actions small,.location-dashboard-toolbar p,.location-dashboard-order-hint,.location-dashboard-staffing small,.location-dashboard-counts span,.location-dashboard-absence small,.location-dashboard-card > footer,.system-center-toolbar p,.system-center-actions > span,.system-center-hero-copy > small,.system-center-factor > p,.system-center-card-checks li,.system-center-section-heading p,.system-center-run-copy > header small,.system-center-run-empty,.system-center-run-error,.system-center-empty p,.system-center-resources span,.system-center-operation > p,.system-center-operation-warning,.system-center-trend-card.empty span) { font-size:var(--rd-font-sm); }
-.rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-user-copy strong,.rights-dashboard-user-count,.rights-dashboard-node strong,.rights-dashboard-permission strong,.rights-process-item-copy strong,.rights-process-rule strong,.rights-process-step-copy strong,.rights-process-explanation p,.rights-process-validation-item strong,.rights-custom-process-actions strong,.location-dashboard-filter,.location-dashboard-staffing strong,.location-dashboard-absence strong,.system-center-hero-copy p,.system-center-factor > strong,.system-center-run-copy > header strong,.system-center-state,.system-center-resources strong,.system-center-operation dd,.system-center-trend-card > header strong) { font-size:var(--rd-font-md); }
+.rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-stat span,.rights-dashboard-filterbar label > span,.rights-dashboard-node span,.rights-dashboard-permission > span,.rights-process-rule span,.rights-process-validation-summary span,.rights-process-list-group > span,.location-dashboard-toolbar-controls label > span,.location-dashboard-status,.system-center-factor > header small,.system-center-coverage small,.system-center-factor > footer > small,.system-center-run-phases li span,.system-center-run-phases li small,.system-center-resources small,.system-center-operation dt,.system-center-trend-card > header small,.system-center-trend-card > footer,.product-readiness-gate > header small,.product-readiness-gate > ul > li small,.product-readiness-disclaimer) { font-size:var(--rd-font-xs); }
+.rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-stat small,.rights-dashboard-user-copy small,.rights-dashboard-node small,.rights-dashboard-permission small,.rights-dashboard-section-heading p,.rights-process-item-copy small,.rights-process-step-copy span,.rights-process-step-copy small,.rights-process-explanation dt,.rights-process-explanation dd,.rights-process-validation-item small,.rights-process-simulation-note,.rights-custom-process-actions small,.location-dashboard-toolbar p,.location-dashboard-order-hint,.location-dashboard-staffing small,.location-dashboard-counts span,.location-dashboard-absence small,.location-dashboard-card > footer,.system-center-toolbar p,.system-center-actions > span,.system-center-hero-copy > small,.system-center-factor > p,.system-center-card-checks li,.system-center-section-heading p,.system-center-run-copy > header small,.system-center-run-empty,.system-center-run-error,.system-center-empty p,.system-center-resources span,.system-center-operation > p,.system-center-operation-warning,.system-center-trend-card.empty span,.product-readiness-gate > p,.product-readiness-gate > a,.product-readiness-gate > ul > li strong,.product-readiness-actions button,.product-readiness-acceptance article > div strong) { font-size:var(--rd-font-sm); }
+.rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-user-copy strong,.rights-dashboard-user-count,.rights-dashboard-node strong,.rights-dashboard-permission strong,.rights-process-item-copy strong,.rights-process-rule strong,.rights-process-step-copy strong,.rights-process-explanation p,.rights-process-validation-item strong,.rights-custom-process-actions strong,.location-dashboard-filter,.location-dashboard-staffing strong,.location-dashboard-absence strong,.system-center-hero-copy p,.system-center-factor > strong,.system-center-run-copy > header strong,.system-center-state,.system-center-resources strong,.system-center-operation dd,.system-center-trend-card > header strong,.product-readiness-gate > header strong) { font-size:var(--rd-font-md); }
 .rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-mode-switch button,.dashboard-theme-switch button,.rights-process-toolbar select,.rights-process-action,.rights-custom-process-actions button,.location-dashboard-toolbar-controls input,.location-dashboard-toolbar-controls button,.system-center-actions button) { font-size:var(--rd-font-sm); }
-.rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-section-heading h2,.rights-process-validation-heading h2,.location-dashboard-toolbar h2,.location-dashboard-card h3,.system-center-toolbar h2,.system-center-section-heading h2,.system-center-operation h2) { font-size:var(--rd-font-title); }
+.rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-section-heading h2,.rights-process-validation-heading h2,.location-dashboard-toolbar h2,.location-dashboard-card h3,.system-center-toolbar h2,.system-center-section-heading h2,.system-center-operation h2,.product-readiness h2) { font-size:var(--rd-font-title); }
 .rights-dashboard[data-dashboard-font-size] .system-center-hero-copy h2 { font-size:calc(var(--rd-font-title) * 1.35); }
 .rights-dashboard[data-dashboard-font-size] .rights-process-explanation strong { font-size:var(--rd-font-lg); }
 
