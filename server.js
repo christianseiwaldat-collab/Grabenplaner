@@ -68,6 +68,12 @@ const {
   DEFAULT_STATUS_PATH: DEFAULT_HOST_SECURITY_STATUS_PATH,
   readHostSecurityStatus,
 } = require("./lib/host-security-status");
+const {
+  F18MigrationError,
+  inspectF18Backup,
+  photoBufferForMigration,
+  publicF18Inspection,
+} = require("./lib/f18-loan-migration");
 const { createSystemCenterTechnicalCache } = require("./lib/system-center-technical-cache");
 const {
   assertRuntimeConfiguration,
@@ -1686,6 +1692,69 @@ function createSchema() {
     BEFORE UPDATE ON loan_events
     BEGIN
       SELECT RAISE(ABORT, 'loan events are immutable');
+    END;
+
+    CREATE TABLE IF NOT EXISTS loan_migration_runs (
+      id TEXT PRIMARY KEY,
+      source_system TEXT NOT NULL CHECK(source_system = 'f18-lagerware'),
+      source_fingerprint TEXT NOT NULL UNIQUE CHECK(length(source_fingerprint) = 64),
+      source_version TEXT NOT NULL DEFAULT '',
+      source_created_at TEXT,
+      location_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'completed' CHECK(status = 'completed'),
+      employee_count INTEGER NOT NULL DEFAULT 0 CHECK(employee_count >= 0),
+      loan_count INTEGER NOT NULL DEFAULT 0 CHECK(loan_count >= 0),
+      item_count INTEGER NOT NULL DEFAULT 0 CHECK(item_count >= 0),
+      photo_count INTEGER NOT NULL DEFAULT 0 CHECK(photo_count >= 0),
+      open_loan_count INTEGER NOT NULL DEFAULT 0 CHECK(open_loan_count >= 0),
+      returned_loan_count INTEGER NOT NULL DEFAULT 0 CHECK(returned_loan_count >= 0),
+      warnings_json TEXT NOT NULL DEFAULT '[]',
+      imported_by_employee_number TEXT,
+      completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(source_system, location_id),
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS loan_migration_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id TEXT NOT NULL,
+      source_loan_id INTEGER NOT NULL,
+      source_record_hash TEXT NOT NULL CHECK(length(source_record_hash) = 64),
+      target_loan_id TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(run_id, source_loan_id),
+      FOREIGN KEY (run_id) REFERENCES loan_migration_runs(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (target_loan_id) REFERENCES loans(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_loan_migration_runs_location
+      ON loan_migration_runs(location_id, completed_at);
+
+    CREATE TRIGGER IF NOT EXISTS trg_loan_migration_runs_immutable_update
+    BEFORE UPDATE ON loan_migration_runs
+    BEGIN
+      SELECT RAISE(ABORT, 'loan migration runs are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_loan_migration_runs_immutable_delete
+    BEFORE DELETE ON loan_migration_runs
+    BEGIN
+      SELECT RAISE(ABORT, 'loan migration runs are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_loan_migration_records_immutable_update
+    BEFORE UPDATE ON loan_migration_records
+    BEGIN
+      SELECT RAISE(ABORT, 'loan migration records are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_loan_migration_records_immutable_delete
+    BEFORE DELETE ON loan_migration_records
+    BEGIN
+      SELECT RAISE(ABORT, 'loan migration records are immutable');
     END;
 
     CREATE TRIGGER IF NOT EXISTS trg_loan_events_immutable_delete
@@ -5432,6 +5501,126 @@ function parseLoanPhotoMultipart(request) {
         resolve({ fields, photos });
       } catch (error) {
         fail(error.status ? error : httpError(400, "Das Fotoformular ist ungültig.", "LOAN_PHOTO_MULTIPART_INVALID"));
+      }
+    });
+  });
+}
+
+function parseF18MigrationMultipart(request) {
+  const totalMaxBytes = 257 * 1024 * 1024;
+  return new Promise((resolve, reject) => {
+    const contentType = String(request.headers["content-type"] || "");
+    const boundaryMatch = contentType.match(/^multipart\/form-data\s*;[\s\S]*?boundary=(?:"([^"]+)"|([^;\s]+))/i);
+    const boundary = String(boundaryMatch?.[1] || boundaryMatch?.[2] || "");
+    if (!boundary || boundary.length > 70 || /[\r\n]/.test(boundary)) {
+      reject(httpError(
+        415,
+        "Bitte die F18-Sicherung als ZIP-Formular senden.",
+        "F18_MULTIPART_REQUIRED",
+      ));
+      return;
+    }
+    const chunks = [];
+    let totalBytes = 0;
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+    request.on("data", (chunk) => {
+      if (settled) return;
+      totalBytes += chunk.length;
+      if (totalBytes > totalMaxBytes) {
+        fail(httpError(
+          413,
+          "Die F18-Sicherung darf höchstens 256 MB groß sein.",
+          "F18_ARCHIVE_TOO_LARGE",
+        ));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("error", () => fail(httpError(
+      400,
+      "Die F18-Sicherung konnte nicht gelesen werden.",
+      "F18_MULTIPART_INVALID",
+    )));
+    request.on("end", () => {
+      if (settled) return;
+      try {
+        const body = Buffer.concat(chunks);
+        const delimiter = Buffer.from(`--${boundary}`, "utf8");
+        const nextDelimiter = Buffer.from(`\r\n--${boundary}`, "utf8");
+        const fields = {};
+        let backup = null;
+        let position = body.indexOf(delimiter);
+        let partCount = 0;
+        if (position !== 0) {
+          throw httpError(400, "Das F18-Uploadformular ist ungültig.", "F18_MULTIPART_INVALID");
+        }
+        while (position >= 0) {
+          position += delimiter.length;
+          if (body.subarray(position, position + 2).toString("ascii") === "--") break;
+          if (body.subarray(position, position + 2).toString("ascii") !== "\r\n") {
+            throw httpError(400, "Das F18-Uploadformular ist ungültig.", "F18_MULTIPART_INVALID");
+          }
+          position += 2;
+          const headerEnd = body.indexOf(Buffer.from("\r\n\r\n"), position);
+          if (headerEnd < 0 || headerEnd - position > 8192) {
+            throw httpError(400, "Ein F18-Uploadteil ist ungültig.", "F18_MULTIPART_INVALID");
+          }
+          const headers = body.subarray(position, headerEnd).toString("utf8");
+          const dataStart = headerEnd + 4;
+          const dataEnd = body.indexOf(nextDelimiter, dataStart);
+          if (dataEnd < 0) {
+            throw httpError(400, "Das F18-Uploadformular ist unvollständig.", "F18_MULTIPART_INVALID");
+          }
+          const data = body.subarray(dataStart, dataEnd);
+          const disposition = headers.split("\r\n").find((line) => /^content-disposition:/i.test(line)) || "";
+          const name = disposition.match(/(?:^|;)\s*name="([^"]*)"/i)?.[1] || "";
+          const encodedFilename = disposition.match(/(?:^|;)\s*filename\*=UTF-8''([^;]+)/i)?.[1];
+          const plainFilename = disposition.match(/(?:^|;)\s*filename="([^"]*)"/i)?.[1];
+          let filename = plainFilename || "";
+          if (encodedFilename) {
+            try { filename = decodeURIComponent(encodedFilename); } catch {}
+          }
+          partCount += 1;
+          if (partCount > 8) {
+            throw httpError(413, "Das F18-Uploadformular enthält zu viele Teile.", "F18_MULTIPART_INVALID");
+          }
+          if (filename && name === "backup") {
+            if (backup) {
+              throw httpError(400, "Bitte genau eine F18-Sicherung auswählen.", "F18_BACKUP_MULTIPLE");
+            }
+            if (!/\.zip$/i.test(filename)) {
+              throw httpError(415, "Die F18-Sicherung muss eine ZIP-Datei sein.", "F18_ARCHIVE_TYPE_INVALID");
+            }
+            if (data.length > 256 * 1024 * 1024) {
+              throw httpError(413, "Die F18-Sicherung darf höchstens 256 MB groß sein.", "F18_ARCHIVE_TOO_LARGE");
+            }
+            backup = { originalName: filename, buffer: Buffer.from(data) };
+          } else if (!filename && [
+            "locationId", "expectedFingerprint", "employeeMappings",
+          ].includes(name)) {
+            if (data.length > 512 * 1024) {
+              throw httpError(413, "Ein F18-Importfeld ist zu groß.", "F18_FIELD_TOO_LARGE");
+            }
+            fields[name] = data.toString("utf8");
+          }
+          position = dataEnd + 2;
+        }
+        if (!backup) {
+          throw httpError(400, "Bitte eine F18-Sicherungs-ZIP auswählen.", "F18_BACKUP_REQUIRED");
+        }
+        settled = true;
+        resolve({ fields, backup });
+      } catch (error) {
+        fail(error.status ? error : httpError(
+          400,
+          "Das F18-Uploadformular ist ungültig.",
+          "F18_MULTIPART_INVALID",
+        ));
       }
     });
   });
@@ -25075,6 +25264,511 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", (request, respons
   response.json({
     location: publicLoanLocationSetting(loanLocationSettingRow(locationId), { includeConfiguration: true }),
   });
+});
+
+function publicLoanMigrationRun(row) {
+  if (!row) return null;
+  let warnings = [];
+  try {
+    const parsed = JSON.parse(String(row.warnings_json || "[]"));
+    if (Array.isArray(parsed)) warnings = parsed.map(String);
+  } catch {}
+  return {
+    id: row.id,
+    sourceSystem: row.source_system,
+    fingerprint: row.source_fingerprint,
+    sourceVersion: row.source_version || "",
+    sourceCreatedAt: row.source_created_at || null,
+    locationId: row.location_id,
+    locationName: row.location_name || "",
+    status: row.status,
+    summary: {
+      employees: Number(row.employee_count || 0),
+      loans: Number(row.loan_count || 0),
+      items: Number(row.item_count || 0),
+      photos: Number(row.photo_count || 0),
+      openLoans: Number(row.open_loan_count || 0),
+      returnedLoans: Number(row.returned_loan_count || 0),
+    },
+    warnings,
+    importedByEmployeeNumber: row.imported_by_employee_number || "",
+    completedAt: row.completed_at,
+  };
+}
+
+function loanMigrationRunRows() {
+  return db.prepare(`
+    SELECT run.*, location.name AS location_name
+    FROM loan_migration_runs run
+    JOIN locations location ON location.id = run.location_id
+    ORDER BY run.completed_at DESC, run.id DESC
+  `).all();
+}
+
+function f18MigrationError(error) {
+  if (!(error instanceof F18MigrationError)) return error;
+  return httpError(error.status || 400, error.message, error.code);
+}
+
+function inspectUploadedF18Backup(backup) {
+  try {
+    return inspectF18Backup(backup.buffer);
+  } catch (error) {
+    throw f18MigrationError(error);
+  }
+}
+
+function f18RequiredSourceEmployeeIds(inspection) {
+  const ids = new Set();
+  for (const loan of inspection.loans) {
+    ids.add(Number(loan.borrowerSourceEmployeeId));
+    if (loan.returnWitnessSourceEmployeeId != null) {
+      ids.add(Number(loan.returnWitnessSourceEmployeeId));
+    }
+  }
+  return ids;
+}
+
+function f18TargetEmployees() {
+  return db.prepare(`
+    SELECT personnel_number, full_name, nickname, active
+    FROM employees
+    ORDER BY personnel_number
+  `).all().map((row) => ({
+    employeeNumber: row.personnel_number,
+    name: row.nickname || row.full_name || row.personnel_number,
+    fullName: row.full_name || "",
+    active: Boolean(row.active),
+  }));
+}
+
+function f18PreviewPayload(inspection, locationId) {
+  const targetEmployees = f18TargetEmployees();
+  const targetNumbers = new Set(targetEmployees.map((employee) => employee.employeeNumber));
+  const requiredIds = f18RequiredSourceEmployeeIds(inspection);
+  const suggestedMappings = {};
+  for (const sourceEmployee of inspection.employees) {
+    if (targetNumbers.has(sourceEmployee.employeeNumber)) {
+      suggestedMappings[String(sourceEmployee.id)] = sourceEmployee.employeeNumber;
+    }
+  }
+  const existingRun = db.prepare(`
+    SELECT run.*, location.name AS location_name
+    FROM loan_migration_runs run
+    JOIN locations location ON location.id = run.location_id
+    WHERE run.source_system = 'f18-lagerware' AND run.location_id = ?
+  `).get(locationId);
+  return {
+    inspection: publicF18Inspection(inspection),
+    locationId,
+    requiredSourceEmployeeIds: [...requiredIds].sort((left, right) => left - right),
+    suggestedMappings,
+    targetEmployees,
+    existingRun: publicLoanMigrationRun(existingRun),
+  };
+}
+
+function parseF18EmployeeMappings(value) {
+  let parsed;
+  try {
+    parsed = JSON.parse(String(value || "{}"));
+  } catch {
+    throw httpError(
+      400,
+      "Die Mitarbeiterzuordnung ist ungültig.",
+      "F18_EMPLOYEE_MAPPING_INVALID",
+    );
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw httpError(
+      400,
+      "Die Mitarbeiterzuordnung ist ungültig.",
+      "F18_EMPLOYEE_MAPPING_INVALID",
+    );
+  }
+  const result = new Map();
+  for (const [sourceId, targetNumber] of Object.entries(parsed)) {
+    if (!/^\d+$/.test(sourceId)) continue;
+    const employeeNumber = String(targetNumber || "").trim();
+    if (employeeNumber) result.set(Number(sourceId), employeeNumber);
+  }
+  return result;
+}
+
+function validateF18EmployeeMappings(inspection, mappings) {
+  const sourceEmployees = new Map(inspection.employees.map((employee) => [employee.id, employee]));
+  const targetEmployees = new Map(f18TargetEmployees().map((employee) => [
+    employee.employeeNumber,
+    employee,
+  ]));
+  for (const sourceId of f18RequiredSourceEmployeeIds(inspection)) {
+    const source = sourceEmployees.get(sourceId);
+    if (!source) {
+      throw httpError(
+        409,
+        `Die F18-Leihe verweist auf die unbekannte Mitarbeiter-ID ${sourceId}.`,
+        "F18_SOURCE_EMPLOYEE_MISSING",
+      );
+    }
+    const targetNumber = mappings.get(sourceId);
+    if (!targetNumber || !targetEmployees.has(targetNumber)) {
+      throw httpError(
+        400,
+        `Bitte ${source.employeeNumber || source.id} · ${source.name} einem Grabenplaner-Teammitglied zuordnen.`,
+        "F18_EMPLOYEE_MAPPING_REQUIRED",
+      );
+    }
+  }
+  return { sourceEmployees, targetEmployees };
+}
+
+function f18MigrationText(value, maximum) {
+  return stripEmoji(String(value || "")).replace(/\0/g, "").trim().slice(0, maximum);
+}
+
+function f18ItemNote(item) {
+  const notes = [];
+  if (item.note) notes.push(item.note);
+  if (item.conditionOut?.original
+    && !["gut", "good"].includes(item.conditionOut.original.toLocaleLowerCase("de"))) {
+    notes.push(`F18-Zustand bei Ausgabe: ${item.conditionOut.original}`);
+  }
+  return f18MigrationText(notes.join(" · "), 1000);
+}
+
+async function prepareF18MigrationArtifacts(inspection, mappings, location, actor) {
+  const prepared = [];
+  const preparedDocuments = [];
+  const preparedPhotos = [];
+  try {
+    for (const sourceLoan of inspection.loans) {
+      const loanId = crypto.randomUUID();
+      const borrowerEmployeeNumber = mappings.get(sourceLoan.borrowerSourceEmployeeId);
+      const witnessEmployeeNumber = sourceLoan.returnWitnessSourceEmployeeId == null
+        ? ""
+        : mappings.get(sourceLoan.returnWitnessSourceEmployeeId);
+      const borrower = loanParticipant(borrowerEmployeeNumber);
+      const witness = witnessEmployeeNumber
+        ? loanParticipant(witnessEmployeeNumber)
+        : { employeeNumber: "", name: "Nicht dokumentiert" };
+      const items = sourceLoan.items.map((item) => ({
+        position: item.position,
+        articleNumber: item.articleNumber,
+        description: item.description,
+        serialNumber: item.serialNumber,
+        conditionOut: item.conditionOut.normalized,
+        conditionReturn: sourceLoan.returnCondition.normalized,
+        note: f18ItemNote(item),
+      }));
+      const issueDocument = await prepareLoanDocument({
+        type: "issue",
+        loanId,
+        revision: 1,
+        createdAt: sourceLoan.issuedAt,
+        issuedAt: sourceLoan.issuedAt,
+        dueDate: sourceLoan.dueDate,
+        note: f18MigrationText(sourceLoan.notes, 1000),
+        location,
+        borrower,
+        recordedBy: borrower,
+        items,
+        branding: loanPdfBranding(location.id),
+      }, actor.employeeNumber);
+      preparedDocuments.push(issueDocument);
+      let returnDocument = null;
+      if (sourceLoan.status === "returned") {
+        returnDocument = await prepareLoanDocument({
+          type: "return",
+          loanId,
+          revision: 2,
+          createdAt: sourceLoan.returnedAt,
+          issuedAt: sourceLoan.issuedAt,
+          returnedAt: sourceLoan.returnedAt,
+          dueDate: sourceLoan.dueDate,
+          note: f18MigrationText([sourceLoan.notes, sourceLoan.returnNotes].filter(Boolean).join(" · "), 1000),
+          confirmationNote: "",
+          location,
+          borrower,
+          recordedBy: borrower,
+          witness,
+          items,
+          branding: loanPdfBranding(location.id),
+        }, actor.employeeNumber);
+        preparedDocuments.push(returnDocument);
+      }
+      const photos = [];
+      const phasePositions = { issue: 0, return: 0 };
+      for (const sourcePhoto of sourceLoan.photos) {
+        const buffer = photoBufferForMigration(inspection, sourcePhoto);
+        if (!buffer) {
+          throw httpError(
+            409,
+            `Das F18-Foto ${sourcePhoto.originalName} fehlt in der geprüften Sicherung.`,
+            "F18_PHOTO_MISSING",
+          );
+        }
+        const stored = await prepareStoredLoanPhoto({
+          buffer,
+          originalName: sourcePhoto.originalName || `F18-${sourcePhoto.sourceId}.jpg`,
+        }, actor.employeeNumber);
+        preparedPhotos.push(stored);
+        phasePositions[sourcePhoto.phase] += 1;
+        photos.push({
+          phase: sourcePhoto.phase,
+          position: phasePositions[sourcePhoto.phase],
+          prepared: stored,
+        });
+      }
+      prepared.push({
+        sourceLoan,
+        loanId,
+        borrowerEmployeeNumber,
+        witnessEmployeeNumber: witnessEmployeeNumber || null,
+        items,
+        photos,
+        issueDocument,
+        returnDocument,
+      });
+    }
+    return { loans: prepared, preparedDocuments, preparedPhotos };
+  } catch (error) {
+    preparedDocuments.forEach(cleanupPreparedLoanDocument);
+    cleanupPreparedLoanPhotos(preparedPhotos);
+    throw error;
+  }
+}
+
+function insertF18Migration(inspection, mappings, location, actor, artifacts) {
+  const runId = crypto.randomUUID();
+  const importedBy = actor.employeeNumber === "local" ? null : actor.employeeNumber;
+  const now = new Date().toISOString();
+  const insertArticle = db.prepare(`
+    INSERT INTO articles
+      (article_number, description, source_provider, active, created_by, updated_by, created_at, updated_at)
+    VALUES (?, ?, 'import', 1, ?, ?, ?, ?)
+    ON CONFLICT(article_number) DO UPDATE SET
+      description = CASE
+        WHEN TRIM(articles.description) = '' THEN excluded.description
+        ELSE articles.description
+      END,
+      active = 1,
+      updated_by = excluded.updated_by,
+      updated_at = excluded.updated_at
+  `);
+  const insertLoan = db.prepare(`
+    INSERT INTO loans
+      (id, legacy_id, location_id, borrower_employee_number, created_by_employee_number,
+       due_date, status, notes, issued_at, returned_at, return_recorded_by_employee_number,
+       return_witness_employee_number, borrower_return_confirmed, revision, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const insertItem = db.prepare(`
+    INSERT INTO loan_items
+      (id, loan_id, position, article_number, description_snapshot, serial_number,
+       quantity, condition_out, condition_return, item_note, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
+  `);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`
+      INSERT INTO loan_migration_runs
+        (id, source_system, source_fingerprint, source_version, source_created_at,
+         location_id, status, employee_count, loan_count, item_count, photo_count,
+         open_loan_count, returned_loan_count, warnings_json,
+         imported_by_employee_number, completed_at)
+      VALUES (?, 'f18-lagerware', ?, ?, ?, ?, 'completed', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      runId,
+      inspection.fingerprint,
+      inspection.source.appVersion,
+      inspection.source.createdAt,
+      location.id,
+      inspection.summary.employees,
+      inspection.summary.loans,
+      inspection.summary.items,
+      inspection.summary.photos,
+      inspection.summary.openLoans,
+      inspection.summary.returnedLoans,
+      JSON.stringify(inspection.warnings),
+      importedBy,
+      now,
+    );
+    for (const entry of artifacts.loans) {
+      const { sourceLoan } = entry;
+      const returned = sourceLoan.status === "returned";
+      const updatedAt = returned ? sourceLoan.returnedAt : sourceLoan.issuedAt;
+      insertLoan.run(
+        entry.loanId,
+        sourceLoan.sourceId,
+        location.id,
+        entry.borrowerEmployeeNumber,
+        entry.borrowerEmployeeNumber,
+        sourceLoan.dueDate,
+        sourceLoan.status,
+        f18MigrationText(sourceLoan.notes, 1000),
+        sourceLoan.issuedAt,
+        returned ? sourceLoan.returnedAt : null,
+        returned ? entry.borrowerEmployeeNumber : null,
+        returned ? entry.witnessEmployeeNumber : null,
+        Number(sourceLoan.borrowerReturnConfirmed),
+        returned ? 2 : 1,
+        sourceLoan.issuedAt,
+        updatedAt,
+      );
+      for (const item of entry.items) {
+        insertArticle.run(
+          item.articleNumber,
+          f18MigrationText(item.description, 300),
+          actor.employeeNumber,
+          actor.employeeNumber,
+          sourceLoan.issuedAt,
+          updatedAt,
+        );
+        insertItem.run(
+          crypto.randomUUID(),
+          entry.loanId,
+          item.position,
+          item.articleNumber,
+          f18MigrationText(item.description, 300),
+          f18MigrationText(item.serialNumber, 200),
+          item.conditionOut,
+          returned ? item.conditionReturn : "",
+          item.note,
+          sourceLoan.issuedAt,
+          updatedAt,
+        );
+      }
+      for (const photo of entry.photos) {
+        insertPreparedLoanPhoto(entry.loanId, photo.phase, photo.position, photo.prepared);
+      }
+      insertPreparedLoanDocument(entry.loanId, entry.issueDocument);
+      appendLoanEvent(entry.loanId, actor.employeeNumber, "migrated_from_f18", 1, {
+        migrationRunId: runId,
+        sourceLoanId: sourceLoan.sourceId,
+        sourceVersion: inspection.source.appVersion,
+        sourceFingerprint: inspection.fingerprint,
+      });
+      appendLoanEvent(entry.loanId, actor.employeeNumber, "document_created", 1, {
+        documentId: entry.issueDocument.id,
+        documentType: "issue",
+        sha256: entry.issueDocument.sha256,
+        migrationRunId: runId,
+      });
+      if (returned) {
+        insertPreparedLoanDocument(entry.loanId, entry.returnDocument);
+        appendLoanEvent(entry.loanId, actor.employeeNumber, "returned", 2, {
+          migrationRunId: runId,
+          sourceLoanId: sourceLoan.sourceId,
+          witnessEmployeeNumber: entry.witnessEmployeeNumber,
+          borrowerConfirmed: sourceLoan.borrowerReturnConfirmed,
+          sourceReturnCondition: sourceLoan.returnCondition.original,
+          sourceReturnNote: sourceLoan.returnNotes,
+        });
+        appendLoanEvent(entry.loanId, actor.employeeNumber, "document_created", 2, {
+          documentId: entry.returnDocument.id,
+          documentType: "return",
+          sha256: entry.returnDocument.sha256,
+          migrationRunId: runId,
+        });
+      }
+      db.prepare(`
+        INSERT INTO loan_migration_records
+          (run_id, source_loan_id, source_record_hash, target_loan_id, created_at)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(
+        runId,
+        sourceLoan.sourceId,
+        crypto.createHash("sha256").update(JSON.stringify(sourceLoan)).digest("hex"),
+        entry.loanId,
+        now,
+      );
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    artifacts.preparedDocuments.forEach(cleanupPreparedLoanDocument);
+    cleanupPreparedLoanPhotos(artifacts.preparedPhotos);
+    throw error;
+  }
+  return db.prepare(`
+    SELECT run.*, location.name AS location_name
+    FROM loan_migration_runs run
+    JOIN locations location ON location.id = run.location_id
+    WHERE run.id = ?
+  `).get(runId);
+}
+
+app.get("/api/portal/v1/loans/migrations/f18", (request, response) => {
+  loanSettingsActor(request);
+  response.json({ runs: loanMigrationRunRows().map(publicLoanMigrationRun) });
+});
+
+app.post("/api/portal/v1/loans/migrations/f18/preview", async (request, response) => {
+  loanSettingsActor(request, { mutation: true });
+  const { fields, backup } = await parseF18MigrationMultipart(request);
+  const locationId = normalizeLocationId(fields.locationId);
+  validateLocationExists(locationId);
+  const inspection = inspectUploadedF18Backup(backup);
+  response.json(f18PreviewPayload(inspection, locationId));
+});
+
+app.post("/api/portal/v1/loans/migrations/f18/apply", async (request, response) => {
+  const actor = loanSettingsActor(request, { mutation: true });
+  const { fields, backup } = await parseF18MigrationMultipart(request);
+  const locationId = normalizeLocationId(fields.locationId);
+  const locationRow = validateLocationExists(locationId);
+  const inspection = inspectUploadedF18Backup(backup);
+  const expectedFingerprint = String(fields.expectedFingerprint || "").trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(expectedFingerprint)
+    || expectedFingerprint !== inspection.fingerprint) {
+    throw httpError(
+      409,
+      "Die Sicherung stimmt nicht mit der geprüften Vorschau überein. Bitte erneut prüfen.",
+      "F18_FINGERPRINT_CHANGED",
+    );
+  }
+  const exactRun = db.prepare(`
+    SELECT run.*, location.name AS location_name
+    FROM loan_migration_runs run
+    JOIN locations location ON location.id = run.location_id
+    WHERE run.source_fingerprint = ?
+  `).get(inspection.fingerprint);
+  if (exactRun) {
+    response.json({ run: publicLoanMigrationRun(exactRun), alreadyImported: true });
+    return;
+  }
+  const existingLocationRun = db.prepare(`
+    SELECT run.*, location.name AS location_name
+    FROM loan_migration_runs run
+    JOIN locations location ON location.id = run.location_id
+    WHERE run.source_system = 'f18-lagerware' AND run.location_id = ?
+  `).get(locationId);
+  if (existingLocationRun) {
+    throw httpError(
+      409,
+      "Für diesen Standort wurde die F18-Ablösung bereits abgeschlossen. Ein zweiter Import ist zum Schutz vor Dubletten gesperrt.",
+      "F18_LOCATION_ALREADY_MIGRATED",
+    );
+  }
+  if (inspection.blockingIssues.length) {
+    throw httpError(
+      409,
+      `Die Sicherung ist noch nicht importierbar: ${inspection.blockingIssues[0]}`,
+      "F18_IMPORT_BLOCKED",
+    );
+  }
+  const mappings = parseF18EmployeeMappings(fields.employeeMappings);
+  validateF18EmployeeMappings(inspection, mappings);
+  const location = { id: locationId, name: locationRow.name || locationId };
+  const artifacts = await prepareF18MigrationArtifacts(inspection, mappings, location, actor);
+  const run = insertF18Migration(inspection, mappings, location, actor, artifacts);
+  auditPortal(actor.employeeNumber, "loan.migration.f18.completed", "loan_migration_run", run.id, JSON.stringify({
+    locationId,
+    sourceFingerprint: inspection.fingerprint,
+    sourceVersion: inspection.source.appVersion,
+    summary: inspection.summary,
+  }));
+  response.status(201).json({ run: publicLoanMigrationRun(run), alreadyImported: false });
 });
 
 app.get("/api/portal/v1/loans/articles", (request, response) => {

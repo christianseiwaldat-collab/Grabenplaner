@@ -46,6 +46,8 @@ Die Artikelauflösung erfolgt serverseitig über einen je Standort konfigurierba
 
 Ausgabe- und Rücknahmefotos werden auf dem Server neu kodiert, verkleinert, von Metadaten bereinigt und verschlüsselt gespeichert. Beteiligte und berechtigte Leitungen können sie ausschließlich über geschützte, nicht zwischengespeicherte Routen öffnen. Eine neue Leihverwaltung zeigt offene, fällige und abgeschlossene Vorgänge standortbezogen an. PDF-Belege werden intern zugestellt; optional kann je Standort ein SMTP-Empfänger für den PDF-Anhang konfiguriert und ein fehlgeschlagener Versand nachvollziehbar wiederholt werden.
 
+Für die kontrollierte Ablösung einer bestehenden F18-Lagerware-Installation kann eine vollständige F18-Sicherungs-ZIP zunächst geprüft und anschließend einmalig einem Standort zugeordnet werden. Der Assistent kontrolliert Manifest, Dateihashes und SQLite-Integrität, verlangt eine ausdrückliche Mitarbeiterzuordnung und schützt vor einem doppelten Import. Details zum Cutover stehen in [docs/F18-ABLOESUNG.md](docs/F18-ABLOESUNG.md).
+
 Für jede Ausgabe und jede bestätigte Rücknahme entsteht automatisch ein gebrandeter PDF-Beleg. Die Belege werden verschlüsselt gespeichert, mit SHA-256 gegen unbemerkte Veränderungen geprüft und in den Sicherungsreferenzen berücksichtigt. Beteiligte sowie ausdrücklich berechtigte Standortrollen können sie geschützt im Mitarbeiterportal abrufen; interne Benachrichtigungen informieren über neu verfügbare Dokumente.
 
 ## System-Center und Recovery Assurance in v0.78 Beta
