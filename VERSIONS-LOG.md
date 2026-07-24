@@ -1,13 +1,15 @@
 # Grabenplaner Versions-Log
 
-## v0.85 Beta · Leihmodul-Fundament
+## v0.85 Beta · Integriertes Leihmodul
 
 - Eine zentrale, wiederverwendbare Artikelentität führt ausschließlich sechsstellige numerische Artikelnummern und bewahrt führende Nullen.
 - Leihvorgänge, Positionen und eine unveränderliche Ereignishistorie sind als eigenes Datenmodell vorbereitet; Bezeichnungsschnappschüsse halten den Stand zum Zeitpunkt der Ausgabe fest.
 - Standorte können das Leihmodul und die Artikelsuche getrennt aktivieren. Funktionsprofile und neue Rollenrechte schützen Selbstbedienung, Standortverwaltung, Dokumente und Einstellungen.
 - Die Artikelsuche kann je Standort einen HTTPS-Shopware-Storefront-Endpunkt verwenden. Ziele werden vor dem Abruf gegen unsichere lokale oder private Netze geprüft.
 - Gefundene Artikelbezeichnungen werden zentral zwischengespeichert. Eine kontrollierte manuelle Eingabe bleibt als Rückfallebene verfügbar und überschreibt bestehende Stammdaten nicht versehentlich.
-- Die vollständige Leihoberfläche, Ausgabe, Rücknahme und PDF-Kommunikation folgen in einem weiteren Entwicklungsblock.
+- Das responsive Mitarbeiterportal unterstützt Ausgabe, offene Leihen und die Rücknahme mit verpflichtender Live-Gegenprüfung durch ein zweites, gleichzeitig angemeldetes Teammitglied.
+- Ausgabebeleg und Rücknahmebeleg werden automatisch mit dem Standort-Branding erzeugt, verschlüsselt abgelegt, per SHA-256 geprüft und als unveränderliche Dokumentrevision geführt.
+- Beteiligte und ausdrücklich berechtigte Standortrollen erhalten den Beleg geschützt über die Grabenplaner-Plattform. Ein je Standort konfigurierbarer Hauptempfänger kann zusätzlich benachrichtigt werden.
 
 ## v0.84 Beta · Pilot- und Abnahmenachweise
 
