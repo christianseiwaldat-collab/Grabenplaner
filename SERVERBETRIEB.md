@@ -295,6 +295,12 @@ Die nächtliche Ausführung bedeutet keine automatische produktive Wiederherstel
 
 Das System-Center liest ausschließlich redigierte Diagnosen und die vollständig verifizierte Signaturkette. Sein technischer Vertrauensindex bewertet acht fest definierte Bereiche mit transparenter Punktegewichtung und Evidenzabdeckung. Unbekannte Prüfungen erhalten keine Punkte; kritische Befunde und unzureichende Nachweise begrenzen den Gesamtwert. Der Index ist weder eine Verfügbarkeitsgarantie noch eine statistische Ausfallwahrscheinlichkeit.
 
+#### Pilot und Abnahme ab v0.84
+
+Der Produktreife-Bereich im System-Center verbindet den vorhandenen technischen Status mit nachvollziehbaren Desktop-, Mobilbrowser-, Bedienungs- und Performanceprüfungen. Security und Recovery können dort nicht manuell grün geschaltet werden, sondern werden ausschließlich aus den aktuellen System-Center- und Recovery-Assurance-Nachweisen abgeleitet.
+
+Eine betriebliche Freigabe erfordert sechs bestandene Gates sowie eine getrennte technische und fachliche Abnahme. Beide Entscheidungen gelten nur für die konkrete App-Version und den SHA-256-Fingerabdruck des angezeigten Prüfstands. Ein neuer Nachweis oder ein geänderter technischer Status macht bestehende Abnahmen unaktuell. Die vollständige Checkliste und die ausdrücklich begrenzte Aussagekraft stehen in [Pilot und Abnahme](docs/PILOT-UND-ABNAHME.md).
+
 Zusätzlich speichert die Anwendung eine begrenzte technische Messreihe für Vertrauensindex, Datenbankgröße sowie Sicherungs- und Wiederherstellungsdauer. Die Darstellung enthält keine Personal-, Empfänger-, Pfad- oder Zugangsdaten. Fehlgeschlagene oder überfällige Recovery-Nachweise erzeugen deduplizierte interne Warnungen für IT-Admin und Developer; der Status zeigt ausschließlich Anzahl und Zeitpunkt, niemals Empfängeridentitäten.
 
 Ein manueller Lauf aus der Weboberfläche erfordert neben technischer Diagnoseberechtigung das gesonderte kritische Recht `system:recovery:run`. Dieses Recht gehört standardmäßig nur IT-Admin und Developer; ein Admin kann es ausdrücklich erhalten. Die Node.js-Anwendung besitzt weder `sudo`- noch Shell-Rechte. Sie übermittelt stattdessen eine fest formatierte lokale Anfrage über einen root-eigenen Unix-Socket. Der kurzlebige systemd-Broker akzeptiert ausschließlich die freigegebene Startaktion, prüft Socketrechte, Schema, Parallelbetrieb und eine root-seitige Sperrfrist und startet nur die feste Assurance-Unit. Browserwerte können weder Unitnamen noch Pfade, Befehle oder Auslöser bestimmen.
