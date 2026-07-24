@@ -283,6 +283,12 @@ test("application smoke sanitizes every known protected domain but preserves ope
         protected_payload TEXT NOT NULL,
         FOREIGN KEY (request_id) REFERENCES privacy_requests(id) ON DELETE RESTRICT
       );
+      CREATE TABLE privacy_export_receipts (
+        id TEXT PRIMARY KEY,
+        request_id TEXT NOT NULL,
+        receipt_sha256 TEXT NOT NULL,
+        FOREIGN KEY (request_id) REFERENCES privacy_requests(id) ON DELETE RESTRICT
+      );
       CREATE TABLE vacation_account_revisions (
         id TEXT PRIMARY KEY,
         employee_number TEXT NOT NULL,
@@ -336,6 +342,7 @@ test("application smoke sanitizes every known protected domain but preserves ope
       INSERT INTO outbound_notification_jobs VALUES ('job', 'enc:v2:job');
       INSERT INTO privacy_requests VALUES ('privacy', '101', 'enc:v2:privacy');
       INSERT INTO privacy_request_events VALUES ('privacy-event', 'privacy', 'enc:v2:privacy-event');
+      INSERT INTO privacy_export_receipts VALUES ('privacy-receipt', 'privacy', '0123456789abcdef');
       INSERT INTO vacation_account_revisions VALUES ('vacation', '101', 'enc:v2:vacation');
       INSERT INTO vacation_account_events VALUES ('vacation-event', 'vacation');
       INSERT INTO vacation_history_events VALUES ('vacation-history', '101', 'enc:v2:vacation-history');
@@ -364,7 +371,7 @@ test("application smoke sanitizes every known protected domain but preserves ope
       "personnel_sensitive_records", "personnel_record_documents", "sickness_cases", "sickness_alerts",
       "protected_case_events",
       "amu_reports", "amu_documents", "sickness_notification_preferences", "outbound_notification_jobs",
-      "privacy_request_events", "privacy_requests",
+      "privacy_export_receipts", "privacy_request_events", "privacy_requests",
       "vacation_account_events", "vacation_account_revisions",
       "vacation_history_events",
       "time_record_statement_events", "time_record_statements", "retention_preview_runs",
