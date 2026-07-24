@@ -325,6 +325,24 @@ test("application smoke sanitizes every known protected domain but preserves ope
         FOREIGN KEY (handoff_id) REFERENCES payroll_handoffs(id) ON DELETE RESTRICT
       );
       CREATE TABLE retention_preview_runs (id TEXT PRIMARY KEY, result_json TEXT NOT NULL);
+      CREATE TRIGGER trg_payroll_handoff_events_immutable_delete BEFORE DELETE ON payroll_handoff_events
+        BEGIN SELECT RAISE(ABORT, 'payroll handoff events are immutable'); END;
+      CREATE TRIGGER trg_payroll_handoffs_immutable_delete BEFORE DELETE ON payroll_handoffs
+        BEGIN SELECT RAISE(ABORT, 'payroll handoffs are immutable'); END;
+      CREATE TRIGGER trg_privacy_request_events_immutable_delete BEFORE DELETE ON privacy_request_events
+        BEGIN SELECT RAISE(ABORT, 'privacy request events are immutable'); END;
+      CREATE TRIGGER trg_retention_preview_runs_immutable_delete BEFORE DELETE ON retention_preview_runs
+        BEGIN SELECT RAISE(ABORT, 'retention preview runs are immutable'); END;
+      CREATE TRIGGER trg_time_record_statement_events_immutable_delete BEFORE DELETE ON time_record_statement_events
+        BEGIN SELECT RAISE(ABORT, 'time record statement events are immutable'); END;
+      CREATE TRIGGER trg_time_record_statements_immutable_delete BEFORE DELETE ON time_record_statements
+        BEGIN SELECT RAISE(ABORT, 'time record statements are immutable'); END;
+      CREATE TRIGGER trg_vacation_account_events_immutable_delete BEFORE DELETE ON vacation_account_events
+        BEGIN SELECT RAISE(ABORT, 'vacation account events are immutable'); END;
+      CREATE TRIGGER trg_vacation_account_revisions_immutable_delete BEFORE DELETE ON vacation_account_revisions
+        BEGIN SELECT RAISE(ABORT, 'vacation account revisions are immutable'); END;
+      CREATE TRIGGER trg_vacation_history_events_immutable_delete BEFORE DELETE ON vacation_history_events
+        BEGIN SELECT RAISE(ABORT, 'vacation history events are immutable'); END;
       CREATE TABLE integration_connections (id TEXT PRIMARY KEY, active INTEGER NOT NULL,
         protected_credentials TEXT NOT NULL, credential_key_id TEXT NOT NULL);
       CREATE TABLE integration_deliveries (id TEXT PRIMARY KEY, connection_id TEXT NOT NULL,
@@ -388,6 +406,23 @@ test("application smoke sanitizes every known protected domain but preserves ope
       "payroll_handoff_events.payload_json",
       "retention_preview_runs.result_json",
     ]) assert.equal(PROTECTED_COLUMNS.has(column), true, column);
+    for (const trigger of [
+      "trg_payroll_handoff_events_immutable_delete",
+      "trg_payroll_handoffs_immutable_delete",
+      "trg_privacy_request_events_immutable_delete",
+      "trg_retention_preview_runs_immutable_delete",
+      "trg_time_record_statement_events_immutable_delete",
+      "trg_time_record_statements_immutable_delete",
+      "trg_vacation_account_events_immutable_delete",
+      "trg_vacation_account_revisions_immutable_delete",
+      "trg_vacation_history_events_immutable_delete",
+    ]) {
+      assert.equal(
+        database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'trigger' AND name = ?").get(trigger).count,
+        1,
+        trigger,
+      );
+    }
     assert.deepEqual(
       { ...database.prepare("SELECT id, active, protected_credentials, credential_key_id FROM integration_connections").get() },
       { id: "connection", active: 0, protected_credentials: "", credential_key_id: "" },
@@ -411,6 +446,29 @@ test("application smoke refuses unknown future protected columns before cleanup"
     assert.throws(() => sanitizeSmokeDatabase(databaseFile), /SMOKE_PRECONDITION_FAILED/);
     const verify = new DatabaseSync(databaseFile, { readOnly: true });
     assert.equal(verify.prepare("SELECT protected_payload FROM future_sensitive_domain").get().protected_payload, "enc:v3:future");
+    verify.close();
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("application smoke refuses unknown delete triggers on protected tables before cleanup", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-trigger-"));
+  const databaseFile = path.join(directory, "dienstplan.db");
+  const database = new DatabaseSync(databaseFile);
+  database.exec(`
+    CREATE TABLE privacy_requests (id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL);
+    CREATE TRIGGER future_privacy_delete BEFORE DELETE ON privacy_requests
+      BEGIN SELECT RAISE(ABORT, 'future delete policy'); END;
+    INSERT INTO privacy_requests VALUES ('1', 'enc:v3:future');
+  `);
+  database.close();
+  try {
+    assert.throws(() => sanitizeSmokeDatabase(databaseFile), /SMOKE_PRECONDITION_FAILED/);
+    const verify = new DatabaseSync(databaseFile, { readOnly: true });
+    assert.equal(verify.prepare("SELECT protected_payload FROM privacy_requests").get().protected_payload, "enc:v3:future");
+    assert.equal(
+      verify.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'trigger' AND name = 'future_privacy_delete'").get().count,
+      1,
+    );
     verify.close();
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
