@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.85.2 Beta · Recovery-Smoke für Leihbelege
+
+- Der isolierte Recovery-App-Smoke entfernt nun auch verschlüsselte Leihbelege, Leihfotos und ihre Zustellnachweise aus seiner bereinigten Testdatenbank.
+- Dadurch kann der Wiederanlauftest nach einer abgeschlossenen F18-Datenübernahme mit vorhandenen Leihdokumenten wieder einen eigenen verifizierten Testsicherungspunkt erzeugen.
+- Produktive Leihdaten, Belege und Fotos bleiben unverändert im gekoppelten lokalen und verschlüsselten Offsite-Sicherungsstand; nur die vollständig isolierte Smoke-Kopie wird minimiert.
+
 ## v0.85.1 Beta · Abschluss der F18-Ablösung und FL-Verwaltung
 
 - Neue Leihen können ausschließlich für den aktuell angemeldeten Mitarbeiter erfasst werden; die frühere Personenauswahl ist in Oberfläche und Serverlogik entfernt.
