@@ -18,7 +18,7 @@ const {
 
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
-const releaseVersion = "0.84.1-beta";
+const releaseVersion = "0.84.2-beta";
 const instant = "2026-07-24T08:00:00.000Z";
 
 function environmentFor(checkId) {
