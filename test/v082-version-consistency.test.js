@@ -38,7 +38,7 @@ test("v0.85: Paket, Launcher, UI und aktuelle Dokumentation bleiben konsistent",
 
   assert.match(indexHtml, /v0\.85 Beta/);
   assert.match(readme, /v0\.85 Beta/);
-  assert.match(readme, /Leihmodul-Fundament/);
+  assert.match(readme, /Leihmodul in v0\.85 Beta/);
   assert.match(readme, /Arbeitszeit-Regelprüfung/);
   assert.match(readme, /Monitorbetrieb/);
   assert.match(readme, /keine automatische Reduktion/);

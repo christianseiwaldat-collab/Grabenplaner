@@ -8,7 +8,10 @@ const path = require("node:path");
 const test = require("node:test");
 
 const {
+  hasValidGtinChecksum,
+  normalizeArticleIdentifier,
   normalizeArticleNumber,
+  parseShopwareProductBarcode,
   parseShopwareSuggestHtml,
   shopwareSuggestUrl,
 } = require("../lib/article-catalog");
@@ -32,11 +35,13 @@ const {
 
 const ADMIN = "v085-admin";
 const EMPLOYEE = "v085-employee";
+const WITNESS = "v085-witness";
 let baseUrl;
 let httpServer;
 let locationId;
 let adminSession;
 let employeeSession;
+let witnessSession;
 
 function ensureEmployee(employeeNumber, name, role) {
   db.prepare(`
@@ -62,17 +67,19 @@ function ensureEmployee(employeeNumber, name, role) {
 }
 
 function createSession(employeeNumber) {
+  const id = crypto.randomUUID();
   const rawToken = crypto.randomBytes(32).toString("hex");
   const csrf = crypto.randomBytes(24).toString("hex");
   db.prepare(`
     INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
     VALUES (?, ?, ?, '2099-12-31T23:59:59.000Z')
   `).run(
-    crypto.randomUUID(),
+    id,
     employeeNumber,
     crypto.createHash("sha256").update(rawToken).digest("hex"),
   );
   return {
+    id,
     cookie: `grabenplaner_session=${rawToken}; grabenplaner_csrf=${csrf}`,
     csrf,
   };
@@ -96,8 +103,10 @@ test.before(() => {
   locationId = String(db.prepare("SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1").get().id);
   ensureEmployee(ADMIN, "Ada Administration", "admin");
   ensureEmployee(EMPLOYEE, "Erika Beispiel", "employee");
+  ensureEmployee(WITNESS, "Walter Beispiel", "employee");
   adminSession = createSession(ADMIN);
   employeeSession = createSession(EMPLOYEE);
+  witnessSession = createSession(WITNESS);
   return new Promise((resolve) => {
     httpServer = app.listen(0, "127.0.0.1", () => {
       baseUrl = `http://127.0.0.1:${httpServer.address().port}`;
@@ -145,8 +154,38 @@ test("v0.85 Shopware-Suche gleicht die sechsstellige Nummer exakt mit der Shopnu
     "https://shop.example/suggest?search=104405");
 });
 
+test("v0.85 EAN und GTIN werden per Prüfziffer erkannt und am Shopartikel bestätigt", () => {
+  assert.deepEqual(normalizeArticleIdentifier("5025232978748"), {
+    type: "ean13",
+    value: "5025232978748",
+  });
+  assert.equal(hasValidGtinChecksum("5025232978748"), true);
+  assert.equal(hasValidGtinChecksum("5025232978749"), false);
+  assert.throws(
+    () => normalizeArticleIdentifier("5025232978749"),
+    { code: "ARTICLE_IDENTIFIER_CHECKSUM_INVALID" },
+  );
+  assert.deepEqual(
+    parseShopwareProductBarcode('<meta itemprop="gtin13" content="5025232978748">'),
+    { type: "ean13", value: "5025232978748" },
+  );
+  const suggestion = `
+    <li class="search-suggest-product">
+      <a href="https://shop.example/Panasonic-Test/0000000104405" title="Panasonic Lumix DC-TZ99 Schwarz"></a>
+    </li>`;
+  assert.deepEqual(parseShopwareSuggestHtml(suggestion, "5025232978748", "https://shop.example"), {
+    articleNumber: "104405",
+    description: "Panasonic Lumix DC-TZ99 Schwarz",
+    sourceProvider: "shopware_storefront",
+    sourceProductNumber: "0000000104405",
+    sourceUrl: "https://shop.example/Panasonic-Test/0000000104405",
+  });
+  assert.equal(shopwareSuggestUrl("https://shop.example", "5025232978748").href,
+    "https://shop.example/suggest?search=5025232978748");
+});
+
 test("v0.85 Datenmodell trennt zentralen Artikelstamm, Standortfreigabe und Leihhistorie", () => {
-  for (const table of ["articles", "loan_location_settings", "loans", "loan_items", "loan_events"]) {
+  for (const table of ["articles", "article_identifiers", "loan_location_settings", "loans", "loan_items", "loan_return_confirmations", "loan_events"]) {
     assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table), table);
   }
   assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.85-loan-module-foundation'").get());
@@ -221,7 +260,7 @@ test("v0.85 manuelle Rückfalleingabe speichert einen wiederverwendbaren Artikel
     body: { locationId, articleNumber: "12345", manualDescription: "Ungültig" },
   });
   assert.equal(invalid.response.status, 400);
-  assert.equal(invalid.payload.code, "ARTICLE_NUMBER_INVALID");
+  assert.equal(invalid.payload.code, "ARTICLE_IDENTIFIER_INVALID");
 
   const resolved = await request("/api/portal/v1/loans/articles/resolve", {
     method: "POST",
@@ -269,4 +308,200 @@ test("v0.85 manuelle Rückfalleingabe speichert einen wiederverwendbaren Artikel
   assert.equal(cachedResolution.response.status, 200, JSON.stringify(cachedResolution.payload));
   assert.equal(cachedResolution.payload.cacheHit, true);
   assert.equal(cachedResolution.payload.lookupWarning, null);
+});
+
+test("v0.85 ein einmal bestätigter EAN-Abgleich wird lokal wiederverwendet", async () => {
+  db.prepare(`
+    UPDATE loan_location_settings
+    SET article_lookup_enabled = 0, article_lookup_provider = 'none',
+        article_lookup_base_url = '', updated_at = CURRENT_TIMESTAMP
+    WHERE location_id = ?
+  `).run(locationId);
+  const first = await request("/api/portal/v1/loans/articles/resolve", {
+    method: "POST",
+    body: {
+      locationId,
+      identifier: "5025232978748",
+      manualArticleNumber: "104405",
+      manualDescription: "Panasonic Lumix DC-TZ99 Schwarz",
+    },
+  });
+  assert.equal(first.response.status, 200, JSON.stringify(first.payload));
+  assert.equal(first.payload.article.articleNumber, "104405");
+  assert.deepEqual(first.payload.article.identifiers.map((item) => [item.type, item.value]), [
+    ["ean13", "5025232978748"],
+  ]);
+
+  const cached = await request("/api/portal/v1/loans/articles/resolve", {
+    method: "POST",
+    body: { locationId, identifier: "5025232978748" },
+  });
+  assert.equal(cached.response.status, 200, JSON.stringify(cached.payload));
+  assert.equal(cached.payload.cacheHit, true);
+  assert.equal(cached.payload.article.articleNumber, "104405");
+
+  const search = await request(`/api/portal/v1/loans/articles?locationId=${locationId}&query=5025232978748`);
+  assert.equal(search.response.status, 200, JSON.stringify(search.payload));
+  assert.equal(search.payload.articles[0].articleNumber, "104405");
+});
+
+test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen Revisionsverlauf", async () => {
+  const issued = await request("/api/portal/v1/loans", {
+    method: "POST",
+    body: {
+      locationId,
+      dueDate: "2027-01-15",
+      notes: "Testausgabe",
+      items: [{
+        articleNumber: "104405",
+        serialNumber: "TZ99-TEST-1",
+        conditionOut: "good",
+        note: "mit Akku",
+      }],
+    },
+  });
+  assert.equal(issued.response.status, 201, JSON.stringify(issued.payload));
+  assert.equal(issued.payload.loan.status, "issued");
+  assert.equal(issued.payload.loan.revision, 1);
+  assert.equal(issued.payload.loan.items[0].quantity, 1);
+
+  const open = await request(`/api/portal/v1/loans?scope=mine&status=open&locationId=${locationId}`);
+  assert.equal(open.response.status, 200, JSON.stringify(open.payload));
+  assert.equal(open.payload.loans.some((loan) => loan.id === issued.payload.loan.id), true);
+
+  db.prepare(`
+    UPDATE portal_sessions SET last_seen_at = datetime('now', '-5 minutes')
+    WHERE employee_number = ?
+  `).run(WITNESS);
+  const offline = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
+    method: "POST",
+    body: {
+      expectedRevision: 1,
+      witnessEmployeeNumber: WITNESS,
+      borrowerConfirmed: true,
+      note: "vollständig",
+      items: [{ position: 1, conditionReturn: "good", note: "" }],
+    },
+  });
+  assert.equal(offline.response.status, 409, JSON.stringify(offline.payload));
+  assert.equal(offline.payload.code, "LOAN_RETURN_WITNESS_OFFLINE");
+
+  const heartbeat = await request("/api/portal/v1/loans/return-confirmations/pending", {
+    session: witnessSession,
+  });
+  assert.equal(heartbeat.response.status, 200, JSON.stringify(heartbeat.payload));
+  assert.deepEqual(heartbeat.payload.confirmations, []);
+
+  const requested = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
+    method: "POST",
+    body: {
+      expectedRevision: 1,
+      witnessEmployeeNumber: WITNESS,
+      borrowerConfirmed: true,
+      note: "vollständig",
+      items: [{ position: 1, conditionReturn: "good", note: "" }],
+    },
+  });
+  assert.equal(requested.response.status, 202, JSON.stringify(requested.payload));
+  assert.equal(requested.payload.loan.status, "issued");
+  assert.equal(requested.payload.loan.revision, 1);
+  assert.equal(requested.payload.loan.pendingReturnConfirmation.witness.employeeNumber, WITNESS);
+
+  const witnessPending = await request("/api/portal/v1/loans/return-confirmations/pending", {
+    session: witnessSession,
+  });
+  assert.equal(witnessPending.response.status, 200, JSON.stringify(witnessPending.payload));
+  assert.equal(witnessPending.payload.confirmations.length, 1);
+  assert.equal(witnessPending.payload.confirmations[0].loan.borrower.employeeNumber, EMPLOYEE);
+  assert.equal(witnessPending.payload.confirmations[0].items[0].conditionReturn, "good");
+
+  const requesterCannotConfirm = await request(
+    `/api/portal/v1/loans/return-confirmations/${requested.payload.confirmation.id}/respond`,
+    {
+      method: "POST",
+      body: { decision: "confirm" },
+    },
+  );
+  assert.equal(requesterCannotConfirm.response.status, 403);
+  assert.equal(requesterCannotConfirm.payload.code, "LOAN_RETURN_CONFIRMATION_DENIED");
+
+  const returned = await request(
+    `/api/portal/v1/loans/return-confirmations/${requested.payload.confirmation.id}/respond`,
+    {
+      method: "POST",
+      session: witnessSession,
+      body: { decision: "confirm", note: "gemeinsam geprüft" },
+    },
+  );
+  assert.equal(returned.response.status, 200, JSON.stringify(returned.payload));
+  assert.equal(returned.payload.loan.status, "returned");
+  assert.equal(returned.payload.loan.revision, 2);
+  assert.equal(returned.payload.loan.returnWitness.employeeNumber, WITNESS);
+  assert.deepEqual(returned.payload.loan.events.map((event) => event.type), [
+    "issued",
+    "return_confirmation_requested",
+    "returned",
+  ]);
+
+  const stale = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
+    method: "POST",
+    body: {
+      expectedRevision: 1,
+      witnessEmployeeNumber: WITNESS,
+      items: [{ position: 1, conditionReturn: "good", note: "" }],
+    },
+  });
+  assert.equal(stale.response.status, 409);
+  assert.equal(stale.payload.code, "LOAN_ALREADY_CLOSED");
+});
+
+test("v0.85 eine abgelehnte Gegenprüfung lässt die Leihe offen und erlaubt eine neue Anfrage", async () => {
+  const issued = await request("/api/portal/v1/loans", {
+    method: "POST",
+    body: {
+      locationId,
+      items: [{
+        articleNumber: "104405",
+        serialNumber: "TZ99-TEST-2",
+        conditionOut: "good",
+      }],
+    },
+  });
+  assert.equal(issued.response.status, 201, JSON.stringify(issued.payload));
+  await request("/api/portal/v1/loans/return-confirmations/pending", { session: witnessSession });
+
+  const requested = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
+    method: "POST",
+    body: {
+      expectedRevision: 1,
+      witnessEmployeeNumber: WITNESS,
+      items: [{ position: 1, conditionReturn: "damaged", note: "bitte prüfen" }],
+    },
+  });
+  assert.equal(requested.response.status, 202, JSON.stringify(requested.payload));
+
+  const rejected = await request(
+    `/api/portal/v1/loans/return-confirmations/${requested.payload.confirmation.id}/respond`,
+    {
+      method: "POST",
+      session: witnessSession,
+      body: { decision: "reject", note: "Zustand stimmt nicht" },
+    },
+  );
+  assert.equal(rejected.response.status, 200, JSON.stringify(rejected.payload));
+  assert.equal(rejected.payload.confirmation.status, "rejected");
+  assert.equal(rejected.payload.loan.status, "issued");
+  assert.equal(rejected.payload.loan.revision, 1);
+  assert.equal(rejected.payload.loan.pendingReturnConfirmation, null);
+
+  const requestedAgain = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
+    method: "POST",
+    body: {
+      expectedRevision: 1,
+      witnessEmployeeNumber: WITNESS,
+      items: [{ position: 1, conditionReturn: "good", note: "" }],
+    },
+  });
+  assert.equal(requestedAgain.response.status, 202, JSON.stringify(requestedAgain.payload));
+  assert.notEqual(requestedAgain.payload.confirmation.id, requested.payload.confirmation.id);
 });
