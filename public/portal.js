@@ -70,6 +70,7 @@ const portalState = {
   loanIssuePhotoFiles: [],
   loanReturnPhotoFiles: [],
   selectedLoan: null,
+  selectedManagedLoan: null,
   pendingLoanConfirmations: [],
   activeLoanConfirmation: null,
   loanConfirmationLoading: false,
@@ -135,9 +136,10 @@ window.addEventListener("resize", applyDeviceMode, { passive: true });
 const el = Object.fromEntries([
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
   "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "settingsView", "settingsPasswordButton", "scheduleView", "timeOffView",
-  "loanTab", "loanView", "leadershipLoanShortcut", "loanRefresh", "loanAvailabilityMessage", "loanWorkspace", "loanIssueForm", "loanBorrowerField", "loanBorrower",
+  "loanTab", "loanView", "leadershipLoanShortcut", "loanRefresh", "loanAvailabilityMessage", "loanWorkspace", "loanIssueForm",
   "loanItemEditor", "loanAddItem", "loanDueDate", "loanIssueNote", "loanIssuePhotos", "loanIssueCamera", "loanIssuePhotoSummary", "loanIssueMessage", "loanIssueSubmit", "loanScopeField", "loanScope", "loanStatusFilter", "loanList",
   "loanReturnDialog", "loanReturnForm", "loanReturnTitle", "loanReturnSummary", "loanReturnItems", "loanReturnWitness", "loanReturnNote", "loanReturnPhotos", "loanReturnCamera", "loanReturnPhotoSummary", "loanReturnMessage", "loanReturnSubmit",
+  "loanManageDialog", "loanManageForm", "loanManageTitle", "loanManageSummary", "loanManageDueDate", "loanManageNote", "loanManageItems", "loanManageActionHint", "loanManageMessage", "loanManageClose", "loanManageReopen", "loanManageSave",
   "loanConfirmationDialog", "loanConfirmationForm", "loanConfirmationTitle", "loanConfirmationSummary", "loanConfirmationItems", "loanConfirmationNote",
   "loanConfirmationPhotos", "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
   "processTasksTab", "processTasksTabCount", "processTasksView", "refreshProcessTasks", "processTaskSummary", "processTaskList",
@@ -3568,17 +3570,6 @@ async function resolveLoanDraftItem(index) {
   }
 }
 
-function populateLoanTeamMembers() {
-  const members = portalState.loanTeamMembers;
-  const ownNumber = portalUser()?.employeeNumber || "";
-  if (el.loanBorrower) {
-    el.loanBorrower.innerHTML = members.map((member) =>
-      `<option value="${esc(member.employeeNumber)}">${esc(member.employeeNumber)} · ${esc(member.name)}</option>`,
-    ).join("");
-    if (members.some((member) => member.employeeNumber === ownNumber)) el.loanBorrower.value = ownNumber;
-  }
-}
-
 async function loadLoanTeamMembers() {
   try {
     const query = new URLSearchParams({ locationId: portalState.loanStatus?.location?.id || "" });
@@ -3587,7 +3578,6 @@ async function loadLoanTeamMembers() {
   } catch {
     portalState.loanTeamMembers = [];
   }
-  populateLoanTeamMembers();
 }
 
 function loanStatusText(status) {
@@ -3639,9 +3629,13 @@ function renderLoanList() {
       ? `<small class="loan-pending-confirmation">Bestätigung ausständig bei ${esc(loan.pendingReturnConfirmation.witness.employeeNumber)} · ${esc(loan.pendingReturnConfirmation.witness.name)} – gültig bis ${esc(timestampText(loan.pendingReturnConfirmation.expiresAt))}</small>`
       : "";
     const photos = loanPhotoGallery(loan.photos);
+    const actions = [
+      canManage ? `<button class="text-button" data-loan-manage="${esc(loan.id)}" type="button">Bearbeiten</button>` : "",
+      canReturn ? `<button class="primary" data-loan-return="${esc(loan.id)}" type="button">Zurücknehmen</button>` : "",
+    ].filter(Boolean).join("");
     return `<article class="loan-list-item">
       <div class="loan-list-main"><span class="status ${loan.status === "returned" ? "approved" : "pending"}">${esc(loanStatusText(loan.status))}</span><strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><small>Ausgabe: ${esc(timestampText(loan.issuedAt || loan.createdAt))}${loan.dueDate ? ` · geplant bis ${esc(dateText(loan.dueDate))}` : ""}</small>${returnCopy}${pendingCopy}<ul>${items}</ul>${photos}${documents}</div>
-      ${canReturn ? `<button class="primary" data-loan-return="${esc(loan.id)}" type="button">Zurücknehmen</button>` : ""}
+      ${actions ? `<div class="loan-list-actions">${actions}</div>` : ""}
     </article>`;
   }).join("") : '<p class="empty-state">In diesem Bereich sind noch keine Leihvorgänge vorhanden.</p>';
 }
@@ -3678,9 +3672,8 @@ async function loadLoanModule() {
     );
     if (!available) return;
     const canManage = portalState.loanStatus.permissions?.locationManage === true;
-    const canCreate = canManage || portalState.loanStatus.permissions?.ownCreate === true;
+    const canCreate = portalState.loanStatus.permissions?.ownCreate === true;
     el.loanIssueForm?.classList.toggle("hidden", !canCreate);
-    el.loanBorrowerField?.classList.toggle("hidden", !canManage);
     el.loanScopeField?.classList.toggle(
       "hidden",
       !canManage && portalState.loanStatus.permissions?.locationRead !== true,
@@ -3714,9 +3707,6 @@ async function submitLoanIssue(event) {
       method: "POST",
       body: JSON.stringify({
         locationId: portalState.loanStatus.location?.id,
-        borrowerEmployeeNumber: portalState.loanStatus.permissions?.locationManage
-          ? el.loanBorrower.value
-          : portalUser()?.employeeNumber,
         dueDate: el.loanDueDate.value,
         notes: el.loanIssueNote.value,
         items: portalState.loanDraftItems.map((item) => ({
@@ -3808,6 +3798,128 @@ async function submitLoanReturn(event) {
     message(el.loanReturnMessage, error.message, true);
   } finally {
     el.loanReturnSubmit.disabled = false;
+  }
+}
+
+async function openLoanManagement(loanId) {
+  try {
+    const result = await api(`/api/portal/v1/loans/${encodeURIComponent(loanId)}`);
+    const loan = result.loan;
+    portalState.selectedManagedLoan = loan;
+    el.loanManageTitle.textContent = `Leihe von ${loan.borrower?.name || loan.borrower?.employeeNumber} bearbeiten`;
+    el.loanManageSummary.innerHTML = `
+      <strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong>
+      <span>${esc(loanStatusText(loan.status))} · ${loan.items.length} ${loan.items.length === 1 ? "Artikel" : "Artikel"} · Revision ${loan.revision}</span>`;
+    el.loanManageDueDate.value = loan.dueDate || "";
+    el.loanManageDueDate.max = addDays(iso(new Date()), 3650);
+    el.loanManageNote.value = loan.notes || "";
+    el.loanManageItems.innerHTML = loan.items.map((item) => {
+      const returnCondition = item.conditionReturn || item.conditionOut || "good";
+      return `<article class="loan-manage-item" data-loan-manage-position="${item.position}">
+        <div><strong>${esc(item.articleNumber)} · ${esc(item.description)}</strong><small>Position ${item.position}</small></div>
+        <label><span>Seriennummer</span><input data-loan-manage-serial="${item.position}" maxlength="100" value="${esc(item.serialNumber || "")}" placeholder="Optional" /></label>
+        <label><span>Zustand bei Ausgabe</span><select data-loan-manage-condition-out="${item.position}">${loanConditionOptions(item.conditionOut || "good")}</select></label>
+        <label><span>Zustand bei Rückgabe</span><select data-loan-manage-condition-return="${item.position}">${loanConditionOptions(returnCondition)}</select></label>
+        <label class="loan-manage-item-note"><span>Artikelbemerkung</span><input data-loan-manage-note="${item.position}" maxlength="500" value="${esc(item.note || "")}" placeholder="Optional" /></label>
+      </article>`;
+    }).join("");
+    const open = loan.status === "issued";
+    el.loanManageClose.classList.toggle("hidden", !open);
+    el.loanManageReopen.classList.toggle("hidden", open);
+    el.loanManageClose.dataset.confirmed = "false";
+    el.loanManageClose.textContent = "Ohne Rücknahmebeleg schließen";
+    el.loanManageActionHint.textContent = open
+      ? "Beim manuellen Schließen werden die Rückgabezustände gespeichert, aber keine Gegenbestätigung und kein neuer Rücknahmebeleg erzeugt."
+      : "Beim Wiederöffnen bleiben vorhandene Belege und Verlaufseinträge unverändert erhalten; die Rückgabezustände werden für die neue offene Revision geleert.";
+    message(el.loanManageMessage, "");
+    el.loanManageDialog.showModal();
+  } catch (error) {
+    message(el.loanAvailabilityMessage, error.message, true);
+  }
+}
+
+function loanManagementPayload(loan, { closing = false } = {}) {
+  return {
+    expectedRevision: loan.revision,
+    dueDate: el.loanManageDueDate.value,
+    notes: el.loanManageNote.value,
+    items: loan.items.map((item) => ({
+      position: item.position,
+      serialNumber: el.loanManageItems.querySelector(`[data-loan-manage-serial="${item.position}"]`)?.value || "",
+      conditionOut: el.loanManageItems.querySelector(`[data-loan-manage-condition-out="${item.position}"]`)?.value || "",
+      conditionReturn: closing || loan.status === "returned"
+        ? el.loanManageItems.querySelector(`[data-loan-manage-condition-return="${item.position}"]`)?.value || ""
+        : "",
+      note: el.loanManageItems.querySelector(`[data-loan-manage-note="${item.position}"]`)?.value || "",
+    })),
+  };
+}
+
+function setLoanManagementBusy(busy) {
+  [el.loanManageSave, el.loanManageClose, el.loanManageReopen].forEach((button) => {
+    if (button) button.disabled = busy;
+  });
+}
+
+async function finishLoanManagement(result, successMessage) {
+  portalState.selectedManagedLoan = null;
+  el.loanManageDialog.close();
+  message(el.loanAvailabilityMessage, successMessage);
+  await loadLoans();
+  return result;
+}
+
+async function submitLoanManagement(event) {
+  event.preventDefault();
+  const loan = portalState.selectedManagedLoan;
+  if (!loan) return;
+  setLoanManagementBusy(true);
+  message(el.loanManageMessage, "");
+  try {
+    const result = await api(`/api/portal/v1/loans/${encodeURIComponent(loan.id)}/management`, {
+      method: "PUT",
+      body: JSON.stringify(loanManagementPayload(loan)),
+    });
+    await finishLoanManagement(result, `Änderungen als Revision ${result.loan.revision} gespeichert.`);
+  } catch (error) {
+    message(el.loanManageMessage, error.message, true);
+  } finally {
+    setLoanManagementBusy(false);
+  }
+}
+
+async function runLoanManagementAction(action) {
+  const loan = portalState.selectedManagedLoan;
+  if (!loan) return;
+  if (action === "close" && el.loanManageClose.dataset.confirmed !== "true") {
+    el.loanManageClose.dataset.confirmed = "true";
+    el.loanManageClose.textContent = "Schließen jetzt bestätigen";
+    message(
+      el.loanManageMessage,
+      "Es wird kein Rücknahmebeleg erstellt und kein zweites Teammitglied bestätigt. Bitte den roten Knopf erneut drücken.",
+      true,
+    );
+    return;
+  }
+  setLoanManagementBusy(true);
+  message(el.loanManageMessage, "");
+  try {
+    const suffix = action === "close" ? "close" : "reopen";
+    const body = action === "close"
+      ? loanManagementPayload(loan, { closing: true })
+      : { expectedRevision: loan.revision };
+    const result = await api(
+      `/api/portal/v1/loans/${encodeURIComponent(loan.id)}/management/${suffix}`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    const copy = action === "close"
+      ? `Leihe ohne neuen Rücknahmebeleg als Revision ${result.loan.revision} geschlossen.`
+      : `Leihe als Revision ${result.loan.revision} wieder geöffnet.`;
+    await finishLoanManagement(result, copy);
+  } catch (error) {
+    message(el.loanManageMessage, error.message, true);
+  } finally {
+    setLoanManagementBusy(false);
   }
 }
 
@@ -4056,10 +4168,18 @@ el.loanItemEditor?.addEventListener("click", (event) => {
 el.loanIssueForm?.addEventListener("submit", submitLoanIssue);
 [el.loanScope, el.loanStatusFilter].forEach((field) => field?.addEventListener("change", loadLoans));
 el.loanList?.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-loan-return]");
-  if (button) openLoanReturn(button.dataset.loanReturn);
+  const returnButton = event.target.closest("[data-loan-return]");
+  if (returnButton) {
+    openLoanReturn(returnButton.dataset.loanReturn);
+    return;
+  }
+  const manageButton = event.target.closest("[data-loan-manage]");
+  if (manageButton) openLoanManagement(manageButton.dataset.loanManage);
 });
 el.loanReturnForm?.addEventListener("submit", submitLoanReturn);
+el.loanManageForm?.addEventListener("submit", submitLoanManagement);
+el.loanManageClose?.addEventListener("click", () => runLoanManagementAction("close"));
+el.loanManageReopen?.addEventListener("click", () => runLoanManagementAction("reopen"));
 el.loanConfirmationForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   respondToLoanConfirmation("confirm");
@@ -4070,6 +4190,10 @@ document.querySelectorAll("[data-close-loan-return]").forEach((button) => button
   el.loanReturnDialog.close();
   portalState.selectedLoan = null;
   setLoanPhotoFiles("return", []);
+}));
+document.querySelectorAll("[data-close-loan-manage]").forEach((button) => button.addEventListener("click", () => {
+  el.loanManageDialog.close();
+  portalState.selectedManagedLoan = null;
 }));
 el.timeOffRequestForm.addEventListener("submit", submitTimeOff);
 el.timeOffDate.addEventListener("change", loadTimeOffSlots);
