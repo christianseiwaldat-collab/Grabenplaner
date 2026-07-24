@@ -53,6 +53,7 @@ const PROTECTED_ROW_TABLES = Object.freeze([
   "sickness_cases",
   "sickness_notification_preferences",
   "personnel_sensitive_records",
+  "privacy_export_receipts",
   "privacy_request_events",
   "privacy_requests",
   "vacation_account_events",
