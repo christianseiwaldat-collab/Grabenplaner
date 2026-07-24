@@ -138,6 +138,12 @@ const {
 const { createIntegrationSecretVault } = require("./lib/integration-secret-vault");
 const { createSqlViewSource } = require("./lib/sql-view-source");
 const { createIdempotencyKey, createSafeApiDelivery, payloadSha256 } = require("./lib/safe-api-delivery");
+const {
+  ArticleCatalogError,
+  fetchShopwareArticle,
+  normalizeArticleNumber,
+  storefrontBaseUrl,
+} = require("./lib/article-catalog");
 const { CONTRACT_IDS, contractById, contractSha256, contractSummaries } = require("./lib/integration-contracts");
 const {
   BUILTIN_WORK_RULE_PROFILES,
@@ -278,6 +284,10 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "sickness:manage", label: "Krankmeldungen im eigenen Bereich bearbeiten", description: "Filialleitungen bearbeiten Krankmeldungen im zugewiesenen Bereich; Abteilungsleitungen nur mit ausdrücklichem Zusatzrecht und wirksamer Filialleitungsvertretung.", group: "AUM", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "sickness:settings", label: "Krankmeldungs- und AUM-Fristen verwalten", group: "AUM", warningLevel: "critical" },
   { id: "notifications:settings", label: "Eigene externe Warnungen und Prozessmeldungen konfigurieren", group: "AUM", warningLevel: "normal", hrDelegable: true },
+  { id: "loans:location:read", label: "Leihvorgänge des Bereichs lesen", description: "Offene und abgeschlossene Leihvorgänge im zugewiesenen Standort lesen.", group: "Leihe", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "loans:location:manage", label: "Leihvorgänge des Bereichs bearbeiten", description: "Ausgaben, Rücknahmen und Korrekturen im zugewiesenen Standort bearbeiten.", group: "Leihe", warningLevel: "high", hrDelegable: true, eligibleRoles: ["manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "loans:documents:read", label: "Leihdokumente des Bereichs lesen", description: "Ausgabe- und Rücknahmebelege im zugewiesenen Standort öffnen.", group: "Leihe", warningLevel: "high", hrDelegable: true, eligibleRoles: ["manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "loans:settings", label: "Leihmodul und Artikelquelle verwalten", description: "Standortfreigaben und externe Artikelkataloge konfigurieren.", group: "Leihe", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "processes:write", label: "Eigene Prozesse und Benachrichtigungsregeln verwalten", description: "Unternehmensweite Prozessdefinitionen anlegen, aktivieren, auslösen und archivieren.", group: "Zugänge & Rechte", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "integrations:read", label: "Schnittstellen und Laufprotokolle lesen", group: "Import & Lohnverrechnung", warningLevel: "high" },
   { id: "integrations:profiles:write", label: "Import- und Exportprofile verwalten", group: "Import & Lohnverrechnung", warningLevel: "high" },
@@ -688,6 +698,26 @@ const ownGovernancePermissions = [
   "own_privacy_export:read",
 ];
 for (const role of builtinPortalRoles) addBuiltinRolePermissions(role.id, ownGovernancePermissions);
+for (const role of builtinPortalRoles) {
+  addBuiltinRolePermissions(role.id, [
+    "loans:self:read",
+    "loans:self:create",
+    "loans:self:return",
+  ]);
+}
+addBuiltinRolePermissions("manager", [
+  "loans:location:read",
+  "loans:location:manage",
+  "loans:documents:read",
+]);
+for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, [
+    "loans:location:read",
+    "loans:location:manage",
+    "loans:documents:read",
+    "loans:settings",
+  ]);
+}
 for (const roleId of ["department_manager", "manager"]) {
   addBuiltinRolePermissions(roleId, ["time_records:read", "time_records:generate"]);
 }
@@ -721,10 +751,13 @@ const installationFeatureCatalog = Object.freeze([
   { id: "sicknessAmu", label: "Krankmeldung & AUM" },
   { id: "wifiSuggestions", label: "WLAN-Zeitvorschläge" },
   { id: "integrations", label: "Personalimport & Lohnverrechnung" },
+  { id: "loans", label: "Leihe" },
 ]);
 const installationFeatureIds = new Set(installationFeatureCatalog.map((feature) => feature.id));
 const defaultInstallationFeatures = installationFeatureCatalog.map((feature) => feature.id);
-const preV063DefaultInstallationFeatures = defaultInstallationFeatures.filter((feature) => feature !== "integrations");
+const preV063DefaultInstallationFeatures = defaultInstallationFeatures
+  .filter((feature) => !["integrations", "loans"].includes(feature));
+const preV085DefaultInstallationFeatures = defaultInstallationFeatures.filter((feature) => feature !== "loans");
 const PORTAL_ROLE_ASSIGNMENTS = Object.freeze({
   developer: new Set(["employee", "department_manager", "manager", "hr", "admin", "it_admin"]),
   admin: new Set(["employee", "department_manager", "manager", "hr", "admin"]),
@@ -1353,6 +1386,128 @@ function createSchema() {
       FOREIGN KEY (cost_center_id) REFERENCES cost_centers(id)
         ON UPDATE CASCADE ON DELETE RESTRICT
     );
+
+    CREATE TABLE IF NOT EXISTS articles (
+      article_number TEXT PRIMARY KEY
+        CHECK(length(article_number) = 6 AND article_number NOT GLOB '*[^0-9]*'),
+      description TEXT NOT NULL DEFAULT '',
+      source_provider TEXT NOT NULL DEFAULT 'manual'
+        CHECK(source_provider IN ('manual','shopware_storefront','import')),
+      source_product_number TEXT NOT NULL DEFAULT '',
+      source_url TEXT NOT NULL DEFAULT '',
+      source_fetched_at TEXT,
+      active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_articles_active_description
+      ON articles(active, description, article_number);
+
+    CREATE TABLE IF NOT EXISTS loan_location_settings (
+      location_id TEXT PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)),
+      article_lookup_enabled INTEGER NOT NULL DEFAULT 0 CHECK(article_lookup_enabled IN (0,1)),
+      article_lookup_provider TEXT NOT NULL DEFAULT 'none'
+        CHECK(article_lookup_provider IN ('none','shopware_storefront')),
+      article_lookup_base_url TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS loans (
+      id TEXT PRIMARY KEY,
+      legacy_id INTEGER,
+      location_id TEXT NOT NULL,
+      borrower_employee_number TEXT NOT NULL,
+      created_by_employee_number TEXT NOT NULL,
+      due_date TEXT,
+      status TEXT NOT NULL DEFAULT 'draft'
+        CHECK(status IN ('draft','issued','returned','cancelled')),
+      notes TEXT NOT NULL DEFAULT '',
+      issued_at TEXT,
+      returned_at TEXT,
+      return_recorded_by_employee_number TEXT,
+      return_witness_employee_number TEXT,
+      borrower_return_confirmed INTEGER NOT NULL DEFAULT 0
+        CHECK(borrower_return_confirmed IN (0,1)),
+      revision INTEGER NOT NULL DEFAULT 1 CHECK(revision >= 1),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (borrower_employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (created_by_employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (return_recorded_by_employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE SET NULL,
+      FOREIGN KEY (return_witness_employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_loans_borrower_status
+      ON loans(borrower_employee_number, status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_loans_location_status
+      ON loans(location_id, status, created_at);
+
+    CREATE TABLE IF NOT EXISTS loan_items (
+      id TEXT PRIMARY KEY,
+      loan_id TEXT NOT NULL,
+      position INTEGER NOT NULL CHECK(position BETWEEN 1 AND 5),
+      article_number TEXT NOT NULL,
+      description_snapshot TEXT NOT NULL,
+      serial_number TEXT NOT NULL DEFAULT '',
+      quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity = 1),
+      condition_out TEXT NOT NULL DEFAULT '',
+      condition_return TEXT NOT NULL DEFAULT '',
+      item_note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(loan_id, position),
+      FOREIGN KEY (loan_id) REFERENCES loans(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (article_number) REFERENCES articles(article_number)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_loan_items_article
+      ON loan_items(article_number, loan_id);
+
+    CREATE TABLE IF NOT EXISTS loan_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      loan_id TEXT NOT NULL,
+      actor_employee_number TEXT,
+      event_type TEXT NOT NULL,
+      revision INTEGER NOT NULL CHECK(revision >= 1),
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (loan_id) REFERENCES loans(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (actor_employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_loan_events_loan_revision
+      ON loan_events(loan_id, revision, created_at);
+
+    CREATE TRIGGER IF NOT EXISTS trg_loan_events_immutable_update
+    BEFORE UPDATE ON loan_events
+    BEGIN
+      SELECT RAISE(ABORT, 'loan events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_loan_events_immutable_delete
+    BEFORE DELETE ON loan_events
+    BEGIN
+      SELECT RAISE(ABORT, 'loan events are immutable');
+    END;
 
     CREATE TABLE IF NOT EXISTS personnel_sensitive_records (
       employee_number TEXT PRIMARY KEY,
@@ -2991,6 +3146,18 @@ const privacyGovernanceMigrationId = "v0.82-leave-records-privacy";
 const vacationHistoryProtectionMigrationId = "v0.82-protected-vacation-history";
 const payrollHandoffMigrationId = "v0.83-payroll-handoffs";
 const productReadinessMigrationId = "v0.84-product-readiness";
+const loanModuleMigrationId = "v0.85-loan-module-foundation";
+const loanModuleTables = Object.freeze([
+  "articles",
+  "loan_location_settings",
+  "loans",
+  "loan_items",
+  "loan_events",
+]);
+const loanModuleTriggerNames = Object.freeze([
+  "trg_loan_events_immutable_update",
+  "trg_loan_events_immutable_delete",
+]);
 const privacyGovernanceTables = [
   "vacation_account_revisions",
   "vacation_account_events",
@@ -3178,11 +3345,15 @@ const productReadinessMigrationRequired = !tableExists("schema_migrations")
   || productReadinessImmutableTriggerDefinitions.some(
     (definition) => !productReadinessImmutableTriggerMatches(definition),
   );
+const loanModuleMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(loanModuleMigrationId)
+  || loanModuleTables.some((name) => !tableExists(name))
+  || loanModuleTriggerNames.some((name) => !triggerExists(name));
 if (databaseExistedBeforeOpen && (portalMobileBaselineMigrationRequired || protectedPersonnelMigrationRequired
   || unreleasedSicknessDraftSchemaPresent || legacySchemaMigrationRequired || costCenterMigrationRequired
   || shiftLocationMigrationRequired || workRuleMigrationRequired || privacyGovernanceMigrationRequired
   || vacationHistoryProtectionMigrationRequired || payrollHandoffMigrationRequired
-  || productReadinessMigrationRequired)) {
+  || productReadinessMigrationRequired || loanModuleMigrationRequired)) {
   createInternalDatabaseBackup("pre-migration");
 }
 
@@ -4283,6 +4454,22 @@ if (!db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(inte
   db.prepare("INSERT INTO schema_migrations (id, app_version) VALUES (?, ?)")
     .run(integrationFeatureMigrationId, packageMetadata.version);
 }
+if (!db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(loanModuleMigrationId)) {
+  const stored = db.prepare("SELECT value FROM settings WHERE key = 'installation_features'").get()?.value;
+  try {
+    const configured = JSON.parse(String(stored || "[]"));
+    if (Array.isArray(configured)) {
+      const enabled = new Set(configured.filter((feature) => installationFeatureIds.has(feature)));
+      const previouslyComplete = preV085DefaultInstallationFeatures.every((feature) => enabled.has(feature));
+      if (previouslyComplete && !enabled.has("loans")) {
+        db.prepare("UPDATE settings SET value = ? WHERE key = 'installation_features'")
+          .run(JSON.stringify([...configured, "loans"]));
+      }
+    }
+  } catch {}
+  db.prepare("INSERT INTO schema_migrations (id, app_version) VALUES (?, ?)")
+    .run(loanModuleMigrationId, packageMetadata.version);
+}
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run("v0.64-sql-api-connectors", packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
@@ -5079,6 +5266,7 @@ const loginBrandingRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_BR
 const mobileRefreshRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 2048, maxEventsPerKey: 90 });
 const usbCreatorAuthRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 128, maxEventsPerKey: 8 });
 const usbCreatorGlobalRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 32, maxEventsPerKey: 24 });
+const articleLookupRateLimits = createBoundedRateLimitStore({ windowMs: 5 * 60 * 1000, maxKeys: 2048, maxEventsPerKey: 60 });
 
 function loginRateKey(request) {
   return String(request.ip || request.socket?.remoteAddress || "unknown").replace(/^::ffff:/, "");
@@ -6407,6 +6595,10 @@ function installationFeaturesForApiPath(apiPath) {
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence)|time(?:-|\/|$)|mobile\/v1\/(?:time|me\/time-entries))/.test(requestPath)) required.add("timeTracking");
   if (/^\/(?:portal\/v1\/me(?:\/|$)|mobile\/v1\/(?:bootstrap|me(?:\/|$))|portal\/v1\/(?:greeting-settings|mobile-layout|leadership\/overview))/.test(requestPath)) required.add("employeePortal");
   if (/^\/integrations\/(?:personnel-import|payroll-export|payroll-handoffs|profiles|runs|connections|contracts)(?:\/|$)/.test(requestPath)) required.add("integrations");
+  if (/^\/(?:portal|mobile)\/v1\/loans(?:\/|$)/.test(requestPath)) {
+    required.add("loans");
+    required.add("employeePortal");
+  }
   return [...required];
 }
 
@@ -9292,6 +9484,7 @@ function getPortalStatus(locationId = "", request = null) {
       localAmuOcr: portalEnabled && features.employeePortal && features.sicknessAmu && Boolean(amuStorage) && portalSettings.amu_ocr_enabled !== "0",
       timeTracking: portalEnabled && features.employeePortal && features.timeTracking,
       wifiTimeSuggestions: portalEnabled && features.employeePortal && features.timeTracking && features.wifiSuggestions,
+      loans: portalEnabled && features.employeePortal && features.loans,
     },
     workflow: {
       vacationHrApprovalRequired: vacationHrApprovalRequired(),
@@ -24179,6 +24372,407 @@ app.post("/api/portal/v1/users/:employeeNumber/unlock", (request, response) => {
   response.json({ users: portalUsersForAdmin(), roles: getPortalRoles() });
 });
 
+function loanSettingsActor(request, { mutation = false } = {}) {
+  const session = requirePortalAnyPermissionOrLocal(request, ["loans:settings"], { csrf: mutation });
+  if (session.employeeNumber !== "local" && !RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)) {
+    throw httpError(
+      403,
+      "Die Einstellungen der Leihe sind nur für Personalleitung und höhere Rollen verfügbar.",
+      "PORTAL_PERMISSION_DENIED",
+    );
+  }
+  return session;
+}
+
+function loanLocationSettingRow(locationId) {
+  return db.prepare(`
+    SELECT l.id AS location_id, l.name AS location_name, l.active AS location_active,
+           COALESCE(s.enabled, 0) AS enabled,
+           COALESCE(s.article_lookup_enabled, 0) AS article_lookup_enabled,
+           COALESCE(s.article_lookup_provider, 'none') AS article_lookup_provider,
+           COALESCE(s.article_lookup_base_url, '') AS article_lookup_base_url,
+           s.updated_by, s.updated_at
+    FROM locations l
+    LEFT JOIN loan_location_settings s ON s.location_id = l.id
+    WHERE l.id = ?
+  `).get(locationId);
+}
+
+function publicLoanLocationSetting(row, { includeConfiguration = false } = {}) {
+  if (!row) return null;
+  const result = {
+    locationId: row.location_id,
+    locationName: row.location_name,
+    locationActive: Boolean(row.location_active),
+    enabled: Boolean(row.enabled) && Boolean(row.location_active),
+    articleLookup: {
+      enabled: Boolean(row.article_lookup_enabled),
+      provider: row.article_lookup_provider || "none",
+      configured: Boolean(row.article_lookup_enabled && row.article_lookup_base_url),
+    },
+    updatedBy: row.updated_by || "",
+    updatedAt: row.updated_at || null,
+  };
+  if (includeConfiguration) result.articleLookup.baseUrl = row.article_lookup_base_url || "";
+  return result;
+}
+
+function loanLocationForSession(session, input = {}) {
+  let locationId = String(input.locationId || input.location || session?.homeLocationId || "").trim();
+  if (!locationId && session?.employeeNumber === "local") {
+    locationId = String(db.prepare("SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1").get()?.id || "");
+  }
+  if (!locationId) {
+    throw httpError(
+      400,
+      "Bitte einen Standort für die Leihe auswählen.",
+      "LOAN_LOCATION_REQUIRED",
+    );
+  }
+  locationId = normalizeLocationId(locationId);
+  validateLocationExists(locationId);
+  const canUseManagedLocation = sessionHasGlobalScope(session)
+    || session?.permissions?.some((permission) => [
+      "loans:location:read",
+      "loans:location:manage",
+      "loans:settings",
+    ].includes(permission));
+  if (canUseManagedLocation) {
+    assertSessionContextScope(session, { locationId });
+  } else if (String(session?.homeLocationId || "") !== locationId) {
+    throw httpError(
+      403,
+      "Die Leihe ist nur für den eigenen Standort verfügbar.",
+      "PORTAL_SCOPE_DENIED",
+    );
+  }
+  return locationId;
+}
+
+function enabledLoanLocationForSession(session, input = {}) {
+  const locationId = loanLocationForSession(session, input);
+  const setting = loanLocationSettingRow(locationId);
+  if (!setting?.location_active || !setting?.enabled) {
+    throw httpError(
+      403,
+      "Die Leihe ist für diesen Standort nicht freigeschaltet.",
+      "LOAN_LOCATION_DISABLED",
+    );
+  }
+  return setting;
+}
+
+function publicArticle(row) {
+  if (!row) return null;
+  return {
+    articleNumber: row.article_number,
+    description: row.description,
+    sourceProvider: row.source_provider,
+    sourceProductNumber: row.source_product_number || "",
+    sourceUrl: row.source_url || "",
+    sourceFetchedAt: row.source_fetched_at || null,
+    active: Boolean(row.active),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function articleRow(articleNumber) {
+  return db.prepare(`
+    SELECT article_number, description, source_provider, source_product_number,
+           source_url, source_fetched_at, active, created_at, updated_at
+    FROM articles WHERE article_number = ?
+  `).get(articleNumber);
+}
+
+function normalizedArticleDescription(value, { required = false } = {}) {
+  const description = String(value || "").replace(/\s+/g, " ").trim();
+  if ((!description && required) || description.length > 300) {
+    throw httpError(
+      400,
+      required
+        ? "Bitte eine Artikelbezeichnung mit höchstens 300 Zeichen eintragen."
+        : "Die Artikelbezeichnung darf höchstens 300 Zeichen lang sein.",
+      "ARTICLE_DESCRIPTION_INVALID",
+    );
+  }
+  return description;
+}
+
+function saveArticleRecord(article, actorEmployeeNumber) {
+  const sourceProvider = ["manual", "shopware_storefront", "import"].includes(article.sourceProvider)
+    ? article.sourceProvider
+    : "manual";
+  db.prepare(`
+    INSERT INTO articles
+      (article_number, description, source_provider, source_product_number,
+       source_url, source_fetched_at, active, created_by, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(article_number) DO UPDATE SET
+      description = excluded.description,
+      source_provider = excluded.source_provider,
+      source_product_number = excluded.source_product_number,
+      source_url = excluded.source_url,
+      source_fetched_at = excluded.source_fetched_at,
+      active = 1,
+      updated_by = excluded.updated_by,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(
+    article.articleNumber,
+    normalizedArticleDescription(article.description, { required: true }),
+    sourceProvider,
+    String(article.sourceProductNumber || "").slice(0, 40),
+    String(article.sourceUrl || "").slice(0, 1000),
+    article.sourceFetchedAt || null,
+    actorEmployeeNumber,
+    actorEmployeeNumber,
+  );
+  return articleRow(article.articleNumber);
+}
+
+function articleLookupHttpError(error) {
+  if (!(error instanceof ArticleCatalogError)) return error;
+  const status = error.code === "ARTICLE_LOOKUP_NOT_FOUND" ? 404
+    : error.code === "ARTICLE_NUMBER_INVALID" ? 400
+      : error.code === "ARTICLE_LOOKUP_URL_INVALID" ? 503
+        : 502;
+  return httpError(status, error.message, error.code);
+}
+
+function articleLookupIsFresh(row, now = Date.now()) {
+  if (row?.source_provider !== "shopware_storefront" || !row.source_fetched_at) return false;
+  const fetchedAt = new Date(row.source_fetched_at).getTime();
+  return Number.isFinite(fetchedAt) && now - fetchedAt < 24 * 60 * 60 * 1000;
+}
+
+function assertArticleLookupRateLimit(actor) {
+  const key = String(actor?.employeeNumber || "local");
+  const now = Date.now();
+  if (articleLookupRateLimits.get(key, now).length >= 60) {
+    throw httpError(
+      429,
+      "Zu viele externe Artikelsuchen. Bitte in einigen Minuten erneut versuchen.",
+      "ARTICLE_LOOKUP_RATE_LIMITED",
+    );
+  }
+  articleLookupRateLimits.record(key, now);
+}
+
+app.get("/api/portal/v1/loans/status", (request, response) => {
+  const session = requirePortalSession(request);
+  const locationId = String(request.query.locationId || request.query.location || session.homeLocationId || "").trim();
+  const setting = locationId
+    ? publicLoanLocationSetting(loanLocationSettingRow(loanLocationForSession(session, { locationId })))
+    : null;
+  response.json({
+    available: Boolean(setting?.enabled),
+    location: setting,
+    permissions: {
+      ownRead: session.permissions.includes("loans:self:read"),
+      ownCreate: session.permissions.includes("loans:self:create"),
+      ownReturn: session.permissions.includes("loans:self:return"),
+      locationRead: session.permissions.includes("loans:location:read"),
+      locationManage: session.permissions.includes("loans:location:manage"),
+      documentsRead: session.permissions.includes("loans:documents:read"),
+      settings: session.permissions.includes("loans:settings"),
+    },
+  });
+});
+
+app.get("/api/portal/v1/loans/settings", (request, response) => {
+  loanSettingsActor(request);
+  const locations = db.prepare(`
+    SELECT l.id AS location_id, l.name AS location_name, l.active AS location_active,
+           COALESCE(s.enabled, 0) AS enabled,
+           COALESCE(s.article_lookup_enabled, 0) AS article_lookup_enabled,
+           COALESCE(s.article_lookup_provider, 'none') AS article_lookup_provider,
+           COALESCE(s.article_lookup_base_url, '') AS article_lookup_base_url,
+           s.updated_by, s.updated_at
+    FROM locations l
+    LEFT JOIN loan_location_settings s ON s.location_id = l.id
+    ORDER BY l.id
+  `).all().map((row) => publicLoanLocationSetting(row, { includeConfiguration: true }));
+  response.json({
+    locations,
+    articleLookupProviders: [
+      { id: "none", label: "Keine externe Artikelsuche" },
+      { id: "shopware_storefront", label: "Shopware-Onlineshop" },
+    ],
+  });
+});
+
+app.put("/api/portal/v1/loans/settings/locations/:locationId", (request, response) => {
+  const actor = loanSettingsActor(request, { mutation: true });
+  const locationId = normalizeLocationId(request.params.locationId);
+  validateLocationExists(locationId);
+  const lookup = request.body?.articleLookup && typeof request.body.articleLookup === "object"
+    ? request.body.articleLookup
+    : {};
+  const enabled = request.body?.enabled === true;
+  const lookupEnabled = lookup.enabled === true;
+  const provider = lookupEnabled ? String(lookup.provider || "shopware_storefront").trim() : "none";
+  if (!["none", "shopware_storefront"].includes(provider) || (lookupEnabled && provider === "none")) {
+    throw httpError(400, "Bitte eine unterstützte Artikelquelle auswählen.", "ARTICLE_LOOKUP_PROVIDER_INVALID");
+  }
+  let baseUrl = "";
+  if (lookupEnabled) {
+    try {
+      const parsed = storefrontBaseUrl(lookup.baseUrl);
+      baseUrl = parsed.href.replace(/\/$/, "");
+    } catch (error) {
+      throw articleLookupHttpError(error);
+    }
+  }
+  db.prepare(`
+    INSERT INTO loan_location_settings
+      (location_id, enabled, article_lookup_enabled, article_lookup_provider,
+       article_lookup_base_url, created_by, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(location_id) DO UPDATE SET
+      enabled = excluded.enabled,
+      article_lookup_enabled = excluded.article_lookup_enabled,
+      article_lookup_provider = excluded.article_lookup_provider,
+      article_lookup_base_url = excluded.article_lookup_base_url,
+      updated_by = excluded.updated_by,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(
+    locationId,
+    Number(enabled),
+    Number(lookupEnabled),
+    provider,
+    baseUrl,
+    actor.employeeNumber,
+    actor.employeeNumber,
+  );
+  auditPortal(actor.employeeNumber, "loan.settings.update", "location", locationId, JSON.stringify({
+    enabled,
+    articleLookupEnabled: lookupEnabled,
+    articleLookupProvider: provider,
+    articleLookupOrigin: baseUrl ? new URL(baseUrl).origin : "",
+  }));
+  response.json({
+    location: publicLoanLocationSetting(loanLocationSettingRow(locationId), { includeConfiguration: true }),
+  });
+});
+
+app.get("/api/portal/v1/loans/articles", (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:self:create", "loans:location:read", "loans:location:manage"],
+  );
+  const setting = enabledLoanLocationForSession(session, request.query);
+  const query = String(request.query.query || "").replace(/\s+/g, " ").trim();
+  if (query.length > 80) {
+    throw httpError(400, "Die Artikelsuche ist zu lang.", "ARTICLE_QUERY_INVALID");
+  }
+  const rows = query
+    ? db.prepare(`
+      SELECT article_number, description, source_provider, source_product_number,
+             source_url, source_fetched_at, active, created_at, updated_at
+      FROM articles
+      WHERE active = 1 AND (article_number LIKE ? OR description LIKE ? COLLATE NOCASE)
+      ORDER BY CASE WHEN article_number = ? THEN 0 ELSE 1 END, description, article_number
+      LIMIT 20
+    `).all(`${query}%`, `%${query}%`, query)
+    : [];
+  response.json({
+    location: publicLoanLocationSetting(setting),
+    articles: rows.map(publicArticle),
+  });
+});
+
+app.post("/api/portal/v1/loans/articles/resolve", async (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:self:create", "loans:location:manage"],
+    { csrf: true },
+  );
+  let articleNumber;
+  try {
+    articleNumber = normalizeArticleNumber(request.body?.articleNumber);
+  } catch (error) {
+    throw articleLookupHttpError(error);
+  }
+  const setting = enabledLoanLocationForSession(actor, request.body || {});
+  const existing = articleRow(articleNumber);
+  const manualDescription = normalizedArticleDescription(request.body?.manualDescription);
+  let suggestion = null;
+  let lookupWarning = null;
+  let recordChanged = false;
+
+  if (setting.article_lookup_enabled) {
+    const lookupConfigured = setting.article_lookup_provider === "shopware_storefront"
+      && Boolean(setting.article_lookup_base_url);
+    if (!lookupConfigured) {
+      lookupWarning = {
+        code: "ARTICLE_LOOKUP_NOT_CONFIGURED",
+        message: "Die externe Artikelsuche ist für diesen Standort nicht vollständig eingerichtet.",
+      };
+    } else if (!articleLookupIsFresh(existing)) {
+      try {
+        assertArticleLookupRateLimit(actor);
+        configureSystemCertificateAuthorities();
+        suggestion = await fetchShopwareArticle(setting.article_lookup_base_url, articleNumber);
+      } catch (error) {
+        const normalized = articleLookupHttpError(error);
+        if (!(normalized?.status >= 400 && normalized?.status < 600)) throw normalized;
+        lookupWarning = { code: normalized.code || "ARTICLE_LOOKUP_FAILED", message: normalized.message };
+      }
+    }
+  }
+
+  let stored = existing;
+  let preservedManualDescription = false;
+  if (manualDescription && !existing) {
+    stored = saveArticleRecord({
+      articleNumber,
+      description: manualDescription,
+      sourceProvider: "manual",
+    }, actor.employeeNumber);
+    recordChanged = true;
+  } else if (manualDescription && existing) {
+    preservedManualDescription = true;
+  } else if (suggestion) {
+    if (existing?.source_provider === "manual" && existing.description) {
+      preservedManualDescription = true;
+    } else {
+      stored = saveArticleRecord({
+        ...suggestion,
+        sourceFetchedAt: new Date().toISOString(),
+      }, actor.employeeNumber);
+      recordChanged = true;
+    }
+  }
+
+  if (!stored) {
+    if (lookupWarning) throw httpError(
+      lookupWarning.code === "ARTICLE_LOOKUP_NOT_FOUND" ? 404 : 502,
+      `${lookupWarning.message} Die Artikelbezeichnung kann manuell ergänzt werden.`,
+      lookupWarning.code,
+    );
+    throw httpError(
+      409,
+      "Für diese Artikelnummer ist noch keine Bezeichnung gespeichert. Bitte eine Bezeichnung ergänzen.",
+      "ARTICLE_DESCRIPTION_REQUIRED",
+    );
+  }
+
+  if (recordChanged) {
+    auditPortal(actor.employeeNumber, "loan.article.resolve", "article", articleNumber, JSON.stringify({
+      locationId: setting.location_id,
+      sourceProvider: stored.source_provider,
+      externalLookup: Boolean(suggestion),
+    }));
+  }
+  response.json({
+    article: publicArticle(stored),
+    suggestion,
+    preservedManualDescription,
+    cacheHit: articleLookupIsFresh(existing) && !suggestion,
+    lookupWarning,
+  });
+});
+
 app.get("/api/portal/v1/me", (request, response) => {
   const session = requirePortalSession(request);
   response.json({ user: publicPortalUser(session), branding: brandingForPortalSession(session) });
@@ -27703,6 +28297,10 @@ const usbFeatureAliases = Object.freeze({
   sicknessAmu: "sicknessAmu",
   wifi_time_suggestions: "wifiSuggestions",
   wifiSuggestions: "wifiSuggestions",
+  loan: "loans",
+  loans: "loans",
+  lending: "loans",
+  leihe: "loans",
 });
 
 function validateUsbFeatures(body = {}) {
@@ -27714,7 +28312,7 @@ function validateUsbFeatures(body = {}) {
   enabled.add("schedule");
   if (enabled.has("wifiSuggestions")) enabled.add("timeTracking");
   if (enabled.has("sicknessAmu")) enabled.add("requests");
-  if (enabled.has("timeTracking") || enabled.has("sicknessAmu") || enabled.has("wifiSuggestions")) enabled.add("employeePortal");
+  if (enabled.has("timeTracking") || enabled.has("sicknessAmu") || enabled.has("wifiSuggestions") || enabled.has("loans")) enabled.add("employeePortal");
   return [...enabled];
 }
 
@@ -30475,6 +31073,7 @@ function startServer() {
         mobileRefreshRateLimits.prune(now);
         usbCreatorAuthRateLimits.prune(now);
         usbCreatorGlobalRateLimits.prune(now);
+        articleLookupRateLimits.prune(now);
       }, 5 * 60 * 1000);
       rateLimitCleanupInterval.unref();
     }
