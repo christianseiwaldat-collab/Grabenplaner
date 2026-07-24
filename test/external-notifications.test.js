@@ -162,6 +162,69 @@ test("SMTP-Versand nutzt TLS-Zeitlimits und nur den neutralen Nachrichtentext", 
   });
 });
 
+test("Leihbelege werden nur per SMTP und als PDF-Anhang versendet", async () => {
+  let mail;
+  const pdf = Buffer.from("%PDF-1.7\nTest");
+  const adapter = createExternalNotificationAdapter({
+    configuration: {
+      email: {
+        enabled: true,
+        host: "smtp.example.test",
+        port: 587,
+        from: "Grabenplaner <app@example.test>",
+      },
+    },
+    smtpTransport: {
+      async sendMail(value) {
+        mail = value;
+        return { accepted: true };
+      },
+    },
+  });
+
+  const delivered = await adapter.sendLoanDocument({
+    recipient: "belege@example.test",
+    subject: "Grabenplaner · Ausgabebeleg",
+    text: "Der Beleg ist beigefügt.",
+    filename: "Leihbeleg-Ausgabe.pdf",
+    buffer: pdf,
+  });
+
+  assert.deepEqual(delivered, { delivered: true, channel: "email" });
+  assert.equal(mail.to, "belege@example.test");
+  assert.equal(mail.subject, "Grabenplaner · Ausgabebeleg");
+  assert.equal(mail.attachments.length, 1);
+  assert.equal(mail.attachments[0].filename, "Leihbeleg-Ausgabe.pdf");
+  assert.equal(mail.attachments[0].contentType, "application/pdf");
+  assert.deepEqual(mail.attachments[0].content, pdf);
+});
+
+test("Leihbelege verwenden keinen E-Mail-Webhook und begrenzen die Anhanggröße", async () => {
+  const adapter = createExternalNotificationAdapter({
+    configuration: {
+      emailWebhook: {
+        enabled: true,
+        url: "https://notify.example.test/email",
+      },
+    },
+    fetchImplementation: async () => ({ ok: true }),
+  });
+  await assert.rejects(
+    adapter.sendLoanDocument({
+      recipient: "belege@example.test",
+      buffer: Buffer.from("%PDF"),
+    }),
+    { code: "EXTERNAL_NOTIFICATION_SMTP_REQUIRED" },
+  );
+  await assert.rejects(
+    adapter.sendLoanDocument({
+      recipient: "belege@example.test",
+      buffer: Buffer.alloc((8 * 1024 * 1024) + 1),
+    }),
+    { code: "EXTERNAL_NOTIFICATION_ATTACHMENT_INVALID" },
+  );
+});
+
 test("SMTP wird bei fehlender Konfiguration nicht geladen", () => {
   let loads = 0;
   const adapter = createExternalNotificationAdapter({

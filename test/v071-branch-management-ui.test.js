@@ -55,7 +55,7 @@ test("v0.71 Block 7 UI: bestehende Views und View-Deep-Links bleiben kompatibel"
   const requestedView = between(app, "function applyRequestedView()", "function setSettingsTab");
   assert.match(requestedView, /new URLSearchParams\(window\.location\.search\)/);
   assert.match(requestedView, /parameters\.get\("view"\)/);
-  assert.match(requestedView, /\["planning", "requests", "timeTracking", "vacations", "personnelAdministration", "personnel", "rightsDashboard", "settings"\]\.includes\(requestedView\)/);
+  assert.match(requestedView, /\["planning", "requests", "timeTracking", "vacations", "personnelAdministration", "personnel", "loans", "rightsDashboard", "settings"\]\.includes\(requestedView\)/);
   assert.match(requestedView, /setView\(requestedView\)/);
 });
 

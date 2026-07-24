@@ -386,6 +386,25 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
 .loan-condition-pill { padding:5px 8px; border-radius:999px; color:var(--green-dark); background:#dff0e8; font-size:9px; font-weight:850; }
 .loan-confirmation-actions { justify-content:space-between; }
 .loan-confirmation-actions .danger-secondary { color:var(--danger); border:1px solid currentColor; background:#fff; }
+.loan-photo-picker { display:grid; gap:10px; margin:14px 0; padding:13px; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); }
+.loan-photo-picker > div:first-child strong,.loan-photo-picker > div:first-child small { display:block; }
+.loan-photo-picker > div:first-child small { margin-top:3px; color:var(--muted); font-size:9px; line-height:1.45; }
+.loan-photo-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.loan-photo-button,.loan-camera-button { display:inline-flex; align-items:center; justify-content:center; min-height:39px; padding:0 13px; border:1px solid var(--green); border-radius:9px; color:var(--green-dark); background:#fff; font-size:10px; font-weight:850; cursor:pointer; }
+.loan-camera-button { color:#fff; background:var(--green); }
+.loan-photo-button input,.loan-camera-button input { position:absolute; width:1px; height:1px; overflow:hidden; opacity:0; pointer-events:none; }
+.loan-photo-selection { display:flex; flex-wrap:wrap; gap:6px; }
+.loan-photo-selection > small { color:var(--muted); font-size:9px; }
+.loan-photo-selection > span { display:grid; grid-template-columns:minmax(0,1fr) auto; position:relative; min-width:min(210px,100%); padding:7px 34px 7px 9px; border:1px solid var(--line); border-radius:9px; background:#fff; }
+.loan-photo-selection span strong { overflow:hidden; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.loan-photo-selection span small { color:var(--muted); font-size:8px; }
+.loan-photo-selection span button { position:absolute; top:50%; right:6px; width:24px; height:24px; padding:0; color:var(--danger); background:#f8e8e6; transform:translateY(-50%); }
+.loan-photo-gallery { display:grid; grid-template-columns:repeat(5,minmax(52px,84px)); gap:7px; margin-top:10px; }
+.loan-photo-gallery a { display:block; overflow:hidden; aspect-ratio:1; border:1px solid var(--line); border-radius:9px; background:#edf2ef; }
+.loan-photo-gallery img { width:100%; height:100%; object-fit:cover; }
+.loan-confirmation-photos { margin:13px 0; padding:12px; border:1px solid var(--line); border-radius:11px; background:var(--surface-soft); }
+.loan-confirmation-photos > strong { display:block; font-size:11px; }
+.loan-confirmation-photos > div > .loan-photo-gallery { grid-template-columns:repeat(4,minmax(58px,90px)); }
 @media (max-width:850px) { .schedule-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.vacation-layout { grid-template-columns:1fr; }.portal-user-copy { display:none; }.portal-tabs { overflow-x:auto; scrollbar-width:none; }.portal-tabs::-webkit-scrollbar { display:none; }.portal-tabs button { flex:0 0 auto; min-width:112px; }.approved-vacation-item { grid-template-columns:1fr 1fr; }.approved-vacation-item > div { grid-column:1 / -1; }.history-item { grid-template-columns:1fr auto; }.history-item > div:first-child { grid-column:1 / -1; }.history-item-status { justify-items:start; }.history-item-status small { text-align:left; } }
 @media (max-width:980px) { .loan-layout { grid-template-columns:1fr; }.loan-return-item { grid-template-columns:1fr 1fr; }.loan-return-item > div { grid-column:1 / -1; } }
 @media (max-width:850px) { .sickness-preferences-card { grid-template-columns:1fr; }.notification-channel-row { grid-template-columns:minmax(130px,.55fr) minmax(240px,1.45fr); }.notification-channel-setup,.notification-verification-row { grid-column:1 / -1; } }
@@ -447,6 +466,8 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
   .loan-list-heading { align-items:stretch; flex-direction:column; }
   .loan-list-item { grid-template-columns:1fr; }
   .loan-list-item > button { width:100%; min-height:42px; }
+  .loan-photo-actions > label { flex:1 1 120px; }
+  .loan-photo-gallery { grid-template-columns:repeat(4,minmax(0,1fr)); }
 }
 @media (max-width:850px) {
   .sickness-hub-grid,.amu-hub-card { grid-template-columns:1fr; }

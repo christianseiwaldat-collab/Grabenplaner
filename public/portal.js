@@ -67,6 +67,8 @@ const portalState = {
   loans: [],
   loanTeamMembers: [],
   loanDraftItems: [],
+  loanIssuePhotoFiles: [],
+  loanReturnPhotoFiles: [],
   selectedLoan: null,
   pendingLoanConfirmations: [],
   activeLoanConfirmation: null,
@@ -134,10 +136,10 @@ const el = Object.fromEntries([
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
   "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "settingsView", "settingsPasswordButton", "scheduleView", "timeOffView",
   "loanTab", "loanView", "leadershipLoanShortcut", "loanRefresh", "loanAvailabilityMessage", "loanWorkspace", "loanIssueForm", "loanBorrowerField", "loanBorrower",
-  "loanItemEditor", "loanAddItem", "loanDueDate", "loanIssueNote", "loanIssueMessage", "loanIssueSubmit", "loanScopeField", "loanScope", "loanStatusFilter", "loanList",
-  "loanReturnDialog", "loanReturnForm", "loanReturnTitle", "loanReturnSummary", "loanReturnItems", "loanReturnWitness", "loanReturnNote", "loanReturnMessage", "loanReturnSubmit",
+  "loanItemEditor", "loanAddItem", "loanDueDate", "loanIssueNote", "loanIssuePhotos", "loanIssueCamera", "loanIssuePhotoSummary", "loanIssueMessage", "loanIssueSubmit", "loanScopeField", "loanScope", "loanStatusFilter", "loanList",
+  "loanReturnDialog", "loanReturnForm", "loanReturnTitle", "loanReturnSummary", "loanReturnItems", "loanReturnWitness", "loanReturnNote", "loanReturnPhotos", "loanReturnCamera", "loanReturnPhotoSummary", "loanReturnMessage", "loanReturnSubmit",
   "loanConfirmationDialog", "loanConfirmationForm", "loanConfirmationTitle", "loanConfirmationSummary", "loanConfirmationItems", "loanConfirmationNote",
-  "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
+  "loanConfirmationPhotos", "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
   "processTasksTab", "processTasksTabCount", "processTasksView", "refreshProcessTasks", "processTaskSummary", "processTaskList",
   "vacationView", "historyView", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
   "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeWeighted", "timePause", "timeDifference", "timeTrackingIssues", "timeEntryList",
@@ -3400,6 +3402,78 @@ const loanConditionLabels = {
   incomplete: "Unvollständig",
 };
 
+function loanPhotoFiles(phase) {
+  return phase === "return" ? portalState.loanReturnPhotoFiles : portalState.loanIssuePhotoFiles;
+}
+
+function setLoanPhotoFiles(phase, files) {
+  if (phase === "return") portalState.loanReturnPhotoFiles = files;
+  else portalState.loanIssuePhotoFiles = files;
+  renderLoanPhotoSelection(phase);
+}
+
+function loanPhotoSize(bytes) {
+  const value = Number(bytes || 0);
+  return value >= 1024 * 1024
+    ? `${(value / 1024 / 1024).toFixed(1).replace(".", ",")} MB`
+    : `${Math.max(1, Math.round(value / 1024))} KB`;
+}
+
+function renderLoanPhotoSelection(phase) {
+  const node = phase === "return" ? el.loanReturnPhotoSummary : el.loanIssuePhotoSummary;
+  if (!node) return;
+  const files = loanPhotoFiles(phase);
+  node.innerHTML = files.length ? files.map((file, index) => `
+    <span><strong>${esc(file.name || `Foto ${index + 1}`)}</strong><small>${esc(loanPhotoSize(file.size))}</small><button type="button" data-loan-photo-remove="${index}" data-loan-photo-phase="${phase}" aria-label="Foto entfernen">×</button></span>
+  `).join("") : '<small>Noch keine Fotos ausgewählt.</small>';
+}
+
+function addLoanPhotoFiles(phase, fileList) {
+  const current = [...loanPhotoFiles(phase)];
+  const originalCount = current.length;
+  const incoming = [...(fileList || [])];
+  const allowedExtension = /\.(?:jpe?g|png|webp|tiff?|heic|heif)$/i;
+  for (const file of incoming) {
+    if (!String(file.type || "").startsWith("image/") && !allowedExtension.test(String(file.name || ""))) {
+      message(phase === "return" ? el.loanReturnMessage : el.loanIssueMessage, "Für Leihfotos werden ausschließlich Bilddateien unterstützt.", true);
+      continue;
+    }
+    if (Number(file.size || 0) > 10 * 1024 * 1024) {
+      message(phase === "return" ? el.loanReturnMessage : el.loanIssueMessage, `${file.name}: Das Foto ist größer als 10 MB.`, true);
+      continue;
+    }
+    if (current.length >= 9) break;
+    if (current.reduce((sum, selected) => sum + Number(selected.size || 0), 0) + Number(file.size || 0) > 45 * 1024 * 1024) {
+      message(phase === "return" ? el.loanReturnMessage : el.loanIssueMessage, "Die ausgewählten Fotos dürfen zusammen höchstens 45 MB groß sein.", true);
+      break;
+    }
+    current.push(file);
+  }
+  setLoanPhotoFiles(phase, current);
+  if (incoming.length && originalCount + incoming.length > 9) {
+    message(phase === "return" ? el.loanReturnMessage : el.loanIssueMessage, "Pro Ausgabe oder Rücknahme sind höchstens neun Fotos möglich.", true);
+  }
+}
+
+async function uploadLoanPhotos(loanId, phase, files) {
+  if (!files?.length) return null;
+  const data = new FormData();
+  data.set("phase", phase);
+  files.forEach((file) => data.append("photos", file, file.name || `${phase}-foto.jpg`));
+  return api(`/api/portal/v1/loans/${encodeURIComponent(loanId)}/photos`, {
+    method: "POST",
+    body: data,
+  });
+}
+
+function loanPhotoGallery(photos, phase = "") {
+  const selected = (photos || []).filter((photo) => !phase || photo.phase === phase);
+  if (!selected.length) return "";
+  return `<div class="loan-photo-gallery">${selected.map((photo, index) => `
+    <a href="${esc(photo.contentUrl)}" target="_blank" rel="noopener"><img src="${esc(photo.contentUrl)}" alt="${photo.phase === "return" ? "Rückgabefoto" : "Ausgabefoto"} ${index + 1}" loading="lazy" /></a>
+  `).join("")}</div>`;
+}
+
 function newLoanDraftItem() {
   return {
     identifier: "",
@@ -3417,9 +3491,12 @@ function newLoanDraftItem() {
 
 function resetLoanDraft() {
   portalState.loanDraftItems = [newLoanDraftItem()];
+  setLoanPhotoFiles("issue", []);
   if (el.loanIssueForm) {
     el.loanDueDate.value = "";
     el.loanIssueNote.value = "";
+    el.loanIssuePhotos.value = "";
+    el.loanIssueCamera.value = "";
   }
   renderLoanDraftItems();
 }
@@ -3561,8 +3638,9 @@ function renderLoanList() {
     const pendingCopy = loan.pendingReturnConfirmation
       ? `<small class="loan-pending-confirmation">Bestätigung ausständig bei ${esc(loan.pendingReturnConfirmation.witness.employeeNumber)} · ${esc(loan.pendingReturnConfirmation.witness.name)} – gültig bis ${esc(timestampText(loan.pendingReturnConfirmation.expiresAt))}</small>`
       : "";
+    const photos = loanPhotoGallery(loan.photos);
     return `<article class="loan-list-item">
-      <div class="loan-list-main"><span class="status ${loan.status === "returned" ? "approved" : "pending"}">${esc(loanStatusText(loan.status))}</span><strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><small>Ausgabe: ${esc(timestampText(loan.issuedAt || loan.createdAt))}${loan.dueDate ? ` · geplant bis ${esc(dateText(loan.dueDate))}` : ""}</small>${returnCopy}${pendingCopy}<ul>${items}</ul>${documents}</div>
+      <div class="loan-list-main"><span class="status ${loan.status === "returned" ? "approved" : "pending"}">${esc(loanStatusText(loan.status))}</span><strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><small>Ausgabe: ${esc(timestampText(loan.issuedAt || loan.createdAt))}${loan.dueDate ? ` · geplant bis ${esc(dateText(loan.dueDate))}` : ""}</small>${returnCopy}${pendingCopy}<ul>${items}</ul>${photos}${documents}</div>
       ${canReturn ? `<button class="primary" data-loan-return="${esc(loan.id)}" type="button">Zurücknehmen</button>` : ""}
     </article>`;
   }).join("") : '<p class="empty-state">In diesem Bereich sind noch keine Leihvorgänge vorhanden.</p>';
@@ -3632,7 +3710,7 @@ async function submitLoanIssue(event) {
   el.loanIssueSubmit.disabled = true;
   message(el.loanIssueMessage, "");
   try {
-    await api("/api/portal/v1/loans", {
+    const result = await api("/api/portal/v1/loans", {
       method: "POST",
       body: JSON.stringify({
         locationId: portalState.loanStatus.location?.id,
@@ -3649,7 +3727,15 @@ async function submitLoanIssue(event) {
         })),
       }),
     });
-    message(el.loanIssueMessage, "Die Leihe und der Ausgabebeleg wurden erfasst.");
+    let photoWarning = "";
+    if (portalState.loanIssuePhotoFiles.length) {
+      try {
+        await uploadLoanPhotos(result.loan.id, "issue", portalState.loanIssuePhotoFiles);
+      } catch (error) {
+        photoWarning = ` Die Leihe ist gespeichert, die Fotos konnten jedoch nicht ergänzt werden: ${error.message}`;
+      }
+    }
+    message(el.loanIssueMessage, `Die Leihe und der Ausgabebeleg wurden erfasst.${photoWarning}`, Boolean(photoWarning));
     resetLoanDraft();
     await loadLoans();
   } catch (error) {
@@ -3677,6 +3763,9 @@ async function openLoanReturn(loanId) {
     .map((member) => `<option value="${esc(member.employeeNumber)}" ${member.portalOpen ? "" : "disabled"}>${esc(member.employeeNumber)} · ${esc(member.name)} · ${member.portalOpen ? "Portal geöffnet" : "Portal nicht geöffnet"}</option>`)
     .join("");
   el.loanReturnNote.value = "";
+  setLoanPhotoFiles("return", []);
+  el.loanReturnPhotos.value = "";
+  el.loanReturnCamera.value = "";
   message(el.loanReturnMessage, "");
   el.loanReturnDialog.showModal();
 }
@@ -3688,6 +3777,12 @@ async function submitLoanReturn(event) {
   el.loanReturnSubmit.disabled = true;
   message(el.loanReturnMessage, "");
   try {
+    if (portalState.loanReturnPhotoFiles.length) {
+      await uploadLoanPhotos(loan.id, "return", portalState.loanReturnPhotoFiles);
+      setLoanPhotoFiles("return", []);
+      el.loanReturnPhotos.value = "";
+      el.loanReturnCamera.value = "";
+    }
     const result = await api(`/api/portal/v1/loans/${encodeURIComponent(loan.id)}/return`, {
       method: "POST",
       body: JSON.stringify({
@@ -3733,6 +3828,9 @@ function showLoanConfirmation(confirmation) {
       <span class="loan-condition-pill">${esc(loanConditionText(item.conditionReturn))}</span>
       ${item.returnNote ? `<small>Bemerkung: ${esc(item.returnNote)}</small>` : ""}
     </article>`).join("");
+  const photos = (confirmation.photos || []);
+  el.loanConfirmationPhotos.classList.toggle("hidden", !photos.length);
+  el.loanConfirmationPhotos.querySelector("div").innerHTML = loanPhotoGallery(photos, "return");
   el.loanConfirmationNote.value = "";
   el.loanConfirmationExpiry.textContent = `Die Anfrage läuft um ${timestampText(confirmation.expiresAt)} ab. Ohne deine Bestätigung bleibt die Leihe offen.`;
   message(el.loanConfirmationMessage, "");
@@ -3907,6 +4005,18 @@ el.previousWeek.addEventListener("click", () => { portalState.weekStart = addDay
 el.nextWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, 7); loadSchedule(); });
 el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule(); });
 el.loanRefresh?.addEventListener("click", loadLoanModule);
+[["issue", el.loanIssuePhotos], ["issue", el.loanIssueCamera], ["return", el.loanReturnPhotos], ["return", el.loanReturnCamera]]
+  .forEach(([phase, input]) => input?.addEventListener("change", () => {
+    addLoanPhotoFiles(phase, input.files);
+    input.value = "";
+  }));
+[el.loanIssuePhotoSummary, el.loanReturnPhotoSummary].forEach((summary) => summary?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-loan-photo-remove]");
+  if (!button) return;
+  const files = [...loanPhotoFiles(button.dataset.loanPhotoPhase)];
+  files.splice(Number(button.dataset.loanPhotoRemove), 1);
+  setLoanPhotoFiles(button.dataset.loanPhotoPhase, files);
+}));
 el.loanAddItem?.addEventListener("click", () => {
   if (portalState.loanDraftItems.length >= 5) return;
   portalState.loanDraftItems.push(newLoanDraftItem());
@@ -3959,6 +4069,7 @@ el.loanConfirmationDialog?.addEventListener("cancel", (event) => event.preventDe
 document.querySelectorAll("[data-close-loan-return]").forEach((button) => button.addEventListener("click", () => {
   el.loanReturnDialog.close();
   portalState.selectedLoan = null;
+  setLoanPhotoFiles("return", []);
 }));
 el.timeOffRequestForm.addEventListener("submit", submitTimeOff);
 el.timeOffDate.addEventListener("change", loadTimeOffSlots);

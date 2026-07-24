@@ -253,6 +253,14 @@
                 <label><span>Geplante Rückgabe</span><input id="loanDueDate" type="date" /></label>
                 <label><span>Bemerkung</span><input id="loanIssueNote" maxlength="500" placeholder="Optional" /></label>
               </div>
+              <section class="loan-photo-picker" aria-labelledby="loanIssuePhotoTitle">
+                <div><strong id="loanIssuePhotoTitle">Zustand bei Ausgabe fotografieren</strong><small>Optional · bis zu 9 Fotos · je 10 MB, zusammen 45 MB · Bilder werden verkleinert und geschützt gespeichert.</small></div>
+                <div class="loan-photo-actions">
+                  <label class="loan-photo-button">Fotos auswählen<input id="loanIssuePhotos" type="file" accept="image/jpeg,image/png,image/webp,image/tiff,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.tif,.tiff,.heic,.heif" multiple /></label>
+                  <label class="loan-camera-button">Kamera<input id="loanIssueCamera" type="file" accept="image/*" capture="environment" /></label>
+                </div>
+                <div class="loan-photo-selection" id="loanIssuePhotoSummary"></div>
+              </section>
               <p class="form-note">Eingabe: sechsstellige interne Artikelnummer oder EAN/GTIN. Ein bestätigter EAN-Abgleich wird für die nächste Leihe gespeichert.</p>
               <p class="message hidden" id="loanIssueMessage"></p>
               <button class="primary" id="loanIssueSubmit" type="submit">Leihe erfassen</button>
@@ -358,6 +366,14 @@
         <div class="loan-return-items" id="loanReturnItems"></div>
         <label><span>Zweites Teammitglied</span><select id="loanReturnWitness" required></select><small>Die Rücknahme wird durch ein anderes aktives Teammitglied desselben Standorts bestätigt.</small></label>
         <label><span>Bemerkung zur Rückgabe</span><textarea id="loanReturnNote" maxlength="1000" rows="3" placeholder="Optional"></textarea></label>
+        <section class="loan-photo-picker" aria-labelledby="loanReturnPhotoTitle">
+          <div><strong id="loanReturnPhotoTitle">Zustand bei Rückgabe fotografieren</strong><small>Die ausgewählten Fotos werden dem zweiten Teammitglied vor der Bestätigung angezeigt.</small></div>
+          <div class="loan-photo-actions">
+            <label class="loan-photo-button">Fotos auswählen<input id="loanReturnPhotos" type="file" accept="image/jpeg,image/png,image/webp,image/tiff,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.tif,.tiff,.heic,.heif" multiple /></label>
+            <label class="loan-camera-button">Kamera<input id="loanReturnCamera" type="file" accept="image/*" capture="environment" /></label>
+          </div>
+          <div class="loan-photo-selection" id="loanReturnPhotoSummary"></div>
+        </section>
         <p class="message hidden" id="loanReturnMessage"></p>
         <div class="dialog-actions"><button type="button" data-close-loan-return>Abbrechen</button><button class="primary" id="loanReturnSubmit" type="submit">Bestätigung anfordern</button></div>
       </form>
@@ -371,6 +387,7 @@
         <p class="loan-confirmation-alert">Du wurdest als zweites Teammitglied ausgewählt. Bitte Artikel und Zustand prüfen, bevor du bestätigst.</p>
         <div class="history-detail-summary" id="loanConfirmationSummary"></div>
         <div class="loan-confirmation-items" id="loanConfirmationItems"></div>
+        <section class="loan-confirmation-photos hidden" id="loanConfirmationPhotos"><strong>Rückgabefotos</strong><div></div></section>
         <label><span>Bemerkung zur Entscheidung</span><textarea id="loanConfirmationNote" maxlength="500" rows="3" placeholder="Optional"></textarea></label>
         <p class="form-note" id="loanConfirmationExpiry"></p>
         <p class="message hidden" id="loanConfirmationMessage"></p>

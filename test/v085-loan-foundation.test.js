@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const sharp = require("sharp");
 
 const {
   hasValidGtinChecksum,
@@ -89,13 +90,14 @@ function createSession(employeeNumber) {
 
 async function request(route, { method = "GET", session = employeeSession, body } = {}) {
   const headers = { Accept: "application/json" };
+  const multipart = body instanceof FormData;
   if (session) headers.Cookie = session.cookie;
   if (session && !["GET", "HEAD"].includes(method)) headers["X-CSRF-Token"] = session.csrf;
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
   const response = await fetch(`${baseUrl}${route}`, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : multipart ? body : JSON.stringify(body),
   });
   const payload = await response.json();
   return { response, payload };
@@ -196,7 +198,18 @@ test("v0.85 EAN und GTIN werden per Prüfziffer erkannt und am Shopartikel best�
 });
 
 test("v0.85 Datenmodell trennt zentralen Artikelstamm, Standortfreigabe und Leihhistorie", () => {
-  for (const table of ["articles", "article_identifiers", "loan_location_settings", "loans", "loan_items", "loan_return_confirmations", "loan_documents", "loan_events"]) {
+  for (const table of [
+    "articles",
+    "article_identifiers",
+    "loan_location_settings",
+    "loans",
+    "loan_items",
+    "loan_return_confirmations",
+    "loan_documents",
+    "loan_photos",
+    "loan_document_deliveries",
+    "loan_events",
+  ]) {
     assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table), table);
   }
   assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.85-loan-module-foundation'").get());
@@ -222,6 +235,25 @@ test("v0.85 Datenmodell trennt zentralen Artikelstamm, Standortfreigabe und Leih
   assert.throws(
     () => db.prepare("UPDATE loan_documents SET filename = 'Geaendert.pdf' WHERE id = 'test-document'").run(),
     /loan documents are immutable/,
+  );
+  db.prepare(`
+    INSERT INTO loan_photos
+      (id, loan_id, phase, position, storage_key, filename, byte_size, sha256,
+       pixel_width, pixel_height)
+    VALUES ('test-photo', ?, 'issue', 1, 'aa/test-photo.enc', 'Foto.jpg', 10, ?, 10, 10)
+  `).run(loanId, "b".repeat(64));
+  assert.throws(
+    () => db.prepare("UPDATE loan_photos SET filename = 'Geaendert.jpg' WHERE id = 'test-photo'").run(),
+    /loan photos are immutable/,
+  );
+  db.prepare(`
+    INSERT INTO loan_document_deliveries
+      (id, document_id, channel, recipient_employee_number, status)
+    VALUES ('test-delivery', 'test-document', 'internal', ?, 'sent')
+  `).run(ADMIN);
+  assert.throws(
+    () => db.prepare("UPDATE loan_document_deliveries SET status = 'failed' WHERE id = 'test-delivery'").run(),
+    /loan document deliveries are immutable/,
   );
 });
 
@@ -263,6 +295,8 @@ test("v0.85 PL-plus konfiguriert den Standort, Mitarbeitende dürfen die Einstel
   assert.equal(configured.payload.location.enabled, true);
   assert.equal(configured.payload.location.articleLookup.baseUrl, "https://shop.lamprechter.com");
   assert.equal(configured.payload.location.documentRecipient.employeeNumber, ADMIN);
+  assert.equal(configured.payload.location.emailDelivery.enabled, false);
+  assert.equal(configured.payload.location.emailDelivery.recipient, "");
 
   const status = await request("/api/portal/v1/loans/status");
   assert.equal(status.response.status, 200, JSON.stringify(status.payload));
@@ -388,14 +422,75 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
   assert.equal(issued.payload.loan.items[0].quantity, 1);
   assert.equal(issued.payload.loan.documents.length, 1);
   assert.equal(issued.payload.loan.documents[0].type, "issue");
+  assert.ok(issued.payload.loan.documents[0].delivery.internalSent >= 1);
   const issuePdf = await requestBinary(issued.payload.loan.documents[0].downloadUrl);
   assert.equal(issuePdf.response.status, 200);
   assert.equal(issuePdf.buffer.subarray(0, 4).toString("ascii"), "%PDF");
   assert.equal(issuePdf.response.headers.get("cache-control"), "private, no-store, max-age=0");
 
+  const issueImage = await sharp({
+    create: {
+      width: 1200,
+      height: 800,
+      channels: 3,
+      background: { r: 38, g: 120, b: 95 },
+    },
+  }).png().toBuffer();
+  const issuePhotoForm = new FormData();
+  issuePhotoForm.set("phase", "issue");
+  issuePhotoForm.append("photos", new Blob([issueImage], { type: "image/png" }), "Ausgabe.png");
+  const uploadedIssuePhoto = await request(
+    `/api/portal/v1/loans/${issued.payload.loan.id}/photos`,
+    { method: "POST", body: issuePhotoForm },
+  );
+  assert.equal(uploadedIssuePhoto.response.status, 201, JSON.stringify(uploadedIssuePhoto.payload));
+  assert.equal(uploadedIssuePhoto.payload.photos.length, 1);
+  assert.equal(uploadedIssuePhoto.payload.photos[0].phase, "issue");
+  assert.match(uploadedIssuePhoto.payload.photos[0].filename, /\.jpg$/);
+  const issuePhoto = await requestBinary(uploadedIssuePhoto.payload.photos[0].contentUrl);
+  assert.equal(issuePhoto.response.status, 200);
+  assert.equal(issuePhoto.response.headers.get("content-type"), "image/jpeg");
+  assert.equal(issuePhoto.response.headers.get("cache-control"), "private, no-store, max-age=0");
+  assert.equal(issuePhoto.buffer.subarray(0, 2).toString("hex"), "ffd8");
+  const deniedPhoto = await requestBinary(uploadedIssuePhoto.payload.photos[0].contentUrl, {
+    session: otherSession,
+  });
+  assert.equal(deniedPhoto.response.status, 403);
+
   const open = await request(`/api/portal/v1/loans?scope=mine&status=open&locationId=${locationId}`);
   assert.equal(open.response.status, 200, JSON.stringify(open.payload));
   assert.equal(open.payload.loans.some((loan) => loan.id === issued.payload.loan.id), true);
+
+  const management = await request(
+    `/api/portal/v1/loans/management/summary?locationId=${locationId}`,
+    { session: adminSession },
+  );
+  assert.equal(management.response.status, 200, JSON.stringify(management.payload));
+  assert.equal(management.payload.loans.some((loan) => loan.id === issued.payload.loan.id), true);
+  assert.ok(management.payload.summary.open >= 1);
+
+  db.prepare(`
+    UPDATE loan_location_settings
+    SET document_email_enabled = 1,
+        document_recipient_email = 'belege@example.test',
+        updated_at = CURRENT_TIMESTAMP
+    WHERE location_id = ?
+  `).run(locationId);
+  const failedEmailRetry = await request(
+    `/api/portal/v1/loans/documents/${issued.payload.loan.documents[0].id}/email`,
+    { method: "POST", session: adminSession, body: {} },
+  );
+  assert.equal(failedEmailRetry.response.status, 503, JSON.stringify(failedEmailRetry.payload));
+  assert.equal(failedEmailRetry.payload.delivery.status, "failed");
+  assert.equal(failedEmailRetry.payload.document.delivery.emailStatus, "failed");
+  assert.equal(failedEmailRetry.payload.document.delivery.emailAttempts, 1);
+  db.prepare(`
+    UPDATE loan_location_settings
+    SET document_email_enabled = 0,
+        document_recipient_email = '',
+        updated_at = CURRENT_TIMESTAMP
+    WHERE location_id = ?
+  `).run(locationId);
 
   db.prepare(`
     UPDATE portal_sessions SET last_seen_at = datetime('now', '-5 minutes')
@@ -420,6 +515,24 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
   assert.equal(heartbeat.response.status, 200, JSON.stringify(heartbeat.payload));
   assert.deepEqual(heartbeat.payload.confirmations, []);
 
+  const returnImage = await sharp({
+    create: {
+      width: 900,
+      height: 900,
+      channels: 3,
+      background: { r: 255, g: 203, b: 66 },
+    },
+  }).jpeg({ quality: 92 }).toBuffer();
+  const returnPhotoForm = new FormData();
+  returnPhotoForm.set("phase", "return");
+  returnPhotoForm.append("photos", new Blob([returnImage], { type: "image/jpeg" }), "Rueckgabe.jpg");
+  const uploadedReturnPhoto = await request(
+    `/api/portal/v1/loans/${issued.payload.loan.id}/photos`,
+    { method: "POST", body: returnPhotoForm },
+  );
+  assert.equal(uploadedReturnPhoto.response.status, 201, JSON.stringify(uploadedReturnPhoto.payload));
+  assert.equal(uploadedReturnPhoto.payload.photos.length, 1);
+
   const requested = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
     method: "POST",
     body: {
@@ -442,6 +555,8 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
   assert.equal(witnessPending.payload.confirmations.length, 1);
   assert.equal(witnessPending.payload.confirmations[0].loan.borrower.employeeNumber, EMPLOYEE);
   assert.equal(witnessPending.payload.confirmations[0].items[0].conditionReturn, "good");
+  assert.equal(witnessPending.payload.confirmations[0].photos.length, 1);
+  assert.equal(witnessPending.payload.confirmations[0].photos[0].phase, "return");
 
   const requesterCannotConfirm = await request(
     `/api/portal/v1/loans/return-confirmations/${requested.payload.confirmation.id}/respond`,
@@ -469,6 +584,8 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
   assert.deepEqual(returned.payload.loan.events.map((event) => event.type), [
     "issued",
     "document_created",
+    "photos_added",
+    "photos_added",
     "return_confirmation_requested",
     "returned",
     "document_created",
@@ -541,4 +658,22 @@ test("v0.85 eine abgelehnte Gegenprüfung lässt die Leihe offen und erlaubt ein
   });
   assert.equal(requestedAgain.response.status, 202, JSON.stringify(requestedAgain.payload));
   assert.notEqual(requestedAgain.payload.confirmation.id, requested.payload.confirmation.id);
+});
+
+test("v0.85 Leihverwaltung, Fotobelege und Standortversand sind in beiden Oberflächen verankert", () => {
+  const adminHtml = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
+  const adminSource = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
+  const portalHtml = fs.readFileSync(path.join(__dirname, "..", "public", "portal.html"), "utf8");
+  const portalSource = fs.readFileSync(path.join(__dirname, "..", "public", "portal.js"), "utf8");
+
+  assert.match(adminHtml, /id="loanManagementNavButton"/);
+  assert.match(adminHtml, /id="loansView"/);
+  assert.match(adminHtml, /id="loanManagementSummary"/);
+  assert.match(adminHtml, /id="loanSettingsCard"/);
+  assert.match(adminSource, /\/api\/portal\/v1\/loans\/management\/summary/);
+  assert.match(adminSource, /\/api\/portal\/v1\/loans\/documents\/\$\{encodeURIComponent\(documentId\)\}\/email/);
+  assert.match(portalHtml, /id="loanIssuePhotos"/);
+  assert.match(portalHtml, /id="loanReturnPhotos"/);
+  assert.match(portalSource, /uploadLoanPhotos/);
+  assert.match(portalSource, /data-loan-photo-remove/);
 });

@@ -44,6 +44,8 @@ v0.85 integriert die Leihe in das Mitarbeiterportal. Bis zu fünf Artikel könne
 
 Die Artikelauflösung erfolgt serverseitig über einen je Standort konfigurierbaren HTTPS-Shop. Eine gefundene Artikelbezeichnung wird im zentralen Artikelstamm zwischengespeichert; bei einer nicht erreichbaren oder erfolglosen Suche bleibt eine kontrollierte manuelle Eingabe möglich. Leihvorgänge verwenden unveränderliche Bezeichnungsschnappschüsse und eine append-only Ereignishistorie. Bei der Rücknahme muss ein zweites, aktuell im Mitarbeiterportal angemeldetes Teammitglied die erfassten Artikel und Zustände in einem sofort eingeblendeten Dialog bestätigen. Bis dahin bleibt die Leihe offen; Ablehnung, Ablauf und konkurrierende Änderungen werden nachvollziehbar behandelt.
 
+Ausgabe- und Rücknahmefotos werden auf dem Server neu kodiert, verkleinert, von Metadaten bereinigt und verschlüsselt gespeichert. Beteiligte und berechtigte Leitungen können sie ausschließlich über geschützte, nicht zwischengespeicherte Routen öffnen. Eine neue Leihverwaltung zeigt offene, fällige und abgeschlossene Vorgänge standortbezogen an. PDF-Belege werden intern zugestellt; optional kann je Standort ein SMTP-Empfänger für den PDF-Anhang konfiguriert und ein fehlgeschlagener Versand nachvollziehbar wiederholt werden.
+
 Für jede Ausgabe und jede bestätigte Rücknahme entsteht automatisch ein gebrandeter PDF-Beleg. Die Belege werden verschlüsselt gespeichert, mit SHA-256 gegen unbemerkte Veränderungen geprüft und in den Sicherungsreferenzen berücksichtigt. Beteiligte sowie ausdrücklich berechtigte Standortrollen können sie geschützt im Mitarbeiterportal abrufen; interne Benachrichtigungen informieren über neu verfügbare Dokumente.
 
 ## System-Center und Recovery Assurance in v0.78 Beta

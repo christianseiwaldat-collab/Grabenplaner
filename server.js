@@ -154,6 +154,12 @@ const {
   normalizeLoanText,
 } = require("./lib/loan-workflow");
 const { renderLoanPdf } = require("./lib/loan-pdf");
+const {
+  LoanPhotoError,
+  MAX_LOAN_PHOTO_INPUT_BYTES,
+  MAX_LOAN_PHOTOS_PER_PHASE,
+  prepareLoanPhoto,
+} = require("./lib/loan-photo");
 const { CONTRACT_IDS, contractById, contractSha256, contractSummaries } = require("./lib/integration-contracts");
 const {
   BUILTIN_WORK_RULE_PROFILES,
@@ -1187,6 +1193,10 @@ function protectedStorageReferencesFromDatabase(database) {
     keys.push(...database.prepare("SELECT storage_key FROM loan_documents").all()
       .map((row) => String(row.storage_key || "").toLowerCase()));
   }
+  if (databaseHasTable(database, "loan_photos")) {
+    keys.push(...database.prepare("SELECT storage_key FROM loan_photos").all()
+      .map((row) => String(row.storage_key || "").toLowerCase()));
+  }
   if (keys.some((key) => !key) || new Set(keys).size !== keys.length) {
     throw new Error("Die Datenbank enthält ungültige oder doppelte Verweise auf geschützte Dokumente.");
   }
@@ -1451,6 +1461,8 @@ function createSchema() {
         CHECK(article_lookup_provider IN ('none','shopware_storefront')),
       article_lookup_base_url TEXT NOT NULL DEFAULT '',
       document_recipient_employee_number TEXT,
+      document_email_enabled INTEGER NOT NULL DEFAULT 0 CHECK(document_email_enabled IN (0,1)),
+      document_recipient_email TEXT NOT NULL DEFAULT '',
       created_by TEXT NOT NULL DEFAULT '',
       updated_by TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1581,6 +1593,76 @@ function createSchema() {
     BEFORE DELETE ON loan_documents
     BEGIN
       SELECT RAISE(ABORT, 'loan documents are immutable');
+    END;
+
+    CREATE TABLE IF NOT EXISTS loan_photos (
+      id TEXT PRIMARY KEY,
+      loan_id TEXT NOT NULL,
+      phase TEXT NOT NULL CHECK(phase IN ('issue','return')),
+      position INTEGER NOT NULL CHECK(position BETWEEN 1 AND 9),
+      storage_key TEXT NOT NULL UNIQUE,
+      filename TEXT NOT NULL,
+      detected_mime TEXT NOT NULL DEFAULT 'image/jpeg'
+        CHECK(detected_mime = 'image/jpeg'),
+      byte_size INTEGER NOT NULL CHECK(byte_size > 0),
+      sha256 TEXT NOT NULL CHECK(length(sha256) = 64),
+      pixel_width INTEGER NOT NULL CHECK(pixel_width > 0),
+      pixel_height INTEGER NOT NULL CHECK(pixel_height > 0),
+      created_by_employee_number TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(loan_id, phase, position),
+      FOREIGN KEY (loan_id) REFERENCES loans(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (created_by_employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_loan_photos_loan
+      ON loan_photos(loan_id, phase, position);
+
+    CREATE TRIGGER IF NOT EXISTS trg_loan_photos_immutable_update
+    BEFORE UPDATE ON loan_photos
+    BEGIN
+      SELECT RAISE(ABORT, 'loan photos are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_loan_photos_immutable_delete
+    BEFORE DELETE ON loan_photos
+    BEGIN
+      SELECT RAISE(ABORT, 'loan photos are immutable');
+    END;
+
+    CREATE TABLE IF NOT EXISTS loan_document_deliveries (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      channel TEXT NOT NULL CHECK(channel IN ('internal','email')),
+      recipient_employee_number TEXT,
+      recipient_address TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL CHECK(status IN ('sent','failed')),
+      error_code TEXT NOT NULL DEFAULT '',
+      attempted_by_employee_number TEXT,
+      attempted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (document_id) REFERENCES loan_documents(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (recipient_employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE SET NULL,
+      FOREIGN KEY (attempted_by_employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_loan_document_deliveries_document
+      ON loan_document_deliveries(document_id, attempted_at, channel);
+
+    CREATE TRIGGER IF NOT EXISTS trg_loan_document_deliveries_immutable_update
+    BEFORE UPDATE ON loan_document_deliveries
+    BEGIN
+      SELECT RAISE(ABORT, 'loan document deliveries are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_loan_document_deliveries_immutable_delete
+    BEFORE DELETE ON loan_document_deliveries
+    BEGIN
+      SELECT RAISE(ABORT, 'loan document deliveries are immutable');
     END;
 
     CREATE TABLE IF NOT EXISTS loan_events (
@@ -3258,11 +3340,17 @@ const loanModuleTables = Object.freeze([
   "loan_items",
   "loan_return_confirmations",
   "loan_documents",
+  "loan_photos",
+  "loan_document_deliveries",
   "loan_events",
 ]);
 const loanModuleTriggerNames = Object.freeze([
   "trg_loan_documents_immutable_update",
   "trg_loan_documents_immutable_delete",
+  "trg_loan_photos_immutable_update",
+  "trg_loan_photos_immutable_delete",
+  "trg_loan_document_deliveries_immutable_update",
+  "trg_loan_document_deliveries_immutable_delete",
   "trg_loan_events_immutable_update",
   "trg_loan_events_immutable_delete",
 ]);
@@ -3509,6 +3597,8 @@ ensureColumn("integration_deliveries", "connection_revision", "INTEGER NOT NULL 
 ensureColumn("integration_deliveries", "connection_fingerprint", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("work_rule_evaluation_runs", "receipt_sha256", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("loan_location_settings", "document_recipient_employee_number", "TEXT");
+ensureColumn("loan_location_settings", "document_email_enabled", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("loan_location_settings", "document_recipient_email", "TEXT NOT NULL DEFAULT ''");
 ensureWorkRuleEvaluationReceiptIntegrity();
 if (!columnExists("week_options", "group_id")) {
   db.exec("ALTER TABLE week_options ADD COLUMN group_id TEXT");
@@ -5251,6 +5341,97 @@ function parseAmuMultipart(request, { maxFileBytes = 10 * 1024 * 1024, totalMaxB
         resolve({ fields, documents });
       } catch (error) {
         fail(error.status ? error : httpError(400, "Das Upload-Formular ist ungültig.", "AMU_MULTIPART_INVALID"));
+      }
+    });
+  });
+}
+
+function parseLoanPhotoMultipart(request) {
+  const totalMaxBytes = 45 * 1024 * 1024;
+  return new Promise((resolve, reject) => {
+    const contentType = String(request.headers["content-type"] || "");
+    const boundaryMatch = contentType.match(/^multipart\/form-data\s*;[\s\S]*?boundary=(?:"([^"]+)"|([^;\s]+))/i);
+    const boundary = String(boundaryMatch?.[1] || boundaryMatch?.[2] || "");
+    if (!boundary || boundary.length > 70 || /[\r\n]/.test(boundary)) {
+      reject(httpError(415, "Bitte die Leihfotos als Formular senden.", "LOAN_PHOTO_MULTIPART_REQUIRED"));
+      return;
+    }
+    const chunks = [];
+    let totalBytes = 0;
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+    request.on("data", (chunk) => {
+      if (settled) return;
+      totalBytes += chunk.length;
+      if (totalBytes > totalMaxBytes) {
+        fail(httpError(413, "Der gesamte Foto-Upload darf höchstens 45 MB groß sein.", "LOAN_PHOTO_UPLOAD_TOO_LARGE"));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("error", () => fail(httpError(400, "Die Leihfotos konnten nicht gelesen werden.", "LOAN_PHOTO_MULTIPART_INVALID")));
+    request.on("end", () => {
+      if (settled) return;
+      try {
+        const body = Buffer.concat(chunks);
+        const delimiter = Buffer.from(`--${boundary}`, "utf8");
+        const nextDelimiter = Buffer.from(`\r\n--${boundary}`, "utf8");
+        const fields = {};
+        const photos = [];
+        let position = body.indexOf(delimiter);
+        let partCount = 0;
+        if (position !== 0) throw httpError(400, "Das Fotoformular ist ungültig.", "LOAN_PHOTO_MULTIPART_INVALID");
+        while (position >= 0) {
+          position += delimiter.length;
+          if (body.subarray(position, position + 2).toString("ascii") === "--") break;
+          if (body.subarray(position, position + 2).toString("ascii") !== "\r\n") {
+            throw httpError(400, "Das Fotoformular ist ungültig.", "LOAN_PHOTO_MULTIPART_INVALID");
+          }
+          position += 2;
+          const headerEnd = body.indexOf(Buffer.from("\r\n\r\n"), position);
+          if (headerEnd < 0 || headerEnd - position > 8192) {
+            throw httpError(400, "Ein Foto-Uploadteil ist ungültig.", "LOAN_PHOTO_MULTIPART_INVALID");
+          }
+          const headers = body.subarray(position, headerEnd).toString("utf8");
+          const dataStart = headerEnd + 4;
+          const dataEnd = body.indexOf(nextDelimiter, dataStart);
+          if (dataEnd < 0) throw httpError(400, "Das Fotoformular ist unvollständig.", "LOAN_PHOTO_MULTIPART_INVALID");
+          const data = body.subarray(dataStart, dataEnd);
+          const disposition = headers.split("\r\n").find((line) => /^content-disposition:/i.test(line)) || "";
+          const name = disposition.match(/(?:^|;)\s*name="([^"]*)"/i)?.[1] || "";
+          const encodedFilename = disposition.match(/(?:^|;)\s*filename\*=UTF-8''([^;]+)/i)?.[1];
+          const plainFilename = disposition.match(/(?:^|;)\s*filename="([^"]*)"/i)?.[1];
+          let filename = plainFilename || "";
+          if (encodedFilename) {
+            try { filename = decodeURIComponent(encodedFilename); } catch {}
+          }
+          partCount += 1;
+          if (partCount > MAX_LOAN_PHOTOS_PER_PHASE + 2) {
+            throw httpError(413, "Das Fotoformular enthält zu viele Teile.", "LOAN_PHOTO_TOO_MANY_PARTS");
+          }
+          if (filename && name === "photos") {
+            if (data.length > MAX_LOAN_PHOTO_INPUT_BYTES) {
+              throw httpError(413, "Ein Foto darf höchstens 10 MB groß sein.", "LOAN_PHOTO_TOO_LARGE");
+            }
+            photos.push({ originalName: filename, buffer: Buffer.from(data) });
+            if (photos.length > MAX_LOAN_PHOTOS_PER_PHASE) {
+              throw httpError(413, "Pro Ausgabe oder Rücknahme sind höchstens neun Fotos möglich.", "LOAN_PHOTO_TOO_MANY");
+            }
+          } else if (!filename && name === "phase") {
+            if (data.length > 16) throw httpError(413, "Die Fotoangabe ist zu groß.", "LOAN_PHOTO_FIELD_TOO_LARGE");
+            fields.phase = data.toString("utf8");
+          }
+          position = dataEnd + 2;
+        }
+        if (!photos.length) throw httpError(400, "Bitte mindestens ein Foto auswählen.", "LOAN_PHOTO_REQUIRED");
+        settled = true;
+        resolve({ fields, photos });
+      } catch (error) {
+        fail(error.status ? error : httpError(400, "Das Fotoformular ist ungültig.", "LOAN_PHOTO_MULTIPART_INVALID"));
       }
     });
   });
@@ -24501,6 +24682,8 @@ function loanLocationSettingRow(locationId) {
            COALESCE(s.article_lookup_provider, 'none') AS article_lookup_provider,
            COALESCE(s.article_lookup_base_url, '') AS article_lookup_base_url,
            COALESCE(s.document_recipient_employee_number, '') AS document_recipient_employee_number,
+           COALESCE(s.document_email_enabled, 0) AS document_email_enabled,
+           COALESCE(s.document_recipient_email, '') AS document_recipient_email,
            recipient.full_name AS document_recipient_full_name,
            recipient.nickname AS document_recipient_nickname,
            s.updated_by, s.updated_at
@@ -24531,7 +24714,14 @@ function publicLoanLocationSetting(row, { includeConfiguration = false } = {}) {
     updatedBy: row.updated_by || "",
     updatedAt: row.updated_at || null,
   };
-  if (includeConfiguration) result.articleLookup.baseUrl = row.article_lookup_base_url || "";
+  if (includeConfiguration) {
+    result.articleLookup.baseUrl = row.article_lookup_base_url || "";
+    result.emailDelivery = {
+      enabled: Boolean(row.document_email_enabled),
+      recipient: row.document_recipient_email || "",
+      provider: externalNotificationProviderStatus().email,
+    };
+  }
   return result;
 }
 
@@ -24763,6 +24953,8 @@ app.get("/api/portal/v1/loans/settings", (request, response) => {
            COALESCE(s.article_lookup_provider, 'none') AS article_lookup_provider,
            COALESCE(s.article_lookup_base_url, '') AS article_lookup_base_url,
            COALESCE(s.document_recipient_employee_number, '') AS document_recipient_employee_number,
+           COALESCE(s.document_email_enabled, 0) AS document_email_enabled,
+           COALESCE(s.document_recipient_email, '') AS document_recipient_email,
            recipient.full_name AS document_recipient_full_name,
            recipient.nickname AS document_recipient_nickname,
            s.updated_by, s.updated_at
@@ -24833,18 +25025,30 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", (request, respons
       );
     }
   }
+  const documentEmailEnabled = request.body?.emailDelivery?.enabled === true;
+  const documentRecipientEmail = String(request.body?.emailDelivery?.recipient || "").trim().toLowerCase();
+  if (documentEmailEnabled && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(documentRecipientEmail)) {
+    throw httpError(
+      400,
+      "Für den E-Mail-Versand ist eine gültige Empfängeradresse erforderlich.",
+      "LOAN_DOCUMENT_EMAIL_INVALID",
+    );
+  }
   db.prepare(`
     INSERT INTO loan_location_settings
       (location_id, enabled, article_lookup_enabled, article_lookup_provider,
        article_lookup_base_url, document_recipient_employee_number,
+       document_email_enabled, document_recipient_email,
        created_by, updated_by, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(location_id) DO UPDATE SET
       enabled = excluded.enabled,
       article_lookup_enabled = excluded.article_lookup_enabled,
       article_lookup_provider = excluded.article_lookup_provider,
       article_lookup_base_url = excluded.article_lookup_base_url,
       document_recipient_employee_number = excluded.document_recipient_employee_number,
+      document_email_enabled = excluded.document_email_enabled,
+      document_recipient_email = excluded.document_recipient_email,
       updated_by = excluded.updated_by,
       updated_at = CURRENT_TIMESTAMP
   `).run(
@@ -24854,6 +25058,8 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", (request, respons
     provider,
     baseUrl,
     documentRecipientEmployeeNumber || null,
+    Number(documentEmailEnabled),
+    documentEmailEnabled ? documentRecipientEmail : "",
     actor.employeeNumber,
     actor.employeeNumber,
   );
@@ -24863,6 +25069,8 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", (request, respons
     articleLookupProvider: provider,
     articleLookupOrigin: baseUrl ? new URL(baseUrl).origin : "",
     documentRecipientEmployeeNumber,
+    documentEmailEnabled,
+    documentRecipientEmail: documentEmailEnabled ? documentRecipientEmail : "",
   }));
   response.json({
     location: publicLoanLocationSetting(loanLocationSettingRow(locationId), { includeConfiguration: true }),
@@ -25149,6 +25357,9 @@ function publicLoanReturnConfirmation(row, { includeLoan = true } = {}) {
         returnNote: returned.note || "",
       };
     }),
+    photos: loan ? loanPhotoRows(loan.id)
+      .filter((photo) => photo.phase === "return")
+      .map(publicLoanPhoto) : [],
   };
   if (includeLoan && loan) {
     result.loan = {
@@ -25221,6 +25432,95 @@ function loanDocumentRow(documentId) {
   `).get(String(documentId || "").trim()) || null;
 }
 
+function loanPhotoRows(loanId) {
+  return db.prepare(`
+    SELECT id, loan_id, phase, position, filename, detected_mime, byte_size, sha256,
+           pixel_width, pixel_height, created_by_employee_number, created_at
+    FROM loan_photos
+    WHERE loan_id = ?
+    ORDER BY CASE phase WHEN 'issue' THEN 0 ELSE 1 END, position
+  `).all(String(loanId || "").trim());
+}
+
+function loanPhotoRow(photoId) {
+  return db.prepare(`
+    SELECT photo.*, loan.location_id, loan.borrower_employee_number,
+           loan.created_by_employee_number, loan.return_recorded_by_employee_number,
+           loan.return_witness_employee_number
+    FROM loan_photos photo
+    JOIN loans loan ON loan.id = photo.loan_id
+    WHERE photo.id = ?
+  `).get(String(photoId || "").trim()) || null;
+}
+
+function publicLoanPhoto(row) {
+  return {
+    id: row.id,
+    phase: row.phase,
+    position: Number(row.position),
+    filename: row.filename,
+    byteSize: Number(row.byte_size),
+    width: Number(row.pixel_width),
+    height: Number(row.pixel_height),
+    sha256: row.sha256,
+    createdAt: row.created_at,
+    contentUrl: `/api/portal/v1/loans/photos/${encodeURIComponent(row.id)}`,
+  };
+}
+
+function loanDocumentDeliveryRows(documentId) {
+  return db.prepare(`
+    SELECT id, document_id, channel, recipient_employee_number, recipient_address,
+           status, error_code, attempted_by_employee_number, attempted_at
+    FROM loan_document_deliveries
+    WHERE document_id = ?
+    ORDER BY attempted_at, id
+  `).all(String(documentId || "").trim());
+}
+
+function loanDocumentDeliverySummary(documentId) {
+  const rows = loanDocumentDeliveryRows(documentId);
+  const emailRows = rows.filter((row) => row.channel === "email");
+  const lastEmail = emailRows.at(-1) || null;
+  return {
+    internalSent: rows.filter((row) => row.channel === "internal" && row.status === "sent").length,
+    emailConfigured: emailRows.length > 0,
+    emailStatus: lastEmail?.status || "not_requested",
+    emailAttempts: emailRows.length,
+    lastEmailAttemptAt: lastEmail?.attempted_at || null,
+  };
+}
+
+function insertLoanDocumentDelivery({
+  documentId,
+  channel,
+  recipientEmployeeNumber = null,
+  recipientAddress = "",
+  status,
+  errorCode = "",
+  attemptedByEmployeeNumber = null,
+}) {
+  const id = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO loan_document_deliveries
+      (id, document_id, channel, recipient_employee_number, recipient_address,
+       status, error_code, attempted_by_employee_number)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    documentId,
+    channel,
+    recipientEmployeeNumber || null,
+    String(recipientAddress || "").slice(0, 320),
+    status,
+    String(errorCode || "").slice(0, 120),
+    attemptedByEmployeeNumber && attemptedByEmployeeNumber !== "local"
+      ? attemptedByEmployeeNumber
+      : null,
+  );
+  return id;
+}
+
 function publicLoanDocument(row) {
   return {
     id: row.id,
@@ -25232,7 +25532,16 @@ function publicLoanDocument(row) {
     sha256: row.sha256,
     createdAt: row.created_at,
     downloadUrl: `/api/portal/v1/loans/documents/${encodeURIComponent(row.id)}`,
+    delivery: loanDocumentDeliverySummary(row.id),
   };
+}
+
+function loanDueState(row, today = viennaTodayIso()) {
+  if (row.status !== "issued" || !row.due_date) return row.status === "returned" ? "returned" : "open";
+  if (row.due_date < today) return "overdue";
+  if (row.due_date === today) return "due_today";
+  if (row.due_date <= addDays(today, 3)) return "due_soon";
+  return "open";
 }
 
 function loanPdfBranding(locationId) {
@@ -25277,6 +25586,65 @@ async function prepareLoanDocument(spec, actorEmployeeNumber) {
     createdByEmployeeNumber: actorEmployeeNumber === "local" ? null : actorEmployeeNumber,
     createdAt: stored.createdAt,
   };
+}
+
+async function prepareStoredLoanPhoto(input, actorEmployeeNumber) {
+  let prepared;
+  try {
+    prepared = await prepareLoanPhoto(input);
+  } catch (error) {
+    if (error instanceof LoanPhotoError) {
+      throw httpError(error.status, error.message, error.code);
+    }
+    throw error;
+  }
+  const stored = await requireAmuStorage().saveBuffer({
+    buffer: prepared.buffer,
+    originalName: prepared.filename,
+    maxBytes: 3 * 1024 * 1024,
+  });
+  return {
+    id: crypto.randomUUID(),
+    storageKey: stored.storageKey,
+    filename: prepared.filename,
+    detectedMime: stored.detectedMime,
+    byteSize: stored.byteSize,
+    sha256: stored.sha256,
+    pixelWidth: prepared.width,
+    pixelHeight: prepared.height,
+    createdByEmployeeNumber: actorEmployeeNumber === "local" ? null : actorEmployeeNumber,
+    createdAt: stored.createdAt,
+  };
+}
+
+function insertPreparedLoanPhoto(loanId, phase, position, prepared) {
+  db.prepare(`
+    INSERT INTO loan_photos
+      (id, loan_id, phase, position, storage_key, filename, detected_mime,
+       byte_size, sha256, pixel_width, pixel_height, created_by_employee_number, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    prepared.id,
+    loanId,
+    phase,
+    position,
+    prepared.storageKey,
+    prepared.filename,
+    prepared.detectedMime,
+    prepared.byteSize,
+    prepared.sha256,
+    prepared.pixelWidth,
+    prepared.pixelHeight,
+    prepared.createdByEmployeeNumber,
+    prepared.createdAt,
+  );
+}
+
+function cleanupPreparedLoanPhotos(preparedPhotos) {
+  for (const prepared of preparedPhotos || []) {
+    if (!prepared?.storageKey) continue;
+    try { requireAmuStorage().deleteBlob(prepared.storageKey); } catch {}
+  }
 }
 
 function insertPreparedLoanDocument(loanId, prepared) {
@@ -25349,7 +25717,57 @@ function loanDocumentRecipients(loan, documentType) {
   return [...recipients];
 }
 
-function notifyLoanDocumentAvailable(loan, document) {
+async function deliverLoanDocumentEmail(loan, document, {
+  recipient = "",
+  attemptedByEmployeeNumber = null,
+} = {}) {
+  const destination = String(recipient || "").trim().toLowerCase();
+  if (!destination) return { attempted: false, status: "not_requested" };
+  let status = "failed";
+  let errorCode = "";
+  try {
+    const content = requireAmuStorage().readBuffer({
+      storageKey: document.storage_key,
+      byteSize: document.byte_size,
+      sha256: document.sha256,
+      detectedMime: document.detected_mime,
+      originalFilename: document.filename,
+    });
+    await externalNotificationAdapter.sendLoanDocument({
+      recipient: destination,
+      subject: `Grabenplaner · ${document.document_type === "return" ? "Rücknahmebeleg" : "Ausgabebeleg"}`,
+      text: [
+        `Leihvorgang: ${loan.id}`,
+        `Teammitglied: ${loan.borrower_employee_number} · ${loan.borrower_nickname || loan.borrower_full_name}`,
+        `Standort: ${loan.location_id} · ${loan.location_name}`,
+        "Der unveränderte Beleg ist als PDF beigefügt.",
+      ].join("\n"),
+      filename: document.filename,
+      buffer: content,
+    });
+    status = "sent";
+  } catch (error) {
+    errorCode = String(error.code || "LOAN_DOCUMENT_EMAIL_FAILED");
+  }
+  insertLoanDocumentDelivery({
+    documentId: document.id,
+    channel: "email",
+    recipientAddress: destination,
+    status,
+    errorCode,
+    attemptedByEmployeeNumber,
+  });
+  auditPortal(
+    attemptedByEmployeeNumber || "system",
+    `loan.document.email.${status}`,
+    "loan_document",
+    document.id,
+    JSON.stringify({ loanId: loan.id, errorCode }),
+  );
+  return { attempted: true, status, errorCode };
+}
+
+async function notifyLoanDocumentAvailable(loan, document) {
   const publicDocument = publicLoanDocument(document);
   for (const recipient of loanDocumentRecipients(loan, document.document_type)) {
     createPortalNotification(
@@ -25364,6 +25782,20 @@ function notifyLoanDocumentAvailable(loan, document) {
         dedupeKey: `loan-document:${document.id}:${recipient}`,
       },
     );
+    insertLoanDocumentDelivery({
+      documentId: document.id,
+      channel: "internal",
+      recipientEmployeeNumber: recipient,
+      status: "sent",
+      attemptedByEmployeeNumber: document.created_by_employee_number,
+    });
+  }
+  const setting = loanLocationSettingRow(loan.location_id);
+  if (setting?.document_email_enabled && setting.document_recipient_email) {
+    await deliverLoanDocumentEmail(loan, document, {
+      recipient: setting.document_recipient_email,
+      attemptedByEmployeeNumber: document.created_by_employee_number,
+    });
   }
 }
 
@@ -25383,6 +25815,26 @@ function assertLoanDocumentAccess(session, document) {
     throw httpError(403, "Für diesen Leihbeleg fehlt die Berechtigung.", "LOAN_DOCUMENT_DENIED");
   }
   assertSessionContextScope(session, { locationId: document.location_id });
+}
+
+function assertLoanPhotoAccess(session, photo) {
+  if (!photo) throw httpError(404, "Das Leihfoto wurde nicht gefunden.", "LOAN_PHOTO_NOT_FOUND");
+  if (session.employeeNumber === "local") return;
+  const participants = new Set([
+    photo.borrower_employee_number,
+    photo.created_by_employee_number,
+    photo.return_recorded_by_employee_number,
+    photo.return_witness_employee_number,
+  ].filter(Boolean));
+  if (participants.has(session.employeeNumber)) return;
+  if (!session.permissions?.some((permission) => [
+    "loans:location:read",
+    "loans:location:manage",
+    "loans:documents:read",
+  ].includes(permission))) {
+    throw httpError(403, "Für dieses Leihfoto fehlt die Berechtigung.", "LOAN_PHOTO_DENIED");
+  }
+  assertSessionContextScope(session, { locationId: photo.location_id });
 }
 
 function publicLoanItem(row) {
@@ -25433,6 +25885,7 @@ function publicLoan(row, { includeEvents = true } = {}) {
       name: row.creator_nickname || row.creator_full_name,
     },
     dueDate: row.due_date || null,
+    dueState: loanDueState(row),
     status: row.status,
     notes: row.notes || "",
     issuedAt: row.issued_at || null,
@@ -25450,6 +25903,7 @@ function publicLoan(row, { includeEvents = true } = {}) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     items: loanItemRows(row.id).map(publicLoanItem),
+    photos: loanPhotoRows(row.id).map(publicLoanPhoto),
     documents: loanDocumentRows(row.id).map(publicLoanDocument),
     events: includeEvents ? loanEventRows(row.id).map(publicLoanEvent) : [],
   };
@@ -25657,6 +26111,68 @@ app.get("/api/portal/v1/loans", (request, response) => {
   response.json({ scope, status, loans: rows.map((row) => publicLoan(row)) });
 });
 
+app.get("/api/portal/v1/loans/management/summary", (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:location:read", "loans:location:manage"],
+  );
+  const requestedLocationId = String(request.query.locationId || request.query.location || "").trim();
+  if (requestedLocationId) {
+    validateLocationExists(requestedLocationId);
+    if (session.employeeNumber !== "local") {
+      assertSessionContextScope(session, { locationId: requestedLocationId });
+    }
+  }
+  const parameters = [];
+  const conditions = [];
+  if (requestedLocationId) {
+    conditions.push("l.location_id = ?");
+    parameters.push(requestedLocationId);
+  }
+  const rows = db.prepare(`
+    SELECT l.*, location.name AS location_name,
+           borrower.full_name AS borrower_full_name, borrower.nickname AS borrower_nickname,
+           creator.full_name AS creator_full_name, creator.nickname AS creator_nickname,
+           witness.full_name AS witness_full_name, witness.nickname AS witness_nickname
+    FROM loans l
+    JOIN locations location ON location.id = l.location_id
+    JOIN employees borrower ON borrower.personnel_number = l.borrower_employee_number
+    JOIN employees creator ON creator.personnel_number = l.created_by_employee_number
+    LEFT JOIN employees witness ON witness.personnel_number = l.return_witness_employee_number
+    ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
+    ORDER BY CASE WHEN l.status = 'issued' THEN 0 ELSE 1 END,
+             COALESCE(l.due_date, l.returned_at, l.issued_at, l.created_at)
+    LIMIT 250
+  `).all(...parameters).filter((row) => {
+    try {
+      assertLoanReadAccess(session, row);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  const loans = rows.map((row) => publicLoan(row));
+  const open = loans.filter((loan) => loan.status === "issued");
+  const summary = {
+    total: loans.length,
+    open: open.length,
+    overdue: open.filter((loan) => loan.dueState === "overdue").length,
+    dueToday: open.filter((loan) => loan.dueState === "due_today").length,
+    dueSoon: open.filter((loan) => loan.dueState === "due_soon").length,
+    pendingConfirmation: open.filter((loan) => loan.pendingReturnConfirmation).length,
+    emailFailed: loans.reduce(
+      (count, loan) => count + loan.documents.filter((document) => document.delivery.emailStatus === "failed").length,
+      0,
+    ),
+  };
+  response.json({
+    generatedAt: new Date().toISOString(),
+    locationId: requestedLocationId || null,
+    summary,
+    loans,
+  });
+});
+
 app.get("/api/portal/v1/loans/:loanId", (request, response) => {
   const session = requirePortalAnyPermissionOrLocal(
     request,
@@ -25694,6 +26210,115 @@ app.get("/api/portal/v1/loans/documents/:documentId", (request, response) => {
   response.setHeader("Pragma", "no-cache");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.send(content);
+});
+
+app.get("/api/portal/v1/loans/photos/:photoId", (request, response) => {
+  const session = requirePortalAnyPermissionOrLocal(request, [
+    "loans:self:read",
+    "loans:self:return",
+    "loans:location:read",
+    "loans:location:manage",
+    "loans:documents:read",
+  ]);
+  const photo = loanPhotoRow(request.params.photoId);
+  assertLoanPhotoAccess(session, photo);
+  const content = requireAmuStorage().readBuffer({
+    storageKey: photo.storage_key,
+    byteSize: photo.byte_size,
+    sha256: photo.sha256,
+    detectedMime: photo.detected_mime,
+    originalFilename: photo.filename,
+  });
+  auditPortal(session.employeeNumber, "loan.photo.read", "loan_photo", photo.id, JSON.stringify({
+    loanId: photo.loan_id,
+    phase: photo.phase,
+  }));
+  response.setHeader("Content-Type", "image/jpeg");
+  response.setHeader("Content-Disposition", `inline; filename="${String(photo.filename).replace(/["\r\n]/g, "-")}"`);
+  response.setHeader("Cache-Control", "private, no-store, max-age=0");
+  response.setHeader("Pragma", "no-cache");
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.send(content);
+});
+
+app.post("/api/portal/v1/loans/:loanId/photos", async (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:self:create", "loans:self:return", "loans:location:manage"],
+    { csrf: true },
+  );
+  const loan = loanRow(request.params.loanId);
+  if (!loan) throw httpError(404, "Der Leihvorgang wurde nicht gefunden.", "LOAN_NOT_FOUND");
+  const { fields, photos } = await parseLoanPhotoMultipart(request);
+  const phase = fields.phase === "return" ? "return" : fields.phase === "issue" ? "issue" : "";
+  if (!phase) throw httpError(400, "Bitte Ausgabe oder Rücknahme als Fotophase angeben.", "LOAN_PHOTO_PHASE_INVALID");
+  if (loan.status !== "issued") {
+    throw httpError(409, "Fotos können nur zu einer offenen Leihe ergänzt werden.", "LOAN_PHOTO_LOAN_CLOSED");
+  }
+  const managesLocation = loanCanManageLocation(actor);
+  const ownPermission = phase === "issue" ? "loans:self:create" : "loans:self:return";
+  if (!managesLocation && (loan.borrower_employee_number !== actor.employeeNumber
+    || !actor.permissions?.includes(ownPermission))) {
+    throw httpError(403, "Für diese Leihfotos fehlt die Berechtigung.", "LOAN_PHOTO_DENIED");
+  }
+  if (managesLocation) assertSessionContextScope(actor, { locationId: loan.location_id });
+  const existingCount = Number(db.prepare(`
+    SELECT COUNT(*) AS count FROM loan_photos WHERE loan_id = ? AND phase = ?
+  `).get(loan.id, phase).count);
+  if (existingCount + photos.length > MAX_LOAN_PHOTOS_PER_PHASE) {
+    throw httpError(413, "Pro Ausgabe oder Rücknahme sind höchstens neun Fotos möglich.", "LOAN_PHOTO_TOO_MANY");
+  }
+  const preparedPhotos = [];
+  try {
+    for (const photo of photos) {
+      preparedPhotos.push(await prepareStoredLoanPhoto(photo, actor.employeeNumber));
+    }
+    db.exec("BEGIN IMMEDIATE");
+    preparedPhotos.forEach((prepared, index) => {
+      insertPreparedLoanPhoto(loan.id, phase, existingCount + index + 1, prepared);
+    });
+    appendLoanEvent(loan.id, actor.employeeNumber, "photos_added", Number(loan.revision), {
+      phase,
+      count: preparedPhotos.length,
+      photoIds: preparedPhotos.map((photo) => photo.id),
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    cleanupPreparedLoanPhotos(preparedPhotos);
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "loan.photos.add", "loan", loan.id, JSON.stringify({
+    phase,
+    count: preparedPhotos.length,
+  }));
+  response.status(201).json({
+    loan: publicLoan(loanRow(loan.id)),
+    photos: loanPhotoRows(loan.id).filter((photo) => photo.phase === phase).map(publicLoanPhoto),
+  });
+});
+
+app.post("/api/portal/v1/loans/documents/:documentId/email", async (request, response) => {
+  const actor = requirePortalAnyPermissionOrLocal(
+    request,
+    ["loans:location:manage", "loans:settings"],
+    { csrf: true },
+  );
+  const document = loanDocumentRow(request.params.documentId);
+  assertLoanDocumentAccess(actor, document);
+  const loan = loanRow(document.loan_id);
+  const setting = loanLocationSettingRow(loan.location_id);
+  if (!setting?.document_email_enabled || !setting.document_recipient_email) {
+    throw httpError(409, "Für diesen Standort ist kein E-Mail-Empfänger aktiviert.", "LOAN_DOCUMENT_EMAIL_NOT_CONFIGURED");
+  }
+  const delivery = await deliverLoanDocumentEmail(loan, document, {
+    recipient: setting.document_recipient_email,
+    attemptedByEmployeeNumber: actor.employeeNumber,
+  });
+  response.status(delivery.status === "sent" ? 200 : 503).json({
+    delivery,
+    document: publicLoanDocument(loanDocumentRow(document.id)),
+  });
 });
 
 app.post("/api/portal/v1/loans", async (request, response) => {
@@ -25818,7 +26443,7 @@ app.post("/api/portal/v1/loans", async (request, response) => {
   }
   const issuedLoan = loanRow(loanId);
   const issueDocument = loanDocumentRow(preparedIssueDocument.id);
-  notifyLoanDocumentAvailable(issuedLoan, issueDocument);
+  await notifyLoanDocumentAvailable(issuedLoan, issueDocument);
   response.status(201).json({ loan: publicLoan(issuedLoan) });
 });
 
@@ -26183,7 +26808,7 @@ app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", as
     );
   }
   const returnedLoan = loanRow(loan.id);
-  notifyLoanDocumentAvailable(returnedLoan, loanDocumentRow(preparedReturnDocument.id));
+  await notifyLoanDocumentAvailable(returnedLoan, loanDocumentRow(preparedReturnDocument.id));
   response.json({
     confirmation: publicLoanReturnConfirmation(loanReturnConfirmationRow(confirmation.id)),
     loan: publicLoan(returnedLoan),

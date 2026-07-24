@@ -51,6 +51,9 @@
               <button class="nav-item nav-module-route" data-view="personnel" id="filialTeamsNavButton">
                 <span class="nav-symbol">◎</span><span>Teams &amp; Standorte</span>
               </button>
+              <button class="nav-item nav-module-route hidden" data-view="loans" id="loanManagementNavButton">
+                <span class="nav-symbol">▣</span><span>Leihverwaltung</span><strong class="nav-count hidden" id="loanManagementNavCount">0</strong>
+              </button>
               <div class="nav-submodule">
                 <div class="nav-branch">
                   <button type="button" class="nav-disclosure expanded" data-nav-toggle="planning" aria-controls="planningNavChildren" aria-label="Dienstplanung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
@@ -487,6 +490,24 @@
           </section>
         </section>
 
+        <section id="loansView" class="view loan-management-view">
+          <header class="topbar loan-management-topbar">
+            <div><span class="eyebrow">Artikel &amp; Verantwortung</span><h1>Leihverwaltung</h1><p class="subtitle">Offene Ausgaben, Rücknahmen, Belege und Fälligkeiten je Standort im Blick behalten.</p></div>
+            <div class="loan-management-header-actions">
+              <button class="secondary-button" id="loanManagementRefresh" type="button">Aktualisieren</button>
+              <a class="primary-button" id="loanManagementPortalLink" href="/portal.html?tab=loan" target="_blank" rel="noopener">Leihe öffnen</a>
+              <div class="page-theme-switch" role="group" aria-label="Darstellung der Leihverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
+            </div>
+          </header>
+          <section class="loan-management-toolbar card">
+            <label class="field"><span>Standort</span><select id="loanManagementLocation"><option value="">Alle freigegebenen Standorte</option></select></label>
+            <label class="field"><span>Ansicht</span><select id="loanManagementStatus"><option value="open">Offene Leihen</option><option value="due">Bald fällig</option><option value="overdue">Überfällig</option><option value="history">Abgeschlossen</option><option value="all">Alle</option></select></label>
+            <p id="loanManagementUpdated">Noch nicht aktualisiert</p>
+          </section>
+          <section class="loan-management-summary" id="loanManagementSummary" aria-label="Zusammenfassung"></section>
+          <section class="loan-management-list" id="loanManagementList" aria-live="polite"><p class="settings-note">Leihvorgänge werden geladen.</p></section>
+        </section>
+
         <section id="rightsDashboardView" class="view rights-dashboard" data-dashboard-theme="light">
           <header class="topbar rights-dashboard-topbar">
             <div><span class="eyebrow">Übersicht &amp; Steuerung</span><h1>Dashboards</h1><p class="subtitle">Filialsituation, wirksame Rechte und Standardprozesse verständlich im Blick behalten.</p></div>
@@ -670,6 +691,12 @@
             <div class="settings-card toast-card">
               <div class="card-heading"><div class="card-icon">!</div><div><h2>Warnmeldungen</h2><p>Legt fest, wie lange Hinweise und Fehlermeldungen sichtbar bleiben.</p></div></div>
               <label class="field"><span>Anzeigedauer</span><select id="toastDuration"><option value="short">Kurz · 5 Sekunden</option><option value="medium">Mittel · 10 Sekunden</option><option value="long">Lang · 15 Sekunden</option></select></label>
+            </div>
+
+            <div class="settings-card full-settings-card hidden" id="loanSettingsCard">
+              <div class="card-heading"><div class="card-icon">Leihe</div><div><h2>Leihe je Standort</h2><p>Artikelquelle, interne Belegzustellung und optionalen E-Mail-Versand festlegen.</p></div></div>
+              <div class="form-actions-inline"><span class="settings-note" id="loanSettingsHint">Leiheinstellungen werden geladen.</span><button class="secondary-button" id="refreshLoanSettingsButton" type="button">Aktualisieren</button></div>
+              <div class="loan-settings-list" id="loanSettingsList"></div>
             </div>
           </section>
 
