@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.85.3 Beta · Stabilität für Leihbelege und Leihfotos
+
+- Die geschützte Waisenbereinigung berücksichtigt nun auch unveränderliche Leihbelege und Leihfotos. Ein App-Neustart oder der tägliche Dokumentenabgleich entfernt keine weiterhin referenzierten Leihdateien mehr.
+- Ein Regressionstest erzeugt PDF und Foto, führt den Dokumentenabgleich aus und bestätigt anschließend erneut Inhalt, MIME-Typ und geschützte Auslieferung.
+- Ein nachweislich aktuelles verschlüsseltes Offsite-Backup erfüllt die Trennung vom Produktivdatenträger; ein zusätzliches lokales Sicherungsziel auf derselben Serverplatte erzeugt dann keine irreführende Trennungswarnung.
+
 ## v0.85.2 Beta · Recovery-Smoke für Leihbelege
 
 - Der isolierte Recovery-App-Smoke entfernt nun auch verschlüsselte Leihbelege, Leihfotos und ihre Zustellnachweise aus seiner bereinigten Testdatenbank.
