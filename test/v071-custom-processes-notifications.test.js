@@ -97,6 +97,7 @@ function processPayload(overrides = {}) {
     title: `Notbesetzung ${crypto.randomBytes(4).toString("hex")}`,
     symbol: "NB",
     description: "Eine lokale Notbesetzung wird kontrolliert und nachvollziehbar eskaliert.",
+    category: "personnel_absence",
     status: "draft",
     scope: { type: "location", locationId },
     trigger: { type: "manual", minimumShortfall: 1 },
@@ -139,6 +140,7 @@ async function createProcess(payload = processPayload(), requestAuth = auth.hr) 
   assert.equal(result.response.status, 201, JSON.stringify(result.payload));
   assert.ok(result.payload?.id, JSON.stringify(result.payload));
   assert.equal(result.payload.source, "custom");
+  assert.equal(result.payload.category, payload.category);
   assert.equal(Number(result.payload.revision), 1);
   return { process: result.payload, payload };
 }
@@ -227,11 +229,13 @@ test("v0.71: persistentes Prozessmodell und Migration sind vorhanden", () => {
   for (const table of ["custom_processes", "custom_process_steps", "custom_process_runs"]) {
     assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table), table);
   }
+  const columns = db.prepare("PRAGMA table_info(custom_processes)").all().map((column) => column.name);
+  assert.ok(columns.includes("category"));
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const script = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
   const styles = fs.readFileSync(path.join(__dirname, "..", "public", "styles.css"), "utf8");
-  for (const marker of ["addCustomProcessButton", "customProcessModal", "customProcessSteps", "rightsCustomProcessActions"]) assert.ok(html.includes(marker), marker);
-  for (const marker of ["openCustomProcessEditor", "saveCustomProcess", "changeCustomProcessStatus", "triggerCustomProcess"]) assert.ok(script.includes(marker), marker);
+  for (const marker of ["addCustomProcessButton", "customProcessModal", "customProcessCategory", "customProcessSteps", "rightsCustomProcessActions"]) assert.ok(html.includes(marker), marker);
+  for (const marker of ["populateCustomProcessCategories", "openCustomProcessEditor", "saveCustomProcess", "changeCustomProcessStatus", "triggerCustomProcess"]) assert.ok(script.includes(marker), marker);
   assert.ok(styles.includes(".custom-process-step-card"));
 });
 
@@ -258,12 +262,14 @@ test("v0.71: nur PL+ darf Prozesse verwalten und jede Mutation bleibt CSRF-gesch
 });
 
 test("v0.71: Rechte-Dashboard verbindet Standard- und eigene Prozesse mit eindeutiger Fähigkeit", async () => {
-  const { process } = await createProcess();
+  const { process } = await createProcess(processPayload({ category: "customer_service" }));
   const hrDashboard = await api("/api/portal/v1/rights-dashboard", { auth: auth.hr });
   assert.equal(hrDashboard.response.status, 200, JSON.stringify(hrDashboard.payload));
   assert.equal(hrDashboard.payload.processDashboard.capabilities.canManageCustomProcesses, true);
+  assert.ok(hrDashboard.payload.processDashboard.capabilities.categories.some((category) => category.id === "customer_service"));
   assert.ok(hrDashboard.payload.processDashboard.processes.some((entry) => entry.id === "vacation"));
-  assert.ok(hrDashboard.payload.processDashboard.processes.some((entry) => entry.id === process.id && entry.source === "custom"));
+  assert.ok(hrDashboard.payload.processDashboard.processes.some((entry) => entry.id === process.id
+    && entry.source === "custom" && entry.category === "customer_service"));
 
 });
 
@@ -272,6 +278,12 @@ test("v0.71: Scope, Bedingungsfelder und unbekannte Ausdrücke werden strikt val
     method: "POST", auth: auth.hr, body: { ...processPayload(), untrustedPayload: "nicht erlaubt" },
   });
   assert.equal(unknownField.response.status, 400, JSON.stringify(unknownField.payload));
+
+  const invalidCategory = await api("/api/portal/v1/custom-processes", {
+    method: "POST", auth: auth.hr, body: processPayload({ category: "beliebig" }),
+  });
+  assert.equal(invalidCategory.response.status, 400, JSON.stringify(invalidCategory.payload));
+  assert.equal(invalidCategory.payload.code, "CUSTOM_PROCESS_CATEGORY_INVALID");
 
   const invalidScope = await api("/api/portal/v1/custom-processes", {
     method: "POST",
@@ -332,12 +344,19 @@ test("v0.71: technische Schritt-IDs dürfen nicht prozessübergreifend kollidier
 
 test("v0.71: Änderungen sind revisionssicher und Archivierung löscht weder Prozess noch Schritte", async () => {
   const { process, payload } = await createProcess();
-  const updateBody = { ...payload, title: `${payload.title} – geprüft`, status: "active", revision: process.revision };
+  const updateBody = {
+    ...payload,
+    title: `${payload.title} – geprüft`,
+    category: "administration_it",
+    status: "active",
+    revision: process.revision,
+  };
   const updated = await api(`/api/portal/v1/custom-processes/${encodeURIComponent(process.id)}`, {
     method: "PUT", auth: auth.hr, body: updateBody,
   });
   assert.equal(updated.response.status, 200, JSON.stringify(updated.payload));
   assert.equal(updated.payload.title, updateBody.title);
+  assert.equal(updated.payload.category, "administration_it");
   assert.equal(updated.payload.status, "active");
   assert.equal(Number(updated.payload.revision), Number(process.revision) + 1);
 
@@ -353,8 +372,9 @@ test("v0.71: Änderungen sind revisionssicher und Archivierung löscht weder Pro
   });
   assert.equal(archived.response.status, 200, JSON.stringify(archived.payload));
   assert.equal(archived.payload.status, "archived");
-  const stored = db.prepare("SELECT status FROM custom_processes WHERE id = ?").get(process.id);
+  const stored = db.prepare("SELECT status, category FROM custom_processes WHERE id = ?").get(process.id);
   assert.equal(stored.status, "archived");
+  assert.equal(stored.category, "administration_it");
   assert.ok(Number(db.prepare("SELECT COUNT(*) AS count FROM custom_process_steps WHERE process_id = ?").get(process.id).count) >= 1);
 
   const archivedTrigger = await api(`/api/portal/v1/custom-processes/${encodeURIComponent(process.id)}/trigger`, {

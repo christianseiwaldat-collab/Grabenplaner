@@ -16,12 +16,21 @@ function functionSource(name, nextName) {
   return script.slice(start, end);
 }
 
-test("v0.77: System-Center ist der erste, capability-getrennte Dashboard-Bereich", () => {
+test("Block 2/7: fachliche Dashboards stehen vorne und das System-Center ganz rechts", () => {
   const systemTab = html.indexOf('data-rights-dashboard-mode="systemCenter"');
   const locationTab = html.indexOf('data-rights-dashboard-mode="locations"');
-  assert.ok(systemTab >= 0 && systemTab < locationTab);
+  const rightsTab = html.indexOf('data-rights-dashboard-mode="rights"');
+  const personnelRulesTab = html.indexOf('data-rights-dashboard-mode="personnelRules"');
+  const processesTab = html.indexOf('data-rights-dashboard-mode="processes"');
+  assert.ok(locationTab >= 0 && locationTab < rightsTab);
+  assert.ok(rightsTab < personnelRulesTab);
+  assert.ok(personnelRulesTab < processesTab);
+  assert.ok(processesTab < systemTab);
   assert.match(html, /data-rights-dashboard-mode="systemCenter" data-dashboard-capability="system"/);
   assert.match(html, /data-rights-dashboard-mode="locations" data-dashboard-capability="rights"/);
+  assert.match(html, /data-rights-dashboard-mode="processes"[^>]*>Abläufe &amp; Prozesse<\/button>/);
+  assert.match(html, /class="system-center-panel hidden" id="systemCenterPanel"/);
+  assert.match(html, /class="location-dashboard-panel" id="rightsDashboardLocationsPanel"/);
   for (const marker of ["systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent"]) {
     assert.match(html, new RegExp(`id="${marker}"`));
   }
@@ -29,7 +38,8 @@ test("v0.77: System-Center ist der erste, capability-getrennte Dashboard-Bereich
   assert.match(script, /function canReadSystemCenter\(\)/);
   assert.match(script, /system:diagnostics:read/);
   assert.match(script, /system:diagnostics:technical/);
-  assert.match(script, /\["systemCenter", "locations", "rights", "processes"\]\.includes\(dashboardMode\)/);
+  assert.match(script, /rightsDashboardMode: "locations"/);
+  assert.match(script, /\["locations", "rights", "personnelRules", "processes", "systemCenter"\]\.includes\(dashboardMode\)/);
 });
 
 test("v0.77: System-Center lädt nur seinen Diagnose-Endpunkt", () => {
