@@ -1688,6 +1688,42 @@ function workRuleEvidenceMarkup(evidence) {
   }).join("")}</dl>`;
 }
 
+function workRuleSnoozeStorageKey(finding) {
+  const employeeNumber = String(finding?.employeeNumber || "unknown").replace(/[^a-z0-9_-]/gi, "_");
+  const ruleId = String(finding?.ruleId || "unknown").replace(/[^a-z0-9_.-]/gi, "_");
+  return `grabenplaner:work-rule-snooze:${uiPreferenceActorKey()}:${employeeNumber}:${ruleId}`;
+}
+
+function workRuleSnoozedUntil(finding) {
+  if (finding?.snoozable !== true) return 0;
+  try {
+    const value = Number(localStorage.getItem(workRuleSnoozeStorageKey(finding)) || 0);
+    return Number.isFinite(value) && value > Date.now() ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function workRulePresentationCounts(findings, evaluatedEmployees) {
+  const rank = { attention: 1, manual_review: 2, blocked: 3 };
+  const byEmployee = new Map();
+  for (const finding of findings) {
+    const employee = String(finding?.employeeNumber || `overall:${finding?.ruleId || ""}`);
+    const findingState = ["blocked", "manual_review", "attention"].includes(finding?.state)
+      ? finding.state
+      : "manual_review";
+    const current = byEmployee.get(employee);
+    if (!current || rank[findingState] > rank[current]) byEmployee.set(employee, findingState);
+  }
+  const counts = { pass: Math.max(0, Number(evaluatedEmployees || 0) - byEmployee.size), attention: 0, manualReview: 0, blocked: 0 };
+  for (const value of byEmployee.values()) {
+    if (value === "blocked") counts.blocked += 1;
+    else if (value === "manual_review") counts.manualReview += 1;
+    else counts.attention += 1;
+  }
+  return counts;
+}
+
 function workRuleFindingMarkup(finding, { compact = false } = {}) {
   const stateValue = ["pass", "attention", "manual_review", "blocked"].includes(finding?.state)
     ? finding.state
@@ -1708,6 +1744,9 @@ function workRuleFindingMarkup(finding, { compact = false } = {}) {
     ${finding?.message ? `<p>${escapeHtml(finding.message)}</p>` : ""}
     ${compact ? "" : workRuleEvidenceMarkup(finding?.evidence)}
     ${compact ? "" : workRuleSourceLinks(sourceRefs)}
+    ${!compact && finding?.snoozable === true ? `<div class="work-rule-finding-actions">
+      <button type="button" class="secondary-button" data-work-rule-snooze="${escapeHtmlAttribute(workRuleSnoozeStorageKey(finding))}" data-snooze-days="${Number(finding.snoozeDays || 4)}">Für ${Number(finding.snoozeDays || 4)} Tage schlummern</button>
+    </div>` : ""}
   </article>`;
 }
 
@@ -1724,23 +1763,39 @@ function renderWorkRuleAssessment() {
     return;
   }
 
-  const counts = assessment.counts;
+  const snoozedFindings = assessment.findings.filter((finding) => workRuleSnoozedUntil(finding));
+  const visibleFindings = assessment.findings.filter((finding) => !workRuleSnoozedUntil(finding));
+  const administrativeFindings = visibleFindings.filter((finding) => finding?.category === "personnel_data");
+  const scheduleFindings = visibleFindings.filter((finding) => finding?.category !== "personnel_data");
+  const administrativeOnly = administrativeFindings.length > 0 && scheduleFindings.length === 0;
+  const counts = workRulePresentationCounts(visibleFindings, assessment.evaluatedEmployees);
   const needsAttention = counts.attention + counts.manualReview + counts.blocked;
+  const displayOutcome = scheduleFindings.length
+    ? (counts.blocked ? "blocked" : (counts.manualReview ? "manual_review" : "attention"))
+    : (administrativeOnly ? "administrative" : "pass");
+  elements.workRuleAssessmentPanel.className = `work-rule-assessment ${displayOutcome}`;
   const modeLabel = assessment.mode === "enforced"
     ? "Aktiver Regelbetrieb – Ergebnis vor dem Speichern beachten"
     : "Monitorbetrieb – Planprüfung, keine Rechtsfreigabe";
   elements.workRuleModeBadge.textContent = modeLabel;
-  elements.workRuleAssessmentSummary.textContent = needsAttention
-    ? `${needsAttention} Punkt${needsAttention === 1 ? "" : "e"} benötigen Aufmerksamkeit.`
-    : "Keine Hinweise in der aktuellen automatischen Planprüfung.";
-  elements.workRuleAssessmentCounts.innerHTML = `
-    <span class="pass"><strong>${counts.pass}</strong> bestätigt</span>
-    <span class="attention"><strong>${counts.attention}</strong> Hinweise</span>
-    <span class="manual_review"><strong>${counts.manualReview}</strong> prüfen</span>
-    <span class="blocked"><strong>${counts.blocked}</strong> blockiert</span>`;
+  elements.workRuleAssessmentSummary.textContent = administrativeOnly
+    ? `${administrativeFindings.length} Stammdatenangabe${administrativeFindings.length === 1 ? "" : "n"} offen – keine akute Planwarnung.`
+    : (needsAttention
+      ? `${needsAttention} Punkt${needsAttention === 1 ? "" : "e"} benötigen Aufmerksamkeit.`
+      : (snoozedFindings.length
+        ? `Keine akuten Planhinweise; ${snoozedFindings.length} Stammdaten-Erinnerung${snoozedFindings.length === 1 ? "" : "en"} pausiert.`
+        : "Keine Hinweise in der aktuellen automatischen Planprüfung."));
+  elements.workRuleAssessmentCounts.innerHTML = administrativeOnly
+    ? `<span class="administrative"><strong>${administrativeFindings.length}</strong> Stammdaten</span>`
+    : `
+      <span class="pass"><strong>${counts.pass}</strong> bestätigt</span>
+      <span class="attention"><strong>${counts.attention}</strong> Hinweise</span>
+      <span class="manual_review"><strong>${counts.manualReview}</strong> prüfen</span>
+      <span class="blocked"><strong>${counts.blocked}</strong> blockiert</span>
+      ${snoozedFindings.length ? `<span class="snoozed"><strong>${snoozedFindings.length}</strong> pausiert</span>` : ""}`;
 
   const grouped = new Map();
-  for (const finding of assessment.findings) {
+  for (const finding of visibleFindings) {
     const employeeNumber = String(finding?.employeeNumber || "").trim();
     const label = employeeNumber
       ? `${finding.employeeName || "Teammitglied"} · ${employeeNumber}`
@@ -1765,9 +1820,19 @@ function renderWorkRuleAssessment() {
     </details>` : "";
   elements.workRuleAssessmentBody.innerHTML = `
     ${findingGroups || '<p class="work-rule-assessment-empty">Die automatische Prüfung hat keine einzelnen Hinweise ausgegeben.</p>'}
+    ${snoozedFindings.length ? `<p class="work-rule-snoozed-note">${snoozedFindings.length} Stammdaten-Erinnerung${snoozedFindings.length === 1 ? "" : "en"} wird nach vier Tagen automatisch wieder angezeigt.</p>` : ""}
     ${profileMarkup}
     <p class="work-rule-disclaimer">${escapeHtml(assessment.disclaimer || "Die automatische Planprüfung unterstützt die Dienstplanung. Sie ersetzt keine rechtliche oder kollektivvertragliche Einzelfallprüfung.")}</p>`;
-  if (assessment.outcome !== "pass") elements.workRuleAssessmentPanel.open = true;
+  elements.workRuleAssessmentBody.querySelectorAll("[data-work-rule-snooze]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const days = Math.min(7, Math.max(1, Number(button.dataset.snoozeDays || 4)));
+      try {
+        localStorage.setItem(button.dataset.workRuleSnooze, String(Date.now() + (days * 86_400_000)));
+      } catch {}
+      renderWorkRuleAssessment();
+    });
+  });
+  elements.workRuleAssessmentPanel.open = scheduleFindings.length > 0;
 }
 
 function renderTimeline() {
@@ -9769,9 +9834,18 @@ function shiftRuleFindingsForCandidate(assessmentValue, employeeNumber, dateValu
   const selectedEmployee = String(employeeNumber || "");
   return assessment.findings.filter((finding) => {
     if (String(finding?.employeeNumber || "") !== selectedEmployee) return false;
+    if (finding?.category === "personnel_data") return false;
     if (!dateValue) return true;
     if (finding?.periodFrom && dateValue < String(finding.periodFrom).slice(0, 10)) return false;
     if (finding?.periodTo && dateValue > String(finding.periodTo).slice(0, 10)) return false;
+    const scope = finding?.scope || {};
+    if (Array.isArray(scope.dates) && scope.dates.length) {
+      if (!scope.dates.includes(dateValue)) return false;
+    } else if (scope.date && String(scope.date).slice(0, 10) !== dateValue) return false;
+    const scopeFrom = String(scope.weekStart || scope.start || scope.from || "").slice(0, 10);
+    const scopeTo = String(scope.weekEnd || scope.end || scope.to || scopeFrom).slice(0, 10);
+    if (scopeFrom && dateValue < scopeFrom) return false;
+    if (scopeTo && dateValue > scopeTo) return false;
     return true;
   });
 }
