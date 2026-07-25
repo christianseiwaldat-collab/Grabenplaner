@@ -2847,3 +2847,300 @@ html[data-active-page-theme="dark"] .governance-generation-errors { color:var(--
   .data-subject-request-card-heading { align-items:flex-start; flex-direction:column; }
   .request-event-history > article { grid-template-columns:1fr; }
 }
+
+/* Personalverwaltung · Block 4/7: versioniertes Kollektivvertragsregister */
+.collective-agreements-section { display:none; }
+.collective-agreements-section.active { display:block; }
+.collective-agreements-toolbar,
+.collective-agreement-panel-heading,
+.collective-agreement-detail-heading {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+}
+.collective-agreements-actions,
+.collective-agreement-detail-actions {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+  gap:8px;
+}
+.collective-agreement-boundary {
+  margin:0 0 14px;
+  padding:12px 14px;
+  border:1px solid color-mix(in srgb,var(--warning,#bf8615) 42%,var(--line));
+  border-left:4px solid var(--warning,#bf8615);
+  border-radius:12px;
+  color:var(--warning-ink,#6a4d08);
+  background:var(--warning-surface,#fff4cf);
+}
+.collective-agreement-boundary strong { display:block; font-size:10px; }
+.collective-agreement-boundary p { margin:4px 0 0; font-size:9px; line-height:1.5; }
+.collective-agreement-summary { margin-bottom:14px; }
+.collective-agreement-workspace {
+  display:grid;
+  grid-template-columns:minmax(260px,.72fr) minmax(0,1.28fr);
+  gap:13px;
+  align-items:start;
+}
+.collective-agreement-lower-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:13px;
+  margin-top:13px;
+}
+.collective-agreement-register-panel,
+.collective-agreement-detail-panel {
+  min-width:0;
+  padding:14px;
+  border:1px solid var(--line);
+  border-radius:15px;
+  color:var(--ink);
+  background:var(--surface);
+  box-shadow:0 8px 22px rgb(26 54 44 / 4%);
+}
+.collective-agreement-detail-panel { min-height:320px; }
+.collective-agreement-panel-heading { margin-bottom:11px; }
+.collective-agreement-panel-heading h3,
+.collective-agreement-detail-heading h3 { margin:2px 0 0; font-size:17px; line-height:1.2; }
+.collective-agreement-panel-heading p,
+.collective-agreement-detail-heading p { margin:4px 0 0; color:var(--muted); font-size:9px; line-height:1.45; }
+.collective-agreement-list,
+.collective-agreement-business-units,
+.collective-agreement-assignments { display:grid; gap:8px; }
+.collective-agreement-list-item {
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  gap:4px 9px;
+  width:100%;
+  padding:11px 12px;
+  border:1px solid var(--line);
+  border-radius:11px;
+  color:var(--ink);
+  text-align:left;
+  background:var(--surface-soft);
+  cursor:pointer;
+}
+.collective-agreement-list-item:hover { border-color:color-mix(in srgb,var(--primary) 42%,var(--line)); }
+.collective-agreement-list-item.active {
+  border-color:var(--primary);
+  background:color-mix(in srgb,var(--primary) 8%,var(--surface));
+  box-shadow:inset 3px 0 0 var(--primary);
+}
+.collective-agreement-list-item .collective-agreement-code {
+  align-self:start;
+  padding:3px 6px;
+  border-radius:999px;
+  color:var(--primary);
+  font-size:7.5px;
+  font-weight:900;
+  letter-spacing:.07em;
+  background:color-mix(in srgb,var(--primary) 10%,transparent);
+}
+.collective-agreement-list-item strong { min-width:0; font-size:10px; overflow-wrap:anywhere; }
+.collective-agreement-list-item small { grid-column:2; color:var(--muted); font-size:8px; }
+.collective-agreement-list-item .status-badge { grid-column:3; grid-row:1/3; align-self:center; }
+.collective-agreement-empty {
+  display:grid;
+  place-content:center;
+  min-height:180px;
+  padding:18px;
+  border:1px dashed var(--line);
+  border-radius:12px;
+  color:var(--muted);
+  text-align:center;
+  background:var(--surface-soft);
+}
+.collective-agreement-empty.compact { min-height:110px; }
+.collective-agreement-empty strong { color:var(--ink); font-size:11px; }
+.collective-agreement-empty p { max-width:520px; margin:6px auto 0; font-size:9px; line-height:1.5; }
+.collective-agreement-detail-actions { flex:0 0 auto; }
+.collective-agreement-source-card {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  margin:13px 0;
+}
+.collective-agreement-source-card > div {
+  min-width:0;
+  padding:10px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--surface-soft);
+}
+.collective-agreement-source-card > .source-wide { grid-column:1/-1; }
+.collective-agreement-source-card span,
+.collective-agreement-source-card small { display:block; color:var(--muted); font-size:8px; }
+.collective-agreement-source-card strong { display:block; margin:3px 0; font-size:9.5px; overflow-wrap:anywhere; }
+.collective-agreement-source-card a { color:var(--primary); }
+.collective-agreement-applicability {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  margin:0;
+}
+.collective-agreement-applicability > div {
+  min-width:0;
+  padding:9px 10px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:var(--surface-soft);
+}
+.collective-agreement-applicability dt { color:var(--muted); font-size:7.5px; font-weight:800; text-transform:uppercase; }
+.collective-agreement-applicability dd { margin:4px 0 0; font-size:9px; line-height:1.45; overflow-wrap:anywhere; }
+.collective-agreement-profile-link {
+  margin:10px 0 0;
+  padding:9px 10px;
+  border-radius:9px;
+  color:var(--muted);
+  font-size:8.5px;
+  background:var(--surface-soft);
+}
+.collective-agreement-version-history { display:grid; gap:7px; margin-top:13px; padding-top:12px; border-top:1px solid var(--line); }
+.collective-agreement-version-history h4 { margin:2px 0 4px; font-size:11px; }
+.collective-agreement-version-history > article {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:9px;
+  padding:8px 10px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:var(--surface-soft);
+}
+.collective-agreement-version-history > article.current { border-color:color-mix(in srgb,var(--success,#2d7c61) 45%,var(--line)); }
+.collective-agreement-version-history strong,
+.collective-agreement-version-history small { display:block; font-size:8.5px; }
+.collective-agreement-version-history small,
+.collective-agreement-version-history article > span { color:var(--muted); font-size:8px; }
+.collective-agreement-business-unit,
+.collective-agreement-assignment {
+  min-width:0;
+  padding:11px 12px;
+  border:1px solid var(--line);
+  border-radius:11px;
+  background:var(--surface-soft);
+}
+.collective-agreement-business-unit > div:first-child { display:grid; grid-template-columns:auto 1fr; gap:2px 8px; }
+.collective-agreement-business-unit > div:first-child > span {
+  grid-row:1/3;
+  align-self:center;
+  padding:4px 6px;
+  border-radius:7px;
+  color:var(--primary);
+  font-size:8px;
+  font-weight:900;
+  background:color-mix(in srgb,var(--primary) 10%,transparent);
+}
+.collective-agreement-business-unit strong,
+.collective-agreement-assignment strong { display:block; font-size:9.5px; }
+.collective-agreement-business-unit small,
+.collective-agreement-assignment small { color:var(--muted); font-size:8px; }
+.collective-agreement-business-unit p,
+.collective-agreement-assignment p { margin:7px 0; color:var(--muted); font-size:8.5px; line-height:1.45; }
+.collective-agreement-scope-tags { display:flex; flex-wrap:wrap; gap:5px; }
+.collective-agreement-scope-tags span {
+  padding:4px 7px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  color:var(--muted);
+  font-size:7.5px;
+  background:var(--surface);
+}
+.collective-agreement-scope-tags span.warning { color:var(--warning-ink,#6a4d08); border-color:color-mix(in srgb,var(--warning,#bf8615) 42%,var(--line)); }
+.collective-agreement-assignment > div { display:grid; grid-template-columns:auto 1fr; gap:3px 7px; }
+.collective-agreement-assignment > div .status-badge { grid-row:1/3; align-self:center; }
+.collective-agreement-assignment > div small { grid-column:2; }
+.collective-agreement-modal { width:min(980px,calc(100vw - 28px)); }
+.collective-agreement-modal-card { width:100%; max-width:none; }
+.collective-agreement-modal-card.compact { max-width:760px; margin-inline:auto; }
+.collective-agreement-form-grid .form-grid-wide { grid-column:1/-1; }
+.collective-agreement-scope-fieldset {
+  margin:14px 0 0;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+}
+.collective-agreement-scope-fieldset legend { padding:0 5px; color:var(--ink); font-size:10px; font-weight:800; }
+.collective-agreement-scope-fieldset > p { margin:0 0 10px; color:var(--muted); font-size:8.5px; }
+.collective-agreement-scope-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
+.collective-agreement-scope-options section {
+  display:grid;
+  align-content:start;
+  gap:5px;
+  min-width:0;
+  padding:9px;
+  border-radius:9px;
+  background:var(--surface-soft);
+}
+.collective-agreement-scope-options section > strong { margin-bottom:2px; font-size:8.5px; }
+.collective-agreement-scope-options label {
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:2px 6px;
+  align-items:start;
+  min-width:0;
+  padding:5px;
+  border-radius:6px;
+  font-size:8px;
+}
+.collective-agreement-scope-options label:hover { background:var(--surface); }
+.collective-agreement-scope-options label.occupied { opacity:.62; }
+.collective-agreement-scope-options label input { margin:1px 0 0; }
+.collective-agreement-scope-options label span { min-width:0; overflow-wrap:anywhere; }
+.collective-agreement-scope-options label small { grid-column:2; color:var(--muted); font-size:7px; }
+.collective-agreement-review-state {
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:2px 8px;
+  margin-top:13px;
+  padding:10px 12px;
+  border:1px solid color-mix(in srgb,var(--warning,#bf8615) 42%,var(--line));
+  border-radius:10px;
+  color:var(--warning-ink,#6a4d08);
+  background:var(--warning-surface,#fff4cf);
+}
+.collective-agreement-review-state span { grid-row:1/3; align-self:center; font-size:8px; font-weight:800; text-transform:uppercase; }
+.collective-agreement-review-state strong { font-size:10px; }
+.collective-agreement-review-state small { font-size:8px; }
+
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(
+  .collective-agreement-register-panel,
+  .collective-agreement-detail-panel,
+  .collective-agreement-list-item,
+  .collective-agreement-empty,
+  .collective-agreement-source-card > div,
+  .collective-agreement-applicability > div,
+  .collective-agreement-version-history > article,
+  .collective-agreement-business-unit,
+  .collective-agreement-assignment
+) { color:var(--ink); border-color:var(--line); background:var(--surface-soft); }
+html[data-active-page-theme="dark"] :is(.collective-agreement-modal,.collective-agreement-modal form) :is(
+  .collective-agreement-scope-fieldset,
+  .collective-agreement-scope-options section
+) { color:#edf4f1; border-color:#40524b; background:#202d29; }
+
+@media (max-width:1000px) {
+  .collective-agreement-workspace,
+  .collective-agreement-lower-grid { grid-template-columns:1fr; }
+  .collective-agreement-detail-panel { min-height:0; }
+}
+
+@media (max-width:700px) {
+  .collective-agreements-toolbar,
+  .collective-agreement-panel-heading,
+  .collective-agreement-detail-heading { flex-direction:column; }
+  .collective-agreements-actions,
+  .collective-agreement-detail-actions { width:100%; align-items:stretch; flex-direction:column; }
+  .collective-agreements-actions button,
+  .collective-agreement-detail-actions button { width:100%; }
+  .collective-agreement-source-card,
+  .collective-agreement-applicability,
+  .collective-agreement-scope-options { grid-template-columns:1fr; }
+  .collective-agreement-source-card > .source-wide,
+  .collective-agreement-form-grid .form-grid-wide { grid-column:auto; }
+  .collective-agreement-list-item { grid-template-columns:auto 1fr; }
+  .collective-agreement-list-item .status-badge { grid-column:1/-1; grid-row:auto; justify-self:start; }
+}
