@@ -269,9 +269,29 @@ test("Arbeitszeitregeln: unbekanntes Alter oder unbestätigte Profilanwendbarkei
   assert.ok(missingAge.findings.filter(({ ruleId }) => ruleId !== "at.applicability.adult").every(({ state }) => state === "unknown"));
   assert.ok(missingAge.findings.filter(({ ruleId }) => ruleId !== "at.applicability.adult").every(({ baseEnforcement }) => baseEnforcement === "manual_review"));
 
-  const unconfirmed = evaluate({ applicabilityConfirmed: false });
+  const unconfirmed = evaluate({
+    applicabilityConfirmed: false,
+    enforcementMode: "enforced",
+  });
   assert.equal(finding(unconfirmed, "at.applicability.adult").evidence.reason, "profile_not_confirmed");
   assert.equal(finding(unconfirmed, "at.azg.maximum.daily").state, "unknown");
+});
+
+test("Arbeitszeitregeln: Geburtsdatum bestätigt Volljährigkeit im Monitorbetrieb", () => {
+  const result = evaluate({
+    employee: { id: "252", birthDate: "1984-07-22" },
+    applicabilityConfirmed: false,
+    enforcementMode: "monitor",
+    rangeStart: "2026-07-27",
+    rangeEnd: "2026-08-02",
+    shifts: [shift("adult", "2026-07-27", "09:00", "18:00", 30)],
+  });
+  const applicability = finding(result, "at.applicability.adult");
+  assert.equal(applicability.state, "pass");
+  assert.equal(applicability.evidence.reason, "birth_date");
+  assert.equal(applicability.evidence.ageAtRangeStart, 42);
+  assert.equal(applicability.evidence.profileConfirmed, false);
+  assert.match(applicability.message, /Volljährigkeit ist bestätigt/i);
 });
 
 test("Arbeitszeitregeln: Minderjährige benötigen ein eigenes KJBG-Profil", () => {

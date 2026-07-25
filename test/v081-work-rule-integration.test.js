@@ -119,6 +119,31 @@ test("v0.81: Katalog, Profile und sichere Monitor-Standardzuordnung sind verfÃ�
   assert.equal(installation.applicabilityConfirmed, false);
 });
 
+test("Regression: Geburtsdatum entfernt Erwachsenenprofil-Hinweis im Monitorbetrieb", async () => {
+  const personnelRecord = await request(`/api/portal/v1/personnel-records/${encodeURIComponent(ADMIN)}`, {
+    method: "PUT",
+    body: {
+      sensitive: {
+        identity: {
+          birthDate: "1984-07-22",
+        },
+      },
+    },
+  });
+  assert.equal(personnelRecord.response.status, 200, JSON.stringify(personnelRecord.payload));
+  assert.ok(personnelRecord.payload.changedFields.includes("identity.birthDate"));
+
+  const schedule = await request(`/api/schedule?week=${WEEK}&location=${encodeURIComponent(locationId)}`);
+  assert.equal(schedule.response.status, 200, JSON.stringify(schedule.payload));
+  assert.equal(schedule.payload.workRuleAssessment.mode, "monitor");
+  assert.ok(!schedule.payload.workRuleAssessment.findings.some((finding) => (
+    finding.employeeNumber === ADMIN && finding.ruleId === "at.applicability.adult"
+  )));
+  assert.ok(schedule.payload.workRuleAssessment.findings.some((finding) => (
+    finding.employeeNumber === EMPLOYEE && finding.ruleId === "at.applicability.adult"
+  )));
+});
+
 test("v0.81: Wochenplan liefert eine sichtbare, nicht blockierende PlanprÃ¼fung", async () => {
   const schedule = await request(`/api/schedule?week=${WEEK}&location=${encodeURIComponent(locationId)}`);
   assert.equal(schedule.response.status, 200, JSON.stringify(schedule.payload));
