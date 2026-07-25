@@ -192,6 +192,17 @@ const {
   seedBuiltinWorkRuleProfiles,
 } = require("./lib/work-rules/store");
 const {
+  COLLECTIVE_AGREEMENT_NOTICE,
+  addBusinessUnitScopes,
+  addCollectiveAgreementVersion,
+  createBusinessUnit,
+  createCollectiveAgreement,
+  listBusinessUnits,
+  listCollectiveAgreementAssignments,
+  listCollectiveAgreements,
+  prepareCollectiveAgreementAssignment,
+} = require("./lib/collective-agreements");
+const {
   OFFICIAL_RETENTION_SOURCES,
   RETENTION_GOVERNANCE_NOTICE,
   createRetentionRuleVersion,
@@ -325,6 +336,9 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "work_rules:manage", label: "Arbeitszeit-Regelprofile verwalten", description: "Versionierte Profile und deren Geltungsbereich verwalten.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "work_rules:exception", label: "Begründete Regelausnahmen dokumentieren", description: "Ausschließlich ausdrücklich übersteuerbare Hinweise mit Grund und Nachweis behandeln.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "work_rules:audit", label: "Arbeitszeit-Regelprotokoll lesen", description: "Unveränderliche Bewertungen, Profilversionen und Ausnahmen nachvollziehen.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "collective_agreements:read", label: "KV-Register und Quellen lesen", description: "Versionierte externe Quellenstände und Zuordnungsvorschläge lesen; keine Rechtsfreigabe.", group: "Arbeitszeitregeln", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "collective_agreements:manage", label: "KV-Register und Betriebsteile pflegen", description: "Registereinträge, unveränderliche Fassungen und organisatorische Betriebsteile dokumentieren.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "collective_agreements:assign", label: "KV-Zuordnungen vorbereiten", description: "Prüfpflichtige Zuordnungsvorschläge zu Betriebsteilen erfassen; keine Aktivierung oder Rechtsfreigabe.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "branding:read", label: "Branding-Verwaltung lesen", group: "System & Verwaltung", warningLevel: "high" },
   { id: "branding:write", label: "Brandings verwalten und zuweisen", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "operation_mode:write", label: "Betriebsmodus umschalten", group: "System & Verwaltung", warningLevel: "critical" },
@@ -453,6 +467,7 @@ const portalGlobalPermissionIds = new Set([
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
   "integrations:connections:write", "integrations:credentials:write", "branding:read", "branding:write",
   "work_rules:manage", "work_rules:exception", "work_rules:audit",
+  "collective_agreements:manage", "collective_agreements:assign",
   "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "system:readiness:review", "update:write", "system:write", "wifi:settings",
   "users:write", "roles:read", "roles:write", "rights:read", "rights:write", "scopes:write",
   "audit:read", "usb:provision", "developer:system",
@@ -758,6 +773,15 @@ addBuiltinRolePermissions("it_admin", [
 ]);
 for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
   addBuiltinRolePermissions(roleId, ["system:readiness:review"]);
+}
+for (const roleId of ["department_manager", "manager", "hr", "admin", "it_admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, ["collective_agreements:read"]);
+}
+for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, [
+    "collective_agreements:manage",
+    "collective_agreements:assign",
+  ]);
 }
 
 const GLOBAL_SCOPE_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
@@ -2813,6 +2837,104 @@ function createSchema() {
         ON UPDATE CASCADE ON DELETE RESTRICT
     );
 
+    CREATE TABLE IF NOT EXISTS collective_agreements (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      short_title TEXT NOT NULL DEFAULT '',
+      jurisdiction TEXT NOT NULL DEFAULT 'AT',
+      review_state TEXT NOT NULL DEFAULT 'review_pending'
+        CHECK(review_state IN ('review_pending','approved','retired')),
+      current_version_id TEXT,
+      note TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS collective_agreement_versions (
+      id TEXT PRIMARY KEY,
+      agreement_id TEXT NOT NULL,
+      version_label TEXT NOT NULL,
+      source_state TEXT NOT NULL DEFAULT 'documented'
+        CHECK(source_state IN ('documented','superseded','withdrawn')),
+      valid_from TEXT NOT NULL,
+      valid_to TEXT,
+      external_published_on TEXT,
+      source_title TEXT NOT NULL,
+      source_url TEXT NOT NULL,
+      source_retrieved_on TEXT NOT NULL,
+      source_sha256 TEXT NOT NULL DEFAULT '',
+      source_note TEXT NOT NULL DEFAULT '',
+      contracting_parties_json TEXT NOT NULL DEFAULT '[]',
+      territorial_scope TEXT NOT NULL DEFAULT '',
+      functional_scope TEXT NOT NULL DEFAULT '',
+      personal_scope TEXT NOT NULL DEFAULT '',
+      employee_groups_json TEXT NOT NULL DEFAULT '[]',
+      work_time_parameters_note TEXT NOT NULL DEFAULT '',
+      classification_note TEXT NOT NULL DEFAULT '',
+      apprentice_relevance TEXT NOT NULL DEFAULT 'unknown'
+        CHECK(apprentice_relevance IN ('yes','no','unknown')),
+      apprentice_note TEXT NOT NULL DEFAULT '',
+      successor_note TEXT NOT NULL DEFAULT '',
+      linked_profile_version_id TEXT,
+      snapshot_json TEXT NOT NULL,
+      content_sha256 TEXT NOT NULL,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(agreement_id, version_label),
+      FOREIGN KEY (agreement_id) REFERENCES collective_agreements(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (linked_profile_version_id) REFERENCES work_rule_profile_versions(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS collective_agreement_business_units (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      legal_entity_name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS collective_agreement_business_unit_scopes (
+      id TEXT PRIMARY KEY,
+      business_unit_id TEXT NOT NULL,
+      scope_type TEXT NOT NULL
+        CHECK(scope_type IN ('cost_center','location','department')),
+      scope_key TEXT NOT NULL,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(business_unit_id, scope_type, scope_key),
+      UNIQUE(scope_type, scope_key),
+      FOREIGN KEY (business_unit_id) REFERENCES collective_agreement_business_units(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS collective_agreement_assignments (
+      id TEXT PRIMARY KEY,
+      agreement_version_id TEXT NOT NULL,
+      business_unit_id TEXT NOT NULL,
+      valid_from TEXT NOT NULL,
+      valid_to TEXT,
+      review_state TEXT NOT NULL DEFAULT 'review_pending'
+        CHECK(review_state IN ('review_pending')),
+      rationale TEXT NOT NULL,
+      reference_note TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (agreement_version_id) REFERENCES collective_agreement_versions(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (business_unit_id) REFERENCES collective_agreement_business_units(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
     CREATE TABLE IF NOT EXISTS work_rule_evaluation_runs (
       id TEXT PRIMARY KEY,
       target_type TEXT NOT NULL
@@ -3087,6 +3209,12 @@ function createSchema() {
       ON work_rule_profile_versions(profile_id, status, valid_from, valid_to);
     CREATE INDEX IF NOT EXISTS idx_work_rule_assignments_scope_validity
       ON work_rule_assignments(scope_type, scope_key, active, valid_from, valid_to);
+    CREATE INDEX IF NOT EXISTS idx_collective_agreement_versions_validity
+      ON collective_agreement_versions(agreement_id, valid_from DESC, valid_to);
+    CREATE INDEX IF NOT EXISTS idx_collective_agreement_business_unit_scopes
+      ON collective_agreement_business_unit_scopes(scope_type, scope_key, business_unit_id);
+    CREATE INDEX IF NOT EXISTS idx_collective_agreement_assignments_review
+      ON collective_agreement_assignments(business_unit_id, review_state, valid_from, valid_to);
     CREATE INDEX IF NOT EXISTS idx_work_rule_evaluations_period
       ON work_rule_evaluation_runs(target_type, period_from, period_to, created_at);
     CREATE INDEX IF NOT EXISTS idx_work_rule_exceptions_finding
@@ -3277,6 +3405,42 @@ function createSchema() {
       SELECT RAISE(ABORT, 'work rule profile versions are immutable');
     END;
 
+    CREATE TRIGGER IF NOT EXISTS trg_collective_agreement_versions_immutable_update
+    BEFORE UPDATE ON collective_agreement_versions
+    BEGIN
+      SELECT RAISE(ABORT, 'collective agreement versions are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_collective_agreement_versions_immutable_delete
+    BEFORE DELETE ON collective_agreement_versions
+    BEGIN
+      SELECT RAISE(ABORT, 'collective agreement versions are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_collective_agreement_assignments_immutable_update
+    BEFORE UPDATE ON collective_agreement_assignments
+    BEGIN
+      SELECT RAISE(ABORT, 'collective agreement assignment proposals are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_collective_agreement_assignments_immutable_delete
+    BEFORE DELETE ON collective_agreement_assignments
+    BEGIN
+      SELECT RAISE(ABORT, 'collective agreement assignment proposals are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_collective_agreement_business_unit_scopes_immutable_update
+    BEFORE UPDATE ON collective_agreement_business_unit_scopes
+    BEGIN
+      SELECT RAISE(ABORT, 'collective agreement business unit scopes are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_collective_agreement_business_unit_scopes_immutable_delete
+    BEFORE DELETE ON collective_agreement_business_unit_scopes
+    BEGIN
+      SELECT RAISE(ABORT, 'collective agreement business unit scopes are immutable');
+    END;
+
   `);
 }
 
@@ -3405,6 +3569,7 @@ const vacationHistoryProtectionMigrationId = "v0.82-protected-vacation-history";
 const payrollHandoffMigrationId = "v0.83-payroll-handoffs";
 const productReadinessMigrationId = "v0.84-product-readiness";
 const loanModuleMigrationId = "v0.85-loan-module-foundation";
+const collectiveAgreementMigrationId = "v0.85-collective-agreement-register";
 const loanModuleTables = Object.freeze([
   "articles",
   "article_identifiers",
@@ -3618,11 +3783,21 @@ const loanModuleMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(loanModuleMigrationId)
   || loanModuleTables.some((name) => !tableExists(name))
   || loanModuleTriggerNames.some((name) => !triggerExists(name));
+const collectiveAgreementMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(collectiveAgreementMigrationId)
+  || !tableExists("collective_agreements")
+  || !tableExists("collective_agreement_versions")
+  || !tableExists("collective_agreement_business_units")
+  || !tableExists("collective_agreement_business_unit_scopes")
+  || !tableExists("collective_agreement_assignments")
+  || !triggerExists("trg_collective_agreement_versions_immutable_update")
+  || !triggerExists("trg_collective_agreement_assignments_immutable_update");
 if (databaseExistedBeforeOpen && (portalMobileBaselineMigrationRequired || protectedPersonnelMigrationRequired
   || unreleasedSicknessDraftSchemaPresent || legacySchemaMigrationRequired || costCenterMigrationRequired
   || shiftLocationMigrationRequired || workRuleMigrationRequired || privacyGovernanceMigrationRequired
   || vacationHistoryProtectionMigrationRequired || payrollHandoffMigrationRequired
-  || productReadinessMigrationRequired || loanModuleMigrationRequired)) {
+  || productReadinessMigrationRequired || loanModuleMigrationRequired
+  || collectiveAgreementMigrationRequired)) {
   createInternalDatabaseBackup("pre-migration");
 }
 
@@ -4774,6 +4949,8 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run(payrollHandoffMigrationId, packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run(productReadinessMigrationId, packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run(collectiveAgreementMigrationId, packageMetadata.version);
 
 productReadinessEvidenceRows();
 productReadinessAcceptanceRows();
@@ -6782,6 +6959,7 @@ function enforceAdminApiAccess(request, _response, next) {
       return next();
     }
     const workRuleRoute = /^\/work-rules(?:\/|$)/.test(request.path);
+    const collectiveAgreementRoute = /^\/collective-agreements(?:\/|$)/.test(request.path);
     const privacyGovernanceRoute = /^\/privacy-governance(?:\/|$)/.test(request.path);
     const vacationAccountsRoute = /^\/vacation-accounts(?:\/|$)/.test(request.path);
     const timeRecordStatementsRoute = /^\/time-record-statements(?:\/|$)/.test(request.path);
@@ -6804,6 +6982,14 @@ function enforceAdminApiAccess(request, _response, next) {
       permission = ["GET", "HEAD", "OPTIONS"].includes(method)
         ? "time_records:read"
         : "time_records:generate";
+    } else if (collectiveAgreementRoute) {
+      if (["GET", "HEAD", "OPTIONS"].includes(method)) {
+        permission = "collective_agreements:read";
+      } else if (/^\/collective-agreements\/assignments(?:\/|$)/.test(request.path)) {
+        permission = "collective_agreements:assign";
+      } else {
+        permission = "collective_agreements:manage";
+      }
     } else if (workRuleRoute) {
       if (/^\/work-rules\/exceptions(?:\/|$)/.test(request.path)) {
         permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "work_rules:audit" : "work_rules:exception";
@@ -20677,6 +20863,211 @@ app.get("/api/portal/v1/self/time-record-statements/:id/download", (request, res
       "time_record_statement", value.row.id);
   } catch (error) {
     governanceRouteError(error, 503);
+  }
+});
+
+function collectiveAgreementBusinessUnitScopeMatcher(session) {
+  if (sessionHasGlobalScope(session)) return () => true;
+  const sessionScopes = Array.isArray(session?.scopes) ? session.scopes : [];
+  if (!sessionScopes.length) return () => false;
+  const assignedLocationIds = new Set(sessionScopes.map((scope) => String(scope.locationId || "")));
+  const assignedDepartmentIds = new Set(sessionScopes
+    .filter((scope) => Number(scope.departmentId || 0))
+    .map((scope) => String(Number(scope.departmentId))));
+  const unrestrictedLocationIds = new Set(sessionScopes
+    .filter((scope) => !Number(scope.departmentId || 0))
+    .map((scope) => String(scope.locationId || "")));
+  const costCenterIds = new Set(db.prepare(`
+    SELECT DISTINCT CAST(cost_center_id AS TEXT) AS id
+    FROM locations
+    WHERE id IN (${sessionScopes.map(() => "?").join(",") || "''"})
+      AND cost_center_id IS NOT NULL
+  `).all(...sessionScopes.map((scope) => String(scope.locationId || ""))).map((row) => row.id));
+  return (scope) => {
+    if (scope.scopeType === "location") return assignedLocationIds.has(String(scope.scopeKey));
+    if (scope.scopeType === "cost_center") return costCenterIds.has(String(scope.scopeKey));
+    if (scope.scopeType !== "department") return false;
+    const departmentId = String(Number(scope.scopeKey || 0));
+    if (assignedDepartmentIds.has(departmentId)) return true;
+    const department = db.prepare("SELECT location_id FROM departments WHERE id = ?").get(Number(scope.scopeKey));
+    return Boolean(department && unrestrictedLocationIds.has(String(department.location_id)));
+  };
+}
+
+function collectiveAgreementRegistryPayload(session) {
+  const allBusinessUnits = listBusinessUnits(db, { includeInactive: true });
+  const visibleScope = collectiveAgreementBusinessUnitScopeMatcher(session);
+  const businessUnits = allBusinessUnits.map((unit) => ({
+    ...unit,
+    scopes: unit.scopes.filter(visibleScope),
+  })).filter((unit) => sessionHasGlobalScope(session) || unit.scopes.length);
+  const visibleBusinessUnitIds = new Set(businessUnits.map((unit) => unit.id));
+  const assignments = listCollectiveAgreementAssignments(db)
+    .filter((assignment) => visibleBusinessUnitIds.has(assignment.businessUnitId));
+  const agreements = listCollectiveAgreements(db).map((agreement) => ({
+    ...agreement,
+    assignments: assignments.filter((assignment) => assignment.agreementId === agreement.id),
+  }));
+  const canManage = !session || session.employeeNumber === "local"
+    || session.permissions?.includes("collective_agreements:manage");
+  const canPrepareAssignments = !session || session.employeeNumber === "local"
+    || session.permissions?.includes("collective_agreements:assign");
+  const locations = canManage ? getLocationsForSession(session, false).map((location) => ({
+    id: String(location.id),
+    name: location.name,
+    costCenterId: location.cost_center_id || location.costCenterId || null,
+    departments: (location.departments || []).filter((department) => department.active).map((department) => ({
+      id: Number(department.id),
+      name: department.name,
+    })),
+  })) : [];
+  const costCenters = canManage && sessionHasGlobalScope(session)
+    ? db.prepare(`
+      SELECT id, code, name, type, active
+      FROM cost_centers
+      ORDER BY active DESC, code COLLATE NOCASE, id
+    `).all().map((row) => ({
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      type: row.type,
+      active: Boolean(row.active),
+    }))
+    : [];
+  const ruleProfileVersions = canManage ? db.prepare(`
+    SELECT v.id, v.version, v.status, v.valid_from, v.valid_to, p.name AS profile_name
+    FROM work_rule_profile_versions v
+    JOIN work_rule_profiles p ON p.id = v.profile_id
+    WHERE v.layer = 'collective_agreement'
+    ORDER BY p.name COLLATE NOCASE, v.valid_from DESC, v.id
+  `).all().map((row) => ({
+    id: row.id,
+    profileName: row.profile_name,
+    version: row.version,
+    status: row.status,
+    validFrom: row.valid_from,
+    validTo: row.valid_to || null,
+  })) : [];
+  const versionCount = agreements.reduce((count, agreement) => count + agreement.versions.length, 0);
+  return {
+    generatedAt: new Date().toISOString(),
+    legalNotice: COLLECTIVE_AGREEMENT_NOTICE,
+    scopeLabel: sessionHasGlobalScope(session) ? "Unternehmensweites KV-Register" : "Register mit Zuordnungen des eigenen Bereichs",
+    capabilities: {
+      canManage,
+      canPrepareAssignments,
+      canApprove: false,
+      canActivate: false,
+      approvalBlock: 6,
+    },
+    summary: {
+      agreements: agreements.length,
+      versions: versionCount,
+      businessUnits: businessUnits.length,
+      pendingAssignments: assignments.filter((assignment) => assignment.reviewState === "review_pending").length,
+      approvedAssignments: 0,
+    },
+    agreements,
+    businessUnits,
+    assignments,
+    locations,
+    costCenters,
+    ruleProfileVersions,
+  };
+}
+
+function collectiveAgreementRouteError(error) {
+  if (error instanceof TypeError) throw httpError(400, error.message, "COLLECTIVE_AGREEMENT_INVALID");
+  throw error;
+}
+
+app.get("/api/collective-agreements/registry", (request, response) => {
+  try {
+    response.json(collectiveAgreementRegistryPayload(request.portalSession));
+  } catch (error) {
+    collectiveAgreementRouteError(error);
+  }
+});
+
+app.post("/api/collective-agreements", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  try {
+    const agreement = createCollectiveAgreement(db, request.body, actor);
+    auditPortal(actor, "collective-agreement.create", "collective_agreement", agreement.id, JSON.stringify({
+      code: agreement.code,
+      versionId: agreement.currentVersionId,
+      reviewState: agreement.reviewState,
+    }));
+    response.status(201).json({ agreement });
+  } catch (error) {
+    collectiveAgreementRouteError(error);
+  }
+});
+
+app.post("/api/collective-agreements/:id/versions", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  try {
+    const agreement = addCollectiveAgreementVersion(db, request.params.id, request.body, actor);
+    auditPortal(actor, "collective-agreement.version.create", "collective_agreement", agreement.id, JSON.stringify({
+      versionId: agreement.currentVersionId,
+      reviewState: agreement.reviewState,
+    }));
+    response.status(201).json({ agreement });
+  } catch (error) {
+    collectiveAgreementRouteError(error);
+  }
+});
+
+app.post("/api/collective-agreements/business-units", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  try {
+    const businessUnit = createBusinessUnit(db, request.body, actor);
+    auditPortal(actor, "collective-agreement.business-unit.create", "collective_agreement_business_unit",
+      businessUnit.id, JSON.stringify({
+        code: businessUnit.code,
+        scopes: businessUnit.scopes.map((scope) => ({
+          scopeType: scope.scopeType,
+          scopeKey: scope.scopeKey,
+        })),
+      }));
+    response.status(201).json({ businessUnit });
+  } catch (error) {
+    collectiveAgreementRouteError(error);
+  }
+});
+
+app.post("/api/collective-agreements/business-units/:id/scopes", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  try {
+    const businessUnit = addBusinessUnitScopes(db, request.params.id, request.body.scopes, actor);
+    auditPortal(actor, "collective-agreement.business-unit.scopes.add",
+      "collective_agreement_business_unit", businessUnit.id, JSON.stringify({
+        scopes: businessUnit.scopes.map((scope) => ({
+          scopeType: scope.scopeType,
+          scopeKey: scope.scopeKey,
+        })),
+      }));
+    response.status(201).json({ businessUnit });
+  } catch (error) {
+    collectiveAgreementRouteError(error);
+  }
+});
+
+app.post("/api/collective-agreements/assignments", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  try {
+    const assignment = prepareCollectiveAgreementAssignment(db, request.body, actor);
+    auditPortal(actor, "collective-agreement.assignment.prepare", "collective_agreement_assignment",
+      assignment.id, JSON.stringify({
+        agreementVersionId: assignment.agreementVersionId,
+        businessUnitId: assignment.businessUnitId,
+        reviewState: assignment.reviewState,
+        validFrom: assignment.validFrom,
+        validTo: assignment.validTo,
+      }));
+    response.status(201).json({ assignment });
+  } catch (error) {
+    collectiveAgreementRouteError(error);
   }
 });
 

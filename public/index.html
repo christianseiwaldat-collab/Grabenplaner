@@ -91,6 +91,9 @@
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="costCenters" id="costCentersNavButton">
                 <span class="nav-symbol">▦</span><span>Kostenstellen</span>
               </button>
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="collectiveAgreements" id="collectiveAgreementsNavButton">
+                <span class="nav-symbol">≡</span><span>Kollektivverträge</span>
+              </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="vacations" id="centralVacationsNavButton">
                 <span class="nav-symbol">☀</span><span>Urlaube (Unternehmen)</span>
               </button>
@@ -327,13 +330,14 @@
 
         <section id="personnelAdministrationView" class="view">
           <header class="settings-header">
-            <div><span class="eyebrow">Zentrale Stammdaten</span><h1>Personalverwaltung</h1><p class="subtitle">Alle Beschäftigten und Kostenstellen übersichtlich und geschützt verwalten.</p></div>
+            <div><span class="eyebrow">Zentrale Stammdaten</span><h1>Personalverwaltung</h1><p class="subtitle">Mitarbeitende, Organisation, Abwesenheiten und fachliche Regelgrundlagen geschützt verwalten.</p></div>
             <div class="settings-header-actions"><button class="display-columns-button" id="personnelDisplayColumnsButton" type="button">Anzeigespalten</button><div class="page-theme-switch" role="group" aria-label="Darstellung der Personalverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div></div>
           </header>
 
           <div class="settings-tabs personnel-administration-tabs" role="tablist">
             <button class="settings-tab active" id="personnelDirectoryTab" type="button" role="tab" aria-controls="personnelDirectorySection" aria-selected="true" data-personnel-administration-tab="employees">Mitarbeitende</button>
             <button class="settings-tab" id="costCentersTab" type="button" role="tab" aria-controls="costCenterSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="costCenters">Kostenstellen</button>
+            <button class="settings-tab hidden" id="collectiveAgreementsTab" type="button" role="tab" aria-controls="collectiveAgreementsSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="collectiveAgreements">Kollektivverträge</button>
             <button class="settings-tab hidden" id="centralVacationsTab" type="button" role="tab" aria-controls="centralVacationSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="vacations">Urlaube</button>
             <button class="settings-tab hidden" id="dataSubjectRequestsTab" type="button" role="tab" aria-controls="dataSubjectRequestsSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="dataRequests">Datenanfragen <span class="tab-count hidden" id="dataSubjectRequestsTabCount">0</span></button>
           </div>
@@ -364,6 +368,64 @@
             </div>
             <p class="calculation-note">Kostenstellen werden nicht endgültig gelöscht. Vor der Deaktivierung müssen bestehende Zuordnungen verschoben werden; historische Daten bleiben erhalten.</p>
             <div class="cost-center-list" id="costCenterList"><p class="settings-note">Kostenstellen werden geladen.</p></div>
+          </section>
+
+          <section class="personnel-administration-section collective-agreements-section" id="collectiveAgreementsSection" role="tabpanel" aria-labelledby="collectiveAgreementsTab">
+            <div class="employee-toolbar collective-agreements-toolbar">
+              <div>
+                <h2>Kollektivvertragsregister</h2>
+                <p>Externe Fassungen, genaue Fundstellen, Betriebsteile und prüfpflichtige Zuordnungsvorschläge nachvollziehbar dokumentieren.</p>
+              </div>
+              <div class="collective-agreements-actions">
+                <button class="secondary-button" id="refreshCollectiveAgreementsButton" type="button">Aktualisieren</button>
+                <button class="primary-button hidden" id="addCollectiveAgreementButton" type="button">+ KV erfassen</button>
+              </div>
+            </div>
+            <article class="collective-agreement-boundary" id="collectiveAgreementLegalNotice">
+              <strong>Register, keine Rechtsfreigabe</strong>
+              <p>Das Register dokumentiert externe Kollektivverträge. Es erzeugt selbst keinen Kollektivvertrag und bestätigt keine Anwendbarkeit.</p>
+            </article>
+            <div class="personnel-administration-summary collective-agreement-summary" id="collectiveAgreementSummary" aria-live="polite"></div>
+
+            <div class="collective-agreement-workspace">
+              <section class="collective-agreement-register-panel">
+                <div class="collective-agreement-panel-heading">
+                  <div><span class="eyebrow">Versionierte Quellenstände</span><h3>KV-Fassungen</h3></div>
+                </div>
+                <div class="collective-agreement-list" id="collectiveAgreementList" aria-live="polite">
+                  <p class="settings-note">Das KV-Register wird beim Öffnen geladen.</p>
+                </div>
+              </section>
+
+              <section class="collective-agreement-detail-panel" id="collectiveAgreementDetail">
+                <div class="collective-agreement-empty">
+                  <strong>Noch keine Fassung ausgewählt</strong>
+                  <p>Wähle links einen Registereintrag, um Quellenstand, Geltungsbereich und Versionshistorie zu lesen.</p>
+                </div>
+              </section>
+            </div>
+
+            <div class="collective-agreement-lower-grid">
+              <section class="collective-agreement-register-panel">
+                <div class="collective-agreement-panel-heading">
+                  <div><span class="eyebrow">Organisationsmodell</span><h3>Betriebsteile</h3><p>Rechtsträger mit Kostenstellen, Filialen und Abteilungen verbinden.</p></div>
+                  <button class="secondary-button hidden" id="addCollectiveAgreementBusinessUnitButton" type="button">+ Betriebsteil</button>
+                </div>
+                <div class="collective-agreement-business-units" id="collectiveAgreementBusinessUnits">
+                  <p class="settings-note">Betriebsteile werden geladen.</p>
+                </div>
+              </section>
+
+              <section class="collective-agreement-register-panel">
+                <div class="collective-agreement-panel-heading">
+                  <div><span class="eyebrow">Noch nicht wirksam</span><h3>Zuordnungsvorschläge</h3><p>Jeder Vorschlag bleibt bis Block 6 auf „Prüfung offen“.</p></div>
+                  <button class="secondary-button hidden" id="addCollectiveAgreementAssignmentButton" type="button">+ Zuordnung vorbereiten</button>
+                </div>
+                <div class="collective-agreement-assignments" id="collectiveAgreementAssignments">
+                  <p class="settings-note">Zuordnungen werden geladen.</p>
+                </div>
+              </section>
+            </div>
           </section>
 
           <section class="personnel-administration-section" id="centralVacationSection" role="tabpanel" aria-labelledby="centralVacationsTab">
@@ -399,6 +461,90 @@
             <div class="data-subject-request-list" id="dataSubjectRequestList" aria-live="polite"><p class="settings-note">Datenanfragen werden beim Öffnen geladen.</p></div>
           </section>
         </section>
+
+        <dialog class="modal collective-agreement-modal" id="collectiveAgreementModal">
+          <form class="modal-card collective-agreement-modal-card" id="collectiveAgreementForm">
+            <div class="modal-header">
+              <div>
+                <span class="eyebrow">Personalverwaltung · KV-Register</span>
+                <h2 id="collectiveAgreementModalTitle">Kollektivvertrag erfassen</h2>
+                <p>Gespeichert wird ein unveränderlicher externer Quellenstand, keine selbst geschaffene Vertragsnorm.</p>
+              </div>
+              <button type="button" class="close-button" data-close="collectiveAgreementModal">×</button>
+            </div>
+            <input id="collectiveAgreementId" type="hidden" />
+            <div class="form-grid collective-agreement-form-grid">
+              <label class="field"><span>Registerkürzel</span><input id="collectiveAgreementCode" maxlength="40" required placeholder="z. B. HANDEL-AT" /></label>
+              <label class="field"><span>Kurzbezeichnung</span><input id="collectiveAgreementShortTitle" maxlength="80" placeholder="z. B. Handels-KV" /></label>
+              <label class="field form-grid-wide"><span>Offizielle Bezeichnung</span><input id="collectiveAgreementTitle" maxlength="180" required /></label>
+              <label class="field"><span>Rechtsraum</span><input id="collectiveAgreementJurisdiction" maxlength="2" value="AT" required /></label>
+              <label class="field"><span>Fassungsbezeichnung</span><input id="collectiveAgreementVersionLabel" maxlength="80" required placeholder="z. B. 2026" /></label>
+              <label class="field"><span>Gültig ab</span><input id="collectiveAgreementValidFrom" type="date" required /></label>
+              <label class="field"><span>Gültig bis</span><input id="collectiveAgreementValidTo" type="date" /></label>
+              <label class="field"><span>Extern veröffentlicht am</span><input id="collectiveAgreementPublishedOn" type="date" /></label>
+              <label class="field"><span>Quelle abgerufen am</span><input id="collectiveAgreementSourceRetrievedOn" type="date" required /></label>
+              <label class="field form-grid-wide"><span>Quellenbezeichnung</span><input id="collectiveAgreementSourceTitle" maxlength="240" required placeholder="Herausgeber und Dokumenttitel" /></label>
+              <label class="field form-grid-wide"><span>Offizielle HTTPS-Fundstelle</span><input id="collectiveAgreementSourceUrl" type="url" maxlength="1200" required placeholder="https://…" /></label>
+              <label class="field form-grid-wide"><span>SHA-256 des Quelldokuments <small>(optional)</small></span><input id="collectiveAgreementSourceSha256" maxlength="64" spellcheck="false" /></label>
+              <label class="field form-grid-wide"><span>Vertragsparteien <small>(eine je Zeile)</small></span><textarea id="collectiveAgreementContractingParties" rows="3" maxlength="2000"></textarea></label>
+              <label class="field"><span>Räumlicher Geltungsbereich</span><textarea id="collectiveAgreementTerritorialScope" rows="3" maxlength="600"></textarea></label>
+              <label class="field"><span>Fachlicher Geltungsbereich</span><textarea id="collectiveAgreementFunctionalScope" rows="3" maxlength="1200"></textarea></label>
+              <label class="field form-grid-wide"><span>Persönlicher Geltungsbereich</span><textarea id="collectiveAgreementPersonalScope" rows="3" maxlength="1200"></textarea></label>
+              <label class="field form-grid-wide"><span>Beschäftigtengruppen <small>(eine je Zeile)</small></span><textarea id="collectiveAgreementEmployeeGroups" rows="3" maxlength="2000"></textarea></label>
+              <label class="field"><span>Lehrlingsrelevanz</span><select id="collectiveAgreementApprenticeRelevance"><option value="unknown">Noch zu prüfen</option><option value="yes">Relevant</option><option value="no">Nicht relevant</option></select></label>
+              <label class="field"><span>Verknüpftes Regelprofil <small>(optional)</small></span><select id="collectiveAgreementLinkedProfileVersion"><option value="">Noch keines</option></select></label>
+              <label class="field form-grid-wide"><span>Lehrlingshinweis</span><textarea id="collectiveAgreementApprenticeNote" rows="3" maxlength="1600"></textarea></label>
+              <label class="field form-grid-wide"><span>Abgeleitete Arbeitszeitparameter</span><textarea id="collectiveAgreementWorkTimeNote" rows="3" maxlength="2000" placeholder="Nur nachvollziehbar abgeleitete Parameter und Fundstellen, kein Volltext."></textarea></label>
+              <label class="field form-grid-wide"><span>Einstufungshinweis</span><textarea id="collectiveAgreementClassificationNote" rows="3" maxlength="1600"></textarea></label>
+              <label class="field form-grid-wide"><span>Quellenhinweis</span><textarea id="collectiveAgreementSourceNote" rows="3" maxlength="1600"></textarea></label>
+              <label class="field form-grid-wide"><span>Nachfolge- oder Ersetzungshinweis</span><textarea id="collectiveAgreementSuccessorNote" rows="3" maxlength="1000"></textarea></label>
+              <label class="field form-grid-wide new-collective-agreement-only"><span>Interner Registerhinweis</span><textarea id="collectiveAgreementNote" rows="3" maxlength="1200"></textarea></label>
+            </div>
+            <p class="calculation-note">Eine gespeicherte Fassung wird nicht überschrieben. Änderungen werden als neue Fassung ergänzt.</p>
+            <div class="modal-actions"><button class="secondary-button" type="button" data-close="collectiveAgreementModal">Abbrechen</button><button class="primary-button" id="collectiveAgreementSubmitButton" type="submit">Fassung speichern</button></div>
+          </form>
+        </dialog>
+
+        <dialog class="modal collective-agreement-modal" id="collectiveAgreementBusinessUnitModal">
+          <form class="modal-card collective-agreement-modal-card compact" id="collectiveAgreementBusinessUnitForm">
+            <div class="modal-header">
+              <div><span class="eyebrow">KV-Register · Organisationsmodell</span><h2 id="collectiveAgreementBusinessUnitModalTitle">Betriebsteil anlegen</h2><p>Der Betriebsteil fasst tatsächliche organisatorische Bereiche unter einem Rechtsträger zusammen.</p></div>
+              <button type="button" class="close-button" data-close="collectiveAgreementBusinessUnitModal">×</button>
+            </div>
+            <input id="collectiveAgreementBusinessUnitId" type="hidden" />
+            <div class="form-grid">
+              <label class="field"><span>Kürzel</span><input id="collectiveAgreementBusinessUnitCode" maxlength="40" required placeholder="z. B. HANDEL" /></label>
+              <label class="field"><span>Name</span><input id="collectiveAgreementBusinessUnitName" maxlength="160" required /></label>
+              <label class="field form-grid-wide"><span>Rechtsträger</span><input id="collectiveAgreementBusinessUnitLegalEntity" maxlength="200" required /></label>
+              <label class="field form-grid-wide"><span>Beschreibung</span><textarea id="collectiveAgreementBusinessUnitDescription" rows="3" maxlength="1200"></textarea></label>
+            </div>
+            <fieldset class="collective-agreement-scope-fieldset">
+              <legend>Zugeordnete Kostenstellen, Filialen und Abteilungen</legend>
+              <p>Mehrfachauswahl ist möglich. Ein organisatorischer Bereich kann nur einem aktiven Betriebsteil angehören.</p>
+              <div class="collective-agreement-scope-options" id="collectiveAgreementBusinessUnitScopeOptions"></div>
+            </fieldset>
+            <div class="modal-actions"><button class="secondary-button" type="button" data-close="collectiveAgreementBusinessUnitModal">Abbrechen</button><button class="primary-button" id="collectiveAgreementBusinessUnitSubmitButton" type="submit">Betriebsteil speichern</button></div>
+          </form>
+        </dialog>
+
+        <dialog class="modal collective-agreement-modal" id="collectiveAgreementAssignmentModal">
+          <form class="modal-card collective-agreement-modal-card compact" id="collectiveAgreementAssignmentForm">
+            <div class="modal-header">
+              <div><span class="eyebrow">KV-Register · Zuordnung</span><h2>Zuordnung vorbereiten</h2><p>Der Vorschlag bleibt rechtlich und fachlich ungeprüft; eine Freigabe ist erst in Block 6 möglich.</p></div>
+              <button type="button" class="close-button" data-close="collectiveAgreementAssignmentModal">×</button>
+            </div>
+            <div class="form-grid">
+              <label class="field form-grid-wide"><span>KV-Fassung</span><select id="collectiveAgreementAssignmentVersion" required></select></label>
+              <label class="field form-grid-wide"><span>Betriebsteil</span><select id="collectiveAgreementAssignmentBusinessUnit" required></select></label>
+              <label class="field"><span>Vorgeschlagen gültig ab</span><input id="collectiveAgreementAssignmentValidFrom" type="date" required /></label>
+              <label class="field"><span>Vorgeschlagen gültig bis</span><input id="collectiveAgreementAssignmentValidTo" type="date" /></label>
+              <label class="field form-grid-wide"><span>Prüfbegründung</span><textarea id="collectiveAgreementAssignmentRationale" rows="4" maxlength="2000" minlength="10" required placeholder="Warum könnte diese Fassung für diesen Betriebsteil gelten?"></textarea></label>
+              <label class="field form-grid-wide"><span>Prüfnachweis / offene Frage</span><textarea id="collectiveAgreementAssignmentReference" rows="3" maxlength="1600"></textarea></label>
+            </div>
+            <div class="collective-agreement-review-state"><span>Status</span><strong>Prüfung offen</strong><small>Keine Auswirkung auf Dienstplan oder Personalakt</small></div>
+            <div class="modal-actions"><button class="secondary-button" type="button" data-close="collectiveAgreementAssignmentModal">Abbrechen</button><button class="primary-button" id="collectiveAgreementAssignmentSubmitButton" type="submit">Vorschlag speichern</button></div>
+          </form>
+        </dialog>
 
         <section id="personnelView" class="view">
           <header class="settings-header">

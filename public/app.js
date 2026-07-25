@@ -157,6 +157,10 @@ const state = {
   personnelAdministrationLoaded: false,
   personnelAdministrationLoading: false,
   personnelAdministrationTab: "employees",
+  collectiveAgreementRegistry: null,
+  collectiveAgreementsLoading: false,
+  selectedCollectiveAgreementId: "",
+  editingCollectiveAgreementBusinessUnitId: "",
   personnelDirectorySearch: "",
   personnelDirectoryCostCenterFilter: "",
   personnelDirectoryStatusFilter: "active",
@@ -245,7 +249,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -254,7 +258,7 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeeHomeLocation", "employeeHomeLocationHint", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "addCostCenterButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
+    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "addCostCenterButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
     "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationCostCenterField", "locationCostCenter", "locationCostCenterReadonly", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
@@ -734,6 +738,18 @@ function canManageDataSubjectRequests() {
   return hasGovernancePermission("data_subject_requests:manage");
 }
 
+function canReadCollectiveAgreements() {
+  return hasGovernancePermission("collective_agreements:read");
+}
+
+function canManageCollectiveAgreements() {
+  return hasGovernancePermission("collective_agreements:manage");
+}
+
+function canPrepareCollectiveAgreementAssignments() {
+  return hasGovernancePermission("collective_agreements:assign");
+}
+
 function canExportDataSubjectRequests() {
   return hasGovernancePermission("data_subject_requests:export");
 }
@@ -771,12 +787,14 @@ function canManageLoanSettings() {
 }
 
 function canOpenPersonnelAdministrationView() {
-  return canReadCentralPersonnel() || canReadCostCenters() || canReadCentralVacations() || canReadDataSubjectRequests();
+  return canReadCentralPersonnel() || canReadCostCenters() || canReadCollectiveAgreements()
+    || canReadCentralVacations() || canReadDataSubjectRequests();
 }
 
 function firstAccessiblePersonnelAdministrationTab() {
   if (canReadCentralPersonnel()) return "employees";
   if (canReadCostCenters()) return "costCenters";
+  if (canReadCollectiveAgreements()) return "collectiveAgreements";
   if (canReadCentralVacations()) return "vacations";
   if (canReadDataSubjectRequests()) return "dataRequests";
   return "";
@@ -785,6 +803,7 @@ function firstAccessiblePersonnelAdministrationTab() {
 function canOpenPersonnelAdministrationTab(tab) {
   return (tab === "employees" && canReadCentralPersonnel())
     || (tab === "costCenters" && canReadCostCenters())
+    || (tab === "collectiveAgreements" && canReadCollectiveAgreements())
     || (tab === "vacations" && canReadCentralVacations())
     || (tab === "dataRequests" && canReadDataSubjectRequests());
 }
@@ -870,15 +889,19 @@ function applyRoleVisibility() {
   const retentionManageAccess = canManageRetentionGovernance() && retentionReadAccess;
   const dataSubjectRequestsReadAccess = canReadDataSubjectRequests();
   const dataSubjectRequestsManageAccess = canManageDataSubjectRequests() && dataSubjectRequestsReadAccess;
+  const collectiveAgreementsReadAccess = canReadCollectiveAgreements();
+  const collectiveAgreementsManageAccess = canManageCollectiveAgreements() && collectiveAgreementsReadAccess;
+  const collectiveAgreementsAssignAccess = canPrepareCollectiveAgreementAssignments() && collectiveAgreementsReadAccess;
   const requestReadAccess = canReadManagerRequests() && features.requests !== false;
   const loanManagementAccess = canReadLoanManagement();
   const loanSettingsAccess = canManageLoanSettings();
-  const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess
+  const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess || collectiveAgreementsReadAccess
     || centralVacationReadAccess || dataSubjectRequestsReadAccess;
   const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
   elements.personnelAdministrationNav?.classList.toggle("hidden", !personnelModuleAccess);
   elements.personnelDirectoryNavButton?.classList.toggle("hidden", !centralPersonnelReadAccess);
   elements.costCentersNavButton?.classList.toggle("hidden", !costCenterReadAccess);
+  elements.collectiveAgreementsNavButton?.classList.toggle("hidden", !collectiveAgreementsReadAccess);
   elements.centralVacationsNavButton?.classList.toggle("hidden", !centralVacationReadAccess);
   elements.dataSubjectRequestsNavButton?.classList.toggle("hidden", !dataSubjectRequestsReadAccess);
   elements.vacationAccountsButton?.classList.toggle("hidden", !vacationAccountsReadAccess);
@@ -945,9 +968,13 @@ function applyRoleVisibility() {
   elements.addCentralEmployeeButton?.classList.toggle("hidden", !centralPersonnelWriteAccess);
   document.querySelector('[data-personnel-administration-tab="employees"]')?.classList.toggle("hidden", !centralPersonnelReadAccess);
   document.querySelector('[data-personnel-administration-tab="costCenters"]')?.classList.toggle("hidden", !costCenterReadAccess);
+  elements.collectiveAgreementsTab?.classList.toggle("hidden", !collectiveAgreementsReadAccess);
   elements.centralVacationsTab?.classList.toggle("hidden", !centralVacationReadAccess);
   elements.dataSubjectRequestsTab?.classList.toggle("hidden", !dataSubjectRequestsReadAccess);
   elements.addCostCenterButton?.classList.toggle("hidden", !costCenterWriteAccess);
+  elements.addCollectiveAgreementButton?.classList.toggle("hidden", !collectiveAgreementsManageAccess);
+  elements.addCollectiveAgreementBusinessUnitButton?.classList.toggle("hidden", !collectiveAgreementsManageAccess);
+  elements.addCollectiveAgreementAssignmentButton?.classList.toggle("hidden", !collectiveAgreementsAssignAccess);
   elements.addLocationButton?.classList.toggle("hidden", !(locationBaseWriteAccess && costCenterWriteAccess));
   elements.addDepartmentButton?.classList.toggle("hidden", !departmentWriteAccess);
   elements.locationFormCard?.classList.toggle("hidden", !locationBaseWriteAccess);
@@ -1560,6 +1587,8 @@ function renderContextNavigation() {
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "employees");
   setNavigationCurrent(elements.costCentersNavButton,
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "costCenters");
+  setNavigationCurrent(elements.collectiveAgreementsNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "collectiveAgreements");
   setNavigationCurrent(elements.centralVacationsNavButton,
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "vacations");
   setNavigationCurrent(elements.dataSubjectRequestsNavButton,
@@ -3865,6 +3894,454 @@ async function runRetentionPreview(event) {
   }
 }
 
+function collectiveAgreementReviewLabel(value) {
+  return ({
+    review_pending: "Prüfung offen",
+    approved: "Freigegeben",
+    retired: "Historisch",
+  })[value] || "Prüfung offen";
+}
+
+function collectiveAgreementApprenticeLabel(value) {
+  return ({ yes: "Lehrlingsrelevant", no: "Nicht lehrlingsrelevant", unknown: "Lehrlingsrelevanz offen" })[value]
+    || "Lehrlingsrelevanz offen";
+}
+
+function collectiveAgreementValidity(from, to) {
+  return `${formatDate(from)}${to ? ` – ${formatDate(to)}` : " – offen"}`;
+}
+
+async function loadCollectiveAgreementRegistry({ force = false } = {}) {
+  if (!canReadCollectiveAgreements() || state.collectiveAgreementsLoading) return;
+  if (state.collectiveAgreementRegistry && !force) {
+    renderCollectiveAgreementRegistry();
+    return;
+  }
+  state.collectiveAgreementsLoading = true;
+  if (elements.collectiveAgreementList) {
+    elements.collectiveAgreementList.innerHTML = '<p class="settings-note">KV-Fassungen werden geladen.</p>';
+  }
+  try {
+    state.collectiveAgreementRegistry = await api("/api/collective-agreements/registry");
+    const agreementIds = new Set((state.collectiveAgreementRegistry.agreements || []).map((agreement) => agreement.id));
+    if (!agreementIds.has(state.selectedCollectiveAgreementId)) {
+      state.selectedCollectiveAgreementId = state.collectiveAgreementRegistry.agreements?.[0]?.id || "";
+    }
+    renderCollectiveAgreementRegistry();
+  } catch (error) {
+    state.collectiveAgreementRegistry = null;
+    if (elements.collectiveAgreementList) {
+      elements.collectiveAgreementList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    }
+    throw error;
+  } finally {
+    state.collectiveAgreementsLoading = false;
+  }
+}
+
+function renderCollectiveAgreementSummary(registry) {
+  if (!elements.collectiveAgreementSummary) return;
+  const summary = registry.summary || {};
+  elements.collectiveAgreementSummary.innerHTML = [
+    ["Registereinträge", summary.agreements || 0, "externe Verträge"],
+    ["Fassungen", summary.versions || 0, "unveränderliche Quellenstände"],
+    ["Betriebsteile", summary.businessUnits || 0, registry.scopeLabel || "sichtbarer Bereich"],
+    ["Prüfung offen", summary.pendingAssignments || 0, "noch ohne Wirksamkeit"],
+  ].map(([label, value, note], index) => `
+    <article class="personnel-administration-stat ${index === 3 && Number(value) ? "warning" : ""}">
+      <span>${escapeHtml(label)}</span><strong>${Number(value)}</strong><small>${escapeHtml(note)}</small>
+    </article>
+  `).join("");
+}
+
+function renderCollectiveAgreementList(registry) {
+  if (!elements.collectiveAgreementList) return;
+  const agreements = registry.agreements || [];
+  if (!agreements.length) {
+    elements.collectiveAgreementList.innerHTML = `
+      <div class="collective-agreement-empty">
+        <strong>Noch kein externer Kollektivvertrag registriert</strong>
+        <p>Foto/Multimedia, Printcenter und IT werden bewusst nicht vorab rechtlich zugeordnet. Zuerst müssen Quelle, Rechtsträger und Geltungsbereich bestätigt werden.</p>
+      </div>`;
+    return;
+  }
+  elements.collectiveAgreementList.innerHTML = agreements.map((agreement) => {
+    const current = agreement.versions.find((version) => version.id === agreement.currentVersionId)
+      || agreement.versions[0];
+    const active = agreement.id === state.selectedCollectiveAgreementId;
+    return `
+      <button type="button" class="collective-agreement-list-item ${active ? "active" : ""}" data-collective-agreement-id="${escapeHtmlAttribute(agreement.id)}" ${active ? 'aria-current="true"' : ""}>
+        <span class="collective-agreement-code">${escapeHtml(agreement.code)}</span>
+        <strong>${escapeHtml(agreement.shortTitle || agreement.title)}</strong>
+        <small>${current ? `${escapeHtml(current.versionLabel)} · ${escapeHtml(collectiveAgreementValidity(current.validFrom, current.validTo))}` : "Noch keine Fassung"}</small>
+        <span class="status-badge warning">${escapeHtml(collectiveAgreementReviewLabel(agreement.reviewState))}</span>
+      </button>`;
+  }).join("");
+}
+
+function collectiveAgreementDefinitionList(version) {
+  const entries = [
+    ["Räumlich", version.territorialScope],
+    ["Fachlich", version.functionalScope],
+    ["Persönlich", version.personalScope],
+    ["Beschäftigtengruppen", (version.employeeGroups || []).join(", ")],
+    ["Arbeitszeitparameter", version.workTimeParametersNote],
+    ["Einstufung", version.classificationNote],
+    ["Lehrlinge", `${collectiveAgreementApprenticeLabel(version.apprenticeRelevance)}${version.apprenticeNote ? ` · ${version.apprenticeNote}` : ""}`],
+    ["Nachfolge / Ersetzung", version.successorNote],
+  ].filter(([, value]) => String(value || "").trim());
+  return entries.length ? entries.map(([label, value]) => `
+    <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>
+  `).join("") : '<p class="settings-note">Der Geltungsbereich ist noch nicht vollständig dokumentiert.</p>';
+}
+
+function renderCollectiveAgreementDetail(registry) {
+  if (!elements.collectiveAgreementDetail) return;
+  const agreement = (registry.agreements || []).find((entry) => entry.id === state.selectedCollectiveAgreementId);
+  if (!agreement) {
+    elements.collectiveAgreementDetail.innerHTML = `
+      <div class="collective-agreement-empty"><strong>Noch keine Fassung ausgewählt</strong><p>Wähle links einen Registereintrag.</p></div>`;
+    return;
+  }
+  const current = agreement.versions.find((version) => version.id === agreement.currentVersionId)
+    || agreement.versions[0];
+  if (!current) return;
+  const parties = current.contractingParties?.length
+    ? current.contractingParties.join(" · ")
+    : "Noch nicht dokumentiert";
+  const sourceHash = current.source.sha256 || current.contentSha256;
+  const versionHistory = agreement.versions.map((version) => `
+    <article class="${version.id === agreement.currentVersionId ? "current" : ""}">
+      <div><strong>${escapeHtml(version.versionLabel)}</strong><small>${escapeHtml(collectiveAgreementValidity(version.validFrom, version.validTo))}</small></div>
+      <span>${version.id === agreement.currentVersionId ? "Aktueller Registerstand" : "Historische Fassung"}</span>
+    </article>`).join("");
+  elements.collectiveAgreementDetail.innerHTML = `
+    <div class="collective-agreement-detail-heading">
+      <div>
+        <span class="eyebrow">${escapeHtml(agreement.code)} · ${escapeHtml(agreement.jurisdiction)}</span>
+        <h3>${escapeHtml(agreement.title)}</h3>
+        <p>${escapeHtml(agreement.note || "Externer Registereintrag ohne bestätigte betriebliche Anwendbarkeit.")}</p>
+      </div>
+      <div class="collective-agreement-detail-actions">
+        <span class="status-badge warning">${escapeHtml(collectiveAgreementReviewLabel(agreement.reviewState))}</span>
+        ${registry.capabilities?.canManage ? `<button type="button" class="secondary-button" data-add-collective-agreement-version="${escapeHtmlAttribute(agreement.id)}">+ Neue Fassung</button>` : ""}
+      </div>
+    </div>
+    <div class="collective-agreement-source-card">
+      <div><span>Fassung</span><strong>${escapeHtml(current.versionLabel)}</strong><small>${escapeHtml(collectiveAgreementValidity(current.validFrom, current.validTo))}</small></div>
+      <div><span>Vertragsparteien</span><strong>${escapeHtml(parties)}</strong><small>${current.externalPublishedOn ? `extern veröffentlicht ${escapeHtml(formatDate(current.externalPublishedOn))}` : "Veröffentlichungsdatum offen"}</small></div>
+      <div class="source-wide"><span>Dokumentierte Quelle</span><strong><a href="${escapeHtmlAttribute(current.source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(current.source.title)}</a></strong><small>abgerufen ${escapeHtml(formatDate(current.source.retrievedOn))} · Integritätswert ${escapeHtml(sourceHash.slice(0, 16))}…</small></div>
+    </div>
+    <dl class="collective-agreement-applicability">${collectiveAgreementDefinitionList(current)}</dl>
+    ${current.linkedProfileVersionId ? `<p class="collective-agreement-profile-link">Vorbereitete Regelprofil-Verknüpfung: <strong>${escapeHtml(current.linkedProfileVersionId)}</strong>. Noch nicht aktiviert.</p>` : ""}
+    <section class="collective-agreement-version-history">
+      <div><span class="eyebrow">Nicht überschreibbar</span><h4>Versionshistorie</h4></div>
+      ${versionHistory}
+    </section>`;
+}
+
+function renderCollectiveAgreementBusinessUnits(registry) {
+  if (!elements.collectiveAgreementBusinessUnits) return;
+  const units = registry.businessUnits || [];
+  elements.collectiveAgreementBusinessUnits.innerHTML = units.length ? units.map((unit) => `
+    <article class="collective-agreement-business-unit" data-collective-agreement-business-unit="${escapeHtmlAttribute(unit.id)}">
+      <div><span>${escapeHtml(unit.code)}</span><strong>${escapeHtml(unit.name)}</strong><small>${escapeHtml(unit.legalEntityName)}</small></div>
+      <p>${escapeHtml(unit.description || "Keine zusätzliche Beschreibung.")}</p>
+      <div class="collective-agreement-scope-tags">${unit.scopes.length
+        ? unit.scopes.map((scope) => `<span>${escapeHtml(scope.label)}</span>`).join("")
+        : '<span class="warning">Noch ohne organisatorischen Bereich</span>'}</div>
+      ${registry.capabilities?.canManage ? '<button class="text-action" type="button" data-add-business-unit-scopes>Bereiche ergänzen</button>' : ""}
+    </article>`).join("") : `
+      <div class="collective-agreement-empty compact"><strong>Noch keine Betriebsteile</strong><p>Lege Rechtsträger und ihre tatsächlichen organisatorischen Bereiche zuerst neutral an.</p></div>`;
+}
+
+function renderCollectiveAgreementAssignments(registry) {
+  if (!elements.collectiveAgreementAssignments) return;
+  const assignments = registry.assignments || [];
+  elements.collectiveAgreementAssignments.innerHTML = assignments.length ? assignments.map((assignment) => `
+    <article class="collective-agreement-assignment">
+      <div>
+        <span class="status-badge warning">${escapeHtml(collectiveAgreementReviewLabel(assignment.reviewState))}</span>
+        <strong>${escapeHtml(assignment.businessUnitCode)} · ${escapeHtml(assignment.businessUnitName)}</strong>
+        <small>${escapeHtml(assignment.agreementCode)} · Fassung ${escapeHtml(assignment.versionLabel)} · ${escapeHtml(collectiveAgreementValidity(assignment.validFrom, assignment.validTo))}</small>
+      </div>
+      <p>${escapeHtml(assignment.rationale)}</p>
+      ${assignment.referenceNote ? `<small>${escapeHtml(assignment.referenceNote)}</small>` : ""}
+    </article>`).join("") : `
+      <div class="collective-agreement-empty compact"><strong>Keine Zuordnung vorbereitet</strong><p>Ohne bestätigte Quelle und Betriebsteil soll kein Kollektivvertrag vorweggenommen werden.</p></div>`;
+}
+
+function renderCollectiveAgreementRegistry() {
+  const registry = state.collectiveAgreementRegistry;
+  if (!registry || !canReadCollectiveAgreements()) return;
+  if (elements.collectiveAgreementLegalNotice) {
+    elements.collectiveAgreementLegalNotice.innerHTML = `<strong>Register, keine Rechtsfreigabe</strong><p>${escapeHtml(registry.legalNotice)}</p>`;
+  }
+  renderCollectiveAgreementSummary(registry);
+  renderCollectiveAgreementList(registry);
+  renderCollectiveAgreementDetail(registry);
+  renderCollectiveAgreementBusinessUnits(registry);
+  renderCollectiveAgreementAssignments(registry);
+  elements.addCollectiveAgreementButton?.classList.toggle("hidden", !registry.capabilities?.canManage);
+  elements.addCollectiveAgreementBusinessUnitButton?.classList.toggle("hidden", !registry.capabilities?.canManage);
+  elements.addCollectiveAgreementAssignmentButton?.classList.toggle("hidden", !registry.capabilities?.canPrepareAssignments);
+}
+
+function collectiveAgreementVersionOptions(registry) {
+  return (registry.agreements || []).flatMap((agreement) => (agreement.versions || []).map((version) => ({
+    ...version,
+    agreement,
+  })));
+}
+
+function populateCollectiveAgreementProfileOptions(selected = "") {
+  if (!elements.collectiveAgreementLinkedProfileVersion) return;
+  const options = state.collectiveAgreementRegistry?.ruleProfileVersions || [];
+  elements.collectiveAgreementLinkedProfileVersion.innerHTML = `<option value="">Noch keines</option>${options.map((profile) => `
+    <option value="${escapeHtmlAttribute(profile.id)}">${escapeHtml(`${profile.profileName} · ${profile.version} · ${profile.status === "published" ? "veröffentlicht" : "Entwurf"}`)}</option>
+  `).join("")}`;
+  elements.collectiveAgreementLinkedProfileVersion.value = options.some((profile) => profile.id === selected) ? selected : "";
+}
+
+function openCollectiveAgreementModal(agreement = null) {
+  if (!canManageCollectiveAgreements() || !elements.collectiveAgreementModal) return;
+  elements.collectiveAgreementForm.reset();
+  const today = toIsoDate(new Date());
+  const newVersion = Boolean(agreement);
+  elements.collectiveAgreementId.value = agreement?.id || "";
+  elements.collectiveAgreementCode.value = agreement?.code || "";
+  elements.collectiveAgreementShortTitle.value = agreement?.shortTitle || "";
+  elements.collectiveAgreementTitle.value = agreement?.title || "";
+  elements.collectiveAgreementJurisdiction.value = agreement?.jurisdiction || "AT";
+  elements.collectiveAgreementSourceRetrievedOn.value = today;
+  elements.collectiveAgreementModalTitle.textContent = newVersion ? "Neue KV-Fassung ergänzen" : "Kollektivvertrag erfassen";
+  elements.collectiveAgreementSubmitButton.textContent = newVersion ? "Neue Fassung speichern" : "Registereintrag speichern";
+  [elements.collectiveAgreementCode, elements.collectiveAgreementShortTitle,
+    elements.collectiveAgreementTitle, elements.collectiveAgreementJurisdiction]
+    .forEach((input) => { input.disabled = newVersion; });
+  document.querySelectorAll(".new-collective-agreement-only").forEach((field) => field.classList.toggle("hidden", newVersion));
+  populateCollectiveAgreementProfileOptions();
+  elements.collectiveAgreementModal.showModal();
+}
+
+function collectiveAgreementVersionPayload() {
+  return {
+    versionLabel: elements.collectiveAgreementVersionLabel.value.trim(),
+    validFrom: elements.collectiveAgreementValidFrom.value,
+    validTo: elements.collectiveAgreementValidTo.value || null,
+    externalPublishedOn: elements.collectiveAgreementPublishedOn.value || null,
+    sourceTitle: elements.collectiveAgreementSourceTitle.value.trim(),
+    sourceUrl: elements.collectiveAgreementSourceUrl.value.trim(),
+    sourceRetrievedOn: elements.collectiveAgreementSourceRetrievedOn.value,
+    sourceSha256: elements.collectiveAgreementSourceSha256.value.trim(),
+    sourceNote: elements.collectiveAgreementSourceNote.value.trim(),
+    contractingParties: elements.collectiveAgreementContractingParties.value,
+    territorialScope: elements.collectiveAgreementTerritorialScope.value.trim(),
+    functionalScope: elements.collectiveAgreementFunctionalScope.value.trim(),
+    personalScope: elements.collectiveAgreementPersonalScope.value.trim(),
+    employeeGroups: elements.collectiveAgreementEmployeeGroups.value,
+    workTimeParametersNote: elements.collectiveAgreementWorkTimeNote.value.trim(),
+    classificationNote: elements.collectiveAgreementClassificationNote.value.trim(),
+    apprenticeRelevance: elements.collectiveAgreementApprenticeRelevance.value,
+    apprenticeNote: elements.collectiveAgreementApprenticeNote.value.trim(),
+    successorNote: elements.collectiveAgreementSuccessorNote.value.trim(),
+    linkedProfileVersionId: elements.collectiveAgreementLinkedProfileVersion.value,
+  };
+}
+
+async function saveCollectiveAgreement(event) {
+  event.preventDefault();
+  if (!canManageCollectiveAgreements()) return;
+  const agreementId = elements.collectiveAgreementId.value;
+  const version = collectiveAgreementVersionPayload();
+  const body = agreementId ? version : {
+    code: elements.collectiveAgreementCode.value.trim(),
+    shortTitle: elements.collectiveAgreementShortTitle.value.trim(),
+    title: elements.collectiveAgreementTitle.value.trim(),
+    jurisdiction: elements.collectiveAgreementJurisdiction.value.trim(),
+    note: elements.collectiveAgreementNote.value.trim(),
+    version,
+  };
+  elements.collectiveAgreementSubmitButton.disabled = true;
+  try {
+    const result = await api(
+      agreementId
+        ? `/api/collective-agreements/${encodeURIComponent(agreementId)}/versions`
+        : "/api/collective-agreements",
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    elements.collectiveAgreementModal.close();
+    state.selectedCollectiveAgreementId = result.agreement?.id || agreementId;
+    await loadCollectiveAgreementRegistry({ force: true });
+    showToast(agreementId ? "Die neue KV-Fassung wurde unveränderlich ergänzt." : "Der KV-Registereintrag wurde angelegt.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.collectiveAgreementSubmitButton.disabled = false;
+  }
+}
+
+function renderCollectiveAgreementScopeOptions(editingUnit = null) {
+  if (!elements.collectiveAgreementBusinessUnitScopeOptions) return;
+  const registry = state.collectiveAgreementRegistry || {};
+  const owners = new Map((registry.businessUnits || []).flatMap((unit) => (
+    unit.scopes.map((scope) => [`${scope.scopeType}:${scope.scopeKey}`, unit])
+  )));
+  const group = (title, options) => options.length ? `
+    <section><strong>${escapeHtml(title)}</strong>${options.map((option) => {
+      const key = `${option.scopeType}:${option.scopeKey}`;
+      const owner = owners.get(key);
+      const belongsToEditingUnit = owner?.id === editingUnit?.id;
+      return `<label class="${owner ? "occupied" : ""}"><input type="checkbox" data-business-unit-scope-type="${escapeHtmlAttribute(option.scopeType)}" data-business-unit-scope-key="${escapeHtmlAttribute(String(option.scopeKey))}" ${belongsToEditingUnit ? "checked " : ""}${owner ? "disabled" : ""} /><span>${escapeHtml(option.label)}</span>${owner ? `<small>${belongsToEditingUnit ? "bereits in diesem Betriebsteil" : `bereits bei ${escapeHtml(owner.code)}`}</small>` : ""}</label>`;
+    }).join("")}</section>` : "";
+  const costCenters = (registry.costCenters || []).map((center) => ({
+    scopeType: "cost_center",
+    scopeKey: center.id,
+    label: `${center.code} · ${center.name}${center.active ? "" : " · inaktiv"}`,
+  }));
+  const locations = (registry.locations || []).map((location) => ({
+    scopeType: "location",
+    scopeKey: location.id,
+    label: `${location.id} · ${location.name}`,
+  }));
+  const departments = (registry.locations || []).flatMap((location) => (location.departments || []).map((department) => ({
+    scopeType: "department",
+    scopeKey: department.id,
+    label: `${location.id} · ${location.name} · ${department.name}`,
+  })));
+  elements.collectiveAgreementBusinessUnitScopeOptions.innerHTML = [
+    group("Kostenstellen", costCenters),
+    group("Filialen", locations),
+    group("Abteilungen", departments),
+  ].join("") || '<p class="settings-note">Keine organisatorischen Bereiche verfügbar.</p>';
+}
+
+function openCollectiveAgreementBusinessUnitModal(unit = null) {
+  if (!canManageCollectiveAgreements() || !elements.collectiveAgreementBusinessUnitModal) return;
+  elements.collectiveAgreementBusinessUnitForm.reset();
+  state.editingCollectiveAgreementBusinessUnitId = unit?.id || "";
+  elements.collectiveAgreementBusinessUnitId.value = unit?.id || "";
+  elements.collectiveAgreementBusinessUnitCode.value = unit?.code || "";
+  elements.collectiveAgreementBusinessUnitName.value = unit?.name || "";
+  elements.collectiveAgreementBusinessUnitLegalEntity.value = unit?.legalEntityName || "";
+  elements.collectiveAgreementBusinessUnitDescription.value = unit?.description || "";
+  [elements.collectiveAgreementBusinessUnitCode, elements.collectiveAgreementBusinessUnitName,
+    elements.collectiveAgreementBusinessUnitLegalEntity, elements.collectiveAgreementBusinessUnitDescription]
+    .forEach((input) => { input.disabled = Boolean(unit); });
+  elements.collectiveAgreementBusinessUnitModalTitle.textContent = unit ? "Betriebsteil um Bereiche ergänzen" : "Betriebsteil anlegen";
+  elements.collectiveAgreementBusinessUnitSubmitButton.textContent = unit ? "Bereiche ergänzen" : "Betriebsteil speichern";
+  renderCollectiveAgreementScopeOptions(unit);
+  elements.collectiveAgreementBusinessUnitModal.showModal();
+}
+
+async function saveCollectiveAgreementBusinessUnit(event) {
+  event.preventDefault();
+  if (!canManageCollectiveAgreements()) return;
+  const businessUnitId = elements.collectiveAgreementBusinessUnitId.value;
+  const scopes = [...elements.collectiveAgreementBusinessUnitScopeOptions.querySelectorAll("input:checked:not(:disabled)")]
+    .map((input) => ({
+      scopeType: input.dataset.businessUnitScopeType,
+      scopeKey: input.dataset.businessUnitScopeKey,
+    }));
+  if (businessUnitId && !scopes.length) {
+    showToast("Bitte mindestens einen neuen organisatorischen Bereich auswählen.", true);
+    return;
+  }
+  const body = businessUnitId ? { scopes } : {
+    code: elements.collectiveAgreementBusinessUnitCode.value.trim(),
+    name: elements.collectiveAgreementBusinessUnitName.value.trim(),
+    legalEntityName: elements.collectiveAgreementBusinessUnitLegalEntity.value.trim(),
+    description: elements.collectiveAgreementBusinessUnitDescription.value.trim(),
+    scopes,
+  };
+  elements.collectiveAgreementBusinessUnitSubmitButton.disabled = true;
+  try {
+    await api(
+      businessUnitId
+        ? `/api/collective-agreements/business-units/${encodeURIComponent(businessUnitId)}/scopes`
+        : "/api/collective-agreements/business-units",
+      {
+      method: "POST",
+      body: JSON.stringify(body),
+      },
+    );
+    elements.collectiveAgreementBusinessUnitModal.close();
+    await loadCollectiveAgreementRegistry({ force: true });
+    showToast(businessUnitId ? "Die Bereiche wurden unveränderlich ergänzt." : "Der Betriebsteil wurde angelegt.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.collectiveAgreementBusinessUnitSubmitButton.disabled = false;
+  }
+}
+
+function selectedCollectiveAgreementAssignmentVersion() {
+  const id = elements.collectiveAgreementAssignmentVersion?.value || "";
+  return collectiveAgreementVersionOptions(state.collectiveAgreementRegistry || {})
+    .find((version) => version.id === id) || null;
+}
+
+function updateCollectiveAgreementAssignmentDates() {
+  const version = selectedCollectiveAgreementAssignmentVersion();
+  if (!version) return;
+  elements.collectiveAgreementAssignmentValidFrom.value = version.validFrom;
+  elements.collectiveAgreementAssignmentValidFrom.min = version.validFrom;
+  elements.collectiveAgreementAssignmentValidTo.min = version.validFrom;
+  elements.collectiveAgreementAssignmentValidFrom.max = version.validTo || "";
+  elements.collectiveAgreementAssignmentValidTo.max = version.validTo || "";
+  elements.collectiveAgreementAssignmentValidTo.value = version.validTo || "";
+}
+
+function openCollectiveAgreementAssignmentModal() {
+  if (!canPrepareCollectiveAgreementAssignments() || !elements.collectiveAgreementAssignmentModal) return;
+  const registry = state.collectiveAgreementRegistry || {};
+  const versions = collectiveAgreementVersionOptions(registry);
+  const units = (registry.businessUnits || []).filter((unit) => unit.active);
+  if (!versions.length || !units.length) {
+    showToast("Für einen Zuordnungsvorschlag werden mindestens eine KV-Fassung und ein Betriebsteil benötigt.", true);
+    return;
+  }
+  elements.collectiveAgreementAssignmentForm.reset();
+  elements.collectiveAgreementAssignmentVersion.innerHTML = versions.map((version) => `
+    <option value="${escapeHtmlAttribute(version.id)}">${escapeHtml(`${version.agreement.code} · ${version.versionLabel} · ${collectiveAgreementValidity(version.validFrom, version.validTo)}`)}</option>
+  `).join("");
+  const selectedAgreement = (registry.agreements || []).find((agreement) => agreement.id === state.selectedCollectiveAgreementId);
+  if (selectedAgreement?.currentVersionId) elements.collectiveAgreementAssignmentVersion.value = selectedAgreement.currentVersionId;
+  elements.collectiveAgreementAssignmentBusinessUnit.innerHTML = units.map((unit) => `
+    <option value="${escapeHtmlAttribute(unit.id)}">${escapeHtml(`${unit.code} · ${unit.name}`)}</option>
+  `).join("");
+  updateCollectiveAgreementAssignmentDates();
+  elements.collectiveAgreementAssignmentModal.showModal();
+}
+
+async function saveCollectiveAgreementAssignment(event) {
+  event.preventDefault();
+  if (!canPrepareCollectiveAgreementAssignments()) return;
+  const body = {
+    agreementVersionId: elements.collectiveAgreementAssignmentVersion.value,
+    businessUnitId: elements.collectiveAgreementAssignmentBusinessUnit.value,
+    validFrom: elements.collectiveAgreementAssignmentValidFrom.value,
+    validTo: elements.collectiveAgreementAssignmentValidTo.value || null,
+    rationale: elements.collectiveAgreementAssignmentRationale.value.trim(),
+    referenceNote: elements.collectiveAgreementAssignmentReference.value.trim(),
+    reviewState: "review_pending",
+  };
+  elements.collectiveAgreementAssignmentSubmitButton.disabled = true;
+  try {
+    await api("/api/collective-agreements/assignments", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    elements.collectiveAgreementAssignmentModal.close();
+    await loadCollectiveAgreementRegistry({ force: true });
+    showToast("Der Zuordnungsvorschlag wurde mit Status „Prüfung offen“ gespeichert.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.collectiveAgreementAssignmentSubmitButton.disabled = false;
+  }
+}
+
 function renderPersonnelAdministration() {
   if (!canOpenPersonnelAdministrationView()) return;
   if (canReadCentralPersonnel()) {
@@ -3872,6 +4349,7 @@ function renderPersonnelAdministration() {
     renderPersonnelDirectory();
   }
   if (canReadCostCenters()) renderCostCenters();
+  if (canReadCollectiveAgreements() && state.collectiveAgreementRegistry) renderCollectiveAgreementRegistry();
   if (canReadCentralVacations() && state.centralVacationLoadedYear !== null) renderCentralVacations();
   if (canReadDataSubjectRequests()) renderDataSubjectRequests();
 }
@@ -3889,10 +4367,12 @@ function setPersonnelAdministrationTab(tab) {
   });
   elements.personnelDirectorySection?.classList.toggle("active", normalized === "employees");
   elements.costCenterSection?.classList.toggle("active", normalized === "costCenters");
+  elements.collectiveAgreementsSection?.classList.toggle("active", normalized === "collectiveAgreements");
   elements.centralVacationSection?.classList.toggle("active", normalized === "vacations");
   elements.dataSubjectRequestsSection?.classList.toggle("active", normalized === "dataRequests");
   elements.personnelDisplayColumnsButton?.classList.toggle("hidden", normalized !== "employees");
   if (state.currentView === "personnelAdministration") renderContextNavigation();
+  if (normalized === "collectiveAgreements") loadCollectiveAgreementRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "vacations") loadCentralVacations().catch((error) => showToast(error.message, true));
   if (normalized === "dataRequests") loadDataSubjectRequests().catch((error) => showToast(error.message, true));
 }
@@ -13214,6 +13694,36 @@ elements.dataSubjectRequestList?.addEventListener("click", (event) => {
 elements.dataSubjectRequestAction?.addEventListener("change", updateDataSubjectRequestActionFields);
 elements.dataSubjectRequestForm?.addEventListener("submit", saveDataSubjectRequest);
 elements.downloadDataSubjectRequestExportButton?.addEventListener("click", downloadDataSubjectRequestExport);
+elements.refreshCollectiveAgreementsButton?.addEventListener("click", () => loadCollectiveAgreementRegistry({ force: true })
+  .catch((error) => showToast(error.message, true)));
+elements.addCollectiveAgreementButton?.addEventListener("click", () => openCollectiveAgreementModal());
+elements.addCollectiveAgreementBusinessUnitButton?.addEventListener("click", openCollectiveAgreementBusinessUnitModal);
+elements.addCollectiveAgreementAssignmentButton?.addEventListener("click", openCollectiveAgreementAssignmentModal);
+elements.collectiveAgreementForm?.addEventListener("submit", saveCollectiveAgreement);
+elements.collectiveAgreementBusinessUnitForm?.addEventListener("submit", saveCollectiveAgreementBusinessUnit);
+elements.collectiveAgreementAssignmentForm?.addEventListener("submit", saveCollectiveAgreementAssignment);
+elements.collectiveAgreementAssignmentVersion?.addEventListener("change", updateCollectiveAgreementAssignmentDates);
+elements.collectiveAgreementList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-collective-agreement-id]");
+  if (!button) return;
+  state.selectedCollectiveAgreementId = button.dataset.collectiveAgreementId;
+  renderCollectiveAgreementRegistry();
+});
+elements.collectiveAgreementDetail?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-add-collective-agreement-version]");
+  if (!button) return;
+  const agreement = (state.collectiveAgreementRegistry?.agreements || [])
+    .find((entry) => entry.id === button.dataset.addCollectiveAgreementVersion);
+  if (agreement) openCollectiveAgreementModal(agreement);
+});
+elements.collectiveAgreementBusinessUnits?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-add-business-unit-scopes]");
+  const card = button?.closest("[data-collective-agreement-business-unit]");
+  if (!card) return;
+  const unit = (state.collectiveAgreementRegistry?.businessUnits || [])
+    .find((entry) => entry.id === card.dataset.collectiveAgreementBusinessUnit);
+  if (unit) openCollectiveAgreementBusinessUnitModal(unit);
+});
 elements.addCostCenterButton?.addEventListener("click", () => openCostCenterModal());
 elements.costCenterForm?.addEventListener("submit", saveCostCenter);
 elements.deactivateCostCenterButton?.addEventListener("click", deactivateCostCenter);

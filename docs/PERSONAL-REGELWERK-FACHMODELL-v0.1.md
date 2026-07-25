@@ -381,6 +381,23 @@ Maßgebliche Ausgangsquellen:
 - [WKO – Hinweis zum früheren grafischen KV](https://www.wko.at/kollektivvertrag/kv-kaufmaennische-angestellte-druck-2012)
 - [WKO – Lehrlingseinkommen Druck 2026](https://www.wko.at/kollektivvertrag/lehrlingseinkommen-druck-gewerbliche-lehrlinge-2026)
 
+### 11.2 Lokale Umsetzung in Block 4 von 7
+
+Block 4 stellt in der lokalen Arbeitsfassung ein eigenes Register unter `Personalverwaltung > Kollektivverträge` bereit:
+
+- stabile Registereinträge für externe Kollektivverträge,
+- unveränderliche, per SHA-256 belegte Fassungen mit Gültigkeitszeitraum,
+- getrennte Quellenmetadaten, Vertragsparteien und Geltungsbeschreibungen,
+- optionale, noch nicht wirksame Verknüpfung zu einer KV-Regelprofil-Version,
+- Betriebsteile mit Rechtsträger sowie additiv zugeordneten Kostenstellen, Filialen und Abteilungen,
+- unveränderliche Zuordnungsvorschläge zwischen KV-Fassung und Betriebsteil,
+- gesonderte Rechte für Lesen, Registerpflege und Vorbereitung einer Zuordnung,
+- bereichsbezogene Lesesicht für Filial- und Abteilungsleitungen.
+
+Der Block trifft ausdrücklich keine Lamprechter-Zuordnung vorab. Es werden weder „Handels-KV“, „Drucker-KV“ noch „IT-KV“ automatisch einem Betriebsteil zugewiesen. Eine externe Veröffentlichung ist außerdem nicht gleichbedeutend mit bestätigter betrieblicher Anwendbarkeit.
+
+Alle in Block 4 erfassten Registereinträge und Zuordnungsvorschläge bleiben `review_pending`. Die Anwendung bietet in diesem Block keine Freigabe, Aktivierung, Deaktivierung oder Übernahme in die Dienstplanprüfung beziehungsweise in den Personalakt an. Diese Grenze wird serverseitig erzwungen; Vier-Augen-Freigabe, Konfliktprüfung und Wiederherstellung folgen erst in Block 6.
+
 ## 12. Rechte- und Freigabemodell
 
 ### 12.1 Fachliche Rollen
@@ -420,7 +437,7 @@ Das bisher breite Verwaltungsrecht soll vor dem späteren Editor fachlich getren
 | `work_rules:audit` | historische Fassungen und Prüfbelege lesen |
 | `collective_agreements:read` | KV-Register und Quellen lesen |
 | `collective_agreements:manage` | KV-Fassungen und Metadaten pflegen |
-| `collective_agreements:assign` | bestätigte KV-Fassung einem Bereich zuordnen |
+| `collective_agreements:assign` | prüfpflichtige KV-Zuordnung vorbereiten; Bestätigung und Aktivierung benötigen Block 6 |
 
 Ein kritischer Wechsel von `monitor` zu `enforced`, eine KV-Zuordnung, eine Feststellung `not_applicable` oder die Veröffentlichung einer Regel mit Blockierwirkung benötigt zwei getrennte Freigaben.
 
@@ -459,13 +476,13 @@ Eine Wiederherstellung erfolgt nicht durch Überschreiben der Historie. Stattdes
 | Fähigkeit | Lokaler Stand | Zielbedarf |
 |---|---|---|
 | versionierte Quellen und Regelprofile | vorhanden | für weitere Quellenarten erweitern |
-| Gültigkeitszeiträume und Geltungszuordnungen | vorhanden | `legal_entity`, `business_unit` und `employee_group` ergänzen |
+| Gültigkeitszeiträume und Geltungszuordnungen | in Block 4 für KV-Fassungen und Betriebsteile lokal ergänzt | Bestätigung, Aufhebung und Konfliktprüfung folgen in Block 6 |
 | Monitor- und aktiver Regelbetrieb | vorhanden | fachliche Freigabestufen ergänzen |
 | unveränderliche Profilfassungen und Prüfbelege | vorhanden | beibehalten |
 | Erwachsenenprofile | vorhanden | KV-Anwendbarkeit weiter fachlich absichern |
 | Jugend-/Lehrlingsprofil unter 18 | in der lokalen Arbeitsfassung vorhanden | Dashboard und Stammdatenhinweise folgen später |
 | Standard-Leserecht FL/AL | vorhanden | im neuen Dashboard bereichsbezogen nutzen |
-| KV im Personalakt | nur Freitextfeld | durch versioniertes KV-Register und Zuordnung ersetzen |
+| KV im Personalakt | Freitextfeld bleibt in Block 4 bewusst unverändert; separates Register ist lokal vorhanden | erst nach bestätigter Zuordnung kontrolliert auf Registerreferenz umstellen |
 | Handels-KV-Profil | nicht zuweisbarer Entwurf | fachlich prüfen und versioniert freigeben |
 | eigene fachliche Regeln | noch kein allgemeiner Editor | Block 5 |
 | getrennte Entwurfs-/Veröffentlichungsrechte | noch nicht vorhanden | vor dem Editor ergänzen |
