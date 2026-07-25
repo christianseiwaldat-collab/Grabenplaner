@@ -13195,6 +13195,16 @@ function reconcileOrphanAmuBlobs() {
       referenced.add(String(row.storage_key || "").toLowerCase());
     }
   }
+  if (tableExists("loan_documents")) {
+    for (const row of db.prepare("SELECT storage_key FROM loan_documents").all()) {
+      referenced.add(String(row.storage_key || "").toLowerCase());
+    }
+  }
+  if (tableExists("loan_photos")) {
+    for (const row of db.prepare("SELECT storage_key FROM loan_photos").all()) {
+      referenced.add(String(row.storage_key || "").toLowerCase());
+    }
+  }
   let removed = 0;
   for (const storageKey of amuStorage.listStorageKeys()) {
     if (referenced.has(storageKey)) continue;
@@ -16667,7 +16677,10 @@ function serverDiagnostics() {
   if (latestExternalBackupState.future) addAlert("EXTERNAL_BACKUP_TIMESTAMP_FUTURE", "critical", "Unplausible Sicherungszeit", "Der Zeitstempel der externen Sicherung liegt unplausibel in der Zukunft; Serverzeit und Sicherung müssen geprüft werden.", "backup");
   else if (latestExternalBackupAgeHours === null || latestExternalBackupAgeHours > backupFreshnessHours) addAlert("EXTERNAL_BACKUP_STALE", "critical", "Externe Sicherung fehlt oder ist zu alt", "Es wurde kein ausreichend aktueller verifizierter externer Sicherungsstand gefunden.", "backup");
   if (latestAppBackupState.future) addAlert("APP_BACKUP_TIMESTAMP_FUTURE", "warning", "Unplausible interne Sicherungszeit", "Der Zeitstempel der internen Sicherung liegt unplausibel in der Zukunft.", "backup");
-  if (externalDirectory && path.parse(path.resolve(databasePath)).root.toLowerCase() === path.parse(path.resolve(externalDirectory)).root.toLowerCase()) addAlert("BACKUP_SAME_VOLUME", "warning", "Sicherung nicht getrennt", "Datenbank und zusätzliches Sicherungsziel liegen auf demselben Datenträger.", "backup");
+  if (externalDirectory && offsite.state !== "ok"
+    && path.parse(path.resolve(databasePath)).root.toLowerCase() === path.parse(path.resolve(externalDirectory)).root.toLowerCase()) {
+    addAlert("BACKUP_SAME_VOLUME", "warning", "Sicherung nicht getrennt", "Datenbank und zusätzliches Sicherungsziel liegen auf demselben Datenträger.", "backup");
+  }
   if (!amu.ok) {
     warnings.push(`Der geschützte AUM-Speicher ist nicht betriebsbereit${amu.error ? `: ${amu.error}` : "."}`);
     alerts.push({ id: "AMU_STORAGE_UNAVAILABLE", severity: "critical", category: "storage", title: "AUM-Speicher nicht bereit", message: "Der geschützte Dokumentenspeicher ist derzeit nicht betriebsbereit.", action: "open-server-status" });
@@ -34221,6 +34234,7 @@ module.exports = {
   verifyActiveProtectedDocumentBlobs,
   verifyProtectedBackupPair,
   verifyProtectedGovernanceRecords,
+  reconcileOrphanAmuBlobs,
   finalizeDeletedPersonnelRecordDocuments,
   ensureWorkRuleEvaluationReceiptIntegrity,
   releaseInstanceLockForTests,
