@@ -145,6 +145,7 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .work-rule-assessment.attention { border-left-color:#d39b2f; }
 .work-rule-assessment.manual_review { border-left-color:#bd7b2f; }
 .work-rule-assessment.blocked { border-left-color:#bd4d3e; }
+.work-rule-assessment.administrative { border-left-color:#7d9189; }
 .work-rule-assessment > summary { display:grid; grid-template-columns:32px minmax(180px,1fr) auto auto 20px; align-items:center; gap:12px; min-height:62px; padding:11px 14px; list-style:none; cursor:pointer; }
 .work-rule-assessment > summary::-webkit-details-marker { display:none; }
 .work-rule-assessment > summary:focus-visible { outline:2px solid var(--green); outline-offset:-3px; border-radius:12px; }
@@ -153,6 +154,7 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .work-rule-assessment.attention .work-rule-assessment-icon { background:#d39b2f; }
 .work-rule-assessment.manual_review .work-rule-assessment-icon { background:#bd7b2f; }
 .work-rule-assessment.blocked .work-rule-assessment-icon { background:#bd4d3e; }
+.work-rule-assessment.administrative .work-rule-assessment-icon { background:#7d9189; }
 .work-rule-assessment-heading { min-width:0; }
 .work-rule-assessment-heading strong,.work-rule-assessment-heading small { display:block; }
 .work-rule-assessment-heading strong { font:800 12px "Manrope","DM Sans","Segoe UI",sans-serif; }
@@ -163,6 +165,7 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .work-rule-assessment-counts strong { color:var(--ink); font-size:9px; }
 .work-rule-assessment-counts .attention,.work-rule-assessment-counts .manual_review { color:#805f16; background:#fff3ca; }
 .work-rule-assessment-counts .blocked { color:#923f33; background:#fde9e5; }
+.work-rule-assessment-counts .administrative,.work-rule-assessment-counts .snoozed { color:#52645d; background:#e8eeeb; }
 .work-rule-assessment-chevron { display:grid; place-items:center; width:20px; height:20px; color:var(--green); font-size:18px; font-weight:900; transition:transform .16s ease; }
 .work-rule-assessment[open] .work-rule-assessment-chevron { transform:rotate(90deg); }
 .work-rule-assessment-body { display:grid; gap:13px; padding:14px 16px 16px; border-top:1px solid var(--line); background:var(--surface-soft); }
@@ -186,6 +189,8 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .work-rule-enforcement { display:grid; gap:1px; justify-items:end; max-width:125px; white-space:normal; text-align:right; }
 .work-rule-enforcement small { color:inherit; font-size:5.8px; font-weight:650; opacity:.75; }
 .work-rule-finding > p { margin:8px 0 0; color:var(--muted); font-size:8px; line-height:1.45; }
+.work-rule-finding-actions { display:flex; justify-content:flex-end; margin-top:9px; }
+.work-rule-finding-actions button { min-height:30px; padding:5px 9px; font-size:7px; }
 .work-rule-evidence { display:flex; flex-wrap:wrap; gap:5px; margin:8px 0 0; }
 .work-rule-evidence > div { padding:5px 7px; border:1px solid var(--line); border-radius:7px; background:var(--surface-soft); }
 .work-rule-evidence dt,.work-rule-evidence dd { margin:0; }
@@ -204,6 +209,7 @@ h1 { margin: 0; font: 800 27px/1.2 "Manrope", "DM Sans", "Segoe UI", sans-serif;
 .work-rule-profiles article > small { margin-top:2px; color:var(--muted); font-size:6.5px; }
 .work-rule-disclaimer,.work-rule-assessment-empty { margin:0; color:var(--muted); font-size:7.5px; line-height:1.45; }
 .work-rule-disclaimer { padding-top:10px; border-top:1px solid var(--line); }
+.work-rule-snoozed-note { margin:0; padding:8px 10px; border-radius:8px; color:var(--muted); background:var(--surface-muted); font-size:7.5px; line-height:1.45; }
 
 .schedule-panel { overflow: hidden; border: 1px solid rgba(207,216,212,.95); border-radius: 17px; background: rgba(255,255,255,.78); box-shadow: var(--shadow); }
 .schedule-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 17px 20px; border-bottom: 1px solid var(--line); }
@@ -2217,6 +2223,7 @@ html[data-active-page-theme="dark"] #planningView .work-rule-assessment-counts >
 html[data-active-page-theme="dark"] #planningView .work-rule-assessment-counts > span strong { color:var(--ink); }
 html[data-active-page-theme="dark"] #planningView :is(.work-rule-assessment-counts .attention,.work-rule-assessment-counts .manual_review,.work-rule-finding.attention .work-rule-finding-state,.work-rule-finding.manual_review .work-rule-finding-state,.work-rule-finding.unknown .work-rule-finding-state) { color:var(--warning-ink); background:var(--warning-surface); }
 html[data-active-page-theme="dark"] #planningView :is(.work-rule-assessment-counts .blocked,.work-rule-finding.blocked .work-rule-finding-state) { color:var(--danger-ink); background:var(--danger-surface); }
+html[data-active-page-theme="dark"] #planningView :is(.work-rule-assessment-counts .administrative,.work-rule-assessment-counts .snoozed,.work-rule-snoozed-note) { color:var(--muted); background:var(--surface-inset); }
 html[data-active-page-theme="dark"] #planningView .work-rule-finding.pass .work-rule-finding-state { color:var(--success-ink); background:var(--success-surface); }
 html[data-active-page-theme="dark"] #planningView :is(.work-rule-finding-state,.work-rule-enforcement,.work-rule-evidence > div) { color:var(--muted); border-color:var(--line); background:var(--surface-inset); }
 html[data-active-page-theme="dark"] #planningView .work-rule-sources a { color:#9de0c3; background:#253a33; }

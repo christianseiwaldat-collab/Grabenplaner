@@ -169,6 +169,7 @@ const {
 } = require("./lib/loan-photo");
 const { CONTRACT_IDS, contractById, contractSha256, contractSummaries } = require("./lib/integration-contracts");
 const {
+  ageOnDate: workRuleAgeOnDate,
   BUILTIN_WORK_RULE_PROFILES,
   SOURCE_CATALOG: WORK_RULE_SOURCE_CATALOG,
   WORK_RULE_ENGINE_VERSION,
@@ -15269,11 +15270,14 @@ function workRuleFindingTouchesPeriod(finding, periodFrom, periodTo) {
   const evidence = finding?.evidence || {};
   const date = String(scope.date || evidence.date || "");
   if (isIsoDate(date)) return date >= periodFrom && date <= periodTo;
+  if (Array.isArray(scope.dates) && scope.dates.some((entry) => (
+    isIsoDate(entry) && entry >= periodFrom && entry <= periodTo
+  ))) return true;
   const from = String(scope.start || scope.weekStart || scope.from || "").slice(0, 10);
   const to = String(scope.end || scope.weekEnd || scope.to || "").slice(0, 10);
   if (isIsoDate(from) && isIsoDate(to)) return from <= periodTo && to >= periodFrom;
   return ["employee", "evaluation_range"].includes(scope.type)
-    || ["at.applicability.adult", "at.input.shift"].includes(finding?.ruleId);
+    || ["at.applicability.adult", "at.applicability.youth", "at.input.shift"].includes(finding?.ruleId);
 }
 
 function presentWorkRuleFinding(finding, employeeNumber, employeeName, catalog, periodFrom, periodTo) {
@@ -15282,15 +15286,22 @@ function presentWorkRuleFinding(finding, employeeNumber, employeeName, catalog, 
     : (finding.state === "unknown"
       ? "manual_review"
       : (finding.effectiveEnforcement === "block" ? "blocked" : "attention"));
+  const ageNotConfirmed = finding?.evidence?.reason === "age_not_confirmed"
+    && ["at.applicability.adult", "at.applicability.youth"].includes(finding?.ruleId);
   return {
     ...finding,
     resultState: finding.state,
     state: displayState,
-    title: catalog.rules[finding.ruleId]?.title || finding.ruleId,
+    title: ageNotConfirmed
+      ? "Geburtsdatum im Personalakt ergänzen"
+      : (catalog.rules[finding.ruleId]?.title || finding.ruleId),
     employeeNumber,
     employeeName,
     periodFrom,
     periodTo,
+    category: ageNotConfirmed ? "personnel_data" : "schedule_rule",
+    snoozable: ageNotConfirmed,
+    snoozeDays: ageNotConfirmed ? 4 : null,
   };
 }
 
@@ -15360,7 +15371,7 @@ function workRuleEvaluationEmployees(employees, candidateShift = null) {
   if (!candidateEmployeeNumber
     || result.some((employee) => String(employee.personnel_number) === candidateEmployeeNumber)) return result;
   const candidateEmployee = db.prepare(`
-    SELECT personnel_number, full_name, nickname, home_location_id, preferred_department_id
+    SELECT personnel_number, full_name, nickname, home_location_id, preferred_department_id, position_id
     FROM employees
     WHERE personnel_number = ? AND active = 1
   `).get(candidateEmployeeNumber);
@@ -15368,9 +15379,10 @@ function workRuleEvaluationEmployees(employees, candidateShift = null) {
   return result;
 }
 
-function workRuleAssignmentGroups(facts, context, employeeNumber, assignments) {
+function workRuleAssignmentGroups(facts, context, employeeNumber, assignments, birthDate = "") {
   const groups = new Map();
   const defaultProfile = getBuiltinWorkRuleProfile("at-retail-adult-monitor");
+  const youthProfile = getBuiltinWorkRuleProfile("at-retail-youth-monitor");
   const defaultAssignment = {
     id: null,
     profileId: defaultProfile.id,
@@ -15406,23 +15418,40 @@ function workRuleAssignmentGroups(facts, context, employeeNumber, assignments) {
         departmentId: dateContext.departmentId,
         employeeNumber,
       }) || defaultAssignment;
+      const assignedProfileId = String(
+        assignment.profileId || String(assignment.profileVersionId || "").split("@")[0],
+      );
+      const age = workRuleAgeOnDate(String(birthDate || ""), date);
+      const useAutomaticYouthProfile = age !== null
+        && age < 18
+        && assignedProfileId === "at-retail-adult-monitor";
+      const effectiveAssignment = useAutomaticYouthProfile
+        ? {
+          ...assignment,
+          profileId: youthProfile.id,
+          profileVersionId: profileVersionId(youthProfile),
+          applicabilityConfirmed: true,
+          automaticByBirthDate: true,
+        }
+        : assignment;
       const key = [
-        assignment.profileVersionId,
-        assignment.enforcementMode || "monitor",
-        assignment.applicabilityConfirmed === true ? "confirmed" : "unconfirmed",
+        effectiveAssignment.profileVersionId,
+        effectiveAssignment.enforcementMode || "monitor",
+        effectiveAssignment.applicabilityConfirmed === true ? "confirmed" : "unconfirmed",
       ].join("|");
       if (!groups.has(key)) {
         groups.set(key, {
           assignmentIds: new Set(),
           dates: new Set(),
           shiftIds: new Set(),
-          profileVersionId: assignment.profileVersionId,
-          enforcementMode: assignment.enforcementMode || "monitor",
-          applicabilityConfirmed: assignment.applicabilityConfirmed === true,
+          profileVersionId: effectiveAssignment.profileVersionId,
+          enforcementMode: effectiveAssignment.enforcementMode || "monitor",
+          applicabilityConfirmed: effectiveAssignment.applicabilityConfirmed === true,
+          automaticByBirthDate: effectiveAssignment.automaticByBirthDate === true,
         });
       }
       const group = groups.get(key);
-      if (assignment.id) group.assignmentIds.add(assignment.id);
+      if (effectiveAssignment.id) group.assignmentIds.add(effectiveAssignment.id);
       group.dates.add(date);
       for (const shiftId of dateContext.shiftIds) group.shiftIds.add(shiftId);
     }
@@ -15500,7 +15529,13 @@ function evaluateScheduleWorkRules(weekStart, context, employees, candidateShift
   const employeeResults = evaluationEmployees.map((employee) => {
     const employeeNumber = String(employee.personnel_number);
     const sensitive = personnelSensitiveProfile(employeeNumber);
-    const groups = workRuleAssignmentGroups(facts, context, employeeNumber, assignments);
+    const groups = workRuleAssignmentGroups(
+      facts,
+      context,
+      employeeNumber,
+      assignments,
+      sensitive.identity.birthDate || "",
+    );
     const profileEvaluations = groups.map((group) => {
       const version = getWorkRuleProfileVersion(db, group.profileVersionId);
       const profile = version?.profile || getBuiltinWorkRuleProfile(
@@ -15518,6 +15553,8 @@ function evaluateScheduleWorkRules(weekStart, context, employees, candidateShift
         employee: {
           id: employeeNumber,
           birthDate: sensitive.identity.birthDate || undefined,
+          positionId: employee.position_id || undefined,
+          isApprentice: employee.position_id === "lehrling",
         },
         rangeStart: [...group.dates].sort()[0] || facts.range.start,
         rangeEnd: [...group.dates].sort().at(-1) || facts.range.end,
@@ -15596,13 +15633,28 @@ function evaluateScheduleWorkRules(weekStart, context, employees, candidateShift
   const allFindings = employeeResults.flatMap((entry) => entry.result.findings);
   const presentationFindings = [];
   for (const entry of employeeResults) {
-    const applicability = entry.result.findings.find((finding) => finding.ruleId === "at.applicability.adult");
+    const applicability = entry.result.findings.find((finding) => (
+      ["at.applicability.adult", "at.applicability.youth"].includes(finding.ruleId)
+    ));
     const profileUnconfirmed = applicability?.evidence?.reason === "profile_not_confirmed";
+    const ageUnconfirmed = applicability?.evidence?.reason === "age_not_confirmed";
     const candidates = profileUnconfirmed
       ? [applicability]
-      : entry.result.findings.filter((finding) => (
-        finding.state !== "pass" && workRuleFindingTouchesPeriod(finding, weekStart, weekEnd)
-      ));
+      : (ageUnconfirmed
+        ? [
+          applicability,
+          ...entry.result.findings.filter((finding) => (
+            finding !== applicability
+            && workRuleFindingTouchesPeriod(finding, weekStart, weekEnd)
+            && (
+              finding.evidence?.conditionalResult === "fail"
+              || finding.ruleId === "at.system.profile-boundary"
+            )
+          )),
+        ]
+        : entry.result.findings.filter((finding) => (
+          finding.state !== "pass" && workRuleFindingTouchesPeriod(finding, weekStart, weekEnd)
+        )));
     const seen = new Set();
     for (const finding of candidates.filter(Boolean)) {
       const key = `${finding.ruleId}|${finding.scope?.type || ""}|${finding.scope?.date || finding.scope?.weekStart || finding.scope?.start || ""}`;

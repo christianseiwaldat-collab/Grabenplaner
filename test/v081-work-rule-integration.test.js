@@ -24,6 +24,7 @@ const { recordWorkRuleEvaluation } = require("../lib/work-rules/store");
 
 const ADMIN = "v081-admin";
 const EMPLOYEE = "v081-plan";
+const YOUTH = "420";
 const WEEK = "2032-07-05";
 let httpServer;
 let baseUrl;
@@ -87,6 +88,12 @@ test.before(async () => {
        target_workdays_per_week, fixed_workdays, home_location_id, cost_center_id, active)
     VALUES (?, ?, ?, '#0b84c6', 38.5, 5, '', ?, ?, 1)
   `).run(EMPLOYEE, "Paul Planzeit", "Paul", locationId, location.cost_center_id);
+  db.prepare(`
+    INSERT INTO employees
+      (personnel_number, full_name, nickname, color, contracted_hours,
+       target_workdays_per_week, fixed_workdays, home_location_id, cost_center_id, position_id, active)
+    VALUES (?, ?, ?, '#d18b27', 38.5, 5, '', ?, ?, 'lehrling', 1)
+  `).run(YOUTH, "Matias Jugend", "Matias", locationId, location.cost_center_id);
   adminSession = createSession(ADMIN, "admin");
   await new Promise((resolve, reject) => {
     httpServer = app.listen(0, "127.0.0.1", resolve);
@@ -111,6 +118,7 @@ test("v0.81: Katalog, Profile und sichere Monitor-Standardzuordnung sind verfÃ�
   const profiles = await request("/api/work-rules/profiles");
   assert.equal(profiles.response.status, 200, JSON.stringify(profiles.payload));
   assert.ok(profiles.payload.profiles.some((profile) => profile.id === "at-retail-adult-monitor"));
+  assert.ok(profiles.payload.profiles.some((profile) => profile.id === "at-retail-youth-monitor"));
 
   const assignments = await request("/api/work-rules/assignments");
   assert.equal(assignments.response.status, 200, JSON.stringify(assignments.payload));
@@ -142,6 +150,72 @@ test("Regression: Geburtsdatum entfernt Erwachsenenprofil-Hinweis im Monitorbetr
   assert.ok(schedule.payload.workRuleAssessment.findings.some((finding) => (
     finding.employeeNumber === EMPLOYEE && finding.ruleId === "at.applicability.adult"
   )));
+  const missingAgeFindings = schedule.payload.workRuleAssessment.findings.filter((finding) => (
+    finding.employeeNumber === EMPLOYEE
+  ));
+  assert.equal(missingAgeFindings.length, 1);
+  assert.equal(missingAgeFindings[0].category, "personnel_data");
+  assert.equal(missingAgeFindings[0].snoozable, true);
+  assert.equal(missingAgeFindings[0].snoozeDays, 4);
+});
+
+test("Regression: U18-Lehrling erhält automatisch das Jugendprofil und die direkte Samstag-Montag-Warnung", async () => {
+  const personnelRecord = await request(`/api/portal/v1/personnel-records/${encodeURIComponent(YOUTH)}`, {
+    method: "PUT",
+    body: {
+      sensitive: {
+        identity: {
+          birthDate: "2015-07-22",
+        },
+      },
+    },
+  });
+  assert.equal(personnelRecord.response.status, 200, JSON.stringify(personnelRecord.payload));
+
+  const saturday = await request("/api/shifts", {
+    method: "POST",
+    body: {
+      employeeNumber: YOUTH,
+      locationId,
+      departmentId: "",
+      date: "2032-07-03",
+      startTime: "10:00",
+      endTime: "17:00",
+      area: "Verkauf",
+      note: "",
+    },
+  });
+  assert.equal(saturday.response.status, 201, JSON.stringify(saturday.payload));
+
+  const preview = await request("/api/work-rules/evaluate", {
+    method: "POST",
+    body: {
+      targetType: "planned_schedule",
+      weekStart: WEEK,
+      locationId,
+      candidateShift: {
+        employeeNumber: YOUTH,
+        locationId,
+        departmentId: "",
+        date: WEEK,
+        startTime: "10:00",
+        endTime: "17:00",
+        area: "Verkauf",
+        note: "",
+      },
+    },
+  });
+  assert.equal(preview.response.status, 200, JSON.stringify(preview.payload));
+  assert.ok(preview.payload.profiles.some((profile) => profile.id === "at-retail-youth-monitor"));
+  const finding = preview.payload.findings.find((entry) => (
+    entry.employeeNumber === YOUTH
+      && entry.ruleId === "at.kjbg.retail.saturday-monday"
+      && entry.scope?.date === WEEK
+  ));
+  assert.ok(finding, JSON.stringify(preview.payload.findings));
+  assert.match(finding.message, /Lehrling unter 18/i);
+  assert.match(finding.message, /Montag/i);
+  assert.equal(finding.snoozable, false);
 });
 
 test("v0.81: Wochenplan liefert eine sichtbare, nicht blockierende PlanprÃ¼fung", async () => {

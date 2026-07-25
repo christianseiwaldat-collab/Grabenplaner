@@ -52,12 +52,29 @@ test("Schichtdialog zeigt vorhandene MA-Hinweise und aktualisiert die Vorschau e
   assert.match(matcher, /employeeNumber/);
   assert.match(matcher, /periodFrom/);
   assert.match(matcher, /periodTo/);
+  assert.match(matcher, /personnel_data/);
+  assert.match(matcher, /scope\.dates/);
   assert.match(scheduler, /setTimeout\(async \(\) =>/);
   assert.match(scheduler, /"\/api\/work-rules\/evaluate"/);
   assert.match(scheduler, /candidateShift/);
   assert.match(scheduler, /preview: true/);
   assert.match(scheduler, /catch \{/);
   assert.match(scheduler, /state\.data\?\.workRuleAssessment/);
+});
+
+test("Fehlendes Geburtsdatum bleibt dezent und kann vier Tage pausiert werden", () => {
+  const snooze = functionSource("workRuleSnoozeStorageKey", "workRulePresentationCounts");
+  const finding = functionSource("workRuleFindingMarkup", "renderWorkRuleAssessment");
+  const renderer = functionSource("renderWorkRuleAssessment", "renderTimeline");
+  assert.match(snooze, /uiPreferenceActorKey/);
+  assert.match(snooze, /localStorage\.getItem/);
+  assert.match(finding, /data-work-rule-snooze/);
+  assert.match(finding, /Für \$\{Number\(finding\.snoozeDays \|\| 4\)\} Tage schlummern/);
+  assert.match(renderer, /localStorage\.setItem/);
+  assert.match(renderer, /days \* 86_400_000/);
+  assert.match(renderer, /administrativeOnly/);
+  assert.match(renderer, /scheduleFindings\.length > 0/);
+  assert.match(styles, /\.work-rule-assessment\.administrative/);
 });
 
 test("Regelprüfung bleibt in Hell, Dunkel und auf kleinen Bildschirmen lesbar", () => {
