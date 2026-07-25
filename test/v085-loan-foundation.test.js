@@ -30,6 +30,7 @@ const {
   app,
   db,
   installationFeaturesForApiPath,
+  reconcileOrphanAmuBlobs,
   releaseInstanceLockForTests,
   validateUsbFeatures,
 } = require("../server");
@@ -456,6 +457,16 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
   assert.equal(issuePhoto.response.headers.get("content-type"), "image/jpeg");
   assert.equal(issuePhoto.response.headers.get("cache-control"), "private, no-store, max-age=0");
   assert.equal(issuePhoto.buffer.subarray(0, 2).toString("hex"), "ffd8");
+
+  const reconciliation = reconcileOrphanAmuBlobs();
+  assert.equal(reconciliation.removed, 0);
+  const issuePdfAfterReconciliation = await requestBinary(issued.payload.loan.documents[0].downloadUrl);
+  assert.equal(issuePdfAfterReconciliation.response.status, 200);
+  assert.equal(issuePdfAfterReconciliation.buffer.subarray(0, 4).toString("ascii"), "%PDF");
+  const issuePhotoAfterReconciliation = await requestBinary(uploadedIssuePhoto.payload.photos[0].contentUrl);
+  assert.equal(issuePhotoAfterReconciliation.response.status, 200);
+  assert.equal(issuePhotoAfterReconciliation.buffer.subarray(0, 2).toString("hex"), "ffd8");
+
   const deniedPhoto = await requestBinary(uploadedIssuePhoto.payload.photos[0].contentUrl, {
     session: otherSession,
   });
