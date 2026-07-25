@@ -36,7 +36,10 @@ test("Arbeitszeit-Regelprüfung liegt kompakt zwischen Wochenübersicht und Kale
 test("Wochenprüfung gruppiert Findings und verlinkt ausschließlich sichere Webquellen", () => {
   const sourceLinks = functionSource("safeWorkRuleSourceUrl", "workRuleSourceLinks");
   const renderer = functionSource("renderWorkRuleAssessment", "renderTimeline");
+  assert.match(sourceLinks, /if \(!submitted\) return ""/);
+  assert.match(sourceLinks, /new URL\(submitted\)/);
   assert.match(sourceLinks, /\["http:", "https:"\]\.includes\(url\.protocol\)/);
+  assert.doesNotMatch(sourceLinks, /window\.location\.href/);
   assert.match(script, /rel="noreferrer noopener"/);
   assert.match(renderer, /employeeName \|\| "Teammitglied"/);
   assert.match(renderer, /work-rule-finding-group/);

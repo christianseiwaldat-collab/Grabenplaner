@@ -192,6 +192,19 @@ const {
   seedBuiltinWorkRuleProfiles,
 } = require("./lib/work-rules/store");
 const {
+  CUSTOM_WORK_RULE_METRICS,
+  CUSTOM_WORK_RULE_NOTICE,
+  CUSTOM_WORK_RULE_REACTIONS,
+  CUSTOM_WORK_RULE_SCOPES,
+  CUSTOM_WORK_RULE_SEVERITIES,
+  CUSTOM_WORK_RULE_TOPICS,
+  CUSTOM_WORK_RULE_TYPES,
+  addCustomWorkRuleDraftRevision,
+  createCustomWorkRuleDraft,
+  listCustomWorkRuleDrafts,
+  simulateCustomWorkRuleDraft,
+} = require("./lib/work-rules/custom-rules");
+const {
   COLLECTIVE_AGREEMENT_NOTICE,
   addBusinessUnitScopes,
   addCollectiveAgreementVersion,
@@ -333,6 +346,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "payroll:export", label: "Lohnverrechnungsdaten exportieren", description: "Zeit-, Abwesenheits- und Zuschlagsdaten ausgeben sowie belegbare Monatsübergaben erstellen.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "payroll:deliver", label: "Lohnverrechnungsdaten sicher übertragen", description: "Final geprüfte Daten kontrolliert übergeben und externe Übertragungsprotokolle dokumentieren.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "work_rules:read", label: "Arbeitszeit-Regelprüfungen lesen", description: "Quellenbelegte Hinweise zur Dienstplanung lesen; keine pauschale Rechtsfreigabe.", group: "Arbeitszeitregeln", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "work_rules:draft", label: "Eigene Regelentwürfe vorbereiten", description: "Geführte, unveränderlich versionierte Entwürfe eigener Personalregeln anlegen; ohne Freigabe oder Dienstplanwirkung.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "work_rules:manage", label: "Arbeitszeit-Regelprofile verwalten", description: "Versionierte Profile und deren Geltungsbereich verwalten.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "work_rules:exception", label: "Begründete Regelausnahmen dokumentieren", description: "Ausschließlich ausdrücklich übersteuerbare Hinweise mit Grund und Nachweis behandeln.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "work_rules:audit", label: "Arbeitszeit-Regelprotokoll lesen", description: "Unveränderliche Bewertungen, Profilversionen und Ausnahmen nachvollziehen.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -466,7 +480,7 @@ const portalGlobalPermissionIds = new Set([
   "processes:write",
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
   "integrations:connections:write", "integrations:credentials:write", "branding:read", "branding:write",
-  "work_rules:manage", "work_rules:exception", "work_rules:audit",
+  "work_rules:draft", "work_rules:manage", "work_rules:exception", "work_rules:audit",
   "collective_agreements:manage", "collective_agreements:assign",
   "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "system:readiness:review", "update:write", "system:write", "wifi:settings",
   "users:write", "roles:read", "roles:write", "rights:read", "rights:write", "scopes:write",
@@ -566,6 +580,7 @@ const builtinPortalRoles = [
       "schedule:read",
       "schedule:write",
       "work_rules:read",
+      "work_rules:draft",
       "work_rules:manage",
       "work_rules:exception",
       "work_rules:audit",
@@ -644,6 +659,7 @@ const builtinPortalRoles = [
       "cost_centers:write",
       "schedule:read",
       "work_rules:read",
+      "work_rules:draft",
       "work_rules:manage",
       "work_rules:exception",
       "work_rules:audit",
@@ -6991,7 +7007,9 @@ function enforceAdminApiAccess(request, _response, next) {
         permission = "collective_agreements:manage";
       }
     } else if (workRuleRoute) {
-      if (/^\/work-rules\/exceptions(?:\/|$)/.test(request.path)) {
+      if (/^\/work-rules\/drafts(?:\/|$)/.test(request.path)) {
+        permission = "work_rules:draft";
+      } else if (/^\/work-rules\/exceptions(?:\/|$)/.test(request.path)) {
         permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "work_rules:audit" : "work_rules:exception";
       } else if (/^\/work-rules\/evaluations(?:\/|$)/.test(request.path)) {
         permission = "work_rules:audit";
@@ -21068,6 +21086,127 @@ app.post("/api/collective-agreements/assignments", (request, response) => {
     response.status(201).json({ assignment });
   } catch (error) {
     collectiveAgreementRouteError(error);
+  }
+});
+
+function customWorkRuleDraftRegistryPayload(session) {
+  const drafts = listCustomWorkRuleDrafts(db);
+  const locations = db.prepare(`
+    SELECT id, name
+    FROM locations
+    WHERE active = 1
+    ORDER BY name COLLATE NOCASE, id
+  `).all().map((location) => ({
+    id: String(location.id),
+    name: location.name,
+    departments: db.prepare(`
+      SELECT id, name
+      FROM departments
+      WHERE location_id = ? AND active = 1
+      ORDER BY name COLLATE NOCASE, id
+    `).all(location.id).map((department) => ({
+      id: String(department.id),
+      name: department.name,
+    })),
+  }));
+  const businessUnits = listBusinessUnits(db).map((unit) => ({
+    id: unit.id,
+    code: unit.code,
+    name: unit.name,
+    legalEntityName: unit.legalEntityName,
+  }));
+  const canDraft = !session || session.employeeNumber === "local"
+    || session.permissions?.includes("work_rules:draft");
+  return {
+    generatedAt: new Date().toISOString(),
+    notice: CUSTOM_WORK_RULE_NOTICE,
+    capabilities: {
+      canDraft,
+      canRevise: canDraft,
+      canSubmitForReview: false,
+      canApprove: false,
+      canPublish: false,
+      canAssign: false,
+      canActivate: false,
+      canDeactivate: false,
+      approvalBlock: 6,
+    },
+    summary: {
+      drafts: drafts.length,
+      revisions: drafts.reduce((sum, draft) => sum + draft.versions.length, 0),
+      pendingReview: 0,
+      active: 0,
+      intendedBlocking: drafts.filter((draft) => draft.currentVersion?.definition?.reaction === "block").length,
+    },
+    catalogs: {
+      ruleTypes: CUSTOM_WORK_RULE_TYPES,
+      topics: CUSTOM_WORK_RULE_TOPICS,
+      scopes: CUSTOM_WORK_RULE_SCOPES,
+      metrics: CUSTOM_WORK_RULE_METRICS,
+      reactions: CUSTOM_WORK_RULE_REACTIONS,
+      severities: CUSTOM_WORK_RULE_SEVERITIES,
+    },
+    organizationalScopes: {
+      businessUnits,
+      locations,
+    },
+    drafts,
+  };
+}
+
+function customWorkRuleDraftRouteError(error) {
+  if (error instanceof TypeError) throw httpError(400, error.message, "CUSTOM_WORK_RULE_DRAFT_INVALID");
+  throw error;
+}
+
+app.get("/api/work-rules/drafts", (request, response) => {
+  try {
+    response.json(customWorkRuleDraftRegistryPayload(request.portalSession));
+  } catch (error) {
+    customWorkRuleDraftRouteError(error);
+  }
+});
+
+app.post("/api/work-rules/drafts/simulate", (request, response) => {
+  try {
+    response.json({
+      simulation: simulateCustomWorkRuleDraft(db, request.body),
+      notice: "Die Simulation prüft ausschließlich die drei Entwurfstestfälle und aktiviert keine Regel.",
+    });
+  } catch (error) {
+    customWorkRuleDraftRouteError(error);
+  }
+});
+
+app.post("/api/work-rules/drafts", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  try {
+    const draft = createCustomWorkRuleDraft(db, request.body, actor);
+    auditPortal(actor, "work-rule.draft.create", "work_rule_profile", draft.id, JSON.stringify({
+      code: draft.code,
+      versionId: draft.currentVersionId,
+      contentSha256: draft.currentVersion?.contentSha256,
+      status: draft.status,
+    }));
+    response.status(201).json({ draft });
+  } catch (error) {
+    customWorkRuleDraftRouteError(error);
+  }
+});
+
+app.post("/api/work-rules/drafts/:id/revisions", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  try {
+    const draft = addCustomWorkRuleDraftRevision(db, request.params.id, request.body, actor);
+    auditPortal(actor, "work-rule.draft.revision.create", "work_rule_profile", draft.id, JSON.stringify({
+      code: draft.code,
+      versionId: draft.currentVersionId,
+      contentSha256: draft.currentVersion?.contentSha256,
+      status: draft.status,
+    }));
+    response.status(201).json({ draft });
+  } catch (error) {
+    customWorkRuleDraftRouteError(error);
   }
 });
 

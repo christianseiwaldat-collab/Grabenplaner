@@ -157,6 +157,10 @@ const state = {
   personnelAdministrationLoaded: false,
   personnelAdministrationLoading: false,
   personnelAdministrationTab: "employees",
+  customWorkRuleRegistry: null,
+  customWorkRulesLoading: false,
+  selectedCustomWorkRuleId: "",
+  customWorkRuleSimulationValid: false,
   collectiveAgreementRegistry: null,
   collectiveAgreementsLoading: false,
   selectedCollectiveAgreementId: "",
@@ -249,7 +253,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -258,7 +262,7 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeeHomeLocation", "employeeHomeLocationHint", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "addCostCenterButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
+    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "addCostCenterButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleList", "customWorkRuleDetail", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
     "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationCostCenterField", "locationCostCenter", "locationCostCenterReadonly", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
@@ -738,6 +742,10 @@ function canManageDataSubjectRequests() {
   return hasGovernancePermission("data_subject_requests:manage");
 }
 
+function canDraftCustomWorkRules() {
+  return hasGovernancePermission("work_rules:draft");
+}
+
 function canReadCollectiveAgreements() {
   return hasGovernancePermission("collective_agreements:read");
 }
@@ -787,13 +795,14 @@ function canManageLoanSettings() {
 }
 
 function canOpenPersonnelAdministrationView() {
-  return canReadCentralPersonnel() || canReadCostCenters() || canReadCollectiveAgreements()
+  return canReadCentralPersonnel() || canReadCostCenters() || canDraftCustomWorkRules() || canReadCollectiveAgreements()
     || canReadCentralVacations() || canReadDataSubjectRequests();
 }
 
 function firstAccessiblePersonnelAdministrationTab() {
   if (canReadCentralPersonnel()) return "employees";
   if (canReadCostCenters()) return "costCenters";
+  if (canDraftCustomWorkRules()) return "ruleDrafts";
   if (canReadCollectiveAgreements()) return "collectiveAgreements";
   if (canReadCentralVacations()) return "vacations";
   if (canReadDataSubjectRequests()) return "dataRequests";
@@ -803,6 +812,7 @@ function firstAccessiblePersonnelAdministrationTab() {
 function canOpenPersonnelAdministrationTab(tab) {
   return (tab === "employees" && canReadCentralPersonnel())
     || (tab === "costCenters" && canReadCostCenters())
+    || (tab === "ruleDrafts" && canDraftCustomWorkRules())
     || (tab === "collectiveAgreements" && canReadCollectiveAgreements())
     || (tab === "vacations" && canReadCentralVacations())
     || (tab === "dataRequests" && canReadDataSubjectRequests());
@@ -889,18 +899,20 @@ function applyRoleVisibility() {
   const retentionManageAccess = canManageRetentionGovernance() && retentionReadAccess;
   const dataSubjectRequestsReadAccess = canReadDataSubjectRequests();
   const dataSubjectRequestsManageAccess = canManageDataSubjectRequests() && dataSubjectRequestsReadAccess;
+  const customWorkRulesAccess = canDraftCustomWorkRules();
   const collectiveAgreementsReadAccess = canReadCollectiveAgreements();
   const collectiveAgreementsManageAccess = canManageCollectiveAgreements() && collectiveAgreementsReadAccess;
   const collectiveAgreementsAssignAccess = canPrepareCollectiveAgreementAssignments() && collectiveAgreementsReadAccess;
   const requestReadAccess = canReadManagerRequests() && features.requests !== false;
   const loanManagementAccess = canReadLoanManagement();
   const loanSettingsAccess = canManageLoanSettings();
-  const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess || collectiveAgreementsReadAccess
+  const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess || customWorkRulesAccess || collectiveAgreementsReadAccess
     || centralVacationReadAccess || dataSubjectRequestsReadAccess;
   const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
   elements.personnelAdministrationNav?.classList.toggle("hidden", !personnelModuleAccess);
   elements.personnelDirectoryNavButton?.classList.toggle("hidden", !centralPersonnelReadAccess);
   elements.costCentersNavButton?.classList.toggle("hidden", !costCenterReadAccess);
+  elements.customWorkRulesNavButton?.classList.toggle("hidden", !customWorkRulesAccess);
   elements.collectiveAgreementsNavButton?.classList.toggle("hidden", !collectiveAgreementsReadAccess);
   elements.centralVacationsNavButton?.classList.toggle("hidden", !centralVacationReadAccess);
   elements.dataSubjectRequestsNavButton?.classList.toggle("hidden", !dataSubjectRequestsReadAccess);
@@ -968,10 +980,12 @@ function applyRoleVisibility() {
   elements.addCentralEmployeeButton?.classList.toggle("hidden", !centralPersonnelWriteAccess);
   document.querySelector('[data-personnel-administration-tab="employees"]')?.classList.toggle("hidden", !centralPersonnelReadAccess);
   document.querySelector('[data-personnel-administration-tab="costCenters"]')?.classList.toggle("hidden", !costCenterReadAccess);
+  elements.customWorkRulesTab?.classList.toggle("hidden", !customWorkRulesAccess);
   elements.collectiveAgreementsTab?.classList.toggle("hidden", !collectiveAgreementsReadAccess);
   elements.centralVacationsTab?.classList.toggle("hidden", !centralVacationReadAccess);
   elements.dataSubjectRequestsTab?.classList.toggle("hidden", !dataSubjectRequestsReadAccess);
   elements.addCostCenterButton?.classList.toggle("hidden", !costCenterWriteAccess);
+  elements.addCustomWorkRuleButton?.classList.toggle("hidden", !customWorkRulesAccess);
   elements.addCollectiveAgreementButton?.classList.toggle("hidden", !collectiveAgreementsManageAccess);
   elements.addCollectiveAgreementBusinessUnitButton?.classList.toggle("hidden", !collectiveAgreementsManageAccess);
   elements.addCollectiveAgreementAssignmentButton?.classList.toggle("hidden", !collectiveAgreementsAssignAccess);
@@ -1587,6 +1601,8 @@ function renderContextNavigation() {
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "employees");
   setNavigationCurrent(elements.costCentersNavButton,
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "costCenters");
+  setNavigationCurrent(elements.customWorkRulesNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "ruleDrafts");
   setNavigationCurrent(elements.collectiveAgreementsNavButton,
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "collectiveAgreements");
   setNavigationCurrent(elements.centralVacationsNavButton,
@@ -1706,7 +1722,9 @@ function normalizeWorkRuleAssessment(value) {
 
 function safeWorkRuleSourceUrl(value) {
   try {
-    const url = new URL(String(value || ""), window.location.href);
+    const submitted = String(value || "").trim();
+    if (!submitted) return "";
+    const url = new URL(submitted);
     return ["http:", "https:"].includes(url.protocol) ? url.href : "";
   } catch {
     return "";
@@ -3894,6 +3912,429 @@ async function runRetentionPreview(event) {
   }
 }
 
+function customWorkRuleCatalogEntry(catalogName, id) {
+  return (state.customWorkRuleRegistry?.catalogs?.[catalogName] || [])
+    .find((entry) => entry.id === id) || null;
+}
+
+function customWorkRuleCatalogLabel(catalogName, id, fallback = "") {
+  return customWorkRuleCatalogEntry(catalogName, id)?.label || fallback || id || "–";
+}
+
+function customWorkRuleConditionLabel(definition = {}) {
+  const metric = customWorkRuleCatalogEntry("metrics", definition.metric);
+  const unit = metric?.valueType === "time" ? "Uhr" : (metric?.unitLabel || definition.unit || "");
+  return [
+    metric?.label || definition.metric || "Regelbaustein",
+    metric?.operatorLabel || definition.operator || "",
+    definition.threshold ?? "–",
+    unit,
+  ].filter((entry) => entry !== "").join(" · ");
+}
+
+async function loadCustomWorkRuleRegistry({ force = false } = {}) {
+  if (!canDraftCustomWorkRules() || state.customWorkRulesLoading) return;
+  if (state.customWorkRuleRegistry && !force) {
+    renderCustomWorkRuleRegistry();
+    return;
+  }
+  state.customWorkRulesLoading = true;
+  if (elements.customWorkRuleList) {
+    elements.customWorkRuleList.innerHTML = '<p class="settings-note">Regelentwürfe werden geladen.</p>';
+  }
+  try {
+    state.customWorkRuleRegistry = await api("/api/work-rules/drafts");
+    const ids = new Set((state.customWorkRuleRegistry.drafts || []).map((draft) => draft.id));
+    if (!ids.has(state.selectedCustomWorkRuleId)) {
+      state.selectedCustomWorkRuleId = state.customWorkRuleRegistry.drafts?.[0]?.id || "";
+    }
+    renderCustomWorkRuleRegistry();
+  } catch (error) {
+    state.customWorkRuleRegistry = null;
+    if (elements.customWorkRuleList) {
+      elements.customWorkRuleList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    }
+    showToast(error.message, true);
+  } finally {
+    state.customWorkRulesLoading = false;
+  }
+}
+
+function renderCustomWorkRuleSummary(registry) {
+  if (!elements.customWorkRuleSummary) return;
+  const summary = registry.summary || {};
+  elements.customWorkRuleSummary.innerHTML = [
+    ["Entwürfe", summary.drafts || 0, "noch nicht wirksam"],
+    ["Fassungen", summary.revisions || 0, "unveränderlich gespeichert"],
+    ["In Prüfung", summary.pendingReview || 0, "erst ab Block 6"],
+    ["Aktiv", summary.active || 0, "Block 5 aktiviert nichts"],
+  ].map(([label, value, note]) => `
+    <article class="personnel-administration-stat"><span>${escapeHtml(String(label))}</span><strong>${escapeHtml(String(value))}</strong><small>${escapeHtml(String(note))}</small></article>
+  `).join("");
+}
+
+function renderCustomWorkRuleList(registry) {
+  if (!elements.customWorkRuleList) return;
+  const drafts = registry.drafts || [];
+  if (!drafts.length) {
+    elements.customWorkRuleList.innerHTML = `
+      <div class="custom-work-rule-empty compact">
+        <strong>Noch keine eigene Regel vorbereitet</strong>
+        <p>Der erste Entwurf bleibt vollständig ohne Dienstplanwirkung.</p>
+      </div>`;
+    return;
+  }
+  elements.customWorkRuleList.innerHTML = drafts.map((draft) => {
+    const current = draft.currentVersion?.definition || {};
+    const active = draft.id === state.selectedCustomWorkRuleId;
+    return `<button class="custom-work-rule-list-item ${active ? "active" : ""}" type="button" data-custom-work-rule-id="${escapeHtmlAttribute(draft.id)}">
+      <span class="custom-work-rule-code">${escapeHtml(draft.code)}</span>
+      <strong>${escapeHtml(draft.title)}</strong>
+      <small>${escapeHtml(customWorkRuleCatalogLabel("ruleTypes", current.ruleType, "Eigene Regel"))} · ${escapeHtml(draft.currentVersion?.versionLabel || "Entwurf")}</small>
+      <span class="status-badge warning">Entwurf</span>
+    </button>`;
+  }).join("");
+}
+
+function renderCustomWorkRuleTestCases(testCases = []) {
+  const labels = { pass: "Eingehalten", fail: "Verletzt", unknown: "Manuell prüfen" };
+  return `<div class="custom-work-rule-tests">${testCases.map((testCase) => `
+    <article class="${escapeHtmlAttribute(testCase.actual || "unknown")}">
+      <span>${escapeHtml(testCase.label || testCase.id)}</span>
+      <strong>${testCase.input === null ? "Kein Prüfwert" : escapeHtml(String(testCase.input))}</strong>
+      <small>${escapeHtml(labels[testCase.actual] || testCase.actual || "Unbekannt")}</small>
+    </article>
+  `).join("")}</div>`;
+}
+
+function renderCustomWorkRuleDetail(registry) {
+  if (!elements.customWorkRuleDetail) return;
+  const draft = (registry.drafts || []).find((entry) => entry.id === state.selectedCustomWorkRuleId);
+  if (!draft?.currentVersion) {
+    elements.customWorkRuleDetail.innerHTML = `
+      <div class="custom-work-rule-empty">
+        <strong>Noch kein Entwurf ausgewählt</strong>
+        <p>Eine eigene Regel kann nur als nicht wirksame Arbeitsfassung vorbereitet werden.</p>
+      </div>`;
+    return;
+  }
+  const version = draft.currentVersion;
+  const definition = version.definition || {};
+  const sourceUrl = safeWorkRuleSourceUrl(definition.sourceUrl);
+  const history = (draft.versions || []).map((entry) => `
+    <article class="${entry.id === draft.currentVersionId ? "current" : ""}">
+      <div><strong>${escapeHtml(entry.versionLabel)}</strong><small>${escapeHtml(formatDate(entry.validFrom))}${entry.validTo ? ` bis ${escapeHtml(formatDate(entry.validTo))}` : " · ohne Enddatum"}</small></div>
+      <span>${escapeHtml(String(entry.contentSha256 || "").slice(0, 12))}…</span>
+    </article>
+  `).join("");
+  elements.customWorkRuleDetail.innerHTML = `
+    <div class="custom-work-rule-detail-heading">
+      <div><span class="eyebrow">${escapeHtml(draft.code)} · ${escapeHtml(version.versionLabel)}</span><h3>${escapeHtml(definition.title || draft.title)}</h3><p>${escapeHtml(definition.description || "")}</p></div>
+      <div class="custom-work-rule-detail-actions">
+        <span class="status-badge warning">Entwurf</span>
+        ${registry.capabilities?.canRevise ? `<button class="secondary-button" type="button" data-revise-custom-work-rule="${escapeHtmlAttribute(draft.id)}">Neue Entwurfsfassung</button>` : ""}
+      </div>
+    </div>
+    <div class="custom-work-rule-effect-note"><strong>Keine Dienstplanwirkung</strong><span>Die vorgesehene Reaktion „${escapeHtml(customWorkRuleCatalogLabel("reactions", definition.reaction))}“ ist nur dokumentiert und nicht aktiv.</span></div>
+    <dl class="custom-work-rule-facts">
+      <div><dt>Regelart</dt><dd>${escapeHtml(customWorkRuleCatalogLabel("ruleTypes", definition.ruleType))}</dd></div>
+      <div><dt>Thema</dt><dd>${escapeHtml(customWorkRuleCatalogLabel("topics", definition.topic))}</dd></div>
+      <div><dt>Geltungsbereich</dt><dd>${escapeHtml(definition.scopeLabel || customWorkRuleCatalogLabel("scopes", definition.scopeType))}</dd></div>
+      <div><dt>Gültigkeit</dt><dd>${escapeHtml(formatDate(definition.validFrom))}${definition.validTo ? ` bis ${escapeHtml(formatDate(definition.validTo))}` : " · ohne Enddatum"}</dd></div>
+      <div class="wide"><dt>Bedingung</dt><dd>${escapeHtml(customWorkRuleConditionLabel(definition))}</dd></div>
+      <div><dt>Schweregrad</dt><dd>${escapeHtml(customWorkRuleCatalogLabel("severities", definition.severity))}</dd></div>
+      <div><dt>Verantwortlich</dt><dd>${escapeHtml(definition.responsibleUnit || "–")}</dd></div>
+      <div class="wide"><dt>Hinweistext</dt><dd>${escapeHtml(definition.message || "–")}</dd></div>
+    </dl>
+    <section class="custom-work-rule-source">
+      <div><span>Quelle</span><strong>${escapeHtml(definition.sourceTitle || "–")}</strong><small>${escapeHtml(definition.sourceReference || "–")}</small></div>
+      ${sourceUrl ? `<a href="${escapeHtmlAttribute(sourceUrl)}" target="_blank" rel="noopener noreferrer">Fundstelle öffnen</a>` : ""}
+      ${definition.sourceNote ? `<p>${escapeHtml(definition.sourceNote)}</p>` : ""}
+    </section>
+    <section class="custom-work-rule-test-section">
+      <div><span class="eyebrow">Deterministische Vorschau</span><h4>Pflicht-Testfälle</h4></div>
+      ${renderCustomWorkRuleTestCases(definition.testCases)}
+    </section>
+    <section class="custom-work-rule-version-history">
+      <h4>Unveränderliche Entwurfsfassungen</h4>
+      ${history}
+    </section>`;
+}
+
+function renderCustomWorkRuleRegistry() {
+  const registry = state.customWorkRuleRegistry;
+  if (!registry || !canDraftCustomWorkRules()) return;
+  if (elements.customWorkRuleNotice) {
+    elements.customWorkRuleNotice.innerHTML = `<strong>Entwurf, noch nicht wirksam</strong><p>${escapeHtml(registry.notice || "")}</p>`;
+  }
+  renderCustomWorkRuleSummary(registry);
+  renderCustomWorkRuleList(registry);
+  renderCustomWorkRuleDetail(registry);
+  elements.addCustomWorkRuleButton?.classList.toggle("hidden", !registry.capabilities?.canDraft);
+}
+
+function customWorkRuleOptions(entries = [], selected = "") {
+  return entries.map((entry) => `
+    <option value="${escapeHtmlAttribute(entry.id)}" ${entry.id === selected ? "selected" : ""}>${escapeHtml(entry.label)}</option>
+  `).join("");
+}
+
+function populateCustomWorkRuleCatalogs(definition = {}) {
+  const catalogs = state.customWorkRuleRegistry?.catalogs || {};
+  elements.customWorkRuleType.innerHTML = customWorkRuleOptions(catalogs.ruleTypes, definition.ruleType);
+  elements.customWorkRuleTopic.innerHTML = customWorkRuleOptions(catalogs.topics, definition.topic);
+  elements.customWorkRuleScopeType.innerHTML = customWorkRuleOptions(catalogs.scopes, definition.scopeType);
+  elements.customWorkRuleMetric.innerHTML = customWorkRuleOptions(catalogs.metrics, definition.metric);
+  elements.customWorkRuleSeverity.innerHTML = customWorkRuleOptions(catalogs.severities, definition.severity);
+  elements.customWorkRuleReaction.innerHTML = customWorkRuleOptions(catalogs.reactions, definition.reaction);
+}
+
+function updateCustomWorkRuleScopeFields(selectedKey = "") {
+  const ruleType = elements.customWorkRuleType.value;
+  const allowedForLocationRule = ["location", "department"];
+  [...elements.customWorkRuleScopeType.options].forEach((option) => {
+    option.disabled = ruleType === "location_rule" && !allowedForLocationRule.includes(option.value);
+  });
+  if (ruleType === "location_rule" && !allowedForLocationRule.includes(elements.customWorkRuleScopeType.value)) {
+    elements.customWorkRuleScopeType.value = "location";
+  }
+  const scopeType = elements.customWorkRuleScopeType.value;
+  const usesSelect = ["business_unit", "location", "department"].includes(scopeType);
+  const usesGroup = scopeType === "employee_group";
+  elements.customWorkRuleScopeSelectField.classList.toggle("hidden", !usesSelect);
+  elements.customWorkRuleScopeGroupField.classList.toggle("hidden", !usesGroup);
+  elements.customWorkRuleScopeSelect.disabled = !usesSelect;
+  elements.customWorkRuleScopeGroup.disabled = !usesGroup;
+  elements.customWorkRuleScopeSelect.required = usesSelect;
+  elements.customWorkRuleScopeGroup.required = usesGroup;
+  if (!usesSelect) return;
+  const organizationalScopes = state.customWorkRuleRegistry?.organizationalScopes || {};
+  let options = [];
+  if (scopeType === "business_unit") {
+    elements.customWorkRuleScopeSelectLabel.textContent = "Betriebsteil";
+    options = (organizationalScopes.businessUnits || []).map((unit) => ({
+      id: String(unit.id),
+      label: `${unit.code} · ${unit.name}`,
+    }));
+  } else if (scopeType === "location") {
+    elements.customWorkRuleScopeSelectLabel.textContent = "Filiale";
+    options = (organizationalScopes.locations || []).map((location) => ({
+      id: String(location.id),
+      label: `${location.id} · ${location.name}`,
+    }));
+  } else {
+    elements.customWorkRuleScopeSelectLabel.textContent = "Abteilung";
+    options = (organizationalScopes.locations || []).flatMap((location) => (
+      (location.departments || []).map((department) => ({
+        id: String(department.id),
+        label: `${location.id} · ${location.name} · ${department.name}`,
+      }))
+    ));
+  }
+  elements.customWorkRuleScopeSelect.innerHTML = options.length
+    ? options.map((option) => `<option value="${escapeHtmlAttribute(option.id)}">${escapeHtml(option.label)}</option>`).join("")
+    : '<option value="">Noch keine passende Organisationseinheit</option>';
+  const candidate = selectedKey || elements.customWorkRuleScopeSelect.value;
+  elements.customWorkRuleScopeSelect.value = options.some((option) => option.id === String(candidate))
+    ? String(candidate) : (options[0]?.id || "");
+}
+
+function customWorkRuleExampleDefaults(metric) {
+  const thresholds = {
+    maximum_planned_daily_minutes: 600,
+    maximum_planned_weekly_minutes: 2400,
+    minimum_planned_rest_minutes: 660,
+    maximum_consecutive_workdays: 6,
+    maximum_saturdays_per_month: 2,
+    earliest_shift_start_time: "06:00",
+    latest_shift_end_time: "20:00",
+    minimum_vacation_request_lead_days: 14,
+    minimum_time_off_request_lead_days: 7,
+    maximum_vacation_days_per_request: 20,
+  };
+  const threshold = thresholds[metric.id] ?? (metric.min || 1);
+  if (metric.valueType === "time") {
+    const minutes = (value) => {
+      const [hours, minute] = value.split(":").map(Number);
+      return hours * 60 + minute;
+    };
+    const time = (value) => `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
+    const base = minutes(threshold);
+    return {
+      threshold,
+      positive: time(metric.operator === "lte" ? Math.max(0, base - 60) : Math.min(1439, base + 60)),
+      negative: time(metric.operator === "lte" ? Math.min(1439, base + 60) : Math.max(0, base - 60)),
+    };
+  }
+  return {
+    threshold,
+    positive: metric.operator === "lte" ? Math.max(metric.min, threshold - 1) : Math.min(metric.max, threshold + 1),
+    negative: metric.operator === "lte" ? Math.min(metric.max, threshold + 1) : Math.max(metric.min, threshold - 1),
+  };
+}
+
+function updateCustomWorkRuleMetricFields({ resetValues = false } = {}) {
+  const metric = customWorkRuleCatalogEntry("metrics", elements.customWorkRuleMetric.value);
+  if (!metric) return;
+  elements.customWorkRuleOperator.value = metric.operatorLabel || metric.operator;
+  elements.customWorkRuleMetricHelp.textContent = metric.help || "";
+  for (const element of [
+    elements.customWorkRuleThreshold,
+    elements.customWorkRulePositiveTest,
+    elements.customWorkRuleNegativeTest,
+  ]) {
+    element.type = metric.valueType === "time" ? "time" : "number";
+    if (metric.valueType === "time") {
+      element.removeAttribute("min");
+      element.removeAttribute("max");
+      element.removeAttribute("step");
+    } else {
+      element.min = String(metric.min);
+      element.max = String(metric.max);
+      element.step = String(metric.step || 1);
+    }
+  }
+  elements.customWorkRuleThresholdUnit.textContent = metric.unitLabel || "";
+  elements.customWorkRulePositiveUnit.textContent = metric.unitLabel || "";
+  elements.customWorkRuleNegativeUnit.textContent = metric.unitLabel || "";
+  if (resetValues) {
+    const defaults = customWorkRuleExampleDefaults(metric);
+    elements.customWorkRuleThreshold.value = String(defaults.threshold);
+    elements.customWorkRulePositiveTest.value = String(defaults.positive);
+    elements.customWorkRuleNegativeTest.value = String(defaults.negative);
+  }
+  resetCustomWorkRuleSimulation();
+}
+
+function resetCustomWorkRuleSimulation() {
+  state.customWorkRuleSimulationValid = false;
+  if (elements.customWorkRuleTestResult) {
+    elements.customWorkRuleTestResult.className = "custom-work-rule-test-result";
+    elements.customWorkRuleTestResult.textContent = "Nach Änderungen erneut prüfen.";
+  }
+}
+
+function customWorkRulePayload() {
+  const scopeType = elements.customWorkRuleScopeType.value;
+  const scopeKey = scopeType === "employee_group"
+    ? elements.customWorkRuleScopeGroup.value.trim()
+    : (scopeType === "installation" ? "" : elements.customWorkRuleScopeSelect.value);
+  return {
+    code: elements.customWorkRuleCode.value.trim(),
+    title: elements.customWorkRuleTitle.value.trim(),
+    description: elements.customWorkRuleDescription.value.trim(),
+    ruleType: elements.customWorkRuleType.value,
+    topic: elements.customWorkRuleTopic.value,
+    scopeType,
+    scopeKey,
+    validFrom: elements.customWorkRuleValidFrom.value,
+    validTo: elements.customWorkRuleValidTo.value || null,
+    metric: elements.customWorkRuleMetric.value,
+    threshold: elements.customWorkRuleThreshold.value,
+    severity: elements.customWorkRuleSeverity.value,
+    reaction: elements.customWorkRuleReaction.value,
+    message: elements.customWorkRuleMessage.value.trim(),
+    responsibleUnit: elements.customWorkRuleResponsibleUnit.value.trim(),
+    sourceTitle: elements.customWorkRuleSourceTitle.value.trim(),
+    sourceReference: elements.customWorkRuleSourceReference.value.trim(),
+    sourceUrl: elements.customWorkRuleSourceUrl.value.trim(),
+    sourceNote: elements.customWorkRuleSourceNote.value.trim(),
+    testCases: {
+      positiveValue: elements.customWorkRulePositiveTest.value,
+      negativeValue: elements.customWorkRuleNegativeTest.value,
+    },
+    status: "draft",
+    enforcementMode: "monitor",
+  };
+}
+
+function openCustomWorkRuleModal(draft = null) {
+  if (!canDraftCustomWorkRules() || !elements.customWorkRuleModal) return;
+  elements.customWorkRuleForm.reset();
+  const definition = draft?.currentVersion?.definition || {};
+  populateCustomWorkRuleCatalogs(definition);
+  elements.customWorkRuleId.value = draft?.id || "";
+  elements.customWorkRuleCode.value = draft?.code || "";
+  elements.customWorkRuleCode.disabled = Boolean(draft);
+  document.querySelectorAll(".custom-work-rule-new-only").forEach((field) => field.classList.toggle("hidden", Boolean(draft)));
+  elements.customWorkRuleTitle.value = definition.title || draft?.title || "";
+  elements.customWorkRuleDescription.value = definition.description || draft?.description || "";
+  elements.customWorkRuleValidFrom.value = definition.validFrom || toIsoDate(new Date());
+  elements.customWorkRuleValidTo.value = definition.validTo || "";
+  elements.customWorkRuleMessage.value = definition.message || "";
+  elements.customWorkRuleResponsibleUnit.value = definition.responsibleUnit || "Personalleitung";
+  elements.customWorkRuleSourceTitle.value = definition.sourceTitle || "";
+  elements.customWorkRuleSourceReference.value = definition.sourceReference || "";
+  elements.customWorkRuleSourceUrl.value = definition.sourceUrl || "";
+  elements.customWorkRuleSourceNote.value = definition.sourceNote || "";
+  elements.customWorkRuleScopeGroup.value = definition.scopeType === "employee_group" ? (definition.scopeKey || "") : "";
+  updateCustomWorkRuleScopeFields(definition.scopeKey || "");
+  updateCustomWorkRuleMetricFields({ resetValues: !draft });
+  if (draft) {
+    elements.customWorkRuleThreshold.value = String(definition.threshold ?? "");
+    elements.customWorkRulePositiveTest.value = String(definition.positiveTestValue ?? "");
+    elements.customWorkRuleNegativeTest.value = String(definition.negativeTestValue ?? "");
+  }
+  elements.customWorkRuleModalTitle.textContent = draft ? "Neue Entwurfsfassung" : "Regelentwurf anlegen";
+  elements.customWorkRuleSubmitButton.textContent = draft ? "Neue Fassung speichern" : "Entwurf speichern";
+  resetCustomWorkRuleSimulation();
+  elements.customWorkRuleModal.showModal();
+}
+
+async function simulateCustomWorkRuleDraft() {
+  if (!elements.customWorkRuleForm.reportValidity()) return false;
+  elements.simulateCustomWorkRuleButton.disabled = true;
+  elements.customWorkRuleTestResult.className = "custom-work-rule-test-result";
+  elements.customWorkRuleTestResult.textContent = "Testfälle werden serverseitig geprüft.";
+  try {
+    const result = await api("/api/work-rules/drafts/simulate", {
+      method: "POST",
+      body: JSON.stringify(customWorkRulePayload()),
+    });
+    const simulation = result.simulation || {};
+    state.customWorkRuleSimulationValid = simulation.valid === true;
+    elements.customWorkRuleTestResult.className = `custom-work-rule-test-result ${state.customWorkRuleSimulationValid ? "valid" : "invalid"}`;
+    elements.customWorkRuleTestResult.innerHTML = state.customWorkRuleSimulationValid
+      ? `<strong>Alle drei Testfälle passen.</strong><span>eingehalten · verletzt · fehlender Prüfwert</span>`
+      : "<strong>Die Testfälle passen noch nicht.</strong>";
+    return state.customWorkRuleSimulationValid;
+  } catch (error) {
+    state.customWorkRuleSimulationValid = false;
+    elements.customWorkRuleTestResult.className = "custom-work-rule-test-result invalid";
+    elements.customWorkRuleTestResult.textContent = error.message;
+    showToast(error.message, true);
+    return false;
+  } finally {
+    elements.simulateCustomWorkRuleButton.disabled = false;
+  }
+}
+
+async function saveCustomWorkRule(event) {
+  event.preventDefault();
+  if (!canDraftCustomWorkRules()) return;
+  if (!state.customWorkRuleSimulationValid && !(await simulateCustomWorkRuleDraft())) return;
+  const draftId = elements.customWorkRuleId.value;
+  elements.customWorkRuleSubmitButton.disabled = true;
+  try {
+    const result = await api(draftId
+      ? `/api/work-rules/drafts/${encodeURIComponent(draftId)}/revisions`
+      : "/api/work-rules/drafts", {
+      method: "POST",
+      body: JSON.stringify(customWorkRulePayload()),
+    });
+    elements.customWorkRuleModal.close();
+    state.selectedCustomWorkRuleId = result.draft?.id || draftId;
+    await loadCustomWorkRuleRegistry({ force: true });
+    showToast(draftId
+      ? "Die neue unveränderliche Entwurfsfassung wurde gespeichert."
+      : "Der Regelentwurf wurde ohne Dienstplanwirkung gespeichert.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.customWorkRuleSubmitButton.disabled = false;
+  }
+}
+
 function collectiveAgreementReviewLabel(value) {
   return ({
     review_pending: "Prüfung offen",
@@ -4349,6 +4790,7 @@ function renderPersonnelAdministration() {
     renderPersonnelDirectory();
   }
   if (canReadCostCenters()) renderCostCenters();
+  if (canDraftCustomWorkRules() && state.customWorkRuleRegistry) renderCustomWorkRuleRegistry();
   if (canReadCollectiveAgreements() && state.collectiveAgreementRegistry) renderCollectiveAgreementRegistry();
   if (canReadCentralVacations() && state.centralVacationLoadedYear !== null) renderCentralVacations();
   if (canReadDataSubjectRequests()) renderDataSubjectRequests();
@@ -4367,11 +4809,13 @@ function setPersonnelAdministrationTab(tab) {
   });
   elements.personnelDirectorySection?.classList.toggle("active", normalized === "employees");
   elements.costCenterSection?.classList.toggle("active", normalized === "costCenters");
+  elements.customWorkRulesSection?.classList.toggle("active", normalized === "ruleDrafts");
   elements.collectiveAgreementsSection?.classList.toggle("active", normalized === "collectiveAgreements");
   elements.centralVacationSection?.classList.toggle("active", normalized === "vacations");
   elements.dataSubjectRequestsSection?.classList.toggle("active", normalized === "dataRequests");
   elements.personnelDisplayColumnsButton?.classList.toggle("hidden", normalized !== "employees");
   if (state.currentView === "personnelAdministration") renderContextNavigation();
+  if (normalized === "ruleDrafts") loadCustomWorkRuleRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "collectiveAgreements") loadCollectiveAgreementRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "vacations") loadCentralVacations().catch((error) => showToast(error.message, true));
   if (normalized === "dataRequests") loadDataSubjectRequests().catch((error) => showToast(error.message, true));
@@ -10277,7 +10721,7 @@ function applyRequestedView() {
   }
   if (requestedView === "personnelAdministration") {
     const requestedSection = parameters.get("section");
-    const establishedSection = ["employees", "costCenters", "vacations"].includes(requestedSection);
+    const establishedSection = ["employees", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"].includes(requestedSection);
     if (establishedSection || requestedSection === "dataRequests") {
       state.personnelAdministrationTab = requestedSection;
     }
@@ -13694,6 +14138,38 @@ elements.dataSubjectRequestList?.addEventListener("click", (event) => {
 elements.dataSubjectRequestAction?.addEventListener("change", updateDataSubjectRequestActionFields);
 elements.dataSubjectRequestForm?.addEventListener("submit", saveDataSubjectRequest);
 elements.downloadDataSubjectRequestExportButton?.addEventListener("click", downloadDataSubjectRequestExport);
+elements.refreshCustomWorkRulesButton?.addEventListener("click", () => loadCustomWorkRuleRegistry({ force: true })
+  .catch((error) => showToast(error.message, true)));
+elements.addCustomWorkRuleButton?.addEventListener("click", () => openCustomWorkRuleModal());
+elements.customWorkRuleForm?.addEventListener("submit", saveCustomWorkRule);
+elements.simulateCustomWorkRuleButton?.addEventListener("click", simulateCustomWorkRuleDraft);
+elements.customWorkRuleType?.addEventListener("change", () => {
+  updateCustomWorkRuleScopeFields();
+  resetCustomWorkRuleSimulation();
+});
+elements.customWorkRuleScopeType?.addEventListener("change", () => {
+  updateCustomWorkRuleScopeFields();
+  resetCustomWorkRuleSimulation();
+});
+elements.customWorkRuleMetric?.addEventListener("change", () => updateCustomWorkRuleMetricFields({ resetValues: true }));
+elements.customWorkRuleReaction?.addEventListener("change", () => {
+  if (elements.customWorkRuleReaction.value === "block") elements.customWorkRuleSeverity.value = "critical";
+  resetCustomWorkRuleSimulation();
+});
+elements.customWorkRuleForm?.addEventListener("input", resetCustomWorkRuleSimulation);
+elements.customWorkRuleList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-custom-work-rule-id]");
+  if (!button) return;
+  state.selectedCustomWorkRuleId = button.dataset.customWorkRuleId;
+  renderCustomWorkRuleRegistry();
+});
+elements.customWorkRuleDetail?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-revise-custom-work-rule]");
+  if (!button) return;
+  const draft = (state.customWorkRuleRegistry?.drafts || [])
+    .find((entry) => entry.id === button.dataset.reviseCustomWorkRule);
+  if (draft) openCustomWorkRuleModal(draft);
+});
 elements.refreshCollectiveAgreementsButton?.addEventListener("click", () => loadCollectiveAgreementRegistry({ force: true })
   .catch((error) => showToast(error.message, true)));
 elements.addCollectiveAgreementButton?.addEventListener("click", () => openCollectiveAgreementModal());

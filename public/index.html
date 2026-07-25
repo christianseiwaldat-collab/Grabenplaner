@@ -91,6 +91,9 @@
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="costCenters" id="costCentersNavButton">
                 <span class="nav-symbol">▦</span><span>Kostenstellen</span>
               </button>
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="ruleDrafts" id="customWorkRulesNavButton">
+                <span class="nav-symbol">◇</span><span>Regelwerk</span>
+              </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="collectiveAgreements" id="collectiveAgreementsNavButton">
                 <span class="nav-symbol">≡</span><span>Kollektivverträge</span>
               </button>
@@ -337,6 +340,7 @@
           <div class="settings-tabs personnel-administration-tabs" role="tablist">
             <button class="settings-tab active" id="personnelDirectoryTab" type="button" role="tab" aria-controls="personnelDirectorySection" aria-selected="true" data-personnel-administration-tab="employees">Mitarbeitende</button>
             <button class="settings-tab" id="costCentersTab" type="button" role="tab" aria-controls="costCenterSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="costCenters">Kostenstellen</button>
+            <button class="settings-tab hidden" id="customWorkRulesTab" type="button" role="tab" aria-controls="customWorkRulesSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="ruleDrafts">Regelwerk</button>
             <button class="settings-tab hidden" id="collectiveAgreementsTab" type="button" role="tab" aria-controls="collectiveAgreementsSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="collectiveAgreements">Kollektivverträge</button>
             <button class="settings-tab hidden" id="centralVacationsTab" type="button" role="tab" aria-controls="centralVacationSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="vacations">Urlaube</button>
             <button class="settings-tab hidden" id="dataSubjectRequestsTab" type="button" role="tab" aria-controls="dataSubjectRequestsSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="dataRequests">Datenanfragen <span class="tab-count hidden" id="dataSubjectRequestsTabCount">0</span></button>
@@ -368,6 +372,40 @@
             </div>
             <p class="calculation-note">Kostenstellen werden nicht endgültig gelöscht. Vor der Deaktivierung müssen bestehende Zuordnungen verschoben werden; historische Daten bleiben erhalten.</p>
             <div class="cost-center-list" id="costCenterList"><p class="settings-note">Kostenstellen werden geladen.</p></div>
+          </section>
+
+          <section class="personnel-administration-section custom-work-rules-section" id="customWorkRulesSection" role="tabpanel" aria-labelledby="customWorkRulesTab">
+            <div class="employee-toolbar custom-work-rules-toolbar">
+              <div>
+                <h2>Eigene Regelentwürfe</h2>
+                <p>Unternehmens-, Standort- und Betriebsvereinbarungsregeln in einem geführten Baukasten vorbereiten.</p>
+              </div>
+              <div class="custom-work-rules-actions">
+                <button class="secondary-button" id="refreshCustomWorkRulesButton" type="button">Aktualisieren</button>
+                <button class="primary-button hidden" id="addCustomWorkRuleButton" type="button">+ Regelentwurf</button>
+              </div>
+            </div>
+            <article class="custom-work-rule-boundary" id="customWorkRuleNotice">
+              <strong>Entwurf, noch nicht wirksam</strong>
+              <p>Block 5 speichert versionierte Arbeitsfassungen. Freigabe, Zuordnung und Dienstplanwirkung folgen erst in Block 6.</p>
+            </article>
+            <div class="personnel-administration-summary custom-work-rule-summary" id="customWorkRuleSummary" aria-live="polite"></div>
+            <div class="custom-work-rule-workspace">
+              <section class="custom-work-rule-list-panel">
+                <div class="custom-work-rule-panel-heading">
+                  <div><span class="eyebrow">Geführter Regelbaukasten</span><h3>Entwürfe</h3></div>
+                </div>
+                <div class="custom-work-rule-list" id="customWorkRuleList" aria-live="polite">
+                  <p class="settings-note">Regelentwürfe werden beim Öffnen geladen.</p>
+                </div>
+              </section>
+              <section class="custom-work-rule-detail-panel" id="customWorkRuleDetail">
+                <div class="custom-work-rule-empty">
+                  <strong>Noch kein Entwurf ausgewählt</strong>
+                  <p>Wähle links eine Regel, um Bedingung, Geltungsbereich, Testfälle und Versionshistorie zu lesen.</p>
+                </div>
+              </section>
+            </div>
           </section>
 
           <section class="personnel-administration-section collective-agreements-section" id="collectiveAgreementsSection" role="tabpanel" aria-labelledby="collectiveAgreementsTab">
@@ -543,6 +581,76 @@
             </div>
             <div class="collective-agreement-review-state"><span>Status</span><strong>Prüfung offen</strong><small>Keine Auswirkung auf Dienstplan oder Personalakt</small></div>
             <div class="modal-actions"><button class="secondary-button" type="button" data-close="collectiveAgreementAssignmentModal">Abbrechen</button><button class="primary-button" id="collectiveAgreementAssignmentSubmitButton" type="submit">Vorschlag speichern</button></div>
+          </form>
+        </dialog>
+
+        <dialog class="modal custom-work-rule-modal" id="customWorkRuleModal">
+          <form class="modal-card custom-work-rule-modal-card" id="customWorkRuleForm">
+            <div class="modal-header">
+              <div>
+                <span class="eyebrow">Personalverwaltung · Regelwerk</span>
+                <h2 id="customWorkRuleModalTitle">Regelentwurf anlegen</h2>
+                <p>Der Baukasten erzeugt eine unveränderliche Entwurfsfassung – keinen ausführbaren Programmcode.</p>
+              </div>
+              <button type="button" class="close-button" data-close="customWorkRuleModal">×</button>
+            </div>
+            <input id="customWorkRuleId" type="hidden" />
+            <div class="form-grid custom-work-rule-form-grid">
+              <label class="field custom-work-rule-new-only"><span>Regelkürzel</span><input id="customWorkRuleCode" maxlength="60" required placeholder="z. B. URLAUB-VORLAUF" /></label>
+              <label class="field"><span>Regelbezeichnung</span><input id="customWorkRuleTitle" maxlength="180" required /></label>
+              <label class="field"><span>Regelart</span><select id="customWorkRuleType" required></select></label>
+              <label class="field"><span>Themenbereich</span><select id="customWorkRuleTopic" required></select></label>
+              <label class="field form-grid-wide"><span>Fachliche Beschreibung</span><textarea id="customWorkRuleDescription" rows="3" minlength="10" maxlength="1600" required></textarea></label>
+              <label class="field"><span>Geltungsbereich</span><select id="customWorkRuleScopeType" required></select></label>
+              <label class="field hidden" id="customWorkRuleScopeSelectField"><span id="customWorkRuleScopeSelectLabel">Zuordnung</span><select id="customWorkRuleScopeSelect"></select></label>
+              <label class="field hidden" id="customWorkRuleScopeGroupField"><span>Beschäftigtengruppe</span><input id="customWorkRuleScopeGroup" maxlength="160" placeholder="z. B. Lehrlinge im Verkauf" /></label>
+              <label class="field"><span>Gültig ab</span><input id="customWorkRuleValidFrom" type="date" required /></label>
+              <label class="field"><span>Gültig bis</span><input id="customWorkRuleValidTo" type="date" /></label>
+            </div>
+
+            <fieldset class="custom-work-rule-fieldset">
+              <legend>Bedingung und geplante Reaktion</legend>
+              <div class="form-grid custom-work-rule-form-grid">
+                <label class="field form-grid-wide"><span>Regelbaustein</span><select id="customWorkRuleMetric" required></select><small id="customWorkRuleMetricHelp"></small></label>
+                <label class="field"><span>Vergleich</span><input id="customWorkRuleOperator" readonly /></label>
+                <label class="field"><span>Grenzwert <small id="customWorkRuleThresholdUnit"></small></span><input id="customWorkRuleThreshold" required /></label>
+                <label class="field"><span>Schweregrad</span><select id="customWorkRuleSeverity" required></select></label>
+                <label class="field"><span>Reaktion nach späterer Freigabe</span><select id="customWorkRuleReaction" required></select></label>
+                <label class="field form-grid-wide"><span>Verständlicher Hinweistext</span><textarea id="customWorkRuleMessage" rows="3" minlength="10" maxlength="1000" required></textarea></label>
+                <label class="field form-grid-wide"><span>Verantwortliche Stelle</span><input id="customWorkRuleResponsibleUnit" maxlength="160" required placeholder="z. B. Personalleitung" /></label>
+              </div>
+            </fieldset>
+
+            <fieldset class="custom-work-rule-fieldset">
+              <legend>Quelle und Fundstelle</legend>
+              <div class="form-grid custom-work-rule-form-grid">
+                <label class="field"><span>Quellenbezeichnung</span><input id="customWorkRuleSourceTitle" maxlength="240" required placeholder="z. B. Interne Urlaubsrichtlinie" /></label>
+                <label class="field"><span>Fundstelle / Dokumentreferenz</span><input id="customWorkRuleSourceReference" maxlength="500" required placeholder="z. B. RL-URL-2026, Abschnitt 3" /></label>
+                <label class="field form-grid-wide"><span>HTTPS-Fundstelle <small>(optional)</small></span><input id="customWorkRuleSourceUrl" type="url" maxlength="1200" placeholder="https://…" /></label>
+                <label class="field form-grid-wide"><span>Quellenhinweis</span><textarea id="customWorkRuleSourceNote" rows="2" maxlength="1200"></textarea></label>
+              </div>
+            </fieldset>
+
+            <fieldset class="custom-work-rule-fieldset">
+              <legend>Pflicht-Testfälle</legend>
+              <p>Ein eingehaltenes, ein verletztes und ein fehlendes Beispiel werden serverseitig gegen denselben Grenzwert geprüft.</p>
+              <div class="form-grid custom-work-rule-form-grid">
+                <label class="field"><span>Beispiel „eingehalten“ <small id="customWorkRulePositiveUnit"></small></span><input id="customWorkRulePositiveTest" required /></label>
+                <label class="field"><span>Beispiel „verletzt“ <small id="customWorkRuleNegativeUnit"></small></span><input id="customWorkRuleNegativeTest" required /></label>
+              </div>
+              <div class="custom-work-rule-test-actions">
+                <button class="secondary-button" id="simulateCustomWorkRuleButton" type="button">3 Testfälle prüfen</button>
+                <div class="custom-work-rule-test-result" id="customWorkRuleTestResult" aria-live="polite">Noch nicht geprüft.</div>
+              </div>
+            </fieldset>
+
+            <div class="custom-work-rule-review-state">
+              <span>Status</span><strong>Entwurf</strong><small>Keine Dienstplanwirkung · keine Freigabe · keine Zuordnung</small>
+            </div>
+            <div class="modal-actions">
+              <button class="secondary-button" type="button" data-close="customWorkRuleModal">Abbrechen</button>
+              <button class="primary-button" id="customWorkRuleSubmitButton" type="submit">Entwurf speichern</button>
+            </div>
           </form>
         </dialog>
 

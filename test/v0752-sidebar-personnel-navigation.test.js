@@ -25,11 +25,15 @@ test("v0.75.2 Navigation: Personalverwaltung bündelt ausschließlich berechtigt
   assert.match(navigation, /id="requestsNavButton"/);
   assert.match(navigation, /id="timeTrackingNavButton"/);
   assert.match(navigation, /<button(?=[^>]*id="costCentersNavButton")(?=[^>]*data-personnel-administration-route="costCenters")[^>]*>/);
+  assert.match(navigation, /<button(?=[^>]*id="customWorkRulesNavButton")(?=[^>]*data-personnel-administration-route="ruleDrafts")[^>]*>/);
+  assert.match(navigation, /<button(?=[^>]*id="collectiveAgreementsNavButton")(?=[^>]*data-personnel-administration-route="collectiveAgreements")[^>]*>/);
   assert.match(navigation, /<button(?=[^>]*id="centralVacationsNavButton")(?=[^>]*data-personnel-administration-route="vacations")[^>]*>/);
   assert.ok(navigation.indexOf("personnelDirectoryNavButton") < navigation.indexOf("requestsNavButton"));
   assert.ok(navigation.indexOf("requestsNavButton") < navigation.indexOf("timeTrackingNavButton"));
   assert.ok(navigation.indexOf("timeTrackingNavButton") < navigation.indexOf("costCentersNavButton"));
-  assert.ok(navigation.indexOf("costCentersNavButton") < navigation.indexOf("centralVacationsNavButton"));
+  assert.ok(navigation.indexOf("costCentersNavButton") < navigation.indexOf("customWorkRulesNavButton"));
+  assert.ok(navigation.indexOf("customWorkRulesNavButton") < navigation.indexOf("collectiveAgreementsNavButton"));
+  assert.ok(navigation.indexOf("collectiveAgreementsNavButton") < navigation.indexOf("centralVacationsNavButton"));
 });
 
 test("v0.75.2 Navigation: zentrale Punkte folgen ihren eigenen Leserechten", () => {
@@ -57,10 +61,12 @@ test("v0.75.2 Navigation: Personal-Unterseiten sind aufklappbar, adressierbar un
   assert.match(contextualNavigation, /\["personnelAdministration", "requests", "timeTracking"\]\.includes\(state\.currentView\)/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "employees"/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "costCenters"/);
+  assert.match(contextualNavigation, /state\.personnelAdministrationTab === "ruleDrafts"/);
+  assert.match(contextualNavigation, /state\.personnelAdministrationTab === "collectiveAgreements"/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "vacations"/);
   const requestedView = between(app, "function applyRequestedView()", "function setSettingsTab");
   assert.match(requestedView, /parameters\.get\("section"\)/);
-  assert.match(requestedView, /\["employees", "costCenters", "vacations"\]\.includes\(requestedSection\)/);
+  assert.match(requestedView, /\["employees", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"\]\.includes\(requestedSection\)/);
 });
 
 test("v0.75.2 Navigation: Teamstatus entfällt und Einstellungen bleiben außerhalb des Scrollmenüs erreichbar", () => {
