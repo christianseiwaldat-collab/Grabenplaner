@@ -510,13 +510,14 @@
 
         <section id="rightsDashboardView" class="view rights-dashboard" data-dashboard-theme="light">
           <header class="topbar rights-dashboard-topbar">
-            <div><span class="eyebrow">Übersicht &amp; Steuerung</span><h1>Dashboards</h1><p class="subtitle">Filialsituation, wirksame Rechte und Standardprozesse verständlich im Blick behalten.</p></div>
+            <div><span class="eyebrow">Übersicht &amp; Steuerung</span><h1>Dashboards</h1><p class="subtitle">Filialsituation, wirksame Rechte, Personalregeln, betriebliche Abläufe und technischen Zustand verständlich im Blick behalten.</p></div>
             <div class="rights-dashboard-header-actions">
               <div class="rights-dashboard-mode-switch" role="tablist" aria-label="Dashboard-Bereich">
-                <button type="button" role="tab" data-rights-dashboard-mode="systemCenter" data-dashboard-capability="system" aria-selected="true">System-Center</button>
-                <button type="button" role="tab" data-rights-dashboard-mode="locations" data-dashboard-capability="rights" aria-selected="false">Filialübersicht</button>
+                <button type="button" role="tab" data-rights-dashboard-mode="locations" data-dashboard-capability="rights" aria-selected="true">Filialübersicht</button>
                 <button type="button" role="tab" data-rights-dashboard-mode="rights" data-dashboard-capability="rights" aria-selected="false">Rechteübersicht</button>
-                <button type="button" role="tab" data-rights-dashboard-mode="processes" data-dashboard-capability="rights" aria-selected="false">Prozesswege</button>
+                <button type="button" role="tab" data-rights-dashboard-mode="personnelRules" data-dashboard-capability="workRules" aria-selected="false">Personal-Regelwerk</button>
+                <button type="button" role="tab" data-rights-dashboard-mode="processes" data-dashboard-capability="rights" aria-selected="false">Abläufe &amp; Prozesse</button>
+                <button type="button" role="tab" data-rights-dashboard-mode="systemCenter" data-dashboard-capability="system" aria-selected="false">System-Center</button>
               </div>
               <div class="page-theme-switch dashboard-theme-switch" role="group" aria-label="Darstellung der Dashboards">
                 <span>Darstellung</span>
@@ -526,7 +527,7 @@
             </div>
           </header>
 
-          <section class="system-center-panel" id="systemCenterPanel" aria-label="System-Center">
+          <section class="system-center-panel hidden" id="systemCenterPanel" aria-label="System-Center">
             <div class="system-center-toolbar">
               <div><span class="eyebrow">Nachweisbarer Systemzustand</span><h2>System-Center</h2><p>Server, Sicherungen und Wiederherstellbarkeit auf Basis redigierter, serverseitig geprüfter Nachweise.</p></div>
               <div class="system-center-actions">
@@ -540,7 +541,7 @@
             </div>
           </section>
 
-          <section class="location-dashboard-panel hidden" id="rightsDashboardLocationsPanel" aria-label="Aktuelle Filialübersicht">
+          <section class="location-dashboard-panel" id="rightsDashboardLocationsPanel" aria-label="Aktuelle Filialübersicht">
             <div class="location-dashboard-toolbar">
               <div><span class="eyebrow">Tageslage</span><h2>Filialübersicht</h2><p>Besetzung und Abwesenheiten aller aktiven Filialen – ohne vertrauliche Dokument- oder Bemerkungsinhalte.</p></div>
               <div class="location-dashboard-toolbar-controls">
@@ -583,14 +584,81 @@
             </section>
           </div>
 
-          <section class="rights-dashboard-process-panel hidden" id="rightsDashboardProcessesPanel" aria-label="Standard- und eigene Prozesse">
+          <section class="personnel-rules-dashboard-panel hidden" id="personnelRulesDashboardPanel" aria-label="Personal-Regelwerk">
+            <div class="personnel-rules-toolbar">
+              <div><span class="eyebrow">Versionierter Regelstand</span><h2>Personal-Regelwerk</h2><p>Arbeitszeit- und Planungsregeln, Geltungszuordnungen und offizielle Quellen im eigenen Verantwortungsbereich nachvollziehen.</p></div>
+              <div class="personnel-rules-toolbar-actions">
+                <span id="personnelRulesScope">Lesesicht wird geladen.</span>
+                <button class="secondary-button" id="refreshPersonnelRulesDashboard" type="button">Aktualisieren</button>
+              </div>
+            </div>
+
+            <section class="personnel-rules-summary" id="personnelRulesSummary" aria-label="Zusammenfassung des Personal-Regelwerks"></section>
+
+            <section class="personnel-rules-filterbar" aria-label="Regelprofile filtern">
+              <label><span>Profil oder Regel</span><input id="personnelRulesSearch" type="search" placeholder="Titel, Regel oder Quelle" autocomplete="off" /></label>
+              <label><span>Regelart</span><select id="personnelRulesLayerFilter"><option value="">Alle Regelarten</option></select></label>
+              <label><span>Stand</span><select id="personnelRulesStatusFilter"><option value="">Alle Stände</option><option value="published">Veröffentlicht</option><option value="draft">Entwurf</option></select></label>
+            </section>
+
+            <div class="personnel-rules-workspace">
+              <aside class="personnel-rules-navigation" aria-label="Regelprofil auswählen">
+                <div class="rights-dashboard-section-heading"><div><span class="eyebrow">Profile</span><h2>Regelprofil wählen</h2></div><strong id="personnelRulesProfileCount">0</strong></div>
+                <div class="personnel-rules-profile-list" id="personnelRulesProfileList"><p class="settings-note">Regelprofile werden geladen.</p></div>
+              </aside>
+
+              <section class="personnel-rules-detail" aria-live="polite">
+                <div class="personnel-rules-heading">
+                  <div><span class="eyebrow">Geltung &amp; Nachweis</span><h2 id="personnelRulesProfileTitle">Regelprofil</h2><p id="personnelRulesProfileSummary"></p></div>
+                  <span class="status-badge" id="personnelRulesProfileStatus">Stand offen</span>
+                </div>
+                <div class="personnel-rules-facts" id="personnelRulesProfileFacts"></div>
+                <aside class="personnel-rules-applicability" id="personnelRulesApplicability">
+                  <strong>Anwendbarkeit</strong><p>Profil auswählen, um Geltungsbedingungen und offenen Bestätigungsbedarf zu sehen.</p>
+                </aside>
+                <section class="personnel-rules-detail-section">
+                  <header><div><span class="eyebrow">Geltungszuordnung</span><h3>Wirksame Bereiche</h3></div></header>
+                  <div class="personnel-rules-assignment-list" id="personnelRulesAssignments"></div>
+                </section>
+                <section class="personnel-rules-detail-section">
+                  <header><div><span class="eyebrow">Prüfkatalog</span><h3>Enthaltene Regeln</h3></div></header>
+                  <div class="personnel-rules-rule-list" id="personnelRulesRules"></div>
+                </section>
+                <section class="personnel-rules-detail-section">
+                  <header><div><span class="eyebrow">Quellennachweis</span><h3>Verwendete Quellen</h3></div></header>
+                  <div class="personnel-rules-source-list" id="personnelRulesSources"></div>
+                </section>
+              </section>
+            </div>
+
+            <section class="personnel-rules-simulation" aria-labelledby="personnelRulesSimulationTitle">
+              <div class="personnel-rules-simulation-heading">
+                <div><span class="eyebrow">Reine Vorschau</span><h2 id="personnelRulesSimulationTitle">Dienstplan-Regelprüfung simulieren</h2><p>Prüft die gespeicherte Planung im gewählten Bereich. Es werden keine Dienste, Zuordnungen oder Regelstände verändert.</p></div>
+                <span id="personnelRulesSimulationHint">Noch nicht geprüft</span>
+              </div>
+              <div class="personnel-rules-simulation-controls">
+                <label><span>Woche ab</span><input id="personnelRulesSimulationWeek" type="date" /></label>
+                <label><span>Filiale</span><select id="personnelRulesSimulationLocation"><option value="">Keine freigegebene Filiale</option></select></label>
+                <label><span>Abteilung</span><select id="personnelRulesSimulationDepartment"><option value="">Gesamte Filiale</option></select></label>
+                <button class="primary-button" id="runPersonnelRulesSimulation" type="button">Planung prüfen</button>
+              </div>
+              <div class="personnel-rules-simulation-result" id="personnelRulesSimulationResult">
+                <p class="settings-note">Die Simulation zeigt Hinweise, manuell zu prüfende Punkte und Blockierungen für die ausgewählte Woche.</p>
+              </div>
+            </section>
+
+            <p class="personnel-rules-legal-notice" id="personnelRulesLegalNotice">Die Planprüfung unterstützt die Dienstplanung und ersetzt keine rechtliche oder kollektivvertragliche Einzelfallprüfung.</p>
+          </section>
+
+          <section class="rights-dashboard-process-panel hidden" id="rightsDashboardProcessesPanel" aria-label="Abläufe und Prozesse nach Fachbereich">
             <div class="rights-process-toolbar">
-              <div><span class="eyebrow">Aktueller Regelstand</span><h2>Standard- und eigene Prozesse</h2><p>Vorgegebene Abläufe prüfen und eigene, nachvollziehbare Prozesswege für den Betrieb gestalten.</p></div>
+              <div><span class="eyebrow">Prozessbibliothek</span><h2>Abläufe &amp; Prozesse</h2><p>Personal- und Betriebsabläufe nach Fachbereichen ordnen, prüfen und nachvollziehbar weiterentwickeln.</p></div>
               <div class="rights-process-toolbar-controls">
+                <label><span>Fachbereich</span><select id="rightsProcessCategory"><option value="all">Alle Fachbereiche</option></select></label>
                 <label><span>Standortbezug</span><select id="rightsProcessLocation"><option value="">Erster aktiver Standort</option></select></label>
                 <label><span>Simulation</span><select id="rightsProcessScenario"><option value="current">Aktuelle Konfiguration</option></select></label>
-                <button class="secondary-button" id="rightsProcessExportPdf" type="button">Prozess als PDF</button>
-                <button class="primary-button hidden" id="addCustomProcessButton" type="button">Eigenen Prozess anlegen</button>
+                <button class="secondary-button" id="rightsProcessExportPdf" type="button">Ablauf als PDF</button>
+                <button class="primary-button hidden" id="addCustomProcessButton" type="button">Eigenen Ablauf anlegen</button>
               </div>
             </div>
             <section class="rights-process-validation" aria-label="Konfigurationsprüfung">
@@ -598,8 +666,8 @@
               <div class="rights-process-validation-list" id="rightsProcessValidationList"></div>
             </section>
             <div class="rights-process-workspace">
-              <aside class="rights-process-navigation" aria-label="Prozessauswahl">
-                <div class="rights-dashboard-section-heading"><div><span class="eyebrow">Abläufe</span><h2>Prozess wählen</h2></div></div>
+              <aside class="rights-process-navigation" aria-label="Ablaufauswahl">
+                <div class="rights-dashboard-section-heading"><div><span class="eyebrow">Fachbereiche</span><h2>Ablauf wählen</h2></div></div>
                 <div id="rightsProcessList"><p class="settings-note">Prozesse werden geladen.</p></div>
               </aside>
               <section class="rights-process-detail" aria-live="polite">
@@ -608,8 +676,8 @@
                 <div class="rights-process-simulation-note" id="rightsProcessSimulationNote"><strong>Aktuelle Konfiguration</strong><span>Die Simulation verändert keine gespeicherten Daten.</span></div>
                 <div class="rights-process-rules" id="rightsProcessRules" aria-label="Aktuell wirksame Regeln"></div>
                 <div class="rights-process-flow-layout">
-                  <div class="rights-process-timeline" id="rightsProcessTimeline" aria-label="Prozessschritte"></div>
-                  <aside class="rights-process-explanation" id="rightsProcessExplanation"><strong>Prozessschritt anklicken</strong><p>Hier werden Zuständigkeit, wirksame Einstellung und benötigte Rechte erklärt.</p></aside>
+                  <div class="rights-process-timeline" id="rightsProcessTimeline" aria-label="Ablaufschritte"></div>
+                  <aside class="rights-process-explanation" id="rightsProcessExplanation"><strong>Ablaufschritt anklicken</strong><p>Hier werden Zuständigkeit, wirksame Einstellung und benötigte Rechte erklärt.</p></aside>
                 </div>
               </section>
             </div>
@@ -1774,12 +1842,13 @@
 
     <dialog class="modal wide-modal custom-process-modal" id="customProcessModal">
       <form method="dialog" id="customProcessForm" autocomplete="off">
-        <div class="modal-header"><div><span class="eyebrow">Eigener Prozess</span><h2 id="customProcessModalTitle">Prozess anlegen</h2><p>Ablauf, Zuständigkeiten und Benachrichtigungswege nachvollziehbar festlegen.</p></div><button type="button" class="close-button" data-close="customProcessModal">×</button></div>
+        <div class="modal-header"><div><span class="eyebrow">Eigener Ablauf</span><h2 id="customProcessModalTitle">Ablauf anlegen</h2><p>Ablauf, Zuständigkeiten und Benachrichtigungswege nachvollziehbar festlegen.</p></div><button type="button" class="close-button" data-close="customProcessModal">×</button></div>
         <input id="customProcessId" type="hidden" />
         <div class="form-grid custom-process-basics">
           <label class="field modal-span-3"><span>Titel</span><input id="customProcessTitle" minlength="3" maxlength="120" placeholder="z. B. Notbesetzung in einer Filiale" required /></label>
           <label class="field"><span>Kurzzeichen</span><input id="customProcessSymbol" maxlength="5" placeholder="z. B. NB" required /><small>1 bis 5 Buchstaben oder Ziffern.</small></label>
           <label class="field"><span>Status</span><select id="customProcessStatus"><option value="draft">Entwurf</option><option value="active">Aktiv</option></select></label>
+          <label class="field"><span>Fachbereich</span><select id="customProcessCategory" required></select></label>
           <label class="field modal-span-3"><span>Beschreibung</span><textarea id="customProcessDescription" rows="3" maxlength="600" placeholder="Wann und wofür wird dieser Prozess verwendet?" required></textarea></label>
           <label class="field"><span>Geltungsbereich</span><select id="customProcessScopeType"><option value="company">Gesamtes Unternehmen</option><option value="location">Bestimmte Filiale</option><option value="department">Bestimmte Abteilung</option></select></label>
           <label class="field hidden" id="customProcessScopeLocationField"><span>Filiale</span><select id="customProcessScopeLocation"></select></label>
@@ -1795,7 +1864,7 @@
         </section>
         <datalist id="customProcessResponsibilityOptions"><option value="department_manager">Abteilungsleitung</option><option value="manager">Filialleitung</option><option value="hr">Personalleitung</option><option value="admin">Administration</option><option value="it_admin">IT-Administration</option><option value="developer">Developer</option></datalist>
         <p class="message hidden" id="customProcessMessage"></p>
-        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="customProcessModal">Abbrechen</button><button type="submit" class="primary-button" id="saveCustomProcessButton">Prozess speichern</button></div>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="customProcessModal">Abbrechen</button><button type="submit" class="primary-button" id="saveCustomProcessButton">Ablauf speichern</button></div>
       </form>
     </dialog>
 

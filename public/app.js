@@ -62,6 +62,18 @@ const state = {
   timeCorrections: [],
   rightsManagement: null,
   rightsDashboard: null,
+  personnelRulesDashboard: null,
+  personnelRulesDashboardLoading: false,
+  personnelRulesSelectedProfileId: "",
+  personnelRulesSearch: "",
+  personnelRulesLayerFilter: "",
+  personnelRulesStatusFilter: "",
+  personnelRulesSimulation: null,
+  personnelRulesSimulationError: "",
+  personnelRulesSimulationLoading: false,
+  personnelRulesSimulationLocationId: "",
+  personnelRulesSimulationDepartmentId: "",
+  personnelRulesSimulationWeek: getMonday(new Date()),
   systemCenter: null,
   systemCenterLoading: false,
   loanManagement: null,
@@ -90,9 +102,10 @@ const state = {
   dashboardFontSize: "standard",
   employeeDisplayColumns: [],
   employeeDisplaySort: { key: "personnel_number", direction: "asc" },
-  rightsDashboardMode: "systemCenter",
+  rightsDashboardMode: "locations",
   rightsDashboardSelectedProcessId: "vacation",
   rightsDashboardSelectedProcessStepId: "",
+  rightsProcessCategoryId: "all",
   rightsProcessLocationId: "",
   rightsProcessScenarioIds: {},
   editingCustomProcessId: "",
@@ -252,9 +265,10 @@ const elements = Object.fromEntries(
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
-    "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
-    "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
-    "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
+    "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
+    "personnelRulesScope", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
+    "rightsProcessCategory", "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
+    "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
     "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "databaseBackupSettingsCard", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "dashboardFontSize", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
@@ -788,11 +802,20 @@ function canReadSystemCenter() {
   return permissions.includes("system:diagnostics:read") || permissions.includes("system:diagnostics:technical");
 }
 
+function canReadPersonnelRulesDashboard() {
+  if (!state.portalStatus?.portalEnabled) return true;
+  return (state.portalSession?.user?.permissions || []).includes("work_rules:read");
+}
+
 function accessibleDashboardModes() {
   return [
-    ...(canReadSystemCenter() ? ["systemCenter"] : []),
     ...(canReadGovernanceDashboards() ? ["locations", "rights", "processes"] : []),
-  ];
+    ...(canReadPersonnelRulesDashboard() ? ["personnelRules"] : []),
+    ...(canReadSystemCenter() ? ["systemCenter"] : []),
+  ].sort((left, right) => (
+    ["locations", "rights", "personnelRules", "processes", "systemCenter"].indexOf(left)
+    - ["locations", "rights", "personnelRules", "processes", "systemCenter"].indexOf(right)
+  ));
 }
 
 function applyRoleVisibility() {
@@ -871,8 +894,10 @@ function applyRoleVisibility() {
   elements.requestsNavButton?.classList.toggle("hidden", !requestReadAccess);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
   const systemCenterAccess = diagnosticsReadAccess || diagnosticsTechnicalAccess;
-  elements.rightsDashboardNavButton?.classList.toggle("hidden", !(rightsAccess || systemCenterAccess));
+  const personnelRulesDashboardAccess = canReadPersonnelRulesDashboard();
+  elements.rightsDashboardNavButton?.classList.toggle("hidden", !(rightsAccess || personnelRulesDashboardAccess || systemCenterAccess));
   document.querySelectorAll('[data-dashboard-capability="rights"]').forEach((button) => button.classList.toggle("hidden", !rightsAccess));
+  document.querySelectorAll('[data-dashboard-capability="workRules"]').forEach((button) => button.classList.toggle("hidden", !personnelRulesDashboardAccess));
   document.querySelectorAll('[data-dashboard-capability="system"]').forEach((button) => button.classList.toggle("hidden", !systemCenterAccess));
   if (!accessibleDashboardModes().includes(state.rightsDashboardMode)) {
     state.rightsDashboardMode = accessibleDashboardModes()[0] || "systemCenter";
@@ -5675,16 +5700,416 @@ function setRightsDashboardMode(mode, { load = true } = {}) {
   elements.systemCenterPanel?.classList.toggle("hidden", normalized !== "systemCenter");
   elements.rightsDashboardLocationsPanel?.classList.toggle("hidden", normalized !== "locations");
   elements.rightsDashboardRightsPanel?.classList.toggle("hidden", normalized !== "rights");
+  elements.personnelRulesDashboardPanel?.classList.toggle("hidden", normalized !== "personnelRules");
   elements.rightsDashboardProcessesPanel?.classList.toggle("hidden", normalized !== "processes");
+  if (normalized === "personnelRules") renderPersonnelRulesDashboard();
   if (normalized === "processes") renderRightsProcessDashboard();
   if (!load) return;
   if (normalized === "systemCenter") loadSystemCenter();
+  else if (normalized === "personnelRules") loadPersonnelRulesDashboard();
   else if (!state.rightsDashboard) loadGovernanceDashboards();
   else if (normalized === "locations" && !state.locationDashboard) loadLocationDashboard();
 }
 
+const personnelRuleStatusLabels = {
+  published: "Veröffentlicht",
+  draft: "Entwurf",
+  superseded: "Abgelöst",
+  archived: "Archiviert",
+  withdrawn: "Zurückgezogen",
+};
+
+const personnelRuleSeverityLabels = {
+  warning: "Hinweis",
+  error: "Ernst",
+  critical: "Kritisch",
+};
+
+const personnelRuleAssignmentStateLabels = {
+  current: "Aktuell wirksam",
+  future: "Künftig",
+  expired: "Abgelaufen",
+  inactive: "Inaktiv",
+};
+
+const personnelRuleLimitLabels = {
+  consentDailyMinutes: "Ablehnungsrecht ab täglich",
+  consentWeeklyMinutes: "Ablehnungsrecht ab wöchentlich",
+  normalDailyMinutes: "Normalarbeitszeit täglich",
+  normalWeeklyMinutes: "Normalarbeitszeit wöchentlich",
+  maximumDailyMinutes: "Höchstgrenze täglich",
+  maximumWeeklyMinutes: "Höchstgrenze wöchentlich",
+  maximumDailyMinutesUnder16: "Höchstgrenze täglich unter 16",
+  maximumWeeklyMinutesUnder16: "Höchstgrenze wöchentlich unter 16",
+  maximumDailyMinutesFrom16: "Höchstgrenze täglich ab 16",
+  maximumWeeklyMinutesFrom16: "Höchstgrenze wöchentlich ab 16",
+  average4WeeksMinutes: "Vierwochenschnitt",
+  average17WeeksMinutes: "17-Wochen-Schnitt",
+  breakTriggerMinutes: "Pausenprüfung ab",
+  breakRequiredMinutes: "Erforderliche Pause",
+  dailyRestMinutes: "Tägliche Ruhezeit",
+  dailyRestMinutesUnder15: "Ruhezeit unter 15",
+  weeklyRestMinutes: "Wöchentliche Ruhezeit",
+  nightStartMinute: "Nachtruhe ab",
+  nightEndMinute: "Nachtruhe bis",
+  saturdaySalesEndMinute: "Samstagsgrenze",
+};
+
+function personnelRulesProfiles() {
+  return Array.isArray(state.personnelRulesDashboard?.profiles) ? state.personnelRulesDashboard.profiles : [];
+}
+
+function personnelRulesFilteredProfiles() {
+  const search = String(state.personnelRulesSearch || "").trim().toLocaleLowerCase("de-AT");
+  return personnelRulesProfiles().filter((profile) => {
+    if (state.personnelRulesLayerFilter && profile.layer !== state.personnelRulesLayerFilter) return false;
+    if (state.personnelRulesStatusFilter && profile.status !== state.personnelRulesStatusFilter) return false;
+    if (!search) return true;
+    const haystack = [
+      profile.title,
+      profile.description,
+      profile.layerLabel,
+      profile.version,
+      ...(profile.rules || []).flatMap((rule) => [rule.id, rule.title]),
+      ...(profile.sources || []).flatMap((source) => [source.id, source.title]),
+    ].join(" ").toLocaleLowerCase("de-AT");
+    return haystack.includes(search);
+  });
+}
+
+function personnelRuleLimitValue(key, value) {
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes)) return String(value ?? "—");
+  if (["nightStartMinute", "nightEndMinute", "saturdaySalesEndMinute"].includes(key)) {
+    const normalized = ((Math.round(minutes) % 1440) + 1440) % 1440;
+    return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")} Uhr`;
+  }
+  if (/Minutes/.test(key)) {
+    const hours = minutes / 60;
+    return Number.isInteger(hours)
+      ? `${hours} Std.`
+      : `${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 2 }).format(hours)} Std.`;
+  }
+  return new Intl.NumberFormat("de-AT").format(minutes);
+}
+
+function populatePersonnelRulesFilters() {
+  const profiles = personnelRulesProfiles();
+  if (elements.personnelRulesLayerFilter) {
+    const current = state.personnelRulesLayerFilter;
+    const layers = [...new Map(profiles.map((profile) => [profile.layer, profile.layerLabel || profile.layer])).entries()];
+    elements.personnelRulesLayerFilter.innerHTML = [
+      '<option value="">Alle Regelarten</option>',
+      ...layers.map(([id, label]) => `<option value="${escapeHtmlAttribute(id)}">${escapeHtml(label)}</option>`),
+    ].join("");
+    elements.personnelRulesLayerFilter.value = layers.some(([id]) => id === current) ? current : "";
+    state.personnelRulesLayerFilter = elements.personnelRulesLayerFilter.value;
+  }
+  if (elements.personnelRulesStatusFilter) elements.personnelRulesStatusFilter.value = state.personnelRulesStatusFilter;
+  if (elements.personnelRulesSearch && elements.personnelRulesSearch.value !== state.personnelRulesSearch) {
+    elements.personnelRulesSearch.value = state.personnelRulesSearch;
+  }
+}
+
+function renderPersonnelRulesSummary() {
+  if (!elements.personnelRulesSummary) return;
+  const summary = state.personnelRulesDashboard?.summary || {};
+  const cards = [
+    ["Regelprofile", summary.profiles || 0, `${summary.publishedProfiles || 0} veröffentlicht · ${summary.draftProfiles || 0} Entwurf`],
+    ["Prüfkatalog", summary.rules || 0, `${summary.sources || 0} belegte Quelle(n)`],
+    ["Wirksame Zuordnungen", summary.currentAssignments || 0, `${summary.visibleAssignments || 0} im Lesebereich sichtbar`],
+    ["Monitor / Aktiv", `${summary.monitorAssignments || 0} / ${summary.enforcedAssignments || 0}`, "Technische Reaktion, nicht fachliche Geltung"],
+    ["Anwendbarkeit offen", summary.unconfirmedAssignments || 0, "Benötigt fachliche Bestätigung"],
+  ];
+  elements.personnelRulesSummary.innerHTML = cards.map(([label, value, hint]) => `
+    <article class="rights-dashboard-stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong><small>${escapeHtml(hint)}</small></article>
+  `).join("");
+}
+
+function renderPersonnelRulesProfileList() {
+  if (!elements.personnelRulesProfileList) return;
+  const profiles = personnelRulesFilteredProfiles();
+  if (!profiles.some((profile) => profile.id === state.personnelRulesSelectedProfileId)) {
+    state.personnelRulesSelectedProfileId = profiles[0]?.id || "";
+  }
+  if (elements.personnelRulesProfileCount) elements.personnelRulesProfileCount.textContent = String(profiles.length);
+  elements.personnelRulesProfileList.innerHTML = profiles.length ? profiles.map((profile) => {
+    const selected = profile.id === state.personnelRulesSelectedProfileId;
+    const mark = profile.automaticByBirthDate ? "U18" : profile.layer === "collective_agreement" ? "KV" : "R";
+    return `<button type="button" class="personnel-rules-profile ${profile.status === "draft" ? "draft" : ""} ${selected ? "selected" : ""}" data-personnel-rules-profile="${escapeHtmlAttribute(profile.id)}" aria-pressed="${selected}">
+      <span class="personnel-rules-profile-mark">${escapeHtml(mark)}</span>
+      <span class="personnel-rules-profile-copy"><strong>${escapeHtml(profile.title)}</strong><small>${escapeHtml(`${profile.layerLabel} · Version ${profile.version}`)}</small></span>
+      <span class="personnel-rules-profile-count"><strong>${escapeHtml(String((profile.rules || []).length))}</strong><small>Regeln</small></span>
+    </button>`;
+  }).join("") : '<p class="settings-note">Für diesen Filter wurden keine Regelprofile gefunden.</p>';
+}
+
+function personnelRulesAssignmentMarkup(assignment) {
+  const status = personnelRuleAssignmentStateLabels[assignment.state] || "Stand offen";
+  const mode = assignment.enforcementMode === "enforced" ? "Aktiver Regelbetrieb" : "Monitorbetrieb";
+  const confirmation = assignment.applicabilityConfirmed ? "Anwendbarkeit bestätigt" : "Anwendbarkeit offen";
+  return `<article class="personnel-rules-assignment ${escapeHtmlAttribute(assignment.state || "inactive")}">
+    <span class="personnel-rules-assignment-state"></span>
+    <div><strong>${escapeHtml(assignment.scopeLabel)}</strong><small>${escapeHtml(`${formatDate(assignment.validFrom)}${assignment.validTo ? ` – ${formatDate(assignment.validTo)}` : " – offen"} · ${mode}`)}</small></div>
+    <span class="personnel-rules-assignment-badge ${assignment.applicabilityConfirmed ? "confirmed" : "open"}">${escapeHtml(`${status} · ${confirmation}`)}</span>
+  </article>`;
+}
+
+function renderPersonnelRulesProfileDetail() {
+  const profile = personnelRulesProfiles().find((entry) => entry.id === state.personnelRulesSelectedProfileId);
+  if (!profile) {
+    elements.personnelRulesProfileTitle.textContent = "Kein Regelprofil ausgewählt";
+    elements.personnelRulesProfileSummary.textContent = "Filter anpassen oder ein vorhandenes Profil auswählen.";
+    elements.personnelRulesProfileStatus.textContent = "Keine Auswahl";
+    elements.personnelRulesProfileStatus.classList.add("inactive");
+    elements.personnelRulesProfileFacts.innerHTML = "";
+    elements.personnelRulesApplicability.innerHTML = "<strong>Anwendbarkeit</strong><p>Für die aktuelle Auswahl liegen keine Profildaten vor.</p>";
+    elements.personnelRulesAssignments.innerHTML = "";
+    elements.personnelRulesRules.innerHTML = "";
+    elements.personnelRulesSources.innerHTML = "";
+    return;
+  }
+  const statusLabel = personnelRuleStatusLabels[profile.status] || profile.status;
+  elements.personnelRulesProfileTitle.textContent = profile.title;
+  elements.personnelRulesProfileSummary.textContent = profile.description;
+  elements.personnelRulesProfileStatus.textContent = statusLabel;
+  elements.personnelRulesProfileStatus.classList.toggle("inactive", profile.status !== "published");
+  const validity = `${formatDate(profile.validFrom)}${profile.validTo ? ` – ${formatDate(profile.validTo)}` : " – offen"}`;
+  const facts = [
+    ["Regelart", profile.layerLabel],
+    ["Version", profile.version],
+    ["Gültigkeit", validity],
+    ["Technischer Standard", profile.defaultEnforcementMode === "enforced" ? "Aktiver Regelbetrieb" : "Monitorbetrieb"],
+    ["Zuordnung", profile.automaticByBirthDate ? "Automatisch nach Geburtsdatum" : profile.assignable ? "Versioniert zuweisbar" : "Nicht manuell zuweisbar"],
+    ["Prüfsumme", profile.contentSha256 ? `${profile.contentSha256.slice(0, 12)}…` : "Kein veröffentlichter Nachweis"],
+  ];
+  elements.personnelRulesProfileFacts.innerHTML = facts.map(([label, value]) => `
+    <article><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value || "—"))}</strong></article>
+  `).join("");
+  const applicability = profile.applicability || {};
+  const age = applicability.maximumAgeExclusive
+    ? `unter ${applicability.maximumAgeExclusive} Jahre`
+    : applicability.minimumAge !== null && applicability.minimumAge !== undefined
+      ? `ab ${applicability.minimumAge} Jahren`
+      : "kein fixer Altersfilter";
+  const limits = Object.entries(profile.limits || {})
+    .filter(([, value]) => value !== null && value !== undefined);
+  elements.personnelRulesApplicability.innerHTML = `
+    <strong>Anwendbarkeit</strong>
+    <p>${escapeHtml(applicability.note || profile.description || "Die konkrete Anwendbarkeit muss anhand des Beschäftigungsverhältnisses geprüft werden.")}</p>
+    <div class="personnel-rules-applicability-tags">
+      <span>${escapeHtml(applicability.jurisdiction || "AT")}</span>
+      <span>${escapeHtml(applicability.sector ? `Bereich: ${applicability.sector}` : "Allgemeiner Bereich")}</span>
+      <span>${escapeHtml(age)}</span>
+      <span>${escapeHtml(applicability.automaticByBirthDate ? "Automatisch per Geburtsdatum" : applicability.confirmationRequired ? "Bestätigung erforderlich" : "Keine gesonderte Bestätigung")}</span>
+    </div>
+    ${limits.length ? `<div class="personnel-rules-limit-grid">${limits.map(([key, value]) => `
+      <article><span>${escapeHtml(personnelRuleLimitLabels[key] || key)}</span><strong>${escapeHtml(personnelRuleLimitValue(key, value))}</strong></article>
+    `).join("")}</div>` : ""}`;
+  const assignments = profile.assignments || [];
+  elements.personnelRulesAssignments.innerHTML = [
+    ...(profile.automaticByBirthDate ? ['<article class="personnel-rules-assignment automatic"><span class="personnel-rules-assignment-state"></span><div><strong>Automatische Jugendprofil-Zuordnung</strong><small>Wird bei bestätigtem Geburtsdatum für Beschäftigte unter 18 am jeweiligen Diensttag verwendet.</small></div><span class="personnel-rules-assignment-badge confirmed">Systemregel</span></article>'] : []),
+    ...assignments.map(personnelRulesAssignmentMarkup),
+  ].join("") || '<p class="settings-note">Für dieses Profil ist im sichtbaren Bereich keine manuelle Geltungszuordnung hinterlegt.</p>';
+  elements.personnelRulesRules.innerHTML = (profile.rules || []).length ? profile.rules.map((rule) => {
+    const sources = (profile.sources || []).filter((source) => (rule.sourceIds || []).includes(source.id));
+    return `<article class="personnel-rules-rule ${escapeHtmlAttribute(rule.severity || "warning")}">
+      <span class="personnel-rules-rule-state">${escapeHtml(personnelRuleSeverityLabels[rule.severity] || "Hinweis")}</span>
+      <div><strong>${escapeHtml(rule.title || rule.id)}</strong><small>${escapeHtml(rule.id)}</small>${workRuleSourceLinks(sources)}</div>
+      <span class="personnel-rules-rule-enforcement">${escapeHtml(workRuleEnforcementLabels[rule.enforcement] || "Manuell prüfen")}</span>
+    </article>`;
+  }).join("") : '<p class="settings-note">Dieser Entwurf enthält noch keine freigegebenen maschinenlesbaren Regeln.</p>';
+  elements.personnelRulesSources.innerHTML = (profile.sources || []).length ? profile.sources.map((source) => {
+    const url = safeWorkRuleSourceUrl(source.url);
+    const title = escapeHtml(source.title || source.id);
+    const titleMarkup = url
+      ? `<a href="${escapeHtmlAttribute(url)}" target="_blank" rel="noreferrer noopener">${title}</a>`
+      : `<strong>${title}</strong>`;
+    return `<article><span>${escapeHtml(source.jurisdiction || "AT")}</span><div>${titleMarkup}<small>${escapeHtml(`Quelle ${source.id}${source.retrievedOn ? ` · abgerufen ${formatDate(source.retrievedOn)}` : ""}`)}</small>${source.applicabilityNote ? `<p>${escapeHtml(source.applicabilityNote)}</p>` : ""}</div></article>`;
+  }).join("") : '<p class="settings-note">Für dieses Profil ist noch kein veröffentlichter Quellennachweis hinterlegt.</p>';
+}
+
+function updatePersonnelRulesSimulationDepartments() {
+  if (!elements.personnelRulesSimulationDepartment) return;
+  const locations = state.personnelRulesDashboard?.locations || [];
+  const selectedLocation = locations.find((location) => String(location.id) === String(state.personnelRulesSimulationLocationId))
+    || locations[0]
+    || null;
+  const departments = selectedLocation?.departments || [];
+  const requested = String(state.personnelRulesSimulationDepartmentId || "");
+  elements.personnelRulesSimulationDepartment.innerHTML = [
+    '<option value="">Gesamte Filiale</option>',
+    ...departments.map((department) => `<option value="${escapeHtmlAttribute(String(department.id))}">${escapeHtml(department.name)}</option>`),
+  ].join("");
+  state.personnelRulesSimulationDepartmentId = departments.some((department) => String(department.id) === requested) ? requested : "";
+  elements.personnelRulesSimulationDepartment.value = state.personnelRulesSimulationDepartmentId;
+}
+
+function populatePersonnelRulesSimulationControls() {
+  if (!elements.personnelRulesSimulationLocation) return;
+  const dashboard = state.personnelRulesDashboard;
+  const locations = dashboard?.locations || [];
+  const requested = String(state.personnelRulesSimulationLocationId || elements.personnelRulesSimulationLocation.value || "");
+  elements.personnelRulesSimulationLocation.innerHTML = locations.length
+    ? locations.map((location) => `<option value="${escapeHtmlAttribute(String(location.id))}">${escapeHtml(`${location.id} · ${location.name}`)}</option>`).join("")
+    : '<option value="">Keine freigegebene Filiale</option>';
+  state.personnelRulesSimulationLocationId = locations.some((location) => String(location.id) === requested)
+    ? requested
+    : String(locations[0]?.id || "");
+  elements.personnelRulesSimulationLocation.value = state.personnelRulesSimulationLocationId;
+  updatePersonnelRulesSimulationDepartments();
+  if (elements.personnelRulesSimulationWeek) {
+    elements.personnelRulesSimulationWeek.value = state.personnelRulesSimulationWeek || getMonday(new Date());
+  }
+  if (elements.runPersonnelRulesSimulation) {
+    elements.runPersonnelRulesSimulation.disabled = !dashboard?.capabilities?.canSimulate
+      || !state.personnelRulesSimulationLocationId
+      || state.personnelRulesSimulationLoading;
+  }
+}
+
+function renderPersonnelRulesSimulation() {
+  if (!elements.personnelRulesSimulationResult) return;
+  populatePersonnelRulesSimulationControls();
+  if (state.personnelRulesSimulationLoading) {
+    elements.personnelRulesSimulationHint.textContent = "Planung wird geprüft …";
+    elements.personnelRulesSimulationResult.innerHTML = '<p class="settings-note">Die gespeicherten Dienste werden mit den aktuell wirksamen Profilversionen ausgewertet.</p>';
+    return;
+  }
+  if (state.personnelRulesSimulationError) {
+    elements.personnelRulesSimulationHint.textContent = "Prüfung nicht möglich";
+    elements.personnelRulesSimulationResult.innerHTML = `<p class="settings-note">${escapeHtml(state.personnelRulesSimulationError)}</p>`;
+    return;
+  }
+  const assessment = normalizeWorkRuleAssessment(state.personnelRulesSimulation);
+  if (!assessment) {
+    elements.personnelRulesSimulationHint.textContent = "Noch nicht geprüft";
+    elements.personnelRulesSimulationResult.innerHTML = '<p class="settings-note">Die Simulation zeigt Hinweise, manuell zu prüfende Punkte und Blockierungen für die ausgewählte Woche.</p>';
+    return;
+  }
+  const outcomeLabel = workRuleStateLabels[assessment.outcome] || "Manuell prüfen";
+  const contextLocation = (state.personnelRulesDashboard?.locations || [])
+    .find((location) => String(location.id) === String(state.personnelRulesSimulationLocationId));
+  const contextDepartment = (contextLocation?.departments || [])
+    .find((department) => String(department.id) === String(state.personnelRulesSimulationDepartmentId));
+  elements.personnelRulesSimulationHint.textContent = `${formatDate(assessment.periodFrom)} – ${formatDate(assessment.periodTo)} · ${contextLocation?.name || "Filiale"}${contextDepartment ? ` · ${contextDepartment.name}` : ""}`;
+  const counts = assessment.counts || {};
+  const findings = assessment.findings || [];
+  elements.personnelRulesSimulationResult.innerHTML = `
+    <div class="personnel-rules-simulation-overview ${escapeHtmlAttribute(assessment.outcome)}">
+      <div><span>Gesamtbewertung</span><strong>${escapeHtml(outcomeLabel)}</strong><small>${escapeHtml(assessment.mode === "enforced" ? "Aktiver Regelbetrieb" : "Monitorbetrieb")}</small></div>
+      <div><span>Team</span><strong>${escapeHtml(String(assessment.evaluatedEmployees || 0))}</strong><small>Personen ausgewertet</small></div>
+      <div><span>Bestätigt</span><strong>${escapeHtml(String(counts.pass || 0))}</strong><small>ohne akuten Befund</small></div>
+      <div><span>Hinweis / Prüfung</span><strong>${escapeHtml(String((counts.attention || 0) + (counts.manualReview || 0)))}</strong><small>benötigt Aufmerksamkeit</small></div>
+      <div><span>Blockiert</span><strong>${escapeHtml(String(counts.blocked || 0))}</strong><small>im aktiven Regelbetrieb</small></div>
+    </div>
+    <div class="personnel-rules-simulation-findings">
+      ${findings.length ? findings.map((finding) => workRuleFindingMarkup({ ...finding, snoozable: false })).join("") : '<p class="settings-note">Die automatische Prüfung hat keine einzelnen Hinweise ausgegeben.</p>'}
+    </div>
+    <p class="work-rule-disclaimer">${escapeHtml(assessment.disclaimer || state.personnelRulesDashboard?.legalNotice || "")}</p>`;
+}
+
+function renderPersonnelRulesDashboard() {
+  if (!elements.personnelRulesDashboardPanel) return;
+  if (state.personnelRulesDashboardLoading && !state.personnelRulesDashboard) {
+    elements.personnelRulesProfileList.innerHTML = '<p class="settings-note">Personal-Regelwerk wird geladen.</p>';
+    return;
+  }
+  const dashboard = state.personnelRulesDashboard;
+  if (!dashboard) return;
+  elements.personnelRulesScope.textContent = `${dashboard.scopeLabel} · Stand ${formatDate(dashboard.effectiveDate)} · Katalog ${dashboard.catalogVersion}`;
+  elements.personnelRulesLegalNotice.textContent = dashboard.legalNotice
+    || "Die Planprüfung unterstützt die Dienstplanung und ersetzt keine rechtliche oder kollektivvertragliche Einzelfallprüfung.";
+  populatePersonnelRulesFilters();
+  renderPersonnelRulesSummary();
+  renderPersonnelRulesProfileList();
+  renderPersonnelRulesProfileDetail();
+  renderPersonnelRulesSimulation();
+}
+
+async function loadPersonnelRulesDashboard() {
+  if (!elements.personnelRulesDashboardPanel || !canReadPersonnelRulesDashboard() || state.personnelRulesDashboardLoading) return;
+  state.personnelRulesDashboardLoading = true;
+  renderPersonnelRulesDashboard();
+  try {
+    const dashboard = await api("/api/work-rules/dashboard");
+    state.personnelRulesDashboard = dashboard;
+    if (!personnelRulesProfiles().some((profile) => profile.id === state.personnelRulesSelectedProfileId)) {
+      state.personnelRulesSelectedProfileId = dashboard.defaultProfileId || dashboard.profiles?.[0]?.id || "";
+    }
+    if (!(dashboard.locations || []).some((location) => String(location.id) === String(state.personnelRulesSimulationLocationId))) {
+      state.personnelRulesSimulationLocationId = String(dashboard.locations?.[0]?.id || "");
+      state.personnelRulesSimulationDepartmentId = "";
+    }
+  } catch (error) {
+    state.personnelRulesDashboard = null;
+    elements.personnelRulesProfileList.innerHTML = `<p class="settings-note">${escapeHtml(error.status === 403 ? "Für das Personal-Regelwerk fehlt das Leserecht." : error.message)}</p>`;
+  } finally {
+    state.personnelRulesDashboardLoading = false;
+    renderPersonnelRulesDashboard();
+  }
+}
+
+async function runPersonnelRulesSimulation() {
+  if (state.personnelRulesSimulationLoading || !state.personnelRulesSimulationLocationId) return;
+  state.personnelRulesSimulationError = "";
+  state.personnelRulesSimulationLoading = true;
+  renderPersonnelRulesSimulation();
+  try {
+    const result = await api("/api/work-rules/evaluate", {
+      method: "POST",
+      body: JSON.stringify({
+        targetType: "planned_schedule",
+        preview: true,
+        weekStart: state.personnelRulesSimulationWeek,
+        locationId: state.personnelRulesSimulationLocationId,
+        departmentId: state.personnelRulesSimulationDepartmentId || "",
+      }),
+    });
+    state.personnelRulesSimulation = result?.workRuleAssessment || result?.assessment || result;
+  } catch (error) {
+    state.personnelRulesSimulation = null;
+    state.personnelRulesSimulationError = error.message;
+  } finally {
+    state.personnelRulesSimulationLoading = false;
+    renderPersonnelRulesSimulation();
+  }
+}
+
 function rightsProcessDashboard() {
   return state.rightsDashboard?.processDashboard || null;
+}
+
+function rightsProcessCategories() {
+  const dashboard = rightsProcessDashboard();
+  const categories = Array.isArray(dashboard?.categories) ? dashboard.categories : [];
+  if (categories.length) return [...categories].sort((left, right) => Number(left.sortOrder || 0) - Number(right.sortOrder || 0));
+  return [{ id: "other", label: "Weitere eigene Abläufe", description: "", sortOrder: 90 }];
+}
+
+function rightsProcessCategoryFor(process) {
+  const categories = rightsProcessCategories();
+  return categories.find((category) => category.id === String(process?.category || "other"))
+    || categories.find((category) => category.id === "other")
+    || { id: "other", label: "Weitere eigene Abläufe", description: "" };
+}
+
+function populateRightsProcessCategories() {
+  if (!elements.rightsProcessCategory) return;
+  const dashboard = rightsProcessDashboard();
+  const categories = rightsProcessCategories();
+  const processes = dashboard?.processes || [];
+  const counts = new Map(categories.map((category) => [
+    category.id,
+    processes.filter((process) => rightsProcessCategoryFor(process).id === category.id).length,
+  ]));
+  const requested = String(state.rightsProcessCategoryId || elements.rightsProcessCategory.value || "all");
+  elements.rightsProcessCategory.innerHTML = [
+    `<option value="all">Alle Fachbereiche (${processes.length})</option>`,
+    ...categories.map((category) => `<option value="${escapeHtmlAttribute(category.id)}">${escapeHtml(`${category.label} (${counts.get(category.id) || 0})`)}</option>`),
+  ].join("");
+  state.rightsProcessCategoryId = requested === "all" || categories.some((category) => category.id === requested) ? requested : "all";
+  elements.rightsProcessCategory.value = state.rightsProcessCategoryId;
 }
 
 function rightsProcessLocation() {
@@ -5790,6 +6215,14 @@ function customProcessLocationOptions() {
   });
 }
 
+function populateCustomProcessCategories(selected = "other") {
+  if (!elements.customProcessCategory) return;
+  const editorCategories = rightsProcessDashboard()?.capabilities?.categories;
+  const categories = Array.isArray(editorCategories) && editorCategories.length ? editorCategories : rightsProcessCategories();
+  elements.customProcessCategory.innerHTML = categories.map((category) => `<option value="${escapeHtmlAttribute(category.id)}">${escapeHtml(category.label)}</option>`).join("");
+  elements.customProcessCategory.value = categories.some((category) => category.id === selected) ? selected : "other";
+}
+
 function customProcessStatusValue(process) {
   if (process?.status) return process.status;
   return process?.enabled ? "active" : "draft";
@@ -5811,13 +6244,16 @@ function customProcessTriggerLabel(process) {
 }
 
 function customProcessDisplayRules(process) {
-  if ((process.rules || []).length) return process.rules;
-  return [
+  const rules = (process.rules || []).length ? [...process.rules] : [
     { label: "Bereich", value: customProcessScopeLabel(process), tone: "neutral" },
     { label: "Auslöser", value: customProcessTriggerLabel(process), tone: process.trigger?.type === "staffing_shortfall" ? "attention" : "neutral" },
     { label: "Revision", value: String(process.revision || 1), tone: "neutral" },
     { label: "Status", value: rightsProcessStatus(process), tone: customProcessStatusValue(process) === "active" ? "positive" : "attention" },
   ];
+  if (!rules.some((rule) => String(rule.label || "").toLocaleLowerCase("de-AT") === "fachbereich")) {
+    rules.unshift({ label: "Fachbereich", value: rightsProcessCategoryFor(process).label, tone: "neutral" });
+  }
+  return rules;
 }
 
 function customProcessStepId() {
@@ -5969,11 +6405,12 @@ function openCustomProcessEditor(process = null) {
   state.editingCustomProcessId = process?.source === "custom" ? String(process.id) : "";
   state.editingCustomProcessRevision = process?.revision ?? null;
   elements.customProcessId.value = state.editingCustomProcessId;
-  elements.customProcessModalTitle.textContent = state.editingCustomProcessId ? "Eigenen Prozess bearbeiten" : "Eigenen Prozess anlegen";
+  elements.customProcessModalTitle.textContent = state.editingCustomProcessId ? "Eigenen Ablauf bearbeiten" : "Eigenen Ablauf anlegen";
   elements.customProcessTitle.value = process?.title || "";
   elements.customProcessSymbol.value = process?.symbol || "";
   elements.customProcessDescription.value = process?.description || process?.summary || "";
   elements.customProcessStatus.value = ["active", "draft"].includes(process?.status) ? process.status : "draft";
+  populateCustomProcessCategories(process?.category || state.rightsProcessCategoryId || "other");
   elements.customProcessScopeType.value = process?.scope?.type || "company";
   const locations = customProcessLocationOptions();
   elements.customProcessScopeLocation.innerHTML = locations.length
@@ -5998,6 +6435,7 @@ function customProcessPayload() {
     title: elements.customProcessTitle.value.trim(),
     symbol: elements.customProcessSymbol.value.trim().toUpperCase(),
     description: elements.customProcessDescription.value.trim(),
+    category: elements.customProcessCategory.value,
     status: elements.customProcessStatus.value,
     revision: state.editingCustomProcessRevision ?? undefined,
     scope: {
@@ -6033,17 +6471,20 @@ async function saveCustomProcess(event) {
   }
   const id = state.editingCustomProcessId;
   elements.saveCustomProcessButton.disabled = true;
-  setCustomProcessMessage(id ? "Prozess wird gespeichert …" : "Prozess wird angelegt …");
+  setCustomProcessMessage(id ? "Ablauf wird gespeichert …" : "Ablauf wird angelegt …");
   try {
     const result = await api(id ? `/api/portal/v1/custom-processes/${encodeURIComponent(id)}` : "/api/portal/v1/custom-processes", {
       method: id ? "PUT" : "POST",
       body: JSON.stringify(payload),
     });
     const saved = result?.process || result;
-    if (saved?.id) state.rightsDashboardSelectedProcessId = String(saved.id);
+    if (saved?.id) {
+      state.rightsDashboardSelectedProcessId = String(saved.id);
+      state.rightsProcessCategoryId = String(saved.category || "all");
+    }
     elements.customProcessModal.close();
     await loadRightsDashboard();
-    showToast(id ? "Der eigene Prozess wurde gespeichert." : "Der eigene Prozess wurde angelegt.");
+    showToast(id ? "Der eigene Ablauf wurde gespeichert." : "Der eigene Ablauf wurde angelegt.");
   } catch (error) {
     setCustomProcessMessage(error.message, true);
   } finally {
@@ -6109,7 +6550,7 @@ function renderRightsCustomProcessActions(process) {
   const toggleStatus = status === "active" ? "draft" : "active";
   const triggerPending = state.customProcessTriggerPending.has(String(process.id));
   elements.rightsCustomProcessActions.innerHTML = `
-    <span><strong>Eigener Prozess</strong><small>Revision ${escapeHtml(String(process.revision || 1))} · ${escapeHtml(customProcessScopeLabel(process))}</small></span>
+    <span><strong>Eigener Ablauf</strong><small>${escapeHtml(rightsProcessCategoryFor(process).label)} · Revision ${escapeHtml(String(process.revision || 1))} · ${escapeHtml(customProcessScopeLabel(process))}</small></span>
     <button type="button" class="secondary-button" data-custom-process-action="edit">Bearbeiten</button>
     <button type="button" class="secondary-button" data-custom-process-action="status" data-custom-process-status="${toggleStatus}">${toggleStatus === "active" ? "Aktivieren" : "Als Entwurf setzen"}</button>
     <button type="button" class="secondary-button" data-custom-process-action="trigger" ${status === "active" && !triggerPending ? "" : "disabled"}>${triggerPending ? "Wird ausgelöst …" : "Manuell auslösen"}</button>
@@ -6119,7 +6560,7 @@ function renderRightsCustomProcessActions(process) {
 function renderRightsProcessExplanation(process, step) {
   if (!elements.rightsProcessExplanation) return;
   if (!process || !step) {
-    elements.rightsProcessExplanation.innerHTML = "<strong>Prozessschritt anklicken</strong><p>Hier werden Zuständigkeit, wirksame Einstellung und benötigte Rechte erklärt.</p>";
+    elements.rightsProcessExplanation.innerHTML = "<strong>Ablaufschritt anklicken</strong><p>Hier werden Zuständigkeit, wirksame Einstellung und benötigte Rechte erklärt.</p>";
     return;
   }
   const stateValue = rightsProcessStepState(process, step);
@@ -6132,7 +6573,7 @@ function renderRightsProcessExplanation(process, step) {
     ? `<button type="button" class="rights-process-action" data-rights-process-permission="${escapeHtml(step.permissions[0])}">Recht in Übersicht zeigen</button>`
     : "";
   const effect = stateValue === "active"
-    ? `Teil des aktuell wirksamen ${process.source === "custom" ? "eigenen Prozesswegs" : "Standardwegs"}.`
+    ? `Teil des aktuell wirksamen ${process.source === "custom" ? "eigenen Ablaufs" : "Standardablaufs"}.`
     : stateValue === "conditional"
       ? "Wird nur ausgelöst, wenn die beschriebene Bedingung eintritt."
       : stateValue === "bypassed"
@@ -6156,7 +6597,7 @@ function renderRightsProcessValidation() {
   const labels = { blocker: "Blocker", warning: "Hinweise", ok: "Geprüft", info: "Info" };
   elements.rightsProcessValidationHint.textContent = validation.ready
     ? "Keine blockierende Konfiguration erkannt. Hinweise bleiben als bewusste Entscheidungen sichtbar."
-    : "Mindestens ein Punkt muss vor einem verlässlichen Gesamtprozess geklärt werden.";
+    : "Mindestens ein Punkt muss vor einem verlässlichen Gesamtablauf geklärt werden.";
   elements.rightsProcessValidationSummary.innerHTML = ["blocker", "warning", "ok", "info"].map((severity) => `<span class="${severity}"><strong>${escapeHtml(String(validation.summary[severity] || 0))}</strong>${escapeHtml(labels[severity])}</span>`).join("");
   const order = { blocker: 0, warning: 1, ok: 2, info: 3 };
   const checks = [...(validation.checks || [])].sort((left, right) => order[left.severity] - order[right.severity]);
@@ -6166,7 +6607,12 @@ function renderRightsProcessValidation() {
 function renderRightsProcessDashboard() {
   const dashboard = rightsProcessDashboard();
   if (!dashboard || !elements.rightsProcessList) return;
-  const processes = dashboard.processes || [];
+  const allProcesses = dashboard.processes || [];
+  populateRightsProcessCategories();
+  const selectedCategoryId = state.rightsProcessCategoryId || "all";
+  const processes = selectedCategoryId === "all"
+    ? allProcesses
+    : allProcesses.filter((process) => rightsProcessCategoryFor(process).id === selectedCategoryId);
   elements.addCustomProcessButton?.classList.toggle("hidden", !canManageCustomProcesses());
   if (!processes.some((process) => process.id === state.rightsDashboardSelectedProcessId)) {
     state.rightsDashboardSelectedProcessId = processes[0]?.id || "";
@@ -6177,17 +6623,43 @@ function renderRightsProcessDashboard() {
     const selected = process.id === state.rightsDashboardSelectedProcessId;
     const status = rightsProcessStatus(process);
     const active = process.source === "custom" ? customProcessStatusValue(process) === "active" : process.enabled;
-    return `<button type="button" class="rights-process-item ${process.source === "custom" ? "custom" : "standard"} ${active ? "" : "disabled"} ${selected ? "selected" : ""}" data-rights-process="${escapeHtmlAttribute(process.id)}" aria-pressed="${selected}"><span class="rights-process-item-mark">${escapeHtml(process.symbol)}</span><span class="rights-process-item-copy"><strong>${escapeHtml(process.title)}</strong><small>${escapeHtml(status)}${process.source === "custom" ? ` · Revision ${escapeHtml(String(process.revision || 1))}` : ""}</small></span></button>`;
+    const sourceLabel = process.source === "custom" ? "Eigener Ablauf" : "Standard";
+    return `<button type="button" class="rights-process-item ${process.source === "custom" ? "custom" : "standard"} ${active ? "" : "disabled"} ${selected ? "selected" : ""}" data-rights-process="${escapeHtmlAttribute(process.id)}" aria-pressed="${selected}"><span class="rights-process-item-mark">${escapeHtml(process.symbol)}</span><span class="rights-process-item-copy"><strong>${escapeHtml(process.title)}</strong><small>${escapeHtml(`${sourceLabel} · ${status}`)}${process.source === "custom" ? ` · Revision ${escapeHtml(String(process.revision || 1))}` : ""}</small></span></button>`;
   };
-  const standardProcesses = processes.filter((process) => process.source !== "custom");
-  const customProcesses = processes.filter((process) => process.source === "custom");
-  elements.rightsProcessList.innerHTML = processes.length
-    ? `${standardProcesses.length ? `<section class="rights-process-list-group"><span>Standardprozesse</span>${standardProcesses.map(processButton).join("")}</section>` : ""}${customProcesses.length ? `<section class="rights-process-list-group custom"><span>Eigene Prozesse</span>${customProcesses.map(processButton).join("")}</section>` : canManageCustomProcesses() ? '<section class="rights-process-list-group custom"><span>Eigene Prozesse</span><p class="settings-note">Noch kein eigener Prozess angelegt.</p></section>' : ""}`
-    : "<p class=\"settings-note\">Keine Prozessdefinitionen verfügbar.</p>";
+  const categoryGroups = rightsProcessCategories()
+    .map((category) => ({
+      category,
+      processes: processes.filter((process) => rightsProcessCategoryFor(process).id === category.id),
+    }))
+    .filter((group) => group.processes.length || selectedCategoryId === group.category.id);
+  elements.rightsProcessList.innerHTML = categoryGroups.length
+    ? categoryGroups.map(({ category, processes: categoryProcesses }) => `
+      <section class="rights-process-list-group" data-rights-process-category="${escapeHtmlAttribute(category.id)}">
+        <header><span>${escapeHtml(category.label)}</span>${category.description ? `<small>${escapeHtml(category.description)}</small>` : ""}</header>
+        ${categoryProcesses.length ? categoryProcesses.map(processButton).join("") : '<p class="settings-note">Diesem Fachbereich ist noch kein Ablauf zugeordnet.</p>'}
+      </section>`).join("")
+    : "<p class=\"settings-note\">Keine Abläufe verfügbar.</p>";
   if (!selectedDefinition) {
     renderRightsCustomProcessActions(null);
+    const selectedCategory = rightsProcessCategories().find((category) => category.id === selectedCategoryId);
+    elements.rightsProcessTitle.textContent = "Kein Ablauf ausgewählt";
+    elements.rightsProcessSummary.textContent = selectedCategory
+      ? `Im Fachbereich „${selectedCategory.label}“ ist derzeit kein Ablauf hinterlegt.`
+      : "Für diese Ansicht ist derzeit kein Ablauf verfügbar.";
+    elements.rightsProcessStatus.textContent = "Keine Auswahl";
+    elements.rightsProcessStatus.classList.add("inactive");
+    elements.rightsProcessScenario.innerHTML = '<option value="">Keine Simulation</option>';
+    elements.rightsProcessScenario.disabled = true;
+    elements.rightsProcessLocation.disabled = true;
+    elements.rightsProcessExportPdf.disabled = true;
+    elements.rightsProcessSimulationNote.innerHTML = "<strong>Fachbereich</strong><span>Über „Eigenen Ablauf anlegen“ kann eine neue Definition direkt zugeordnet werden.</span>";
+    elements.rightsProcessRules.innerHTML = "";
+    elements.rightsProcessTimeline.innerHTML = "";
+    renderRightsProcessExplanation(null, null);
     return;
   }
+  elements.rightsProcessScenario.disabled = false;
+  elements.rightsProcessExportPdf.disabled = false;
   populateRightsProcessScenarios(selectedDefinition);
   const selectedProcess = rightsProcessWithScenario(selectedDefinition);
   elements.rightsProcessLocation.disabled = !selectedProcess.locationSensitive;
@@ -6198,7 +6670,7 @@ function renderRightsProcessDashboard() {
   const processActive = selectedProcess.source === "custom" ? customProcessStatusValue(selectedProcess) === "active" : selectedProcess.enabled;
   elements.rightsProcessStatus.classList.toggle("inactive", !processActive || processStatus.includes("deaktiviert"));
   elements.rightsProcessSimulationNote.innerHTML = selectedProcess.source === "custom"
-    ? `<strong>${escapeHtml(selectedProcess.scenario.label)}</strong><span>${escapeHtml(selectedProcess.scenario.description)} · Eigener Prozess, Revision ${escapeHtml(String(selectedProcess.revision || 1))}.</span>`
+    ? `<strong>${escapeHtml(selectedProcess.scenario.label)}</strong><span>${escapeHtml(selectedProcess.scenario.description)} · Eigener Ablauf, Revision ${escapeHtml(String(selectedProcess.revision || 1))}.</span>`
     : `<strong>${escapeHtml(selectedProcess.scenario.label)}</strong><span>${escapeHtml(selectedProcess.scenario.description)} · Nur Vorschau, keine gespeicherten Daten werden verändert.</span>`;
   elements.rightsProcessRules.innerHTML = customProcessDisplayRules(selectedProcess).map((rule) => `<article class="rights-process-rule ${escapeHtml(rule.tone || "neutral")}"><span>${escapeHtml(rule.label)}</span><strong>${escapeHtml(rightsProcessRuleValue(rule))}</strong></article>`).join("");
   renderRightsCustomProcessActions(selectedProcess);
@@ -6234,7 +6706,8 @@ function showRightsProcessPermission(permissionId) {
 }
 
 function exportRightsProcessPdf() {
-  const processId = state.rightsDashboardSelectedProcessId || "vacation";
+  const processId = state.rightsDashboardSelectedProcessId;
+  if (!processId) return;
   const scenario = state.rightsProcessScenarioIds[processId] || "current";
   const parameters = new URLSearchParams({ process: processId, scenario });
   if (state.rightsProcessLocationId) parameters.set("location", state.rightsProcessLocationId);
@@ -6282,6 +6755,7 @@ async function loadRightsDashboard() {
   if (!selected) return;
   setRightsDashboardMode(selected, { load: false });
   if (selected === "systemCenter") await loadSystemCenter();
+  else if (selected === "personnelRules") await loadPersonnelRulesDashboard();
   else await loadGovernanceDashboards();
 }
 
@@ -9330,7 +9804,7 @@ function applyRequestedView() {
   }
   if (requestedView === "rightsDashboard") {
     const dashboardMode = parameters.get("dashboard");
-    if (["systemCenter", "locations", "rights", "processes"].includes(dashboardMode)) state.rightsDashboardMode = dashboardMode;
+    if (["locations", "rights", "personnelRules", "processes", "systemCenter"].includes(dashboardMode)) state.rightsDashboardMode = dashboardMode;
     const processId = parameters.get("process");
     if (processId) state.rightsDashboardSelectedProcessId = processId.slice(0, 120);
   }
@@ -12014,6 +12488,52 @@ document.querySelectorAll("button[data-page-theme-choice]").forEach((button) => 
 }));
 elements.dashboardFontSize?.addEventListener("change", () => applyDashboardFontSize(elements.dashboardFontSize.value));
 document.querySelectorAll("button[data-rights-dashboard-mode]").forEach((button) => button.addEventListener("click", () => setRightsDashboardMode(button.dataset.rightsDashboardMode)));
+elements.refreshPersonnelRulesDashboard?.addEventListener("click", loadPersonnelRulesDashboard);
+elements.personnelRulesSearch?.addEventListener("input", () => {
+  state.personnelRulesSearch = elements.personnelRulesSearch.value;
+  renderPersonnelRulesProfileList();
+  renderPersonnelRulesProfileDetail();
+});
+elements.personnelRulesLayerFilter?.addEventListener("change", () => {
+  state.personnelRulesLayerFilter = elements.personnelRulesLayerFilter.value;
+  renderPersonnelRulesProfileList();
+  renderPersonnelRulesProfileDetail();
+});
+elements.personnelRulesStatusFilter?.addEventListener("change", () => {
+  state.personnelRulesStatusFilter = elements.personnelRulesStatusFilter.value;
+  renderPersonnelRulesProfileList();
+  renderPersonnelRulesProfileDetail();
+});
+elements.personnelRulesProfileList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-personnel-rules-profile]");
+  if (!button) return;
+  state.personnelRulesSelectedProfileId = button.dataset.personnelRulesProfile;
+  renderPersonnelRulesProfileList();
+  renderPersonnelRulesProfileDetail();
+});
+elements.personnelRulesSimulationWeek?.addEventListener("change", () => {
+  const submitted = elements.personnelRulesSimulationWeek.value;
+  state.personnelRulesSimulationWeek = submitted ? getMonday(new Date(`${submitted}T12:00:00`)) : getMonday(new Date());
+  elements.personnelRulesSimulationWeek.value = state.personnelRulesSimulationWeek;
+  state.personnelRulesSimulation = null;
+  state.personnelRulesSimulationError = "";
+  renderPersonnelRulesSimulation();
+});
+elements.personnelRulesSimulationLocation?.addEventListener("change", () => {
+  state.personnelRulesSimulationLocationId = elements.personnelRulesSimulationLocation.value;
+  state.personnelRulesSimulationDepartmentId = "";
+  state.personnelRulesSimulation = null;
+  state.personnelRulesSimulationError = "";
+  updatePersonnelRulesSimulationDepartments();
+  renderPersonnelRulesSimulation();
+});
+elements.personnelRulesSimulationDepartment?.addEventListener("change", () => {
+  state.personnelRulesSimulationDepartmentId = elements.personnelRulesSimulationDepartment.value;
+  state.personnelRulesSimulation = null;
+  state.personnelRulesSimulationError = "";
+  renderPersonnelRulesSimulation();
+});
+elements.runPersonnelRulesSimulation?.addEventListener("click", runPersonnelRulesSimulation);
 elements.refreshSystemCenter?.addEventListener("click", () => loadSystemCenter());
 elements.startRecoveryAssurance?.addEventListener("click", startRecoveryAssurance);
 elements.systemCenterContent?.addEventListener("click", (event) => {
@@ -12100,6 +12620,11 @@ elements.rightsProcessLocation?.addEventListener("change", () => {
   state.rightsProcessLocationId = elements.rightsProcessLocation.value;
   renderRightsProcessDashboard();
 });
+elements.rightsProcessCategory?.addEventListener("change", () => {
+  state.rightsProcessCategoryId = elements.rightsProcessCategory.value || "all";
+  state.rightsDashboardSelectedProcessStepId = "";
+  renderRightsProcessDashboard();
+});
 elements.rightsProcessScenario?.addEventListener("change", () => {
   state.rightsProcessScenarioIds[state.rightsDashboardSelectedProcessId] = elements.rightsProcessScenario.value;
   state.rightsDashboardSelectedProcessStepId = "";
@@ -12182,6 +12707,9 @@ elements.rightsProcessValidationList?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-rights-validation-process]");
   if (!button) return;
   state.rightsDashboardSelectedProcessId = button.dataset.rightsValidationProcess;
+  const selectedProcess = (rightsProcessDashboard()?.processes || [])
+    .find((process) => process.id === state.rightsDashboardSelectedProcessId);
+  state.rightsProcessCategoryId = selectedProcess ? rightsProcessCategoryFor(selectedProcess).id : "all";
   state.rightsDashboardSelectedProcessStepId = button.dataset.rightsValidationStep || "";
   renderRightsProcessDashboard();
   elements.rightsProcessTitle?.scrollIntoView({ behavior: "smooth", block: "center" });

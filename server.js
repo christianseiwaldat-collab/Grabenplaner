@@ -2648,6 +2648,8 @@ function createSchema() {
       title TEXT NOT NULL,
       symbol TEXT NOT NULL DEFAULT 'P',
       description TEXT NOT NULL DEFAULT '',
+      category TEXT NOT NULL DEFAULT 'other'
+        CHECK(category IN ('personnel_absence','time_payroll','customer_service','goods_equipment','administration_it','other')),
       scope_type TEXT NOT NULL DEFAULT 'company'
         CHECK(scope_type IN ('company','location','department')),
       location_id TEXT,
@@ -3661,6 +3663,7 @@ if (legacySchemaMigrationRequired) {
 createSchema();
 ensureColumn("shifts", "location_id", "TEXT");
 ensureColumn("sickness_notification_preferences", "process_notifications_enabled", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("custom_processes", "category", "TEXT NOT NULL DEFAULT 'other'");
 ensureColumn("custom_process_runs", "activation_count", "INTEGER NOT NULL DEFAULT 1");
 ensureColumn("custom_process_run_steps", "completion_request_id", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("integration_connections", "revision", "INTEGER NOT NULL DEFAULT 1");
@@ -3670,6 +3673,7 @@ ensureColumn("work_rule_evaluation_runs", "receipt_sha256", "TEXT NOT NULL DEFAU
 ensureColumn("loan_location_settings", "document_recipient_employee_number", "TEXT");
 ensureColumn("loan_location_settings", "document_email_enabled", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("loan_location_settings", "document_recipient_email", "TEXT NOT NULL DEFAULT ''");
+db.exec("CREATE INDEX IF NOT EXISTS idx_custom_processes_category ON custom_processes(category, status, title)");
 ensureWorkRuleEvaluationReceiptIntegrity();
 if (!columnExists("week_options", "group_id")) {
   db.exec("ALTER TABLE week_options ADD COLUMN group_id TEXT");
@@ -20676,6 +20680,183 @@ app.get("/api/portal/v1/self/time-record-statements/:id/download", (request, res
   }
 });
 
+const WORK_RULE_DASHBOARD_LAYER_LABELS = Object.freeze({
+  law: "Gesetzliches Profil",
+  sector: "Branchenprofil",
+  collective_agreement: "Kollektivvertrag",
+  company: "Unternehmensregel",
+  contract: "Individuelle Regel",
+});
+
+function workRuleDashboardAssignmentState(assignment, today = viennaTodayIso()) {
+  if (!assignment.active) return "inactive";
+  if (assignment.validFrom > today) return "future";
+  if (assignment.validTo && assignment.validTo < today) return "expired";
+  return "current";
+}
+
+function workRuleDashboardScopeLabel(session, assignment, locations) {
+  const locationLookup = new Map(locations.map((location) => [String(location.id), location]));
+  const departmentLookup = new Map(locations.flatMap((location) => (
+    (location.departments || []).map((department) => [String(department.id), { ...department, location }])
+  )));
+  if (assignment.scopeType === "installation") return "Gesamte Installation";
+  if (assignment.scopeType === "location") {
+    const location = locationLookup.get(String(assignment.scopeKey));
+    return location ? `${location.id} · ${location.name}` : "Zugewiesene Filiale";
+  }
+  if (assignment.scopeType === "department") {
+    const department = departmentLookup.get(String(assignment.scopeKey));
+    return department ? `${department.location.id} · ${department.location.name} · ${department.name}` : "Zugewiesene Abteilung";
+  }
+  if (assignment.scopeType === "employee" && sessionHasGlobalScope(session)) {
+    const employee = db.prepare("SELECT personnel_number, full_name FROM employees WHERE personnel_number = ?")
+      .get(String(assignment.scopeKey));
+    return employee ? `${employee.personnel_number} · ${employee.full_name}` : "Personenbezogene Zuordnung";
+  }
+  return "Personenbezogene Zuordnung im eigenen Bereich";
+}
+
+function workRuleDashboardPayload(session) {
+  const catalog = getRuleCatalog();
+  const today = viennaTodayIso();
+  const locations = getLocationsForSession(session, false).map((location) => ({
+    id: String(location.id),
+    name: location.name,
+    departments: (location.departments || []).filter((department) => department.active).map((department) => ({
+      id: Number(department.id),
+      name: department.name,
+    })),
+  }));
+  const visibleAssignments = listWorkRuleAssignments(db)
+    .filter((assignment) => workRuleAssignmentVisibleToSession(session, assignment))
+    .map((assignment) => ({
+      id: assignment.id,
+      profileId: assignment.profileId,
+      profileVersionId: assignment.profileVersionId,
+      profileName: assignment.profileName,
+      scopeType: assignment.scopeType,
+      scopeLabel: workRuleDashboardScopeLabel(session, assignment, locations),
+      validFrom: assignment.validFrom,
+      validTo: assignment.validTo,
+      enforcementMode: assignment.enforcementMode,
+      applicabilityConfirmed: assignment.applicabilityConfirmed,
+      state: workRuleDashboardAssignmentState(assignment, today),
+    }));
+  const persistedProfiles = new Map(listWorkRuleProfiles(db).map((profile) => [profile.id, profile]));
+  const profiles = Object.values(catalog.profiles || {}).map((definition) => {
+    const persisted = persistedProfiles.get(definition.id) || null;
+    const versionId = persisted?.currentVersionId || profileVersionId(definition);
+    const version = getWorkRuleProfileVersion(db, versionId);
+    const rules = (version?.rules?.length ? version.rules : (definition.ruleIds || [])
+      .map((ruleId) => catalog.rules?.[ruleId])
+      .filter(Boolean))
+      .map((rule) => ({
+        id: rule.id,
+        title: rule.title || rule.id,
+        severity: rule.severity || "warning",
+        enforcement: rule.enforcement || "manual_review",
+        sourceIds: Array.isArray(rule.sourceRefs) ? rule.sourceRefs : [],
+      }));
+    const sources = (version?.sources?.length ? version.sources : (definition.sourceRefs || [])
+      .map((sourceId) => catalog.sources?.[sourceId])
+      .filter(Boolean))
+      .map((source) => ({
+        id: source.id,
+        title: source.title,
+        jurisdiction: source.jurisdiction || "AT",
+        url: source.url,
+        retrievedOn: source.retrievedOn || null,
+        applicabilityNote: source.applicabilityNote || "",
+      }));
+    const assignments = visibleAssignments.filter((assignment) => (
+      assignment.profileVersionId === versionId || assignment.profileId === definition.id
+    ));
+    const profile = version?.profile || definition;
+    return {
+      id: definition.id,
+      title: profile.title || definition.title || persisted?.name || definition.id,
+      description: profile.applicability?.note || definition.applicability?.note || persisted?.description || "",
+      version: version?.version || definition.version,
+      versionId,
+      layer: version?.layer || persisted?.layer || "law",
+      layerLabel: WORK_RULE_DASHBOARD_LAYER_LABELS[version?.layer || persisted?.layer || "law"] || "Regelprofil",
+      status: version?.status || (definition.status === "active" ? "published" : "draft"),
+      validFrom: version?.validFrom || definition.validFrom,
+      validTo: version?.validTo || definition.validTo || null,
+      contentSha256: version?.contentSha256 || persisted?.contentSha256 || null,
+      assignable: profile.assignable === true,
+      automaticByBirthDate: profile.applicability?.automaticByBirthDate === true,
+      defaultEnforcementMode: profile.defaultEnforcementMode || "monitor",
+      applicability: {
+        jurisdiction: profile.applicability?.jurisdiction || "AT",
+        sector: profile.applicability?.sector || "",
+        minimumAge: profile.applicability?.minimumAge !== null
+          && profile.applicability?.minimumAge !== undefined
+          && Number.isFinite(Number(profile.applicability.minimumAge))
+          ? Number(profile.applicability.minimumAge) : null,
+        maximumAgeExclusive: profile.applicability?.maximumAgeExclusive !== null
+          && profile.applicability?.maximumAgeExclusive !== undefined
+          && Number.isFinite(Number(profile.applicability.maximumAgeExclusive))
+          ? Number(profile.applicability.maximumAgeExclusive) : null,
+        confirmationRequired: profile.applicability?.confirmationRequired === true,
+        automaticByBirthDate: profile.applicability?.automaticByBirthDate === true,
+        note: profile.applicability?.note || "",
+      },
+      limits: profile.limits || {},
+      rules,
+      sources,
+      assignments,
+    };
+  });
+  const currentAssignments = visibleAssignments.filter((assignment) => assignment.state === "current");
+  const sourceIds = new Set(profiles.flatMap((profile) => profile.sources.map((source) => source.id)));
+  const ruleIds = new Set(profiles.flatMap((profile) => profile.rules.map((rule) => rule.id)));
+  const defaultProfile = profiles.find((profile) => profile.assignments.some((assignment) => assignment.state === "current"))
+    || profiles.find((profile) => profile.status === "published")
+    || profiles[0]
+    || null;
+  return {
+    generatedAt: new Date().toISOString(),
+    effectiveDate: today,
+    engineVersion: WORK_RULE_ENGINE_VERSION,
+    catalogVersion: catalog.version,
+    timeBasis: catalog.timeBasis,
+    timeZone: catalog.timeZone,
+    legalNotice: catalog.legalNotice,
+    scopeLabel: sessionHasGlobalScope(session) ? "Unternehmensweite Lesesicht" : "Eigene zugewiesene Bereiche",
+    capabilities: {
+      canManageAssignments: !session || session.employeeNumber === "local"
+        || session.permissions?.includes("work_rules:manage"),
+      canDocumentExceptions: !session || session.employeeNumber === "local"
+        || session.permissions?.includes("work_rules:exception"),
+      canReadAudit: !session || session.employeeNumber === "local"
+        || session.permissions?.includes("work_rules:audit"),
+      canSimulate: sessionCanReadWorkRules(session),
+    },
+    summary: {
+      profiles: profiles.length,
+      publishedProfiles: profiles.filter((profile) => profile.status === "published").length,
+      draftProfiles: profiles.filter((profile) => profile.status === "draft").length,
+      rules: ruleIds.size,
+      sources: sourceIds.size,
+      visibleAssignments: visibleAssignments.length,
+      currentAssignments: currentAssignments.length,
+      monitorAssignments: currentAssignments.filter((assignment) => assignment.enforcementMode === "monitor").length,
+      enforcedAssignments: currentAssignments.filter((assignment) => assignment.enforcementMode === "enforced").length,
+      unconfirmedAssignments: currentAssignments.filter((assignment) => !assignment.applicabilityConfirmed).length,
+    },
+    defaultProfileId: defaultProfile?.id || "",
+    profiles,
+    assignments: visibleAssignments,
+    locations,
+  };
+}
+
+app.get("/api/work-rules/dashboard", (request, response) => {
+  response.json(workRuleDashboardPayload(request.portalSession));
+});
+
 app.get("/api/work-rules/catalog", (_request, response) => {
   response.json(getRuleCatalog());
 });
@@ -22452,6 +22633,57 @@ const CUSTOM_PROCESS_RESPONSIBILITIES = new Set(["system", "role", "employee"]);
 const CUSTOM_PROCESS_CONDITIONS = new Set(["always", "when", "optional"]);
 const CUSTOM_PROCESS_NOTIFICATION_CHANNELS = new Set(["internal", "email", "sms"]);
 const CUSTOM_PROCESS_MAX_STEPS = 30;
+const PROCESS_CATEGORY_CATALOG = Object.freeze([
+  Object.freeze({
+    id: "personnel_absence",
+    label: "Personal & Abwesenheit",
+    description: "Urlaub, Zeitausgleich, Krankheit und weitere personenbezogene Abwesenheitsabläufe.",
+    sortOrder: 10,
+  }),
+  Object.freeze({
+    id: "time_payroll",
+    label: "Arbeitszeit & Abrechnung",
+    description: "Zeiterfassung, Tagesprüfung und kontrollierte Übergaben an nachgelagerte Stellen.",
+    sortOrder: 20,
+  }),
+  Object.freeze({
+    id: "customer_service",
+    label: "Verkauf & Kundenservice",
+    description: "Kundenbezogene Abläufe wie Reparaturen, Reklamationen und Second-Hand-Annahmen.",
+    sortOrder: 30,
+  }),
+  Object.freeze({
+    id: "goods_equipment",
+    label: "Ware & Geräte",
+    description: "Leihen, Umlagerungen, Inventur und weitere waren- oder gerätebezogene Abläufe.",
+    sortOrder: 40,
+  }),
+  Object.freeze({
+    id: "administration_it",
+    label: "Administration & IT",
+    description: "Zugänge, Datenschutzfälle, Systemstörungen und administrative Betriebsabläufe.",
+    sortOrder: 50,
+  }),
+  Object.freeze({
+    id: "other",
+    label: "Weitere eigene Abläufe",
+    description: "Eigene Prozessdefinitionen, die noch keinem spezielleren Fachbereich zugeordnet sind.",
+    sortOrder: 90,
+  }),
+]);
+const PROCESS_CATEGORY_LOOKUP = new Map(PROCESS_CATEGORY_CATALOG.map((category) => [category.id, category]));
+
+function processCategoryDefinition(value, { strict = false } = {}) {
+  const id = String(value || "other").trim();
+  const category = PROCESS_CATEGORY_LOOKUP.get(id);
+  if (category) return category;
+  if (strict) throw httpError(400, "Der Fachbereich des Prozesses ist ungültig.", "CUSTOM_PROCESS_CATEGORY_INVALID");
+  return PROCESS_CATEGORY_LOOKUP.get("other");
+}
+
+function processCategoryCatalogPublic() {
+  return PROCESS_CATEGORY_CATALOG.map((category) => ({ ...category }));
+}
 
 function customProcessInputObject(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -22603,11 +22835,12 @@ function normalizeCustomProcessStep(input, index, scope, usedIds) {
 
 function normalizeCustomProcessInput(body = {}, { allowArchived = false } = {}) {
   const input = customProcessInputObject(body, "Die Prozessdefinition");
-  assertCustomProcessKeys(input, new Set(["title", "symbol", "description", "summary", "status", "scope", "trigger", "steps", "revision"]), "Die Prozessdefinition");
+  assertCustomProcessKeys(input, new Set(["title", "symbol", "description", "summary", "category", "status", "scope", "trigger", "steps", "revision"]), "Die Prozessdefinition");
   const title = customProcessText(input.title, { label: "Der Prozessname", min: 3, max: 120 });
   const rawSymbol = customProcessText(input.symbol || "P", { label: "Das Kurzzeichen", min: 1, max: 5 }).toUpperCase();
   if (!/^[\p{L}\p{N}]{1,5}$/u.test(rawSymbol)) throw httpError(400, "Das Kurzzeichen darf nur Buchstaben und Ziffern enthalten.", "CUSTOM_PROCESS_INPUT_INVALID");
   const description = customProcessText(input.description ?? input.summary, { label: "Die Prozessbeschreibung", max: 600 });
+  const category = processCategoryDefinition(input.category || "other", { strict: true });
   const status = String(input.status || "draft").trim();
   if (!CUSTOM_PROCESS_STATUS.has(status) || (!allowArchived && status === "archived")) {
     throw httpError(400, "Der Prozessstatus ist ungültig.", "CUSTOM_PROCESS_STATUS_INVALID");
@@ -22628,7 +22861,7 @@ function normalizeCustomProcessInput(body = {}, { allowArchived = false } = {}) 
   if (status === "active" && !steps.some((step) => step.type === "finish")) {
     throw httpError(422, "Ein aktiver Prozess benötigt einen klaren Abschlussschritt.", "CUSTOM_PROCESS_ACTIVATION_INVALID");
   }
-  return { title, symbol: rawSymbol, description, status, scope, trigger: { type: triggerType, minimumShortfall }, steps };
+  return { title, symbol: rawSymbol, description, category: category.id, status, scope, trigger: { type: triggerType, minimumShortfall }, steps };
 }
 
 function customProcessRows({ includeArchived = false } = {}) {
@@ -22660,6 +22893,7 @@ function customProcessScopeFromRow(row) {
 
 function customProcessDashboardDefinition(row, stepRows = []) {
   const scope = customProcessScopeFromRow(row);
+  const category = processCategoryDefinition(row.category);
   const steps = stepRows.map((step) => {
     let notificationChannels = [];
     try {
@@ -22699,6 +22933,8 @@ function customProcessDashboardDefinition(row, stepRows = []) {
     status: row.status,
     statusLabel: row.status === "active" ? "Ablauf aktiv" : row.status === "draft" ? "Entwurf" : "Archiviert",
     enabled: row.status === "active",
+    category: category.id,
+    categoryLabel: category.label,
     symbol: row.symbol,
     title: row.title,
     description: row.description,
@@ -22707,6 +22943,7 @@ function customProcessDashboardDefinition(row, stepRows = []) {
     scope: { type: scope.type, locationId: scope.locationId, departmentId: scope.departmentId, label: scope.label, valid: scope.valid !== false },
     trigger: { type: row.trigger_type, minimumShortfall: Number(row.trigger_minimum_shortfall || 1), label: triggerLabel },
     rules: [
+      { label: "Fachbereich", value: category.label, tone: "neutral" },
       { label: "Geltungsbereich", value: scope.label, tone: "neutral" },
       { label: "Auslöser", value: triggerLabel, tone: row.trigger_type === "staffing_shortfall" ? "attention" : "neutral" },
       { label: "Benachrichtigungen", value: String(notifications), tone: notifications ? "positive" : "neutral" },
@@ -22745,6 +22982,7 @@ function customProcessEditorCatalog(actor) {
   }));
   return {
     canManageCustomProcesses: canManage,
+    categories: processCategoryCatalogPublic(),
     statuses: ["draft", "active"],
     scopes: ["company", "location", "department"],
     triggers: ["manual", "staffing_shortfall"],
@@ -22861,16 +23099,16 @@ function createCustomProcess(actor, body) {
     assertCustomProcessStepIdsAvailable(value.steps);
     db.prepare(`
       INSERT INTO custom_processes
-        (id, title, symbol, description, scope_type, location_id, department_id, trigger_type,
+        (id, title, symbol, description, category, scope_type, location_id, department_id, trigger_type,
          trigger_minimum_shortfall, status, created_by, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, value.title, value.symbol, value.description, value.scope.type, value.scope.locationId,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, value.title, value.symbol, value.description, value.category, value.scope.type, value.scope.locationId,
       value.scope.departmentId, value.trigger.type, value.trigger.minimumShortfall, value.status,
       actor.employeeNumber, actor.employeeNumber);
     insertCustomProcessSteps(id, value.steps);
     persistCustomProcessRevision(id, actor.employeeNumber);
     auditPortal(actor.employeeNumber, "custom-process.create", "custom_process", id,
-      JSON.stringify({ status: value.status, revision: 1, scope: value.scope.type, stepCount: value.steps.length, trigger: value.trigger.type }));
+      JSON.stringify({ status: value.status, revision: 1, category: value.category, scope: value.scope.type, stepCount: value.steps.length, trigger: value.trigger.type }));
     db.exec("COMMIT");
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
@@ -22891,11 +23129,11 @@ function updateCustomProcess(actor, id, body) {
     assertCustomProcessStepIdsAvailable(value.steps, id);
     const updated = db.prepare(`
       UPDATE custom_processes SET
-        title = ?, symbol = ?, description = ?, scope_type = ?, location_id = ?, department_id = ?,
+        title = ?, symbol = ?, description = ?, category = ?, scope_type = ?, location_id = ?, department_id = ?,
         trigger_type = ?, trigger_minimum_shortfall = ?, status = ?, revision = revision + 1,
         updated_by = ?, archived_at = NULL, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND revision = ? AND status <> 'archived'
-    `).run(value.title, value.symbol, value.description, value.scope.type, value.scope.locationId,
+    `).run(value.title, value.symbol, value.description, value.category, value.scope.type, value.scope.locationId,
       value.scope.departmentId, value.trigger.type, value.trigger.minimumShortfall, value.status,
       actor.employeeNumber, id, revision);
     if (!updated.changes) throw httpError(409, "Der Prozess wurde zwischenzeitlich geändert. Bitte neu laden.", "CUSTOM_PROCESS_REVISION_CONFLICT");
@@ -22903,7 +23141,7 @@ function updateCustomProcess(actor, id, body) {
     insertCustomProcessSteps(id, value.steps);
     persistCustomProcessRevision(id, actor.employeeNumber);
     auditPortal(actor.employeeNumber, "custom-process.update", "custom_process", id,
-      JSON.stringify({ status: value.status, revision: revision + 1, scope: value.scope.type, stepCount: value.steps.length, trigger: value.trigger.type }));
+      JSON.stringify({ status: value.status, revision: revision + 1, category: value.category, scope: value.scope.type, stepCount: value.steps.length, trigger: value.trigger.type }));
     db.exec("COMMIT");
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
@@ -22927,6 +23165,7 @@ function setCustomProcessStatus(actor, id, body = {}) {
       title: existing.process.title,
       symbol: existing.process.symbol,
       description: existing.process.description,
+      category: existing.process.category,
       status,
       scope: { type: existing.process.scope_type, locationId: existing.process.location_id, departmentId: existing.process.department_id },
       trigger: { type: existing.process.trigger_type, minimumShortfall: existing.process.trigger_minimum_shortfall },
@@ -23524,17 +23763,24 @@ function rightsDashboardProcesses(actor = null) {
     timeTrackingAccessLabel: location.time_tracking_access_mode === "trusted_network" ? "Nur freigegebene Netzwerke" : "Ortsunabhängige Buchung",
     timeTrackingVarianceMinutes: Math.max(0, Number(location.time_tracking_variance_minutes || 0)),
   }));
-  const process = (definition) => ({
-    ...definition,
-    statusLabel: definition.enabled ? "Ablauf aktiv" : "Modul nicht freigeschaltet",
-  });
+  const process = (definition) => {
+    const category = processCategoryDefinition(definition.category);
+    return {
+      ...definition,
+      category: category.id,
+      categoryLabel: category.label,
+      statusLabel: definition.enabled ? "Ablauf aktiv" : "Modul nicht freigeschaltet",
+    };
+  };
   return {
     generatedAt: new Date().toISOString(),
     locations,
+    categories: processCategoryCatalogPublic(),
     capabilities: customProcessEditorCatalog(actor),
     processes: [
       process({
         id: "vacation",
+        category: "personnel_absence",
         symbol: "U",
         title: "Urlaubsantrag",
         summary: "Vom Antrag über die lokale Freigabe bis zur verbindlichen Urlaubsplanung.",
@@ -23560,6 +23806,7 @@ function rightsDashboardProcesses(actor = null) {
       }),
       process({
         id: "time_off",
+        category: "personnel_absence",
         symbol: "ZA",
         title: "Zeitausgleich",
         summary: "Filialinterner oder PL-gebundener ZA mit Planbarkeitsprüfung und passendem Freigabeweg.",
@@ -23586,6 +23833,7 @@ function rightsDashboardProcesses(actor = null) {
       }),
       process({
         id: "sickness_amu",
+        category: "personnel_absence",
         symbol: "AUM",
         title: "Krankmeldung & AUM",
         summary: "Sichere Krankmeldung, optionale AUM-Nachreichung, Fristen und geschützter Abschluss des Falls.",
@@ -23617,6 +23865,7 @@ function rightsDashboardProcesses(actor = null) {
       }),
       process({
         id: "time_review",
+        category: "time_payroll",
         symbol: "ZEIT",
         title: "Zeiterfassung & Tagesprüfung",
         summary: "Von der Buchung über Abweichungen und Korrekturen bis zum geprüften Tagesabschluss.",
@@ -23643,6 +23892,7 @@ function rightsDashboardProcesses(actor = null) {
       }),
       process({
         id: "payroll",
+        category: "time_payroll",
         symbol: "LV",
         title: "Lohnverrechnung übergeben",
         summary: "Geprüfte Zeit- und Abwesenheitsdaten als Datei oder über ein freigegebenes HTTPS-Ziel ausgeben.",
@@ -23955,8 +24205,8 @@ function drawRightsDashboardProcessPdf(processDashboard, process, location, vali
     size: "A4",
     margin: 0,
     info: {
-      Title: `Prozessweg · ${process.title}`,
-      Subject: `${APP_NAME} ${APP_VERSION_LABEL} · Rechte-Dashboard`,
+      Title: `Ablauf · ${process.title}`,
+      Subject: `${APP_NAME} ${APP_VERSION_LABEL} · Dashboard Abläufe & Prozesse`,
     },
   });
   doc.pipe(response);
@@ -23967,7 +24217,7 @@ function drawRightsDashboardProcessPdf(processDashboard, process, location, vali
   const colors = { text: "#172331", muted: "#6f7b80", line: "#d7dfdb", accent: "#26785f", soft: "#eef6f2", warning: "#b77a12", blocker: "#b8473b" };
   let y = 38;
   const pageHeader = (continued = false) => {
-    doc.fillColor(colors.accent).font("Helvetica-Bold").fontSize(7).text("GRABENPLANER · RECHTE-DASHBOARD", left, y, { characterSpacing: 1.2 });
+    doc.fillColor(colors.accent).font("Helvetica-Bold").fontSize(7).text("GRABENPLANER · ABLÄUFE & PROZESSE", left, y, { characterSpacing: 1.2 });
     y += 16;
     doc.fillColor(colors.text).font("Helvetica-Bold").fontSize(continued ? 14 : 22).text(continued ? `${process.title} · Fortsetzung` : process.title, left, y, { width });
     y += continued ? 25 : 34;
@@ -23981,7 +24231,7 @@ function drawRightsDashboardProcessPdf(processDashboard, process, location, vali
   pageHeader();
   doc.fillColor(colors.muted).font("Helvetica").fontSize(9).text(process.summary, left, y, { width, lineGap: 2 });
   y = doc.y + 13;
-  const contextParts = [`Simulation: ${process.scenario.label}`];
+  const contextParts = [`Fachbereich: ${process.categoryLabel || processCategoryDefinition(process.category).label}`, `Simulation: ${process.scenario.label}`];
   if (process.locationSensitive && location) contextParts.push(`Standort: ${location.id} · ${location.name}`);
   contextParts.push(`Erstellt: ${createdAt.toLocaleString("de-AT", { timeZone: "Europe/Vienna" })}`);
   doc.roundedRect(left, y, width, 31, 7).fill(colors.soft);
