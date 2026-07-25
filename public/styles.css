@@ -3144,3 +3144,271 @@ html[data-active-page-theme="dark"] :is(.collective-agreement-modal,.collective-
   .collective-agreement-list-item { grid-template-columns:auto 1fr; }
   .collective-agreement-list-item .status-badge { grid-column:1/-1; grid-row:auto; justify-self:start; }
 }
+
+/* Personalverwaltung · Block 5/7: geführter Editor für eigene Regelentwürfe */
+.custom-work-rules-section { display:none; }
+.custom-work-rules-section.active { display:block; }
+.custom-work-rules-toolbar,
+.custom-work-rule-panel-heading,
+.custom-work-rule-detail-heading,
+.custom-work-rule-test-actions {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+}
+.custom-work-rules-actions,
+.custom-work-rule-detail-actions {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.custom-work-rule-boundary {
+  margin:0 0 14px;
+  padding:12px 14px;
+  border:1px solid color-mix(in srgb,var(--warning,#bf8615) 42%,var(--line));
+  border-left:4px solid var(--warning,#bf8615);
+  border-radius:12px;
+  color:var(--warning-ink,#6a4d08);
+  background:var(--warning-surface,#fff4cf);
+}
+.custom-work-rule-boundary strong { display:block; font-size:10px; }
+.custom-work-rule-boundary p { margin:4px 0 0; font-size:9px; line-height:1.5; }
+.custom-work-rule-summary { margin-bottom:14px; }
+.custom-work-rule-workspace {
+  display:grid;
+  grid-template-columns:minmax(270px,.72fr) minmax(0,1.28fr);
+  gap:13px;
+  align-items:start;
+}
+.custom-work-rule-list-panel,
+.custom-work-rule-detail-panel {
+  min-width:0;
+  padding:14px;
+  border:1px solid var(--line);
+  border-radius:15px;
+  color:var(--ink);
+  background:var(--surface);
+  box-shadow:0 8px 22px rgb(26 54 44 / 4%);
+}
+.custom-work-rule-detail-panel { min-height:390px; }
+.custom-work-rule-panel-heading { margin-bottom:11px; }
+.custom-work-rule-panel-heading h3,
+.custom-work-rule-detail-heading h3 { margin:2px 0 0; font-size:17px; line-height:1.2; }
+.custom-work-rule-detail-heading p { max-width:700px; margin:5px 0 0; color:var(--muted); font-size:9px; line-height:1.5; }
+.custom-work-rule-list { display:grid; gap:8px; }
+.custom-work-rule-list-item {
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  gap:4px 9px;
+  width:100%;
+  padding:11px 12px;
+  border:1px solid var(--line);
+  border-radius:11px;
+  color:var(--ink);
+  text-align:left;
+  background:var(--surface-soft);
+  cursor:pointer;
+}
+.custom-work-rule-list-item:hover { border-color:color-mix(in srgb,var(--primary) 42%,var(--line)); }
+.custom-work-rule-list-item.active {
+  border-color:var(--primary);
+  background:color-mix(in srgb,var(--primary) 8%,var(--surface));
+  box-shadow:inset 3px 0 0 var(--primary);
+}
+.custom-work-rule-code {
+  align-self:start;
+  padding:3px 6px;
+  border-radius:999px;
+  color:var(--primary);
+  font-size:7.5px;
+  font-weight:900;
+  letter-spacing:.06em;
+  background:color-mix(in srgb,var(--primary) 10%,transparent);
+}
+.custom-work-rule-list-item strong { min-width:0; font-size:10px; overflow-wrap:anywhere; }
+.custom-work-rule-list-item small { grid-column:2; color:var(--muted); font-size:8px; }
+.custom-work-rule-list-item .status-badge { grid-column:3; grid-row:1/3; align-self:center; }
+.custom-work-rule-empty {
+  display:grid;
+  place-content:center;
+  min-height:240px;
+  padding:18px;
+  border:1px dashed var(--line);
+  border-radius:12px;
+  color:var(--muted);
+  text-align:center;
+  background:var(--surface-soft);
+}
+.custom-work-rule-empty.compact { min-height:150px; }
+.custom-work-rule-empty strong { color:var(--ink); font-size:11px; }
+.custom-work-rule-empty p { max-width:520px; margin:6px auto 0; font-size:9px; line-height:1.5; }
+.custom-work-rule-effect-note {
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:3px 9px;
+  margin:13px 0;
+  padding:10px 12px;
+  border:1px solid color-mix(in srgb,var(--warning,#bf8615) 35%,var(--line));
+  border-radius:10px;
+  color:var(--warning-ink,#6a4d08);
+  background:var(--warning-surface,#fff4cf);
+}
+.custom-work-rule-effect-note strong { font-size:9px; }
+.custom-work-rule-effect-note span { font-size:8.5px; line-height:1.45; }
+.custom-work-rule-facts {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  margin:0;
+}
+.custom-work-rule-facts > div {
+  min-width:0;
+  padding:9px 10px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:var(--surface-soft);
+}
+.custom-work-rule-facts > .wide { grid-column:1/-1; }
+.custom-work-rule-facts dt { color:var(--muted); font-size:7.5px; font-weight:800; text-transform:uppercase; }
+.custom-work-rule-facts dd { margin:4px 0 0; font-size:9px; line-height:1.45; overflow-wrap:anywhere; }
+.custom-work-rule-source {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:6px 12px;
+  align-items:center;
+  margin-top:10px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--surface-soft);
+}
+.custom-work-rule-source span,
+.custom-work-rule-source small { display:block; color:var(--muted); font-size:8px; }
+.custom-work-rule-source strong { display:block; margin:3px 0; font-size:9.5px; }
+.custom-work-rule-source a { color:var(--primary); font-size:8.5px; font-weight:800; }
+.custom-work-rule-source p { grid-column:1/-1; margin:3px 0 0; color:var(--muted); font-size:8.5px; line-height:1.45; }
+.custom-work-rule-test-section,
+.custom-work-rule-version-history {
+  margin-top:13px;
+  padding-top:12px;
+  border-top:1px solid var(--line);
+}
+.custom-work-rule-test-section h4,
+.custom-work-rule-version-history h4 { margin:2px 0 9px; font-size:11px; }
+.custom-work-rule-tests {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+}
+.custom-work-rule-tests article {
+  min-width:0;
+  padding:9px 10px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:var(--surface-soft);
+}
+.custom-work-rule-tests article.pass { border-color:color-mix(in srgb,var(--success,#2d7c61) 40%,var(--line)); }
+.custom-work-rule-tests article.fail { border-color:color-mix(in srgb,var(--danger,#bd493a) 40%,var(--line)); }
+.custom-work-rule-tests article.unknown { border-color:color-mix(in srgb,var(--warning,#bf8615) 40%,var(--line)); }
+.custom-work-rule-tests span,
+.custom-work-rule-tests small { display:block; color:var(--muted); font-size:8px; }
+.custom-work-rule-tests strong { display:block; margin:3px 0; font-size:10px; }
+.custom-work-rule-version-history { display:grid; gap:7px; }
+.custom-work-rule-version-history > article {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:9px;
+  padding:8px 10px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:var(--surface-soft);
+}
+.custom-work-rule-version-history > article.current { border-color:color-mix(in srgb,var(--success,#2d7c61) 45%,var(--line)); }
+.custom-work-rule-version-history strong,
+.custom-work-rule-version-history small { display:block; font-size:8.5px; }
+.custom-work-rule-version-history small,
+.custom-work-rule-version-history article > span { color:var(--muted); font-size:8px; }
+.custom-work-rule-modal { width:min(920px,calc(100vw - 28px)); }
+.custom-work-rule-modal-card { width:100%; max-width:none; }
+.custom-work-rule-form-grid .form-grid-wide { grid-column:1/-1; }
+.custom-work-rule-fieldset {
+  margin:14px 0 0;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+}
+.custom-work-rule-fieldset legend { padding:0 5px; color:var(--ink); font-size:10px; font-weight:800; }
+.custom-work-rule-fieldset > p { margin:0 0 10px; color:var(--muted); font-size:8.5px; line-height:1.45; }
+.custom-work-rule-fieldset .field > small { margin-top:4px; color:var(--muted); font-size:7.5px; line-height:1.4; }
+.custom-work-rule-test-actions { align-items:center; margin-top:10px; }
+.custom-work-rule-test-result {
+  display:grid;
+  justify-items:end;
+  color:var(--muted);
+  font-size:8.5px;
+  text-align:right;
+}
+.custom-work-rule-test-result.valid { color:var(--success-ink,#1d644d); }
+.custom-work-rule-test-result.invalid { color:var(--danger-ink,#8e352b); }
+.custom-work-rule-test-result strong,
+.custom-work-rule-test-result span { display:block; }
+.custom-work-rule-review-state {
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:2px 8px;
+  margin-top:13px;
+  padding:10px 12px;
+  border:1px solid color-mix(in srgb,var(--warning,#bf8615) 42%,var(--line));
+  border-radius:10px;
+  color:var(--warning-ink,#6a4d08);
+  background:var(--warning-surface,#fff4cf);
+}
+.custom-work-rule-review-state span { grid-row:1/3; align-self:center; font-size:8px; font-weight:800; text-transform:uppercase; }
+.custom-work-rule-review-state strong { font-size:10px; }
+.custom-work-rule-review-state small { font-size:8px; }
+
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(
+  .custom-work-rule-list-panel,
+  .custom-work-rule-detail-panel,
+  .custom-work-rule-list-item,
+  .custom-work-rule-empty,
+  .custom-work-rule-facts > div,
+  .custom-work-rule-source,
+  .custom-work-rule-tests article,
+  .custom-work-rule-version-history > article
+) { color:var(--ink); border-color:var(--line); background:var(--surface-soft); }
+html[data-active-page-theme="dark"] :is(.custom-work-rule-modal,.custom-work-rule-modal form) .custom-work-rule-fieldset {
+  color:#edf4f1;
+  border-color:#40524b;
+  background:#202d29;
+}
+
+@media (max-width:1000px) {
+  .custom-work-rule-workspace { grid-template-columns:1fr; }
+  .custom-work-rule-detail-panel { min-height:0; }
+}
+
+@media (max-width:700px) {
+  .custom-work-rules-toolbar,
+  .custom-work-rule-panel-heading,
+  .custom-work-rule-detail-heading,
+  .custom-work-rule-test-actions { flex-direction:column; }
+  .custom-work-rules-actions,
+  .custom-work-rule-detail-actions { width:100%; align-items:stretch; flex-direction:column; }
+  .custom-work-rules-actions button,
+  .custom-work-rule-detail-actions button,
+  .custom-work-rule-test-actions button { width:100%; }
+  .custom-work-rule-facts,
+  .custom-work-rule-tests { grid-template-columns:1fr; }
+  .custom-work-rule-facts > .wide,
+  .custom-work-rule-form-grid .form-grid-wide { grid-column:auto; }
+  .custom-work-rule-list-item { grid-template-columns:auto 1fr; }
+  .custom-work-rule-list-item .status-badge { grid-column:1/-1; grid-row:auto; justify-self:start; }
+  .custom-work-rule-source { grid-template-columns:1fr; }
+  .custom-work-rule-source p { grid-column:auto; }
+  .custom-work-rule-test-result { justify-items:start; text-align:left; }
+}
