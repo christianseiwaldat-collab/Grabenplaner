@@ -2345,6 +2345,30 @@
       </form>
     </dialog>
 
+    <dialog class="modal server-restart-modal" id="serverRestartModal" aria-labelledby="serverRestartTitle" aria-describedby="serverRestartDescription serverRestartConsequences">
+      <form method="dialog" id="serverRestartForm">
+        <div class="modal-header">
+          <div>
+            <span class="eyebrow">Server-Monitor</span>
+            <h2 id="serverRestartTitle">Server kontrolliert neu starten</h2>
+            <p id="serverRestartDescription">Bitte prüfen Sie die Auswirkungen, bevor Sie den verwalteten Serverdienst neu starten.</p>
+          </div>
+          <button type="button" class="close-button" id="serverRestartCloseButton" data-close="serverRestartModal" aria-label="Dialog schließen">×</button>
+        </div>
+        <section class="server-restart-warning" id="serverRestartConsequences">
+          <strong>Kurze Unterbrechung mit Sicherungsschutz</strong>
+          <p>Der Neustart unterbricht die Verbindung für kurze Zeit. Nicht gespeicherte Eingaben in geöffneten Browserfenstern können verloren gehen.</p>
+          <p>Vor dem Neustart erstellt Grabenplaner automatisch einen verifizierten Sicherungspunkt. Erst danach wird der verwaltete Serverdienst kontrolliert neu gestartet.</p>
+        </section>
+        <p class="server-restart-message hidden" id="serverRestartMessage" role="status" aria-live="polite"></p>
+        <div class="modal-actions server-restart-actions">
+          <span></span><span></span>
+          <button type="button" class="secondary-button" id="serverRestartCancelButton" data-close="serverRestartModal">Abbrechen</button>
+          <button type="submit" class="danger-button" id="serverRestartConfirmButton">Sicherung erstellen und neu starten</button>
+        </div>
+      </form>
+    </dialog>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="/api-errors.js"></script>
     <script src="/vendor/quill/quill.js"></script>

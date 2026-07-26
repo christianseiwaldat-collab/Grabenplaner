@@ -8,7 +8,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 
 test("v0.86: Paket, Launcher, UI und aktuelle Dokumentation bleiben konsistent", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.86.1-beta");
+  assert.equal(packageJson.version, "0.86.2-beta");
   assert.equal(packageJson.dependencies.sharp, "0.35.3");
   assert.match(read("pnpm-workspace.yaml"), /brace-expansion:\s*5\.0\.8/);
   assert.match(read("pnpm-workspace.yaml"), /brace-expansion@5\.0\.8:\s*lib\/vendor-patches\/brace-expansion@5\.0\.8\.patch/);
@@ -42,6 +42,13 @@ test("v0.86: Paket, Launcher, UI und aktuelle Dokumentation bleiben konsistent",
   const genericLauncher = read("Dienstplan starten.cmd");
 
   assert.match(indexHtml, /v0\.86 Beta/);
+  assert.match(indexHtml, /id="serverRestartModal"/);
+  assert.match(indexHtml, /Nicht gespeicherte Eingaben in geöffneten Browserfenstern können verloren gehen/);
+  assert.match(indexHtml, /Vor dem Neustart erstellt Grabenplaner automatisch einen verifizierten Sicherungspunkt/);
+  const appJavascript = read("public/app.js");
+  assert.match(appJavascript, /monitorActions\.canRestart === true/);
+  assert.match(appJavascript, /\/api\/portal\/v1\/server-monitor\/restart/);
+  assert.match(appJavascript, /JSON\.stringify\(\{ confirmation: "SERVER_RESTART" \}\)/);
   assert.match(readme, /v0\.86 Beta/);
   assert.match(readme, /Personal-Regelwerk in v0\.86 Beta/);
   assert.match(readme, /Leihmodul in v0\.85 Beta/);

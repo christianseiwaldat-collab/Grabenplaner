@@ -118,6 +118,7 @@ sudo grabenplaner-uninstall --yes
 
 - `grabenplaner-backup` erstellt und prüft einen gekoppelten Sicherungspunkt aus SQLite-Datenbank und verschlüsselter Dokumentablage.
 - `grabenplaner-test` prüft Dienste, interne und öffentliche Erreichbarkeit, TLS, Caddy, Datenbankintegrität und Sicherungsalter.
+- Im System-Center können Admin, IT-Admin und Developer den redigierten Server-Monitorstatus direkt aktualisieren. Der dort angebotene kontrollierte Neustart erscheint nur im tatsächlich durch systemd verwalteten Serverbetrieb und bei wirksamem Recht `system:write`. Nach einer gesonderten Warnbestätigung wird zuerst ein gekoppelter, verifizierter Sicherungspunkt erstellt; erst danach beendet sich die Anwendung mit einem für `Restart=on-failure` vorgesehenen Fehlercode.
 - `grabenplaner-monitor` führt dieselbe freigegebene Betriebsprüfung für den systemd-Timer aus und veröffentlicht nur fest definierte Prüfergebnisse ohne URLs, Pfade oder Antwortinhalte.
 - `grabenplaner-stop` beendet die Anwendung kontrolliert und prüft, dass der interne Listener geschlossen ist.
 - `grabenplaner-update` lädt nichts selbst herunter. Es akzeptiert nur ein lokales Linux-Serverpaket samt SHA-256, sichert vor dem Austausch und rollt bei fehlgeschlagener Bereitschaftsprüfung automatisch zurück.

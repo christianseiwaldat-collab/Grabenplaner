@@ -940,6 +940,10 @@ const publicUrl = String(process.env.GRABENPLANER_PUBLIC_URL || runtimeConfig.pu
 const trustProxySetting = String(process.env.GRABENPLANER_TRUST_PROXY || runtimeConfig.trustProxy || "loopback").trim() || "loopback";
 const serviceControlToken = String(process.env.GRABENPLANER_SERVICE_CONTROL_TOKEN || "").trim();
 const deploymentKind = String(process.env.GRABENPLANER_DEPLOYMENT_KIND || "local").trim().toLowerCase() || "local";
+const systemdInvocationId = String(process.env.INVOCATION_ID || "").trim().toLowerCase();
+const serverManagedRestartAvailable = serverModeActive
+  && process.platform === "linux"
+  && /^[a-f0-9]{32}$/.test(systemdInvocationId);
 const bootstrapToken = String(process.env.GRABENPLANER_BOOTSTRAP_TOKEN || "").trim();
 const bootstrapMode = String(process.env.GRABENPLANER_BOOTSTRAP_MODE || "").trim();
 const codespacesForwardingDomain = String(process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || "app.github.dev")
@@ -19639,8 +19643,8 @@ app.get("/api/server-diagnostics", (request, response) => {
 });
 
 app.get("/api/server-status", (request, response) => {
-  requirePortalAnyPermission(request, ["system:diagnostics:read", "system:diagnostics:technical"]);
-  response.json(serverStatusSummary());
+  const actor = requirePortalAnyPermission(request, ["system:diagnostics:read", "system:diagnostics:technical"]);
+  response.json(serverStatusForActor(serverDiagnostics(), actor));
 });
 
 function runtimeDriveInfo() {
@@ -19831,7 +19835,7 @@ app.get("/api/system-info", (request, response) => {
     appVersion: packageMetadata.version,
     appVersionLabel: APP_VERSION_LABEL,
     portal: getPortalStatus(),
-    serverStatus: statusAllowed ? serverStatusSummary(diagnosticSnapshot) : null,
+    serverStatus: statusAllowed ? serverStatusForActor(diagnosticSnapshot, request.portalSession) : null,
     serverDiagnostics: diagnosticsAllowed ? diagnosticSnapshot : null,
     runtimeDrive: privileged ? runtimeDriveInfo() : null,
   });
@@ -20091,6 +20095,130 @@ Remove-Item -LiteralPath '${tempRoot.replaceAll("'", "''")}' -Recurse -Force -Er
   }).unref();
   setTimeout(shutdown, 900);
 }
+
+const SERVER_MONITOR_CONTROL_ROLES = new Set(["admin", "it_admin", "developer"]);
+const SERVER_MONITOR_RESTART_COOLDOWN_MS = 5 * 60 * 1000;
+let serverManagedRestartRequested = false;
+
+function serverMonitorRestartCooldownSeconds(lastAcceptedAt, now = new Date()) {
+  if (!lastAcceptedAt) return 0;
+  const acceptedMilliseconds = Date.parse(`${String(lastAcceptedAt).replace(" ", "T").replace(/Z$/i, "")}Z`);
+  if (!Number.isFinite(acceptedMilliseconds)) return SERVER_MONITOR_RESTART_COOLDOWN_MS / 1000;
+  return Math.max(0, Math.ceil(
+    (acceptedMilliseconds + SERVER_MONITOR_RESTART_COOLDOWN_MS - now.getTime()) / 1000,
+  ));
+}
+
+function currentServerMonitorRestartCooldownSeconds(now = new Date()) {
+  const latest = db.prepare(`
+    SELECT created_at
+    FROM audit_log
+    WHERE action = 'system.server_monitor.restart.accepted'
+    ORDER BY id DESC
+    LIMIT 1
+  `).get();
+  return serverMonitorRestartCooldownSeconds(latest?.created_at, now);
+}
+
+function serverMonitorActionCapabilities(
+  actor,
+  {
+    managedRestartAvailable = serverManagedRestartAvailable,
+    restartCooldownSeconds = currentServerMonitorRestartCooldownSeconds(),
+  } = {},
+) {
+  return {
+    canRefresh: Boolean(actor),
+    canRestart: Boolean(
+      actor
+      && managedRestartAvailable
+      && restartCooldownSeconds === 0
+      && SERVER_MONITOR_CONTROL_ROLES.has(actor.role)
+      && actor.permissions?.includes("system:write")
+      && actor.permissions?.includes("system:diagnostics:technical"),
+    ),
+  };
+}
+
+function serverStatusForActor(diagnostics, actor) {
+  return {
+    ...serverStatusSummary(diagnostics),
+    monitorActions: serverMonitorActionCapabilities(actor),
+  };
+}
+
+function assertServerRestartConfirmation(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || Object.keys(body).length !== 1 || body.confirmation !== "SERVER_RESTART") {
+    throw httpError(
+      400,
+      "Der kontrollierte Serverneustart wurde nicht eindeutig bestätigt.",
+      "SERVER_RESTART_CONFIRMATION_REQUIRED",
+    );
+  }
+}
+
+app.post("/api/portal/v1/server-monitor/restart", (request, response) => {
+  const actor = requirePortalAdminOrLocal(request, "system:write");
+  if (actor.employeeNumber === "local" || !SERVER_MONITOR_CONTROL_ROLES.has(actor.role)) {
+    throw httpError(
+      403,
+      "Nur Developer, IT-Administration oder Administration dürfen den Server kontrolliert neu starten.",
+      "SERVER_RESTART_ROLE_DENIED",
+    );
+  }
+  if (!actor.permissions?.includes("system:diagnostics:technical")) {
+    throw httpError(
+      403,
+      "Für den kontrollierten Serverneustart fehlt die technische Diagnoseberechtigung.",
+      "SERVER_RESTART_DIAGNOSTICS_PERMISSION_REQUIRED",
+    );
+  }
+  assertServerRestartConfirmation(request.body);
+  if (!serverManagedRestartAvailable) {
+    throw httpError(
+      409,
+      "Der kontrollierte Neustart ist ausschließlich im verwalteten Ubuntu-Serverdienst verfügbar.",
+      "SERVER_RESTART_SERVICE_REQUIRED",
+    );
+  }
+  if (serverManagedRestartRequested) {
+    throw httpError(409, "Ein kontrollierter Serverneustart wurde bereits eingeleitet.", "SERVER_RESTART_IN_PROGRESS");
+  }
+  const cooldownSeconds = currentServerMonitorRestartCooldownSeconds();
+  if (cooldownSeconds > 0) {
+    response.setHeader("Retry-After", String(cooldownSeconds));
+    throw httpError(
+      429,
+      `Nach einem kontrollierten Neustart ist die Aktion noch ${cooldownSeconds} Sekunden gesperrt.`,
+      "SERVER_RESTART_COOLDOWN",
+    );
+  }
+
+  const requestId = crypto.randomUUID();
+  createDatabaseBackup("server-monitor-restart");
+  auditPortal(
+    actor.employeeNumber,
+    "system.server_monitor.restart.accepted",
+    "system",
+    "server-monitor",
+    JSON.stringify({ requestId, result: "accepted" }),
+  );
+  serverManagedRestartRequested = true;
+  response.status(202).json({
+    ok: true,
+    code: "SERVER_RESTART_ACCEPTED",
+    requestId,
+    message: "Der verifizierte Sicherungspunkt wurde erstellt. Grabenplaner wird kontrolliert neu gestartet.",
+  });
+  response.on("finish", () => {
+    setTimeout(() => shutdown({
+      reason: "server-monitor-restart",
+      skipBackup: true,
+      exitCode: 75,
+    }), 350);
+  });
+});
 
 app.post("/api/system/restart", (_request, response) => {
   if (serverModeActive) throw httpError(409, "Der Serverbetrieb wird über den Serverdienst neu gestartet.", "SERVER_MANAGED_RESTART");
@@ -36310,6 +36438,10 @@ module.exports = {
   newestDatabaseBackup,
   serverDiagnostics,
   serverStatusSummary,
+  serverMonitorActionCapabilities,
+  serverMonitorRestartCooldownSeconds,
+  serverStatusForActor,
+  assertServerRestartConfirmation,
   migrateProtectedPersonnelRecords,
   parseProtectedJson,
   purgeExpiredAmuDocuments,

@@ -4,10 +4,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const FORMAT = "grabenplaner-server-monitor-status";
-const SCHEMA_VERSION = 1;
+const LEGACY_SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const MAX_STATUS_BYTES = 64 * 1024;
 const RESTART_COOLDOWN_MS = 30 * 60 * 1000;
-const CHECK_IDS = Object.freeze([
+const LEGACY_CHECK_IDS = Object.freeze([
   "appService",
   "proxyService",
   "monitorTimer",
@@ -28,6 +29,16 @@ const CHECK_IDS = Object.freeze([
   "diskSpace",
   "monitorStatusProtection",
 ]);
+const CHECK_IDS = Object.freeze([
+  ...LEGACY_CHECK_IDS.slice(0, 9),
+  "frameOptions",
+  ...LEGACY_CHECK_IDS.slice(9, 10),
+  "permissionsPolicy",
+  "crossOriginOpenerPolicy",
+  "crossOriginResourcePolicy",
+  "permittedCrossDomainPolicies",
+  ...LEGACY_CHECK_IDS.slice(10),
+]);
 const CHECK_LABELS = new Map([
   ["Dienst grabenplaner.service", "appService"],
   ["Dienst caddy.service", "proxyService"],
@@ -38,7 +49,12 @@ const CHECK_LABELS = new Map([
   ["HSTS", "hsts"],
   ["Content-Security-Policy", "contentSecurityPolicy"],
   ["X-Content-Type-Options", "contentTypeOptions"],
+  ["X-Frame-Options", "frameOptions"],
   ["Referrer-Policy", "referrerPolicy"],
+  ["Permissions-Policy", "permissionsPolicy"],
+  ["Cross-Origin-Opener-Policy", "crossOriginOpenerPolicy"],
+  ["Cross-Origin-Resource-Policy", "crossOriginResourcePolicy"],
+  ["X-Permitted-Cross-Domain-Policies", "permittedCrossDomainPolicies"],
   ["TLS-Zertifikat", "tlsCertificate"],
   ["SQLite quick_check", "sqlite"],
   ["Backup-Aktualitaet", "backupFresh"],
@@ -97,15 +113,15 @@ function validTimestamp(value) {
     && new Date(value).toISOString() === value;
 }
 
-function validateStatus(value) {
-  if (!exactKeys(value, TOP_LEVEL_KEYS) || value.format !== FORMAT || value.schemaVersion !== SCHEMA_VERSION
+function validateStatusSchema(value, schemaVersion, checkIds) {
+  if (!exactKeys(value, TOP_LEVEL_KEYS) || value.format !== FORMAT || value.schemaVersion !== schemaVersion
     || !STATES.has(value.state) || typeof value.complete !== "boolean"
     || !Number.isSafeInteger(value.consecutiveLiveFailures) || value.consecutiveLiveFailures < 0
     || value.consecutiveLiveFailures > 3 || !validTimestamp(value.generatedAt)
     || (value.lastRestartAt !== null && !validTimestamp(value.lastRestartAt))) {
     throw new Error("Der Monitorstatus besitzt kein freigegebenes Schema.");
   }
-  if (!exactKeys(value.checks, new Set(CHECK_IDS))
+  if (!exactKeys(value.checks, new Set(checkIds))
     || Object.values(value.checks).some((result) => typeof result !== "boolean")) {
     throw new Error("Der Monitorstatus enthaelt ungueltige Pruefergebnisse.");
   }
@@ -122,6 +138,29 @@ function validateStatus(value) {
     }
   }
   return value;
+}
+
+function validateStatus(value) {
+  return validateStatusSchema(value, SCHEMA_VERSION, CHECK_IDS);
+}
+
+function migrateLegacyStatus(value) {
+  const legacy = validateStatusSchema(value, LEGACY_SCHEMA_VERSION, LEGACY_CHECK_IDS);
+  return validateStatus({
+    ...legacy,
+    schemaVersion: SCHEMA_VERSION,
+    state: legacy.state === "ok" ? "warning" : legacy.state,
+    complete: false,
+    checks: Object.fromEntries(CHECK_IDS.map((id) => [
+      id,
+      Object.hasOwn(legacy.checks, id) ? legacy.checks[id] : false,
+    ])),
+  });
+}
+
+function normalizeStoredStatus(value) {
+  if (value?.schemaVersion === LEGACY_SCHEMA_VERSION) return migrateLegacyStatus(value);
+  return validateStatus(value);
 }
 
 function parseTestOutput(text, exitCode) {
@@ -264,7 +303,7 @@ function readStatus(statusFile, statusGid) {
     descriptor = fs.openSync(statusFile, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0) | (fs.constants.O_CLOEXEC || 0));
     const after = fs.fstatSync(descriptor);
     if (after.dev !== before.dev || after.ino !== before.ino) throw new Error("Der Monitorstatus wurde ausgetauscht.");
-    return validateStatus(JSON.parse(fs.readFileSync(descriptor, "utf8").replace(/^\uFEFF/, "")));
+    return normalizeStoredStatus(JSON.parse(fs.readFileSync(descriptor, "utf8").replace(/^\uFEFF/, "")));
   } catch (error) {
     if (error?.code === "ENOENT") return emptyStatus();
     throw error;
@@ -366,10 +405,12 @@ module.exports = {
   CHECK_LABELS,
   ERROR_CODES,
   FORMAT,
+  LEGACY_CHECK_IDS,
   RESTART_COOLDOWN_MS,
   emptyStatus,
   errorStatus,
   evaluateStatus,
+  migrateLegacyStatus,
   parseTestOutput,
   restartAttemptStatus,
   restartResultStatus,

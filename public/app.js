@@ -178,6 +178,12 @@ const state = {
   employeePersonnelRecord: null,
   serverStatus: null,
   serverDiagnostics: null,
+  serverDiagnosticsLoading: false,
+  serverMonitorActionPending: "",
+  serverMonitorActionFeedback: null,
+  serverMonitorRestartAccepted: false,
+  serverMonitorRestartPhase: "",
+  serverMonitorRestartReturnFocus: null,
   updateStatus: null,
   selectedColor: "#0b84c6",
   integrations: {
@@ -281,7 +287,7 @@ const elements = Object.fromEntries(
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
     "rightsProcessCategory", "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
-    "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "databaseBackupSettingsCard", "backupRestoreGuidanceCard",
+    "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "databaseBackupSettingsCard", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "dashboardFontSize", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
@@ -2421,6 +2427,11 @@ const serverMonitorCheckLabels = {
   contentSecurityPolicy: "Content-Security-Policy",
   contentTypeOptions: "Content-Type-Schutz",
   referrerPolicy: "Referrer-Policy",
+  frameOptions: "X-Frame-Options",
+  permissionsPolicy: "Permissions-Policy",
+  crossOriginOpenerPolicy: "Cross-Origin-Opener-Policy",
+  crossOriginResourcePolicy: "Cross-Origin-Resource-Policy",
+  permittedCrossDomainPolicies: "X-Permitted-Cross-Domain-Policies",
   tlsCertificate: "TLS-Zertifikat",
   sqlite: "SQLite",
   backupFresh: "Sicherungsalter",
@@ -2466,7 +2477,7 @@ function backupPointText(point) {
   return `${diagnosticTimestamp(point.createdAt)}${diagnosticAge(point.ageHours)}${point.verified ? " · geprüft" : ""}`;
 }
 
-function renderMonitorDiagnostics(monitor) {
+function renderMonitorDiagnostics(monitor, monitorActions = {}) {
   if (!monitor?.configured) return "";
   const failed = Array.isArray(monitor.failedChecks) ? monitor.failedChecks : [];
   const failedText = failed.length
@@ -2477,6 +2488,22 @@ function renderMonitorDiagnostics(monitor) {
   const recoveryText = recovery.successful ? "automatischer Wiederanlauf erfolgreich"
     : recovery.suppressed ? "Wiederanlauf aus Sicherheitsgründen unterdrückt"
       : recovery.attempted ? "Wiederanlauf versucht" : "kein Wiederanlauf erforderlich";
+  const pendingAction = state.serverMonitorActionPending;
+  const refreshDisabled = Boolean(pendingAction)
+    || (state.serverMonitorRestartAccepted && state.serverMonitorRestartPhase !== "timeout");
+  const restartDisabled = Boolean(pendingAction) || state.serverMonitorRestartAccepted;
+  const feedback = state.serverMonitorActionFeedback;
+  const feedbackMarkup = feedback?.message
+    ? `<p class="monitor-action-feedback ${escapeHtml(feedback.kind || "info")}" role="${feedback.kind === "error" ? "alert" : "status"}" aria-live="polite">${escapeHtml(feedback.message)}</p>`
+    : '<p class="monitor-action-feedback hidden" role="status" aria-live="polite"></p>';
+  const restartLabel = state.serverMonitorRestartPhase === "timeout"
+    ? "Neustartstatus nicht bestätigt"
+    : state.serverMonitorRestartAccepted
+      ? "Warte auf Server …"
+      : pendingAction === "restart" ? "Neustart wird vorbereitet …" : "Server kontrolliert neu starten";
+  const restartButton = monitorActions.canRestart === true
+    ? `<button type="button" class="danger-button" data-server-monitor-action="restart" aria-haspopup="dialog" aria-controls="serverRestartModal"${restartDisabled ? " disabled" : ""}>${restartLabel}</button>`
+    : "";
   return `
     <section class="monitor-diagnostics ${monitor.state === "ok" ? "ok" : "warning"}">
       <div class="offsite-diagnostics-heading"><div><span class="eyebrow">Automatische Betriebsüberwachung</span><strong>Server-Monitor</strong><small>${escapeHtml(failedText)}</small></div><span class="status-badge ${monitor.state === "ok" ? "active" : "inactive"}">${escapeHtml(stateLabel)}</span></div>
@@ -2487,6 +2514,11 @@ function renderMonitorDiagnostics(monitor) {
         <span><small>Wiederanlauf</small><strong>${escapeHtml(recoveryText)}</strong></span>
       </div>
       ${monitor.lastErrorCode ? `<p class="offsite-diagnostic-error"><strong>Fehlercode:</strong> ${escapeHtml(monitor.lastErrorCode)}</p>` : ""}
+      <div class="monitor-diagnostics-actions" aria-label="Server-Monitor-Aktionen">
+        <button type="button" class="secondary-button" data-server-monitor-action="refresh"${refreshDisabled ? " disabled" : ""}>${pendingAction === "refresh" ? "Status wird aktualisiert …" : state.serverMonitorRestartAccepted && state.serverMonitorRestartPhase !== "timeout" ? "Warte auf Server …" : "Status aktualisieren"}</button>
+        ${restartButton}
+        ${feedbackMarkup}
+      </div>
     </section>`;
 }
 
@@ -2553,7 +2585,7 @@ function renderServerDiagnostics(status, technical = null) {
       <span><small>Letzte Statusprüfung</small><strong>${escapeHtml(diagnosticTimestamp(status.checkedAt))}</strong></span>
     </div>
     ${renderOffsiteBackupDiagnostics(offsite)}
-    ${renderMonitorDiagnostics(status.monitor)}
+    ${renderMonitorDiagnostics(status.monitor, status.monitorActions)}
     ${renderHostSecurityDiagnostics(hostSecurity)}
     <section class="recovery-diagnostics ${recoveryState}">
       <div><span class="eyebrow">Wiederherstellungsnachweis</span><strong>Isolierter Test-Restore</strong><small>${recovery.isolatedRestoreTestPending ? "Noch ausständig, überfällig oder zuletzt fehlgeschlagen." : "Der letzte isolierte Wiederherstellungstest ist bestätigt."}</small></div>
@@ -2564,7 +2596,25 @@ function renderServerDiagnostics(status, technical = null) {
   renderGlobalServerAlert(status);
 }
 
-async function refreshServerDiagnostics() {
+function applyServerDiagnosticsLoadingState() {
+  if (!elements.refreshServerDiagnosticsButton) return;
+  const waitingForRestart = state.serverMonitorRestartAccepted && state.serverMonitorRestartPhase !== "timeout";
+  elements.refreshServerDiagnosticsButton.disabled = state.serverDiagnosticsLoading || waitingForRestart;
+  elements.refreshServerDiagnosticsButton.textContent = state.serverDiagnosticsLoading
+    ? "Diagnose wird aktualisiert …"
+    : waitingForRestart ? "Warte auf Server …" : "Diagnose aktualisieren";
+}
+
+async function refreshServerDiagnostics({ announce = false } = {}) {
+  if (state.serverDiagnosticsLoading
+    || (state.serverMonitorRestartAccepted && state.serverMonitorRestartPhase !== "timeout")) return false;
+  state.serverDiagnosticsLoading = true;
+  if (announce) {
+    state.serverMonitorActionPending = "refresh";
+    state.serverMonitorActionFeedback = { kind: "pending", message: "Der aktuelle Serverstatus wird geladen." };
+  }
+  applyServerDiagnosticsLoadingState();
+  if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
   try {
     const permissions = state.portalSession?.user?.permissions || [];
     const localAccess = state.portalStatus?.portalEnabled !== true;
@@ -2573,9 +2623,172 @@ async function refreshServerDiagnostics() {
     const technical = technicalAccess ? await api("/api/server-diagnostics") : null;
     state.serverStatus = status;
     state.serverDiagnostics = technical;
+    if (announce) {
+      const restartRecovered = state.serverMonitorRestartAccepted && state.serverMonitorRestartPhase === "timeout";
+      state.serverMonitorActionFeedback = {
+        kind: "success",
+        message: restartRecovered
+          ? "Grabenplaner ist wieder erreichbar. Die Ansicht wird neu geladen."
+          : "Der Serverstatus wurde erfolgreich aktualisiert.",
+      };
+      showToast(restartRecovered ? "Grabenplaner ist wieder erreichbar." : "Serverstatus aktualisiert.");
+      if (restartRecovered) {
+        state.serverMonitorRestartPhase = "ready";
+        window.setTimeout(() => window.location.reload(), 800);
+      }
+    }
     renderServerDiagnostics(status, technical);
+    return true;
   } catch (error) {
-    if (elements.serverDiagnostics) elements.serverDiagnostics.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    if (announce) {
+      state.serverMonitorActionFeedback = { kind: "error", message: error.message };
+      showToast(error.message, true);
+      if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
+      else if (elements.serverDiagnostics) elements.serverDiagnostics.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    } else if (elements.serverDiagnostics) {
+      elements.serverDiagnostics.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    }
+    return false;
+  } finally {
+    state.serverDiagnosticsLoading = false;
+    if (state.serverMonitorActionPending === "refresh") state.serverMonitorActionPending = "";
+    applyServerDiagnosticsLoadingState();
+    if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
+  }
+}
+
+function setServerRestartMessage(message = "", kind = "") {
+  if (!elements.serverRestartMessage) return;
+  elements.serverRestartMessage.textContent = message;
+  elements.serverRestartMessage.classList.toggle("hidden", !message);
+  elements.serverRestartMessage.classList.toggle("error", kind === "error");
+  elements.serverRestartMessage.classList.toggle("success", kind === "success");
+  elements.serverRestartMessage.setAttribute("role", kind === "error" ? "alert" : "status");
+}
+
+function applyServerRestartDialogState() {
+  const pending = state.serverMonitorActionPending === "restart";
+  elements.serverRestartModal?.setAttribute("aria-busy", pending ? "true" : "false");
+  if (elements.serverRestartCloseButton) elements.serverRestartCloseButton.disabled = pending;
+  if (elements.serverRestartCancelButton) elements.serverRestartCancelButton.disabled = pending;
+  if (elements.serverRestartConfirmButton) {
+    elements.serverRestartConfirmButton.disabled = pending || state.serverStatus?.monitorActions?.canRestart !== true;
+    elements.serverRestartConfirmButton.textContent = pending
+      ? "Sicherung und Neustart werden vorbereitet …"
+      : "Sicherung erstellen und neu starten";
+  }
+}
+
+function openServerRestartDialog(opener) {
+  if (state.serverStatus?.monitorActions?.canRestart !== true || state.serverMonitorRestartAccepted) {
+    state.serverMonitorActionFeedback = {
+      kind: "error",
+      message: "Der kontrollierte Serverneustart ist für diese Sitzung nicht verfügbar.",
+    };
+    if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
+    showToast(state.serverMonitorActionFeedback.message, true);
+    return;
+  }
+  state.serverMonitorRestartReturnFocus = opener || null;
+  setServerRestartMessage();
+  applyServerRestartDialogState();
+  elements.serverRestartModal?.showModal();
+}
+
+let serverRestartReadinessGeneration = 0;
+
+function waitForServerRestartDelay(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+async function waitForServerReadinessAfterRestart() {
+  const generation = ++serverRestartReadinessGeneration;
+  const deadline = Date.now() + 90000;
+  state.serverMonitorRestartPhase = "waiting";
+  state.serverMonitorActionFeedback = {
+    kind: "pending",
+    message: "Der Sicherungspunkt ist erstellt. Grabenplaner startet neu; die Ansicht wartet auf die Betriebsbereitschaft.",
+  };
+  applyServerDiagnosticsLoadingState();
+  if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
+
+  await waitForServerRestartDelay(2000);
+  while (generation === serverRestartReadinessGeneration
+    && state.serverMonitorRestartAccepted
+    && Date.now() < deadline) {
+    try {
+      const response = await fetch(`/api/health/ready?restart-check=${Date.now()}`, {
+        method: "GET",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+      const payload = response.ok ? await response.json().catch(() => null) : null;
+      if (response.ok && payload?.ok === true) {
+        state.serverMonitorRestartPhase = "ready";
+        state.serverMonitorActionFeedback = {
+          kind: "success",
+          message: "Grabenplaner ist wieder betriebsbereit. Die Ansicht wird neu geladen.",
+        };
+        applyServerDiagnosticsLoadingState();
+        if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
+        showToast("Grabenplaner ist wieder betriebsbereit.");
+        window.setTimeout(() => window.location.reload(), 800);
+        return;
+      }
+    } catch {
+      // Die kurze Nichterreichbarkeit ist während des kontrollierten Neustarts erwartbar.
+    }
+    await waitForServerRestartDelay(1500);
+  }
+
+  if (generation !== serverRestartReadinessGeneration || !state.serverMonitorRestartAccepted) return;
+  state.serverMonitorRestartPhase = "timeout";
+  state.serverMonitorActionFeedback = {
+    kind: "error",
+    message: "Die Betriebsbereitschaft wurde innerhalb von 90 Sekunden nicht bestätigt. Bitte den Status manuell aktualisieren; der Neustart wird nicht automatisch wiederholt.",
+  };
+  applyServerDiagnosticsLoadingState();
+  if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
+  showToast(state.serverMonitorActionFeedback.message, true);
+}
+
+async function submitServerRestart(event) {
+  event.preventDefault();
+  if (state.serverMonitorActionPending || state.serverMonitorRestartAccepted) return;
+  if (state.serverStatus?.monitorActions?.canRestart !== true) {
+    setServerRestartMessage("Der kontrollierte Serverneustart ist für diese Sitzung nicht verfügbar.", "error");
+    return;
+  }
+
+  state.serverMonitorActionPending = "restart";
+  state.serverMonitorActionFeedback = {
+    kind: "pending",
+    message: "Ein verifizierter Sicherungspunkt wird erstellt und der Neustart vorbereitet.",
+  };
+  applyServerRestartDialogState();
+  setServerRestartMessage("Verifizierter Sicherungspunkt und kontrollierter Neustart werden vorbereitet.");
+  if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
+
+  try {
+    const result = await api("/api/portal/v1/server-monitor/restart", {
+      method: "POST",
+      body: JSON.stringify({ confirmation: "SERVER_RESTART" }),
+    });
+    const successMessage = result?.message || "Der verifizierte Sicherungspunkt wurde erstellt. Grabenplaner wird kontrolliert neu gestartet.";
+    state.serverMonitorRestartAccepted = true;
+    elements.serverRestartModal?.close();
+    showToast(`${successMessage} Die Verbindung ist gleich kurz unterbrochen.`);
+    waitForServerReadinessAfterRestart();
+  } catch (error) {
+    const errorMessage = `${error.message} Es wurde keine erfolgreiche Neustartbestätigung empfangen. Bitte den Serverstatus prüfen, bevor Sie die Aktion wiederholen.`;
+    state.serverMonitorActionFeedback = { kind: "error", message: errorMessage };
+    setServerRestartMessage(errorMessage, "error");
+    showToast(errorMessage, true);
+  } finally {
+    if (state.serverMonitorActionPending === "restart") state.serverMonitorActionPending = "";
+    applyServerRestartDialogState();
+    applyServerDiagnosticsLoadingState();
+    if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
   }
 }
 
@@ -14359,7 +14572,25 @@ elements.publicServerModeOption?.addEventListener("click", () => {
   if (state.portalStatus?.operationMode === "server") return;
   showToast("Der Serverbetrieb wird aus Sicherheitsgründen ausschließlich über die geschützte Serverkonfiguration aktiviert.");
 });
-elements.refreshServerDiagnosticsButton?.addEventListener("click", refreshServerDiagnostics);
+elements.refreshServerDiagnosticsButton?.addEventListener("click", () => refreshServerDiagnostics({ announce: true }));
+elements.serverDiagnostics?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-server-monitor-action]");
+  if (!button || button.disabled) return;
+  if (button.dataset.serverMonitorAction === "refresh") {
+    refreshServerDiagnostics({ announce: true });
+  } else if (button.dataset.serverMonitorAction === "restart") {
+    openServerRestartDialog(button);
+  }
+});
+elements.serverRestartForm?.addEventListener("submit", submitServerRestart);
+elements.serverRestartModal?.addEventListener("cancel", (event) => {
+  if (state.serverMonitorActionPending === "restart") event.preventDefault();
+});
+elements.serverRestartModal?.addEventListener("close", () => {
+  const returnFocus = state.serverMonitorRestartReturnFocus;
+  state.serverMonitorRestartReturnFocus = null;
+  if (returnFocus?.isConnected) returnFocus.focus();
+});
 elements.serverAlertBanner?.addEventListener("click", () => {
   setView("settings");
   setSettingsTab("backup");

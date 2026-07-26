@@ -166,3 +166,116 @@ test("v0.78: reine Leseberechtigung bleibt redigiert und GET ist nebenwirkungsfr
   assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM portal_notifications").get().count), notificationsBefore);
   assert.match(serverSource, /createPortalNotification\(employeeNumber,\s*"system\.recovery\.alert",[\s\S]{0,1000}?reactivate:\s*true/);
 });
+
+test("v0.86.2: Server-Monitor-Aktionen bleiben auf Admin, IT-Admin und Developer begrenzt", () => {
+  const actor = (role, permissions = ["system:write", "system:diagnostics:technical"]) => ({
+    employeeNumber: `role-${role}`,
+    role,
+    permissions,
+  });
+  for (const role of ["admin", "it_admin", "developer"]) {
+    assert.deepEqual(
+      subject.serverMonitorActionCapabilities(actor(role), { managedRestartAvailable: true }),
+      { canRefresh: true, canRestart: true },
+      role,
+    );
+  }
+  assert.equal(
+    subject.serverMonitorActionCapabilities(actor("hr"), { managedRestartAvailable: true }).canRestart,
+    false,
+  );
+  assert.equal(
+    subject.serverMonitorActionCapabilities(actor("admin", []), { managedRestartAvailable: true }).canRestart,
+    false,
+  );
+  assert.equal(
+    subject.serverMonitorActionCapabilities(actor("admin", ["system:write"]), { managedRestartAvailable: true }).canRestart,
+    false,
+  );
+  assert.equal(
+    subject.serverMonitorActionCapabilities(actor("admin"), {
+      managedRestartAvailable: true,
+      restartCooldownSeconds: 1,
+    }).canRestart,
+    false,
+  );
+  assert.equal(
+    subject.serverMonitorActionCapabilities(actor("admin"), { managedRestartAvailable: false }).canRestart,
+    false,
+  );
+  assert.deepEqual(subject.serverMonitorActionCapabilities(null), { canRefresh: false, canRestart: false });
+});
+
+test("v0.86.2: persistente Neustartsperre ist fail-closed und endet nach fünf Minuten", () => {
+  const acceptedAt = "2026-07-26 12:00:00";
+  assert.equal(
+    subject.serverMonitorRestartCooldownSeconds(acceptedAt, new Date("2026-07-26T12:04:00.000Z")),
+    60,
+  );
+  assert.equal(
+    subject.serverMonitorRestartCooldownSeconds(acceptedAt, new Date("2026-07-26T12:05:00.000Z")),
+    0,
+  );
+  assert.equal(subject.serverMonitorRestartCooldownSeconds(null), 0);
+  assert.equal(subject.serverMonitorRestartCooldownSeconds("ungueltig"), 300);
+});
+
+test("v0.86.2: Neustart verlangt exakte Bestaetigung, CSRF und verwalteten Serverdienst", async () => {
+  assert.doesNotThrow(() => subject.assertServerRestartConfirmation({ confirmation: "SERVER_RESTART" }));
+  for (const body of [
+    null,
+    {},
+    { confirmation: "server_restart" },
+    { confirmation: "SERVER_RESTART", extra: true },
+  ]) {
+    assert.throws(
+      () => subject.assertServerRestartConfirmation(body),
+      (error) => error?.status === 400 && error?.code === "SERVER_RESTART_CONFIRMATION_REQUIRED",
+    );
+  }
+
+  const admin = ensureTestUser("9701", "admin");
+  const missingConfirmation = await requestJson("/api/portal/v1/server-monitor/restart", {
+    method: "POST",
+    session: admin,
+    body: {},
+  });
+  assert.equal(missingConfirmation.response.status, 400, JSON.stringify(missingConfirmation.payload));
+  assert.equal(missingConfirmation.payload.code, "SERVER_RESTART_CONFIRMATION_REQUIRED");
+
+  const noCsrf = await nativeFetch(`${baseUrl}/api/portal/v1/server-monitor/restart`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Cookie: admin.cookie,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ confirmation: "SERVER_RESTART" }),
+  });
+  assert.equal(noCsrf.status, 403);
+
+  const hr = ensureTestUser("9704", "hr");
+  db.prepare(`
+    INSERT OR IGNORE INTO portal_permission_grants (employee_number, permission, granted_by)
+    VALUES ('9704', 'system:write', '9701')
+  `).run();
+  const deniedRole = await requestJson("/api/portal/v1/server-monitor/restart", {
+    method: "POST",
+    session: hr,
+    body: { confirmation: "SERVER_RESTART" },
+  });
+  assert.equal(deniedRole.response.status, 403, JSON.stringify(deniedRole.payload));
+  assert.equal(deniedRole.payload.code, "SERVER_RESTART_ROLE_DENIED");
+
+  const unmanaged = await requestJson("/api/portal/v1/server-monitor/restart", {
+    method: "POST",
+    session: admin,
+    body: { confirmation: "SERVER_RESTART" },
+  });
+  assert.equal(unmanaged.response.status, 409, JSON.stringify(unmanaged.payload));
+  assert.equal(unmanaged.payload.code, "SERVER_RESTART_SERVICE_REQUIRED");
+
+  const status = await requestJson("/api/server-status", { session: admin });
+  assert.equal(status.response.status, 200, JSON.stringify(status.payload));
+  assert.deepEqual(status.payload.monitorActions, { canRefresh: true, canRestart: false });
+});

@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.86.2 Beta · Server-Monitor und kontrollierte Direktmaßnahmen
+
+- Der Linux-Monitor verarbeitet den in v0.86.1 erweiterten Sicherheitsheader-Vertrag vollständig. Vorhandene Statusdateien des bisherigen Schemas werden eng begrenzt übernommen und bei der nächsten geschützten Monitor-Aktualisierung auf das neue Schema gehoben.
+- Admin, IT-Admin und Developer können den Serverstatus direkt in der Karte der automatischen Betriebsüberwachung aktualisieren. Ein kontrollierter Serverneustart wird ausschließlich bei wirksamem `system:write`-Recht und nach einer ausdrücklichen Warnbestätigung angeboten.
+- Vor einem angenommenen Neustart erzeugt Grabenplaner synchron einen gekoppelten, verifizierten Datenbank-/Dokument-Sicherungspunkt. Erst danach wird der verwaltete systemd-Dienst mit einem kontrollierten Fehlercode beendet und durch seine bestehende Wiederanlaufregel neu gestartet.
+- CSRF-Schutz, exakte Bestätigungsdaten, Rollenprüfung, systemd-Nachweis, Wiederholungssperre und Audit-Ereignis schützen die Direktmaßnahme vor fremden, versehentlichen oder doppelten Anforderungen.
+
 ## v0.86.1 Beta · Technischer Härtungs- und Abnahmeblock
 
 - Gekoppelte Sicherungen und Wiederherstellungen berücksichtigen nun neben AMU- und Personalaktdateien auch sämtliche verschlüsselten Leihbelege und Leihfotos. Fehlende referenzierte Dateien lassen Sicherung, Wiederherstellung oder Serverdiagnose nachvollziehbar fehlschlagen.
