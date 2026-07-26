@@ -185,6 +185,22 @@ $shmPath = "$target-shm"
 $amuRestored = $false
 $amuSafetyBackup = Join-Path $targetDirectory ".amu-pre-restore-$timestamp"
 $amuTarget = [System.IO.Path]::GetFullPath($AmuDirectory)
+$amuTargetKeyCheck = Join-Path $amuTarget 'key-check.amu'
+$hadAmu = Test-Path -LiteralPath $amuTargetKeyCheck -PathType Leaf
+if ((Test-Path -LiteralPath $amuTarget -PathType Container) -and -not $hadAmu) {
+    $allowedEmptySkeletonDirectories = @('blobs', 'tmp')
+    $unexpectedAmuEntry = Get-ChildItem -LiteralPath $amuTarget -Force | Where-Object {
+        if (-not $_.PSIsContainer -or
+            ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+            $_.Name -notin $allowedEmptySkeletonDirectories) {
+            return $true
+        }
+        return [bool](Get-ChildItem -LiteralPath $_.FullName -Force | Select-Object -First 1)
+    } | Select-Object -First 1
+    if ($unexpectedAmuEntry) {
+        throw 'Das vorhandene AMU-Ziel ist nicht initialisiert und nicht leer. Eine sichere Wiederherstellung würde vorhandene Dateien überschreiben.'
+    }
+}
 $amuModule = Join-Path ([System.IO.Path]::GetFullPath($AppDirectory)) 'lib\amu-storage.js'
 if (-not $AmuBackupDirectory) {
     $AmuBackupDirectory = Join-Path (Split-Path -Parent $source) "$([System.IO.Path]::GetFileNameWithoutExtension($source)).amu"
@@ -226,11 +242,16 @@ const database = new DatabaseSync(databasePath, { readOnly: true });
 let requiredStorageKeys = [];
 try {
   const hasTable = (name) => Boolean(database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
-  if (hasTable('amu_documents')) {
-    requiredStorageKeys.push(...database.prepare("SELECT storage_key FROM amu_documents WHERE status = 'active'").all().map((row) => row.storage_key));
-  }
-  if (hasTable('personnel_record_documents')) {
-    requiredStorageKeys.push(...database.prepare("SELECT storage_key FROM personnel_record_documents WHERE status = 'active'").all().map((row) => row.storage_key));
+  for (const reference of [
+    { table: 'amu_documents', where: "WHERE status = 'active'" },
+    { table: 'personnel_record_documents', where: "WHERE status = 'active'" },
+    { table: 'loan_documents', where: '' },
+    { table: 'loan_photos', where: '' },
+  ]) {
+    if (!hasTable(reference.table)) continue;
+    requiredStorageKeys.push(...database.prepare(
+      `SELECT storage_key FROM ${reference.table} ${reference.where}`,
+    ).all().map((row) => row.storage_key));
   }
 } finally { database.close(); }
 verifyBackupReferences({ backupDirectory: sourceDirectory, requiredStorageKeys });
@@ -259,7 +280,9 @@ try {
     Test-SqliteDatabase -Path $target
 
     if ($AmuBackupDirectory) {
-        Invoke-AmuStorage -Action 'backup' -ModulePath $amuModule -Source $amuTarget -Target $amuSafetyBackup | Out-Null
+        if ($hadAmu) {
+            Invoke-AmuStorage -Action 'backup' -ModulePath $amuModule -Source $amuTarget -Target $amuSafetyBackup | Out-Null
+        }
         Invoke-AmuStorage -Action 'restore' -ModulePath $amuModule -Source $amuSource -Target $amuTarget | Out-Null
         $amuRestored = $true
     }
@@ -303,30 +326,48 @@ try {
     }
     $amuRollbackReady = -not $amuRestored
     $amuRollbackError = $null
-    if ($amuRestored -and $AmuBackupDirectory -and (Test-Path -LiteralPath (Join-Path $amuSafetyBackup 'manifest.json') -PathType Leaf)) {
-        try {
-            Invoke-AmuStorage -Action 'restore' -ModulePath $amuModule -Source $amuSafetyBackup -Target $amuTarget | Out-Null
-            $amuRollbackReady = $true
-        } catch { $amuRollbackError = $_.Exception.Message }
+    if ($amuRestored -and $AmuBackupDirectory) {
+        if ($hadAmu -and (Test-Path -LiteralPath (Join-Path $amuSafetyBackup 'manifest.json') -PathType Leaf)) {
+            try {
+                Invoke-AmuStorage -Action 'restore' -ModulePath $amuModule -Source $amuSafetyBackup -Target $amuTarget | Out-Null
+                $amuRollbackReady = $true
+            } catch { $amuRollbackError = $_.Exception.Message }
+        } elseif (-not $hadAmu) {
+            try {
+                if (Test-Path -LiteralPath $amuTarget -PathType Container) {
+                    Remove-Item -LiteralPath $amuTarget -Recurse -Force
+                }
+                $amuRollbackReady = -not (Test-Path -LiteralPath $amuTarget)
+            } catch { $amuRollbackError = $_.Exception.Message }
+        }
     }
     Remove-Item -LiteralPath $rawPrevious -Force -ErrorAction SilentlyContinue
     Stop-DatabaseMaintenanceLock $databaseLockHandle
     $databaseLockHandle = $null
-    $databaseRollbackReady = Test-Path -LiteralPath $target -PathType Leaf
-    if ($StartServiceAfterRestore -and $databaseRollbackReady -and $amuRollbackReady) {
+    $databaseRollbackReady = if ($hadDatabase) {
+        Test-Path -LiteralPath $target -PathType Leaf
+    } else {
+        -not (Test-Path -LiteralPath $target)
+    }
+    if ($StartServiceAfterRestore -and $hadDatabase -and $databaseRollbackReady -and $amuRollbackReady) {
         Start-Service -Name $ServiceName -ErrorAction SilentlyContinue
     }
     $rollbackHint = if (-not $databaseRollbackReady -or -not $amuRollbackReady) {
         " Der Sicherheitsrollback ist unvollstaendig (AUM: $amuRollbackError); sofortiger manueller IT-Eingriff ist erforderlich."
     } else { '' }
-    throw "Wiederherstellung fehlgeschlagen; die vorherige gekoppelte Sicherung wurde zurueckgesetzt. $($restoreError.Exception.Message)$rollbackHint"
+    $rollbackState = if ($hadDatabase) {
+        'die vorherige gekoppelte Sicherung wurde zurueckgesetzt'
+    } else {
+        'das frische Ziel wurde in den leeren Ausgangszustand zurueckgesetzt'
+    }
+    throw "Wiederherstellung fehlgeschlagen; $rollbackState. $($restoreError.Exception.Message)$rollbackHint"
 } finally {
     Stop-DatabaseMaintenanceLock $databaseLockHandle
     Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
 }
 if ($transactionCommitted) {
     Remove-Item -LiteralPath $rawPrevious -Force -ErrorAction SilentlyContinue
-    if ($amuRestored -and (Test-Path -LiteralPath $amuSafetyBackup -PathType Container)) {
+    if ($hadAmu -and $amuRestored -and (Test-Path -LiteralPath $amuSafetyBackup -PathType Container)) {
         $resolvedSafety = [System.IO.Path]::GetFullPath($amuSafetyBackup)
         if ($resolvedSafety.StartsWith($targetDirectory + [IO.Path]::DirectorySeparatorChar)) {
             try { Remove-Item -LiteralPath $resolvedSafety -Recurse -Force -ErrorAction Stop } catch {}

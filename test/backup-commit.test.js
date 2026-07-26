@@ -127,6 +127,20 @@ test("standalone Windows backup uses the same commit marker and committed-only r
   assert.match(source, /marker: markerTarget/);
 });
 
+test("all standalone backup and restore helpers include protected loan files", () => {
+  for (const relativePath of [
+    "backup.js",
+    "server-tools/linux/lib/backup-snapshot.js",
+    "server-tools/linux/lib/verify-backup.js",
+    "server-tools/windows/Backup-Grabenplaner.ps1",
+    "server-tools/windows/Restore-Grabenplaner.ps1",
+  ]) {
+    const source = fs.readFileSync(path.join(__dirname, "..", ...relativePath.split("/")), "utf8");
+    assert.match(source, /loan_documents/, relativePath);
+    assert.match(source, /loan_photos/, relativePath);
+  }
+});
+
 test("public readiness uses only O(1) cached metadata helpers", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
   const latest = source.match(/function latestDatabaseBackup\([\s\S]*?function serverDiagnostics/)?.[0] || "";

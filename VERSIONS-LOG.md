@@ -1,5 +1,17 @@
 # Grabenplaner Versions-Log
 
+## v0.86.1 Beta · Technischer Härtungs- und Abnahmeblock
+
+- Gekoppelte Sicherungen und Wiederherstellungen berücksichtigen nun neben AMU- und Personalaktdateien auch sämtliche verschlüsselten Leihbelege und Leihfotos. Fehlende referenzierte Dateien lassen Sicherung, Wiederherstellung oder Serverdiagnose nachvollziehbar fehlschlagen.
+- Die Windows-Wiederherstellung unterstützt ein frisches Installationsziel mit leerem AMU-Verzeichnis und stellt bei Fehlern auch diesen Ausgangszustand transaktional wieder her. Nichtleere oder unerwartete Zielinhalte werden weiterhin nicht überschrieben.
+- Die Windows- und Linux-Serverdiagnose prüft die sicherheitsrelevanten HTTP-Header gegen den vollständigen erwarteten Vertrag. Kritische CSP-Direktiven werden exakt ausgewertet; angehängte oder abweichende Fremdquellen gelten nicht als bestanden.
+- Die Bildverarbeitung verwendet Sharp 0.35.3 mit libvips 8.18.3. Die transitive Brace-Expansion der Excel-/ZIP-Verarbeitung ist auf die korrigierte Fassung 5.0.8 begrenzt und über eine lokale CommonJS-Kompatibilitätsschicht für die vorhandenen Archivbibliotheken abgesichert.
+- Der scope-bezogene Zugriff auf eigene Personalregeln und Prozessaufgaben wurde weiter minimiert. Fremde Fassungen, fachliche Metadaten und Audit-Identitäten werden nicht über sichtbare aktuelle Fassungen oder bereichsbezogene Leserechte mitgeliefert.
+- Eine ausgewählte zweite Person kann Rückgabefotos während der offenen Live-Gegenprüfung geschützt ansehen. Nach Anforderung der Gegenbestätigung bleiben die zugehörigen Rückgabefotos unveränderlich; nach Ablehnung endet auch dieser vorübergehende Zugriff.
+- Parallele Foto-Uploads werden innerhalb des serialisierten Schreibvorgangs nochmals gegen Leihstatus, offene Gegenbestätigung, Fotoanzahl und freie Positionen geprüft. Dadurch entstehen weder doppelte Positionen noch nachträglich angefügte Fotos an bereits geschlossenen Vorgängen.
+- Eine Leitung kann die persönliche Rückgabebestätigung des ausleihenden Mitarbeiters nicht stellvertretend setzen. Leitungsfunktionen zum revisionsgesicherten Bearbeiten, Schließen ohne neuen Beleg und Wiederöffnen bleiben davon unberührt.
+- Die Härtung wurde mit synthetischen Rollen-, Leih-, Foto- und PDF-Fällen, mobilen Ansichten, Recovery-Prüfungen und der vollständigen automatisierten Testsuite abgenommen. Produktive Personaldaten wurden dafür nicht verändert.
+
 ## v0.86 Beta · Personal-Regelwerk und Kollektivverträge
 
 - Das neue Personal-Regelwerk-Dashboard bündelt gesetzliche Basisprofile, Jugendprofile, Kollektivverträge, eigene Regeln, Quellen, Geltungsbereiche und Simulationen in einer gemeinsamen fachlichen Übersicht.
@@ -11,6 +23,8 @@
 - Veröffentlichungen, Zuordnungsrevisionen, KV-Entscheidungen und Governance-Ereignisse bleiben append-only und über SHA-256-Belege nachvollziehbar. Rücknahme und Wiederherstellung überschreiben keine historischen Fassungen.
 - Filial- und Abteilungsleitungen erhalten im Dashboard und KV-Register eine bereichsbezogene Lesesicht. Fremde oder globale Personalzuordnungen sowie fachliche Verwaltungs- und Freigabefunktionen bleiben ausgeblendet.
 - Die Funktionen sind technische Governance- und Planungshilfen. Sie ersetzen weder die fachliche Pflege aktueller Quellen noch die rechtliche Prüfung des konkreten Arbeitsverhältnisses, Kollektivvertrags oder einer betrieblichen Ausnahme.
+- Das ausgelieferte Linux-Offsite-Modul verwendet Vertrag v5. Bestehende verifizierte Module v1 bis v4 werden ausschließlich im beaufsichtigten Wartungsfenster, ohne Neuinitialisierung des Repositorys und mit transaktionalem Rückfallpfad migriert.
+- Modul v5 übernimmt den bisherigen Assurance-Vertrag und ergänzt für die nächtliche Sicherung ein begrenztes Warten auf den Wartungslock.
 - Zusätzlich bleiben alle Verbesserungen aus v0.85.4 Beta einschließlich der technischen Offsite-Migrationsbrücke enthalten.
 
 ## v0.85.4 Beta · Technische Offsite-Migrationsbrücke

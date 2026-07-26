@@ -170,12 +170,16 @@ test("v0.75 hardening fingerprint uses the package builder's ordinal order", () 
   assert.doesNotMatch(contractSource, /localeCompare/);
   assert.match(contractSource, /ordinalCompare/);
   assert.match(builder, /\[Array\]::Sort\(\$sortedHardeningArtifacts, \[StringComparer\]::Ordinal\)/);
+  assert.match(builder, /StartsWith\('patches\/'\)/);
 });
 
 test("v0.75 package builder and both package verifiers require every hardening artifact", () => {
   const builder = read("server-tools/package/New-GrabenplanerLinuxServerPackage.ps1");
   const verifier = read("server-tools/linux/lib/verify-package.js");
   const installer = read("server-tools/linux/install-grabenplaner-server.sh");
+  assert.match(builder, /StartsWith\('patches\/'\)/);
+  assert.match(verifier, /startsWith\("patches\/"\)/);
+  assert.match(installer, /allowedRootDirectories = new Set\(\["lib", "patches", "public", "server-tools"\]\)/);
   for (const relative of schema.managedArtifacts) {
     const escaped = relative.replaceAll("/", "[\\\\/]").replaceAll(".", "\\.");
     assert.match(builder, new RegExp(escaped), `Builder fordert ${relative} nicht an.`);
@@ -224,8 +228,8 @@ test("v0.75 Linux package builder expands the complete hardening artifact list",
       "-OutputDirectory", temporaryRoot,
     ], { encoding: "utf8", timeout: 120_000 });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-    assert.ok(fs.existsSync(path.join(temporaryRoot, "Grabenplaner-Server-v0.86.0-beta-linux-x64.zip")));
-    assert.ok(fs.existsSync(path.join(temporaryRoot, "Grabenplaner-Server-v0.86.0-beta-linux-x64.zip.sha256")));
+    assert.ok(fs.existsSync(path.join(temporaryRoot, "Grabenplaner-Server-v0.86.1-beta-linux-x64.zip")));
+    assert.ok(fs.existsSync(path.join(temporaryRoot, "Grabenplaner-Server-v0.86.1-beta-linux-x64.zip.sha256")));
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true });
   }

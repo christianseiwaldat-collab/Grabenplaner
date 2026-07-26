@@ -8,7 +8,11 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 
 test("v0.86: Paket, Launcher, UI und aktuelle Dokumentation bleiben konsistent", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.86.0-beta");
+  assert.equal(packageJson.version, "0.86.1-beta");
+  assert.equal(packageJson.dependencies.sharp, "0.35.3");
+  assert.match(read("pnpm-workspace.yaml"), /brace-expansion:\s*5\.0\.8/);
+  assert.match(read("pnpm-workspace.yaml"), /brace-expansion@5\.0\.8:\s*patches\/brace-expansion@5\.0\.8\.patch/);
+  assert.match(read("patches/brace-expansion@5.0.8.patch"), /module\.exports = expand/);
 
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.86 Beta starten.cmd")), true);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.85 Beta starten.cmd")), false);

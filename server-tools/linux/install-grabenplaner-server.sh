@@ -559,7 +559,7 @@ const allowedRootFiles = new Set([
   "server.js", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
   "README.md", "LICENSE.md", "SECURITY.md", "SERVERBETRIEB.md",
 ]);
-const allowedRootDirectories = new Set(["lib", "public", "server-tools"]);
+const allowedRootDirectories = new Set(["lib", "patches", "public", "server-tools"]);
 const forbiddenTopLevels = new Set([
   ".git", ".github", ".devcontainer", "backups", "data", "demo", "docs",
   "node_modules", "output", "release", "runtime", "scripts", "test", "tmp", "usb-backups",

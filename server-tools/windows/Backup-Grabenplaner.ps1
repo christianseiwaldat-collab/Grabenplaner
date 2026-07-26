@@ -87,7 +87,7 @@ const fs = require('node:fs');
 const { DatabaseSync } = require('node:sqlite');
 const [source, target, lockModulePath, amuModulePath, amuSource, amuTarget, databaseFileName] = process.argv.slice(2);
 const { acquireDatabaseLock, releaseDatabaseLock } = require(lockModulePath);
-const { syncEncryptedFilesBackup } = require(amuModulePath);
+const { syncEncryptedFilesBackup, verifyBackupReferences } = require(amuModulePath);
 const lock = acquireDatabaseLock({ databasePath: source, kind: 'backup', appVersion: 'server-maintenance' });
 try {
   const sourceDb = new DatabaseSync(source);
@@ -98,9 +98,24 @@ try {
     sourceDb.close();
   }
   const check = new DatabaseSync(target, { readOnly: true });
+  const requiredStorageKeys = [];
   try {
     const result = check.prepare('PRAGMA quick_check').all().map((row) => Object.values(row)[0]);
     if (result.length !== 1 || result[0] !== 'ok') throw new Error(`quick_check: ${result.join('; ')}`);
+    const hasTable = (name) => Boolean(check.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+    ).get(name));
+    for (const reference of [
+      { table: 'amu_documents', where: "WHERE status = 'active'" },
+      { table: 'personnel_record_documents', where: "WHERE status = 'active'" },
+      { table: 'loan_documents', where: '' },
+      { table: 'loan_photos', where: '' },
+    ]) {
+      if (!hasTable(reference.table)) continue;
+      requiredStorageKeys.push(...check.prepare(
+        `SELECT storage_key FROM ${reference.table} ${reference.where}`,
+      ).all().map((row) => row.storage_key));
+    }
   } finally {
     check.close();
   }
@@ -110,7 +125,14 @@ try {
     targetDirectory: amuTarget,
     manifestMetadata: { database: { fileName: databaseFileName, sha256: databaseSha256 } },
   });
-  process.stdout.write(JSON.stringify({ ok: true, target, databaseSha256, fileCount: amu.fileCount }));
+  verifyBackupReferences({ backupDirectory: amuTarget, requiredStorageKeys });
+  process.stdout.write(JSON.stringify({
+    ok: true,
+    target,
+    databaseSha256,
+    fileCount: amu.fileCount,
+    requiredStorageKeys: requiredStorageKeys.length,
+  }));
 } finally {
   releaseDatabaseLock(lock);
 }

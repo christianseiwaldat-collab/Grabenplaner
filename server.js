@@ -13712,6 +13712,16 @@ function verifyActiveProtectedDocumentBlobs() {
     WHERE status = 'active'
     ORDER BY created_at, id
   `).all() : [];
+  const loanDocuments = tableExists("loan_documents") ? db.prepare(`
+    SELECT id, storage_key, byte_size, sha256, detected_mime, filename
+    FROM loan_documents
+    ORDER BY created_at, id
+  `).all() : [];
+  const loanPhotos = tableExists("loan_photos") ? db.prepare(`
+    SELECT id, storage_key, byte_size, sha256, detected_mime, filename
+    FROM loan_photos
+    ORDER BY created_at, id
+  `).all() : [];
   const verifyUniqueStorageKey = (storageKey) => {
     const normalized = String(storageKey || "").toLowerCase();
     if (!normalized || storageKeys.has(normalized)) {
@@ -13727,7 +13737,23 @@ function verifyActiveProtectedDocumentBlobs() {
     verifyUniqueStorageKey(document.storage_key);
     readPersonnelRecordDocument(document);
   }
-  return { amuDocuments: amuDocuments.length, personnelDocuments: personnelDocuments.length, storageKeys: [...storageKeys] };
+  for (const document of [...loanDocuments, ...loanPhotos]) {
+    verifyUniqueStorageKey(document.storage_key);
+    requireAmuStorage().readBuffer({
+      storageKey: document.storage_key,
+      byteSize: document.byte_size,
+      sha256: document.sha256,
+      detectedMime: document.detected_mime,
+      originalFilename: document.filename,
+    });
+  }
+  return {
+    amuDocuments: amuDocuments.length,
+    personnelDocuments: personnelDocuments.length,
+    loanDocuments: loanDocuments.length,
+    loanPhotos: loanPhotos.length,
+    storageKeys: [...storageKeys],
+  };
 }
 
 function sendAmuDocument(response, metadata, prepared = readAmuDocument(metadata)) {
@@ -21659,15 +21685,59 @@ app.post("/api/collective-agreements/assignments", (request, response) => {
   }
 });
 
+function customWorkRuleDraftVisibleToSession(session, draft) {
+  if (sessionHasGlobalScope(session)) return draft;
+  const currentVersionId = String(draft?.currentVersionId || "");
+  const currentScopes = currentVersionId ? workRuleGovernanceVersionScopes(currentVersionId) : [];
+  if (!currentScopes.length || !currentScopes.every((scope) => (
+    workRuleGovernanceScopeVisible(session, scope)
+  ))) return null;
+  const versions = (draft.versions || []).filter((version) => {
+    const scopes = workRuleGovernanceVersionScopes(version.id);
+    return Boolean(scopes.length && scopes.every((scope) => (
+      workRuleGovernanceScopeVisible(session, scope)
+    )));
+  });
+  const visibleVersionIds = new Set(versions.map((version) => version.id));
+  const currentVersion = versions.find((version) => version.id === currentVersionId) || null;
+  if (!currentVersion) return null;
+  return {
+    ...draft,
+    title: currentVersion.definition.title,
+    description: currentVersion.definition.description,
+    status: currentVersion.status,
+    currentVersionId: currentVersion.id,
+    currentVersion,
+    effectiveVersionId: visibleVersionIds.has(draft.effectiveVersionId) ? draft.effectiveVersionId : null,
+    publishedVersion: visibleVersionIds.has(draft.publishedVersion?.id) ? draft.publishedVersion : null,
+    hasUnreleasedDraft: currentVersion.versionKind === "draft" && !currentVersion.releasedAsVersionId,
+    lifecycleStatus: currentVersion.status === "published" ? "published" : "draft",
+    createdBy: currentVersion.createdBy,
+    updatedBy: currentVersion.createdBy,
+    createdAt: currentVersion.createdAt,
+    updatedAt: currentVersion.createdAt,
+    versions,
+  };
+}
+
 function customWorkRuleDraftRegistryPayload(session) {
-  const drafts = listCustomWorkRuleDrafts(db);
-  const governance = listWorkRuleGovernance(db);
+  const canAudit = !session || session.employeeNumber === "local"
+    || session.permissions?.includes("work_rules:audit");
+  const drafts = listCustomWorkRuleDrafts(db)
+    .map((draft) => customWorkRuleDraftVisibleToSession(session, draft))
+    .filter(Boolean)
+    .map((draft) => (canAudit ? draft : redactWorkRuleGovernanceAuditFields(draft)));
+  const governance = workRuleGovernancePayload(session);
+  const globalScope = sessionHasGlobalScope(session);
+  const sessionScopes = Array.isArray(session?.scopes) ? session.scopes : [];
   const locations = db.prepare(`
     SELECT id, name
     FROM locations
     WHERE active = 1
     ORDER BY name COLLATE NOCASE, id
-  `).all().map((location) => ({
+  `).all().filter((location) => globalScope || sessionScopes.some((scope) => (
+    String(scope.locationId || "") === String(location.id)
+  ))).map((location) => ({
     id: String(location.id),
     name: location.name,
     departments: db.prepare(`
@@ -21675,12 +21745,18 @@ function customWorkRuleDraftRegistryPayload(session) {
       FROM departments
       WHERE location_id = ? AND active = 1
       ORDER BY name COLLATE NOCASE, id
-    `).all(location.id).map((department) => ({
+    `).all(location.id).filter((department) => globalScope || sessionScopes.some((scope) => (
+      String(scope.locationId || "") === String(location.id)
+      && (!Number(scope.departmentId || 0) || Number(scope.departmentId) === Number(department.id))
+    ))).map((department) => ({
       id: String(department.id),
       name: department.name,
     })),
   }));
-  const businessUnits = listBusinessUnits(db).map((unit) => ({
+  const visibleBusinessUnitScope = collectiveAgreementBusinessUnitScopeMatcher(session);
+  const businessUnits = listBusinessUnits(db).filter((unit) => (
+    globalScope || unit.scopes.some(visibleBusinessUnitScope)
+  )).map((unit) => ({
     id: unit.id,
     code: unit.code,
     name: unit.name,
@@ -21692,8 +21768,6 @@ function customWorkRuleDraftRegistryPayload(session) {
   const canReview = Boolean(humanActor && session.permissions?.includes("work_rules:review"));
   const canPublish = Boolean(humanActor && session.permissions?.includes("work_rules:publish"));
   const canAssign = Boolean(humanActor && session.permissions?.includes("work_rules:assign"));
-  const canAudit = !session || session.employeeNumber === "local"
-    || session.permissions?.includes("work_rules:audit");
   const requests = Array.isArray(governance.requests) ? governance.requests : [];
   return {
     generatedAt: new Date().toISOString(),
@@ -24928,16 +25002,19 @@ function customProcessScopeIsActive(scope) {
 
 function customProcessPortalUserInScope(user, scope) {
   if (!scope || scope.type === "company" || ["hr", "admin", "it_admin", "developer"].includes(user.role)) return true;
-  const explicitScopes = db.prepare(`
-    SELECT location_id, department_id FROM portal_access_scopes WHERE employee_number = ?
-  `).all(user.employee_number);
-  const scopes = explicitScopes.length
-    ? explicitScopes
-    : [{ location_id: user.home_location_id, department_id: user.role === "department_manager" ? user.preferred_department_id : null }];
-  return scopes.some((entry) => String(entry.location_id || "") === String(scope.locationId || "")
+  const scopes = portalAccessScopesForPrincipal({
+    employeeNumber: user.employee_number,
+    role: user.role,
+    homeLocationId: user.home_location_id,
+    preferredDepartmentId: user.preferred_department_id,
+  });
+  if (!scopes.length && scope.type === "location") {
+    return String(user.home_location_id || "") === String(scope.locationId || "");
+  }
+  return scopes.some((entry) => String(entry.locationId || "") === String(scope.locationId || "")
     && (scope.type !== "department"
-      || !entry.department_id
-      || Number(entry.department_id) === Number(scope.departmentId)));
+      || !entry.departmentId
+      || Number(entry.departmentId) === Number(scope.departmentId)));
 }
 
 function customProcessRecipients(bundle, step, context = {}) {
@@ -28440,6 +28517,18 @@ function assertLoanPhotoAccess(session, photo) {
     photo.return_witness_employee_number,
   ].filter(Boolean));
   if (participants.has(session.employeeNumber)) return;
+  if (photo.phase === "return") {
+    const pendingWitness = db.prepare(`
+      SELECT 1
+      FROM loan_return_confirmations
+      WHERE loan_id = ?
+        AND witness_employee_number = ?
+        AND status = 'pending'
+        AND julianday(expires_at) > julianday('now')
+      LIMIT 1
+    `).get(photo.loan_id, session.employeeNumber);
+    if (pendingWitness) return;
+  }
   if (!session.permissions?.some((permission) => [
     "loans:location:read",
     "loans:location:manage",
@@ -28962,10 +29051,20 @@ app.post("/api/portal/v1/loans/:loanId/photos", async (request, response) => {
     throw httpError(403, "Für diese Leihfotos fehlt die Berechtigung.", "LOAN_PHOTO_DENIED");
   }
   if (managesLocation) assertSessionContextScope(actor, { locationId: loan.location_id });
-  const existingCount = Number(db.prepare(`
+  if (phase === "return") {
+    expireLoanReturnConfirmations();
+    if (loanPendingReturnConfirmationRow(loan.id)) {
+      throw httpError(
+        409,
+        "Rückgabefotos können während einer offenen Gegenbestätigung nicht verändert werden.",
+        "LOAN_RETURN_CONFIRMATION_PENDING",
+      );
+    }
+  }
+  const initialExistingCount = Number(db.prepare(`
     SELECT COUNT(*) AS count FROM loan_photos WHERE loan_id = ? AND phase = ?
   `).get(loan.id, phase).count);
-  if (existingCount + photos.length > MAX_LOAN_PHOTOS_PER_PHASE) {
+  if (initialExistingCount + photos.length > MAX_LOAN_PHOTOS_PER_PHASE) {
     throw httpError(413, "Pro Ausgabe oder Rücknahme sind höchstens neun Fotos möglich.", "LOAN_PHOTO_TOO_MANY");
   }
   const preparedPhotos = [];
@@ -28974,10 +29073,35 @@ app.post("/api/portal/v1/loans/:loanId/photos", async (request, response) => {
       preparedPhotos.push(await prepareStoredLoanPhoto(photo, actor.employeeNumber));
     }
     db.exec("BEGIN IMMEDIATE");
+    const currentLoan = db.prepare("SELECT status, revision FROM loans WHERE id = ?").get(loan.id);
+    if (!currentLoan || currentLoan.status !== "issued") {
+      throw httpError(
+        409,
+        "Fotos können nur zu einer offenen Leihe ergänzt werden.",
+        "LOAN_PHOTO_LOAN_CLOSED",
+      );
+    }
+    if (phase === "return" && loanPendingReturnConfirmationRow(loan.id)) {
+      throw httpError(
+        409,
+        "Rückgabefotos können während einer offenen Gegenbestätigung nicht verändert werden.",
+        "LOAN_RETURN_CONFIRMATION_PENDING",
+      );
+    }
+    const currentExistingCount = Number(db.prepare(`
+      SELECT COUNT(*) AS count FROM loan_photos WHERE loan_id = ? AND phase = ?
+    `).get(loan.id, phase).count);
+    if (currentExistingCount + preparedPhotos.length > MAX_LOAN_PHOTOS_PER_PHASE) {
+      throw httpError(
+        413,
+        "Pro Ausgabe oder Rücknahme sind höchstens neun Fotos möglich.",
+        "LOAN_PHOTO_TOO_MANY",
+      );
+    }
     preparedPhotos.forEach((prepared, index) => {
-      insertPreparedLoanPhoto(loan.id, phase, existingCount + index + 1, prepared);
+      insertPreparedLoanPhoto(loan.id, phase, currentExistingCount + index + 1, prepared);
     });
-    appendLoanEvent(loan.id, actor.employeeNumber, "photos_added", Number(loan.revision), {
+    appendLoanEvent(loan.id, actor.employeeNumber, "photos_added", Number(currentLoan.revision), {
       phase,
       count: preparedPhotos.length,
       photoIds: preparedPhotos.map((photo) => photo.id),
@@ -29476,8 +29600,7 @@ app.post("/api/portal/v1/loans/:loanId/return", (request, response) => {
   const confirmationId = crypto.randomUUID();
   const requestedAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-  const borrowerConfirmed = actor.employeeNumber === row.borrower_employee_number
-    || request.body?.borrowerConfirmed === true;
+  const borrowerConfirmed = actor.employeeNumber === row.borrower_employee_number;
   db.exec("BEGIN IMMEDIATE");
   try {
     const current = db.prepare("SELECT status, revision FROM loans WHERE id = ?").get(row.id);

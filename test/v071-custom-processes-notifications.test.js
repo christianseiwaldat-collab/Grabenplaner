@@ -519,6 +519,91 @@ test("v0.71: manuelle Prozesse mit deaktiviertem Standort- oder Abteilungsscope 
   }
 });
 
+test("v0.71: abteilungsgebundene Mitarbeiteraufgaben bleiben in der eigenen Abteilung", async () => {
+  let otherDepartmentId = Number(db.prepare(`
+    SELECT id FROM departments
+    WHERE location_id = ? AND id <> ? AND active = 1
+    ORDER BY id LIMIT 1
+  `).get(locationId, departmentId)?.id || 0);
+  if (!otherDepartmentId) {
+    otherDepartmentId = Number(db.prepare(`
+      INSERT INTO departments (location_id, name, min_staff, active, sort_order)
+      VALUES (?, 'Fremde Prozessabteilung', 1, 1, 100)
+    `).run(locationId).lastInsertRowid);
+  }
+  upsertEmployee("8721", "Eva Eigene Abteilung", "employee");
+  upsertEmployee("8722", "Fritz Fremde Abteilung", "employee");
+  db.prepare("UPDATE employees SET preferred_department_id = ? WHERE personnel_number = '8722'")
+    .run(otherDepartmentId);
+  const ownDepartmentSession = createSession("8721");
+  const foreignDepartmentSession = createSession("8722");
+  const { process } = await createProcess(processPayload({
+    status: "active",
+    scope: { type: "department", locationId, departmentId },
+    steps: [
+      {
+        type: "actor",
+        title: "Abteilungsaufgabe erledigen",
+        description: "Nur Mitarbeitende der ausgewählten Abteilung dürfen diese Aufgabe sehen.",
+        responsibilityType: "role",
+        responsibilityReference: "employee",
+        conditionType: "always",
+        conditionText: "",
+        notificationChannels: ["internal"],
+      },
+      {
+        type: "finish",
+        title: "Abteilungsablauf abschließen",
+        description: "Der technische Abschluss folgt auf die geschützte Mitarbeiteraufgabe.",
+        responsibilityType: "system",
+        responsibilityReference: "",
+        conditionType: "always",
+        conditionText: "",
+        notificationChannels: [],
+      },
+    ],
+  }));
+  const triggered = await api(`/api/portal/v1/custom-processes/${encodeURIComponent(process.id)}/trigger`, {
+    method: "POST",
+    auth: auth.hr,
+    body: { idempotencyKey: `v071-department-task-${crypto.randomUUID()}` },
+  });
+  assert.equal(triggered.response.status, 200, JSON.stringify(triggered.payload));
+  const runId = triggered.payload.run.id;
+
+  const ownTasks = await api("/api/portal/v1/me/process-tasks", { auth: ownDepartmentSession });
+  const ownTask = ownTasks.payload.tasks.find((entry) => entry.runId === runId);
+  assert.ok(ownTask, JSON.stringify(ownTasks.payload));
+  const foreignTasks = await api("/api/portal/v1/me/process-tasks", { auth: foreignDepartmentSession });
+  assert.equal(foreignTasks.payload.tasks.some((entry) => entry.runId === runId), false);
+  const forbiddenCompletion = await api(
+    `/api/portal/v1/me/process-tasks/${encodeURIComponent(runId)}/${encodeURIComponent(ownTask.stepId)}/complete`,
+    {
+      method: "POST",
+      auth: foreignDepartmentSession,
+      body: {
+        activationCount: ownTask.activationCount,
+        idempotencyKey: `v071-foreign-task-${crypto.randomUUID()}`,
+      },
+    },
+  );
+  assert.equal(forbiddenCompletion.response.status, 404, JSON.stringify(forbiddenCompletion.payload));
+
+  const ownCompletion = await api(
+    `/api/portal/v1/me/process-tasks/${encodeURIComponent(runId)}/${encodeURIComponent(ownTask.stepId)}/complete`,
+    {
+      method: "POST",
+      auth: ownDepartmentSession,
+      body: {
+        activationCount: ownTask.activationCount,
+        idempotencyKey: `v071-own-task-${crypto.randomUUID()}`,
+      },
+    },
+  );
+  assert.equal(ownCompletion.response.status, 200, JSON.stringify(ownCompletion.payload));
+  assert.equal(db.prepare("SELECT status FROM custom_process_runs WHERE id = ?").get(runId).status, "resolved");
+});
+
 test("v0.71: historische Revision und schrittweise Aufgaben bleiben auch nach Änderungen stabil", async () => {
   const originalPayload = processPayload({
     status: "active",
@@ -957,4 +1042,58 @@ test("v0.71: Aufgabenabschluss ist an die aktuelle Laufaktivierung gebunden", as
     db.prepare("UPDATE departments SET active = 0 WHERE id = ?").run(isolatedDepartmentId);
     db.prepare("DELETE FROM shifts WHERE shift_date = ? AND department_id = ?").run(date, isolatedDepartmentId);
   }
+});
+
+test("v0.71: Mitarbeiter ohne bevorzugte Abteilung erhalten Standortaufgaben am Heimatstandort", async () => {
+  upsertEmployee("8723", "Lina Heimatstandort", "employee");
+  db.prepare(`
+    UPDATE employees
+    SET preferred_department_id = NULL
+    WHERE personnel_number = '8723'
+  `).run();
+  assert.equal(
+    db.prepare("SELECT preferred_department_id FROM employees WHERE personnel_number = '8723'").get()
+      .preferred_department_id,
+    null,
+  );
+  const employeeSession = createSession("8723");
+  const { process } = await createProcess(processPayload({
+    status: "active",
+    scope: { type: "location", locationId },
+    steps: [
+      {
+        type: "actor",
+        title: "Standortaufgabe erledigen",
+        description: "Alle Mitarbeitenden dieses Heimatstandorts sollen die Aufgabe sehen.",
+        responsibilityType: "role",
+        responsibilityReference: "employee",
+        conditionType: "always",
+        conditionText: "",
+        notificationChannels: ["internal"],
+      },
+      {
+        type: "finish",
+        title: "Standortablauf abschließen",
+        description: "Der technische Abschluss folgt nach der Standortaufgabe.",
+        responsibilityType: "system",
+        responsibilityReference: "",
+        conditionType: "always",
+        conditionText: "",
+        notificationChannels: [],
+      },
+    ],
+  }));
+  const triggered = await api(`/api/portal/v1/custom-processes/${encodeURIComponent(process.id)}/trigger`, {
+    method: "POST",
+    auth: auth.hr,
+    body: { idempotencyKey: `v071-location-home-fallback-${crypto.randomUUID()}` },
+  });
+  assert.equal(triggered.response.status, 200, JSON.stringify(triggered.payload));
+
+  const tasks = await api("/api/portal/v1/me/process-tasks", { auth: employeeSession });
+  assert.equal(tasks.response.status, 200, JSON.stringify(tasks.payload));
+  assert.ok(
+    tasks.payload.tasks.some((entry) => entry.runId === triggered.payload.run.id),
+    JSON.stringify(tasks.payload),
+  );
 });

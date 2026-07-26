@@ -8,6 +8,14 @@ const test = require("node:test");
 
 const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
+const bash = [
+  process.platform === "win32"
+    ? path.join(process.env.ProgramFiles || "C:\\Program Files", "Git", "bin", "bash.exe")
+    : "bash",
+  process.platform === "win32" && process.env["ProgramFiles(x86)"]
+    ? path.join(process.env["ProgramFiles(x86)"], "Git", "bin", "bash.exe")
+    : "",
+].find((candidate) => candidate && spawnSync(candidate, ["--version"], { encoding: "utf8" }).status === 0) || "";
 
 test("v0.74 runtime contract makes monitor units an explicit schema-2 maintenance migration", () => {
   const schema = JSON.parse(read("server-tools", "linux", "runtime-schema.json"));
@@ -83,9 +91,70 @@ test("v0.74 monitor executes the existing bounded server test and permits restar
 test("v0.74 keeps monitor output schema-complete when the public HTTPS response is unavailable", () => {
   const health = read("server-tools/linux/test-grabenplaner-server.sh");
   assert.doesNotMatch(health, /check_fail "HTTPS-Sicherheitsheader"/);
-  for (const label of ["HSTS", "Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy"]) {
+  for (const label of [
+    "HSTS",
+    "Content-Security-Policy",
+    "X-Content-Type-Options",
+    "X-Frame-Options",
+    "Referrer-Policy",
+    "Permissions-Policy",
+    "Cross-Origin-Opener-Policy",
+    "Cross-Origin-Resource-Policy",
+    "X-Permitted-Cross-Domain-Policies",
+  ]) {
     assert.match(health, new RegExp(`check_fail "${label}" "Antwort konnte nicht gelesen werden"`));
   }
+});
+
+test("v0.86 Linux diagnostics enforce the complete public security-header contract", () => {
+  const health = read("server-tools/linux/test-grabenplaner-server.sh");
+  assert.match(health, /csp_has_exact_directive/);
+  for (const expected of [
+    "max-age=31536000;[[:space:]]*includeSubDomains",
+    "X-Content-Type-Options:[[:space:]]*nosniff[[:space:]]*$",
+    "X-Frame-Options:[[:space:]]*DENY",
+    "Referrer-Policy:[[:space:]]*no-referrer",
+    "Permissions-Policy:[[:space:]]*camera=\\(\\),[[:space:]]*microphone=\\(\\),[[:space:]]*geolocation=\\(\\)",
+    "Cross-Origin-Opener-Policy:[[:space:]]*same-origin",
+    "Cross-Origin-Resource-Policy:[[:space:]]*same-origin",
+    "X-Permitted-Cross-Domain-Policies:[[:space:]]*none",
+  ]) {
+    assert.ok(health.includes(expected), `Headerpruefung fehlt: ${expected}`);
+  }
+  for (const directive of ["object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'"]) {
+    assert.ok(health.includes(directive), `Content-Security-Policy prueft ${directive} nicht.`);
+  }
+});
+
+test("v0.86 Linux diagnostics reject CSP directive substring appendages", {
+  skip: !bash,
+}, () => {
+  const health = read("server-tools/linux/test-grabenplaner-server.sh").replace(/\r\n/g, "\n");
+  const functionStart = health.indexOf("csp_has_exact_directive()");
+  const functionEnd = health.indexOf("\n\nfor unit in", functionStart);
+  assert.notEqual(functionStart, -1, "Exakte CSP-Prueffunktion fehlt.");
+  assert.notEqual(functionEnd, -1, "Ende der CSP-Prueffunktion fehlt.");
+  const functionSource = health.slice(functionStart, functionEnd).trim();
+  const harness = [
+    functionSource,
+    "valid=\"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\"",
+    "frame_suffix=\"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none' https://evil.example\"",
+    "form_suffix=\"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://evil.example; frame-ancestors 'none'\"",
+    "if csp_has_exact_directive \"$valid\" \"frame-ancestors 'none'\"; then printf 'valid=accepted\\n'; else printf 'valid=rejected\\n'; fi",
+    "if csp_has_exact_directive \"$frame_suffix\" \"frame-ancestors 'none'\"; then printf 'frame=accepted\\n'; else printf 'frame=rejected\\n'; fi",
+    "if csp_has_exact_directive \"$form_suffix\" \"form-action 'self'\"; then printf 'form=accepted\\n'; else printf 'form=rejected\\n'; fi",
+    "",
+  ].join("\n");
+  const result = spawnSync(bash, ["-s"], {
+    input: harness,
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), [
+    "valid=accepted",
+    "frame=rejected",
+    "form=rejected",
+  ].join("\n"));
 });
 
 test("v0.74 rejects backup timestamps more than five minutes in the future", () => {

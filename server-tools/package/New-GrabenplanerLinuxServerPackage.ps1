@@ -48,6 +48,7 @@ function Test-AllowedTrackedRuntimePath([string]$RelativePath) {
         'SERVERBETRIEB.md'
     )) { return $true }
     return $normalized.StartsWith('lib/') -or
+        $normalized.StartsWith('patches/') -or
         $normalized.StartsWith('public/') -or
         $normalized.StartsWith('server-tools/')
 }
