@@ -32,6 +32,7 @@ const offsiteArtifacts = [
   "server-tools/linux/offsite/grabenplaner-offsite-recovery-set.sh",
   "server-tools/linux/offsite/grabenplaner-offsite-rebind-rclone.sh",
   "server-tools/linux/offsite/grabenplaner-offsite-restore-test.sh",
+  "server-tools/linux/offsite/grabenplaner-offsite-switch-target.sh",
   "server-tools/linux/offsite/grabenplaner-offsite-upload.sh",
   "server-tools/linux/offsite/install-grabenplaner-offsite.sh",
   "server-tools/linux/offsite/lib/application-smoke.js",
@@ -39,6 +40,7 @@ const offsiteArtifacts = [
   "server-tools/linux/offsite/lib/offsite-contract.js",
   "server-tools/linux/offsite/lib/assurance-history.js",
   "server-tools/linux/offsite/lib/assurance-control-broker.js",
+  "server-tools/linux/offsite/lib/offsite-target-broker.js",
   "server-tools/linux/offsite/lib/offsite-rclone-policy.js",
   "server-tools/linux/offsite/lib/offsite-restore-verify.js",
   "server-tools/linux/offsite/lib/offsite-retention-verify.js",
@@ -50,6 +52,8 @@ const offsiteArtifacts = [
   "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance@.service.in",
   "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control.socket.in",
   "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control@.service.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-target-control.socket.in",
+  "server-tools/linux/offsite/systemd/grabenplaner-offsite-target-control@.service.in",
   "server-tools/linux/offsite/systemd/grabenplaner-offsite-check.service.in",
   "server-tools/linux/offsite/systemd/grabenplaner-offsite-check.timer.in",
   "server-tools/linux/offsite/systemd/grabenplaner-offsite-prepare.service.in",
@@ -68,7 +72,7 @@ test("Linux runtime artifacts stay separate from the optional offsite contract",
   assert.deepEqual([...runtime.managedArtifacts].sort(), [...coreRuntimeArtifacts].sort());
   assert.equal(runtime.managedArtifacts.length, 7);
   assert.equal(offsite.activationPolicy, "explicit-root-setup");
-  assert.equal(offsite.moduleVersion, 5);
+  assert.equal(offsite.moduleVersion, 6);
   assert.deepEqual([...offsite.managedArtifacts].sort(), [...offsiteArtifacts].sort());
   for (const relative of offsiteArtifacts) assert.ok(fs.statSync(path.join(root, relative)).isFile(), `Fehlt: ${relative}`);
 });
@@ -80,7 +84,7 @@ test("package verifier validates the separate offsite module without changing th
   const contract = JSON.parse(result.stdout);
   assert.deepEqual(contract.managedArtifacts, [...coreRuntimeArtifacts].sort());
   assert.equal(contract.offsiteModule.activationPolicy, "explicit-root-setup");
-  assert.equal(contract.offsiteModule.moduleVersion, 5);
+  assert.equal(contract.offsiteModule.moduleVersion, 6);
   assert.deepEqual(contract.offsiteModule.managedArtifacts, [...offsiteArtifacts].sort());
   assert.match(contract.offsiteModule.fingerprint, /^[a-f0-9]{64}$/);
 });

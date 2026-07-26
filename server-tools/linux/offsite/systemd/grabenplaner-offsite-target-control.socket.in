@@ -1,0 +1,17 @@
+[Unit]
+Description=Grabenplaner Offsite-Ziel-Steuerung
+Documentation=https://github.com/christianseiwaldat-collab/Grabenplaner/blob/main/SERVERBETRIEB.md
+
+[Socket]
+ListenStream=/run/grabenplaner-offsite-target-control/request.sock
+SocketUser=root
+SocketGroup=grabenplaner-assurance-control
+SocketMode=0660
+DirectoryMode=0755
+Accept=yes
+MaxConnections=4
+RemoveOnStop=yes
+FlushPending=yes
+
+[Install]
+WantedBy=sockets.target

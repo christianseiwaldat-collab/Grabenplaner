@@ -4,8 +4,8 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const CURRENT_MODULE_VERSION = 5;
-const SUPPORTED_INSTALLED_MODULE_VERSIONS = new Set([1, 2, 3, 4, CURRENT_MODULE_VERSION]);
+const CURRENT_MODULE_VERSION = 6;
+const SUPPORTED_INSTALLED_MODULE_VERSIONS = new Set([1, 2, 3, 4, 5, CURRENT_MODULE_VERSION]);
 const LEGACY_V1_ARTIFACTS = Object.freeze([
   "grabenplaner-offsite-check.sh", "grabenplaner-offsite-pre-update.sh", "grabenplaner-offsite-prepare.sh",
   "grabenplaner-offsite-read-secret.sh", "grabenplaner-offsite-rclone-wrapper.sh",
@@ -46,10 +46,18 @@ const MODULE_V4_ARTIFACTS = Object.freeze([
   "systemd/grabenplaner-offsite-assurance.timer.in",
 ]);
 const MODULE_V5_ARTIFACTS = Object.freeze([...MODULE_V4_ARTIFACTS]);
+const MODULE_V6_ARTIFACTS = Object.freeze([
+  ...MODULE_V5_ARTIFACTS,
+  "grabenplaner-offsite-switch-target.sh",
+  "lib/offsite-target-broker.js",
+  "systemd/grabenplaner-offsite-target-control.socket.in",
+  "systemd/grabenplaner-offsite-target-control@.service.in",
+]);
 const VERSION_ARTIFACTS = new Map([
   [1, new Set(LEGACY_V1_ARTIFACTS)], [2, new Set(LEGACY_V2_ARTIFACTS)],
   [3, new Set(LEGACY_V3_ARTIFACTS)], [4, new Set(MODULE_V4_ARTIFACTS)],
   [5, new Set(MODULE_V5_ARTIFACTS)],
+  [6, new Set(MODULE_V6_ARTIFACTS)],
 ]);
 
 function assertExactArtifactContract(moduleVersion, fullArtifacts) {

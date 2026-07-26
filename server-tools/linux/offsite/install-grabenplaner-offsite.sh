@@ -195,6 +195,7 @@ assert_existing_directory "$OFFSITE_BIN_ROOT" 0 0 755
 assert_existing_directory "$OFFSITE_STATE_ROOT" 0 "$status_gid" 750
 assert_existing_directory "$OFFSITE_STAGE_ROOT" 0 "$offsite_gid" 750
 assert_existing_directory "$OFFSITE_RESTORE_ROOT" 0 "$offsite_gid" 750
+assert_existing_directory "$OFFSITE_RECOVERY_SET_ROOT" 0 0 700
 assert_existing_directory "$OFFSITE_CREDENTIAL_STATE_ROOT" "$offsite_uid" "$offsite_gid" 700
 assert_existing_directory "$OFFSITE_UPLOADER_HOME" "$offsite_uid" "$offsite_gid" 700
 assert_existing_directory "$OFFSITE_CONFIG_ROOT" 0 0 700
@@ -241,7 +242,7 @@ if [[ -e "$OFFSITE_MODULE_ROOT" || -L "$OFFSITE_MODULE_ROOT" ]]; then
   installed_module_version="$("$OFFSITE_NODE" - "$OFFSITE_CONFIG_ROOT/installed-contract.json" <<'NODE'
 const fs = require("node:fs");
 const value = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-if (![1, 2, 3, 4, 5].includes(value.moduleVersion)) process.exit(1);
+if (![1, 2, 3, 4, 5, 6].includes(value.moduleVersion)) process.exit(1);
 process.stdout.write(String(value.moduleVersion));
 NODE
 )" || offsite_die "Die installierte Offsite-Modulversion ist nicht migrationsfaehig."
@@ -250,6 +251,7 @@ fi
 install -d -m 0755 -o root -g root -- "$OFFSITE_ROOT" "$OFFSITE_BIN_ROOT"
 install -d -m 0750 -o root -g "$OFFSITE_STATUS_GROUP" -- "$OFFSITE_STATE_ROOT"
 install -d -m 0750 -o root -g "$OFFSITE_GROUP" -- "$OFFSITE_STAGE_ROOT" "$OFFSITE_RESTORE_ROOT"
+install -d -m 0700 -o root -g root -- "$OFFSITE_RECOVERY_SET_ROOT"
 install -d -m 0700 -o "$OFFSITE_USER" -g "$OFFSITE_GROUP" -- "$OFFSITE_CREDENTIAL_STATE_ROOT" "$OFFSITE_UPLOADER_HOME"
 install -d -m 0700 -o root -g root -- "$OFFSITE_CONFIG_ROOT"
 offsite_prepare_run_root
@@ -282,6 +284,10 @@ control_socket="grabenplaner-offsite-assurance-control.socket"
 control_socket_was_enabled=0
 control_socket_was_active=0
 control_socket_paused=0
+target_control_socket="grabenplaner-offsite-target-control.socket"
+target_control_socket_was_enabled=0
+target_control_socket_was_active=0
+target_control_socket_paused=0
 setup_complete=0
 rollback_control_group() {
   (( setup_complete == 0 )) || return 0
@@ -302,7 +308,8 @@ rollback_control_group() {
 cleanup() {
   local status=$?
   if (( setup_complete == 0 && commit_started == 1 )); then
-    for unit in 'grabenplaner-offsite-assurance-control@*.service' grabenplaner-offsite-assurance-control.socket \
+    for unit in 'grabenplaner-offsite-target-control@*.service' grabenplaner-offsite-target-control.socket \
+      'grabenplaner-offsite-assurance-control@*.service' grabenplaner-offsite-assurance-control.socket \
       'grabenplaner-offsite-assurance@*.service' \
       grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer \
       grabenplaner-offsite-application-smoke.service grabenplaner-offsite-upload.service grabenplaner-offsite-prepare.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
@@ -361,7 +368,8 @@ cleanup() {
     rm -rf --one-file-system -- "$OFFSITE_CONFIG_ROOT"
     install -d -m 0700 -o root -g root -- "$OFFSITE_CONFIG_ROOT"
     if (( config_had_original == 1 )); then cp --archive -- "$rollback_root/config/." "$OFFSITE_CONFIG_ROOT/"; fi
-    for unit_name in grabenplaner-offsite-assurance-control.socket 'grabenplaner-offsite-assurance-control@.service' \
+    for unit_name in grabenplaner-offsite-target-control.socket 'grabenplaner-offsite-target-control@.service' \
+      grabenplaner-offsite-assurance-control.socket 'grabenplaner-offsite-assurance-control@.service' \
       'grabenplaner-offsite-assurance@.service' grabenplaner-offsite-assurance.timer \
       grabenplaner-offsite-application-smoke.service \
       grabenplaner-offsite-prepare.service grabenplaner-offsite-upload.service grabenplaner-offsite-upload.timer \
@@ -394,6 +402,11 @@ cleanup() {
     (( control_socket_was_enabled == 1 )) && systemctl enable "$control_socket" >/dev/null 2>&1 || true
     (( control_socket_was_active == 1 )) && systemctl start "$control_socket" >/dev/null 2>&1 || true
   fi
+  if (( setup_complete == 0 && target_control_socket_paused == 1 )); then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    (( target_control_socket_was_enabled == 1 )) && systemctl enable "$target_control_socket" >/dev/null 2>&1 || true
+    (( target_control_socket_was_active == 1 )) && systemctl start "$target_control_socket" >/dev/null 2>&1 || true
+  fi
   [[ -f "$contract_receipt" && ! -L "$contract_receipt" ]] && rm -f -- "$contract_receipt"
   [[ -n "$setup_credentials" ]] && offsite_remove_uploader_credentials "$setup_credentials" 2>/dev/null || true
   [[ -n "$operation_root" && -d "$operation_root" && ! -L "$operation_root" ]] && rm -rf --one-file-system -- "$operation_root"
@@ -406,11 +419,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Module v5 keeps the v4 assurance contract and adds a bounded maintenance-lock
-# wait for nightly staging. Existing verified v1 through v4 modules are migrated
-# transactionally without reinitializing credentials, repository or history.
-if (( installed_module_version >= 1 && installed_module_version <= 4 )); then
-  offsite_info "Das verifizierte Offsite-Modul v${installed_module_version} wird kontrolliert auf v5 migriert."
+# Module v6 adds the isolated target-control broker without changing credentials,
+# repository contents or signed history. Existing verified v1 through v5 modules
+# are migrated transactionally.
+if (( installed_module_version >= 1 && installed_module_version <= 5 )); then
+  offsite_info "Das verifizierte Offsite-Modul v${installed_module_version} wird kontrolliert auf v6 migriert."
 fi
 if getent group "$OFFSITE_CONTROL_GROUP" >/dev/null; then
   control_gid="$(getent group "$OFFSITE_CONTROL_GROUP" | awk -F: '{print $3}')"
@@ -523,6 +536,13 @@ if [[ "$(systemctl show --property=LoadState --value "$control_socket" 2>/dev/nu
 fi
 systemctl stop 'grabenplaner-offsite-assurance-control@*.service' >/dev/null 2>&1 || true
 control_socket_paused=1
+if [[ "$(systemctl show --property=LoadState --value "$target_control_socket" 2>/dev/null || true)" != "not-found" ]]; then
+  systemctl is-enabled --quiet "$target_control_socket" && target_control_socket_was_enabled=1 || true
+  systemctl is-active --quiet "$target_control_socket" && target_control_socket_was_active=1 || true
+  systemctl disable --now "$target_control_socket" >/dev/null 2>&1 || true
+fi
+systemctl stop 'grabenplaner-offsite-target-control@*.service' >/dev/null 2>&1 || true
+target_control_socket_paused=1
 gp_acquire_maintenance_lock
 offsite_acquire_assurance_lock
 offsite_acquire_repository_lock
@@ -609,7 +629,7 @@ for template in "$module_candidate"/systemd/*.in; do
     fi
   fi
 done
-for service_name in 'grabenplaner-offsite-assurance-control@*.service' 'grabenplaner-offsite-assurance@*.service' grabenplaner-offsite-application-smoke.service grabenplaner-offsite-prepare.service grabenplaner-offsite-upload.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
+for service_name in 'grabenplaner-offsite-target-control@*.service' 'grabenplaner-offsite-assurance-control@*.service' 'grabenplaner-offsite-assurance@*.service' grabenplaner-offsite-application-smoke.service grabenplaner-offsite-prepare.service grabenplaner-offsite-upload.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
   deadline=$((SECONDS + 14400))
   while systemctl is-active --quiet "$service_name"; do
     (( SECONDS < deadline )) || offsite_die "Ein laufender Offsite-Vorgang wurde nicht rechtzeitig abgeschlossen."
@@ -711,12 +731,14 @@ mv -f -- "$env_temporary" "$OFFSITE_APP_ENV"
 
 if (( status_configured_before == 0 )); then offsite_status configured >/dev/null; fi
 systemctl daemon-reload
-systemctl enable --now grabenplaner-offsite-assurance-control.socket \
+systemctl enable --now grabenplaner-offsite-target-control.socket grabenplaner-offsite-assurance-control.socket \
   grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer >/dev/null
 systemctl restart "$OFFSITE_APP_SERVICE"
 systemctl is-active --quiet "$OFFSITE_APP_SERVICE" || offsite_die "Der Grabenplaner-Dienst konnte nach der Offsite-Aktivierung nicht gestartet werden."
 systemctl is-active --quiet grabenplaner-offsite-assurance-control.socket \
   || offsite_die "Der abgesicherte Recovery-Assurance-Steuerungssocket wurde nicht aktiviert."
+systemctl is-active --quiet grabenplaner-offsite-target-control.socket \
+  || offsite_die "Der abgesicherte Offsite-Ziel-Steuerungssocket wurde nicht aktiviert."
 app_port="$("$OFFSITE_NODE" - "$OFFSITE_APP_ENV" <<'NODE'
 const fs = require("node:fs");
 const matches = fs.readFileSync(process.argv[2], "utf8").split(/\r?\n/).filter((line) => /^PORT=/.test(line));

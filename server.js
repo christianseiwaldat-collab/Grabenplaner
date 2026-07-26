@@ -44,6 +44,12 @@ const {
   readOffsiteBackupStatus,
 } = require("./lib/offsite-backup-status");
 const {
+  activateManagedOffsiteFolder,
+  createManagedOffsiteFolder,
+  listManagedOffsiteFolders,
+  validFolderLabel: validManagedOffsiteFolderLabel,
+} = require("./lib/offsite-target-client");
+const {
   DEFAULT_HEAD_PATH: DEFAULT_ASSURANCE_HEAD_PATH,
   readRecoveryAssuranceStatus,
 } = require("./lib/recovery-assurance-status");
@@ -370,6 +376,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "branding:write", label: "Brandings verwalten und zuweisen", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "operation_mode:write", label: "Betriebsmodus umschalten", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "backup:write", label: "Datenbanksicherungen verwalten", group: "System & Verwaltung", warningLevel: "critical" },
+  { id: "system:offsite:configure", label: "Offsite-Sicherungsordner verwalten", description: "App-eigene Google-Drive-Zielordner anlegen und nach gesicherter Übernahme aktivieren.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
   { id: "system:diagnostics:read", label: "Serverzustand lesen", description: "Redigierte Betriebs-, Sicherungs- und Wiederherstellungswarnungen ohne interne Pfade lesen.", group: "System & Verwaltung", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "system:diagnostics:technical", label: "Technische Serverdiagnose lesen", description: "Interne Laufzeit-, Speicher- und Wartungsdetails für die technische Administration lesen.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "system:recovery:run", label: "Recovery-Assurance-Prüfung starten", description: "Einen vollständigen, isolierten Sicherungs- und Wiederherstellungsnachweis am Ubuntu-Server anfordern.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
@@ -496,7 +503,7 @@ const portalGlobalPermissionIds = new Set([
   "work_rules:draft", "work_rules:manage", "work_rules:review", "work_rules:publish",
   "work_rules:assign", "work_rules:exception", "work_rules:audit",
   "collective_agreements:manage", "collective_agreements:assign", "collective_agreements:approve",
-  "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "system:readiness:review", "update:write", "system:write", "wifi:settings",
+  "operation_mode:write", "backup:write", "system:offsite:configure", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "system:readiness:review", "update:write", "system:write", "wifi:settings",
   "users:write", "roles:read", "roles:write", "rights:read", "rights:write", "scopes:write",
   "audit:read", "usb:provision", "developer:system",
 ]);
@@ -804,6 +811,9 @@ addBuiltinRolePermissions("it_admin", [
 for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
   addBuiltinRolePermissions(roleId, ["system:readiness:review"]);
 }
+for (const roleId of ["admin", "it_admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, ["system:offsite:configure"]);
+}
 for (const roleId of ["department_manager", "manager", "hr", "admin", "it_admin", "developer"]) {
   addBuiltinRolePermissions(roleId, ["collective_agreements:read"]);
 }
@@ -825,6 +835,7 @@ const RIGHTS_ADMIN_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr
 const HR_DECISION_PORTAL_ROLES = new Set(["developer", "admin", "hr"]);
 const PROTECTED_PORTAL_ROLES = new Set(["developer"]);
 const USB_PROVISIONING_ROLES = new Set(["developer", "it_admin", "admin"]);
+const BACKUP_ADMIN_ROLES = new Set(["developer", "it_admin", "admin"]);
 
 const installationFeatureCatalog = Object.freeze([
   { id: "schedule", label: "Dienstplanung", required: true },
@@ -940,6 +951,10 @@ const publicUrl = String(process.env.GRABENPLANER_PUBLIC_URL || runtimeConfig.pu
 const trustProxySetting = String(process.env.GRABENPLANER_TRUST_PROXY || runtimeConfig.trustProxy || "loopback").trim() || "loopback";
 const serviceControlToken = String(process.env.GRABENPLANER_SERVICE_CONTROL_TOKEN || "").trim();
 const deploymentKind = String(process.env.GRABENPLANER_DEPLOYMENT_KIND || "local").trim().toLowerCase() || "local";
+const systemdInvocationId = String(process.env.INVOCATION_ID || "").trim().toLowerCase();
+const serverManagedRestartAvailable = serverModeActive
+  && process.platform === "linux"
+  && /^[a-f0-9]{32}$/.test(systemdInvocationId);
 const bootstrapToken = String(process.env.GRABENPLANER_BOOTSTRAP_TOKEN || "").trim();
 const bootstrapMode = String(process.env.GRABENPLANER_BOOTSTRAP_MODE || "").trim();
 const codespacesForwardingDomain = String(process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || "app.github.dev")
@@ -1357,8 +1372,38 @@ function createInternalDatabaseBackup(reason = "automatic") {
 }
 
 function createExternalDatabaseBackup(reason = "automatic", settings = tableExists("settings") ? getSettings() : {}) {
+  if (serverModeActive) return null;
   if (settings.external_backup_enabled === "0") return null;
   return createDatabaseBackupToDirectory(backupDirectoryFromSettings(settings), reason, "external");
+}
+
+function createDatabaseDownloadSnapshot() {
+  if (databasePath === ":memory:" || !fs.existsSync(databasePath)) {
+    throw httpError(409, "Die Datenbank steht derzeit nicht als Datei zur Verfügung.", "DATABASE_DOWNLOAD_UNAVAILABLE");
+  }
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-db-download-"));
+  const snapshotPath = path.join(temporaryRoot, `grabenplaner-${backupTimestamp()}-${crypto.randomBytes(6).toString("hex")}.db`);
+  try {
+    try { fs.chmodSync(temporaryRoot, 0o700); } catch {}
+    const escapedTarget = snapshotPath.replaceAll("\\", "/").replaceAll("'", "''");
+    db.exec(`VACUUM INTO '${escapedTarget}'`);
+    const verification = verifyDatabaseFile(snapshotPath);
+    if (!verification.ok) {
+      throw new Error("Die Integritätsprüfung des Datenbank-Downloads ist fehlgeschlagen.");
+    }
+    try { fs.chmodSync(snapshotPath, 0o600); } catch {}
+    const stat = fs.statSync(snapshotPath);
+    return {
+      temporaryRoot,
+      path: snapshotPath,
+      size: stat.size,
+      sha256: fileSha256(snapshotPath),
+      createdAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 function createDatabaseBackup(reason = "automatic") {
@@ -6329,7 +6374,111 @@ const loginBrandingRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_BR
 const mobileRefreshRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 2048, maxEventsPerKey: 90 });
 const usbCreatorAuthRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 128, maxEventsPerKey: 8 });
 const usbCreatorGlobalRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 32, maxEventsPerKey: 24 });
+const backupAdminAuthRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 128, maxEventsPerKey: 5 });
+const backupAdminGlobalRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 32, maxEventsPerKey: 20 });
 const articleLookupRateLimits = createBoundedRateLimitStore({ windowMs: 5 * 60 * 1000, maxKeys: 2048, maxEventsPerKey: 60 });
+
+function backupAdminOriginAllowed(request) {
+  const origin = String(request.headers.origin || "").trim();
+  const fetchSite = String(request.headers["sec-fetch-site"] || "").trim().toLowerCase();
+  return Boolean(origin && (!fetchSite || fetchSite === "same-origin") && requestOriginAllowed(request, origin));
+}
+
+async function requireBackupAdminReauthentication(request, {
+  permission = "backup:write",
+  operation = "backup-administration",
+} = {}) {
+  if (!serverModeActive) {
+    throw httpError(409, "Diese geschützte Serverfunktion steht nur im Serverbetrieb zur Verfügung.", "SERVER_MODE_REQUIRED");
+  }
+  const session = request.portalSession || requirePortalSession(request, permission);
+  if (!BACKUP_ADMIN_ROLES.has(session.role) || !session.permissions.includes(permission)) {
+    throw httpError(403, "Diese Aktion ist nur für Developer, IT-Admin oder Admin verfügbar.", "PORTAL_PERMISSION_DENIED");
+  }
+  assertPortalCsrf(request);
+  if (!backupAdminOriginAllowed(request)) {
+    throw httpError(403, "Die Aktion muss direkt aus der Grabenplaner-Oberfläche gestartet werden.", "BACKUP_ADMIN_ORIGIN_REQUIRED");
+  }
+
+  const now = Date.now();
+  const ipKey = loginRateKey(request);
+  const rateKey = `${ipKey}:${session.employeeNumber}`;
+  if (backupAdminGlobalRateLimits.get(ipKey, now).length >= 20
+    || backupAdminAuthRateLimits.get(rateKey, now).length >= 5) {
+    auditPortal(session.employeeNumber, "backup.admin.reauthentication.rate-limited", "system", operation);
+    throw httpError(429, "Zu viele fehlgeschlagene Freigaben. Bitte 15 Minuten warten.", "BACKUP_ADMIN_RATE_LIMITED");
+  }
+
+  const user = db.prepare(`
+    SELECT u.employee_number, u.password_hash, u.role, u.active, u.locked_until,
+           e.active AS employee_active
+    FROM portal_users u
+    JOIN employees e ON e.personnel_number = u.employee_number
+    WHERE u.employee_number = ?
+    LIMIT 1
+  `).get(session.employeeNumber);
+  const suppliedPassword = typeof request.body?.currentPassword === "string"
+    && request.body.currentPassword.length <= 512
+    ? request.body.currentPassword
+    : "";
+  const accountUnlocked = !user?.locked_until || new Date(user.locked_until).getTime() <= now;
+  const allowed = Boolean(
+    user
+    && user.active
+    && user.employee_active
+    && accountUnlocked
+    && user.role === session.role
+    && BACKUP_ADMIN_ROLES.has(user.role)
+    && user.password_hash,
+  );
+  const passwordMatches = await verifyPortalPassword(
+    suppliedPassword,
+    allowed ? user.password_hash : DUMMY_PORTAL_PASSWORD_HASH,
+  );
+  if (!allowed || !suppliedPassword || !passwordMatches) {
+    backupAdminAuthRateLimits.record(rateKey, now);
+    backupAdminGlobalRateLimits.record(ipKey, now);
+    auditPortal(session.employeeNumber, "backup.admin.reauthentication.denied", "system", operation);
+    throw httpError(403, "Das aktuelle Passwort ist nicht korrekt.", "BACKUP_ADMIN_AUTH_FAILED");
+  }
+  backupAdminAuthRateLimits.clear(rateKey);
+  auditPortal(session.employeeNumber, "backup.admin.reauthentication.accepted", "system", operation);
+  return { session, user };
+}
+
+function requireOffsiteTargetAdministrator(request) {
+  if (!serverModeActive) {
+    throw httpError(409, "Die Offsite-Ordnerverwaltung steht nur im Serverbetrieb zur Verfügung.", "SERVER_MODE_REQUIRED");
+  }
+  const session = requirePortalSession(request, "system:offsite:configure");
+  if (!BACKUP_ADMIN_ROLES.has(session.role)
+    || !session.permissions.includes("system:offsite:configure")) {
+    throw httpError(403, "Diese Aktion ist nur für Developer, IT-Admin oder Admin verfügbar.", "PORTAL_PERMISSION_DENIED");
+  }
+  return session;
+}
+
+function offsiteTargetHttpError(error) {
+  const code = String(error?.code || "UNAVAILABLE");
+  if (code === "ALREADY_EXISTS") {
+    return httpError(409, "Dieser verwaltete Sicherungsordner besteht bereits.", "OFFSITE_FOLDER_EXISTS");
+  }
+  if (code === "NOT_FOUND") {
+    return httpError(409, "Der ausgewählte verwaltete Sicherungsordner ist nicht mehr verfügbar.", "OFFSITE_FOLDER_NOT_FOUND");
+  }
+  if (code === "ALREADY_ACTIVE") {
+    return httpError(409, "Dieser verwaltete Sicherungsordner ist bereits aktiv.", "OFFSITE_FOLDER_ALREADY_ACTIVE");
+  }
+  if (code === "LIMIT_REACHED") {
+    return httpError(409, "Es können höchstens 100 verwaltete Sicherungsordner angelegt werden.", "OFFSITE_FOLDER_LIMIT_REACHED");
+  }
+  if (code === "RATE_LIMITED") {
+    const value = httpError(429, "Die Offsite-Ordnerverwaltung wurde vorübergehend begrenzt.", "OFFSITE_TARGET_RATE_LIMITED");
+    value.retryAfter = Number(error?.retryAfterSeconds || 60);
+    return value;
+  }
+  return httpError(503, "Die geschützte Offsite-Ordnerverwaltung ist derzeit nicht verfügbar.", "OFFSITE_TARGET_UNAVAILABLE");
+}
 
 function loginRateKey(request) {
   return String(request.ip || request.socket?.remoteAddress || "unknown").replace(/^::ffff:/, "");
@@ -7367,6 +7516,7 @@ function enforceAdminApiAccess(request, _response, next) {
     const personnelDirectoryRoute = /^\/personnel-directory(?:\/|$)/.test(request.path);
     const personnelVacationRoute = /^\/personnel-vacations(?:\/|$)/.test(request.path);
     const costCenterRoute = /^\/cost-centers(?:\/|$)/.test(request.path);
+    const offsiteFolderRoute = /^\/backup\/offsite-folders(?:\/|$)/.test(request.path);
     const workRuleGovernancePermissions = [
       "work_rules:draft",
       "work_rules:review",
@@ -7387,7 +7537,9 @@ function enforceAdminApiAccess(request, _response, next) {
       request.portalSession = session;
       return next();
     }
-    if (privacyGovernanceRoute) {
+    if (offsiteFolderRoute) {
+      permission = "system:offsite:configure";
+    } else if (privacyGovernanceRoute) {
       if (/^\/privacy-governance\/retention(?:\/|$)/.test(request.path)) {
         permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "retention:read" : "retention:manage";
       } else {
@@ -15229,6 +15381,8 @@ function backupIntervalMs(settings = getSettings()) {
 
 function scheduleAutomaticBackups() {
   if (backupInterval) clearInterval(backupInterval);
+  backupInterval = null;
+  if (serverModeActive) return;
   backupInterval = setInterval(() => {
     try {
       const settings = getSettings();
@@ -17369,21 +17523,26 @@ function serverDiagnostics() {
     directories: requiredStorageHealth,
   };
   let externalDirectory = "";
-  try { externalDirectory = backupDirectoryFromSettings(settings); } catch (error) {
-    warnings.push(`Das externe Backupziel ist ungültig: ${error.message}`);
-    alerts.push({ id: "EXTERNAL_BACKUP_TARGET_INVALID", severity: "critical", category: "backup", title: "Sicherungsziel ungültig", message: "Das konfigurierte externe Sicherungsziel muss durch die technische Administration geprüft werden.", action: "open-server-status" });
+  if (!serverModeActive) {
+    try { externalDirectory = backupDirectoryFromSettings(settings); } catch (error) {
+      warnings.push(`Das externe Backupziel ist ungültig: ${error.message}`);
+      alerts.push({ id: "EXTERNAL_BACKUP_TARGET_INVALID", severity: "critical", category: "backup", title: "Sicherungsziel ungültig", message: "Das konfigurierte externe Sicherungsziel muss durch die technische Administration geprüft werden.", action: "open-server-status" });
+    }
   }
   const backupHealth = externalDirectory ? directoryDiagnostics(externalDirectory) : { writable: false, freeBytes: null, volume: "" };
   const latestExternalBackup = externalDirectory ? latestDatabaseBackup(externalDirectory) : null;
   const latestAppBackup = latestDatabaseBackup(appBackupDirectory);
-  const latestBackup = newestDatabaseBackup(latestExternalBackup, latestAppBackup);
+  const latestBackup = serverModeActive
+    ? latestAppBackup
+    : newestDatabaseBackup(latestExternalBackup, latestAppBackup);
   const latestBackupState = backupAgeState(latestBackup);
   const latestExternalBackupState = backupAgeState(latestExternalBackup);
   const latestAppBackupState = backupAgeState(latestAppBackup);
   const latestBackupAgeHours = latestBackupState.ageHours;
   const latestExternalBackupAgeHours = latestExternalBackupState.ageHours;
   const backupFreshnessHours = Math.max(6, Number(settings.backup_interval_hours || 2) * 3);
-  const externalBackupReady = settingEnabled(settings, "external_backup_enabled") && backupHealth.writable
+  const externalBackupReady = !serverModeActive
+    && settingEnabled(settings, "external_backup_enabled") && backupHealth.writable
     && latestExternalBackup?.committed === true
     && latestExternalBackupState.timestampValid
     && latestExternalBackupAgeHours !== null && latestExternalBackupAgeHours <= backupFreshnessHours;
@@ -17391,6 +17550,9 @@ function serverDiagnostics() {
   const offsiteStatus = readOffsiteBackupStatus({ configured: offsiteConfigured });
   const offsiteApplicable = serverModeActive || offsiteConfigured || offsiteStatus.statusAvailable;
   const offsite = { ...offsiteStatus, applicable: offsiteApplicable };
+  const offsiteBackupReady = offsite.configured === true && offsite.state === "ok"
+    && offsite.unresolvedFailures?.backup !== true
+    && offsite.unresolvedFailures?.fullCheck !== true;
   const recoveryAssurance = readRecoveryAssuranceStatus({ configured: offsiteConfigured });
   const monitorConfiguration = String(process.env.GRABENPLANER_MONITOR_CONFIGURED || "").trim();
   const monitorConfigured = monitorConfiguration === "1"
@@ -17412,18 +17574,22 @@ function serverDiagnostics() {
     warnings.push(...runtimeErrors);
     alerts.push({ id: "RUNTIME_CONFIGURATION_INVALID", severity: "critical", category: "system", title: "Serverkonfiguration prüfen", message: "Mindestens eine erforderliche Laufzeitkonfiguration ist ungültig oder unvollständig.", action: "open-server-status" });
   }
-  if (settings.external_backup_enabled === "0") addAlert("EXTERNAL_BACKUP_DISABLED", serverModeActive ? "critical" : "warning", "Externe Sicherung deaktiviert", "Die zusätzliche externe Datensicherung ist deaktiviert.", "backup");
+  if (!serverModeActive && settings.external_backup_enabled === "0") {
+    addAlert("EXTERNAL_BACKUP_DISABLED", "warning", "Externe Sicherung deaktiviert", "Die zusätzliche externe Datensicherung ist deaktiviert.", "backup");
+  }
   if (!dataHealth.writable) {
     const failedDirectories = Object.entries(requiredStorageHealth).filter(([, item]) => !item.writable).map(([name]) => name);
     warnings.push(`Mindestens ein benötigtes Server-Datenverzeichnis ist nicht beschreibbar: ${failedDirectories.join(", ")}.`);
     alerts.push({ id: "DATA_STORAGE_UNWRITABLE", severity: "critical", category: "storage", title: "Datenspeicher nicht beschreibbar", message: "Mindestens ein benötigter geschützter Datenbereich ist nicht beschreibbar.", action: "open-server-status" });
   }
-  if (settingEnabled(settings, "external_backup_enabled") && !backupHealth.writable) addAlert("EXTERNAL_BACKUP_TARGET_UNWRITABLE", "critical", "Sicherungsziel nicht beschreibbar", "Das externe Sicherungsziel ist derzeit nicht beschreibbar.", "backup");
-  if (latestExternalBackup?.legacy) addAlert("EXTERNAL_BACKUP_LEGACY", "warning", "Älterer Sicherungsstand", "Der neueste externe Sicherungsstand besitzt noch keinen atomaren Abschlussmarker.", "backup");
-  if (latestExternalBackupState.future) addAlert("EXTERNAL_BACKUP_TIMESTAMP_FUTURE", "critical", "Unplausible Sicherungszeit", "Der Zeitstempel der externen Sicherung liegt unplausibel in der Zukunft; Serverzeit und Sicherung müssen geprüft werden.", "backup");
-  else if (latestExternalBackupAgeHours === null || latestExternalBackupAgeHours > backupFreshnessHours) addAlert("EXTERNAL_BACKUP_STALE", "critical", "Externe Sicherung fehlt oder ist zu alt", "Es wurde kein ausreichend aktueller verifizierter externer Sicherungsstand gefunden.", "backup");
+  if (!serverModeActive) {
+    if (settingEnabled(settings, "external_backup_enabled") && !backupHealth.writable) addAlert("EXTERNAL_BACKUP_TARGET_UNWRITABLE", "critical", "Sicherungsziel nicht beschreibbar", "Das externe Sicherungsziel ist derzeit nicht beschreibbar.", "backup");
+    if (latestExternalBackup?.legacy) addAlert("EXTERNAL_BACKUP_LEGACY", "warning", "Älterer Sicherungsstand", "Der neueste externe Sicherungsstand besitzt noch keinen atomaren Abschlussmarker.", "backup");
+    if (latestExternalBackupState.future) addAlert("EXTERNAL_BACKUP_TIMESTAMP_FUTURE", "critical", "Unplausible Sicherungszeit", "Der Zeitstempel der externen Sicherung liegt unplausibel in der Zukunft; Serverzeit und Sicherung müssen geprüft werden.", "backup");
+    else if (latestExternalBackupAgeHours === null || latestExternalBackupAgeHours > backupFreshnessHours) addAlert("EXTERNAL_BACKUP_STALE", "critical", "Externe Sicherung fehlt oder ist zu alt", "Es wurde kein ausreichend aktueller verifizierter externer Sicherungsstand gefunden.", "backup");
+  }
   if (latestAppBackupState.future) addAlert("APP_BACKUP_TIMESTAMP_FUTURE", "warning", "Unplausible interne Sicherungszeit", "Der Zeitstempel der internen Sicherung liegt unplausibel in der Zukunft.", "backup");
-  if (externalDirectory && offsite.state !== "ok"
+  if (!serverModeActive && externalDirectory && offsite.state !== "ok"
     && path.parse(path.resolve(databasePath)).root.toLowerCase() === path.parse(path.resolve(externalDirectory)).root.toLowerCase()) {
     addAlert("BACKUP_SAME_VOLUME", "warning", "Sicherung nicht getrennt", "Datenbank und zusätzliches Sicherungsziel liegen auf demselben Datenträger.", "backup");
   }
@@ -17471,7 +17637,14 @@ function serverDiagnostics() {
     { id: "admin", label: "Admin-Zugang", ok: portal.adminSetupState === "configured", detail: portal.adminSetupState },
     { id: "database", label: "SQLite-Integrität", ok: startupIntegrity[0] === "ok", detail: startupIntegrity[0] || "unbekannt" },
     { id: "data", label: "Datenverzeichnis", ok: dataHealth.writable, detail: dataHealth.writable ? "beschreibbar" : "nicht beschreibbar" },
-    { id: "backup", label: "Externes Backup", ok: externalBackupReady, detail: latestExternalBackup ? latestExternalBackup.modifiedAt : "noch kein verifiziertes Backup" },
+    {
+      id: "backup",
+      label: serverModeActive ? "Verschlüsseltes Offsite-Backup" : "Externes Backup",
+      ok: serverModeActive ? offsiteBackupReady : externalBackupReady,
+      detail: serverModeActive
+        ? (offsite.lastSuccessAt || offsite.lastErrorCode || "noch kein verifizierter Offsite-Stand")
+        : (latestExternalBackup ? latestExternalBackup.modifiedAt : "noch kein verifiziertes Backup"),
+    },
     { id: "amu", label: "AUM-Speicher", ok: amu.ok, detail: amu.ok ? "verschlüsselt und beschreibbar" : (amu.error || "nicht bereit") },
     { id: "integration-secrets", label: "Schnittstellenschlüssel", ok: integrationSecretsReady, detail: protectedIntegrationConnectionCount ? `${protectedIntegrationConnectionCount} geschützte Verbindung(en)` : "derzeit nicht benötigt" },
     { id: "scanner", label: "AUM-Virenscanner", ok: !amu.requireScanner || (amu.scannerChecked && amu.scannerAvailable && amu.ok), detail: amu.scannerEngine || (amu.scannerChecked ? "nicht verfügbar" : "Prüfung läuft") },
@@ -17483,7 +17656,7 @@ function serverDiagnostics() {
   return {
     ready: startupIntegrity.length === 1 && startupIntegrity[0] === "ok" && dataHealth.writable
       && (!serverModeActive || (runtimeErrors.length === 0 && publicHttpsReady && portal.adminSetupState === "configured"
-        && externalBackupReady && amu.ok && integrationSecretsReady && serviceControlToken.length >= 32)),
+        && amu.ok && integrationSecretsReady && serviceControlToken.length >= 32)),
     mode: portal.operationMode,
     publicUrl: portal.publicUrl,
     httpsRequired: portal.httpsRequired,
@@ -17506,19 +17679,19 @@ function serverDiagnostics() {
     backups: {
       freshnessHours: backupFreshnessHours,
       appDirectory: appBackupDirectory,
-      externalEnabled: settingEnabled(settings, "external_backup_enabled"),
-      externalDirectory,
-      externalWritable: backupHealth.writable,
-      freeBytes: backupHealth.freeBytes,
+      externalEnabled: !serverModeActive && settingEnabled(settings, "external_backup_enabled"),
+      externalDirectory: serverModeActive ? "" : externalDirectory,
+      externalWritable: !serverModeActive && backupHealth.writable,
+      freeBytes: serverModeActive ? null : backupHealth.freeBytes,
       latest: latestBackup,
       latestAgeHours: latestBackupAgeHours,
       latestTimestampValid: latestBackupState.timestampValid,
       latestApp: latestAppBackup,
       latestAppAgeHours: latestAppBackupState.ageHours,
       latestAppTimestampValid: latestAppBackupState.timestampValid,
-      latestExternal: latestExternalBackup,
-      latestExternalAgeHours: latestExternalBackupAgeHours,
-      latestExternalTimestampValid: latestExternalBackupState.timestampValid,
+      latestExternal: serverModeActive ? null : latestExternalBackup,
+      latestExternalAgeHours: serverModeActive ? null : latestExternalBackupAgeHours,
+      latestExternalTimestampValid: serverModeActive ? false : latestExternalBackupState.timestampValid,
       retentionCount: backupKeep,
       lastVerified: Boolean(lastBackup?.appBackup?.verified || lastBackup?.externalBackup?.verified),
       offsite,
@@ -19639,8 +19812,8 @@ app.get("/api/server-diagnostics", (request, response) => {
 });
 
 app.get("/api/server-status", (request, response) => {
-  requirePortalAnyPermission(request, ["system:diagnostics:read", "system:diagnostics:technical"]);
-  response.json(serverStatusSummary());
+  const actor = requirePortalAnyPermission(request, ["system:diagnostics:read", "system:diagnostics:technical"]);
+  response.json(serverStatusForActor(serverDiagnostics(), actor));
 });
 
 function runtimeDriveInfo() {
@@ -19821,9 +19994,9 @@ app.get("/api/system-info", (request, response) => {
     uptimeSeconds: Math.floor(process.uptime()),
     database: path.basename(databasePath),
     appBackupDirectory: privileged ? appBackupDirectory : "",
-    backupDirectory: privileged ? backupDirectoryFromSettings(settings) : "",
-    externalBackupEnabled: settingEnabled(settings, "external_backup_enabled"),
-    backupIntervalHours: Number(settings.backup_interval_hours || 2),
+    backupDirectory: privileged && !serverModeActive ? backupDirectoryFromSettings(settings) : "",
+    externalBackupEnabled: !serverModeActive && settingEnabled(settings, "external_backup_enabled"),
+    backupIntervalHours: serverModeActive ? null : Number(settings.backup_interval_hours || 2),
     lastBackup: privileged ? lastBackup : null,
     adminContact: brandingFromSettings(settings).adminEmail,
     appName: brandingFromSettings(settings).appName,
@@ -19831,7 +20004,7 @@ app.get("/api/system-info", (request, response) => {
     appVersion: packageMetadata.version,
     appVersionLabel: APP_VERSION_LABEL,
     portal: getPortalStatus(),
-    serverStatus: statusAllowed ? serverStatusSummary(diagnosticSnapshot) : null,
+    serverStatus: statusAllowed ? serverStatusForActor(diagnosticSnapshot, request.portalSession) : null,
     serverDiagnostics: diagnosticsAllowed ? diagnosticSnapshot : null,
     runtimeDrive: privileged ? runtimeDriveInfo() : null,
   });
@@ -20026,6 +20199,13 @@ Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
 });
 
 app.put("/api/backup/settings", (request, response) => {
+  if (serverModeActive) {
+    throw httpError(
+      409,
+      "Die frühere zweite Pfadsicherung wird im Serverbetrieb nicht mehr von der App verwaltet.",
+      "SERVER_MANAGED_BACKUP",
+    );
+  }
   const currentSettings = getSettings();
   const externalBackupEnabled = request.body?.externalBackupEnabled !== false;
   const backupDirectory = externalBackupEnabled
@@ -20056,7 +20236,260 @@ app.put("/api/backup/settings", (request, response) => {
 });
 
 app.post("/api/backup", (_request, response) => {
+  if (serverModeActive) {
+    throw httpError(
+      409,
+      "Im Serverbetrieb übernimmt die gesicherte Offsite-Automatik die laufenden Sicherungen.",
+      "SERVER_MANAGED_BACKUP",
+    );
+  }
   response.status(201).json(createDatabaseBackup("manual"));
+});
+
+app.post("/api/backup/database-download", async (request, response, next) => {
+  const body = request.body;
+  const bodyKeys = body && typeof body === "object" && !Array.isArray(body)
+    ? Object.keys(body).sort()
+    : [];
+  if (bodyKeys.length !== 2
+    || bodyKeys[0] !== "confirmation"
+    || bodyKeys[1] !== "currentPassword"
+    || body.confirmation !== "DATABASE_BACKUP_DOWNLOAD") {
+    throw httpError(400, "Die ausdrückliche Download-Bestätigung fehlt.", "DATABASE_DOWNLOAD_CONFIRMATION_REQUIRED");
+  }
+  const { session } = await requireBackupAdminReauthentication(request, {
+    permission: "backup:write",
+    operation: "database-download",
+  });
+  const requestId = crypto.randomUUID();
+  auditPortal(
+    session.employeeNumber,
+    "backup.database-download.requested",
+    "database",
+    requestId,
+    JSON.stringify({ requestId }),
+  );
+
+  let snapshot;
+  try {
+    snapshot = createDatabaseDownloadSnapshot();
+  } catch (error) {
+    auditPortal(
+      session.employeeNumber,
+      "backup.database-download.failed",
+      "database",
+      requestId,
+      JSON.stringify({ requestId, errorCode: "SNAPSHOT_CREATION_FAILED" }),
+    );
+    throw httpError(500, "Der geprüfte Datenbankstand konnte nicht erstellt werden.", "DATABASE_DOWNLOAD_FAILED");
+  }
+
+  const filename = `Grabenplaner-Datenbank-${backupTimestamp(new Date()).replace(/Z$/, "")}.db`;
+  response.set({
+    "Content-Type": "application/vnd.sqlite3",
+    "Content-Disposition": contentDispositionHeader(filename),
+    "Cache-Control": "private, no-store, max-age=0",
+    Pragma: "no-cache",
+    Expires: "0",
+    "X-Content-Type-Options": "nosniff",
+    "Cross-Origin-Resource-Policy": "same-origin",
+  });
+
+  let settled = false;
+  const cleanup = () => {
+    try {
+      fs.rmSync(snapshot.temporaryRoot, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 50,
+      });
+    } catch (error) {
+      const reportedCode = String(error?.code || "");
+      const errorCode = /^[A-Z0-9_]{1,80}$/.test(reportedCode) ? reportedCode : "CLEANUP_FAILED";
+      console.error("Die temporäre Datenbankkopie konnte nicht vollständig entfernt werden:", errorCode);
+      try {
+        auditPortal(
+          session.employeeNumber,
+          "backup.database-download.cleanup-failed",
+          "database",
+          requestId,
+          JSON.stringify({ requestId, errorCode }),
+        );
+      } catch {
+        // Der Transferabschluss darf auch bei einem Auditfehler nicht abstürzen.
+      }
+    }
+  };
+  const finishTransfer = (outcome, errorCode = "") => {
+    if (settled) return;
+    settled = true;
+    try {
+      if (outcome === "completed") {
+        auditPortal(
+          session.employeeNumber,
+          "backup.database-download.completed",
+          "database",
+          requestId,
+          JSON.stringify({ requestId, bytes: snapshot.size, sha256: snapshot.sha256 }),
+        );
+      } else {
+        auditPortal(
+          session.employeeNumber,
+          "backup.database-download.failed",
+          "database",
+          requestId,
+          JSON.stringify({ requestId, errorCode: errorCode || "TRANSFER_FAILED" }),
+        );
+      }
+    } catch (error) {
+      console.error("Der Abschluss des Datenbank-Downloads konnte nicht protokolliert werden:", error);
+    } finally {
+      cleanup();
+    }
+  };
+  response.once("close", () => {
+    if (!response.writableEnded) finishTransfer("failed", "CLIENT_ABORTED");
+  });
+  response.sendFile(snapshot.path, {
+    acceptRanges: false,
+    cacheControl: false,
+    lastModified: false,
+    dotfiles: "deny",
+  }, (error) => {
+    if (error) {
+      finishTransfer("failed", "TRANSFER_FAILED");
+      if (response.headersSent) {
+        response.destroy();
+      } else {
+        next(httpError(500, "Der Datenbank-Download konnte nicht übertragen werden.", "DATABASE_DOWNLOAD_FAILED"));
+      }
+      return;
+    }
+    finishTransfer("completed");
+  });
+});
+
+app.get("/api/backup/offsite-folders", async (request, response) => {
+  requireOffsiteTargetAdministrator(request);
+  try {
+    const result = await listManagedOffsiteFolders();
+    response.json({
+      activeFolder: result.activeFolder || null,
+      folders: Array.isArray(result.folders) ? result.folders : [],
+    });
+  } catch (error) {
+    throw offsiteTargetHttpError(error);
+  }
+});
+
+app.post("/api/backup/offsite-folders", async (request, response) => {
+  const body = request.body;
+  const bodyKeys = body && typeof body === "object" && !Array.isArray(body)
+    ? Object.keys(body).sort()
+    : [];
+  if (bodyKeys.length !== 3
+    || bodyKeys[0] !== "confirmation"
+    || bodyKeys[1] !== "currentPassword"
+    || bodyKeys[2] !== "folderLabel"
+    || body.confirmation !== "CREATE_MANAGED_OFFSITE_FOLDER"
+    || !validManagedOffsiteFolderLabel(body.folderLabel)) {
+    throw httpError(400, "Bitte einen gültigen verwalteten Ordnernamen und die ausdrückliche Bestätigung angeben.", "OFFSITE_FOLDER_REQUEST_INVALID");
+  }
+  const { session } = await requireBackupAdminReauthentication(request, {
+    permission: "system:offsite:configure",
+    operation: "offsite-folder-create",
+  });
+  const requestId = crypto.randomUUID();
+  auditPortal(
+    session.employeeNumber,
+    "backup.offsite-folder.create.requested",
+    "offsite_folder",
+    body.folderLabel,
+    JSON.stringify({ requestId }),
+  );
+  try {
+    const result = await createManagedOffsiteFolder(body.folderLabel);
+    auditPortal(
+      session.employeeNumber,
+      "backup.offsite-folder.create.completed",
+      "offsite_folder",
+      body.folderLabel,
+      JSON.stringify({ requestId }),
+    );
+    response.status(201).json({
+      activeFolder: result.activeFolder || null,
+      createdFolder: result.createdFolder,
+      requestId,
+    });
+  } catch (error) {
+    auditPortal(
+      session.employeeNumber,
+      "backup.offsite-folder.create.failed",
+      "offsite_folder",
+      body.folderLabel,
+      JSON.stringify({ requestId, errorCode: String(error?.code || "UNAVAILABLE").slice(0, 80) }),
+    );
+    throw offsiteTargetHttpError(error);
+  }
+});
+
+app.put("/api/backup/offsite-folders/active", async (request, response) => {
+  const body = request.body;
+  const bodyKeys = body && typeof body === "object" && !Array.isArray(body)
+    ? Object.keys(body).sort()
+    : [];
+  if (bodyKeys.length !== 3
+    || bodyKeys[0] !== "confirmation"
+    || bodyKeys[1] !== "currentPassword"
+    || bodyKeys[2] !== "folderLabel"
+    || body.confirmation !== "ACTIVATE_MANAGED_OFFSITE_FOLDER"
+    || !validManagedOffsiteFolderLabel(body.folderLabel)) {
+    throw httpError(400, "Bitte das neue Sicherungsziel und die ausdrückliche Bestätigung vollständig angeben.", "OFFSITE_TARGET_REQUEST_INVALID");
+  }
+  const { session } = await requireBackupAdminReauthentication(request, {
+    permission: "system:offsite:configure",
+    operation: "offsite-folder-activate",
+  });
+  const requestId = crypto.randomUUID();
+  auditPortal(
+    session.employeeNumber,
+    "backup.offsite-folder.activate.requested",
+    "offsite_folder",
+    body.folderLabel,
+    JSON.stringify({ requestId }),
+  );
+  try {
+    const result = await activateManagedOffsiteFolder(body.folderLabel);
+    auditPortal(
+      session.employeeNumber,
+      "backup.offsite-folder.activate.completed",
+      "offsite_folder",
+      body.folderLabel,
+      JSON.stringify({
+        requestId,
+        migrationMode: result.migrationMode,
+        recoverySetState: result.recoverySetState,
+        fallbackPreserved: result.fallbackPreserved === true,
+      }),
+    );
+    response.json({
+      activeFolder: result.activeFolder || null,
+      migrationMode: result.migrationMode,
+      recoverySetState: result.recoverySetState,
+      fallbackPreserved: result.fallbackPreserved === true,
+      requestId,
+    });
+  } catch (error) {
+    auditPortal(
+      session.employeeNumber,
+      "backup.offsite-folder.activate.failed",
+      "offsite_folder",
+      body.folderLabel,
+      JSON.stringify({ requestId, errorCode: String(error?.code || "UNAVAILABLE").slice(0, 80) }),
+    );
+    throw offsiteTargetHttpError(error);
+  }
 });
 
 function scheduleApplicationRestart() {
@@ -20091,6 +20524,130 @@ Remove-Item -LiteralPath '${tempRoot.replaceAll("'", "''")}' -Recurse -Force -Er
   }).unref();
   setTimeout(shutdown, 900);
 }
+
+const SERVER_MONITOR_CONTROL_ROLES = new Set(["admin", "it_admin", "developer"]);
+const SERVER_MONITOR_RESTART_COOLDOWN_MS = 5 * 60 * 1000;
+let serverManagedRestartRequested = false;
+
+function serverMonitorRestartCooldownSeconds(lastAcceptedAt, now = new Date()) {
+  if (!lastAcceptedAt) return 0;
+  const acceptedMilliseconds = Date.parse(`${String(lastAcceptedAt).replace(" ", "T").replace(/Z$/i, "")}Z`);
+  if (!Number.isFinite(acceptedMilliseconds)) return SERVER_MONITOR_RESTART_COOLDOWN_MS / 1000;
+  return Math.max(0, Math.ceil(
+    (acceptedMilliseconds + SERVER_MONITOR_RESTART_COOLDOWN_MS - now.getTime()) / 1000,
+  ));
+}
+
+function currentServerMonitorRestartCooldownSeconds(now = new Date()) {
+  const latest = db.prepare(`
+    SELECT created_at
+    FROM audit_log
+    WHERE action = 'system.server_monitor.restart.accepted'
+    ORDER BY id DESC
+    LIMIT 1
+  `).get();
+  return serverMonitorRestartCooldownSeconds(latest?.created_at, now);
+}
+
+function serverMonitorActionCapabilities(
+  actor,
+  {
+    managedRestartAvailable = serverManagedRestartAvailable,
+    restartCooldownSeconds = currentServerMonitorRestartCooldownSeconds(),
+  } = {},
+) {
+  return {
+    canRefresh: Boolean(actor),
+    canRestart: Boolean(
+      actor
+      && managedRestartAvailable
+      && restartCooldownSeconds === 0
+      && SERVER_MONITOR_CONTROL_ROLES.has(actor.role)
+      && actor.permissions?.includes("system:write")
+      && actor.permissions?.includes("system:diagnostics:technical"),
+    ),
+  };
+}
+
+function serverStatusForActor(diagnostics, actor) {
+  return {
+    ...serverStatusSummary(diagnostics),
+    monitorActions: serverMonitorActionCapabilities(actor),
+  };
+}
+
+function assertServerRestartConfirmation(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || Object.keys(body).length !== 1 || body.confirmation !== "SERVER_RESTART") {
+    throw httpError(
+      400,
+      "Der kontrollierte Serverneustart wurde nicht eindeutig bestätigt.",
+      "SERVER_RESTART_CONFIRMATION_REQUIRED",
+    );
+  }
+}
+
+app.post("/api/portal/v1/server-monitor/restart", (request, response) => {
+  const actor = requirePortalAdminOrLocal(request, "system:write");
+  if (actor.employeeNumber === "local" || !SERVER_MONITOR_CONTROL_ROLES.has(actor.role)) {
+    throw httpError(
+      403,
+      "Nur Developer, IT-Administration oder Administration dürfen den Server kontrolliert neu starten.",
+      "SERVER_RESTART_ROLE_DENIED",
+    );
+  }
+  if (!actor.permissions?.includes("system:diagnostics:technical")) {
+    throw httpError(
+      403,
+      "Für den kontrollierten Serverneustart fehlt die technische Diagnoseberechtigung.",
+      "SERVER_RESTART_DIAGNOSTICS_PERMISSION_REQUIRED",
+    );
+  }
+  assertServerRestartConfirmation(request.body);
+  if (!serverManagedRestartAvailable) {
+    throw httpError(
+      409,
+      "Der kontrollierte Neustart ist ausschließlich im verwalteten Ubuntu-Serverdienst verfügbar.",
+      "SERVER_RESTART_SERVICE_REQUIRED",
+    );
+  }
+  if (serverManagedRestartRequested) {
+    throw httpError(409, "Ein kontrollierter Serverneustart wurde bereits eingeleitet.", "SERVER_RESTART_IN_PROGRESS");
+  }
+  const cooldownSeconds = currentServerMonitorRestartCooldownSeconds();
+  if (cooldownSeconds > 0) {
+    response.setHeader("Retry-After", String(cooldownSeconds));
+    throw httpError(
+      429,
+      `Nach einem kontrollierten Neustart ist die Aktion noch ${cooldownSeconds} Sekunden gesperrt.`,
+      "SERVER_RESTART_COOLDOWN",
+    );
+  }
+
+  const requestId = crypto.randomUUID();
+  createDatabaseBackup("server-monitor-restart");
+  auditPortal(
+    actor.employeeNumber,
+    "system.server_monitor.restart.accepted",
+    "system",
+    "server-monitor",
+    JSON.stringify({ requestId, result: "accepted" }),
+  );
+  serverManagedRestartRequested = true;
+  response.status(202).json({
+    ok: true,
+    code: "SERVER_RESTART_ACCEPTED",
+    requestId,
+    message: "Der verifizierte Sicherungspunkt wurde erstellt. Grabenplaner wird kontrolliert neu gestartet.",
+  });
+  response.on("finish", () => {
+    setTimeout(() => shutdown({
+      reason: "server-monitor-restart",
+      skipBackup: true,
+      exitCode: 75,
+    }), 350);
+  });
+});
 
 app.post("/api/system/restart", (_request, response) => {
   if (serverModeActive) throw httpError(409, "Der Serverbetrieb wird über den Serverdienst neu gestartet.", "SERVER_MANAGED_RESTART");
@@ -33863,7 +34420,13 @@ app.get("/api/settings", (request, response) => {
   }
   const context = resolvePlanningContext(request.query || {});
   assertSessionContextScope(request.portalSession, context);
-  response.json(settingsForLocation(context.locationId));
+  const settings = settingsForLocation(context.locationId);
+  if (serverModeActive) {
+    settings.external_backup_enabled = "0";
+    settings.backup_directory = "";
+    settings.backup_interval_hours = "";
+  }
+  response.json(settings);
 });
 
 app.get("/api/branding/export", (request, response) => {
@@ -34062,11 +34625,17 @@ app.put("/api/settings", (request, response) => {
   const pdfFilenamePrefix = validatePdfText(body.pdfFilenamePrefix || scheduleDefaults.pdf_filename_prefix, "der Dienstplan-PDF-Dateiname", { min: 5, max: 80 });
   const vacationPdfTitle = validatePdfText(body.vacationPdfTitle || vacationDefaults.vacation_pdf_title, "den Urlaubsplaner-PDF-Titel");
   const vacationPdfFilenamePrefix = validatePdfText(body.vacationPdfFilenamePrefix || vacationDefaults.vacation_pdf_filename_prefix, "der Urlaubsplaner-PDF-Dateiname", { min: 5, max: 80 });
-  const externalBackupEnabled = body.externalBackupEnabled !== false;
-  const backupDirectory = externalBackupEnabled
-    ? validateBackupDirectory(body.backupDirectory || defaultBackupDirectorySetting)
-    : { stored: String(body.backupDirectory || defaultBackupDirectorySetting).trim() || defaultBackupDirectorySetting };
-  const backupIntervalHours = Number(body.backupIntervalHours || 2);
+  const externalBackupEnabled = serverModeActive
+    ? settingEnabled(currentSettings, "external_backup_enabled")
+    : body.externalBackupEnabled !== false;
+  const backupDirectory = serverModeActive
+    ? { stored: String(currentSettings.backup_directory || defaultBackupDirectorySetting) }
+    : externalBackupEnabled
+      ? validateBackupDirectory(body.backupDirectory || defaultBackupDirectorySetting)
+      : { stored: String(body.backupDirectory || defaultBackupDirectorySetting).trim() || defaultBackupDirectorySetting };
+  const backupIntervalHours = serverModeActive
+    ? Number(currentSettings.backup_interval_hours || 2)
+    : Number(body.backupIntervalHours || 2);
   const vacationPdfCalendarStyle = ["bars", "dots"].includes(String(body.vacationPdfCalendarStyle))
     ? String(body.vacationPdfCalendarStyle)
     : "bars";
@@ -34092,7 +34661,7 @@ app.put("/api/settings", (request, response) => {
     ? currentSettings.remember_last_vacation_overall_plan !== "0"
     : body.rememberLastVacationOverallPlan !== false;
 
-  if (!Number.isInteger(backupIntervalHours) || backupIntervalHours < 1 || backupIntervalHours > 6) {
+  if (!serverModeActive && (!Number.isInteger(backupIntervalHours) || backupIntervalHours < 1 || backupIntervalHours > 6)) {
     throw httpError(400, "Das Backup-Intervall muss zwischen 1 und 6 Stunden liegen.");
   }
   if (!Number.isInteger(breakAfterMinutes) || breakAfterMinutes < 0 || breakAfterMinutes > 1440) {
@@ -34110,9 +34679,10 @@ app.put("/api/settings", (request, response) => {
   if (currentWeekLockMode === "manual" && (lockOrder < 5 * 1440 + 18 * 60 || lockOrder > 7 * 1440 + 23 * 60)) {
     throw httpError(400, "Der manuelle Sperrzeitpunkt muss zwischen Freitag 18:00 Uhr und Sonntag 23:00 Uhr liegen.");
   }
-  const backupChanged = String(currentSettings.external_backup_enabled || "1") !== (externalBackupEnabled ? "1" : "0")
+  const backupChanged = !serverModeActive
+    && (String(currentSettings.external_backup_enabled || "1") !== (externalBackupEnabled ? "1" : "0")
     || String(currentSettings.backup_directory || "") !== backupDirectory.stored
-    || String(currentSettings.backup_interval_hours || "2") !== String(backupIntervalHours);
+    || String(currentSettings.backup_interval_hours || "2") !== String(backupIntervalHours));
   if (backupChanged) assertRequestPermission(request, "backup:write");
   const managementViewSettingsChanged = currentSettings.remember_last_schedule_overall_plan !== (rememberLastScheduleOverallPlan ? "1" : "0")
     || currentSettings.remember_last_vacation_overall_plan !== (rememberLastVacationOverallPlan ? "1" : "0");
@@ -36201,6 +36771,8 @@ function startServer() {
         mobileRefreshRateLimits.prune(now);
         usbCreatorAuthRateLimits.prune(now);
         usbCreatorGlobalRateLimits.prune(now);
+        backupAdminAuthRateLimits.prune(now);
+        backupAdminGlobalRateLimits.prune(now);
         articleLookupRateLimits.prune(now);
       }, 5 * 60 * 1000);
       rateLimitCleanupInterval.unref();
@@ -36310,6 +36882,10 @@ module.exports = {
   newestDatabaseBackup,
   serverDiagnostics,
   serverStatusSummary,
+  serverMonitorActionCapabilities,
+  serverMonitorRestartCooldownSeconds,
+  serverStatusForActor,
+  assertServerRestartConfirmation,
   migrateProtectedPersonnelRecords,
   parseProtectedJson,
   purgeExpiredAmuDocuments,

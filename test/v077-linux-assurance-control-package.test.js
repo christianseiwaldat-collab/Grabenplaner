@@ -17,8 +17,8 @@ const socketUnit = read("server-tools/linux/offsite/systemd/grabenplaner-offsite
 const serviceUnit = read("server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control@.service.in");
 const packageBuilder = read("server-tools/package/New-GrabenplanerLinuxServerPackage.ps1");
 
-test("offsite module v5 retains the complete fixed RAS control bridge", () => {
-  assert.equal(schema.moduleVersion, 5);
+test("offsite module v6 retains the complete fixed RAS control bridge", () => {
+  assert.equal(schema.moduleVersion, 6);
   for (const relative of [
     "server-tools/linux/offsite/lib/assurance-control-broker.js",
     "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control.socket.in",
@@ -59,7 +59,7 @@ test("installer retains the transactional privilege bridge and rollback removes 
   assert.match(installer, /rollback_control_group/);
   assert.match(installer, /gpasswd --delete "\$OFFSITE_APP_USER" "\$OFFSITE_CONTROL_GROUP"/);
   assert.match(installer, /groupdel "\$OFFSITE_CONTROL_GROUP"/);
-  assert.match(installer, /systemctl enable --now grabenplaner-offsite-assurance-control\.socket/);
+  assert.match(installer, /systemctl enable --now[\s\S]*grabenplaner-offsite-assurance-control\.socket/);
   assert.match(installer, /control_socket_was_enabled/);
   assert.match(installer, /control_socket_was_active/);
 });

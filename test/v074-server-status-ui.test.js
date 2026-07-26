@@ -12,9 +12,9 @@ test("v0.74 separates redacted status and technical diagnostics permissions", ()
   const server = read("server.js");
   assert.match(server, /id: "system:diagnostics:read"/);
   assert.match(server, /id: "system:diagnostics:technical"/);
-  assert.match(server, /app\.get\("\/api\/server-status"[\s\S]*serverStatusSummary\(\)/);
+  assert.match(server, /app\.get\("\/api\/server-status"[\s\S]*serverStatusForActor\(serverDiagnostics\(\), actor\)/);
   assert.match(server, /app\.get\("\/api\/server-diagnostics"[\s\S]*"system:diagnostics:technical"/);
-  assert.match(server, /serverStatus: statusAllowed \? serverStatusSummary\(diagnosticSnapshot\) : null/);
+  assert.match(server, /serverStatus: statusAllowed \? serverStatusForActor\(diagnosticSnapshot, request\.portalSession\) : null/);
   assert.match(server, /serverDiagnostics: diagnosticsAllowed \? diagnosticSnapshot : null/);
   const summary = server.match(/function serverStatusSummary[\s\S]*?function sendReadiness/)?.[0] || "";
   for (const forbidden of ["dataRoot", "appDirectory", "externalDirectory", "rootDirectory", "process.pid", "listenHost"]) {

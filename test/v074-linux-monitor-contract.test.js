@@ -88,6 +88,20 @@ test("v0.74 monitor executes the existing bounded server test and permits restar
   assert.doesNotMatch(monitor, /systemctl restart.*ready|systemctl restart.*backup|systemctl restart.*offsite/i);
 });
 
+test("v0.86.2 controlled dashboard restart remains coupled to backup and systemd recovery", () => {
+  const server = read("server.js");
+  const service = read("server-tools/linux/grabenplaner.service.in");
+  assert.match(service, /^StartLimitIntervalSec=300$/m);
+  assert.match(service, /^StartLimitBurst=5$/m);
+  assert.match(service, /^Restart=on-failure$/m);
+  assert.match(service, /^RestartSec=10s$/m);
+  assert.match(server, /process\.env\.INVOCATION_ID/);
+  assert.match(server, /body\.confirmation !== "SERVER_RESTART"/);
+  assert.match(server, /SERVER_MONITOR_RESTART_COOLDOWN_MS = 5 \* 60 \* 1000/);
+  assert.match(server, /createDatabaseBackup\("server-monitor-restart"\);[\s\S]{0,1200}?exitCode: 75/);
+  assert.match(server, /SERVER_MONITOR_CONTROL_ROLES = new Set\(\["admin", "it_admin", "developer"\]\)/);
+});
+
 test("v0.74 keeps monitor output schema-complete when the public HTTPS response is unavailable", () => {
   const health = read("server-tools/linux/test-grabenplaner-server.sh");
   assert.doesNotMatch(health, /check_fail "HTTPS-Sicherheitsheader"/);

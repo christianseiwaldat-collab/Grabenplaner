@@ -8,6 +8,8 @@ const path = require("node:path");
 
 const {
   CHECK_IDS,
+  LEGACY_CHECK_IDS,
+  LEGACY_STATUS_SCHEMA_VERSION,
   MAX_STATUS_BYTES,
   STATUS_FORMAT,
   STATUS_SCHEMA_VERSION,
@@ -28,6 +30,15 @@ function validStatus(overrides = {}) {
     checks: Object.fromEntries(CHECK_IDS.map((id) => [id, true])),
     recovery: { attempted: false, successful: false, suppressed: false },
     lastError: null,
+    ...overrides,
+  };
+}
+
+function legacyStatus(overrides = {}) {
+  return {
+    ...validStatus(),
+    schemaVersion: LEGACY_STATUS_SCHEMA_VERSION,
+    checks: Object.fromEntries(LEGACY_CHECK_IDS.map((id) => [id, true])),
     ...overrides,
   };
 }
@@ -66,6 +77,17 @@ test("v0.74 accepts only the exact allowlisted monitor schema and returns no pat
   const withoutCheck = validStatus();
   delete withoutCheck.checks.monitorTimer;
   assert.throws(() => parseServerMonitorStatus(withoutCheck), /freigegebenen Schema/);
+});
+
+test("v0.86.2 reads the legacy schema without inventing unavailable security checks", () => {
+  const parsed = parseServerMonitorStatus(legacyStatus());
+  const diagnostics = diagnosticsFromStatus(parsed, {
+    now: new Date("2026-07-20T12:15:00.000Z"),
+  });
+  assert.equal(parsed.schemaVersion, LEGACY_STATUS_SCHEMA_VERSION);
+  assert.deepEqual(Object.keys(parsed.checks), LEGACY_CHECK_IDS);
+  assert.deepEqual(diagnostics.failedChecks, []);
+  assert.equal(diagnostics.state, "ok");
 });
 
 test("v0.74 rejects contradictory recovery, state and error values", () => {
@@ -113,7 +135,7 @@ test("v0.74 degrades cleanly when monitoring is unconfigured, missing or invalid
   assert.equal(configuredMissing.lastErrorCode, "MONITOR_STATUS_FILE_MISSING");
   assert.equal(configuredMissing.blocksMainReadiness, false);
 
-  withStatusFile({ ...validStatus(), schemaVersion: 2 }, (statusPath) => {
+  withStatusFile({ ...validStatus(), schemaVersion: 3 }, (statusPath) => {
     const invalid = readServerMonitorStatus({ configured: true, statusPath, requireRootOwner: false });
     assert.equal(invalid.state, "error");
     assert.equal(invalid.lastErrorCode, "MONITOR_STATUS_SCHEMA_INVALID");
