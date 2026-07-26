@@ -180,9 +180,8 @@ test("v0.86.3: Planungsverantwortung besitzt nur den vorgesehenen Planungsumfang
     "employees:nickname:write",
     "schedule:read",
     "schedule:write",
+    "absence_entries:write",
     "work_rules:planning:read",
-    "vacation:read",
-    "vacation:approve",
     "personnel:phone:read",
     "personnel:phone:write",
     "locations:operational:write",
@@ -200,6 +199,13 @@ test("v0.86.3: Planungsverantwortung besitzt nur den vorgesehenen Planungsumfang
     "payroll:export",
     "sickness:read",
     "amu:local:manage",
+    "own_vacation:read",
+    "own_vacation:request",
+    "vacation:read",
+    "vacation:approve",
+    "own_time:read",
+    "own_time:write",
+    "own_time:correction_request",
   ]) assert.equal(permissions.has(forbidden), false, `Unzulässiges Grundrecht: ${forbidden}`);
   assert.equal([...permissions].some((permission) => permission.startsWith("loans:")), false);
 });
@@ -381,26 +387,156 @@ test("v0.86.3: Arbeitszeitwarnungen sind im Plan sichtbar, Regel- und System-Das
   }
 });
 
-test("v0.86.3: Urlaubsanträge der eigenen Filiale sind sichtbar, entscheidbar und werden gemeldet", async () => {
+test("v0.86.3: Bereits genehmigte Urlaube und ZA sind direkt planbar, Anträge bleiben vollständig gesperrt", async () => {
   const planner = session(PLANNER, "location_planner");
+  const vacation = await request("/api/vacations", {
+    method: "POST",
+    auth: planner,
+    body: {
+      employeeNumber: TARGET_A,
+      dateFrom: "2035-03-12",
+      dateTo: "2035-03-13",
+      note: "Bereits betrieblich genehmigt",
+      locationId: LOCATION,
+    },
+  });
+  assert.equal(vacation.response.status, 201, vacation.text);
+  assert.ok(vacation.payload.groupId);
+
+  const updatedVacation = await request(`/api/vacations/${encodeURIComponent(vacation.payload.groupId)}`, {
+    method: "PUT",
+    auth: planner,
+    body: {
+      employeeNumber: TARGET_A,
+      dateFrom: "2035-03-12",
+      dateTo: "2035-03-13",
+      note: "Bereits genehmigt und korrigiert",
+      locationId: LOCATION,
+    },
+  });
+  assert.equal(updatedVacation.response.status, 200, updatedVacation.text);
+
+  const timeOff = await request("/api/week-options", {
+    method: "POST",
+    auth: planner,
+    body: {
+      employeeNumber: TARGET_A,
+      weekStart: "2035-03-12",
+      dateFrom: "2035-03-14",
+      dateTo: "2035-03-14",
+      optionType: "time_off",
+      allDay: true,
+      note: "Vereinbarter ZA",
+    },
+  });
+  assert.equal(timeOff.response.status, 201, timeOff.text);
+
+  const updatedTimeOff = await request(`/api/week-options/${timeOff.payload.id}`, {
+    method: "PUT",
+    auth: planner,
+    body: {
+      employeeNumber: TARGET_A,
+      weekStart: "2035-03-12",
+      dateFrom: "2035-03-15",
+      dateTo: "2035-03-15",
+      optionType: "time_off",
+      allDay: true,
+      note: "Vereinbarter ZA verschoben",
+    },
+  });
+  assert.equal(updatedTimeOff.response.status, 200, updatedTimeOff.text);
+
+  const forbiddenType = await request("/api/week-options", {
+    method: "POST",
+    auth: planner,
+    body: {
+      employeeNumber: TARGET_A,
+      weekStart: "2035-03-12",
+      dateFrom: "2035-03-16",
+      dateTo: "2035-03-16",
+      optionType: "sick",
+      allDay: true,
+      note: "Nicht zulässig",
+    },
+  });
+  assert.equal(forbiddenType.response.status, 403, forbiddenType.text);
+  assert.equal(forbiddenType.payload.code, "APPROVED_ABSENCE_TYPE_DENIED");
+
+  const remote = await request("/api/week-options", {
+    method: "POST",
+    auth: planner,
+    body: {
+      employeeNumber: TARGET_REMOTE,
+      weekStart: "2035-03-12",
+      dateFrom: "2035-03-16",
+      dateTo: "2035-03-16",
+      optionType: "time_off",
+      allDay: true,
+    },
+  });
+  assert.equal(remote.response.status, 403, remote.text);
+  assert.equal(remote.payload.code, "PORTAL_SCOPE_DENIED");
+
+  for (const deniedRequest of [
+    await request("/api/portal/v1/absence-requests", { auth: planner }),
+    await request("/api/portal/v1/me/vacation-requests", {
+      method: "POST",
+      auth: planner,
+      body: { dateFrom: "2035-04-02", dateTo: "2035-04-03", note: "Nicht zulässig" },
+    }),
+  ]) {
+    assert.equal(deniedRequest.response.status, 403, deniedRequest.text);
+    assert.equal(deniedRequest.payload.code, "PORTAL_PERMISSION_DENIED");
+  }
+
+  const mobileLayout = await request("/api/portal/v1/mobile-layout", { auth: planner });
+  assert.equal(mobileLayout.response.status, 200, mobileLayout.text);
+  assert.deepEqual(mobileLayout.payload.modules, ["schedule", "more"]);
+
+  const deletedTimeOff = await request(`/api/week-options/${timeOff.payload.id}`, {
+    method: "DELETE",
+    auth: planner,
+  });
+  assert.equal(deletedTimeOff.response.status, 204, deletedTimeOff.text);
+  const deletedVacation = await request(`/api/vacations/${encodeURIComponent(vacation.payload.groupId)}`, {
+    method: "DELETE",
+    auth: planner,
+  });
+  assert.equal(deletedVacation.response.status, 204, deletedVacation.text);
+
+  const auditActions = new Set(db.prepare(`
+    SELECT action FROM audit_log
+    WHERE actor = ? AND action LIKE 'approved-absence.%'
+  `).all(PLANNER).map((row) => row.action));
+  assert.deepEqual(
+    [...auditActions].sort(),
+    ["approved-absence.create", "approved-absence.delete", "approved-absence.update"],
+  );
+});
+
+test("v0.86.3: Planungsverantwortung wird nicht als Empfängerin für Urlaubsanträge behandelt", async () => {
   const employee = session(TARGET_A, "employee");
   db.prepare("DELETE FROM portal_notifications WHERE recipient_employee_number = ?").run(PLANNER);
   const created = await request("/api/portal/v1/me/vacation-requests", {
     method: "POST",
     auth: employee,
-    body: { dateFrom: "2035-03-12", dateTo: "2035-03-13", note: "Pilot-Test" },
+    body: { dateFrom: "2035-04-09", dateTo: "2035-04-10", note: "Antragstest" },
   });
   assert.equal(created.response.status, 201, created.text);
-  assert.ok(db.prepare(`
-    SELECT 1 FROM portal_notifications
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM portal_notifications
     WHERE recipient_employee_number = ? AND event_type = 'request.review'
-  `).get(PLANNER));
+  `).get(PLANNER).count, 0);
+});
 
-  const requests = await request("/api/portal/v1/absence-requests", { auth: planner });
-  assert.equal(requests.response.status, 200, requests.text);
-  const entry = requests.payload.requests.find((item) =>
-    item.kind === "vacation" && Number(item.id) === Number(created.payload.id));
-  assert.ok(entry);
-  assert.equal(entry.capabilities.view, true);
-  assert.equal(entry.capabilities.decide, true);
+test("v0.86.3: Mobile Portal blendet Antragswege aus und öffnet die Filialplanung", () => {
+  const portalHtml = fs.readFileSync(path.join(__dirname, "..", "public", "portal.html"), "utf8");
+  const portalJs = fs.readFileSync(path.join(__dirname, "..", "public", "portal.js"), "utf8");
+  assert.match(portalHtml, /id="timeOffTab"/);
+  assert.match(portalHtml, /id="vacationTab"/);
+  assert.match(portalJs, /session\.user\.role === "location_planner"/);
+  assert.match(portalJs, /Filialplanung öffnen/);
+  assert.match(portalJs, /Vollständige Planung auch am Smartphone/);
+  assert.match(portalJs, /!portalTabAllowed\("timeOff"\)/);
+  assert.match(portalJs, /!portalTabAllowed\("vacation"\)/);
 });

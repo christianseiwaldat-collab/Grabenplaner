@@ -37,11 +37,11 @@
           <button class="hidden leadership-tab" id="leadershipTeamTab" data-tab="leadershipTeam" data-mobile-module="presence" type="button" role="tab" aria-selected="false" aria-controls="leadershipTeamView" tabindex="-1">Team</button>
           <button class="hidden leadership-tab" id="leadershipApprovalsTab" data-tab="leadershipApprovals" data-mobile-module="approvals" type="button" role="tab" aria-selected="false" aria-controls="leadershipApprovalsView" tabindex="-1">Freigaben</button>
           <button id="processTasksTab" data-tab="processTasks" type="button" role="tab" aria-selected="false" aria-controls="processTasksView" tabindex="-1">Aufgaben <span class="portal-tab-count hidden" id="processTasksTabCount">0</span></button>
-          <button data-tab="timeOff" type="button" role="tab" aria-selected="false" aria-controls="timeOffView" tabindex="-1">ZA</button>
-          <button data-tab="vacation" type="button" role="tab" aria-selected="false" aria-controls="vacationView" tabindex="-1">Urlaub</button>
-          <button data-tab="history" type="button" role="tab" aria-selected="false" aria-controls="historyView" tabindex="-1">Meine Anträge</button>
+          <button id="timeOffTab" data-tab="timeOff" type="button" role="tab" aria-selected="false" aria-controls="timeOffView" tabindex="-1">ZA</button>
+          <button id="vacationTab" data-tab="vacation" type="button" role="tab" aria-selected="false" aria-controls="vacationView" tabindex="-1">Urlaub</button>
+          <button id="historyTab" data-tab="history" type="button" role="tab" aria-selected="false" aria-controls="historyView" tabindex="-1">Meine Anträge</button>
           <button class="hidden" id="loanTab" data-tab="loan" type="button" role="tab" aria-selected="false" aria-controls="loanView" tabindex="-1">Leihe</button>
-          <button data-tab="amu" type="button" role="tab" aria-selected="false" aria-controls="amuView" tabindex="-1">Krank &amp; AUM</button>
+          <button id="amuTab" data-tab="amu" type="button" role="tab" aria-selected="false" aria-controls="amuView" tabindex="-1">Krank &amp; AUM</button>
           <button class="hidden leadership-tab" id="leadershipMoreTab" data-tab="leadershipMore" data-mobile-module="more" type="button" role="tab" aria-selected="false" aria-controls="leadershipMoreView" tabindex="-1">Mehr</button>
         </nav>
 
@@ -162,13 +162,13 @@
         </section>
 
         <section class="portal-view leadership-view" id="leadershipMoreView" role="tabpanel" aria-labelledby="leadershipMoreTab">
-          <div class="view-heading"><div><span class="eyebrow">Schnellzugriff</span><h1>Mehr</h1><p>Persönliche Anträge und weitere Funktionen.</p></div></div>
+          <div class="view-heading"><div><span class="eyebrow">Schnellzugriff</span><h1>Mehr</h1><p id="leadershipMoreDescription">Persönliche Anträge und weitere Funktionen.</p></div></div>
           <div class="leadership-more-grid">
-            <button type="button" data-more-tab="timeOff"><strong>ZA beantragen</strong><span>Stundenweise, ganztägig oder mehrtägig</span></button>
-            <button type="button" data-more-tab="vacation"><strong>Urlaub beantragen</strong><span>Neuen Urlaubsantrag einreichen</span></button>
-            <button type="button" data-more-tab="amu"><strong>Krankmeldung &amp; AUM</strong><span>Krankmelden oder Dokument senden</span></button>
+            <button id="leadershipTimeOffShortcut" type="button" data-more-tab="timeOff"><strong>ZA beantragen</strong><span>Stundenweise, ganztägig oder mehrtägig</span></button>
+            <button id="leadershipVacationShortcut" type="button" data-more-tab="vacation"><strong>Urlaub beantragen</strong><span>Neuen Urlaubsantrag einreichen</span></button>
+            <button id="leadershipAmuShortcut" type="button" data-more-tab="amu"><strong>Krankmeldung &amp; AUM</strong><span>Krankmelden oder Dokument senden</span></button>
             <button class="hidden" id="leadershipLoanShortcut" type="button" data-more-tab="loan"><strong>Leihe</strong><span>Artikel ausgeben, offene Leihen prüfen oder zurücknehmen</span></button>
-            <button type="button" data-more-tab="processTasks"><strong>Meine Prozessaufgaben</strong><span>Offene Arbeitsschritte ansehen und abschließen</span></button>
+            <button id="leadershipProcessTasksShortcut" type="button" data-more-tab="processTasks"><strong>Meine Prozessaufgaben</strong><span>Offene Arbeitsschritte ansehen und abschließen</span></button>
             <button type="button" id="leadershipSettingsButton"><strong>Einstellungen</strong><span>Passwort und WLAN-Zeitvorschläge verwalten</span></button>
             <a id="leadershipDesktopLink" href="/?desktop=1"><strong>Desktop-Planung</strong><span>Vollständige Verwaltung am großen Bildschirm</span></a>
           </div>

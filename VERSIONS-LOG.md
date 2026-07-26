@@ -2,8 +2,10 @@
 
 ## v0.86.3 Beta · Standortbezogene Planungsverantwortung
 
-- Die neue eingebaute Rolle `Planungsverantwortung` bildet eine eng begrenzte standortbezogene Dienst- und Urlaubsplanung ab, ohne daraus eine allgemeine Filialleitungs- oder Personalverwaltungsrolle zu machen.
-- Der wirksame Bereich bleibt auf ausdrücklich zugewiesene Standorte begrenzt. Innerhalb dieses Bereichs können Dienst- und Urlaubsplanung, Teamfarben, Dienstplan-Spitznamen und Telefonnummern bearbeitet werden.
+- Die neue eingebaute Rolle `Planungsverantwortung` bildet eine eng begrenzte standortbezogene Dienstplanung ab, ohne daraus eine allgemeine Filialleitungs- oder Personalverwaltungsrolle zu machen.
+- Der wirksame Bereich bleibt auf ausdrücklich zugewiesene Standorte begrenzt. Innerhalb dieses Bereichs können Dienste sowie bereits betrieblich genehmigte Urlaube und vereinbarte Zeitausgleiche direkt eingetragen, bearbeitet und entfernt werden.
+- Urlaubs-/ZA-Anträge, Selbstanträge, Antragslisten und Freigaben sind weder Rollenbestandteil noch mobile Navigationsziele. Die mobile Ansicht führt stattdessen zum persönlichen Dienstplan und zur vollständigen Filialplanung.
+- Teamfarben, Dienstplan-Spitznamen und Telefonnummern können im zugewiesenen Standort bearbeitet werden.
 - Operative Standortpflege erlaubt ausschließlich Öffnungs-/Tageszeiten und Mindestbesetzung. Standortname, Aktivstatus, Zeiterfassung, Kostenstellen und fremde Standorte bleiben geschützt.
 - Die Arbeitszeit-Regelprüfung steht beim Planen einschließlich konkreter Warnmeldungen zur Verfügung. Das Regelwerk-Dashboard und dessen fachliche oder rechtliche Verwaltungsfunktionen bleiben ausgeblendet.
 - System-Center, Systemdiagnosen, Rechteverwaltung, globale Einstellungen, Exporte, Krankenstand/AUM, Leihverwaltung und weitere nicht erforderliche Funktionen sind weder Rollenbestandteil noch über die Pilotnavigation erreichbar.

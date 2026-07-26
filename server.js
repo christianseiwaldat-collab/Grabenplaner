@@ -307,6 +307,7 @@ const integrationCache = new IntegrationCache({
 const delegablePortalPermissionCatalog = Object.freeze([
   { id: "schedule:read", label: "Dienstpläne lesen", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
   { id: "schedule:write", label: "Dienstpläne bearbeiten", group: "Dienstplanung", warningLevel: "normal", hrDelegable: true },
+  { id: "absence_entries:write", label: "Genehmigten Urlaub und ZA direkt eintragen", description: "Bereits betrieblich genehmigte Urlaube und vereinbarte Zeitausgleiche im eigenen Planungsbereich erfassen, bearbeiten und entfernen; keine Antrags- oder Freigaberechte.", group: "Dienstplanung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "settings:write", label: "Planungs- und Grundeinstellungen bearbeiten", group: "Dienstplanung", warningLevel: "high", hrDelegable: true },
   { id: "employees:read", label: "Teamstammdaten lesen", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true },
   { id: "employees:display:write", label: "Teamfarben bearbeiten", description: "Nur die Farbe im Dienstplan; Name, Sollzeit und Personalstammdaten bleiben geschützt.", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true },
@@ -582,20 +583,17 @@ const builtinPortalRoles = [
   {
     id: "location_planner",
     name: "Planungsverantwortung",
-    description: "Standortgebundene Dienst- und Urlaubsplanung mit eingeschränkter Team- und Standortpflege.",
+    description: "Standortgebundene Dienstplanung mit direkter Erfassung bereits genehmigter Urlaube und vereinbarter Zeitausgleiche sowie eingeschränkter Team- und Standortpflege.",
     sortOrder: 22,
     permissions: [
       "own_schedule:read",
-      "own_vacation:read",
-      "own_vacation:request",
       "employees:read",
       "employees:display:write",
       "employees:nickname:write",
       "schedule:read",
       "schedule:write",
+      "absence_entries:write",
       "work_rules:planning:read",
-      "vacation:read",
-      "vacation:approve",
       "personnel:phone:read",
       "personnel:phone:write",
       "locations:operational:write",
@@ -915,7 +913,7 @@ const defaultPortalSettings = {
   trust_levels_visible_to_employees: "1",
   personalized_greetings: JSON.stringify(DEFAULT_PORTAL_GREETING_SETTINGS),
   mobile_leadership_layouts: JSON.stringify({
-    location_planner: ["team", "schedule", "requests", "more"],
+    location_planner: ["schedule", "more"],
     department_manager: ["timeTracking", "team", "approvals", "schedule", "requests", "more"],
     manager: ["timeTracking", "team", "approvals", "schedule", "requests", "more"],
     hr: ["timeTracking", "approvals", "team", "schedule", "requests", "more"],
@@ -6728,11 +6726,11 @@ function requestReviewerRecipients(locationId, departmentId = null, stage = "loc
         SELECT u.employee_number FROM portal_users u
         JOIN employees e ON e.personnel_number = u.employee_number
         WHERE u.active = 1 AND TRIM(u.password_hash) <> ''
-          AND (u.role = 'admin' OR (u.role IN ('location_planner','manager','department_manager') AND (
+          AND (u.role = 'admin' OR (u.role IN ('manager','department_manager') AND (
             EXISTS (SELECT 1 FROM portal_access_scopes s WHERE s.employee_number = u.employee_number
-              AND s.location_id = ? AND (u.role IN ('location_planner','manager') OR s.department_id = ?))
+              AND s.location_id = ? AND (u.role = 'manager' OR s.department_id = ?))
             OR (NOT EXISTS (SELECT 1 FROM portal_access_scopes s WHERE s.employee_number = u.employee_number)
-              AND e.home_location_id = ? AND (u.role IN ('location_planner','manager') OR e.preferred_department_id = ?))
+              AND e.home_location_id = ? AND (u.role = 'manager' OR e.preferred_department_id = ?))
           )))
         ORDER BY u.employee_number
       `).all(String(locationId || ""), Number(departmentId || 0), String(locationId || ""), Number(departmentId || 0));
@@ -7545,6 +7543,8 @@ function enforceAdminApiAccess(request, _response, next) {
     const personnelVacationRoute = /^\/personnel-vacations(?:\/|$)/.test(request.path);
     const costCenterRoute = /^\/cost-centers(?:\/|$)/.test(request.path);
     const offsiteFolderRoute = /^\/backup\/offsite-folders(?:\/|$)/.test(request.path);
+    const approvedVacationMutationRoute = !["GET", "HEAD", "OPTIONS"].includes(method)
+      && /^\/vacations(?:\/|$)/.test(request.path);
     const operationalLocationUpdateRoute = method === "PUT"
       && /^\/locations\/[^/]+\/?$/.test(request.path);
     const workRulePlanningEvaluationRoute = /^\/work-rules\/evaluate\/?$/.test(request.path);
@@ -7556,6 +7556,16 @@ function enforceAdminApiAccess(request, _response, next) {
       "work_rules:audit",
       "collective_agreements:approve",
     ];
+    if (approvedVacationMutationRoute) {
+      const session = requirePortalAnyPermissionOrLocal(
+        request,
+        ["vacation:approve", "absence_entries:write"],
+        { csrf: true },
+      );
+      assertSessionContextScope(session, { ...request.query, ...request.body });
+      request.portalSession = session;
+      return next();
+    }
     if (workRuleRoute
       && (/^\/work-rules\/governance(?:\/|$)/.test(request.path)
         || (["GET", "HEAD", "OPTIONS"].includes(method)
@@ -12157,7 +12167,7 @@ function mobileLeadershipLayouts() {
     for (const role of ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"]) {
       const requested = Array.isArray(value[role]) ? value[role].filter((id) => mobileLeadershipModuleIds.has(id)) : [];
       const modules = role === "location_planner"
-        ? requested.filter((id) => id !== "timeTracking")
+        ? requested.filter((id) => ["schedule", "more"].includes(id))
         : ["timeTracking", ...requested.filter((id) => id !== "timeTracking")];
       fallback[role] = [...new Set(modules)].slice(0, 6);
     }
@@ -12198,7 +12208,7 @@ function validateMobileLeadershipLayouts(value) {
       throw httpError(400, "Die mobile Leitungsansicht enthält ein unbekanntes Element.", "MOBILE_LAYOUT_INVALID");
     }
     result[role] = [...new Set(role === "location_planner"
-      ? requested.filter((id) => id !== "timeTracking")
+      ? requested.filter((id) => ["schedule", "more"].includes(id))
       : ["timeTracking", ...requested.filter((id) => id !== "timeTracking")])].slice(0, 6);
   }
   return result;
@@ -15862,6 +15872,7 @@ function assertShiftEmployeeAssignmentScope(session, shift, existing = null) {
 const alwaysFullDayOptionTypes = new Set(["vacation", "sick", "branch", "vocational_school", "special_leave"]);
 const timedOptionTypes = new Set(["school", "time_off", "external_appointment", "team_meeting", "other"]);
 const manualAllDayCreditTypes = new Set(["school", "external_appointment", "team_meeting", "other"]);
+const directlyApprovedAbsenceOptionTypes = new Set(["vacation", "time_off"]);
 const allowedWeekOptionTypes = [
   "vacation",
   "sick",
@@ -15874,6 +15885,42 @@ const allowedWeekOptionTypes = [
   "team_meeting",
   "other",
 ];
+
+function assertApprovedAbsenceEntryAccess(session, optionType) {
+  if (session?.role !== "location_planner") return;
+  if (!session.permissions?.includes("absence_entries:write")) {
+    throw httpError(
+      403,
+      "Für die direkte Erfassung bereits genehmigter Abwesenheiten fehlt die Berechtigung.",
+      "APPROVED_ABSENCE_PERMISSION_DENIED",
+    );
+  }
+  if (!directlyApprovedAbsenceOptionTypes.has(String(optionType || ""))) {
+    throw httpError(
+      403,
+      "Die Planungsverantwortung darf hier ausschließlich bereits genehmigten Urlaub oder vereinbarten Zeitausgleich eintragen.",
+      "APPROVED_ABSENCE_TYPE_DENIED",
+    );
+  }
+}
+
+function auditApprovedAbsenceEntry(session, action, entityId, option) {
+  const optionType = String(option.optionType || option.option_type || "");
+  if (!directlyApprovedAbsenceOptionTypes.has(optionType)) return;
+  auditPortal(
+    session?.employeeNumber || "local",
+    action,
+    "approved_absence",
+    String(entityId || ""),
+    JSON.stringify({
+      employeeNumber: String(option.employeeNumber || option.employee_number || ""),
+      optionType,
+      dateFrom: String(option.dateFrom || option.date_from || ""),
+      dateTo: String(option.dateTo || option.date_to || ""),
+      allDay: Number(option.allDay ?? option.all_day ?? 1) === 1,
+    }),
+  );
+}
 
 function optionIsAllDay(option) {
   return Number(option.all_day ?? 1) === 1;
@@ -33887,7 +33934,7 @@ app.put("/api/portal/v1/time-corrections/:id/decision", (request, response) => {
 });
 
 app.get("/api/portal/v1/mobile-layout", (request, response) => {
-  const session = requirePortalReadOrLocal(request, "own_time:read");
+  const session = requirePortalAnyPermissionOrLocal(request, ["own_time:read", "own_schedule:read"]);
   response.json(mobileLayoutPayload(session));
 });
 
@@ -35003,6 +35050,7 @@ app.delete("/api/schedule", (request, response) => {
 
 app.post("/api/week-options", (request, response) => {
   const option = validateWeekOption(request.body);
+  assertApprovedAbsenceEntryAccess(request.portalSession, option.optionType);
   assertSessionEmployeeScope(request.portalSession, option.employeeNumber);
   const result = db.prepare(`
     INSERT INTO week_options
@@ -35022,16 +35070,18 @@ app.post("/api/week-options", (request, response) => {
     option.endTime,
   );
   for (let date = option.dateFrom; date <= option.dateTo; date = addDays(date, 1)) invalidateTimeDayReview(option.employeeNumber, date);
+  auditApprovedAbsenceEntry(request.portalSession, "approved-absence.create", result.lastInsertRowid, option);
   response.status(201).json({ id: Number(result.lastInsertRowid), ...option });
 });
 
 app.put("/api/week-options/:id", (request, response) => {
   const id = Number(request.params.id);
   if (!Number.isInteger(id) || id <= 0) throw httpError(400, "Die Planungsoption ist ungültig.");
-  const existing = db.prepare("SELECT group_id, week_start, employee_number, date_from, date_to FROM week_options WHERE id = ?").get(id);
+  const existing = db.prepare("SELECT group_id, week_start, employee_number, date_from, date_to, option_type, all_day FROM week_options WHERE id = ?").get(id);
   if (!existing) {
     throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
   }
+  assertApprovedAbsenceEntryAccess(request.portalSession, existing.option_type);
   assertSessionEmployeeScope(request.portalSession, existing.employee_number);
   const existingLocation = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(existing.employee_number)?.home_location_id;
   assertWeekEditable(existing.week_start, settingsForLocation(existingLocation));
@@ -35039,6 +35089,7 @@ app.put("/api/week-options/:id", (request, response) => {
     ...request.body,
     groupId: request.body.groupId === undefined ? existing.group_id : request.body.groupId,
   }, id);
+  assertApprovedAbsenceEntryAccess(request.portalSession, option.optionType);
   assertSessionEmployeeScope(request.portalSession, option.employeeNumber);
   db.prepare(`
     UPDATE week_options
@@ -35061,19 +35112,22 @@ app.put("/api/week-options/:id", (request, response) => {
   );
   for (let date = existing.date_from; date <= existing.date_to; date = addDays(date, 1)) invalidateTimeDayReview(existing.employee_number, date);
   for (let date = option.dateFrom; date <= option.dateTo; date = addDays(date, 1)) invalidateTimeDayReview(option.employeeNumber, date);
+  auditApprovedAbsenceEntry(request.portalSession, "approved-absence.update", id, option);
   response.json({ id, ...option });
 });
 
 app.delete("/api/week-options/:id", (request, response) => {
   const id = Number(request.params.id);
-  const existing = db.prepare("SELECT week_start, employee_number, date_from, date_to FROM week_options WHERE id = ?").get(id);
+  const existing = db.prepare("SELECT week_start, employee_number, date_from, date_to, option_type, all_day FROM week_options WHERE id = ?").get(id);
   if (!existing) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
+  assertApprovedAbsenceEntryAccess(request.portalSession, existing.option_type);
   assertSessionEmployeeScope(request.portalSession, existing.employee_number);
   const existingLocation = db.prepare("SELECT home_location_id FROM employees WHERE personnel_number = ?").get(existing.employee_number)?.home_location_id;
   assertWeekEditable(existing.week_start, settingsForLocation(existingLocation));
   const result = db.prepare("DELETE FROM week_options WHERE id = ?").run(id);
   if (!result.changes) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
   for (let date = existing.date_from; date <= existing.date_to; date = addDays(date, 1)) invalidateTimeDayReview(existing.employee_number, date);
+  auditApprovedAbsenceEntry(request.portalSession, "approved-absence.delete", id, existing);
   response.status(204).end();
 });
 
@@ -35185,8 +35239,14 @@ app.put("/api/vacation-entitlements", (request, response) => {
 
 app.post("/api/vacations", (request, response) => {
   const vacation = validateVacationEntry(request.body);
+  assertApprovedAbsenceEntryAccess(request.portalSession, "vacation");
   assertSessionEmployeeScope(request.portalSession, vacation.employeeNumber);
   const result = createVacationEntries(vacation, request.portalSession?.employeeNumber || "local");
+  auditApprovedAbsenceEntry(request.portalSession, "approved-absence.create", result.groupId, {
+    ...vacation,
+    optionType: "vacation",
+    allDay: 1,
+  });
   response.status(201).json({
     groupId: result.groupId,
     assessment: result.assessment,
@@ -35199,11 +35259,17 @@ app.put("/api/vacations/:groupId", (request, response) => {
   if (!groupId || !vacationGroupExists(groupId)) {
     throw httpError(404, "Der Urlaubseintrag wurde nicht gefunden.");
   }
+  assertApprovedAbsenceEntryAccess(request.portalSession, "vacation");
   const existingEmployee = db.prepare("SELECT employee_number FROM week_options WHERE group_id = ? LIMIT 1").get(groupId)?.employee_number;
   assertSessionEmployeeScope(request.portalSession, existingEmployee);
   const vacation = validateVacationEntry(request.body, groupId);
   assertSessionEmployeeScope(request.portalSession, vacation.employeeNumber);
   const result = replaceVacationGroup(groupId, vacation, request.portalSession?.employeeNumber || "local");
+  auditApprovedAbsenceEntry(request.portalSession, "approved-absence.update", result.groupId, {
+    ...vacation,
+    optionType: "vacation",
+    allDay: 1,
+  });
   response.json({
     groupId: result.groupId,
     assessment: result.assessment,
@@ -35212,11 +35278,17 @@ app.put("/api/vacations/:groupId", (request, response) => {
 });
 
 app.delete("/api/vacations/:groupId", (request, response) => {
-  const existingEmployee = db.prepare("SELECT employee_number FROM week_options WHERE group_id = ? LIMIT 1").get(request.params.groupId)?.employee_number;
-  if (!existingEmployee) throw httpError(404, "Der Urlaubseintrag wurde nicht gefunden.");
-  assertSessionEmployeeScope(request.portalSession, existingEmployee);
+  assertApprovedAbsenceEntryAccess(request.portalSession, "vacation");
+  const existing = vacationGroupSnapshot(request.params.groupId);
+  if (!existing) throw httpError(404, "Der Urlaubseintrag wurde nicht gefunden.");
+  assertSessionEmployeeScope(request.portalSession, existing.employeeNumber);
   const result = deleteVacationGroup(request.params.groupId, request.portalSession?.employeeNumber || "local");
   if (!result) throw httpError(404, "Der Urlaubseintrag wurde nicht gefunden.");
+  auditApprovedAbsenceEntry(request.portalSession, "approved-absence.delete", request.params.groupId, {
+    ...existing,
+    optionType: "vacation",
+    allDay: 1,
+  });
   response.status(204).end();
 });
 
