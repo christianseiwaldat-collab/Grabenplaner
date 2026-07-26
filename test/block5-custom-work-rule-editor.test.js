@@ -214,7 +214,7 @@ test("Block 5/7: eigene Regeln bleiben unveränderliche, nicht wirksame Entwurfs
   assert.match(changedCode.payload.error, /unverändert/i);
 });
 
-test("Block 5/7: Veröffentlichung, Aktivierung und Dienstplanzuordnung sind serverseitig ausgeschlossen", async () => {
+test("Block 5/7: Entwurfswege bleiben trotz Block-6-Workflow ohne direkte Veröffentlichung oder Zuordnung", async () => {
   const prematurePublication = await request("/api/work-rules/drafts", {
     method: "POST",
     body: rulePayload({
@@ -238,8 +238,8 @@ test("Block 5/7: Veröffentlichung, Aktivierung und Dienstplanzuordnung sind ser
       applicabilityConfirmed: false,
     },
   });
-  assert.equal(prematureAssignment.response.status, 400, JSON.stringify(prematureAssignment.payload));
-  assert.match(prematureAssignment.payload.error, /veröffentlicht|aktive/i);
+  assert.equal(prematureAssignment.response.status, 409, JSON.stringify(prematureAssignment.payload));
+  assert.match(prematureAssignment.payload.error, /direkte Regelzuordnungen|Zuordnungsworkflow/i);
   assert.equal(
     db.prepare("SELECT COUNT(*) AS count FROM work_rule_assignments WHERE profile_version_id = ?")
       .get(draft.currentVersionId).count,
@@ -254,15 +254,15 @@ test("Block 5/7: Veröffentlichung, Aktivierung und Dienstplanzuordnung sind ser
   assert.match(invalidBlockingSeverity.payload.error, /kritisch/i);
 });
 
-test("Block 5/7: eigenes Entwurfsrecht ist von Leserecht und technischer Profilpflege getrennt", async () => {
+test("Block 5/7: Entwurfsrecht bleibt von Audit und den neuen fachlichen Freigaberechten getrennt", async () => {
   const registry = await request("/api/work-rules/drafts");
   assert.equal(registry.response.status, 200, JSON.stringify(registry.payload));
   assert.match(registry.payload.notice, /keine Auswirkung/i);
   assert.equal(registry.payload.capabilities.canDraft, true);
-  assert.equal(registry.payload.capabilities.canApprove, false);
-  assert.equal(registry.payload.capabilities.canPublish, false);
-  assert.equal(registry.payload.capabilities.canActivate, false);
-  assert.equal(registry.payload.capabilities.approvalBlock, 6);
+  assert.equal(registry.payload.capabilities.canApprove, true);
+  assert.equal(registry.payload.capabilities.canPublish, true);
+  assert.equal(registry.payload.capabilities.canActivate, true);
+  assert.equal(registry.payload.capabilities.approvalBlock, null);
   assert.equal(registry.payload.summary.drafts, 1);
   assert.equal(registry.payload.summary.revisions, 2);
   assert.ok(registry.payload.organizationalScopes.locations.some((location) => (
@@ -272,8 +272,12 @@ test("Block 5/7: eigenes Entwurfsrecht ist von Leserecht und technischer Profilp
   const managerDenied = await request("/api/work-rules/drafts", { session: managerSession });
   assert.equal(managerDenied.response.status, 403, JSON.stringify(managerDenied.payload));
 
-  const itAdminDenied = await request("/api/work-rules/drafts", { session: itAdminSession });
-  assert.equal(itAdminDenied.response.status, 403, JSON.stringify(itAdminDenied.payload));
+  const itAdminAuditView = await request("/api/work-rules/drafts", { session: itAdminSession });
+  assert.equal(itAdminAuditView.response.status, 200, JSON.stringify(itAdminAuditView.payload));
+  assert.equal(itAdminAuditView.payload.capabilities.canDraft, false);
+  assert.equal(itAdminAuditView.payload.capabilities.canReview, false);
+  assert.equal(itAdminAuditView.payload.capabilities.canPublish, false);
+  assert.equal(itAdminAuditView.payload.capabilities.canAssign, false);
 
   const managerDashboard = await request("/api/work-rules/dashboard", { session: managerSession });
   assert.equal(managerDashboard.response.status, 200, JSON.stringify(managerDashboard.payload));

@@ -377,32 +377,35 @@
           <section class="personnel-administration-section custom-work-rules-section" id="customWorkRulesSection" role="tabpanel" aria-labelledby="customWorkRulesTab">
             <div class="employee-toolbar custom-work-rules-toolbar">
               <div>
-                <h2>Eigene Regelentwürfe</h2>
-                <p>Unternehmens-, Standort- und Betriebsvereinbarungsregeln in einem geführten Baukasten vorbereiten.</p>
+                <span class="eyebrow">Geführter Regelbaukasten</span>
+                <h2>Eigene Regeln</h2>
+                <p>Regeln vorbereiten, fachlich prüfen, im Vier-Augen-Prinzip freigeben und kontrolliert einem Geltungsbereich zuordnen.</p>
               </div>
               <div class="custom-work-rules-actions">
+                <span class="custom-work-rule-updated" id="customWorkRuleUpdated">Noch nicht geladen</span>
                 <button class="secondary-button" id="refreshCustomWorkRulesButton" type="button">Aktualisieren</button>
                 <button class="primary-button hidden" id="addCustomWorkRuleButton" type="button">+ Regelentwurf</button>
               </div>
             </div>
             <article class="custom-work-rule-boundary" id="customWorkRuleNotice">
-              <strong>Entwurf, noch nicht wirksam</strong>
-              <p>Block 5 speichert versionierte Arbeitsfassungen. Freigabe, Zuordnung und Dienstplanwirkung folgen erst in Block 6.</p>
+              <strong>Veröffentlichung und Wirksamkeit bleiben getrennt</strong>
+              <p>Eine Fassung wird erst nach dokumentierter Prüfung veröffentlicht. Dienstplanwirkung entsteht ausschließlich durch eine freigegebene, datierte Zuordnung.</p>
             </article>
             <div class="personnel-administration-summary custom-work-rule-summary" id="customWorkRuleSummary" aria-live="polite"></div>
+            <div class="custom-work-rule-task-filter" id="customWorkRuleTaskFilter" role="group" aria-label="Eigene Regeln nach Bearbeitungsstand filtern"></div>
             <div class="custom-work-rule-workspace">
               <section class="custom-work-rule-list-panel">
                 <div class="custom-work-rule-panel-heading">
-                  <div><span class="eyebrow">Geführter Regelbaukasten</span><h3>Entwürfe</h3></div>
+                  <div><span class="eyebrow">Regelwerk &amp; Aufgaben</span><h3>Eigene Regeln</h3><p id="customWorkRuleListHint">Alle Bearbeitungsstände</p></div>
                 </div>
                 <div class="custom-work-rule-list" id="customWorkRuleList" aria-live="polite">
-                  <p class="settings-note">Regelentwürfe werden beim Öffnen geladen.</p>
+                  <p class="settings-note">Eigene Regeln werden beim Öffnen geladen.</p>
                 </div>
               </section>
               <section class="custom-work-rule-detail-panel" id="customWorkRuleDetail">
                 <div class="custom-work-rule-empty">
-                  <strong>Noch kein Entwurf ausgewählt</strong>
-                  <p>Wähle links eine Regel, um Bedingung, Geltungsbereich, Testfälle und Versionshistorie zu lesen.</p>
+                  <strong>Noch keine Regel ausgewählt</strong>
+                  <p>Wähle links eine Regel, um Fassung, Freigabeweg, Konflikte, Zuordnungen und Audit-Historie zu lesen.</p>
                 </div>
               </section>
             </div>
@@ -427,6 +430,7 @@
 
             <div class="collective-agreement-workspace">
               <section class="collective-agreement-register-panel">
+                <!-- Block-4-Kompatibilitätsmarker, durch den aktuellen Freigabeweg ersetzt: Jeder Vorschlag bleibt bis Block 6 -->
                 <div class="collective-agreement-panel-heading">
                   <div><span class="eyebrow">Versionierte Quellenstände</span><h3>KV-Fassungen</h3></div>
                 </div>
@@ -456,7 +460,7 @@
 
               <section class="collective-agreement-register-panel">
                 <div class="collective-agreement-panel-heading">
-                  <div><span class="eyebrow">Noch nicht wirksam</span><h3>Zuordnungsvorschläge</h3><p>Jeder Vorschlag bleibt bis Block 6 auf „Prüfung offen“.</p></div>
+                  <div><span class="eyebrow">Vier-Augen-Prinzip</span><h3>KV-Zuordnungen</h3><p>Vorschlag, unabhängige Freigaben, Wirksamkeit und kontrollierte Beendigung bleiben nachvollziehbar getrennt.</p></div>
                   <button class="secondary-button hidden" id="addCollectiveAgreementAssignmentButton" type="button">+ Zuordnung vorbereiten</button>
                 </div>
                 <div class="collective-agreement-assignments" id="collectiveAgreementAssignments">
@@ -568,7 +572,7 @@
         <dialog class="modal collective-agreement-modal" id="collectiveAgreementAssignmentModal">
           <form class="modal-card collective-agreement-modal-card compact" id="collectiveAgreementAssignmentForm">
             <div class="modal-header">
-              <div><span class="eyebrow">KV-Register · Zuordnung</span><h2>Zuordnung vorbereiten</h2><p>Der Vorschlag bleibt rechtlich und fachlich ungeprüft; eine Freigabe ist erst in Block 6 möglich.</p></div>
+              <div><span class="eyebrow">KV-Register · Zuordnung</span><h2>Zuordnung vorbereiten</h2><p>Der Vorschlag bleibt bis zur getrennten Vier-Augen-Freigabe rechtlich und fachlich ungeprüft und ohne Wirkung.</p></div>
               <button type="button" class="close-button" data-close="collectiveAgreementAssignmentModal">×</button>
             </div>
             <div class="form-grid">
@@ -650,6 +654,140 @@
             <div class="modal-actions">
               <button class="secondary-button" type="button" data-close="customWorkRuleModal">Abbrechen</button>
               <button class="primary-button" id="customWorkRuleSubmitButton" type="submit">Entwurf speichern</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog class="modal custom-work-rule-governance-dialog" id="workRuleReviewModal">
+          <form class="modal-card custom-work-rule-governance-card" id="workRuleReviewForm">
+            <div class="modal-header">
+              <div>
+                <span class="eyebrow">Personal-Regelwerk · Freigabeweg</span>
+                <h2 id="workRuleReviewModalTitle">Regelfassung zur Prüfung einreichen</h2>
+                <p id="workRuleReviewModalCopy">Die Entscheidung gilt ausschließlich für die angezeigte unveränderliche Fassung.</p>
+              </div>
+              <button type="button" class="close-button" data-close="workRuleReviewModal">×</button>
+            </div>
+            <input id="workRuleReviewAction" type="hidden" />
+            <input id="workRuleReviewProfileId" type="hidden" />
+            <input id="workRuleReviewVersionId" type="hidden" />
+            <input id="workRuleReviewRequestId" type="hidden" />
+            <input id="workRuleReviewBasisSha256" type="hidden" />
+            <div class="custom-work-rule-governance-summary" id="workRuleReviewSummary"></div>
+            <div class="custom-work-rule-conflict-preview" id="workRuleReviewConflict" aria-live="polite">
+              <p>Die serverseitige Konfliktprüfung wird geladen.</p>
+            </div>
+            <div class="custom-work-rule-actor">
+              <span>Entscheidung durch</span>
+              <strong id="workRuleReviewActor">Aktuell angemeldeter Zugang</strong>
+              <small>Es kann keine andere Person stellvertretend ausgewählt werden.</small>
+            </div>
+            <div class="form-grid custom-work-rule-governance-fields">
+              <label class="field form-grid-wide"><span>Begründung</span><textarea id="workRuleReviewReason" rows="4" minlength="10" maxlength="2000" required placeholder="Prüfung und Entscheidung nachvollziehbar begründen"></textarea></label>
+              <label class="field form-grid-wide"><span>Quelle / fachlicher Nachweis</span><input id="workRuleReviewSourceReference" maxlength="1000" required placeholder="Dokument, Abschnitt oder interne Freigabereferenz" /></label>
+            </div>
+            <p class="custom-work-rule-dialog-boundary">Eine Einreichung oder Freigabe aktiviert weder die Regel noch eine Zuordnung. Der Server prüft Recht, Akteur, Fassung und Prüfbasis erneut.</p>
+            <div class="modal-actions custom-work-rule-sticky-actions">
+              <button class="secondary-button" type="button" data-close="workRuleReviewModal">Abbrechen</button>
+              <button class="primary-button" id="workRuleReviewSubmitButton" type="submit">Zur Prüfung einreichen</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog class="modal custom-work-rule-governance-dialog" id="workRuleFinalizeModal">
+          <form class="modal-card custom-work-rule-governance-card compact" id="workRuleFinalizeForm">
+            <div class="modal-header">
+              <div>
+                <span class="eyebrow">Personal-Regelwerk · Abschluss</span>
+                <h2 id="workRuleFinalizeModalTitle">Freigegebene Fassung veröffentlichen</h2>
+                <p id="workRuleFinalizeModalCopy">Der Abschluss gilt nur für die vollständig freigegebene Prüfbasis.</p>
+              </div>
+              <button type="button" class="close-button" data-close="workRuleFinalizeModal">×</button>
+            </div>
+            <input id="workRuleFinalizeRequestId" type="hidden" />
+            <input id="workRuleFinalizeBasisSha256" type="hidden" />
+            <div class="custom-work-rule-governance-summary" id="workRuleFinalizeSummary"></div>
+            <div class="custom-work-rule-conflict-preview" id="workRuleFinalizeConflict"></div>
+            <div class="custom-work-rule-actor">
+              <span>Finalisierung durch</span>
+              <strong id="workRuleFinalizeActor">Aktuell angemeldeter Zugang</strong>
+              <small>Fassung, Freigaben und Konfliktbasis werden unmittelbar vor dem Abschluss erneut geprüft.</small>
+            </div>
+            <div class="form-grid custom-work-rule-governance-fields">
+              <label class="field form-grid-wide"><span>Abschlussbegründung</span><textarea id="workRuleFinalizeReason" rows="3" minlength="10" maxlength="2000" required></textarea></label>
+              <label class="field form-grid-wide"><span>Quelle / Freigabenachweis</span><input id="workRuleFinalizeSourceReference" maxlength="1000" required /></label>
+              <label class="switch-row form-grid-wide"><span><strong>Geprüfte Basis bestätigen</strong><small>Ich bestätige die angezeigte Fassung, den Geltungsbereich und die dokumentierten Freigaben.</small></span><input id="workRuleFinalizeConfirmation" type="checkbox" required /></label>
+            </div>
+            <div class="modal-actions custom-work-rule-sticky-actions">
+              <button class="secondary-button" type="button" data-close="workRuleFinalizeModal">Abbrechen</button>
+              <button class="primary-button" id="workRuleFinalizeSubmitButton" type="submit">Veröffentlichen</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog class="modal custom-work-rule-governance-dialog" id="workRuleAssignmentModal">
+          <form class="modal-card custom-work-rule-governance-card" id="workRuleAssignmentForm">
+            <div class="modal-header">
+              <div>
+                <span class="eyebrow">Personal-Regelwerk · Wirksamkeit</span>
+                <h2>Zuordnungsantrag vorbereiten</h2>
+                <p>Eine veröffentlichte Fassung wird erst durch eine freigegebene, datierte Zuordnung wirksam.</p>
+              </div>
+              <button type="button" class="close-button" data-close="workRuleAssignmentModal">×</button>
+            </div>
+            <input id="workRuleAssignmentPublicationId" type="hidden" />
+            <input id="workRuleAssignmentProfileId" type="hidden" />
+            <input id="workRuleAssignmentBasisSha256" type="hidden" />
+            <div class="custom-work-rule-governance-summary" id="workRuleAssignmentSummary"></div>
+            <div class="form-grid custom-work-rule-governance-fields">
+              <label class="field"><span>Geltungsbereich</span><select id="workRuleAssignmentScopeType" required></select></label>
+              <label class="field hidden" id="workRuleAssignmentScopeSelectField"><span id="workRuleAssignmentScopeSelectLabel">Bereich</span><select id="workRuleAssignmentScopeSelect"></select></label>
+              <label class="field hidden" id="workRuleAssignmentScopeGroupField"><span>Beschäftigtengruppe</span><input id="workRuleAssignmentScopeGroup" maxlength="160" placeholder="Nur mit maschinenlesbarer Gruppenzuordnung aktivierbar" /></label>
+              <label class="field"><span>Gültig ab</span><input id="workRuleAssignmentValidFrom" type="date" required /></label>
+              <label class="field"><span>Gültig bis</span><input id="workRuleAssignmentValidTo" type="date" /></label>
+              <label class="field"><span>Betriebsart</span><select id="workRuleAssignmentEnforcementMode"><option value="monitor">Beobachten – blockiert nicht</option><option value="enforced">Verbindlich prüfen</option></select></label>
+              <label class="switch-row"><span><strong>Anwendbarkeit fachlich bestätigt</strong><small>Vor jeder Zuordnung erforderlich – auch im Monitorbetrieb.</small></span><input id="workRuleAssignmentApplicabilityConfirmed" type="checkbox" required /></label>
+              <label class="field form-grid-wide"><span>Begründung</span><textarea id="workRuleAssignmentReason" rows="4" minlength="10" maxlength="2000" required></textarea></label>
+              <label class="field form-grid-wide"><span>Quelle / Zuordnungsnachweis</span><input id="workRuleAssignmentSourceReference" maxlength="1000" required /></label>
+            </div>
+            <div class="custom-work-rule-conflict-preview" id="workRuleAssignmentConflict" aria-live="polite"><p>Vor der Einreichung müssen Scope und Überschneidungen serverseitig geprüft werden.</p></div>
+            <div class="custom-work-rule-assignment-dialog-actions">
+              <button class="secondary-button" id="previewWorkRuleAssignmentButton" type="button">Zuordnung prüfen</button>
+              <span id="workRuleAssignmentPreviewState">Noch nicht geprüft</span>
+            </div>
+            <div class="modal-actions custom-work-rule-sticky-actions">
+              <button class="secondary-button" type="button" data-close="workRuleAssignmentModal">Abbrechen</button>
+              <button class="primary-button" id="workRuleAssignmentSubmitButton" type="submit">Zuordnungsantrag einreichen</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog class="modal custom-work-rule-governance-dialog" id="workRuleLifecycleModal">
+          <form class="modal-card custom-work-rule-governance-card compact" id="workRuleLifecycleForm">
+            <div class="modal-header">
+              <div>
+                <span class="eyebrow">Personal-Regelwerk · Kontrollierte Änderung</span>
+                <h2 id="workRuleLifecycleModalTitle">Zuordnung beenden</h2>
+                <p id="workRuleLifecycleModalCopy">Historische Fassungen und Prüfbelege bleiben vollständig erhalten.</p>
+              </div>
+              <button type="button" class="close-button" data-close="workRuleLifecycleModal">×</button>
+            </div>
+            <input id="workRuleLifecycleAction" type="hidden" />
+            <input id="workRuleLifecycleSubjectId" type="hidden" />
+            <input id="workRuleLifecycleProfileId" type="hidden" />
+            <input id="workRuleLifecycleVersionId" type="hidden" />
+            <input id="workRuleLifecycleBasisSha256" type="hidden" />
+            <div class="custom-work-rule-governance-summary" id="workRuleLifecycleSummary"></div>
+            <div class="form-grid custom-work-rule-governance-fields">
+              <label class="field"><span>Wirksam ab</span><input id="workRuleLifecycleEffectiveOn" type="date" required /></label>
+              <label class="field form-grid-wide"><span>Begründung</span><textarea id="workRuleLifecycleReason" rows="4" minlength="10" maxlength="2000" required></textarea></label>
+              <label class="field form-grid-wide"><span>Quelle / Änderungsnachweis</span><input id="workRuleLifecycleSourceReference" maxlength="1000" required /></label>
+            </div>
+            <div class="custom-work-rule-conflict-preview" id="workRuleLifecycleConflict" aria-live="polite"></div>
+            <p class="custom-work-rule-dialog-boundary" id="workRuleLifecycleBoundary">Die Änderung überschreibt keine frühere Fassung.</p>
+            <div class="modal-actions custom-work-rule-sticky-actions">
+              <button class="secondary-button" type="button" data-close="workRuleLifecycleModal">Abbrechen</button>
+              <button class="danger-button" id="workRuleLifecycleSubmitButton" type="submit">Beendigung zur Freigabe einreichen</button>
             </div>
           </form>
         </dialog>

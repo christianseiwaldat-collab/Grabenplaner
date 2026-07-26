@@ -3412,3 +3412,517 @@ html[data-active-page-theme="dark"] :is(.custom-work-rule-modal,.custom-work-rul
   .custom-work-rule-source p { grid-column:auto; }
   .custom-work-rule-test-result { justify-items:start; text-align:left; }
 }
+
+/* Personalverwaltung · Block 6/7: Freigabe, Veröffentlichung und datierte Wirkung */
+.custom-work-rule-updated {
+  color:var(--muted);
+  font-size:9px;
+  white-space:nowrap;
+}
+.status-badge.info { color:#285f78; background:#dceef6; }
+.status-badge.danger { color:var(--danger-ink,#8e352b); background:var(--danger-surface,#f9d8d1); }
+.status-badge.success { color:var(--success-ink,#1d644d); background:var(--success-surface,#dff3e8); }
+.custom-work-rule-summary-card {
+  appearance:none;
+  width:100%;
+  color:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.custom-work-rule-summary-card:hover,
+.custom-work-rule-summary-card.selected {
+  border-color:color-mix(in srgb,var(--primary) 48%,var(--line));
+  box-shadow:inset 0 -3px 0 color-mix(in srgb,var(--primary) 70%,transparent);
+}
+.custom-work-rule-task-filter {
+  display:flex;
+  gap:7px;
+  margin:0 0 13px;
+  padding:4px 0 2px;
+  overflow-x:auto;
+  scrollbar-width:thin;
+}
+.custom-work-rule-task-filter button {
+  display:inline-flex;
+  flex:0 0 auto;
+  align-items:center;
+  gap:6px;
+  min-height:34px;
+  padding:0 11px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  color:var(--muted);
+  background:var(--surface);
+  font-size:9px;
+  font-weight:800;
+  cursor:pointer;
+}
+.custom-work-rule-task-filter button span {
+  display:inline-grid;
+  place-items:center;
+  min-width:19px;
+  min-height:19px;
+  padding:0 5px;
+  border-radius:999px;
+  color:var(--ink);
+  background:var(--surface-soft);
+  font-size:8px;
+}
+.custom-work-rule-task-filter button:hover,
+.custom-work-rule-task-filter button.active {
+  color:var(--primary);
+  border-color:color-mix(in srgb,var(--primary) 48%,var(--line));
+  background:color-mix(in srgb,var(--primary) 8%,var(--surface));
+}
+.custom-work-rule-workflow {
+  margin-top:13px;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--surface-soft);
+}
+.custom-work-rule-workflow.review { border-top:3px solid var(--primary); }
+.custom-work-rule-workflow.effect { border-top:3px solid var(--success,#2d7c61); }
+.custom-work-rule-section-heading {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+.custom-work-rule-section-heading h4 { margin:2px 0 0; font-size:11px; }
+.custom-work-rule-section-heading > small {
+  max-width:310px;
+  color:var(--muted);
+  font-size:8px;
+  line-height:1.4;
+  text-align:right;
+}
+.custom-work-rule-workflow ol {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:0;
+  margin:0;
+  padding:0;
+  list-style:none;
+}
+.custom-work-rule-workflow li {
+  position:relative;
+  display:grid;
+  grid-template-columns:22px 1fr;
+  align-items:center;
+  gap:6px;
+  min-width:0;
+  color:var(--muted);
+  font-size:8.5px;
+}
+.custom-work-rule-workflow li:not(:last-child)::after {
+  content:"";
+  position:absolute;
+  z-index:0;
+  top:11px;
+  left:22px;
+  right:0;
+  height:2px;
+  background:var(--line);
+}
+.custom-work-rule-workflow li > span {
+  position:relative;
+  z-index:1;
+  display:grid;
+  place-items:center;
+  width:22px;
+  height:22px;
+  border:2px solid var(--line);
+  border-radius:50%;
+  color:var(--muted);
+  background:var(--surface);
+  font-size:9px;
+  font-weight:900;
+}
+.custom-work-rule-workflow li > strong {
+  position:relative;
+  z-index:1;
+  padding-right:6px;
+  overflow-wrap:anywhere;
+}
+.custom-work-rule-workflow li.completed { color:var(--success-ink,#1d644d); }
+.custom-work-rule-workflow li.completed > span {
+  color:#fff;
+  border-color:var(--success,#2d7c61);
+  background:var(--success,#2d7c61);
+}
+.custom-work-rule-workflow li.completed:not(:last-child)::after { background:var(--success,#2d7c61); }
+.custom-work-rule-workflow li.current { color:var(--ink); }
+.custom-work-rule-workflow li.current > span {
+  color:var(--primary);
+  border-color:var(--primary);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 12%,transparent);
+}
+.custom-work-rule-workflow li.failed { color:var(--danger-ink,#8e352b); }
+.custom-work-rule-workflow li.failed > span {
+  color:#fff;
+  border-color:var(--danger,#bd493a);
+  background:var(--danger,#bd493a);
+}
+.custom-work-rule-primary-actions,
+.custom-work-rule-record-actions {
+  display:flex;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:10px 0 0;
+}
+.custom-work-rule-conflict {
+  display:grid;
+  grid-template-columns:26px 1fr;
+  gap:9px;
+  align-items:start;
+  padding:9px 10px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--surface-soft);
+}
+.custom-work-rule-conflict.pass {
+  color:var(--success-ink,#1d644d);
+  border-color:color-mix(in srgb,var(--success,#2d7c61) 42%,var(--line));
+  background:var(--success-surface,#e4f3ed);
+}
+.custom-work-rule-conflict.warning {
+  color:var(--warning-ink,#6a4d08);
+  border-color:color-mix(in srgb,var(--warning,#bf8615) 42%,var(--line));
+  background:var(--warning-surface,#fff4cf);
+}
+.custom-work-rule-conflict.blocked {
+  color:var(--danger-ink,#8e352b);
+  border-color:color-mix(in srgb,var(--danger,#bd493a) 45%,var(--line));
+  background:var(--danger-surface,#fbe5e1);
+}
+.custom-work-rule-conflict-mark {
+  display:grid;
+  place-items:center;
+  width:25px;
+  height:25px;
+  border-radius:50%;
+  color:inherit;
+  background:color-mix(in srgb,currentColor 12%,transparent);
+  font-size:12px;
+  font-weight:900;
+}
+.custom-work-rule-conflict strong { display:block; font-size:9px; }
+.custom-work-rule-conflict p,
+.custom-work-rule-conflict ul { margin:3px 0 0; font-size:8.5px; line-height:1.45; }
+.custom-work-rule-conflict ul { padding-left:17px; }
+.custom-work-rule-conflict small { display:block; margin-top:4px; color:inherit; font-size:7.5px; opacity:.78; }
+.custom-work-rule-records {
+  display:grid;
+  gap:8px;
+  margin-top:13px;
+  padding-top:12px;
+  border-top:1px solid var(--line);
+}
+.collective-agreement-governance-actions {
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  margin-top:10px;
+}
+.collective-agreement-governance-requests {
+  display:grid;
+  gap:8px;
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px solid var(--line);
+}
+.collective-agreement-assignment.governed > div:first-child .status-badge {
+  max-width:240px;
+  white-space:normal;
+  text-align:center;
+}
+.custom-work-rule-request-card,
+.custom-work-rule-assignment-card {
+  min-width:0;
+  padding:11px;
+  border:1px solid var(--line);
+  border-radius:11px;
+  background:var(--surface-soft);
+}
+.custom-work-rule-request-card.rejected { border-color:color-mix(in srgb,var(--danger,#bd493a) 38%,var(--line)); }
+.custom-work-rule-record-heading {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:8px;
+}
+.custom-work-rule-record-heading strong,
+.custom-work-rule-record-heading small { display:block; }
+.custom-work-rule-record-heading strong { margin:2px 0; font-size:10px; }
+.custom-work-rule-record-heading small { color:var(--muted); font-size:8px; line-height:1.4; }
+.custom-work-rule-record-heading .status-badge {
+  flex:0 0 auto;
+  max-width:210px;
+  white-space:normal;
+  text-align:center;
+}
+.custom-work-rule-decisions {
+  display:grid;
+  gap:6px;
+  margin-top:8px;
+}
+.custom-work-rule-decisions > div {
+  display:grid;
+  grid-template-columns:22px 1fr;
+  gap:7px;
+  padding:7px 8px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--surface);
+}
+.custom-work-rule-decisions > div > span {
+  display:grid;
+  place-items:center;
+  width:21px;
+  height:21px;
+  border-radius:50%;
+  color:#fff;
+  background:var(--success,#2d7c61);
+  font-size:9px;
+  font-weight:900;
+}
+.custom-work-rule-decisions > div.reject > span { background:var(--danger,#bd493a); }
+.custom-work-rule-decisions strong,
+.custom-work-rule-decisions small { display:block; font-size:8px; line-height:1.4; }
+.custom-work-rule-decisions small,
+.custom-work-rule-decisions > p { color:var(--muted); }
+.custom-work-rule-decisions > p { margin:0; font-size:8.5px; }
+.custom-work-rule-version-history > article > div:last-child {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+  gap:7px;
+}
+.custom-work-rule-version-history > article button { min-height:32px; padding:0 9px; font-size:8px; }
+.custom-work-rule-audit {
+  margin-top:13px;
+  border:1px solid var(--line);
+  border-radius:11px;
+  background:var(--surface-soft);
+}
+.custom-work-rule-audit summary {
+  padding:11px 12px;
+  color:var(--ink);
+  font-size:9px;
+  font-weight:800;
+  cursor:pointer;
+}
+.custom-work-rule-audit > div { padding:0 12px 11px; }
+.custom-work-rule-audit article {
+  display:grid;
+  grid-template-columns:10px 1fr;
+  gap:8px;
+  padding:7px 0;
+  border-top:1px solid var(--line);
+}
+.custom-work-rule-audit article > span {
+  width:8px;
+  height:8px;
+  margin-top:3px;
+  border-radius:50%;
+  background:var(--primary);
+}
+.custom-work-rule-audit strong,
+.custom-work-rule-audit small,
+.custom-work-rule-audit code { display:block; font-size:8px; line-height:1.4; }
+.custom-work-rule-audit small,
+.custom-work-rule-audit code { color:var(--muted); }
+.custom-work-rule-governance-dialog { width:min(760px,calc(100vw - 28px)); }
+.custom-work-rule-governance-card {
+  width:100%;
+  max-width:none;
+  max-height:min(88dvh,860px);
+  overflow:auto;
+}
+.custom-work-rule-governance-card.compact { max-width:680px; margin-inline:auto; }
+.custom-work-rule-governance-summary {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:12px 0;
+  padding:11px 12px;
+  border:1px solid var(--line);
+  border-radius:11px;
+  background:var(--surface-soft);
+}
+.custom-work-rule-governance-summary strong,
+.custom-work-rule-governance-summary small { display:block; }
+.custom-work-rule-governance-summary strong { margin:3px 0; font-size:11px; }
+.custom-work-rule-governance-summary small { color:var(--muted); font-size:8.5px; }
+.custom-work-rule-governance-summary code {
+  flex:0 0 auto;
+  color:var(--muted);
+  font-size:8px;
+}
+.custom-work-rule-conflict-preview { margin:10px 0; }
+.custom-work-rule-conflict-preview > p {
+  margin:0;
+  padding:10px 11px;
+  border:1px dashed var(--line);
+  border-radius:10px;
+  color:var(--muted);
+  font-size:9px;
+  background:var(--surface-soft);
+}
+.custom-work-rule-actor {
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:2px 9px;
+  margin:10px 0;
+  padding:10px 11px;
+  border:1px solid color-mix(in srgb,var(--primary) 24%,var(--line));
+  border-radius:10px;
+  background:color-mix(in srgb,var(--primary) 5%,var(--surface));
+}
+.custom-work-rule-actor > span {
+  grid-row:1/3;
+  align-self:center;
+  color:var(--muted);
+  font-size:8px;
+  font-weight:800;
+  text-transform:uppercase;
+}
+.custom-work-rule-actor strong { font-size:9.5px; }
+.custom-work-rule-actor small { color:var(--muted); font-size:8px; }
+.custom-work-rule-governance-fields { margin-top:10px; }
+.custom-work-rule-dialog-boundary {
+  margin:10px 0 0;
+  padding:9px 10px;
+  border-left:3px solid var(--warning,#bf8615);
+  color:var(--muted);
+  font-size:8.5px;
+  line-height:1.5;
+  background:var(--surface-soft);
+}
+.custom-work-rule-assignment-dialog-actions {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:10px 0 0;
+}
+.custom-work-rule-assignment-dialog-actions span {
+  color:var(--muted);
+  font-size:8.5px;
+  font-weight:700;
+  text-align:right;
+}
+.custom-work-rule-sticky-actions {
+  position:sticky;
+  z-index:2;
+  bottom:-1px;
+  margin:14px -2px -2px;
+  padding:11px 2px 2px;
+  background:linear-gradient(to bottom,transparent,var(--surface) 28%);
+}
+html[data-active-page-theme="dark"] .view.active:not(.rights-dashboard) :is(
+  .custom-work-rule-task-filter button,
+  .custom-work-rule-workflow,
+  .custom-work-rule-conflict,
+  .custom-work-rule-request-card,
+  .custom-work-rule-assignment-card,
+  .custom-work-rule-decisions > div,
+  .custom-work-rule-audit
+) {
+  color:var(--ink);
+  border-color:var(--line);
+  background:var(--surface-soft);
+}
+html[data-active-page-theme="dark"] :is(
+  .custom-work-rule-governance-card,
+  .custom-work-rule-governance-summary,
+  .custom-work-rule-conflict-preview > p,
+  .custom-work-rule-actor,
+  .custom-work-rule-dialog-boundary
+) {
+  color:#edf4f1;
+  border-color:#40524b;
+  background:#202d29;
+}
+html[data-active-page-theme="dark"] .custom-work-rule-sticky-actions {
+  background:linear-gradient(to bottom,transparent,#18231f 28%);
+}
+
+@media (max-width:1000px) {
+  .custom-work-rule-workflow li { grid-template-columns:20px 1fr; }
+  .custom-work-rule-workflow li > span { width:20px; height:20px; }
+}
+
+@media (max-width:700px) {
+  .custom-work-rule-updated { white-space:normal; }
+  .custom-work-rule-task-filter { margin-inline:-2px; padding-bottom:7px; }
+  .custom-work-rule-task-filter button { min-height:40px; font-size:10px; }
+  .custom-work-rule-summary-card { min-height:86px; }
+  .custom-work-rule-workflow ol { grid-template-columns:1fr; gap:7px; }
+  .custom-work-rule-workflow li { min-height:28px; grid-template-columns:24px 1fr; font-size:10px; }
+  .custom-work-rule-workflow li > span { width:24px; height:24px; }
+  .custom-work-rule-workflow li:not(:last-child)::after {
+    top:24px;
+    bottom:-8px;
+    left:11px;
+    right:auto;
+    width:2px;
+    height:auto;
+  }
+  .custom-work-rule-section-heading,
+  .custom-work-rule-record-heading,
+  .custom-work-rule-governance-summary,
+  .custom-work-rule-assignment-dialog-actions {
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .custom-work-rule-section-heading > small,
+  .custom-work-rule-assignment-dialog-actions span { max-width:none; text-align:left; }
+  .custom-work-rule-primary-actions,
+  .custom-work-rule-record-actions,
+  .collective-agreement-governance-actions { align-items:stretch; flex-direction:column; }
+  .custom-work-rule-primary-actions button,
+  .custom-work-rule-record-actions button,
+  .collective-agreement-governance-actions button,
+  .custom-work-rule-assignment-dialog-actions button { width:100%; min-height:44px; }
+  .custom-work-rule-record-heading .status-badge { align-self:flex-start; max-width:100%; }
+  .custom-work-rule-version-history > article { align-items:flex-start; flex-direction:column; }
+  .custom-work-rule-version-history > article > div:last-child { width:100%; justify-content:space-between; }
+  .custom-work-rule-version-history > article button { min-height:40px; }
+  .custom-work-rule-governance-dialog {
+    width:100vw;
+    max-width:none;
+    max-height:100dvh;
+    margin:0;
+  }
+  .custom-work-rule-governance-card {
+    min-height:100dvh;
+    max-height:100dvh;
+    border-radius:0;
+  }
+  .custom-work-rule-governance-summary code { align-self:flex-start; }
+  .custom-work-rule-actor { grid-template-columns:1fr; }
+  .custom-work-rule-actor > span { grid-row:auto; }
+  .custom-work-rule-sticky-actions {
+    display:grid;
+    grid-template-columns:1fr;
+    gap:8px;
+    margin-inline:-4px;
+    padding:13px 4px 4px;
+  }
+  .custom-work-rule-sticky-actions button { width:100%; min-height:44px; }
+  .custom-work-rule-conflict strong,
+  .custom-work-rule-conflict p,
+  .custom-work-rule-conflict li,
+  .custom-work-rule-record-heading strong,
+  .custom-work-rule-decisions strong,
+  .custom-work-rule-decisions small,
+  .custom-work-rule-audit strong,
+  .custom-work-rule-audit small { font-size:12px; }
+}
