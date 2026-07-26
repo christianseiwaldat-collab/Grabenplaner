@@ -2,11 +2,15 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
+const powershell = process.platform === "win32"
+  ? path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+  : "";
 
 test("v0.61 server tools: Caddy and WinSW use production-safe identities and health probes", () => {
   const caddy = read("server-tools", "caddy", "Caddyfile.example");
@@ -120,5 +124,63 @@ test("v0.61 server tools: maintenance scripts share one lock and distinct live-r
   assert.match(health, /InternalLiveUrl[\s\S]+api\/health\/live/);
   assert.match(health, /InternalReadyUrl[\s\S]+api\/health\/ready/);
   assert.match(health, /readAndVerifyBackup/);
+  assert.match(health, /verifyBackupReferences/);
+  assert.match(health, /loan_documents/);
+  assert.match(health, /loan_photos/);
+  const expectedSecurityHeaders = [
+    ["HSTS", "max-age=31536000; includeSubDomains"],
+    ["Content-Security-Policy", "object-src 'none'"],
+    ["X-Content-Type-Options", "nosniff"],
+    ["X-Frame-Options", "DENY"],
+    ["Referrer-Policy", "no-referrer"],
+    ["Permissions-Policy", "camera=(), microphone=(), geolocation=()"],
+    ["Cross-Origin-Opener-Policy", "same-origin"],
+    ["Cross-Origin-Resource-Policy", "same-origin"],
+    ["X-Permitted-Cross-Domain-Policies", "none"],
+  ];
+  for (const [label, expectedValue] of expectedSecurityHeaders) {
+    assert.match(health, new RegExp(`Add-Check '${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}'`));
+    assert.ok(health.includes(expectedValue), `${label} prueft nicht den erwarteten Wert.`);
+    assert.ok(
+      health.includes(`Add-Check '${label}' $false 'Antwort konnte nicht gelesen werden'`),
+      `${label} fehlt im stabilen Fehlerergebnis.`,
+    );
+  }
+  for (const directive of ["base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'"]) {
+    assert.ok(health.includes(directive), `Content-Security-Policy prueft ${directive} nicht.`);
+  }
   assert.doesNotMatch(allOps, /GRABENPLANER_ALLOW_UNSCANNED_AMU/);
+});
+
+test("v0.86 Windows diagnostics require complete, exact CSP directives", {
+  skip: !powershell || !fs.existsSync(powershell),
+}, () => {
+  const health = read("server-tools", "windows", "Test-GrabenplanerServer.ps1");
+  const functionStart = health.indexOf("function Test-ExactCspDirectives");
+  const functionEnd = health.indexOf("foreach ($serviceName", functionStart);
+  assert.notEqual(functionStart, -1, "Exakte CSP-Prueffunktion fehlt.");
+  assert.notEqual(functionEnd, -1, "Ende der CSP-Prueffunktion fehlt.");
+  const functionSource = health.slice(functionStart, functionEnd).trim();
+  const harness = [
+    functionSource,
+    "$valid = \"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\"",
+    "$frameSuffix = \"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none' https://evil.example\"",
+    "$formSuffix = \"default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://evil.example; frame-ancestors 'none'\"",
+    "[pscustomobject]@{",
+    "  valid = (Test-ExactCspDirectives $valid)",
+    "  frameSuffix = (Test-ExactCspDirectives $frameSuffix)",
+    "  formSuffix = (Test-ExactCspDirectives $formSuffix)",
+    "} | ConvertTo-Json -Compress",
+    "",
+  ].join("\r\n");
+  const encodedHarness = Buffer.from(harness, "utf16le").toString("base64");
+  const result = spawnSync(powershell, [
+    "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodedHarness,
+  ], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout.trim()), {
+    valid: true,
+    frameSuffix: false,
+    formSuffix: false,
+  });
 });

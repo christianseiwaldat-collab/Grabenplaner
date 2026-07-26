@@ -33,6 +33,7 @@ const {
   reconcileOrphanAmuBlobs,
   releaseInstanceLockForTests,
   validateUsbFeatures,
+  verifyActiveProtectedDocumentBlobs,
 } = require("../server");
 
 const ADMIN = "v085-admin";
@@ -260,6 +261,30 @@ test("v0.85 Datenmodell trennt zentralen Artikelstamm, Standortfreigabe und Leih
     () => db.prepare("UPDATE loan_document_deliveries SET status = 'failed' WHERE id = 'test-delivery'").run(),
     /loan document deliveries are immutable/,
   );
+  const deleteTriggerNames = [
+    "trg_loan_document_deliveries_immutable_delete",
+    "trg_loan_documents_immutable_delete",
+    "trg_loan_photos_immutable_delete",
+    "trg_loan_events_immutable_delete",
+  ];
+  const deleteTriggers = deleteTriggerNames.map((name) => db.prepare(`
+    SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND name = ?
+  `).get(name));
+  assert.equal(deleteTriggers.every((trigger) => trigger?.sql), true);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const trigger of deleteTriggers) db.exec(`DROP TRIGGER "${trigger.name}"`);
+    db.prepare("DELETE FROM loan_document_deliveries WHERE document_id = 'test-document'").run();
+    db.prepare("DELETE FROM loan_documents WHERE loan_id = ?").run(loanId);
+    db.prepare("DELETE FROM loan_photos WHERE loan_id = ?").run(loanId);
+    db.prepare("DELETE FROM loan_events WHERE loan_id = ?").run(loanId);
+    db.prepare("DELETE FROM loans WHERE id = ?").run(loanId);
+    for (const trigger of deleteTriggers) db.exec(trigger.sql);
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
 });
 
 test("v0.85 Funktionsprofil schaltet Leihe nur gemeinsam mit dem Mitarbeiterportal frei", () => {
@@ -563,6 +588,16 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
   assert.equal(requested.payload.loan.revision, 1);
   assert.equal(requested.payload.loan.pendingReturnConfirmation.witness.employeeNumber, WITNESS);
 
+  const lateReturnPhotoForm = new FormData();
+  lateReturnPhotoForm.set("phase", "return");
+  lateReturnPhotoForm.append("photos", new Blob([returnImage], { type: "image/jpeg" }), "Zu-spaet.jpg");
+  const lateReturnPhoto = await request(
+    `/api/portal/v1/loans/${issued.payload.loan.id}/photos`,
+    { method: "POST", body: lateReturnPhotoForm },
+  );
+  assert.equal(lateReturnPhoto.response.status, 409, JSON.stringify(lateReturnPhoto.payload));
+  assert.equal(lateReturnPhoto.payload.code, "LOAN_RETURN_CONFIRMATION_PENDING");
+
   const witnessPending = await request("/api/portal/v1/loans/return-confirmations/pending", {
     session: witnessSession,
   });
@@ -572,6 +607,18 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
   assert.equal(witnessPending.payload.confirmations[0].items[0].conditionReturn, "good");
   assert.equal(witnessPending.payload.confirmations[0].photos.length, 1);
   assert.equal(witnessPending.payload.confirmations[0].photos[0].phase, "return");
+  const witnessReturnPhoto = await requestBinary(
+    witnessPending.payload.confirmations[0].photos[0].contentUrl,
+    { session: witnessSession },
+  );
+  assert.equal(witnessReturnPhoto.response.status, 200);
+  assert.equal(witnessReturnPhoto.response.headers.get("content-type"), "image/jpeg");
+  assert.equal(witnessReturnPhoto.buffer.subarray(0, 2).toString("hex"), "ffd8");
+  const unrelatedReturnPhoto = await requestBinary(
+    witnessPending.payload.confirmations[0].photos[0].contentUrl,
+    { session: otherSession },
+  );
+  assert.equal(unrelatedReturnPhoto.response.status, 403);
 
   const requesterCannotConfirm = await request(
     `/api/portal/v1/loans/return-confirmations/${requested.payload.confirmation.id}/respond`,
@@ -624,6 +671,126 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
   assert.equal(stale.payload.code, "LOAN_ALREADY_CLOSED");
 });
 
+test("Filialleitung kann die Rückgabebestätigung des Borrowers nicht stellvertretend setzen", async () => {
+  const issued = await request("/api/portal/v1/loans", {
+    method: "POST",
+    body: {
+      locationId,
+      items: [{
+        articleNumber: "104405",
+        serialNumber: "TZ99-MANAGER-RETURN",
+        conditionOut: "good",
+      }],
+    },
+  });
+  assert.equal(issued.response.status, 201, JSON.stringify(issued.payload));
+  const witnessHeartbeat = await request("/api/portal/v1/loans/return-confirmations/pending", {
+    session: otherSession,
+  });
+  assert.equal(witnessHeartbeat.response.status, 200);
+
+  const requested = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
+    method: "POST",
+    session: managerSession,
+    body: {
+      expectedRevision: 1,
+      witnessEmployeeNumber: OTHER,
+      borrowerConfirmed: true,
+      items: [{ position: 1, conditionReturn: "good", note: "" }],
+    },
+  });
+  assert.equal(requested.response.status, 202, JSON.stringify(requested.payload));
+  const returned = await request(
+    `/api/portal/v1/loans/return-confirmations/${requested.payload.confirmation.id}/respond`,
+    {
+      method: "POST",
+      session: otherSession,
+      body: { decision: "confirm" },
+    },
+  );
+  assert.equal(returned.response.status, 200, JSON.stringify(returned.payload));
+  assert.equal(returned.payload.loan.borrowerReturnConfirmed, false);
+  assert.equal(
+    Boolean(db.prepare("SELECT borrower_return_confirmed FROM loans WHERE id = ?")
+      .get(issued.payload.loan.id).borrower_return_confirmed),
+    false,
+  );
+});
+
+test("parallele Foto-Uploads vergeben Positionen erst im serialisierten Schreibvorgang", async () => {
+  const issued = await request("/api/portal/v1/loans", {
+    method: "POST",
+    body: {
+      locationId,
+      items: [{
+        articleNumber: "104405",
+        serialNumber: "TZ99-CONCURRENT-PHOTOS",
+        conditionOut: "good",
+      }],
+    },
+  });
+  assert.equal(issued.response.status, 201, JSON.stringify(issued.payload));
+
+  const imageBuffers = await Promise.all([
+    sharp({
+      create: {
+        width: 1800,
+        height: 1800,
+        channels: 3,
+        background: { r: 38, g: 120, b: 95 },
+      },
+    }).png().toBuffer(),
+    sharp({
+      create: {
+        width: 1800,
+        height: 1800,
+        channels: 3,
+        background: { r: 214, g: 76, b: 58 },
+      },
+    }).png().toBuffer(),
+  ]);
+  const forms = imageBuffers.map((buffer, index) => {
+    const form = new FormData();
+    form.set("phase", "issue");
+    form.append("photos", new Blob([buffer], { type: "image/png" }), `Parallel-${index + 1}.png`);
+    return form;
+  });
+
+  const results = await Promise.all(forms.map((body) => request(
+    `/api/portal/v1/loans/${issued.payload.loan.id}/photos`,
+    { method: "POST", body },
+  )));
+  assert.deepEqual(results.map((result) => result.response.status), [201, 201],
+    results.map((result) => JSON.stringify(result.payload)).join("\n"));
+
+  const stored = db.prepare(`
+    SELECT id, position
+    FROM loan_photos
+    WHERE loan_id = ? AND phase = 'issue'
+    ORDER BY position, id
+  `).all(issued.payload.loan.id);
+  assert.deepEqual(stored.map((photo) => Number(photo.position)), [1, 2]);
+  assert.equal(new Set(stored.map((photo) => photo.id)).size, 2);
+  assert.equal(
+    db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM loan_events
+      WHERE loan_id = ? AND event_type = 'photos_added'
+    `).get(issued.payload.loan.id).count,
+    2,
+  );
+});
+
+test("proaktive Integritätsprüfung liest auch geschützte Leihbelege und Leihfotos", () => {
+  const verified = verifyActiveProtectedDocumentBlobs();
+  assert.ok(verified.loanDocuments >= 3, JSON.stringify(verified));
+  assert.ok(verified.loanPhotos >= 2, JSON.stringify(verified));
+  assert.equal(
+    verified.storageKeys.length,
+    verified.amuDocuments + verified.personnelDocuments + verified.loanDocuments + verified.loanPhotos,
+  );
+});
+
 test("v0.85 eine abgelehnte Gegenprüfung lässt die Leihe offen und erlaubt eine neue Anfrage", async () => {
   const issued = await request("/api/portal/v1/loans", {
     method: "POST",
@@ -638,6 +805,24 @@ test("v0.85 eine abgelehnte Gegenprüfung lässt die Leihe offen und erlaubt ein
   });
   assert.equal(issued.response.status, 201, JSON.stringify(issued.payload));
   await request("/api/portal/v1/loans/return-confirmations/pending", { session: witnessSession });
+
+  const returnImage = await sharp({
+    create: {
+      width: 640,
+      height: 640,
+      channels: 3,
+      background: { r: 214, g: 76, b: 58 },
+    },
+  }).jpeg({ quality: 90 }).toBuffer();
+  const returnPhotoForm = new FormData();
+  returnPhotoForm.set("phase", "return");
+  returnPhotoForm.append("photos", new Blob([returnImage], { type: "image/jpeg" }), "Ablehnung.jpg");
+  const uploadedReturnPhoto = await request(
+    `/api/portal/v1/loans/${issued.payload.loan.id}/photos`,
+    { method: "POST", body: returnPhotoForm },
+  );
+  assert.equal(uploadedReturnPhoto.response.status, 201, JSON.stringify(uploadedReturnPhoto.payload));
+  const returnPhotoUrl = uploadedReturnPhoto.payload.photos[0].contentUrl;
 
   const requested = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
     method: "POST",
@@ -662,6 +847,8 @@ test("v0.85 eine abgelehnte Gegenprüfung lässt die Leihe offen und erlaubt ein
   assert.equal(rejected.payload.loan.status, "issued");
   assert.equal(rejected.payload.loan.revision, 1);
   assert.equal(rejected.payload.loan.pendingReturnConfirmation, null);
+  const deniedRejectedPhoto = await requestBinary(returnPhotoUrl, { session: witnessSession });
+  assert.equal(deniedRejectedPhoto.response.status, 403);
 
   const requestedAgain = await request(`/api/portal/v1/loans/${issued.payload.loan.id}/return`, {
     method: "POST",

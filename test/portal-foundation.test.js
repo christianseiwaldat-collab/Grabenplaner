@@ -1761,11 +1761,18 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     const secureHeaders = { "X-Forwarded-Proto": "https", Origin: publicAddress };
     const statusResponse = await fetch(`${url}/api/portal/v1/status`, { headers: secureHeaders });
     assert.equal(statusResponse.status, 200, await statusResponse.clone().text());
-    assert.match(statusResponse.headers.get("strict-transport-security") || "", /max-age=31536000/);
+    assert.equal(statusResponse.headers.get("strict-transport-security"), "max-age=31536000; includeSubDomains");
+    assert.equal(statusResponse.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(statusResponse.headers.get("x-frame-options"), "DENY");
+    assert.equal(statusResponse.headers.get("referrer-policy"), "no-referrer");
+    assert.equal(statusResponse.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=()");
     assert.equal(statusResponse.headers.get("cross-origin-opener-policy"), "same-origin");
     assert.equal(statusResponse.headers.get("cross-origin-resource-policy"), "same-origin");
     assert.equal(statusResponse.headers.get("x-permitted-cross-domain-policies"), "none");
-    assert.match(statusResponse.headers.get("content-security-policy") || "", /form-action 'self'/);
+    const contentSecurityPolicy = statusResponse.headers.get("content-security-policy") || "";
+    for (const directive of ["object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'"]) {
+      assert.match(contentSecurityPolicy, new RegExp(directive.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    }
     assert.match(statusResponse.headers.get("x-request-id") || "", /^[a-f0-9-]{36}$/i);
     assert.equal(statusResponse.headers.get("cache-control"), "no-store");
     const status = await statusResponse.json();
