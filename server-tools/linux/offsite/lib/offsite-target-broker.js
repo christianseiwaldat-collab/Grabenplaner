@@ -436,6 +436,8 @@ function defaultRunRclone(args, config, options = {}) {
   }
   const runtimeRoot = assertSecureDirectory(path.resolve(options.runtimeRoot || RUNTIME_ROOT), 0o755, options);
   const identity = uploaderIdentity(options);
+  const platform = options.platform || process.platform;
+  const chownSync = options.chownSync || fs.chownSync;
   const temporary = fs.mkdtempSync(path.join(runtimeRoot, "credentials."));
   const passwordPath = path.join(temporary, "rclone-config-password");
   let descriptor;
@@ -450,9 +452,9 @@ function defaultRunRclone(args, config, options = {}) {
     fs.fsyncSync(descriptor);
     fs.closeSync(descriptor);
     descriptor = undefined;
-    if (process.platform !== "win32") {
-      fs.chownSync(passwordPath, identity.uid, identity.gid);
-      fs.chownSync(temporary, identity.uid, identity.gid);
+    if (platform !== "win32") {
+      chownSync(passwordPath, identity.uid, identity.gid);
+      chownSync(temporary, identity.uid, identity.gid);
     }
     const runner = options.rcloneSpawnSync || childProcess.spawnSync;
     return runner(RUNUSER, [
