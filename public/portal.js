@@ -135,7 +135,7 @@ window.addEventListener("resize", applyDeviceMode, { passive: true });
 
 const el = Object.fromEntries([
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
-  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "settingsView", "settingsPasswordButton", "scheduleView", "timeOffView",
+  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "settingsView", "settingsPasswordButton", "scheduleView", "timeOffTab", "timeOffView",
   "loanTab", "loanView", "leadershipLoanShortcut", "loanRefresh", "loanAvailabilityMessage", "loanWorkspace", "loanIssueForm",
   "loanItemEditor", "loanAddItem", "loanDueDate", "loanIssueNote", "loanIssuePhotos", "loanIssueCamera", "loanIssuePhotoSummary", "loanIssueMessage", "loanIssueSubmit", "loanScopeField", "loanScope", "loanStatusFilter", "loanList",
   "loanReturnDialog", "loanReturnForm", "loanReturnTitle", "loanReturnSummary", "loanReturnItems", "loanReturnWitness", "loanReturnNote", "loanReturnPhotos", "loanReturnCamera", "loanReturnPhotoSummary", "loanReturnMessage", "loanReturnSubmit",
@@ -143,7 +143,7 @@ const el = Object.fromEntries([
   "loanConfirmationDialog", "loanConfirmationForm", "loanConfirmationTitle", "loanConfirmationSummary", "loanConfirmationItems", "loanConfirmationNote",
   "loanConfirmationPhotos", "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
   "processTasksTab", "processTasksTabCount", "processTasksView", "refreshProcessTasks", "processTaskSummary", "processTaskList",
-  "vacationView", "historyView", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
+  "vacationTab", "vacationView", "historyTab", "historyView", "amuTab", "amuView", "timeTrackingTab", "timeTrackingView", "timeTrackingDate", "timeTrackingGreeting", "timeTrackingRefresh", "timeTrackingCard",
   "timeTrackingIndicator", "timeTrackingState", "timeTrackingReason", "timeTrackingActions", "timeTrackingMessage", "timePlanned", "timeActual", "timeWeighted", "timePause", "timeDifference", "timeTrackingIssues", "timeEntryList",
   "wifiAutomationCard", "wifiAutomationAvailability", "wifiAutomationToggle", "wifiConfirmationLevel", "wifiSuggestionWarning", "wifiSuggestionList", "wifiAutomationMessage",
   "timePeriodHeading", "timePeriodSummary", "timePeriodList", "previousTimePeriod", "currentTimePeriod", "nextTimePeriod",
@@ -152,7 +152,7 @@ const el = Object.fromEntries([
   "timeRecordStatementsPanel", "timeRecordStatementList",
   "leadershipTeamTab", "leadershipApprovalsTab", "leadershipMoreTab", "leadershipTeamView", "leadershipApprovalsView", "leadershipMoreView",
   "leadershipTeamRefresh", "leadershipApprovalsRefresh", "leadershipContextFields", "leadershipLocation", "leadershipDepartment", "leadershipApprovalContextFields", "leadershipApprovalLocation", "leadershipApprovalDepartment", "leadershipPresenceSummary", "leadershipPresenceList", "leadershipApprovalList",
-  "leadershipSettingsButton", "leadershipDesktopLink", "timeCorrectionDialog", "timeCorrectionForm", "timeCorrectionId", "timeCorrectionDate", "timeCorrectionDateText", "timeCorrectionEntries", "timeCorrectionNote", "timeCorrectionMessage", "addTimeCorrectionEntry",
+  "leadershipSettingsButton", "leadershipDesktopLink", "leadershipMoreDescription", "leadershipTimeOffShortcut", "leadershipVacationShortcut", "leadershipAmuShortcut", "leadershipProcessTasksShortcut", "timeCorrectionDialog", "timeCorrectionForm", "timeCorrectionId", "timeCorrectionDate", "timeCorrectionDateText", "timeCorrectionEntries", "timeCorrectionNote", "timeCorrectionMessage", "addTimeCorrectionEntry",
   "leadershipRequestDialog", "leadershipRequestForm", "leadershipRequestTitle", "leadershipRequestSummary", "leadershipRequestHistory", "leadershipRequestDocuments", "leadershipSicknessFields", "leadershipSicknessExpectedEnd", "leadershipSicknessReturnDate", "leadershipCorrectionEntries", "addLeadershipCorrectionEntry", "leadershipRequestNote", "leadershipRequestMessage", "leadershipRequestActions",
   "scheduleHeading", "scheduleGrid", "previousWeek", "currentWeek", "nextWeek",
   "timeOffRequestForm", "timeOffFormTitle", "timeOffDate", "timeOffDateTo", "timeOffDateToField", "timeOffTimeFields", "timeOffStart", "timeOffEnd", "timeOffNote", "timeOffCheck", "timeOffMessage",
@@ -406,6 +406,7 @@ function hasPortalPermission(permission) {
 }
 
 const leadershipPortalPermissions = new Set([
+  "schedule:write",
   "time:read",
   "time:review",
   "vacation:read",
@@ -473,6 +474,29 @@ function mobileModuleAllowed(module, permissions = portalUser()?.permissions || 
   return module === "more";
 }
 
+function portalTabAllowed(tab, user = portalUser()) {
+  const permissions = user?.permissions || [];
+  if (["settings", "schedule", "leadershipMore"].includes(tab)) return true;
+  if (tab === "timeTracking") return permissions.includes("own_time:read") && timeTrackingCapabilityEnabled();
+  if (tab === "timeOff") return permissions.includes("own_vacation:request");
+  if (tab === "vacation") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request"].includes(permission));
+  if (tab === "history") {
+    return permissions.some((permission) => [
+      "own_vacation:read", "own_vacation:request", "own_time:read", "own_time:correction_request",
+    ].includes(permission));
+  }
+  if (tab === "amu") {
+    return permissions.some((permission) => [
+      "own_sickness:create", "own_sickness:read", "own_amu:create", "own_amu:read", "own_amu:withdraw",
+    ].includes(permission)) && portalState.status?.capabilities?.sicknessReports === true;
+  }
+  if (tab === "processTasks") return user?.role !== "location_planner" && portalState.processTasksAvailable !== false;
+  if (tab === "loan") return loanCapabilityEnabled();
+  if (tab === "leadershipTeam") return mobileModuleAllowed("presence", permissions);
+  if (tab === "leadershipApprovals") return mobileModuleAllowed("approvals", permissions);
+  return false;
+}
+
 function effectiveMobileModules() {
   const fallback = ["time", "presence", "approvals", "schedule", "requests", "more"];
   const configured = normalizedMobileModules(portalState.mobileLayout?.modules);
@@ -496,8 +520,7 @@ function applyMobileLeadershipLayout() {
   if (!compactLeadership) {
     regularTabs.forEach((tab) => {
       const button = document.querySelector(`[data-tab="${tab}"]`);
-      const unavailable = (tab === "timeTracking" && !timeTrackingCapabilityEnabled())
-        || (tab === "amu" && portalState.status?.capabilities?.sicknessReports !== true);
+      const unavailable = !portalTabAllowed(tab);
       button?.classList.toggle("hidden", unavailable);
       button?.style.removeProperty("order");
     });
@@ -656,10 +679,13 @@ async function initialize() {
 
 async function loadPortalData() {
   const requests = [
-    loadPortalHome(),
-    loadSchedule(), loadVacationRequests(), loadTimeOffRequests(), loadApprovedVacations(),
-    loadAbsenceHistory(), loadNotifications(), loadProcessTasks(), loadSicknessCases(), loadAmuReports(), loadAmuSettings(),
+    loadPortalHome(), loadSchedule(), loadNotifications(),
   ];
+  if (portalTabAllowed("vacation")) requests.push(loadVacationRequests(), loadApprovedVacations());
+  if (portalTabAllowed("timeOff")) requests.push(loadTimeOffRequests());
+  if (portalTabAllowed("history")) requests.push(loadAbsenceHistory());
+  if (portalTabAllowed("processTasks")) requests.push(loadProcessTasks());
+  if (portalTabAllowed("amu")) requests.push(loadSicknessCases(), loadAmuReports(), loadAmuSettings());
   if (timeTrackingCapabilityEnabled()) requests.push(loadTimeTracking());
   if (hasPortalPermission("own_privacy_requests:read")) requests.push(loadPrivacyRequests());
   if (hasPortalPermission("own_vacation:read")) requests.push(loadVacationAccount());
@@ -834,6 +860,15 @@ function applySelfServiceVisibility() {
     el.privacyRequestsNotice.textContent = "Jede Anfrage wird nach einer Identitätsprüfung manuell bearbeitet und nachvollziehbar entschieden.";
   }
   el.vacationAccountCard?.classList.toggle("hidden", !hasPortalPermission("own_vacation:read"));
+  el.timeOffTab?.classList.toggle("hidden", !portalTabAllowed("timeOff"));
+  el.vacationTab?.classList.toggle("hidden", !portalTabAllowed("vacation"));
+  el.historyTab?.classList.toggle("hidden", !portalTabAllowed("history"));
+  el.amuTab?.classList.toggle("hidden", !portalTabAllowed("amu"));
+  el.processTasksTab?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
+  el.leadershipTimeOffShortcut?.classList.toggle("hidden", !portalTabAllowed("timeOff"));
+  el.leadershipVacationShortcut?.classList.toggle("hidden", !portalTabAllowed("vacation"));
+  el.leadershipAmuShortcut?.classList.toggle("hidden", !portalTabAllowed("amu"));
+  el.leadershipProcessTasksShortcut?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
   if (!hasPortalPermission("own_time_record:read")) {
     el.timeRecordStatementsPanel?.classList.add("hidden");
   }
@@ -863,6 +898,20 @@ function showPortal(session) {
   el.portalUserName.textContent = `${session.user.employeeNumber} · ${session.user.nickname || session.user.fullName}`;
   el.portalUserRole.textContent = session.user.roleName;
   el.adminAppLink.classList.toggle("hidden", !session.user.permissions.includes("schedule:read"));
+  const planningOnly = session.user.role === "location_planner";
+  el.adminAppLink.textContent = planningOnly ? "Filialplanung öffnen" : "Planung öffnen";
+  if (el.leadershipDesktopLink) {
+    el.leadershipDesktopLink.href = planningOnly ? "/" : "/?desktop=1";
+    el.leadershipDesktopLink.querySelector("strong").textContent = planningOnly ? "Filialplanung" : "Desktop-Planung";
+    el.leadershipDesktopLink.querySelector("span").textContent = planningOnly
+      ? "Vollständige Planung auch am Smartphone"
+      : "Vollständige Verwaltung am großen Bildschirm";
+  }
+  if (el.leadershipMoreDescription) {
+    el.leadershipMoreDescription.textContent = planningOnly
+      ? "Filialplanung und persönliche Einstellungen."
+      : "Persönliche Anträge und weitere Funktionen.";
+  }
   el.sicknessNotificationPreferencesCard?.classList.toggle("hidden", !session.user.permissions.includes("notifications:settings"));
   document.querySelector('[data-leadership-kind="sickness"]')?.classList.toggle("hidden", !session.user.permissions.includes("sickness:read"));
   el.passwordDialog.dataset.required = session.user.mustChangePassword ? "true" : "false";
@@ -899,6 +948,7 @@ async function logout() {
 }
 
 function setTab(tab) {
+  if (portalUser() && !portalTabAllowed(tab)) tab = "schedule";
   if (tab === "timeTracking" && !timeTrackingCapabilityEnabled()) tab = "schedule";
   if (tab === "loan" && !loanCapabilityEnabled()) tab = "schedule";
   portalState.activeTab = tab;
@@ -2584,7 +2634,7 @@ async function loadProcessTasks(options = {}) {
       });
       portalState.processTaskSummary = data?.summary || null;
       portalState.processTasksAvailable = data?.available !== false;
-      el.processTasksTab?.classList.toggle("hidden", !portalState.processTasksAvailable);
+      el.processTasksTab?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
     } catch (error) {
       if ([403, 404].includes(error.status)) {
         portalState.processTasksAvailable = false;

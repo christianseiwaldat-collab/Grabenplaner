@@ -288,6 +288,7 @@
               <div class="page-theme-switch" role="group" aria-label="Darstellung der Urlaubsplanung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div>
             </div>
           </header>
+          <p class="calculation-note hidden" id="vacationApprovedEntryHint">Hier werden ausschließlich Urlaube eingetragen, die außerhalb des Grabenplaners bereits betrieblich genehmigt wurden. Dieser Zugang kann keine Anträge erfassen, prüfen oder freigeben.</p>
 
           <section class="vacation-panel" id="requestBlackoutPanel">
             <div class="vacation-panel-heading">
@@ -1926,7 +1927,7 @@
 
     <dialog class="modal wide-modal" id="optionsModal" tabindex="-1">
       <form method="dialog" id="optionForm">
-        <div class="modal-header"><div><span class="eyebrow">Vor der Planerstellung</span><h2>Planungsoptionen · <span id="optionsWeekLabel"></span></h2><div class="option-week-switch"><button type="button" class="nav-button" id="optionPreviousWeek" aria-label="Vorherige Kalenderwoche">←</button><span id="optionsWeekRange"></span><button type="button" class="nav-button" id="optionNextWeek" aria-label="Nächste Kalenderwoche">→</button></div><p>Urlaub, Krankenstand, andere Filiale oder weitere Sonderfälle für diese Woche.</p></div><button type="button" class="close-button" data-close="optionsModal">×</button></div>
+        <div class="modal-header"><div><span class="eyebrow">Vor der Planerstellung</span><h2>Planungsoptionen · <span id="optionsWeekLabel"></span></h2><div class="option-week-switch"><button type="button" class="nav-button" id="optionPreviousWeek" aria-label="Vorherige Kalenderwoche">←</button><span id="optionsWeekRange"></span><button type="button" class="nav-button" id="optionNextWeek" aria-label="Nächste Kalenderwoche">→</button></div><p id="optionsScopeHint">Urlaub, Krankenstand, andere Filiale oder weitere Sonderfälle für diese Woche.</p></div><button type="button" class="close-button" data-close="optionsModal">×</button></div>
         <div class="global-block-entry">
           <div><strong>Ganzer Tag für alle sperren</strong><small>z. B. Feiertag, Betrieb geschlossen oder Inventur.</small></div>
           <label class="field"><span>Datum</span><input id="globalBlockDate" type="date" /></label>

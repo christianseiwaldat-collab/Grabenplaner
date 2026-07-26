@@ -273,7 +273,7 @@ const elements = Object.fromEntries(
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
-    "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField",
+    "vacationTitle", "vacationSubtitle", "vacationYear", "vacationViewMode", "vacationQuarter", "vacationMonth", "vacationQuarterField", "vacationMonthField", "vacationApprovedEntryHint",
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount", "vacationAccountsButton", "vacationAccountsModal", "vacationAccountsYear", "loadVacationAccountsButton", "vacationAccountsSummary", "vacationAccountsList",
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
@@ -284,7 +284,7 @@ const elements = Object.fromEntries(
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationCostCenterField", "locationCostCenter", "locationCostCenterReadonly", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
     "departmentForm", "departmentId", "departmentLocation", "departmentName", "departmentMinStaff", "departmentActive", "departmentSubmitButton", "cancelDepartmentEditButton", "locationList",
     "shiftModal", "shiftForm", "shiftModalTitle", "deleteShiftButton", "shiftCalculation", "shiftRulePreview", "shiftDepartment", "departmentPdfControl", "departmentPdfSelect", "departmentPdfButton",
-    "optionsModal", "optionForm", "optionList", "optionsWeekLabel", "optionsWeekRange", "optionPreviousWeek", "optionNextWeek", "globalBlockDate", "globalBlockReason", "globalBlockHoliday", "globalBlockSubmitButton", "optionSubmitButton", "cancelOptionEditButton", "autoPlanModal",
+    "optionsModal", "optionForm", "optionList", "optionsWeekLabel", "optionsWeekRange", "optionsScopeHint", "optionPreviousWeek", "optionNextWeek", "globalBlockDate", "globalBlockReason", "globalBlockHoliday", "globalBlockSubmitButton", "optionSubmitButton", "cancelOptionEditButton", "autoPlanModal",
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
@@ -815,6 +815,16 @@ function canReadManagerRequests() {
     || state.portalSession?.user?.permissions?.includes("vacation:read") === true;
 }
 
+function canWriteApprovedAbsenceEntries() {
+  if (!state.portalStatus?.portalEnabled) return true;
+  const permissions = state.portalSession?.user?.permissions || [];
+  return permissions.includes("absence_entries:write") || permissions.includes("vacation:approve");
+}
+
+function isLocationPlannerSession() {
+  return state.portalSession?.user?.role === "location_planner";
+}
+
 function canReadManagedTimeTracking() {
   if (!state.portalStatus?.portalEnabled || !state.portalStatus?.capabilities?.timeTracking) return false;
   const permissions = state.portalSession?.user?.permissions || [];
@@ -943,6 +953,7 @@ function applyRoleVisibility() {
   const costCenterReadAccess = canReadCostCenters();
   const costCenterWriteAccess = canWriteCostCenters();
   const centralVacationReadAccess = canReadCentralVacations() && features.vacation !== false;
+  const approvedAbsenceWriteAccess = canWriteApprovedAbsenceEntries() && features.vacation !== false;
   const vacationAccountsReadAccess = canReadVacationAccounts() && features.vacation !== false;
   const timeRecordsReadAccess = canReadMonthlyTimeRecords() && features.timeTracking !== false;
   const timeRecordsGenerateAccess = canGenerateMonthlyTimeRecords() && timeRecordsReadAccess;
@@ -976,6 +987,8 @@ function applyRoleVisibility() {
   elements.retentionPreviewCard?.classList.toggle("hidden", !retentionManageAccess);
   document.querySelectorAll('[data-view="personnel"]').forEach((button) => button.classList.toggle("hidden", !employeeReadAccess));
   document.querySelectorAll('[data-view="vacations"]').forEach((button) => button.classList.toggle("hidden", features.vacation === false));
+  elements.addVacationButton?.classList.toggle("hidden", !approvedAbsenceWriteAccess);
+  elements.vacationApprovedEntryHint?.classList.toggle("hidden", !isLocationPlannerSession());
   elements.loanManagementNavButton?.classList.toggle("hidden", !loanManagementAccess);
   elements.requestsNavButton?.classList.toggle("hidden", !requestReadAccess);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
@@ -2214,7 +2227,7 @@ function renderVacationMonthCard(month) {
             return `<div class="vacation-item">
               <span class="vacation-item-color" style="background:${vacation.color}"></span>
               <div><strong>${escapeHtml(vacation.nickname)}</strong><small>${formatVacationDateRange(vacation, start, end)} · ${formatDays(days)}${vacation.note ? ` · ${escapeHtml(vacation.note)}` : ""}</small></div>
-              <div class="vacation-actions-inline">
+              <div class="vacation-actions-inline ${canWriteApprovedAbsenceEntries() ? "" : "hidden"}">
                 <button type="button" class="edit-vacation" data-edit-vacation="${escapeHtml(vacation.group_id)}">Bearbeiten</button>
                 <button type="button" class="delete-vacation" data-delete-vacation="${escapeHtml(vacation.group_id)}">Löschen</button>
               </div>
@@ -2244,7 +2257,7 @@ function renderVacationEmployeeOverview(range) {
               return `<div class="vacation-item">
                 <span class="vacation-item-color" style="background:${employee.color}"></span>
                 <div><strong>${formatVacationDateRange(vacation)}</strong><small>${formatDays(days)}${vacation.note ? ` · ${escapeHtml(vacation.note)}` : ""}</small></div>
-                <div class="vacation-actions-inline">
+                <div class="vacation-actions-inline ${canWriteApprovedAbsenceEntries() ? "" : "hidden"}">
                   <button type="button" class="edit-vacation" data-edit-vacation="${escapeHtml(vacation.group_id)}">Bearbeiten</button>
                   <button type="button" class="delete-vacation" data-delete-vacation="${escapeHtml(vacation.group_id)}">Löschen</button>
                 </div>
@@ -2296,6 +2309,10 @@ function renderVacations() {
 }
 
 function openVacationModal(vacation = null) {
+  if (!canWriteApprovedAbsenceEntries()) {
+    showToast("Für die direkte Erfassung bereits genehmigter Urlaube fehlt die Berechtigung.", true);
+    return;
+  }
   if (!state.vacationData?.employees?.length) {
     showToast("Bitte zuerst ein aktives Teammitglied anlegen.", true);
     return;
@@ -6825,12 +6842,12 @@ function renderMobileLeadershipSettings() {
     const enabled = new Set(layouts[role] || []);
     return `<article class="mobile-role-card" data-mobile-layout-role="${role}"><strong>${label}</strong><div class="mobile-module-grid">${modules.map((module) => {
       const required = role !== "location_planner" && module.id === "timeTracking";
-      const unavailable = role === "location_planner" && module.id === "timeTracking";
+      const unavailable = role === "location_planner" && !["schedule", "more"].includes(module.id);
       return `<label><input type="checkbox" value="${escapeHtml(module.id)}" ${enabled.has(module.id) || required ? "checked" : ""} ${required || unavailable ? "disabled" : ""} /><span>${escapeHtml(module.label || module.id)}</span></label>`;
     }).join("")}</div></article>`;
   }).join("");
   elements.saveMobileLeadershipSettingsButton.disabled = result.canChange === false;
-  elements.mobileLeadershipSettingsHint.textContent = result.canChange === false ? "Nur Developer, IT-Admin, Admin oder Personalleitung kann diese Auswahl ändern." : "Zeiterfassung bleibt immer der erste Punkt; insgesamt maximal sechs Elemente je Rolle.";
+  elements.mobileLeadershipSettingsHint.textContent = result.canChange === false ? "Nur Developer, IT-Admin, Admin oder Personalleitung kann diese Auswahl ändern." : "Zeiterfassung bleibt bei Leitungsrollen der erste Punkt; die Planungsverantwortung nutzt ausschließlich Dienstplan und Mehr.";
 }
 
 function personnelFieldLevelLabel(level, payload = state.personnelFieldRights || {}) {
@@ -12992,6 +13009,7 @@ function openOptionsModal() {
     `<option value="${escapeHtml(employee.personnel_number)}">${escapeHtml(employee.nickname)} · ${escapeHtml(employee.personnel_number)}</option>`,
   ).join("");
   document.querySelector("#optionEmployee").innerHTML = employeeOptions;
+  applyApprovedAbsenceOptionRestrictions();
   document.querySelector("#optionDateFrom").value = state.weekStart;
   document.querySelector("#optionDateTo").value = state.weekStart;
   document.querySelector("#optionType").value = "vacation";
@@ -13011,6 +13029,23 @@ function openOptionsModal() {
   renderOptionList();
   elements.optionsModal.showModal();
   elements.optionsModal.focus();
+}
+
+function applyApprovedAbsenceOptionRestrictions() {
+  const restricted = isLocationPlannerSession();
+  const allowed = new Set(["vacation", "time_off"]);
+  const select = document.querySelector("#optionType");
+  Array.from(select?.options || []).forEach((option) => {
+    const unavailable = restricted && !allowed.has(option.value);
+    option.hidden = unavailable;
+    option.disabled = unavailable;
+  });
+  if (restricted && !allowed.has(select?.value)) select.value = "vacation";
+  if (elements.optionsScopeHint) {
+    elements.optionsScopeHint.textContent = restricted
+      ? "Nur bereits betrieblich genehmigten Urlaub oder vereinbarten Zeitausgleich direkt in die Planung eintragen. Anträge und Freigaben erfolgen nicht in diesem Zugang."
+      : "Urlaub, Krankenstand, andere Filiale oder weitere Sonderfälle für diese Woche.";
+  }
 }
 
 function updateOptionWeekControls() {
@@ -13079,6 +13114,10 @@ function resetOptionEditor() {
 }
 
 function fillOptionForm(option) {
+  if (isLocationPlannerSession() && !["vacation", "time_off"].includes(option.option_type)) {
+    showToast("Dieser Zugang darf ausschließlich bereits genehmigten Urlaub oder vereinbarten Zeitausgleich bearbeiten.", true);
+    return;
+  }
   state.editingOptionId = option.id;
   state.editingOptionGroupId = option.group_id || null;
   document.querySelector("#optionEmployee").value = option.employee_number;
@@ -13184,7 +13223,7 @@ function renderOptionList() {
       <span class="option-item-color" style="background:${option.color}"></span>
       <div><strong>${escapeHtml(option.employee_number)} ${escapeHtml(option.nickname)} · ${optionLabels[option.option_type]}</strong>
       <small>${formatOptionDates(option)} · ${formatOptionTime(option)}${option.note ? ` · ${escapeHtml(option.note)}` : ""} · gerechnet ${formatHours(option.credited_minutes || 0)}</small></div>
-      <div class="option-actions">
+      <div class="option-actions ${isLocationPlannerSession() && !["vacation", "time_off"].includes(option.option_type) ? "hidden" : ""}">
         <button type="button" class="edit-option" data-edit-option="${option.id}">Bearbeiten</button>
         <button type="button" class="delete-option" data-delete-option="${option.id}">Entfernen</button>
       </div>
@@ -13540,12 +13579,17 @@ async function saveShift(event) {
 async function saveOption(event) {
   event.preventDefault();
   const isEdit = Boolean(state.editingOptionId);
+  const selectedType = document.querySelector("#optionType").value;
+  if (isLocationPlannerSession() && !["vacation", "time_off"].includes(selectedType)) {
+    showToast("Dieser Zugang darf ausschließlich bereits genehmigten Urlaub oder vereinbarten Zeitausgleich eintragen.", true);
+    return;
+  }
   const body = {
     employeeNumber: document.querySelector("#optionEmployee").value,
     weekStart: state.weekStart,
     dateFrom: document.querySelector("#optionDateFrom").value,
     dateTo: document.querySelector("#optionDateTo").value,
-    optionType: document.querySelector("#optionType").value,
+    optionType: selectedType,
     allDay: document.querySelector("#optionAllDay").checked,
     startTime: document.querySelector("#optionStartTime").value,
     endTime: document.querySelector("#optionEndTime").value,
