@@ -8,7 +8,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 
 test("v0.86: Paket, Launcher, UI und aktuelle Dokumentation bleiben konsistent", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.86.2-beta");
+  assert.equal(packageJson.version, "0.86.3-beta");
   assert.equal(packageJson.dependencies.sharp, "0.35.3");
   assert.match(read("pnpm-workspace.yaml"), /brace-expansion:\s*5\.0\.8/);
   assert.match(read("pnpm-workspace.yaml"), /brace-expansion@5\.0\.8:\s*lib\/vendor-patches\/brace-expansion@5\.0\.8\.patch/);
