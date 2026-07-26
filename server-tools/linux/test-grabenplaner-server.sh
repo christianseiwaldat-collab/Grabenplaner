@@ -80,6 +80,20 @@ caddyfile="$(gp_existing_file "$caddyfile" "Caddyfile")"
 failures=0
 check_ok() { printf 'OK\t%s\t%s\n' "$1" "$2"; }
 check_fail() { printf 'FEHLER\t%s\t%s\n' "$1" "$2"; failures=$((failures + 1)); }
+csp_has_exact_directive() {
+  local policy="$1"
+  local required="$2"
+  local directive
+  local IFS=';'
+  local -a directives=()
+  read -r -a directives <<< "$policy"
+  for directive in "${directives[@]}"; do
+    directive="${directive#"${directive%%[![:space:]]*}"}"
+    directive="${directive%"${directive##*[![:space:]]}"}"
+    [[ "$directive" == "$required" ]] && return 0
+  done
+  return 1
+}
 
 for unit in "$service" "$caddy_service" "$monitor_timer"; do
   if gp_systemd_unit_exists "$unit" && systemctl is-active --quiet "$unit"; then
@@ -110,15 +124,34 @@ cleanup() { rm -f -- "$headers_file" "$scanner_probe"; }
 trap cleanup EXIT
 
 if curl --fail --silent --show-error --max-time 15 --dump-header "$headers_file" --output /dev/null -- "$public_ready_url"; then
-  if grep -Eqi '^Strict-Transport-Security:[[:space:]]*.*max-age=' "$headers_file"; then check_ok "HSTS" "gesetzt"; else check_fail "HSTS" "Header fehlt"; fi
-  if grep -Eqi '^Content-Security-Policy:' "$headers_file"; then check_ok "Content-Security-Policy" "gesetzt"; else check_fail "Content-Security-Policy" "Header fehlt"; fi
-  if grep -Eqi '^X-Content-Type-Options:[[:space:]]*nosniff' "$headers_file"; then check_ok "X-Content-Type-Options" "nosniff"; else check_fail "X-Content-Type-Options" "Header fehlt oder ist falsch"; fi
-  if grep -Eqi '^Referrer-Policy:' "$headers_file"; then check_ok "Referrer-Policy" "gesetzt"; else check_fail "Referrer-Policy" "Header fehlt"; fi
+  if grep -Eqi '^Strict-Transport-Security:[[:space:]]*max-age=31536000;[[:space:]]*includeSubDomains[[:space:]]*$' "$headers_file"; then check_ok "HSTS" "max-age=31536000; includeSubDomains"; else check_fail "HSTS" "Header fehlt oder ist falsch"; fi
+  csp_header="$(grep -Eim1 '^Content-Security-Policy:' "$headers_file" || true)"
+  csp_value="${csp_header#*:}"
+  if csp_has_exact_directive "$csp_value" "object-src 'none'" \
+    && csp_has_exact_directive "$csp_value" "base-uri 'self'" \
+    && csp_has_exact_directive "$csp_value" "form-action 'self'" \
+    && csp_has_exact_directive "$csp_value" "frame-ancestors 'none'"; then
+    check_ok "Content-Security-Policy" "kritische Direktiven gesetzt"
+  else
+    check_fail "Content-Security-Policy" "Header fehlt oder kritische Direktiven sind unvollstaendig"
+  fi
+  if grep -Eqi '^X-Content-Type-Options:[[:space:]]*nosniff[[:space:]]*$' "$headers_file"; then check_ok "X-Content-Type-Options" "nosniff"; else check_fail "X-Content-Type-Options" "Header fehlt oder ist falsch"; fi
+  if grep -Eqi '^X-Frame-Options:[[:space:]]*DENY[[:space:]]*$' "$headers_file"; then check_ok "X-Frame-Options" "DENY"; else check_fail "X-Frame-Options" "Header fehlt oder ist falsch"; fi
+  if grep -Eqi '^Referrer-Policy:[[:space:]]*no-referrer[[:space:]]*$' "$headers_file"; then check_ok "Referrer-Policy" "no-referrer"; else check_fail "Referrer-Policy" "Header fehlt oder ist falsch"; fi
+  if grep -Eqi '^Permissions-Policy:[[:space:]]*camera=\(\),[[:space:]]*microphone=\(\),[[:space:]]*geolocation=\(\)[[:space:]]*$' "$headers_file"; then check_ok "Permissions-Policy" "camera=(), microphone=(), geolocation=()"; else check_fail "Permissions-Policy" "Header fehlt oder ist falsch"; fi
+  if grep -Eqi '^Cross-Origin-Opener-Policy:[[:space:]]*same-origin[[:space:]]*$' "$headers_file"; then check_ok "Cross-Origin-Opener-Policy" "same-origin"; else check_fail "Cross-Origin-Opener-Policy" "Header fehlt oder ist falsch"; fi
+  if grep -Eqi '^Cross-Origin-Resource-Policy:[[:space:]]*same-origin[[:space:]]*$' "$headers_file"; then check_ok "Cross-Origin-Resource-Policy" "same-origin"; else check_fail "Cross-Origin-Resource-Policy" "Header fehlt oder ist falsch"; fi
+  if grep -Eqi '^X-Permitted-Cross-Domain-Policies:[[:space:]]*none[[:space:]]*$' "$headers_file"; then check_ok "X-Permitted-Cross-Domain-Policies" "none"; else check_fail "X-Permitted-Cross-Domain-Policies" "Header fehlt oder ist falsch"; fi
 else
   check_fail "HSTS" "Antwort konnte nicht gelesen werden"
   check_fail "Content-Security-Policy" "Antwort konnte nicht gelesen werden"
   check_fail "X-Content-Type-Options" "Antwort konnte nicht gelesen werden"
+  check_fail "X-Frame-Options" "Antwort konnte nicht gelesen werden"
   check_fail "Referrer-Policy" "Antwort konnte nicht gelesen werden"
+  check_fail "Permissions-Policy" "Antwort konnte nicht gelesen werden"
+  check_fail "Cross-Origin-Opener-Policy" "Antwort konnte nicht gelesen werden"
+  check_fail "Cross-Origin-Resource-Policy" "Antwort konnte nicht gelesen werden"
+  check_fail "X-Permitted-Cross-Domain-Policies" "Antwort konnte nicht gelesen werden"
 fi
 
 readarray -t public_endpoint < <("$node" - "$public_url" <<'NODE'

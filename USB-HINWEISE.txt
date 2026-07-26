@@ -117,12 +117,13 @@ Recovery Assurance seit v0.78 Beta:
   - Das System-Center zeigt Automatik, begrenzte technische Langzeittrends und
     den redigierten Eskalationsstatus. Fehlgeschlagene oder ueberfaellige
     Nachweise erzeugen deduplizierte interne IT-Warnungen.
-  - Bestehende Offsite-Modulversion 3 wird nicht still durch das Kernupdate
-    veraendert. Die IT installiert Modulversion 4 im beaufsichtigten
+  - Bestehende Offsite-Modulversionen 1 bis 4 werden nicht still durch das
+    Kernupdate veraendert. Die IT installiert Modulversion 5 im beaufsichtigten
     Wartungsfenster mit den geschuetzten vorhandenen Daten direkt darueber und
     ohne Deinstallation oder erneute Repository-Initialisierung. Erst nach
     erfolgreichem Selbsttest und Assurance-Lauf samt App-Smoke folgt das
-    Kernupdate.
+    Kernupdate. Modulversion 5 ergaenzt den begrenzten Wartungslock-Wartepfad
+    fuer die naechtliche Sicherung.
   - Zusaetzlich bleiben alle Verbesserungen aus v0.75.7 Beta enthalten.
 
 Version v0.75.7 Beta:

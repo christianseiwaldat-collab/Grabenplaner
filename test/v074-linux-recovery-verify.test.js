@@ -15,6 +15,7 @@ const backupVerifier = path.join(root, "server-tools/linux/lib/verify-backup.js"
 const integrationModule = path.join(root, "lib/integration-secret-vault.js");
 const databaseLockModule = path.join(root, "lib/database-lock.js");
 const { createAmuStorage, syncEncryptedFilesBackup } = require(amuModule);
+const { verifyBackup } = require("../server-tools/linux/lib/verify-backup.js");
 const { verifyRecovery } = require("../server-tools/linux/recovery/lib/recovery-verify.js");
 const { applyRecovery } = require("../server-tools/linux/recovery/lib/recovery-apply.js");
 const { __internalTestOnly } = require("../server-tools/linux/recovery/lib/recovery-metadata.js");
@@ -119,6 +120,62 @@ test("v0.74 performs full frozen-stage, SQLite, document, key and compatibility 
     assert.equal(JSON.parse(fs.readFileSync(output, "utf8")).ok, true);
   } finally {
     if (stage) thawTree(stage);
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
+test("Linux recovery verification rejects missing loan documents and photos", () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-loan-backup-verify-"));
+  const liveAmu = path.join(temporary, "source-amu");
+  const databasePath = path.join(temporary, "snapshot.db");
+  try {
+    createAmuStorage({
+      rootDirectory: liveAmu,
+      encryptionKeys: { primary: crypto.randomBytes(32) },
+      activeKeyId: "primary",
+    });
+    const database = new DatabaseSync(databasePath);
+    database.exec(`
+      CREATE TABLE loan_documents (id TEXT PRIMARY KEY, storage_key TEXT NOT NULL);
+      CREATE TABLE loan_photos (id TEXT PRIMARY KEY, storage_key TEXT NOT NULL);
+      INSERT INTO loan_documents (id, storage_key)
+      VALUES ('missing-document', 'aa/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.amu');
+    `);
+    database.close();
+
+    const documentBackup = path.join(temporary, "document.amu");
+    syncEncryptedFilesBackup({
+      sourceDirectory: liveAmu,
+      targetDirectory: documentBackup,
+      manifestMetadata: {
+        database: { fileName: path.basename(databasePath), sha256: sha256(databasePath) },
+      },
+    });
+    assert.throws(
+      () => verifyBackup(databasePath, documentBackup, amuModule),
+      (error) => error?.code === "AMU_BACKUP_REFERENCE_MISSING",
+    );
+
+    const photoDatabase = new DatabaseSync(databasePath);
+    photoDatabase.exec(`
+      DELETE FROM loan_documents;
+      INSERT INTO loan_photos (id, storage_key)
+      VALUES ('missing-photo', 'bb/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.amu');
+    `);
+    photoDatabase.close();
+    const photoBackup = path.join(temporary, "photo.amu");
+    syncEncryptedFilesBackup({
+      sourceDirectory: liveAmu,
+      targetDirectory: photoBackup,
+      manifestMetadata: {
+        database: { fileName: path.basename(databasePath), sha256: sha256(databasePath) },
+      },
+    });
+    assert.throws(
+      () => verifyBackup(databasePath, photoBackup, amuModule),
+      (error) => error?.code === "AMU_BACKUP_REFERENCE_MISSING",
+    );
+  } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
   }
 });

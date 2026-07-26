@@ -12,11 +12,15 @@ function sha256File(filePath) {
 function requiredProtectedStorageKeys(database) {
   const hasTable = (name) => Boolean(database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
   const keys = [];
-  if (hasTable("amu_documents")) {
-    keys.push(...database.prepare("SELECT storage_key FROM amu_documents WHERE status = 'active'").all().map((row) => row.storage_key));
-  }
-  if (hasTable("personnel_record_documents")) {
-    keys.push(...database.prepare("SELECT storage_key FROM personnel_record_documents WHERE status = 'active'").all().map((row) => row.storage_key));
+  for (const reference of [
+    { table: "amu_documents", where: "WHERE status = 'active'" },
+    { table: "personnel_record_documents", where: "WHERE status = 'active'" },
+    { table: "loan_documents", where: "" },
+    { table: "loan_photos", where: "" },
+  ]) {
+    if (!hasTable(reference.table)) continue;
+    keys.push(...database.prepare(`SELECT storage_key FROM ${reference.table} ${reference.where}`).all()
+      .map((row) => row.storage_key));
   }
   return keys;
 }

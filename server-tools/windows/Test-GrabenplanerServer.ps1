@@ -27,6 +27,15 @@ function Add-Check([string]$Name, [bool]$Ok, [string]$Detail) {
     $results.Add([pscustomobject]@{ Check = $Name; Ok = $Ok; Detail = $Detail })
 }
 
+function Test-ExactCspDirectives([string]$Policy) {
+    if ([string]::IsNullOrWhiteSpace($Policy)) { return $false }
+    $directives = @($Policy -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    foreach ($required in @("object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'")) {
+        if ($directives -notcontains $required) { return $false }
+    }
+    return $true
+}
+
 foreach ($serviceName in @($AppServiceName, $ProxyServiceName)) {
     try {
         $service = Get-Service -Name $serviceName -ErrorAction Stop
@@ -52,13 +61,29 @@ $publicHealthUrl = "{0}/api/health/ready" -f $PublicUrl.TrimEnd('/')
 try {
     $response = Invoke-WebRequest -Uri $publicHealthUrl -TimeoutSec 15 -UseBasicParsing
     $hsts = [string]$response.Headers['Strict-Transport-Security']
+    $contentSecurityPolicy = [string]$response.Headers['Content-Security-Policy']
+    $contentSecurityPolicyComplete = Test-ExactCspDirectives $contentSecurityPolicy
     Add-Check 'Oeffentlicher HTTPS-Healthcheck' ($response.StatusCode -eq 200) "HTTP $($response.StatusCode)"
-    Add-Check 'HSTS' ($hsts -match 'max-age=') $(if ($hsts) { $hsts } else { 'Header fehlt.' })
-    Add-Check 'Content-Security-Policy' ([bool]$response.Headers['Content-Security-Policy']) $(if ($response.Headers['Content-Security-Policy']) { 'gesetzt' } else { 'Header fehlt.' })
+    Add-Check 'HSTS' ($hsts -eq 'max-age=31536000; includeSubDomains') $(if ($hsts) { $hsts } else { 'Header fehlt.' })
+    Add-Check 'Content-Security-Policy' $contentSecurityPolicyComplete $(if ($contentSecurityPolicy) { $contentSecurityPolicy } else { 'Header fehlt.' })
     Add-Check 'X-Content-Type-Options' ([string]$response.Headers['X-Content-Type-Options'] -eq 'nosniff') $(if ($response.Headers['X-Content-Type-Options']) { [string]$response.Headers['X-Content-Type-Options'] } else { 'Header fehlt.' })
-    Add-Check 'Referrer-Policy' ([bool]$response.Headers['Referrer-Policy']) $(if ($response.Headers['Referrer-Policy']) { [string]$response.Headers['Referrer-Policy'] } else { 'Header fehlt.' })
+    Add-Check 'X-Frame-Options' ([string]$response.Headers['X-Frame-Options'] -eq 'DENY') $(if ($response.Headers['X-Frame-Options']) { [string]$response.Headers['X-Frame-Options'] } else { 'Header fehlt.' })
+    Add-Check 'Referrer-Policy' ([string]$response.Headers['Referrer-Policy'] -eq 'no-referrer') $(if ($response.Headers['Referrer-Policy']) { [string]$response.Headers['Referrer-Policy'] } else { 'Header fehlt.' })
+    Add-Check 'Permissions-Policy' ([string]$response.Headers['Permissions-Policy'] -eq 'camera=(), microphone=(), geolocation=()') $(if ($response.Headers['Permissions-Policy']) { [string]$response.Headers['Permissions-Policy'] } else { 'Header fehlt.' })
+    Add-Check 'Cross-Origin-Opener-Policy' ([string]$response.Headers['Cross-Origin-Opener-Policy'] -eq 'same-origin') $(if ($response.Headers['Cross-Origin-Opener-Policy']) { [string]$response.Headers['Cross-Origin-Opener-Policy'] } else { 'Header fehlt.' })
+    Add-Check 'Cross-Origin-Resource-Policy' ([string]$response.Headers['Cross-Origin-Resource-Policy'] -eq 'same-origin') $(if ($response.Headers['Cross-Origin-Resource-Policy']) { [string]$response.Headers['Cross-Origin-Resource-Policy'] } else { 'Header fehlt.' })
+    Add-Check 'X-Permitted-Cross-Domain-Policies' ([string]$response.Headers['X-Permitted-Cross-Domain-Policies'] -eq 'none') $(if ($response.Headers['X-Permitted-Cross-Domain-Policies']) { [string]$response.Headers['X-Permitted-Cross-Domain-Policies'] } else { 'Header fehlt.' })
 } catch {
     Add-Check 'Oeffentlicher HTTPS-Healthcheck' $false $_.Exception.Message
+    Add-Check 'HSTS' $false 'Antwort konnte nicht gelesen werden'
+    Add-Check 'Content-Security-Policy' $false 'Antwort konnte nicht gelesen werden'
+    Add-Check 'X-Content-Type-Options' $false 'Antwort konnte nicht gelesen werden'
+    Add-Check 'X-Frame-Options' $false 'Antwort konnte nicht gelesen werden'
+    Add-Check 'Referrer-Policy' $false 'Antwort konnte nicht gelesen werden'
+    Add-Check 'Permissions-Policy' $false 'Antwort konnte nicht gelesen werden'
+    Add-Check 'Cross-Origin-Opener-Policy' $false 'Antwort konnte nicht gelesen werden'
+    Add-Check 'Cross-Origin-Resource-Policy' $false 'Antwort konnte nicht gelesen werden'
+    Add-Check 'X-Permitted-Cross-Domain-Policies' $false 'Antwort konnte nicht gelesen werden'
 }
 
 try {
@@ -129,12 +154,38 @@ try {
     $amuModule = Join-Path ([System.IO.Path]::GetFullPath($AppDirectory)) 'lib\amu-storage.js'
     if (-not (Test-Path -LiteralPath $amuModule -PathType Leaf)) { throw "AUM-Pruefmodul fehlt: $amuModule" }
     $amuCheckScript = @'
-const [modulePath, backupDirectory] = process.argv.slice(2);
-const { readAndVerifyBackup } = require(modulePath);
+const { DatabaseSync } = require('node:sqlite');
+const [modulePath, backupDirectory, databasePath] = process.argv.slice(2);
+const { readAndVerifyBackup, verifyBackupReferences } = require(modulePath);
+const database = new DatabaseSync(databasePath, { readOnly: true });
+const requiredStorageKeys = [];
+try {
+  const hasTable = (name) => Boolean(database.prepare(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+  ).get(name));
+  for (const reference of [
+    { table: 'amu_documents', where: "WHERE status = 'active'" },
+    { table: 'personnel_record_documents', where: "WHERE status = 'active'" },
+    { table: 'loan_documents', where: '' },
+    { table: 'loan_photos', where: '' },
+  ]) {
+    if (!hasTable(reference.table)) continue;
+    requiredStorageKeys.push(...database.prepare(
+      `SELECT storage_key FROM ${reference.table} ${reference.where}`,
+    ).all().map((row) => row.storage_key));
+  }
+} finally {
+  database.close();
+}
 const result = readAndVerifyBackup(backupDirectory);
-process.stdout.write(JSON.stringify({ ok: true, fileCount: result.verified.length }));
+verifyBackupReferences({ backupDirectory, requiredStorageKeys });
+process.stdout.write(JSON.stringify({
+  ok: true,
+  fileCount: result.verified.length,
+  requiredStorageKeys: requiredStorageKeys.length,
+}));
 '@
-    $amuCheckOutput = $amuCheckScript | & $NodeExecutable - $amuModule $amuBackupDirectory
+    $amuCheckOutput = $amuCheckScript | & $NodeExecutable - $amuModule $amuBackupDirectory $latestBackup.FullName
     if ($LASTEXITCODE -ne 0) { throw 'AUM-Manifest- oder Blob-Integritaetspruefung fehlgeschlagen.' }
     $amuCheck = $amuCheckOutput | Select-Object -Last 1 | ConvertFrom-Json
     Add-Check 'Backup AUM-Blob-Integritaet' ([bool]$amuCheck.ok) ("{0} verschluesselte Dateien verifiziert" -f [int]$amuCheck.fileCount)

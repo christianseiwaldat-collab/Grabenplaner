@@ -320,7 +320,7 @@ test.before(async () => {
   hrNoAuditSession = createSession(HR_NO_AUDIT, "hr");
   managerSession = createSession(MANAGER, "manager");
   departmentManagerSession = createSession(DEPARTMENT_MANAGER, "department_manager");
-  reviewManagerSession = createSession(REVIEW_MANAGER, "manager");
+  reviewManagerSession = createSession(REVIEW_MANAGER, "department_manager");
   employeeSession = createSession(EMPLOYEE, "employee");
   db.prepare(`
     INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
@@ -332,8 +332,8 @@ test.before(async () => {
   `).run(DEPARTMENT_MANAGER, localLocationId, localDepartmentId);
   db.prepare(`
     INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
-    VALUES (?, ?, 0, 'block7-test')
-  `).run(REVIEW_MANAGER, localLocationId);
+    VALUES (?, ?, ?, 'block7-test')
+  `).run(REVIEW_MANAGER, localLocationId, localDepartmentId);
   db.prepare(`
     INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
     VALUES (?, 'work_rules:review', ?)
@@ -684,6 +684,127 @@ test("Block 7/7: employee access is denied and sensitive governance or audit dat
     "B7-SIBLING",
   ]);
   assert.equal(JSON.stringify(registry.payload).includes("kv-secret-foreign-only-marker"), true);
+});
+
+test("Block 7/7: delegated reviewers see only drafts and catalogs from their assigned scope", async () => {
+  const localDraft = await request("/api/work-rules/drafts", {
+    session: hrSession,
+    method: "POST",
+    body: {
+      ...scopedHistoryRulePayload(
+        "VISIBLE-LOCAL-DRAFT",
+        "2031-01-01",
+        "2031-12-31",
+      ),
+      code: "BLOCK7-VISIBLE-LOCAL-DRAFT",
+    },
+  });
+  assert.equal(localDraft.response.status, 201, JSON.stringify(localDraft.payload));
+  const foreignDraft = await request("/api/work-rules/drafts", {
+    session: hrSession,
+    method: "POST",
+    body: {
+      ...scopedHistoryRulePayload(
+        "FOREIGN-SCOPE-SECRET-DRAFT",
+        "2031-01-01",
+        "2031-12-31",
+      ),
+      code: "BLOCK7-FOREIGN-DRAFT",
+      scopeType: "department",
+      scopeKey: String(foreignDepartmentId),
+    },
+  });
+  assert.equal(foreignDraft.response.status, 201, JSON.stringify(foreignDraft.payload));
+
+  const registry = await request("/api/work-rules/drafts", {
+    session: reviewManagerSession,
+  });
+  assert.equal(registry.response.status, 200, JSON.stringify(registry.payload));
+  const titles = registry.payload.drafts.map((draft) => draft.title);
+  assert.ok(titles.includes("VISIBLE-LOCAL-DRAFT"), JSON.stringify(titles));
+  assert.equal(titles.includes("FOREIGN-SCOPE-SECRET-DRAFT"), false);
+  assert.equal(JSON.stringify(registry.payload).includes("FOREIGN-SCOPE-SECRET-DRAFT"), false);
+  assert.equal(registry.payload.summary.drafts, registry.payload.drafts.length);
+  assert.deepEqual(
+    registry.payload.organizationalScopes.locations.map((location) => location.id),
+    [localLocationId],
+  );
+  assert.deepEqual(
+    registry.payload.organizationalScopes.locations[0].departments.map((department) => department.id),
+    [String(localDepartmentId)],
+  );
+  assert.equal(
+    registry.payload.organizationalScopes.businessUnits.some((unit) => unit.code === "BU-B7-FOREIGN"),
+    false,
+  );
+});
+
+test("Block 7/7: a scoped reviewer sees only current Scope-B metadata after a foreign Scope-A release", async () => {
+  const hiddenScopeATitle = "FOREIGN-SCOPE-A-TITLE-SECRET";
+  const hiddenScopeADescription = "Foreign Scope A description must never leave its organizational scope.";
+  const visibleScopeBTitle = "VISIBLE-SCOPE-B-TITLE";
+  const visibleScopeBDescription = "Visible Scope B description for the delegated local reviewer.";
+  const scopeAActor = "foreign-scope-a-actor-secret";
+  const scopeAPublisher = "foreign-scope-a-publisher-secret";
+
+  const scopeADraft = createCustomWorkRuleDraft(
+    db,
+    {
+      ...scopedHistoryRulePayload(hiddenScopeATitle, "2033-01-01", "2033-12-31"),
+      code: "BLOCK7-SCOPE-METADATA-ISOLATION",
+      description: hiddenScopeADescription,
+      scopeType: "department",
+      scopeKey: String(foreignDepartmentId),
+    },
+    scopeAActor,
+  );
+  const scopeARelease = publishCustomWorkRuleDraft(
+    db,
+    scopeADraft.currentVersionId,
+    scopeAPublisher,
+  );
+  const scopeBRevision = addCustomWorkRuleDraftRevision(
+    db,
+    scopeARelease.profileId,
+    {
+      ...scopedHistoryRulePayload(visibleScopeBTitle, "2034-01-01", "2034-12-31"),
+      code: "BLOCK7-SCOPE-METADATA-ISOLATION",
+      description: visibleScopeBDescription,
+      scopeType: "department",
+      scopeKey: String(localDepartmentId),
+    },
+    "visible-scope-b-actor-secret",
+  );
+
+  const registry = await request("/api/work-rules/drafts", {
+    session: reviewManagerSession,
+  });
+  assert.equal(registry.response.status, 200, JSON.stringify(registry.payload));
+  const scopedDraft = registry.payload.drafts.find((draft) => draft.id === scopeARelease.profileId);
+  assert.ok(scopedDraft, JSON.stringify(registry.payload.drafts));
+  assert.equal(scopedDraft.title, visibleScopeBTitle);
+  assert.equal(scopedDraft.description, visibleScopeBDescription);
+  assert.equal(scopedDraft.currentVersionId, scopeBRevision.currentVersionId);
+  assert.equal(scopedDraft.currentVersion.id, scopeBRevision.currentVersionId);
+  assert.equal(scopedDraft.currentVersion.definition.scopeKey, String(localDepartmentId));
+  assert.deepEqual(
+    scopedDraft.versions.map((version) => version.id),
+    [scopeBRevision.currentVersionId],
+  );
+  assert.equal(scopedDraft.publishedVersion, null);
+  assert.equal(scopedDraft.effectiveVersionId, null);
+
+  const serialized = JSON.stringify(scopedDraft);
+  for (const secret of [
+    hiddenScopeATitle,
+    hiddenScopeADescription,
+    scopeAActor,
+    scopeAPublisher,
+    scopeARelease.releasedVersionId,
+  ]) {
+    assert.equal(serialized.includes(secret), false, secret);
+  }
+  assertNoGovernanceAuditFields(scopedDraft, "registry.scopeBScopedDraft");
 });
 
 test("Block 7/7: delegated scoped reviewers receive decisions without audit identities or receipts", async () => {
