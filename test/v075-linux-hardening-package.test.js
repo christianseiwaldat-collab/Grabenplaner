@@ -170,16 +170,12 @@ test("v0.75 hardening fingerprint uses the package builder's ordinal order", () 
   assert.doesNotMatch(contractSource, /localeCompare/);
   assert.match(contractSource, /ordinalCompare/);
   assert.match(builder, /\[Array\]::Sort\(\$sortedHardeningArtifacts, \[StringComparer\]::Ordinal\)/);
-  assert.match(builder, /StartsWith\('patches\/'\)/);
 });
 
 test("v0.75 package builder and both package verifiers require every hardening artifact", () => {
   const builder = read("server-tools/package/New-GrabenplanerLinuxServerPackage.ps1");
   const verifier = read("server-tools/linux/lib/verify-package.js");
   const installer = read("server-tools/linux/install-grabenplaner-server.sh");
-  assert.match(builder, /StartsWith\('patches\/'\)/);
-  assert.match(verifier, /startsWith\("patches\/"\)/);
-  assert.match(installer, /allowedRootDirectories = new Set\(\["lib", "patches", "public", "server-tools"\]\)/);
   for (const relative of schema.managedArtifacts) {
     const escaped = relative.replaceAll("/", "[\\\\/]").replaceAll(".", "\\.");
     assert.match(builder, new RegExp(escaped), `Builder fordert ${relative} nicht an.`);

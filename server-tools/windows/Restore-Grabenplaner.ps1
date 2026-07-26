@@ -186,7 +186,21 @@ $amuRestored = $false
 $amuSafetyBackup = Join-Path $targetDirectory ".amu-pre-restore-$timestamp"
 $amuTarget = [System.IO.Path]::GetFullPath($AmuDirectory)
 $amuTargetKeyCheck = Join-Path $amuTarget 'key-check.amu'
+$amuTargetExists = Test-Path -LiteralPath $amuTarget
+if ($amuTargetExists) {
+    $amuTargetEntry = Get-Item -LiteralPath $amuTarget -Force
+    if (-not $amuTargetEntry.PSIsContainer -or
+        ($amuTargetEntry.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'Das AMU-Ziel muss ein regulaeres lokales Verzeichnis ohne Reparse-Point sein.'
+    }
+}
 $hadAmu = Test-Path -LiteralPath $amuTargetKeyCheck -PathType Leaf
+if ($hadAmu) {
+    $amuKeyEntry = Get-Item -LiteralPath $amuTargetKeyCheck -Force
+    if ($amuKeyEntry.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw 'Die AMU-Schluesselpruefdatei darf kein Reparse-Point sein.'
+    }
+}
 if ((Test-Path -LiteralPath $amuTarget -PathType Container) -and -not $hadAmu) {
     $allowedEmptySkeletonDirectories = @('blobs', 'tmp')
     $unexpectedAmuEntry = Get-ChildItem -LiteralPath $amuTarget -Force | Where-Object {

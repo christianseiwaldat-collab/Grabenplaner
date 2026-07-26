@@ -92,7 +92,6 @@ test("v0.61 server tools: update is checksum-bound, staged, backed up, health-ch
   assert.match(packageBuilder, /git -C \$sourceRoot ls-files/);
   assert.match(packageBuilder, /sauberen Git-Arbeitsbaum/);
   assert.match(packageBuilder, /node-linker=hoisted/);
-  assert.match(packageBuilder, /StartsWith\('patches\/'\)/);
   assert.match(packageBuilder, /Reparse-Point/);
   assert.match(packageBuilder, /require\.resolve\('express'/);
   assert.match(packageBuilder, /Server-ZIP-Roundtrip/);

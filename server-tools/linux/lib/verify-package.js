@@ -102,7 +102,6 @@ function isAllowedRuntimePath(relative) {
   ]);
   return topLevelFiles.has(relative)
     || relative.startsWith("lib/")
-    || relative.startsWith("patches/")
     || relative.startsWith("public/")
     || relative.startsWith("server-tools/");
 }

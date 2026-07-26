@@ -166,6 +166,19 @@ test("Windows restore accepts only an empty installer-created AMU skeleton", {
       /AMU-Ziel ist nicht initialisiert und nicht leer/i,
     );
     assert.equal(fs.readFileSync(sentinel, "utf8"), "must-not-be-overwritten");
+
+    const fileTarget = path.join(root, "private", "amu-file-target");
+    fs.writeFileSync(fileTarget, "existing-file-must-survive", "utf8");
+    const regularFileTarget = spawnSync(powershell, [
+      "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+      "-File", harness, "-AmuDirectory", fileTarget,
+    ], { encoding: "utf8" });
+    assert.notEqual(regularFileTarget.status, 0, regularFileTarget.stdout);
+    assert.match(
+      `${regularFileTarget.stderr}\n${regularFileTarget.stdout}`,
+      /AMU-Ziel muss ein regulaeres lokales Verzeichnis ohne Reparse-Point sein/i,
+    );
+    assert.equal(fs.readFileSync(fileTarget, "utf8"), "existing-file-must-survive");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
