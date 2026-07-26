@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const HASH = /^[a-f0-9]{64}$/;
 const PREFIX = "server-tools/linux/offsite/";
 const INSTALLER = "install-grabenplaner-offsite.sh";
-const SUPPORTED_MODULE_VERSIONS = new Set([1, 2, 3, 4]);
+const SUPPORTED_MODULE_VERSIONS = new Set([1, 2, 3, 4, 5]);
 const LEGACY_V1_ARTIFACTS = Object.freeze([
   "grabenplaner-offsite-check.sh",
   "grabenplaner-offsite-pre-update.sh",
@@ -78,11 +78,13 @@ const MODULE_V4_ARTIFACTS = Object.freeze([
   "systemd/grabenplaner-offsite-application-smoke.service.in",
   "systemd/grabenplaner-offsite-assurance.timer.in",
 ]);
+const MODULE_V5_ARTIFACTS = Object.freeze([...MODULE_V4_ARTIFACTS]);
 const VERSION_ARTIFACTS = new Map([
   [1, new Set(LEGACY_V1_ARTIFACTS)],
   [2, new Set(LEGACY_V2_ARTIFACTS)],
   [3, new Set(LEGACY_V3_ARTIFACTS)],
   [4, new Set(MODULE_V4_ARTIFACTS)],
+  [5, new Set(MODULE_V5_ARTIFACTS)],
 ]);
 
 function safeRelative(value) {
