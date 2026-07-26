@@ -43,9 +43,7 @@ function Test-ExcludedRelativePath([string]$RelativePath) {
 function Test-AllowedTrackedRuntimePath([string]$RelativePath) {
     $normalized = $RelativePath.Replace('\', '/')
     if ($normalized -in @('server.js', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'README.md', 'LICENSE.md', 'SECURITY.md', 'SERVERBETRIEB.md')) { return $true }
-    return $normalized.StartsWith('lib/') -or
-        $normalized.StartsWith('public/') -or
-        $normalized.StartsWith('server-tools/')
+    return $normalized.StartsWith('lib/') -or $normalized.StartsWith('public/') -or $normalized.StartsWith('server-tools/')
 }
 
 function Copy-TreeFiles([string]$Source, [string]$Target, [scriptblock]$Include) {
