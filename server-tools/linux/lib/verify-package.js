@@ -10,7 +10,6 @@ const manifestPath = path.join(root, "grabenplaner-server-manifest.json");
 const runtimeSchemaPath = path.join(root, "server-tools", "linux", "runtime-schema.json");
 const offsiteSchemaPath = path.join(root, "server-tools", "linux", "offsite", "module-schema.json");
 const hardeningSchemaPath = path.join(root, "server-tools", "linux", "hardening", "module-schema.json");
-
 const expectedOffsiteArtifacts = [
   "server-tools/linux/offsite/grabenplaner-offsite-application-smoke.sh",
   "server-tools/linux/offsite/grabenplaner-offsite-assurance.sh",

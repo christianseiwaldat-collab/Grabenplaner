@@ -11,7 +11,13 @@
 - Veröffentlichungen, Zuordnungsrevisionen, KV-Entscheidungen und Governance-Ereignisse bleiben append-only und über SHA-256-Belege nachvollziehbar. Rücknahme und Wiederherstellung überschreiben keine historischen Fassungen.
 - Filial- und Abteilungsleitungen erhalten im Dashboard und KV-Register eine bereichsbezogene Lesesicht. Fremde oder globale Personalzuordnungen sowie fachliche Verwaltungs- und Freigabefunktionen bleiben ausgeblendet.
 - Die Funktionen sind technische Governance- und Planungshilfen. Sie ersetzen weder die fachliche Pflege aktueller Quellen noch die rechtliche Prüfung des konkreten Arbeitsverhältnisses, Kollektivvertrags oder einer betrieblichen Ausnahme.
-- Zusätzlich bleiben alle Verbesserungen aus v0.85.3 Beta enthalten.
+- Zusätzlich bleiben alle Verbesserungen aus v0.85.4 Beta einschließlich der technischen Offsite-Migrationsbrücke enthalten.
+
+## v0.85.4 Beta · Technische Offsite-Migrationsbrücke
+
+- Der installierte Linux-Paketprüfer erkennt weiterhin den unveränderten Offsite-Modulvertrag v4 und zusätzlich den freigegebenen Kandidatvertrag v5 mit demselben exakt geprüften Artefaktpfad-Satz.
+- Die Kompatibilitätsprüfung weist einen Wechsel von v4 auf v5 weiterhin ausdrücklich als erforderliche Offsite-Migration aus. Das normale App-Update umgeht oder startet diese Migration nicht.
+- Das ausgelieferte Offsite-Modul bleibt in dieser Brückenversion byte-identisch auf v4. Produktoberfläche, Launcher und sichtbare Produktbezeichnung bleiben unverändert v0.85 Beta.
 
 ## v0.85.3 Beta · Stabilität für Leihbelege und Leihfotos
 
