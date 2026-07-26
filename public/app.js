@@ -278,7 +278,7 @@ const elements = Object.fromEntries(
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
-    "personnelRulesScope", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
+    "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
     "rightsProcessCategory", "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
     "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "databaseBackupSettingsCard", "backupRestoreGuidanceCard",
@@ -4060,7 +4060,9 @@ function workRuleRequestState(request = {}) {
 }
 
 function workRuleRequestApprovalCount(request = {}) {
-  return workRuleRequestDecisions(request).filter((entry) => entry.decision === "approve").length;
+  const decisions = workRuleRequestDecisions(request);
+  if (decisions.length) return decisions.filter((entry) => entry.decision === "approve").length;
+  return Number(request.approvalCount || 0);
 }
 
 function workRuleConflict(value = {}) {
@@ -4392,10 +4394,11 @@ function renderCustomWorkRuleRequestCard(request, capabilities) {
     || "";
   const alreadyDecided = decisions.some((entry) => (
     (entry.actorEmployeeNumber || entry.employeeNumber) === currentActorNumber
-  ));
+  )) || request.currentActorDecisionRecorded === true;
   const canDecide = capabilities.canReview
     && workRuleRequestState(request) === "in_review"
     && request.submittedBy !== currentActorNumber
+    && request.submittedByCurrentActor !== true
     && !alreadyDecided;
   return `<article class="custom-work-rule-request-card ${escapeHtmlAttribute(workRuleRequestState(request))}">
     <div class="custom-work-rule-record-heading">
@@ -4405,7 +4408,9 @@ function renderCustomWorkRuleRequestCard(request, capabilities) {
     ${workRuleConflictMarkup(request, { compact: true })}
     <div class="custom-work-rule-decisions">${decisions.length ? decisions.map((decision) => `
       <div class="${escapeHtmlAttribute(decision.decision)}"><span>${decision.decision === "approve" ? "✓" : "!"}</span><div><strong>${decision.decision === "approve" ? "Freigegeben" : "Abgelehnt"} · ${escapeHtml(workRuleDecisionActor(decision))}</strong><small>${escapeHtml(decision.reason || "Keine Begründung übermittelt")} · ${escapeHtml(decision.decidedAt ? new Date(decision.decidedAt).toLocaleString("de-AT") : "")}</small></div></div>
-    `).join("") : '<p>Noch keine Entscheidung dokumentiert.</p>'}</div>
+    `).join("") : approvals || workRuleRequestState(request) === "rejected"
+      ? '<p>Entscheidungen sind dokumentiert; personenbezogene Entscheidungsdetails sind nur mit Auditrecht sichtbar.</p>'
+      : '<p>Noch keine Entscheidung dokumentiert.</p>'}</div>
     ${(canDecide || canFinalize) ? `<div class="custom-work-rule-record-actions">
       ${canDecide ? `<button class="secondary-button" type="button" data-work-rule-action="approve-request" data-request-id="${escapeHtmlAttribute(request.id)}">${approvals ? "Zweitfreigabe erteilen" : "Fachlich freigeben"}</button>
         <button class="danger-button" type="button" data-work-rule-action="reject-request" data-request-id="${escapeHtmlAttribute(request.id)}">Ablehnen</button>` : ""}
@@ -5438,14 +5443,18 @@ function renderCollectiveAgreementList(registry) {
     return;
   }
   elements.collectiveAgreementList.innerHTML = agreements.map((agreement) => {
-    const current = agreement.versions.find((version) => version.id === agreement.currentVersionId)
-      || agreement.versions[0];
+    const current = agreement.versions.find((version) => version.id === agreement.currentVersionId) || null;
+    const displayedVersion = current || agreement.versions[0] || null;
     const active = agreement.id === state.selectedCollectiveAgreementId;
     return `
       <button type="button" class="collective-agreement-list-item ${active ? "active" : ""}" data-collective-agreement-id="${escapeHtmlAttribute(agreement.id)}" ${active ? 'aria-current="true"' : ""}>
         <span class="collective-agreement-code">${escapeHtml(agreement.code)}</span>
         <strong>${escapeHtml(agreement.shortTitle || agreement.title)}</strong>
-        <small>${current ? `${escapeHtml(current.versionLabel)} · ${escapeHtml(collectiveAgreementValidity(current.validFrom, current.validTo))}` : "Noch keine Fassung"}</small>
+        <small>${current
+          ? `${escapeHtml(current.versionLabel)} · ${escapeHtml(collectiveAgreementValidity(current.validFrom, current.validTo))}`
+          : displayedVersion
+            ? `${escapeHtml(displayedVersion.versionLabel)} · zugeordnete historische Fassung`
+            : "Noch keine Fassung"}</small>
         <span class="status-badge warning">${escapeHtml(collectiveAgreementReviewLabel(agreement.reviewState))}</span>
       </button>`;
   }).join("");
@@ -5475,17 +5484,17 @@ function renderCollectiveAgreementDetail(registry) {
       <div class="collective-agreement-empty"><strong>Noch keine Fassung ausgewählt</strong><p>Wähle links einen Registereintrag.</p></div>`;
     return;
   }
-  const current = agreement.versions.find((version) => version.id === agreement.currentVersionId)
-    || agreement.versions[0];
-  if (!current) return;
-  const parties = current.contractingParties?.length
-    ? current.contractingParties.join(" · ")
+  const current = agreement.versions.find((version) => version.id === agreement.currentVersionId) || null;
+  const displayedVersion = current || agreement.versions[0] || null;
+  if (!displayedVersion) return;
+  const parties = displayedVersion.contractingParties?.length
+    ? displayedVersion.contractingParties.join(" · ")
     : "Noch nicht dokumentiert";
-  const sourceHash = current.source.sha256 || current.contentSha256;
+  const sourceHash = displayedVersion.source.sha256 || displayedVersion.contentSha256;
   const versionHistory = agreement.versions.map((version) => `
     <article class="${version.id === agreement.currentVersionId ? "current" : ""}">
       <div><strong>${escapeHtml(version.versionLabel)}</strong><small>${escapeHtml(collectiveAgreementValidity(version.validFrom, version.validTo))}</small></div>
-      <span>${version.id === agreement.currentVersionId ? "Aktueller Registerstand" : "Historische Fassung"}</span>
+      <span>${version.id === agreement.currentVersionId ? "Aktueller Registerstand" : current ? "Historische Fassung" : "Zugeordnete historische Fassung"}</span>
     </article>`).join("");
   elements.collectiveAgreementDetail.innerHTML = `
     <div class="collective-agreement-detail-heading">
@@ -5499,13 +5508,14 @@ function renderCollectiveAgreementDetail(registry) {
         ${registry.capabilities?.canManage ? `<button type="button" class="secondary-button" data-add-collective-agreement-version="${escapeHtmlAttribute(agreement.id)}">+ Neue Fassung</button>` : ""}
       </div>
     </div>
+    ${current ? "" : '<p class="settings-note collective-agreement-current-visibility">Der aktuelle Registerstand ist in dieser bereichsbezogenen Lesesicht nicht sichtbar. Angezeigt wird ausschließlich eine dem eigenen Bereich zugeordnete historische Fassung.</p>'}
     <div class="collective-agreement-source-card">
-      <div><span>Fassung</span><strong>${escapeHtml(current.versionLabel)}</strong><small>${escapeHtml(collectiveAgreementValidity(current.validFrom, current.validTo))}</small></div>
-      <div><span>Vertragsparteien</span><strong>${escapeHtml(parties)}</strong><small>${current.externalPublishedOn ? `extern veröffentlicht ${escapeHtml(formatDate(current.externalPublishedOn))}` : "Veröffentlichungsdatum offen"}</small></div>
-      <div class="source-wide"><span>Dokumentierte Quelle</span><strong><a href="${escapeHtmlAttribute(current.source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(current.source.title)}</a></strong><small>abgerufen ${escapeHtml(formatDate(current.source.retrievedOn))} · Integritätswert ${escapeHtml(sourceHash.slice(0, 16))}…</small></div>
+      <div><span>${current ? "Fassung" : "Sichtbare Fassung"}</span><strong>${escapeHtml(displayedVersion.versionLabel)}</strong><small>${escapeHtml(collectiveAgreementValidity(displayedVersion.validFrom, displayedVersion.validTo))}</small></div>
+      <div><span>Vertragsparteien</span><strong>${escapeHtml(parties)}</strong><small>${displayedVersion.externalPublishedOn ? `extern veröffentlicht ${escapeHtml(formatDate(displayedVersion.externalPublishedOn))}` : "Veröffentlichungsdatum offen"}</small></div>
+      <div class="source-wide"><span>Dokumentierte Quelle</span><strong><a href="${escapeHtmlAttribute(displayedVersion.source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(displayedVersion.source.title)}</a></strong><small>abgerufen ${escapeHtml(formatDate(displayedVersion.source.retrievedOn))} · Integritätswert ${escapeHtml(sourceHash.slice(0, 16))}…</small></div>
     </div>
-    <dl class="collective-agreement-applicability">${collectiveAgreementDefinitionList(current)}</dl>
-    ${current.linkedProfileVersionId ? `<p class="collective-agreement-profile-link">Vorbereitete Regelprofil-Verknüpfung: <strong>${escapeHtml(current.linkedProfileVersionId)}</strong>. Noch nicht aktiviert.</p>` : ""}
+    <dl class="collective-agreement-applicability">${collectiveAgreementDefinitionList(displayedVersion)}</dl>
+    ${displayedVersion.linkedProfileVersionId ? `<p class="collective-agreement-profile-link">Vorbereitete Regelprofil-Verknüpfung: <strong>${escapeHtml(displayedVersion.linkedProfileVersionId)}</strong>. Noch nicht aktiviert.</p>` : ""}
     <section class="collective-agreement-version-history">
       <div><span class="eyebrow">Nicht überschreibbar</span><h4>Versionshistorie</h4></div>
       ${versionHistory}
@@ -7806,18 +7816,46 @@ function populatePersonnelRulesFilters() {
   }
 }
 
+function personnelRulesAssignmentCounts() {
+  const counts = { current: 0, future: 0, inactive: 0, expired: 0 };
+  for (const assignment of state.personnelRulesDashboard?.assignments || []) {
+    const assignmentState = Object.prototype.hasOwnProperty.call(counts, assignment.state) ? assignment.state : "inactive";
+    counts[assignmentState] += 1;
+  }
+  return counts;
+}
+
 function renderPersonnelRulesSummary() {
   if (!elements.personnelRulesSummary) return;
   const summary = state.personnelRulesDashboard?.summary || {};
+  const assignmentCounts = personnelRulesAssignmentCounts();
   const cards = [
     ["Regelprofile", summary.profiles || 0, `${summary.publishedProfiles || 0} veröffentlicht · ${summary.draftProfiles || 0} Entwurf`],
     ["Prüfkatalog", summary.rules || 0, `${summary.sources || 0} belegte Quelle(n)`],
-    ["Wirksame Zuordnungen", summary.currentAssignments || 0, `${summary.visibleAssignments || 0} im Lesebereich sichtbar`],
-    ["Monitor / Aktiv", `${summary.monitorAssignments || 0} / ${summary.enforcedAssignments || 0}`, "Technische Reaktion, nicht fachliche Geltung"],
+    ["Aktuell wirksam", assignmentCounts.current, `${summary.monitorAssignments || 0} Monitor · ${summary.enforcedAssignments || 0} aktiv`],
+    ["Künftig", assignmentCounts.future, "Noch ohne Wirkung am heutigen Tag"],
+    ["Inaktiv / abgelaufen", assignmentCounts.inactive + assignmentCounts.expired, "Derzeit ohne Planwirkung"],
     ["Anwendbarkeit offen", summary.unconfirmedAssignments || 0, "Benötigt fachliche Bestätigung"],
   ];
   elements.personnelRulesSummary.innerHTML = cards.map(([label, value, hint]) => `
     <article class="rights-dashboard-stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong><small>${escapeHtml(hint)}</small></article>
+  `).join("");
+}
+
+function renderPersonnelRulesAssignmentLegend() {
+  if (!elements.personnelRulesAssignmentLegend) return;
+  const counts = personnelRulesAssignmentCounts();
+  const entries = [
+    ["current", "Aktuell wirksam", counts.current, "Der Gültigkeitszeitraum umfasst den heutigen Tag."],
+    ["future", "Künftig", counts.future, "Die Zuordnung beginnt erst zu einem späteren Datum."],
+    ["inactive", "Inaktiv oder abgelaufen", counts.inactive + counts.expired, "Die Zuordnung hat heute keine Planwirkung."],
+  ];
+  elements.personnelRulesAssignmentLegend.innerHTML = entries.map(([assignmentState, label, count, explanation]) => `
+    <article class="${escapeHtmlAttribute(assignmentState)}">
+      <span class="personnel-rules-assignment-state" aria-hidden="true"></span>
+      <div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(explanation)}</small></div>
+      <span class="personnel-rules-assignment-legend-count" aria-label="${escapeHtmlAttribute(`${count} Zuordnungen`)}">${escapeHtml(String(count))}</span>
+    </article>
   `).join("");
 }
 
@@ -7831,8 +7869,11 @@ function renderPersonnelRulesProfileList() {
   elements.personnelRulesProfileList.innerHTML = profiles.length ? profiles.map((profile) => {
     const selected = profile.id === state.personnelRulesSelectedProfileId;
     const mark = profile.automaticByBirthDate ? "U18" : profile.layer === "collective_agreement" ? "KV" : "R";
-    return `<button type="button" class="personnel-rules-profile ${profile.status === "draft" ? "draft" : ""} ${selected ? "selected" : ""}" data-personnel-rules-profile="${escapeHtmlAttribute(profile.id)}" aria-pressed="${selected}">
-      <span class="personnel-rules-profile-mark">${escapeHtml(mark)}</span>
+    const statusLabel = personnelRuleStatusLabels[profile.status] || profile.status || "Stand offen";
+    const versionLabel = profile.version ? `Version ${profile.version}` : "Fassung ohne Versionsangabe";
+    const accessibleName = `${profile.title}, ${profile.layerLabel || "Regelprofil"}, ${versionLabel}, ${statusLabel}, ${(profile.rules || []).length} Regeln auswählen`;
+    return `<button type="button" class="personnel-rules-profile ${profile.status === "draft" ? "draft" : ""} ${selected ? "selected" : ""}" data-personnel-rules-profile="${escapeHtmlAttribute(profile.id)}" aria-pressed="${selected}" aria-label="${escapeHtmlAttribute(accessibleName)}">
+      <span class="personnel-rules-profile-mark" aria-hidden="true">${escapeHtml(mark)}</span>
       <span class="personnel-rules-profile-copy"><strong>${escapeHtml(profile.title)}</strong><small>${escapeHtml(`${profile.layerLabel} · Version ${profile.version}`)}</small></span>
       <span class="personnel-rules-profile-count"><strong>${escapeHtml(String((profile.rules || []).length))}</strong><small>Regeln</small></span>
     </button>`;
@@ -7840,13 +7881,20 @@ function renderPersonnelRulesProfileList() {
 }
 
 function personnelRulesAssignmentMarkup(assignment) {
-  const status = personnelRuleAssignmentStateLabels[assignment.state] || "Stand offen";
+  const assignmentState = Object.prototype.hasOwnProperty.call(personnelRuleAssignmentStateLabels, assignment.state)
+    ? assignment.state
+    : "inactive";
+  const status = personnelRuleAssignmentStateLabels[assignmentState];
   const mode = assignment.enforcementMode === "enforced" ? "Aktiver Regelbetrieb" : "Monitorbetrieb";
   const confirmation = assignment.applicabilityConfirmed ? "Anwendbarkeit bestätigt" : "Anwendbarkeit offen";
-  return `<article class="personnel-rules-assignment ${escapeHtmlAttribute(assignment.state || "inactive")}">
-    <span class="personnel-rules-assignment-state"></span>
-    <div><strong>${escapeHtml(assignment.scopeLabel)}</strong><small>${escapeHtml(`${formatDate(assignment.validFrom)}${assignment.validTo ? ` – ${formatDate(assignment.validTo)}` : " – offen"} · ${mode}`)}</small></div>
-    <span class="personnel-rules-assignment-badge ${assignment.applicabilityConfirmed ? "confirmed" : "open"}">${escapeHtml(`${status} · ${confirmation}`)}</span>
+  const scopeLabel = assignment.scopeLabel || "Zugewiesener Bereich";
+  return `<article class="personnel-rules-assignment ${escapeHtmlAttribute(assignmentState)}" aria-label="${escapeHtmlAttribute(`${scopeLabel}: ${status}; ${confirmation}`)}">
+    <span class="personnel-rules-assignment-state" aria-hidden="true"></span>
+    <div><strong>${escapeHtml(scopeLabel)}</strong><small>${escapeHtml(`${formatDate(assignment.validFrom)}${assignment.validTo ? ` – ${formatDate(assignment.validTo)}` : " – offen"} · ${mode}`)}</small></div>
+    <div class="personnel-rules-assignment-badges">
+      <span class="personnel-rules-assignment-badge ${escapeHtmlAttribute(assignmentState)}">${escapeHtml(status)}</span>
+      <span class="personnel-rules-assignment-badge ${assignment.applicabilityConfirmed ? "confirmed" : "open"}">${escapeHtml(confirmation)}</span>
+    </div>
   </article>`;
 }
 
@@ -7903,7 +7951,7 @@ function renderPersonnelRulesProfileDetail() {
     `).join("")}</div>` : ""}`;
   const assignments = profile.assignments || [];
   elements.personnelRulesAssignments.innerHTML = [
-    ...(profile.automaticByBirthDate ? ['<article class="personnel-rules-assignment automatic"><span class="personnel-rules-assignment-state"></span><div><strong>Automatische Jugendprofil-Zuordnung</strong><small>Wird bei bestätigtem Geburtsdatum für Beschäftigte unter 18 am jeweiligen Diensttag verwendet.</small></div><span class="personnel-rules-assignment-badge confirmed">Systemregel</span></article>'] : []),
+    ...(profile.automaticByBirthDate ? ['<article class="personnel-rules-assignment automatic" aria-label="Automatische Jugendprofil-Zuordnung: Systemregel"><span class="personnel-rules-assignment-state" aria-hidden="true"></span><div><strong>Automatische Jugendprofil-Zuordnung</strong><small>Wird bei bestätigtem Geburtsdatum für Beschäftigte unter 18 am jeweiligen Diensttag verwendet.</small></div><div class="personnel-rules-assignment-badges"><span class="personnel-rules-assignment-badge current">Automatische Auswahl</span><span class="personnel-rules-assignment-badge confirmed">Systemregel</span></div></article>'] : []),
     ...assignments.map(personnelRulesAssignmentMarkup),
   ].join("") || '<p class="settings-note">Für dieses Profil ist im sichtbaren Bereich keine manuelle Geltungszuordnung hinterlegt.</p>';
   elements.personnelRulesRules.innerHTML = (profile.rules || []).length ? profile.rules.map((rule) => {
@@ -7931,12 +7979,15 @@ function updatePersonnelRulesSimulationDepartments() {
     || locations[0]
     || null;
   const departments = selectedLocation?.departments || [];
+  const canSimulateWholeLocation = selectedLocation?.canSimulateWholeLocation !== false;
   const requested = String(state.personnelRulesSimulationDepartmentId || "");
   elements.personnelRulesSimulationDepartment.innerHTML = [
-    '<option value="">Gesamte Filiale</option>',
+    ...(canSimulateWholeLocation ? ['<option value="">Gesamte Filiale</option>'] : []),
     ...departments.map((department) => `<option value="${escapeHtmlAttribute(String(department.id))}">${escapeHtml(department.name)}</option>`),
   ].join("");
-  state.personnelRulesSimulationDepartmentId = departments.some((department) => String(department.id) === requested) ? requested : "";
+  state.personnelRulesSimulationDepartmentId = departments.some((department) => String(department.id) === requested)
+    ? requested
+    : (canSimulateWholeLocation ? "" : String(departments[0]?.id || ""));
   elements.personnelRulesSimulationDepartment.value = state.personnelRulesSimulationDepartmentId;
 }
 
@@ -7957,8 +8008,14 @@ function populatePersonnelRulesSimulationControls() {
     elements.personnelRulesSimulationWeek.value = state.personnelRulesSimulationWeek || getMonday(new Date());
   }
   if (elements.runPersonnelRulesSimulation) {
+    const selectedLocation = locations.find((location) => (
+      String(location.id) === String(state.personnelRulesSimulationLocationId)
+    ));
+    const hasVisibleSimulationScope = selectedLocation?.canSimulateWholeLocation !== false
+      || Boolean(selectedLocation?.departments?.length);
     elements.runPersonnelRulesSimulation.disabled = !dashboard?.capabilities?.canSimulate
       || !state.personnelRulesSimulationLocationId
+      || !hasVisibleSimulationScope
       || state.personnelRulesSimulationLoading;
   }
 }
@@ -8006,6 +8063,7 @@ function renderPersonnelRulesSimulation() {
 
 function renderPersonnelRulesDashboard() {
   if (!elements.personnelRulesDashboardPanel) return;
+  elements.personnelRulesDashboardPanel.setAttribute("aria-busy", String(state.personnelRulesDashboardLoading));
   if (state.personnelRulesDashboardLoading && !state.personnelRulesDashboard) {
     elements.personnelRulesProfileList.innerHTML = '<p class="settings-note">Personal-Regelwerk wird geladen.</p>';
     return;
@@ -8013,10 +8071,20 @@ function renderPersonnelRulesDashboard() {
   const dashboard = state.personnelRulesDashboard;
   if (!dashboard) return;
   elements.personnelRulesScope.textContent = `${dashboard.scopeLabel} · Stand ${formatDate(dashboard.effectiveDate)} · Katalog ${dashboard.catalogVersion}`;
-  elements.personnelRulesLegalNotice.textContent = dashboard.legalNotice
-    || "Die Planprüfung unterstützt die Dienstplanung und ersetzt keine rechtliche oder kollektivvertragliche Einzelfallprüfung.";
+  const visibleLocations = dashboard.locations || [];
+  const visibleDepartments = visibleLocations.reduce((sum, location) => sum + (location.departments || []).length, 0);
+  const locationCountLabel = `${visibleLocations.length} ${visibleLocations.length === 1 ? "Filiale" : "Filialen"}`;
+  const departmentCountLabel = `${visibleDepartments} ${visibleDepartments === 1 ? "Abteilung" : "Abteilungen"}`;
+  const ownScope = dashboard.scopeLabel === "Eigene zugewiesene Bereiche";
+  elements.personnelRulesScopeDetail.textContent = ownScope
+    ? `Sichtbar sind ${locationCountLabel} und ${departmentCountLabel} des aktuell zugewiesenen Bereichs. Andere Unternehmensbereiche bleiben ausgeblendet. Diese Ansicht erlaubt nur Lesen und eine unverändernde Planvorschau; Änderungen und Freigaben benötigen getrennte Fachrechte in der Personalverwaltung.`
+    : `Sichtbar ist der unternehmensweite Regelstand mit ${locationCountLabel} und ${departmentCountLabel}. Auch diese Dashboard-Ansicht erlaubt nur Lesen und eine unverändernde Planvorschau; Änderungen und Freigaben erfolgen getrennt in der Personalverwaltung.`;
+  const legalNotice = dashboard.legalNotice
+    || "Die Planprüfung ist eine technische Planungshilfe und keine Rechtsberatung oder Rechtskonformitätsbestätigung.";
+  elements.personnelRulesLegalNotice.textContent = `${legalNotice} Maßgeblich bleiben die zum Dienstzeitpunkt geltende Rechtslage, der tatsächlich anwendbare Kollektivvertrag, vertragliche Regelungen und fachlich bestätigte Ausnahmen. Auch ein unauffälliges Ergebnis ist keine Rechtsfreigabe.`;
   populatePersonnelRulesFilters();
   renderPersonnelRulesSummary();
+  renderPersonnelRulesAssignmentLegend();
   renderPersonnelRulesProfileList();
   renderPersonnelRulesProfileDetail();
   renderPersonnelRulesSimulation();

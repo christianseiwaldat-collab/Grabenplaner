@@ -224,8 +224,8 @@ test("v0.75 Linux package builder expands the complete hardening artifact list",
       "-OutputDirectory", temporaryRoot,
     ], { encoding: "utf8", timeout: 120_000 });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-    assert.ok(fs.existsSync(path.join(temporaryRoot, "Grabenplaner-Server-v0.85.3-beta-linux-x64.zip")));
-    assert.ok(fs.existsSync(path.join(temporaryRoot, "Grabenplaner-Server-v0.85.3-beta-linux-x64.zip.sha256")));
+    assert.ok(fs.existsSync(path.join(temporaryRoot, "Grabenplaner-Server-v0.86.0-beta-linux-x64.zip")));
+    assert.ok(fs.existsSync(path.join(temporaryRoot, "Grabenplaner-Server-v0.86.0-beta-linux-x64.zip.sha256")));
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true });
   }

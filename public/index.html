@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.85 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.86 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -978,12 +978,25 @@
 
           <section class="personnel-rules-dashboard-panel hidden" id="personnelRulesDashboardPanel" aria-label="Personal-Regelwerk">
             <div class="personnel-rules-toolbar">
-              <div><span class="eyebrow">Versionierter Regelstand</span><h2>Personal-Regelwerk</h2><p>Arbeitszeit- und Planungsregeln, Geltungszuordnungen und offizielle Quellen im eigenen Verantwortungsbereich nachvollziehen.</p></div>
+              <div><span class="eyebrow">Lesesicht &amp; Planvorschau</span><h2>Personal-Regelwerk</h2><p>Arbeitszeit- und Planungsregeln, Geltungszuordnungen und offizielle Quellen im eigenen Verantwortungsbereich nachvollziehen.</p></div>
               <div class="personnel-rules-toolbar-actions">
-                <span id="personnelRulesScope">Lesesicht wird geladen.</span>
-                <button class="secondary-button" id="refreshPersonnelRulesDashboard" type="button">Aktualisieren</button>
+                <span id="personnelRulesScope" role="status">Lesesicht wird geladen.</span>
+                <button class="secondary-button" id="refreshPersonnelRulesDashboard" type="button" aria-controls="personnelRulesDashboardPanel" aria-describedby="personnelRulesReadBoundary">Aktualisieren</button>
               </div>
             </div>
+
+            <aside class="personnel-rules-read-boundary" id="personnelRulesReadBoundary" aria-labelledby="personnelRulesReadBoundaryTitle">
+              <span class="personnel-rules-read-boundary-mark" aria-hidden="true">L</span>
+              <div>
+                <strong id="personnelRulesReadBoundaryTitle">Bereichsbezogene Lesesicht</strong>
+                <p id="personnelRulesScopeDetail">Sichtbare Filialen und Abteilungen werden aus dem aktuell angemeldeten Zugang ermittelt.</p>
+              </div>
+              <div class="personnel-rules-read-boundary-badges" aria-label="Möglichkeiten dieser Ansicht">
+                <span>Nur lesen</span>
+                <span>Planvorschau</span>
+                <span>Keine Freigabe oder Änderung</span>
+              </div>
+            </aside>
 
             <section class="personnel-rules-summary" id="personnelRulesSummary" aria-label="Zusammenfassung des Personal-Regelwerks"></section>
 
@@ -992,6 +1005,8 @@
               <label><span>Regelart</span><select id="personnelRulesLayerFilter"><option value="">Alle Regelarten</option></select></label>
               <label><span>Stand</span><select id="personnelRulesStatusFilter"><option value="">Alle Stände</option><option value="published">Veröffentlicht</option><option value="draft">Entwurf</option></select></label>
             </section>
+
+            <section class="personnel-rules-assignment-legend" id="personnelRulesAssignmentLegend" aria-label="Bedeutung und Anzahl der Zuordnungsstände" aria-live="polite"></section>
 
             <div class="personnel-rules-workspace">
               <aside class="personnel-rules-navigation" aria-label="Regelprofil auswählen">
@@ -1009,7 +1024,7 @@
                   <strong>Anwendbarkeit</strong><p>Profil auswählen, um Geltungsbedingungen und offenen Bestätigungsbedarf zu sehen.</p>
                 </aside>
                 <section class="personnel-rules-detail-section">
-                  <header><div><span class="eyebrow">Geltungszuordnung</span><h3>Wirksame Bereiche</h3></div></header>
+                  <header><div><span class="eyebrow">Geltungszuordnung</span><h3>Aktuelle, künftige und inaktive Bereiche</h3></div></header>
                   <div class="personnel-rules-assignment-list" id="personnelRulesAssignments"></div>
                 </section>
                 <section class="personnel-rules-detail-section">
@@ -1025,21 +1040,21 @@
 
             <section class="personnel-rules-simulation" aria-labelledby="personnelRulesSimulationTitle">
               <div class="personnel-rules-simulation-heading">
-                <div><span class="eyebrow">Reine Vorschau</span><h2 id="personnelRulesSimulationTitle">Dienstplan-Regelprüfung simulieren</h2><p>Prüft die gespeicherte Planung im gewählten Bereich. Es werden keine Dienste, Zuordnungen oder Regelstände verändert.</p></div>
-                <span id="personnelRulesSimulationHint">Noch nicht geprüft</span>
+                <div><span class="eyebrow">Reine Vorschau</span><h2 id="personnelRulesSimulationTitle">Bereichsbezogene Dienstplan-Regelprüfung</h2><p>Prüft die gespeicherte Planung ausschließlich im gewählten, sichtbaren Bereich. Es werden keine Dienste, Zuordnungen, Freigaben oder Regelstände verändert.</p></div>
+                <span id="personnelRulesSimulationHint" role="status">Noch nicht geprüft</span>
               </div>
               <div class="personnel-rules-simulation-controls">
                 <label><span>Woche ab</span><input id="personnelRulesSimulationWeek" type="date" /></label>
                 <label><span>Filiale</span><select id="personnelRulesSimulationLocation"><option value="">Keine freigegebene Filiale</option></select></label>
                 <label><span>Abteilung</span><select id="personnelRulesSimulationDepartment"><option value="">Gesamte Filiale</option></select></label>
-                <button class="primary-button" id="runPersonnelRulesSimulation" type="button">Planung prüfen</button>
+                <button class="primary-button" id="runPersonnelRulesSimulation" type="button" aria-controls="personnelRulesSimulationResult" aria-describedby="personnelRulesSimulationTitle">Planvorschau starten</button>
               </div>
-              <div class="personnel-rules-simulation-result" id="personnelRulesSimulationResult">
+              <div class="personnel-rules-simulation-result" id="personnelRulesSimulationResult" aria-live="polite" aria-atomic="false">
                 <p class="settings-note">Die Simulation zeigt Hinweise, manuell zu prüfende Punkte und Blockierungen für die ausgewählte Woche.</p>
               </div>
             </section>
 
-            <p class="personnel-rules-legal-notice" id="personnelRulesLegalNotice">Die Planprüfung unterstützt die Dienstplanung und ersetzt keine rechtliche oder kollektivvertragliche Einzelfallprüfung.</p>
+            <p class="personnel-rules-legal-notice" id="personnelRulesLegalNotice">Das Dashboard ist eine technische Planungshilfe und keine Rechtsberatung oder Rechtsfreigabe. Maßgeblich bleiben die zum Dienstzeitpunkt geltende Rechtslage, der tatsächlich anwendbare Kollektivvertrag, vertragliche Regelungen und fachlich bestätigte Ausnahmen.</p>
           </section>
 
           <section class="rights-dashboard-process-panel hidden" id="rightsDashboardProcessesPanel" aria-label="Abläufe und Prozesse nach Fachbereich">
@@ -1702,7 +1717,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.85 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.86 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>

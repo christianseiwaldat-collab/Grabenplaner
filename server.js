@@ -21372,13 +21372,51 @@ function collectiveAgreementBusinessUnitScopeMatcher(session) {
   };
 }
 
+function scopedCollectiveAgreementBusinessUnit(unit, visibleScope) {
+  const scopes = unit.scopes.filter(visibleScope);
+  return {
+    id: unit.id,
+    code: unit.code,
+    name: unit.name,
+    legalEntityName: unit.legalEntityName,
+    description: unit.description,
+    active: unit.active,
+    scopes: scopes.map((scope) => ({
+      id: scope.id,
+      scopeType: scope.scopeType,
+      scopeKey: scope.scopeKey,
+      label: scope.label,
+    })),
+  };
+}
+
+function scopedCollectiveAgreementAssignment(assignment) {
+  const {
+    createdBy: _createdBy,
+    createdAt: _createdAt,
+    ...visible
+  } = assignment;
+  return visible;
+}
+
+function scopedCollectiveAgreementVersion(version) {
+  const {
+    createdBy: _createdBy,
+    createdAt: _createdAt,
+    ...visible
+  } = version;
+  return visible;
+}
+
 function collectiveAgreementRegistryPayload(session) {
+  const globalScope = sessionHasGlobalScope(session);
   const allBusinessUnits = listBusinessUnits(db, { includeInactive: true });
   const visibleScope = collectiveAgreementBusinessUnitScopeMatcher(session);
-  const businessUnits = allBusinessUnits.map((unit) => ({
-    ...unit,
-    scopes: unit.scopes.filter(visibleScope),
-  })).filter((unit) => sessionHasGlobalScope(session) || unit.scopes.length);
+  const businessUnits = allBusinessUnits.map((unit) => (
+    globalScope
+      ? unit
+      : scopedCollectiveAgreementBusinessUnit(unit, visibleScope)
+  )).filter((unit) => globalScope || unit.scopes.length);
   const visibleBusinessUnitIds = new Set(businessUnits.map((unit) => unit.id));
   const governanceEventsByAssignmentId = new Map();
   const governanceToday = viennaTodayIso();
@@ -21417,18 +21455,38 @@ function collectiveAgreementRegistryPayload(session) {
     .filter((assignment) => visibleBusinessUnitIds.has(assignment.businessUnitId))
     .map((assignment) => {
       const governanceState = governanceStateByAssignmentId.get(assignment.id);
-      return {
+      const enriched = {
         ...assignment,
         governanceState: governanceState?.state || "review_pending",
         governanceEffectiveOn: governanceState?.effectiveOn || null,
         governanceCurrentEffectiveOn: governanceState?.currentEffectiveOn || null,
         governancePlannedEventType: governanceState?.plannedEventType || null,
       };
+      return globalScope ? enriched : scopedCollectiveAgreementAssignment(enriched);
     });
-  const agreements = listCollectiveAgreements(db).map((agreement) => ({
-    ...agreement,
-    assignments: assignments.filter((assignment) => assignment.agreementId === agreement.id),
-  }));
+  const visibleAgreementVersionIds = new Set(assignments.map((assignment) => assignment.agreementVersionId));
+  const agreements = listCollectiveAgreements(db).map((agreement) => {
+    const relatedAssignments = assignments.filter((assignment) => assignment.agreementId === agreement.id);
+    if (!globalScope && !relatedAssignments.length) return null;
+    if (globalScope) return { ...agreement, assignments: relatedAssignments };
+    const versions = agreement.versions
+      .filter((version) => visibleAgreementVersionIds.has(version.id))
+      .map(scopedCollectiveAgreementVersion);
+    return {
+      id: agreement.id,
+      code: agreement.code,
+      title: agreement.title,
+      shortTitle: agreement.shortTitle,
+      jurisdiction: agreement.jurisdiction,
+      reviewState: agreement.reviewState,
+      currentVersionId: versions.some((version) => version.id === agreement.currentVersionId)
+        ? agreement.currentVersionId
+        : null,
+      note: agreement.note,
+      versions,
+      assignments: relatedAssignments,
+    };
+  }).filter(Boolean);
   const canManage = !session || session.employeeNumber === "local"
     || session.permissions?.includes("collective_agreements:manage");
   const canPrepareAssignments = !session || session.employeeNumber === "local"
@@ -21476,7 +21534,7 @@ function collectiveAgreementRegistryPayload(session) {
   return {
     generatedAt: new Date().toISOString(),
     legalNotice: COLLECTIVE_AGREEMENT_NOTICE,
-    scopeLabel: sessionHasGlobalScope(session) ? "Unternehmensweites KV-Register" : "Register mit Zuordnungen des eigenen Bereichs",
+    scopeLabel: globalScope ? "Unternehmensweites KV-Register" : "Register mit Zuordnungen des eigenen Bereichs",
     capabilities: {
       canManage,
       canPrepareAssignments,
@@ -21868,6 +21926,68 @@ function workRuleGovernanceCapabilities(session) {
   };
 }
 
+const WORK_RULE_GOVERNANCE_AUDIT_ONLY_FIELDS = new Set([
+  "actoremployeenumber",
+  "actorrole",
+  "confirmedby",
+  "createdby",
+  "permissionused",
+  "publishedby",
+  "subjectauthor",
+  "submittedby",
+  "submittedpermission",
+  "submittedrole",
+  "updatedby",
+]);
+
+function redactWorkRuleGovernanceAuditFields(value) {
+  if (Array.isArray(value)) return value.map(redactWorkRuleGovernanceAuditFields);
+  if (!value || typeof value !== "object") return value;
+  const visible = {};
+  for (const [key, entry] of Object.entries(value)) {
+    const normalizedKey = key.replace(/[_-]/g, "").toLowerCase();
+    if (normalizedKey.includes("receipt")
+      || WORK_RULE_GOVERNANCE_AUDIT_ONLY_FIELDS.has(normalizedKey)) continue;
+    if (normalizedKey === "decisions" || normalizedKey === "events") {
+      visible[key] = [];
+      continue;
+    }
+    visible[key] = redactWorkRuleGovernanceAuditFields(entry);
+  }
+  return visible;
+}
+
+function scopedWorkRuleGovernanceRequest(entry, currentActorNumber) {
+  const decisions = Array.isArray(entry.decisions) ? entry.decisions : [];
+  const submittedBy = entry.submittedBy;
+  const visible = redactWorkRuleGovernanceAuditFields(entry);
+  return {
+    ...visible,
+    submittedByCurrentActor: Boolean(currentActorNumber && submittedBy === currentActorNumber),
+    currentActorDecisionRecorded: Boolean(currentActorNumber && decisions.some((decision) => (
+      decision.actorEmployeeNumber === currentActorNumber
+    ))),
+    decisions: [],
+  };
+}
+
+function scopedWorkRuleGovernanceAssignment(entry) {
+  return redactWorkRuleGovernanceAuditFields(entry);
+}
+
+function scopedWorkRuleGovernanceConflictRun(entry) {
+  return redactWorkRuleGovernanceAuditFields(entry);
+}
+
+function workRuleGovernanceFinalizeResultForSession(result, governance) {
+  if (governance.capabilities.canAudit) return result;
+  const visible = redactWorkRuleGovernanceAuditFields(result);
+  return {
+    ...visible,
+    request: governance.requests.find((entry) => entry.id === result.request?.id) || null,
+  };
+}
+
 function workRuleGovernancePayload(session) {
   const complete = listWorkRuleGovernance(db);
   const capabilities = workRuleGovernanceCapabilities(session);
@@ -21884,20 +22004,21 @@ function workRuleGovernancePayload(session) {
       role: "admin",
       roleName: "Lokaler Einzelplatz",
     };
-  if (sessionHasGlobalScope(session)) return { ...complete, currentActor, capabilities };
+  if (sessionHasGlobalScope(session) && capabilities.canAudit) {
+    return { ...complete, currentActor, capabilities };
+  }
 
-  const requests = complete.requests.filter((entry) => (
+  const scopedRequests = complete.requests.filter((entry) => (
     workRuleGovernanceRequestVisibleToSession(session, entry)
   ));
-  const requestIds = new Set(requests.map((entry) => entry.id));
+  const requestIds = new Set(scopedRequests.map((entry) => entry.id));
   const assignmentRevisions = complete.assignmentRevisions.filter((assignment) => {
     const scopes = assignment.expandedScopes?.length
       ? assignment.expandedScopes
       : [{ type: assignment.scopeType, key: assignment.scopeKey }];
-    return scopes.some((scope) => (
-      String(scope.type || scope.scopeType || "") === "installation"
-      || workRuleGovernanceScopeVisible(session, scope)
-    ));
+    return Boolean(scopes.length && scopes.every((scope) => (
+      workRuleGovernanceScopeVisible(session, scope)
+    )));
   });
   const assignmentRevisionIds = new Set(assignmentRevisions.map((entry) => entry.id));
   const assignments = complete.assignments.filter((assignment) => (
@@ -21907,21 +22028,43 @@ function workRuleGovernancePayload(session) {
     requestIds.has(publication.reviewRequestId)
     || assignmentRevisions.some((assignment) => assignment.publicationId === publication.id)
   ));
-  const conflictRunIds = new Set(requests.map((entry) => entry.conflictRunId));
+  const conflictRunIds = new Set(scopedRequests.map((entry) => entry.conflictRunId));
   const collectiveAgreementAssignments = complete.collectiveAgreementAssignments.filter((entry) => (
     requestIds.has(entry.reviewRequestId)
-    || entry.scopeSnapshot?.scopes?.some((scope) => workRuleGovernanceScopeVisible(session, scope))
+    || (entry.scopeSnapshot?.scopes?.length
+      && entry.scopeSnapshot.scopes.every((scope) => workRuleGovernanceScopeVisible(session, scope)))
   ));
+  const canReadAudit = capabilities.canAudit;
+  const requests = canReadAudit
+    ? scopedRequests
+    : scopedRequests.map((entry) => (
+      scopedWorkRuleGovernanceRequest(entry, currentActor.employeeNumber)
+    ));
   return {
     ...complete,
     currentActor,
     capabilities,
     requests,
-    conflictRuns: complete.conflictRuns.filter((entry) => conflictRunIds.has(entry.id)),
-    publications,
-    assignmentRevisions,
-    assignments,
-    collectiveAgreementAssignments,
+    conflictRuns: complete.conflictRuns
+      .filter((entry) => conflictRunIds.has(entry.id))
+      .map((entry) => (
+        canReadAudit ? entry : scopedWorkRuleGovernanceConflictRun(entry)
+      )),
+    publications: publications.map((entry) => {
+      if (canReadAudit) return entry;
+      return redactWorkRuleGovernanceAuditFields(entry);
+    }),
+    assignmentRevisions: assignmentRevisions.map((entry) => {
+      if (canReadAudit) return entry;
+      return redactWorkRuleGovernanceAuditFields(entry);
+    }),
+    assignments: canReadAudit
+      ? assignments
+      : assignments.map(scopedWorkRuleGovernanceAssignment),
+    collectiveAgreementAssignments: collectiveAgreementAssignments.map((entry) => {
+      if (canReadAudit) return entry;
+      return redactWorkRuleGovernanceAuditFields(entry);
+    }),
     events: [],
   };
 }
@@ -21972,7 +22115,11 @@ app.post("/api/work-rules/governance/preview", (request, response) => {
     const permission = workRuleGovernancePermission(request.body.operation, "submit");
     const actor = workRuleGovernanceActor(request, permission, { allowLocal: true });
     const preview = previewWorkRuleGovernance(db, request.body, actor);
-    response.json({ preview });
+    if (workRuleGovernanceCapabilities(request.portalSession).canAudit) {
+      response.json({ preview });
+      return;
+    }
+    response.json({ preview: redactWorkRuleGovernanceAuditFields(preview) });
   } catch (error) {
     workRuleGovernanceRouteError(error);
   }
@@ -21995,9 +22142,10 @@ app.post("/api/work-rules/governance/requests", (request, response) => {
         subjectId: reviewRequest.subjectId,
         basisSha256: reviewRequest.basisSha256,
       }));
+    const governance = workRuleGovernancePayload(request.portalSession);
     response.status(201).json({
-      request: reviewRequest,
-      governance: workRuleGovernancePayload(request.portalSession),
+      request: governance.requests.find((entry) => entry.id === reviewRequest.id) || null,
+      governance,
     });
   } catch (error) {
     workRuleGovernanceRouteError(error);
@@ -22022,9 +22170,10 @@ app.post("/api/work-rules/governance/requests/:id/decisions", (request, response
         decision: String(request.body.decision || ""),
         basisSha256: reviewRequest.basisSha256,
       }));
+    const governance = workRuleGovernancePayload(request.portalSession);
     response.json({
-      request: reviewRequest,
-      governance: workRuleGovernancePayload(request.portalSession),
+      request: governance.requests.find((entry) => entry.id === reviewRequest.id) || null,
+      governance,
     });
   } catch (error) {
     workRuleGovernanceRouteError(error);
@@ -22050,9 +22199,10 @@ app.post("/api/work-rules/governance/requests/:id/finalize", (request, response)
         basisSha256: visible.basisSha256,
         outcomeType: result.outcome?.type || "",
       }));
+    const updatedGovernance = workRuleGovernancePayload(request.portalSession);
     response.json({
-      result,
-      governance: workRuleGovernancePayload(request.portalSession),
+      result: workRuleGovernanceFinalizeResultForSession(result, updatedGovernance),
+      governance: updatedGovernance,
     });
   } catch (error) {
     workRuleGovernanceRouteError(error);
@@ -22138,6 +22288,11 @@ function workRuleDashboardPayload(session) {
   const locations = getLocationsForSession(session, false).map((location) => ({
     id: String(location.id),
     name: location.name,
+    canSimulateWholeLocation: sessionHasGlobalScope(session)
+      || (session?.scopes || []).some((scope) => (
+        String(scope.locationId) === String(location.id)
+        && !Number(scope.departmentId || 0)
+      )),
     departments: (location.departments || []).filter((department) => department.active).map((department) => ({
       id: Number(department.id),
       name: department.name,
@@ -22291,10 +22446,112 @@ app.get("/api/work-rules/catalog", (_request, response) => {
   response.json(getRuleCatalog());
 });
 
-app.get("/api/work-rules/profiles", (_request, response) => {
+function workRuleProfileVersionRulesPayload(version) {
+  const profile = version.profile || {};
+  const payload = {
+    schemaVersion: version.schemaVersion,
+    catalogVersion: profile.catalogVersion,
+  };
+  if (version.schemaVersion >= 2) {
+    Object.assign(payload, {
+      title: profile.title,
+      status: profile.status,
+      assignable: profile.assignable === true,
+      validFrom: profile.validFrom,
+      validTo: profile.validTo || null,
+      defaultEnforcementMode: profile.defaultEnforcementMode || "monitor",
+    });
+  }
+  return {
+    ...payload,
+    applicability: profile.applicability || {},
+    limits: profile.limits || {},
+    ruleIds: Array.isArray(profile.ruleIds) ? profile.ruleIds : [],
+    rules: Array.isArray(version.rules) ? version.rules : [],
+  };
+}
+
+function scopedWorkRuleProfileVersion(version) {
+  return {
+    id: version.id,
+    profileId: version.profileId,
+    version: version.version,
+    layer: version.layer,
+    status: version.status,
+    validFrom: version.validFrom,
+    validTo: version.validTo,
+    contentSha256: version.contentSha256,
+    schemaVersion: version.schemaVersion,
+    profile: version.profile,
+    rules: version.rules,
+    sources: version.sources,
+  };
+}
+
+function scopedWorkRuleProfile(profileRecord, versions) {
+  const sortedVersions = [...versions].sort((left, right) => (
+    String(right.validFrom || "").localeCompare(String(left.validFrom || ""))
+    || String(right.version || "").localeCompare(String(left.version || ""), "de-AT")
+    || String(right.id).localeCompare(String(left.id))
+  ));
+  const current = sortedVersions.find((version) => version.id === profileRecord.currentVersionId) || null;
+  const representative = current || sortedVersions[0];
+  const definition = representative.profile || {};
+  const applicability = definition.applicability || {};
+  return {
+    id: representative.profileId,
+    name: definition.title || representative.profileId,
+    description: applicability.note || "",
+    jurisdiction: applicability.jurisdiction || "AT",
+    sector: applicability.sector || "",
+    builtin: false,
+    status: representative.status === "published" ? "active" : "draft",
+    currentVersionId: current?.id || null,
+    visibleVersionId: representative.id,
+    version: representative.version,
+    layer: representative.layer,
+    versionStatus: representative.status,
+    validFrom: representative.validFrom,
+    validTo: representative.validTo,
+    contentSha256: representative.contentSha256,
+    rules: workRuleProfileVersionRulesPayload(representative),
+    visibleVersions: sortedVersions.map(scopedWorkRuleProfileVersion),
+  };
+}
+
+app.get("/api/work-rules/profiles", (request, response) => {
+  const session = request.portalSession;
+  const profiles = listWorkRuleProfiles(db);
+  if (sessionHasGlobalScope(session)) {
+    response.json({
+      engineVersion: WORK_RULE_ENGINE_VERSION,
+      profiles,
+    });
+    return;
+  }
+  const visibleVersionIds = new Set([
+    ...listWorkRuleAssignments(db, { includeInactive: true }),
+    ...listGovernedWorkRuleAssignments(db, { includeInactive: true }),
+  ].filter((assignment) => workRuleAssignmentVisibleToSession(session, assignment))
+    .map((assignment) => assignment.profileVersionId));
+  const profileRecords = new Map(profiles.map((profile) => [profile.id, profile]));
+  const scopedVersionsByProfile = new Map();
+  for (const versionId of visibleVersionIds) {
+    const version = getWorkRuleProfileVersion(db, versionId);
+    const profileRecord = version ? profileRecords.get(version.profileId) : null;
+    if (!version || version.status !== "published" || !profileRecord || profileRecord.builtin) continue;
+    const versions = scopedVersionsByProfile.get(version.profileId) || [];
+    versions.push(version);
+    scopedVersionsByProfile.set(version.profileId, versions);
+  }
   response.json({
     engineVersion: WORK_RULE_ENGINE_VERSION,
-    profiles: listWorkRuleProfiles(db),
+    profiles: [
+      ...profiles.filter((profile) => profile.builtin),
+      ...[...scopedVersionsByProfile.entries()].map(([profileId, versions]) => (
+        scopedWorkRuleProfile(profileRecords.get(profileId), versions)
+      )),
+    ],
   });
 });
 
@@ -22327,9 +22584,20 @@ function workRuleAssignmentVisibleToSession(session, assignment) {
 }
 
 app.get("/api/work-rules/assignments", (request, response) => {
+  const globalScope = sessionHasGlobalScope(request.portalSession);
   const assignments = listWorkRuleAssignments(db, {
     includeInactive: String(request.query.includeInactive || "") === "1",
-  }).filter((assignment) => workRuleAssignmentVisibleToSession(request.portalSession, assignment));
+  })
+    .filter((assignment) => workRuleAssignmentVisibleToSession(request.portalSession, assignment))
+    .map((assignment) => {
+      if (globalScope) return assignment;
+      const {
+        confirmedBy: _confirmedBy,
+        createdBy: _createdBy,
+        ...visible
+      } = assignment;
+      return visible;
+    });
   response.json({
     assignments,
   });
