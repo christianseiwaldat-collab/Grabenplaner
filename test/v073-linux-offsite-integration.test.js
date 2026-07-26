@@ -46,6 +46,9 @@ test("v0.73 integrates optional offsite health and prevents unsafe implicit core
 
   assert.match(testScript, /grabenplaner-offsite-test/);
   assert.match(testScript, /Offsite-Sicherung/);
+  assert.match(testScript, /maximum_backup_age_explicit=0/);
+  assert.match(testScript, /GRABENPLANER_OFFSITE_CONFIGURED:-0/);
+  assert.match(testScript, /maximum_backup_age_hours=36/);
   assert.match(uninstall, /grabenplaner-offsite-uninstall --yes/);
   assert.match(uninstall, /GRABENPLANER_OFFSITE_CONFIGURED=1/);
   assert.match(install, /grabenplaner-linux-offsite-module-contract/);

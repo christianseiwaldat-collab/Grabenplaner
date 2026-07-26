@@ -11,6 +11,7 @@ readonly OFFSITE_STAGE_ROOT="$OFFSITE_STATE_ROOT/staging"
 readonly OFFSITE_STAGE_CURRENT="$OFFSITE_STAGE_ROOT/current"
 readonly OFFSITE_RESTORE_ROOT="$OFFSITE_STATE_ROOT/restore-tests"
 readonly OFFSITE_SMOKE_ROOT="$OFFSITE_STATE_ROOT/application-smoke"
+readonly OFFSITE_RECOVERY_SET_ROOT="$OFFSITE_STATE_ROOT/recovery-sets"
 readonly OFFSITE_SMOKE_SERVICE="grabenplaner-offsite-application-smoke.service"
 readonly OFFSITE_CREDENTIAL_STATE_ROOT="$OFFSITE_STATE_ROOT/credentials"
 readonly OFFSITE_RCLONE_CONFIG="$OFFSITE_CREDENTIAL_STATE_ROOT/rclone.conf"
@@ -179,18 +180,49 @@ offsite_make_uploader_credentials() {
   printf '%s\n' "$target_directory"
 }
 
+offsite_stream_persistent_rclone_config() {
+  offsite_require_command runuser
+  [[ -x "$OFFSITE_NODE" ]] || offsite_die "Die freigegebene Node.js-Laufzeit fehlt."
+  runuser --user "$OFFSITE_USER" -- env -i \
+    HOME="$OFFSITE_UPLOADER_HOME" USER="$OFFSITE_USER" LOGNAME="$OFFSITE_USER" \
+    PATH="$OFFSITE_BIN_ROOT:/usr/bin:/bin" \
+    "$OFFSITE_NODE" - "$OFFSITE_CREDENTIAL_STATE_ROOT" "$OFFSITE_RCLONE_CONFIG" <<'NODE' \
+    || offsite_die "Die persistente rclone-Konfiguration ist nicht sicher lesbar."
+const fs = require("node:fs");
+const [directory, file] = process.argv.slice(2);
+const uid = process.getuid();
+const gid = process.getgid();
+const directoryStat = fs.lstatSync(directory);
+if (!directoryStat.isDirectory() || directoryStat.isSymbolicLink()
+  || directoryStat.uid !== uid || directoryStat.gid !== gid
+  || (directoryStat.mode & 0o7777) !== 0o700) process.exit(1);
+const before = fs.lstatSync(file);
+if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1
+  || before.uid !== uid || before.gid !== gid
+  || (before.mode & 0o7777) !== 0o600
+  || before.size < 16 || before.size > 1024 * 1024) process.exit(1);
+const descriptor = fs.openSync(file, fs.constants.O_RDONLY
+  | (fs.constants.O_NOFOLLOW || 0)
+  | (fs.constants.O_CLOEXEC || 0));
+try {
+  const opened = fs.fstatSync(descriptor);
+  if (opened.dev !== before.dev || opened.ino !== before.ino
+    || opened.nlink !== 1 || opened.uid !== uid || opened.gid !== gid
+    || (opened.mode & 0o7777) !== 0o600 || opened.size !== before.size) process.exit(1);
+  const bytes = fs.readFileSync(descriptor);
+  const after = fs.fstatSync(descriptor);
+  if (bytes.length !== before.size || after.dev !== opened.dev || after.ino !== opened.ino
+    || after.nlink !== 1 || after.uid !== uid || after.gid !== gid
+    || (after.mode & 0o7777) !== 0o600 || after.size !== opened.size) process.exit(1);
+  process.stdout.write(bytes);
+} finally {
+  fs.closeSync(descriptor);
+}
+NODE
+}
+
 offsite_assert_persistent_rclone_config() {
-  local owner group mode links size
-  [[ -f "$OFFSITE_RCLONE_CONFIG" && ! -L "$OFFSITE_RCLONE_CONFIG" ]] || offsite_die "Die persistente verschluesselte rclone-Konfiguration fehlt."
-  owner="$(stat --format='%U' -- "$OFFSITE_RCLONE_CONFIG")"
-  group="$(stat --format='%G' -- "$OFFSITE_RCLONE_CONFIG")"
-  mode="$(stat --format='%a' -- "$OFFSITE_RCLONE_CONFIG")"
-  links="$(stat --format='%h' -- "$OFFSITE_RCLONE_CONFIG")"
-  size="$(stat --format='%s' -- "$OFFSITE_RCLONE_CONFIG")"
-  [[ "$owner" == "$OFFSITE_USER" && "$group" == "$OFFSITE_GROUP" && "$mode" == "600" && "$links" == "1" ]] \
-    || offsite_die "Die persistente rclone-Konfiguration hat unsichere Rechte."
-  [[ "$size" =~ ^[0-9]+$ ]] && (( size >= 16 && size <= 1048576 )) \
-    || offsite_die "Die persistente rclone-Konfiguration hat eine unzulaessige Groesse."
+  offsite_stream_persistent_rclone_config >/dev/null
 }
 
 offsite_repository_remote() {

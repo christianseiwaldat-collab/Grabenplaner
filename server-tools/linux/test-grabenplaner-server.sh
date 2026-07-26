@@ -25,6 +25,7 @@ service="$GP_DEFAULT_SERVICE"
 caddy_service="$GP_DEFAULT_CADDY_SERVICE"
 caddyfile="/etc/caddy/Caddyfile"
 maximum_backup_age_hours=6
+maximum_backup_age_explicit=0
 minimum_certificate_days=14
 monitor_mode=0
 monitor_timer="grabenplaner-monitor.timer"
@@ -43,7 +44,7 @@ while (($#)); do
     --service) service="${2:?Wert fuer --service fehlt}"; shift 2 ;;
     --caddy-service) caddy_service="${2:?Wert fuer --caddy-service fehlt}"; shift 2 ;;
     --caddyfile) caddyfile="${2:?Wert fuer --caddyfile fehlt}"; shift 2 ;;
-    --maximum-backup-age-hours) maximum_backup_age_hours="${2:?Wert fehlt}"; shift 2 ;;
+    --maximum-backup-age-hours) maximum_backup_age_hours="${2:?Wert fehlt}"; maximum_backup_age_explicit=1; shift 2 ;;
     --minimum-certificate-days) minimum_certificate_days="${2:?Wert fehlt}"; shift 2 ;;
     --monitor-mode) monitor_mode=1; shift ;;
     -h|--help)
@@ -54,14 +55,17 @@ while (($#)); do
   esac
 done
 
-[[ "$maximum_backup_age_hours" =~ ^[0-9]+$ ]] && (( maximum_backup_age_hours >= 1 && maximum_backup_age_hours <= 168 )) \
-  || gp_die "Das maximale Backupalter muss zwischen 1 und 168 Stunden liegen."
 [[ "$minimum_certificate_days" =~ ^[0-9]+$ ]] && (( minimum_certificate_days >= 1 && minimum_certificate_days <= 365 )) \
   || gp_die "Die Zertifikatsreserve muss zwischen 1 und 365 Tagen liegen."
 
 gp_require_root
 for command_name in curl openssl systemctl stat find sort date df caddy readlink getent; do gp_require_command "$command_name"; done
 gp_load_env_file "$env_file"
+if (( maximum_backup_age_explicit == 0 )) && [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" ]]; then
+  maximum_backup_age_hours=36
+fi
+[[ "$maximum_backup_age_hours" =~ ^[0-9]+$ ]] && (( maximum_backup_age_hours >= 1 && maximum_backup_age_hours <= 168 )) \
+  || gp_die "Das maximale Backupalter muss zwischen 1 und 168 Stunden liegen."
 
 app_dir="$(gp_existing_directory "${app_arg:-$GP_DEFAULT_APP_DIR}" "App-Ordner")"
 data_dir="$(gp_existing_directory "${data_arg:-${GRABENPLANER_DATA_DIR:-$GP_DEFAULT_DATA_DIR}}" "Datenordner")"

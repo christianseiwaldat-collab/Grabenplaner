@@ -1,0 +1,53 @@
+[Unit]
+Description=Grabenplaner Offsite-Ziel-Steuerungsanforderung
+Documentation=https://github.com/christianseiwaldat-collab/Grabenplaner/blob/main/SERVERBETRIEB.md
+Requires=grabenplaner-offsite-target-control.socket
+After=grabenplaner-offsite-target-control.socket network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/flock --exclusive --wait 3 /run/grabenplaner-offsite-target-control/broker.lock /usr/bin/node /opt/grabenplaner-offsite/module/lib/offsite-target-broker.js
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+UMask=0077
+TimeoutStartSec=31min
+TimeoutStopSec=5s
+RuntimeMaxSec=32min
+RuntimeDirectory=grabenplaner-offsite-target-control grabenplaner grabenplaner-offsite
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateMounts=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+DevicePolicy=closed
+CapabilityBoundingSet=CAP_CHOWN CAP_SETGID CAP_SETUID
+AmbientCapabilities=
+SystemCallArchitectures=native
+ReadWritePaths=/run/grabenplaner-offsite-target-control /run/grabenplaner /run/grabenplaner-offsite /etc/grabenplaner/offsite /var/lib/grabenplaner-offsite/credentials /var/lib/grabenplaner-offsite/recovery-sets
+MemoryMax=256M
+MemorySwapMax=0
+TasksMax=64
+LimitNOFILE=256
+LimitCORE=0

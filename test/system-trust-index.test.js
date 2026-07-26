@@ -138,9 +138,9 @@ test("application-smoke-not-run bleibt unbekannt und verhindert einen vorgetaeus
   const result = buildSystemTrustIndex(healthyInput());
   assert.equal(evidence(result, "recovery_application_smoke").state, CHECK_STATES.UNKNOWN);
   assert.equal(card(result, "recovery").state, CHECK_STATES.UNKNOWN);
-  assert.equal(result.rawScore, 95);
-  assert.equal(result.score, 95);
-  assert.equal(result.coverage, 95);
+  assert.equal(result.rawScore, 94);
+  assert.equal(result.score, 94);
+  assert.equal(result.coverage, 94);
   assert.equal(result.state, "attention");
   assert.match(result.disclaimer, /keine Verfügbarkeitsgarantie/);
 });
@@ -153,6 +153,16 @@ test("ein explizit nachgewiesener Anwendungsstart erlaubt bei vollstaendiger Evi
   assert.equal(result.score, 100);
   assert.equal(result.coverage, 100);
   assert.equal(result.state, "healthy");
+});
+
+test("die fruehere lokale Zweitsicherung ist im Servermodus nicht anwendbar", () => {
+  const result = buildSystemTrustIndex(healthyInput({
+    appSmoke: { state: "pass", checkedAt: "2026-07-21T23:05:00.000Z" },
+  }));
+  assert.equal(evidence(result, "backup_external").state, CHECK_STATES.NOT_APPLICABLE);
+  assert.equal(evidence(result, "storage_external_writable").state, CHECK_STATES.NOT_APPLICABLE);
+  assert.equal(evidence(result, "backup_offsite_snapshot").state, CHECK_STATES.PASS);
+  assert.equal(evidence(result, "backup_repository_check").state, CHECK_STATES.PASS);
 });
 
 test("nicht konfiguriertes SMTP ist nicht zutreffend und wird nicht als Erfolg ausgegeben", () => {

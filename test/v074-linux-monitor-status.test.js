@@ -7,10 +7,12 @@ const {
   CHECK_IDS,
   CHECK_LABELS,
   FORMAT,
+  LEGACY_CHECK_IDS,
   RESTART_COOLDOWN_MS,
   emptyStatus,
   errorStatus,
   evaluateStatus,
+  migrateLegacyStatus,
   parseTestOutput,
   restartAttemptStatus,
   restartResultStatus,
@@ -25,6 +27,30 @@ function checksWith(overrides = {}) {
   return Object.fromEntries(CHECK_IDS.map((id) => [id, overrides[id] ?? true]));
 }
 
+test("v0.86.2 migrates the exact legacy monitor schema before the next protected write", () => {
+  const legacy = {
+    format: FORMAT,
+    schemaVersion: 1,
+    generatedAt: "2026-07-26T15:35:00.000Z",
+    state: "ok",
+    complete: true,
+    consecutiveLiveFailures: 0,
+    lastRestartAt: null,
+    checks: Object.fromEntries(LEGACY_CHECK_IDS.map((id) => [id, true])),
+    recovery: { attempted: false, successful: false, suppressed: false },
+    lastError: null,
+  };
+  const migrated = migrateLegacyStatus(legacy);
+  assert.equal(migrated.schemaVersion, 2);
+  assert.equal(migrated.state, "warning");
+  assert.equal(migrated.complete, false);
+  assert.deepEqual(Object.keys(migrated.checks), CHECK_IDS);
+  for (const id of LEGACY_CHECK_IDS) assert.equal(migrated.checks[id], true, id);
+  for (const id of CHECK_IDS.filter((id) => !LEGACY_CHECK_IDS.includes(id))) {
+    assert.equal(migrated.checks[id], false, id);
+  }
+});
+
 test("v0.74 monitor persists only allowlisted boolean checks and discards diagnostic details", () => {
   const sensitive = "https://user:secret@example.invalid/C:/private/token";
   const checks = parseTestOutput(passingOutput(sensitive), 0);
@@ -35,11 +61,31 @@ test("v0.74 monitor persists only allowlisted boolean checks and discards diagno
     new Date("2026-07-19T08:05:00.000Z"));
   const serialized = JSON.stringify(result.status);
   assert.equal(result.status.format, FORMAT);
+  assert.equal(result.status.schemaVersion, 2);
   assert.equal(result.status.state, "ok");
   assert.equal(result.status.complete, true);
   assert.equal(result.restartEligible, false);
   assert.doesNotMatch(serialized, /secret|example\.invalid|private|token/i);
   assert.deepEqual(Object.keys(result.status.checks), CHECK_IDS);
+});
+
+test("v0.86.2 maps the complete hardened HTTP-header output contract", () => {
+  assert.deepEqual(
+    [...CHECK_LABELS.entries()].filter(([, id]) => [
+      "frameOptions",
+      "permissionsPolicy",
+      "crossOriginOpenerPolicy",
+      "crossOriginResourcePolicy",
+      "permittedCrossDomainPolicies",
+    ].includes(id)),
+    [
+      ["X-Frame-Options", "frameOptions"],
+      ["Permissions-Policy", "permissionsPolicy"],
+      ["Cross-Origin-Opener-Policy", "crossOriginOpenerPolicy"],
+      ["Cross-Origin-Resource-Policy", "crossOriginResourcePolicy"],
+      ["X-Permitted-Cross-Domain-Policies", "permittedCrossDomainPolicies"],
+    ],
+  );
 });
 
 test("v0.74 monitor rejects unknown, duplicate, incomplete and exit-code-inconsistent output", () => {

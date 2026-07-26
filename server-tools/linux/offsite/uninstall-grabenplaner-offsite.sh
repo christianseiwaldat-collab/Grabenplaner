@@ -13,7 +13,7 @@ while (($#)); do
     --yes) confirmed=1; shift ;;
     -h|--help)
       printf '%s\n' "Verwendung: sudo grabenplaner-offsite-uninstall --yes"
-      printf '%s\n' "Deaktiviert das Modul; Repository, lokale Stagingdaten und Geheimdateien bleiben erhalten."
+      printf '%s\n' "Deaktiviert das Modul; Repository, lokale Stagingdaten, Pending-Recovery-Sets und Geheimdateien bleiben erhalten."
       exit 0
       ;;
     *) offsite_die "Unbekannte Option: $1" ;;
@@ -31,7 +31,8 @@ gp_acquire_maintenance_lock
 offsite_acquire_assurance_lock
 offsite_acquire_repository_lock
 
-for unit in 'grabenplaner-offsite-assurance-control@*.service' grabenplaner-offsite-assurance-control.socket \
+for unit in 'grabenplaner-offsite-target-control@*.service' grabenplaner-offsite-target-control.socket \
+  'grabenplaner-offsite-assurance-control@*.service' grabenplaner-offsite-assurance-control.socket \
   'grabenplaner-offsite-assurance@*.service' \
   grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer \
   grabenplaner-offsite-application-smoke.service grabenplaner-offsite-upload.service grabenplaner-offsite-prepare.service grabenplaner-offsite-check.service grabenplaner-offsite-restore-test.service; do
@@ -104,4 +105,4 @@ rm -f -- "$OFFSITE_RESTIC" "$OFFSITE_RCLONE" "$OFFSITE_LEGACY_RCLONE_WRAPPER"
 if systemctl show --property=LoadState --value "$OFFSITE_APP_SERVICE" 2>/dev/null | grep -qxv not-found; then
   systemctl restart "$OFFSITE_APP_SERVICE"
 fi
-offsite_info "Das Offsite-Modul wurde deaktiviert. Verschluesselte Repository-Zugangsdaten, Staging und das externe Repository bleiben erhalten."
+offsite_info "Das Offsite-Modul wurde deaktiviert. Verschluesselte Repository-Zugangsdaten, Staging, Pending-Recovery-Sets und das externe Repository bleiben erhalten."
