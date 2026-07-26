@@ -6,9 +6,9 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("v0.85: Paket, Launcher, UI und aktuelle Dokumentation bleiben konsistent", () => {
+test("v0.85.4: Migrationsbrücke, Launcher, UI und aktuelle Dokumentation bleiben konsistent", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.85.3-beta");
+  assert.equal(packageJson.version, "0.85.4-beta");
 
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.85 Beta starten.cmd")), true);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.84 Beta starten.cmd")), false);
