@@ -184,6 +184,12 @@ const state = {
   serverMonitorRestartAccepted: false,
   serverMonitorRestartPhase: "",
   serverMonitorRestartReturnFocus: null,
+  databaseDownloadPending: false,
+  offsiteFolders: null,
+  offsiteFoldersLoadState: "idle",
+  offsiteFoldersLoadError: "",
+  offsiteFolderMutationPending: "",
+  offsiteFolderReturnFocus: null,
   updateStatus: null,
   selectedColor: "#0b84c6",
   integrations: {
@@ -287,7 +293,7 @@ const elements = Object.fromEntries(
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
     "rightsProcessCategory", "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
-    "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "databaseBackupSettingsCard", "backupRestoreGuidanceCard",
+    "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "databaseBackupSettingsCard", "legacyLocalBackupControls", "serverDatabaseDownloadPanel", "databaseDownloadForm", "databaseDownloadCurrentPassword", "databaseDownloadButton", "databaseDownloadStatus", "serverGoogleDriveManagementCard", "googleDriveManagementStatus", "reloadGoogleDriveFoldersButton", "manageGoogleDriveFolderButton", "offsiteFolderManagementModal", "offsiteFolderManagementForm", "offsiteFolderActiveLabel", "offsiteManagedFolderList", "offsiteNewFolderLabel", "offsiteCreateCurrentPassword", "createManagedOffsiteFolderButton", "offsiteActiveFolderSelection", "offsiteFolderActivationConfirmation", "offsiteActivateCurrentPassword", "activateManagedOffsiteFolderButton", "offsiteFolderDialogStatus", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "dashboardFontSize", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
@@ -909,6 +915,12 @@ function applyRoleVisibility() {
   const diagnosticsReadAccess = !lanActive || diagnosticsTechnicalAccess || permissions.includes("system:diagnostics:read");
   const backupWriteAccess = !lanActive || permissions.includes("backup:write");
   const backupConfigurationAccess = backupWriteAccess;
+  const serverBackupAdministrationAccess = serverActive
+    && ["admin", "it_admin", "developer"].includes(role)
+    && permissions.includes("backup:write");
+  const offsiteFolderManagementAccess = serverActive
+    && ["admin", "it_admin", "developer"].includes(role)
+    && permissions.includes("system:offsite:configure");
   const backupImportAccess = !serverActive && (!lanActive || ["developer", "it_admin"].includes(role));
   const usbProvisioningAccess = ["developer", "it_admin", "admin"].includes(role)
     && (!lanActive || permissions.includes("usb:provision"));
@@ -1002,7 +1014,7 @@ function applyRoleVisibility() {
   elements.saveSettingsButton?.classList.toggle("hidden", (!settingsAccess && !backupTabActive)
     || integrationTabActive || dataProtectionTabActive || usbTabActive
     || (timeTrackingTabActive && !settingsAccess)
-    || (backupTabActive && !backupConfigurationAccess));
+    || (backupTabActive && (serverActive || !backupConfigurationAccess)));
   elements.saveOperationModeButton?.classList.toggle("hidden", !operationModeAccess || settingsAccess);
   const canExit = serverActive
     ? Boolean(state.portalSession?.user)
@@ -1064,13 +1076,31 @@ function applyRoleVisibility() {
   elements.greetingSettingsCard?.classList.toggle("hidden", !greetingSettingsAccess || features.employeePortal === false);
   elements.serverDiagnosticsCard?.classList.toggle("hidden", !(diagnosticsReadAccess || diagnosticsTechnicalAccess));
   elements.refreshServerDiagnosticsButton?.classList.toggle("hidden", !(diagnosticsReadAccess || diagnosticsTechnicalAccess));
-  elements.databaseBackupSettingsCard?.classList.toggle("hidden", !backupWriteAccess);
+  elements.databaseBackupSettingsCard?.classList.toggle("hidden", serverActive ? !serverBackupAdministrationAccess : !backupWriteAccess);
+  elements.legacyLocalBackupControls?.classList.toggle("hidden", serverActive);
+  elements.serverDatabaseDownloadPanel?.classList.toggle("hidden", !serverBackupAdministrationAccess);
+  elements.serverGoogleDriveManagementCard?.classList.toggle("hidden", !offsiteFolderManagementAccess);
   elements.backupRestoreGuidanceCard?.classList.toggle("hidden", !(serverActive && diagnosticsTechnicalAccess));
   document.querySelector("#backupImportCard")?.classList.toggle("hidden", !backupImportAccess);
   [document.querySelector("#externalBackupEnabled"), document.querySelector("#backupDirectory"), document.querySelector("#backupIntervalHours")]
-    .forEach((input) => { if (input) input.disabled = !backupConfigurationAccess; });
+    .forEach((input) => { if (input) input.disabled = serverActive || !backupConfigurationAccess; });
   const createBackupButton = document.querySelector("#createBackupButton");
-  if (createBackupButton) createBackupButton.disabled = !backupWriteAccess;
+  if (createBackupButton) createBackupButton.disabled = serverActive || !backupWriteAccess;
+  if (elements.databaseDownloadCurrentPassword) {
+    elements.databaseDownloadCurrentPassword.disabled = !serverBackupAdministrationAccess || state.databaseDownloadPending;
+  }
+  if (elements.databaseDownloadButton) {
+    elements.databaseDownloadButton.disabled = !serverBackupAdministrationAccess || state.databaseDownloadPending;
+  }
+  const offsiteFolderBusy = state.offsiteFoldersLoadState === "loading" || Boolean(state.offsiteFolderMutationPending);
+  if (elements.reloadGoogleDriveFoldersButton) {
+    elements.reloadGoogleDriveFoldersButton.disabled = !offsiteFolderManagementAccess || offsiteFolderBusy;
+  }
+  if (elements.manageGoogleDriveFolderButton) {
+    elements.manageGoogleDriveFolderButton.disabled = !offsiteFolderManagementAccess
+      || state.offsiteFoldersLoadState !== "ready"
+      || offsiteFolderBusy;
+  }
   elements.delegationSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.generalSettings?.querySelectorAll(".settings-card:not(.operation-mode-card)").forEach((card) => card.classList.toggle("hidden", !settingsAccess));
   if (globalAdministration) elements.viewBehaviorSettingsCard?.classList.remove("hidden");
@@ -2547,8 +2577,146 @@ function renderHostSecurityDiagnostics(hostSecurity) {
     </section>`;
 }
 
+function canManageOffsiteFolders() {
+  const role = state.portalSession?.user?.role || "";
+  const permissions = state.portalSession?.user?.permissions || [];
+  return state.portalStatus?.operationMode === "server"
+    && ["admin", "it_admin", "developer"].includes(role)
+    && permissions.includes("system:offsite:configure");
+}
+
+function validManagedOffsiteFolderLabel(value) {
+  return typeof value === "string"
+    && /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,46}[A-Za-z0-9])?$/.test(value);
+}
+
+function normalizedManagedOffsiteFolders(result) {
+  const keys = result && typeof result === "object" && !Array.isArray(result)
+    ? Object.keys(result).sort()
+    : [];
+  const folders = Array.isArray(result?.folders) ? [...result.folders] : null;
+  const activeFolder = result?.activeFolder ?? null;
+  if (keys.length !== 2
+    || keys[0] !== "activeFolder"
+    || keys[1] !== "folders"
+    || !folders
+    || folders.some((folder) => !validManagedOffsiteFolderLabel(folder))
+    || (activeFolder !== null && !validManagedOffsiteFolderLabel(activeFolder))
+    || (activeFolder !== null && !folders.includes(activeFolder))
+    || new Set(folders.map((folder) => folder.toLowerCase())).size !== folders.length) {
+    throw new Error("Die geschützte Ordnerliste hat ein ungültiges Format und wurde deshalb nicht übernommen.");
+  }
+  return { activeFolder, folders };
+}
+
+function normalizedManagedOffsiteActivation(result, expectedFolder) {
+  const keys = result && typeof result === "object" && !Array.isArray(result)
+    ? Object.keys(result).sort()
+    : [];
+  const migrationModes = new Set(["copied", "verified-existing", "already-active"]);
+  if (keys.length !== 5
+    || keys[0] !== "activeFolder"
+    || keys[1] !== "fallbackPreserved"
+    || keys[2] !== "migrationMode"
+    || keys[3] !== "recoverySetState"
+    || keys[4] !== "requestId"
+    || result.activeFolder !== expectedFolder
+    || !migrationModes.has(result.migrationMode)
+    || result.recoverySetState !== "pending-offline-transfer-and-verification"
+    || result.fallbackPreserved !== true
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(String(result.requestId || ""))) {
+    throw new Error("Der geschützte Zielwechsel hat keinen vollständig bestätigten Wiederherstellungsstatus geliefert.");
+  }
+  return {
+    activeFolder: result.activeFolder,
+    migrationMode: result.migrationMode,
+    recoverySetState: result.recoverySetState,
+    fallbackPreserved: true,
+  };
+}
+
+function renderGoogleDriveManagementStatus(status = state.serverStatus, { failed = false } = {}) {
+  if (!elements.googleDriveManagementStatus) return;
+  const serverActive = (status?.mode || state.portalStatus?.operationMode) === "server";
+  if (!serverActive) return;
+  const offsite = status?.backups?.offsite;
+  let message = "Sicherer Status wird geladen …";
+  let statusState = "loading";
+
+  if (state.offsiteFoldersLoadState === "loading") {
+    message = "Die Liste der verwalteten Sicherungsordner wird geschützt geladen …";
+  } else if (state.offsiteFoldersLoadState === "error") {
+    message = state.offsiteFoldersLoadError
+      ? `Die Ordnerliste konnte nicht geladen werden: ${state.offsiteFoldersLoadError}`
+      : "Die Ordnerliste konnte nicht geladen werden. Die Verwaltung bleibt sicher gesperrt.";
+    statusState = "warning";
+  } else if (state.offsiteFoldersLoadState === "ready" && state.offsiteFolders) {
+    const count = state.offsiteFolders.folders.length;
+    const activeLabel = state.offsiteFolders.activeFolder || "noch kein Ordner aktiv";
+    message = `Aktives Ziel: ${activeLabel} · ${count} verwaltete${count === 1 ? "r Ordner" : " Ordner"}`;
+    statusState = state.offsiteFolders.activeFolder ? "ok" : "warning";
+  } else if (failed) {
+    message = "Der aktuelle Status konnte nicht geladen werden. Die Ordnerverwaltung bleibt sicher gesperrt.";
+    statusState = "warning";
+  } else if (offsite?.configured === true && offsite.state === "ok") {
+    message = "Aktiv und bestätigt – die verschlüsselte Google-Drive-Sicherung wird serverseitig verwaltet.";
+    statusState = "ok";
+  } else if (offsite?.configured === true) {
+    message = "Eingerichtet – der aktuelle Offsite-Status benötigt Aufmerksamkeit.";
+    statusState = "warning";
+  } else if (offsite && offsite.configured === false) {
+    message = "Noch nicht eingerichtet – die Konfiguration erfolgt ausschließlich über die geschützte Serververwaltung.";
+    statusState = "warning";
+  }
+  elements.googleDriveManagementStatus.textContent = message;
+  elements.googleDriveManagementStatus.dataset.state = statusState;
+  if (elements.reloadGoogleDriveFoldersButton) {
+    elements.reloadGoogleDriveFoldersButton.textContent = state.offsiteFoldersLoadState === "loading"
+      ? "Ordnerliste wird geladen …"
+      : "Ordnerliste neu laden";
+  }
+}
+
+async function loadManagedOffsiteFolders({ force = false } = {}) {
+  if (!canManageOffsiteFolders()) {
+    state.offsiteFolders = null;
+    state.offsiteFoldersLoadState = "idle";
+    state.offsiteFoldersLoadError = "";
+    renderGoogleDriveManagementStatus();
+    applyRoleVisibility();
+    return false;
+  }
+  if (state.offsiteFoldersLoadState === "loading") return false;
+  if (!force && state.offsiteFoldersLoadState === "ready") return true;
+
+  state.offsiteFolders = null;
+  state.offsiteFoldersLoadState = "loading";
+  state.offsiteFoldersLoadError = "";
+  renderGoogleDriveManagementStatus();
+  applyRoleVisibility();
+  try {
+    const result = await api("/api/backup/offsite-folders");
+    state.offsiteFolders = normalizedManagedOffsiteFolders(result);
+    state.offsiteFoldersLoadState = "ready";
+    if (elements.offsiteFolderManagementModal?.open) renderManagedOffsiteFoldersDialog();
+    return true;
+  } catch (error) {
+    state.offsiteFolders = null;
+    state.offsiteFoldersLoadState = "error";
+    state.offsiteFoldersLoadError = error.message;
+    if (elements.offsiteFolderManagementModal?.open) {
+      setOffsiteFolderDialogStatus("Die aktuelle Ordnerliste konnte nicht sicher geladen werden. Bitte den Dialog schließen und erneut versuchen.", "error");
+    }
+    return false;
+  } finally {
+    renderGoogleDriveManagementStatus();
+    applyRoleVisibility();
+  }
+}
+
 function renderServerDiagnostics(status, technical = null) {
   if (!elements.serverDiagnostics || !status) return;
+  renderGoogleDriveManagementStatus(status);
   const alerts = Array.isArray(status.alerts) ? status.alerts : [];
   const alertMarkup = alerts.length
     ? `<div class="diagnostic-alerts">${alerts.map((alert) => `<article class="${escapeHtml(alert.severity || "warning")}"><strong>${escapeHtml(alert.title || "Serverzustand prüfen")}</strong><span>${escapeHtml(alert.message || "")}</span></article>`).join("")}</div>`
@@ -2558,6 +2726,9 @@ function renderServerDiagnostics(status, technical = null) {
   const recovery = status.recovery || {};
   const recoveryState = recovery.isolatedRestoreTestPending ? "warning" : "ok";
   const technicalChecks = Array.isArray(technical?.productionChecks) ? technical.productionChecks : [];
+  const localBackupMarkup = status.mode === "server" ? "" : `
+       <span><small>Getrennte lokale Sicherung</small><strong>${escapeHtml(status.backups?.external?.enabled ? backupPointText(status.backups.external) : "deaktiviert")}</strong></span>
+       <span><small>Externes Sicherungsziel</small><strong>${status.backups?.external?.enabled ? (status.backups.external.writable ? "beschreibbar" : "nicht beschreibbar") : "nicht aktiv"}</strong></span>`;
   const technicalMarkup = technical ? `
     <details class="technical-diagnostics">
       <summary>Technische Details anzeigen</summary>
@@ -2580,8 +2751,7 @@ function renderServerDiagnostics(status, technical = null) {
     </div>
     <div class="diagnostic-grid backup-status-grid">
       <span><small>Interne Sicherung</small><strong>${escapeHtml(backupPointText(status.backups?.internal))}</strong></span>
-      <span><small>Getrennte lokale Sicherung</small><strong>${escapeHtml(status.backups?.external?.enabled ? backupPointText(status.backups.external) : "deaktiviert")}</strong></span>
-      <span><small>Externes Sicherungsziel</small><strong>${status.backups?.external?.enabled ? (status.backups.external.writable ? "beschreibbar" : "nicht beschreibbar") : "nicht aktiv"}</strong></span>
+      ${localBackupMarkup}
       <span><small>Letzte Statusprüfung</small><strong>${escapeHtml(diagnosticTimestamp(status.checkedAt))}</strong></span>
     </div>
     ${renderOffsiteBackupDiagnostics(offsite)}
@@ -2804,6 +2974,8 @@ async function loadSystemInfo() {
     elements.sidebarVersion.textContent = info.appVersionLabel;
     if (elements.appBackupDirectoryText) elements.appBackupDirectoryText.textContent = info.appBackupDirectory || "geschützter interner Sicherungsbereich";
     const backupCreatedAt = info.lastBackup?.createdAt || info.lastBackup?.externalBackup?.createdAt || info.lastBackup?.appBackup?.createdAt;
+    const localBackupTargetMarkup = info.portal?.operationMode === "server" ? "" : `
+      <span><strong>Lokales Sicherungsziel</strong> ${info.externalBackupEnabled ? escapeHtml(info.backupDirectory || "konfiguriert") : "deaktiviert"}</span>`;
     elements.systemData.innerHTML = `
       <span><strong>Serverzeit</strong> ${escapeHtml(info.serverTime)} Uhr</span>
       <span><strong>App</strong> ${escapeHtml(appName)} ${escapeHtml(info.appVersionLabel)}</span>
@@ -2813,7 +2985,7 @@ async function loadSystemInfo() {
       <span><strong>System</strong> ${escapeHtml(info.platform)}</span>
       <span><strong>Datenbank</strong> ${escapeHtml(info.database)}</span>
       <span><strong>Interne Sicherung</strong> ${escapeHtml(info.appBackupDirectory || "geschützter App-Datenbereich")}</span>
-      <span><strong>Lokales Sicherungsziel</strong> ${info.externalBackupEnabled ? escapeHtml(info.backupDirectory || "konfiguriert") : "deaktiviert"}</span>
+      ${localBackupTargetMarkup}
       <span><strong>Letztes Backup</strong> ${backupCreatedAt ? escapeHtml(new Intl.DateTimeFormat("de-AT", { dateStyle: "short", timeStyle: "short" }).format(new Date(backupCreatedAt))) : "noch ausständig"}</span>
       <span><strong>Laufzeit</strong> ${uptimeHours} h ${uptimeMinutes} min</span>`;
     state.serverStatus = info.serverStatus || null;
@@ -2822,6 +2994,7 @@ async function loadSystemInfo() {
     else renderGlobalServerAlert(null);
   } catch {
     elements.systemData.textContent = "Technische Daten konnten nicht geladen werden.";
+    renderGoogleDriveManagementStatus(null, { failed: true });
   }
 }
 
@@ -12111,7 +12284,9 @@ function setSettingsTab(tab) {
     || state.portalSession?.user?.permissions?.includes("settings:write");
   const canSaveBackupSettings = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("backup:write");
+  const serverBackupTab = tab === "backup" && state.portalStatus?.operationMode === "server";
   elements.saveSettingsButton?.classList.toggle("hidden", ["integrations", "dataProtection", "usbProvisioning"].includes(tab)
+    || serverBackupTab
     || (tab === "backup" ? !canSaveBackupSettings : !canSaveGeneralSettings));
   if (tab === "access") {
     loadPortalUsers();
@@ -12132,7 +12307,10 @@ function setSettingsTab(tab) {
     loadRetentionGovernance().catch((error) => showToast(error.message, true));
   }
   if (tab === "timeTracking") loadWifiAutomationSettings();
-  if (tab === "backup") refreshServerDiagnostics();
+  if (tab === "backup") {
+    refreshServerDiagnostics();
+    if (canManageOffsiteFolders()) loadManagedOffsiteFolders();
+  }
   if (tab === "personnel") loadTrustLevelSettings();
   if (tab === "branding") Promise.all([loadManagementBrandingPreference(), loadBrandingAssignments()]).then(() => renderSettings()).catch((error) => showToast(error.message, true));
   if (tab === "usbProvisioning") {
@@ -13547,6 +13725,278 @@ async function createManualBackup() {
     const paths = [backup.appBackup?.path, backup.externalBackup?.path].filter(Boolean);
     showToast(paths.length > 1 ? "Sicherungen erstellt: intern und am zusätzlichen lokalen Ziel." : `Sicherung erstellt: ${paths[0] || backup.path}`);
   } catch (error) { showToast(error.message, true); }
+}
+
+function canDownloadServerDatabase() {
+  const role = state.portalSession?.user?.role || "";
+  const permissions = state.portalSession?.user?.permissions || [];
+  return state.portalStatus?.operationMode === "server"
+    && ["admin", "it_admin", "developer"].includes(role)
+    && permissions.includes("backup:write");
+}
+
+function setDatabaseDownloadStatus(message = "", kind = "info") {
+  if (!elements.databaseDownloadStatus) return;
+  elements.databaseDownloadStatus.setAttribute("role", kind === "error" ? "alert" : "status");
+  elements.databaseDownloadStatus.textContent = message;
+  elements.databaseDownloadStatus.dataset.state = message ? kind : "";
+}
+
+async function downloadCompleteDatabase(event) {
+  event.preventDefault();
+  if (state.databaseDownloadPending) return;
+  if (!canDownloadServerDatabase()) {
+    setDatabaseDownloadStatus("Der Datenbankdownload ist nur für Admin, IT-Admin und Developer mit Backup-Berechtigung verfügbar.", "error");
+    return;
+  }
+  const currentPassword = elements.databaseDownloadCurrentPassword?.value || "";
+  if (!currentPassword) {
+    setDatabaseDownloadStatus("Bitte das aktuelle Passwort eingeben.", "error");
+    elements.databaseDownloadCurrentPassword?.focus();
+    return;
+  }
+
+  state.databaseDownloadPending = true;
+  elements.serverDatabaseDownloadPanel?.setAttribute("aria-busy", "true");
+  if (elements.databaseDownloadButton) elements.databaseDownloadButton.textContent = "Datenbank wird vorbereitet …";
+  setDatabaseDownloadStatus("Eine konsistente und geprüfte Datenbankkopie wird sicher erstellt.", "pending");
+  applyRoleVisibility();
+  try {
+    const response = await rawApi("/api/backup/database-download", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmation: "DATABASE_BACKUP_DOWNLOAD", currentPassword }),
+    });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    await downloadFileResponse(response, `Grabenplaner-Datenbank-${timestamp}.db`);
+    setDatabaseDownloadStatus("Die geprüfte Datenbankkopie wurde heruntergeladen. Bitte lokal sicher verwahren.", "success");
+    showToast("Datenbankkopie wurde heruntergeladen.");
+  } catch (error) {
+    setDatabaseDownloadStatus(error.message, "error");
+    showToast(error.message, true);
+  } finally {
+    if (elements.databaseDownloadCurrentPassword) elements.databaseDownloadCurrentPassword.value = "";
+    state.databaseDownloadPending = false;
+    elements.serverDatabaseDownloadPanel?.removeAttribute("aria-busy");
+    if (elements.databaseDownloadButton) elements.databaseDownloadButton.textContent = "Datenbank herunterladen";
+    applyRoleVisibility();
+  }
+}
+
+function setOffsiteFolderDialogStatus(message = "", kind = "info") {
+  if (!elements.offsiteFolderDialogStatus) return;
+  elements.offsiteFolderDialogStatus.setAttribute("role", kind === "error" ? "alert" : "status");
+  elements.offsiteFolderDialogStatus.textContent = message;
+  elements.offsiteFolderDialogStatus.dataset.state = message ? kind : "";
+}
+
+function clearOffsiteFolderPasswords() {
+  if (elements.offsiteCreateCurrentPassword) elements.offsiteCreateCurrentPassword.value = "";
+  if (elements.offsiteActivateCurrentPassword) elements.offsiteActivateCurrentPassword.value = "";
+}
+
+function renderManagedOffsiteFoldersDialog() {
+  const folderState = state.offsiteFoldersLoadState === "ready" ? state.offsiteFolders : null;
+  const folders = folderState?.folders || [];
+  const activeFolder = folderState?.activeFolder || null;
+  const pending = Boolean(state.offsiteFolderMutationPending);
+  const previousSelection = elements.offsiteActiveFolderSelection?.value || "";
+  const activationCandidates = folders.filter((folder) => folder !== activeFolder);
+
+  if (elements.offsiteFolderActiveLabel) {
+    elements.offsiteFolderActiveLabel.textContent = activeFolder || "Noch kein verwalteter Ordner aktiv";
+  }
+  if (elements.offsiteManagedFolderList) {
+    elements.offsiteManagedFolderList.innerHTML = folders.length
+      ? folders.map((folder) => `
+          <span class="offsite-managed-folder ${folder === activeFolder ? "active" : ""}" role="listitem">
+            <strong>${escapeHtml(folder)}</strong>
+            <small>${folder === activeFolder ? "Aktives Sicherungsziel" : "Verwalteter Ordner"}</small>
+          </span>`).join("")
+      : '<p class="settings-note">Es ist noch kein verwalteter Sicherungsordner vorhanden.</p>';
+  }
+  if (elements.offsiteActiveFolderSelection) {
+    elements.offsiteActiveFolderSelection.innerHTML = [
+      '<option value="">Verwalteten Ordner auswählen</option>',
+      ...activationCandidates.map((folder) => `<option value="${escapeHtml(folder)}">${escapeHtml(folder)}</option>`),
+    ].join("");
+    elements.offsiteActiveFolderSelection.value = activationCandidates.includes(previousSelection) ? previousSelection : "";
+  }
+
+  const createUnavailable = pending || state.offsiteFoldersLoadState !== "ready";
+  const activationUnavailable = createUnavailable || activationCandidates.length === 0;
+  if (elements.offsiteNewFolderLabel) elements.offsiteNewFolderLabel.disabled = createUnavailable;
+  if (elements.offsiteCreateCurrentPassword) elements.offsiteCreateCurrentPassword.disabled = createUnavailable;
+  if (elements.createManagedOffsiteFolderButton) {
+    elements.createManagedOffsiteFolderButton.disabled = createUnavailable;
+    elements.createManagedOffsiteFolderButton.textContent = state.offsiteFolderMutationPending === "create"
+      ? "Ordner wird angelegt …"
+      : "Ordner sicher anlegen";
+  }
+  if (elements.offsiteActiveFolderSelection) elements.offsiteActiveFolderSelection.disabled = activationUnavailable;
+  if (elements.offsiteFolderActivationConfirmation) elements.offsiteFolderActivationConfirmation.disabled = activationUnavailable;
+  if (elements.offsiteActivateCurrentPassword) elements.offsiteActivateCurrentPassword.disabled = activationUnavailable;
+  if (elements.activateManagedOffsiteFolderButton) {
+    elements.activateManagedOffsiteFolderButton.disabled = activationUnavailable;
+    elements.activateManagedOffsiteFolderButton.textContent = state.offsiteFolderMutationPending === "activate"
+      ? "Zielwechsel läuft …"
+      : "Ausgewählten Ordner aktivieren";
+  }
+  elements.offsiteFolderManagementModal?.querySelectorAll("[data-close]")
+    .forEach((button) => { button.disabled = pending; });
+  elements.offsiteFolderManagementModal?.toggleAttribute("aria-busy", pending);
+}
+
+function openManagedOffsiteFolderDialog() {
+  if (!canManageOffsiteFolders() || state.offsiteFoldersLoadState !== "ready" || !state.offsiteFolders) {
+    showToast("Die geschützte Ordnerliste muss zuerst erfolgreich geladen werden.", true);
+    return;
+  }
+  state.offsiteFolderReturnFocus = document.activeElement;
+  clearOffsiteFolderPasswords();
+  if (elements.offsiteNewFolderLabel) elements.offsiteNewFolderLabel.value = "";
+  if (elements.offsiteFolderActivationConfirmation) elements.offsiteFolderActivationConfirmation.checked = false;
+  setOffsiteFolderDialogStatus("");
+  renderManagedOffsiteFoldersDialog();
+  elements.offsiteFolderManagementModal?.showModal();
+}
+
+function offsiteFolderMutationErrorMessage(error) {
+  if (error?.code === "OFFSITE_FOLDER_NOT_FOUND") {
+    return "Der ausgewählte verwaltete Ordner ist nicht mehr verfügbar. Bitte die Ordnerliste neu laden.";
+  }
+  if (error?.code === "OFFSITE_FOLDER_ALREADY_ACTIVE") {
+    return "Dieser verwaltete Ordner ist bereits das aktive Sicherungsziel.";
+  }
+  if (error?.code === "OFFSITE_FOLDER_LIMIT_REACHED") {
+    return "Die Höchstzahl von 100 verwalteten Sicherungsordnern ist erreicht.";
+  }
+  return error?.message || "Die geschützte Ordneraktion konnte nicht ausgeführt werden.";
+}
+
+async function createManagedOffsiteFolder() {
+  if (state.offsiteFolderMutationPending) return;
+  if (!canManageOffsiteFolders() || state.offsiteFoldersLoadState !== "ready") {
+    setOffsiteFolderDialogStatus("Die Ordnerverwaltung ist für diese Sitzung nicht verfügbar.", "error");
+    return;
+  }
+  const folderLabel = elements.offsiteNewFolderLabel?.value.trim() || "";
+  const currentPassword = elements.offsiteCreateCurrentPassword?.value || "";
+  if (!validManagedOffsiteFolderLabel(folderLabel)) {
+    setOffsiteFolderDialogStatus("Bitte einen gültigen Ordnernamen mit 1 bis 48 Zeichen ohne Pfadbestandteile eingeben.", "error");
+    elements.offsiteNewFolderLabel?.focus();
+    return;
+  }
+  if (state.offsiteFolders?.folders.some((folder) => folder.toLowerCase() === folderLabel.toLowerCase())) {
+    setOffsiteFolderDialogStatus("Dieser verwaltete Ordner ist bereits vorhanden.", "error");
+    elements.offsiteNewFolderLabel?.focus();
+    return;
+  }
+  if (!currentPassword) {
+    setOffsiteFolderDialogStatus("Bitte das aktuelle Passwort für die Ordneranlage eingeben.", "error");
+    elements.offsiteCreateCurrentPassword?.focus();
+    return;
+  }
+
+  state.offsiteFolderMutationPending = "create";
+  setOffsiteFolderDialogStatus("Der neue verwaltete Ordner wird geschützt angelegt.", "pending");
+  renderManagedOffsiteFoldersDialog();
+  applyRoleVisibility();
+  try {
+    const result = await api("/api/backup/offsite-folders", {
+      method: "POST",
+      body: JSON.stringify({
+        confirmation: "CREATE_MANAGED_OFFSITE_FOLDER",
+        folderLabel,
+        currentPassword,
+      }),
+    });
+    if (elements.offsiteNewFolderLabel) elements.offsiteNewFolderLabel.value = "";
+    const refreshed = await loadManagedOffsiteFolders({ force: true });
+    const createdFolder = validManagedOffsiteFolderLabel(result?.createdFolder) ? result.createdFolder : folderLabel;
+    setOffsiteFolderDialogStatus(
+      refreshed
+        ? `Der verwaltete Ordner „${createdFolder}“ wurde angelegt. Das aktive Sicherungsziel wurde nicht geändert.`
+        : `Der verwaltete Ordner „${createdFolder}“ wurde angelegt; die aktualisierte Ordnerliste konnte jedoch noch nicht geladen werden.`,
+      refreshed ? "success" : "warning",
+    );
+    showToast(`Verwalteter Sicherungsordner „${createdFolder}“ wurde angelegt.`);
+  } catch (error) {
+    const message = offsiteFolderMutationErrorMessage(error);
+    setOffsiteFolderDialogStatus(message, "error");
+    showToast(message, true);
+  } finally {
+    clearOffsiteFolderPasswords();
+    state.offsiteFolderMutationPending = "";
+    elements.offsiteFolderManagementModal?.removeAttribute("aria-busy");
+    renderManagedOffsiteFoldersDialog();
+    applyRoleVisibility();
+  }
+}
+
+async function activateManagedOffsiteFolder() {
+  if (state.offsiteFolderMutationPending) return;
+  if (!canManageOffsiteFolders() || state.offsiteFoldersLoadState !== "ready") {
+    setOffsiteFolderDialogStatus("Die Ordnerverwaltung ist für diese Sitzung nicht verfügbar.", "error");
+    return;
+  }
+  const folderLabel = elements.offsiteActiveFolderSelection?.value || "";
+  const currentPassword = elements.offsiteActivateCurrentPassword?.value || "";
+  if (!validManagedOffsiteFolderLabel(folderLabel)
+    || !state.offsiteFolders?.folders.includes(folderLabel)
+    || folderLabel === state.offsiteFolders?.activeFolder) {
+    setOffsiteFolderDialogStatus("Bitte einen anderen verwalteten Ordner aus der Liste auswählen.", "error");
+    elements.offsiteActiveFolderSelection?.focus();
+    return;
+  }
+  if (!elements.offsiteFolderActivationConfirmation?.checked) {
+    setOffsiteFolderDialogStatus("Bitte die Warnung zum Zielwechsel ausdrücklich bestätigen.", "error");
+    elements.offsiteFolderActivationConfirmation?.focus();
+    return;
+  }
+  if (!currentPassword) {
+    setOffsiteFolderDialogStatus("Bitte das aktuelle Passwort für den Zielwechsel eingeben.", "error");
+    elements.offsiteActivateCurrentPassword?.focus();
+    return;
+  }
+
+  state.offsiteFolderMutationPending = "activate";
+  setOffsiteFolderDialogStatus(
+    "Der geschützte Zielwechsel läuft. Kopie, Prüfung und Vorbereitung des Recovery-Sets können einige Minuten dauern. Bitte diese Seite geöffnet lassen.",
+    "pending",
+  );
+  renderManagedOffsiteFoldersDialog();
+  applyRoleVisibility();
+  try {
+    const result = normalizedManagedOffsiteActivation(await api("/api/backup/offsite-folders/active", {
+      method: "PUT",
+      body: JSON.stringify({
+        confirmation: "ACTIVATE_MANAGED_OFFSITE_FOLDER",
+        folderLabel,
+        currentPassword,
+      }),
+    }), folderLabel);
+    const refreshed = await loadManagedOffsiteFolders({ force: true });
+    const recoveryConfirmation = "Recovery-Set für Offline-Transfer/-Prüfung vorbereitet; altes Repository bleibt Rückfallpunkt.";
+    setOffsiteFolderDialogStatus(
+      refreshed
+        ? `„${result.activeFolder}“ ist jetzt das aktive Ziel für künftige Offsite-Sicherungen. ${recoveryConfirmation}`
+        : `„${result.activeFolder}“ wurde aktiviert. ${recoveryConfirmation} Die aktualisierte Ordnerliste konnte jedoch noch nicht geladen werden.`,
+      refreshed ? "success" : "warning",
+    );
+    showToast(`Offsite-Sicherungsziel „${result.activeFolder}“ wurde aktiviert; Recovery-Set vorbereitet.`);
+  } catch (error) {
+    const message = offsiteFolderMutationErrorMessage(error);
+    setOffsiteFolderDialogStatus(message, "error");
+    showToast(message, true);
+  } finally {
+    clearOffsiteFolderPasswords();
+    if (elements.offsiteFolderActivationConfirmation) elements.offsiteFolderActivationConfirmation.checked = false;
+    state.offsiteFolderMutationPending = "";
+    elements.offsiteFolderManagementModal?.removeAttribute("aria-busy");
+    renderManagedOffsiteFoldersDialog();
+    applyRoleVisibility();
+  }
 }
 
 function renderUpdateStatus(status = state.updateStatus) {
@@ -15643,9 +16093,14 @@ elements.collectiveAgreementAssignments?.addEventListener("click", (event) => {
 elements.addCostCenterButton?.addEventListener("click", () => openCostCenterModal());
 elements.costCenterForm?.addEventListener("submit", saveCostCenter);
 elements.deactivateCostCenterButton?.addEventListener("click", deactivateCostCenter);
-document.querySelector("#saveSettingsButton").addEventListener("click", () => (
-  elements.backupSettings?.classList.contains("active") ? saveBackupSettings() : saveSettings(false)
-));
+document.querySelector("#saveSettingsButton").addEventListener("click", () => {
+  if (elements.backupSettings?.classList.contains("active")) {
+    if (state.portalStatus?.operationMode === "server") return;
+    saveBackupSettings();
+    return;
+  }
+  saveSettings(false);
+});
 elements.locationForm.addEventListener("submit", saveLocation);
 elements.departmentForm.addEventListener("submit", saveDepartment);
 elements.addLocationButton?.addEventListener("click", async () => {
@@ -15686,6 +16141,29 @@ elements.employeeAdditionalRights?.addEventListener("change", (event) => {
 elements.schedulePdfPreviewButton.addEventListener("click", generateSchedulePdfPreview);
 elements.vacationPdfPreviewButton.addEventListener("click", generateVacationPdfPreview);
 document.querySelector("#createBackupButton").addEventListener("click", createManualBackup);
+elements.databaseDownloadForm?.addEventListener("submit", downloadCompleteDatabase);
+elements.reloadGoogleDriveFoldersButton?.addEventListener("click", async () => {
+  const loaded = await loadManagedOffsiteFolders({ force: true });
+  if (!loaded && state.offsiteFoldersLoadState === "error") showToast(state.offsiteFoldersLoadError, true);
+});
+elements.manageGoogleDriveFolderButton?.addEventListener("click", openManagedOffsiteFolderDialog);
+elements.offsiteFolderManagementForm?.addEventListener("submit", (event) => event.preventDefault());
+elements.createManagedOffsiteFolderButton?.addEventListener("click", createManagedOffsiteFolder);
+elements.activateManagedOffsiteFolderButton?.addEventListener("click", activateManagedOffsiteFolder);
+elements.offsiteActiveFolderSelection?.addEventListener("change", () => {
+  if (elements.offsiteFolderActivationConfirmation) elements.offsiteFolderActivationConfirmation.checked = false;
+  setOffsiteFolderDialogStatus("");
+});
+elements.offsiteFolderManagementModal?.addEventListener("cancel", (event) => {
+  if (state.offsiteFolderMutationPending) event.preventDefault();
+});
+elements.offsiteFolderManagementModal?.addEventListener("close", () => {
+  clearOffsiteFolderPasswords();
+  if (elements.offsiteFolderActivationConfirmation) elements.offsiteFolderActivationConfirmation.checked = false;
+  const returnFocus = state.offsiteFolderReturnFocus;
+  state.offsiteFolderReturnFocus = null;
+  if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
+});
 document.querySelector("#importBackupButton").addEventListener("click", importBackup);
 ["pdfTitleSetting", "pdfFilenamePrefix", "pdfFilenameIncludeKw", "pdfFilenameIncludeTimestamp", "vacationPdfTitleSetting", "vacationPdfFilenamePrefix", "vacationPdfFilenameIncludePeriod", "vacationPdfFilenameIncludeTimestamp", "vacationPdfCalendarStyle", "vacationPdfShowBalance", "vacationPdfBalanceShowEntitlement", "vacationPdfBalanceShowPlanned", "vacationPdfBalanceShowConsumed"].forEach((id) => {
   document.querySelector(`#${id}`).addEventListener("input", updatePdfPreview);

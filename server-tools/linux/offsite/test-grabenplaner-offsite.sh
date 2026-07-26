@@ -93,6 +93,19 @@ if [[ -f "$recovery_set_command" && ! -L "$recovery_set_command" && -L "$recover
 else
   fail "Offline-Recovery-Set" "Befehl fehlt oder zeigt nicht auf das installierte Modul"
 fi
+switch_target_helper="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-switch-target.sh"
+if [[ -f "$switch_target_helper" && ! -L "$switch_target_helper" \
+  && "$(stat --format='%u:%g:%a:%h' -- "$switch_target_helper")" == "0:0:755:1" ]]; then
+  ok "Offsite-Zielwechsel" "fester root-only Helper installiert"
+else
+  fail "Offsite-Zielwechsel" "Helper fehlt oder besitzt unsichere Rechte"
+fi
+if [[ -d "$OFFSITE_RECOVERY_SET_ROOT" && ! -L "$OFFSITE_RECOVERY_SET_ROOT" \
+  && "$(stat --format='%u:%g:%a' -- "$OFFSITE_RECOVERY_SET_ROOT")" == "0:0:700" ]]; then
+  ok "Pending-Recovery-Sets" "root-only Ablage mit Modus 0700"
+else
+  fail "Pending-Recovery-Sets" "Ablage fehlt oder besitzt unsichere Rechte"
+fi
 for timer in grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer; do
   if systemctl is-enabled --quiet "$timer" && systemctl is-active --quiet "$timer"; then ok "Timer $timer" "aktiv"; else fail "Timer $timer" "nicht aktiv"; fi
 done
@@ -154,6 +167,23 @@ then
   ok "RAS-Steuerungsprotokoll" "redigierter Status als App-Dienstkonto abrufbar"
 else
   fail "RAS-Steuerungsprotokoll" "Socket oder Statusprotokoll nicht sicher nutzbar"
+fi
+
+target_control_socket_unit="grabenplaner-offsite-target-control.socket"
+target_control_socket_root="/run/grabenplaner-offsite-target-control"
+target_control_socket_path="$target_control_socket_root/request.sock"
+if systemctl is-enabled --quiet "$target_control_socket_unit" && systemctl is-active --quiet "$target_control_socket_unit"; then
+  ok "Offsite-Ziel-Steuerungssocket" "aktiv und beim Systemstart aktiviert"
+else
+  fail "Offsite-Ziel-Steuerungssocket" "nicht aktiv oder nicht aktiviert"
+fi
+if [[ "$control_gid" =~ ^[0-9]+$ && -d "$target_control_socket_root" && ! -L "$target_control_socket_root" \
+  && -S "$target_control_socket_path" && ! -L "$target_control_socket_path" \
+  && "$(stat --format='%u:%g:%a' -- "$target_control_socket_root")" == "0:0:755" \
+  && "$(stat --format='%u:%g:%a:%h' -- "$target_control_socket_path")" == "0:$control_gid:660:1" ]]; then
+  ok "Offsite-Ziel-Socketrechte" "root und dedizierte Steuerungsgruppe, Modus 0660"
+else
+  fail "Offsite-Ziel-Socketrechte" "Pfad, Besitz oder Modus weicht vom Sicherheitsvertrag ab"
 fi
 
 status_gid="$(getent group "$OFFSITE_STATUS_GROUP" | awk -F: '{print $3}')"

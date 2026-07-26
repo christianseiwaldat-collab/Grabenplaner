@@ -1920,8 +1920,11 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     assert.equal(diagnostics.database.busyTimeoutMs, 5000);
     assert.equal(diagnostics.instanceLock.held, true);
     const monitorCheck = diagnostics.productionChecks.find((check) => check.id === "monitor");
-    const blockingChecks = diagnostics.productionChecks.filter((check) => check.id !== "monitor");
+    const backupCheck = diagnostics.productionChecks.find((check) => check.id === "backup");
+    const blockingChecks = diagnostics.productionChecks
+      .filter((check) => !["backup", "monitor"].includes(check.id));
     assert.ok(blockingChecks.every((check) => check.ok), JSON.stringify(blockingChecks));
+    assert.equal(backupCheck?.ok, false);
     assert.equal(monitorCheck?.ok, false);
     assert.equal(diagnostics.monitor.configured, true);
     assert.equal(diagnostics.monitor.blocksMainReadiness, false);

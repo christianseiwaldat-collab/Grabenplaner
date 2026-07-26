@@ -1542,17 +1542,41 @@
               <div class="backup-actions"><button type="button" class="secondary-button" id="refreshServerDiagnosticsButton">Diagnose aktualisieren</button></div>
             </div>
             <div class="settings-card full-settings-card hidden" id="databaseBackupSettingsCard">
-              <div class="card-heading"><div class="card-icon">DB</div><div><h2>Datenbank &amp; Backups</h2><p>Beim Programmstart entsteht eine interne Sicherung. Zusätzlich kann ein getrenntes lokales Sicherungsziel regelmäßig verwendet werden.</p></div></div>
+              <div class="card-heading"><div class="card-icon">DB</div><div><h2>Datenbank &amp; Backups</h2><p>Interne Sicherungen, ein geprüfter Datenbankexport und die externe Wiederherstellbarkeit werden passend zur Betriebsart bereitgestellt.</p></div></div>
               <div class="database-backup-path"><span>Interne Startsicherung</span><strong id="appBackupDirectoryText">geschützter interner Sicherungsbereich</strong></div>
-              <label class="switch-row"><span><strong>Zusätzliches lokales Sicherungsziel aktiv</strong><small>Für Serverinstallationen muss die IT ein getrenntes, geschütztes Ziel konfigurieren.</small></span><input id="externalBackupEnabled" type="checkbox" /></label>
-              <label class="field full-width"><span>Lokales Sicherungsziel</span><input id="backupDirectory" placeholder="Von der technischen Administration festgelegter Sicherungspfad" /></label>
-              <div class="inline-fields">
-                <label class="field"><span>Backup-Intervall</span><div class="unit-input"><input id="backupIntervalHours" type="number" min="1" max="6" step="1" /><em>Stunden</em></div></label>
-                <div class="backup-actions">
-                  <button type="button" class="secondary-button" id="createBackupButton">Backup jetzt erstellen</button>
+              <div id="legacyLocalBackupControls">
+                <label class="switch-row"><span><strong>Zusätzliches lokales Sicherungsziel aktiv</strong><small>Für Serverinstallationen muss die IT ein getrenntes, geschütztes Ziel konfigurieren.</small></span><input id="externalBackupEnabled" type="checkbox" /></label>
+                <label class="field full-width"><span>Lokales Sicherungsziel</span><input id="backupDirectory" placeholder="Von der technischen Administration festgelegter Sicherungspfad" /></label>
+                <div class="inline-fields">
+                  <label class="field"><span>Backup-Intervall</span><div class="unit-input"><input id="backupIntervalHours" type="number" min="1" max="6" step="1" /><em>Stunden</em></div></label>
+                  <div class="backup-actions">
+                    <button type="button" class="secondary-button" id="createBackupButton">Backup jetzt erstellen</button>
+                  </div>
+                </div>
+                <p class="settings-note">Standard: alle 2 Stunden, einstellbar von 1 bis 6 Stunden. Die letzten 30 Sicherungen bleiben je Backup-Ordner erhalten.</p>
+              </div>
+              <div class="server-database-download hidden" id="serverDatabaseDownloadPanel">
+                <div class="secure-download-copy">
+                  <strong>Komplette Datenbank herunterladen (.db)</strong>
+                  <span id="databaseDownloadScopeNote">Der Download enthält alle SQLite-Tabellen. Fotos, PDF-Anhänge, geschützte Dokumentdateien und Wiederherstellungsschlüssel sind nicht enthalten; für eine vollständige Wiederherstellung bleibt die verschlüsselte Offsite-Sicherung maßgeblich.</span>
+                </div>
+                <form class="secure-download-form" id="databaseDownloadForm" aria-describedby="databaseDownloadScopeNote databaseDownloadStatus">
+                  <label class="field"><span>Aktuelles Passwort</span><input id="databaseDownloadCurrentPassword" type="password" autocomplete="current-password" required /></label>
+                  <button type="submit" class="secondary-button" id="databaseDownloadButton">Datenbank herunterladen</button>
+                </form>
+                <p class="secure-download-status" id="databaseDownloadStatus" role="status" aria-live="polite"></p>
+              </div>
+            </div>
+            <div class="settings-card full-settings-card hidden" id="serverGoogleDriveManagementCard">
+              <div class="card-heading"><div class="card-icon">Drive</div><div><h2>Google-Drive-Offsite-Sicherung</h2><p>Die verschlüsselte externe Sicherung wird ausschließlich durch die geschützte Serververwaltung gesteuert.</p></div></div>
+              <div class="google-drive-management-row">
+                <p id="googleDriveManagementStatus" role="status" aria-live="polite">Sicherer Status wird geladen …</p>
+                <div class="google-drive-management-actions">
+                  <button type="button" class="secondary-button compact-button" id="reloadGoogleDriveFoldersButton">Ordnerliste neu laden</button>
+                  <button type="button" class="secondary-button" id="manageGoogleDriveFolderButton" aria-describedby="googleDriveManagementHint" disabled>Ordner verwalten</button>
                 </div>
               </div>
-              <p class="settings-note">Standard: alle 2 Stunden, einstellbar von 1 bis 6 Stunden. Die letzten 30 Sicherungen bleiben je Backup-Ordner erhalten.</p>
+              <p class="settings-note" id="googleDriveManagementHint">Verfügbar sind ausschließlich von Grabenplaner verwaltete Ordnernamen. Es gibt keine freie Pfadeingabe und keinen Zugriff auf andere Bereiche in Google Drive.</p>
             </div>
             <div class="settings-card full-settings-card hidden" id="backupRestoreGuidanceCard">
               <div class="card-heading"><div class="card-icon">Restore</div><div><h2>Wiederherstellung im Wartungsfenster</h2><p>Im laufenden HTTPS-Serverbetrieb ist ein Datenbankimport absichtlich gesperrt. Datenbank, verschlüsselte Dokumentablage und zugehörige Schlüssel müssen gemeinsam durch die technische Administration wiederhergestellt und geprüft werden.</p></div></div>
@@ -2342,6 +2366,49 @@
         <label class="field"><span>Prüfbemerkung</span><textarea id="timeDayReviewNote" rows="3" maxlength="500" placeholder="Optional"></textarea></label>
         <p class="message hidden" id="timeDayReviewMessage"></p>
         <div class="modal-actions"><button type="button" class="secondary-button hidden" id="removeTimeDayReviewButton">Prüfung aufheben</button><span></span><button type="button" class="secondary-button" data-close="timeDayReviewModal">Abbrechen</button><button type="submit" class="primary-button">Als geprüft speichern</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal offsite-folder-modal" id="offsiteFolderManagementModal" aria-labelledby="offsiteFolderManagementTitle" aria-describedby="offsiteFolderManagementDescription">
+      <form method="dialog" id="offsiteFolderManagementForm">
+        <div class="modal-header">
+          <div>
+            <span class="eyebrow">Google-Drive-Offsite-Sicherung</span>
+            <h2 id="offsiteFolderManagementTitle">Verwaltete Sicherungsordner</h2>
+            <p id="offsiteFolderManagementDescription">Nur app-eigene Ordner unterhalb des geschützten Grabenplaner-Bereichs können angezeigt, angelegt oder ausgewählt werden.</p>
+          </div>
+          <button type="button" class="close-button" data-close="offsiteFolderManagementModal" aria-label="Dialog schließen">×</button>
+        </div>
+
+        <section class="offsite-folder-overview" aria-labelledby="offsiteFolderOverviewTitle">
+          <div><span class="eyebrow" id="offsiteFolderOverviewTitle">Aktives Sicherungsziel</span><strong id="offsiteFolderActiveLabel">Noch nicht festgelegt</strong></div>
+          <div class="offsite-managed-folder-list" id="offsiteManagedFolderList" role="list"></div>
+        </section>
+
+        <fieldset class="offsite-folder-action">
+          <legend>Neuen verwalteten Ordner anlegen</legend>
+          <p>Der Name darf 1 bis 48 Zeichen enthalten: Buchstaben, Ziffern, Bindestrich und Unterstrich. Pfade oder Drive-Links werden nicht angenommen.</p>
+          <div class="offsite-folder-action-fields">
+            <label class="field"><span>Ordnername</span><input id="offsiteNewFolderLabel" maxlength="48" pattern="[A-Za-z0-9](?:[A-Za-z0-9_-]{0,46}[A-Za-z0-9])?" autocomplete="off" placeholder="z. B. Sicherung_2026" /></label>
+            <label class="field"><span>Aktuelles Passwort</span><input id="offsiteCreateCurrentPassword" type="password" autocomplete="current-password" /></label>
+          </div>
+          <div class="offsite-folder-action-buttons"><button type="button" class="secondary-button" id="createManagedOffsiteFolderButton">Ordner sicher anlegen</button></div>
+        </fieldset>
+
+        <fieldset class="offsite-folder-action offsite-folder-activation">
+          <legend>Anderen Ordner als Sicherungsziel aktivieren</legend>
+          <label class="field"><span>Verwalteter Ordner</span><select id="offsiteActiveFolderSelection"></select></label>
+          <section class="offsite-folder-change-warning" id="offsiteFolderActivationWarning">
+            <strong>Achtung: Das Ziel künftiger Offsite-Sicherungen wird geändert.</strong>
+            <p>Der geschützte Wechsel kann einige Minuten dauern. Das neue Repository wird übernommen und geprüft; das alte Repository bleibt als Rückfallpunkt erhalten. Anschließend wird ein Recovery-Set für den Offline-Transfer und die dortige Prüfung vorbereitet. Bis dieser Transfer bestätigt ist, bleibt ein weiterer Zielwechsel gesperrt.</p>
+          </section>
+          <label class="checkbox-line offsite-folder-confirmation"><input id="offsiteFolderActivationConfirmation" type="checkbox" /><span>Ich habe die Folgen geprüft und möchte den ausgewählten verwalteten Ordner aktivieren.</span></label>
+          <label class="field"><span>Aktuelles Passwort</span><input id="offsiteActivateCurrentPassword" type="password" autocomplete="current-password" /></label>
+          <div class="offsite-folder-action-buttons"><button type="button" class="danger-button" id="activateManagedOffsiteFolderButton" aria-describedby="offsiteFolderActivationWarning">Ausgewählten Ordner aktivieren</button></div>
+        </fieldset>
+
+        <p class="offsite-folder-dialog-status" id="offsiteFolderDialogStatus" role="status" aria-live="polite"></p>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="offsiteFolderManagementModal">Schließen</button></div>
       </form>
     </dialog>
 

@@ -469,6 +469,48 @@ html[data-ui-mode="mobile"] .app-shell { padding-top:42px; }
 .database-backup-path { display: grid; gap: 4px; margin-bottom: 14px; padding: 12px 14px; border: 1px solid #dce2df; border-radius: 10px; background: #f8faf8; }
 .database-backup-path span { color: var(--muted); font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .database-backup-path strong { overflow-wrap: anywhere; font-size: 10px; }
+.server-database-download { display:grid; gap:12px; padding:14px; border:1px solid var(--line); border-radius:11px; background:var(--surface-soft); }
+.secure-download-copy { display:grid; gap:5px; }
+.secure-download-copy strong { font-size:10px; }
+.secure-download-copy span { color:var(--muted); font-size:8.5px; line-height:1.5; }
+.secure-download-form { display:grid; grid-template-columns:minmax(220px,1fr) auto; gap:10px; align-items:end; }
+.secure-download-form .field { margin:0; }
+.secure-download-form button { min-height:37px; }
+.secure-download-status { min-height:14px; margin:0; color:var(--muted); font-size:8.5px; line-height:1.45; }
+.secure-download-status[data-state="pending"] { color:#765714; }
+.secure-download-status[data-state="success"] { color:#246048; }
+.secure-download-status[data-state="error"] { color:#9b342b; }
+.google-drive-management-row { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:13px 14px; border:1px solid var(--line); border-radius:11px; background:var(--surface-soft); }
+.google-drive-management-row p { margin:0; color:var(--muted); font-size:9px; line-height:1.45; }
+.google-drive-management-row p[data-state="ok"] { color:#246048; }
+.google-drive-management-row p[data-state="warning"] { color:#765714; }
+.google-drive-management-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; }
+.offsite-folder-modal { width:min(760px,calc(100vw - 28px)); }
+.offsite-folder-overview { display:grid; gap:11px; padding:14px 15px; border:1px solid #b9d9ca; border-radius:12px; background:#f1f8f4; }
+.offsite-folder-overview > div:first-child { display:grid; gap:4px; }
+.offsite-folder-overview > div:first-child strong { font-size:11px; overflow-wrap:anywhere; }
+.offsite-managed-folder-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.offsite-managed-folder { display:grid; gap:3px; min-width:0; padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:rgba(255,255,255,.74); }
+.offsite-managed-folder.active { color:#245b45; border-color:#87bda5; background:#e3f1e9; }
+.offsite-managed-folder strong,.offsite-managed-folder small { overflow-wrap:anywhere; }
+.offsite-managed-folder strong { font-size:9px; }
+.offsite-managed-folder small { color:var(--muted); font-size:7.5px; }
+.offsite-folder-action { min-width:0; margin:15px 0 0; padding:14px 15px; border:1px solid var(--line); border-radius:12px; background:var(--surface-soft); }
+.offsite-folder-action legend { padding:0 7px; color:var(--ink); font-size:10px; font-weight:850; }
+.offsite-folder-action > p { margin:0 0 11px; color:var(--muted); font-size:8.5px; line-height:1.5; }
+.offsite-folder-action-fields { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px; }
+.offsite-folder-action .field { margin:0; }
+.offsite-folder-action-buttons { display:flex; justify-content:flex-end; margin-top:11px; }
+.offsite-folder-change-warning { display:grid; gap:6px; margin:11px 0; padding:12px 13px; border:1px solid #dfbd68; border-left:4px solid #c48612; border-radius:10px; color:#684c10; background:#fff4cf; }
+.offsite-folder-change-warning strong { font-size:9.5px; }
+.offsite-folder-change-warning p { margin:0; font-size:8.5px; line-height:1.5; }
+.offsite-folder-confirmation { height:auto; min-height:40px; margin-bottom:11px; padding-block:9px; line-height:1.4; }
+.offsite-folder-dialog-status { min-height:17px; margin:13px 0 0; padding:9px 11px; border-radius:9px; color:var(--muted); background:var(--surface-soft); font-size:8.5px; line-height:1.45; }
+.offsite-folder-dialog-status:empty { display:none; }
+.offsite-folder-dialog-status[data-state="pending"] { color:#765714; background:#fff4cf; }
+.offsite-folder-dialog-status[data-state="success"] { color:#246048; background:#e3f1e9; }
+.offsite-folder-dialog-status[data-state="warning"] { color:#765714; background:#fff4cf; }
+.offsite-folder-dialog-status[data-state="error"] { color:#8f382e; background:#fde8e4; }
 .server-diagnostics { display: grid; gap: 11px; }
 .diagnostic-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid #d8e2dd; border-radius: 11px; background: #f5faf7; }
 .diagnostic-summary.warning { border-color: #e2c87f; background: #fff8df; }.diagnostic-summary strong,.diagnostic-summary span { font-size: 9px; }.diagnostic-summary span { color: var(--muted); overflow-wrap: anywhere; }
@@ -524,6 +566,11 @@ html[data-ui-mode="mobile"] .app-shell { padding-top:42px; }
 .maintenance-guidance strong { font-size:9.5px; }
 .maintenance-guidance span { color:var(--muted); font-size:8.5px; line-height:1.5; }
 @media (max-width: 620px) {
+  .google-drive-management-row { align-items:stretch; flex-direction:column; }
+  .google-drive-management-actions { justify-content:stretch; }
+  .google-drive-management-actions button { flex:1 1 180px; }
+  .offsite-managed-folder-list,.offsite-folder-action-fields { grid-template-columns:1fr; }
+  .offsite-folder-action-buttons button { width:100%; }
   .server-alert-banner { grid-template-columns:26px minmax(0,1fr); }
   .server-alert-banner em { display:none; }
   .diagnostic-readiness-grid { grid-template-columns:1fr; }
@@ -973,6 +1020,10 @@ input:disabled,select:disabled,textarea:disabled { color:#89938e; background:#ee
   .hours-values { grid-template-columns: 1fr 1fr; }
   .settings-header .primary-button { margin-top: 15px; }
   .form-grid, .inline-fields, .option-entry, .global-block-entry, .service-time-grid { grid-template-columns: 1fr; }
+  .secure-download-form { grid-template-columns:1fr; }
+  .secure-download-form button { width:100%; }
+  .google-drive-management-row { align-items:stretch; flex-direction:column; }
+  .google-drive-management-row button { width:100%; }
   .employee-access-profile { grid-template-columns:1fr; padding:13px; }
   .employee-access-heading,.employee-additional-rights,.employee-access-profile > .calculation-note { grid-column:auto; }
   .employee-additional-rights section > div { grid-template-columns:1fr; }
@@ -2433,6 +2484,9 @@ html[data-active-page-theme="dark"] .modal { --modal-surface:#1b2522; color:#edf
 html[data-active-page-theme="dark"] .modal :is(.modal-header,.modal-actions) { border-color:#34443e; }
 html[data-active-page-theme="dark"] .modal :is(input,select,textarea,.secondary-button,.close-button,.weekday-checks label,.checkbox-line) { color:#edf4f1; border-color:#40524b; background:#24322d; }
 html[data-active-page-theme="dark"] .server-restart-modal .server-restart-warning { color:var(--warning-ink); border-color:#786735; background:var(--warning-surface); }
+html[data-active-page-theme="dark"] .offsite-folder-modal :is(.offsite-folder-overview,.offsite-folder-action,.offsite-managed-folder) { color:#edf4f1; border-color:#40524b; background:#202d29; }
+html[data-active-page-theme="dark"] .offsite-folder-modal .offsite-managed-folder.active { color:#c6f1df; border-color:#557b6d; background:#294138; }
+html[data-active-page-theme="dark"] .offsite-folder-modal .offsite-folder-change-warning { color:var(--warning-ink); border-color:#786735; background:var(--warning-surface); }
 html[data-active-page-theme="dark"] .server-restart-modal .server-restart-message { color:var(--muted); border-color:#40524b; background:#24322d; }
 html[data-active-page-theme="dark"] .server-restart-modal .server-restart-message.success { color:var(--success-ink); border-color:#416d5d; background:var(--success-surface); }
 html[data-active-page-theme="dark"] .server-restart-modal .server-restart-message.error { color:var(--danger-ink); border-color:#7b4b44; background:var(--danger-surface); }

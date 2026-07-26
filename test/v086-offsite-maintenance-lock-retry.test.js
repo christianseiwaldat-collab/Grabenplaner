@@ -119,11 +119,11 @@ test("v0.86: bounded lock wait does not turn genuine prepare errors into success
   assert.doesNotMatch(prepare, /\|\|\s*true[^\n]*gp_acquire_maintenance_lock/);
 });
 
-test("v0.86: the lock change is an explicit v4 to v5 offsite migration", () => {
-  assert.equal(moduleSchema.moduleVersion, 5);
-  assert.match(installer, /\[1, 2, 3, 4, 5\]\.includes\(value\.moduleVersion\)/);
-  assert.match(installer, /installed_module_version >= 1 && installed_module_version <= 4/);
-  assert.match(installer, /kontrolliert auf v5 migriert/);
+test("v0.86: the target-control change preserves the explicit v4 to v6 offsite migration", () => {
+  assert.equal(moduleSchema.moduleVersion, 6);
+  assert.match(installer, /\[1, 2, 3, 4, 5, 6\]\.includes\(value\.moduleVersion\)/);
+  assert.match(installer, /installed_module_version >= 1 && installed_module_version <= 5/);
+  assert.match(installer, /kontrolliert auf v6 migriert/);
 });
 
 test("v0.86: maintenance-lock helper really waits for a short holder", {

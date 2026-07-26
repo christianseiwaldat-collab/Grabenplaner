@@ -46,8 +46,8 @@ source "$core_common"
 
 secure_target() {
   local requested="$1" mode="$2" resolved parent
-  [[ "$requested" == /root/grabenplaner-recovery-set-* && "$requested" != *"/../"* ]] \
-    || offsite_die "Recovery-Sets duerfen nur als direkter, eindeutig benannter Unterordner von /root angelegt werden."
+  [[ "$requested" != *"/../"* ]] \
+    || offsite_die "Der Recovery-Set-Pfad ist nicht zulaessig."
   if [[ "$mode" == "existing" ]]; then
     resolved="$(realpath --canonicalize-existing -- "$requested")" \
       || offsite_die "Das Recovery-Set wurde nicht gefunden."
@@ -56,7 +56,13 @@ secure_target() {
       || offsite_die "Der Recovery-Set-Pfad ist ungueltig."
   fi
   parent="$(dirname -- "$resolved")"
-  [[ "$resolved" == "$requested" && "$parent" == "/root" ]] \
+  [[ "$resolved" == "$requested" && (
+      ( "$parent" == "/root" && "$resolved" == /root/grabenplaner-recovery-set-* )
+      || ( "$parent" == "$OFFSITE_RECOVERY_SET_ROOT"
+        && "$resolved" == "$OFFSITE_RECOVERY_SET_ROOT/grabenplaner-recovery-set-pending-"* )
+      || ( "$parent" == "$OFFSITE_RECOVERY_SET_ROOT"
+        && "$resolved" == "$OFFSITE_RECOVERY_SET_ROOT/.pending."* )
+    ) ]] \
     || offsite_die "Der Recovery-Set-Pfad ist nicht kanonisch."
   printf '%s\n' "$resolved"
 }
