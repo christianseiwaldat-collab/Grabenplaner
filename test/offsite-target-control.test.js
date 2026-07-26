@@ -514,8 +514,23 @@ test("default rclone runner drops privileges and removes its transient password 
   const calls = [];
   try {
     const result = broker.defaultRunRclone(["lsjson", "internal-drive:Grabenplaner-Offsite"], config, optionsFor(files, {
+      platform: "linux",
       identitySpawnSync(command, args) {
         return { status: 0, stdout: args[0] === "-u" ? "1001\n" : "1002\n" };
+      },
+      chownSync() {},
+      chmodSync(target, mode) {
+        fs.chmodSync(target, mode);
+      },
+      lstatSync(target) {
+        const stat = fs.lstatSync(target);
+        return {
+          isDirectory: () => stat.isDirectory(),
+          isSymbolicLink: () => stat.isSymbolicLink(),
+          mode: (stat.mode & ~0o7777) | 0o700,
+          uid: 0,
+          gid: 0,
+        };
       },
       rcloneSpawnSync(command, args, spawnOptions) {
         calls.push({ command, args, spawnOptions });
