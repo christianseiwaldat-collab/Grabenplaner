@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.85.4 Beta · Technische Offsite-Migrationsbrücke
+
+- Der installierte Linux-Paketprüfer erkennt weiterhin den unveränderten Offsite-Modulvertrag v4 und zusätzlich den freigegebenen Kandidatvertrag v5 mit demselben exakt geprüften Artefaktpfad-Satz.
+- Die Kompatibilitätsprüfung weist einen Wechsel von v4 auf v5 weiterhin ausdrücklich als erforderliche Offsite-Migration aus. Das normale App-Update umgeht oder startet diese Migration nicht.
+- Das ausgelieferte Offsite-Modul bleibt in dieser Brückenversion byte-identisch auf v4. Produktoberfläche, Launcher und sichtbare Produktbezeichnung bleiben unverändert v0.85 Beta.
+
 ## v0.85.3 Beta · Stabilität für Leihbelege und Leihfotos
 
 - Die geschützte Waisenbereinigung berücksichtigt nun auch unveränderliche Leihbelege und Leihfotos. Ein App-Neustart oder der tägliche Dokumentenabgleich entfernt keine weiterhin referenzierten Leihdateien mehr.
