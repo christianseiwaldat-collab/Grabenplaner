@@ -6,11 +6,12 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("v0.85.4: Migrationsbrücke, Launcher, UI und aktuelle Dokumentation bleiben konsistent", () => {
+test("v0.86: Paket, Launcher, UI und aktuelle Dokumentation bleiben konsistent", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.85.4-beta");
+  assert.equal(packageJson.version, "0.86.0-beta");
 
-  assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.85 Beta starten.cmd")), true);
+  assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.86 Beta starten.cmd")), true);
+  assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.85 Beta starten.cmd")), false);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.84 Beta starten.cmd")), false);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.83 Beta starten.cmd")), false);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.82 Beta starten.cmd")), false);
@@ -36,8 +37,9 @@ test("v0.85.4: Migrationsbrücke, Launcher, UI und aktuelle Dokumentation bleibe
   const pilotAcceptanceDocs = read("docs/PILOT-UND-ABNAHME.md");
   const genericLauncher = read("Dienstplan starten.cmd");
 
-  assert.match(indexHtml, /v0\.85 Beta/);
-  assert.match(readme, /v0\.85 Beta/);
+  assert.match(indexHtml, /v0\.86 Beta/);
+  assert.match(readme, /v0\.86 Beta/);
+  assert.match(readme, /Personal-Regelwerk in v0\.86 Beta/);
   assert.match(readme, /Leihmodul in v0\.85 Beta/);
   assert.match(readme, /Arbeitszeit-Regelprüfung/);
   assert.match(readme, /Monitorbetrieb/);
@@ -47,9 +49,9 @@ test("v0.85.4: Migrationsbrücke, Launcher, UI und aktuelle Dokumentation bleibe
   assert.match(readme, /Revisionssichere Fallverwaltung/);
   assert.match(readme, /nächtliche Recovery-Assurance-Automatik/);
   assert.match(serverDocs, /Recovery Assurance und System-Center v0\.78/);
-  assert.match(usbNotes, /Version v0\.85 Beta/);
+  assert.match(usbNotes, /Version v0\.86 Beta/);
   assert.match(usbNotes, /keine automatische Reduktion/i);
-  assert.match(genericLauncher, /Grabenplaner v0\.85 Beta starten\.cmd/);
+  assert.match(genericLauncher, /Grabenplaner v0\.86 Beta starten\.cmd/);
   assert.match(governanceDocs, /Urlaubsgesetz § 2/);
   assert.match(governanceDocs, /Urlaubsgesetz § 4/);
   assert.match(governanceDocs, /Urlaubsgesetz § 8/);
@@ -66,6 +68,7 @@ test("v0.85.4: Migrationsbrücke, Launcher, UI und aktuelle Dokumentation bleibe
   assert.match(pilotAcceptanceDocs, /WCAG 2\.2/);
   assert.match(pilotAcceptanceDocs, /OWASP ASVS 5\.0\.0/);
   assert.match(pilotAcceptanceDocs, /keine pauschale Rechts-, Sicherheits- oder Barrierefreiheitsgarantie/);
+  assert.match(versionLog, /v0\.86 Beta/);
   assert.match(versionLog, /v0\.85 Beta/);
   assert.match(versionLog, /v0\.84 Beta/);
   assert.match(versionLog, /v0\.83 Beta/);

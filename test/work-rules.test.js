@@ -52,6 +52,10 @@ test("Arbeitszeitregeln: Katalog ist versioniert, quellenbelegt und trennt aktiv
   assert.equal(catalog.sources["ris.azg.11"].jurisdiction, "AT");
   assert.match(catalog.sources["ris.azg.11"].url, /ris\.bka\.gv\.at/i);
   assert.ok(catalog.profiles["at-retail-adult-monitor"].ruleIds.includes("at.trade.saturday-after-18"));
+  assert.equal(BUILTIN_WORK_RULE_PROFILES["at-retail-youth-monitor"].profile.version, "2026.2");
+  assert.equal(BUILTIN_WORK_RULE_PROFILES["at-retail-youth-monitor"].assignable, false);
+  assert.ok(catalog.profiles["at-retail-youth-monitor"].ruleIds.includes("at.kjbg.retail.saturday-monday"));
+  assert.match(catalog.sources["ris.kjbg.19a"].url, /ris\.bka\.gv\.at/i);
 });
 
 test("Arbeitszeitregeln: Fingerprints und gesamte Bewertung sind deterministisch", () => {
@@ -269,9 +273,29 @@ test("Arbeitszeitregeln: unbekanntes Alter oder unbestätigte Profilanwendbarkei
   assert.ok(missingAge.findings.filter(({ ruleId }) => ruleId !== "at.applicability.adult").every(({ state }) => state === "unknown"));
   assert.ok(missingAge.findings.filter(({ ruleId }) => ruleId !== "at.applicability.adult").every(({ baseEnforcement }) => baseEnforcement === "manual_review"));
 
-  const unconfirmed = evaluate({ applicabilityConfirmed: false });
+  const unconfirmed = evaluate({
+    applicabilityConfirmed: false,
+    enforcementMode: "enforced",
+  });
   assert.equal(finding(unconfirmed, "at.applicability.adult").evidence.reason, "profile_not_confirmed");
   assert.equal(finding(unconfirmed, "at.azg.maximum.daily").state, "unknown");
+});
+
+test("Arbeitszeitregeln: Geburtsdatum bestätigt Volljährigkeit im Monitorbetrieb", () => {
+  const result = evaluate({
+    employee: { id: "252", birthDate: "1984-07-22" },
+    applicabilityConfirmed: false,
+    enforcementMode: "monitor",
+    rangeStart: "2026-07-27",
+    rangeEnd: "2026-08-02",
+    shifts: [shift("adult", "2026-07-27", "09:00", "18:00", 30)],
+  });
+  const applicability = finding(result, "at.applicability.adult");
+  assert.equal(applicability.state, "pass");
+  assert.equal(applicability.evidence.reason, "birth_date");
+  assert.equal(applicability.evidence.ageAtRangeStart, 42);
+  assert.equal(applicability.evidence.profileConfirmed, false);
+  assert.match(applicability.message, /Volljährigkeit ist bestätigt/i);
 });
 
 test("Arbeitszeitregeln: Minderjährige benötigen ein eigenes KJBG-Profil", () => {
@@ -283,6 +307,132 @@ test("Arbeitszeitregeln: Minderjährige benötigen ein eigenes KJBG-Profil", () 
   assert.equal(applicability.state, "unknown");
   assert.equal(applicability.evidence.reason, "minor_requires_kjbg_profile");
   assert.match(applicability.message, /KJBG/i);
+});
+
+test("Arbeitszeitregeln: Jugendprofil warnt direkt bei Samstags- und folgendem Montagsdienst", () => {
+  const result = evaluatePlannedSchedule({
+    profileId: "at-retail-youth-monitor",
+    employee: {
+      id: "420",
+      birthDate: "2009-07-22",
+      positionId: "lehrling",
+      isApprentice: true,
+    },
+    rangeStart: "2026-11-23",
+    rangeEnd: "2026-11-30",
+    shifts: [
+      shift("saturday", "2026-11-28", "09:00", "18:00", 30),
+      shift("monday", "2026-11-30", "09:00", "17:00", 30),
+    ],
+  });
+  assert.equal(finding(result, "at.applicability.youth").state, "pass");
+  const weekend = finding(result, "at.kjbg.retail.saturday-monday");
+  assert.equal(weekend.state, "fail");
+  assert.equal(weekend.scope.date, "2026-11-30");
+  assert.deepEqual(weekend.scope.dates, ["2026-11-28", "2026-11-30"]);
+  assert.match(weekend.message, /Lehrling unter 18/i);
+  assert.match(weekend.message, /Montag/i);
+});
+
+test("Arbeitszeitregeln: zulässige Jugendwoche bleibt ohne Dauerwarnung", () => {
+  const result = evaluatePlannedSchedule({
+    profileId: "at-retail-youth-monitor",
+    employee: {
+      id: "420",
+      birthDate: "2009-07-22",
+      positionId: "lehrling",
+      isApprentice: true,
+    },
+    rangeStart: "2026-07-13",
+    rangeEnd: "2026-07-19",
+    shifts: [13, 14, 15, 16, 17].map((day) => (
+      shift(`regular-${day}`, `2026-07-${day}`, "10:00", "17:00", 30)
+    )),
+  });
+  assert.equal(result.summary.state, "pass");
+  assert.ok(result.findings.every((entry) => entry.state === "pass"));
+});
+
+test("Arbeitszeitregeln: Vorweihnachtsausnahme erlaubt die letzten vier aufeinanderfolgenden Samstage", () => {
+  const youth = {
+    id: "420",
+    birthDate: "2009-07-22",
+    positionId: "lehrling",
+    isApprentice: true,
+  };
+  const christmas = evaluatePlannedSchedule({
+    profileId: "at-retail-youth-monitor",
+    employee: youth,
+    rangeStart: "2026-11-28",
+    rangeEnd: "2026-12-19",
+    shifts: [
+      shift("christmas-1", "2026-11-28", "10:00", "18:00", 30),
+      shift("christmas-2", "2026-12-05", "10:00", "18:00", 30),
+      shift("christmas-3", "2026-12-12", "10:00", "18:00", 30),
+      shift("christmas-4", "2026-12-19", "10:00", "18:00", 30),
+    ],
+  });
+  const allowed = findings(christmas, "at.kjbg.retail.consecutive-saturdays");
+  assert.equal(allowed.length, 3);
+  assert.ok(allowed.every((entry) => entry.state === "pass"));
+  assert.ok(allowed.every((entry) => entry.evidence.christmasException === true));
+
+  const regular = evaluatePlannedSchedule({
+    profileId: "at-retail-youth-monitor",
+    employee: youth,
+    rangeStart: "2026-11-14",
+    rangeEnd: "2026-11-21",
+    shifts: [
+      shift("regular-1", "2026-11-14", "09:00", "18:00", 30),
+      shift("regular-2", "2026-11-21", "09:00", "18:00", 30),
+    ],
+  });
+  const denied = finding(regular, "at.kjbg.retail.consecutive-saturdays");
+  assert.equal(denied.state, "fail");
+  assert.equal(denied.evidence.christmasException, false);
+  assert.match(denied.message, /folgende Samstag/i);
+});
+
+test("Arbeitszeitregeln: Jugendprofil prüft Pause, Nachtruhe und zwölf Stunden Ruhezeit", () => {
+  const result = evaluatePlannedSchedule({
+    profileId: "at-retail-youth-monitor",
+    employee: {
+      id: "420",
+      birthDate: "2009-07-22",
+      positionId: "lehrling",
+      isApprentice: true,
+    },
+    rangeStart: "2026-07-13",
+    rangeEnd: "2026-07-14",
+    shifts: [
+      shift("late", "2026-07-13", "14:00", "21:00", 0),
+      shift("early", "2026-07-14", "07:00", "12:00", 0),
+    ],
+  });
+  assert.equal(finding(result, "at.kjbg.break.after-four-half", ({ scope }) => scope.date === "2026-07-13").state, "fail");
+  assert.equal(finding(result, "at.kjbg.night-work").state, "fail");
+  assert.equal(finding(result, "at.kjbg.daily-rest").state, "fail");
+});
+
+test("Arbeitszeitregeln: unter 15 Jahren werden vierzehn Stunden Ruhezeit verlangt", () => {
+  const result = evaluatePlannedSchedule({
+    profileId: "at-retail-youth-monitor",
+    employee: {
+      id: "421",
+      birthDate: "2012-07-22",
+      positionId: "lehrling",
+      isApprentice: true,
+    },
+    rangeStart: "2026-07-13",
+    rangeEnd: "2026-07-14",
+    shifts: [
+      shift("day-one", "2026-07-13", "10:00", "18:00", 30),
+      shift("day-two", "2026-07-14", "07:00", "12:00", 30),
+    ],
+  });
+  const rest = finding(result, "at.kjbg.daily-rest");
+  assert.equal(rest.state, "fail");
+  assert.equal(rest.evidence.threshold, 14 * 60);
 });
 
 test("Arbeitszeitregeln: KV-Handel-Entwurf ist nicht zuweisbar", () => {

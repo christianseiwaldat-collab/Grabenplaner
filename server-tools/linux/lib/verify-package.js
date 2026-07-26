@@ -10,8 +10,6 @@ const manifestPath = path.join(root, "grabenplaner-server-manifest.json");
 const runtimeSchemaPath = path.join(root, "server-tools", "linux", "runtime-schema.json");
 const offsiteSchemaPath = path.join(root, "server-tools", "linux", "offsite", "module-schema.json");
 const hardeningSchemaPath = path.join(root, "server-tools", "linux", "hardening", "module-schema.json");
-const supportedOffsiteCandidateVersions = new Set([4, 5]);
-
 const expectedOffsiteArtifacts = [
   "server-tools/linux/offsite/grabenplaner-offsite-application-smoke.sh",
   "server-tools/linux/offsite/grabenplaner-offsite-assurance.sh",
@@ -238,7 +236,7 @@ function readOffsiteModuleContract() {
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Der optionale Offsite-Modulvertrag fehlt oder ist unzulaessig.");
   const contract = JSON.parse(fs.readFileSync(offsiteSchemaPath, "utf8").replace(/^\uFEFF/, ""));
   if (contract?.format !== "grabenplaner-linux-offsite-module-contract" || contract?.schemaVersion !== 1
-    || !supportedOffsiteCandidateVersions.has(contract?.moduleVersion) || contract?.activationPolicy !== "explicit-root-setup"
+    || contract?.moduleVersion !== 5 || contract?.activationPolicy !== "explicit-root-setup"
     || !Array.isArray(contract?.managedArtifacts) || contract.managedArtifacts.length !== expectedOffsiteArtifacts.length
     || expectedOffsiteArtifacts.some((relative) => !contract.managedArtifacts.includes(relative))) {
     throw new Error("Der optionale Offsite-Modulvertrag wird nicht unterstuetzt.");

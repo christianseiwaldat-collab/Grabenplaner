@@ -17,6 +17,7 @@ readonly OFFSITE_RCLONE_CONFIG="$OFFSITE_CREDENTIAL_STATE_ROOT/rclone.conf"
 readonly OFFSITE_UPLOADER_HOME="$OFFSITE_STATE_ROOT/uploader-home"
 readonly OFFSITE_RUN_ROOT="/run/grabenplaner-offsite"
 readonly OFFSITE_REPOSITORY_LOCK="$OFFSITE_RUN_ROOT/repository.lock"
+readonly OFFSITE_MAINTENANCE_LOCK="/run/grabenplaner/maintenance.lock"
 readonly OFFSITE_CONFIG_ROOT="/etc/grabenplaner/offsite"
 readonly OFFSITE_STATUS_ROOT="$OFFSITE_STATE_ROOT"
 readonly OFFSITE_STATUS_FILE="$OFFSITE_STATE_ROOT/status.json"
@@ -269,6 +270,52 @@ offsite_prepare_run_root() {
     chmod 0755 -- "$OFFSITE_RUN_ROOT"
   else
     install -d -m 0755 -o root -g root -- "$OFFSITE_RUN_ROOT"
+  fi
+}
+
+offsite_acquire_maintenance_lock_with_wait() {
+  local wait_seconds="${1:-}"
+  local requested_lock_path="${2:-$OFFSITE_MAINTENANCE_LOCK}"
+  local lock_path lock_directory lock_owner lock_group lock_links
+  local directory_owner directory_group directory_mode
+  offsite_require_command flock
+  [[ "$wait_seconds" =~ ^[1-9][0-9]*$ && "$wait_seconds" -le 3600 ]] \
+    || offsite_die "Die Wartezeit fuer die Wartungssperre muss zwischen 1 und 3600 Sekunden liegen."
+  [[ "$requested_lock_path" == /* && "$requested_lock_path" != *$'\n'* && "$requested_lock_path" != *$'\r'* ]] \
+    || offsite_die "Die Wartungssperre muss ein absoluter lokaler Linux-Pfad sein."
+  lock_path="$(realpath --canonicalize-missing -- "$requested_lock_path")" \
+    || offsite_die "Die Wartungssperre konnte nicht sicher aufgeloest werden."
+  [[ "$lock_path" != "/" ]] || offsite_die "Die Wartungssperre darf nicht das Dateisystem-Stammverzeichnis sein."
+  lock_directory="$(dirname -- "$lock_path")"
+  if [[ -e "$lock_directory" || -L "$lock_directory" ]]; then
+    [[ -d "$lock_directory" && ! -L "$lock_directory" ]] \
+      || offsite_die "Das Laufzeitverzeichnis der Wartungssperre ist unzulaessig."
+  else
+    install -d -m 0755 -o root -g root -- "$lock_directory"
+  fi
+  directory_owner="$(stat --format='%u' -- "$lock_directory")"
+  directory_group="$(stat --format='%g' -- "$lock_directory")"
+  directory_mode="$(stat --format='%a' -- "$lock_directory")"
+  [[ "$directory_owner" == "0" && "$directory_group" == "0" ]] \
+    || offsite_die "Das Laufzeitverzeichnis der Wartungssperre muss root:root gehoeren."
+  (( (8#$directory_mode & 022) == 0 )) \
+    || offsite_die "Das Laufzeitverzeichnis der Wartungssperre darf fuer Gruppe oder andere Benutzer nicht beschreibbar sein."
+  if [[ -e "$lock_path" || -L "$lock_path" ]]; then
+    [[ -f "$lock_path" && ! -L "$lock_path" ]] || offsite_die "Die Wartungssperre ist keine regulaere Datei."
+    lock_owner="$(stat --format='%u' -- "$lock_path")"
+    lock_group="$(stat --format='%g' -- "$lock_path")"
+    lock_links="$(stat --format='%h' -- "$lock_path")"
+    [[ "$lock_owner" == "0" && "$lock_group" == "0" && "$lock_links" == "1" ]] \
+      || offsite_die "Die Wartungssperre muss eine eindeutige root:root-Datei sein."
+    chmod 0600 -- "$lock_path"
+  else
+    install -m 0600 -o root -g root /dev/null "$lock_path"
+  fi
+  exec 9<>"$lock_path"
+  if ! flock --nonblock 9; then
+    offsite_info "Warte bis zu ${wait_seconds} Sekunden auf eine laufende Grabenplaner-Wartung."
+    flock --wait "$wait_seconds" 9 \
+      || offsite_die "Eine andere Grabenplaner-Wartung konnte nicht innerhalb des begrenzten Wartefensters abgeschlossen werden."
   fi
 }
 

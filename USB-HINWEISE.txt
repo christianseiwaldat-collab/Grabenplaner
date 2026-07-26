@@ -2,7 +2,7 @@ GRABENPLANER - PORTABLE USB-VERSION
 ================================================
 
 Start:
-  "Grabenplaner v0.85 Beta starten.cmd" doppelklicken.
+  "Grabenplaner v0.86 Beta starten.cmd" doppelklicken.
 
 Voraussetzung:
   Windows 10 oder 11 auf einem 64-Bit-PC.
@@ -13,15 +13,28 @@ Daten:
   Die aktive Datenbank liegt unter data\dienstplan.db.
   Alle Daten bleiben im Projektordner bzw. auf dem USB-Stick.
 
+Version v0.86 Beta:
+  - Das Personal-Regelwerk fasst gesetzliche Basisprofile, Jugendprofile,
+    Kollektivvertraege, betriebliche Regeln und Simulationen zusammen.
+  - Filial- und Abteilungsleitungen erhalten eine bereichsbezogene Lesesicht,
+    ohne globale oder fremde Personalzuordnungen offenzulegen.
+  - Ein bestaetigtes Geburtsdatum steuert das Erwachsenen- oder Jugendprofil;
+    fuer Handelslehrlinge unter 18 bleibt das Jugendprofil additiv wirksam.
+  - Eigene Regeln und KV-Zuordnungen verwenden versionierte Entwuerfe,
+    persoenliche Vier-Augen-Freigaben und getrennte Wirksamkeitszuordnungen.
+  - Die Funktionen sind technische Governance- und Planungshilfen und ersetzen
+    keine fachliche Quellenpflege oder rechtliche Einzelfallpruefung.
+  - Zusaetzlich bleiben alle Verbesserungen aus v0.85.3 Beta enthalten.
+
 Version v0.85 Beta:
   - Zentrales Artikel- und Leihdatenmodell mit exakt sechsstelligen
     numerischen Artikelnummern.
   - Sichere, je Standort konfigurierbare Shopware-Artikelsuche mit
     kontrollierter manueller Rueckfalleingabe.
   - Standortfreigaben, Funktionsprofile und getrennte Rollenrechte fuer das
-    kuenftige Leihmodul.
-  - Die vollstaendige Leihoberflaeche folgt in einem weiteren
-    Entwicklungsblock.
+    integrierte Leihmodul.
+  - Ausgabe, Ruecknahme, geschuetzte Fotos, PDF-Belege und die
+    standortbezogene Leitungsverwaltung sind vollstaendig integriert.
 
 Version v0.84 Beta:
   - Das System-Center fuehrt Pilot-, Browser-, Bedienungs-, Performance-,

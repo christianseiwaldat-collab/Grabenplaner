@@ -1,5 +1,18 @@
 # Grabenplaner Versions-Log
 
+## v0.86 Beta · Personal-Regelwerk und Kollektivverträge
+
+- Das neue Personal-Regelwerk-Dashboard bündelt gesetzliche Basisprofile, Jugendprofile, Kollektivverträge, eigene Regeln, Quellen, Geltungsbereiche und Simulationen in einer gemeinsamen fachlichen Übersicht.
+- Bestätigte Geburtsdaten steuern die Altersanwendbarkeit. Für Handelslehrlinge unter 18 wird das Jugendprofil automatisch und additiv zu weiteren anwendbaren Profilen berücksichtigt; unbekannte Profildaten werden nicht als bestanden behandelt.
+- Offene Stammdatenhinweise können vorübergehend zurückgestellt werden. Konkrete Befunde aus der Dienstplanung bleiben davon unabhängig sichtbar.
+- Das Kollektivvertragsregister trennt Verträge, unveränderliche Fassungen, Quellen, Betriebsteile und zeitliche Zuordnungsvorschläge. Eigene Verträge und betriebliche Strukturen können versioniert vorbereitet werden.
+- Der Regelbaukasten unterstützt geführte Entwürfe, Pflichtquellen, definierte Prüffälle und deterministische Simulationen, ohne daraus eine rechtliche Freigabe abzuleiten.
+- Ein persönlicher Vier-Augen-Workflow trennt Entwurf, Prüfung, Veröffentlichung und datierte Wirksamkeit. Kritische Vorgänge benötigen zwei unabhängige Freigaben; Selbstfreigabe und die Auswahl einer fremden entscheidenden Person sind ausgeschlossen.
+- Veröffentlichungen, Zuordnungsrevisionen, KV-Entscheidungen und Governance-Ereignisse bleiben append-only und über SHA-256-Belege nachvollziehbar. Rücknahme und Wiederherstellung überschreiben keine historischen Fassungen.
+- Filial- und Abteilungsleitungen erhalten im Dashboard und KV-Register eine bereichsbezogene Lesesicht. Fremde oder globale Personalzuordnungen sowie fachliche Verwaltungs- und Freigabefunktionen bleiben ausgeblendet.
+- Die Funktionen sind technische Governance- und Planungshilfen. Sie ersetzen weder die fachliche Pflege aktueller Quellen noch die rechtliche Prüfung des konkreten Arbeitsverhältnisses, Kollektivvertrags oder einer betrieblichen Ausnahme.
+- Zusätzlich bleiben alle Verbesserungen aus v0.85.4 Beta einschließlich der technischen Offsite-Migrationsbrücke enthalten.
+
 ## v0.85.4 Beta · Technische Offsite-Migrationsbrücke
 
 - Der installierte Linux-Paketprüfer erkennt weiterhin den unveränderten Offsite-Modulvertrag v4 und zusätzlich den freigegebenen Kandidatvertrag v5 mit demselben exakt geprüften Artefaktpfad-Satz.

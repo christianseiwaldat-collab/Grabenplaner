@@ -33,17 +33,17 @@ const {
 const broker = require(path.join(root, "server-tools/linux/offsite/lib/assurance-control-broker.js"));
 const history = require(path.join(root, "server-tools/linux/offsite/lib/assurance-history.js"));
 
-test("v0.78 packages module v4 and migrates only verified v1, v2 or v3 installations", () => {
-  assert.equal(schema.moduleVersion, 4);
+test("v0.86 packages module v5 and migrates only verified v1 through v4 installations", () => {
+  assert.equal(schema.moduleVersion, 5);
   for (const relative of [
     "server-tools/linux/offsite/grabenplaner-offsite-application-smoke.sh",
     "server-tools/linux/offsite/lib/application-smoke.js",
     "server-tools/linux/offsite/systemd/grabenplaner-offsite-application-smoke.service.in",
     "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance.timer.in",
-  ]) assert.ok(schema.managedArtifacts.includes(relative), `Fehlt im Modul-v4-Vertrag: ${relative}`);
-  assert.match(installer, /\[1, 2, 3, 4\]\.includes\(value\.moduleVersion\)/);
-  assert.match(installer, /installed_module_version >= 1 && installed_module_version <= 3/);
-  assert.match(installer, /kontrolliert auf v4 migriert/);
+  ]) assert.ok(schema.managedArtifacts.includes(relative), `Fehlt im Modul-v5-Vertrag: ${relative}`);
+  assert.match(installer, /\[1, 2, 3, 4, 5\]\.includes\(value\.moduleVersion\)/);
+  assert.match(installer, /installed_module_version >= 1 && installed_module_version <= 4/);
+  assert.match(installer, /kontrolliert auf v5 migriert/);
   assert.match(installer, /for template in "\$OFFSITE_MODULE_ROOT"\/systemd\/\*\.in/);
 });
 

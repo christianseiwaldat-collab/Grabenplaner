@@ -241,7 +241,7 @@ if [[ -e "$OFFSITE_MODULE_ROOT" || -L "$OFFSITE_MODULE_ROOT" ]]; then
   installed_module_version="$("$OFFSITE_NODE" - "$OFFSITE_CONFIG_ROOT/installed-contract.json" <<'NODE'
 const fs = require("node:fs");
 const value = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-if (![1, 2, 3, 4].includes(value.moduleVersion)) process.exit(1);
+if (![1, 2, 3, 4, 5].includes(value.moduleVersion)) process.exit(1);
 process.stdout.write(String(value.moduleVersion));
 NODE
 )" || offsite_die "Die installierte Offsite-Modulversion ist nicht migrationsfaehig."
@@ -406,11 +406,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Module v4 adds the isolated application-smoke service and the persistent
-# nightly assurance timer. Existing verified v1, v2 and v3 modules are migrated
+# Module v5 keeps the v4 assurance contract and adds a bounded maintenance-lock
+# wait for nightly staging. Existing verified v1 through v4 modules are migrated
 # transactionally without reinitializing credentials, repository or history.
-if (( installed_module_version >= 1 && installed_module_version <= 3 )); then
-  offsite_info "Das verifizierte Offsite-Modul v${installed_module_version} wird kontrolliert auf v4 migriert."
+if (( installed_module_version >= 1 && installed_module_version <= 4 )); then
+  offsite_info "Das verifizierte Offsite-Modul v${installed_module_version} wird kontrolliert auf v5 migriert."
 fi
 if getent group "$OFFSITE_CONTROL_GROUP" >/dev/null; then
   control_gid="$(getent group "$OFFSITE_CONTROL_GROUP" | awk -F: '{print $3}')"

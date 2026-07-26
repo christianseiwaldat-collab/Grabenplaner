@@ -108,20 +108,32 @@ test("v0.67: Prozessansicht und Bedienung sind vollständig verdrahtet", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8");
   const script = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
   const styles = fs.readFileSync(path.join(__dirname, "..", "public", "styles.css"), "utf8");
-  for (const marker of ["data-rights-dashboard-mode=\"processes\"", "rightsProcessLocation", "rightsProcessList", "rightsProcessTimeline", "rightsProcessExplanation"]) assert.match(html, new RegExp(marker));
-  for (const marker of ["setRightsDashboardMode", "renderRightsProcessDashboard", "data-rights-process-step", "rightsProcessLocation?.addEventListener"]) assert.ok(script.includes(marker), marker);
-  for (const marker of [".rights-process-timeline", ".rights-process-step", ".rights-process-explanation"]) assert.ok(styles.includes(marker), marker);
+  for (const marker of ["data-rights-dashboard-mode=\"processes\"", "Abläufe &amp; Prozesse", "rightsProcessCategory", "rightsProcessLocation", "rightsProcessList", "rightsProcessTimeline", "rightsProcessExplanation"]) assert.match(html, new RegExp(marker));
+  for (const marker of ["setRightsDashboardMode", "populateRightsProcessCategories", "renderRightsProcessDashboard", "data-rights-process-category", "data-rights-process-step", "rightsProcessCategory?.addEventListener", "rightsProcessLocation?.addEventListener"]) assert.ok(script.includes(marker), marker);
+  for (const marker of [".rights-process-list-group > header", ".rights-process-timeline", ".rights-process-step", ".rights-process-explanation"]) assert.ok(styles.includes(marker), marker);
 });
 
-test("v0.67: API liefert fünf sichere, erklärbare Standardprozesse", async () => {
+test("Block 2/7: API liefert Fachbereiche und fünf sicher zugeordnete Standardabläufe", async () => {
   const result = await requestJson("/api/portal/v1/rights-dashboard", createPortalSession());
   assert.equal(result.response.status, 200, JSON.stringify(result.payload));
+  assert.deepEqual(result.payload.processDashboard.categories.map((category) => category.id), [
+    "personnel_absence",
+    "time_payroll",
+    "customer_service",
+    "goods_equipment",
+    "administration_it",
+    "other",
+  ]);
   assert.deepEqual(result.payload.processDashboard.processes.map((process) => process.id), [
     "vacation", "time_off", "sickness_amu", "time_review", "payroll",
+  ]);
+  assert.deepEqual(result.payload.processDashboard.processes.map((process) => process.category), [
+    "personnel_absence", "personnel_absence", "personnel_absence", "time_payroll", "time_payroll",
   ]);
   for (const process of result.payload.processDashboard.processes) {
     assert.ok(process.title);
     assert.ok(process.summary);
+    assert.ok(process.categoryLabel);
     assert.ok(process.rules.length >= 3);
     assert.ok(process.steps.length >= 5);
     for (const step of process.steps) {
