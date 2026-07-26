@@ -287,6 +287,7 @@ test("Block 4/7: Standard-Leserecht ist gescopt; Pflege und Zuordnung bleiben PL
   assert.equal(global.response.status, 200, JSON.stringify(global.payload));
   assert.equal(global.payload.capabilities.canManage, true);
   assert.equal(global.payload.capabilities.canPrepareAssignments, true);
+  assert.equal(global.payload.capabilities.canApprove, true);
   assert.equal(global.payload.businessUnits.length, 2);
   assert.equal(global.payload.assignments.length, 2);
   assert.equal(global.payload.summary.approvedAssignments, 0);
