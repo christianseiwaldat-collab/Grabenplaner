@@ -1902,12 +1902,27 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
 .personnel-rules-toolbar-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:9px; }
 .personnel-rules-toolbar-actions > span { color:var(--rd-muted); font-size:8px; font-weight:750; text-align:right; }
 .personnel-rules-toolbar-actions button { min-height:38px; margin:0; color:var(--rd-accent); border-color:var(--rd-line); background:var(--rd-surface-soft); }
-.personnel-rules-summary { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:9px; }
+.personnel-rules-read-boundary { display:grid; grid-template-columns:38px minmax(0,1fr) auto; align-items:center; gap:11px 13px; padding:13px 15px; border:1px solid color-mix(in srgb,var(--rd-accent) 42%,var(--rd-line)); border-left:4px solid var(--rd-accent); border-radius:14px; color:var(--rd-text); background:var(--rd-accent-soft); }
+.personnel-rules-read-boundary-mark { display:grid; place-items:center; width:38px; height:38px; border-radius:11px; color:var(--rd-surface); background:var(--rd-accent); font-size:10px; font-weight:900; }
+.personnel-rules-read-boundary strong { display:block; font-size:10px; }
+.personnel-rules-read-boundary p { margin:4px 0 0; color:var(--rd-muted); font-size:8px; line-height:1.5; }
+.personnel-rules-read-boundary-badges { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:6px; }
+.personnel-rules-read-boundary-badges span { padding:5px 8px; border:1px solid color-mix(in srgb,var(--rd-accent) 35%,var(--rd-line)); border-radius:999px; color:var(--rd-accent); background:var(--rd-surface); font-size:7px; font-weight:850; white-space:nowrap; }
+.personnel-rules-summary { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:9px; }
 .personnel-rules-summary .rights-dashboard-stat { padding:12px 13px; }
 .personnel-rules-filterbar { display:grid; grid-template-columns:minmax(240px,1.4fr) repeat(2,minmax(150px,.6fr)); gap:9px; padding:12px; border:1px solid var(--rd-line); border-radius:14px; background:var(--rd-surface); }
 .personnel-rules-filterbar label,.personnel-rules-simulation-controls label { display:grid; gap:4px; min-width:0; }
 .personnel-rules-filterbar label > span,.personnel-rules-simulation-controls label > span { color:var(--rd-muted); font-size:7.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
 .personnel-rules-filterbar input,.personnel-rules-filterbar select,.personnel-rules-simulation-controls input,.personnel-rules-simulation-controls select { width:100%; min-width:0; height:38px; color:var(--rd-text); border-color:var(--rd-line); background:var(--rd-surface-soft); }
+.personnel-rules-assignment-legend { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.personnel-rules-assignment-legend article { display:grid; grid-template-columns:10px minmax(0,1fr) auto; align-items:center; gap:9px; min-width:0; padding:9px 11px; border:1px solid var(--rd-line); border-radius:11px; color:var(--rd-text); background:var(--rd-surface); }
+.personnel-rules-assignment-legend article > div { min-width:0; }
+.personnel-rules-assignment-legend strong,.personnel-rules-assignment-legend small { display:block; }
+.personnel-rules-assignment-legend strong { font-size:8.5px; }
+.personnel-rules-assignment-legend small { margin-top:3px; color:var(--rd-muted); font-size:7px; line-height:1.4; }
+.personnel-rules-assignment-legend-count { display:grid; place-items:center; min-width:28px; min-height:28px; padding:0 7px; border-radius:9px; color:var(--rd-muted); background:var(--rd-restricted-soft); font-size:9px; font-weight:900; }
+.personnel-rules-assignment-legend article.current .personnel-rules-assignment-legend-count { color:var(--rd-good); background:var(--rd-good-soft); }
+.personnel-rules-assignment-legend article.future .personnel-rules-assignment-legend-count { color:var(--rd-warning); background:var(--rd-warning-soft); }
 .personnel-rules-workspace { display:grid; grid-template-columns:minmax(270px,320px) minmax(0,1fr); align-items:start; gap:14px; }
 .personnel-rules-navigation,.personnel-rules-detail { min-width:0; border:1px solid var(--rd-line); border-radius:16px; background:var(--rd-surface); }
 .personnel-rules-navigation { position:sticky; top:96px; padding:15px; }
@@ -1945,14 +1960,18 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
 .personnel-rules-assignment-list,.personnel-rules-rule-list,.personnel-rules-source-list { display:grid; gap:7px; }
 .personnel-rules-assignment { display:grid; grid-template-columns:10px minmax(0,1fr) auto; align-items:center; gap:10px; min-width:0; padding:10px 11px; border:1px solid var(--rd-line); border-radius:11px; background:var(--rd-surface-soft); }
 .personnel-rules-assignment-state { width:10px; height:10px; border-radius:50%; background:var(--rd-restricted); }
-.personnel-rules-assignment.current .personnel-rules-assignment-state,.personnel-rules-assignment.automatic .personnel-rules-assignment-state { background:var(--rd-good); box-shadow:0 0 0 4px var(--rd-good-soft); }
-.personnel-rules-assignment.future .personnel-rules-assignment-state { background:var(--rd-warning); box-shadow:0 0 0 4px var(--rd-warning-soft); }
-.personnel-rules-assignment.expired { opacity:.65; }
+.personnel-rules-assignment.current .personnel-rules-assignment-state,.personnel-rules-assignment.automatic .personnel-rules-assignment-state,.personnel-rules-assignment-legend .current .personnel-rules-assignment-state { background:var(--rd-good); box-shadow:0 0 0 4px var(--rd-good-soft); }
+.personnel-rules-assignment.future .personnel-rules-assignment-state,.personnel-rules-assignment-legend .future .personnel-rules-assignment-state { background:var(--rd-warning); box-shadow:0 0 0 4px var(--rd-warning-soft); }
+.personnel-rules-assignment:is(.expired,.inactive) { border-style:dashed; }
 .personnel-rules-assignment div { min-width:0; }
 .personnel-rules-assignment div strong,.personnel-rules-assignment div small { display:block; overflow-wrap:anywhere; }
 .personnel-rules-assignment div strong { color:var(--rd-text); font-size:8.7px; }
 .personnel-rules-assignment div small { margin-top:3px; color:var(--rd-muted); font-size:7.2px; line-height:1.4; }
+.personnel-rules-assignment-badges { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:5px; }
 .personnel-rules-assignment-badge,.personnel-rules-rule-state,.personnel-rules-rule-enforcement { padding:5px 7px; border-radius:8px; color:var(--rd-muted); background:var(--rd-restricted-soft); font-size:6.8px; font-weight:850; white-space:nowrap; }
+.personnel-rules-assignment-badge.current { color:var(--rd-good); background:var(--rd-good-soft); }
+.personnel-rules-assignment-badge.future { color:var(--rd-warning); background:var(--rd-warning-soft); }
+.personnel-rules-assignment-badge:is(.inactive,.expired) { color:var(--rd-muted); background:var(--rd-restricted-soft); }
 .personnel-rules-assignment-badge.confirmed { color:var(--rd-good); background:var(--rd-good-soft); }
 .personnel-rules-assignment-badge.open { color:var(--rd-warning); background:var(--rd-warning-soft); }
 .personnel-rules-rule { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:start; gap:10px; min-width:0; padding:10px 11px; border:1px solid var(--rd-line); border-left:4px solid var(--rd-warning); border-radius:11px; background:var(--rd-surface-soft); }
@@ -1992,7 +2011,7 @@ body:has(.deployment-banner:not(.hidden)) .app-shell { padding-top:34px; }
 .rights-dashboard .personnel-rules-simulation-findings :is(.work-rule-finding-state,.work-rule-enforcement,.work-rule-evidence > div) { color:var(--rd-muted); border-color:var(--rd-line); background:var(--rd-restricted-soft); }
 .rights-dashboard .personnel-rules-simulation-result .work-rule-disclaimer { border-color:var(--rd-line); }
 .personnel-rules-legal-notice { margin:0; padding:10px 12px; border:1px dashed var(--rd-line); border-radius:11px; color:var(--rd-muted); background:color-mix(in srgb,var(--rd-surface) 70%,transparent); font-size:7.8px; line-height:1.5; }
-.personnel-rules-profile:focus-visible,.personnel-rules-toolbar-actions button:focus-visible,.personnel-rules-filterbar :is(input,select):focus-visible,.personnel-rules-simulation-controls :is(input,select,button):focus-visible { border-color:var(--rd-accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--rd-accent) 18%,transparent); outline:0; }
+.personnel-rules-profile:focus-visible,.personnel-rules-toolbar-actions button:focus-visible,.personnel-rules-filterbar :is(input,select):focus-visible,.personnel-rules-simulation-controls :is(input,select,button):focus-visible,.personnel-rules-source-list a:focus-visible { border-color:var(--rd-accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--rd-accent) 18%,transparent); outline:0; }
 .rights-dashboard-process-panel { display:grid; gap:14px; }
 .rights-process-toolbar { display:flex; align-items:end; justify-content:space-between; gap:18px; padding:14px 16px; border:1px solid var(--rd-line); border-radius:14px; background:var(--rd-surface); }
 .rights-process-toolbar h2,.rights-process-heading h2 { margin:0; color:var(--rd-text); font-size:15px; }
@@ -2161,6 +2180,8 @@ html[data-active-page-theme="dark"] .custom-process-modal .custom-process-step-c
   .location-dashboard-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .personnel-rules-toolbar { align-items:flex-start; flex-direction:column; }
   .personnel-rules-toolbar-actions { justify-content:flex-start; width:100%; }
+  .personnel-rules-read-boundary { grid-template-columns:38px minmax(0,1fr); }
+  .personnel-rules-read-boundary-badges { grid-column:2; justify-content:flex-start; }
   .personnel-rules-workspace { grid-template-columns:1fr; }
   .personnel-rules-navigation { position:static; }
   .personnel-rules-profile-list { grid-template-columns:repeat(2,minmax(0,1fr)); max-height:none; }
@@ -2203,12 +2224,15 @@ html[data-active-page-theme="dark"] .custom-process-modal .custom-process-step-c
   .personnel-rules-toolbar-actions,.personnel-rules-heading,.personnel-rules-simulation-heading { align-items:stretch; flex-direction:column; }
   .personnel-rules-toolbar-actions > span { text-align:left; }
   .personnel-rules-toolbar-actions button { width:100%; }
+  .personnel-rules-read-boundary { grid-template-columns:1fr; align-items:start; }
+  .personnel-rules-read-boundary-mark { display:none; }
+  .personnel-rules-read-boundary-badges { grid-column:auto; justify-content:flex-start; }
   .personnel-rules-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .personnel-rules-filterbar,.personnel-rules-profile-list,.personnel-rules-simulation-controls { grid-template-columns:1fr; }
+  .personnel-rules-filterbar,.personnel-rules-assignment-legend,.personnel-rules-profile-list,.personnel-rules-simulation-controls { grid-template-columns:1fr; }
   .personnel-rules-facts,.personnel-rules-limit-grid,.personnel-rules-simulation-overview { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .personnel-rules-detail { padding:13px; }
   .personnel-rules-assignment,.personnel-rules-rule { grid-template-columns:10px minmax(0,1fr); }
-  .personnel-rules-assignment-badge,.personnel-rules-rule-enforcement { grid-column:2; justify-self:start; }
+  .personnel-rules-assignment-badges,.personnel-rules-rule-enforcement { grid-column:2; justify-self:start; justify-content:flex-start; }
   .rights-process-toolbar-controls,.rights-process-validation-heading { align-items:stretch; flex-direction:column; }
   .rights-process-toolbar-controls label { min-width:0; }
   .rights-process-validation-summary { justify-content:flex-start; overflow:auto; }
@@ -2525,9 +2549,9 @@ html[data-active-page-theme="dark"] #settingsView .f18-migration-summary span { 
 .rights-dashboard[data-dashboard-font-size] :is(.rights-dashboard-section-heading h2,.rights-process-validation-heading h2,.location-dashboard-toolbar h2,.location-dashboard-card h3,.system-center-toolbar h2,.system-center-section-heading h2,.system-center-operation h2,.product-readiness h2) { font-size:var(--rd-font-title); }
 .rights-dashboard[data-dashboard-font-size] .system-center-hero-copy h2 { font-size:calc(var(--rd-font-title) * 1.35); }
 .rights-dashboard[data-dashboard-font-size] .rights-process-explanation strong { font-size:var(--rd-font-lg); }
-.rights-dashboard[data-dashboard-font-size] :is(.personnel-rules-filterbar label > span,.personnel-rules-simulation-controls label > span,.personnel-rules-facts span,.personnel-rules-limit-grid span,.personnel-rules-simulation-overview span,.personnel-rules-profile-count small,.personnel-rules-rule-state,.personnel-rules-rule-enforcement,.personnel-rules-assignment-badge) { font-size:var(--rd-font-xs); }
-.rights-dashboard[data-dashboard-font-size] :is(.personnel-rules-toolbar p,.personnel-rules-heading p,.personnel-rules-simulation-heading p,.personnel-rules-toolbar-actions > span,.personnel-rules-profile-copy small,.personnel-rules-assignment div small,.personnel-rules-rule > div > small,.personnel-rules-source-list article small,.personnel-rules-source-list article p,.personnel-rules-applicability > p,.personnel-rules-simulation-overview small,.personnel-rules-legal-notice) { font-size:var(--rd-font-sm); }
-.rights-dashboard[data-dashboard-font-size] :is(.personnel-rules-profile-copy strong,.personnel-rules-profile-count strong,.personnel-rules-facts strong,.personnel-rules-limit-grid strong,.personnel-rules-assignment div strong,.personnel-rules-rule > div > strong,.personnel-rules-source-list article a,.personnel-rules-source-list article strong,.personnel-rules-simulation-overview strong) { font-size:var(--rd-font-md); }
+.rights-dashboard[data-dashboard-font-size] :is(.personnel-rules-filterbar label > span,.personnel-rules-simulation-controls label > span,.personnel-rules-facts span,.personnel-rules-limit-grid span,.personnel-rules-simulation-overview span,.personnel-rules-profile-count small,.personnel-rules-rule-state,.personnel-rules-rule-enforcement,.personnel-rules-assignment-badge,.personnel-rules-read-boundary-badges span) { font-size:var(--rd-font-xs); }
+.rights-dashboard[data-dashboard-font-size] :is(.personnel-rules-toolbar p,.personnel-rules-heading p,.personnel-rules-simulation-heading p,.personnel-rules-toolbar-actions > span,.personnel-rules-profile-copy small,.personnel-rules-assignment div small,.personnel-rules-rule > div > small,.personnel-rules-source-list article small,.personnel-rules-source-list article p,.personnel-rules-applicability > p,.personnel-rules-simulation-overview small,.personnel-rules-legal-notice,.personnel-rules-read-boundary p,.personnel-rules-assignment-legend small) { font-size:var(--rd-font-sm); }
+.rights-dashboard[data-dashboard-font-size] :is(.personnel-rules-profile-copy strong,.personnel-rules-profile-count strong,.personnel-rules-facts strong,.personnel-rules-limit-grid strong,.personnel-rules-assignment div strong,.personnel-rules-rule > div > strong,.personnel-rules-source-list article a,.personnel-rules-source-list article strong,.personnel-rules-simulation-overview strong,.personnel-rules-read-boundary strong,.personnel-rules-assignment-legend strong) { font-size:var(--rd-font-md); }
 .rights-dashboard[data-dashboard-font-size] :is(.personnel-rules-filterbar input,.personnel-rules-filterbar select,.personnel-rules-simulation-controls input,.personnel-rules-simulation-controls select,.personnel-rules-simulation-controls button,.personnel-rules-toolbar-actions button) { font-size:var(--rd-font-sm); }
 .rights-dashboard[data-dashboard-font-size] :is(.personnel-rules-toolbar h2,.personnel-rules-heading h2,.personnel-rules-simulation-heading h2) { font-size:var(--rd-font-title); }
 
