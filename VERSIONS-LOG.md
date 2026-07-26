@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.86.3 Beta · Standortbezogene Planungsverantwortung
+
+- Die neue eingebaute Rolle `Planungsverantwortung` bildet eine eng begrenzte standortbezogene Dienst- und Urlaubsplanung ab, ohne daraus eine allgemeine Filialleitungs- oder Personalverwaltungsrolle zu machen.
+- Der wirksame Bereich bleibt auf ausdrücklich zugewiesene Standorte begrenzt. Innerhalb dieses Bereichs können Dienst- und Urlaubsplanung, Teamfarben, Dienstplan-Spitznamen und Telefonnummern bearbeitet werden.
+- Operative Standortpflege erlaubt ausschließlich Öffnungs-/Tageszeiten und Mindestbesetzung. Standortname, Aktivstatus, Zeiterfassung, Kostenstellen und fremde Standorte bleiben geschützt.
+- Die Arbeitszeit-Regelprüfung steht beim Planen einschließlich konkreter Warnmeldungen zur Verfügung. Das Regelwerk-Dashboard und dessen fachliche oder rechtliche Verwaltungsfunktionen bleiben ausgeblendet.
+- System-Center, Systemdiagnosen, Rechteverwaltung, globale Einstellungen, Exporte, Krankenstand/AUM, Leihverwaltung und weitere nicht erforderliche Funktionen sind weder Rollenbestandteil noch über die Pilotnavigation erreichbar.
+- Bereichs-, Schreib-, Telefon- und Negativtests sichern die serverseitige Begrenzung unabhängig von der sichtbaren Oberfläche ab.
+
 ## v0.86.2 Beta · Server-Monitor, Backupverwaltung und kontrollierte Direktmaßnahmen
 
 - Der Linux-Monitor verarbeitet den in v0.86.1 erweiterten Sicherheitsheader-Vertrag vollständig. Vorhandene Statusdateien des bisherigen Schemas werden eng begrenzt übernommen und bei der nächsten geschützten Monitor-Aktualisierung auf das neue Schema gehoben.

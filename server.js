@@ -310,6 +310,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "settings:write", label: "Planungs- und Grundeinstellungen bearbeiten", group: "Dienstplanung", warningLevel: "high", hrDelegable: true },
   { id: "employees:read", label: "Teamstammdaten lesen", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true },
   { id: "employees:display:write", label: "Teamfarben bearbeiten", description: "Nur die Farbe im Dienstplan; Name, Sollzeit und Personalstammdaten bleiben geschützt.", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true },
+  { id: "employees:nickname:write", label: "Dienstplan-Spitznamen bearbeiten", description: "Nur der im Dienstplan verwendete Spitzname; vollständiger Name, Sollzeit und weitere Personalstammdaten bleiben geschützt.", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "employees:write", label: "Teamstammdaten vollständig bearbeiten", description: "Umfasst Namen, Sollstunden und weitere Personalstammdaten.", group: "Filialverwaltung", warningLevel: "critical" },
   { id: "personnel:central:read", label: "Zentrale Personalverwaltung lesen", description: "Unternehmensweite Personalübersicht ohne Inhalte des geschützten Personalakts.", group: "Personalverwaltung", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "personnel:central:write", label: "Zentrale Personalzuordnungen bearbeiten", description: "Kostenstellen und filialunabhängige Beschäftigte unternehmensweit verwalten.", group: "Personalverwaltung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -317,6 +318,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "cost_centers:write", label: "Kostenstellen verwalten", description: "Kostenstellen anlegen, ändern und archivieren.", group: "Personalverwaltung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "departments:write", label: "Abteilungen anlegen und bearbeiten", group: "Filialverwaltung", warningLevel: "normal", hrDelegable: true },
   { id: "positions:write", label: "Positionen anlegen, bearbeiten und löschen", group: "Filialverwaltung", warningLevel: "high", hrDelegable: true },
+  { id: "locations:operational:write", label: "Eigenen Standort betrieblich pflegen", description: "Öffnungszeiten und Mindestbesetzung ausschließlich in zugewiesenen Standorten bearbeiten; keine Neuanlage, Deaktivierung, Kostenstellen- oder Zeiterfassungseinstellungen.", group: "Filialverwaltung", warningLevel: "high", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "locations:write", label: "Standorte vollständig bearbeiten", group: "Filialverwaltung", warningLevel: "critical" },
   { id: "time:read", label: "Zeiterfassung des Bereichs lesen", group: "Zeit & Abwesenheit", warningLevel: "normal", hrDelegable: true },
   { id: "time:review", label: "Zeitbuchungen prüfen und korrigieren", group: "Zeit & Abwesenheit", warningLevel: "high", hrDelegable: true },
@@ -336,8 +338,8 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "data_subject_requests:export", label: "Datenauskunftspaket erzeugen", description: "Minimierte, geprüfte Auskunft mit Prüfsumme erzeugen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "personnel:sensitive:read", label: "Sensible MA-Daten lesen", description: "SV-Nummer, Bankverbindung und Wohnadresse; nur Personalleitung oder ausdrücklich berechtigte höhere Rollen.", group: "Personalakt", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "personnel:sensitive:write", label: "Sensible MA-Daten bearbeiten", description: "SV-Nummer, Bankverbindung und Wohnadresse verschlüsselt pflegen.", group: "Personalakt", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
-  { id: "personnel:phone:read", label: "Telefonnummern im eigenen Bereich lesen", group: "Personalakt", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
-  { id: "personnel:phone:write", label: "Telefonnummern im eigenen Bereich bearbeiten", description: "Bei Filial- und Abteilungsleitungen zusätzlich nur mit eigener Vertrauensstufe A.", group: "Personalakt", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:phone:read", label: "Telefonnummern im eigenen Bereich lesen", group: "Personalakt", warningLevel: "high", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:phone:write", label: "Telefonnummern im eigenen Bereich bearbeiten", description: "Bei standortgebundenen Leitungs- und Planungsrollen zusätzlich nur mit eigener Vertrauensstufe A.", group: "Personalakt", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "amu:metadata:read", label: "Geschützte AUM-Metadaten lesen", description: "Nur Personalleitung und höhere geschützte Rollen; nicht an Filial- oder Abteilungsleitung delegierbar.", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "amu:file:read", label: "AUM-Dokumente öffnen", description: "Besonders geschütztes Zusatzrecht für Personalleitung und höhere Rollen.", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "amu:review", label: "AUM-Meldungen prüfen", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -360,6 +362,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "employees:import", label: "Personalstammdaten importieren", description: "CSV-/Excel-Import mit Vorschau; sensible Personalaktfelder sind ausgeschlossen.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "payroll:export", label: "Lohnverrechnungsdaten exportieren", description: "Zeit-, Abwesenheits- und Zuschlagsdaten ausgeben sowie belegbare Monatsübergaben erstellen.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "payroll:deliver", label: "Lohnverrechnungsdaten sicher übertragen", description: "Final geprüfte Daten kontrolliert übergeben und externe Übertragungsprotokolle dokumentieren.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
+  { id: "work_rules:planning:read", label: "Arbeitszeit-Hinweise in der Dienstplanung lesen", description: "Regelhinweise und die Vorschau einer konkreten Schicht im eigenen Planungsbereich sehen; kein Zugriff auf Regelverwaltung oder Regel-Dashboard.", group: "Arbeitszeitregeln", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "work_rules:read", label: "Arbeitszeit-Regelprüfungen lesen", description: "Quellenbelegte Hinweise zur Dienstplanung lesen; keine pauschale Rechtsfreigabe.", group: "Arbeitszeitregeln", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "work_rules:draft", label: "Eigene Regelentwürfe vorbereiten", description: "Geführte, unveränderlich versionierte Entwürfe eigener Personalregeln anlegen; ohne Freigabe oder Dienstplanwirkung.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "work_rules:manage", label: "Arbeitszeit-Regelprofile verwalten", description: "Versionierte Profile und deren Geltungsbereich verwalten.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -577,6 +580,28 @@ const builtinPortalRoles = [
     ],
   },
   {
+    id: "location_planner",
+    name: "Planungsverantwortung",
+    description: "Standortgebundene Dienst- und Urlaubsplanung mit eingeschränkter Team- und Standortpflege.",
+    sortOrder: 22,
+    permissions: [
+      "own_schedule:read",
+      "own_vacation:read",
+      "own_vacation:request",
+      "employees:read",
+      "employees:display:write",
+      "employees:nickname:write",
+      "schedule:read",
+      "schedule:write",
+      "work_rules:planning:read",
+      "vacation:read",
+      "vacation:approve",
+      "personnel:phone:read",
+      "personnel:phone:write",
+      "locations:operational:write",
+    ],
+  },
+  {
     id: "admin",
     name: "Admin",
     description: "Vollzugriff auf Benutzer, Einstellungen, Rollen und Protokolle.",
@@ -775,6 +800,7 @@ const ownGovernancePermissions = [
 ];
 for (const role of builtinPortalRoles) addBuiltinRolePermissions(role.id, ownGovernancePermissions);
 for (const role of builtinPortalRoles) {
+  if (role.id === "location_planner") continue;
   addBuiltinRolePermissions(role.id, [
     "loans:self:read",
     "loans:self:create",
@@ -854,10 +880,10 @@ const preV063DefaultInstallationFeatures = defaultInstallationFeatures
   .filter((feature) => !["integrations", "loans"].includes(feature));
 const preV085DefaultInstallationFeatures = defaultInstallationFeatures.filter((feature) => feature !== "loans");
 const PORTAL_ROLE_ASSIGNMENTS = Object.freeze({
-  developer: new Set(["employee", "department_manager", "manager", "hr", "admin", "it_admin"]),
-  admin: new Set(["employee", "department_manager", "manager", "hr", "admin"]),
-  it_admin: new Set(["employee", "department_manager", "manager", "hr"]),
-  hr: new Set(["employee", "department_manager", "manager"]),
+  developer: new Set(["employee", "location_planner", "department_manager", "manager", "hr", "admin", "it_admin"]),
+  admin: new Set(["employee", "location_planner", "department_manager", "manager", "hr", "admin"]),
+  it_admin: new Set(["employee", "location_planner", "department_manager", "manager", "hr"]),
+  hr: new Set(["employee", "location_planner", "department_manager", "manager"]),
   manager: new Set(["department_manager"]),
 });
 
@@ -889,6 +915,7 @@ const defaultPortalSettings = {
   trust_levels_visible_to_employees: "1",
   personalized_greetings: JSON.stringify(DEFAULT_PORTAL_GREETING_SETTINGS),
   mobile_leadership_layouts: JSON.stringify({
+    location_planner: ["team", "schedule", "requests", "more"],
     department_manager: ["timeTracking", "team", "approvals", "schedule", "requests", "more"],
     manager: ["timeTracking", "team", "approvals", "schedule", "requests", "more"],
     hr: ["timeTracking", "approvals", "team", "schedule", "requests", "more"],
@@ -6701,11 +6728,11 @@ function requestReviewerRecipients(locationId, departmentId = null, stage = "loc
         SELECT u.employee_number FROM portal_users u
         JOIN employees e ON e.personnel_number = u.employee_number
         WHERE u.active = 1 AND TRIM(u.password_hash) <> ''
-          AND (u.role = 'admin' OR (u.role IN ('manager','department_manager') AND (
+          AND (u.role = 'admin' OR (u.role IN ('location_planner','manager','department_manager') AND (
             EXISTS (SELECT 1 FROM portal_access_scopes s WHERE s.employee_number = u.employee_number
-              AND s.location_id = ? AND (u.role = 'manager' OR s.department_id = ?))
+              AND s.location_id = ? AND (u.role IN ('location_planner','manager') OR s.department_id = ?))
             OR (NOT EXISTS (SELECT 1 FROM portal_access_scopes s WHERE s.employee_number = u.employee_number)
-              AND e.home_location_id = ? AND (u.role = 'manager' OR e.preferred_department_id = ?))
+              AND e.home_location_id = ? AND (u.role IN ('location_planner','manager') OR e.preferred_department_id = ?))
           )))
         ORDER BY u.employee_number
       `).all(String(locationId || ""), Number(departmentId || 0), String(locationId || ""), Number(departmentId || 0));
@@ -6846,7 +6873,8 @@ function sessionHasGlobalScope(session) {
 function sessionCanReadWorkRules(session) {
   return !session
     || session.employeeNumber === "local"
-    || session.permissions?.includes("work_rules:read");
+    || session.permissions?.includes("work_rules:read")
+    || session.permissions?.includes("work_rules:planning:read");
 }
 
 function assertSessionContextScope(session, input = {}) {
@@ -7517,6 +7545,9 @@ function enforceAdminApiAccess(request, _response, next) {
     const personnelVacationRoute = /^\/personnel-vacations(?:\/|$)/.test(request.path);
     const costCenterRoute = /^\/cost-centers(?:\/|$)/.test(request.path);
     const offsiteFolderRoute = /^\/backup\/offsite-folders(?:\/|$)/.test(request.path);
+    const operationalLocationUpdateRoute = method === "PUT"
+      && /^\/locations\/[^/]+\/?$/.test(request.path);
+    const workRulePlanningEvaluationRoute = /^\/work-rules\/evaluate\/?$/.test(request.path);
     const workRuleGovernancePermissions = [
       "work_rules:draft",
       "work_rules:review",
@@ -7532,6 +7563,24 @@ function enforceAdminApiAccess(request, _response, next) {
       const session = requirePortalAnyPermissionOrLocal(
         request,
         workRuleGovernancePermissions,
+        { csrf: true },
+      );
+      request.portalSession = session;
+      return next();
+    }
+    if (operationalLocationUpdateRoute) {
+      const session = requirePortalAnyPermissionOrLocal(
+        request,
+        ["locations:write", "locations:operational:write"],
+        { csrf: true },
+      );
+      request.portalSession = session;
+      return next();
+    }
+    if (workRulePlanningEvaluationRoute) {
+      const session = requirePortalAnyPermissionOrLocal(
+        request,
+        ["work_rules:read", "work_rules:planning:read"],
         { csrf: true },
       );
       request.portalSession = session;
@@ -9565,7 +9614,7 @@ function sessionCanManageLocalContext(session, { locationId, departmentId = null
   if (!session.permissions?.includes(permission)) return false;
   if (sessionHasGlobalScope(session)) return true;
   if (!sessionMatchesOrganizationalContext(session, locationId, departmentId)) return false;
-  if (session.role === "manager") return true;
+  if (["location_planner", "manager"].includes(session.role)) return true;
   if (session.role !== "department_manager" || !departmentId) return false;
   const hasDepartmentScope = (session.scopes || []).some((scope) =>
     String(scope.locationId) === String(locationId || "")
@@ -9717,7 +9766,7 @@ function actorCanWritePersonnelPhone(session) {
   if (session.employeeNumber === "local") return true;
   if (!portalPermissionAllowedForRole("personnel:phone:write", session.role)
     || !session.permissions?.includes("personnel:phone:write")) return false;
-  if (!["manager", "department_manager"].includes(session.role)) return true;
+  if (!["location_planner", "manager", "department_manager"].includes(session.role)) return true;
   const actor = db.prepare("SELECT time_confirmation_level FROM employees WHERE personnel_number = ?")
     .get(session.employeeNumber);
   return getTrustLevelPolicy().enabled && normalizeTimeConfirmationLevel(actor?.time_confirmation_level) === "A";
@@ -9779,6 +9828,14 @@ function personnelFieldEffectiveAccess(session) {
         return [field.key, sensitiveWrite ? "write" : sensitiveRead ? "read" : "hidden"];
       })),
     );
+  }
+  if (session.role === "location_planner") {
+    const phoneWrite = actorCanWritePersonnelPhone(session);
+    const phoneRead = phoneWrite || actorCanReadPersonnelPhone(session);
+    return Object.fromEntries(personnelFieldCatalog.map((field) => [
+      field.key,
+      field.key === "phone" ? (phoneWrite ? "write" : phoneRead ? "read" : "hidden") : "hidden",
+    ]));
   }
   if (!personnelFieldManagedRoles.has(session.role)) {
     return Object.fromEntries(personnelFieldCatalog.map((field) => [field.key, "hidden"]));
@@ -9900,7 +9957,7 @@ function personnelRecordAccess(session) {
     canOpenFiles: canReadAmu && actorCanReadAmuFiles(session),
     canReadDocuments: fieldAccess.documents !== "hidden",
     canWriteDocuments: fieldAccess.documents === "write",
-    phoneWriteRequiresTrustA: ["manager", "department_manager"].includes(session?.role || ""),
+    phoneWriteRequiresTrustA: ["location_planner", "manager", "department_manager"].includes(session?.role || ""),
   };
 }
 
@@ -10443,7 +10500,7 @@ function portalAccessScopesForPrincipal({ employeeNumber, role, homeLocationId, 
     departmentId: Number(scope.department_id || 0) || null,
   }));
   if (scopes.length || !homeLocationId) return scopes;
-  if (role === "manager") return [{ locationId: homeLocationId, departmentId: null }];
+  if (["location_planner", "manager"].includes(role)) return [{ locationId: homeLocationId, departmentId: null }];
   const departmentId = Number(preferredDepartmentId || 0) || null;
   return departmentId ? [{ locationId: homeLocationId, departmentId }] : [];
 }
@@ -10469,7 +10526,7 @@ function actorCanManagePermissionGrants(actor, target) {
   if (!actor || !target || target.role === "developer" || target.roleLocked || !target.configured || !target.active) return false;
   if (actor.employeeNumber === "local" || ["developer", "it_admin"].includes(actor.role)) return true;
   if (actor.role === "admin") return target.role !== "it_admin";
-  return actor.role === "hr" && ["employee", "department_manager", "manager"].includes(target.role);
+  return actor.role === "hr" && ["employee", "location_planner", "department_manager", "manager"].includes(target.role);
 }
 
 function getPortalRoles() {
@@ -10511,8 +10568,8 @@ function actorCanManagePortalRole(actor, targetRole) {
   if (!actor || targetRole === "developer") return false;
   if (actor.employeeNumber === "local" || actor.role === "developer") return true;
   if (actor.role === "admin") return targetRole !== "it_admin";
-  if (actor.role === "it_admin") return ["employee", "department_manager", "manager", "hr"].includes(targetRole);
-  if (actor.role === "hr") return ["employee", "department_manager", "manager"].includes(targetRole);
+  if (actor.role === "it_admin") return ["employee", "location_planner", "department_manager", "manager", "hr"].includes(targetRole);
+  if (actor.role === "hr") return ["employee", "location_planner", "department_manager", "manager"].includes(targetRole);
   return actor.role === "manager" && targetRole === "department_manager";
 }
 
@@ -10635,7 +10692,7 @@ function validatePersonnelAccessProfile(actor, payload, employee = {}) {
   const permissions = submittedPermissions.filter((permission) => !rolePermissions.has(permission));
   const homeLocationId = String(employee.homeLocationId || employee.home_location_id || "").trim();
   const preferredDepartmentId = Number(employee.preferredDepartmentId || employee.preferred_department_id || 0) || null;
-  if (["manager", "department_manager"].includes(role) && !homeLocationId) {
+  if (["location_planner", "manager", "department_manager"].includes(role) && !homeLocationId) {
     throw httpError(400, "Für eine Leitungsrolle muss zuerst eine Stammfiliale hinterlegt werden.", "PORTAL_SCOPE_REQUIRED");
   }
   if (role === "department_manager" && !preferredDepartmentId) {
@@ -10667,7 +10724,7 @@ function applyPersonnelAccessProfile(actor, profile) {
   `);
   for (const permission of profile.permissions) insertGrant.run(profile.employeeNumber, permission, actor.employeeNumber);
   db.prepare("DELETE FROM portal_access_scopes WHERE employee_number = ?").run(profile.employeeNumber);
-  if (["manager", "department_manager"].includes(profile.role)) {
+  if (["location_planner", "manager", "department_manager"].includes(profile.role)) {
     db.prepare(`
       INSERT INTO portal_access_scopes (employee_number, location_id, department_id, assigned_by)
       VALUES (?, ?, ?, ?)
@@ -12097,9 +12154,11 @@ function mobileLeadershipLayouts() {
   const fallback = JSON.parse(defaultPortalSettings.mobile_leadership_layouts);
   try {
     const value = JSON.parse(getPortalSettings().mobile_leadership_layouts || "{}");
-    for (const role of ["department_manager", "manager", "hr", "admin", "it_admin", "developer"]) {
+    for (const role of ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"]) {
       const requested = Array.isArray(value[role]) ? value[role].filter((id) => mobileLeadershipModuleIds.has(id)) : [];
-      const modules = ["timeTracking", ...requested.filter((id) => id !== "timeTracking")];
+      const modules = role === "location_planner"
+        ? requested.filter((id) => id !== "timeTracking")
+        : ["timeTracking", ...requested.filter((id) => id !== "timeTracking")];
       fallback[role] = [...new Set(modules)].slice(0, 6);
     }
   } catch {}
@@ -12133,12 +12192,14 @@ function validateMobileLeadershipLayouts(value) {
     throw httpError(400, "Bitte eine gültige Auswahl für die mobile Leitungsansicht übermitteln.", "MOBILE_LAYOUT_INVALID");
   }
   const result = mobileLeadershipLayouts();
-  for (const role of ["department_manager", "manager", "hr", "admin", "it_admin", "developer"]) {
+  for (const role of ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"]) {
     const requested = Array.isArray(value[role]) ? value[role].map(String) : result[role];
     if (requested.some((id) => !mobileLeadershipModuleIds.has(id))) {
       throw httpError(400, "Die mobile Leitungsansicht enthält ein unbekanntes Element.", "MOBILE_LAYOUT_INVALID");
     }
-    result[role] = [...new Set(["timeTracking", ...requested.filter((id) => id !== "timeTracking")])].slice(0, 6);
+    result[role] = [...new Set(role === "location_planner"
+      ? requested.filter((id) => id !== "timeTracking")
+      : ["timeTracking", ...requested.filter((id) => id !== "timeTracking")])].slice(0, 6);
   }
   return result;
 }
@@ -12283,7 +12344,7 @@ function mobileUserPayload(session) {
 function mobileNavigationPayload(session, status = getPortalStatus()) {
   const permissions = session.permissions || [];
   let modules;
-  if (["department_manager", "manager", "hr", "admin", "it_admin", "developer"].includes(session.role)) {
+  if (["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"].includes(session.role)) {
     modules = mobileLayoutPayload(session).modules;
   } else {
     modules = [
@@ -23504,12 +23565,27 @@ app.put("/api/locations/:id", (request, response) => {
   const id = normalizeLocationId(request.params.id);
   assertSessionLocationAdministrationScope(request.portalSession, id);
   const current = validateLocationExists(id);
+  const body = request.body && typeof request.body === "object" && !Array.isArray(request.body)
+    ? request.body : {};
+  const fullLocationWrite = request.portalSession?.employeeNumber === "local"
+    || request.portalSession?.permissions?.includes("locations:write");
+  const submittedLocation = fullLocationWrite ? body : {
+    id,
+    name: current.name,
+    minStaff: body.minStaff ?? body.min_staff ?? current.min_staff,
+    daySettings: body.daySettings ?? body.day_settings ?? JSON.parse(current.day_settings_json || "{}"),
+    active: Boolean(current.active),
+    timeTrackingEnabled: Boolean(current.time_tracking_enabled),
+    timeTrackingAccessMode: current.time_tracking_access_mode || "anywhere",
+    timeTrackingAllowedNetworks: current.time_tracking_allowed_networks || "",
+    timeTrackingVarianceMinutes: Number(current.time_tracking_variance_minutes ?? 15),
+  };
   const location = validateLocationPayload({
     timeTrackingEnabled: Boolean(current.time_tracking_enabled),
     timeTrackingAccessMode: current.time_tracking_access_mode || "anywhere",
     timeTrackingAllowedNetworks: current.time_tracking_allowed_networks || "",
     timeTrackingVarianceMinutes: Number(current.time_tracking_variance_minutes ?? 15),
-    ...request.body,
+    ...submittedLocation,
     id,
   }, false);
   const timeSettingsChanged = Number(current.time_tracking_enabled || 0) !== location.timeTrackingEnabled
@@ -23531,6 +23607,16 @@ app.put("/api/locations/:id", (request, response) => {
     auditPortal(request.portalSession?.employeeNumber || "local", "location.cost-center.assign", "location", id,
       JSON.stringify({ costCenterBefore: current.cost_center_id || null, costCenterAfter: costCenterId }));
   }
+  const changedFields = [
+    String(current.name || "") !== location.name ? "name" : "",
+    Number(current.min_staff || 0) !== location.minStaff ? "minStaff" : "",
+    String(current.day_settings_json || "{}") !== JSON.stringify(location.daySettings) ? "daySettings" : "",
+    Boolean(current.active) !== Boolean(location.active) ? "active" : "",
+    timeSettingsChanged ? "timeTracking" : "",
+    costCenterId !== current.cost_center_id ? "costCenter" : "",
+  ].filter(Boolean);
+  auditPortal(request.portalSession?.employeeNumber || "local", "location.update", "location", id,
+    JSON.stringify({ changedFields, operationalOnly: !fullLocationWrite }));
   response.json(getLocationsForSession(request.portalSession, true));
 });
 
@@ -24034,14 +24120,36 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
 app.patch("/api/employees/:personnelNumber/display", (request, response) => {
   const personnelNumber = String(request.params.personnelNumber || "").trim();
   assertSessionEmployeeScope(request.portalSession, personnelNumber);
-  const color = String(request.body.color || "").trim().toLowerCase();
-  if (!/^#[0-9a-f]{6}$/.test(color)) {
+  const body = request.body && typeof request.body === "object" && !Array.isArray(request.body)
+    ? request.body : {};
+  const colorSubmitted = own(body, "color");
+  const nicknameSubmitted = own(body, "nickname");
+  if (!colorSubmitted && !nicknameSubmitted) {
+    throw httpError(400, "Bitte mindestens ein freigegebenes Darstellungsfeld übermitteln.", "EMPLOYEE_DISPLAY_INVALID");
+  }
+  if (nicknameSubmitted && !request.portalSession?.permissions?.includes("employees:nickname:write")) {
+    throw httpError(403, "Der Dienstplan-Spitzname darf mit diesem Zugang nicht bearbeitet werden.", "EMPLOYEE_NICKNAME_WRITE_DENIED");
+  }
+  const existing = db.prepare("SELECT color, nickname FROM employees WHERE personnel_number = ?").get(personnelNumber);
+  if (!existing) throw httpError(404, "Die Person wurde nicht gefunden.");
+  const color = colorSubmitted ? String(body.color || "").trim().toLowerCase() : existing.color;
+  if (colorSubmitted && !/^#[0-9a-f]{6}$/.test(color)) {
     throw httpError(400, "Bitte eine gültige RGB-Farbe auswählen.", "EMPLOYEE_DISPLAY_INVALID");
   }
-  const result = db.prepare("UPDATE employees SET color = ? WHERE personnel_number = ?").run(color, personnelNumber);
+  const nickname = nicknameSubmitted ? String(body.nickname || "").trim() : existing.nickname;
+  if (nicknameSubmitted && (!nickname || nickname.length > 80)) {
+    throw httpError(400, "Der Dienstplan-Spitzname muss zwischen 1 und 80 Zeichen lang sein.", "EMPLOYEE_NICKNAME_INVALID");
+  }
+  const result = db.prepare("UPDATE employees SET color = ?, nickname = ? WHERE personnel_number = ?")
+    .run(color, nickname, personnelNumber);
   if (!result.changes) throw httpError(404, "Die Person wurde nicht gefunden.");
-  auditPortal(request.portalSession?.employeeNumber || "local", "employee.display.update", "employee", personnelNumber, JSON.stringify({ color }));
-  response.json({ personnelNumber, color });
+  const changedFields = [
+    colorSubmitted && color !== existing.color ? "color" : "",
+    nicknameSubmitted && nickname !== existing.nickname ? "nickname" : "",
+  ].filter(Boolean);
+  auditPortal(request.portalSession?.employeeNumber || "local", "employee.display.update", "employee", personnelNumber,
+    JSON.stringify({ changedFields }));
+  response.json({ personnelNumber, color, nickname });
 });
 
 app.delete("/api/employees/:personnelNumber", (request, response) => {
@@ -24549,10 +24657,10 @@ function rightsDashboardScopes(user, locationLookup, departmentLookup) {
   }
   const assigned = Array.isArray(user.scopes) && user.scopes.length
     ? user.scopes.map((scope) => ({ ...scope, source: "assigned" }))
-    : user.homeLocationId && (user.role === "manager" || user.preferredDepartmentId)
+    : user.homeLocationId && (["location_planner", "manager"].includes(user.role) || user.preferredDepartmentId)
       ? [{
           locationId: user.homeLocationId,
-          departmentId: user.role === "manager" ? null : user.preferredDepartmentId,
+          departmentId: ["location_planner", "manager"].includes(user.role) ? null : user.preferredDepartmentId,
           source: "home",
         }]
       : [];
@@ -27214,10 +27322,10 @@ function normalizeRightsScopesForTarget(target, submittedScopes, projectedPermis
   }));
   if (!scopes.length && scheduleAccess && target.homeLocationId) {
     const preferredDepartmentId = Number(target.preferredDepartmentId || 0) || null;
-    if (target.role === "manager" || preferredDepartmentId) {
+    if (["location_planner", "manager"].includes(target.role) || preferredDepartmentId) {
       scopes = [{
         locationId: target.homeLocationId,
-        departmentId: target.role === "manager" ? null : preferredDepartmentId,
+        departmentId: ["location_planner", "manager"].includes(target.role) ? null : preferredDepartmentId,
       }];
     }
   }
@@ -27372,7 +27480,9 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", (request, response) => {
   const employeeNumber = String(request.params.employeeNumber || "").trim();
   const target = db.prepare(`SELECT u.role, e.home_location_id FROM portal_users u JOIN employees e ON e.personnel_number = u.employee_number WHERE u.employee_number = ?`).get(employeeNumber);
   if (!target) throw httpError(404, "Der Zugang wurde nicht gefunden.");
-  if (!["manager", "department_manager"].includes(target.role)) throw httpError(400, "Nur Filial- und Abteilungsleitungen benötigen eine Bereichszuweisung.");
+  if (!["location_planner", "manager", "department_manager"].includes(target.role)) {
+    throw httpError(400, "Nur standortgebundene Planungs- und Leitungsrollen benötigen eine Bereichszuweisung.");
+  }
   const submitted = Array.isArray(request.body.scopes) ? request.body.scopes : [];
   const scopes = submitted.map((scope) => ({
     locationId: normalizeLocationId(scope.locationId),
