@@ -55,7 +55,9 @@ fi
 # Die Core-Helfer sind Bestandteil des bereits verifizierten installierten Pakets.
 # shellcheck source=server-tools/linux/lib/common.sh
 source "$core_common"
-(( lock_already_held == 1 )) || gp_acquire_maintenance_lock
+readonly OFFSITE_MAINTENANCE_LOCK_WAIT_SECONDS=300
+(( lock_already_held == 1 )) \
+  || offsite_acquire_maintenance_lock_with_wait "$OFFSITE_MAINTENANCE_LOCK_WAIT_SECONDS"
 app_port="$("$OFFSITE_NODE" - "$OFFSITE_APP_ENV" <<'NODE'
 const fs = require("node:fs");
 const matches = fs.readFileSync(process.argv[2], "utf8").split(/\r?\n/).filter((line) => /^PORT=/.test(line));

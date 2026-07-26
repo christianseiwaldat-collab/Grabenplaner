@@ -62,6 +62,18 @@ const state = {
   timeCorrections: [],
   rightsManagement: null,
   rightsDashboard: null,
+  personnelRulesDashboard: null,
+  personnelRulesDashboardLoading: false,
+  personnelRulesSelectedProfileId: "",
+  personnelRulesSearch: "",
+  personnelRulesLayerFilter: "",
+  personnelRulesStatusFilter: "",
+  personnelRulesSimulation: null,
+  personnelRulesSimulationError: "",
+  personnelRulesSimulationLoading: false,
+  personnelRulesSimulationLocationId: "",
+  personnelRulesSimulationDepartmentId: "",
+  personnelRulesSimulationWeek: getMonday(new Date()),
   systemCenter: null,
   systemCenterLoading: false,
   loanManagement: null,
@@ -90,9 +102,10 @@ const state = {
   dashboardFontSize: "standard",
   employeeDisplayColumns: [],
   employeeDisplaySort: { key: "personnel_number", direction: "asc" },
-  rightsDashboardMode: "systemCenter",
+  rightsDashboardMode: "locations",
   rightsDashboardSelectedProcessId: "vacation",
   rightsDashboardSelectedProcessStepId: "",
+  rightsProcessCategoryId: "all",
   rightsProcessLocationId: "",
   rightsProcessScenarioIds: {},
   editingCustomProcessId: "",
@@ -144,6 +157,18 @@ const state = {
   personnelAdministrationLoaded: false,
   personnelAdministrationLoading: false,
   personnelAdministrationTab: "employees",
+  customWorkRuleRegistry: null,
+  workRuleGovernance: null,
+  customWorkRulesLoading: false,
+  selectedCustomWorkRuleId: "",
+  customWorkRuleStatusFilter: "all",
+  customWorkRuleSimulationValid: false,
+  workRuleGovernancePreview: null,
+  workRuleAssignmentPreviewValid: false,
+  collectiveAgreementRegistry: null,
+  collectiveAgreementsLoading: false,
+  selectedCollectiveAgreementId: "",
+  editingCollectiveAgreementBusinessUnitId: "",
   personnelDirectorySearch: "",
   personnelDirectoryCostCenterFilter: "",
   personnelDirectoryStatusFilter: "active",
@@ -232,7 +257,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -241,7 +266,7 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeeHomeLocation", "employeeHomeLocationHint", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "addCostCenterButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
+    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "addCostCenterButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
     "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationCostCenterField", "locationCostCenter", "locationCostCenterReadonly", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
@@ -252,9 +277,10 @@ const elements = Object.fromEntries(
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
     "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
-    "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
-    "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
-    "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
+    "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
+    "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
+    "rightsProcessCategory", "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
+    "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
     "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "databaseBackupSettingsCard", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "dashboardFontSize", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
@@ -720,6 +746,48 @@ function canManageDataSubjectRequests() {
   return hasGovernancePermission("data_subject_requests:manage");
 }
 
+function canDraftCustomWorkRules() {
+  return hasGovernancePermission("work_rules:draft");
+}
+
+function canAccessCustomWorkRuleGovernance() {
+  return [
+    "work_rules:draft",
+    "work_rules:review",
+    "work_rules:publish",
+    "work_rules:assign",
+    "work_rules:audit",
+  ].some(hasGovernancePermission);
+}
+
+function canReviewCustomWorkRules() {
+  return hasGovernancePermission("work_rules:review");
+}
+
+function canPublishCustomWorkRules() {
+  return hasGovernancePermission("work_rules:publish");
+}
+
+function canAssignCustomWorkRules() {
+  return hasGovernancePermission("work_rules:assign");
+}
+
+function canAuditCustomWorkRules() {
+  return hasGovernancePermission("work_rules:audit");
+}
+
+function canReadCollectiveAgreements() {
+  return hasGovernancePermission("collective_agreements:read");
+}
+
+function canManageCollectiveAgreements() {
+  return hasGovernancePermission("collective_agreements:manage");
+}
+
+function canPrepareCollectiveAgreementAssignments() {
+  return hasGovernancePermission("collective_agreements:assign");
+}
+
 function canExportDataSubjectRequests() {
   return hasGovernancePermission("data_subject_requests:export");
 }
@@ -757,12 +825,15 @@ function canManageLoanSettings() {
 }
 
 function canOpenPersonnelAdministrationView() {
-  return canReadCentralPersonnel() || canReadCostCenters() || canReadCentralVacations() || canReadDataSubjectRequests();
+  return canReadCentralPersonnel() || canReadCostCenters() || canAccessCustomWorkRuleGovernance() || canReadCollectiveAgreements()
+    || canReadCentralVacations() || canReadDataSubjectRequests();
 }
 
 function firstAccessiblePersonnelAdministrationTab() {
   if (canReadCentralPersonnel()) return "employees";
   if (canReadCostCenters()) return "costCenters";
+  if (canAccessCustomWorkRuleGovernance()) return "ruleDrafts";
+  if (canReadCollectiveAgreements()) return "collectiveAgreements";
   if (canReadCentralVacations()) return "vacations";
   if (canReadDataSubjectRequests()) return "dataRequests";
   return "";
@@ -771,6 +842,8 @@ function firstAccessiblePersonnelAdministrationTab() {
 function canOpenPersonnelAdministrationTab(tab) {
   return (tab === "employees" && canReadCentralPersonnel())
     || (tab === "costCenters" && canReadCostCenters())
+    || (tab === "ruleDrafts" && canAccessCustomWorkRuleGovernance())
+    || (tab === "collectiveAgreements" && canReadCollectiveAgreements())
     || (tab === "vacations" && canReadCentralVacations())
     || (tab === "dataRequests" && canReadDataSubjectRequests());
 }
@@ -788,11 +861,20 @@ function canReadSystemCenter() {
   return permissions.includes("system:diagnostics:read") || permissions.includes("system:diagnostics:technical");
 }
 
+function canReadPersonnelRulesDashboard() {
+  if (!state.portalStatus?.portalEnabled) return true;
+  return (state.portalSession?.user?.permissions || []).includes("work_rules:read");
+}
+
 function accessibleDashboardModes() {
   return [
-    ...(canReadSystemCenter() ? ["systemCenter"] : []),
     ...(canReadGovernanceDashboards() ? ["locations", "rights", "processes"] : []),
-  ];
+    ...(canReadPersonnelRulesDashboard() ? ["personnelRules"] : []),
+    ...(canReadSystemCenter() ? ["systemCenter"] : []),
+  ].sort((left, right) => (
+    ["locations", "rights", "personnelRules", "processes", "systemCenter"].indexOf(left)
+    - ["locations", "rights", "personnelRules", "processes", "systemCenter"].indexOf(right)
+  ));
 }
 
 function applyRoleVisibility() {
@@ -847,15 +929,21 @@ function applyRoleVisibility() {
   const retentionManageAccess = canManageRetentionGovernance() && retentionReadAccess;
   const dataSubjectRequestsReadAccess = canReadDataSubjectRequests();
   const dataSubjectRequestsManageAccess = canManageDataSubjectRequests() && dataSubjectRequestsReadAccess;
+  const customWorkRulesAccess = canAccessCustomWorkRuleGovernance();
+  const collectiveAgreementsReadAccess = canReadCollectiveAgreements();
+  const collectiveAgreementsManageAccess = canManageCollectiveAgreements() && collectiveAgreementsReadAccess;
+  const collectiveAgreementsAssignAccess = canPrepareCollectiveAgreementAssignments() && collectiveAgreementsReadAccess;
   const requestReadAccess = canReadManagerRequests() && features.requests !== false;
   const loanManagementAccess = canReadLoanManagement();
   const loanSettingsAccess = canManageLoanSettings();
-  const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess
+  const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess || customWorkRulesAccess || collectiveAgreementsReadAccess
     || centralVacationReadAccess || dataSubjectRequestsReadAccess;
   const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
   elements.personnelAdministrationNav?.classList.toggle("hidden", !personnelModuleAccess);
   elements.personnelDirectoryNavButton?.classList.toggle("hidden", !centralPersonnelReadAccess);
   elements.costCentersNavButton?.classList.toggle("hidden", !costCenterReadAccess);
+  elements.customWorkRulesNavButton?.classList.toggle("hidden", !customWorkRulesAccess);
+  elements.collectiveAgreementsNavButton?.classList.toggle("hidden", !collectiveAgreementsReadAccess);
   elements.centralVacationsNavButton?.classList.toggle("hidden", !centralVacationReadAccess);
   elements.dataSubjectRequestsNavButton?.classList.toggle("hidden", !dataSubjectRequestsReadAccess);
   elements.vacationAccountsButton?.classList.toggle("hidden", !vacationAccountsReadAccess);
@@ -871,8 +959,10 @@ function applyRoleVisibility() {
   elements.requestsNavButton?.classList.toggle("hidden", !requestReadAccess);
   elements.timeTrackingNavButton?.classList.toggle("hidden", !timeReadAccess);
   const systemCenterAccess = diagnosticsReadAccess || diagnosticsTechnicalAccess;
-  elements.rightsDashboardNavButton?.classList.toggle("hidden", !(rightsAccess || systemCenterAccess));
+  const personnelRulesDashboardAccess = canReadPersonnelRulesDashboard();
+  elements.rightsDashboardNavButton?.classList.toggle("hidden", !(rightsAccess || personnelRulesDashboardAccess || systemCenterAccess));
   document.querySelectorAll('[data-dashboard-capability="rights"]').forEach((button) => button.classList.toggle("hidden", !rightsAccess));
+  document.querySelectorAll('[data-dashboard-capability="workRules"]').forEach((button) => button.classList.toggle("hidden", !personnelRulesDashboardAccess));
   document.querySelectorAll('[data-dashboard-capability="system"]').forEach((button) => button.classList.toggle("hidden", !systemCenterAccess));
   if (!accessibleDashboardModes().includes(state.rightsDashboardMode)) {
     state.rightsDashboardMode = accessibleDashboardModes()[0] || "systemCenter";
@@ -920,9 +1010,15 @@ function applyRoleVisibility() {
   elements.addCentralEmployeeButton?.classList.toggle("hidden", !centralPersonnelWriteAccess);
   document.querySelector('[data-personnel-administration-tab="employees"]')?.classList.toggle("hidden", !centralPersonnelReadAccess);
   document.querySelector('[data-personnel-administration-tab="costCenters"]')?.classList.toggle("hidden", !costCenterReadAccess);
+  elements.customWorkRulesTab?.classList.toggle("hidden", !customWorkRulesAccess);
+  elements.collectiveAgreementsTab?.classList.toggle("hidden", !collectiveAgreementsReadAccess);
   elements.centralVacationsTab?.classList.toggle("hidden", !centralVacationReadAccess);
   elements.dataSubjectRequestsTab?.classList.toggle("hidden", !dataSubjectRequestsReadAccess);
   elements.addCostCenterButton?.classList.toggle("hidden", !costCenterWriteAccess);
+  elements.addCustomWorkRuleButton?.classList.toggle("hidden", !canDraftCustomWorkRules());
+  elements.addCollectiveAgreementButton?.classList.toggle("hidden", !collectiveAgreementsManageAccess);
+  elements.addCollectiveAgreementBusinessUnitButton?.classList.toggle("hidden", !collectiveAgreementsManageAccess);
+  elements.addCollectiveAgreementAssignmentButton?.classList.toggle("hidden", !collectiveAgreementsAssignAccess);
   elements.addLocationButton?.classList.toggle("hidden", !(locationBaseWriteAccess && costCenterWriteAccess));
   elements.addDepartmentButton?.classList.toggle("hidden", !departmentWriteAccess);
   elements.locationFormCard?.classList.toggle("hidden", !locationBaseWriteAccess);
@@ -1535,6 +1631,10 @@ function renderContextNavigation() {
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "employees");
   setNavigationCurrent(elements.costCentersNavButton,
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "costCenters");
+  setNavigationCurrent(elements.customWorkRulesNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "ruleDrafts");
+  setNavigationCurrent(elements.collectiveAgreementsNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "collectiveAgreements");
   setNavigationCurrent(elements.centralVacationsNavButton,
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "vacations");
   setNavigationCurrent(elements.dataSubjectRequestsNavButton,
@@ -1652,7 +1752,9 @@ function normalizeWorkRuleAssessment(value) {
 
 function safeWorkRuleSourceUrl(value) {
   try {
-    const url = new URL(String(value || ""), window.location.href);
+    const submitted = String(value || "").trim();
+    if (!submitted) return "";
+    const url = new URL(submitted);
     return ["http:", "https:"].includes(url.protocol) ? url.href : "";
   } catch {
     return "";
@@ -1688,6 +1790,42 @@ function workRuleEvidenceMarkup(evidence) {
   }).join("")}</dl>`;
 }
 
+function workRuleSnoozeStorageKey(finding) {
+  const employeeNumber = String(finding?.employeeNumber || "unknown").replace(/[^a-z0-9_-]/gi, "_");
+  const ruleId = String(finding?.ruleId || "unknown").replace(/[^a-z0-9_.-]/gi, "_");
+  return `grabenplaner:work-rule-snooze:${uiPreferenceActorKey()}:${employeeNumber}:${ruleId}`;
+}
+
+function workRuleSnoozedUntil(finding) {
+  if (finding?.snoozable !== true) return 0;
+  try {
+    const value = Number(localStorage.getItem(workRuleSnoozeStorageKey(finding)) || 0);
+    return Number.isFinite(value) && value > Date.now() ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function workRulePresentationCounts(findings, evaluatedEmployees) {
+  const rank = { attention: 1, manual_review: 2, blocked: 3 };
+  const byEmployee = new Map();
+  for (const finding of findings) {
+    const employee = String(finding?.employeeNumber || `overall:${finding?.ruleId || ""}`);
+    const findingState = ["blocked", "manual_review", "attention"].includes(finding?.state)
+      ? finding.state
+      : "manual_review";
+    const current = byEmployee.get(employee);
+    if (!current || rank[findingState] > rank[current]) byEmployee.set(employee, findingState);
+  }
+  const counts = { pass: Math.max(0, Number(evaluatedEmployees || 0) - byEmployee.size), attention: 0, manualReview: 0, blocked: 0 };
+  for (const value of byEmployee.values()) {
+    if (value === "blocked") counts.blocked += 1;
+    else if (value === "manual_review") counts.manualReview += 1;
+    else counts.attention += 1;
+  }
+  return counts;
+}
+
 function workRuleFindingMarkup(finding, { compact = false } = {}) {
   const stateValue = ["pass", "attention", "manual_review", "blocked"].includes(finding?.state)
     ? finding.state
@@ -1708,6 +1846,9 @@ function workRuleFindingMarkup(finding, { compact = false } = {}) {
     ${finding?.message ? `<p>${escapeHtml(finding.message)}</p>` : ""}
     ${compact ? "" : workRuleEvidenceMarkup(finding?.evidence)}
     ${compact ? "" : workRuleSourceLinks(sourceRefs)}
+    ${!compact && finding?.snoozable === true ? `<div class="work-rule-finding-actions">
+      <button type="button" class="secondary-button" data-work-rule-snooze="${escapeHtmlAttribute(workRuleSnoozeStorageKey(finding))}" data-snooze-days="${Number(finding.snoozeDays || 4)}">Für ${Number(finding.snoozeDays || 4)} Tage schlummern</button>
+    </div>` : ""}
   </article>`;
 }
 
@@ -1724,23 +1865,39 @@ function renderWorkRuleAssessment() {
     return;
   }
 
-  const counts = assessment.counts;
+  const snoozedFindings = assessment.findings.filter((finding) => workRuleSnoozedUntil(finding));
+  const visibleFindings = assessment.findings.filter((finding) => !workRuleSnoozedUntil(finding));
+  const administrativeFindings = visibleFindings.filter((finding) => finding?.category === "personnel_data");
+  const scheduleFindings = visibleFindings.filter((finding) => finding?.category !== "personnel_data");
+  const administrativeOnly = administrativeFindings.length > 0 && scheduleFindings.length === 0;
+  const counts = workRulePresentationCounts(visibleFindings, assessment.evaluatedEmployees);
   const needsAttention = counts.attention + counts.manualReview + counts.blocked;
+  const displayOutcome = scheduleFindings.length
+    ? (counts.blocked ? "blocked" : (counts.manualReview ? "manual_review" : "attention"))
+    : (administrativeOnly ? "administrative" : "pass");
+  elements.workRuleAssessmentPanel.className = `work-rule-assessment ${displayOutcome}`;
   const modeLabel = assessment.mode === "enforced"
     ? "Aktiver Regelbetrieb – Ergebnis vor dem Speichern beachten"
     : "Monitorbetrieb – Planprüfung, keine Rechtsfreigabe";
   elements.workRuleModeBadge.textContent = modeLabel;
-  elements.workRuleAssessmentSummary.textContent = needsAttention
-    ? `${needsAttention} Punkt${needsAttention === 1 ? "" : "e"} benötigen Aufmerksamkeit.`
-    : "Keine Hinweise in der aktuellen automatischen Planprüfung.";
-  elements.workRuleAssessmentCounts.innerHTML = `
-    <span class="pass"><strong>${counts.pass}</strong> bestätigt</span>
-    <span class="attention"><strong>${counts.attention}</strong> Hinweise</span>
-    <span class="manual_review"><strong>${counts.manualReview}</strong> prüfen</span>
-    <span class="blocked"><strong>${counts.blocked}</strong> blockiert</span>`;
+  elements.workRuleAssessmentSummary.textContent = administrativeOnly
+    ? `${administrativeFindings.length} Stammdatenangabe${administrativeFindings.length === 1 ? "" : "n"} offen – keine akute Planwarnung.`
+    : (needsAttention
+      ? `${needsAttention} Punkt${needsAttention === 1 ? "" : "e"} benötigen Aufmerksamkeit.`
+      : (snoozedFindings.length
+        ? `Keine akuten Planhinweise; ${snoozedFindings.length} Stammdaten-Erinnerung${snoozedFindings.length === 1 ? "" : "en"} pausiert.`
+        : "Keine Hinweise in der aktuellen automatischen Planprüfung."));
+  elements.workRuleAssessmentCounts.innerHTML = administrativeOnly
+    ? `<span class="administrative"><strong>${administrativeFindings.length}</strong> Stammdaten</span>`
+    : `
+      <span class="pass"><strong>${counts.pass}</strong> bestätigt</span>
+      <span class="attention"><strong>${counts.attention}</strong> Hinweise</span>
+      <span class="manual_review"><strong>${counts.manualReview}</strong> prüfen</span>
+      <span class="blocked"><strong>${counts.blocked}</strong> blockiert</span>
+      ${snoozedFindings.length ? `<span class="snoozed"><strong>${snoozedFindings.length}</strong> pausiert</span>` : ""}`;
 
   const grouped = new Map();
-  for (const finding of assessment.findings) {
+  for (const finding of visibleFindings) {
     const employeeNumber = String(finding?.employeeNumber || "").trim();
     const label = employeeNumber
       ? `${finding.employeeName || "Teammitglied"} · ${employeeNumber}`
@@ -1765,9 +1922,19 @@ function renderWorkRuleAssessment() {
     </details>` : "";
   elements.workRuleAssessmentBody.innerHTML = `
     ${findingGroups || '<p class="work-rule-assessment-empty">Die automatische Prüfung hat keine einzelnen Hinweise ausgegeben.</p>'}
+    ${snoozedFindings.length ? `<p class="work-rule-snoozed-note">${snoozedFindings.length} Stammdaten-Erinnerung${snoozedFindings.length === 1 ? "" : "en"} wird nach vier Tagen automatisch wieder angezeigt.</p>` : ""}
     ${profileMarkup}
     <p class="work-rule-disclaimer">${escapeHtml(assessment.disclaimer || "Die automatische Planprüfung unterstützt die Dienstplanung. Sie ersetzt keine rechtliche oder kollektivvertragliche Einzelfallprüfung.")}</p>`;
-  if (assessment.outcome !== "pass") elements.workRuleAssessmentPanel.open = true;
+  elements.workRuleAssessmentBody.querySelectorAll("[data-work-rule-snooze]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const days = Math.min(7, Math.max(1, Number(button.dataset.snoozeDays || 4)));
+      try {
+        localStorage.setItem(button.dataset.workRuleSnooze, String(Date.now() + (days * 86_400_000)));
+      } catch {}
+      renderWorkRuleAssessment();
+    });
+  });
+  elements.workRuleAssessmentPanel.open = scheduleFindings.length > 0;
 }
 
 function renderTimeline() {
@@ -3775,6 +3942,1928 @@ async function runRetentionPreview(event) {
   }
 }
 
+function customWorkRuleCatalogEntry(catalogName, id) {
+  return (state.customWorkRuleRegistry?.catalogs?.[catalogName] || [])
+    .find((entry) => entry.id === id) || null;
+}
+
+function customWorkRuleCatalogLabel(catalogName, id, fallback = "") {
+  return customWorkRuleCatalogEntry(catalogName, id)?.label || fallback || id || "–";
+}
+
+function customWorkRuleConditionLabel(definition = {}) {
+  const metric = customWorkRuleCatalogEntry("metrics", definition.metric);
+  const unit = metric?.valueType === "time" ? "Uhr" : (metric?.unitLabel || definition.unit || "");
+  return [
+    metric?.label || definition.metric || "Regelbaustein",
+    metric?.operatorLabel || definition.operator || "",
+    definition.threshold ?? "–",
+    unit,
+  ].filter((entry) => entry !== "").join(" · ");
+}
+
+async function loadCustomWorkRuleRegistry({ force = false } = {}) {
+  if (!canAccessCustomWorkRuleGovernance() || state.customWorkRulesLoading) return;
+  if (state.customWorkRuleRegistry && state.workRuleGovernance && !force) {
+    renderCustomWorkRuleRegistry();
+    return;
+  }
+  state.customWorkRulesLoading = true;
+  if (elements.customWorkRuleList) {
+    elements.customWorkRuleList.innerHTML = '<p class="settings-note">Regelwerk und offene Aufgaben werden geladen.</p>';
+  }
+  try {
+    const [registryResult, governanceResult] = await Promise.allSettled([
+      api("/api/work-rules/drafts"),
+      api("/api/work-rules/governance"),
+    ]);
+    if (registryResult.status === "rejected" && governanceResult.status === "rejected") {
+      throw registryResult.reason;
+    }
+    state.customWorkRuleRegistry = registryResult.status === "fulfilled"
+      ? registryResult.value
+      : {
+        generatedAt: governanceResult.value?.generatedAt,
+        notice: "Entwürfe, Freigaben, Veröffentlichungen und Zuordnungen bleiben getrennte, nachvollziehbare Vorgänge.",
+        capabilities: {},
+        summary: {},
+        catalogs: {},
+        organizationalScopes: {},
+        drafts: [],
+      };
+    state.workRuleGovernance = governanceResult.status === "fulfilled"
+      ? governanceResult.value
+      : {
+        generatedAt: state.customWorkRuleRegistry.generatedAt,
+        capabilities: state.customWorkRuleRegistry.capabilities || {},
+        requests: [],
+        publications: [],
+        assignments: [],
+        events: [],
+      };
+    const ids = new Set((state.customWorkRuleRegistry.drafts || []).map((draft) => draft.id));
+    if (!ids.has(state.selectedCustomWorkRuleId)) {
+      state.selectedCustomWorkRuleId = state.customWorkRuleRegistry.drafts?.[0]?.id || "";
+    }
+    renderCustomWorkRuleRegistry();
+  } catch (error) {
+    state.customWorkRuleRegistry = null;
+    if (elements.customWorkRuleList) {
+      elements.customWorkRuleList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    }
+    showToast(error.message, true);
+  } finally {
+    state.customWorkRulesLoading = false;
+  }
+}
+
+function workRuleGovernanceCapabilities() {
+  const registry = state.customWorkRuleRegistry?.capabilities || {};
+  const governance = state.workRuleGovernance?.capabilities || {};
+  return {
+    canDraft: governance.canDraft ?? registry.canDraft ?? canDraftCustomWorkRules(),
+    canRevise: governance.canRevise ?? registry.canRevise ?? canDraftCustomWorkRules(),
+    canSubmitForReview: governance.canSubmitForReview ?? registry.canSubmitForReview ?? canDraftCustomWorkRules(),
+    canReview: governance.canReview ?? governance.canApprove ?? registry.canReview ?? registry.canApprove ?? canReviewCustomWorkRules(),
+    canPublish: governance.canPublish ?? registry.canPublish ?? canPublishCustomWorkRules(),
+    canAssign: governance.canAssign ?? governance.canActivate ?? registry.canAssign ?? registry.canActivate ?? canAssignCustomWorkRules(),
+    canDeactivate: (governance.canAssign ?? registry.canAssign ?? canAssignCustomWorkRules())
+      || (governance.canPublish ?? registry.canPublish ?? canPublishCustomWorkRules()),
+    canDeactivateAssignment: governance.canAssign ?? registry.canAssign ?? canAssignCustomWorkRules(),
+    canWithdrawPublication: governance.canPublish ?? registry.canPublish ?? canPublishCustomWorkRules(),
+    canAudit: governance.canAudit ?? registry.canAudit ?? canAuditCustomWorkRules(),
+  };
+}
+
+function workRuleProfileId(value = "") {
+  const normalized = String(value || "");
+  if (!normalized.startsWith("custom:")) return "";
+  const separator = normalized.indexOf("@");
+  return separator === -1 ? normalized : normalized.slice(0, separator);
+}
+
+function workRuleGovernanceEntries(key) {
+  return Array.isArray(state.workRuleGovernance?.[key]) ? state.workRuleGovernance[key] : [];
+}
+
+function workRuleRequestDecisions(request = {}) {
+  return Array.isArray(request.decisions) ? request.decisions : [];
+}
+
+function workRuleRequestState(request = {}) {
+  const decisions = workRuleRequestDecisions(request);
+  if (request.state) return request.state;
+  if (decisions.some((entry) => entry.decision === "reject")) return "rejected";
+  const approvals = decisions.filter((entry) => entry.decision === "approve").length;
+  if (approvals >= Number(request.requiredApprovals || 2)) return "approved";
+  return "in_review";
+}
+
+function workRuleRequestApprovalCount(request = {}) {
+  const decisions = workRuleRequestDecisions(request);
+  if (decisions.length) return decisions.filter((entry) => entry.decision === "approve").length;
+  return Number(request.approvalCount || 0);
+}
+
+function workRuleConflict(value = {}) {
+  const referencedRun = value?.conflictRunId
+    ? workRuleGovernanceEntries("conflictRuns").find((entry) => entry.id === value.conflictRunId)
+    : null;
+  const source = value?.preview || value?.conflictRun || value?.conflict || referencedRun || value || {};
+  const result = source.result || source.details || source;
+  const outcome = String(source.outcome || result.outcome || "warning");
+  const issues = [
+    ...(Array.isArray(result.blockers) ? result.blockers : []),
+    ...(Array.isArray(result.warnings) ? result.warnings : []),
+    ...(Array.isArray(result.issues) ? result.issues : []),
+    ...(Array.isArray(result.conflicts) ? result.conflicts : []),
+  ];
+  return {
+    outcome: ["pass", "warning", "blocked"].includes(outcome) ? outcome : "warning",
+    title: source.title || result.title || ({
+      pass: "Keine blockierende Überschneidung erkannt",
+      warning: "Fachliche Prüfung erforderlich",
+      blocked: "Konflikt verhindert den Vorgang",
+    })[outcome] || "Fachliche Prüfung erforderlich",
+    note: source.note || result.note || result.message || "",
+    issues,
+    checkedAt: source.createdAt || source.checkedAt || "",
+    receipt: source.receiptSha256 || source.resultSha256 || "",
+  };
+}
+
+function workRuleConflictMarkup(value, { compact = false } = {}) {
+  const conflict = workRuleConflict(value);
+  const issueMarkup = !compact && conflict.issues.length
+    ? `<ul>${conflict.issues.slice(0, 5).map((issue) => `<li>${escapeHtml(issue.message || issue.label || String(issue))}</li>`).join("")}</ul>`
+    : "";
+  return `<div class="custom-work-rule-conflict ${escapeHtmlAttribute(conflict.outcome)}">
+    <span class="custom-work-rule-conflict-mark" aria-hidden="true">${conflict.outcome === "pass" ? "✓" : conflict.outcome === "blocked" ? "!" : "…"}</span>
+    <div><strong>${escapeHtml(conflict.title)}</strong>${conflict.note ? `<p>${escapeHtml(conflict.note)}</p>` : ""}${issueMarkup}${conflict.checkedAt ? `<small>Geprüft ${escapeHtml(new Date(conflict.checkedAt).toLocaleString("de-AT"))}</small>` : ""}</div>
+  </div>`;
+}
+
+function workRuleActorLabel() {
+  const actor = state.workRuleGovernance?.currentActor || state.portalSession?.user || {};
+  const number = actor.employeeNumber || actor.actorEmployeeNumber || "";
+  const name = actor.fullName || actor.nickname || actor.name || "";
+  const role = actor.roleName || actor.role || "";
+  return [number && name ? `${number} · ${name}` : (name || number || "Aktuell angemeldeter Zugang"), role]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function workRulePublicationState(publication = {}) {
+  if (publication.state) return publication.state;
+  const events = Array.isArray(publication.events) ? publication.events : [];
+  const lastEvent = events.at(-1);
+  if (lastEvent?.eventType === "withdrawn") return "withdrawn";
+  if (lastEvent?.eventType === "superseded") return "superseded";
+  return "published";
+}
+
+function workRuleAssignmentState(assignment = {}) {
+  if (assignment.active === true) return "active";
+  if (assignment.state) return assignment.state;
+  const events = Array.isArray(assignment.events) ? assignment.events : [];
+  const lastEvent = events.at(-1);
+  if (lastEvent?.eventType === "deactivated") return "ended";
+  if (lastEvent?.eventType === "superseded") return "superseded";
+  const today = toIsoDate(new Date());
+  if (assignment.active === false && assignment.validFrom && assignment.validFrom <= today) return "ended";
+  if (assignment.validTo && assignment.validTo < today) return "ended";
+  if (assignment.validFrom && assignment.validFrom > today) return "planned";
+  return events.some((entry) => entry.eventType === "activated") ? "active" : "planned";
+}
+
+function customWorkRuleContext(profileId) {
+  const draft = (state.customWorkRuleRegistry?.drafts || []).find((entry) => entry.id === profileId) || null;
+  const publications = workRuleGovernanceEntries("publications")
+    .filter((entry) => workRuleProfileId(entry.profileId || entry.releasedProfileVersionId || entry.sourceProfileVersionId) === profileId);
+  const publicationIds = new Set(publications.map((entry) => entry.id));
+  const assignments = workRuleGovernanceEntries("assignments")
+    .filter((entry) => publicationIds.has(entry.publicationId) || workRuleProfileId(entry.profileId || entry.profileVersionId) === profileId);
+  const assignmentIds = new Set(assignments.flatMap((entry) => [
+    entry.id,
+    entry.governedRevisionId,
+    entry.logicalAssignmentId,
+  ]).filter(Boolean));
+  const versionIds = new Set((draft?.versions || []).map((entry) => entry.id));
+  const requests = workRuleGovernanceEntries("requests").filter((entry) => (
+    workRuleProfileId(entry.profileId || entry.subjectId) === profileId
+    || versionIds.has(entry.subjectId)
+    || publicationIds.has(entry.subjectId)
+    || assignmentIds.has(entry.subjectId)
+  ));
+  const requestIds = new Set(requests.map((entry) => entry.id));
+  const relatedIds = new Set([profileId, ...versionIds, ...publicationIds, ...assignmentIds, ...requestIds]);
+  const events = workRuleGovernanceEntries("events").filter((entry) => (
+    relatedIds.has(entry.aggregateId)
+    || relatedIds.has(entry.subjectId)
+    || relatedIds.has(entry.requestId)
+    || workRuleProfileId(entry.profileId || entry.aggregateId) === profileId
+  ));
+  return { draft, publications, assignments, requests, events };
+}
+
+function customWorkRuleStatus(context) {
+  const blocked = context.requests.some((request) => (
+    ["in_review", "approved"].includes(workRuleRequestState(request))
+    && workRuleConflict(request).outcome === "blocked"
+  ));
+  if (blocked) return { key: "conflict", label: "Konflikt – Bearbeitung erforderlich", tone: "danger" };
+  const pending = context.requests
+    .filter((request) => ["in_review", "approved"].includes(workRuleRequestState(request)))
+    .sort((left, right) => String(right.submittedAt || "").localeCompare(String(left.submittedAt || "")))[0];
+  if (pending) {
+    const approvals = workRuleRequestApprovalCount(pending);
+    const required = Number(pending.requiredApprovals || 2);
+    if (workRuleRequestState(pending) === "approved" || approvals >= required) {
+      return { key: "approval", label: "Freigegeben – Abschluss offen", tone: "success" };
+    }
+    if (approvals > 0) return { key: "approval", label: "Zweitfreigabe offen", tone: "warning" };
+    return { key: "review", label: "Fachprüfung offen", tone: "warning" };
+  }
+  const activeAssignment = context.assignments.find((entry) => workRuleAssignmentState(entry) === "active");
+  if (activeAssignment) {
+    return {
+      key: "effective",
+      label: activeAssignment.enforcementMode === "enforced"
+        ? "Wirksam · verbindliche Prüfung"
+        : "Wirksam · Monitorbetrieb",
+      tone: "success",
+    };
+  }
+  const plannedAssignment = context.assignments.find((entry) => workRuleAssignmentState(entry) === "planned");
+  if (plannedAssignment) {
+    return { key: "published", label: `Geplant ab ${formatDate(plannedAssignment.validFrom)}`, tone: "info" };
+  }
+  const publication = context.publications.find((entry) => workRulePublicationState(entry) === "published");
+  if (publication) return { key: "published", label: "Veröffentlicht – noch nicht zugeordnet", tone: "info" };
+  const ended = context.assignments.some((entry) => ["ended", "superseded"].includes(workRuleAssignmentState(entry)))
+    || context.publications.some((entry) => ["withdrawn", "superseded"].includes(workRulePublicationState(entry)));
+  if (ended && !context.draft?.hasUnreleasedDraft) return { key: "ended", label: "Beendet / zurückgezogen", tone: "inactive" };
+  return { key: "draft", label: "Entwurf – keine Wirkung", tone: "warning" };
+}
+
+function customWorkRuleItems() {
+  const profiles = new Map((state.customWorkRuleRegistry?.drafts || []).map((draft) => [draft.id, draft]));
+  for (const publication of workRuleGovernanceEntries("publications")) {
+    const profileId = workRuleProfileId(publication.profileId || publication.releasedProfileVersionId || publication.sourceProfileVersionId);
+    if (profileId && !profiles.has(profileId)) {
+      profiles.set(profileId, {
+        id: profileId,
+        code: profileId.slice("custom:".length),
+        title: publication.title || publication.profileTitle || profileId,
+        currentVersion: publication.definition ? { id: publication.releasedProfileVersionId, definition: publication.definition } : null,
+        versions: [],
+      });
+    }
+  }
+  const statusOrder = ["conflict", "review", "approval", "draft", "published", "effective", "ended"];
+  return [...profiles.values()].map((draft) => {
+    const context = customWorkRuleContext(draft.id);
+    return { draft, context, status: customWorkRuleStatus(context) };
+  }).sort((left, right) => (
+    statusOrder.indexOf(left.status.key) - statusOrder.indexOf(right.status.key)
+    || String(left.draft.title || "").localeCompare(String(right.draft.title || ""), "de-AT")
+  ));
+}
+
+function renderCustomWorkRuleSummary(items) {
+  if (!elements.customWorkRuleSummary) return;
+  const cards = [
+    ["actionable", "Zu bearbeiten", items.filter((item) => ["conflict", "review", "approval"].includes(item.status.key)).length, "Prüfung oder Abschluss offen"],
+    ["draft", "Entwürfe", items.filter((item) => item.status.key === "draft").length, "noch ohne Freigabe"],
+    ["published", "Veröffentlicht", items.filter((item) => item.status.key === "published").length, "Zuordnung getrennt prüfen"],
+    ["effective", "Wirksam", items.filter((item) => item.status.key === "effective").length, "datierte Zuordnungen"],
+  ];
+  elements.customWorkRuleSummary.innerHTML = cards.map(([filter, label, value, note]) => `
+    <button type="button" class="personnel-administration-stat custom-work-rule-summary-card ${state.customWorkRuleStatusFilter === filter ? "selected" : ""}" data-custom-work-rule-filter="${escapeHtmlAttribute(filter)}" aria-pressed="${state.customWorkRuleStatusFilter === filter}">
+      <span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong><small>${escapeHtml(note)}</small>
+    </button>
+  `).join("");
+}
+
+function customWorkRuleFilterMatch(item, filter) {
+  if (filter === "all") return true;
+  if (filter === "actionable") return ["conflict", "review", "approval"].includes(item.status.key);
+  return item.status.key === filter;
+}
+
+function renderCustomWorkRuleTaskFilter(items) {
+  if (!elements.customWorkRuleTaskFilter) return;
+  const filters = [
+    ["all", "Alle"],
+    ["actionable", "Zu bearbeiten"],
+    ["draft", "Entwürfe"],
+    ["review", "Fachprüfung"],
+    ["approval", "Zweitfreigabe"],
+    ["published", "Veröffentlicht"],
+    ["effective", "Wirksam"],
+    ["conflict", "Konflikte"],
+    ["ended", "Historisch"],
+  ];
+  elements.customWorkRuleTaskFilter.innerHTML = filters.map(([key, label]) => {
+    const count = items.filter((item) => customWorkRuleFilterMatch(item, key)).length;
+    return `<button type="button" class="${state.customWorkRuleStatusFilter === key ? "active" : ""}" data-custom-work-rule-filter="${escapeHtmlAttribute(key)}" aria-pressed="${state.customWorkRuleStatusFilter === key}">${escapeHtml(label)} <span>${count}</span></button>`;
+  }).join("");
+}
+
+function renderCustomWorkRuleList(items) {
+  if (!elements.customWorkRuleList) return;
+  const filtered = items.filter((item) => customWorkRuleFilterMatch(item, state.customWorkRuleStatusFilter));
+  if (elements.customWorkRuleListHint) {
+    elements.customWorkRuleListHint.textContent = state.customWorkRuleStatusFilter === "all"
+      ? `${items.length} eigene Regeln in allen Bearbeitungsständen`
+      : `${filtered.length} von ${items.length} Regeln im gewählten Bearbeitungsstand`;
+  }
+  if (!filtered.length) {
+    elements.customWorkRuleList.innerHTML = `
+      <div class="custom-work-rule-empty compact">
+        <strong>Keine eigene Regel in diesem Bearbeitungsstand</strong>
+        <p>Wähle einen anderen Filter oder lege – mit passendem Recht – einen neuen Entwurf an.</p>
+      </div>`;
+    return;
+  }
+  elements.customWorkRuleList.innerHTML = filtered.map(({ draft, status }) => {
+    const current = draft.currentVersion?.definition || {};
+    const active = draft.id === state.selectedCustomWorkRuleId;
+    return `<button class="custom-work-rule-list-item ${active ? "active" : ""}" type="button" data-custom-work-rule-id="${escapeHtmlAttribute(draft.id)}">
+      <span class="custom-work-rule-code">${escapeHtml(draft.code)}</span>
+      <strong>${escapeHtml(draft.title)}</strong>
+      <small>${escapeHtml(customWorkRuleCatalogLabel("ruleTypes", current.ruleType, "Eigene Regel"))} · ${escapeHtml(draft.currentVersion?.versionLabel || "Entwurf")}</small>
+      <span class="status-badge ${escapeHtmlAttribute(status.tone)}">${escapeHtml(status.label)}</span>
+    </button>`;
+  }).join("");
+}
+
+function renderCustomWorkRuleTestCases(testCases = []) {
+  const labels = { pass: "Eingehalten", fail: "Verletzt", unknown: "Manuell prüfen" };
+  return `<div class="custom-work-rule-tests">${testCases.map((testCase) => `
+    <article class="${escapeHtmlAttribute(testCase.actual || "unknown")}">
+      <span>${escapeHtml(testCase.label || testCase.id)}</span>
+      <strong>${testCase.input === null ? "Kein Prüfwert" : escapeHtml(String(testCase.input))}</strong>
+      <small>${escapeHtml(labels[testCase.actual] || testCase.actual || "Unbekannt")}</small>
+    </article>
+  `).join("")}</div>`;
+}
+
+function workRuleOperationLabel(operation) {
+  return ({
+    publish_rule: "Regelfassung veröffentlichen",
+    activate_assignment: "Zuordnung aktivieren",
+    deactivate_assignment: "Zuordnung beenden",
+    withdraw_publication: "Veröffentlichung zurückziehen",
+    approve_kv_assignment: "KV-Zuordnung freigeben",
+    deactivate_kv_assignment: "KV-Zuordnung beenden",
+  })[operation] || operation || "Governance-Vorgang";
+}
+
+function workRuleDecisionActor(decision = {}) {
+  return [
+    decision.actorEmployeeNumber || decision.employeeNumber || "Zugang",
+    decision.actorName || decision.fullName || "",
+    decision.qualification === "fachlich" ? "fachlich" : decision.qualification || "",
+  ].filter(Boolean).join(" · ");
+}
+
+function renderCustomWorkRuleReviewWorkflow(context) {
+  const publishRequest = context.requests
+    .filter((entry) => entry.operation === "publish_rule")
+    .sort((left, right) => String(right.submittedAt || "").localeCompare(String(left.submittedAt || "")))[0];
+  const approvals = workRuleRequestApprovalCount(publishRequest);
+  const requiredApprovals = Number(publishRequest?.requiredApprovals || 1);
+  const rejected = workRuleRequestState(publishRequest) === "rejected";
+  const published = context.publications.some((entry) => workRulePublicationState(entry) !== "withdrawn");
+  const steps = [
+    ["Entwurf", true],
+    ["Fachprüfung", published || approvals >= 1, Boolean(publishRequest) && approvals === 0 && !rejected],
+    ...(requiredApprovals > 1
+      ? [["Zweitfreigabe", published || approvals >= requiredApprovals,
+        Boolean(publishRequest) && approvals > 0 && approvals < requiredApprovals && !rejected]]
+      : []),
+    ["Veröffentlicht", published, workRuleRequestState(publishRequest) === "approved" && !published],
+  ];
+  return `<section class="custom-work-rule-workflow review">
+    <div class="custom-work-rule-section-heading"><div><span class="eyebrow">Freigabeweg</span><h4>Fassung und Veröffentlichung</h4></div><small>Vier-Augen-Prinzip · unveränderliche Prüfbasis</small></div>
+    <ol>${steps.map(([label, completed, current]) => `<li class="${rejected && current ? "failed" : completed ? "completed" : current ? "current" : "pending"}"><span>${completed ? "✓" : current ? "●" : ""}</span><strong>${escapeHtml(label)}</strong></li>`).join("")}</ol>
+  </section>`;
+}
+
+function renderCustomWorkRuleAssignmentWorkflow(context) {
+  const hasPublication = context.publications.some((entry) => workRulePublicationState(entry) === "published");
+  const planned = context.assignments.some((entry) => workRuleAssignmentState(entry) === "planned");
+  const effective = context.assignments.some((entry) => workRuleAssignmentState(entry) === "active");
+  const ended = context.assignments.some((entry) => ["ended", "superseded"].includes(workRuleAssignmentState(entry)));
+  const hasAssignmentRequest = context.requests.some((entry) => entry.operation === "activate_assignment");
+  const steps = [
+    ["Zuordnung", hasPublication && (hasAssignmentRequest || context.assignments.length), hasPublication && !hasAssignmentRequest && !context.assignments.length],
+    ["Geplant", planned || effective || ended, hasAssignmentRequest && !context.assignments.length],
+    ["Wirksam", effective || ended, planned],
+    ["Beendet", ended, false],
+  ];
+  return `<section class="custom-work-rule-workflow effect">
+    <div class="custom-work-rule-section-heading"><div><span class="eyebrow">Wirksamkeitsweg</span><h4>Zuordnung und Betriebsart</h4></div><small>Veröffentlichung allein hat keine Dienstplanwirkung</small></div>
+    <ol>${steps.map(([label, completed, current]) => `<li class="${completed ? "completed" : current ? "current" : "pending"}"><span>${completed ? "✓" : current ? "●" : ""}</span><strong>${escapeHtml(label)}</strong></li>`).join("")}</ol>
+  </section>`;
+}
+
+function renderCustomWorkRuleRequestCard(request, capabilities) {
+  const stateLabel = ({
+    in_review: "Prüfung offen",
+    approved: "Freigegeben · Abschluss offen",
+    rejected: "Abgelehnt",
+    applied: "Abgeschlossen",
+    finalized: "Abgeschlossen",
+    superseded: "Abgelöst",
+  })[workRuleRequestState(request)] || workRuleRequestState(request);
+  const decisions = workRuleRequestDecisions(request);
+  const required = Number(request.requiredApprovals || 2);
+  const approvals = workRuleRequestApprovalCount(request);
+  const canFinalize = workRuleRequestState(request) === "approved" && (
+    (request.operation === "publish_rule" && capabilities.canPublish)
+    || (request.operation === "activate_assignment" && capabilities.canAssign)
+    || (request.operation === "deactivate_assignment" && capabilities.canDeactivateAssignment)
+    || (request.operation === "withdraw_publication" && capabilities.canWithdrawPublication)
+    || (["approve_kv_assignment", "deactivate_kv_assignment"].includes(request.operation)
+      && capabilities.canApproveCollectiveAgreement)
+  );
+  const currentActorNumber = state.workRuleGovernance?.currentActor?.employeeNumber
+    || state.portalSession?.user?.employeeNumber
+    || "";
+  const alreadyDecided = decisions.some((entry) => (
+    (entry.actorEmployeeNumber || entry.employeeNumber) === currentActorNumber
+  )) || request.currentActorDecisionRecorded === true;
+  const canDecide = capabilities.canReview
+    && workRuleRequestState(request) === "in_review"
+    && request.submittedBy !== currentActorNumber
+    && request.submittedByCurrentActor !== true
+    && !alreadyDecided;
+  return `<article class="custom-work-rule-request-card ${escapeHtmlAttribute(workRuleRequestState(request))}">
+    <div class="custom-work-rule-record-heading">
+      <div><span class="eyebrow">${escapeHtml(workRuleOperationLabel(request.operation))}</span><strong>${escapeHtml(stateLabel)}</strong><small>${approvals} von ${required} Freigaben · eingereicht ${escapeHtml(request.submittedAt ? new Date(request.submittedAt).toLocaleString("de-AT") : "–")}</small></div>
+      <span class="status-badge ${workRuleRequestState(request) === "rejected" ? "danger" : workRuleRequestState(request) === "approved" ? "success" : "warning"}">${escapeHtml(stateLabel)}</span>
+    </div>
+    ${workRuleConflictMarkup(request, { compact: true })}
+    <div class="custom-work-rule-decisions">${decisions.length ? decisions.map((decision) => `
+      <div class="${escapeHtmlAttribute(decision.decision)}"><span>${decision.decision === "approve" ? "✓" : "!"}</span><div><strong>${decision.decision === "approve" ? "Freigegeben" : "Abgelehnt"} · ${escapeHtml(workRuleDecisionActor(decision))}</strong><small>${escapeHtml(decision.reason || "Keine Begründung übermittelt")} · ${escapeHtml(decision.decidedAt ? new Date(decision.decidedAt).toLocaleString("de-AT") : "")}</small></div></div>
+    `).join("") : approvals || workRuleRequestState(request) === "rejected"
+      ? '<p>Entscheidungen sind dokumentiert; personenbezogene Entscheidungsdetails sind nur mit Auditrecht sichtbar.</p>'
+      : '<p>Noch keine Entscheidung dokumentiert.</p>'}</div>
+    ${(canDecide || canFinalize) ? `<div class="custom-work-rule-record-actions">
+      ${canDecide ? `<button class="secondary-button" type="button" data-work-rule-action="approve-request" data-request-id="${escapeHtmlAttribute(request.id)}">${approvals ? "Zweitfreigabe erteilen" : "Fachlich freigeben"}</button>
+        <button class="danger-button" type="button" data-work-rule-action="reject-request" data-request-id="${escapeHtmlAttribute(request.id)}">Ablehnen</button>` : ""}
+      ${canFinalize ? `<button class="primary-button" type="button" data-work-rule-action="finalize-request" data-request-id="${escapeHtmlAttribute(request.id)}">${request.operation === "publish_rule" ? "Veröffentlichen" : "Freigegebenen Vorgang abschließen"}</button>` : ""}
+    </div>` : ""}
+  </article>`;
+}
+
+function renderCustomWorkRuleAssignmentCard(assignment, capabilities) {
+  const assignmentState = workRuleAssignmentState(assignment);
+  const stateLabel = ({
+    planned: `Geplant ab ${formatDate(assignment.validFrom)}`,
+    active: assignment.enforcementMode === "enforced" ? "Wirksam · verbindliche Prüfung" : "Wirksam · Monitorbetrieb",
+    ended: "Beendet",
+    superseded: "Abgelöst",
+  })[assignmentState] || assignmentState;
+  const tone = assignmentState === "active" ? "success" : assignmentState === "planned" ? "info" : "inactive";
+  return `<article class="custom-work-rule-assignment-card ${escapeHtmlAttribute(assignmentState)}">
+    <div class="custom-work-rule-record-heading">
+      <div><span class="eyebrow">${escapeHtml(assignment.scopeLabel || assignment.scopeType || "Geltungsbereich")}</span><strong>${escapeHtml(stateLabel)}</strong><small>${escapeHtml(formatDate(assignment.validFrom))}${assignment.validTo ? ` bis ${escapeHtml(formatDate(assignment.validTo))}` : " · ohne Enddatum"} · ${assignment.applicabilityConfirmed ? "Anwendbarkeit bestätigt" : "Anwendbarkeit nicht bestätigt"}</small></div>
+      <span class="status-badge ${tone}">${escapeHtml(stateLabel)}</span>
+    </div>
+    ${capabilities.canDeactivateAssignment && ["active", "planned"].includes(assignmentState) ? `<div class="custom-work-rule-record-actions"><button class="danger-button" type="button" data-work-rule-action="deactivate-assignment" data-assignment-id="${escapeHtmlAttribute(assignment.governedRevisionId || assignment.id)}">Zuordnung kontrolliert beenden</button></div>` : ""}
+  </article>`;
+}
+
+function workRuleAuditEventLabel(event = {}) {
+  return ({
+    request_submitted: "Prüfung eingereicht",
+    decision_recorded: "Entscheidung dokumentiert",
+    published: "Fassung veröffentlicht",
+    withdrawn: "Veröffentlichung zurückgezogen",
+    activated: "Zuordnung aktiviert",
+    deactivated: "Zuordnung beendet",
+    superseded: "Fassung abgelöst",
+  })[event.eventType] || event.label || event.eventType || "Governance-Ereignis";
+}
+
+function renderCustomWorkRuleAudit(context, capabilities) {
+  if (!capabilities.canAudit) return "";
+  const events = [...context.events].sort((left, right) => String(right.occurredAt || "").localeCompare(String(left.occurredAt || "")));
+  return `<details class="custom-work-rule-audit">
+    <summary>Audit-Historie (${events.length})</summary>
+    <div>${events.length ? events.map((event) => `<article><span></span><div><strong>${escapeHtml(workRuleAuditEventLabel(event))}</strong><small>${escapeHtml([event.actorEmployeeNumber, event.actorRole, event.occurredAt ? new Date(event.occurredAt).toLocaleString("de-AT") : ""].filter(Boolean).join(" · "))}</small>${event.receiptSha256 ? `<code>${escapeHtml(String(event.receiptSha256).slice(0, 16))}…</code>` : ""}</div></article>`).join("") : '<p>Noch keine Audit-Ereignisse für diese Regel.</p>'}</div>
+  </details>`;
+}
+
+function renderCustomWorkRuleDetail(items) {
+  if (!elements.customWorkRuleDetail) return;
+  const item = items.find((entry) => entry.draft.id === state.selectedCustomWorkRuleId);
+  const draft = item?.draft;
+  if (!draft?.currentVersion) {
+    elements.customWorkRuleDetail.innerHTML = `
+      <div class="custom-work-rule-empty">
+        <strong>Noch keine Regel ausgewählt</strong>
+        <p>Wähle links eine Regel, um Freigabeweg, Konflikte, Zuordnungen und Historie zu lesen.</p>
+      </div>`;
+    return;
+  }
+  const context = item.context;
+  const capabilities = workRuleGovernanceCapabilities();
+  const version = draft.currentVersion;
+  const definition = version.definition || {};
+  const sourceUrl = safeWorkRuleSourceUrl(definition.sourceUrl);
+  const openPublishRequest = context.requests.find((entry) => (
+    entry.operation === "publish_rule"
+    && entry.subjectId === version.id
+    && ["in_review", "approved"].includes(workRuleRequestState(entry))
+  ));
+  const activePublication = context.publications.find((entry) => workRulePublicationState(entry) === "published");
+  const history = (draft.versions || []).map((entry) => `
+    <article class="${entry.id === draft.currentVersionId ? "current" : ""}">
+      <div><strong>${escapeHtml(entry.versionLabel)}</strong><small>${entry.versionKind === "release" ? "Veröffentlichte, unveränderliche Fassung" : (entry.releasedAsVersionId ? `Veröffentlicht als ${escapeHtml(entry.releasedAsVersionId)}` : "Unveränderliche Arbeitsfassung")} · ${escapeHtml(formatDate(entry.validFrom))}${entry.validTo ? ` bis ${escapeHtml(formatDate(entry.validTo))}` : " · ohne Enddatum"}</small></div>
+      <div><span>${escapeHtml(String(entry.contentSha256 || "").slice(0, 12))}…</span>${capabilities.canRevise && entry.versionKind === "release" ? `<button class="secondary-button" type="button" data-work-rule-action="restore-version" data-profile-id="${escapeHtmlAttribute(draft.id)}" data-version-id="${escapeHtmlAttribute(entry.id)}">Als neue Fassung wieder öffnen</button>` : ""}</div>
+    </article>
+  `).join("");
+  const effectCopy = item.status.key === "effective"
+    ? "Nur die unten dokumentierte, datierte Zuordnung wirkt im Dienstplan. Die veröffentlichte Fassung selbst bleibt unverändert."
+    : "Diese Fassung hat ohne freigegebene, datierte Zuordnung keine Dienstplanwirkung.";
+  elements.customWorkRuleDetail.innerHTML = `
+    <div class="custom-work-rule-detail-heading">
+      <div><span class="eyebrow">${escapeHtml(draft.code)} · ${escapeHtml(version.versionLabel)}</span><h3>${escapeHtml(definition.title || draft.title)}</h3><p>${escapeHtml(definition.description || "")}</p></div>
+      <div class="custom-work-rule-detail-actions">
+        <span class="status-badge ${escapeHtmlAttribute(item.status.tone)}">${escapeHtml(item.status.label)}</span>
+        ${capabilities.canRevise ? `<button class="secondary-button" type="button" data-revise-custom-work-rule="${escapeHtmlAttribute(draft.id)}">Neue Entwurfsfassung</button>` : ""}
+      </div>
+    </div>
+    ${renderCustomWorkRuleReviewWorkflow(context)}
+    ${renderCustomWorkRuleAssignmentWorkflow(context)}
+    <div class="custom-work-rule-effect-note"><strong>${item.status.key === "effective" ? "Kontrolliert wirksam" : "Noch keine Dienstplanwirkung"}</strong><span>${escapeHtml(effectCopy)}</span></div>
+    <div class="custom-work-rule-primary-actions">
+      ${capabilities.canSubmitForReview && draft.hasUnreleasedDraft !== false && !openPublishRequest ? `<button class="primary-button" type="button" data-work-rule-action="submit-review" data-profile-id="${escapeHtmlAttribute(draft.id)}" data-version-id="${escapeHtmlAttribute(version.id)}">Fassung zur Prüfung einreichen</button>` : ""}
+      ${capabilities.canAssign && activePublication ? `<button class="primary-button" type="button" data-work-rule-action="assign-publication" data-publication-id="${escapeHtmlAttribute(activePublication.id)}">Datierte Zuordnung vorbereiten</button>` : ""}
+      ${capabilities.canWithdrawPublication && activePublication ? `<button class="secondary-button" type="button" data-work-rule-action="withdraw-publication" data-publication-id="${escapeHtmlAttribute(activePublication.id)}">Veröffentlichung zurückziehen</button>` : ""}
+    </div>
+    <dl class="custom-work-rule-facts">
+      <div><dt>Regelart</dt><dd>${escapeHtml(customWorkRuleCatalogLabel("ruleTypes", definition.ruleType))}</dd></div>
+      <div><dt>Thema</dt><dd>${escapeHtml(customWorkRuleCatalogLabel("topics", definition.topic))}</dd></div>
+      <div><dt>Geltungsbereich</dt><dd>${escapeHtml(definition.scopeLabel || customWorkRuleCatalogLabel("scopes", definition.scopeType))}</dd></div>
+      <div><dt>Gültigkeit</dt><dd>${escapeHtml(formatDate(definition.validFrom))}${definition.validTo ? ` bis ${escapeHtml(formatDate(definition.validTo))}` : " · ohne Enddatum"}</dd></div>
+      <div class="wide"><dt>Bedingung</dt><dd>${escapeHtml(customWorkRuleConditionLabel(definition))}</dd></div>
+      <div><dt>Schweregrad</dt><dd>${escapeHtml(customWorkRuleCatalogLabel("severities", definition.severity))}</dd></div>
+      <div><dt>Verantwortlich</dt><dd>${escapeHtml(definition.responsibleUnit || "–")}</dd></div>
+      <div class="wide"><dt>Hinweistext</dt><dd>${escapeHtml(definition.message || "–")}</dd></div>
+    </dl>
+    <section class="custom-work-rule-source">
+      <div><span>Quelle</span><strong>${escapeHtml(definition.sourceTitle || "–")}</strong><small>${escapeHtml(definition.sourceReference || "–")}</small></div>
+      ${sourceUrl ? `<a href="${escapeHtmlAttribute(sourceUrl)}" target="_blank" rel="noopener noreferrer">Fundstelle öffnen</a>` : ""}
+      ${definition.sourceNote ? `<p>${escapeHtml(definition.sourceNote)}</p>` : ""}
+    </section>
+    <section class="custom-work-rule-test-section">
+      <div><span class="eyebrow">Deterministische Vorschau</span><h4>Pflicht-Testfälle</h4></div>
+      ${renderCustomWorkRuleTestCases(definition.testCases)}
+    </section>
+    <section class="custom-work-rule-version-history">
+      <h4>Unveränderliche Fassungen</h4>
+      ${history}
+    </section>
+    ${context.requests.length ? `<section class="custom-work-rule-records"><div class="custom-work-rule-section-heading"><div><span class="eyebrow">Vier-Augen-Prinzip</span><h4>Prüf- und Freigabevorgänge</h4></div></div>${context.requests.map((request) => renderCustomWorkRuleRequestCard(request, capabilities)).join("")}</section>` : ""}
+    ${context.assignments.length ? `<section class="custom-work-rule-records"><div class="custom-work-rule-section-heading"><div><span class="eyebrow">Datierte Wirkung</span><h4>Zuordnungen</h4></div></div>${context.assignments.map((assignment) => renderCustomWorkRuleAssignmentCard(assignment, capabilities)).join("")}</section>` : ""}
+    ${renderCustomWorkRuleAudit(context, capabilities)}`;
+}
+
+function renderCustomWorkRuleRegistry() {
+  const registry = state.customWorkRuleRegistry;
+  if (!registry || !canAccessCustomWorkRuleGovernance()) return;
+  const items = customWorkRuleItems();
+  if (!items.some((item) => item.draft.id === state.selectedCustomWorkRuleId)) {
+    state.selectedCustomWorkRuleId = items[0]?.draft.id || "";
+  }
+  if (elements.customWorkRuleNotice) {
+    elements.customWorkRuleNotice.innerHTML = `<strong>Veröffentlichung und Wirksamkeit bleiben getrennt</strong><p>${escapeHtml(registry.notice || "Jede Entscheidung bezieht sich auf eine unveränderliche Fassung; Dienstplanwirkung entsteht ausschließlich durch eine freigegebene, datierte Zuordnung.")}</p>`;
+  }
+  renderCustomWorkRuleSummary(items);
+  renderCustomWorkRuleTaskFilter(items);
+  renderCustomWorkRuleList(items);
+  renderCustomWorkRuleDetail(items);
+  const generatedAt = state.workRuleGovernance?.generatedAt || registry.generatedAt;
+  if (elements.customWorkRuleUpdated) {
+    elements.customWorkRuleUpdated.textContent = generatedAt
+      ? `Stand ${new Date(generatedAt).toLocaleString("de-AT")}`
+      : "Aktueller Serverstand";
+  }
+  elements.addCustomWorkRuleButton?.classList.toggle("hidden", !workRuleGovernanceCapabilities().canDraft);
+}
+
+function customWorkRuleOptions(entries = [], selected = "") {
+  return entries.map((entry) => `
+    <option value="${escapeHtmlAttribute(entry.id)}" ${entry.id === selected ? "selected" : ""}>${escapeHtml(entry.label)}</option>
+  `).join("");
+}
+
+function populateCustomWorkRuleCatalogs(definition = {}) {
+  const catalogs = state.customWorkRuleRegistry?.catalogs || {};
+  elements.customWorkRuleType.innerHTML = customWorkRuleOptions(catalogs.ruleTypes, definition.ruleType);
+  elements.customWorkRuleTopic.innerHTML = customWorkRuleOptions(catalogs.topics, definition.topic);
+  elements.customWorkRuleScopeType.innerHTML = customWorkRuleOptions(catalogs.scopes, definition.scopeType);
+  elements.customWorkRuleMetric.innerHTML = customWorkRuleOptions(catalogs.metrics, definition.metric);
+  elements.customWorkRuleSeverity.innerHTML = customWorkRuleOptions(catalogs.severities, definition.severity);
+  elements.customWorkRuleReaction.innerHTML = customWorkRuleOptions(catalogs.reactions, definition.reaction);
+}
+
+function updateCustomWorkRuleScopeFields(selectedKey = "") {
+  const ruleType = elements.customWorkRuleType.value;
+  const allowedForLocationRule = ["location", "department"];
+  [...elements.customWorkRuleScopeType.options].forEach((option) => {
+    option.disabled = ruleType === "location_rule" && !allowedForLocationRule.includes(option.value);
+  });
+  if (ruleType === "location_rule" && !allowedForLocationRule.includes(elements.customWorkRuleScopeType.value)) {
+    elements.customWorkRuleScopeType.value = "location";
+  }
+  const scopeType = elements.customWorkRuleScopeType.value;
+  const usesSelect = ["business_unit", "location", "department"].includes(scopeType);
+  const usesGroup = scopeType === "employee_group";
+  elements.customWorkRuleScopeSelectField.classList.toggle("hidden", !usesSelect);
+  elements.customWorkRuleScopeGroupField.classList.toggle("hidden", !usesGroup);
+  elements.customWorkRuleScopeSelect.disabled = !usesSelect;
+  elements.customWorkRuleScopeGroup.disabled = !usesGroup;
+  elements.customWorkRuleScopeSelect.required = usesSelect;
+  elements.customWorkRuleScopeGroup.required = usesGroup;
+  if (!usesSelect) return;
+  const organizationalScopes = state.customWorkRuleRegistry?.organizationalScopes || {};
+  let options = [];
+  if (scopeType === "business_unit") {
+    elements.customWorkRuleScopeSelectLabel.textContent = "Betriebsteil";
+    options = (organizationalScopes.businessUnits || []).map((unit) => ({
+      id: String(unit.id),
+      label: `${unit.code} · ${unit.name}`,
+    }));
+  } else if (scopeType === "location") {
+    elements.customWorkRuleScopeSelectLabel.textContent = "Filiale";
+    options = (organizationalScopes.locations || []).map((location) => ({
+      id: String(location.id),
+      label: `${location.id} · ${location.name}`,
+    }));
+  } else {
+    elements.customWorkRuleScopeSelectLabel.textContent = "Abteilung";
+    options = (organizationalScopes.locations || []).flatMap((location) => (
+      (location.departments || []).map((department) => ({
+        id: String(department.id),
+        label: `${location.id} · ${location.name} · ${department.name}`,
+      }))
+    ));
+  }
+  elements.customWorkRuleScopeSelect.innerHTML = options.length
+    ? options.map((option) => `<option value="${escapeHtmlAttribute(option.id)}">${escapeHtml(option.label)}</option>`).join("")
+    : '<option value="">Noch keine passende Organisationseinheit</option>';
+  const candidate = selectedKey || elements.customWorkRuleScopeSelect.value;
+  elements.customWorkRuleScopeSelect.value = options.some((option) => option.id === String(candidate))
+    ? String(candidate) : (options[0]?.id || "");
+}
+
+function customWorkRuleExampleDefaults(metric) {
+  const thresholds = {
+    maximum_planned_daily_minutes: 600,
+    maximum_planned_weekly_minutes: 2400,
+    minimum_planned_rest_minutes: 660,
+    maximum_consecutive_workdays: 6,
+    maximum_saturdays_per_month: 2,
+    earliest_shift_start_time: "06:00",
+    latest_shift_end_time: "20:00",
+    minimum_vacation_request_lead_days: 14,
+    minimum_time_off_request_lead_days: 7,
+    maximum_vacation_days_per_request: 20,
+  };
+  const threshold = thresholds[metric.id] ?? (metric.min || 1);
+  if (metric.valueType === "time") {
+    const minutes = (value) => {
+      const [hours, minute] = value.split(":").map(Number);
+      return hours * 60 + minute;
+    };
+    const time = (value) => `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
+    const base = minutes(threshold);
+    return {
+      threshold,
+      positive: time(metric.operator === "lte" ? Math.max(0, base - 60) : Math.min(1439, base + 60)),
+      negative: time(metric.operator === "lte" ? Math.min(1439, base + 60) : Math.max(0, base - 60)),
+    };
+  }
+  return {
+    threshold,
+    positive: metric.operator === "lte" ? Math.max(metric.min, threshold - 1) : Math.min(metric.max, threshold + 1),
+    negative: metric.operator === "lte" ? Math.min(metric.max, threshold + 1) : Math.max(metric.min, threshold - 1),
+  };
+}
+
+function updateCustomWorkRuleMetricFields({ resetValues = false } = {}) {
+  const metric = customWorkRuleCatalogEntry("metrics", elements.customWorkRuleMetric.value);
+  if (!metric) return;
+  elements.customWorkRuleOperator.value = metric.operatorLabel || metric.operator;
+  elements.customWorkRuleMetricHelp.textContent = metric.help || "";
+  for (const element of [
+    elements.customWorkRuleThreshold,
+    elements.customWorkRulePositiveTest,
+    elements.customWorkRuleNegativeTest,
+  ]) {
+    element.type = metric.valueType === "time" ? "time" : "number";
+    if (metric.valueType === "time") {
+      element.removeAttribute("min");
+      element.removeAttribute("max");
+      element.removeAttribute("step");
+    } else {
+      element.min = String(metric.min);
+      element.max = String(metric.max);
+      element.step = String(metric.step || 1);
+    }
+  }
+  elements.customWorkRuleThresholdUnit.textContent = metric.unitLabel || "";
+  elements.customWorkRulePositiveUnit.textContent = metric.unitLabel || "";
+  elements.customWorkRuleNegativeUnit.textContent = metric.unitLabel || "";
+  if (resetValues) {
+    const defaults = customWorkRuleExampleDefaults(metric);
+    elements.customWorkRuleThreshold.value = String(defaults.threshold);
+    elements.customWorkRulePositiveTest.value = String(defaults.positive);
+    elements.customWorkRuleNegativeTest.value = String(defaults.negative);
+  }
+  resetCustomWorkRuleSimulation();
+}
+
+function resetCustomWorkRuleSimulation() {
+  state.customWorkRuleSimulationValid = false;
+  if (elements.customWorkRuleTestResult) {
+    elements.customWorkRuleTestResult.className = "custom-work-rule-test-result";
+    elements.customWorkRuleTestResult.textContent = "Nach Änderungen erneut prüfen.";
+  }
+}
+
+function customWorkRulePayload() {
+  const scopeType = elements.customWorkRuleScopeType.value;
+  const scopeKey = scopeType === "employee_group"
+    ? elements.customWorkRuleScopeGroup.value.trim()
+    : (scopeType === "installation" ? "" : elements.customWorkRuleScopeSelect.value);
+  return {
+    code: elements.customWorkRuleCode.value.trim(),
+    title: elements.customWorkRuleTitle.value.trim(),
+    description: elements.customWorkRuleDescription.value.trim(),
+    ruleType: elements.customWorkRuleType.value,
+    topic: elements.customWorkRuleTopic.value,
+    scopeType,
+    scopeKey,
+    validFrom: elements.customWorkRuleValidFrom.value,
+    validTo: elements.customWorkRuleValidTo.value || null,
+    metric: elements.customWorkRuleMetric.value,
+    threshold: elements.customWorkRuleThreshold.value,
+    severity: elements.customWorkRuleSeverity.value,
+    reaction: elements.customWorkRuleReaction.value,
+    message: elements.customWorkRuleMessage.value.trim(),
+    responsibleUnit: elements.customWorkRuleResponsibleUnit.value.trim(),
+    sourceTitle: elements.customWorkRuleSourceTitle.value.trim(),
+    sourceReference: elements.customWorkRuleSourceReference.value.trim(),
+    sourceUrl: elements.customWorkRuleSourceUrl.value.trim(),
+    sourceNote: elements.customWorkRuleSourceNote.value.trim(),
+    testCases: {
+      positiveValue: elements.customWorkRulePositiveTest.value,
+      negativeValue: elements.customWorkRuleNegativeTest.value,
+    },
+    status: "draft",
+    enforcementMode: "monitor",
+  };
+}
+
+function openCustomWorkRuleModal(draft = null) {
+  if (!canDraftCustomWorkRules() || !elements.customWorkRuleModal) return;
+  elements.customWorkRuleForm.reset();
+  const definition = draft?.currentVersion?.definition || {};
+  populateCustomWorkRuleCatalogs(definition);
+  elements.customWorkRuleId.value = draft?.id || "";
+  elements.customWorkRuleCode.value = draft?.code || "";
+  elements.customWorkRuleCode.disabled = Boolean(draft);
+  document.querySelectorAll(".custom-work-rule-new-only").forEach((field) => field.classList.toggle("hidden", Boolean(draft)));
+  elements.customWorkRuleTitle.value = definition.title || draft?.title || "";
+  elements.customWorkRuleDescription.value = definition.description || draft?.description || "";
+  elements.customWorkRuleValidFrom.value = definition.validFrom || toIsoDate(new Date());
+  elements.customWorkRuleValidTo.value = definition.validTo || "";
+  elements.customWorkRuleMessage.value = definition.message || "";
+  elements.customWorkRuleResponsibleUnit.value = definition.responsibleUnit || "Personalleitung";
+  elements.customWorkRuleSourceTitle.value = definition.sourceTitle || "";
+  elements.customWorkRuleSourceReference.value = definition.sourceReference || "";
+  elements.customWorkRuleSourceUrl.value = definition.sourceUrl || "";
+  elements.customWorkRuleSourceNote.value = definition.sourceNote || "";
+  elements.customWorkRuleScopeGroup.value = definition.scopeType === "employee_group" ? (definition.scopeKey || "") : "";
+  updateCustomWorkRuleScopeFields(definition.scopeKey || "");
+  updateCustomWorkRuleMetricFields({ resetValues: !draft });
+  if (draft) {
+    elements.customWorkRuleThreshold.value = String(definition.threshold ?? "");
+    elements.customWorkRulePositiveTest.value = String(definition.positiveTestValue ?? "");
+    elements.customWorkRuleNegativeTest.value = String(definition.negativeTestValue ?? "");
+  }
+  elements.customWorkRuleModalTitle.textContent = draft ? "Neue Entwurfsfassung" : "Regelentwurf anlegen";
+  elements.customWorkRuleSubmitButton.textContent = draft ? "Neue Fassung speichern" : "Entwurf speichern";
+  resetCustomWorkRuleSimulation();
+  elements.customWorkRuleModal.showModal();
+}
+
+async function simulateCustomWorkRuleDraft() {
+  if (!elements.customWorkRuleForm.reportValidity()) return false;
+  elements.simulateCustomWorkRuleButton.disabled = true;
+  elements.customWorkRuleTestResult.className = "custom-work-rule-test-result";
+  elements.customWorkRuleTestResult.textContent = "Testfälle werden serverseitig geprüft.";
+  try {
+    const result = await api("/api/work-rules/drafts/simulate", {
+      method: "POST",
+      body: JSON.stringify(customWorkRulePayload()),
+    });
+    const simulation = result.simulation || {};
+    state.customWorkRuleSimulationValid = simulation.valid === true;
+    elements.customWorkRuleTestResult.className = `custom-work-rule-test-result ${state.customWorkRuleSimulationValid ? "valid" : "invalid"}`;
+    elements.customWorkRuleTestResult.innerHTML = state.customWorkRuleSimulationValid
+      ? `<strong>Alle drei Testfälle passen.</strong><span>eingehalten · verletzt · fehlender Prüfwert</span>`
+      : "<strong>Die Testfälle passen noch nicht.</strong>";
+    return state.customWorkRuleSimulationValid;
+  } catch (error) {
+    state.customWorkRuleSimulationValid = false;
+    elements.customWorkRuleTestResult.className = "custom-work-rule-test-result invalid";
+    elements.customWorkRuleTestResult.textContent = error.message;
+    showToast(error.message, true);
+    return false;
+  } finally {
+    elements.simulateCustomWorkRuleButton.disabled = false;
+  }
+}
+
+async function saveCustomWorkRule(event) {
+  event.preventDefault();
+  if (!canDraftCustomWorkRules()) return;
+  if (!state.customWorkRuleSimulationValid && !(await simulateCustomWorkRuleDraft())) return;
+  const draftId = elements.customWorkRuleId.value;
+  elements.customWorkRuleSubmitButton.disabled = true;
+  try {
+    const result = await api(draftId
+      ? `/api/work-rules/drafts/${encodeURIComponent(draftId)}/revisions`
+      : "/api/work-rules/drafts", {
+      method: "POST",
+      body: JSON.stringify(customWorkRulePayload()),
+    });
+    elements.customWorkRuleModal.close();
+    state.selectedCustomWorkRuleId = result.draft?.id || draftId;
+    await loadCustomWorkRuleRegistry({ force: true });
+    showToast(draftId
+      ? "Die neue unveränderliche Entwurfsfassung wurde gespeichert."
+      : "Der Regelentwurf wurde ohne Dienstplanwirkung gespeichert.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.customWorkRuleSubmitButton.disabled = false;
+  }
+}
+
+function workRuleGovernanceSummaryMarkup({ title, versionLabel, scopeLabel, basisSha256 } = {}) {
+  return `<div>
+    <span class="eyebrow">${escapeHtml(versionLabel || "Unveränderliche Prüfbasis")}</span>
+    <strong>${escapeHtml(title || "Eigene Personalregel")}</strong>
+    ${scopeLabel ? `<small>${escapeHtml(scopeLabel)}</small>` : ""}
+  </div>${basisSha256 ? `<code title="${escapeHtmlAttribute(basisSha256)}">${escapeHtml(String(basisSha256).slice(0, 16))}…</code>` : ""}`;
+}
+
+function workRuleClientRequestId(operation) {
+  const suffix = globalThis.crypto?.randomUUID
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `gp-${operation}-${suffix}`;
+}
+
+function findWorkRuleRequest(id) {
+  return workRuleGovernanceEntries("requests").find((entry) => entry.id === id) || null;
+}
+
+function findWorkRulePublication(id) {
+  return workRuleGovernanceEntries("publications").find((entry) => entry.id === id) || null;
+}
+
+function findWorkRuleAssignment(id) {
+  return workRuleGovernanceEntries("assignments").find((entry) => (
+    entry.id === id
+    || entry.governedRevisionId === id
+    || entry.logicalAssignmentId === id
+  )) || null;
+}
+
+function customWorkRuleForGovernanceSubject(subject = {}) {
+  let profileId = workRuleProfileId(
+    subject.profileId
+    || subject.subjectId
+    || subject.releasedProfileVersionId
+    || subject.sourceProfileVersionId
+    || subject.profileVersionId,
+  );
+  if (!profileId && subject.subjectId) {
+    const publication = findWorkRulePublication(subject.subjectId);
+    const assignment = findWorkRuleAssignment(subject.subjectId);
+    profileId = workRuleProfileId(
+      publication?.profileId
+      || publication?.releasedProfileVersionId
+      || assignment?.profileId
+      || assignment?.profileVersionId,
+    );
+  }
+  return (state.customWorkRuleRegistry?.drafts || []).find((entry) => entry.id === profileId) || null;
+}
+
+function workRuleGovernanceSubjectType(operation) {
+  return ({
+    publish_rule: "work_rule_profile_version",
+    activate_assignment: "work_rule_publication",
+    deactivate_assignment: "work_rule_assignment_revision",
+    withdraw_publication: "work_rule_publication",
+    approve_kv_assignment: "collective_agreement_assignment",
+    deactivate_kv_assignment: "collective_agreement_assignment",
+  })[operation] || "";
+}
+
+async function previewWorkRuleGovernance(operation, subjectId, payload = {}) {
+  const result = await api("/api/work-rules/governance/preview", {
+    method: "POST",
+    body: JSON.stringify({
+      operation,
+      subjectType: workRuleGovernanceSubjectType(operation),
+      subjectId,
+      payload,
+    }),
+  });
+  return result.preview || result;
+}
+
+async function createWorkRuleGovernanceRequest({
+  operation,
+  subjectId,
+  payload = {},
+  reason,
+  sourceReference,
+  basisSha256,
+  conflictRunId,
+}) {
+  return api("/api/work-rules/governance/requests", {
+    method: "POST",
+    body: JSON.stringify({
+      operation,
+      subjectType: workRuleGovernanceSubjectType(operation),
+      subjectId,
+      payload,
+      reason,
+      sourceReference,
+      clientRequestId: workRuleClientRequestId(operation),
+      basisSha256,
+      conflictRunId,
+    }),
+  });
+}
+
+async function openWorkRuleReviewModal(action, { profileId = "", versionId = "", requestId = "" } = {}) {
+  if (!elements.workRuleReviewModal) return;
+  const request = requestId ? findWorkRuleRequest(requestId) : null;
+  const draft = (state.customWorkRuleRegistry?.drafts || []).find((entry) => entry.id === profileId)
+    || customWorkRuleForGovernanceSubject(request || {});
+  const collectiveAssignment = request
+    ? (state.collectiveAgreementRegistry?.assignments || []).find((entry) => entry.id === request.subjectId)
+    : null;
+  const version = (draft?.versions || []).find((entry) => entry.id === versionId)
+    || draft?.currentVersion;
+  if (action === "submit" && (!draft || !version)) {
+    showToast("Die unveränderliche Regelfassung wurde nicht gefunden.", true);
+    return;
+  }
+  if (action !== "submit" && !request) {
+    showToast("Der Prüfauftrag wurde nicht gefunden.", true);
+    return;
+  }
+  elements.workRuleReviewForm.reset();
+  state.workRuleGovernancePreview = null;
+  elements.workRuleReviewAction.value = action;
+  elements.workRuleReviewProfileId.value = draft?.id || "";
+  elements.workRuleReviewVersionId.value = version?.id || request?.subjectId || "";
+  elements.workRuleReviewRequestId.value = request?.id || "";
+  elements.workRuleReviewBasisSha256.value = request?.basisSha256 || version?.contentSha256 || "";
+  elements.workRuleReviewActor.textContent = workRuleActorLabel();
+  elements.workRuleReviewSummary.innerHTML = workRuleGovernanceSummaryMarkup({
+    title: version?.definition?.title || draft?.title
+      || (collectiveAssignment
+        ? `${collectiveAssignment.agreementCode} · ${collectiveAssignment.businessUnitName}`
+        : request?.subjectLabel),
+    versionLabel: version?.versionLabel || collectiveAssignment?.versionLabel || request?.subjectVersionLabel,
+    scopeLabel: version?.definition?.scopeLabel || collectiveAssignment?.businessUnitName || request?.scopeLabel,
+    basisSha256: request?.basisSha256 || version?.contentSha256,
+  });
+  const labels = {
+    submit: ["Regelfassung zur Prüfung einreichen", "Die Einreichung startet das Vier-Augen-Verfahren und aktiviert die Fassung nicht.", "Zur Prüfung einreichen"],
+    approve: ["Regelfassung fachlich freigeben", "Die Entscheidung wird dir persönlich zugerechnet. Eine Selbst- oder Stellvertretungsfreigabe verhindert der Server.", workRuleRequestApprovalCount(request) ? "Zweitfreigabe erteilen" : "Fachlich freigeben"],
+    reject: ["Regelfassung ablehnen", "Die Ablehnung beendet diesen Prüfauftrag; die unveränderliche Fassung bleibt in der Historie.", "Begründet ablehnen"],
+  };
+  const collectiveLabels = {
+    approve: ["KV-Zuordnung fachlich freigeben", "Die Entscheidung wird dir persönlich zugerechnet. Selbst- und Stellvertretungsfreigaben verhindert der Server.", workRuleRequestApprovalCount(request) ? "Zweitfreigabe erteilen" : "Fachlich freigeben"],
+    reject: ["KV-Zuordnung ablehnen", "Die Ablehnung beendet diesen Prüfauftrag; Fassung, Zuordnungsvorschlag und Nachweise bleiben erhalten.", "Begründet ablehnen"],
+  };
+  const [title, copy, submitLabel] = request?.subjectType === "collective_agreement_assignment"
+    ? (collectiveLabels[action] || labels[action])
+    : (labels[action] || labels.submit);
+  elements.workRuleReviewModalTitle.textContent = title;
+  elements.workRuleReviewModalCopy.textContent = copy;
+  elements.workRuleReviewSubmitButton.textContent = submitLabel;
+  elements.workRuleReviewSubmitButton.classList.toggle("danger-button", action === "reject");
+  elements.workRuleReviewSubmitButton.classList.toggle("primary-button", action !== "reject");
+  const reviewSourceField = elements.workRuleReviewSourceReference.closest(".field");
+  reviewSourceField?.classList.toggle("hidden", action !== "submit");
+  elements.workRuleReviewSourceReference.required = action === "submit";
+  elements.workRuleReviewSourceReference.disabled = action !== "submit";
+  elements.workRuleReviewConflict.innerHTML = request
+    ? workRuleConflictMarkup(request)
+    : '<p>Die serverseitige Konfliktprüfung wird geladen.</p>';
+  elements.workRuleReviewSubmitButton.disabled = action === "submit";
+  elements.workRuleReviewModal.showModal();
+  if (action !== "submit") return;
+  try {
+    const preview = await previewWorkRuleGovernance("publish_rule", version.id, {});
+    state.workRuleGovernancePreview = preview;
+    elements.workRuleReviewBasisSha256.value = preview.basisSha256 || "";
+    elements.workRuleReviewConflict.innerHTML = workRuleConflictMarkup(preview);
+    elements.workRuleReviewSubmitButton.disabled = workRuleConflict(preview).outcome === "blocked";
+  } catch (error) {
+    elements.workRuleReviewConflict.innerHTML = workRuleConflictMarkup({
+      outcome: "blocked",
+      title: "Konfliktprüfung fehlgeschlagen",
+      note: error.message,
+    });
+    showToast(error.message, true);
+  }
+}
+
+async function saveWorkRuleReview(event) {
+  event.preventDefault();
+  const action = elements.workRuleReviewAction.value;
+  const reason = elements.workRuleReviewReason.value.trim();
+  const sourceReference = elements.workRuleReviewSourceReference.value.trim();
+  const reviewRequest = findWorkRuleRequest(elements.workRuleReviewRequestId.value);
+  const collectiveOperation = ["approve_kv_assignment", "deactivate_kv_assignment"]
+    .includes(reviewRequest?.operation);
+  elements.workRuleReviewSubmitButton.disabled = true;
+  try {
+    if (action === "submit") {
+      await createWorkRuleGovernanceRequest({
+        operation: "publish_rule",
+        subjectId: elements.workRuleReviewVersionId.value,
+        reason,
+        sourceReference,
+        basisSha256: elements.workRuleReviewBasisSha256.value,
+        conflictRunId: state.workRuleGovernancePreview?.conflictRunId,
+      });
+      showToast("Die unveränderliche Fassung wurde zur fachlichen Prüfung eingereicht.");
+    } else {
+      const requestId = elements.workRuleReviewRequestId.value;
+      await api(`/api/work-rules/governance/requests/${encodeURIComponent(requestId)}/decisions`, {
+        method: "POST",
+        body: JSON.stringify({
+          decision: action === "reject" ? "reject" : "approve",
+          reason,
+        }),
+      });
+      showToast(action === "reject"
+        ? "Die Ablehnung wurde nachvollziehbar dokumentiert."
+        : "Die persönliche Freigabe wurde dokumentiert.");
+    }
+    elements.workRuleReviewModal.close();
+    if (collectiveOperation) await loadCollectiveAgreementRegistry({ force: true });
+    else await loadCustomWorkRuleRegistry({ force: true });
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.workRuleReviewSubmitButton.disabled = false;
+  }
+}
+
+function openWorkRuleFinalizeModal(requestId) {
+  const request = findWorkRuleRequest(requestId);
+  if (!request || !elements.workRuleFinalizeModal) {
+    showToast("Der freigegebene Vorgang wurde nicht gefunden.", true);
+    return;
+  }
+  const draft = customWorkRuleForGovernanceSubject(request);
+  const collectiveAssignment = (state.collectiveAgreementRegistry?.assignments || [])
+    .find((entry) => entry.id === request.subjectId);
+  const version = (draft?.versions || []).find((entry) => entry.id === request.subjectId) || draft?.currentVersion;
+  elements.workRuleFinalizeForm.reset();
+  elements.workRuleFinalizeRequestId.value = request.id;
+  elements.workRuleFinalizeBasisSha256.value = request.basisSha256 || "";
+  elements.workRuleFinalizeActor.textContent = workRuleActorLabel();
+  elements.workRuleFinalizeSummary.innerHTML = workRuleGovernanceSummaryMarkup({
+    title: version?.definition?.title || draft?.title
+      || (collectiveAssignment ? `${collectiveAssignment.agreementCode} · ${collectiveAssignment.businessUnitName}` : request.subjectLabel),
+    versionLabel: collectiveAssignment?.versionLabel || workRuleOperationLabel(request.operation),
+    scopeLabel: version?.definition?.scopeLabel || collectiveAssignment?.businessUnitName || request.scopeLabel,
+    basisSha256: request.basisSha256,
+  });
+  elements.workRuleFinalizeConflict.innerHTML = workRuleConflictMarkup(request);
+  elements.workRuleFinalizeModalTitle.textContent = request.operation === "publish_rule"
+    ? "Freigegebene Fassung veröffentlichen"
+    : "Freigegebenen Vorgang abschließen";
+  elements.workRuleFinalizeModalCopy.textContent = "Fassung, Freigaben und Konfliktbasis werden unmittelbar vor dem Abschluss serverseitig erneut geprüft.";
+  elements.workRuleFinalizeSubmitButton.textContent = request.operation === "publish_rule"
+    ? "Veröffentlichen"
+    : "Vorgang abschließen";
+  elements.workRuleFinalizeModal.showModal();
+}
+
+async function saveWorkRuleFinalize(event) {
+  event.preventDefault();
+  elements.workRuleFinalizeSubmitButton.disabled = true;
+  try {
+    const requestId = elements.workRuleFinalizeRequestId.value;
+    const collectiveOperation = ["approve_kv_assignment", "deactivate_kv_assignment"]
+      .includes(findWorkRuleRequest(requestId)?.operation);
+    await api(`/api/work-rules/governance/requests/${encodeURIComponent(requestId)}/finalize`, {
+      method: "POST",
+      body: JSON.stringify({
+        reason: elements.workRuleFinalizeReason.value.trim(),
+        sourceReference: elements.workRuleFinalizeSourceReference.value.trim(),
+      }),
+    });
+    elements.workRuleFinalizeModal.close();
+    if (collectiveOperation) await loadCollectiveAgreementRegistry({ force: true });
+    else await loadCustomWorkRuleRegistry({ force: true });
+    showToast("Der freigegebene Vorgang wurde auf unveränderter Prüfbasis abgeschlossen.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.workRuleFinalizeSubmitButton.disabled = false;
+  }
+}
+
+function setWorkRuleAssignmentScope(definition = {}) {
+  const scopeType = definition.scopeType || "installation";
+  const scopeLabel = definition.scopeLabel || customWorkRuleCatalogLabel("scopes", scopeType);
+  elements.workRuleAssignmentScopeType.innerHTML = `<option value="${escapeHtmlAttribute(scopeType)}">${escapeHtml(scopeLabel)}</option>`;
+  elements.workRuleAssignmentScopeType.value = scopeType;
+  elements.workRuleAssignmentScopeType.disabled = true;
+  elements.workRuleAssignmentScopeSelectField.classList.add("hidden");
+  elements.workRuleAssignmentScopeGroupField.classList.add("hidden");
+  if (["business_unit", "location", "department"].includes(scopeType)) {
+    elements.workRuleAssignmentScopeSelectField.classList.remove("hidden");
+    elements.workRuleAssignmentScopeSelectLabel.textContent = "Aus veröffentlichter Fassung";
+    elements.workRuleAssignmentScopeSelect.innerHTML = `<option value="${escapeHtmlAttribute(definition.scopeKey || "")}">${escapeHtml(scopeLabel)}</option>`;
+    elements.workRuleAssignmentScopeSelect.disabled = true;
+  } else if (scopeType === "employee_group") {
+    elements.workRuleAssignmentScopeGroupField.classList.remove("hidden");
+    elements.workRuleAssignmentScopeGroup.value = definition.scopeKey || scopeLabel;
+    elements.workRuleAssignmentScopeGroup.readOnly = true;
+    elements.workRuleAssignmentScopeGroup.disabled = false;
+  }
+}
+
+function workRuleAssignmentPayload() {
+  return {
+    validFrom: elements.workRuleAssignmentValidFrom.value,
+    validTo: elements.workRuleAssignmentValidTo.value || null,
+    enforcementMode: elements.workRuleAssignmentEnforcementMode.value,
+    applicabilityConfirmed: elements.workRuleAssignmentApplicabilityConfirmed.checked,
+  };
+}
+
+function resetWorkRuleAssignmentPreview() {
+  state.workRuleAssignmentPreviewValid = false;
+  state.workRuleGovernancePreview = null;
+  if (elements.workRuleAssignmentPreviewState) elements.workRuleAssignmentPreviewState.textContent = "Nach Änderungen erneut prüfen";
+  if (elements.workRuleAssignmentSubmitButton) elements.workRuleAssignmentSubmitButton.disabled = true;
+}
+
+function openWorkRuleAssignmentModal(publicationId) {
+  const publication = findWorkRulePublication(publicationId);
+  if (!publication || !elements.workRuleAssignmentModal) {
+    showToast("Die veröffentlichte Regelfassung wurde nicht gefunden.", true);
+    return;
+  }
+  const draft = customWorkRuleForGovernanceSubject(publication);
+  const version = (draft?.versions || []).find((entry) => (
+    [publication.sourceProfileVersionId, publication.releasedProfileVersionId].includes(entry.id)
+  )) || draft?.publishedVersion || draft?.currentVersion;
+  const definition = version?.definition || publication.definition || {};
+  elements.workRuleAssignmentForm.reset();
+  elements.workRuleAssignmentPublicationId.value = publication.id;
+  elements.workRuleAssignmentProfileId.value = draft?.id || publication.profileId || "";
+  elements.workRuleAssignmentBasisSha256.value = publication.semanticSha256 || publication.receiptSha256 || "";
+  elements.workRuleAssignmentSummary.innerHTML = workRuleGovernanceSummaryMarkup({
+    title: definition.title || draft?.title || publication.title,
+    versionLabel: version?.versionLabel || publication.versionLabel || "Veröffentlichte Fassung",
+    scopeLabel: definition.scopeLabel || publication.scopeLabel,
+    basisSha256: publication.semanticSha256 || publication.receiptSha256,
+  });
+  setWorkRuleAssignmentScope(definition);
+  elements.workRuleAssignmentValidFrom.value = definition.validFrom || toIsoDate(new Date());
+  elements.workRuleAssignmentValidTo.value = definition.validTo || "";
+  elements.workRuleAssignmentEnforcementMode.value = "monitor";
+  elements.workRuleAssignmentApplicabilityConfirmed.checked = false;
+  elements.workRuleAssignmentApplicabilityConfirmed.required = true;
+  elements.workRuleAssignmentConflict.innerHTML = "<p>Vor der Einreichung müssen Zeitraum und Überschneidungen serverseitig geprüft werden.</p>";
+  resetWorkRuleAssignmentPreview();
+  elements.workRuleAssignmentPreviewState.textContent = "Noch nicht geprüft";
+  elements.workRuleAssignmentModal.showModal();
+}
+
+async function previewWorkRuleAssignment() {
+  if (!elements.workRuleAssignmentForm.reportValidity()) return;
+  if (!elements.workRuleAssignmentApplicabilityConfirmed.checked) {
+    showToast("Vor jeder Zuordnung muss die fachliche Anwendbarkeit bestätigt sein.", true);
+    return;
+  }
+  elements.previewWorkRuleAssignmentButton.disabled = true;
+  try {
+    const preview = await previewWorkRuleGovernance(
+      "activate_assignment",
+      elements.workRuleAssignmentPublicationId.value,
+      workRuleAssignmentPayload(),
+    );
+    state.workRuleGovernancePreview = preview;
+    state.workRuleAssignmentPreviewValid = workRuleConflict(preview).outcome !== "blocked";
+    elements.workRuleAssignmentBasisSha256.value = preview.basisSha256 || "";
+    elements.workRuleAssignmentConflict.innerHTML = workRuleConflictMarkup(preview);
+    elements.workRuleAssignmentPreviewState.textContent = state.workRuleAssignmentPreviewValid
+      ? "Prüfung aktuell · Einreichung möglich"
+      : "Blockierender Konflikt";
+    elements.workRuleAssignmentSubmitButton.disabled = !state.workRuleAssignmentPreviewValid;
+  } catch (error) {
+    elements.workRuleAssignmentConflict.innerHTML = workRuleConflictMarkup({
+      outcome: "blocked",
+      title: "Konfliktprüfung fehlgeschlagen",
+      note: error.message,
+    });
+    showToast(error.message, true);
+  } finally {
+    elements.previewWorkRuleAssignmentButton.disabled = false;
+  }
+}
+
+async function saveWorkRuleAssignment(event) {
+  event.preventDefault();
+  if (!state.workRuleAssignmentPreviewValid) {
+    showToast("Bitte die Zuordnung nach der letzten Änderung erneut prüfen.", true);
+    return;
+  }
+  elements.workRuleAssignmentSubmitButton.disabled = true;
+  try {
+    await createWorkRuleGovernanceRequest({
+      operation: "activate_assignment",
+      subjectId: elements.workRuleAssignmentPublicationId.value,
+      payload: workRuleAssignmentPayload(),
+      reason: elements.workRuleAssignmentReason.value.trim(),
+      sourceReference: elements.workRuleAssignmentSourceReference.value.trim(),
+      basisSha256: elements.workRuleAssignmentBasisSha256.value,
+      conflictRunId: state.workRuleGovernancePreview?.conflictRunId,
+    });
+    elements.workRuleAssignmentModal.close();
+    await loadCustomWorkRuleRegistry({ force: true });
+    showToast("Der datierte Zuordnungsantrag wurde zur unabhängigen Freigabe eingereicht.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.workRuleAssignmentSubmitButton.disabled = false;
+  }
+}
+
+async function openWorkRuleLifecycleModal(action, subjectId, { profileId = "", versionId = "" } = {}) {
+  if (!elements.workRuleLifecycleModal) return;
+  const assignment = action === "deactivate_assignment" ? findWorkRuleAssignment(subjectId) : null;
+  const publication = action === "withdraw_publication" ? findWorkRulePublication(subjectId) : null;
+  const collectiveAssignment = ["approve_kv_assignment", "deactivate_kv_assignment"].includes(action)
+    ? (state.collectiveAgreementRegistry?.assignments || []).find((entry) => entry.id === subjectId)
+    : null;
+  const draft = action === "restore_version"
+    ? (state.customWorkRuleRegistry?.drafts || []).find((entry) => entry.id === profileId)
+    : customWorkRuleForGovernanceSubject(assignment || publication || {});
+  const version = (draft?.versions || []).find((entry) => entry.id === versionId) || draft?.currentVersion;
+  if (!draft && !assignment && !publication && !collectiveAssignment) {
+    showToast("Der ausgewählte Regelvorgang wurde nicht gefunden.", true);
+    return;
+  }
+  elements.workRuleLifecycleForm.reset();
+  state.workRuleGovernancePreview = null;
+  elements.workRuleLifecycleAction.value = action;
+  elements.workRuleLifecycleSubjectId.value = subjectId;
+  elements.workRuleLifecycleProfileId.value = draft?.id || profileId;
+  elements.workRuleLifecycleVersionId.value = versionId;
+  elements.workRuleLifecycleBasisSha256.value = assignment?.receiptSha256 || publication?.receiptSha256 || version?.contentSha256 || "";
+  const today = toIsoDate(new Date());
+  const earliestEffectiveOn = action === "approve_kv_assignment"
+    ? collectiveAssignment.validFrom
+    : (action === "deactivate_kv_assignment"
+      ? (collectiveAssignment.governanceCurrentEffectiveOn
+        || collectiveAssignment.governanceEffectiveOn
+        || collectiveAssignment.validFrom)
+      : (action === "deactivate_assignment" ? assignment?.validFrom : ""));
+  elements.workRuleLifecycleEffectiveOn.value = earliestEffectiveOn && earliestEffectiveOn > today
+    ? earliestEffectiveOn
+    : (action === "approve_kv_assignment" ? earliestEffectiveOn : today);
+  elements.workRuleLifecycleEffectiveOn.min = earliestEffectiveOn || "";
+  elements.workRuleLifecycleEffectiveOn.max = collectiveAssignment?.validTo || assignment?.validTo || "";
+  elements.workRuleLifecycleEffectiveOn.closest(".field")?.classList.toggle("hidden", action === "restore_version");
+  elements.workRuleLifecycleEffectiveOn.required = action !== "restore_version";
+  const copy = {
+    deactivate_assignment: ["Zuordnung beenden", "Die Beendigung wird datiert beantragt und benötigt eine unabhängige Freigabe.", "Beendigung zur Freigabe einreichen"],
+    withdraw_publication: ["Veröffentlichung zurückziehen", "Bestehende Fassungen, Prüfungen und frühere Wirkzeiträume bleiben vollständig erhalten.", "Rücknahme zur Freigabe einreichen"],
+    restore_version: ["Historische Fassung wieder öffnen", "Die historische Fassung bleibt unverändert; aus ihr wird ausschließlich eine neue Entwurfsfassung erzeugt.", "Als neue Entwurfsfassung öffnen"],
+    approve_kv_assignment: ["KV-Zuordnung zur Freigabe einreichen", "Die fachliche Anwendbarkeit wird auf der unveränderlichen Fassung und dem dokumentierten Betriebsteil im Vier-Augen-Prinzip geprüft.", "KV-Zuordnung zur Freigabe einreichen"],
+    deactivate_kv_assignment: ["KV-Zuordnung kontrolliert beenden", "Die Beendigung wird datiert und im Vier-Augen-Prinzip freigegeben; frühere Nachweise bleiben erhalten.", "Beendigung zur Freigabe einreichen"],
+  }[action];
+  elements.workRuleLifecycleModalTitle.textContent = copy[0];
+  elements.workRuleLifecycleModalCopy.textContent = copy[1];
+  elements.workRuleLifecycleSubmitButton.textContent = copy[2];
+  const constructiveAction = ["restore_version", "approve_kv_assignment"].includes(action);
+  elements.workRuleLifecycleSubmitButton.classList.toggle("danger-button", !constructiveAction);
+  elements.workRuleLifecycleSubmitButton.classList.toggle("primary-button", constructiveAction);
+  elements.workRuleLifecycleSummary.innerHTML = workRuleGovernanceSummaryMarkup({
+    title: version?.definition?.title || draft?.title || publication?.title || assignment?.scopeLabel
+      || (collectiveAssignment ? `${collectiveAssignment.agreementCode} · ${collectiveAssignment.agreementTitle}` : ""),
+    versionLabel: version?.versionLabel || collectiveAssignment?.versionLabel || workRuleOperationLabel(action),
+    scopeLabel: assignment?.scopeLabel || version?.definition?.scopeLabel || publication?.scopeLabel
+      || collectiveAssignment?.businessUnitName,
+    basisSha256: elements.workRuleLifecycleBasisSha256.value,
+  });
+  elements.workRuleLifecycleBoundary.textContent = action === "restore_version"
+    ? "Die Wiederöffnung überschreibt keine Fassung und erzeugt keine Dienstplanwirkung."
+    : "Die Änderung überschreibt keine frühere Fassung und beendet keine historischen Nachweise.";
+  elements.workRuleLifecycleConflict.innerHTML = action === "restore_version"
+    ? workRuleConflictMarkup({ outcome: "pass", title: "Neue Entwurfsfassung ohne Wirkung", note: "Die bestehende Historie bleibt unverändert." })
+    : "<p>Die serverseitige Konfliktprüfung wird geladen.</p>";
+  elements.workRuleLifecycleSubmitButton.disabled = action !== "restore_version";
+  elements.workRuleLifecycleModal.showModal();
+  if (action === "restore_version") return;
+  await refreshWorkRuleLifecyclePreview();
+}
+
+async function refreshWorkRuleLifecyclePreview() {
+  const action = elements.workRuleLifecycleAction.value;
+  if (![
+    "deactivate_assignment",
+    "withdraw_publication",
+    "approve_kv_assignment",
+    "deactivate_kv_assignment",
+  ].includes(action)) return;
+  elements.workRuleLifecycleSubmitButton.disabled = true;
+  elements.workRuleLifecycleConflict.innerHTML = "<p>Die geänderte Wirksamkeit wird serverseitig erneut geprüft.</p>";
+  try {
+    const preview = await previewWorkRuleGovernance(action, elements.workRuleLifecycleSubjectId.value, {
+      effectiveOn: elements.workRuleLifecycleEffectiveOn.value,
+    });
+    state.workRuleGovernancePreview = preview;
+    elements.workRuleLifecycleBasisSha256.value = preview.basisSha256 || "";
+    elements.workRuleLifecycleConflict.innerHTML = workRuleConflictMarkup(preview);
+    elements.workRuleLifecycleSubmitButton.disabled = workRuleConflict(preview).outcome === "blocked";
+  } catch (error) {
+    elements.workRuleLifecycleConflict.innerHTML = workRuleConflictMarkup({
+      outcome: "blocked",
+      title: "Konfliktprüfung fehlgeschlagen",
+      note: error.message,
+    });
+    showToast(error.message, true);
+  }
+}
+
+async function saveWorkRuleLifecycle(event) {
+  event.preventDefault();
+  const action = elements.workRuleLifecycleAction.value;
+  elements.workRuleLifecycleSubmitButton.disabled = true;
+  try {
+    if (action === "restore_version") {
+      await api(`/api/work-rules/drafts/${encodeURIComponent(elements.workRuleLifecycleProfileId.value)}/versions/${encodeURIComponent(elements.workRuleLifecycleVersionId.value)}/restore`, {
+        method: "POST",
+        body: JSON.stringify({
+          reason: elements.workRuleLifecycleReason.value.trim(),
+          sourceReference: elements.workRuleLifecycleSourceReference.value.trim(),
+        }),
+      });
+      showToast("Die historische Fassung wurde als neue, noch nicht wirksame Entwurfsfassung geöffnet.");
+    } else {
+      await createWorkRuleGovernanceRequest({
+        operation: action,
+        subjectId: elements.workRuleLifecycleSubjectId.value,
+        payload: { effectiveOn: elements.workRuleLifecycleEffectiveOn.value },
+        reason: elements.workRuleLifecycleReason.value.trim(),
+        sourceReference: elements.workRuleLifecycleSourceReference.value.trim(),
+        basisSha256: elements.workRuleLifecycleBasisSha256.value,
+        conflictRunId: state.workRuleGovernancePreview?.conflictRunId,
+      });
+      showToast("Die kontrollierte Änderung wurde zur unabhängigen Freigabe eingereicht.");
+    }
+    elements.workRuleLifecycleModal.close();
+    if (["approve_kv_assignment", "deactivate_kv_assignment"].includes(action)) {
+      await loadCollectiveAgreementRegistry({ force: true });
+    } else {
+      await loadCustomWorkRuleRegistry({ force: true });
+    }
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.workRuleLifecycleSubmitButton.disabled = false;
+  }
+}
+
+function collectiveAgreementReviewLabel(value) {
+  return ({
+    review_pending: "Prüfung offen",
+    approved: "Freigegeben",
+    retired: "Historisch",
+  })[value] || "Prüfung offen";
+}
+
+function collectiveAgreementApprenticeLabel(value) {
+  return ({ yes: "Lehrlingsrelevant", no: "Nicht lehrlingsrelevant", unknown: "Lehrlingsrelevanz offen" })[value]
+    || "Lehrlingsrelevanz offen";
+}
+
+function collectiveAgreementValidity(from, to) {
+  return `${formatDate(from)}${to ? ` – ${formatDate(to)}` : " – offen"}`;
+}
+
+async function loadCollectiveAgreementRegistry({ force = false } = {}) {
+  if (!canReadCollectiveAgreements() || state.collectiveAgreementsLoading) return;
+  if (state.collectiveAgreementRegistry && state.workRuleGovernance && !force) {
+    renderCollectiveAgreementRegistry();
+    return;
+  }
+  state.collectiveAgreementsLoading = true;
+  if (elements.collectiveAgreementList) {
+    elements.collectiveAgreementList.innerHTML = '<p class="settings-note">KV-Fassungen werden geladen.</p>';
+  }
+  try {
+    const [registryResult, governanceResult] = await Promise.allSettled([
+      api("/api/collective-agreements/registry"),
+      api("/api/work-rules/governance"),
+    ]);
+    if (registryResult.status === "rejected") throw registryResult.reason;
+    state.collectiveAgreementRegistry = registryResult.value;
+    if (governanceResult.status === "fulfilled") state.workRuleGovernance = governanceResult.value;
+    const agreementIds = new Set((state.collectiveAgreementRegistry.agreements || []).map((agreement) => agreement.id));
+    if (!agreementIds.has(state.selectedCollectiveAgreementId)) {
+      state.selectedCollectiveAgreementId = state.collectiveAgreementRegistry.agreements?.[0]?.id || "";
+    }
+    renderCollectiveAgreementRegistry();
+  } catch (error) {
+    state.collectiveAgreementRegistry = null;
+    if (elements.collectiveAgreementList) {
+      elements.collectiveAgreementList.innerHTML = `<p class="settings-note">${escapeHtml(error.message)}</p>`;
+    }
+    throw error;
+  } finally {
+    state.collectiveAgreementsLoading = false;
+  }
+}
+
+function renderCollectiveAgreementSummary(registry) {
+  if (!elements.collectiveAgreementSummary) return;
+  const summary = registry.summary || {};
+  elements.collectiveAgreementSummary.innerHTML = [
+    ["Registereinträge", summary.agreements || 0, "externe Verträge"],
+    ["Fassungen", summary.versions || 0, "unveränderliche Quellenstände"],
+    ["Betriebsteile", summary.businessUnits || 0, registry.scopeLabel || "sichtbarer Bereich"],
+    ["Prüfung offen", summary.pendingAssignments || 0, "noch ohne Wirksamkeit"],
+  ].map(([label, value, note], index) => `
+    <article class="personnel-administration-stat ${index === 3 && Number(value) ? "warning" : ""}">
+      <span>${escapeHtml(label)}</span><strong>${Number(value)}</strong><small>${escapeHtml(note)}</small>
+    </article>
+  `).join("");
+}
+
+function renderCollectiveAgreementList(registry) {
+  if (!elements.collectiveAgreementList) return;
+  const agreements = registry.agreements || [];
+  if (!agreements.length) {
+    elements.collectiveAgreementList.innerHTML = `
+      <div class="collective-agreement-empty">
+        <strong>Noch kein externer Kollektivvertrag registriert</strong>
+        <p>Foto/Multimedia, Printcenter und IT werden bewusst nicht vorab rechtlich zugeordnet. Zuerst müssen Quelle, Rechtsträger und Geltungsbereich bestätigt werden.</p>
+      </div>`;
+    return;
+  }
+  elements.collectiveAgreementList.innerHTML = agreements.map((agreement) => {
+    const current = agreement.versions.find((version) => version.id === agreement.currentVersionId) || null;
+    const displayedVersion = current || agreement.versions[0] || null;
+    const active = agreement.id === state.selectedCollectiveAgreementId;
+    return `
+      <button type="button" class="collective-agreement-list-item ${active ? "active" : ""}" data-collective-agreement-id="${escapeHtmlAttribute(agreement.id)}" ${active ? 'aria-current="true"' : ""}>
+        <span class="collective-agreement-code">${escapeHtml(agreement.code)}</span>
+        <strong>${escapeHtml(agreement.shortTitle || agreement.title)}</strong>
+        <small>${current
+          ? `${escapeHtml(current.versionLabel)} · ${escapeHtml(collectiveAgreementValidity(current.validFrom, current.validTo))}`
+          : displayedVersion
+            ? `${escapeHtml(displayedVersion.versionLabel)} · zugeordnete historische Fassung`
+            : "Noch keine Fassung"}</small>
+        <span class="status-badge warning">${escapeHtml(collectiveAgreementReviewLabel(agreement.reviewState))}</span>
+      </button>`;
+  }).join("");
+}
+
+function collectiveAgreementDefinitionList(version) {
+  const entries = [
+    ["Räumlich", version.territorialScope],
+    ["Fachlich", version.functionalScope],
+    ["Persönlich", version.personalScope],
+    ["Beschäftigtengruppen", (version.employeeGroups || []).join(", ")],
+    ["Arbeitszeitparameter", version.workTimeParametersNote],
+    ["Einstufung", version.classificationNote],
+    ["Lehrlinge", `${collectiveAgreementApprenticeLabel(version.apprenticeRelevance)}${version.apprenticeNote ? ` · ${version.apprenticeNote}` : ""}`],
+    ["Nachfolge / Ersetzung", version.successorNote],
+  ].filter(([, value]) => String(value || "").trim());
+  return entries.length ? entries.map(([label, value]) => `
+    <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>
+  `).join("") : '<p class="settings-note">Der Geltungsbereich ist noch nicht vollständig dokumentiert.</p>';
+}
+
+function renderCollectiveAgreementDetail(registry) {
+  if (!elements.collectiveAgreementDetail) return;
+  const agreement = (registry.agreements || []).find((entry) => entry.id === state.selectedCollectiveAgreementId);
+  if (!agreement) {
+    elements.collectiveAgreementDetail.innerHTML = `
+      <div class="collective-agreement-empty"><strong>Noch keine Fassung ausgewählt</strong><p>Wähle links einen Registereintrag.</p></div>`;
+    return;
+  }
+  const current = agreement.versions.find((version) => version.id === agreement.currentVersionId) || null;
+  const displayedVersion = current || agreement.versions[0] || null;
+  if (!displayedVersion) return;
+  const parties = displayedVersion.contractingParties?.length
+    ? displayedVersion.contractingParties.join(" · ")
+    : "Noch nicht dokumentiert";
+  const sourceHash = displayedVersion.source.sha256 || displayedVersion.contentSha256;
+  const versionHistory = agreement.versions.map((version) => `
+    <article class="${version.id === agreement.currentVersionId ? "current" : ""}">
+      <div><strong>${escapeHtml(version.versionLabel)}</strong><small>${escapeHtml(collectiveAgreementValidity(version.validFrom, version.validTo))}</small></div>
+      <span>${version.id === agreement.currentVersionId ? "Aktueller Registerstand" : current ? "Historische Fassung" : "Zugeordnete historische Fassung"}</span>
+    </article>`).join("");
+  elements.collectiveAgreementDetail.innerHTML = `
+    <div class="collective-agreement-detail-heading">
+      <div>
+        <span class="eyebrow">${escapeHtml(agreement.code)} · ${escapeHtml(agreement.jurisdiction)}</span>
+        <h3>${escapeHtml(agreement.title)}</h3>
+        <p>${escapeHtml(agreement.note || "Externer Registereintrag ohne bestätigte betriebliche Anwendbarkeit.")}</p>
+      </div>
+      <div class="collective-agreement-detail-actions">
+        <span class="status-badge warning">${escapeHtml(collectiveAgreementReviewLabel(agreement.reviewState))}</span>
+        ${registry.capabilities?.canManage ? `<button type="button" class="secondary-button" data-add-collective-agreement-version="${escapeHtmlAttribute(agreement.id)}">+ Neue Fassung</button>` : ""}
+      </div>
+    </div>
+    ${current ? "" : '<p class="settings-note collective-agreement-current-visibility">Der aktuelle Registerstand ist in dieser bereichsbezogenen Lesesicht nicht sichtbar. Angezeigt wird ausschließlich eine dem eigenen Bereich zugeordnete historische Fassung.</p>'}
+    <div class="collective-agreement-source-card">
+      <div><span>${current ? "Fassung" : "Sichtbare Fassung"}</span><strong>${escapeHtml(displayedVersion.versionLabel)}</strong><small>${escapeHtml(collectiveAgreementValidity(displayedVersion.validFrom, displayedVersion.validTo))}</small></div>
+      <div><span>Vertragsparteien</span><strong>${escapeHtml(parties)}</strong><small>${displayedVersion.externalPublishedOn ? `extern veröffentlicht ${escapeHtml(formatDate(displayedVersion.externalPublishedOn))}` : "Veröffentlichungsdatum offen"}</small></div>
+      <div class="source-wide"><span>Dokumentierte Quelle</span><strong><a href="${escapeHtmlAttribute(displayedVersion.source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(displayedVersion.source.title)}</a></strong><small>abgerufen ${escapeHtml(formatDate(displayedVersion.source.retrievedOn))} · Integritätswert ${escapeHtml(sourceHash.slice(0, 16))}…</small></div>
+    </div>
+    <dl class="collective-agreement-applicability">${collectiveAgreementDefinitionList(displayedVersion)}</dl>
+    ${displayedVersion.linkedProfileVersionId ? `<p class="collective-agreement-profile-link">Vorbereitete Regelprofil-Verknüpfung: <strong>${escapeHtml(displayedVersion.linkedProfileVersionId)}</strong>. Noch nicht aktiviert.</p>` : ""}
+    <section class="collective-agreement-version-history">
+      <div><span class="eyebrow">Nicht überschreibbar</span><h4>Versionshistorie</h4></div>
+      ${versionHistory}
+    </section>`;
+}
+
+function renderCollectiveAgreementBusinessUnits(registry) {
+  if (!elements.collectiveAgreementBusinessUnits) return;
+  const units = registry.businessUnits || [];
+  elements.collectiveAgreementBusinessUnits.innerHTML = units.length ? units.map((unit) => `
+    <article class="collective-agreement-business-unit" data-collective-agreement-business-unit="${escapeHtmlAttribute(unit.id)}">
+      <div><span>${escapeHtml(unit.code)}</span><strong>${escapeHtml(unit.name)}</strong><small>${escapeHtml(unit.legalEntityName)}</small></div>
+      <p>${escapeHtml(unit.description || "Keine zusätzliche Beschreibung.")}</p>
+      <div class="collective-agreement-scope-tags">${unit.scopes.length
+        ? unit.scopes.map((scope) => `<span>${escapeHtml(scope.label)}</span>`).join("")
+        : '<span class="warning">Noch ohne organisatorischen Bereich</span>'}</div>
+      ${registry.capabilities?.canManage ? '<button class="text-action" type="button" data-add-business-unit-scopes>Bereiche ergänzen</button>' : ""}
+    </article>`).join("") : `
+      <div class="collective-agreement-empty compact"><strong>Noch keine Betriebsteile</strong><p>Lege Rechtsträger und ihre tatsächlichen organisatorischen Bereiche zuerst neutral an.</p></div>`;
+}
+
+function collectiveAgreementGovernanceStateLabel(stateValue, effectiveOn) {
+  return ({
+    review_pending: "Freigabe noch nicht eingereicht",
+    approval_planned: `Freigegeben · wirksam ab ${formatDate(effectiveOn)}`,
+    approved: "Wirksam zugeordnet",
+    deactivation_planned: `Beendigung geplant ab ${formatDate(effectiveOn)}`,
+    deactivated: "Beendet",
+  })[stateValue] || collectiveAgreementReviewLabel(stateValue);
+}
+
+function renderCollectiveAgreementAssignments(registry) {
+  if (!elements.collectiveAgreementAssignments) return;
+  const assignments = registry.assignments || [];
+  const canApprove = Boolean(registry.capabilities?.canApprove
+    && state.workRuleGovernance?.capabilities?.canApproveCollectiveAgreement);
+  elements.collectiveAgreementAssignments.innerHTML = assignments.length ? assignments.map((assignment) => {
+    const requests = workRuleGovernanceEntries("requests").filter((entry) => (
+      entry.subjectId === assignment.id
+      && ["approve_kv_assignment", "deactivate_kv_assignment"].includes(entry.operation)
+    ));
+    const openApproval = requests.some((entry) => (
+      entry.operation === "approve_kv_assignment"
+      && ["in_review", "approved"].includes(workRuleRequestState(entry))
+    ));
+    const openDeactivation = requests.some((entry) => (
+      entry.operation === "deactivate_kv_assignment"
+      && ["in_review", "approved"].includes(workRuleRequestState(entry))
+    ));
+    const label = collectiveAgreementGovernanceStateLabel(
+      assignment.governanceState,
+      assignment.governanceEffectiveOn,
+    );
+    const tone = ["approved", "approval_planned"].includes(assignment.governanceState)
+      ? "success"
+      : assignment.governanceState === "deactivated" ? "inactive" : "warning";
+    const requestCapabilities = {
+      canReview: canApprove,
+      canApproveCollectiveAgreement: canApprove,
+    };
+    return `
+    <article class="collective-agreement-assignment governed" data-collective-agreement-assignment="${escapeHtmlAttribute(assignment.id)}">
+      <div>
+        <span class="status-badge ${tone}">${escapeHtml(label)}</span>
+        <strong>${escapeHtml(assignment.businessUnitCode)} · ${escapeHtml(assignment.businessUnitName)}</strong>
+        <small>${escapeHtml(assignment.agreementCode)} · Fassung ${escapeHtml(assignment.versionLabel)} · ${escapeHtml(collectiveAgreementValidity(assignment.validFrom, assignment.validTo))}</small>
+      </div>
+      <p>${escapeHtml(assignment.rationale)}</p>
+      ${assignment.referenceNote ? `<small>${escapeHtml(assignment.referenceNote)}</small>` : ""}
+      ${canApprove && assignment.governanceState === "review_pending" && !openApproval ? `<div class="collective-agreement-governance-actions"><button class="primary-button" type="button" data-kv-governance-action="approve_kv_assignment">Zur Freigabe einreichen</button></div>` : ""}
+      ${canApprove && ["approved", "approval_planned"].includes(assignment.governanceState) && !openDeactivation ? `<div class="collective-agreement-governance-actions"><button class="danger-button" type="button" data-kv-governance-action="deactivate_kv_assignment">Zuordnung kontrolliert beenden</button></div>` : ""}
+      ${requests.length ? `<div class="collective-agreement-governance-requests">${requests.map((request) => renderCustomWorkRuleRequestCard(request, requestCapabilities)).join("")}</div>` : ""}
+    </article>`;
+  }).join("") : `
+      <div class="collective-agreement-empty compact"><strong>Keine Zuordnung vorbereitet</strong><p>Ohne bestätigte Quelle und Betriebsteil soll kein Kollektivvertrag vorweggenommen werden.</p></div>`;
+}
+
+function renderCollectiveAgreementRegistry() {
+  const registry = state.collectiveAgreementRegistry;
+  if (!registry || !canReadCollectiveAgreements()) return;
+  if (elements.collectiveAgreementLegalNotice) {
+    elements.collectiveAgreementLegalNotice.innerHTML = `<strong>Register und Freigabeweg, keine pauschale Rechtsbestätigung</strong><p>Externe Quellenstände und interne Zuordnungsvorschläge bleiben getrennt. Eine KV-Zuordnung wird erst nach Konfliktprüfung, zwei unabhängigen Entscheidungen und datiertem Abschluss wirksam; die rechtliche Einzelfallprüfung bleibt erforderlich.</p>`;
+  }
+  renderCollectiveAgreementSummary(registry);
+  renderCollectiveAgreementList(registry);
+  renderCollectiveAgreementDetail(registry);
+  renderCollectiveAgreementBusinessUnits(registry);
+  renderCollectiveAgreementAssignments(registry);
+  elements.addCollectiveAgreementButton?.classList.toggle("hidden", !registry.capabilities?.canManage);
+  elements.addCollectiveAgreementBusinessUnitButton?.classList.toggle("hidden", !registry.capabilities?.canManage);
+  elements.addCollectiveAgreementAssignmentButton?.classList.toggle("hidden", !registry.capabilities?.canPrepareAssignments);
+}
+
+function collectiveAgreementVersionOptions(registry) {
+  return (registry.agreements || []).flatMap((agreement) => (agreement.versions || []).map((version) => ({
+    ...version,
+    agreement,
+  })));
+}
+
+function populateCollectiveAgreementProfileOptions(selected = "") {
+  if (!elements.collectiveAgreementLinkedProfileVersion) return;
+  const options = state.collectiveAgreementRegistry?.ruleProfileVersions || [];
+  elements.collectiveAgreementLinkedProfileVersion.innerHTML = `<option value="">Noch keines</option>${options.map((profile) => `
+    <option value="${escapeHtmlAttribute(profile.id)}">${escapeHtml(`${profile.profileName} · ${profile.version} · ${profile.status === "published" ? "veröffentlicht" : "Entwurf"}`)}</option>
+  `).join("")}`;
+  elements.collectiveAgreementLinkedProfileVersion.value = options.some((profile) => profile.id === selected) ? selected : "";
+}
+
+function openCollectiveAgreementModal(agreement = null) {
+  if (!canManageCollectiveAgreements() || !elements.collectiveAgreementModal) return;
+  elements.collectiveAgreementForm.reset();
+  const today = toIsoDate(new Date());
+  const newVersion = Boolean(agreement);
+  elements.collectiveAgreementId.value = agreement?.id || "";
+  elements.collectiveAgreementCode.value = agreement?.code || "";
+  elements.collectiveAgreementShortTitle.value = agreement?.shortTitle || "";
+  elements.collectiveAgreementTitle.value = agreement?.title || "";
+  elements.collectiveAgreementJurisdiction.value = agreement?.jurisdiction || "AT";
+  elements.collectiveAgreementSourceRetrievedOn.value = today;
+  elements.collectiveAgreementModalTitle.textContent = newVersion ? "Neue KV-Fassung ergänzen" : "Kollektivvertrag erfassen";
+  elements.collectiveAgreementSubmitButton.textContent = newVersion ? "Neue Fassung speichern" : "Registereintrag speichern";
+  [elements.collectiveAgreementCode, elements.collectiveAgreementShortTitle,
+    elements.collectiveAgreementTitle, elements.collectiveAgreementJurisdiction]
+    .forEach((input) => { input.disabled = newVersion; });
+  document.querySelectorAll(".new-collective-agreement-only").forEach((field) => field.classList.toggle("hidden", newVersion));
+  populateCollectiveAgreementProfileOptions();
+  elements.collectiveAgreementModal.showModal();
+}
+
+function collectiveAgreementVersionPayload() {
+  return {
+    versionLabel: elements.collectiveAgreementVersionLabel.value.trim(),
+    validFrom: elements.collectiveAgreementValidFrom.value,
+    validTo: elements.collectiveAgreementValidTo.value || null,
+    externalPublishedOn: elements.collectiveAgreementPublishedOn.value || null,
+    sourceTitle: elements.collectiveAgreementSourceTitle.value.trim(),
+    sourceUrl: elements.collectiveAgreementSourceUrl.value.trim(),
+    sourceRetrievedOn: elements.collectiveAgreementSourceRetrievedOn.value,
+    sourceSha256: elements.collectiveAgreementSourceSha256.value.trim(),
+    sourceNote: elements.collectiveAgreementSourceNote.value.trim(),
+    contractingParties: elements.collectiveAgreementContractingParties.value,
+    territorialScope: elements.collectiveAgreementTerritorialScope.value.trim(),
+    functionalScope: elements.collectiveAgreementFunctionalScope.value.trim(),
+    personalScope: elements.collectiveAgreementPersonalScope.value.trim(),
+    employeeGroups: elements.collectiveAgreementEmployeeGroups.value,
+    workTimeParametersNote: elements.collectiveAgreementWorkTimeNote.value.trim(),
+    classificationNote: elements.collectiveAgreementClassificationNote.value.trim(),
+    apprenticeRelevance: elements.collectiveAgreementApprenticeRelevance.value,
+    apprenticeNote: elements.collectiveAgreementApprenticeNote.value.trim(),
+    successorNote: elements.collectiveAgreementSuccessorNote.value.trim(),
+    linkedProfileVersionId: elements.collectiveAgreementLinkedProfileVersion.value,
+  };
+}
+
+async function saveCollectiveAgreement(event) {
+  event.preventDefault();
+  if (!canManageCollectiveAgreements()) return;
+  const agreementId = elements.collectiveAgreementId.value;
+  const version = collectiveAgreementVersionPayload();
+  const body = agreementId ? version : {
+    code: elements.collectiveAgreementCode.value.trim(),
+    shortTitle: elements.collectiveAgreementShortTitle.value.trim(),
+    title: elements.collectiveAgreementTitle.value.trim(),
+    jurisdiction: elements.collectiveAgreementJurisdiction.value.trim(),
+    note: elements.collectiveAgreementNote.value.trim(),
+    version,
+  };
+  elements.collectiveAgreementSubmitButton.disabled = true;
+  try {
+    const result = await api(
+      agreementId
+        ? `/api/collective-agreements/${encodeURIComponent(agreementId)}/versions`
+        : "/api/collective-agreements",
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    elements.collectiveAgreementModal.close();
+    state.selectedCollectiveAgreementId = result.agreement?.id || agreementId;
+    await loadCollectiveAgreementRegistry({ force: true });
+    showToast(agreementId ? "Die neue KV-Fassung wurde unveränderlich ergänzt." : "Der KV-Registereintrag wurde angelegt.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.collectiveAgreementSubmitButton.disabled = false;
+  }
+}
+
+function renderCollectiveAgreementScopeOptions(editingUnit = null) {
+  if (!elements.collectiveAgreementBusinessUnitScopeOptions) return;
+  const registry = state.collectiveAgreementRegistry || {};
+  const owners = new Map((registry.businessUnits || []).flatMap((unit) => (
+    unit.scopes.map((scope) => [`${scope.scopeType}:${scope.scopeKey}`, unit])
+  )));
+  const group = (title, options) => options.length ? `
+    <section><strong>${escapeHtml(title)}</strong>${options.map((option) => {
+      const key = `${option.scopeType}:${option.scopeKey}`;
+      const owner = owners.get(key);
+      const belongsToEditingUnit = owner?.id === editingUnit?.id;
+      return `<label class="${owner ? "occupied" : ""}"><input type="checkbox" data-business-unit-scope-type="${escapeHtmlAttribute(option.scopeType)}" data-business-unit-scope-key="${escapeHtmlAttribute(String(option.scopeKey))}" ${belongsToEditingUnit ? "checked " : ""}${owner ? "disabled" : ""} /><span>${escapeHtml(option.label)}</span>${owner ? `<small>${belongsToEditingUnit ? "bereits in diesem Betriebsteil" : `bereits bei ${escapeHtml(owner.code)}`}</small>` : ""}</label>`;
+    }).join("")}</section>` : "";
+  const costCenters = (registry.costCenters || []).map((center) => ({
+    scopeType: "cost_center",
+    scopeKey: center.id,
+    label: `${center.code} · ${center.name}${center.active ? "" : " · inaktiv"}`,
+  }));
+  const locations = (registry.locations || []).map((location) => ({
+    scopeType: "location",
+    scopeKey: location.id,
+    label: `${location.id} · ${location.name}`,
+  }));
+  const departments = (registry.locations || []).flatMap((location) => (location.departments || []).map((department) => ({
+    scopeType: "department",
+    scopeKey: department.id,
+    label: `${location.id} · ${location.name} · ${department.name}`,
+  })));
+  elements.collectiveAgreementBusinessUnitScopeOptions.innerHTML = [
+    group("Kostenstellen", costCenters),
+    group("Filialen", locations),
+    group("Abteilungen", departments),
+  ].join("") || '<p class="settings-note">Keine organisatorischen Bereiche verfügbar.</p>';
+}
+
+function openCollectiveAgreementBusinessUnitModal(unit = null) {
+  if (!canManageCollectiveAgreements() || !elements.collectiveAgreementBusinessUnitModal) return;
+  elements.collectiveAgreementBusinessUnitForm.reset();
+  state.editingCollectiveAgreementBusinessUnitId = unit?.id || "";
+  elements.collectiveAgreementBusinessUnitId.value = unit?.id || "";
+  elements.collectiveAgreementBusinessUnitCode.value = unit?.code || "";
+  elements.collectiveAgreementBusinessUnitName.value = unit?.name || "";
+  elements.collectiveAgreementBusinessUnitLegalEntity.value = unit?.legalEntityName || "";
+  elements.collectiveAgreementBusinessUnitDescription.value = unit?.description || "";
+  [elements.collectiveAgreementBusinessUnitCode, elements.collectiveAgreementBusinessUnitName,
+    elements.collectiveAgreementBusinessUnitLegalEntity, elements.collectiveAgreementBusinessUnitDescription]
+    .forEach((input) => { input.disabled = Boolean(unit); });
+  elements.collectiveAgreementBusinessUnitModalTitle.textContent = unit ? "Betriebsteil um Bereiche ergänzen" : "Betriebsteil anlegen";
+  elements.collectiveAgreementBusinessUnitSubmitButton.textContent = unit ? "Bereiche ergänzen" : "Betriebsteil speichern";
+  renderCollectiveAgreementScopeOptions(unit);
+  elements.collectiveAgreementBusinessUnitModal.showModal();
+}
+
+async function saveCollectiveAgreementBusinessUnit(event) {
+  event.preventDefault();
+  if (!canManageCollectiveAgreements()) return;
+  const businessUnitId = elements.collectiveAgreementBusinessUnitId.value;
+  const scopes = [...elements.collectiveAgreementBusinessUnitScopeOptions.querySelectorAll("input:checked:not(:disabled)")]
+    .map((input) => ({
+      scopeType: input.dataset.businessUnitScopeType,
+      scopeKey: input.dataset.businessUnitScopeKey,
+    }));
+  if (businessUnitId && !scopes.length) {
+    showToast("Bitte mindestens einen neuen organisatorischen Bereich auswählen.", true);
+    return;
+  }
+  const body = businessUnitId ? { scopes } : {
+    code: elements.collectiveAgreementBusinessUnitCode.value.trim(),
+    name: elements.collectiveAgreementBusinessUnitName.value.trim(),
+    legalEntityName: elements.collectiveAgreementBusinessUnitLegalEntity.value.trim(),
+    description: elements.collectiveAgreementBusinessUnitDescription.value.trim(),
+    scopes,
+  };
+  elements.collectiveAgreementBusinessUnitSubmitButton.disabled = true;
+  try {
+    await api(
+      businessUnitId
+        ? `/api/collective-agreements/business-units/${encodeURIComponent(businessUnitId)}/scopes`
+        : "/api/collective-agreements/business-units",
+      {
+      method: "POST",
+      body: JSON.stringify(body),
+      },
+    );
+    elements.collectiveAgreementBusinessUnitModal.close();
+    await loadCollectiveAgreementRegistry({ force: true });
+    showToast(businessUnitId ? "Die Bereiche wurden unveränderlich ergänzt." : "Der Betriebsteil wurde angelegt.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.collectiveAgreementBusinessUnitSubmitButton.disabled = false;
+  }
+}
+
+function selectedCollectiveAgreementAssignmentVersion() {
+  const id = elements.collectiveAgreementAssignmentVersion?.value || "";
+  return collectiveAgreementVersionOptions(state.collectiveAgreementRegistry || {})
+    .find((version) => version.id === id) || null;
+}
+
+function updateCollectiveAgreementAssignmentDates() {
+  const version = selectedCollectiveAgreementAssignmentVersion();
+  if (!version) return;
+  elements.collectiveAgreementAssignmentValidFrom.value = version.validFrom;
+  elements.collectiveAgreementAssignmentValidFrom.min = version.validFrom;
+  elements.collectiveAgreementAssignmentValidTo.min = version.validFrom;
+  elements.collectiveAgreementAssignmentValidFrom.max = version.validTo || "";
+  elements.collectiveAgreementAssignmentValidTo.max = version.validTo || "";
+  elements.collectiveAgreementAssignmentValidTo.value = version.validTo || "";
+}
+
+function openCollectiveAgreementAssignmentModal() {
+  if (!canPrepareCollectiveAgreementAssignments() || !elements.collectiveAgreementAssignmentModal) return;
+  const registry = state.collectiveAgreementRegistry || {};
+  const versions = collectiveAgreementVersionOptions(registry);
+  const units = (registry.businessUnits || []).filter((unit) => unit.active);
+  if (!versions.length || !units.length) {
+    showToast("Für einen Zuordnungsvorschlag werden mindestens eine KV-Fassung und ein Betriebsteil benötigt.", true);
+    return;
+  }
+  elements.collectiveAgreementAssignmentForm.reset();
+  elements.collectiveAgreementAssignmentVersion.innerHTML = versions.map((version) => `
+    <option value="${escapeHtmlAttribute(version.id)}">${escapeHtml(`${version.agreement.code} · ${version.versionLabel} · ${collectiveAgreementValidity(version.validFrom, version.validTo)}`)}</option>
+  `).join("");
+  const selectedAgreement = (registry.agreements || []).find((agreement) => agreement.id === state.selectedCollectiveAgreementId);
+  if (selectedAgreement?.currentVersionId) elements.collectiveAgreementAssignmentVersion.value = selectedAgreement.currentVersionId;
+  elements.collectiveAgreementAssignmentBusinessUnit.innerHTML = units.map((unit) => `
+    <option value="${escapeHtmlAttribute(unit.id)}">${escapeHtml(`${unit.code} · ${unit.name}`)}</option>
+  `).join("");
+  updateCollectiveAgreementAssignmentDates();
+  elements.collectiveAgreementAssignmentModal.showModal();
+}
+
+async function saveCollectiveAgreementAssignment(event) {
+  event.preventDefault();
+  if (!canPrepareCollectiveAgreementAssignments()) return;
+  const body = {
+    agreementVersionId: elements.collectiveAgreementAssignmentVersion.value,
+    businessUnitId: elements.collectiveAgreementAssignmentBusinessUnit.value,
+    validFrom: elements.collectiveAgreementAssignmentValidFrom.value,
+    validTo: elements.collectiveAgreementAssignmentValidTo.value || null,
+    rationale: elements.collectiveAgreementAssignmentRationale.value.trim(),
+    referenceNote: elements.collectiveAgreementAssignmentReference.value.trim(),
+    reviewState: "review_pending",
+  };
+  elements.collectiveAgreementAssignmentSubmitButton.disabled = true;
+  try {
+    await api("/api/collective-agreements/assignments", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    elements.collectiveAgreementAssignmentModal.close();
+    await loadCollectiveAgreementRegistry({ force: true });
+    showToast("Der Zuordnungsvorschlag wurde mit Status „Prüfung offen“ gespeichert.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.collectiveAgreementAssignmentSubmitButton.disabled = false;
+  }
+}
+
 function renderPersonnelAdministration() {
   if (!canOpenPersonnelAdministrationView()) return;
   if (canReadCentralPersonnel()) {
@@ -3782,6 +5871,8 @@ function renderPersonnelAdministration() {
     renderPersonnelDirectory();
   }
   if (canReadCostCenters()) renderCostCenters();
+  if (canAccessCustomWorkRuleGovernance() && state.customWorkRuleRegistry) renderCustomWorkRuleRegistry();
+  if (canReadCollectiveAgreements() && state.collectiveAgreementRegistry) renderCollectiveAgreementRegistry();
   if (canReadCentralVacations() && state.centralVacationLoadedYear !== null) renderCentralVacations();
   if (canReadDataSubjectRequests()) renderDataSubjectRequests();
 }
@@ -3799,10 +5890,14 @@ function setPersonnelAdministrationTab(tab) {
   });
   elements.personnelDirectorySection?.classList.toggle("active", normalized === "employees");
   elements.costCenterSection?.classList.toggle("active", normalized === "costCenters");
+  elements.customWorkRulesSection?.classList.toggle("active", normalized === "ruleDrafts");
+  elements.collectiveAgreementsSection?.classList.toggle("active", normalized === "collectiveAgreements");
   elements.centralVacationSection?.classList.toggle("active", normalized === "vacations");
   elements.dataSubjectRequestsSection?.classList.toggle("active", normalized === "dataRequests");
   elements.personnelDisplayColumnsButton?.classList.toggle("hidden", normalized !== "employees");
   if (state.currentView === "personnelAdministration") renderContextNavigation();
+  if (normalized === "ruleDrafts") loadCustomWorkRuleRegistry().catch((error) => showToast(error.message, true));
+  if (normalized === "collectiveAgreements") loadCollectiveAgreementRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "vacations") loadCentralVacations().catch((error) => showToast(error.message, true));
   if (normalized === "dataRequests") loadDataSubjectRequests().catch((error) => showToast(error.message, true));
 }
@@ -5610,16 +7705,474 @@ function setRightsDashboardMode(mode, { load = true } = {}) {
   elements.systemCenterPanel?.classList.toggle("hidden", normalized !== "systemCenter");
   elements.rightsDashboardLocationsPanel?.classList.toggle("hidden", normalized !== "locations");
   elements.rightsDashboardRightsPanel?.classList.toggle("hidden", normalized !== "rights");
+  elements.personnelRulesDashboardPanel?.classList.toggle("hidden", normalized !== "personnelRules");
   elements.rightsDashboardProcessesPanel?.classList.toggle("hidden", normalized !== "processes");
+  if (normalized === "personnelRules") renderPersonnelRulesDashboard();
   if (normalized === "processes") renderRightsProcessDashboard();
   if (!load) return;
   if (normalized === "systemCenter") loadSystemCenter();
+  else if (normalized === "personnelRules") loadPersonnelRulesDashboard();
   else if (!state.rightsDashboard) loadGovernanceDashboards();
   else if (normalized === "locations" && !state.locationDashboard) loadLocationDashboard();
 }
 
+const personnelRuleStatusLabels = {
+  published: "Veröffentlicht",
+  draft: "Entwurf",
+  superseded: "Abgelöst",
+  archived: "Archiviert",
+  withdrawn: "Zurückgezogen",
+};
+
+const personnelRuleSeverityLabels = {
+  warning: "Hinweis",
+  error: "Ernst",
+  critical: "Kritisch",
+};
+
+const personnelRuleAssignmentStateLabels = {
+  current: "Aktuell wirksam",
+  future: "Künftig",
+  expired: "Abgelaufen",
+  inactive: "Inaktiv",
+};
+
+const personnelRuleLimitLabels = {
+  consentDailyMinutes: "Ablehnungsrecht ab täglich",
+  consentWeeklyMinutes: "Ablehnungsrecht ab wöchentlich",
+  normalDailyMinutes: "Normalarbeitszeit täglich",
+  normalWeeklyMinutes: "Normalarbeitszeit wöchentlich",
+  maximumDailyMinutes: "Höchstgrenze täglich",
+  maximumWeeklyMinutes: "Höchstgrenze wöchentlich",
+  maximumDailyMinutesUnder16: "Höchstgrenze täglich unter 16",
+  maximumWeeklyMinutesUnder16: "Höchstgrenze wöchentlich unter 16",
+  maximumDailyMinutesFrom16: "Höchstgrenze täglich ab 16",
+  maximumWeeklyMinutesFrom16: "Höchstgrenze wöchentlich ab 16",
+  average4WeeksMinutes: "Vierwochenschnitt",
+  average17WeeksMinutes: "17-Wochen-Schnitt",
+  breakTriggerMinutes: "Pausenprüfung ab",
+  breakRequiredMinutes: "Erforderliche Pause",
+  dailyRestMinutes: "Tägliche Ruhezeit",
+  dailyRestMinutesUnder15: "Ruhezeit unter 15",
+  weeklyRestMinutes: "Wöchentliche Ruhezeit",
+  nightStartMinute: "Nachtruhe ab",
+  nightEndMinute: "Nachtruhe bis",
+  saturdaySalesEndMinute: "Samstagsgrenze",
+};
+
+function personnelRulesProfiles() {
+  return Array.isArray(state.personnelRulesDashboard?.profiles) ? state.personnelRulesDashboard.profiles : [];
+}
+
+function personnelRulesFilteredProfiles() {
+  const search = String(state.personnelRulesSearch || "").trim().toLocaleLowerCase("de-AT");
+  return personnelRulesProfiles().filter((profile) => {
+    if (state.personnelRulesLayerFilter && profile.layer !== state.personnelRulesLayerFilter) return false;
+    if (state.personnelRulesStatusFilter && profile.status !== state.personnelRulesStatusFilter) return false;
+    if (!search) return true;
+    const haystack = [
+      profile.title,
+      profile.description,
+      profile.layerLabel,
+      profile.version,
+      ...(profile.rules || []).flatMap((rule) => [rule.id, rule.title]),
+      ...(profile.sources || []).flatMap((source) => [source.id, source.title]),
+    ].join(" ").toLocaleLowerCase("de-AT");
+    return haystack.includes(search);
+  });
+}
+
+function personnelRuleLimitValue(key, value) {
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes)) return String(value ?? "—");
+  if (["nightStartMinute", "nightEndMinute", "saturdaySalesEndMinute"].includes(key)) {
+    const normalized = ((Math.round(minutes) % 1440) + 1440) % 1440;
+    return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")} Uhr`;
+  }
+  if (/Minutes/.test(key)) {
+    const hours = minutes / 60;
+    return Number.isInteger(hours)
+      ? `${hours} Std.`
+      : `${new Intl.NumberFormat("de-AT", { maximumFractionDigits: 2 }).format(hours)} Std.`;
+  }
+  return new Intl.NumberFormat("de-AT").format(minutes);
+}
+
+function populatePersonnelRulesFilters() {
+  const profiles = personnelRulesProfiles();
+  if (elements.personnelRulesLayerFilter) {
+    const current = state.personnelRulesLayerFilter;
+    const layers = [...new Map(profiles.map((profile) => [profile.layer, profile.layerLabel || profile.layer])).entries()];
+    elements.personnelRulesLayerFilter.innerHTML = [
+      '<option value="">Alle Regelarten</option>',
+      ...layers.map(([id, label]) => `<option value="${escapeHtmlAttribute(id)}">${escapeHtml(label)}</option>`),
+    ].join("");
+    elements.personnelRulesLayerFilter.value = layers.some(([id]) => id === current) ? current : "";
+    state.personnelRulesLayerFilter = elements.personnelRulesLayerFilter.value;
+  }
+  if (elements.personnelRulesStatusFilter) elements.personnelRulesStatusFilter.value = state.personnelRulesStatusFilter;
+  if (elements.personnelRulesSearch && elements.personnelRulesSearch.value !== state.personnelRulesSearch) {
+    elements.personnelRulesSearch.value = state.personnelRulesSearch;
+  }
+}
+
+function personnelRulesAssignmentCounts() {
+  const counts = { current: 0, future: 0, inactive: 0, expired: 0 };
+  for (const assignment of state.personnelRulesDashboard?.assignments || []) {
+    const assignmentState = Object.prototype.hasOwnProperty.call(counts, assignment.state) ? assignment.state : "inactive";
+    counts[assignmentState] += 1;
+  }
+  return counts;
+}
+
+function renderPersonnelRulesSummary() {
+  if (!elements.personnelRulesSummary) return;
+  const summary = state.personnelRulesDashboard?.summary || {};
+  const assignmentCounts = personnelRulesAssignmentCounts();
+  const cards = [
+    ["Regelprofile", summary.profiles || 0, `${summary.publishedProfiles || 0} veröffentlicht · ${summary.draftProfiles || 0} Entwurf`],
+    ["Prüfkatalog", summary.rules || 0, `${summary.sources || 0} belegte Quelle(n)`],
+    ["Aktuell wirksam", assignmentCounts.current, `${summary.monitorAssignments || 0} Monitor · ${summary.enforcedAssignments || 0} aktiv`],
+    ["Künftig", assignmentCounts.future, "Noch ohne Wirkung am heutigen Tag"],
+    ["Inaktiv / abgelaufen", assignmentCounts.inactive + assignmentCounts.expired, "Derzeit ohne Planwirkung"],
+    ["Anwendbarkeit offen", summary.unconfirmedAssignments || 0, "Benötigt fachliche Bestätigung"],
+  ];
+  elements.personnelRulesSummary.innerHTML = cards.map(([label, value, hint]) => `
+    <article class="rights-dashboard-stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong><small>${escapeHtml(hint)}</small></article>
+  `).join("");
+}
+
+function renderPersonnelRulesAssignmentLegend() {
+  if (!elements.personnelRulesAssignmentLegend) return;
+  const counts = personnelRulesAssignmentCounts();
+  const entries = [
+    ["current", "Aktuell wirksam", counts.current, "Der Gültigkeitszeitraum umfasst den heutigen Tag."],
+    ["future", "Künftig", counts.future, "Die Zuordnung beginnt erst zu einem späteren Datum."],
+    ["inactive", "Inaktiv oder abgelaufen", counts.inactive + counts.expired, "Die Zuordnung hat heute keine Planwirkung."],
+  ];
+  elements.personnelRulesAssignmentLegend.innerHTML = entries.map(([assignmentState, label, count, explanation]) => `
+    <article class="${escapeHtmlAttribute(assignmentState)}">
+      <span class="personnel-rules-assignment-state" aria-hidden="true"></span>
+      <div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(explanation)}</small></div>
+      <span class="personnel-rules-assignment-legend-count" aria-label="${escapeHtmlAttribute(`${count} Zuordnungen`)}">${escapeHtml(String(count))}</span>
+    </article>
+  `).join("");
+}
+
+function renderPersonnelRulesProfileList() {
+  if (!elements.personnelRulesProfileList) return;
+  const profiles = personnelRulesFilteredProfiles();
+  if (!profiles.some((profile) => profile.id === state.personnelRulesSelectedProfileId)) {
+    state.personnelRulesSelectedProfileId = profiles[0]?.id || "";
+  }
+  if (elements.personnelRulesProfileCount) elements.personnelRulesProfileCount.textContent = String(profiles.length);
+  elements.personnelRulesProfileList.innerHTML = profiles.length ? profiles.map((profile) => {
+    const selected = profile.id === state.personnelRulesSelectedProfileId;
+    const mark = profile.automaticByBirthDate ? "U18" : profile.layer === "collective_agreement" ? "KV" : "R";
+    const statusLabel = personnelRuleStatusLabels[profile.status] || profile.status || "Stand offen";
+    const versionLabel = profile.version ? `Version ${profile.version}` : "Fassung ohne Versionsangabe";
+    const accessibleName = `${profile.title}, ${profile.layerLabel || "Regelprofil"}, ${versionLabel}, ${statusLabel}, ${(profile.rules || []).length} Regeln auswählen`;
+    return `<button type="button" class="personnel-rules-profile ${profile.status === "draft" ? "draft" : ""} ${selected ? "selected" : ""}" data-personnel-rules-profile="${escapeHtmlAttribute(profile.id)}" aria-pressed="${selected}" aria-label="${escapeHtmlAttribute(accessibleName)}">
+      <span class="personnel-rules-profile-mark" aria-hidden="true">${escapeHtml(mark)}</span>
+      <span class="personnel-rules-profile-copy"><strong>${escapeHtml(profile.title)}</strong><small>${escapeHtml(`${profile.layerLabel} · Version ${profile.version}`)}</small></span>
+      <span class="personnel-rules-profile-count"><strong>${escapeHtml(String((profile.rules || []).length))}</strong><small>Regeln</small></span>
+    </button>`;
+  }).join("") : '<p class="settings-note">Für diesen Filter wurden keine Regelprofile gefunden.</p>';
+}
+
+function personnelRulesAssignmentMarkup(assignment) {
+  const assignmentState = Object.prototype.hasOwnProperty.call(personnelRuleAssignmentStateLabels, assignment.state)
+    ? assignment.state
+    : "inactive";
+  const status = personnelRuleAssignmentStateLabels[assignmentState];
+  const mode = assignment.enforcementMode === "enforced" ? "Aktiver Regelbetrieb" : "Monitorbetrieb";
+  const confirmation = assignment.applicabilityConfirmed ? "Anwendbarkeit bestätigt" : "Anwendbarkeit offen";
+  const scopeLabel = assignment.scopeLabel || "Zugewiesener Bereich";
+  return `<article class="personnel-rules-assignment ${escapeHtmlAttribute(assignmentState)}" aria-label="${escapeHtmlAttribute(`${scopeLabel}: ${status}; ${confirmation}`)}">
+    <span class="personnel-rules-assignment-state" aria-hidden="true"></span>
+    <div><strong>${escapeHtml(scopeLabel)}</strong><small>${escapeHtml(`${formatDate(assignment.validFrom)}${assignment.validTo ? ` – ${formatDate(assignment.validTo)}` : " – offen"} · ${mode}`)}</small></div>
+    <div class="personnel-rules-assignment-badges">
+      <span class="personnel-rules-assignment-badge ${escapeHtmlAttribute(assignmentState)}">${escapeHtml(status)}</span>
+      <span class="personnel-rules-assignment-badge ${assignment.applicabilityConfirmed ? "confirmed" : "open"}">${escapeHtml(confirmation)}</span>
+    </div>
+  </article>`;
+}
+
+function renderPersonnelRulesProfileDetail() {
+  const profile = personnelRulesProfiles().find((entry) => entry.id === state.personnelRulesSelectedProfileId);
+  if (!profile) {
+    elements.personnelRulesProfileTitle.textContent = "Kein Regelprofil ausgewählt";
+    elements.personnelRulesProfileSummary.textContent = "Filter anpassen oder ein vorhandenes Profil auswählen.";
+    elements.personnelRulesProfileStatus.textContent = "Keine Auswahl";
+    elements.personnelRulesProfileStatus.classList.add("inactive");
+    elements.personnelRulesProfileFacts.innerHTML = "";
+    elements.personnelRulesApplicability.innerHTML = "<strong>Anwendbarkeit</strong><p>Für die aktuelle Auswahl liegen keine Profildaten vor.</p>";
+    elements.personnelRulesAssignments.innerHTML = "";
+    elements.personnelRulesRules.innerHTML = "";
+    elements.personnelRulesSources.innerHTML = "";
+    return;
+  }
+  const statusLabel = personnelRuleStatusLabels[profile.status] || profile.status;
+  elements.personnelRulesProfileTitle.textContent = profile.title;
+  elements.personnelRulesProfileSummary.textContent = profile.description;
+  elements.personnelRulesProfileStatus.textContent = statusLabel;
+  elements.personnelRulesProfileStatus.classList.toggle("inactive", profile.status !== "published");
+  const validity = `${formatDate(profile.validFrom)}${profile.validTo ? ` – ${formatDate(profile.validTo)}` : " – offen"}`;
+  const facts = [
+    ["Regelart", profile.layerLabel],
+    ["Version", profile.version],
+    ["Gültigkeit", validity],
+    ["Technischer Standard", profile.defaultEnforcementMode === "enforced" ? "Aktiver Regelbetrieb" : "Monitorbetrieb"],
+    ["Zuordnung", profile.automaticByBirthDate ? "Automatisch nach Geburtsdatum" : profile.assignable ? "Versioniert zuweisbar" : "Nicht manuell zuweisbar"],
+    ["Prüfsumme", profile.contentSha256 ? `${profile.contentSha256.slice(0, 12)}…` : "Kein veröffentlichter Nachweis"],
+  ];
+  elements.personnelRulesProfileFacts.innerHTML = facts.map(([label, value]) => `
+    <article><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value || "—"))}</strong></article>
+  `).join("");
+  const applicability = profile.applicability || {};
+  const age = applicability.maximumAgeExclusive
+    ? `unter ${applicability.maximumAgeExclusive} Jahre`
+    : applicability.minimumAge !== null && applicability.minimumAge !== undefined
+      ? `ab ${applicability.minimumAge} Jahren`
+      : "kein fixer Altersfilter";
+  const limits = Object.entries(profile.limits || {})
+    .filter(([, value]) => value !== null && value !== undefined);
+  elements.personnelRulesApplicability.innerHTML = `
+    <strong>Anwendbarkeit</strong>
+    <p>${escapeHtml(applicability.note || profile.description || "Die konkrete Anwendbarkeit muss anhand des Beschäftigungsverhältnisses geprüft werden.")}</p>
+    <div class="personnel-rules-applicability-tags">
+      <span>${escapeHtml(applicability.jurisdiction || "AT")}</span>
+      <span>${escapeHtml(applicability.sector ? `Bereich: ${applicability.sector}` : "Allgemeiner Bereich")}</span>
+      <span>${escapeHtml(age)}</span>
+      <span>${escapeHtml(applicability.automaticByBirthDate ? "Automatisch per Geburtsdatum" : applicability.confirmationRequired ? "Bestätigung erforderlich" : "Keine gesonderte Bestätigung")}</span>
+    </div>
+    ${limits.length ? `<div class="personnel-rules-limit-grid">${limits.map(([key, value]) => `
+      <article><span>${escapeHtml(personnelRuleLimitLabels[key] || key)}</span><strong>${escapeHtml(personnelRuleLimitValue(key, value))}</strong></article>
+    `).join("")}</div>` : ""}`;
+  const assignments = profile.assignments || [];
+  elements.personnelRulesAssignments.innerHTML = [
+    ...(profile.automaticByBirthDate ? ['<article class="personnel-rules-assignment automatic" aria-label="Automatische Jugendprofil-Zuordnung: Systemregel"><span class="personnel-rules-assignment-state" aria-hidden="true"></span><div><strong>Automatische Jugendprofil-Zuordnung</strong><small>Wird bei bestätigtem Geburtsdatum für Beschäftigte unter 18 am jeweiligen Diensttag verwendet.</small></div><div class="personnel-rules-assignment-badges"><span class="personnel-rules-assignment-badge current">Automatische Auswahl</span><span class="personnel-rules-assignment-badge confirmed">Systemregel</span></div></article>'] : []),
+    ...assignments.map(personnelRulesAssignmentMarkup),
+  ].join("") || '<p class="settings-note">Für dieses Profil ist im sichtbaren Bereich keine manuelle Geltungszuordnung hinterlegt.</p>';
+  elements.personnelRulesRules.innerHTML = (profile.rules || []).length ? profile.rules.map((rule) => {
+    const sources = (profile.sources || []).filter((source) => (rule.sourceIds || []).includes(source.id));
+    return `<article class="personnel-rules-rule ${escapeHtmlAttribute(rule.severity || "warning")}">
+      <span class="personnel-rules-rule-state">${escapeHtml(personnelRuleSeverityLabels[rule.severity] || "Hinweis")}</span>
+      <div><strong>${escapeHtml(rule.title || rule.id)}</strong><small>${escapeHtml(rule.id)}</small>${workRuleSourceLinks(sources)}</div>
+      <span class="personnel-rules-rule-enforcement">${escapeHtml(workRuleEnforcementLabels[rule.enforcement] || "Manuell prüfen")}</span>
+    </article>`;
+  }).join("") : '<p class="settings-note">Dieser Entwurf enthält noch keine freigegebenen maschinenlesbaren Regeln.</p>';
+  elements.personnelRulesSources.innerHTML = (profile.sources || []).length ? profile.sources.map((source) => {
+    const url = safeWorkRuleSourceUrl(source.url);
+    const title = escapeHtml(source.title || source.id);
+    const titleMarkup = url
+      ? `<a href="${escapeHtmlAttribute(url)}" target="_blank" rel="noreferrer noopener">${title}</a>`
+      : `<strong>${title}</strong>`;
+    return `<article><span>${escapeHtml(source.jurisdiction || "AT")}</span><div>${titleMarkup}<small>${escapeHtml(`Quelle ${source.id}${source.retrievedOn ? ` · abgerufen ${formatDate(source.retrievedOn)}` : ""}`)}</small>${source.applicabilityNote ? `<p>${escapeHtml(source.applicabilityNote)}</p>` : ""}</div></article>`;
+  }).join("") : '<p class="settings-note">Für dieses Profil ist noch kein veröffentlichter Quellennachweis hinterlegt.</p>';
+}
+
+function updatePersonnelRulesSimulationDepartments() {
+  if (!elements.personnelRulesSimulationDepartment) return;
+  const locations = state.personnelRulesDashboard?.locations || [];
+  const selectedLocation = locations.find((location) => String(location.id) === String(state.personnelRulesSimulationLocationId))
+    || locations[0]
+    || null;
+  const departments = selectedLocation?.departments || [];
+  const canSimulateWholeLocation = selectedLocation?.canSimulateWholeLocation !== false;
+  const requested = String(state.personnelRulesSimulationDepartmentId || "");
+  elements.personnelRulesSimulationDepartment.innerHTML = [
+    ...(canSimulateWholeLocation ? ['<option value="">Gesamte Filiale</option>'] : []),
+    ...departments.map((department) => `<option value="${escapeHtmlAttribute(String(department.id))}">${escapeHtml(department.name)}</option>`),
+  ].join("");
+  state.personnelRulesSimulationDepartmentId = departments.some((department) => String(department.id) === requested)
+    ? requested
+    : (canSimulateWholeLocation ? "" : String(departments[0]?.id || ""));
+  elements.personnelRulesSimulationDepartment.value = state.personnelRulesSimulationDepartmentId;
+}
+
+function populatePersonnelRulesSimulationControls() {
+  if (!elements.personnelRulesSimulationLocation) return;
+  const dashboard = state.personnelRulesDashboard;
+  const locations = dashboard?.locations || [];
+  const requested = String(state.personnelRulesSimulationLocationId || elements.personnelRulesSimulationLocation.value || "");
+  elements.personnelRulesSimulationLocation.innerHTML = locations.length
+    ? locations.map((location) => `<option value="${escapeHtmlAttribute(String(location.id))}">${escapeHtml(`${location.id} · ${location.name}`)}</option>`).join("")
+    : '<option value="">Keine freigegebene Filiale</option>';
+  state.personnelRulesSimulationLocationId = locations.some((location) => String(location.id) === requested)
+    ? requested
+    : String(locations[0]?.id || "");
+  elements.personnelRulesSimulationLocation.value = state.personnelRulesSimulationLocationId;
+  updatePersonnelRulesSimulationDepartments();
+  if (elements.personnelRulesSimulationWeek) {
+    elements.personnelRulesSimulationWeek.value = state.personnelRulesSimulationWeek || getMonday(new Date());
+  }
+  if (elements.runPersonnelRulesSimulation) {
+    const selectedLocation = locations.find((location) => (
+      String(location.id) === String(state.personnelRulesSimulationLocationId)
+    ));
+    const hasVisibleSimulationScope = selectedLocation?.canSimulateWholeLocation !== false
+      || Boolean(selectedLocation?.departments?.length);
+    elements.runPersonnelRulesSimulation.disabled = !dashboard?.capabilities?.canSimulate
+      || !state.personnelRulesSimulationLocationId
+      || !hasVisibleSimulationScope
+      || state.personnelRulesSimulationLoading;
+  }
+}
+
+function renderPersonnelRulesSimulation() {
+  if (!elements.personnelRulesSimulationResult) return;
+  populatePersonnelRulesSimulationControls();
+  if (state.personnelRulesSimulationLoading) {
+    elements.personnelRulesSimulationHint.textContent = "Planung wird geprüft …";
+    elements.personnelRulesSimulationResult.innerHTML = '<p class="settings-note">Die gespeicherten Dienste werden mit den aktuell wirksamen Profilversionen ausgewertet.</p>';
+    return;
+  }
+  if (state.personnelRulesSimulationError) {
+    elements.personnelRulesSimulationHint.textContent = "Prüfung nicht möglich";
+    elements.personnelRulesSimulationResult.innerHTML = `<p class="settings-note">${escapeHtml(state.personnelRulesSimulationError)}</p>`;
+    return;
+  }
+  const assessment = normalizeWorkRuleAssessment(state.personnelRulesSimulation);
+  if (!assessment) {
+    elements.personnelRulesSimulationHint.textContent = "Noch nicht geprüft";
+    elements.personnelRulesSimulationResult.innerHTML = '<p class="settings-note">Die Simulation zeigt Hinweise, manuell zu prüfende Punkte und Blockierungen für die ausgewählte Woche.</p>';
+    return;
+  }
+  const outcomeLabel = workRuleStateLabels[assessment.outcome] || "Manuell prüfen";
+  const contextLocation = (state.personnelRulesDashboard?.locations || [])
+    .find((location) => String(location.id) === String(state.personnelRulesSimulationLocationId));
+  const contextDepartment = (contextLocation?.departments || [])
+    .find((department) => String(department.id) === String(state.personnelRulesSimulationDepartmentId));
+  elements.personnelRulesSimulationHint.textContent = `${formatDate(assessment.periodFrom)} – ${formatDate(assessment.periodTo)} · ${contextLocation?.name || "Filiale"}${contextDepartment ? ` · ${contextDepartment.name}` : ""}`;
+  const counts = assessment.counts || {};
+  const findings = assessment.findings || [];
+  elements.personnelRulesSimulationResult.innerHTML = `
+    <div class="personnel-rules-simulation-overview ${escapeHtmlAttribute(assessment.outcome)}">
+      <div><span>Gesamtbewertung</span><strong>${escapeHtml(outcomeLabel)}</strong><small>${escapeHtml(assessment.mode === "enforced" ? "Aktiver Regelbetrieb" : "Monitorbetrieb")}</small></div>
+      <div><span>Team</span><strong>${escapeHtml(String(assessment.evaluatedEmployees || 0))}</strong><small>Personen ausgewertet</small></div>
+      <div><span>Bestätigt</span><strong>${escapeHtml(String(counts.pass || 0))}</strong><small>ohne akuten Befund</small></div>
+      <div><span>Hinweis / Prüfung</span><strong>${escapeHtml(String((counts.attention || 0) + (counts.manualReview || 0)))}</strong><small>benötigt Aufmerksamkeit</small></div>
+      <div><span>Blockiert</span><strong>${escapeHtml(String(counts.blocked || 0))}</strong><small>im aktiven Regelbetrieb</small></div>
+    </div>
+    <div class="personnel-rules-simulation-findings">
+      ${findings.length ? findings.map((finding) => workRuleFindingMarkup({ ...finding, snoozable: false })).join("") : '<p class="settings-note">Die automatische Prüfung hat keine einzelnen Hinweise ausgegeben.</p>'}
+    </div>
+    <p class="work-rule-disclaimer">${escapeHtml(assessment.disclaimer || state.personnelRulesDashboard?.legalNotice || "")}</p>`;
+}
+
+function renderPersonnelRulesDashboard() {
+  if (!elements.personnelRulesDashboardPanel) return;
+  elements.personnelRulesDashboardPanel.setAttribute("aria-busy", String(state.personnelRulesDashboardLoading));
+  if (state.personnelRulesDashboardLoading && !state.personnelRulesDashboard) {
+    elements.personnelRulesProfileList.innerHTML = '<p class="settings-note">Personal-Regelwerk wird geladen.</p>';
+    return;
+  }
+  const dashboard = state.personnelRulesDashboard;
+  if (!dashboard) return;
+  elements.personnelRulesScope.textContent = `${dashboard.scopeLabel} · Stand ${formatDate(dashboard.effectiveDate)} · Katalog ${dashboard.catalogVersion}`;
+  const visibleLocations = dashboard.locations || [];
+  const visibleDepartments = visibleLocations.reduce((sum, location) => sum + (location.departments || []).length, 0);
+  const locationCountLabel = `${visibleLocations.length} ${visibleLocations.length === 1 ? "Filiale" : "Filialen"}`;
+  const departmentCountLabel = `${visibleDepartments} ${visibleDepartments === 1 ? "Abteilung" : "Abteilungen"}`;
+  const ownScope = dashboard.scopeLabel === "Eigene zugewiesene Bereiche";
+  elements.personnelRulesScopeDetail.textContent = ownScope
+    ? `Sichtbar sind ${locationCountLabel} und ${departmentCountLabel} des aktuell zugewiesenen Bereichs. Andere Unternehmensbereiche bleiben ausgeblendet. Diese Ansicht erlaubt nur Lesen und eine unverändernde Planvorschau; Änderungen und Freigaben benötigen getrennte Fachrechte in der Personalverwaltung.`
+    : `Sichtbar ist der unternehmensweite Regelstand mit ${locationCountLabel} und ${departmentCountLabel}. Auch diese Dashboard-Ansicht erlaubt nur Lesen und eine unverändernde Planvorschau; Änderungen und Freigaben erfolgen getrennt in der Personalverwaltung.`;
+  const legalNotice = dashboard.legalNotice
+    || "Die Planprüfung ist eine technische Planungshilfe und keine Rechtsberatung oder Rechtskonformitätsbestätigung.";
+  elements.personnelRulesLegalNotice.textContent = `${legalNotice} Maßgeblich bleiben die zum Dienstzeitpunkt geltende Rechtslage, der tatsächlich anwendbare Kollektivvertrag, vertragliche Regelungen und fachlich bestätigte Ausnahmen. Auch ein unauffälliges Ergebnis ist keine Rechtsfreigabe.`;
+  populatePersonnelRulesFilters();
+  renderPersonnelRulesSummary();
+  renderPersonnelRulesAssignmentLegend();
+  renderPersonnelRulesProfileList();
+  renderPersonnelRulesProfileDetail();
+  renderPersonnelRulesSimulation();
+}
+
+async function loadPersonnelRulesDashboard() {
+  if (!elements.personnelRulesDashboardPanel || !canReadPersonnelRulesDashboard() || state.personnelRulesDashboardLoading) return;
+  state.personnelRulesDashboardLoading = true;
+  renderPersonnelRulesDashboard();
+  try {
+    const dashboard = await api("/api/work-rules/dashboard");
+    state.personnelRulesDashboard = dashboard;
+    if (!personnelRulesProfiles().some((profile) => profile.id === state.personnelRulesSelectedProfileId)) {
+      state.personnelRulesSelectedProfileId = dashboard.defaultProfileId || dashboard.profiles?.[0]?.id || "";
+    }
+    if (!(dashboard.locations || []).some((location) => String(location.id) === String(state.personnelRulesSimulationLocationId))) {
+      state.personnelRulesSimulationLocationId = String(dashboard.locations?.[0]?.id || "");
+      state.personnelRulesSimulationDepartmentId = "";
+    }
+  } catch (error) {
+    state.personnelRulesDashboard = null;
+    elements.personnelRulesProfileList.innerHTML = `<p class="settings-note">${escapeHtml(error.status === 403 ? "Für das Personal-Regelwerk fehlt das Leserecht." : error.message)}</p>`;
+  } finally {
+    state.personnelRulesDashboardLoading = false;
+    renderPersonnelRulesDashboard();
+  }
+}
+
+async function runPersonnelRulesSimulation() {
+  if (state.personnelRulesSimulationLoading || !state.personnelRulesSimulationLocationId) return;
+  state.personnelRulesSimulationError = "";
+  state.personnelRulesSimulationLoading = true;
+  renderPersonnelRulesSimulation();
+  try {
+    const result = await api("/api/work-rules/evaluate", {
+      method: "POST",
+      body: JSON.stringify({
+        targetType: "planned_schedule",
+        preview: true,
+        weekStart: state.personnelRulesSimulationWeek,
+        locationId: state.personnelRulesSimulationLocationId,
+        departmentId: state.personnelRulesSimulationDepartmentId || "",
+      }),
+    });
+    state.personnelRulesSimulation = result?.workRuleAssessment || result?.assessment || result;
+  } catch (error) {
+    state.personnelRulesSimulation = null;
+    state.personnelRulesSimulationError = error.message;
+  } finally {
+    state.personnelRulesSimulationLoading = false;
+    renderPersonnelRulesSimulation();
+  }
+}
+
 function rightsProcessDashboard() {
   return state.rightsDashboard?.processDashboard || null;
+}
+
+function rightsProcessCategories() {
+  const dashboard = rightsProcessDashboard();
+  const categories = Array.isArray(dashboard?.categories) ? dashboard.categories : [];
+  if (categories.length) return [...categories].sort((left, right) => Number(left.sortOrder || 0) - Number(right.sortOrder || 0));
+  return [{ id: "other", label: "Weitere eigene Abläufe", description: "", sortOrder: 90 }];
+}
+
+function rightsProcessCategoryFor(process) {
+  const categories = rightsProcessCategories();
+  return categories.find((category) => category.id === String(process?.category || "other"))
+    || categories.find((category) => category.id === "other")
+    || { id: "other", label: "Weitere eigene Abläufe", description: "" };
+}
+
+function populateRightsProcessCategories() {
+  if (!elements.rightsProcessCategory) return;
+  const dashboard = rightsProcessDashboard();
+  const categories = rightsProcessCategories();
+  const processes = dashboard?.processes || [];
+  const counts = new Map(categories.map((category) => [
+    category.id,
+    processes.filter((process) => rightsProcessCategoryFor(process).id === category.id).length,
+  ]));
+  const requested = String(state.rightsProcessCategoryId || elements.rightsProcessCategory.value || "all");
+  elements.rightsProcessCategory.innerHTML = [
+    `<option value="all">Alle Fachbereiche (${processes.length})</option>`,
+    ...categories.map((category) => `<option value="${escapeHtmlAttribute(category.id)}">${escapeHtml(`${category.label} (${counts.get(category.id) || 0})`)}</option>`),
+  ].join("");
+  state.rightsProcessCategoryId = requested === "all" || categories.some((category) => category.id === requested) ? requested : "all";
+  elements.rightsProcessCategory.value = state.rightsProcessCategoryId;
 }
 
 function rightsProcessLocation() {
@@ -5725,6 +8278,14 @@ function customProcessLocationOptions() {
   });
 }
 
+function populateCustomProcessCategories(selected = "other") {
+  if (!elements.customProcessCategory) return;
+  const editorCategories = rightsProcessDashboard()?.capabilities?.categories;
+  const categories = Array.isArray(editorCategories) && editorCategories.length ? editorCategories : rightsProcessCategories();
+  elements.customProcessCategory.innerHTML = categories.map((category) => `<option value="${escapeHtmlAttribute(category.id)}">${escapeHtml(category.label)}</option>`).join("");
+  elements.customProcessCategory.value = categories.some((category) => category.id === selected) ? selected : "other";
+}
+
 function customProcessStatusValue(process) {
   if (process?.status) return process.status;
   return process?.enabled ? "active" : "draft";
@@ -5746,13 +8307,16 @@ function customProcessTriggerLabel(process) {
 }
 
 function customProcessDisplayRules(process) {
-  if ((process.rules || []).length) return process.rules;
-  return [
+  const rules = (process.rules || []).length ? [...process.rules] : [
     { label: "Bereich", value: customProcessScopeLabel(process), tone: "neutral" },
     { label: "Auslöser", value: customProcessTriggerLabel(process), tone: process.trigger?.type === "staffing_shortfall" ? "attention" : "neutral" },
     { label: "Revision", value: String(process.revision || 1), tone: "neutral" },
     { label: "Status", value: rightsProcessStatus(process), tone: customProcessStatusValue(process) === "active" ? "positive" : "attention" },
   ];
+  if (!rules.some((rule) => String(rule.label || "").toLocaleLowerCase("de-AT") === "fachbereich")) {
+    rules.unshift({ label: "Fachbereich", value: rightsProcessCategoryFor(process).label, tone: "neutral" });
+  }
+  return rules;
 }
 
 function customProcessStepId() {
@@ -5904,11 +8468,12 @@ function openCustomProcessEditor(process = null) {
   state.editingCustomProcessId = process?.source === "custom" ? String(process.id) : "";
   state.editingCustomProcessRevision = process?.revision ?? null;
   elements.customProcessId.value = state.editingCustomProcessId;
-  elements.customProcessModalTitle.textContent = state.editingCustomProcessId ? "Eigenen Prozess bearbeiten" : "Eigenen Prozess anlegen";
+  elements.customProcessModalTitle.textContent = state.editingCustomProcessId ? "Eigenen Ablauf bearbeiten" : "Eigenen Ablauf anlegen";
   elements.customProcessTitle.value = process?.title || "";
   elements.customProcessSymbol.value = process?.symbol || "";
   elements.customProcessDescription.value = process?.description || process?.summary || "";
   elements.customProcessStatus.value = ["active", "draft"].includes(process?.status) ? process.status : "draft";
+  populateCustomProcessCategories(process?.category || state.rightsProcessCategoryId || "other");
   elements.customProcessScopeType.value = process?.scope?.type || "company";
   const locations = customProcessLocationOptions();
   elements.customProcessScopeLocation.innerHTML = locations.length
@@ -5933,6 +8498,7 @@ function customProcessPayload() {
     title: elements.customProcessTitle.value.trim(),
     symbol: elements.customProcessSymbol.value.trim().toUpperCase(),
     description: elements.customProcessDescription.value.trim(),
+    category: elements.customProcessCategory.value,
     status: elements.customProcessStatus.value,
     revision: state.editingCustomProcessRevision ?? undefined,
     scope: {
@@ -5968,17 +8534,20 @@ async function saveCustomProcess(event) {
   }
   const id = state.editingCustomProcessId;
   elements.saveCustomProcessButton.disabled = true;
-  setCustomProcessMessage(id ? "Prozess wird gespeichert …" : "Prozess wird angelegt …");
+  setCustomProcessMessage(id ? "Ablauf wird gespeichert …" : "Ablauf wird angelegt …");
   try {
     const result = await api(id ? `/api/portal/v1/custom-processes/${encodeURIComponent(id)}` : "/api/portal/v1/custom-processes", {
       method: id ? "PUT" : "POST",
       body: JSON.stringify(payload),
     });
     const saved = result?.process || result;
-    if (saved?.id) state.rightsDashboardSelectedProcessId = String(saved.id);
+    if (saved?.id) {
+      state.rightsDashboardSelectedProcessId = String(saved.id);
+      state.rightsProcessCategoryId = String(saved.category || "all");
+    }
     elements.customProcessModal.close();
     await loadRightsDashboard();
-    showToast(id ? "Der eigene Prozess wurde gespeichert." : "Der eigene Prozess wurde angelegt.");
+    showToast(id ? "Der eigene Ablauf wurde gespeichert." : "Der eigene Ablauf wurde angelegt.");
   } catch (error) {
     setCustomProcessMessage(error.message, true);
   } finally {
@@ -6044,7 +8613,7 @@ function renderRightsCustomProcessActions(process) {
   const toggleStatus = status === "active" ? "draft" : "active";
   const triggerPending = state.customProcessTriggerPending.has(String(process.id));
   elements.rightsCustomProcessActions.innerHTML = `
-    <span><strong>Eigener Prozess</strong><small>Revision ${escapeHtml(String(process.revision || 1))} · ${escapeHtml(customProcessScopeLabel(process))}</small></span>
+    <span><strong>Eigener Ablauf</strong><small>${escapeHtml(rightsProcessCategoryFor(process).label)} · Revision ${escapeHtml(String(process.revision || 1))} · ${escapeHtml(customProcessScopeLabel(process))}</small></span>
     <button type="button" class="secondary-button" data-custom-process-action="edit">Bearbeiten</button>
     <button type="button" class="secondary-button" data-custom-process-action="status" data-custom-process-status="${toggleStatus}">${toggleStatus === "active" ? "Aktivieren" : "Als Entwurf setzen"}</button>
     <button type="button" class="secondary-button" data-custom-process-action="trigger" ${status === "active" && !triggerPending ? "" : "disabled"}>${triggerPending ? "Wird ausgelöst …" : "Manuell auslösen"}</button>
@@ -6054,7 +8623,7 @@ function renderRightsCustomProcessActions(process) {
 function renderRightsProcessExplanation(process, step) {
   if (!elements.rightsProcessExplanation) return;
   if (!process || !step) {
-    elements.rightsProcessExplanation.innerHTML = "<strong>Prozessschritt anklicken</strong><p>Hier werden Zuständigkeit, wirksame Einstellung und benötigte Rechte erklärt.</p>";
+    elements.rightsProcessExplanation.innerHTML = "<strong>Ablaufschritt anklicken</strong><p>Hier werden Zuständigkeit, wirksame Einstellung und benötigte Rechte erklärt.</p>";
     return;
   }
   const stateValue = rightsProcessStepState(process, step);
@@ -6067,7 +8636,7 @@ function renderRightsProcessExplanation(process, step) {
     ? `<button type="button" class="rights-process-action" data-rights-process-permission="${escapeHtml(step.permissions[0])}">Recht in Übersicht zeigen</button>`
     : "";
   const effect = stateValue === "active"
-    ? `Teil des aktuell wirksamen ${process.source === "custom" ? "eigenen Prozesswegs" : "Standardwegs"}.`
+    ? `Teil des aktuell wirksamen ${process.source === "custom" ? "eigenen Ablaufs" : "Standardablaufs"}.`
     : stateValue === "conditional"
       ? "Wird nur ausgelöst, wenn die beschriebene Bedingung eintritt."
       : stateValue === "bypassed"
@@ -6091,7 +8660,7 @@ function renderRightsProcessValidation() {
   const labels = { blocker: "Blocker", warning: "Hinweise", ok: "Geprüft", info: "Info" };
   elements.rightsProcessValidationHint.textContent = validation.ready
     ? "Keine blockierende Konfiguration erkannt. Hinweise bleiben als bewusste Entscheidungen sichtbar."
-    : "Mindestens ein Punkt muss vor einem verlässlichen Gesamtprozess geklärt werden.";
+    : "Mindestens ein Punkt muss vor einem verlässlichen Gesamtablauf geklärt werden.";
   elements.rightsProcessValidationSummary.innerHTML = ["blocker", "warning", "ok", "info"].map((severity) => `<span class="${severity}"><strong>${escapeHtml(String(validation.summary[severity] || 0))}</strong>${escapeHtml(labels[severity])}</span>`).join("");
   const order = { blocker: 0, warning: 1, ok: 2, info: 3 };
   const checks = [...(validation.checks || [])].sort((left, right) => order[left.severity] - order[right.severity]);
@@ -6101,7 +8670,12 @@ function renderRightsProcessValidation() {
 function renderRightsProcessDashboard() {
   const dashboard = rightsProcessDashboard();
   if (!dashboard || !elements.rightsProcessList) return;
-  const processes = dashboard.processes || [];
+  const allProcesses = dashboard.processes || [];
+  populateRightsProcessCategories();
+  const selectedCategoryId = state.rightsProcessCategoryId || "all";
+  const processes = selectedCategoryId === "all"
+    ? allProcesses
+    : allProcesses.filter((process) => rightsProcessCategoryFor(process).id === selectedCategoryId);
   elements.addCustomProcessButton?.classList.toggle("hidden", !canManageCustomProcesses());
   if (!processes.some((process) => process.id === state.rightsDashboardSelectedProcessId)) {
     state.rightsDashboardSelectedProcessId = processes[0]?.id || "";
@@ -6112,17 +8686,43 @@ function renderRightsProcessDashboard() {
     const selected = process.id === state.rightsDashboardSelectedProcessId;
     const status = rightsProcessStatus(process);
     const active = process.source === "custom" ? customProcessStatusValue(process) === "active" : process.enabled;
-    return `<button type="button" class="rights-process-item ${process.source === "custom" ? "custom" : "standard"} ${active ? "" : "disabled"} ${selected ? "selected" : ""}" data-rights-process="${escapeHtmlAttribute(process.id)}" aria-pressed="${selected}"><span class="rights-process-item-mark">${escapeHtml(process.symbol)}</span><span class="rights-process-item-copy"><strong>${escapeHtml(process.title)}</strong><small>${escapeHtml(status)}${process.source === "custom" ? ` · Revision ${escapeHtml(String(process.revision || 1))}` : ""}</small></span></button>`;
+    const sourceLabel = process.source === "custom" ? "Eigener Ablauf" : "Standard";
+    return `<button type="button" class="rights-process-item ${process.source === "custom" ? "custom" : "standard"} ${active ? "" : "disabled"} ${selected ? "selected" : ""}" data-rights-process="${escapeHtmlAttribute(process.id)}" aria-pressed="${selected}"><span class="rights-process-item-mark">${escapeHtml(process.symbol)}</span><span class="rights-process-item-copy"><strong>${escapeHtml(process.title)}</strong><small>${escapeHtml(`${sourceLabel} · ${status}`)}${process.source === "custom" ? ` · Revision ${escapeHtml(String(process.revision || 1))}` : ""}</small></span></button>`;
   };
-  const standardProcesses = processes.filter((process) => process.source !== "custom");
-  const customProcesses = processes.filter((process) => process.source === "custom");
-  elements.rightsProcessList.innerHTML = processes.length
-    ? `${standardProcesses.length ? `<section class="rights-process-list-group"><span>Standardprozesse</span>${standardProcesses.map(processButton).join("")}</section>` : ""}${customProcesses.length ? `<section class="rights-process-list-group custom"><span>Eigene Prozesse</span>${customProcesses.map(processButton).join("")}</section>` : canManageCustomProcesses() ? '<section class="rights-process-list-group custom"><span>Eigene Prozesse</span><p class="settings-note">Noch kein eigener Prozess angelegt.</p></section>' : ""}`
-    : "<p class=\"settings-note\">Keine Prozessdefinitionen verfügbar.</p>";
+  const categoryGroups = rightsProcessCategories()
+    .map((category) => ({
+      category,
+      processes: processes.filter((process) => rightsProcessCategoryFor(process).id === category.id),
+    }))
+    .filter((group) => group.processes.length || selectedCategoryId === group.category.id);
+  elements.rightsProcessList.innerHTML = categoryGroups.length
+    ? categoryGroups.map(({ category, processes: categoryProcesses }) => `
+      <section class="rights-process-list-group" data-rights-process-category="${escapeHtmlAttribute(category.id)}">
+        <header><span>${escapeHtml(category.label)}</span>${category.description ? `<small>${escapeHtml(category.description)}</small>` : ""}</header>
+        ${categoryProcesses.length ? categoryProcesses.map(processButton).join("") : '<p class="settings-note">Diesem Fachbereich ist noch kein Ablauf zugeordnet.</p>'}
+      </section>`).join("")
+    : "<p class=\"settings-note\">Keine Abläufe verfügbar.</p>";
   if (!selectedDefinition) {
     renderRightsCustomProcessActions(null);
+    const selectedCategory = rightsProcessCategories().find((category) => category.id === selectedCategoryId);
+    elements.rightsProcessTitle.textContent = "Kein Ablauf ausgewählt";
+    elements.rightsProcessSummary.textContent = selectedCategory
+      ? `Im Fachbereich „${selectedCategory.label}“ ist derzeit kein Ablauf hinterlegt.`
+      : "Für diese Ansicht ist derzeit kein Ablauf verfügbar.";
+    elements.rightsProcessStatus.textContent = "Keine Auswahl";
+    elements.rightsProcessStatus.classList.add("inactive");
+    elements.rightsProcessScenario.innerHTML = '<option value="">Keine Simulation</option>';
+    elements.rightsProcessScenario.disabled = true;
+    elements.rightsProcessLocation.disabled = true;
+    elements.rightsProcessExportPdf.disabled = true;
+    elements.rightsProcessSimulationNote.innerHTML = "<strong>Fachbereich</strong><span>Über „Eigenen Ablauf anlegen“ kann eine neue Definition direkt zugeordnet werden.</span>";
+    elements.rightsProcessRules.innerHTML = "";
+    elements.rightsProcessTimeline.innerHTML = "";
+    renderRightsProcessExplanation(null, null);
     return;
   }
+  elements.rightsProcessScenario.disabled = false;
+  elements.rightsProcessExportPdf.disabled = false;
   populateRightsProcessScenarios(selectedDefinition);
   const selectedProcess = rightsProcessWithScenario(selectedDefinition);
   elements.rightsProcessLocation.disabled = !selectedProcess.locationSensitive;
@@ -6133,7 +8733,7 @@ function renderRightsProcessDashboard() {
   const processActive = selectedProcess.source === "custom" ? customProcessStatusValue(selectedProcess) === "active" : selectedProcess.enabled;
   elements.rightsProcessStatus.classList.toggle("inactive", !processActive || processStatus.includes("deaktiviert"));
   elements.rightsProcessSimulationNote.innerHTML = selectedProcess.source === "custom"
-    ? `<strong>${escapeHtml(selectedProcess.scenario.label)}</strong><span>${escapeHtml(selectedProcess.scenario.description)} · Eigener Prozess, Revision ${escapeHtml(String(selectedProcess.revision || 1))}.</span>`
+    ? `<strong>${escapeHtml(selectedProcess.scenario.label)}</strong><span>${escapeHtml(selectedProcess.scenario.description)} · Eigener Ablauf, Revision ${escapeHtml(String(selectedProcess.revision || 1))}.</span>`
     : `<strong>${escapeHtml(selectedProcess.scenario.label)}</strong><span>${escapeHtml(selectedProcess.scenario.description)} · Nur Vorschau, keine gespeicherten Daten werden verändert.</span>`;
   elements.rightsProcessRules.innerHTML = customProcessDisplayRules(selectedProcess).map((rule) => `<article class="rights-process-rule ${escapeHtml(rule.tone || "neutral")}"><span>${escapeHtml(rule.label)}</span><strong>${escapeHtml(rightsProcessRuleValue(rule))}</strong></article>`).join("");
   renderRightsCustomProcessActions(selectedProcess);
@@ -6169,7 +8769,8 @@ function showRightsProcessPermission(permissionId) {
 }
 
 function exportRightsProcessPdf() {
-  const processId = state.rightsDashboardSelectedProcessId || "vacation";
+  const processId = state.rightsDashboardSelectedProcessId;
+  if (!processId) return;
   const scenario = state.rightsProcessScenarioIds[processId] || "current";
   const parameters = new URLSearchParams({ process: processId, scenario });
   if (state.rightsProcessLocationId) parameters.set("location", state.rightsProcessLocationId);
@@ -6217,6 +8818,7 @@ async function loadRightsDashboard() {
   if (!selected) return;
   setRightsDashboardMode(selected, { load: false });
   if (selected === "systemCenter") await loadSystemCenter();
+  else if (selected === "personnelRules") await loadPersonnelRulesDashboard();
   else await loadGovernanceDashboards();
 }
 
@@ -9258,14 +11860,14 @@ function applyRequestedView() {
   }
   if (requestedView === "personnelAdministration") {
     const requestedSection = parameters.get("section");
-    const establishedSection = ["employees", "costCenters", "vacations"].includes(requestedSection);
+    const establishedSection = ["employees", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"].includes(requestedSection);
     if (establishedSection || requestedSection === "dataRequests") {
       state.personnelAdministrationTab = requestedSection;
     }
   }
   if (requestedView === "rightsDashboard") {
     const dashboardMode = parameters.get("dashboard");
-    if (["systemCenter", "locations", "rights", "processes"].includes(dashboardMode)) state.rightsDashboardMode = dashboardMode;
+    if (["locations", "rights", "personnelRules", "processes", "systemCenter"].includes(dashboardMode)) state.rightsDashboardMode = dashboardMode;
     const processId = parameters.get("process");
     if (processId) state.rightsDashboardSelectedProcessId = processId.slice(0, 120);
   }
@@ -9769,9 +12371,18 @@ function shiftRuleFindingsForCandidate(assessmentValue, employeeNumber, dateValu
   const selectedEmployee = String(employeeNumber || "");
   return assessment.findings.filter((finding) => {
     if (String(finding?.employeeNumber || "") !== selectedEmployee) return false;
+    if (finding?.category === "personnel_data") return false;
     if (!dateValue) return true;
     if (finding?.periodFrom && dateValue < String(finding.periodFrom).slice(0, 10)) return false;
     if (finding?.periodTo && dateValue > String(finding.periodTo).slice(0, 10)) return false;
+    const scope = finding?.scope || {};
+    if (Array.isArray(scope.dates) && scope.dates.length) {
+      if (!scope.dates.includes(dateValue)) return false;
+    } else if (scope.date && String(scope.date).slice(0, 10) !== dateValue) return false;
+    const scopeFrom = String(scope.weekStart || scope.start || scope.from || "").slice(0, 10);
+    const scopeTo = String(scope.weekEnd || scope.end || scope.to || scopeFrom).slice(0, 10);
+    if (scopeFrom && dateValue < scopeFrom) return false;
+    if (scopeTo && dateValue > scopeTo) return false;
     return true;
   });
 }
@@ -11940,6 +14551,52 @@ document.querySelectorAll("button[data-page-theme-choice]").forEach((button) => 
 }));
 elements.dashboardFontSize?.addEventListener("change", () => applyDashboardFontSize(elements.dashboardFontSize.value));
 document.querySelectorAll("button[data-rights-dashboard-mode]").forEach((button) => button.addEventListener("click", () => setRightsDashboardMode(button.dataset.rightsDashboardMode)));
+elements.refreshPersonnelRulesDashboard?.addEventListener("click", loadPersonnelRulesDashboard);
+elements.personnelRulesSearch?.addEventListener("input", () => {
+  state.personnelRulesSearch = elements.personnelRulesSearch.value;
+  renderPersonnelRulesProfileList();
+  renderPersonnelRulesProfileDetail();
+});
+elements.personnelRulesLayerFilter?.addEventListener("change", () => {
+  state.personnelRulesLayerFilter = elements.personnelRulesLayerFilter.value;
+  renderPersonnelRulesProfileList();
+  renderPersonnelRulesProfileDetail();
+});
+elements.personnelRulesStatusFilter?.addEventListener("change", () => {
+  state.personnelRulesStatusFilter = elements.personnelRulesStatusFilter.value;
+  renderPersonnelRulesProfileList();
+  renderPersonnelRulesProfileDetail();
+});
+elements.personnelRulesProfileList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-personnel-rules-profile]");
+  if (!button) return;
+  state.personnelRulesSelectedProfileId = button.dataset.personnelRulesProfile;
+  renderPersonnelRulesProfileList();
+  renderPersonnelRulesProfileDetail();
+});
+elements.personnelRulesSimulationWeek?.addEventListener("change", () => {
+  const submitted = elements.personnelRulesSimulationWeek.value;
+  state.personnelRulesSimulationWeek = submitted ? getMonday(new Date(`${submitted}T12:00:00`)) : getMonday(new Date());
+  elements.personnelRulesSimulationWeek.value = state.personnelRulesSimulationWeek;
+  state.personnelRulesSimulation = null;
+  state.personnelRulesSimulationError = "";
+  renderPersonnelRulesSimulation();
+});
+elements.personnelRulesSimulationLocation?.addEventListener("change", () => {
+  state.personnelRulesSimulationLocationId = elements.personnelRulesSimulationLocation.value;
+  state.personnelRulesSimulationDepartmentId = "";
+  state.personnelRulesSimulation = null;
+  state.personnelRulesSimulationError = "";
+  updatePersonnelRulesSimulationDepartments();
+  renderPersonnelRulesSimulation();
+});
+elements.personnelRulesSimulationDepartment?.addEventListener("change", () => {
+  state.personnelRulesSimulationDepartmentId = elements.personnelRulesSimulationDepartment.value;
+  state.personnelRulesSimulation = null;
+  state.personnelRulesSimulationError = "";
+  renderPersonnelRulesSimulation();
+});
+elements.runPersonnelRulesSimulation?.addEventListener("click", runPersonnelRulesSimulation);
 elements.refreshSystemCenter?.addEventListener("click", () => loadSystemCenter());
 elements.startRecoveryAssurance?.addEventListener("click", startRecoveryAssurance);
 elements.systemCenterContent?.addEventListener("click", (event) => {
@@ -12026,6 +14683,11 @@ elements.rightsProcessLocation?.addEventListener("change", () => {
   state.rightsProcessLocationId = elements.rightsProcessLocation.value;
   renderRightsProcessDashboard();
 });
+elements.rightsProcessCategory?.addEventListener("change", () => {
+  state.rightsProcessCategoryId = elements.rightsProcessCategory.value || "all";
+  state.rightsDashboardSelectedProcessStepId = "";
+  renderRightsProcessDashboard();
+});
 elements.rightsProcessScenario?.addEventListener("change", () => {
   state.rightsProcessScenarioIds[state.rightsDashboardSelectedProcessId] = elements.rightsProcessScenario.value;
   state.rightsDashboardSelectedProcessStepId = "";
@@ -12108,6 +14770,9 @@ elements.rightsProcessValidationList?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-rights-validation-process]");
   if (!button) return;
   state.rightsDashboardSelectedProcessId = button.dataset.rightsValidationProcess;
+  const selectedProcess = (rightsProcessDashboard()?.processes || [])
+    .find((process) => process.id === state.rightsDashboardSelectedProcessId);
+  state.rightsProcessCategoryId = selectedProcess ? rightsProcessCategoryFor(selectedProcess).id : "all";
   state.rightsDashboardSelectedProcessStepId = button.dataset.rightsValidationStep || "";
   renderRightsProcessDashboard();
   elements.rightsProcessTitle?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -12612,6 +15277,138 @@ elements.dataSubjectRequestList?.addEventListener("click", (event) => {
 elements.dataSubjectRequestAction?.addEventListener("change", updateDataSubjectRequestActionFields);
 elements.dataSubjectRequestForm?.addEventListener("submit", saveDataSubjectRequest);
 elements.downloadDataSubjectRequestExportButton?.addEventListener("click", downloadDataSubjectRequestExport);
+elements.refreshCustomWorkRulesButton?.addEventListener("click", () => loadCustomWorkRuleRegistry({ force: true })
+  .catch((error) => showToast(error.message, true)));
+elements.addCustomWorkRuleButton?.addEventListener("click", () => openCustomWorkRuleModal());
+elements.customWorkRuleForm?.addEventListener("submit", saveCustomWorkRule);
+elements.workRuleReviewForm?.addEventListener("submit", saveWorkRuleReview);
+elements.workRuleFinalizeForm?.addEventListener("submit", saveWorkRuleFinalize);
+elements.workRuleAssignmentForm?.addEventListener("submit", saveWorkRuleAssignment);
+elements.workRuleLifecycleForm?.addEventListener("submit", saveWorkRuleLifecycle);
+elements.previewWorkRuleAssignmentButton?.addEventListener("click", previewWorkRuleAssignment);
+elements.workRuleLifecycleEffectiveOn?.addEventListener("change", refreshWorkRuleLifecyclePreview);
+elements.simulateCustomWorkRuleButton?.addEventListener("click", simulateCustomWorkRuleDraft);
+elements.customWorkRuleType?.addEventListener("change", () => {
+  updateCustomWorkRuleScopeFields();
+  resetCustomWorkRuleSimulation();
+});
+elements.customWorkRuleScopeType?.addEventListener("change", () => {
+  updateCustomWorkRuleScopeFields();
+  resetCustomWorkRuleSimulation();
+});
+elements.customWorkRuleMetric?.addEventListener("change", () => updateCustomWorkRuleMetricFields({ resetValues: true }));
+elements.customWorkRuleReaction?.addEventListener("change", () => {
+  if (elements.customWorkRuleReaction.value === "block") elements.customWorkRuleSeverity.value = "critical";
+  resetCustomWorkRuleSimulation();
+});
+elements.customWorkRuleForm?.addEventListener("input", resetCustomWorkRuleSimulation);
+[
+  elements.workRuleAssignmentValidFrom,
+  elements.workRuleAssignmentValidTo,
+  elements.workRuleAssignmentEnforcementMode,
+  elements.workRuleAssignmentApplicabilityConfirmed,
+].forEach((field) => field?.addEventListener("change", resetWorkRuleAssignmentPreview));
+const selectCustomWorkRuleFilter = (event) => {
+  const button = event.target.closest("[data-custom-work-rule-filter]");
+  if (!button) return;
+  state.customWorkRuleStatusFilter = button.dataset.customWorkRuleFilter;
+  renderCustomWorkRuleRegistry();
+};
+elements.customWorkRuleSummary?.addEventListener("click", selectCustomWorkRuleFilter);
+elements.customWorkRuleTaskFilter?.addEventListener("click", selectCustomWorkRuleFilter);
+elements.customWorkRuleList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-custom-work-rule-id]");
+  if (!button) return;
+  state.selectedCustomWorkRuleId = button.dataset.customWorkRuleId;
+  renderCustomWorkRuleRegistry();
+});
+elements.customWorkRuleDetail?.addEventListener("click", (event) => {
+  const reviseButton = event.target.closest("[data-revise-custom-work-rule]");
+  if (reviseButton) {
+    const draft = (state.customWorkRuleRegistry?.drafts || [])
+      .find((entry) => entry.id === reviseButton.dataset.reviseCustomWorkRule);
+    if (draft) openCustomWorkRuleModal(draft);
+    return;
+  }
+  const button = event.target.closest("[data-work-rule-action]");
+  if (!button) return;
+  const action = button.dataset.workRuleAction;
+  if (action === "submit-review") {
+    openWorkRuleReviewModal("submit", {
+      profileId: button.dataset.profileId,
+      versionId: button.dataset.versionId,
+    });
+  } else if (action === "approve-request" || action === "reject-request") {
+    openWorkRuleReviewModal(action === "approve-request" ? "approve" : "reject", {
+      requestId: button.dataset.requestId,
+    });
+  } else if (action === "finalize-request") {
+    openWorkRuleFinalizeModal(button.dataset.requestId);
+  } else if (action === "assign-publication") {
+    openWorkRuleAssignmentModal(button.dataset.publicationId);
+  } else if (action === "deactivate-assignment") {
+    openWorkRuleLifecycleModal("deactivate_assignment", button.dataset.assignmentId);
+  } else if (action === "withdraw-publication") {
+    openWorkRuleLifecycleModal("withdraw_publication", button.dataset.publicationId);
+  } else if (action === "restore-version") {
+    openWorkRuleLifecycleModal("restore_version", button.dataset.versionId, {
+      profileId: button.dataset.profileId,
+      versionId: button.dataset.versionId,
+    });
+  }
+});
+elements.refreshCollectiveAgreementsButton?.addEventListener("click", () => loadCollectiveAgreementRegistry({ force: true })
+  .catch((error) => showToast(error.message, true)));
+elements.addCollectiveAgreementButton?.addEventListener("click", () => openCollectiveAgreementModal());
+elements.addCollectiveAgreementBusinessUnitButton?.addEventListener("click", openCollectiveAgreementBusinessUnitModal);
+elements.addCollectiveAgreementAssignmentButton?.addEventListener("click", openCollectiveAgreementAssignmentModal);
+elements.collectiveAgreementForm?.addEventListener("submit", saveCollectiveAgreement);
+elements.collectiveAgreementBusinessUnitForm?.addEventListener("submit", saveCollectiveAgreementBusinessUnit);
+elements.collectiveAgreementAssignmentForm?.addEventListener("submit", saveCollectiveAgreementAssignment);
+elements.collectiveAgreementAssignmentVersion?.addEventListener("change", updateCollectiveAgreementAssignmentDates);
+elements.collectiveAgreementList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-collective-agreement-id]");
+  if (!button) return;
+  state.selectedCollectiveAgreementId = button.dataset.collectiveAgreementId;
+  renderCollectiveAgreementRegistry();
+});
+elements.collectiveAgreementDetail?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-add-collective-agreement-version]");
+  if (!button) return;
+  const agreement = (state.collectiveAgreementRegistry?.agreements || [])
+    .find((entry) => entry.id === button.dataset.addCollectiveAgreementVersion);
+  if (agreement) openCollectiveAgreementModal(agreement);
+});
+elements.collectiveAgreementBusinessUnits?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-add-business-unit-scopes]");
+  const card = button?.closest("[data-collective-agreement-business-unit]");
+  if (!card) return;
+  const unit = (state.collectiveAgreementRegistry?.businessUnits || [])
+    .find((entry) => entry.id === card.dataset.collectiveAgreementBusinessUnit);
+  if (unit) openCollectiveAgreementBusinessUnitModal(unit);
+});
+elements.collectiveAgreementAssignments?.addEventListener("click", (event) => {
+  const assignmentCard = event.target.closest("[data-collective-agreement-assignment]");
+  if (!assignmentCard) return;
+  const governanceAction = event.target.closest("[data-kv-governance-action]");
+  if (governanceAction) {
+    openWorkRuleLifecycleModal(
+      governanceAction.dataset.kvGovernanceAction,
+      assignmentCard.dataset.collectiveAgreementAssignment,
+    );
+    return;
+  }
+  const requestAction = event.target.closest("[data-work-rule-action]");
+  if (!requestAction) return;
+  const action = requestAction.dataset.workRuleAction;
+  if (action === "approve-request" || action === "reject-request") {
+    openWorkRuleReviewModal(action === "approve-request" ? "approve" : "reject", {
+      requestId: requestAction.dataset.requestId,
+    });
+  } else if (action === "finalize-request") {
+    openWorkRuleFinalizeModal(requestAction.dataset.requestId);
+  }
+});
 elements.addCostCenterButton?.addEventListener("click", () => openCostCenterModal());
 elements.costCenterForm?.addEventListener("submit", saveCostCenter);
 elements.deactivateCostCenterButton?.addEventListener("click", deactivateCostCenter);

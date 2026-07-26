@@ -135,15 +135,24 @@ test("Arbeitszeitregel-Store: Seed verarbeitet Profil-Bundles vollständig und i
     seed(database);
 
     const profiles = listWorkRuleProfiles(database);
-    assert.equal(profiles.length, 3);
-    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM work_rule_profile_versions").get().count, 3);
-    assert.deepEqual(Object.fromEntries(database.prepare(`
+    assert.equal(profiles.length, 4);
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM work_rule_profile_versions").get().count, 4);
+    const profileHashes = Object.fromEntries(database.prepare(`
       SELECT id, content_sha256 FROM work_rule_profile_versions ORDER BY id
-    `).all().map((row) => [row.id, row.content_sha256])), {
+    `).all().map((row) => [row.id, row.content_sha256]));
+    assert.deepEqual({
+      "at-general-adult@2026.1": profileHashes["at-general-adult@2026.1"],
+      "at-retail-adult-monitor@2026.1": profileHashes["at-retail-adult-monitor@2026.1"],
+      "at-retail-kv-2026-draft@2026.1-draft": profileHashes["at-retail-kv-2026-draft@2026.1-draft"],
+    }, {
       "at-general-adult@2026.1": "2d0b128182fe737940f3d855ee2eee9b92f06a2be25df0c557d2080a885b121c",
       "at-retail-adult-monitor@2026.1": "26372bbd513f1eb81771441acd2f20a8aab3fa942c2b656ea6d38017d100db04",
       "at-retail-kv-2026-draft@2026.1-draft": "0bc5875a8d18cdb3ea6f04b54bbb59e24cc689dd33eb810e8308b77615cb7474",
     });
+    assert.equal(
+      profileHashes["at-retail-youth-monitor@2026.2"],
+      "50019077b97f4050e65c24bbdd4481317aad09bfea3035b5a6fb5f60125fc4aa",
+    );
     const retail = profiles.find(({ id }) => id === "at-retail-adult-monitor");
     assert.equal(retail.status, "active");
     assert.equal(retail.versionStatus, "published");
@@ -154,6 +163,12 @@ test("Arbeitszeitregel-Store: Seed verarbeitet Profil-Bundles vollständig und i
     assert.equal(legacyVersion.schemaVersion, 1);
     assert.equal(legacyVersion.profile.assignable, true);
     assert.equal(legacyVersion.rules.find(({ id }) => id === "at.azg.maximum.daily").severity, "critical");
+
+    const youthVersion = getWorkRuleProfileVersion(database, "at-retail-youth-monitor@2026.2");
+    assert.equal(youthVersion.schemaVersion, 2);
+    assert.equal(youthVersion.profile.assignable, false);
+    assert.equal(youthVersion.profile.applicability.automaticByBirthDate, true);
+    assert.ok(youthVersion.rules.some(({ id }) => id === "at.kjbg.retail.saturday-monday"));
 
     const draft = profiles.find(({ id }) => id === "at-retail-kv-2026-draft");
     assert.equal(draft.status, "draft");
@@ -301,6 +316,14 @@ test("Arbeitszeitregel-Store: Zuordnungen beachten Gültigkeit und employee > de
       enforcementMode: "enforced",
       applicabilityConfirmed: false,
     }, "252"), /nicht bestätigtes Regelprofil/i);
+    assert.throws(() => saveWorkRuleAssignment(database, {
+      profileVersionId: "at-retail-youth-monitor@2026.2",
+      scopeType: "employee",
+      scopeKey: "420",
+      validFrom: "2026-07-01",
+      enforcementMode: "monitor",
+      applicabilityConfirmed: true,
+    }, "252"), /ausschließlich automatisch/i);
     assert.throws(
       () => resolveWorkRuleAssignment(database, { date: "23.07.2026" }),
       /YYYY-MM-DD/i,

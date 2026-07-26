@@ -17,8 +17,8 @@ const socketUnit = read("server-tools/linux/offsite/systemd/grabenplaner-offsite
 const serviceUnit = read("server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control@.service.in");
 const packageBuilder = read("server-tools/package/New-GrabenplanerLinuxServerPackage.ps1");
 
-test("offsite module v4 retains the complete fixed RAS control bridge", () => {
-  assert.equal(schema.moduleVersion, 4);
+test("offsite module v5 retains the complete fixed RAS control bridge", () => {
+  assert.equal(schema.moduleVersion, 5);
   for (const relative of [
     "server-tools/linux/offsite/lib/assurance-control-broker.js",
     "server-tools/linux/offsite/systemd/grabenplaner-offsite-assurance-control.socket.in",

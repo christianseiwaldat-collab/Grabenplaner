@@ -169,10 +169,12 @@ const {
 } = require("./lib/loan-photo");
 const { CONTRACT_IDS, contractById, contractSha256, contractSummaries } = require("./lib/integration-contracts");
 const {
+  ageOnDate: workRuleAgeOnDate,
   BUILTIN_WORK_RULE_PROFILES,
   SOURCE_CATALOG: WORK_RULE_SOURCE_CATALOG,
   WORK_RULE_ENGINE_VERSION,
   canonicalSha256: workRuleSha256,
+  evaluateCustomPlannedSchedule,
   evaluatePlannedSchedule,
   getProfile: getBuiltinWorkRuleProfile,
   getRuleCatalog,
@@ -186,10 +188,42 @@ const {
   listWorkRuleProfiles,
   profileVersionId,
   recordWorkRuleEvaluation,
-  resolveWorkRuleAssignmentFromList,
-  saveWorkRuleAssignment,
+  resolveWorkRuleAssignmentsFromList,
   seedBuiltinWorkRuleProfiles,
 } = require("./lib/work-rules/store");
+const {
+  CUSTOM_WORK_RULE_METRICS,
+  CUSTOM_WORK_RULE_NOTICE,
+  CUSTOM_WORK_RULE_REACTIONS,
+  CUSTOM_WORK_RULE_SCOPES,
+  CUSTOM_WORK_RULE_SEVERITIES,
+  CUSTOM_WORK_RULE_TOPICS,
+  CUSTOM_WORK_RULE_TYPES,
+  addCustomWorkRuleDraftRevision,
+  createCustomWorkRuleDraft,
+  listCustomWorkRuleDrafts,
+  restoreCustomWorkRuleVersionAsDraft,
+  simulateCustomWorkRuleDraft,
+} = require("./lib/work-rules/custom-rules");
+const {
+  createWorkRuleReviewRequest,
+  finalizeWorkRuleReviewRequest,
+  listGovernedWorkRuleAssignments,
+  listWorkRuleGovernance,
+  previewWorkRuleGovernance,
+  recordWorkRuleReviewDecision,
+} = require("./lib/work-rules/governance");
+const {
+  COLLECTIVE_AGREEMENT_NOTICE,
+  addBusinessUnitScopes,
+  addCollectiveAgreementVersion,
+  createBusinessUnit,
+  createCollectiveAgreement,
+  listBusinessUnits,
+  listCollectiveAgreementAssignments,
+  listCollectiveAgreements,
+  prepareCollectiveAgreementAssignment,
+} = require("./lib/collective-agreements");
 const {
   OFFICIAL_RETENTION_SOURCES,
   RETENTION_GOVERNANCE_NOTICE,
@@ -321,9 +355,17 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "payroll:export", label: "Lohnverrechnungsdaten exportieren", description: "Zeit-, Abwesenheits- und Zuschlagsdaten ausgeben sowie belegbare Monatsübergaben erstellen.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "payroll:deliver", label: "Lohnverrechnungsdaten sicher übertragen", description: "Final geprüfte Daten kontrolliert übergeben und externe Übertragungsprotokolle dokumentieren.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "work_rules:read", label: "Arbeitszeit-Regelprüfungen lesen", description: "Quellenbelegte Hinweise zur Dienstplanung lesen; keine pauschale Rechtsfreigabe.", group: "Arbeitszeitregeln", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "work_rules:draft", label: "Eigene Regelentwürfe vorbereiten", description: "Geführte, unveränderlich versionierte Entwürfe eigener Personalregeln anlegen; ohne Freigabe oder Dienstplanwirkung.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "work_rules:manage", label: "Arbeitszeit-Regelprofile verwalten", description: "Versionierte Profile und deren Geltungsbereich verwalten.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "work_rules:review", label: "Eigene Personalregeln fachlich prüfen", description: "Eine unveränderliche Regelfassung als aktuell angemeldete Person unabhängig prüfen; keine Selbstfreigabe.", group: "Arbeitszeitregeln", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin"] },
+  { id: "work_rules:publish", label: "Geprüfte Personalregeln veröffentlichen", description: "Vollständig freigegebene Fassungen veröffentlichen oder kontrolliert zurückziehen; Veröffentlichung allein erzeugt noch keine Planwirkung.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin"] },
+  { id: "work_rules:assign", label: "Veröffentlichte Personalregeln zuordnen", description: "Geprüfte Geltungszuordnungen aktivieren oder beenden; ohne direkten Zuordnungs-Bypass.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin"] },
   { id: "work_rules:exception", label: "Begründete Regelausnahmen dokumentieren", description: "Ausschließlich ausdrücklich übersteuerbare Hinweise mit Grund und Nachweis behandeln.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "work_rules:audit", label: "Arbeitszeit-Regelprotokoll lesen", description: "Unveränderliche Bewertungen, Profilversionen und Ausnahmen nachvollziehen.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "collective_agreements:read", label: "KV-Register und Quellen lesen", description: "Versionierte externe Quellenstände und Zuordnungsvorschläge lesen; keine Rechtsfreigabe.", group: "Arbeitszeitregeln", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "collective_agreements:manage", label: "KV-Register und Betriebsteile pflegen", description: "Registereinträge, unveränderliche Fassungen und organisatorische Betriebsteile dokumentieren.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "collective_agreements:assign", label: "KV-Zuordnungen vorbereiten", description: "Prüfpflichtige Zuordnungsvorschläge zu Betriebsteilen erfassen; keine Aktivierung oder Rechtsfreigabe.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "collective_agreements:approve", label: "KV-Zuordnungen fachlich freigeben", description: "Eine dokumentierte KV-Zuordnung im Vier-Augen-Verfahren bestätigen oder kontrolliert beenden; keine pauschale Rechtsbestätigung.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin"] },
   { id: "branding:read", label: "Branding-Verwaltung lesen", group: "System & Verwaltung", warningLevel: "high" },
   { id: "branding:write", label: "Brandings verwalten und zuweisen", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "operation_mode:write", label: "Betriebsmodus umschalten", group: "System & Verwaltung", warningLevel: "critical" },
@@ -451,7 +493,9 @@ const portalGlobalPermissionIds = new Set([
   "processes:write",
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
   "integrations:connections:write", "integrations:credentials:write", "branding:read", "branding:write",
-  "work_rules:manage", "work_rules:exception", "work_rules:audit",
+  "work_rules:draft", "work_rules:manage", "work_rules:review", "work_rules:publish",
+  "work_rules:assign", "work_rules:exception", "work_rules:audit",
+  "collective_agreements:manage", "collective_agreements:assign", "collective_agreements:approve",
   "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "system:readiness:review", "update:write", "system:write", "wifi:settings",
   "users:write", "roles:read", "roles:write", "rights:read", "rights:write", "scopes:write",
   "audit:read", "usb:provision", "developer:system",
@@ -550,6 +594,7 @@ const builtinPortalRoles = [
       "schedule:read",
       "schedule:write",
       "work_rules:read",
+      "work_rules:draft",
       "work_rules:manage",
       "work_rules:exception",
       "work_rules:audit",
@@ -628,6 +673,7 @@ const builtinPortalRoles = [
       "cost_centers:write",
       "schedule:read",
       "work_rules:read",
+      "work_rules:draft",
       "work_rules:manage",
       "work_rules:exception",
       "work_rules:audit",
@@ -757,6 +803,21 @@ addBuiltinRolePermissions("it_admin", [
 ]);
 for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
   addBuiltinRolePermissions(roleId, ["system:readiness:review"]);
+}
+for (const roleId of ["department_manager", "manager", "hr", "admin", "it_admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, ["collective_agreements:read"]);
+}
+addBuiltinRolePermissions("hr", [
+  "work_rules:review",
+  "work_rules:publish",
+  "work_rules:assign",
+  "collective_agreements:approve",
+]);
+for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, [
+    "collective_agreements:manage",
+    "collective_agreements:assign",
+  ]);
 }
 
 const GLOBAL_SCOPE_PORTAL_ROLES = new Set(["developer", "it_admin", "admin", "hr"]);
@@ -2647,6 +2708,8 @@ function createSchema() {
       title TEXT NOT NULL,
       symbol TEXT NOT NULL DEFAULT 'P',
       description TEXT NOT NULL DEFAULT '',
+      category TEXT NOT NULL DEFAULT 'other'
+        CHECK(category IN ('personnel_absence','time_payroll','customer_service','goods_equipment','administration_it','other')),
       scope_type TEXT NOT NULL DEFAULT 'company'
         CHECK(scope_type IN ('company','location','department')),
       location_id TEXT,
@@ -2810,6 +2873,104 @@ function createSchema() {
         ON UPDATE CASCADE ON DELETE RESTRICT
     );
 
+    CREATE TABLE IF NOT EXISTS collective_agreements (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      short_title TEXT NOT NULL DEFAULT '',
+      jurisdiction TEXT NOT NULL DEFAULT 'AT',
+      review_state TEXT NOT NULL DEFAULT 'review_pending'
+        CHECK(review_state IN ('review_pending','approved','retired')),
+      current_version_id TEXT,
+      note TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS collective_agreement_versions (
+      id TEXT PRIMARY KEY,
+      agreement_id TEXT NOT NULL,
+      version_label TEXT NOT NULL,
+      source_state TEXT NOT NULL DEFAULT 'documented'
+        CHECK(source_state IN ('documented','superseded','withdrawn')),
+      valid_from TEXT NOT NULL,
+      valid_to TEXT,
+      external_published_on TEXT,
+      source_title TEXT NOT NULL,
+      source_url TEXT NOT NULL,
+      source_retrieved_on TEXT NOT NULL,
+      source_sha256 TEXT NOT NULL DEFAULT '',
+      source_note TEXT NOT NULL DEFAULT '',
+      contracting_parties_json TEXT NOT NULL DEFAULT '[]',
+      territorial_scope TEXT NOT NULL DEFAULT '',
+      functional_scope TEXT NOT NULL DEFAULT '',
+      personal_scope TEXT NOT NULL DEFAULT '',
+      employee_groups_json TEXT NOT NULL DEFAULT '[]',
+      work_time_parameters_note TEXT NOT NULL DEFAULT '',
+      classification_note TEXT NOT NULL DEFAULT '',
+      apprentice_relevance TEXT NOT NULL DEFAULT 'unknown'
+        CHECK(apprentice_relevance IN ('yes','no','unknown')),
+      apprentice_note TEXT NOT NULL DEFAULT '',
+      successor_note TEXT NOT NULL DEFAULT '',
+      linked_profile_version_id TEXT,
+      snapshot_json TEXT NOT NULL,
+      content_sha256 TEXT NOT NULL,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(agreement_id, version_label),
+      FOREIGN KEY (agreement_id) REFERENCES collective_agreements(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (linked_profile_version_id) REFERENCES work_rule_profile_versions(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS collective_agreement_business_units (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      legal_entity_name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS collective_agreement_business_unit_scopes (
+      id TEXT PRIMARY KEY,
+      business_unit_id TEXT NOT NULL,
+      scope_type TEXT NOT NULL
+        CHECK(scope_type IN ('cost_center','location','department')),
+      scope_key TEXT NOT NULL,
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(business_unit_id, scope_type, scope_key),
+      UNIQUE(scope_type, scope_key),
+      FOREIGN KEY (business_unit_id) REFERENCES collective_agreement_business_units(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS collective_agreement_assignments (
+      id TEXT PRIMARY KEY,
+      agreement_version_id TEXT NOT NULL,
+      business_unit_id TEXT NOT NULL,
+      valid_from TEXT NOT NULL,
+      valid_to TEXT,
+      review_state TEXT NOT NULL DEFAULT 'review_pending'
+        CHECK(review_state IN ('review_pending')),
+      rationale TEXT NOT NULL,
+      reference_note TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (agreement_version_id) REFERENCES collective_agreement_versions(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (business_unit_id) REFERENCES collective_agreement_business_units(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
     CREATE TABLE IF NOT EXISTS work_rule_evaluation_runs (
       id TEXT PRIMARY KEY,
       target_type TEXT NOT NULL
@@ -2850,6 +3011,227 @@ function createSchema() {
         ON UPDATE CASCADE ON DELETE RESTRICT,
       FOREIGN KEY (profile_version_id) REFERENCES work_rule_profile_versions(id)
         ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS work_rule_conflict_runs (
+      id TEXT PRIMARY KEY,
+      operation TEXT NOT NULL
+        CHECK(operation IN (
+          'publish_rule','activate_assignment','deactivate_assignment',
+          'withdraw_publication','approve_kv_assignment','deactivate_kv_assignment'
+        )),
+      subject_type TEXT NOT NULL
+        CHECK(subject_type IN (
+          'work_rule_profile_version','work_rule_publication',
+          'work_rule_assignment_revision','collective_agreement_assignment'
+        )),
+      subject_id TEXT NOT NULL,
+      baseline_sha256 TEXT NOT NULL,
+      outcome TEXT NOT NULL
+        CHECK(outcome IN ('pass','warning','blocked')),
+      result_json TEXT NOT NULL,
+      result_sha256 TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS work_rule_review_requests (
+      id TEXT PRIMARY KEY,
+      client_request_id TEXT NOT NULL UNIQUE,
+      operation TEXT NOT NULL
+        CHECK(operation IN (
+          'publish_rule','activate_assignment','deactivate_assignment',
+          'withdraw_publication','approve_kv_assignment','deactivate_kv_assignment'
+        )),
+      subject_type TEXT NOT NULL
+        CHECK(subject_type IN (
+          'work_rule_profile_version','work_rule_publication',
+          'work_rule_assignment_revision','collective_agreement_assignment'
+        )),
+      subject_id TEXT NOT NULL,
+      basis_sha256 TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      payload_sha256 TEXT NOT NULL,
+      risk_class TEXT NOT NULL
+        CHECK(risk_class IN ('standard','critical')),
+      required_approvals INTEGER NOT NULL
+        CHECK(required_approvals IN (1,2)),
+      required_fachlich_approvals INTEGER NOT NULL DEFAULT 1
+        CHECK(required_fachlich_approvals BETWEEN 1 AND required_approvals),
+      conflict_run_id TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      source_reference TEXT NOT NULL DEFAULT '',
+      submitted_by TEXT NOT NULL,
+      submitted_role TEXT NOT NULL,
+      submitted_permission TEXT NOT NULL,
+      submitted_at TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      FOREIGN KEY (conflict_run_id) REFERENCES work_rule_conflict_runs(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS work_rule_review_decisions (
+      id TEXT PRIMARY KEY,
+      request_id TEXT NOT NULL,
+      decision TEXT NOT NULL
+        CHECK(decision IN ('approve','reject')),
+      actor_employee_number TEXT NOT NULL,
+      actor_role TEXT NOT NULL,
+      permission_used TEXT NOT NULL,
+      qualification TEXT NOT NULL
+        CHECK(qualification IN ('fachlich','organisational','technical')),
+      reason TEXT NOT NULL,
+      request_receipt_sha256 TEXT NOT NULL,
+      decided_at TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      UNIQUE(request_id, actor_employee_number),
+      FOREIGN KEY (request_id) REFERENCES work_rule_review_requests(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS work_rule_publications (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL,
+      source_profile_version_id TEXT NOT NULL UNIQUE,
+      released_profile_version_id TEXT NOT NULL UNIQUE,
+      review_request_id TEXT NOT NULL UNIQUE,
+      release_number INTEGER NOT NULL,
+      semantic_sha256 TEXT NOT NULL,
+      conflict_run_id TEXT NOT NULL,
+      published_by TEXT NOT NULL,
+      published_at TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      FOREIGN KEY (profile_id) REFERENCES work_rule_profiles(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (source_profile_version_id) REFERENCES work_rule_profile_versions(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (released_profile_version_id) REFERENCES work_rule_profile_versions(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (review_request_id) REFERENCES work_rule_review_requests(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (conflict_run_id) REFERENCES work_rule_conflict_runs(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS work_rule_publication_events (
+      id TEXT PRIMARY KEY,
+      publication_id TEXT NOT NULL,
+      event_type TEXT NOT NULL
+        CHECK(event_type IN ('published','withdrawn','superseded')),
+      effective_on TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      review_request_id TEXT NOT NULL,
+      actor_employee_number TEXT NOT NULL,
+      actor_role TEXT NOT NULL,
+      permission_used TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      UNIQUE(publication_id, event_type, review_request_id),
+      FOREIGN KEY (publication_id) REFERENCES work_rule_publications(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (review_request_id) REFERENCES work_rule_review_requests(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS work_rule_assignment_revisions (
+      id TEXT PRIMARY KEY,
+      logical_assignment_id TEXT NOT NULL,
+      revision INTEGER NOT NULL,
+      publication_id TEXT NOT NULL,
+      profile_version_id TEXT NOT NULL,
+      scope_type TEXT NOT NULL
+        CHECK(scope_type IN (
+          'installation','business_unit','location','department',
+          'employee_group','employee'
+        )),
+      scope_key TEXT NOT NULL DEFAULT '',
+      expanded_scopes_json TEXT NOT NULL,
+      scope_sha256 TEXT NOT NULL,
+      valid_from TEXT NOT NULL,
+      valid_to TEXT,
+      enforcement_mode TEXT NOT NULL DEFAULT 'monitor'
+        CHECK(enforcement_mode IN ('monitor','enforced')),
+      applicability_confirmed INTEGER NOT NULL DEFAULT 0,
+      rationale TEXT NOT NULL,
+      source_reference TEXT NOT NULL DEFAULT '',
+      supersedes_revision_id TEXT,
+      review_request_id TEXT NOT NULL UNIQUE,
+      conflict_run_id TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      UNIQUE(logical_assignment_id, revision),
+      FOREIGN KEY (publication_id) REFERENCES work_rule_publications(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (profile_version_id) REFERENCES work_rule_profile_versions(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (supersedes_revision_id) REFERENCES work_rule_assignment_revisions(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (review_request_id) REFERENCES work_rule_review_requests(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (conflict_run_id) REFERENCES work_rule_conflict_runs(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS work_rule_assignment_events (
+      id TEXT PRIMARY KEY,
+      assignment_revision_id TEXT NOT NULL,
+      event_type TEXT NOT NULL
+        CHECK(event_type IN ('activated','deactivated','superseded')),
+      effective_on TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      review_request_id TEXT NOT NULL,
+      actor_employee_number TEXT NOT NULL,
+      actor_role TEXT NOT NULL,
+      permission_used TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      UNIQUE(assignment_revision_id, event_type, review_request_id),
+      FOREIGN KEY (assignment_revision_id) REFERENCES work_rule_assignment_revisions(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (review_request_id) REFERENCES work_rule_review_requests(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS collective_agreement_assignment_events (
+      id TEXT PRIMARY KEY,
+      assignment_id TEXT NOT NULL,
+      event_type TEXT NOT NULL
+        CHECK(event_type IN ('approved','deactivated')),
+      effective_on TEXT NOT NULL,
+      scope_snapshot_json TEXT NOT NULL,
+      scope_sha256 TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      review_request_id TEXT NOT NULL,
+      actor_employee_number TEXT NOT NULL,
+      actor_role TEXT NOT NULL,
+      permission_used TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      UNIQUE(assignment_id, event_type, review_request_id),
+      FOREIGN KEY (assignment_id) REFERENCES collective_agreement_assignments(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (review_request_id) REFERENCES work_rule_review_requests(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+    );
+
+    CREATE TABLE IF NOT EXISTS work_rule_governance_events (
+      id TEXT PRIMARY KEY,
+      aggregate_type TEXT NOT NULL,
+      aggregate_id TEXT NOT NULL,
+      sequence_no INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      payload_sha256 TEXT NOT NULL,
+      previous_receipt_sha256 TEXT NOT NULL DEFAULT '',
+      actor_employee_number TEXT NOT NULL,
+      actor_role TEXT NOT NULL,
+      permission_used TEXT NOT NULL,
+      correlation_id TEXT NOT NULL DEFAULT '',
+      occurred_at TEXT NOT NULL,
+      receipt_sha256 TEXT NOT NULL,
+      UNIQUE(aggregate_type, aggregate_id, sequence_no)
     );
 
     -- Governance-Historien bewahren die zum Ereignis gehörende Personalnummer
@@ -3084,10 +3466,30 @@ function createSchema() {
       ON work_rule_profile_versions(profile_id, status, valid_from, valid_to);
     CREATE INDEX IF NOT EXISTS idx_work_rule_assignments_scope_validity
       ON work_rule_assignments(scope_type, scope_key, active, valid_from, valid_to);
+    CREATE INDEX IF NOT EXISTS idx_collective_agreement_versions_validity
+      ON collective_agreement_versions(agreement_id, valid_from DESC, valid_to);
+    CREATE INDEX IF NOT EXISTS idx_collective_agreement_business_unit_scopes
+      ON collective_agreement_business_unit_scopes(scope_type, scope_key, business_unit_id);
+    CREATE INDEX IF NOT EXISTS idx_collective_agreement_assignments_review
+      ON collective_agreement_assignments(business_unit_id, review_state, valid_from, valid_to);
     CREATE INDEX IF NOT EXISTS idx_work_rule_evaluations_period
       ON work_rule_evaluation_runs(target_type, period_from, period_to, created_at);
     CREATE INDEX IF NOT EXISTS idx_work_rule_exceptions_finding
       ON work_rule_exceptions(finding_fingerprint, state, valid_from, valid_to);
+    CREATE INDEX IF NOT EXISTS idx_work_rule_review_requests_subject
+      ON work_rule_review_requests(subject_type, subject_id, submitted_at);
+    CREATE INDEX IF NOT EXISTS idx_work_rule_review_decisions_request
+      ON work_rule_review_decisions(request_id, decided_at);
+    CREATE INDEX IF NOT EXISTS idx_work_rule_publications_profile
+      ON work_rule_publications(profile_id, release_number DESC);
+    CREATE INDEX IF NOT EXISTS idx_work_rule_assignment_revisions_scope
+      ON work_rule_assignment_revisions(scope_type, scope_key, valid_from, valid_to);
+    CREATE INDEX IF NOT EXISTS idx_work_rule_assignment_events_revision
+      ON work_rule_assignment_events(assignment_revision_id, effective_on, occurred_at);
+    CREATE INDEX IF NOT EXISTS idx_collective_agreement_assignment_events_assignment
+      ON collective_agreement_assignment_events(assignment_id, effective_on, occurred_at);
+    CREATE INDEX IF NOT EXISTS idx_work_rule_governance_events_aggregate
+      ON work_rule_governance_events(aggregate_type, aggregate_id, sequence_no);
     CREATE INDEX IF NOT EXISTS idx_vacation_account_employee_year
       ON vacation_account_revisions(employee_number, leave_year, revision DESC);
     CREATE INDEX IF NOT EXISTS idx_vacation_account_events_employee
@@ -3274,6 +3676,150 @@ function createSchema() {
       SELECT RAISE(ABORT, 'work rule profile versions are immutable');
     END;
 
+    CREATE TRIGGER IF NOT EXISTS trg_collective_agreement_versions_immutable_update
+    BEFORE UPDATE ON collective_agreement_versions
+    BEGIN
+      SELECT RAISE(ABORT, 'collective agreement versions are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_collective_agreement_versions_immutable_delete
+    BEFORE DELETE ON collective_agreement_versions
+    BEGIN
+      SELECT RAISE(ABORT, 'collective agreement versions are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_collective_agreement_assignments_immutable_update
+    BEFORE UPDATE ON collective_agreement_assignments
+    BEGIN
+      SELECT RAISE(ABORT, 'collective agreement assignment proposals are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_collective_agreement_assignments_immutable_delete
+    BEFORE DELETE ON collective_agreement_assignments
+    BEGIN
+      SELECT RAISE(ABORT, 'collective agreement assignment proposals are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_collective_agreement_business_unit_scopes_immutable_update
+    BEFORE UPDATE ON collective_agreement_business_unit_scopes
+    BEGIN
+      SELECT RAISE(ABORT, 'collective agreement business unit scopes are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_collective_agreement_business_unit_scopes_immutable_delete
+    BEFORE DELETE ON collective_agreement_business_unit_scopes
+    BEGIN
+      SELECT RAISE(ABORT, 'collective agreement business unit scopes are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_conflict_runs_immutable_update
+    BEFORE UPDATE ON work_rule_conflict_runs
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule conflict runs are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_conflict_runs_immutable_delete
+    BEFORE DELETE ON work_rule_conflict_runs
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule conflict runs are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_review_requests_immutable_update
+    BEFORE UPDATE ON work_rule_review_requests
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule review requests are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_review_requests_immutable_delete
+    BEFORE DELETE ON work_rule_review_requests
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule review requests are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_review_decisions_immutable_update
+    BEFORE UPDATE ON work_rule_review_decisions
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule review decisions are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_review_decisions_immutable_delete
+    BEFORE DELETE ON work_rule_review_decisions
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule review decisions are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_publications_immutable_update
+    BEFORE UPDATE ON work_rule_publications
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule publications are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_publications_immutable_delete
+    BEFORE DELETE ON work_rule_publications
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule publications are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_publication_events_immutable_update
+    BEFORE UPDATE ON work_rule_publication_events
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule publication events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_publication_events_immutable_delete
+    BEFORE DELETE ON work_rule_publication_events
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule publication events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_assignment_revisions_immutable_update
+    BEFORE UPDATE ON work_rule_assignment_revisions
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule assignment revisions are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_assignment_revisions_immutable_delete
+    BEFORE DELETE ON work_rule_assignment_revisions
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule assignment revisions are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_assignment_events_immutable_update
+    BEFORE UPDATE ON work_rule_assignment_events
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule assignment events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_assignment_events_immutable_delete
+    BEFORE DELETE ON work_rule_assignment_events
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule assignment events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_collective_agreement_assignment_events_immutable_update
+    BEFORE UPDATE ON collective_agreement_assignment_events
+    BEGIN
+      SELECT RAISE(ABORT, 'collective agreement assignment events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_collective_agreement_assignment_events_immutable_delete
+    BEFORE DELETE ON collective_agreement_assignment_events
+    BEGIN
+      SELECT RAISE(ABORT, 'collective agreement assignment events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_governance_events_immutable_update
+    BEFORE UPDATE ON work_rule_governance_events
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule governance events are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_work_rule_governance_events_immutable_delete
+    BEFORE DELETE ON work_rule_governance_events
+    BEGIN
+      SELECT RAISE(ABORT, 'work rule governance events are immutable');
+    END;
+
   `);
 }
 
@@ -3402,6 +3948,23 @@ const vacationHistoryProtectionMigrationId = "v0.82-protected-vacation-history";
 const payrollHandoffMigrationId = "v0.83-payroll-handoffs";
 const productReadinessMigrationId = "v0.84-product-readiness";
 const loanModuleMigrationId = "v0.85-loan-module-foundation";
+const collectiveAgreementMigrationId = "v0.85-collective-agreement-register";
+const workRuleGovernanceMigrationId = "v0.86-work-rule-governance";
+const workRuleGovernanceTables = Object.freeze([
+  "work_rule_conflict_runs",
+  "work_rule_review_requests",
+  "work_rule_review_decisions",
+  "work_rule_publications",
+  "work_rule_publication_events",
+  "work_rule_assignment_revisions",
+  "work_rule_assignment_events",
+  "collective_agreement_assignment_events",
+  "work_rule_governance_events",
+]);
+const workRuleGovernanceTriggerNames = Object.freeze(workRuleGovernanceTables.flatMap((name) => [
+  `trg_${name}_immutable_update`,
+  `trg_${name}_immutable_delete`,
+]));
 const loanModuleTables = Object.freeze([
   "articles",
   "article_identifiers",
@@ -3615,11 +4178,25 @@ const loanModuleMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(loanModuleMigrationId)
   || loanModuleTables.some((name) => !tableExists(name))
   || loanModuleTriggerNames.some((name) => !triggerExists(name));
+const collectiveAgreementMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(collectiveAgreementMigrationId)
+  || !tableExists("collective_agreements")
+  || !tableExists("collective_agreement_versions")
+  || !tableExists("collective_agreement_business_units")
+  || !tableExists("collective_agreement_business_unit_scopes")
+  || !tableExists("collective_agreement_assignments")
+  || !triggerExists("trg_collective_agreement_versions_immutable_update")
+  || !triggerExists("trg_collective_agreement_assignments_immutable_update");
+const workRuleGovernanceMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(workRuleGovernanceMigrationId)
+  || workRuleGovernanceTables.some((name) => !tableExists(name))
+  || workRuleGovernanceTriggerNames.some((name) => !triggerExists(name));
 if (databaseExistedBeforeOpen && (portalMobileBaselineMigrationRequired || protectedPersonnelMigrationRequired
   || unreleasedSicknessDraftSchemaPresent || legacySchemaMigrationRequired || costCenterMigrationRequired
   || shiftLocationMigrationRequired || workRuleMigrationRequired || privacyGovernanceMigrationRequired
   || vacationHistoryProtectionMigrationRequired || payrollHandoffMigrationRequired
-  || productReadinessMigrationRequired || loanModuleMigrationRequired)) {
+  || productReadinessMigrationRequired || loanModuleMigrationRequired
+  || collectiveAgreementMigrationRequired || workRuleGovernanceMigrationRequired)) {
   createInternalDatabaseBackup("pre-migration");
 }
 
@@ -3660,6 +4237,7 @@ if (legacySchemaMigrationRequired) {
 createSchema();
 ensureColumn("shifts", "location_id", "TEXT");
 ensureColumn("sickness_notification_preferences", "process_notifications_enabled", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("custom_processes", "category", "TEXT NOT NULL DEFAULT 'other'");
 ensureColumn("custom_process_runs", "activation_count", "INTEGER NOT NULL DEFAULT 1");
 ensureColumn("custom_process_run_steps", "completion_request_id", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("integration_connections", "revision", "INTEGER NOT NULL DEFAULT 1");
@@ -3669,6 +4247,7 @@ ensureColumn("work_rule_evaluation_runs", "receipt_sha256", "TEXT NOT NULL DEFAU
 ensureColumn("loan_location_settings", "document_recipient_employee_number", "TEXT");
 ensureColumn("loan_location_settings", "document_email_enabled", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("loan_location_settings", "document_recipient_email", "TEXT NOT NULL DEFAULT ''");
+db.exec("CREATE INDEX IF NOT EXISTS idx_custom_processes_category ON custom_processes(category, status, title)");
 ensureWorkRuleEvaluationReceiptIntegrity();
 if (!columnExists("week_options", "group_id")) {
   db.exec("ALTER TABLE week_options ADD COLUMN group_id TEXT");
@@ -4769,6 +5348,10 @@ db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?,
   .run(payrollHandoffMigrationId, packageMetadata.version);
 db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
   .run(productReadinessMigrationId, packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run(collectiveAgreementMigrationId, packageMetadata.version);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run(workRuleGovernanceMigrationId, packageMetadata.version);
 
 productReadinessEvidenceRows();
 productReadinessAcceptanceRows();
@@ -6777,12 +7360,33 @@ function enforceAdminApiAccess(request, _response, next) {
       return next();
     }
     const workRuleRoute = /^\/work-rules(?:\/|$)/.test(request.path);
+    const collectiveAgreementRoute = /^\/collective-agreements(?:\/|$)/.test(request.path);
     const privacyGovernanceRoute = /^\/privacy-governance(?:\/|$)/.test(request.path);
     const vacationAccountsRoute = /^\/vacation-accounts(?:\/|$)/.test(request.path);
     const timeRecordStatementsRoute = /^\/time-record-statements(?:\/|$)/.test(request.path);
     const personnelDirectoryRoute = /^\/personnel-directory(?:\/|$)/.test(request.path);
     const personnelVacationRoute = /^\/personnel-vacations(?:\/|$)/.test(request.path);
     const costCenterRoute = /^\/cost-centers(?:\/|$)/.test(request.path);
+    const workRuleGovernancePermissions = [
+      "work_rules:draft",
+      "work_rules:review",
+      "work_rules:publish",
+      "work_rules:assign",
+      "work_rules:audit",
+      "collective_agreements:approve",
+    ];
+    if (workRuleRoute
+      && (/^\/work-rules\/governance(?:\/|$)/.test(request.path)
+        || (["GET", "HEAD", "OPTIONS"].includes(method)
+          && /^\/work-rules\/drafts\/?$/.test(request.path)))) {
+      const session = requirePortalAnyPermissionOrLocal(
+        request,
+        workRuleGovernancePermissions,
+        { csrf: true },
+      );
+      request.portalSession = session;
+      return next();
+    }
     if (privacyGovernanceRoute) {
       if (/^\/privacy-governance\/retention(?:\/|$)/.test(request.path)) {
         permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "retention:read" : "retention:manage";
@@ -6799,8 +7403,21 @@ function enforceAdminApiAccess(request, _response, next) {
       permission = ["GET", "HEAD", "OPTIONS"].includes(method)
         ? "time_records:read"
         : "time_records:generate";
+    } else if (collectiveAgreementRoute) {
+      if (["GET", "HEAD", "OPTIONS"].includes(method)) {
+        permission = "collective_agreements:read";
+      } else if (/^\/collective-agreements\/assignments(?:\/|$)/.test(request.path)) {
+        permission = "collective_agreements:assign";
+      } else {
+        permission = "collective_agreements:manage";
+      }
     } else if (workRuleRoute) {
-      if (/^\/work-rules\/exceptions(?:\/|$)/.test(request.path)) {
+      if (/^\/work-rules\/drafts(?:\/|$)/.test(request.path)) {
+        permission = "work_rules:draft";
+      } else if (/^\/work-rules\/assignments\/?$/.test(request.path)
+        && !["GET", "HEAD", "OPTIONS"].includes(method)) {
+        permission = "work_rules:assign";
+      } else if (/^\/work-rules\/exceptions(?:\/|$)/.test(request.path)) {
         permission = ["GET", "HEAD", "OPTIONS"].includes(method) ? "work_rules:audit" : "work_rules:exception";
       } else if (/^\/work-rules\/evaluations(?:\/|$)/.test(request.path)) {
         permission = "work_rules:audit";
@@ -15269,11 +15886,14 @@ function workRuleFindingTouchesPeriod(finding, periodFrom, periodTo) {
   const evidence = finding?.evidence || {};
   const date = String(scope.date || evidence.date || "");
   if (isIsoDate(date)) return date >= periodFrom && date <= periodTo;
+  if (Array.isArray(scope.dates) && scope.dates.some((entry) => (
+    isIsoDate(entry) && entry >= periodFrom && entry <= periodTo
+  ))) return true;
   const from = String(scope.start || scope.weekStart || scope.from || "").slice(0, 10);
   const to = String(scope.end || scope.weekEnd || scope.to || "").slice(0, 10);
   if (isIsoDate(from) && isIsoDate(to)) return from <= periodTo && to >= periodFrom;
   return ["employee", "evaluation_range"].includes(scope.type)
-    || ["at.applicability.adult", "at.input.shift"].includes(finding?.ruleId);
+    || ["at.applicability.adult", "at.applicability.youth", "at.input.shift"].includes(finding?.ruleId);
 }
 
 function presentWorkRuleFinding(finding, employeeNumber, employeeName, catalog, periodFrom, periodTo) {
@@ -15282,15 +15902,22 @@ function presentWorkRuleFinding(finding, employeeNumber, employeeName, catalog, 
     : (finding.state === "unknown"
       ? "manual_review"
       : (finding.effectiveEnforcement === "block" ? "blocked" : "attention"));
+  const ageNotConfirmed = finding?.evidence?.reason === "age_not_confirmed"
+    && ["at.applicability.adult", "at.applicability.youth"].includes(finding?.ruleId);
   return {
     ...finding,
     resultState: finding.state,
     state: displayState,
-    title: catalog.rules[finding.ruleId]?.title || finding.ruleId,
+    title: ageNotConfirmed
+      ? "Geburtsdatum im Personalakt ergänzen"
+      : (catalog.rules[finding.ruleId]?.title || finding.ruleId),
     employeeNumber,
     employeeName,
     periodFrom,
     periodTo,
+    category: ageNotConfirmed ? "personnel_data" : "schedule_rule",
+    snoozable: ageNotConfirmed,
+    snoozeDays: ageNotConfirmed ? 4 : null,
   };
 }
 
@@ -15360,7 +15987,7 @@ function workRuleEvaluationEmployees(employees, candidateShift = null) {
   if (!candidateEmployeeNumber
     || result.some((employee) => String(employee.personnel_number) === candidateEmployeeNumber)) return result;
   const candidateEmployee = db.prepare(`
-    SELECT personnel_number, full_name, nickname, home_location_id, preferred_department_id
+    SELECT personnel_number, full_name, nickname, home_location_id, preferred_department_id, position_id
     FROM employees
     WHERE personnel_number = ? AND active = 1
   `).get(candidateEmployeeNumber);
@@ -15368,9 +15995,10 @@ function workRuleEvaluationEmployees(employees, candidateShift = null) {
   return result;
 }
 
-function workRuleAssignmentGroups(facts, context, employeeNumber, assignments) {
+function workRuleAssignmentGroups(facts, context, employeeNumber, assignments, birthDate = "") {
   const groups = new Map();
   const defaultProfile = getBuiltinWorkRuleProfile("at-retail-adult-monitor");
+  const youthProfile = getBuiltinWorkRuleProfile("at-retail-youth-monitor");
   const defaultAssignment = {
     id: null,
     profileId: defaultProfile.id,
@@ -15400,31 +16028,65 @@ function workRuleAssignmentGroups(facts, context, employeeNumber, assignments) {
       });
     }
     for (const dateContext of dateContexts.values()) {
-      const assignment = resolveWorkRuleAssignmentFromList(assignments, {
+      const resolvedAssignments = resolveWorkRuleAssignmentsFromList(assignments, {
         date,
         locationId: dateContext.locationId,
         departmentId: dateContext.departmentId,
         employeeNumber,
-      }) || defaultAssignment;
-      const key = [
-        assignment.profileVersionId,
-        assignment.enforcementMode || "monitor",
-        assignment.applicabilityConfirmed === true ? "confirmed" : "unconfirmed",
-      ].join("|");
-      if (!groups.has(key)) {
-        groups.set(key, {
-          assignmentIds: new Set(),
-          dates: new Set(),
-          shiftIds: new Set(),
-          profileVersionId: assignment.profileVersionId,
-          enforcementMode: assignment.enforcementMode || "monitor",
-          applicabilityConfirmed: assignment.applicabilityConfirmed === true,
-        });
+      });
+      if (!resolvedAssignments.some((assignment) => (
+        ["at-retail-adult-monitor", "at-retail-youth-monitor"].includes(String(
+          assignment.profileId || String(assignment.profileVersionId || "").split("@")[0],
+        ))
+      ))) resolvedAssignments.push(defaultAssignment);
+      const age = workRuleAgeOnDate(String(birthDate || ""), date);
+      for (const assignment of resolvedAssignments) {
+        const assignedProfileId = String(
+          assignment.profileId || String(assignment.profileVersionId || "").split("@")[0],
+        );
+        const useAutomaticYouthProfile = age !== null
+          && age < 18
+          && assignedProfileId === "at-retail-adult-monitor";
+        const effectiveAssignment = useAutomaticYouthProfile
+          ? {
+            ...assignment,
+            profileId: youthProfile.id,
+            profileVersionId: profileVersionId(youthProfile),
+            applicabilityConfirmed: true,
+            automaticByBirthDate: true,
+          }
+          : assignment;
+        const key = [
+          effectiveAssignment.profileVersionId,
+          effectiveAssignment.enforcementMode || "monitor",
+          effectiveAssignment.applicabilityConfirmed === true ? "confirmed" : "unconfirmed",
+        ].join("|");
+        if (!groups.has(key)) {
+          groups.set(key, {
+            assignmentIds: new Set(),
+            dates: new Set(),
+            shiftIds: new Set(),
+            profileVersionId: effectiveAssignment.profileVersionId,
+            profileId: effectiveAssignment.profileId || assignedProfileId,
+            enforcementMode: effectiveAssignment.enforcementMode || "monitor",
+            applicabilityConfirmed: effectiveAssignment.applicabilityConfirmed === true,
+            automaticByBirthDate: effectiveAssignment.automaticByBirthDate === true,
+            assignment: {
+              id: effectiveAssignment.id || "",
+              scopeType: effectiveAssignment.scopeType || "installation",
+              scopeKey: effectiveAssignment.scopeKey || "",
+              validFrom: effectiveAssignment.validFrom || facts.range.start,
+              validTo: effectiveAssignment.validTo || null,
+              enforcementMode: effectiveAssignment.enforcementMode || "monitor",
+              applicabilityConfirmed: effectiveAssignment.applicabilityConfirmed === true,
+            },
+          });
+        }
+        const group = groups.get(key);
+        if (effectiveAssignment.id) group.assignmentIds.add(effectiveAssignment.id);
+        group.dates.add(date);
+        for (const shiftId of dateContext.shiftIds) group.shiftIds.add(shiftId);
       }
-      const group = groups.get(key);
-      if (assignment.id) group.assignmentIds.add(assignment.id);
-      group.dates.add(date);
-      for (const shiftId of dateContext.shiftIds) group.shiftIds.add(shiftId);
     }
   }
   return [...groups.values()];
@@ -15496,42 +16158,80 @@ function evaluateScheduleWorkRules(weekStart, context, employees, candidateShift
   const facts = scheduleWorkRuleFacts(weekStart, context, evaluationEmployees, candidateShift);
   const weekEnd = addDays(weekStart, 6);
   const catalog = getRuleCatalog();
-  const assignments = listWorkRuleAssignments(db);
+  const assignments = [
+    ...listWorkRuleAssignments(db),
+    ...listGovernedWorkRuleAssignments(db),
+  ];
   const employeeResults = evaluationEmployees.map((employee) => {
     const employeeNumber = String(employee.personnel_number);
     const sensitive = personnelSensitiveProfile(employeeNumber);
-    const groups = workRuleAssignmentGroups(facts, context, employeeNumber, assignments);
+    const groups = workRuleAssignmentGroups(
+      facts,
+      context,
+      employeeNumber,
+      assignments,
+      sensitive.identity.birthDate || "",
+    );
     const profileEvaluations = groups.map((group) => {
       const version = getWorkRuleProfileVersion(db, group.profileVersionId);
       const profile = version?.profile || getBuiltinWorkRuleProfile(
         version?.profileId || String(group.profileVersionId || "").split("@")[0],
       );
       if (!profile) throw new Error(`Die zugewiesene Regelprofil-Version ${group.profileVersionId} ist nicht auswertbar.`);
-      const evaluated = evaluatePlannedSchedule({
-        basis: "planned_schedule",
-        profileId: profile.id,
-        profile,
-        enforcementMode: group.enforcementMode,
-        shifts: facts.shifts.filter((shift) => (
-          shift.employeeId === employeeNumber && group.shiftIds.has(String(shift.id))
-        )),
-        employee: {
-          id: employeeNumber,
-          birthDate: sensitive.identity.birthDate || undefined,
-        },
-        rangeStart: [...group.dates].sort()[0] || facts.range.start,
-        rangeEnd: [...group.dates].sort().at(-1) || facts.range.end,
-        holidays: facts.holidays,
-        applicabilityConfirmed: group.applicabilityConfirmed,
-        timeZone: "Europe/Vienna",
-        ruleDefinitions: version?.rules,
-        sourceCatalog: version?.sources,
-      });
+      const shifts = facts.shifts.filter((shift) => (
+        shift.employeeId === employeeNumber && group.shiftIds.has(String(shift.id))
+      ));
+      const rangeStart = [...group.dates].sort()[0] || facts.range.start;
+      const rangeEnd = [...group.dates].sort().at(-1) || facts.range.end;
+      const customProfile = profile.applicability?.sector === "custom"
+        || String(profile.id || "").startsWith("custom:");
+      const evaluated = customProfile
+        ? evaluateCustomPlannedSchedule({
+          profile: {
+            ...profile,
+            rules: version?.rules || [],
+            sources: version?.sources || [],
+          },
+          assignment: group.assignment,
+          shifts,
+          employee: {
+            id: employeeNumber,
+            birthDate: sensitive.identity.birthDate || undefined,
+            positionId: employee.position_id || undefined,
+            isApprentice: employee.position_id === "lehrling",
+          },
+          employeeNumber,
+          locationId: context.locationId,
+          departmentId: context.departmentId,
+          rangeStart,
+          rangeEnd,
+        })
+        : evaluatePlannedSchedule({
+          basis: "planned_schedule",
+          profileId: profile.id,
+          profile,
+          enforcementMode: group.enforcementMode,
+          shifts,
+          employee: {
+            id: employeeNumber,
+            birthDate: sensitive.identity.birthDate || undefined,
+            positionId: employee.position_id || undefined,
+            isApprentice: employee.position_id === "lehrling",
+          },
+          rangeStart,
+          rangeEnd,
+          holidays: facts.holidays,
+          applicabilityConfirmed: group.applicabilityConfirmed,
+          timeZone: "Europe/Vienna",
+          ruleDefinitions: version?.rules,
+          sourceCatalog: version?.sources,
+        });
       return {
         ...group,
         assignmentIds: [...group.assignmentIds],
         shiftIds: [...group.shiftIds],
         profile,
+        layer: version?.layer || "law",
         sources: version?.sources || [],
         result: {
           ...evaluated,
@@ -15546,7 +16246,7 @@ function evaluateScheduleWorkRules(weekStart, context, employees, candidateShift
     });
     const findings = profileEvaluations.flatMap((entry) => entry.result.findings);
     const boundaryFinding = workRuleAssignmentBoundaryFinding(
-      profileEvaluations,
+      profileEvaluations.filter((entry) => String(entry.profile?.id || "").startsWith("at-retail-")),
       employeeNumber,
       facts.range,
     );
@@ -15587,6 +16287,7 @@ function evaluateScheduleWorkRules(weekStart, context, employees, candidateShift
       profileEvaluations: profileEvaluations.map((entry) => ({
         profileVersionId: entry.profileVersionId,
         profile: entry.profile,
+        layer: entry.layer,
         sources: entry.sources,
       })),
       result,
@@ -15596,13 +16297,28 @@ function evaluateScheduleWorkRules(weekStart, context, employees, candidateShift
   const allFindings = employeeResults.flatMap((entry) => entry.result.findings);
   const presentationFindings = [];
   for (const entry of employeeResults) {
-    const applicability = entry.result.findings.find((finding) => finding.ruleId === "at.applicability.adult");
+    const applicability = entry.result.findings.find((finding) => (
+      ["at.applicability.adult", "at.applicability.youth"].includes(finding.ruleId)
+    ));
     const profileUnconfirmed = applicability?.evidence?.reason === "profile_not_confirmed";
+    const ageUnconfirmed = applicability?.evidence?.reason === "age_not_confirmed";
     const candidates = profileUnconfirmed
       ? [applicability]
-      : entry.result.findings.filter((finding) => (
-        finding.state !== "pass" && workRuleFindingTouchesPeriod(finding, weekStart, weekEnd)
-      ));
+      : (ageUnconfirmed
+        ? [
+          applicability,
+          ...entry.result.findings.filter((finding) => (
+            finding !== applicability
+            && workRuleFindingTouchesPeriod(finding, weekStart, weekEnd)
+            && (
+              finding.evidence?.conditionalResult === "fail"
+              || finding.ruleId === "at.system.profile-boundary"
+            )
+          )),
+        ]
+        : entry.result.findings.filter((finding) => (
+          finding.state !== "pass" && workRuleFindingTouchesPeriod(finding, weekStart, weekEnd)
+        )));
     const seen = new Set();
     for (const finding of candidates.filter(Boolean)) {
       const key = `${finding.ruleId}|${finding.scope?.type || ""}|${finding.scope?.date || finding.scope?.weekStart || finding.scope?.start || ""}`;
@@ -15643,7 +16359,11 @@ function evaluateScheduleWorkRules(weekStart, context, employees, candidateShift
       versionId: entry.profileVersionId,
       name: catalog.profiles[entry.profile.id]?.title || entry.profile.title || entry.profile.id,
       title: catalog.profiles[entry.profile.id]?.title || entry.profile.title || entry.profile.id,
-      layer: builtin?.applicability?.sector ? "Branchenprofil" : "Gesetzliches Profil",
+      layer: entry.layer === "company"
+        ? "Unternehmensregel"
+        : (entry.layer === "collective_agreement"
+          ? "Kollektivvertrag"
+          : (builtin?.applicability?.sector ? "Branchenprofil" : "Gesetzliches Profil")),
       sources: entry.sources.length ? entry.sources : (builtin?.sources || []),
     }];
   })).values()].filter((profile) => profile.id);
@@ -20624,14 +21344,1214 @@ app.get("/api/portal/v1/self/time-record-statements/:id/download", (request, res
   }
 });
 
+function collectiveAgreementBusinessUnitScopeMatcher(session) {
+  if (sessionHasGlobalScope(session)) return () => true;
+  const sessionScopes = Array.isArray(session?.scopes) ? session.scopes : [];
+  if (!sessionScopes.length) return () => false;
+  const assignedLocationIds = new Set(sessionScopes.map((scope) => String(scope.locationId || "")));
+  const assignedDepartmentIds = new Set(sessionScopes
+    .filter((scope) => Number(scope.departmentId || 0))
+    .map((scope) => String(Number(scope.departmentId))));
+  const unrestrictedLocationIds = new Set(sessionScopes
+    .filter((scope) => !Number(scope.departmentId || 0))
+    .map((scope) => String(scope.locationId || "")));
+  const costCenterIds = new Set(db.prepare(`
+    SELECT DISTINCT CAST(cost_center_id AS TEXT) AS id
+    FROM locations
+    WHERE id IN (${sessionScopes.map(() => "?").join(",") || "''"})
+      AND cost_center_id IS NOT NULL
+  `).all(...sessionScopes.map((scope) => String(scope.locationId || ""))).map((row) => row.id));
+  return (scope) => {
+    if (scope.scopeType === "location") return assignedLocationIds.has(String(scope.scopeKey));
+    if (scope.scopeType === "cost_center") return costCenterIds.has(String(scope.scopeKey));
+    if (scope.scopeType !== "department") return false;
+    const departmentId = String(Number(scope.scopeKey || 0));
+    if (assignedDepartmentIds.has(departmentId)) return true;
+    const department = db.prepare("SELECT location_id FROM departments WHERE id = ?").get(Number(scope.scopeKey));
+    return Boolean(department && unrestrictedLocationIds.has(String(department.location_id)));
+  };
+}
+
+function scopedCollectiveAgreementBusinessUnit(unit, visibleScope) {
+  const scopes = unit.scopes.filter(visibleScope);
+  return {
+    id: unit.id,
+    code: unit.code,
+    name: unit.name,
+    legalEntityName: unit.legalEntityName,
+    description: unit.description,
+    active: unit.active,
+    scopes: scopes.map((scope) => ({
+      id: scope.id,
+      scopeType: scope.scopeType,
+      scopeKey: scope.scopeKey,
+      label: scope.label,
+    })),
+  };
+}
+
+function scopedCollectiveAgreementAssignment(assignment) {
+  const {
+    createdBy: _createdBy,
+    createdAt: _createdAt,
+    ...visible
+  } = assignment;
+  return visible;
+}
+
+function scopedCollectiveAgreementVersion(version) {
+  const {
+    createdBy: _createdBy,
+    createdAt: _createdAt,
+    ...visible
+  } = version;
+  return visible;
+}
+
+function collectiveAgreementRegistryPayload(session) {
+  const globalScope = sessionHasGlobalScope(session);
+  const allBusinessUnits = listBusinessUnits(db, { includeInactive: true });
+  const visibleScope = collectiveAgreementBusinessUnitScopeMatcher(session);
+  const businessUnits = allBusinessUnits.map((unit) => (
+    globalScope
+      ? unit
+      : scopedCollectiveAgreementBusinessUnit(unit, visibleScope)
+  )).filter((unit) => globalScope || unit.scopes.length);
+  const visibleBusinessUnitIds = new Set(businessUnits.map((unit) => unit.id));
+  const governanceEventsByAssignmentId = new Map();
+  const governanceToday = viennaTodayIso();
+  for (const event of db.prepare(`
+    SELECT assignment_id, event_type, effective_on, occurred_at, id
+    FROM collective_agreement_assignment_events
+    ORDER BY assignment_id, effective_on, occurred_at, id
+  `).all()) {
+    const entries = governanceEventsByAssignmentId.get(event.assignment_id) || [];
+    entries.push(event);
+    governanceEventsByAssignmentId.set(event.assignment_id, entries);
+  }
+  const governanceStateByAssignmentId = new Map();
+  for (const [assignmentId, events] of governanceEventsByAssignmentId) {
+    const effectiveEvents = events.filter((event) => event.effective_on <= governanceToday);
+    const futureEvents = events.filter((event) => event.effective_on > governanceToday);
+    const currentEvent = effectiveEvents.at(-1) || null;
+    const plannedEvent = futureEvents[0] || null;
+    let state = "review_pending";
+    if (currentEvent?.event_type === "deactivated") {
+      state = "deactivated";
+    } else if (currentEvent?.event_type === "approved") {
+      state = plannedEvent?.event_type === "deactivated" ? "deactivation_planned" : "approved";
+    } else if (plannedEvent?.event_type === "approved") {
+      state = "approval_planned";
+    }
+    governanceStateByAssignmentId.set(assignmentId, {
+      state,
+      effectiveOn: plannedEvent?.effective_on || currentEvent?.effective_on || null,
+      currentEffectiveOn: currentEvent?.effective_on || null,
+      plannedEventType: plannedEvent?.event_type || null,
+      occurredAt: plannedEvent?.occurred_at || currentEvent?.occurred_at || null,
+    });
+  }
+  const assignments = listCollectiveAgreementAssignments(db)
+    .filter((assignment) => visibleBusinessUnitIds.has(assignment.businessUnitId))
+    .map((assignment) => {
+      const governanceState = governanceStateByAssignmentId.get(assignment.id);
+      const enriched = {
+        ...assignment,
+        governanceState: governanceState?.state || "review_pending",
+        governanceEffectiveOn: governanceState?.effectiveOn || null,
+        governanceCurrentEffectiveOn: governanceState?.currentEffectiveOn || null,
+        governancePlannedEventType: governanceState?.plannedEventType || null,
+      };
+      return globalScope ? enriched : scopedCollectiveAgreementAssignment(enriched);
+    });
+  const visibleAgreementVersionIds = new Set(assignments.map((assignment) => assignment.agreementVersionId));
+  const agreements = listCollectiveAgreements(db).map((agreement) => {
+    const relatedAssignments = assignments.filter((assignment) => assignment.agreementId === agreement.id);
+    if (!globalScope && !relatedAssignments.length) return null;
+    if (globalScope) return { ...agreement, assignments: relatedAssignments };
+    const versions = agreement.versions
+      .filter((version) => visibleAgreementVersionIds.has(version.id))
+      .map(scopedCollectiveAgreementVersion);
+    return {
+      id: agreement.id,
+      code: agreement.code,
+      title: agreement.title,
+      shortTitle: agreement.shortTitle,
+      jurisdiction: agreement.jurisdiction,
+      reviewState: agreement.reviewState,
+      currentVersionId: versions.some((version) => version.id === agreement.currentVersionId)
+        ? agreement.currentVersionId
+        : null,
+      note: agreement.note,
+      versions,
+      assignments: relatedAssignments,
+    };
+  }).filter(Boolean);
+  const canManage = !session || session.employeeNumber === "local"
+    || session.permissions?.includes("collective_agreements:manage");
+  const canPrepareAssignments = !session || session.employeeNumber === "local"
+    || session.permissions?.includes("collective_agreements:assign");
+  const canApprove = Boolean(session
+    && session.employeeNumber !== "local"
+    && session.permissions?.includes("collective_agreements:approve"));
+  const locations = canManage ? getLocationsForSession(session, false).map((location) => ({
+    id: String(location.id),
+    name: location.name,
+    costCenterId: location.cost_center_id || location.costCenterId || null,
+    departments: (location.departments || []).filter((department) => department.active).map((department) => ({
+      id: Number(department.id),
+      name: department.name,
+    })),
+  })) : [];
+  const costCenters = canManage && sessionHasGlobalScope(session)
+    ? db.prepare(`
+      SELECT id, code, name, type, active
+      FROM cost_centers
+      ORDER BY active DESC, code COLLATE NOCASE, id
+    `).all().map((row) => ({
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      type: row.type,
+      active: Boolean(row.active),
+    }))
+    : [];
+  const ruleProfileVersions = canManage ? db.prepare(`
+    SELECT v.id, v.version, v.status, v.valid_from, v.valid_to, p.name AS profile_name
+    FROM work_rule_profile_versions v
+    JOIN work_rule_profiles p ON p.id = v.profile_id
+    WHERE v.layer = 'collective_agreement'
+    ORDER BY p.name COLLATE NOCASE, v.valid_from DESC, v.id
+  `).all().map((row) => ({
+    id: row.id,
+    profileName: row.profile_name,
+    version: row.version,
+    status: row.status,
+    validFrom: row.valid_from,
+    validTo: row.valid_to || null,
+  })) : [];
+  const versionCount = agreements.reduce((count, agreement) => count + agreement.versions.length, 0);
+  return {
+    generatedAt: new Date().toISOString(),
+    legalNotice: COLLECTIVE_AGREEMENT_NOTICE,
+    scopeLabel: globalScope ? "Unternehmensweites KV-Register" : "Register mit Zuordnungen des eigenen Bereichs",
+    capabilities: {
+      canManage,
+      canPrepareAssignments,
+      canApprove,
+      canActivate: canApprove,
+      approvalBlock: null,
+    },
+    summary: {
+      agreements: agreements.length,
+      versions: versionCount,
+      businessUnits: businessUnits.length,
+      pendingAssignments: assignments.filter((assignment) => assignment.governanceState === "review_pending").length,
+      plannedAssignments: assignments.filter((assignment) => (
+        ["approval_planned", "deactivation_planned"].includes(assignment.governanceState)
+      )).length,
+      approvedAssignments: assignments.filter((assignment) => (
+        ["approved", "deactivation_planned"].includes(assignment.governanceState)
+      )).length,
+      deactivatedAssignments: assignments.filter((assignment) => assignment.governanceState === "deactivated").length,
+    },
+    agreements,
+    businessUnits,
+    assignments,
+    locations,
+    costCenters,
+    ruleProfileVersions,
+  };
+}
+
+function collectiveAgreementRouteError(error) {
+  if (error instanceof TypeError) throw httpError(400, error.message, "COLLECTIVE_AGREEMENT_INVALID");
+  throw error;
+}
+
+app.get("/api/collective-agreements/registry", (request, response) => {
+  try {
+    response.json(collectiveAgreementRegistryPayload(request.portalSession));
+  } catch (error) {
+    collectiveAgreementRouteError(error);
+  }
+});
+
+app.post("/api/collective-agreements", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  try {
+    const agreement = createCollectiveAgreement(db, request.body, actor);
+    auditPortal(actor, "collective-agreement.create", "collective_agreement", agreement.id, JSON.stringify({
+      code: agreement.code,
+      versionId: agreement.currentVersionId,
+      reviewState: agreement.reviewState,
+    }));
+    response.status(201).json({ agreement });
+  } catch (error) {
+    collectiveAgreementRouteError(error);
+  }
+});
+
+app.post("/api/collective-agreements/:id/versions", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  try {
+    const agreement = addCollectiveAgreementVersion(db, request.params.id, request.body, actor);
+    auditPortal(actor, "collective-agreement.version.create", "collective_agreement", agreement.id, JSON.stringify({
+      versionId: agreement.currentVersionId,
+      reviewState: agreement.reviewState,
+    }));
+    response.status(201).json({ agreement });
+  } catch (error) {
+    collectiveAgreementRouteError(error);
+  }
+});
+
+app.post("/api/collective-agreements/business-units", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  try {
+    const businessUnit = createBusinessUnit(db, request.body, actor);
+    auditPortal(actor, "collective-agreement.business-unit.create", "collective_agreement_business_unit",
+      businessUnit.id, JSON.stringify({
+        code: businessUnit.code,
+        scopes: businessUnit.scopes.map((scope) => ({
+          scopeType: scope.scopeType,
+          scopeKey: scope.scopeKey,
+        })),
+      }));
+    response.status(201).json({ businessUnit });
+  } catch (error) {
+    collectiveAgreementRouteError(error);
+  }
+});
+
+app.post("/api/collective-agreements/business-units/:id/scopes", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  try {
+    const businessUnit = addBusinessUnitScopes(db, request.params.id, request.body.scopes, actor);
+    auditPortal(actor, "collective-agreement.business-unit.scopes.add",
+      "collective_agreement_business_unit", businessUnit.id, JSON.stringify({
+        scopes: businessUnit.scopes.map((scope) => ({
+          scopeType: scope.scopeType,
+          scopeKey: scope.scopeKey,
+        })),
+      }));
+    response.status(201).json({ businessUnit });
+  } catch (error) {
+    collectiveAgreementRouteError(error);
+  }
+});
+
+app.post("/api/collective-agreements/assignments", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  try {
+    const assignment = prepareCollectiveAgreementAssignment(db, request.body, actor);
+    auditPortal(actor, "collective-agreement.assignment.prepare", "collective_agreement_assignment",
+      assignment.id, JSON.stringify({
+        agreementVersionId: assignment.agreementVersionId,
+        businessUnitId: assignment.businessUnitId,
+        reviewState: assignment.reviewState,
+        validFrom: assignment.validFrom,
+        validTo: assignment.validTo,
+      }));
+    response.status(201).json({ assignment });
+  } catch (error) {
+    collectiveAgreementRouteError(error);
+  }
+});
+
+function customWorkRuleDraftRegistryPayload(session) {
+  const drafts = listCustomWorkRuleDrafts(db);
+  const governance = listWorkRuleGovernance(db);
+  const locations = db.prepare(`
+    SELECT id, name
+    FROM locations
+    WHERE active = 1
+    ORDER BY name COLLATE NOCASE, id
+  `).all().map((location) => ({
+    id: String(location.id),
+    name: location.name,
+    departments: db.prepare(`
+      SELECT id, name
+      FROM departments
+      WHERE location_id = ? AND active = 1
+      ORDER BY name COLLATE NOCASE, id
+    `).all(location.id).map((department) => ({
+      id: String(department.id),
+      name: department.name,
+    })),
+  }));
+  const businessUnits = listBusinessUnits(db).map((unit) => ({
+    id: unit.id,
+    code: unit.code,
+    name: unit.name,
+    legalEntityName: unit.legalEntityName,
+  }));
+  const canDraft = !session || session.employeeNumber === "local"
+    || session.permissions?.includes("work_rules:draft");
+  const humanActor = Boolean(session && session.employeeNumber !== "local");
+  const canReview = Boolean(humanActor && session.permissions?.includes("work_rules:review"));
+  const canPublish = Boolean(humanActor && session.permissions?.includes("work_rules:publish"));
+  const canAssign = Boolean(humanActor && session.permissions?.includes("work_rules:assign"));
+  const canAudit = !session || session.employeeNumber === "local"
+    || session.permissions?.includes("work_rules:audit");
+  const requests = Array.isArray(governance.requests) ? governance.requests : [];
+  return {
+    generatedAt: new Date().toISOString(),
+    notice: CUSTOM_WORK_RULE_NOTICE,
+    capabilities: {
+      canDraft,
+      canRevise: canDraft,
+      canSubmitForReview: humanActor && canDraft,
+      canReview,
+      canApprove: canReview,
+      canPublish,
+      canAssign,
+      canActivate: canAssign,
+      canDeactivate: canAssign || canPublish,
+      canAudit,
+      approvalBlock: null,
+    },
+    summary: {
+      drafts: drafts.length,
+      revisions: drafts.reduce((sum, draft) => sum + draft.versions.length, 0),
+      pendingReview: requests.filter((entry) => ["in_review", "approved"].includes(entry.state)).length,
+      active: Array.isArray(governance.assignments)
+        ? governance.assignments.filter((entry) => entry.state === "active").length
+        : 0,
+      published: Array.isArray(governance.publications)
+        ? governance.publications.filter((entry) => entry.state === "published").length
+        : 0,
+      intendedBlocking: drafts.filter((draft) => draft.currentVersion?.definition?.reaction === "block").length,
+    },
+    catalogs: {
+      ruleTypes: CUSTOM_WORK_RULE_TYPES,
+      topics: CUSTOM_WORK_RULE_TOPICS,
+      scopes: CUSTOM_WORK_RULE_SCOPES,
+      metrics: CUSTOM_WORK_RULE_METRICS,
+      reactions: CUSTOM_WORK_RULE_REACTIONS,
+      severities: CUSTOM_WORK_RULE_SEVERITIES,
+    },
+    organizationalScopes: {
+      businessUnits,
+      locations,
+    },
+    drafts,
+  };
+}
+
+function customWorkRuleDraftRouteError(error) {
+  if (error instanceof TypeError) throw httpError(400, error.message, "CUSTOM_WORK_RULE_DRAFT_INVALID");
+  throw error;
+}
+
+app.get("/api/work-rules/drafts", (request, response) => {
+  try {
+    response.json(customWorkRuleDraftRegistryPayload(request.portalSession));
+  } catch (error) {
+    customWorkRuleDraftRouteError(error);
+  }
+});
+
+app.post("/api/work-rules/drafts/simulate", (request, response) => {
+  try {
+    response.json({
+      simulation: simulateCustomWorkRuleDraft(db, request.body),
+      notice: "Die Simulation prüft ausschließlich die drei Entwurfstestfälle und aktiviert keine Regel.",
+    });
+  } catch (error) {
+    customWorkRuleDraftRouteError(error);
+  }
+});
+
+app.post("/api/work-rules/drafts", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  try {
+    const draft = createCustomWorkRuleDraft(db, request.body, actor);
+    auditPortal(actor, "work-rule.draft.create", "work_rule_profile", draft.id, JSON.stringify({
+      code: draft.code,
+      versionId: draft.currentVersionId,
+      contentSha256: draft.currentVersion?.contentSha256,
+      status: draft.status,
+    }));
+    response.status(201).json({ draft });
+  } catch (error) {
+    customWorkRuleDraftRouteError(error);
+  }
+});
+
+app.post("/api/work-rules/drafts/:id/revisions", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  try {
+    const draft = addCustomWorkRuleDraftRevision(db, request.params.id, request.body, actor);
+    auditPortal(actor, "work-rule.draft.revision.create", "work_rule_profile", draft.id, JSON.stringify({
+      code: draft.code,
+      versionId: draft.currentVersionId,
+      contentSha256: draft.currentVersion?.contentSha256,
+      status: draft.status,
+    }));
+    response.status(201).json({ draft });
+  } catch (error) {
+    customWorkRuleDraftRouteError(error);
+  }
+});
+
+function workRuleGovernancePermission(operation, phase = "submit") {
+  const operationId = String(operation || "");
+  if (phase === "review") {
+    return ["approve_kv_assignment", "deactivate_kv_assignment"].includes(operationId)
+      ? "collective_agreements:approve"
+      : "work_rules:review";
+  }
+  if (operationId === "publish_rule") {
+    return phase === "finalize" ? "work_rules:publish" : "work_rules:draft";
+  }
+  if (["activate_assignment", "deactivate_assignment"].includes(operationId)) {
+    return "work_rules:assign";
+  }
+  if (operationId === "withdraw_publication") return "work_rules:publish";
+  if (["approve_kv_assignment", "deactivate_kv_assignment"].includes(operationId)) {
+    return "collective_agreements:approve";
+  }
+  throw httpError(400, "Die Governance-Operation ist ungültig.", "WORK_RULE_GOVERNANCE_OPERATION_INVALID");
+}
+
+function workRuleGovernanceActor(request, permission, { allowLocal = false, qualification = "" } = {}) {
+  const session = request.portalSession || {
+    employeeNumber: "local",
+    role: "admin",
+    roleName: "Lokaler Einzelplatz",
+    permissions: [],
+  };
+  if (session.employeeNumber === "local" && !allowLocal) {
+    throw httpError(
+      409,
+      "Dieser Freigabevorgang benötigt persönliche Portalzugänge. Der lokale Einzelplatz kann das Vier-Augen-Prinzip nicht ersetzen.",
+      "WORK_RULE_GOVERNANCE_PERSONAL_LOGIN_REQUIRED",
+    );
+  }
+  if (session.employeeNumber !== "local" && !session.permissions?.includes(permission)) {
+    throw httpError(403, "Für diesen Schritt fehlt das ausdrücklich getrennte Fachrecht.", "PORTAL_PERMISSION_DENIED");
+  }
+  return {
+    employeeNumber: session.employeeNumber,
+    role: session.role || "unknown",
+    permissionUsed: permission,
+    qualification: qualification || (
+      ["work_rules:review", "collective_agreements:approve"].includes(permission)
+        ? "fachlich"
+        : (["developer", "it_admin"].includes(session.role) ? "technical" : "organisational")
+    ),
+  };
+}
+
+function workRuleGovernanceScopeVisible(session, scope) {
+  if (sessionHasGlobalScope(session)) return true;
+  const type = String(scope?.type || scope?.scopeType || "");
+  const key = String(scope?.key ?? scope?.scopeKey ?? "");
+  if (type === "installation") return false;
+  if (!["location", "department", "employee"].includes(type)) return false;
+  return workRuleAssignmentVisibleToSession(session, {
+    scopeType: type,
+    scopeKey: key,
+  });
+}
+
+function workRuleGovernanceVersionScopes(versionId) {
+  const version = getWorkRuleProfileVersion(db, versionId);
+  const type = String(version?.profile?.applicability?.scopeType || "installation");
+  const key = String(version?.profile?.applicability?.scopeKey || "");
+  if (type !== "business_unit") return [{ type, key }];
+  return db.prepare(`
+    SELECT scope_type AS type, scope_key AS key
+    FROM collective_agreement_business_unit_scopes
+    WHERE business_unit_id = ?
+    ORDER BY scope_type, scope_key, id
+  `).all(key);
+}
+
+function workRuleGovernanceRequestScopes(entry) {
+  const payload = entry?.payload && typeof entry.payload === "object" ? entry.payload : {};
+  if (Array.isArray(payload.expandedScopes) && payload.expandedScopes.length) {
+    return payload.expandedScopes;
+  }
+  if (Array.isArray(payload.scopeSnapshot?.scopes) && payload.scopeSnapshot.scopes.length) {
+    return payload.scopeSnapshot.scopes;
+  }
+  if (entry.operation === "publish_rule") {
+    return workRuleGovernanceVersionScopes(entry.subjectId);
+  }
+  if (entry.operation === "withdraw_publication") {
+    const publication = db.prepare(`
+      SELECT released_profile_version_id
+      FROM work_rule_publications
+      WHERE id = ?
+    `).get(entry.subjectId);
+    return publication ? workRuleGovernanceVersionScopes(publication.released_profile_version_id) : [];
+  }
+  if (entry.operation === "deactivate_assignment") {
+    const revision = db.prepare(`
+      SELECT scope_type, scope_key, expanded_scopes_json
+      FROM work_rule_assignment_revisions
+      WHERE id = ?
+    `).get(entry.subjectId);
+    if (!revision) return [];
+    try {
+      const expanded = JSON.parse(revision.expanded_scopes_json);
+      if (Array.isArray(expanded) && expanded.length) return expanded;
+    } catch {}
+    return [{ type: revision.scope_type, key: revision.scope_key }];
+  }
+  return [];
+}
+
+function workRuleGovernanceRequestVisibleToSession(session, entry) {
+  if (sessionHasGlobalScope(session)) return true;
+  const scopes = workRuleGovernanceRequestScopes(entry);
+  return Boolean(scopes.length && scopes.every((scope) => (
+    workRuleGovernanceScopeVisible(session, scope)
+  )));
+}
+
+function workRuleGovernanceCapabilities(session) {
+  const human = Boolean(session && session.employeeNumber !== "local");
+  const has = (permission) => Boolean(human && session.permissions?.includes(permission));
+  return {
+    canDraft: !session || session.employeeNumber === "local" || has("work_rules:draft"),
+    canSubmitForReview: has("work_rules:draft"),
+    canReview: has("work_rules:review"),
+    canPublish: has("work_rules:publish"),
+    canAssign: has("work_rules:assign"),
+    canApproveCollectiveAgreement: has("collective_agreements:approve"),
+    canAudit: !session || session.employeeNumber === "local" || has("work_rules:audit"),
+  };
+}
+
+const WORK_RULE_GOVERNANCE_AUDIT_ONLY_FIELDS = new Set([
+  "actoremployeenumber",
+  "actorrole",
+  "confirmedby",
+  "createdby",
+  "permissionused",
+  "publishedby",
+  "subjectauthor",
+  "submittedby",
+  "submittedpermission",
+  "submittedrole",
+  "updatedby",
+]);
+
+function redactWorkRuleGovernanceAuditFields(value) {
+  if (Array.isArray(value)) return value.map(redactWorkRuleGovernanceAuditFields);
+  if (!value || typeof value !== "object") return value;
+  const visible = {};
+  for (const [key, entry] of Object.entries(value)) {
+    const normalizedKey = key.replace(/[_-]/g, "").toLowerCase();
+    if (normalizedKey.includes("receipt")
+      || WORK_RULE_GOVERNANCE_AUDIT_ONLY_FIELDS.has(normalizedKey)) continue;
+    if (normalizedKey === "decisions" || normalizedKey === "events") {
+      visible[key] = [];
+      continue;
+    }
+    visible[key] = redactWorkRuleGovernanceAuditFields(entry);
+  }
+  return visible;
+}
+
+function scopedWorkRuleGovernanceRequest(entry, currentActorNumber) {
+  const decisions = Array.isArray(entry.decisions) ? entry.decisions : [];
+  const submittedBy = entry.submittedBy;
+  const visible = redactWorkRuleGovernanceAuditFields(entry);
+  return {
+    ...visible,
+    submittedByCurrentActor: Boolean(currentActorNumber && submittedBy === currentActorNumber),
+    currentActorDecisionRecorded: Boolean(currentActorNumber && decisions.some((decision) => (
+      decision.actorEmployeeNumber === currentActorNumber
+    ))),
+    decisions: [],
+  };
+}
+
+function scopedWorkRuleGovernanceAssignment(entry) {
+  return redactWorkRuleGovernanceAuditFields(entry);
+}
+
+function scopedWorkRuleGovernanceConflictRun(entry) {
+  return redactWorkRuleGovernanceAuditFields(entry);
+}
+
+function workRuleGovernanceFinalizeResultForSession(result, governance) {
+  if (governance.capabilities.canAudit) return result;
+  const visible = redactWorkRuleGovernanceAuditFields(result);
+  return {
+    ...visible,
+    request: governance.requests.find((entry) => entry.id === result.request?.id) || null,
+  };
+}
+
+function workRuleGovernancePayload(session) {
+  const complete = listWorkRuleGovernance(db);
+  const capabilities = workRuleGovernanceCapabilities(session);
+  const currentActor = session
+    ? {
+      employeeNumber: session.employeeNumber,
+      fullName: session.fullName || "",
+      role: session.role || "",
+      roleName: session.roleName || session.role || "",
+    }
+    : {
+      employeeNumber: "local",
+      fullName: "Lokaler Einzelplatz",
+      role: "admin",
+      roleName: "Lokaler Einzelplatz",
+    };
+  if (sessionHasGlobalScope(session) && capabilities.canAudit) {
+    return { ...complete, currentActor, capabilities };
+  }
+
+  const scopedRequests = complete.requests.filter((entry) => (
+    workRuleGovernanceRequestVisibleToSession(session, entry)
+  ));
+  const requestIds = new Set(scopedRequests.map((entry) => entry.id));
+  const assignmentRevisions = complete.assignmentRevisions.filter((assignment) => {
+    const scopes = assignment.expandedScopes?.length
+      ? assignment.expandedScopes
+      : [{ type: assignment.scopeType, key: assignment.scopeKey }];
+    return Boolean(scopes.length && scopes.every((scope) => (
+      workRuleGovernanceScopeVisible(session, scope)
+    )));
+  });
+  const assignmentRevisionIds = new Set(assignmentRevisions.map((entry) => entry.id));
+  const assignments = complete.assignments.filter((assignment) => (
+    assignmentRevisionIds.has(assignment.governedRevisionId)
+  ));
+  const publications = complete.publications.filter((publication) => (
+    requestIds.has(publication.reviewRequestId)
+    || assignmentRevisions.some((assignment) => assignment.publicationId === publication.id)
+  ));
+  const conflictRunIds = new Set(scopedRequests.map((entry) => entry.conflictRunId));
+  const collectiveAgreementAssignments = complete.collectiveAgreementAssignments.filter((entry) => (
+    requestIds.has(entry.reviewRequestId)
+    || (entry.scopeSnapshot?.scopes?.length
+      && entry.scopeSnapshot.scopes.every((scope) => workRuleGovernanceScopeVisible(session, scope)))
+  ));
+  const canReadAudit = capabilities.canAudit;
+  const requests = canReadAudit
+    ? scopedRequests
+    : scopedRequests.map((entry) => (
+      scopedWorkRuleGovernanceRequest(entry, currentActor.employeeNumber)
+    ));
+  return {
+    ...complete,
+    currentActor,
+    capabilities,
+    requests,
+    conflictRuns: complete.conflictRuns
+      .filter((entry) => conflictRunIds.has(entry.id))
+      .map((entry) => (
+        canReadAudit ? entry : scopedWorkRuleGovernanceConflictRun(entry)
+      )),
+    publications: publications.map((entry) => {
+      if (canReadAudit) return entry;
+      return redactWorkRuleGovernanceAuditFields(entry);
+    }),
+    assignmentRevisions: assignmentRevisions.map((entry) => {
+      if (canReadAudit) return entry;
+      return redactWorkRuleGovernanceAuditFields(entry);
+    }),
+    assignments: canReadAudit
+      ? assignments
+      : assignments.map(scopedWorkRuleGovernanceAssignment),
+    collectiveAgreementAssignments: collectiveAgreementAssignments.map((entry) => {
+      if (canReadAudit) return entry;
+      return redactWorkRuleGovernanceAuditFields(entry);
+    }),
+    events: [],
+  };
+}
+
+function workRuleGovernanceRouteError(error) {
+  if (Number(error?.status) >= 400) {
+    const status = error.code === "WORK_RULE_GOVERNANCE_INTEGRITY" ? 503 : Number(error.status);
+    throw httpError(status, error.message, error.code || "WORK_RULE_GOVERNANCE_FAILED");
+  }
+  if (error instanceof TypeError) {
+    throw httpError(400, error.message, "WORK_RULE_GOVERNANCE_INVALID");
+  }
+  throw error;
+}
+
+app.post("/api/work-rules/drafts/:id/versions/:versionId/restore", (request, response) => {
+  const actor = request.portalSession?.employeeNumber || "local";
+  if (request.portalSession && !request.portalSession.permissions?.includes("work_rules:draft")) {
+    throw httpError(403, "Für einen Nachfolgeentwurf fehlt das Entwurfsrecht.", "PORTAL_PERMISSION_DENIED");
+  }
+  try {
+    const version = getWorkRuleProfileVersion(db, request.params.versionId);
+    if (!version || version.profileId !== request.params.id) {
+      throw httpError(404, "Die veröffentlichte Fassung wurde für diese Regel nicht gefunden.");
+    }
+    const draft = restoreCustomWorkRuleVersionAsDraft(db, version.id, actor);
+    auditPortal(actor, "work-rule.draft.restore", "work_rule_profile", draft.id, JSON.stringify({
+      restoredFromVersionId: version.id,
+      newDraftVersionId: draft.currentVersionId,
+    }));
+    response.status(201).json({ draft });
+  } catch (error) {
+    if (Number(error?.status) >= 400) throw error;
+    customWorkRuleDraftRouteError(error);
+  }
+});
+
+app.get("/api/work-rules/governance", (request, response) => {
+  try {
+    response.json(workRuleGovernancePayload(request.portalSession));
+  } catch (error) {
+    workRuleGovernanceRouteError(error);
+  }
+});
+
+app.post("/api/work-rules/governance/preview", (request, response) => {
+  try {
+    const permission = workRuleGovernancePermission(request.body.operation, "submit");
+    const actor = workRuleGovernanceActor(request, permission, { allowLocal: true });
+    const preview = previewWorkRuleGovernance(db, request.body, actor);
+    if (workRuleGovernanceCapabilities(request.portalSession).canAudit) {
+      response.json({ preview });
+      return;
+    }
+    response.json({ preview: redactWorkRuleGovernanceAuditFields(preview) });
+  } catch (error) {
+    workRuleGovernanceRouteError(error);
+  }
+});
+
+app.post("/api/work-rules/governance/requests", (request, response) => {
+  try {
+    const permission = workRuleGovernancePermission(request.body.operation, "submit");
+    const actor = workRuleGovernanceActor(request, permission);
+    if (!String(request.body.sourceReference || "").trim()) {
+      throw httpError(400, "Bitte eine Quelle oder fachliche Freigabereferenz angeben.", "WORK_RULE_GOVERNANCE_SOURCE_REQUIRED");
+    }
+    const reviewRequest = createWorkRuleReviewRequest(db, {
+      ...request.body,
+      clientRequestId: String(request.body.clientRequestId || crypto.randomUUID()),
+    }, actor);
+    auditPortal(actor.employeeNumber, "work-rule.governance.submit", "work_rule_review_request",
+      reviewRequest.id, JSON.stringify({
+        operation: reviewRequest.operation,
+        subjectId: reviewRequest.subjectId,
+        basisSha256: reviewRequest.basisSha256,
+      }));
+    const governance = workRuleGovernancePayload(request.portalSession);
+    response.status(201).json({
+      request: governance.requests.find((entry) => entry.id === reviewRequest.id) || null,
+      governance,
+    });
+  } catch (error) {
+    workRuleGovernanceRouteError(error);
+  }
+});
+
+app.post("/api/work-rules/governance/requests/:id/decisions", (request, response) => {
+  try {
+    const visible = workRuleGovernancePayload(request.portalSession).requests
+      .find((entry) => entry.id === request.params.id);
+    if (!visible) throw httpError(404, "Der Freigabeantrag wurde im eigenen Bereich nicht gefunden.");
+    const permission = workRuleGovernancePermission(visible.operation, "review");
+    const actor = workRuleGovernanceActor(request, permission, { qualification: "fachlich" });
+    const reviewRequest = recordWorkRuleReviewDecision(
+      db,
+      request.params.id,
+      request.body,
+      actor,
+    );
+    auditPortal(actor.employeeNumber, "work-rule.governance.decision", "work_rule_review_request",
+      reviewRequest.id, JSON.stringify({
+        decision: String(request.body.decision || ""),
+        basisSha256: reviewRequest.basisSha256,
+      }));
+    const governance = workRuleGovernancePayload(request.portalSession);
+    response.json({
+      request: governance.requests.find((entry) => entry.id === reviewRequest.id) || null,
+      governance,
+    });
+  } catch (error) {
+    workRuleGovernanceRouteError(error);
+  }
+});
+
+app.post("/api/work-rules/governance/requests/:id/finalize", (request, response) => {
+  try {
+    const governance = workRuleGovernancePayload(request.portalSession);
+    const visible = governance.requests.find((entry) => entry.id === request.params.id);
+    if (!visible) throw httpError(404, "Der freigegebene Vorgang wurde nicht gefunden.");
+    const permission = workRuleGovernancePermission(visible.operation, "finalize");
+    const actor = workRuleGovernanceActor(request, permission);
+    const result = finalizeWorkRuleReviewRequest(
+      db,
+      request.params.id,
+      request.body,
+      actor,
+    );
+    auditPortal(actor.employeeNumber, "work-rule.governance.finalize", "work_rule_review_request",
+      visible.id, JSON.stringify({
+        operation: visible.operation,
+        basisSha256: visible.basisSha256,
+        outcomeType: result.outcome?.type || "",
+      }));
+    const updatedGovernance = workRuleGovernancePayload(request.portalSession);
+    response.json({
+      result: workRuleGovernanceFinalizeResultForSession(result, updatedGovernance),
+      governance: updatedGovernance,
+    });
+  } catch (error) {
+    workRuleGovernanceRouteError(error);
+  }
+});
+
+const WORK_RULE_DASHBOARD_LAYER_LABELS = Object.freeze({
+  law: "Gesetzliches Profil",
+  sector: "Branchenprofil",
+  collective_agreement: "Kollektivvertrag",
+  company: "Unternehmensregel",
+  contract: "Individuelle Regel",
+});
+
+function workRuleDashboardAssignmentState(assignment, today = viennaTodayIso()) {
+  if (!assignment.active) return "inactive";
+  if (assignment.validFrom > today) return "future";
+  if (assignment.validTo && assignment.validTo < today) return "expired";
+  return "current";
+}
+
+function workRuleDashboardScopeLabel(session, assignment, locations) {
+  const locationLookup = new Map(locations.map((location) => [String(location.id), location]));
+  const departmentLookup = new Map(locations.flatMap((location) => (
+    (location.departments || []).map((department) => [String(department.id), { ...department, location }])
+  )));
+  if (assignment.scopeType === "installation") return "Gesamte Installation";
+  if (assignment.scopeType === "location") {
+    const location = locationLookup.get(String(assignment.scopeKey));
+    return location ? `${location.id} · ${location.name}` : "Zugewiesene Filiale";
+  }
+  if (assignment.scopeType === "department") {
+    const department = departmentLookup.get(String(assignment.scopeKey));
+    return department ? `${department.location.id} · ${department.location.name} · ${department.name}` : "Zugewiesene Abteilung";
+  }
+  if (assignment.scopeType === "employee" && sessionHasGlobalScope(session)) {
+    const employee = db.prepare("SELECT personnel_number, full_name FROM employees WHERE personnel_number = ?")
+      .get(String(assignment.scopeKey));
+    return employee ? `${employee.personnel_number} · ${employee.full_name}` : "Personenbezogene Zuordnung";
+  }
+  return "Personenbezogene Zuordnung im eigenen Bereich";
+}
+
+function workRuleDashboardProfileDescriptors(catalog, persistedProfiles, assignments, session) {
+  const descriptors = Object.values(catalog.profiles || {}).map((definition) => ({
+    responseId: definition.id,
+    profileId: definition.id,
+    definition,
+    forcedVersionId: "",
+  }));
+  const includedVersionIds = new Set(descriptors.map((entry) => {
+    const persisted = persistedProfiles.get(entry.profileId);
+    return persisted?.currentVersionId || profileVersionId(entry.definition);
+  }));
+  const candidateVersionIds = new Set(assignments
+    .map((assignment) => String(assignment.profileVersionId || ""))
+    .filter((versionId) => versionId.startsWith("custom:")));
+  if (sessionHasGlobalScope(session)) {
+    for (const profile of persistedProfiles.values()) {
+      if (!profile.builtin && profile.status === "active" && profile.currentVersionId) {
+        candidateVersionIds.add(profile.currentVersionId);
+      }
+    }
+  }
+  for (const versionId of candidateVersionIds) {
+    if (includedVersionIds.has(versionId)) continue;
+    const version = getWorkRuleProfileVersion(db, versionId);
+    if (!version || version.status !== "published") continue;
+    descriptors.push({
+      responseId: version.id,
+      profileId: version.profileId,
+      definition: version.profile,
+      forcedVersionId: version.id,
+    });
+    includedVersionIds.add(version.id);
+  }
+  return descriptors;
+}
+
+function workRuleDashboardPayload(session) {
+  const catalog = getRuleCatalog();
+  const today = viennaTodayIso();
+  const locations = getLocationsForSession(session, false).map((location) => ({
+    id: String(location.id),
+    name: location.name,
+    canSimulateWholeLocation: sessionHasGlobalScope(session)
+      || (session?.scopes || []).some((scope) => (
+        String(scope.locationId) === String(location.id)
+        && !Number(scope.departmentId || 0)
+      )),
+    departments: (location.departments || []).filter((department) => department.active).map((department) => ({
+      id: Number(department.id),
+      name: department.name,
+    })),
+  }));
+  const visibleAssignments = [
+    ...listWorkRuleAssignments(db, { includeInactive: true }),
+    ...listGovernedWorkRuleAssignments(db, { includeInactive: true }),
+  ]
+    .filter((assignment) => workRuleAssignmentVisibleToSession(session, assignment))
+    .map((assignment) => ({
+      id: assignment.id,
+      profileId: assignment.profileId,
+      profileVersionId: assignment.profileVersionId,
+      profileName: assignment.profileName,
+      scopeType: assignment.scopeType,
+      scopeLabel: workRuleDashboardScopeLabel(session, assignment, locations),
+      validFrom: assignment.validFrom,
+      validTo: assignment.validTo,
+      enforcementMode: assignment.enforcementMode,
+      applicabilityConfirmed: assignment.applicabilityConfirmed,
+      state: workRuleDashboardAssignmentState(assignment, today),
+    }));
+  const persistedProfiles = new Map(listWorkRuleProfiles(db).map((profile) => [profile.id, profile]));
+  const profileDescriptors = workRuleDashboardProfileDescriptors(
+    catalog,
+    persistedProfiles,
+    visibleAssignments,
+    session,
+  );
+  const profiles = profileDescriptors.map((descriptor) => {
+    const definition = descriptor.definition;
+    const stableProfileId = descriptor.profileId;
+    const persisted = persistedProfiles.get(stableProfileId) || null;
+    const versionId = descriptor.forcedVersionId
+      || persisted?.currentVersionId
+      || profileVersionId(definition);
+    const version = getWorkRuleProfileVersion(db, versionId);
+    const rules = (version?.rules?.length ? version.rules : (definition.ruleIds || [])
+      .map((ruleId) => catalog.rules?.[ruleId])
+      .filter(Boolean))
+      .map((rule) => ({
+        id: rule.id,
+        title: rule.title || rule.id,
+        severity: rule.severity || "warning",
+        enforcement: rule.enforcement || "manual_review",
+        sourceIds: Array.isArray(rule.sourceRefs) ? rule.sourceRefs : [],
+      }));
+    const sources = (version?.sources?.length ? version.sources : (definition.sourceRefs || [])
+      .map((sourceId) => catalog.sources?.[sourceId])
+      .filter(Boolean))
+      .map((source) => ({
+        id: source.id,
+        title: source.title,
+        jurisdiction: source.jurisdiction || "AT",
+        url: source.url,
+        retrievedOn: source.retrievedOn || null,
+        applicabilityNote: source.applicabilityNote || "",
+      }));
+    const assignments = visibleAssignments.filter((assignment) => (
+      assignment.profileVersionId === versionId
+      || (!descriptor.forcedVersionId && assignment.profileId === stableProfileId)
+    ));
+    const profile = version?.profile || definition;
+    return {
+      id: descriptor.responseId,
+      profileId: stableProfileId,
+      title: profile.title || definition.title || persisted?.name || stableProfileId,
+      description: profile.applicability?.note || definition.applicability?.note || persisted?.description || "",
+      version: version?.version || definition.version,
+      versionId,
+      layer: version?.layer || persisted?.layer || "law",
+      layerLabel: WORK_RULE_DASHBOARD_LAYER_LABELS[version?.layer || persisted?.layer || "law"] || "Regelprofil",
+      status: version?.status || (definition.status === "active" ? "published" : "draft"),
+      validFrom: version?.validFrom || definition.validFrom,
+      validTo: version?.validTo || definition.validTo || null,
+      contentSha256: version?.contentSha256 || persisted?.contentSha256 || null,
+      assignable: profile.assignable === true,
+      automaticByBirthDate: profile.applicability?.automaticByBirthDate === true,
+      defaultEnforcementMode: profile.defaultEnforcementMode || "monitor",
+      applicability: {
+        jurisdiction: profile.applicability?.jurisdiction || "AT",
+        sector: profile.applicability?.sector || "",
+        minimumAge: profile.applicability?.minimumAge !== null
+          && profile.applicability?.minimumAge !== undefined
+          && Number.isFinite(Number(profile.applicability.minimumAge))
+          ? Number(profile.applicability.minimumAge) : null,
+        maximumAgeExclusive: profile.applicability?.maximumAgeExclusive !== null
+          && profile.applicability?.maximumAgeExclusive !== undefined
+          && Number.isFinite(Number(profile.applicability.maximumAgeExclusive))
+          ? Number(profile.applicability.maximumAgeExclusive) : null,
+        confirmationRequired: profile.applicability?.confirmationRequired === true,
+        automaticByBirthDate: profile.applicability?.automaticByBirthDate === true,
+        note: profile.applicability?.note || "",
+      },
+      limits: profile.limits || {},
+      rules,
+      sources,
+      assignments,
+    };
+  });
+  const currentAssignments = visibleAssignments.filter((assignment) => assignment.state === "current");
+  const sourceIds = new Set(profiles.flatMap((profile) => profile.sources.map((source) => source.id)));
+  const ruleIds = new Set(profiles.flatMap((profile) => profile.rules.map((rule) => rule.id)));
+  const defaultProfile = profiles.find((profile) => profile.assignments.some((assignment) => assignment.state === "current"))
+    || profiles.find((profile) => profile.status === "published")
+    || profiles[0]
+    || null;
+  return {
+    generatedAt: new Date().toISOString(),
+    effectiveDate: today,
+    engineVersion: WORK_RULE_ENGINE_VERSION,
+    catalogVersion: catalog.version,
+    timeBasis: catalog.timeBasis,
+    timeZone: catalog.timeZone,
+    legalNotice: catalog.legalNotice,
+    scopeLabel: sessionHasGlobalScope(session) ? "Unternehmensweite Lesesicht" : "Eigene zugewiesene Bereiche",
+    capabilities: {
+      canManageAssignments: !session || session.employeeNumber === "local"
+        || session.permissions?.includes("work_rules:manage"),
+      canDocumentExceptions: !session || session.employeeNumber === "local"
+        || session.permissions?.includes("work_rules:exception"),
+      canReadAudit: !session || session.employeeNumber === "local"
+        || session.permissions?.includes("work_rules:audit"),
+      canSimulate: sessionCanReadWorkRules(session),
+    },
+    summary: {
+      profiles: profiles.length,
+      publishedProfiles: profiles.filter((profile) => profile.status === "published").length,
+      draftProfiles: profiles.filter((profile) => profile.status === "draft").length,
+      rules: ruleIds.size,
+      sources: sourceIds.size,
+      visibleAssignments: visibleAssignments.length,
+      currentAssignments: currentAssignments.length,
+      monitorAssignments: currentAssignments.filter((assignment) => assignment.enforcementMode === "monitor").length,
+      enforcedAssignments: currentAssignments.filter((assignment) => assignment.enforcementMode === "enforced").length,
+      unconfirmedAssignments: currentAssignments.filter((assignment) => !assignment.applicabilityConfirmed).length,
+    },
+    defaultProfileId: defaultProfile?.id || "",
+    profiles,
+    assignments: visibleAssignments,
+    locations,
+  };
+}
+
+app.get("/api/work-rules/dashboard", (request, response) => {
+  response.json(workRuleDashboardPayload(request.portalSession));
+});
+
 app.get("/api/work-rules/catalog", (_request, response) => {
   response.json(getRuleCatalog());
 });
 
-app.get("/api/work-rules/profiles", (_request, response) => {
+function workRuleProfileVersionRulesPayload(version) {
+  const profile = version.profile || {};
+  const payload = {
+    schemaVersion: version.schemaVersion,
+    catalogVersion: profile.catalogVersion,
+  };
+  if (version.schemaVersion >= 2) {
+    Object.assign(payload, {
+      title: profile.title,
+      status: profile.status,
+      assignable: profile.assignable === true,
+      validFrom: profile.validFrom,
+      validTo: profile.validTo || null,
+      defaultEnforcementMode: profile.defaultEnforcementMode || "monitor",
+    });
+  }
+  return {
+    ...payload,
+    applicability: profile.applicability || {},
+    limits: profile.limits || {},
+    ruleIds: Array.isArray(profile.ruleIds) ? profile.ruleIds : [],
+    rules: Array.isArray(version.rules) ? version.rules : [],
+  };
+}
+
+function scopedWorkRuleProfileVersion(version) {
+  return {
+    id: version.id,
+    profileId: version.profileId,
+    version: version.version,
+    layer: version.layer,
+    status: version.status,
+    validFrom: version.validFrom,
+    validTo: version.validTo,
+    contentSha256: version.contentSha256,
+    schemaVersion: version.schemaVersion,
+    profile: version.profile,
+    rules: version.rules,
+    sources: version.sources,
+  };
+}
+
+function scopedWorkRuleProfile(profileRecord, versions) {
+  const sortedVersions = [...versions].sort((left, right) => (
+    String(right.validFrom || "").localeCompare(String(left.validFrom || ""))
+    || String(right.version || "").localeCompare(String(left.version || ""), "de-AT")
+    || String(right.id).localeCompare(String(left.id))
+  ));
+  const current = sortedVersions.find((version) => version.id === profileRecord.currentVersionId) || null;
+  const representative = current || sortedVersions[0];
+  const definition = representative.profile || {};
+  const applicability = definition.applicability || {};
+  return {
+    id: representative.profileId,
+    name: definition.title || representative.profileId,
+    description: applicability.note || "",
+    jurisdiction: applicability.jurisdiction || "AT",
+    sector: applicability.sector || "",
+    builtin: false,
+    status: representative.status === "published" ? "active" : "draft",
+    currentVersionId: current?.id || null,
+    visibleVersionId: representative.id,
+    version: representative.version,
+    layer: representative.layer,
+    versionStatus: representative.status,
+    validFrom: representative.validFrom,
+    validTo: representative.validTo,
+    contentSha256: representative.contentSha256,
+    rules: workRuleProfileVersionRulesPayload(representative),
+    visibleVersions: sortedVersions.map(scopedWorkRuleProfileVersion),
+  };
+}
+
+app.get("/api/work-rules/profiles", (request, response) => {
+  const session = request.portalSession;
+  const profiles = listWorkRuleProfiles(db);
+  if (sessionHasGlobalScope(session)) {
+    response.json({
+      engineVersion: WORK_RULE_ENGINE_VERSION,
+      profiles,
+    });
+    return;
+  }
+  const visibleVersionIds = new Set([
+    ...listWorkRuleAssignments(db, { includeInactive: true }),
+    ...listGovernedWorkRuleAssignments(db, { includeInactive: true }),
+  ].filter((assignment) => workRuleAssignmentVisibleToSession(session, assignment))
+    .map((assignment) => assignment.profileVersionId));
+  const profileRecords = new Map(profiles.map((profile) => [profile.id, profile]));
+  const scopedVersionsByProfile = new Map();
+  for (const versionId of visibleVersionIds) {
+    const version = getWorkRuleProfileVersion(db, versionId);
+    const profileRecord = version ? profileRecords.get(version.profileId) : null;
+    if (!version || version.status !== "published" || !profileRecord || profileRecord.builtin) continue;
+    const versions = scopedVersionsByProfile.get(version.profileId) || [];
+    versions.push(version);
+    scopedVersionsByProfile.set(version.profileId, versions);
+  }
   response.json({
     engineVersion: WORK_RULE_ENGINE_VERSION,
-    profiles: listWorkRuleProfiles(db),
+    profiles: [
+      ...profiles.filter((profile) => profile.builtin),
+      ...[...scopedVersionsByProfile.entries()].map(([profileId, versions]) => (
+        scopedWorkRuleProfile(profileRecords.get(profileId), versions)
+      )),
+    ],
   });
 });
 
@@ -20664,42 +22584,31 @@ function workRuleAssignmentVisibleToSession(session, assignment) {
 }
 
 app.get("/api/work-rules/assignments", (request, response) => {
+  const globalScope = sessionHasGlobalScope(request.portalSession);
   const assignments = listWorkRuleAssignments(db, {
     includeInactive: String(request.query.includeInactive || "") === "1",
-  }).filter((assignment) => workRuleAssignmentVisibleToSession(request.portalSession, assignment));
+  })
+    .filter((assignment) => workRuleAssignmentVisibleToSession(request.portalSession, assignment))
+    .map((assignment) => {
+      if (globalScope) return assignment;
+      const {
+        confirmedBy: _confirmedBy,
+        createdBy: _createdBy,
+        ...visible
+      } = assignment;
+      return visible;
+    });
   response.json({
     assignments,
   });
 });
 
 app.post("/api/work-rules/assignments", (request, response) => {
-  const validFrom = String(request.body.validFrom || "");
-  const validTo = String(request.body.validTo || "");
-  if (!isIsoDate(validFrom) || (validTo && (!isIsoDate(validTo) || validTo < validFrom))) {
-    throw httpError(400, "Bitte einen gültigen Geltungszeitraum für das Regelprofil angeben.");
-  }
-  const actor = request.portalSession?.employeeNumber || "local";
-  let assignment;
-  try {
-    assignment = saveWorkRuleAssignment(db, {
-      ...request.body,
-      validFrom,
-      validTo: validTo || null,
-    }, actor);
-  } catch (error) {
-    if (error instanceof TypeError) throw httpError(400, error.message);
-    throw error;
-  }
-  auditPortal(actor, "work-rule.assignment.save", "work_rule_assignment", assignment.id, JSON.stringify({
-    profileVersionId: assignment.profileVersionId,
-    scopeType: assignment.scopeType,
-    scopeKey: assignment.scopeKey,
-    validFrom: assignment.validFrom,
-    validTo: assignment.validTo,
-    enforcementMode: assignment.enforcementMode,
-    applicabilityConfirmed: assignment.applicabilityConfirmed,
-  }));
-  response.status(201).json(assignment);
+  throw httpError(
+    409,
+    "Direkte Regelzuordnungen sind geschlossen. Bitte eine veröffentlichte Fassung über den geprüften Zuordnungsworkflow einreichen.",
+    "WORK_RULE_DIRECT_ASSIGNMENT_DISABLED",
+  );
 });
 
 app.get("/api/work-rules/evaluations", (request, response) => {
@@ -22400,6 +24309,57 @@ const CUSTOM_PROCESS_RESPONSIBILITIES = new Set(["system", "role", "employee"]);
 const CUSTOM_PROCESS_CONDITIONS = new Set(["always", "when", "optional"]);
 const CUSTOM_PROCESS_NOTIFICATION_CHANNELS = new Set(["internal", "email", "sms"]);
 const CUSTOM_PROCESS_MAX_STEPS = 30;
+const PROCESS_CATEGORY_CATALOG = Object.freeze([
+  Object.freeze({
+    id: "personnel_absence",
+    label: "Personal & Abwesenheit",
+    description: "Urlaub, Zeitausgleich, Krankheit und weitere personenbezogene Abwesenheitsabläufe.",
+    sortOrder: 10,
+  }),
+  Object.freeze({
+    id: "time_payroll",
+    label: "Arbeitszeit & Abrechnung",
+    description: "Zeiterfassung, Tagesprüfung und kontrollierte Übergaben an nachgelagerte Stellen.",
+    sortOrder: 20,
+  }),
+  Object.freeze({
+    id: "customer_service",
+    label: "Verkauf & Kundenservice",
+    description: "Kundenbezogene Abläufe wie Reparaturen, Reklamationen und Second-Hand-Annahmen.",
+    sortOrder: 30,
+  }),
+  Object.freeze({
+    id: "goods_equipment",
+    label: "Ware & Geräte",
+    description: "Leihen, Umlagerungen, Inventur und weitere waren- oder gerätebezogene Abläufe.",
+    sortOrder: 40,
+  }),
+  Object.freeze({
+    id: "administration_it",
+    label: "Administration & IT",
+    description: "Zugänge, Datenschutzfälle, Systemstörungen und administrative Betriebsabläufe.",
+    sortOrder: 50,
+  }),
+  Object.freeze({
+    id: "other",
+    label: "Weitere eigene Abläufe",
+    description: "Eigene Prozessdefinitionen, die noch keinem spezielleren Fachbereich zugeordnet sind.",
+    sortOrder: 90,
+  }),
+]);
+const PROCESS_CATEGORY_LOOKUP = new Map(PROCESS_CATEGORY_CATALOG.map((category) => [category.id, category]));
+
+function processCategoryDefinition(value, { strict = false } = {}) {
+  const id = String(value || "other").trim();
+  const category = PROCESS_CATEGORY_LOOKUP.get(id);
+  if (category) return category;
+  if (strict) throw httpError(400, "Der Fachbereich des Prozesses ist ungültig.", "CUSTOM_PROCESS_CATEGORY_INVALID");
+  return PROCESS_CATEGORY_LOOKUP.get("other");
+}
+
+function processCategoryCatalogPublic() {
+  return PROCESS_CATEGORY_CATALOG.map((category) => ({ ...category }));
+}
 
 function customProcessInputObject(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -22551,11 +24511,12 @@ function normalizeCustomProcessStep(input, index, scope, usedIds) {
 
 function normalizeCustomProcessInput(body = {}, { allowArchived = false } = {}) {
   const input = customProcessInputObject(body, "Die Prozessdefinition");
-  assertCustomProcessKeys(input, new Set(["title", "symbol", "description", "summary", "status", "scope", "trigger", "steps", "revision"]), "Die Prozessdefinition");
+  assertCustomProcessKeys(input, new Set(["title", "symbol", "description", "summary", "category", "status", "scope", "trigger", "steps", "revision"]), "Die Prozessdefinition");
   const title = customProcessText(input.title, { label: "Der Prozessname", min: 3, max: 120 });
   const rawSymbol = customProcessText(input.symbol || "P", { label: "Das Kurzzeichen", min: 1, max: 5 }).toUpperCase();
   if (!/^[\p{L}\p{N}]{1,5}$/u.test(rawSymbol)) throw httpError(400, "Das Kurzzeichen darf nur Buchstaben und Ziffern enthalten.", "CUSTOM_PROCESS_INPUT_INVALID");
   const description = customProcessText(input.description ?? input.summary, { label: "Die Prozessbeschreibung", max: 600 });
+  const category = processCategoryDefinition(input.category || "other", { strict: true });
   const status = String(input.status || "draft").trim();
   if (!CUSTOM_PROCESS_STATUS.has(status) || (!allowArchived && status === "archived")) {
     throw httpError(400, "Der Prozessstatus ist ungültig.", "CUSTOM_PROCESS_STATUS_INVALID");
@@ -22576,7 +24537,7 @@ function normalizeCustomProcessInput(body = {}, { allowArchived = false } = {}) 
   if (status === "active" && !steps.some((step) => step.type === "finish")) {
     throw httpError(422, "Ein aktiver Prozess benötigt einen klaren Abschlussschritt.", "CUSTOM_PROCESS_ACTIVATION_INVALID");
   }
-  return { title, symbol: rawSymbol, description, status, scope, trigger: { type: triggerType, minimumShortfall }, steps };
+  return { title, symbol: rawSymbol, description, category: category.id, status, scope, trigger: { type: triggerType, minimumShortfall }, steps };
 }
 
 function customProcessRows({ includeArchived = false } = {}) {
@@ -22608,6 +24569,7 @@ function customProcessScopeFromRow(row) {
 
 function customProcessDashboardDefinition(row, stepRows = []) {
   const scope = customProcessScopeFromRow(row);
+  const category = processCategoryDefinition(row.category);
   const steps = stepRows.map((step) => {
     let notificationChannels = [];
     try {
@@ -22647,6 +24609,8 @@ function customProcessDashboardDefinition(row, stepRows = []) {
     status: row.status,
     statusLabel: row.status === "active" ? "Ablauf aktiv" : row.status === "draft" ? "Entwurf" : "Archiviert",
     enabled: row.status === "active",
+    category: category.id,
+    categoryLabel: category.label,
     symbol: row.symbol,
     title: row.title,
     description: row.description,
@@ -22655,6 +24619,7 @@ function customProcessDashboardDefinition(row, stepRows = []) {
     scope: { type: scope.type, locationId: scope.locationId, departmentId: scope.departmentId, label: scope.label, valid: scope.valid !== false },
     trigger: { type: row.trigger_type, minimumShortfall: Number(row.trigger_minimum_shortfall || 1), label: triggerLabel },
     rules: [
+      { label: "Fachbereich", value: category.label, tone: "neutral" },
       { label: "Geltungsbereich", value: scope.label, tone: "neutral" },
       { label: "Auslöser", value: triggerLabel, tone: row.trigger_type === "staffing_shortfall" ? "attention" : "neutral" },
       { label: "Benachrichtigungen", value: String(notifications), tone: notifications ? "positive" : "neutral" },
@@ -22693,6 +24658,7 @@ function customProcessEditorCatalog(actor) {
   }));
   return {
     canManageCustomProcesses: canManage,
+    categories: processCategoryCatalogPublic(),
     statuses: ["draft", "active"],
     scopes: ["company", "location", "department"],
     triggers: ["manual", "staffing_shortfall"],
@@ -22809,16 +24775,16 @@ function createCustomProcess(actor, body) {
     assertCustomProcessStepIdsAvailable(value.steps);
     db.prepare(`
       INSERT INTO custom_processes
-        (id, title, symbol, description, scope_type, location_id, department_id, trigger_type,
+        (id, title, symbol, description, category, scope_type, location_id, department_id, trigger_type,
          trigger_minimum_shortfall, status, created_by, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, value.title, value.symbol, value.description, value.scope.type, value.scope.locationId,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, value.title, value.symbol, value.description, value.category, value.scope.type, value.scope.locationId,
       value.scope.departmentId, value.trigger.type, value.trigger.minimumShortfall, value.status,
       actor.employeeNumber, actor.employeeNumber);
     insertCustomProcessSteps(id, value.steps);
     persistCustomProcessRevision(id, actor.employeeNumber);
     auditPortal(actor.employeeNumber, "custom-process.create", "custom_process", id,
-      JSON.stringify({ status: value.status, revision: 1, scope: value.scope.type, stepCount: value.steps.length, trigger: value.trigger.type }));
+      JSON.stringify({ status: value.status, revision: 1, category: value.category, scope: value.scope.type, stepCount: value.steps.length, trigger: value.trigger.type }));
     db.exec("COMMIT");
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
@@ -22839,11 +24805,11 @@ function updateCustomProcess(actor, id, body) {
     assertCustomProcessStepIdsAvailable(value.steps, id);
     const updated = db.prepare(`
       UPDATE custom_processes SET
-        title = ?, symbol = ?, description = ?, scope_type = ?, location_id = ?, department_id = ?,
+        title = ?, symbol = ?, description = ?, category = ?, scope_type = ?, location_id = ?, department_id = ?,
         trigger_type = ?, trigger_minimum_shortfall = ?, status = ?, revision = revision + 1,
         updated_by = ?, archived_at = NULL, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND revision = ? AND status <> 'archived'
-    `).run(value.title, value.symbol, value.description, value.scope.type, value.scope.locationId,
+    `).run(value.title, value.symbol, value.description, value.category, value.scope.type, value.scope.locationId,
       value.scope.departmentId, value.trigger.type, value.trigger.minimumShortfall, value.status,
       actor.employeeNumber, id, revision);
     if (!updated.changes) throw httpError(409, "Der Prozess wurde zwischenzeitlich geändert. Bitte neu laden.", "CUSTOM_PROCESS_REVISION_CONFLICT");
@@ -22851,7 +24817,7 @@ function updateCustomProcess(actor, id, body) {
     insertCustomProcessSteps(id, value.steps);
     persistCustomProcessRevision(id, actor.employeeNumber);
     auditPortal(actor.employeeNumber, "custom-process.update", "custom_process", id,
-      JSON.stringify({ status: value.status, revision: revision + 1, scope: value.scope.type, stepCount: value.steps.length, trigger: value.trigger.type }));
+      JSON.stringify({ status: value.status, revision: revision + 1, category: value.category, scope: value.scope.type, stepCount: value.steps.length, trigger: value.trigger.type }));
     db.exec("COMMIT");
   } catch (error) {
     try { db.exec("ROLLBACK"); } catch {}
@@ -22875,6 +24841,7 @@ function setCustomProcessStatus(actor, id, body = {}) {
       title: existing.process.title,
       symbol: existing.process.symbol,
       description: existing.process.description,
+      category: existing.process.category,
       status,
       scope: { type: existing.process.scope_type, locationId: existing.process.location_id, departmentId: existing.process.department_id },
       trigger: { type: existing.process.trigger_type, minimumShortfall: existing.process.trigger_minimum_shortfall },
@@ -23472,17 +25439,24 @@ function rightsDashboardProcesses(actor = null) {
     timeTrackingAccessLabel: location.time_tracking_access_mode === "trusted_network" ? "Nur freigegebene Netzwerke" : "Ortsunabhängige Buchung",
     timeTrackingVarianceMinutes: Math.max(0, Number(location.time_tracking_variance_minutes || 0)),
   }));
-  const process = (definition) => ({
-    ...definition,
-    statusLabel: definition.enabled ? "Ablauf aktiv" : "Modul nicht freigeschaltet",
-  });
+  const process = (definition) => {
+    const category = processCategoryDefinition(definition.category);
+    return {
+      ...definition,
+      category: category.id,
+      categoryLabel: category.label,
+      statusLabel: definition.enabled ? "Ablauf aktiv" : "Modul nicht freigeschaltet",
+    };
+  };
   return {
     generatedAt: new Date().toISOString(),
     locations,
+    categories: processCategoryCatalogPublic(),
     capabilities: customProcessEditorCatalog(actor),
     processes: [
       process({
         id: "vacation",
+        category: "personnel_absence",
         symbol: "U",
         title: "Urlaubsantrag",
         summary: "Vom Antrag über die lokale Freigabe bis zur verbindlichen Urlaubsplanung.",
@@ -23508,6 +25482,7 @@ function rightsDashboardProcesses(actor = null) {
       }),
       process({
         id: "time_off",
+        category: "personnel_absence",
         symbol: "ZA",
         title: "Zeitausgleich",
         summary: "Filialinterner oder PL-gebundener ZA mit Planbarkeitsprüfung und passendem Freigabeweg.",
@@ -23534,6 +25509,7 @@ function rightsDashboardProcesses(actor = null) {
       }),
       process({
         id: "sickness_amu",
+        category: "personnel_absence",
         symbol: "AUM",
         title: "Krankmeldung & AUM",
         summary: "Sichere Krankmeldung, optionale AUM-Nachreichung, Fristen und geschützter Abschluss des Falls.",
@@ -23565,6 +25541,7 @@ function rightsDashboardProcesses(actor = null) {
       }),
       process({
         id: "time_review",
+        category: "time_payroll",
         symbol: "ZEIT",
         title: "Zeiterfassung & Tagesprüfung",
         summary: "Von der Buchung über Abweichungen und Korrekturen bis zum geprüften Tagesabschluss.",
@@ -23591,6 +25568,7 @@ function rightsDashboardProcesses(actor = null) {
       }),
       process({
         id: "payroll",
+        category: "time_payroll",
         symbol: "LV",
         title: "Lohnverrechnung übergeben",
         summary: "Geprüfte Zeit- und Abwesenheitsdaten als Datei oder über ein freigegebenes HTTPS-Ziel ausgeben.",
@@ -23903,8 +25881,8 @@ function drawRightsDashboardProcessPdf(processDashboard, process, location, vali
     size: "A4",
     margin: 0,
     info: {
-      Title: `Prozessweg · ${process.title}`,
-      Subject: `${APP_NAME} ${APP_VERSION_LABEL} · Rechte-Dashboard`,
+      Title: `Ablauf · ${process.title}`,
+      Subject: `${APP_NAME} ${APP_VERSION_LABEL} · Dashboard Abläufe & Prozesse`,
     },
   });
   doc.pipe(response);
@@ -23915,7 +25893,7 @@ function drawRightsDashboardProcessPdf(processDashboard, process, location, vali
   const colors = { text: "#172331", muted: "#6f7b80", line: "#d7dfdb", accent: "#26785f", soft: "#eef6f2", warning: "#b77a12", blocker: "#b8473b" };
   let y = 38;
   const pageHeader = (continued = false) => {
-    doc.fillColor(colors.accent).font("Helvetica-Bold").fontSize(7).text("GRABENPLANER · RECHTE-DASHBOARD", left, y, { characterSpacing: 1.2 });
+    doc.fillColor(colors.accent).font("Helvetica-Bold").fontSize(7).text("GRABENPLANER · ABLÄUFE & PROZESSE", left, y, { characterSpacing: 1.2 });
     y += 16;
     doc.fillColor(colors.text).font("Helvetica-Bold").fontSize(continued ? 14 : 22).text(continued ? `${process.title} · Fortsetzung` : process.title, left, y, { width });
     y += continued ? 25 : 34;
@@ -23929,7 +25907,7 @@ function drawRightsDashboardProcessPdf(processDashboard, process, location, vali
   pageHeader();
   doc.fillColor(colors.muted).font("Helvetica").fontSize(9).text(process.summary, left, y, { width, lineGap: 2 });
   y = doc.y + 13;
-  const contextParts = [`Simulation: ${process.scenario.label}`];
+  const contextParts = [`Fachbereich: ${process.categoryLabel || processCategoryDefinition(process.category).label}`, `Simulation: ${process.scenario.label}`];
   if (process.locationSensitive && location) contextParts.push(`Standort: ${location.id} · ${location.name}`);
   contextParts.push(`Erstellt: ${createdAt.toLocaleString("de-AT", { timeZone: "Europe/Vienna" })}`);
   doc.roundedRect(left, y, width, 31, 7).fill(colors.soft);

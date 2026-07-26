@@ -30,7 +30,7 @@
       <aside class="sidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.85 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.86 Beta</span></div>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -90,6 +90,12 @@
               </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="costCenters" id="costCentersNavButton">
                 <span class="nav-symbol">▦</span><span>Kostenstellen</span>
+              </button>
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="ruleDrafts" id="customWorkRulesNavButton">
+                <span class="nav-symbol">◇</span><span>Regelwerk</span>
+              </button>
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="collectiveAgreements" id="collectiveAgreementsNavButton">
+                <span class="nav-symbol">≡</span><span>Kollektivverträge</span>
               </button>
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="vacations" id="centralVacationsNavButton">
                 <span class="nav-symbol">☀</span><span>Urlaube (Unternehmen)</span>
@@ -327,13 +333,15 @@
 
         <section id="personnelAdministrationView" class="view">
           <header class="settings-header">
-            <div><span class="eyebrow">Zentrale Stammdaten</span><h1>Personalverwaltung</h1><p class="subtitle">Alle Beschäftigten und Kostenstellen übersichtlich und geschützt verwalten.</p></div>
+            <div><span class="eyebrow">Zentrale Stammdaten</span><h1>Personalverwaltung</h1><p class="subtitle">Mitarbeitende, Organisation, Abwesenheiten und fachliche Regelgrundlagen geschützt verwalten.</p></div>
             <div class="settings-header-actions"><button class="display-columns-button" id="personnelDisplayColumnsButton" type="button">Anzeigespalten</button><div class="page-theme-switch" role="group" aria-label="Darstellung der Personalverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div></div>
           </header>
 
           <div class="settings-tabs personnel-administration-tabs" role="tablist">
             <button class="settings-tab active" id="personnelDirectoryTab" type="button" role="tab" aria-controls="personnelDirectorySection" aria-selected="true" data-personnel-administration-tab="employees">Mitarbeitende</button>
             <button class="settings-tab" id="costCentersTab" type="button" role="tab" aria-controls="costCenterSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="costCenters">Kostenstellen</button>
+            <button class="settings-tab hidden" id="customWorkRulesTab" type="button" role="tab" aria-controls="customWorkRulesSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="ruleDrafts">Regelwerk</button>
+            <button class="settings-tab hidden" id="collectiveAgreementsTab" type="button" role="tab" aria-controls="collectiveAgreementsSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="collectiveAgreements">Kollektivverträge</button>
             <button class="settings-tab hidden" id="centralVacationsTab" type="button" role="tab" aria-controls="centralVacationSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="vacations">Urlaube</button>
             <button class="settings-tab hidden" id="dataSubjectRequestsTab" type="button" role="tab" aria-controls="dataSubjectRequestsSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="dataRequests">Datenanfragen <span class="tab-count hidden" id="dataSubjectRequestsTabCount">0</span></button>
           </div>
@@ -364,6 +372,102 @@
             </div>
             <p class="calculation-note">Kostenstellen werden nicht endgültig gelöscht. Vor der Deaktivierung müssen bestehende Zuordnungen verschoben werden; historische Daten bleiben erhalten.</p>
             <div class="cost-center-list" id="costCenterList"><p class="settings-note">Kostenstellen werden geladen.</p></div>
+          </section>
+
+          <section class="personnel-administration-section custom-work-rules-section" id="customWorkRulesSection" role="tabpanel" aria-labelledby="customWorkRulesTab">
+            <div class="employee-toolbar custom-work-rules-toolbar">
+              <div>
+                <span class="eyebrow">Geführter Regelbaukasten</span>
+                <h2>Eigene Regeln</h2>
+                <p>Regeln vorbereiten, fachlich prüfen, im Vier-Augen-Prinzip freigeben und kontrolliert einem Geltungsbereich zuordnen.</p>
+              </div>
+              <div class="custom-work-rules-actions">
+                <span class="custom-work-rule-updated" id="customWorkRuleUpdated">Noch nicht geladen</span>
+                <button class="secondary-button" id="refreshCustomWorkRulesButton" type="button">Aktualisieren</button>
+                <button class="primary-button hidden" id="addCustomWorkRuleButton" type="button">+ Regelentwurf</button>
+              </div>
+            </div>
+            <article class="custom-work-rule-boundary" id="customWorkRuleNotice">
+              <strong>Veröffentlichung und Wirksamkeit bleiben getrennt</strong>
+              <p>Eine Fassung wird erst nach dokumentierter Prüfung veröffentlicht. Dienstplanwirkung entsteht ausschließlich durch eine freigegebene, datierte Zuordnung.</p>
+            </article>
+            <div class="personnel-administration-summary custom-work-rule-summary" id="customWorkRuleSummary" aria-live="polite"></div>
+            <div class="custom-work-rule-task-filter" id="customWorkRuleTaskFilter" role="group" aria-label="Eigene Regeln nach Bearbeitungsstand filtern"></div>
+            <div class="custom-work-rule-workspace">
+              <section class="custom-work-rule-list-panel">
+                <div class="custom-work-rule-panel-heading">
+                  <div><span class="eyebrow">Regelwerk &amp; Aufgaben</span><h3>Eigene Regeln</h3><p id="customWorkRuleListHint">Alle Bearbeitungsstände</p></div>
+                </div>
+                <div class="custom-work-rule-list" id="customWorkRuleList" aria-live="polite">
+                  <p class="settings-note">Eigene Regeln werden beim Öffnen geladen.</p>
+                </div>
+              </section>
+              <section class="custom-work-rule-detail-panel" id="customWorkRuleDetail">
+                <div class="custom-work-rule-empty">
+                  <strong>Noch keine Regel ausgewählt</strong>
+                  <p>Wähle links eine Regel, um Fassung, Freigabeweg, Konflikte, Zuordnungen und Audit-Historie zu lesen.</p>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section class="personnel-administration-section collective-agreements-section" id="collectiveAgreementsSection" role="tabpanel" aria-labelledby="collectiveAgreementsTab">
+            <div class="employee-toolbar collective-agreements-toolbar">
+              <div>
+                <h2>Kollektivvertragsregister</h2>
+                <p>Externe Fassungen, genaue Fundstellen, Betriebsteile und prüfpflichtige Zuordnungsvorschläge nachvollziehbar dokumentieren.</p>
+              </div>
+              <div class="collective-agreements-actions">
+                <button class="secondary-button" id="refreshCollectiveAgreementsButton" type="button">Aktualisieren</button>
+                <button class="primary-button hidden" id="addCollectiveAgreementButton" type="button">+ KV erfassen</button>
+              </div>
+            </div>
+            <article class="collective-agreement-boundary" id="collectiveAgreementLegalNotice">
+              <strong>Register, keine Rechtsfreigabe</strong>
+              <p>Das Register dokumentiert externe Kollektivverträge. Es erzeugt selbst keinen Kollektivvertrag und bestätigt keine Anwendbarkeit.</p>
+            </article>
+            <div class="personnel-administration-summary collective-agreement-summary" id="collectiveAgreementSummary" aria-live="polite"></div>
+
+            <div class="collective-agreement-workspace">
+              <section class="collective-agreement-register-panel">
+                <!-- Block-4-Kompatibilitätsmarker, durch den aktuellen Freigabeweg ersetzt: Jeder Vorschlag bleibt bis Block 6 -->
+                <div class="collective-agreement-panel-heading">
+                  <div><span class="eyebrow">Versionierte Quellenstände</span><h3>KV-Fassungen</h3></div>
+                </div>
+                <div class="collective-agreement-list" id="collectiveAgreementList" aria-live="polite">
+                  <p class="settings-note">Das KV-Register wird beim Öffnen geladen.</p>
+                </div>
+              </section>
+
+              <section class="collective-agreement-detail-panel" id="collectiveAgreementDetail">
+                <div class="collective-agreement-empty">
+                  <strong>Noch keine Fassung ausgewählt</strong>
+                  <p>Wähle links einen Registereintrag, um Quellenstand, Geltungsbereich und Versionshistorie zu lesen.</p>
+                </div>
+              </section>
+            </div>
+
+            <div class="collective-agreement-lower-grid">
+              <section class="collective-agreement-register-panel">
+                <div class="collective-agreement-panel-heading">
+                  <div><span class="eyebrow">Organisationsmodell</span><h3>Betriebsteile</h3><p>Rechtsträger mit Kostenstellen, Filialen und Abteilungen verbinden.</p></div>
+                  <button class="secondary-button hidden" id="addCollectiveAgreementBusinessUnitButton" type="button">+ Betriebsteil</button>
+                </div>
+                <div class="collective-agreement-business-units" id="collectiveAgreementBusinessUnits">
+                  <p class="settings-note">Betriebsteile werden geladen.</p>
+                </div>
+              </section>
+
+              <section class="collective-agreement-register-panel">
+                <div class="collective-agreement-panel-heading">
+                  <div><span class="eyebrow">Vier-Augen-Prinzip</span><h3>KV-Zuordnungen</h3><p>Vorschlag, unabhängige Freigaben, Wirksamkeit und kontrollierte Beendigung bleiben nachvollziehbar getrennt.</p></div>
+                  <button class="secondary-button hidden" id="addCollectiveAgreementAssignmentButton" type="button">+ Zuordnung vorbereiten</button>
+                </div>
+                <div class="collective-agreement-assignments" id="collectiveAgreementAssignments">
+                  <p class="settings-note">Zuordnungen werden geladen.</p>
+                </div>
+              </section>
+            </div>
           </section>
 
           <section class="personnel-administration-section" id="centralVacationSection" role="tabpanel" aria-labelledby="centralVacationsTab">
@@ -399,6 +503,294 @@
             <div class="data-subject-request-list" id="dataSubjectRequestList" aria-live="polite"><p class="settings-note">Datenanfragen werden beim Öffnen geladen.</p></div>
           </section>
         </section>
+
+        <dialog class="modal collective-agreement-modal" id="collectiveAgreementModal">
+          <form class="modal-card collective-agreement-modal-card" id="collectiveAgreementForm">
+            <div class="modal-header">
+              <div>
+                <span class="eyebrow">Personalverwaltung · KV-Register</span>
+                <h2 id="collectiveAgreementModalTitle">Kollektivvertrag erfassen</h2>
+                <p>Gespeichert wird ein unveränderlicher externer Quellenstand, keine selbst geschaffene Vertragsnorm.</p>
+              </div>
+              <button type="button" class="close-button" data-close="collectiveAgreementModal">×</button>
+            </div>
+            <input id="collectiveAgreementId" type="hidden" />
+            <div class="form-grid collective-agreement-form-grid">
+              <label class="field"><span>Registerkürzel</span><input id="collectiveAgreementCode" maxlength="40" required placeholder="z. B. HANDEL-AT" /></label>
+              <label class="field"><span>Kurzbezeichnung</span><input id="collectiveAgreementShortTitle" maxlength="80" placeholder="z. B. Handels-KV" /></label>
+              <label class="field form-grid-wide"><span>Offizielle Bezeichnung</span><input id="collectiveAgreementTitle" maxlength="180" required /></label>
+              <label class="field"><span>Rechtsraum</span><input id="collectiveAgreementJurisdiction" maxlength="2" value="AT" required /></label>
+              <label class="field"><span>Fassungsbezeichnung</span><input id="collectiveAgreementVersionLabel" maxlength="80" required placeholder="z. B. 2026" /></label>
+              <label class="field"><span>Gültig ab</span><input id="collectiveAgreementValidFrom" type="date" required /></label>
+              <label class="field"><span>Gültig bis</span><input id="collectiveAgreementValidTo" type="date" /></label>
+              <label class="field"><span>Extern veröffentlicht am</span><input id="collectiveAgreementPublishedOn" type="date" /></label>
+              <label class="field"><span>Quelle abgerufen am</span><input id="collectiveAgreementSourceRetrievedOn" type="date" required /></label>
+              <label class="field form-grid-wide"><span>Quellenbezeichnung</span><input id="collectiveAgreementSourceTitle" maxlength="240" required placeholder="Herausgeber und Dokumenttitel" /></label>
+              <label class="field form-grid-wide"><span>Offizielle HTTPS-Fundstelle</span><input id="collectiveAgreementSourceUrl" type="url" maxlength="1200" required placeholder="https://…" /></label>
+              <label class="field form-grid-wide"><span>SHA-256 des Quelldokuments <small>(optional)</small></span><input id="collectiveAgreementSourceSha256" maxlength="64" spellcheck="false" /></label>
+              <label class="field form-grid-wide"><span>Vertragsparteien <small>(eine je Zeile)</small></span><textarea id="collectiveAgreementContractingParties" rows="3" maxlength="2000"></textarea></label>
+              <label class="field"><span>Räumlicher Geltungsbereich</span><textarea id="collectiveAgreementTerritorialScope" rows="3" maxlength="600"></textarea></label>
+              <label class="field"><span>Fachlicher Geltungsbereich</span><textarea id="collectiveAgreementFunctionalScope" rows="3" maxlength="1200"></textarea></label>
+              <label class="field form-grid-wide"><span>Persönlicher Geltungsbereich</span><textarea id="collectiveAgreementPersonalScope" rows="3" maxlength="1200"></textarea></label>
+              <label class="field form-grid-wide"><span>Beschäftigtengruppen <small>(eine je Zeile)</small></span><textarea id="collectiveAgreementEmployeeGroups" rows="3" maxlength="2000"></textarea></label>
+              <label class="field"><span>Lehrlingsrelevanz</span><select id="collectiveAgreementApprenticeRelevance"><option value="unknown">Noch zu prüfen</option><option value="yes">Relevant</option><option value="no">Nicht relevant</option></select></label>
+              <label class="field"><span>Verknüpftes Regelprofil <small>(optional)</small></span><select id="collectiveAgreementLinkedProfileVersion"><option value="">Noch keines</option></select></label>
+              <label class="field form-grid-wide"><span>Lehrlingshinweis</span><textarea id="collectiveAgreementApprenticeNote" rows="3" maxlength="1600"></textarea></label>
+              <label class="field form-grid-wide"><span>Abgeleitete Arbeitszeitparameter</span><textarea id="collectiveAgreementWorkTimeNote" rows="3" maxlength="2000" placeholder="Nur nachvollziehbar abgeleitete Parameter und Fundstellen, kein Volltext."></textarea></label>
+              <label class="field form-grid-wide"><span>Einstufungshinweis</span><textarea id="collectiveAgreementClassificationNote" rows="3" maxlength="1600"></textarea></label>
+              <label class="field form-grid-wide"><span>Quellenhinweis</span><textarea id="collectiveAgreementSourceNote" rows="3" maxlength="1600"></textarea></label>
+              <label class="field form-grid-wide"><span>Nachfolge- oder Ersetzungshinweis</span><textarea id="collectiveAgreementSuccessorNote" rows="3" maxlength="1000"></textarea></label>
+              <label class="field form-grid-wide new-collective-agreement-only"><span>Interner Registerhinweis</span><textarea id="collectiveAgreementNote" rows="3" maxlength="1200"></textarea></label>
+            </div>
+            <p class="calculation-note">Eine gespeicherte Fassung wird nicht überschrieben. Änderungen werden als neue Fassung ergänzt.</p>
+            <div class="modal-actions"><button class="secondary-button" type="button" data-close="collectiveAgreementModal">Abbrechen</button><button class="primary-button" id="collectiveAgreementSubmitButton" type="submit">Fassung speichern</button></div>
+          </form>
+        </dialog>
+
+        <dialog class="modal collective-agreement-modal" id="collectiveAgreementBusinessUnitModal">
+          <form class="modal-card collective-agreement-modal-card compact" id="collectiveAgreementBusinessUnitForm">
+            <div class="modal-header">
+              <div><span class="eyebrow">KV-Register · Organisationsmodell</span><h2 id="collectiveAgreementBusinessUnitModalTitle">Betriebsteil anlegen</h2><p>Der Betriebsteil fasst tatsächliche organisatorische Bereiche unter einem Rechtsträger zusammen.</p></div>
+              <button type="button" class="close-button" data-close="collectiveAgreementBusinessUnitModal">×</button>
+            </div>
+            <input id="collectiveAgreementBusinessUnitId" type="hidden" />
+            <div class="form-grid">
+              <label class="field"><span>Kürzel</span><input id="collectiveAgreementBusinessUnitCode" maxlength="40" required placeholder="z. B. HANDEL" /></label>
+              <label class="field"><span>Name</span><input id="collectiveAgreementBusinessUnitName" maxlength="160" required /></label>
+              <label class="field form-grid-wide"><span>Rechtsträger</span><input id="collectiveAgreementBusinessUnitLegalEntity" maxlength="200" required /></label>
+              <label class="field form-grid-wide"><span>Beschreibung</span><textarea id="collectiveAgreementBusinessUnitDescription" rows="3" maxlength="1200"></textarea></label>
+            </div>
+            <fieldset class="collective-agreement-scope-fieldset">
+              <legend>Zugeordnete Kostenstellen, Filialen und Abteilungen</legend>
+              <p>Mehrfachauswahl ist möglich. Ein organisatorischer Bereich kann nur einem aktiven Betriebsteil angehören.</p>
+              <div class="collective-agreement-scope-options" id="collectiveAgreementBusinessUnitScopeOptions"></div>
+            </fieldset>
+            <div class="modal-actions"><button class="secondary-button" type="button" data-close="collectiveAgreementBusinessUnitModal">Abbrechen</button><button class="primary-button" id="collectiveAgreementBusinessUnitSubmitButton" type="submit">Betriebsteil speichern</button></div>
+          </form>
+        </dialog>
+
+        <dialog class="modal collective-agreement-modal" id="collectiveAgreementAssignmentModal">
+          <form class="modal-card collective-agreement-modal-card compact" id="collectiveAgreementAssignmentForm">
+            <div class="modal-header">
+              <div><span class="eyebrow">KV-Register · Zuordnung</span><h2>Zuordnung vorbereiten</h2><p>Der Vorschlag bleibt bis zur getrennten Vier-Augen-Freigabe rechtlich und fachlich ungeprüft und ohne Wirkung.</p></div>
+              <button type="button" class="close-button" data-close="collectiveAgreementAssignmentModal">×</button>
+            </div>
+            <div class="form-grid">
+              <label class="field form-grid-wide"><span>KV-Fassung</span><select id="collectiveAgreementAssignmentVersion" required></select></label>
+              <label class="field form-grid-wide"><span>Betriebsteil</span><select id="collectiveAgreementAssignmentBusinessUnit" required></select></label>
+              <label class="field"><span>Vorgeschlagen gültig ab</span><input id="collectiveAgreementAssignmentValidFrom" type="date" required /></label>
+              <label class="field"><span>Vorgeschlagen gültig bis</span><input id="collectiveAgreementAssignmentValidTo" type="date" /></label>
+              <label class="field form-grid-wide"><span>Prüfbegründung</span><textarea id="collectiveAgreementAssignmentRationale" rows="4" maxlength="2000" minlength="10" required placeholder="Warum könnte diese Fassung für diesen Betriebsteil gelten?"></textarea></label>
+              <label class="field form-grid-wide"><span>Prüfnachweis / offene Frage</span><textarea id="collectiveAgreementAssignmentReference" rows="3" maxlength="1600"></textarea></label>
+            </div>
+            <div class="collective-agreement-review-state"><span>Status</span><strong>Prüfung offen</strong><small>Keine Auswirkung auf Dienstplan oder Personalakt</small></div>
+            <div class="modal-actions"><button class="secondary-button" type="button" data-close="collectiveAgreementAssignmentModal">Abbrechen</button><button class="primary-button" id="collectiveAgreementAssignmentSubmitButton" type="submit">Vorschlag speichern</button></div>
+          </form>
+        </dialog>
+
+        <dialog class="modal custom-work-rule-modal" id="customWorkRuleModal">
+          <form class="modal-card custom-work-rule-modal-card" id="customWorkRuleForm">
+            <div class="modal-header">
+              <div>
+                <span class="eyebrow">Personalverwaltung · Regelwerk</span>
+                <h2 id="customWorkRuleModalTitle">Regelentwurf anlegen</h2>
+                <p>Der Baukasten erzeugt eine unveränderliche Entwurfsfassung – keinen ausführbaren Programmcode.</p>
+              </div>
+              <button type="button" class="close-button" data-close="customWorkRuleModal">×</button>
+            </div>
+            <input id="customWorkRuleId" type="hidden" />
+            <div class="form-grid custom-work-rule-form-grid">
+              <label class="field custom-work-rule-new-only"><span>Regelkürzel</span><input id="customWorkRuleCode" maxlength="60" required placeholder="z. B. URLAUB-VORLAUF" /></label>
+              <label class="field"><span>Regelbezeichnung</span><input id="customWorkRuleTitle" maxlength="180" required /></label>
+              <label class="field"><span>Regelart</span><select id="customWorkRuleType" required></select></label>
+              <label class="field"><span>Themenbereich</span><select id="customWorkRuleTopic" required></select></label>
+              <label class="field form-grid-wide"><span>Fachliche Beschreibung</span><textarea id="customWorkRuleDescription" rows="3" minlength="10" maxlength="1600" required></textarea></label>
+              <label class="field"><span>Geltungsbereich</span><select id="customWorkRuleScopeType" required></select></label>
+              <label class="field hidden" id="customWorkRuleScopeSelectField"><span id="customWorkRuleScopeSelectLabel">Zuordnung</span><select id="customWorkRuleScopeSelect"></select></label>
+              <label class="field hidden" id="customWorkRuleScopeGroupField"><span>Beschäftigtengruppe</span><input id="customWorkRuleScopeGroup" maxlength="160" placeholder="z. B. Lehrlinge im Verkauf" /></label>
+              <label class="field"><span>Gültig ab</span><input id="customWorkRuleValidFrom" type="date" required /></label>
+              <label class="field"><span>Gültig bis</span><input id="customWorkRuleValidTo" type="date" /></label>
+            </div>
+
+            <fieldset class="custom-work-rule-fieldset">
+              <legend>Bedingung und geplante Reaktion</legend>
+              <div class="form-grid custom-work-rule-form-grid">
+                <label class="field form-grid-wide"><span>Regelbaustein</span><select id="customWorkRuleMetric" required></select><small id="customWorkRuleMetricHelp"></small></label>
+                <label class="field"><span>Vergleich</span><input id="customWorkRuleOperator" readonly /></label>
+                <label class="field"><span>Grenzwert <small id="customWorkRuleThresholdUnit"></small></span><input id="customWorkRuleThreshold" required /></label>
+                <label class="field"><span>Schweregrad</span><select id="customWorkRuleSeverity" required></select></label>
+                <label class="field"><span>Reaktion nach späterer Freigabe</span><select id="customWorkRuleReaction" required></select></label>
+                <label class="field form-grid-wide"><span>Verständlicher Hinweistext</span><textarea id="customWorkRuleMessage" rows="3" minlength="10" maxlength="1000" required></textarea></label>
+                <label class="field form-grid-wide"><span>Verantwortliche Stelle</span><input id="customWorkRuleResponsibleUnit" maxlength="160" required placeholder="z. B. Personalleitung" /></label>
+              </div>
+            </fieldset>
+
+            <fieldset class="custom-work-rule-fieldset">
+              <legend>Quelle und Fundstelle</legend>
+              <div class="form-grid custom-work-rule-form-grid">
+                <label class="field"><span>Quellenbezeichnung</span><input id="customWorkRuleSourceTitle" maxlength="240" required placeholder="z. B. Interne Urlaubsrichtlinie" /></label>
+                <label class="field"><span>Fundstelle / Dokumentreferenz</span><input id="customWorkRuleSourceReference" maxlength="500" required placeholder="z. B. RL-URL-2026, Abschnitt 3" /></label>
+                <label class="field form-grid-wide"><span>HTTPS-Fundstelle <small>(optional)</small></span><input id="customWorkRuleSourceUrl" type="url" maxlength="1200" placeholder="https://…" /></label>
+                <label class="field form-grid-wide"><span>Quellenhinweis</span><textarea id="customWorkRuleSourceNote" rows="2" maxlength="1200"></textarea></label>
+              </div>
+            </fieldset>
+
+            <fieldset class="custom-work-rule-fieldset">
+              <legend>Pflicht-Testfälle</legend>
+              <p>Ein eingehaltenes, ein verletztes und ein fehlendes Beispiel werden serverseitig gegen denselben Grenzwert geprüft.</p>
+              <div class="form-grid custom-work-rule-form-grid">
+                <label class="field"><span>Beispiel „eingehalten“ <small id="customWorkRulePositiveUnit"></small></span><input id="customWorkRulePositiveTest" required /></label>
+                <label class="field"><span>Beispiel „verletzt“ <small id="customWorkRuleNegativeUnit"></small></span><input id="customWorkRuleNegativeTest" required /></label>
+              </div>
+              <div class="custom-work-rule-test-actions">
+                <button class="secondary-button" id="simulateCustomWorkRuleButton" type="button">3 Testfälle prüfen</button>
+                <div class="custom-work-rule-test-result" id="customWorkRuleTestResult" aria-live="polite">Noch nicht geprüft.</div>
+              </div>
+            </fieldset>
+
+            <div class="custom-work-rule-review-state">
+              <span>Status</span><strong>Entwurf</strong><small>Keine Dienstplanwirkung · keine Freigabe · keine Zuordnung</small>
+            </div>
+            <div class="modal-actions">
+              <button class="secondary-button" type="button" data-close="customWorkRuleModal">Abbrechen</button>
+              <button class="primary-button" id="customWorkRuleSubmitButton" type="submit">Entwurf speichern</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog class="modal custom-work-rule-governance-dialog" id="workRuleReviewModal">
+          <form class="modal-card custom-work-rule-governance-card" id="workRuleReviewForm">
+            <div class="modal-header">
+              <div>
+                <span class="eyebrow">Personal-Regelwerk · Freigabeweg</span>
+                <h2 id="workRuleReviewModalTitle">Regelfassung zur Prüfung einreichen</h2>
+                <p id="workRuleReviewModalCopy">Die Entscheidung gilt ausschließlich für die angezeigte unveränderliche Fassung.</p>
+              </div>
+              <button type="button" class="close-button" data-close="workRuleReviewModal">×</button>
+            </div>
+            <input id="workRuleReviewAction" type="hidden" />
+            <input id="workRuleReviewProfileId" type="hidden" />
+            <input id="workRuleReviewVersionId" type="hidden" />
+            <input id="workRuleReviewRequestId" type="hidden" />
+            <input id="workRuleReviewBasisSha256" type="hidden" />
+            <div class="custom-work-rule-governance-summary" id="workRuleReviewSummary"></div>
+            <div class="custom-work-rule-conflict-preview" id="workRuleReviewConflict" aria-live="polite">
+              <p>Die serverseitige Konfliktprüfung wird geladen.</p>
+            </div>
+            <div class="custom-work-rule-actor">
+              <span>Entscheidung durch</span>
+              <strong id="workRuleReviewActor">Aktuell angemeldeter Zugang</strong>
+              <small>Es kann keine andere Person stellvertretend ausgewählt werden.</small>
+            </div>
+            <div class="form-grid custom-work-rule-governance-fields">
+              <label class="field form-grid-wide"><span>Begründung</span><textarea id="workRuleReviewReason" rows="4" minlength="10" maxlength="2000" required placeholder="Prüfung und Entscheidung nachvollziehbar begründen"></textarea></label>
+              <label class="field form-grid-wide"><span>Quelle / fachlicher Nachweis</span><input id="workRuleReviewSourceReference" maxlength="1000" required placeholder="Dokument, Abschnitt oder interne Freigabereferenz" /></label>
+            </div>
+            <p class="custom-work-rule-dialog-boundary">Eine Einreichung oder Freigabe aktiviert weder die Regel noch eine Zuordnung. Der Server prüft Recht, Akteur, Fassung und Prüfbasis erneut.</p>
+            <div class="modal-actions custom-work-rule-sticky-actions">
+              <button class="secondary-button" type="button" data-close="workRuleReviewModal">Abbrechen</button>
+              <button class="primary-button" id="workRuleReviewSubmitButton" type="submit">Zur Prüfung einreichen</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog class="modal custom-work-rule-governance-dialog" id="workRuleFinalizeModal">
+          <form class="modal-card custom-work-rule-governance-card compact" id="workRuleFinalizeForm">
+            <div class="modal-header">
+              <div>
+                <span class="eyebrow">Personal-Regelwerk · Abschluss</span>
+                <h2 id="workRuleFinalizeModalTitle">Freigegebene Fassung veröffentlichen</h2>
+                <p id="workRuleFinalizeModalCopy">Der Abschluss gilt nur für die vollständig freigegebene Prüfbasis.</p>
+              </div>
+              <button type="button" class="close-button" data-close="workRuleFinalizeModal">×</button>
+            </div>
+            <input id="workRuleFinalizeRequestId" type="hidden" />
+            <input id="workRuleFinalizeBasisSha256" type="hidden" />
+            <div class="custom-work-rule-governance-summary" id="workRuleFinalizeSummary"></div>
+            <div class="custom-work-rule-conflict-preview" id="workRuleFinalizeConflict"></div>
+            <div class="custom-work-rule-actor">
+              <span>Finalisierung durch</span>
+              <strong id="workRuleFinalizeActor">Aktuell angemeldeter Zugang</strong>
+              <small>Fassung, Freigaben und Konfliktbasis werden unmittelbar vor dem Abschluss erneut geprüft.</small>
+            </div>
+            <div class="form-grid custom-work-rule-governance-fields">
+              <label class="field form-grid-wide"><span>Abschlussbegründung</span><textarea id="workRuleFinalizeReason" rows="3" minlength="10" maxlength="2000" required></textarea></label>
+              <label class="field form-grid-wide"><span>Quelle / Freigabenachweis</span><input id="workRuleFinalizeSourceReference" maxlength="1000" required /></label>
+              <label class="switch-row form-grid-wide"><span><strong>Geprüfte Basis bestätigen</strong><small>Ich bestätige die angezeigte Fassung, den Geltungsbereich und die dokumentierten Freigaben.</small></span><input id="workRuleFinalizeConfirmation" type="checkbox" required /></label>
+            </div>
+            <div class="modal-actions custom-work-rule-sticky-actions">
+              <button class="secondary-button" type="button" data-close="workRuleFinalizeModal">Abbrechen</button>
+              <button class="primary-button" id="workRuleFinalizeSubmitButton" type="submit">Veröffentlichen</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog class="modal custom-work-rule-governance-dialog" id="workRuleAssignmentModal">
+          <form class="modal-card custom-work-rule-governance-card" id="workRuleAssignmentForm">
+            <div class="modal-header">
+              <div>
+                <span class="eyebrow">Personal-Regelwerk · Wirksamkeit</span>
+                <h2>Zuordnungsantrag vorbereiten</h2>
+                <p>Eine veröffentlichte Fassung wird erst durch eine freigegebene, datierte Zuordnung wirksam.</p>
+              </div>
+              <button type="button" class="close-button" data-close="workRuleAssignmentModal">×</button>
+            </div>
+            <input id="workRuleAssignmentPublicationId" type="hidden" />
+            <input id="workRuleAssignmentProfileId" type="hidden" />
+            <input id="workRuleAssignmentBasisSha256" type="hidden" />
+            <div class="custom-work-rule-governance-summary" id="workRuleAssignmentSummary"></div>
+            <div class="form-grid custom-work-rule-governance-fields">
+              <label class="field"><span>Geltungsbereich</span><select id="workRuleAssignmentScopeType" required></select></label>
+              <label class="field hidden" id="workRuleAssignmentScopeSelectField"><span id="workRuleAssignmentScopeSelectLabel">Bereich</span><select id="workRuleAssignmentScopeSelect"></select></label>
+              <label class="field hidden" id="workRuleAssignmentScopeGroupField"><span>Beschäftigtengruppe</span><input id="workRuleAssignmentScopeGroup" maxlength="160" placeholder="Nur mit maschinenlesbarer Gruppenzuordnung aktivierbar" /></label>
+              <label class="field"><span>Gültig ab</span><input id="workRuleAssignmentValidFrom" type="date" required /></label>
+              <label class="field"><span>Gültig bis</span><input id="workRuleAssignmentValidTo" type="date" /></label>
+              <label class="field"><span>Betriebsart</span><select id="workRuleAssignmentEnforcementMode"><option value="monitor">Beobachten – blockiert nicht</option><option value="enforced">Verbindlich prüfen</option></select></label>
+              <label class="switch-row"><span><strong>Anwendbarkeit fachlich bestätigt</strong><small>Vor jeder Zuordnung erforderlich – auch im Monitorbetrieb.</small></span><input id="workRuleAssignmentApplicabilityConfirmed" type="checkbox" required /></label>
+              <label class="field form-grid-wide"><span>Begründung</span><textarea id="workRuleAssignmentReason" rows="4" minlength="10" maxlength="2000" required></textarea></label>
+              <label class="field form-grid-wide"><span>Quelle / Zuordnungsnachweis</span><input id="workRuleAssignmentSourceReference" maxlength="1000" required /></label>
+            </div>
+            <div class="custom-work-rule-conflict-preview" id="workRuleAssignmentConflict" aria-live="polite"><p>Vor der Einreichung müssen Scope und Überschneidungen serverseitig geprüft werden.</p></div>
+            <div class="custom-work-rule-assignment-dialog-actions">
+              <button class="secondary-button" id="previewWorkRuleAssignmentButton" type="button">Zuordnung prüfen</button>
+              <span id="workRuleAssignmentPreviewState">Noch nicht geprüft</span>
+            </div>
+            <div class="modal-actions custom-work-rule-sticky-actions">
+              <button class="secondary-button" type="button" data-close="workRuleAssignmentModal">Abbrechen</button>
+              <button class="primary-button" id="workRuleAssignmentSubmitButton" type="submit">Zuordnungsantrag einreichen</button>
+            </div>
+          </form>
+        </dialog>
+
+        <dialog class="modal custom-work-rule-governance-dialog" id="workRuleLifecycleModal">
+          <form class="modal-card custom-work-rule-governance-card compact" id="workRuleLifecycleForm">
+            <div class="modal-header">
+              <div>
+                <span class="eyebrow">Personal-Regelwerk · Kontrollierte Änderung</span>
+                <h2 id="workRuleLifecycleModalTitle">Zuordnung beenden</h2>
+                <p id="workRuleLifecycleModalCopy">Historische Fassungen und Prüfbelege bleiben vollständig erhalten.</p>
+              </div>
+              <button type="button" class="close-button" data-close="workRuleLifecycleModal">×</button>
+            </div>
+            <input id="workRuleLifecycleAction" type="hidden" />
+            <input id="workRuleLifecycleSubjectId" type="hidden" />
+            <input id="workRuleLifecycleProfileId" type="hidden" />
+            <input id="workRuleLifecycleVersionId" type="hidden" />
+            <input id="workRuleLifecycleBasisSha256" type="hidden" />
+            <div class="custom-work-rule-governance-summary" id="workRuleLifecycleSummary"></div>
+            <div class="form-grid custom-work-rule-governance-fields">
+              <label class="field"><span>Wirksam ab</span><input id="workRuleLifecycleEffectiveOn" type="date" required /></label>
+              <label class="field form-grid-wide"><span>Begründung</span><textarea id="workRuleLifecycleReason" rows="4" minlength="10" maxlength="2000" required></textarea></label>
+              <label class="field form-grid-wide"><span>Quelle / Änderungsnachweis</span><input id="workRuleLifecycleSourceReference" maxlength="1000" required /></label>
+            </div>
+            <div class="custom-work-rule-conflict-preview" id="workRuleLifecycleConflict" aria-live="polite"></div>
+            <p class="custom-work-rule-dialog-boundary" id="workRuleLifecycleBoundary">Die Änderung überschreibt keine frühere Fassung.</p>
+            <div class="modal-actions custom-work-rule-sticky-actions">
+              <button class="secondary-button" type="button" data-close="workRuleLifecycleModal">Abbrechen</button>
+              <button class="danger-button" id="workRuleLifecycleSubmitButton" type="submit">Beendigung zur Freigabe einreichen</button>
+            </div>
+          </form>
+        </dialog>
 
         <section id="personnelView" class="view">
           <header class="settings-header">
@@ -510,13 +902,14 @@
 
         <section id="rightsDashboardView" class="view rights-dashboard" data-dashboard-theme="light">
           <header class="topbar rights-dashboard-topbar">
-            <div><span class="eyebrow">Übersicht &amp; Steuerung</span><h1>Dashboards</h1><p class="subtitle">Filialsituation, wirksame Rechte und Standardprozesse verständlich im Blick behalten.</p></div>
+            <div><span class="eyebrow">Übersicht &amp; Steuerung</span><h1>Dashboards</h1><p class="subtitle">Filialsituation, wirksame Rechte, Personalregeln, betriebliche Abläufe und technischen Zustand verständlich im Blick behalten.</p></div>
             <div class="rights-dashboard-header-actions">
               <div class="rights-dashboard-mode-switch" role="tablist" aria-label="Dashboard-Bereich">
-                <button type="button" role="tab" data-rights-dashboard-mode="systemCenter" data-dashboard-capability="system" aria-selected="true">System-Center</button>
-                <button type="button" role="tab" data-rights-dashboard-mode="locations" data-dashboard-capability="rights" aria-selected="false">Filialübersicht</button>
+                <button type="button" role="tab" data-rights-dashboard-mode="locations" data-dashboard-capability="rights" aria-selected="true">Filialübersicht</button>
                 <button type="button" role="tab" data-rights-dashboard-mode="rights" data-dashboard-capability="rights" aria-selected="false">Rechteübersicht</button>
-                <button type="button" role="tab" data-rights-dashboard-mode="processes" data-dashboard-capability="rights" aria-selected="false">Prozesswege</button>
+                <button type="button" role="tab" data-rights-dashboard-mode="personnelRules" data-dashboard-capability="workRules" aria-selected="false">Personal-Regelwerk</button>
+                <button type="button" role="tab" data-rights-dashboard-mode="processes" data-dashboard-capability="rights" aria-selected="false">Abläufe &amp; Prozesse</button>
+                <button type="button" role="tab" data-rights-dashboard-mode="systemCenter" data-dashboard-capability="system" aria-selected="false">System-Center</button>
               </div>
               <div class="page-theme-switch dashboard-theme-switch" role="group" aria-label="Darstellung der Dashboards">
                 <span>Darstellung</span>
@@ -526,7 +919,7 @@
             </div>
           </header>
 
-          <section class="system-center-panel" id="systemCenterPanel" aria-label="System-Center">
+          <section class="system-center-panel hidden" id="systemCenterPanel" aria-label="System-Center">
             <div class="system-center-toolbar">
               <div><span class="eyebrow">Nachweisbarer Systemzustand</span><h2>System-Center</h2><p>Server, Sicherungen und Wiederherstellbarkeit auf Basis redigierter, serverseitig geprüfter Nachweise.</p></div>
               <div class="system-center-actions">
@@ -540,7 +933,7 @@
             </div>
           </section>
 
-          <section class="location-dashboard-panel hidden" id="rightsDashboardLocationsPanel" aria-label="Aktuelle Filialübersicht">
+          <section class="location-dashboard-panel" id="rightsDashboardLocationsPanel" aria-label="Aktuelle Filialübersicht">
             <div class="location-dashboard-toolbar">
               <div><span class="eyebrow">Tageslage</span><h2>Filialübersicht</h2><p>Besetzung und Abwesenheiten aller aktiven Filialen – ohne vertrauliche Dokument- oder Bemerkungsinhalte.</p></div>
               <div class="location-dashboard-toolbar-controls">
@@ -583,14 +976,96 @@
             </section>
           </div>
 
-          <section class="rights-dashboard-process-panel hidden" id="rightsDashboardProcessesPanel" aria-label="Standard- und eigene Prozesse">
+          <section class="personnel-rules-dashboard-panel hidden" id="personnelRulesDashboardPanel" aria-label="Personal-Regelwerk">
+            <div class="personnel-rules-toolbar">
+              <div><span class="eyebrow">Lesesicht &amp; Planvorschau</span><h2>Personal-Regelwerk</h2><p>Arbeitszeit- und Planungsregeln, Geltungszuordnungen und offizielle Quellen im eigenen Verantwortungsbereich nachvollziehen.</p></div>
+              <div class="personnel-rules-toolbar-actions">
+                <span id="personnelRulesScope" role="status">Lesesicht wird geladen.</span>
+                <button class="secondary-button" id="refreshPersonnelRulesDashboard" type="button" aria-controls="personnelRulesDashboardPanel" aria-describedby="personnelRulesReadBoundary">Aktualisieren</button>
+              </div>
+            </div>
+
+            <aside class="personnel-rules-read-boundary" id="personnelRulesReadBoundary" aria-labelledby="personnelRulesReadBoundaryTitle">
+              <span class="personnel-rules-read-boundary-mark" aria-hidden="true">L</span>
+              <div>
+                <strong id="personnelRulesReadBoundaryTitle">Bereichsbezogene Lesesicht</strong>
+                <p id="personnelRulesScopeDetail">Sichtbare Filialen und Abteilungen werden aus dem aktuell angemeldeten Zugang ermittelt.</p>
+              </div>
+              <div class="personnel-rules-read-boundary-badges" aria-label="Möglichkeiten dieser Ansicht">
+                <span>Nur lesen</span>
+                <span>Planvorschau</span>
+                <span>Keine Freigabe oder Änderung</span>
+              </div>
+            </aside>
+
+            <section class="personnel-rules-summary" id="personnelRulesSummary" aria-label="Zusammenfassung des Personal-Regelwerks"></section>
+
+            <section class="personnel-rules-filterbar" aria-label="Regelprofile filtern">
+              <label><span>Profil oder Regel</span><input id="personnelRulesSearch" type="search" placeholder="Titel, Regel oder Quelle" autocomplete="off" /></label>
+              <label><span>Regelart</span><select id="personnelRulesLayerFilter"><option value="">Alle Regelarten</option></select></label>
+              <label><span>Stand</span><select id="personnelRulesStatusFilter"><option value="">Alle Stände</option><option value="published">Veröffentlicht</option><option value="draft">Entwurf</option></select></label>
+            </section>
+
+            <section class="personnel-rules-assignment-legend" id="personnelRulesAssignmentLegend" aria-label="Bedeutung und Anzahl der Zuordnungsstände" aria-live="polite"></section>
+
+            <div class="personnel-rules-workspace">
+              <aside class="personnel-rules-navigation" aria-label="Regelprofil auswählen">
+                <div class="rights-dashboard-section-heading"><div><span class="eyebrow">Profile</span><h2>Regelprofil wählen</h2></div><strong id="personnelRulesProfileCount">0</strong></div>
+                <div class="personnel-rules-profile-list" id="personnelRulesProfileList"><p class="settings-note">Regelprofile werden geladen.</p></div>
+              </aside>
+
+              <section class="personnel-rules-detail" aria-live="polite">
+                <div class="personnel-rules-heading">
+                  <div><span class="eyebrow">Geltung &amp; Nachweis</span><h2 id="personnelRulesProfileTitle">Regelprofil</h2><p id="personnelRulesProfileSummary"></p></div>
+                  <span class="status-badge" id="personnelRulesProfileStatus">Stand offen</span>
+                </div>
+                <div class="personnel-rules-facts" id="personnelRulesProfileFacts"></div>
+                <aside class="personnel-rules-applicability" id="personnelRulesApplicability">
+                  <strong>Anwendbarkeit</strong><p>Profil auswählen, um Geltungsbedingungen und offenen Bestätigungsbedarf zu sehen.</p>
+                </aside>
+                <section class="personnel-rules-detail-section">
+                  <header><div><span class="eyebrow">Geltungszuordnung</span><h3>Aktuelle, künftige und inaktive Bereiche</h3></div></header>
+                  <div class="personnel-rules-assignment-list" id="personnelRulesAssignments"></div>
+                </section>
+                <section class="personnel-rules-detail-section">
+                  <header><div><span class="eyebrow">Prüfkatalog</span><h3>Enthaltene Regeln</h3></div></header>
+                  <div class="personnel-rules-rule-list" id="personnelRulesRules"></div>
+                </section>
+                <section class="personnel-rules-detail-section">
+                  <header><div><span class="eyebrow">Quellennachweis</span><h3>Verwendete Quellen</h3></div></header>
+                  <div class="personnel-rules-source-list" id="personnelRulesSources"></div>
+                </section>
+              </section>
+            </div>
+
+            <section class="personnel-rules-simulation" aria-labelledby="personnelRulesSimulationTitle">
+              <div class="personnel-rules-simulation-heading">
+                <div><span class="eyebrow">Reine Vorschau</span><h2 id="personnelRulesSimulationTitle">Bereichsbezogene Dienstplan-Regelprüfung</h2><p>Prüft die gespeicherte Planung ausschließlich im gewählten, sichtbaren Bereich. Es werden keine Dienste, Zuordnungen, Freigaben oder Regelstände verändert.</p></div>
+                <span id="personnelRulesSimulationHint" role="status">Noch nicht geprüft</span>
+              </div>
+              <div class="personnel-rules-simulation-controls">
+                <label><span>Woche ab</span><input id="personnelRulesSimulationWeek" type="date" /></label>
+                <label><span>Filiale</span><select id="personnelRulesSimulationLocation"><option value="">Keine freigegebene Filiale</option></select></label>
+                <label><span>Abteilung</span><select id="personnelRulesSimulationDepartment"><option value="">Gesamte Filiale</option></select></label>
+                <button class="primary-button" id="runPersonnelRulesSimulation" type="button" aria-controls="personnelRulesSimulationResult" aria-describedby="personnelRulesSimulationTitle">Planvorschau starten</button>
+              </div>
+              <div class="personnel-rules-simulation-result" id="personnelRulesSimulationResult" aria-live="polite" aria-atomic="false">
+                <p class="settings-note">Die Simulation zeigt Hinweise, manuell zu prüfende Punkte und Blockierungen für die ausgewählte Woche.</p>
+              </div>
+            </section>
+
+            <p class="personnel-rules-legal-notice" id="personnelRulesLegalNotice">Das Dashboard ist eine technische Planungshilfe und keine Rechtsberatung oder Rechtsfreigabe. Maßgeblich bleiben die zum Dienstzeitpunkt geltende Rechtslage, der tatsächlich anwendbare Kollektivvertrag, vertragliche Regelungen und fachlich bestätigte Ausnahmen.</p>
+          </section>
+
+          <section class="rights-dashboard-process-panel hidden" id="rightsDashboardProcessesPanel" aria-label="Abläufe und Prozesse nach Fachbereich">
             <div class="rights-process-toolbar">
-              <div><span class="eyebrow">Aktueller Regelstand</span><h2>Standard- und eigene Prozesse</h2><p>Vorgegebene Abläufe prüfen und eigene, nachvollziehbare Prozesswege für den Betrieb gestalten.</p></div>
+              <div><span class="eyebrow">Prozessbibliothek</span><h2>Abläufe &amp; Prozesse</h2><p>Personal- und Betriebsabläufe nach Fachbereichen ordnen, prüfen und nachvollziehbar weiterentwickeln.</p></div>
               <div class="rights-process-toolbar-controls">
+                <label><span>Fachbereich</span><select id="rightsProcessCategory"><option value="all">Alle Fachbereiche</option></select></label>
                 <label><span>Standortbezug</span><select id="rightsProcessLocation"><option value="">Erster aktiver Standort</option></select></label>
                 <label><span>Simulation</span><select id="rightsProcessScenario"><option value="current">Aktuelle Konfiguration</option></select></label>
-                <button class="secondary-button" id="rightsProcessExportPdf" type="button">Prozess als PDF</button>
-                <button class="primary-button hidden" id="addCustomProcessButton" type="button">Eigenen Prozess anlegen</button>
+                <button class="secondary-button" id="rightsProcessExportPdf" type="button">Ablauf als PDF</button>
+                <button class="primary-button hidden" id="addCustomProcessButton" type="button">Eigenen Ablauf anlegen</button>
               </div>
             </div>
             <section class="rights-process-validation" aria-label="Konfigurationsprüfung">
@@ -598,8 +1073,8 @@
               <div class="rights-process-validation-list" id="rightsProcessValidationList"></div>
             </section>
             <div class="rights-process-workspace">
-              <aside class="rights-process-navigation" aria-label="Prozessauswahl">
-                <div class="rights-dashboard-section-heading"><div><span class="eyebrow">Abläufe</span><h2>Prozess wählen</h2></div></div>
+              <aside class="rights-process-navigation" aria-label="Ablaufauswahl">
+                <div class="rights-dashboard-section-heading"><div><span class="eyebrow">Fachbereiche</span><h2>Ablauf wählen</h2></div></div>
                 <div id="rightsProcessList"><p class="settings-note">Prozesse werden geladen.</p></div>
               </aside>
               <section class="rights-process-detail" aria-live="polite">
@@ -608,8 +1083,8 @@
                 <div class="rights-process-simulation-note" id="rightsProcessSimulationNote"><strong>Aktuelle Konfiguration</strong><span>Die Simulation verändert keine gespeicherten Daten.</span></div>
                 <div class="rights-process-rules" id="rightsProcessRules" aria-label="Aktuell wirksame Regeln"></div>
                 <div class="rights-process-flow-layout">
-                  <div class="rights-process-timeline" id="rightsProcessTimeline" aria-label="Prozessschritte"></div>
-                  <aside class="rights-process-explanation" id="rightsProcessExplanation"><strong>Prozessschritt anklicken</strong><p>Hier werden Zuständigkeit, wirksame Einstellung und benötigte Rechte erklärt.</p></aside>
+                  <div class="rights-process-timeline" id="rightsProcessTimeline" aria-label="Ablaufschritte"></div>
+                  <aside class="rights-process-explanation" id="rightsProcessExplanation"><strong>Ablaufschritt anklicken</strong><p>Hier werden Zuständigkeit, wirksame Einstellung und benötigte Rechte erklärt.</p></aside>
                 </div>
               </section>
             </div>
@@ -1242,7 +1717,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.85 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.86 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -1774,12 +2249,13 @@
 
     <dialog class="modal wide-modal custom-process-modal" id="customProcessModal">
       <form method="dialog" id="customProcessForm" autocomplete="off">
-        <div class="modal-header"><div><span class="eyebrow">Eigener Prozess</span><h2 id="customProcessModalTitle">Prozess anlegen</h2><p>Ablauf, Zuständigkeiten und Benachrichtigungswege nachvollziehbar festlegen.</p></div><button type="button" class="close-button" data-close="customProcessModal">×</button></div>
+        <div class="modal-header"><div><span class="eyebrow">Eigener Ablauf</span><h2 id="customProcessModalTitle">Ablauf anlegen</h2><p>Ablauf, Zuständigkeiten und Benachrichtigungswege nachvollziehbar festlegen.</p></div><button type="button" class="close-button" data-close="customProcessModal">×</button></div>
         <input id="customProcessId" type="hidden" />
         <div class="form-grid custom-process-basics">
           <label class="field modal-span-3"><span>Titel</span><input id="customProcessTitle" minlength="3" maxlength="120" placeholder="z. B. Notbesetzung in einer Filiale" required /></label>
           <label class="field"><span>Kurzzeichen</span><input id="customProcessSymbol" maxlength="5" placeholder="z. B. NB" required /><small>1 bis 5 Buchstaben oder Ziffern.</small></label>
           <label class="field"><span>Status</span><select id="customProcessStatus"><option value="draft">Entwurf</option><option value="active">Aktiv</option></select></label>
+          <label class="field"><span>Fachbereich</span><select id="customProcessCategory" required></select></label>
           <label class="field modal-span-3"><span>Beschreibung</span><textarea id="customProcessDescription" rows="3" maxlength="600" placeholder="Wann und wofür wird dieser Prozess verwendet?" required></textarea></label>
           <label class="field"><span>Geltungsbereich</span><select id="customProcessScopeType"><option value="company">Gesamtes Unternehmen</option><option value="location">Bestimmte Filiale</option><option value="department">Bestimmte Abteilung</option></select></label>
           <label class="field hidden" id="customProcessScopeLocationField"><span>Filiale</span><select id="customProcessScopeLocation"></select></label>
@@ -1795,7 +2271,7 @@
         </section>
         <datalist id="customProcessResponsibilityOptions"><option value="department_manager">Abteilungsleitung</option><option value="manager">Filialleitung</option><option value="hr">Personalleitung</option><option value="admin">Administration</option><option value="it_admin">IT-Administration</option><option value="developer">Developer</option></datalist>
         <p class="message hidden" id="customProcessMessage"></p>
-        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="customProcessModal">Abbrechen</button><button type="submit" class="primary-button" id="saveCustomProcessButton">Prozess speichern</button></div>
+        <div class="modal-actions"><span></span><span></span><button type="button" class="secondary-button" data-close="customProcessModal">Abbrechen</button><button type="submit" class="primary-button" id="saveCustomProcessButton">Ablauf speichern</button></div>
       </form>
     </dialog>
 
