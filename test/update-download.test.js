@@ -111,7 +111,9 @@ test("Updater: schützt nur Datenordner an der Paketwurzel und bestätigt den Ne
   assert.match(endpoint, /GRABENPLANER_UPDATE_RESTART/);
   assert.ok(endpoint.indexOf("Invoke-WebRequest") < endpoint.indexOf('Write-UpdateLog "Update erfolgreich abgeschlossen."'));
 
-  const startFile = fs.readFileSync(path.join(__dirname, "..", "Grabenplaner v0.86 Beta starten.cmd"), "utf8");
+  assert.ok(endpoint.indexOf("LEGACY_RELEASE_FINAL") < endpoint.indexOf("downloadGitHubReleaseAsset"));
+
+  const startFile = fs.readFileSync(path.join(__dirname, "..", "Grabenplaner v0.87 Legacy starten.cmd"), "utf8");
   assert.match(startFile, /set "UPDATE_RESTART=%GRABENPLANER_UPDATE_RESTART%"/);
   assert.match(startFile, /if \/I "%UPDATE_RESTART%"=="1" exit \/b 1/);
 });

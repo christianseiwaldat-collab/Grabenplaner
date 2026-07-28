@@ -1,42 +1,35 @@
 # Grabenplaner
 
-<p align="center"><strong>Dienstplanung, Abwesenheiten und Zeiterfassung – passend für eine Filiale oder eine ganze Organisation.</strong></p>
+<p align="center"><strong>Finaler Windows-/LAN-Legacy-Endstand für bestehende lokale Installationen.</strong></p>
 
 <p align="center"><strong>Datenschutzfreundlich entwickelt – für einen DSGVO-konformen Betrieb konzipiert.</strong></p>
 
 <p align="center">
-  Grabenplaner verbindet Wochenplanung, Urlaubsverwaltung, Personalorganisation und ein smartphonegerechtes Mitarbeiterportal in einer übersichtlichen Anwendung. Filialen und Abteilungen bleiben sauber getrennt, Rechte lassen sich gezielt vergeben und jedes Unternehmen kann seinen eigenen Auftritt über wiederverwendbare Branding-Kits einrichten.
+  Diese Ausgabe schließt die frühere Windows-Portable-Produktlinie sauber ab. Sie ist für den lokalen Betrieb auf einem Windows-PC oder als einzelner Host in einem vertrauenswürdigen internen LAN vorgesehen.
 </p>
 
 <p align="center">
-  <strong>v0.87 Beta</strong> · Ubuntu-Server · SQLite · Source-available
+  <strong>v0.87 Legacy</strong> · Windows 10/11 x64 · SQLite · Lokal/LAN · Source-available
 </p>
 
 <p align="center">
-  <a href="https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest"><strong>Aktuelle Version herunterladen</strong></a>
+  <a href="https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.87.0-beta.legacy.1"><strong>Finalen Legacy-Endstand herunterladen</strong></a>
 </p>
 
-## Grabenplaner, drei Betriebsmodelle
+## Finaler Windows-/LAN-Legacy-Endstand
 
-| Funktion | Lokalbetrieb | LAN-Host | HTTPS-Server |
-|---|---|---|---|
-| Dienst- und Abteilungsplanung | Ja | Ja | Ja |
-| Urlaubsplanung, Auswertungen und PDF-Export | Ja | Ja | Ja |
-| Personal, Standorte, Branding und Einstellungen | Ja | Ja, nach Rechten | Ja, nach Rechten |
-| Personalimport, Lohnexport und direkte Schnittstellen | Ja | Ja, nach Rechten | Ja, nach Rechten |
-| Login, Rollen und Bereichsrechte | Nicht erforderlich | Verpflichtend | Verpflichtend |
-| Nutzung durch mehrere Browsergeräte | Nein, nur am Grabenplaner-PC | Ja, im Firmen-LAN/WLAN | Ja, über HTTPS |
-| Mitarbeiterportal und eigener Dienstplan | Nicht im Standardbetrieb | Ja | Ja |
-| Urlaubs- und ZA-Anträge, Krankmeldung und AUM-Upload | Nicht im Standardbetrieb | Ja | Ja |
-| Zeiterfassung durch Mitarbeitende | Nicht im Standardbetrieb | Ja, je Standort aktivierbar | Ja, je Standort aktivierbar |
-| Freiwillige WLAN-Zeitvorschläge | Nein | Optional mit Netzwerkintegration | Optional mit Netzwerkintegration |
-| Backups | Lokal | Zentral am Host-PC | Zentral mit IT-Wartungswerkzeugen und optional verschlüsselter Offsite-Kopie |
-| GitHub-Aktualisierungscheck | Ja | Ja | Ja |
-| Automatisches Portable-Update | Ja | Ja, am Host-PC | Nein, kontrolliert durch die IT |
-| Zugriff | Nur auf diesem Gerät | Im vertrauenswürdigen Firmennetz | Über Internet oder Intranet per HTTPS |
-| Produktstatus | Verfügbar | Verfügbar | IT-verwalteter Beta-Serverbetrieb; produktive Freigabe nach Go-live-Prüfung |
+| Merkmal | Lokalbetrieb | LAN-Host |
+|---|---|---|
+| Dienstplanung, Abwesenheiten, Personalorganisation und PDF-Export | Ja | Ja |
+| SQLite-Datenbank | Auf demselben PC | Ausschließlich auf dem Host-PC |
+| Zugriff | Nur auf diesem Gerät | Über Browsergeräte im vertrauenswürdigen Firmen-LAN/WLAN |
+| Login, Rollen und Bereichsrechte | Nicht erforderlich | Verpflichtend |
+| Automatische Produktupdates | Nein, eingefrorener Endstand | Nein, eingefrorener Endstand |
+| Direkte Internetfreigabe | Nicht vorgesehen | Nicht vorgesehen |
 
-Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Dienst- und Urlaubsplanung an einem Gerät. Im LAN-Host-Modus liegt die Datenbank ausschließlich am Host-PC; Mitarbeitende können sich im Firmen-LAN oder -WLAN anmelden und dort auch die Zeiterfassung verwenden. Der HTTPS-Server erweitert dieses Modell um geschützten Zugriff von außerhalb. Unterstützt werden Ubuntu 24.04 und 26.04 LTS auf x86-64 mit Caddy, systemd, getrennten Dienstrechten und ClamAV; für neue Beta-Server wird Ubuntu 26.04 LTS empfohlen. Unter Ubuntu kann ein optionales Restic-/rclone-Modul verifizierte lokale Sicherungspunkte täglich verschlüsselt zu Google Drive übertragen. Eine automatische Serverprüfung meldet Störungen redigiert in der Oberfläche; Wiederherstellungen bleiben ein bewusst beaufsichtigter, mehrstufiger Vorgang. Ein getrenntes Host-Sicherheitsmodul prüft SSH, UFW, automatische Sicherheitsaktualisierungen, Kernel- und Journalvorgaben. Aktivierende Änderungen bleiben ein ausdrücklicher Root-Vorgang mit Sicherheitsrollback und Bestätigung über eine eigenständige neue SSH-Verbindung. Die vorhandenen Windows-Werkzeuge bleiben verfügbar. Die konkrete Domain-, Firewall-, Zertifikats- und Betriebskonfiguration muss vor der Freigabe durch die zuständige IT geprüft werden. Details stehen in [SERVERBETRIEB.md](SERVERBETRIEB.md).
+Die Anwendung und ihre Daten bleiben in einem entpackten Ordner. Der LAN-Modus ist ausschließlich für ein kontrolliertes internes Netz vorgesehen; Router-Portfreigaben, öffentliche Reverse-Proxys und eine direkte Internetexposition gehören nicht zum freigegebenen Legacy-Betrieb. Der USB-Stick-Assistent ist in diesem Endstand deaktiviert. Für neue, zentral verwaltete Installationen und externen HTTPS-Zugriff ist die getrennte Server-Produktlinie vorgesehen.
+
+Dieser Stand erhält keine weiteren automatischen Produktupdates. Sicherheits-, Betriebssystem-, Netzwerk- und Sicherungsmaßnahmen bleiben in der Verantwortung der betreibenden Stelle. Details zu Installation, Sicherung und Ablösung stehen unter [Windows Portable / LAN-Host](docs/LEGACY-WINDOWS-PORTABLE.md).
 
 ## Organisationsmodell und Leihnachweise in v0.87 Beta
 
@@ -183,10 +176,10 @@ Technische Details, Grenzen und der amtliche Quellenkatalog stehen in [Arbeitsze
 - Revisionssichere Fallverwaltung für offene und abgeschlossene Anträge, Krankmeldungen und AUMs mit delegierter Filialleitungsvertretung
 - Standortbezogene Branding-Kits für unterschiedliche Filialauftritte
 - Lokale SQLite-Datenbank ohne externen Datenbankserver
-- Integriertes Backup-System, optional verschlüsselte Restic-/rclone-Offsite-Sicherung, transaktionales Ubuntu-Host-Hardening und GitHub-basierter Aktualisierungscheck
+- Integriertes lokales Backup-System und ein eingefrorener, klar ausgewiesener Legacy-Aktualisierungsstatus
 - System-Center mit transparentem technischem Vertrauensindex, signierter Recovery-Assurance-Timeline, begrenzten Langzeittrends, nächtlichem isoliertem App-Smoke-Test und deduplizierter interner Eskalation
 - Nachweisbasierter Produktreife-Bereich mit Desktop- und Mobilpilot, Bedienungs- und Performanceprüfungen sowie getrennten technischen und fachlichen Abnahmen
-- Windows-Host-Assistent für vorkonfigurierte USB-Sticks mit Funktionsprofil, Team, Rollen, Branding-Kits und anpassbarer „Erste Schritte“-PDF; nutzbar aus Lokal-, LAN- und HTTPS-Betrieb direkt am Host
+- Final gekennzeichnete Windows-/LAN-Ausgabe ohne USB-Stick-Erstellungsassistenten und ohne automatische Produktupdates
 
 ## Schutz sensibler Personalakt-Daten
 
@@ -194,28 +187,27 @@ Sensible Inhalte des Personalakts sowie AUM-Dokumente und ihre geschützten Meta
 
 Der Zugriff folgt eigenen, besonders eingeschränkten Rechten. Datenbank und verschlüsselte Dokumentablage werden gemeinsam gesichert. Diese zusätzlichen Schutzmaßnahmen ersetzen nicht HTTPS, sichere Betriebssystem- und Dateiberechtigungen, eine geschützte Schlüsselverwaltung und ein geprüftes Backupkonzept. Betriebliche Indizes und nicht sensible Verwaltungsdaten bleiben für den Anwendungsbetrieb in SQLite lesbar.
 
-## In Vorbereitung
+## Produktlinie abgeschlossen
 
-- Weitere Datenbankprovider und kundenspezifische, durch die jeweilige Firmen-IT geprüfte API-Verträge
-- Hochverfügbarkeit und horizontale Skalierung über mehrere Anwendungsinstanzen
-- Erweiterte Auswertungs- und Integrationsmöglichkeiten
+Diese Windows-Portable-/LAN-Produktlinie ist mit v0.87 Legacy abgeschlossen. Neue Funktionen, automatische Produktupdates, öffentliche HTTPS-Bereitstellung, Hochverfügbarkeit und weitere Datenbankprovider sind nicht Bestandteil dieses eingefrorenen Endstands. Eine spätere Ablösung erfolgt bewusst durch eine separat betriebene, verwaltete Serverinstallation.
 
 ## Schnellstart unter Windows
 
-1. Die portable ZIP-Datei unter [Grabenplaner Releases](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/latest) herunterladen und entpacken.
-2. `Grabenplaner v0.86 Beta starten.cmd` doppelt anklicken.
+1. Die Datei `Grabenplaner-v0.87.0-beta.legacy.1-windows-portable.zip` aus dem [finalen Legacy-Release](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.87.0-beta.legacy.1) herunterladen und vollständig entpacken.
+2. `Grabenplaner v0.87 Legacy starten.cmd` doppelt anklicken.
 3. Grabenplaner öffnet sich lokal unter [http://localhost:3000](http://localhost:3000).
 
 Die Arbeitsdatenbank wird bei der ersten Verwendung unter `data\dienstplan.db` angelegt und ist nicht Bestandteil der neutralen Release-ZIP. Beim Start entsteht automatisch eine interne Sicherung; zusätzliche lokale Sicherungsziele können in Grabenplaner eingerichtet werden.
 
-Aktualisierungen werden über GitHub geprüft und als Portable-ZIP direkt über HTTPS geladen; eine installierte oder angemeldete GitHub CLI ist nicht erforderlich. Vor der Installation prüft Grabenplaner Dateigröße und SHA-256-Prüfsumme. Die integrierte Aktualisierung ersetzt die Programmdateien kontrolliert und startet Grabenplaner neu; Datenbank, Backups, AUM-Dateien und lokale Laufzeitkonfiguration bleiben geschützt.
+Die Aktualisierungsanzeige meldet diesen Stand dauerhaft als finalen Legacy-Endstand. Es werden keine weiteren automatischen Produktupdates gesucht, heruntergeladen oder installiert. Die veröffentlichte SHA-256-Datei dient zur Prüfung des heruntergeladenen ZIP-Archivs.
 
 ## Technische Grundlage
 
 | Bereich | Umsetzung |
 |---|---|
-| Anwendung | Lokale beziehungsweise zentral bereitgestellte Web-App mit Node.js und Express |
+| Anwendung | Portable Windows-Web-App mit mitgelieferter Node.js-Laufzeit und Express |
 | Datenbank | SQLite, ohne separaten Datenbankserver |
+| Betriebsgrenze | Ein Windows-PC oder ein einzelner Host im vertrauenswürdigen internen LAN |
 | PDF-Ausgabe | PDFKit |
 | Tabellenimport und -export | CSV sowie XLSX mit ExcelJS |
 | Direkte Schnittstellen | Microsoft SQL Server über ausschließlich lesbare Views; HTTPS-JSON mit TLS 1.2+, DNS-/SSRF-Schutz und idempotenter Zustellung |
@@ -223,9 +215,6 @@ Aktualisierungen werden über GitHub geprüft und als Portable-ZIP direkt über 
 | Lokale AUM-Datenerkennung | PDF.js für digitale PDFs; Tesseract.js mit lokal mitgeliefertem deutschen Sprachmodell für Scan-PDFs, hochgeladene Fotos und Kamerabilder |
 | Geschützter Personalakt-Speicher | AES-256-GCM, kontextgebundene Verschlüsselung und gemeinsame Sicherung mit der Datenbank |
 | Authentifizierung | Rollen, Browser-Sitzungen mit CSRF-Schutz, rotierende native Geräte-Sitzungen und bereichsbezogene Berechtigungen |
-| HTTPS-Serverbetrieb | IT-verwalteter Ubuntu- oder Windows-Einzelserver mit Caddy, automatischer Live-/Ready-Prüfung sowie kontrolliertem Update, Backup und Restore |
-| Ubuntu-Offsite-Backup | Optionales Restic-Repository über rclone mit eigenem Google-OAuth-Client (`drive.file`), verschlüsselter Google-Drive-Kopie, signierter Recovery-Assurance-Historie und beaufsichtigter Wiederherstellung |
-| Ubuntu-Host-Sicherheit | Separates, paketgebundenes Audit-/Hardening-Modul für Schlüssel-SSH, UFW, Sicherheitsupdates, Kernel- und Journalvorgaben mit Zwei-Sitzungs-Bestätigung und automatischem Rollback |
 
 Für lokale Entwicklung wird Node.js 22.13 oder neuer benötigt:
 

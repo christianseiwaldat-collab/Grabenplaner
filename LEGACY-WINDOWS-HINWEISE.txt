@@ -1,0 +1,63 @@
+GRABENPLANER v0.87 LEGACY - WINDOWS PORTABLE / LAN-HOST
+=======================================================
+
+Status
+------
+Dies ist der finale, eingefrorene Stand der früheren Windows-Portable-
+Produktlinie. Er erhält keine weiteren automatischen Produktupdates.
+
+Freigegebener Rahmen
+--------------------
+- Windows 10 oder 11 auf einem 64-Bit-PC.
+- Lokalbetrieb auf genau diesem PC oder Betrieb als einzelner Host in einem
+  vertrauenswürdigen internen Firmen-LAN/WLAN.
+- SQLite als lokale Datenbank.
+- Keine direkte Freigabe aus dem Internet.
+- Kein öffentlich erreichbarer HTTPS-Produktivbetrieb.
+- Kein USB-Stick-Erstellungsassistent.
+
+Start
+-----
+1. Das ZIP-Archiv vollständig in einen normalen, beschreibbaren Ordner
+   entpacken.
+2. "Grabenplaner v0.87 Legacy starten.cmd" doppelklicken.
+3. Grabenplaner öffnet sich unter http://localhost:3000.
+
+Die mitgelieferte Node.js-Laufzeit liegt unter runtime\node.exe. Eine eigene
+Node.js-Installation ist für das veröffentlichte Paket nicht erforderlich.
+
+Daten und Sicherung
+-------------------
+Die aktive SQLite-Datenbank liegt standardmäßig unter:
+
+  data\dienstplan.db
+
+Verschlüsselte Dokumente, Sicherungen und weitere Laufzeitdaten liegen ebenfalls
+innerhalb der dafür vorgesehenen Unterordner. Diese Ordner dürfen nicht durch
+Programmdateien eines anderen Builds überschrieben werden.
+
+Regelmäßig getrennte Sicherungen erstellen und Wiederherstellungen auf einer
+Kopie prüfen. Eine Sicherung auf demselben PC schützt nicht vor Verlust,
+Defekt, Schadsoftware oder Fehlbedienung. Vor einem Rechnerwechsel oder einer
+Ablösung der Installation eine vollständige, geprüfte Sicherung anlegen.
+
+LAN-Betrieb
+-----------
+Im LAN-Modus bleibt die Datenbank ausschließlich am Host-PC. Der Zugriff darf
+nur aus einem kontrollierten internen Netz erfolgen. Keine Router-Portfreigabe,
+kein öffentliches NAT und keinen öffentlichen Reverse-Proxy für dieses Paket
+einrichten. Konten, Rollen, Betriebssystem, Windows-Firewall und das lokale
+Netz müssen durch die verantwortliche IT angemessen abgesichert werden.
+
+Ende der Produktlinie
+---------------------
+Die Aktualisierungsanzeige weist diesen Build als Legacy-Endstand aus.
+Automatische Update-Suche, Download und Installation sind deaktiviert. Für neue
+zentrale Installationen, externen HTTPS-Zugriff oder weiterentwickelte
+Funktionen ist eine Migration auf die separat verwaltete Server-Produktlinie
+vorgesehen.
+
+Diese Hinweise sind eine technische Betriebsgrenze und keine pauschale Zusage
+vollständiger Rechts-, Datenschutz- oder Informationssicherheitskonformität.
+Die konkrete Installation, Aufbewahrung, Berechtigung und Sicherung muss durch
+die verantwortliche Stelle geprüft werden.

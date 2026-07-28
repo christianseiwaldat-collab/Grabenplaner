@@ -1,5 +1,16 @@
 # Grabenplaner Versions-Log
 
+## v0.87 Legacy · Windows Portable / LAN-Host · letzter Stand
+
+- Finaler, eingefrorener Abschluss der früheren Windows-Portable-Produktlinie auf Basis des vollständigen Funktionsstands von v0.87 Beta.
+- Vorgesehen für Windows 10/11 x64 im Lokalbetrieb oder als einzelne App-Instanz auf einem Host-PC in einem vertrauenswürdigen internen Firmen-LAN/WLAN.
+- SQLite bleibt unverändert die lokale Datenbank; bestehende Daten werden nicht automatisch konvertiert.
+- Automatische Update-Suche, Download und Installation sind fail-closed deaktiviert. Die Oberfläche weist den Stand dauerhaft als Legacy-Endstand aus.
+- Der frühere USB-Stick-Erstellungsassistent ist in dieser Ausgabe server- und oberflächenseitig deaktiviert.
+- Direkte Internetexposition und öffentlicher HTTPS-Produktivbetrieb sind nicht freigegeben. Für neue zentrale Installationen ist die getrennte verwaltete Server-Produktlinie vorgesehen.
+- Das deterministisch erzeugte ZIP enthält eine gepinnte Windows-x64-Node-Laufzeit und wird mit einer SHA-256-Prüfsummendatei veröffentlicht.
+- Aus diesem Legacy-Abschluss entsteht keine Zusage weiterer Funktions-, Sicherheits- oder Kompatibilitätsupdates.
+
 ## v0.87 Beta · Organisationsmodell, fachliche Rechte und Leihnachweise
 
 - Frei konfigurierbare Kostenstellentypen ersetzen die bisher fest codierte Typauswahl. Zulässige Positionen werden je Typ gepflegt; nur Filialtypen dürfen einen Standort führen.

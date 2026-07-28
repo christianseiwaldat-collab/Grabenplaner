@@ -6,15 +6,16 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("v0.87: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", () => {
+test("v0.87 Legacy: Windows-/LAN-Endstand, UI und Dokumentation bleiben konsistent", () => {
   const packageJson = JSON.parse(read("package.json"));
-  assert.equal(packageJson.version, "0.87.0-beta");
+  assert.equal(packageJson.version, "0.87.0-beta.legacy.1");
   assert.equal(packageJson.dependencies.sharp, "0.35.3");
   assert.match(read("pnpm-workspace.yaml"), /brace-expansion:\s*5\.0\.8/);
   assert.match(read("pnpm-workspace.yaml"), /brace-expansion@5\.0\.8:\s*lib\/vendor-patches\/brace-expansion@5\.0\.8\.patch/);
   assert.match(read("lib/vendor-patches/brace-expansion@5.0.8.patch"), /module\.exports = expand/);
 
-  assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.86 Beta starten.cmd")), true);
+  assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.87 Legacy starten.cmd")), true);
+  assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.86 Beta starten.cmd")), false);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.85 Beta starten.cmd")), false);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.84 Beta starten.cmd")), false);
   assert.equal(fs.existsSync(path.join(root, "Grabenplaner v0.83 Beta starten.cmd")), false);
@@ -34,14 +35,15 @@ test("v0.87: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", () 
   const indexHtml = read("public/index.html");
   const readme = read("README.md");
   const serverDocs = read("SERVERBETRIEB.md");
-  const usbNotes = read("USB-HINWEISE.txt");
+  const legacyNotes = read("LEGACY-WINDOWS-HINWEISE.txt");
+  const legacyDocs = read("docs/LEGACY-WINDOWS-PORTABLE.md");
   const versionLog = read("VERSIONS-LOG.md");
   const governanceDocs = read("docs/URLAUB-ARBEITSZEIT-DATENSCHUTZ.md");
   const payrollHandoffDocs = read("docs/LOHNUEBERGABE-UND-ELDA-NACHWEIS.md");
   const pilotAcceptanceDocs = read("docs/PILOT-UND-ABNAHME.md");
   const genericLauncher = read("Dienstplan starten.cmd");
 
-  assert.match(indexHtml, /v0\.87 Beta/);
+  assert.match(indexHtml, /v0\.87 Legacy/);
   assert.match(indexHtml, /id="serverRestartModal"/);
   assert.match(indexHtml, /Nicht gespeicherte Eingaben in geöffneten Browserfenstern können verloren gehen/);
   assert.match(indexHtml, /Vor dem Neustart erstellt Grabenplaner automatisch einen verifizierten Sicherungspunkt/);
@@ -49,7 +51,8 @@ test("v0.87: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", () 
   assert.match(appJavascript, /monitorActions\.canRestart === true/);
   assert.match(appJavascript, /\/api\/portal\/v1\/server-monitor\/restart/);
   assert.match(appJavascript, /JSON\.stringify\(\{ confirmation: "SERVER_RESTART" \}\)/);
-  assert.match(readme, /v0\.87 Beta/);
+  assert.match(readme, /v0\.87 Legacy/);
+  assert.match(readme, /finaler Windows-\/LAN-Legacy-Endstand/i);
   assert.match(readme, /Organisationsmodell und Leihnachweise in v0\.87 Beta/);
   assert.match(readme, /Personal-Regelwerk in v0\.86 Beta/);
   assert.match(readme, /Leihmodul in v0\.85 Beta/);
@@ -61,9 +64,14 @@ test("v0.87: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", () 
   assert.match(readme, /Revisionssichere Fallverwaltung/);
   assert.match(readme, /nächtliche Recovery-Assurance-Automatik/);
   assert.match(serverDocs, /Recovery Assurance und System-Center v0\.78/);
-  assert.match(usbNotes, /Version v0\.86 Beta/);
-  assert.match(usbNotes, /keine automatische Reduktion/i);
-  assert.match(genericLauncher, /Grabenplaner v0\.86 Beta starten\.cmd/);
+  assert.match(legacyNotes, /Windows 10 oder 11/);
+  assert.match(legacyNotes, /keine weiteren automatischen Produktupdates/i);
+  assert.match(legacyNotes, /keine direkte Freigabe aus dem Internet/i);
+  assert.match(legacyDocs, /eingefrorener Legacy-Endstand/i);
+  assert.match(legacyDocs, /data\\dienstplan\.db/);
+  assert.equal(fs.existsSync(path.join(root, "USB-HINWEISE.txt")), false);
+  assert.match(genericLauncher, /Grabenplaner v0\.87 Legacy starten\.cmd/);
+  assert.match(read("Backup erstellen.cmd"), /v0\.87 Legacy/);
   assert.match(governanceDocs, /Urlaubsgesetz § 2/);
   assert.match(governanceDocs, /Urlaubsgesetz § 4/);
   assert.match(governanceDocs, /Urlaubsgesetz § 8/);
@@ -80,6 +88,7 @@ test("v0.87: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", () 
   assert.match(pilotAcceptanceDocs, /WCAG 2\.2/);
   assert.match(pilotAcceptanceDocs, /OWASP ASVS 5\.0\.0/);
   assert.match(pilotAcceptanceDocs, /keine pauschale Rechts-, Sicherheits- oder Barrierefreiheitsgarantie/);
+  assert.match(versionLog, /v0\.87 Legacy/);
   assert.match(versionLog, /v0\.87 Beta/);
   assert.match(versionLog, /v0\.86 Beta/);
   assert.match(versionLog, /v0\.85 Beta/);
@@ -98,4 +107,25 @@ test("v0.87: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", () 
   assert.match(versionLog, /v0\.78\.1 Beta/);
   assert.match(versionLog, /v0\.78 Beta/);
   assert.doesNotMatch(readme, /v0\.77 enthält noch keinen nächtlichen/);
+});
+
+test("v0.87 Legacy: Updater und USB-Bereitstellung bleiben fail-closed", () => {
+  const serverSource = read("server.js");
+  const appSource = read("public/app.js");
+
+  assert.match(serverSource, /const LEGACY_WINDOWS_RELEASE = \/\^0\\\.87\\\.0-beta\\\.legacy/);
+  assert.match(serverSource, /source: "legacy-final"/);
+  assert.match(serverSource, /updateAvailable: false/);
+  assert.match(serverSource, /canAutoUpdate: false/);
+  assert.ok(
+    serverSource.indexOf('if (LEGACY_WINDOWS_RELEASE) {') < serverSource.indexOf("const latest = await getLatestReleaseInfo();"),
+  );
+  const updateEndpoint = serverSource.slice(
+    serverSource.indexOf('app.post("/api/update-apply"'),
+    serverSource.indexOf('app.post("/api/backup"'),
+  );
+  assert.ok(updateEndpoint.indexOf("LEGACY_RELEASE_FINAL") < updateEndpoint.indexOf("downloadGitHubReleaseAsset"));
+  assert.match(serverSource, /reasonCode: "LEGACY_USB_PROVISIONING_DISABLED"/);
+  assert.match(appSource, /state\.portalStatus\?\.usbProvisioning\?\.available === true/);
+  assert.match(appSource, /status\.source === "legacy-final"/);
 });
