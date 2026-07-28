@@ -970,7 +970,8 @@ function applyRoleVisibility() {
     && ["admin", "it_admin", "developer"].includes(role)
     && permissions.includes("system:offsite:configure");
   const backupImportAccess = !serverActive && (!lanActive || ["developer", "it_admin"].includes(role));
-  const usbProvisioningAccess = ["developer", "it_admin", "admin"].includes(role)
+  const usbProvisioningAccess = state.portalStatus?.usbProvisioning?.available === true
+    && ["developer", "it_admin", "admin"].includes(role)
     && (!lanActive || permissions.includes("usb:provision"));
   const integrationsEnabled = features.integrations !== false;
   const integrationReadAccess = integrationsEnabled && (!lanActive || permissions.includes("integrations:read"));
@@ -14886,7 +14887,11 @@ async function checkForUpdates(showResult = true) {
       ...status,
       cssClass: status.updateAvailable ? (status.updateKind === "security" ? "security" : "available") : "current",
       icon: status.updateAvailable ? "!" : "✓",
-      text: status.updateAvailable ? `${updateTypeLabel} verfügbar` : "Aktuell",
+      text: status.updateAvailable
+        ? `${updateTypeLabel} verfügbar`
+        : status.source === "legacy-final"
+          ? "Legacy-Endstand"
+          : "Aktuell",
       hint: status.updateAvailable ? status.latestVersion : status.currentLabel,
     };
     renderUpdateStatus();
@@ -14895,7 +14900,7 @@ async function checkForUpdates(showResult = true) {
         ? status.canAutoUpdate
           ? `${updateTypeLabel} ${status.latestVersion} verfügbar. Klick unten links startet die Aktualisierung.`
           : `${status.managementNote || `${updateTypeLabel} ${status.latestVersion} verfügbar.`}`
-        : "Du hast die aktuellste Version.");
+        : (status.managementNote || "Du hast die aktuellste Version."));
     }
     return status;
   } catch (error) {
@@ -14913,7 +14918,7 @@ async function handleUpdateButton() {
     return;
   }
   if (!status.updateAvailable) {
-    showToast("Du hast die aktuellste Version.");
+    showToast(status.managementNote || "Du hast die aktuellste Version.");
     return;
   }
   if (!status.canAutoUpdate) {
@@ -15144,6 +15149,9 @@ function renderUsbAvailability(metadata) {
   } else if (reasonCode === "USB_DEPLOYMENT_UNSUPPORTED") {
     title = "In dieser Umgebung nicht verfügbar";
     fallbackReason = "Der USB-Stick-Assistent ist in dieser Test- oder Entwicklungsumgebung nicht verfügbar.";
+  } else if (reasonCode === "LEGACY_USB_PROVISIONING_DISABLED") {
+    title = "Im Legacy-Endstand nicht enthalten";
+    fallbackReason = "Der USB-Stick-Assistent ist im finalen Windows-/LAN-Legacy-Endstand nicht enthalten.";
   }
   elements.usbProvisioningAvailabilityBadge.textContent = available ? "Bereit" : "Gesperrt";
   elements.usbProvisioningAvailabilityBadge.classList.toggle("inactive", !available);

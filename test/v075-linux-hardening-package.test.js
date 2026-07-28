@@ -12,6 +12,7 @@ const root = path.resolve(__dirname, "..");
 const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 const schema = JSON.parse(read("server-tools/linux/hardening/module-schema.json"));
 const hardeningRoot = path.join(root, "server-tools", "linux", "hardening");
+const legacyWindowsRelease = JSON.parse(read("package.json")).version.includes(".legacy.");
 const legacyV075HardeningArtifacts = [
   "server-tools/linux/hardening/grabenplaner-host-security.sh",
   "server-tools/linux/hardening/install-grabenplaner-host-hardening.sh",
@@ -211,7 +212,11 @@ test("v0.75 package integration never activates host hardening implicitly", () =
 });
 
 test("v0.75 Linux package builder expands the complete hardening artifact list", {
-  skip: process.platform !== "win32" ? "PowerShell-Paketbau wird im Windows-Job geprüft." : false,
+  skip: process.platform !== "win32"
+    ? "PowerShell-Paketbau wird im Windows-Job geprüft."
+    : legacyWindowsRelease
+      ? "Der eingefrorene Windows-Legacy-Zweig erzeugt kein Linux-Serverpaket."
+      : false,
 }, () => {
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v075-package-build-"));
   try {

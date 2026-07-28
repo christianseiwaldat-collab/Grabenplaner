@@ -281,6 +281,7 @@ const {
   verifyProductReadinessEvidence,
 } = require("./lib/product-readiness");
 const packageMetadata = require("./package.json");
+const LEGACY_WINDOWS_RELEASE = /^0\.87\.0-beta\.legacy\.\d+$/.test(String(packageMetadata.version));
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
 const LOAN_OVERVIEW_PERMISSION = "loans:overview:read";
@@ -971,6 +972,12 @@ const defaultPortalSettings = {
 };
 
 function formatVersionLabel(version) {
+  const legacyMatch = String(version).match(/^(\d+)\.(\d+)\.(\d+)-beta\.legacy\.\d+$/);
+  if (legacyMatch) {
+    return legacyMatch[3] === "0"
+      ? `v${legacyMatch[1]}.${legacyMatch[2]} Legacy`
+      : `v${legacyMatch[1]}.${legacyMatch[2]}.${legacyMatch[3]} Legacy`;
+  }
   const match = String(version).match(/^(\d+)\.(\d+)\.(\d+)-beta/);
   if (!match) return `v${version}`;
   return match[3] === "0" ? `v${match[1]}.${match[2]} Beta` : `v${match[1]}.${match[2]}.${match[3]} Beta`;
@@ -1251,7 +1258,7 @@ function cleanupPortableInstallRoot() {
   const docsDirectory = path.join(__dirname, "docs");
   fs.mkdirSync(docsDirectory, { recursive: true });
 
-  for (const docName of ["README.md", "USB-HINWEISE.txt", "LICENSE.md"]) {
+  for (const docName of ["README.md", "LEGACY-WINDOWS-HINWEISE.txt", "LICENSE.md"]) {
     const source = path.join(__dirname, docName);
     const target = path.join(docsDirectory, docName);
     if (fs.existsSync(source)) {
@@ -1265,7 +1272,7 @@ function cleanupPortableInstallRoot() {
   for (const fileName of fs.readdirSync(__dirname)) {
     const filePath = path.join(__dirname, fileName);
     if (!fs.statSync(filePath).isFile()) continue;
-    if (/^Grabenplaner v.+ Beta starten\.cmd$/i.test(fileName) && fileName !== currentStartFile) {
+    if (/^Grabenplaner v.+ (?:Beta|Legacy) starten\.cmd$/i.test(fileName) && fileName !== currentStartFile) {
       safeRemoveFile(filePath);
       continue;
     }
@@ -21696,6 +21703,28 @@ async function getLatestReleaseInfo() {
 }
 
 async function resolveUpdateStatus() {
+  if (LEGACY_WINDOWS_RELEASE) {
+    return {
+      status: {
+        ok: true,
+        currentVersion: packageMetadata.version,
+        currentLabel: APP_VERSION_LABEL,
+        latestVersion: packageMetadata.version,
+        latestTag: `v${packageMetadata.version}`,
+        latestUrl: `https://github.com/${GITHUB_REPO}/releases/tag/v${packageMetadata.version}`,
+        source: "legacy-final",
+        updateKind: "legacy",
+        updateTypeLabel: "Legacy-Endstand",
+        updateAvailable: false,
+        assetName: "",
+        assetSize: 0,
+        assetIntegrity: "",
+        canAutoUpdate: false,
+        managementNote: "Finaler Legacy-Endstand – für diese Windows-/LAN-Ausgabe sind keine weiteren automatischen Updates vorgesehen.",
+      },
+      asset: null,
+    };
+  }
   const latest = await getLatestReleaseInfo();
   const comparison = compareVersions(latest.tagName, packageMetadata.version);
   const asset = latest.assets.find((item) => /windows-portable\.zip$/i.test(item.name)) || null;
@@ -21771,6 +21800,13 @@ app.get("/api/update-status", async (_request, response) => {
 });
 
 app.post("/api/update-apply", async (_request, response) => {
+  if (LEGACY_WINDOWS_RELEASE) {
+    throw httpError(
+      409,
+      "Dieser Windows-/LAN-Legacy-Endstand erhält keine weiteren automatischen Updates.",
+      "LEGACY_RELEASE_FINAL",
+    );
+  }
   if (serverModeActive) throw httpError(409, "Im Serverbetrieb werden Updates kontrolliert am Server eingespielt.", "SERVER_MANAGED_UPDATE");
   if (fs.existsSync(path.join(__dirname, ".git"))) {
     throw httpError(409, "Ein Quellcode-Checkout wird nicht über den Portable-Updater überschrieben. Bitte die Aktualisierung mit Git durchführen.", "SOURCE_CHECKOUT_UPDATE_BLOCKED");
@@ -36624,6 +36660,19 @@ app.get("/api/portal/v1/time-presence", (request, response) => {
 });
 
 function usbProvisioningAvailability(request = null) {
+  if (LEGACY_WINDOWS_RELEASE) {
+    return {
+      available: false,
+      hostCapable: false,
+      localConsole: false,
+      localOnly: true,
+      requiresElevation: false,
+      targetOperationMode: "local",
+      currentOperationMode: configuredOperationMode,
+      reasonCode: "LEGACY_USB_PROVISIONING_DISABLED",
+      reason: "Der USB-Stick-Assistent ist im finalen Windows-/LAN-Legacy-Endstand nicht enthalten.",
+    };
+  }
   return evaluateUsbProvisioningAccess({
     platform: process.platform,
     operationMode: configuredOperationMode,
