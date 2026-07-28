@@ -359,6 +359,8 @@ Im beaufsichtigten Wartungsfenster wird zuerst das neue Linux-Paket vollständig
 
 Erst wenn `sudo grabenplaner-offsite-test` und der ausgelöste vollständige Assurance-Lauf einschließlich App-Smoke erfolgreich abgeschlossen sind, wird das Kernupdate gestartet. Der Updater findet dann bereits Modulversion 6 vor und darf fortfahren. Repository, Repository-ID, Installations-ID, Geheimdateien, lokales Staging und vorhandene Sicherungsstände bleiben dabei erhalten. Version 6 übernimmt den bisherigen Assurance-Vertrag und ergänzt den begrenzten, gruppengeschützten Zielordner-Broker samt geprüftem, atomarem Zielwechsel. Das bisherige Repository bleibt beim Wechsel als Rückfallpunkt bestehen; der automatisch vorbereitete neue Recovery-Zwischenstand ist anschließend getrennt zu übertragen und zu prüfen.
 
+v0.87 behält den Offsite-Modulvertrag auf Version 6, erweitert aber dessen isolierten App-Smoke um die neuen Leihfoto-PDF-Beilagen. Bei einem bereits installierten v6-Modul ist `migration-required:6->6` deshalb der erwartete Sicherheitsstopp und darf nicht umgangen werden. Der v0.87-Kandidat wird getrennt verifiziert und sein Offsite-Installer mit denselben geprüften Binaries, Geheimdateien und derselben Repository-Bindung ausgeführt; `--initialize-repository` bleibt ausdrücklich verboten. Erst nach erfolgreichem `sudo grabenplaner-offsite-test` und einem vollständig bestandenen Assurance-Lauf einschließlich App-Smoke darf `grabenplaner-update` das Kernupdate ausführen.
+
 Der neutrale Status liegt unter `/var/lib/grabenplaner-offsite/status.json`. `grabenplaner-test` und die berechtigte Serverdiagnose zeigen daraus insbesondere:
 
 - ob das Modul eingerichtet ist;

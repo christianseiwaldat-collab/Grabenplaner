@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>v0.86 Beta</strong> · Windows · Ubuntu-Server · SQLite · Source-available
+  <strong>v0.87 Beta</strong> · Ubuntu-Server · SQLite · Source-available
 </p>
 
 <p align="center">
@@ -37,6 +37,14 @@
 | Produktstatus | Verfügbar | Verfügbar | IT-verwalteter Beta-Serverbetrieb; produktive Freigabe nach Go-live-Prüfung |
 
 Der Lokalbetrieb bleibt der unkomplizierte Standard für die vollständige Dienst- und Urlaubsplanung an einem Gerät. Im LAN-Host-Modus liegt die Datenbank ausschließlich am Host-PC; Mitarbeitende können sich im Firmen-LAN oder -WLAN anmelden und dort auch die Zeiterfassung verwenden. Der HTTPS-Server erweitert dieses Modell um geschützten Zugriff von außerhalb. Unterstützt werden Ubuntu 24.04 und 26.04 LTS auf x86-64 mit Caddy, systemd, getrennten Dienstrechten und ClamAV; für neue Beta-Server wird Ubuntu 26.04 LTS empfohlen. Unter Ubuntu kann ein optionales Restic-/rclone-Modul verifizierte lokale Sicherungspunkte täglich verschlüsselt zu Google Drive übertragen. Eine automatische Serverprüfung meldet Störungen redigiert in der Oberfläche; Wiederherstellungen bleiben ein bewusst beaufsichtigter, mehrstufiger Vorgang. Ein getrenntes Host-Sicherheitsmodul prüft SSH, UFW, automatische Sicherheitsaktualisierungen, Kernel- und Journalvorgaben. Aktivierende Änderungen bleiben ein ausdrücklicher Root-Vorgang mit Sicherheitsrollback und Bestätigung über eine eigenständige neue SSH-Verbindung. Die vorhandenen Windows-Werkzeuge bleiben verfügbar. Die konkrete Domain-, Firewall-, Zertifikats- und Betriebskonfiguration muss vor der Freigabe durch die zuständige IT geprüft werden. Details stehen in [SERVERBETRIEB.md](SERVERBETRIEB.md).
+
+## Organisationsmodell und Leihnachweise in v0.87 Beta
+
+v0.87 führt frei konfigurierbare Kostenstellentypen ein und macht die Kostenstelle zur führenden organisatorischen Mitarbeiterzuordnung. Positionen werden passend zum Kostenstellentyp angeboten; bei Filialkostenstellen wird der Standort daraus abgeleitet. Bestehende Daten werden konservativ migriert und widersprüchliche Altzuordnungen vor einer Änderung gesichert und nachvollziehbar bereinigt.
+
+Fachliche Einzelrechte für Arbeitszeitregeln, Personalakt und AUM können ab Personalleitung gezielt vergeben werden, während technische System- und Rollenrechte geschützt bleiben. Eigenständige Organisations- und Terminalkonten sind strikt von Mitarbeiterdaten getrennt und auf ihre freigegebenen Standorte und Ansichten begrenzt.
+
+Die Leihübersicht zeigt Mitarbeitenden einen minimierten, schnell durchsuchbaren Bestand ohne vertrauliche Dokumente oder Fotos. Ausgabe- und Rückgabefotos können getrennt zu kompakten, verschlüsselten und unveränderlichen PDF-Beilagen verarbeitet werden. Die Aufbewahrung der Farboriginale bleibt konfigurierbar; als sichere Voreinstellung werden sie geschützt behalten. Sicherung, Wiederherstellung und Recovery-Prüfung berücksichtigen die neuen Beilagen vollständig.
 
 ## Personal-Regelwerk in v0.86 Beta
 
