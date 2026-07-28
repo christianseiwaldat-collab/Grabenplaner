@@ -62,9 +62,11 @@ test("v0.87: Serverpaket, UI und aktuelle Dokumentation bleiben konsistent", () 
   assert.match(readme, /docs\/readme\/mitarbeiterportal\.webp/);
   assert.doesNotMatch(readme, /Grabenplaner, drei Betriebsmodelle/);
   assert.doesNotMatch(readme, /Schnellstart unter Windows/);
-  assert.match(securityPolicy, /Private Vulnerability Reporting/);
+  assert.match(securityPolicy, /christian\.seiwald\.at@gmail\.com/);
+  assert.doesNotMatch(securityPolicy, /Private Vulnerability Reporting/);
   assert.match(securityPolicy, /Legacy/i);
-  assert.match(codespacesDocs, /öffentliches Repository/i);
+  assert.match(codespacesDocs, /Repository ist privat/i);
+  assert.match(codespacesDocs, /nur Personen mit Repository-Zugriff/i);
   assert.match(codespacesDocs, /eingeladene Collaborators mit Schreibzugriff/);
   assert.equal(devcontainer.name, "Grabenplaner v0.87 Codespaces-Demo");
   assert.equal(Object.hasOwn(devcontainer.features, "ghcr.io/devcontainers/features/sshd:1"), false);

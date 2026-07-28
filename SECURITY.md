@@ -10,11 +10,9 @@
 
 ## Vertraulich melden
 
-Sicherheitsprobleme bitte nicht als öffentliches Issue veröffentlichen. Bevorzugter Meldeweg ist GitHubs **Private Vulnerability Reporting**:
+Sicherheitsprobleme bitte nicht als GitHub-Issue veröffentlichen, sondern vertraulich an `christian.seiwald.at@gmail.com` melden. Bitte nur bereinigte Nachweise ohne echte Personal-, Gesundheits-, Zugangs- oder Produktivdaten übermitteln.
 
-[Sicherheitslücke vertraulich melden](https://github.com/christianseiwaldat-collab/Grabenplaner/security/advisories/new)
-
-Alternativ ist eine vertrauliche Meldung an `christian.seiwald.at@gmail.com` möglich. Bitte nur bereinigte Nachweise ohne echte Personal-, Gesundheits-, Zugangs- oder Produktivdaten übermitteln.
+Repository-Administratoren können für die interne Bearbeitung zusätzlich ein privates GitHub Security Advisory anlegen.
 
 Hilfreich sind betroffene Version, Auswirkung, reproduzierbare Schritte und gegebenenfalls ein minimiertes Testbeispiel. Eine Eingangsbestätigung wird nach Möglichkeit innerhalb von fünf Werktagen, eine erste Einschätzung innerhalb von zehn Werktagen angestrebt; dies sind Zielwerte, keine Garantie.
 

@@ -14,7 +14,7 @@ Der Start-Hook prüft:
 
 Port `3000` bleibt privat und ist nur über den authentifizierten HTTPS-Proxy des jeweiligen Codespaces erreichbar.
 
-Wichtige GitHub-Grenze: Dieses Repository ist öffentlich. GitHub erlaubt daher jedem GitHub-Konto, auf eigene Rechnung einen eigenen Codespace aus dem öffentlichen Quellcode zu erstellen. Ein persönliches öffentliches Repository besitzt keine Codespaces-Whitelist. Der Start-Hook begrenzt die bereitgestellte Original-Demo, ersetzt aber keine GitHub-Zugriffskontrolle. Eine technisch vollständige Beschränkung der Codespace-Erstellung auf Eigentümer und Collaborators erfordert ein privates Repository.
+Dieses Repository ist privat. GitHub erlaubt die Erstellung eines Codespaces für ein privates Repository eines persönlichen Kontos nur Personen mit Repository-Zugriff. Der Start-Hook beschränkt den automatischen Demo-Start zusätzlich auf den Repository-Eigentümer und ausdrücklich eingeladene Collaborators mit Schreibzugriff.
 
 ## Start
 
