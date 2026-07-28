@@ -75,4 +75,4 @@ Die [Codespaces-Demo](CODESPACES.md) ist ausschließlich für fiktive Testdaten 
 
 Grabenplaner ist **source-available, nicht Open Source**. Private interne Test- und Evaluierungsnutzung richtet sich nach [LICENSE.md](LICENSE.md); kommerzielle Nutzung erfordert die vorherige schriftliche Genehmigung des Rechteinhabers.
 
-Sicherheitsprobleme bitte ausschließlich vertraulich nach [SECURITY.md](SECURITY.md) melden, nicht als öffentliches Issue.
+Sicherheitsprobleme bitte ausschließlich vertraulich nach [SECURITY.md](SECURITY.md) melden, nicht als GitHub-Issue.
