@@ -45,6 +45,7 @@ let baseUrl;
 let mainLocationId;
 let foreignLocationId;
 let mainCostCenterId;
+let foreignCostCenterId;
 let adminSession;
 let employeeSession;
 let managerSession;
@@ -234,16 +235,22 @@ test.before(async () => {
   mainLocationId = mainLocation.id;
   mainCostCenterId = mainLocation.cost_center_id || null;
   foreignLocationId = uniqueLocationId();
+  foreignCostCenterId = `cc-v081-${foreignLocationId}`;
+  db.prepare(`
+    INSERT INTO cost_centers
+      (id, code, name, type, cost_center_type_id, active, sort_order)
+    VALUES (?, ?, 'Regeltest Fremdfiliale', 'branch', 'branch', 1, 900)
+  `).run(foreignCostCenterId, `V081-${foreignLocationId}`);
   db.prepare(`
     INSERT INTO locations (id, name, cost_center_id, min_staff, day_settings_json, active)
     VALUES (?, 'Regeltest Fremdfiliale', ?, 1, '', 1)
-  `).run(foreignLocationId, mainCostCenterId);
+  `).run(foreignLocationId, foreignCostCenterId);
 
   insertEmployee(ADMIN, "Ada Regelsicherheit", mainLocationId, mainCostCenterId);
   insertEmployee(NO_RULE_READ, "Emil Ohne Regelrecht", mainLocationId, mainCostCenterId);
   insertEmployee(SCOPED_MANAGER, "Mara Bereichsleitung", mainLocationId, mainCostCenterId);
   insertEmployee(HISTORICAL_EMPLOYEE, "Hanna Historie", mainLocationId, mainCostCenterId);
-  insertEmployee(FOREIGN_EMPLOYEE, "Franz Fremdfiliale", foreignLocationId, mainCostCenterId);
+  insertEmployee(FOREIGN_EMPLOYEE, "Franz Fremdfiliale", foreignLocationId, foreignCostCenterId);
   insertEmployee(SWITCH_EMPLOYEE, "Wera Profilwechsel", mainLocationId, mainCostCenterId);
   insertEmployee(ATOMIC_EMPLOYEE, "Toni Transaktion", mainLocationId, mainCostCenterId);
 

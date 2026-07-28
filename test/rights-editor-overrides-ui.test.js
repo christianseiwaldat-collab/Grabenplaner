@@ -31,9 +31,12 @@ test("Rechteeditor sendet getrennte Freigaben, Entzüge und Bereiche", () => {
 });
 
 test("Dienstplan-Schreibrecht bleibt vom Leserecht abhängig", () => {
-  assert.match(script, /function enforceRightsEditorScheduleDependency/);
-  assert.match(script, /value="schedule:read"/);
-  assert.match(script, /value="schedule:write"/);
+  assert.match(script, /const permissionDependencyRules/);
+  assert.match(script, /permissionId: "schedule:write"/);
+  assert.match(script, /requiredPermissionId: "schedule:read"/);
+  assert.match(script, /permissionId: "amu:local:manage"/);
+  assert.match(script, /requiredPermissionId: "sickness:read"/);
+  assert.match(script, /function enforceRightsEditorPermissionDependencies/);
   assert.match(script, /Dienstpläne bearbeiten wurde ebenfalls entzogen/);
   assert.match(script, /Dienstpläne lesen wurde automatisch ergänzt/);
 });

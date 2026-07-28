@@ -11,12 +11,20 @@ function sha256File(filePath) {
 
 function requiredProtectedStorageKeys(database) {
   const hasTable = (name) => Boolean(database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
+  const hasColumn = (table, column) => hasTable(table)
+    && Boolean(database.prepare("SELECT 1 FROM pragma_table_info(?) WHERE name = ?").get(table, column));
   const keys = [];
   for (const reference of [
     { table: "amu_documents", where: "WHERE status = 'active'" },
     { table: "personnel_record_documents", where: "WHERE status = 'active'" },
     { table: "loan_documents", where: "" },
-    { table: "loan_photos", where: "" },
+    { table: "loan_photo_attachments", where: "" },
+    {
+      table: "loan_photos",
+      where: hasColumn("loan_photos", "original_retained")
+        ? "WHERE original_retained = 1"
+        : "",
+    },
   ]) {
     if (!hasTable(reference.table)) continue;
     keys.push(...database.prepare(`SELECT storage_key FROM ${reference.table} ${reference.where}`).all()

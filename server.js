@@ -173,6 +173,10 @@ const {
   MAX_LOAN_PHOTOS_PER_PHASE,
   prepareLoanPhoto,
 } = require("./lib/loan-photo");
+const {
+  LoanPhotoPdfError,
+  renderLoanPhotoPdf,
+} = require("./lib/loan-photo-pdf");
 const { CONTRACT_IDS, contractById, contractSha256, contractSummaries } = require("./lib/integration-contracts");
 const {
   ageOnDate: workRuleAgeOnDate,
@@ -279,8 +283,45 @@ const {
 const packageMetadata = require("./package.json");
 const APP_NAME = "Grabenplaner";
 const PORTAL_API_VERSION = 1;
+const LOAN_OVERVIEW_PERMISSION = "loans:overview:read";
+const ORGANIZATION_SCHEDULE_PERMISSION = "schedule:location:view";
+const organizationAccountPermissionCatalog = Object.freeze([
+  {
+    id: LOAN_OVERVIEW_PERMISSION,
+    label: "Offene Leihen am Standort ansehen",
+    description: "Datensparsame Geräteübersicht ohne Personen, Notizen, Fotos, Belege oder Bearbeitungsrechte.",
+  },
+  {
+    id: ORGANIZATION_SCHEDULE_PERMISSION,
+    label: "Dienstplan des Standorts ansehen",
+    description: "Reduzierte Dienstplanansicht des ausdrücklich zugewiesenen Standorts.",
+  },
+]);
+const organizationAccountPermissions = new Set(
+  organizationAccountPermissionCatalog.map((permission) => permission.id),
+);
 const DEFAULT_OPERATION_MODE = "local";
-const SERVER_MODE_STATUS = "active";
+const APP_FONT_SCALE_MIN = 75;
+const APP_FONT_SCALE_MAX = 150;
+const APP_FONT_SCALE_STEP = 5;
+const APP_FONT_SCALE_DEFAULT = 100;
+const LEGACY_DASHBOARD_FONT_SCALE = Object.freeze({
+  compact: 85,
+  standard: 100,
+  large: 115,
+});
+
+function normalizeAppFontScalePercent(value, fallback = APP_FONT_SCALE_DEFAULT) {
+  const legacyValue = LEGACY_DASHBOARD_FONT_SCALE[String(value || "").trim().toLowerCase()];
+  const numericValue = legacyValue || Number(value);
+  return Number.isInteger(numericValue)
+    && numericValue >= APP_FONT_SCALE_MIN
+    && numericValue <= APP_FONT_SCALE_MAX
+    && numericValue % APP_FONT_SCALE_STEP === 0
+    ? numericValue
+    : fallback;
+}
+
 const LOCAL_PORTAL_PASSWORD_MIN_LENGTH = 6;
 const SERVER_PORTAL_PASSWORD_MIN_LENGTH = 10;
 const PORTAL_SESSION_COOKIE = "grabenplaner_session";
@@ -337,8 +378,8 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "data_subject_requests:read", label: "Betroffenenanfragen lesen", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "data_subject_requests:manage", label: "Betroffenenanfragen bearbeiten", description: "Identitätsprüfung, Fristen, Entscheidung und Maßnahmen dokumentieren.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "data_subject_requests:export", label: "Datenauskunftspaket erzeugen", description: "Minimierte, geprüfte Auskunft mit Prüfsumme erzeugen.", group: "Datenschutz", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
-  { id: "personnel:sensitive:read", label: "Sensible MA-Daten lesen", description: "SV-Nummer, Bankverbindung und Wohnadresse; nur Personalleitung oder ausdrücklich berechtigte höhere Rollen.", group: "Personalakt", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
-  { id: "personnel:sensitive:write", label: "Sensible MA-Daten bearbeiten", description: "SV-Nummer, Bankverbindung und Wohnadresse verschlüsselt pflegen.", group: "Personalakt", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:sensitive:read", label: "Sensible MA-Daten lesen", description: "Personalakt im ausdrücklich zugewiesenen Verantwortungsbereich lesen; keine technische oder globale Berechtigung.", group: "Personalakt", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:sensitive:write", label: "Sensible MA-Daten bearbeiten", description: "Personalakt im ausdrücklich zugewiesenen Verantwortungsbereich verschlüsselt pflegen; keine technische oder globale Berechtigung.", group: "Personalakt", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "personnel:phone:read", label: "Telefonnummern im eigenen Bereich lesen", group: "Personalakt", warningLevel: "high", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "personnel:phone:write", label: "Telefonnummern im eigenen Bereich bearbeiten", description: "Bei standortgebundenen Leitungs- und Planungsrollen zusätzlich nur mit eigener Vertrauensstufe A.", group: "Personalakt", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "amu:metadata:read", label: "Geschützte AUM-Metadaten lesen", description: "Nur Personalleitung und höhere geschützte Rollen; nicht an Filial- oder Abteilungsleitung delegierbar.", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -364,7 +405,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "payroll:export", label: "Lohnverrechnungsdaten exportieren", description: "Zeit-, Abwesenheits- und Zuschlagsdaten ausgeben sowie belegbare Monatsübergaben erstellen.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "payroll:deliver", label: "Lohnverrechnungsdaten sicher übertragen", description: "Final geprüfte Daten kontrolliert übergeben und externe Übertragungsprotokolle dokumentieren.", group: "Import & Lohnverrechnung", warningLevel: "critical" },
   { id: "work_rules:planning:read", label: "Arbeitszeit-Hinweise in der Dienstplanung lesen", description: "Regelhinweise und die Vorschau einer konkreten Schicht im eigenen Planungsbereich sehen; kein Zugriff auf Regelverwaltung oder Regel-Dashboard.", group: "Arbeitszeitregeln", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
-  { id: "work_rules:read", label: "Arbeitszeit-Regelprüfungen lesen", description: "Quellenbelegte Hinweise zur Dienstplanung lesen; keine pauschale Rechtsfreigabe.", group: "Arbeitszeitregeln", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "work_rules:read", label: "Arbeitszeit-Regelprüfungen lesen", description: "Quellenbelegte Hinweise zur Dienstplanung lesen; keine pauschale Rechtsfreigabe.", group: "Arbeitszeitregeln", warningLevel: "high", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "work_rules:draft", label: "Eigene Regelentwürfe vorbereiten", description: "Geführte, unveränderlich versionierte Entwürfe eigener Personalregeln anlegen; ohne Freigabe oder Dienstplanwirkung.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "work_rules:manage", label: "Arbeitszeit-Regelprofile verwalten", description: "Versionierte Profile und deren Geltungsbereich verwalten.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "work_rules:review", label: "Eigene Personalregeln fachlich prüfen", description: "Eine unveränderliche Regelfassung als aktuell angemeldete Person unabhängig prüfen; keine Selbstfreigabe.", group: "Arbeitszeitregeln", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin"] },
@@ -378,7 +419,6 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "collective_agreements:approve", label: "KV-Zuordnungen fachlich freigeben", description: "Eine dokumentierte KV-Zuordnung im Vier-Augen-Verfahren bestätigen oder kontrolliert beenden; keine pauschale Rechtsbestätigung.", group: "Arbeitszeitregeln", warningLevel: "critical", eligibleRoles: ["hr", "admin"] },
   { id: "branding:read", label: "Branding-Verwaltung lesen", group: "System & Verwaltung", warningLevel: "high" },
   { id: "branding:write", label: "Brandings verwalten und zuweisen", group: "System & Verwaltung", warningLevel: "critical" },
-  { id: "operation_mode:write", label: "Betriebsmodus umschalten", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "backup:write", label: "Datenbanksicherungen verwalten", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "system:offsite:configure", label: "Offsite-Sicherungsordner verwalten", description: "App-eigene Google-Drive-Zielordner anlegen und nach gesicherter Übernahme aktivieren.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
   { id: "system:diagnostics:read", label: "Serverzustand lesen", description: "Redigierte Betriebs-, Sicherungs- und Wiederherstellungswarnungen ohne interne Pfade lesen.", group: "System & Verwaltung", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -387,7 +427,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "system:readiness:review", label: "Pilotprüfungen und Abnahmen dokumentieren", description: "Versionierte Browser-, Bedienungs- und Performance-Nachweise erfassen sowie die fachliche oder technische Abnahme dokumentieren.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "update:write", label: "Grabenplaner aktualisieren", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "system:write", label: "App neu starten oder beenden", group: "System & Verwaltung", warningLevel: "critical" },
-  { id: "amu:local:manage", label: "AUM im eigenen Verantwortungsbereich öffnen und prüfen", description: "Grundrecht der Filialleitung; für Abteilungsleitungen nur ausdrücklich und bei wirksamer Filialleitungsvertretung.", group: "AUM", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "amu:local:manage", label: "AUM im eigenen Verantwortungsbereich öffnen und prüfen", description: "Standortgebundenes Fachrecht; für Planungs- und Abteilungsverantwortliche nur ausdrücklich zugewiesen, zusätzlich ist das Leserecht für Krankmeldungen erforderlich.", group: "AUM", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
 ]);
 const delegablePortalPermissions = new Set(delegablePortalPermissionCatalog.map((entry) => entry.id));
 const hrDelegablePortalPermissions = new Set(delegablePortalPermissionCatalog.filter((entry) => entry.hrDelegable).map((entry) => entry.id));
@@ -463,6 +503,15 @@ function portalPermissionRoleRestrictionError(permissions) {
   return httpError(403, "Diese Personalakt-Rechte sind für die gewählte App-Rolle nicht zulässig.", "PORTAL_PERMISSION_ROLE_RESTRICTED");
 }
 
+function assertPortalPermissionDependencies(permissions) {
+  const projected = new Set(Array.isArray(permissions) ? permissions : []);
+  if (projected.has("amu:local:manage") && !projected.has("sickness:read")) {
+    throw httpError(400,
+      "AUM im eigenen Verantwortungsbereich kann nur zusammen mit dem Leserecht für Krankmeldungen vergeben werden.",
+      "PORTAL_PERMISSION_DEPENDENCY");
+  }
+}
+
 const portalDashboardPermissionDetails = Object.freeze([
   { id: "own_schedule:read", label: "Eigenen Dienstplan lesen", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "own_time:read", label: "Eigene Zeiterfassung lesen", group: "Eigene Daten", scopeBehavior: "self" },
@@ -480,7 +529,7 @@ const portalDashboardPermissionDetails = Object.freeze([
   { id: "own_sickness:create", label: "Eigene Krankmeldung erfassen", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "own_sickness:read", label: "Eigene Krankmeldungen lesen", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "notifications:settings", label: "Eigene externe Warnungen und Prozessmeldungen konfigurieren", group: "Eigene Daten", scopeBehavior: "self" },
-  { id: "amu:local:manage", label: "AUM im eigenen Filialbereich öffnen und prüfen", description: "Standortgebundenes Grundrecht der Filialleitung; die Personalleitung kann den Zugriff rollenweit oder persönlich entziehen.", group: "AUM", warningLevel: "critical", scopeBehavior: "organizational" },
+  { id: "amu:local:manage", label: "AUM im eigenen Filialbereich öffnen und prüfen", description: "Standortgebundenes Fachrecht der zuständigen Leitung; individuelle Zuweisungen und Entzüge werden berücksichtigt.", group: "AUM", warningLevel: "critical", scopeBehavior: "organizational" },
   { id: "wifi:settings", label: "WLAN-Zeitvorschläge verwalten", group: "Zeit & Abwesenheit", scopeBehavior: "global" },
   { id: "users:write", label: "Portal-Zugänge verwalten", group: "Zugänge & Rechte", scopeBehavior: "global" },
   { id: "roles:read", label: "App-Rollen lesen", group: "Zugänge & Rechte", scopeBehavior: "global" },
@@ -496,7 +545,6 @@ const portalDashboardPermissionDetails = Object.freeze([
 const portalGlobalPermissionIds = new Set([
   "settings:write", "positions:write", "hr:approve", "hr:settings", "sickness:settings",
   "personnel:central:read", "personnel:central:write", "cost_centers:read", "cost_centers:write",
-  "personnel:sensitive:read", "personnel:sensitive:write",
   "vacation_accounts:read", "vacation_accounts:manage",
   "retention:read", "retention:manage",
   "data_subject_requests:read", "data_subject_requests:manage", "data_subject_requests:export",
@@ -507,7 +555,7 @@ const portalGlobalPermissionIds = new Set([
   "work_rules:draft", "work_rules:manage", "work_rules:review", "work_rules:publish",
   "work_rules:assign", "work_rules:exception", "work_rules:audit",
   "collective_agreements:manage", "collective_agreements:assign", "collective_agreements:approve",
-  "operation_mode:write", "backup:write", "system:offsite:configure", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "system:readiness:review", "update:write", "system:write", "wifi:settings",
+  "backup:write", "system:offsite:configure", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "system:readiness:review", "update:write", "system:write", "wifi:settings",
   "users:write", "roles:read", "roles:write", "rights:read", "rights:write", "scopes:write",
   "audit:read", "usb:provision", "developer:system",
 ]);
@@ -639,7 +687,6 @@ const builtinPortalRoles = [
       "branding:write",
       "rights:read",
       "rights:write",
-      "operation_mode:write",
       "employees:write",
       "locations:write",
       "departments:write",
@@ -721,7 +768,6 @@ const builtinPortalRoles = [
       "branding:write",
       "rights:read",
       "rights:write",
-      "operation_mode:write",
       "employees:write",
       "locations:write",
       "departments:write",
@@ -766,7 +812,7 @@ builtinPortalRoles.push(
       "work_rules:read", "work_rules:manage", "work_rules:exception", "work_rules:audit",
       "personnel:central:read", "personnel:central:write", "cost_centers:read", "cost_centers:write",
       "employees:write",
-      "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "update:write", "system:write", "users:write",
+      "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "system:recovery:run", "update:write", "system:write", "users:write",
       "usb:provision",
       "roles:read", "roles:write", "audit:read", "scopes:write", "wifi:settings",
       "hr:settings", "sickness:read", "sickness:manage", "sickness:settings", "notifications:settings",
@@ -797,6 +843,7 @@ const ownGovernancePermissions = [
   "own_privacy_export:read",
 ];
 for (const role of builtinPortalRoles) addBuiltinRolePermissions(role.id, ownGovernancePermissions);
+for (const role of builtinPortalRoles) addBuiltinRolePermissions(role.id, [LOAN_OVERVIEW_PERMISSION]);
 for (const role of builtinPortalRoles) {
   if (role.id === "location_planner") continue;
   addBuiltinRolePermissions(role.id, [
@@ -956,15 +1003,6 @@ function readRuntimeConfig() {
   } catch {
     return {};
   }
-}
-
-function writeRuntimeConfig(values) {
-  const next = { ...readRuntimeConfig(), ...values, updatedAt: new Date().toISOString() };
-  fs.mkdirSync(path.dirname(runtimeConfigPath), { recursive: true });
-  const temporaryPath = `${runtimeConfigPath}.tmp`;
-  fs.writeFileSync(temporaryPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
-  fs.renameSync(temporaryPath, runtimeConfigPath);
-  return next;
 }
 
 const runtimeConfig = readRuntimeConfig();
@@ -1287,6 +1325,12 @@ function databaseHasTable(database, tableName) {
   return Boolean(database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName));
 }
 
+function databaseHasColumn(database, tableName, columnName) {
+  if (!databaseHasTable(database, tableName)) return false;
+  return database.prepare(`PRAGMA table_info("${String(tableName).replace(/"/g, '""')}")`).all()
+    .some((column) => column.name === columnName);
+}
+
 function protectedStorageReferencesFromDatabase(database) {
   const keys = [];
   if (databaseHasTable(database, "amu_documents")) {
@@ -1302,7 +1346,14 @@ function protectedStorageReferencesFromDatabase(database) {
       .map((row) => String(row.storage_key || "").toLowerCase()));
   }
   if (databaseHasTable(database, "loan_photos")) {
-    keys.push(...database.prepare("SELECT storage_key FROM loan_photos").all()
+    const retainedFilter = databaseHasColumn(database, "loan_photos", "original_retained")
+      ? " WHERE original_retained = 1"
+      : "";
+    keys.push(...database.prepare(`SELECT storage_key FROM loan_photos${retainedFilter}`).all()
+      .map((row) => String(row.storage_key || "").toLowerCase()));
+  }
+  if (databaseHasTable(database, "loan_photo_attachments")) {
+    keys.push(...database.prepare("SELECT storage_key FROM loan_photo_attachments").all()
       .map((row) => String(row.storage_key || "").toLowerCase()));
   }
   if (keys.some((key) => !key) || new Set(keys).size !== keys.length) {
@@ -1466,19 +1517,37 @@ function ensureColumn(table, column, definition) {
 
 function createSchema() {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS cost_center_types (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL COLLATE NOCASE UNIQUE,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      is_branch INTEGER NOT NULL DEFAULT 0 CHECK(is_branch IN (0,1)),
+      active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+      builtin INTEGER NOT NULL DEFAULT 0 CHECK(builtin IN (0,1)),
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS cost_centers (
       id TEXT PRIMARY KEY,
       code TEXT NOT NULL COLLATE NOCASE UNIQUE,
       name TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'other'
         CHECK(type IN ('branch','administration','production','other')),
+      cost_center_type_id TEXT,
       description TEXT NOT NULL DEFAULT '',
       active INTEGER NOT NULL DEFAULT 1,
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_by TEXT NOT NULL DEFAULT '',
       updated_by TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (cost_center_type_id) REFERENCES cost_center_types(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT
     );
 
     CREATE TABLE IF NOT EXISTS locations (
@@ -1601,6 +1670,10 @@ function createSchema() {
       document_recipient_employee_number TEXT,
       document_email_enabled INTEGER NOT NULL DEFAULT 0 CHECK(document_email_enabled IN (0,1)),
       document_recipient_email TEXT NOT NULL DEFAULT '',
+      photo_pdf_output_mode TEXT NOT NULL DEFAULT 'grayscale'
+        CHECK(photo_pdf_output_mode IN ('grayscale','blackwhite')),
+      photo_original_retention TEXT NOT NULL DEFAULT 'retain'
+        CHECK(photo_original_retention IN ('retain','delete')),
       created_by TEXT NOT NULL DEFAULT '',
       updated_by TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1746,6 +1819,9 @@ function createSchema() {
       sha256 TEXT NOT NULL CHECK(length(sha256) = 64),
       pixel_width INTEGER NOT NULL CHECK(pixel_width > 0),
       pixel_height INTEGER NOT NULL CHECK(pixel_height > 0),
+      original_retained INTEGER NOT NULL DEFAULT 1 CHECK(original_retained IN (0,1)),
+      original_deleted_at TEXT,
+      original_deletion_reason TEXT NOT NULL DEFAULT '',
       created_by_employee_number TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(loan_id, phase, position),
@@ -1768,6 +1844,46 @@ function createSchema() {
     BEFORE DELETE ON loan_photos
     BEGIN
       SELECT RAISE(ABORT, 'loan photos are immutable');
+    END;
+
+    CREATE TABLE IF NOT EXISTS loan_photo_attachments (
+      id TEXT PRIMARY KEY,
+      loan_id TEXT NOT NULL,
+      phase TEXT NOT NULL CHECK(phase IN ('issue','return')),
+      attachment_revision INTEGER NOT NULL CHECK(attachment_revision >= 1),
+      source_photo_count INTEGER NOT NULL CHECK(source_photo_count BETWEEN 1 AND 9),
+      source_photo_ids_json TEXT NOT NULL DEFAULT '[]',
+      source_fingerprint TEXT NOT NULL CHECK(length(source_fingerprint) = 64),
+      output_mode TEXT NOT NULL CHECK(output_mode IN ('grayscale','blackwhite')),
+      original_retention TEXT NOT NULL CHECK(original_retention IN ('retain','delete')),
+      storage_key TEXT NOT NULL UNIQUE,
+      filename TEXT NOT NULL,
+      detected_mime TEXT NOT NULL DEFAULT 'application/pdf'
+        CHECK(detected_mime = 'application/pdf'),
+      byte_size INTEGER NOT NULL CHECK(byte_size > 0),
+      sha256 TEXT NOT NULL CHECK(length(sha256) = 64),
+      created_by_employee_number TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(loan_id, phase, attachment_revision),
+      FOREIGN KEY (loan_id) REFERENCES loans(id)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+      FOREIGN KEY (created_by_employee_number) REFERENCES employees(personnel_number)
+        ON UPDATE CASCADE ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_loan_photo_attachments_loan
+      ON loan_photo_attachments(loan_id, phase, attachment_revision);
+
+    CREATE TRIGGER IF NOT EXISTS trg_loan_photo_attachments_immutable_update
+    BEFORE UPDATE ON loan_photo_attachments
+    BEGIN
+      SELECT RAISE(ABORT, 'loan photo attachments are immutable');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS trg_loan_photo_attachments_immutable_delete
+    BEFORE DELETE ON loan_photo_attachments
+    BEGIN
+      SELECT RAISE(ABORT, 'loan photo attachments are immutable');
     END;
 
     CREATE TABLE IF NOT EXISTS loan_document_deliveries (
@@ -1952,6 +2068,24 @@ function createSchema() {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS cost_center_type_positions (
+      cost_center_type_id TEXT NOT NULL,
+      position_id TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (cost_center_type_id, position_id),
+      FOREIGN KEY (cost_center_type_id) REFERENCES cost_center_types(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (position_id) REFERENCES positions(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cost_center_types_active_sort
+      ON cost_center_types(active, sort_order, name);
+
+    CREATE INDEX IF NOT EXISTS idx_cost_center_type_positions_position
+      ON cost_center_type_positions(position_id, cost_center_type_id);
+
     CREATE TABLE IF NOT EXISTS shifts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       employee_number TEXT NOT NULL,
@@ -2090,6 +2224,61 @@ function createSchema() {
       revoked_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (employee_number) REFERENCES portal_users(employee_number)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS portal_organization_accounts (
+      id TEXT PRIMARY KEY,
+      login_name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+      display_name TEXT NOT NULL,
+      account_type TEXT NOT NULL DEFAULT 'branch'
+        CHECK(account_type IN ('branch','terminal')),
+      password_hash TEXT NOT NULL DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+      must_change_password INTEGER NOT NULL DEFAULT 1 CHECK(must_change_password IN (0,1)),
+      last_login_at TEXT,
+      password_changed_at TEXT,
+      failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+      locked_until TEXT,
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS portal_organization_sessions (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      revoked_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (account_id) REFERENCES portal_organization_accounts(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS portal_organization_account_permissions (
+      account_id TEXT NOT NULL,
+      permission TEXT NOT NULL,
+      granted_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (account_id, permission),
+      FOREIGN KEY (account_id) REFERENCES portal_organization_accounts(id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS portal_organization_account_scopes (
+      account_id TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      department_id INTEGER NOT NULL DEFAULT 0 CHECK(department_id = 0),
+      assigned_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (account_id, location_id, department_id),
+      FOREIGN KEY (account_id) REFERENCES portal_organization_accounts(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      FOREIGN KEY (location_id) REFERENCES locations(id)
         ON UPDATE CASCADE ON DELETE CASCADE
     );
 
@@ -3585,6 +3774,14 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_portal_users_role_active ON portal_users(role, active);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_employee ON portal_sessions(employee_number, expires_at);
     CREATE INDEX IF NOT EXISTS idx_portal_sessions_expiry ON portal_sessions(expires_at, revoked_at);
+    CREATE INDEX IF NOT EXISTS idx_portal_organization_accounts_active
+      ON portal_organization_accounts(active, login_name);
+    CREATE INDEX IF NOT EXISTS idx_portal_organization_sessions_account
+      ON portal_organization_sessions(account_id, expires_at);
+    CREATE INDEX IF NOT EXISTS idx_portal_organization_sessions_expiry
+      ON portal_organization_sessions(expires_at, revoked_at);
+    CREATE INDEX IF NOT EXISTS idx_portal_organization_scopes_location
+      ON portal_organization_account_scopes(location_id, account_id);
     CREATE INDEX IF NOT EXISTS idx_mobile_sessions_employee ON mobile_sessions(employee_number, refresh_expires_at);
     CREATE INDEX IF NOT EXISTS idx_mobile_sessions_expiry ON mobile_sessions(refresh_expires_at, revoked_at);
     CREATE INDEX IF NOT EXISTS idx_mobile_refresh_history_consumed ON mobile_refresh_token_history(consumed_at);
@@ -4011,6 +4208,8 @@ const legacySchemaMigrationRequired = tableExists("employees") && !columnExists(
 const portalMobileBaselineMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.60-portal-mobile-foundation' LIMIT 1").get();
 const costCenterMigrationId = "v0.71-cost-centers-personnel";
+const costCenterTypeMigrationId = "v0.87-cost-center-types";
+const employeeCostCenterAssignmentMigrationId = "v0.87-employee-cost-center-assignment";
 const shiftLocationMigrationId = "v0.71-shift-locations";
 const workRuleMigrationId = "v0.81-austrian-work-rule-engine";
 const privacyGovernanceMigrationId = "v0.82-leave-records-privacy";
@@ -4018,6 +4217,20 @@ const vacationHistoryProtectionMigrationId = "v0.82-protected-vacation-history";
 const payrollHandoffMigrationId = "v0.83-payroll-handoffs";
 const productReadinessMigrationId = "v0.84-product-readiness";
 const loanModuleMigrationId = "v0.85-loan-module-foundation";
+const loanPhotoPdfMigrationId = "v0.87-loan-photo-pdf-attachments";
+const block7SettingsMigrationId = "v0.87-block7-settings-appearance";
+const principalSeparationMigrationId = "v0.87-block8-principal-separation";
+const principalSeparationTriggerNames = Object.freeze([
+  "trg_employees_organization_login_insert",
+  "trg_employees_organization_login_update",
+  "trg_organization_accounts_employee_login_insert",
+  "trg_organization_accounts_employee_login_update",
+]);
+const loanPhotoPdfTriggerNames = Object.freeze([
+  "trg_loan_photos_retention_insert",
+  "trg_loan_photo_attachments_immutable_update",
+  "trg_loan_photo_attachments_immutable_delete",
+]);
 const collectiveAgreementMigrationId = "v0.85-collective-agreement-register";
 const workRuleGovernanceMigrationId = "v0.86-work-rule-governance";
 const workRuleGovernanceTables = Object.freeze([
@@ -4202,11 +4415,137 @@ function removeMalformedProductReadinessImmutableTriggers() {
     }
   }
 }
+
+function costCenterTypeDataRepairNeeded() {
+  if (!tableExists("cost_center_types") || !tableExists("cost_centers")
+    || !columnExists("cost_centers", "cost_center_type_id")) return false;
+  for (const id of ["branch", "administration", "production", "other"]) {
+    if (!db.prepare("SELECT 1 FROM cost_center_types WHERE id = ? LIMIT 1").get(id)) return true;
+  }
+  return Boolean(db.prepare(`
+    SELECT 1
+    FROM cost_centers center
+    LEFT JOIN cost_center_types type ON type.id = center.cost_center_type_id
+    WHERE TRIM(COALESCE(center.cost_center_type_id, '')) = '' OR type.id IS NULL
+    LIMIT 1
+  `).get());
+}
+
+function costCenterDataRepairNeeded() {
+  if (!tableExists("cost_centers") || !tableExists("cost_center_types")
+    || !tableExists("locations") || !tableExists("employees")
+    || !columnExists("locations", "cost_center_id")
+    || !columnExists("employees", "cost_center_id")
+    || !columnExists("cost_centers", "cost_center_type_id")) return false;
+  const administrationMissing = !db.prepare(`
+    SELECT 1 FROM cost_centers
+    WHERE id = 'cc-administration' OR code = 'VERW' COLLATE NOCASE
+    LIMIT 1
+  `).get();
+  if (administrationMissing) return true;
+  const invalidLocation = db.prepare(`
+    SELECT 1
+    FROM locations location
+    LEFT JOIN cost_centers center ON center.id = location.cost_center_id
+    LEFT JOIN cost_center_types type ON type.id = center.cost_center_type_id
+    WHERE center.id IS NULL OR center.active <> 1
+      OR type.id IS NULL OR type.active <> 1 OR type.is_branch <> 1
+    LIMIT 1
+  `).get();
+  if (invalidLocation) return true;
+  const duplicateLocationCenter = db.prepare(`
+    SELECT 1
+    FROM locations
+    WHERE TRIM(COALESCE(cost_center_id, '')) <> ''
+    GROUP BY cost_center_id
+    HAVING COUNT(*) > 1
+    LIMIT 1
+  `).get();
+  if (duplicateLocationCenter) return true;
+  return Boolean(db.prepare(`
+    SELECT 1
+    FROM employees employee
+    LEFT JOIN cost_centers center ON center.id = employee.cost_center_id
+    WHERE TRIM(COALESCE(employee.cost_center_id, '')) = '' OR center.id IS NULL
+    LIMIT 1
+  `).get());
+}
+
+function employeeCostCenterAssignmentDataRepairNeeded() {
+  if (!tableExists("employees") || !tableExists("cost_centers")
+    || !tableExists("cost_center_types") || !tableExists("cost_center_type_positions")
+    || !tableExists("locations") || !tableExists("departments")
+    || !columnExists("employees", "cost_center_id")
+    || !columnExists("employees", "home_location_id")
+    || !columnExists("employees", "preferred_department_id")
+    || !columnExists("cost_centers", "cost_center_type_id")) return false;
+  return Boolean(db.prepare(`
+    SELECT 1
+    FROM employees employee
+    JOIN cost_centers center ON center.id = employee.cost_center_id
+    JOIN cost_center_types type ON type.id = center.cost_center_type_id
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM cost_center_type_positions mapping
+        WHERE mapping.cost_center_type_id = center.cost_center_type_id
+          AND mapping.position_id = employee.position_id
+      )
+      OR COALESCE(employee.home_location_id, '') <> COALESCE(
+        CASE WHEN type.is_branch = 1
+          THEN (
+            SELECT location.id
+            FROM locations location
+            WHERE location.cost_center_id = center.id
+            ORDER BY location.id
+            LIMIT 1
+          )
+          ELSE NULL
+        END,
+        ''
+      )
+      OR (
+        employee.preferred_department_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM departments department
+          WHERE department.id = employee.preferred_department_id
+            AND department.location_id = CASE WHEN type.is_branch = 1
+              THEN (
+                SELECT location.id
+                FROM locations location
+                WHERE location.cost_center_id = center.id
+                ORDER BY location.id
+                LIMIT 1
+              )
+              ELSE NULL
+            END
+        )
+      )
+    LIMIT 1
+  `).get());
+}
+
 const costCenterMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(costCenterMigrationId)
   || !tableExists("cost_centers")
   || !columnExists("employees", "cost_center_id")
-  || !columnExists("locations", "cost_center_id");
+  || !columnExists("locations", "cost_center_id")
+  || costCenterDataRepairNeeded();
+const costCenterTypeMigrationApplied = tableExists("schema_migrations")
+  && Boolean(db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(costCenterTypeMigrationId));
+const costCenterTypeTableMissingBeforeSchema = !tableExists("cost_center_types");
+const costCenterTypePositionTableMissingBeforeSchema = !tableExists("cost_center_type_positions");
+const costCenterTypeMigrationRequired = !costCenterTypeMigrationApplied
+  || costCenterTypeTableMissingBeforeSchema
+  || costCenterTypePositionTableMissingBeforeSchema
+  || !columnExists("cost_centers", "cost_center_type_id")
+  || costCenterTypeDataRepairNeeded();
+const employeeCostCenterAssignmentMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1")
+    .get(employeeCostCenterAssignmentMigrationId)
+  || costCenterMigrationRequired
+  || costCenterTypeMigrationRequired
+  || employeeCostCenterAssignmentDataRepairNeeded();
 const shiftLocationMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(shiftLocationMigrationId)
   || !columnExists("shifts", "location_id")
@@ -4248,6 +4587,15 @@ const loanModuleMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(loanModuleMigrationId)
   || loanModuleTables.some((name) => !tableExists(name))
   || loanModuleTriggerNames.some((name) => !triggerExists(name));
+const loanPhotoPdfMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(loanPhotoPdfMigrationId)
+  || !tableExists("loan_photo_attachments")
+  || loanPhotoPdfTriggerNames.some((name) => !triggerExists(name))
+  || !columnExists("loan_location_settings", "photo_pdf_output_mode")
+  || !columnExists("loan_location_settings", "photo_original_retention")
+  || !columnExists("loan_photos", "original_retained")
+  || !columnExists("loan_photos", "original_deleted_at")
+  || !columnExists("loan_photos", "original_deletion_reason");
 const collectiveAgreementMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(collectiveAgreementMigrationId)
   || !tableExists("collective_agreements")
@@ -4261,12 +4609,20 @@ const workRuleGovernanceMigrationRequired = !tableExists("schema_migrations")
   || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(workRuleGovernanceMigrationId)
   || workRuleGovernanceTables.some((name) => !tableExists(name))
   || workRuleGovernanceTriggerNames.some((name) => !triggerExists(name));
+const block7SettingsMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1").get(block7SettingsMigrationId);
+const principalSeparationMigrationRequired = !tableExists("schema_migrations")
+  || !db.prepare("SELECT 1 FROM schema_migrations WHERE id = ? LIMIT 1")
+    .get(principalSeparationMigrationId)
+  || principalSeparationTriggerNames.some((name) => !triggerExists(name));
 if (databaseExistedBeforeOpen && (portalMobileBaselineMigrationRequired || protectedPersonnelMigrationRequired
   || unreleasedSicknessDraftSchemaPresent || legacySchemaMigrationRequired || costCenterMigrationRequired
+  || costCenterTypeMigrationRequired || employeeCostCenterAssignmentMigrationRequired
   || shiftLocationMigrationRequired || workRuleMigrationRequired || privacyGovernanceMigrationRequired
   || vacationHistoryProtectionMigrationRequired || payrollHandoffMigrationRequired
-  || productReadinessMigrationRequired || loanModuleMigrationRequired
-  || collectiveAgreementMigrationRequired || workRuleGovernanceMigrationRequired)) {
+   || productReadinessMigrationRequired || loanModuleMigrationRequired || loanPhotoPdfMigrationRequired
+   || collectiveAgreementMigrationRequired || workRuleGovernanceMigrationRequired
+   || block7SettingsMigrationRequired || principalSeparationMigrationRequired)) {
   createInternalDatabaseBackup("pre-migration");
 }
 
@@ -4305,6 +4661,7 @@ if (legacySchemaMigrationRequired) {
   createSchema();
 }
 createSchema();
+ensureColumn("cost_centers", "cost_center_type_id", "TEXT");
 ensureColumn("shifts", "location_id", "TEXT");
 ensureColumn("sickness_notification_preferences", "process_notifications_enabled", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("custom_processes", "category", "TEXT NOT NULL DEFAULT 'other'");
@@ -4317,6 +4674,25 @@ ensureColumn("work_rule_evaluation_runs", "receipt_sha256", "TEXT NOT NULL DEFAU
 ensureColumn("loan_location_settings", "document_recipient_employee_number", "TEXT");
 ensureColumn("loan_location_settings", "document_email_enabled", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("loan_location_settings", "document_recipient_email", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("loan_location_settings", "photo_pdf_output_mode", "TEXT NOT NULL DEFAULT 'grayscale'");
+ensureColumn("loan_location_settings", "photo_original_retention", "TEXT NOT NULL DEFAULT 'retain'");
+ensureColumn("loan_photos", "original_retained", "INTEGER NOT NULL DEFAULT 1");
+ensureColumn("loan_photos", "original_deleted_at", "TEXT");
+ensureColumn("loan_photos", "original_deletion_reason", "TEXT NOT NULL DEFAULT ''");
+db.exec(`
+  CREATE TRIGGER IF NOT EXISTS trg_loan_photos_retention_insert
+  BEFORE INSERT ON loan_photos
+  WHEN NEW.original_retained NOT IN (0,1)
+    OR (NEW.original_retained = 1
+      AND (NEW.original_deleted_at IS NOT NULL OR NEW.original_deletion_reason <> ''))
+    OR (NEW.original_retained = 0
+      AND (NEW.original_deleted_at IS NULL OR TRIM(NEW.original_deletion_reason) = ''))
+  BEGIN
+    SELECT RAISE(ABORT, 'loan photo retention state is invalid');
+  END;
+`);
+db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+  .run(loanPhotoPdfMigrationId, packageMetadata.version);
 db.exec("CREATE INDEX IF NOT EXISTS idx_custom_processes_category ON custom_processes(category, status, title)");
 ensureWorkRuleEvaluationReceiptIntegrity();
 if (!columnExists("week_options", "group_id")) {
@@ -5172,7 +5548,6 @@ const defaultSettings = {
   branding_icon_url: defaultBranding.icon_url,
   branding_logo_alt: defaultBranding.logo_alt,
   branding_admin_email: defaultBranding.admin_email,
-  operation_mode: DEFAULT_OPERATION_MODE,
   pdf_title: "Dienstplan",
   pdf_filename_prefix: "Dienstplan",
   pdf_filename_include_kw: "1",
@@ -5281,13 +5656,21 @@ db.prepare("UPDATE portal_users SET role_locked = 1 WHERE role = 'developer'").r
 db.prepare(`
   DELETE FROM portal_permission_grants
   WHERE permission IN (
-    'amu:metadata:read','amu:file:read','amu:review','amu:delete','amu:audit',
-    'personnel:sensitive:read','personnel:sensitive:write'
+    'amu:metadata:read','amu:file:read','amu:review','amu:delete','amu:audit'
   )
     AND EXISTS (
       SELECT 1 FROM portal_users u
       WHERE u.employee_number = portal_permission_grants.employee_number
         AND u.role NOT IN ('hr','admin','it_admin','developer')
+    )
+`).run();
+db.prepare(`
+  DELETE FROM portal_permission_grants
+  WHERE permission IN ('personnel:sensitive:read','personnel:sensitive:write')
+    AND EXISTS (
+      SELECT 1 FROM portal_users u
+      WHERE u.employee_number = portal_permission_grants.employee_number
+        AND u.role NOT IN ('location_planner','department_manager','manager','hr','admin','it_admin','developer')
     )
 `).run();
 db.exec("BEGIN");
@@ -5307,6 +5690,82 @@ try {
   db.exec("ROLLBACK");
   throw error;
 }
+
+function migrateBlock7SettingsAppearance() {
+  if (!block7SettingsMigrationRequired) return;
+  const legacyRows = db.prepare(`
+    SELECT employee_number, value, updated_at
+    FROM portal_user_preferences
+    WHERE preference_key = 'dashboard_font_size'
+  `).all();
+  const existingRows = db.prepare(`
+    SELECT employee_number, value
+    FROM portal_user_preferences
+    WHERE preference_key = 'app_font_scale_percent'
+  `).all();
+  const insertPreference = db.prepare(`
+    INSERT OR IGNORE INTO portal_user_preferences
+      (employee_number, preference_key, value, updated_at)
+    VALUES (?, 'app_font_scale_percent', ?, COALESCE(?, CURRENT_TIMESTAMP))
+  `);
+  const normalizePreference = db.prepare(`
+    UPDATE portal_user_preferences
+    SET value = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE employee_number = ? AND preference_key = 'app_font_scale_percent'
+  `);
+  const roleRows = db.prepare("SELECT id, permissions FROM portal_roles").all();
+  const updateRolePermissions = db.prepare(`
+    UPDATE portal_roles
+    SET permissions = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const row of legacyRows) {
+      insertPreference.run(
+        row.employee_number,
+        String(normalizeAppFontScalePercent(row.value)),
+        row.updated_at || null,
+      );
+    }
+    for (const row of existingRows) {
+      const normalized = String(normalizeAppFontScalePercent(row.value));
+      if (normalized !== String(row.value)) normalizePreference.run(normalized, row.employee_number);
+    }
+    db.prepare("DELETE FROM portal_user_preferences WHERE preference_key = 'dashboard_font_size'").run();
+    db.prepare("DELETE FROM portal_permission_grants WHERE permission = 'operation_mode:write'").run();
+    db.prepare("DELETE FROM portal_permission_denials WHERE permission = 'operation_mode:write'").run();
+    for (const role of roleRows) {
+      let permissions;
+      try { permissions = JSON.parse(role.permissions || "[]"); } catch { permissions = []; }
+      if (!Array.isArray(permissions) || !permissions.includes("operation_mode:write")) continue;
+      updateRolePermissions.run(
+        JSON.stringify(permissions.filter((permission) => permission !== "operation_mode:write")),
+        role.id,
+      );
+    }
+    db.prepare("DELETE FROM settings WHERE key = 'operation_mode'").run();
+    db.prepare("INSERT INTO schema_migrations (id, app_version, applied_at) VALUES (?, ?, CURRENT_TIMESTAMP)")
+      .run(block7SettingsMigrationId, packageMetadata.version);
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
+migrateBlock7SettingsAppearance();
+db.prepare("DELETE FROM portal_permission_grants WHERE permission = 'operation_mode:write'").run();
+db.prepare("DELETE FROM portal_permission_denials WHERE permission = 'operation_mode:write'").run();
+db.prepare("DELETE FROM settings WHERE key = 'operation_mode'").run();
+for (const role of db.prepare("SELECT id, permissions FROM portal_roles").all()) {
+  let permissions;
+  try { permissions = JSON.parse(role.permissions || "[]"); } catch { permissions = []; }
+  if (!Array.isArray(permissions) || !permissions.includes("operation_mode:write")) continue;
+  db.prepare("UPDATE portal_roles SET permissions = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    .run(JSON.stringify(permissions.filter((permission) => permission !== "operation_mode:write")), role.id);
+}
+
 const insertPortalSetting = db.prepare("INSERT OR IGNORE INTO portal_settings (key, value) VALUES (?, ?)");
 for (const [key, value] of Object.entries(defaultPortalSettings)) insertPortalSetting.run(key, value);
 const localAmuRoutingMigrationId = "v0.71-local-amu-routing";
@@ -5441,6 +5900,153 @@ function ensureDefaultLocation() {
 
 ensureDefaultLocation();
 
+const BUILTIN_COST_CENTER_TYPES = Object.freeze([
+  { id: "branch", code: "branch", name: "Filiale", isBranch: true, sortOrder: 10 },
+  { id: "administration", code: "administration", name: "Verwaltung", isBranch: false, sortOrder: 20 },
+  { id: "production", code: "production", name: "Produktion", isBranch: false, sortOrder: 30 },
+  { id: "other", code: "other", name: "Sonstiges", isBranch: false, sortOrder: 90 },
+]);
+const LEGACY_COST_CENTER_TYPES = new Set(BUILTIN_COST_CENTER_TYPES.map((entry) => entry.id));
+
+function legacyCostCenterType(type) {
+  return LEGACY_COST_CENTER_TYPES.has(type?.id) ? type.id : "other";
+}
+
+function migrateCostCenterTypes() {
+  const seedPositionMappings = !costCenterTypeMigrationApplied
+    || costCenterTypeTableMissingBeforeSchema
+    || costCenterTypePositionTableMissingBeforeSchema;
+  const insertType = db.prepare(`
+    INSERT OR IGNORE INTO cost_center_types
+      (id, code, name, description, is_branch, active, builtin, sort_order, created_by, updated_by)
+    VALUES (?, ?, ?, '', ?, 1, 1, ?, 'migration', 'migration')
+  `);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const type of BUILTIN_COST_CENTER_TYPES) {
+      insertType.run(type.id, type.code, type.name, type.isBranch ? 1 : 0, type.sortOrder);
+    }
+    db.exec(`
+      UPDATE cost_centers
+      SET cost_center_type_id = CASE
+        WHEN type IN ('branch','administration','production') THEN type
+        ELSE 'other'
+      END
+      WHERE TRIM(COALESCE(cost_center_type_id, '')) = ''
+        OR NOT EXISTS (
+          SELECT 1 FROM cost_center_types cct WHERE cct.id = cost_centers.cost_center_type_id
+        )
+    `);
+    if (seedPositionMappings) {
+      const insertMapping = db.prepare(`
+        INSERT OR IGNORE INTO cost_center_type_positions
+          (cost_center_type_id, position_id, sort_order)
+        SELECT ?, p.id, p.sort_order FROM positions p
+      `);
+      for (const type of BUILTIN_COST_CENTER_TYPES) insertMapping.run(type.id);
+    }
+    const invalidCenters = Number(db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM cost_centers c
+      LEFT JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
+      WHERE cct.id IS NULL
+    `).get().count || 0);
+    if (invalidCenters) throw new Error(`Kostenstellentyp-Migration unvollständig: ${invalidCenters} Kostenstellen.`);
+    db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+      .run(costCenterTypeMigrationId, packageMetadata.version);
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
+function installCostCenterTypeIntegrityTriggers() {
+  db.exec(`
+    DROP TRIGGER IF EXISTS trg_cost_centers_type_insert;
+    DROP TRIGGER IF EXISTS trg_cost_centers_type_update;
+    DROP TRIGGER IF EXISTS trg_cost_centers_location_type_update;
+    DROP TRIGGER IF EXISTS trg_cost_centers_location_archive;
+    DROP TRIGGER IF EXISTS trg_cost_center_types_archive_in_use;
+    DROP TRIGGER IF EXISTS trg_cost_center_types_branch_in_use;
+    DROP TRIGGER IF EXISTS trg_cost_center_types_delete;
+
+    CREATE TRIGGER trg_cost_centers_type_insert
+    BEFORE INSERT ON cost_centers
+    WHEN TRIM(COALESCE(NEW.cost_center_type_id, '')) = ''
+      OR NOT EXISTS (
+        SELECT 1 FROM cost_center_types
+        WHERE id = NEW.cost_center_type_id AND active = 1
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'COST_CENTER_TYPE_REQUIRED');
+    END;
+
+    CREATE TRIGGER trg_cost_centers_type_update
+    BEFORE UPDATE OF cost_center_type_id ON cost_centers
+    WHEN COALESCE(NEW.cost_center_type_id, '') <> COALESCE(OLD.cost_center_type_id, '')
+      AND (
+        TRIM(COALESCE(NEW.cost_center_type_id, '')) = ''
+        OR NOT EXISTS (
+          SELECT 1 FROM cost_center_types
+          WHERE id = NEW.cost_center_type_id AND active = 1
+        )
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'COST_CENTER_TYPE_REQUIRED');
+    END;
+
+    CREATE TRIGGER trg_cost_centers_location_type_update
+    BEFORE UPDATE OF cost_center_type_id ON cost_centers
+    WHEN EXISTS (SELECT 1 FROM locations WHERE cost_center_id = OLD.id)
+      AND NOT EXISTS (
+        SELECT 1 FROM cost_center_types
+        WHERE id = NEW.cost_center_type_id AND active = 1 AND is_branch = 1
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'COST_CENTER_TYPE_LOCATION_CONFLICT');
+    END;
+
+    CREATE TRIGGER trg_cost_centers_location_archive
+    BEFORE UPDATE OF active ON cost_centers
+    WHEN OLD.active = 1 AND NEW.active = 0
+      AND EXISTS (SELECT 1 FROM locations WHERE cost_center_id = OLD.id)
+    BEGIN
+      SELECT RAISE(ABORT, 'COST_CENTER_LOCATION_IN_USE');
+    END;
+
+    CREATE TRIGGER trg_cost_center_types_archive_in_use
+    BEFORE UPDATE OF active ON cost_center_types
+    WHEN OLD.active = 1 AND NEW.active = 0
+      AND EXISTS (
+        SELECT 1 FROM cost_centers
+        WHERE cost_center_type_id = OLD.id AND active = 1
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'COST_CENTER_TYPE_IN_USE');
+    END;
+
+    CREATE TRIGGER trg_cost_center_types_branch_in_use
+    BEFORE UPDATE OF is_branch ON cost_center_types
+    WHEN OLD.is_branch = 1 AND NEW.is_branch = 0
+      AND EXISTS (
+        SELECT 1
+        FROM locations l
+        JOIN cost_centers c ON c.id = l.cost_center_id
+        WHERE c.cost_center_type_id = OLD.id
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'COST_CENTER_TYPE_BRANCH_IN_USE');
+    END;
+
+    CREATE TRIGGER trg_cost_center_types_delete
+    BEFORE DELETE ON cost_center_types
+    BEGIN
+      SELECT RAISE(ABORT, 'COST_CENTER_TYPE_ARCHIVE_ONLY');
+    END;
+  `);
+}
+
 function installCostCenterIntegrityTriggers() {
   db.exec(`
     DROP TRIGGER IF EXISTS trg_locations_cost_center_supplied;
@@ -5449,23 +6055,57 @@ function installCostCenterIntegrityTriggers() {
     DROP TRIGGER IF EXISTS trg_employees_cost_center_supplied;
     DROP TRIGGER IF EXISTS trg_employees_cost_center_default;
     DROP TRIGGER IF EXISTS trg_employees_cost_center_update;
+    DROP TRIGGER IF EXISTS trg_employees_assignment_position_insert;
+    DROP TRIGGER IF EXISTS trg_employees_assignment_position_update;
+    DROP TRIGGER IF EXISTS trg_employees_assignment_location_insert;
+    DROP TRIGGER IF EXISTS trg_employees_assignment_location_update;
+    DROP TRIGGER IF EXISTS trg_employees_assignment_department_insert;
+    DROP TRIGGER IF EXISTS trg_employees_assignment_department_update;
 
     CREATE TRIGGER trg_locations_cost_center_supplied
     BEFORE INSERT ON locations
     WHEN TRIM(COALESCE(NEW.cost_center_id, '')) <> ''
-      AND NOT EXISTS (SELECT 1 FROM cost_centers WHERE id = NEW.cost_center_id AND active = 1)
+      AND (
+        NOT EXISTS (
+          SELECT 1
+          FROM cost_centers c
+          JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
+          WHERE c.id = NEW.cost_center_id AND c.active = 1 AND cct.active = 1 AND cct.is_branch = 1
+        )
+        OR EXISTS (SELECT 1 FROM locations WHERE cost_center_id = NEW.cost_center_id)
+      )
     BEGIN
-      SELECT RAISE(ABORT, 'COST_CENTER_INVALID');
+      SELECT RAISE(ABORT, 'LOCATION_COST_CENTER_INVALID');
     END;
 
     CREATE TRIGGER trg_locations_cost_center_default
     AFTER INSERT ON locations
     WHEN TRIM(COALESCE(NEW.cost_center_id, '')) = ''
     BEGIN
+      INSERT OR IGNORE INTO cost_centers
+        (id, code, name, type, cost_center_type_id, description, active, sort_order, created_by, updated_by)
+      SELECT
+        'cc-location-' || NEW.id,
+        UPPER('FIL' || NEW.id),
+        COALESCE(NULLIF(TRIM(NEW.name), ''), UPPER('FIL' || NEW.id)),
+        'branch',
+        cct.id,
+        '',
+        1,
+        100,
+        'trigger',
+        'trigger'
+      FROM cost_center_types cct
+      WHERE cct.id = 'branch' AND cct.active = 1;
+
       UPDATE locations
-      SET cost_center_id = COALESCE(
-        (SELECT id FROM cost_centers WHERE active = 1 AND type = 'administration' ORDER BY sort_order, code LIMIT 1),
-        (SELECT id FROM cost_centers WHERE active = 1 ORDER BY sort_order, code LIMIT 1)
+      SET cost_center_id = (
+        SELECT c.id
+        FROM cost_centers c
+        JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
+        WHERE c.code = UPPER('FIL' || NEW.id) COLLATE NOCASE
+          AND c.active = 1 AND cct.active = 1 AND cct.is_branch = 1
+        LIMIT 1
       )
       WHERE id = NEW.id;
       SELECT CASE WHEN TRIM(COALESCE((SELECT cost_center_id FROM locations WHERE id = NEW.id), '')) = ''
@@ -5475,9 +6115,18 @@ function installCostCenterIntegrityTriggers() {
     CREATE TRIGGER trg_locations_cost_center_update
     BEFORE UPDATE OF cost_center_id ON locations
     WHEN TRIM(COALESCE(NEW.cost_center_id, '')) = ''
-      OR NOT EXISTS (SELECT 1 FROM cost_centers WHERE id = NEW.cost_center_id AND active = 1)
+      OR NOT EXISTS (
+        SELECT 1
+        FROM cost_centers c
+        JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
+        WHERE c.id = NEW.cost_center_id AND c.active = 1 AND cct.active = 1 AND cct.is_branch = 1
+      )
+      OR EXISTS (
+        SELECT 1 FROM locations
+        WHERE cost_center_id = NEW.cost_center_id AND id <> OLD.id
+      )
     BEGIN
-      SELECT RAISE(ABORT, 'COST_CENTER_REQUIRED');
+      SELECT RAISE(ABORT, 'LOCATION_COST_CENTER_INVALID');
     END;
 
     CREATE TRIGGER trg_employees_cost_center_supplied
@@ -5497,7 +6146,9 @@ function installCostCenterIntegrityTriggers() {
         (SELECT l.cost_center_id FROM locations l
           JOIN cost_centers c ON c.id = l.cost_center_id
           WHERE l.id = NEW.home_location_id LIMIT 1),
-        (SELECT id FROM cost_centers WHERE active = 1 AND type = 'administration' ORDER BY sort_order, code LIMIT 1),
+        (SELECT id FROM cost_centers
+          WHERE active = 1 AND cost_center_type_id = 'administration'
+          ORDER BY sort_order, code LIMIT 1),
         (SELECT id FROM cost_centers WHERE active = 1 ORDER BY sort_order, code LIMIT 1)
       )
       WHERE personnel_number = NEW.personnel_number;
@@ -5512,31 +6163,179 @@ function installCostCenterIntegrityTriggers() {
     BEGIN
       SELECT RAISE(ABORT, 'COST_CENTER_REQUIRED');
     END;
+
+    CREATE TRIGGER trg_employees_assignment_position_insert
+    BEFORE INSERT ON employees
+    WHEN TRIM(COALESCE(NEW.cost_center_id, '')) <> ''
+      AND NOT EXISTS (
+        SELECT 1
+        FROM cost_centers c
+        JOIN cost_center_type_positions cctp
+          ON cctp.cost_center_type_id = c.cost_center_type_id
+        WHERE c.id = NEW.cost_center_id AND cctp.position_id = NEW.position_id
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'EMPLOYEE_POSITION_NOT_ALLOWED_FOR_COST_CENTER');
+    END;
+
+    CREATE TRIGGER trg_employees_assignment_position_update
+    BEFORE UPDATE OF cost_center_id, position_id ON employees
+    WHEN NOT EXISTS (
+      SELECT 1
+      FROM cost_centers c
+      JOIN cost_center_type_positions cctp
+        ON cctp.cost_center_type_id = c.cost_center_type_id
+      WHERE c.id = NEW.cost_center_id AND cctp.position_id = NEW.position_id
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'EMPLOYEE_POSITION_NOT_ALLOWED_FOR_COST_CENTER');
+    END;
+
+    CREATE TRIGGER trg_employees_assignment_location_insert
+    BEFORE INSERT ON employees
+    WHEN TRIM(COALESCE(NEW.cost_center_id, '')) <> ''
+      AND COALESCE(NEW.home_location_id, '') <> COALESCE((
+        SELECT CASE WHEN cct.is_branch = 1
+          THEN (SELECT l.id FROM locations l WHERE l.cost_center_id = c.id LIMIT 1)
+          ELSE NULL END
+        FROM cost_centers c
+        JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
+        WHERE c.id = NEW.cost_center_id
+      ), '')
+    BEGIN
+      SELECT RAISE(ABORT, 'EMPLOYEE_LOCATION_MUST_FOLLOW_COST_CENTER');
+    END;
+
+    CREATE TRIGGER trg_employees_assignment_location_update
+    BEFORE UPDATE OF cost_center_id, home_location_id ON employees
+    WHEN COALESCE(NEW.home_location_id, '') <> COALESCE((
+      SELECT CASE WHEN cct.is_branch = 1
+        THEN (SELECT l.id FROM locations l WHERE l.cost_center_id = c.id LIMIT 1)
+        ELSE NULL END
+      FROM cost_centers c
+      JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
+      WHERE c.id = NEW.cost_center_id
+    ), '')
+    BEGIN
+      SELECT RAISE(ABORT, 'EMPLOYEE_LOCATION_MUST_FOLLOW_COST_CENTER');
+    END;
+
+    CREATE TRIGGER trg_employees_assignment_department_insert
+    BEFORE INSERT ON employees
+    WHEN NEW.preferred_department_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM departments d
+        WHERE d.id = NEW.preferred_department_id AND d.location_id = NEW.home_location_id
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'EMPLOYEE_DEPARTMENT_LOCATION_CONFLICT');
+    END;
+
+    CREATE TRIGGER trg_employees_assignment_department_update
+    BEFORE UPDATE OF home_location_id, preferred_department_id ON employees
+    WHEN NEW.preferred_department_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM departments d
+        WHERE d.id = NEW.preferred_department_id AND d.location_id = NEW.home_location_id
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'EMPLOYEE_DEPARTMENT_LOCATION_CONFLICT');
+    END;
   `);
 }
 
 function migrateCostCenters() {
   const insertCostCenter = db.prepare(`
     INSERT OR IGNORE INTO cost_centers
-      (id, code, name, type, description, active, sort_order, created_by, updated_by)
-    VALUES (?, ?, ?, ?, '', 1, ?, 'migration', 'migration')
+      (id, code, name, type, cost_center_type_id, description, active, sort_order, created_by, updated_by)
+    VALUES (?, ?, ?, ?, ?, '', 1, ?, 'migration', 'migration')
   `);
   db.exec("BEGIN IMMEDIATE");
   try {
-    insertCostCenter.run("cc-administration", "VERW", "Verwaltung", "administration", 10);
+    insertCostCenter.run("cc-administration", "VERW", "Verwaltung", "administration", "administration", 10);
     const administrationId = db.prepare("SELECT id FROM cost_centers WHERE code = ? COLLATE NOCASE").get("VERW")?.id
-      || db.prepare("SELECT id FROM cost_centers WHERE type = 'administration' ORDER BY active DESC, sort_order, code LIMIT 1").get()?.id;
+      || db.prepare(`
+        SELECT id FROM cost_centers
+        WHERE cost_center_type_id = 'administration'
+        ORDER BY active DESC, sort_order, code LIMIT 1
+      `).get()?.id;
     if (!administrationId) throw new Error("COST_CENTER_ADMINISTRATION_REQUIRED");
 
+    const activeBranchById = db.prepare(`
+      SELECT c.id
+      FROM cost_centers c
+      JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
+      WHERE c.id = ? AND c.active = 1 AND cct.active = 1 AND cct.is_branch = 1
+    `);
+    const activeBranchByCode = db.prepare(`
+      SELECT c.id
+      FROM cost_centers c
+      JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
+      WHERE c.code = ? COLLATE NOCASE
+        AND c.active = 1 AND cct.active = 1 AND cct.is_branch = 1
+      LIMIT 1
+    `);
+    const anyCostCenterById = db.prepare("SELECT 1 FROM cost_centers WHERE id = ?");
+    const anyCostCenterByCode = db.prepare("SELECT 1 FROM cost_centers WHERE code = ? COLLATE NOCASE");
+    const centerUsedByOtherLocation = db.prepare(`
+      SELECT 1 FROM locations WHERE cost_center_id = ? AND id <> ? LIMIT 1
+    `);
+    const updateLocationCostCenter = db.prepare("UPDATE locations SET cost_center_id = ? WHERE id = ?");
+    const moveEmployeesWithLegacyLocationCenter = db.prepare(`
+      UPDATE employees
+      SET cost_center_id = ?
+      WHERE home_location_id = ? AND cost_center_id = ?
+    `);
+    const claimedBranchCenters = new Set();
+
     for (const location of db.prepare("SELECT id, name, cost_center_id FROM locations ORDER BY id").all()) {
-      const code = `FIL${String(location.id).toUpperCase()}`;
-      insertCostCenter.run(`cc-location-${location.id}`, code, String(location.name || code), "branch",
-        100 + (Number(location.id) || 0));
-      const costCenterId = db.prepare("SELECT id FROM cost_centers WHERE code = ? COLLATE NOCASE").get(code)?.id
-        || administrationId;
-      const currentValid = location.cost_center_id
-        && db.prepare("SELECT 1 FROM cost_centers WHERE id = ?").get(location.cost_center_id);
-      if (!currentValid) db.prepare("UPDATE locations SET cost_center_id = ? WHERE id = ?").run(costCenterId, location.id);
+      let costCenterId = "";
+      const current = location.cost_center_id ? activeBranchById.get(location.cost_center_id) : null;
+      if (current && !claimedBranchCenters.has(String(current.id))) costCenterId = String(current.id);
+
+      const codeToken = String(location.id || "")
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9._-]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 24) || "STANDORT";
+      const baseCode = `FIL${codeToken}`.slice(0, 30);
+      if (!costCenterId) {
+        const candidate = activeBranchByCode.get(baseCode);
+        if (candidate
+          && !claimedBranchCenters.has(String(candidate.id))
+          && !centerUsedByOtherLocation.get(candidate.id, location.id)) {
+          costCenterId = String(candidate.id);
+        }
+      }
+
+      if (!costCenterId) {
+        const baseId = `cc-location-${location.id}`;
+        let id = baseId;
+        let idSuffix = 1;
+        while (anyCostCenterById.get(id)) {
+          id = `${baseId}-migration-${idSuffix}`;
+          idSuffix += 1;
+        }
+        let code = baseCode;
+        let codeSuffix = 1;
+        while (anyCostCenterByCode.get(code)) {
+          const suffix = `-M${codeSuffix}`;
+          code = `${baseCode.slice(0, 30 - suffix.length)}${suffix}`;
+          codeSuffix += 1;
+        }
+        insertCostCenter.run(id, code, String(location.name || code), "branch", "branch",
+          100 + (Number(location.id) || 0));
+        costCenterId = String(activeBranchById.get(id)?.id || "");
+      }
+      if (!costCenterId) throw new Error(`COST_CENTER_BRANCH_REQUIRED:${location.id}`);
+      claimedBranchCenters.add(costCenterId);
+      if (String(location.cost_center_id || "") !== costCenterId) {
+        updateLocationCostCenter.run(costCenterId, location.id);
+        if (String(location.cost_center_id || "")) {
+          moveEmployeesWithLegacyLocationCenter.run(costCenterId, location.id, location.cost_center_id);
+        }
+      }
     }
 
     db.prepare(`
@@ -5571,7 +6370,285 @@ function migrateCostCenters() {
   }
 }
 
+migrateCostCenterTypes();
 migrateCostCenters();
+
+function employeeCostCenterReconciliationPlan() {
+  return db.prepare(`
+    SELECT employee.personnel_number, employee.cost_center_id,
+           employee.home_location_id, employee.preferred_department_id,
+           type.is_branch,
+           (
+             SELECT location.id
+             FROM locations location
+             WHERE location.cost_center_id = center.id
+             ORDER BY location.id
+             LIMIT 1
+           ) AS derived_home_location_id,
+           department.location_id AS preferred_department_location_id
+    FROM employees employee
+    JOIN cost_centers center ON center.id = employee.cost_center_id
+    JOIN cost_center_types type ON type.id = center.cost_center_type_id
+    LEFT JOIN departments department ON department.id = employee.preferred_department_id
+    ORDER BY employee.personnel_number
+  `).all().map((row) => {
+    const beforeHomeLocationId = String(row.home_location_id || "") || null;
+    const afterHomeLocationId = Number(row.is_branch) === 1
+      ? (String(row.derived_home_location_id || "") || null)
+      : null;
+    const beforePreferredDepartmentId = Number(row.preferred_department_id || 0) || null;
+    const preferredDepartmentMatches = beforePreferredDepartmentId
+      && afterHomeLocationId
+      && String(row.preferred_department_location_id || "") === afterHomeLocationId;
+    const afterPreferredDepartmentId = preferredDepartmentMatches
+      ? beforePreferredDepartmentId
+      : null;
+    const reasons = [];
+    if (beforeHomeLocationId !== afterHomeLocationId) reasons.push("home-location-derived-from-cost-center");
+    if (beforePreferredDepartmentId !== afterPreferredDepartmentId) reasons.push("preferred-department-outside-derived-location");
+    return {
+      personnelNumber: String(row.personnel_number),
+      costCenterId: String(row.cost_center_id),
+      homeLocationId: { before: beforeHomeLocationId, after: afterHomeLocationId },
+      preferredDepartmentId: {
+        before: beforePreferredDepartmentId,
+        after: afterPreferredDepartmentId,
+      },
+      reasons,
+    };
+  }).filter((entry) => entry.reasons.length);
+}
+
+function migrateEmployeeCostCenterAssignments() {
+  if (!employeeCostCenterAssignmentMigrationRequired) return;
+  const employeeNumbersBefore = db.prepare(`
+    SELECT personnel_number FROM employees ORDER BY personnel_number
+  `).all().map((row) => String(row.personnel_number));
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.exec(`
+      INSERT OR IGNORE INTO cost_center_type_positions
+        (cost_center_type_id, position_id, sort_order)
+      SELECT DISTINCT
+        c.cost_center_type_id,
+        e.position_id,
+        COALESCE(p.sort_order, 9999)
+      FROM employees e
+      JOIN cost_centers c ON c.id = e.cost_center_id
+      JOIN positions p ON p.id = e.position_id
+      WHERE TRIM(COALESCE(c.cost_center_type_id, '')) <> '';
+    `);
+    const reconcileEmployee = db.prepare(`
+      UPDATE employees
+      SET home_location_id = ?, preferred_department_id = ?
+      WHERE personnel_number = ?
+    `);
+    for (const entry of employeeCostCenterReconciliationPlan()) {
+      reconcileEmployee.run(
+        entry.homeLocationId.after,
+        entry.preferredDepartmentId.after,
+        entry.personnelNumber,
+      );
+      auditPortal(
+        "system",
+        "employee.cost-center.reconcile",
+        "employee",
+        entry.personnelNumber,
+        JSON.stringify({
+          migrationId: employeeCostCenterAssignmentMigrationId,
+          reason: entry.reasons,
+          costCenterId: entry.costCenterId,
+          homeLocationId: entry.homeLocationId,
+          preferredDepartmentId: entry.preferredDepartmentId,
+        }),
+      );
+    }
+    const employeeNumbersAfter = db.prepare(`
+      SELECT personnel_number FROM employees ORDER BY personnel_number
+    `).all().map((row) => String(row.personnel_number));
+    if (JSON.stringify(employeeNumbersAfter) !== JSON.stringify(employeeNumbersBefore)) {
+      throw new Error("EMPLOYEE_ASSIGNMENT_MIGRATION_NOT_LOSSLESS");
+    }
+    db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+      .run(employeeCostCenterAssignmentMigrationId, packageMetadata.version);
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
+migrateEmployeeCostCenterAssignments();
+installCostCenterIntegrityTriggers();
+installCostCenterTypeIntegrityTriggers();
+
+const invalidLocationCostCenterTypes = db.prepare(`
+  SELECT l.id, l.cost_center_id
+  FROM locations l
+  LEFT JOIN cost_centers c ON c.id = l.cost_center_id
+  LEFT JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
+  WHERE c.id IS NULL OR c.active <> 1
+    OR cct.id IS NULL OR cct.active <> 1 OR cct.is_branch <> 1
+  ORDER BY l.id
+`).all();
+if (invalidLocationCostCenterTypes.length) {
+  throw new Error(`Standort-Kostenstellen sind keinem Filialtyp zugeordnet: ${
+    invalidLocationCostCenterTypes.map((row) => row.id).join(", ")
+  }.`);
+}
+const duplicateLocationCostCenters = db.prepare(`
+  SELECT cost_center_id, GROUP_CONCAT(id, ', ') AS location_ids
+  FROM locations
+  GROUP BY cost_center_id
+  HAVING COUNT(*) > 1
+`).all();
+if (duplicateLocationCostCenters.length) {
+  throw new Error(`Eine Filialkostenstelle ist mehreren Standorten zugeordnet: ${
+    duplicateLocationCostCenters.map((row) => `${row.cost_center_id} (${row.location_ids})`).join("; ")
+  }.`);
+}
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_locations_cost_center_unique
+  ON locations(cost_center_id)
+  WHERE TRIM(COALESCE(cost_center_id, '')) <> ''
+`);
+const invalidEmployeeCostCenterAssignments = db.prepare(`
+  SELECT employee.personnel_number
+  FROM employees employee
+  LEFT JOIN cost_centers center ON center.id = employee.cost_center_id
+  LEFT JOIN cost_center_types type ON type.id = center.cost_center_type_id
+  WHERE center.id IS NULL OR type.id IS NULL
+    OR NOT EXISTS (
+      SELECT 1
+      FROM cost_center_type_positions mapping
+      WHERE mapping.cost_center_type_id = center.cost_center_type_id
+        AND mapping.position_id = employee.position_id
+    )
+    OR COALESCE(employee.home_location_id, '') <> COALESCE(
+      CASE WHEN type.is_branch = 1
+        THEN (
+          SELECT location.id
+          FROM locations location
+          WHERE location.cost_center_id = center.id
+          ORDER BY location.id
+          LIMIT 1
+        )
+        ELSE NULL
+      END,
+      ''
+    )
+    OR (
+      employee.preferred_department_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM departments department
+        WHERE department.id = employee.preferred_department_id
+          AND department.location_id = employee.home_location_id
+      )
+    )
+  ORDER BY employee.personnel_number
+`).all();
+if (invalidEmployeeCostCenterAssignments.length) {
+  throw new Error(`Mitarbeiter-Kostenstellenzuordnungen sind widersprüchlich: ${
+    invalidEmployeeCostCenterAssignments.map((row) => row.personnel_number).join(", ")
+  }.`);
+}
+const postCostCenterForeignKeyErrors = db.prepare("PRAGMA foreign_key_check").all();
+if (postCostCenterForeignKeyErrors.length) {
+  throw new Error(`Datenbank-Fremdschlüsselprüfung nach Kostenstellenmigration fehlgeschlagen: ${
+    postCostCenterForeignKeyErrors.length
+  } Konflikt(e).`);
+}
+const postCostCenterIntegrity = db.prepare("PRAGMA quick_check").all().map((row) => Object.values(row)[0]);
+if (!(postCostCenterIntegrity.length === 1 && postCostCenterIntegrity[0] === "ok")) {
+  throw new Error(`Datenbank-Integritätsprüfung nach Kostenstellenmigration fehlgeschlagen: ${
+    postCostCenterIntegrity.join("; ")
+  }`);
+}
+
+function installPortalPrincipalSeparation() {
+  const collisions = db.prepare(`
+    SELECT organization.login_name, employee.personnel_number
+    FROM portal_organization_accounts organization
+    JOIN employees employee
+      ON employee.personnel_number = organization.login_name COLLATE NOCASE
+    UNION
+    SELECT organization.login_name, user.employee_number
+    FROM portal_organization_accounts organization
+    JOIN portal_users user
+      ON user.employee_number = organization.login_name COLLATE NOCASE
+    ORDER BY login_name
+  `).all();
+  if (collisions.length) {
+    throw new Error(`Mitarbeiter- und Organisationskonten verwenden dieselbe Zugangskennung: ${
+      collisions.map((row) => row.login_name).join(", ")
+    }.`);
+  }
+  if (!principalSeparationMigrationRequired) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.exec(`
+      DROP TRIGGER IF EXISTS trg_employees_organization_login_insert;
+      DROP TRIGGER IF EXISTS trg_employees_organization_login_update;
+      DROP TRIGGER IF EXISTS trg_organization_accounts_employee_login_insert;
+      DROP TRIGGER IF EXISTS trg_organization_accounts_employee_login_update;
+
+      CREATE TRIGGER trg_employees_organization_login_insert
+      BEFORE INSERT ON employees
+      WHEN EXISTS (
+        SELECT 1 FROM portal_organization_accounts
+        WHERE login_name = NEW.personnel_number COLLATE NOCASE
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'PORTAL_PRINCIPAL_LOGIN_CONFLICT');
+      END;
+
+      CREATE TRIGGER trg_employees_organization_login_update
+      BEFORE UPDATE OF personnel_number ON employees
+      WHEN EXISTS (
+        SELECT 1 FROM portal_organization_accounts
+        WHERE login_name = NEW.personnel_number COLLATE NOCASE
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'PORTAL_PRINCIPAL_LOGIN_CONFLICT');
+      END;
+
+      CREATE TRIGGER trg_organization_accounts_employee_login_insert
+      BEFORE INSERT ON portal_organization_accounts
+      WHEN EXISTS (
+        SELECT 1 FROM employees
+        WHERE personnel_number = NEW.login_name COLLATE NOCASE
+      ) OR EXISTS (
+        SELECT 1 FROM portal_users
+        WHERE employee_number = NEW.login_name COLLATE NOCASE
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'PORTAL_PRINCIPAL_LOGIN_CONFLICT');
+      END;
+
+      CREATE TRIGGER trg_organization_accounts_employee_login_update
+      BEFORE UPDATE OF login_name ON portal_organization_accounts
+      WHEN EXISTS (
+        SELECT 1 FROM employees
+        WHERE personnel_number = NEW.login_name COLLATE NOCASE
+      ) OR EXISTS (
+        SELECT 1 FROM portal_users
+        WHERE employee_number = NEW.login_name COLLATE NOCASE
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'PORTAL_PRINCIPAL_LOGIN_CONFLICT');
+      END;
+    `);
+    db.prepare("INSERT OR IGNORE INTO schema_migrations (id, app_version) VALUES (?, ?)")
+      .run(principalSeparationMigrationId, packageMetadata.version);
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+}
+
+installPortalPrincipalSeparation();
 
 function installShiftLocationIntegrityTriggers() {
   db.exec(`
@@ -5784,8 +6861,8 @@ function seedSporthandelDemo() {
   const profile = loadSporthandelDemoProfile();
   const insertCostCenter = db.prepare(`
     INSERT OR IGNORE INTO cost_centers
-      (id, code, name, type, description, active, sort_order, created_by, updated_by)
-    VALUES (?, ?, ?, 'branch', 'Demodaten', 1, ?, 'demo-profile', 'demo-profile')
+      (id, code, name, type, cost_center_type_id, description, active, sort_order, created_by, updated_by)
+    VALUES (?, ?, ?, 'branch', 'branch', 'Demodaten', 1, ?, 'demo-profile', 'demo-profile')
   `);
   const insertLocation = db.prepare(`
     INSERT INTO locations
@@ -6781,10 +7858,44 @@ function resolveRequestReviewNotifications(kind, id, stage = "") {
   `).run(pattern);
 }
 
+function organizationAccountPermissionsForAccount(accountId) {
+  if (!accountId || !tableExists("portal_organization_account_permissions")) return [];
+  return db.prepare(`
+    SELECT permission
+    FROM portal_organization_account_permissions
+    WHERE account_id = ?
+    ORDER BY permission
+  `).all(String(accountId))
+    .map((row) => String(row.permission || ""))
+    .filter((permission) => organizationAccountPermissions.has(permission));
+}
+
+function organizationAccountScopesForAccount(accountId) {
+  if (!accountId || !tableExists("portal_organization_account_scopes")) return [];
+  return db.prepare(`
+    SELECT location_id, department_id
+    FROM portal_organization_account_scopes
+    WHERE account_id = ?
+    ORDER BY location_id, department_id
+  `).all(String(accountId)).map((scope) => ({
+    locationId: String(scope.location_id),
+    departmentId: Number(scope.department_id || 0) || null,
+  }));
+}
+
+function organizationAccountRoleName(accountType) {
+  return accountType === "terminal" ? "Terminalkonto" : "Filialkonto";
+}
+
+function portalActorId(session) {
+  return String(session?.actorId || session?.employeeNumber || "local");
+}
+
 function portalSessionFromRequest(request, { touch = true } = {}) {
   const token = parseCookies(request)[PORTAL_SESSION_COOKIE];
   if (!token) return null;
   const now = new Date().toISOString();
+  const tokenHash = sha256(token);
   const session = db.prepare(`
     SELECT s.id, s.employee_number, s.expires_at, s.revoked_at,
            u.role, u.role_locked, u.active, u.must_change_password,
@@ -6801,42 +7912,130 @@ function portalSessionFromRequest(request, { touch = true } = {}) {
       AND s.expires_at > ?
       AND u.active = 1
     LIMIT 1
-  `).get(sha256(token), now);
-  if (!session) return null;
-  if (touch) db.prepare("UPDATE portal_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?").run(session.id);
-  const scopes = portalAccessScopesForPrincipal({
-    employeeNumber: session.employee_number,
-    role: session.role,
-    homeLocationId: session.home_location_id,
-    preferredDepartmentId: session.preferred_department_id,
-  });
-  const permissionState = effectivePortalPermissionState(session.employee_number, session.role, session.permissions);
+  `).get(tokenHash, now);
+  if (session) {
+    if (touch) db.prepare("UPDATE portal_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?").run(session.id);
+    const scopes = portalAccessScopesForPrincipal({
+      employeeNumber: session.employee_number,
+      role: session.role,
+      homeLocationId: session.home_location_id,
+      preferredDepartmentId: session.preferred_department_id,
+    });
+    const permissionState = effectivePortalPermissionState(session.employee_number, session.role, session.permissions);
+    return {
+      id: session.id,
+      sessionKind: "employee",
+      actorId: session.employee_number,
+      isEmployee: true,
+      accountId: null,
+      loginName: session.employee_number,
+      accountType: "employee",
+      employeeNumber: session.employee_number,
+      fullName: session.full_name,
+      nickname: session.nickname,
+      color: session.color,
+      homeLocationId: session.home_location_id,
+      positionId: session.position_id || null,
+      positionName: session.position_name || "",
+      role: session.role,
+      roleName: session.role_name || session.role,
+      roleLocked: Boolean(session.role_locked),
+      permissions: permissionState.effectivePermissions,
+      rolePermissions: permissionState.rolePermissions,
+      grantedPermissions: permissionState.grantedPermissions,
+      deniedPermissions: permissionState.deniedPermissions,
+      scopes,
+      mustChangePassword: Boolean(session.must_change_password),
+      expiresAt: session.expires_at,
+    };
+  }
+  if (!tableExists("portal_organization_sessions")) return null;
+  const organizationSession = db.prepare(`
+    SELECT s.id, s.account_id, s.expires_at,
+           account.login_name, account.display_name, account.account_type,
+           account.active, account.must_change_password
+    FROM portal_organization_sessions s
+    JOIN portal_organization_accounts account ON account.id = s.account_id
+    WHERE s.token_hash = ?
+      AND s.revoked_at IS NULL
+      AND s.expires_at > ?
+      AND account.active = 1
+    LIMIT 1
+  `).get(tokenHash, now);
+  if (!organizationSession) return null;
+  if (touch) {
+    db.prepare("UPDATE portal_organization_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?")
+      .run(organizationSession.id);
+  }
+  const scopes = organizationAccountScopesForAccount(organizationSession.account_id);
+  const permissions = organizationAccountPermissionsForAccount(organizationSession.account_id);
   return {
-    id: session.id,
-    employeeNumber: session.employee_number,
-    fullName: session.full_name,
-    nickname: session.nickname,
-    color: session.color,
-    homeLocationId: session.home_location_id,
-    positionId: session.position_id || null,
-    positionName: session.position_name || "",
-    role: session.role,
-    roleName: session.role_name || session.role,
-    roleLocked: Boolean(session.role_locked),
-    permissions: permissionState.effectivePermissions,
-    rolePermissions: permissionState.rolePermissions,
-    grantedPermissions: permissionState.grantedPermissions,
-    deniedPermissions: permissionState.deniedPermissions,
+    id: organizationSession.id,
+    sessionKind: "organization",
+    actorId: `account:${organizationSession.account_id}`,
+    isEmployee: false,
+    accountId: organizationSession.account_id,
+    loginName: organizationSession.login_name,
+    accountType: organizationSession.account_type,
+    employeeNumber: null,
+    fullName: organizationSession.display_name,
+    nickname: organizationSession.display_name,
+    color: "#276e55",
+    homeLocationId: scopes[0]?.locationId || "",
+    positionId: null,
+    positionName: "",
+    role: "organization_account",
+    roleName: organizationAccountRoleName(organizationSession.account_type),
+    roleLocked: true,
+    permissions,
+    rolePermissions: [],
+    grantedPermissions: permissions,
+    deniedPermissions: [],
     scopes,
-    mustChangePassword: Boolean(session.must_change_password),
-    expiresAt: session.expires_at,
+    mustChangePassword: Boolean(organizationSession.must_change_password),
+    expiresAt: organizationSession.expires_at,
   };
 }
 
 function publicPortalUser(session) {
   if (!session) return null;
+  if (session.sessionKind === "organization" || session.isEmployee === false) {
+    return {
+      accountId: session.accountId,
+      loginName: session.loginName,
+      accountType: session.accountType,
+      isEmployee: false,
+      employeeNumber: null,
+      fullName: session.fullName,
+      nickname: session.nickname,
+      color: session.color,
+      homeLocationId: session.homeLocationId,
+      positionId: null,
+      positionName: "",
+      role: session.role,
+      roleName: session.roleName,
+      roleLocked: true,
+      permissions: session.permissions,
+      rolePermissions: [],
+      grantedPermissions: session.grantedPermissions || [],
+      deniedPermissions: [],
+      scopes: session.scopes || [],
+      mustChangePassword: session.mustChangePassword,
+      personnelRecordAccess: {
+        available: false,
+        fieldAccess: {},
+        canReadDocuments: false,
+        canWriteDocuments: false,
+        phoneWriteRequiresTrustA: false,
+      },
+    };
+  }
   const recordAccess = personnelRecordAccess(session);
   return {
+    accountId: null,
+    loginName: session.employeeNumber,
+    accountType: "employee",
+    isEmployee: true,
     employeeNumber: session.employeeNumber,
     fullName: session.fullName,
     nickname: session.nickname,
@@ -6991,6 +8190,18 @@ function requirePortalSession(request, permission = "") {
   }
   if (permission && !session.permissions.includes(permission)) {
     throw httpError(403, "Für diese Aktion fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
+  return session;
+}
+
+function requireEmployeePortalSession(request, permission = "") {
+  const session = requirePortalSession(request, permission);
+  if (session.sessionKind === "organization" || session.isEmployee === false) {
+    throw httpError(
+      403,
+      "Diese Funktion ist ausschlieÃŸlich fÃ¼r persÃ¶nliche MitarbeiterzugÃ¤nge verfÃ¼gbar.",
+      "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
+    );
   }
   return session;
 }
@@ -7512,7 +8723,7 @@ function enforceAdminApiAccess(request, _response, next) {
       : request.path === "/server-diagnostics"
         ? ["system:diagnostics:technical"]
         : request.path === "/system-info"
-          ? ["schedule:read", "settings:write", "operation_mode:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "update:write", "system:write", "usb:provision"]
+          ? ["schedule:read", "settings:write", "backup:write", "system:diagnostics:read", "system:diagnostics:technical", "update:write", "system:write", "usb:provision"]
           : null;
     if (preciseDiagnosticPermissions) {
       const session = requirePortalAnyPermission(request, preciseDiagnosticPermissions);
@@ -7541,7 +8752,7 @@ function enforceAdminApiAccess(request, _response, next) {
     const timeRecordStatementsRoute = /^\/time-record-statements(?:\/|$)/.test(request.path);
     const personnelDirectoryRoute = /^\/personnel-directory(?:\/|$)/.test(request.path);
     const personnelVacationRoute = /^\/personnel-vacations(?:\/|$)/.test(request.path);
-    const costCenterRoute = /^\/cost-centers(?:\/|$)/.test(request.path);
+    const costCenterRoute = /^\/cost-center(?:s|-types)(?:\/|$)/.test(request.path);
     const offsiteFolderRoute = /^\/backup\/offsite-folders(?:\/|$)/.test(request.path);
     const approvedVacationMutationRoute = !["GET", "HEAD", "OPTIONS"].includes(method)
       && /^\/vacations(?:\/|$)/.test(request.path);
@@ -7675,10 +8886,6 @@ function enforceAdminApiAccess(request, _response, next) {
         permission = "backup:write";
       } else if (/^\/update/.test(request.path)) {
         permission = "update:write";
-      } else if (/^\/operation-mode/.test(request.path)) {
-        permission = "operation_mode:write";
-      } else if (/^\/system\/restart/.test(request.path)) {
-        permission = "operation_mode:write";
       } else if (/^\/system/.test(request.path)) {
         permission = "system:write";
       } else if (/^\/settings/.test(request.path)) {
@@ -7881,19 +9088,13 @@ function assertDateEditable(isoDate, settings = getSettings()) {
 }
 
 function getSettings() {
-  const stored = Object.fromEntries(db.prepare("SELECT key, value FROM settings").all().map((row) => [row.key, row.value]));
-  const effectiveMode = serverModeActive ? "server" : (configuredOperationMode === "lan" ? "lan" : "local");
-  return {
-    ...stored,
-    operation_mode: effectiveMode,
-    server_mode_status: SERVER_MODE_STATUS,
-  };
+  return Object.fromEntries(db.prepare("SELECT key, value FROM settings").all().map((row) => [row.key, row.value]));
 }
 
 function installationFeaturesForApiPath(apiPath) {
   const requestPath = String(apiPath || "").toLowerCase();
   const required = new Set();
-  if (/^\/(?:schedule(?:$|\/|\.pdf$|-note(?:\/|$)|-preview\.pdf$)|shifts(?:\/|$)|week-options(?:\/|$)|global-day-blocks(?:\/|$)|auto-plan(?:\/|$)|portal\/v1\/me\/schedule(?:\/|$)|mobile\/v1\/me\/schedule(?:\/|$))/.test(requestPath)) required.add("schedule");
+  if (/^\/(?:schedule(?:$|\/|\.pdf$|-note(?:\/|$)|-preview\.pdf$)|shifts(?:\/|$)|week-options(?:\/|$)|global-day-blocks(?:\/|$)|auto-plan(?:\/|$)|portal\/v1\/(?:me\/schedule|location-dashboard\/schedule)(?:\/|$)|mobile\/v1\/me\/schedule(?:\/|$))/.test(requestPath)) required.add("schedule");
   if (/^\/(?:vacations?(?:$|\/|\.pdf$|-preview\.pdf$)|vacation-entitlements(?:\/|$))/.test(requestPath)) required.add("vacation");
   if (/^\/personnel-vacations(?:\/|$)/.test(requestPath)) required.add("vacation");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:absence(?:-|\/|$)|vacation(?:-|\/|$)|approved-vacation(?:s)?(?:\/|$)|time-off(?:-|\/|$)|approved-time-off(?:\/|$)|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))|request-blackouts(?:\/|$)|approval-delegations(?:\/|$))/.test(requestPath)) required.add("requests");
@@ -9573,11 +10774,11 @@ function managerAmuAccessOverride(employeeNumber) {
 
 function managerAmuAccessEffective(employeeNumber, role = "manager") {
   const normalizedRole = String(role || "");
-  if (!["manager", "department_manager"].includes(normalizedRole)) return false;
+  if (!["location_planner", "manager", "department_manager"].includes(normalizedRole)) return false;
   const mode = managerAmuAccessOverride(employeeNumber);
   if (mode === "allow") return true;
   if (mode === "deny") return false;
-  if (normalizedRole === "department_manager") return true;
+  if (["location_planner", "department_manager"].includes(normalizedRole)) return true;
   return managerAmuRoleDefaultEnabled();
 }
 
@@ -9635,14 +10836,11 @@ function sessionCanManageLocalContext(session, { locationId, departmentId = null
 
 function sessionHasLocalAmuAccess(session) {
   if (!session || session.employeeNumber === "local") return false;
-  if (!["manager", "department_manager"].includes(session.role)) return false;
+  if (!["location_planner", "manager", "department_manager"].includes(session.role)) return false;
   if (!session.permissions?.includes("amu:local:manage")
     || !session.permissions?.includes("sickness:read")
     || portalPermissionExplicitlyDenied(session.employeeNumber, "amu:local:manage")) return false;
-  if (managerAmuAccessOverride(session.employeeNumber) === "deny") return false;
-  return session.role === "manager"
-    ? managerAmuAccessEffective(session.employeeNumber, session.role)
-    : true;
+  return managerAmuAccessEffective(session.employeeNumber, session.role);
 }
 
 function managerAmuAccessPolicyPayload() {
@@ -9840,18 +11038,31 @@ function personnelFieldEffectiveAccess(session) {
     );
   }
   if (session.role === "location_planner") {
+    const sensitiveWrite = actorCanWritePersonnelSensitiveData(session);
+    const sensitiveRead = sensitiveWrite || actorCanReadPersonnelSensitiveData(session);
     const phoneWrite = actorCanWritePersonnelPhone(session);
     const phoneRead = phoneWrite || actorCanReadPersonnelPhone(session);
-    return Object.fromEntries(personnelFieldCatalog.map((field) => [
-      field.key,
-      field.key === "phone" ? (phoneWrite ? "write" : phoneRead ? "read" : "hidden") : "hidden",
-    ]));
+    return applyPersonnelFieldAccessDependencies(
+      Object.fromEntries(personnelFieldCatalog.map((field) => [
+        field.key,
+        field.key === "phone"
+          ? (phoneWrite ? "write" : phoneRead ? "read" : "hidden")
+          : (sensitiveWrite ? "write" : sensitiveRead ? "read" : "hidden"),
+      ])),
+    );
   }
   if (!personnelFieldManagedRoles.has(session.role)) {
     return Object.fromEntries(personnelFieldCatalog.map((field) => [field.key, "hidden"]));
   }
   const stored = personnelFieldStoredRows(session.role);
   const matrix = personnelFieldMatrixForRole(session.role);
+  const sensitiveWrite = actorCanWritePersonnelSensitiveData(session);
+  const sensitiveRead = sensitiveWrite || actorCanReadPersonnelSensitiveData(session);
+  for (const field of personnelFieldCatalog) {
+    if (field.key === "phone") continue;
+    if (sensitiveWrite) matrix[field.key] = "write";
+    else if (sensitiveRead && matrix[field.key] === "hidden") matrix[field.key] = "read";
+  }
   if (!stored.has("phone")) {
     if (actorCanWritePersonnelPhone(session)) matrix.phone = "write";
     else if (actorCanReadPersonnelPhone(session)) matrix.phone = "read";
@@ -10700,6 +11911,7 @@ function validatePersonnelAccessProfile(actor, payload, employee = {}) {
   }
   const rolePermissions = new Set(getPortalRoles().find((entry) => entry.id === role)?.permissions || []);
   const permissions = submittedPermissions.filter((permission) => !rolePermissions.has(permission));
+  assertPortalPermissionDependencies([...rolePermissions, ...permissions]);
   const homeLocationId = String(employee.homeLocationId || employee.home_location_id || "").trim();
   const preferredDepartmentId = Number(employee.preferredDepartmentId || employee.preferred_department_id || 0) || null;
   if (["location_planner", "manager", "department_manager"].includes(role) && !homeLocationId) {
@@ -10756,7 +11968,7 @@ function getPortalStatus(locationId = "", request = null) {
   const portalSettings = getPortalSettings();
   const features = installationFeatures(settings);
   const networkRuntimeActive = serverModeActive || !loopbackHosts.has(HOST.toLowerCase()) || process.env.GRABENPLANER_FORCE_PORTAL === "1";
-  const portalEnabled = !productionBootstrapActive && networkRuntimeActive && SERVER_MODE_STATUS === "active";
+  const portalEnabled = !productionBootstrapActive && networkRuntimeActive;
   const configuredAdmin = db.prepare(`
     SELECT 1
     FROM portal_users
@@ -10765,17 +11977,15 @@ function getPortalStatus(locationId = "", request = null) {
   `).get();
   return {
     apiVersion: PORTAL_API_VERSION,
-    operationMode: settings.operation_mode,
-    serverModeStatus: SERVER_MODE_STATUS,
+    operationMode: configuredOperationMode,
     portalEnabled,
-    serverModeAvailable: SERVER_MODE_STATUS === "active",
     loginRequired: portalEnabled,
     adminSetupState: configuredAdmin ? "configured" : "not-configured",
     adminSetupAvailable: !configuredAdmin && (!serverModeActive || productionBootstrapActive),
     localOnly: loopbackHosts.has(HOST.toLowerCase()),
     listenHost: HOST,
     port: PORT,
-    networkUrls: settings.operation_mode === "lan" && portalEnabled ? getLanUrls(PORT) : [],
+    networkUrls: configuredOperationMode === "lan" && portalEnabled ? getLanUrls(PORT) : [],
     publicUrl: serverModeActive ? publicUrl : "",
     httpsRequired: serverModeActive,
     trustProxy: serverModeActive ? trustProxySetting : "",
@@ -12167,7 +13377,7 @@ function mobileLeadershipLayouts() {
     for (const role of ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"]) {
       const requested = Array.isArray(value[role]) ? value[role].filter((id) => mobileLeadershipModuleIds.has(id)) : [];
       const modules = role === "location_planner"
-        ? requested.filter((id) => ["schedule", "more"].includes(id))
+        ? requested.filter((id) => ["approvals", "schedule", "more"].includes(id))
         : ["timeTracking", ...requested.filter((id) => id !== "timeTracking")];
       fallback[role] = [...new Set(modules)].slice(0, 6);
     }
@@ -12208,7 +13418,7 @@ function validateMobileLeadershipLayouts(value) {
       throw httpError(400, "Die mobile Leitungsansicht enthält ein unbekanntes Element.", "MOBILE_LAYOUT_INVALID");
     }
     result[role] = [...new Set(role === "location_planner"
-      ? requested.filter((id) => ["schedule", "more"].includes(id))
+      ? requested.filter((id) => ["approvals", "schedule", "more"].includes(id))
       : ["timeTracking", ...requested.filter((id) => id !== "timeTracking")])].slice(0, 6);
   }
   return result;
@@ -12593,12 +13803,14 @@ function requestBlackoutReason(blackout, requestLabel) {
 function vacationEmployeeGovernanceContext(employeeNumber) {
   const row = db.prepare(`
     SELECT e.personnel_number, e.home_location_id, e.preferred_department_id, e.cost_center_id,
-           ec.type AS employee_cost_center_type, l.cost_center_id AS location_cost_center_id,
-           lc.type AS location_cost_center_type
+           ect.is_branch AS employee_cost_center_is_branch, l.cost_center_id AS location_cost_center_id,
+           lct.is_branch AS location_cost_center_is_branch
     FROM employees e
     LEFT JOIN cost_centers ec ON ec.id = e.cost_center_id
+    LEFT JOIN cost_center_types ect ON ect.id = ec.cost_center_type_id
     LEFT JOIN locations l ON l.id = e.home_location_id
     LEFT JOIN cost_centers lc ON lc.id = l.cost_center_id
+    LEFT JOIN cost_center_types lct ON lct.id = lc.cost_center_type_id
     WHERE e.personnel_number = ? AND e.active = 1
   `).get(employeeNumber);
   if (!row) return null;
@@ -12610,7 +13822,7 @@ function vacationEmployeeGovernanceContext(employeeNumber) {
     departmentId,
     costCenterId: String(row.cost_center_id || ""),
     branchPlanned: Boolean(locationId && (
-      row.location_cost_center_type === "branch" || row.employee_cost_center_type === "branch"
+      row.location_cost_center_is_branch || row.employee_cost_center_is_branch
     )),
   };
 }
@@ -13758,11 +14970,30 @@ function departmentManagerProfileMatchesAmuReport(user, report) {
   return scoped && departmentManagerSubstitutionActive(user.employeeNumber, report.location_id);
 }
 
+function locationPlannerProfileMatchesAmuReport(user, report) {
+  if (!user || user.role !== "location_planner" || !user.active || !user.employeeActive || !user.passwordConfigured) return false;
+  const rolePermissions = db.prepare("SELECT permissions FROM portal_roles WHERE id = ?").get(user.role)?.permissions || "[]";
+  const effectivePermissions = effectivePortalPermissionState(
+    user.employeeNumber,
+    user.role,
+    rolePermissions,
+  ).effectivePermissions;
+  if (!effectivePermissions.includes("amu:local:manage") || !effectivePermissions.includes("sickness:read")) return false;
+  if (!managerAmuAccessEffective(user.employeeNumber, user.role)) return false;
+  const scopes = user.scopes?.length
+    ? user.scopes
+    : (user.homeLocationId ? [{ locationId: user.homeLocationId, departmentId: null }] : []);
+  return scopes.some((scope) => String(scope.locationId) === String(report.location_id)
+    && (!Number(scope.departmentId || 0)
+      || (report.department_id != null && Number(scope.departmentId) === Number(report.department_id))));
+}
+
 function localAmuReviewerRecipients(report) {
   if (!report) return [];
   return portalUsersForAdmin()
     .filter((user) => managerProfileMatchesAmuReport(user, report)
-      || departmentManagerProfileMatchesAmuReport(user, report))
+      || departmentManagerProfileMatchesAmuReport(user, report)
+      || locationPlannerProfileMatchesAmuReport(user, report))
     .map((user) => user.employeeNumber)
     .filter((employeeNumber) => employeeNumber && employeeNumber !== report.employee_number);
 }
@@ -13943,6 +15174,12 @@ function verifyActiveProtectedDocumentBlobs() {
   const loanPhotos = tableExists("loan_photos") ? db.prepare(`
     SELECT id, storage_key, byte_size, sha256, detected_mime, filename
     FROM loan_photos
+    ${columnExists("loan_photos", "original_retained") ? "WHERE original_retained = 1" : ""}
+    ORDER BY created_at, id
+  `).all() : [];
+  const loanPhotoAttachments = tableExists("loan_photo_attachments") ? db.prepare(`
+    SELECT id, storage_key, byte_size, sha256, detected_mime, filename
+    FROM loan_photo_attachments
     ORDER BY created_at, id
   `).all() : [];
   const verifyUniqueStorageKey = (storageKey) => {
@@ -13960,7 +15197,7 @@ function verifyActiveProtectedDocumentBlobs() {
     verifyUniqueStorageKey(document.storage_key);
     readPersonnelRecordDocument(document);
   }
-  for (const document of [...loanDocuments, ...loanPhotos]) {
+  for (const document of [...loanDocuments, ...loanPhotos, ...loanPhotoAttachments]) {
     verifyUniqueStorageKey(document.storage_key);
     requireAmuStorage().readBuffer({
       storageKey: document.storage_key,
@@ -13975,6 +15212,7 @@ function verifyActiveProtectedDocumentBlobs() {
     personnelDocuments: personnelDocuments.length,
     loanDocuments: loanDocuments.length,
     loanPhotos: loanPhotos.length,
+    loanPhotoAttachments: loanPhotoAttachments.length,
     storageKeys: [...storageKeys],
   };
 }
@@ -14067,7 +15305,12 @@ function reconcileOrphanAmuBlobs() {
     }
   }
   if (tableExists("loan_photos")) {
-    for (const row of db.prepare("SELECT storage_key FROM loan_photos").all()) {
+    for (const row of db.prepare("SELECT storage_key FROM loan_photos WHERE original_retained = 1").all()) {
+      referenced.add(String(row.storage_key || "").toLowerCase());
+    }
+  }
+  if (tableExists("loan_photo_attachments")) {
+    for (const row of db.prepare("SELECT storage_key FROM loan_photo_attachments").all()) {
       referenced.add(String(row.storage_key || "").toLowerCase());
     }
   }
@@ -14423,26 +15666,90 @@ function settingEnabled(settings, key) {
   return settings[key] === "1";
 }
 
-const costCenterTypeCatalog = Object.freeze([
-  { id: "branch", label: "Filiale" },
-  { id: "administration", label: "Verwaltung" },
-  { id: "production", label: "Produktion" },
-  { id: "other", label: "Sonstiges" },
-]);
-const costCenterTypes = new Set(costCenterTypeCatalog.map((entry) => entry.id));
+function serializeCostCenterType(row, positions = []) {
+  return {
+    id: String(row.id),
+    code: String(row.code || ""),
+    name: String(row.name || ""),
+    label: String(row.name || ""),
+    description: String(row.description || ""),
+    isBranch: Boolean(row.is_branch),
+    active: Boolean(row.active),
+    builtin: Boolean(row.builtin),
+    sortOrder: Number(row.sort_order || 0),
+    positionIds: positions.map((position) => String(position.id)),
+    positions,
+    costCenterCount: Number(row.cost_center_count || 0),
+    activeCostCenterCount: Number(row.active_cost_center_count || 0),
+    locationCount: Number(row.location_count || 0),
+    createdBy: String(row.created_by || ""),
+    updatedBy: String(row.updated_by || ""),
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+  };
+}
+
+function getCostCenterTypes(includeInactive = true) {
+  const typeRows = db.prepare(`
+    SELECT cct.*,
+      (SELECT COUNT(*) FROM cost_centers c WHERE c.cost_center_type_id = cct.id) AS cost_center_count,
+      (SELECT COUNT(*) FROM cost_centers c WHERE c.cost_center_type_id = cct.id AND c.active = 1) AS active_cost_center_count,
+      (SELECT COUNT(*)
+       FROM locations l
+       JOIN cost_centers c ON c.id = l.cost_center_id
+       WHERE c.cost_center_type_id = cct.id) AS location_count
+    FROM cost_center_types cct
+    ${includeInactive ? "" : "WHERE cct.active = 1"}
+    ORDER BY cct.active DESC, cct.sort_order, cct.name COLLATE NOCASE
+  `).all();
+  const positionRows = db.prepare(`
+    SELECT cctp.cost_center_type_id, p.id, p.name, p.builtin, p.sort_order, p.created_at
+    FROM cost_center_type_positions cctp
+    JOIN positions p ON p.id = cctp.position_id
+    ORDER BY cctp.cost_center_type_id, cctp.sort_order, p.sort_order, p.name COLLATE NOCASE
+  `).all().map(serializePosition);
+  const positionsByType = new Map();
+  for (const position of positionRows) {
+    const typeId = String(position.cost_center_type_id);
+    if (!positionsByType.has(typeId)) positionsByType.set(typeId, []);
+    const { cost_center_type_id: _typeId, ...serialized } = position;
+    positionsByType.get(typeId).push(serialized);
+  }
+  return typeRows.map((row) => serializeCostCenterType(row, positionsByType.get(String(row.id)) || []));
+}
+
+function validateCostCenterTypeExists(value, options = {}) {
+  const key = String(value || "").trim();
+  if (!key) throw httpError(400, "Bitte einen Kostenstellentyp auswählen.", "COST_CENTER_TYPE_REQUIRED");
+  const row = db.prepare(`
+    SELECT * FROM cost_center_types WHERE id = ? OR code = ? COLLATE NOCASE LIMIT 1
+  `).get(key, key);
+  if (!row) throw httpError(404, "Der Kostenstellentyp wurde nicht gefunden.", "COST_CENTER_TYPE_NOT_FOUND");
+  if (!options.allowInactive && !row.active) {
+    throw httpError(409, "Der Kostenstellentyp ist archiviert und kann nicht neu zugeordnet werden.", "COST_CENTER_TYPE_INACTIVE");
+  }
+  return row;
+}
 
 function serializeCostCenter(row) {
   return {
     id: String(row.id),
     code: String(row.code || ""),
     name: String(row.name || ""),
-    type: costCenterTypes.has(row.type) ? row.type : "other",
+    type: String(row.cost_center_type_id || row.type || "other"),
+    typeId: String(row.cost_center_type_id || ""),
+    typeCode: String(row.cost_center_type_code || row.type || ""),
+    typeName: String(row.cost_center_type_name || ""),
+    isBranch: Boolean(row.cost_center_type_is_branch),
+    typeActive: Boolean(row.cost_center_type_active),
     description: String(row.description || ""),
     active: Boolean(row.active),
     sortOrder: Number(row.sort_order || 0),
     employeeCount: Number(row.employee_count || 0),
     activeEmployeeCount: Number(row.active_employee_count || 0),
     locationCount: Number(row.location_count || 0),
+    locationId: String(row.location_id || ""),
+    locationName: String(row.location_name || ""),
     createdBy: String(row.created_by || ""),
     updatedBy: String(row.updated_by || ""),
     createdAt: row.created_at || null,
@@ -14453,10 +15760,17 @@ function serializeCostCenter(row) {
 function getCostCenters(includeInactive = true) {
   return db.prepare(`
     SELECT c.*,
+      cct.code AS cost_center_type_code,
+      cct.name AS cost_center_type_name,
+      cct.is_branch AS cost_center_type_is_branch,
+      cct.active AS cost_center_type_active,
       (SELECT COUNT(*) FROM employees e WHERE e.cost_center_id = c.id) AS employee_count,
       (SELECT COUNT(*) FROM employees e WHERE e.cost_center_id = c.id AND e.active = 1) AS active_employee_count,
-      (SELECT COUNT(*) FROM locations l WHERE l.cost_center_id = c.id) AS location_count
+      (SELECT COUNT(*) FROM locations l WHERE l.cost_center_id = c.id) AS location_count,
+      (SELECT l.id FROM locations l WHERE l.cost_center_id = c.id ORDER BY l.id LIMIT 1) AS location_id,
+      (SELECT l.name FROM locations l WHERE l.cost_center_id = c.id ORDER BY l.id LIMIT 1) AS location_name
     FROM cost_centers c
+    LEFT JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
     ${includeInactive ? "" : "WHERE c.active = 1"}
     ORDER BY c.active DESC, c.sort_order, c.code COLLATE NOCASE
   `).all().map(serializeCostCenter);
@@ -14465,10 +15779,19 @@ function getCostCenters(includeInactive = true) {
 function validateCostCenterExists(value, options = {}) {
   const id = String(value || "").trim();
   if (!id) throw httpError(400, "Bitte eine Kostenstelle auswählen.", "COST_CENTER_REQUIRED");
-  const row = db.prepare("SELECT * FROM cost_centers WHERE id = ?").get(id);
+  const row = db.prepare(`
+    SELECT c.*, cct.code AS cost_center_type_code, cct.name AS cost_center_type_name,
+           cct.is_branch AS cost_center_type_is_branch, cct.active AS cost_center_type_active
+    FROM cost_centers c
+    LEFT JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
+    WHERE c.id = ?
+  `).get(id);
   if (!row) throw httpError(404, "Die Kostenstelle wurde nicht gefunden.", "COST_CENTER_NOT_FOUND");
   if (!options.allowInactive && !row.active) {
     throw httpError(409, "Die Kostenstelle ist archiviert und kann nicht neu zugeordnet werden.", "COST_CENTER_INACTIVE");
+  }
+  if (options.requireBranch && (!row.cost_center_type_active || !row.cost_center_type_is_branch)) {
+    throw httpError(409, "Einem Standort kann nur eine aktive Filialkostenstelle zugeordnet werden.", "LOCATION_COST_CENTER_TYPE_REQUIRED");
   }
   return row;
 }
@@ -14476,9 +15799,17 @@ function validateCostCenterExists(value, options = {}) {
 function validateCostCenterPayload(body = {}, existing = null) {
   const code = String(body.code ?? existing?.code ?? "").trim().toUpperCase();
   const name = String(body.name ?? existing?.name ?? "").trim().replace(/\s+/g, " ");
-  const type = String(body.type ?? existing?.type ?? "other").trim();
+  const typeKey = String(
+    body.costCenterTypeId ?? body.typeId ?? body.type
+      ?? existing?.cost_center_type_id ?? existing?.type ?? "other",
+  ).trim();
+  const selectedType = validateCostCenterTypeExists(typeKey, {
+    allowInactive: Boolean(existing && String(existing.cost_center_type_id || "") === typeKey),
+  });
   const description = String(body.description ?? existing?.description ?? "").trim();
-  const active = body.active === undefined ? Boolean(existing?.active ?? true) : body.active !== false;
+  const active = body.active === undefined
+    ? Boolean(existing?.active ?? true)
+    : ![false, 0, "0", "false"].includes(body.active);
   const sortOrder = Number(body.sortOrder ?? body.sort_order ?? existing?.sort_order ?? 0);
   if (!/^[A-Z0-9][A-Z0-9._-]{0,29}$/.test(code)) {
     throw httpError(400, "Der Kostenstellencode muss aus 1 bis 30 Buchstaben, Ziffern, Punkten, Strichen oder Unterstrichen bestehen.", "COST_CENTER_CODE_INVALID");
@@ -14486,12 +15817,160 @@ function validateCostCenterPayload(body = {}, existing = null) {
   if (!name || name.length > 100) {
     throw httpError(400, "Der Name der Kostenstelle muss 1 bis 100 Zeichen lang sein.", "COST_CENTER_NAME_INVALID");
   }
-  if (!costCenterTypes.has(type)) throw httpError(400, "Der Kostenstellentyp ist ungültig.", "COST_CENTER_TYPE_INVALID");
+  if (active && !selectedType.active) {
+    throw httpError(
+      409,
+      "Eine aktive Kostenstelle kann keinem archivierten Kostenstellentyp zugeordnet werden.",
+      "COST_CENTER_TYPE_INACTIVE",
+    );
+  }
   if (description.length > 500) throw httpError(400, "Die Beschreibung darf höchstens 500 Zeichen lang sein.", "COST_CENTER_DESCRIPTION_INVALID");
   if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 9999) {
     throw httpError(400, "Die Sortierung der Kostenstelle muss zwischen 0 und 9999 liegen.", "COST_CENTER_SORT_INVALID");
   }
-  return { code, name, type, description, active: active ? 1 : 0, sortOrder };
+  return {
+    code,
+    name,
+    type: legacyCostCenterType(selectedType),
+    costCenterTypeId: String(selectedType.id),
+    costCenterType: selectedType,
+    description,
+    active: active ? 1 : 0,
+    sortOrder,
+  };
+}
+
+function validateCostCenterTypePayload(body = {}, existing = null) {
+  const code = String(body.code ?? existing?.code ?? "")
+    .trim()
+    .toLowerCase();
+  const name = String(body.name ?? existing?.name ?? "").trim().replace(/\s+/g, " ");
+  const description = String(body.description ?? existing?.description ?? "").trim();
+  const submittedIsBranch = body.isBranch ?? body.is_branch;
+  const isBranch = submittedIsBranch === undefined
+    ? Boolean(existing?.is_branch)
+    : [true, 1, "1", "true"].includes(submittedIsBranch);
+  const active = body.active === undefined
+    ? Boolean(existing?.active ?? true)
+    : ![false, 0, "0", "false"].includes(body.active);
+  const nextSortOrder = existing?.sort_order
+    ?? Math.min(9999, Number(db.prepare("SELECT COALESCE(MAX(sort_order), 0) AS value FROM cost_center_types").get().value) + 10);
+  const sortOrder = Number(body.sortOrder ?? body.sort_order ?? nextSortOrder);
+  const submittedPositionIds = body.positionIds ?? body.position_ids;
+  const currentPositionIds = existing
+    ? db.prepare(`
+      SELECT position_id FROM cost_center_type_positions
+      WHERE cost_center_type_id = ? ORDER BY sort_order, position_id
+    `).all(existing.id).map((row) => String(row.position_id))
+    : [];
+  if (!/^[a-z0-9][a-z0-9._-]{0,39}$/.test(code)) {
+    throw httpError(
+      400,
+      "Der Typ-Code muss aus 1 bis 40 Kleinbuchstaben, Ziffern, Punkten, Strichen oder Unterstrichen bestehen.",
+      "COST_CENTER_TYPE_CODE_INVALID",
+    );
+  }
+  if (!name || name.length > 80) {
+    throw httpError(400, "Der Name des Kostenstellentyps muss 1 bis 80 Zeichen lang sein.", "COST_CENTER_TYPE_NAME_INVALID");
+  }
+  if (description.length > 500) {
+    throw httpError(400, "Die Beschreibung darf höchstens 500 Zeichen lang sein.", "COST_CENTER_TYPE_DESCRIPTION_INVALID");
+  }
+  if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 9999) {
+    throw httpError(400, "Die Sortierung des Kostenstellentyps muss zwischen 0 und 9999 liegen.", "COST_CENTER_TYPE_SORT_INVALID");
+  }
+  if (submittedPositionIds !== undefined && !Array.isArray(submittedPositionIds)) {
+    throw httpError(400, "Die erlaubten Positionen müssen als Liste übermittelt werden.", "COST_CENTER_TYPE_POSITIONS_INVALID");
+  }
+  const positionIds = [...new Set((submittedPositionIds === undefined ? currentPositionIds : submittedPositionIds)
+    .map((value) => String(value || "").trim())
+    .filter(Boolean))];
+  if (positionIds.length > 100) {
+    throw httpError(400, "Ein Kostenstellentyp kann höchstens 100 Positionen enthalten.", "COST_CENTER_TYPE_POSITIONS_LIMIT");
+  }
+  if (positionIds.length) {
+    const knownPositions = new Set(db.prepare(`
+      SELECT id FROM positions WHERE id IN (${positionIds.map(() => "?").join(",")})
+    `).all(...positionIds).map((row) => String(row.id)));
+    const unknown = positionIds.filter((id) => !knownPositions.has(id));
+    if (unknown.length) {
+      throw httpError(400, "Mindestens eine ausgewählte Position wurde nicht gefunden.", "COST_CENTER_TYPE_POSITION_NOT_FOUND");
+    }
+  }
+  return {
+    code,
+    name,
+    description,
+    isBranch: isBranch ? 1 : 0,
+    active: active ? 1 : 0,
+    sortOrder,
+    positionIds,
+  };
+}
+
+function assertCostCenterTypeNameUnique(name, excludeId = "") {
+  const duplicate = db.prepare(`
+    SELECT id FROM cost_center_types
+    WHERE name = ? COLLATE NOCASE AND id <> ?
+    LIMIT 1
+  `).get(name, String(excludeId || ""));
+  if (duplicate) {
+    throw httpError(409, "Dieser Name für einen Kostenstellentyp ist bereits vergeben.", "COST_CENTER_TYPE_NAME_DUPLICATE");
+  }
+}
+
+function replaceCostCenterTypePositions(typeId, positionIds) {
+  db.prepare("DELETE FROM cost_center_type_positions WHERE cost_center_type_id = ?").run(typeId);
+  const insert = db.prepare(`
+    INSERT INTO cost_center_type_positions (cost_center_type_id, position_id, sort_order)
+    VALUES (?, ?, ?)
+  `);
+  positionIds.forEach((positionId, index) => insert.run(typeId, positionId, index + 1));
+}
+
+function assertCostCenterTypeChangeAllowed(existing, value) {
+  const assignments = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM cost_centers WHERE cost_center_type_id = ? AND active = 1) AS active_cost_centers,
+      (SELECT COUNT(*)
+       FROM locations l
+       JOIN cost_centers c ON c.id = l.cost_center_id
+       WHERE c.cost_center_type_id = ?) AS locations
+  `).get(existing.id, existing.id);
+  if (existing.active && !value.active && Number(assignments.active_cost_centers || 0)) {
+    throw httpError(
+      409,
+      "Ein verwendeter Kostenstellentyp kann nicht archiviert werden. Bitte zuerst die aktiven Kostenstellen neu zuordnen.",
+      "COST_CENTER_TYPE_IN_USE",
+    );
+  }
+  if (existing.is_branch && !value.isBranch && Number(assignments.locations || 0)) {
+    throw httpError(
+      409,
+      "Der Filialstatus kann nicht entfernt werden, solange Standorte Kostenstellen dieses Typs verwenden.",
+      "COST_CENTER_TYPE_BRANCH_IN_USE",
+    );
+  }
+  if (Array.isArray(value.positionIds)) {
+    const placeholders = value.positionIds.map(() => "?").join(",");
+    const incompatibleEmployee = db.prepare(`
+      SELECT e.personnel_number, e.position_id, p.name AS position_name, c.code AS cost_center_code
+      FROM employees e
+      JOIN positions p ON p.id = e.position_id
+      JOIN cost_centers c ON c.id = e.cost_center_id
+      WHERE c.cost_center_type_id = ?
+        ${value.positionIds.length ? `AND e.position_id NOT IN (${placeholders})` : ""}
+      ORDER BY e.active DESC, e.personnel_number
+      LIMIT 1
+    `).get(existing.id, ...value.positionIds);
+    if (incompatibleEmployee) {
+      throw httpError(
+        409,
+        `Die Position „${incompatibleEmployee.position_name}“ wird in ${incompatibleEmployee.cost_center_code} noch verwendet und kann deshalb nicht aus diesem Typ entfernt werden.`,
+        "COST_CENTER_TYPE_POSITION_IN_USE",
+      );
+    }
+  }
 }
 
 function defaultCostCenterId(locationId = "") {
@@ -14500,21 +15979,74 @@ function defaultCostCenterId(locationId = "") {
     WHERE l.id = ? AND c.active = 1
   `).get(String(locationId))?.id : "";
   return locationCostCenter
-    || db.prepare("SELECT id FROM cost_centers WHERE active = 1 AND type = 'administration' ORDER BY sort_order, code LIMIT 1").get()?.id
+    || db.prepare(`
+      SELECT id FROM cost_centers
+      WHERE active = 1 AND cost_center_type_id = 'administration'
+      ORDER BY sort_order, code LIMIT 1
+    `).get()?.id
     || db.prepare("SELECT id FROM cost_centers WHERE active = 1 ORDER BY sort_order, code LIMIT 1").get()?.id
     || "";
+}
+
+function employeeAssignmentForCostCenter(value, options = {}) {
+  const center = validateCostCenterExists(value, {
+    allowInactive: Boolean(options.allowInactive),
+  });
+  const location = db.prepare(`
+    SELECT id, name
+    FROM locations
+    WHERE cost_center_id = ?
+    ORDER BY active DESC, id
+    LIMIT 1
+  `).get(center.id);
+  const isBranch = Boolean(center.cost_center_type_is_branch);
+  if (isBranch && !location && !options.allowUnlinkedBranch) {
+    throw httpError(
+      409,
+      "Diese Filialkostenstelle ist noch keinem Standort zugeordnet und kann deshalb keinem Personalstamm zugewiesen werden.",
+      "EMPLOYEE_COST_CENTER_LOCATION_REQUIRED",
+    );
+  }
+  return {
+    center,
+    typeId: String(center.cost_center_type_id || ""),
+    isBranch,
+    homeLocationId: isBranch && location ? String(location.id) : null,
+    homeLocationName: isBranch && location ? String(location.name || "") : "",
+  };
+}
+
+function validateEmployeePositionForAssignment(positionId, assignment) {
+  const position = db.prepare("SELECT id, name FROM positions WHERE id = ?").get(positionId);
+  if (!position) {
+    throw httpError(400, "Bitte eine gültige Position auswählen.", "EMPLOYEE_POSITION_INVALID");
+  }
+  const allowed = db.prepare(`
+    SELECT 1
+    FROM cost_center_type_positions
+    WHERE cost_center_type_id = ? AND position_id = ?
+    LIMIT 1
+  `).get(assignment.typeId, positionId);
+  if (!allowed) {
+    throw httpError(
+      409,
+      `Die Position „${position.name}“ ist für den Kostenstellentyp „${assignment.center.cost_center_type_name || assignment.typeId}“ nicht freigegeben.`,
+      "EMPLOYEE_POSITION_NOT_ALLOWED_FOR_COST_CENTER",
+    );
+  }
+  return position;
 }
 
 function ensureBranchCostCenterForLocation(location, actor = "system") {
   const code = `FIL${String(location.id || "").toUpperCase()}`;
   const existing = db.prepare("SELECT id FROM cost_centers WHERE code = ? COLLATE NOCASE").get(code);
-  if (existing) return existing.id;
+  if (existing) return validateCostCenterExists(existing.id, { requireBranch: true }).id;
   let id = `cc-location-${location.id}`;
   if (db.prepare("SELECT 1 FROM cost_centers WHERE id = ?").get(id)) id = `cc-${crypto.randomUUID()}`;
   db.prepare(`
     INSERT INTO cost_centers
-      (id, code, name, type, description, active, sort_order, created_by, updated_by)
-    VALUES (?, ?, ?, 'branch', '', 1, ?, ?, ?)
+      (id, code, name, type, cost_center_type_id, description, active, sort_order, created_by, updated_by)
+    VALUES (?, ?, ?, 'branch', 'branch', '', 1, ?, ?, ?)
   `).run(id, code, String(location.name || code), 100 + (Number(location.id) || 0), actor, actor);
   auditPortal(actor, "cost-center.create", "cost_center", id, JSON.stringify({ code, type: "branch", automatic: true }));
   return id;
@@ -14531,7 +16063,10 @@ function serializeLocation(row, departments = []) {
     cost_center_id: row.cost_center_id || "",
     cost_center_code: row.cost_center_code || "",
     cost_center_name: row.cost_center_name || "",
-    cost_center_type: row.cost_center_type || "",
+    cost_center_type: row.cost_center_type_id || row.cost_center_type || "",
+    cost_center_type_id: row.cost_center_type_id || "",
+    cost_center_type_name: row.cost_center_type_name || "",
+    cost_center_is_branch: Boolean(row.cost_center_is_branch),
     min_staff: Number(row.min_staff || 0),
     day_settings: daySettingsFromLocation(row.id),
     time_tracking_enabled: Boolean(row.time_tracking_enabled),
@@ -14554,15 +16089,28 @@ function serializeDepartment(row) {
 }
 
 function serializePosition(row) {
+  const costCenterTypeIds = String(row.cost_center_type_ids || "")
+    .split("|")
+    .map((value) => value.trim())
+    .filter(Boolean);
   return {
     ...row,
     builtin: Boolean(row.builtin),
     sort_order: Number(row.sort_order || 0),
+    cost_center_type_ids: costCenterTypeIds,
+    costCenterTypeIds,
   };
 }
 
 function getPositions() {
-  return db.prepare("SELECT id, name, builtin, sort_order, created_at FROM positions ORDER BY builtin DESC, sort_order, name")
+  return db.prepare(`
+    SELECT p.id, p.name, p.builtin, p.sort_order, p.created_at,
+           GROUP_CONCAT(cctp.cost_center_type_id, '|') AS cost_center_type_ids
+    FROM positions p
+    LEFT JOIN cost_center_type_positions cctp ON cctp.position_id = p.id
+    GROUP BY p.id, p.name, p.builtin, p.sort_order, p.created_at
+    ORDER BY p.builtin DESC, p.sort_order, p.name
+  `)
     .all()
     .map(serializePosition);
 }
@@ -14571,11 +16119,14 @@ function getLocations(includeInactive = true) {
   const locationRows = db
     .prepare(`
       SELECT l.id, l.name, l.cost_center_id, c.code AS cost_center_code, c.name AS cost_center_name,
-             c.type AS cost_center_type, l.min_staff, l.day_settings_json, l.time_tracking_enabled,
+             c.type AS cost_center_type, c.cost_center_type_id,
+             cct.name AS cost_center_type_name, cct.is_branch AS cost_center_is_branch,
+             l.min_staff, l.day_settings_json, l.time_tracking_enabled,
              l.time_tracking_access_mode, l.time_tracking_allowed_networks, l.time_tracking_variance_minutes,
              l.active, l.created_at
       FROM locations l
       LEFT JOIN cost_centers c ON c.id = l.cost_center_id
+      LEFT JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
       ${includeInactive ? "" : "WHERE l.active = 1"}
       ORDER BY l.active DESC, l.id
     `)
@@ -14692,7 +16243,19 @@ function validateLocationPayload(body, isNew = false) {
   }
   const costCenterSubmitted = own(body, "costCenterId") || own(body, "cost_center_id");
   const costCenterId = costCenterSubmitted ? String(body.costCenterId ?? body.cost_center_id ?? "").trim() : "";
-  if (costCenterSubmitted) validateCostCenterExists(costCenterId);
+  if (costCenterSubmitted) {
+    validateCostCenterExists(costCenterId, { requireBranch: true });
+    const usedBy = db.prepare(`
+      SELECT id FROM locations WHERE cost_center_id = ? AND id <> ? LIMIT 1
+    `).get(costCenterId, isNew ? "" : id);
+    if (usedBy) {
+      throw httpError(
+        409,
+        `Diese Filialkostenstelle ist bereits dem Standort ${usedBy.id} zugeordnet.`,
+        "LOCATION_COST_CENTER_IN_USE",
+      );
+    }
+  }
   return {
     id,
     name,
@@ -15673,13 +17236,34 @@ function serializeEmployee(row, options = {}) {
     cost_center_id: row.cost_center_id || "",
     cost_center_code: row.cost_center_code || "",
     cost_center_name: row.cost_center_name || "",
-    cost_center_type: row.cost_center_type || "",
+    cost_center_type: row.cost_center_type_id || row.cost_center_type || "",
+    cost_center_type_id: row.cost_center_type_id || "",
+    cost_center_type_name: row.cost_center_type_name || "",
+    cost_center_is_branch: Boolean(row.cost_center_is_branch),
     active: Boolean(row.active),
     sickness_without_aum_enabled: Boolean(row.sickness_without_aum_enabled),
   };
   if (options.includeTimeConfirmationLevel === false) delete serialized.time_confirmation_level;
   if (options.includeSicknessAllowance === false) delete serialized.sickness_without_aum_enabled;
   return serialized;
+}
+
+function assertEmployeePrincipalLoginAvailable(personnelNumber) {
+  const normalized = String(personnelNumber || "").trim();
+  if (!normalized || !tableExists("portal_organization_accounts")) return;
+  const collision = db.prepare(`
+    SELECT login_name
+    FROM portal_organization_accounts
+    WHERE login_name = ? COLLATE NOCASE
+    LIMIT 1
+  `).get(normalized);
+  if (collision) {
+    throw httpError(
+      409,
+      "Diese Personalnummer ist bereits als Organisationskonto vergeben.",
+      "PORTAL_PRINCIPAL_LOGIN_CONFLICT",
+    );
+  }
 }
 
 function validateEmployee(body, isNew, options = {}) {
@@ -15699,26 +17283,41 @@ function validateEmployee(body, isNew, options = {}) {
   const sicknessWithoutAumEnabled = body.sicknessWithoutAumEnabled === true
     || body.sickness_without_aum_enabled === true || Number(body.sickness_without_aum_enabled) === 1;
   const allowedPreferredDays = ["", "monday", "tuesday", "wednesday", "thursday", "friday"];
-  const homeLocationSubmitted = own(body, "homeLocationId") || own(body, "home_location_id");
-  const homeLocationValue = homeLocationSubmitted
-    ? String(body.homeLocationId ?? body.home_location_id ?? "").trim()
-    : String(options.defaultHomeLocationId ?? (isNew ? "01" : "")).trim();
-  const homeLocationId = homeLocationValue ? normalizeLocationId(homeLocationValue) : null;
-  if (homeLocationId) validateLocationExists(homeLocationId);
-  const preferredDepartmentId = normalizeDepartmentId(body.preferredDepartmentId ?? body.preferred_department_id, true);
-  if (preferredDepartmentId && !homeLocationId) {
-    throw httpError(400, "Ohne Stammfiliale kann keine bevorzugte Abteilung zugeordnet werden.", "EMPLOYEE_DEPARTMENT_WITHOUT_LOCATION");
-  }
-  if (preferredDepartmentId) validateDepartmentExists(preferredDepartmentId, homeLocationId);
   const costCenterSubmitted = own(body, "costCenterId") || own(body, "cost_center_id");
   const costCenterId = costCenterSubmitted
     ? String(body.costCenterId ?? body.cost_center_id ?? "").trim()
-    : String(options.defaultCostCenterId || defaultCostCenterId(homeLocationId)).trim();
-  validateCostCenterExists(costCenterId, { allowInactive: costCenterId === options.allowInactiveCostCenterId });
-  if (!db.prepare("SELECT 1 FROM positions WHERE id = ?").get(positionId)) {
-    throw httpError(400, "Bitte eine gültige Position auswählen.");
+    : String(options.defaultCostCenterId || "").trim();
+  const assignment = employeeAssignmentForCostCenter(costCenterId, {
+    allowInactive: costCenterId === options.allowInactiveCostCenterId,
+    allowUnlinkedBranch: Boolean(options.allowUnlinkedBranch),
+  });
+  const homeLocationSubmitted = own(body, "homeLocationId") || own(body, "home_location_id");
+  const submittedHomeLocationValue = homeLocationSubmitted
+    ? String(body.homeLocationId ?? body.home_location_id ?? "").trim()
+    : "";
+  const submittedHomeLocationId = submittedHomeLocationValue
+    ? normalizeLocationId(submittedHomeLocationValue)
+    : null;
+  const homeLocationId = assignment.homeLocationId;
+  if (submittedHomeLocationId && submittedHomeLocationId !== homeLocationId) {
+    throw httpError(
+      409,
+      "Der Standort wird automatisch aus der Kostenstelle abgeleitet und kann nicht separat zugeordnet werden.",
+      "EMPLOYEE_HOME_LOCATION_DERIVED",
+    );
   }
+  const preferredDepartmentId = normalizeDepartmentId(body.preferredDepartmentId ?? body.preferred_department_id, true);
+  if (preferredDepartmentId && !homeLocationId) {
+    throw httpError(
+      400,
+      "Ohne einen aus der Kostenstelle abgeleiteten Standort kann keine bevorzugte Abteilung zugeordnet werden.",
+      "EMPLOYEE_DEPARTMENT_WITHOUT_LOCATION",
+    );
+  }
+  if (preferredDepartmentId) validateDepartmentExists(preferredDepartmentId, homeLocationId);
+  validateEmployeePositionForAssignment(positionId, assignment);
 
+  if (isNew) assertEmployeePrincipalLoginAvailable(personnelNumber);
   if (isNew && !/^[A-Za-z0-9._-]{1,24}$/.test(personnelNumber)) {
     throw httpError(400, "Bitte eine gültige Personalnummer eingeben.");
   }
@@ -18169,8 +19768,15 @@ function allowedSqlPersonnelColumns(configuration, columns) {
 
 function sqlPersonnelScopeContext(input = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input)) input = {};
+  const costCenterId = String(input.costCenterId || input.defaultCostCenterId || "");
+  const derivedLocationId = costCenterId
+    ? String(db.prepare(`
+      SELECT id FROM locations WHERE cost_center_id = ?
+      ORDER BY active DESC, id LIMIT 1
+    `).get(costCenterId)?.id || "")
+    : "";
   return {
-    locationId: String(input.locationId || input.defaultLocationId || ""),
+    locationId: String(input.locationId || input.defaultLocationId || derivedLocationId),
     departmentId: String(input.departmentId || input.defaultDepartmentId || ""),
   };
 }
@@ -18406,15 +20012,38 @@ function integrationProfileById(id, direction = "", kind = "", options = {}) {
 
 function personnelImportReferenceData(actor = null) {
   const centralPersonnelAccess = sessionCanManageCentralPersonnel(actor);
+  const locations = getLocationsForSession(actor, true);
+  const visibleCostCenterIds = new Set(locations
+    .map((location) => String(location.cost_center_id || ""))
+    .filter(Boolean));
+  const costCenterTypes = new Map(getCostCenterTypes(true)
+    .map((type) => [String(type.id), type]));
   return {
-    positions: getPositions().map((position) => ({ id: position.id, name: position.name, active: true })),
-    costCenters: (centralPersonnelAccess ? getCostCenters(true) : []).map((costCenter) => ({
-      id: costCenter.id, code: costCenter.code, name: costCenter.name, type: costCenter.type, active: costCenter.active,
+    positions: getPositions().map((position) => ({
+      id: position.id,
+      name: position.name,
+      active: true,
+      costCenterTypeIds: position.costCenterTypeIds,
     })),
-    locations: getLocationsForSession(actor, true).map((location) => ({
+    costCenters: getCostCenters(true)
+      .filter((costCenter) => centralPersonnelAccess || visibleCostCenterIds.has(String(costCenter.id)))
+      .map((costCenter) => ({
+      id: costCenter.id,
+      code: costCenter.code,
+      name: costCenter.name,
+      type: costCenter.type,
+      typeId: costCenter.typeId,
+      typeName: costCenter.typeName,
+      isBranch: costCenter.isBranch,
+      active: costCenter.active,
+      locationId: costCenter.locationId,
+      positionIds: costCenterTypes.get(String(costCenter.typeId))?.positionIds || [],
+    })),
+    locations: locations.map((location) => ({
       id: location.id,
       name: location.name,
       active: location.active,
+      costCenterId: String(location.cost_center_id || ""),
       departments: location.departments.map((department) => ({ id: department.id, name: department.name, active: department.active })),
     })),
   };
@@ -18516,54 +20145,73 @@ function resolvePersonnelImportCandidate(incoming, mapping, existing, actor) {
   if (use("active")) base.active = incoming.active;
 
   const references = personnelImportReferenceData(actor);
+  const assignmentMapped = importFieldMapped(mapping, "costCenterId", "homeLocationId", "homeLocationName");
+  const legacyLocationUsed = creating || importFieldMapped(mapping, "homeLocationId", "homeLocationName");
+  let legacyLocation = null;
+  if (creating || assignmentMapped) {
+    if (importFieldMapped(mapping, "costCenterId") && !centralPersonnelAccess) {
+      throw httpError(403, "Kostenstellen können nur in der zentralen Personalverwaltung importiert werden.", "PERSONNEL_CENTRAL_WRITE_REQUIRED");
+    }
+    const hasLegacyLocation = legacyLocationUsed && Boolean(incoming.homeLocationId || incoming.homeLocationName);
+    legacyLocation = hasLegacyLocation
+      ? (incoming.homeLocationId && references.locations.find((item) => String(item.id) === String(incoming.homeLocationId)))
+        || (incoming.homeLocationName
+          ? uniqueReferenceByName(references.locations, incoming.homeLocationName, "Der Standort")
+          : null)
+      : null;
+    if (hasLegacyLocation && !legacyLocation) {
+      throw httpError(400, "Die bisherige Standortzuordnung konnte keiner Kostenstelle zugeordnet werden.", "IMPORT_LOCATION_REQUIRED");
+    }
+    const submittedCostCenterId = String(incoming.costCenterId || legacyLocation?.costCenterId || "").trim();
+    if (!submittedCostCenterId) {
+      throw httpError(400, "Bitte eine gültige Standardkostenstelle auswählen.", "IMPORT_COST_CENTER_REQUIRED");
+    }
+    const costCenter = references.costCenters.find((item) => String(item.id) === submittedCostCenterId);
+    if (!costCenter) {
+      throw httpError(400, "Bitte eine gültige Kostenstellen-ID zuordnen.", "IMPORT_COST_CENTER_INVALID");
+    }
+    if (legacyLocation?.costCenterId
+      && String(legacyLocation.costCenterId) !== String(costCenter.id)) {
+      throw httpError(
+        409,
+        "Der importierte Standort widerspricht der Kostenstelle. Der Standort wird ausschließlich aus der Kostenstelle abgeleitet.",
+        "EMPLOYEE_HOME_LOCATION_DERIVED",
+      );
+    }
+    base.costCenterId = costCenter.id;
+  }
+  const assignment = employeeAssignmentForCostCenter(base.costCenterId, {
+    allowInactive: Boolean(existing && String(existing.cost_center_id) === String(base.costCenterId)),
+  });
+  if (legacyLocation && String(assignment.homeLocationId || "") !== String(legacyLocation.id)) {
+    throw httpError(
+      409,
+      "Der importierte Standort widerspricht der Kostenstelle. Der Standort wird ausschließlich aus der Kostenstelle abgeleitet.",
+      "EMPLOYEE_HOME_LOCATION_DERIVED",
+    );
+  }
+  base.homeLocationId = assignment.homeLocationId;
+
   if (creating || importFieldMapped(mapping, "positionId", "positionName")) {
     const position = incoming.positionId && references.positions.find((item) => item.id === incoming.positionId)
       || (incoming.positionName ? uniqueReferenceByName(references.positions, incoming.positionName, "Die Position") : null);
     if (!position) throw httpError(400, "Bitte eine g\u00fcltige Position zuordnen.", "IMPORT_POSITION_REQUIRED");
     base.positionId = position.id;
   }
-  if (creating || importFieldMapped(mapping, "homeLocationId", "homeLocationName")) {
-    const hasLocationReference = Boolean(incoming.homeLocationId || incoming.homeLocationName);
-    if (!hasLocationReference) {
-      if (!centralPersonnelAccess) {
-        throw httpError(400, "Bitte einen g\u00fcltigen Standardstandort ausw\u00e4hlen.", "IMPORT_LOCATION_REQUIRED");
-      }
-      base.homeLocationId = "";
-    } else {
-      const location = incoming.homeLocationId && references.locations.find((item) => item.id === incoming.homeLocationId)
-        || (incoming.homeLocationName ? uniqueReferenceByName(references.locations, incoming.homeLocationName, "Der Standort") : null);
-      if (!location) throw httpError(400, "Bitte einen g\u00fcltigen Standardstandort ausw\u00e4hlen.", "IMPORT_LOCATION_REQUIRED");
-      base.homeLocationId = location.id;
-    }
-  }
   if (creating || importFieldMapped(mapping, "preferredDepartmentId", "preferredDepartmentName")) {
-    const location = references.locations.find((item) => item.id === base.homeLocationId);
+    const location = references.locations.find((item) => String(item.id) === String(base.homeLocationId || ""));
     if (!incoming.preferredDepartmentId && !incoming.preferredDepartmentName) base.preferredDepartmentId = "";
     else {
       const departmentId = Number(incoming.preferredDepartmentId || 0);
       const department = departmentId && location?.departments.find((item) => Number(item.id) === departmentId)
         || (incoming.preferredDepartmentName ? uniqueReferenceByName(location?.departments || [], incoming.preferredDepartmentName, "Die Abteilung") : null);
-      if (!department) throw httpError(400, "Bitte eine g\u00fcltige Abteilung zuordnen.", "IMPORT_DEPARTMENT_INVALID");
+      if (!department) throw httpError(400, "Bitte eine gültige Abteilung zuordnen.", "IMPORT_DEPARTMENT_INVALID");
       base.preferredDepartmentId = department.id;
-    }
-  }
-  if (creating || importFieldMapped(mapping, "costCenterId")) {
-    if (importFieldMapped(mapping, "costCenterId") && !centralPersonnelAccess) {
-      throw httpError(403, "Kostenstellen können nur in der zentralen Personalverwaltung importiert werden.", "PERSONNEL_CENTRAL_WRITE_REQUIRED");
-    }
-    const submittedCostCenterId = String(incoming.costCenterId || "").trim();
-    if (submittedCostCenterId) {
-      const costCenter = references.costCenters.find((item) => item.id === submittedCostCenterId);
-      if (!costCenter) throw httpError(400, "Bitte eine gültige Kostenstellen-ID zuordnen.", "IMPORT_COST_CENTER_INVALID");
-      base.costCenterId = costCenter.id;
-    } else {
-      base.costCenterId = defaultCostCenterId(base.homeLocationId);
     }
   }
   const candidate = validateEmployee(base, creating, {
     defaultTimeConfirmationLevel: existing?.time_confirmation_level || "C",
-    defaultHomeLocationId: existing?.home_location_id || "",
-    defaultCostCenterId: existing?.cost_center_id || defaultCostCenterId(base.homeLocationId),
+    defaultCostCenterId: existing?.cost_center_id || base.costCenterId,
     allowInactiveCostCenterId: existing?.cost_center_id || "",
   });
   if (existing && existing.active && !candidate.active) {
@@ -20600,39 +22248,6 @@ app.put("/api/backup/offsite-folders/active", async (request, response) => {
   }
 });
 
-function scheduleApplicationRestart() {
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-restart-"));
-  const scriptPath = path.join(tempRoot, "restart-grabenplaner.ps1");
-  const launcherPath = path.join(tempRoot, "launch-restart.cmd");
-  const safeAppDir = __dirname.replaceAll("'", "''");
-  const safeVersionLabel = APP_VERSION_LABEL.replaceAll("'", "''");
-  const script = `
-$ErrorActionPreference = 'Stop'
-$appDir = '${safeAppDir}'
-$versionLabel = '${safeVersionLabel}'
-$pidToWait = ${process.pid}
-$deadline = (Get-Date).AddMinutes(2)
-while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) {
-  if ((Get-Date) -gt $deadline) { throw "Server-Prozess $pidToWait wurde nicht rechtzeitig beendet." }
-  Start-Sleep -Milliseconds 300
-}
-Start-Sleep -Milliseconds 600
-$startFile = Join-Path $appDir "Grabenplaner $versionLabel starten.cmd"
-if (-not (Test-Path $startFile)) { $startFile = Join-Path $appDir 'Dienstplan starten.cmd' }
-Start-Process -FilePath $startFile -WorkingDirectory $appDir
-Start-Sleep -Seconds 2
-Remove-Item -LiteralPath '${tempRoot.replaceAll("'", "''")}' -Recurse -Force -ErrorAction SilentlyContinue
-`;
-  fs.writeFileSync(scriptPath, script, "utf8");
-  fs.writeFileSync(launcherPath, `@echo off\r\nstart "" /min powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"\r\n`, "utf8");
-  childProcess.spawn("cmd.exe", ["/d", "/c", launcherPath], {
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-  }).unref();
-  setTimeout(shutdown, 900);
-}
-
 const SERVER_MONITOR_CONTROL_ROLES = new Set(["admin", "it_admin", "developer"]);
 const SERVER_MONITOR_RESTART_COOLDOWN_MS = 5 * 60 * 1000;
 let serverManagedRestartRequested = false;
@@ -20757,13 +22372,6 @@ app.post("/api/portal/v1/server-monitor/restart", (request, response) => {
   });
 });
 
-app.post("/api/system/restart", (_request, response) => {
-  if (serverModeActive) throw httpError(409, "Der Serverbetrieb wird über den Serverdienst neu gestartet.", "SERVER_MANAGED_RESTART");
-  const backup = createDatabaseBackup("restart");
-  response.json({ ok: true, message: "Grabenplaner wird sicher neu gestartet.", backup });
-  response.on("finish", () => setTimeout(scheduleApplicationRestart, 250));
-});
-
 app.post("/api/system/exit", (request, response) => {
   if (serverModeActive) {
     const session = requirePortalSession(request, "system:write");
@@ -20826,10 +22434,7 @@ try {
   Remove-Item -LiteralPath "$databasePath-shm" -Force -ErrorAction SilentlyContinue
   Copy-Item -LiteralPath $importPath -Destination $databasePath -Force
   Remove-Item -LiteralPath $importPath -Force -ErrorAction SilentlyContinue
-  $runtimeConfigPath = Join-Path $appDir 'data\runtime-config.json'
-  '{"operationMode":"local"}' | Set-Content -LiteralPath $runtimeConfigPath -Encoding UTF8
   Write-ImportLog "Datenbank ersetzt."
-  Write-ImportLog "Betriebsmodus aus Sicherheitsgründen auf Lokalbetrieb zurückgesetzt."
   $startFile = Join-Path $appDir "Grabenplaner $versionLabel starten.cmd"
   if (-not (Test-Path $startFile)) { $startFile = Join-Path $appDir 'Dienstplan starten.cmd' }
   Write-ImportLog "Starte neu: $startFile"
@@ -23581,7 +25186,7 @@ app.post("/api/locations", (request, response) => {
   db.exec("BEGIN IMMEDIATE");
   try {
     const costCenterId = location.costCenterSubmitted
-      ? validateCostCenterExists(location.costCenterId).id
+      ? validateCostCenterExists(location.costCenterId, { requireBranch: true }).id
       : ensureBranchCostCenterForLocation(location, actor);
     db.prepare(`
       INSERT INTO locations
@@ -23737,11 +25342,138 @@ function assertCostCenterCanBeArchived(id) {
   }
 }
 
+app.get("/api/cost-center-types", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "cost_centers:read");
+  response.json({
+    types: getCostCenterTypes(request.query.includeInactive !== "0"),
+    positions: getPositions(),
+    canWrite: sessionCanManageCentralPersonnel(actor, "cost_centers:write"),
+  });
+});
+
+app.post("/api/cost-center-types", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "cost_centers:write");
+  const value = validateCostCenterTypePayload(request.body || {});
+  assertCostCenterTypeNameUnique(value.name);
+  const id = `cct-${crypto.randomUUID()}`;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`
+      INSERT INTO cost_center_types
+        (id, code, name, description, is_branch, active, builtin, sort_order, created_by, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+    `).run(
+      id,
+      value.code,
+      value.name,
+      value.description,
+      value.isBranch,
+      value.active,
+      value.sortOrder,
+      actor.employeeNumber,
+      actor.employeeNumber,
+    );
+    replaceCostCenterTypePositions(id, value.positionIds);
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    if (String(error.message).includes("UNIQUE")) {
+      throw httpError(409, "Dieser Typ-Code oder Name ist bereits vergeben.", "COST_CENTER_TYPE_DUPLICATE");
+    }
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "cost-center-type.create", "cost_center_type", id, JSON.stringify({
+    code: value.code,
+    isBranch: Boolean(value.isBranch),
+    active: Boolean(value.active),
+    positionCount: value.positionIds.length,
+  }));
+  response.status(201).json({ type: getCostCenterTypes(true).find((entry) => entry.id === id) });
+});
+
+app.put("/api/cost-center-types/:id", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "cost_centers:write");
+  const id = String(request.params.id || "").trim();
+  const existing = db.prepare("SELECT * FROM cost_center_types WHERE id = ?").get(id);
+  if (!existing) throw httpError(404, "Der Kostenstellentyp wurde nicht gefunden.", "COST_CENTER_TYPE_NOT_FOUND");
+  if (own(request.body || {}, "code")
+    && String(request.body.code || "").trim().toLowerCase() !== String(existing.code || "").trim().toLowerCase()) {
+    throw httpError(409, "Der Typ-Code bleibt nach dem Anlegen unveränderlich.", "COST_CENTER_TYPE_CODE_IMMUTABLE");
+  }
+  const value = validateCostCenterTypePayload(request.body || {}, existing);
+  assertCostCenterTypeNameUnique(value.name, id);
+  assertCostCenterTypeChangeAllowed(existing, value);
+  const previousPositionIds = db.prepare(`
+    SELECT position_id FROM cost_center_type_positions
+    WHERE cost_center_type_id = ? ORDER BY sort_order, position_id
+  `).all(id).map((row) => String(row.position_id));
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`
+      UPDATE cost_center_types
+      SET name = ?, description = ?, is_branch = ?, active = ?, sort_order = ?,
+          updated_by = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      value.name,
+      value.description,
+      value.isBranch,
+      value.active,
+      value.sortOrder,
+      actor.employeeNumber,
+      id,
+    );
+    replaceCostCenterTypePositions(id, value.positionIds);
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    if (String(error.message).includes("UNIQUE")) {
+      throw httpError(409, "Dieser Name für einen Kostenstellentyp ist bereits vergeben.", "COST_CENTER_TYPE_NAME_DUPLICATE");
+    }
+    throw error;
+  }
+  auditPortal(actor.employeeNumber, "cost-center-type.update", "cost_center_type", id, JSON.stringify({
+    code: existing.code,
+    isBranchBefore: Boolean(existing.is_branch),
+    isBranchAfter: Boolean(value.isBranch),
+    activeBefore: Boolean(existing.active),
+    activeAfter: Boolean(value.active),
+    positionCountBefore: previousPositionIds.length,
+    positionCountAfter: value.positionIds.length,
+  }));
+  response.json({ type: getCostCenterTypes(true).find((entry) => entry.id === id) });
+});
+
+app.delete("/api/cost-center-types/:id", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "cost_centers:write");
+  const id = String(request.params.id || "").trim();
+  const existing = db.prepare("SELECT * FROM cost_center_types WHERE id = ?").get(id);
+  if (!existing) throw httpError(404, "Der Kostenstellentyp wurde nicht gefunden.", "COST_CENTER_TYPE_NOT_FOUND");
+  if (existing.active) {
+    assertCostCenterTypeChangeAllowed(existing, {
+      active: 0,
+      isBranch: Number(existing.is_branch),
+    });
+  }
+  db.prepare(`
+    UPDATE cost_center_types
+    SET active = 0, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(actor.employeeNumber, id);
+  auditPortal(actor.employeeNumber, "cost-center-type.archive", "cost_center_type", id, JSON.stringify({
+    code: existing.code,
+    activeBefore: Boolean(existing.active),
+    activeAfter: false,
+  }));
+  response.status(204).end();
+});
+
 app.get("/api/cost-centers", (request, response) => {
   const actor = requireAdminHrOrLocal(request, "cost_centers:read");
   response.json({
     costCenters: getCostCenters(request.query.includeInactive !== "0"),
-    types: costCenterTypeCatalog,
+    types: getCostCenterTypes(true),
+    positions: getPositions(),
     canWrite: sessionCanManageCentralPersonnel(actor, "cost_centers:write"),
   });
 });
@@ -23753,9 +25485,9 @@ app.post("/api/cost-centers", (request, response) => {
   try {
     db.prepare(`
       INSERT INTO cost_centers
-        (id, code, name, type, description, active, sort_order, created_by, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, value.code, value.name, value.type, value.description, value.active, value.sortOrder,
+        (id, code, name, type, cost_center_type_id, description, active, sort_order, created_by, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, value.code, value.name, value.type, value.costCenterTypeId, value.description, value.active, value.sortOrder,
       actor.employeeNumber, actor.employeeNumber);
   } catch (error) {
     if (String(error.message).includes("UNIQUE")) {
@@ -23779,13 +25511,29 @@ app.put("/api/cost-centers/:id", (request, response) => {
   }
   const value = validateCostCenterPayload(request.body || {}, existing);
   if (existing.active && !value.active) assertCostCenterCanBeArchived(id);
+  if (String(existing.cost_center_type_id || existing.type || "") !== value.costCenterTypeId
+    && db.prepare("SELECT 1 FROM employees WHERE cost_center_id = ? LIMIT 1").get(id)) {
+    throw httpError(
+      409,
+      "Der Typ einer belegten Kostenstelle kann nicht geändert werden. Bitte zuerst die Beschäftigten neu zuordnen.",
+      "COST_CENTER_TYPE_EMPLOYEE_ASSIGNMENTS",
+    );
+  }
+  if (!value.costCenterType.is_branch
+    && db.prepare("SELECT 1 FROM locations WHERE cost_center_id = ? LIMIT 1").get(id)) {
+    throw httpError(
+      409,
+      "Eine einem Standort zugeordnete Kostenstelle muss einen Filialtyp verwenden.",
+      "COST_CENTER_TYPE_LOCATION_CONFLICT",
+    );
+  }
   try {
     db.prepare(`
       UPDATE cost_centers
-      SET code = ?, name = ?, type = ?, description = ?, active = ?, sort_order = ?,
+      SET code = ?, name = ?, type = ?, cost_center_type_id = ?, description = ?, active = ?, sort_order = ?,
           updated_by = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(value.code, value.name, value.type, value.description, value.active, value.sortOrder,
+    `).run(value.code, value.name, value.type, value.costCenterTypeId, value.description, value.active, value.sortOrder,
       actor.employeeNumber, id);
   } catch (error) {
     if (String(error.message).includes("UNIQUE")) {
@@ -23796,8 +25544,8 @@ app.put("/api/cost-centers/:id", (request, response) => {
   auditPortal(actor.employeeNumber, "cost-center.update", "cost_center", id, JSON.stringify({
     codeBefore: existing.code,
     codeAfter: value.code,
-    typeBefore: existing.type,
-    typeAfter: value.type,
+    typeBefore: existing.cost_center_type_id || existing.type,
+    typeAfter: value.costCenterTypeId,
     activeBefore: Boolean(existing.active),
     activeAfter: Boolean(value.active),
   }));
@@ -23827,6 +25575,8 @@ app.get("/api/personnel-directory", (request, response) => {
            e.home_location_id, e.preferred_department_id, e.cost_center_id, e.active,
            l.name AS home_location_name, d.name AS preferred_department_name, p.name AS position_name,
            c.code AS cost_center_code, c.name AS cost_center_name, c.type AS cost_center_type,
+           c.cost_center_type_id, cct.name AS cost_center_type_name,
+           cct.is_branch AS cost_center_is_branch,
            u.role AS portal_role, r.name AS portal_role_name,
            CASE WHEN u.employee_number IS NULL THEN 0 ELSE 1 END AS portal_configured,
            CASE WHEN u.active = 1 THEN 1 ELSE 0 END AS portal_active
@@ -23835,6 +25585,7 @@ app.get("/api/personnel-directory", (request, response) => {
     LEFT JOIN departments d ON d.id = e.preferred_department_id
     LEFT JOIN positions p ON p.id = e.position_id
     LEFT JOIN cost_centers c ON c.id = e.cost_center_id
+    LEFT JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
     LEFT JOIN portal_users u ON u.employee_number = e.personnel_number
     LEFT JOIN portal_roles r ON r.id = u.role
     ORDER BY e.active DESC, c.sort_order, c.code COLLATE NOCASE,
@@ -23910,6 +25661,16 @@ app.delete("/api/positions/:id", (request, response) => {
   const existing = db.prepare("SELECT id, builtin FROM positions WHERE id = ?").get(id);
   if (!existing) throw httpError(404, "Die Position wurde nicht gefunden.");
   if (existing.builtin) throw httpError(403, "Diese Standardposition kann nicht gelöscht werden.");
+  const typeAssignments = Number(db.prepare(`
+    SELECT COUNT(*) AS count FROM cost_center_type_positions WHERE position_id = ?
+  `).get(id).count || 0);
+  if (typeAssignments) {
+    throw httpError(
+      409,
+      "Diese Position ist noch mindestens einem Kostenstellentyp zugeordnet. Bitte dort zuerst die Zuordnung entfernen.",
+      "POSITION_COST_CENTER_TYPE_IN_USE",
+    );
+  }
   db.exec("BEGIN");
   try {
     db.prepare("UPDATE employees SET position_id = 'verkaufsmitarbeiter' WHERE position_id = ?").run(id);
@@ -23934,12 +25695,14 @@ app.get("/api/employees", (request, response) => {
                e.home_location_id, e.preferred_department_id, e.cost_center_id,
                e.active, l.name AS home_location_name, d.name AS preferred_department_name,
                p.name AS position_name, c.code AS cost_center_code, c.name AS cost_center_name,
-               c.type AS cost_center_type
+               c.type AS cost_center_type, c.cost_center_type_id,
+               cct.name AS cost_center_type_name, cct.is_branch AS cost_center_is_branch
         FROM employees e
         LEFT JOIN locations l ON l.id = e.home_location_id
         LEFT JOIN departments d ON d.id = e.preferred_department_id
         LEFT JOIN positions p ON p.id = e.position_id
         LEFT JOIN cost_centers c ON c.id = e.cost_center_id
+        LEFT JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
         ORDER BY e.active DESC, CAST(e.personnel_number AS INTEGER), e.personnel_number
       `)
       .all().map((row) => ({
@@ -23973,16 +25736,27 @@ app.get("/api/employees", (request, response) => {
 
 app.post("/api/employees", (request, response) => {
   const centralWrite = sessionCanManageCentralPersonnel(request.portalSession);
-  const homeLocationSubmitted = own(request.body, "homeLocationId") || own(request.body, "home_location_id");
-  const submittedHomeLocation = String(request.body.homeLocationId ?? request.body.home_location_id ?? "").trim();
   const costCenterSubmitted = own(request.body, "costCenterId") || own(request.body, "cost_center_id");
-  if (!centralWrite && homeLocationSubmitted && !submittedHomeLocation) {
-    throw httpError(403, "Filialunabhängige Beschäftigte können nur in der zentralen Personalverwaltung angelegt werden.", "PERSONNEL_CENTRAL_WRITE_REQUIRED");
+  const submittedCostCenter = String(request.body.costCenterId ?? request.body.cost_center_id ?? "").trim();
+  const legacySubmittedHomeLocation = String(
+    request.body.homeLocationId ?? request.body.home_location_id ?? "",
+  ).trim();
+  const scopedCostCenterId = defaultCostCenterId(
+    legacySubmittedHomeLocation || request.portalSession?.homeLocationId || "",
+  );
+  if (centralWrite && !submittedCostCenter && !legacySubmittedHomeLocation) {
+    throw httpError(400, "Bitte eine Kostenstelle auswählen.", "COST_CENTER_REQUIRED");
   }
-  if (!centralWrite && costCenterSubmitted) {
-    throw httpError(403, "Kostenstellen können nur in der zentralen Personalverwaltung zugeordnet werden.", "PERSONNEL_CENTRAL_WRITE_REQUIRED");
+  if (!centralWrite && costCenterSubmitted && submittedCostCenter !== scopedCostCenterId) {
+    throw httpError(
+      403,
+      "Kostenstellen können außerhalb der zentralen Personalverwaltung nicht geändert werden.",
+      "PERSONNEL_CENTRAL_WRITE_REQUIRED",
+    );
   }
-  const employee = validateEmployee(request.body, true);
+  const employee = validateEmployee(request.body, true, {
+    defaultCostCenterId: scopedCostCenterId,
+  });
   const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
   if (!canManageTimeConfirmationLevel) {
     employee.timeConfirmationLevel = "C";
@@ -24066,13 +25840,8 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
   `).get(personnelNumber);
   if (!existing) throw httpError(404, "Die Person wurde nicht gefunden.");
   const centralWrite = sessionCanManageCentralPersonnel(request.portalSession);
-  const homeLocationSubmitted = own(request.body, "homeLocationId") || own(request.body, "home_location_id");
-  const submittedHomeLocation = String(request.body.homeLocationId ?? request.body.home_location_id ?? existing.home_location_id ?? "").trim();
   const costCenterSubmitted = own(request.body, "costCenterId") || own(request.body, "cost_center_id");
   const submittedCostCenter = String(request.body.costCenterId ?? request.body.cost_center_id ?? existing.cost_center_id ?? "").trim();
-  if (!centralWrite && homeLocationSubmitted && !submittedHomeLocation) {
-    throw httpError(403, "Filialunabhängige Beschäftigte können nur in der zentralen Personalverwaltung verwaltet werden.", "PERSONNEL_CENTRAL_WRITE_REQUIRED");
-  }
   if (!centralWrite && costCenterSubmitted && submittedCostCenter !== String(existing.cost_center_id || "")) {
     throw httpError(403, "Kostenstellen können nur in der zentralen Personalverwaltung geändert werden.", "PERSONNEL_CENTRAL_WRITE_REQUIRED");
   }
@@ -24088,7 +25857,6 @@ app.put("/api/employees/:personnelNumber", (request, response) => {
       ? {} : { sicknessWithoutAumEnabled: Boolean(existing.sickness_without_aum_enabled) }),
   }, false, {
     defaultTimeConfirmationLevel: existing.time_confirmation_level || "C",
-    defaultHomeLocationId: existing.home_location_id || "",
     defaultCostCenterId: existing.cost_center_id || "",
     allowInactiveCostCenterId: existing.cost_center_id || "",
   });
@@ -24556,17 +26324,27 @@ app.get("/api/portal/v1/session", (request, response) => {
 
 app.post("/api/portal/v1/auth/branding", (request, response) => {
   assertLoginBrandingRateLimit(request);
-  const employeeNumber = String(request.body.employeeNumber || "").trim();
-  const user = employeeNumber ? db.prepare(`
+  const loginName = String(request.body.loginName || request.body.employeeNumber || "").trim();
+  const user = loginName ? db.prepare(`
     SELECT u.role, e.home_location_id
     FROM portal_users u
     JOIN employees e ON e.personnel_number = u.employee_number
     WHERE u.employee_number = ? AND u.active = 1 AND e.active = 1
     LIMIT 1
-  `).get(employeeNumber) : null;
-  const branding = user && !GLOBAL_SCOPE_PORTAL_ROLES.has(user.role)
-    ? brandingForLocation(user.home_location_id)
-    : managementBrandingPreference().branding;
+  `).get(loginName) : null;
+  const organization = !user && loginName ? db.prepare(`
+    SELECT scope.location_id AS home_location_id
+    FROM portal_organization_accounts account
+    JOIN portal_organization_account_scopes scope ON scope.account_id = account.id
+    WHERE account.login_name = ? COLLATE NOCASE AND account.active = 1
+    ORDER BY scope.location_id
+    LIMIT 1
+  `).get(loginName) : null;
+  const branding = organization
+    ? brandingForLocation(organization.home_location_id)
+    : user && !GLOBAL_SCOPE_PORTAL_ROLES.has(user.role)
+      ? brandingForLocation(user.home_location_id)
+      : managementBrandingPreference().branding;
   response.json({ branding });
 });
 
@@ -24594,13 +26372,24 @@ app.post("/api/portal/v1/setup/admin", async (request, response) => {
 app.post("/api/portal/v1/auth/login", async (request, response) => {
   if (!getPortalStatus().portalEnabled) return sendPortalInactive(request, response);
   assertLoginRateLimit(request);
-  const employeeNumber = String(request.body.employeeNumber || "").trim();
-  const user = db.prepare(`
+  const loginName = String(request.body.loginName || request.body.employeeNumber || "").trim();
+  let sessionKind = "employee";
+  let user = db.prepare(`
     SELECT u.employee_number, u.password_hash, u.active, u.failed_login_attempts, u.locked_until,
            e.active AS employee_active
     FROM portal_users u JOIN employees e ON e.personnel_number = u.employee_number
     WHERE u.employee_number = ?
-  `).get(employeeNumber);
+  `).get(loginName);
+  if (!user) {
+    user = db.prepare(`
+      SELECT account.id AS account_id, account.login_name AS employee_number,
+             account.password_hash, account.active, account.failed_login_attempts,
+             account.locked_until, 1 AS employee_active
+      FROM portal_organization_accounts account
+      WHERE account.login_name = ? COLLATE NOCASE
+    `).get(loginName);
+    if (user) sessionKind = "organization";
+  }
   const now = new Date();
   if (user?.locked_until && new Date(user.locked_until) > now) {
     throw httpError(429, "Der Zugang ist vorübergehend gesperrt. Bitte später erneut versuchen.", "PORTAL_ACCOUNT_LOCKED");
@@ -24616,32 +26405,65 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
       const lockUntil = attempts >= maximum
         ? new Date(now.getTime() + Number(portalSettings.account_lock_minutes || 15) * 60000).toISOString()
         : null;
-      db.prepare("UPDATE portal_users SET failed_login_attempts = ?, locked_until = ?, updated_at = CURRENT_TIMESTAMP WHERE employee_number = ?")
-        .run(lockUntil ? 0 : attempts, lockUntil, employeeNumber);
+      if (sessionKind === "organization") {
+        db.prepare("UPDATE portal_organization_accounts SET failed_login_attempts = ?, locked_until = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+          .run(lockUntil ? 0 : attempts, lockUntil, user.account_id);
+      } else {
+        db.prepare("UPDATE portal_users SET failed_login_attempts = ?, locked_until = ?, updated_at = CURRENT_TIMESTAMP WHERE employee_number = ?")
+          .run(lockUntil ? 0 : attempts, lockUntil, loginName);
+      }
     }
-    auditPortal(employeeNumber, "portal.login.failed", "portal_user", employeeNumber, `ip=${loginRateKey(request)}`);
-    throw httpError(401, "Personalnummer oder Passwort ist nicht korrekt.", "PORTAL_LOGIN_FAILED");
+    auditPortal(
+      sessionKind === "organization" && user ? `account:${user.account_id}` : loginName,
+      "portal.login.failed",
+      sessionKind === "organization" ? "portal_organization_account" : "portal_user",
+      sessionKind === "organization" && user ? user.account_id : loginName,
+      `ip=${loginRateKey(request)}`,
+    );
+    throw httpError(401, "Zugangskennung oder Passwort ist nicht korrekt.", "PORTAL_LOGIN_FAILED");
   }
-  db.prepare("DELETE FROM portal_sessions WHERE expires_at <= CURRENT_TIMESTAMP OR revoked_at IS NOT NULL").run();
   clearLoginRate(request);
-  db.prepare("UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND revoked_at IS NULL").run(employeeNumber);
   const rawToken = crypto.randomBytes(32).toString("base64url");
   const csrfToken = crypto.randomBytes(24).toString("base64url");
   const timeoutMinutes = Math.min(1440, Math.max(15, Number(getPortalSettings().session_timeout_minutes || 480)));
   const expiresAt = new Date(now.getTime() + timeoutMinutes * 60000).toISOString();
-  db.prepare(`
-    INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
-    VALUES (?, ?, ?, ?)
-  `).run(crypto.randomUUID(), employeeNumber, sha256(rawToken), expiresAt);
-  db.prepare(`
-    UPDATE portal_users SET failed_login_attempts = 0, locked_until = NULL,
-      last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-    WHERE employee_number = ?
-  `).run(employeeNumber);
+  if (sessionKind === "organization") {
+    db.prepare("DELETE FROM portal_organization_sessions WHERE expires_at <= CURRENT_TIMESTAMP OR revoked_at IS NOT NULL").run();
+    db.prepare("UPDATE portal_organization_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE account_id = ? AND revoked_at IS NULL")
+      .run(user.account_id);
+    db.prepare(`
+      INSERT INTO portal_organization_sessions (id, account_id, token_hash, expires_at)
+      VALUES (?, ?, ?, ?)
+    `).run(crypto.randomUUID(), user.account_id, sha256(rawToken), expiresAt);
+    db.prepare(`
+      UPDATE portal_organization_accounts SET failed_login_attempts = 0, locked_until = NULL,
+        last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(user.account_id);
+  } else {
+    db.prepare("DELETE FROM portal_sessions WHERE expires_at <= CURRENT_TIMESTAMP OR revoked_at IS NOT NULL").run();
+    db.prepare("UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE employee_number = ? AND revoked_at IS NULL")
+      .run(loginName);
+    db.prepare(`
+      INSERT INTO portal_sessions (id, employee_number, token_hash, expires_at)
+      VALUES (?, ?, ?, ?)
+    `).run(crypto.randomUUID(), loginName, sha256(rawToken), expiresAt);
+    db.prepare(`
+      UPDATE portal_users SET failed_login_attempts = 0, locked_until = NULL,
+        last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE employee_number = ?
+    `).run(loginName);
+  }
   appendCookie(response, portalCookie(PORTAL_SESSION_COOKIE, rawToken, request, { httpOnly: true, maxAge: timeoutMinutes * 60 }));
   appendCookie(response, portalCookie(PORTAL_CSRF_COOKIE, csrfToken, request, { maxAge: timeoutMinutes * 60 }));
   const session = portalSessionFromRequest({ ...request, headers: { ...request.headers, cookie: `${PORTAL_SESSION_COOKIE}=${rawToken}` } }, { touch: false });
-  auditPortal(employeeNumber, "portal.login.success", "portal_user", employeeNumber, `ip=${loginRateKey(request)}`);
+  auditPortal(
+    portalActorId(session),
+    "portal.login.success",
+    sessionKind === "organization" ? "portal_organization_account" : "portal_user",
+    sessionKind === "organization" ? user.account_id : loginName,
+    `ip=${loginRateKey(request)}`,
+  );
   response.json({ ok: true, authenticated: true, user: publicPortalUser(session), status: portalStatusForSession(session, request) });
 });
 
@@ -24649,8 +26471,16 @@ app.post("/api/portal/v1/auth/logout", (request, response) => {
   const session = portalSessionFromRequest(request, { touch: false });
   if (session) {
     assertPortalCsrf(request);
-    db.prepare("UPDATE portal_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE id = ?").run(session.id);
-    auditPortal(session.employeeNumber, "portal.logout", "portal_user", session.employeeNumber);
+    const sessionTable = session.sessionKind === "organization"
+      ? "portal_organization_sessions"
+      : "portal_sessions";
+    db.prepare(`UPDATE ${sessionTable} SET revoked_at = CURRENT_TIMESTAMP WHERE id = ?`).run(session.id);
+    auditPortal(
+      portalActorId(session),
+      "portal.logout",
+      session.sessionKind === "organization" ? "portal_organization_account" : "portal_user",
+      session.accountId || session.employeeNumber,
+    );
   }
   clearPortalCookies(request, response);
   if (serverModeActive) response.setHeader("Clear-Site-Data", '"cache", "cookies", "storage"');
@@ -24759,7 +26589,6 @@ const UI_PREFERENCE_VIEWS = Object.freeze([
   "settings",
 ]);
 const UI_PAGE_THEMES = new Set(["light", "dark"]);
-const DASHBOARD_FONT_SIZES = new Set(["compact", "standard", "large"]);
 const UI_EMPLOYEE_DISPLAY_COLUMNS = new Set([
   "color", "personnel_number", "name", "nickname", "position", "cost_center", "assignment", "location", "department",
   "workload", "preferred_day", "fixed_days", "status", "phone", "private_email", "employment_start", "employment_end",
@@ -24774,22 +26603,30 @@ function uiPreferenceActor(request, { write = false } = {}) {
   if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) {
     return { employeeNumber: "local", role: "admin", permissions: [] };
   }
-  const session = requirePortalSession(request);
+  const session = requireEmployeePortalSession(request);
   if (write) assertPortalCsrf(request);
   return session;
 }
 
 function uiPreferencesForActor(actor, overrides = {}) {
   const pageThemes = Object.fromEntries(UI_PREFERENCE_VIEWS.map((view) => [view, "light"]));
-  let dashboardFontSize = "standard";
+  let appFontScalePercent = APP_FONT_SCALE_DEFAULT;
   let employeeDisplayColumns = [...UI_DEFAULT_EMPLOYEE_DISPLAY_COLUMNS];
   let employeeDisplaySort = { key: "personnel_number", direction: "asc" };
+  let workRuleAssessmentExpanded = false;
   if (actor?.employeeNumber && actor.employeeNumber !== "local") {
     const rows = db.prepare(`
       SELECT preference_key, value FROM portal_user_preferences
       WHERE employee_number = ? AND (
         preference_key LIKE 'page_theme_%'
-        OR preference_key IN ('rights_dashboard_theme', 'dashboard_font_size', 'employee_display_columns', 'employee_display_sort')
+        OR preference_key IN (
+          'rights_dashboard_theme',
+          'app_font_scale_percent',
+          'dashboard_font_size',
+          'employee_display_columns',
+          'employee_display_sort',
+          'work_rule_assessment_expanded'
+        )
       )
     `).all(actor.employeeNumber);
     const lookup = new Map(rows.map((row) => [row.preference_key, row.value]));
@@ -24798,9 +26635,9 @@ function uiPreferencesForActor(actor, overrides = {}) {
         || (view === "rightsDashboard" ? lookup.get("rights_dashboard_theme") : "");
       if (UI_PAGE_THEMES.has(stored)) pageThemes[view] = stored;
     }
-    if (DASHBOARD_FONT_SIZES.has(lookup.get("dashboard_font_size"))) {
-      dashboardFontSize = lookup.get("dashboard_font_size");
-    }
+    const storedFontScale = normalizeAppFontScalePercent(lookup.get("app_font_scale_percent"), null)
+      ?? normalizeAppFontScalePercent(lookup.get("dashboard_font_size"), null);
+    if (storedFontScale !== null) appFontScalePercent = storedFontScale;
     try {
       const storedColumns = JSON.parse(lookup.get("employee_display_columns") || "null");
       if (Array.isArray(storedColumns) && storedColumns.length && storedColumns.every((column) => UI_EMPLOYEE_DISPLAY_COLUMNS.has(String(column)))) {
@@ -24813,19 +26650,25 @@ function uiPreferencesForActor(actor, overrides = {}) {
         employeeDisplaySort = { key: String(storedSort.key), direction: storedSort.direction };
       }
     } catch {}
+    workRuleAssessmentExpanded = lookup.get("work_rule_assessment_expanded") === "1";
   }
   for (const [view, theme] of Object.entries(overrides.pageThemes || {})) {
     if (UI_PREFERENCE_VIEWS.includes(view) && UI_PAGE_THEMES.has(theme)) pageThemes[view] = theme;
   }
-  if (DASHBOARD_FONT_SIZES.has(overrides.dashboardFontSize)) dashboardFontSize = overrides.dashboardFontSize;
+  const overriddenFontScale = normalizeAppFontScalePercent(overrides.appFontScalePercent, null);
+  if (overriddenFontScale !== null) appFontScalePercent = overriddenFontScale;
   if (Array.isArray(overrides.employeeDisplayColumns)) employeeDisplayColumns = [...overrides.employeeDisplayColumns];
   if (overrides.employeeDisplaySort) employeeDisplaySort = { ...overrides.employeeDisplaySort };
+  if (typeof overrides.workRuleAssessmentExpanded === "boolean") {
+    workRuleAssessmentExpanded = overrides.workRuleAssessmentExpanded;
+  }
   return {
     actor: actor?.employeeNumber || "local",
     pageThemes,
-    dashboardFontSize,
+    appFontScalePercent,
     employeeDisplayColumns,
     employeeDisplaySort,
+    workRuleAssessmentExpanded,
   };
 }
 
@@ -24841,9 +26684,16 @@ function saveUiPreferencesForActor(actor, input = {}) {
     }
     pageThemes[view] = theme;
   }
-  const dashboardFontSize = input.dashboardFontSize === undefined ? undefined : String(input.dashboardFontSize || "");
-  if (dashboardFontSize !== undefined && !DASHBOARD_FONT_SIZES.has(dashboardFontSize)) {
-    throw httpError(400, "Bitte eine gültige Dashboard-Schriftgröße auswählen.", "UI_PREFERENCES_INVALID");
+  const appFontScalePercent = input.appFontScalePercent === undefined ? undefined : input.appFontScalePercent;
+  if (appFontScalePercent !== undefined && (
+    typeof appFontScalePercent !== "number"
+    || normalizeAppFontScalePercent(appFontScalePercent, null) !== appFontScalePercent
+  )) {
+    throw httpError(
+      400,
+      `Bitte eine gültige Schriftgröße zwischen ${APP_FONT_SCALE_MIN} und ${APP_FONT_SCALE_MAX} Prozent in ${APP_FONT_SCALE_STEP}er-Schritten angeben.`,
+      "UI_PREFERENCES_INVALID",
+    );
   }
   const employeeDisplayColumns = input.employeeDisplayColumns === undefined ? undefined : input.employeeDisplayColumns;
   if (employeeDisplayColumns !== undefined && (!Array.isArray(employeeDisplayColumns) || !employeeDisplayColumns.length
@@ -24858,7 +26708,14 @@ function saveUiPreferencesForActor(actor, input = {}) {
     || !["asc", "desc"].includes(String(employeeDisplaySort.direction || "")))) {
     throw httpError(400, "Bitte eine gültige Sortierung übermitteln.", "UI_PREFERENCES_INVALID");
   }
-  if (!Object.keys(pageThemes).length && dashboardFontSize === undefined && employeeDisplayColumns === undefined && employeeDisplaySort === undefined) {
+  const workRuleAssessmentExpanded = input.workRuleAssessmentExpanded === undefined
+    ? undefined
+    : input.workRuleAssessmentExpanded;
+  if (workRuleAssessmentExpanded !== undefined && typeof workRuleAssessmentExpanded !== "boolean") {
+    throw httpError(400, "Bitte einen gültigen Zustand der Arbeitszeit-Regelprüfung übermitteln.", "UI_PREFERENCES_INVALID");
+  }
+  if (!Object.keys(pageThemes).length && appFontScalePercent === undefined && employeeDisplayColumns === undefined
+    && employeeDisplaySort === undefined && workRuleAssessmentExpanded === undefined) {
     throw httpError(400, "Es wurde keine Darstellung zum Speichern übermittelt.", "UI_PREFERENCES_INVALID");
   }
   if (actor.employeeNumber !== "local") {
@@ -24875,16 +26732,31 @@ function saveUiPreferencesForActor(actor, input = {}) {
         store.run(actor.employeeNumber, `page_theme_${view}`, theme);
         if (view === "rightsDashboard") store.run(actor.employeeNumber, "rights_dashboard_theme", theme);
       }
-      if (dashboardFontSize !== undefined) store.run(actor.employeeNumber, "dashboard_font_size", dashboardFontSize);
+      if (appFontScalePercent !== undefined) {
+        store.run(actor.employeeNumber, "app_font_scale_percent", String(appFontScalePercent));
+        db.prepare(`
+          DELETE FROM portal_user_preferences
+          WHERE employee_number = ? AND preference_key = 'dashboard_font_size'
+        `).run(actor.employeeNumber);
+      }
       if (employeeDisplayColumns !== undefined) store.run(actor.employeeNumber, "employee_display_columns", JSON.stringify(employeeDisplayColumns.map(String)));
       if (employeeDisplaySort !== undefined) store.run(actor.employeeNumber, "employee_display_sort", JSON.stringify({ key: String(employeeDisplaySort.key), direction: String(employeeDisplaySort.direction) }));
+      if (workRuleAssessmentExpanded !== undefined) {
+        store.run(actor.employeeNumber, "work_rule_assessment_expanded", workRuleAssessmentExpanded ? "1" : "0");
+      }
       db.exec("COMMIT");
     } catch (error) {
       try { db.exec("ROLLBACK"); } catch {}
       throw error;
     }
   }
-  return uiPreferencesForActor(actor, { pageThemes, dashboardFontSize, employeeDisplayColumns, employeeDisplaySort });
+  return uiPreferencesForActor(actor, {
+    pageThemes,
+    appFontScalePercent,
+    employeeDisplayColumns,
+    employeeDisplaySort,
+    workRuleAssessmentExpanded,
+  });
 }
 
 function rightsDashboardThemeForActor(actor) {
@@ -27464,6 +29336,7 @@ app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
       "Dienstpläne können nur bearbeitet werden, wenn das Leserecht ebenfalls wirksam ist.",
       "PORTAL_PERMISSION_DEPENDENCY");
   }
+  assertPortalPermissionDependencies(projectedPermissions);
   const scopesInputProvided = Object.prototype.hasOwnProperty.call(request.body || {}, "scopes");
   if (scopesInputProvided && !Array.isArray(request.body.scopes)) {
     throw httpError(400, "Bitte eine gültige Bereichsauswahl übermitteln.", "PORTAL_SCOPE_INVALID");
@@ -27513,8 +29386,270 @@ app.put("/api/portal/v1/rights/:employeeNumber", (request, response) => {
   }
   const after = rightsMutationSnapshot(employeeNumber, target.role, rolePermissions);
   auditPortal(actor.employeeNumber, "portal.rights.update", "portal_user", employeeNumber, JSON.stringify({ before, after }));
-  if (scopesInputProvided) reconcileOpenAmuResponsibilities(actor.employeeNumber);
+  const amuRoutingChanged = ["amu:local:manage", "sickness:read"].some((permission) =>
+    before.effectivePermissions.includes(permission) !== after.effectivePermissions.includes(permission));
+  if (scopesInputProvided || amuRoutingChanged) reconcileOpenAmuResponsibilities(actor.employeeNumber);
   response.json(rightsManagementPayload(actor));
+});
+
+function normalizedOrganizationAccountLoginName(value) {
+  const loginName = String(value || "").trim().toLowerCase();
+  if (!/^[a-z][a-z0-9._-]{2,39}$/.test(loginName) || loginName === "local") {
+    throw httpError(
+      400,
+      "Die Zugangskennung muss mit einem Buchstaben beginnen und 3 bis 40 Zeichen aus Buchstaben, Ziffern, Punkt, Unterstrich oder Bindestrich enthalten.",
+      "PORTAL_ORGANIZATION_LOGIN_INVALID",
+    );
+  }
+  return loginName;
+}
+
+function normalizedOrganizationAccountInput(body = {}, { existing = null } = {}) {
+  const loginName = existing?.login_name
+    || normalizedOrganizationAccountLoginName(body.loginName);
+  const displayName = stripEmoji(String(body.displayName || existing?.display_name || ""))
+    .replace(/\s+/g, " ").trim().slice(0, 100);
+  if (displayName.length < 2) {
+    throw httpError(400, "Bitte eine Bezeichnung mit mindestens zwei Zeichen eintragen.", "PORTAL_ORGANIZATION_NAME_INVALID");
+  }
+  const accountType = String(body.accountType || existing?.account_type || "branch").trim();
+  if (!["branch", "terminal"].includes(accountType)) {
+    throw httpError(400, "Der Kontotyp ist ungÃ¼ltig.", "PORTAL_ORGANIZATION_TYPE_INVALID");
+  }
+  if (!Array.isArray(body.permissions)) {
+    throw httpError(400, "Bitte die erlaubten Filialfunktionen auswÃ¤hlen.", "PORTAL_ORGANIZATION_PERMISSIONS_INVALID");
+  }
+  const permissions = [...new Set(body.permissions.map((permission) => String(permission || "").trim()).filter(Boolean))];
+  const invalidPermissions = permissions.filter((permission) => !organizationAccountPermissions.has(permission));
+  if (invalidPermissions.length) {
+    throw httpError(
+      403,
+      "Filial- und Terminalkonten dÃ¼rfen ausschlieÃŸlich die dafÃ¼r freigegebenen Lesefunktionen erhalten.",
+      "PORTAL_ORGANIZATION_PERMISSION_DENIED",
+    );
+  }
+  if (!permissions.length) {
+    throw httpError(400, "Bitte mindestens eine Filialfunktion freigeben.", "PORTAL_ORGANIZATION_PERMISSIONS_REQUIRED");
+  }
+  const submittedScopes = Array.isArray(body.scopes)
+    ? body.scopes
+    : body.locationId ? [{ locationId: body.locationId }] : [];
+  const scopes = [...new Set(submittedScopes.map((scope) => normalizeLocationId(scope?.locationId)))]
+    .map((locationId) => ({ locationId, departmentId: null }));
+  if (!scopes.length) {
+    throw httpError(400, "Bitte mindestens eine Filiale zuweisen.", "PORTAL_ORGANIZATION_SCOPE_REQUIRED");
+  }
+  for (const scope of scopes) validateLocationExists(scope.locationId);
+  return {
+    loginName,
+    displayName,
+    accountType,
+    active: body.active !== false,
+    permissions,
+    scopes,
+  };
+}
+
+function publicOrganizationAccount(row) {
+  const scopes = organizationAccountScopesForAccount(row.id);
+  const permissions = organizationAccountPermissionsForAccount(row.id);
+  return {
+    id: row.id,
+    loginName: row.login_name,
+    displayName: row.display_name,
+    accountType: row.account_type,
+    accountTypeLabel: organizationAccountRoleName(row.account_type),
+    active: Boolean(row.active),
+    mustChangePassword: Boolean(row.must_change_password),
+    passwordConfigured: Boolean(String(row.password_hash || "").trim()),
+    lastLoginAt: row.last_login_at || null,
+    failedLoginAttempts: Number(row.failed_login_attempts || 0),
+    lockedUntil: row.locked_until || null,
+    locked: Boolean(row.locked_until && new Date(row.locked_until) > new Date()),
+    permissions,
+    scopes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function organizationAccountsForAdmin() {
+  return db.prepare(`
+    SELECT id, login_name, display_name, account_type, password_hash, active,
+           must_change_password, last_login_at, failed_login_attempts,
+           locked_until, created_at, updated_at
+    FROM portal_organization_accounts
+    ORDER BY active DESC, login_name COLLATE NOCASE
+  `).all().map(publicOrganizationAccount);
+}
+
+function revokeOrganizationSessions(accountId) {
+  db.prepare(`
+    UPDATE portal_organization_sessions
+    SET revoked_at = CURRENT_TIMESTAMP
+    WHERE account_id = ? AND revoked_at IS NULL
+  `).run(String(accountId || ""));
+}
+
+function replaceOrganizationAccountAccess(accountId, permissions, scopes, actorId) {
+  db.prepare("DELETE FROM portal_organization_account_permissions WHERE account_id = ?").run(accountId);
+  const insertPermission = db.prepare(`
+    INSERT INTO portal_organization_account_permissions
+      (account_id, permission, granted_by, updated_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+  `);
+  for (const permission of permissions) insertPermission.run(accountId, permission, actorId);
+  db.prepare("DELETE FROM portal_organization_account_scopes WHERE account_id = ?").run(accountId);
+  const insertScope = db.prepare(`
+    INSERT INTO portal_organization_account_scopes
+      (account_id, location_id, department_id, assigned_by)
+    VALUES (?, ?, 0, ?)
+  `);
+  for (const scope of scopes) insertScope.run(accountId, scope.locationId, actorId);
+}
+
+app.get("/api/portal/v1/organization-accounts", (request, response) => {
+  requireAdminHrOrLocal(request, "users:write");
+  response.json({
+    accounts: organizationAccountsForAdmin(),
+    permissionCatalog: organizationAccountPermissionCatalog,
+    accountTypes: [
+      { id: "branch", label: "Filialkonto" },
+      { id: "terminal", label: "Terminalkonto" },
+    ],
+  });
+});
+
+app.post("/api/portal/v1/organization-accounts", async (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "users:write");
+  const input = normalizedOrganizationAccountInput(request.body || {});
+  const collision = db.prepare(`
+    SELECT 1
+    FROM employees
+    WHERE personnel_number = ? COLLATE NOCASE
+    UNION ALL
+    SELECT 1
+    FROM portal_users
+    WHERE employee_number = ? COLLATE NOCASE
+    UNION ALL
+    SELECT 1
+    FROM portal_organization_accounts
+    WHERE login_name = ? COLLATE NOCASE
+    LIMIT 1
+  `).get(input.loginName, input.loginName, input.loginName);
+  if (collision) {
+    throw httpError(409, "Diese Zugangskennung ist bereits vergeben.", "PORTAL_ORGANIZATION_LOGIN_CONFLICT");
+  }
+  const password = String(request.body?.password || "");
+  const passwordHash = password ? await hashPortalPassword(password) : "";
+  const accountId = crypto.randomUUID();
+  const actorId = portalActorId(actor);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`
+      INSERT INTO portal_organization_accounts
+        (id, login_name, display_name, account_type, password_hash, active,
+         must_change_password, password_changed_at, created_by, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, CASE WHEN ? <> '' THEN CURRENT_TIMESTAMP ELSE NULL END, ?, ?)
+    `).run(
+      accountId,
+      input.loginName,
+      input.displayName,
+      input.accountType,
+      passwordHash,
+      input.active ? 1 : 0,
+      password ? 1 : 0,
+      password,
+      actorId,
+      actorId,
+    );
+    replaceOrganizationAccountAccess(accountId, input.permissions, input.scopes, actorId);
+    auditPortal(actorId, "portal.organization-account.create", "portal_organization_account", accountId, JSON.stringify({
+      loginName: input.loginName,
+      accountType: input.accountType,
+      active: input.active,
+      permissions: input.permissions,
+      scopes: input.scopes,
+      passwordConfigured: Boolean(password),
+    }));
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  const stored = db.prepare("SELECT * FROM portal_organization_accounts WHERE id = ?").get(accountId);
+  response.status(201).json({ account: publicOrganizationAccount(stored), accounts: organizationAccountsForAdmin() });
+});
+
+app.put("/api/portal/v1/organization-accounts/:accountId", async (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "users:write");
+  const accountId = String(request.params.accountId || "").trim();
+  const existing = db.prepare("SELECT * FROM portal_organization_accounts WHERE id = ?").get(accountId);
+  if (!existing) throw httpError(404, "Das Filial- oder Terminalkonto wurde nicht gefunden.");
+  const input = normalizedOrganizationAccountInput(request.body || {}, { existing });
+  const password = String(request.body?.password || "");
+  const passwordHash = password ? await hashPortalPassword(password) : existing.password_hash;
+  const actorId = portalActorId(actor);
+  const before = publicOrganizationAccount(existing);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`
+      UPDATE portal_organization_accounts
+      SET display_name = ?, account_type = ?, password_hash = ?, active = ?,
+          must_change_password = CASE WHEN ? <> '' THEN 1 ELSE must_change_password END,
+          password_changed_at = CASE WHEN ? <> '' THEN CURRENT_TIMESTAMP ELSE password_changed_at END,
+          updated_by = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      input.displayName,
+      input.accountType,
+      passwordHash,
+      input.active ? 1 : 0,
+      password,
+      password,
+      actorId,
+      accountId,
+    );
+    replaceOrganizationAccountAccess(accountId, input.permissions, input.scopes, actorId);
+    revokeOrganizationSessions(accountId);
+    auditPortal(actorId, "portal.organization-account.update", "portal_organization_account", accountId, JSON.stringify({
+      before: {
+        displayName: before.displayName,
+        accountType: before.accountType,
+        active: before.active,
+        permissions: before.permissions,
+        scopes: before.scopes,
+      },
+      after: {
+        displayName: input.displayName,
+        accountType: input.accountType,
+        active: input.active,
+        permissions: input.permissions,
+        scopes: input.scopes,
+      },
+      passwordReset: Boolean(password),
+    }));
+    db.exec("COMMIT");
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  }
+  const stored = db.prepare("SELECT * FROM portal_organization_accounts WHERE id = ?").get(accountId);
+  response.json({ account: publicOrganizationAccount(stored), accounts: organizationAccountsForAdmin() });
+});
+
+app.post("/api/portal/v1/organization-accounts/:accountId/unlock", (request, response) => {
+  const actor = requireAdminHrOrLocal(request, "users:write");
+  const accountId = String(request.params.accountId || "").trim();
+  const result = db.prepare(`
+    UPDATE portal_organization_accounts
+    SET failed_login_attempts = 0, locked_until = NULL,
+        updated_by = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(portalActorId(actor), accountId);
+  if (!result.changes) throw httpError(404, "Das Filial- oder Terminalkonto wurde nicht gefunden.");
+  auditPortal(portalActorId(actor), "portal.organization-account.unlock", "portal_organization_account", accountId);
+  response.json({ accounts: organizationAccountsForAdmin() });
 });
 
 app.get("/api/portal/v1/users", (request, response) => {
@@ -27656,6 +29791,8 @@ function loanLocationSettingRow(locationId) {
            COALESCE(s.document_recipient_employee_number, '') AS document_recipient_employee_number,
            COALESCE(s.document_email_enabled, 0) AS document_email_enabled,
            COALESCE(s.document_recipient_email, '') AS document_recipient_email,
+           COALESCE(s.photo_pdf_output_mode, 'grayscale') AS photo_pdf_output_mode,
+           COALESCE(s.photo_original_retention, 'retain') AS photo_original_retention,
            recipient.full_name AS document_recipient_full_name,
            recipient.nickname AS document_recipient_nickname,
            s.updated_by, s.updated_at
@@ -27683,6 +29820,10 @@ function publicLoanLocationSetting(row, { includeConfiguration = false } = {}) {
       employeeNumber: row.document_recipient_employee_number,
       name: row.document_recipient_nickname || row.document_recipient_full_name || row.document_recipient_employee_number,
     } : null,
+    photoPdf: {
+      outputMode: row.photo_pdf_output_mode === "blackwhite" ? "blackwhite" : "grayscale",
+      originalRetention: row.photo_original_retention === "delete" ? "delete" : "retain",
+    },
     updatedBy: row.updated_by || "",
     updatedAt: row.updated_at || null,
   };
@@ -27718,6 +29859,8 @@ function loanLocationForSession(session, input = {}) {
       "loans:settings",
     ].includes(permission));
   if (canUseManagedLocation) {
+    assertSessionContextScope(session, { locationId });
+  } else if (session?.sessionKind === "organization") {
     assertSessionContextScope(session, { locationId });
   } else if (String(session?.homeLocationId || "") !== locationId) {
     throw httpError(
@@ -27905,6 +30048,7 @@ app.get("/api/portal/v1/loans/status", (request, response) => {
     available: Boolean(setting?.enabled),
     location: setting,
     permissions: {
+      overviewRead: session.permissions.includes(LOAN_OVERVIEW_PERMISSION),
       ownRead: session.permissions.includes("loans:self:read"),
       ownCreate: session.permissions.includes("loans:self:create"),
       ownReturn: session.permissions.includes("loans:self:return"),
@@ -27913,6 +30057,37 @@ app.get("/api/portal/v1/loans/status", (request, response) => {
       documentsRead: session.permissions.includes("loans:documents:read"),
       settings: session.permissions.includes("loans:settings"),
     },
+  });
+});
+
+app.get("/api/portal/v1/loans/open-overview", (request, response) => {
+  const session = requirePortalSession(request, LOAN_OVERVIEW_PERMISSION);
+  const setting = enabledLoanLocationForSession(session, request.query);
+  const items = db.prepare(`
+    SELECT item.article_number, item.description_snapshot, item.serial_number,
+           loan.due_date
+    FROM loans loan
+    JOIN loan_items item ON item.loan_id = loan.id
+    WHERE loan.location_id = ?
+      AND loan.status = 'issued'
+    ORDER BY item.description_snapshot COLLATE NOCASE,
+             item.article_number, item.serial_number, item.position
+  `).all(setting.location_id).map((item) => ({
+    articleNumber: item.article_number,
+    description: item.description_snapshot,
+    serialNumber: item.serial_number || "",
+    dueDate: item.due_date || null,
+  }));
+  const searchThreshold = 10;
+  response.json({
+    location: {
+      id: setting.location_id,
+      name: setting.location_name,
+    },
+    total: items.length,
+    searchThreshold,
+    searchEnabled: items.length > searchThreshold,
+    items,
   });
 });
 
@@ -27927,6 +30102,8 @@ app.get("/api/portal/v1/loans/settings", (request, response) => {
            COALESCE(s.document_recipient_employee_number, '') AS document_recipient_employee_number,
            COALESCE(s.document_email_enabled, 0) AS document_email_enabled,
            COALESCE(s.document_recipient_email, '') AS document_recipient_email,
+           COALESCE(s.photo_pdf_output_mode, 'grayscale') AS photo_pdf_output_mode,
+           COALESCE(s.photo_original_retention, 'retain') AS photo_original_retention,
            recipient.full_name AS document_recipient_full_name,
            recipient.nickname AS document_recipient_nickname,
            s.updated_by, s.updated_at
@@ -28006,13 +30183,50 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", (request, respons
       "LOAN_DOCUMENT_EMAIL_INVALID",
     );
   }
+  const currentSetting = loanLocationSettingRow(locationId);
+  const photoPdfInput = request.body?.photoPdf;
+  if (photoPdfInput !== undefined
+    && (!photoPdfInput || typeof photoPdfInput !== "object" || Array.isArray(photoPdfInput))) {
+    throw httpError(
+      400,
+      "Die Einstellungen der Foto-PDF-Beilage sind ungültig.",
+      "LOAN_PHOTO_PDF_SETTINGS_INVALID",
+    );
+  }
+  const currentPhotoPdfOutputMode = currentSetting?.photo_pdf_output_mode === "blackwhite"
+    ? "blackwhite"
+    : "grayscale";
+  const photoPdfOutputMode = photoPdfInput?.outputMode === undefined
+    ? currentPhotoPdfOutputMode
+    : String(photoPdfInput.outputMode || "").trim();
+  if (!["grayscale", "blackwhite"].includes(photoPdfOutputMode)) {
+    throw httpError(
+      400,
+      "Bitte Graustufen oder Schwarzweiß für die Foto-PDF-Beilage auswählen.",
+      "LOAN_PHOTO_PDF_OUTPUT_MODE_INVALID",
+    );
+  }
+  const currentPhotoOriginalRetention = currentSetting?.photo_original_retention === "delete"
+    ? "delete"
+    : "retain";
+  const photoOriginalRetention = photoPdfInput?.originalRetention === undefined
+    ? currentPhotoOriginalRetention
+    : String(photoPdfInput.originalRetention || "").trim();
+  if (!["retain", "delete"].includes(photoOriginalRetention)) {
+    throw httpError(
+      400,
+      "Bitte die geschützte Aufbewahrung oder Löschung der aufbereiteten Farbfassungen auswählen.",
+      "LOAN_PHOTO_ORIGINAL_RETENTION_INVALID",
+    );
+  }
   db.prepare(`
     INSERT INTO loan_location_settings
       (location_id, enabled, article_lookup_enabled, article_lookup_provider,
        article_lookup_base_url, document_recipient_employee_number,
-       document_email_enabled, document_recipient_email,
+       document_email_enabled, document_recipient_email, photo_pdf_output_mode,
+       photo_original_retention,
        created_by, updated_by, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(location_id) DO UPDATE SET
       enabled = excluded.enabled,
       article_lookup_enabled = excluded.article_lookup_enabled,
@@ -28021,6 +30235,8 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", (request, respons
       document_recipient_employee_number = excluded.document_recipient_employee_number,
       document_email_enabled = excluded.document_email_enabled,
       document_recipient_email = excluded.document_recipient_email,
+      photo_pdf_output_mode = excluded.photo_pdf_output_mode,
+      photo_original_retention = excluded.photo_original_retention,
       updated_by = excluded.updated_by,
       updated_at = CURRENT_TIMESTAMP
   `).run(
@@ -28032,6 +30248,8 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", (request, respons
     documentRecipientEmployeeNumber || null,
     Number(documentEmailEnabled),
     documentEmailEnabled ? documentRecipientEmail : "",
+    photoPdfOutputMode,
+    photoOriginalRetention,
     actor.employeeNumber,
     actor.employeeNumber,
   );
@@ -28043,6 +30261,8 @@ app.put("/api/portal/v1/loans/settings/locations/:locationId", (request, respons
     documentRecipientEmployeeNumber,
     documentEmailEnabled,
     documentRecipientEmail: documentEmailEnabled ? documentRecipientEmail : "",
+    photoPdfOutputMode,
+    photoOriginalRetention,
   }));
   response.json({
     location: publicLoanLocationSetting(loanLocationSettingRow(locationId), { includeConfiguration: true }),
@@ -28734,6 +30954,13 @@ function publicLoanReturnConfirmation(row, { includeLoan = true } = {}) {
   const loan = loanRow(row.loan_id);
   const sourceItems = loan ? loanItemRows(loan.id) : [];
   const returnedItems = Array.isArray(payload.items) ? payload.items : [];
+  const photoIds = new Set(Array.isArray(payload.photoIds) ? payload.photoIds.map(String) : []);
+  const photoAttachmentIds = new Set(
+    Array.isArray(payload.photoAttachmentIds) ? payload.photoAttachmentIds.map(String) : [],
+  );
+  const returnPhotoAttachments = loan ? loanPhotoAttachmentRows(loan.id)
+    .filter((attachment) => attachment.phase === "return" && photoAttachmentIds.has(attachment.id))
+    .map(publicLoanPhotoAttachment) : [];
   const result = {
     id: row.id,
     loanId: row.loan_id,
@@ -28762,8 +30989,9 @@ function publicLoanReturnConfirmation(row, { includeLoan = true } = {}) {
       };
     }),
     photos: loan ? loanPhotoRows(loan.id)
-      .filter((photo) => photo.phase === "return")
+      .filter((photo) => photo.phase === "return" && photoIds.has(photo.id))
       .map(publicLoanPhoto) : [],
+    photoAttachments: returnPhotoAttachments,
   };
   if (includeLoan && loan) {
     result.loan = {
@@ -28775,6 +31003,7 @@ function publicLoanReturnConfirmation(row, { includeLoan = true } = {}) {
         name: loan.borrower_nickname || loan.borrower_full_name,
       },
       revision: Number(loan.revision),
+      photoAttachments: returnPhotoAttachments,
     };
   }
   return result;
@@ -28839,7 +31068,8 @@ function loanDocumentRow(documentId) {
 function loanPhotoRows(loanId) {
   return db.prepare(`
     SELECT id, loan_id, phase, position, filename, detected_mime, byte_size, sha256,
-           pixel_width, pixel_height, created_by_employee_number, created_at
+           pixel_width, pixel_height, original_retained, original_deleted_at,
+           original_deletion_reason, created_by_employee_number, created_at
     FROM loan_photos
     WHERE loan_id = ?
     ORDER BY CASE phase WHEN 'issue' THEN 0 ELSE 1 END, position
@@ -28858,6 +31088,7 @@ function loanPhotoRow(photoId) {
 }
 
 function publicLoanPhoto(row) {
+  const originalRetained = Boolean(row.original_retained);
   return {
     id: row.id,
     phase: row.phase,
@@ -28868,7 +31099,52 @@ function publicLoanPhoto(row) {
     height: Number(row.pixel_height),
     sha256: row.sha256,
     createdAt: row.created_at,
-    contentUrl: `/api/portal/v1/loans/photos/${encodeURIComponent(row.id)}`,
+    originalRetained,
+    originalDeletedAt: originalRetained ? null : row.original_deleted_at || null,
+    originalDeletionReason: originalRetained ? "" : row.original_deletion_reason || "pdf_created",
+    contentUrl: originalRetained
+      ? `/api/portal/v1/loans/photos/${encodeURIComponent(row.id)}`
+      : null,
+  };
+}
+
+function loanPhotoAttachmentRows(loanId) {
+  return db.prepare(`
+    SELECT id, loan_id, phase, attachment_revision, source_photo_count,
+           source_photo_ids_json, source_fingerprint, output_mode,
+           original_retention, filename, detected_mime, byte_size, sha256,
+           created_by_employee_number, created_at
+    FROM loan_photo_attachments
+    WHERE loan_id = ?
+    ORDER BY CASE phase WHEN 'issue' THEN 0 ELSE 1 END, attachment_revision
+  `).all(String(loanId || "").trim());
+}
+
+function loanPhotoAttachmentRow(attachmentId) {
+  return db.prepare(`
+    SELECT attachment.*, loan.location_id, loan.borrower_employee_number,
+           loan.created_by_employee_number, loan.return_recorded_by_employee_number,
+           loan.return_witness_employee_number
+    FROM loan_photo_attachments attachment
+    JOIN loans loan ON loan.id = attachment.loan_id
+    WHERE attachment.id = ?
+  `).get(String(attachmentId || "").trim()) || null;
+}
+
+function publicLoanPhotoAttachment(row) {
+  return {
+    id: row.id,
+    phase: row.phase,
+    revision: Number(row.attachment_revision),
+    sourcePhotoCount: Number(row.source_photo_count),
+    outputMode: row.output_mode,
+    originalRetention: row.original_retention,
+    filename: row.filename,
+    byteSize: Number(row.byte_size),
+    sha256: row.sha256,
+    createdAt: row.created_at,
+    previewUrl: `/api/portal/v1/loans/photo-attachments/${encodeURIComponent(row.id)}/preview`,
+    downloadUrl: `/api/portal/v1/loans/photo-attachments/${encodeURIComponent(row.id)}/download`,
   };
 }
 
@@ -29009,6 +31285,7 @@ async function prepareStoredLoanPhoto(input, actorEmployeeNumber) {
   });
   return {
     id: crypto.randomUUID(),
+    buffer: prepared.buffer,
     storageKey: stored.storageKey,
     filename: prepared.filename,
     detectedMime: stored.detectedMime,
@@ -29021,12 +31298,90 @@ async function prepareStoredLoanPhoto(input, actorEmployeeNumber) {
   };
 }
 
+async function prepareStoredLoanPhotoAttachment({
+  loan,
+  phase,
+  preparedPhotos,
+  positionOffset = 0,
+  outputMode,
+  originalRetention,
+  actorEmployeeNumber,
+}) {
+  let pdf;
+  try {
+    pdf = await renderLoanPhotoPdf({
+      photos: preparedPhotos.map((photo, index) => ({
+        buffer: photo.buffer,
+        filename: photo.filename,
+        position: positionOffset + index + 1,
+      })),
+      phase,
+      outputMode,
+      titleContext: {
+        locationId: loan.location_id,
+        locationName: loan.location_name,
+        loanId: String(loan.id).slice(0, 12),
+        subtitle: "Unveränderliche Teilbeilage dieses Foto-Uploads",
+        createdAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    if (error instanceof LoanPhotoPdfError) {
+      throw httpError(error.status, error.message, error.code);
+    }
+    throw error;
+  }
+  const typeLabel = phase === "return" ? "Rueckgabe" : "Ausgabe";
+  const filename = `Leihfoto-Beilage-${typeLabel}-${String(loan.id).slice(0, 8)}.pdf`;
+  const stored = await requireAmuStorage().saveBuffer({
+    buffer: pdf,
+    originalName: filename,
+    maxBytes: 8 * 1024 * 1024,
+  });
+  const sourceFingerprint = crypto.createHash("sha256")
+    .update(JSON.stringify(preparedPhotos.map((photo) => photo.sha256)))
+    .digest("hex");
+  return {
+    id: crypto.randomUUID(),
+    storageKey: stored.storageKey,
+    filename,
+    detectedMime: stored.detectedMime,
+    byteSize: stored.byteSize,
+    sha256: stored.sha256,
+    sourcePhotoCount: preparedPhotos.length,
+    sourceFingerprint,
+    outputMode,
+    originalRetention,
+    createdByEmployeeNumber: actorEmployeeNumber === "local" ? null : actorEmployeeNumber,
+    createdAt: stored.createdAt,
+  };
+}
+
+const loanPhotoUploadLocks = new Map();
+
+async function acquireLoanPhotoUploadLock(loanId) {
+  const key = String(loanId || "").trim();
+  const previous = loanPhotoUploadLocks.get(key) || Promise.resolve();
+  let releaseCurrent;
+  const current = new Promise((resolve) => {
+    releaseCurrent = resolve;
+  });
+  const tail = previous.catch(() => {}).then(() => current);
+  loanPhotoUploadLocks.set(key, tail);
+  await previous.catch(() => {});
+  return () => {
+    releaseCurrent();
+    if (loanPhotoUploadLocks.get(key) === tail) loanPhotoUploadLocks.delete(key);
+  };
+}
+
 function insertPreparedLoanPhoto(loanId, phase, position, prepared) {
   db.prepare(`
     INSERT INTO loan_photos
       (id, loan_id, phase, position, storage_key, filename, detected_mime,
-       byte_size, sha256, pixel_width, pixel_height, created_by_employee_number, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       byte_size, sha256, pixel_width, pixel_height, original_retained,
+       original_deleted_at, original_deletion_reason, created_by_employee_number, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     prepared.id,
     loanId,
@@ -29039,9 +31394,61 @@ function insertPreparedLoanPhoto(loanId, phase, position, prepared) {
     prepared.sha256,
     prepared.pixelWidth,
     prepared.pixelHeight,
+    prepared.originalRetained === false ? 0 : 1,
+    prepared.originalDeletedAt || null,
+    prepared.originalDeletionReason || "",
     prepared.createdByEmployeeNumber,
     prepared.createdAt,
   );
+}
+
+function insertPreparedLoanPhotoAttachment(loanId, phase, revision, prepared, preparedPhotos) {
+  const typeLabel = phase === "return" ? "Rueckgabe" : "Ausgabe";
+  const filename = `Leihfoto-Beilage-${typeLabel}-${String(loanId).slice(0, 8)}-B${revision}.pdf`;
+  db.prepare(`
+    INSERT INTO loan_photo_attachments
+      (id, loan_id, phase, attachment_revision, source_photo_count,
+       source_photo_ids_json, source_fingerprint, output_mode, original_retention,
+       storage_key, filename, detected_mime, byte_size, sha256,
+       created_by_employee_number, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    prepared.id,
+    loanId,
+    phase,
+    revision,
+    prepared.sourcePhotoCount,
+    JSON.stringify(preparedPhotos.map((photo) => photo.id)),
+    prepared.sourceFingerprint,
+    prepared.outputMode,
+    prepared.originalRetention,
+    prepared.storageKey,
+    filename,
+    prepared.detectedMime,
+    prepared.byteSize,
+    prepared.sha256,
+    prepared.createdByEmployeeNumber,
+    prepared.createdAt,
+  );
+  prepared.filename = filename;
+}
+
+function discardPreparedLoanPhotoOriginals(preparedPhotos) {
+  const deletedAt = new Date().toISOString();
+  for (const prepared of preparedPhotos || []) {
+    if (!prepared?.storageKey) continue;
+    const removed = requireAmuStorage().deleteBlob(prepared.storageKey);
+    if (!removed) {
+      throw httpError(
+        503,
+        "Eine aufbereitete Farbfassung konnte nach der PDF-Erstellung nicht sicher entfernt werden.",
+        "LOAN_PHOTO_ORIGINAL_DELETE_FAILED",
+      );
+    }
+    prepared.originalRetained = false;
+    prepared.originalDeletedAt = deletedAt;
+    prepared.originalDeletionReason = "pdf_created";
+  }
 }
 
 function cleanupPreparedLoanPhotos(preparedPhotos) {
@@ -29049,6 +31456,11 @@ function cleanupPreparedLoanPhotos(preparedPhotos) {
     if (!prepared?.storageKey) continue;
     try { requireAmuStorage().deleteBlob(prepared.storageKey); } catch {}
   }
+}
+
+function cleanupPreparedLoanPhotoAttachment(prepared) {
+  if (!prepared?.storageKey) return;
+  try { requireAmuStorage().deleteBlob(prepared.storageKey); } catch {}
 }
 
 function insertPreparedLoanDocument(loanId, prepared) {
@@ -29233,7 +31645,7 @@ function assertLoanPhotoAccess(session, photo) {
   if (participants.has(session.employeeNumber)) return;
   if (photo.phase === "return") {
     const pendingWitness = db.prepare(`
-      SELECT 1
+      SELECT payload_json
       FROM loan_return_confirmations
       WHERE loan_id = ?
         AND witness_employee_number = ?
@@ -29241,7 +31653,9 @@ function assertLoanPhotoAccess(session, photo) {
         AND julianday(expires_at) > julianday('now')
       LIMIT 1
     `).get(photo.loan_id, session.employeeNumber);
-    if (pendingWitness) return;
+    const pendingPayload = parseLoanReturnConfirmationPayload(pendingWitness);
+    if (Array.isArray(pendingPayload.photoIds)
+      && pendingPayload.photoIds.includes(photo.id)) return;
   }
   if (!session.permissions?.some((permission) => [
     "loans:location:read",
@@ -29251,6 +31665,46 @@ function assertLoanPhotoAccess(session, photo) {
     throw httpError(403, "Für dieses Leihfoto fehlt die Berechtigung.", "LOAN_PHOTO_DENIED");
   }
   assertSessionContextScope(session, { locationId: photo.location_id });
+}
+
+function assertLoanPhotoAttachmentAccess(session, attachment) {
+  if (!attachment) {
+    throw httpError(404, "Die Foto-PDF-Beilage wurde nicht gefunden.", "LOAN_PHOTO_ATTACHMENT_NOT_FOUND");
+  }
+  if (session.employeeNumber === "local") return;
+  const participants = new Set([
+    attachment.borrower_employee_number,
+    attachment.created_by_employee_number,
+    attachment.return_recorded_by_employee_number,
+    attachment.return_witness_employee_number,
+  ].filter(Boolean));
+  if (participants.has(session.employeeNumber)) return;
+  if (attachment.phase === "return") {
+    const pendingWitness = db.prepare(`
+      SELECT payload_json
+      FROM loan_return_confirmations
+      WHERE loan_id = ?
+        AND witness_employee_number = ?
+        AND status = 'pending'
+        AND julianday(expires_at) > julianday('now')
+      LIMIT 1
+    `).get(attachment.loan_id, session.employeeNumber);
+    const pendingPayload = parseLoanReturnConfirmationPayload(pendingWitness);
+    if (Array.isArray(pendingPayload.photoAttachmentIds)
+      && pendingPayload.photoAttachmentIds.includes(attachment.id)) return;
+  }
+  if (!session.permissions?.some((permission) => [
+    "loans:location:read",
+    "loans:location:manage",
+    "loans:documents:read",
+  ].includes(permission))) {
+    throw httpError(
+      403,
+      "Für diese Foto-PDF-Beilage fehlt die Berechtigung.",
+      "LOAN_PHOTO_ATTACHMENT_DENIED",
+    );
+  }
+  assertSessionContextScope(session, { locationId: attachment.location_id });
 }
 
 function publicLoanItem(row) {
@@ -29320,6 +31774,7 @@ function publicLoan(row, { includeEvents = true } = {}) {
     updatedAt: row.updated_at,
     items: loanItemRows(row.id).map(publicLoanItem),
     photos: loanPhotoRows(row.id).map(publicLoanPhoto),
+    photoAttachments: loanPhotoAttachmentRows(row.id).map(publicLoanPhotoAttachment),
     documents: loanDocumentRows(row.id).map(publicLoanDocument),
     events: includeEvents ? loanEventRows(row.id).map(publicLoanEvent) : [],
   };
@@ -29725,6 +32180,13 @@ app.get("/api/portal/v1/loans/photos/:photoId", (request, response) => {
   ]);
   const photo = loanPhotoRow(request.params.photoId);
   assertLoanPhotoAccess(session, photo);
+  if (!photo.original_retained) {
+    throw httpError(
+      410,
+      "Die aufbereitete Farbfassung wurde nach Erstellung der geschützten PDF-Beilage gelöscht.",
+      "LOAN_PHOTO_ORIGINAL_DELETED",
+    );
+  }
   const content = requireAmuStorage().readBuffer({
     storageKey: photo.storage_key,
     byteSize: photo.byte_size,
@@ -29742,6 +32204,56 @@ app.get("/api/portal/v1/loans/photos/:photoId", (request, response) => {
   response.setHeader("Pragma", "no-cache");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.send(content);
+});
+
+function sendLoanPhotoAttachment(request, response, disposition) {
+  const session = requirePortalAnyPermissionOrLocal(request, [
+    "loans:self:read",
+    "loans:self:return",
+    "loans:location:read",
+    "loans:location:manage",
+    "loans:documents:read",
+  ]);
+  const attachment = loanPhotoAttachmentRow(request.params.attachmentId);
+  assertLoanPhotoAttachmentAccess(session, attachment);
+  const content = requireAmuStorage().readBuffer({
+    storageKey: attachment.storage_key,
+    byteSize: attachment.byte_size,
+    sha256: attachment.sha256,
+    detectedMime: attachment.detected_mime,
+    originalFilename: attachment.filename,
+  });
+  const action = disposition === "inline" ? "preview" : "download";
+  auditPortal(
+    session.employeeNumber,
+    `loan.photo_attachment.${action}`,
+    "loan_photo_attachment",
+    attachment.id,
+    JSON.stringify({
+      loanId: attachment.loan_id,
+      phase: attachment.phase,
+      revision: Number(attachment.attachment_revision),
+    }),
+  );
+  const contentDisposition = contentDispositionHeader(attachment.filename);
+  response.setHeader("Content-Type", "application/pdf");
+  response.setHeader(
+    "Content-Disposition",
+    disposition === "inline" ? contentDisposition.replace(/^attachment;/, "inline;") : contentDisposition,
+  );
+  response.setHeader("Content-Length", String(content.length));
+  response.setHeader("Cache-Control", "private, no-store, max-age=0");
+  response.setHeader("Pragma", "no-cache");
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.send(content);
+}
+
+app.get("/api/portal/v1/loans/photo-attachments/:attachmentId/preview", (request, response) => {
+  sendLoanPhotoAttachment(request, response, "inline");
+});
+
+app.get("/api/portal/v1/loans/photo-attachments/:attachmentId/download", (request, response) => {
+  sendLoanPhotoAttachment(request, response, "attachment");
 });
 
 app.post("/api/portal/v1/loans/:loanId/photos", async (request, response) => {
@@ -29775,65 +32287,121 @@ app.post("/api/portal/v1/loans/:loanId/photos", async (request, response) => {
       );
     }
   }
-  const initialExistingCount = Number(db.prepare(`
-    SELECT COUNT(*) AS count FROM loan_photos WHERE loan_id = ? AND phase = ?
-  `).get(loan.id, phase).count);
-  if (initialExistingCount + photos.length > MAX_LOAN_PHOTOS_PER_PHASE) {
-    throw httpError(413, "Pro Ausgabe oder Rücknahme sind höchstens neun Fotos möglich.", "LOAN_PHOTO_TOO_MANY");
-  }
-  const preparedPhotos = [];
+  const releaseLoanPhotoUpload = await acquireLoanPhotoUploadLock(loan.id);
   try {
-    for (const photo of photos) {
-      preparedPhotos.push(await prepareStoredLoanPhoto(photo, actor.employeeNumber));
-    }
-    db.exec("BEGIN IMMEDIATE");
-    const currentLoan = db.prepare("SELECT status, revision FROM loans WHERE id = ?").get(loan.id);
-    if (!currentLoan || currentLoan.status !== "issued") {
-      throw httpError(
-        409,
-        "Fotos können nur zu einer offenen Leihe ergänzt werden.",
-        "LOAN_PHOTO_LOAN_CLOSED",
-      );
-    }
-    if (phase === "return" && loanPendingReturnConfirmationRow(loan.id)) {
-      throw httpError(
-        409,
-        "Rückgabefotos können während einer offenen Gegenbestätigung nicht verändert werden.",
-        "LOAN_RETURN_CONFIRMATION_PENDING",
-      );
-    }
-    const currentExistingCount = Number(db.prepare(`
+    const initialExistingCount = Number(db.prepare(`
       SELECT COUNT(*) AS count FROM loan_photos WHERE loan_id = ? AND phase = ?
     `).get(loan.id, phase).count);
-    if (currentExistingCount + preparedPhotos.length > MAX_LOAN_PHOTOS_PER_PHASE) {
-      throw httpError(
-        413,
-        "Pro Ausgabe oder Rücknahme sind höchstens neun Fotos möglich.",
-        "LOAN_PHOTO_TOO_MANY",
-      );
+    if (initialExistingCount + photos.length > MAX_LOAN_PHOTOS_PER_PHASE) {
+      throw httpError(413, "Pro Ausgabe oder Rücknahme sind höchstens neun Fotos möglich.", "LOAN_PHOTO_TOO_MANY");
     }
-    preparedPhotos.forEach((prepared, index) => {
-      insertPreparedLoanPhoto(loan.id, phase, currentExistingCount + index + 1, prepared);
+    const photoSetting = loanLocationSettingRow(loan.location_id);
+    const outputMode = photoSetting?.photo_pdf_output_mode === "blackwhite" ? "blackwhite" : "grayscale";
+    const originalRetention = photoSetting?.photo_original_retention === "delete" ? "delete" : "retain";
+    const preparedPhotos = [];
+    let preparedAttachment = null;
+    let attachmentRevision = 0;
+    amuMutationInProgress += 1;
+    try {
+      for (const photo of photos) {
+        preparedPhotos.push(await prepareStoredLoanPhoto(photo, actor.employeeNumber));
+      }
+      preparedAttachment = await prepareStoredLoanPhotoAttachment({
+        loan,
+        phase,
+        preparedPhotos,
+        positionOffset: initialExistingCount,
+        outputMode,
+        originalRetention,
+        actorEmployeeNumber: actor.employeeNumber,
+      });
+      if (originalRetention === "delete") {
+        discardPreparedLoanPhotoOriginals(preparedPhotos);
+      }
+      db.exec("BEGIN IMMEDIATE");
+      const currentLoan = db.prepare("SELECT status, revision FROM loans WHERE id = ?").get(loan.id);
+      if (!currentLoan || currentLoan.status !== "issued") {
+        throw httpError(
+          409,
+          "Fotos können nur zu einer offenen Leihe ergänzt werden.",
+          "LOAN_PHOTO_LOAN_CLOSED",
+        );
+      }
+      if (phase === "return" && loanPendingReturnConfirmationRow(loan.id)) {
+        throw httpError(
+          409,
+          "Rückgabefotos können während einer offenen Gegenbestätigung nicht verändert werden.",
+          "LOAN_RETURN_CONFIRMATION_PENDING",
+        );
+      }
+      const currentExistingCount = Number(db.prepare(`
+        SELECT COUNT(*) AS count FROM loan_photos WHERE loan_id = ? AND phase = ?
+      `).get(loan.id, phase).count);
+      if (currentExistingCount !== initialExistingCount) {
+        throw httpError(
+          409,
+          "Die Leihfotos wurden gleichzeitig verändert. Bitte den Upload erneut durchführen.",
+          "LOAN_PHOTO_CONCURRENT_CHANGE",
+        );
+      }
+      if (currentExistingCount + preparedPhotos.length > MAX_LOAN_PHOTOS_PER_PHASE) {
+        throw httpError(
+          413,
+          "Pro Ausgabe oder Rücknahme sind höchstens neun Fotos möglich.",
+          "LOAN_PHOTO_TOO_MANY",
+        );
+      }
+      preparedPhotos.forEach((prepared, index) => {
+        insertPreparedLoanPhoto(loan.id, phase, currentExistingCount + index + 1, prepared);
+      });
+      attachmentRevision = Number(db.prepare(`
+        SELECT COALESCE(MAX(attachment_revision), 0) + 1 AS revision
+        FROM loan_photo_attachments
+        WHERE loan_id = ? AND phase = ?
+      `).get(loan.id, phase).revision);
+      insertPreparedLoanPhotoAttachment(
+        loan.id,
+        phase,
+        attachmentRevision,
+        preparedAttachment,
+        preparedPhotos,
+      );
+      appendLoanEvent(loan.id, actor.employeeNumber, "photos_added", Number(currentLoan.revision), {
+        phase,
+        count: preparedPhotos.length,
+        photoIds: preparedPhotos.map((photo) => photo.id),
+        photoAttachmentId: preparedAttachment.id,
+        photoAttachmentRevision: attachmentRevision,
+        photoPdfOutputMode: outputMode,
+        photoOriginalRetention: originalRetention,
+      });
+      auditPortal(actor.employeeNumber, "loan.photos.add", "loan", loan.id, JSON.stringify({
+        phase,
+        count: preparedPhotos.length,
+        photoAttachmentId: preparedAttachment.id,
+        photoAttachmentRevision: attachmentRevision,
+        photoPdfOutputMode: outputMode,
+        photoOriginalRetention: originalRetention,
+      }));
+      db.exec("COMMIT");
+    } catch (error) {
+      try { db.exec("ROLLBACK"); } catch {}
+      cleanupPreparedLoanPhotos(preparedPhotos);
+      cleanupPreparedLoanPhotoAttachment(preparedAttachment);
+      throw error;
+    } finally {
+      amuMutationInProgress = Math.max(0, amuMutationInProgress - 1);
+    }
+    response.status(201).json({
+      loan: publicLoan(loanRow(loan.id)),
+      photos: loanPhotoRows(loan.id).filter((photo) => photo.phase === phase).map(publicLoanPhoto),
+      photoAttachments: loanPhotoAttachmentRows(loan.id)
+        .filter((attachment) => attachment.phase === phase)
+        .map(publicLoanPhotoAttachment),
     });
-    appendLoanEvent(loan.id, actor.employeeNumber, "photos_added", Number(currentLoan.revision), {
-      phase,
-      count: preparedPhotos.length,
-      photoIds: preparedPhotos.map((photo) => photo.id),
-    });
-    db.exec("COMMIT");
-  } catch (error) {
-    try { db.exec("ROLLBACK"); } catch {}
-    cleanupPreparedLoanPhotos(preparedPhotos);
-    throw error;
+  } finally {
+    releaseLoanPhotoUpload();
   }
-  auditPortal(actor.employeeNumber, "loan.photos.add", "loan", loan.id, JSON.stringify({
-    phase,
-    count: preparedPhotos.length,
-  }));
-  response.status(201).json({
-    loan: publicLoan(loanRow(loan.id)),
-    photos: loanPhotoRows(loan.id).filter((photo) => photo.phase === phase).map(publicLoanPhoto),
-  });
 });
 
 app.post("/api/portal/v1/loans/documents/:documentId/email", async (request, response) => {
@@ -30315,12 +32883,20 @@ app.post("/api/portal/v1/loans/:loanId/return", (request, response) => {
   const requestedAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
   const borrowerConfirmed = actor.employeeNumber === row.borrower_employee_number;
+  let photoIds = [];
+  let photoAttachmentIds = [];
   db.exec("BEGIN IMMEDIATE");
   try {
     const current = db.prepare("SELECT status, revision FROM loans WHERE id = ?").get(row.id);
     if (current?.status !== "issued" || Number(current?.revision) !== expectedRevision) {
       throw httpError(409, "Der Leihvorgang wurde inzwischen geändert. Bitte neu laden.", "LOAN_STALE");
     }
+    photoIds = loanPhotoRows(row.id)
+      .filter((photo) => photo.phase === "return")
+      .map((photo) => photo.id);
+    photoAttachmentIds = loanPhotoAttachmentRows(row.id)
+      .filter((attachment) => attachment.phase === "return")
+      .map((attachment) => attachment.id);
     db.prepare(`
       INSERT INTO loan_return_confirmations
         (id, loan_id, requested_by_employee_number, witness_employee_number,
@@ -30332,7 +32908,13 @@ app.post("/api/portal/v1/loans/:loanId/return", (request, response) => {
       actor.employeeNumber,
       witness.personnel_number,
       expectedRevision,
-      JSON.stringify({ items: returnedItems, note, borrowerConfirmed }),
+      JSON.stringify({
+        items: returnedItems,
+        note,
+        borrowerConfirmed,
+        photoIds,
+        photoAttachmentIds,
+      }),
       requestedAt,
       expiresAt,
       requestedAt,
@@ -30341,6 +32923,8 @@ app.post("/api/portal/v1/loans/:loanId/return", (request, response) => {
       confirmationId,
       witnessEmployeeNumber: witness.personnel_number,
       expiresAt,
+      photoIds,
+      photoAttachmentIds,
     });
     db.exec("COMMIT");
   } catch (error) {
@@ -30352,6 +32936,8 @@ app.post("/api/portal/v1/loans/:loanId/return", (request, response) => {
     borrowerEmployeeNumber: row.borrower_employee_number,
     witnessEmployeeNumber: witness.personnel_number,
     itemCount: returnedItems.length,
+    photoCount: photoIds.length,
+    photoAttachmentCount: photoAttachmentIds.length,
     noteProvided: Boolean(note),
   }));
   createPortalNotification(
@@ -30621,7 +33207,7 @@ app.get("/api/portal/v1/me", (request, response) => {
 });
 
 app.get("/api/portal/v1/me/home", (request, response) => {
-  const session = requirePortalSession(request);
+  const session = requireEmployeePortalSession(request);
   response.json(mobileHomePayload(session, request, new Date()));
 });
 
@@ -30675,23 +33261,39 @@ app.get("/api/mobile/v1/me/schedule", (request, response) => {
 app.put("/api/portal/v1/me/password", async (request, response) => {
   const session = requirePortalSession(request);
   assertPortalCsrf(request);
-  const current = db.prepare("SELECT password_hash FROM portal_users WHERE employee_number = ?").get(session.employeeNumber);
+  const organizationAccount = session.sessionKind === "organization";
+  const current = organizationAccount
+    ? db.prepare("SELECT password_hash FROM portal_organization_accounts WHERE id = ?").get(session.accountId)
+    : db.prepare("SELECT password_hash FROM portal_users WHERE employee_number = ?").get(session.employeeNumber);
   if (!await verifyPortalPassword(request.body.currentPassword, current?.password_hash)) {
     throw httpError(401, "Das bisherige Passwort ist nicht korrekt.");
   }
   const passwordHash = await hashPortalPassword(request.body.newPassword);
-  db.prepare(`
-    UPDATE portal_users SET password_hash = ?, must_change_password = 0,
-      password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-    WHERE employee_number = ?
-  `).run(passwordHash, session.employeeNumber);
-  revokeMobileSessionsForEmployee(session.employeeNumber, "password_changed");
-  auditPortal(session.employeeNumber, "portal.password.change", "portal_user", session.employeeNumber);
+  if (organizationAccount) {
+    db.prepare(`
+      UPDATE portal_organization_accounts SET password_hash = ?, must_change_password = 0,
+        password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(passwordHash, session.accountId);
+  } else {
+    db.prepare(`
+      UPDATE portal_users SET password_hash = ?, must_change_password = 0,
+        password_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE employee_number = ?
+    `).run(passwordHash, session.employeeNumber);
+    revokeMobileSessionsForEmployee(session.employeeNumber, "password_changed");
+  }
+  auditPortal(
+    portalActorId(session),
+    "portal.password.change",
+    organizationAccount ? "portal_organization_account" : "portal_user",
+    session.accountId || session.employeeNumber,
+  );
   response.json({ ok: true });
 });
 
 app.get("/api/portal/v1/me/schedule", (request, response) => {
-  const session = requirePortalSession(request, "own_schedule:read");
+  const session = requireEmployeePortalSession(request, "own_schedule:read");
   const weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : currentWeekStart());
   const weekEnd = addDays(weekStart, 6);
   const shifts = db.prepare(`
@@ -30712,13 +33314,58 @@ app.get("/api/portal/v1/me/schedule", (request, response) => {
   response.json({ weekStart, weekEnd, calendarWeek: getIsoWeek(weekStart), shifts, options, user: publicPortalUser(session) });
 });
 
+app.get("/api/portal/v1/location-dashboard/schedule", (request, response) => {
+  const session = requirePortalSession(request, ORGANIZATION_SCHEDULE_PERMISSION);
+  if (session.sessionKind !== "organization") {
+    throw httpError(
+      403,
+      "Die reduzierte Standortansicht ist Filial- und Terminalkonten vorbehalten.",
+      "PORTAL_ORGANIZATION_ACCOUNT_REQUIRED",
+    );
+  }
+  const locationId = normalizeLocationId(
+    String(request.query.locationId || session.homeLocationId || "").trim(),
+  );
+  assertSessionContextScope(session, { locationId });
+  const location = validateLocationExists(locationId);
+  const weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : currentWeekStart());
+  const weekEnd = addDays(weekStart, 6);
+  const shifts = db.prepare(`
+    SELECT shift.shift_date, shift.start_time, shift.end_time, shift.area,
+           employee.full_name, employee.nickname,
+           department.name AS department_name
+    FROM shifts shift
+    JOIN employees employee ON employee.personnel_number = shift.employee_number
+    LEFT JOIN departments department ON department.id = shift.department_id
+    WHERE shift.location_id = ?
+      AND shift.shift_date BETWEEN ? AND ?
+      AND employee.active = 1
+    ORDER BY shift.shift_date, shift.start_time,
+             COALESCE(NULLIF(employee.nickname, ''), employee.full_name)
+  `).all(locationId, weekStart, weekEnd).map((shift) => ({
+    date: shift.shift_date,
+    startTime: shift.start_time,
+    endTime: shift.end_time,
+    area: shift.area || "",
+    departmentName: shift.department_name || "",
+    employeeName: shift.nickname || shift.full_name,
+  }));
+  response.json({
+    location: { id: location.id, name: location.name },
+    weekStart,
+    weekEnd,
+    calendarWeek: getIsoWeek(weekStart),
+    shifts,
+  });
+});
+
 app.get(["/api/portal/v1/me/absence-history", "/api/portal/v1/me/absence-requests"], (request, response) => {
   const session = requirePortalSession(request, "own_vacation:read");
   response.json({ items: absenceHistoryForEmployee(session.employeeNumber) });
 });
 
 app.get("/api/portal/v1/me/process-tasks", (request, response) => {
-  const session = requirePortalSession(request);
+  const session = requireEmployeePortalSession(request);
   const items = customProcessTasksForEmployee(session.employeeNumber);
   response.json({
     available: true,
@@ -30729,7 +33376,7 @@ app.get("/api/portal/v1/me/process-tasks", (request, response) => {
 });
 
 app.post("/api/portal/v1/me/process-tasks/:runId/:stepId/complete", (request, response) => {
-  const session = requirePortalSession(request);
+  const session = requireEmployeePortalSession(request);
   assertPortalCsrf(request);
   const body = { ...(request.body || {}) };
   if (!body.idempotencyKey) body.idempotencyKey = String(request.get("Idempotency-Key") || "");
@@ -30737,7 +33384,7 @@ app.post("/api/portal/v1/me/process-tasks/:runId/:stepId/complete", (request, re
 });
 
 app.get("/api/portal/v1/me/notifications", (request, response) => {
-  const session = requirePortalSession(request);
+  const session = requireEmployeePortalSession(request);
   const notifications = db.prepare(`
     SELECT id, event_type, title, message, target, entity_type, entity_id, read_at, created_at
     FROM portal_notifications WHERE recipient_employee_number = ?
@@ -30751,7 +33398,7 @@ app.get("/api/portal/v1/me/notifications", (request, response) => {
 });
 
 app.put("/api/portal/v1/me/notifications/:id/read", (request, response) => {
-  const session = requirePortalSession(request);
+  const session = requireEmployeePortalSession(request);
   assertPortalCsrf(request);
   const result = db.prepare(`
     UPDATE portal_notifications SET read_at = COALESCE(read_at, CURRENT_TIMESTAMP)
@@ -30762,7 +33409,7 @@ app.put("/api/portal/v1/me/notifications/:id/read", (request, response) => {
 });
 
 app.put("/api/portal/v1/me/notifications/read-all", (request, response) => {
-  const session = requirePortalSession(request);
+  const session = requireEmployeePortalSession(request);
   assertPortalCsrf(request);
   const result = db.prepare(`
     UPDATE portal_notifications SET read_at = CURRENT_TIMESTAMP
@@ -34745,35 +37392,9 @@ function assertRequestPermission(request, permission) {
   }
 }
 
-function validateOperationModeRequest(requestedMode) {
-  const mode = String(requestedMode || DEFAULT_OPERATION_MODE);
-  if (!["local", "lan", "server"].includes(mode)) throw httpError(400, "Der ausgewählte Betriebsmodus ist ungültig.");
-  if (mode === "server" && !serverModeActive) {
-    throw httpError(409, "Der öffentliche Serverbetrieb wird ausschließlich über die geschützte Serverkonfiguration aktiviert.", "SERVER_CONFIGURATION_REQUIRED");
-  }
-  if (mode === "lan" && getPortalStatus().adminSetupState !== "configured") {
-    throw httpError(409, "Bitte zuerst die Admin-Ersteinrichtung abschließen.", "PORTAL_ADMIN_SETUP_REQUIRED");
-  }
-  return mode;
-}
-
-app.put("/api/operation-mode", (request, response) => {
-  assertRequestPermission(request, "operation_mode:write");
-  const requestedOperationMode = validateOperationModeRequest(request.body.operationMode);
-  const update = db.prepare("INSERT INTO settings (key, value) VALUES ('operation_mode', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
-  update.run(requestedOperationMode);
-  const currentRuntimeMode = configuredOperationMode;
-  const restartRequired = !serverModeActive && currentRuntimeMode !== requestedOperationMode;
-  if (restartRequired) writeRuntimeConfig({ operationMode: requestedOperationMode });
-  auditPortal(request.portalSession?.employeeNumber || "local", "operation_mode.update", "settings", "operation_mode", requestedOperationMode);
-  response.json({ operationMode: requestedOperationMode, restartRequired, networkUrls: requestedOperationMode === "lan" ? getLanUrls(PORT) : [] });
-});
-
 app.put("/api/settings", (request, response) => {
   const body = request.body;
   const currentSettings = getSettings();
-  const requestedOperationMode = validateOperationModeRequest(body.operationMode || currentSettings.operation_mode);
-  if (requestedOperationMode !== currentSettings.operation_mode) assertRequestPermission(request, "operation_mode:write");
   const scheduleContext = resolvePlanningContext(body);
   const vacationContext = resolvePlanningContext({ ...body, departmentId: null, department: null });
   const scheduleDefaults = defaultSchedulePdfSettings(scheduleContext);
@@ -34846,7 +37467,6 @@ app.put("/api/settings", (request, response) => {
   if (managementViewSettingsChanged) requireAdminHrOrLocal(request, "hr:settings");
 
   const values = {
-    operation_mode: requestedOperationMode,
     toast_duration: toastDuration,
     show_inactive_personnel: body.showInactivePersonnel === true ? "1" : "0",
     show_saturday_service_stats: body.showSaturdayServiceStats === false ? "0" : "1",
@@ -34902,10 +37522,7 @@ app.put("/api/settings", (request, response) => {
     INSERT INTO portal_settings (key, value, updated_at) VALUES ('login_required', '1', CURRENT_TIMESTAMP)
     ON CONFLICT(key) DO UPDATE SET value = '1', updated_at = CURRENT_TIMESTAMP
   `).run();
-  const currentRuntimeMode = configuredOperationMode;
-  const restartRequired = !serverModeActive && currentRuntimeMode !== requestedOperationMode;
-  if (restartRequired) writeRuntimeConfig({ operationMode: requestedOperationMode });
-  response.json({ ...settingsForLocation(scheduleContext.locationId), restartRequired, networkUrls: requestedOperationMode === "lan" ? getLanUrls(PORT) : [] });
+  response.json(settingsForLocation(scheduleContext.locationId));
 });
 
 app.post("/api/shifts", (request, response) => {
@@ -36889,7 +39506,7 @@ function validateServerStartup(portalStatus) {
     }
     return;
   }
-  if (!loopbackHosts.has(HOST.toLowerCase()) && (getSettings().operation_mode !== "lan" || !portalStatus.portalEnabled || portalStatus.adminSetupState !== "configured")) {
+  if (!loopbackHosts.has(HOST.toLowerCase()) && (configuredOperationMode !== "lan" || !portalStatus.portalEnabled || portalStatus.adminSetupState !== "configured")) {
     throw new Error("LAN-Bindung abgebrochen: Der LAN-Modus und ein Admin-Zugang müssen aktiviert sein.");
   }
 }

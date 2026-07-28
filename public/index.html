@@ -16,7 +16,7 @@
     <section class="login-gate hidden" id="loginGate" aria-live="polite">
       <form class="login-card" id="adminLoginForm">
         <img id="loginBrandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-        <span class="eyebrow" id="adminAccessModeLabel">Geschützter LAN-Zugang</span>
+        <span class="eyebrow" id="adminAccessModeLabel">Geschützter Zugang</span>
         <h1>Beim Grabenplaner anmelden</h1>
         <p>Filialleitung und Administration verwenden hier ihre Personalnummer.</p>
         <label class="field"><span>Personalnummer</span><input id="adminLoginPersonnelNumber" autocomplete="username" required /></label>
@@ -369,9 +369,22 @@
           <section class="personnel-administration-section" id="costCenterSection" role="tabpanel" aria-labelledby="costCentersTab">
             <div class="employee-toolbar cost-center-toolbar">
               <div><h2>Kostenstellen</h2><p>Verwaltung, Filialen, Produktion und weitere Unternehmensbereiche eindeutig zuordnen.</p></div>
-              <button class="primary-button hidden" id="addCostCenterButton" type="button">+ Kostenstelle anlegen</button>
+              <div class="cost-center-toolbar-actions">
+                <button class="secondary-button hidden" id="addCostCenterTypeButton" type="button">+ Typ anlegen</button>
+                <button class="primary-button hidden" id="addCostCenterButton" type="button">+ Kostenstelle anlegen</button>
+              </div>
             </div>
             <p class="calculation-note">Kostenstellen werden nicht endgültig gelöscht. Vor der Deaktivierung müssen bestehende Zuordnungen verschoben werden; historische Daten bleiben erhalten.</p>
+            <section class="cost-center-types-panel" aria-labelledby="costCenterTypesTitle">
+              <div class="cost-center-subheading">
+                <div><span class="eyebrow">Organisationsmodell</span><h3 id="costCenterTypesTitle">Typen und erlaubte Positionen</h3></div>
+                <p>Typen legen fest, ob eine Kostenstelle eine Filiale abbildet und welche Positionen dort später auswählbar sind.</p>
+              </div>
+              <div class="cost-center-type-list" id="costCenterTypeList"><p class="settings-note">Kostenstellentypen werden geladen.</p></div>
+            </section>
+            <div class="cost-center-subheading cost-center-subheading-concrete">
+              <div><span class="eyebrow">Konkrete Zuordnung</span><h3>Kostenstellen</h3></div>
+            </div>
             <div class="cost-center-list" id="costCenterList"><p class="settings-note">Kostenstellen werden geladen.</p></div>
           </section>
 
@@ -806,7 +819,7 @@
 
           <section id="employeeSettings" class="personnel-section active">
             <div class="employee-toolbar">
-              <div><h2>Team</h2><p>Personalnummer, Name, Dienstplan-Name, Position, Farbe, Stammfiliale, Abteilung, Wochen-Sollzeit und fixe Arbeitstage.</p></div>
+              <div><h2>Team</h2><p>Personalnummer, Name, Dienstplan-Name, Kostenstelle, passende Position, Farbe, Abteilung, Wochen-Sollzeit und fixe Arbeitstage.</p></div>
               <button class="primary-button" id="addEmployeeButton">+ Teammitglied anlegen</button>
             </div>
             <div class="employee-table-wrap">
@@ -1100,8 +1113,6 @@
 
           <div class="settings-tabs" role="tablist">
             <button class="settings-tab active" data-settings-tab="general">Grundeinstellungen</button>
-            <button class="settings-tab" data-settings-tab="branding">Branding</button>
-            <button class="settings-tab" data-settings-tab="pdf">PDF-Ausgabe</button>
             <button class="settings-tab" data-settings-tab="personnel">Personal</button>
             <button class="settings-tab" data-settings-tab="vacation">Urlaub</button>
             <button class="settings-tab" data-settings-tab="timeTracking">Zeiterfassung</button>
@@ -1114,36 +1125,25 @@
           </div>
 
           <section id="generalSettings" class="settings-section settings-two-column active">
-            <div class="settings-card operation-mode-card">
-              <div class="card-heading"><div class="card-icon">Modus</div><div><h2>Betriebsmodus</h2><p>Lokal, zentral im Firmennetz oder als IT-verwalteter HTTPS-Einzelserver.</p></div></div>
-              <div class="operation-mode-options">
-                <button class="operation-mode-option active" id="localModeOption" type="button" aria-current="true">
-                  <span class="operation-mode-mark">L</span>
-                  <span><strong>Lokalbetrieb</strong><small>SQLite auf diesem Gerät oder USB-Stick, ohne Loginpflicht.</small></span>
-                  <span class="status-badge" id="localModeBadge">Aktiv</span>
-                </button>
-                <button class="operation-mode-option" id="serverModeOption" type="button" aria-current="false">
-                  <span class="operation-mode-mark">LAN</span>
-                  <span><strong>LAN-Host</strong><small>Eine zentrale App, Zugriff anderer Firmen-PCs per Browser und Login.</small></span>
-                  <span class="status-badge inactive" id="serverModeBadge">Verfügbar</span>
-                </button>
-                <button class="operation-mode-option server-managed-option" id="publicServerModeOption" type="button" aria-current="false">
-                  <span class="operation-mode-mark">HTTPS</span>
-                  <span><strong>Serverbetrieb</strong><small>Öffentlicher Zugriff ausschließlich über HTTPS-Reverse-Proxy und geschützte Serverkonfiguration.</small></span>
-                  <span class="status-badge inactive" id="publicServerModeBadge">IT-Konfiguration erforderlich</span>
-                </button>
-              </div>
-              <p class="settings-note" id="portalFoundationHint">Vor der Aktivierung wird ein Admin-Zugang benötigt. Der Wechsel erfordert einen sicheren Neustart.</p>
-              <div class="form-actions-inline"><button class="primary-button hidden" id="saveOperationModeButton" type="button">Betriebsmodus übernehmen</button></div>
-              <p class="settings-note security-note">Der Serverbetrieb wird nicht per Browser aktiviert. Dadurch können öffentliche Adresse, Proxy-Vertrauen und HTTPS-Pflicht nicht versehentlich verändert werden.</p>
-            </div>
-
             <div class="settings-card" id="viewBehaviorSettingsCard">
               <div class="card-heading"><div class="card-icon">Ansicht</div><div><h2>Ansicht &amp; Startverhalten</h2><p>Legt die Darstellung und den Wiedereinstieg in standortübergreifende Pläne fest.</p></div></div>
               <label class="switch-row"><span><strong>Letzten Dienstplan-Gesamtplan wieder öffnen</strong><small>Merkt sich den zuletzt angesehenen Standort pro angemeldetem Benutzer und Browser.</small></span><input id="rememberLastScheduleOverallPlan" type="checkbox" /></label>
               <label class="switch-row"><span><strong>Letzten Urlaubs-Gesamtplan wieder öffnen</strong><small>Kehrt beim nächsten Aufruf zur zuletzt angesehenen Filiale zurück.</small></span><input id="rememberLastVacationOverallPlan" type="checkbox" /></label>
               <label class="switch-row"><span><strong>Sonntag anzeigen</strong><small>Zeigt den Sonntag in Webansicht und PDF; für Dienste bleibt er gesperrt.</small></span><input id="showSunday" type="checkbox" /></label>
-              <label class="field"><span>Dashboard-Schriftgröße</span><select id="dashboardFontSize"><option value="compact">Kompakt · bisherige Größe</option><option value="standard">Standard · empfohlen</option><option value="large">Groß</option></select><small>Vergrößert Texte in Rechte- und Prozess-Dashboards, ohne die Planungsraster zu verändern.</small></label>
+              <div class="field app-font-scale-field">
+                <span id="appFontScaleLabel">Schriftgröße im Grabenplaner</span>
+                <div class="app-font-scale-control" role="group" aria-labelledby="appFontScaleLabel" aria-describedby="appFontScaleHint">
+                  <button class="app-font-scale-button" id="decreaseAppFontScale" type="button" aria-label="Schriftgröße verkleinern">−</button>
+                  <label class="visually-hidden" for="appFontScalePercent">Schriftgröße in Prozent</label>
+                  <span class="app-font-scale-value">
+                    <input id="appFontScalePercent" type="number" min="75" max="150" step="5" value="100" inputmode="numeric" aria-describedby="appFontScaleHint" />
+                    <span aria-hidden="true">%</span>
+                  </span>
+                  <button class="app-font-scale-button" id="increaseAppFontScale" type="button" aria-label="Schriftgröße vergrößern">+</button>
+                </div>
+                <small id="appFontScaleHint">Änderungen werden sofort im gesamten Grabenplaner als Vorschau angezeigt und erst mit „Einstellungen speichern“ dauerhaft übernommen.</small>
+              </div>
+              <label class="field"><span>Anzeigedauer für Warnmeldungen</span><select id="toastDuration"><option value="short">Kurz · 5 Sekunden</option><option value="medium">Mittel · 10 Sekunden</option><option value="long">Lang · 15 Sekunden</option></select><small>Legt fest, wie lange Hinweise und Fehlermeldungen sichtbar bleiben.</small></label>
               <p class="settings-note">Die beiden Startansichten können von Personalleitung, Admin, IT-Admin und Developer festgelegt werden.</p>
             </div>
 
@@ -1164,16 +1164,107 @@
               </div>
             </div>
 
-            <div class="settings-card toast-card">
-              <div class="card-heading"><div class="card-icon">!</div><div><h2>Warnmeldungen</h2><p>Legt fest, wie lange Hinweise und Fehlermeldungen sichtbar bleiben.</p></div></div>
-              <label class="field"><span>Anzeigedauer</span><select id="toastDuration"><option value="short">Kurz · 5 Sekunden</option><option value="medium">Mittel · 10 Sekunden</option><option value="long">Lang · 15 Sekunden</option></select></label>
-            </div>
+            <details class="settings-accordion full-settings-card hidden" id="loanSettingsCard">
+              <summary>
+                <span class="card-icon">Leihe</span>
+                <span class="settings-accordion-copy"><strong>Leihe je Standort</strong><small>Artikelquelle, Foto-PDFs, Originalaufbewahrung und Belegzustellung festlegen.</small></span>
+                <span class="settings-accordion-chevron" aria-hidden="true">›</span>
+              </summary>
+              <div class="settings-accordion-body">
+                <div class="form-actions-inline"><span class="settings-note" id="loanSettingsHint">Leiheinstellungen werden geladen.</span><button class="secondary-button" id="refreshLoanSettingsButton" type="button">Aktualisieren</button></div>
+                <div class="loan-settings-list" id="loanSettingsList"></div>
+              </div>
+            </details>
 
-            <div class="settings-card full-settings-card hidden" id="loanSettingsCard">
-              <div class="card-heading"><div class="card-icon">Leihe</div><div><h2>Leihe je Standort</h2><p>Artikelquelle, interne Belegzustellung und optionalen E-Mail-Versand festlegen.</p></div></div>
-              <div class="form-actions-inline"><span class="settings-note" id="loanSettingsHint">Leiheinstellungen werden geladen.</span><button class="secondary-button" id="refreshLoanSettingsButton" type="button">Aktualisieren</button></div>
-              <div class="loan-settings-list" id="loanSettingsList"></div>
-            </div>
+            <details class="settings-accordion full-settings-card" id="brandingSettings">
+              <summary>
+                <span class="card-icon">Logo</span>
+                <span class="settings-accordion-copy"><strong>Branding</strong><small>Firmenauftritt und Standortzuordnungen verwalten.</small></span>
+                <span class="settings-accordion-chevron" aria-hidden="true">›</span>
+              </summary>
+              <div class="settings-accordion-body settings-accordion-grid">
+                <div class="settings-card">
+                  <div class="card-heading"><div class="card-icon">Logo</div><div><h2>Branding für Oberfläche und PDFs</h2><p>Firmenname, Logo und Admin-Kontakt für Oberfläche und PDF-Ausgabe.</p></div></div>
+                  <div class="branding-settings-grid">
+                    <div>
+                      <label class="field"><span>Firma / Organisation</span><input id="brandingCompanyName" maxlength="100" placeholder="Optional" /></label>
+                      <label class="field"><span>Admin-E-Mail</span><input id="brandingAdminEmail" maxlength="180" placeholder="Optional" /></label>
+                      <label class="field"><span>Logo-Pfad oder Bild-URL</span><input id="brandingLogoUrl" maxlength="300" placeholder="/assets/grabenplaner-logo.svg" /></label>
+                      <label class="field"><span>Logo-Alternativtext</span><input id="brandingLogoAlt" maxlength="120" placeholder="Grabenplaner" /></label>
+                      <label class="field"><span>Webicon/Favicon-Pfad</span><input id="brandingIconUrl" maxlength="300" placeholder="/assets/webicon.svg" /></label>
+                    </div>
+                    <div class="branding-preview">
+                      <span class="eyebrow">Vorschau</span>
+                      <img id="brandingPreviewLogo" src="/assets/grabenplaner-logo.svg" alt="" />
+                      <strong id="brandingPreviewTitle">Grabenplaner</strong>
+                      <small id="brandingPreviewCompany">Neutrale GitHub-Version</small>
+                    </div>
+                  </div>
+                  <div class="branding-kit-actions">
+                    <button type="button" class="secondary-button" id="exportBrandingButton">Branding-Kit exportieren</button>
+                    <label class="secondary-button file-button">Branding-Kit auswählen<input id="brandingImportFile" type="file" accept=".zip,.json,application/zip,application/json" /></label>
+                    <button type="button" class="primary-button" id="importBrandingButton">Branding-Kit importieren</button>
+                  </div>
+                  <div class="branding-kit-library" id="brandingKitLibrary"></div>
+                  <p class="settings-note">Branding-Kits können als komplette ZIP-Datei oder als ältere JSON-Datei importiert werden. Importierte Kits werden lokal gespeichert und können später wie Themes erneut angewendet werden.</p>
+                </div>
+                <div class="settings-card">
+                  <div class="card-heading"><div class="card-icon">Fil</div><div><h2>Branding je Standort</h2><p>Jede Filiale kann ein eigenes installiertes Branding-Kit verwenden. Ohne Zuordnung gilt das Standard-Branding.</p></div></div>
+                  <div class="branding-assignment-list" id="brandingAssignmentList"><p class="settings-note">Standortzuordnungen werden geladen.</p></div>
+                </div>
+              </div>
+            </details>
+
+            <details class="settings-accordion full-settings-card" id="pdfSettings">
+              <summary>
+                <span class="card-icon">PDF</span>
+                <span class="settings-accordion-copy"><strong>PDF-Ausgabe</strong><small>Dienstplan- und Urlaubs-PDFs konfigurieren und prüfen.</small></span>
+                <span class="settings-accordion-chevron" aria-hidden="true">›</span>
+              </summary>
+              <div class="settings-accordion-body settings-accordion-stack">
+                <div class="settings-card pdf-card">
+                  <div class="card-heading"><div class="card-icon">Dienst</div><div><h2>PDF-Ausgabe Dienstplan</h2><p>A4 Querformat als kompakte Vektor-PDF mit anpassbarem Dateinamen.</p></div></div>
+                  <label class="field"><span>Titel der PDF</span><input id="pdfTitleSetting" placeholder="Dienstplan" /></label>
+                  <label class="field pdf-filename-field"><span>Dateiname vor Kalenderwoche</span><input id="pdfFilenamePrefix" minlength="5" maxlength="80" placeholder="Dienstplan" /></label>
+                  <div class="pdf-file-options">
+                    <label><input id="pdfFilenameIncludeKw" type="checkbox" /> Kalenderwoche automatisch anhängen</label>
+                    <label><input id="pdfFilenameIncludeTimestamp" type="checkbox" /> Erstelldatum und Uhrzeit anhängen</label>
+                  </div>
+                  <div class="preview-line"><span>Titelvorschau</span><strong id="pdfTitlePreview"></strong></div>
+                  <div class="preview-line"><span>Dateiname</span><strong id="pdfFilenamePreview"></strong></div>
+                  <p class="settings-note">Standard: „Dienstplan KW31.pdf“. Der Text vor der KW muss 5 bis 80 Zeichen lang sein.</p>
+                  <div class="pdf-live-preview">
+                    <div><strong>PDF-Vorschau Dienstplan</strong><small>Wird erst beim Klick generiert.</small></div>
+                    <button type="button" class="secondary-button" id="schedulePdfPreviewButton">Vorschau erzeugen</button>
+                    <iframe id="schedulePdfPreviewFrame" title="PDF-Vorschau Dienstplan"></iframe>
+                  </div>
+                </div>
+                <div class="settings-card pdf-card">
+                  <div class="card-heading"><div class="card-icon">Urlaub</div><div><h2>PDF-Ausgabe Urlaubsplanung</h2><p>Nur für Monats-, Quartals- und Jahresübersichten des Urlaubsplaners.</p></div></div>
+                  <label class="field"><span>Titel der PDF</span><input id="vacationPdfTitleSetting" placeholder="Urlaubsplanung" /></label>
+                  <label class="field pdf-filename-field"><span>Dateiname vor Zeitraum</span><input id="vacationPdfFilenamePrefix" minlength="5" maxlength="80" placeholder="Urlaubsplanung" /></label>
+                  <div class="pdf-file-options">
+                    <label><input id="vacationPdfFilenameIncludePeriod" type="checkbox" /> Zeitraum automatisch anhängen</label>
+                    <label><input id="vacationPdfFilenameIncludeTimestamp" type="checkbox" /> Erstelldatum und Uhrzeit anhängen</label>
+                  </div>
+                  <label class="field"><span>Kalenderdarstellung</span><select id="vacationPdfCalendarStyle"><option value="bars">Durchgezogene Urlaubslinien</option><option value="dots">Einzelne Farb-Punkte je Tag</option></select></label>
+                  <div class="pdf-file-options vacation-balance-options">
+                    <label><input id="vacationPdfShowBalance" type="checkbox" /> Resturlaub je Teammitglied anzeigen</label>
+                    <label><input id="vacationPdfBalanceShowEntitlement" type="checkbox" /> Jahresurlaub per 1.1. anzeigen</label>
+                    <label><input id="vacationPdfBalanceShowPlanned" type="checkbox" /> Eingeplanten Urlaub anzeigen</label>
+                    <label><input id="vacationPdfBalanceShowConsumed" type="checkbox" /> Bereits konsumierten Urlaub anzeigen</label>
+                  </div>
+                  <div class="preview-line"><span>Titelvorschau</span><strong id="vacationPdfTitlePreview"></strong></div>
+                  <div class="preview-line"><span>Dateiname</span><strong id="vacationPdfFilenamePreview"></strong></div>
+                  <p class="settings-note">Urlaubs-PDFs werden einheitlich als A4 Querformat ausgegeben. Die PDF ist vektorbasiert und dadurch unabhängig von DPI gestochen scharf.</p>
+                  <div class="pdf-live-preview">
+                    <div><strong>PDF-Vorschau Urlaub</strong><small>Aktuelle Urlaubsansicht als echte PDF.</small></div>
+                    <button type="button" class="secondary-button" id="vacationPdfPreviewButton">Vorschau erzeugen</button>
+                    <iframe id="vacationPdfPreviewFrame" title="PDF-Vorschau Urlaub"></iframe>
+                  </div>
+                </div>
+              </div>
+            </details>
 
           </section>
 
@@ -1247,6 +1338,31 @@
               <p class="settings-note" id="accessSettingsHint">Die Zugänge werden geladen.</p>
               <div class="portal-user-list" id="portalUserList"></div>
             </div>
+            <div class="settings-card" id="organizationAccountsCard">
+              <div class="card-heading"><div class="card-icon">Fil</div><div><h2>Filial- &amp; Terminalkonten</h2><p>Allgemeine, filialgebundene Zugänge ohne Mitarbeiterdatensatz oder Personalnummer.</p></div></div>
+              <p class="settings-note security-note">Diese Konten erhalten ausschließlich ausdrücklich freigegebene Leseansichten. Sie können keine persönliche Ausgabe, Rückgabe, Zeiterfassung, Urlaubsverwaltung, AUM oder Personalakte übernehmen.</p>
+              <form class="organization-account-form" id="organizationAccountForm">
+                <input id="organizationAccountEditingId" type="hidden" />
+                <div class="settings-grid organization-account-fields">
+                  <label class="field"><span>Zugangskennung</span><input id="organizationAccountLoginName" autocomplete="off" maxlength="40" placeholder="z. B. fil18" required /><small>Keine Personalnummer; beginnt mit einem Buchstaben.</small></label>
+                  <label class="field"><span>Bezeichnung</span><input id="organizationAccountDisplayName" maxlength="100" placeholder="z. B. Filiale Mitterweg" required /></label>
+                  <label class="field"><span>Kontotyp</span><select id="organizationAccountType"><option value="branch">Filialkonto</option><option value="terminal">Terminalkonto</option></select></label>
+                  <label class="field"><span>Filiale</span><select id="organizationAccountLocation" required></select></label>
+                  <label class="field"><span>Neues Startpasswort</span><span class="password-field"><input id="organizationAccountPassword" type="password" autocomplete="new-password" placeholder="Beim Bearbeiten optional" /><button class="password-toggle" type="button" data-password-toggle="organizationAccountPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>
+                </div>
+                <div class="organization-account-permissions" aria-label="Freigegebene Filialfunktionen">
+                  <label class="switch-row"><span><strong>Offene Leihen ansehen</strong><small>Nur Gerät, Artikel-/Inventarnummer, Seriennummer und geplante Rückgabe.</small></span><input id="organizationAccountLoanOverview" type="checkbox" checked /></label>
+                  <label class="switch-row"><span><strong>Dienstplan des Standorts ansehen</strong><small>Reduzierte Ansicht ohne Bearbeitungs-, Personal- oder Abwesenheitsfunktionen.</small></span><input id="organizationAccountScheduleView" type="checkbox" /></label>
+                  <label class="switch-row"><span><strong>Konto aktiv</strong><small>Deaktivieren beendet bestehende Sitzungen sofort.</small></span><input id="organizationAccountActive" type="checkbox" checked /></label>
+                </div>
+                <div class="form-actions-inline">
+                  <span class="settings-note" id="organizationAccountHint">Mindestens eine Filialfunktion und eine Filiale sind erforderlich.</span>
+                  <button class="secondary-button hidden" id="organizationAccountCancel" type="button">Abbrechen</button>
+                  <button class="primary-button" id="organizationAccountSubmit" type="submit">Konto anlegen</button>
+                </div>
+              </form>
+              <div class="organization-account-list" id="organizationAccountList"><p class="settings-note">Konten werden geladen.</p></div>
+            </div>
           </section>
 
           <section id="rightsSettings" class="settings-section settings-two-column">
@@ -1269,82 +1385,6 @@
               <p class="settings-note security-note">Verborgene Werte werden nicht an den Browser übertragen. „Nur lesen“ zeigt sie grau und unveränderbar; „Bearbeiten“ erlaubt Änderungen innerhalb der zugewiesenen Filiale beziehungsweise Abteilung.</p>
               <div class="personnel-field-rights-matrix" id="personnelFieldRightsMatrix"><p class="settings-note">Feldrechte werden geladen.</p></div>
               <div class="form-actions-inline"><span class="settings-note" id="personnelFieldRightsHint">Die Rollenmatrix gilt für alle Zugänge dieser Leitungsebene.</span><button class="primary-button" id="savePersonnelFieldRightsButton" type="button">Feldrechte speichern</button></div>
-            </div>
-          </section>
-
-          <section id="brandingSettings" class="settings-section settings-two-column">
-            <div class="settings-card full-settings-card">
-              <div class="card-heading"><div class="card-icon">Logo</div><div><h2>Branding</h2><p>Firmenname, Logo und Admin-Kontakt für Oberfläche und PDF-Ausgabe.</p></div></div>
-              <div class="branding-settings-grid">
-                <div>
-                  <label class="field"><span>Firma / Organisation</span><input id="brandingCompanyName" maxlength="100" placeholder="Optional" /></label>
-                  <label class="field"><span>Admin-E-Mail</span><input id="brandingAdminEmail" maxlength="180" placeholder="Optional" /></label>
-                  <label class="field"><span>Logo-Pfad oder Bild-URL</span><input id="brandingLogoUrl" maxlength="300" placeholder="/assets/grabenplaner-logo.svg" /></label>
-                  <label class="field"><span>Logo-Alternativtext</span><input id="brandingLogoAlt" maxlength="120" placeholder="Grabenplaner" /></label>
-                  <label class="field"><span>Webicon/Favicon-Pfad</span><input id="brandingIconUrl" maxlength="300" placeholder="/assets/webicon.svg" /></label>
-                </div>
-                <div class="branding-preview">
-                  <span class="eyebrow">Vorschau</span>
-                  <img id="brandingPreviewLogo" src="/assets/grabenplaner-logo.svg" alt="" />
-                  <strong id="brandingPreviewTitle">Grabenplaner</strong>
-                  <small id="brandingPreviewCompany">Neutrale GitHub-Version</small>
-                </div>
-              </div>
-              <div class="branding-kit-actions">
-                <button type="button" class="secondary-button" id="exportBrandingButton">Branding-Kit exportieren</button>
-                <label class="secondary-button file-button">Branding-Kit auswählen<input id="brandingImportFile" type="file" accept=".zip,.json,application/zip,application/json" /></label>
-                <button type="button" class="primary-button" id="importBrandingButton">Branding-Kit importieren</button>
-              </div>
-              <div class="branding-kit-library" id="brandingKitLibrary"></div>
-              <p class="settings-note">Branding-Kits können als komplette ZIP-Datei oder als ältere JSON-Datei importiert werden. Importierte Kits werden lokal gespeichert und können später wie Themes erneut angewendet werden.</p>
-            </div>
-            <div class="settings-card full-settings-card">
-              <div class="card-heading"><div class="card-icon">Fil</div><div><h2>Branding je Standort</h2><p>Jede Filiale kann ein eigenes installiertes Branding-Kit verwenden. Ohne Zuordnung gilt das Standard-Branding.</p></div></div>
-              <div class="branding-assignment-list" id="brandingAssignmentList"><p class="settings-note">Standortzuordnungen werden geladen.</p></div>
-            </div>
-          </section>
-
-          <section id="pdfSettings" class="settings-section">
-            <div class="settings-card pdf-card">
-              <div class="card-heading"><div class="card-icon">Dienst</div><div><h2>PDF-Ausgabe Dienstplan</h2><p>A4 Querformat als kompakte Vektor-PDF mit anpassbarem Dateinamen.</p></div></div>
-              <label class="field"><span>Titel der PDF</span><input id="pdfTitleSetting" placeholder="Dienstplan" /></label>
-              <label class="field pdf-filename-field"><span>Dateiname vor Kalenderwoche</span><input id="pdfFilenamePrefix" minlength="5" maxlength="80" placeholder="Dienstplan" /></label>
-              <div class="pdf-file-options">
-                <label><input id="pdfFilenameIncludeKw" type="checkbox" /> Kalenderwoche automatisch anhängen</label>
-                <label><input id="pdfFilenameIncludeTimestamp" type="checkbox" /> Erstelldatum und Uhrzeit anhängen</label>
-              </div>
-              <div class="preview-line"><span>Titelvorschau</span><strong id="pdfTitlePreview"></strong></div>
-              <div class="preview-line"><span>Dateiname</span><strong id="pdfFilenamePreview"></strong></div>
-              <p class="settings-note">Standard: „Dienstplan KW31.pdf“. Der Text vor der KW muss 5 bis 80 Zeichen lang sein.</p>
-              <div class="pdf-live-preview">
-                <div><strong>PDF-Vorschau Dienstplan</strong><small>Wird erst beim Klick generiert.</small></div>
-                <button type="button" class="secondary-button" id="schedulePdfPreviewButton">Vorschau erzeugen</button>
-                <iframe id="schedulePdfPreviewFrame" title="PDF-Vorschau Dienstplan"></iframe>
-              </div>
-            </div>
-            <div class="settings-card pdf-card">
-              <div class="card-heading"><div class="card-icon">Urlaub</div><div><h2>PDF-Ausgabe Urlaubsplanung</h2><p>Nur für Monats-, Quartals- und Jahresübersichten des Urlaubsplaners.</p></div></div>
-              <label class="field"><span>Titel der PDF</span><input id="vacationPdfTitleSetting" placeholder="Urlaubsplanung" /></label>
-              <label class="field pdf-filename-field"><span>Dateiname vor Zeitraum</span><input id="vacationPdfFilenamePrefix" minlength="5" maxlength="80" placeholder="Urlaubsplanung" /></label>
-              <div class="pdf-file-options">
-                <label><input id="vacationPdfFilenameIncludePeriod" type="checkbox" /> Zeitraum automatisch anhängen</label>
-                <label><input id="vacationPdfFilenameIncludeTimestamp" type="checkbox" /> Erstelldatum und Uhrzeit anhängen</label>
-              </div>
-              <label class="field"><span>Kalenderdarstellung</span><select id="vacationPdfCalendarStyle"><option value="bars">Durchgezogene Urlaubslinien</option><option value="dots">Einzelne Farb-Punkte je Tag</option></select></label>
-              <div class="pdf-file-options vacation-balance-options">
-                <label><input id="vacationPdfShowBalance" type="checkbox" /> Resturlaub je Teammitglied anzeigen</label>
-                <label><input id="vacationPdfBalanceShowEntitlement" type="checkbox" /> Jahresurlaub per 1.1. anzeigen</label>
-                <label><input id="vacationPdfBalanceShowPlanned" type="checkbox" /> Eingeplanten Urlaub anzeigen</label>
-                <label><input id="vacationPdfBalanceShowConsumed" type="checkbox" /> Bereits konsumierten Urlaub anzeigen</label>
-              </div>
-              <div class="preview-line"><span>Titelvorschau</span><strong id="vacationPdfTitlePreview"></strong></div>
-              <div class="preview-line"><span>Dateiname</span><strong id="vacationPdfFilenamePreview"></strong></div>
-              <p class="settings-note">Urlaubs-PDFs werden einheitlich als A4 Querformat ausgegeben. Die PDF ist vektorbasiert und dadurch unabhängig von DPI gestochen scharf.</p>
-              <div class="pdf-live-preview">
-                <div><strong>PDF-Vorschau Urlaub</strong><small>Aktuelle Urlaubsansicht als echte PDF.</small></div>
-                <button type="button" class="secondary-button" id="vacationPdfPreviewButton">Vorschau erzeugen</button>
-                <iframe id="vacationPdfPreviewFrame" title="PDF-Vorschau Urlaub"></iframe>
-              </div>
             </div>
           </section>
 
@@ -1580,7 +1620,7 @@
               <p class="settings-note" id="googleDriveManagementHint">Verfügbar sind ausschließlich von Grabenplaner verwaltete Ordnernamen. Es gibt keine freie Pfadeingabe und keinen Zugriff auf andere Bereiche in Google Drive.</p>
             </div>
             <div class="settings-card full-settings-card hidden" id="backupRestoreGuidanceCard">
-              <div class="card-heading"><div class="card-icon">Restore</div><div><h2>Wiederherstellung im Wartungsfenster</h2><p>Im laufenden HTTPS-Serverbetrieb ist ein Datenbankimport absichtlich gesperrt. Datenbank, verschlüsselte Dokumentablage und zugehörige Schlüssel müssen gemeinsam durch die technische Administration wiederhergestellt und geprüft werden.</p></div></div>
+              <div class="card-heading"><div class="card-icon">Restore</div><div><h2>Wiederherstellung im Wartungsfenster</h2><p>In der produktiven Installation ist ein Datenbankimport absichtlich gesperrt. Datenbank, verschlüsselte Dokumentablage und zugehörige Schlüssel müssen gemeinsam durch die technische Administration wiederhergestellt und geprüft werden.</p></div></div>
               <div class="maintenance-guidance"><strong>Kein Browser-Schnellrestore</strong><span>Die produktive Übernahme erfolgt beaufsichtigt mit den Server-Wartungswerkzeugen. Vor dem Austausch wird ein Sicherheitsstand erstellt; danach müssen Integrität, Live- und Ready-Prüfung erfolgreich sein.</span></div>
             </div>
             <div class="settings-card full-settings-card hidden" id="backupImportCard">
@@ -1598,12 +1638,12 @@
 
           <section id="usbProvisioningSettings" class="settings-section settings-two-column">
             <div class="settings-card full-span usb-availability-card" id="usbProvisioningAvailabilityCard">
-              <div class="card-heading"><div class="card-icon">USB</div><div><h2>USB-Stick erstellen</h2><p>Am Windows-Host einen vorkonfigurierten Grabenplaner-Stick erstellen. Die Installation auf dem Stick startet immer im Lokalbetrieb.</p></div></div>
+              <div class="card-heading"><div class="card-icon">USB</div><div><h2>USB-Stick erstellen</h2><p>Am Windows-Host einen vorkonfigurierten Grabenplaner-Stick als eigenständige lokale Installation erstellen.</p></div></div>
               <div class="usb-availability" id="usbProvisioningAvailability">
                 <span class="status-badge inactive" id="usbProvisioningAvailabilityBadge">Wird geprüft</span>
                 <div><strong id="usbProvisioningAvailabilityTitle">Windows-Host wird geprüft</strong><small id="usbProvisioningAvailabilityText">USB-Sticks können ausschließlich direkt am Windows-Host vorbereitet werden.</small></div>
               </div>
-              <p class="settings-note security-note"><strong>Ziel: Lokalbetrieb.</strong> Der erstellte Stick arbeitet unabhängig vom aktuellen LAN- oder HTTPS-Betrieb mit eigener lokaler SQLite-Datenbank.</p>
+              <p class="settings-note security-note"><strong>Eigenständige Installation.</strong> Der erstellte Stick arbeitet unabhängig von der produktiven Installation mit eigener lokaler SQLite-Datenbank.</p>
               <p class="settings-note security-note">Es wird keine Windows-Administratorfreigabe angefordert. Erlaubt Windows die Formatierung mit dem aktuellen Benutzerkonto nicht, wird der Vorgang mit einer verständlichen Meldung beendet.</p>
             </div>
 
@@ -1626,7 +1666,7 @@
                   <div class="usb-panel-heading"><span class="usb-panel-number">1</span><div><h3>Installationsprofil</h3><p>Ein passendes Grundprofil wählen und anschließend bei Bedarf einzelne Funktionen anpassen.</p></div></div>
                   <label class="field"><span>Profil</span><select id="usbInstallationProfile"><option value="full">Vollständiger Grabenplaner</option><option value="planning-vacation" selected>Dienstplanung &amp; Urlaub</option><option value="custom">Benutzerdefiniert</option></select></label>
                   <label class="field"><span>Bezeichnung der Installation</span><input id="usbInstallationName" maxlength="80" placeholder="z. B. Filiale 05 · Dienstplanung" /></label>
-                  <div class="calculation-note"><strong>Zielbetrieb: Lokalbetrieb.</strong> Das Profil legt nur den verfügbaren Funktionsumfang dieser eigenständigen Installation fest. Rollen und individuelle Rechte werden im Schritt „Team“ vergeben.</div>
+                  <div class="calculation-note"><strong>Eigenständige lokale Installation.</strong> Das Profil legt nur den verfügbaren Funktionsumfang fest. Rollen und individuelle Rechte werden im Schritt „Team“ vergeben.</div>
                 </section>
                 <section class="usb-panel-card">
                   <div class="usb-panel-heading"><span class="usb-panel-number">✓</span><div><h3>Enthaltene Funktionen</h3><p>Nicht ausgewählte Bereiche werden im Zielsystem ausgeblendet und technisch deaktiviert.</p></div></div>
@@ -1780,44 +1820,53 @@
     <dialog class="modal wide-modal employee-modal" id="employeeModal">
       <form method="dialog" id="employeeForm" autocomplete="off">
         <div class="modal-header"><div><span class="eyebrow">Personalstammdaten</span><h2 id="employeeModalTitle">Teammitglied anlegen</h2></div><button type="button" class="close-button" data-close="employeeModal">×</button></div>
-        <div class="form-grid">
+        <div class="form-grid employee-form-accordion">
           <p class="calculation-note full-width hidden" id="employeeEditScopeHint">Nur die ausdrücklich freigegebenen Angaben zur Teamdarstellung können geändert werden. Alle weiteren Personalstammdaten bleiben schreibgeschützt.</p>
-          <label class="field"><span>Personalnummer</span><input id="employeeNumber" required /></label>
-          <label class="field"><span>Wochen-Sollzeit</span><div class="unit-input"><input id="employeeHours" type="number" min="0" max="80" step="0.25" required /><em>Stunden</em></div></label>
-          <label class="field"><span>Soll-Arbeitstage pro Woche</span><div class="unit-input"><input id="employeeTargetWorkdays" type="number" min="1" max="6" step="1" required /><em>Tage</em></div><small>Grundlage für die unveränderlich gespeicherte Krankenstandszeit je vorgesehenem Arbeitstag.</small></label>
-          <label class="field"><span>Kostenstelle</span><select id="employeeCostCenter" required></select><small id="employeeCostCenterHint">Eine Kostenstelle ist für jeden Personalstamm erforderlich.</small></label>
-          <label class="field"><span>Stammfiliale</span><select id="employeeHomeLocation"></select><small id="employeeHomeLocationHint">Für Verwaltung, Geschäftsleitung oder Produktion kann die Stammfiliale entfallen.</small></label>
-          <label class="field"><span>Position</span><select id="employeePosition" required></select></label>
-          <label class="field" id="employeeTimeConfirmationLevelField"><span>Vertrauensstufe</span><select id="employeeTimeConfirmationLevel" required><option value="A">Stufe A · Wochenabschluss</option><option value="B">Stufe B · spätestens nach 3 Tagen</option><option value="C">Stufe C · täglich bis 12:00 Uhr</option></select><small>Unabhängig von Position und Rolle; steuert künftig die Bestätigungsfrist automatischer Zeitvorschläge.</small></label>
-          <label class="switch-row full-width hidden" id="employeeSicknessWithoutAumField"><span><strong>Persönliches Kontingent ohne AUM freischalten</strong><small id="employeeSicknessWithoutAumHint">Wirksam nur bei Vertrauensstufe A und aktivierter Unternehmensregel.</small></span><input id="employeeSicknessWithoutAumEnabled" type="checkbox" /></label>
-          <label class="field"><span>Bevorzugte Abteilung</span><select id="employeePreferredDepartment"><option value="">Keine Abteilung</option></select></label>
-          <label class="field modal-span-2"><span>Bevorzugter freier Tag</span><select id="employeePreferredDay"><option value="">Kein bevorzugter Tag</option><option value="monday">Montag</option><option value="tuesday">Dienstag</option><option value="wednesday">Mittwoch</option><option value="thursday">Donnerstag</option><option value="friday">Freitag</option></select></label>
-          <div class="field modal-span-3"><span>Dienstvertraglich vereinbarte fixe Arbeitstage</span>
-            <div class="weekday-checks">
-              <label><input type="checkbox" name="employeeFixedWorkday" value="monday" /> Mo</label>
-              <label><input type="checkbox" name="employeeFixedWorkday" value="tuesday" /> Di</label>
-              <label><input type="checkbox" name="employeeFixedWorkday" value="wednesday" /> Mi</label>
-              <label><input type="checkbox" name="employeeFixedWorkday" value="thursday" /> Do</label>
-              <label><input type="checkbox" name="employeeFixedWorkday" value="friday" /> Fr</label>
-              <label><input type="checkbox" name="employeeFixedWorkday" value="saturday" /> Sa</label>
+          <details class="employee-form-section full-width" data-employee-form-section="organisation">
+            <summary><span><strong>Person &amp; Organisation</strong><small>Kostenstelle, Position und organisatorische Zuordnung</small></span><span class="status-badge">Stammdaten</span></summary>
+            <div class="form-grid employee-form-section-grid">
+              <label class="field"><span>Personalnummer</span><input id="employeeNumber" required /></label>
+              <label class="field modal-span-2"><span>Name</span><input id="employeeName" required /></label>
+              <label class="field"><span>Kostenstelle</span><select id="employeeCostCenter" required></select><small id="employeeCostCenterHint">Die Kostenstelle bestimmt Standort und auswählbare Positionen.</small></label>
+              <label class="field"><span>Position</span><select id="employeePosition" required></select><small id="employeePositionHint">Nach Auswahl der Kostenstelle erscheinen nur freigegebene Positionen.</small></label>
+              <label class="field"><span>Bevorzugte Abteilung</span><select id="employeePreferredDepartment"><option value="">Keine Abteilung</option></select><small id="employeePreferredDepartmentHint">Nur für Kostenstellen mit zugeordnetem Standort.</small></label>
+              <label class="switch-row full-width"><span><strong>Aktiv</strong><small>In Planung und PDF anzeigen.</small></span><input id="employeeActive" type="checkbox" checked /></label>
             </div>
-          </div>
-          <label class="field modal-span-2"><span>Name</span><input id="employeeName" required /></label>
-          <label class="field modal-span-2"><span>Spitzname / Anzeige im Dienstplan</span><input id="employeeNickname" required /></label>
-          <label class="field modal-span-2"><span>Farbe im Dienstplan</span>
-            <div class="rgb-color-picker">
-              <input id="employeeColorPicker" type="color" value="#0b84c6" />
-              <input id="employeeColorHex" maxlength="7" value="#0b84c6" aria-label="RGB-Farbwert" />
-              <span id="employeeColorPreview"></span>
+          </details>
+          <details class="employee-form-section full-width" data-employee-form-section="planning">
+            <summary><span><strong>Dienstplanung &amp; Arbeitszeit</strong><small>Anzeige, Sollzeit und wiederkehrende Planungsangaben</small></span><span class="status-badge">Planung</span></summary>
+            <div class="form-grid employee-form-section-grid">
+              <label class="field modal-span-2"><span>Spitzname / Anzeige im Dienstplan</span><input id="employeeNickname" required /></label>
+              <label class="field modal-span-2"><span>Farbe im Dienstplan</span>
+                <div class="rgb-color-picker">
+                  <input id="employeeColorPicker" type="color" value="#0b84c6" />
+                  <input id="employeeColorHex" maxlength="7" value="#0b84c6" aria-label="RGB-Farbwert" />
+                  <span id="employeeColorPreview"></span>
+                </div>
+              </label>
+              <label class="field"><span>Wochen-Sollzeit</span><div class="unit-input"><input id="employeeHours" type="number" min="0" max="80" step="0.25" required /><em>Stunden</em></div></label>
+              <label class="field"><span>Soll-Arbeitstage pro Woche</span><div class="unit-input"><input id="employeeTargetWorkdays" type="number" min="1" max="6" step="1" required /><em>Tage</em></div><small>Grundlage für die unveränderlich gespeicherte Krankenstandszeit je vorgesehenem Arbeitstag.</small></label>
+              <label class="field" id="employeeTimeConfirmationLevelField"><span>Vertrauensstufe</span><select id="employeeTimeConfirmationLevel" required><option value="A">Stufe A · Wochenabschluss</option><option value="B">Stufe B · spätestens nach 3 Tagen</option><option value="C">Stufe C · täglich bis 12:00 Uhr</option></select><small>Unabhängig von Position und Rolle; steuert künftig die Bestätigungsfrist automatischer Zeitvorschläge.</small></label>
+              <label class="switch-row full-width hidden" id="employeeSicknessWithoutAumField"><span><strong>Persönliches Kontingent ohne AUM freischalten</strong><small id="employeeSicknessWithoutAumHint">Wirksam nur bei Vertrauensstufe A und aktivierter Unternehmensregel.</small></span><input id="employeeSicknessWithoutAumEnabled" type="checkbox" /></label>
+              <label class="field modal-span-2"><span>Bevorzugter freier Tag</span><select id="employeePreferredDay"><option value="">Kein bevorzugter Tag</option><option value="monday">Montag</option><option value="tuesday">Dienstag</option><option value="wednesday">Mittwoch</option><option value="thursday">Donnerstag</option><option value="friday">Freitag</option></select></label>
+              <div class="field modal-span-3"><span>Dienstvertraglich vereinbarte fixe Arbeitstage</span>
+                <div class="weekday-checks">
+                  <label><input type="checkbox" name="employeeFixedWorkday" value="monday" /> Mo</label>
+                  <label><input type="checkbox" name="employeeFixedWorkday" value="tuesday" /> Di</label>
+                  <label><input type="checkbox" name="employeeFixedWorkday" value="wednesday" /> Mi</label>
+                  <label><input type="checkbox" name="employeeFixedWorkday" value="thursday" /> Do</label>
+                  <label><input type="checkbox" name="employeeFixedWorkday" value="friday" /> Fr</label>
+                  <label><input type="checkbox" name="employeeFixedWorkday" value="saturday" /> Sa</label>
+                </div>
+              </div>
             </div>
-          </label>
-          <label class="switch-row full-width"><span><strong>Aktiv</strong><small>In Planung und PDF anzeigen.</small></span><input id="employeeActive" type="checkbox" checked /></label>
+          </details>
           <details class="employee-protected-record full-width hidden" id="employeeProtectedRecord">
             <summary><span><strong>Geschützter Personalakt</strong><small>Persönliche, vertragliche und sensible Daten verschlüsselt erfassen.</small></span><span class="status-badge approved">PL+</span></summary>
             <p class="calculation-note" id="employeeProtectedRecordHint">Die Angaben werden ausschließlich im geschützten Personalakt gespeichert.</p>
             <div class="protected-record-sections">
-              <section class="protected-record-section">
-                <h3>Persönliche Daten</h3>
+              <details class="protected-record-section">
+                <summary>Persönliche Daten</summary>
                 <div class="personnel-record-field-grid">
                   <label class="field"><span>Vorname</span><input name="employeeRecordFirstName" maxlength="100" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
                   <label class="field"><span>Nachname</span><input name="employeeRecordLastName" maxlength="100" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
@@ -1828,9 +1877,9 @@
                   <label class="field"><span>Geburtsort</span><input name="employeeRecordBirthPlace" maxlength="120" autocomplete="off" /></label>
                   <label class="field"><span>Staatsangehörigkeit</span><input name="employeeRecordNationality" maxlength="80" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
                 </div>
-              </section>
-              <section class="protected-record-section">
-                <h3>Kontakt &amp; Notfallkontakt</h3>
+              </details>
+              <details class="protected-record-section">
+                <summary>Kontakt &amp; Notfallkontakt</summary>
                 <div class="personnel-record-field-grid">
                   <label class="field"><span>Telefonnummer</span><input name="employeeRecordPhone" type="tel" maxlength="40" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
                   <label class="field"><span>Weitere Telefonnummer</span><input name="employeeRecordAlternatePhone" type="tel" maxlength="40" autocomplete="off" /></label>
@@ -1839,9 +1888,9 @@
                   <label class="field"><span>Beziehung</span><input name="employeeRecordEmergencyRelationship" maxlength="80" autocomplete="off" /></label>
                   <label class="field personnel-record-span-two"><span>Notfallkontakt · Telefon</span><input name="employeeRecordEmergencyPhone" type="tel" maxlength="40" autocomplete="off" /></label>
                 </div>
-              </section>
-              <section class="protected-record-section sensitive-personnel-section">
-                <h3>SV, Bank &amp; Adresse</h3>
+              </details>
+              <details class="protected-record-section sensitive-personnel-section">
+                <summary>SV, Bank &amp; Adresse</summary>
                 <div class="personnel-record-field-grid">
                   <label class="field"><span>SV-Nummer</span><input name="employeeRecordSocialSecurityNumber" inputmode="numeric" maxlength="13" autocomplete="off" /></label>
                   <label class="field"><span>Kontoinhaber/-in</span><input name="employeeRecordAccountHolder" maxlength="120" autocomplete="off" /></label>
@@ -1854,9 +1903,9 @@
                   <label class="field"><span>Bundesland</span><input name="employeeRecordState" maxlength="100" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
                   <label class="field"><span>Land</span><input name="employeeRecordCountry" maxlength="80" value="Österreich" autocomplete="off" data-1p-ignore="true" data-lpignore="true" /></label>
                 </div>
-              </section>
-              <section class="protected-record-section">
-                <h3>Beschäftigung &amp; Vertrag</h3>
+              </details>
+              <details class="protected-record-section">
+                <summary>Beschäftigung &amp; Vertrag</summary>
                 <div class="personnel-record-field-grid">
                   <label class="field"><span>Eintrittsdatum</span><input name="employeeRecordStartDate" type="date" /></label>
                   <label class="field"><span>Austrittsdatum</span><input name="employeeRecordEndDate" type="date" /></label>
@@ -1870,19 +1919,21 @@
                   <label class="field"><span>Lohnverrechnungsgruppe</span><input name="employeeRecordPayrollGroup" maxlength="120" /></label>
                   <label class="field personnel-record-span-two"><span>Interne Hinweise</span><textarea name="employeeRecordNotes" rows="3" maxlength="2000"></textarea></label>
                 </div>
-              </section>
+              </details>
             </div>
           </details>
-          <section class="employee-access-profile full-width" id="employeeAccessProfile">
-            <div class="employee-access-heading"><div><span class="eyebrow">App-Zugang</span><h3>Rechte</h3><p>App-Rolle und individuelle Zusatzrechte sind von der Position im Unternehmen getrennt.</p></div><span class="status-badge inactive" id="employeeAccessStatus">Nur Ansicht</span></div>
-            <label class="field"><span>App-Rolle</span><select id="employeeAppRole"></select><small id="employeeAppRoleDescription"></small></label>
-            <div class="employee-role-summary"><strong>Grundrechte der Rolle</strong><div id="employeeRolePermissions"></div></div>
-            <details class="employee-additional-rights" id="employeeAdditionalRightsDetails">
-              <summary>Individuelle Zusatzrechte <span id="employeeAdditionalRightsCount">0</span></summary>
-              <div id="employeeAdditionalRights"></div>
-            </details>
-            <p class="calculation-note" id="employeeAccessHint">Rechte werden geladen.</p>
-          </section>
+          <details class="employee-access-profile full-width" id="employeeAccessProfile">
+            <summary class="employee-access-heading"><div><span class="eyebrow">App-Zugang</span><h3>Rechte</h3><p>App-Rolle und individuelle Zusatzrechte sind von der Position im Unternehmen getrennt.</p></div><span class="status-badge inactive" id="employeeAccessStatus">Nur Ansicht</span></summary>
+            <div class="employee-access-body">
+              <label class="field"><span>App-Rolle</span><select id="employeeAppRole"></select><small id="employeeAppRoleDescription"></small></label>
+              <div class="employee-role-summary"><strong>Grundrechte der Rolle</strong><div id="employeeRolePermissions"></div></div>
+              <details class="employee-additional-rights" id="employeeAdditionalRightsDetails">
+                <summary>Individuelle Zusatzrechte <span id="employeeAdditionalRightsCount">0</span></summary>
+                <div id="employeeAdditionalRights"></div>
+              </details>
+              <p class="calculation-note" id="employeeAccessHint">Rechte werden geladen.</p>
+            </div>
+          </details>
         </div>
         <div class="modal-actions"><button type="button" class="danger-button hidden" id="deleteEmployeeButton">Teammitglied löschen</button><span></span><button type="button" class="secondary-button" data-close="employeeModal">Abbrechen</button><button type="submit" class="primary-button">Speichern</button></div>
       </form>
@@ -1894,12 +1945,36 @@
         <input id="costCenterId" type="hidden" />
         <div class="form-grid">
           <label class="field"><span>Code</span><input id="costCenterCode" maxlength="30" pattern="[A-Za-z0-9._-]+" placeholder="z. B. VERW" required /></label>
-          <label class="field"><span>Typ</span><select id="costCenterType" required><option value="branch">Filiale</option><option value="administration">Verwaltung</option><option value="production">Produktion</option><option value="other">Sonstige</option></select></label>
+          <label class="field"><span>Typ</span><select id="costCenterType" required></select><small id="costCenterTypeHint">Kostenstellentypen werden geladen.</small></label>
           <label class="field full-width"><span>Bezeichnung</span><input id="costCenterName" maxlength="100" placeholder="z. B. Verwaltung" required /></label>
-          <label class="field full-width"><span>Beschreibung</span><textarea id="costCenterDescription" rows="3" maxlength="600" placeholder="Optional"></textarea></label>
+          <label class="field full-width"><span>Beschreibung</span><textarea id="costCenterDescription" rows="3" maxlength="500" placeholder="Optional"></textarea></label>
           <label class="switch-row full-width"><span><strong>Aktiv</strong><small>Aktive Kostenstellen können neuen oder bestehenden Mitarbeitenden zugeordnet werden.</small></span><input id="costCenterActive" type="checkbox" checked /></label>
         </div>
         <div class="modal-actions"><button type="button" class="danger-button hidden" id="deactivateCostCenterButton">Deaktivieren</button><span></span><button type="button" class="secondary-button" data-close="costCenterModal">Abbrechen</button><button type="submit" class="primary-button" id="costCenterSubmitButton">Kostenstelle anlegen</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="modal wide-modal" id="costCenterTypeModal">
+      <form id="costCenterTypeForm" autocomplete="off">
+        <div class="modal-header"><div><span class="eyebrow">Organisationsmodell</span><h2 id="costCenterTypeModalTitle">Kostenstellentyp anlegen</h2><p>Der technische Code bleibt unveränderlich. Bezeichnung, Filialstatus und erlaubte Positionen können später angepasst werden.</p></div><button type="button" class="close-button" data-close="costCenterTypeModal">×</button></div>
+        <input id="costCenterTypeId" type="hidden" />
+        <div class="form-grid cost-center-type-form-grid">
+          <label class="field"><span>Technischer Code</span><input id="costCenterTypeCode" maxlength="40" pattern="[A-Za-z0-9._-]+" placeholder="z. B. lager-logistik" required /><small>Kleinbuchstaben, Zahlen, Punkt, Strich oder Unterstrich.</small></label>
+          <label class="field"><span>Bezeichnung</span><input id="costCenterTypeName" maxlength="80" placeholder="z. B. Lager und Logistik" required /></label>
+          <label class="field full-width"><span>Beschreibung</span><textarea id="costCenterTypeDescription" rows="3" maxlength="500" placeholder="Optional"></textarea></label>
+          <label class="switch-row full-width"><span><strong>Dieser Typ bildet eine Filiale ab</strong><small>Nur Kostenstellen mit einem Filialtyp dürfen einem Standort zugeordnet werden.</small></span><input id="costCenterTypeIsBranch" type="checkbox" /></label>
+          <label class="switch-row full-width"><span><strong>Aktiv</strong><small>Archivierte Typen bleiben historisch sichtbar, können aber nicht neu zugeordnet werden.</small></span><input id="costCenterTypeActive" type="checkbox" checked /></label>
+        </div>
+        <section class="cost-center-type-positions" aria-labelledby="costCenterTypePositionsTitle">
+          <div class="cost-center-type-position-heading">
+            <div><strong id="costCenterTypePositionsTitle">Erlaubte Positionen</strong><small>Die Einschränkung der Mitarbeiteranlage erfolgt im nächsten Block. Hier wird bereits das verbindliche Positionsset gepflegt.</small></div>
+            <span class="status-badge" id="costCenterTypePositionCount">0 ausgewählt</span>
+          </div>
+          <label class="field"><span>Positionen durchsuchen</span><input id="costCenterTypePositionSearch" type="search" inputmode="search" autocomplete="off" placeholder="Position suchen" /></label>
+          <div class="cost-center-type-position-options" id="costCenterTypePositionOptions"></div>
+          <p class="calculation-note" id="costCenterTypePositionHint">Ohne Auswahl steht für diesen Typ später keine Position zur Verfügung.</p>
+        </section>
+        <div class="modal-actions"><button type="button" class="danger-button hidden" id="deactivateCostCenterTypeButton">Deaktivieren</button><span></span><button type="button" class="secondary-button" data-close="costCenterTypeModal">Abbrechen</button><button type="submit" class="primary-button" id="costCenterTypeSubmitButton">Typ anlegen</button></div>
       </form>
     </dialog>
 
@@ -2024,8 +2099,8 @@
             <label class="field modal-span-3" id="personnelImportFileField"><span>CSV- oder Excel-Datei</span><input id="personnelImportFile" type="file" accept=".csv,.tsv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /></label>
             <label class="field"><span>Gespeichertes Profil</span><select id="personnelImportProfile"><option value="">Ohne Profil / automatisch erkennen</option></select></label>
             <label class="field"><span>Vorhandene Personalnummer</span><select id="personnelImportDuplicateStrategy"><option value="skip">Überspringen (empfohlen)</option><option value="update">Stammdaten aktualisieren</option></select></label>
-            <label class="field"><span>Standardstandort für neue Personen</span><select id="personnelImportDefaultLocation"></select></label>
-            <label class="field"><span>Standardabteilung / SQL-Bereich</span><select id="personnelImportDefaultDepartment"><option value="">Gesamter Standort</option></select></label>
+            <label class="field"><span>Standardkostenstelle für neue Personen</span><select id="personnelImportDefaultCostCenter"></select><small>Standort und zulässige Positionen werden daraus abgeleitet.</small></label>
+            <label class="field"><span>Standardabteilung</span><select id="personnelImportDefaultDepartment"><option value="">Keine Abteilung</option></select></label>
             <label class="field"><span>Standardposition</span><select id="personnelImportDefaultPosition"></select></label>
             <label class="field"><span>Standard-Sollzeit</span><div class="unit-input"><input id="personnelImportDefaultHours" type="number" min="0" max="80" step="0.5" value="38.5" /><em>Std.</em></div></label>
           </div>
@@ -2242,7 +2317,7 @@
 
     <dialog class="modal" id="adminSetupModal">
       <form method="dialog" id="adminSetupForm">
-        <div class="modal-header"><div><span class="eyebrow">LAN-Host</span><h2>Admin-Ersteinrichtung</h2><p>Der erste Admin wird direkt am Grabenplaner-PC eingerichtet.</p></div><button type="button" class="close-button" data-close="adminSetupModal">×</button></div>
+        <div class="modal-header"><div><span class="eyebrow">Geschützter Zugang</span><h2>Admin-Ersteinrichtung</h2><p>Der erste Admin wird direkt am Grabenplaner-PC eingerichtet.</p></div><button type="button" class="close-button" data-close="adminSetupModal">×</button></div>
         <div class="form-grid">
           <label class="field full-width"><span>Teammitglied</span><select id="adminSetupEmployee" required></select></label>
           <label class="field"><span>Passwort</span><span class="password-field"><input id="adminSetupPassword" type="password" minlength="6" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-toggle="adminSetupPassword" aria-label="Passwort anzeigen">Anzeigen</button></span></label>

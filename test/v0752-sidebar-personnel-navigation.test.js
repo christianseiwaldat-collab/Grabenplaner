@@ -42,7 +42,8 @@ test("v0.75.2 Navigation: zentrale Punkte folgen ihren eigenen Leserechten", () 
   assert.match(costCenterHelper, /cost_centers:read/);
   assert.doesNotMatch(costCenterHelper, /canReadCentralPersonnel/);
   assert.match(accessHelpers, /function canReadCentralVacations\(\)[\s\S]*?canReadCentralPersonnel\(\)[\s\S]*?vacation:read/);
-  assert.match(accessHelpers, /function canReadManagerRequests\(\)[\s\S]*?vacation:read/);
+  assert.match(accessHelpers, /function managerRequestTabAvailability\(\)[\s\S]*?vacation:read[\s\S]*?sickness:read[\s\S]*?amu:local:manage/);
+  assert.match(accessHelpers, /function canReadManagerRequests\(\)[\s\S]*?accessibleManagerRequestTabs\(\)\.length > 0/);
   assert.match(accessHelpers, /function canReadManagedTimeTracking\(\)[\s\S]*?time:read[\s\S]*?time:review/);
 
   const visibility = between(app, "function applyRoleVisibility()", "async function bootstrapApplication()");

@@ -76,7 +76,8 @@ test("Fehlendes Geburtsdatum bleibt dezent und kann vier Tage pausiert werden", 
   assert.match(renderer, /localStorage\.setItem/);
   assert.match(renderer, /days \* 86_400_000/);
   assert.match(renderer, /administrativeOnly/);
-  assert.match(renderer, /scheduleFindings\.length > 0/);
+  assert.match(renderer, /const displayOutcome = scheduleFindings\.length/);
+  assert.doesNotMatch(renderer, /workRuleAssessmentPanel\.open\s*=/);
   assert.match(styles, /\.work-rule-assessment\.administrative/);
 });
 

@@ -17,7 +17,9 @@ function schema(database) {
     CREATE TABLE portal_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE portal_roles (id TEXT PRIMARY KEY, name TEXT, description TEXT, builtin INTEGER, permissions TEXT, sort_order INTEGER, created_at TEXT, updated_at TEXT);
     CREATE TABLE positions (id TEXT PRIMARY KEY, name TEXT, builtin INTEGER, sort_order INTEGER, created_at TEXT);
-    CREATE TABLE cost_centers (id TEXT PRIMARY KEY, code TEXT, name TEXT, type TEXT, description TEXT, active INTEGER, sort_order INTEGER, created_by TEXT, updated_by TEXT, created_at TEXT, updated_at TEXT);
+    CREATE TABLE cost_center_types (id TEXT PRIMARY KEY, code TEXT, name TEXT, description TEXT, is_branch INTEGER, active INTEGER, builtin INTEGER, sort_order INTEGER, created_by TEXT, updated_by TEXT, created_at TEXT, updated_at TEXT);
+    CREATE TABLE cost_center_type_positions (cost_center_type_id TEXT, position_id TEXT, sort_order INTEGER, created_at TEXT, PRIMARY KEY(cost_center_type_id, position_id));
+    CREATE TABLE cost_centers (id TEXT PRIMARY KEY, code TEXT, name TEXT, type TEXT, cost_center_type_id TEXT, description TEXT, active INTEGER, sort_order INTEGER, created_by TEXT, updated_by TEXT, created_at TEXT, updated_at TEXT);
     CREATE TABLE locations (id TEXT PRIMARY KEY, name TEXT, cost_center_id TEXT, min_staff INTEGER, day_settings_json TEXT, time_tracking_enabled INTEGER, time_tracking_access_mode TEXT, time_tracking_allowed_networks TEXT, time_tracking_variance_minutes INTEGER, active INTEGER, created_at TEXT);
     CREATE TABLE departments (id INTEGER PRIMARY KEY, location_id TEXT, name TEXT, min_staff INTEGER, active INTEGER, sort_order INTEGER, created_at TEXT);
     CREATE TABLE location_branding (location_id TEXT PRIMARY KEY, kit_id TEXT, company_name TEXT, logo_url TEXT, icon_url TEXT, logo_alt TEXT, admin_email TEXT, updated_by TEXT, updated_at TEXT);
@@ -39,6 +41,11 @@ function schema(database) {
     CREATE TABLE time_entries (id INTEGER PRIMARY KEY, employee_number TEXT);
     CREATE TABLE portal_sessions (id TEXT PRIMARY KEY, employee_number TEXT);
     CREATE TABLE audit_log (id INTEGER PRIMARY KEY, actor TEXT);
+    CREATE TRIGGER trg_cost_center_types_delete
+      BEFORE DELETE ON cost_center_types
+      BEGIN
+        SELECT RAISE(ABORT, 'COST_CENTER_TYPE_ARCHIVE_ONLY');
+      END;
   `);
 }
 
@@ -52,19 +59,36 @@ test("USB-Profil erzeugt nur Stammdaten und setzt den Ersteller als Admin", () =
   schema(target);
   target.exec(`
     INSERT INTO schema_migrations VALUES ('current', '0.61.1-beta');
-    INSERT INTO settings VALUES ('operation_mode', 'local');
     INSERT INTO portal_settings VALUES ('login_required', '1');
     INSERT INTO portal_roles (id,name,builtin,permissions,sort_order) VALUES
       ('admin','Admin',1,'[]',30),
       ('department_manager','Abteilungsleitung',1,'[]',20),
       ('employee','Mitarbeiter',1,'[]',10);
+    INSERT INTO cost_center_types (id,code,name,description,is_branch,active,builtin,sort_order)
+      VALUES ('branch','branch','Filiale','',1,1,1,10);
     INSERT INTO shifts VALUES (1,'999','2026-01-01');
     INSERT INTO portal_sessions VALUES ('secret','999');
   `);
   source.exec(`
     INSERT INTO settings VALUES ('pdf_title','Dienstplan Muster'),('branding_company_name','Alt'),('operation_mode','server');
-    INSERT INTO positions (id,name,builtin,sort_order) VALUES ('verkaufsmitarbeiter','Verkaufsmitarbeiter',1,10);
-    INSERT INTO cost_centers (id,code,name,type,description,active,sort_order) VALUES ('cc18','FIL18','Musterfiliale','branch','',1,118),('cc99','FIL99','Nicht dabei','branch','',1,199);
+    INSERT INTO positions (id,name,builtin,sort_order) VALUES
+      ('teamleitung','Teamleitung',1,1),
+      ('verkaufsmitarbeiter','Verkaufsmitarbeiter',1,10);
+    INSERT INTO cost_center_types (id,code,name,description,is_branch,active,builtin,sort_order) VALUES
+      ('branch','branch','Filiale','',1,1,1,10),
+      ('administration','administration','Verwaltung','',0,1,1,20),
+      ('production','production','Produktion','',0,1,1,30),
+      ('other','other','Sonstiges','',0,1,1,90);
+    INSERT INTO cost_center_type_positions (cost_center_type_id,position_id,sort_order) VALUES
+      ('branch','teamleitung',1),
+      ('branch','verkaufsmitarbeiter',10),
+      ('administration','teamleitung',1),
+      ('administration','verkaufsmitarbeiter',10),
+      ('production','teamleitung',1),
+      ('production','verkaufsmitarbeiter',10),
+      ('other','teamleitung',1),
+      ('other','verkaufsmitarbeiter',10);
+    INSERT INTO cost_centers (id,code,name,type,cost_center_type_id,description,active,sort_order) VALUES ('cc18','FIL18','Musterfiliale','branch','branch','',1,118),('cc99','FIL99','Nicht dabei','branch','branch','',1,199);
     INSERT INTO locations (id,name,cost_center_id,min_staff,day_settings_json,time_tracking_enabled,time_tracking_access_mode,time_tracking_allowed_networks,time_tracking_variance_minutes,active) VALUES ('18','Musterfiliale','cc18',2,'{}',0,'anywhere','',15,1),('99','Nicht dabei','cc99',1,'{}',0,'anywhere','',15,1);
     INSERT INTO departments (id,location_id,name,min_staff,active,sort_order) VALUES (1,'18','Hardware',1,1,1),(2,'99','Andere',1,1,1);
     INSERT INTO employees (personnel_number,full_name,nickname,color,contracted_hours,fixed_workdays,position_id,time_confirmation_level,home_location_id,preferred_department_id,cost_center_id,active) VALUES
@@ -168,6 +192,26 @@ test("USB-Profil erzeugt nur Stammdaten und setzt den Ersteller als Admin", () =
   assert.equal(result.creator, "101");
   assert.deepEqual(check.prepare("SELECT id FROM locations ORDER BY id").all().map((row) => ({ ...row })), [{ id: "18" }]);
   assert.deepEqual(check.prepare("SELECT id, code FROM cost_centers ORDER BY id").all().map((row) => ({ ...row })), [{ id: "cc18", code: "FIL18" }]);
+  assert.deepEqual(check.prepare("SELECT id, code, is_branch FROM cost_center_types ORDER BY sort_order, id").all().map((row) => ({ ...row })), [
+    { id: "branch", code: "branch", is_branch: 1 },
+    { id: "administration", code: "administration", is_branch: 0 },
+    { id: "production", code: "production", is_branch: 0 },
+    { id: "other", code: "other", is_branch: 0 },
+  ]);
+  assert.deepEqual(check.prepare(`
+    SELECT cost_center_type_id, position_id
+    FROM cost_center_type_positions
+    ORDER BY cost_center_type_id, sort_order, position_id
+  `).all().map((row) => ({ ...row })), [
+    { cost_center_type_id: "administration", position_id: "teamleitung" },
+    { cost_center_type_id: "administration", position_id: "verkaufsmitarbeiter" },
+    { cost_center_type_id: "branch", position_id: "teamleitung" },
+    { cost_center_type_id: "branch", position_id: "verkaufsmitarbeiter" },
+    { cost_center_type_id: "other", position_id: "teamleitung" },
+    { cost_center_type_id: "other", position_id: "verkaufsmitarbeiter" },
+    { cost_center_type_id: "production", position_id: "teamleitung" },
+    { cost_center_type_id: "production", position_id: "verkaufsmitarbeiter" },
+  ]);
   assert.equal(check.prepare("SELECT COUNT(*) AS count FROM employees WHERE cost_center_id = 'cc18'").get().count, 2);
   assert.equal(check.prepare("SELECT COUNT(*) AS count FROM employees").get().count, 2);
   assert.deepEqual(check.prepare("SELECT employee_number, role, password_hash, active FROM portal_users ORDER BY employee_number").all().map((row) => ({ ...row })), [
@@ -180,7 +224,11 @@ test("USB-Profil erzeugt nur Stammdaten und setzt den Ersteller als Admin", () =
   assert.deepEqual(check.prepare("SELECT employee_number, permission FROM portal_permission_denials").all().map((row) => ({ ...row })), [
     { employee_number: "500", permission: "schedule:write" },
   ]);
-  assert.equal(check.prepare("SELECT value FROM settings WHERE key='operation_mode'").get().value, "local");
+  assert.equal(
+    check.prepare("SELECT COUNT(*) AS count FROM settings WHERE key='operation_mode'").get().count,
+    0,
+    "Ein veralteter Betriebsmodus darf weder als USB-Standard entstehen noch aus der Legacyquelle übernommen werden.",
+  );
   assert.equal(check.prepare("SELECT value FROM settings WHERE key='backup_directory'").get().value, "%GRABENPLANER_ROOT%\\Backups");
   assert.equal(check.prepare("SELECT value FROM settings WHERE key='branding_company_name'").get().value, "Muster GmbH");
   assert.deepEqual(check.prepare("SELECT id FROM custom_processes ORDER BY id").all().map((row) => row.id), [

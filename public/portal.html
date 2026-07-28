@@ -15,8 +15,8 @@
         <img src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
         <span class="eyebrow" id="portalAccessModeLabel">Mitarbeiterportal</span>
         <h1>Anmelden</h1>
-        <p>Mit Personalnummer und persönlichem Passwort.</p>
-        <label><span>Personalnummer</span><input id="loginPersonnelNumber" autocomplete="username" required /></label>
+        <p>Mit Personalnummer oder Zugangskennung und Passwort.</p>
+        <label><span>Zugangskennung</span><input id="loginPersonnelNumber" autocomplete="username" placeholder="Personalnummer oder Kontokennung" required /></label>
         <label><span>Passwort</span><span class="password-field"><input id="loginPassword" type="password" autocomplete="current-password" minlength="6" required /><button type="button" data-password-toggle aria-label="Passwort anzeigen">Anzeigen</button></span></label>
         <p class="message error hidden" id="loginError"></p>
         <button class="primary" type="submit">Anmelden</button>
@@ -32,7 +32,7 @@
       <main>
         <nav class="portal-tabs" role="tablist" aria-label="Mitarbeiterportal">
           <button data-tab="settings" type="button" role="tab" aria-selected="false" aria-controls="settingsView" tabindex="-1">Einstellungen</button>
-          <button class="active" data-tab="schedule" type="button" role="tab" aria-selected="true" aria-controls="scheduleView">Dienstplan</button>
+          <button class="active" id="scheduleTab" data-tab="schedule" type="button" role="tab" aria-selected="true" aria-controls="scheduleView">Dienstplan</button>
           <button class="hidden" id="timeTrackingTab" data-tab="timeTracking" type="button" role="tab" aria-selected="false" aria-controls="timeTrackingView" tabindex="-1">Zeit</button>
           <button class="hidden leadership-tab" id="leadershipTeamTab" data-tab="leadershipTeam" data-mobile-module="presence" type="button" role="tab" aria-selected="false" aria-controls="leadershipTeamView" tabindex="-1">Team</button>
           <button class="hidden leadership-tab" id="leadershipApprovalsTab" data-tab="leadershipApprovals" data-mobile-module="approvals" type="button" role="tab" aria-selected="false" aria-controls="leadershipApprovalsView" tabindex="-1">Freigaben</button>
@@ -239,11 +239,24 @@
 
         <section class="portal-view loan-view" id="loanView" role="tabpanel" aria-labelledby="loanTab">
           <div class="view-heading loan-heading">
-            <div><span class="eyebrow">Mitarbeiterportal</span><h1>Leihe</h1><p>Bis zu fünf Artikel ausgeben, offene Leihen überblicken und die Rückgabe gemeinsam bestätigen.</p></div>
+            <div><span class="eyebrow">Portal</span><h1>Leihe</h1><p>Offene Geräte direkt erkennen; persönliche Ausgabe-, Rückgabe- und Leitungsfunktionen erscheinen nur mit entsprechender Berechtigung.</p></div>
             <button class="text-button" id="loanRefresh" type="button">Aktualisieren</button>
           </div>
           <p class="message hidden" id="loanAvailabilityMessage"></p>
           <div class="loan-layout" id="loanWorkspace">
+            <section class="portal-card loan-open-overview-card" id="loanOpenOverview">
+              <div class="loan-list-heading">
+                <div><span class="eyebrow">Direktübersicht</span><h2>Offene Leihen am Standort</h2><p>Gerätestatus ohne Personen-, Beleg- oder interne Vorgangsdaten.</p></div>
+                <label id="loanOverviewSearchField" class="loan-overview-search hidden"><span>Gerät suchen</span><input id="loanOverviewSearch" type="search" inputmode="search" autocomplete="off" placeholder="Gerät, Modell, Nummer oder Seriennummer" /></label>
+              </div>
+              <div class="loan-overview-table-wrap">
+                <table class="loan-overview-table">
+                  <thead><tr><th>Gerät / Modell</th><th>Artikel-/Inventarnr.</th><th>Seriennr.</th><th>Geplante Rückgabe</th></tr></thead>
+                  <tbody id="loanOverviewTableBody"><tr><td colspan="4">Offene Leihen werden geladen.</td></tr></tbody>
+                </table>
+              </div>
+            </section>
+
             <form class="portal-card request-form loan-issue-form" id="loanIssueForm">
               <div class="loan-card-heading"><div><span class="eyebrow">Neue Ausgabe</span><h2>Artikel ausleihen</h2></div><span class="loan-limit-badge">max. 5</span></div>
               <div class="loan-item-editor" id="loanItemEditor"></div>
@@ -253,7 +266,7 @@
                 <label><span>Bemerkung</span><input id="loanIssueNote" maxlength="500" placeholder="Optional" /></label>
               </div>
               <section class="loan-photo-picker" aria-labelledby="loanIssuePhotoTitle">
-                <div><strong id="loanIssuePhotoTitle">Zustand bei Ausgabe fotografieren</strong><small>Optional · bis zu 9 Fotos · je 10 MB, zusammen 45 MB · Bilder werden verkleinert und geschützt gespeichert.</small></div>
+                <div><strong id="loanIssuePhotoTitle">Zustand bei Ausgabe fotografieren</strong><small id="loanIssuePhotoPolicy">Optional · bis zu 9 Fotos · je 10 MB, zusammen 45 MB · Bilder werden verkleinert und als geschützte PDF-Beilage verarbeitet.</small></div>
                 <div class="loan-photo-actions">
                   <label class="loan-photo-button">Fotos auswählen<input id="loanIssuePhotos" type="file" accept="image/jpeg,image/png,image/webp,image/tiff,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.tif,.tiff,.heic,.heif" multiple /></label>
                   <label class="loan-camera-button">Kamera<input id="loanIssueCamera" type="file" accept="image/*" capture="environment" /></label>
@@ -265,7 +278,7 @@
               <button class="primary" id="loanIssueSubmit" type="submit">Leihe erfassen</button>
             </form>
 
-            <section class="portal-card loan-overview-card">
+            <section class="portal-card loan-overview-card" id="loanPersonalOverview">
               <div class="loan-list-heading">
                 <div><span class="eyebrow">Übersicht</span><h2>Leihvorgänge</h2></div>
                 <div class="loan-list-filters">
@@ -366,7 +379,7 @@
         <label><span>Zweites Teammitglied</span><select id="loanReturnWitness" required></select><small>Die Rücknahme wird durch ein anderes aktives Teammitglied desselben Standorts bestätigt.</small></label>
         <label><span>Bemerkung zur Rückgabe</span><textarea id="loanReturnNote" maxlength="1000" rows="3" placeholder="Optional"></textarea></label>
         <section class="loan-photo-picker" aria-labelledby="loanReturnPhotoTitle">
-          <div><strong id="loanReturnPhotoTitle">Zustand bei Rückgabe fotografieren</strong><small>Die ausgewählten Fotos werden dem zweiten Teammitglied vor der Bestätigung angezeigt.</small></div>
+          <div><strong id="loanReturnPhotoTitle">Zustand bei Rückgabe fotografieren</strong><small id="loanReturnPhotoPolicy">Die ausgewählten Fotos werden als eigene geschützte Rückgabe-PDF-Beilage verarbeitet und dem zweiten Teammitglied vor der Bestätigung angezeigt.</small></div>
           <div class="loan-photo-actions">
             <label class="loan-photo-button">Fotos auswählen<input id="loanReturnPhotos" type="file" accept="image/jpeg,image/png,image/webp,image/tiff,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.tif,.tiff,.heic,.heif" multiple /></label>
             <label class="loan-camera-button">Kamera<input id="loanReturnCamera" type="file" accept="image/*" capture="environment" /></label>

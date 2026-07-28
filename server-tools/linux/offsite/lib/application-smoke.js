@@ -46,6 +46,7 @@ const PROTECTED_ROW_TABLES = Object.freeze([
   "personnel_record_documents",
   "loan_document_deliveries",
   "loan_documents",
+  "loan_photo_attachments",
   "loan_photos",
   "protected_case_events",
   "sickness_alerts",
@@ -69,6 +70,7 @@ const PROTECTED_ROW_TABLES = Object.freeze([
 const PROTECTED_DELETE_TRIGGERS = Object.freeze({
   trg_loan_document_deliveries_immutable_delete: "loan_document_deliveries",
   trg_loan_documents_immutable_delete: "loan_documents",
+  trg_loan_photo_attachments_immutable_delete: "loan_photo_attachments",
   trg_loan_photos_immutable_delete: "loan_photos",
   trg_payroll_handoff_events_immutable_delete: "payroll_handoff_events",
   trg_payroll_handoffs_immutable_delete: "payroll_handoffs",

@@ -26,6 +26,7 @@ const HR = "103";
 const MANAGER = "104";
 const BRANCHLESS = "v071-cc-900";
 const REVOKED = "v071-cc-901";
+const IMPORT_ORGANIZATION_LOGIN = "v071-org-import";
 
 let httpServer;
 let baseUrl;
@@ -221,11 +222,16 @@ test.after(async () => {
 
 test("v0.71 Block 6: Schema, Migration und bestehende Zuordnungen sind vollstaendig", () => {
   assert.ok(tableExists("cost_centers"), "Tabelle cost_centers fehlt");
+  assert.ok(tableExists("cost_center_types"), "Tabelle cost_center_types fehlt");
+  assert.ok(tableExists("cost_center_type_positions"), "Tabelle cost_center_type_positions fehlt");
   assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.71-cost-centers-personnel'").get(),
     "Kostenstellenmigration fehlt");
+  assert.ok(db.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v0.87-cost-center-types'").get(),
+    "Kostenstellentypmigration fehlt");
   for (const column of ["id", "code", "name", "type", "active", "created_at", "updated_at"]) {
     assert.ok(columnNames("cost_centers").has(column), `cost_centers.${column} fehlt`);
   }
+  assert.ok(columnNames("cost_centers").has("cost_center_type_id"), "cost_centers.cost_center_type_id fehlt");
   assert.ok(columnNames("employees").has("cost_center_id"), "employees.cost_center_id fehlt");
   assert.ok(columnNames("locations").has("cost_center_id"), "locations.cost_center_id fehlt");
   assert.equal(db.prepare(`
@@ -236,8 +242,19 @@ test("v0.71 Block 6: Schema, Migration und bestehende Zuordnungen sind vollstaen
   assert.equal(db.prepare(`
     SELECT COUNT(*) AS count FROM locations l
     LEFT JOIN cost_centers c ON c.id = l.cost_center_id
+    LEFT JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
     WHERE l.cost_center_id IS NULL OR TRIM(l.cost_center_id) = '' OR c.id IS NULL
-  `).get().count, 0, "Mindestens ein bestehender Standort hat keine gueltige Kostenstelle");
+      OR cct.id IS NULL OR cct.is_branch <> 1
+  `).get().count, 0, "Mindestens ein bestehender Standort hat keine gueltige Filialkostenstelle");
+  assert.equal(db.prepare(`
+    SELECT COUNT(*) AS count FROM cost_centers c
+    LEFT JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
+    WHERE cct.id IS NULL
+  `).get().count, 0, "Mindestens eine Kostenstelle hat keinen gueltigen dynamischen Typ");
+  assert.deepEqual(
+    db.prepare("SELECT code FROM cost_center_types WHERE builtin = 1 ORDER BY sort_order").all().map((row) => row.code),
+    ["branch", "administration", "production", "other"],
+  );
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id = 'v0.71-cost-centers-personnel'").get().count, 1);
   assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
 });
@@ -248,8 +265,16 @@ test("v0.71 Block 6: Eine echte Alt-Datenbank wird deterministisch und ohne Wais
   const serverPath = path.join(__dirname, "..", "server.js");
   const legacySchema = `
     PRAGMA foreign_keys = ON;
+    CREATE TABLE cost_centers (
+      id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('branch','administration','production','other')),
+      description TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0, created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
     CREATE TABLE locations (
-      id TEXT PRIMARY KEY, name TEXT NOT NULL, min_staff INTEGER NOT NULL DEFAULT 0,
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, cost_center_id TEXT, min_staff INTEGER NOT NULL DEFAULT 0,
       day_settings_json TEXT NOT NULL DEFAULT '', time_tracking_enabled INTEGER NOT NULL DEFAULT 0,
       time_tracking_access_mode TEXT NOT NULL DEFAULT 'anywhere',
       time_tracking_allowed_networks TEXT NOT NULL DEFAULT '', time_tracking_variance_minutes INTEGER NOT NULL DEFAULT 15,
@@ -267,12 +292,26 @@ test("v0.71 Block 6: Eine echte Alt-Datenbank wird deterministisch und ohne Wais
       target_workdays_per_week INTEGER NOT NULL DEFAULT 5, preferred_day_off TEXT,
       fixed_workdays TEXT NOT NULL DEFAULT '', position_id TEXT NOT NULL DEFAULT 'verkaufsmitarbeiter',
       time_confirmation_level TEXT NOT NULL DEFAULT 'C', sickness_without_aum_enabled INTEGER NOT NULL DEFAULT 0,
-      home_location_id TEXT, preferred_department_id INTEGER, active INTEGER NOT NULL DEFAULT 1,
+      home_location_id TEXT, preferred_department_id INTEGER, cost_center_id TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
-    INSERT INTO locations (id, name, active) VALUES ('L1', 'Legacy Nord', 1), ('L2', 'Legacy Sued', 1);
-    INSERT INTO employees (personnel_number, full_name, nickname, home_location_id)
-      VALUES ('LEG-1', 'Legacy Eins', 'Eins', 'L1'), ('LEG-2', 'Legacy Zwei', 'Zwei', NULL);
+    INSERT INTO cost_centers (id, code, name, type, active) VALUES
+      ('legacy-admin', 'LEGACY-VERW', 'Alte gemeinsame Verwaltung', 'administration', 1),
+      ('legacy-shared-branch', 'LEGACY-FIL', 'Alte gemeinsame Filiale', 'branch', 1);
+    INSERT INTO locations (id, name, cost_center_id, active)
+      VALUES
+        ('L1', 'Legacy Nord', 'legacy-admin', 1),
+        ('L2', 'Legacy Sued', 'legacy-admin', 1),
+        ('L3', 'Legacy West', 'legacy-shared-branch', 1),
+        ('L4', 'Legacy Ost', 'legacy-shared-branch', 1);
+    INSERT INTO employees (personnel_number, full_name, nickname, home_location_id, cost_center_id)
+      VALUES
+        ('LEG-1', 'Legacy Eins', 'Eins', 'L1', 'legacy-admin'),
+        ('LEG-2', 'Legacy Zwei', 'Zwei', 'L2', 'legacy-admin'),
+        ('LEG-3', 'Legacy Drei', 'Drei', 'L3', 'legacy-shared-branch'),
+        ('LEG-4', 'Legacy Vier', 'Vier', 'L4', 'legacy-shared-branch'),
+        ('LEG-5', 'Legacy Fünf', 'Fünf', NULL, NULL);
   `;
   const employeeQuery = `
     SELECT e.personnel_number, e.home_location_id, e.cost_center_id, c.code
@@ -280,8 +319,10 @@ test("v0.71 Block 6: Eine echte Alt-Datenbank wird deterministisch und ohne Wais
     WHERE e.personnel_number LIKE 'LEG-%' ORDER BY e.personnel_number
   `;
   const locationQuery = `
-    SELECT l.id, l.cost_center_id, c.code FROM locations l
-    LEFT JOIN cost_centers c ON c.id = l.cost_center_id ORDER BY l.id
+    SELECT l.id, l.cost_center_id, c.code, c.cost_center_type_id, cct.is_branch FROM locations l
+    LEFT JOIN cost_centers c ON c.id = l.cost_center_id
+    LEFT JOIN cost_center_types cct ON cct.id = c.cost_center_type_id
+    ORDER BY l.id
   `;
   const script = `
     const { DatabaseSync } = require('node:sqlite');
@@ -294,7 +335,13 @@ test("v0.71 Block 6: Eine echte Alt-Datenbank wird deterministisch und ohne Wais
     const migrationCount = subject.db.prepare(
       "SELECT COUNT(*) AS count FROM schema_migrations WHERE id = 'v0.71-cost-centers-personnel'"
     ).get().count;
-    process.stdout.write(JSON.stringify({ rows, locations, migrationCount,
+    const typeMigrationCount = subject.db.prepare(
+      "SELECT COUNT(*) AS count FROM schema_migrations WHERE id = 'v0.87-cost-center-types'"
+    ).get().count;
+    const builtInTypes = subject.db.prepare(
+      "SELECT code FROM cost_center_types WHERE builtin = 1 ORDER BY sort_order"
+    ).all().map((row) => row.code);
+    process.stdout.write(JSON.stringify({ rows, locations, migrationCount, typeMigrationCount, builtInTypes,
       foreignKeys: subject.db.prepare('PRAGMA foreign_key_check').all() }));
     subject.db.close();
     subject.releaseInstanceLockForTests();
@@ -316,9 +363,22 @@ test("v0.71 Block 6: Eine echte Alt-Datenbank wird deterministisch und ohne Wais
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const migrated = JSON.parse(result.stdout);
   assert.equal(migrated.migrationCount, 1);
-  assert.equal(migrated.rows.length, 2);
+  assert.equal(migrated.typeMigrationCount, 1);
+  assert.deepEqual(migrated.builtInTypes, ["branch", "administration", "production", "other"]);
+  assert.equal(migrated.rows.length, 5);
   assert.ok(migrated.rows.every((row) => row.cost_center_id && row.code));
-  assert.ok(migrated.locations.every((row) => row.cost_center_id && row.code));
+  assert.ok(migrated.locations.every((row) => row.cost_center_id && row.code
+    && row.cost_center_type_id === "branch" && Number(row.is_branch) === 1));
+  assert.equal(new Set(migrated.locations.map((row) => row.cost_center_id)).size, migrated.locations.length,
+    "Geteilte oder nicht-filiale Altzuordnungen müssen deterministisch getrennt werden");
+  const migratedLocationCenters = new Map(migrated.locations.map((row) => [row.id, row.cost_center_id]));
+  for (const employee of migrated.rows.filter((row) => row.home_location_id)) {
+    assert.equal(
+      employee.cost_center_id,
+      migratedLocationCenters.get(employee.home_location_id),
+      `${employee.personnel_number} muss der normalisierten Kostenstelle des eigenen Standorts folgen`,
+    );
+  }
   assert.deepEqual(migrated.foreignKeys, []);
 });
 
@@ -435,25 +495,24 @@ test("v0.71 Block 6: PL kann filiallose Personen mit Verwaltungskostenstelle anl
   assert.equal(String(stored.cost_center_id), administration.key);
 });
 
-test("v0.71 Block 6: Kostenstellenwechsel veraendert den Standort nicht", async () => {
+test("v0.87 Block 2: Kostenstellenwechsel leitet den Standort neu ab", async () => {
   const hr = session(HR, "hr");
-  const first = await createCostCenter(hr, "WECHSEL-A");
-  const second = await createCostCenter(hr, "WECHSEL-B");
+  const second = await createCostCenter(hr, "WECHSEL-VERW");
   const personnelNumber = "v071-cc-902";
   const created = await request("/api/employees", {
     method: "POST",
     auth: hr,
-    body: employeePayload(personnelNumber, { homeLocationId: locationId, costCenterId: first.key }),
+    body: employeePayload(personnelNumber, { homeLocationId: locationId, costCenterId: defaultCostCenterId }),
   });
   assert.equal(created.response.status, 201, created.text);
   const changed = await request(`/api/employees/${encodeURIComponent(personnelNumber)}`, {
     method: "PUT",
     auth: hr,
-    body: employeePayload(personnelNumber, { homeLocationId: locationId, costCenterId: second.key, nickname: "Wechsel" }),
+    body: employeePayload(personnelNumber, { homeLocationId: "", costCenterId: second.key, nickname: "Wechsel" }),
   });
   assert.equal(changed.response.status, 200, changed.text);
   const stored = db.prepare("SELECT home_location_id, cost_center_id FROM employees WHERE personnel_number = ?").get(personnelNumber);
-  assert.equal(stored.home_location_id, locationId);
+  assert.equal(stored.home_location_id, null);
   assert.equal(String(stored.cost_center_id), second.key);
 });
 
@@ -478,6 +537,12 @@ test("v0.71 Block 6: Belegte Kostenstellen koennen nicht archiviert werden", asy
 
 test("v0.71 Block 6: Filiallose Anlage bleibt PL+ vorbehalten", async () => {
   const manager = session(MANAGER, "manager");
+  const administrationCostCenterId = String(db.prepare(`
+    SELECT id FROM cost_centers
+    WHERE cost_center_type_id = 'administration' AND active = 1
+    ORDER BY sort_order, code LIMIT 1
+  `).get()?.id || "");
+  assert.ok(administrationCostCenterId);
   db.prepare(`
     INSERT INTO portal_permission_grants (employee_number, permission, granted_by, updated_at)
     VALUES (?, 'employees:write', 'test', CURRENT_TIMESTAMP)
@@ -486,10 +551,23 @@ test("v0.71 Block 6: Filiallose Anlage bleibt PL+ vorbehalten", async () => {
   const result = await request("/api/employees", {
     method: "POST",
     auth: manager,
-    body: employeePayload("v071-cc-manager-orphan", { homeLocationId: "", costCenterId: defaultCostCenterId }),
+    body: employeePayload("v071-cc-manager-orphan", { homeLocationId: "", costCenterId: administrationCostCenterId }),
   });
   assert.equal(result.response.status, 403, result.text);
   assert.equal(db.prepare("SELECT 1 FROM employees WHERE personnel_number = 'v071-cc-manager-orphan'").get(), undefined);
+
+  const scoped = await request("/api/employees", {
+    method: "POST",
+    auth: manager,
+    body: employeePayload("v087-cc-manager-scoped", { homeLocationId: "", costCenterId: defaultCostCenterId }),
+  });
+  assert.equal(scoped.response.status, 201, scoped.text);
+  const stored = db.prepare(`
+    SELECT home_location_id, cost_center_id FROM employees
+    WHERE personnel_number = 'v087-cc-manager-scoped'
+  `).get();
+  assert.equal(stored.home_location_id, locationId);
+  assert.equal(String(stored.cost_center_id), defaultCostCenterId);
 });
 
 test("v0.71 Block 6: Mitarbeiterdeaktivierung widerruft Web- und App-Zugang sofort", async () => {
@@ -597,6 +675,64 @@ test("v0.71 Block 6: Importdeaktivierung widerruft alle Zugänge und Reaktivieru
   assert.equal(Boolean(db.prepare("SELECT active FROM employees WHERE personnel_number = ?").get(employeeNumber).active), true);
   assert.equal(Boolean(db.prepare("SELECT active FROM portal_users WHERE employee_number = ?").get(employeeNumber).active), false,
     "Der Import darf einen deaktivierten Portalzugang nicht automatisch reaktivieren");
+});
+
+test("v0.87 Block 8: Personalimport blockiert Organisationskonten case-insensitiv vor dem Commit", async () => {
+  const hr = session(HR, "hr");
+  const accountId = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO portal_organization_accounts
+      (id, login_name, display_name, account_type, password_hash, active,
+       must_change_password, created_by, updated_by)
+    VALUES (?, ?, 'Import-Testfiliale', 'branch', 'test-only', 1, 0, 'test', 'test')
+  `).run(accountId, IMPORT_ORGANIZATION_LOGIN);
+  db.prepare(`
+    INSERT INTO portal_organization_account_scopes
+      (account_id, location_id, department_id, assigned_by)
+    VALUES (?, ?, 0, 'test')
+  `).run(accountId, locationId);
+
+  const submittedPersonnelNumber = IMPORT_ORGANIZATION_LOGIN.toUpperCase();
+  const preview = await personnelImportPreview(
+    hr,
+    `Personalnummer;Name\r\n${submittedPersonnelNumber};Unzulässige Importperson\r\n`,
+    {
+      personnelNumber: { columnIndex: 0 },
+      fullName: { columnIndex: 1 },
+    },
+    {},
+    "skip",
+  );
+  assert.equal(preview.payload.summary.errors, 1, preview.text);
+  assert.equal(preview.payload.summary.create, 0, preview.text);
+  assert.equal(preview.payload.rows[0].action, "error");
+  assert.ok(
+    preview.payload.rows[0].errors.some((error) =>
+      error.code === "PORTAL_PRINCIPAL_LOGIN_CONFLICT"),
+    preview.text,
+  );
+  assert.equal(
+    db.prepare("SELECT 1 FROM employees WHERE personnel_number = ? COLLATE NOCASE")
+      .get(IMPORT_ORGANIZATION_LOGIN),
+    undefined,
+  );
+
+  const applied = await request("/api/integrations/personnel-import/apply", {
+    method: "POST",
+    auth: hr,
+    body: { previewId: preview.payload.previewId },
+  });
+  assert.equal(applied.response.status, 422, applied.text);
+  assert.equal(applied.payload.code, "IMPORT_HAS_ERRORS");
+  assert.equal(
+    db.prepare("SELECT 1 FROM employees WHERE personnel_number = ? COLLATE NOCASE")
+      .get(IMPORT_ORGANIZATION_LOGIN),
+    undefined,
+  );
+  assert.ok(
+    db.prepare("SELECT 1 FROM portal_organization_accounts WHERE id = ?")
+      .get(accountId),
+  );
 });
 
 test("v0.71 Block 6: Zentraler Import unterstützt filiallose Beschäftigte und Kostenstellen-ID", async () => {

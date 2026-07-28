@@ -171,7 +171,8 @@ test("Built-in-Rollen werden aktualisiert und eigene Rollen bleiben erhalten", (
   assert.ok(roles.some((role) => role.id === "admin" && role.permissions.includes("rights:write")
     && role.permissions.includes("branding:write") && role.permissions.includes("system:diagnostics:read")
     && role.permissions.includes("system:diagnostics:technical")));
-  assert.ok(roles.some((role) => role.id === "hr" && role.permissions.includes("rights:write") && role.permissions.includes("operation_mode:write")));
+  assert.ok(roles.some((role) => role.id === "hr" && role.permissions.includes("rights:write")));
+  assert.equal(roles.some((role) => role.permissions.includes("operation_mode:write")), false);
   assert.ok(roles.some((role) => role.id === "hr" && !role.permissions.includes("system:diagnostics:read") && !role.permissions.includes("system:diagnostics:technical")));
   assert.ok(roles.some((role) => role.id === "it_admin" && role.permissions.includes("rights:write")
     && role.permissions.includes("update:write") && role.permissions.includes("employees:write")
@@ -181,10 +182,9 @@ test("Built-in-Rollen werden aktualisiert und eigene Rollen bleiben erhalten", (
   assert.deepEqual(custom.permissions, ["audit:read"]);
 });
 
-test("Status meldet verfügbaren LAN-Modus bei weiterhin sicherem Lokalbetrieb", async () => {
+test("Status meldet eine sichere lokale Testlaufzeit", async () => {
   const directStatus = getPortalStatus();
   assert.equal(directStatus.operationMode, "local");
-  assert.equal(directStatus.serverModeStatus, "active");
   assert.equal(directStatus.portalEnabled, false);
   assert.equal(directStatus.loginRequired, false);
   assert.equal(directStatus.localOnly, true);
@@ -227,15 +227,13 @@ test("Login und Mitarbeiterfunktionen bleiben bis zum Servermodus gesperrt", asy
   assert.equal(result.status.operationMode, "local");
 });
 
-test("Servermodus kann im Browser nicht ungeschützt aktiviert werden", async () => {
-  const response = await fetch(`${baseUrl}/api/settings`, {
+test("Betriebsmodus kann nicht über eine Browser-API verändert werden", async () => {
+  const response = await fetch(`${baseUrl}/api/operation-mode`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ operationMode: "server" }),
   });
-  assert.equal(response.status, 409);
-  const result = await response.json();
-  assert.match(result.error, /Serverkonfiguration/i);
+  assert.equal(response.status, 404);
   assert.equal(getPortalStatus().operationMode, "local");
 });
 
@@ -244,8 +242,8 @@ test("bestehende lokale Dienstplan-API bleibt erreichbar", async () => {
   assert.equal(response.status, 200);
   const schedule = await response.json();
   assert.equal(schedule.weekStart, "2026-07-13");
-  assert.equal(schedule.settings.operation_mode, "local");
-  assert.equal(schedule.settings.server_mode_status, "active");
+  assert.equal(Object.hasOwn(schedule.settings, "operation_mode"), false);
+  assert.equal(Object.hasOwn(schedule.settings, "server_mode_status"), false);
 });
 
 test("PDF-Vorschauen dürfen nur gleichursprünglich eingebettet werden", async () => {
@@ -1099,7 +1097,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const hrRightsResponse = await fetch(`${url}/api/portal/v1/rights`, { headers: { Cookie: hr.cookie } });
     assert.equal(hrRightsResponse.status, 200, await hrRightsResponse.clone().text());
     const rightsPayload = await hrRightsResponse.json();
-    assert.ok(rightsPayload.catalog.some((permission) => permission.id === "operation_mode:write" && permission.warningLevel === "critical" && !permission.editable));
+    assert.equal(rightsPayload.catalog.some((permission) => permission.id === "operation_mode:write"), false);
     assert.ok(rightsPayload.catalog.some((permission) => permission.id === "employees:display:write" && permission.editable));
     assert.ok(rightsPayload.catalog.some((permission) => permission.id === "employees:write" && !permission.editable));
     assert.ok(rightsPayload.catalog.some((permission) => permission.id === "backup:write" && !permission.editable));
@@ -1252,23 +1250,18 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const grantManagerTechnicalRights = await fetch(`${url}/api/portal/v1/rights/104`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: itAdmin.cookie, "X-CSRF-Token": itAdmin.csrf },
-      body: JSON.stringify({ permissions: ["employees:display:write", "locations:write", "departments:write", "operation_mode:write"] }),
+      body: JSON.stringify({ permissions: ["employees:display:write", "locations:write", "departments:write"] }),
     });
     assert.equal(grantManagerTechnicalRights.status, 200, await grantManagerTechnicalRights.clone().text());
     const grantedManager = (await grantManagerTechnicalRights.json()).users.find((user) => user.employeeNumber === "104");
-    assert.deepEqual(grantedManager.grantedPermissions, ["departments:write", "employees:display:write", "locations:write", "operation_mode:write"]);
+    assert.deepEqual(grantedManager.grantedPermissions, ["departments:write", "employees:display:write", "locations:write"]);
 
     manager = await login("104", "665544");
     const managerSessionWithGrant = await fetch(`${url}/api/portal/v1/session`, { headers: { Cookie: manager.cookie } });
     assert.equal(managerSessionWithGrant.status, 200, await managerSessionWithGrant.clone().text());
-    assert.ok((await managerSessionWithGrant.json()).user.permissions.includes("employees:display:write"));
-    const delegatedOperationMode = await fetch(`${url}/api/operation-mode`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Cookie: manager.cookie, "X-CSRF-Token": manager.csrf },
-      body: JSON.stringify({ operationMode: "local" }),
-    });
-    assert.equal(delegatedOperationMode.status, 200, await delegatedOperationMode.clone().text());
-    assert.equal((await delegatedOperationMode.json()).restartRequired, false);
+    const managerSessionPermissions = (await managerSessionWithGrant.json()).user.permissions;
+    assert.ok(managerSessionPermissions.includes("employees:display:write"));
+    assert.equal(managerSessionPermissions.includes("operation_mode:write"), false);
 
     const scopedEmployeesResponse = await fetch(`${url}/api/employees`, { headers: { Cookie: manager.cookie } });
     assert.equal(scopedEmployeesResponse.status, 200, await scopedEmployeesResponse.clone().text());
@@ -1407,7 +1400,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const permissionsAfterHrRevoke = (await managerSessionAfterRevoke.json()).user.permissions;
     assert.equal(permissionsAfterHrRevoke.includes("employees:display:write"), false);
     assert.ok(permissionsAfterHrRevoke.includes("locations:write"));
-    assert.ok(permissionsAfterHrRevoke.includes("operation_mode:write"));
+    assert.equal(permissionsAfterHrRevoke.includes("operation_mode:write"), false);
 
     const managerBrandingDenied = await fetch(`${url}/api/branding/assignments`, { headers: { Cookie: manager.cookie } });
     assert.equal(managerBrandingDenied.status, 403, await managerBrandingDenied.clone().text());

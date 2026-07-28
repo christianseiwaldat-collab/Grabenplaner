@@ -77,7 +77,7 @@ test("v0.77: Vertrauensindex, Nachweiskarten und signierte Laufhistorie sind ver
   assert.match(script, /system-center-state/);
 });
 
-test("v0.77: System-Center folgt Dashboard-Darkmode, Schriftgröße und Responsive Layout", () => {
+test("v0.77: System-Center folgt Dashboard-Darkmode, globaler Schriftgröße und Responsive Layout", () => {
   assert.match(styles, /\.system-center-hero/);
   assert.match(styles, /\.system-center-factor-grid/);
   assert.match(styles, /\.system-center-run-phases/);
@@ -85,7 +85,9 @@ test("v0.77: System-Center folgt Dashboard-Darkmode, Schriftgröße und Responsi
   assert.match(styles, /\.system-center-state\.warning/);
   assert.match(styles, /\.system-center-state\.ok/);
   assert.match(styles, /rights-dashboard\[data-dashboard-theme="dark"\][\s\S]*--rd-critical-soft/);
-  assert.match(styles, /rights-dashboard\[data-dashboard-font-size\][^\n]*system-center-factor/);
+  assert.match(styles, /--app-font-scale:\s*1;/);
+  assert.match(styles, /body \{[^}]*zoom:\s*var\(--app-font-scale\);/);
+  assert.doesNotMatch(styles, /data-dashboard-font-size=/);
   assert.match(styles, /@media \(max-width: 1250px\)[\s\S]*system-center-factor-grid/);
   assert.match(styles, /@media \(max-width: 700px\)[\s\S]*system-center-factor-grid/);
 });

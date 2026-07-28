@@ -12,10 +12,15 @@ function section(id) {
   return html.match(new RegExp(`<section id="${id}"[\\s\\S]*?(?=<section id="|</main>)`))?.[0] || "";
 }
 
+function detailsTag(id) {
+  return html.match(new RegExp(`<details[^>]*\\bid="${id}"[^>]*>`))?.[0] || "";
+}
+
 test("v0.65: Einstellungen sind fachlich in Urlaub, Zeiterfassung und Personal gegliedert", () => {
   assert.match(html, /data-settings-tab="vacation">Urlaub</);
   assert.match(html, /data-settings-tab="timeTracking">Zeiterfassung</);
   assert.doesNotMatch(html, /data-settings-tab="wifiAutomation"/);
+  assert.doesNotMatch(html, /data-settings-tab="branding"|data-settings-tab="pdf"/);
 
   const general = section("generalSettings");
   const vacation = section("vacationSettings");
@@ -31,6 +36,41 @@ test("v0.65: Einstellungen sind fachlich in Urlaub, Zeiterfassung und Personal g
   assert.match(timeTracking, /id="vacationCountSaturday"/);
   assert.match(timeTracking, /id="wifiSettingsCard"/);
   assert.match(personnel, /id="trustLevelSettingsCard"/);
+});
+
+test("Block 7: Leihe, Branding und PDF sind geschlossene Bereiche der Grundeinstellungen", () => {
+  const general = section("generalSettings");
+  const viewBehavior = general.match(
+    /<div class="settings-card" id="viewBehaviorSettingsCard">[\s\S]*?<\/div>\s*<div class="settings-card past-week-card">/,
+  )?.[0] || "";
+
+  assert.match(viewBehavior, /id="toastDuration"/);
+  assert.match(viewBehavior, /id="decreaseAppFontScale"/);
+  assert.match(viewBehavior, /id="appFontScalePercent"[^>]*type="number"[^>]*min="75"[^>]*max="150"[^>]*step="5"/);
+  assert.match(viewBehavior, /id="increaseAppFontScale"/);
+  assert.doesNotMatch(general, /id="dashboardFontSize"|operation-mode-card|Betriebsmodus/);
+
+  for (const id of ["loanSettingsCard", "brandingSettings", "pdfSettings"]) {
+    const tag = detailsTag(id);
+    assert.match(tag, /class="[^"]*\bsettings-accordion\b[^"]*\bfull-settings-card\b[^"]*"/);
+    assert.doesNotMatch(tag, /\sopen(?:\s|=|>)/);
+    assert.ok(general.includes(tag), `${id} muss innerhalb der Grundeinstellungen liegen`);
+  }
+
+  const loanIndex = general.indexOf('id="loanSettingsCard"');
+  const brandingIndex = general.indexOf('id="brandingSettings"');
+  const pdfIndex = general.indexOf('id="pdfSettings"');
+  assert.ok(loanIndex >= 0 && loanIndex < brandingIndex, "Leihe muss vor Branding stehen");
+  assert.ok(brandingIndex < pdfIndex, "PDF-Ausgabe muss am Ende der integrierten Bereiche stehen");
+  assert.match(general, /id="brandingCompanyName"/);
+  assert.match(general, /id="brandingAssignmentList"/);
+  assert.match(general, /id="pdfTitleSetting"/);
+  assert.match(general, /id="vacationPdfTitleSetting"/);
+
+  assert.match(styles, /\.settings-two-column \{[^}]*grid-auto-rows:\s*max-content;[^}]*align-items:\s*start;/);
+  assert.match(styles, /\.settings-card \{[^}]*align-self:\s*start;[^}]*height:\s*auto;/);
+  assert.match(styles, /\.settings-accordion-grid \{[^}]*grid-template-columns:\s*repeat\(2,minmax\(0,1fr\)\);[^}]*grid-auto-rows:\s*max-content;[^}]*align-items:\s*start;/);
+  assert.match(styles, /@media \(max-width:\s*820px\)[\s\S]*?\.settings-accordion-grid \{ grid-template-columns:\s*1fr; \}/);
 });
 
 test("v0.65: Zugänge und Rechtemanagement bleiben echte Zweispalten-Bereiche", () => {
