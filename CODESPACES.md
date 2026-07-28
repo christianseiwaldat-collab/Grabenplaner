@@ -1,50 +1,36 @@
-# GitHub-Codespaces-Test
+# Codespaces-Demo
 
-> **Achtung:** Diese Umgebung ist ausschließlich für Demo- und Testdaten bestimmt. Keine echten Personal-, Gesundheits- oder Produktivdaten verwenden.
+> Ausschließlich für fiktive Demo- und Testdaten. Keine Personal-, Gesundheits-, Zugangs- oder Produktivdaten verwenden.
 
-Codespaces bildet Browser-, Rollen- und Portalabläufe über den privaten GitHub-HTTPS-Proxy ab. Es ersetzt weder den produktiven Windows-Einzelserver mit Caddy/WinSW und getrennten Dienstrechten noch dessen Backup-, Virenscanner-, Update- und Wiederherstellungsprüfung.
+## Zugriff
+
+Der automatische Grabenplaner-Demo-Start ist nur für den Repository-Eigentümer und eingeladene Collaborators mit Schreibzugriff vorgesehen.
+
+Der Start-Hook prüft:
+
+- das Original-Repository `christianseiwaldat-collab/Grabenplaner`;
+- die vom Codespace gemeldete GitHub-Identität;
+- Admin- oder Schreibzugriff dieser Identität auf das Repository.
+
+Port `3000` bleibt privat und ist nur über den authentifizierten HTTPS-Proxy des jeweiligen Codespaces erreichbar.
+
+Wichtige GitHub-Grenze: Dieses Repository ist öffentlich. GitHub erlaubt daher jedem GitHub-Konto, auf eigene Rechnung einen eigenen Codespace aus dem öffentlichen Quellcode zu erstellen. Ein persönliches öffentliches Repository besitzt keine Codespaces-Whitelist. Der Start-Hook begrenzt die bereitgestellte Original-Demo, ersetzt aber keine GitHub-Zugriffskontrolle. Eine technisch vollständige Beschränkung der Codespace-Erstellung auf Eigentümer und Collaborators erfordert ein privates Repository.
 
 ## Start
 
-1. Im GitHub-Repository **Code → Codespaces → Create codespace on main** wählen.
-2. Den automatischen Start abwarten und anschließend den privat weitergeleiteten Port `3000` öffnen.
-3. Im Codespaces-Terminal die erzeugten Zugangsdaten anzeigen:
+1. Auf GitHub **Code → Codespaces → Create codespace on main** wählen.
+2. Den Containerstart abwarten.
+3. Port `3000` unter **PORTS** mit **Open in Browser** öffnen.
+4. Die erzeugten Demo-Zugangsdaten im Terminal anzeigen:
 
 ```bash
 cat "/workspaces/.grabenplaner-codespaces/${CODESPACE_NAME}/secrets.json"
 ```
 
-Die dort angegebene Personalnummer und das Admin-Passwort gelten ausschließlich für diese Testinstanz.
-
-Der Dev Container verwendet Node.js 24 und die festgelegte pnpm-Version 11.7.0; die Abhängigkeiten werden mit `pnpm install --frozen-lockfile` installiert. Beim Start richtet der Runner bei Bedarf lokal einen Demo-Admin sowie das fiktive Sporthandelsprofil mit sechs Filialen und 31 Verkaufsmitarbeitenden ein und wechselt anschließend in den Servermodus. Der Dienst lauscht intern per HTTP nur auf Loopback; Codespaces leitet Port `3000` privat weiter.
-
-Der Port-Eintrag `protocol: "http"` beschreibt dabei nur die interne Verbindung zum Loopback-Dienst; der Zugriff im Browser erfolgt über den authentifizierten HTTPS-Proxy von Codespaces.
-
-Zum Anmelden immer die Adresse aus dem Bereich **PORTS** mit **Open in Browser** öffnen. Die App akzeptiert dabei sowohl die konfigurierte Codespaces-Adresse als auch die vom vertrauenswürdigen GitHub-Proxy gemeldete gleichursprüngliche Weiterleitungsadresse.
-
-War der Codespace zwischenzeitlich beendet oder ist die GitHub-Anmeldung des privaten Ports abgelaufen, eine noch offene Portal-Seite nicht weiterverwenden: Codespace starten, den Port `3000` erneut unter **PORTS** mit **Open in Browser** öffnen und den Start kurz abwarten. Das Portal zeigt für diesen Fall eine eigene Hinweismeldung; die Sicherheitsprüfung der App wird dabei nicht gelockert.
-
-Nach einem Update des Servercodes genügt ein Neuladen der Portal-Seite nicht. Den Codespace über **Codespaces: Rebuild Container** neu aufbauen oder für eine vollständig frische Demo-Testinstanz neu erstellen; erst danach läuft der aktualisierte Grabenplaner-Prozess.
-
-Das Sporthandelsprofil wird ausschließlich in einer frischen, leeren Demo-Datenbank angelegt. Bereits vorhandene Codespaces-Testdaten werden nicht automatisch überschrieben.
-
-Die private URL lautet:
-
-```text
-https://${CODESPACE_NAME}-3000.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}
-```
-
-Alle Laufzeitdaten, Backups, Logs und Secrets liegen außerhalb des Repositorys unter:
+Der Dev Container verwendet Node.js 24 und pnpm 11.7.0. Er erzeugt einen isolierten Demo-Admin und ein fiktives Sporthandelsprofil. Laufzeitdaten, Logs, Backups und Zugangsdaten liegen außerhalb des Repositorys unter:
 
 ```text
 /workspaces/.grabenplaner-codespaces/${CODESPACE_NAME}
 ```
 
-Die erzeugten Zugangsdaten stehen in `secrets.json` (Dateimodus `0600`). Der Runner reicht GitHub-Token nicht an den Grabenplaner-Prozess weiter. Nicht gescannte AUM-Uploads sind nur in dieser Testumgebung erlaubt.
-
-Status und Log:
-
-```bash
-cat "/workspaces/.grabenplaner-codespaces/${CODESPACE_NAME}/ready.json"
-tail -f "/workspaces/.grabenplaner-codespaces/${CODESPACE_NAME}/codespaces-runner.log"
-```
+Nach Änderungen am Servercode den Container neu aufbauen oder einen frischen Codespace erstellen. Codespaces ersetzt weder den verwalteten Ubuntu-Serverbetrieb noch dessen Backup-, Virenscanner-, Update- und Recovery-Prüfungen.

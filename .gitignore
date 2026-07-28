@@ -16,3 +16,10 @@ public/assets/private-*
 public/assets/*-private.*
 output/pdf/Grabenplaner-Prospekt-*.pdf
 /tmp/
+/GRABENPLANER-HANDOFF-*.md
+/coverage/
+/.nyc_output/
+/playwright-report/
+/test-results/
+.DS_Store
+Thumbs.db
