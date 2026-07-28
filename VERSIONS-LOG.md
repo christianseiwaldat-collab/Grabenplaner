@@ -1,5 +1,18 @@
 # Grabenplaner Versions-Log
 
+## v0.87 Beta · Organisationsmodell, fachliche Rechte und Leihnachweise
+
+- Frei konfigurierbare Kostenstellentypen ersetzen die bisher fest codierte Typauswahl. Zulässige Positionen werden je Typ gepflegt; nur Filialtypen dürfen einen Standort führen.
+- Die Kostenstelle ist die führende organisatorische Mitarbeiterzuordnung. Filialstandorte werden daraus abgeleitet, während zusätzliche Einsatzorte unabhängig für die Dienstplanung erhalten bleiben.
+- Personalleitung und höhere Rollen können fachliche Einzelrechte für Arbeitszeitregeln, Personalakt und AUM gezielt vergeben. Technische System-, Rollen- und geschützte AUM-Rechte bleiben von dieser Delegation ausgeschlossen.
+- Die Leihübersicht bietet Mitarbeitenden eine minimierte, standortgerechte Suche ohne vertrauliche Fotos, Dokumente, Unterschriften oder interne Bearbeitungsdaten.
+- Eigenständige Organisations- und Terminalkonten bleiben technisch von Mitarbeitenden, Personalakten, Zeiterfassung und Abwesenheitsprozessen getrennt und erhalten ausschließlich ausdrücklich freigegebene Ansichten.
+- Ausgabe- und Rückgabefotos können getrennt zu kompakten, verschlüsselten und unveränderlichen PDF-Beilagen verarbeitet werden. Die Farboriginale werden standardmäßig geschützt aufbewahrt und können nach erfolgreicher Beilagenerstellung gemäß Einstellung entfernt werden.
+- Der Zustand der Arbeitszeit-Regelprüfung wird benutzerbezogen bewahrt. Warnungs- und Blockeranzahl bleiben im eingeklappten Kopf sichtbar, ohne den Bereich automatisch zu öffnen.
+- Die Grundeinstellungen verwenden klar gegliederte, standardmäßig eingeklappte Bereiche und eine numerische Schriftgrößensteuerung von 75 bis 150 Prozent mit sofortiger Vorschau und bewusster Speicherung.
+- Bestehende Kostenstellen-, Mitarbeiter- und Kontozuordnungen werden vor der Migration gesichert, idempotent bereinigt und gegen eine Vermischung von Organisations- und Mitarbeiteridentitäten geschützt.
+- Lokale, Windows- und verschlüsselte Offsite-Sicherungen sowie der isolierte Recovery-App-Smoke berücksichtigen die neuen Leihfoto-PDF-Beilagen und ihre unveränderlichen Datenbanknachweise.
+
 ## v0.86.3 Beta · Standortbezogene Planungsverantwortung
 
 - Die neue eingebaute Rolle `Planungsverantwortung` bildet eine eng begrenzte standortbezogene Dienstplanung ab, ohne daraus eine allgemeine Filialleitungs- oder Personalverwaltungsrolle zu machen.

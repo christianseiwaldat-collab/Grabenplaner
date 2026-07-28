@@ -338,6 +338,12 @@ test("application smoke sanitizes every known protected domain but preserves ope
         storage_key TEXT NOT NULL UNIQUE,
         FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE RESTRICT
       );
+      CREATE TABLE loan_photo_attachments (
+        id TEXT PRIMARY KEY,
+        loan_id TEXT NOT NULL,
+        storage_key TEXT NOT NULL UNIQUE,
+        FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE RESTRICT
+      );
       CREATE TABLE loan_document_deliveries (
         id TEXT PRIMARY KEY,
         document_id TEXT NOT NULL,
@@ -349,6 +355,8 @@ test("application smoke sanitizes every known protected domain but preserves ope
         BEGIN SELECT RAISE(ABORT, 'loan documents are immutable'); END;
       CREATE TRIGGER trg_loan_photos_immutable_delete BEFORE DELETE ON loan_photos
         BEGIN SELECT RAISE(ABORT, 'loan photos are immutable'); END;
+      CREATE TRIGGER trg_loan_photo_attachments_immutable_delete BEFORE DELETE ON loan_photo_attachments
+        BEGIN SELECT RAISE(ABORT, 'loan photo attachments are immutable'); END;
       CREATE TRIGGER trg_payroll_handoff_events_immutable_delete BEFORE DELETE ON payroll_handoff_events
         BEGIN SELECT RAISE(ABORT, 'payroll handoff events are immutable'); END;
       CREATE TRIGGER trg_payroll_handoffs_immutable_delete BEFORE DELETE ON payroll_handoffs
@@ -396,6 +404,7 @@ test("application smoke sanitizes every known protected domain but preserves ope
       INSERT INTO loans VALUES ('loan');
       INSERT INTO loan_documents VALUES ('loan-document', 'loan', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
       INSERT INTO loan_photos VALUES ('loan-photo', 'loan', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
+      INSERT INTO loan_photo_attachments VALUES ('loan-photo-attachment', 'loan', 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc');
       INSERT INTO loan_document_deliveries VALUES ('loan-delivery', 'loan-document');
       INSERT INTO integration_connections VALUES ('connection', 1, 'gp-integration-secret:v1:value', 'live-key');
       INSERT INTO integration_deliveries VALUES ('delivery', 'connection');
@@ -421,7 +430,7 @@ test("application smoke sanitizes every known protected domain but preserves ope
       "vacation_account_events", "vacation_account_revisions",
       "vacation_history_events",
       "time_record_statement_events", "time_record_statements", "retention_preview_runs",
-      "loan_document_deliveries", "loan_documents", "loan_photos",
+      "loan_document_deliveries", "loan_documents", "loan_photo_attachments", "loan_photos",
       "payroll_handoff_events", "payroll_handoffs",
       "portal_notifications",
     ]) assert.equal(database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 0, table);
@@ -440,6 +449,7 @@ test("application smoke sanitizes every known protected domain but preserves ope
       "trg_payroll_handoffs_immutable_delete",
       "trg_loan_document_deliveries_immutable_delete",
       "trg_loan_documents_immutable_delete",
+      "trg_loan_photo_attachments_immutable_delete",
       "trg_loan_photos_immutable_delete",
       "trg_privacy_request_events_immutable_delete",
       "trg_retention_preview_runs_immutable_delete",
