@@ -109,8 +109,17 @@ test("v0.71: Jede Hauptseite bietet eine eigene gespeicherte Darstellung", () =>
   assert.equal((html.match(/class="page-theme-switch/g) || []).length, 9);
   assert.match(script, /personnelAdministration:\s*"light"/);
   assert.match(script, /loans:\s*"light"/);
-  assert.match(html, /id="dashboardFontSize"/);
+  const decreaseFontScale = html.indexOf('id="decreaseAppFontScale"');
+  const fontScalePercent = html.indexOf('id="appFontScalePercent"');
+  const increaseFontScale = html.indexOf('id="increaseAppFontScale"');
+  assert.ok(decreaseFontScale >= 0 && decreaseFontScale < fontScalePercent);
+  assert.ok(fontScalePercent < increaseFontScale);
+  assert.match(html, /id="appFontScalePercent" type="number" min="75" max="150" step="5" value="100"/);
+  assert.match(html, /class="app-font-scale-value"[\s\S]*?<span[^>]*>%<\/span>/);
+  assert.doesNotMatch(html, /id="dashboardFontSize"/);
   assert.match(script, /loadUiPreferences/);
+  assert.match(script, /function applyAppFontScalePercent\(value\)/);
+  assert.match(script, /document\.documentElement\.style\.setProperty\("--app-font-scale"/);
   assert.match(script, /formatAmuPeriod/);
   assert.doesNotMatch(script, /formatDate\(report\.incapacity_to\)/);
   assert.match(styles, /data-active-page-theme="dark"[^\n]*\.system-footer/);
@@ -120,10 +129,12 @@ test("v0.71: Jede Hauptseite bietet eine eigene gespeicherte Darstellung", () =>
   assert.match(styles, /data-active-page-theme="dark"\] \.view\.active:not\(\.rights-dashboard\) :is\([\s\S]{0,900}\.pilot-checklist/);
   assert.match(styles, /data-active-page-theme="dark"\] :is\(\.settings-tabs,\.timeline-scroll/);
   assert.match(script, /--employee-contrast:\$\{contrastColor\(employee\.color\)\}/);
-  assert.match(styles, /data-dashboard-font-size="standard"/);
+  assert.match(styles, /--app-font-scale:\s*1;/);
+  assert.match(styles, /body \{[^}]*zoom:\s*var\(--app-font-scale\);/);
+  assert.doesNotMatch(styles, /data-dashboard-font-size=/);
 });
 
-test("v0.71: Seitendarstellungen und Dashboard-Schriftgröße sind benutzerbezogen", async () => {
+test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbezogen", async () => {
   const admin = createPortalSession("v071-admin", "admin");
   const manager = createPortalSession("v071-manager", "manager");
 
@@ -132,7 +143,8 @@ test("v0.71: Seitendarstellungen und Dashboard-Schriftgröße sind benutzerbezog
   assert.equal(defaults.payload.pageThemes.planning, "light");
   assert.equal(defaults.payload.pageThemes.personnelAdministration, "light");
   assert.equal(defaults.payload.pageThemes.rightsDashboard, "light");
-  assert.equal(defaults.payload.dashboardFontSize, "standard");
+  assert.equal(defaults.payload.appFontScalePercent, 100);
+  assert.equal(defaults.payload.dashboardFontSize, undefined);
   assert.ok(defaults.payload.employeeDisplayColumns.includes("name"));
   assert.deepEqual(defaults.payload.employeeDisplaySort, { key: "personnel_number", direction: "asc" });
 
@@ -141,7 +153,7 @@ test("v0.71: Seitendarstellungen und Dashboard-Schriftgröße sind benutzerbezog
     session: admin,
     body: {
       pageThemes: { planning: "dark", personnelAdministration: "dark", rightsDashboard: "dark" },
-      dashboardFontSize: "large",
+      appFontScalePercent: 115,
       employeeDisplayColumns: ["name", "phone", "assignment"],
       employeeDisplaySort: { key: "name", direction: "desc" },
     },
@@ -150,14 +162,14 @@ test("v0.71: Seitendarstellungen und Dashboard-Schriftgröße sind benutzerbezog
   assert.equal(changed.payload.pageThemes.planning, "dark");
   assert.equal(changed.payload.pageThemes.personnelAdministration, "dark");
   assert.equal(changed.payload.pageThemes.rightsDashboard, "dark");
-  assert.equal(changed.payload.dashboardFontSize, "large");
+  assert.equal(changed.payload.appFontScalePercent, 115);
   assert.deepEqual(changed.payload.employeeDisplayColumns, ["name", "phone", "assignment"]);
   assert.deepEqual(changed.payload.employeeDisplaySort, { key: "name", direction: "desc" });
 
   const refreshed = await requestJson("/api/portal/v1/ui-preferences", { session: admin });
   assert.equal(refreshed.payload.pageThemes.planning, "dark");
   assert.equal(refreshed.payload.pageThemes.personnelAdministration, "dark");
-  assert.equal(refreshed.payload.dashboardFontSize, "large");
+  assert.equal(refreshed.payload.appFontScalePercent, 115);
   assert.deepEqual(refreshed.payload.employeeDisplayColumns, ["name", "phone", "assignment"]);
   assert.deepEqual(refreshed.payload.employeeDisplaySort, { key: "name", direction: "desc" });
 
@@ -165,8 +177,18 @@ test("v0.71: Seitendarstellungen und Dashboard-Schriftgröße sind benutzerbezog
   assert.equal(managerDefaults.response.status, 200, JSON.stringify(managerDefaults.payload));
   assert.equal(managerDefaults.payload.pageThemes.planning, "light");
   assert.equal(managerDefaults.payload.pageThemes.personnelAdministration, "light");
-  assert.equal(managerDefaults.payload.dashboardFontSize, "standard");
+  assert.equal(managerDefaults.payload.appFontScalePercent, 100);
   assert.ok(managerDefaults.payload.employeeDisplayColumns.includes("name"));
+
+  for (const appFontScalePercent of [75, 150]) {
+    const boundary = await requestJson("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      session: admin,
+      body: { appFontScalePercent },
+    });
+    assert.equal(boundary.response.status, 200, JSON.stringify(boundary.payload));
+    assert.equal(boundary.payload.appFontScalePercent, appFontScalePercent);
+  }
 });
 
 test("v0.71: Ungültige Darstellungswerte und anonyme Zugriffe werden abgewiesen", async () => {
@@ -177,12 +199,14 @@ test("v0.71: Ungültige Darstellungswerte und anonyme Zugriffe werden abgewiesen
     body: { pageThemes: { unknown: "dark" } },
   });
   assert.equal(invalidView.response.status, 400, JSON.stringify(invalidView.payload));
-  const invalidSize = await requestJson("/api/portal/v1/ui-preferences", {
-    method: "PUT",
-    session: admin,
-    body: { dashboardFontSize: "enormous" },
-  });
-  assert.equal(invalidSize.response.status, 400, JSON.stringify(invalidSize.payload));
+  for (const appFontScalePercent of [70, 155, 103, "110"]) {
+    const invalidSize = await requestJson("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      session: admin,
+      body: { appFontScalePercent },
+    });
+    assert.equal(invalidSize.response.status, 400, JSON.stringify(invalidSize.payload));
+  }
   const invalidColumns = await requestJson("/api/portal/v1/ui-preferences", {
     method: "PUT",
     session: admin,

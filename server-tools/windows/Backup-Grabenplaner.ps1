@@ -105,11 +105,19 @@ try {
     const hasTable = (name) => Boolean(check.prepare(
       "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
     ).get(name));
+    const hasColumn = (table, column) => hasTable(table)
+      && Boolean(check.prepare("SELECT 1 FROM pragma_table_info(?) WHERE name = ?").get(table, column));
     for (const reference of [
       { table: 'amu_documents', where: "WHERE status = 'active'" },
       { table: 'personnel_record_documents', where: "WHERE status = 'active'" },
       { table: 'loan_documents', where: '' },
-      { table: 'loan_photos', where: '' },
+      { table: 'loan_photo_attachments', where: '' },
+      {
+        table: 'loan_photos',
+        where: hasColumn('loan_photos', 'original_retained')
+          ? 'WHERE original_retained = 1'
+          : '',
+      },
     ]) {
       if (!hasTable(reference.table)) continue;
       requiredStorageKeys.push(...check.prepare(

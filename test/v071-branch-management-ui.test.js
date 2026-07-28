@@ -93,7 +93,7 @@ test("v0.71 Block 7 UI: globale Dienstplanung behält Standort und kennt filialf
   const candidates = between(app, "function canUseAllEmployeesForShiftPlanning()", "function openShiftModal");
   assert.match(candidates, /\["developer", "it_admin", "admin", "hr"\]\.includes/);
   assert.match(candidates, /canUseAllEmployeesForShiftPlanning\(\) \? state\.allEmployees : scopedEmployees/);
-  assert.match(candidates, /Stammfiliale \$\{homeLocation\}/);
+  assert.match(candidates, /zugeordneter Standort \$\{homeLocation\}/);
   assert.match(candidates, /String\(employee\.personnel_number\) === selected/);
   const saveShift = between(app, "async function saveShift(event)", "async function saveOption(event)");
   assert.match(saveShift, /employeeNumber: document\.querySelector\("#shiftEmployee"\)\.value/);

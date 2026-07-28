@@ -174,7 +174,13 @@ test("v0.53: Zeitübersichten und Korrekturen bleiben authentifiziert, bereichss
     fixtureDb.exec("PRAGMA busy_timeout = 5000");
     try {
       fixtureDb.prepare("UPDATE locations SET time_tracking_enabled = 1 WHERE id IN ('01','02')").run();
-      fixtureDb.prepare("UPDATE employees SET home_location_id = '02' WHERE personnel_number = '105'").run();
+      fixtureDb.prepare(`
+        UPDATE employees
+        SET cost_center_id = (SELECT cost_center_id FROM locations WHERE id = '02'),
+            home_location_id = '02',
+            preferred_department_id = NULL
+        WHERE personnel_number = '105'
+      `).run();
     } finally {
       fixtureDb.close();
     }

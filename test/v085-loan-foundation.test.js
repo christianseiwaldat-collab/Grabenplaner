@@ -41,6 +41,8 @@ const MANAGER = "v085-manager";
 const EMPLOYEE = "v085-employee";
 const WITNESS = "v085-witness";
 const OTHER = "v085-other";
+const FOREIGN_EMPLOYEE = "v085-foreign-employee";
+const FOREIGN_LOCATION = "98";
 let baseUrl;
 let httpServer;
 let locationId;
@@ -49,8 +51,9 @@ let managerSession;
 let employeeSession;
 let witnessSession;
 let otherSession;
+let foreignEmployeeSession;
 
-function ensureEmployee(employeeNumber, name, role) {
+function ensureEmployee(employeeNumber, name, role, employeeLocationId = locationId) {
   db.prepare(`
     INSERT INTO employees
       (personnel_number, full_name, nickname, color, contracted_hours,
@@ -61,7 +64,7 @@ function ensureEmployee(employeeNumber, name, role) {
       nickname = excluded.nickname,
       home_location_id = excluded.home_location_id,
       active = 1
-  `).run(employeeNumber, name, name.split(" ")[0], locationId);
+  `).run(employeeNumber, name, name.split(" ")[0], employeeLocationId);
   db.prepare(`
     INSERT INTO portal_users
       (employee_number, password_hash, role, active, must_change_password, password_changed_at, updated_at)
@@ -92,11 +95,22 @@ function createSession(employeeNumber) {
   };
 }
 
-async function request(route, { method = "GET", session = employeeSession, body } = {}) {
+async function request(
+  route,
+  {
+    method = "GET",
+    session = employeeSession,
+    body,
+    csrfToken,
+  } = {},
+) {
   const headers = { Accept: "application/json" };
   const multipart = body instanceof FormData;
   if (session) headers.Cookie = session.cookie;
-  if (session && !["GET", "HEAD"].includes(method)) headers["X-CSRF-Token"] = session.csrf;
+  if (session && !["GET", "HEAD"].includes(method)) {
+    const effectiveCsrfToken = csrfToken === undefined ? session.csrf : csrfToken;
+    if (effectiveCsrfToken !== null) headers["X-CSRF-Token"] = effectiveCsrfToken;
+  }
   if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
   const response = await fetch(`${baseUrl}${route}`, {
     method,
@@ -116,16 +130,40 @@ async function requestBinary(route, { session = employeeSession } = {}) {
 
 test.before(() => {
   locationId = String(db.prepare("SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1").get().id);
+  db.prepare(`
+    INSERT INTO locations (id, name, min_staff, day_settings_json, active)
+    VALUES (?, 'Block-8-Fremdfiliale', 0, '{}', 1)
+    ON CONFLICT(id) DO UPDATE SET name = excluded.name, active = 1
+  `).run(FOREIGN_LOCATION);
+  db.prepare(`
+    INSERT INTO loan_location_settings
+      (location_id, enabled, article_lookup_enabled, article_lookup_provider,
+       created_by, updated_by)
+    VALUES (?, 1, 0, 'none', 'test', 'test')
+    ON CONFLICT(location_id) DO UPDATE SET
+      enabled = 1,
+      article_lookup_enabled = 0,
+      article_lookup_provider = 'none',
+      updated_by = 'test',
+      updated_at = CURRENT_TIMESTAMP
+  `).run(FOREIGN_LOCATION);
   ensureEmployee(ADMIN, "Ada Administration", "admin");
   ensureEmployee(MANAGER, "Mara Filialleitung", "manager");
   ensureEmployee(EMPLOYEE, "Erika Beispiel", "employee");
   ensureEmployee(WITNESS, "Walter Beispiel", "employee");
   ensureEmployee(OTHER, "Olivia Ohne Bezug", "employee");
+  ensureEmployee(
+    FOREIGN_EMPLOYEE,
+    "Franziska Fremdfiliale",
+    "employee",
+    FOREIGN_LOCATION,
+  );
   adminSession = createSession(ADMIN);
   managerSession = createSession(MANAGER);
   employeeSession = createSession(EMPLOYEE);
   witnessSession = createSession(WITNESS);
   otherSession = createSession(OTHER);
+  foreignEmployeeSession = createSession(FOREIGN_EMPLOYEE);
   return new Promise((resolve) => {
     httpServer = app.listen(0, "127.0.0.1", () => {
       baseUrl = `http://127.0.0.1:${httpServer.address().port}`;
@@ -213,6 +251,7 @@ test("v0.85 Datenmodell trennt zentralen Artikelstamm, Standortfreigabe und Leih
     "loan_return_confirmations",
     "loan_documents",
     "loan_photos",
+    "loan_photo_attachments",
     "loan_document_deliveries",
     "loan_events",
   ]) {
@@ -607,6 +646,8 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
   assert.equal(witnessPending.payload.confirmations[0].items[0].conditionReturn, "good");
   assert.equal(witnessPending.payload.confirmations[0].photos.length, 1);
   assert.equal(witnessPending.payload.confirmations[0].photos[0].phase, "return");
+  assert.equal(witnessPending.payload.confirmations[0].photoAttachments.length, 1);
+  assert.equal(witnessPending.payload.confirmations[0].photoAttachments[0].phase, "return");
   const witnessReturnPhoto = await requestBinary(
     witnessPending.payload.confirmations[0].photos[0].contentUrl,
     { session: witnessSession },
@@ -619,6 +660,26 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
     { session: otherSession },
   );
   assert.equal(unrelatedReturnPhoto.response.status, 403);
+  const witnessReturnAttachment = await requestBinary(
+    witnessPending.payload.confirmations[0].photoAttachments[0].previewUrl,
+    { session: witnessSession },
+  );
+  assert.equal(witnessReturnAttachment.response.status, 200);
+  assert.equal(witnessReturnAttachment.response.headers.get("content-type"), "application/pdf");
+  assert.match(
+    witnessReturnAttachment.response.headers.get("content-disposition") || "",
+    /^inline;/,
+  );
+  const unrelatedReturnAttachment = await requestBinary(
+    witnessPending.payload.confirmations[0].photoAttachments[0].previewUrl,
+    { session: otherSession },
+  );
+  assert.equal(unrelatedReturnAttachment.response.status, 403);
+  const witnessIssueAttachment = await requestBinary(
+    uploadedIssuePhoto.payload.photoAttachments[0].previewUrl,
+    { session: witnessSession },
+  );
+  assert.equal(witnessIssueAttachment.response.status, 403);
 
   const requesterCannotConfirm = await request(
     `/api/portal/v1/loans/return-confirmations/${requested.payload.confirmation.id}/respond`,
@@ -787,7 +848,8 @@ test("proaktive Integritätsprüfung liest auch geschützte Leihbelege und Leihf
   assert.ok(verified.loanPhotos >= 2, JSON.stringify(verified));
   assert.equal(
     verified.storageKeys.length,
-    verified.amuDocuments + verified.personnelDocuments + verified.loanDocuments + verified.loanPhotos,
+    verified.amuDocuments + verified.personnelDocuments + verified.loanDocuments
+      + verified.loanPhotos + verified.loanPhotoAttachments,
   );
 });
 
@@ -1021,6 +1083,446 @@ test("Filialleitung kann Leihen revisionsgesichert bearbeiten, ohne Beleg schlie
   });
   assert.equal(stale.response.status, 409);
   assert.equal(stale.payload.code, "LOAN_STALE");
+});
+
+test("Block 8: ein aktives Teammitglied einer Fremdfiliale ist keine gueltige Rueckgabebestaetigung", async () => {
+  const issued = await request("/api/portal/v1/loans", {
+    method: "POST",
+    body: {
+      locationId,
+      notes: "Block-8-Witness-Grenze",
+      items: [{
+        articleNumber: "104405",
+        serialNumber: "B8-WITNESS-SCOPE",
+        conditionOut: "good",
+      }],
+    },
+  });
+  assert.equal(issued.response.status, 201, JSON.stringify(issued.payload));
+  const loanId = issued.payload.loan.id;
+
+  const foreignHeartbeat = await request(
+    "/api/portal/v1/loans/return-confirmations/pending",
+    { session: foreignEmployeeSession },
+  );
+  assert.equal(foreignHeartbeat.response.status, 200, JSON.stringify(foreignHeartbeat.payload));
+
+  const before = {
+    confirmations: db.prepare(
+      "SELECT COUNT(*) AS count FROM loan_return_confirmations WHERE loan_id = ?",
+    ).get(loanId).count,
+    events: db.prepare(
+      "SELECT COUNT(*) AS count FROM loan_events WHERE loan_id = ?",
+    ).get(loanId).count,
+    notifications: db.prepare(
+      "SELECT COUNT(*) AS count FROM portal_notifications WHERE recipient_employee_number = ?",
+    ).get(FOREIGN_EMPLOYEE).count,
+    revision: db.prepare("SELECT revision FROM loans WHERE id = ?").get(loanId).revision,
+  };
+
+  const rejected = await request(`/api/portal/v1/loans/${loanId}/return`, {
+    method: "POST",
+    body: {
+      expectedRevision: 1,
+      witnessEmployeeNumber: FOREIGN_EMPLOYEE,
+      note: "Darf die Filialgrenze nicht ueberschreiten.",
+      items: [{ position: 1, conditionReturn: "good", note: "" }],
+    },
+  });
+  assert.equal(rejected.response.status, 400, JSON.stringify(rejected.payload));
+  assert.equal(rejected.payload.code, "LOAN_RETURN_WITNESS_INVALID");
+  assert.deepEqual({
+    confirmations: db.prepare(
+      "SELECT COUNT(*) AS count FROM loan_return_confirmations WHERE loan_id = ?",
+    ).get(loanId).count,
+    events: db.prepare(
+      "SELECT COUNT(*) AS count FROM loan_events WHERE loan_id = ?",
+    ).get(loanId).count,
+    notifications: db.prepare(
+      "SELECT COUNT(*) AS count FROM portal_notifications WHERE recipient_employee_number = ?",
+    ).get(FOREIGN_EMPLOYEE).count,
+    revision: db.prepare("SELECT revision FROM loans WHERE id = ?").get(loanId).revision,
+  }, before);
+});
+
+test("Block 8: Filialleitung kann Fremdfilial-Leihen und deren geschuetzte Dateien nicht oeffnen oder aendern", async () => {
+  const issued = await request("/api/portal/v1/loans", {
+    method: "POST",
+    session: foreignEmployeeSession,
+    body: {
+      locationId: FOREIGN_LOCATION,
+      notes: "Vertraulicher Vorgang der Fremdfiliale",
+      items: [{
+        articleNumber: "104405",
+        serialNumber: "B8-FOREIGN-LOAN",
+        conditionOut: "good",
+        note: "Nur Fremdfiliale",
+      }],
+    },
+  });
+  assert.equal(issued.response.status, 201, JSON.stringify(issued.payload));
+  const loanId = issued.payload.loan.id;
+  const document = issued.payload.loan.documents[0];
+
+  const sourceImage = await sharp({
+    create: {
+      width: 640,
+      height: 480,
+      channels: 3,
+      background: { r: 44, g: 112, b: 84 },
+    },
+  }).jpeg({ quality: 88 }).toBuffer();
+  const photoForm = new FormData();
+  photoForm.set("phase", "issue");
+  photoForm.append(
+    "photos",
+    new Blob([sourceImage], { type: "image/jpeg" }),
+    "Fremdfiliale.jpg",
+  );
+  const uploaded = await request(`/api/portal/v1/loans/${loanId}/photos`, {
+    method: "POST",
+    session: foreignEmployeeSession,
+    body: photoForm,
+  });
+  assert.equal(uploaded.response.status, 201, JSON.stringify(uploaded.payload));
+  const photo = uploaded.payload.photos[0];
+  const attachment = uploaded.payload.photoAttachments[0];
+  assert.ok(document?.downloadUrl);
+  assert.ok(photo?.contentUrl);
+  assert.ok(attachment?.previewUrl);
+  assert.ok(attachment?.downloadUrl);
+
+  const before = {
+    revision: db.prepare("SELECT revision FROM loans WHERE id = ?").get(loanId).revision,
+    events: db.prepare(
+      "SELECT COUNT(*) AS count FROM loan_events WHERE loan_id = ?",
+    ).get(loanId).count,
+    managerAudits: db.prepare(
+      "SELECT COUNT(*) AS count FROM audit_log WHERE actor = ?",
+    ).get(MANAGER).count,
+  };
+  const editBody = {
+    expectedRevision: 1,
+    dueDate: "2027-09-15",
+    notes: "Unzulaessige Fremdfilialbearbeitung",
+    items: [{
+      position: 1,
+      serialNumber: "B8-FOREIGN-CHANGED",
+      conditionOut: "used",
+      conditionReturn: "",
+      note: "",
+    }],
+  };
+  const closeBody = {
+    ...editBody,
+    items: editBody.items.map((item) => ({ ...item, conditionReturn: "good" })),
+  };
+
+  for (const attempt of [
+    await request(`/api/portal/v1/loans/${loanId}`, { session: managerSession }),
+    await request(`/api/portal/v1/loans/${loanId}/management`, {
+      method: "PUT",
+      session: managerSession,
+      body: editBody,
+    }),
+    await request(`/api/portal/v1/loans/${loanId}/management/close`, {
+      method: "POST",
+      session: managerSession,
+      body: closeBody,
+    }),
+    await request(`/api/portal/v1/loans/${loanId}/management/reopen`, {
+      method: "POST",
+      session: managerSession,
+      body: { expectedRevision: 1 },
+    }),
+  ]) {
+    assert.equal(attempt.response.status, 403, JSON.stringify(attempt.payload));
+    assert.equal(attempt.payload.code, "PORTAL_SCOPE_DENIED");
+  }
+
+  for (const protectedRoute of [
+    document.downloadUrl,
+    photo.contentUrl,
+    attachment.previewUrl,
+    attachment.downloadUrl,
+  ]) {
+    const denied = await requestBinary(protectedRoute, { session: managerSession });
+    assert.equal(denied.response.status, 403, protectedRoute);
+  }
+
+  assert.deepEqual({
+    revision: db.prepare("SELECT revision FROM loans WHERE id = ?").get(loanId).revision,
+    events: db.prepare(
+      "SELECT COUNT(*) AS count FROM loan_events WHERE loan_id = ?",
+    ).get(loanId).count,
+    managerAudits: db.prepare(
+      "SELECT COUNT(*) AS count FROM audit_log WHERE actor = ?",
+    ).get(MANAGER).count,
+  }, before);
+});
+
+test("Block 8: CSRF und anonyme Dateizugriffe veraendern keine Leihdaten und geben keine Schutzdatei aus", async () => {
+  const issued = await request("/api/portal/v1/loans", {
+    method: "POST",
+    body: {
+      locationId,
+      notes: "Block-8-CSRF",
+      items: [{
+        articleNumber: "104405",
+        serialNumber: "B8-CSRF",
+        conditionOut: "good",
+      }],
+    },
+  });
+  assert.equal(issued.response.status, 201, JSON.stringify(issued.payload));
+  const loanId = issued.payload.loan.id;
+  const document = issued.payload.loan.documents[0];
+
+  const sourceImage = await sharp({
+    create: {
+      width: 480,
+      height: 360,
+      channels: 3,
+      background: { r: 196, g: 122, b: 54 },
+    },
+  }).png().toBuffer();
+  const photoForm = new FormData();
+  photoForm.set("phase", "issue");
+  photoForm.append(
+    "photos",
+    new Blob([sourceImage], { type: "image/png" }),
+    "CSRF-Schutzdatei.png",
+  );
+  const uploaded = await request(`/api/portal/v1/loans/${loanId}/photos`, {
+    method: "POST",
+    body: photoForm,
+  });
+  assert.equal(uploaded.response.status, 201, JSON.stringify(uploaded.payload));
+  const photo = uploaded.payload.photos[0];
+  const attachment = uploaded.payload.photoAttachments[0];
+
+  const mutationBody = {
+    expectedRevision: 1,
+    dueDate: "2027-10-15",
+    notes: "Darf ohne CSRF nicht gespeichert werden",
+    items: [{
+      position: 1,
+      serialNumber: "B8-CSRF-CHANGED",
+      conditionOut: "used",
+      conditionReturn: "",
+      note: "",
+    }],
+  };
+  const before = {
+    revision: db.prepare("SELECT revision FROM loans WHERE id = ?").get(loanId).revision,
+    events: db.prepare(
+      "SELECT COUNT(*) AS count FROM loan_events WHERE loan_id = ?",
+    ).get(loanId).count,
+    managerAudits: db.prepare(
+      "SELECT COUNT(*) AS count FROM audit_log WHERE actor = ?",
+    ).get(MANAGER).count,
+  };
+
+  const missingCsrf = await request(`/api/portal/v1/loans/${loanId}/management`, {
+    method: "PUT",
+    session: managerSession,
+    csrfToken: null,
+    body: mutationBody,
+  });
+  assert.equal(missingCsrf.response.status, 403, JSON.stringify(missingCsrf.payload));
+  const wrongCsrf = await request(`/api/portal/v1/loans/${loanId}/management`, {
+    method: "PUT",
+    session: managerSession,
+    csrfToken: "block-8-wrong-csrf-token",
+    body: mutationBody,
+  });
+  assert.equal(wrongCsrf.response.status, 403, JSON.stringify(wrongCsrf.payload));
+  assert.deepEqual({
+    revision: db.prepare("SELECT revision FROM loans WHERE id = ?").get(loanId).revision,
+    events: db.prepare(
+      "SELECT COUNT(*) AS count FROM loan_events WHERE loan_id = ?",
+    ).get(loanId).count,
+    managerAudits: db.prepare(
+      "SELECT COUNT(*) AS count FROM audit_log WHERE actor = ?",
+    ).get(MANAGER).count,
+  }, before);
+
+  const protectedAuditCount = () => db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM audit_log
+    WHERE entity_id IN (?, ?, ?, ?)
+  `).get(loanId, document.id, photo.id, attachment.id).count;
+  const auditsBeforeAnonymousReads = protectedAuditCount();
+  for (const [route, forbiddenSignature] of [
+    [document.downloadUrl, "%PDF"],
+    [photo.contentUrl, "ffd8"],
+    [attachment.previewUrl, "%PDF"],
+    [attachment.downloadUrl, "%PDF"],
+  ]) {
+    const denied = await requestBinary(route, { session: null });
+    assert.ok([401, 403].includes(denied.response.status), route);
+    assert.match(denied.response.headers.get("content-type") || "", /application\/json/i);
+    if (forbiddenSignature === "ffd8") {
+      assert.notEqual(denied.buffer.subarray(0, 2).toString("hex"), forbiddenSignature);
+    } else {
+      assert.notEqual(denied.buffer.subarray(0, 4).toString("ascii"), forbiddenSignature);
+    }
+  }
+  assert.equal(protectedAuditCount(), auditsBeforeAnonymousReads);
+});
+
+test("Block 8: erfolgreiche Leihaktionen schreiben zuordenbare und inhaltsarme Audits", async () => {
+  const NOTE_SENTINEL = "BLOCK8-NOTIZ-INHALT-DARF-NICHT-INS-AUDIT";
+  const FILE_CONTENT_SENTINEL = "BLOCK8-DATEIINHALT-DARF-NICHT-INS-AUDIT";
+  const issued = await request("/api/portal/v1/loans", {
+    method: "POST",
+    body: {
+      locationId,
+      dueDate: "2027-11-01",
+      notes: `${NOTE_SENTINEL}-AUSGABE`,
+      items: [{
+        articleNumber: "104405",
+        serialNumber: "B8-AUDIT",
+        conditionOut: "good",
+        note: `${NOTE_SENTINEL}-ARTIKEL`,
+      }],
+    },
+  });
+  assert.equal(issued.response.status, 201, JSON.stringify(issued.payload));
+  const loanId = issued.payload.loan.id;
+
+  const edited = await request(`/api/portal/v1/loans/${loanId}/management`, {
+    method: "PUT",
+    session: managerSession,
+    body: {
+      expectedRevision: 1,
+      dueDate: "2027-11-15",
+      notes: `${NOTE_SENTINEL}-BEARBEITUNG`,
+      items: [{
+        position: 1,
+        serialNumber: "B8-AUDIT-EDIT",
+        conditionOut: "used",
+        conditionReturn: "",
+        note: `${NOTE_SENTINEL}-EDIT-ARTIKEL`,
+      }],
+    },
+  });
+  assert.equal(edited.response.status, 200, JSON.stringify(edited.payload));
+  assert.equal(edited.payload.loan.revision, 2);
+
+  const closed = await request(`/api/portal/v1/loans/${loanId}/management/close`, {
+    method: "POST",
+    session: managerSession,
+    body: {
+      expectedRevision: 2,
+      dueDate: "2027-11-15",
+      notes: `${NOTE_SENTINEL}-SCHLIESSEN`,
+      items: [{
+        position: 1,
+        serialNumber: "B8-AUDIT-EDIT",
+        conditionOut: "used",
+        conditionReturn: "good",
+        note: `${NOTE_SENTINEL}-SCHLIESSEN-ARTIKEL`,
+      }],
+    },
+  });
+  assert.equal(closed.response.status, 200, JSON.stringify(closed.payload));
+  assert.equal(closed.payload.loan.revision, 3);
+
+  const reopened = await request(`/api/portal/v1/loans/${loanId}/management/reopen`, {
+    method: "POST",
+    session: managerSession,
+    body: { expectedRevision: 3 },
+  });
+  assert.equal(reopened.response.status, 200, JSON.stringify(reopened.payload));
+  assert.equal(reopened.payload.loan.revision, 4);
+
+  const sourceImage = await sharp({
+    create: {
+      width: 520,
+      height: 390,
+      channels: 3,
+      background: { r: 48, g: 148, b: 194 },
+    },
+  }).jpeg({ quality: 90 }).toBuffer();
+  const photoForm = new FormData();
+  photoForm.set("phase", "return");
+  photoForm.append(
+    "photos",
+    new Blob(
+      [Buffer.concat([sourceImage, Buffer.from(FILE_CONTENT_SENTINEL, "utf8")])],
+      { type: "image/jpeg" },
+    ),
+    "Audit-Rueckgabe.jpg",
+  );
+  const uploaded = await request(`/api/portal/v1/loans/${loanId}/photos`, {
+    method: "POST",
+    body: photoForm,
+  });
+  assert.equal(uploaded.response.status, 201, JSON.stringify(uploaded.payload));
+
+  const witnessHeartbeat = await request(
+    "/api/portal/v1/loans/return-confirmations/pending",
+    { session: witnessSession },
+  );
+  assert.equal(witnessHeartbeat.response.status, 200, JSON.stringify(witnessHeartbeat.payload));
+  const requested = await request(`/api/portal/v1/loans/${loanId}/return`, {
+    method: "POST",
+    body: {
+      expectedRevision: 4,
+      witnessEmployeeNumber: WITNESS,
+      note: `${NOTE_SENTINEL}-RUECKGABE`,
+      items: [{
+        position: 1,
+        conditionReturn: "good",
+        note: `${NOTE_SENTINEL}-RUECKGABE-ARTIKEL`,
+      }],
+    },
+  });
+  assert.equal(requested.response.status, 202, JSON.stringify(requested.payload));
+  const confirmed = await request(
+    `/api/portal/v1/loans/return-confirmations/${requested.payload.confirmation.id}/respond`,
+    {
+      method: "POST",
+      session: witnessSession,
+      body: { decision: "confirm", note: `${NOTE_SENTINEL}-BESTAETIGUNG` },
+    },
+  );
+  assert.equal(confirmed.response.status, 200, JSON.stringify(confirmed.payload));
+  assert.equal(confirmed.payload.loan.status, "returned");
+  assert.equal(confirmed.payload.loan.revision, 5);
+
+  const expectedAudits = [
+    ["loan.issue", EMPLOYEE],
+    ["loan.management.edit", MANAGER],
+    ["loan.management.close_without_document", MANAGER],
+    ["loan.management.reopen", MANAGER],
+    ["loan.return.request", EMPLOYEE],
+    ["loan.return.confirm", WITNESS],
+  ];
+  const audits = db.prepare(`
+    SELECT actor, action, entity_type, entity_id, detail
+    FROM audit_log
+    WHERE entity_id = ?
+      AND action IN (${expectedAudits.map(() => "?").join(",")})
+    ORDER BY id
+  `).all(loanId, ...expectedAudits.map(([action]) => action));
+  assert.deepEqual(
+    audits.map((entry) => [
+      entry.action,
+      entry.actor,
+      entry.entity_type,
+      entry.entity_id,
+    ]),
+    expectedAudits.map(([action, actor]) => [action, actor, "loan", loanId]),
+  );
+  audits.forEach((entry) => assert.doesNotThrow(() => JSON.parse(entry.detail)));
+
+  const allLoanAuditDetails = db.prepare(`
+    SELECT detail FROM audit_log WHERE entity_id = ? ORDER BY id
+  `).all(loanId).map((entry) => entry.detail).join("\n");
+  assert.equal(allLoanAuditDetails.includes(NOTE_SENTINEL), false);
+  assert.equal(allLoanAuditDetails.includes(FILE_CONTENT_SENTINEL), false);
 });
 
 test("Leihverwaltung und FL-Aktionen sind im Portal verankert, der F18-Import ist entfernt", () => {

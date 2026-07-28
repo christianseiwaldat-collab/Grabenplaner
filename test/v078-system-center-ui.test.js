@@ -35,7 +35,7 @@ test("v0.78: Langzeitwerte sind begrenzt, barrierearm und ohne externe Diagrammb
   assert.doesNotMatch(script, /Chart\(|d3\.|plotly/i);
 });
 
-test("v0.78: neue System-Center-Bereiche folgen Darkmode, Schriftgröße und responsivem Raster", () => {
+test("v0.78: neue System-Center-Bereiche folgen Darkmode, globaler Schriftgröße und responsivem Raster", () => {
   for (const marker of [
     ".system-center-operations",
     ".system-center-operation",
@@ -46,6 +46,8 @@ test("v0.78: neue System-Center-Bereiche folgen Darkmode, Schriftgröße und res
   assert.match(styles, /@media \(max-width: 1250px\)[\s\S]*system-center-trend-grid/);
   assert.match(styles, /@media \(max-width: 980px\)[\s\S]*system-center-operations/);
   assert.match(styles, /@media \(max-width: 700px\)[\s\S]*system-center-trend-grid/);
-  assert.match(styles, /rights-dashboard\[data-dashboard-font-size\][^\n]*system-center-operation/);
+  assert.match(styles, /--app-font-scale:\s*1;/);
+  assert.match(styles, /body \{[^}]*zoom:\s*var\(--app-font-scale\);/);
+  assert.doesNotMatch(styles, /data-dashboard-font-size=/);
   assert.match(styles, /rights-dashboard\[data-dashboard-theme="dark"\]/);
 });

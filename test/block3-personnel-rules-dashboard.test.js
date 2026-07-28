@@ -29,6 +29,7 @@ let managerSession;
 let employeeSession;
 let localLocationId;
 let foreignLocationId;
+let foreignCostCenterId;
 
 function createSession(employeeNumber, role) {
   const token = crypto.randomBytes(32).toString("hex");
@@ -85,10 +86,16 @@ test.before(async () => {
     Array.from({ length: 19 }, (_, index) => 80 + index)
       .find((id) => !db.prepare("SELECT 1 FROM locations WHERE id = ?").get(String(id))),
   );
+  foreignCostCenterId = `cc-block3-${foreignLocationId}`;
+  db.prepare(`
+    INSERT INTO cost_centers
+      (id, code, name, type, cost_center_type_id, active, sort_order)
+    VALUES (?, ?, 'Block 3 Fremdfiliale', 'branch', 'branch', 1, 900)
+  `).run(foreignCostCenterId, `B3-${foreignLocationId}`);
   db.prepare(`
     INSERT INTO locations (id, name, cost_center_id, min_staff, day_settings_json, active)
     VALUES (?, 'Block 3 Fremdfiliale', ?, 1, '', 1)
-  `).run(foreignLocationId, localLocation.cost_center_id || null);
+  `).run(foreignLocationId, foreignCostCenterId);
   insertEmployee(MANAGER, "Mara Regelblick", localLocationId, localLocation.cost_center_id);
   insertEmployee(EMPLOYEE, "Emil Ohne Regelrecht", localLocationId, localLocation.cost_center_id);
   managerSession = createSession(MANAGER, "manager");

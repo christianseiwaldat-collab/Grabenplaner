@@ -138,6 +138,7 @@ test("all standalone backup and restore helpers include protected loan files", (
     const source = fs.readFileSync(path.join(__dirname, "..", ...relativePath.split("/")), "utf8");
     assert.match(source, /loan_documents/, relativePath);
     assert.match(source, /loan_photos/, relativePath);
+    assert.match(source, /loan_photo_attachments/, relativePath);
   }
 });
 

@@ -41,8 +41,8 @@ const state = {
   brandingKits: [],
   portalStatus: null,
   portalSession: null,
-  desiredOperationMode: null,
   portalUsers: [],
+  organizationAccounts: [],
   portalRoles: [],
   portalPermissionCatalog: [],
   approvalDelegations: [],
@@ -99,7 +99,9 @@ const state = {
     rightsDashboard: "light",
     settings: "light",
   },
-  dashboardFontSize: "standard",
+  appFontScalePercent: 100,
+  persistedAppFontScalePercent: 100,
+  workRuleAssessmentExpanded: false,
   employeeDisplayColumns: [],
   employeeDisplaySort: { key: "personnel_number", direction: "asc" },
   rightsDashboardMode: "locations",
@@ -135,6 +137,7 @@ const state = {
   allEmployees: [],
   personnelDirectory: [],
   costCenters: [],
+  costCenterTypes: [],
   centralVacations: [],
   centralVacationYear: new Date().getFullYear(),
   centralVacationCostCenterFilter: "",
@@ -173,8 +176,11 @@ const state = {
   personnelDirectoryCostCenterFilter: "",
   personnelDirectoryStatusFilter: "active",
   editingCostCenterId: null,
+  editingCostCenterTypeId: null,
+  costCenterTypePositionSelection: new Set(),
   personnelRecord: null,
   personnelRecordDirtyFields: new Set(),
+  personnelRecordOpenSections: new Set(),
   employeePersonnelRecord: null,
   serverStatus: null,
   serverDiagnostics: null,
@@ -206,6 +212,7 @@ const state = {
     runs: [],
     inspection: null,
     preview: null,
+    legacyPersonnelImportMapping: {},
     payrollPreflight: null,
     payrollHandoffs: [],
     payrollHandoffPreflight: null,
@@ -247,6 +254,7 @@ let scheduleNoteQuill = null;
 let scheduleNoteSanitizing = false;
 let shiftRulePreviewTimer = null;
 let shiftRulePreviewRequest = null;
+let workRuleAssessmentPreferenceRequestId = 0;
 
 const optionLabels = {
   vacation: "Urlaub",
@@ -277,8 +285,8 @@ const elements = Object.fromEntries(
     "vacationSummary", "vacationCalendar", "vacationCalendarTitle", "vacationPdfButton", "addVacationButton", "saveEntitlementsButton", "editEntitlementsButton", "managerVacationRequestList", "refreshRequestsButton", "requestWorkflowSummary", "requestStatusFilter", "vacationRequestCount", "timeOffRequestCount", "amuRequestCount", "vacationAccountsButton", "vacationAccountsModal", "vacationAccountsYear", "loadVacationAccountsButton", "vacationAccountsSummary", "vacationAccountsList",
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
-    "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeeHomeLocation", "employeeHomeLocationHint", "employeePreferredDepartment", "employeePosition", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "addCostCenterButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
+    "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeePreferredDepartment", "employeePreferredDepartmentHint", "employeePosition", "employeePositionHint", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
+    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
     "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationCostCenterField", "locationCostCenter", "locationCostCenterReadonly", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
@@ -287,7 +295,8 @@ const elements = Object.fromEntries(
     "optionsModal", "optionForm", "optionList", "optionsWeekLabel", "optionsWeekRange", "optionsScopeHint", "optionPreviousWeek", "optionNextWeek", "globalBlockDate", "globalBlockReason", "globalBlockHoliday", "globalBlockSubmitButton", "optionSubmitButton", "cancelOptionEditButton", "autoPlanModal",
     "autoPlanForm", "autoPlanWeek", "resetWeekModal", "resetWeekForm", "resetWeekText", "schedulePdfPreviewButton", "schedulePdfPreviewFrame", "vacationPdfPreviewButton", "vacationPdfPreviewFrame", "appBackupDirectoryText",
     "positionForm", "positionId", "positionName", "positionSubmitButton", "cancelPositionEditButton", "positionList", "updateCheckButton", "updateCheckIcon", "updateCheckText", "updateCheckHint", "systemExitButton",
-    "localModeOption", "localModeBadge", "serverModeOption", "serverModeBadge", "publicServerModeOption", "publicServerModeBadge", "saveOperationModeButton", "portalFoundationHint", "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
+    "adminAccessModeLabel", "accessSettings", "portalUserList", "accessSettingsHint", "adminSetupButton", "adminSetupModal", "adminSetupForm", "adminSetupEmployee", "adminSetupPassword", "adminSetupPasswordRepeat",
+    "organizationAccountsCard", "organizationAccountForm", "organizationAccountEditingId", "organizationAccountLoginName", "organizationAccountDisplayName", "organizationAccountType", "organizationAccountLocation", "organizationAccountPassword", "organizationAccountLoanOverview", "organizationAccountScheduleView", "organizationAccountActive", "organizationAccountHint", "organizationAccountCancel", "organizationAccountSubmit", "organizationAccountList",
     "rightsManagementHint", "rightsEmployeeSearch", "rightsUserList", "rightsEditorModal", "rightsEditorForm", "rightsEditorTitle", "rightsEditorSummary", "rightsEditorPermissions", "rightsEditorScope", "rightsEditorScopeHint", "rightsEditorDepartmentScopeLabel", "rightsEditorLocationScopeLabel", "rightsEditorAnnouncement", "rightsEditorHint", "saveRightsEditorButton", "mobileLeadershipModuleSettings", "mobileLeadershipSettingsHint", "saveMobileLeadershipSettingsButton", "personnelFieldRightsRole", "personnelFieldRightsMatrix", "personnelFieldRightsHint", "savePersonnelFieldRightsButton", "positionSettingsCard", "personnelViewSettingsCard", "trustLevelSettingsCard",
     "systemCenterPanel", "systemCenterUpdated", "refreshSystemCenter", "startRecoveryAssurance", "systemCenterContent", "rightsDashboardLocationsPanel", "locationDashboardDate", "refreshLocationDashboard", "locationDashboardSummary", "locationDashboardFilters", "locationDashboardGrid", "rightsDashboardRightsPanel", "personnelRulesDashboardPanel", "rightsDashboardProcessesPanel", "rightsDashboardSummary", "rightsDashboardSearch", "rightsDashboardRoleFilter", "rightsDashboardLocationFilter", "rightsDashboardDepartmentFilter", "rightsDashboardOriginFilter", "rightsDashboardResultCount", "rightsDashboardUserList", "rightsDashboardEmpty", "rightsDashboardSelection", "rightsDashboardPersonTitle", "rightsDashboardPersonSubtitle", "rightsDashboardAccessStatus", "rightsDashboardPath", "rightsDashboardMatrix", "rightsDashboardExplanation",
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
@@ -295,7 +304,7 @@ const elements = Object.fromEntries(
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
     "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "databaseBackupSettingsCard", "legacyLocalBackupControls", "serverDatabaseDownloadPanel", "databaseDownloadForm", "databaseDownloadCurrentPassword", "databaseDownloadButton", "databaseDownloadStatus", "serverGoogleDriveManagementCard", "googleDriveManagementStatus", "reloadGoogleDriveFoldersButton", "manageGoogleDriveFolderButton", "offsiteFolderManagementModal", "offsiteFolderManagementForm", "offsiteFolderActiveLabel", "offsiteManagedFolderList", "offsiteNewFolderLabel", "offsiteCreateCurrentPassword", "createManagedOffsiteFolderButton", "offsiteActiveFolderSelection", "offsiteFolderActivationConfirmation", "offsiteActivateCurrentPassword", "activateManagedOffsiteFolderButton", "offsiteFolderDialogStatus", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
-    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "dashboardFontSize", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
+    "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
     "greetingSettingsCard", "personalizedGreetingsEnabled", "greetingVacationMinimumDays", "greetingReturnWorkdays", "greetingRecoveryWorkdays", "greetingMorningTemplates", "greetingDaytimeTemplates", "greetingEveningTemplates", "greetingVacationTemplates", "greetingSicknessActiveTemplates", "greetingSicknessReturnTemplates", "greetingSettingsHint", "saveGreetingSettingsButton",
     "wifiSettingsCard", "wifiMinimumPresenceMinutes", "wifiAbsenceGraceMinutes", "wifiAutomationStatus", "wifiAutomationSettingsHint", "saveWifiAutomationSettingsButton", "wifiConnectorDetails", "wifiLocationMappingList", "saveWifiLocationMappingsButton", "wifiConfirmationLevelSearch", "wifiConfirmationLevelList", "wifiConfirmationLevelHint", "saveWifiConfirmationLevelsButton", "trustLevelsEnabled", "trustLevelsVisibleToManagers", "trustLevelsVisibleToDepartmentManagers", "trustLevelsVisibleToEmployees",
@@ -315,7 +324,7 @@ const elements = Object.fromEntries(
     "employeeImportCard", "importProfileCard", "payrollExportCard", "payrollHandoffCard", "exportProfileCard", "integrationInformationCard", "integrationHistoryCard", "openPersonnelImportButton", "importProfileList", "exportProfileList", "integrationHistory",
     "payrollProfile", "payrollLocation", "payrollDepartment", "payrollDateFrom", "payrollDateTo", "payrollSourceMode", "payrollLayout", "payrollFormat", "payrollApiTargetField", "payrollApiTarget", "payrollDelimiter", "payrollDecimalSeparator", "payrollColumnSelection", "payrollWageCodeDetails", "payrollWageCodeMap", "payrollAllowDraft", "payrollProfileName", "savePayrollProfileButton", "payrollPreflightButton", "payrollDeliverButton", "payrollDownloadButton", "payrollPreflightResult",
     "payrollHandoffMonth", "payrollHandoffLocation", "payrollHandoffDepartment", "payrollHandoffPreflightButton", "payrollHandoffCreateButton", "payrollHandoffPreflightResult", "payrollHandoffList", "payrollHandoffProtocolModal", "payrollHandoffProtocolForm", "payrollHandoffProtocolId", "payrollHandoffProtocolSummary", "payrollHandoffProtocolResult", "payrollHandoffProtocolNumber", "payrollHandoffProtocolNote", "payrollHandoffProtocolMessage", "savePayrollHandoffProtocolButton",
-    "personnelImportModal", "personnelImportForm", "personnelImportProgress", "personnelImportFileStep", "personnelImportMappingStep", "personnelImportPreviewStep", "personnelImportSourceType", "personnelImportFileField", "personnelImportSqlConnectionField", "personnelImportSqlConnection", "personnelImportFile", "personnelImportProfile", "personnelImportDuplicateStrategy", "personnelImportDefaultLocation", "personnelImportDefaultDepartment", "personnelImportDefaultPosition", "personnelImportDefaultHours", "inspectPersonnelImportButton", "personnelImportSheet", "personnelImportHeaderRow", "personnelImportMapping", "personnelImportProfileName", "savePersonnelImportProfileButton", "previewPersonnelImportButton", "personnelImportSummary", "personnelImportPreviewBody", "personnelImportPreviewHint", "personnelImportMessage", "resetPersonnelImportButton", "backPersonnelImportButton", "applyPersonnelImportButton",
+    "personnelImportModal", "personnelImportForm", "personnelImportProgress", "personnelImportFileStep", "personnelImportMappingStep", "personnelImportPreviewStep", "personnelImportSourceType", "personnelImportFileField", "personnelImportSqlConnectionField", "personnelImportSqlConnection", "personnelImportFile", "personnelImportProfile", "personnelImportDuplicateStrategy", "personnelImportDefaultCostCenter", "personnelImportDefaultDepartment", "personnelImportDefaultPosition", "personnelImportDefaultHours", "inspectPersonnelImportButton", "personnelImportSheet", "personnelImportHeaderRow", "personnelImportMapping", "personnelImportProfileName", "savePersonnelImportProfileButton", "previewPersonnelImportButton", "personnelImportSummary", "personnelImportPreviewBody", "personnelImportPreviewHint", "personnelImportMessage", "resetPersonnelImportButton", "backPersonnelImportButton", "applyPersonnelImportButton",
     "integrationConnectionModal", "integrationConnectionForm", "integrationConnectionTitle", "integrationConnectionId", "integrationConnectionKind", "integrationConnectionName", "integrationConnectionActive", "integrationConnectionScopeLocations", "integrationConnectionScopeDepartments", "integrationSqlFields", "integrationSqlHost", "integrationSqlPort", "integrationSqlDatabase", "integrationSqlInstance", "integrationSqlSchema", "integrationSqlView", "integrationSqlAllowedColumns", "integrationSqlTls", "integrationSqlTimeout", "integrationSqlRowLimit", "integrationApiFields", "integrationApiEndpoint", "integrationApiAuthentication", "integrationApiKeyHeaderField", "integrationApiKeyHeader", "integrationApiTimeout", "integrationApiRequestLimit", "integrationApiResponseLimit", "integrationCredentialPanel", "integrationCredentialTitle", "integrationCredentialStatus", "integrationSqlCredentials", "integrationApiCredentials", "integrationBearerTokenField", "integrationApiKeyField", "integrationBasicUsernameField", "integrationBasicPasswordField", "integrationCredentialUsername", "integrationCredentialPassword", "integrationCredentialToken", "integrationCredentialApiKey", "integrationCredentialBasicUsername", "integrationCredentialBasicPassword", "integrationConnectionMessage", "deleteIntegrationConnectionButton", "testIntegrationConnectionButton", "saveIntegrationConnectionButton",
   ].map((id) => [id, document.querySelector(`#${id}`)]),
 );
@@ -810,9 +819,37 @@ function dataSubjectRequestCanBeExported(request) {
     && ["approved", "partially_approved", "fulfilled", "partially_fulfilled"].includes(request?.status);
 }
 
+function managerRequestTabAvailability() {
+  const localAccess = !state.portalStatus?.portalEnabled;
+  const permissions = state.portalSession?.user?.permissions || [];
+  const vacationAvailable = localAccess || permissions.includes("vacation:read");
+  const sicknessAndAmuAvailable = state.portalStatus?.installationFeatures?.sicknessAmu !== false
+    && (localAccess || permissions.includes("sickness:read") || permissions.includes("amu:local:manage"));
+  return {
+    vacation: vacationAvailable,
+    time_off: vacationAvailable,
+    amu: sicknessAndAmuAvailable,
+  };
+}
+
+function accessibleManagerRequestTabs() {
+  const availability = managerRequestTabAvailability();
+  return ["vacation", "time_off", "amu"].filter((kind) => availability[kind]);
+}
+
+function ensureAccessibleManagerRequestTab() {
+  const availableTabs = accessibleManagerRequestTabs();
+  if (!availableTabs.includes(state.requestKindTab)) {
+    state.requestKindTab = availableTabs[0] || "vacation";
+    if (elements.requestStatusFilter && !["actionable", "all"].includes(elements.requestStatusFilter.value)) {
+      elements.requestStatusFilter.value = "actionable";
+    }
+  }
+  return state.requestKindTab;
+}
+
 function canReadManagerRequests() {
-  return !state.portalStatus?.portalEnabled
-    || state.portalSession?.user?.permissions?.includes("vacation:read") === true;
+  return accessibleManagerRequestTabs().length > 0;
 }
 
 function canWriteApprovedAbsenceEntries() {
@@ -885,7 +922,6 @@ function canReadSystemCenter() {
 
 function canReadPersonnelRulesDashboard() {
   if (!state.portalStatus?.portalEnabled) return true;
-  if (state.portalSession?.user?.role === "location_planner") return false;
   return (state.portalSession?.user?.permissions || []).includes("work_rules:read");
 }
 
@@ -918,7 +954,6 @@ function applyRoleVisibility() {
   const departmentWriteAccess = !lanActive || permissions.includes("departments:write");
   const locationWriteAccess = locationBaseWriteAccess || departmentWriteAccess;
   const positionWriteAccess = !lanActive || permissions.includes("positions:write");
-  const operationModeAccess = !lanActive || permissions.includes("operation_mode:write");
   const scopeAccess = permissions.includes("scopes:write");
   const employeeReadAccess = employeeWriteAccess || employeeDisplayWriteAccess || permissions.includes("employees:read");
   const timeReadAccess = canReadManagedTimeTracking() && features.timeTracking !== false;
@@ -1002,14 +1037,12 @@ function applyRoleVisibility() {
     state.rightsDashboardMode = accessibleDashboardModes()[0] || "systemCenter";
   }
   const anySettingsAccess = settingsAccess || scopeAccess || rightsAccess || brandingAccess || positionWriteAccess
-    || operationModeAccess || wifiSettingsAccess || usbProvisioningAccess || integrationAccess
+    || wifiSettingsAccess || usbProvisioningAccess || integrationAccess
     || diagnosticsReadAccess || diagnosticsTechnicalAccess || backupWriteAccess || retentionReadAccess
     || loanSettingsAccess;
   document.querySelectorAll('[data-view="settings"]').forEach((button) => button.classList.toggle("hidden", !anySettingsAccess));
   const settingsTabs = {
-    general: settingsAccess || operationModeAccess,
-    branding: brandingAccess,
-    pdf: settingsAccess,
+    general: settingsAccess || brandingAccess || loanSettingsAccess,
     personnel: settingsAccess || positionWriteAccess || wifiSettingsAccess,
     vacation: features.vacation !== false && (settingsAccess || globalAdministration),
     timeTracking: settingsAccess || (wifiSettingsAccess && features.wifiSuggestions !== false && features.timeTracking !== false),
@@ -1027,11 +1060,10 @@ function applyRoleVisibility() {
   const dataProtectionTabActive = document.querySelector('[data-settings-tab="dataProtection"]')?.classList.contains("active");
   const usbTabActive = document.querySelector('[data-settings-tab="usbProvisioning"]')?.classList.contains("active");
   const backupTabActive = document.querySelector('[data-settings-tab="backup"]')?.classList.contains("active");
-  elements.saveSettingsButton?.classList.toggle("hidden", (!settingsAccess && !backupTabActive)
+  elements.saveSettingsButton?.classList.toggle("hidden", (!(settingsAccess || brandingAccess) && !backupTabActive)
     || integrationTabActive || dataProtectionTabActive || usbTabActive
     || (timeTrackingTabActive && !settingsAccess)
     || (backupTabActive && (serverActive || !backupConfigurationAccess)));
-  elements.saveOperationModeButton?.classList.toggle("hidden", !operationModeAccess || settingsAccess);
   const canExit = serverActive
     ? Boolean(state.portalSession?.user)
     : !lanActive || permissions.includes("system:write");
@@ -1049,6 +1081,7 @@ function applyRoleVisibility() {
   elements.centralVacationsTab?.classList.toggle("hidden", !centralVacationReadAccess);
   elements.dataSubjectRequestsTab?.classList.toggle("hidden", !dataSubjectRequestsReadAccess);
   elements.addCostCenterButton?.classList.toggle("hidden", !costCenterWriteAccess);
+  elements.addCostCenterTypeButton?.classList.toggle("hidden", !costCenterWriteAccess);
   elements.addCustomWorkRuleButton?.classList.toggle("hidden", !canDraftCustomWorkRules());
   elements.addCollectiveAgreementButton?.classList.toggle("hidden", !collectiveAgreementsManageAccess);
   elements.addCollectiveAgreementBusinessUnitButton?.classList.toggle("hidden", !collectiveAgreementsManageAccess);
@@ -1063,8 +1096,10 @@ function applyRoleVisibility() {
   elements.positionSettingsCard?.classList.toggle("hidden", !positionWriteAccess);
   elements.personnelViewSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.trustLevelSettingsCard?.classList.toggle("hidden", !wifiSettingsAccess || !globalAdministration);
-  elements.viewBehaviorSettingsCard?.classList.toggle("hidden", !globalAdministration);
+  elements.viewBehaviorSettingsCard?.classList.toggle("hidden", !(settingsAccess && globalAdministration));
   elements.loanSettingsCard?.classList.toggle("hidden", !loanSettingsAccess);
+  elements.brandingSettings?.classList.toggle("hidden", !brandingAccess);
+  elements.pdfSettings?.classList.toggle("hidden", !settingsAccess);
   elements.wifiSettingsCard?.classList.toggle("hidden", !wifiSettingsAccess || features.wifiSuggestions === false || features.timeTracking === false);
   elements.employeeImportCard?.classList.toggle("hidden", !personnelImportAccess);
   elements.importProfileCard?.classList.toggle("hidden", !(integrationReadAccess || personnelImportAccess));
@@ -1118,10 +1153,7 @@ function applyRoleVisibility() {
       || offsiteFolderBusy;
   }
   elements.delegationSettingsCard?.classList.toggle("hidden", !settingsAccess);
-  elements.generalSettings?.querySelectorAll(".settings-card:not(.operation-mode-card)").forEach((card) => card.classList.toggle("hidden", !settingsAccess));
-  if (globalAdministration) elements.viewBehaviorSettingsCard?.classList.remove("hidden");
-  if (loanSettingsAccess) elements.loanSettingsCard?.classList.remove("hidden");
-  [elements.localModeOption, elements.serverModeOption, elements.publicServerModeOption].forEach((button) => { if (button) button.disabled = !operationModeAccess; });
+  elements.generalSettings?.querySelector(".past-week-card")?.classList.toggle("hidden", !settingsAccess);
   if (!locationWriteAccess && state.personnelTab === "locations") setPersonnelTab("employees");
   if (!canOpenPersonnelAdministrationTab(state.personnelAdministrationTab)) {
     setPersonnelAdministrationTab(firstAccessiblePersonnelAdministrationTab());
@@ -1141,8 +1173,7 @@ async function bootstrapApplication() {
     elements.deploymentBanner?.classList.toggle("hidden", status.deploymentKind !== "codespaces-test");
     const passwordMinimum = Number(status.passwordMinLength || 6);
     [elements.adminLoginPassword, elements.adminSetupPassword, elements.adminSetupPasswordRepeat].forEach((input) => { if (input) input.minLength = passwordMinimum; });
-    if (elements.adminAccessModeLabel) elements.adminAccessModeLabel.textContent = status.operationMode === "server" ? "Geschützter HTTPS-Zugang" : "Geschützter LAN-Zugang";
-    state.desiredOperationMode = ["lan", "server"].includes(status.operationMode) ? status.operationMode : "local";
+    if (elements.adminAccessModeLabel) elements.adminAccessModeLabel.textContent = "Geschützter Zugang";
     if (status.portalEnabled) {
       const session = await api("/api/portal/v1/session");
       state.portalSession = session;
@@ -1203,7 +1234,7 @@ async function logoutPortal() {
 
 function openAdminSetup() {
   if (state.portalStatus?.adminSetupAvailable !== true) {
-    showToast("Die Admin-Ersteinrichtung ist nur im lokalen Einrichtungsmodus verfügbar.", true);
+    showToast("Die Admin-Ersteinrichtung ist nur direkt am Grabenplaner-PC verfügbar.", true);
     return;
   }
   const employees = (state.allEmployees || []).filter((employee) => employee.active);
@@ -1228,7 +1259,7 @@ async function setupPortalAdmin(event) {
     });
     state.portalStatus = result.status;
     elements.adminSetupModal.close();
-    renderOperationMode();
+    renderPortalAccessState();
     await loadPortalUsers();
     showToast("Admin-Zugang wurde eingerichtet.");
   } catch (error) { showToast(error.message, true); }
@@ -1367,7 +1398,6 @@ async function loadAll() {
     state.portalStatus = portalStatus;
     state.portalRoles = roleData.roles || [];
     state.portalPermissionCatalog = roleData.catalog || [];
-    if (!state.desiredOperationMode) state.desiredOperationMode = ["lan", "server"].includes(portalStatus?.operationMode) ? portalStatus.operationMode : "local";
     setDefaultContext(state.locations);
     restoreRememberedOverallContext(state.currentView, state.locations);
     const scheduleContext = contextQuery(true);
@@ -1451,6 +1481,57 @@ function filteredLoanManagementRows() {
   return loans.filter((loan) => loan.status === "issued");
 }
 
+function loanPhotoOutputModeLabel(value) {
+  return value === "blackwhite" ? "Schwarzweiß" : "Graustufen";
+}
+
+function loanPhotoRetentionLabel(value) {
+  return value === "delete"
+    ? "Aufbereitete Farbfassungen nach Verarbeitung gelöscht"
+    : value === "retain"
+      ? "Aufbereitete Farbfassungen geschützt aufbewahrt"
+      : "Status der Farbfassung nicht ausgewiesen";
+}
+
+function renderAdminLoanPhoto(photo, index) {
+  const phaseLabel = photo.phase === "return" ? "Rückgabe" : "Ausgabe";
+  const retentionLabel = photo.originalRetained === true
+    ? "Aufbereitete Farbfassung verfügbar"
+    : photo.originalRetained === false
+      ? "Farbfassung nicht aufbewahrt"
+      : "Status der Farbfassung nicht ausgewiesen";
+  const preview = photo.contentUrl
+    ? `<a href="${escapeHtml(photo.contentUrl)}" target="_blank" rel="noopener" title="${phaseLabel}foto ${Number(photo.position || index + 1)}"><img src="${escapeHtml(photo.contentUrl)}" alt="${phaseLabel} ${Number(photo.position || index + 1)}" loading="lazy" /></a>`
+    : `<span class="loan-management-photo-placeholder" aria-label="Keine Einzelvorschau verfügbar">Nur in der PDF-Beilage</span>`;
+  return `<figure class="loan-management-photo">${preview}<figcaption>${escapeHtml(retentionLabel)}</figcaption></figure>`;
+}
+
+function renderAdminLoanPhotoAttachments(attachments) {
+  const rows = (Array.isArray(attachments) ? attachments : [])
+    .filter((attachment) => attachment && ["issue", "return"].includes(attachment.phase))
+    .sort((left, right) => {
+      const phaseOrder = Number(left.phase === "return") - Number(right.phase === "return");
+      return phaseOrder || Number(left.revision || 0) - Number(right.revision || 0);
+    });
+  if (!rows.length) return "";
+  return `<div class="loan-photo-attachments">${rows.map((attachment) => {
+    const phaseLabel = attachment.phase === "return" ? "Rückgabe" : "Ausgabe";
+    const count = Number(attachment.sourcePhotoCount || 0);
+    const actions = [
+      attachment.previewUrl
+        ? `<a href="${escapeHtml(attachment.previewUrl)}" target="_blank" rel="noopener">Vorschau</a>`
+        : "",
+      attachment.downloadUrl
+        ? `<a href="${escapeHtml(attachment.downloadUrl)}">PDF herunterladen</a>`
+        : "",
+    ].filter(Boolean).join("");
+    return `<article class="loan-photo-attachment ${escapeHtml(attachment.phase)}">
+      <div><strong>Fotobeilage ${phaseLabel}</strong><small>Beilage B${Number(attachment.revision || 1)} · ${count} ${count === 1 ? "Foto" : "Fotos"} · ${escapeHtml(loanPhotoOutputModeLabel(attachment.outputMode))} · ${escapeHtml(loanPhotoRetentionLabel(attachment.originalRetention))}</small></div>
+      ${actions ? `<nav aria-label="Fotobeilage ${phaseLabel}">${actions}</nav>` : ""}
+    </article>`;
+  }).join("")}</div>`;
+}
+
 function renderLoanManagement() {
   if (!elements.loanManagementSummary || !elements.loanManagementList) return;
   const payload = state.loanManagement;
@@ -1474,8 +1555,9 @@ function renderLoanManagement() {
     const issuePhotos = photos.filter((photo) => photo.phase === "issue");
     const returnPhotos = photos.filter((photo) => photo.phase === "return");
     const photoLinks = photos.length ? `<div class="loan-management-photos">${photos.map((photo) => `
-      <a href="${escapeHtml(photo.contentUrl)}" target="_blank" rel="noopener" title="${photo.phase === "return" ? "Rückgabefoto" : "Ausgabefoto"} ${Number(photo.position)}"><img src="${escapeHtml(photo.contentUrl)}" alt="${photo.phase === "return" ? "Rückgabe" : "Ausgabe"} ${Number(photo.position)}" loading="lazy" /></a>
+      ${renderAdminLoanPhoto(photo, Number(photo.position || 1) - 1)}
     `).join("")}</div>` : "";
+    const photoAttachments = renderAdminLoanPhotoAttachments(loan.photoAttachments);
     const documents = (loan.documents || []).map((document) => {
       const failed = document.delivery?.emailStatus === "failed";
       const sent = document.delivery?.emailStatus === "sent";
@@ -1493,7 +1575,7 @@ function renderLoanManagement() {
       </header>
       ${loan.pendingReturnConfirmation ? `<p class="loan-management-warning">Rücknahme wartet auf Bestätigung durch ${escapeHtml(loan.pendingReturnConfirmation.witness?.employeeNumber)} · ${escapeHtml(loan.pendingReturnConfirmation.witness?.name)}.</p>` : ""}
       <div class="loan-management-body"><ul>${items}</ul><aside><span>${issuePhotos.length} Ausgabefoto(s) · ${returnPhotos.length} Rückgabefoto(s)</span>${photoLinks}</aside></div>
-      ${documents ? `<footer>${documents}</footer>` : ""}
+      ${documents || photoAttachments ? `<footer>${documents}${photoAttachments}</footer>` : ""}
     </article>`;
   }).join("") : `<p class="loan-management-empty">Für diese Auswahl sind keine Leihvorgänge vorhanden.</p>`;
   const openCount = Number(summary.open || 0);
@@ -1555,6 +1637,8 @@ function renderLoanSettings() {
   elements.loanSettingsList.innerHTML = settings.length ? settings.map((location) => {
     const provider = location.emailDelivery?.provider || {};
     const selectedRecipient = location.documentRecipient?.employeeNumber || "";
+    const photoOutputMode = location.photoPdf?.outputMode === "blackwhite" ? "blackwhite" : "grayscale";
+    const photoOriginalRetention = location.photoPdf?.originalRetention === "delete" ? "delete" : "retain";
     return `<form class="loan-location-setting" data-loan-setting-location="${escapeHtml(location.locationId)}">
       <header><div><span class="eyebrow">${escapeHtml(location.locationId)}</span><h3>${escapeHtml(location.locationName)}</h3></div><span class="status-badge ${location.enabled ? "active" : "inactive"}">${location.enabled ? "Aktiv" : "Inaktiv"}</span></header>
       <label class="switch-row"><span><strong>Leihe aktiv</strong><small>Schaltet Ausgabe und Rücknahme für diesen Standort frei.</small></span><input name="enabled" type="checkbox" ${location.enabled ? "checked" : ""} /></label>
@@ -1562,9 +1646,12 @@ function renderLoanSettings() {
       <div class="loan-setting-fields">
         <label class="field"><span>Artikelquelle</span><select name="lookupProvider"><option value="none">Keine externe Suche</option><option value="shopware_storefront" ${location.articleLookup?.provider === "shopware_storefront" ? "selected" : ""}>Shopware-Onlineshop</option></select></label>
         <label class="field loan-setting-wide"><span>Basisadresse</span><input name="lookupBaseUrl" type="url" maxlength="1000" value="${escapeHtml(location.articleLookup?.baseUrl || "")}" placeholder="https://shop.example.com" /></label>
+        <label class="field"><span>Foto-PDF-Ausgabe</span><select name="photoOutputMode"><option value="grayscale" ${photoOutputMode === "grayscale" ? "selected" : ""}>Graustufen</option><option value="blackwhite" ${photoOutputMode === "blackwhite" ? "selected" : ""}>Schwarzweiß</option></select></label>
+        <label class="field loan-setting-wide"><span>Aufbereitete Farbfassungen</span><select name="photoOriginalRetention"><option value="retain" ${photoOriginalRetention === "retain" ? "selected" : ""}>Geschützt aufbewahren (sicherer Standard)</option><option value="delete" ${photoOriginalRetention === "delete" ? "selected" : ""}>Nach PDF-Verarbeitung löschen</option></select></label>
         <label class="field"><span>Interner Belegempfänger</span><select name="documentRecipient"><option value="">Automatisch zuständige Leitung</option>${recipients.map((employee) => `<option value="${escapeHtml(employee.personnel_number)}" ${employee.personnel_number === selectedRecipient ? "selected" : ""}>${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.nickname || employee.full_name)}</option>`).join("")}</select></label>
         <label class="field loan-setting-wide"><span>Zusätzliche Beleg-E-Mail</span><input name="emailRecipient" type="email" maxlength="320" value="${escapeHtml(location.emailDelivery?.recipient || "")}" placeholder="Optional" /></label>
       </div>
+      <p class="loan-photo-retention-note"><strong>Hinweis zur Aufbewahrung:</strong> Diese Auswahl gilt für neu hochgeladene Fotos. Die metadatenfrei verkleinerte Farbfassung kann besonders bei Schäden für eine spätere Beurteilung wichtig sein; der sichere Standard ist deshalb die geschützte Aufbewahrung. Die unveränderte Handydatei wird nicht gespeichert.</p>
       <label class="switch-row"><span><strong>Beleg zusätzlich per E-Mail senden</strong><small>${provider.configured === false ? "SMTP ist noch nicht eingerichtet." : "PDF-Beleg wird verschlüsselt gelesen und als Anlage versendet."}</small></span><input name="emailEnabled" type="checkbox" ${location.emailDelivery?.enabled ? "checked" : ""} ${provider.configured === false ? "disabled" : ""} /></label>
       <div class="form-actions-inline"><span class="settings-note" data-loan-setting-message></span><button class="primary-button" type="submit">Standort speichern</button></div>
     </form>`;
@@ -1605,6 +1692,10 @@ async function saveLoanLocationSetting(form) {
           enabled: form.elements.lookupEnabled.checked,
           provider: form.elements.lookupProvider.value,
           baseUrl: form.elements.lookupBaseUrl.value,
+        },
+        photoPdf: {
+          outputMode: form.elements.photoOutputMode.value,
+          originalRetention: form.elements.photoOriginalRetention.value,
         },
         documentRecipientEmployeeNumber: form.elements.documentRecipient.value,
         emailDelivery: {
@@ -1913,7 +2004,6 @@ function renderWorkRuleAssessment() {
     elements.workRuleModeBadge.textContent = "Monitorbetrieb – Planprüfung, keine Rechtsfreigabe";
     elements.workRuleAssessmentCounts.innerHTML = "";
     elements.workRuleAssessmentBody.innerHTML = '<p class="work-rule-assessment-empty">Die Planung bleibt bearbeitbar. Eine fehlende Prüfung ist keine Bestätigung der Arbeitszeitregeln.</p>';
-    elements.workRuleAssessmentPanel.open = false;
     return;
   }
 
@@ -1986,7 +2076,6 @@ function renderWorkRuleAssessment() {
       renderWorkRuleAssessment();
     });
   });
-  elements.workRuleAssessmentPanel.open = scheduleFindings.length > 0;
 }
 
 function renderTimeline() {
@@ -2412,10 +2501,6 @@ async function deleteVacation(groupId) {
   } catch (error) { showToast(error.message, true); }
 }
 
-function operationModeLabel(mode) {
-  return mode === "server" ? "HTTPS-Server" : mode === "lan" ? "LAN-Host" : "Lokal";
-}
-
 function diagnosticTimestamp(value) {
   if (!value) return "noch ausständig";
   const date = new Date(value);
@@ -2753,7 +2838,7 @@ function renderServerDiagnostics(status, technical = null) {
     <details class="technical-diagnostics">
       <summary>Technische Details anzeigen</summary>
       <div class="diagnostic-grid">
-        <span><small>HTTPS-Pflicht</small><strong>${technical.httpsRequired ? "aktiv" : "nur Servermodus"}</strong></span>
+        <span><small>HTTPS-Pflicht</small><strong>${technical.httpsRequired ? "aktiv" : "nicht erforderlich"}</strong></span>
         <span><small>Passwortminimum</small><strong>${Number(technical.passwordMinLength || 6)} Zeichen</strong></span>
         <span><small>SQLite</small><strong>${escapeHtml(technical.database?.journalMode || "–")} · ${Number(technical.database?.busyTimeoutMs || 0)} ms</strong></span>
         <span><small>Integrität</small><strong>${escapeHtml(technical.database?.integrity || "unbekannt")}</strong></span>
@@ -2767,7 +2852,7 @@ function renderServerDiagnostics(status, technical = null) {
   elements.serverDiagnostics.innerHTML = `
     <div class="diagnostic-readiness-grid">
       <article class="${status.live?.ok ? "ok" : "warning"}"><small>Live</small><strong>${status.live?.ok ? "Prozess erreichbar" : "Nicht erreichbar"}</strong><span>Die Anwendung beantwortet Anfragen.</span></article>
-      <article class="${status.ready?.ok ? "ok" : "warning"}"><small>Ready</small><strong>${status.ready?.ok ? "Betriebsbereit" : "Nicht betriebsbereit"}</strong><span>${escapeHtml(operationModeLabel(status.mode))}${status.publicUrl ? ` · ${escapeHtml(status.publicUrl)}` : ""}</span></article>
+      <article class="${status.ready?.ok ? "ok" : "warning"}"><small>Ready</small><strong>${status.ready?.ok ? "Betriebsbereit" : "Nicht betriebsbereit"}</strong><span>${status.publicUrl ? escapeHtml(status.publicUrl) : "Interner Anwendungsdienst"}</span></article>
     </div>
     <div class="diagnostic-grid backup-status-grid">
       <span><small>Interne Sicherung</small><strong>${escapeHtml(backupPointText(status.backups?.internal))}</strong></span>
@@ -2999,7 +3084,6 @@ async function loadSystemInfo() {
     elements.systemData.innerHTML = `
       <span><strong>Serverzeit</strong> ${escapeHtml(info.serverTime)} Uhr</span>
       <span><strong>App</strong> ${escapeHtml(appName)} ${escapeHtml(info.appVersionLabel)}</span>
-      <span><strong>Betriebsmodus</strong> ${escapeHtml(operationModeLabel(info.portal?.operationMode))}</span>
       <span><strong>Node.js</strong> ${escapeHtml(info.nodeVersion)}</span>
       <span><strong>SQLite</strong> ${escapeHtml(info.sqliteVersion)}</span>
       <span><strong>System</strong> ${escapeHtml(info.platform)}</span>
@@ -3031,6 +3115,26 @@ function personnelRecordAvailableInUi() {
   return state.portalSession?.user?.permissions?.some((permission) => [
     "personnel:sensitive:read", "personnel:sensitive:write", "personnel:phone:read", "personnel:phone:write", "amu:metadata:read",
   ].includes(permission)) === true;
+}
+
+function personnelRecordButtonLabel() {
+  if (!state.portalStatus?.portalEnabled) return "Personalakt";
+  const access = state.portalSession?.user?.personnelRecordAccess;
+  if (!access) return "Personalakt";
+  const fieldAccess = access.fieldAccess && typeof access.fieldAccess === "object" ? access.fieldAccess : {};
+  const visibleFields = Object.entries(fieldAccess)
+    .filter(([, level]) => ["read", "write"].includes(level))
+    .map(([fieldKey]) => fieldKey);
+  const explicitFieldAccess = Object.keys(fieldAccess).length > 0;
+  const phoneVisible = visibleFields.includes("phone")
+    || (!explicitFieldAccess && (access.canReadPhone === true || access.canWritePhone === true));
+  const otherAreaVisible = visibleFields.some((fieldKey) => fieldKey !== "phone")
+    || access.canReadSensitive === true
+    || access.canWriteSensitive === true
+    || access.canReadDocuments === true
+    || access.canWriteDocuments === true
+    || access.canReadAmu === true;
+  return phoneVisible && !otherAreaVisible ? "Telefon" : "Personalakt";
 }
 
 const EMPLOYEE_DISPLAY_COLUMNS = Object.freeze([
@@ -3175,17 +3279,59 @@ function normalizedActive(value, fallback = true) {
   return ![false, 0, "0"].includes(value);
 }
 
+function normalizeCostCenterType(item = {}) {
+  const positions = apiList(item, ["positions"]).map((position) => ({
+    ...position,
+    id: String(position.id ?? position.position_id ?? position.positionId ?? ""),
+    name: String(position.name ?? position.position_name ?? position.positionName ?? ""),
+    builtin: normalizedActive(position.builtin, false),
+    sort_order: Number(position.sort_order ?? position.sortOrder ?? 0),
+  }));
+  const submittedPositionIds = item.positionIds ?? item.position_ids;
+  const positionIds = Array.isArray(submittedPositionIds)
+    ? submittedPositionIds.map((id) => String(id))
+    : positions.map((position) => position.id);
+  return {
+    ...item,
+    id: String(item.id ?? item.cost_center_type_id ?? item.costCenterTypeId ?? item.code ?? ""),
+    code: String(item.code ?? item.type_code ?? item.typeCode ?? ""),
+    name: String(item.name ?? item.label ?? item.type_name ?? item.typeName ?? ""),
+    description: String(item.description ?? ""),
+    isBranch: normalizedActive(item.isBranch ?? item.is_branch, false),
+    active: normalizedActive(item.active),
+    builtin: normalizedActive(item.builtin, false),
+    sortOrder: Number(item.sortOrder ?? item.sort_order ?? 0),
+    positionIds,
+    positions,
+    costCenterCount: Number(item.costCenterCount ?? item.cost_center_count ?? 0),
+    activeCostCenterCount: Number(item.activeCostCenterCount ?? item.active_cost_center_count ?? 0),
+    locationCount: Number(item.locationCount ?? item.location_count ?? 0),
+  };
+}
+
 function normalizeCostCenter(item = {}) {
+  const typeId = String(item.typeId ?? item.cost_center_type_id ?? item.costCenterTypeId ?? item.type ?? "");
+  const typeCode = String(item.typeCode ?? item.cost_center_type_code ?? item.costCenterTypeCode ?? item.type ?? "other");
   return {
     ...item,
     id: item.id ?? item.cost_center_id ?? item.costCenterId ?? item.code ?? "",
     code: String(item.code ?? item.cost_center_code ?? item.costCenterCode ?? ""),
     name: String(item.name ?? item.cost_center_name ?? item.costCenterName ?? ""),
-    type: String(item.type ?? item.cost_center_type ?? item.costCenterType ?? "other"),
+    type: typeCode,
+    typeId,
+    typeCode,
+    typeName: String(item.typeName ?? item.cost_center_type_name ?? item.costCenterTypeName ?? ""),
+    isBranch: normalizedActive(
+      item.isBranch ?? item.cost_center_type_is_branch ?? item.costCenterTypeIsBranch,
+      typeCode === "branch",
+    ),
+    typeActive: normalizedActive(item.typeActive ?? item.cost_center_type_active ?? item.costCenterTypeActive),
     description: String(item.description ?? ""),
     active: normalizedActive(item.active),
     employee_count: Number(item.employee_count ?? item.employeeCount ?? 0),
     location_count: Number(item.location_count ?? item.locationCount ?? 0),
+    locationId: String(item.locationId ?? item.location_id ?? ""),
+    locationName: String(item.locationName ?? item.location_name ?? ""),
   };
 }
 
@@ -3214,8 +3360,17 @@ function normalizePersonnelDirectoryEmployee(item = {}) {
   };
 }
 
+function costCenterTypeByKey(value) {
+  const key = String(value || "");
+  return state.costCenterTypes.find((entry) => entry.id === key || entry.code === key) || null;
+}
+
 function costCenterTypeLabel(type) {
-  return ({ branch: "Filiale", administration: "Verwaltung", production: "Produktion", other: "Sonstige" })[type] || "Sonstige";
+  const value = typeof type === "object" ? type?.typeId || type?.typeCode || type?.type : type;
+  const match = costCenterTypeByKey(value);
+  if (match) return match.name;
+  if (typeof type === "object" && type?.typeName) return type.typeName;
+  return ({ branch: "Filiale", administration: "Verwaltung", production: "Produktion", other: "Sonstige" })[value] || "Sonstige";
 }
 
 async function loadPersonnelAdministration({ force = false } = {}) {
@@ -3240,6 +3395,14 @@ async function loadPersonnelAdministration({ force = false } = {}) {
       .map(normalizePersonnelDirectoryEmployee);
     state.costCenters = apiList(costCenterPayload, ["costCenters", "cost_centers", "items"])
       .map(normalizeCostCenter);
+    const typeItems = Array.isArray(costCenterPayload)
+      ? []
+      : apiList(costCenterPayload, ["types", "costCenterTypes", "cost_center_types"]);
+    if (typeItems.length) state.costCenterTypes = typeItems.map(normalizeCostCenterType);
+    const positionItems = Array.isArray(costCenterPayload)
+      ? []
+      : apiList(costCenterPayload, ["positions"]);
+    if (positionItems.length) state.positions = positionItems;
     state.personnelAdministrationLoaded = true;
     renderPersonnelAdministration();
   } catch (error) {
@@ -3313,6 +3476,40 @@ function renderPersonnelDirectory() {
   }).join("") : `<tr><td colspan="${columns.length + 1}" class="personnel-directory-empty">Keine passenden Mitarbeitenden gefunden.</td></tr>`;
 }
 
+function renderCostCenterTypes() {
+  if (!elements.costCenterTypeList) return;
+  const canEdit = canWriteCostCenters();
+  const types = state.costCenterTypes.slice().sort((left, right) =>
+    Number(right.active) - Number(left.active)
+      || Number(left.sortOrder) - Number(right.sortOrder)
+      || left.name.localeCompare(right.name, "de-AT", { sensitivity: "base" }));
+  elements.costCenterTypeList.innerHTML = types.length ? types.map((type) => {
+    const positions = type.positions.length
+      ? type.positions
+      : type.positionIds.map((id) => state.positions.find((position) => String(position.id) === String(id)))
+        .filter(Boolean);
+    const visiblePositions = positions.slice(0, 6);
+    const remainingPositions = Math.max(0, positions.length - visiblePositions.length);
+    return `<article class="cost-center-type-card ${type.active ? "" : "inactive"}">
+      <span class="eyebrow">${type.isBranch ? "Filialtyp" : "Kostenstellentyp"}</span>
+      <h4>${escapeHtml(type.name || type.code || "Kostenstellentyp")}</h4>
+      <p><code>${escapeHtml(type.code || "–")}</code>${type.description ? ` · ${escapeHtml(type.description)}` : ""}</p>
+      <div class="cost-center-type-card-meta">
+        <span>${type.active ? "Aktiv" : "Archiviert"}</span>
+        <span>${type.builtin ? "Standardtyp" : "Eigener Typ"}</span>
+        <span>${Number(type.costCenterCount)} Kostenstelle(n)</span>
+        ${type.isBranch ? `<span>${Number(type.locationCount)} Standort(e)</span>` : ""}
+      </div>
+      <div class="cost-center-type-card-positions">${
+        visiblePositions.length
+          ? visiblePositions.map((position) => `<span>${escapeHtml(position.name || position.id)}</span>`).join("")
+          : "<span>Keine Positionen zugeordnet</span>"
+      }${remainingPositions ? `<span>+ ${remainingPositions} weitere</span>` : ""}</div>
+      ${canEdit ? `<button type="button" class="edit-button" data-edit-cost-center-type="${escapeHtmlAttribute(type.id)}">Bearbeiten</button>` : ""}
+    </article>`;
+  }).join("") : '<p class="settings-note">Noch keine Kostenstellentypen angelegt.</p>';
+}
+
 function renderCostCenters() {
   if (!elements.costCenterList) return;
   const canEdit = canWriteCostCenters();
@@ -3320,8 +3517,8 @@ function renderCostCenters() {
   elements.costCenterList.innerHTML = centers.length ? centers.map((center) => `
     <article class="cost-center-card ${center.active ? "" : "inactive"}">
       <div class="cost-center-card-code"><strong>${escapeHtml(center.code || "–")}</strong><span class="status-badge ${center.active ? "" : "inactive"}">${center.active ? "Aktiv" : "Inaktiv"}</span></div>
-      <div class="cost-center-card-copy"><span class="eyebrow">${escapeHtml(costCenterTypeLabel(center.type))}</span><h3>${escapeHtml(center.name || center.code || "Kostenstelle")}</h3>${center.description ? `<p>${escapeHtml(center.description)}</p>` : ""}</div>
-      <div class="cost-center-card-counts"><span><strong>${Number(center.employee_count)}</strong> Beschäftigte</span><span><strong>${Number(center.location_count)}</strong> Filialen</span></div>
+      <div class="cost-center-card-copy"><span class="eyebrow">${escapeHtml(costCenterTypeLabel(center))}</span><h3>${escapeHtml(center.name || center.code || "Kostenstelle")}</h3>${center.description ? `<p>${escapeHtml(center.description)}</p>` : ""}</div>
+      <div class="cost-center-card-counts"><span><strong>${Number(center.employee_count)}</strong> Beschäftigte</span><span><strong>${Number(center.location_count)}</strong> Standorte</span></div>
       ${canEdit ? `<button type="button" class="edit-button" data-edit-cost-center="${escapeHtmlAttribute(String(center.id))}">Bearbeiten</button>` : ""}
     </article>`).join("") : '<p class="settings-note">Noch keine Kostenstelle angelegt.</p>';
 }
@@ -3430,7 +3627,7 @@ function renderCentralVacations() {
   elements.centralVacationList.innerHTML = rows.length ? rows.map((vacation) => {
     const personName = vacation.full_name || vacation.nickname || "–";
     const costCenter = [vacation.cost_center_code, vacation.cost_center_name].filter(Boolean).join(" · ") || "Nicht zugeordnet";
-    const location = [vacation.home_location_name || vacation.home_location_id, vacation.preferred_department_name].filter(Boolean).join(" · ") || "Keine Stammfiliale";
+    const location = [vacation.home_location_name || vacation.home_location_id, vacation.preferred_department_name].filter(Boolean).join(" · ") || "Kein zugeordneter Standort";
     const period = vacation.date_from === vacation.date_to
       ? formatDate(vacation.date_from)
       : `${formatDate(vacation.date_from)} – ${formatDate(vacation.date_to)}`;
@@ -6276,7 +6473,10 @@ function renderPersonnelAdministration() {
     renderPersonnelAdministrationSummary();
     renderPersonnelDirectory();
   }
-  if (canReadCostCenters()) renderCostCenters();
+  if (canReadCostCenters()) {
+    renderCostCenterTypes();
+    renderCostCenters();
+  }
   if (canAccessCustomWorkRuleGovernance() && state.customWorkRuleRegistry) renderCustomWorkRuleRegistry();
   if (canReadCollectiveAgreements() && state.collectiveAgreementRegistry) renderCollectiveAgreementRegistry();
   if (canReadCentralVacations() && state.centralVacationLoadedYear !== null) renderCentralVacations();
@@ -6308,6 +6508,36 @@ function setPersonnelAdministrationTab(tab) {
   if (normalized === "dataRequests") loadDataSubjectRequests().catch((error) => showToast(error.message, true));
 }
 
+function populateCostCenterTypeSelect(selectedId = "") {
+  if (!elements.costCenterType) return;
+  const selected = String(selectedId || "");
+  const types = state.costCenterTypes
+    .filter((type) => type.active || type.id === selected)
+    .sort((left, right) => Number(left.sortOrder) - Number(right.sortOrder)
+      || left.name.localeCompare(right.name, "de-AT", { sensitivity: "base" }));
+  elements.costCenterType.innerHTML = types.length
+    ? types.map((type) => `<option value="${escapeHtmlAttribute(type.id)}">${escapeHtml(type.name)}${type.isBranch ? " · Filialtyp" : ""}${type.active ? "" : " · archiviert"}</option>`).join("")
+    : '<option value="">Kein aktiver Typ verfügbar</option>';
+  const fallback = types.find((type) => type.code === "other") || types[0] || null;
+  elements.costCenterType.value = types.some((type) => type.id === selected) ? selected : fallback?.id || "";
+  syncCostCenterTypeHint();
+}
+
+function syncCostCenterTypeHint() {
+  if (!elements.costCenterTypeHint) return;
+  const type = costCenterTypeByKey(elements.costCenterType?.value);
+  if (!type) {
+    elements.costCenterTypeHint.textContent = "Bitte zuerst einen aktiven Kostenstellentyp anlegen.";
+    return;
+  }
+  const parts = [
+    type.isBranch ? "Kann einem Standort zugeordnet werden." : "Keine Filiale; ein Standort wird dafür nicht benötigt.",
+    `${type.positionIds.length} Position(en) hinterlegt.`,
+  ];
+  if (!type.active) parts.push("Dieser Typ ist archiviert.");
+  elements.costCenterTypeHint.textContent = parts.join(" ");
+}
+
 function openCostCenterModal(costCenter = null) {
   if (!canWriteCostCenters() || !elements.costCenterModal) return;
   state.editingCostCenterId = costCenter?.id ?? null;
@@ -6316,7 +6546,7 @@ function openCostCenterModal(costCenter = null) {
   elements.costCenterCode.value = costCenter?.code || "";
   elements.costCenterCode.disabled = Boolean(costCenter);
   elements.costCenterName.value = costCenter?.name || "";
-  elements.costCenterType.value = costCenter?.type || "other";
+  populateCostCenterTypeSelect(costCenter?.typeId || costCenter?.type || "");
   elements.costCenterDescription.value = costCenter?.description || "";
   elements.costCenterActive.checked = costCenter?.active ?? true;
   elements.costCenterModalTitle.textContent = costCenter ? "Kostenstelle bearbeiten" : "Kostenstelle anlegen";
@@ -6332,7 +6562,7 @@ async function saveCostCenter(event) {
   const body = {
     code: elements.costCenterCode.value.trim(),
     name: elements.costCenterName.value.trim(),
-    type: elements.costCenterType.value,
+    costCenterTypeId: elements.costCenterType.value,
     description: elements.costCenterDescription.value.trim(),
     active: elements.costCenterActive.checked,
   };
@@ -6370,6 +6600,102 @@ async function deactivateCostCenter() {
   }
 }
 
+function updateCostCenterTypePositionCount() {
+  if (!elements.costCenterTypePositionCount) return;
+  const count = state.costCenterTypePositionSelection.size;
+  elements.costCenterTypePositionCount.textContent = `${count} ausgewählt`;
+  if (elements.costCenterTypePositionHint) {
+    elements.costCenterTypePositionHint.textContent = count
+      ? "Diese Positionen stehen für Kostenstellen dieses Typs zur Verfügung."
+      : "Ohne Auswahl steht für diesen Typ später keine Position zur Verfügung.";
+  }
+}
+
+function renderCostCenterTypePositionOptions() {
+  if (!elements.costCenterTypePositionOptions) return;
+  const search = String(elements.costCenterTypePositionSearch?.value || "").trim().toLocaleLowerCase("de-AT");
+  const positions = (state.positions || [])
+    .filter((position) => !search || String(position.name || "").toLocaleLowerCase("de-AT").includes(search))
+    .slice()
+    .sort((left, right) => Number(left.sort_order ?? left.sortOrder ?? 0) - Number(right.sort_order ?? right.sortOrder ?? 0)
+      || String(left.name || "").localeCompare(String(right.name || ""), "de-AT", { sensitivity: "base" }));
+  elements.costCenterTypePositionOptions.innerHTML = positions.length ? positions.map((position) => {
+    const id = String(position.id || "");
+    return `<label class="cost-center-type-position-option">
+      <input type="checkbox" value="${escapeHtmlAttribute(id)}" ${state.costCenterTypePositionSelection.has(id) ? "checked" : ""} />
+      <span>${escapeHtml(position.name || id)}</span>
+    </label>`;
+  }).join("") : '<p class="cost-center-type-position-empty">Keine passende Position gefunden.</p>';
+  updateCostCenterTypePositionCount();
+}
+
+function openCostCenterTypeModal(type = null) {
+  if (!canWriteCostCenters() || !elements.costCenterTypeModal) return;
+  state.editingCostCenterTypeId = type?.id || null;
+  state.costCenterTypePositionSelection = new Set((type?.positionIds || []).map(String));
+  elements.costCenterTypeForm.reset();
+  elements.costCenterTypeId.value = type?.id || "";
+  elements.costCenterTypeCode.value = type?.code || "";
+  elements.costCenterTypeCode.disabled = Boolean(type);
+  elements.costCenterTypeName.value = type?.name || "";
+  elements.costCenterTypeDescription.value = type?.description || "";
+  elements.costCenterTypeIsBranch.checked = Boolean(type?.isBranch);
+  elements.costCenterTypeActive.checked = type?.active ?? true;
+  elements.costCenterTypePositionSearch.value = "";
+  elements.costCenterTypeModalTitle.textContent = type ? "Kostenstellentyp bearbeiten" : "Kostenstellentyp anlegen";
+  elements.costCenterTypeSubmitButton.textContent = type ? "Typ speichern" : "Typ anlegen";
+  elements.deactivateCostCenterTypeButton.classList.toggle("hidden", !type?.active);
+  renderCostCenterTypePositionOptions();
+  elements.costCenterTypeModal.showModal();
+}
+
+async function saveCostCenterType(event) {
+  event.preventDefault();
+  if (!canWriteCostCenters()) return;
+  const id = state.editingCostCenterTypeId;
+  const body = {
+    code: elements.costCenterTypeCode.value.trim().toLowerCase(),
+    name: elements.costCenterTypeName.value.trim(),
+    description: elements.costCenterTypeDescription.value.trim(),
+    isBranch: elements.costCenterTypeIsBranch.checked,
+    active: elements.costCenterTypeActive.checked,
+    positionIds: [...state.costCenterTypePositionSelection],
+  };
+  elements.costCenterTypeSubmitButton.disabled = true;
+  try {
+    await api(id ? `/api/cost-center-types/${encodeURIComponent(id)}` : "/api/cost-center-types", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(body),
+    });
+    elements.costCenterTypeModal.close();
+    state.personnelAdministrationLoaded = false;
+    await loadPersonnelAdministration({ force: true });
+    showToast(id ? "Kostenstellentyp wurde gespeichert." : "Kostenstellentyp wurde angelegt.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.costCenterTypeSubmitButton.disabled = false;
+  }
+}
+
+async function deactivateCostCenterType() {
+  const id = state.editingCostCenterTypeId;
+  if (!id || !canWriteCostCenters()
+    || !confirm("Diesen Kostenstellentyp archivieren? Verwendete Typen müssen zuerst von allen aktiven Kostenstellen gelöst werden.")) return;
+  elements.deactivateCostCenterTypeButton.disabled = true;
+  try {
+    await api(`/api/cost-center-types/${encodeURIComponent(id)}`, { method: "DELETE" });
+    elements.costCenterTypeModal.close();
+    state.personnelAdministrationLoaded = false;
+    await loadPersonnelAdministration({ force: true });
+    showToast("Kostenstellentyp wurde archiviert.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    elements.deactivateCostCenterTypeButton.disabled = false;
+  }
+}
+
 function renderEmployees() {
   const showInactive = state.data?.settings?.show_inactive_personnel !== "0";
   const employees = sortedEmployeesForDisplay(showInactive ? state.allEmployees : state.allEmployees.filter((employee) => employee.active));
@@ -6377,7 +6703,7 @@ function renderEmployees() {
   const canEditDisplay = canEditFull || state.portalSession?.user?.permissions?.includes("employees:display:write");
   const canEditNickname = canEditFull || state.portalSession?.user?.permissions?.includes("employees:nickname:write");
   const canReadPersonnelRecord = personnelRecordAvailableInUi();
-  const personnelRecordButtonLabel = state.portalSession?.user?.role === "location_planner" ? "Telefon" : "Personalakt";
+  const recordButtonLabel = personnelRecordButtonLabel();
   const columns = normalizeEmployeeDisplayColumns(state.employeeDisplayColumns)
     .map((id) => availableEmployeeDisplayColumns().find((column) => column.id === id))
     .filter(Boolean);
@@ -6387,7 +6713,7 @@ function renderEmployees() {
   elements.employeeTableBody.innerHTML = employees.map((employee) => `
     <tr>
       ${columns.map((column) => `<td data-label="${escapeHtmlAttribute(column.label)}">${employeeDisplayCell(employee, column)}</td>`).join("")}
-      <td><span class="table-actions">${canReadPersonnelRecord ? `<button type="button" class="edit-button" data-personnel-record="${escapeHtml(employee.personnel_number)}">${personnelRecordButtonLabel}</button>` : ""}${canEditDisplay ? `<button type="button" class="edit-button" data-edit-employee="${escapeHtml(employee.personnel_number)}">${canEditFull ? "Bearbeiten" : canEditNickname ? "Darstellung ändern" : "Farbe ändern"}</button>` : ""}</span></td>
+      <td><span class="table-actions">${canReadPersonnelRecord ? `<button type="button" class="edit-button" data-personnel-record="${escapeHtml(employee.personnel_number)}">${recordButtonLabel}</button>` : ""}${canEditDisplay ? `<button type="button" class="edit-button" data-edit-employee="${escapeHtml(employee.personnel_number)}">${canEditFull ? "Bearbeiten" : canEditNickname ? "Darstellung ändern" : "Farbe ändern"}</button>` : ""}</span></td>
     </tr>`).join("");
 }
 
@@ -6492,10 +6818,10 @@ function renderSettings() {
   document.querySelector("#showSunday").checked = settings.show_sunday === "1";
   elements.rememberLastScheduleOverallPlan.checked = settings.remember_last_schedule_overall_plan !== "0";
   elements.rememberLastVacationOverallPlan.checked = settings.remember_last_vacation_overall_plan !== "0";
-  applyDashboardFontSize(state.dashboardFontSize);
+  applyAppFontScalePercent(state.appFontScalePercent);
   localStorage.setItem(rememberContextCacheKey("planning"), elements.rememberLastScheduleOverallPlan.checked ? "1" : "0");
   localStorage.setItem(rememberContextCacheKey("vacations"), elements.rememberLastVacationOverallPlan.checked ? "1" : "0");
-  renderOperationMode();
+  renderPortalAccessState();
   updatePdfPreview();
 }
 
@@ -6514,43 +6840,10 @@ function updateWeekLockSettings() {
   elements.currentWeekLockHint.textContent = manual ? "Manuell möglich von Freitag 18:00 Uhr bis Sonntag 23:00 Uhr." : `Automatisch nach der letzten Schließzeit: ${label}, ${time} Uhr.`;
 }
 
-function renderOperationMode() {
+function renderPortalAccessState() {
   const status = state.portalStatus || {};
-  const actualLanActive = status.operationMode === "lan" && status.portalEnabled === true;
-  const actualServerActive = status.operationMode === "server" && status.portalEnabled === true;
-  const selectedLan = state.desiredOperationMode === "lan";
-  const selectedServer = state.desiredOperationMode === "server";
-  const selectedLocal = !selectedLan && !selectedServer;
-  elements.localModeOption?.classList.toggle("active", selectedLocal);
-  elements.localModeOption?.setAttribute("aria-current", String(selectedLocal));
-  elements.serverModeOption?.classList.toggle("active", selectedLan);
-  elements.serverModeOption?.setAttribute("aria-current", String(selectedLan));
-  elements.publicServerModeOption?.classList.toggle("active", selectedServer);
-  elements.publicServerModeOption?.setAttribute("aria-current", String(selectedServer));
-  if (elements.localModeBadge) {
-    elements.localModeBadge.textContent = selectedLocal ? "Aktiv" : "Verfügbar";
-    elements.localModeBadge.classList.toggle("inactive", !selectedLocal);
-  }
-  if (elements.serverModeBadge) {
-    elements.serverModeBadge.textContent = actualLanActive ? "Aktiv" : (selectedLan ? "Ausgewählt" : "Verfügbar");
-    elements.serverModeBadge.classList.toggle("inactive", !actualLanActive);
-  }
-  if (elements.publicServerModeBadge) {
-    elements.publicServerModeBadge.textContent = actualServerActive ? "Aktiv" : "IT-Konfiguration erforderlich";
-    elements.publicServerModeBadge.classList.toggle("inactive", !actualServerActive);
-  }
-  if (elements.portalFoundationHint) {
-    const networkText = (status.networkUrls || []).length ? ` Erreichbar unter ${status.networkUrls.join(" oder ")}.` : "";
-    elements.portalFoundationHint.textContent = actualServerActive
-      ? `HTTPS-Serverbetrieb ist aktiv${status.publicUrl ? ` unter ${status.publicUrl}` : ""}. Login, sichere Cookies und Server-Passwortregeln werden erzwungen.`
-      : actualLanActive
-      ? `LAN-Host ist aktiv. Anmeldung und Rollen werden erzwungen.${networkText}`
-      : status.adminSetupState === "configured"
-        ? "Admin-Zugang ist eingerichtet. Der LAN-Host kann aktiviert und anschließend sicher neu gestartet werden."
-        : "Bitte zuerst den Admin-Zugang unter „Zugänge“ einrichten.";
-  }
-  if (elements.adminAccessModeLabel) elements.adminAccessModeLabel.textContent = actualServerActive ? "Geschützter HTTPS-Zugang" : "Geschützter LAN-Zugang";
-  elements.employeePortalLink?.classList.toggle("hidden", !(actualLanActive || actualServerActive));
+  if (elements.adminAccessModeLabel) elements.adminAccessModeLabel.textContent = "Geschützter Zugang";
+  elements.employeePortalLink?.classList.toggle("hidden", status.portalEnabled !== true);
   elements.portalLogoutButton?.classList.toggle("hidden", status.portalEnabled !== true);
 }
 
@@ -6571,6 +6864,28 @@ function portalUserManageableInUi(actorRole, user) {
   if (actorRole === "hr") return ["employee", "location_planner", "manager", "department_manager"].includes(user.role);
   return actorRole === "manager" && user.role === "department_manager";
 }
+
+function permissionEligibleForRole(permission, role) {
+  if (!permission || !role) return false;
+  return !Array.isArray(permission.eligibleRoles) || permission.eligibleRoles.includes(role);
+}
+
+const permissionDependencyRules = Object.freeze([
+  Object.freeze({
+    permissionId: "schedule:write",
+    requiredPermissionId: "schedule:read",
+    removedMessage: "Dienstpläne bearbeiten wurde ebenfalls entzogen, weil das Leserecht fehlt.",
+    unavailableMessage: "Dienstpläne bearbeiten kann ohne verwaltbares Leserecht nicht vergeben werden.",
+    addedMessage: "Dienstpläne lesen wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "amu:local:manage",
+    requiredPermissionId: "sickness:read",
+    removedMessage: "AUM lokal verwalten wurde ebenfalls entzogen, weil Krankenstände lesen fehlt.",
+    unavailableMessage: "AUM lokal verwalten kann ohne verwaltbares Leserecht für Krankenstände nicht vergeben werden.",
+    addedMessage: "Krankenstände lesen wurde automatisch ergänzt.",
+  }),
+]);
 
 async function loadPortalUsers() {
   if (!elements.portalUserList) return;
@@ -6616,6 +6931,156 @@ async function loadPortalUsers() {
   }
 }
 
+function organizationAccountLocationOptions(selected = "") {
+  return state.locations.map((location) =>
+    `<option value="${escapeHtmlAttribute(location.id)}" ${location.id === selected ? "selected" : ""}>${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`,
+  ).join("");
+}
+
+function resetOrganizationAccountForm() {
+  if (!elements.organizationAccountForm) return;
+  elements.organizationAccountForm.reset();
+  elements.organizationAccountEditingId.value = "";
+  elements.organizationAccountLoginName.disabled = false;
+  elements.organizationAccountLoginName.value = "";
+  elements.organizationAccountDisplayName.value = "";
+  elements.organizationAccountType.value = "branch";
+  elements.organizationAccountLocation.innerHTML = organizationAccountLocationOptions(
+    state.locationId || state.locations[0]?.id || "",
+  );
+  elements.organizationAccountPassword.value = "";
+  elements.organizationAccountPassword.minLength = Number(state.portalStatus?.passwordMinLength || 6);
+  elements.organizationAccountLoanOverview.checked = true;
+  elements.organizationAccountScheduleView.checked = false;
+  elements.organizationAccountActive.checked = true;
+  elements.organizationAccountCancel.classList.add("hidden");
+  elements.organizationAccountSubmit.textContent = "Konto anlegen";
+  elements.organizationAccountHint.textContent = "Mindestens eine Filialfunktion und eine Filiale sind erforderlich.";
+}
+
+function renderOrganizationAccounts() {
+  if (!elements.organizationAccountList) return;
+  const accounts = state.organizationAccounts || [];
+  elements.organizationAccountList.innerHTML = accounts.length ? accounts.map((account) => {
+    const locationNames = (account.scopes || []).map((scope) => {
+      const location = state.locations.find((entry) => entry.id === scope.locationId);
+      return location?.name || scope.locationId;
+    }).join(", ");
+    const functions = [
+      account.permissions?.includes("loans:overview:read") ? "Leihübersicht" : "",
+      account.permissions?.includes("schedule:location:view") ? "Dienstplanansicht" : "",
+    ].filter(Boolean).join(" · ");
+    const status = !account.active
+      ? "Inaktiv"
+      : account.locked
+        ? `Gesperrt bis ${new Date(account.lockedUntil).toLocaleString("de-AT")}`
+        : account.passwordConfigured ? "Anmeldung bereit" : "Noch kein Passwort";
+    return `<article class="organization-account-row" data-organization-account="${escapeHtmlAttribute(account.id)}">
+      <div class="organization-account-copy">
+        <strong>${escapeHtml(account.loginName)} · ${escapeHtml(account.displayName)}</strong>
+        <small>${escapeHtml(account.accountTypeLabel || account.accountType)} · ${escapeHtml(locationNames || "Keine Filiale")}</small>
+        <small>${escapeHtml(functions || "Keine Funktion")} · ${escapeHtml(status)}${account.lastLoginAt ? ` · zuletzt ${escapeHtml(new Date(account.lastLoginAt).toLocaleString("de-AT"))}` : ""}</small>
+      </div>
+      <span class="status-badge ${account.active && !account.locked ? "approved" : "inactive"}">${escapeHtml(account.active ? (account.locked ? "Gesperrt" : "Aktiv") : "Inaktiv")}</span>
+      <div class="organization-account-actions">
+        <button class="secondary-button" data-edit-organization-account type="button">Bearbeiten</button>
+        ${account.locked || account.failedLoginAttempts ? '<button class="secondary-button" data-unlock-organization-account type="button">Entsperren</button>' : ""}
+      </div>
+    </article>`;
+  }).join("") : '<p class="settings-note">Noch keine Filial- oder Terminalkonten angelegt.</p>';
+}
+
+async function loadOrganizationAccounts() {
+  if (!elements.organizationAccountsCard) return;
+  try {
+    const result = await api("/api/portal/v1/organization-accounts");
+    state.organizationAccounts = result.accounts || [];
+    elements.organizationAccountsCard.classList.remove("hidden");
+    if (!elements.organizationAccountEditingId.value) resetOrganizationAccountForm();
+    renderOrganizationAccounts();
+  } catch (error) {
+    state.organizationAccounts = [];
+    if (error.status === 403) {
+      elements.organizationAccountsCard.classList.add("hidden");
+    } else {
+      elements.organizationAccountHint.textContent = error.message;
+      renderOrganizationAccounts();
+    }
+  }
+}
+
+function editOrganizationAccount(accountId) {
+  const account = state.organizationAccounts.find((entry) => entry.id === accountId);
+  if (!account) return;
+  elements.organizationAccountEditingId.value = account.id;
+  elements.organizationAccountLoginName.value = account.loginName;
+  elements.organizationAccountLoginName.disabled = true;
+  elements.organizationAccountDisplayName.value = account.displayName;
+  elements.organizationAccountType.value = account.accountType;
+  elements.organizationAccountLocation.innerHTML = organizationAccountLocationOptions(
+    account.scopes?.[0]?.locationId || state.locations[0]?.id || "",
+  );
+  elements.organizationAccountPassword.value = "";
+  elements.organizationAccountLoanOverview.checked = account.permissions?.includes("loans:overview:read") === true;
+  elements.organizationAccountScheduleView.checked = account.permissions?.includes("schedule:location:view") === true;
+  elements.organizationAccountActive.checked = account.active === true;
+  elements.organizationAccountCancel.classList.remove("hidden");
+  elements.organizationAccountSubmit.textContent = "Konto speichern";
+  elements.organizationAccountHint.textContent = "Ein neues Passwort ist nur nötig, wenn es zurückgesetzt werden soll.";
+  elements.organizationAccountDisplayName.focus();
+}
+
+async function saveOrganizationAccount(event) {
+  event.preventDefault();
+  const accountId = elements.organizationAccountEditingId.value;
+  const permissions = [
+    elements.organizationAccountLoanOverview.checked ? "loans:overview:read" : "",
+    elements.organizationAccountScheduleView.checked ? "schedule:location:view" : "",
+  ].filter(Boolean);
+  const body = {
+    loginName: elements.organizationAccountLoginName.value,
+    displayName: elements.organizationAccountDisplayName.value,
+    accountType: elements.organizationAccountType.value,
+    active: elements.organizationAccountActive.checked,
+    password: elements.organizationAccountPassword.value,
+    permissions,
+    scopes: [{ locationId: elements.organizationAccountLocation.value }],
+  };
+  elements.organizationAccountSubmit.disabled = true;
+  try {
+    const route = accountId
+      ? `/api/portal/v1/organization-accounts/${encodeURIComponent(accountId)}`
+      : "/api/portal/v1/organization-accounts";
+    const result = await api(route, {
+      method: accountId ? "PUT" : "POST",
+      body: JSON.stringify(body),
+    });
+    state.organizationAccounts = result.accounts || [];
+    showToast(accountId ? "Filialkonto wurde gespeichert." : "Filialkonto wurde angelegt.");
+    resetOrganizationAccountForm();
+    renderOrganizationAccounts();
+  } catch (error) {
+    elements.organizationAccountHint.textContent = error.message;
+    showToast(error.message, true);
+  } finally {
+    elements.organizationAccountSubmit.disabled = false;
+  }
+}
+
+async function unlockOrganizationAccount(accountId) {
+  try {
+    const result = await api(
+      `/api/portal/v1/organization-accounts/${encodeURIComponent(accountId)}/unlock`,
+      { method: "POST", body: "{}" },
+    );
+    state.organizationAccounts = result.accounts || [];
+    renderOrganizationAccounts();
+    showToast("Das Filial- oder Terminalkonto wurde entsperrt.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
 function renderRightsManagement() {
   if (!elements.rightsUserList) return;
   const result = state.rightsManagement || {};
@@ -6647,6 +7112,7 @@ const rightsEditorOrganizationalPermissionIds = new Set([
   "time:read", "time:review", "time:settings",
   "vacation:read", "vacation:approve",
   "personnel:phone:read", "personnel:phone:write",
+  "personnel:sensitive:read", "personnel:sensitive:write",
   "work_rules:planning:read",
   "sickness:read", "sickness:manage", "amu:local:manage",
 ]);
@@ -6755,30 +7221,33 @@ function refreshRightsEditorScope() {
   elements.rightsEditorScopeHint.textContent = !hasOrganizationalPermissions
     ? "Für die aktuell wirksamen Rechte ist kein Standortbereich erforderlich."
     : !context.locationId
-      ? "Bitte zuerst eine Stammfiliale zuweisen."
+      ? "Bitte zuerst eine Filialkostenstelle zuweisen."
       : !context.departmentId && ["employee", "department_manager"].includes(user.role)
         ? "Für den sicheren Abteilungsbereich fehlt noch eine zugewiesene Abteilung. Alternativ kann ausdrücklich die gesamte Filiale gewählt werden."
         : "Standortbezogene Rechte gelten ausschließlich im ausgewählten Bereich.";
   refreshRightsEditorSaveState();
 }
 
-function enforceRightsEditorScheduleDependency(changedInput, announce = true) {
-  const readInput = elements.rightsEditorPermissions.querySelector('input[data-rights-permission][value="schedule:read"]');
-  const writeInput = elements.rightsEditorPermissions.querySelector('input[data-rights-permission][value="schedule:write"]');
-  if (!readInput || !writeInput) return;
-  if (changedInput === readInput && !readInput.checked && writeInput.checked) {
-    writeInput.checked = false;
-    updateRightsEditorPermissionStatus(writeInput);
-    if (announce) rightsEditorAnnounce("Dienstpläne bearbeiten wurde ebenfalls entzogen, weil das Leserecht fehlt.");
-  } else if (changedInput === writeInput && writeInput.checked && !readInput.checked) {
-    if (readInput.disabled) {
-      writeInput.checked = false;
-      updateRightsEditorPermissionStatus(writeInput);
-      if (announce) rightsEditorAnnounce("Dienstpläne bearbeiten kann ohne verwaltbares Leserecht nicht vergeben werden.");
-    } else {
-      readInput.checked = true;
-      updateRightsEditorPermissionStatus(readInput);
-      if (announce) rightsEditorAnnounce("Dienstpläne lesen wurde automatisch ergänzt.");
+function enforceRightsEditorPermissionDependencies(changedInput = null, announce = true) {
+  for (const dependency of permissionDependencyRules) {
+    const requiredInput = elements.rightsEditorPermissions.querySelector(`input[data-rights-permission][value="${dependency.requiredPermissionId}"]`);
+    const dependentInput = elements.rightsEditorPermissions.querySelector(`input[data-rights-permission][value="${dependency.permissionId}"]`);
+    if (!requiredInput || !dependentInput) continue;
+    if (changedInput && changedInput !== requiredInput && changedInput !== dependentInput) continue;
+    if (changedInput === requiredInput && !requiredInput.checked && dependentInput.checked) {
+      dependentInput.checked = false;
+      updateRightsEditorPermissionStatus(dependentInput);
+      if (announce) rightsEditorAnnounce(dependency.removedMessage);
+    } else if (dependentInput.checked && !requiredInput.checked) {
+      if (requiredInput.disabled) {
+        dependentInput.checked = false;
+        updateRightsEditorPermissionStatus(dependentInput);
+        if (announce) rightsEditorAnnounce(dependency.unavailableMessage);
+      } else {
+        requiredInput.checked = true;
+        updateRightsEditorPermissionStatus(requiredInput);
+        if (announce) rightsEditorAnnounce(dependency.addedMessage);
+      }
     }
   }
 }
@@ -6803,12 +7272,14 @@ function openRightsEditor(employeeNumber) {
   elements.rightsEditorPermissions.innerHTML = [...groups.entries()].map(([group, permissions]) => `
     <section class="rights-permission-group"><h3>${escapeHtml(group)}</h3><div class="rights-permission-grid">${permissions.map((permission) => {
       const baseRight = rolePermissions.has(permission.id);
-      const effectiveRight = effectivePermissions.has(permission.id);
-      const roleEligible = !Array.isArray(permission.eligibleRoles) || permission.eligibleRoles.includes(user.role);
+      const roleEligible = permissionEligibleForRole(permission, user.role);
+      const effectiveRight = roleEligible && effectivePermissions.has(permission.id);
       const editable = Boolean(user.manageable && permission.editable && roleEligible);
       const lockedRight = !editable;
       const warningLevel = permission.warningLevel || "normal";
-      const statusText = baseRight
+      const statusText = !roleEligible
+        ? "Für diese Rolle nicht verfügbar"
+        : baseRight
         ? effectiveRight ? "Grundrecht der Rolle" : "Individuell entzogen"
         : effectiveRight ? "Individuell hinzugefügt" : "Nicht vergeben";
       const stateClass = baseRight
@@ -6816,8 +7287,7 @@ function openRightsEditor(employeeNumber) {
         : effectiveRight ? "additional-right" : "unassigned-right";
       return `<label class="rights-permission ${warningLevel === "critical" ? "critical" : warningLevel === "high" ? "sensitive" : ""} ${stateClass} ${lockedRight ? "locked-right" : ""}"><input type="checkbox" data-rights-permission data-role-permission="${baseRight}" value="${escapeHtml(permission.id)}" ${effectiveRight ? "checked" : ""} ${editable ? "" : "disabled"} /><span><strong>${escapeHtml(permission.label || permission.id)}</strong><small data-rights-permission-status>${escapeHtml(statusText)}</small>${permission.description ? `<small class="rights-permission-description">${escapeHtml(permission.description)}</small>` : ""}</span></label>`;
     }).join("")}</div></section>`).join("");
-  const scheduleWriteInput = elements.rightsEditorPermissions.querySelector('input[data-rights-permission][value="schedule:write"]');
-  if (scheduleWriteInput?.checked) enforceRightsEditorScheduleDependency(scheduleWriteInput, false);
+  enforceRightsEditorPermissionDependencies(null, false);
   const context = rightsEditorScopeContext(user);
   elements.rightsEditorForm.querySelectorAll('input[name="rightsEditorScopeMode"]').forEach((input) => {
     input.checked = input.value === context.mode;
@@ -6842,12 +7312,12 @@ function renderMobileLeadershipSettings() {
     const enabled = new Set(layouts[role] || []);
     return `<article class="mobile-role-card" data-mobile-layout-role="${role}"><strong>${label}</strong><div class="mobile-module-grid">${modules.map((module) => {
       const required = role !== "location_planner" && module.id === "timeTracking";
-      const unavailable = role === "location_planner" && !["schedule", "more"].includes(module.id);
-      return `<label><input type="checkbox" value="${escapeHtml(module.id)}" ${enabled.has(module.id) || required ? "checked" : ""} ${required || unavailable ? "disabled" : ""} /><span>${escapeHtml(module.label || module.id)}</span></label>`;
+      const unavailable = role === "location_planner" && !["schedule", "approvals", "more"].includes(module.id);
+      return `<label><input type="checkbox" value="${escapeHtml(module.id)}" ${(!unavailable && enabled.has(module.id)) || required ? "checked" : ""} ${required || unavailable ? "disabled" : ""} /><span>${escapeHtml(module.label || module.id)}</span></label>`;
     }).join("")}</div></article>`;
   }).join("");
   elements.saveMobileLeadershipSettingsButton.disabled = result.canChange === false;
-  elements.mobileLeadershipSettingsHint.textContent = result.canChange === false ? "Nur Developer, IT-Admin, Admin oder Personalleitung kann diese Auswahl ändern." : "Zeiterfassung bleibt bei Leitungsrollen der erste Punkt; die Planungsverantwortung nutzt ausschließlich Dienstplan und Mehr.";
+  elements.mobileLeadershipSettingsHint.textContent = result.canChange === false ? "Nur Developer, IT-Admin, Admin oder Personalleitung kann diese Auswahl ändern." : "Zeiterfassung bleibt bei Leitungsrollen der erste Punkt; für die Planungsverantwortung können Dienstplan, Freigaben und Mehr angeordnet werden. Die Laufzeit prüft weiterhin die wirksamen Rechte.";
 }
 
 function personnelFieldLevelLabel(level, payload = state.personnelFieldRights || {}) {
@@ -6954,8 +7424,12 @@ async function savePersonnelFieldRights() {
 async function saveUserRights(event) {
   event.preventDefault();
   const employeeNumber = state.selectedRightsEmployeeNumber;
-  if (!employeeNumber) return;
-  const inputs = [...elements.rightsEditorPermissions.querySelectorAll('input[data-rights-permission]:not(:disabled)')];
+  const user = selectedRightsEditorUser();
+  if (!employeeNumber || !user) return;
+  enforceRightsEditorPermissionDependencies(null, false);
+  const catalogById = new Map((state.rightsManagement?.catalog || []).map((permission) => [permission.id, permission]));
+  const inputs = [...elements.rightsEditorPermissions.querySelectorAll('input[data-rights-permission]:not(:disabled)')]
+    .filter((input) => permissionEligibleForRole(catalogById.get(input.value), user.role));
   const grantedPermissions = inputs
     .filter((input) => input.dataset.rolePermission !== "true" && input.checked)
     .map((input) => input.value);
@@ -7002,7 +7476,11 @@ function pageThemeStorageKey(view) {
   return `grabenplaner:page-theme:${uiPreferenceActorKey()}:${view}`;
 }
 
-function dashboardFontSizeStorageKey() {
+function appFontScaleStorageKey() {
+  return `grabenplaner:app-font-scale-percent:${uiPreferenceActorKey()}`;
+}
+
+function legacyDashboardFontSizeStorageKey() {
   return `grabenplaner:dashboard-font-size:${uiPreferenceActorKey()}`;
 }
 
@@ -7012,6 +7490,18 @@ function employeeDisplayColumnsStorageKey() {
 
 function employeeDisplaySortStorageKey() {
   return `grabenplaner:employee-display-sort:${uiPreferenceActorKey()}`;
+}
+
+function workRuleAssessmentExpandedStorageKey() {
+  return `grabenplaner:work-rule-assessment-expanded:${uiPreferenceActorKey()}`;
+}
+
+function applyWorkRuleAssessmentExpanded(value) {
+  const expanded = value === true;
+  state.workRuleAssessmentExpanded = expanded;
+  if (elements.workRuleAssessmentPanel && elements.workRuleAssessmentPanel.open !== expanded) {
+    elements.workRuleAssessmentPanel.open = expanded;
+  }
 }
 
 function pageViewElement(view) {
@@ -7051,11 +7541,34 @@ function applyPageTheme(view, theme) {
   if (state.currentView === view) applyActivePageAppearance();
 }
 
-function applyDashboardFontSize(value) {
-  const normalized = ["compact", "standard", "large"].includes(value) ? value : "standard";
-  state.dashboardFontSize = normalized;
-  elements.rightsDashboardView?.setAttribute("data-dashboard-font-size", normalized);
-  if (elements.dashboardFontSize) elements.dashboardFontSize.value = normalized;
+const APP_FONT_SCALE_MIN = 75;
+const APP_FONT_SCALE_MAX = 150;
+const APP_FONT_SCALE_STEP = 5;
+const APP_FONT_SCALE_DEFAULT = 100;
+const LEGACY_DASHBOARD_FONT_SCALE = Object.freeze({ compact: 85, standard: 100, large: 115 });
+
+function normalizeAppFontScalePercent(value, fallback = APP_FONT_SCALE_DEFAULT) {
+  const legacyValue = LEGACY_DASHBOARD_FONT_SCALE[String(value || "").trim().toLowerCase()];
+  const numericValue = legacyValue ?? Number(value);
+  return Number.isInteger(numericValue)
+    && numericValue >= APP_FONT_SCALE_MIN
+    && numericValue <= APP_FONT_SCALE_MAX
+    && numericValue % APP_FONT_SCALE_STEP === 0
+    ? numericValue
+    : fallback;
+}
+
+function applyAppFontScalePercent(value) {
+  const normalized = normalizeAppFontScalePercent(value);
+  const scale = normalized / 100;
+  state.appFontScalePercent = normalized;
+  document.documentElement.dataset.appFontScalePercent = String(normalized);
+  document.documentElement.style.setProperty("--app-font-scale", String(scale));
+  document.documentElement.style.setProperty("--app-font-scale-inverse", String(1 / scale));
+  if (elements.appFontScalePercent) elements.appFontScalePercent.value = String(normalized);
+  if (elements.decreaseAppFontScale) elements.decreaseAppFontScale.disabled = normalized <= APP_FONT_SCALE_MIN;
+  if (elements.increaseAppFontScale) elements.increaseAppFontScale.disabled = normalized >= APP_FONT_SCALE_MAX;
+  return normalized;
 }
 
 async function loadUiPreferences() {
@@ -7065,13 +7578,31 @@ async function loadUiPreferences() {
   } catch (error) {
     if (![401, 403, 404].includes(error.status)) throw error;
   }
-  const localOnly = (preferences?.actor || uiPreferenceActorKey()) === "local";
+  const localOnly = preferences?.actor === "local"
+    || state.portalStatus?.portalEnabled !== true;
   for (const view of UI_APPEARANCE_VIEWS) {
     const stored = localOnly ? localStorage.getItem(pageThemeStorageKey(view)) : "";
     applyPageTheme(view, stored || preferences?.pageThemes?.[view] || "light");
   }
-  const storedFontSize = localOnly ? localStorage.getItem(dashboardFontSizeStorageKey()) : "";
-  applyDashboardFontSize(storedFontSize || preferences?.dashboardFontSize || "standard");
+  const storedFontScale = localOnly ? localStorage.getItem(appFontScaleStorageKey()) : "";
+  const legacyStoredFontSize = localOnly ? localStorage.getItem(legacyDashboardFontSizeStorageKey()) : "";
+  const loadedFontScale = normalizeAppFontScalePercent(storedFontScale, null)
+    ?? normalizeAppFontScalePercent(legacyStoredFontSize, null)
+    ?? normalizeAppFontScalePercent(preferences?.appFontScalePercent);
+  applyAppFontScalePercent(loadedFontScale);
+  state.persistedAppFontScalePercent = state.appFontScalePercent;
+  if (localOnly && legacyStoredFontSize) {
+    localStorage.setItem(appFontScaleStorageKey(), String(state.persistedAppFontScalePercent));
+    localStorage.removeItem(legacyDashboardFontSizeStorageKey());
+  }
+  const storedWorkRuleAssessment = localOnly
+    ? localStorage.getItem(workRuleAssessmentExpandedStorageKey())
+    : null;
+  applyWorkRuleAssessmentExpanded(
+    storedWorkRuleAssessment === null
+      ? preferences?.workRuleAssessmentExpanded === true
+      : storedWorkRuleAssessment === "1",
+  );
   let storedColumns = preferences?.employeeDisplayColumns;
   let storedSort = preferences?.employeeDisplaySort;
   if (localOnly) {
@@ -7083,6 +7614,29 @@ async function loadUiPreferences() {
   renderEmployees();
   if (state.personnelAdministrationLoaded) renderPersonnelDirectory();
   applyActivePageAppearance();
+}
+
+async function saveWorkRuleAssessmentExpanded(value) {
+  const previous = state.workRuleAssessmentExpanded;
+  const expanded = value === true;
+  const requestId = ++workRuleAssessmentPreferenceRequestId;
+  applyWorkRuleAssessmentExpanded(expanded);
+  localStorage.setItem(workRuleAssessmentExpandedStorageKey(), expanded ? "1" : "0");
+  try {
+    const result = await api("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      body: JSON.stringify({ workRuleAssessmentExpanded: expanded }),
+    });
+    if (requestId !== workRuleAssessmentPreferenceRequestId) return;
+    const stored = result.workRuleAssessmentExpanded === true;
+    applyWorkRuleAssessmentExpanded(stored);
+    localStorage.setItem(workRuleAssessmentExpandedStorageKey(), stored ? "1" : "0");
+  } catch (error) {
+    if (requestId !== workRuleAssessmentPreferenceRequestId) return;
+    applyWorkRuleAssessmentExpanded(previous);
+    localStorage.setItem(workRuleAssessmentExpandedStorageKey(), previous ? "1" : "0");
+    showToast(error.message, true);
+  }
 }
 
 async function savePageTheme(view, theme) {
@@ -7104,21 +7658,24 @@ async function savePageTheme(view, theme) {
   }
 }
 
-async function saveDashboardFontSize(value, { silent = false } = {}) {
-  const previous = state.dashboardFontSize;
-  const normalized = ["compact", "standard", "large"].includes(value) ? value : "standard";
-  applyDashboardFontSize(normalized);
-  localStorage.setItem(dashboardFontSizeStorageKey(), normalized);
+async function saveAppFontScalePercent(value, { silent = false } = {}) {
+  const previous = state.persistedAppFontScalePercent;
+  const normalized = normalizeAppFontScalePercent(value, null);
+  if (normalized === null) throw new Error("Bitte eine gültige Schriftgröße in 5er-Schritten angeben.");
+  applyAppFontScalePercent(normalized);
   try {
     const result = await api("/api/portal/v1/ui-preferences", {
       method: "PUT",
-      body: JSON.stringify({ dashboardFontSize: normalized }),
+      body: JSON.stringify({ appFontScalePercent: normalized }),
     });
-    applyDashboardFontSize(result.dashboardFontSize || normalized);
-    if (!silent) showToast("Die Dashboard-Schriftgröße wurde gespeichert.");
+    const stored = applyAppFontScalePercent(result.appFontScalePercent ?? normalized);
+    state.persistedAppFontScalePercent = stored;
+    localStorage.setItem(appFontScaleStorageKey(), String(stored));
+    localStorage.removeItem(legacyDashboardFontSizeStorageKey());
+    if (!silent) showToast("Die Schriftgröße wurde gespeichert.");
   } catch (error) {
-    applyDashboardFontSize(previous);
-    localStorage.setItem(dashboardFontSizeStorageKey(), previous);
+    applyAppFontScalePercent(previous);
+    localStorage.setItem(appFontScaleStorageKey(), String(previous));
     if (!silent) showToast(error.message, true);
     throw error;
   }
@@ -10193,7 +10750,8 @@ function personnelRecordDetails(title, eyebrow, accessMode, content, className =
   if (accessMode === "hidden" || !String(content || "").trim()) return "";
   const editable = accessMode === "write" || accessMode === "mixed" || accessMode === true;
   const badge = accessMode === "mixed" ? "Teilweise bearbeitbar" : editable ? "Bearbeitbar" : "Nur lesen";
-  return `<details class="personnel-record-details ${className}" open><summary><span><small>${escapeHtml(eyebrow)}</small><strong>${escapeHtml(title)}</strong></span><span class="status-badge ${accessMode === "mixed" ? "warning" : editable ? "approved" : "inactive"}">${badge}</span></summary><div class="personnel-record-details-body">${content}</div></details>`;
+  const open = state.personnelRecordOpenSections.has(title) ? " open" : "";
+  return `<details class="personnel-record-details ${className}" data-personnel-record-section="${escapeHtmlAttribute(title)}"${open}><summary><span><small>${escapeHtml(eyebrow)}</small><strong>${escapeHtml(title)}</strong></span><span class="status-badge ${accessMode === "mixed" ? "warning" : editable ? "approved" : "inactive"}">${badge}</span></summary><div class="personnel-record-details-body">${content}</div></details>`;
 }
 
 function personnelDocumentDate(value) {
@@ -10232,6 +10790,10 @@ function renderPersonnelDocuments(employeeNumber, result, access) {
 
 async function openPersonnelRecord(employeeNumber) {
   if (!elements.personnelRecordModal) return;
+  const freshDialog = !elements.personnelRecordModal.open;
+  if (freshDialog || String(state.personnelRecord?.employeeNumber || "") !== String(employeeNumber)) {
+    state.personnelRecordOpenSections.clear();
+  }
   const requestToken = Symbol(`personnel-record-${employeeNumber}`);
   state.personnelRecordRequestToken = requestToken;
   state.personnelRecord = null;
@@ -10438,26 +11000,28 @@ function amuReportStatusLabel(report) {
 
 function renderRequestNavigation() {
   const counts = state.requestCounts;
-  const sicknessEnabled = state.portalStatus?.installationFeatures?.sicknessAmu !== false;
-  const amuAvailable = sicknessEnabled && state.amuAccess?.available !== false;
-  const sicknessAvailable = sicknessEnabled && (!state.portalStatus?.portalEnabled
-    || state.portalSession?.user?.permissions?.includes("sickness:read"));
-  const sicknessAndAmuAvailable = sicknessAvailable || amuAvailable;
-  document.querySelectorAll('[data-request-kind-tab="amu"]').forEach((button) => button.classList.toggle("hidden", !sicknessAndAmuAvailable));
-  if (!sicknessAndAmuAvailable && state.requestKindTab === "amu") state.requestKindTab = "vacation";
+  const availability = managerRequestTabAvailability();
+  const permissions = state.portalSession?.user?.permissions || [];
+  const localAccess = !state.portalStatus?.portalEnabled;
+  const sicknessAvailable = availability.amu && (localAccess || permissions.includes("sickness:read"));
+  const amuAvailable = availability.amu && state.amuAccess?.available !== false;
+  document.querySelectorAll("[data-request-kind-tab]").forEach((button) => {
+    button.classList.toggle("hidden", !availability[button.dataset.requestKindTab]);
+  });
+  ensureAccessibleManagerRequestTab();
   document.querySelectorAll("[data-request-kind-tab]").forEach((button) => button.classList.toggle("active", button.dataset.requestKindTab === state.requestKindTab));
   elements.requestsNavCount.textContent = counts.total;
   elements.requestsNavCount.classList.toggle("hidden", !counts.total);
   elements.requestsNavButton.classList.toggle("attention", counts.total > 0);
   elements.vacationRequestCount.textContent = counts.vacation;
   elements.timeOffRequestCount.textContent = counts.timeOff;
-  elements.amuRequestCount.textContent = sicknessAndAmuAvailable ? Number(counts.sickness || 0) + Number(counts.amu || 0) : 0;
+  elements.amuRequestCount.textContent = availability.amu ? Number(counts.sickness || 0) + Number(counts.amu || 0) : 0;
   elements.requestWorkflowSummary.innerHTML = `
-    <article><span>Urlaub offen</span><strong>${counts.vacation}</strong></article>
-    <article><span>ZA offen</span><strong>${counts.timeOff}</strong></article>
+    ${availability.vacation ? `<article><span>Urlaub offen</span><strong>${counts.vacation}</strong></article>` : ""}
+    ${availability.time_off ? `<article><span>ZA offen</span><strong>${counts.timeOff}</strong></article>` : ""}
     ${sicknessAvailable ? `<article><span>Krankenstände offen</span><strong>${counts.sickness || 0}</strong></article>` : ""}
     ${amuAvailable ? `<article><span>AUM neu</span><strong>${counts.amu || 0}</strong></article>` : ""}
-    <article><span>Urlaubs-Zweitfreigabe</span><strong>${state.workflowSettings?.vacationHrApprovalRequired ? "Aktiv" : "Nicht aktiv"}</strong>${state.workflowSettings?.canChange ? `<button type="button" class="text-action" data-toggle-hr-workflow>${state.workflowSettings.vacationHrApprovalRequired ? "Deaktivieren" : "Aktivieren"}</button>` : ""}</article>`;
+    ${availability.vacation ? `<article><span>Urlaubs-Zweitfreigabe</span><strong>${state.workflowSettings?.vacationHrApprovalRequired ? "Aktiv" : "Nicht aktiv"}</strong>${state.workflowSettings?.canChange ? `<button type="button" class="text-action" data-toggle-hr-workflow>${state.workflowSettings.vacationHrApprovalRequired ? "Deaktivieren" : "Aktivieren"}</button>` : ""}</article>` : ""}`;
 }
 
 async function toggleHrWorkflow(required) {
@@ -11759,13 +12323,22 @@ async function loadIntegrations() {
 function populatePersonnelImportDefaults() {
   const catalog = state.integrations.importCatalog;
   if (!catalog) return;
-  const locationValue = elements.personnelImportDefaultLocation.value || state.locationId;
-  elements.personnelImportDefaultLocation.innerHTML = (catalog.references?.locations || []).filter((location) => location.active !== false).map((location) => `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`).join("");
-  if ([...elements.personnelImportDefaultLocation.options].some((option) => option.value === locationValue)) elements.personnelImportDefaultLocation.value = locationValue;
-  updatePersonnelImportDefaultDepartments();
-  const positionValue = elements.personnelImportDefaultPosition.value || "verkaufsmitarbeiter";
-  elements.personnelImportDefaultPosition.innerHTML = (catalog.references?.positions || []).map((position) => `<option value="${escapeHtml(position.id)}">${escapeHtml(position.name)}</option>`).join("");
-  if ([...elements.personnelImportDefaultPosition.options].some((option) => option.value === positionValue)) elements.personnelImportDefaultPosition.value = positionValue;
+  const references = catalog.references || {};
+  const costCenters = (references.costCenters || []).filter((costCenter) => costCenter.active !== false);
+  const currentLocation = (references.locations || []).find((location) => String(location.id) === String(state.locationId));
+  const costCenterValue = elements.personnelImportDefaultCostCenter.value
+    || currentLocation?.costCenterId
+    || costCenters[0]?.id
+    || "";
+  elements.personnelImportDefaultCostCenter.innerHTML = costCenters.length
+    ? costCenters.map((costCenter) =>
+      `<option value="${escapeHtml(costCenter.id)}">${escapeHtml(costCenter.code)} · ${escapeHtml(costCenter.name)}</option>`,
+    ).join("")
+    : '<option value="">Keine Kostenstelle verfügbar</option>';
+  if (costCenters.some((costCenter) => String(costCenter.id) === String(costCenterValue))) {
+    elements.personnelImportDefaultCostCenter.value = String(costCenterValue);
+  }
+  updatePersonnelImportAssignmentDefaults("", elements.personnelImportDefaultPosition.value || "verkaufsmitarbeiter");
 }
 
 function setPersonnelImportStep(step) {
@@ -11794,6 +12367,7 @@ async function discardPersonnelImportSessions() {
 function clearPersonnelImportWizard() {
   state.integrations.inspection = null;
   state.integrations.preview = null;
+  state.integrations.legacyPersonnelImportMapping = {};
   elements.personnelImportFile.value = "";
   elements.personnelImportSourceType.value = "file";
   if (elements.personnelImportProfile) elements.personnelImportProfile.value = "";
@@ -11820,9 +12394,18 @@ function applyPersonnelImportProfile(profile) {
   if (configuration.connectionId && [...elements.personnelImportSqlConnection.options].some((option) => option.value === configuration.connectionId)) {
     elements.personnelImportSqlConnection.value = configuration.connectionId;
   }
-  if (defaults.homeLocationId) elements.personnelImportDefaultLocation.value = defaults.homeLocationId;
-  updatePersonnelImportDefaultDepartments(defaults.preferredDepartmentId || "");
-  if (defaults.positionId) elements.personnelImportDefaultPosition.value = defaults.positionId;
+  const references = state.integrations.importCatalog?.references || {};
+  const legacyLocation = (references.locations || [])
+    .find((location) => String(location.id) === String(defaults.homeLocationId || ""));
+  const costCenterId = defaults.costCenterId || legacyLocation?.costCenterId || "";
+  if (costCenterId && [...elements.personnelImportDefaultCostCenter.options]
+    .some((option) => option.value === String(costCenterId))) {
+    elements.personnelImportDefaultCostCenter.value = String(costCenterId);
+  }
+  updatePersonnelImportAssignmentDefaults(
+    defaults.preferredDepartmentId || "",
+    defaults.positionId || "",
+  );
   if (defaults.contractedHours !== undefined) elements.personnelImportDefaultHours.value = defaults.contractedHours;
   if (configuration.duplicateStrategy) elements.personnelImportDuplicateStrategy.value = configuration.duplicateStrategy;
   updatePersonnelImportSourceFields();
@@ -11842,15 +12425,41 @@ async function openPersonnelImportWizard(profileId = "") {
   elements.personnelImportModal.showModal();
 }
 
-function updatePersonnelImportDefaultDepartments(preferredValue = elements.personnelImportDefaultDepartment?.value || "") {
-  if (!elements.personnelImportDefaultDepartment) return;
-  const locations = state.integrations.importCatalog?.references?.locations || [];
-  const location = locations.find((item) => String(item.id) === String(elements.personnelImportDefaultLocation?.value));
+function updatePersonnelImportAssignmentDefaults(
+  preferredDepartmentValue = elements.personnelImportDefaultDepartment?.value || "",
+  preferredPositionValue = elements.personnelImportDefaultPosition?.value || "",
+) {
+  const references = state.integrations.importCatalog?.references || {};
+  const costCenterId = String(elements.personnelImportDefaultCostCenter?.value || "");
+  const costCenter = (references.costCenters || [])
+    .find((item) => String(item.id) === costCenterId);
+  const location = (references.locations || [])
+    .find((item) => String(item.costCenterId || "") === costCenterId);
   const departments = (location?.departments || []).filter((department) => department.active !== false);
-  elements.personnelImportDefaultDepartment.innerHTML = `<option value="">Gesamter Standort</option>${departments
-    .map((department) => `<option value="${escapeHtml(department.id)}">${escapeHtml(department.name)}</option>`).join("")}`;
-  if (departments.some((department) => String(department.id) === String(preferredValue))) {
-    elements.personnelImportDefaultDepartment.value = String(preferredValue);
+  if (elements.personnelImportDefaultDepartment) {
+    elements.personnelImportDefaultDepartment.innerHTML = location
+      ? `<option value="">Keine Abteilung</option>${departments
+        .map((department) => `<option value="${escapeHtml(department.id)}">${escapeHtml(department.name)}</option>`).join("")}`
+      : '<option value="">Keine Abteilung vorgesehen</option>';
+    elements.personnelImportDefaultDepartment.disabled = !location;
+    if (departments.some((department) => String(department.id) === String(preferredDepartmentValue))) {
+      elements.personnelImportDefaultDepartment.value = String(preferredDepartmentValue);
+    }
+  }
+  if (elements.personnelImportDefaultPosition) {
+    const positions = (references.positions || []).filter((position) => {
+      const typeIds = position.costCenterTypeIds ?? position.cost_center_type_ids ?? [];
+      const normalized = Array.isArray(typeIds) ? typeIds.map(String) : String(typeIds || "").split("|");
+      return normalized.includes(String(costCenter?.typeId || ""));
+    });
+    elements.personnelImportDefaultPosition.innerHTML = positions.length
+      ? positions.map((position) => `<option value="${escapeHtml(position.id)}">${escapeHtml(position.name)}</option>`).join("")
+      : '<option value="">Keine Position freigegeben</option>';
+    elements.personnelImportDefaultPosition.disabled = !positions.length;
+    elements.personnelImportDefaultPosition.value = positions
+      .some((position) => String(position.id) === String(preferredPositionValue))
+      ? String(preferredPositionValue)
+      : String(positions[0]?.id || "");
   }
 }
 
@@ -11900,10 +12509,16 @@ function renderPersonnelImportMapping() {
   const profileMatches = profile?.configuration?.format === state.integrations.inspection.format
     && (!profile.configuration.headerFingerprint || profile.configuration.headerFingerprint === headerCandidate?.headerFingerprint);
   const mapping = profileMatches ? profile.configuration.mapping || {} : headerCandidate?.suggestedMapping || {};
+  state.integrations.legacyPersonnelImportMapping = profileMatches
+    ? Object.fromEntries(Object.entries(mapping)
+      .filter(([field]) => ["homeLocationId", "homeLocationName"].includes(field)))
+    : {};
   elements.personnelImportMapping.innerHTML = catalog.fields.map((field) => `
     <label class="field"><span>${escapeHtml(field.label)}${field.required ? " *" : ""}</span><select data-import-field="${escapeHtml(field.id)}"><option value="">Nicht importieren</option>${headers.map((header) => `<option value="${header.columnIndex}" ${Number(mapping[field.id]?.columnIndex) === header.columnIndex ? "selected" : ""}>${escapeHtml(header.label)} · Spalte ${header.columnIndex + 1}</option>`).join("")}</select></label>
   `).join("");
-  if (profile && !profileMatches) setPersonnelImportMessage("Das Profil passt nicht exakt zu dieser Kopfzeile. Die Spalten wurden neu vorgeschlagen.", false);
+  if (Object.keys(state.integrations.legacyPersonnelImportMapping).length) {
+    setPersonnelImportMessage("Älteres Profil erkannt: Die bisherige Standortspalte wird intern auf die zugehörige Kostenstelle abgebildet.", false);
+  } else if (profile && !profileMatches) setPersonnelImportMessage("Das Profil passt nicht exakt zu dieser Kopfzeile. Die Spalten wurden neu vorgeschlagen.", false);
   else setPersonnelImportMessage();
 }
 
@@ -11918,7 +12533,7 @@ async function inspectPersonnelImport() {
       const result = await api(`/api/integrations/connections/${encodeURIComponent(connectionId)}/sql/inspect`, {
         method: "POST",
         body: JSON.stringify({
-          defaultLocationId: elements.personnelImportDefaultLocation.value,
+          defaultCostCenterId: elements.personnelImportDefaultCostCenter.value,
           defaultDepartmentId: elements.personnelImportDefaultDepartment.value || "",
         }),
       });
@@ -11976,8 +12591,15 @@ async function inspectPersonnelImport() {
 }
 
 function currentPersonnelImportMapping() {
-  return Object.fromEntries([...elements.personnelImportMapping.querySelectorAll("select[data-import-field]")]
+  const mapping = Object.fromEntries([...elements.personnelImportMapping.querySelectorAll("select[data-import-field]")]
     .filter((select) => select.value !== "").map((select) => [select.dataset.importField, { columnIndex: Number(select.value) }]));
+  if (mapping.costCenterId) return mapping;
+  const usedColumns = new Set(Object.values(mapping).map((source) => Number(source.columnIndex)));
+  const compatibleLegacyMapping = Object.fromEntries(
+    Object.entries(state.integrations.legacyPersonnelImportMapping)
+      .filter(([, source]) => !usedColumns.has(Number(source.columnIndex))),
+  );
+  return { ...compatibleLegacyMapping, ...mapping };
 }
 
 function currentPersonnelImportConfiguration() {
@@ -11995,7 +12617,7 @@ function currentPersonnelImportConfiguration() {
     defaults: {
       contractedHours: Number(elements.personnelImportDefaultHours.value || 38.5),
       positionId: elements.personnelImportDefaultPosition.value,
-      homeLocationId: elements.personnelImportDefaultLocation.value,
+      costCenterId: elements.personnelImportDefaultCostCenter.value,
       preferredDepartmentId: elements.personnelImportDefaultDepartment.value || "",
       active: true,
     },
@@ -12224,6 +12846,7 @@ function setView(view) {
     || (view === "loans" && !canReadLoanManagement())
     || (view === "rightsDashboard" && elements.rightsDashboardNavButton?.classList.contains("hidden"))) view = "planning";
   state.currentView = view;
+  if (view === "requests") ensureAccessibleManagerRequestTab();
   if (view === "personnelAdministration") setPersonnelAdministrationTab(state.personnelAdministrationTab);
   if (timePresenceRefreshTimer) clearInterval(timePresenceRefreshTimer);
   timePresenceRefreshTimer = null;
@@ -12289,57 +12912,71 @@ function applyRequestedView() {
 }
 
 function setSettingsTab(tab) {
-  document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("active", button.dataset.settingsTab === tab));
-  document.querySelector(`[data-settings-tab="${tab}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
-  elements.generalSettings.classList.toggle("active", tab === "general");
-  elements.brandingSettings.classList.toggle("active", tab === "branding");
-  elements.pdfSettings.classList.toggle("active", tab === "pdf");
-  elements.personnelSettings.classList.toggle("active", tab === "personnel");
-  elements.vacationSettings?.classList.toggle("active", tab === "vacation");
-  elements.timeTrackingSettings?.classList.toggle("active", tab === "timeTracking");
-  elements.integrationSettings?.classList.toggle("active", tab === "integrations");
-  elements.dataProtectionSettings?.classList.toggle("active", tab === "dataProtection");
-  elements.accessSettings.classList.toggle("active", tab === "access");
-  elements.rightsSettings?.classList.toggle("active", tab === "rights");
-  elements.backupSettings.classList.toggle("active", tab === "backup");
-  elements.usbProvisioningSettings?.classList.toggle("active", tab === "usbProvisioning");
-  if (tab === "general" && canManageLoanSettings()) {
+  const integratedTarget = ["branding", "pdf"].includes(tab) ? tab : "";
+  const activeTab = integratedTarget ? "general" : tab;
+  document.querySelectorAll("[data-settings-tab]").forEach((button) => button.classList.toggle("active", button.dataset.settingsTab === activeTab));
+  document.querySelector(`[data-settings-tab="${activeTab}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  elements.generalSettings.classList.toggle("active", activeTab === "general");
+  elements.personnelSettings.classList.toggle("active", activeTab === "personnel");
+  elements.vacationSettings?.classList.toggle("active", activeTab === "vacation");
+  elements.timeTrackingSettings?.classList.toggle("active", activeTab === "timeTracking");
+  elements.integrationSettings?.classList.toggle("active", activeTab === "integrations");
+  elements.dataProtectionSettings?.classList.toggle("active", activeTab === "dataProtection");
+  elements.accessSettings.classList.toggle("active", activeTab === "access");
+  elements.rightsSettings?.classList.toggle("active", activeTab === "rights");
+  elements.backupSettings.classList.toggle("active", activeTab === "backup");
+  elements.usbProvisioningSettings?.classList.toggle("active", activeTab === "usbProvisioning");
+  if (activeTab === "general" && canManageLoanSettings()) {
     loadLoanSettings();
   }
   const canSaveGeneralSettings = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("settings:write");
   const canSaveBackupSettings = !state.portalStatus?.portalEnabled
     || state.portalSession?.user?.permissions?.includes("backup:write");
-  const serverBackupTab = tab === "backup" && state.portalStatus?.operationMode === "server";
-  elements.saveSettingsButton?.classList.toggle("hidden", ["integrations", "dataProtection", "usbProvisioning"].includes(tab)
+  const canSaveBranding = !state.portalStatus?.portalEnabled
+    || state.portalSession?.user?.permissions?.includes("branding:write");
+  const serverBackupTab = activeTab === "backup" && state.portalStatus?.operationMode === "server";
+  elements.saveSettingsButton?.classList.toggle("hidden", ["integrations", "dataProtection", "usbProvisioning"].includes(activeTab)
     || serverBackupTab
-    || (tab === "backup" ? !canSaveBackupSettings : !canSaveGeneralSettings));
-  if (tab === "access") {
+    || (activeTab === "backup" ? !canSaveBackupSettings : !(canSaveGeneralSettings || (activeTab === "general" && canSaveBranding))));
+  if (activeTab === "access") {
     loadPortalUsers();
+    loadOrganizationAccounts();
     loadAmuSettings();
     loadAmuAccessPolicy();
     loadGreetingSettings();
   }
-  if (tab === "vacation") {
+  if (activeTab === "vacation") {
     loadWorkflowSettings();
     loadApprovalDelegations();
   }
-  if (tab === "rights") loadRightsManagement();
-  if (tab === "integrations") loadIntegrations().catch((error) => showToast(error.message, true));
-  if (tab === "dataProtection") {
+  if (activeTab === "rights") loadRightsManagement();
+  if (activeTab === "integrations") loadIntegrations().catch((error) => showToast(error.message, true));
+  if (activeTab === "dataProtection") {
     if (elements.retentionPreviewAsOf && !elements.retentionPreviewAsOf.value) {
       elements.retentionPreviewAsOf.value = toIsoDate(new Date());
     }
     loadRetentionGovernance().catch((error) => showToast(error.message, true));
   }
-  if (tab === "timeTracking") loadWifiAutomationSettings();
-  if (tab === "backup") {
+  if (activeTab === "timeTracking") loadWifiAutomationSettings();
+  if (activeTab === "backup") {
     refreshServerDiagnostics();
     if (canManageOffsiteFolders()) loadManagedOffsiteFolders();
   }
-  if (tab === "personnel") loadTrustLevelSettings();
-  if (tab === "branding") Promise.all([loadManagementBrandingPreference(), loadBrandingAssignments()]).then(() => renderSettings()).catch((error) => showToast(error.message, true));
-  if (tab === "usbProvisioning") {
+  if (activeTab === "personnel") loadTrustLevelSettings();
+  if (activeTab === "general" && canSaveBranding) {
+    Promise.all([loadManagementBrandingPreference(), loadBrandingAssignments()])
+      .then(() => renderSettings())
+      .catch((error) => showToast(error.message, true));
+  }
+  if (integratedTarget) {
+    const target = integratedTarget === "branding" ? elements.brandingSettings : elements.pdfSettings;
+    if (target) {
+      target.open = true;
+      window.setTimeout(() => target.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    }
+  }
+  if (activeTab === "usbProvisioning") {
     renderUsbAvailability(state.portalStatus?.usbProvisioning || {});
     if (state.portalStatus?.usbProvisioning?.available === true) {
       loadUsbProvisioning().catch((error) => showToast(error.message, true));
@@ -12363,17 +13000,113 @@ function updateColorPicker(color) {
   document.querySelector("#employeeColorPreview").style.setProperty("--preview-color", normalized);
 }
 
-function updateEmployeeDepartmentOptions(selectedDepartmentId = "") {
-  const locationId = elements.employeeHomeLocation.value || state.locationId;
+function employeeCostCenterOptions(employee = null) {
+  const centers = state.costCenters.length
+    ? state.costCenters.slice()
+    : (state.locations || []).filter((location) => location.cost_center_id || location.costCenterId).map((location) =>
+      normalizeCostCenter({
+        id: location.cost_center_id ?? location.costCenterId,
+        code: location.cost_center_code ?? location.costCenterCode ?? "",
+        name: location.cost_center_name ?? location.costCenterName ?? location.name,
+        typeId: location.cost_center_type_id ?? location.costCenterTypeId ?? location.cost_center_type ?? "",
+        typeName: location.cost_center_type_name ?? location.costCenterTypeName ?? "",
+        isBranch: location.cost_center_is_branch ?? location.costCenterIsBranch ?? true,
+        locationId: location.id,
+        locationName: location.name,
+        active: location.active !== false,
+      }));
+  const byId = new Map(centers.map((center) => [String(center.id), center]));
+  const currentId = String(employee?.cost_center_id ?? employee?.costCenterId ?? "");
+  if (currentId && !byId.has(currentId)) {
+    byId.set(currentId, normalizeCostCenter({
+      id: currentId,
+      code: employee?.cost_center_code ?? employee?.costCenterCode ?? "",
+      name: employee?.cost_center_name ?? employee?.costCenterName ?? "Bestehende Kostenstelle",
+      typeId: employee?.cost_center_type_id ?? employee?.costCenterTypeId ?? employee?.cost_center_type ?? "",
+      typeName: employee?.cost_center_type_name ?? employee?.costCenterTypeName ?? "",
+      isBranch: employee?.cost_center_is_branch ?? employee?.costCenterIsBranch ?? Boolean(employee?.home_location_id),
+      locationId: employee?.home_location_id ?? employee?.homeLocationId ?? "",
+      locationName: employee?.home_location_name ?? employee?.homeLocationName ?? "",
+      active: false,
+    }));
+  }
+  return [...byId.values()];
+}
+
+function selectedEmployeeCostCenter() {
+  const id = String(elements.employeeCostCenter?.value || "");
+  return employeeCostCenterOptions().find((center) => String(center.id) === id) || null;
+}
+
+function employeeCostCenterLocation(center) {
+  if (!center?.isBranch) return null;
+  const locationId = String(center.locationId || "");
+  return (state.locations || []).find((location) => String(location.id) === locationId)
+    || (state.locations || []).find((location) =>
+      String(location.cost_center_id ?? location.costCenterId ?? "") === String(center.id))
+    || null;
+}
+
+function employeePositionTypeIds(position) {
+  const values = position?.costCenterTypeIds ?? position?.cost_center_type_ids ?? [];
+  return Array.isArray(values) ? values.map(String) : String(values || "").split("|").filter(Boolean);
+}
+
+function updateEmployeeDepartmentOptions(selectedDepartmentId = "", center = selectedEmployeeCostCenter()) {
+  const location = employeeCostCenterLocation(center);
+  const locationId = String(location?.id || "");
   const departments = departmentsForLocation(locationId);
   elements.employeePreferredDepartment.innerHTML = `<option value="">Keine Abteilung</option>${departments.map((department) =>
     `<option value="${department.id}">${escapeHtml(department.name)}</option>`,
   ).join("")}`;
+  elements.employeePreferredDepartment.disabled = !locationId || state.employeeEditMode === "display";
+  if (elements.employeePreferredDepartmentHint) {
+    elements.employeePreferredDepartmentHint.textContent = locationId
+      ? `Verfügbar für ${location.id} · ${location.name}.`
+      : "Diese Kostenstelle ist keiner Filiale zugeordnet; eine Abteilung ist daher nicht vorgesehen.";
+  }
   if (selectedDepartmentId && departments.some((department) => String(department.id) === String(selectedDepartmentId))) {
     elements.employeePreferredDepartment.value = String(selectedDepartmentId);
   } else {
     elements.employeePreferredDepartment.value = "";
   }
+}
+
+function updateEmployeeAssignmentOptions(selectedPositionId = "", selectedDepartmentId = "") {
+  const center = selectedEmployeeCostCenter();
+  const type = center ? costCenterTypeByKey(center.typeId || center.type) : null;
+  const typeId = String(type?.id || center?.typeId || center?.type || "");
+  const allowedIds = type
+    ? new Set(type.positionIds.map(String))
+    : new Set((state.positions || [])
+      .filter((position) => employeePositionTypeIds(position).includes(typeId))
+      .map((position) => String(position.id)));
+  const positions = (state.positions || []).filter((position) => allowedIds.has(String(position.id)));
+  elements.employeePosition.innerHTML = center
+    ? positions.length
+      ? positions.map((position) => `<option value="${escapeHtml(position.id)}">${escapeHtml(position.name)}</option>`).join("")
+      : '<option value="">Keine Position freigegeben</option>'
+    : '<option value="">Zuerst Kostenstelle auswählen</option>';
+  elements.employeePosition.disabled = !center || !positions.length || state.employeeEditMode === "display";
+  elements.employeePosition.value = positions.some((position) => String(position.id) === String(selectedPositionId))
+    ? String(selectedPositionId)
+    : String(positions[0]?.id || "");
+  if (elements.employeePositionHint) {
+    elements.employeePositionHint.textContent = center
+      ? positions.length
+        ? `${positions.length} Position(en) für ${type?.name || center.typeName || "diesen Kostenstellentyp"} freigegeben.`
+        : "Für diesen Kostenstellentyp ist noch keine Position freigegeben."
+      : "Nach Auswahl der Kostenstelle erscheinen nur freigegebene Positionen.";
+  }
+  const location = employeeCostCenterLocation(center);
+  if (elements.employeeCostCenterHint) {
+    elements.employeeCostCenterHint.textContent = !center
+      ? "Bitte zuerst eine Kostenstelle auswählen."
+      : location
+        ? `Standort ${location.id} · ${location.name} wird automatisch aus der Kostenstelle übernommen.`
+        : "Diese Kostenstelle ist keiner Filiale zugeordnet; ein Standort wird nicht benötigt.";
+  }
+  updateEmployeeDepartmentOptions(selectedDepartmentId, center);
 }
 
 function canEditEmployeeAccessProfile(employee = null) {
@@ -12393,6 +13126,43 @@ function appRoleAssignableInPersonnelModal(roleId) {
 function permissionDisplayLabel(permissionId) {
   return state.portalPermissionCatalog.find((permission) => permission.id === permissionId)?.label
     || permissionId.replaceAll(":", " · ");
+}
+
+function normalizeEmployeeAccessDraftForRole(roleId, changedPermissionId = "", changedChecked = null) {
+  const catalogById = new Map(state.portalPermissionCatalog.map((permission) => [permission.id, permission]));
+  const rolePermissions = new Set(state.portalRoles.find((role) => role.id === roleId)?.permissions || []);
+  state.employeeAccessDraft = new Set([...state.employeeAccessDraft].filter((permissionId) => {
+    const permission = catalogById.get(permissionId);
+    return permissionEligibleForRole(permission, roleId) && !rolePermissions.has(permissionId);
+  }));
+  let dependencyMessage = "";
+  for (const dependency of permissionDependencyRules) {
+    const dependentIsEffective = rolePermissions.has(dependency.permissionId) || state.employeeAccessDraft.has(dependency.permissionId);
+    const requiredIsEffective = rolePermissions.has(dependency.requiredPermissionId) || state.employeeAccessDraft.has(dependency.requiredPermissionId);
+    if (changedPermissionId === dependency.requiredPermissionId && changedChecked === false && dependentIsEffective) {
+      if (rolePermissions.has(dependency.permissionId)) {
+        const requiredPermission = catalogById.get(dependency.requiredPermissionId);
+        if (permissionEligibleForRole(requiredPermission, roleId) && !rolePermissions.has(dependency.requiredPermissionId)) {
+          state.employeeAccessDraft.add(dependency.requiredPermissionId);
+          dependencyMessage = dependency.addedMessage;
+        }
+      } else {
+        state.employeeAccessDraft.delete(dependency.permissionId);
+        dependencyMessage = dependency.removedMessage;
+      }
+      continue;
+    }
+    if (!dependentIsEffective || requiredIsEffective) continue;
+    const requiredPermission = catalogById.get(dependency.requiredPermissionId);
+    if (permissionEligibleForRole(requiredPermission, roleId)) {
+      if (!rolePermissions.has(dependency.requiredPermissionId)) state.employeeAccessDraft.add(dependency.requiredPermissionId);
+      dependencyMessage = dependency.addedMessage;
+    } else if (!rolePermissions.has(dependency.permissionId)) {
+      state.employeeAccessDraft.delete(dependency.permissionId);
+      dependencyMessage = dependency.unavailableMessage;
+    }
+  }
+  return dependencyMessage;
 }
 
 function renderEmployeeAccessProfile(employee = null) {
@@ -12420,6 +13190,7 @@ function renderEmployeeAccessProfile(employee = null) {
   const role = state.portalRoles.find((entry) => entry.id === elements.employeeAppRole.value)
     || state.portalRoles.find((entry) => entry.id === access.role);
   const rolePermissions = new Set(role?.permissions || access.rolePermissions || []);
+  normalizeEmployeeAccessDraftForRole(role?.id || elements.employeeAppRole.value);
   elements.employeeAppRoleDescription.textContent = role?.description || "Grundrechte werden durch die ausgewählte App-Rolle vorgegeben.";
   const basePermissionLabels = [...rolePermissions].map(permissionDisplayLabel);
   const visibleBase = basePermissionLabels.slice(0, 6);
@@ -12435,9 +13206,15 @@ function renderEmployeeAccessProfile(employee = null) {
   elements.employeeAdditionalRights.innerHTML = [...groups.entries()].map(([group, permissions]) => {
     const entries = permissions.map((permission) => {
       const baseRight = rolePermissions.has(permission.id);
-      const additionalRight = state.employeeAccessDraft.has(permission.id) && !baseRight;
+      const roleEligible = permissionEligibleForRole(permission, role?.id || elements.employeeAppRole.value);
+      const additionalRight = roleEligible && state.employeeAccessDraft.has(permission.id) && !baseRight;
       if (additionalRight) additionalCount += 1;
-      return `<label class="employee-access-right ${baseRight ? "base-right" : ""} ${additionalRight ? "additional-right" : ""}"><input type="checkbox" data-employee-access-permission value="${escapeHtml(permission.id)}" ${baseRight || additionalRight ? "checked" : ""} ${editable && !baseRight ? "" : "disabled"} /><span><strong>${escapeHtml(permission.label || permission.id)}</strong><small>${baseRight ? "Grundrecht der Rolle" : permission.description || "Individuelles Zusatzrecht"}</small></span></label>`;
+      const detail = baseRight
+        ? "Grundrecht der Rolle"
+        : !roleEligible
+          ? "Für diese App-Rolle nicht verfügbar"
+          : permission.description || "Individuelles Zusatzrecht";
+      return `<label class="employee-access-right ${baseRight ? "base-right" : ""} ${additionalRight ? "additional-right" : ""}"><input type="checkbox" data-employee-access-permission value="${escapeHtml(permission.id)}" ${baseRight || additionalRight ? "checked" : ""} ${editable && roleEligible && !baseRight ? "" : "disabled"} /><span><strong>${escapeHtml(permission.label || permission.id)}</strong><small>${escapeHtml(detail)}</small></span></label>`;
     }).join("");
     return `<section><h4>${escapeHtml(group)}</h4><div>${entries}</div></section>`;
   }).join("");
@@ -12692,14 +13469,27 @@ function openEmployeeModal(employee = null) {
   const centralPersonnelWrite = canWriteCentralPersonnel();
   state.employeeEditMode = fullAccess ? "full" : "display";
   elements.employeeForm.reset();
+  elements.employeeForm.querySelectorAll("details").forEach((section) => { section.open = false; });
   state.employeePersonnelRecord = null;
-  const employeeCostCenterId = employee?.cost_center_id ?? employee?.costCenterId ?? "";
-  const availableCostCenters = state.costCenters.filter((center) => center.active || String(center.id) === String(employeeCostCenterId));
+  let employeeCostCenterId = employee?.cost_center_id ?? employee?.costCenterId ?? "";
+  if (!employee && !centralPersonnelWrite) {
+    const scopedLocationId = String(state.portalSession?.user?.homeLocationId || state.locationId || "");
+    const scopedLocation = (state.locations || [])
+      .find((location) => String(location.id) === scopedLocationId);
+    employeeCostCenterId = scopedLocation?.cost_center_id ?? scopedLocation?.costCenterId ?? "";
+  }
+  const availableCostCenters = employeeCostCenterOptions(employee)
+    .filter((center) => center.active || String(center.id) === String(employeeCostCenterId));
   if (employeeCostCenterId && !availableCostCenters.some((center) => String(center.id) === String(employeeCostCenterId))) {
     availableCostCenters.push(normalizeCostCenter({
       id: employeeCostCenterId,
       code: employee?.cost_center_code ?? employee?.costCenterCode ?? "",
       name: employee?.cost_center_name ?? employee?.costCenterName ?? "Bestehende Kostenstelle",
+      typeId: employee?.cost_center_type_id ?? employee?.costCenterTypeId ?? employee?.cost_center_type ?? "",
+      typeName: employee?.cost_center_type_name ?? employee?.costCenterTypeName ?? "",
+      isBranch: employee?.cost_center_is_branch ?? employee?.costCenterIsBranch ?? Boolean(employee?.home_location_id),
+      locationId: employee?.home_location_id ?? employee?.homeLocationId ?? "",
+      locationName: employee?.home_location_name ?? employee?.homeLocationName ?? "",
       active: false,
     }));
   }
@@ -12708,36 +13498,22 @@ function openEmployeeModal(employee = null) {
     .map((center) => `<option value="${escapeHtmlAttribute(String(center.id))}">${escapeHtml(`${center.code} · ${center.name}${center.active ? "" : " · inaktiv"}`)}</option>`).join("")}`;
   elements.employeeCostCenter.value = String(employeeCostCenterId || "");
   elements.employeeCostCenter.disabled = !centralPersonnelWrite;
-  elements.employeeCostCenter.required = centralPersonnelWrite;
-  elements.employeeCostCenterHint.textContent = centralPersonnelWrite
-    ? "Eine Kostenstelle ist für jeden Personalstamm erforderlich."
-    : "Die Kostenstelle kann ausschließlich in der zentralen Personalverwaltung geändert werden.";
-  elements.employeeHomeLocation.innerHTML = `<option value="">Keine Stammfiliale</option>${(state.locations || []).map((location) =>
-    `<option value="${escapeHtml(location.id)}">${escapeHtml(location.id)} · ${escapeHtml(location.name)}</option>`,
-  ).join("")}`;
-  elements.employeeHomeLocation.required = !centralPersonnelWrite;
-  elements.employeeHomeLocationHint.textContent = centralPersonnelWrite
-    ? "Für Verwaltung, Geschäftsleitung oder Produktion kann die Stammfiliale entfallen."
-    : "Eine filiallose Zuordnung kann ausschließlich in der zentralen Personalverwaltung gespeichert werden.";
+  elements.employeeCostCenter.required = true;
   document.querySelector("#employeeNumber").value = employee?.personnel_number || "";
   document.querySelector("#employeeNumber").disabled = Boolean(employee);
   document.querySelector("#employeeName").value = employee?.full_name || "";
   document.querySelector("#employeeNickname").value = employee?.nickname || "";
   document.querySelector("#employeeHours").value = employee?.contracted_hours ?? 38.5;
   elements.employeeTargetWorkdays.value = employee?.target_workdays_per_week ?? 5;
-  elements.employeePosition.innerHTML = (state.positions || []).map((position) =>
-    `<option value="${escapeHtml(position.id)}">${escapeHtml(position.name)}</option>`,
-  ).join("");
-  elements.employeePosition.value = employee?.position_id || "verkaufsmitarbeiter";
   const canManageConfirmationLevel = canManageWifiAutomationSettings();
   const canViewConfirmationLevel = canManageConfirmationLevel || Boolean(employee && "time_confirmation_level" in employee);
   elements.employeeTimeConfirmationLevel.value = employee?.time_confirmation_level || "C";
   elements.employeeSicknessWithoutAumEnabled.checked = employee?.sickness_without_aum_enabled === true;
   elements.employeeTimeConfirmationLevelField?.classList.toggle("hidden", !canViewConfirmationLevel);
-  elements.employeeHomeLocation.value = employee
-    ? String(employee.home_location_id ?? employee.homeLocationId ?? "")
-    : centralPersonnelWrite ? "" : (state.locationId || state.locations?.[0]?.id || "");
-  updateEmployeeDepartmentOptions(employee?.preferred_department_id || "");
+  updateEmployeeAssignmentOptions(
+    employee?.position_id || "verkaufsmitarbeiter",
+    employee?.preferred_department_id || "",
+  );
   document.querySelector("#employeePreferredDay").value = employee?.preferred_day_off || "";
   const fixedDays = fixedWorkdays(employee);
   document.querySelectorAll('[name="employeeFixedWorkday"]').forEach((checkbox) => {
@@ -12768,7 +13544,7 @@ function openEmployeeModal(employee = null) {
     }
   }
   const protectedControls = [
-    "employeeName", "employeeNickname", "employeeHours", "employeeTargetWorkdays", "employeeCostCenter", "employeeHomeLocation", "employeePosition",
+    "employeeName", "employeeNickname", "employeeHours", "employeeTargetWorkdays", "employeeCostCenter", "employeePosition",
     "employeeTimeConfirmationLevel", "employeePreferredDepartment", "employeePreferredDay", "employeeActive",
   ];
   for (const id of protectedControls) document.querySelector(`#${id}`).disabled = displayOnly;
@@ -12951,7 +13727,7 @@ function shiftEmployeeOptionLabel(employee) {
   const homeLocationId = String(employee.home_location_id || employee.homeLocationId || "");
   const homeLocation = employee.home_location_name || employee.homeLocationName
     || state.locations.find((location) => location.id === homeLocationId)?.name || homeLocationId;
-  const externalHint = homeLocationId && homeLocationId !== state.locationId ? ` · Stammfiliale ${homeLocation}` : "";
+  const externalHint = homeLocationId && homeLocationId !== state.locationId ? ` · zugeordneter Standort ${homeLocation}` : "";
   return `${employee.nickname || employee.full_name || employee.fullName || employee.personnel_number} · ${employee.personnel_number}${externalHint}`;
 }
 
@@ -13255,14 +14031,14 @@ async function saveEmployee(event) {
     } catch (error) { showToast(error.message, true); }
     return;
   }
-  const centralPersonnelWrite = canWriteCentralPersonnel();
-  if (centralPersonnelWrite && !elements.employeeCostCenter.value) {
+  if (!elements.employeeCostCenter.value) {
     showToast("Bitte eine Kostenstelle auswählen.", true);
     elements.employeeCostCenter.focus();
     return;
   }
-  if (!centralPersonnelWrite && !elements.employeeHomeLocation.value) {
-    showToast("Eine filiallose Zuordnung kann ausschließlich in der zentralen Personalverwaltung gespeichert werden.", true);
+  if (!elements.employeePosition.value) {
+    showToast("Für diese Kostenstelle ist keine auswählbare Position hinterlegt.", true);
+    elements.employeePosition.focus();
     return;
   }
   const body = {
@@ -13271,15 +14047,14 @@ async function saveEmployee(event) {
     nickname: document.querySelector("#employeeNickname").value,
     contractedHours: Number(document.querySelector("#employeeHours").value),
     targetWorkdaysPerWeek: Number(elements.employeeTargetWorkdays.value),
+    costCenterId: elements.employeeCostCenter.value,
     positionId: elements.employeePosition.value,
-    homeLocationId: elements.employeeHomeLocation.value,
     preferredDepartmentId: elements.employeePreferredDepartment.value,
     preferredDayOff: document.querySelector("#employeePreferredDay").value,
     fixedWorkdays: Array.from(document.querySelectorAll('[name="employeeFixedWorkday"]:checked')).map((input) => input.value),
     color: state.selectedColor,
     active: document.querySelector("#employeeActive").checked,
   };
-  if (centralPersonnelWrite) body.costCenterId = elements.employeeCostCenter.value;
   if (canManageWifiAutomationSettings()) {
     body.timeConfirmationLevel = elements.employeeTimeConfirmationLevel.value;
     body.sicknessWithoutAumEnabled = elements.employeeSicknessWithoutAumEnabled.checked;
@@ -13295,9 +14070,12 @@ async function saveEmployee(event) {
   if (canEditEmployeeAccessProfile(editedEmployee)) {
     const role = elements.employeeAppRole.value || "employee";
     const basePermissions = new Set(state.portalRoles.find((entry) => entry.id === role)?.permissions || []);
+    normalizeEmployeeAccessDraftForRole(role);
+    const catalogById = new Map(state.portalPermissionCatalog.map((permission) => [permission.id, permission]));
     body.accessProfile = {
       role,
-      permissions: [...state.employeeAccessDraft].filter((permission) => !basePermissions.has(permission)),
+      permissions: [...state.employeeAccessDraft]
+        .filter((permissionId) => permissionEligibleForRole(catalogById.get(permissionId), role) && !basePermissions.has(permissionId)),
     };
   }
   try {
@@ -13339,11 +14117,17 @@ async function ensureLocationCostCenters() {
   if (!canReadCostCenters() || state.costCenters.length) return;
   const payload = await api("/api/cost-centers?includeInactive=1");
   state.costCenters = apiList(payload, ["costCenters", "cost_centers", "items"]).map(normalizeCostCenter);
+  if (!Array.isArray(payload)) {
+    state.costCenterTypes = apiList(payload, ["types", "costCenterTypes", "cost_center_types"])
+      .map(normalizeCostCenterType);
+  }
 }
 
 function populateLocationCostCenter(selectedId = "", fallbackLabel = "") {
   const canEdit = canWriteCostCenters();
   const activeCenters = state.costCenters
+    .filter((center) => center.isBranch)
+    .filter((center) => !center.locationId || String(center.id) === String(selectedId))
     .filter((center) => center.active || String(center.id) === String(selectedId))
     .sort((left, right) => left.code.localeCompare(right.code, "de-AT", { numeric: true, sensitivity: "base" }));
   elements.locationCostCenterField?.classList.toggle("hidden", !canEdit);
@@ -14863,27 +15647,6 @@ async function saveCustomManagementBranding() {
   updateManagementBrandingPreference(result);
 }
 
-async function saveOperationMode() {
-  const operationMode = state.desiredOperationMode || state.portalStatus?.operationMode || "local";
-  try {
-    const result = await api("/api/operation-mode", {
-      method: "PUT",
-      body: JSON.stringify({ operationMode }),
-    });
-    if (!result.restartRequired) {
-      showToast("Der Betriebsmodus wurde gespeichert.");
-      return;
-    }
-    const modeText = operationMode === "lan" ? "LAN-Host" : operationMode === "server" ? "Serverbetrieb" : "Lokalbetrieb";
-    if (!confirm(`Der Wechsel auf ${modeText} erfordert einen sicheren Neustart. Jetzt neu starten?`)) return;
-    await api("/api/system/restart", { method: "POST", body: "{}" });
-    document.body.innerHTML = '<main class="shutdown-screen"><h1>Grabenplaner startet neu.</h1><p>Diese Seite kann in wenigen Sekunden neu geladen werden.</p></main>';
-    setTimeout(() => window.location.reload(), 6000);
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
 async function saveBackupSettings() {
   try {
     await api("/api/backup/settings", {
@@ -14906,8 +15669,9 @@ async function saveBackupSettings() {
 async function saveSettings(silent = false) {
   try {
     const permissions = state.portalSession?.user?.permissions || [];
-    const role = state.portalSession?.user?.role || "admin";
     const portalEnabled = state.portalStatus?.portalEnabled === true;
+    const canSaveGeneralSettings = !portalEnabled || permissions.includes("settings:write");
+    const canSaveBranding = !portalEnabled || permissions.includes("branding:write");
     const payload = {
         locationId: state.locationId,
         departmentId: state.departmentId || "",
@@ -14946,27 +15710,17 @@ async function saveSettings(silent = false) {
         rememberLastScheduleOverallPlan: elements.rememberLastScheduleOverallPlan.checked,
         rememberLastVacationOverallPlan: elements.rememberLastVacationOverallPlan.checked,
     };
-    if (!portalEnabled || permissions.includes("operation_mode:write")) {
-      payload.operationMode = state.desiredOperationMode || state.portalStatus?.operationMode || "local";
+    if (canSaveGeneralSettings) {
+      await api("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
     }
-    const result = await api("/api/settings", {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
-    if (elements.dashboardFontSize) {
-      await saveDashboardFontSize(elements.dashboardFontSize.value, { silent: true });
+    if (!silent && canSaveGeneralSettings && elements.appFontScalePercent) {
+      await saveAppFontScalePercent(elements.appFontScalePercent.valueAsNumber, { silent: true });
     }
-    if ((!portalEnabled || permissions.includes("branding:write")) && elements.brandingSettings?.classList.contains("active") && state.brandingFormDirty) {
+    if (!silent && canSaveBranding && state.brandingFormDirty) {
       await saveCustomManagementBranding();
-    }
-    if (result.restartRequired && !silent) {
-      const modeText = state.desiredOperationMode === "lan" ? "LAN-Host" : state.desiredOperationMode === "server" ? "Serverbetrieb" : "Lokalbetrieb";
-      if (confirm(`Die Einstellungen wurden gespeichert. Für den Wechsel auf ${modeText} muss Grabenplaner sicher neu starten. Jetzt neu starten?`)) {
-        await api("/api/system/restart", { method: "POST", body: "{}" });
-        document.body.innerHTML = '<main class="shutdown-screen"><h1>Grabenplaner startet neu.</h1><p>Diese Seite kann in wenigen Sekunden neu geladen werden.</p></main>';
-        setTimeout(() => window.location.reload(), 6000);
-        return true;
-      }
     }
     if (!silent) showToast("Einstellungen wurden gespeichert.");
     await loadAll();
@@ -15083,23 +15837,6 @@ elements.adminLoginForm?.addEventListener("submit", loginToAdministration);
 elements.adminLoginPersonnelNumber?.addEventListener("input", scheduleAdminLoginBrandingPreview);
 elements.adminLoginPersonnelNumber?.addEventListener("blur", previewAdminLoginBranding);
 elements.portalLogoutButton?.addEventListener("click", logoutPortal);
-elements.localModeOption?.addEventListener("click", () => {
-  state.desiredOperationMode = "local";
-  renderOperationMode();
-});
-elements.serverModeOption?.addEventListener("click", () => {
-  if (state.portalStatus?.adminSetupState !== "configured") {
-    setSettingsTab("access");
-    openAdminSetup();
-    return;
-  }
-  state.desiredOperationMode = "lan";
-  renderOperationMode();
-});
-elements.publicServerModeOption?.addEventListener("click", () => {
-  if (state.portalStatus?.operationMode === "server") return;
-  showToast("Der Serverbetrieb wird aus Sicherheitsgründen ausschließlich über die geschützte Serverkonfiguration aktiviert.");
-});
 elements.refreshServerDiagnosticsButton?.addEventListener("click", () => refreshServerDiagnostics({ announce: true }));
 elements.serverDiagnostics?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-server-monitor-action]");
@@ -15127,7 +15864,6 @@ elements.serverAlertBanner?.addEventListener("click", () => {
 elements.currentWeekAutoLock?.addEventListener("change", updateWeekLockSettings);
 elements.currentWeekLockMode?.addEventListener("change", updateWeekLockSettings);
 elements.currentWeekLockDay?.addEventListener("change", updateWeekLockSettings);
-elements.saveOperationModeButton?.addEventListener("click", saveOperationMode);
 elements.adminSetupButton?.addEventListener("click", openAdminSetup);
 elements.adminSetupForm?.addEventListener("submit", setupPortalAdmin);
 elements.portalUserList?.addEventListener("click", (event) => {
@@ -15145,6 +15881,18 @@ elements.portalUserList?.addEventListener("change", (event) => {
   if (event.target.matches("[data-scope-location]")) {
     const departments = state.locations.find((location) => location.id === event.target.value)?.departments || [];
     row.querySelector("[data-scope-department]").innerHTML = departments.map((department) => `<option value="${department.id}">${escapeHtml(department.name)}</option>`).join("");
+  }
+});
+elements.organizationAccountForm?.addEventListener("submit", saveOrganizationAccount);
+elements.organizationAccountCancel?.addEventListener("click", resetOrganizationAccountForm);
+elements.organizationAccountList?.addEventListener("click", (event) => {
+  const row = event.target.closest("[data-organization-account]");
+  if (!row) return;
+  if (event.target.closest("[data-edit-organization-account]")) {
+    editOrganizationAccount(row.dataset.organizationAccount);
+  }
+  if (event.target.closest("[data-unlock-organization-account]")) {
+    unlockOrganizationAccount(row.dataset.organizationAccount);
   }
 });
 elements.delegationLocation?.addEventListener("change", refreshDelegationEmployees);
@@ -15246,7 +15994,7 @@ elements.rightsUserList?.addEventListener("click", (event) => {
 elements.rightsEditorPermissions?.addEventListener("change", (event) => {
   const input = event.target.closest('input[data-rights-permission]');
   if (!input) return;
-  enforceRightsEditorScheduleDependency(input);
+  enforceRightsEditorPermissionDependencies(input);
   updateRightsEditorPermissionStatus(input);
   refreshRightsEditorScope();
 });
@@ -15308,7 +16056,23 @@ document.querySelectorAll("button[data-page-theme-choice]").forEach((button) => 
   const view = button.closest(".view")?.id?.replace(/View$/, "") || state.currentView;
   savePageTheme(view, button.dataset.pageThemeChoice);
 }));
-elements.dashboardFontSize?.addEventListener("change", () => applyDashboardFontSize(elements.dashboardFontSize.value));
+elements.decreaseAppFontScale?.addEventListener("click", () => {
+  applyAppFontScalePercent(Math.max(APP_FONT_SCALE_MIN, state.appFontScalePercent - APP_FONT_SCALE_STEP));
+});
+elements.increaseAppFontScale?.addEventListener("click", () => {
+  applyAppFontScalePercent(Math.min(APP_FONT_SCALE_MAX, state.appFontScalePercent + APP_FONT_SCALE_STEP));
+});
+elements.appFontScalePercent?.addEventListener("input", () => {
+  const normalized = normalizeAppFontScalePercent(elements.appFontScalePercent.valueAsNumber, null);
+  if (normalized !== null) applyAppFontScalePercent(normalized);
+});
+elements.appFontScalePercent?.addEventListener("change", () => {
+  const submitted = Number(elements.appFontScalePercent.value);
+  const rounded = Number.isFinite(submitted)
+    ? Math.round(submitted / APP_FONT_SCALE_STEP) * APP_FONT_SCALE_STEP
+    : state.appFontScalePercent;
+  applyAppFontScalePercent(Math.max(APP_FONT_SCALE_MIN, Math.min(APP_FONT_SCALE_MAX, rounded)));
+});
 document.querySelectorAll("button[data-rights-dashboard-mode]").forEach((button) => button.addEventListener("click", () => setRightsDashboardMode(button.dataset.rightsDashboardMode)));
 elements.refreshPersonnelRulesDashboard?.addEventListener("click", loadPersonnelRulesDashboard);
 elements.personnelRulesSearch?.addEventListener("input", () => {
@@ -15715,7 +16479,7 @@ elements.usbProvisioningStartButton?.addEventListener("click", () => createUsbSt
 }));
 elements.openPersonnelImportButton?.addEventListener("click", () => openPersonnelImportWizard().catch((error) => showToast(error.message, true)));
 elements.personnelImportSourceType?.addEventListener("change", updatePersonnelImportSourceFields);
-elements.personnelImportDefaultLocation?.addEventListener("change", () => updatePersonnelImportDefaultDepartments(""));
+elements.personnelImportDefaultCostCenter?.addEventListener("change", () => updatePersonnelImportAssignmentDefaults("", ""));
 elements.inspectPersonnelImportButton?.addEventListener("click", inspectPersonnelImport);
 elements.personnelImportSheet?.addEventListener("change", () => {
   const sheet = selectedImportSheet();
@@ -16169,8 +16933,20 @@ elements.collectiveAgreementAssignments?.addEventListener("click", (event) => {
   }
 });
 elements.addCostCenterButton?.addEventListener("click", () => openCostCenterModal());
+elements.addCostCenterTypeButton?.addEventListener("click", () => openCostCenterTypeModal());
 elements.costCenterForm?.addEventListener("submit", saveCostCenter);
 elements.deactivateCostCenterButton?.addEventListener("click", deactivateCostCenter);
+elements.costCenterType?.addEventListener("change", syncCostCenterTypeHint);
+elements.costCenterTypeForm?.addEventListener("submit", saveCostCenterType);
+elements.deactivateCostCenterTypeButton?.addEventListener("click", deactivateCostCenterType);
+elements.costCenterTypePositionSearch?.addEventListener("input", renderCostCenterTypePositionOptions);
+elements.costCenterTypePositionOptions?.addEventListener("change", (event) => {
+  const input = event.target.closest('input[type="checkbox"]');
+  if (!input) return;
+  if (input.checked) state.costCenterTypePositionSelection.add(String(input.value));
+  else state.costCenterTypePositionSelection.delete(String(input.value));
+  updateCostCenterTypePositionCount();
+});
 document.querySelector("#saveSettingsButton").addEventListener("click", () => {
   if (elements.backupSettings?.classList.contains("active")) {
     if (state.portalStatus?.operationMode === "server") return;
@@ -16185,8 +16961,8 @@ elements.addLocationButton?.addEventListener("click", async () => {
   try {
     await ensureLocationCostCenters();
     resetLocationForm();
-    if (!state.costCenters.some((center) => center.active)) {
-      showToast("Bitte zuerst eine aktive Kostenstelle anlegen.", true);
+    if (!state.costCenters.some((center) => center.active && center.isBranch && !center.locationId)) {
+      showToast("Bitte zuerst eine freie, aktive Filialkostenstelle anlegen.", true);
       return;
     }
     elements.locationEditorModal?.showModal();
@@ -16202,7 +16978,10 @@ elements.positionForm.addEventListener("submit", savePosition);
 elements.cancelLocationEditButton.addEventListener("click", resetLocationForm);
 elements.cancelDepartmentEditButton.addEventListener("click", resetDepartmentForm);
 elements.cancelPositionEditButton.addEventListener("click", resetPositionForm);
-elements.employeeHomeLocation.addEventListener("change", () => updateEmployeeDepartmentOptions());
+elements.employeeCostCenter.addEventListener("change", () => updateEmployeeAssignmentOptions());
+elements.employeeForm.addEventListener("invalid", (event) => {
+  event.target.closest("details")?.setAttribute("open", "");
+}, true);
 elements.employeeTimeConfirmationLevel?.addEventListener("change", syncEmployeeSicknessAllowanceField);
 elements.employeeAppRole?.addEventListener("change", () => {
   const employeeNumber = document.querySelector("#employeeNumber").value.trim();
@@ -16213,8 +16992,11 @@ elements.employeeAdditionalRights?.addEventListener("change", (event) => {
   if (!input || input.disabled) return;
   if (input.checked) state.employeeAccessDraft.add(input.value);
   else state.employeeAccessDraft.delete(input.value);
+  const role = elements.employeeAppRole.value || "employee";
+  const dependencyMessage = normalizeEmployeeAccessDraftForRole(role, input.value, input.checked);
   const employeeNumber = document.querySelector("#employeeNumber").value.trim();
   renderEmployeeAccessProfile(state.allEmployees.find((employee) => employee.personnel_number === employeeNumber) || null);
+  if (dependencyMessage) showToast(dependencyMessage);
 });
 elements.schedulePdfPreviewButton.addEventListener("click", generateSchedulePdfPreview);
 elements.vacationPdfPreviewButton.addEventListener("click", generateVacationPdfPreview);
@@ -16263,6 +17045,12 @@ document.querySelector("#optionDateTo").addEventListener("change", () => {
 });
 elements.employeeForm.addEventListener("submit", saveEmployee);
 elements.personnelRecordForm?.addEventListener("submit", savePersonnelRecord);
+elements.personnelRecordContent?.addEventListener("toggle", (event) => {
+  const section = event.target.closest("details[data-personnel-record-section]");
+  if (!section) return;
+  if (section.open) state.personnelRecordOpenSections.add(section.dataset.personnelRecordSection);
+  else state.personnelRecordOpenSections.delete(section.dataset.personnelRecordSection);
+}, true);
 elements.personnelRecordContent?.addEventListener("input", (event) => {
   const field = event.target.closest("[data-personnel-field-key]");
   if (field && !event.target.disabled) state.personnelRecordDirtyFields.add(field.dataset.personnelFieldKey);
@@ -16275,6 +17063,11 @@ elements.personnelRecordContent?.addEventListener("click", (event) => {
   }
   const deleteButton = event.target.closest("[data-delete-personnel-document]");
   if (deleteButton) deletePersonnelDocument(deleteButton.dataset.deletePersonnelDocument);
+});
+elements.workRuleAssessmentPanel?.addEventListener("toggle", () => {
+  const expanded = elements.workRuleAssessmentPanel.open;
+  if (expanded === state.workRuleAssessmentExpanded) return;
+  saveWorkRuleAssessmentExpanded(expanded);
 });
 elements.shiftForm.addEventListener("submit", saveShift);
 elements.optionForm.addEventListener("submit", saveOption);
@@ -16312,6 +17105,13 @@ elements.costCenterList?.addEventListener("click", (event) => {
   if (!button) return;
   const costCenter = state.costCenters.find((item) => String(item.id) === String(button.dataset.editCostCenter));
   if (costCenter) openCostCenterModal(costCenter);
+});
+
+elements.costCenterTypeList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-edit-cost-center-type]");
+  if (!button) return;
+  const type = state.costCenterTypes.find((item) => String(item.id) === String(button.dataset.editCostCenterType));
+  if (type) openCostCenterTypeModal(type);
 });
 
 elements.employeeTableBody.addEventListener("click", async (event) => {

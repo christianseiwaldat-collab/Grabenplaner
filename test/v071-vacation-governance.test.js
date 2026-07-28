@@ -95,10 +95,10 @@ function resetFixture() {
     db.prepare("DELETE FROM departments WHERE location_id IN (?, ?)").run(LOCATION, OTHER_LOCATION);
     db.prepare("DELETE FROM locations WHERE id IN (?, ?)").run(LOCATION, OTHER_LOCATION);
     db.prepare("DELETE FROM cost_centers WHERE id IN ('cc-v071-vac-71','cc-v071-vac-72','cc-v071-vac-admin')").run();
-    db.prepare(`INSERT INTO cost_centers (id, code, name, type, active)
-      VALUES ('cc-v071-vac-71','V071-71','Filiale 71','branch',1),
-             ('cc-v071-vac-72','V071-72','Filiale 72','branch',1),
-             ('cc-v071-vac-admin','V071-ADM','Verwaltung','administration',1)`).run();
+    db.prepare(`INSERT INTO cost_centers (id, code, name, type, cost_center_type_id, active)
+      VALUES ('cc-v071-vac-71','V071-71','Filiale 71','branch','branch',1),
+             ('cc-v071-vac-72','V071-72','Filiale 72','branch','branch',1),
+             ('cc-v071-vac-admin','V071-ADM','Verwaltung','administration','administration',1)`).run();
     db.prepare(`INSERT INTO locations (id, name, cost_center_id, min_staff, active)
       VALUES (?, 'Governance Nord', 'cc-v071-vac-71', 2, 1),
              (?, 'Governance Süd', 'cc-v071-vac-72', 1, 1)`).run(LOCATION, OTHER_LOCATION);

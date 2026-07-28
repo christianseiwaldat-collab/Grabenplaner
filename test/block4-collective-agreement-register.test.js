@@ -31,6 +31,7 @@ let managerSession;
 let employeeSession;
 let localLocationId;
 let foreignLocationId;
+let foreignCostCenterId;
 let localDepartmentId;
 let agreement;
 let localBusinessUnit;
@@ -115,10 +116,16 @@ test.before(async () => {
     Array.from({ length: 19 }, (_, index) => 60 + index)
       .find((id) => !db.prepare("SELECT 1 FROM locations WHERE id = ?").get(String(id))),
   );
+  foreignCostCenterId = `cc-block4-${foreignLocationId}`;
+  db.prepare(`
+    INSERT INTO cost_centers
+      (id, code, name, type, cost_center_type_id, active, sort_order)
+    VALUES (?, ?, 'Block 4 Fremdfiliale', 'branch', 'branch', 1, 900)
+  `).run(foreignCostCenterId, `B4-${foreignLocationId}`);
   db.prepare(`
     INSERT INTO locations (id, name, cost_center_id, min_staff, day_settings_json, active)
     VALUES (?, 'Block 4 Fremdfiliale', ?, 1, '', 1)
-  `).run(foreignLocationId, localLocation.cost_center_id || null);
+  `).run(foreignLocationId, foreignCostCenterId);
   localDepartmentId = Number(db.prepare(`
     INSERT INTO departments (location_id, name, min_staff, active)
     VALUES (?, 'Block 4 Zusatzbereich', 0, 1)

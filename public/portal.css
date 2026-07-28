@@ -340,6 +340,18 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
 .request-event-history small { margin-top:3px; color:var(--muted); }
 .leadership-request-documents { display:flex; flex-wrap:wrap; gap:7px; margin:12px 0; }
 .loan-layout { display:grid; grid-template-columns:minmax(380px,.9fr) minmax(420px,1.1fr); gap:15px; align-items:start; }
+.loan-open-overview-card { grid-column:1 / -1; min-width:0; padding:22px; }
+.loan-open-overview-card .loan-list-heading { align-items:flex-start; }
+.loan-open-overview-card .loan-list-heading p { margin:4px 0 0; color:var(--muted); font-size:10px; }
+.loan-overview-search { width:min(320px,100%); }
+.loan-overview-table-wrap { overflow-x:auto; border:1px solid var(--line); border-radius:12px; }
+.loan-overview-table { width:100%; min-width:650px; border-collapse:collapse; background:rgba(250,251,249,.9); }
+.loan-overview-table th,.loan-overview-table td { padding:11px 13px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+.loan-overview-table th { color:var(--muted); background:var(--surface-soft); font-size:9px; font-weight:900; letter-spacing:.03em; text-transform:uppercase; }
+.loan-overview-table td { font-size:10px; }
+.loan-overview-table tbody tr:last-child td { border-bottom:0; }
+.loan-overview-table td:first-child { font-weight:800; }
+.loan-overview-table .loan-overview-empty { color:var(--muted); text-align:center; }
 .loan-issue-form,.loan-overview-card { min-width:0; padding:22px; }
 .loan-card-heading,.loan-list-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:15px; }
 .loan-card-heading h2,.loan-list-heading h2 { margin:0; }
@@ -411,8 +423,20 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
 .loan-photo-selection span small { color:var(--muted); font-size:8px; }
 .loan-photo-selection span button { position:absolute; top:50%; right:6px; width:24px; height:24px; padding:0; color:var(--danger); background:#f8e8e6; transform:translateY(-50%); }
 .loan-photo-gallery { display:grid; grid-template-columns:repeat(5,minmax(52px,84px)); gap:7px; margin-top:10px; }
-.loan-photo-gallery a { display:block; overflow:hidden; aspect-ratio:1; border:1px solid var(--line); border-radius:9px; background:#edf2ef; }
+.loan-photo-entry { display:grid; min-width:0; gap:4px; margin:0; }
+.loan-photo-entry a,.loan-photo-placeholder { display:flex; align-items:center; justify-content:center; overflow:hidden; aspect-ratio:1; border:1px solid var(--line); border-radius:9px; background:#edf2ef; }
 .loan-photo-gallery img { width:100%; height:100%; object-fit:cover; }
+.loan-photo-placeholder { padding:5px; color:var(--muted); font-size:8px; text-align:center; }
+.loan-photo-entry figcaption { color:var(--muted); font-size:7px; line-height:1.25; overflow-wrap:anywhere; }
+.loan-photo-attachments { display:grid; gap:7px; margin-top:10px; }
+.loan-photo-attachment { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; padding:9px 10px; border:1px solid var(--line); border-left:4px solid var(--green); border-radius:9px; background:var(--surface-soft); }
+.loan-photo-attachment.return { border-left-color:var(--warning); }
+.loan-photo-attachment > div { min-width:0; }
+.loan-photo-attachment strong,.loan-photo-attachment small { display:block; overflow-wrap:anywhere; }
+.loan-photo-attachment small { margin-top:3px; color:var(--muted); font-size:8px; }
+.loan-photo-attachment nav { display:flex; flex:0 0 auto; flex-wrap:wrap; justify-content:flex-end; gap:6px; }
+.loan-photo-attachment nav a { padding:6px 8px; border:1px solid var(--green); border-radius:7px; color:var(--green-dark); background:#fff; font-size:8px; font-weight:850; text-decoration:none; }
+.loan-photo-attachment nav a:hover,.loan-photo-attachment nav a:focus-visible { color:#fff; background:var(--green); }
 .loan-confirmation-photos { margin:13px 0; padding:12px; border:1px solid var(--line); border-radius:11px; background:var(--surface-soft); }
 .loan-confirmation-photos > strong { display:block; font-size:11px; }
 .loan-confirmation-photos > div > .loan-photo-gallery { grid-template-columns:repeat(4,minmax(58px,90px)); }
@@ -471,10 +495,11 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
   .process-task-completion button { width:100%; }
   .loan-heading { align-items:stretch; }
   .loan-heading .text-button { align-self:flex-start; }
-  .loan-issue-form,.loan-overview-card { padding:16px; }
+  .loan-open-overview-card,.loan-issue-form,.loan-overview-card { padding:16px; }
   .loan-item-fields,.loan-manual-mapping,.loan-list-filters,.loan-return-item { grid-template-columns:1fr; }
   .loan-manual-mapping > small,.loan-return-item > div { grid-column:1; }
   .loan-list-heading { align-items:stretch; flex-direction:column; }
+  .loan-overview-search { width:100%; }
   .loan-list-item { grid-template-columns:1fr; }
   .loan-list-actions { grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
   .loan-list-actions button { min-height:42px; }
@@ -482,6 +507,8 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
   .loan-manage-item-note { grid-column:1; }
   .loan-photo-actions > label { flex:1 1 120px; }
   .loan-photo-gallery { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .loan-photo-attachment { align-items:flex-start; flex-direction:column; }
+  .loan-photo-attachment nav { justify-content:flex-start; width:100%; }
 }
 @media (max-width:850px) {
   .sickness-hub-grid,.amu-hub-card { grid-template-columns:1fr; }

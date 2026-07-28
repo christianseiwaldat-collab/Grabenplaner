@@ -64,6 +64,8 @@ const portalState = {
   editingVacationId: null,
   timeOffArchive: false,
   loanStatus: null,
+  loanOverviewItems: [],
+  loanOverviewSearchEnabled: false,
   loans: [],
   loanTeamMembers: [],
   loanDraftItems: [],
@@ -89,6 +91,7 @@ const optionNames = {
   other: "Sonstiges",
 };
 const weekdayNames = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const LOAN_OVERVIEW_SEARCH_THRESHOLD = 10;
 const statusLabels = { pending: "Offen", submitted: "Übermittelt", reported: "Gemeldet", aum_received: "AUM vorhanden", not_required: "AUM nicht erforderlich", recovered: "Wieder arbeitsfähig", pending_local: "Offen", preliminary_local: "Vorläufig genehmigt", pending_hr: "Wartet auf Personalleitung", approved: "Genehmigt", rejected: "Abgelehnt", cancelled: "Storniert", withdrawn: "Zurückgezogen", reviewed: "Geprüft", returned: "Ergänzung erforderlich", warning: "Besetzung prüfen", yellow: "AUM überfällig", red: "Rot eskaliert" };
 const privacyRequestStatusLabels = {
   received: "Eingelangt",
@@ -135,10 +138,11 @@ window.addEventListener("resize", applyDeviceMode, { passive: true });
 
 const el = Object.fromEntries([
   "portalLogin", "portalLoginForm", "loginPersonnelNumber", "loginPassword", "loginError", "portalApp", "portalLogo", "portalAccessModeLabel",
-  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "settingsView", "settingsPasswordButton", "scheduleView", "timeOffTab", "timeOffView",
+  "portalUserName", "portalUserRole", "adminAppLink", "portalSettingsShortcut", "logoutButton", "notificationsButton", "notificationBadge", "settingsView", "settingsPasswordButton", "scheduleTab", "scheduleView", "timeOffTab", "timeOffView",
   "loanTab", "loanView", "leadershipLoanShortcut", "loanRefresh", "loanAvailabilityMessage", "loanWorkspace", "loanIssueForm",
-  "loanItemEditor", "loanAddItem", "loanDueDate", "loanIssueNote", "loanIssuePhotos", "loanIssueCamera", "loanIssuePhotoSummary", "loanIssueMessage", "loanIssueSubmit", "loanScopeField", "loanScope", "loanStatusFilter", "loanList",
-  "loanReturnDialog", "loanReturnForm", "loanReturnTitle", "loanReturnSummary", "loanReturnItems", "loanReturnWitness", "loanReturnNote", "loanReturnPhotos", "loanReturnCamera", "loanReturnPhotoSummary", "loanReturnMessage", "loanReturnSubmit",
+  "loanOpenOverview", "loanOverviewSearchField", "loanOverviewSearch", "loanOverviewTableBody", "loanPersonalOverview",
+  "loanItemEditor", "loanAddItem", "loanDueDate", "loanIssueNote", "loanIssuePhotos", "loanIssueCamera", "loanIssuePhotoPolicy", "loanIssuePhotoSummary", "loanIssueMessage", "loanIssueSubmit", "loanScopeField", "loanScope", "loanStatusFilter", "loanList",
+  "loanReturnDialog", "loanReturnForm", "loanReturnTitle", "loanReturnSummary", "loanReturnItems", "loanReturnWitness", "loanReturnNote", "loanReturnPhotos", "loanReturnCamera", "loanReturnPhotoPolicy", "loanReturnPhotoSummary", "loanReturnMessage", "loanReturnSubmit",
   "loanManageDialog", "loanManageForm", "loanManageTitle", "loanManageSummary", "loanManageDueDate", "loanManageNote", "loanManageItems", "loanManageActionHint", "loanManageMessage", "loanManageClose", "loanManageReopen", "loanManageSave",
   "loanConfirmationDialog", "loanConfirmationForm", "loanConfirmationTitle", "loanConfirmationSummary", "loanConfirmationItems", "loanConfirmationNote",
   "loanConfirmationPhotos", "loanConfirmationExpiry", "loanConfirmationMessage", "loanConfirmationReject", "loanConfirmationSubmit",
@@ -351,7 +355,7 @@ async function previewLoginBranding() {
   try {
     const result = await api("/api/portal/v1/auth/branding", {
       method: "POST",
-      body: JSON.stringify({ employeeNumber }),
+      body: JSON.stringify({ loginName: employeeNumber }),
     });
     if (el.loginPersonnelNumber.value.trim() === employeeNumber) applyPortalBranding(result.branding || {});
   } catch {
@@ -376,6 +380,7 @@ function loanCapabilityEnabled() {
   if (portalState.status?.capabilities?.loans !== true) return false;
   const permissions = portalUser()?.permissions || [];
   return permissions.some((permission) => [
+    "loans:overview:read",
     "loans:self:read",
     "loans:self:create",
     "loans:self:return",
@@ -388,17 +393,27 @@ function applyPortalCapabilities() {
   const timeTrackingEnabled = timeTrackingCapabilityEnabled();
   el.timeTrackingTab?.classList.toggle("hidden", !timeTrackingEnabled);
   el.wifiAutomationCard?.classList.toggle("hidden", !wifiTimeSuggestionsCapabilityEnabled());
-  if (!timeTrackingEnabled && portalState.activeTab === "timeTracking") setTab("schedule");
+  if (!timeTrackingEnabled && portalState.activeTab === "timeTracking") setTab(defaultPortalTab());
   const sicknessEnabled = portalState.status?.capabilities?.sicknessReports === true;
   document.querySelector('[data-tab="amu"]')?.classList.toggle("hidden", !sicknessEnabled);
   const loansEnabled = loanCapabilityEnabled();
   el.loanTab?.classList.toggle("hidden", !loansEnabled);
   el.leadershipLoanShortcut?.classList.toggle("hidden", !loansEnabled);
-  if (!loansEnabled && portalState.activeTab === "loan") setTab("schedule");
+  if (!loansEnabled && portalState.activeTab === "loan") setTab(defaultPortalTab());
 }
 
 function portalUser() {
   return portalState.session?.user || null;
+}
+
+function isOrganizationAccount(user = portalUser()) {
+  return user?.isEmployee === false || ["branch", "terminal"].includes(user?.accountType);
+}
+
+function scheduleCapabilityEnabled(user = portalUser()) {
+  const permissions = user?.permissions || [];
+  return permissions.includes("own_schedule:read")
+    || (isOrganizationAccount(user) && permissions.includes("schedule:location:view"));
 }
 
 function hasPortalPermission(permission) {
@@ -476,7 +491,9 @@ function mobileModuleAllowed(module, permissions = portalUser()?.permissions || 
 
 function portalTabAllowed(tab, user = portalUser()) {
   const permissions = user?.permissions || [];
-  if (["settings", "schedule", "leadershipMore"].includes(tab)) return true;
+  if (tab === "settings") return true;
+  if (tab === "schedule") return scheduleCapabilityEnabled(user);
+  if (tab === "leadershipMore") return !isOrganizationAccount(user);
   if (tab === "timeTracking") return permissions.includes("own_time:read") && timeTrackingCapabilityEnabled();
   if (tab === "timeOff") return permissions.includes("own_vacation:request");
   if (tab === "vacation") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request"].includes(permission));
@@ -490,7 +507,11 @@ function portalTabAllowed(tab, user = portalUser()) {
       "own_sickness:create", "own_sickness:read", "own_amu:create", "own_amu:read", "own_amu:withdraw",
     ].includes(permission)) && portalState.status?.capabilities?.sicknessReports === true;
   }
-  if (tab === "processTasks") return user?.role !== "location_planner" && portalState.processTasksAvailable !== false;
+  if (tab === "processTasks") {
+    return !isOrganizationAccount(user)
+      && user?.role !== "location_planner"
+      && portalState.processTasksAvailable !== false;
+  }
   if (tab === "loan") return loanCapabilityEnabled();
   if (tab === "leadershipTeam") return mobileModuleAllowed("presence", permissions);
   if (tab === "leadershipApprovals") return mobileModuleAllowed("approvals", permissions);
@@ -636,8 +657,15 @@ function chooseInitialPortalTab() {
   portalState.processTaskRequestedRunId = String(parameters.get("run") || "").slice(0, 120);
   portalState.processTaskRequestedStepId = String(parameters.get("step") || "").slice(0, 120);
   if (["absence", "sickness", "amu", "time_correction"].includes(requestedKind)) portalState.leadershipKind = requestedKind;
-  setTab(requested || (timeTrackingCapabilityEnabled() ? "timeTracking" : "schedule"));
+  setTab(requested || defaultPortalTab());
   return requested;
+}
+
+function defaultPortalTab(user = portalUser()) {
+  if (portalTabAllowed("timeTracking", user)) return "timeTracking";
+  if (portalTabAllowed("schedule", user)) return "schedule";
+  if (portalTabAllowed("loan", user)) return "loan";
+  return "settings";
 }
 
 async function initialize() {
@@ -657,7 +685,7 @@ async function initialize() {
     [el.loginPassword, el.newPassword, el.repeatPassword].forEach((input) => { if (input) input.minLength = minimum; });
     if (el.portalAccessModeLabel) el.portalAccessModeLabel.textContent = status.operationMode === "server" ? "Mitarbeiterportal · HTTPS" : "Mitarbeiterportal";
     if (!status.portalEnabled) {
-      message(el.loginError, "Das Mitarbeiterportal ist auf diesem Gerät nicht als LAN-Host oder Server aktiv.", true);
+      message(el.loginError, "Das Mitarbeiterportal ist für diese Installation nicht freigeschaltet.", true);
       return;
     }
     const session = await api("/api/portal/v1/session");
@@ -668,9 +696,8 @@ async function initialize() {
     showPortal(session);
     if (!session.user.mustChangePassword) {
       await loadMobileLayout();
-      const requested = chooseInitialPortalTab();
+      chooseInitialPortalTab();
       await loadPortalData();
-      if (!requested && portalState.timeTracking?.enabled !== true) setTab("schedule");
     }
   } catch (error) {
     showLogin(error.message);
@@ -678,15 +705,15 @@ async function initialize() {
 }
 
 async function loadPortalData() {
-  const requests = [
-    loadPortalHome(), loadSchedule(), loadNotifications(),
-  ];
+  const requests = [];
+  if (!isOrganizationAccount()) requests.push(loadPortalHome(), loadNotifications());
+  if (portalTabAllowed("schedule")) requests.push(loadSchedule());
   if (portalTabAllowed("vacation")) requests.push(loadVacationRequests(), loadApprovedVacations());
   if (portalTabAllowed("timeOff")) requests.push(loadTimeOffRequests());
   if (portalTabAllowed("history")) requests.push(loadAbsenceHistory());
   if (portalTabAllowed("processTasks")) requests.push(loadProcessTasks());
   if (portalTabAllowed("amu")) requests.push(loadSicknessCases(), loadAmuReports(), loadAmuSettings());
-  if (timeTrackingCapabilityEnabled()) requests.push(loadTimeTracking());
+  if (portalTabAllowed("timeTracking")) requests.push(loadTimeTracking());
   if (hasPortalPermission("own_privacy_requests:read")) requests.push(loadPrivacyRequests());
   if (hasPortalPermission("own_vacation:read")) requests.push(loadVacationAccount());
   if (loanCapabilityEnabled()) requests.push(loadLoanModule());
@@ -860,6 +887,12 @@ function applySelfServiceVisibility() {
     el.privacyRequestsNotice.textContent = "Jede Anfrage wird nach einer Identitätsprüfung manuell bearbeitet und nachvollziehbar entschieden.";
   }
   el.vacationAccountCard?.classList.toggle("hidden", !hasPortalPermission("own_vacation:read"));
+  el.timeTrackingTab?.classList.toggle("hidden", !portalTabAllowed("timeTracking"));
+  el.wifiAutomationCard?.classList.toggle(
+    "hidden",
+    !wifiTimeSuggestionsCapabilityEnabled() || !hasPortalPermission("own_time:read"),
+  );
+  el.scheduleTab?.classList.toggle("hidden", !portalTabAllowed("schedule"));
   el.timeOffTab?.classList.toggle("hidden", !portalTabAllowed("timeOff"));
   el.vacationTab?.classList.toggle("hidden", !portalTabAllowed("vacation"));
   el.historyTab?.classList.toggle("hidden", !portalTabAllowed("history"));
@@ -869,6 +902,7 @@ function applySelfServiceVisibility() {
   el.leadershipVacationShortcut?.classList.toggle("hidden", !portalTabAllowed("vacation"));
   el.leadershipAmuShortcut?.classList.toggle("hidden", !portalTabAllowed("amu"));
   el.leadershipProcessTasksShortcut?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
+  el.notificationsButton?.classList.toggle("hidden", isOrganizationAccount());
   if (!hasPortalPermission("own_time_record:read")) {
     el.timeRecordStatementsPanel?.classList.add("hidden");
   }
@@ -895,9 +929,15 @@ function showPortal(session) {
   applyPortalCapabilities();
   el.portalLogin.classList.add("hidden");
   el.portalApp.classList.remove("hidden");
-  el.portalUserName.textContent = `${session.user.employeeNumber} · ${session.user.nickname || session.user.fullName}`;
+  const identity = isOrganizationAccount(session.user)
+    ? session.user.loginName
+    : session.user.employeeNumber;
+  el.portalUserName.textContent = `${identity} · ${session.user.nickname || session.user.fullName}`;
   el.portalUserRole.textContent = session.user.roleName;
-  el.adminAppLink.classList.toggle("hidden", !session.user.permissions.includes("schedule:read"));
+  el.adminAppLink.classList.toggle(
+    "hidden",
+    isOrganizationAccount(session.user) || !session.user.permissions.includes("schedule:read"),
+  );
   const planningOnly = session.user.role === "location_planner";
   el.adminAppLink.textContent = planningOnly ? "Filialplanung öffnen" : "Planung öffnen";
   if (el.leadershipDesktopLink) {
@@ -926,15 +966,14 @@ async function login(event) {
   try {
     const result = await api("/api/portal/v1/auth/login", {
       method: "POST",
-      body: JSON.stringify({ employeeNumber: el.loginPersonnelNumber.value, password: el.loginPassword.value }),
+      body: JSON.stringify({ loginName: el.loginPersonnelNumber.value, password: el.loginPassword.value }),
     });
     el.loginPassword.value = "";
     showPortal(result);
     if (!result.user.mustChangePassword) {
       await loadMobileLayout();
-      const requested = chooseInitialPortalTab();
+      chooseInitialPortalTab();
       await loadPortalData();
-      if (!requested && portalState.timeTracking?.enabled !== true) setTab("schedule");
     }
   } catch (error) {
     message(el.loginError, error.message, true);
@@ -948,9 +987,9 @@ async function logout() {
 }
 
 function setTab(tab) {
-  if (portalUser() && !portalTabAllowed(tab)) tab = "schedule";
-  if (tab === "timeTracking" && !timeTrackingCapabilityEnabled()) tab = "schedule";
-  if (tab === "loan" && !loanCapabilityEnabled()) tab = "schedule";
+  if (portalUser() && !portalTabAllowed(tab)) tab = defaultPortalTab();
+  if (tab === "timeTracking" && !timeTrackingCapabilityEnabled()) tab = defaultPortalTab();
+  if (tab === "loan" && !loanCapabilityEnabled()) tab = defaultPortalTab();
   portalState.activeTab = tab;
   rememberPortalTab(tab);
   syncPortalTabButtons(tab);
@@ -969,7 +1008,7 @@ function setTab(tab) {
   el.leadershipMoreView?.classList.toggle("active", tab === "leadershipMore");
   if (tab === "timeOff") loadTimeOffRequests();
   if (tab === "settings") {
-    loadWifiAutomation();
+    if (hasPortalPermission("own_time:read")) loadWifiAutomation();
     if (hasPortalPermission("own_privacy_requests:read")) loadPrivacyRequests();
   }
   if (tab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking(), loadTimeSummary(), loadTimeCorrections()]);
@@ -990,17 +1029,25 @@ function setTab(tab) {
 }
 
 async function loadSchedule() {
-  const data = await api(`/api/portal/v1/me/schedule?week=${portalState.weekStart}`);
+  const organizationView = isOrganizationAccount();
+  const route = organizationView
+    ? `/api/portal/v1/location-dashboard/schedule?week=${portalState.weekStart}`
+    : `/api/portal/v1/me/schedule?week=${portalState.weekStart}`;
+  const data = await api(route);
   portalState.weekStart = data.weekStart;
-  el.scheduleHeading.textContent = `KW ${data.calendarWeek} · ${dateText(data.weekStart)} – ${dateText(data.weekEnd)}`;
+  el.scheduleHeading.textContent = organizationView
+    ? `${data.location?.name || "Standort"} · KW ${data.calendarWeek} · ${dateText(data.weekStart)} – ${dateText(data.weekEnd)}`
+    : `KW ${data.calendarWeek} · ${dateText(data.weekStart)} – ${dateText(data.weekEnd)}`;
   const today = iso(new Date());
   el.scheduleGrid.innerHTML = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(data.weekStart, index);
-    const shifts = data.shifts.filter((item) => item.shift_date === date);
-    const options = data.options.filter((item) => item.date_from <= date && item.date_to >= date);
+    const shifts = data.shifts.filter((item) => (item.shift_date || item.date) === date);
+    const options = organizationView
+      ? []
+      : data.options.filter((item) => item.date_from <= date && item.date_to >= date);
     return `<article class="schedule-day ${date === today ? "today" : ""} ${index > 4 ? "weekend" : ""}">
       <header><strong>${weekdayNames[index]}</strong><span>${dateText(date, { day: "2-digit", month: "2-digit" })}</span></header>
-      ${shifts.map((shift) => `<div class="shift-card"><strong>${esc(shift.start_time)}–${esc(shift.end_time)}</strong>${shift.department_name ? `<br>${esc(shift.department_name)}` : ""}${shift.area ? `<br>${esc(shift.area)}` : ""}</div>`).join("")}
+      ${shifts.map((shift) => `<div class="shift-card">${organizationView && shift.employeeName ? `<span>${esc(shift.employeeName)}</span><br>` : ""}<strong>${esc(shift.start_time || shift.startTime)}–${esc(shift.end_time || shift.endTime)}</strong>${shift.department_name || shift.departmentName ? `<br>${esc(shift.department_name || shift.departmentName)}` : ""}${shift.area ? `<br>${esc(shift.area)}` : ""}</div>`).join("")}
       ${options.map((option) => `<div class="option-card"><strong>${esc(optionNames[option.option_type] || option.option_type)}</strong>${!option.all_day && option.start_time ? `<br>${esc(option.start_time)}–${esc(option.end_time)}` : ""}${option.note ? `<br>${esc(option.note)}` : ""}</div>`).join("")}
       ${!shifts.length && !options.length ? '<span class="empty-day">Kein Eintrag</span>' : ""}
     </article>`;
@@ -3431,9 +3478,8 @@ async function changePassword(event) {
     setTimeout(async () => {
       el.passwordDialog.close();
       await loadMobileLayout();
-      const requested = chooseInitialPortalTab();
+      chooseInitialPortalTab();
       await loadPortalData();
-      if (!requested && portalState.timeTracking?.enabled !== true) setTab("schedule");
     }, 700);
   } catch (error) { message(el.passwordMessage, error.message, true); }
 }
@@ -3453,6 +3499,35 @@ const loanConditionLabels = {
   damaged: "Beschädigt",
   incomplete: "Unvollständig",
 };
+
+function currentLoanPhotoPdfPolicy() {
+  const policy = portalState.loanStatus?.location?.photoPdf || {};
+  return {
+    outputMode: policy.outputMode === "blackwhite" ? "blackwhite" : "grayscale",
+    originalRetention: policy.originalRetention === "delete" ? "delete" : "retain",
+  };
+}
+
+function loanPhotoOutputModeText(value) {
+  return value === "blackwhite" ? "Schwarzweiß" : "Graustufen";
+}
+
+function loanPhotoOriginalRetentionText(value) {
+  return value === "delete"
+    ? "Die aufbereiteten Farbfassungen werden nach der PDF-Verarbeitung gelöscht."
+    : "Die metadatenfrei verkleinerten Farbfassungen werden geschützt aufbewahrt; die unveränderten Handydateien werden nicht gespeichert.";
+}
+
+function renderLoanPhotoPolicy() {
+  const policy = currentLoanPhotoPdfPolicy();
+  const processing = `Die Fotos werden verkleinert, in ${loanPhotoOutputModeText(policy.outputMode)} als geschützte PDF-Beilage zusammengefasst. ${loanPhotoOriginalRetentionText(policy.originalRetention)}`;
+  if (el.loanIssuePhotoPolicy) {
+    el.loanIssuePhotoPolicy.textContent = `Optional · bis zu 9 Fotos · je 10 MB, zusammen 45 MB. ${processing}`;
+  }
+  if (el.loanReturnPhotoPolicy) {
+    el.loanReturnPhotoPolicy.textContent = `${processing} Die Rückgabe-Beilage wird dem zweiten Teammitglied vor der Bestätigung angezeigt.`;
+  }
+}
 
 function loanPhotoFiles(phase) {
   return phase === "return" ? portalState.loanReturnPhotoFiles : portalState.loanIssuePhotoFiles;
@@ -3521,9 +3596,50 @@ async function uploadLoanPhotos(loanId, phase, files) {
 function loanPhotoGallery(photos, phase = "") {
   const selected = (photos || []).filter((photo) => !phase || photo.phase === phase);
   if (!selected.length) return "";
-  return `<div class="loan-photo-gallery">${selected.map((photo, index) => `
-    <a href="${esc(photo.contentUrl)}" target="_blank" rel="noopener"><img src="${esc(photo.contentUrl)}" alt="${photo.phase === "return" ? "Rückgabefoto" : "Ausgabefoto"} ${index + 1}" loading="lazy" /></a>
-  `).join("")}</div>`;
+  return `<div class="loan-photo-gallery">${selected.map((photo, index) => {
+    const phaseLabel = photo.phase === "return" ? "Rückgabe" : "Ausgabe";
+    const retention = photo.originalRetained === true
+      ? "Aufbereitete Farbfassung verfügbar"
+      : photo.originalRetained === false
+        ? "Farbfassung nicht aufbewahrt"
+        : "Status der Farbfassung nicht ausgewiesen";
+    const preview = photo.contentUrl
+      ? `<a href="${esc(photo.contentUrl)}" target="_blank" rel="noopener"><img src="${esc(photo.contentUrl)}" alt="${phaseLabel} ${Number(photo.position || index + 1)}" loading="lazy" /></a>`
+      : `<span class="loan-photo-placeholder" aria-label="Keine Einzelvorschau verfügbar">Nur in der PDF-Beilage</span>`;
+    return `<figure class="loan-photo-entry">${preview}<figcaption>${esc(retention)}</figcaption></figure>`;
+  }).join("")}</div>`;
+}
+
+function loanPhotoAttachmentList(attachments, phase = "") {
+  const selected = (Array.isArray(attachments) ? attachments : [])
+    .filter((attachment) => attachment && ["issue", "return"].includes(attachment.phase)
+      && (!phase || attachment.phase === phase))
+    .sort((left, right) => {
+      const phaseOrder = Number(left.phase === "return") - Number(right.phase === "return");
+      return phaseOrder || Number(left.revision || 0) - Number(right.revision || 0);
+    });
+  if (!selected.length) return "";
+  return `<div class="loan-photo-attachments">${selected.map((attachment) => {
+    const phaseLabel = attachment.phase === "return" ? "Rückgabe" : "Ausgabe";
+    const count = Number(attachment.sourcePhotoCount || 0);
+    const retention = attachment.originalRetention === "delete"
+      ? "Farbfassungen nicht aufbewahrt"
+      : attachment.originalRetention === "retain"
+        ? "Aufbereitete Farbfassungen geschützt aufbewahrt"
+        : "Status der Farbfassung nicht ausgewiesen";
+    const actions = [
+      attachment.previewUrl
+        ? `<a href="${esc(attachment.previewUrl)}" target="_blank" rel="noopener">Vorschau</a>`
+        : "",
+      attachment.downloadUrl
+        ? `<a href="${esc(attachment.downloadUrl)}">PDF herunterladen</a>`
+        : "",
+    ].filter(Boolean).join("");
+    return `<article class="loan-photo-attachment ${esc(attachment.phase)}">
+      <div><strong>Fotobeilage ${phaseLabel}</strong><small>Beilage B${Number(attachment.revision || 1)} · ${count} ${count === 1 ? "Foto" : "Fotos"} · ${esc(loanPhotoOutputModeText(attachment.outputMode))} · ${esc(retention)}</small></div>
+      ${actions ? `<nav aria-label="Fotobeilage ${phaseLabel}">${actions}</nav>` : ""}
+    </article>`;
+  }).join("")}</div>`;
 }
 
 function newLoanDraftItem() {
@@ -3648,6 +3764,54 @@ function loanConditionText(condition) {
   }[condition] || condition || "Nicht angegeben";
 }
 
+function renderLoanOverview() {
+  if (!el.loanOverviewTableBody) return;
+  const query = String(el.loanOverviewSearch?.value || "").trim().toLocaleLowerCase("de-AT");
+  const items = portalState.loanOverviewItems.filter((item) => !query || [
+    item.description,
+    item.articleNumber,
+    item.serialNumber,
+  ].some((value) => String(value || "").toLocaleLowerCase("de-AT").includes(query)));
+  el.loanOverviewTableBody.innerHTML = items.length ? items.map((item) => `
+    <tr>
+      <td>${esc(item.description || "Gerät ohne Bezeichnung")}</td>
+      <td>${esc(item.articleNumber || "–")}</td>
+      <td>${esc(item.serialNumber || "–")}</td>
+      <td>${item.dueDate ? esc(dateText(item.dueDate)) : "Nicht festgelegt"}</td>
+    </tr>
+  `).join("") : `<tr><td class="loan-overview-empty" colspan="4">${
+    query ? "Kein offenes Gerät entspricht dieser Suche." : "Am Standort sind derzeit keine Geräte als ausgeliehen erfasst."
+  }</td></tr>`;
+}
+
+async function loadLoanOverview() {
+  if (portalState.loanStatus?.permissions?.overviewRead !== true) {
+    portalState.loanOverviewItems = [];
+    portalState.loanOverviewSearchEnabled = false;
+    el.loanOpenOverview?.classList.add("hidden");
+    return;
+  }
+  el.loanOpenOverview?.classList.remove("hidden");
+  const parameters = new URLSearchParams({
+    locationId: portalState.loanStatus.location?.id || "",
+  });
+  try {
+    const result = await api(`/api/portal/v1/loans/open-overview?${parameters}`);
+    portalState.loanOverviewItems = Array.isArray(result.items) ? result.items : [];
+    const searchEnabled = result.searchEnabled === true
+      && portalState.loanOverviewItems.length > LOAN_OVERVIEW_SEARCH_THRESHOLD;
+    portalState.loanOverviewSearchEnabled = searchEnabled;
+    el.loanOverviewSearchField?.classList.toggle("hidden", !searchEnabled);
+    if (!searchEnabled && el.loanOverviewSearch) el.loanOverviewSearch.value = "";
+    renderLoanOverview();
+  } catch (error) {
+    portalState.loanOverviewItems = [];
+    portalState.loanOverviewSearchEnabled = false;
+    el.loanOverviewSearchField?.classList.add("hidden");
+    el.loanOverviewTableBody.innerHTML = `<tr><td class="loan-overview-empty" colspan="4">${esc(error.message)}</td></tr>`;
+  }
+}
+
 function renderLoanList() {
   if (!el.loanList) return;
   const ownNumber = portalUser()?.employeeNumber || "";
@@ -3679,12 +3843,13 @@ function renderLoanList() {
       ? `<small class="loan-pending-confirmation">Bestätigung ausständig bei ${esc(loan.pendingReturnConfirmation.witness.employeeNumber)} · ${esc(loan.pendingReturnConfirmation.witness.name)} – gültig bis ${esc(timestampText(loan.pendingReturnConfirmation.expiresAt))}</small>`
       : "";
     const photos = loanPhotoGallery(loan.photos);
+    const photoAttachments = loanPhotoAttachmentList(loan.photoAttachments);
     const actions = [
       canManage ? `<button class="text-button" data-loan-manage="${esc(loan.id)}" type="button">Bearbeiten</button>` : "",
       canReturn ? `<button class="primary" data-loan-return="${esc(loan.id)}" type="button">Zurücknehmen</button>` : "",
     ].filter(Boolean).join("");
     return `<article class="loan-list-item">
-      <div class="loan-list-main"><span class="status ${loan.status === "returned" ? "approved" : "pending"}">${esc(loanStatusText(loan.status))}</span><strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><small>Ausgabe: ${esc(timestampText(loan.issuedAt || loan.createdAt))}${loan.dueDate ? ` · geplant bis ${esc(dateText(loan.dueDate))}` : ""}</small>${returnCopy}${pendingCopy}<ul>${items}</ul>${photos}${documents}</div>
+      <div class="loan-list-main"><span class="status ${loan.status === "returned" ? "approved" : "pending"}">${esc(loanStatusText(loan.status))}</span><strong>${esc(loan.borrower?.employeeNumber)} · ${esc(loan.borrower?.name)}</strong><small>Ausgabe: ${esc(timestampText(loan.issuedAt || loan.createdAt))}${loan.dueDate ? ` · geplant bis ${esc(dateText(loan.dueDate))}` : ""}</small>${returnCopy}${pendingCopy}<ul>${items}</ul>${photos}${photoAttachments}${documents}</div>
       ${actions ? `<div class="loan-list-actions">${actions}</div>` : ""}
     </article>`;
   }).join("") : '<p class="empty-state">In diesem Bereich sind noch keine Leihvorgänge vorhanden.</p>';
@@ -3713,6 +3878,7 @@ async function loadLoanModule() {
   if (!loanCapabilityEnabled() || !el.loanWorkspace) return;
   try {
     portalState.loanStatus = await api("/api/portal/v1/loans/status");
+    renderLoanPhotoPolicy();
     const available = portalState.loanStatus.available === true;
     el.loanWorkspace.classList.toggle("hidden", !available);
     message(
@@ -3723,18 +3889,32 @@ async function loadLoanModule() {
     if (!available) return;
     const canManage = portalState.loanStatus.permissions?.locationManage === true;
     const canCreate = portalState.loanStatus.permissions?.ownCreate === true;
+    const canReadDetails = portalState.loanStatus.permissions?.ownRead === true
+      || portalState.loanStatus.permissions?.locationRead === true
+      || canManage;
     el.loanIssueForm?.classList.toggle("hidden", !canCreate);
+    el.loanPersonalOverview?.classList.toggle("hidden", !canReadDetails);
     el.loanScopeField?.classList.toggle(
       "hidden",
       !canManage && portalState.loanStatus.permissions?.locationRead !== true,
     );
-    const today = iso(new Date());
-    el.loanDueDate.min = today;
-    el.loanDueDate.max = addDays(today, 3650);
-    if (!portalState.loanDraftItems.length) resetLoanDraft();
-    await loadLoanTeamMembers();
-    await loadLoans();
-    await loadPendingLoanConfirmations();
+    if (canCreate) {
+      const today = iso(new Date());
+      el.loanDueDate.min = today;
+      el.loanDueDate.max = addDays(today, 3650);
+      if (!portalState.loanDraftItems.length) resetLoanDraft();
+    }
+    const requests = [loadLoanOverview()];
+    if (portalState.loanStatus.permissions?.ownReturn === true || canManage) {
+      requests.push(loadLoanTeamMembers());
+    }
+    if (canReadDetails) requests.push(loadLoans());
+    if (portalState.loanStatus.permissions?.ownRead === true
+      || portalState.loanStatus.permissions?.ownReturn === true
+      || canManage) {
+      requests.push(loadPendingLoanConfirmations());
+    }
+    await Promise.all(requests);
   } catch (error) {
     portalState.loanStatus = null;
     el.loanWorkspace.classList.add("hidden");
@@ -3777,7 +3957,7 @@ async function submitLoanIssue(event) {
     }
     message(el.loanIssueMessage, `Die Leihe und der Ausgabebeleg wurden erfasst.${photoWarning}`, Boolean(photoWarning));
     resetLoanDraft();
-    await loadLoans();
+    await Promise.all([loadLoans(), loadLoanOverview()]);
   } catch (error) {
     message(el.loanIssueMessage, error.message, true);
   } finally {
@@ -3915,7 +4095,7 @@ async function finishLoanManagement(result, successMessage) {
   portalState.selectedManagedLoan = null;
   el.loanManageDialog.close();
   message(el.loanAvailabilityMessage, successMessage);
-  await loadLoans();
+  await Promise.all([loadLoans(), loadLoanOverview()]);
   return result;
 }
 
@@ -3991,8 +4171,10 @@ function showLoanConfirmation(confirmation) {
       ${item.returnNote ? `<small>Bemerkung: ${esc(item.returnNote)}</small>` : ""}
     </article>`).join("");
   const photos = (confirmation.photos || []);
-  el.loanConfirmationPhotos.classList.toggle("hidden", !photos.length);
-  el.loanConfirmationPhotos.querySelector("div").innerHTML = loanPhotoGallery(photos, "return");
+  const photoAttachments = confirmation.photoAttachments || confirmation.loan?.photoAttachments || [];
+  const returnAttachment = loanPhotoAttachmentList(photoAttachments, "return");
+  el.loanConfirmationPhotos.classList.toggle("hidden", !photos.length && !returnAttachment);
+  el.loanConfirmationPhotos.querySelector("div").innerHTML = `${loanPhotoGallery(photos, "return")}${returnAttachment}`;
   el.loanConfirmationNote.value = "";
   el.loanConfirmationExpiry.textContent = `Die Anfrage läuft um ${timestampText(confirmation.expiresAt)} ab. Ohne deine Bestätigung bleibt die Leihe offen.`;
   message(el.loanConfirmationMessage, "");
@@ -4037,7 +4219,9 @@ async function respondToLoanConfirmation(decision) {
     portalState.activeLoanConfirmation = null;
     portalState.pendingLoanConfirmations = portalState.pendingLoanConfirmations
       .filter((entry) => entry.id !== confirmation.id);
-    if (portalState.loanStatus?.available) await loadLoans();
+    if (portalState.loanStatus?.available) {
+      await Promise.all([loadLoans(), loadLoanOverview()]);
+    }
     presentNextLoanConfirmation();
   } catch (error) {
     message(el.loanConfirmationMessage, error.message, true);
@@ -4167,6 +4351,7 @@ el.previousWeek.addEventListener("click", () => { portalState.weekStart = addDay
 el.nextWeek.addEventListener("click", () => { portalState.weekStart = addDays(portalState.weekStart, 7); loadSchedule(); });
 el.currentWeek.addEventListener("click", () => { portalState.weekStart = mondayOf(new Date()); loadSchedule(); });
 el.loanRefresh?.addEventListener("click", loadLoanModule);
+el.loanOverviewSearch?.addEventListener("input", renderLoanOverview);
 [["issue", el.loanIssuePhotos], ["issue", el.loanIssueCamera], ["return", el.loanReturnPhotos], ["return", el.loanReturnCamera]]
   .forEach(([phase, input]) => input?.addEventListener("change", () => {
     addLoanPhotoFiles(phase, input.files);

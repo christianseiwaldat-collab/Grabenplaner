@@ -127,6 +127,7 @@ test("v0.61 server tools: maintenance scripts share one lock and distinct live-r
   assert.match(health, /verifyBackupReferences/);
   assert.match(health, /loan_documents/);
   assert.match(health, /loan_photos/);
+  assert.match(health, /loan_photo_attachments/);
   const expectedSecurityHeaders = [
     ["HSTS", "max-age=31536000; includeSubDomains"],
     ["Content-Security-Policy", "object-src 'none'"],

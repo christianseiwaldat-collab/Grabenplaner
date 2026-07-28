@@ -207,7 +207,10 @@ test("v0.86.3: Planungsverantwortung besitzt nur den vorgesehenen Planungsumfang
     "own_time:write",
     "own_time:correction_request",
   ]) assert.equal(permissions.has(forbidden), false, `Unzulässiges Grundrecht: ${forbidden}`);
-  assert.equal([...permissions].some((permission) => permission.startsWith("loans:")), false);
+  assert.deepEqual(
+    [...permissions].filter((permission) => permission.startsWith("loans:")).sort(),
+    ["loans:overview:read"],
+  );
 });
 
 test("v0.86.3: Team- und Standortdaten bleiben auf die eigene Filiale begrenzt", async () => {
@@ -355,6 +358,11 @@ test("v0.86.3: Eigene Öffnungszeiten und Mindestbesetzung sind editierbar, Verw
   });
   assert.equal(create.response.status, 403, create.text);
   assert.equal(create.payload.code, "PORTAL_PERMISSION_DENIED");
+
+  // Die geänderte Mindestbesetzung gehört nur zu diesem Test. Spätere
+  // Urlaubstests prüfen andere Rechtepfade und brauchen den neutralen Ausgangszustand.
+  db.prepare("UPDATE locations SET min_staff = 2, day_settings_json = ? WHERE id = ?")
+    .run(JSON.stringify(originalDaySettings), LOCATION);
 });
 
 test("v0.86.3: Arbeitszeitwarnungen sind im Plan sichtbar, Regel- und System-Dashboards bleiben gesperrt", async () => {
