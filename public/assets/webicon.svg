@@ -1,20 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Grabenplaner">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">GP</title>
+  <desc id="desc">Blaues Grabenplaner-Webicon mit den Initialen GP</desc>
   <defs>
-    <linearGradient id="bg" x1="28" y1="28" x2="228" y2="228" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#f8f3e8"/>
-      <stop offset="1" stop-color="#e5ddd0"/>
-    </linearGradient>
-    <linearGradient id="mark" x1="64" y1="58" x2="190" y2="188" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#2f6a58"/>
-      <stop offset="1" stop-color="#17382f"/>
+    <linearGradient id="blue" x1="34" y1="26" x2="222" y2="230" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1677ff"/>
+      <stop offset="1" stop-color="#0046c7"/>
     </linearGradient>
   </defs>
-  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
-  <rect x="48" y="50" width="160" height="156" rx="24" fill="#ffffff" stroke="#d2ddd7" stroke-width="8"/>
-  <rect x="48" y="50" width="160" height="44" rx="24" fill="url(#mark)"/>
-  <path d="M76 122h104M76 153h104M76 184h76" fill="none" stroke="#d9e2dd" stroke-width="12" stroke-linecap="round"/>
-  <path d="M83 76h90" fill="none" stroke="#f4f1e9" stroke-width="11" stroke-linecap="round"/>
-  <circle cx="82" cy="122" r="8" fill="#ea6243"/>
-  <circle cx="82" cy="153" r="8" fill="#d4b600"/>
-  <circle cx="82" cy="184" r="8" fill="#2f6a58"/>
+  <rect width="256" height="256" rx="48" fill="url(#blue)"/>
+  <path d="M34 62h188M34 194h188M66 34v188M190 34v188" fill="none" stroke="#fff" stroke-width="4" opacity=".12"/>
+  <text x="128" y="154" fill="#fff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="92" font-weight="800" letter-spacing="-7" text-anchor="middle">GP</text>
 </svg>

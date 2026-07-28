@@ -1,28 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 260" role="img" aria-labelledby="title desc">
   <title id="title">Grabenplaner</title>
-  <desc id="desc">Neutrales Grabenplaner Logo</desc>
+  <desc id="desc">Neutrales blaues Grabenplaner-Logo</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f9f6ed"/>
-      <stop offset="1" stop-color="#e9f2ec"/>
+    <linearGradient id="surface" x1="28" y1="22" x2="682" y2="238" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eef4ff"/>
     </linearGradient>
-    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1f6f52"/>
-      <stop offset="1" stop-color="#2f9f79"/>
+    <linearGradient id="blue" x1="50" y1="46" x2="216" y2="214" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1677ff"/>
+      <stop offset="1" stop-color="#0046c7"/>
     </linearGradient>
   </defs>
-  <rect width="720" height="260" rx="34" fill="url(#bg)"/>
-  <g transform="translate(54 47)">
-    <rect x="0" y="0" width="166" height="166" rx="28" fill="url(#mark)"/>
-    <g fill="#fff" opacity=".96">
-      <rect x="34" y="43" width="98" height="16" rx="8"/>
-      <rect x="34" y="75" width="70" height="16" rx="8"/>
-      <rect x="34" y="107" width="112" height="16" rx="8"/>
-    </g>
-    <circle cx="131" cy="83" r="16" fill="#f2cf66"/>
+  <rect width="720" height="260" rx="34" fill="url(#surface)"/>
+  <g transform="translate(48 44)">
+    <rect width="172" height="172" rx="34" fill="url(#blue)"/>
+    <path d="M22 47h128M22 125h128M47 22v128M125 22v128" fill="none" stroke="#fff" stroke-width="3" opacity=".12"/>
+    <text x="86" y="106" fill="#fff" font-family="Inter, Arial, Helvetica, sans-serif" font-size="66" font-weight="800" letter-spacing="-5" text-anchor="middle">GP</text>
   </g>
-  <g fill="#173426" font-family="Inter, Arial, sans-serif">
-    <text x="250" y="113" font-size="54" font-weight="800" letter-spacing="-1.8">Grabenplaner</text>
-    <text x="254" y="155" font-size="24" font-weight="650" fill="#5d6e65">Dienst- und Urlaubsplanung</text>
+  <g font-family="Inter, Arial, Helvetica, sans-serif">
+    <text x="252" y="116" fill="#102a56" font-size="56" font-weight="800" letter-spacing="-1.8">Grabenplaner</text>
+    <text x="255" y="160" fill="#4c6288" font-size="23" font-weight="650">Personal · Planung · Arbeitszeit</text>
   </g>
 </svg>

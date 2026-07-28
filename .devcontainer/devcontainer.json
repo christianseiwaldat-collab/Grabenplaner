@@ -1,13 +1,10 @@
 {
-  "name": "Grabenplaner v0.57 Codespaces-Test",
+  "name": "Grabenplaner v0.87 Codespaces-Demo",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
       "version": "24",
       "pnpmVersion": "11.7.0"
-    },
-    "ghcr.io/devcontainers/features/sshd:1": {
-      "version": "latest"
     }
   },
   "postCreateCommand": "pnpm install --frozen-lockfile",

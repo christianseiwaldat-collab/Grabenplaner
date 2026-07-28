@@ -8,6 +8,26 @@ if [[ "${CODESPACES:-}" != "true" ]]; then
   exit 1
 fi
 
+EXPECTED_REPOSITORY="christianseiwaldat-collab/Grabenplaner"
+if [[ "${GITHUB_REPOSITORY:-}" != "${EXPECTED_REPOSITORY}" ]]; then
+  echo "Fehler: Die verwaltete Demo startet nur aus ${EXPECTED_REPOSITORY}." >&2
+  exit 1
+fi
+
+if [[ -z "${GITHUB_TOKEN:-}" || -z "${GITHUB_USER:-}" ]]; then
+  echo "Fehler: Die GitHub-Identität des Codespaces konnte nicht geprüft werden." >&2
+  exit 1
+fi
+
+REPOSITORY_PERMISSION="$(
+  GH_TOKEN="${GITHUB_TOKEN}" gh api "repos/${EXPECTED_REPOSITORY}" \
+    --jq '(.permissions.admin or .permissions.push)'
+)"
+if [[ "${REPOSITORY_PERMISSION}" != "true" ]]; then
+  echo "Fehler: Die Grabenplaner-Demo ist nur für den Eigentümer und eingeladene Collaborators freigegeben." >&2
+  exit 1
+fi
+
 if [[ ! "${CODESPACE_NAME:-}" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]]; then
   echo "Fehler: CODESPACE_NAME fehlt oder enthält unerwartete Zeichen." >&2
   exit 1

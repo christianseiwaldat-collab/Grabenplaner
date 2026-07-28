@@ -15659,7 +15659,7 @@ function locationBrandingAssignments() {
 
 function pdfFooterContact(settings = getSettings(), createdAt = new Date()) {
   const branding = brandingFromSettings(settings);
-  return `${branding.adminEmail ? `Admin: ${branding.adminEmail} · ` : ""}Erstellt am ${formatPdfTimestamp(createdAt)}`;
+  return `${branding.adminEmail ? `dev: ${branding.adminEmail} · ` : ""}Erstellt am ${formatPdfTimestamp(createdAt)}`;
 }
 
 function settingEnabled(settings, key) {
