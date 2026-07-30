@@ -46,6 +46,7 @@ test("package builder and both verifiers require runtime-v3 control files", () =
   for (const relative of [
     ...hostRuntimeArtifacts,
     "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
+    "server-tools/linux/finalize-grabenplaner-runtime-v3.sh",
     "lib/controlled-host-reboot.js",
     "lib/host-reboot-control-client.js",
     "lib/offsite-provider-policy.js",
@@ -160,7 +161,7 @@ test("runtime-v3 migration consumes the verified top-level module contracts", ()
       hardeningModule: { moduleVersion: 1, fingerprint: "b".repeat(64) },
     }));
     fs.writeFileSync(verifierFile, JSON.stringify({
-      appVersion: "0.88.3-beta",
+      appVersion: "0.88.4-beta",
       runtimeContract: {
         deploymentSchemaVersion: 3,
         migrationPolicy: "explicit-maintenance",
@@ -179,7 +180,7 @@ test("runtime-v3 migration consumes the verified top-level module contracts", ()
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(result.stdout.trim().split(/\r?\n/), [
       "0.87.0-beta",
-      "0.88.3-beta",
+      "0.88.4-beta",
       "c".repeat(64),
       "1",
       "6",

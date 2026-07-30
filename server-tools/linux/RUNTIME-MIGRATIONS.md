@@ -94,10 +94,10 @@ Die Migration wird aus dem separat bereitgestellten, per SHA-256 freigegebenen
 Linux-Serverpaket gestartet:
 
 ```bash
-unzip Grabenplaner-Server-v0.88.3-beta-linux-x64.zip -d /root/grabenplaner-runtime-v3
+unzip Grabenplaner-Server-v0.88.4-beta-linux-x64.zip -d /root/grabenplaner-runtime-v3
 sudo bash /root/grabenplaner-runtime-v3/server-tools/linux/migrate-grabenplaner-runtime-v3.sh \
-  --package /root/Grabenplaner-Server-v0.88.3-beta-linux-x64.zip \
-  --sha256-file /root/Grabenplaner-Server-v0.88.3-beta-linux-x64.zip.sha256
+  --package /root/Grabenplaner-Server-v0.88.4-beta-linux-x64.zip \
+  --sha256-file /root/Grabenplaner-Server-v0.88.4-beta-linux-x64.zip.sha256
 ```
 
 Das Werkzeug akzeptiert ausschliesslich eine gesunde, produktive
@@ -136,3 +136,30 @@ Units, Brokerkopie und neu angelegte Gruppenbindung zurueckgerollt. Nach einem
 bereits erfolgreichen App-Commit bleibt wie bei Schema 2 der konsistente neue
 Stand erhalten und ein root-only Diagnoseordner markiert den erforderlichen
 manuellen Nachlauf.
+
+### Ausschliesslicher Post-Commit-Abschluss
+
+Ist Schema 3 bereits installiert und der innere App-Updater nachweislich
+committed, darf die Schema-2→3-Migration nicht erneut gestartet werden. Fehlt
+in diesem Sonderfall nur der aeussere Migrationsbeleg, kann das v0.88.4-Paket
+den retained Diagnoseordner fail-closed finalisieren:
+
+```bash
+sudo bash /root/grabenplaner-v0884/server-tools/linux/finalize-grabenplaner-runtime-v3.sh \
+  --package /root/Grabenplaner-Server-v0.88.4-beta-linux-x64.zip \
+  --sha256-file /root/Grabenplaner-Server-v0.88.4-beta-linux-x64.zip.sha256 \
+  --diagnostic-dir /opt/grabenplaner/.runtime-v3-migration.XXXXXXXX \
+  --from-version 0.87.0-beta \
+  --to-version 0.88.3-beta \
+  --original-package-sha256 ORIGINALPAKET_SHA256
+```
+
+Der Finalizer bindet sich bytegleich an das vollstaendig verifizierte
+v0.88.4-Paket. Unter derselben Wartungssperre korreliert er Transcript,
+Commitmarker und dauerhaften Updatebeleg, verifiziert den kompletten
+DB-/Dokumentsicherungspunkt erneut und reproduziert Runtime-, Env-, Unit-,
+Health- und Offsite-Nachweise. Er schreibt ausschliesslich den fehlenden
+Migrationsbeleg, einen Recovery-Sidecar und `FINALIZED.json`. App, systemd,
+Env, Provider, Repository und Zugangsdaten werden nicht veraendert; es wird
+kein Dienst und kein Host neu gestartet. Der Diagnose- und Rollbackordner
+bleibt bis zur getrennten Abschlusskontrolle erhalten.

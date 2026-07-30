@@ -46,7 +46,8 @@ test("v0.74 migration binds monitor runtime before delegating the backed-up app 
   assert.match(migration, /update_args=\([\s\S]*--package "\$staged_package"[\s\S]*--lock-already-held/);
   assert.match(migration, /commit\?\.verification\?\.status!=="verified"/);
   assert.match(migration, /sha256:commit\.database\.sha256/);
-  assert.ok(migration.indexOf("systemctl enable --now grabenplaner-monitor.timer") < migration.indexOf("bash \"$extract_root/server-tools/linux/update-grabenplaner-server.sh\""));
+  assert.ok(migration.indexOf("systemctl enable --now grabenplaner-monitor.timer") < migration.indexOf("bash \"$app_dir/server-tools/linux/update-grabenplaner-server.sh\""));
+  assert.doesNotMatch(migration, /bash "\$extract_root\/server-tools\/linux\/update-grabenplaner-server\.sh"/);
 });
 
 test("v0.74 migration marks each destructive transition before another fallible operation", () => {

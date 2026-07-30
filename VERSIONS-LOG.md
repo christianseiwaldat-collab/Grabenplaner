@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.88.4 Beta · Runtime-Migrationsbeleg robust abgeschlossen
+
+- Der Runtime-2→3-Wartungsweg trennt Fortschrittsausgaben des Paketmanagers vom strukturierten Updater-Ergebnis. Der letzte Ergebnisvertrag wird mit exaktem Schema, Version, Paket-Hash, Readiness-Adresse und fest begrenzten Belegpfaden validiert, bevor der Migrationsbeleg entsteht.
+- Vor dem Migrationsbeleg wird der zugehörige Datenbank-/Dokumentsicherungspunkt vollständig erneut verifiziert. Der eng begrenzte Post-Commit-Finalizer kann einen bereits gesunden Schema-3-Stand ausschließlich anhand retained, paketgebundener Nachweise abschließen, ohne App, Runtime, systemd, Env oder Offsite-Bindung zu verändern.
+- Zusätzliche Regressionstests decken Paketmanager-Text vor dem Ergebnis-JSON, doppelte oder nachgestellte Verträge, unsichere Ergebnisdateien, pfadfremde Belege und den eng begrenzten Finalizer-Vertrag fail-closed ab.
+- Produktfunktionen, Google-Drive-Bindung, Offsite-Ziel und Runtime-Schema bleiben gegenüber v0.88.3 unverändert. Es wird weder ein Host-Neustart noch eine Provider- oder Repository-Neubindung ausgelöst.
+
 ## v0.88.3 Beta · Linux-Dateirechte und Google-Drive-Ordnerliste abgesichert
 
 - Die zentrale Rechtevergabe erkennt nun sowohl einen vollständigen App-Baum als auch einen eindeutig geprüften Linux-Werkzeugbaum. Dadurch werden vertrauenswürdige Shell-Werkzeuge auch dann wieder auf `0750` normalisiert, wenn ein unter Windows erzeugtes ZIP keine Unix-Ausführungsbits bewahrt.
