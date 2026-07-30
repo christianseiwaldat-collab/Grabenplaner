@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.88.2 Beta · Geschützte Offsite-Prüfung in der Runtime-Migration
+
+- Der innerhalb der Runtime-2→3-Migration gestartete App-Updater wird nun ausdrücklich aus dem zuvor verifizierten und root-geschützt eingebundenen Runtime-Baum aufgerufen. Damit stammen auch Sicherheitsbasis und Offsite-Kompatibilitätsprüfung aus demselben installierten Vertrauensanker; der isolierte Build-Baum wird nicht ausgeführt.
+- Ein ausführbarer Regressionstest bildet die getrennten Eigentümerkontexte nach und sichert Reihenfolge sowie Pfad des verschachtelten Updater-Aufrufs.
+- Die Produktfunktionen von v0.88.1 bleiben unverändert; es erfolgt weder ein Providerwechsel noch eine Offsite-Neubindung oder ein Host-Neustart.
+
 ## v0.88.1 Beta · Runtime-Migration abgesichert
 
 - Die explizite Linux-Migration von Runtime-Schema 2 auf 3 übernimmt Offsite- und Hardening-Verträge aus der tatsächlichen, vollständig verifizierten Paketstruktur. Dadurch bleibt die Provider-, Fingerprint- und Repository-Prüfung vor dem Runtime-Swap wirksam.

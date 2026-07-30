@@ -46,7 +46,7 @@ usage() {
   cat <<'EOF'
 Verwendung:
   sudo ./migrate-grabenplaner-runtime-v3.sh \
-    --package /pfad/Grabenplaner-Server-v0.88.1-beta-linux-x64.zip \
+    --package /pfad/Grabenplaner-Server-v0.88.2-beta-linux-x64.zip \
     [--sha256 HEX | --sha256-file /pfad/paket.zip.sha256]
 
 Dieser root-only Wartungsvorgang akzeptiert ausschliesslich den freigegebenen
@@ -602,7 +602,7 @@ if (( version_comparison == 0 )); then update_args+=(--allow-downgrade-or-reinst
 write_phase "updater-invoked"
 updater_invoked=1
 set +e
-bash "$extract_root/server-tools/linux/update-grabenplaner-server.sh" "${update_args[@]}" >"$updater_output"
+bash "$app_dir/server-tools/linux/update-grabenplaner-server.sh" "${update_args[@]}" >"$updater_output"
 updater_status=$?
 set -e
 if updater_commit_is_valid; then
