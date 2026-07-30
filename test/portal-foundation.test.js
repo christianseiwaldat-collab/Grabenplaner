@@ -160,8 +160,8 @@ test("alte Datenbank wird um das Portal-Fundament erweitert", () => {
   assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_time_entries_mobile_request'").get());
 });
 
-test("Built-in-Rollen werden aktualisiert und eigene Rollen bleiben erhalten", () => {
-  const roles = getPortalRoles();
+test("Built-in-Rollen werden aktualisiert und eigene Rollen bleiben erhalten", async () => {
+  const roles = await getPortalRoles();
   const employee = roles.find((role) => role.id === "employee");
   const custom = roles.find((role) => role.id === "custom-auditor");
   assert.equal(employee.name, "Mitarbeiter");
@@ -277,7 +277,7 @@ test("vorbereitete Passwort-Hashes verwenden scrypt, Salz und Versionskennung", 
   assert.equal(await verifyPortalPassword(password, "ungueltig"), false);
 });
 
-test("Zeiterfassung erzwingt die sichere Buchungsfolge und berechnet die Ist-Zeit", () => {
+test("Zeiterfassung erzwingt die sichere Buchungsfolge und berechnet die Ist-Zeit", async () => {
   const location = db.prepare("SELECT id, name FROM locations ORDER BY id LIMIT 1").get();
   assert.ok(location);
   const employeeNumber = "991";
@@ -293,28 +293,31 @@ test("Zeiterfassung erzwingt die sichere Buchungsfolge und berechnet die Ist-Zei
     new Date("2026-07-13T15:00:00.000Z"),
   ];
   try {
-    assert.deepEqual(timeTrackingDayStatus(employeeNumber, "2026-07-13", times[0]).allowedActions, ["clock_in"]);
-    assert.equal(bookTimeEntry(employeeNumber, "clock_in", times[0]).state, "working");
-    assert.throws(() => bookTimeEntry(employeeNumber, "clock_in", times[0]), (error) => error.code === "TIME_ENTRY_STATE_CONFLICT");
-    assert.equal(bookTimeEntry(employeeNumber, "break_start", times[1]).state, "paused");
-    assert.equal(bookTimeEntry(employeeNumber, "break_end", times[2]).state, "working");
-    const completed = bookTimeEntry(employeeNumber, "clock_out", times[3]);
+    assert.deepEqual((await timeTrackingDayStatus(employeeNumber, "2026-07-13", times[0])).allowedActions, ["clock_in"]);
+    assert.equal((await bookTimeEntry(employeeNumber, "clock_in", times[0])).state, "working");
+    await assert.rejects(
+      () => bookTimeEntry(employeeNumber, "clock_in", times[0]),
+      (error) => error.code === "TIME_ENTRY_STATE_CONFLICT",
+    );
+    assert.equal((await bookTimeEntry(employeeNumber, "break_start", times[1])).state, "paused");
+    assert.equal((await bookTimeEntry(employeeNumber, "break_end", times[2])).state, "working");
+    const completed = await bookTimeEntry(employeeNumber, "clock_out", times[3]);
     assert.equal(completed.state, "off");
     assert.equal(completed.actualMinutes, 450);
     assert.deepEqual(completed.allowedActions, ["clock_in"]);
-    const presence = timePresenceForContext({ employeeNumber: "local", role: "admin", permissions: ["time:read"] }, {
+    const presence = await timePresenceForContext({ employeeNumber: "local", role: "admin", permissions: ["time:read"] }, {
       locationId: location.id, locationName: location.name, departmentId: null, departmentName: "",
     }, "2026-07-13", times[3]);
     assert.equal(presence.employees.find((employee) => employee.employeeNumber === employeeNumber)?.actualMinutes, 450);
 
     db.prepare("DELETE FROM time_entries WHERE employee_number = ?").run(employeeNumber);
-    bookTimeEntry(employeeNumber, "clock_in", times[0]);
+    await bookTimeEntry(employeeNumber, "clock_in", times[0]);
     const nextMorning = new Date("2026-07-14T08:00:00.000Z");
-    const stale = timeTrackingDayStatus(employeeNumber, "2026-07-14", nextMorning);
+    const stale = await timeTrackingDayStatus(employeeNumber, "2026-07-14", nextMorning);
     assert.equal(stale.state, "attention");
     assert.equal(stale.allowedActions.length, 0);
     assert.equal(stale.staleEntry.date, "2026-07-13");
-    const resolved = resolveStaleTimeEntry(
+    const resolved = await resolveStaleTimeEntry(
       { employeeNumber: "local", role: "admin", permissions: ["time:review"] },
       employeeNumber,
       "2026-07-13",
@@ -323,7 +326,7 @@ test("Zeiterfassung erzwingt die sichere Buchungsfolge und berechnet die Ist-Zei
     );
     assert.equal(resolved.state, "off");
     assert.equal(resolved.staleEntry, null);
-    assert.equal(timeTrackingDayStatus(employeeNumber, "2026-07-13", nextMorning).actualMinutes, 480);
+    assert.equal((await timeTrackingDayStatus(employeeNumber, "2026-07-13", nextMorning)).actualMinutes, 480);
     assert.equal(db.prepare("SELECT COUNT(*) AS count FROM time_corrections WHERE employee_number = ?").get(employeeNumber).count, 1);
     const staleCorrection = db.prepare(`
       SELECT id, location_id, requested_by, decided_by, decision_note
@@ -1801,6 +1804,18 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     const csrf = decodeURIComponent(csrfCookie.split("=").slice(1).join("="));
 
     if (windowsUsbHost) {
+      const usbStatusResponse = await fetch(`${url}/api/usb-provisioning/status`, {
+        headers: {
+          ...hostSecureHeaders,
+          Cookie: cookie,
+          "X-Grabenplaner-USB-Action": "provisioning",
+        },
+      });
+      assert.equal(usbStatusResponse.status, 200, await usbStatusResponse.clone().text());
+      const usbStatus = await usbStatusResponse.json();
+      assert.ok(Array.isArray(usbStatus.creators));
+      assert.ok(usbStatus.creators.some((creator) => creator.employeeNumber === "101"));
+
       const usbStatusWithoutActionHeader = await fetch(`${url}/api/usb-provisioning/status`, {
         headers: { ...hostSecureHeaders, Cookie: cookie },
       });

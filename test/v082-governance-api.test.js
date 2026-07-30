@@ -479,8 +479,8 @@ test("v0.82: Monatsnachweis nutzt nur Ist-Ereignisse und wird revisionssicher fi
   assert.equal(ownArchivedDownload.response.status, 409);
 });
 
-test("v0.82: Hilfsereignisse werden gegen ihre geschützten Revisionen geprüft", () => {
-  assert.ok(verifyProtectedGovernanceRecords() > 0);
+test("v0.82: Hilfsereignisse werden gegen ihre geschützten Revisionen geprüft", async () => {
+  assert.ok(await verifyProtectedGovernanceRecords() > 0);
 
   const vacationEvent = db.prepare(`
     SELECT id, detail_json FROM vacation_account_events
@@ -492,7 +492,7 @@ test("v0.82: Hilfsereignisse werden gegen ihre geschützten Revisionen geprüft"
   try {
     db.prepare("UPDATE vacation_account_events SET detail_json = '{}' WHERE id = ?")
       .run(vacationEvent.id);
-    assert.throws(
+    await assert.rejects(
       () => verifyProtectedGovernanceRecords(),
       { code: "VACATION_ACCOUNT_EVENT_INTEGRITY_FAILED" },
     );
@@ -517,7 +517,7 @@ test("v0.82: Hilfsereignisse werden gegen ihre geschützten Revisionen geprüft"
   try {
     db.prepare("UPDATE time_record_statement_events SET detail_json = '{}' WHERE id = ?")
       .run(timeEvent.id);
-    assert.throws(
+    await assert.rejects(
       () => verifyProtectedGovernanceRecords(),
       { code: "TIME_RECORD_STATEMENT_EVENT_INTEGRITY_FAILED" },
     );
@@ -532,7 +532,7 @@ test("v0.82: Hilfsereignisse werden gegen ihre geschützten Revisionen geprüft"
       END
     `);
   }
-  assert.ok(verifyProtectedGovernanceRecords() > 0);
+  assert.ok(await verifyProtectedGovernanceRecords() > 0);
 });
 
 test("v0.82: Teammitglied löschen deaktiviert den Zugang und erhält die Historie", async () => {

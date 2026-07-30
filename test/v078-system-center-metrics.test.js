@@ -2,7 +2,22 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
+const {
+  createSystemCenterMetricsRepository,
+} = require("../lib/persistence/repositories/system-center-metrics");
+const {
+  SQLITE_SYSTEM_CENTER_METRICS_CATALOG,
+} = require("../lib/persistence/sqlite/system-center-metrics-catalog");
+const {
+  ensureSqliteSystemCenterMetricsSchema,
+} = require("../lib/persistence/sqlite/operations/system-center-metrics-schema");
+const {
+  createSqlitePersistenceProvider,
+} = require("../lib/persistence/sqlite/provider");
 const {
   buildSystemCenterTrendPayload,
   createSystemCenterMetricsStore,
@@ -12,6 +27,91 @@ const {
   systemCenterNotificationIncidentKey,
   systemCenterRecoveryAlert,
 } = require("../lib/system-center-metrics");
+
+function createSystemCenterMetricsProviderFixture(options = {}) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-system-center-metrics-"));
+  const databasePath = path.join(directory, "metrics.sqlite");
+  const schemaDatabase = new DatabaseSync(databasePath);
+  try {
+    ensureSqliteSystemCenterMetricsSchema(schemaDatabase);
+    schemaDatabase.exec(`
+      CREATE TABLE product_readiness_evidence (
+        id TEXT PRIMARY KEY,
+        check_id TEXT NOT NULL,
+        outcome TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        receipt_sha256 TEXT NOT NULL,
+        observed_by TEXT NOT NULL,
+        observed_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE product_readiness_acceptances (
+        id TEXT PRIMARY KEY,
+        discipline TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        release_version TEXT NOT NULL,
+        basis_sha256 TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        receipt_sha256 TEXT NOT NULL,
+        decided_by TEXT NOT NULL,
+        decided_at TEXT NOT NULL
+      );
+      CREATE TABLE portal_notifications (
+        id TEXT PRIMARY KEY,
+        recipient_employee_number TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        dedupe_key TEXT,
+        read_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  } finally {
+    schemaDatabase.close();
+  }
+  const provider = createSqlitePersistenceProvider({
+    databasePath,
+    catalog: SQLITE_SYSTEM_CENTER_METRICS_CATALOG,
+  });
+  const repository = createSystemCenterMetricsRepository(provider);
+  return {
+    repository,
+    store: createSystemCenterMetricsStore(repository, options),
+    tamperTrustScoreWithSqliteTestOperation(intervalKey, trustScore) {
+      const manipulationDatabase = new DatabaseSync(databasePath);
+      try {
+        manipulationDatabase
+          .prepare("UPDATE system_center_trust_metrics SET trust_score = ? WHERE interval_key = ?")
+          .run(trustScore, intervalKey);
+      } finally {
+        manipulationDatabase.close();
+      }
+    },
+    insertRecoveryNotificationWithSqliteTestOperation({
+      id,
+      recipient,
+      dedupeKey,
+      createdAt,
+    }) {
+      const manipulationDatabase = new DatabaseSync(databasePath);
+      try {
+        manipulationDatabase.prepare(`
+          INSERT INTO portal_notifications
+            (id, recipient_employee_number, event_type, dedupe_key, created_at)
+          VALUES (?, ?, 'system.recovery.alert', ?, ?)
+        `).run(id, recipient, dedupeKey, createdAt);
+      } finally {
+        manipulationDatabase.close();
+      }
+    },
+    async close() {
+      try {
+        await provider.close();
+      } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  };
+}
 
 function event(runId, eventType, occurredAt, trigger = "scheduled-nightly") {
   return { payload: { runId, eventType, occurredAt, trigger } };
@@ -180,29 +280,169 @@ test("v0.78: vertrauenswuerdig aktiver Timer plus Nachtlauf wird gesund", () => 
   assert.equal(result.reasonCode, "AUTOMATION_CURRENT");
 });
 
-test("v0.78: lokale Trust-Metriken sind gedrosselt, begrenzt und manipulationsauffaellig", () => {
-  const db = new DatabaseSync(":memory:");
+test("v0.78: lokale Trust-Metriken sind gedrosselt, begrenzt und manipulationsauffaellig", async () => {
+  const fixture = createSystemCenterMetricsProviderFixture({
+    retentionDays: 30,
+    sampleIntervalHours: 6,
+  });
   try {
-    const store = createSystemCenterMetricsStore(db, { retentionDays: 30, sampleIntervalHours: 6 });
     const input = {
       trustIndex: { score: 93, coverage: 100, state: "healthy" },
       resources: { storage: { databaseBytes: 4096, freeBytes: 8192 } },
       automation: { state: "healthy" },
       now: new Date("2026-07-21T01:10:00.000Z"),
     };
-    assert.equal(store.record(input), true);
-    assert.equal(store.record({ ...input, now: new Date("2026-07-21T05:59:00.000Z") }), false);
-    assert.equal(store.record({ ...input, trustIndex: { score: 94, coverage: 100, state: "healthy" }, now: new Date("2026-07-21T07:00:00.000Z") }), true);
-    const verified = store.read();
+    assert.equal(await fixture.store.record(input), true);
+    assert.equal(await fixture.store.record({
+      ...input,
+      now: new Date("2026-07-21T05:59:00.000Z"),
+    }), false);
+    assert.equal(await fixture.store.record({
+      ...input,
+      trustIndex: { score: 94, coverage: 100, state: "healthy" },
+      now: new Date("2026-07-21T07:00:00.000Z"),
+    }), true);
+    const verified = await fixture.store.read();
     assert.equal(verified.integrityVerified, true);
     assert.equal(verified.samples.length, 2);
     assert.equal(verified.samples[0].databaseBytes, 4096);
 
-    db.prepare("UPDATE system_center_trust_metrics SET trust_score = 12 WHERE interval_key = ?")
-      .run(verified.samples[0].intervalKey);
-    assert.deepEqual(store.read(), { integrityVerified: false, samples: [] });
+    fixture.tamperTrustScoreWithSqliteTestOperation(verified.samples[0].intervalKey, 12);
+    assert.deepEqual(await fixture.store.read(), { integrityVerified: false, samples: [] });
   } finally {
-    db.close();
+    await fixture.close();
+  }
+});
+
+test("v0.87 Datenbank Block 3: parallele Slots und rueckdatierte Metriken bleiben atomar", async () => {
+  const fixture = createSystemCenterMetricsProviderFixture({
+    retentionDays: 30,
+    sampleIntervalHours: 6,
+  });
+  try {
+    const input = {
+      trustIndex: { score: 91, coverage: 100, state: "healthy" },
+      resources: { storage: { databaseBytes: 4096, freeBytes: 8192 } },
+      automation: { state: "healthy" },
+      now: new Date("2026-07-21T07:00:00.000Z"),
+    };
+    const concurrentResults = await Promise.all([
+      fixture.store.record(input),
+      fixture.store.record(input),
+    ]);
+    assert.equal(concurrentResults.filter(Boolean).length, 1);
+    assert.equal(concurrentResults.filter((result) => result === false).length, 1);
+
+    assert.equal(await fixture.store.record({
+      ...input,
+      now: new Date("2026-07-21T13:00:00.000Z"),
+    }), true);
+    assert.equal(await fixture.store.record({
+      ...input,
+      now: new Date("2026-07-21T01:00:00.000Z"),
+    }), false);
+    const verified = await fixture.store.read();
+    assert.equal(verified.integrityVerified, true);
+    assert.deepEqual(
+      verified.samples.map((sample) => sample.recordedAt),
+      ["2026-07-21T06:00:00.000Z", "2026-07-21T12:00:00.000Z"],
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("v0.87 Datenbank Block 3: Metrics-Retention bleibt begrenzt und hashverifiziert", async () => {
+  const fixture = createSystemCenterMetricsProviderFixture({
+    retentionDays: 30,
+    sampleIntervalHours: 24,
+  });
+  try {
+    const start = Date.parse("2026-06-01T01:00:00.000Z");
+    for (let day = 0; day < 40; day += 1) {
+      assert.equal(await fixture.store.record({
+        trustIndex: { score: 90 + (day % 5), coverage: 100, state: "healthy" },
+        resources: { storage: { databaseBytes: 4096 + day, freeBytes: 8192 - day } },
+        automation: { state: "healthy" },
+        now: new Date(start + (day * 24 * 60 * 60 * 1_000)),
+      }), true);
+    }
+    const verified = await fixture.store.read();
+    assert.equal(verified.integrityVerified, true);
+    assert.ok(verified.samples.length <= fixture.store.maximumSamples);
+    assert.equal(verified.samples.at(-1).recordedAt, "2026-07-10T00:00:00.000Z");
+    assert.ok(Date.parse(verified.samples[0].recordedAt) >= Date.parse("2026-06-10T00:00:00.000Z"));
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("v0.87 Datenbank Block 3: Pilotnachweise und Abnahmen laufen providerneutral", async () => {
+  const fixture = createSystemCenterMetricsProviderFixture();
+  try {
+    const evidence = {
+      id: "evidence-1",
+      checkId: "security",
+      outcome: "passed",
+      receiptSha256: "a".repeat(64),
+      observedBy: "E1",
+      observedAt: "2026-07-29T10:00:00.000Z",
+      createdAt: "2026-07-29T10:00:00.000Z",
+    };
+    await fixture.repository.insertReadinessEvidence(evidence);
+    assert.deepEqual(await fixture.repository.listReadinessEvidence(), [{
+      id: evidence.id,
+      check_id: evidence.checkId,
+      outcome: evidence.outcome,
+      payload_json: JSON.stringify(evidence),
+      receipt_sha256: evidence.receiptSha256,
+      observed_by: evidence.observedBy,
+      observed_at: evidence.observedAt,
+      created_at: evidence.createdAt,
+    }]);
+
+    const acceptance = {
+      id: "acceptance-1",
+      discipline: "technical",
+      decision: "accepted",
+      releaseVersion: "0.87.0-beta",
+      basisSha256: "b".repeat(64),
+      receiptSha256: "c".repeat(64),
+      decidedBy: "E1",
+      decidedAt: "2026-07-29T10:05:00.000Z",
+    };
+    await fixture.repository.insertReadinessAcceptance(acceptance);
+    assert.deepEqual(await fixture.repository.listReadinessAcceptances(), [{
+      id: acceptance.id,
+      discipline: acceptance.discipline,
+      decision: acceptance.decision,
+      release_version: acceptance.releaseVersion,
+      basis_sha256: acceptance.basisSha256,
+      payload_json: JSON.stringify(acceptance),
+      receipt_sha256: acceptance.receiptSha256,
+      decided_by: acceptance.decidedBy,
+      decided_at: acceptance.decidedAt,
+    }]);
+
+    fixture.insertRecoveryNotificationWithSqliteTestOperation({
+      id: "notification-1",
+      recipient: "E1",
+      dedupeKey: "incident-1",
+      createdAt: "2026-07-29 10:06:00",
+    });
+    assert.deepEqual(await fixture.repository.listRecoveryNotifications(), [{
+      id: "notification-1",
+      recipient: "E1",
+      dedupeKey: "incident-1",
+      readAt: null,
+    }]);
+    await fixture.repository.closeRecoveryNotification("notification-1");
+    assert.ok((await fixture.repository.listRecoveryNotifications())[0].readAt);
+    assert.deepEqual(await fixture.repository.latestRecoveryNotification(), {
+      createdAt: "2026-07-29 10:06:00",
+    });
+  } finally {
+    await fixture.close();
   }
 });
 

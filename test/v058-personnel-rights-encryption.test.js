@@ -289,6 +289,22 @@ test("v0.58: Admin darf keine Datenbank über die geschützte API importieren", 
   assert.equal(denied.payload.code, "BACKUP_IMPORT_ROLE_DENIED");
 });
 
+test("v0.87: unlesbarer DB-Import wird unter Windows erst geschlossen und dann entfernt", async () => {
+  const itAdmin = session("106", "it_admin");
+  const importDirectory = path.join(process.env.GRABENPLANER_DATA_DIR, "data");
+  const pendingImports = () => fs.existsSync(importDirectory)
+    ? fs.readdirSync(importDirectory).filter((name) => name.startsWith("pending-import-")).sort()
+    : [];
+  const before = pendingImports();
+  const denied = await requestRaw("/api/backup/import", {
+    auth: itAdmin,
+    body: Buffer.alloc(2048),
+  });
+  assert.equal(denied.response.status, 400, JSON.stringify(denied.payload));
+  assert.match(denied.payload.error, /keine lesbare SQLite-Backup-Datei/i);
+  assert.deepEqual(pendingImports(), before);
+});
+
 test("v0.58: DB-Import lehnt auch bereinigte Personalakten mit fremdem Schlüssel ab", async () => {
   const foreignRoot = fs.mkdtempSync(path.join(testRoot, "foreign-personnel-key-"));
   const foreignStorage = createAmuStorage({

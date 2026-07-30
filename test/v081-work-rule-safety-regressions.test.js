@@ -23,7 +23,9 @@ const {
   app,
   db,
   ensureWorkRuleEvaluationReceiptIntegrity,
+  initializeApplicationPersistence,
   releaseInstanceLockForTests,
+  workRuleStoreRepository,
 } = subject;
 const { canonicalSha256 } = require("../lib/work-rules");
 const { getWorkRuleEvaluation } = require("../lib/work-rules/store");
@@ -229,6 +231,7 @@ function insertEvaluationRun(id, receiptSha256 = canonicalSha256({ receipt: id }
 }
 
 test.before(async () => {
+  await initializeApplicationPersistence();
   const mainLocation = db.prepare(`
     SELECT id, cost_center_id FROM locations WHERE active = 1 ORDER BY id LIMIT 1
   `).get();
@@ -637,7 +640,7 @@ test("Regression: Evaluation-Runs sind DB-seitig gegen DELETE geschützt", () =>
   );
 });
 
-test("Regression: Legacy-Prüfbelege werden vor Aktivierung der Trigger vollständig nachsigniert", () => {
+test("Regression: Legacy-Prüfbelege werden vor Aktivierung der Trigger vollständig nachsigniert", async () => {
   const id = `legacy-receipt-${crypto.randomUUID()}`;
   db.exec(`
     DROP TRIGGER IF EXISTS trg_work_rule_evaluations_immutable_update;
@@ -649,7 +652,7 @@ test("Regression: Legacy-Prüfbelege werden vor Aktivierung der Trigger vollstä
     SELECT receipt_sha256 FROM work_rule_evaluation_runs WHERE id = ?
   `).get(id);
   assert.match(migrated.receipt_sha256, /^[a-f0-9]{64}$/);
-  const verified = getWorkRuleEvaluation(db, id);
+  const verified = await getWorkRuleEvaluation(workRuleStoreRepository, id);
   assert.equal(verified.receiptHashValid, true);
   assert.equal(verified.resultHashValid, true);
   assert.throws(

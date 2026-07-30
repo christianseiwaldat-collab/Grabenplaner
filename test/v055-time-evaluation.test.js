@@ -224,17 +224,17 @@ test("v0.55: Samstagsfaktor wird nur auf tatsächlich gearbeitete Minuten ab 13 
   assert.equal(result.valuedMinutes, 473);
 });
 
-test("v0.55: Tagesbewertung erkennt fehlende Buchungen, offenen Abschluss und zu kurze Pause", () => {
+test("v0.55: Tagesbewertung erkennt fehlende Buchungen, offenen Abschluss und zu kurze Pause", async () => {
   const now = new Date("2026-07-20T10:00:00Z");
 
   insertShift("103", "2026-07-10", "09:00", "17:00");
-  const missing = subject.evaluateTimeDay("103", "2026-07-10", now);
+  const missing = await subject.evaluateTimeDay("103", "2026-07-10", now);
   assert.equal(missing.code, "missing_entries");
   assert.ok(issueCodes(missing).includes("missing_entries"));
 
   insertShift("104", "2026-07-09", "09:00", "17:00");
   insertEntries("104", "2026-07-09", [{ type: "clock_in", time: "09:00" }]);
-  const incomplete = subject.evaluateTimeDay("104", "2026-07-09", now);
+  const incomplete = await subject.evaluateTimeDay("104", "2026-07-09", now);
   assert.equal(incomplete.incomplete, true);
   assert.ok(issueCodes(incomplete).includes("incomplete"));
 
@@ -245,7 +245,7 @@ test("v0.55: Tagesbewertung erkennt fehlende Buchungen, offenen Abschluss und zu
     { type: "break_end", time: "12:10" },
     { type: "clock_out", time: "16:01" },
   ]);
-  const shortBreak = subject.evaluateTimeDay("105", "2026-07-08", now);
+  const shortBreak = await subject.evaluateTimeDay("105", "2026-07-08", now);
   assert.equal(shortBreak.actualMinutes, 411);
   assert.equal(shortBreak.breakMinutes, 10);
   assert.equal(shortBreak.requiredBreakMinutes, 30);

@@ -27,10 +27,14 @@
       </form>
     </section>
     <div class="app-shell">
-      <aside class="sidebar">
+      <button class="mobile-navigation-toggle" id="mobileNavigationToggle" type="button" aria-controls="mainSidebar" aria-expanded="false">
+        <span aria-hidden="true"></span><span class="mobile-navigation-label">Menü</span>
+      </button>
+      <aside class="sidebar" id="mainSidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
           <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.87 Beta</span></div>
+          <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
           <strong id="sidebarSessionRole"></strong>
@@ -75,9 +79,12 @@
             </div>
           </section>
           <section class="nav-module hidden" id="personnelAdministrationNav" aria-label="Personalverwaltung">
-            <button type="button" class="nav-module-toggle expanded" id="personnelAdministrationToggle" data-nav-toggle="personnelAdministration" aria-controls="personnelAdministrationNavChildren" aria-expanded="true">
-              <span class="nav-module-chevron" aria-hidden="true"></span><span class="nav-symbol" aria-hidden="true">◎</span><span>Personalverwaltung</span>
-            </button>
+            <div class="nav-branch nav-module-heading">
+              <button type="button" class="nav-disclosure expanded" id="personnelAdministrationToggle" data-nav-toggle="personnelAdministration" aria-controls="personnelAdministrationNavChildren" aria-label="Unterpunkte der Personalverwaltung ein- oder ausklappen" aria-expanded="true"><span aria-hidden="true"></span></button>
+              <button class="nav-item nav-module-main" data-view="personnelAdministration" data-personnel-administration-route="dashboard" id="personnelDashboardNavButton">
+                <span class="nav-symbol" aria-hidden="true">◎</span><span>Personalverwaltung</span>
+              </button>
+            </div>
             <div class="nav-module-children" id="personnelAdministrationNavChildren">
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="employees" id="personnelDirectoryNavButton">
                 <span class="nav-symbol">◉</span><span>Mitarbeitende</span>
@@ -130,6 +137,7 @@
         </div>
 
       </aside>
+      <button class="sidebar-backdrop" id="mobileNavigationBackdrop" type="button" aria-label="Hauptmenü schließen" tabindex="-1"></button>
 
       <main class="main-content">
         <button class="server-alert-banner hidden" id="serverAlertBanner" type="button" aria-live="polite">
@@ -337,6 +345,30 @@
             <div><span class="eyebrow">Zentrale Stammdaten</span><h1>Personalverwaltung</h1><p class="subtitle">Mitarbeitende, Organisation, Abwesenheiten und fachliche Regelgrundlagen geschützt verwalten.</p></div>
             <div class="settings-header-actions"><button class="display-columns-button" id="personnelDisplayColumnsButton" type="button">Anzeigespalten</button><div class="page-theme-switch" role="group" aria-label="Darstellung der Personalverwaltung"><button type="button" data-page-theme-choice="light" aria-pressed="true">Hell</button><button type="button" data-page-theme-choice="dark" aria-pressed="false">Dunkel</button></div></div>
           </header>
+
+          <section class="personnel-administration-section personnel-dashboard-section active" id="personnelDashboardSection" aria-labelledby="personnelDashboardTitle">
+            <div class="personnel-dashboard-heading">
+              <div>
+                <span class="eyebrow">Arbeitsbereiche</span>
+                <h2 id="personnelDashboardTitle">Personalverwaltung im Überblick</h2>
+                <p>Öffne genau die Bereiche, die für deine Rolle und den aktivierten Funktionsumfang verfügbar sind.</p>
+              </div>
+              <button class="secondary-button" id="personnelDashboardCustomizeButton" type="button" aria-controls="personnelDashboardCustomizer" aria-expanded="false">Dashboard anpassen</button>
+            </div>
+            <section class="personnel-dashboard-customizer hidden" id="personnelDashboardCustomizer" aria-labelledby="personnelDashboardCustomizerTitle">
+              <div class="personnel-dashboard-customizer-heading">
+                <div><span class="eyebrow">Persönliche Ansicht</span><h3 id="personnelDashboardCustomizerTitle">Kacheln anordnen und ausblenden</h3><p>Die Auswahl gilt nur für dein Benutzerkonto. Nicht erlaubte Bereiche bleiben unabhängig davon verborgen.</p></div>
+                <button class="close-button" id="personnelDashboardCustomizerClose" type="button" aria-label="Dashboard-Anpassung schließen">×</button>
+              </div>
+              <div class="personnel-dashboard-customizer-list" id="personnelDashboardCustomizerList"></div>
+              <p class="settings-note" id="personnelDashboardCustomizerStatus" role="status" aria-live="polite"></p>
+              <div class="personnel-dashboard-customizer-actions">
+                <button class="secondary-button" id="resetPersonnelDashboardLayout" type="button">Standard wiederherstellen</button>
+                <button class="primary-button" id="savePersonnelDashboardLayout" type="button">Anordnung speichern</button>
+              </div>
+            </section>
+            <div class="personnel-dashboard-grid" id="personnelDashboardGrid" aria-live="polite"></div>
+          </section>
 
           <div class="settings-tabs personnel-administration-tabs" role="tablist">
             <button class="settings-tab active" id="personnelDirectoryTab" type="button" role="tab" aria-controls="personnelDirectorySection" aria-selected="true" data-personnel-administration-tab="employees">Mitarbeitende</button>

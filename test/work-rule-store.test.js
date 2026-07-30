@@ -2,13 +2,26 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { DatabaseSync } = require("node:sqlite");
 
 const {
   BUILTIN_WORK_RULE_PROFILES,
   SOURCE_CATALOG,
   canonicalSha256,
 } = require("../lib/work-rules");
+const {
+  SQLITE_WORK_RULE_STORE_CATALOG,
+} = require("../lib/persistence/sqlite/work-rule-store-catalog");
+const {
+  dropSqliteWorkRuleEvaluationReceiptTriggers,
+  ensureSqliteWorkRuleEvaluationReceiptTriggers,
+  ensureSqliteWorkRuleStoreSchema,
+} = require("../lib/persistence/sqlite/operations/work-rule-store-schema");
+const {
+  openSqliteApplicationPersistence,
+} = require("../lib/persistence/sqlite/provider");
+const {
+  createWorkRuleStoreRepository,
+} = require("../lib/persistence/repositories/work-rule-store");
 const {
   getWorkRuleEvaluation,
   getWorkRuleProfileVersion,
@@ -23,118 +36,77 @@ const {
   versionSnapshot,
 } = require("../lib/work-rules/store");
 
-function createDatabase() {
-  const database = new DatabaseSync(":memory:");
-  database.exec(`
-    PRAGMA foreign_keys = ON;
-
-    CREATE TABLE work_rule_profiles (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      description TEXT NOT NULL DEFAULT '',
-      jurisdiction TEXT NOT NULL DEFAULT 'AT',
-      sector TEXT NOT NULL DEFAULT 'general',
-      builtin INTEGER NOT NULL DEFAULT 0,
-      status TEXT NOT NULL DEFAULT 'draft'
-        CHECK(status IN ('draft','active','retired')),
-      current_version_id TEXT,
-      created_by TEXT NOT NULL DEFAULT '',
-      updated_by TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+function createFixture() {
+  const application = openSqliteApplicationPersistence({
+    databasePath: ":memory:",
+    catalog: SQLITE_WORK_RULE_STORE_CATALOG,
+  });
+  ensureSqliteWorkRuleStoreSchema(application.database);
+  application.database.exec(`
+    CREATE TABLE shifts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_number TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      department_id INTEGER,
+      shift_date TEXT NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      area TEXT NOT NULL DEFAULT '',
+      note TEXT NOT NULL DEFAULT ''
     );
 
-    CREATE TABLE work_rule_profile_versions (
-      id TEXT PRIMARY KEY,
-      profile_id TEXT NOT NULL,
-      version TEXT NOT NULL,
-      layer TEXT NOT NULL
-        CHECK(layer IN ('law','sector','collective_agreement','company','contract')),
-      status TEXT NOT NULL DEFAULT 'draft'
-        CHECK(status IN ('draft','published','retired')),
-      valid_from TEXT NOT NULL,
-      valid_to TEXT,
-      rules_json TEXT NOT NULL,
-      sources_json TEXT NOT NULL,
-      content_sha256 TEXT NOT NULL,
-      created_by TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      published_at TEXT,
-      UNIQUE(profile_id, version),
-      FOREIGN KEY (profile_id) REFERENCES work_rule_profiles(id)
-        ON UPDATE CASCADE ON DELETE RESTRICT
+    CREATE TABLE time_day_reviews (
+      employee_number TEXT NOT NULL,
+      work_date TEXT NOT NULL,
+      location_id TEXT NOT NULL,
+      department_key INTEGER NOT NULL DEFAULT 0
     );
 
-    CREATE TABLE work_rule_assignments (
+    CREATE TABLE work_rule_exceptions (
       id TEXT PRIMARY KEY,
+      evaluation_id TEXT NOT NULL,
+      finding_fingerprint TEXT NOT NULL,
+      rule_id TEXT NOT NULL,
       profile_version_id TEXT NOT NULL,
-      scope_type TEXT NOT NULL DEFAULT 'installation'
-        CHECK(scope_type IN ('installation','location','department','employee')),
-      scope_key TEXT NOT NULL DEFAULT '',
+      exception_type TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      evidence TEXT NOT NULL DEFAULT '',
+      state TEXT NOT NULL DEFAULT 'active',
       valid_from TEXT NOT NULL,
       valid_to TEXT,
-      enforcement_mode TEXT NOT NULL DEFAULT 'monitor'
-        CHECK(enforcement_mode IN ('monitor','enforced')),
-      applicability_confirmed INTEGER NOT NULL DEFAULT 0,
-      confirmed_by TEXT NOT NULL DEFAULT '',
-      confirmed_at TEXT,
-      active INTEGER NOT NULL DEFAULT 1,
-      created_by TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (profile_version_id) REFERENCES work_rule_profile_versions(id)
-        ON UPDATE CASCADE ON DELETE RESTRICT
+      revoked_by TEXT,
+      revoked_at TEXT
     );
-
-    CREATE TABLE work_rule_evaluation_runs (
-      id TEXT PRIMARY KEY,
-      target_type TEXT NOT NULL
-        CHECK(target_type IN ('planned_schedule','actual_time')),
-      scope_type TEXT NOT NULL,
-      scope_key TEXT NOT NULL DEFAULT '',
-      period_from TEXT NOT NULL,
-      period_to TEXT NOT NULL,
-      profile_version_ids_json TEXT NOT NULL,
-      input_sha256 TEXT NOT NULL,
-      result_sha256 TEXT NOT NULL,
-      result_json TEXT NOT NULL,
-      receipt_sha256 TEXT NOT NULL,
-      outcome TEXT NOT NULL
-        CHECK(outcome IN ('pass','attention','manual_review','blocked')),
-      created_by TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TRIGGER trg_work_rule_profile_versions_immutable_update
-    BEFORE UPDATE ON work_rule_profile_versions
-    BEGIN
-      SELECT RAISE(ABORT, 'work rule profile versions are immutable');
-    END;
-
-    CREATE TRIGGER trg_work_rule_profile_versions_immutable_delete
-    BEFORE DELETE ON work_rule_profile_versions
-    BEGIN
-      SELECT RAISE(ABORT, 'work rule profile versions are immutable');
-    END;
   `);
-  return database;
+  return {
+    database: application.database,
+    repository: createWorkRuleStoreRepository(application.provider),
+    async close() {
+      await application.provider.close();
+      application.database.close();
+    },
+  };
 }
 
-function seed(database) {
-  seedBuiltinWorkRuleProfiles(
-    database,
+function seed(repository) {
+  return seedBuiltinWorkRuleProfiles(
+    repository,
     BUILTIN_WORK_RULE_PROFILES,
     SOURCE_CATALOG,
     { actor: "test-system" },
   );
 }
 
-test("Arbeitszeitregel-Store: Seed verarbeitet Profil-Bundles vollständig und idempotent", () => {
-  const database = createDatabase();
+test("Arbeitszeitregel-Store: Seed verarbeitet Profil-Bundles vollständig und idempotent", async () => {
+  const fixture = createFixture();
+  const { database, repository } = fixture;
   try {
-    seed(database);
-    seed(database);
+    await seed(repository);
+    await seed(repository);
 
-    const profiles = listWorkRuleProfiles(database);
+    const profiles = await listWorkRuleProfiles(repository);
     assert.equal(profiles.length, 4);
     assert.equal(database.prepare("SELECT COUNT(*) AS count FROM work_rule_profile_versions").get().count, 4);
     const profileHashes = Object.fromEntries(database.prepare(`
@@ -159,12 +131,18 @@ test("Arbeitszeitregel-Store: Seed verarbeitet Profil-Bundles vollständig und i
     assert.equal(retail.currentVersionId, "at-retail-adult-monitor@2026.1");
     assert.ok(retail.rules.rules.some(({ id }) => id === "at.azg.maximum.daily"));
     assert.ok(retail.sources.some(({ id }) => id === "ris.azg.9"));
-    const legacyVersion = getWorkRuleProfileVersion(database, "at-retail-adult-monitor@2026.1");
+    const legacyVersion = await getWorkRuleProfileVersion(
+      repository,
+      "at-retail-adult-monitor@2026.1",
+    );
     assert.equal(legacyVersion.schemaVersion, 1);
     assert.equal(legacyVersion.profile.assignable, true);
     assert.equal(legacyVersion.rules.find(({ id }) => id === "at.azg.maximum.daily").severity, "critical");
 
-    const youthVersion = getWorkRuleProfileVersion(database, "at-retail-youth-monitor@2026.2");
+    const youthVersion = await getWorkRuleProfileVersion(
+      repository,
+      "at-retail-youth-monitor@2026.2",
+    );
     assert.equal(youthVersion.schemaVersion, 2);
     assert.equal(youthVersion.profile.assignable, false);
     assert.equal(youthVersion.profile.applicability.automaticByBirthDate, true);
@@ -174,7 +152,7 @@ test("Arbeitszeitregel-Store: Seed verarbeitet Profil-Bundles vollständig und i
     assert.equal(draft.status, "draft");
     assert.equal(draft.currentVersionId, null);
 
-    const assignments = listWorkRuleAssignments(database);
+    const assignments = await listWorkRuleAssignments(repository);
     assert.equal(assignments.length, 1);
     assert.deepEqual({
       id: assignments[0].id,
@@ -190,14 +168,85 @@ test("Arbeitszeitregel-Store: Seed verarbeitet Profil-Bundles vollständig und i
       applicabilityConfirmed: false,
     });
   } finally {
-    database.close();
+    await fixture.close();
   }
 });
 
-test("Arbeitszeitregel-Store: Versionssnapshot, Hash und SQLite-Trigger schützen unveränderliche Fassungen", () => {
-  const database = createDatabase();
+test("Arbeitszeitregel-Store: Planungsmutation und Prüfbeleg teilen Commit oder Rollback", async () => {
+  const fixture = createFixture();
+  const { database, repository } = fixture;
   try {
-    seed(database);
+    await seed(repository);
+    const result = {
+      engineVersion: "at-planned-work-evaluator-v1",
+      basis: "planned_schedule",
+      profile: { id: "at-retail-adult-monitor", version: "2026.1" },
+      summary: { state: "pass", counts: { pass: 1, fail: 0, unknown: 0 } },
+      findings: [],
+    };
+    const evaluation = {
+      targetType: "planned_schedule",
+      scopeType: "location",
+      scopeKey: "01",
+      periodFrom: "2026-07-20",
+      periodTo: "2026-07-26",
+      profileVersionIds: ["at-retail-adult-monitor@2026.1"],
+      inputSha256: canonicalSha256({ week: "2026-07-20", locationId: "01" }),
+      result,
+      outcome: "pass",
+      actor: "test-system",
+    };
+    const shift = {
+      employeeNumber: "419",
+      locationId: "01",
+      departmentId: null,
+      shiftDate: "2026-07-20",
+      startTime: "09:00",
+      endTime: "17:00",
+      area: "Verkauf",
+      note: "",
+    };
+
+    await assert.rejects(repository.transaction(async (transaction) => {
+      await transaction.insertPlanningShift(shift);
+      await recordWorkRuleEvaluation(transaction, {
+        ...evaluation,
+        id: "rollback-evaluation",
+      });
+      throw new Error("rollback requested");
+    }), /rollback requested/);
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM shifts").get().count, 0);
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM work_rule_evaluation_runs").get().count,
+      0,
+    );
+
+    await repository.transaction(async (transaction) => {
+      await transaction.insertPlanningShift(shift);
+      await recordWorkRuleEvaluation(transaction, {
+        ...evaluation,
+        id: "committed-evaluation",
+      });
+    });
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM shifts").get().count, 1);
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM work_rule_evaluation_runs").get().count,
+      1,
+    );
+    assert.equal(
+      (await getWorkRuleEvaluation(repository, "committed-evaluation")).receiptHashValid,
+      true,
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Arbeitszeitregel-Store: Versionssnapshot, Hash und SQLite-Trigger schützen unveränderliche Fassungen", async () => {
+  const fixture = createFixture();
+  const { database, repository } = fixture;
+  try {
+    await seed(repository);
     const bundle = BUILTIN_WORK_RULE_PROFILES["at-retail-adult-monitor"];
     const expected = canonicalSha256(versionSnapshot(bundle.profile, bundle.rules, bundle.sources));
     const stored = database.prepare(`
@@ -219,8 +268,8 @@ test("Arbeitszeitregel-Store: Versionssnapshot, Hash und SQLite-Trigger schütze
 
     const changed = JSON.parse(JSON.stringify(BUILTIN_WORK_RULE_PROFILES));
     changed["at-retail-adult-monitor"].profile.limits.maximumDailyMinutes = 999;
-    assert.throws(
-      () => seedBuiltinWorkRuleProfiles(database, changed, SOURCE_CATALOG, { actor: "changed-build" }),
+    await assert.rejects(
+      seedBuiltinWorkRuleProfiles(repository, changed, SOURCE_CATALOG, { actor: "changed-build" }),
       /stimmt nicht mit dem eingebauten Katalog/i,
     );
     assert.equal(
@@ -229,16 +278,17 @@ test("Arbeitszeitregel-Store: Versionssnapshot, Hash und SQLite-Trigger schütze
       expected,
     );
   } finally {
-    database.close();
+    await fixture.close();
   }
 });
 
-test("Arbeitszeitregel-Store: Zuordnungen beachten Gültigkeit und employee > department > location > installation", () => {
-  const database = createDatabase();
+test("Arbeitszeitregel-Store: Zuordnungen beachten Gültigkeit und employee > department > location > installation", async () => {
+  const fixture = createFixture();
+  const { repository } = fixture;
   try {
-    seed(database);
+    await seed(repository);
     const profileVersion = "at-retail-adult-monitor@2026.1";
-    saveWorkRuleAssignment(database, {
+    await saveWorkRuleAssignment(repository, {
       id: "location-18",
       profileVersionId: profileVersion,
       scopeType: "location",
@@ -247,7 +297,7 @@ test("Arbeitszeitregel-Store: Zuordnungen beachten Gültigkeit und employee > de
       enforcementMode: "monitor",
       applicabilityConfirmed: false,
     }, "252");
-    saveWorkRuleAssignment(database, {
+    await saveWorkRuleAssignment(repository, {
       id: "department-hardware",
       profileVersionId: profileVersion,
       scopeType: "department",
@@ -256,7 +306,7 @@ test("Arbeitszeitregel-Store: Zuordnungen beachten Gültigkeit und employee > de
       enforcementMode: "enforced",
       applicabilityConfirmed: true,
     }, "252");
-    saveWorkRuleAssignment(database, {
+    await saveWorkRuleAssignment(repository, {
       id: "employee-419-old",
       profileVersionId: profileVersion,
       scopeType: "employee",
@@ -265,7 +315,7 @@ test("Arbeitszeitregel-Store: Zuordnungen beachten Gültigkeit und employee > de
       enforcementMode: "monitor",
       applicabilityConfirmed: true,
     }, "252");
-    saveWorkRuleAssignment(database, {
+    await saveWorkRuleAssignment(repository, {
       id: "employee-419-new",
       profileVersionId: profileVersion,
       scopeType: "employee",
@@ -276,39 +326,39 @@ test("Arbeitszeitregel-Store: Zuordnungen beachten Gültigkeit und employee > de
       applicabilityConfirmed: true,
     }, "252");
 
-    assert.equal(resolveWorkRuleAssignment(database, {
+    assert.equal((await resolveWorkRuleAssignment(repository, {
       date: "2026-07-23",
       locationId: "18",
       departmentId: "hardware",
       employeeNumber: "419",
-    }).id, "employee-419-new");
-    assert.equal(resolveWorkRuleAssignment(database, {
+    })).id, "employee-419-new");
+    assert.equal((await resolveWorkRuleAssignment(repository, {
       date: "2027-01-01",
       locationId: "18",
       departmentId: "hardware",
       employeeNumber: "999",
-    }).id, "department-hardware");
-    assert.equal(resolveWorkRuleAssignment(database, {
+    })).id, "department-hardware");
+    assert.equal((await resolveWorkRuleAssignment(repository, {
       date: "2026-02-01",
       locationId: "18",
       departmentId: "fotowelt",
       employeeNumber: "999",
-    }).id, "location-18");
-    assert.equal(resolveWorkRuleAssignment(database, {
+    })).id, "location-18");
+    assert.equal((await resolveWorkRuleAssignment(repository, {
       date: "2026-02-01",
       locationId: "05",
       departmentId: "fotowelt",
       employeeNumber: "999",
-    }).id, "builtin:at-retail-adult-monitor:installation");
+    })).id, "builtin:at-retail-adult-monitor:installation");
 
-    assert.throws(() => saveWorkRuleAssignment(database, {
+    await assert.rejects(saveWorkRuleAssignment(repository, {
       profileVersionId: profileVersion,
       scopeType: "location",
       scopeKey: "18",
       validFrom: "2026-10-01",
       validTo: "2026-09-30",
     }, "252"), /darf nicht vor/i);
-    assert.throws(() => saveWorkRuleAssignment(database, {
+    await assert.rejects(saveWorkRuleAssignment(repository, {
       profileVersionId: profileVersion,
       scopeType: "location",
       scopeKey: "18",
@@ -316,7 +366,7 @@ test("Arbeitszeitregel-Store: Zuordnungen beachten Gültigkeit und employee > de
       enforcementMode: "enforced",
       applicabilityConfirmed: false,
     }, "252"), /nicht bestätigtes Regelprofil/i);
-    assert.throws(() => saveWorkRuleAssignment(database, {
+    await assert.rejects(saveWorkRuleAssignment(repository, {
       profileVersionId: "at-retail-youth-monitor@2026.2",
       scopeType: "employee",
       scopeKey: "420",
@@ -324,19 +374,51 @@ test("Arbeitszeitregel-Store: Zuordnungen beachten Gültigkeit und employee > de
       enforcementMode: "monitor",
       applicabilityConfirmed: true,
     }, "252"), /ausschließlich automatisch/i);
-    assert.throws(
-      () => resolveWorkRuleAssignment(database, { date: "23.07.2026" }),
+    await assert.rejects(
+      resolveWorkRuleAssignment(repository, { date: "23.07.2026" }),
       /YYYY-MM-DD/i,
     );
   } finally {
-    database.close();
+    await fixture.close();
   }
 });
 
-test("Arbeitszeitregel-Store: kanonischer Evaluation-Receipt erkennt Manipulationen am gesamten Prüfbeleg", () => {
-  const database = createDatabase();
+test("Arbeitszeitregel-Store: dokumentierte Ausnahmen bleiben providergebunden", async () => {
+  const fixture = createFixture();
+  const { repository } = fixture;
   try {
-    seed(database);
+    await seed(repository);
+    assert.equal(await repository.profileVersionExists("at-retail-adult-monitor@2026.1"), true);
+    await repository.insertException({
+      id: "exception-1",
+      evaluationId: "evaluation-1",
+      findingFingerprint: "a".repeat(64),
+      ruleId: "at.azg.maximum.daily",
+      profileVersionId: "at-retail-adult-monitor@2026.1",
+      exceptionType: "documented_exception",
+      reason: "Nachvollziehbare Testbegründung",
+      evidence: "Testnachweis",
+      validFrom: "2026-07-29",
+      validTo: null,
+      actor: "E1",
+    });
+    assert.equal((await repository.listExceptions("active"))[0].id, "exception-1");
+    assert.equal((await repository.revokeException({
+      id: "exception-1",
+      actor: "E1",
+      evidence: "Widerruf: Testbegründung",
+    })).rowsAffected, 1);
+    assert.equal((await repository.getException("exception-1")).state, "revoked");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("Arbeitszeitregel-Store: kanonischer Evaluation-Receipt erkennt Manipulationen am gesamten Prüfbeleg", async () => {
+  const fixture = createFixture();
+  const { database, repository } = fixture;
+  try {
+    await seed(repository);
     const result = {
       engineVersion: "at-planned-work-evaluator-v1",
       basis: "planned_schedule",
@@ -349,7 +431,7 @@ test("Arbeitszeitregel-Store: kanonischer Evaluation-Receipt erkennt Manipulatio
       periodFrom: "2026-07-20",
       periodTo: "2026-07-25",
     });
-    const receipt = recordWorkRuleEvaluation(database, {
+    const receipt = await recordWorkRuleEvaluation(repository, {
       id: "evaluation-1",
       targetType: "planned_schedule",
       scopeType: "employee",
@@ -384,16 +466,28 @@ test("Arbeitszeitregel-Store: kanonischer Evaluation-Receipt erkennt Manipulatio
       createdBy: "252",
       createdAt: receipt.createdAt,
     }));
-    assert.deepEqual(getWorkRuleEvaluation(database, "evaluation-1").result, result);
+    assert.deepEqual((await getWorkRuleEvaluation(repository, "evaluation-1")).result, result);
+    const listedEvaluation = (await listWorkRuleEvaluations(repository))[0];
     assert.deepEqual({
-      resultSha256: listWorkRuleEvaluations(database)[0].resultSha256,
-      receiptSha256: listWorkRuleEvaluations(database)[0].receiptSha256,
-      receiptHashValid: listWorkRuleEvaluations(database)[0].receiptHashValid,
+      resultSha256: listedEvaluation.resultSha256,
+      receiptSha256: listedEvaluation.receiptSha256,
+      receiptHashValid: listedEvaluation.receiptHashValid,
     }, {
       resultSha256: receipt.resultSha256,
       receiptSha256: receipt.receiptSha256,
       receiptHashValid: true,
     });
+
+    ensureSqliteWorkRuleEvaluationReceiptTriggers(database);
+    assert.throws(
+      () => database.prepare(`
+        UPDATE work_rule_evaluation_runs
+        SET outcome = 'pass'
+        WHERE id = ?
+      `).run("evaluation-1"),
+      /immutable/i,
+    );
+    dropSqliteWorkRuleEvaluationReceiptTriggers(database);
 
     const original = database.prepare(`
       SELECT * FROM work_rule_evaluation_runs WHERE id = ?
@@ -418,25 +512,37 @@ test("Arbeitszeitregel-Store: kanonischer Evaluation-Receipt erkennt Manipulatio
     for (const [column, changedValue] of mutations) {
       database.prepare(`UPDATE work_rule_evaluation_runs SET ${column} = ? WHERE id = ?`)
         .run(changedValue, "evaluation-1");
-      assert.throws(
-        () => getWorkRuleEvaluation(database, "evaluation-1"),
+      await assert.rejects(
+        getWorkRuleEvaluation(repository, "evaluation-1"),
         /Prüfbeleg-Prüfsumme/i,
         `Manipulation an ${column} muss erkannt werden`,
       );
-      const unverified = getWorkRuleEvaluation(database, "evaluation-1", { verify: false });
+      const unverified = await getWorkRuleEvaluation(
+        repository,
+        "evaluation-1",
+        { verify: false },
+      );
       assert.equal(unverified.receiptHashValid, false, column);
       assert.equal(
         unverified.resultHashValid,
         !["result_json", "result_sha256"].includes(column),
         column,
       );
-      assert.equal(listWorkRuleEvaluations(database)[0].receiptHashValid, false, column);
+      assert.equal(
+        (await listWorkRuleEvaluations(repository))[0].receiptHashValid,
+        false,
+        column,
+      );
       database.prepare(`UPDATE work_rule_evaluation_runs SET ${column} = ? WHERE id = ?`)
         .run(original[column], "evaluation-1");
-      assert.equal(getWorkRuleEvaluation(database, "evaluation-1").receiptHashValid, true, column);
+      assert.equal(
+        (await getWorkRuleEvaluation(repository, "evaluation-1")).receiptHashValid,
+        true,
+        column,
+      );
     }
 
-    assert.throws(() => recordWorkRuleEvaluation(database, {
+    await assert.rejects(recordWorkRuleEvaluation(repository, {
       targetType: "planned_schedule",
       periodFrom: "2026-07-20",
       periodTo: "2026-07-25",
@@ -445,7 +551,7 @@ test("Arbeitszeitregel-Store: kanonischer Evaluation-Receipt erkennt Manipulatio
       result,
       outcome: "pass",
     }), /unbekannte Regelprofil-Version/i);
-    assert.throws(() => recordWorkRuleEvaluation(database, {
+    await assert.rejects(recordWorkRuleEvaluation(repository, {
       targetType: "planned_schedule",
       periodFrom: "2026-07-20",
       periodTo: "2026-07-25",
@@ -455,6 +561,6 @@ test("Arbeitszeitregel-Store: kanonischer Evaluation-Receipt erkennt Manipulatio
       outcome: "pass",
     }), /SHA-256/i);
   } finally {
-    database.close();
+    await fixture.close();
   }
 });

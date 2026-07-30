@@ -15,7 +15,9 @@ test("v0.80 USB-WebUI uebernimmt entzogene Grundrechte und explizite Bereiche", 
   assert.match(appSource, /data-usb-scope-mode/);
   assert.match(appSource, /deniedPermissions:\s*\[\.\.\.row\.querySelectorAll/);
   assert.match(appSource, /scopes:\s*usbScopesFromRow\(row\)/);
-  assert.match(serverSource, /scopes:\s*user\s*\?\s*explicitPortalAccessScopesForEmployee\(employeeNumber\)\s*:\s*\[\]/);
+  assert.match(serverSource, /async function validateUsbEmployees/);
+  assert.match(serverSource, /const \[employeeRows, positionRows, portalRoles\] = await Promise\.all\(/);
+  assert.match(serverSource, /let scopes = Array\.isArray\(input\.scopes\)/);
 });
 
 test("v0.80 USB-WebUI trennt Grundrechte und Zusatzrechte", () => {

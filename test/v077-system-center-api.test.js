@@ -164,7 +164,7 @@ test("v0.78: reine Leseberechtigung bleibt redigiert und GET ist nebenwirkungsfr
   assert.ok(result.payload.trends.points.every((point) => point.databaseBytes === null));
   assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM system_center_trust_metrics").get().count), metricsBefore);
   assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM portal_notifications").get().count), notificationsBefore);
-  assert.match(serverSource, /createPortalNotification\(employeeNumber,\s*"system\.recovery\.alert",[\s\S]{0,1000}?reactivate:\s*true/);
+  assert.match(serverSource, /createAbsencePortalNotification\(\s*absenceManagementRepository,\s*employeeNumber,\s*"system\.recovery\.alert",[\s\S]{0,1000}?reactivate:\s*true/);
 });
 
 test("v0.86.2: Server-Monitor-Aktionen bleiben auf Admin, IT-Admin und Developer begrenzt", () => {

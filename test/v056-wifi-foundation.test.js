@@ -172,7 +172,7 @@ test("v0.56: Migration legt das WLAN-Fundament datensparsam mit Vertrauensstufe 
 });
 
 test("v0.56: wifi:settings ist nur in den vorgesehenen Built-in-Rollen und nicht delegierbar", async () => {
-  const roles = new Map(getPortalRoles().map((role) => [role.id, role]));
+  const roles = new Map((await getPortalRoles()).map((role) => [role.id, role]));
   for (const role of ["hr", "admin", "it_admin", "developer"]) {
     assert.ok(roles.get(role)?.permissions.includes("wifi:settings"), `${role} benötigt wifi:settings.`);
   }
@@ -368,10 +368,15 @@ test("v0.56: WLAN-Regeln bleiben nach einem frischen App-Start erhalten", async 
     process.env.GRABENPLANER_SEED_DEMO = "1";
     process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
     process.env.NODE_ENV = "test";
-    const { db } = require("./server");
-    const rows = db.prepare("SELECT key, value FROM portal_settings WHERE key IN ('wifi_minimum_presence_minutes','wifi_absence_grace_minutes') ORDER BY key").all();
-    process.stdout.write(JSON.stringify(rows));
-    db.close();
+    void (async () => {
+      const { db, closePersistenceForTests } = require("./server");
+      const rows = db.prepare("SELECT key, value FROM portal_settings WHERE key IN ('wifi_minimum_presence_minutes','wifi_absence_grace_minutes') ORDER BY key").all();
+      process.stdout.write(JSON.stringify(rows));
+      await closePersistenceForTests();
+    })().catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
   `;
   const restarted = spawnSync(process.execPath, ["-e", script], {
     cwd: repositoryRoot,

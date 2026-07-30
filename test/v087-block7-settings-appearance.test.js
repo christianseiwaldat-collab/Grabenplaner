@@ -117,6 +117,8 @@ test("v0.87 Block 7: Grundeinstellungen verwenden Accordions und eine globale nu
   assert.match(styles, /min-width:\s*calc\(320px \* var\(--app-font-scale-inverse\)\)/);
   assert.match(styles, /\.settings-two-column\s*\{[^}]*grid-auto-rows:\s*max-content[^}]*align-items:\s*start/);
   assert.match(styles, /\.settings-accordion-grid\s*\{[^}]*grid-auto-rows:\s*max-content[^}]*align-items:\s*start/);
+  assert.match(styles, /\.settings-packed-grid\s*\{[^}]*grid-auto-flow:\s*row[^}]*grid-auto-rows:\s*1px/);
+  assert.match(script, /function applyAppFontScalePercent[\s\S]*?scheduleAllSettingsPackedGrids\(\);[\s\S]*?return normalized;/);
   assert.doesNotMatch(styles, /--app-font-scale-(?:width|min-height)/);
 });
 

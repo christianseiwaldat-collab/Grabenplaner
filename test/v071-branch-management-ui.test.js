@@ -100,8 +100,8 @@ test("v0.71 Block 7 UI: globale Dienstplanung behält Standort und kennt filialf
   assert.match(saveShift, /locationId: state\.locationId/);
   assert.match(saveShift, /departmentId: elements\.shiftDepartment\.value/);
   const mobileSchedule = between(server, "function mobileSchedulePayload", "function portalStatusForSession");
-  assert.match(mobileSchedule, /s\.location_id/);
-  assert.match(mobileSchedule, /l\.name AS location_name/);
+  assert.match(mobileSchedule, /planningSettingsRepository\.listMobileScheduleShifts/);
+  assert.match(mobileSchedule, /employeeNumber: session\.employeeNumber/);
   assert.match(mobileSchedule, /locationId: shift\.location_id/);
   assert.match(mobileSchedule, /locationName: shift\.location_name/);
 });
@@ -109,8 +109,10 @@ test("v0.71 Block 7 UI: globale Dienstplanung behält Standort und kennt filialf
 test("v0.71 Block 7 UI: Navigation und zentrale Urlaubstabelle reagieren auf kleinere Ansichten", () => {
   assert.match(styles, /\.nav-module \{ display:grid; min-width:0; \}/);
   assert.match(styles, /\.nav-module-children \{[^}]*border-left:/);
-  assert.match(styles, /@media \(max-width: 820px\) \{[\s\S]*?\.main-nav \{[^}]*overflow-x:auto;[^}]*\}[\s\S]*?\.nav-module \{ flex:0 0 220px; \}/);
-  assert.match(styles, /@media \(max-width: 600px\) \{[\s\S]*?\.main-nav \{ display:grid; width:100%; overflow-x:visible; \}[\s\S]*?\.nav-module \{ width:100%; \}/);
+  assert.match(styles, /\.main-nav \{[^}]*overflow-x:clip;[^}]*overflow-y:\s*auto;/);
+  assert.match(styles, /@media \(max-width: 820px\) \{[\s\S]*?\.sidebar \{[^}]*position:fixed;[^}]*transform:translateX\(-105%\);[^}]*\}[\s\S]*?\.main-nav \{[^}]*display:grid;[^}]*overflow-x:clip;[^}]*overflow-y:auto;/);
+  assert.match(styles, /@media \(max-width: 600px\) \{[\s\S]*?\.main-nav \{ display:grid; width:100%; overflow-x:clip; \}[\s\S]*?\.nav-module \{ width:100%; \}/);
+  assert.doesNotMatch(styles, /@media \(max-width: 820px\) \{[\s\S]*?\.main-nav \{[^}]*overflow-x:auto;/);
   assert.match(html, /class="personnel-directory-table central-vacation-table"/);
   assert.match(styles, /@media \(max-width:1180px\) \{[\s\S]*?\.personnel-directory-table thead \{ display:none; \}[\s\S]*?\.personnel-directory-table tr \{ display:grid;/);
 });

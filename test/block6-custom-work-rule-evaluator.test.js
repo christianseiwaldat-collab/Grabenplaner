@@ -2,14 +2,28 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { DatabaseSync } = require("node:sqlite");
 
 const {
+  BUILTIN_WORK_RULE_PROFILES,
+  SOURCE_CATALOG,
   evaluateCustomPlannedSchedule,
-} = require("../lib/work-rules/evaluator");
+} = require("../lib/work-rules");
+const {
+  createWorkRuleStoreRepository,
+} = require("../lib/persistence/repositories/work-rule-store");
+const {
+  ensureSqliteWorkRuleStoreSchema,
+} = require("../lib/persistence/sqlite/operations/work-rule-store-schema");
+const {
+  openSqliteApplicationPersistence,
+} = require("../lib/persistence/sqlite/provider");
+const {
+  SQLITE_WORK_RULE_STORE_CATALOG,
+} = require("../lib/persistence/sqlite/work-rule-store-catalog");
 const {
   resolveWorkRuleAssignmentsFromList,
   saveWorkRuleAssignment,
+  seedBuiltinWorkRuleProfiles,
 } = require("../lib/work-rules/store");
 
 function customProfileVersion(metric, operator, threshold, unit) {
@@ -264,20 +278,30 @@ test("Block 6: Basis-, Custom- und U18-Profil werden additiv aufgelöst", () => 
   );
 });
 
-test("Block 6: eine bestehende Assignment-ID wird nicht per UPSERT überschrieben", () => {
-  const db = new DatabaseSync(":memory:");
+test("Block 6: eine bestehende Assignment-ID wird nicht per UPSERT überschrieben", async () => {
+  const application = openSqliteApplicationPersistence({
+    databasePath: ":memory:",
+    catalog: SQLITE_WORK_RULE_STORE_CATALOG,
+  });
+  const { database, provider } = application;
+  ensureSqliteWorkRuleStoreSchema(database);
+  const repository = createWorkRuleStoreRepository(provider);
   try {
-    db.exec(`
-      CREATE TABLE work_rule_assignments (
-        id TEXT PRIMARY KEY,
-        marker TEXT NOT NULL
-      );
-      INSERT INTO work_rule_assignments (id, marker)
-      VALUES ('immutable-assignment', 'original');
-    `);
-    assert.throws(
-      () => saveWorkRuleAssignment(db, {
-        id: "immutable-assignment",
+    await seedBuiltinWorkRuleProfiles(
+      repository,
+      BUILTIN_WORK_RULE_PROFILES,
+      SOURCE_CATALOG,
+      { actor: "test-system" },
+    );
+    const assignmentId = "builtin:at-retail-adult-monitor:installation";
+    const original = database.prepare(`
+      SELECT id, profile_version_id, valid_from, created_by
+      FROM work_rule_assignments
+      WHERE id = ?
+    `).get(assignmentId);
+    await assert.rejects(
+      saveWorkRuleAssignment(repository, {
+        id: assignmentId,
         profileVersionId: "custom:SAMSTAG@release-2",
         scopeType: "location",
         scopeKey: "18",
@@ -285,10 +309,14 @@ test("Block 6: eine bestehende Assignment-ID wird nicht per UPSERT überschriebe
       }, "252"),
       /bestehende Regelprofil-Zuordnung/i,
     );
-    const stored = db.prepare("SELECT id, marker FROM work_rule_assignments").get();
-    assert.equal(stored.id, "immutable-assignment");
-    assert.equal(stored.marker, "original");
+    const stored = database.prepare(`
+      SELECT id, profile_version_id, valid_from, created_by
+      FROM work_rule_assignments
+      WHERE id = ?
+    `).get(assignmentId);
+    assert.deepEqual(stored, original);
   } finally {
-    db.close();
+    await provider.close();
+    database.close();
   }
 });

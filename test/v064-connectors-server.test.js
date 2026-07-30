@@ -151,7 +151,7 @@ test("v0.64: IT-Admin speichert SQL-Zugangsdaten nur verschlüsselt und öffentl
   assert.equal(JSON.stringify(listed.payload).includes("Nur-Lese-Testpasswort"), false);
 });
 
-test("v0.64: unterbrochene API-Zustellungen werden kontrolliert auf unklar gesetzt", () => {
+test("v0.64: unterbrochene API-Zustellungen werden kontrolliert auf unklar gesetzt", async () => {
   const deliveryId = crypto.randomUUID();
   db.prepare(`
     INSERT INTO integration_deliveries
@@ -159,7 +159,7 @@ test("v0.64: unterbrochene API-Zustellungen werden kontrolliert auf unklar geset
        connection_revision, connection_fingerprint, status, actor_employee_number)
     VALUES (?, ?, ?, '2026-07-01', '2026-07-01', '18', ?, 1, ?, 'sending', '101')
   `).run(deliveryId, sqlConnection.id, `gp-test-${crypto.randomBytes(16).toString("hex")}`, "a".repeat(64), "b".repeat(64));
-  assert.equal(reconcileInterruptedIntegrationDeliveries(), 1);
+  assert.equal(await reconcileInterruptedIntegrationDeliveries(), 1);
   const delivery = db.prepare("SELECT status, error_code, completed_at FROM integration_deliveries WHERE id = ?").get(deliveryId);
   assert.equal(delivery.status, "unknown");
   assert.equal(delivery.error_code, "PROCESS_INTERRUPTED");
@@ -231,7 +231,7 @@ test("v0.64: SQL-Inspect verlangt globalen Scope und vollstaendigen Connection-K
   }
 });
 
-test("v0.64: SQL-Apply verwirft deaktivierte oder nachtraeglich geaenderte Verbindungen", () => {
+test("v0.64: SQL-Apply verwirft deaktivierte oder nachtraeglich geaenderte Verbindungen", async () => {
   assert.ok(sqlConnection?.id);
   const actor = {
     employeeNumber: "101",
@@ -247,13 +247,13 @@ test("v0.64: SQL-Apply verwirft deaktivierte oder nachtraeglich geaenderte Verbi
   };
   const stored = db.prepare("SELECT configuration_json, last_test_status, last_test_at, last_error_code FROM integration_connections WHERE id = ?").get(sqlConnection.id);
   db.prepare("UPDATE integration_connections SET last_test_status = 'ready', last_error_code = '' WHERE id = ?").run(sqlConnection.id);
-  assert.doesNotThrow(() => revalidateSqlPersonnelPreviewConnection(actor, preview));
+  await assert.doesNotReject(() => revalidateSqlPersonnelPreviewConnection(actor, preview));
 
   const changed = JSON.parse(stored.configuration_json);
   changed.rowLimit = Number(changed.rowLimit || 1000) === 4999 ? 4998 : 4999;
   db.prepare("UPDATE integration_connections SET configuration_json = ? WHERE id = ?")
     .run(JSON.stringify(changed), sqlConnection.id);
-  assert.throws(
+  await assert.rejects(
     () => revalidateSqlPersonnelPreviewConnection(actor, preview),
     (error) => error.status === 409 && error.code === "INTEGRATION_CONNECTION_CHANGED",
   );
@@ -261,7 +261,7 @@ test("v0.64: SQL-Apply verwirft deaktivierte oder nachtraeglich geaenderte Verbi
     .run(stored.configuration_json, sqlConnection.id);
 
   db.prepare("UPDATE integration_connections SET active = 0 WHERE id = ?").run(sqlConnection.id);
-  assert.throws(
+  await assert.rejects(
     () => revalidateSqlPersonnelPreviewConnection(actor, preview),
     (error) => error.status === 409 && error.code === "INTEGRATION_CONNECTION_CHANGED",
   );

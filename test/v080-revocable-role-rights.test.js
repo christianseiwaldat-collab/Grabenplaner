@@ -22,7 +22,7 @@ const subject = require("../server");
 const {
   app,
   db,
-  portalSessionFromRequest,
+  loadPortalSessionFromRequest,
   mobileSessionPrincipal,
   mobileSessionRow,
   releaseInstanceLockForTests,
@@ -236,8 +236,11 @@ test("v0.80: Web und Mobile berechnen Entzüge identisch", async () => {
   assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
   const webAuth = createPortalSession(MANAGER, "manager");
   const mobileId = createMobileSession(MANAGER);
-  const web = portalSessionFromRequest({ headers: { cookie: webAuth.cookie } }, { touch: false });
-  const mobile = mobileSessionPrincipal(mobileSessionRow(mobileId));
+  const web = await loadPortalSessionFromRequest(
+    { headers: { cookie: webAuth.cookie } },
+    { touch: false },
+  );
+  const mobile = mobileSessionPrincipal(await mobileSessionRow(mobileId));
   assert.deepEqual(web.rolePermissions, mobile.rolePermissions);
   assert.deepEqual(web.grantedPermissions, mobile.grantedPermissions);
   assert.deepEqual(web.deniedPermissions, mobile.deniedPermissions);

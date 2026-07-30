@@ -319,7 +319,7 @@ test("v0.83: API erzwingt Finalisierung, protokolliert Übergabe und verschlüss
   assert.equal(protocol.payload.handoff.state, "accepted_with_warning");
   assert.equal(protocol.payload.handoff.protocolNumber, "ELDA-TEST-W-1");
   assert.ok(db.prepare("SELECT payload_json FROM payroll_handoff_events WHERE event_type = 'protocol_recorded'").get().payload_json.startsWith("enc:v2:"));
-  assert.ok(verifyProtectedGovernanceRecords() > 0);
+  assert.ok(await verifyProtectedGovernanceRecords() > 0);
 });
 
 test("v0.83: Vertrag und UI benennen die Grenze zur externen ELDA-Übermittlung", () => {

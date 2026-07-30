@@ -9,6 +9,100 @@ permissions:
   contents: read
 
 jobs:
+  sqlite-provider-node-minimum:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.7.0
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Persistence provider and Block 4 contracts on minimum Node
+        run: >-
+          node --test --test-concurrency=1
+          test/v087-persistence-provider-contract.test.js
+          test/v087-sqlite-persistence-provider.test.js
+          test/v087-database-block4-application-migrations.test.js
+          test/v087-database-block4-dialect-contract.test.js
+          test/v087-database-block4-migration-contract.test.js
+          test/v087-database-block4-sqlite-migration-runner.test.js
+          test/v087-database-block4-statement-dialects.test.js
+
+  postgresql-provider-development-contract:
+    runs-on: ubuntu-latest
+    env:
+      TEST_POSTGRESQL_URL: postgresql://postgres:postgres@127.0.0.1:5432/grabenplaner_test
+      TEST_POSTGRESQL_BIN: /usr/lib/postgresql/18/bin
+    services:
+      postgres:
+        image: postgres:18.4-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: grabenplaner_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d grabenplaner_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.7.0
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install PostgreSQL 18 client tools from PGDG
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ca-certificates curl
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-18
+      - name: PostgreSQL Blocks 5 and 6 development contract
+        run: >-
+          node --test --test-concurrency=1
+          test/v087-database-block5-postgresql-provider.test.js
+          test/v087-database-block5-postgresql-pool-policy.test.js
+          test/v087-database-block5-postgresql-dialect-compiler.test.js
+          test/v087-database-block5-postgresql-application-dialect-plan.test.js
+          test/v087-database-block5-postgresql-catalog-contract.test.js
+          test/v087-database-block5-postgresql-ui-preferences.test.js
+          test/v087-database-block5-postgresql-planning-settings.test.js
+          test/v087-database-block5-postgresql-organization-departments.test.js
+          test/v087-database-block5-postgresql-system-center-metrics.test.js
+          test/v087-database-block5-postgresql-migration-adapter.test.js
+          test/v087-database-block5-postgresql-live.test.js
+          test/v087-database-block6-backup-bundle.test.js
+          test/v087-database-block6-mutation-quiesce.test.js
+          test/v087-database-block6-operations-contract.test.js
+          test/v087-database-block6-postgresql-backup.test.js
+          test/v087-database-block6-postgresql-evidence.test.js
+          test/v087-database-block6-postgresql-monitoring.test.js
+          test/v087-database-block6-postgresql-restore.test.js
+          test/v087-database-block6-postgresql-restore-live.test.js
+          test/v087-database-block6-postgresql-snapshot.test.js
+          test/v087-database-block6-postgresql-tools.test.js
+          test/v087-database-block6-recovery-assurance.test.js
+          test/v087-database-block6-no-cutover.test.js
+
   test:
     strategy:
       fail-fast: false

@@ -182,6 +182,7 @@ test("v0.84: Fehlgeschlagene oder beschädigte Nachweise blockieren die Abnahme"
 
 test("v0.84: Datenbank, API und Startprüfung erzwingen unveränderliche Nachweise", () => {
   const server = read("server.js");
+  const schema = read("lib/persistence/sqlite/operations/application-schema.js");
   for (const marker of [
     "CREATE TABLE IF NOT EXISTS product_readiness_evidence",
     "CREATE TABLE IF NOT EXISTS product_readiness_acceptances",
@@ -189,8 +190,10 @@ test("v0.84: Datenbank, API und Startprüfung erzwingen unveränderliche Nachwei
     "trg_product_readiness_evidence_immutable_delete",
     "trg_product_readiness_acceptances_immutable_update",
     "trg_product_readiness_acceptances_immutable_delete",
-    "productReadinessEvidenceRows();",
-    "productReadinessAcceptanceRows();",
+  ]) assert.match(schema, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  for (const marker of [
+    "systemCenterMetricsRepository.listReadinessEvidence()",
+    "systemCenterMetricsRepository.listReadinessAcceptances()",
     'app.get("/api/portal/v1/product-readiness"',
     'app.post("/api/portal/v1/product-readiness/evidence"',
     'app.post("/api/portal/v1/product-readiness/acceptances"',

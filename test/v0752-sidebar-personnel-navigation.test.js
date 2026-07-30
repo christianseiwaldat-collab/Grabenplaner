@@ -21,6 +21,8 @@ function between(source, start, end) {
 test("v0.75.2 Navigation: Personalverwaltung bündelt ausschließlich berechtigte Fachbereiche", () => {
   const navigation = between(html, '<section class="nav-module hidden" id="personnelAdministrationNav"', "</nav>");
   assert.match(navigation, /id="personnelAdministrationToggle"[^>]*data-nav-toggle="personnelAdministration"[^>]*aria-controls="personnelAdministrationNavChildren"/);
+  assert.match(navigation, /id="personnelAdministrationToggle"[^>]*aria-label="Unterpunkte der Personalverwaltung ein- oder ausklappen"/);
+  assert.match(navigation, /<button(?=[^>]*id="personnelDashboardNavButton")(?=[^>]*data-view="personnelAdministration")(?=[^>]*data-personnel-administration-route="dashboard")[^>]*>/);
   assert.match(navigation, /<button(?=[^>]*id="personnelDirectoryNavButton")(?=[^>]*data-personnel-administration-route="employees")[^>]*>/);
   assert.match(navigation, /id="requestsNavButton"/);
   assert.match(navigation, /id="timeTrackingNavButton"/);
@@ -60,6 +62,7 @@ test("v0.75.2 Navigation: Personal-Unterseiten sind aufklappbar, adressierbar un
   assert.match(groups, /personnelAdministration:\s*\{\s*toggle:\s*elements\.personnelAdministrationToggle,\s*children:\s*elements\.personnelAdministrationNavChildren\s*\}/);
   const contextualNavigation = between(app, "function renderContextNavigation()", "function renderHeader()");
   assert.match(contextualNavigation, /\["personnelAdministration", "requests", "timeTracking"\]\.includes\(state\.currentView\)/);
+  assert.match(contextualNavigation, /state\.personnelAdministrationTab === "dashboard"/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "employees"/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "costCenters"/);
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "ruleDrafts"/);
@@ -67,7 +70,7 @@ test("v0.75.2 Navigation: Personal-Unterseiten sind aufklappbar, adressierbar un
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "vacations"/);
   const requestedView = between(app, "function applyRequestedView()", "function setSettingsTab");
   assert.match(requestedView, /parameters\.get\("section"\)/);
-  assert.match(requestedView, /\["employees", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"\]\.includes\(requestedSection\)/);
+  assert.match(requestedView, /\["dashboard", "employees", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"\]\.includes\(requestedSection\)/);
 });
 
 test("v0.75.2 Navigation: Teamstatus entfällt und Einstellungen bleiben außerhalb des Scrollmenüs erreichbar", () => {

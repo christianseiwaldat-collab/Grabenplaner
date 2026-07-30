@@ -41,13 +41,18 @@ function waitForExit(child) {
 test("v0.72 browser bootstrap keeps the one-time key local and sends it only on mutations", () => {
   const application = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
   const server = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
+  const portalAccessCatalog = fs.readFileSync(
+    path.join(__dirname, "..", "lib", "persistence", "sqlite", "portal-access-catalog.js"),
+    "utf8",
+  );
 
   assert.match(application, /parameters\.delete\("bootstrap"\)/);
   assert.match(application, /window\.history\.replaceState/);
   assert.match(application, /target\.origin !== window\.location\.origin/);
   assert.match(application, /\["GET", "HEAD", "OPTIONS"\]\.includes\(method\)/);
   assert.match(application, /X-Grabenplaner-Bootstrap-Token/);
-  assert.match(server, /role IN \('developer','it_admin','admin'\)/);
+  assert.match(portalAccessCatalog, /role IN \('developer','it_admin','admin'\)/);
+  assert.match(server, /configuredAdminSnapshot = Boolean\(await portalAccessRepository\.getConfiguredAdmin\(\{\}\)\)/);
   assert.match(server, /if \(\(serverModeActive && !productionBootstrapActive\) \|\| !isLoopbackRequest\(request\)\)/);
 });
 
