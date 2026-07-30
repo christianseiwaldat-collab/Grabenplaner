@@ -6,6 +6,40 @@ const path = require("node:path");
 
 const CURRENT_MODULE_VERSION = 6;
 const SUPPORTED_INSTALLED_MODULE_VERSIONS = new Set([1, 2, 3, 4, 5, CURRENT_MODULE_VERSION]);
+const HASH_PATTERN = /^[a-f0-9]{64}$/;
+const REMOTE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+const FOLDER_LABEL_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,46}[A-Za-z0-9])?$/;
+const BUCKET_PATTERN = /^[a-z0-9](?:[a-z0-9.-]{1,61}[a-z0-9])$/;
+const PROVIDER_POLICY_FORMAT = "grabenplaner-offsite-rclone-provider-policy";
+const PROVIDER_BINDING_FORMAT = "grabenplaner-offsite-provider-binding";
+const PROVIDER_BINDING_SCHEMA_VERSION = 1;
+const PROVIDER_POLICY_KEYS = Object.freeze([
+  "authentication", "backend", "configSha256", "endpoint", "format",
+  "providerId", "region", "remoteName", "schemaVersion", "scope",
+]);
+const PROVIDER_BINDING_KEYS = Object.freeze([
+  "authentication", "backend", "configSha256", "endpoint", "format",
+  "policySha256", "providerId", "region", "remoteName", "repositoryLayout",
+  "schemaVersion", "scope", "storageRoot",
+]);
+const S3_PROVIDER_ENDPOINTS = Object.freeze(new Map([
+  ["fsn1.your-objectstorage.com", Object.freeze({
+    providerId: "hetzner_object_storage",
+    region: "fsn1",
+  })],
+  ["nbg1.your-objectstorage.com", Object.freeze({
+    providerId: "hetzner_object_storage",
+    region: "nbg1",
+  })],
+  ["hel1.your-objectstorage.com", Object.freeze({
+    providerId: "hetzner_object_storage",
+    region: "hel1",
+  })],
+  ["s3.eu-central-003.backblazeb2.com", Object.freeze({
+    providerId: "backblaze_b2",
+    region: "eu-central-003",
+  })],
+]));
 const LEGACY_V1_ARTIFACTS = Object.freeze([
   "grabenplaner-offsite-check.sh", "grabenplaner-offsite-pre-update.sh", "grabenplaner-offsite-prepare.sh",
   "grabenplaner-offsite-read-secret.sh", "grabenplaner-offsite-rclone-wrapper.sh",
@@ -77,6 +111,191 @@ function digest(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
+function exactKeys(value, keys) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+    && Object.getPrototypeOf(value) === Object.prototype
+    && Object.keys(value).sort().join("\0") === [...keys].sort().join("\0");
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function timingSafeCanonicalEqual(left, right) {
+  const leftBuffer = Buffer.from(canonicalJson(left));
+  const rightBuffer = Buffer.from(canonicalJson(right));
+  return leftBuffer.length === rightBuffer.length
+    && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function readJson(file, label) {
+  let value;
+  try {
+    value = JSON.parse(fs.readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
+  } catch {
+    throw new Error(`${label} ist ungueltig.`);
+  }
+  return value;
+}
+
+function providerPolicy(value) {
+  if (!exactKeys(value, PROVIDER_POLICY_KEYS)
+    || value.format !== PROVIDER_POLICY_FORMAT
+    || value.schemaVersion !== PROVIDER_BINDING_SCHEMA_VERSION
+    || !REMOTE_PATTERN.test(String(value.remoteName || ""))
+    || !HASH_PATTERN.test(String(value.configSha256 || ""))) {
+    throw new Error("Die validierte Offsite-Provider-Richtlinie ist ungueltig.");
+  }
+  if (value.providerId === "google_drive") {
+    if (value.backend !== "drive" || value.authentication !== "dedicated_oauth"
+      || value.scope !== "drive.file" || value.endpoint !== null || value.region !== null) {
+      throw new Error("Die Google-Drive-Provider-Richtlinie ist ungueltig.");
+    }
+  } else {
+    const selected = typeof value.endpoint === "string"
+      ? S3_PROVIDER_ENDPOINTS.get(value.endpoint)
+      : null;
+    if (!selected || value.providerId !== selected.providerId || value.region !== selected.region
+      || value.backend !== "s3" || value.authentication !== "static_access_key"
+      || value.scope !== null) {
+      throw new Error("Die S3-Provider-Richtlinie ist ungueltig.");
+    }
+  }
+  return value;
+}
+
+function repositoryBinding(repositoryFile, policy) {
+  const repository = fs.readFileSync(repositoryFile, "utf8").trim();
+  const match = repository.match(/^rclone:([A-Za-z0-9][A-Za-z0-9_-]{0,63}):([A-Za-z0-9][A-Za-z0-9._/-]{0,511})$/);
+  if (!match || match[1] !== policy.remoteName
+    || match[2].split("/").some((part) => !part || part === "." || part === "..")) {
+    throw new Error("Die Repository-Bindung passt nicht zur validierten Provider-Richtlinie.");
+  }
+  if (policy.providerId === "google_drive") {
+    return {
+      repositoryLayout: "google-drive-direct-safe-path-v1",
+      storageRoot: null,
+    };
+  }
+  const segments = match[2].split("/");
+  const bucket = segments.shift();
+  const label = segments.pop();
+  if (segments.length !== 1 || segments[0] !== "Grabenplaner-Offsite"
+    || !BUCKET_PATTERN.test(bucket)
+    || bucket.includes("..")
+    || /^(?:\d{1,3}\.){3}\d{1,3}$/.test(bucket)
+    || !FOLDER_LABEL_PATTERN.test(label)
+    || Buffer.byteLength(label, "utf8") > 48) {
+    throw new Error("Das S3-Repository muss exakt BUCKET/Grabenplaner-Offsite/ORDNER verwenden.");
+  }
+  return {
+    repositoryLayout: "s3-managed-prefix-v1",
+    storageRoot: bucket,
+  };
+}
+
+function bindingFromPolicy(policyValue, repositoryFile) {
+  const policy = providerPolicy(policyValue);
+  const repository = repositoryBinding(repositoryFile, policy);
+  return {
+    format: PROVIDER_BINDING_FORMAT,
+    schemaVersion: PROVIDER_BINDING_SCHEMA_VERSION,
+    providerId: policy.providerId,
+    remoteName: policy.remoteName,
+    backend: policy.backend,
+    authentication: policy.authentication,
+    endpoint: policy.endpoint,
+    region: policy.region,
+    scope: policy.scope,
+    configSha256: policy.configSha256,
+    policySha256: crypto.createHash("sha256").update(canonicalJson(policy)).digest("hex"),
+    repositoryLayout: repository.repositoryLayout,
+    storageRoot: repository.storageRoot,
+  };
+}
+
+function validProviderBinding(value) {
+  if (!exactKeys(value, PROVIDER_BINDING_KEYS)
+    || value.format !== PROVIDER_BINDING_FORMAT
+    || value.schemaVersion !== PROVIDER_BINDING_SCHEMA_VERSION
+    || !REMOTE_PATTERN.test(String(value.remoteName || ""))
+    || !HASH_PATTERN.test(String(value.configSha256 || ""))
+    || !HASH_PATTERN.test(String(value.policySha256 || ""))) {
+    return false;
+  }
+  if (value.providerId === "google_drive") {
+    return value.backend === "drive"
+      && value.authentication === "dedicated_oauth"
+      && value.scope === "drive.file"
+      && value.endpoint === null
+      && value.region === null
+      && value.repositoryLayout === "google-drive-direct-safe-path-v1"
+      && value.storageRoot === null;
+  }
+  const selected = typeof value.endpoint === "string"
+    ? S3_PROVIDER_ENDPOINTS.get(value.endpoint)
+    : null;
+  return Boolean(selected)
+    && value.providerId === selected.providerId
+    && value.region === selected.region
+    && value.backend === "s3"
+    && value.authentication === "static_access_key"
+    && value.scope === null
+    && value.repositoryLayout === "s3-managed-prefix-v1"
+    && typeof value.storageRoot === "string"
+    && BUCKET_PATTERN.test(value.storageRoot)
+    && !value.storageRoot.includes("..")
+    && !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(value.storageRoot);
+}
+
+function boundReceipt(receiptFile, policyFile, repositoryFile) {
+  const receipt = readJson(receiptFile, "Der ungebundene Installationsbeleg");
+  if (receipt.format !== "grabenplaner-linux-offsite-installed-contract"
+    || receipt.schemaVersion !== 1
+    || receipt.moduleVersion !== CURRENT_MODULE_VERSION
+    || !HASH_PATTERN.test(String(receipt.fingerprint || ""))
+    || !HASH_PATTERN.test(String(receipt.schemaSha256 || ""))
+    || !Array.isArray(receipt.files)
+    || receipt.providerBinding !== undefined) {
+    throw new Error("Der ungebundene Installationsbeleg ist ungueltig.");
+  }
+  const policy = readJson(policyFile, "Die validierte Provider-Richtlinie");
+  return {
+    ...receipt,
+    providerBinding: bindingFromPolicy(policy, repositoryFile),
+  };
+}
+
+function verifyProviderBinding(receiptFile, policyFile, repositoryFile) {
+  const receipt = readJson(receiptFile, "Der Installationsbeleg");
+  const policy = readJson(policyFile, "Die validierte Provider-Richtlinie");
+  const expected = bindingFromPolicy(policy, repositoryFile);
+  if (receipt.format !== "grabenplaner-linux-offsite-installed-contract"
+    || receipt.schemaVersion !== 1
+    || !SUPPORTED_INSTALLED_MODULE_VERSIONS.has(receipt.moduleVersion)
+    || !HASH_PATTERN.test(String(receipt.fingerprint || ""))
+    || !Array.isArray(receipt.files)
+    || !validProviderBinding(receipt.providerBinding)
+    || !timingSafeCanonicalEqual(receipt.providerBinding, expected)) {
+    throw new Error("Die aktive Offsite-Provider-Bindung weicht vom Installationsbeleg ab.");
+  }
+  return receipt.providerBinding.providerId;
+}
+
+function providerIdFromReceipt(receiptFile) {
+  const receipt = readJson(receiptFile, "Der Installationsbeleg");
+  if (receipt.format !== "grabenplaner-linux-offsite-installed-contract"
+    || receipt.schemaVersion !== 1
+    || !validProviderBinding(receipt.providerBinding)) {
+    throw new Error("Der Installationsbeleg besitzt keine gueltige Offsite-Provider-Bindung.");
+  }
+  return receipt.providerBinding.providerId;
+}
+
 function safeRelative(value) {
   return typeof value === "string" && value && !value.includes("\\") && !value.startsWith("/")
     && value.split("/").every((part) => part && part !== "." && part !== "..");
@@ -116,7 +335,7 @@ function moduleContract(sourceRoot) {
   };
 }
 
-function verifyInstalled(moduleRoot, receiptPath) {
+function verifyInstalled(moduleRoot, receiptPath, options = {}) {
   for (const directory of [path.dirname(moduleRoot), moduleRoot]) {
     const directoryStat = fs.lstatSync(directory);
     if (!directoryStat.isDirectory() || directoryStat.isSymbolicLink() || directoryStat.uid !== 0 || (directoryStat.mode & 0o022) !== 0) {
@@ -131,6 +350,10 @@ function verifyInstalled(moduleRoot, receiptPath) {
     || !Array.isArray(receipt.files) || !/^[a-f0-9]{64}$/.test(String(receipt.fingerprint || ""))
     || !/^[a-f0-9]{64}$/.test(String(receipt.schemaSha256 || ""))) {
     throw new Error("Der Installationsbeleg ist ungueltig.");
+  }
+  if ((options.requireProviderBinding === true && !validProviderBinding(receipt.providerBinding))
+    || (receipt.providerBinding !== undefined && !validProviderBinding(receipt.providerBinding))) {
+    throw new Error("Der Installationsbeleg besitzt keine gueltige Offsite-Provider-Bindung.");
   }
   const schemaPath = path.join(moduleRoot, "module-schema.json");
   const schemaStat = fs.lstatSync(schemaPath);
@@ -180,12 +403,32 @@ function verifyInstalled(moduleRoot, receiptPath) {
 }
 
 try {
-  const [command, first, second] = process.argv.slice(2);
+  const [command, first, second, third] = process.argv.slice(2);
   if (command === "contract") {
     const result = moduleContract(path.resolve(first || ""));
     process.stdout.write(`${JSON.stringify({ format: "grabenplaner-linux-offsite-installed-contract", schemaVersion: 1, moduleVersion: CURRENT_MODULE_VERSION, ...result }, null, 2)}\n`);
   } else if (command === "verify-installed") {
     process.stdout.write(`${JSON.stringify(verifyInstalled(path.resolve(first || ""), path.resolve(second || "")))}\n`);
+  } else if (command === "verify-installed-bound") {
+    process.stdout.write(`${JSON.stringify(verifyInstalled(
+      path.resolve(first || ""),
+      path.resolve(second || ""),
+      { requireProviderBinding: true },
+    ))}\n`);
+  } else if (command === "bind-provider") {
+    process.stdout.write(`${JSON.stringify(boundReceipt(
+      path.resolve(first || ""),
+      path.resolve(second || ""),
+      path.resolve(third || ""),
+    ), null, 2)}\n`);
+  } else if (command === "verify-provider-binding") {
+    process.stdout.write(`${verifyProviderBinding(
+      path.resolve(first || ""),
+      path.resolve(second || ""),
+      path.resolve(third || ""),
+    )}\n`);
+  } else if (command === "provider-id") {
+    process.stdout.write(`${providerIdFromReceipt(path.resolve(first || ""))}\n`);
   } else {
     throw new Error("Unbekannter Offsite-Vertragsvorgang.");
   }

@@ -217,7 +217,7 @@ Es muss vor der Uebertragung stark verschluesselt, danach vom Server geloescht
 und getrennt vom VPS sowie vom Restic-Repository aufbewahrt werden.
 
 Manuell zu ergaenzen und getrennt zu pruefen:
-- Wiederherstellungszugang des zugeordneten Google-Kontos
+- Wiederherstellungszugang des vertraglich gebundenen Offsite-Providers
 - Kontakt und Ablauf fuer die verantwortliche IT
 - Datum eines beaufsichtigten Lesetests auf dem Offline-Medium
 

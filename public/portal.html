@@ -46,41 +46,106 @@
         </nav>
 
         <section class="portal-view" id="settingsView" role="tabpanel">
-          <div class="view-heading"><div><span class="eyebrow">Persönlich</span><h1>Einstellungen</h1><p>Passwort, freiwillige Zeitvorschläge und Anfragen zu deinen Daten an einem Ort.</p></div></div>
-          <div class="portal-settings-grid">
-            <section class="portal-card portal-settings-card">
-              <div><span class="eyebrow">Sicherheit</span><h2>Passwort</h2><p>Ändere dein persönliches Passwort und kontrolliere die Eingabe bei Bedarf mit „Anzeigen“.</p></div>
-              <button class="primary" id="settingsPasswordButton" type="button">Passwort ändern</button>
-            </section>
-            <section class="portal-card wifi-suggestion-card" id="wifiAutomationCard" aria-live="polite">
-              <div class="wifi-suggestion-heading">
-                <div><span class="eyebrow">Freiwillig</span><h2>WLAN-Zeitvorschläge</h2><p id="wifiAutomationAvailability">Status wird geladen.</p></div>
-                <label class="portal-switch"><span>Aktiv</span><input id="wifiAutomationToggle" type="checkbox" /></label>
+          <div class="view-heading"><div><span class="eyebrow">Persönlich</span><h1>Einstellungen</h1><p>Mobile Navigation, persönliches Portaldesign, freiwillige Funktionen und Sicherheit an einem Ort.</p></div></div>
+          <div class="portal-settings-stack">
+            <details class="portal-card portal-settings-section" id="mobileNavigationSettingsCard">
+              <summary class="portal-settings-summary">
+                <span><span class="eyebrow">Handyansicht</span><strong>Bottom-Menü</strong><small>Direkte Punkte auswählen und anordnen</small></span>
+                <span class="portal-settings-chevron" aria-hidden="true"></span>
+              </summary>
+              <div class="portal-settings-content">
+                <p>Wähle bis zu fünf direkte Punkte. „Mehr“ bleibt fest erreichbar; dort findest du alle weiteren für dich freigeschalteten Bereiche.</p>
+                <div class="mobile-navigation-settings-list" id="mobileNavigationSettingsList" aria-live="polite"><p class="empty-state">Menü wird geladen.</p></div>
+                <p class="message hidden" id="mobileNavigationSettingsMessage" role="status" aria-live="polite"></p>
+                <div class="portal-settings-actions"><button class="text-button" id="resetMobileNavigationButton" type="button">Standard wiederherstellen</button><button class="primary" id="saveMobileNavigationButton" type="button">Menü speichern</button></div>
               </div>
-              <div class="wifi-level-note" id="wifiConfirmationLevel"></div>
-              <div class="wifi-suggestion-warning hidden" id="wifiSuggestionWarning"></div>
-              <div class="wifi-suggestion-list" id="wifiSuggestionList"><p class="empty-state">Zeitvorschläge werden geladen.</p></div>
-              <p class="message hidden" id="wifiAutomationMessage"></p>
-            </section>
-            <section class="portal-card portal-settings-card privacy-settings-card hidden" id="privacyRequestsCard">
-              <div class="privacy-settings-heading">
-                <div><span class="eyebrow">Meine Daten</span><h2>Datenschutzanfragen</h2><p id="privacyRequestsNotice">Anfragen werden geladen.</p></div>
+            </details>
+            <details class="portal-card portal-settings-section" id="mobileAppearanceSettingsCard">
+              <summary class="portal-settings-summary">
+                <span><span class="eyebrow">Persönlich</span><strong>Portaldesign</strong><small>Farben und Kartenstil nur für dein Portal</small></span>
+                <span class="portal-settings-chevron" aria-hidden="true"></span>
+              </summary>
+              <div class="portal-settings-content">
+                <fieldset class="portal-palette-options">
+                  <legend>Farbwelt</legend>
+                  <label data-palette-option="forest"><input type="radio" name="mobilePortalPalette" value="forest" checked /><span class="portal-palette-swatch forest"></span><span><strong>Waldgrün</strong><small>Ruhig und vertraut</small></span></label>
+                  <label data-palette-option="ocean"><input type="radio" name="mobilePortalPalette" value="ocean" /><span class="portal-palette-swatch ocean"></span><span><strong>Ozeanblau</strong><small>Klar und neutral</small></span></label>
+                  <label data-palette-option="plum"><input type="radio" name="mobilePortalPalette" value="plum" /><span class="portal-palette-swatch plum"></span><span><strong>Pflaume</strong><small>Warm und zurückhaltend</small></span></label>
+                  <label data-palette-option="sand"><input type="radio" name="mobilePortalPalette" value="sand" /><span class="portal-palette-swatch sand"></span><span><strong>Sand</strong><small>Natürlich und weich</small></span></label>
+                </fieldset>
+                <fieldset class="portal-surface-options">
+                  <legend>Kartenstil</legend>
+                  <label><input type="radio" name="mobilePortalSurface" value="soft" checked /><span><strong>Rund &amp; weich</strong><small>Großzügige Abstände und sanfte Schatten</small></span></label>
+                  <label><input type="radio" name="mobilePortalSurface" value="compact" /><span><strong>Klar &amp; kompakt</strong><small>Weniger Rundung und dichterer Aufbau</small></span></label>
+                </fieldset>
+                <p>Die Auswahl verändert ausschließlich deine persönliche Portalansicht. Firmenlogo und globales Branding bleiben unverändert.</p>
+                <p class="message hidden" id="mobileAppearanceSettingsMessage" role="status" aria-live="polite"></p>
+                <div class="portal-settings-actions"><button class="primary" id="saveMobileAppearanceButton" type="button">Design speichern</button></div>
+              </div>
+            </details>
+            <details class="portal-card portal-settings-section wifi-suggestion-card" id="wifiAutomationCard">
+              <summary class="portal-settings-summary">
+                <span><span class="eyebrow">Freiwillig</span><strong>WLAN-Zeitvorschläge</strong><small id="wifiAutomationAvailability">Status wird geladen.</small></span>
+                <span class="portal-settings-chevron" aria-hidden="true"></span>
+              </summary>
+              <div class="portal-settings-content" aria-live="polite">
+                <div class="wifi-suggestion-heading">
+                  <div><h2>Zeitvorschläge</h2><p>Du entscheidest über jeden Vorschlag selbst.</p></div>
+                  <label class="portal-switch"><span>Aktiv</span><input id="wifiAutomationToggle" type="checkbox" /></label>
+                </div>
+                <div class="wifi-level-note" id="wifiConfirmationLevel"></div>
+                <div class="wifi-suggestion-warning hidden" id="wifiSuggestionWarning"></div>
+                <div class="wifi-suggestion-list" id="wifiSuggestionList"><p class="empty-state">Zeitvorschläge werden geladen.</p></div>
+                <p class="message hidden" id="wifiAutomationMessage"></p>
+              </div>
+            </details>
+            <details class="portal-card portal-settings-section privacy-settings-card hidden" id="privacyRequestsCard">
+              <summary class="portal-settings-summary">
+                <span><span class="eyebrow">Meine Daten</span><strong>Datenschutzanfragen</strong><small id="privacyRequestsNotice">Anfragen werden geladen.</small></span>
                 <span class="privacy-manual-badge">Manuelle Prüfung</span>
-              </div>
-              <div class="privacy-data-layout">
-                <form class="privacy-request-form hidden" id="privacyRequestForm">
-                  <label><span>Art der Anfrage</span><select id="privacyRequestType" required><option value="">Wird geladen …</option></select></label>
-                  <p>Deine Identität und der konkrete Umfang werden vor einer Entscheidung geprüft. Das Absenden löst keine automatische Löschung oder Datenübertragung aus.</p>
-                  <button class="primary" id="privacyRequestSubmit" type="submit">Anfrage einreichen</button>
-                  <p class="message hidden" id="privacyRequestMessage" role="status" aria-live="polite"></p>
-                </form>
-                <div class="privacy-request-history">
-                  <div class="list-heading"><h3>Meine Anfragen</h3><button class="text-button hidden" id="privacyRequestsRefresh" type="button">Aktualisieren</button></div>
-                  <p class="privacy-export-hint hidden" id="privacyExportHint">Bereitgestellte Auskünfte und Datenpakete werden bei der jeweiligen Anfrage zum sicheren Abruf angezeigt.</p>
-                  <div class="privacy-request-list" id="privacyRequestList" aria-live="polite"><p class="empty-state">Anfragen werden geladen.</p></div>
+                <span class="portal-settings-chevron" aria-hidden="true"></span>
+              </summary>
+              <div class="portal-settings-content">
+                <div class="privacy-data-layout">
+                  <form class="privacy-request-form hidden" id="privacyRequestForm">
+                    <label><span>Art der Anfrage</span><select id="privacyRequestType" required><option value="">Wird geladen …</option></select></label>
+                    <p>Deine Identität und der konkrete Umfang werden vor einer Entscheidung geprüft. Das Absenden löst keine automatische Löschung oder Datenübertragung aus.</p>
+                    <button class="primary" id="privacyRequestSubmit" type="submit">Anfrage einreichen</button>
+                    <p class="message hidden" id="privacyRequestMessage" role="status" aria-live="polite"></p>
+                  </form>
+                  <div class="privacy-request-history">
+                    <div class="list-heading"><h3>Meine Anfragen</h3><button class="text-button hidden" id="privacyRequestsRefresh" type="button">Aktualisieren</button></div>
+                    <p class="privacy-export-hint hidden" id="privacyExportHint">Bereitgestellte Auskünfte und Datenpakete werden bei der jeweiligen Anfrage zum sicheren Abruf angezeigt.</p>
+                    <div class="privacy-request-list" id="privacyRequestList" aria-live="polite"><p class="empty-state">Anfragen werden geladen.</p></div>
+                  </div>
                 </div>
               </div>
-            </section>
+            </details>
+            <details class="portal-card portal-settings-section sickness-preferences-card hidden" id="sicknessNotificationPreferencesCard">
+              <summary class="portal-settings-summary">
+                <span><span class="eyebrow">Verifizierte Empfänger</span><strong>Externe Warnungen &amp; Prozessmeldungen</strong><small>Freiwillige, bestätigte Kanäle verwalten</small></span>
+                <span class="portal-settings-chevron" aria-hidden="true"></span>
+              </summary>
+              <div class="portal-settings-content">
+                <p>Die Portal-Meldung kommt immer sofort. Externe Nachrichten sind freiwillig, werden je Zweck ausdrücklich aktiviert und enthalten keine Gesundheits- oder Personendaten.</p>
+                <form id="sicknessNotificationPreferencesForm">
+                  <label><span>Warnungen zur Mindestbesetzung frühestens ab</span><input id="sicknessNotificationEarliestTime" type="time" value="08:00" required /></label>
+                  <div class="notification-channel-list" id="sicknessNotificationChannels"></div>
+                  <p class="message hidden" id="sicknessNotificationPreferencesMessage"></p>
+                  <button class="primary" type="submit">Kanäle speichern</button>
+                </form>
+              </div>
+            </details>
+            <details class="portal-card portal-settings-section portal-settings-password">
+              <summary class="portal-settings-summary">
+                <span><span class="eyebrow">Sicherheit</span><strong>Passwort ändern</strong><small>Persönliches Passwort sicher aktualisieren</small></span>
+                <span class="portal-settings-chevron" aria-hidden="true"></span>
+              </summary>
+              <div class="portal-settings-content">
+                <p>Ändere dein persönliches Passwort und kontrolliere die Eingabe bei Bedarf mit „Anzeigen“.</p>
+                <div class="portal-settings-actions"><button class="primary" id="settingsPasswordButton" type="button">Passwort ändern</button></div>
+              </div>
+            </details>
           </div>
         </section>
 
@@ -164,6 +229,11 @@
         <section class="portal-view leadership-view" id="leadershipMoreView" role="tabpanel" aria-labelledby="leadershipMoreTab">
           <div class="view-heading"><div><span class="eyebrow">Schnellzugriff</span><h1>Mehr</h1><p id="leadershipMoreDescription">Persönliche Anträge und weitere Funktionen.</p></div></div>
           <div class="leadership-more-grid">
+            <button class="hidden" id="mobileMoreTimeShortcut" type="button" data-more-tab="timeTracking"><strong>Zeiterfassung</strong><span>Arbeitstag und Zeitkonto öffnen</span></button>
+            <button class="hidden" id="mobileMoreScheduleShortcut" type="button" data-more-tab="schedule"><strong>Dienstplan</strong><span>Meine geplanten Dienste ansehen</span></button>
+            <button class="hidden" id="mobileMoreTeamShortcut" type="button" data-more-tab="leadershipTeam"><strong>Team</strong><span>Anwesenheit im zuständigen Bereich</span></button>
+            <button class="hidden" id="mobileMoreApprovalsShortcut" type="button" data-more-tab="leadershipApprovals"><strong>Freigaben</strong><span>Offene Entscheidungen bearbeiten</span></button>
+            <button class="hidden" id="mobileMoreRequestsShortcut" type="button" data-more-tab="history"><strong>Meine Anträge</strong><span>Status und Verlauf ansehen</span></button>
             <button id="leadershipTimeOffShortcut" type="button" data-more-tab="timeOff"><strong>ZA beantragen</strong><span>Stundenweise, ganztägig oder mehrtägig</span></button>
             <button id="leadershipVacationShortcut" type="button" data-more-tab="vacation"><strong>Urlaub beantragen</strong><span>Neuen Urlaubsantrag einreichen</span></button>
             <button id="leadershipAmuShortcut" type="button" data-more-tab="amu"><strong>Krankmeldung &amp; AUM</strong><span>Krankmelden oder Dokument senden</span></button>
@@ -172,15 +242,6 @@
             <button type="button" id="leadershipSettingsButton"><strong>Einstellungen</strong><span>Passwort und WLAN-Zeitvorschläge verwalten</span></button>
             <a id="leadershipDesktopLink" href="/?desktop=1"><strong>Desktop-Planung</strong><span>Vollständige Verwaltung am großen Bildschirm</span></a>
           </div>
-          <section class="portal-card sickness-preferences-card hidden" id="sicknessNotificationPreferencesCard">
-            <div><span class="eyebrow">Verifizierte Empfänger</span><h2>Externe Warnungen &amp; Prozessmeldungen</h2><p>Die Portal-Meldung kommt immer sofort. Externe Nachrichten sind freiwillig, werden je Zweck ausdrücklich aktiviert und enthalten keine Gesundheits- oder Personendaten.</p></div>
-            <form id="sicknessNotificationPreferencesForm">
-              <label><span>Warnungen zur Mindestbesetzung frühestens ab</span><input id="sicknessNotificationEarliestTime" type="time" value="08:00" required /></label>
-              <div class="notification-channel-list" id="sicknessNotificationChannels"></div>
-              <p class="message hidden" id="sicknessNotificationPreferencesMessage"></p>
-              <button class="primary" type="submit">Kanäle speichern</button>
-            </form>
-          </section>
         </section>
 
         <section class="portal-view" id="timeOffView" role="tabpanel">

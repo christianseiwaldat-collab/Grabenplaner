@@ -19,6 +19,7 @@ function validStatus(overrides = {}) {
   return {
     format: STATUS_FORMAT,
     schemaVersion: STATUS_SCHEMA_VERSION,
+    providerId: "google_drive",
     configured: true,
     state: "ok",
     generatedAt: "2026-07-19T12:00:00.000Z",
@@ -56,6 +57,7 @@ test("offsite status reader returns only bounded diagnostics and never blocks ma
     });
     assert.deepEqual(diagnostics, {
       configured: true,
+      providerId: "google_drive",
       state: "ok",
       statusAvailable: true,
       blocksMainReadiness: false,
@@ -114,6 +116,23 @@ test("status schema is exact and rejects unknown fields, mismatched results and 
     () => parseOffsiteBackupStatus(validStatus({ generatedAt: "2026-02-30T12:00:00.000Z" })),
     /generatedAt.*ungueltig/,
   );
+});
+
+test("legacy schema 1 remains readable but has no verified provider binding", () => {
+  const { providerId: _providerId, ...legacy } = validStatus({ schemaVersion: 1 });
+  const parsed = parseOffsiteBackupStatus(legacy);
+  assert.equal(parsed.schemaVersion, 1);
+  assert.equal(parsed.providerId, null);
+  withStatusFile(legacy, (statusPath) => {
+    const diagnostics = readOffsiteBackupStatus({
+      statusPath,
+      configured: true,
+      requireRootOwner: false,
+      now: new Date("2026-07-20T00:00:00.000Z"),
+    });
+    assert.equal(diagnostics.statusAvailable, true);
+    assert.equal(diagnostics.providerId, null);
+  });
 });
 
 test("a stale daily repository check becomes a warning but never a readiness blocker", () => {
@@ -221,6 +240,7 @@ test("missing or invalid status files degrade safely without throwing", () => {
   const missing = path.join(os.tmpdir(), `missing-offsite-${process.pid}-${Date.now()}.json`);
   assert.deepEqual(readOffsiteBackupStatus({ statusPath: missing, requireRootOwner: false }), {
     configured: false,
+    providerId: null,
     state: "unconfigured",
     statusAvailable: false,
     blocksMainReadiness: false,
@@ -252,6 +272,7 @@ test("missing or invalid status files degrade safely without throwing", () => {
 
   withStatusFile(validStatus({
     configured: false,
+    providerId: null,
     state: "unconfigured",
     lastAttemptAt: null,
     lastSuccessAt: null,

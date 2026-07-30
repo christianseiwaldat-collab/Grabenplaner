@@ -51,6 +51,8 @@ const portalState = {
   wifiAutomationLoading: false,
   home: null,
   mobileLayout: null,
+  uiPreferences: null,
+  mobileNavigationDraft: null,
   mobileLeadership: false,
   leadershipOverview: null,
   leadershipLocations: [],
@@ -152,11 +154,15 @@ const el = Object.fromEntries([
   "wifiAutomationCard", "wifiAutomationAvailability", "wifiAutomationToggle", "wifiConfirmationLevel", "wifiSuggestionWarning", "wifiSuggestionList", "wifiAutomationMessage",
   "timePeriodHeading", "timePeriodSummary", "timePeriodList", "previousTimePeriod", "currentTimePeriod", "nextTimePeriod",
   "privacyRequestsCard", "privacyRequestsNotice", "privacyRequestForm", "privacyRequestType", "privacyRequestSubmit", "privacyRequestMessage", "privacyRequestsRefresh", "privacyExportHint", "privacyRequestList",
+  "mobileNavigationSettingsCard", "mobileNavigationSettingsList", "mobileNavigationSettingsMessage", "resetMobileNavigationButton", "saveMobileNavigationButton",
+  "mobileAppearanceSettingsCard", "mobileAppearanceSettingsMessage", "saveMobileAppearanceButton",
   "vacationAccountCard", "vacationAccountYear", "vacationAccountSummary", "vacationAccountNotice",
   "timeRecordStatementsPanel", "timeRecordStatementList",
   "leadershipTeamTab", "leadershipApprovalsTab", "leadershipMoreTab", "leadershipTeamView", "leadershipApprovalsView", "leadershipMoreView",
   "leadershipTeamRefresh", "leadershipApprovalsRefresh", "leadershipContextFields", "leadershipLocation", "leadershipDepartment", "leadershipApprovalContextFields", "leadershipApprovalLocation", "leadershipApprovalDepartment", "leadershipPresenceSummary", "leadershipPresenceList", "leadershipApprovalList",
-  "leadershipSettingsButton", "leadershipDesktopLink", "leadershipMoreDescription", "leadershipTimeOffShortcut", "leadershipVacationShortcut", "leadershipAmuShortcut", "leadershipProcessTasksShortcut", "timeCorrectionDialog", "timeCorrectionForm", "timeCorrectionId", "timeCorrectionDate", "timeCorrectionDateText", "timeCorrectionEntries", "timeCorrectionNote", "timeCorrectionMessage", "addTimeCorrectionEntry",
+  "leadershipSettingsButton", "leadershipDesktopLink", "leadershipMoreDescription", "leadershipTimeOffShortcut", "leadershipVacationShortcut", "leadershipAmuShortcut", "leadershipProcessTasksShortcut",
+  "mobileMoreTimeShortcut", "mobileMoreScheduleShortcut", "mobileMoreTeamShortcut", "mobileMoreApprovalsShortcut", "mobileMoreRequestsShortcut",
+  "timeCorrectionDialog", "timeCorrectionForm", "timeCorrectionId", "timeCorrectionDate", "timeCorrectionDateText", "timeCorrectionEntries", "timeCorrectionNote", "timeCorrectionMessage", "addTimeCorrectionEntry",
   "leadershipRequestDialog", "leadershipRequestForm", "leadershipRequestTitle", "leadershipRequestSummary", "leadershipRequestHistory", "leadershipRequestDocuments", "leadershipSicknessFields", "leadershipSicknessExpectedEnd", "leadershipSicknessReturnDate", "leadershipCorrectionEntries", "addLeadershipCorrectionEntry", "leadershipRequestNote", "leadershipRequestMessage", "leadershipRequestActions",
   "scheduleHeading", "scheduleGrid", "previousWeek", "currentWeek", "nextWeek",
   "timeOffRequestForm", "timeOffFormTitle", "timeOffDate", "timeOffDateTo", "timeOffDateToField", "timeOffTimeFields", "timeOffStart", "timeOffEnd", "timeOffNote", "timeOffCheck", "timeOffMessage",
@@ -433,33 +439,38 @@ const leadershipPortalPermissions = new Set([
   "notifications:settings",
 ]);
 
-const mobileMoreSecondaryTabs = new Set(["timeOff", "vacation", "amu", "loan", "settings"]);
-mobileMoreSecondaryTabs.add("processTasks");
-
-function syncPortalTabButtons(tab) {
-  const representedByMore = portalState.mobileLeadership && mobileMoreSecondaryTabs.has(tab);
-  document.querySelectorAll("[data-tab]").forEach((button) => {
-    const active = representedByMore
-      ? button.dataset.tab === "leadershipMore"
-      : button.dataset.tab === tab;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-selected", String(active));
-    button.tabIndex = active ? 0 : -1;
-  });
-}
-
 function isLeadershipUser(user = portalUser()) {
   return Array.isArray(user?.permissions)
     && user.permissions.some((permission) => leadershipPortalPermissions.has(permission));
 }
 
+const mobileMoreSecondaryTabs = new Set(["timeOff", "vacation", "amu", "loan", "settings"]);
+mobileMoreSecondaryTabs.add("processTasks");
+const mobileModuleCatalog = Object.freeze([
+  { id: "time", tab: "timeTracking", label: "Zeit", description: "Zeiterfassung und Zeitkonto" },
+  { id: "tasks", tab: "processTasks", label: "Aufgaben", description: "Offene persönliche Prozessschritte" },
+  { id: "team", tab: "leadershipTeam", label: "Team", description: "Anwesenheit im zuständigen Bereich" },
+  { id: "approvals", tab: "leadershipApprovals", label: "Freigaben", description: "Offene Entscheidungen" },
+  { id: "schedule", tab: "schedule", label: "Dienstplan", description: "Meine geplanten Dienste" },
+  { id: "requests", tab: "history", label: "Anträge", description: "Status und Verlauf meiner Anträge" },
+  { id: "loan", tab: "loan", label: "Leihe", description: "Ausgaben und Rücknahmen" },
+  { id: "sickness", tab: "amu", label: "Krank & AUM", description: "Krankmeldung und Dokumente" },
+  { id: "more", tab: "leadershipMore", label: "Mehr", description: "Alle weiteren Bereiche" },
+]);
+const mobileModuleIds = new Set(mobileModuleCatalog.map((item) => item.id));
+const mobileModuleById = new Map(mobileModuleCatalog.map((item) => [item.id, item]));
+const mobileModuleByTab = new Map(mobileModuleCatalog.map((item) => [item.tab, item.id]));
+
 const mobileModuleAliases = {
   time: "time",
   timeTracking: "time",
   time_tracking: "time",
-  presence: "presence",
-  team: "presence",
-  team_now: "presence",
+  tasks: "tasks",
+  processTasks: "tasks",
+  process_tasks: "tasks",
+  presence: "team",
+  team: "team",
+  team_now: "team",
   approvals: "approvals",
   requests_review: "approvals",
   schedule: "schedule",
@@ -467,6 +478,10 @@ const mobileModuleAliases = {
   requests: "requests",
   history: "requests",
   own_requests: "requests",
+  loan: "loan",
+  loans: "loan",
+  sickness: "sickness",
+  amu: "sickness",
   more: "more",
 };
 
@@ -477,15 +492,18 @@ function normalizedMobileModules(value) {
     if (item?.enabled === false || item?.visible === false) return "";
     return mobileModuleAliases[item?.id || item?.key || item?.module] || item?.id || item?.key || item?.module || "";
   }).filter(Boolean);
-  return [...new Set(normalized)].slice(0, 6);
+  return [...new Set(normalized)].filter((id) => mobileModuleIds.has(id));
 }
 
 function mobileModuleAllowed(module, permissions = portalUser()?.permissions || []) {
   if (module === "time") return permissions.includes("own_time:read") && timeTrackingCapabilityEnabled();
-  if (module === "presence") return permissions.includes("time:read");
+  if (module === "tasks") return portalTabAllowed("processTasks");
+  if (module === "team") return permissions.includes("time:read");
   if (module === "approvals") return permissions.some((permission) => ["vacation:read", "vacation:approve", "time:review", "amu:metadata:read", "amu:review", "amu:local:manage", "sickness:read", "sickness:manage"].includes(permission));
   if (module === "schedule") return permissions.includes("own_schedule:read");
   if (module === "requests") return permissions.some((permission) => ["own_vacation:read", "own_vacation:request", "own_time:read", "own_time:correction_request"].includes(permission));
+  if (module === "loan") return loanCapabilityEnabled();
+  if (module === "sickness") return portalTabAllowed("amu");
   return module === "more";
 }
 
@@ -513,32 +531,112 @@ function portalTabAllowed(tab, user = portalUser()) {
       && portalState.processTasksAvailable !== false;
   }
   if (tab === "loan") return loanCapabilityEnabled();
-  if (tab === "leadershipTeam") return mobileModuleAllowed("presence", permissions);
+  if (tab === "leadershipTeam") return mobileModuleAllowed("team", permissions);
   if (tab === "leadershipApprovals") return mobileModuleAllowed("approvals", permissions);
   return false;
 }
 
+function availablePersonalMobileModules() {
+  return mobileModuleCatalog
+    .map((item) => item.id)
+    .filter((id) => id !== "more" && mobileModuleAllowed(id));
+}
+
+function normalizedPersonalMobileNavigation(value) {
+  const fallback = mobileModuleCatalog.filter((item) => item.id !== "more").map((item) => item.id);
+  const requestedOrder = Array.isArray(value?.order)
+    ? [...new Set(value.order.map(String))].filter((id) => mobileModuleIds.has(id) && id !== "more")
+    : [];
+  for (const id of fallback) if (!requestedOrder.includes(id)) requestedOrder.push(id);
+  const hidden = Array.isArray(value?.hidden)
+    ? [...new Set(value.hidden.map(String))].filter((id) => mobileModuleIds.has(id) && id !== "more")
+    : [];
+  return { version: 1, order: requestedOrder, hidden };
+}
+
+function defaultPersonalMobileSelection() {
+  const available = new Set(availablePersonalMobileModules());
+  const roleDefault = isLeadershipUser()
+    ? normalizedMobileModules(portalState.mobileLayout?.modules)
+    : ["time", "tasks", "schedule", "requests", "sickness", "loan"];
+  const selected = roleDefault.filter((id) => id !== "more" && available.has(id)).slice(0, 5);
+  if (!selected.length) selected.push(...[...available].slice(0, 1));
+  return selected;
+}
+
+function createMobileNavigationDraft() {
+  const stored = normalizedPersonalMobileNavigation(portalState.uiPreferences?.mobilePortalNavigation);
+  const available = new Set(availablePersonalMobileModules());
+  const customized = portalState.uiPreferences?.mobilePortalNavigationCustomized === true;
+  const selected = customized
+    ? stored.order.filter((id) => available.has(id) && !stored.hidden.includes(id)).slice(0, 5)
+    : defaultPersonalMobileSelection();
+  return {
+    order: [...stored.order],
+    selected: selected.length ? selected : [...available].slice(0, 1),
+  };
+}
+
+function currentMobileNavigationDraft() {
+  if (!portalState.mobileNavigationDraft) portalState.mobileNavigationDraft = createMobileNavigationDraft();
+  return portalState.mobileNavigationDraft;
+}
+
 function effectiveMobileModules() {
-  const fallback = ["time", "presence", "approvals", "schedule", "requests", "more"];
-  const configured = normalizedMobileModules(portalState.mobileLayout?.modules);
-  const available = normalizedMobileModules(portalState.mobileLayout?.availableModules);
-  const source = configured.length ? configured : fallback;
-  const availability = new Set(available.length ? available : fallback);
-  const modules = source.filter((module) => module !== "time" && availability.has(module) && mobileModuleAllowed(module));
-  if (availability.has("time") && mobileModuleAllowed("time")) modules.unshift("time");
-  return [...new Set(modules)].slice(0, 6);
+  const available = new Set(availablePersonalMobileModules());
+  const draft = currentMobileNavigationDraft();
+  const direct = draft.order
+    .filter((id) => available.has(id) && draft.selected.includes(id))
+    .slice(0, 5);
+  if (!direct.length) direct.push(...[...available].slice(0, 1));
+  return [...direct, "more"];
+}
+
+function syncPortalTabButtons(tab) {
+  const modules = portalState.mobileLeadership ? effectiveMobileModules() : [];
+  const directModule = mobileModuleByTab.get(tab);
+  const representedByMore = portalState.mobileLeadership
+    && ((mobileMoreSecondaryTabs.has(tab) && (!directModule || !modules.includes(directModule)))
+      || (directModule && !modules.includes(directModule)));
+  document.querySelectorAll("[data-tab]").forEach((button) => {
+    const active = representedByMore
+      ? button.dataset.tab === "leadershipMore"
+      : button.dataset.tab === tab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
+  if (portalState.mobileLeadership) {
+    const activeButton = document.querySelector(".portal-tabs [data-tab].active");
+    activeButton?.scrollIntoView?.({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }
+}
+
+function renderMobileMoreShortcuts(modules = effectiveMobileModules()) {
+  const direct = new Set(modules);
+  [
+    [el.mobileMoreTimeShortcut, "time"],
+    [el.mobileMoreScheduleShortcut, "schedule"],
+    [el.mobileMoreTeamShortcut, "team"],
+    [el.mobileMoreApprovalsShortcut, "approvals"],
+    [el.mobileMoreRequestsShortcut, "requests"],
+  ].forEach(([button, module]) => {
+    button?.classList.toggle("hidden", !mobileModuleAllowed(module) || direct.has(module));
+  });
 }
 
 function applyMobileLeadershipLayout() {
   const navigation = document.querySelector(".portal-tabs");
   if (!navigation) return;
-  const compactLeadership = isMobileUi() && isLeadershipUser();
-  portalState.mobileLeadership = compactLeadership;
-  navigation.classList.toggle("mobile-leadership", compactLeadership);
-  el.portalSettingsShortcut?.classList.toggle("hidden", !compactLeadership);
+  const compactMobile = isMobileUi() && !isOrganizationAccount();
+  portalState.mobileLeadership = compactMobile;
+  navigation.classList.toggle("mobile-personal", compactMobile);
+  navigation.classList.toggle("mobile-leadership", compactMobile && isLeadershipUser());
+  el.portalSettingsShortcut?.classList.toggle("hidden", !compactMobile);
   const regularTabs = ["settings", "schedule", "timeTracking", "processTasks", "timeOff", "vacation", "history", "amu"];
   document.querySelectorAll(".leadership-tab").forEach((button) => button.classList.add("hidden"));
-  if (!compactLeadership) {
+  if (!compactMobile) {
+    document.querySelectorAll("[data-tab]").forEach((button) => button.classList.remove("mobile-navigation-hidden"));
     regularTabs.forEach((tab) => {
       const button = document.querySelector(`[data-tab="${tab}"]`);
       const unavailable = !portalTabAllowed(tab);
@@ -546,7 +644,6 @@ function applyMobileLeadershipLayout() {
       button?.style.removeProperty("order");
     });
     document.querySelectorAll(".leadership-tab").forEach((button) => button.style.removeProperty("order"));
-    navigation.style.removeProperty("--mobile-module-count");
     if (["leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(portalState.activeTab)) {
       setTab("timeTracking");
       return;
@@ -554,49 +651,225 @@ function applyMobileLeadershipLayout() {
     syncPortalTabButtons(portalState.activeTab);
     return;
   }
-  document.querySelectorAll("[data-tab]").forEach((button) => button.classList.add("hidden"));
-  const moduleTabs = {
-    time: "timeTracking",
-    presence: "leadershipTeam",
-    approvals: "leadershipApprovals",
-    schedule: "schedule",
-    requests: "history",
-    more: "leadershipMore",
-  };
+  document.querySelectorAll("[data-tab]").forEach((button) => {
+    button.classList.add("hidden");
+    button.classList.add("mobile-navigation-hidden");
+  });
   const modules = effectiveMobileModules();
   modules.forEach((module, index) => {
-    const button = document.querySelector(`[data-tab="${moduleTabs[module]}"]`);
+    const button = document.querySelector(`[data-tab="${mobileModuleById.get(module)?.tab}"]`);
     button?.classList.remove("hidden");
+    button?.classList.remove("mobile-navigation-hidden");
     if (button) button.style.order = String(index);
   });
-  navigation.style.setProperty("--mobile-module-count", String(Math.max(1, modules.length)));
+  renderMobileMoreShortcuts(modules);
   const activeButton = document.querySelector(`[data-tab="${portalState.activeTab}"]`);
-  const secondaryViaMore = modules.includes("more") && mobileMoreSecondaryTabs.has(portalState.activeTab);
-  if (activeButton?.classList.contains("hidden") && modules.length && !secondaryViaMore) {
-    setTab(moduleTabs[modules[0]]);
+  const activeModule = mobileModuleByTab.get(portalState.activeTab);
+  const secondaryViaMore = modules.includes("more") && mobileMoreSecondaryTabs.has(portalState.activeTab)
+    && (!activeModule || !modules.includes(activeModule));
+  const hiddenDirectViaMore = modules.includes("more") && activeModule && !modules.includes(activeModule);
+  if (activeButton?.classList.contains("hidden") && modules.length && !secondaryViaMore && !hiddenDirectViaMore) {
+    setTab(mobileModuleById.get(modules[0])?.tab || "leadershipMore");
     return;
   }
   syncPortalTabButtons(portalState.activeTab);
 }
 
 async function loadMobileLayout() {
-  if (!isLeadershipUser()) {
-    portalState.mobileLayout = null;
-    applyMobileLeadershipLayout();
+  const layoutRequest = isLeadershipUser()
+    ? api("/api/portal/v1/mobile-layout")
+    : Promise.resolve(null);
+  const [layoutResult, preferencesResult] = await Promise.allSettled([
+    layoutRequest,
+    api("/api/portal/v1/ui-preferences"),
+  ]);
+  portalState.mobileLayout = layoutResult.status === "fulfilled"
+    ? layoutResult.value
+    : { modules: ["time", "team", "approvals", "schedule", "requests", "more"] };
+  portalState.uiPreferences = preferencesResult.status === "fulfilled"
+    ? preferencesResult.value
+    : {
+      mobilePortalNavigation: { version: 1, order: mobileModuleCatalog.filter((item) => item.id !== "more").map((item) => item.id), hidden: [] },
+      mobilePortalAppearance: { version: 1, palette: "forest", surface: "soft" },
+      mobilePortalNavigationCustomized: false,
+    };
+  portalState.mobileNavigationDraft = null;
+  applyMobilePortalAppearance(portalState.uiPreferences.mobilePortalAppearance);
+  renderMobileAppearanceSettings();
+  renderMobileNavigationSettings();
+  applyMobileLeadershipLayout();
+}
+
+function normalizedMobilePortalAppearance(value) {
+  const palettes = new Set(["forest", "ocean", "plum", "sand"]);
+  const surfaces = new Set(["soft", "compact"]);
+  return {
+    version: 1,
+    palette: palettes.has(String(value?.palette)) ? String(value.palette) : "forest",
+    surface: surfaces.has(String(value?.surface)) ? String(value.surface) : "soft",
+  };
+}
+
+function applyMobilePortalAppearance(value) {
+  const appearance = normalizedMobilePortalAppearance(value);
+  document.documentElement.dataset.portalPalette = appearance.palette;
+  document.documentElement.dataset.portalSurface = appearance.surface;
+}
+
+function mobileAppearanceFromSettings() {
+  return normalizedMobilePortalAppearance({
+    version: 1,
+    palette: document.querySelector('input[name="mobilePortalPalette"]:checked')?.value,
+    surface: document.querySelector('input[name="mobilePortalSurface"]:checked')?.value,
+  });
+}
+
+function renderMobileAppearanceSettings() {
+  const appearance = normalizedMobilePortalAppearance(portalState.uiPreferences?.mobilePortalAppearance);
+  const palette = document.querySelector(`input[name="mobilePortalPalette"][value="${appearance.palette}"]`);
+  const surface = document.querySelector(`input[name="mobilePortalSurface"][value="${appearance.surface}"]`);
+  if (palette) palette.checked = true;
+  if (surface) surface.checked = true;
+  applyMobilePortalAppearance(appearance);
+}
+
+async function saveMobileAppearanceSettings() {
+  const appearance = mobileAppearanceFromSettings();
+  el.saveMobileAppearanceButton.disabled = true;
+  message(el.mobileAppearanceSettingsMessage, "");
+  try {
+    portalState.uiPreferences = await api("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      body: JSON.stringify({ mobilePortalAppearance: appearance }),
+    });
+    renderMobileAppearanceSettings();
+    message(el.mobileAppearanceSettingsMessage, "Dein persönliches Portaldesign wurde gespeichert.");
+  } catch (error) {
+    renderMobileAppearanceSettings();
+    message(el.mobileAppearanceSettingsMessage, error.message, true);
+  } finally {
+    el.saveMobileAppearanceButton.disabled = false;
+  }
+}
+
+function mobileNavigationItemsForSettings() {
+  const allowed = new Set(availablePersonalMobileModules());
+  const draft = currentMobileNavigationDraft();
+  return draft.order
+    .filter((id) => allowed.has(id))
+    .map((id) => mobileModuleById.get(id))
+    .filter(Boolean);
+}
+
+function renderMobileNavigationSettings() {
+  if (!el.mobileNavigationSettingsList) return;
+  const draft = currentMobileNavigationDraft();
+  const items = mobileNavigationItemsForSettings();
+  const selected = new Set(draft.selected);
+  if (!items.length) {
+    el.mobileNavigationSettingsList.innerHTML = '<p class="empty-state">Für dein Konto ist derzeit kein direkter Portalbereich freigeschaltet. „Mehr“ und die persönlichen Einstellungen bleiben erreichbar.</p>';
+    if (el.saveMobileNavigationButton) el.saveMobileNavigationButton.disabled = true;
     return;
   }
-  try {
-    portalState.mobileLayout = await api("/api/portal/v1/mobile-layout");
-  } catch {
-    portalState.mobileLayout = { modules: ["time", "presence", "approvals", "schedule", "requests", "more"] };
+  if (el.saveMobileNavigationButton) el.saveMobileNavigationButton.disabled = false;
+  el.mobileNavigationSettingsList.innerHTML = items.map((item, index) => `
+    <div class="mobile-navigation-setting-row" data-mobile-navigation-item="${esc(item.id)}">
+      <label>
+        <input type="checkbox" data-mobile-navigation-visible value="${esc(item.id)}" ${selected.has(item.id) ? "checked" : ""} ${!selected.has(item.id) && selected.size >= 5 ? "disabled" : ""} />
+        <span><strong>${esc(item.label)}</strong><small>${esc(item.description)}</small></span>
+      </label>
+      <div class="mobile-navigation-order-actions" aria-label="${esc(item.label)} anordnen">
+        <button type="button" data-mobile-navigation-move="-1" aria-label="${esc(item.label)} nach links verschieben" ${index === 0 ? "disabled" : ""}>↑</button>
+        <button type="button" data-mobile-navigation-move="1" aria-label="${esc(item.label)} nach rechts verschieben" ${index === items.length - 1 ? "disabled" : ""}>↓</button>
+      </div>
+    </div>
+  `).join("") + `<p class="mobile-navigation-limit">${selected.size} von höchstens 5 direkten Punkten · „Mehr“ bleibt fest am Ende.</p>`;
+}
+
+function updateMobileNavigationSelection(itemId, visible) {
+  const draft = currentMobileNavigationDraft();
+  const selected = new Set(draft.selected);
+  if (visible && selected.size >= 5 && !selected.has(itemId)) {
+    message(el.mobileNavigationSettingsMessage, "Im Bottom-Menü sind höchstens fünf direkte Punkte möglich. Weitere Bereiche bleiben unter „Mehr“ erreichbar.", true);
+    return false;
   }
+  if (visible) selected.add(itemId);
+  else selected.delete(itemId);
+  if (!selected.size) {
+    message(el.mobileNavigationSettingsMessage, "Bitte mindestens einen direkten Punkt auswählen. „Mehr“ bleibt zusätzlich erreichbar.", true);
+    return false;
+  }
+  draft.selected = draft.order.filter((id) => selected.has(id));
+  message(el.mobileNavigationSettingsMessage, "");
+  renderMobileNavigationSettings();
   applyMobileLeadershipLayout();
+  return true;
+}
+
+function moveMobileNavigationItem(itemId, direction) {
+  const draft = currentMobileNavigationDraft();
+  const visibleOrder = mobileNavigationItemsForSettings().map((item) => item.id);
+  const index = visibleOrder.indexOf(itemId);
+  const target = index + direction;
+  if (index < 0 || target < 0 || target >= visibleOrder.length) return;
+  [visibleOrder[index], visibleOrder[target]] = [visibleOrder[target], visibleOrder[index]];
+  const visibleSet = new Set(visibleOrder);
+  draft.order = [...visibleOrder, ...draft.order.filter((id) => !visibleSet.has(id))];
+  draft.selected = draft.order.filter((id) => draft.selected.includes(id));
+  renderMobileNavigationSettings();
+  applyMobileLeadershipLayout();
+}
+
+function resetMobileNavigationSettings() {
+  const selected = defaultPersonalMobileSelection();
+  const all = normalizedPersonalMobileNavigation(null).order;
+  portalState.mobileNavigationDraft = {
+    order: [...selected, ...all.filter((id) => !selected.includes(id))],
+    selected: [...selected],
+  };
+  renderMobileNavigationSettings();
+  applyMobileLeadershipLayout();
+  message(el.mobileNavigationSettingsMessage, "Der Rollenstandard ist als Vorschau eingestellt. Bitte noch speichern.");
+}
+
+async function saveMobileNavigationSettings() {
+  const draft = currentMobileNavigationDraft();
+  const available = new Set(availablePersonalMobileModules());
+  const stored = normalizedPersonalMobileNavigation(portalState.uiPreferences?.mobilePortalNavigation);
+  const hidden = [
+    ...stored.hidden.filter((id) => !available.has(id)),
+    ...[...available].filter((id) => !draft.selected.includes(id)),
+  ];
+  const navigation = {
+    version: 1,
+    order: [...draft.order],
+    hidden: [...new Set(hidden)],
+  };
+  el.saveMobileNavigationButton.disabled = true;
+  message(el.mobileNavigationSettingsMessage, "");
+  try {
+    portalState.uiPreferences = await api("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      body: JSON.stringify({ mobilePortalNavigation: navigation }),
+    });
+    portalState.mobileNavigationDraft = null;
+    renderMobileNavigationSettings();
+    applyMobileLeadershipLayout();
+    message(el.mobileNavigationSettingsMessage, "Dein persönliches Bottom-Menü wurde gespeichert.");
+  } catch (error) {
+    portalState.mobileNavigationDraft = null;
+    renderMobileNavigationSettings();
+    applyMobileLeadershipLayout();
+    message(el.mobileNavigationSettingsMessage, error.message, true);
+  } finally {
+    el.saveMobileNavigationButton.disabled = false;
+  }
 }
 
 function normalizedPortalTab(requested) {
   const aliases = { requests: "history", team: "leadershipTeam", approvals: "leadershipApprovals", more: "leadershipMore", time: "timeTracking" };
   const tab = aliases[requested] || requested;
-  if (["leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) && !isLeadershipUser()) return "";
+  if (["leadershipTeam", "leadershipApprovals"].includes(tab) && !isLeadershipUser()) return "";
   return ["settings", "schedule", "timeTracking", "processTasks", "timeOff", "vacation", "history", "loan", "amu", "leadershipTeam", "leadershipApprovals", "leadershipMore"].includes(tab) ? tab : "";
 }
 
@@ -941,6 +1214,10 @@ function showPortal(session) {
   const planningOnly = session.user.role === "location_planner";
   el.adminAppLink.textContent = planningOnly ? "Filialplanung öffnen" : "Planung öffnen";
   if (el.leadershipDesktopLink) {
+    el.leadershipDesktopLink.classList.toggle(
+      "hidden",
+      isOrganizationAccount(session.user) || !session.user.permissions.includes("schedule:read"),
+    );
     el.leadershipDesktopLink.href = planningOnly ? "/" : "/?desktop=1";
     el.leadershipDesktopLink.querySelector("strong").textContent = planningOnly ? "Filialplanung" : "Desktop-Planung";
     el.leadershipDesktopLink.querySelector("span").textContent = planningOnly
@@ -1010,6 +1287,7 @@ function setTab(tab) {
   if (tab === "settings") {
     if (hasPortalPermission("own_time:read")) loadWifiAutomation();
     if (hasPortalPermission("own_privacy_requests:read")) loadPrivacyRequests();
+    if (hasPortalPermission("notifications:settings")) loadSicknessNotificationPreferences();
   }
   if (tab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking(), loadTimeSummary(), loadTimeCorrections()]);
   if (tab === "vacation") {
@@ -1025,7 +1303,6 @@ function setTab(tab) {
     document.querySelectorAll("[data-leadership-kind]").forEach((item) => item.classList.toggle("active", item.dataset.leadershipKind === portalState.leadershipKind));
     loadLeadershipApprovals();
   }
-  if (tab === "leadershipMore" && portalUser()?.permissions?.includes("notifications:settings")) loadSicknessNotificationPreferences();
 }
 
 async function loadSchedule() {
@@ -4238,6 +4515,33 @@ el.logoutButton.addEventListener("click", logout);
 el.settingsPasswordButton?.addEventListener("click", () => el.passwordDialog.showModal());
 el.portalSettingsShortcut?.addEventListener("click", () => setTab("settings"));
 el.leadershipSettingsButton?.addEventListener("click", () => setTab("settings"));
+el.mobileNavigationSettingsList?.addEventListener("change", (event) => {
+  const input = event.target.closest("[data-mobile-navigation-visible]");
+  if (!input) return;
+  if (!updateMobileNavigationSelection(input.value, input.checked)) {
+    input.checked = !input.checked;
+    renderMobileNavigationSettings();
+  }
+});
+el.mobileNavigationSettingsList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-mobile-navigation-move]");
+  const row = button?.closest("[data-mobile-navigation-item]");
+  if (button && row) moveMobileNavigationItem(row.dataset.mobileNavigationItem, Number(button.dataset.mobileNavigationMove));
+});
+el.resetMobileNavigationButton?.addEventListener("click", resetMobileNavigationSettings);
+el.saveMobileNavigationButton?.addEventListener("click", saveMobileNavigationSettings);
+document.querySelectorAll('input[name="mobilePortalPalette"],input[name="mobilePortalSurface"]').forEach((input) => {
+  input.addEventListener("change", () => {
+    applyMobilePortalAppearance(mobileAppearanceFromSettings());
+    message(el.mobileAppearanceSettingsMessage, "Vorschau aktiv. Bitte speichern, um die Auswahl zu behalten.");
+  });
+});
+el.saveMobileAppearanceButton?.addEventListener("click", saveMobileAppearanceSettings);
+el.sicknessNotificationPreferencesCard?.addEventListener("toggle", () => {
+  if (el.sicknessNotificationPreferencesCard.open && hasPortalPermission("notifications:settings")) {
+    loadSicknessNotificationPreferences();
+  }
+});
 el.passwordForm.addEventListener("submit", changePassword);
 document.addEventListener("click", (event) => {
   const toggle = event.target.closest("[data-password-toggle]");

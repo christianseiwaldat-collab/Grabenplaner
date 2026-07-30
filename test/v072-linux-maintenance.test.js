@@ -60,9 +60,9 @@ test("Linux runtime contract is versioned and cryptographically fingerprinted", 
   ], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   const contract = JSON.parse(result.stdout);
-  assert.equal(contract.deploymentSchemaVersion, 2);
+  assert.equal(contract.deploymentSchemaVersion, 3);
   assert.match(contract.fingerprint, /^[0-9a-f]{64}$/);
-  assert.equal(contract.managedArtifacts.length, 7);
+  assert.equal(contract.managedArtifacts.length, 11);
 
   const schema = JSON.parse(read("server-tools/linux/runtime-schema.json"));
   assert.equal(schema.format, "grabenplaner-linux-runtime-contract");
@@ -70,5 +70,5 @@ test("Linux runtime contract is versioned and cryptographically fingerprinted", 
 
   const installer = read("server-tools/linux/install-grabenplaner-server.sh");
   assert.match(installer, /server-tools\/linux\/runtime-schema\.json/);
-  assert.match(installer, /Der Linux-Runtimevertrag v2 ist ungueltig/);
+  assert.match(installer, /Der Linux-Runtimevertrag v3 ist ungueltig/);
 });

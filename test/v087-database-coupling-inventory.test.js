@@ -268,15 +268,18 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
   }
   assert.ok(report.legacyProductionTotals.prepareCall < BASELINE.productionTotals.prepareCall);
   assert.ok(report.serverHotspot.dbPrepareCall < BASELINE.serverHotspot.dbPrepareCall);
-  assert.equal(report.productionTotals.directNodeSqliteImport, BASELINE.productionTotals.directNodeSqliteImport);
+  assert.equal(
+    report.productionTotals.directNodeSqliteImport,
+    BASELINE.productionTotals.directNodeSqliteImport + 1,
+  );
   assert.equal(
     report.legacyProductionTotals.directNodeSqliteImport,
-    BASELINE.productionTotals.directNodeSqliteImport - 1,
+    BASELINE.productionTotals.directNodeSqliteImport,
   );
 
-  assert.equal(report.summary.productionDirectFiles, 47);
-  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles);
-  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles);
+  assert.equal(report.summary.productionDirectFiles, 48);
+  assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 1);
+  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 1);
   const expectedTestDriverFiles = BASELINE_DIRECT_TEST_DRIVER_FILES
     .filter((file) => ![
       "test/block6-custom-work-rule-evaluator.test.js",

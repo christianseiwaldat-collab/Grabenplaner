@@ -33,7 +33,7 @@
       <aside class="sidebar" id="mainSidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.87 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.88 Beta</span></div>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
@@ -1641,10 +1641,17 @@
               </div>
             </div>
             <div class="settings-card full-settings-card hidden" id="serverGoogleDriveManagementCard">
-              <div class="card-heading"><div class="card-icon">Drive</div><div><h2>Google-Drive-Offsite-Sicherung</h2><p>Die verschlüsselte externe Sicherung wird ausschließlich durch die geschützte Serververwaltung gesteuert.</p></div></div>
+              <div class="card-heading"><div class="card-icon">Offsite</div><div><h2>Offsite-Sicherung</h2><p>Google Drive bleibt der bevorzugte Anbieter. Alternativ sind Hetzner Object Storage und Backblaze B2 im verbindlichen Provider-Modell vorgesehen.</p></div></div>
+              <label class="field">
+                <span>Aktiver Anbieter (Pflichtauswahl)</span>
+                <select id="offsiteProviderSelect" disabled aria-describedby="offsiteProviderPolicyHint">
+                  <option value="">Kein Anbieter ausgewählt</option>
+                </select>
+              </label>
+              <p class="settings-note" id="offsiteProviderPolicyHint">Die Auswahl allein erzeugt noch keinen grünen Systemstatus: Konfiguration, Erreichbarkeit, aktueller Sicherungsstand, Repository-Prüfung und Recovery Assurance müssen ebenfalls bestätigt sein. Ein Anbieterwechsel erfolgt als geschützte Servermigration.</p>
               <div class="google-drive-management-row">
                 <p id="googleDriveManagementStatus" role="status" aria-live="polite">Sicherer Status wird geladen …</p>
-                <div class="google-drive-management-actions">
+                <div class="google-drive-management-actions" id="googleDriveFolderControls">
                   <button type="button" class="secondary-button compact-button" id="reloadGoogleDriveFoldersButton">Ordnerliste neu laden</button>
                   <button type="button" class="secondary-button" id="manageGoogleDriveFolderButton" aria-describedby="googleDriveManagementHint" disabled>Ordner verwalten</button>
                 </div>
@@ -1814,7 +1821,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.87 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.88 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -2525,8 +2532,8 @@
         <div class="modal-header">
           <div>
             <span class="eyebrow">Server-Monitor</span>
-            <h2 id="serverRestartTitle">Server kontrolliert neu starten</h2>
-            <p id="serverRestartDescription">Bitte prüfen Sie die Auswirkungen, bevor Sie den verwalteten Serverdienst neu starten.</p>
+            <h2 id="serverRestartTitle">Grabenplaner-Dienst neu starten</h2>
+            <p id="serverRestartDescription">Bitte prüfen Sie die Auswirkungen, bevor Sie ausschließlich den verwalteten Grabenplaner-Dienst neu starten.</p>
           </div>
           <button type="button" class="close-button" id="serverRestartCloseButton" data-close="serverRestartModal" aria-label="Dialog schließen">×</button>
         </div>
@@ -2539,7 +2546,35 @@
         <div class="modal-actions server-restart-actions">
           <span></span><span></span>
           <button type="button" class="secondary-button" id="serverRestartCancelButton" data-close="serverRestartModal">Abbrechen</button>
-          <button type="submit" class="danger-button" id="serverRestartConfirmButton">Sicherung erstellen und neu starten</button>
+          <button type="submit" class="danger-button" id="serverRestartConfirmButton">Sicherung erstellen und Dienst neu starten</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal server-restart-modal" id="vpsRebootModal" aria-labelledby="vpsRebootTitle" aria-describedby="vpsRebootDescription vpsRebootConsequences">
+      <form method="dialog" id="vpsRebootForm">
+        <div class="modal-header">
+          <div>
+            <span class="eyebrow">Developer · Ubuntu-Host</span>
+            <h2 id="vpsRebootTitle">VPS kontrolliert neu starten</h2>
+            <p id="vpsRebootDescription">Dieser geschützte Vorgang startet den vollständigen Ubuntu-Host neu – nicht nur Grabenplaner.</p>
+          </div>
+          <button type="button" class="close-button" id="vpsRebootCloseButton" data-close="vpsRebootModal" aria-label="Dialog schließen">×</button>
+        </div>
+        <section class="server-restart-warning" id="vpsRebootConsequences">
+          <strong>Kurzes Wartungsfenster für den gesamten VPS</strong>
+          <p>Grabenplaner, HTTPS und die automatischen Serverdienste sind während des Neustarts vorübergehend nicht erreichbar. Nicht gespeicherte Eingaben können verloren gehen.</p>
+          <p>Vor der Freigabe erstellt Grabenplaner einen verifizierten Sicherungspunkt. Der root-seitige Steuerungspfad akzeptiert ausschließlich den fest definierten VPS-Neustart und wiederholt ihn nicht automatisch.</p>
+        </section>
+        <label class="field">
+          <span>Aktuelles Developer-Passwort</span>
+          <input type="password" id="vpsRebootCurrentPassword" autocomplete="current-password" maxlength="512" required />
+        </label>
+        <p class="server-restart-message hidden" id="vpsRebootMessage" role="status" aria-live="polite"></p>
+        <div class="modal-actions server-restart-actions">
+          <span></span><span></span>
+          <button type="button" class="secondary-button" id="vpsRebootCancelButton" data-close="vpsRebootModal">Abbrechen</button>
+          <button type="submit" class="danger-button" id="vpsRebootConfirmButton">Sicherung erstellen und VPS neu starten</button>
         </div>
       </form>
     </dialog>

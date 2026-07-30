@@ -72,3 +72,67 @@ gefaehrlicher Teilrollback auf Schema 1 versucht. Die konsistente Runtime-v2-
 Installation bleibt aktiv und das root-only Diagnoseverzeichnis wird mit
 `POST-UPDATE-ACTION-REQUIRED` erhalten. Dieser Sonderfall verlangt eine
 kontrollierte IT-Pruefung; er oeffnet ebenfalls niemals den Admin-Bootstrap.
+
+## Deployment-Schema 3
+
+Schema 3 ergaenzt einen eng begrenzten, root-verwalteten Steuerpfad fuer einen
+ausdruecklich bestaetigten Ubuntu-Host-Neustart. Die App erhaelt keine
+allgemeinen `sudo`- oder systemd-Rechte. Ausschliesslich der Dienstbenutzer
+`grabenplaner` darf ueber
+`/run/grabenplaner-host-control/request.sock` eine streng validierte Anfrage an
+den separat unter `/opt/grabenplaner-host-control/module` installierten Broker
+senden. Die Brokerkopie und alle drei Units gehoeren root und sind fuer die App
+nicht schreibbar.
+
+Der Wechsel von Schema 2 erfordert eine ausdrueckliche Wartungsmigration. Das
+normale App-Update bricht vorher mit `migration-required:2->3` ab. Insbesondere
+reicht es nicht, nur die neuen Dateien in den App-Ordner zu kopieren.
+
+### Offizieller Weg von Schema 2 auf Schema 3
+
+Die Migration wird aus dem separat bereitgestellten, per SHA-256 freigegebenen
+Linux-Serverpaket gestartet:
+
+```bash
+unzip Grabenplaner-Server-v0.88.0-beta-linux-x64.zip -d /root/grabenplaner-runtime-v3
+sudo bash /root/grabenplaner-runtime-v3/server-tools/linux/migrate-grabenplaner-runtime-v3.sh \
+  --package /root/Grabenplaner-Server-v0.88.0-beta-linux-x64.zip \
+  --sha256-file /root/Grabenplaner-Server-v0.88.0-beta-linux-x64.zip.sha256
+```
+
+Das Werkzeug akzeptiert ausschliesslich eine gesunde, produktive
+Schema-2-Installation mit geschlossenem Bootstrap und aktivem administrativem
+Zugang. Es fuehrt folgende Schritte aus:
+
+1. Paket-SHA, ZIP-Struktur, Einzeldateimanifest, ClamAV, Runtime-Fingerprints,
+   Live/Ready und den unveraenderten Hardening-Vertrag pruefen. Ein geaenderter
+   Offsite-Quellfingerprint ist bei nicht aktivierter Offsite-Sicherung
+   zulaessig. Bei einer konfigurierten Sicherung muss dagegen die getrennte
+   Offsite-Migration bereits abgeschlossen sein: Der root-only
+   Installationsbeleg und der installierte Modulbaum muessen exakt
+   Modulversion, Schema, Dateiliste und Fingerprint des Kandidaten bestaetigen.
+   Zudem werden die unveraenderte Providerbindung, die live von rclone
+   redigierte Provider-Richtlinie und die gebundene Repository-Identitaet mit
+   den Kandidatenwerkzeugen geprueft. Andernfalls endet der Vorgang
+   fail-closed mit `Offsite-Migration zuerst`; ein Providerwechsel ist in der
+   Runtime-Migration ausgeschlossen.
+2. Die root-only Wartungssperre halten und den bestehenden Schema-2-Runtimebaum
+   als lokalen Rollbackpunkt sichern.
+3. Die dedizierte Gruppe `grabenplaner-host-control` erstellen, nur den
+   Dienstbenutzer aufnehmen und Broker sowie Units root-owned vorbereiten.
+4. Alle Units vor und nach der atomaren Installation mit `systemd-analyze
+   verify` pruefen und ausschliesslich den Unix-Socket aktivieren.
+5. Den normalen Server-Updater unter derselben Wartungssperre ausfuehren. Damit
+   entstehen ein verifiziertes DB-/Dokumentenbackup, gegebenenfalls die
+   verpflichtende Offsite-Kopie sowie der uebliche App- und Datenrollback.
+6. Runtime-Fingerprint, Eigentumsrechte, Gruppenmitgliedschaft, Socket,
+   Bootstrap und Live/Ready erneut pruefen und einen root-geschuetzten Beleg
+   unter `/var/lib/grabenplaner/maintenance/history` schreiben.
+
+Die Migration startet weder `grabenplaner-host-reboot.service` noch einen
+anderen Neustartbefehl; der Beleg enthaelt deshalb explizit
+`"rebootTriggered": false`. Scheitert sie vor dem App-Commit, werden Runtime,
+Units, Brokerkopie und neu angelegte Gruppenbindung zurueckgerollt. Nach einem
+bereits erfolgreichen App-Commit bleibt wie bei Schema 2 der konsistente neue
+Stand erhalten und ein root-only Diagnoseordner markiert den erforderlichen
+manuellen Nachlauf.

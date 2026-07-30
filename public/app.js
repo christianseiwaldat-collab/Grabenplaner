@@ -192,6 +192,10 @@ const state = {
   serverMonitorRestartAccepted: false,
   serverMonitorRestartPhase: "",
   serverMonitorRestartReturnFocus: null,
+  vpsRebootAccepted: false,
+  vpsRebootPhase: "",
+  vpsRebootPreviousHostBootGeneration: "",
+  vpsRebootReturnFocus: null,
   databaseDownloadPending: false,
   offsiteFolders: null,
   offsiteFoldersLoadState: "idle",
@@ -304,7 +308,7 @@ const elements = Object.fromEntries(
     "personnelRulesScope", "personnelRulesScopeDetail", "refreshPersonnelRulesDashboard", "personnelRulesSummary", "personnelRulesSearch", "personnelRulesLayerFilter", "personnelRulesStatusFilter", "personnelRulesAssignmentLegend", "personnelRulesProfileCount", "personnelRulesProfileList", "personnelRulesProfileTitle", "personnelRulesProfileSummary", "personnelRulesProfileStatus", "personnelRulesProfileFacts", "personnelRulesApplicability", "personnelRulesAssignments", "personnelRulesRules", "personnelRulesSources", "personnelRulesSimulationWeek", "personnelRulesSimulationLocation", "personnelRulesSimulationDepartment", "runPersonnelRulesSimulation", "personnelRulesSimulationHint", "personnelRulesSimulationResult", "personnelRulesLegalNotice",
     "rightsProcessCategory", "rightsProcessLocation", "rightsProcessScenario", "rightsProcessExportPdf", "addCustomProcessButton", "rightsCustomProcessActions", "rightsProcessValidationHint", "rightsProcessValidationSummary", "rightsProcessValidationList", "rightsProcessList", "rightsProcessTitle", "rightsProcessSummary", "rightsProcessStatus", "rightsProcessSimulationNote", "rightsProcessRules", "rightsProcessTimeline", "rightsProcessExplanation",
     "customProcessModal", "customProcessForm", "customProcessModalTitle", "customProcessId", "customProcessTitle", "customProcessSymbol", "customProcessStatus", "customProcessCategory", "customProcessDescription", "customProcessScopeType", "customProcessScopeLocationField", "customProcessScopeLocation", "customProcessScopeDepartmentField", "customProcessScopeDepartment", "customProcessTriggerType", "customProcessShortfallField", "customProcessMinimumShortfall", "addCustomProcessStepButton", "customProcessSteps", "customProcessResponsibilityOptions", "customProcessMessage", "saveCustomProcessButton",
-    "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "databaseBackupSettingsCard", "legacyLocalBackupControls", "serverDatabaseDownloadPanel", "databaseDownloadForm", "databaseDownloadCurrentPassword", "databaseDownloadButton", "databaseDownloadStatus", "serverGoogleDriveManagementCard", "googleDriveManagementStatus", "reloadGoogleDriveFoldersButton", "manageGoogleDriveFolderButton", "offsiteFolderManagementModal", "offsiteFolderManagementForm", "offsiteFolderActiveLabel", "offsiteManagedFolderList", "offsiteNewFolderLabel", "offsiteCreateCurrentPassword", "createManagedOffsiteFolderButton", "offsiteActiveFolderSelection", "offsiteFolderActivationConfirmation", "offsiteActivateCurrentPassword", "activateManagedOffsiteFolderButton", "offsiteFolderDialogStatus", "backupRestoreGuidanceCard",
+    "serverAlertBanner", "serverAlertTitle", "serverAlertMessage", "serverDiagnosticsCard", "serverDiagnostics", "refreshServerDiagnosticsButton", "serverRestartModal", "serverRestartForm", "serverRestartCloseButton", "serverRestartCancelButton", "serverRestartConfirmButton", "serverRestartMessage", "vpsRebootModal", "vpsRebootForm", "vpsRebootCloseButton", "vpsRebootCancelButton", "vpsRebootConfirmButton", "vpsRebootCurrentPassword", "vpsRebootMessage", "databaseBackupSettingsCard", "legacyLocalBackupControls", "serverDatabaseDownloadPanel", "databaseDownloadForm", "databaseDownloadCurrentPassword", "databaseDownloadButton", "databaseDownloadStatus", "serverGoogleDriveManagementCard", "offsiteProviderSelect", "offsiteProviderPolicyHint", "googleDriveManagementStatus", "googleDriveFolderControls", "reloadGoogleDriveFoldersButton", "manageGoogleDriveFolderButton", "offsiteFolderManagementModal", "offsiteFolderManagementForm", "offsiteFolderActiveLabel", "offsiteManagedFolderList", "offsiteNewFolderLabel", "offsiteCreateCurrentPassword", "createManagedOffsiteFolderButton", "offsiteActiveFolderSelection", "offsiteFolderActivationConfirmation", "offsiteActivateCurrentPassword", "activateManagedOffsiteFolderButton", "offsiteFolderDialogStatus", "backupRestoreGuidanceCard",
     "delegationSettingsCard", "delegationForm", "delegationLocation", "delegationEmployee", "delegationDateFrom", "delegationDateTo", "delegationNote", "delegationList",
     "workflowSettingsCard", "vacationHrApprovalRequired", "workflowSettingsHint", "currentWeekAutoLock", "currentWeekLockSettings", "currentWeekLockMode", "manualWeekLockFields", "currentWeekLockDay", "currentWeekLockTime", "currentWeekLockHint", "viewBehaviorSettingsCard", "rememberLastScheduleOverallPlan", "rememberLastVacationOverallPlan", "decreaseAppFontScale", "appFontScalePercent", "increaseAppFontScale", "loanSettingsCard", "loanSettingsHint", "refreshLoanSettingsButton", "loanSettingsList",
     "amuSettingsCard", "amuUploadMaxMb", "amuStoredMaxMb", "amuConvertImagesToPdf", "amuGrayscaleImages", "amuOcrEnabled", "sicknessLocalWarningDays", "sicknessHrWarningDays", "sicknessAumAllowanceEnabled", "sicknessAumAllowanceMaxCases", "sicknessAumAllowanceMaxDays", "amuAutoReviewTrustA", "amuSettingsHint", "saveAmuSettingsButton", "amuManagerDefaultAccess", "amuManagerAccessList", "amuAccessPolicyHint", "saveAmuAccessPolicyButton",
@@ -2534,12 +2538,22 @@ function renderOffsiteBackupDiagnostics(offsite) {
   if (!offsite?.applicable) return "";
   const configured = Boolean(offsite?.configured);
   const state = configured ? String(offsite?.state || "warning") : "unconfigured";
-  const stateLabel = state === "ok" ? "Geschützt" : state === "error" ? "Fehler" : configured ? "Prüfen" : "Nicht eingerichtet";
-  const summary = String(offsite?.summary || (configured
-    ? (state === "ok"
-      ? "Die verschlüsselte externe Sicherung ist aktuell."
-      : "Die externe Sicherung oder eine Wiederherstellungsprüfung benötigt Aufmerksamkeit. Der Grabenplaner bleibt erreichbar.")
-    : "Für diesen Server ist noch kein verschlüsseltes Offsite-Backup eingerichtet."));
+  const provider = offsite?.provider || {};
+  const selectedProvider = Array.isArray(provider.available)
+    ? provider.available.find((entry) => entry?.id === provider.selectedProviderId) || null
+    : null;
+  const policyReady = offsite?.providerPolicy?.systemCenterOk === true;
+  const displayState = policyReady ? "ok" : state === "error" ? "error" : "warning";
+  const stateLabel = policyReady ? "Geschützt" : displayState === "error" ? "Fehler" : "Prüfen";
+  const summary = !selectedProvider
+    ? "Ein Offsite-Anbieter muss ausgewählt werden; bis dahin bleibt der Nachweis fail-closed."
+    : provider.bindingVerified !== true
+      ? "Die Auswahl stimmt noch nicht mit einem geschützt gebundenen Serverziel überein."
+      : policyReady
+        ? String(offsite?.summary || "Die verschlüsselte externe Sicherung ist aktuell.")
+        : configured
+          ? "Die externe Sicherung oder eine Wiederherstellungsprüfung benötigt Aufmerksamkeit. Der Grabenplaner bleibt erreichbar."
+          : "Für diesen Server ist noch kein verschlüsseltes Offsite-Backup eingerichtet.";
   const retention = offsite?.retention || {};
   const unresolved = offsite?.unresolvedFailures || {};
   const unresolvedLabels = [
@@ -2552,9 +2566,10 @@ function renderOffsiteBackupDiagnostics(offsite) {
     : unresolvedLabels.length ? `Offen: ${unresolvedLabels.join(", ")}` : "";
   const snapshotDetail = offsite?.lastSnapshotId ? ` · ${escapeHtml(offsite.lastSnapshotId)}` : "";
   return `
-    <section class="offsite-diagnostics ${state === "ok" ? "ok" : "warning"}">
-      <div class="offsite-diagnostics-heading"><div><span class="eyebrow">Verschlüsselte externe Sicherung</span><strong>Offsite-Backup</strong><small>${escapeHtml(summary)}</small></div><span class="status-badge ${state === "ok" ? "active" : "inactive"}">${escapeHtml(stateLabel)}</span></div>
+    <section class="offsite-diagnostics ${policyReady ? "ok" : "warning"}">
+      <div class="offsite-diagnostics-heading"><div><span class="eyebrow">Verschlüsselte externe Sicherung</span><strong>Offsite-Backup</strong><small>${escapeHtml(summary)}</small></div><span class="status-badge ${policyReady ? "active" : "inactive"}">${escapeHtml(stateLabel)}</span></div>
       <div class="diagnostic-grid offsite-diagnostic-grid">
+        <span><small>Anbieter (Pflichtauswahl)</small><strong>${escapeHtml(selectedProvider?.label || "nicht ausgewählt")}</strong></span>
         <span><small>Letzter Snapshot</small><strong>${escapeHtml(diagnosticTimestamp(offsite?.lastSuccessAt))}${escapeHtml(diagnosticAge(offsite?.agesHours?.backup))}${snapshotDetail}</strong></span>
         <span><small>Repository-Prüfung</small><strong>${escapeHtml(diagnosticTimestamp(offsite?.lastRepositoryCheckAt))}${escapeHtml(diagnosticAge(offsite?.agesHours?.repositoryCheck))}</strong></span>
         <span><small>Vollständiger Monatscheck</small><strong>${escapeHtml(diagnosticTimestamp(offsite?.lastFullCheckAt))}${escapeHtml(diagnosticAge(offsite?.agesHours?.fullCheck))}</strong></span>
@@ -2638,18 +2653,19 @@ function renderMonitorDiagnostics(monitor, monitorActions = {}) {
     : recovery.suppressed ? "Wiederanlauf aus Sicherheitsgründen unterdrückt"
       : recovery.attempted ? "Wiederanlauf versucht" : "kein Wiederanlauf erforderlich";
   const pendingAction = state.serverMonitorActionPending;
-  const refreshDisabled = Boolean(pendingAction)
-    || (state.serverMonitorRestartAccepted && state.serverMonitorRestartPhase !== "timeout");
-  const restartDisabled = Boolean(pendingAction) || state.serverMonitorRestartAccepted;
+  const waitingForServiceRestart = state.serverMonitorRestartAccepted && state.serverMonitorRestartPhase !== "timeout";
+  const waitingForVpsReboot = state.vpsRebootAccepted && state.vpsRebootPhase !== "timeout";
+  const refreshDisabled = Boolean(pendingAction) || waitingForServiceRestart || waitingForVpsReboot;
+  const restartDisabled = Boolean(pendingAction) || state.serverMonitorRestartAccepted || state.vpsRebootAccepted;
   const feedback = state.serverMonitorActionFeedback;
   const feedbackMarkup = feedback?.message
     ? `<p class="monitor-action-feedback ${escapeHtml(feedback.kind || "info")}" role="${feedback.kind === "error" ? "alert" : "status"}" aria-live="polite">${escapeHtml(feedback.message)}</p>`
     : '<p class="monitor-action-feedback hidden" role="status" aria-live="polite"></p>';
   const restartLabel = state.serverMonitorRestartPhase === "timeout"
-    ? "Neustartstatus nicht bestätigt"
+    ? "Dienstneustart nicht bestätigt"
     : state.serverMonitorRestartAccepted
-      ? "Warte auf Server …"
-      : pendingAction === "restart" ? "Neustart wird vorbereitet …" : "Server kontrolliert neu starten";
+      ? "Warte auf Grabenplaner …"
+      : pendingAction === "restart" ? "Dienstneustart wird vorbereitet …" : "Grabenplaner-Dienst neu starten";
   const restartButton = monitorActions.canRestart === true
     ? `<button type="button" class="danger-button" data-server-monitor-action="restart" aria-haspopup="dialog" aria-controls="serverRestartModal"${restartDisabled ? " disabled" : ""}>${restartLabel}</button>`
     : "";
@@ -2664,14 +2680,14 @@ function renderMonitorDiagnostics(monitor, monitorActions = {}) {
       </div>
       ${monitor.lastErrorCode ? `<p class="offsite-diagnostic-error"><strong>Fehlercode:</strong> ${escapeHtml(monitor.lastErrorCode)}</p>` : ""}
       <div class="monitor-diagnostics-actions" aria-label="Server-Monitor-Aktionen">
-        <button type="button" class="secondary-button" data-server-monitor-action="refresh"${refreshDisabled ? " disabled" : ""}>${pendingAction === "refresh" ? "Status wird aktualisiert …" : state.serverMonitorRestartAccepted && state.serverMonitorRestartPhase !== "timeout" ? "Warte auf Server …" : "Status aktualisieren"}</button>
+        <button type="button" class="secondary-button" data-server-monitor-action="refresh"${refreshDisabled ? " disabled" : ""}>${pendingAction === "refresh" ? "Status wird aktualisiert …" : waitingForServiceRestart ? "Warte auf Grabenplaner …" : waitingForVpsReboot ? "Warte auf VPS …" : "Status aktualisieren"}</button>
         ${restartButton}
         ${feedbackMarkup}
       </div>
     </section>`;
 }
 
-function renderHostSecurityDiagnostics(hostSecurity) {
+function renderHostSecurityDiagnostics(hostSecurity, monitorActions = {}) {
   if (!hostSecurity?.configured && !hostSecurity?.statusAvailable) return "";
   const failed = Array.isArray(hostSecurity.failedChecks) ? hostSecurity.failedChecks : [];
   const failedText = failed.length
@@ -2683,6 +2699,18 @@ function renderHostSecurityDiagnostics(hostSecurity) {
     ? "Bestätigung aus zweiter SSH-Sitzung ausständig"
     : "keine offene Sicherheitstransaktion";
   const rebootText = hostSecurity.rebootRequired ? "im Wartungsfenster erforderlich" : "derzeit nicht erforderlich";
+  const vpsRebootPending = state.serverMonitorActionPending === "vps-reboot";
+  const vpsRebootDisabled = Boolean(state.serverMonitorActionPending)
+    || state.vpsRebootAccepted
+    || state.serverMonitorRestartAccepted;
+  const vpsRebootLabel = state.vpsRebootPhase === "timeout"
+    ? "VPS-Neustart nicht bestätigt"
+    : state.vpsRebootAccepted
+      ? "Warte auf VPS …"
+      : vpsRebootPending ? "VPS-Neustart wird vorbereitet …" : "VPS kontrolliert neu starten";
+  const vpsRebootButton = monitorActions.canVpsReboot === true
+    ? `<div class="monitor-diagnostics-actions" aria-label="Ubuntu-Host-Aktionen"><button type="button" class="danger-button" data-server-monitor-action="vps-reboot" aria-haspopup="dialog" aria-controls="vpsRebootModal"${vpsRebootDisabled ? " disabled" : ""}>${vpsRebootLabel}</button></div>`
+    : "";
   return `
     <section class="monitor-diagnostics ${hostSecurity.state === "ok" || !hostSecurity.configured ? "ok" : "warning"}">
       <div class="offsite-diagnostics-heading"><div><span class="eyebrow">Ubuntu-Host</span><strong>Host-Sicherheit</strong><small>${escapeHtml(failedText)}</small></div><span class="status-badge ${hostSecurity.state === "ok" ? "active" : "inactive"}">${escapeHtml(stateLabel)}</span></div>
@@ -2693,13 +2721,16 @@ function renderHostSecurityDiagnostics(hostSecurity) {
         <span><small>Statusdatei</small><strong>${hostSecurity.statusAvailable ? "geschützt verfügbar" : "nicht verfügbar"}</strong></span>
       </div>
       ${hostSecurity.lastErrorCode ? `<p class="offsite-diagnostic-error"><strong>Fehlercode:</strong> ${escapeHtml(hostSecurity.lastErrorCode)}</p>` : ""}
+      ${vpsRebootButton}
     </section>`;
 }
 
 function canManageOffsiteFolders() {
   const role = state.portalSession?.user?.role || "";
   const permissions = state.portalSession?.user?.permissions || [];
+  const selectedProviderId = state.serverStatus?.backups?.offsite?.provider?.selectedProviderId || "";
   return state.portalStatus?.operationMode === "server"
+    && selectedProviderId === "google_drive"
     && ["admin", "it_admin", "developer"].includes(role)
     && permissions.includes("system:offsite:configure");
 }
@@ -2759,32 +2790,60 @@ function renderGoogleDriveManagementStatus(status = state.serverStatus, { failed
   const serverActive = (status?.mode || state.portalStatus?.operationMode) === "server";
   if (!serverActive) return;
   const offsite = status?.backups?.offsite;
+  const provider = offsite?.provider || {};
+  const providers = Array.isArray(provider.available) ? provider.available : [];
+  const selectedProviderId = provider.selectedProviderId || "";
+  const selectedProvider = providers.find((entry) => entry?.id === selectedProviderId) || null;
+  const providerPolicyReady = offsite?.providerPolicy?.systemCenterOk === true;
+  if (elements.offsiteProviderSelect) {
+    elements.offsiteProviderSelect.innerHTML = [
+      '<option value="">Kein Anbieter ausgewählt</option>',
+      ...providers.map((entry) => `<option value="${escapeHtml(entry.id || "")}">${escapeHtml(entry.label || entry.id || "Anbieter")}${entry.preferred ? " (bevorzugt)" : ""}</option>`),
+    ].join("");
+    elements.offsiteProviderSelect.value = selectedProvider ? selectedProvider.id : "";
+  }
+  elements.googleDriveFolderControls?.classList.toggle("hidden", selectedProviderId !== "google_drive");
   let message = "Sicherer Status wird geladen …";
   let statusState = "loading";
 
-  if (state.offsiteFoldersLoadState === "loading") {
+  if (!selectedProvider) {
+    message = "Es ist noch kein unterstützter Offsite-Anbieter ausgewählt. Das System-Center bleibt fail-closed.";
+    statusState = "warning";
+  } else if (provider.bindingVerified !== true) {
+    message = `${selectedProvider.label} ist ausgewählt, aber die geschützte Serverbindung ist noch nicht bestätigt. Das System-Center bleibt fail-closed.`;
+    statusState = "warning";
+  } else if (selectedProviderId !== "google_drive") {
+    message = providerPolicyReady
+      ? `${selectedProvider.label} ist ausgewählt und vollständig nachgewiesen.`
+      : `${selectedProvider.label} ist ausgewählt; mindestens ein erforderlicher Betriebs- oder Wiederherstellungsnachweis ist noch offen.`;
+    statusState = providerPolicyReady ? "ok" : "warning";
+  } else if (state.offsiteFoldersLoadState === "loading") {
     message = "Die Liste der verwalteten Sicherungsordner wird geschützt geladen …";
   } else if (state.offsiteFoldersLoadState === "error") {
-    message = state.offsiteFoldersLoadError
-      ? `Die Ordnerliste konnte nicht geladen werden: ${state.offsiteFoldersLoadError}`
-      : "Die Ordnerliste konnte nicht geladen werden. Die Verwaltung bleibt sicher gesperrt.";
+    message = offsite?.configured === true && offsite.state === "ok"
+      ? "Die Google-Drive-Sicherung und Recovery Assurance sind bestätigt. Nur die neue verwaltete Ordnerliste ist für den bisherigen Legacy-Zielpfad noch nicht verfügbar."
+      : state.offsiteFoldersLoadError
+        ? `Die Ordnerliste konnte nicht geladen werden: ${state.offsiteFoldersLoadError}`
+        : "Die Ordnerliste konnte nicht geladen werden. Die Verwaltung bleibt sicher gesperrt.";
     statusState = "warning";
   } else if (state.offsiteFoldersLoadState === "ready" && state.offsiteFolders) {
     const count = state.offsiteFolders.folders.length;
-    const activeLabel = state.offsiteFolders.activeFolder || "noch kein Ordner aktiv";
-    message = `Aktives Ziel: ${activeLabel} · ${count} verwaltete${count === 1 ? "r Ordner" : " Ordner"}`;
+    const activeLabel = state.offsiteFolders.activeFolder || "bestehender Legacy-Zielpfad";
+    message = state.offsiteFolders.activeFolder
+      ? `Google Drive · aktives Ziel: ${activeLabel} · ${count} verwaltete${count === 1 ? "r Ordner" : " Ordner"}`
+      : "Die Google-Drive-Sicherung ist aktiv. Der bestehende Legacy-Zielpfad wurde noch nicht in die verwaltete Ordnerstruktur übernommen.";
     statusState = state.offsiteFolders.activeFolder ? "ok" : "warning";
   } else if (failed) {
     message = "Der aktuelle Status konnte nicht geladen werden. Die Ordnerverwaltung bleibt sicher gesperrt.";
     statusState = "warning";
-  } else if (offsite?.configured === true && offsite.state === "ok") {
-    message = "Aktiv und bestätigt – die verschlüsselte Google-Drive-Sicherung wird serverseitig verwaltet.";
+  } else if (providerPolicyReady) {
+    message = "Google Drive ist ausgewählt; Sicherung, Repository-Prüfung und Recovery Assurance sind bestätigt.";
     statusState = "ok";
   } else if (offsite?.configured === true) {
-    message = "Eingerichtet – der aktuelle Offsite-Status benötigt Aufmerksamkeit.";
+    message = "Google Drive ist ausgewählt; mindestens ein erforderlicher Betriebs- oder Wiederherstellungsnachweis ist noch offen.";
     statusState = "warning";
   } else if (offsite && offsite.configured === false) {
-    message = "Noch nicht eingerichtet – die Konfiguration erfolgt ausschließlich über die geschützte Serververwaltung.";
+    message = "Google Drive ist ausgewählt, aber noch nicht vollständig eingerichtet.";
     statusState = "warning";
   }
   elements.googleDriveManagementStatus.textContent = message;
@@ -2875,7 +2934,7 @@ function renderServerDiagnostics(status, technical = null) {
     </div>
     ${renderOffsiteBackupDiagnostics(offsite)}
     ${renderMonitorDiagnostics(status.monitor, status.monitorActions)}
-    ${renderHostSecurityDiagnostics(hostSecurity)}
+    ${renderHostSecurityDiagnostics(hostSecurity, status.monitorActions)}
     <section class="recovery-diagnostics ${recoveryState}">
       <div><span class="eyebrow">Wiederherstellungsnachweis</span><strong>Isolierter Test-Restore</strong><small>${recovery.isolatedRestoreTestPending ? "Noch ausständig, überfällig oder zuletzt fehlgeschlagen." : "Der letzte isolierte Wiederherstellungstest ist bestätigt."}</small></div>
       <span><strong>${escapeHtml(diagnosticTimestamp(recovery.isolatedRestoreTestAt))}${escapeHtml(diagnosticAge(recovery.isolatedRestoreTestAgeHours))}</strong><small>Produktive Wiederherstellungen bleiben ein beaufsichtigter Wartungsvorgang.</small></span>
@@ -2887,16 +2946,21 @@ function renderServerDiagnostics(status, technical = null) {
 
 function applyServerDiagnosticsLoadingState() {
   if (!elements.refreshServerDiagnosticsButton) return;
-  const waitingForRestart = state.serverMonitorRestartAccepted && state.serverMonitorRestartPhase !== "timeout";
-  elements.refreshServerDiagnosticsButton.disabled = state.serverDiagnosticsLoading || waitingForRestart;
+  const waitingForServiceRestart = state.serverMonitorRestartAccepted && state.serverMonitorRestartPhase !== "timeout";
+  const waitingForVpsReboot = state.vpsRebootAccepted && state.vpsRebootPhase !== "timeout";
+  elements.refreshServerDiagnosticsButton.disabled = state.serverDiagnosticsLoading
+    || waitingForServiceRestart
+    || waitingForVpsReboot;
   elements.refreshServerDiagnosticsButton.textContent = state.serverDiagnosticsLoading
     ? "Diagnose wird aktualisiert …"
-    : waitingForRestart ? "Warte auf Server …" : "Diagnose aktualisieren";
+    : waitingForServiceRestart ? "Warte auf Grabenplaner …"
+      : waitingForVpsReboot ? "Warte auf VPS …" : "Diagnose aktualisieren";
 }
 
 async function refreshServerDiagnostics({ announce = false } = {}) {
   if (state.serverDiagnosticsLoading
-    || (state.serverMonitorRestartAccepted && state.serverMonitorRestartPhase !== "timeout")) return false;
+    || (state.serverMonitorRestartAccepted && state.serverMonitorRestartPhase !== "timeout")
+    || (state.vpsRebootAccepted && state.vpsRebootPhase !== "timeout")) return false;
   state.serverDiagnosticsLoading = true;
   if (announce) {
     state.serverMonitorActionPending = "refresh";
@@ -2972,7 +3036,7 @@ function openServerRestartDialog(opener) {
   if (state.serverStatus?.monitorActions?.canRestart !== true || state.serverMonitorRestartAccepted) {
     state.serverMonitorActionFeedback = {
       kind: "error",
-      message: "Der kontrollierte Serverneustart ist für diese Sitzung nicht verfügbar.",
+      message: "Der kontrollierte Dienstneustart ist für diese Sitzung nicht verfügbar.",
     };
     if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
     showToast(state.serverMonitorActionFeedback.message, true);
@@ -3045,7 +3109,7 @@ async function submitServerRestart(event) {
   event.preventDefault();
   if (state.serverMonitorActionPending || state.serverMonitorRestartAccepted) return;
   if (state.serverStatus?.monitorActions?.canRestart !== true) {
-    setServerRestartMessage("Der kontrollierte Serverneustart ist für diese Sitzung nicht verfügbar.", "error");
+    setServerRestartMessage("Der kontrollierte Dienstneustart ist für diese Sitzung nicht verfügbar.", "error");
     return;
   }
 
@@ -3076,6 +3140,172 @@ async function submitServerRestart(event) {
   } finally {
     if (state.serverMonitorActionPending === "restart") state.serverMonitorActionPending = "";
     applyServerRestartDialogState();
+    applyServerDiagnosticsLoadingState();
+    if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
+  }
+}
+
+function setVpsRebootMessage(message = "", kind = "") {
+  if (!elements.vpsRebootMessage) return;
+  elements.vpsRebootMessage.textContent = message;
+  elements.vpsRebootMessage.classList.toggle("hidden", !message);
+  elements.vpsRebootMessage.classList.toggle("error", kind === "error");
+  elements.vpsRebootMessage.classList.toggle("success", kind === "success");
+  elements.vpsRebootMessage.setAttribute("role", kind === "error" ? "alert" : "status");
+}
+
+function applyVpsRebootDialogState() {
+  const pending = state.serverMonitorActionPending === "vps-reboot";
+  elements.vpsRebootModal?.setAttribute("aria-busy", pending ? "true" : "false");
+  if (elements.vpsRebootCloseButton) elements.vpsRebootCloseButton.disabled = pending;
+  if (elements.vpsRebootCancelButton) elements.vpsRebootCancelButton.disabled = pending;
+  if (elements.vpsRebootCurrentPassword) elements.vpsRebootCurrentPassword.disabled = pending;
+  if (elements.vpsRebootConfirmButton) {
+    elements.vpsRebootConfirmButton.disabled = pending
+      || state.serverStatus?.monitorActions?.canVpsReboot !== true;
+    elements.vpsRebootConfirmButton.textContent = pending
+      ? "Sicherung und VPS-Neustart werden vorbereitet …"
+      : "Sicherung erstellen und VPS neu starten";
+  }
+}
+
+function openVpsRebootDialog(opener) {
+  if (state.serverStatus?.monitorActions?.canVpsReboot !== true || state.vpsRebootAccepted) {
+    state.serverMonitorActionFeedback = {
+      kind: "error",
+      message: "Der kontrollierte VPS-Neustart ist für diese Developer-Sitzung nicht verfügbar.",
+    };
+    if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
+    showToast(state.serverMonitorActionFeedback.message, true);
+    return;
+  }
+  state.vpsRebootReturnFocus = opener || null;
+  if (elements.vpsRebootCurrentPassword) elements.vpsRebootCurrentPassword.value = "";
+  setVpsRebootMessage();
+  applyVpsRebootDialogState();
+  elements.vpsRebootModal?.showModal();
+  window.setTimeout(() => elements.vpsRebootCurrentPassword?.focus(), 0);
+}
+
+let vpsRebootReadinessGeneration = 0;
+
+async function waitForServerReadinessAfterVpsReboot() {
+  const generation = ++vpsRebootReadinessGeneration;
+  const deadline = Date.now() + 5 * 60 * 1000;
+  const previousHostBootGeneration = String(
+    state.vpsRebootPreviousHostBootGeneration || "",
+  );
+  let interruptionObserved = false;
+  state.vpsRebootPhase = "waiting";
+  state.serverMonitorActionFeedback = {
+    kind: "pending",
+    message: "Der Sicherungspunkt ist erstellt. Der VPS startet neu; die Ansicht wartet auf die Rückkehr des Hosts.",
+  };
+  applyServerDiagnosticsLoadingState();
+  if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
+
+  await waitForServerRestartDelay(3000);
+  while (generation === vpsRebootReadinessGeneration
+    && state.vpsRebootAccepted
+    && Date.now() < deadline) {
+    const controller = new AbortController();
+    const probeTimeout = window.setTimeout(() => controller.abort(), 4000);
+    try {
+      const response = await fetch(`/api/health/ready?vps-reboot-check=${Date.now()}`, {
+        method: "GET",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+      });
+      const payload = response.ok ? await response.json().catch(() => null) : null;
+      if (!response.ok) interruptionObserved = true;
+      const newHostBootGeneration = String(payload?.hostBootGeneration || "");
+      if (interruptionObserved
+        && response.ok
+        && payload?.ok === true
+        && /^[0-9a-f]{32}$/.test(previousHostBootGeneration)
+        && /^[0-9a-f]{32}$/.test(newHostBootGeneration)
+        && newHostBootGeneration !== previousHostBootGeneration) {
+        state.vpsRebootPhase = "ready";
+        state.serverMonitorActionFeedback = {
+          kind: "success",
+          message: "Der VPS und Grabenplaner sind wieder betriebsbereit. Die Ansicht wird neu geladen.",
+        };
+        applyServerDiagnosticsLoadingState();
+        if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
+        showToast("Der VPS und Grabenplaner sind wieder betriebsbereit.");
+        window.setTimeout(() => window.location.reload(), 800);
+        return;
+      }
+    } catch {
+      interruptionObserved = true;
+    } finally {
+      window.clearTimeout(probeTimeout);
+    }
+    await waitForServerRestartDelay(2500);
+  }
+
+  if (generation !== vpsRebootReadinessGeneration || !state.vpsRebootAccepted) return;
+  state.vpsRebootPhase = "timeout";
+  state.serverMonitorActionFeedback = {
+    kind: "error",
+    message: "Die Rückkehr des VPS wurde innerhalb von fünf Minuten nicht sicher bestätigt. Bitte den Status manuell prüfen; der Neustart wird nicht automatisch wiederholt.",
+  };
+  applyServerDiagnosticsLoadingState();
+  if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
+  showToast(state.serverMonitorActionFeedback.message, true);
+}
+
+async function submitVpsReboot(event) {
+  event.preventDefault();
+  if (state.serverMonitorActionPending || state.vpsRebootAccepted) return;
+  if (state.serverStatus?.monitorActions?.canVpsReboot !== true) {
+    setVpsRebootMessage(
+      "Der kontrollierte VPS-Neustart ist für diese Developer-Sitzung nicht verfügbar.",
+      "error",
+    );
+    return;
+  }
+  const currentPassword = elements.vpsRebootCurrentPassword?.value || "";
+  if (!currentPassword) {
+    setVpsRebootMessage("Bitte geben Sie Ihr aktuelles Developer-Passwort ein.", "error");
+    elements.vpsRebootCurrentPassword?.focus();
+    return;
+  }
+
+  state.serverMonitorActionPending = "vps-reboot";
+  state.serverMonitorActionFeedback = {
+    kind: "pending",
+    message: "Ein verifizierter Sicherungspunkt wird erstellt und der VPS-Neustart vorbereitet.",
+  };
+  applyVpsRebootDialogState();
+  setVpsRebootMessage("Verifizierter Sicherungspunkt und geschützter VPS-Neustart werden vorbereitet.");
+  if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
+
+  try {
+    const result = await api("/api/portal/v1/server-monitor/vps-reboot", {
+      method: "POST",
+      body: JSON.stringify({ confirmation: "VPS_REBOOT", currentPassword }),
+    });
+    state.vpsRebootPreviousHostBootGeneration = String(
+      result?.previousHostBootGeneration || "",
+    );
+    const successMessage = result?.message
+      || "Der verifizierte Sicherungspunkt wurde erstellt. Der VPS wird kontrolliert neu gestartet.";
+    state.vpsRebootAccepted = true;
+    if (elements.vpsRebootCurrentPassword) elements.vpsRebootCurrentPassword.value = "";
+    elements.vpsRebootModal?.close();
+    showToast(`${successMessage} Die Verbindung wird vorübergehend unterbrochen.`);
+    waitForServerReadinessAfterVpsReboot();
+  } catch (error) {
+    const errorMessage = `${error.message} Es wurde keine erfolgreiche VPS-Neustartbestätigung empfangen. Bitte den Hoststatus prüfen, bevor Sie die Aktion wiederholen.`;
+    state.serverMonitorActionFeedback = { kind: "error", message: errorMessage };
+    setVpsRebootMessage(errorMessage, "error");
+    showToast(errorMessage, true);
+  } finally {
+    if (elements.vpsRebootCurrentPassword) elements.vpsRebootCurrentPassword.value = "";
+    if (state.serverMonitorActionPending === "vps-reboot") state.serverMonitorActionPending = "";
+    applyVpsRebootDialogState();
     applyServerDiagnosticsLoadingState();
     if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
   }
@@ -8675,6 +8905,33 @@ function systemCenterResourceCards(resources) {
   return `<section class="system-center-resources" aria-label="Aktuelle technische Ressourcen">${metrics.map((metric) => `<article><small>${escapeHtml(metric.label)}</small><strong>${escapeHtml(metric.value)}</strong><span>${escapeHtml(metric.detail)}</span></article>`).join("")}</section>`;
 }
 
+function renderSystemCenterOffsiteProvider(status) {
+  const offsite = status?.backups?.offsite || {};
+  if (offsite.applicable !== true) return "";
+  const provider = offsite.provider || {};
+  const providers = Array.isArray(provider.available) ? provider.available : [];
+  const selected = providers.find((entry) => entry?.id === provider.selectedProviderId) || null;
+  const ready = offsite.providerPolicy?.systemCenterOk === true;
+  const bindingVerified = provider.bindingVerified === true;
+  const visualState = ready ? "ok" : "critical";
+  const stateCopy = systemCenterStateCopy(visualState);
+  const options = [
+    `<option value=""${selected ? "" : " selected"}>Kein Anbieter ausgewählt</option>`,
+    ...providers.map((entry) => `<option value="${escapeHtml(entry.id || "")}"${selected?.id === entry.id ? " selected" : ""}>${escapeHtml(entry.label || entry.id || "Anbieter")}${entry.preferred ? " (bevorzugt)" : ""}</option>`),
+  ].join("");
+  return `<section class="system-center-operations" aria-label="Offsite-Anbieter">
+    <article class="system-center-operation ${visualState}">
+      <header><div><span class="eyebrow">Pflichtauswahl</span><h2>Offsite-Sicherung</h2></div><span class="system-center-state ${visualState}"><i aria-hidden="true">${stateCopy.icon}</i>${escapeHtml(stateCopy.label)}</span></header>
+      <label class="field"><span>Aktiver Anbieter</span><select disabled>${options}</select></label>
+      <p>${ready
+        ? "Anbieter, Sicherungsstand, Repository-Prüfung und Recovery Assurance sind vollständig bestätigt."
+        : selected && !bindingVerified
+          ? "Der ausgewählte Anbieter ist noch nicht mit dem geschützten Serverziel identisch gebunden."
+          : "Eine Auswahl allein reicht nicht: Erst der vollständige Betriebs- und Wiederherstellungsnachweis gibt das System-Center frei."}</p>
+    </article>
+  </section>`;
+}
+
 function systemCenterDurationLabel(seconds) {
   const value = Number(seconds);
   if (!Number.isFinite(value) || value < 0) return "Nicht verfügbar";
@@ -8882,6 +9139,7 @@ function renderSystemCenter(payload) {
       const alertCopy = systemCenterStateCopy(alertState);
       return `<article class="${alertState}"><i aria-hidden="true">${alertCopy.icon}</i><div><strong>${escapeHtml(alert.title || "Systemzustand prüfen")}</strong><span>${escapeHtml(alert.message || "Ein technischer Nachweis benötigt Aufmerksamkeit.")}</span></div></article>`;
     }).join("")}</section>` : ""}
+    ${renderSystemCenterOffsiteProvider(payload?.status)}
     ${systemCenterResourceCards(payload?.resources)}
     ${renderSystemCenterOperations(payload?.automation, payload?.notifications)}
     ${renderSystemCenterTrends(payload?.trends)}
@@ -16324,6 +16582,8 @@ elements.serverDiagnostics?.addEventListener("click", (event) => {
     refreshServerDiagnostics({ announce: true });
   } else if (button.dataset.serverMonitorAction === "restart") {
     openServerRestartDialog(button);
+  } else if (button.dataset.serverMonitorAction === "vps-reboot") {
+    openVpsRebootDialog(button);
   }
 });
 elements.serverRestartForm?.addEventListener("submit", submitServerRestart);
@@ -16333,6 +16593,16 @@ elements.serverRestartModal?.addEventListener("cancel", (event) => {
 elements.serverRestartModal?.addEventListener("close", () => {
   const returnFocus = state.serverMonitorRestartReturnFocus;
   state.serverMonitorRestartReturnFocus = null;
+  if (returnFocus?.isConnected) returnFocus.focus();
+});
+elements.vpsRebootForm?.addEventListener("submit", submitVpsReboot);
+elements.vpsRebootModal?.addEventListener("cancel", (event) => {
+  if (state.serverMonitorActionPending === "vps-reboot") event.preventDefault();
+});
+elements.vpsRebootModal?.addEventListener("close", () => {
+  if (elements.vpsRebootCurrentPassword) elements.vpsRebootCurrentPassword.value = "";
+  const returnFocus = state.vpsRebootReturnFocus;
+  state.vpsRebootReturnFocus = null;
   if (returnFocus?.isConnected) returnFocus.focus();
 });
 elements.serverAlertBanner?.addEventListener("click", () => {

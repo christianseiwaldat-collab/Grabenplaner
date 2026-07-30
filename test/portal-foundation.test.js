@@ -1742,14 +1742,20 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
   const url = `http://127.0.0.1:${port}`;
   try {
     const health = await waitForJson(`${url}/api/health`, child);
-    assert.deepEqual(health, { ok: true });
+    assert.deepEqual(health, {
+      ok: true,
+      hostBootGeneration: null,
+    });
     const livenessResponse = await fetch(`${url}/api/health/live`);
     assert.equal(livenessResponse.status, 200);
     assert.equal(livenessResponse.headers.get("cache-control"), "no-store");
     assert.deepEqual(await livenessResponse.json(), { ok: true });
     const readinessResponse = await fetch(`${url}/api/health/ready`);
     assert.equal(readinessResponse.status, 200);
-    assert.deepEqual(await readinessResponse.json(), { ok: true });
+    assert.deepEqual(await readinessResponse.json(), {
+      ok: true,
+      hostBootGeneration: null,
+    });
 
     const insecureStatus = await fetch(`${url}/api/portal/v1/status`);
     assert.equal(insecureStatus.status, 426);
@@ -1948,7 +1954,10 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     for (const endpoint of ["/api/health", "/api/health/ready"]) {
       const healthResponse = await fetch(`${url}${endpoint}`, { headers: secureHeaders });
       assert.equal(healthResponse.status, 200, await healthResponse.clone().text());
-      assert.deepEqual(await healthResponse.json(), { ok: true });
+      assert.deepEqual(await healthResponse.json(), {
+        ok: true,
+        hostBootGeneration: null,
+      });
     }
 
     const shortPasswordResponse = await fetch(`${url}/api/portal/v1/users/102`, {

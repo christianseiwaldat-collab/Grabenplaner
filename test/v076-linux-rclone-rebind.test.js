@@ -26,7 +26,7 @@ test("v0.76 rclone rebind requires explicit root-only canonical credential files
   assert.match(script, /RCLONE_ENCRYPT_V0:/);
 });
 
-test("v0.76 validates the dedicated OAuth candidate and the pinned repository before commit", () => {
+test("v0.76 validates the bound provider candidate and the pinned repository before commit", () => {
   const policy = script.indexOf('config redacted "$remote"');
   const repositoryProbe = script.indexOf('setup_restic cat config');
   const identityComparison = script.indexOf('candidate_repository_id" == "$expected_repository_id');

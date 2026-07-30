@@ -61,6 +61,15 @@ const expectedRecoveryArtifacts = [
   "server-tools/linux/recovery/lib/recovery-verify.js",
 ];
 
+const expectedHostControlArtifacts = [
+  "server-tools/linux/host-control/lib/host-reboot-broker.js",
+  "server-tools/linux/host-control/systemd/grabenplaner-host-control.socket.in",
+  "server-tools/linux/host-control/systemd/grabenplaner-host-control@.service.in",
+  "server-tools/linux/host-control/systemd/grabenplaner-host-reboot.service.in",
+];
+const hostControlPrefix = "server-tools/linux/host-control/";
+const expectedHostControlDirectories = new Set(["lib", "systemd"]);
+
 const hardeningPrefix = "server-tools/linux/hardening/";
 const expectedHardeningArtifacts = [
   "server-tools/linux/hardening/grabenplaner-host-security.sh",
@@ -173,6 +182,43 @@ function assertExactHardeningTree() {
   }
 }
 
+function assertExactHostControlTree() {
+  const moduleRoot = path.join(root, "server-tools", "linux", "host-control");
+  const moduleStat = fs.lstatSync(moduleRoot);
+  if (!moduleStat.isDirectory() || moduleStat.isSymbolicLink()) {
+    throw new Error("Der Host-Control-Runtimeordner ist unzulaessig.");
+  }
+  const expectedFiles = new Set(expectedHostControlArtifacts.map((relative) => relative.slice(hostControlPrefix.length)));
+  const actualFiles = new Set();
+  const actualDirectories = new Set();
+  function inspect(directory, prefix = "") {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const target = path.join(directory, entry.name);
+      const stat = fs.lstatSync(target);
+      if (stat.isSymbolicLink()) throw new Error(`Symbolischer Link im Host-Control-Runtimebaum: ${relative}`);
+      if (stat.isDirectory()) {
+        if (!expectedHostControlDirectories.has(relative)) {
+          throw new Error(`Nicht manifestiertes Host-Control-Verzeichnis: ${relative}`);
+        }
+        actualDirectories.add(relative);
+        inspect(target, relative);
+      } else if (stat.isFile()) {
+        if (!expectedFiles.has(relative)) throw new Error(`Nicht manifestierte Host-Control-Datei: ${relative}`);
+        actualFiles.add(relative);
+      } else {
+        throw new Error(`Unzulaessiger Dateityp im Host-Control-Runtimebaum: ${relative}`);
+      }
+    }
+  }
+  inspect(moduleRoot);
+  if (actualFiles.size !== expectedFiles.size || [...expectedFiles].some((relative) => !actualFiles.has(relative))
+    || actualDirectories.size !== expectedHostControlDirectories.size
+    || [...expectedHostControlDirectories].some((relative) => !actualDirectories.has(relative))) {
+    throw new Error("Der Host-Control-Runtimebaum enthaelt nicht exakt die freigegebenen Dateien und Verzeichnisse.");
+  }
+}
+
 function assertMinimumNode(range) {
   const match = String(range || "").match(/^>=(\d+)\.(\d+)\.(\d+)$/);
   if (!match) throw new Error("minimumNode im Paketmanifest ist ungueltig.");
@@ -206,10 +252,14 @@ function readRuntimeContract() {
     "server-tools/linux/grabenplaner-monitor.service.in",
     "server-tools/linux/grabenplaner-monitor.timer.in",
   ]);
+  const requiredV3 = new Set([
+    ...requiredV2,
+    ...expectedHostControlArtifacts,
+  ]);
   const artifacts = new Map();
   for (const raw of contract.managedArtifacts) {
     const relative = String(raw || "");
-    if (!safeRelativePath(relative) || !/^server-tools\/linux\/(?:[a-z0-9._-]+\.in|grabenplaner\.env\.example)$/i.test(relative)
+    if (!safeRelativePath(relative) || !relative.startsWith("server-tools/linux/")
       || artifacts.has(relative)) throw new Error(`Ungueltiges Runtime-Artefakt: ${relative || "(leer)"}`);
     const target = path.resolve(root, ...relative.split("/"));
     if (!target.startsWith(`${root}${path.sep}`)) throw new Error("Ein Runtime-Artefakt verlaesst die App-Wurzel.");
@@ -218,7 +268,9 @@ function readRuntimeContract() {
     artifacts.set(relative, sha256File(target));
   }
   const requiredArtifacts = contract.deploymentSchemaVersion === 1 ? requiredV1
-    : contract.deploymentSchemaVersion === 2 ? requiredV2 : null;
+    : contract.deploymentSchemaVersion === 2 ? requiredV2
+      : contract.deploymentSchemaVersion === 3 ? requiredV3 : null;
+  if (contract.deploymentSchemaVersion === 3) assertExactHostControlTree();
   if (!requiredArtifacts || artifacts.size !== requiredArtifacts.size
     || [...requiredArtifacts].some((relative) => !artifacts.has(relative))) {
     throw new Error("Der Runtimevertrag enthaelt nicht exakt die freigegebenen Deployment-Artefakte.");
@@ -375,6 +427,7 @@ function main() {
     "server-tools/linux/stop-grabenplaner-server.sh",
     "server-tools/linux/test-grabenplaner-server.sh",
     "server-tools/linux/migrate-grabenplaner-runtime-v2.sh",
+    "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
     "server-tools/linux/update-grabenplaner-server.sh",
     "server-tools/linux/uninstall-grabenplaner-server.sh",
     "server-tools/linux/runtime-schema.json",
@@ -391,6 +444,10 @@ function main() {
     "server-tools/linux/monitor/run-grabenplaner-monitor.sh",
     "server-tools/linux/grabenplaner-monitor.service.in",
     "server-tools/linux/grabenplaner-monitor.timer.in",
+    "lib/controlled-host-reboot.js",
+    "lib/host-reboot-control-client.js",
+    "lib/offsite-provider-policy.js",
+    ...expectedHostControlArtifacts,
     ...expectedRecoveryArtifacts,
     ...expectedOffsiteArtifacts,
     ...expectedHardeningArtifacts,

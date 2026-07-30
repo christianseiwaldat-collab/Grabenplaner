@@ -54,6 +54,22 @@ function Test-ChildPath([string]$Candidate, [string]$Parent) {
     return $candidatePath.StartsWith($parentPrefix, [StringComparison]::OrdinalIgnoreCase)
 }
 
+function Assert-RequiredRuntimeFiles([string]$Root, [string]$PackageKind) {
+    foreach ($required in @(
+        'server.js',
+        'package.json',
+        'lib\database-lock.js',
+        'lib\offsite-provider-policy.js',
+        'lib\host-reboot-control-client.js',
+        'lib\controlled-host-reboot.js',
+        'server-tools\windows\Update-GrabenplanerServer.ps1'
+    )) {
+        if (-not (Test-Path -LiteralPath (Join-Path $Root $required) -PathType Leaf)) {
+            throw "Pflichtdatei fehlt im ${PackageKind}: $required"
+        }
+    }
+}
+
 function Compare-SemVer([string]$Current, [string]$Candidate) {
     $pattern = '^(?<core>[0-9]+\.[0-9]+\.[0-9]+)(?:-(?<pre>[A-Za-z0-9.-]+))?$'
     if ($Current -notmatch $pattern) { throw "Installierte Version ist nicht vergleichbar: $Current" }
@@ -257,9 +273,7 @@ function Test-PackageManifest([string]$ExtractRoot) {
     if ([string]$manifest.appVersion -ne [string]$packageMetadata.version) {
         throw 'Manifest-Version und package.json-Version des Serverpakets stimmen nicht ueberein.'
     }
-    foreach ($required in @('server.js', 'package.json', 'lib\database-lock.js', 'server-tools\windows\Update-GrabenplanerServer.ps1')) {
-        if (-not (Test-Path -LiteralPath (Join-Path $packageRoot $required) -PathType Leaf)) { throw "Pflichtdatei fehlt im Updatepaket: $required" }
-    }
+    Assert-RequiredRuntimeFiles -Root $packageRoot -PackageKind 'Updatepaket'
     $expected = @{}
     foreach ($item in $manifest.files) {
         $relative = [string]$item.path

@@ -39,15 +39,15 @@ test("v0.76 runs the exact signed assurance phases in the approved order", () =>
   }
 });
 
-test("assurance copies root-only systemd credentials for its unprivileged OAuth policy check", () => {
+test("assurance copies root-only systemd credentials for its unprivileged bound-provider check", () => {
   const source = assurance.indexOf('credentials_source="$(offsite_credentials_directory)"');
   const prepared = assurance.indexOf('policy_credentials="$(offsite_make_uploader_credentials "$credentials_source")"', source);
-  const checked = assurance.indexOf('offsite_assert_dedicated_rclone_oauth "$policy_credentials"', prepared);
+  const checked = assurance.indexOf('offsite_assert_bound_rclone_provider "$policy_credentials"', prepared);
   const removed = assurance.indexOf('offsite_remove_uploader_credentials "$policy_credentials"', checked);
   const cleared = assurance.indexOf('policy_credentials=""', removed);
   const recorded = assurance.indexOf("record_event oauth-policy-passed", cleared);
   assert.ok(source > 0 && prepared > source && checked > prepared && removed > checked && cleared > removed && recorded > cleared);
-  assert.doesNotMatch(assurance, /offsite_assert_dedicated_rclone_oauth "\$credentials_source"/);
+  assert.doesNotMatch(assurance, /offsite_assert_bound_rclone_provider "\$credentials_source"/);
   assert.match(assurance, /cleanup\(\)[\s\S]*offsite_remove_uploader_credentials "\$policy_credentials"/);
 });
 
@@ -87,7 +87,7 @@ test("offsite failures keep detailed diagnostics in the root journal and publish
   assert.match(common, /offsite_die "\$summary"/);
 });
 
-test("v0.76 queues automatic assurance only after a committed update or OAuth rebind", () => {
+test("v0.76 queues automatic assurance only after a committed update or provider rebind", () => {
   const committed = updater.indexOf("update_committed=1");
   const updateEvent = updater.indexOf("offsite_record_assurance_queue update-queued app-updated", committed);
   const queued = updater.indexOf("grabenplaner-offsite-assurance@app-updated.service");
@@ -95,12 +95,12 @@ test("v0.76 queues automatic assurance only after a committed update or OAuth re
   assert.match(updater, /gp_warn "Das erfolgreiche App-Update konnte nicht im signierten Recovery-Assurance-Verlauf vorgemerkt werden\."/);
   assert.match(updater, /systemctl start --no-block grabenplaner-offsite-assurance@app-updated\.service/);
   const rebindComplete = rebind.indexOf("rebind_complete=1");
-  const oauthEvent = rebind.indexOf("offsite_record_assurance_queue configuration-change-queued oauth-config-changed");
-  const oauthQueued = rebind.indexOf("grabenplaner-offsite-assurance@oauth-config-changed.service");
-  assert.ok(oauthEvent > 0 && oauthQueued > oauthEvent && rebindComplete > oauthQueued);
-  assert.ok(rebind.indexOf("offsite_acquire_assurance_lock") < oauthQueued);
+  const providerEvent = rebind.indexOf("offsite_record_assurance_queue configuration-change-queued offsite-config-changed");
+  const providerQueued = rebind.indexOf("grabenplaner-offsite-assurance@offsite-config-changed.service");
+  assert.ok(providerEvent > 0 && providerQueued > providerEvent && rebindComplete > providerQueued);
+  assert.ok(rebind.indexOf("offsite_acquire_assurance_lock") < providerQueued);
   assert.match(common, /offsite_record_assurance_queue\(\)/);
-  assert.match(common, /configuration-change-queued:oauth-config-changed/);
+  assert.match(common, /configuration-change-queued:offsite-config-changed/);
   assert.match(common, /update-queued:app-updated/);
 });
 

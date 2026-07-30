@@ -108,9 +108,9 @@ started=1
 failure_code="CONFIGURATION_VERIFY_FAILED"
 credentials_source="$(offsite_credentials_directory)"
 policy_credentials="$(offsite_make_uploader_credentials "$credentials_source")"
-offsite_assert_dedicated_rclone_oauth "$policy_credentials"
+offsite_assert_bound_rclone_provider "$policy_credentials" >/dev/null
 offsite_remove_uploader_credentials "$policy_credentials" \
-  || offsite_die "Die fluechtigen OAuth-Pruefcredentials konnten nicht sicher entfernt werden."
+  || offsite_die "Die fluechtigen Provider-Pruefcredentials konnten nicht sicher entfernt werden."
 policy_credentials=""
 record_event oauth-policy-passed
 

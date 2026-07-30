@@ -5,6 +5,7 @@ const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { parseRedactedConfig } = require("./offsite-rclone-policy.js");
 
 const REQUEST_FORMAT = "grabenplaner-offsite-target-control-request";
 const RESPONSE_FORMAT = "grabenplaner-offsite-target-control-response";
@@ -18,6 +19,7 @@ const MAX_FOLDER_COUNT = 100;
 const RATE_LIMIT_SECONDS = 60;
 const MANAGED_PREFIX = "Grabenplaner-Offsite";
 const CONFIG_ROOT = "/etc/grabenplaner/offsite";
+const INSTALLED_CONTRACT_NAME = "installed-contract.json";
 const RUNTIME_ROOT = "/run/grabenplaner-offsite-target-control";
 const STATE_PATH = `${RUNTIME_ROOT}/state.json`;
 const RCLONE_WRAPPER = "/opt/grabenplaner-offsite/module/grabenplaner-offsite-rclone-wrapper.sh";
@@ -71,6 +73,22 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 const FOLDER_LABEL_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,46}[A-Za-z0-9])?$/;
 const REMOTE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const REPOSITORY_ID_PATTERN = /^[a-f0-9]{16,64}$/;
+const HASH_PATTERN = /^[a-f0-9]{64}$/;
+const PROVIDER_BINDING_KEYS = new Set([
+  "authentication",
+  "backend",
+  "configSha256",
+  "endpoint",
+  "format",
+  "policySha256",
+  "providerId",
+  "region",
+  "remoteName",
+  "repositoryLayout",
+  "schemaVersion",
+  "scope",
+  "storageRoot",
+]);
 
 class OffsiteTargetBrokerError extends Error {
   constructor(code) {
@@ -89,6 +107,22 @@ function exactKeys(value, expected) {
     && Object.getPrototypeOf(value) === Object.prototype
     && Object.keys(value).length === expected.size
     && Object.keys(value).every((key) => expected.has(key));
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function timingSafeCanonicalEqual(left, right) {
+  const leftBuffer = Buffer.from(canonicalJson(left), "utf8");
+  const rightBuffer = Buffer.from(canonicalJson(right), "utf8");
+  return leftBuffer.length === rightBuffer.length
+    && crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function canonicalUtcTimestamp(value) {
@@ -263,15 +297,64 @@ function managedActiveFolder(repositoryPath) {
   return validFolderLabel(label) ? label : null;
 }
 
+function readBoundProvider(configRoot, options = {}) {
+  if (Object.prototype.hasOwnProperty.call(options, "providerId")) {
+    if (!["google_drive", "hetzner_object_storage", "backblaze_b2"].includes(options.providerId)) fail();
+    return { providerId: options.providerId, remoteName: null };
+  }
+  let receipt;
+  try {
+    receipt = JSON.parse(strictUtf8(readProtectedFile(path.join(configRoot, INSTALLED_CONTRACT_NAME), {
+      minimum: 128,
+      maximum: 64 * 1024,
+    }, options)));
+  } catch (error) {
+    if (error instanceof OffsiteTargetBrokerError) throw error;
+    fail();
+  }
+  const binding = receipt?.providerBinding;
+  if (receipt?.format !== "grabenplaner-linux-offsite-installed-contract"
+    || receipt?.schemaVersion !== 1
+    || !exactKeys(binding, PROVIDER_BINDING_KEYS)
+    || binding.format !== "grabenplaner-offsite-provider-binding"
+    || binding.schemaVersion !== 1
+    || !HASH_PATTERN.test(String(binding.configSha256 || ""))
+    || !HASH_PATTERN.test(String(binding.policySha256 || ""))
+    || !REMOTE_PATTERN.test(String(binding.remoteName || ""))) {
+    fail();
+  }
+  if (binding.providerId === "google_drive"
+    && (binding.backend !== "drive"
+      || binding.authentication !== "dedicated_oauth"
+      || binding.scope !== "drive.file"
+      || binding.endpoint !== null
+      || binding.region !== null
+      || binding.repositoryLayout !== "google-drive-direct-safe-path-v1"
+      || binding.storageRoot !== null)) {
+    fail();
+  }
+  return binding;
+}
+
+function readBoundProviderId(configRoot, options = {}) {
+  return readBoundProvider(configRoot, options).providerId;
+}
+
 function readRootConfig(options = {}) {
   const configRoot = path.resolve(options.configRoot || CONFIG_ROOT);
   assertSecureDirectory(configRoot, 0o700, options);
+  // Die verwaltete Ordnersteuerung ist bewusst eine Google-Drive-Funktion.
+  // Fuer S3-Provider bleibt der gesamte Broker fail-closed, selbst wenn das
+  // App-Environment faelschlich auf Google umbenannt wuerde.
+  const providerBinding = readBoundProvider(configRoot, options);
+  if (providerBinding.providerId !== "google_drive") fail();
   const repository = oneLine(readProtectedFile(path.join(configRoot, "repository"), {
     minimum: 10,
     maximum: 1024,
   }, options));
   const match = repository.match(/^rclone:([A-Za-z0-9][A-Za-z0-9_-]{0,63}):([A-Za-z0-9][A-Za-z0-9._/-]{0,511})$/);
   if (!match || !REMOTE_PATTERN.test(match[1])
+    || providerBinding.remoteName !== null && match[1] !== providerBinding.remoteName
     || match[2].split("/").some((segment) => !segment || segment === "." || segment === "..")) {
     fail();
   }
@@ -291,11 +374,13 @@ function readRootConfig(options = {}) {
     fail();
   }
   return {
+    configRoot,
     remote: match[1],
     repositoryPath: match[2],
     repositoryId,
     password,
     activeFolder: managedActiveFolder(match[2]),
+    providerBinding,
   };
 }
 
@@ -514,6 +599,55 @@ function runRclone(args, config, options = {}) {
   return result;
 }
 
+function assertLiveProviderBinding(config, options = {}) {
+  if (!config || typeof config !== "object" || Array.isArray(config)
+    || !REMOTE_PATTERN.test(String(config.remote || ""))
+    || typeof config.repositoryPath !== "string"
+    || typeof config.configRoot !== "string") {
+    fail();
+  }
+
+  // Receipt und Repository werden direkt vor jedem rclone-Listen- oder
+  // Schreibzugriff nochmals gelesen. Damit kann weder ein zwischenzeitlicher
+  // Remote-Wechsel noch eine ausgetauschte Bindung mit einem bereits
+  // eingelesenen Request-Kontext weiterarbeiten.
+  const liveBinding = readBoundProvider(config.configRoot, options);
+  const liveRepository = oneLine(readProtectedFile(path.join(config.configRoot, "repository"), {
+    minimum: 10,
+    maximum: 1024,
+  }, options));
+  if (liveRepository !== `rclone:${config.remote}:${config.repositoryPath}`
+    || !timingSafeCanonicalEqual(liveBinding, config.providerBinding)) {
+    fail();
+  }
+
+  const result = runRclone(["config", "redacted", config.remote], config, options);
+  if (result.status !== 0) fail();
+  const policy = parseRedactedConfig(result.stdout, config.remote);
+  if (!policy) fail();
+  const expectedBinding = {
+    format: "grabenplaner-offsite-provider-binding",
+    schemaVersion: 1,
+    providerId: policy.providerId,
+    remoteName: policy.remoteName,
+    backend: policy.backend,
+    authentication: policy.authentication,
+    endpoint: policy.endpoint,
+    region: policy.region,
+    scope: policy.scope,
+    configSha256: policy.configSha256,
+    policySha256: crypto.createHash("sha256")
+      .update(canonicalJson(policy), "utf8")
+      .digest("hex"),
+    repositoryLayout: "google-drive-direct-safe-path-v1",
+    storageRoot: null,
+  };
+  if (policy.providerId !== "google_drive"
+    || !timingSafeCanonicalEqual(liveBinding, expectedBinding)) {
+    fail();
+  }
+}
+
 function parseRcloneFolderList(result) {
   if (result.status === 3) return [];
   if (result.status !== 0) fail();
@@ -541,6 +675,7 @@ function parseRcloneFolderList(result) {
 }
 
 function listManagedFolders(config, options = {}) {
+  assertLiveProviderBinding(config, options);
   const result = runRclone([
     "lsjson",
     `${config.remote}:${MANAGED_PREFIX}`,
@@ -555,6 +690,7 @@ function listManagedFolders(config, options = {}) {
 
 function createManagedFolder(config, folderLabel, options = {}) {
   if (!validFolderLabel(folderLabel)) fail();
+  assertLiveProviderBinding(config, options);
   const result = runRclone([
     "mkdir",
     `${config.remote}:${MANAGED_PREFIX}/${folderLabel}`,
@@ -827,6 +963,7 @@ module.exports = {
   TARGET_SWITCH_SCHEMA_VERSION,
   TARGET_SWITCH_TIMEOUT_MS,
   activateManagedFolder,
+  assertLiveProviderBinding,
   canonicalFolderList,
   createManagedFolder,
   defaultRunTargetSwitch,
@@ -837,6 +974,7 @@ module.exports = {
   parseRcloneFolderList,
   parseRequest,
   parseTargetSwitchResult,
+  readBoundProviderId,
   readRateLimitState,
   readRootConfig,
   response,

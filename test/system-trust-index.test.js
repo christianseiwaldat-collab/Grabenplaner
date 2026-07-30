@@ -44,6 +44,10 @@ function healthyInput({ appSmoke = null, emailConfigured = false } = {}) {
           configured: true,
           statusAvailable: true,
           state: "ok",
+          providerPolicy: {
+            systemCenterOk: true,
+            reasonCodes: ["OFFSITE_PROVIDER_READY"],
+          },
           lastSuccessAt: "2026-07-22T05:00:00.000Z",
           lastRepositoryCheckAt: "2026-07-22T05:10:00.000Z",
           lastFullCheckAt: "2026-07-22T05:20:00.000Z",
@@ -165,6 +169,34 @@ test("die fruehere lokale Zweitsicherung ist im Servermodus nicht anwendbar", ()
   assert.equal(evidence(result, "backup_repository_check").state, CHECK_STATES.PASS);
 });
 
+test("eine offene Offsite-Provider-Pflichtauswahl sperrt den System-Center-Nachweis", () => {
+  const input = healthyInput({
+    appSmoke: { state: "pass", checkedAt: "2026-07-21T23:05:00.000Z" },
+  });
+  input.diagnostics.backups.offsite.providerPolicy = {
+    systemCenterOk: false,
+    reasonCodes: ["OFFSITE_PROVIDER_NOT_SELECTED"],
+  };
+  const result = buildSystemTrustIndex(input);
+  assert.equal(evidence(result, "backup_offsite_snapshot").state, CHECK_STATES.FAIL);
+  assert.equal(evidence(result, "backup_repository_check").state, CHECK_STATES.FAIL);
+  assert.notEqual(result.state, "healthy");
+  assert.ok(result.score < 100);
+});
+
+test("eine fehlende oder ungueltige Provider-Policy kann keinen alten Offsite-Erfolg erben", () => {
+  for (const providerPolicy of [undefined, {}, { systemCenterOk: "true" }]) {
+    const input = healthyInput({
+      appSmoke: { state: "pass", checkedAt: "2026-07-21T23:05:00.000Z" },
+    });
+    input.diagnostics.backups.offsite.providerPolicy = providerPolicy;
+    const result = buildSystemTrustIndex(input);
+    assert.equal(evidence(result, "backup_offsite_snapshot").state, CHECK_STATES.FAIL);
+    assert.equal(evidence(result, "backup_repository_check").state, CHECK_STATES.FAIL);
+    assert.notEqual(result.state, "healthy");
+  }
+});
+
 test("nicht konfiguriertes SMTP ist nicht zutreffend und wird nicht als Erfolg ausgegeben", () => {
   const result = buildSystemTrustIndex(healthyInput());
   assert.equal(card(result, "notifications").state, CHECK_STATES.NOT_APPLICABLE);
@@ -221,7 +253,7 @@ test("ein kritischer Diagnosealarm begrenzt den Index ohne doppelten Punkteabzug
 test("zu geringe Evidenzabdeckung ist transparent und kann keinen hohen Index erzeugen", () => {
   const result = buildSystemTrustIndex({
     now: NOW,
-    diagnostics: { mode: "server", publicUrl: "https://beta.example.test", alerts: [] },
+    diagnostics: { mode: "local", publicUrl: "https://beta.example.test", alerts: [] },
     notificationProviders: { email: { configured: false } },
   });
   assert.ok(result.coverage < 60);
