@@ -218,6 +218,11 @@ test("nested runtime-v3 updater uses the installed root-protected offsite helper
     /(if \[\[ "\$\{GRABENPLANER_OFFSITE_CONFIGURED:-0\}" == "1" \]\]; then[\s\S]*?\r?\nfi)\r?\ncandidate_version=/,
   )?.[1];
   assert.ok(gateBlock, "Der ausführbare Offsite-Kompatibilitätsblock fehlt.");
+  const harnessGateBlock = gateBlock.replace(
+    'installed_offsite_receipt="/etc/grabenplaner/offsite/installed-contract.json"',
+    'installed_offsite_receipt="$5"',
+  );
+  assert.notEqual(harnessGateBlock, gateBlock, "Der Testbelegpfad konnte nicht isoliert werden.");
 
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-nested-updater-"));
   try {
@@ -254,7 +259,6 @@ readonly SCRIPT_DIR="$1"
 readonly app_dir="$2"
 readonly node="$3"
 readonly manifest_result_file="$4"
-readonly installed_offsite_receipt="$5"
 readonly service_group="grabenplaner"
 readonly GRABENPLANER_OFFSITE_CONFIGURED=1
 gp_die() { printf '%s\\n' "$1" >&2; exit 97; }
@@ -286,7 +290,7 @@ stat() {
     *) command stat "$@" ;;
   esac
 }
-${gateBlock}
+${harnessGateBlock}
 printf '%s\\n' "nested-helper-ok"
 `);
 
