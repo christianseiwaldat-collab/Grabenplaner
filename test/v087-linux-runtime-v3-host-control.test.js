@@ -160,7 +160,7 @@ test("runtime-v3 migration consumes the verified top-level module contracts", ()
       hardeningModule: { moduleVersion: 1, fingerprint: "b".repeat(64) },
     }));
     fs.writeFileSync(verifierFile, JSON.stringify({
-      appVersion: "0.88.1-beta",
+      appVersion: "0.88.2-beta",
       runtimeContract: {
         deploymentSchemaVersion: 3,
         migrationPolicy: "explicit-maintenance",
@@ -179,12 +179,128 @@ test("runtime-v3 migration consumes the verified top-level module contracts", ()
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(result.stdout.trim().split(/\r?\n/), [
       "0.87.0-beta",
-      "0.88.1-beta",
+      "0.88.2-beta",
       "c".repeat(64),
       "1",
       "6",
       "d".repeat(64),
     ]);
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
+test("runtime-v3 invokes the nested updater only from the root-protected installed tree", () => {
+  const migration = read("server-tools", "linux", "migrate-grabenplaner-runtime-v3.sh");
+  assert.match(
+    migration,
+    /bash "\$app_dir\/server-tools\/linux\/update-grabenplaner-server\.sh"/,
+    "Der verschachtelte Updater muss aus dem bereits root-geschützten Runtime-Baum starten.",
+  );
+  assert.doesNotMatch(
+    migration,
+    /bash "\$extract_root\/server-tools\/linux\/update-grabenplaner-server\.sh"/,
+  );
+  const permissionsIndex = migration.indexOf('gp_apply_app_permissions "$work_root/linux-schema3"');
+  const installIndex = migration.indexOf('mv -T -- "$work_root/linux-schema3" "$app_dir/server-tools/linux"');
+  const updaterIndex = migration.indexOf('bash "$app_dir/server-tools/linux/update-grabenplaner-server.sh"');
+  assert.ok(
+    permissionsIndex >= 0 && installIndex > permissionsIndex && updaterIndex > installIndex,
+    "Der Kandidat muss vor dem Updater-Aufruf root-geschützt in den App-Baum eingebunden sein.",
+  );
+});
+
+test("nested runtime-v3 updater uses the installed root-protected offsite helper", {
+  skip: process.platform === "win32",
+}, () => {
+  const updater = read("server-tools", "linux", "update-grabenplaner-server.sh");
+  const gateBlock = updater.match(
+    /(if \[\[ "\$\{GRABENPLANER_OFFSITE_CONFIGURED:-0\}" == "1" \]\]; then[\s\S]*?\r?\nfi)\r?\ncandidate_version=/,
+  )?.[1];
+  assert.ok(gateBlock, "Der ausführbare Offsite-Kompatibilitätsblock fehlt.");
+
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-nested-updater-"));
+  try {
+    const candidateScriptDir = path.join(temporary, "candidate", "server-tools", "linux");
+    const installedAppDir = path.join(temporary, "installed");
+    const installedHelper = path.join(
+      installedAppDir,
+      "server-tools",
+      "linux",
+      "lib",
+      "offsite-update-compat.js",
+    );
+    const installedScriptDir = path.join(installedAppDir, "server-tools", "linux");
+    const candidateHelper = path.join(candidateScriptDir, "lib", "offsite-update-compat.js");
+    const manifest = path.join(temporary, "manifest.json");
+    const receipt = path.join(temporary, "installed-contract.json");
+    const harness = path.join(temporary, "nested-updater-gate.sh");
+
+    fs.mkdirSync(path.dirname(installedHelper), { recursive: true });
+    fs.mkdirSync(path.dirname(candidateHelper), { recursive: true });
+    fs.writeFileSync(
+      installedHelper,
+      "'use strict'; process.stdout.write('compatible\\n');\n",
+    );
+    fs.writeFileSync(
+      candidateHelper,
+      "'use strict'; process.stderr.write('build-user helper must not run\\n'); process.exit(43);\n",
+    );
+    fs.writeFileSync(manifest, "{}\n");
+    fs.writeFileSync(receipt, "{}\n");
+    fs.writeFileSync(harness, `#!/usr/bin/env bash
+set -Eeuo pipefail
+readonly SCRIPT_DIR="$1"
+readonly app_dir="$2"
+readonly node="$3"
+readonly manifest_result_file="$4"
+readonly installed_offsite_receipt="$5"
+readonly service_group="grabenplaner"
+readonly GRABENPLANER_OFFSITE_CONFIGURED=1
+gp_die() { printf '%s\\n' "$1" >&2; exit 97; }
+getent() {
+  [[ "\${1:-}" == "group" && "\${2:-}" == "$service_group" ]] || return 1
+  printf '%s\\n' "$service_group:x:4242:"
+}
+stat() {
+  local format="" target="\${!#}"
+  local argument
+  for argument in "$@"; do
+    case "$argument" in --format=*) format="\${argument#--format=}" ;; esac
+  done
+  case "$target" in
+    "$app_dir/server-tools/linux/lib/offsite-update-compat.js")
+      case "$format" in
+        "%u:%g:%h") printf '%s\\n' "0:4242:1" ;;
+        "%a") printf '%s\\n' "640" ;;
+        *) return 2 ;;
+      esac
+      ;;
+    "$SCRIPT_DIR/lib/offsite-update-compat.js")
+      case "$format" in
+        "%u:%g:%h") printf '%s\\n' "1000:4242:1" ;;
+        "%a") printf '%s\\n' "640" ;;
+        *) return 2 ;;
+      esac
+      ;;
+    *) command stat "$@" ;;
+  esac
+}
+${gateBlock}
+printf '%s\\n' "nested-helper-ok"
+`);
+
+    const result = spawnSync("bash", [
+      harness,
+      installedScriptDir,
+      installedAppDir,
+      process.execPath,
+      manifest,
+      receipt,
+    ], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), "nested-helper-ok");
+    assert.doesNotMatch(result.stderr, /build-user helper must not run/);
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
   }
