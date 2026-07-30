@@ -88,12 +88,14 @@ test(
         ["HOST_REBOOT_CONTROL_FAILED", "UNAVAILABLE", null],
       ]) {
         const id = crypto.randomUUID();
-        const server = net.createServer((socket) => {
+        const server = net.createServer({ allowHalfOpen: true }, (socket) => {
           socket.resume();
-          socket.on("end", () => socket.end(`${JSON.stringify(protocolResponse(protocolCode, {
-            requestId: id,
-            retryAfterSeconds,
-          }))}\n`));
+          socket.on("end", () => {
+            setTimeout(() => socket.end(`${JSON.stringify(protocolResponse(protocolCode, {
+              requestId: id,
+              retryAfterSeconds,
+            }))}\n`), 25);
+          });
         });
         await new Promise((resolve, reject) => server.once("error", reject).listen(socketPath, resolve));
         fs.chmodSync(socketPath, 0o660);

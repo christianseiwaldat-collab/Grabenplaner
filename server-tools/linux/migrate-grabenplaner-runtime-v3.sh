@@ -46,7 +46,7 @@ usage() {
   cat <<'EOF'
 Verwendung:
   sudo ./migrate-grabenplaner-runtime-v3.sh \
-    --package /pfad/Grabenplaner-Server-v0.88.2-beta-linux-x64.zip \
+    --package /pfad/Grabenplaner-Server-v0.88.3-beta-linux-x64.zip \
     [--sha256 HEX | --sha256-file /pfad/paket.zip.sha256]
 
 Dieser root-only Wartungsvorgang akzeptiert ausschliesslich den freigegebenen
@@ -204,6 +204,18 @@ if(!stat.isFile()||stat.isSymbolicLink()||stat.uid!==0||(stat.mode&0o077)!==0
 NODE
 }
 
+runtime_tools_are_executable() {
+  local linux_root="$1" relative script
+  [[ -d "$linux_root" && ! -L "$linux_root" ]] || return 1
+  for relative in \
+    backup-grabenplaner.sh \
+    update-grabenplaner-server.sh \
+    monitor/run-grabenplaner-monitor.sh; do
+    script="$linux_root/$relative"
+    [[ -f "$script" && ! -L "$script" && -x "$script" ]] || return 1
+  done
+}
+
 rollback_runtime() {
   local rollback_code=0
   trap - ERR
@@ -233,6 +245,7 @@ rollback_runtime() {
     fi
     mv -T -- "$rollback_root/linux-schema2" "$app_dir/server-tools/linux" || rollback_code=1
     gp_apply_app_permissions "$app_dir/server-tools/linux" "$GP_DEFAULT_SERVICE_GROUP" || rollback_code=1
+    runtime_tools_are_executable "$app_dir/server-tools/linux" || rollback_code=1
     systemctl start "$APP_SERVICE" >/dev/null 2>&1 || rollback_code=1
   fi
   systemctl is-active --quiet "$CADDY_SERVICE" || systemctl start "$CADDY_SERVICE" >/dev/null 2>&1 || rollback_code=1
@@ -511,6 +524,8 @@ mv -T -- "$app_dir/server-tools/linux" "$rollback_root/linux-schema2"
 write_phase "runtime-schema2-saved"
 cp --archive -- "$extract_root/server-tools/linux" "$work_root/linux-schema3"
 gp_apply_app_permissions "$work_root/linux-schema3" "$GP_DEFAULT_SERVICE_GROUP"
+runtime_tools_are_executable "$work_root/linux-schema3" \
+  || gp_die "Die geprueften Runtime-v3-Wartungswerkzeuge sind vor dem Einbinden nicht ausfuehrbar."
 mv -T -- "$work_root/linux-schema3" "$app_dir/server-tools/linux"
 
 write_phase "host-control-bind-intent"
@@ -591,6 +606,8 @@ systemctl is-active --quiet "$HOST_REBOOT_NAME" \
   && gp_die "Die Migration darf keinen Host-Neustart ausloesen."
 
 updater_output="$work_root/updater-result.json"
+runtime_tools_are_executable "$app_dir/server-tools/linux" \
+  || gp_die "Die eingebundenen Runtime-v3-Wartungswerkzeuge sind vor dem App-Update nicht ausfuehrbar."
 update_args=(
   --package "$staged_package" --sha256 "$actual_package_sha256" --env-file "$ENV_FILE"
   --app-dir "$app_dir" --data-dir "$data_dir" --database "$database" --backup-dir "$backup_dir"

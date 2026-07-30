@@ -489,7 +489,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "branding:read", label: "Branding-Verwaltung lesen", group: "System & Verwaltung", warningLevel: "high" },
   { id: "branding:write", label: "Brandings verwalten und zuweisen", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "backup:write", label: "Datenbanksicherungen verwalten", group: "System & Verwaltung", warningLevel: "critical" },
-  { id: "system:offsite:configure", label: "Offsite-Sicherungsordner verwalten", description: "App-eigene Google-Drive-Zielordner anlegen und nach gesicherter Übernahme aktivieren.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
+  { id: "system:offsite:configure", label: "Offsite-Sicherungsordner verwalten", description: "App-eigene Google-Drive-Zielordner anlegen und nach gesicherter Übernahme aktivieren.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["developer"] },
   { id: "system:diagnostics:read", label: "Serverzustand lesen", description: "Redigierte Betriebs-, Sicherungs- und Wiederherstellungswarnungen ohne interne Pfade lesen.", group: "System & Verwaltung", warningLevel: "high", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "system:diagnostics:technical", label: "Technische Serverdiagnose lesen", description: "Interne Laufzeit-, Speicher- und Wartungsdetails für die technische Administration lesen.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "system:recovery:run", label: "Recovery-Assurance-Prüfung starten", description: "Einen vollständigen, isolierten Sicherungs- und Wiederherstellungsnachweis am Ubuntu-Server anfordern.", group: "System & Verwaltung", warningLevel: "critical", eligibleRoles: ["admin", "it_admin", "developer"] },
@@ -951,9 +951,7 @@ addBuiltinRolePermissions("it_admin", [
 for (const roleId of ["hr", "admin", "it_admin", "developer"]) {
   addBuiltinRolePermissions(roleId, ["system:readiness:review"]);
 }
-for (const roleId of ["admin", "it_admin", "developer"]) {
-  addBuiltinRolePermissions(roleId, ["system:offsite:configure"]);
-}
+addBuiltinRolePermissions("developer", ["system:offsite:configure"]);
 for (const roleId of ["department_manager", "manager", "hr", "admin", "it_admin", "developer"]) {
   addBuiltinRolePermissions(roleId, ["collective_agreements:read"]);
 }
@@ -2932,14 +2930,14 @@ async function requireBackupAdminReauthentication(request, {
   return { session, user };
 }
 
-function requireOffsiteTargetAdministrator(request) {
+function requireOffsiteTargetDeveloper(request) {
   if (!serverModeActive) {
     throw httpError(409, "Die Offsite-Ordnerverwaltung steht nur im Serverbetrieb zur Verfügung.", "SERVER_MODE_REQUIRED");
   }
   const session = requirePortalSession(request, "system:offsite:configure");
-  if (!BACKUP_ADMIN_ROLES.has(session.role)
+  if (session.role !== "developer"
     || !session.permissions.includes("system:offsite:configure")) {
-    throw httpError(403, "Diese Aktion ist nur für Developer, IT-Admin oder Admin verfügbar.", "PORTAL_PERMISSION_DENIED");
+    throw httpError(403, "Diese Aktion ist nur für Developer verfügbar.", "PORTAL_PERMISSION_DENIED");
   }
   return session;
 }
@@ -18343,7 +18341,7 @@ app.post("/api/backup/database-download", async (request, response, next) => {
 });
 
 app.get("/api/backup/offsite-folders", async (request, response) => {
-  requireOffsiteTargetAdministrator(request);
+  requireOffsiteTargetDeveloper(request);
   try {
     const result = await listManagedOffsiteFolders();
     response.json({
@@ -18356,6 +18354,7 @@ app.get("/api/backup/offsite-folders", async (request, response) => {
 });
 
 app.post("/api/backup/offsite-folders", async (request, response) => {
+  requireOffsiteTargetDeveloper(request);
   const body = request.body;
   const bodyKeys = body && typeof body === "object" && !Array.isArray(body)
     ? Object.keys(body).sort()
@@ -18407,6 +18406,7 @@ app.post("/api/backup/offsite-folders", async (request, response) => {
 });
 
 app.put("/api/backup/offsite-folders/active", async (request, response) => {
+  requireOffsiteTargetDeveloper(request);
   const body = request.body;
   const bodyKeys = body && typeof body === "object" && !Array.isArray(body)
     ? Object.keys(body).sort()

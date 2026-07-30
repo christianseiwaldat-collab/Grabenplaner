@@ -8,6 +8,7 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 const schema = JSON.parse(read("server-tools/linux/offsite/module-schema.json"));
+const selfTest = read("server-tools/linux/offsite/test-grabenplaner-offsite.sh");
 
 const targetArtifacts = [
   "server-tools/linux/offsite/lib/offsite-target-broker.js",
@@ -60,10 +61,28 @@ test("target-control broker service keeps the root and network boundary narrow",
     /^ReadWritePaths=\/run\/grabenplaner-offsite-target-control \/run\/grabenplaner \/run\/grabenplaner-offsite \/etc\/grabenplaner\/offsite \/var\/lib\/grabenplaner-offsite\/credentials \/var\/lib\/grabenplaner-offsite\/recovery-sets$/m,
   );
   assert.match(service, /^CapabilityBoundingSet=CAP_CHOWN CAP_SETGID CAP_SETUID$/m);
-  assert.match(service, /^AmbientCapabilities=$/m);
+  assert.match(service, /^AmbientCapabilities=CAP_CHOWN CAP_SETGID CAP_SETUID$/m);
+  assert.doesNotMatch(service, /CAP_(?:DAC_OVERRIDE|FOWNER|NET_ADMIN|SYS_ADMIN)/);
   assert.match(service, /^MemoryMax=256M$/m);
   assert.match(service, /^TimeoutStartSec=31min$/m);
   assert.match(service, /^RuntimeMaxSec=32min$/m);
+});
+
+test("target-control transport keeps the response open and the self-test proves a real list", () => {
+  for (const relative of [
+    "lib/offsite-target-client.js",
+    "lib/recovery-assurance-control-client.js",
+    "lib/host-reboot-control-client.js",
+  ]) {
+    assert.match(
+      read(relative),
+      /net\.createConnection\(\{ path: socketPath, allowHalfOpen: true \}\)/,
+      `${relative} muss die Antwortseite des systemd-Sockets offen halten`,
+    );
+  }
+  assert.match(selfTest, /offsiteTargetControlStatus\(\{ timeoutMs: 5000 \}\)/);
+  assert.match(selfTest, /listManagedOffsiteFolders\(\{ timeoutMs: 60000 \}\)/);
+  assert.match(selfTest, /Offsite-Ziel-Steuerungsprotokoll/);
 });
 
 test("installer and uninstaller manage the target-control socket transactionally", () => {

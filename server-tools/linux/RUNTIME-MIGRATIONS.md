@@ -94,10 +94,10 @@ Die Migration wird aus dem separat bereitgestellten, per SHA-256 freigegebenen
 Linux-Serverpaket gestartet:
 
 ```bash
-unzip Grabenplaner-Server-v0.88.2-beta-linux-x64.zip -d /root/grabenplaner-runtime-v3
+unzip Grabenplaner-Server-v0.88.3-beta-linux-x64.zip -d /root/grabenplaner-runtime-v3
 sudo bash /root/grabenplaner-runtime-v3/server-tools/linux/migrate-grabenplaner-runtime-v3.sh \
-  --package /root/Grabenplaner-Server-v0.88.2-beta-linux-x64.zip \
-  --sha256-file /root/Grabenplaner-Server-v0.88.2-beta-linux-x64.zip.sha256
+  --package /root/Grabenplaner-Server-v0.88.3-beta-linux-x64.zip \
+  --sha256-file /root/Grabenplaner-Server-v0.88.3-beta-linux-x64.zip.sha256
 ```
 
 Das Werkzeug akzeptiert ausschliesslich eine gesunde, produktive

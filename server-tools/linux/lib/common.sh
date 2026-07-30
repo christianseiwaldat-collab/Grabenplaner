@@ -268,9 +268,29 @@ NODE
 gp_apply_app_permissions() {
   local path="$1"
   local group="${2:-$GP_DEFAULT_SERVICE_GROUP}"
+  local linux_root=""
+  [[ -d "$path" && ! -L "$path" ]] || {
+    gp_log ERROR "Der App-Baum fuer die Rechtevergabe ist ungueltig."
+    return 1
+  }
+  if [[ -d "$path/server-tools" && ! -L "$path/server-tools" \
+    && -d "$path/server-tools/linux" && ! -L "$path/server-tools/linux" ]]; then
+    linux_root="$path/server-tools/linux"
+  elif [[ -f "$path/update-grabenplaner-server.sh" && ! -L "$path/update-grabenplaner-server.sh" \
+    && -f "$path/lib/common.sh" && ! -L "$path/lib/common.sh" ]]; then
+    linux_root="$path"
+  else
+    gp_log ERROR "Der App-Baum enthaelt keinen eindeutig vertrauenswuerdigen Linux-Werkzeugordner."
+    return 1
+  fi
+  [[ -f "$linux_root/update-grabenplaner-server.sh" && ! -L "$linux_root/update-grabenplaner-server.sh" \
+    && -f "$linux_root/lib/common.sh" && ! -L "$linux_root/lib/common.sh" ]] || {
+    gp_log ERROR "Der Linux-Werkzeugordner besitzt keinen gueltigen Wartungsvertrag."
+    return 1
+  }
   chown -R "root:$group" -- "$path"
   find "$path" -type d -exec chmod 0750 -- {} +
   find "$path" -type f ! -perm /111 -exec chmod 0640 -- {} +
   find "$path" -type f -perm /111 -exec chmod 0750 -- {} +
-  find "$path/server-tools/linux" -type f -name '*.sh' -exec chmod 0750 -- {} + 2>/dev/null || true
+  find "$linux_root" -type f -name '*.sh' -exec chmod 0750 -- {} +
 }

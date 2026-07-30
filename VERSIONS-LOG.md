@@ -1,5 +1,13 @@
 # Grabenplaner Versions-Log
 
+## v0.88.3 Beta · Linux-Dateirechte und Google-Drive-Ordnerliste abgesichert
+
+- Die zentrale Rechtevergabe erkennt nun sowohl einen vollständigen App-Baum als auch einen eindeutig geprüften Linux-Werkzeugbaum. Dadurch werden vertrauenswürdige Shell-Werkzeuge auch dann wieder auf `0750` normalisiert, wenn ein unter Windows erzeugtes ZIP keine Unix-Ausführungsbits bewahrt.
+- Die Runtime-2→3-Migration prüft vor dem Einbinden und nochmals vor dem App-Updater fail-closed, dass Backup, Update und Monitor tatsächlich ausführbar sind. Gewöhnliche Dateien bleiben auf `0640` begrenzt.
+- Die geschützten Steuerungsclients halten bei socket-aktivierten Antworten den Rückkanal offen. Beim Google-Drive-Zielbroker bleibt der enge `CapabilityBoundingSet` unverändert und wird über die feste Prozesskette für den anschließenden Privilegabwurf wirksam; zusätzliche Capabilities kommen nicht hinzu.
+- Die interaktive Auswahl verwalteter Offsite-Zielordner ist ausschließlich für die Developer-Rolle der jeweiligen Installation verfügbar. Anbieter-Zugangsdaten und Zielbindungen bleiben installationsgebundene, root-geschützte Betriebsdaten und sind weder Bestandteil des Repositorys noch eines Release-Pakets.
+- Ausführbare Regressionstests sichern App- und Werkzeugbaum, Modusnormalisierung, Runtime-Swap, verzögerte Socket-Antworten und den echten Status-/Ordnerlistenpfad. Provider-, OAuth- und Repository-Bindung bleiben unverändert; es wird weder ein Host-Neustart noch eine Offsite-Neubindung ausgelöst.
+
 ## v0.88.2 Beta · Geschützte Offsite-Prüfung in der Runtime-Migration
 
 - Der innerhalb der Runtime-2→3-Migration gestartete App-Updater wird nun ausdrücklich aus dem zuvor verifizierten und root-geschützt eingebundenen Runtime-Baum aufgerufen. Damit stammen auch Sicherheitsbasis und Offsite-Kompatibilitätsprüfung aus demselben installierten Vertrauensanker; der isolierte Build-Baum wird nicht ausgeführt.
