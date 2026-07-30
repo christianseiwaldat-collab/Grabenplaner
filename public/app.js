@@ -982,7 +982,7 @@ function applyRoleVisibility() {
     && ["admin", "it_admin", "developer"].includes(role)
     && permissions.includes("backup:write");
   const offsiteFolderManagementAccess = serverActive
-    && ["admin", "it_admin", "developer"].includes(role)
+    && role === "developer"
     && permissions.includes("system:offsite:configure");
   const backupImportAccess = !serverActive && (!lanActive || ["developer", "it_admin"].includes(role));
   const usbProvisioningAccess = ["developer", "it_admin", "admin"].includes(role)
@@ -2731,7 +2731,7 @@ function canManageOffsiteFolders() {
   const selectedProviderId = state.serverStatus?.backups?.offsite?.provider?.selectedProviderId || "";
   return state.portalStatus?.operationMode === "server"
     && selectedProviderId === "google_drive"
-    && ["admin", "it_admin", "developer"].includes(role)
+    && role === "developer"
     && permissions.includes("system:offsite:configure");
 }
 

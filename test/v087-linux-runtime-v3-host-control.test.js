@@ -160,7 +160,7 @@ test("runtime-v3 migration consumes the verified top-level module contracts", ()
       hardeningModule: { moduleVersion: 1, fingerprint: "b".repeat(64) },
     }));
     fs.writeFileSync(verifierFile, JSON.stringify({
-      appVersion: "0.88.2-beta",
+      appVersion: "0.88.3-beta",
       runtimeContract: {
         deploymentSchemaVersion: 3,
         migrationPolicy: "explicit-maintenance",
@@ -179,7 +179,7 @@ test("runtime-v3 migration consumes the verified top-level module contracts", ()
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(result.stdout.trim().split(/\r?\n/), [
       "0.87.0-beta",
-      "0.88.2-beta",
+      "0.88.3-beta",
       "c".repeat(64),
       "1",
       "6",
@@ -192,6 +192,8 @@ test("runtime-v3 migration consumes the verified top-level module contracts", ()
 
 test("runtime-v3 invokes the nested updater only from the root-protected installed tree", () => {
   const migration = read("server-tools", "linux", "migrate-grabenplaner-runtime-v3.sh");
+  const common = read("server-tools", "linux", "lib", "common.sh");
+  const permissionsHelper = common.match(/^gp_apply_app_permissions\(\) \{[\s\S]*?^\}/m)?.[0] || "";
   assert.match(
     migration,
     /bash "\$app_dir\/server-tools\/linux\/update-grabenplaner-server\.sh"/,
@@ -201,13 +203,125 @@ test("runtime-v3 invokes the nested updater only from the root-protected install
     migration,
     /bash "\$extract_root\/server-tools\/linux\/update-grabenplaner-server\.sh"/,
   );
+  assert.match(permissionsHelper, /linux_root="\$path\/server-tools\/linux"/);
+  assert.match(permissionsHelper, /linux_root="\$path"/);
+  assert.match(permissionsHelper, /update-grabenplaner-server\.sh/);
+  assert.match(permissionsHelper, /lib\/common\.sh/);
+  assert.doesNotMatch(permissionsHelper, /2>\/dev\/null \|\| true/);
   const permissionsIndex = migration.indexOf('gp_apply_app_permissions "$work_root/linux-schema3"');
+  const stagedExecutableIndex = migration.indexOf(
+    'runtime_tools_are_executable "$work_root/linux-schema3"',
+    permissionsIndex,
+  );
   const installIndex = migration.indexOf('mv -T -- "$work_root/linux-schema3" "$app_dir/server-tools/linux"');
+  const installedExecutableIndex = migration.indexOf(
+    'runtime_tools_are_executable "$app_dir/server-tools/linux"',
+    installIndex,
+  );
   const updaterIndex = migration.indexOf('bash "$app_dir/server-tools/linux/update-grabenplaner-server.sh"');
   assert.ok(
-    permissionsIndex >= 0 && installIndex > permissionsIndex && updaterIndex > installIndex,
-    "Der Kandidat muss vor dem Updater-Aufruf root-geschützt in den App-Baum eingebunden sein.",
+    permissionsIndex >= 0
+      && stagedExecutableIndex > permissionsIndex
+      && installIndex > stagedExecutableIndex
+      && installedExecutableIndex > installIndex
+      && updaterIndex > installedExecutableIndex,
+    "Rechte und Ausführbarkeit müssen vor Runtime-Swap und Updater fail-closed bestätigt sein.",
   );
+  for (const relative of [
+    "backup-grabenplaner.sh",
+    "update-grabenplaner-server.sh",
+    "monitor/run-grabenplaner-monitor.sh",
+  ]) assert.ok(migration.includes(relative), `Ausführbarkeitsprüfung fehlt: ${relative}`);
+});
+
+test("central app permissions normalize Windows-like modes for app and Linux subtree", {
+  skip: process.platform !== "linux",
+}, (context) => {
+  const common = read("server-tools", "linux", "lib", "common.sh");
+  const helper = common.match(/^gp_apply_app_permissions\(\) \{[\s\S]*?^\}/m)?.[0];
+  assert.ok(helper, "Die zentrale Rechtevergabe konnte nicht isoliert werden.");
+
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-runtime-v3-modes-"));
+  context.after(() => fs.rmSync(temporary, { recursive: true, force: true }));
+  const appRoot = path.join(temporary, "app");
+  const linuxRoot = path.join(appRoot, "server-tools", "linux");
+  const paths = {
+    backup: path.join(linuxRoot, "backup-grabenplaner.sh"),
+    update: path.join(linuxRoot, "update-grabenplaner-server.sh"),
+    common: path.join(linuxRoot, "lib", "common.sh"),
+    monitor: path.join(linuxRoot, "monitor", "run-grabenplaner-monitor.sh"),
+    linuxOrdinary: path.join(linuxRoot, "host-control", "lib", "worker.js"),
+    ordinary: path.join(appRoot, "package.json"),
+    nodeModuleShell: path.join(appRoot, "node_modules", "fixture", "not-a-tool.sh"),
+  };
+  fs.mkdirSync(path.dirname(paths.common), { recursive: true });
+  fs.mkdirSync(path.dirname(paths.monitor), { recursive: true });
+  fs.mkdirSync(path.dirname(paths.linuxOrdinary), { recursive: true });
+  fs.mkdirSync(path.dirname(paths.nodeModuleShell), { recursive: true });
+  for (const script of [paths.backup, paths.update, paths.common, paths.monitor]) {
+    fs.writeFileSync(script, "#!/usr/bin/env bash\nexit 0\n");
+  }
+  fs.writeFileSync(paths.linuxOrdinary, "'use strict';\n");
+  fs.writeFileSync(paths.ordinary, "{}\n");
+  fs.writeFileSync(paths.nodeModuleShell, "#!/usr/bin/env bash\nexit 0\n");
+
+  const applyPermissions = (target) => spawnSync("bash", ["-s", "--", target], {
+    encoding: "utf8",
+    input: `set -Eeuo pipefail
+GP_DEFAULT_SERVICE_GROUP=grabenplaner
+gp_log() { printf '%s\\n' "$*" >&2; }
+chown() { :; }
+${helper}
+gp_apply_app_permissions "$1" grabenplaner
+`,
+  });
+  const resetWindowsLikeModes = () => {
+    fs.chmodSync(paths.backup, 0o640);
+    fs.chmodSync(paths.update, 0o644);
+    fs.chmodSync(paths.common, 0o640);
+    fs.chmodSync(paths.monitor, 0o644);
+    fs.chmodSync(paths.linuxOrdinary, 0o644);
+    fs.chmodSync(paths.ordinary, 0o644);
+    fs.chmodSync(paths.nodeModuleShell, 0o644);
+  };
+  const assertNormalizedModes = () => {
+    for (const script of [paths.backup, paths.update, paths.common, paths.monitor]) {
+      assert.equal(fs.statSync(script).mode & 0o777, 0o750, script);
+    }
+    assert.equal(fs.statSync(paths.linuxOrdinary).mode & 0o777, 0o640);
+  };
+
+  resetWindowsLikeModes();
+  const appResult = applyPermissions(appRoot);
+  assert.equal(appResult.status, 0, appResult.stderr);
+  assertNormalizedModes();
+  assert.equal(fs.statSync(paths.ordinary).mode & 0o777, 0o640);
+  assert.equal(fs.statSync(paths.nodeModuleShell).mode & 0o777, 0o640);
+
+  resetWindowsLikeModes();
+  const subtreeResult = applyPermissions(linuxRoot);
+  assert.equal(subtreeResult.status, 0, subtreeResult.stderr);
+  assertNormalizedModes();
+  assert.equal(fs.statSync(paths.ordinary).mode & 0o777, 0o644);
+  assert.equal(fs.statSync(paths.nodeModuleShell).mode & 0o777, 0o644);
+
+  const malformedRoot = path.join(temporary, "malformed");
+  const malformedFile = path.join(malformedRoot, "ordinary.txt");
+  fs.mkdirSync(malformedRoot);
+  fs.writeFileSync(malformedFile, "unchanged\n", { mode: 0o644 });
+  fs.chmodSync(malformedFile, 0o644);
+  const malformedResult = applyPermissions(malformedRoot);
+  assert.notEqual(malformedResult.status, 0, "Ein mehrdeutiger Baum muss fail-closed abgelehnt werden.");
+  assert.match(malformedResult.stderr, /keinen eindeutig vertrauenswuerdigen Linux-Werkzeugordner/);
+  assert.equal(fs.statSync(malformedFile).mode & 0o777, 0o644);
+
+  const incompleteAppRoot = path.join(temporary, "incomplete-app");
+  const incompleteLinuxRoot = path.join(incompleteAppRoot, "server-tools", "linux");
+  fs.mkdirSync(incompleteLinuxRoot, { recursive: true });
+  fs.writeFileSync(path.join(incompleteLinuxRoot, "ordinary.txt"), "unchanged\n", { mode: 0o644 });
+  const incompleteResult = applyPermissions(incompleteAppRoot);
+  assert.notEqual(incompleteResult.status, 0, "Ein unvollständiger App-Baum muss fail-closed abgelehnt werden.");
+  assert.match(incompleteResult.stderr, /keinen gueltigen Wartungsvertrag/);
 });
 
 test("nested runtime-v3 updater uses the installed root-protected offsite helper", {

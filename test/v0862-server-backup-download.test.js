@@ -163,12 +163,13 @@ async function errorPayload(response) {
 }
 
 test.before(async () => {
-  actors.admin = await createActor("98621", "admin");
-  actors.itAdmin = await createActor("98622", "it_admin");
+  actors.admin = await createActor("98621", "admin", { grantOffsite: true });
+  actors.itAdmin = await createActor("98622", "it_admin", { grantOffsite: true });
   actors.developer = await createActor("98623", "developer");
   actors.hrWithBackup = await createActor("98624", "hr", { grantBackup: true, grantOffsite: true });
   actors.adminWithoutBackup = await createActor("98625", "admin", { denyBackup: true });
   actors.adminWithoutOffsite = await createActor("98626", "admin", { denyOffsite: true });
+  actors.developerWithoutBackup = await createActor("98627", "developer", { denyBackup: true });
   db.prepare(`
     INSERT INTO settings (key, value) VALUES ('v0862_download_marker', 'vollstaendige-sqlite-kopie')
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
@@ -266,10 +267,10 @@ test("v0.86.2: Rolle und backup:write müssen gemeinsam wirksam sein", async () 
   assert.equal(missingPermission.status, 403);
 });
 
-test("v0.86.2: Offsite-Pfadänderungen verlangen Rolle, Recht, Same-Origin und aktuelles Passwort", async () => {
+test("v0.88.3: Offsite-Pfadänderungen verlangen Developer, Recht, Same-Origin und aktuelles Passwort", async () => {
   const createWithWrongPassword = await postJson(
     "/api/backup/offsite-folders",
-    actors.itAdmin,
+    actors.developer,
     {
       confirmation: "CREATE_MANAGED_OFFSITE_FOLDER",
       folderLabel: "Sicherung_2026",
@@ -314,10 +315,32 @@ test("v0.86.2: Offsite-Pfadänderungen verlangen Rolle, Recht, Same-Origin und a
   );
   assert.equal(deniedPermission.status, 403);
 
+  const adminRoleDenied = await postJson(
+    "/api/backup/offsite-folders",
+    actors.admin,
+    {
+      confirmation: "CREATE_MANAGED_OFFSITE_FOLDER",
+      folderLabel: "Sicherung_2026",
+      currentPassword,
+    },
+  );
+  assert.equal(adminRoleDenied.status, 403);
+
+  const itAdminRoleDenied = await postJson(
+    "/api/backup/offsite-folders",
+    actors.itAdmin,
+    {
+      confirmation: "CREATE_MANAGED_OFFSITE_FOLDER",
+      folderLabel: "Sicherung_2026",
+      currentPassword,
+    },
+  );
+  assert.equal(itAdminRoleDenied.status, 403);
+
   const offsiteWithoutBackupWrite = await requestJson(
     "PUT",
     "/api/backup/offsite-folders/active",
-    actors.adminWithoutBackup,
+    actors.developerWithoutBackup,
     {
       confirmation: "ACTIVATE_MANAGED_OFFSITE_FOLDER",
       folderLabel: "Sicherung_2026",
@@ -329,7 +352,7 @@ test("v0.86.2: Offsite-Pfadänderungen verlangen Rolle, Recht, Same-Origin und a
 
   const crossSite = await postJson(
     "/api/backup/offsite-folders",
-    actors.admin,
+    actors.developer,
     {
       confirmation: "CREATE_MANAGED_OFFSITE_FOLDER",
       folderLabel: "Sicherung_2026",
@@ -341,7 +364,7 @@ test("v0.86.2: Offsite-Pfadänderungen verlangen Rolle, Recht, Same-Origin und a
 
   const authenticatedRequest = await postJson(
     "/api/backup/offsite-folders",
-    actors.admin,
+    actors.developer,
     {
       confirmation: "CREATE_MANAGED_OFFSITE_FOLDER",
       folderLabel: "Sicherung_2026",

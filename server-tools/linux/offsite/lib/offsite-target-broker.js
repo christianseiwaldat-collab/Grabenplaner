@@ -914,6 +914,36 @@ function readStandardInput() {
   });
 }
 
+function writeStandardOutput(value, output = process.stdout) {
+  const payload = `${JSON.stringify(value)}\n`;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      output.off("error", onError);
+      if (error) reject(error);
+      else resolve();
+    };
+    const onError = () => finish(new OffsiteTargetBrokerError("TARGET_CONTROL_FAILED"));
+    output.once("error", onError);
+    try {
+      output.end(payload, (error) => {
+        if (error) {
+          if (!settled) {
+            settled = true;
+            reject(new OffsiteTargetBrokerError("TARGET_CONTROL_FAILED"));
+          }
+          return;
+        }
+        finish(null);
+      });
+    } catch {
+      finish(new OffsiteTargetBrokerError("TARGET_CONTROL_FAILED"));
+    }
+  });
+}
+
 async function main() {
   if (process.platform !== "linux"
     || typeof process.getuid !== "function"
@@ -928,7 +958,7 @@ async function main() {
   } catch {
     result = response(null, "TARGET_REQUEST_INVALID");
   }
-  process.stdout.write(`${JSON.stringify(result)}\n`);
+  await writeStandardOutput(result);
 }
 
 if (require.main === module) {
@@ -982,5 +1012,6 @@ module.exports = {
   safeRemoveCredentials,
   uploaderIdentity,
   validFolderLabel,
+  writeStandardOutput,
   writeRateLimitState,
 };

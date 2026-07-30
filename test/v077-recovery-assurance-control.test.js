@@ -138,18 +138,20 @@ test("app client exposes only BUSY, RATE_LIMITED and UNAVAILABLE control errors"
       ["ASSURANCE_CONTROL_FAILED", "UNAVAILABLE", null],
     ]) {
       const id = crypto.randomUUID();
-      const server = net.createServer((socket) => {
+      const server = net.createServer({ allowHalfOpen: true }, (socket) => {
         socket.resume();
-        socket.on("end", () => socket.end(`${JSON.stringify({
-          format: client.RESPONSE_FORMAT,
-          schemaVersion: client.SCHEMA_VERSION,
-          requestId: id,
-          accepted: false,
-          code: protocolCode,
-          acceptedAt: null,
-          retryAfterSeconds,
-          scheduler: client.untrustedScheduler(),
-        })}\n`));
+        socket.on("end", () => {
+          setTimeout(() => socket.end(`${JSON.stringify({
+            format: client.RESPONSE_FORMAT,
+            schemaVersion: client.SCHEMA_VERSION,
+            requestId: id,
+            accepted: false,
+            code: protocolCode,
+            acceptedAt: null,
+            retryAfterSeconds,
+            scheduler: client.untrustedScheduler(),
+          })}\n`), 25);
+        });
       });
       await new Promise((resolve, reject) => server.once("error", reject).listen(socketPath, resolve));
       fs.chmodSync(socketPath, 0o660);

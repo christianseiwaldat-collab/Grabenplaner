@@ -3,8 +3,10 @@
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
+const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const { Writable } = require("node:stream");
 const test = require("node:test");
 
 const root = path.resolve(__dirname, "..");
@@ -702,6 +704,76 @@ test("client rejects non-canonical or secret-bearing broker responses", () => {
   assert.throws(() => client.parseResponse(Buffer.alloc(client.MAX_RESPONSE_BYTES + 1, 1), REQUEST_ID), {
     code: "TARGET_CONTROL_RESPONSE_INVALID",
   });
+});
+
+test("target-control client keeps the response half of a delayed Unix socket open", {
+  skip: process.platform !== "linux",
+}, async () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-target-socket-"));
+  const socketPath = path.join(temporary, "request.sock");
+  const server = net.createServer({ allowHalfOpen: true }, (socket) => {
+    const chunks = [];
+    socket.on("data", (chunk) => chunks.push(chunk));
+    socket.on("end", () => {
+      const requestValue = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      setTimeout(() => socket.end(`${JSON.stringify({
+        format: client.RESPONSE_FORMAT,
+        schemaVersion: client.SCHEMA_VERSION,
+        requestId: requestValue.requestId,
+        ok: true,
+        code: "TARGET_FOLDERS_LISTED",
+        generatedAt: "2026-07-30T18:00:00.000Z",
+        activeFolder: null,
+        folders: [],
+        createdFolder: null,
+        retryAfterSeconds: null,
+        migrationMode: null,
+        recoverySetState: null,
+        fallbackPreserved: false,
+      })}\n`), 25);
+    });
+  });
+  try {
+    fs.chmodSync(temporary, 0o755);
+    await new Promise((resolve, reject) => server.once("error", reject).listen(socketPath, resolve));
+    fs.chmodSync(socketPath, 0o660);
+    const result = await client.requestOffsiteTargetControl("list-managed-folders", {}, {
+      allowNonLinux: true,
+      socketPath,
+      requireRootOwner: false,
+      expectedGid: process.getgid(),
+      timeoutMs: 3000,
+    });
+    assert.equal(result.code, "TARGET_FOLDERS_LISTED");
+    assert.deepEqual(result.folders, []);
+  } finally {
+    if (server.listening) await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
+test("target-control broker waits for output flush and handles an early peer close", async () => {
+  let written = "";
+  const output = new Writable({
+    write(chunk, _encoding, callback) {
+      written += chunk.toString("utf8");
+      setImmediate(callback);
+    },
+  });
+  await broker.writeStandardOutput({ ok: true }, output);
+  assert.equal(written, '{"ok":true}\n');
+
+  const closedOutput = new Writable({
+    write(_chunk, _encoding, callback) {
+      const error = new Error("closed");
+      error.code = "EPIPE";
+      callback(error);
+    },
+  });
+  await assert.rejects(
+    broker.writeStandardOutput({ ok: false }, closedOutput),
+    { name: "OffsiteTargetBrokerError", code: "TARGET_CONTROL_FAILED" },
+  );
 });
 
 test("default rclone runner drops privileges and removes its transient password copy", () => {

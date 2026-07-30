@@ -8,13 +8,32 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (relative) => fs.readFileSync(path.join(root, relative), "utf8");
 
-test("v0.86.2: Offsite-Ordnerverwaltung ist auf die drei Rollen und das technische Recht begrenzt", () => {
+test("v0.88.3: Offsite-Ordnerverwaltung ist auf Developer und das technische Recht begrenzt", () => {
   const client = read("public/app.js");
+  const server = read("server.js");
   const permissionFunction = client.match(/function canManageOffsiteFolders\(\)[\s\S]*?\n}/)?.[0] || "";
   assert.match(permissionFunction, /operationMode === "server"/);
-  assert.match(permissionFunction, /\["admin", "it_admin", "developer"\]\.includes\(role\)/);
+  assert.match(permissionFunction, /role === "developer"/);
+  assert.doesNotMatch(permissionFunction, /\["admin", "it_admin", "developer"\]\.includes\(role\)/);
   assert.match(permissionFunction, /permissions\.includes\("system:offsite:configure"\)/);
   assert.doesNotMatch(permissionFunction, /backup:write/);
+  assert.match(
+    server,
+    /id: "system:offsite:configure"[\s\S]*?eligibleRoles: \["developer"\]/,
+  );
+  assert.match(server, /addBuiltinRolePermissions\("developer", \["system:offsite:configure"\]\)/);
+  assert.doesNotMatch(
+    server,
+    /for \(const roleId of \["admin", "it_admin", "developer"\]\) \{\s*addBuiltinRolePermissions\(roleId, \["system:offsite:configure"\]\)/,
+  );
+  assert.match(
+    server,
+    /function requireOffsiteTargetDeveloper\(request\)[\s\S]*?session\.role !== "developer"[\s\S]*?permissions\.includes\("system:offsite:configure"\)/,
+  );
+  assert.equal(
+    (server.match(/app\.(?:get|post|put)\("\/api\/backup\/offsite-folders(?:\/active)?"[\s\S]*?requireOffsiteTargetDeveloper\(request\);/g) || []).length,
+    3,
+  );
   assert.match(client, /serverGoogleDriveManagementCard\?\.classList\.toggle\("hidden", !offsiteFolderManagementAccess\)/);
   assert.match(
     client,

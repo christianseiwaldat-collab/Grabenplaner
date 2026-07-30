@@ -203,6 +203,29 @@ else
   fail "Offsite-Ziel-Socketrechte" "Pfad, Besitz oder Modus weicht von der Providerbindung ab"
 fi
 
+target_control_client="$OFFSITE_APP_ROOT/lib/offsite-target-client.js"
+if [[ "$bound_provider_id" == "google_drive" ]]; then
+  if [[ -f "$target_control_client" && ! -L "$target_control_client" ]] \
+    && runuser --user "$OFFSITE_APP_USER" -- env -i PATH=/usr/bin:/bin \
+      "$OFFSITE_NODE" - "$target_control_client" <<'NODE' >/dev/null 2>&1
+const client = require(process.argv[2]);
+(async () => {
+  const status = await client.offsiteTargetControlStatus({ timeoutMs: 5000 });
+  if (!status || status.available !== true || status.reason !== null) process.exit(1);
+  const result = await client.listManagedOffsiteFolders({ timeoutMs: 60000 });
+  if (!result || !Array.isArray(result.folders)
+    || result.activeFolder !== null && !result.folders.includes(result.activeFolder)) process.exit(1);
+})().catch(() => { process.exitCode = 1; });
+NODE
+  then
+    ok "Offsite-Ziel-Steuerungsprotokoll" "Status und verwaltete Ordnerliste als App-Dienstkonto abrufbar"
+  else
+    fail "Offsite-Ziel-Steuerungsprotokoll" "Google-Drive-Status oder Ordnerliste ist nicht sicher nutzbar"
+  fi
+else
+  ok "Offsite-Ziel-Steuerungsprotokoll" "fuer den gebundenen S3-Provider bewusst nicht angeboten"
+fi
+
 status_gid="$(getent group "$OFFSITE_STATUS_GROUP" | awk -F: '{print $3}')"
 if [[ "$status_gid" =~ ^[0-9]+$ ]] && offsite_assurance_history inspect >/dev/null 2>&1; then
   ok "Assurance-Verlauf" "Signaturen, Kette und Dateirechte gueltig"
