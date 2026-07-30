@@ -20,6 +20,66 @@ const broker = require(path.join(
 
 const REQUEST_ID = "410d17bd-8eca-4f6a-9adf-9ab4ed897f63";
 const NOW_MS = Date.parse("2026-07-26T16:00:00.000Z");
+const LIVE_GOOGLE_REDACTED_CONFIG = [
+  "[internal-drive]",
+  "type = drive",
+  "scope = drive.file",
+  "client_id = XXX",
+  "client_secret = XXX",
+  "token = XXX",
+  "",
+].join("\n");
+const LIVE_GOOGLE_CANONICAL_CONFIG = [
+  "authentication=dedicated_oauth",
+  "backend=drive",
+  "client_id=XXX",
+  "client_secret=XXX",
+  "scope=drive.file",
+  "token=XXX",
+].join("\n");
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function googleProviderBinding() {
+  const policy = {
+    format: "grabenplaner-offsite-rclone-provider-policy",
+    schemaVersion: 1,
+    providerId: "google_drive",
+    remoteName: "internal-drive",
+    backend: "drive",
+    authentication: "dedicated_oauth",
+    endpoint: null,
+    region: null,
+    scope: "drive.file",
+    configSha256: crypto.createHash("sha256")
+      .update(LIVE_GOOGLE_CANONICAL_CONFIG, "utf8")
+      .digest("hex"),
+  };
+  return {
+    format: "grabenplaner-offsite-provider-binding",
+    schemaVersion: 1,
+    providerId: "google_drive",
+    remoteName: "internal-drive",
+    backend: "drive",
+    authentication: "dedicated_oauth",
+    endpoint: null,
+    region: null,
+    scope: "drive.file",
+    configSha256: policy.configSha256,
+    policySha256: crypto.createHash("sha256")
+      .update(canonicalJson(policy), "utf8")
+      .digest("hex"),
+    repositoryLayout: "google-drive-direct-safe-path-v1",
+    storageRoot: null,
+  };
+}
 
 function request(action = "status", parameters = {}, requestId = REQUEST_ID) {
   return Buffer.from(`${JSON.stringify({
@@ -49,6 +109,15 @@ function fixture(repositoryPath = "Grabenplaner-Offsite/Aktiv_2026") {
   writeProtected(path.join(configRoot, "repository"), `rclone:internal-drive:${repositoryPath}\n`);
   writeProtected(path.join(configRoot, "repository-id"), "0123456789abcdef0123456789abcdef\n");
   writeProtected(path.join(configRoot, "rclone-config-password"), "this-is-a-private-test-password\n");
+  writeProtected(path.join(configRoot, "installed-contract.json"), `${JSON.stringify({
+    format: "grabenplaner-linux-offsite-installed-contract",
+    schemaVersion: 1,
+    moduleVersion: 6,
+    fingerprint: "a".repeat(64),
+    schemaSha256: "b".repeat(64),
+    files: [],
+    providerBinding: googleProviderBinding(),
+  })}\n`);
   return {
     temporary,
     configRoot,
@@ -58,13 +127,30 @@ function fixture(repositoryPath = "Grabenplaner-Offsite/Aktiv_2026") {
 }
 
 function optionsFor(files, extra = {}) {
+  const {
+    liveRedactedConfig = LIVE_GOOGLE_REDACTED_CONFIG,
+    runRclone: requestedRunRclone,
+    ...rest
+  } = extra;
   return {
     configRoot: files.configRoot,
     runtimeRoot: files.runtimeRoot,
     statePath: files.statePath,
     requireRootOwner: false,
     nowMs: NOW_MS,
-    ...extra,
+    ...rest,
+    runRclone(args, config, options) {
+      if (args[0] === "config"
+        && args[1] === "redacted"
+        && args[2] === "internal-drive"
+        && args.length === 3) {
+        return { status: 0, stdout: liveRedactedConfig, stderr: "" };
+      }
+      if (typeof requestedRunRclone !== "function") {
+        throw new Error("unexpected rclone operation");
+      }
+      return requestedRunRclone(args, config, options);
+    },
   };
 }
 
@@ -97,6 +183,27 @@ test("offsite target broker accepts only its exact bounded request schema", () =
     assert.throws(() => broker.parseRequest(request("create-managed-folder", { folderLabel: label })), {
       code: "TARGET_REQUEST_INVALID",
     });
+  }
+});
+
+test("managed Google folder control stays fail-closed for every S3 provider", () => {
+  for (const providerId of ["hetzner_object_storage", "backblaze_b2"]) {
+    const files = fixture();
+    try {
+      let called = false;
+      const result = broker.handleRequest(request("status"), optionsFor(files, {
+        providerId,
+        runRclone() {
+          called = true;
+          throw new Error("must not run");
+        },
+      }));
+      assert.equal(result.ok, false);
+      assert.equal(result.code, "TARGET_CONTROL_FAILED");
+      assert.equal(called, false);
+    } finally {
+      fs.rmSync(files.temporary, { recursive: true, force: true });
+    }
   }
 });
 
@@ -163,6 +270,95 @@ test("managed-folder listing is fixed below Grabenplaner-Offsite and strips rclo
     assert.deepEqual(result.folders, ["Aktiv_2026", "Zukunft"]);
     assert.equal(result.activeFolder, "Aktiv_2026");
     assert.doesNotMatch(JSON.stringify(result), /drive-folder-secret|internal-drive|repository/i);
+  } finally {
+    fs.rmSync(files.temporary, { recursive: true, force: true });
+  }
+});
+
+test("managed-folder access fails closed before list or create when the live rclone policy drifts", () => {
+  const driftedConfig = LIVE_GOOGLE_REDACTED_CONFIG.replace("scope = drive.file", "scope = drive");
+  for (const [action, parameters] of [
+    ["list-managed-folders", {}],
+    ["create-managed-folder", { folderLabel: "Neu_2026" }],
+  ]) {
+    const files = fixture();
+    let storageOperationCalled = false;
+    try {
+      const result = broker.handleRequest(request(action, parameters), optionsFor(files, {
+        liveRedactedConfig: driftedConfig,
+        runRclone() {
+          storageOperationCalled = true;
+          throw new Error("must not run after provider drift");
+        },
+      }));
+      assert.equal(result.ok, false);
+      assert.equal(result.code, "TARGET_CONTROL_FAILED");
+      assert.equal(storageOperationCalled, false);
+      assert.equal(fs.existsSync(`${files.statePath}.create`), false);
+    } finally {
+      fs.rmSync(files.temporary, { recursive: true, force: true });
+    }
+  }
+});
+
+test("managed-folder listing rejects installed-contract config or policy hash drift before storage access", () => {
+  for (const field of ["configSha256", "policySha256"]) {
+    const files = fixture();
+    let storageOperationCalled = false;
+    try {
+      const receiptPath = path.join(files.configRoot, "installed-contract.json");
+      const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
+      receipt.providerBinding[field] = "f".repeat(64);
+      writeProtected(receiptPath, `${JSON.stringify(receipt)}\n`);
+
+      const result = broker.handleRequest(request("list-managed-folders"), optionsFor(files, {
+        runRclone() {
+          storageOperationCalled = true;
+          throw new Error("must not run after contract drift");
+        },
+      }));
+      assert.equal(result.ok, false, field);
+      assert.equal(result.code, "TARGET_CONTROL_FAILED", field);
+      assert.equal(storageOperationCalled, false, field);
+    } finally {
+      fs.rmSync(files.temporary, { recursive: true, force: true });
+    }
+  }
+});
+
+test("legacy repository with an absent managed prefix returns a successful empty folder list", () => {
+  const files = fixture("Legacy-Repository");
+  const calls = [];
+  try {
+    const result = broker.handleRequest(request("list-managed-folders"), optionsFor(files, {
+      runRclone(args) {
+        calls.push(args);
+        return {
+          status: 3,
+          stdout: "",
+          stderr: "directory not found",
+        };
+      },
+    }));
+    assert.deepEqual(calls, [[
+      "lsjson",
+      "internal-drive:Grabenplaner-Offsite",
+      "--dirs-only",
+      "--max-depth",
+      "1",
+    ]]);
+    assert.equal(result.ok, true);
+    assert.equal(result.code, "TARGET_FOLDERS_LISTED");
+    assert.equal(result.activeFolder, null);
+    assert.deepEqual(result.folders, []);
+
+    const parsed = client.parseResponse(
+      Buffer.from(`${JSON.stringify(result)}\n`),
+      REQUEST_ID,
+    );
+    assert.equal(parsed.code, "TARGET_FOLDERS_LISTED");
+    assert.equal(parsed.activeFolder, null);
+    assert.deepEqual(parsed.folders, []);
   } finally {
     fs.rmSync(files.temporary, { recursive: true, force: true });
   }

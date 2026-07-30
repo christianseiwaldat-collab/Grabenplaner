@@ -15,8 +15,9 @@ Verwendung: sudo grabenplaner-offsite-rebind-rclone \
   --yes
 
 Bindet ausschliesslich eine vollstaendig vorbereitete, verschluesselte
-rclone-Konfiguration mit eigenem Google-OAuth-Client an das bereits gepinnte
-Restic-Repository. Es wird niemals ein Repository angelegt.
+rclone-Konfiguration desselben vertraglich gebundenen Providers an das bereits
+gepinnte Restic-Repository. Es wird niemals ein Repository angelegt oder der
+Provider gewechselt.
 EOF
 }
 
@@ -268,9 +269,14 @@ setup_restic() {
     -o "rclone.program=$setup_root/rclone-wrapper" "$@"
 }
 
+candidate_provider_policy="$operation_root/candidate-provider-policy.json"
 setup_run "$setup_root/rclone-wrapper" config redacted "$remote" 2>/dev/null \
-  | "$OFFSITE_NODE" "$OFFSITE_RCLONE_POLICY_HELPER" "$remote" >/dev/null \
-  || offsite_die "Die neue rclone-Konfiguration verwendet keinen freigegebenen eigenen Google-OAuth-Client."
+  | "$OFFSITE_NODE" "$OFFSITE_RCLONE_POLICY_HELPER" "$remote" >"$candidate_provider_policy" \
+  || offsite_die "Die neue rclone-Konfiguration entspricht keiner freigegebenen Provider-Richtlinie."
+chmod 0600 -- "$candidate_provider_policy"
+candidate_provider="$("$OFFSITE_NODE" "$OFFSITE_MODULE_ROOT/lib/offsite-contract.js" verify-provider-binding \
+  "$OFFSITE_INSTALLED_CONTRACT" "$candidate_provider_policy" "$candidate_credentials/repository")" \
+  || offsite_die "Die neue rclone-Konfiguration weicht vom gebundenen Provider ab."
 setup_restic cat config >"$operation_root/candidate-repository.json" 2>/dev/null \
   || offsite_die "Die neue rclone-Konfiguration erreicht das bestehende Repository nicht."
 candidate_repository_id="$("$OFFSITE_NODE" - "$operation_root/candidate-repository.json" <<'NODE'
@@ -282,11 +288,18 @@ NODE
 )" || offsite_die "Die Identitaet des bestehenden Repositorys konnte nicht gelesen werden."
 [[ "$candidate_repository_id" == "$expected_repository_id" ]] \
   || offsite_die "Die neue rclone-Konfiguration verweist nicht auf das gepinnte bestehende Repository."
-# Ein moeglicher Token-Refresh waehrend des Repositoryzugriffs darf die
-# OAuth-Richtlinie nicht veraendern.
+# Ein moeglicher Token-Refresh oder eine rclone-interne Aktualisierung waehrend
+# des Repositoryzugriffs darf die gebundene Provider-Richtlinie nicht veraendern.
+refreshed_provider_policy="$operation_root/refreshed-provider-policy.json"
 setup_run "$setup_root/rclone-wrapper" config redacted "$remote" 2>/dev/null \
-  | "$OFFSITE_NODE" "$OFFSITE_RCLONE_POLICY_HELPER" "$remote" >/dev/null \
-  || offsite_die "Die aktualisierte rclone-Konfiguration verletzt die OAuth-Richtlinie."
+  | "$OFFSITE_NODE" "$OFFSITE_RCLONE_POLICY_HELPER" "$remote" >"$refreshed_provider_policy" \
+  || offsite_die "Die aktualisierte rclone-Konfiguration verletzt die Provider-Richtlinie."
+chmod 0600 -- "$refreshed_provider_policy"
+refreshed_provider="$("$OFFSITE_NODE" "$OFFSITE_MODULE_ROOT/lib/offsite-contract.js" verify-provider-binding \
+  "$OFFSITE_INSTALLED_CONTRACT" "$refreshed_provider_policy" "$candidate_credentials/repository")" \
+  || offsite_die "Die aktualisierte rclone-Konfiguration weicht vom gebundenen Provider ab."
+[[ "$refreshed_provider" == "$candidate_provider" ]] \
+  || offsite_die "Der Offsite-Provider hat sich waehrend der Neuanbindung geaendert."
 
 install -m 0600 -o root -g root -- "$OFFSITE_RCLONE_CONFIG" "$operation_root/original-rclone.conf"
 install -m 0600 -o root -g root \
@@ -308,7 +321,9 @@ offsite_assert_persistent_rclone_config
 [[ "$(stat --format='%u:%g:%a:%h' -- "$OFFSITE_CONFIG_ROOT/rclone-config-password")" == "0:0:600:1" ]] \
   || offsite_die "Das neu gebundene rclone-Konfigurationspasswort hat unsichere Rechte."
 post_credentials="$(offsite_make_uploader_credentials "$OFFSITE_CONFIG_ROOT")"
-offsite_assert_dedicated_rclone_oauth "$post_credentials"
+post_provider="$(offsite_assert_bound_rclone_provider "$post_credentials")"
+[[ "$post_provider" == "$candidate_provider" ]] \
+  || offsite_die "Die persistente rclone-Konfiguration weicht vom gebundenen Provider ab."
 offsite_verify_repository_identity "$post_credentials" "$operation_root/post-repository.json" \
   || offsite_die "Die Repository-Bindung konnte nach dem Credential-Tausch nicht bestaetigt werden."
 cmp --silent -- "$setup_root/config/rclone.conf" "$OFFSITE_RCLONE_CONFIG" \
@@ -319,8 +334,8 @@ cmp --silent -- "$rclone_password_source" "$OFFSITE_CONFIG_ROOT/rclone-config-pa
 restore_timer_state || offsite_die "Der vorherige Zustand der Offsite-Timer konnte nicht wiederhergestellt werden."
 app_version="$($OFFSITE_NODE -e 'const value=require("/opt/grabenplaner/app/package.json");const version=String(value.version||"");if(!/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(version))process.exit(1);process.stdout.write(version)')" \
   || offsite_die "Die installierte App-Version ist fuer Recovery Assurance ungueltig."
-offsite_record_assurance_queue configuration-change-queued oauth-config-changed "$app_version" \
-  || offsite_die "Die OAuth-Aenderung konnte nicht im signierten Recovery-Assurance-Verlauf vorgemerkt werden."
-systemctl start --no-block grabenplaner-offsite-assurance@oauth-config-changed.service >/dev/null \
-  || offsite_die "Die Recovery-Assurance-Pruefung der neuen OAuth-Konfiguration konnte nicht eingeplant werden."
+offsite_record_assurance_queue configuration-change-queued offsite-config-changed "$app_version" \
+  || offsite_die "Die Provider-Neuanbindung konnte nicht im signierten Recovery-Assurance-Verlauf vorgemerkt werden."
+systemctl start --no-block grabenplaner-offsite-assurance@offsite-config-changed.service >/dev/null \
+  || offsite_die "Die Recovery-Assurance-Pruefung der neuen Provider-Konfiguration konnte nicht eingeplant werden."
 rebind_complete=1

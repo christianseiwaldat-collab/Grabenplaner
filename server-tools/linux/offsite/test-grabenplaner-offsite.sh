@@ -22,7 +22,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if (offsite_assert_installed_contract >/dev/null 2>&1); then ok "Modulvertrag" "installierte Dateien unveraendert"; else fail "Modulvertrag" "Integritaetspruefung fehlgeschlagen"; fi
+bound_provider_id=""
+if (offsite_assert_installed_contract >/dev/null 2>&1) \
+  && bound_provider_id="$("$OFFSITE_NODE" "$OFFSITE_MODULE_ROOT/lib/offsite-contract.js" \
+    provider-id "$OFFSITE_INSTALLED_CONTRACT" 2>/dev/null)"; then
+  ok "Modulvertrag" "installierte Dateien und Providerbindung unveraendert"
+else
+  fail "Modulvertrag" "Integritaets- oder Providerpruefung fehlgeschlagen"
+fi
 if (offsite_assert_runtime_binaries >/dev/null 2>&1); then
   ok "Binaerintegritaet" "Rechte, Modulwrapper und SHA-256-Pins bestaetigt"
 else
@@ -73,9 +80,9 @@ rebind_command="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-rebind-rclone.sh"
 rebind_link="/usr/local/sbin/grabenplaner-offsite-rebind-rclone"
 if [[ -f "$rebind_command" && ! -L "$rebind_command" && -L "$rebind_link" \
   && "$(readlink -f -- "$rebind_link")" == "$rebind_command" ]]; then
-  ok "OAuth-Neuanbindung" "root-only Wartungsbefehl installiert"
+  ok "Provider-Neuanbindung" "root-only Wartungsbefehl installiert"
 else
-  fail "OAuth-Neuanbindung" "Wartungsbefehl fehlt oder zeigt nicht auf das installierte Modul"
+  fail "Provider-Neuanbindung" "Wartungsbefehl fehlt oder zeigt nicht auf das installierte Modul"
 fi
 assurance_command="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-assurance.sh"
 assurance_link="/usr/local/sbin/grabenplaner-offsite-assurance"
@@ -172,18 +179,28 @@ fi
 target_control_socket_unit="grabenplaner-offsite-target-control.socket"
 target_control_socket_root="/run/grabenplaner-offsite-target-control"
 target_control_socket_path="$target_control_socket_root/request.sock"
-if systemctl is-enabled --quiet "$target_control_socket_unit" && systemctl is-active --quiet "$target_control_socket_unit"; then
-  ok "Offsite-Ziel-Steuerungssocket" "aktiv und beim Systemstart aktiviert"
+if [[ "$bound_provider_id" == "google_drive" ]] \
+  && systemctl is-enabled --quiet "$target_control_socket_unit" \
+  && systemctl is-active --quiet "$target_control_socket_unit"; then
+  ok "Offsite-Ziel-Steuerungssocket" "fuer Google Drive aktiv und beim Systemstart aktiviert"
+elif [[ "$bound_provider_id" == "hetzner_object_storage" || "$bound_provider_id" == "backblaze_b2" ]] \
+  && ! systemctl is-enabled --quiet "$target_control_socket_unit" \
+  && ! systemctl is-active --quiet "$target_control_socket_unit"; then
+  ok "Offsite-Ziel-Steuerungssocket" "fuer den S3-Provider bewusst nicht angeboten"
 else
-  fail "Offsite-Ziel-Steuerungssocket" "nicht aktiv oder nicht aktiviert"
+  fail "Offsite-Ziel-Steuerungssocket" "Aktivierung passt nicht zum gebundenen Provider"
 fi
-if [[ "$control_gid" =~ ^[0-9]+$ && -d "$target_control_socket_root" && ! -L "$target_control_socket_root" \
+if [[ "$bound_provider_id" == "google_drive" \
+  && "$control_gid" =~ ^[0-9]+$ && -d "$target_control_socket_root" && ! -L "$target_control_socket_root" \
   && -S "$target_control_socket_path" && ! -L "$target_control_socket_path" \
   && "$(stat --format='%u:%g:%a' -- "$target_control_socket_root")" == "0:0:755" \
   && "$(stat --format='%u:%g:%a:%h' -- "$target_control_socket_path")" == "0:$control_gid:660:1" ]]; then
   ok "Offsite-Ziel-Socketrechte" "root und dedizierte Steuerungsgruppe, Modus 0660"
+elif [[ "$bound_provider_id" == "hetzner_object_storage" || "$bound_provider_id" == "backblaze_b2" ]] \
+  && [[ ! -S "$target_control_socket_path" ]]; then
+  ok "Offsite-Ziel-Socketrechte" "kein Google-Drive-Steuerungssocket fuer den S3-Provider vorhanden"
 else
-  fail "Offsite-Ziel-Socketrechte" "Pfad, Besitz oder Modus weicht vom Sicherheitsvertrag ab"
+  fail "Offsite-Ziel-Socketrechte" "Pfad, Besitz oder Modus weicht von der Providerbindung ab"
 fi
 
 status_gid="$(getent group "$OFFSITE_STATUS_GROUP" | awk -F: '{print $3}')"
@@ -192,21 +209,26 @@ if [[ "$status_gid" =~ ^[0-9]+$ ]] && offsite_assurance_history inspect >/dev/nu
 else
   fail "Assurance-Verlauf" "Signaturkette fehlt oder ist ungueltig"
 fi
+status_inspection=""
+status_provider_id=""
 if [[ "$status_gid" =~ ^[0-9]+$ && -f "$OFFSITE_STATUS_FILE" && ! -L "$OFFSITE_STATUS_FILE" \
   && "$(stat --format='%u:%g:%a:%h' -- "$OFFSITE_STATUS_FILE")" == "0:$status_gid:640:1" ]] \
-  && "$OFFSITE_NODE" "$OFFSITE_STATUS_HELPER" --status-file "$OFFSITE_STATUS_FILE" --status-gid "$status_gid" inspect >/dev/null 2>&1
+  && status_inspection="$("$OFFSITE_NODE" "$OFFSITE_STATUS_HELPER" \
+    --status-file "$OFFSITE_STATUS_FILE" --status-gid "$status_gid" inspect 2>/dev/null)" \
+  && status_provider_id="$("$OFFSITE_NODE" -e 'const v=JSON.parse(process.argv[1]);if(v.ok!==true||typeof v.providerId!=="string")process.exit(1);process.stdout.write(v.providerId)' "$status_inspection")" \
+  && [[ "$status_provider_id" == "$bound_provider_id" ]]
 then
-  ok "Redigierter Status" "Schema und 14/8/12-Regel gueltig"
+  ok "Redigierter Status" "Schema, Providerbindung und 14/8/12-Regel gueltig"
 else
-  fail "Redigierter Status" "fehlt oder ist ungueltig"
+  fail "Redigierter Status" "fehlt, ist ungueltig oder passt nicht zur Providerbindung"
 fi
 
 credentials="$(offsite_make_uploader_credentials "$OFFSITE_CONFIG_ROOT")"
 offsite_acquire_repository_lock
-if offsite_assert_dedicated_rclone_oauth "$credentials" >/dev/null 2>&1; then
-  ok "Google OAuth" "eigener Client und Scope drive.file bestaetigt"
+if provider_id="$(offsite_assert_bound_rclone_provider "$credentials" 2>/dev/null)"; then
+  ok "Providerbindung" "Installationsbeleg und aktive rclone-Richtlinie bestaetigt: $provider_id"
 else
-  fail "Google OAuth" "eigener Client fehlt oder Richtlinie nicht bestaetigt"
+  fail "Providerbindung" "aktive rclone-Konfiguration weicht vom Installationsbeleg ab"
 fi
 if offsite_verify_repository_identity "$credentials" "$operation_root/repository.json"; then
   ok "Repository-Identitaet" "gepinnt und erreichbar"

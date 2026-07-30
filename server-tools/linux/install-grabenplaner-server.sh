@@ -22,6 +22,12 @@ readonly MONITOR_TIMER="/etc/systemd/system/grabenplaner-monitor.timer"
 readonly MONITOR_STATUS_ROOT="/var/lib/grabenplaner-monitor"
 readonly MONITOR_STATUS_FILE="${MONITOR_STATUS_ROOT}/status.json"
 readonly MONITOR_STATUS_GROUP="grabenplaner-monitor-status"
+readonly HOST_CONTROL_GROUP="grabenplaner-host-control"
+readonly HOST_CONTROL_ROOT="/opt/grabenplaner-host-control"
+readonly HOST_CONTROL_MODULE="${HOST_CONTROL_ROOT}/module"
+readonly HOST_CONTROL_SOCKET_UNIT="/etc/systemd/system/grabenplaner-host-control.socket"
+readonly HOST_CONTROL_WORKER_UNIT="/etc/systemd/system/grabenplaner-host-control@.service"
+readonly HOST_REBOOT_UNIT="/etc/systemd/system/grabenplaner-host-reboot.service"
 readonly CADDY_CONFIG="/etc/caddy/Caddyfile"
 readonly BOOTSTRAP_COMMAND="/usr/local/sbin/grabenplaner-bootstrap-admin"
 readonly CADDY_MANAGED_MARKER="# Managed by Grabenplaner. Local changes may be replaced by the installer."
@@ -50,8 +56,16 @@ APP_UNIT_WRITTEN=0
 BOOTSTRAP_UNIT_WRITTEN=0
 MONITOR_UNIT_WRITTEN=0
 MONITOR_TIMER_WRITTEN=0
+HOST_CONTROL_SOCKET_WRITTEN=0
+HOST_CONTROL_WORKER_WRITTEN=0
+HOST_REBOOT_UNIT_WRITTEN=0
+HOST_CONTROL_MODULE_WRITTEN=0
+HOST_CONTROL_ROOT_CREATED=0
+HOST_CONTROL_GROUP_CREATED=0
+HOST_CONTROL_MEMBERSHIP_ADDED=0
 BOOTSTRAP_COMMAND_WRITTEN=0
 UNIT_TEMP=""
+HOST_CONTROL_PENDING_UNIT=""
 PNPM_COMMAND=()
 
 fail() {
@@ -114,10 +128,15 @@ cleanup() {
   if [[ -n "$UNIT_TEMP" ]]; then
     rm -f -- "$UNIT_TEMP"
   fi
+  if [[ -n "$HOST_CONTROL_PENDING_UNIT" ]]; then
+    rm -f -- "$HOST_CONTROL_PENDING_UNIT"
+  fi
   if [[ -n "$STAGE_ROOT" && -d "$STAGE_ROOT" ]]; then
     rm -rf --one-file-system -- "$STAGE_ROOT"
   fi
   if [[ $exit_code -ne 0 && $APP_SWAPPED -eq 1 ]]; then
+    systemctl disable --now grabenplaner-host-control.socket >/dev/null 2>&1 || true
+    systemctl stop 'grabenplaner-host-control@*.service' grabenplaner-host-reboot.service >/dev/null 2>&1 || true
     systemctl disable --now grabenplaner-monitor.timer grabenplaner-monitor.service \
       grabenplaner.service grabenplaner-bootstrap.service >/dev/null 2>&1 || true
     rm -rf --one-file-system -- "$APP_ROOT"
@@ -128,10 +147,27 @@ cleanup() {
     [[ $BOOTSTRAP_UNIT_WRITTEN -eq 0 ]] || rm -f -- "$BOOTSTRAP_UNIT"
     [[ $MONITOR_UNIT_WRITTEN -eq 0 ]] || rm -f -- "$MONITOR_UNIT"
     [[ $MONITOR_TIMER_WRITTEN -eq 0 ]] || rm -f -- "$MONITOR_TIMER"
+    [[ $HOST_CONTROL_SOCKET_WRITTEN -eq 0 ]] || rm -f -- "$HOST_CONTROL_SOCKET_UNIT"
+    [[ $HOST_CONTROL_WORKER_WRITTEN -eq 0 ]] || rm -f -- "$HOST_CONTROL_WORKER_UNIT"
+    [[ $HOST_REBOOT_UNIT_WRITTEN -eq 0 ]] || rm -f -- "$HOST_REBOOT_UNIT"
     [[ $BOOTSTRAP_COMMAND_WRITTEN -eq 0 ]] || rm -f -- "$BOOTSTRAP_COMMAND"
+    if [[ $HOST_CONTROL_MODULE_WRITTEN -eq 1 && -d "$HOST_CONTROL_MODULE" && ! -L "$HOST_CONTROL_MODULE" ]]; then
+      rm -rf --one-file-system -- "$HOST_CONTROL_MODULE"
+    fi
+    if [[ $HOST_CONTROL_ROOT_CREATED -eq 1 && -d "$HOST_CONTROL_ROOT" && ! -L "$HOST_CONTROL_ROOT" ]]; then
+      rmdir -- "$HOST_CONTROL_ROOT" >/dev/null 2>&1 || true
+    fi
+    if [[ $HOST_CONTROL_MEMBERSHIP_ADDED -eq 1 ]]; then
+      gpasswd --delete "$SERVICE_USER" "$HOST_CONTROL_GROUP" >/dev/null 2>&1 || true
+    fi
+    if [[ $HOST_CONTROL_GROUP_CREATED -eq 1 ]]; then
+      groupdel "$HOST_CONTROL_GROUP" >/dev/null 2>&1 || true
+    fi
   fi
   if [[ $exit_code -ne 0 && ( $APP_UNIT_WRITTEN -eq 1 || $BOOTSTRAP_UNIT_WRITTEN -eq 1 \
-    || $MONITOR_UNIT_WRITTEN -eq 1 || $MONITOR_TIMER_WRITTEN -eq 1 ) ]]; then
+    || $MONITOR_UNIT_WRITTEN -eq 1 || $MONITOR_TIMER_WRITTEN -eq 1 \
+    || $HOST_CONTROL_SOCKET_WRITTEN -eq 1 || $HOST_CONTROL_WORKER_WRITTEN -eq 1 \
+    || $HOST_REBOOT_UNIT_WRITTEN -eq 1 ) ]]; then
     systemctl daemon-reload >/dev/null 2>&1 || true
   fi
   if [[ $exit_code -ne 0 ]]; then
@@ -394,6 +430,14 @@ const expectedRecoveryArtifacts = [
   "server-tools/linux/recovery/lib/recovery-metadata.js",
   "server-tools/linux/recovery/lib/recovery-verify.js",
 ];
+const expectedHostControlArtifacts = [
+  "server-tools/linux/host-control/lib/host-reboot-broker.js",
+  "server-tools/linux/host-control/systemd/grabenplaner-host-control.socket.in",
+  "server-tools/linux/host-control/systemd/grabenplaner-host-control@.service.in",
+  "server-tools/linux/host-control/systemd/grabenplaner-host-reboot.service.in",
+];
+const hostControlPrefix = "server-tools/linux/host-control/";
+const expectedHostControlDirectories = new Set(["lib", "systemd"]);
 const hardeningPrefix = "server-tools/linux/hardening/";
 const expectedHardeningArtifacts = [
   "server-tools/linux/hardening/grabenplaner-host-security.sh",
@@ -451,6 +495,38 @@ function assertExactHardeningTree() {
     fail("Der Hardening-Modulbaum enthaelt nicht exakt die freigegebenen Verzeichnisse.");
   }
 }
+function assertExactHostControlTree() {
+  const moduleRoot = path.join(root, "server-tools", "linux", "host-control");
+  const moduleStat = fs.lstatSync(moduleRoot, { throwIfNoEntry: false });
+  if (!moduleStat?.isDirectory() || moduleStat.isSymbolicLink()) fail("Der Host-Control-Runtimeordner ist unzulaessig.");
+  const expectedFiles = new Set(expectedHostControlArtifacts.map((relative) => relative.slice(hostControlPrefix.length)));
+  const actualFiles = new Set();
+  const actualDirectories = new Set();
+  function inspect(directory, prefix = "") {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const target = path.join(directory, entry.name);
+      const stat = fs.lstatSync(target);
+      if (stat.isSymbolicLink()) fail(`Symbolischer Link im Host-Control-Runtimebaum: ${relative}`);
+      if (stat.isDirectory()) {
+        if (!expectedHostControlDirectories.has(relative)) fail(`Nicht manifestiertes Host-Control-Verzeichnis: ${relative}`);
+        actualDirectories.add(relative);
+        inspect(target, relative);
+      } else if (stat.isFile()) {
+        if (!expectedFiles.has(relative)) fail(`Nicht manifestierte Host-Control-Datei: ${relative}`);
+        actualFiles.add(relative);
+      } else {
+        fail(`Unzulaessiger Dateityp im Host-Control-Runtimebaum: ${relative}`);
+      }
+    }
+  }
+  inspect(moduleRoot);
+  if (actualFiles.size !== expectedFiles.size || [...expectedFiles].some((relative) => !actualFiles.has(relative))
+    || actualDirectories.size !== expectedHostControlDirectories.size
+    || [...expectedHostControlDirectories].some((relative) => !actualDirectories.has(relative))) {
+    fail("Der Host-Control-Runtimebaum enthaelt nicht exakt die freigegebenen Dateien und Verzeichnisse.");
+  }
+}
 function hardeningContractMatches(candidate, expected) {
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)
     || JSON.stringify(Object.keys(candidate).sort()) !== JSON.stringify(["files", "fingerprint", "format", "moduleVersion", "schemaSha256", "schemaVersion"])) return false;
@@ -480,6 +556,7 @@ for (const required of [
   "server-tools/linux/stop-grabenplaner-server.sh",
   "server-tools/linux/test-grabenplaner-server.sh",
   "server-tools/linux/migrate-grabenplaner-runtime-v2.sh",
+  "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
   "server-tools/linux/update-grabenplaner-server.sh",
   "server-tools/linux/uninstall-grabenplaner-server.sh",
   "server-tools/linux/runtime-schema.json",
@@ -492,6 +569,10 @@ for (const required of [
   "server-tools/linux/lib/verify-backup.js",
   "server-tools/linux/lib/verify-install-tree.js",
   "server-tools/linux/lib/verify-package.js",
+  "lib/controlled-host-reboot.js",
+  "lib/host-reboot-control-client.js",
+  "lib/offsite-provider-policy.js",
+  ...expectedHostControlArtifacts,
   ...expectedMonitorArtifacts,
   ...expectedRecoveryArtifacts,
   ...expectedOffsiteArtifacts,
@@ -503,6 +584,7 @@ const metadata = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
 if (String(metadata.version) !== String(manifest.appVersion)) fail("Manifest- und App-Version stimmen nicht ueberein.");
 if (metadata.packageManager !== "pnpm@11.7.0") fail("package.json fordert nicht die freigegebene pnpm-Version.");
 const runtimeContract = JSON.parse(fs.readFileSync(path.join(root, "server-tools/linux/runtime-schema.json"), "utf8").replace(/^\uFEFF/, ""));
+assertExactHostControlTree();
 const expectedRuntimeArtifacts = [
   "server-tools/linux/Caddyfile.in",
   "server-tools/linux/grabenplaner-bootstrap-admin.sh.in",
@@ -511,13 +593,14 @@ const expectedRuntimeArtifacts = [
   "server-tools/linux/grabenplaner-monitor.service.in",
   "server-tools/linux/grabenplaner-monitor.timer.in",
   "server-tools/linux/grabenplaner.service.in",
+  ...expectedHostControlArtifacts,
 ];
 if (runtimeContract?.format !== "grabenplaner-linux-runtime-contract" || runtimeContract?.schemaVersion !== 1
-  || runtimeContract?.deploymentSchemaVersion !== 2 || runtimeContract?.migrationPolicy !== "explicit-maintenance"
+  || runtimeContract?.deploymentSchemaVersion !== 3 || runtimeContract?.migrationPolicy !== "explicit-maintenance"
   || !Array.isArray(runtimeContract?.managedArtifacts)
   || runtimeContract.managedArtifacts.length !== expectedRuntimeArtifacts.length
   || expectedRuntimeArtifacts.some((relative) => !runtimeContract.managedArtifacts.includes(relative))) {
-  fail("Der Linux-Runtimevertrag v2 ist ungueltig.");
+  fail("Der Linux-Runtimevertrag v3 ist ungueltig.");
 }
 const offsiteSchemaPath = path.join(root, "server-tools/linux/offsite/module-schema.json");
 let offsiteContract;
@@ -696,7 +779,7 @@ fi
 [[ "$EXPECTED_SHA256" =~ ^[A-Fa-f0-9]{64}$ ]] || fail "Eine feste SHA256-Pruefsumme ist erforderlich."
 [[ "$PORT" =~ ^[0-9]+$ ]] && (( PORT >= 1 && PORT <= 65535 )) || fail "--port muss zwischen 1 und 65535 liegen."
 
-for command in awk base64 caddy chmod chown clamscan cp curl date dirname du find getent grep groupadd head id install journalctl ln mktemp mv readlink rm runuser seq sha256sum sleep stat systemctl tr uname unzip useradd usermod wc; do
+for command in awk base64 caddy chmod chown clamscan cp curl date dirname du find getent gpasswd grep groupadd groupdel head id install journalctl ln mktemp mv readlink rm rmdir runuser seq sha256sum sleep stat systemctl tr uname unzip useradd usermod wc; do
   need_command "$command"
 done
 validate_os
@@ -723,13 +806,22 @@ validate_zip_entries
 [[ -f "$SCRIPT_DIR/grabenplaner.service.in" && -f "$SCRIPT_DIR/grabenplaner-bootstrap.service.in" \
   && -f "$SCRIPT_DIR/grabenplaner-monitor.service.in" && -f "$SCRIPT_DIR/grabenplaner-monitor.timer.in" \
   && -f "$SCRIPT_DIR/Caddyfile.in" && -f "$SCRIPT_DIR/grabenplaner.env.example" \
-  && -f "$SCRIPT_DIR/grabenplaner-bootstrap-admin.sh.in" ]] || fail "Die Linux-Laufzeitvorlagen sind unvollstaendig."
+  && -f "$SCRIPT_DIR/grabenplaner-bootstrap-admin.sh.in" \
+  && -f "$SCRIPT_DIR/host-control/lib/host-reboot-broker.js" \
+  && -f "$SCRIPT_DIR/host-control/systemd/grabenplaner-host-control.socket.in" \
+  && -f "$SCRIPT_DIR/host-control/systemd/grabenplaner-host-control@.service.in" \
+  && -f "$SCRIPT_DIR/host-control/systemd/grabenplaner-host-reboot.service.in" ]] \
+  || fail "Die Linux-Laufzeitvorlagen sind unvollstaendig."
 if [[ -s "$CADDY_CONFIG" ]] && ! caddy_config_is_managed; then
   [[ $REPLACE_CADDY_CONFIG -eq 1 ]] || fail "Die vorhandene Caddy-Konfiguration wird nicht von Grabenplaner verwaltet. Fuer einen dedizierten Server ist --replace-caddy-config erforderlich."
 fi
 systemctl cat caddy.service >/dev/null 2>&1 || fail "Der installierte Caddy-systemd-Dienst fehlt."
 id caddy >/dev/null 2>&1 || fail "Der Systembenutzer caddy fehlt."
 [[ ! -e "$APP_ROOT" ]] || fail "Grabenplaner ist bereits installiert. Fuer bestehende Installationen grabenplaner-update verwenden."
+for host_control_path in "$HOST_CONTROL_ROOT" "$HOST_CONTROL_SOCKET_UNIT" "$HOST_CONTROL_WORKER_UNIT" "$HOST_REBOOT_UNIT"; do
+  [[ ! -e "$host_control_path" && ! -L "$host_control_path" ]] \
+    || fail "Host-Control-Artefakte sind bereits vorhanden; eine teilweise Einrichtung wird nicht blind fortgesetzt."
+done
 
 getent group "$SERVICE_GROUP" >/dev/null 2>&1 || groupadd --system "$SERVICE_GROUP"
 if ! id "$SERVICE_USER" >/dev/null 2>&1; then
@@ -742,6 +834,25 @@ if ! id -nG "$SERVICE_USER" | tr ' ' '\n' | grep -Fxq "$MONITOR_STATUS_GROUP"; t
 fi
 id -nG "$SERVICE_USER" | tr ' ' '\n' | grep -Fxq "$MONITOR_STATUS_GROUP" \
   || fail "Der App-Benutzer konnte nicht lesend der Monitor-Statusgruppe zugeordnet werden."
+if ! getent group "$HOST_CONTROL_GROUP" >/dev/null 2>&1; then
+  groupadd --system "$HOST_CONTROL_GROUP"
+  HOST_CONTROL_GROUP_CREATED=1
+fi
+host_control_gid="$(getent group "$HOST_CONTROL_GROUP" | awk -F: 'NR == 1 { print $3 }')"
+[[ "$host_control_gid" =~ ^[0-9]+$ ]] \
+  || fail "Die geschuetzte Host-Control-Gruppenkennung ist ungueltig."
+host_control_primary_members="$(getent passwd | awk -F: -v gid="$host_control_gid" '$4 == gid { print $1 }')"
+[[ -z "$host_control_primary_members" ]] \
+  || fail "Die geschuetzte Host-Control-Gruppe darf fuer keinen Benutzer Hauptgruppe sein."
+host_control_members="$(getent group "$HOST_CONTROL_GROUP" | awk -F: 'NR == 1 { print $4 }')"
+[[ -z "$host_control_members" || "$host_control_members" == "$SERVICE_USER" ]] \
+  || fail "Die geschuetzte Host-Control-Gruppe besitzt unerwartete Mitglieder."
+if [[ "$host_control_members" != "$SERVICE_USER" ]]; then
+  usermod --append --groups "$HOST_CONTROL_GROUP" "$SERVICE_USER"
+  HOST_CONTROL_MEMBERSHIP_ADDED=1
+fi
+[[ "$(getent group "$HOST_CONTROL_GROUP" | awk -F: 'NR == 1 { print $4 }')" == "$SERVICE_USER" ]] \
+  || fail "Nur der Grabenplaner-Dienstbenutzer darf Mitglied der Host-Control-Gruppe sein."
 getent group "$BUILD_GROUP" >/dev/null 2>&1 || groupadd --system "$BUILD_GROUP"
 if ! id "$BUILD_USER" >/dev/null 2>&1; then
   useradd --system --gid "$BUILD_GROUP" --home-dir "$CACHE_ROOT" --shell /usr/sbin/nologin "$BUILD_USER"
@@ -860,6 +971,19 @@ systemctl stop grabenplaner-bootstrap.service grabenplaner.service >/dev/null 2>
 mv -- "$STAGE_ROOT/source" "$APP_ROOT"
 APP_SWAPPED=1
 
+HOST_CONTROL_ROOT_CREATED=1
+install -d -o root -g root -m 0755 -- "$HOST_CONTROL_ROOT"
+host_control_stage="$STAGE_ROOT/host-control-module"
+cp --archive -- "$APP_ROOT/server-tools/linux/host-control" "$host_control_stage"
+chown -R root:root -- "$host_control_stage"
+find "$host_control_stage" -type d -exec chmod 0755 -- {} +
+find "$host_control_stage" -type f -exec chmod 0644 -- {} +
+mv -T -- "$host_control_stage" "$HOST_CONTROL_MODULE"
+HOST_CONTROL_MODULE_WRITTEN=1
+[[ -f "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" && ! -L "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js" \
+  && "$(stat -c '%U:%G:%a:%h' -- "$HOST_CONTROL_MODULE/lib/host-reboot-broker.js")" == "root:root:644:1" ]] \
+  || fail "Der root-geschuetzte Host-Control-Broker wurde nicht sicher installiert."
+
 monitor_status_gid="$(getent group "$MONITOR_STATUS_GROUP" | awk -F: '{print $3}')"
 [[ "$monitor_status_gid" =~ ^[0-9]+$ ]] || fail "Die Monitor-Statusgruppe konnte nicht sicher aufgeloest werden."
 monitor_status_helper="$APP_ROOT/server-tools/linux/monitor/lib/monitor-status.js"
@@ -879,6 +1003,44 @@ install -o root -g root -m 0644 "$UNIT_TEMP" "$MONITOR_UNIT"
 render_template "$SCRIPT_DIR/grabenplaner-monitor.timer.in" "$UNIT_TEMP"
 MONITOR_TIMER_WRITTEN=1
 install -o root -g root -m 0644 "$UNIT_TEMP" "$MONITOR_TIMER"
+host_control_render_root="$STAGE_ROOT/host-control-units"
+install -d -o root -g root -m 0700 -- "$host_control_render_root"
+render_template "$APP_ROOT/server-tools/linux/host-control/systemd/grabenplaner-host-control.socket.in" \
+  "$host_control_render_root/grabenplaner-host-control.socket"
+render_template "$APP_ROOT/server-tools/linux/host-control/systemd/grabenplaner-host-control@.service.in" \
+  "$host_control_render_root/grabenplaner-host-control@.service"
+render_template "$APP_ROOT/server-tools/linux/host-control/systemd/grabenplaner-host-reboot.service.in" \
+  "$host_control_render_root/grabenplaner-host-reboot.service"
+if command -v systemd-analyze >/dev/null 2>&1; then
+  systemd-analyze verify \
+    "$host_control_render_root/grabenplaner-host-control.socket" \
+    "$host_control_render_root/grabenplaner-host-control@.service" \
+    "$host_control_render_root/grabenplaner-host-reboot.service" >/dev/null
+fi
+HOST_CONTROL_PENDING_UNIT="${HOST_CONTROL_SOCKET_UNIT}.install.$$"
+install -o root -g root -m 0644 \
+  "$host_control_render_root/grabenplaner-host-control.socket" "$HOST_CONTROL_PENDING_UNIT"
+[[ ! -e "$HOST_CONTROL_SOCKET_UNIT" && ! -L "$HOST_CONTROL_SOCKET_UNIT" ]] \
+  || fail "Die Host-Control-Socket-Unit ist waehrend der Installation unerwartet erschienen."
+mv -T -- "$HOST_CONTROL_PENDING_UNIT" "$HOST_CONTROL_SOCKET_UNIT"
+HOST_CONTROL_PENDING_UNIT=""
+HOST_CONTROL_SOCKET_WRITTEN=1
+HOST_CONTROL_PENDING_UNIT="${HOST_CONTROL_WORKER_UNIT}.install.$$"
+install -o root -g root -m 0644 \
+  "$host_control_render_root/grabenplaner-host-control@.service" "$HOST_CONTROL_PENDING_UNIT"
+[[ ! -e "$HOST_CONTROL_WORKER_UNIT" && ! -L "$HOST_CONTROL_WORKER_UNIT" ]] \
+  || fail "Die Host-Control-Worker-Unit ist waehrend der Installation unerwartet erschienen."
+mv -T -- "$HOST_CONTROL_PENDING_UNIT" "$HOST_CONTROL_WORKER_UNIT"
+HOST_CONTROL_PENDING_UNIT=""
+HOST_CONTROL_WORKER_WRITTEN=1
+HOST_CONTROL_PENDING_UNIT="${HOST_REBOOT_UNIT}.install.$$"
+install -o root -g root -m 0644 \
+  "$host_control_render_root/grabenplaner-host-reboot.service" "$HOST_CONTROL_PENDING_UNIT"
+[[ ! -e "$HOST_REBOOT_UNIT" && ! -L "$HOST_REBOOT_UNIT" ]] \
+  || fail "Die Host-Reboot-Unit ist waehrend der Installation unerwartet erschienen."
+mv -T -- "$HOST_CONTROL_PENDING_UNIT" "$HOST_REBOOT_UNIT"
+HOST_CONTROL_PENDING_UNIT=""
+HOST_REBOOT_UNIT_WRITTEN=1
 render_template "$SCRIPT_DIR/grabenplaner-bootstrap-admin.sh.in" "$UNIT_TEMP"
 BOOTSTRAP_COMMAND_WRITTEN=1
 install -o root -g root -m 0750 "$UNIT_TEMP" "$BOOTSTRAP_COMMAND"
@@ -898,7 +1060,8 @@ UNIT_TEMP=""
 systemctl daemon-reload
 
 if command -v systemd-analyze >/dev/null 2>&1; then
-  systemd-analyze verify "$APP_UNIT" "$BOOTSTRAP_UNIT" "$MONITOR_UNIT" "$MONITOR_TIMER" >/dev/null
+  systemd-analyze verify "$APP_UNIT" "$BOOTSTRAP_UNIT" "$MONITOR_UNIT" "$MONITOR_TIMER" \
+    "$HOST_CONTROL_SOCKET_UNIT" "$HOST_CONTROL_WORKER_UNIT" "$HOST_REBOOT_UNIT" >/dev/null
 fi
 
 if [[ $START_AFTER_INSTALL -eq 1 ]]; then
@@ -915,7 +1078,13 @@ if [[ $START_AFTER_INSTALL -eq 1 ]]; then
     printf 'Grabenplaner %s wurde installiert.\n\n' "$APP_VERSION"
     "$BOOTSTRAP_COMMAND" start
   fi
+  systemctl enable --now grabenplaner-host-control.socket >/dev/null
+  systemctl is-enabled --quiet grabenplaner-host-control.socket \
+    || fail "Der geschuetzte Host-Control-Socket konnte nicht aktiviert werden."
+  systemctl is-active --quiet grabenplaner-host-control.socket \
+    || fail "Der geschuetzte Host-Control-Socket konnte nicht gestartet werden."
 else
+  systemctl disable --now grabenplaner-host-control.socket >/dev/null 2>&1 || true
   systemctl disable --now grabenplaner-monitor.timer grabenplaner-monitor.service \
     grabenplaner-bootstrap.service grabenplaner.service caddy.service >/dev/null 2>&1 || true
   printf 'Grabenplaner %s wurde installiert; die Dienste wurden nicht gestartet.\n' "$APP_VERSION"

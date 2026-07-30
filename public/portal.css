@@ -1,6 +1,10 @@
-:root { --ink:#17231f; --muted:#687770; --green:#276e55; --green-dark:#1d5944; --line:#d7dfda; --paper:#fffdfa; --bg:#edf2ee; --danger:#9a3d34; --warning:#9a6b12; font-family:Inter,Segoe UI,sans-serif; color:var(--ink); background:var(--bg); }
+:root { --ink:#17231f; --muted:#687770; --green:#276e55; --green-dark:#1d5944; --line:#d7dfda; --paper:#fffdfa; --bg:#edf2ee; --danger:#9a3d34; --warning:#9a6b12; --portal-glow-top:#f8f4e9; --portal-glow-mid:#edf2ee; --portal-glow-bottom:#dfe9e4; --portal-focus:rgba(61,130,102,.18); font-family:Inter,Segoe UI,sans-serif; color:var(--ink); background:var(--bg); }
+html[data-portal-palette="forest"] { --green:#276e55; --green-dark:#1d5944; --line:#d7dfda; --bg:#edf2ee; --portal-glow-top:#f8f4e9; --portal-glow-mid:#edf2ee; --portal-glow-bottom:#dfe9e4; --portal-focus:rgba(61,130,102,.18); }
+html[data-portal-palette="ocean"] { --green:#256b91; --green-dark:#184f70; --line:#d2dde4; --bg:#eaf1f5; --portal-glow-top:#f6f2e9; --portal-glow-mid:#eaf1f5; --portal-glow-bottom:#dce8ef; --portal-focus:rgba(37,107,145,.18); }
+html[data-portal-palette="plum"] { --green:#745184; --green-dark:#563761; --line:#ded6e1; --bg:#f1edf2; --portal-glow-top:#faf3eb; --portal-glow-mid:#f1edf2; --portal-glow-bottom:#e7dfe9; --portal-focus:rgba(116,81,132,.18); }
+html[data-portal-palette="sand"] { --green:#8a5a35; --green-dark:#654024; --line:#e0d8cf; --bg:#f2eee8; --portal-glow-top:#faf5ea; --portal-glow-mid:#f2eee8; --portal-glow-bottom:#e8dfd4; --portal-focus:rgba(138,90,53,.18); }
 * { box-sizing:border-box; }
-body { margin:0; min-height:100vh; background:radial-gradient(circle at top right,#f8f4e9,#edf2ee 48%,#dfe9e4); }
+body { margin:0; min-height:100vh; background:radial-gradient(circle at top right,var(--portal-glow-top),var(--portal-glow-mid) 48%,var(--portal-glow-bottom)); }
 button,input,textarea { font:inherit; }
 select { width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:10px; color:var(--ink); background:white; font:inherit; }
 .hidden { display:none !important; }
@@ -15,7 +19,7 @@ h2 { margin-bottom:14px; font-size:18px; }
 p { color:var(--muted); line-height:1.55; }
 label { display:grid; gap:6px; color:#44534d; font-size:12px; font-weight:750; }
 input,textarea { width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:10px; color:var(--ink); background:white; outline:none; }
-input:focus,textarea:focus { border-color:#76a994; box-shadow:0 0 0 3px rgba(61,130,102,.11); }
+input:focus,textarea:focus { border-color:var(--green); box-shadow:0 0 0 3px var(--portal-focus); }
 button { border:0; border-radius:10px; cursor:pointer; }
 .primary { padding:11px 15px; color:white; background:var(--green); font-weight:800; }
 .primary:hover { background:var(--green-dark); }
@@ -174,6 +178,57 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
 .privacy-settings-card { grid-column:1 / -1; align-content:start; min-width:0; }
 .privacy-settings-heading,.vacation-account-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; min-width:0; }
 .privacy-settings-heading > div,.vacation-account-heading > div { min-width:0; }
+.portal-settings-stack { display:grid; gap:11px; }
+.portal-settings-section { min-width:0; overflow:hidden; }
+.portal-settings-section.wifi-suggestion-card,
+.portal-settings-section.sickness-preferences-card,
+.portal-settings-section.privacy-settings-card { display:block; grid-column:auto; margin:0; padding:0; }
+.portal-settings-summary { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:12px; min-height:84px; padding:17px 20px; cursor:pointer; list-style:none; }
+.privacy-settings-card .portal-settings-summary { grid-template-columns:minmax(0,1fr) auto auto; }
+.portal-settings-summary::-webkit-details-marker { display:none; }
+.portal-settings-summary:hover { background:rgba(255,255,255,.58); }
+.portal-settings-summary:focus-visible { outline:3px solid var(--portal-focus); outline-offset:-3px; }
+.portal-settings-summary > span:first-child { min-width:0; }
+.portal-settings-summary strong,.portal-settings-summary small { display:block; }
+.portal-settings-summary strong { color:var(--ink); font-size:16px; line-height:1.3; }
+.portal-settings-summary small { margin-top:4px; overflow:hidden; color:var(--muted); font-size:10px; font-weight:600; line-height:1.4; text-overflow:ellipsis; white-space:nowrap; }
+.portal-settings-chevron { width:12px; height:12px; margin-right:5px; border-right:2px solid var(--green); border-bottom:2px solid var(--green); transform:rotate(45deg); transition:transform .16s ease; }
+.portal-settings-section[open] > .portal-settings-summary { border-bottom:1px solid var(--line); background:rgba(255,255,255,.62); }
+.portal-settings-section[open] > .portal-settings-summary .portal-settings-chevron { transform:rotate(225deg); }
+.portal-settings-content { min-width:0; padding:20px; }
+.portal-settings-content > p:first-child { margin-top:0; }
+.portal-settings-content > p:last-child { margin-bottom:0; }
+.portal-settings-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; margin-top:15px; }
+.portal-settings-actions button { min-height:42px; }
+.mobile-navigation-settings-list { display:grid; gap:7px; margin-top:14px; }
+.mobile-navigation-setting-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; min-width:0; padding:10px 11px; border:1px solid var(--line); border-radius:11px; background:#fafbf9; }
+.mobile-navigation-setting-row > label { display:grid; grid-template-columns:20px minmax(0,1fr); align-items:center; gap:9px; min-width:0; }
+.mobile-navigation-setting-row input { width:18px; min-height:18px; margin:0; padding:0; accent-color:var(--green); }
+.mobile-navigation-setting-row label strong,.mobile-navigation-setting-row label small { display:block; min-width:0; }
+.mobile-navigation-setting-row label small { margin-top:2px; overflow:hidden; color:var(--muted); font-size:9px; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+.mobile-navigation-order-actions { display:flex; gap:5px; }
+.mobile-navigation-order-actions button { display:grid; place-items:center; width:36px; min-height:36px; padding:0; color:var(--green); border:1px solid var(--line); background:#fff; font-size:16px; font-weight:850; }
+.mobile-navigation-order-actions button:disabled { cursor:not-allowed; opacity:.36; }
+.mobile-navigation-limit { margin:9px 0 0; color:var(--muted); font-size:10px; }
+.portal-palette-options,.portal-surface-options { display:grid; gap:8px; margin:0 0 15px; padding:0; border:0; }
+.portal-palette-options { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.portal-palette-options legend,.portal-surface-options legend { grid-column:1 / -1; margin-bottom:2px; color:#44534d; font-size:11px; font-weight:850; }
+.portal-palette-options label,.portal-surface-options label { display:grid; grid-template-columns:18px 32px minmax(0,1fr); align-items:center; gap:9px; min-width:0; padding:11px; border:1px solid var(--line); border-radius:11px; background:#fafbf9; cursor:pointer; }
+.portal-surface-options { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.portal-surface-options label { grid-template-columns:18px minmax(0,1fr); }
+.portal-palette-options input,.portal-surface-options input { width:17px; min-height:17px; margin:0; padding:0; accent-color:var(--green); }
+.portal-palette-options label:has(input:checked),.portal-surface-options label:has(input:checked) { border-color:var(--green); box-shadow:0 0 0 2px var(--portal-focus); }
+.portal-palette-options strong,.portal-palette-options small,.portal-surface-options strong,.portal-surface-options small { display:block; }
+.portal-palette-options small,.portal-surface-options small { margin-top:2px; color:var(--muted); font-size:9px; font-weight:600; line-height:1.35; }
+.portal-palette-swatch { width:32px; height:32px; border:2px solid rgba(255,255,255,.9); border-radius:50%; box-shadow:0 0 0 1px var(--line); }
+.portal-palette-swatch.forest { background:#276e55; }
+.portal-palette-swatch.ocean { background:#256b91; }
+.portal-palette-swatch.plum { background:#745184; }
+.portal-palette-swatch.sand { background:#8a5a35; }
+.portal-settings-password { margin-top:4px; }
+html[data-portal-surface="compact"] .portal-card { border-radius:11px; box-shadow:0 8px 24px rgba(27,54,44,.07); }
+html[data-portal-surface="compact"] .portal-settings-summary { min-height:72px; padding:13px 16px; }
+html[data-portal-surface="compact"] .portal-settings-content { padding:16px; }
 .privacy-manual-badge { flex:0 0 auto; padding:6px 9px; border:1px solid #d7c27d; border-radius:999px; color:#75520a; background:#fff3cf; font-size:10px; font-weight:850; white-space:nowrap; }
 .privacy-data-layout { display:grid; grid-template-columns:minmax(220px,.72fr) minmax(300px,1.28fr); gap:16px; min-width:0; }
 .privacy-request-form,.privacy-request-history { min-width:0; max-width:100%; }
@@ -455,8 +510,17 @@ body:has(.deployment-banner:not(.hidden)) { padding-top:34px; }
 @media (max-width:560px) { .privacy-settings-heading,.vacation-account-heading { align-items:stretch; flex-direction:column; }.privacy-manual-badge { align-self:flex-start; }.privacy-request-item { grid-template-columns:1fr; }.privacy-request-actions { align-items:flex-start; }.vacation-account-heading label { width:100%; }.vacation-account-primary,.vacation-account-details { grid-template-columns:1fr; }.vacation-account-card { padding:17px; }.time-record-statement { grid-template-columns:1fr; }.time-record-statement .status { justify-self:start; }.time-record-actuals { grid-column:1; width:100%; } }
 @media (max-width:720px) { body { padding-bottom:calc(78px + env(safe-area-inset-bottom)); }.portal-header { min-height:58px; padding:8px 10px; }.portal-tabs { position:fixed; left:8px; right:8px; bottom:max(8px,env(safe-area-inset-bottom)); z-index:30; margin:0; padding:5px; flex-wrap:nowrap; overflow-x:auto; scroll-snap-type:x proximity; box-shadow:0 12px 35px rgba(25,53,43,.25); background:rgba(255,253,250,.97); backdrop-filter:blur(12px); }.portal-tabs button { flex:0 0 auto; min-width:94px; min-height:48px; padding:7px 10px; font-size:10px; scroll-snap-align:start; }.portal-card { border-radius:14px; }.request-form,.vacation-layout > section,.history-card { padding:17px; } main { width:min(100% - 20px,1180px); margin-top:18px; }.primary,.text-button,.approved-vacation-item button,.cancel-request,input,select { min-height:44px; }.request-item,.history-item { grid-template-columns:1fr; }.request-item button,.history-item button { width:100%; }.history-item-status { justify-items:start; }.dialog-actions { position:sticky; bottom:-24px; padding:10px 0 max(2px,env(safe-area-inset-bottom)); background:white; }.notification-button { flex-basis:38px; } }
 @media (max-width:720px) {
-  .portal-tabs.mobile-leadership { display:grid; grid-template-columns:repeat(var(--mobile-module-count,6),minmax(0,1fr)); gap:2px; overflow:hidden; scroll-snap-type:none; }
-  .portal-tabs.mobile-leadership button { min-width:0; min-height:49px; padding:6px 2px; overflow:hidden; font-size:9px; line-height:1.1; white-space:normal; text-overflow:ellipsis; }
+  .portal-tabs.mobile-personal { display:flex; flex-wrap:nowrap; gap:3px; overflow-x:auto; overflow-y:hidden; scroll-snap-type:x proximity; scrollbar-width:none; }
+  .portal-tabs.mobile-personal::-webkit-scrollbar { display:none; }
+  .portal-tabs.mobile-personal button.mobile-navigation-hidden { display:none !important; }
+  .portal-tabs.mobile-personal button { flex:1 0 72px; min-width:72px; min-height:49px; padding:6px 7px; overflow:hidden; font-size:9px; line-height:1.1; text-overflow:ellipsis; white-space:nowrap; }
+  .portal-settings-summary { min-height:75px; padding:14px 15px; }
+  .portal-settings-summary small { max-width:calc(100vw - 102px); }
+  .portal-settings-content { padding:16px 15px; }
+  .portal-palette-options,.portal-surface-options { grid-template-columns:1fr; }
+  .mobile-navigation-setting-row { padding:9px; }
+  .portal-settings-actions { align-items:stretch; flex-direction:column-reverse; }
+  .portal-settings-actions button { width:100%; }
   .time-period-card { padding:15px; }
   .time-period-toolbar,.time-period-actions { align-items:stretch; flex-direction:column; }
   .time-period-actions { width:100%; }

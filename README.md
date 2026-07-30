@@ -2,15 +2,15 @@
 
 Grabenplaner bündelt Dienstplanung, Abwesenheiten, Personalorganisation, Zeiterfassung und ein mobiles Mitarbeiterportal in einer Anwendung.
 
-**v0.87 Beta · verwalteter Ubuntu-Einzelserver · SQLite · source-available**
+**v0.88 Beta · verwalteter Ubuntu-Einzelserver · SQLite · source-available**
 
-[Server-Release v0.87 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.87-beta) · [Serverbetrieb](SERVERBETRIEB.md) · [Sicherheit](SECURITY.md)
+[Server-Release v0.88 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.88-beta) · [Serverbetrieb](SERVERBETRIEB.md) · [Sicherheit](SECURITY.md)
 
 ## Produktstatus
 
 `main` wird als zentral betriebenes Serverprodukt weiterentwickelt. Die Anwendung läuft hinter HTTPS auf einem von der zuständigen IT verwalteten Ubuntu-Einzelserver; der App-Prozess selbst bleibt an Loopback gebunden.
 
-SQLite ist der aktuell unterstützte Datenbankprovider. PostgreSQL ist als späterer Provider für größere zentrale Installationen geplant, aber noch nicht implementiert oder freigegeben. Die verbindliche Reihenfolge steht in der [Datenbank-Provider-Strategie](docs/DATENBANK-PROVIDER-STRATEGIE.md).
+SQLite ist der aktuell unterstützte Produktprovider. PostgreSQL besitzt eine nicht produktive Entwicklungs- und Nachweisgrundlage, ist aber noch nicht für Installation oder Migration freigegeben. Die verbindliche Reihenfolge steht in der [Datenbank-Provider-Strategie](docs/DATENBANK-PROVIDER-STRATEGIE.md).
 
 Die frühere Windows-Portable-/LAN-Auslieferung ist als [v0.87.0-beta.legacy.1](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.87.0-beta.legacy.1) eingefroren. Sie ist kein zweites aktuelles Entwicklungsziel.
 
@@ -32,15 +32,15 @@ Grabenplaner unterstützt betriebliche Abläufe und Nachweise. Die Anwendung ers
 
 <table>
   <tr>
-    <td><img src="docs/readme/dienstplanung.webp" alt="Dienstplanung in Grabenplaner v0.87"></td>
-    <td><img src="docs/readme/teams-standorte.webp" alt="Personal- und Kostenstellenverwaltung in Grabenplaner v0.87"></td>
+    <td><img src="docs/readme/dienstplanung.webp" alt="Dienstplanung in Grabenplaner v0.88"></td>
+    <td><img src="docs/readme/teams-standorte.webp" alt="Personal- und Kostenstellenverwaltung in Grabenplaner v0.88"></td>
   </tr>
   <tr>
-    <td><img src="docs/readme/rechtemanagement.webp" alt="Rollen und wirksame Bereiche in Grabenplaner v0.87"></td>
-    <td><img src="docs/readme/branding-kits.webp" alt="Neutrales Branding in Grabenplaner v0.87"></td>
+    <td><img src="docs/readme/rechtemanagement.webp" alt="Rollen und wirksame Bereiche in Grabenplaner v0.88"></td>
+    <td><img src="docs/readme/branding-kits.webp" alt="Neutrales Branding in Grabenplaner v0.88"></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/readme/mitarbeiterportal.webp" alt="Mobiles Mitarbeiterportal in Grabenplaner v0.87" width="300"></td>
+    <td align="center"><img src="docs/readme/mitarbeiterportal.webp" alt="Mobiles Mitarbeiterportal in Grabenplaner v0.88" width="300"></td>
     <td align="center"><img src="docs/readme/aum-upload.webp" alt="Krankmeldung und AUM im mobilen Portal" width="300"></td>
   </tr>
 </table>

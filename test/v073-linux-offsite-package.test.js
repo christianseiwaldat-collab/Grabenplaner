@@ -19,6 +19,10 @@ const coreRuntimeArtifacts = [
   "server-tools/linux/grabenplaner-monitor.service.in",
   "server-tools/linux/grabenplaner-monitor.timer.in",
   "server-tools/linux/grabenplaner.service.in",
+  "server-tools/linux/host-control/lib/host-reboot-broker.js",
+  "server-tools/linux/host-control/systemd/grabenplaner-host-control.socket.in",
+  "server-tools/linux/host-control/systemd/grabenplaner-host-control@.service.in",
+  "server-tools/linux/host-control/systemd/grabenplaner-host-reboot.service.in",
 ];
 
 const offsiteArtifacts = [
@@ -70,7 +74,7 @@ test("Linux runtime artifacts stay separate from the optional offsite contract",
   const offsite = readJson("server-tools/linux/offsite/module-schema.json");
 
   assert.deepEqual([...runtime.managedArtifacts].sort(), [...coreRuntimeArtifacts].sort());
-  assert.equal(runtime.managedArtifacts.length, 7);
+  assert.equal(runtime.managedArtifacts.length, 11);
   assert.equal(offsite.activationPolicy, "explicit-root-setup");
   assert.equal(offsite.moduleVersion, 6);
   assert.deepEqual([...offsite.managedArtifacts].sort(), [...offsiteArtifacts].sort());

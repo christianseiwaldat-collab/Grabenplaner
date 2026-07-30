@@ -19,6 +19,11 @@ service="$GP_DEFAULT_SERVICE"
 bootstrap_service="grabenplaner-bootstrap.service"
 monitor_service="grabenplaner-monitor.service"
 monitor_timer="grabenplaner-monitor.timer"
+host_control_socket="grabenplaner-host-control.socket"
+host_control_worker="grabenplaner-host-control@.service"
+host_reboot_service="grabenplaner-host-reboot.service"
+host_control_group="grabenplaner-host-control"
+host_control_root="/opt/grabenplaner-host-control"
 caddy_config="/etc/caddy/Caddyfile"
 confirmed=0
 
@@ -33,7 +38,8 @@ while (($#)); do
       cat <<'EOF'
 Verwendung: sudo ./uninstall-grabenplaner-server.sh --yes [Optionen]
 
-Entfernt App-Code, Grabenplaner-systemd-Units und die eigenen Befehlslinks.
+Entfernt App-Code, Grabenplaner-systemd-Units, den root-geschuetzten
+Host-Control-Broker und die eigenen Befehlslinks.
 Datenbank, Dokumente, geheime Konfiguration, Logs, Backups und der bisherige
 Monitorstatus bleiben immer erhalten. Caddy selbst wird niemals deinstalliert.
 EOF
@@ -46,6 +52,7 @@ done
 gp_require_root
 (( confirmed == 1 )) || gp_die "Die Deinstallation erfordert die ausdrueckliche Option --yes."
 gp_require_command systemctl
+for command_name in awk find getent gpasswd groupdel rmdir stat; do gp_require_command "$command_name"; done
 
 # Das optionale Offsite-Modul besitzt eigene Secrets, Binaries und einen
 # Stagingbereich. Seine Entfernung muss bewusst ueber den eigenen, strikt
@@ -66,7 +73,12 @@ app_dir="$(gp_safe_absolute_path "$app_arg" "App-Ordner")"
 [[ "$(basename -- "$app_dir")" == "app" && "$(basename -- "$(dirname -- "$app_dir")")" == "grabenplaner" ]] \
   || gp_die "Sicherheitsabbruch: Der App-Ordner muss auf .../grabenplaner/app enden."
 
-for unit in "$monitor_timer" "$monitor_service" "$service" "$bootstrap_service"; do
+if gp_systemd_unit_exists "$host_control_socket"; then
+  systemctl disable --now "$host_control_socket" 2>/dev/null || true
+fi
+systemctl stop 'grabenplaner-host-control@*.service' "$host_reboot_service" 2>/dev/null || true
+for unit in "$host_control_socket" "$host_control_worker" "$host_reboot_service" \
+  "$monitor_timer" "$monitor_service" "$service" "$bootstrap_service"; do
   if gp_systemd_unit_exists "$unit"; then
     systemctl stop "$unit" 2>/dev/null || true
     systemctl disable "$unit" 2>/dev/null || true
@@ -78,7 +90,38 @@ for unit in "$monitor_timer" "$monitor_service" "$service" "$bootstrap_service";
   fi
 done
 systemctl daemon-reload
-systemctl reset-failed "$monitor_timer" "$monitor_service" "$service" "$bootstrap_service" 2>/dev/null || true
+systemctl reset-failed "$host_control_socket" 'grabenplaner-host-control@*.service' "$host_reboot_service" \
+  "$monitor_timer" "$monitor_service" "$service" "$bootstrap_service" 2>/dev/null || true
+
+host_control_module="$host_control_root/module"
+if [[ -e "$host_control_root" || -L "$host_control_root" ]]; then
+  [[ -d "$host_control_root" && ! -L "$host_control_root" \
+    && "$(stat --format='%u:%g' -- "$host_control_root")" == "0:0" ]] \
+    || gp_die "Der Host-Control-Installationspfad ist veraendert und wird nicht automatisch entfernt."
+  if [[ -e "$host_control_module" || -L "$host_control_module" ]]; then
+    [[ -d "$host_control_module" && ! -L "$host_control_module" \
+      && -z "$(find "$host_control_module" -xdev \( ! -user root -o ! -group root -o -perm /022 \) -print -quit)" \
+      && -z "$(find "$host_control_module" -xdev ! -type f ! -type d -print -quit)" ]] \
+      || gp_die "Das Host-Control-Modul ist veraendert und wird nicht automatisch entfernt."
+    rm -rf --one-file-system -- "$host_control_module"
+  fi
+  rmdir -- "$host_control_root" 2>/dev/null \
+    || gp_warn "Der nicht leere Host-Control-Ordner bleibt zur manuellen Pruefung erhalten: $host_control_root"
+fi
+if getent group "$host_control_group" >/dev/null 2>&1; then
+  host_control_members="$(getent group "$host_control_group" | awk -F: 'NR == 1 { print $4 }')"
+  if tr ',' '\n' <<<"$host_control_members" | grep -Fxq "$GP_DEFAULT_SERVICE_USER"; then
+    gpasswd --delete "$GP_DEFAULT_SERVICE_USER" "$host_control_group" >/dev/null
+    host_control_members="$(getent group "$host_control_group" | awk -F: 'NR == 1 { print $4 }')"
+  fi
+  host_control_gid="$(getent group "$host_control_group" | awk -F: 'NR == 1 { print $3 }')"
+  host_control_primary_members="$(getent passwd | awk -F: -v gid="$host_control_gid" '$4 == gid { print $1 }')"
+  if [[ -z "$host_control_members" && -z "$host_control_primary_members" ]]; then
+    groupdel "$host_control_group"
+  else
+    gp_warn "Die Host-Control-Gruppe besitzt unerwartete Mitglieder und bleibt zur manuellen Pruefung erhalten."
+  fi
+fi
 
 bootstrap_command="/usr/local/sbin/grabenplaner-bootstrap-admin"
 if [[ -f "$bootstrap_command" && ! -L "$bootstrap_command" ]] \

@@ -1,0 +1,17 @@
+[Unit]
+Description=Grabenplaner controlled host reboot socket
+Documentation=https://github.com/christianseiwaldat-collab/Grabenplaner/blob/main/SERVERBETRIEB.md
+
+[Socket]
+ListenStream=/run/grabenplaner-host-control/request.sock
+SocketUser=root
+SocketGroup=grabenplaner-host-control
+SocketMode=0660
+DirectoryMode=0755
+Accept=yes
+MaxConnections=2
+RemoveOnStop=yes
+FlushPending=yes
+
+[Install]
+WantedBy=sockets.target

@@ -43,11 +43,22 @@ const {
   readOffsiteBackupStatus,
 } = require("./lib/offsite-backup-status");
 const {
+  evaluateOffsiteProviderPolicy,
+  listOffsiteProviders,
+} = require("./lib/offsite-provider-policy");
+const {
   activateManagedOffsiteFolder,
   createManagedOffsiteFolder,
   listManagedOffsiteFolders,
   validFolderLabel: validManagedOffsiteFolderLabel,
 } = require("./lib/offsite-target-client");
+const {
+  assertSafeSocket: assertSafeHostRebootSocket,
+  requestHostReboot,
+} = require("./lib/host-reboot-control-client");
+const {
+  prepareControlledHostReboot,
+} = require("./lib/controlled-host-reboot");
 const {
   DEFAULT_HEAD_PATH: DEFAULT_ASSURANCE_HEAD_PATH,
   readRecoveryAssuranceStatus,
@@ -1076,6 +1087,31 @@ const systemdInvocationId = String(process.env.INVOCATION_ID || "").trim().toLow
 const serverManagedRestartAvailable = serverModeActive
   && process.platform === "linux"
   && /^[a-f0-9]{32}$/.test(systemdInvocationId);
+function currentHostManagedRebootAvailable() {
+  if (!serverModeActive || process.platform !== "linux" || !hostBootGeneration) return false;
+  try {
+    assertSafeHostRebootSocket();
+    return true;
+  } catch {
+    return false;
+  }
+}
+function readHostBootGeneration() {
+  if (process.platform !== "linux") return null;
+  try {
+    const bootId = fs.readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim().toLowerCase();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(bootId)) {
+      return null;
+    }
+    return crypto.createHash("sha256")
+      .update(`grabenplaner-host-boot:${bootId}`, "utf8")
+      .digest("hex")
+      .slice(0, 32);
+  } catch {
+    return null;
+  }
+}
+const hostBootGeneration = readHostBootGeneration();
 const bootstrapToken = String(process.env.GRABENPLANER_BOOTSTRAP_TOKEN || "").trim();
 const bootstrapMode = String(process.env.GRABENPLANER_BOOTSTRAP_MODE || "").trim();
 const codespacesForwardingDomain = String(process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || "app.github.dev")
@@ -15310,14 +15346,73 @@ function serverDiagnostics() {
     && latestExternalBackup?.committed === true
     && latestExternalBackupState.timestampValid
     && latestExternalBackupAgeHours !== null && latestExternalBackupAgeHours <= backupFreshnessHours;
-  const offsiteConfigured = String(process.env.GRABENPLANER_OFFSITE_CONFIGURED || "").trim() === "1";
-  const offsiteStatus = readOffsiteBackupStatus({ configured: offsiteConfigured });
+  const offsiteConfigurationClaim = String(
+    process.env.GRABENPLANER_OFFSITE_CONFIGURED || "",
+  ).trim();
+  const offsiteConfigured = offsiteConfigurationClaim === "1";
+  const offsiteStatus = readOffsiteBackupStatus({
+    configured: offsiteConfigurationClaim === "1"
+      ? true
+      : offsiteConfigurationClaim === "0"
+        ? false
+        : undefined,
+  });
   const offsiteApplicable = serverModeActive || offsiteConfigured || offsiteStatus.statusAvailable;
-  const offsite = { ...offsiteStatus, applicable: offsiteApplicable };
-  const offsiteBackupReady = offsite.configured === true && offsite.state === "ok"
-    && offsite.unresolvedFailures?.backup !== true
-    && offsite.unresolvedFailures?.fullCheck !== true;
   const recoveryAssurance = readRecoveryAssuranceStatus({ configured: offsiteConfigured });
+  const configuredOffsiteProviderId = String(
+    process.env.GRABENPLANER_OFFSITE_PROVIDER || "",
+  ).trim();
+  const offsiteProviderBindingMatches = offsiteStatus.statusAvailable === true
+    && offsiteStatus.configured === true
+    && configuredOffsiteProviderId.length > 0
+    ? offsiteStatus.providerId === configuredOffsiteProviderId
+    : undefined;
+  const offsiteProviderPolicy = evaluateOffsiteProviderPolicy({
+    selectedProviderId: configuredOffsiteProviderId,
+    configured: offsiteStatus.configured === true,
+    providerBindingMatches: offsiteProviderBindingMatches,
+    reachable: offsiteStatus.statusAvailable === true
+      ? offsiteStatus.state === "ok"
+      : undefined,
+    backupCurrent: offsiteStatus.statusAvailable === true
+      ? offsiteStatus.state === "ok"
+      && offsiteStatus.unresolvedFailures?.backup !== true
+      && Number.isFinite(offsiteStatus.agesHours?.backup)
+      : undefined,
+    repositoryCheckPassed: offsiteStatus.statusAvailable === true
+      ? offsiteStatus.state === "ok"
+      && offsiteStatus.unresolvedFailures?.fullCheck !== true
+      && Number.isFinite(offsiteStatus.agesHours?.repositoryCheck)
+      && Number.isFinite(offsiteStatus.agesHours?.fullCheck)
+      : undefined,
+    isolatedRestorePassed: offsiteStatus.statusAvailable === true
+      ? offsiteStatus.state === "ok"
+      && offsiteStatus.unresolvedFailures?.restoreTest !== true
+      && Number.isFinite(offsiteStatus.agesHours?.restoreTest)
+      : undefined,
+    recoveryAssurancePassed: recoveryAssurance.configured === true
+      && recoveryAssurance.statusAvailable === true
+      ? recoveryAssurance.state === "ok"
+      && recoveryAssurance.integrityVerified === true
+      && recoveryAssurance.stale !== true
+      : undefined,
+  });
+  const offsite = {
+    ...offsiteStatus,
+    applicable: offsiteApplicable,
+    provider: {
+      selectionRequired: true,
+      selectedProviderId: offsiteProviderPolicy.selectedProviderId,
+      boundProviderId: offsiteStatus.providerId || null,
+      bindingVerified: offsiteProviderBindingMatches === true,
+      preferredProviderId: offsiteProviderPolicy.preferredProviderId,
+      available: listOffsiteProviders(),
+    },
+    providerPolicy: offsiteProviderPolicy,
+  };
+  const offsiteBackupReady = offsiteProviderPolicy.systemCenterOk === true;
+  const selectedOffsiteProvider = offsite.provider.available
+    .find((provider) => provider.id === offsite.provider.selectedProviderId) || null;
   const monitorConfiguration = String(process.env.GRABENPLANER_MONITOR_CONFIGURED || "").trim();
   const monitorConfigured = monitorConfiguration === "1"
     || (monitorConfiguration !== "0" && serverModeActive && process.platform === "linux");
@@ -15363,9 +15458,19 @@ function serverDiagnostics() {
     alerts.push({ id: "AMU_STORAGE_UNAVAILABLE", severity: "critical", category: "storage", title: "AUM-Speicher nicht bereit", message: "Der geschützte Dokumentenspeicher ist derzeit nicht betriebsbereit.", action: "open-server-status" });
   }
   if (!integrationSecretsReady) addAlert("INTEGRATION_SECRET_UNAVAILABLE", "critical", "Schnittstellenschlüssel fehlt", "Für mindestens eine aktive direkte Verbindung fehlt der geschützte Integrationsschlüssel.", "security");
-  if (serverModeActive && !offsite.configured) {
+  const offsiteProviderSelectionReady = offsite.providerPolicy?.checks
+    ?.find((check) => check.id === "selection")?.state === "pass";
+  if (serverModeActive && !offsiteProviderSelectionReady) {
+    addAlert(
+      "OFFSITE_PROVIDER_SELECTION_REQUIRED",
+      "warning",
+      "Offsite-Anbieter auswählen",
+      "Für die Offsite-Sicherung muss genau ein unterstützter Anbieter ausgewählt werden.",
+      "backup",
+    );
+  } else if (serverModeActive && !offsite.configured) {
     addAlert("OFFSITE_BACKUP_NOT_CONFIGURED", "warning", "Offsite-Sicherung nicht eingerichtet", "Das verschlüsselte Offsite-Backup ist noch nicht eingerichtet.", "backup");
-  } else if (offsite.configured && offsite.state !== "ok") {
+  } else if (offsite.configured && offsite.providerPolicy?.systemCenterOk !== true) {
     addAlert("OFFSITE_BACKUP_ATTENTION", offsite.state === "error" ? "critical" : "warning", "Offsite-Sicherung prüfen", "Die verschlüsselte Offsite-Sicherung oder eine Wiederherstellungsprüfung benötigt Aufmerksamkeit.", "backup");
   }
   if (recoveryAssurance.configured && recoveryAssurance.state !== "ok") {
@@ -15407,7 +15512,9 @@ function serverDiagnostics() {
       label: serverModeActive ? "Verschlüsseltes Offsite-Backup" : "Externes Backup",
       ok: serverModeActive ? offsiteBackupReady : externalBackupReady,
       detail: serverModeActive
-        ? (offsite.lastSuccessAt || offsite.lastErrorCode || "noch kein verifizierter Offsite-Stand")
+        ? (selectedOffsiteProvider
+          ? `${selectedOffsiteProvider.label} · ${offsite.lastSuccessAt || offsite.lastErrorCode || "noch kein verifizierter Offsite-Stand"}`
+          : "kein Offsite-Anbieter ausgewählt")
         : (latestExternalBackup ? latestExternalBackup.modifiedAt : "noch kein verifiziertes Backup"),
     },
     { id: "amu", label: "AUM-Speicher", ok: amu.ok, detail: amu.ok ? "verschlüsselt und beschreibbar" : (amu.error || "nicht bereit") },
@@ -15533,6 +15640,34 @@ function serverStatusSummary(diagnostics = serverDiagnostics()) {
       offsite: {
         applicable: offsite.applicable === true,
         configured: offsite.configured === true,
+        provider: {
+          selectionRequired: offsite.provider?.selectionRequired === true,
+          selectedProviderId: offsite.provider?.selectedProviderId || null,
+          boundProviderId: offsite.provider?.boundProviderId || null,
+          bindingVerified: offsite.provider?.bindingVerified === true,
+          preferredProviderId: offsite.provider?.preferredProviderId || "google_drive",
+          available: Array.isArray(offsite.provider?.available)
+            ? offsite.provider.available.map((provider) => ({
+              id: String(provider.id || ""),
+              label: String(provider.label || ""),
+              preferred: provider.preferred === true,
+            }))
+            : [],
+        },
+        providerPolicy: {
+          state: String(offsite.providerPolicy?.state || "blocked"),
+          systemCenterOk: offsite.providerPolicy?.systemCenterOk === true,
+          reasonCodes: Array.isArray(offsite.providerPolicy?.reasonCodes)
+            ? offsite.providerPolicy.reasonCodes.map(String)
+            : ["OFFSITE_PROVIDER_NOT_SELECTED"],
+          checks: Array.isArray(offsite.providerPolicy?.checks)
+            ? offsite.providerPolicy.checks.map((check) => ({
+              id: String(check.id || ""),
+              state: String(check.state || "unknown"),
+              reasonCode: String(check.reasonCode || "OFFSITE_PROVIDER_POLICY_INPUT_INVALID"),
+            }))
+            : [],
+        },
         state: String(offsite.state || "unconfigured"),
         lastSuccessAt: offsite.lastSuccessAt || null,
         lastRepositoryCheckAt: offsite.lastRepositoryCheckAt || null,
@@ -15617,7 +15752,11 @@ function serverStatusSummary(diagnostics = serverDiagnostics()) {
 
 function sendReadiness(response) {
   const diagnostics = serverDiagnostics();
-  response.status(diagnostics.ready ? 200 : 503).json({ ok: diagnostics.ready });
+  response.setHeader("Cache-Control", "no-store");
+  response.status(diagnostics.ready ? 200 : 503).json({
+    ok: diagnostics.ready,
+    hostBootGeneration,
+  });
 }
 
 function integrationActor(request, permission) {
@@ -18328,6 +18467,7 @@ app.put("/api/backup/offsite-folders/active", async (request, response) => {
 const SERVER_MONITOR_CONTROL_ROLES = new Set(["admin", "it_admin", "developer"]);
 const SERVER_MONITOR_RESTART_COOLDOWN_MS = 5 * 60 * 1000;
 let serverManagedRestartRequested = false;
+let hostManagedRebootRequested = false;
 
 function serverMonitorRestartCooldownSeconds(lastAcceptedAt, now = new Date()) {
   if (!lastAcceptedAt) return 0;
@@ -18349,6 +18489,9 @@ function serverMonitorActionCapabilities(
   {
     managedRestartAvailable = serverManagedRestartAvailable,
     restartCooldownSeconds = currentServerMonitorRestartCooldownSeconds(),
+    managedHostRebootAvailable = currentHostManagedRebootAvailable(),
+    hostRebootRequired = false,
+    hostSecurityPendingConfirmation = false,
   } = {},
 ) {
   return {
@@ -18358,6 +18501,16 @@ function serverMonitorActionCapabilities(
       && managedRestartAvailable
       && restartCooldownSeconds === 0
       && SERVER_MONITOR_CONTROL_ROLES.has(actor.role)
+       && actor.permissions?.includes("system:write")
+       && actor.permissions?.includes("system:diagnostics:technical"),
+    ),
+    canVpsReboot: Boolean(
+      actor
+      && actor.role === "developer"
+      && managedHostRebootAvailable
+      && hostRebootRequired
+      && !hostSecurityPendingConfirmation
+      && !hostManagedRebootRequested
       && actor.permissions?.includes("system:write")
       && actor.permissions?.includes("system:diagnostics:technical"),
     ),
@@ -18367,7 +18520,10 @@ function serverMonitorActionCapabilities(
 function serverStatusForActor(diagnostics, actor) {
   return {
     ...serverStatusSummary(diagnostics),
-    monitorActions: serverMonitorActionCapabilities(actor),
+    monitorActions: serverMonitorActionCapabilities(actor, {
+      hostRebootRequired: diagnostics?.hostSecurity?.rebootRequired === true,
+      hostSecurityPendingConfirmation: diagnostics?.hostSecurity?.pendingConfirmation === true,
+    }),
   };
 }
 
@@ -18380,6 +18536,79 @@ function assertServerRestartConfirmation(body) {
       "SERVER_RESTART_CONFIRMATION_REQUIRED",
     );
   }
+}
+
+function assertVpsRebootConfirmation(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)
+    || Object.keys(body).length !== 2
+    || body.confirmation !== "VPS_REBOOT"
+    || typeof body.currentPassword !== "string"
+    || body.currentPassword.length < 1
+    || body.currentPassword.length > 512) {
+    throw httpError(
+      400,
+      "Der kontrollierte VPS-Neustart wurde nicht eindeutig bestätigt.",
+      "VPS_REBOOT_CONFIRMATION_REQUIRED",
+    );
+  }
+}
+
+function currentHostSecurityStatus() {
+  const configured = String(process.env.GRABENPLANER_HOST_SECURITY_CONFIGURED || "").trim();
+  return readHostSecurityStatus({
+    configured: configured === "1" ? true : (configured === "0" ? false : undefined),
+  });
+}
+
+function hostRebootHttpError(error, response) {
+  const code = String(error?.code || "UNAVAILABLE");
+  if (code === "RATE_LIMITED") {
+    const retryAfterSeconds = Number.isSafeInteger(error?.retryAfterSeconds)
+      ? Math.max(1, Math.min(error.retryAfterSeconds, 900))
+      : 900;
+    response.setHeader("Retry-After", String(retryAfterSeconds));
+    return httpError(
+      429,
+      `Der kontrollierte VPS-Neustart ist noch ${retryAfterSeconds} Sekunden gesperrt.`,
+      "VPS_REBOOT_RATE_LIMITED",
+    );
+  }
+  if (code === "BACKUP_REQUIRED") {
+    return httpError(
+      503,
+      "Der root-geschützte Sicherungsbeleg wurde nicht bestätigt. Der VPS wurde nicht neu gestartet.",
+      "VPS_REBOOT_BACKUP_FAILED",
+    );
+  }
+  if (code === "MAINTENANCE_BUSY") {
+    return httpError(
+      409,
+      "Eine andere geschützte Wartung ist aktiv. Der VPS wurde nicht neu gestartet.",
+      "VPS_REBOOT_MAINTENANCE_BUSY",
+    );
+  }
+  if (code === "SECURITY_PENDING") {
+    return httpError(
+      409,
+      "Eine Host-Sicherheitsänderung wartet noch auf Bestätigung. Der VPS wurde nicht neu gestartet.",
+      "VPS_REBOOT_SECURITY_CONFIRMATION_PENDING",
+    );
+  }
+  if (code === "BUSY") {
+    return httpError(409, "Ein kontrollierter VPS-Neustart wird bereits vorbereitet.", "VPS_REBOOT_IN_PROGRESS");
+  }
+  if (code === "NOT_REQUIRED") {
+    return httpError(
+      409,
+      "Der Ubuntu-Host meldet derzeit keinen erforderlichen Sicherheitsneustart.",
+      "VPS_REBOOT_NOT_REQUIRED",
+    );
+  }
+  return httpError(
+    503,
+    "Die geschützte VPS-Neustartsteuerung ist derzeit nicht verfügbar.",
+    "VPS_REBOOT_CONTROL_UNAVAILABLE",
+  );
 }
 
 app.post("/api/portal/v1/server-monitor/restart", (request, response) => {
@@ -18441,6 +18670,126 @@ app.post("/api/portal/v1/server-monitor/restart", (request, response) => {
       skipBackup: true,
       exitCode: 75,
     }), 350);
+  });
+});
+
+app.post("/api/portal/v1/server-monitor/vps-reboot", async (request, response) => {
+  const actor = requirePortalSession(request, "system:write");
+  if (actor.role !== "developer") {
+    throw httpError(
+      403,
+      "Nur die Developer-Rolle darf den vollständigen VPS kontrolliert neu starten.",
+      "VPS_REBOOT_ROLE_DENIED",
+    );
+  }
+  if (!actor.permissions?.includes("system:diagnostics:technical")) {
+    throw httpError(
+      403,
+      "Für den kontrollierten VPS-Neustart fehlt die technische Diagnoseberechtigung.",
+      "VPS_REBOOT_DIAGNOSTICS_PERMISSION_REQUIRED",
+    );
+  }
+  assertVpsRebootConfirmation(request.body);
+  if (!currentHostManagedRebootAvailable()) {
+    throw httpError(
+      409,
+      "Der kontrollierte VPS-Neustart ist nur in der verwalteten Ubuntu-Serverlaufzeit verfügbar.",
+      "VPS_REBOOT_SERVICE_REQUIRED",
+    );
+  }
+  if (hostManagedRebootRequested) {
+    throw httpError(409, "Ein kontrollierter VPS-Neustart wurde bereits eingeleitet.", "VPS_REBOOT_IN_PROGRESS");
+  }
+
+  const hostSecurity = currentHostSecurityStatus();
+  if (hostSecurity.configured !== true
+    || hostSecurity.statusAvailable !== true
+    || hostSecurity.rebootRequired !== true
+    || hostSecurity.pendingConfirmation === true) {
+    throw httpError(
+      409,
+      "Der Ubuntu-Host meldet derzeit keinen sicher bestätigten Neustartbedarf.",
+      "VPS_REBOOT_NOT_REQUIRED",
+    );
+  }
+  try {
+    assertSafeHostRebootSocket();
+  } catch {
+    throw httpError(
+      503,
+      "Die geschützte VPS-Neustartsteuerung ist derzeit nicht verfügbar.",
+      "VPS_REBOOT_CONTROL_UNAVAILABLE",
+    );
+  }
+
+  const { session } = await requireBackupAdminReauthentication(request, {
+    permission: "system:write",
+    operation: "vps-reboot",
+  });
+  if (hostManagedRebootRequested) {
+    throw httpError(409, "Ein kontrollierter VPS-Neustart wurde bereits eingeleitet.", "VPS_REBOOT_IN_PROGRESS");
+  }
+
+  const requestId = crypto.randomUUID();
+  hostManagedRebootRequested = true;
+  let result;
+  try {
+    result = await prepareControlledHostReboot({
+      requestId,
+      createBackup: () => createDatabaseBackup("vps-reboot"),
+      recordRequest: () => auditPortal(
+        session.employeeNumber,
+        "system.host_reboot.requested",
+        "system",
+        "vps-reboot",
+        JSON.stringify({ requestId }),
+      ),
+      requestControl: requestHostReboot,
+    });
+  } catch (error) {
+    hostManagedRebootRequested = false;
+    try {
+      auditPortal(
+        session.employeeNumber,
+        "system.host_reboot.failed",
+        "system",
+        "vps-reboot",
+        JSON.stringify({
+          requestId,
+          errorCode: String(error?.code || "VPS_REBOOT_CONTROL_UNAVAILABLE").slice(0, 80),
+        }),
+      );
+    } catch {
+      console.error("VPS-Reboot-Fehler konnte nicht revisionssicher protokolliert werden.");
+    }
+    if (error?.code === "HOST_REBOOT_BACKUP_FAILED") {
+      throw httpError(
+        503,
+        "Der verifizierte Sicherungspunkt konnte nicht erstellt werden. Der VPS wurde nicht neu gestartet.",
+        "VPS_REBOOT_BACKUP_FAILED",
+      );
+    }
+    if (error?.status) throw error;
+    throw hostRebootHttpError(error, response);
+  }
+  try {
+    auditPortal(
+      session.employeeNumber,
+      "system.host_reboot.accepted",
+      "system",
+      "vps-reboot",
+      JSON.stringify({ requestId, result: "accepted" }),
+    );
+  } catch {
+    console.error("Angenommener VPS-Reboot konnte nicht nachträglich protokolliert werden.");
+  }
+  response.status(202).json({
+    ok: true,
+    code: "VPS_REBOOT_ACCEPTED",
+    requestId,
+    acceptedAt: result.acceptedAt,
+    previousHostBootGeneration: hostBootGeneration,
+    message: "Der verifizierte Sicherungspunkt wurde erstellt. Der VPS wird kontrolliert neu gestartet.",
   });
 });
 
@@ -22393,6 +22742,19 @@ const UI_PERSONNEL_DASHBOARD_ITEMS = Object.freeze([
   "dataRequests",
 ]);
 const UI_PERSONNEL_DASHBOARD_ITEM_SET = new Set(UI_PERSONNEL_DASHBOARD_ITEMS);
+const UI_MOBILE_PORTAL_NAVIGATION_ITEMS = Object.freeze([
+  "time",
+  "tasks",
+  "team",
+  "approvals",
+  "schedule",
+  "requests",
+  "loan",
+  "sickness",
+]);
+const UI_MOBILE_PORTAL_NAVIGATION_ITEM_SET = new Set(UI_MOBILE_PORTAL_NAVIGATION_ITEMS);
+const UI_MOBILE_PORTAL_PALETTES = new Set(["forest", "ocean", "plum", "sand"]);
+const UI_MOBILE_PORTAL_SURFACES = new Set(["soft", "compact"]);
 
 function defaultPersonnelDashboardLayout() {
   return { version: 1, order: [...UI_PERSONNEL_DASHBOARD_ITEMS], hidden: [] };
@@ -22426,6 +22788,70 @@ function validatePersonnelDashboardLayout(value) {
   return normalizePersonnelDashboardLayout(value);
 }
 
+function defaultMobilePortalNavigation() {
+  return {
+    version: 1,
+    order: [...UI_MOBILE_PORTAL_NAVIGATION_ITEMS],
+    hidden: [],
+  };
+}
+
+function normalizeMobilePortalNavigation(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || Number(value.version) !== 1) {
+    return defaultMobilePortalNavigation();
+  }
+  const order = Array.isArray(value.order)
+    ? [...new Set(value.order.map(String))].filter((id) => UI_MOBILE_PORTAL_NAVIGATION_ITEM_SET.has(id))
+    : [];
+  for (const id of UI_MOBILE_PORTAL_NAVIGATION_ITEMS) if (!order.includes(id)) order.push(id);
+  const hidden = Array.isArray(value.hidden)
+    ? [...new Set(value.hidden.map(String))].filter((id) => UI_MOBILE_PORTAL_NAVIGATION_ITEM_SET.has(id))
+    : [];
+  return { version: 1, order, hidden };
+}
+
+function validateMobilePortalNavigation(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !["version", "order", "hidden"].includes(key))
+    || value.version !== 1
+    || !Array.isArray(value.order) || !Array.isArray(value.hidden)
+    || value.order.length > UI_MOBILE_PORTAL_NAVIGATION_ITEMS.length
+    || value.hidden.length > UI_MOBILE_PORTAL_NAVIGATION_ITEMS.length
+    || new Set(value.order.map(String)).size !== value.order.length
+    || new Set(value.hidden.map(String)).size !== value.hidden.length
+    || value.order.some((id) => !UI_MOBILE_PORTAL_NAVIGATION_ITEM_SET.has(String(id)))
+    || value.hidden.some((id) => !UI_MOBILE_PORTAL_NAVIGATION_ITEM_SET.has(String(id)))) {
+    throw httpError(400, "Bitte eine gültige persönliche mobile Navigation übermitteln.", "UI_PREFERENCES_INVALID");
+  }
+  return normalizeMobilePortalNavigation(value);
+}
+
+function defaultMobilePortalAppearance() {
+  return { version: 1, palette: "forest", surface: "soft" };
+}
+
+function normalizeMobilePortalAppearance(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || Number(value.version) !== 1) {
+    return defaultMobilePortalAppearance();
+  }
+  return {
+    version: 1,
+    palette: UI_MOBILE_PORTAL_PALETTES.has(String(value.palette)) ? String(value.palette) : "forest",
+    surface: UI_MOBILE_PORTAL_SURFACES.has(String(value.surface)) ? String(value.surface) : "soft",
+  };
+}
+
+function validateMobilePortalAppearance(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || Object.keys(value).some((key) => !["version", "palette", "surface"].includes(key))
+    || value.version !== 1
+    || !UI_MOBILE_PORTAL_PALETTES.has(String(value.palette || ""))
+    || !UI_MOBILE_PORTAL_SURFACES.has(String(value.surface || ""))) {
+    throw httpError(400, "Bitte ein gültiges persönliches Portaldesign übermitteln.", "UI_PREFERENCES_INVALID");
+  }
+  return normalizeMobilePortalAppearance(value);
+}
+
 function uiPreferenceActor(request, { write = false } = {}) {
   if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) {
     return { employeeNumber: "local", role: "admin", permissions: [] };
@@ -22442,6 +22868,10 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   let employeeDisplaySort = { key: "personnel_number", direction: "asc" };
   let workRuleAssessmentExpanded = false;
   let personnelDashboardLayout = defaultPersonnelDashboardLayout();
+  let mobilePortalNavigation = defaultMobilePortalNavigation();
+  let mobilePortalAppearance = defaultMobilePortalAppearance();
+  let mobilePortalNavigationCustomized = false;
+  let mobilePortalAppearanceCustomized = false;
   if (actor?.employeeNumber && actor.employeeNumber !== "local") {
     const rows = await uiPreferencesRepository.list(actor.employeeNumber);
     const lookup = new Map(rows.map((row) => [row.preferenceKey, row.value]));
@@ -22471,6 +22901,18 @@ async function uiPreferencesForActor(actor, overrides = {}) {
         JSON.parse(lookup.get("personnel_dashboard_layout_v1") || "null"),
       );
     } catch {}
+    try {
+      mobilePortalNavigation = normalizeMobilePortalNavigation(
+        JSON.parse(lookup.get("mobile_portal_navigation_v1") || "null"),
+      );
+      mobilePortalNavigationCustomized = lookup.has("mobile_portal_navigation_v1");
+    } catch {}
+    try {
+      mobilePortalAppearance = normalizeMobilePortalAppearance(
+        JSON.parse(lookup.get("mobile_portal_appearance_v1") || "null"),
+      );
+      mobilePortalAppearanceCustomized = lookup.has("mobile_portal_appearance_v1");
+    } catch {}
   }
   for (const [view, theme] of Object.entries(overrides.pageThemes || {})) {
     if (UI_PREFERENCE_VIEWS.includes(view) && UI_PAGE_THEMES.has(theme)) pageThemes[view] = theme;
@@ -22485,6 +22927,14 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   if (overrides.personnelDashboardLayout) {
     personnelDashboardLayout = normalizePersonnelDashboardLayout(overrides.personnelDashboardLayout);
   }
+  if (overrides.mobilePortalNavigation) {
+    mobilePortalNavigation = normalizeMobilePortalNavigation(overrides.mobilePortalNavigation);
+    mobilePortalNavigationCustomized = true;
+  }
+  if (overrides.mobilePortalAppearance) {
+    mobilePortalAppearance = normalizeMobilePortalAppearance(overrides.mobilePortalAppearance);
+    mobilePortalAppearanceCustomized = true;
+  }
   return {
     actor: actor?.employeeNumber || "local",
     pageThemes,
@@ -22493,6 +22943,10 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     employeeDisplaySort,
     workRuleAssessmentExpanded,
     personnelDashboardLayout,
+    mobilePortalNavigation,
+    mobilePortalAppearance,
+    mobilePortalNavigationCustomized,
+    mobilePortalAppearanceCustomized,
   };
 }
 
@@ -22541,9 +22995,16 @@ async function saveUiPreferencesForActor(actor, input = {}) {
   const personnelDashboardLayout = input.personnelDashboardLayout === undefined
     ? undefined
     : validatePersonnelDashboardLayout(input.personnelDashboardLayout);
+  const mobilePortalNavigation = input.mobilePortalNavigation === undefined
+    ? undefined
+    : validateMobilePortalNavigation(input.mobilePortalNavigation);
+  const mobilePortalAppearance = input.mobilePortalAppearance === undefined
+    ? undefined
+    : validateMobilePortalAppearance(input.mobilePortalAppearance);
   if (!Object.keys(pageThemes).length && appFontScalePercent === undefined && employeeDisplayColumns === undefined
     && employeeDisplaySort === undefined && workRuleAssessmentExpanded === undefined
-    && personnelDashboardLayout === undefined) {
+    && personnelDashboardLayout === undefined && mobilePortalNavigation === undefined
+    && mobilePortalAppearance === undefined) {
     throw httpError(400, "Es wurde keine Darstellung zum Speichern übermittelt.", "UI_PREFERENCES_INVALID");
   }
   if (actor.employeeNumber !== "local") {
@@ -22584,6 +23045,18 @@ async function saveUiPreferencesForActor(actor, input = {}) {
         value: JSON.stringify(personnelDashboardLayout),
       });
     }
+    if (mobilePortalNavigation !== undefined) {
+      upserts.push({
+        preferenceKey: "mobile_portal_navigation_v1",
+        value: JSON.stringify(mobilePortalNavigation),
+      });
+    }
+    if (mobilePortalAppearance !== undefined) {
+      upserts.push({
+        preferenceKey: "mobile_portal_appearance_v1",
+        value: JSON.stringify(mobilePortalAppearance),
+      });
+    }
     await uiPreferencesRepository.saveChanges(actor.employeeNumber, {
       upserts,
       deleteKeys: appFontScalePercent === undefined ? [] : ["dashboard_font_size"],
@@ -22596,6 +23069,8 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     employeeDisplaySort,
     workRuleAssessmentExpanded,
     personnelDashboardLayout,
+    mobilePortalNavigation,
+    mobilePortalAppearance,
   });
 }
 
@@ -36093,6 +36568,7 @@ module.exports = {
   serverMonitorRestartCooldownSeconds,
   serverStatusForActor,
   assertServerRestartConfirmation,
+  assertVpsRebootConfirmation,
   migrateProtectedPersonnelRecords,
   parseProtectedJson,
   purgeExpiredAmuDocuments,

@@ -11,6 +11,18 @@ const read = (...parts) => fs.readFileSync(path.join(root, ...parts), "utf8");
 const powershell = process.platform === "win32"
   ? path.join(process.env.SystemRoot || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
   : "";
+const mandatoryRuntimeModules = [
+  "lib\\offsite-provider-policy.js",
+  "lib\\host-reboot-control-client.js",
+  "lib\\controlled-host-reboot.js",
+];
+
+function extractPowerShellFunction(source, name) {
+  const start = source.indexOf(`function ${name}`);
+  assert.notEqual(start, -1, `PowerShell-Funktion ${name} fehlt.`);
+  const next = source.indexOf("\nfunction ", start + 1);
+  return source.slice(start, next === -1 ? source.length : next).trim();
+}
 
 test("v0.61 server tools: Caddy and WinSW use production-safe identities and health probes", () => {
   const caddy = read("server-tools", "caddy", "Caddyfile.example");
@@ -99,6 +111,102 @@ test("v0.61 server tools: update is checksum-bound, staged, backed up, health-ch
   assert.match(packageBuilder, /temporaere Paketordner konnte noch nicht entfernt werden/);
   assert.match(packageBuilder, /Zum Schutz bestehender Release-Artefakte bitte einen leeren Ausgabeordner verwenden/);
   assert.match(packageBuilder, /if \(\$archiveOwned\).*Remove-Item -LiteralPath \$archivePath/s);
+});
+
+test("Windows package builder and updater require every runtime control module", () => {
+  const scripts = [
+    {
+      label: "Serverpaket-Erstellung",
+      source: read("server-tools", "windows", "New-GrabenplanerServerPackage.ps1"),
+      assertionCall: /Assert-RequiredRuntimeFiles -Root \$buildRoot -PackageKind 'Serverpaket'/,
+    },
+    {
+      label: "Updatepaket-Pruefung",
+      source: read("server-tools", "windows", "Update-GrabenplanerServer.ps1"),
+      assertionCall: /Assert-RequiredRuntimeFiles -Root \$packageRoot -PackageKind 'Updatepaket'/,
+    },
+  ];
+
+  for (const script of scripts) {
+    const assertionSource = extractPowerShellFunction(script.source, "Assert-RequiredRuntimeFiles");
+    for (const modulePath of mandatoryRuntimeModules) {
+      assert.ok(
+        assertionSource.includes(`'${modulePath}'`),
+        `${script.label} verlangt ${modulePath} nicht als Pflichtdatei.`,
+      );
+    }
+    assert.match(script.source, script.assertionCall);
+  }
+});
+
+test("Windows package assertions reject each missing runtime control module", {
+  skip: !powershell || !fs.existsSync(powershell),
+}, () => {
+  const packageBuilder = read("server-tools", "windows", "New-GrabenplanerServerPackage.ps1");
+  const updater = read("server-tools", "windows", "Update-GrabenplanerServer.ps1");
+  const builderAssertion = extractPowerShellFunction(packageBuilder, "Assert-RequiredRuntimeFiles")
+    .replace("function Assert-RequiredRuntimeFiles", "function Assert-BuilderRequiredRuntimeFiles");
+  const updaterAssertion = extractPowerShellFunction(updater, "Assert-RequiredRuntimeFiles")
+    .replace("function Assert-RequiredRuntimeFiles", "function Assert-UpdaterRequiredRuntimeFiles");
+  const quotedModules = mandatoryRuntimeModules
+    .map((modulePath) => `'${modulePath.replaceAll("'", "''")}'`)
+    .join(", ");
+  const harness = [
+    builderAssertion,
+    updaterAssertion,
+    `$missingModules = @(${quotedModules})`,
+    "$allRequired = @(",
+    "  'server.js',",
+    "  'package.json',",
+    "  'lib\\database-lock.js',",
+    "  'lib\\offsite-provider-policy.js',",
+    "  'lib\\host-reboot-control-client.js',",
+    "  'lib\\controlled-host-reboot.js',",
+    "  'server-tools\\windows\\Update-GrabenplanerServer.ps1'",
+    ")",
+    "$base = Join-Path ([IO.Path]::GetTempPath()) ('GrabenplanerRuntimeModules-' + [guid]::NewGuid().ToString('N'))",
+    "$results = @()",
+    "try {",
+    "  foreach ($pathKind in @('builder', 'updater')) {",
+    "    foreach ($missing in $missingModules) {",
+    "      $root = Join-Path $base ($pathKind + '-' + [IO.Path]::GetFileNameWithoutExtension($missing))",
+    "      foreach ($required in $allRequired) {",
+    "        if ($required -eq $missing) { continue }",
+    "        $target = Join-Path $root $required",
+    "        New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null",
+    "        Set-Content -LiteralPath $target -Value '' -Encoding Ascii",
+    "      }",
+    "      try {",
+    "        if ($pathKind -eq 'builder') {",
+    "          Assert-BuilderRequiredRuntimeFiles -Root $root -PackageKind 'Serverpaket'",
+    "        } else {",
+    "          Assert-UpdaterRequiredRuntimeFiles -Root $root -PackageKind 'Updatepaket'",
+    "        }",
+    "        $results += [pscustomobject]@{ pathKind = $pathKind; missing = $missing; rejected = $false; message = '' }",
+    "      } catch {",
+    "        $results += [pscustomobject]@{ pathKind = $pathKind; missing = $missing; rejected = $true; message = $_.Exception.Message }",
+    "      }",
+    "    }",
+    "  }",
+    "} finally {",
+    "  if (Test-Path -LiteralPath $base) { Remove-Item -LiteralPath $base -Recurse -Force }",
+    "}",
+    "$results | ConvertTo-Json -Compress",
+    "",
+  ].join("\r\n");
+  const encodedHarness = Buffer.from(harness, "utf16le").toString("base64");
+  const result = spawnSync(powershell, [
+    "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodedHarness,
+  ], { encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr);
+  const outcomes = JSON.parse(result.stdout.trim());
+  assert.equal(outcomes.length, 6);
+  for (const outcome of outcomes) {
+    assert.equal(outcome.rejected, true, `${outcome.pathKind} akzeptierte fehlendes ${outcome.missing}.`);
+    assert.match(outcome.message, /Pflichtdatei fehlt/);
+    assert.ok(outcome.message.includes(outcome.missing), outcome.message);
+  }
 });
 
 test("v0.61 server tools: maintenance scripts share one lock and distinct live-ready endpoints", () => {

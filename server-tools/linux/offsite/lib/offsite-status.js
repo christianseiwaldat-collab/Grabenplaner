@@ -4,13 +4,17 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const FORMAT = "grabenplaner-offsite-backup-status";
+const CURRENT_SCHEMA_VERSION = 2;
+const LEGACY_SCHEMA_VERSION = 1;
 const RETENTION = Object.freeze({ daily: 14, weekly: 8, monthly: 12 });
 const STATES = new Set(["ok", "warning", "error", "unconfigured"]);
+const PROVIDER_IDS = new Set(["google_drive", "hetzner_object_storage", "backblaze_b2"]);
 const STATUS_KEYS = new Set([
-  "format", "schemaVersion", "configured", "state", "generatedAt", "lastAttemptAt", "lastSuccessAt",
+  "format", "schemaVersion", "providerId", "configured", "state", "generatedAt", "lastAttemptAt", "lastSuccessAt",
   "lastSnapshotId", "lastRepositoryCheckAt", "lastFullCheckAt", "lastRestoreTestAt", "lastFailureAt",
   "lastError", "unresolvedFailures", "retention",
 ]);
+const LEGACY_STATUS_KEYS = new Set([...STATUS_KEYS].filter((key) => key !== "providerId"));
 const ERROR_SUMMARIES = new Map([
   ["PREPARE_FAILED", "Der lokale Offsite-Sicherungspunkt konnte nicht vorbereitet werden."],
   ["UPLOAD_FAILED", "Die verschluesselte Offsite-Sicherung konnte nicht uebertragen werden."],
@@ -26,7 +30,7 @@ const ERROR_SUMMARIES = new Map([
 ]);
 
 function usage() {
-  process.stderr.write("Verwendung: offsite-status.js --status-file PFAD --status-gid GID <inspect|configured|unconfigured|attempt|success|failure|full-check|restore-test> [Optionen]\n");
+  process.stderr.write("Verwendung: offsite-status.js --status-file PFAD --status-gid GID <inspect|configured|bind-provider|unconfigured|attempt|success|failure|full-check|restore-test> [Optionen]\n");
   process.exit(2);
 }
 
@@ -51,11 +55,12 @@ function parseArguments(argv) {
   return { statusFile: path.resolve(statusFile), statusGid, command, options };
 }
 
-function emptyStatus(configured) {
+function emptyStatus(configured, providerId = null) {
   const now = new Date().toISOString();
   return {
     format: FORMAT,
-    schemaVersion: 1,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    providerId: configured ? providerId : null,
     configured,
     state: configured ? "warning" : "unconfigured",
     generatedAt: now,
@@ -82,9 +87,17 @@ function readCurrent(statusFile, statusGid) {
     if (!stat.isFile() || stat.dev !== before.dev || stat.ino !== before.ino || stat.uid !== 0 || stat.gid !== statusGid
       || (stat.mode & 0o7777) !== 0o640 || stat.nlink !== 1) throw new Error("unsafe");
     const value = JSON.parse(fs.readFileSync(descriptor, "utf8").replace(/^\uFEFF/, ""));
-    if (Object.keys(value).length !== STATUS_KEYS.size || Object.keys(value).some((key) => !STATUS_KEYS.has(key))
-      || [...STATUS_KEYS].some((key) => !Object.hasOwn(value, key))) throw new Error("schema");
-    if (value.format !== FORMAT || value.schemaVersion !== 1 || typeof value.configured !== "boolean") throw new Error("schema");
+    const keys = new Set(Object.keys(value));
+    const currentSchema = keys.size === STATUS_KEYS.size
+      && [...STATUS_KEYS].every((key) => keys.has(key));
+    const legacySchema = keys.size === LEGACY_STATUS_KEYS.size
+      && [...LEGACY_STATUS_KEYS].every((key) => keys.has(key));
+    if (!currentSchema && !legacySchema) throw new Error("schema");
+    if (value.format !== FORMAT || typeof value.configured !== "boolean"
+      || (currentSchema && value.schemaVersion !== CURRENT_SCHEMA_VERSION)
+      || (legacySchema && value.schemaVersion !== LEGACY_SCHEMA_VERSION)) throw new Error("schema");
+    if (currentSchema && ((value.configured && !PROVIDER_IDS.has(value.providerId))
+      || (!value.configured && value.providerId !== null))) throw new Error("schema");
     if (!STATES.has(value.state) || JSON.stringify(value.retention) !== JSON.stringify(RETENTION)
       || JSON.stringify(value.unresolvedFailures) !== JSON.stringify({ backup: false, fullCheck: false, restoreTest: false })
         && (!value.unresolvedFailures || Object.keys(value.unresolvedFailures).sort().join(",") !== "backup,fullCheck,restoreTest"
@@ -93,7 +106,20 @@ function readCurrent(statusFile, statusGid) {
     if ((value.state === "error") !== hasUnresolvedFailure || (value.state === "unconfigured") !== !value.configured) {
       throw new Error("schema");
     }
-    return { ...emptyStatus(value.configured), ...value, retention: { ...RETENTION } };
+    const normalized = {
+      ...emptyStatus(value.configured, currentSchema ? value.providerId : null),
+      ...value,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      providerId: currentSchema ? value.providerId : null,
+      retention: { ...RETENTION },
+    };
+    // Schema v1 besitzt keinen kryptographisch gebundenen Providerbezug.
+    // Seine historischen Erfolgswerte bleiben lesbar, duerfen aber bis zur
+    // expliziten Neubindung und neuer Assurance niemals als "ok" gelten.
+    if (legacySchema && normalized.configured && normalized.state !== "error") {
+      normalized.state = "warning";
+    }
+    return normalized;
   } catch (error) {
     if (error?.code === "ENOENT") return emptyStatus(true);
     throw new Error("Der bisherige Status ist nicht sicher lesbar.");
@@ -128,20 +154,34 @@ function main() {
   }
   const { statusFile, statusGid, command, options } = parseArguments(process.argv.slice(2));
   const current = readCurrent(statusFile, statusGid);
+  const requestedProviderId = String(options["provider-id"] || "");
+  if (command !== "inspect" && command !== "unconfigured" && !PROVIDER_IDS.has(requestedProviderId)) usage();
   const now = new Date().toISOString();
   let next = { ...current, generatedAt: now, retention: { ...RETENTION } };
   switch (command) {
     case "inspect":
-      process.stdout.write(`${JSON.stringify({ ok: true, configured: current.configured, state: current.state })}\n`);
+      process.stdout.write(`${JSON.stringify({
+        ok: true,
+        configured: current.configured,
+        providerId: current.providerId,
+        state: current.state,
+      })}\n`);
       return;
     case "configured":
-      next = emptyStatus(true);
+      next = emptyStatus(true, requestedProviderId);
+      break;
+    case "bind-provider":
+      // Ein Provider-/Repository-Vertrag darf nie alte Snapshot-, Check- oder
+      // Restore-Nachweise erben. Erst eine neue Recovery Assurance hebt den
+      // frischen Warnzustand wieder auf.
+      next = emptyStatus(true, requestedProviderId);
       break;
     case "unconfigured":
-      next = emptyStatus(false);
+      next = emptyStatus(false, null);
       break;
     case "attempt":
       next.configured = true;
+      next.providerId = requestedProviderId;
       next.state = Object.values(next.unresolvedFailures).some(Boolean) ? "error" : "warning";
       next.lastAttemptAt = now;
       break;
@@ -149,6 +189,7 @@ function main() {
       const snapshot = String(options.snapshot || "").toLowerCase();
       if (!/^[a-f0-9]{64}$/.test(snapshot)) usage();
       next.configured = true;
+      next.providerId = requestedProviderId;
       next.state = "ok";
       next.lastAttemptAt = now;
       next.lastSuccessAt = now;
@@ -163,6 +204,7 @@ function main() {
       const summary = ERROR_SUMMARIES.get(code);
       if (!summary || (options.summary && options.summary !== summary)) usage();
       next.configured = true;
+      next.providerId = requestedProviderId;
       next.state = "error";
       next.lastAttemptAt = now;
       next.lastFailureAt = now;
@@ -175,6 +217,7 @@ function main() {
     }
     case "full-check":
       next.configured = true;
+      next.providerId = requestedProviderId;
       next.lastFullCheckAt = now;
       next.lastRepositoryCheckAt = now;
       next.unresolvedFailures.fullCheck = false;
@@ -182,6 +225,7 @@ function main() {
       break;
     case "restore-test":
       next.configured = true;
+      next.providerId = requestedProviderId;
       next.lastRestoreTestAt = now;
       next.unresolvedFailures.restoreTest = false;
       next.state = Object.values(next.unresolvedFailures).some(Boolean) ? "error" : next.lastSuccessAt ? "ok" : "warning";
@@ -190,7 +234,7 @@ function main() {
       usage();
   }
   atomicWrite(statusFile, statusGid, next);
-  process.stdout.write(`${JSON.stringify({ ok: true, state: next.state })}\n`);
+  process.stdout.write(`${JSON.stringify({ ok: true, providerId: next.providerId, state: next.state })}\n`);
 }
 
 try { main(); }

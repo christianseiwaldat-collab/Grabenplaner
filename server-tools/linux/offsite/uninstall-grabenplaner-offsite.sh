@@ -89,7 +89,7 @@ env_temporary="$(mktemp --tmpdir="$(dirname -- "$OFFSITE_APP_ENV")" .grabenplane
 const fs = require("node:fs");
 const [source, target] = process.argv.slice(2);
 const lines = fs.readFileSync(source, "utf8").split(/\r?\n/)
-  .filter((line) => !/^GRABENPLANER_OFFSITE_(?:CONFIGURED|STATUS_FILE)=/.test(line));
+  .filter((line) => !/^GRABENPLANER_OFFSITE_(?:CONFIGURED|PROVIDER|STATUS_FILE)=/.test(line));
 while (lines.length && !lines.at(-1)) lines.pop();
 lines.push("");
 fs.writeFileSync(target, lines.join("\n"), { mode: 0o600 });

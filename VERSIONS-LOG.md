@@ -1,5 +1,17 @@
 # Grabenplaner Versions-Log
 
+## v0.88 Beta · Persönliches Portal und abgesicherter Serverbetrieb
+
+- Persönliche Portaleinstellungen sind platzsparend in standardmäßig geschlossene Bereiche gegliedert. Die Passwortänderung steht am Ende; verifizierte Empfänger werden innerhalb der Einstellungen verwaltet.
+- Mitarbeitende können Reihenfolge und Auswahl der mobilen Navigation unmittelbar in einer einzeiligen Handyvorschau anpassen. Das untere Menü bleibt auch auf schmalen Bildschirmen horizontal und bricht nicht zweizeilig um.
+- Für das persönliche Portal stehen kuratierte Farbvarianten ohne freie CSS- oder Farbeingaben zur Verfügung. Die Auswahl wird ausschließlich für das jeweilige Mitarbeiterkonto gespeichert.
+- Eine Offsite-Sicherung verlangt jetzt eine ausdrückliche Providerwahl. Google Drive bleibt die bevorzugte Option; Hetzner Object Storage und Backblaze B2 sind als kontrollierte S3-Alternativen vorgesehen.
+- System-Center und Vertrauensindex melden die Offsite-Sicherung nur dann als bestanden, wenn Status, Providerbindung, Repository-Identität, vollständige Prüfung und Wiederherstellungsnachweis zusammenpassen. Fehlende oder widersprüchliche Nachweise bleiben geschlossen.
+- Der Google-Drive-Steuerpfad prüft vor Ordnerliste und Zielanlage erneut die aktive, redigierte rclone-Richtlinie sowie den gebundenen Installations- und Repository-Vertrag. Ein noch leerer verwalteter Altordner wird als leere Liste statt als Verbindungsfehler behandelt.
+- Ein kontrollierter VPS-Neustart steht ausschließlich der Developer-Rolle nach erneuter Passwortbestätigung zur Verfügung. Vor der Übergabe an den eng begrenzten root-seitigen Broker wird ein vollständig manifestierter und hashgeprüfter Sicherungspunkt verlangt.
+- Das Linux-Deployment-Schema 3 installiert nur den gesicherten Host-Control-Socket. Die Migration löst selbst keinen VPS-Neustart und keine Offsite-Neubindung aus und behält den transaktionalen Backup-, Healthcheck- und Rollbackvertrag bei.
+- SQLite bleibt der einzige freigegebene Produktprovider. Die PostgreSQL-Arbeiten bleiben eine nicht produktive Entwicklungs- und Nachweisgrundlage ohne Freigabe für Installation oder Datenmigration.
+
 ## v0.87 Beta · Benutzeroberfläche, Organisationsmodell und Leihnachweise
 
 - Die Personalverwaltung öffnet mit einem anpassbaren Dashboard, das die fachlich verfügbaren Unterbereiche übersichtlich zusammenführt und die persönliche Anordnung benutzerbezogen bewahrt.

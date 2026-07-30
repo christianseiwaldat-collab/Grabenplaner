@@ -1,0 +1,57 @@
+[Unit]
+Description=Grabenplaner controlled host reboot request
+Documentation=https://github.com/christianseiwaldat-collab/Grabenplaner/blob/main/SERVERBETRIEB.md
+Requires=grabenplaner-host-control.socket
+After=grabenplaner-host-control.socket
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStartPre={{NODE_EXECUTABLE}} /opt/grabenplaner-host-control/module/lib/host-reboot-broker.js --ensure-maintenance-lock
+ExecStart=/usr/bin/flock --exclusive --wait 3 /run/grabenplaner-host-control/broker.lock {{NODE_EXECUTABLE}} /opt/grabenplaner-host-control/module/lib/host-reboot-broker.js
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+UMask=0077
+TimeoutStopSec=5s
+TimeoutStartSec=30s
+RuntimeMaxSec=35s
+RuntimeDirectory=grabenplaner-host-control grabenplaner
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+StateDirectory=grabenplaner-host-control
+StateDirectoryMode=0700
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateMounts=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+DevicePolicy=closed
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+ReadWritePaths=/run/grabenplaner-host-control /var/lib/grabenplaner-host-control
+ReadOnlyPaths=/var/lib/grabenplaner/backups /var/lib/grabenplaner-host-security
+MemoryMax=64M
+MemorySwapMax=0
+TasksMax=32
+LimitNOFILE=64
+LimitCORE=0

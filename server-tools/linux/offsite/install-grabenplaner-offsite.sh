@@ -546,9 +546,73 @@ target_control_socket_paused=1
 gp_acquire_maintenance_lock
 offsite_acquire_assurance_lock
 offsite_acquire_repository_lock
+previous_provider_id=""
+previous_provider_binding=0
+previous_repository=""
+previous_repository_id=""
+if (( installed_module_version >= 1 )); then
+  if previous_provider_id="$("$OFFSITE_NODE" "$module_candidate/lib/offsite-contract.js" provider-id \
+    "$OFFSITE_CONFIG_ROOT/installed-contract.json" 2>/dev/null)"; then
+    previous_provider_binding=1
+  else
+    previous_provider_id=""
+  fi
+  if [[ -z "$previous_provider_id" ]]; then
+    # Module vor der Providerbindung unterstuetzten ausschliesslich den
+    # dedizierten Google-Drive-Pfad. Diese einmalige Zuordnung ermoeglicht die
+    # kontrollierte Migration, aber keinen stillen Wechsel zu S3.
+    previous_provider_id="google_drive"
+  fi
+  previous_repository="$("$OFFSITE_NODE" - "$OFFSITE_CONFIG_ROOT/repository" <<'NODE'
+const fs = require("node:fs");
+const value = fs.readFileSync(process.argv[2], "utf8");
+const match = value.match(/^(rclone:[A-Za-z0-9][A-Za-z0-9_-]{0,63}:[A-Za-z0-9][A-Za-z0-9._/-]{0,511})\n?$/);
+if (!match || match[1].split(":").at(-1).split("/").some((part) => !part || part === "." || part === "..")) process.exit(1);
+process.stdout.write(match[1]);
+NODE
+)" || offsite_die "Das bisher gebundene Offsite-Repository ist ungueltig."
+  previous_repository_id="$("$OFFSITE_NODE" - "$OFFSITE_CONFIG_ROOT/repository-id" <<'NODE'
+const fs = require("node:fs");
+const value = fs.readFileSync(process.argv[2], "utf8");
+const match = value.match(/^([a-f0-9]{16,64})\n?$/);
+if (!match) process.exit(1);
+process.stdout.write(match[1]);
+NODE
+)" || offsite_die "Die bisher gebundene Repository-Identitaet ist ungueltig."
+  (( initialize_repository == 0 )) \
+    || offsite_die "--initialize-repository ist nur bei der ersten Offsite-Einrichtung erlaubt."
+elif (( status_configured_before == 1 )); then
+  offsite_die "Ein konfigurierter Offsite-Status ohne installiertes Modul ist nicht migrationsfaehig."
+fi
+provider_policy="$operation_root/provider-policy.json"
 setup_run "$operation_root/rclone-wrapper" config redacted "$rclone_remote" 2>/dev/null \
-  | "$OFFSITE_NODE" "$module_candidate/lib/offsite-rclone-policy.js" "$rclone_remote" >/dev/null \
-  || offsite_die "Das gewaehlte rclone-Remote benoetigt einen eigenen Google-OAuth-Client mit Scope drive.file."
+  | "$OFFSITE_NODE" "$module_candidate/lib/offsite-rclone-policy.js" "$rclone_remote" >"$provider_policy" \
+  || offsite_die "Das gewaehlte rclone-Remote entspricht keiner freigegebenen Offsite-Provider-Richtlinie."
+chmod 0600 -- "$provider_policy"
+if (( previous_provider_binding == 1 )); then
+  "$OFFSITE_NODE" "$module_candidate/lib/offsite-contract.js" verify-provider-binding \
+    "$OFFSITE_CONFIG_ROOT/installed-contract.json" "$provider_policy" "$operation_root/repository" >/dev/null \
+    || offsite_die "Eine Aenderung der gebundenen Provider-, Endpoint- oder Repository-Richtlinie ist nur ueber einen eigenen Migrationsvorgang erlaubt."
+fi
+bound_contract_receipt="$operation_root/installed-contract.bound.json"
+"$OFFSITE_NODE" "$module_candidate/lib/offsite-contract.js" bind-provider \
+  "$contract_receipt" "$provider_policy" "$operation_root/repository" >"$bound_contract_receipt" \
+  || offsite_die "Die validierte Provider- und Repository-Bindung ist ungueltig."
+chmod 0600 -- "$bound_contract_receipt"
+mv -f -- "$bound_contract_receipt" "$contract_receipt"
+validated_provider="$("$OFFSITE_NODE" "$module_candidate/lib/offsite-contract.js" verify-provider-binding \
+  "$contract_receipt" "$provider_policy" "$operation_root/repository")" \
+  || offsite_die "Die Providerbindung konnte nicht aus dem Installationsbeleg bestaetigt werden."
+case "$validated_provider" in
+  google_drive|hetzner_object_storage|backblaze_b2) ;;
+  *) offsite_die "Der validierte Offsite-Provider ist ungueltig." ;;
+esac
+if [[ -n "$previous_provider_id" && "$validated_provider" != "$previous_provider_id" ]]; then
+  offsite_die "Ein Offsite-Providerwechsel ist nur ueber einen eigenen, vollstaendig abgesicherten Migrationsvorgang erlaubt."
+fi
+if [[ -n "$previous_repository" && "$repository" != "$previous_repository" ]]; then
+  offsite_die "Ein Wechsel des gebundenen Offsite-Repositorys ist im Installer nicht erlaubt."
+fi
 
 repository_config="$operation_root/repository-config.json"
 set +e
@@ -558,9 +622,18 @@ set -e
 if (( repository_status != 0 )); then
   [[ "$repository_status" -eq 10 && "$initialize_repository" -eq 1 ]] \
     || offsite_die "Das Restic-Repository ist nicht initialisiert, nicht erreichbar oder die Zugangsdaten stimmen nicht."
-  setup_run "$operation_root/rclone-wrapper" about "$rclone_remote:" \
-    >"$operation_root/remote-about.out" 2>"$operation_root/remote-about.error" \
-    || offsite_die "Das rclone-Remote ist nicht sicher erreichbar."
+  if [[ "$validated_provider" == "google_drive" ]]; then
+    setup_run "$operation_root/rclone-wrapper" about "$rclone_remote:" \
+      >"$operation_root/remote-about.out" 2>"$operation_root/remote-about.error" \
+      || offsite_die "Das Google-Drive-Remote ist nicht sicher erreichbar."
+  else
+    s3_bucket="${repository_path%%/*}"
+    [[ -n "$s3_bucket" && "$s3_bucket" != "$repository_path" ]] \
+      || offsite_die "Der fest gebundene S3-Bucket konnte nicht bestimmt werden."
+    setup_run "$operation_root/rclone-wrapper" lsf "$rclone_remote:$s3_bucket" --dirs-only --max-depth 1 \
+      >"$operation_root/bucket-list.out" 2>"$operation_root/bucket-list.error" \
+      || offsite_die "Der fest gebundene S3-Bucket ist nicht sicher erreichbar."
+  fi
   set +e
   setup_run "$operation_root/rclone-wrapper" lsf "$rclone_remote:$repository_path" --max-depth 1 \
     >"$operation_root/repository-list.out" 2>"$operation_root/repository-list.error"
@@ -585,6 +658,9 @@ if (( repository_status != 0 )); then
 fi
 repository_id="$("$OFFSITE_NODE" -e 'const fs=require("node:fs");const v=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(!/^[a-f0-9]{16,64}$/i.test(String(v.id||"")))process.exit(1);process.stdout.write(String(v.id).toLowerCase())' "$repository_config")" \
   || offsite_die "Die Repository-Identitaet konnte nicht sicher gelesen werden."
+if [[ -n "$previous_repository_id" && "$repository_id" != "$previous_repository_id" ]]; then
+  offsite_die "Die erreichbare Repository-Identitaet weicht von der bisher gebundenen Identitaet ab."
+fi
 printf '%s\n' "$repository_id" >"$operation_root/repository-id"
 offsite_remove_uploader_credentials "$setup_credentials"
 setup_credentials="$(offsite_make_uploader_credentials "$operation_root")"
@@ -592,6 +668,19 @@ if ! setup_restic cat config >"$operation_root/repository-confirm.json" 2>/dev/n
   || [[ "$("$OFFSITE_NODE" -e 'const fs=require("node:fs");const v=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(String(v.id||"").toLowerCase())' "$operation_root/repository-confirm.json")" != "$repository_id" ]]; then
   offsite_die "Die Repository-Identitaet konnte nicht erneut bestaetigt werden."
 fi
+# Ein moeglicher Credential-Refresh oder eine rclone-interne
+# Konfigurationsaktualisierung waehrend des Repositoryzugriffs darf die
+# zuvor gebundene Provider-Richtlinie nicht veraendern.
+post_provider_policy="$operation_root/provider-policy.post.json"
+setup_run "$operation_root/rclone-wrapper" config redacted "$rclone_remote" 2>/dev/null \
+  | "$OFFSITE_NODE" "$module_candidate/lib/offsite-rclone-policy.js" "$rclone_remote" >"$post_provider_policy" \
+  || offsite_die "Die aktualisierte rclone-Konfiguration verletzt die gebundene Provider-Richtlinie."
+chmod 0600 -- "$post_provider_policy"
+post_validated_provider="$("$OFFSITE_NODE" "$module_candidate/lib/offsite-contract.js" verify-provider-binding \
+  "$contract_receipt" "$post_provider_policy" "$operation_root/repository")" \
+  || offsite_die "Die aktualisierte rclone-Konfiguration weicht von der gebundenen Provider-Richtlinie ab."
+[[ "$post_validated_provider" == "$validated_provider" ]] \
+  || offsite_die "Der validierte Offsite-Provider hat sich waehrend der Einrichtung geaendert."
 
 rollback_root="$operation_root/rollback"
 install -d -m 0700 -o root -g root -- "$rollback_root" "$rollback_root/units"
@@ -716,29 +805,54 @@ for command_name in "${!commands[@]}"; do
 done
 
 env_temporary="$(mktemp --tmpdir="$(dirname -- "$OFFSITE_APP_ENV")" .grabenplaner.env.XXXXXXXX)"
-"$OFFSITE_NODE" - "$OFFSITE_APP_ENV" "$env_temporary" <<'NODE'
+"$OFFSITE_NODE" - "$OFFSITE_APP_ENV" "$env_temporary" "$validated_provider" <<'NODE'
 const fs = require("node:fs");
-const [source, target] = process.argv.slice(2);
+const [source, target, provider] = process.argv.slice(2);
+if (!["google_drive", "hetzner_object_storage", "backblaze_b2"].includes(provider)) process.exit(1);
 const lines = fs.readFileSync(source, "utf8").split(/\r?\n/)
-  .filter((line) => !/^GRABENPLANER_OFFSITE_(?:CONFIGURED|STATUS_FILE)=/.test(line));
+  .filter((line) => !/^GRABENPLANER_OFFSITE_(?:CONFIGURED|PROVIDER|STATUS_FILE)=/.test(line));
 while (lines.length && !lines.at(-1)) lines.pop();
-lines.push("GRABENPLANER_OFFSITE_CONFIGURED=1", "GRABENPLANER_OFFSITE_STATUS_FILE=/var/lib/grabenplaner-offsite/status.json", "");
+lines.push(
+  "GRABENPLANER_OFFSITE_CONFIGURED=1",
+  `GRABENPLANER_OFFSITE_PROVIDER=${provider}`,
+  "GRABENPLANER_OFFSITE_STATUS_FILE=/var/lib/grabenplaner-offsite/status.json",
+  "",
+);
 fs.writeFileSync(target, lines.join("\n"), { mode: 0o600 });
 NODE
 chown root:root -- "$env_temporary"
 chmod 0600 -- "$env_temporary"
 mv -f -- "$env_temporary" "$OFFSITE_APP_ENV"
 
-if (( status_configured_before == 0 )); then offsite_status configured >/dev/null; fi
+if (( status_configured_before == 0 )); then
+  offsite_status configured >/dev/null
+else
+  offsite_status bind-provider >/dev/null
+fi
 systemctl daemon-reload
-systemctl enable --now grabenplaner-offsite-target-control.socket grabenplaner-offsite-assurance-control.socket \
+systemctl enable --now grabenplaner-offsite-assurance-control.socket \
   grabenplaner-offsite-assurance.timer grabenplaner-offsite-upload.timer grabenplaner-offsite-check.timer grabenplaner-offsite-restore-test.timer >/dev/null
+if [[ "$validated_provider" == "google_drive" ]]; then
+  systemctl enable --now grabenplaner-offsite-target-control.socket >/dev/null
+else
+  systemctl disable --now grabenplaner-offsite-target-control.socket >/dev/null 2>&1 || true
+  systemctl stop 'grabenplaner-offsite-target-control@*.service' >/dev/null 2>&1 || true
+fi
 systemctl restart "$OFFSITE_APP_SERVICE"
 systemctl is-active --quiet "$OFFSITE_APP_SERVICE" || offsite_die "Der Grabenplaner-Dienst konnte nach der Offsite-Aktivierung nicht gestartet werden."
 systemctl is-active --quiet grabenplaner-offsite-assurance-control.socket \
   || offsite_die "Der abgesicherte Recovery-Assurance-Steuerungssocket wurde nicht aktiviert."
-systemctl is-active --quiet grabenplaner-offsite-target-control.socket \
-  || offsite_die "Der abgesicherte Offsite-Ziel-Steuerungssocket wurde nicht aktiviert."
+if [[ "$validated_provider" == "google_drive" ]]; then
+  systemctl is-enabled --quiet grabenplaner-offsite-target-control.socket \
+    || offsite_die "Der abgesicherte Google-Drive-Ziel-Steuerungssocket wurde nicht aktiviert."
+  systemctl is-active --quiet grabenplaner-offsite-target-control.socket \
+    || offsite_die "Der abgesicherte Google-Drive-Ziel-Steuerungssocket wurde nicht gestartet."
+else
+  ! systemctl is-enabled --quiet grabenplaner-offsite-target-control.socket \
+    || offsite_die "Die Google-Drive-Ziel-Steuerung darf fuer den gebundenen S3-Provider nicht aktiviert sein."
+  ! systemctl is-active --quiet grabenplaner-offsite-target-control.socket \
+    || offsite_die "Die Google-Drive-Ziel-Steuerung darf fuer den gebundenen S3-Provider nicht laufen."
+fi
 app_port="$("$OFFSITE_NODE" - "$OFFSITE_APP_ENV" <<'NODE'
 const fs = require("node:fs");
 const matches = fs.readFileSync(process.argv[2], "utf8").split(/\r?\n/).filter((line) => /^PORT=/.test(line));

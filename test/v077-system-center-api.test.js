@@ -176,10 +176,35 @@ test("v0.86.2: Server-Monitor-Aktionen bleiben auf Admin, IT-Admin und Developer
   for (const role of ["admin", "it_admin", "developer"]) {
     assert.deepEqual(
       subject.serverMonitorActionCapabilities(actor(role), { managedRestartAvailable: true }),
-      { canRefresh: true, canRestart: true },
+      { canRefresh: true, canRestart: true, canVpsReboot: false },
       role,
     );
   }
+  assert.equal(
+    subject.serverMonitorActionCapabilities(actor("developer"), {
+      managedRestartAvailable: true,
+      managedHostRebootAvailable: true,
+      hostRebootRequired: true,
+    }).canVpsReboot,
+    true,
+  );
+  for (const role of ["admin", "it_admin", "hr"]) {
+    assert.equal(
+      subject.serverMonitorActionCapabilities(actor(role), {
+        managedHostRebootAvailable: true,
+        hostRebootRequired: true,
+      }).canVpsReboot,
+      false,
+      role,
+    );
+  }
+  assert.equal(
+    subject.serverMonitorActionCapabilities(actor("developer"), {
+      managedHostRebootAvailable: true,
+      hostRebootRequired: false,
+    }).canVpsReboot,
+    false,
+  );
   assert.equal(
     subject.serverMonitorActionCapabilities(actor("hr"), { managedRestartAvailable: true }).canRestart,
     false,
@@ -203,7 +228,10 @@ test("v0.86.2: Server-Monitor-Aktionen bleiben auf Admin, IT-Admin und Developer
     subject.serverMonitorActionCapabilities(actor("admin"), { managedRestartAvailable: false }).canRestart,
     false,
   );
-  assert.deepEqual(subject.serverMonitorActionCapabilities(null), { canRefresh: false, canRestart: false });
+  assert.deepEqual(
+    subject.serverMonitorActionCapabilities(null),
+    { canRefresh: false, canRestart: false, canVpsReboot: false },
+  );
 });
 
 test("v0.86.2: persistente Neustartsperre ist fail-closed und endet nach fünf Minuten", () => {
@@ -231,6 +259,23 @@ test("v0.86.2: Neustart verlangt exakte Bestaetigung, CSRF und verwalteten Serve
     assert.throws(
       () => subject.assertServerRestartConfirmation(body),
       (error) => error?.status === 400 && error?.code === "SERVER_RESTART_CONFIRMATION_REQUIRED",
+    );
+  }
+  assert.doesNotThrow(() => subject.assertVpsRebootConfirmation({
+    confirmation: "VPS_REBOOT",
+    currentPassword: "developer-password",
+  }));
+  for (const body of [
+    null,
+    {},
+    { confirmation: "VPS_REBOOT" },
+    { confirmation: "vps_reboot", currentPassword: "developer-password" },
+    { confirmation: "VPS_REBOOT", currentPassword: "" },
+    { confirmation: "VPS_REBOOT", currentPassword: "developer-password", extra: true },
+  ]) {
+    assert.throws(
+      () => subject.assertVpsRebootConfirmation(body),
+      (error) => error?.status === 400 && error?.code === "VPS_REBOOT_CONFIRMATION_REQUIRED",
     );
   }
 
@@ -277,5 +322,36 @@ test("v0.86.2: Neustart verlangt exakte Bestaetigung, CSRF und verwalteten Serve
 
   const status = await requestJson("/api/server-status", { session: admin });
   assert.equal(status.response.status, 200, JSON.stringify(status.payload));
-  assert.deepEqual(status.payload.monitorActions, { canRefresh: true, canRestart: false });
+  assert.deepEqual(
+    status.payload.monitorActions,
+    { canRefresh: true, canRestart: false, canVpsReboot: false },
+  );
+});
+
+test("VPS-Neustart bleibt Developer-only und lokal fail-closed", async () => {
+  const admin = ensureTestUser("9701", "admin");
+  const deniedRole = await requestJson("/api/portal/v1/server-monitor/vps-reboot", {
+    method: "POST",
+    session: admin,
+    body: { confirmation: "VPS_REBOOT", currentPassword: "test-only" },
+  });
+  assert.equal(deniedRole.response.status, 403, JSON.stringify(deniedRole.payload));
+  assert.equal(deniedRole.payload.code, "VPS_REBOOT_ROLE_DENIED");
+
+  const developer = ensureTestUser("9705", "developer");
+  const missingConfirmation = await requestJson("/api/portal/v1/server-monitor/vps-reboot", {
+    method: "POST",
+    session: developer,
+    body: {},
+  });
+  assert.equal(missingConfirmation.response.status, 400, JSON.stringify(missingConfirmation.payload));
+  assert.equal(missingConfirmation.payload.code, "VPS_REBOOT_CONFIRMATION_REQUIRED");
+
+  const unmanaged = await requestJson("/api/portal/v1/server-monitor/vps-reboot", {
+    method: "POST",
+    session: developer,
+    body: { confirmation: "VPS_REBOOT", currentPassword: "test-only" },
+  });
+  assert.equal(unmanaged.response.status, 409, JSON.stringify(unmanaged.payload));
+  assert.equal(unmanaged.payload.code, "VPS_REBOOT_SERVICE_REQUIRED");
 });

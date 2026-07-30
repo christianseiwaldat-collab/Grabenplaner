@@ -61,6 +61,28 @@ test("v0.86.2: Ordneraktionen verwenden exakte geschützte und redigierte API-Ve
   assert.ok((client.match(/finally \{\s*clearOffsiteFolderPasswords\(\);/g) || []).length >= 2);
 });
 
+test("v0.86.2: Legacy target without a managed folder remains a successful empty API and UI state", () => {
+  const client = read("public/app.js");
+  const server = read("server.js");
+  const labelValidator = client.match(/function validManagedOffsiteFolderLabel\(value\) \{[\s\S]*?\n}/)?.[0] || "";
+  const normalizerSource = client.match(/function normalizedManagedOffsiteFolders\(result\) \{[\s\S]*?\n}/)?.[0] || "";
+  assert.ok(labelValidator);
+  assert.ok(normalizerSource);
+  const normalize = Function(
+    `"use strict";\n${labelValidator}\n${normalizerSource}\nreturn normalizedManagedOffsiteFolders;`,
+  )();
+  assert.deepEqual(normalize({ activeFolder: null, folders: [] }), {
+    activeFolder: null,
+    folders: [],
+  });
+  assert.match(
+    server,
+    /app\.get\("\/api\/backup\/offsite-folders"[\s\S]*?activeFolder: result\.activeFolder \|\| null,[\s\S]*?folders: Array\.isArray\(result\.folders\) \? result\.folders : \[\],/,
+  );
+  assert.match(client, /bestehender Legacy-Zielpfad/);
+  assert.match(client, /bestehende Legacy-Zielpfad wurde noch nicht in die verwaltete Ordnerstruktur/);
+});
+
 test("v0.86.2: Ordnerdialog bleibt responsiv und warnt auch im dunklen Modus", () => {
   const styles = read("public/styles.css");
   assert.match(styles, /\.offsite-folder-modal \{ width:min\(760px,calc\(100vw - 28px\)\); \}/);

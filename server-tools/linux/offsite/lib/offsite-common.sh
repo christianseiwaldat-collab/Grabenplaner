@@ -42,6 +42,7 @@ readonly OFFSITE_NODE="/usr/bin/node"
 readonly OFFSITE_RCLONE_WRAPPER="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-rclone-wrapper.sh"
 readonly OFFSITE_LEGACY_RCLONE_WRAPPER="$OFFSITE_BIN_ROOT/grabenplaner-rclone"
 readonly OFFSITE_BINARY_PINS="$OFFSITE_CONFIG_ROOT/binary-pins.json"
+readonly OFFSITE_INSTALLED_CONTRACT="$OFFSITE_CONFIG_ROOT/installed-contract.json"
 readonly OFFSITE_READER="$OFFSITE_MODULE_ROOT/grabenplaner-offsite-read-secret.sh"
 readonly OFFSITE_STATUS_HELPER="$OFFSITE_MODULE_ROOT/lib/offsite-status.js"
 readonly OFFSITE_RCLONE_POLICY_HELPER="$OFFSITE_MODULE_ROOT/lib/offsite-rclone-policy.js"
@@ -144,9 +145,9 @@ NODE
 }
 
 offsite_assert_installed_contract() {
-  local file="$OFFSITE_CONFIG_ROOT/installed-contract.json"
+  local file="$OFFSITE_INSTALLED_CONTRACT"
   offsite_assert_regular_root_file "$file"
-  "$OFFSITE_NODE" "$OFFSITE_MODULE_ROOT/lib/offsite-contract.js" verify-installed "$OFFSITE_MODULE_ROOT" "$file" >/dev/null \
+  "$OFFSITE_NODE" "$OFFSITE_MODULE_ROOT/lib/offsite-contract.js" verify-installed-bound "$OFFSITE_MODULE_ROOT" "$file" >/dev/null \
     || offsite_die "Das installierte Offsite-Modul stimmt nicht mit seinem Installationsbeleg ueberein."
 }
 
@@ -236,17 +237,41 @@ process.stdout.write(match[1]);
 NODE
 }
 
-offsite_assert_dedicated_rclone_oauth() {
-  local credentials="$1" remote
+offsite_assert_bound_rclone_provider() {
+  local credentials="$1" remote policy_file provider_id
+  offsite_assert_installed_contract
   offsite_assert_persistent_rclone_config
   remote="$(offsite_repository_remote "$credentials")" \
     || offsite_die "Das eingerichtete rclone-Remote ist ungueltig."
+  offsite_prepare_run_root
+  policy_file="$(mktemp --tmpdir="$OFFSITE_RUN_ROOT" provider-policy.XXXXXXXX)"
+  chmod 0600 -- "$policy_file"
   # Nur die von rclone selbst redigierte, ausgewaehlte Remote-Sektion wird
-  # fluechtig ueber stdin geprueft. Weder Client-ID noch Secret oder Token
-  # gelangen in Argumente, Dateien, Statusmeldungen oder RAS-Belege.
-  offsite_run_as_uploader "$credentials" "$OFFSITE_RCLONE_WRAPPER" config redacted "$remote" 2>/dev/null \
-    | "$OFFSITE_NODE" "$OFFSITE_RCLONE_POLICY_HELPER" "$remote" >/dev/null \
-    || offsite_die "Fuer die Offsite-Sicherung ist ein eigener Google-OAuth-Client mit Scope drive.file erforderlich."
+  # fluechtig geprueft. Zugangsschluessel, Client-Secrets und Tokens gelangen
+  # weder in Argumente noch in Statusmeldungen oder Recovery-Assurance-Belege.
+  if ! offsite_run_as_uploader "$credentials" "$OFFSITE_RCLONE_WRAPPER" config redacted "$remote" 2>/dev/null \
+    | "$OFFSITE_NODE" "$OFFSITE_RCLONE_POLICY_HELPER" "$remote" >"$policy_file"; then
+    rm -f -- "$policy_file"
+    offsite_die "Die aktive rclone-Konfiguration verletzt die gebundene Offsite-Provider-Richtlinie."
+  fi
+  provider_id="$("$OFFSITE_NODE" "$OFFSITE_MODULE_ROOT/lib/offsite-contract.js" verify-provider-binding \
+    "$OFFSITE_INSTALLED_CONTRACT" "$policy_file" "$credentials/repository")" || {
+    rm -f -- "$policy_file"
+    offsite_die "Die aktive rclone-Konfiguration stimmt nicht mit der gebundenen Offsite-Provider-Richtlinie ueberein."
+  }
+  rm -f -- "$policy_file"
+  case "$provider_id" in
+    google_drive|hetzner_object_storage|backblaze_b2) ;;
+    *) offsite_die "Der gebundene Offsite-Provider ist ungueltig." ;;
+  esac
+  printf '%s\n' "$provider_id"
+}
+
+offsite_assert_dedicated_rclone_oauth() {
+  local credentials="$1" provider_id
+  provider_id="$(offsite_assert_bound_rclone_provider "$credentials")"
+  [[ "$provider_id" == "google_drive" ]] \
+    || offsite_die "Die verwaltete Google-Drive-Ordnersteuerung ist fuer den gebundenen Provider nicht freigegeben."
 }
 
 offsite_assert_group_isolation() {
@@ -425,6 +450,7 @@ offsite_restic() {
   # rclone-Wrapper) als auch die separat gepinnten Binaerdateien fail-closed
   # geprueft. Erst danach erfolgt der Privilegabwurf zum Uploaderkonto.
   offsite_assert_runtime_binaries
+  offsite_assert_bound_rclone_provider "$credentials" >/dev/null
   offsite_run_as_uploader "$credentials" "$OFFSITE_RESTIC" \
     --repository-file "$credentials/repository" \
     --password-file "$credentials/restic-password" \
@@ -446,11 +472,23 @@ offsite_verify_repository_identity() {
 }
 
 offsite_status() {
-  local status_gid
+  local status_gid command_name provider_id
   offsite_require_root
   status_gid="$(getent group "$OFFSITE_STATUS_GROUP" | awk -F: '{print $3}')"
   [[ "$status_gid" =~ ^[0-9]+$ ]] || offsite_die "Die Offsite-Statusgruppe konnte nicht sicher aufgeloest werden."
-  "$OFFSITE_NODE" "$OFFSITE_STATUS_HELPER" --status-file "$OFFSITE_STATUS_FILE" --status-gid "$status_gid" "$@"
+  command_name="${1:-}"
+  case "$command_name" in
+    inspect|unconfigured)
+      "$OFFSITE_NODE" "$OFFSITE_STATUS_HELPER" --status-file "$OFFSITE_STATUS_FILE" --status-gid "$status_gid" "$@"
+      ;;
+    *)
+      offsite_assert_installed_contract
+      provider_id="$("$OFFSITE_NODE" "$OFFSITE_MODULE_ROOT/lib/offsite-contract.js" provider-id "$OFFSITE_INSTALLED_CONTRACT")" \
+        || offsite_die "Der gebundene Offsite-Provider konnte fuer den Status nicht bestaetigt werden."
+      "$OFFSITE_NODE" "$OFFSITE_STATUS_HELPER" --status-file "$OFFSITE_STATUS_FILE" --status-gid "$status_gid" \
+        "$@" --provider-id "$provider_id"
+      ;;
+  esac
 }
 
 offsite_assurance_history() {

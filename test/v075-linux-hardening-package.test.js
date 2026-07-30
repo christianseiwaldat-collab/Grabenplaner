@@ -113,7 +113,7 @@ function withCleanGitSnapshot(callback) {
   }
 }
 
-test("v0.75 keeps hardening separate from the schema-2 core runtime and binds its exact fingerprint", () => {
+test("hardening stays separate from the current core runtime and binds its exact fingerprint", () => {
   const verification = spawnSync(process.execPath, [
     path.join(root, "server-tools/linux/lib/verify-package.js"),
     "--runtime-contract",
@@ -121,8 +121,8 @@ test("v0.75 keeps hardening separate from the schema-2 core runtime and binds it
   ], { encoding: "utf8" });
   assert.equal(verification.status, 0, verification.stderr);
   const result = JSON.parse(verification.stdout);
-  assert.equal(result.deploymentSchemaVersion, 2);
-  assert.equal(result.managedArtifacts.length, 7);
+  assert.equal(result.deploymentSchemaVersion, 3);
+  assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 
   const { moduleContract } = require(path.join(root, "server-tools/linux/hardening/lib/hardening-contract.js"));
@@ -269,8 +269,8 @@ test("v0.75 Linux package builder expands the complete hardening artifact list",
       "-OutputDirectory", outputRoot,
     ], { encoding: "utf8", timeout: 120_000 });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.87.0-beta-linux-x64.zip")));
-    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.87.0-beta-linux-x64.zip.sha256")));
+    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.88.0-beta-linux-x64.zip")));
+    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.88.0-beta-linux-x64.zip.sha256")));
   });
 });
 

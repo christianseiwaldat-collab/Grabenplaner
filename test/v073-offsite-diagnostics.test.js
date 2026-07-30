@@ -21,7 +21,10 @@ test("v0.73 exposes redacted offsite diagnostics only through the protected serv
   const readinessExpression = server.match(/ready:\s*startupIntegrity[\s\S]*?serviceControlToken\.length >= 32\)\),/);
   assert.ok(readinessExpression, "Readiness-Ausdruck fehlt");
   assert.doesNotMatch(readinessExpression[0], /offsite|monitor/i);
-  assert.match(server, /response\.status\(diagnostics\.ready \? 200 : 503\)\.json\(\{ ok: diagnostics\.ready \}\)/);
+  assert.match(
+    server,
+    /response\.status\(diagnostics\.ready \? 200 : 503\)\.json\(\{[\s\S]*ok: diagnostics\.ready,[\s\S]*hostBootGeneration,[\s\S]*\}\)/,
+  );
 });
 
 test("v0.73 renders backup age, repository check, full check and isolated restore without internal paths", () => {

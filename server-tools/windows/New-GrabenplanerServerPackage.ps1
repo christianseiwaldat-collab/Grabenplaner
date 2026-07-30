@@ -46,6 +46,22 @@ function Test-AllowedTrackedRuntimePath([string]$RelativePath) {
     return $normalized.StartsWith('lib/') -or $normalized.StartsWith('public/') -or $normalized.StartsWith('server-tools/')
 }
 
+function Assert-RequiredRuntimeFiles([string]$Root, [string]$PackageKind) {
+    foreach ($required in @(
+        'server.js',
+        'package.json',
+        'lib\database-lock.js',
+        'lib\offsite-provider-policy.js',
+        'lib\host-reboot-control-client.js',
+        'lib\controlled-host-reboot.js',
+        'server-tools\windows\Update-GrabenplanerServer.ps1'
+    )) {
+        if (-not (Test-Path -LiteralPath (Join-Path $Root $required) -PathType Leaf)) {
+            throw "Pflichtdatei fehlt im ${PackageKind}: $required"
+        }
+    }
+}
+
 function Copy-TreeFiles([string]$Source, [string]$Target, [scriptblock]$Include) {
     $sourcePrefix = $Source.TrimEnd('\') + '\'
     foreach ($file in Get-ChildItem -LiteralPath $Source -Recurse -File -Force) {
@@ -195,11 +211,7 @@ process.stdout.write('dependencies-ok');
     & $nodeVerifier --check (Join-Path $buildRoot 'server.js')
     if ($LASTEXITCODE -ne 0) { throw 'server.js hat die Node-Syntaxpruefung nicht bestanden.' }
 
-    foreach ($required in @('server.js', 'package.json', 'lib\database-lock.js', 'server-tools\windows\Update-GrabenplanerServer.ps1')) {
-        if (-not (Test-Path -LiteralPath (Join-Path $buildRoot $required) -PathType Leaf)) {
-            throw "Pflichtdatei fehlt im Serverpaket: $required"
-        }
-    }
+    Assert-RequiredRuntimeFiles -Root $buildRoot -PackageKind 'Serverpaket'
 
     $buildPrefix = $buildRoot.TrimEnd('\') + '\'
     $manifestFiles = @(Get-ChildItem -LiteralPath $buildRoot -Recurse -File -Force |

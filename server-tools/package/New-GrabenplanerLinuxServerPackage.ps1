@@ -152,6 +152,16 @@ $expectedHardeningDirectories = @(
     'server-tools/linux/hardening/systemd',
     'server-tools/linux/hardening/templates'
 )
+$expectedHostControlArtifacts = @(
+    'server-tools/linux/host-control/lib/host-reboot-broker.js',
+    'server-tools/linux/host-control/systemd/grabenplaner-host-control.socket.in',
+    'server-tools/linux/host-control/systemd/grabenplaner-host-control@.service.in',
+    'server-tools/linux/host-control/systemd/grabenplaner-host-reboot.service.in'
+)
+$expectedHostControlDirectories = @(
+    'server-tools/linux/host-control/lib',
+    'server-tools/linux/host-control/systemd'
+)
 $sourcePrefixForOutput = $sourceRoot.TrimEnd('\') + '\'
 if ($outputRoot -eq $sourceRoot) { throw 'Der Ausgabeordner darf nicht dem Quellordner entsprechen.' }
 if ($outputRoot.StartsWith($sourcePrefixForOutput, [StringComparison]::OrdinalIgnoreCase)) {
@@ -268,16 +278,50 @@ try {
         'server-tools\linux\monitor\lib\monitor-status.js',
         'server-tools\linux\monitor\run-grabenplaner-monitor.sh',
         'server-tools\linux\migrate-grabenplaner-runtime-v2.sh',
+        'server-tools\linux\migrate-grabenplaner-runtime-v3.sh',
+        'lib\controlled-host-reboot.js',
+        'lib\host-reboot-control-client.js',
+        'lib\offsite-provider-policy.js',
         'server-tools\linux\lib\offsite-update-compat.js',
         'server-tools\linux\recovery\grabenplaner-recovery.sh',
         'server-tools\linux\recovery\lib\recovery-apply.js',
         'server-tools\linux\recovery\lib\recovery-metadata.js',
         'server-tools\linux\recovery\lib\recovery-verify.js'
-    ) + $expectedHardeningArtifacts
+    ) + $expectedHardeningArtifacts + $expectedHostControlArtifacts
     foreach ($required in $requiredPackageFiles) {
         if (-not (Test-Path -LiteralPath (Join-Path $buildRoot $required) -PathType Leaf)) {
             throw "Pflichtdatei fehlt im Linux-Serverpaket: $required"
         }
+    }
+
+    $hostControlTreeRoot = Join-Path $buildRoot 'server-tools\linux\host-control'
+    $hostControlTreeRootItem = Get-Item -LiteralPath $hostControlTreeRoot -Force
+    if (-not $hostControlTreeRootItem.PSIsContainer -or
+        (($hostControlTreeRootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+        throw 'Der Host-Control-Runtimeordner ist unzulaessig.'
+    }
+    $actualHostControlFiles = @()
+    $actualHostControlDirectories = @()
+    foreach ($item in Get-ChildItem -LiteralPath $hostControlTreeRoot -Recurse -Force) {
+        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Links und Reparse-Points sind im Host-Control-Runtimebaum nicht erlaubt: $($item.FullName)"
+        }
+        $relative = $item.FullName.Substring($buildRoot.TrimEnd('\').Length + 1).Replace('\', '/')
+        if ($item.PSIsContainer) { $actualHostControlDirectories += $relative }
+        elseif ($item -is [IO.FileInfo]) { $actualHostControlFiles += $relative }
+        else { throw "Unzulaessiger Dateityp im Host-Control-Runtimebaum: $relative" }
+    }
+    $actualHostControlFiles = [string[]]$actualHostControlFiles
+    $actualHostControlDirectories = [string[]]$actualHostControlDirectories
+    $sortedExpectedHostControlFiles = [string[]]$expectedHostControlArtifacts.Clone()
+    $sortedExpectedHostControlDirectories = [string[]]$expectedHostControlDirectories.Clone()
+    [Array]::Sort($actualHostControlFiles, [StringComparer]::Ordinal)
+    [Array]::Sort($actualHostControlDirectories, [StringComparer]::Ordinal)
+    [Array]::Sort($sortedExpectedHostControlFiles, [StringComparer]::Ordinal)
+    [Array]::Sort($sortedExpectedHostControlDirectories, [StringComparer]::Ordinal)
+    if (($actualHostControlFiles -join "`0") -cne ($sortedExpectedHostControlFiles -join "`0") -or
+        ($actualHostControlDirectories -join "`0") -cne ($sortedExpectedHostControlDirectories -join "`0")) {
+        throw 'Der Host-Control-Runtimebaum enthaelt nicht exakt die freigegebenen Dateien und Verzeichnisse.'
     }
 
     $hardeningTreeRoot = Join-Path $buildRoot 'server-tools\linux\hardening'

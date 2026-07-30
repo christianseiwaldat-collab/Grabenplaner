@@ -89,7 +89,7 @@ while (($#)); do
 done
 
 gp_require_root
-for command_name in realpath readlink flock sha256sum unzip zipinfo systemctl curl find sort stat du getent clamscan runuser; do gp_require_command "$command_name"; done
+for command_name in cmp realpath readlink flock sha256sum unzip zipinfo systemctl curl find grep sort stat du getent clamscan runuser; do gp_require_command "$command_name"; done
 [[ "$(uname -m)" == "x86_64" ]] || gp_die "Das Serverpaket wird derzeit nur auf Linux x86_64 unterstuetzt."
 [[ -n "$package_arg" ]] || gp_die "--package ist erforderlich."
 [[ "$health_timeout" =~ ^[0-9]+$ ]] && (( health_timeout >= 30 && health_timeout <= 600 )) || gp_die "--health-timeout muss zwischen 30 und 600 liegen."
@@ -151,11 +151,11 @@ commit_marker=""
 if [[ -n "$commit_marker_arg" ]]; then
   commit_marker="$(gp_safe_absolute_path "$commit_marker_arg" "Updater-Commitmarker")"
   commit_marker_parent="$(dirname -- "$commit_marker")"
-  [[ "$commit_marker_parent" == "/opt/grabenplaner/".runtime-v2-migration.* \
+  [[ "$commit_marker_parent" =~ ^/opt/grabenplaner/\.runtime-v(2|3)-migration\.[A-Za-z0-9]+$ \
     && -d "$commit_marker_parent" && ! -L "$commit_marker_parent" \
     && "$(stat --format='%u:%g:%a' -- "$commit_marker_parent")" == "0:0:711" \
     && ! -e "$commit_marker" && ! -L "$commit_marker" ]] \
-    || gp_die "Der Updater-Commitmarker ist nicht sicher an die Runtime-v2-Migration gebunden."
+    || gp_die "Der Updater-Commitmarker ist nicht sicher an eine freigegebene Runtime-Migration gebunden."
 fi
 
 gp_path_is_same_or_child "$database" "$data_dir" || gp_die "DB_PATH muss innerhalb des geschuetzten Datenordners liegen."
@@ -488,6 +488,108 @@ case "$runtime_gate" in
     ;;
   *) gp_die "Der Runtimevertrag des Updatepakets konnte nicht sicher verglichen werden." ;;
 esac
+installed_runtime_schema="$("$node" -e \
+  'const fs=require("node:fs");process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).deploymentSchemaVersion))' \
+  "$installed_runtime_result_file")"
+if [[ "$installed_runtime_schema" == "3" ]]; then
+  host_control_group="grabenplaner-host-control"
+  host_control_module="/opt/grabenplaner-host-control/module"
+  host_control_socket_unit="/etc/systemd/system/grabenplaner-host-control.socket"
+  host_control_worker_unit="/etc/systemd/system/grabenplaner-host-control@.service"
+  host_reboot_unit="/etc/systemd/system/grabenplaner-host-reboot.service"
+  host_control_socket="/run/grabenplaner-host-control/request.sock"
+  host_control_members="$(getent group "$host_control_group" | awk -F: 'NR == 1 { print $4 }')" \
+    || gp_die "Die geschuetzte Host-Control-Gruppe fehlt."
+  host_control_gid="$(getent group "$host_control_group" | awk -F: 'NR == 1 { print $3 }')"
+  [[ "$host_control_gid" =~ ^[0-9]+$
+    && -z "$(getent passwd | awk -F: -v gid="$host_control_gid" '$4 == gid { print $1 }')" ]] \
+    || gp_die "Die Host-Control-Gruppe darf fuer keinen Benutzer Hauptgruppe sein."
+  [[ "$host_control_members" == "$service_user" ]] \
+    || gp_die "Nur der Grabenplaner-Dienstbenutzer darf Mitglied der Host-Control-Gruppe sein."
+  id -nG "$service_user" | tr ' ' '\n' | grep -Fxq "$host_control_group" \
+    || gp_die "Der Dienstbenutzer ist nicht sicher an den Host-Control-Socket gebunden."
+  [[ -d "$host_control_module" && ! -L "$host_control_module" ]] \
+    || gp_die "Das root-geschuetzte Host-Control-Modul fehlt."
+  [[ -z "$(find "$host_control_module" -xdev \( ! -user root -o ! -group root -o -perm /022 \) -print -quit)" \
+    && -z "$(find "$host_control_module" -xdev ! -type f ! -type d -print -quit)" ]] \
+    || gp_die "Das Host-Control-Modul besitzt unsichere Eigentumsrechte oder Dateitypen."
+  "$node" - "$host_control_module" "$app_dir/server-tools/linux/host-control" <<'NODE' >/dev/null \
+    || gp_die "Die installierte Host-Control-Modulkopie weicht vom Runtimevertrag ab."
+const crypto = require("node:crypto");
+const fs = require("node:fs");
+const path = require("node:path");
+function inventory(root) {
+  const found = [];
+  function walk(directory, prefix = "") {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const target = path.join(directory, entry.name);
+      const stat = fs.lstatSync(target);
+      if (stat.isSymbolicLink()) process.exit(1);
+      if (stat.isDirectory()) {
+        found.push(`d:${relative}`);
+        walk(target, relative);
+      } else if (stat.isFile()) {
+        const hash = crypto.createHash("sha256").update(fs.readFileSync(target)).digest("hex");
+        found.push(`f:${relative}:${hash}`);
+      } else process.exit(1);
+    }
+  }
+  walk(root);
+  return found.sort();
+}
+if (JSON.stringify(inventory(process.argv[2])) !== JSON.stringify(inventory(process.argv[3]))) process.exit(1);
+NODE
+  installed_host_broker="$host_control_module/lib/host-reboot-broker.js"
+  app_host_broker="$app_dir/server-tools/linux/host-control/lib/host-reboot-broker.js"
+  [[ -f "$installed_host_broker" && ! -L "$installed_host_broker" \
+    && "$(stat --format='%u:%g:%a:%h' -- "$installed_host_broker")" == "0:0:644:1" ]] \
+    || gp_die "Der installierte Host-Control-Broker ist ungueltig."
+  cmp --silent -- "$installed_host_broker" "$app_host_broker" \
+    || gp_die "Der installierte Host-Control-Broker weicht vom Runtimevertrag ab."
+
+  host_control_render_root="$maintenance_root/host-control-runtime"
+  install -d -m 0700 -o root -g root -- "$host_control_render_root"
+  resolved_node="$(readlink -f -- "$node")"
+  "$node" - "$app_dir" "$host_control_render_root" "$resolved_node" <<'NODE'
+const fs = require("node:fs");
+const path = require("node:path");
+const [appRoot, outputRoot, nodeExecutable] = process.argv.slice(2);
+const templates = new Map([
+  ["grabenplaner-host-control.socket", "grabenplaner-host-control.socket.in"],
+  ["grabenplaner-host-control@.service", "grabenplaner-host-control@.service.in"],
+  ["grabenplaner-host-reboot.service", "grabenplaner-host-reboot.service.in"],
+]);
+for (const [target, source] of templates) {
+  let content = fs.readFileSync(path.join(appRoot, "server-tools/linux/host-control/systemd", source), "utf8");
+  content = content.replaceAll("{{NODE_EXECUTABLE}}", nodeExecutable);
+  if (/\{\{[A-Z0-9_]+\}\}/.test(content)) process.exit(1);
+  fs.writeFileSync(path.join(outputRoot, target), content, { mode: 0o600 });
+}
+NODE
+  for host_unit in grabenplaner-host-control.socket grabenplaner-host-control@.service grabenplaner-host-reboot.service; do
+    installed_host_unit="/etc/systemd/system/$host_unit"
+    [[ -f "$installed_host_unit" && ! -L "$installed_host_unit" \
+      && "$(stat --format='%u:%g:%a:%h' -- "$installed_host_unit")" == "0:0:644:1" ]] \
+      || gp_die "Eine installierte Host-Control-Unit ist ungueltig: $host_unit"
+    cmp --silent -- "$installed_host_unit" "$host_control_render_root/$host_unit" \
+      || gp_die "Eine installierte Host-Control-Unit weicht vom Runtimevertrag ab: $host_unit"
+  done
+  if command -v systemd-analyze >/dev/null 2>&1; then
+    systemd-analyze verify "$host_control_socket_unit" "$host_control_worker_unit" "$host_reboot_unit" >/dev/null \
+      || gp_die "Die installierten Host-Control-Units sind nicht valide."
+  fi
+  systemctl is-enabled --quiet grabenplaner-host-control.socket \
+    || gp_die "Der Host-Control-Socket ist nicht aktiviert."
+  systemctl is-active --quiet grabenplaner-host-control.socket \
+    || gp_die "Der Host-Control-Socket ist nicht aktiv."
+  [[ -S "$host_control_socket" \
+    && "$(stat --format='%U:%G:%a' -- "$host_control_socket")" == "root:${host_control_group}:660" ]] \
+    || gp_die "Der Host-Control-Socket besitzt nicht den freigegebenen Zugriffsschutz."
+  if systemctl is-active --quiet grabenplaner-host-reboot.service; then
+    gp_die "Ein Host-Neustart ist bereits aktiv; das App-Update wird nicht parallel gestartet."
+  fi
+fi
 if [[ "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" == "1" ]]; then
   installed_offsite_receipt="/etc/grabenplaner/offsite/installed-contract.json"
   [[ -f "$installed_offsite_receipt" && ! -L "$installed_offsite_receipt" \

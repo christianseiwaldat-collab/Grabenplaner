@@ -482,6 +482,7 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
       "server-tools/linux/lib/restore-backup.js",
       "server-tools/linux/lib/verify-backup.js",
       "server-tools/linux/migrate-grabenplaner-runtime-v2.sh",
+      "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
       "server-tools/linux/monitor/lib/monitor-status.js",
       "server-tools/linux/offsite/lib/application-smoke.js",
       "server-tools/linux/recovery/lib/recovery-apply.js",
@@ -559,6 +560,7 @@ const PRODUCTION_INDIRECT_GROUPS = Object.freeze([
       "server-tools/linux/backup-grabenplaner.sh",
       "server-tools/linux/grabenplaner.env.example",
       "server-tools/linux/grabenplaner.service.in",
+      "server-tools/linux/host-control/lib/host-reboot-broker.js",
       "server-tools/linux/lib/hold-database-lock.js",
       "server-tools/linux/lib/prune-backups.js",
       "server-tools/linux/lib/verify-package.js",
@@ -690,11 +692,15 @@ const BASELINE_TEST_FILES = Object.freeze([
   "test/v087-block8-cost-center-migration.test.js",
   "test/v087-cost-center-types.test.js",
   "test/v087-employee-cost-center-assignment.test.js",
+  "test/v087-mobile-portal-personalization.test.js",
   "test/v087-pl-plus-functional-rights.test.js",
   "test/work-rule-store.test.js",
 ]);
 
 const TEST_SPECIAL_GROUPS = Object.freeze({
+  "portal-ui-preferences-integration": new Set([
+    "test/v087-mobile-portal-personalization.test.js",
+  ]),
   "historical-sqlite-fixture": new Set([
     "test-support/f18-backup-fixture.js",
     "test/portal-foundation.test.js",
@@ -785,9 +791,13 @@ const BASELINE_DIRECT_TEST_DRIVER_FILES = Object.freeze([
   "test/v087-block8-cost-center-migration.test.js",
   "test/work-rule-store.test.js",
 ]);
+const MANAGED_LINUX_SQLITE_COMPATIBILITY_DRIVER_FILES = Object.freeze([
+  "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
+]);
 const PHASE_3_ALLOWED_PRODUCTION_DRIVER_FILES = Object.freeze([
   ...BASELINE_DIRECT_PRODUCTION_DRIVER_FILES.filter((file) => file !== "server.js"),
   ...PHASE_3_SQLITE_DRIVER_FILES,
+  ...MANAGED_LINUX_SQLITE_COMPATIBILITY_DRIVER_FILES,
 ]);
 const SIGNALS = Object.freeze([
   { id: "directNodeSqliteImport", operation: "driver import", sqliteFeature: "node:sqlite", directDiscovery: true },

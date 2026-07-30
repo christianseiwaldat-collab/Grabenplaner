@@ -73,7 +73,9 @@ test("installer and uninstaller manage the target-control socket transactionally
   assert.match(installer, /\[1, 2, 3, 4, 5, 6\]\.includes\(value\.moduleVersion\)/);
   assert.match(installer, /target_control_socket_was_enabled/);
   assert.match(installer, /target_control_socket_was_active/);
-  assert.match(installer, /systemctl enable --now grabenplaner-offsite-target-control\.socket grabenplaner-offsite-assurance-control\.socket/);
-  assert.match(installer, /systemctl is-active --quiet grabenplaner-offsite-target-control\.socket/);
+  assert.match(installer, /if \[\[ "\$validated_provider" == "google_drive" \]\]; then[\s\S]*?systemctl enable --now grabenplaner-offsite-target-control\.socket/);
+  assert.match(installer, /systemctl disable --now grabenplaner-offsite-target-control\.socket/);
+  assert.match(installer, /! systemctl is-enabled --quiet grabenplaner-offsite-target-control\.socket/);
+  assert.match(installer, /! systemctl is-active --quiet grabenplaner-offsite-target-control\.socket/);
   assert.match(uninstaller, /'grabenplaner-offsite-target-control@\*\.service' grabenplaner-offsite-target-control\.socket/);
 });
