@@ -220,7 +220,7 @@ test("nested runtime-v3 updater uses the installed root-protected offsite helper
   assert.ok(gateBlock, "Der ausführbare Offsite-Kompatibilitätsblock fehlt.");
   const harnessGateBlock = gateBlock.replace(
     'installed_offsite_receipt="/etc/grabenplaner/offsite/installed-contract.json"',
-    'installed_offsite_receipt="$5"',
+    'installed_offsite_receipt="$TEST_INSTALLED_OFFSITE_RECEIPT"',
   );
   assert.notEqual(harnessGateBlock, gateBlock, "Der Testbelegpfad konnte nicht isoliert werden.");
 
@@ -259,6 +259,7 @@ readonly SCRIPT_DIR="$1"
 readonly app_dir="$2"
 readonly node="$3"
 readonly manifest_result_file="$4"
+readonly TEST_INSTALLED_OFFSITE_RECEIPT="$5"
 readonly service_group="grabenplaner"
 readonly GRABENPLANER_OFFSITE_CONFIGURED=1
 gp_die() { printf '%s\\n' "$1" >&2; exit 97; }
@@ -273,6 +274,12 @@ stat() {
     case "$argument" in --format=*) format="\${argument#--format=}" ;; esac
   done
   case "$target" in
+    "$TEST_INSTALLED_OFFSITE_RECEIPT")
+      case "$format" in
+        "%u:%g:%a:%h") printf '%s\\n' "0:0:600:1" ;;
+        *) return 2 ;;
+      esac
+      ;;
     "$app_dir/server-tools/linux/lib/offsite-update-compat.js")
       case "$format" in
         "%u:%g:%h") printf '%s\\n' "0:4242:1" ;;
