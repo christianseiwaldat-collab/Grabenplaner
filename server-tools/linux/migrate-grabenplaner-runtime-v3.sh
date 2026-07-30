@@ -46,7 +46,7 @@ usage() {
   cat <<'EOF'
 Verwendung:
   sudo ./migrate-grabenplaner-runtime-v3.sh \
-    --package /pfad/Grabenplaner-Server-v0.88.3-beta-linux-x64.zip \
+    --package /pfad/Grabenplaner-Server-v0.88.4-beta-linux-x64.zip \
     [--sha256 HEX | --sha256-file /pfad/paket.zip.sha256]
 
 Dieser root-only Wartungsvorgang akzeptiert ausschliesslich den freigegebenen
@@ -326,6 +326,12 @@ candidate_verifier="$extract_root/server-tools/linux/lib/verify-package.js"
 manifest_result="$work_root/manifest.json"
 "$node" "$candidate_verifier" "$extract_root" >"$manifest_result" \
   || gp_die "Manifest- und Einzeldateipruefung fehlgeschlagen."
+candidate_updater_contract_helper="$extract_root/server-tools/linux/lib/extract-updater-contract.js"
+[[ -f "$candidate_updater_contract_helper" && ! -L "$candidate_updater_contract_helper" ]] \
+  || gp_die "Die Paketpruefung fuer den Updater-Ergebnisvertrag fehlt."
+candidate_updater_contract_helper_sha256="$(gp_sha256 "$candidate_updater_contract_helper")"
+candidate_backup_verifier_sha256="$(gp_sha256 "$extract_root/server-tools/linux/lib/verify-backup.js")"
+candidate_amu_storage_sha256="$(gp_sha256 "$extract_root/lib/amu-storage.js")"
 cmp --silent -- "$SCRIPT_PATH" "$extract_root/server-tools/linux/migrate-grabenplaner-runtime-v3.sh" \
   || gp_die "Das gestartete Migrationsskript stammt nicht bytegleich aus dem geprueften Paket."
 cmp --silent -- "$SCRIPT_DIR/lib/common.sh" "$extract_root/server-tools/linux/lib/common.sh" \
@@ -606,6 +612,7 @@ systemctl is-active --quiet "$HOST_REBOOT_NAME" \
   && gp_die "Die Migration darf keinen Host-Neustart ausloesen."
 
 updater_output="$work_root/updater-result.json"
+install -m 0600 -o root -g root /dev/null "$updater_output"
 runtime_tools_are_executable "$app_dir/server-tools/linux" \
   || gp_die "Die eingebundenen Runtime-v3-Wartungswerkzeuge sind vor dem App-Update nicht ausfuehrbar."
 update_args=(
@@ -639,6 +646,46 @@ post_update_fail() {
   gp_log ERROR "$message Die App ist bereits erfolgreich auf Runtime v3 aktualisiert; kein unsicherer Schema-2-Teilrollback wird versucht. Diagnose: $work_root"
   exit 2
 }
+
+updater_contract="$work_root/updater-contract.json"
+updater_contract_helper="$app_dir/server-tools/linux/lib/extract-updater-contract.js"
+service_group_gid="$(getent group "$GP_DEFAULT_SERVICE_GROUP" | awk -F: 'NR==1 {print $3}')"
+if [[ ! "$service_group_gid" =~ ^[0-9]+$ \
+    || ! -f "$updater_contract_helper" || -L "$updater_contract_helper" \
+    || "$(stat --format='%u:%g:%a:%h' -- "$updater_contract_helper")" != "0:${service_group_gid}:640:1" \
+    || "$(gp_sha256 "$updater_contract_helper")" != "$candidate_updater_contract_helper_sha256" ]] \
+  || ! "$node" "$updater_contract_helper" \
+    "$updater_output" "$updater_contract" "$updater_commit_marker" \
+    "$old_version" "$candidate_version" "$actual_package_sha256" "$public_ready_url" \
+    "$backup_dir" "$data_dir/maintenance/history"; then
+  post_update_fail "Der strukturierte Ergebnisvertrag des bereits festgeschriebenen App-Updates ist ungueltig."
+fi
+chown root:root -- "$updater_contract" \
+  || post_update_fail "Der strukturierte Updater-Vertrag konnte nicht sicher zugeordnet werden."
+chmod 0600 -- "$updater_contract" \
+  || post_update_fail "Der strukturierte Updater-Vertrag konnte nicht sicher geschuetzt werden."
+
+backup_verifier="$app_dir/server-tools/linux/lib/verify-backup.js"
+amu_storage_module="$app_dir/lib/amu-storage.js"
+for protected_helper in "$backup_verifier" "$amu_storage_module"; do
+  [[ -f "$protected_helper" && ! -L "$protected_helper" \
+    && "$(stat --format='%u:%g:%a:%h' -- "$protected_helper")" == "0:${service_group_gid}:640:1" ]] \
+    || post_update_fail "Ein paketgebundener Sicherungspruefer besitzt keinen sicheren Installationszustand."
+done
+[[ "$(gp_sha256 "$backup_verifier")" == "$candidate_backup_verifier_sha256" \
+  && "$(gp_sha256 "$amu_storage_module")" == "$candidate_amu_storage_sha256" ]] \
+  || post_update_fail "Die installierte Sicherungspruefung weicht vom geprueften Paket ab."
+backup_database="$("$node" -e 'const fs=require("node:fs");process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).backup||""))' "$updater_contract")"
+backup_base="${backup_database%.db}"
+[[ "$backup_database" == "$backup_base.db" ]] \
+  || post_update_fail "Der kanonische Sicherungspfad ist ungueltig."
+backup_amu="$backup_base.amu"
+backup_marker="$backup_base.complete.json"
+backup_verification="$work_root/post-update-backup-verification.json"
+install -m 0600 -o root -g root /dev/null "$backup_verification"
+"$node" "$backup_verifier" "$backup_database" "$backup_amu" "$amu_storage_module" "$backup_marker" \
+  >"$backup_verification" \
+  || post_update_fail "Der Sicherungspunkt des festgeschriebenen App-Updates ist nicht mehr vollstaendig verifizierbar."
 
 [[ "$(gp_sha256 "$ENV_FILE")" == "$env_sha256_before" ]] \
   || post_update_fail "Die geschuetzte Server-Umgebungsdatei wurde unerwartet veraendert."
@@ -682,7 +729,7 @@ install -d -m 0750 -o root -g "$GP_DEFAULT_SERVICE_GROUP" -- "$history_dir" \
   || post_update_fail "Der Migrationsverlauf konnte nicht vorbereitet werden."
 receipt="$history_dir/runtime-v3-$(date --utc '+%Y-%m-%dT%H-%M-%S-%3N').json"
 if ! "$node" - "$receipt" "$old_version" "$candidate_version" "$actual_package_sha256" \
-  "$env_sha256_before" "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" "$updater_output" <<'NODE'
+  "$env_sha256_before" "${GRABENPLANER_OFFSITE_CONFIGURED:-0}" "$updater_contract" <<'NODE'
 const fs=require("node:fs"),path=require("node:path");
 const [file,fromVersion,toVersion,packageSha256,environmentSha256,offsiteConfigured,updateFile]=process.argv.slice(2);
 const update=JSON.parse(fs.readFileSync(updateFile,"utf8"));
