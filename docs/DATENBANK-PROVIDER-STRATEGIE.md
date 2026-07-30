@@ -308,7 +308,7 @@ anzeigen, die der aktive Provider tatsächlich und nachweislich unterstützt.
 | Bestehende Migrationen | unterstützt | providerabhängig umzusetzen | vollständige Neuaufbau- und Upgrade-Tests |
 | Gleichzeitige Schreibzugriffe | begrenzt auf freigegebenes Einzelinstanzmodell | nicht freigegeben; nachzuweisen | Last-, Lock-, Deadlock- und Isolationstests |
 | Mehrere App-Instanzen | nicht freigegeben | nicht automatisch freigegeben | Sitzungen, Jobs, Sperren, Dateien und Scheduler geprüft |
-| Konsistentes Datenbankbackup | bestehender SQLite-Pfad | Block-6-`development-contract` mit realem Custom-Dump lokal geprüft; Produktfähigkeit bleibt `false` | produktive Verdrahtung, Zeitplan, Rollen-, Offsite- und externer CI-Nachweis |
+| Konsistentes Datenbankbackup | bestehender SQLite-Pfad | Block-6-`development-contract` mit realem Custom-Dump lokal und extern in CI geprüft; Produktfähigkeit bleibt `false` | produktive Verdrahtung, Zeitplan sowie Rollen- und Offsite-Nachweis |
 | Restore | bestehender SQLite-Pfad | isolierter Real-Restore gegen PostgreSQL 18.4 lokal 1/1 grün; Produktfähigkeit bleibt `false` | vollständiger Vollanwendungs-Restore, gemessenes RTO und Installationsabnahme |
 | Integritätsprüfung | SQLite-spezifisch | Bundle-, Manifest-, Artefakt- und Evidence-Prüfungen nicht produktiv implementiert | produktiver providerbezogener Integritätsnachweis |
 | Point-in-Time-Recovery | nicht Bestandteil des SQLite-Standards | nicht implementiert und nicht Ziel von Block 6 | eigener PITR-Aufbau und Wiederherstellungstest |
@@ -364,9 +364,10 @@ ausgegeben werden und umgekehrt.
 Block 6 hat dafür einen klar abgegrenzten, nicht produktiven Entwicklungspfad
 für Custom-Dump, isolierten Restore, Bundle v2, Monitoring und
 Recovery-Assurance-Belege geschaffen. Der lokale PostgreSQL-18.4-Nachweis ist
-grün; der Workflow ist in GitHub Actions verankert. Ein grüner externer Lauf
-des exakt veröffentlichten Commitstands bleibt bis zum belegten Lauf mit
-Run-ID ein eigenes offenes Gate. Einzelheiten, RPO-/RTO-Grenzen und die offenen
+grün. Der veröffentlichte Integrationscommit `25fab8e` ist im
+[GitHub-Actions-Lauf 30508095599](https://github.com/christianseiwaldat-collab/Grabenplaner/actions/runs/30508095599)
+einschließlich PostgreSQL-18.4-Vertragsjob sowie vollständiger Ubuntu- und
+Windows-Suite grün. Einzelheiten, RPO-/RTO-Grenzen und die offenen
 Installationsgates stehen in
 [PostgreSQL-Betrieb und Recovery im nicht produktiven Status](DATENBANK-POSTGRESQL-BETRIEB-UND-RECOVERY.md).
 
@@ -613,8 +614,9 @@ Aktueller Stand am 30.07.2026: Der nicht produktive technische Anteil von
 Block 6 ist lokal abgenommen. Der kombinierte PostgreSQL-Lauf für Block 5 und
 Block 6 ist mit 121/121 Tests grün; der reale PostgreSQL-18.4-Restore-E2E-Fall
 ist 1/1 grün. Der CI-Job ist mit PostgreSQL 18.4 und den Clientwerkzeugen 18
-konfiguriert. Ein grüner externer Lauf des exakt veröffentlichten Commitstands
-bleibt bis zu einem belegten GitHub-Actions-Lauf mit Run-ID offen.
+konfiguriert. Der veröffentlichte Integrationscommit `25fab8e` ist im
+[GitHub-Actions-Lauf 30508095599](https://github.com/christianseiwaldat-collab/Grabenplaner/actions/runs/30508095599)
+in allen vier Jobs grün.
 
 Implementiert sind der providerneutrale Betriebsvertrag, Backup-Bundle v2,
 Custom-Dump aus exportiertem Snapshot, Dokumentbindung, isolierter Restore,
@@ -638,7 +640,8 @@ Abnahme:
   nachgewiesen;
 - [x] Provider, Methode, Datenbankartefakt und verschlüsselte
   Dokumentkomponente sind technisch aneinander gebunden;
-- [ ] der unveränderte Stand besitzt einen grünen externen CI-E2E-Lauf;
+- [x] der veröffentlichte Integrationscommit `25fab8e` besitzt mit Run
+  `30508095599` einen grünen externen CI-E2E-Lauf;
 - [ ] die Phase-5-Gates 891/891 und 9/9 sind erfüllt;
 - [ ] ein Vollanwendungs-Restore auf realitätsnaher Datenmenge ist
   nachgewiesen;
@@ -682,8 +685,10 @@ PostgreSQL-Supportfreigabe.
   `false`.
 - [x] Backup, Restore und Recovery Assurance sind im
   `development-contract` providerspezifisch getrennt.
-- [ ] Produktzeitplan, Offsite-Orchestrierung, System-Center-Integration und
-  externe CI-E2E-Abnahme sind abgeschlossen.
+- [x] Der nicht produktive Integrationscommit besitzt einen grünen externen
+  CI-E2E-Lauf auf PostgreSQL 18.4, Ubuntu, Windows und der Node-Mindestversion.
+- [ ] Produktzeitplan, Offsite-Orchestrierung und System-Center-Integration
+  sind abgeschlossen.
 - [ ] PostgreSQL wird erst nach bestandenen Betriebs- und Recovery-Gates als
   unterstützt bezeichnet.
 - [ ] Jede Implementierungsphase besitzt eine eigene Freigabe und Abnahme.

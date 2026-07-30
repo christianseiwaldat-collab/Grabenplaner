@@ -370,10 +370,12 @@ Der E2E-Fall verwendet ein bewusst kleines synthetisches
 `grabenplaner`-Schema. Er ist ein realer Betriebsweg-Nachweis, aber **kein**
 Vollanwendungs-Restore: Die Gates 0/891 und 0/9 bleiben unverändert.
 
-Ein vollständiger plattformübergreifender `pnpm test`-Gesamtlauf wird durch
-diese Block-5/6-Abnahme nicht behauptet.
+Die lokale Block-5/6-Abnahme allein behauptet keinen vollständigen
+plattformübergreifenden `pnpm test`-Gesamtlauf. Der nachfolgend dokumentierte
+externe GitHub-Actions-Lauf enthält zusätzlich vollständige Ubuntu- und
+Windows-Suiten; auch diese ersetzen keine Vollanwendungsparität.
 
-### 10.2 In GitHub Actions verankert, externer Commitnachweis offen
+### 10.2 Externer GitHub-Actions-Nachweis
 
 Der Workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enthält
 den Job `postgresql-provider-development-contract` mit:
@@ -384,12 +386,19 @@ den Job `postgresql-provider-development-contract` mit:
 - allen Block-5- und Block-6-Vertrags-, Negativ- und Live-Tests einschließlich
   des realen Restore-E2E-Falls.
 
-Der Workflow ist im Repository verankert. Die korrekte Aussage bleibt bis zu
-einem belegten Lauf des exakt veröffentlichten Commitstands:
-**CI-verankert und lokal grün, externer CI-Nachweis noch offen.**
+Der veröffentlichte Integrationscommit `25fab8e` wurde im
+[GitHub-Actions-Lauf 30508095599](https://github.com/christianseiwaldat-collab/Grabenplaner/actions/runs/30508095599)
+extern geprüft. Alle vier Jobs sind grün:
 
-Ein erster grüner externer Lauf des unveränderten Commitstands ist ein eigenes
-Abnahmegate; die Workflowkonfiguration allein ist kein CI-Erfolg.
+- `postgresql-provider-development-contract` mit PostgreSQL 18.4;
+- vollständige Testsuite auf Ubuntu;
+- vollständige Testsuite auf Windows;
+- Provider- und Block-4-Verträge auf der Node-Mindestversion.
+
+Damit ist das nicht produktive externe CI-Gate für diesen Integrationscommit
+erfüllt. Der Lauf aktiviert keine Produktcapability und ersetzt weder 891/891
+Vollanwendungsparität noch 9/9 Anwendungsmigrationen oder eine
+installationsbezogene Betriebsfreigabe.
 
 ## 11. Capability-Stand nach Block 6
 
@@ -439,7 +448,8 @@ mindestens alle folgenden Punkte separat abgenommen sein:
       Beständen geprüft;
 - [ ] vollständiger Funktions-, Konkurrenz- und Lastlauf auf realitätsnahen
       Daten;
-- [ ] grüner externer GitHub-Actions-E2E-Lauf des unveränderten Commitstands;
+- [x] grüner externer GitHub-Actions-E2E-Lauf für Integrationscommit `25fab8e`
+      mit Run `30508095599`;
 - [ ] produktive Verdrahtung des Dokument-Mutation-Gates;
 - [ ] reale Rollen-, Secret-, TLS- und Dateiberechtigungsabnahme;
 - [ ] geplanter Backup-, Offsite-, Retention- und Monitoringbetrieb;
@@ -461,8 +471,8 @@ Block 7 ist als installationsbezogene Gate-Prüfung gestartet. Das Ergebnis ist
 - Der PostgreSQL-Vollanwendungskatalog steht bei 0/891.
 - Die PostgreSQL-Anwendungsmigrationen stehen bei 0/9.
 - `productActivation` und alle PostgreSQL-Produktcapabilities bleiben `false`.
-- Der grüne externe GitHub-Actions-Lauf des exakt veröffentlichten Commitstands
-  ist noch nachzuweisen.
+- Der externe GitHub-Actions-Nachweis für den Integrationscommit ist grün,
+  ersetzt aber keines der offenen Installationsgates.
 - Betriebsmodell, Verantwortliche, Wartungsfenster, RPO/RTO, Rollen, Secrets,
   TLS, Backup, Offsite, Retention, Monitoring, Rückkehrplan und
   Erfolgskriterien sind noch nicht installationsbezogen abgenommen.

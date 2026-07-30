@@ -525,7 +525,7 @@ installationsbezogene Gates.
 | Rollen | vier statisch getrennte Rollen; der Migrationsadapter prüft eine echte getrennte Loginrolle, `current_user = session_user`, Schemaeigentum, unprivilegierte Rollenflags und fehlende Rollenmitgliedschaften fail-closed | Rechte-Negativtests mit den übrigen drei echten Betriebsrollen | betriebliche Rollenverantwortung |
 | Migrationen | generischer Adapter mit Session-Lock vor genau einer serialisierbaren Schreibtransaktion und selbst gehashten versionierten SQL-Artefakten; Rebuild, Präfix-Upgrade, No-op, synthetischer Rollback, atomarer Fehlerabbruch, Parallelität, Allowlist und Drift real geprüft; Anwendungsmigrationen weiterhin 0/9 | deklarative Bindung und Nachweis aller neun Anwendungsmigrationen einschließlich historischem Bestand | reproduzierbarer Cutover- und Rückkehrplan |
 | Backup-Bundle und Dump | Bundle v2, exportierter Snapshot, Custom-Dump, Dokumentbindung, Manipulations-/Partial-/Link-Negativtests | produktive Quiesce-Verdrahtung, Zeitplan, Retention und Offsite | freigegebener installierter Backupbetrieb passend zum RPO |
-| Restore | synthetische Negativtests plus realer PostgreSQL-18.4-Restore-E2E 1/1 lokal grün | Vollanwendungs-Restore auf realitätsnaher Datenmenge und externer CI-Nachweis | gemessenes RTO und freigegebener Wiederanlaufplan |
+| Restore | synthetische Negativtests plus realer PostgreSQL-18.4-Restore-E2E 1/1 lokal und extern in CI grün | Vollanwendungs-Restore auf realitätsnaher Datenmenge | gemessenes RTO und freigegebener Wiederanlaufplan |
 | Monitoring | read-only Abfrage, exakter Resultatvertrag und Evidence-Zustände getestet | System-Center-, Alarmierungs- und Operations-Rollenintegration | betrieblich verantwortete Grenzwerte und Eskalation |
 | Recovery Assurance | providergebundener signierter Belegvertrag v2 und Negativtests | produktiver Orchestrator für Offsite, Repository-Read-Check, Restore, Signierung und Ablage | aktueller vollständiger End-to-End-Beleg |
 | PITR, HA und Mehrinstanz | nicht implementiert | nicht Ziel von Block 6 | jeweils eigener Aufbau und eigene Freigabe |
@@ -552,9 +552,12 @@ Für Block 6 wurde darüber hinaus lokal abgenommen:
 - No-Cutover-Gates für Produktprovider, Serverstart und Produktoberfläche.
 
 Der GitHub-Actions-Job ist mit `postgres:18.4-alpine`, Clientwerkzeugen 18 und
-allen Block-5/6-Tests konfiguriert. Der Workflow ist im Repository verankert.
-Ein grüner externer Lauf des exakt veröffentlichten Commitstands bleibt bis zu
-einem belegten GitHub-Actions-Lauf mit Run-ID ein eigenes offenes Abnahmegate.
+allen Block-5/6-Tests konfiguriert. Der veröffentlichte Integrationscommit
+`25fab8e` ist im
+[GitHub-Actions-Lauf 30508095599](https://github.com/christianseiwaldat-collab/Grabenplaner/actions/runs/30508095599)
+einschließlich PostgreSQL-18.4-Vertragsjob sowie vollständiger Ubuntu- und
+Windows-Suite grün. Das erfüllt den nicht produktiven externen CI-Nachweis,
+aber keine Vollanwendungs-, Support- oder Installationsfreigabe.
 
 ### 8.2 Noch erforderliche vollständige Phase-5-Abnahme
 
@@ -657,6 +660,6 @@ Jede produktive Aktivierung, Datenübernahme und Supportfreigabe benötigt eine
 eigene ausdrückliche Entscheidung nach den noch offenen realen Integrations-,
 Betriebs- und Recovery-Nachweisen.
 
-Für RPO, RTO, Wartung, Rollen, Secrets, lokale Abnahme und den noch offenen
-externen CI-Nachweis gilt verbindlich
+Für RPO, RTO, Wartung, Rollen, Secrets, externe CI-Evidence und die weiterhin
+offenen installationsbezogenen Abnahmen gilt verbindlich
 [PostgreSQL-Betrieb und Recovery im nicht produktiven Status](DATENBANK-POSTGRESQL-BETRIEB-UND-RECOVERY.md).
