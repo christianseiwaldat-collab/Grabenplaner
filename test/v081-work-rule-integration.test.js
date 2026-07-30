@@ -19,7 +19,13 @@ process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
 
 const subject = require("../server");
-const { app, db, releaseInstanceLockForTests } = subject;
+const {
+  app,
+  db,
+  initializeApplicationPersistence,
+  releaseInstanceLockForTests,
+  workRuleStoreRepository,
+} = subject;
 const { recordWorkRuleEvaluation } = require("../lib/work-rules/store");
 
 const ADMIN = "v081-admin";
@@ -72,6 +78,7 @@ async function request(route, { method = "GET", body } = {}) {
 }
 
 test.before(async () => {
+  await initializeApplicationPersistence();
   const location = db.prepare(`
     SELECT id, cost_center_id FROM locations WHERE active = 1 ORDER BY id LIMIT 1
   `).get();
@@ -283,7 +290,7 @@ test("v0.81: nur vorgesehene Ausnahmen werden begrÃ¼ndet angelegt und widerruf
   const result = JSON.parse(row.result_json);
   const finding = result.employeeResults[0].result.findings.find((entry) => entry.profileId && entry.profileVersion);
   finding.baseEnforcement = "exception_required";
-  const evaluation = recordWorkRuleEvaluation(db, {
+  const evaluation = await recordWorkRuleEvaluation(workRuleStoreRepository, {
     targetType: row.target_type,
     scopeType: row.scope_type,
     scopeKey: row.scope_key,

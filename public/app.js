@@ -102,6 +102,8 @@ const state = {
   appFontScalePercent: 100,
   persistedAppFontScalePercent: 100,
   workRuleAssessmentExpanded: false,
+  personnelDashboardLayout: { version: 1, order: [], hidden: [] },
+  personnelDashboardDraftLayout: null,
   employeeDisplayColumns: [],
   employeeDisplaySort: { key: "personnel_number", direction: "asc" },
   rightsDashboardMode: "locations",
@@ -159,7 +161,7 @@ const state = {
   selectedDataSubjectRequest: null,
   personnelAdministrationLoaded: false,
   personnelAdministrationLoading: false,
-  personnelAdministrationTab: "employees",
+  personnelAdministrationTab: "dashboard",
   customWorkRuleRegistry: null,
   workRuleGovernance: null,
   customWorkRulesLoading: false,
@@ -277,7 +279,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "rightsDashboardView", "settingsView", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -286,7 +288,7 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeePreferredDepartment", "employeePreferredDepartmentHint", "employeePosition", "employeePositionHint", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
+    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
     "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationCostCenterField", "locationCostCenter", "locationCostCenterReadonly", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
@@ -888,7 +890,15 @@ function canOpenPersonnelAdministrationView() {
     || canReadCentralVacations() || canReadDataSubjectRequests();
 }
 
+function canOpenPersonnelAdministrationModule() {
+  const features = state.portalStatus?.installationFeatures || {};
+  return canOpenPersonnelAdministrationView()
+    || (features.requests !== false && canReadManagerRequests())
+    || (features.timeTracking !== false && canReadManagedTimeTracking());
+}
+
 function firstAccessiblePersonnelAdministrationTab() {
+  if (canOpenPersonnelAdministrationModule()) return "dashboard";
   if (canReadCentralPersonnel()) return "employees";
   if (canReadCostCenters()) return "costCenters";
   if (canAccessCustomWorkRuleGovernance()) return "ruleDrafts";
@@ -899,7 +909,8 @@ function firstAccessiblePersonnelAdministrationTab() {
 }
 
 function canOpenPersonnelAdministrationTab(tab) {
-  return (tab === "employees" && canReadCentralPersonnel())
+  return (tab === "dashboard" && canOpenPersonnelAdministrationModule())
+    || (tab === "employees" && canReadCentralPersonnel())
     || (tab === "costCenters" && canReadCostCenters())
     || (tab === "ruleDrafts" && canAccessCustomWorkRuleGovernance())
     || (tab === "collectiveAgreements" && canReadCollectiveAgreements())
@@ -1158,7 +1169,8 @@ function applyRoleVisibility() {
   if (!canOpenPersonnelAdministrationTab(state.personnelAdministrationTab)) {
     setPersonnelAdministrationTab(firstAccessiblePersonnelAdministrationTab());
   }
-  if (!personnelAdministrationViewAccess && state.currentView === "personnelAdministration") setView("planning");
+  if (personnelModuleAccess) renderPersonnelDashboard();
+  if (!personnelModuleAccess && state.currentView === "personnelAdministration") setView("planning");
   if (!requestReadAccess && state.currentView === "requests") setView("planning");
   if (!timeReadAccess && state.currentView === "timeTracking") setView("planning");
   if (!loanManagementAccess && state.currentView === "loans") setView("planning");
@@ -1770,6 +1782,8 @@ function renderContextNavigation() {
   const personnelViewActive = ["personnelAdministration", "requests", "timeTracking"].includes(state.currentView);
   elements.personnelAdministrationNav?.classList.toggle("contains-active", personnelViewActive);
   applyNavigationGroupState("personnelAdministration", personnelModuleVisible);
+  setNavigationCurrent(elements.personnelDashboardNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "dashboard");
   setNavigationCurrent(elements.personnelDirectoryNavButton,
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "employees");
   setNavigationCurrent(elements.costCentersNavButton,
@@ -6483,6 +6497,200 @@ function renderPersonnelAdministration() {
   if (canReadDataSubjectRequests()) renderDataSubjectRequests();
 }
 
+const PERSONNEL_DASHBOARD_ITEM_IDS = Object.freeze([
+  "employees",
+  "requests",
+  "timeTracking",
+  "costCenters",
+  "ruleDrafts",
+  "collectiveAgreements",
+  "vacations",
+  "dataRequests",
+]);
+
+function defaultPersonnelDashboardLayout() {
+  return { version: 1, order: [...PERSONNEL_DASHBOARD_ITEM_IDS], hidden: [] };
+}
+
+function normalizePersonnelDashboardLayout(value) {
+  const known = new Set(PERSONNEL_DASHBOARD_ITEM_IDS);
+  const order = Array.isArray(value?.order)
+    ? [...new Set(value.order.map(String))].filter((id) => known.has(id))
+    : [];
+  for (const id of PERSONNEL_DASHBOARD_ITEM_IDS) if (!order.includes(id)) order.push(id);
+  const hidden = Array.isArray(value?.hidden)
+    ? [...new Set(value.hidden.map(String))].filter((id) => known.has(id))
+    : [];
+  return { version: 1, order, hidden };
+}
+
+function personnelDashboardCatalog() {
+  const features = state.portalStatus?.installationFeatures || {};
+  return [
+    {
+      id: "employees",
+      symbol: "◉",
+      eyebrow: "Stammdaten",
+      label: "Mitarbeitende",
+      description: "Zentrale Personaldaten und freigegebene Angaben verwalten.",
+      view: "personnelAdministration",
+      route: "employees",
+      available: canReadCentralPersonnel(),
+    },
+    {
+      id: "requests",
+      symbol: "✓",
+      eyebrow: "Freigaben",
+      label: "Anträge",
+      description: "Urlaub, Zeitausgleich und weitere Anträge nachvollziehbar bearbeiten.",
+      view: "requests",
+      available: features.requests !== false && canReadManagerRequests(),
+    },
+    {
+      id: "timeTracking",
+      symbol: "◷",
+      eyebrow: "Arbeitszeit",
+      label: "Zeiterfassung",
+      description: "Anwesenheiten, Tagesprüfung und Zeitkorrekturen im eigenen Bereich öffnen.",
+      view: "timeTracking",
+      available: features.timeTracking !== false && canReadManagedTimeTracking(),
+    },
+    {
+      id: "costCenters",
+      symbol: "▦",
+      eyebrow: "Organisation",
+      label: "Kostenstellen",
+      description: "Kostenstellen, Typen und organisatorische Zuordnungen pflegen.",
+      view: "personnelAdministration",
+      route: "costCenters",
+      available: canReadCostCenters(),
+    },
+    {
+      id: "ruleDrafts",
+      symbol: "◇",
+      eyebrow: "Regelgrundlagen",
+      label: "Regelwerk",
+      description: "Eigene Regelentwürfe prüfen, freigeben und kontrolliert zuordnen.",
+      view: "personnelAdministration",
+      route: "ruleDrafts",
+      available: canAccessCustomWorkRuleGovernance(),
+    },
+    {
+      id: "collectiveAgreements",
+      symbol: "≡",
+      eyebrow: "Rechtsquellen",
+      label: "Kollektivverträge",
+      description: "Versionierte Quellenstände und betriebliche Zuordnungen nachvollziehen.",
+      view: "personnelAdministration",
+      route: "collectiveAgreements",
+      available: canReadCollectiveAgreements(),
+    },
+    {
+      id: "vacations",
+      symbol: "☀",
+      eyebrow: "Unternehmensweit",
+      label: "Urlaube",
+      description: "Genehmigte und direkt erfasste Urlaube im erlaubten Bereich anzeigen.",
+      view: "personnelAdministration",
+      route: "vacations",
+      available: canReadCentralVacations(),
+    },
+    {
+      id: "dataRequests",
+      symbol: "§",
+      eyebrow: "Datenschutz",
+      label: "Datenanfragen",
+      description: "Betroffenenanfragen, Fristen und Bearbeitungsstände geschützt verwalten.",
+      view: "personnelAdministration",
+      route: "dataRequests",
+      available: canReadDataSubjectRequests(),
+    },
+  ];
+}
+
+function orderedPersonnelDashboardItems(layout = state.personnelDashboardLayout) {
+  const normalized = normalizePersonnelDashboardLayout(layout);
+  const catalog = new Map(personnelDashboardCatalog().map((item) => [item.id, item]));
+  return normalized.order.map((id) => catalog.get(id)).filter((item) => item?.available);
+}
+
+function renderPersonnelDashboard() {
+  if (!elements.personnelDashboardGrid) return;
+  state.personnelDashboardLayout = normalizePersonnelDashboardLayout(state.personnelDashboardLayout);
+  const hidden = new Set(state.personnelDashboardLayout.hidden);
+  const items = orderedPersonnelDashboardItems().filter((item) => !hidden.has(item.id));
+  elements.personnelDashboardGrid.innerHTML = items.length
+    ? items.map((item) => `<button class="personnel-dashboard-card" type="button" data-personnel-dashboard-item="${escapeHtmlAttribute(item.id)}">
+        <span class="personnel-dashboard-card-symbol" aria-hidden="true">${escapeHtml(item.symbol)}</span>
+        <span class="personnel-dashboard-card-copy"><small>${escapeHtml(item.eyebrow)}</small><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.description)}</span></span>
+        <span class="personnel-dashboard-card-arrow" aria-hidden="true">→</span>
+      </button>`).join("")
+    : '<div class="personnel-dashboard-empty"><strong>Keine Kachel eingeblendet</strong><p>Öffne „Dashboard anpassen“, um mindestens einen verfügbaren Arbeitsbereich einzublenden.</p></div>';
+}
+
+function renderPersonnelDashboardCustomizer() {
+  if (!elements.personnelDashboardCustomizerList) return;
+  const layout = normalizePersonnelDashboardLayout(state.personnelDashboardDraftLayout || state.personnelDashboardLayout);
+  state.personnelDashboardDraftLayout = layout;
+  const hidden = new Set(layout.hidden);
+  const items = orderedPersonnelDashboardItems(layout);
+  elements.personnelDashboardCustomizerList.innerHTML = items.map((item, index) => `
+    <article class="personnel-dashboard-customizer-row">
+      <label><input type="checkbox" data-personnel-dashboard-visible="${escapeHtmlAttribute(item.id)}" ${hidden.has(item.id) ? "" : "checked"} /><span><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.eyebrow)}</small></span></label>
+      <div>
+        <button type="button" data-personnel-dashboard-move="${escapeHtmlAttribute(item.id)}" data-direction="-1" ${index === 0 ? "disabled" : ""} aria-label="${escapeHtmlAttribute(`${item.label} nach vorne verschieben`)}">↑</button>
+        <button type="button" data-personnel-dashboard-move="${escapeHtmlAttribute(item.id)}" data-direction="1" ${index === items.length - 1 ? "disabled" : ""} aria-label="${escapeHtmlAttribute(`${item.label} nach hinten verschieben`)}">↓</button>
+      </div>
+    </article>`).join("");
+  updatePersonnelDashboardCustomizerStatus(layout);
+}
+
+function updatePersonnelDashboardCustomizerStatus(layout = state.personnelDashboardDraftLayout || state.personnelDashboardLayout) {
+  const normalized = normalizePersonnelDashboardLayout(layout);
+  const hidden = new Set(normalized.hidden);
+  const items = orderedPersonnelDashboardItems(normalized);
+  if (elements.personnelDashboardCustomizerStatus) {
+    elements.personnelDashboardCustomizerStatus.textContent = `${items.length} verfügbare Arbeitsbereiche · ${items.filter((item) => !hidden.has(item.id)).length} eingeblendet`;
+  }
+}
+
+function openPersonnelDashboardCustomizer() {
+  state.personnelDashboardDraftLayout = normalizePersonnelDashboardLayout(state.personnelDashboardLayout);
+  elements.personnelDashboardCustomizer?.classList.remove("hidden");
+  elements.personnelDashboardCustomizeButton?.setAttribute("aria-expanded", "true");
+  renderPersonnelDashboardCustomizer();
+  elements.personnelDashboardCustomizerClose?.focus();
+}
+
+function closePersonnelDashboardCustomizer({ restoreFocus = true } = {}) {
+  state.personnelDashboardDraftLayout = null;
+  elements.personnelDashboardCustomizer?.classList.add("hidden");
+  elements.personnelDashboardCustomizeButton?.setAttribute("aria-expanded", "false");
+  if (restoreFocus) elements.personnelDashboardCustomizeButton?.focus();
+}
+
+function movePersonnelDashboardDraft(itemId, direction) {
+  const layout = normalizePersonnelDashboardLayout(state.personnelDashboardDraftLayout || state.personnelDashboardLayout);
+  const accessibleIds = orderedPersonnelDashboardItems(layout).map((item) => item.id);
+  const currentIndex = accessibleIds.indexOf(itemId);
+  const targetId = accessibleIds[currentIndex + direction];
+  if (currentIndex < 0 || !targetId) return;
+  const left = layout.order.indexOf(itemId);
+  const right = layout.order.indexOf(targetId);
+  [layout.order[left], layout.order[right]] = [layout.order[right], layout.order[left]];
+  state.personnelDashboardDraftLayout = layout;
+  renderPersonnelDashboardCustomizer();
+  elements.personnelDashboardCustomizerList?.querySelector(`[data-personnel-dashboard-move="${CSS.escape(itemId)}"][data-direction="${direction}"]`)?.focus();
+}
+
+function navigateFromPersonnelDashboard(itemId) {
+  const item = personnelDashboardCatalog().find((entry) => entry.id === itemId && entry.available);
+  if (!item) return;
+  if (item.view === "personnelAdministration") setPersonnelAdministrationTab(item.route);
+  setView(item.view);
+  closeMobileNavigation({ restoreFocus: false });
+}
+
 function setPersonnelAdministrationTab(tab) {
   const normalized = canOpenPersonnelAdministrationTab(tab)
     ? tab
@@ -6494,6 +6702,8 @@ function setPersonnelAdministrationTab(tab) {
     button.setAttribute("aria-selected", String(active));
     button.tabIndex = active ? 0 : -1;
   });
+  document.querySelector(".personnel-administration-tabs")?.classList.toggle("hidden", normalized === "dashboard");
+  elements.personnelDashboardSection?.classList.toggle("active", normalized === "dashboard");
   elements.personnelDirectorySection?.classList.toggle("active", normalized === "employees");
   elements.costCenterSection?.classList.toggle("active", normalized === "costCenters");
   elements.customWorkRulesSection?.classList.toggle("active", normalized === "ruleDrafts");
@@ -6501,7 +6711,11 @@ function setPersonnelAdministrationTab(tab) {
   elements.centralVacationSection?.classList.toggle("active", normalized === "vacations");
   elements.dataSubjectRequestsSection?.classList.toggle("active", normalized === "dataRequests");
   elements.personnelDisplayColumnsButton?.classList.toggle("hidden", normalized !== "employees");
+  if (normalized === "dashboard") renderPersonnelDashboard();
   if (state.currentView === "personnelAdministration") renderContextNavigation();
+  if (state.currentView === "personnelAdministration" && ["employees", "costCenters"].includes(normalized)) {
+    loadPersonnelAdministration().catch((error) => showToast(error.message, true));
+  }
   if (normalized === "ruleDrafts") loadCustomWorkRuleRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "collectiveAgreements") loadCollectiveAgreementRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "vacations") loadCentralVacations().catch((error) => showToast(error.message, true));
@@ -7496,6 +7710,10 @@ function workRuleAssessmentExpandedStorageKey() {
   return `grabenplaner:work-rule-assessment-expanded:${uiPreferenceActorKey()}`;
 }
 
+function personnelDashboardLayoutStorageKey() {
+  return `grabenplaner:personnel-dashboard-layout-v1:${uiPreferenceActorKey()}`;
+}
+
 function applyWorkRuleAssessmentExpanded(value) {
   const expanded = value === true;
   state.workRuleAssessmentExpanded = expanded;
@@ -7546,6 +7764,135 @@ const APP_FONT_SCALE_MAX = 150;
 const APP_FONT_SCALE_STEP = 5;
 const APP_FONT_SCALE_DEFAULT = 100;
 const LEGACY_DASHBOARD_FONT_SCALE = Object.freeze({ compact: 85, standard: 100, large: 115 });
+const SETTINGS_PACKED_GRID_SELECTOR = "#settingsView .settings-two-column, #settingsView .settings-accordion-grid";
+const settingsPackedGridMedia = window.matchMedia("(min-width: 821px)");
+const settingsPackedGridQueue = new Set();
+let settingsPackedGridFrame = 0;
+let settingsPackedResizeObserver = null;
+let settingsPackedMutationObserver = null;
+
+function settingsPackedGrids() {
+  return [...document.querySelectorAll(SETTINGS_PACKED_GRID_SELECTOR)];
+}
+
+function directSettingsPackedItems(grid) {
+  return [...grid.children].filter((item) => item.matches(".settings-card, .settings-accordion"));
+}
+
+function resetSettingsPackedGrid(grid) {
+  grid.classList.remove("settings-packed-grid");
+  directSettingsPackedItems(grid).forEach((item) => {
+    item.style.removeProperty("--settings-grid-column");
+    item.style.removeProperty("--settings-grid-row-start");
+    item.style.removeProperty("--settings-grid-row-span");
+  });
+}
+
+function measureSettingsPackedGrid(grid) {
+  if (!settingsPackedGridMedia.matches || !grid.isConnected || grid.getClientRects().length === 0) {
+    resetSettingsPackedGrid(grid);
+    return;
+  }
+  const items = directSettingsPackedItems(grid);
+  const columnEnds = [1, 1];
+  for (const item of items) {
+    if (item.classList.contains("hidden") || item.getClientRects().length === 0) {
+      item.style.removeProperty("--settings-grid-column");
+      item.style.removeProperty("--settings-grid-row-start");
+      item.style.removeProperty("--settings-grid-row-span");
+      continue;
+    }
+    const rowSpan = Math.max(1, Math.ceil(item.offsetHeight + 15));
+    const fullSpan = item.classList.contains("full-span")
+      || item.matches(".settings-accordion.full-settings-card");
+    if (fullSpan) {
+      const rowStart = Math.max(...columnEnds);
+      item.style.removeProperty("--settings-grid-column");
+      item.style.setProperty("--settings-grid-row-start", String(rowStart));
+      columnEnds.fill(rowStart + rowSpan);
+    } else {
+      const columnIndex = columnEnds[0] <= columnEnds[1] ? 0 : 1;
+      const rowStart = columnEnds[columnIndex];
+      item.style.setProperty("--settings-grid-column", String(columnIndex + 1));
+      item.style.setProperty("--settings-grid-row-start", String(rowStart));
+      columnEnds[columnIndex] = rowStart + rowSpan;
+    }
+    item.style.setProperty("--settings-grid-row-span", String(rowSpan));
+  }
+  grid.classList.add("settings-packed-grid");
+}
+
+function scheduleSettingsPackedGrid(grid) {
+  if (!settingsPackedResizeObserver || !grid?.matches?.(SETTINGS_PACKED_GRID_SELECTOR)) return;
+  settingsPackedGridQueue.add(grid);
+  if (settingsPackedGridFrame) return;
+  settingsPackedGridFrame = requestAnimationFrame(() => {
+    settingsPackedGridFrame = 0;
+    const queuedGrids = [...settingsPackedGridQueue];
+    settingsPackedGridQueue.clear();
+    queuedGrids.forEach(measureSettingsPackedGrid);
+  });
+}
+
+function scheduleAllSettingsPackedGrids() {
+  settingsPackedGrids().forEach(scheduleSettingsPackedGrid);
+}
+
+function refreshSettingsPackedGridObservers() {
+  if (!settingsPackedResizeObserver) return;
+  settingsPackedResizeObserver.disconnect();
+  settingsPackedGrids().forEach((grid) => {
+    directSettingsPackedItems(grid).forEach((item) => settingsPackedResizeObserver.observe(item));
+  });
+}
+
+function initializeSettingsPackedGrids() {
+  if (typeof ResizeObserver !== "function") return;
+  settingsPackedResizeObserver = new ResizeObserver((entries) => {
+    entries.forEach((entry) => scheduleSettingsPackedGrid(entry.target.parentElement));
+  });
+  refreshSettingsPackedGridObservers();
+
+  if (typeof MutationObserver === "function") {
+    settingsPackedMutationObserver = new MutationObserver((mutations) => {
+      let refreshObservedItems = false;
+      for (const mutation of mutations) {
+        if (mutation.type === "childList") refreshObservedItems = true;
+        const target = mutation.target.nodeType === Node.ELEMENT_NODE
+          ? mutation.target
+          : mutation.target.parentElement;
+        if (!target) continue;
+        if (mutation.type === "attributes"
+          && mutation.attributeName === "class"
+          && target.matches(".settings-two-column, .settings-accordion-grid")) {
+          continue;
+        }
+        const grid = target.matches(SETTINGS_PACKED_GRID_SELECTOR)
+          ? target
+          : target.closest(SETTINGS_PACKED_GRID_SELECTOR);
+        if (grid) scheduleSettingsPackedGrid(grid);
+      }
+      if (refreshObservedItems) refreshSettingsPackedGridObservers();
+    });
+    settingsPackedMutationObserver.observe(elements.settingsView, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["class", "open"],
+    });
+  }
+
+  settingsPackedGridMedia.addEventListener("change", () => {
+    if (settingsPackedGridMedia.matches) {
+      scheduleAllSettingsPackedGrids();
+    } else {
+      settingsPackedGrids().forEach(resetSettingsPackedGrid);
+    }
+  });
+  window.addEventListener("resize", scheduleAllSettingsPackedGrids);
+  document.fonts?.ready?.then(scheduleAllSettingsPackedGrids);
+  scheduleAllSettingsPackedGrids();
+}
 
 function normalizeAppFontScalePercent(value, fallback = APP_FONT_SCALE_DEFAULT) {
   const legacyValue = LEGACY_DASHBOARD_FONT_SCALE[String(value || "").trim().toLowerCase()];
@@ -7568,6 +7915,7 @@ function applyAppFontScalePercent(value) {
   if (elements.appFontScalePercent) elements.appFontScalePercent.value = String(normalized);
   if (elements.decreaseAppFontScale) elements.decreaseAppFontScale.disabled = normalized <= APP_FONT_SCALE_MIN;
   if (elements.increaseAppFontScale) elements.increaseAppFontScale.disabled = normalized >= APP_FONT_SCALE_MAX;
+  scheduleAllSettingsPackedGrids();
   return normalized;
 }
 
@@ -7603,6 +7951,14 @@ async function loadUiPreferences() {
       ? preferences?.workRuleAssessmentExpanded === true
       : storedWorkRuleAssessment === "1",
   );
+  let storedPersonnelDashboardLayout = preferences?.personnelDashboardLayout;
+  if (localOnly) {
+    try {
+      storedPersonnelDashboardLayout = JSON.parse(localStorage.getItem(personnelDashboardLayoutStorageKey()) || "null");
+    } catch {}
+  }
+  state.personnelDashboardLayout = normalizePersonnelDashboardLayout(storedPersonnelDashboardLayout);
+  renderPersonnelDashboard();
   let storedColumns = preferences?.employeeDisplayColumns;
   let storedSort = preferences?.employeeDisplaySort;
   if (localOnly) {
@@ -7614,6 +7970,31 @@ async function loadUiPreferences() {
   renderEmployees();
   if (state.personnelAdministrationLoaded) renderPersonnelDirectory();
   applyActivePageAppearance();
+}
+
+async function persistPersonnelDashboardLayout(layout, { silent = false } = {}) {
+  const previous = normalizePersonnelDashboardLayout(state.personnelDashboardLayout);
+  const normalized = normalizePersonnelDashboardLayout(layout);
+  state.personnelDashboardLayout = normalized;
+  localStorage.setItem(personnelDashboardLayoutStorageKey(), JSON.stringify(normalized));
+  renderPersonnelDashboard();
+  try {
+    const result = await api("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      body: JSON.stringify({ personnelDashboardLayout: normalized }),
+    });
+    state.personnelDashboardLayout = normalizePersonnelDashboardLayout(result.personnelDashboardLayout || normalized);
+    localStorage.setItem(personnelDashboardLayoutStorageKey(), JSON.stringify(state.personnelDashboardLayout));
+    renderPersonnelDashboard();
+    if (!silent) showToast("Das Personal-Dashboard wurde gespeichert.");
+    return true;
+  } catch (error) {
+    state.personnelDashboardLayout = previous;
+    localStorage.setItem(personnelDashboardLayoutStorageKey(), JSON.stringify(previous));
+    renderPersonnelDashboard();
+    if (!silent) showToast(error.message, true);
+    return false;
+  }
 }
 
 async function saveWorkRuleAssessmentExpanded(value) {
@@ -12842,7 +13223,7 @@ function setView(view) {
   if ((view === "vacations" && features.vacation === false)
     || (view === "requests" && (features.requests === false || !canReadManagerRequests()))
     || (view === "timeTracking" && (features.timeTracking === false || !canReadManagedTimeTracking()))
-    || (view === "personnelAdministration" && !canOpenPersonnelAdministrationView())
+    || (view === "personnelAdministration" && !canOpenPersonnelAdministrationModule())
     || (view === "loans" && !canReadLoanManagement())
     || (view === "rightsDashboard" && elements.rightsDashboardNavButton?.classList.contains("hidden"))) view = "planning";
   state.currentView = view;
@@ -12873,7 +13254,6 @@ function setView(view) {
     if (!activeSettingsTab && firstAllowedSettingsTab) setSettingsTab(firstAllowedSettingsTab.dataset.settingsTab);
   }
   if (view === "requests") loadManagerVacationRequests();
-  if (view === "personnelAdministration") loadPersonnelAdministration();
   if (view === "loans") loadLoanManagement();
   if (view === "rightsDashboard") loadRightsDashboard();
   if (view === "timeTracking") {
@@ -12895,7 +13275,7 @@ function applyRequestedView() {
   }
   if (requestedView === "personnelAdministration") {
     const requestedSection = parameters.get("section");
-    const establishedSection = ["employees", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"].includes(requestedSection);
+    const establishedSection = ["dashboard", "employees", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"].includes(requestedSection);
     if (establishedSection || requestedSection === "dataRequests") {
       state.personnelAdministrationTab = requestedSection;
     }
@@ -12982,6 +13362,7 @@ function setSettingsTab(tab) {
       loadUsbProvisioning().catch((error) => showToast(error.message, true));
     }
   }
+  scheduleAllSettingsPackedGrids();
 }
 
 function setPersonnelTab(tab) {
@@ -15824,6 +16205,67 @@ function showToast(message, error = false) {
   }, duration);
 }
 
+let mobileNavigationPreviousFocus = null;
+const mobileNavigationMedia = window.matchMedia("(max-width: 820px)");
+
+function mobileNavigationFocusableElements() {
+  return [...(elements.mainSidebar?.querySelectorAll(
+    'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
+  ) || [])].filter((element) => !element.closest(".hidden"));
+}
+
+function openMobileNavigation() {
+  if (!mobileNavigationMedia.matches || !elements.mainSidebar) return;
+  mobileNavigationPreviousFocus = document.activeElement;
+  document.body.classList.add("mobile-navigation-open");
+  elements.mainSidebar.inert = false;
+  elements.mainSidebar.removeAttribute("aria-hidden");
+  document.querySelector(".main-content").inert = true;
+  if (elements.mobileNavigationToggle) elements.mobileNavigationToggle.inert = true;
+  elements.mobileNavigationToggle?.setAttribute("aria-expanded", "true");
+  elements.mobileNavigationBackdrop?.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => {
+    const focusTarget = elements.mobileNavigationClose || mobileNavigationFocusableElements()[0];
+    focusTarget?.focus({ preventScroll: true });
+    if (document.activeElement !== focusTarget) setTimeout(() => focusTarget?.focus({ preventScroll: true }), 0);
+  });
+}
+
+function closeMobileNavigation({ restoreFocus = true } = {}) {
+  if (!elements.mainSidebar) return;
+  const wasOpen = document.body.classList.contains("mobile-navigation-open");
+  document.body.classList.remove("mobile-navigation-open");
+  document.querySelector(".main-content").inert = false;
+  if (elements.mobileNavigationToggle) elements.mobileNavigationToggle.inert = false;
+  elements.mobileNavigationToggle?.setAttribute("aria-expanded", "false");
+  elements.mobileNavigationBackdrop?.setAttribute("aria-hidden", "true");
+  if (mobileNavigationMedia.matches) {
+    elements.mainSidebar.inert = true;
+    elements.mainSidebar.setAttribute("aria-hidden", "true");
+  } else {
+    elements.mainSidebar.inert = false;
+    elements.mainSidebar.removeAttribute("aria-hidden");
+  }
+  if (restoreFocus && wasOpen) {
+    const target = mobileNavigationPreviousFocus?.isConnected ? mobileNavigationPreviousFocus : elements.mobileNavigationToggle;
+    requestAnimationFrame(() => target?.focus());
+  }
+  mobileNavigationPreviousFocus = null;
+}
+
+function updateMobileNavigationOffset() {
+  const bannerHeight = Math.max(0, ...[elements.deploymentBanner, elements.compactAdminNotice]
+    .filter((banner) => banner && !banner.classList.contains("hidden"))
+    .map((banner) => Math.ceil(banner.getBoundingClientRect().height)));
+  document.documentElement.style.setProperty("--deployment-banner-height", `${bannerHeight}px`);
+  document.documentElement.style.setProperty("--mobile-navigation-top", `${bannerHeight + 12}px`);
+}
+
+function syncMobileNavigationMode() {
+  closeMobileNavigation({ restoreFocus: false });
+  updateMobileNavigationOffset();
+}
+
 document.querySelectorAll(".nav-item").forEach((button) => button.addEventListener("click", () => {
   const view = button.dataset.view;
   if (button.dataset.personnelAdministrationRoute) {
@@ -15832,7 +16274,44 @@ document.querySelectorAll(".nav-item").forEach((button) => button.addEventListen
   const contextChanged = restoreRememberedOverallContext(view);
   setView(view);
   if (contextChanged) loadAll();
+  closeMobileNavigation({ restoreFocus: false });
 }));
+elements.mobileNavigationToggle?.addEventListener("click", openMobileNavigation);
+elements.mobileNavigationClose?.addEventListener("click", () => closeMobileNavigation());
+elements.mobileNavigationBackdrop?.addEventListener("click", () => closeMobileNavigation());
+mobileNavigationMedia.addEventListener("change", syncMobileNavigationMode);
+if (typeof ResizeObserver === "function" && (elements.deploymentBanner || elements.compactAdminNotice)) {
+  const deploymentBannerResizeObserver = new ResizeObserver(updateMobileNavigationOffset);
+  [elements.deploymentBanner, elements.compactAdminNotice].filter(Boolean)
+    .forEach((banner) => deploymentBannerResizeObserver.observe(banner));
+}
+if (typeof MutationObserver === "function" && (elements.deploymentBanner || elements.compactAdminNotice)) {
+  const deploymentBannerMutationObserver = new MutationObserver(updateMobileNavigationOffset);
+  [elements.deploymentBanner, elements.compactAdminNotice].filter(Boolean)
+    .forEach((banner) => deploymentBannerMutationObserver.observe(banner, { attributes: true, attributeFilter: ["class"] }));
+}
+document.addEventListener("keydown", (event) => {
+  if (!document.body.classList.contains("mobile-navigation-open")) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeMobileNavigation();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const focusable = mobileNavigationFocusableElements();
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+});
+syncMobileNavigationMode();
+initializeSettingsPackedGrids();
 elements.adminLoginForm?.addEventListener("submit", loginToAdministration);
 elements.adminLoginPersonnelNumber?.addEventListener("input", scheduleAdminLoginBrandingPreview);
 elements.adminLoginPersonnelNumber?.addEventListener("blur", previewAdminLoginBranding);
@@ -16731,6 +17210,51 @@ document.querySelector("#addEmployeeButton").addEventListener("click", async () 
   openEmployeeModal();
 });
 elements.addCentralEmployeeButton?.addEventListener("click", () => openEmployeeModal());
+elements.personnelDashboardGrid?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-personnel-dashboard-item]");
+  if (button) navigateFromPersonnelDashboard(button.dataset.personnelDashboardItem);
+});
+elements.personnelDashboardCustomizeButton?.addEventListener("click", () => {
+  if (elements.personnelDashboardCustomizer?.classList.contains("hidden")) openPersonnelDashboardCustomizer();
+  else closePersonnelDashboardCustomizer();
+});
+elements.personnelDashboardCustomizerClose?.addEventListener("click", () => closePersonnelDashboardCustomizer());
+elements.personnelDashboardCustomizerList?.addEventListener("change", (event) => {
+  const checkbox = event.target.closest("[data-personnel-dashboard-visible]");
+  if (!checkbox) return;
+  const layout = normalizePersonnelDashboardLayout(state.personnelDashboardDraftLayout || state.personnelDashboardLayout);
+  const hidden = new Set(layout.hidden);
+  if (checkbox.checked) hidden.delete(checkbox.dataset.personnelDashboardVisible);
+  else hidden.add(checkbox.dataset.personnelDashboardVisible);
+  layout.hidden = [...hidden];
+  state.personnelDashboardDraftLayout = layout;
+  updatePersonnelDashboardCustomizerStatus(layout);
+});
+elements.personnelDashboardCustomizerList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-personnel-dashboard-move]");
+  if (button) movePersonnelDashboardDraft(button.dataset.personnelDashboardMove, Number(button.dataset.direction));
+});
+elements.resetPersonnelDashboardLayout?.addEventListener("click", () => {
+  state.personnelDashboardDraftLayout = defaultPersonnelDashboardLayout();
+  renderPersonnelDashboardCustomizer();
+  if (elements.personnelDashboardCustomizerStatus) {
+    elements.personnelDashboardCustomizerStatus.textContent = "Die Standardanordnung ist vorbereitet. Zum Übernehmen bitte speichern.";
+  }
+});
+elements.savePersonnelDashboardLayout?.addEventListener("click", async () => {
+  const layout = normalizePersonnelDashboardLayout(state.personnelDashboardDraftLayout || state.personnelDashboardLayout);
+  const hidden = new Set(layout.hidden);
+  if (!orderedPersonnelDashboardItems(layout).some((item) => !hidden.has(item.id))) {
+    if (elements.personnelDashboardCustomizerStatus) {
+      elements.personnelDashboardCustomizerStatus.textContent = "Bitte mindestens einen verfügbaren Arbeitsbereich einblenden.";
+    }
+    return;
+  }
+  elements.savePersonnelDashboardLayout.disabled = true;
+  const saved = await persistPersonnelDashboardLayout(layout);
+  elements.savePersonnelDashboardLayout.disabled = false;
+  if (saved) closePersonnelDashboardCustomizer();
+});
 document.querySelectorAll("[data-personnel-administration-tab]").forEach((button) => button.addEventListener("click", () => setPersonnelAdministrationTab(button.dataset.personnelAdministrationTab)));
 document.querySelector(".personnel-administration-tabs")?.addEventListener("keydown", (event) => {
   if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;

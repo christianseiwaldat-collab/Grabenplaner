@@ -19,7 +19,13 @@ process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
 
 const subject = require("../server");
-const { app, db, releaseInstanceLockForTests } = subject;
+const {
+  app,
+  closePersistenceForTests,
+  db,
+  initializeApplicationPersistence,
+  releaseInstanceLockForTests,
+} = subject;
 
 const MANAGER = "block3-manager";
 const EMPLOYEE = "block3-employee";
@@ -78,6 +84,7 @@ function insertEmployee(personnelNumber, name, locationId, costCenterId) {
 }
 
 test.before(async () => {
+  await initializeApplicationPersistence();
   const localLocation = db.prepare(`
     SELECT id, cost_center_id FROM locations WHERE active = 1 ORDER BY id LIMIT 1
   `).get();
@@ -129,7 +136,7 @@ test.before(async () => {
 
 test.after(async () => {
   if (httpServer) await new Promise((resolve) => httpServer.close(resolve));
-  try { db.close(); } catch {}
+  await closePersistenceForTests();
   releaseInstanceLockForTests();
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });

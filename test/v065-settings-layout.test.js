@@ -70,6 +70,9 @@ test("Block 7: Leihe, Branding und PDF sind geschlossene Bereiche der Grundeinst
   assert.match(styles, /\.settings-two-column \{[^}]*grid-auto-rows:\s*max-content;[^}]*align-items:\s*start;/);
   assert.match(styles, /\.settings-card \{[^}]*align-self:\s*start;[^}]*height:\s*auto;/);
   assert.match(styles, /\.settings-accordion-grid \{[^}]*grid-template-columns:\s*repeat\(2,minmax\(0,1fr\)\);[^}]*grid-auto-rows:\s*max-content;[^}]*align-items:\s*start;/);
+  assert.match(styles, /\.settings-packed-grid \{[^}]*grid-auto-flow:\s*row;[^}]*grid-auto-rows:\s*1px;[^}]*row-gap:\s*0;/);
+  assert.match(app, /Math\.ceil\(item\.offsetHeight \+ 15\)/);
+  assert.match(app, /new ResizeObserver/);
   assert.match(styles, /@media \(max-width:\s*820px\)[\s\S]*?\.settings-accordion-grid \{ grid-template-columns:\s*1fr; \}/);
 });
 

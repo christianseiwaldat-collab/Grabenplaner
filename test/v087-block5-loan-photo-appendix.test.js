@@ -670,10 +670,10 @@ test("v0.87 Block 5 erzeugt geschützte Foto-PDF-Beilagen mit konfigurierbarer F
         original_retention: "delete",
       },
     ]);
-    const verified = verifyActiveProtectedDocumentBlobs();
+    const verified = await verifyActiveProtectedDocumentBlobs();
     assert.equal(verified.loanPhotos, 2);
     assert.equal(verified.loanPhotoAttachments, 3);
-    assert.equal(reconcileOrphanAmuBlobs().removed, 0);
+    assert.equal((await reconcileOrphanAmuBlobs()).removed, 0);
 
     const backupDirectory = path.join(testRoot, "block5-backup");
     const backup = createDatabaseBackupToDirectory(

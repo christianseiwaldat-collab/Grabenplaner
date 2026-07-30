@@ -356,7 +356,7 @@ test("v0.63: finaler Ist-Lohnexport verlangt aktuelle Tagesprüfung und liefert 
   assert.match(draft.response.headers.get("content-disposition"), /ENTWURF-/i);
   assert.match(draft.payload.toString("utf8"), /# ENTWURF/);
 
-  const evaluation = evaluateTimeDay("101", date, new Date("2026-07-14T12:00:00Z"));
+  const evaluation = await evaluateTimeDay("101", date, new Date("2026-07-14T12:00:00Z"));
   db.prepare(`
     INSERT INTO time_day_reviews
       (employee_number, location_id, department_id, department_key, work_date, note, reviewed_by, evaluation_version, snapshot_json)

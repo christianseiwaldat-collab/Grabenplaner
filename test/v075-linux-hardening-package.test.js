@@ -67,6 +67,52 @@ function withRuntimeContractCopy(callback) {
   }
 }
 
+function withCleanGitSnapshot(callback) {
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-clean-package-source-"));
+  const snapshotRoot = path.join(temporaryRoot, "source");
+  const outputRoot = path.join(temporaryRoot, "output");
+  const runGit = (args, cwd = root) => {
+    const result = spawnSync("git", ["-C", cwd, ...args], {
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    return result.stdout;
+  };
+  try {
+    const clone = spawnSync("git", ["clone", "--quiet", "--no-hardlinks", root, snapshotRoot], {
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    assert.equal(clone.status, 0, `${clone.stdout}\n${clone.stderr}`);
+
+    const currentFiles = runGit(
+      ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+    ).split("\0").filter(Boolean);
+    for (const relative of currentFiles) {
+      const source = path.join(root, relative);
+      const destination = path.join(snapshotRoot, relative);
+      if (!fs.existsSync(source)) {
+        fs.rmSync(destination, { force: true });
+        continue;
+      }
+      fs.mkdirSync(path.dirname(destination), { recursive: true });
+      fs.copyFileSync(source, destination);
+    }
+
+    runGit(["add", "--all"], snapshotRoot);
+    runGit([
+      "-c", "user.name=Grabenplaner Test",
+      "-c", "user.email=grabenplaner-test@example.invalid",
+      "commit", "--quiet", "--allow-empty", "--no-gpg-sign", "-m", "Test snapshot",
+    ], snapshotRoot);
+    assert.equal(runGit(["status", "--porcelain", "--untracked-files=all"], snapshotRoot), "");
+    callback(snapshotRoot, outputRoot);
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
 test("v0.75 keeps hardening separate from the schema-2 core runtime and binds its exact fingerprint", () => {
   const verification = spawnSync(process.execPath, [
     path.join(root, "server-tools/linux/lib/verify-package.js"),
@@ -213,22 +259,19 @@ test("v0.75 package integration never activates host hardening implicitly", () =
 test("v0.75 Linux package builder expands the complete hardening artifact list", {
   skip: process.platform !== "win32" ? "PowerShell-Paketbau wird im Windows-Job geprüft." : false,
 }, () => {
-  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-v075-package-build-"));
-  try {
-    const builder = path.join(root, "server-tools", "package", "New-GrabenplanerLinuxServerPackage.ps1");
+  withCleanGitSnapshot((snapshotRoot, outputRoot) => {
+    const builder = path.join(snapshotRoot, "server-tools", "package", "New-GrabenplanerLinuxServerPackage.ps1");
     const result = spawnSync("powershell.exe", [
       "-NoProfile",
       "-ExecutionPolicy", "Bypass",
       "-File", builder,
-      "-SourceDirectory", root,
-      "-OutputDirectory", temporaryRoot,
+      "-SourceDirectory", snapshotRoot,
+      "-OutputDirectory", outputRoot,
     ], { encoding: "utf8", timeout: 120_000 });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
-    assert.ok(fs.existsSync(path.join(temporaryRoot, "Grabenplaner-Server-v0.87.0-beta-linux-x64.zip")));
-    assert.ok(fs.existsSync(path.join(temporaryRoot, "Grabenplaner-Server-v0.87.0-beta-linux-x64.zip.sha256")));
-  } finally {
-    fs.rmSync(temporaryRoot, { recursive: true, force: true });
-  }
+    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.87.0-beta-linux-x64.zip")));
+    assert.ok(fs.existsSync(path.join(outputRoot, "Grabenplaner-Server-v0.87.0-beta-linux-x64.zip.sha256")));
+  });
 });
 
 test("v0.75 hardening package schema stays exact and explicitly activated", () => {

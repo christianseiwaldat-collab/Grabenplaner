@@ -10,6 +10,10 @@ const html = fs.readFileSync(path.join(root, "public", "index.html"), "utf8");
 const script = fs.readFileSync(path.join(root, "public", "app.js"), "utf8");
 const styles = fs.readFileSync(path.join(root, "public", "styles.css"), "utf8");
 const server = fs.readFileSync(path.join(root, "server.js"), "utf8");
+const startupSchemaMigrations = fs.readFileSync(
+  path.join(root, "lib", "persistence", "sqlite", "operations", "startup-schema-migrations.js"),
+  "utf8",
+);
 
 test("v0.82 Admin-UI trennt Governance-Bereiche nach expliziten Rechten", () => {
   for (const permission of [
@@ -104,7 +108,7 @@ test("v0.82 Migrationswächter umfasst alle Governance-Tabellen und Immutable-Tr
     "privacy_request_events",
     "privacy_export_receipts",
   ]) {
-    assert.match(server, new RegExp(`"${table}"`));
+    assert.match(startupSchemaMigrations, new RegExp(`"${table}"`));
   }
   for (const trigger of [
     "trg_vacation_account_revisions_immutable_update",
@@ -116,11 +120,11 @@ test("v0.82 Migrationswächter umfasst alle Governance-Tabellen und Immutable-Tr
     "trg_retention_preview_runs_immutable_update",
     "trg_privacy_request_events_immutable_delete",
   ]) {
-    assert.match(server, new RegExp(`"${trigger}"`));
+    assert.match(startupSchemaMigrations, new RegExp(`"${trigger}"`));
   }
-  assert.match(server, /privacyGovernanceTables\.some\(\(name\) => !tableExists\(name\)\)/);
-  assert.match(server, /privacyGovernanceImmutableTriggerDefinitions\.some\([\s\S]*!privacyGovernanceImmutableTriggerMatches\(definition\)/);
-  assert.match(server, /if \(privacyGovernanceMigrationRequired\) \{\s*removeMalformedPrivacyGovernanceImmutableTriggers\(\)/);
+  assert.match(startupSchemaMigrations, /privacyGovernanceTables\.some\(\(name\) => !tableExists\(name\)\)/);
+  assert.match(startupSchemaMigrations, /privacyGovernanceImmutableTriggerDefinitions\.some\([\s\S]*!privacyGovernanceImmutableTriggerMatches\(definition\)/);
+  assert.match(startupSchemaMigrations, /if \(privacyGovernanceMigrationRequired\) \{\s*removeMalformedPrivacyGovernanceImmutableTriggers\(\)/);
 });
 
 test("v0.82 GET-Routen bleiben lesend und Anspruchsänderungen verlangen das Verwaltungsrecht", () => {

@@ -1,7 +1,10 @@
 # Grabenplaner Versions-Log
 
-## v0.87 Beta · Organisationsmodell, fachliche Rechte und Leihnachweise
+## v0.87 Beta · Benutzeroberfläche, Organisationsmodell und Leihnachweise
 
+- Die Personalverwaltung öffnet mit einem anpassbaren Dashboard, das die fachlich verfügbaren Unterbereiche übersichtlich zusammenführt und die persönliche Anordnung benutzerbezogen bewahrt.
+- Einstellungsbereiche nutzen ein adaptives, gepacktes Kartenraster: Hohe Inhalte links lassen rechts mehrere kleinere Karten nachrücken, ohne starre gemeinsame Zeilenhöhe.
+- Aufgeklappte Hauptmenüs bleiben innerhalb der Navigation; lange Unterpunkte erzeugen keine horizontale Seitenleiste und der mobile Drawer bleibt vollständig bedienbar.
 - Frei konfigurierbare Kostenstellentypen ersetzen die bisher fest codierte Typauswahl. Zulässige Positionen werden je Typ gepflegt; nur Filialtypen dürfen einen Standort führen.
 - Die Kostenstelle ist die führende organisatorische Mitarbeiterzuordnung. Filialstandorte werden daraus abgeleitet, während zusätzliche Einsatzorte unabhängig für die Dienstplanung erhalten bleiben.
 - Personalleitung und höhere Rollen können fachliche Einzelrechte für Arbeitszeitregeln, Personalakt und AUM gezielt vergeben. Technische System-, Rollen- und geschützte AUM-Rechte bleiben von dieser Delegation ausgeschlossen.
@@ -12,6 +15,7 @@
 - Die Grundeinstellungen verwenden klar gegliederte, standardmäßig eingeklappte Bereiche und eine numerische Schriftgrößensteuerung von 75 bis 150 Prozent mit sofortiger Vorschau und bewusster Speicherung.
 - Bestehende Kostenstellen-, Mitarbeiter- und Kontozuordnungen werden vor der Migration gesichert, idempotent bereinigt und gegen eine Vermischung von Organisations- und Mitarbeiteridentitäten geschützt.
 - Lokale, Windows- und verschlüsselte Offsite-Sicherungen sowie der isolierte Recovery-App-Smoke berücksichtigen die neuen Leihfoto-PDF-Beilagen und ihre unveränderlichen Datenbanknachweise.
+- Die interne Datenzugriffsschicht erhält providerneutrale Verträge sowie nicht produktive PostgreSQL-Entwicklungsnachweise für Migration, Backup und Restore. SQLite bleibt der einzige unterstützte Produktprovider; daraus folgt noch keine PostgreSQL-Freigabe oder Installationsmigration.
 
 ## v0.86.3 Beta · Standortbezogene Planungsverantwortung
 
@@ -21,7 +25,7 @@
 - Teamfarben, Dienstplan-Spitznamen und Telefonnummern können im zugewiesenen Standort bearbeitet werden.
 - Operative Standortpflege erlaubt ausschließlich Öffnungs-/Tageszeiten und Mindestbesetzung. Standortname, Aktivstatus, Zeiterfassung, Kostenstellen und fremde Standorte bleiben geschützt.
 - Die Arbeitszeit-Regelprüfung steht beim Planen einschließlich konkreter Warnmeldungen zur Verfügung. Das Regelwerk-Dashboard und dessen fachliche oder rechtliche Verwaltungsfunktionen bleiben ausgeblendet.
-- System-Center, Systemdiagnosen, Rechteverwaltung, globale Einstellungen, Exporte, Krankenstand/AUM, Leihverwaltung und weitere nicht erforderliche Funktionen sind weder Rollenbestandteil noch über die Pilotnavigation erreichbar.
+- System-Center, Systemdiagnosen, Rechteverwaltung, globale Einstellungen, Exporte, Krankenstand/AUM, Leihverwaltung und weitere nicht erforderliche Funktionen sind weder Rollenbestandteil noch über die rollenbezogene Navigation erreichbar.
 - Bereichs-, Schreib-, Telefon- und Negativtests sichern die serverseitige Begrenzung unabhängig von der sichtbaren Oberfläche ab.
 
 ## v0.86.2 Beta · Server-Monitor, Backupverwaltung und kontrollierte Direktmaßnahmen

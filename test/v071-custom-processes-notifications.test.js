@@ -837,7 +837,7 @@ test("v0.71: ein zunächst blockierter externer Hinweis wird bei der nächsten P
   assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM outbound_notification_jobs WHERE entity_lookup = ?").get(entityLookup).count), 0);
 
   await configureManagerSmsProcessNotifications(true);
-  reconcileCustomProcessTriggers(new Date("2099-06-15T10:00:00.000Z"));
+  await reconcileCustomProcessTriggers(new Date("2099-06-15T10:00:00.000Z"));
   assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM outbound_notification_jobs WHERE entity_lookup = ?").get(entityLookup).count), 1);
   const queued = db.prepare("SELECT status, channel FROM outbound_notification_jobs WHERE entity_lookup = ?").get(entityLookup);
   assert.equal(queued.status, "pending");
@@ -889,7 +889,7 @@ test("v0.71: fester Notbesetzungs-Auslöser öffnet und löst Prozessläufe auto
       },
     ],
   }));
-  const triggered = reconcileCustomProcessTriggers(new Date(`${date}T10:00:00.000Z`));
+  const triggered = await reconcileCustomProcessTriggers(new Date(`${date}T10:00:00.000Z`));
   assert.equal(triggered.triggered, 1);
   const run = db.prepare("SELECT * FROM custom_process_runs WHERE process_id = ?").get(process.id);
   assert.equal(run.status, "open");
@@ -904,7 +904,7 @@ test("v0.71: fester Notbesetzungs-Auslöser öffnet und löst Prozessläufe auto
   `);
   insertShift.run("8711", locationId, departmentId, date);
   insertShift.run("8713", locationId, departmentId, date);
-  const resolved = reconcileCustomProcessTriggers(new Date(`${date}T10:05:00.000Z`));
+  const resolved = await reconcileCustomProcessTriggers(new Date(`${date}T10:05:00.000Z`));
   assert.equal(resolved.resolved, 1);
   assert.equal(db.prepare("SELECT status FROM custom_process_runs WHERE id = ?").get(run.id).status, "resolved");
   assert.ok(db.prepare("SELECT read_at FROM portal_notifications WHERE entity_type = 'custom_process_run' AND entity_id = ?").get(run.id).read_at);
@@ -931,7 +931,7 @@ test("v0.71: Notbesetzung wird je 15-Minuten-Slot und ohne abwesende oder inakti
       AND entity_id IN (SELECT id FROM custom_process_runs WHERE process_id = ?)
   `).run(process.id);
   db.prepare("DELETE FROM custom_process_runs WHERE process_id = ?").run(process.id);
-  reconcileCustomProcessTriggers(new Date(`${sunday}T10:00:00.000Z`));
+  await reconcileCustomProcessTriggers(new Date(`${sunday}T10:00:00.000Z`));
   assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM custom_process_runs WHERE process_id = ?").get(process.id).count), 0);
 
   const insertShift = db.prepare(`
@@ -941,7 +941,7 @@ test("v0.71: Notbesetzung wird je 15-Minuten-Slot und ohne abwesende oder inakti
   insertShift.run("8713", locationId, departmentId, monday, "09:00", "12:00");
   insertShift.run("8714", locationId, departmentId, monday, "12:00", "18:00");
   insertShift.run("8715", locationId, departmentId, monday, "09:00", "18:00");
-  const partial = reconcileCustomProcessTriggers(new Date(`${monday}T10:00:00.000Z`));
+  const partial = await reconcileCustomProcessTriggers(new Date(`${monday}T10:00:00.000Z`));
   assert.ok(partial.triggered >= 1);
   const run = db.prepare("SELECT * FROM custom_process_runs WHERE process_id = ?").get(process.id);
   assert.equal(run.status, "open");
@@ -951,12 +951,12 @@ test("v0.71: Notbesetzung wird je 15-Minuten-Slot und ohne abwesende oder inakti
     INSERT INTO week_options (week_start, group_id, employee_number, date_from, date_to, option_type, note, all_day)
     VALUES (?, 'v071-absence', '8714', ?, ?, 'training', 'Test', 1)
   `).run(monday, monday, monday);
-  const absent = reconcileCustomProcessTriggers(new Date(`${monday}T10:05:00.000Z`));
+  const absent = await reconcileCustomProcessTriggers(new Date(`${monday}T10:05:00.000Z`));
   assert.equal(absent.resolved, 0);
   assert.equal(db.prepare("SELECT status FROM custom_process_runs WHERE id = ?").get(run.id).status, "open");
 
   db.prepare("DELETE FROM week_options WHERE group_id = 'v071-absence'").run();
-  const covered = reconcileCustomProcessTriggers(new Date(`${monday}T10:10:00.000Z`));
+  const covered = await reconcileCustomProcessTriggers(new Date(`${monday}T10:10:00.000Z`));
   assert.ok(covered.resolved >= 1);
   assert.equal(db.prepare("SELECT status FROM custom_process_runs WHERE id = ?").get(run.id).status, "resolved");
 });
@@ -984,7 +984,7 @@ test("v0.71: Aufgabenabschluss ist an die aktuelle Laufaktivierung gebunden", as
     db.prepare("DELETE FROM custom_process_runs WHERE process_id = ?").run(process.id);
     db.prepare("DELETE FROM shifts WHERE shift_date = ? AND department_id = ?").run(date, isolatedDepartmentId);
 
-    const firstSweep = reconcileCustomProcessTriggers(new Date(`${date}T10:00:00.000Z`));
+    const firstSweep = await reconcileCustomProcessTriggers(new Date(`${date}T10:00:00.000Z`));
     assert.ok(firstSweep.triggered >= 1, JSON.stringify(firstSweep));
     const run = db.prepare("SELECT * FROM custom_process_runs WHERE process_id = ?").get(process.id);
     assert.ok(run);
@@ -1004,7 +1004,7 @@ test("v0.71: Aufgabenabschluss ist an die aktuelle Laufaktivierung gebunden", as
     assert.equal(firstCompleted.response.status, 200, JSON.stringify(firstCompleted.payload));
     assert.equal(db.prepare("SELECT status FROM custom_process_runs WHERE id = ?").get(run.id).status, "resolved");
 
-    const secondSweep = reconcileCustomProcessTriggers(new Date(`${date}T10:05:00.000Z`));
+    const secondSweep = await reconcileCustomProcessTriggers(new Date(`${date}T10:05:00.000Z`));
     assert.ok(secondSweep.triggered >= 1, JSON.stringify(secondSweep));
     const reopened = db.prepare("SELECT * FROM custom_process_runs WHERE id = ?").get(run.id);
     assert.equal(reopened.status, "open");

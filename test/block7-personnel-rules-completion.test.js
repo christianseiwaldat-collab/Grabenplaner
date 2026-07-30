@@ -19,7 +19,14 @@ process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
 
 const subject = require("../server");
-const { app, db, releaseInstanceLockForTests } = subject;
+const {
+  app,
+  collectiveAgreementsRepository,
+  customWorkRulesRepository,
+  db,
+  initializeApplicationPersistence,
+  releaseInstanceLockForTests,
+} = subject;
 const {
   addCollectiveAgreementVersion,
   createBusinessUnit,
@@ -146,8 +153,8 @@ function collectiveAgreementVersion(marker) {
   };
 }
 
-function createKvFixture(code, marker, scopeType, scopeKey) {
-  const agreement = createCollectiveAgreement(db, {
+async function createKvFixture(code, marker, scopeType, scopeKey) {
+  const agreement = await createCollectiveAgreement(collectiveAgreementsRepository, {
     code,
     title: `${marker} collective agreement`,
     shortTitle: marker,
@@ -155,14 +162,14 @@ function createKvFixture(code, marker, scopeType, scopeKey) {
     note: `${marker} register entry`,
     version: collectiveAgreementVersion(marker),
   }, `kv-secret-${marker.toLowerCase()}`);
-  const businessUnit = createBusinessUnit(db, {
+  const businessUnit = await createBusinessUnit(collectiveAgreementsRepository, {
     code: `BU-${code}`,
     name: `${marker} business unit`,
     legalEntityName: "Block 7 Test GmbH",
     description: `${marker} organizational scope`,
     scopes: [{ scopeType, scopeKey: String(scopeKey) }],
   }, `business-unit-secret-${marker.toLowerCase()}`);
-  const assignment = prepareCollectiveAgreementAssignment(db, {
+  const assignment = await prepareCollectiveAgreementAssignment(collectiveAgreementsRepository, {
     agreementVersionId: agreement.currentVersionId,
     businessUnitId: businessUnit.id,
     validFrom: "2026-01-01",
@@ -174,8 +181,8 @@ function createKvFixture(code, marker, scopeType, scopeKey) {
   return { agreement, businessUnit, assignment };
 }
 
-function createHistoricalKvFixture(code, marker, businessUnit) {
-  const original = createCollectiveAgreement(db, {
+async function createHistoricalKvFixture(code, marker, businessUnit) {
+  const original = await createCollectiveAgreement(collectiveAgreementsRepository, {
     code,
     title: `${marker} collective agreement`,
     shortTitle: marker,
@@ -184,14 +191,14 @@ function createHistoricalKvFixture(code, marker, businessUnit) {
     version: collectiveAgreementVersion(`${marker}-HISTORICAL`),
   }, `kv-secret-${marker.toLowerCase()}-historical`);
   const assignedVersionId = original.currentVersionId;
-  const agreement = addCollectiveAgreementVersion(db, original.id, {
+  const agreement = await addCollectiveAgreementVersion(collectiveAgreementsRepository, original.id, {
     ...collectiveAgreementVersion(`${marker}-CURRENT`),
     versionLabel: "2027",
     validFrom: "2027-01-01",
     validTo: "2027-12-31",
     externalPublishedOn: "2026-06-15",
   }, `kv-secret-${marker.toLowerCase()}-current`);
-  const assignment = prepareCollectiveAgreementAssignment(db, {
+  const assignment = await prepareCollectiveAgreementAssignment(collectiveAgreementsRepository, {
     agreementVersionId: assignedVersionId,
     businessUnitId: businessUnit.id,
     validFrom: "2026-01-01",
@@ -278,6 +285,7 @@ function codes(entries) {
 }
 
 test.before(async () => {
+  await initializeApplicationPersistence();
   const localLocation = db.prepare(`
     SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1
   `).get();
@@ -360,22 +368,22 @@ test.before(async () => {
       'foreign-profile-secret', 'foreign-profile-secret')
   `).run();
 
-  createKvFixture("B7-LOCATION", "LOCATION-MARKER", "location", localLocationId);
-  ownDepartmentKvFixture = createKvFixture(
+  await createKvFixture("B7-LOCATION", "LOCATION-MARKER", "location", localLocationId);
+  ownDepartmentKvFixture = await createKvFixture(
     "B7-OWN-DEPT",
     "OWN-DEPARTMENT-MARKER",
     "department",
     localDepartmentId,
   );
-  createKvFixture("B7-SIBLING", "SIBLING-DEPARTMENT-MARKER", "department", siblingDepartmentId);
-  createKvFixture("B7-FOREIGN", "FOREIGN-ONLY-MARKER", "location", foreignLocationId);
-  historicalKvFixture = createHistoricalKvFixture(
+  await createKvFixture("B7-SIBLING", "SIBLING-DEPARTMENT-MARKER", "department", siblingDepartmentId);
+  await createKvFixture("B7-FOREIGN", "FOREIGN-ONLY-MARKER", "location", foreignLocationId);
+  historicalKvFixture = await createHistoricalKvFixture(
     "B7-HISTORICAL",
     "HISTORICAL-MARKER",
     ownDepartmentKvFixture.businessUnit,
   );
-  const historicalDraft = createCustomWorkRuleDraft(
-    db,
+  const historicalDraft = await createCustomWorkRuleDraft(
+    customWorkRulesRepository,
     scopedHistoryRulePayload(
       "VISIBLE-HISTORICAL-PROFILE-MARKER",
       "2026-01-01",
@@ -383,13 +391,13 @@ test.before(async () => {
     ),
     HR,
   );
-  const historicalRelease = publishCustomWorkRuleDraft(
-    db,
+  const historicalRelease = await publishCustomWorkRuleDraft(
+    customWorkRulesRepository,
     historicalDraft.currentVersionId,
     HR,
   );
-  const currentDraft = addCustomWorkRuleDraftRevision(
-    db,
+  const currentDraft = await addCustomWorkRuleDraftRevision(
+    customWorkRulesRepository,
     historicalRelease.profileId,
     scopedHistoryRulePayload(
       "HIDDEN-CURRENT-PROFILE-MARKER",
@@ -398,8 +406,8 @@ test.before(async () => {
     ),
     HR,
   );
-  const currentRelease = publishCustomWorkRuleDraft(
-    db,
+  const currentRelease = await publishCustomWorkRuleDraft(
+    customWorkRulesRepository,
     currentDraft.currentVersionId,
     HR,
   );
@@ -747,8 +755,8 @@ test("Block 7/7: a scoped reviewer sees only current Scope-B metadata after a fo
   const scopeAActor = "foreign-scope-a-actor-secret";
   const scopeAPublisher = "foreign-scope-a-publisher-secret";
 
-  const scopeADraft = createCustomWorkRuleDraft(
-    db,
+  const scopeADraft = await createCustomWorkRuleDraft(
+    customWorkRulesRepository,
     {
       ...scopedHistoryRulePayload(hiddenScopeATitle, "2033-01-01", "2033-12-31"),
       code: "BLOCK7-SCOPE-METADATA-ISOLATION",
@@ -758,13 +766,13 @@ test("Block 7/7: a scoped reviewer sees only current Scope-B metadata after a fo
     },
     scopeAActor,
   );
-  const scopeARelease = publishCustomWorkRuleDraft(
-    db,
+  const scopeARelease = await publishCustomWorkRuleDraft(
+    customWorkRulesRepository,
     scopeADraft.currentVersionId,
     scopeAPublisher,
   );
-  const scopeBRevision = addCustomWorkRuleDraftRevision(
-    db,
+  const scopeBRevision = await addCustomWorkRuleDraftRevision(
+    customWorkRulesRepository,
     scopeARelease.profileId,
     {
       ...scopedHistoryRulePayload(visibleScopeBTitle, "2034-01-01", "2034-12-31"),

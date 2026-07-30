@@ -147,7 +147,17 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.equal(defaults.payload.dashboardFontSize, undefined);
   assert.ok(defaults.payload.employeeDisplayColumns.includes("name"));
   assert.deepEqual(defaults.payload.employeeDisplaySort, { key: "personnel_number", direction: "asc" });
+  assert.deepEqual(defaults.payload.personnelDashboardLayout, {
+    version: 1,
+    order: ["employees", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations", "dataRequests"],
+    hidden: [],
+  });
 
+  const personnelDashboardLayout = {
+    version: 1,
+    order: ["requests", "employees", "costCenters", "timeTracking", "vacations", "ruleDrafts", "collectiveAgreements", "dataRequests"],
+    hidden: ["collectiveAgreements"],
+  };
   const changed = await requestJson("/api/portal/v1/ui-preferences", {
     method: "PUT",
     session: admin,
@@ -156,6 +166,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
       appFontScalePercent: 115,
       employeeDisplayColumns: ["name", "phone", "assignment"],
       employeeDisplaySort: { key: "name", direction: "desc" },
+      personnelDashboardLayout,
     },
   });
   assert.equal(changed.response.status, 200, JSON.stringify(changed.payload));
@@ -165,6 +176,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.equal(changed.payload.appFontScalePercent, 115);
   assert.deepEqual(changed.payload.employeeDisplayColumns, ["name", "phone", "assignment"]);
   assert.deepEqual(changed.payload.employeeDisplaySort, { key: "name", direction: "desc" });
+  assert.deepEqual(changed.payload.personnelDashboardLayout, personnelDashboardLayout);
 
   const refreshed = await requestJson("/api/portal/v1/ui-preferences", { session: admin });
   assert.equal(refreshed.payload.pageThemes.planning, "dark");
@@ -172,6 +184,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.equal(refreshed.payload.appFontScalePercent, 115);
   assert.deepEqual(refreshed.payload.employeeDisplayColumns, ["name", "phone", "assignment"]);
   assert.deepEqual(refreshed.payload.employeeDisplaySort, { key: "name", direction: "desc" });
+  assert.deepEqual(refreshed.payload.personnelDashboardLayout, personnelDashboardLayout);
 
   const managerDefaults = await requestJson("/api/portal/v1/ui-preferences", { session: manager });
   assert.equal(managerDefaults.response.status, 200, JSON.stringify(managerDefaults.payload));
@@ -179,6 +192,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.equal(managerDefaults.payload.pageThemes.personnelAdministration, "light");
   assert.equal(managerDefaults.payload.appFontScalePercent, 100);
   assert.ok(managerDefaults.payload.employeeDisplayColumns.includes("name"));
+  assert.deepEqual(managerDefaults.payload.personnelDashboardLayout.hidden, []);
 
   for (const appFontScalePercent of [75, 150]) {
     const boundary = await requestJson("/api/portal/v1/ui-preferences", {
@@ -188,6 +202,7 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
     });
     assert.equal(boundary.response.status, 200, JSON.stringify(boundary.payload));
     assert.equal(boundary.payload.appFontScalePercent, appFontScalePercent);
+    assert.deepEqual(boundary.payload.personnelDashboardLayout, personnelDashboardLayout);
   }
 });
 
@@ -219,6 +234,20 @@ test("v0.71: Ungültige Darstellungswerte und anonyme Zugriffe werden abgewiesen
     body: { employeeDisplaySort: { key: "name", direction: "sideways" } },
   });
   assert.equal(invalidSort.response.status, 400, JSON.stringify(invalidSort.payload));
+  for (const personnelDashboardLayout of [
+    null,
+    { version: 2, order: [], hidden: [] },
+    { version: 1, order: ["employees", "employees"], hidden: [] },
+    { version: 1, order: ["unknown"], hidden: [] },
+    { version: 1, order: [], hidden: ["unknown"] },
+  ]) {
+    const invalidLayout = await requestJson("/api/portal/v1/ui-preferences", {
+      method: "PUT",
+      session: admin,
+      body: { personnelDashboardLayout },
+    });
+    assert.equal(invalidLayout.response.status, 400, JSON.stringify(invalidLayout.payload));
+  }
   const anonymous = await requestJson("/api/portal/v1/ui-preferences");
   assert.equal(anonymous.response.status, 401, JSON.stringify(anonymous.payload));
 });

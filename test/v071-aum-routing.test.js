@@ -465,7 +465,7 @@ test("v0.71: AUM-Zugriff folgt Filialscope, PL-Routing und persönlichen Ausnahm
     SELECT COUNT(*) AS count FROM protected_case_events
     WHERE entity_kind = 'amu' AND entity_id = ?
   `).get(secondNorthId).count, 1);
-  const retentionPurge = purgeExpiredAmuDocuments("9999-12-31");
+  const retentionPurge = await purgeExpiredAmuDocuments("9999-12-31");
   assert.equal(retentionPurge.purged > 0, true, JSON.stringify(retentionPurge));
   assert.equal(db.prepare("SELECT status FROM amu_reports WHERE id = ?").get(secondNorthId).status, "purged");
   assert.equal(db.prepare(`

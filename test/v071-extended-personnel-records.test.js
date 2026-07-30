@@ -497,7 +497,7 @@ test("v0.71 Block 4: unterbrochene Dokumentlöschungen werden sicher abgeschloss
 
   db.prepare("UPDATE personnel_record_documents SET status = 'deleted', deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
     .run(stored.id);
-  const finalized = finalizeDeletedPersonnelRecordDocuments();
+  const finalized = await finalizeDeletedPersonnelRecordDocuments();
   assert.equal(finalized.purged, 1);
   assert.equal(finalized.failed, 0);
   assert.equal(fs.existsSync(blobPath), false);

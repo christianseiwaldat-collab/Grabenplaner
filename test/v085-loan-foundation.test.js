@@ -522,7 +522,7 @@ test("v0.85 Ausgabe, Live-Gegenprüfung und bestätigte Rücknahme bilden einen 
   assert.equal(issuePhoto.response.headers.get("cache-control"), "private, no-store, max-age=0");
   assert.equal(issuePhoto.buffer.subarray(0, 2).toString("hex"), "ffd8");
 
-  const reconciliation = reconcileOrphanAmuBlobs();
+  const reconciliation = await reconcileOrphanAmuBlobs();
   assert.equal(reconciliation.removed, 0);
   const issuePdfAfterReconciliation = await requestBinary(issued.payload.loan.documents[0].downloadUrl);
   assert.equal(issuePdfAfterReconciliation.response.status, 200);
@@ -842,8 +842,8 @@ test("parallele Foto-Uploads vergeben Positionen erst im serialisierten Schreibv
   );
 });
 
-test("proaktive Integritätsprüfung liest auch geschützte Leihbelege und Leihfotos", () => {
-  const verified = verifyActiveProtectedDocumentBlobs();
+test("proaktive Integritätsprüfung liest auch geschützte Leihbelege und Leihfotos", async () => {
+  const verified = await verifyActiveProtectedDocumentBlobs();
   assert.ok(verified.loanDocuments >= 3, JSON.stringify(verified));
   assert.ok(verified.loanPhotos >= 2, JSON.stringify(verified));
   assert.equal(

@@ -1,6 +1,10 @@
 # Datenbank-Provider-Strategie
 
-**Status:** Verbindliche Zielarchitektur, noch nicht implementiert
+**Status:** Verbindliche Zielarchitektur; Phase 4 abgeschlossen, Phase 5
+weiterhin in Bearbeitung; Block 6 als nicht produktiver Betriebs- und
+Recovery-Vertrag lokal abgenommen
+
+**Stand:** 30.07.2026
 
 **Beschlossen am:** 28.07.2026
 
@@ -304,13 +308,13 @@ anzeigen, die der aktive Provider tatsächlich und nachweislich unterstützt.
 | Bestehende Migrationen | unterstützt | providerabhängig umzusetzen | vollständige Neuaufbau- und Upgrade-Tests |
 | Gleichzeitige Schreibzugriffe | begrenzt auf freigegebenes Einzelinstanzmodell | nicht freigegeben; nachzuweisen | Last-, Lock-, Deadlock- und Isolationstests |
 | Mehrere App-Instanzen | nicht freigegeben | nicht automatisch freigegeben | Sitzungen, Jobs, Sperren, Dateien und Scheduler geprüft |
-| Konsistentes Datenbankbackup | bestehender SQLite-Pfad | nicht durch SQLite-Nachweis abgedeckt | eigener geprüfter PostgreSQL-Backup-Pfad |
-| Restore | bestehender SQLite-Pfad | nicht freigegeben | automatisierter Restore-Test |
-| Integritätsprüfung | SQLite-spezifisch | separat zu definieren | providerbezogener Integritätsnachweis |
-| Point-in-Time-Recovery | nicht Bestandteil des SQLite-Standards | optionales PostgreSQL-Ziel | eigener PITR-Aufbau und Wiederherstellungstest |
-| Recovery Assurance | SQLite-spezifischer Nachweis | nicht freigegeben | signierter providerbezogener End-to-End-Nachweis |
-| System-Center-Auskunft | SQLite-Status | erst nach Implementierung | aktive Methode und Nachweisalter korrekt ausgewiesen |
-| Gepaarte Dokumentablage | bestehender Betriebsweg | separat nachzuweisen | konsistenter Datenbank-/Dokument-Sicherungspunkt |
+| Konsistentes Datenbankbackup | bestehender SQLite-Pfad | Block-6-`development-contract` mit realem Custom-Dump lokal geprüft; Produktfähigkeit bleibt `false` | produktive Verdrahtung, Zeitplan, Rollen-, Offsite- und externer CI-Nachweis |
+| Restore | bestehender SQLite-Pfad | isolierter Real-Restore gegen PostgreSQL 18.4 lokal 1/1 grün; Produktfähigkeit bleibt `false` | vollständiger Vollanwendungs-Restore, gemessenes RTO und Installationsabnahme |
+| Integritätsprüfung | SQLite-spezifisch | Bundle-, Manifest-, Artefakt- und Evidence-Prüfungen nicht produktiv implementiert | produktiver providerbezogener Integritätsnachweis |
+| Point-in-Time-Recovery | nicht Bestandteil des SQLite-Standards | nicht implementiert und nicht Ziel von Block 6 | eigener PITR-Aufbau und Wiederherstellungstest |
+| Recovery Assurance | SQLite-spezifischer Nachweis | signierbarer Belegvertrag v2 getestet; produktive Orchestrierung und Offsite-Phasen offen | vollständiger signierter providerbezogener End-to-End-Nachweis |
+| System-Center-Auskunft | SQLite-Status | read-only Monitoradapter getestet, aber nicht in Server oder Oberfläche aktiviert | aktive Methode, Evidence-Alter, Alarmierung und Betriebsabnahme |
+| Gepaarte Dokumentablage | bestehender Betriebsweg | verschlüsselter Dokument-Roundtrip lokal real geprüft; produktive Quiesce-Verdrahtung offen | konsistenter Vollanwendungs-Sicherungspunkt mit allen Mutationspfaden |
 
 Eine nicht vorhandene oder nicht geprüfte Fähigkeit wird als nicht verfügbar
 behandelt. PostgreSQL allein ist weder ein Beweis für Hochverfügbarkeit noch
@@ -357,6 +361,19 @@ System-Center und Recovery Assurance müssen eindeutig anzeigen:
 Ein erfolgreicher SQLite-Nachweis darf niemals als PostgreSQL-Nachweis
 ausgegeben werden und umgekehrt.
 
+Block 6 hat dafür einen klar abgegrenzten, nicht produktiven Entwicklungspfad
+für Custom-Dump, isolierten Restore, Bundle v2, Monitoring und
+Recovery-Assurance-Belege geschaffen. Der lokale PostgreSQL-18.4-Nachweis ist
+grün; der Workflow ist in GitHub Actions verankert. Ein grüner externer Lauf
+des exakt veröffentlichten Commitstands bleibt bis zum belegten Lauf mit
+Run-ID ein eigenes offenes Gate. Einzelheiten, RPO-/RTO-Grenzen und die offenen
+Installationsgates stehen in
+[PostgreSQL-Betrieb und Recovery im nicht produktiven Status](DATENBANK-POSTGRESQL-BETRIEB-UND-RECOVERY.md).
+
+Dieser Stand ist keine Supportfreigabe. Es gibt weiterhin keinen produktiven
+Zeitplan, keinen PostgreSQL-System-Center-Pfad, keinen Offsite-Orchestrator und
+keine allgemeine RPO-/RTO-Zusage.
+
 ## 9. Phasen und getrennte Freigaben
 
 Jede Phase wird separat geplant, geprüft, abgenommen und erst nach
@@ -379,6 +396,9 @@ Nicht enthalten:
 
 ### Phase 1 – Vollständiges Kopplungs- und Betriebsinventar
 
+Ergebnisartefakt:
+[Datenbank-Kopplungsinventar](DATENBANK-KOPPLUNGSINVENTAR.md)
+
 Umfang:
 
 - alle direkten Treiberimporte und Datenbankzugriffe erfassen;
@@ -396,6 +416,9 @@ Abnahme:
 
 ### Phase 2 – Providervertrag, Typen und Vertragstests
 
+Ergebnisartefakt:
+[Datenbank-Provider-Vertrag](DATENBANK-PROVIDER-VERTRAG.md)
+
 Umfang:
 
 - Promise-basierten Vertrag definieren;
@@ -411,6 +434,15 @@ Abnahme:
 - Transaktions-, Rollback- und Fehlersemantik ist automatisiert geprüft.
 
 ### Phase 3 – SQLite-Provider und schrittweise SQLite-Parität
+
+Abschlussartefakt:
+[SQLite-Provider und vollständige SQLite-Parität](DATENBANK-SQLITE-PROVIDER.md)
+
+Aktueller Stand am 29.07.2026: Block 3 wurde separat freigegeben und
+abgeschlossen. Fachbereiche verwenden treiberfreie Repositories; Schema,
+Migrationen und SQLite-spezifische Betriebsfunktionen liegen hinter ausdrücklich
+benannten Persistence-Operationen. Das Architektur-Audit weist null rohe
+Fachzugriffe und null Schichtverletzungen aus.
 
 Umfang:
 
@@ -430,11 +462,25 @@ Abnahme:
 
 ### Phase 4 – Providerfähiges SQL und providerfähige Migrationen
 
+Abschlussartefakt:
+[Datenbank-Dialekte und providerfähige Migrationen](DATENBANK-DIALEKTE-UND-MIGRATIONEN.md)
+
+Aktueller Stand am 29.07.2026: Block 4 wurde separat freigegeben und
+abgeschlossen. Sämtliche 891 Anwendungsstatements besitzen eine eindeutige
+SQLite-Bindung und eine deckungsgleiche, nicht ausführbare
+PostgreSQL-Plan-Fixture. Die neun realen Anwendungsmigrationsstufen sind durch
+providerneutrale Operations-IDs, SQLite-Bindungen und einen ausdrücklich nur
+vertraglichen PostgreSQL-Status abgebildet. Der neue generische Ledger ist
+gehärtet, ersetzt aber die teilweise selbst transaktionierende bestehende
+SQLite-Startkette noch nicht; diese Aktivierungsgrenze ist ausdrücklich
+dokumentiert. Phase 5 wurde anschließend separat gestartet; ihr aktueller
+Zwischenstand ist im folgenden Abschnitt ausgewiesen.
+
 Umfang:
 
 - SQL-Eigentum vollständig in die Persistence-Schicht überführen;
-- gemeinsamen SQL-Teilumfang und die Eigentumsgrenzen künftiger
-  Dialektvarianten festlegen;
+- den konservativen SQLite-Ausgangsbestand und die Eigentumsgrenzen künftiger
+  Dialektvarianten festlegen, ohne daraus Portabilität abzuleiten;
 - fachliche Migrationen von providerspezifischer Syntax trennen;
 - Neuaufbau-, Upgrade-, Rollback- und historische Fixture-Tests etablieren.
 
@@ -447,6 +493,94 @@ Abnahme:
 - historische SQLite-Datenbestände bleiben vollständig kompatibel.
 
 ### Phase 5 – PostgreSQL-Provider im nicht produktiven Status
+
+Zwischenstand am 30.07.2026: Phase 5 ist begonnen und weiterhin in
+Bearbeitung. Der abgegrenzte PostgreSQL-Provider einschließlich
+Connection-Pool, Transaktionsbindung, Fehlernormalisierung und
+Sicherheitsrichtlinien ist für die nicht produktive Entwicklung implementiert.
+Reale, isolierte Nonprod-Live-Tests gegen PostgreSQL haben Datentypen,
+Compiler-JSON-Bindungen, Constraints, Commit und Rollback, Read-only- und
+serialisierbare Transaktionen, parallele Transaktionen,
+Deadlock-Normalisierung und Statement-Timeouts in sieben Fällen erfolgreich
+geprüft. Ergebnisfelder werden vor der Zuordnung nach Name und Reihenfolge
+geprüft; Widersprüche zwischen Statementvertrag, Katalogangabe und
+SQL-`RETURNING` scheitern geschlossen.
+
+Dieser Nachweis ist keine Produktiv- oder Supportfreigabe. PostgreSQL ist
+weder in der Produkt- noch in der Serverkonfiguration aktiviert; beide bleiben
+ausschließlich auf SQLite festgelegt.
+
+Der aktuelle PostgreSQL-Dialektplan wird mit Compiler v2 erzeugt und bleibt
+absichtlich nicht ausführbar. Er umfasst alle 891 Anwendungsstatements: 789
+Einträge sind generierte Syntaxkandidaten (`portable-generated`), 102
+benötigen eine ausdrückliche `requires-override`-Implementierung und 0 von 891
+bilden einen ausführbaren Vollanwendungskatalog.
+
+Der neue Katalogvertrag verhindert bei derzeit 0/891 akzeptierten Live- und
+Paritätsnachweisen jeden für die Vollanwendung ausführbaren Katalog. Auch 891
+strukturell vollständige Deklarationen reichen ohne diese 891
+Acceptance-Nachweise nicht für `applicationExecutable: true`.
+
+Davon getrennt sind vier reale Teil-Slices auf SQLite und PostgreSQL
+fachlich geprüft: UI-Präferenzen 4/4, Planning Settings 2/2, Organization
+Departments 2/2 und System Center `oldestIntervalKeys` 1/1. Zusammen sind das
+genau neun live geprüfte Statements. Alle vier tragen den Status
+`development-contract`, deklarieren `fullApplicationCatalog: false` und
+bleiben auf `applicationExecutable: false` sowie `productActivation: false`
+begrenzt.
+
+Der Planning-Settings-Slice prüft JSON-Binding, JSONB-Objektkonstruktion und
+atomaren Transaktionsrollback; `key: null` scheitert nun auf beiden Providern
+bereits als `PERSISTENCE_STATEMENT_INVALID`. Der Abteilungsslice löst
+Boolean-Prädikat, SQLite-`BINARY`- gegenüber PostgreSQL-`C`-Sortierung und
+UTC-Timestamp-Text ausdrücklich. Der System-Center-Slice bindet das Limit
+typisiert und löst gleiche Zeitpunkte mit einer `C`-Sortierung auf. Alle vier
+Slices pinnen Quellvertrags-Fingerprints aus exaktem SQLite-SQL, Operation,
+Parametervertrag und geordnetem Ergebnisvertrag. SQL-, Nullability-,
+Parameter- oder Ergebnisdrift scheitert geschlossen. Cleanupfehler lassen die
+Dual-Provider-Tests fehlschlagen.
+
+Diese 4/4-, 2/2-, 2/2- und 1/1-Nachweise sind weder Vollkatalog noch
+Produktaktivierung und verändern den Stand 0/891 nicht.
+
+Der generische PostgreSQL-Migrationsadapter ist als nicht aktivierter
+`development-contract` implementiert und real getestet. Ein
+Session-`pg_advisory_lock` wird vor genau einer
+`SERIALIZABLE READ WRITE`-Transaktion erworben und erst nach Commit oder
+Rollback wieder gelöst. Der transaktionsgebundene
+`pg_advisory_xact_lock` wurde nach einem real reproduzierten
+Stale-Snapshot-/Ledgerfehler verworfen; es gibt weder eine JavaScript-Queue
+noch einen automatischen Retry. Rebuild,
+Präfix-Upgrade, No-op, synthetischer Rollback, atomarer Fehlerabbruch,
+parallele Runner und Driftprüfung sind live grün.
+
+Frei programmierbare Handler sind nicht Teil des Adapters. Er führt nur
+kanonische versionierte SQL-Artefakte aus, berechnet deren Fingerprint selbst
+und sperrt Ledgerzugriff, Routinen, Session-/Transaktionssteuerung,
+Schemaqualifizierung, temporäre beziehungsweise `UNLOGGED`-Objekte und
+`SELECT ... INTO` fail-closed. Die konfigurierte Migrationsrolle muss zugleich
+`current_user`, `session_user` und Schemaeigentümerin sein; privilegierte
+Rollenflags oder geerbte Rollen sind unzulässig. Eine getrennte temporäre
+Loginrolle weist diese Grenze live nach. Diese technische Grundlage aktiviert
+weder den PostgreSQL-Produktpfad noch eine reale Anwendungsmigration.
+
+Für die späteren PostgreSQL-Migrationen gilt ein zusätzliches Schema-Gate:
+SQLite-`TEXT PRIMARY KEY` ist ohne ausdrückliches `NOT NULL` schwächer als der
+entsprechende PostgreSQL-Vertrag. Die PostgreSQL-Nullability muss daher je
+Spalte ausdrücklich aus dem Fachvertrag abgeleitet und geprüft werden; eine
+mechanische Übernahme der SQLite-DDL ist nicht zulässig.
+
+Der PostgreSQL-Migrationsstand bleibt 0/9; keine Anwendungsmigration ist
+implementiert. Datenübernahme, vollständige fachliche Parität und Lasttests
+sind weiterhin offen. Die technischen Einzelheiten des Provider-Slices sind
+in
+[PostgreSQL-Provider im nicht produktiven Entwicklungsstatus](DATENBANK-POSTGRESQL-PROVIDER.md)
+dokumentiert.
+
+Der separat freigegebene Block 6 ergänzt Betriebs- und Recovery-Module, ändert
+aber keines dieser Phase-5-Gates: Der Vollanwendungsstand bleibt 0/891 und der
+Anwendungsmigrationsstand 0/9. Ein erfolgreicher technischer Backup- und
+Restore-Nachweis darf fehlende Anwendungsparität nicht ersetzen.
 
 Vorbedingung für die Implementierungsfreigabe:
 
@@ -475,6 +609,21 @@ Abnahme:
 
 ### Phase 6 – Betriebs-, Recovery- und Supportfreigabe
 
+Aktueller Stand am 30.07.2026: Der nicht produktive technische Anteil von
+Block 6 ist lokal abgenommen. Der kombinierte PostgreSQL-Lauf für Block 5 und
+Block 6 ist mit 121/121 Tests grün; der reale PostgreSQL-18.4-Restore-E2E-Fall
+ist 1/1 grün. Der CI-Job ist mit PostgreSQL 18.4 und den Clientwerkzeugen 18
+konfiguriert. Ein grüner externer Lauf des exakt veröffentlichten Commitstands
+bleibt bis zu einem belegten GitHub-Actions-Lauf mit Run-ID offen.
+
+Implementiert sind der providerneutrale Betriebsvertrag, Backup-Bundle v2,
+Custom-Dump aus exportiertem Snapshot, Dokumentbindung, isolierter Restore,
+Evidence-Abgleich, ein signierbarer Recovery-Assurance-Vertrag und ein
+read-only Monitoradapter. Alle Pfade bleiben `development-contract`,
+`productActivation: false` und außerhalb von `server.js`. Das
+Abschlussartefakt ist
+[PostgreSQL-Betrieb und Recovery im nicht produktiven Status](DATENBANK-POSTGRESQL-BETRIEB-UND-RECOVERY.md).
+
 Umfang:
 
 - PostgreSQL-Backup und automatisierten Restore-Nachweis implementieren;
@@ -485,29 +634,56 @@ Umfang:
 
 Abnahme:
 
-- alle zutreffenden Capability-Gates sind erfüllt;
-- mindestens ein vollständiger, reproduzierbarer End-to-End-Restore ist
+- [x] ein realer, isolierter Betriebsweg-Restore ist lokal reproduzierbar
   nachgewiesen;
-- Betriebsverantwortung, Alarmierung und Wartung sind geklärt;
-- PostgreSQL-Support und ein konkreter Produktiv-Cutover werden jeweils
+- [x] Provider, Methode, Datenbankartefakt und verschlüsselte
+  Dokumentkomponente sind technisch aneinander gebunden;
+- [ ] der unveränderte Stand besitzt einen grünen externen CI-E2E-Lauf;
+- [ ] die Phase-5-Gates 891/891 und 9/9 sind erfüllt;
+- [ ] ein Vollanwendungs-Restore auf realitätsnaher Datenmenge ist
+  nachgewiesen;
+- [ ] RPO, RTO, Rollen, Secrets, Offsite, Retention, Betriebsverantwortung,
+  Alarmierung und Wartung sind je Installation abgenommen;
+- [ ] PostgreSQL-Support und ein konkreter Produktiv-Cutover sind jeweils
   ausdrücklich freigegeben.
+
+### Nachgelagerter Block 7 – freiwillige Migration einer konkreten Installation
+
+Die Startprüfung vom 30.07.2026 hat das Ergebnis **NO-GO**. Es ist noch keine
+konkrete Zielinstallation ausgewählt oder installationsbezogen freigegeben.
+PostgreSQL-Vollkatalog und Anwendungsmigrationen stehen weiterhin bei 0/891
+beziehungsweise 0/9; `productActivation` bleibt `false`. Deshalb wurde keine
+Installation, kein VPS und keine Produktkonfiguration verändert.
+
+Block 7 darf erst in einen Cutover übergehen, wenn alle offenen Abnahmepunkte
+aus Phase 6 erfüllt sind und für genau eine benannte Installation
+Betriebsmodell, Verantwortliche, Wartungsfenster, RPO/RTO, Rollen, Secrets,
+TLS, Backup, Offsite, Monitoring, Rückkehrplan und Erfolgskriterien ausdrücklich
+freigegeben wurden. Der Start der Prüfung allein ist keine
+PostgreSQL-Supportfreigabe.
 
 ## 10. Übergreifende Abnahmekriterien
 
-- [ ] Ausgangslage und direkte Datenbankkopplungen sind vollständig inventarisiert.
-- [ ] Der asynchrone Providervertrag ist dokumentiert und vertraglich getestet.
-- [ ] Transaktionen verwenden ausschließlich ihren gebundenen Executor.
-- [ ] Fachlogik erhält keine rohen Treiberhandles.
-- [ ] Resultate, Werte und Fehler sind providerneutral normalisiert.
-- [ ] `DB_PATH` bleibt für bestehende SQLite-Installationen kompatibel.
-- [ ] Unbekannte oder ungültige Providerkonfiguration scheitert geschlossen.
-- [ ] SQLite läuft ohne funktionale Verschlechterung vollständig über den
+- [x] Ausgangslage und direkte Datenbankkopplungen sind vollständig inventarisiert.
+- [x] Der asynchrone Providervertrag ist dokumentiert und vertraglich getestet.
+- [x] Transaktionen verwenden ausschließlich ihren gebundenen Executor.
+- [x] Fachlogik erhält keine rohen Treiberhandles.
+- [x] Resultate, Werte und Fehler sind providerneutral normalisiert.
+- [x] `DB_PATH` bleibt für bestehende SQLite-Installationen kompatibel.
+- [x] Unbekannte oder ungültige Providerkonfiguration scheitert geschlossen.
+- [x] Alle Runtime-Slices einschließlich UI-Präferenzen nutzen Repository- oder
+      benannte SQLite-Operationspfade.
+- [x] SQLite läuft ohne funktionale Verschlechterung vollständig über den
   Providerpfad.
-- [ ] Bestehende SQLite-Dateien bleiben ohne Datenverlust nutzbar.
-- [ ] SQL-Eigentum und Migrationen sind providerfähig getrennt.
-- [ ] Die Capability-Matrix wird technisch und betrieblich wahrheitsgemäß
-  abgebildet.
-- [ ] Backup, Restore und Recovery Assurance sind providerspezifisch getrennt.
+- [x] Bestehende SQLite-Dateien bleiben ohne Datenverlust nutzbar.
+- [x] SQL-Eigentum und Migrationen sind providerfähig getrennt.
+- [x] Die Capability-Matrix bildet den nicht produktiven Entwicklungsstand
+  technisch wahrheitsgemäß ab; alle PostgreSQL-Produktfähigkeiten bleiben
+  `false`.
+- [x] Backup, Restore und Recovery Assurance sind im
+  `development-contract` providerspezifisch getrennt.
+- [ ] Produktzeitplan, Offsite-Orchestrierung, System-Center-Integration und
+  externe CI-E2E-Abnahme sind abgeschlossen.
 - [ ] PostgreSQL wird erst nach bestandenen Betriebs- und Recovery-Gates als
   unterstützt bezeichnet.
 - [ ] Jede Implementierungsphase besitzt eine eigene Freigabe und Abnahme.

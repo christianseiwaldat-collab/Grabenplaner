@@ -394,7 +394,7 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
       (id, entity_kind, entity_id, action_lookup, actor_lookup, protected_payload)
     VALUES ('sickness-retention-event', 'sickness', ?, 'test-action', 'test-actor', 'enc:v2:test')
   `).run(caseId);
-  const activePurge = purgeExpiredSicknessData("2026-07-14");
+  const activePurge = await purgeExpiredSicknessData("2026-07-14");
   assert.equal(activePurge.cases, 0);
   assert.equal(activePurge.jobs, 1);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM sickness_cases WHERE id = ?").get(caseId).count, 1);
@@ -407,7 +407,7 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
   });
   assert.equal(withdrawn.response.status, 200, JSON.stringify(withdrawn.payload));
   db.prepare("UPDATE sickness_cases SET purge_after = '2000-01-01' WHERE id = ?").run(caseId);
-  const purged = purgeExpiredSicknessData("2026-07-14");
+  const purged = await purgeExpiredSicknessData("2026-07-14");
   assert.equal(purged.cases, 1);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM sickness_cases WHERE id = ?").get(caseId).count, 0);
   assert.equal(db.prepare(`
@@ -473,7 +473,7 @@ test("v0.59: filialfremder Einsatz steuert Besetzungsrisiko, effektive Leserecht
 
   const balancingShift = insertShift.run("598", departmentB, shiftDate, shiftStart, shiftEnd);
   const sweepAtShiftDate = new Date(`${shiftDate}T12:00:00+02:00`);
-  runSicknessEscalationSweep(sweepAtShiftDate);
+  await runSicknessEscalationSweep(sweepAtShiftDate);
 
   const safeCaseRow = db.prepare("SELECT * FROM sickness_cases WHERE id = ?").get(caseId);
   const safePayload = parseProtectedJson(safeCaseRow.protected_payload, {
@@ -489,7 +489,7 @@ test("v0.59: filialfremder Einsatz steuert Besetzungsrisiko, effektive Leserecht
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM portal_notifications WHERE recipient_employee_number = '599' AND read_at IS NULL").get().count, 1);
 
   db.prepare("DELETE FROM shifts WHERE id = ?").run(Number(balancingShift.lastInsertRowid));
-  runSicknessEscalationSweep(sweepAtShiftDate);
+  await runSicknessEscalationSweep(sweepAtShiftDate);
   const reopenedAlertRow = db.prepare("SELECT * FROM sickness_alerts WHERE sickness_case_id = ?").get(caseId);
   const reopenedAlert = parseProtectedJson(reopenedAlertRow.protected_payload, {
     namespace: "sickness-alert", recordId: reopenedAlertRow.id, field: "payload", employeeNumber: String(caseId),
@@ -630,12 +630,12 @@ test("v0.59: AUM ohne Enddatum bleibt verschlüsselt und eine Rückkehrmeldung b
     INSERT INTO shifts (employee_number, department_id, shift_date, start_time, end_time, area, note)
     VALUES ('591', ?, ?, ?, ?, 'Nach Rückkehr', '')
   `).run(departmentA, postReturnDate, postReturnConfig.start, postReturnConfig.end);
-  runSicknessEscalationSweep(new Date(`${startDate}T12:00:00+02:00`));
+  await runSicknessEscalationSweep(new Date(`${startDate}T12:00:00+02:00`));
   assert.equal(alertPayloads().filter((entry) => entry.kind === "staffing_risk")
     .every((entry) => entry.status === "resolved"), true);
   db.prepare("DELETE FROM shifts WHERE id = ?").run(Number(postReturnShift.lastInsertRowid));
   db.prepare("DELETE FROM shifts WHERE id = ?").run(Number(balancingShift.lastInsertRowid));
-  runSicknessEscalationSweep(new Date(`${startDate}T12:00:00+02:00`));
+  await runSicknessEscalationSweep(new Date(`${startDate}T12:00:00+02:00`));
   assert.equal(alertPayloads().some((entry) => entry.kind === "staffing_risk" && entry.status === "open"), true);
   assert.equal(caseJobs().every((row) => row.status === "pending"), true);
 
@@ -661,7 +661,7 @@ test("v0.59: AUM ohne Enddatum bleibt verschlüsselt und eine Rückkehrmeldung b
     assert.equal(allowedFromReturn.response.status, 201, JSON.stringify(allowedFromReturn.payload));
   }
 
-  runSicknessEscalationSweep(new Date(`${returnDate}T12:00:00+02:00`));
+  await runSicknessEscalationSweep(new Date(`${returnDate}T12:00:00+02:00`));
   assert.equal(alertPayloads().filter((entry) => entry.kind === "staffing_risk")
     .every((entry) => entry.status === "resolved"), true);
   assert.equal(caseJobs().every((row) => row.status === "cancelled"), true);
@@ -890,7 +890,7 @@ test("v0.59: ein erneut überfälliger AUM-Hinweis wird für die Leitung wieder 
     WHERE recipient_employee_number = '593' AND entity_id = ?
   `).run(caseNotification.entity_id);
   const overdueAt = new Date(`${offsetDate(startDate, 10)}T12:00:00+02:00`);
-  runSicknessEscalationSweep(overdueAt);
+  await runSicknessEscalationSweep(overdueAt);
   const unreadCaseNotifications = () => db.prepare(`
     SELECT COUNT(*) AS count FROM portal_notifications
     WHERE recipient_employee_number = '593' AND entity_id = ? AND read_at IS NULL
@@ -904,7 +904,7 @@ test("v0.59: ein erneut überfälliger AUM-Hinweis wird für die Leitung wieder 
     method: "POST", auth: employee, body: {},
   });
   assert.equal(withdrawn.response.status, 200, JSON.stringify(withdrawn.payload));
-  runSicknessEscalationSweep(overdueAt);
+  await runSicknessEscalationSweep(overdueAt);
   assert.equal(unreadCaseNotifications(), 1);
 
   const managerView = await request("/api/portal/v1/sickness-cases", { auth: managerAuth });
@@ -1175,7 +1175,7 @@ test("AUM Block 4: Stufe-A-Kontingent, rückwirkende AUM-Pflicht und Krankenstun
     });
     assert.equal(durationCase.response.status, 201, JSON.stringify(durationCase.payload));
     assert.equal(durationCase.payload.case.aum_allowance.required, false);
-    runSicknessEscalationSweep(new Date(`${offsetDate(durationStart, 1)}T12:00:00+02:00`));
+    await runSicknessEscalationSweep(new Date(`${offsetDate(durationStart, 1)}T12:00:00+02:00`));
     const durationView = await request("/api/portal/v1/me/sickness-cases", { auth: durationEmployee });
     assert.equal(durationView.response.status, 200, JSON.stringify(durationView.payload));
     assert.equal(durationView.payload.cases[0].aum_allowance.required, true);
