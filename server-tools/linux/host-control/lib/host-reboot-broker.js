@@ -709,8 +709,8 @@ function ensureMaintenanceLock(options = {}) {
     || (process.platform !== "win32"
       && (directoryStat.nlink < 2
         || (directoryStat.mode & 0o7777) !== 0o755
-        || directoryStat.uid !== 0
-        || directoryStat.gid !== 0))) {
+        || ((directoryStat.uid !== 0 || directoryStat.gid !== 0)
+          && options.requireRootOwner !== false)))) {
     fail("HOST_REBOOT_CONTROL_FAILED");
   }
   if (!fs.existsSync(lockPath)) {
