@@ -157,10 +157,10 @@ test("DB Block 6 No-Cutover: server.js oeffnet keinen PostgreSQL-Produktpfad", (
 
 test("DB Block 6 No-Cutover: README und Produktoberflaeche melden keinen PostgreSQL-Support", () => {
   const readme = read("README.md");
-  assert.match(readme, /SQLite ist der aktuell unterst\S+tzte Datenbankprovider\./);
+  assert.match(readme, /SQLite ist der aktuell unterst\S+tzte Produktprovider\./);
   assert.match(
     readme,
-    /PostgreSQL ist als sp\S+terer Provider[\s\S]*noch nicht implementiert oder freigegeben\./,
+    /PostgreSQL besitzt eine nicht produktive Entwicklungs- und Nachweisgrundlage,[\s\S]*noch nicht f\S+r Installation oder Migration freigegeben\./,
   );
 
   const productSurface = [
