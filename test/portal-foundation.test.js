@@ -1742,9 +1742,15 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
   const url = `http://127.0.0.1:${port}`;
   try {
     const health = await waitForJson(`${url}/api/health`, child);
+    const expectedHostBootGeneration = process.platform === "linux"
+      ? health.hostBootGeneration
+      : null;
+    if (process.platform === "linux") {
+      assert.match(expectedHostBootGeneration, /^[0-9a-f]{32}$/);
+    }
     assert.deepEqual(health, {
       ok: true,
-      hostBootGeneration: null,
+      hostBootGeneration: expectedHostBootGeneration,
     });
     const livenessResponse = await fetch(`${url}/api/health/live`);
     assert.equal(livenessResponse.status, 200);
@@ -1754,7 +1760,7 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
     assert.equal(readinessResponse.status, 200);
     assert.deepEqual(await readinessResponse.json(), {
       ok: true,
-      hostBootGeneration: null,
+      hostBootGeneration: expectedHostBootGeneration,
     });
 
     const insecureStatus = await fetch(`${url}/api/portal/v1/status`);
@@ -1956,7 +1962,7 @@ test("HTTPS-Serverfundament erzwingt Proxy-Sicherheit und verhindert eine zweite
       assert.equal(healthResponse.status, 200, await healthResponse.clone().text());
       assert.deepEqual(await healthResponse.json(), {
         ok: true,
-        hostBootGeneration: null,
+        hostBootGeneration: expectedHostBootGeneration,
       });
     }
 

@@ -31,7 +31,7 @@ test("VPS-Reboot wartet nur lesend auf echte Unterbrechung und wiederholt die Ak
 
 test("Serverpfad verlangt Developer, Reauth und Backup vor dem Root-Broker", () => {
   const endpoint = server.match(
-    /app\.post\("\/api\/portal\/v1\/server-monitor\/vps-reboot"[\s\S]*?\n\}\);\n\napp\.post\("\/api\/system\/exit"/,
+    /app\.post\("\/api\/portal\/v1\/server-monitor\/vps-reboot"[\s\S]*?\r?\n\}\);\r?\n\r?\napp\.post\("\/api\/system\/exit"/,
   )?.[0] || "";
   assert.match(endpoint, /actor\.role !== "developer"/);
   assert.match(endpoint, /assertVpsRebootConfirmation\(request\.body\)/);
