@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
@@ -124,6 +125,69 @@ test("configured offsite source deltas require a completed provider-stable migra
     migration,
     /(?:install-grabenplaner-offsite|grabenplaner-offsite-rebind-rclone|grabenplaner-offsite-switch-target)\.sh/,
   );
+});
+
+test("runtime-v3 migration consumes the verified top-level module contracts", () => {
+  const migration = read("server-tools", "linux", "migrate-grabenplaner-runtime-v3.sh");
+  const transitionProgram = migration.match(
+    /readarray -t transition < <\("\$node" - "\$installed_runtime" "\$manifest_result" "\$app_dir\/package\.json" <<'NODE'\r?\n([\s\S]*?)\r?\nNODE\r?\n\) \|\| gp_die/,
+  )?.[1];
+  assert.ok(transitionProgram, "Der ausführbare Runtime-Übergangsprüfer fehlt.");
+
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-runtime-v3-contract-"));
+  try {
+    const oldFile = path.join(temporary, "old-runtime.json");
+    const verifierFile = path.join(temporary, "verifier-result.json");
+    const packageFile = path.join(temporary, "package.json");
+    const baseArtifacts = [
+      "server-tools/linux/Caddyfile.in",
+      "server-tools/linux/grabenplaner-bootstrap-admin.sh.in",
+      "server-tools/linux/grabenplaner-bootstrap.service.in",
+      "server-tools/linux/grabenplaner.env.example",
+      "server-tools/linux/grabenplaner.service.in",
+    ];
+    const schema2Artifacts = [
+      ...baseArtifacts,
+      "server-tools/linux/grabenplaner-monitor.service.in",
+      "server-tools/linux/grabenplaner-monitor.timer.in",
+    ].sort();
+    const schema3Artifacts = [...schema2Artifacts, ...hostRuntimeArtifacts].sort();
+    fs.writeFileSync(oldFile, JSON.stringify({
+      deploymentSchemaVersion: 2,
+      migrationPolicy: "explicit-maintenance",
+      managedArtifacts: schema2Artifacts,
+      offsiteModule: { moduleVersion: 6, fingerprint: "a".repeat(64) },
+      hardeningModule: { moduleVersion: 1, fingerprint: "b".repeat(64) },
+    }));
+    fs.writeFileSync(verifierFile, JSON.stringify({
+      appVersion: "0.88.1-beta",
+      runtimeContract: {
+        deploymentSchemaVersion: 3,
+        migrationPolicy: "explicit-maintenance",
+        fingerprint: "c".repeat(64),
+        managedArtifacts: schema3Artifacts,
+      },
+      offsiteModule: { moduleVersion: 6, fingerprint: "d".repeat(64) },
+      hardeningModule: { moduleVersion: 1, fingerprint: "b".repeat(64) },
+    }));
+    fs.writeFileSync(packageFile, JSON.stringify({ version: "0.87.0-beta" }));
+
+    const result = spawnSync(process.execPath, ["-", oldFile, verifierFile, packageFile], {
+      encoding: "utf8",
+      input: transitionProgram,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(result.stdout.trim().split(/\r?\n/), [
+      "0.87.0-beta",
+      "0.88.1-beta",
+      "c".repeat(64),
+      "1",
+      "6",
+      "d".repeat(64),
+    ]);
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
 });
 
 test("schema-3 updater rejects a damaged installed host-control contract", () => {

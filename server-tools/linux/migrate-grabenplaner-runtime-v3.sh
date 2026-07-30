@@ -46,7 +46,7 @@ usage() {
   cat <<'EOF'
 Verwendung:
   sudo ./migrate-grabenplaner-runtime-v3.sh \
-    --package /pfad/Grabenplaner-Server-v0.88.0-beta-linux-x64.zip \
+    --package /pfad/Grabenplaner-Server-v0.88.1-beta-linux-x64.zip \
     [--sha256 HEX | --sha256-file /pfad/paket.zip.sha256]
 
 Dieser root-only Wartungsvorgang akzeptiert ausschliesslich den freigegebenen
@@ -339,7 +339,11 @@ const fs=require("node:fs");
 const [oldFile,newFile,packageFile]=process.argv.slice(2);
 const old=JSON.parse(fs.readFileSync(oldFile,"utf8"));
 const result=JSON.parse(fs.readFileSync(newFile,"utf8"));
-const next=result.runtimeContract;
+const next={
+  ...result.runtimeContract,
+  offsiteModule:result.offsiteModule,
+  hardeningModule:result.hardeningModule,
+};
 const oldVersion=JSON.parse(fs.readFileSync(packageFile,"utf8")).version;
 const v1=["server-tools/linux/Caddyfile.in","server-tools/linux/grabenplaner-bootstrap-admin.sh.in","server-tools/linux/grabenplaner-bootstrap.service.in","server-tools/linux/grabenplaner.env.example","server-tools/linux/grabenplaner.service.in"];
 const v2=[...v1,"server-tools/linux/grabenplaner-monitor.service.in","server-tools/linux/grabenplaner-monitor.timer.in"].sort();
