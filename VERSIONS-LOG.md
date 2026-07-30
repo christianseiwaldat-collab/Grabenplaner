@@ -1,5 +1,11 @@
 # Grabenplaner Versions-Log
 
+## v0.88.1 Beta · Runtime-Migration abgesichert
+
+- Die explizite Linux-Migration von Runtime-Schema 2 auf 3 übernimmt Offsite- und Hardening-Verträge aus der tatsächlichen, vollständig verifizierten Paketstruktur. Dadurch bleibt die Provider-, Fingerprint- und Repository-Prüfung vor dem Runtime-Swap wirksam.
+- Ein ausführbarer Regressionstest bildet die Ausgabe des Paketverifiers nach und prüft den vollständigen Übergangsdatensatz. Ein unvollständiger Vertrag stoppt weiterhin vor jeder Runtime-Änderung.
+- Die Produktfunktionen von v0.88 bleiben unverändert. SQLite bleibt der einzige freigegebene Produktprovider; PostgreSQL bleibt ohne Installations- oder Migrationsfreigabe.
+
 ## v0.88 Beta · Persönliches Portal und abgesicherter Serverbetrieb
 
 - Persönliche Portaleinstellungen sind platzsparend in standardmäßig geschlossene Bereiche gegliedert. Die Passwortänderung steht am Ende; verifizierte Empfänger werden innerhalb der Einstellungen verwaltet.
