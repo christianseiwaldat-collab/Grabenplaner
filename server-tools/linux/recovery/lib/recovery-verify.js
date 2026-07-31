@@ -6,6 +6,13 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { DatabaseSync } = require("node:sqlite");
+const {
+  normalizePersonalEmailAddress,
+} = require("../../../../lib/personal-email-address.js");
+const {
+  inspectSqlitePersonalNotificationContactsSchema,
+  inspectSqlitePersonalNotificationContactRows,
+} = require("../../../../lib/persistence/sqlite/operations/application-schema.js");
 const { __internalTestOnly, assertFrozenTree } = require("./recovery-metadata.js");
 
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
@@ -161,13 +168,27 @@ function protectedJson(storage, value, context, { allowLegacy = true } = {}) {
   const text = storage.unprotectRecord(value, context, { allowLegacy });
   const parsed = JSON.parse(text);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) fail("Ein geschuetzter Datensatz ist ungueltig.");
+  return parsed;
 }
 
 function verifyProtectedRecords(database, storage) {
   let verified = 0;
+  const personalNotificationContactsSchema = inspectSqlitePersonalNotificationContactsSchema(database);
+  if (personalNotificationContactsSchema.exists && !personalNotificationContactsSchema.valid) {
+    fail("Die geschuetzte Tabelle fuer persoenliche Benachrichtigungskontakte ist nicht kompatibel.");
+  }
+  if (personalNotificationContactsSchema.exists) {
+    const personalNotificationContactRows = inspectSqlitePersonalNotificationContactRows(database);
+    if (!personalNotificationContactRows.valid) {
+      fail("Die Tabelle fuer persoenliche Benachrichtigungseinstellungen ist inhaltlich ungueltig.");
+    }
+  }
   for (const row of rowsIf(database, "personnel_sensitive_records", ["employee_number", "protected_payload"],
     "SELECT employee_number, protected_payload FROM personnel_sensitive_records ORDER BY employee_number")) {
-    protectedJson(storage, row.protected_payload, { namespace: "personnel-sensitive-record", recordId: String(row.employee_number), field: "payload", employeeNumber: String(row.employee_number) }, { allowLegacy: false });
+    const profile = protectedJson(storage, row.protected_payload, { namespace: "personnel-sensitive-record", recordId: String(row.employee_number), field: "payload", employeeNumber: String(row.employee_number) }, { allowLegacy: false });
+    if (profile.privateEmail && !normalizePersonalEmailAddress(profile.privateEmail)) {
+      fail("Eine geschuetzte private E-Mail-Adresse ist ungueltig.");
+    }
     verified += 1;
   }
   for (const row of rowsIf(database, "personnel_record_documents", ["id", "employee_number", "protected_payload"],
@@ -203,14 +224,17 @@ function verifyProtectedRecords(database, storage) {
     protectedJson(storage, row.protected_payload, { namespace: "sickness-alert", recordId: String(row.id), field: "payload", employeeNumber: String(row.sickness_case_id) });
     verified += 1;
   }
-  for (const row of rowsIf(database, "sickness_notification_preferences", ["employee_number", "channel", "protected_destination"],
-    "SELECT employee_number, channel, protected_destination FROM sickness_notification_preferences WHERE protected_destination <> '' ORDER BY employee_number, channel")) {
-    protectedJson(storage, row.protected_destination, { namespace: "sickness-notification-preference", recordId: `${row.employee_number}:${row.channel}`, field: "destination", employeeNumber: String(row.employee_number) });
-    verified += 1;
+  const legacySicknessDestinations = rowsIf(database, "sickness_notification_preferences", ["protected_destination"],
+    "SELECT 1 AS present FROM sickness_notification_preferences WHERE TRIM(COALESCE(protected_destination, '')) <> '' LIMIT 1");
+  if (legacySicknessDestinations.length) {
+    fail("Eine alte duplizierte Benachrichtigungsadresse ist noch gespeichert.");
   }
   for (const row of rowsIf(database, "outbound_notification_jobs", ["id", "recipient_lookup", "protected_payload"],
     "SELECT id, recipient_lookup, protected_payload FROM outbound_notification_jobs ORDER BY id")) {
-    protectedJson(storage, row.protected_payload, { namespace: "outbound-notification-job", recordId: String(row.id), field: "payload", employeeNumber: String(row.recipient_lookup) });
+    const payload = protectedJson(storage, row.protected_payload, { namespace: "outbound-notification-job", recordId: String(row.id), field: "payload", employeeNumber: String(row.recipient_lookup) });
+    if (Object.hasOwn(payload, "destination")) {
+      fail("Ein alter Benachrichtigungsauftrag enthaelt noch eine duplizierte Zieladresse.");
+    }
     verified += 1;
   }
   for (const row of rowsIf(database, "privacy_requests", ["id", "employee_number", "protected_payload"],

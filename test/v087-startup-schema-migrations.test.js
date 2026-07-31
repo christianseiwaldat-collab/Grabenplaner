@@ -5,6 +5,7 @@ const test = require("node:test");
 
 const {
   ensureSqliteApplicationSchema,
+  inspectSqlitePersonalNotificationContactsSchema,
 } = require("../lib/persistence/sqlite/operations/application-schema");
 const {
   runSqliteHistoricalCompatibilityMigrations,
@@ -58,6 +59,10 @@ test("Block 3/7: frische SQLite-Datenbank und idempotenter Wiederanlauf", () => 
     );
     assert.equal(
       database.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id = 'v0.87-loan-photo-pdf-attachments'").get().count,
+      1,
+    );
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id = 'v0.89-personal-notification-preferences'").get().count,
       1,
     );
     assert.equal(database.prepare("PRAGMA quick_check").get().quick_check, "ok");
@@ -216,6 +221,257 @@ test("Block 3/7: historischer globaler Sperrtag wird standortbezogen und idempot
       `).get().count,
       1,
     );
+  } finally {
+    database.close();
+  }
+});
+
+test("v0.89: Praeferenzmigration markiert eine inkompatible Kontakttabelle nicht", () => {
+  const database = openSqliteLegacyDatabase(":memory:");
+  let backups = 0;
+  try {
+    database.exec(`
+      CREATE TABLE personal_notification_contacts (
+        employee_number TEXT PRIMARY KEY,
+        protected_address TEXT NOT NULL,
+        verified_at TEXT,
+        verification_hash TEXT NOT NULL DEFAULT '',
+        verification_salt TEXT NOT NULL DEFAULT '',
+        verification_expires_at TEXT,
+        verification_attempts INTEGER NOT NULL DEFAULT 0,
+        verification_sent_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    assert.throws(
+      () => runMigrations(database, {
+        databaseExistedBeforeOpen: true,
+        onBackup: () => { backups += 1; },
+      }),
+      /personal_notification_contacts.*email_target_fingerprint/i,
+    );
+    assert.equal(backups, 1);
+    assert.equal(
+      database.prepare(`
+        SELECT COUNT(*) AS count
+        FROM schema_migrations
+        WHERE id = 'v0.89-personal-notification-preferences'
+      `).get().count,
+      0,
+    );
+  } finally {
+    database.close();
+  }
+});
+
+test("v0.89: Legacy-Kontakte werden PII-frei migriert und alte Zielkopien entfernt", () => {
+  const database = openSqliteLegacyDatabase(":memory:");
+  let backups = 0;
+  try {
+    ensureSqliteApplicationSchema(database);
+    database.exec(`
+      DROP TABLE personal_notification_contacts;
+      CREATE TABLE personal_notification_contacts (
+        employee_number TEXT PRIMARY KEY,
+        protected_address TEXT NOT NULL CHECK(TRIM(protected_address) <> ''),
+        address_active INTEGER NOT NULL DEFAULT 1 CHECK(address_active IN (0,1)),
+        verified_at TEXT,
+        verification_hash TEXT NOT NULL DEFAULT '',
+        verification_salt TEXT NOT NULL DEFAULT '',
+        verification_generation TEXT NOT NULL DEFAULT '',
+        verification_expires_at TEXT,
+        verification_attempts INTEGER NOT NULL DEFAULT 0,
+        verification_sent_at TEXT,
+        verification_rate_window_started_at TEXT,
+        verification_rate_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (employee_number) REFERENCES employees(personnel_number)
+          ON UPDATE CASCADE ON DELETE CASCADE
+      );
+      INSERT INTO employees (personnel_number, full_name, nickname)
+      VALUES ('101', 'Legacy Kontakt', 'Legacy');
+      INSERT INTO personal_notification_contacts (
+        employee_number,
+        protected_address,
+        address_active,
+        verified_at,
+        verification_hash,
+        verification_salt,
+        verification_generation,
+        verification_expires_at,
+        verification_attempts,
+        verification_sent_at,
+        verification_rate_window_started_at,
+        verification_rate_count,
+        created_at,
+        updated_at
+      ) VALUES (
+        '101',
+        'enc:v2:legacy-address',
+        1,
+        '2026-07-30T07:00:00.000Z',
+        'legacy-hash',
+        'legacy-salt',
+        'legacy-generation',
+        '2026-07-30T07:10:00.000Z',
+        3,
+        '2026-07-30T07:00:00.000Z',
+        '2026-07-30T06:00:00.000Z',
+        4,
+        '2026-07-29T08:00:00.000Z',
+        '2026-07-30T08:00:00.000Z'
+      );
+      INSERT INTO sickness_notification_preferences (
+        employee_number,
+        channel,
+        enabled,
+        process_notifications_enabled,
+        earliest_time,
+        protected_destination,
+        verified_at,
+        verification_hash,
+        verification_salt,
+        verification_expires_at,
+        verification_attempts,
+        verification_sent_at
+      ) VALUES (
+        '101',
+        'email',
+        1,
+        1,
+        '06:45',
+        'enc:v2:legacy-destination',
+        '2026-07-30T07:00:00.000Z',
+        'legacy-hash',
+        'legacy-salt',
+        '2026-07-30T07:10:00.000Z',
+        2,
+        '2026-07-30T07:00:00.000Z'
+      );
+      INSERT INTO outbound_notification_jobs (
+        id,
+        recipient_lookup,
+        channel,
+        entity_lookup,
+        protected_payload,
+        not_before,
+        purge_after,
+        dedupe_lookup
+      ) VALUES (
+        'legacy-job',
+        'recipient',
+        'email',
+        'entity',
+        'enc:v2:legacy-job-destination',
+        '2026-07-30T07:00:00.000Z',
+        '2026-08-30T07:00:00.000Z',
+        'legacy-job-dedupe'
+      );
+    `);
+
+    runMigrations(database, {
+      databaseExistedBeforeOpen: true,
+      onBackup: () => { backups += 1; },
+    });
+    assert.equal(backups, 1);
+    assert.deepEqual(inspectSqlitePersonalNotificationContactsSchema(database), {
+      exists: true,
+      valid: true,
+      issues: [],
+    });
+    assert.deepEqual(
+      {
+        ...database.prepare(`
+          SELECT
+            email_target_fingerprint,
+            phone_target_fingerprint,
+            email_verified_at,
+            phone_verified_at,
+            email_enabled,
+            sms_enabled,
+            whatsapp_enabled,
+            earliest_time,
+            verification_target,
+            verification_channel,
+            verification_target_fingerprint,
+            verification_hash,
+            verification_salt,
+            verification_generation,
+            verification_expires_at,
+            verification_attempts,
+            verification_sent_at,
+            verification_rate_window_started_at,
+            verification_rate_count,
+            created_at,
+            updated_at
+          FROM personal_notification_contacts
+          WHERE employee_number = '101'
+        `).get(),
+      },
+      {
+        email_target_fingerprint: "",
+        phone_target_fingerprint: "",
+        email_verified_at: null,
+        phone_verified_at: null,
+        email_enabled: 0,
+        sms_enabled: 0,
+        whatsapp_enabled: 0,
+        earliest_time: "08:00",
+        verification_target: "",
+        verification_channel: "",
+        verification_target_fingerprint: "",
+        verification_hash: "",
+        verification_salt: "",
+        verification_generation: "",
+        verification_expires_at: null,
+        verification_attempts: 0,
+        verification_sent_at: null,
+        verification_rate_window_started_at: "2026-07-30T06:00:00.000Z",
+        verification_rate_count: 4,
+        created_at: "2026-07-29T08:00:00.000Z",
+        updated_at: "2026-07-30T08:00:00.000Z",
+      },
+    );
+    assert.deepEqual(
+      {
+        ...database.prepare(`
+          SELECT enabled, process_notifications_enabled, earliest_time,
+                 protected_destination, verified_at, verification_hash,
+                 verification_salt, verification_expires_at,
+                 verification_attempts, verification_sent_at
+          FROM sickness_notification_preferences
+          WHERE employee_number = '101' AND channel = 'email'
+        `).get(),
+      },
+      {
+        enabled: 1,
+        process_notifications_enabled: 1,
+        earliest_time: "06:45",
+        protected_destination: "",
+        verified_at: null,
+        verification_hash: "",
+        verification_salt: "",
+        verification_expires_at: null,
+        verification_attempts: 0,
+        verification_sent_at: null,
+      },
+    );
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM outbound_notification_jobs").get().count,
+      0,
+    );
+    assert.equal(
+      database.prepare("PRAGMA table_info(personal_notification_contacts)").all()
+        .some((column) => column.name === "protected_address"),
+      false,
+    );
+    assert.equal(database.prepare(`
+      SELECT COUNT(*) AS count FROM schema_migrations
+      WHERE id = 'v0.89-personal-notification-preferences'
+    `).get().count, 1);
   } finally {
     database.close();
   }

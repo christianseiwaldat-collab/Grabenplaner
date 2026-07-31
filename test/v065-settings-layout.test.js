@@ -28,12 +28,13 @@ test("v0.65: Einstellungen sind fachlich in Urlaub, Zeiterfassung und Personal g
   const personnel = section("personnelSettings");
   assert.match(general, /Ansicht &amp; Startverhalten/);
   assert.match(general, /id="showSunday"/);
-  assert.doesNotMatch(general, /id="breakRuleEnabled"|id="saturdayBonusEnabled"|id="vacationCountSaturday"/);
+  assert.doesNotMatch(general, /id="breakRuleEnabled"|id="saturdayBonusEnabled"/);
   assert.match(vacation, /id="workflowSettingsCard"/);
   assert.match(vacation, /id="delegationSettingsCard"/);
   assert.match(timeTracking, /id="breakRuleEnabled"/);
   assert.match(timeTracking, /id="saturdayBonusEnabled"/);
-  assert.match(timeTracking, /id="vacationCountSaturday"/);
+  assert.doesNotMatch(html, /vacationCountSaturday|Samstag als Urlaubstag|vacation_count_saturday/);
+  assert.doesNotMatch(app, /vacationCountSaturday|vacation_count_saturday/);
   assert.match(timeTracking, /id="wifiSettingsCard"/);
   assert.match(personnel, /id="trustLevelSettingsCard"/);
 });

@@ -256,6 +256,7 @@ function readRuntimeContract() {
     ...requiredV2,
     ...expectedHostControlArtifacts,
   ]);
+  const requiredV4 = requiredV3;
   const artifacts = new Map();
   for (const raw of contract.managedArtifacts) {
     const relative = String(raw || "");
@@ -269,8 +270,9 @@ function readRuntimeContract() {
   }
   const requiredArtifacts = contract.deploymentSchemaVersion === 1 ? requiredV1
     : contract.deploymentSchemaVersion === 2 ? requiredV2
-      : contract.deploymentSchemaVersion === 3 ? requiredV3 : null;
-  if (contract.deploymentSchemaVersion === 3) assertExactHostControlTree();
+      : contract.deploymentSchemaVersion === 3 ? requiredV3
+        : contract.deploymentSchemaVersion === 4 ? requiredV4 : null;
+  if ([3, 4].includes(contract.deploymentSchemaVersion)) assertExactHostControlTree();
   if (!requiredArtifacts || artifacts.size !== requiredArtifacts.size
     || [...requiredArtifacts].some((relative) => !artifacts.has(relative))) {
     throw new Error("Der Runtimevertrag enthaelt nicht exakt die freigegebenen Deployment-Artefakte.");
@@ -428,6 +430,7 @@ function main() {
     "server-tools/linux/test-grabenplaner-server.sh",
     "server-tools/linux/migrate-grabenplaner-runtime-v2.sh",
     "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
+    "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
     "server-tools/linux/finalize-grabenplaner-runtime-v3.sh",
     "server-tools/linux/update-grabenplaner-server.sh",
     "server-tools/linux/uninstall-grabenplaner-server.sh",

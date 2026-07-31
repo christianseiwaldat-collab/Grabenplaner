@@ -12,7 +12,7 @@ const portalHtml = fs.readFileSync(path.join(projectRoot, "public", "portal.html
 const portalScript = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
 const portalStyles = fs.readFileSync(path.join(projectRoot, "public", "portal.css"), "utf8");
 
-test("v0.87: Persönliche Einstellungen sind geschlossen, Empfänger verschoben und Passwort zuletzt", () => {
+test("v0.87: Persönliche Einstellungen sind geschlossen, Benachrichtigungen ergänzt und Passwort zuletzt", () => {
   const settingsView = portalHtml.match(
     /<section class="portal-view" id="settingsView"[\s\S]*?(?=<section class="portal-view active" id="scheduleView")/,
   )?.[0] || "";
@@ -23,15 +23,30 @@ test("v0.87: Persönliche Einstellungen sind geschlossen, Empfänger verschoben 
 
   assert.equal(detailTags.length, 6);
   assert.equal(detailTags.every((tag) => !/\sopen(?:\s|=|>)/.test(tag)), true);
-  assert.equal((portalHtml.match(/Verifizierte Empfänger/g) || []).length, 1);
-  assert.match(settingsView, /id="sicknessNotificationPreferencesCard"[\s\S]*Verifizierte Empfänger/);
-  assert.doesNotMatch(moreView, /Verifizierte Empfänger|sicknessNotificationPreferencesCard/);
+  assert.doesNotMatch(portalHtml, /Verifizierte Empfänger|sicknessNotificationPreferencesCard/);
+  assert.doesNotMatch(moreView, /Externe Benachrichtigungen|emailSettingsCard/);
+  assert.match(settingsView, /id="emailSettingsCard"[\s\S]*Externe Benachrichtigungen/);
+  assert.doesNotMatch(settingsView.match(/<details[^>]+id="emailSettingsCard"[^>]*>/)?.[0] || "", /\bhidden\b/);
 
   const passwordSection = settingsView.indexOf('class="portal-card portal-settings-section portal-settings-password"');
+  const emailSection = settingsView.indexOf('id="emailSettingsCard"');
   const lastDetailsStart = settingsView.lastIndexOf("<details");
-  assert.ok(passwordSection > settingsView.indexOf('id="sicknessNotificationPreferencesCard"'));
+  assert.ok(emailSection >= 0);
+  assert.ok(passwordSection > emailSection);
   assert.ok(lastDetailsStart >= 0 && lastDetailsStart < passwordSection);
   assert.match(settingsView.slice(lastDetailsStart), /^<details class="portal-card portal-settings-section portal-settings-password"[\s\S]*Passwort ändern[\s\S]*id="settingsPasswordButton"/);
+});
+
+test("v0.87: Persönliche Kanäle bleiben Self-Service, Stammdaten read-only und Fachereignisse inaktiv", () => {
+  assert.match(portalScript, /api\("\/api\/portal\/v1\/me\/email-settings"\)/);
+  assert.match(portalScript, /api\("\/api\/portal\/v1\/me\/email-settings\/categories"/);
+  assert.match(portalScript, /Object\.freeze\(\["email", "sms", "whatsapp"\]\)/);
+  assert.match(portalScript, /return String\(target\?\.masked \|\| ""\)\.trim\(\)/);
+  assert.doesNotMatch(portalScript, /email-settings\/address|data-channel-destination|preference\.destination/);
+  assert.match(portalScript, /<span>Noch nicht aktiviert<\/span>/);
+  assert.match(portalHtml, /Derzeit wird daraus noch nichts automatisch extern versendet\./);
+  assert.match(portalScript, /if \(tab === "settings"\)[\s\S]*loadEmailSettings\(\)/);
+  assert.doesNotMatch(portalScript, /if \(hasPortalPermission\([^)]*\)\)\s*loadEmailSettings\(\)/);
 });
 
 test("v0.87: Bottom-Menü bleibt auch bei 360px garantiert eine horizontale Zeile", () => {

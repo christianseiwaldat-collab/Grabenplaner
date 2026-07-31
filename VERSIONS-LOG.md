@@ -1,5 +1,15 @@
 # Grabenplaner Versions-Log
 
+## v0.88.6 Beta · Zeitwertung, Benachrichtigungskanäle und Ubuntu-Bootnachweis
+
+- Die Wochenstundenübersicht trennt eingeteilte, gewertete und vertragliche Zeit zuverlässig. Urlaub wird wochenübergreifend von Montag bis Freitag angerechnet; Dienste, Krankenstand, Feiertage und doppelte Optionen werden nicht mehrfach gewertet.
+- Die frühere Einstellung zur Samstagswertung von Urlaub entfällt. Samstag bleibt bei einem Urlaubszeitraum für Dienste gesperrt, wird aber nicht als Urlaubstag abgezogen; die separate Samstagswertung tatsächlich geleisteter Arbeit bleibt unverändert verfügbar.
+- Tages-, Wochen- und Monatsauswertungen unterscheiden echte Buchungszeit von Abwesenheitsgutschriften. Urlaub, bestätigte Abwesenheit, Krankenstand und Werktagsfeiertage fließen in „Gewertet“ und die zugehörige Differenz ein.
+- Nur ausdrücklich gebuchte Pausen werden als Pause ausgewiesen. Eine Lücke zwischen zwei abgeschlossenen Diensten zählt nicht als Pause; „Gehen“ während einer laufenden Pause schließt Pause und Dienst vollständig ab.
+- Persönliche Benachrichtigungseinstellungen verwenden die E-Mail-Adresse aus den geschützten Personalstammdaten. E-Mail, SMS und WhatsApp sind als auswählbare Kanäle vorbereitet; externe Zustellung bleibt ohne gültige Providerdaten, freigegebenen Absender, Versandfreigabe und Ereignis-Positivliste geschlossen.
+- Das Linux-Deployment-Schema 4 stellt die aktuelle Host-Boot-ID als schreibgeschütztes systemd-Credential bereit. `ProtectProc=invisible` und `ProcSubset=pid` bleiben aktiv; Paket-, Runtime-, Rollback- und Readiness-Prüfungen begleiten den ausdrücklich erforderlichen Schema-3→4-Wartungsweg.
+- Der Datenbankumbau erweitert die providerneutralen Verträge und PostgreSQL-Nachweise. SQLite bleibt der einzige freigegebene Produktprovider; eine produktive PostgreSQL-Migration wird dadurch nicht aktiviert.
+
 ## v0.88.5 Beta · Developer-VPS-Neustart und vorbereiteter TEM-Mailversand
 
 - Die Developer-Rolle sieht die Aktion für einen kontrollierten VPS-Neustart im Ubuntu-Host-Bereich dauerhaft. Ist die Ausführung gerade nicht zulässig, bleibt der Button sichtbar, deaktiviert und nennt den konkreten Grund.

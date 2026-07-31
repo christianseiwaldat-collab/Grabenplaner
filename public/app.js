@@ -510,12 +510,10 @@ function dateRangesOverlap(startA, endA, startB, endB) {
 
 function vacationDayCount(dateFrom, dateTo) {
   if (!dateFrom || !dateTo || dateTo < dateFrom) return 0;
-  const countSaturday = state.data?.settings?.vacation_count_saturday === "1";
   let days = 0;
   for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
     const day = new Date(`${date}T12:00:00`).getDay();
-    if (day === 0) continue;
-    if (day === 6 && !countSaturday) continue;
+    if (day === 0 || day === 6) continue;
     if (vacationHolidayForDate(date)) continue;
     days += 1;
   }
@@ -2470,9 +2468,7 @@ function updateVacationCalculation() {
   }
   const days = vacationDayCount(dateFrom, dateTo);
   const totals = state.vacationData.totals[employeeNumber] || { remaining: 0 };
-  const saturdayHint = state.data.settings.vacation_count_saturday === "1"
-    ? "Samstag wird als Urlaubstag gezählt."
-    : "Samstag wird nicht vom Resturlaub abgezogen, der Zeitraum ist aber trotzdem gesperrt.";
+  const saturdayHint = "Samstag wird nicht vom Resturlaub abgezogen, der Zeitraum ist aber trotzdem gesperrt.";
   const holidays = [];
   for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
     const holiday = (state.vacationData?.publicHolidays || []).find((item) => item.date === date);
@@ -2733,7 +2729,12 @@ function renderHostSecurityDiagnostics(hostSecurity, monitorActions = {}) {
   const transactionText = hostSecurity.pendingConfirmation
     ? "Bestätigung aus zweiter SSH-Sitzung ausständig"
     : "keine offene Sicherheitstransaktion";
-  const rebootText = hostSecurity.rebootRequired ? "im Wartungsfenster erforderlich" : "derzeit nicht erforderlich";
+  const rebootText = hostSecurity.rebootRequired
+    ? "vollständiger Ubuntu-VPS-Neustart erforderlich"
+    : "derzeit nicht erforderlich";
+  const rebootGuidance = hostSecurity.rebootRequired
+    ? '<div class="diagnostic-warnings host-reboot-guidance"><p><strong>Vollständiger kontrollierter Ubuntu-VPS-Neustart im Wartungsfenster erforderlich:</strong> Ein Neustart des Grabenplaner-Dienstes genügt nicht und lässt den Sicherheitsneustart offen.</p></div>'
+    : "";
   const vpsRebootPending = state.serverMonitorActionPending === "vps-reboot";
   const vpsRebootDisabled = Boolean(state.serverMonitorActionPending)
     || state.vpsRebootAccepted
@@ -2760,6 +2761,7 @@ function renderHostSecurityDiagnostics(hostSecurity, monitorActions = {}) {
         <span><small>Statusdatei</small><strong>${hostSecurity.statusAvailable ? "geschützt verfügbar" : "nicht verfügbar"}</strong></span>
       </div>
       ${hostSecurity.lastErrorCode ? `<p class="offsite-diagnostic-error"><strong>Fehlercode:</strong> ${escapeHtml(hostSecurity.lastErrorCode)}</p>` : ""}
+      ${rebootGuidance}
       ${vpsRebootButton}
     </section>`;
 }
@@ -7285,7 +7287,6 @@ function renderSettings() {
   document.querySelector("#externalBackupEnabled").checked = settings.external_backup_enabled !== "0";
   document.querySelector("#backupDirectory").value = settings.backup_directory || "";
   document.querySelector("#backupIntervalHours").value = settings.backup_interval_hours || "2";
-  document.querySelector("#vacationCountSaturday").checked = settings.vacation_count_saturday === "1";
   const allowPastWeekEditing = document.querySelector("#allowPastWeekEditing");
   allowPastWeekEditing.checked = state.portalStatus?.portalEnabled === true
     ? state.allowPastWeekEditing
@@ -11059,7 +11060,7 @@ function renderTimePresence() {
       <span class="employee-color" style="background:${escapeHtml(employee.color || "#748087")}"></span>
       <div class="time-presence-person"><strong>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</strong><small>${entries || "Heute noch keine Buchung"}${issues ? ` · ${escapeHtml(issues)}` : ""}</small></div>
       <span class="time-state-badge ${escapeHtml(employee.state)}">${labels[employee.state] || employee.state}</span>
-      <div class="time-presence-hours"><span>Plan <strong>${formatHours(employee.plannedMinutes)}</strong></span><span>Ist <strong>${formatHours(employee.actualMinutes)}</strong></span><span>Gewertet <strong>${formatHours(employee.actualValuedMinutes)}</strong></span><span>Pause <strong>${formatHours(employee.breakMinutes)}</strong></span><span>Diff. <strong class="${Number(employee.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(employee.differenceMinutes)}</strong></span></div>
+      <div class="time-presence-hours"><span>Plan <strong>${formatHours(employee.plannedMinutes)}</strong></span><span>Ist <strong>${formatHours(employee.actualMinutes)}</strong></span><span>Gewertet <strong>${formatHours(employee.valuedMinutes ?? employee.actualValuedMinutes)}</strong></span><span>Pause <strong>${formatHours(employee.breakMinutes)}</strong></span><span>Diff. <strong class="${Number(employee.valuedDifferenceMinutes ?? employee.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(employee.valuedDifferenceMinutes ?? employee.differenceMinutes)}</strong></span></div>
       ${(employee.staleEntry && canReviewTime) || canReadPersonnelRecord ? `<div class="time-presence-actions">
         ${employee.staleEntry && canReviewTime ? `<button type="button" class="secondary-button compact-button" data-resolve-stale="${escapeHtml(employee.employeeNumber)}">Altbuchung abschließen</button>` : ""}
         ${canReadPersonnelRecord ? `<button type="button" class="secondary-button compact-button" data-personnel-record="${escapeHtml(employee.employeeNumber)}">Personalakt</button>` : ""}
@@ -11138,9 +11139,9 @@ function renderTimeDayReview() {
       <div class="time-day-review-values">
         <span>Plan<strong>${formatHours(entry.plannedMinutes)}</strong></span>
         <span>Ist<strong>${formatHours(entry.actualMinutes)}</strong></span>
-        <span>Gewertet<strong>${formatHours(entry.actualValuedMinutes)}</strong></span>
+        <span>Gewertet<strong>${formatHours(entry.valuedMinutes ?? entry.actualValuedMinutes)}</strong></span>
         <span>Pause<strong>${formatHours(entry.breakMinutes)}</strong></span>
-        <span>Abw.<strong class="${Number(entry.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(entry.differenceMinutes)}</strong></span>
+        <span>Abw.<strong class="${Number(entry.valuedDifferenceMinutes ?? entry.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(entry.valuedDifferenceMinutes ?? entry.differenceMinutes)}</strong></span>
       </div>
       ${canReview ? '<button type="button" class="secondary-button compact-button" data-open-time-day-review>Prüfen</button>' : ""}
     </article>`;
@@ -11173,9 +11174,9 @@ function openTimeDayReview(employeeNumber) {
   elements.timeDayReviewMetrics.innerHTML = `
     <article><span>Plan</span><strong>${formatHours(entry.plannedMinutes)}</strong></article>
     <article><span>Ist</span><strong>${formatHours(entry.actualMinutes)}</strong></article>
-    <article><span>Gewertet</span><strong>${formatHours(entry.actualValuedMinutes)}</strong></article>
+    <article><span>Gewertet</span><strong>${formatHours(entry.valuedMinutes ?? entry.actualValuedMinutes)}</strong></article>
     <article><span>Pause</span><strong>${formatHours(entry.breakMinutes)}${entry.requiredBreakMinutes ? ` / ${formatHours(entry.requiredBreakMinutes)}` : ""}</strong></article>
-    <article><span>Abweichung</span><strong class="${Number(entry.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(entry.differenceMinutes)}</strong></article>`;
+    <article><span>Abweichung</span><strong class="${Number(entry.valuedDifferenceMinutes ?? entry.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(entry.valuedDifferenceMinutes ?? entry.differenceMinutes)}</strong></article>`;
   const issues = timeEvaluationIssues(entry);
   elements.timeDayReviewIssues.innerHTML = issues.length
     ? issues.map((issue) => `<article class="${escapeHtml(issue.severity || "warning")}"><strong>${escapeHtml(issue.label || issue.code)}</strong><p>${escapeHtml(issue.message || "")}</p></article>`).join("")
@@ -11225,9 +11226,9 @@ function renderTimeSummary() {
     <div><strong>${escapeHtml(employee.employeeNumber)} · ${escapeHtml(employee.nickname || employee.fullName)}</strong><small>${formatDate(summary.from)}–${formatDate(summary.to)}${employee.issueDays ? ` · ${Number(employee.issueDays)} auffällige Tag(e)` : ""}${employee.reviewedDays ? ` · ${Number(employee.reviewedDays)} geprüft` : ""}</small></div>
     <div class="time-summary-metric"><span>Plan</span><strong>${formatHours(employee.plannedMinutes)}</strong></div>
     <div class="time-summary-metric"><span>Ist</span><strong>${formatHours(employee.actualMinutes)}</strong></div>
-    <div class="time-summary-metric"><span>Gewertet</span><strong>${formatHours(employee.actualValuedMinutes)}</strong></div>
+    <div class="time-summary-metric"><span>Gewertet</span><strong>${formatHours(employee.valuedMinutes ?? employee.actualValuedMinutes)}</strong></div>
     <div class="time-summary-metric"><span>Pause</span><strong>${formatHours(employee.breakMinutes)}</strong></div>
-    <div class="time-summary-metric"><span>Differenz</span><strong class="${Number(employee.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(employee.differenceMinutes)}</strong></div>
+    <div class="time-summary-metric"><span>Differenz</span><strong class="${Number(employee.valuedDifferenceMinutes ?? employee.differenceMinutes) < 0 ? "negative" : "positive"}">${formatTimeDifference(employee.valuedDifferenceMinutes ?? employee.differenceMinutes)}</strong></div>
   </article>`).join("") : '<p class="settings-note">Für diesen Zeitraum wurden keine auswertbaren Teammitglieder gefunden.</p>';
 }
 
@@ -16390,7 +16391,6 @@ async function saveSettings(silent = false) {
         externalBackupEnabled: document.querySelector("#externalBackupEnabled").checked,
         backupDirectory: document.querySelector("#backupDirectory").value,
         backupIntervalHours: Number(document.querySelector("#backupIntervalHours").value),
-        vacationCountSaturday: document.querySelector("#vacationCountSaturday").checked,
         ...(!portalEnabled ? { allowPastWeekEditing } : {}),
         currentWeekAutoLock: elements.currentWeekAutoLock.checked,
         currentWeekLockMode: elements.currentWeekLockMode.value,

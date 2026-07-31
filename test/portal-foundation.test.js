@@ -1574,7 +1574,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     assert.equal(managerPersonnelRecord.status, 200, await managerPersonnelRecord.clone().text());
     const managerPersonnelPayload = await managerPersonnelRecord.json();
     assert.equal(managerPersonnelPayload.profile.phone, "");
-    assert.equal(managerPersonnelPayload.profile.sensitive, null);
+    assert.deepEqual(managerPersonnelPayload.profile.sensitive, { privateEmail: "" });
     assert.deepEqual(managerPersonnelPayload.reports.map((report) => Number(report.id)), [localAmuId]);
     assert.equal(managerPersonnelPayload.reports.some((report) => Number(report.id) === remoteAmuId), false);
     assert.equal(Object.hasOwn(managerPersonnelPayload.reports[0], "identity_check"), false);
@@ -1593,7 +1593,15 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     assert.equal(departmentManagerLegacyAmu.status, 200, await departmentManagerLegacyAmu.clone().text());
     assert.deepEqual((await departmentManagerLegacyAmu.json()).reports, []);
     const departmentManagerLegacyRecord = await fetch(`${url}/api/portal/v1/personnel-records/104`, { headers: { Cookie: departmentManager.cookie } });
-    assert.equal(departmentManagerLegacyRecord.status, 403, await departmentManagerLegacyRecord.clone().text());
+    assert.equal(departmentManagerLegacyRecord.status, 200, await departmentManagerLegacyRecord.clone().text());
+    const departmentManagerLegacyPayload = await departmentManagerLegacyRecord.json();
+    assert.equal(departmentManagerLegacyPayload.profile.phone, null);
+    assert.deepEqual(departmentManagerLegacyPayload.profile.sensitive, { privateEmail: "" });
+    assert.deepEqual(departmentManagerLegacyPayload.documents, []);
+    assert.deepEqual(departmentManagerLegacyPayload.reports, []);
+    assert.equal(departmentManagerLegacyPayload.access.canReadPhone, false);
+    assert.equal(departmentManagerLegacyPayload.access.canReadAmu, false);
+    assert.equal(departmentManagerLegacyPayload.access.canOpenFiles, false);
 
     const obsoleteManagerAmuSetting = await fetch(`${url}/api/portal/v1/amu-settings`, {
       method: "PUT",

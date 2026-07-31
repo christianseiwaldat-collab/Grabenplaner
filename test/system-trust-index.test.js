@@ -322,6 +322,7 @@ test("ein veralteter Host-Sicherheitsstatus bleibt bei Updates unbekannt", () =>
   const result = buildSystemTrustIndex(input);
   assert.equal(evidence(result, "updates_host_automatic").state, CHECK_STATES.UNKNOWN);
   assert.equal(evidence(result, "updates_restart_clear").state, CHECK_STATES.UNKNOWN);
+  assert.equal(evidence(result, "updates_restart_clear").label, "Status des Ubuntu-VPS-Sicherheitsneustarts");
   assert.equal(card(result, "updates").state, CHECK_STATES.UNKNOWN);
 });
 
@@ -334,6 +335,7 @@ test("ein expliziter alter Host-Fehler bleibt sichtbar statt unbekannt zu werden
   const result = buildSystemTrustIndex(input);
   assert.equal(evidence(result, "updates_host_automatic").state, CHECK_STATES.FAIL);
   assert.equal(evidence(result, "updates_restart_clear").state, CHECK_STATES.FAIL);
+  assert.equal(evidence(result, "updates_restart_clear").label, "Ubuntu-VPS-Sicherheitsneustart offen");
 });
 
 test("Ausgabe ist deterministisch, redigiert und enthaelt nur statische Erklaerungen", () => {

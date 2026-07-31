@@ -36,10 +36,12 @@ const PROTECTED_COLUMNS = new Set([
   "retention_preview_runs.result_json",
   "sickness_alerts.protected_payload",
   "sickness_cases.protected_payload",
-  "sickness_notification_preferences.protected_destination",
   "time_record_statements.snapshot_json",
   "vacation_account_revisions.calculation_json",
   "vacation_history_events.snapshot_json",
+]);
+const EMPTY_ONLY_LEGACY_COLUMNS = new Set([
+  "sickness_notification_preferences.protected_destination",
 ]);
 const PROTECTED_ROW_TABLES = Object.freeze([
   "amu_documents",
@@ -55,7 +57,6 @@ const PROTECTED_ROW_TABLES = Object.freeze([
   "payroll_handoffs",
   "amu_reports",
   "sickness_cases",
-  "sickness_notification_preferences",
   "personnel_sensitive_records",
   "privacy_export_receipts",
   "privacy_request_events",
@@ -221,7 +222,18 @@ function sanitizeSmokeDatabase(databaseFile = DATABASE) {
       }
     }
     for (const column of observedProtectedColumns) {
-      if (!PROTECTED_COLUMNS.has(column)) throw new Error("SMOKE_PRECONDITION_FAILED");
+      if (PROTECTED_COLUMNS.has(column)) continue;
+      if (EMPTY_ONLY_LEGACY_COLUMNS.has(column)) {
+        const [table, name] = column.split(".");
+        const unexpectedValue = database.prepare(`
+          SELECT 1 AS present
+          FROM ${quoteIdentifier(table)}
+          WHERE TRIM(COALESCE(${quoteIdentifier(name)}, '')) <> ''
+          LIMIT 1
+        `).get();
+        if (!unexpectedValue) continue;
+      }
+      throw new Error("SMOKE_PRECONDITION_FAILED");
     }
     const protectedTableSet = new Set(PROTECTED_ROW_TABLES);
     const deleteTriggers = database.prepare(`

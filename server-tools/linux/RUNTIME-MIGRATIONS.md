@@ -163,3 +163,45 @@ Migrationsbeleg, einen Recovery-Sidecar und `FINALIZED.json`. App, systemd,
 Env, Provider, Repository und Zugangsdaten werden nicht veraendert; es wird
 kein Dienst und kein Host neu gestartet. Der Diagnose- und Rollbackordner
 bleibt bis zur getrennten Abschlusskontrolle erhalten.
+
+## Deployment-Schema 4
+
+Schema 4 behaelt den root-verwalteten Host-Control-Pfad und saemtliche
+Hardening-Direktiven aus Schema 3 unveraendert bei. Neu ist ausschliesslich die
+systemd-Credential-Bindung `host-boot-id` an
+`/proc/sys/kernel/random/boot_id`. PID 1 kopiert diese Boot-ID vor Aufbau des
+gehaerteten Prozess-Namensraums in den nur fuer den Dienst lesbaren
+Credential-Pfad. Dadurch kann die App eine echte Bootgeneration bestaetigen,
+obwohl `ProtectProc=invisible` und `ProcSubset=pid` den direkten `/proc`-Zugriff
+weiterhin begrenzen.
+
+Der normale Updater lehnt den Runtime-Fingerprintwechsel mit
+`migration-required:3->4` ab. Der freigegebene Wartungsweg lautet:
+
+```bash
+sudo bash /root/grabenplaner-runtime-v4/server-tools/linux/migrate-grabenplaner-runtime-v4.sh \
+  --package /root/Grabenplaner-Server-VERSION-linux-x64.zip \
+  --sha256-file /root/Grabenplaner-Server-VERSION-linux-x64.zip.sha256
+```
+
+Die Migration akzeptiert nur eine gesunde Schema-3-Installation. Sie verlangt,
+dass die App-Unit exakt um den einen Credential-Block erweitert wurde. Als
+einzige weitere Abweichung ist der bekannte, rein kommentierte
+E-Mail-/SMS-/WhatsApp-Beispielblock in `grabenplaner.env.example` bytegenau
+zulaessig; ist er bereits installiert, muss das Template vollstaendig
+bytegleich sein. Die echte root-only Datei `/etc/grabenplaner/grabenplaner.env`
+wird nicht veraendert und ihr SHA-256-Wert vor und nach der Migration
+bestaetigt. Alle anderen verwalteten Runtime-Artefakte muessen bytegleich
+bleiben. Vor jeder Aenderung prueft die Migration Paket-SHA, ZIP-Struktur,
+Manifest, ClamAV, Runtimevertrag,
+installierte Unit und Live/Ready. Die Kandidaten-Unit wird vor der atomaren
+Bindung mit `systemd-analyze verify` geprueft. Anschliessend laeuft der normale,
+backup- und rollback-faehige Server-Updater unter derselben Wartungssperre.
+
+Vor dem App-Commit werden Unit und Runtimebaum bei einem Fehler gemeinsam auf
+Schema 3 zurueckgesetzt. Nach dem Commit werden Runtime-Fingerprint,
+Credential-Zeile, Live/Ready und eine 32-stellige `hostBootGeneration` erneut
+verifiziert. Der root-geschuetzte Migrationsbeleg wird unter
+`/var/lib/grabenplaner/maintenance/history` geschrieben. Die Migration lockert
+keine Hardening-Direktive und startet weder den Host-Reboot-Dienst noch einen
+anderen VPS-Neustart.

@@ -180,10 +180,49 @@ test("v0.82: Aufbewahrung ist belegte Vorschau und führt keine Löschung aus", 
 });
 
 test("v0.82: Betroffenenanfrage bleibt verschlüsselt, manuell geprüft und exportierbar", async () => {
+  const personalNotificationAddress = "eva.notifications@example.at";
+  const savedAddress = await request(`/api/portal/v1/personnel-records/${encodeURIComponent(EMPLOYEE)}`, {
+    method: "PUT",
+    session: hrSession,
+    body: { sensitive: { privateEmail: personalNotificationAddress } },
+  });
+  assert.equal(savedAddress.response.status, 200, JSON.stringify(savedAddress.payload));
+  const initializedSettings = await request("/api/portal/v1/me/email-settings", {
+    session: employeeSession,
+  });
+  assert.equal(initializedSettings.response.status, 200, JSON.stringify(initializedSettings.payload));
+  assert.equal(initializedSettings.payload.targets.email.status, "pending");
+  const contactTimes = {
+    createdAt: "2032-03-01T08:00:00.000Z",
+    verificationSentAt: "2032-03-02T09:15:00.000Z",
+    verifiedAt: "2032-03-03T10:30:00.000Z",
+    updatedAt: "2032-03-03T10:30:00.000Z",
+  };
+  db.prepare(`
+    UPDATE personal_notification_contacts
+    SET created_at = ?, verification_sent_at = ?, email_verified_at = ?, updated_at = ?
+    WHERE employee_number = ?
+  `).run(
+    contactTimes.createdAt,
+    contactTimes.verificationSentAt,
+    contactTimes.verifiedAt,
+    contactTimes.updatedAt,
+    EMPLOYEE,
+  );
+
   const created = await request("/api/portal/v1/self/privacy-requests", {
     method: "POST",
     session: employeeSession,
-    body: { type: "access" },
+    body: {
+      type: "access",
+      scope: [
+        "personnel_master_data",
+        "all_personal_data",
+        "time_records",
+        "vacation_records",
+        "sickness_metadata",
+      ],
+    },
   });
   assert.equal(created.response.status, 201, JSON.stringify(created.payload));
   const requestId = created.payload.request.id;
@@ -221,7 +260,23 @@ test("v0.82: Betroffenenanfrage bleibt verschlüsselt, manuell geprüft und expo
   );
   assert.equal(governanceExport.response.status, 200, governanceExport.buffer.toString("utf8"));
   assert.match(governanceExport.response.headers.get("content-disposition") || "", /attachment/);
-  assert.equal(JSON.parse(governanceExport.buffer.toString("utf8")).subjectId, EMPLOYEE);
+  const governanceBundle = JSON.parse(governanceExport.buffer.toString("utf8"));
+  assert.equal(governanceBundle.subjectId, EMPLOYEE);
+  assert.equal(governanceBundle.data.personnelMasterData.sensitiveProfile.privateEmail,
+    personalNotificationAddress);
+  const notificationContact = governanceBundle.data.personnelMasterData.personalNotificationContact;
+  assert.deepEqual(notificationContact.targets.email, {
+    status: "verified",
+    verifiedAt: contactTimes.verifiedAt,
+  });
+  assert.deepEqual(notificationContact.targets.phone, { status: "none", verifiedAt: null });
+  assert.deepEqual(notificationContact.channels, { email: false, sms: false, whatsapp: false });
+  assert.deepEqual(notificationContact.quietHours, { earliestTime: "08:00" });
+  assert.equal(notificationContact.verificationSentAt, contactTimes.verificationSentAt);
+  assert.equal(notificationContact.verificationExpiresAt, null);
+  assert.equal(notificationContact.createdAt, contactTimes.createdAt);
+  assert.ok(notificationContact.updatedAt);
+  assert.equal(JSON.stringify(notificationContact).includes(personalNotificationAddress), false);
 
   const exported = await request(`/api/portal/v1/self/privacy-requests/${encodeURIComponent(requestId)}/export`, {
     session: employeeSession,
@@ -231,6 +286,25 @@ test("v0.82: Betroffenenanfrage bleibt verschlüsselt, manuell geprüft und expo
   assert.equal(bundle.subjectId, EMPLOYEE);
   assert.equal(Object.hasOwn(bundle.data, "timeRecords"), true);
   assert.equal(Object.hasOwn(bundle.data, "password_hash"), false);
+  assert.deepEqual(bundle.data.personnelMasterData.personalNotificationContact.targets,
+    notificationContact.targets);
+  assert.deepEqual(bundle.data.personnelMasterData.personalNotificationContact.channels,
+    notificationContact.channels);
+  assert.ok(bundle.scope.includes("personnel_master_data"));
+  assert.ok(bundle.scope.includes("all_personal_data"));
+
+  const relevantAudit = db.prepare(`
+    SELECT action, detail
+    FROM audit_log
+    WHERE actor IN (?, ?)
+      AND (action LIKE 'personal-notifications.%'
+        OR action = 'personnel-record.update'
+        OR action = 'privacy-request.export')
+    ORDER BY id
+  `).all(EMPLOYEE, HR);
+  assert.ok(relevantAudit.some((entry) => entry.action === "personnel-record.update"));
+  assert.ok(relevantAudit.some((entry) => entry.action === "privacy-request.export"));
+  assert.equal(JSON.stringify(relevantAudit).includes(personalNotificationAddress), false);
 });
 
 test("v0.82: Selbstservice und Governance-Verwaltung bleiben serverseitig strikt getrennt", async () => {

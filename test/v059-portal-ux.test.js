@@ -33,34 +33,36 @@ test("v0.59: geschützte AUM-Benachrichtigungen bleiben in der mobilen Leitungsa
 
 test("v0.59: externe Warnkanäle werden vor Aktivierung per Einmalcode bestätigt", () => {
   const source = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
-  const confirmationBlock = source.match(/async function confirmSicknessNotificationVerification[\s\S]+?\n\}/);
+  const requestBlock = source.match(/async function requestNotificationVerification[\s\S]+?\n\}/);
+  const confirmationBlock = source.match(/async function confirmNotificationVerification[\s\S]+?\n\}/);
 
-  assert.match(source, /Bestätigung ausständig/);
-  assert.match(source, /data-channel-code type="text" inputmode="numeric" autocomplete="one-time-code"/);
-  assert.match(source, /\/sickness-notification-preferences\/verification"/);
-  assert.match(source, /\/sickness-notification-preferences\/verification\/confirm"/);
-  assert.match(source, /JSON\.stringify\(\{ channel, destination, earliestTime:/);
+  assert.match(source, /data-notification-verification-code/);
+  assert.match(source, /type="text" inputmode="numeric" autocomplete="one-time-code"/);
+  assert.match(source, /\/me\/email-settings\/verification"/);
+  assert.match(source, /\/me\/email-settings\/verification\/confirm"/);
+  assert.match(source, /JSON\.stringify\(\{ channel \}\)/);
   assert.match(source, /JSON\.stringify\(\{ channel, code \}\)/);
+  assert.ok(requestBlock, "Anforderungsfunktion fehlt");
   assert.ok(confirmationBlock, "Bestätigungsfunktion fehlt");
+  assert.doesNotMatch(requestBlock[0], /\b(?:destination|address|privateEmail|phone)\s*:/);
   assert.doesNotMatch(confirmationBlock[0], /console\./);
 });
 
 test("v0.59: normales Speichern übernimmt keine unbestätigt geänderten Empfänger", () => {
   const source = fs.readFileSync(path.join(projectRoot, "public", "portal.js"), "utf8");
-  const saveBlock = source.match(/async function saveSicknessNotificationPreferences[\s\S]+?\n\}/);
+  const saveBlock = source.match(/async function saveNotificationPreferences[\s\S]+?\n\}/);
 
-  assert.ok(saveBlock, "Speicherfunktion für Warnkanäle fehlt");
-  assert.match(saveBlock[0], /Bitte geänderte Empfänger zuerst mit einem Bestätigungscode bestätigen/);
-  assert.match(saveBlock[0], /enabled: Boolean\(preference\.verifiedAt\)/);
-  assert.match(saveBlock[0], /destination: preference\.destination \|\| ""/);
+  assert.ok(saveBlock, "Speicherfunktion für persönliche Kanäle fehlt");
+  assert.match(saveBlock[0], /const body = \{ channels \}/);
+  assert.match(saveBlock[0], /\/me\/email-settings\/categories"/);
+  assert.doesNotMatch(saveBlock[0], /\b(?:destination|address|privateEmail|phone)\s*:/);
 });
 
-test("v0.59: OTP-Zeilen stapeln sich auf schmalen Handy-Displays", () => {
+test("v0.59: Verifizierung stapelt sich auf schmalen Handy-Displays", () => {
   const source = fs.readFileSync(path.join(projectRoot, "public", "portal.css"), "utf8");
 
-  assert.match(source, /@media \(max-width:560px\)[\s\S]*?\.notification-channel-row \{ grid-template-columns:1fr;/);
-  assert.match(source, /\.notification-channel-setup,\.notification-verification-row \{ grid-column:1; grid-template-columns:1fr; \}/);
-  assert.match(source, /\.notification-channel-setup button,\.notification-verification-row button \{ width:100%; \}/);
+  assert.match(source, /@media \(max-width:760px\)[\s\S]*?\.notification-verification-code \{ grid-template-columns:1fr; \}/);
+  assert.match(source, /@media \(max-width:760px\)[\s\S]*?\.notification-verification-code button \{ width:100%; \}/);
 });
 
 test("v0.59: Krankmeldung und AUM bilden einen mobilen Fall mit Zeitraumskalender", () => {

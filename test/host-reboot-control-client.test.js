@@ -49,6 +49,101 @@ function safeProcOneMetadata(ctimeNs = 1785450333519564568n) {
   };
 }
 
+function safeCredentialDirectoryMetadata() {
+  return {
+    mode: 0o40500n,
+    nlink: 2n,
+    isDirectory: () => true,
+    isSymbolicLink: () => false,
+  };
+}
+
+function safeCredentialFileMetadata(size = 37n) {
+  return {
+    mode: 0o100400n,
+    nlink: 1n,
+    size,
+    isFile: () => true,
+    isSymbolicLink: () => false,
+  };
+}
+
+test("host boot generation prefers the bounded systemd boot-id credential", () => {
+  const bootId = "8c9a6b20-2bb1-4a9e-bc2c-2d93b0d693ac";
+  const credentialsDirectory = "/run/credentials/grabenplaner.service";
+  const credentialPath = `${credentialsDirectory}/${client.BOOT_ID_CREDENTIAL_NAME}`;
+  const expected = crypto.createHash("sha256")
+    .update(`grabenplaner-host-boot:boot-id:${bootId}`, "utf8")
+    .digest("hex")
+    .slice(0, 32);
+  const reads = [];
+  assert.equal(client.readHostBootGeneration({
+    platform: "linux",
+    credentialsDirectory,
+    readFile(file) {
+      reads.push(file);
+      if (file === credentialPath) return `${bootId}\n`;
+      throw new Error(`unexpected fallback read: ${file}`);
+    },
+    lstat(file) {
+      if (file === credentialsDirectory) return safeCredentialDirectoryMetadata();
+      if (file === credentialPath) return safeCredentialFileMetadata();
+      throw new Error(`unexpected stat: ${file}`);
+    },
+  }), expected);
+  assert.deepEqual(reads, [credentialPath]);
+});
+
+test("host boot generation rejects unsafe systemd credential metadata before using the secure fallback", () => {
+  const bootId = "8c9a6b20-2bb1-4a9e-bc2c-2d93b0d693ac";
+  const credentialsDirectory = "/run/credentials/grabenplaner.service";
+  const credentialPath = `${credentialsDirectory}/${client.BOOT_ID_CREDENTIAL_NAME}`;
+  let credentialRead = false;
+  const result = client.readHostBootGeneration({
+    platform: "linux",
+    credentialsDirectory,
+    readFile(file) {
+      if (file === credentialPath) {
+        credentialRead = true;
+        return `${bootId}\n`;
+      }
+      if (file === "/proc/sys/kernel/random/boot_id") return `${bootId}\n`;
+      throw new Error(`unexpected read: ${file}`);
+    },
+    lstat(file) {
+      if (file === credentialsDirectory) return safeCredentialDirectoryMetadata();
+      if (file === credentialPath) return safeCredentialFileMetadata(65n);
+      throw new Error(`unexpected stat: ${file}`);
+    },
+  });
+  assert.equal(credentialRead, false);
+  assert.match(result, /^[0-9a-f]{32}$/);
+});
+
+test("host boot generation rejects non-canonical credential content", () => {
+  const bootId = "8c9a6b20-2bb1-4a9e-bc2c-2d93b0d693ac";
+  const credentialsDirectory = "/run/credentials/grabenplaner.service";
+  const credentialPath = `${credentialsDirectory}/${client.BOOT_ID_CREDENTIAL_NAME}`;
+  const reads = [];
+  const result = client.readHostBootGeneration({
+    platform: "linux",
+    credentialsDirectory,
+    readFile(file) {
+      reads.push(file);
+      if (file === credentialPath) return ` ${bootId}\n`;
+      if (file === "/proc/sys/kernel/random/boot_id") return `${bootId}\n`;
+      throw new Error(`unexpected read: ${file}`);
+    },
+    lstat(file) {
+      if (file === credentialsDirectory) return safeCredentialDirectoryMetadata();
+      if (file === credentialPath) return safeCredentialFileMetadata(38n);
+      throw new Error(`unexpected stat: ${file}`);
+    },
+  });
+  assert.deepEqual(reads, [credentialPath, "/proc/sys/kernel/random/boot_id"]);
+  assert.match(result, /^[0-9a-f]{32}$/);
+});
+
 test("host boot generation uses the kernel boot id when the service namespace exposes it", () => {
   const bootId = "8c9a6b20-2bb1-4a9e-bc2c-2d93b0d693ac";
   const expected = crypto.createHash("sha256")

@@ -17,6 +17,9 @@ const {
   inspectSqliteImportFile,
 } = require("../lib/persistence/sqlite/operations/database-import");
 const {
+  PERSONAL_NOTIFICATION_CONTACTS_CREATE_SQL,
+} = require("../lib/persistence/sqlite/operations/application-schema");
+const {
   openSqliteApplicationPersistence,
   openSqliteLegacyDatabase,
 } = require("../lib/persistence/sqlite/provider");
@@ -115,4 +118,62 @@ test("v0.87 Datenbank Block 3: Importinspektion trennt Dateifehler von Schutzdat
   const invalidPath = path.join(directory, "invalid.db");
   fs.writeFileSync(invalidPath, "not a database");
   assert.throws(() => inspectSqliteImportFile(invalidPath));
+});
+
+test("v0.89: Importinspektion akzeptiert nur PII-freie Kontaktpraeferenzen", (context) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-contact-import-schema-"));
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const validPath = path.join(directory, "valid.db");
+  const malformedPath = path.join(directory, "malformed.db");
+  const inconsistentPath = path.join(directory, "inconsistent.db");
+
+  const valid = openSqliteLegacyDatabase(validPath);
+  valid.exec(`
+    CREATE TABLE employees (personnel_number TEXT PRIMARY KEY);
+    ${PERSONAL_NOTIFICATION_CONTACTS_CREATE_SQL}
+    INSERT INTO employees VALUES ('101');
+    INSERT INTO personal_notification_contacts (
+      employee_number,
+      email_target_fingerprint,
+      phone_target_fingerprint,
+      email_enabled,
+      sms_enabled,
+      earliest_time
+    ) VALUES ('101', '${"a".repeat(64)}', '${"b".repeat(64)}', 1, 1, '07:30');
+  `);
+  valid.close();
+
+  const validInspection = inspectSqliteImportFile(validPath);
+  assert.equal(validInspection.protectedInspectionError, false);
+  assert.deepEqual(validInspection.protected.personalNotificationContacts, []);
+
+  const malformed = openSqliteLegacyDatabase(malformedPath);
+  malformed.exec(`
+    CREATE TABLE personal_notification_contacts (
+      employee_number TEXT PRIMARY KEY,
+      verification_hash TEXT NOT NULL DEFAULT ''
+    );
+  `);
+  malformed.close();
+
+  const malformedInspection = inspectSqliteImportFile(malformedPath);
+  assert.equal(malformedInspection.protectedInspectionError, true);
+  assert.deepEqual(malformedInspection.protected.personalNotificationContacts, []);
+
+  const inconsistent = openSqliteLegacyDatabase(inconsistentPath);
+  inconsistent.exec(`
+    CREATE TABLE employees (personnel_number TEXT PRIMARY KEY);
+    ${PERSONAL_NOTIFICATION_CONTACTS_CREATE_SQL}
+    INSERT INTO employees VALUES ('102');
+    INSERT INTO personal_notification_contacts (
+      employee_number,
+      email_target_fingerprint,
+      email_verified_at
+    ) VALUES ('102', 'ungueltig', '2026-07-31T08:00:00.000Z');
+  `);
+  inconsistent.close();
+
+  const inconsistentInspection = inspectSqliteImportFile(inconsistentPath);
+  assert.equal(inconsistentInspection.protectedInspectionError, true);
+  assert.deepEqual(inconsistentInspection.protected.personalNotificationContacts, []);
 });

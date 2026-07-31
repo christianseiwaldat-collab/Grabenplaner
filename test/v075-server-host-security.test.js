@@ -28,5 +28,5 @@ test("v0.75 host-security findings are visible but never become a readiness depe
   assert.doesNotMatch(readiness, /hostSecurity/);
   assert.match(client, /function renderHostSecurityDiagnostics/);
   assert.match(client, /keine offene Sicherheitstransaktion/);
-  assert.match(client, /im Wartungsfenster erforderlich/);
+  assert.match(client, /Vollständiger kontrollierter Ubuntu-VPS-Neustart im Wartungsfenster erforderlich/);
 });

@@ -177,7 +177,7 @@ test("v0.55: Buchungszugriff erlaubt überall, private Netze und explizite CIDRs
   assert.match(denied.reason, /Firmennetz/i);
 });
 
-test("v0.55: Mehrfachpausen und geteilter Dienst werden als ein Tag korrekt zerlegt", () => {
+test("v0.88.5: nur explizite Pausen zählen, eine echte Split-Dienstlücke nicht", () => {
   const date = "2026-07-11";
   const entries = [
     entry(1, date, "clock_in", "09:00"),
@@ -196,7 +196,22 @@ test("v0.55: Mehrfachpausen und geteilter Dienst werden als ein Tag korrekt zerl
   assert.deepEqual(result.errors, []);
   assert.equal(result.segments.length, 4);
   assert.equal(result.workedMinutes, 390);
-  assert.equal(result.breakMinutes, 90, "Explizite Pausen und die Unterbrechung zwischen zwei Diensten zählen zur Anwesenheitsunterbrechung.");
+  assert.equal(result.breakMinutes, 30, "Nur break_start bis break_end zählt als Pause; die Stunde zwischen zwei Diensten nicht.");
+});
+
+test("v0.88.5: Gehen aus einer laufenden Pause schließt die explizite Pause korrekt", () => {
+  const date = "2026-07-10";
+  const result = subject.parseTimeEntrySequence([
+    entry(1, date, "clock_in", "09:00"),
+    entry(2, date, "break_start", "12:00"),
+    entry(3, date, "clock_out", "12:30"),
+  ], date, new Date("2026-07-11T12:00:00Z"));
+
+  assert.equal(result.state, "off");
+  assert.equal(result.incomplete, false);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.workedMinutes, 180);
+  assert.equal(result.breakMinutes, 30);
 });
 
 test("v0.55: Samstagsfaktor wird nur auf tatsächlich gearbeitete Minuten ab 13 Uhr angewendet", () => {
@@ -222,6 +237,31 @@ test("v0.55: Samstagsfaktor wird nur auf tatsächlich gearbeitete Minuten ab 13 
   assert.equal(result.saturdayEligibleMinutes, 165);
   assert.equal(result.saturdayBonusMinutes, 83);
   assert.equal(result.valuedMinutes, 473);
+});
+
+test("v0.88.5: ungültige Samstagswerte verwenden auch bei Ist-Zeiten den sicheren Standard", () => {
+  const date = "2026-07-11";
+  const entries = [
+    entry(1, date, "clock_in", "09:00"),
+    entry(2, date, "break_start", "12:00"),
+    entry(3, date, "break_end", "12:15"),
+    entry(4, date, "clock_out", "14:00"),
+    entry(5, date, "clock_in", "15:00"),
+    entry(6, date, "break_start", "16:00"),
+    entry(7, date, "break_end", "16:15"),
+    entry(8, date, "clock_out", "17:00"),
+  ];
+  const result = subject.actualDayMetrics(entries, date, {
+    saturday_bonus_enabled: "1",
+    saturday_bonus_from: "ungültig",
+    saturday_bonus_factor: "NaN",
+  }, new Date("2026-07-12T12:00:00Z"));
+
+  assert.equal(result.workedMinutes, 390);
+  assert.equal(result.saturdayEligibleMinutes, 165);
+  assert.equal(result.saturdayBonusMinutes, 83);
+  assert.equal(result.valuedMinutes, 473);
+  assert.ok(Number.isFinite(result.valuedMinutes));
 });
 
 test("v0.55: Tagesbewertung erkennt fehlende Buchungen, offenen Abschluss und zu kurze Pause", async () => {
@@ -250,6 +290,101 @@ test("v0.55: Tagesbewertung erkennt fehlende Buchungen, offenen Abschluss und zu
   assert.equal(shortBreak.breakMinutes, 10);
   assert.equal(shortBreak.requiredBreakMinutes, 30);
   assert.ok(issueCodes(shortBreak).includes("break_short"));
+});
+
+test("v0.88.5: Portal-Zeitwerte trennen Ist-Zeit und Abwesenheitsgutschrift", async () => {
+  db.prepare(`
+    UPDATE employees
+    SET contracted_hours = 32, home_location_id = '01', active = 1
+    WHERE personnel_number = '102'
+  `).run();
+  insertShift("102", "2026-07-06", "09:00", "17:00");
+  const insertOption = db.prepare(`
+    INSERT INTO week_options
+      (employee_number, week_start, date_from, date_to, option_type, note, credited_minutes_per_day, all_day)
+    VALUES ('102', '2026-07-06', ?, ?, ?, 'v0.88.5 Zeitwert', ?, 1)
+  `);
+  insertOption.run("2026-07-06", "2026-07-06", "vacation", null);
+  insertOption.run("2026-07-07", "2026-07-07", "other", 120);
+
+  const holiday = await subject.evaluateTimeDay("102", "2026-05-01", new Date("2026-07-20T12:00:00Z"));
+  assert.equal(holiday.excused.label, "Feiertag");
+  assert.equal(holiday.actualMinutes, 0);
+  assert.equal(holiday.actualValuedMinutes, 0);
+  assert.equal(holiday.absenceCreditedMinutes, 384);
+  assert.equal(holiday.valuedMinutes, 384);
+  assert.equal(holiday.valuedDifferenceMinutes, 384);
+  assert.equal(holiday.evaluationVersion, "v2");
+
+  const weekendHoliday = await subject.evaluateTimeDay("102", "2026-08-15", new Date("2026-08-20T12:00:00Z"));
+  assert.equal(weekendHoliday.excused.label, "Feiertag");
+  assert.equal(weekendHoliday.absenceCreditedMinutes, 0);
+  assert.equal(weekendHoliday.valuedMinutes, 0);
+
+  const employee = createPortalSession("102", "employee");
+  const manager = createPortalSession("105", "manager", ["time:read"], [{ locationId: "01" }]);
+  const httpServer = subject.app.listen(0, "127.0.0.1");
+  await once(httpServer, "listening");
+  const baseUrl = `http://127.0.0.1:${httpServer.address().port}`;
+
+  try {
+    const result = await requestJson(
+      baseUrl,
+      "/api/portal/v1/me/time-summary?period=week&anchor=2026-07-06",
+      { session: employee },
+    );
+    assert.equal(result.response.status, 200, JSON.stringify(result.payload));
+    const summary = result.payload.summary;
+    const vacation = summary.days.find((day) => day.date === "2026-07-06");
+    const other = summary.days.find((day) => day.date === "2026-07-07");
+
+    assert.equal(vacation.plannedMinutes, 450);
+    assert.equal(vacation.actualMinutes, 0);
+    assert.equal(vacation.actualValuedMinutes, 0);
+    assert.equal(vacation.absenceCreditedMinutes, 384);
+    assert.equal(vacation.valuedMinutes, 384);
+    assert.equal(vacation.differenceMinutes, -450);
+    assert.equal(vacation.valuedDifferenceMinutes, -66);
+    assert.equal(other.absenceCreditedMinutes, 120);
+    assert.equal(other.valuedMinutes, 120);
+    assert.equal(other.valuedDifferenceMinutes, 120);
+    assert.equal(summary.totals.actualMinutes, 0);
+    assert.equal(summary.totals.actualValuedMinutes, 0);
+    assert.equal(summary.totals.absenceCreditedMinutes, 504);
+    assert.equal(summary.totals.valuedMinutes, 504);
+    assert.equal(summary.totals.differenceMinutes, -450);
+    assert.equal(summary.totals.valuedDifferenceMinutes, 54);
+
+    const managementResult = await requestJson(
+      baseUrl,
+      "/api/portal/v1/time-summary?locationId=01&from=2026-07-06&to=2026-07-12",
+      { session: manager },
+    );
+    assert.equal(managementResult.response.status, 200, JSON.stringify(managementResult.payload));
+    const managementEmployee = managementResult.payload.summary.employees
+      .find((entryValue) => entryValue.employeeNumber === "102");
+    assert.equal(managementEmployee.actualValuedMinutes, 0);
+    assert.equal(managementEmployee.absenceCreditedMinutes, 504);
+    assert.equal(managementEmployee.valuedMinutes, 504);
+    assert.equal(managementEmployee.valuedDifferenceMinutes, 54);
+  } finally {
+    await new Promise((resolve, reject) => httpServer.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
+test("v0.88.5: Portal zeigt Gewertet und Differenz aus Gesamtwertung statt nur aus Ist-Zeit", () => {
+  const portalSource = fs.readFileSync(path.join(__dirname, "..", "public", "portal.js"), "utf8");
+  const managementSource = fs.readFileSync(path.join(__dirname, "..", "public", "app.js"), "utf8");
+  assert.match(portalSource, /timeWeighted\.textContent = durationText\(data\.valuedMinutes/);
+  assert.match(portalSource, /const valuedDifferenceMinutes = data\.valuedDifferenceMinutes/);
+  assert.match(portalSource, /\["Gewertet", totals\.valuedMinutes/);
+  assert.match(portalSource, /\["Differenz", totals\.valuedDifferenceMinutes/);
+  assert.match(portalSource, /durationText\(day\.valuedMinutes\)/);
+  assert.match(portalSource, /const difference = Number\(day\.valuedDifferenceMinutes/);
+  assert.match(managementSource, /formatHours\(employee\.valuedMinutes \?\? employee\.actualValuedMinutes\)/);
+  assert.match(managementSource, /formatTimeDifference\(employee\.valuedDifferenceMinutes \?\? employee\.differenceMinutes\)/);
+  assert.match(managementSource, /formatHours\(entry\.valuedMinutes \?\? entry\.actualValuedMinutes\)/);
+  assert.match(managementSource, /formatTimeDifference\(entry\.valuedDifferenceMinutes \?\? entry\.differenceMinutes\)/);
 });
 
 test("v0.55: Korrekturen akzeptieren mehrere Pausen und einen zweiten Dienst", () => {
@@ -325,6 +460,10 @@ test("v0.55: Tagesreview-API wahrt delegierte Abteilungsscopes und wird durch Ko
     assert.equal(review.response.status, 200, JSON.stringify(review.payload));
     assert.equal(review.payload.evaluation.review.reviewedBy, "106");
     assert.equal(review.payload.evaluation.review.note, "Tagesprüfung abgeschlossen");
+    assert.equal(review.payload.evaluation.review.snapshot.actualValuedMinutes, 0);
+    assert.equal(review.payload.evaluation.review.snapshot.absenceCreditedMinutes, 0);
+    assert.equal(review.payload.evaluation.review.snapshot.valuedMinutes, 0);
+    assert.equal(review.payload.evaluation.review.snapshot.valuedDifferenceMinutes, -450);
 
     const correctedEntries = [
       { type: "clock_in", time: "09:00" },
