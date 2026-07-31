@@ -66,6 +66,7 @@ const BASELINE_PACKAGE_DEPENDENCY_NAMES = Object.freeze([
   "tedious",
   "tesseract.js",
 ]);
+const APPLICATION_ALLOWED_DEPENDENCIES = Object.freeze(["nodemailer"]);
 
 const SCAN_ROOTS = Object.freeze([
   "server.js",
@@ -2072,6 +2073,7 @@ function scanPhaseBoundary(root, files) {
   const packageJson = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
   const allowedDependencyNames = new Set([
     ...BASELINE_PACKAGE_DEPENDENCY_NAMES,
+    ...APPLICATION_ALLOWED_DEPENDENCIES,
     ...PHASE_5_ALLOWED_DEPENDENCIES,
   ]);
   const configuredDependencyNames = [

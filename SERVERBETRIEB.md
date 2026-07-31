@@ -481,11 +481,24 @@ GRABENPLANER_INTEGRATION_KEY=<separater geheimer 32-Byte-Schlüssel als Base64>
 GRABENPLANER_SERVICE_CONTROL_TOKEN=<geheimer zufälliger Dienststeuerungs-Token>
 ```
 
-### Optionale externe Besetzungswarnungen
+### Optionale externe Benachrichtigungen
 
 Die interne Warnung in der mobilen App funktioniert ohne externen Dienst. Für E-Mail, SMS oder WhatsApp richtet die Firmen-IT mindestens einen Versandweg über Umgebungsvariablen ein. Empfänger und früheste Versandzeit werden anschließend von der berechtigten Leitung im Portal gepflegt. Externe Meldungen enthalten nur den neutralen Hinweis, sich wegen einer Besetzungswarnung in der App anzumelden; Gesundheitsdaten werden nicht versendet.
 
 Ein neues oder geändertes Warnziel wird erst nach Eingabe eines sechsstelligen Einmalcodes aktiviert. Der Code läuft nach zehn Minuten ab; in der Datenbank liegen nur ein gesalzener Hash, Ablaufzeit und Fehlversuchszähler. Ohne erfolgreiche Bestätigung wird für dieses Ziel keine Besetzungswarnung eingereiht.
+
+Für Transaktionsmails ist Scaleway TEM vorbereitet. Die feste Transportadresse und TLS-Vorgaben liegen im Programmcode; in der root-only Dienstkonfiguration stehen ausschließlich Projektkennung, eingeschränkter TEM-Schlüssel und Absender. Der Versand bleibt auch mit vollständigen Zugangsdaten gesperrt, bis die IT sowohl den Hauptschalter als auch eine Positivliste vereinbarter Ereignisse setzt:
+
+```text
+GRABENPLANER_EMAIL_PROVIDER=scaleway-tem
+GRABENPLANER_EMAIL_FROM=Grabenplaner <benachrichtigung@grabenplaner.eu>
+GRABENPLANER_SCALEWAY_TEM_PROJECT_ID=<Scaleway-Projekt-ID>
+GRABENPLANER_SCALEWAY_TEM_SECRET_KEY=<eingeschränkter TEM-API-Schlüssel>
+GRABENPLANER_EMAIL_DISPATCH_ENABLED=0
+GRABENPLANER_EMAIL_ALLOWED_EVENTS=
+```
+
+Solange `GRABENPLANER_EMAIL_DISPATCH_ENABLED=0` oder die Ereignisliste leer ist, kann keine Transaktionsmail versendet oder eingereiht werden. Grabenplaner richtet kein eingehendes Postfach und keine Antwortadresse ein. Die konkreten Ereignisse, Empfängerregeln und Inhalte werden separat freigegeben.
 
 E-Mail kann über einen vorhandenen HTTPS-Benachrichtigungsdienst angebunden werden:
 
@@ -503,7 +516,7 @@ GRABENPLANER_WHATSAPP_WEBHOOK_URL=https://notify.example.at/whatsapp
 GRABENPLANER_WHATSAPP_WEBHOOK_TOKEN=<geheimer Provider-Token>
 ```
 
-Alternativ unterstützt Grabenplaner SMTP, sobald das optionale Runtime-Paket `nodemailer` in der kontrollierten Serverinstallation vorhanden ist. Die Variablen heißen `GRABENPLANER_SMTP_HOST`, `GRABENPLANER_SMTP_PORT`, `GRABENPLANER_SMTP_SECURE`, `GRABENPLANER_SMTP_USER`, `GRABENPLANER_SMTP_PASSWORD` und `GRABENPLANER_SMTP_FROM`. Provider-Tokens und SMTP-Zugangsdaten gehören ausschließlich in die ACL-geschützte Dienstkonfiguration und niemals in SQLite, Branding-Kits oder das Repository.
+Für abweichende Bestandsinstallationen bleibt ein benutzerdefinierter SMTP-Pfad über `GRABENPLANER_SMTP_HOST`, `GRABENPLANER_SMTP_PORT`, `GRABENPLANER_SMTP_SECURE`, `GRABENPLANER_SMTP_USER`, `GRABENPLANER_SMTP_PASSWORD` und `GRABENPLANER_SMTP_FROM` erhalten. Provider-Tokens und SMTP-Zugangsdaten gehören ausschließlich in die ACL-geschützte Dienstkonfiguration und niemals in SQLite, Branding-Kits oder das Repository.
 
 Der Einrichtungsassistent erzeugt den AMU-Schlüssel bei einer neuen, leeren Installation zufällig in der ACL-geschützten Dienstkonfiguration. Sind bereits AMU-Dateien vorhanden, wird niemals still ein neuer Schlüssel erzeugt: Die Einrichtung verlangt den bestehenden Schlüssel und prüft ihn an den vorhandenen Dokumenten. Die IT muss diesen Recovery-Schlüssel zusätzlich getrennt und geschützt sichern; ohne ihn können verschlüsselte AMU-Dokumente nicht wiederhergestellt werden.
 

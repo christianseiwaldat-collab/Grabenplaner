@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.88.5 Beta · Developer-VPS-Neustart und vorbereiteter TEM-Mailversand
+
+- Die Developer-Rolle sieht die Aktion für einen kontrollierten VPS-Neustart im Ubuntu-Host-Bereich dauerhaft. Ist die Ausführung gerade nicht zulässig, bleibt der Button sichtbar, deaktiviert und nennt den konkreten Grund.
+- Die Host-Neustartgeneration bleibt auch im gehärteten systemd-Prozess mit `ProcSubset=pid` zuverlässig erkennbar. Wenn die Kernel-Boot-ID dort absichtlich verborgen ist, wird ein eng geprüftes, root-eigenes PID-1-Merkmal verwendet; die Linux-Härtung wird dafür nicht gelockert.
+- Der eigentliche Neustart bleibt fail-closed: Developer-Rolle, technische Einzelrechte, bestätigter Hoststatus, aktuelles Passwort, verifizierter Sicherungspunkt, freier Sicherheitsvorgang und geschützter Root-Broker sind weiterhin verpflichtend.
+- Scaleway Transactional Email ist als fester TLS-Transport für ausgehende Systemmails vorbereitet. Zugangsdaten bleiben ausschließlich in der root-geschützten Serverkonfiguration; das neutrale Release enthält keine kundenspezifischen Kennungen oder Geheimnisse.
+- Der Mailversand bleibt nach dem Update fail-closed deaktiviert. Erst ein ausdrücklicher Hauptschalter zusammen mit einer Positivliste freigegebener Ereignisse erlaubt später einzelne Benachrichtigungsarten.
+- Das Update löst selbst keinen Host- oder Dienstneustart aus und verändert weder Runtime-Schema noch Offsite-Bindung oder Datenbankprovider.
+
 ## v0.88.4 Beta · Runtime-Migrationsbeleg robust abgeschlossen
 
 - Der Runtime-2→3-Wartungsweg trennt Fortschrittsausgaben des Paketmanagers vom strukturierten Updater-Ergebnis. Der letzte Ergebnisvertrag wird mit exaktem Schema, Version, Paket-Hash, Readiness-Adresse und fest begrenzten Belegpfaden validiert, bevor der Migrationsbeleg entsteht.

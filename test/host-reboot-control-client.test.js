@@ -29,6 +29,90 @@ function protocolResponse(code, options = {}) {
   };
 }
 
+function procOneStat(startTime = "28") {
+  const fields = Array(50).fill("0");
+  fields[0] = "S";
+  fields[19] = startTime;
+  return `1 (systemd host) ${fields.join(" ")}\n`;
+}
+
+function safeProcOneMetadata(ctimeNs = 1785450333519564568n) {
+  return {
+    uid: 0n,
+    gid: 0n,
+    nlink: 9n,
+    dev: 56n,
+    ino: 4635890n,
+    ctimeNs,
+    isDirectory: () => true,
+    isSymbolicLink: () => false,
+  };
+}
+
+test("host boot generation uses the kernel boot id when the service namespace exposes it", () => {
+  const bootId = "8c9a6b20-2bb1-4a9e-bc2c-2d93b0d693ac";
+  const expected = crypto.createHash("sha256")
+    .update(`grabenplaner-host-boot:boot-id:${bootId}`, "utf8")
+    .digest("hex")
+    .slice(0, 32);
+  assert.equal(client.readHostBootGeneration({
+    platform: "linux",
+    readFile: () => `${bootId}\n`,
+    lstat: () => { throw new Error("PID 1 fallback must not run"); },
+  }), expected);
+});
+
+test("host boot generation falls back to stable root-owned PID 1 metadata under ProcSubset=pid", () => {
+  const readFile = (file) => {
+    if (file === "/proc/sys/kernel/random/boot_id") {
+      const error = new Error("hidden by ProcSubset");
+      error.code = "ENOENT";
+      throw error;
+    }
+    if (file === "/proc/1/stat") return procOneStat();
+    throw new Error(`unexpected read: ${file}`);
+  };
+  const first = client.readHostBootGeneration({
+    platform: "linux",
+    readFile,
+    lstat: () => safeProcOneMetadata(),
+  });
+  const repeated = client.readHostBootGeneration({
+    platform: "linux",
+    readFile,
+    lstat: () => safeProcOneMetadata(),
+  });
+  const nextBoot = client.readHostBootGeneration({
+    platform: "linux",
+    readFile,
+    lstat: () => safeProcOneMetadata(1785450999999999999n),
+  });
+  assert.match(first, /^[0-9a-f]{32}$/);
+  assert.equal(repeated, first);
+  assert.notEqual(nextBoot, first);
+});
+
+test("host boot generation rejects unsafe PID 1 fallback metadata and non-Linux hosts", () => {
+  const hiddenBootId = (file) => {
+    if (file === "/proc/1/stat") return procOneStat();
+    throw Object.assign(new Error("hidden"), { code: "ENOENT" });
+  };
+  assert.equal(client.readHostBootGeneration({
+    platform: "linux",
+    readFile: hiddenBootId,
+    lstat: () => ({ ...safeProcOneMetadata(), uid: 1000n }),
+  }), null);
+  assert.equal(client.readHostBootGeneration({
+    platform: "linux",
+    readFile: hiddenBootId,
+    lstat: () => ({ ...safeProcOneMetadata(), isSymbolicLink: () => true }),
+  }), null);
+  assert.equal(client.readHostBootGeneration({
+    platform: "win32",
+    readFile: () => { throw new Error("must not read"); },
+  }), null);
+});
+
 test("host reboot client emits only the fixed action and exact bounded schema", () => {
   assert.deepEqual(JSON.parse(client.buildRequest(requestId, backupMarkerFileName)), {
     format: client.REQUEST_FORMAT,

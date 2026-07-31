@@ -2687,8 +2687,25 @@ function renderMonitorDiagnostics(monitor, monitorActions = {}) {
     </section>`;
 }
 
+const vpsRebootUnavailableMessages = Object.freeze({
+  VPS_REBOOT_PERMISSION_REQUIRED: "Für den kontrollierten VPS-Neustart fehlen die erforderlichen Developer-Berechtigungen.",
+  VPS_REBOOT_CONTROL_UNAVAILABLE: "Die geschützte VPS-Neustartsteuerung ist derzeit nicht verfügbar.",
+  VPS_REBOOT_IN_PROGRESS: "Ein kontrollierter VPS-Neustart wird bereits vorbereitet.",
+  VPS_REBOOT_STATUS_UNVERIFIED: "Der geschützte Ubuntu-Hoststatus ist noch nicht vollständig bestätigt.",
+  VPS_REBOOT_SECURITY_CONFIRMATION_PENDING: "Eine offene Host-Sicherheitstransaktion muss zuerst bestätigt werden.",
+  VPS_REBOOT_NOT_REQUIRED: "Der Ubuntu-Host meldet derzeit keinen Neustartbedarf.",
+});
+
+function vpsRebootUnavailableMessage(reason) {
+  return vpsRebootUnavailableMessages[String(reason || "")]
+    || "Der kontrollierte VPS-Neustart ist derzeit nicht verfügbar.";
+}
+
 function renderHostSecurityDiagnostics(hostSecurity, monitorActions = {}) {
-  if (!hostSecurity?.configured && !hostSecurity?.statusAvailable) return "";
+  const vpsRebootVisible = monitorActions.vpsRebootVisible === true
+    || monitorActions.canVpsReboot === true;
+  if (!hostSecurity?.configured && !hostSecurity?.statusAvailable && !vpsRebootVisible) return "";
+  hostSecurity = hostSecurity || {};
   const failed = Array.isArray(hostSecurity.failedChecks) ? hostSecurity.failedChecks : [];
   const failedText = failed.length
     ? failed.map((id) => hostSecurityCheckLabels[id] || id).join(", ")
@@ -2702,14 +2719,18 @@ function renderHostSecurityDiagnostics(hostSecurity, monitorActions = {}) {
   const vpsRebootPending = state.serverMonitorActionPending === "vps-reboot";
   const vpsRebootDisabled = Boolean(state.serverMonitorActionPending)
     || state.vpsRebootAccepted
-    || state.serverMonitorRestartAccepted;
+    || state.serverMonitorRestartAccepted
+    || monitorActions.canVpsReboot !== true;
   const vpsRebootLabel = state.vpsRebootPhase === "timeout"
     ? "VPS-Neustart nicht bestätigt"
     : state.vpsRebootAccepted
       ? "Warte auf VPS …"
       : vpsRebootPending ? "VPS-Neustart wird vorbereitet …" : "VPS kontrolliert neu starten";
-  const vpsRebootButton = monitorActions.canVpsReboot === true
-    ? `<div class="monitor-diagnostics-actions" aria-label="Ubuntu-Host-Aktionen"><button type="button" class="danger-button" data-server-monitor-action="vps-reboot" aria-haspopup="dialog" aria-controls="vpsRebootModal"${vpsRebootDisabled ? " disabled" : ""}>${vpsRebootLabel}</button></div>`
+  const vpsRebootUnavailable = monitorActions.canVpsReboot !== true
+    ? vpsRebootUnavailableMessage(monitorActions.vpsRebootUnavailableReason)
+    : "";
+  const vpsRebootButton = vpsRebootVisible
+    ? `<div class="monitor-diagnostics-actions" aria-label="Ubuntu-Host-Aktionen"><button type="button" class="danger-button" data-server-monitor-action="vps-reboot" aria-haspopup="dialog" aria-controls="vpsRebootModal"${vpsRebootUnavailable ? ' aria-describedby="vpsRebootAvailabilityHint"' : ""}${vpsRebootDisabled ? " disabled" : ""}>${vpsRebootLabel}</button>${vpsRebootUnavailable ? `<p class="monitor-action-feedback" id="vpsRebootAvailabilityHint">${escapeHtml(vpsRebootUnavailable)}</p>` : ""}</div>`
     : "";
   return `
     <section class="monitor-diagnostics ${hostSecurity.state === "ok" || !hostSecurity.configured ? "ok" : "warning"}">
@@ -3173,7 +3194,9 @@ function openVpsRebootDialog(opener) {
   if (state.serverStatus?.monitorActions?.canVpsReboot !== true || state.vpsRebootAccepted) {
     state.serverMonitorActionFeedback = {
       kind: "error",
-      message: "Der kontrollierte VPS-Neustart ist für diese Developer-Sitzung nicht verfügbar.",
+      message: vpsRebootUnavailableMessage(
+        state.serverStatus?.monitorActions?.vpsRebootUnavailableReason,
+      ),
     };
     if (state.serverStatus) renderServerDiagnostics(state.serverStatus, state.serverDiagnostics);
     showToast(state.serverMonitorActionFeedback.message, true);
@@ -3261,7 +3284,9 @@ async function submitVpsReboot(event) {
   if (state.serverMonitorActionPending || state.vpsRebootAccepted) return;
   if (state.serverStatus?.monitorActions?.canVpsReboot !== true) {
     setVpsRebootMessage(
-      "Der kontrollierte VPS-Neustart ist für diese Developer-Sitzung nicht verfügbar.",
+      vpsRebootUnavailableMessage(
+        state.serverStatus?.monitorActions?.vpsRebootUnavailableReason,
+      ),
       "error",
     );
     return;

@@ -36,6 +36,14 @@ test("Provider-Status enthält weder Konfigurationsgeheimnisse noch Empfänger",
   assert.doesNotMatch(serialized, /smtp-secret|sms-secret|wa-secret|smtp\.example|notify\.example|unsafe\.example/);
   assert.deepEqual(adapter.getProviderStatus().email, {
     configured: true, valid: true, available: true, transport: "smtp", issueCode: null,
+    provider: "custom-smtp",
+    dispatchEnabled: true,
+    enabledEvents: [
+      "destination_verification",
+      "loan_document",
+      "process_notification",
+      "staffing_warning",
+    ],
   });
   assert.equal(adapter.getProviderStatus().whatsapp.valid, false);
   assert.equal(adapter.getProviderStatus().whatsapp.available, false);
@@ -252,6 +260,14 @@ test("E-Mail-HTTPS-Fallback erscheint im Provider-Status als betriebsbereit", ()
     valid: true,
     available: true,
     transport: "https-webhook",
+    provider: "https-webhook",
+    dispatchEnabled: true,
+    enabledEvents: [
+      "destination_verification",
+      "loan_document",
+      "process_notification",
+      "staffing_warning",
+    ],
     issueCode: null,
   });
 });
