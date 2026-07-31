@@ -24,6 +24,9 @@ importers:
       express:
         specifier: ^5.1.0
         version: 5.2.1
+      nodemailer:
+        specifier: 9.0.3
+        version: 9.0.3
       pdfjs-dist:
         specifier: 6.1.200
         version: 6.1.200
@@ -897,6 +900,10 @@ packages:
     peerDependenciesMeta:
       encoding:
         optional: true
+
+  nodemailer@9.0.3:
+    resolution: {integrity: sha512-n+YP+NKwR5zRWa60k3GiQ6Q3B4KXCoAw40dAKeCtYn020iNN74aWK2liXIC3ZEATeGql7we3tE3t8QwhY0eskw==}
+    engines: {node: '>=6.0.0'}
 
   normalize-path@3.0.0:
     resolution: {integrity: sha512-6eZs5Ls3WtCisHWp9S2GUy8dqkpGi4BVSz3GaqiE6ezub0512ESztXUwUB6C6IKbQkY2Pnb/mD4WYojCRwcwLA==}
@@ -2122,6 +2129,8 @@ snapshots:
   node-fetch@2.7.0:
     dependencies:
       whatwg-url: 5.0.0
+
+  nodemailer@9.0.3: {}
 
   normalize-path@3.0.0: {}
 

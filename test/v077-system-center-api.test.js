@@ -173,17 +173,35 @@ test("v0.86.2: Server-Monitor-Aktionen bleiben auf Admin, IT-Admin und Developer
     role,
     permissions,
   });
-  for (const role of ["admin", "it_admin", "developer"]) {
+  for (const role of ["admin", "it_admin"]) {
     assert.deepEqual(
       subject.serverMonitorActionCapabilities(actor(role), { managedRestartAvailable: true }),
-      { canRefresh: true, canRestart: true, canVpsReboot: false },
+      {
+        canRefresh: true,
+        canRestart: true,
+        canVpsReboot: false,
+        vpsRebootVisible: false,
+        vpsRebootUnavailableReason: null,
+      },
       role,
     );
   }
+  assert.deepEqual(
+    subject.serverMonitorActionCapabilities(actor("developer"), { managedRestartAvailable: true }),
+    {
+      canRefresh: true,
+      canRestart: true,
+      canVpsReboot: false,
+      vpsRebootVisible: true,
+      vpsRebootUnavailableReason: "VPS_REBOOT_STATUS_UNVERIFIED",
+    },
+  );
   assert.equal(
     subject.serverMonitorActionCapabilities(actor("developer"), {
       managedRestartAvailable: true,
       managedHostRebootAvailable: true,
+      hostSecurityConfigured: true,
+      hostSecurityStatusAvailable: true,
       hostRebootRequired: true,
     }).canVpsReboot,
     true,
@@ -201,9 +219,58 @@ test("v0.86.2: Server-Monitor-Aktionen bleiben auf Admin, IT-Admin und Developer
   assert.equal(
     subject.serverMonitorActionCapabilities(actor("developer"), {
       managedHostRebootAvailable: true,
+      hostSecurityConfigured: true,
+      hostSecurityStatusAvailable: true,
       hostRebootRequired: false,
     }).canVpsReboot,
     false,
+  );
+  assert.equal(
+    subject.serverMonitorActionCapabilities(actor("developer"), {
+      managedHostRebootAvailable: true,
+      hostSecurityConfigured: true,
+      hostSecurityStatusAvailable: true,
+      hostRebootRequired: false,
+    }).vpsRebootUnavailableReason,
+    "VPS_REBOOT_NOT_REQUIRED",
+  );
+  assert.equal(
+    subject.serverMonitorActionCapabilities(actor("developer"), {
+      managedHostRebootAvailable: false,
+      hostSecurityConfigured: true,
+      hostSecurityStatusAvailable: true,
+      hostRebootRequired: true,
+    }).vpsRebootUnavailableReason,
+    "VPS_REBOOT_CONTROL_UNAVAILABLE",
+  );
+  assert.equal(
+    subject.serverMonitorActionCapabilities(actor("developer"), {
+      managedHostRebootAvailable: true,
+      hostSecurityConfigured: true,
+      hostSecurityStatusAvailable: true,
+      hostRebootRequired: true,
+      hostSecurityPendingConfirmation: true,
+    }).vpsRebootUnavailableReason,
+    "VPS_REBOOT_SECURITY_CONFIRMATION_PENDING",
+  );
+  assert.equal(
+    subject.serverMonitorActionCapabilities(actor("developer"), {
+      managedHostRebootAvailable: true,
+      hostSecurityConfigured: true,
+      hostSecurityStatusAvailable: true,
+      hostRebootRequired: true,
+      hostRebootInProgress: true,
+    }).vpsRebootUnavailableReason,
+    "VPS_REBOOT_IN_PROGRESS",
+  );
+  assert.equal(
+    subject.serverMonitorActionCapabilities(actor("developer", []), {
+      managedHostRebootAvailable: true,
+      hostSecurityConfigured: true,
+      hostSecurityStatusAvailable: true,
+      hostRebootRequired: true,
+    }).vpsRebootUnavailableReason,
+    "VPS_REBOOT_PERMISSION_REQUIRED",
   );
   assert.equal(
     subject.serverMonitorActionCapabilities(actor("hr"), { managedRestartAvailable: true }).canRestart,
@@ -230,7 +297,13 @@ test("v0.86.2: Server-Monitor-Aktionen bleiben auf Admin, IT-Admin und Developer
   );
   assert.deepEqual(
     subject.serverMonitorActionCapabilities(null),
-    { canRefresh: false, canRestart: false, canVpsReboot: false },
+    {
+      canRefresh: false,
+      canRestart: false,
+      canVpsReboot: false,
+      vpsRebootVisible: false,
+      vpsRebootUnavailableReason: null,
+    },
   );
 });
 
@@ -324,7 +397,13 @@ test("v0.86.2: Neustart verlangt exakte Bestaetigung, CSRF und verwalteten Serve
   assert.equal(status.response.status, 200, JSON.stringify(status.payload));
   assert.deepEqual(
     status.payload.monitorActions,
-    { canRefresh: true, canRestart: false, canVpsReboot: false },
+    {
+      canRefresh: true,
+      canRestart: false,
+      canVpsReboot: false,
+      vpsRebootVisible: false,
+      vpsRebootUnavailableReason: null,
+    },
   );
 });
 

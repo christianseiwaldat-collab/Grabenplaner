@@ -54,6 +54,7 @@ const {
 } = require("./lib/offsite-target-client");
 const {
   assertSafeSocket: assertSafeHostRebootSocket,
+  readHostBootGeneration,
   requestHostReboot,
 } = require("./lib/host-reboot-control-client");
 const {
@@ -1092,21 +1093,6 @@ function currentHostManagedRebootAvailable() {
     return true;
   } catch {
     return false;
-  }
-}
-function readHostBootGeneration() {
-  if (process.platform !== "linux") return null;
-  try {
-    const bootId = fs.readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim().toLowerCase();
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(bootId)) {
-      return null;
-    }
-    return crypto.createHash("sha256")
-      .update(`grabenplaner-host-boot:${bootId}`, "utf8")
-      .digest("hex")
-      .slice(0, 32);
-  } catch {
-    return null;
   }
 }
 const hostBootGeneration = readHostBootGeneration();
@@ -5900,6 +5886,10 @@ function externalNotificationProviderStatus() {
   return externalNotificationAdapter.getProviderStatus();
 }
 
+function externalNotificationEventAvailable(channel, event) {
+  return externalNotificationAdapter.canSendEvent(channel, event);
+}
+
 function normalizedNotificationDestination(channel, value) {
   const raw = stripEmoji(String(value || "").trim());
   if (!raw) return "";
@@ -6018,8 +6008,9 @@ async function requestSicknessNotificationVerification(employeeNumber, body = {}
   if (!SICKNESS_NOTIFICATION_CHANNELS.includes(channel)) {
     throw httpError(400, "Der Warnkanal ist ungültig.", "SICKNESS_NOTIFICATION_CHANNEL_INVALID");
   }
-  const provider = externalNotificationProviderStatus()[channel];
-  if (!provider?.available) throw httpError(503, "Dieser Warnkanal ist durch die Firmen-IT noch nicht eingerichtet.", "SICKNESS_NOTIFICATION_PROVIDER_UNAVAILABLE");
+  if (!externalNotificationEventAvailable(channel, "destination_verification")) {
+    throw httpError(503, "Dieser Warnkanal ist durch die Firmen-IT noch nicht eingerichtet.", "SICKNESS_NOTIFICATION_PROVIDER_UNAVAILABLE");
+  }
   const destination = normalizedNotificationDestination(channel, body.destination);
   if (!destination) throw httpError(400, "Bitte ein Ziel für den Warnkanal eingeben.", "SICKNESS_NOTIFICATION_DESTINATION_REQUIRED");
   const earliestTime = String(body.earliestTime || "08:00");
@@ -6100,13 +6091,16 @@ async function confirmSicknessNotificationVerification(employeeNumber, body = {}
 }
 
 async function queueExternalStaffingAlerts(caseRow, recipients, reportedAt = new Date().toISOString()) {
-  const providerStatus = externalNotificationProviderStatus();
   let queued = 0;
   for (const recipient of recipients) {
     const preferences = await sicknessAmuManagementRepository
       .listActiveNotificationPreferences({ employeeNumber: recipient });
     for (const preference of preferences) {
-      if (!SICKNESS_NOTIFICATION_CHANNELS.includes(preference.channel) || !providerStatus[preference.channel]?.available || !preference.protected_destination) continue;
+      if (
+        !SICKNESS_NOTIFICATION_CHANNELS.includes(preference.channel)
+        || !externalNotificationEventAvailable(preference.channel, "staffing_warning")
+        || !preference.protected_destination
+      ) continue;
       const destination = parseProtectedJson(preference.protected_destination, sicknessPreferenceProtectionContext(preference)).destination || "";
       if (!destination) continue;
       const id = crypto.randomUUID();
@@ -18490,10 +18484,31 @@ function serverMonitorActionCapabilities(
     managedRestartAvailable = serverManagedRestartAvailable,
     restartCooldownSeconds = currentServerMonitorRestartCooldownSeconds(),
     managedHostRebootAvailable = currentHostManagedRebootAvailable(),
+    hostSecurityConfigured = false,
+    hostSecurityStatusAvailable = false,
     hostRebootRequired = false,
     hostSecurityPendingConfirmation = false,
+    hostRebootInProgress = hostManagedRebootRequested,
   } = {},
 ) {
+  const vpsRebootVisible = Boolean(actor && actor.role === "developer");
+  let vpsRebootUnavailableReason = null;
+  if (vpsRebootVisible) {
+    if (!actor.permissions?.includes("system:write")
+      || !actor.permissions?.includes("system:diagnostics:technical")) {
+      vpsRebootUnavailableReason = "VPS_REBOOT_PERMISSION_REQUIRED";
+    } else if (hostRebootInProgress) {
+      vpsRebootUnavailableReason = "VPS_REBOOT_IN_PROGRESS";
+    } else if (!hostSecurityConfigured || !hostSecurityStatusAvailable) {
+      vpsRebootUnavailableReason = "VPS_REBOOT_STATUS_UNVERIFIED";
+    } else if (hostSecurityPendingConfirmation) {
+      vpsRebootUnavailableReason = "VPS_REBOOT_SECURITY_CONFIRMATION_PENDING";
+    } else if (!managedHostRebootAvailable) {
+      vpsRebootUnavailableReason = "VPS_REBOOT_CONTROL_UNAVAILABLE";
+    } else if (!hostRebootRequired) {
+      vpsRebootUnavailableReason = "VPS_REBOOT_NOT_REQUIRED";
+    }
+  }
   return {
     canRefresh: Boolean(actor),
     canRestart: Boolean(
@@ -18504,16 +18519,9 @@ function serverMonitorActionCapabilities(
        && actor.permissions?.includes("system:write")
        && actor.permissions?.includes("system:diagnostics:technical"),
     ),
-    canVpsReboot: Boolean(
-      actor
-      && actor.role === "developer"
-      && managedHostRebootAvailable
-      && hostRebootRequired
-      && !hostSecurityPendingConfirmation
-      && !hostManagedRebootRequested
-      && actor.permissions?.includes("system:write")
-      && actor.permissions?.includes("system:diagnostics:technical"),
-    ),
+    canVpsReboot: vpsRebootVisible && vpsRebootUnavailableReason === null,
+    vpsRebootVisible,
+    vpsRebootUnavailableReason,
   };
 }
 
@@ -18521,6 +18529,8 @@ function serverStatusForActor(diagnostics, actor) {
   return {
     ...serverStatusSummary(diagnostics),
     monitorActions: serverMonitorActionCapabilities(actor, {
+      hostSecurityConfigured: diagnostics?.hostSecurity?.configured === true,
+      hostSecurityStatusAvailable: diagnostics?.hostSecurity?.statusAvailable === true,
       hostRebootRequired: diagnostics?.hostSecurity?.rebootRequired === true,
       hostSecurityPendingConfirmation: diagnostics?.hostSecurity?.pendingConfirmation === true,
     }),
@@ -24070,7 +24080,6 @@ async function queueCustomProcessExternalNotification(
   channel,
   repository = customProcessRepository,
 ) {
-  const provider = externalNotificationProviderStatus()[channel];
   const preference = await repository.notificationPreference({
     employeeNumber: recipient,
     channel,
@@ -24078,7 +24087,10 @@ async function queueCustomProcessExternalNotification(
   if (!preference?.process_notifications_enabled || !preference?.verified_at) {
     return { queued: false, blocked: true };
   }
-  if (!provider?.available || !preference?.protected_destination) return { queued: false, blocked: true };
+  if (
+    !externalNotificationEventAvailable(channel, "process_notification")
+    || !preference?.protected_destination
+  ) return { queued: false, blocked: true };
   let destination = "";
   try {
     destination = parseProtectedJson(
@@ -24851,7 +24863,6 @@ async function rightsDashboardProcessValidation(processDashboard) {
   add("payroll", "delivery", "info", targetCount ? `${targetCount} sichere(s) HTTPS-Ziel(e) aktiv` : "Datei-Export ohne direktes HTTPS-Ziel",
     targetCount ? "Nach erfolgreicher Vorprüfung kann eine kontrollierte Direktübergabe verwendet werden." : "Das ist zulässig: CSV- und Excel-Ausgabe bleiben auch ohne direkte Verbindung verfügbar.", "integrations");
 
-  const providerStatus = externalNotificationProviderStatus();
   for (const custom of processDashboard.processes.filter((process) => process.source === "custom")) {
     const processState = custom.status === "active" ? "ok" : "info";
     add(custom.id, custom.steps[0]?.id || "definition", processState,
@@ -24875,7 +24886,7 @@ async function rightsDashboardProcessValidation(processDashboard) {
     }
     const externalChannels = new Set(custom.steps.flatMap((step) => step.notificationChannels || []).filter((channel) => channel !== "internal"));
     for (const channel of externalChannels) {
-      const available = Boolean(providerStatus[channel]?.available);
+      const available = externalNotificationEventAvailable(channel, "process_notification");
       add(custom.id, custom.steps.find((step) => step.notificationChannels?.includes(channel))?.id || "notification",
         available ? "ok" : "warning",
         available ? `${channel.toUpperCase()}-Versand ist eingerichtet` : `${channel.toUpperCase()}-Versand ist noch nicht eingerichtet`,
