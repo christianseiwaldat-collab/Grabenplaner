@@ -412,7 +412,7 @@ test("v0.70 Block 2: sensible Personalaktfelder werden verschlüsselt gespeicher
   assert.match(audit.detail, /socialSecurityNumber/);
 });
 
-test("v0.70 Block 2: Leitungen sehen nur Telefon und benötigen Schreibrecht plus eigene Vertrauensstufe A", async () => {
+test("v0.70 Block 2: Leitungen sehen Telefon und private E-Mail, Telefon-Schreiben benötigt weiterhin Vertrauensstufe A", async () => {
   const hr = session("103", "hr");
   await request("/api/portal/v1/personnel-records/102", {
     method: "PUT", auth: hr,
@@ -426,7 +426,7 @@ test("v0.70 Block 2: Leitungen sehen nur Telefon und benötigen Schreibrecht plu
   const visible = await request("/api/portal/v1/personnel-records/102", { auth: manager });
   assert.equal(visible.response.status, 200, JSON.stringify(visible.payload));
   assert.equal(visible.payload.profile.phone, "+43 512 555111");
-  assert.equal(visible.payload.profile.sensitive, null);
+  assert.deepEqual(visible.payload.profile.sensitive, { privateEmail: "" });
   assert.deepEqual(visible.payload.reports, []);
   assert.equal(visible.payload.access.canWritePhone, false);
 

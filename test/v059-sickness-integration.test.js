@@ -16,6 +16,11 @@ process.env.GRABENPLANER_FORCE_PORTAL = "1";
 process.env.GRABENPLANER_SEED_DEMO = "1";
 process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
 process.env.GRABENPLANER_SMS_WEBHOOK_URL = "https://notifications.invalid/grabenplaner/staffing";
+process.env.GRABENPLANER_SMS_WEBHOOK_TOKEN = "test-sms-token";
+process.env.GRABENPLANER_SMS_SENDER = "test-approved-sender";
+process.env.GRABENPLANER_SMS_SENDER_APPROVED = "1";
+process.env.GRABENPLANER_SMS_DISPATCH_ENABLED = "1";
+process.env.GRABENPLANER_SMS_ALLOWED_EVENTS = "destination_verification,staffing_warning";
 process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
 
@@ -32,10 +37,12 @@ process.env.GRABENPLANER_TEST_TODAY = realViennaDay === 0
 
 const nativeFetch = globalThis.fetch;
 let deliveredVerificationCode = "";
+let deliveredStaffingMessages = 0;
 globalThis.fetch = async (url, options) => {
   if (String(url).startsWith("https://notifications.invalid/")) {
     const payload = JSON.parse(String(options?.body || "{}"));
     if (payload.event === "destination_verification") deliveredVerificationCode = String(payload.code || "");
+    if (payload.event === "staffing_warning") deliveredStaffingMessages += 1;
     return { ok: true };
   }
   return nativeFetch(url, options);
@@ -237,7 +244,7 @@ test.after(async () => {
   fs.rmSync(testRoot, { recursive: true, force: true });
 });
 
-test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respektiert Scopes und queued extern ohne Versand", async () => {
+test("v0.59: Krankmeldung bleibt verschlüsselt, warnt lokal und erzeugt keinen externen Business-Job", async () => {
   const { employeeAuth, managerAuth, foreignManagerAuth, hrAuth, departmentA } = auth;
   const portalPage = await fetch(`${baseUrl}/portal.html`);
   assert.equal(portalPage.status, 200);
@@ -262,28 +269,39 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
   insertShift.run("591", departmentA, shiftDate, shiftStart, shiftEnd);
   insertShift.run("592", departmentA, shiftDate, shiftStart, shiftEnd);
 
-  const verification = await request("/api/portal/v1/me/sickness-notification-preferences/verification", {
+  const masterPhone = await request("/api/portal/v1/personnel-records/593", {
+    method: "PUT",
+    auth: hrAuth,
+    body: { phone: "+436601234567" },
+  });
+  assert.equal(masterPhone.response.status, 200, JSON.stringify(masterPhone.payload));
+  const verification = await request("/api/portal/v1/me/email-settings/verification", {
     method: "POST",
     auth: managerAuth,
-    body: {
-      channel: "sms",
-      destination: "+436601234567",
-      earliestTime: "23:59",
-    },
+    body: { channel: "sms" },
   });
   assert.equal(verification.response.status, 200, JSON.stringify(verification.payload));
   assert.match(deliveredVerificationCode, /^\d{6}$/);
-  const pendingPreference = db.prepare("SELECT * FROM sickness_notification_preferences WHERE employee_number = '593' AND channel = 'sms'").get();
-  assert.equal(pendingPreference.enabled, 0);
-  assert.equal(pendingPreference.verified_at, null);
+  const pendingPreference = db.prepare("SELECT * FROM personal_notification_contacts WHERE employee_number = '593'").get();
+  assert.equal(pendingPreference.sms_enabled, 0);
+  assert.equal(pendingPreference.phone_verified_at, null);
   assert.notEqual(pendingPreference.verification_hash, deliveredVerificationCode);
-  assert.equal(pendingPreference.protected_destination.includes("+436601234567"), false);
-  const confirmed = await request("/api/portal/v1/me/sickness-notification-preferences/verification/confirm", {
+  assert.equal(JSON.stringify(pendingPreference).includes("+436601234567"), false);
+  const confirmed = await request("/api/portal/v1/me/email-settings/verification/confirm", {
     method: "POST", auth: managerAuth, body: { channel: "sms", code: deliveredVerificationCode },
   });
   assert.equal(confirmed.response.status, 200, JSON.stringify(confirmed.payload));
-  assert.equal(confirmed.payload.channels.sms.enabled, true);
-  assert.ok(confirmed.payload.channels.sms.verifiedAt);
+  assert.equal(confirmed.payload.channels.sms.enabled, false);
+  assert.equal(confirmed.payload.targets.phone.status, "verified");
+  const selected = await request("/api/portal/v1/me/email-settings/categories", {
+    method: "PUT",
+    auth: managerAuth,
+    body: { channels: { sms: true }, earliestTime: "23:59" },
+  });
+  assert.equal(selected.response.status, 200, JSON.stringify(selected.payload));
+  assert.equal(selected.payload.channels.sms.enabled, true);
+  assert.equal(selected.payload.quietHours.earliestTime, "23:59");
+  assert.equal(db.prepare("SELECT 1 FROM sickness_notification_preferences WHERE employee_number = '593'").get(), undefined);
 
   const confidentialNote = "V059 vertrauliche Gesundheitsnotiz";
   const created = await request("/api/portal/v1/me/sickness-cases", {
@@ -340,25 +358,8 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
   `).get().count, 0);
 
   const queued = db.prepare("SELECT * FROM outbound_notification_jobs").all();
-  assert.equal(queued.length, 1);
-  assert.equal(Object.hasOwn(queued[0], "recipient_employee_number"), false);
-  assert.equal(queued[0].channel, "sms");
-  assert.equal(queued[0].status, "pending");
-  assert.equal(queued[0].attempts, 0);
-  assert.match(queued[0].protected_payload, /^enc:v2:/);
-  assert.equal(queued[0].protected_payload.includes("+436601234567"), false);
-  assert.equal(queued[0].protected_payload.includes(confidentialNote), false);
-  const queuedPayload = parseProtectedJson(queued[0].protected_payload, {
-    namespace: "outbound-notification-job",
-    recordId: queued[0].id,
-    field: "payload",
-    employeeNumber: queued[0].recipient_lookup,
-  });
-  assert.deepEqual(queuedPayload, {
-    destination: "+436601234567",
-    recipientEmployeeNumber: "593",
-    sicknessCaseId: caseId,
-  });
+  assert.deepEqual(queued, []);
+  assert.equal(deliveredStaffingMessages, 0);
 
   const managerList = await request("/api/portal/v1/sickness-cases", { auth: managerAuth });
   assert.equal(managerList.response.status, 200, JSON.stringify(managerList.payload));
@@ -383,12 +384,7 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
   assert.deepEqual(ownList.payload.cases.map((entry) => entry.id), [caseId]);
   assert.equal(ownList.payload.cases[0].employee_note, confidentialNote);
 
-  // app.listen() statt startServer(): Der Queue-Dispatcher wird in diesem Test nie gestartet.
-  const finalJob = db.prepare("SELECT status, attempts, sent_at FROM outbound_notification_jobs WHERE id = ?").get(queued[0].id);
-  assert.deepEqual({ ...finalJob }, { status: "pending", attempts: 0, sent_at: null });
-
   db.prepare("UPDATE sickness_cases SET purge_after = '2000-01-01' WHERE id = ?").run(caseId);
-  db.prepare("UPDATE outbound_notification_jobs SET purge_after = '2000-01-01' WHERE id = ?").run(queued[0].id);
   db.prepare(`
     INSERT INTO protected_case_events
       (id, entity_kind, entity_id, action_lookup, actor_lookup, protected_payload)
@@ -396,7 +392,7 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
   `).run(caseId);
   const activePurge = await purgeExpiredSicknessData("2026-07-14");
   assert.equal(activePurge.cases, 0);
-  assert.equal(activePurge.jobs, 1);
+  assert.equal(activePurge.jobs, 0);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM sickness_cases WHERE id = ?").get(caseId).count, 1);
   assert.equal(db.prepare(`
     SELECT COUNT(*) AS count FROM protected_case_events
@@ -415,7 +411,7 @@ test("v0.59: Krankmeldung bleibt verschlüsselt, warnt bei Unterbesetzung, respe
     WHERE entity_kind = 'sickness' AND entity_id = ?
   `).get(caseId).count, 0);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM sickness_alerts WHERE sickness_case_id = ?").get(caseId).count, 0);
-  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM outbound_notification_jobs WHERE id = ?").get(queued[0].id).count, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM outbound_notification_jobs").get().count, 0);
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM portal_notifications WHERE recipient_employee_number = '593'").get().count, 0);
 });
 
@@ -617,7 +613,7 @@ test("v0.59: AUM ohne Enddatum bleibt verschlüsselt und eine Rückkehrmeldung b
     .filter((row) => parseProtectedJson(row.protected_payload, {
       namespace: "outbound-notification-job", recordId: row.id, field: "payload", employeeNumber: row.recipient_lookup,
     }).sicknessCaseId === caseId);
-  assert.equal(caseJobs().every((row) => row.status === "pending"), true);
+  assert.deepEqual(caseJobs(), []);
 
   const balancingShift = db.prepare(`
     INSERT INTO shifts (employee_number, department_id, shift_date, start_time, end_time, area, note)
@@ -637,7 +633,7 @@ test("v0.59: AUM ohne Enddatum bleibt verschlüsselt und eine Rückkehrmeldung b
   db.prepare("DELETE FROM shifts WHERE id = ?").run(Number(balancingShift.lastInsertRowid));
   await runSicknessEscalationSweep(new Date(`${startDate}T12:00:00+02:00`));
   assert.equal(alertPayloads().some((entry) => entry.kind === "staffing_risk" && entry.status === "open"), true);
-  assert.equal(caseJobs().every((row) => row.status === "pending"), true);
+  assert.deepEqual(caseJobs(), []);
 
   const stillBlockedBeforeReturn = await request("/api/shifts", {
     method: "POST",
@@ -664,7 +660,7 @@ test("v0.59: AUM ohne Enddatum bleibt verschlüsselt und eine Rückkehrmeldung b
   await runSicknessEscalationSweep(new Date(`${returnDate}T12:00:00+02:00`));
   assert.equal(alertPayloads().filter((entry) => entry.kind === "staffing_risk")
     .every((entry) => entry.status === "resolved"), true);
-  assert.equal(caseJobs().every((row) => row.status === "cancelled"), true);
+  assert.deepEqual(caseJobs(), []);
 
   const laterAum = await uploadAum(employeeAuth, {
     incapacityFrom: startDate,
@@ -1155,6 +1151,10 @@ test("AUM Block 4: Stufe-A-Kontingent, rückwirkende AUM-Pflicht und Krankenstun
     const employeeDay = evaluation.payload.dayReview.evaluations.find((entry) => entry.employeeNumber === "612");
     assert.equal(employeeDay.absenceCreditedMinutes, 384);
     assert.equal(employeeDay.excused.label, "Krankenstand");
+    assert.equal(employeeDay.actualMinutes, 0);
+    assert.equal(employeeDay.actualValuedMinutes, 0);
+    assert.equal(employeeDay.valuedMinutes, 384);
+    assert.equal(employeeDay.valuedDifferenceMinutes, 384 - employeeDay.plannedValuedMinutes);
 
     const aum = await uploadAum(allowanceEmployee, {
       incapacityFrom: firstDate, incapacityTo: firstDate, sicknessCaseId: createdCases[0].id,

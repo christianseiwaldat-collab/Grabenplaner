@@ -28,6 +28,18 @@ test("VPS-Reboot ist als eigener Developer-Dialog vom Dienstneustart getrennt", 
   assert.match(app, /\/api\/portal\/v1\/server-monitor\/vps-reboot/);
 });
 
+test("offener Sicherheitsneustart wird eindeutig vom Dienstneustart abgegrenzt", () => {
+  assert.match(
+    server,
+    /vollständiger kontrollierter Neustart des Ubuntu-VPS[^.]*\. Ein Neustart des Grabenplaner-Dienstes genügt nicht\./,
+  );
+  assert.match(app, /vollständiger Ubuntu-VPS-Neustart erforderlich/);
+  assert.match(app, /Vollständiger kontrollierter Ubuntu-VPS-Neustart im Wartungsfenster erforderlich/);
+  assert.match(app, /Ein Neustart des Grabenplaner-Dienstes genügt nicht und lässt den Sicherheitsneustart offen/);
+  assert.match(html, /Ein Neustart des Grabenplaner-Dienstes beseitigt keinen offenen Ubuntu-Sicherheitsneustart/);
+  assert.match(html, /Dieser geschützte Vorgang startet den vollständigen Ubuntu-VPS kontrolliert neu/);
+});
+
 test("Developer sieht die VPS-Aktion immer, während die Ausführung fail-closed bleibt", () => {
   assert.match(server, /const vpsRebootVisible = Boolean\(actor && actor\.role === "developer"\)/);
   assert.match(server, /canVpsReboot:\s*vpsRebootVisible && vpsRebootUnavailableReason === null/);
@@ -40,10 +52,17 @@ test("Developer sieht die VPS-Aktion immer, während die Ausführung fail-closed
   assert.match(app, /vpsRebootUnavailableMessage\(monitorActions\.vpsRebootUnavailableReason\)/);
 });
 
-test("gehärtetes ProcSubset besitzt eine sichere PID-1-Ausweichmessung für die Bootgeneration", () => {
+test("gehärtetes ProcSubset erhält die Boot-ID als systemd-Credential mit sicherem Fallback", () => {
   assert.match(serviceUnit, /^ProtectKernelTunables=yes$/m);
   assert.match(serviceUnit, /^ProtectProc=invisible$/m);
   assert.match(serviceUnit, /^ProcSubset=pid$/m);
+  assert.match(serviceUnit, /^LoadCredential=host-boot-id:\/proc\/sys\/kernel\/random\/boot_id$/m);
+  assert.ok(
+    serviceUnit.indexOf("LoadCredential=host-boot-id:") < serviceUnit.indexOf("ProtectProc=invisible"),
+  );
+  assert.match(hostRebootClient, /CREDENTIALS_DIRECTORY/);
+  assert.match(hostRebootClient, /readCredentialBootId/);
+  assert.match(hostRebootClient, /MAX_BOOT_ID_CREDENTIAL_BYTES/);
   assert.match(hostRebootClient, /PROC_ONE_STAT_PATH = "\/proc\/1\/stat"/);
   assert.match(hostRebootClient, /stat\.uid !== 0n/);
   assert.match(hostRebootClient, /stat\.gid !== 0n/);

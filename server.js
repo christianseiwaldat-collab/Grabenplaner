@@ -30,6 +30,9 @@ const {
   createExternalNotificationAdapter,
   STAFFING_ALERT_TEXT,
 } = require("./lib/external-notifications");
+const {
+  normalizePersonalEmailAddress,
+} = require("./lib/personal-email-address");
 const { acquireDatabaseLock, lockPathForDatabase, releaseDatabaseLock } = require("./lib/database-lock");
 const {
   listCommittedBackupMetadata,
@@ -460,7 +463,7 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "sickness:read", label: "Krankmeldungen im eigenen Bereich lesen", group: "AUM", warningLevel: "high", hrDelegable: true },
   { id: "sickness:manage", label: "Krankmeldungen im eigenen Bereich bearbeiten", description: "Filialleitungen bearbeiten Krankmeldungen im zugewiesenen Bereich; Abteilungsleitungen nur mit ausdrücklichem Zusatzrecht und wirksamer Filialleitungsvertretung.", group: "AUM", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "sickness:settings", label: "Krankmeldungs- und AUM-Fristen verwalten", group: "AUM", warningLevel: "critical" },
-  { id: "notifications:settings", label: "Eigene externe Warnungen und Prozessmeldungen konfigurieren", group: "AUM", warningLevel: "normal", hrDelegable: true },
+  { id: "notifications:settings", label: "Persoenlichen Schlafmodus fuer externe Benachrichtigungen aendern", group: "AUM", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "loans:location:read", label: "Leihvorgänge des Bereichs lesen", description: "Offene und abgeschlossene Leihvorgänge im zugewiesenen Standort lesen.", group: "Leihe", warningLevel: "normal", hrDelegable: true, eligibleRoles: ["manager", "hr", "admin", "it_admin", "developer"] },
   { id: "loans:location:manage", label: "Leihvorgänge des Bereichs bearbeiten", description: "Ausgaben, Rücknahmen und Korrekturen im zugewiesenen Standort bearbeiten.", group: "Leihe", warningLevel: "high", hrDelegable: true, eligibleRoles: ["manager", "hr", "admin", "it_admin", "developer"] },
   { id: "loans:documents:read", label: "Leihdokumente des Bereichs lesen", description: "Ausgabe- und Rücknahmebelege im zugewiesenen Standort öffnen.", group: "Leihe", warningLevel: "high", hrDelegable: true, eligibleRoles: ["manager", "hr", "admin", "it_admin", "developer"] },
@@ -598,7 +601,7 @@ const portalDashboardPermissionDetails = Object.freeze([
   { id: "own_amu:withdraw", label: "Eigene AUM-Meldung zurückziehen", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "own_sickness:create", label: "Eigene Krankmeldung erfassen", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "own_sickness:read", label: "Eigene Krankmeldungen lesen", group: "Eigene Daten", scopeBehavior: "self" },
-  { id: "notifications:settings", label: "Eigene externe Warnungen und Prozessmeldungen konfigurieren", group: "Eigene Daten", scopeBehavior: "self" },
+  { id: "notifications:settings", label: "Persoenlichen Schlafmodus fuer externe Benachrichtigungen aendern", group: "Eigene Daten", scopeBehavior: "self" },
   { id: "amu:local:manage", label: "AUM im eigenen Filialbereich öffnen und prüfen", description: "Standortgebundenes Fachrecht der zuständigen Leitung; individuelle Zuweisungen und Entzüge werden berücksichtigt.", group: "AUM", warningLevel: "critical", scopeBehavior: "organizational" },
   { id: "wifi:settings", label: "WLAN-Zeitvorschläge verwalten", group: "Zeit & Abwesenheit", scopeBehavior: "global" },
   { id: "users:write", label: "Portal-Zugänge verwalten", group: "Zugänge & Rechte", scopeBehavior: "global" },
@@ -1386,6 +1389,7 @@ const {
   loanModule: loanModuleRepository,
   mobileAuth: mobileAuthRepository,
   organizationPersonnel: organizationPersonnelRepository,
+  personalNotificationContacts: personalNotificationContactsRepository,
   planningSettings: planningSettingsRepository,
   portalAccess: portalAccessRepository,
   runtimeRecovery: runtimeRecoveryRepository,
@@ -1788,15 +1792,6 @@ function sicknessAlertProtectionContext(row) {
   };
 }
 
-function sicknessPreferenceProtectionContext(row) {
-  return {
-    namespace: "sickness-notification-preference",
-    recordId: `${String(row.employee_number || "")}:${String(row.channel || "")}`,
-    field: "destination",
-    employeeNumber: String(row.employee_number || ""),
-  };
-}
-
 function outboundNotificationProtectionContext(row) {
   return {
     namespace: "outbound-notification-job",
@@ -2103,7 +2098,6 @@ const defaultSettings = {
   external_backup_enabled: "1",
   backup_directory: process.env.BACKUP_DIR || defaultBackupDirectorySetting,
   backup_interval_hours: "2",
-  vacation_count_saturday: "0",
   vacation_pdf_size: "A4",
   allow_past_week_editing: "0",
   current_week_auto_lock: "1",
@@ -2235,7 +2229,9 @@ async function refreshPortalScopeProjectionSnapshot() {
 
 function updateApplicationSettingsSnapshot(settings) {
   applicationSettingsSnapshot = Object.freeze(Object.fromEntries(
-    settings.map((row) => [String(row.key), String(row.value)]),
+    settings
+      .filter((row) => String(row.key) !== "vacation_count_saturday")
+      .map((row) => [String(row.key), String(row.value)]),
   ));
   return applicationSettingsSnapshot;
 }
@@ -2852,6 +2848,11 @@ const usbCreatorGlobalRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN
 const backupAdminAuthRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 128, maxEventsPerKey: 5 });
 const backupAdminGlobalRateLimits = createBoundedRateLimitStore({ windowMs: LOGIN_RATE_WINDOW_MS, maxKeys: 32, maxEventsPerKey: 20 });
 const articleLookupRateLimits = createBoundedRateLimitStore({ windowMs: 5 * 60 * 1000, maxKeys: 2048, maxEventsPerKey: 60 });
+const personalEmailVerificationIpRateLimits = createBoundedRateLimitStore({
+  windowMs: 15 * 60 * 1000,
+  maxKeys: 2048,
+  maxEventsPerKey: 30,
+});
 
 function backupAdminOriginAllowed(request) {
   const origin = String(request.headers.origin || "").trim();
@@ -3643,6 +3644,18 @@ function requireEmployeePortalSession(request, permission = "") {
       403,
       "Diese Funktion ist ausschlieÃŸlich fÃ¼r persÃ¶nliche MitarbeiterzugÃ¤nge verfÃ¼gbar.",
       "PORTAL_EMPLOYEE_ACCOUNT_REQUIRED",
+    );
+  }
+  return session;
+}
+
+function requirePersonalEmailPortalSession(request) {
+  const session = requireEmployeePortalSession(request);
+  if (session.mustChangePassword) {
+    throw httpError(
+      428,
+      "Bitte zuerst das persönliche Startpasswort ändern.",
+      "PORTAL_PASSWORD_CHANGE_REQUIRED",
     );
   }
   return session;
@@ -5514,6 +5527,32 @@ const OUTBOUND_NOTIFICATION_RETENTION_DAYS = 30;
 const OUTBOUND_NOTIFICATION_CANCELLED_RETENTION_DAYS = 7;
 const NOTIFICATION_VERIFICATION_TTL_MINUTES = 10;
 const NOTIFICATION_VERIFICATION_MAX_ATTEMPTS = 5;
+const PERSONAL_EMAIL_VERIFICATION_RESEND_MS = 60 * 1000;
+const PERSONAL_EMAIL_VERIFICATION_RATE_WINDOW_MS = 15 * 60 * 1000;
+const PERSONAL_EMAIL_VERIFICATION_RATE_MAX = 6;
+const PERSONAL_EMAIL_VERIFICATION_IP_RATE_MAX = 30;
+const PERSONAL_EMAIL_CATEGORY_CATALOG = Object.freeze([
+  Object.freeze({
+    id: "account_security",
+    label: "Kontosicherheit",
+    description: "Zum Beispiel wichtige Hinweise zum eigenen Zugang.",
+  }),
+  Object.freeze({
+    id: "requests_and_approvals",
+    label: "Anträge und Entscheidungen",
+    description: "Zum Beispiel Entscheidungen zu Urlaub oder anderen Anträgen.",
+  }),
+  Object.freeze({
+    id: "schedule_changes",
+    label: "Dienstplanänderungen",
+    description: "Hinweise zu freigegebenen oder geänderten Dienstplänen.",
+  }),
+  Object.freeze({
+    id: "staffing_operations",
+    label: "Betriebliche Hinweise",
+    description: "Betriebliche Meldungen für ausdrücklich berechtigte Rollen.",
+  }),
+]);
 
 function sicknessCaseRetentionDays() {
   const configured = Number(getPortalSettings().amu_retention_days || 730);
@@ -5892,6 +5931,22 @@ async function refreshSicknessStaffingAfterPlanningChange(now = new Date()) {
 }
 
 const SICKNESS_NOTIFICATION_CHANNELS = Object.freeze(["email", "sms", "whatsapp"]);
+const PERSONAL_NOTIFICATION_QUIET_HOURS_ROLES = new Set([
+  "department_manager",
+  "manager",
+  "hr",
+  "admin",
+  "it_admin",
+  "developer",
+]);
+
+function personalNotificationQuietHoursEditable(session) {
+  return Boolean(
+    session
+    && PERSONAL_NOTIFICATION_QUIET_HOURS_ROLES.has(session.role)
+    && session.permissions?.includes("notifications:settings"),
+  );
+}
 
 function externalNotificationProviderStatus() {
   return externalNotificationAdapter.getProviderStatus();
@@ -5918,320 +5973,618 @@ function normalizedNotificationDestination(channel, value) {
 }
 
 async function sicknessNotificationPreferences(employeeNumber) {
-  const rows = await sicknessAmuManagementRepository.listNotificationPreferences({
-    employeeNumber,
-  });
-  const byChannel = new Map(rows.map((row) => [row.channel, row]));
+  const personal = await personalNotificationSettings(employeeNumber);
   const channels = {};
   for (const channel of SICKNESS_NOTIFICATION_CHANNELS) {
-    const row = byChannel.get(channel);
-    let destination = "";
-    if (row?.protected_destination) {
-      destination = parseProtectedJson(row.protected_destination, sicknessPreferenceProtectionContext(row)).destination || "";
-    }
+    const personalChannel = personal.channels[channel];
+    const target = personal.targets[personalChannel.target];
     channels[channel] = {
-      enabled: Boolean(row?.enabled),
-      processEnabled: Boolean(row?.process_notifications_enabled),
-      destination,
-      earliestTime: isTime(row?.earliest_time) ? row.earliest_time : "08:00",
-      verifiedAt: row?.verified_at || null,
-      verificationRequired: Boolean(row?.protected_destination && !row?.verified_at),
-      verificationExpiresAt: row?.verification_expires_at || null,
+      enabled: false,
+      processEnabled: false,
+      destination: "",
+      maskedDestination: target.masked,
+      earliestTime: personal.quietHours.earliestTime,
+      verifiedAt: target.verifiedAt,
+      verificationRequired: personalChannel.verificationRequired,
+      verificationExpiresAt: personal.verification.channel === channel
+        ? personal.verification.expiresAt : null,
+      selectable: personalChannel.selectable,
+      deliveryReady: personalChannel.deliveryReady,
     };
   }
   return { channels, providers: externalNotificationProviderStatus(), messagePreview: STAFFING_ALERT_TEXT };
-}
-
-async function saveSicknessNotificationPreferences(employeeNumber, body = {}) {
-  const earliestTime = String(body.earliestTime || "08:00");
-  if (!isTime(earliestTime)) throw httpError(400, "Bitte eine gültige früheste Warnzeit eingeben.", "SICKNESS_NOTIFICATION_TIME_INVALID");
-  const submitted = body.channels && typeof body.channels === "object" ? body.channels : {};
-  const existingRows = await sicknessAmuManagementRepository.listNotificationPreferences({
-    employeeNumber,
-  });
-  const existingByChannel = new Map(existingRows.map((row) => [row.channel, row]));
-  const values = SICKNESS_NOTIFICATION_CHANNELS.map((channel) => {
-    const input = submitted[channel] || {};
-    const enabled = input.enabled === true;
-    const processEnabled = input.processEnabled === true;
-    const destination = normalizedNotificationDestination(channel, input.destination);
-    if ((enabled || processEnabled) && !destination) {
-      throw httpError(400, "Für jeden aktivierten externen Kanal muss ein Empfänger hinterlegt sein.", "SICKNESS_NOTIFICATION_DESTINATION_REQUIRED");
-    }
-    const existing = existingByChannel.get(channel);
-    const previousDestination = existing?.protected_destination
-      ? (parseProtectedJson(existing.protected_destination, sicknessPreferenceProtectionContext(existing)).destination || "")
-      : "";
-    const unchanged = destination && destination === previousDestination;
-    const verifiedAt = unchanged ? (existing?.verified_at || null) : null;
-    if ((enabled || processEnabled) && !verifiedAt) {
-      throw httpError(409, "Bitte dieses Ziel zuerst mit dem sechsstelligen Einmalcode bestätigen.", "SICKNESS_NOTIFICATION_VERIFICATION_REQUIRED");
-    }
-    return {
-      channel, enabled, processEnabled, destination, verifiedAt,
-      verificationHash: unchanged ? (existing?.verification_hash || "") : "",
-      verificationSalt: unchanged ? (existing?.verification_salt || "") : "",
-      verificationExpiresAt: unchanged ? (existing?.verification_expires_at || null) : null,
-      verificationAttempts: unchanged ? Number(existing?.verification_attempts || 0) : 0,
-      verificationSentAt: unchanged ? (existing?.verification_sent_at || null) : null,
-    };
-  });
-  await sicknessAmuManagementRepository.transaction(async (repository) => {
-    for (const value of values) {
-      const context = sicknessPreferenceProtectionContext({ employee_number: employeeNumber, channel: value.channel });
-      const protectedDestination = value.destination ? protectJson({ destination: value.destination }, context) : "";
-      await repository.upsertNotificationPreference({
-        employeeNumber,
-        channel: value.channel,
-        enabled: value.enabled ? 1 : 0,
-        processEnabled: value.processEnabled ? 1 : 0,
-        earliestTime,
-        protectedDestination,
-        verifiedAt: value.verifiedAt,
-        verificationHash: value.verificationHash,
-        verificationSalt: value.verificationSalt,
-        verificationExpiresAt: value.verificationExpiresAt,
-        verificationAttempts: value.verificationAttempts,
-        verificationSentAt: value.verificationSentAt,
-      });
-    }
-    await repository.recordAudit({
-      actor: employeeNumber,
-      action: "sickness.notification-preferences.update",
-      entityType: "portal_user",
-      entityId: employeeNumber,
-      detail: JSON.stringify({
-        staffingChannels: values.filter((value) => value.enabled).map((value) => value.channel),
-        processChannels: values.filter((value) => value.processEnabled).map((value) => value.channel),
-        earliestTime,
-      }),
-    });
-  });
-  return await sicknessNotificationPreferences(employeeNumber);
 }
 
 function notificationVerificationHash(code, salt) {
   return crypto.scryptSync(String(code), String(salt), 32).toString("hex");
 }
 
-async function requestSicknessNotificationVerification(employeeNumber, body = {}) {
-  const channel = String(body.channel || "").trim().toLowerCase();
-  if (!SICKNESS_NOTIFICATION_CHANNELS.includes(channel)) {
-    throw httpError(400, "Der Warnkanal ist ungültig.", "SICKNESS_NOTIFICATION_CHANNEL_INVALID");
-  }
-  if (!externalNotificationEventAvailable(channel, "destination_verification")) {
-    throw httpError(503, "Dieser Warnkanal ist durch die Firmen-IT noch nicht eingerichtet.", "SICKNESS_NOTIFICATION_PROVIDER_UNAVAILABLE");
-  }
-  const destination = normalizedNotificationDestination(channel, body.destination);
-  if (!destination) throw httpError(400, "Bitte ein Ziel für den Warnkanal eingeben.", "SICKNESS_NOTIFICATION_DESTINATION_REQUIRED");
-  const earliestTime = String(body.earliestTime || "08:00");
-  if (!isTime(earliestTime)) throw httpError(400, "Bitte eine gültige früheste Warnzeit eingeben.", "SICKNESS_NOTIFICATION_TIME_INVALID");
-  const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
-  const salt = crypto.randomBytes(16).toString("base64url");
-  const hash = notificationVerificationHash(code, salt);
-  const expiresAt = new Date(Date.now() + NOTIFICATION_VERIFICATION_TTL_MINUTES * 60 * 1000).toISOString();
-  const context = sicknessPreferenceProtectionContext({ employee_number: employeeNumber, channel });
-  const protectedDestination = protectJson({ destination }, context);
-  await sicknessAmuManagementRepository.requestNotificationVerification({
-    employeeNumber,
-    channel,
-    earliestTime,
-    protectedDestination,
-    verificationHash: hash,
-    verificationSalt: salt,
-    verificationExpiresAt: expiresAt,
-  });
-  try {
-    await externalNotificationAdapter.sendVerificationCode({ channel, recipient: destination, code });
-  } catch (error) {
-    await sicknessAmuManagementRepository.resetNotificationVerification({
-      employeeNumber,
-      channel,
-    });
-    throw httpError(502, "Der Bestätigungscode konnte nicht zugestellt werden.", error.code || "SICKNESS_NOTIFICATION_VERIFICATION_DELIVERY_FAILED");
-  }
-  auditPortal(employeeNumber, "sickness.notification-destination.verification.request", "portal_user", employeeNumber,
-    JSON.stringify({ channel }));
+function maskedEmailAddress(value) {
+  const address = String(value || "");
+  const separator = address.lastIndexOf("@");
+  if (separator <= 0 || separator >= address.length - 1) return "";
+  const local = address.slice(0, separator);
+  const visible = local.slice(0, 1);
+  return `${visible}${"*".repeat(Math.max(3, Math.min(8, local.length - 1)))}@${address.slice(separator + 1)}`;
+}
+
+function personalEmailTimestampMs(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return Number.NaN;
+  const normalized = /(?:Z|[+-]\d{2}:\d{2})$/i.test(raw)
+    ? raw
+    : `${raw.replace(" ", "T")}Z`;
+  return Date.parse(normalized);
+}
+
+function personalEmailIsoTimestamp(value) {
+  const milliseconds = personalEmailTimestampMs(value);
+  return Number.isFinite(milliseconds) ? new Date(milliseconds).toISOString() : null;
+}
+
+function personalEmailResendAvailableAt(row, now = Date.now()) {
+  const sentAt = personalEmailTimestampMs(row?.verificationSentAt);
+  if (!Number.isFinite(sentAt)) return null;
+  const availableAt = sentAt + PERSONAL_EMAIL_VERIFICATION_RESEND_MS;
+  return availableAt > now ? new Date(availableAt).toISOString() : null;
+}
+
+function personalEmailVerificationRateReservation(row, now = Date.now()) {
+  const rawWindowStartedAt = String(row?.verificationRateWindowStartedAt || "");
+  const windowStartedAt = personalEmailTimestampMs(rawWindowStartedAt);
+  const rawCount = Number(row?.verificationRateCount || 0);
+  const count = Number.isSafeInteger(rawCount) && rawCount >= 0 ? rawCount : PERSONAL_EMAIL_VERIFICATION_RATE_MAX;
+  const active = Number.isFinite(windowStartedAt)
+    && windowStartedAt + PERSONAL_EMAIL_VERIFICATION_RATE_WINDOW_MS > now;
   return {
-    ...await sicknessNotificationPreferences(employeeNumber),
-    verification: { channel, required: true, expiresAt },
+    expectedWindowStartedAt: rawWindowStartedAt,
+    expectedCount: count,
+    limited: active && count >= PERSONAL_EMAIL_VERIFICATION_RATE_MAX,
+    retryAfter: active
+      ? Math.max(1, Math.ceil((windowStartedAt + PERSONAL_EMAIL_VERIFICATION_RATE_WINDOW_MS - now) / 1000))
+      : 0,
+    nextWindowStartedAt: active ? rawWindowStartedAt : new Date(now).toISOString(),
+    nextCount: active ? count + 1 : 1,
   };
 }
 
-async function confirmSicknessNotificationVerification(employeeNumber, body = {}) {
-  const channel = String(body.channel || "").trim().toLowerCase();
-  const code = String(body.code || "").trim();
-  if (!SICKNESS_NOTIFICATION_CHANNELS.includes(channel) || !/^\d{6}$/.test(code)) {
-    throw httpError(400, "Der Bestätigungscode ist ungültig.", "SICKNESS_NOTIFICATION_VERIFICATION_INVALID");
+function personalEmailVerificationRateError(employeeNumber, retryAfter = 15 * 60) {
+  auditPortal(employeeNumber, "personal-email.verification.rate-limited", "portal_user", employeeNumber);
+  const error = httpError(
+    429,
+    "Zu viele Bestätigungscodes wurden angefordert. Bitte 15 Minuten warten.",
+    "PERSONAL_EMAIL_VERIFICATION_RATE_LIMITED",
+  );
+  error.retryAfter = Math.max(1, Number(retryAfter || 15 * 60));
+  return error;
+}
+
+function personalEmailVerificationCooldownError(row, now = Date.now()) {
+  const resendAvailableAt = personalEmailResendAvailableAt(row, now);
+  if (!resendAvailableAt) return null;
+  const error = httpError(
+    429,
+    "Bitte vor dem erneuten Senden des Bestätigungscodes kurz warten.",
+    "PERSONAL_EMAIL_VERIFICATION_COOLDOWN",
+  );
+  error.retryAfter = Math.max(1, Math.ceil((Date.parse(resendAvailableAt) - now) / 1000));
+  return error;
+}
+
+function assertPersonalEmailVerificationIpRate(request, employeeNumber, now = Date.now()) {
+  const ipKey = loginRateKey(request);
+  const events = personalEmailVerificationIpRateLimits.get(ipKey, now);
+  if (events.length >= PERSONAL_EMAIL_VERIFICATION_IP_RATE_MAX) {
+    const retryAfter = events.length
+      ? Math.max(1, Math.ceil((PERSONAL_EMAIL_VERIFICATION_RATE_WINDOW_MS - (now - events[0])) / 1000))
+      : 15 * 60;
+    throw personalEmailVerificationRateError(employeeNumber, retryAfter);
   }
-  const row = await sicknessAmuManagementRepository.getNotificationPreference({
-    employeeNumber,
-    channel,
-  });
-  const expired = !row?.verification_expires_at || new Date(row.verification_expires_at).getTime() <= Date.now();
-  if (!row?.verification_hash || !row?.verification_salt || expired
-      || Number(row.verification_attempts || 0) >= NOTIFICATION_VERIFICATION_MAX_ATTEMPTS) {
-    throw httpError(410, "Der Bestätigungscode ist abgelaufen. Bitte einen neuen Code anfordern.", "SICKNESS_NOTIFICATION_VERIFICATION_EXPIRED");
+  personalEmailVerificationIpRateLimits.record(ipKey, now);
+}
+
+function maskedPersonalNotificationPhone(value) {
+  const phone = String(value || "");
+  return phone ? `•••• ${phone.slice(-4)}` : "";
+}
+
+function personalNotificationTargetForChannel(channel) {
+  return channel === "email" ? "email" : "phone";
+}
+
+function personalNotificationMasterFieldsChanged(fields = []) {
+  return fields.some((field) => ["privateEmail", "phone"].includes(String(field || "")));
+}
+
+function normalizePersonalNotificationChannel(value) {
+  const channel = String(value || "").trim().toLowerCase();
+  if (!SICKNESS_NOTIFICATION_CHANNELS.includes(channel)) {
+    throw httpError(400, "Der Benachrichtigungskanal ist ungueltig.", "PERSONAL_NOTIFICATION_CHANNEL_INVALID");
   }
-  const actual = Buffer.from(notificationVerificationHash(code, row.verification_salt), "hex");
-  const expected = Buffer.from(row.verification_hash, "hex");
-  const valid = actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
-  if (!valid) {
-    const attempts = Number(row.verification_attempts || 0) + 1;
-    await sicknessAmuManagementRepository.incrementNotificationVerificationAttempts({
-      attempts,
-      employeeNumber,
-      channel,
-    });
-    if (attempts >= NOTIFICATION_VERIFICATION_MAX_ATTEMPTS) {
-      throw httpError(410, "Zu viele Fehlversuche. Bitte einen neuen Code anfordern.", "SICKNESS_NOTIFICATION_VERIFICATION_EXPIRED");
+  return channel;
+}
+
+function personalNotificationTargetFingerprint(target, value) {
+  return value
+    ? personnelSensitiveLookup(`personal-notification-target:${target}`, value)
+    : "";
+}
+
+async function personalNotificationMasterTargets(employeeNumber) {
+  const profile = await personnelSensitiveProfile(employeeNumber);
+  const rawEmail = String(profile.privateEmail || "").trim();
+  const email = rawEmail ? normalizePersonalEmailAddress(rawEmail) : "";
+  const rawPhone = String(profile.phone || "").trim();
+  let phone = "";
+  if (rawPhone) {
+    try {
+      phone = normalizedNotificationDestination("sms", rawPhone);
+    } catch {
+      phone = "";
     }
-    throw httpError(400, "Der Bestätigungscode ist nicht korrekt.", "SICKNESS_NOTIFICATION_VERIFICATION_INVALID");
   }
-  await sicknessAmuManagementRepository.transaction(async (repository) => {
-    await repository.confirmNotificationVerification({ employeeNumber, channel });
+  return {
+    email: {
+      value: email || "",
+      configured: Boolean(rawEmail),
+      valid: Boolean(email),
+      fingerprint: personalNotificationTargetFingerprint("email", email || ""),
+    },
+    phone: {
+      value: phone,
+      configured: Boolean(rawPhone),
+      valid: Boolean(phone),
+      fingerprint: personalNotificationTargetFingerprint("phone", phone),
+    },
+  };
+}
+
+function personalNotificationTargetState(row, targets, target) {
+  const master = targets[target];
+  const storedFingerprint = String(row?.[`${target}TargetFingerprint`] || "");
+  const verifiedAt = row?.[`${target}VerifiedAt`] || null;
+  const current = Boolean(master?.fingerprint && storedFingerprint === master.fingerprint);
+  const verified = Boolean(current && verifiedAt);
+  return {
+    value: String(master?.value || ""),
+    fingerprint: String(master?.fingerprint || ""),
+    configured: Boolean(master?.configured),
+    valid: Boolean(master?.valid),
+    status: !master?.configured ? "none" : !master?.valid ? "invalid" : verified ? "verified" : "pending",
+    verified,
+    verifiedAt: verified ? personalEmailIsoTimestamp(verifiedAt) : null,
+  };
+}
+
+async function reconcilePersonalNotificationTargets(
+  employeeNumber,
+  targets = null,
+  actor = employeeNumber,
+) {
+  const currentTargets = targets || await personalNotificationMasterTargets(employeeNumber);
+  const before = await personalNotificationContactsRepository.get(employeeNumber);
+  const changedTargets = ["email", "phone"].filter((target) => (
+    String(before?.[`${target}TargetFingerprint`] || "") !== currentTargets[target].fingerprint
+  ));
+  await personalNotificationContactsRepository.transaction(async (repository) => {
+    await repository.reconcileTargets({
+      employeeNumber,
+      emailTargetFingerprint: currentTargets.email.fingerprint,
+      phoneTargetFingerprint: currentTargets.phone.fingerprint,
+    });
+    if (changedTargets.length) {
+      await repository.recordAudit({
+        actor,
+        action: "personal-notifications.targets.reconcile",
+        entityType: "portal_user",
+        entityId: employeeNumber,
+        detail: JSON.stringify({ targets: changedTargets, verificationInvalidated: Boolean(before) }),
+      });
+    }
+  });
+  return {
+    row: await personalNotificationContactsRepository.get(employeeNumber),
+    targets: currentTargets,
+    changedTargets,
+  };
+}
+
+async function personalNotificationSettings(employeeNumber, session = null) {
+  const { row, targets } = await reconcilePersonalNotificationTargets(employeeNumber);
+  const email = personalNotificationTargetState(row, targets, "email");
+  const phone = personalNotificationTargetState(row, targets, "phone");
+  const providers = externalNotificationProviderStatus();
+  const channels = {};
+  for (const channel of SICKNESS_NOTIFICATION_CHANNELS) {
+    const target = personalNotificationTargetForChannel(channel);
+    const state = target === "email" ? email : phone;
+    const enabled = Boolean(row?.[`${channel}Enabled`]);
+    const verificationAvailable = externalNotificationEventAvailable(channel, "destination_verification");
+    const deliveryReady = Boolean(state.verified && providers[channel]?.available === true);
+    channels[channel] = {
+      enabled,
+      selectable: Boolean(state.value),
+      available: deliveryReady,
+      deliveryReady,
+      verificationAvailable,
+      target,
+      verificationRequired: Boolean(state.value && !state.verified),
+    };
+  }
+  const pendingTarget = String(row?.verificationTarget || "");
+  return {
+    schemaVersion: 2,
+    address: {
+      masked: maskedEmailAddress(email.value),
+      status: email.status,
+      verifiedAt: email.verifiedAt,
+    },
+    targets: {
+      email: {
+        masked: maskedEmailAddress(email.value),
+        status: email.status,
+        verifiedAt: email.verifiedAt,
+        available: Boolean(email.value),
+      },
+      phone: {
+        masked: maskedPersonalNotificationPhone(phone.value),
+        status: phone.status,
+        verifiedAt: phone.verifiedAt,
+        available: Boolean(phone.value),
+      },
+    },
+    channels,
+    quietHours: {
+      earliestTime: isTime(row?.earliestTime) ? row.earliestTime : "08:00",
+      editable: personalNotificationQuietHoursEditable(session),
+    },
+    providers,
+    verification: {
+      available: pendingTarget
+        ? externalNotificationEventAvailable(row.verificationChannel, "destination_verification")
+        : false,
+      target: pendingTarget || null,
+      channel: row?.verificationChannel || null,
+      required: Boolean(pendingTarget),
+      expiresAt: row?.verificationHash ? (row.verificationExpiresAt || null) : null,
+      resendAvailableAt: personalEmailResendAvailableAt(row),
+      expiresInMinutes: NOTIFICATION_VERIFICATION_TTL_MINUTES,
+    },
+    categories: {
+      catalogVersion: 1,
+      deliveryActive: false,
+      items: PERSONAL_EMAIL_CATEGORY_CATALOG.map((item) => ({
+        ...item,
+        available: false,
+        selected: false,
+      })),
+    },
+  };
+}
+
+function assertNoPersonalNotificationDestinationInput(body = {}) {
+  const forbidden = ["address", "destination", "email", "phone"];
+  if (forbidden.some((key) => Object.hasOwn(body || {}, key))) {
+    throw httpError(
+      422,
+      "Benachrichtigungsziele werden ausschliesslich im geschuetzten Personalakt gepflegt.",
+      "PERSONAL_NOTIFICATION_TARGET_READ_ONLY",
+    );
+  }
+  const submittedChannels = body?.channels && typeof body.channels === "object"
+    ? body.channels : {};
+  for (const value of Object.values(submittedChannels)) {
+    if (value && typeof value === "object" && !Array.isArray(value)
+      && forbidden.some((key) => Object.hasOwn(value, key))) {
+      throw httpError(
+        422,
+        "Benachrichtigungsziele werden ausschliesslich im geschuetzten Personalakt gepflegt.",
+        "PERSONAL_NOTIFICATION_TARGET_READ_ONLY",
+      );
+    }
+  }
+}
+
+async function savePersonalNotificationPreferences(session, body = {}) {
+  assertNoPersonalNotificationDestinationInput(body);
+  const employeeNumber = session.employeeNumber;
+  const { row, targets } = await reconcilePersonalNotificationTargets(employeeNumber);
+  const submitted = body.channels && typeof body.channels === "object" ? body.channels : {};
+  const enabled = {};
+  for (const channel of SICKNESS_NOTIFICATION_CHANNELS) {
+    const input = submitted[channel];
+    const requested = input === undefined
+      ? Boolean(row?.[`${channel}Enabled`])
+      : typeof input === "object" && input !== null
+        ? input.enabled === true
+        : input === true;
+    const target = targets[personalNotificationTargetForChannel(channel)];
+    if (requested && !target.value) {
+      throw httpError(
+        409,
+        "Fuer diesen Kanal fehlt ein gueltiges Ziel im geschuetzten Personalakt.",
+        "PERSONAL_NOTIFICATION_MASTER_TARGET_REQUIRED",
+      );
+    }
+    enabled[channel] = requested;
+  }
+  let earliestTime = isTime(row?.earliestTime) ? row.earliestTime : "08:00";
+  if (Object.hasOwn(body, "earliestTime")) {
+    if (!personalNotificationQuietHoursEditable(session)) {
+      throw httpError(403, "Die Ruhezeit darf mit diesem Zugang nicht geaendert werden.", "PORTAL_PERMISSION_DENIED");
+    }
+    earliestTime = String(body.earliestTime || "");
+    if (!isTime(earliestTime)) {
+      throw httpError(
+        422,
+        "Bitte eine gueltige frueheste Versandzeit im Format HH:MM eingeben.",
+        "PERSONAL_NOTIFICATION_TIME_INVALID",
+      );
+    }
+  }
+  await personalNotificationContactsRepository.transaction(async (repository) => {
+    await repository.updatePreferences({
+      employeeNumber,
+      emailEnabled: enabled.email ? 1 : 0,
+      smsEnabled: enabled.sms ? 1 : 0,
+      whatsappEnabled: enabled.whatsapp ? 1 : 0,
+      earliestTime,
+    });
     await repository.recordAudit({
       actor: employeeNumber,
-      action: "sickness.notification-destination.verification.confirm",
+      action: "personal-notifications.preferences.update",
       entityType: "portal_user",
       entityId: employeeNumber,
-      detail: JSON.stringify({ channel }),
+      detail: JSON.stringify({
+        channels: SICKNESS_NOTIFICATION_CHANNELS.filter((channel) => enabled[channel]),
+        earliestTimeChanged: earliestTime !== row?.earliestTime,
+      }),
     });
   });
-  return await sicknessNotificationPreferences(employeeNumber);
+  return personalNotificationSettings(employeeNumber, session);
+}
+
+async function throwPersonalNotificationVerificationReservationConflict(employeeNumber, now = Date.now()) {
+  const current = await personalNotificationContactsRepository.get(employeeNumber);
+  const cooldownError = personalEmailVerificationCooldownError(current, now);
+  if (cooldownError) throw cooldownError;
+  const rate = personalEmailVerificationRateReservation(current, now);
+  if (rate.limited) throw personalEmailVerificationRateError(employeeNumber, rate.retryAfter);
+  throw httpError(
+    409,
+    "Die Benachrichtigungseinstellungen wurden gleichzeitig geaendert. Bitte neu laden.",
+    "PERSONAL_NOTIFICATION_VERIFICATION_STATE_CHANGED",
+  );
+}
+
+async function requestPersonalNotificationVerification(request, session, body = {}) {
+  assertNoPersonalNotificationDestinationInput(body);
+  const channel = normalizePersonalNotificationChannel(body.channel || "email");
+  const target = personalNotificationTargetForChannel(channel);
+  const reconciled = await reconcilePersonalNotificationTargets(session.employeeNumber);
+  const row = reconciled.row;
+  const masterTarget = reconciled.targets[target];
+  if (!masterTarget.value) {
+    throw httpError(
+      409,
+      "Bitte zuerst ein gueltiges Ziel im geschuetzten Personalakt hinterlegen lassen.",
+      "PERSONAL_NOTIFICATION_MASTER_TARGET_REQUIRED",
+    );
+  }
+  if (!externalNotificationEventAvailable(channel, "destination_verification")) {
+    throw httpError(
+      503,
+      "Die Bestaetigung fuer diesen Kanal ist durch die Serververwaltung noch nicht freigeschaltet.",
+      "PERSONAL_NOTIFICATION_PROVIDER_UNAVAILABLE",
+    );
+  }
+  const now = Date.now();
+  const cooldownError = personalEmailVerificationCooldownError(row, now);
+  if (cooldownError) throw cooldownError;
+  const rate = personalEmailVerificationRateReservation(row, now);
+  if (rate.limited) throw personalEmailVerificationRateError(session.employeeNumber, rate.retryAfter);
+  assertPersonalEmailVerificationIpRate(request, session.employeeNumber, now);
+  const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+  const salt = crypto.randomBytes(16).toString("base64url");
+  const verificationGeneration = crypto.randomUUID();
+  const verificationHash = notificationVerificationHash(code, salt);
+  const verificationSentAt = new Date(now).toISOString();
+  const verificationExpiresAt = new Date(
+    now + NOTIFICATION_VERIFICATION_TTL_MINUTES * 60 * 1000,
+  ).toISOString();
+  const stored = await personalNotificationContactsRepository.setVerification({
+    employeeNumber: session.employeeNumber,
+    expectedEmailTargetFingerprint: row.emailTargetFingerprint,
+    expectedPhoneTargetFingerprint: row.phoneTargetFingerprint,
+    expectedVerificationGeneration: String(row.verificationGeneration || ""),
+    expectedVerificationSentAt: String(row.verificationSentAt || ""),
+    expectedVerificationRateWindowStartedAt: rate.expectedWindowStartedAt,
+    expectedVerificationRateCount: rate.expectedCount,
+    verificationTarget: target,
+    verificationChannel: channel,
+    verificationTargetFingerprint: masterTarget.fingerprint,
+    verificationGeneration,
+    verificationHash,
+    verificationSalt: salt,
+    verificationExpiresAt,
+    verificationSentAt,
+    verificationRateWindowStartedAt: rate.nextWindowStartedAt,
+    verificationRateCount: rate.nextCount,
+  });
+  if (!stored.rowsAffected) {
+    await throwPersonalNotificationVerificationReservationConflict(session.employeeNumber, now);
+  }
+  try {
+    await externalNotificationAdapter.sendVerificationCode({
+      channel,
+      recipient: masterTarget.value,
+      code,
+    });
+  } catch (error) {
+    await personalNotificationContactsRepository.resetVerification({
+      employeeNumber: session.employeeNumber,
+      verificationTargetFingerprint: masterTarget.fingerprint,
+      verificationGeneration,
+    });
+    throw httpError(
+      502,
+      "Der Bestaetigungscode konnte nicht zugestellt werden.",
+      error.code || "PERSONAL_NOTIFICATION_VERIFICATION_DELIVERY_FAILED",
+    );
+  }
+  auditPortal(
+    session.employeeNumber,
+    "personal-notifications.verification.request",
+    "portal_user",
+    session.employeeNumber,
+    JSON.stringify({ channel, target }),
+  );
+  return personalNotificationSettings(session.employeeNumber, session);
+}
+
+async function confirmPersonalNotificationVerification(session, body = {}) {
+  assertNoPersonalNotificationDestinationInput(body);
+  const employeeNumber = session.employeeNumber;
+  const channel = normalizePersonalNotificationChannel(body.channel || "email");
+  const target = personalNotificationTargetForChannel(channel);
+  const code = String(body.code || "").trim();
+  if (!/^\d{6}$/.test(code)) {
+    throw httpError(400, "Der Bestaetigungscode ist ungueltig.", "PERSONAL_NOTIFICATION_VERIFICATION_INVALID");
+  }
+  const reconciled = await reconcilePersonalNotificationTargets(employeeNumber);
+  const row = reconciled.row;
+  const masterTarget = reconciled.targets[target];
+  const verificationNow = new Date().toISOString();
+  const expired = !row?.verificationExpiresAt
+    || personalEmailTimestampMs(row.verificationExpiresAt) <= Date.now();
+  if (!masterTarget.value || row?.verificationTarget !== target
+    || row?.verificationChannel !== channel
+    || row?.verificationTargetFingerprint !== masterTarget.fingerprint
+    || !row?.verificationGeneration || !row?.verificationHash || !row?.verificationSalt
+    || expired || Number(row?.verificationAttempts || 0) >= NOTIFICATION_VERIFICATION_MAX_ATTEMPTS) {
+    throw httpError(
+      410,
+      "Der Bestaetigungscode ist abgelaufen. Bitte einen neuen Code anfordern.",
+      "PERSONAL_NOTIFICATION_VERIFICATION_EXPIRED",
+    );
+  }
+  const actual = Buffer.from(notificationVerificationHash(code, row.verificationSalt), "hex");
+  const expected = Buffer.from(row.verificationHash, "hex");
+  const valid = actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+  if (!valid) {
+    const incremented = await personalNotificationContactsRepository.incrementVerificationAttempts({
+      employeeNumber,
+      verificationTarget: target,
+      verificationChannel: channel,
+      verificationTargetFingerprint: masterTarget.fingerprint,
+      verificationGeneration: row.verificationGeneration,
+      verificationHash: row.verificationHash,
+      verificationSalt: row.verificationSalt,
+      verificationExpiresAt: row.verificationExpiresAt,
+      verificationNow,
+      maxAttempts: NOTIFICATION_VERIFICATION_MAX_ATTEMPTS,
+    });
+    const current = await personalNotificationContactsRepository.get(employeeNumber);
+    if (!incremented.rowsAffected
+      || current?.verificationTargetFingerprint !== masterTarget.fingerprint
+      || current?.verificationGeneration !== row.verificationGeneration
+      || Number(current?.verificationAttempts || 0) >= NOTIFICATION_VERIFICATION_MAX_ATTEMPTS) {
+      throw httpError(
+        410,
+        "Zu viele Fehlversuche. Bitte einen neuen Code anfordern.",
+        "PERSONAL_NOTIFICATION_VERIFICATION_EXPIRED",
+      );
+    }
+    throw httpError(400, "Der Bestaetigungscode ist nicht korrekt.", "PERSONAL_NOTIFICATION_VERIFICATION_INVALID");
+  }
+  const confirmed = await personalNotificationContactsRepository.transaction(async (repository) => {
+    const result = await repository.confirmVerification({
+      employeeNumber,
+      verificationTarget: target,
+      verificationChannel: channel,
+      verificationTargetFingerprint: masterTarget.fingerprint,
+      verificationGeneration: row.verificationGeneration,
+      verificationHash: row.verificationHash,
+      verificationSalt: row.verificationSalt,
+      verificationExpiresAt: row.verificationExpiresAt,
+      verifiedAt: verificationNow,
+      maxAttempts: NOTIFICATION_VERIFICATION_MAX_ATTEMPTS,
+    });
+    if (!result.rowsAffected) return result;
+    await repository.recordAudit({
+      actor: employeeNumber,
+      action: "personal-notifications.verification.confirm",
+      entityType: "portal_user",
+      entityId: employeeNumber,
+      detail: JSON.stringify({ channel, target }),
+    });
+    return result;
+  });
+  if (!confirmed.rowsAffected) {
+    throw httpError(
+      410,
+      "Der Bestaetigungscode ist abgelaufen. Bitte einen neuen Code anfordern.",
+      "PERSONAL_NOTIFICATION_VERIFICATION_EXPIRED",
+    );
+  }
+  return personalNotificationSettings(employeeNumber, session);
+}
+
+async function personalNotificationPrivacyExport(employeeNumber) {
+  const { row, targets } = await reconcilePersonalNotificationTargets(employeeNumber);
+  const email = personalNotificationTargetState(row, targets, "email");
+  const phone = personalNotificationTargetState(row, targets, "phone");
+  return {
+    targets: {
+      email: { status: email.status, verifiedAt: email.verifiedAt },
+      phone: { status: phone.status, verifiedAt: phone.verifiedAt },
+    },
+    channels: Object.fromEntries(SICKNESS_NOTIFICATION_CHANNELS.map((channel) => [
+      channel,
+      Boolean(row?.[`${channel}Enabled`]),
+    ])),
+    quietHours: { earliestTime: isTime(row?.earliestTime) ? row.earliestTime : "08:00" },
+    verificationSentAt: personalEmailIsoTimestamp(row?.verificationSentAt),
+    verificationExpiresAt: personalEmailIsoTimestamp(row?.verificationExpiresAt),
+    createdAt: personalEmailIsoTimestamp(row?.createdAt),
+    updatedAt: personalEmailIsoTimestamp(row?.updatedAt),
+  };
+}
+
+async function verifiedPersonalNotificationTarget(employeeNumber, channel, { requireEnabled = true } = {}) {
+  const normalizedChannel = normalizePersonalNotificationChannel(channel);
+  const target = personalNotificationTargetForChannel(normalizedChannel);
+  const reconciled = await reconcilePersonalNotificationTargets(employeeNumber);
+  const state = personalNotificationTargetState(reconciled.row, reconciled.targets, target);
+  if (!state.verified || !state.value) return null;
+  if (requireEnabled && !Boolean(reconciled.row?.[`${normalizedChannel}Enabled`])) return null;
+  return {
+    channel: normalizedChannel,
+    target,
+    destination: state.value,
+    fingerprint: state.fingerprint,
+    earliestTime: isTime(reconciled.row?.earliestTime) ? reconciled.row.earliestTime : "08:00",
+  };
 }
 
 async function queueExternalStaffingAlerts(caseRow, recipients, reportedAt = new Date().toISOString()) {
-  let queued = 0;
-  for (const recipient of recipients) {
-    const preferences = await sicknessAmuManagementRepository
-      .listActiveNotificationPreferences({ employeeNumber: recipient });
-    for (const preference of preferences) {
-      if (
-        !SICKNESS_NOTIFICATION_CHANNELS.includes(preference.channel)
-        || !externalNotificationEventAvailable(preference.channel, "staffing_warning")
-        || !preference.protected_destination
-      ) continue;
-      const destination = parseProtectedJson(preference.protected_destination, sicknessPreferenceProtectionContext(preference)).destination || "";
-      if (!destination) continue;
-      const id = crypto.randomUUID();
-      const notBefore = externalAlertNotBefore({ reportAt: reportedAt, sendAfter: preference.earliest_time || "08:00" }).notBefore;
-      const recipientLookup = sicknessLookup("notification-recipient", recipient);
-      const protectedPayload = protectJson({
-        destination,
-        recipientEmployeeNumber: recipient,
-        sicknessCaseId: Number(caseRow.id),
-      }, outboundNotificationProtectionContext({ id, recipient_lookup: recipientLookup }));
-      const dedupeLookup = sicknessOutboundDedupeLookup(caseRow.id, recipient, preference.channel);
-      const purgeAfter = addDays(notBefore.slice(0, 10), OUTBOUND_NOTIFICATION_RETENTION_DAYS);
-      const entityLookup = sicknessOutboundEntityLookup(caseRow.id);
-      const result = await sicknessAmuManagementRepository.insertOutboundNotificationJob({
-        id,
-        recipientLookup,
-        channel: preference.channel,
-        entityLookup,
-        protectedPayload,
-        notBefore,
-        purgeAfter,
-        dedupeLookup,
-      });
-      if (result.rowsAffected) {
-        queued += 1;
-        continue;
-      }
-      const existing = await sicknessAmuManagementRepository
-        .getOutboundNotificationJobByDedupe({ dedupeLookup });
-      if (!existing || ["pending", "processing"].includes(existing.status)) continue;
-      const rearmedPayload = protectJson({
-        destination,
-        recipientEmployeeNumber: recipient,
-        sicknessCaseId: Number(caseRow.id),
-      }, outboundNotificationProtectionContext(existing));
-      const rearmed = await sicknessAmuManagementRepository.rearmOutboundNotificationJob({
-        recipientLookup,
-        channel: preference.channel,
-        entityLookup,
-        protectedPayload: rearmedPayload,
-        notBefore,
-        purgeAfter,
-        id: existing.id,
-      });
-      if (rearmed.rowsAffected) queued += 1;
-    }
-  }
-  if (queued) auditPortal("system", "protected.external-alerts.queued", "protected_record",
-    protectedPortalEntityId("sickness-case", caseRow.id), JSON.stringify({ queued }));
-  return queued;
+  void caseRow;
+  void recipients;
+  void reportedAt;
+  return 0;
 }
 
 async function processOutboundNotificationJobs(now = new Date()) {
   const due = await customProcessRepository.listDueOutboundJobs({ now: now.toISOString() });
-  let sent = 0;
-  let failed = 0;
   for (const job of due) {
     const claimed = await customProcessRepository.claimOutboundJob({ id: job.id });
     if (!claimed.rowsAffected) continue;
-    try {
-      const payload = parseProtectedJson(job.protected_payload, outboundNotificationProtectionContext(job));
-      if (payload.notificationKind === "custom_process") {
-        const current = await customProcessExternalJobValid(job, payload);
-        if (!current) {
-          await customProcessRepository.cancelOutboundJob({
-            id: job.id,
-            purgeAfter: addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_CANCELLED_RETENTION_DAYS),
-          });
-          continue;
-        }
-        await externalNotificationAdapter.sendProcessAlert({ channel: job.channel, recipient: current.destination });
-        await customProcessRepository.transaction(async (repository) => {
-          await repository.markOutboundJobSent({
-            id: job.id,
-            purgeAfter: addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_RETENTION_DAYS),
-          });
-          await repository.insertAudit({
-            actor: "system",
-            action: "custom-process.external-notification.sent",
-            entityType: "outbound_notification_job",
-            entityId: job.id,
-            detail: JSON.stringify({ channel: job.channel, processId: payload.processId }),
-          });
-        });
-        sent += 1;
-        continue;
-      }
-      if (payload.sicknessCaseId && !await sicknessStaffingAlertIsOpen(payload.sicknessCaseId)) {
-        await customProcessRepository.cancelOutboundJob({
-          id: job.id,
-          purgeAfter: addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_CANCELLED_RETENTION_DAYS),
-        });
-        continue;
-      }
-      await externalNotificationAdapter.sendStaffingAlert({ channel: job.channel, recipient: payload.destination });
-      await customProcessRepository.markOutboundJobSent({
-        id: job.id,
-        purgeAfter: addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_RETENTION_DAYS),
-      });
-      auditPortal("system", "protected.external-alert.sent", "outbound_notification_job", job.id, JSON.stringify({ channel: job.channel }));
-      sent += 1;
-    } catch (error) {
-      const attempts = Number(job.attempts || 0) + 1;
-      const retryMinutes = [5, 15, 60, 180][Math.min(attempts - 1, 3)];
-      const nextStatus = attempts >= 5 ? "failed" : "pending";
-      const nextAttempt = new Date(now.getTime() + retryMinutes * 60 * 1000).toISOString();
-      await customProcessRepository.markOutboundJobFailed({
-        id: job.id,
-        status: nextStatus,
-        attempts,
-        errorCode: String(error.code || "EXTERNAL_NOTIFICATION_DELIVERY_FAILED").slice(0, 120),
-        notBefore: nextAttempt,
-        purgeAfter: addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_RETENTION_DAYS),
-      });
-      auditPortal("system", "protected.external-alert.failed", "outbound_notification_job", job.id,
-        JSON.stringify({ channel: job.channel, code: String(error.code || "delivery_failed"), final: nextStatus === "failed" }));
-      failed += 1;
-    }
+    await customProcessRepository.cancelOutboundJob({
+      id: job.id,
+      purgeAfter: addDays(viennaTodayIso(), OUTBOUND_NOTIFICATION_CANCELLED_RETENTION_DAYS),
+    });
   }
-  return { checked: due.length, sent, failed };
+  return { checked: due.length, sent: 0, failed: 0 };
 }
 
 async function purgeExpiredSicknessData(today = viennaTodayIso()) {
@@ -6545,6 +6898,7 @@ function actorCanWritePersonnelPhone(session) {
 
 function personnelFieldDefaultAccess(role, fieldKey) {
   if (role === "manager" && fieldKey === "phone") return "read";
+  if (["manager", "department_manager"].includes(role) && fieldKey === "privateEmail") return "write";
   return "hidden";
 }
 
@@ -7812,7 +8166,7 @@ const timeEntryLabels = {
   break_end: "Weiter",
   clock_out: "Gehen",
 };
-const TIME_EVALUATION_VERSION = "v1";
+const TIME_EVALUATION_VERSION = "v2";
 
 function timeEntryStateFromType(type) {
   if (type === "clock_in" || type === "break_end") return "working";
@@ -7851,6 +8205,8 @@ function parseTimeEntrySequence(entries, date, now = new Date()) {
   const errors = [];
   let state = "off";
   let workingFrom = null;
+  let breakFrom = null;
+  let completedBreakMilliseconds = 0;
   let firstTimestamp = null;
   let lastTimestamp = null;
   for (const entry of ordered) {
@@ -7870,16 +8226,24 @@ function parseTimeEntrySequence(entries, date, now = new Date()) {
       continue;
     }
     if (!firstTimestamp && type === "clock_in") firstTimestamp = timestamp;
-    if (type === "clock_in" || type === "break_end") {
+    if (type === "clock_in") {
+      workingFrom = timestamp;
+      state = "working";
+    } else if (type === "break_end") {
+      if (breakFrom) completedBreakMilliseconds += Math.max(0, timestamp - breakFrom);
+      breakFrom = null;
       workingFrom = timestamp;
       state = "working";
     } else if (type === "break_start") {
       if (workingFrom) segments.push({ start: workingFrom, end: timestamp });
       workingFrom = null;
+      breakFrom = timestamp;
       state = "paused";
     } else if (type === "clock_out") {
       if (state === "working" && workingFrom) segments.push({ start: workingFrom, end: timestamp });
+      if (state === "paused" && breakFrom) completedBreakMilliseconds += Math.max(0, timestamp - breakFrom);
       workingFrom = null;
+      breakFrom = null;
       state = "off";
     }
     lastTimestamp = timestamp;
@@ -7889,6 +8253,9 @@ function parseTimeEntrySequence(entries, date, now = new Date()) {
   const effectiveEnd = ongoing ? now : lastTimestamp;
   const workedMilliseconds = segments.reduce((sum, segment) => sum + Math.max(0, segment.end - segment.start), 0);
   const presenceMilliseconds = firstTimestamp && effectiveEnd ? Math.max(0, effectiveEnd - firstTimestamp) : 0;
+  const ongoingBreakMilliseconds = ongoing && state === "paused" && breakFrom && now > breakFrom
+    ? now - breakFrom
+    : 0;
   return {
     state,
     ongoing,
@@ -7897,7 +8264,7 @@ function parseTimeEntrySequence(entries, date, now = new Date()) {
     errors,
     workedMinutes: Math.floor(workedMilliseconds / 60000),
     presenceMinutes: Math.floor(presenceMilliseconds / 60000),
-    breakMinutes: Math.max(0, Math.floor((presenceMilliseconds - workedMilliseconds) / 60000)),
+    breakMinutes: Math.floor((completedBreakMilliseconds + ongoingBreakMilliseconds) / 60000),
     firstTimestamp: firstTimestamp?.toISOString() || null,
     lastTimestamp: lastTimestamp?.toISOString() || null,
   };
@@ -7938,14 +8305,19 @@ async function plannedMinutesForEmployeeDate(employeeNumber, date, locationId, d
 function actualDayMetrics(entries, date, settings, now = new Date()) {
   const parsed = parseTimeEntrySequence(entries, date, now);
   let eligibleSaturdayMinutes = 0;
+  let effectiveSaturdayFactor = 1;
   const isSaturday = new Date(`${date}T12:00:00Z`).getUTCDay() === 6;
-  if (isSaturday && settingEnabled(settings, "saturday_bonus_enabled") && isTime(settings.saturday_bonus_from)) {
-    const bonusFrom = viennaLocalDateTime(date, settings.saturday_bonus_from);
+  if (isSaturday && settingEnabled(settings, "saturday_bonus_enabled")) {
+    const saturdayBonus = saturdayBonusSettings(settings);
+    effectiveSaturdayFactor = saturdayBonus.factor;
+    const bonusFrom = viennaLocalDateTime(date, saturdayBonus.from);
     eligibleSaturdayMinutes = Math.floor(parsed.segments.reduce((sum, segment) => (
       sum + Math.max(0, segment.end - (segment.start > bonusFrom ? segment.start : bonusFrom))
     ), 0) / 60000);
   }
-  const saturdayBonusMinutes = Math.round(eligibleSaturdayMinutes * Math.max(0, Number(settings.saturday_bonus_factor || 1) - 1));
+  const saturdayBonusMinutes = Math.max(0, finiteScheduleMinutes(
+    Math.round(eligibleSaturdayMinutes * Math.max(0, effectiveSaturdayFactor - 1)),
+  ));
   return {
     ...parsed,
     saturdayEligibleMinutes: eligibleSaturdayMinutes,
@@ -7960,10 +8332,22 @@ async function excusedTimeForEmployeeDate(
   locationId,
   activeSickness = null,
   repository = timeTrackingRepository,
+  employee = null,
 ) {
   const options = await repository.listExcusedOptions({ employeeNumber, date });
+  const allDayOptions = options.filter(optionIsAllDay);
+  const holidayWeekday = ![0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay());
+  const holidayCreditedMinutes = holidayWeekday ? holidayCreditMinutes(employee || {}) : 0;
+  const holidayResult = () => ({
+    excused: true,
+    label: "Feiertag",
+    options,
+    creditedMinutes: holidayCreditedMinutes,
+  });
+  const isHoliday = isVacationHoliday(date, locationId);
   if ((activeSickness || await activeSicknessEmployeeNumbers(date)).has(employeeNumber)) {
     const credit = await sicknessCreditForEmployeeDate(employeeNumber, date);
+    if (credit.minutes <= 0 && isHoliday && holidayCreditedMinutes > 0) return holidayResult();
     return {
       excused: true,
       label: "Krankenstand",
@@ -7973,7 +8357,19 @@ async function excusedTimeForEmployeeDate(
       valuationVersion: credit.valuationVersion,
     };
   }
-  const allDayOptions = options.filter((option) => Boolean(option.all_day));
+  const optionCreditMinutes = allDayOptions.reduce((highestCredit, option) => {
+    if (!payrollOptionCreditedOnDate(option, date, locationId)) return highestCredit;
+    return Math.max(highestCredit, optionMinutesPerDay(option, employee?.contracted_hours));
+  }, 0);
+  if (optionCreditMinutes > 0) {
+    return {
+      excused: true,
+      label: allDayOptions.map((option) => optionLabel(option.option_type)).join(", "),
+      options,
+      creditedMinutes: optionCreditMinutes,
+    };
+  }
+  if (isHoliday) return holidayResult();
   if (allDayOptions.length) {
     return {
       excused: true,
@@ -7982,7 +8378,6 @@ async function excusedTimeForEmployeeDate(
       creditedMinutes: 0,
     };
   }
-  if (isVacationHoliday(date, locationId)) return { excused: true, label: "Feiertag", options: [], creditedMinutes: 0 };
   return { excused: false, label: "", options, creditedMinutes: 0 };
 }
 
@@ -8084,6 +8479,7 @@ async function evaluateTimeDay(
     evaluationLocationId,
     evaluationOptions.activeSickness || null,
     repository,
+    context.employee,
   );
   const today = viennaTodayIso(now);
   const isPast = date < today;
@@ -8092,8 +8488,10 @@ async function evaluateTimeDay(
   const todayAfterPlannedEnd = date === today && plannedEndTime && viennaNowLocal(now).slice(11, 16) >= plannedEndTime;
   const bookingWindowEnded = isPast || todayAfterPlannedEnd;
   const toleranceMinutes = Math.max(0, Number(location.time_tracking_variance_minutes ?? 15));
+  const absenceCreditedMinutes = Math.max(0, finiteScheduleMinutes(excused.creditedMinutes));
   const differenceMinutes = actual.workedMinutes - planned.netMinutes;
-  const valuedDifferenceMinutes = actual.valuedMinutes - planned.valuedMinutes;
+  const valuedMinutes = actual.valuedMinutes + absenceCreditedMinutes;
+  const valuedDifferenceMinutes = valuedMinutes - planned.valuedMinutes;
   const requiredBreakMinutes = settingEnabled(settings, "break_rule_enabled")
     && actual.workedMinutes > Number(settings.break_after_minutes || 0)
     ? Number(settings.break_duration_minutes || 0)
@@ -8168,7 +8566,7 @@ async function evaluateTimeDay(
     severity,
     issues,
     excused,
-    absenceCreditedMinutes: Number(excused.creditedMinutes || 0),
+    absenceCreditedMinutes,
     pendingCorrection,
     planned,
     actual,
@@ -8181,6 +8579,7 @@ async function evaluateTimeDay(
     differenceMinutes,
     plannedValuedMinutes: planned.valuedMinutes,
     actualValuedMinutes: actual.valuedMinutes,
+    valuedMinutes,
     valuedDifferenceMinutes,
     breakMinutes: actual.breakMinutes,
     requiredBreakMinutes,
@@ -8592,7 +8991,10 @@ async function setTimeDayReview(session, context, employeeNumber, date, body = {
     plannedMinutes: evaluation.plannedMinutes,
     actualMinutes: evaluation.actualMinutes,
     actualValuedMinutes: evaluation.actualValuedMinutes,
+    absenceCreditedMinutes: evaluation.absenceCreditedMinutes,
+    valuedMinutes: evaluation.valuedMinutes,
     differenceMinutes: evaluation.differenceMinutes,
+    valuedDifferenceMinutes: evaluation.valuedDifferenceMinutes,
     issues: evaluation.issues.map((issue) => issue.code),
   };
   await timeTrackingRepository.upsertDayReview({
@@ -8748,12 +9150,15 @@ async function timeSummaryForEmployee(employeeNumber, dateFrom, dateTo, period =
     differenceMinutes: result.differenceMinutes + day.differenceMinutes,
     plannedValuedMinutes: result.plannedValuedMinutes + day.plannedValuedMinutes,
     actualValuedMinutes: result.actualValuedMinutes + day.actualValuedMinutes,
+    absenceCreditedMinutes: result.absenceCreditedMinutes + day.absenceCreditedMinutes,
+    valuedMinutes: result.valuedMinutes + day.valuedMinutes,
     valuedDifferenceMinutes: result.valuedDifferenceMinutes + day.valuedDifferenceMinutes,
     breakMinutes: result.breakMinutes + day.breakMinutes,
     saturdayBonusMinutes: result.saturdayBonusMinutes + day.saturdayBonusMinutes,
   }), {
     plannedMinutes: 0, actualMinutes: 0, differenceMinutes: 0,
-    plannedValuedMinutes: 0, actualValuedMinutes: 0, valuedDifferenceMinutes: 0,
+    plannedValuedMinutes: 0, actualValuedMinutes: 0, absenceCreditedMinutes: 0,
+    valuedMinutes: 0, valuedDifferenceMinutes: 0,
     breakMinutes: 0, saturdayBonusMinutes: 0,
   });
   return {
@@ -13767,28 +14172,92 @@ function optionMinutesPerDay(option, contractedHours) {
   return Math.max(0, Number(option.credited_minutes_per_day || 0));
 }
 
-function vacationDayCount(dateFrom, dateTo, settings = getSettings(), locationId = null) {
+function vacationDayCount(dateFrom, dateTo, locationId = null) {
   let days = 0;
-  const countSaturday = settingEnabled(settings, "vacation_count_saturday");
   for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
     const day = new Date(`${date}T12:00:00Z`).getUTCDay();
-    if (day === 0) continue;
-    if (day === 6 && !countSaturday) continue;
+    if (day === 0 || day === 6) continue;
     if (isVacationHoliday(date, locationId)) continue;
     days += 1;
   }
   return days;
 }
 
-function countCreditedOptionDays(option, settings = getSettings(), locationId = null) {
-  if (option.option_type === "vacation") {
-    return vacationDayCount(option.date_from, option.date_to, settings, locationId);
+function countCreditedOptionDaysInRange(
+  option,
+  rangeStart,
+  rangeEnd,
+  locationId = null,
+) {
+  return creditedOptionDatesInRange(
+    option,
+    rangeStart,
+    rangeEnd,
+    locationId,
+  ).length;
+}
+
+function creditedOptionDatesInRange(
+  option,
+  rangeStart,
+  rangeEnd,
+  locationId = null,
+) {
+  const optionStart = String(option?.date_from || "");
+  const optionEnd = String(option?.date_to || "");
+  if (!isIsoDate(optionStart) || !isIsoDate(optionEnd) || optionEnd < optionStart) return [];
+  const dateFrom = optionStart < rangeStart ? rangeStart : optionStart;
+  const dateTo = optionEnd > rangeEnd ? rangeEnd : optionEnd;
+  if (dateTo < dateFrom) return [];
+  const dates = [];
+  for (let date = dateFrom; date <= dateTo; date = addDays(date, 1)) {
+    if (option.option_type === "vacation") {
+      if (vacationDayCount(date, date, locationId) === 1) dates.push(date);
+      continue;
+    }
+    if (new Date(`${date}T12:00:00Z`).getUTCDay() !== 0) dates.push(date);
   }
-  let days = 0;
-  for (let date = option.date_from; date <= option.date_to; date = addDays(date, 1)) {
-    if (new Date(`${date}T12:00:00Z`).getUTCDay() !== 0) days += 1;
+  return optionIsAllDay(option) && alwaysFullDayOptionTypes.has(option.option_type)
+    ? dates.slice(0, 5)
+    : dates;
+}
+
+function claimEmployeeDate(
+  employeeNumber,
+  date,
+  blockedEmployeeDates,
+  claimedEmployeeDates,
+) {
+  if (!isIsoDate(date)) return false;
+  const key = `${employeeNumber}|${date}`;
+  if (blockedEmployeeDates.has(key) || claimedEmployeeDates.has(key)) return false;
+  claimedEmployeeDates.add(key);
+  return true;
+}
+
+function claimCreditedOptionDaysInRange(
+  option,
+  rangeStart,
+  rangeEnd,
+  locationId,
+  blockedEmployeeDates,
+  claimedEmployeeDates,
+) {
+  let claimed = 0;
+  for (const date of creditedOptionDatesInRange(
+    option,
+    rangeStart,
+    rangeEnd,
+    locationId,
+  )) {
+    if (claimEmployeeDate(
+      option.employee_number,
+      date,
+      blockedEmployeeDates,
+      claimedEmployeeDates,
+    )) claimed += 1;
   }
-  return optionIsAllDay(option) && alwaysFullDayOptionTypes.has(option.option_type) ? Math.min(days, 5) : days;
+  return claimed;
 }
 
 function hasNonVacationCreditOnDate(options, employeeNumber, date) {
@@ -14506,7 +14975,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     weekStart,
     weekEnd,
   };
-  const [employeeRows, shiftRows, weekOptions] = await Promise.all([
+  const [employeeRows, shiftRows, storedWeekOptions] = await Promise.all([
     planningSettingsRepository.listScheduleEmployees(planningQuery),
     planningSettingsRepository.listScheduleShifts(planningQuery),
     planningSettingsRepository.listScheduleWeekOptions(planningQuery),
@@ -14515,6 +14984,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
   const shifts = await Promise.all(
     shiftRows.map(async (shift) => ({ ...shift, ...await shiftMetrics(shift, settings) })),
   );
+  const weekOptions = storedWeekOptions.map((option) => ({ ...option }));
   const visibleEmployeeNumbers = new Set(employees.map((employee) => employee.personnel_number));
   const pendingTimeOff = (await absenceManagementRepository.pendingTimeOffForRange({
     dateFrom: weekStart,
@@ -14570,14 +15040,33 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
       minuteBasis.bonusMinutes,
     );
   }
+  const scheduledEmployeeDates = new Set(
+    shifts.map((shift) => `${shift.employee_number}|${shift.shift_date}`),
+  );
+  const claimedOptionDates = new Set();
   for (const option of weekOptions) {
     option.credited_minutes_per_day_effective = Math.max(
       0,
       finiteScheduleMinutes(optionMinutesPerDay(option, option.contracted_hours)),
     );
+    const creditedDays = optionIsAllDay(option) && option.credited_minutes_per_day_effective > 0
+      ? claimCreditedOptionDaysInRange(
+        option,
+        weekStart,
+        weekEnd,
+        context.locationId,
+        scheduledEmployeeDates,
+        claimedOptionDates,
+      )
+      : countCreditedOptionDaysInRange(
+        option,
+        weekStart,
+        weekEnd,
+        context.locationId,
+      );
     option.credited_minutes = option.credited_minutes_per_day_effective * Math.max(
       0,
-      finiteScheduleMinutes(countCreditedOptionDays(option, settings, context.locationId)),
+      finiteScheduleMinutes(creditedDays),
     );
     optionCreditTotals[option.employee_number] = addScheduleMinutes(
       optionCreditTotals[option.employee_number],
@@ -14587,9 +15076,28 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
       totals[option.employee_number],
       option.credited_minutes,
     );
+    if (!optionIsAllDay(option) && option.credited_minutes > 0) {
+      for (const date of creditedOptionDatesInRange(
+        option,
+        weekStart,
+        weekEnd,
+        context.locationId,
+      )) claimedOptionDates.add(`${option.employee_number}|${date}`);
+    }
   }
+  const sicknessBlockedDates = new Set([
+    ...scheduledEmployeeDates,
+    ...claimedOptionDates,
+  ]);
+  const claimedSicknessDates = new Set();
   for (const credit of sicknessCredits) {
     const creditMinutes = Math.max(0, finiteScheduleMinutes(credit.minutes));
+    if (creditMinutes === 0 || !claimEmployeeDate(
+      credit.employee_number,
+      credit.date,
+      sicknessBlockedDates,
+      claimedSicknessDates,
+    )) continue;
     sicknessCreditTotals[credit.employee_number] = addScheduleMinutes(
       sicknessCreditTotals[credit.employee_number],
       creditMinutes,
@@ -14609,6 +15117,8 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     const day = new Date(`${holiday.date}T12:00:00Z`).getUTCDay();
     if (day === 0 || day === 6) continue;
     for (const employee of employees) {
+      const employeeDate = `${employee.personnel_number}|${holiday.date}`;
+      if (scheduledEmployeeDates.has(employeeDate) || claimedSicknessDates.has(employeeDate)) continue;
       if (hasNonVacationCreditOnDate(weekOptions, employee.personnel_number, holiday.date)) continue;
       const credit = Math.max(0, finiteScheduleMinutes(holidayCreditMinutes(employee)));
       optionCreditTotals[employee.personnel_number] = addScheduleMinutes(optionCreditTotals[employee.personnel_number], credit);
@@ -14621,6 +15131,8 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     const day = new Date(`${block.block_date}T12:00:00Z`).getUTCDay();
     if (day === 0 || day === 6) continue;
     for (const employee of employees) {
+      const employeeDate = `${employee.personnel_number}|${block.block_date}`;
+      if (scheduledEmployeeDates.has(employeeDate) || claimedSicknessDates.has(employeeDate)) continue;
       if (hasNonVacationCreditOnDate(weekOptions, employee.personnel_number, block.block_date)) continue;
       const credit = Math.max(0, finiteScheduleMinutes(holidayCreditMinutes(employee)));
       optionCreditTotals[employee.personnel_number] = addScheduleMinutes(optionCreditTotals[employee.personnel_number], credit);
@@ -14758,7 +15270,7 @@ async function getVacationPlan(yearValue, contextInput = {}, session = null) {
       const clippedTo = vacation.date_to > yearEnd ? yearEnd : vacation.date_to;
       return {
         ...vacation,
-        days: vacationDayCount(clippedFrom, clippedTo, settings, context.locationId),
+        days: vacationDayCount(clippedFrom, clippedTo, context.locationId),
         calendar_days: daysBetweenInclusive(clippedFrom, clippedTo),
       };
     })
@@ -14772,7 +15284,7 @@ async function getVacationPlan(yearValue, contextInput = {}, session = null) {
       const clippedFrom = vacation.date_from < yearStart ? yearStart : vacation.date_from;
       const clippedTo = vacation.date_to > consumedEnd ? consumedEnd : vacation.date_to;
       consumedByEmployee[vacation.employee_number] =
-        (consumedByEmployee[vacation.employee_number] || 0) + vacationDayCount(clippedFrom, clippedTo, settings, context.locationId);
+        (consumedByEmployee[vacation.employee_number] || 0) + vacationDayCount(clippedFrom, clippedTo, context.locationId);
     }
   }
   const totals = Object.fromEntries(
@@ -14894,12 +15406,11 @@ async function getCentralVacationPlan(yearValue, filters = {}) {
   const vacations = (await Promise.all([...grouped.values()].map(async (vacation) => {
     const employee = employeeLookup.get(vacation.employee_number);
     const employeeLocationId = employee?.home_location_id || null;
-    const settings = employeeLocationId ? await settingsForLocation(employeeLocationId) : getSettings();
     const clippedFrom = vacation.date_from < yearStart ? yearStart : vacation.date_from;
     const clippedTo = vacation.date_to > yearEnd ? yearEnd : vacation.date_to;
     return {
       ...vacation,
-      days: vacationDayCount(clippedFrom, clippedTo, settings, employeeLocationId),
+      days: vacationDayCount(clippedFrom, clippedTo, employeeLocationId),
       calendar_days: daysBetweenInclusive(clippedFrom, clippedTo),
     };
   }))).sort((left, right) => left.date_from.localeCompare(right.date_from)
@@ -14911,11 +15422,10 @@ async function getCentralVacationPlan(yearValue, filters = {}) {
     const planned = employeeVacations.reduce((sum, vacation) => sum + Number(vacation.days || 0), 0);
     let consumed = 0;
     if (consumedEnd) {
-      const settings = employee.home_location_id ? await settingsForLocation(employee.home_location_id) : getSettings();
       for (const vacation of employeeVacations.filter((entry) => entry.date_from <= consumedEnd)) {
         const from = vacation.date_from < yearStart ? yearStart : vacation.date_from;
         const to = vacation.date_to > consumedEnd ? consumedEnd : vacation.date_to;
-        if (to >= from) consumed += vacationDayCount(from, to, settings, employee.home_location_id || null);
+        if (to >= from) consumed += vacationDayCount(from, to, employee.home_location_id || null);
       }
     }
     const entitlement = Number(entitlements[employee.personnel_number] || 0);
@@ -15577,7 +16087,7 @@ function serverDiagnostics() {
     const message = hostSecurity.pendingConfirmation
       ? "Eine Host-Sicherheitstransaktion wartet auf die Bestätigung aus einer zweiten SSH-Sitzung oder wird automatisch zurückgesetzt."
       : hostSecurity.rebootRequired
-        ? "Für eingespielte Ubuntu-Sicherheitsaktualisierungen ist ein kontrollierter Neustart im Wartungsfenster erforderlich."
+        ? "Für eingespielte Ubuntu-Sicherheitsaktualisierungen ist ein vollständiger kontrollierter Neustart des Ubuntu-VPS im Wartungsfenster erforderlich. Ein Neustart des Grabenplaner-Dienstes genügt nicht."
         : "Mindestens eine redigierte Ubuntu-Host-Sicherheitsprüfung benötigt Aufmerksamkeit.";
     addAlert("HOST_SECURITY_ATTENTION", hostSecurity.state === "error" ? "critical" : "warning", "Ubuntu-Host-Sicherheit prüfen", message, "security");
   }
@@ -16777,9 +17287,9 @@ const payrollAbsenceCodeByOption = Object.freeze({
   other: "other",
 });
 
-function payrollOptionCreditedOnDate(option, date, settings, locationId) {
+function payrollOptionCreditedOnDate(option, date, locationId) {
   if (!optionIsAllDay(option)) return true;
-  if (option.option_type === "vacation") return vacationDayCount(date, date, settings, locationId) === 1;
+  if (option.option_type === "vacation") return vacationDayCount(date, date, locationId) === 1;
   const day = new Date(`${date}T12:00:00Z`).getUTCDay();
   if (day === 0) return false;
   if (!alwaysFullDayOptionTypes.has(option.option_type)) return true;
@@ -16794,12 +17304,11 @@ async function payrollAbsencesForDay(employee, date, locationId, activeSickness 
   const employeeNumber = employee.personnel_number;
   if (String(employee.home_location_id || "") !== String(locationId || "")) return [];
   if (departmentId && Number(employee.preferred_department_id || 0) !== Number(departmentId)) return [];
-  const settings = await settingsForLocation(locationId);
   const rows = await integrationRuntimeRepository.listPayrollAbsencesForDay({
     employeeNumber,
     date,
   });
-  const absences = rows.filter((row) => payrollOptionCreditedOnDate(row, date, settings, locationId)).map((row) => {
+  const absences = rows.filter((row) => payrollOptionCreditedOnDate(row, date, locationId)).map((row) => {
     const internalCode = payrollAbsenceCodeByOption[row.option_type] || "other";
     const quantityMinutes = !row.all_day && isTime(row.start_time) && isTime(row.end_time)
       ? Math.max(0, timeToMinutes(row.end_time) - timeToMinutes(row.start_time))
@@ -16826,9 +17335,9 @@ async function payrollAbsencesForDay(employee, date, locationId, activeSickness 
       unit: "days", allDay: true, startTime: "", endTime: "",
     });
   }
-  const holidayCredited = weekDay >= 1 && weekDay <= 5
-    || (weekDay === 6 && settingEnabled(settings, "vacation_count_saturday"));
-  if (employee.active && holidayCredited && isVacationHoliday(date, locationId)) {
+  const holidayCredited = weekDay >= 1 && weekDay <= 5;
+  const hasCreditedAbsence = absences.some((absence) => Number(absence.quantityMinutes || 0) > 0);
+  if (employee.active && holidayCredited && !hasCreditedAbsence && isVacationHoliday(date, locationId)) {
     absences.push({
       internalCode: "public_holiday", referenceType: "public_holiday", referenceId: null,
       quantityMinutes: Math.round((Number(employee.contracted_hours || 0) * 60) / 5), quantityDays: 1,
@@ -19032,6 +19541,9 @@ function verifyImportedProtectedPersonnelPayloads(inspection) {
     );
     const parsed = JSON.parse(payload);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected personnel profile payload");
+    if (parsed.privateEmail && !normalizePersonalEmailAddress(parsed.privateEmail)) {
+      throw new Error("invalid protected personnel profile email address");
+    }
     verified += 1;
   }
   for (const document of protectedRows.personnelDocuments || []) {
@@ -19086,16 +19598,6 @@ function verifyImportedProtectedPersonnelPayloads(inspection) {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected sickness case payload");
     verified += 1;
   }
-  for (const preference of protectedRows.sicknessPreferences || []) {
-    const payload = storage.unprotectRecord(
-      preference.protected_destination,
-      sicknessPreferenceProtectionContext(preference),
-      { allowLegacy: true },
-    );
-    const parsed = JSON.parse(payload);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected notification destination");
-    verified += 1;
-  }
   for (const job of protectedRows.outboundNotificationJobs || []) {
     if (!job.protected_payload) throw new Error("missing protected outbound notification payload");
     const payload = storage.unprotectRecord(
@@ -19104,7 +19606,10 @@ function verifyImportedProtectedPersonnelPayloads(inspection) {
       { allowLegacy: true },
     );
     const parsed = JSON.parse(payload);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected outbound notification payload");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)
+      || Object.hasOwn(parsed, "destination")) {
+      throw new Error("invalid protected outbound notification payload");
+    }
     verified += 1;
   }
   return verified;
@@ -19379,8 +19884,11 @@ async function privacyRequestExportBundle(state) {
     data: {},
   };
   if (scope.has("personnel_master_data") || scope.has("all_personal_data")) {
-    const employee = await governanceStoreRepository.privacyExportEmployee(employeeNumber);
-    const sensitive = await personnelSensitiveProfile(employeeNumber);
+    const [employee, sensitive, personalNotificationContact] = await Promise.all([
+      governanceStoreRepository.privacyExportEmployee(employeeNumber),
+      personnelSensitiveProfile(employeeNumber),
+      personalNotificationPrivacyExport(employeeNumber),
+    ]);
     bundle.data.personnelMasterData = employee ? {
       ...employee,
       sensitiveProfile: {
@@ -19395,6 +19903,7 @@ async function privacyRequestExportBundle(state) {
         privateEmail: sensitive.privateEmail,
         employment: sensitive.employment,
       },
+      personalNotificationContact,
     } : null;
   }
   if (scope.has("time_records") || scope.has("all_personal_data")) {
@@ -22067,6 +22576,13 @@ app.post("/api/employees", async (request, response) => {
     if (isUniquePersistenceViolation(error)) throw httpError(409, "Diese Personalnummer ist bereits vergeben.");
     throw error;
   }
+  if (personalNotificationMasterFieldsChanged(personnelRecordMutation?.changedFields)) {
+    await reconcilePersonalNotificationTargets(
+      employee.personnelNumber,
+      null,
+      request.portalSession?.employeeNumber || "local",
+    );
+  }
   await refreshConfiguredAdminSnapshot();
   auditPortal(request.portalSession?.employeeNumber || "local", "employee.create", "employee", employee.personnelNumber,
     JSON.stringify({
@@ -22147,6 +22663,13 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
     }
     await persistPersonnelRecordMutationWithRepository(organization, personnelRecordMutation, "update");
   });
+  if (personalNotificationMasterFieldsChanged(personnelRecordMutation?.changedFields)) {
+    await reconcilePersonalNotificationTargets(
+      personnelNumber,
+      null,
+      request.portalSession?.employeeNumber || "local",
+    );
+  }
   await refreshConfiguredAdminSnapshot();
   auditPortal(request.portalSession?.employeeNumber || "local", "employee.update", "employee", personnelNumber,
     JSON.stringify({
@@ -24172,40 +24695,10 @@ async function customProcessExternalJobValid(
   payload,
   repository = customProcessRepository,
 ) {
-  const run = await repository.openRunForExternalJob({
-    runId: payload.runId,
-    processId: payload.processId,
-  });
-  if (!run || Number(run.process_revision) !== Number(payload.processRevision)
-      || Number(run.activation_count || 1) !== Number(payload.activationCount || 1)) return null;
-  const bundle = await customProcessRunBundle(run, repository);
-  if (!bundle) return null;
-  const step = bundle.dto.steps.find((entry) => entry.id === payload.stepId);
-  if (!step?.notificationChannels?.includes(job.channel)) return null;
-  const runStep = await repository.runStepById({
-    runId: run.id,
-    stepId: step.id,
-  });
-  if (runStep?.status !== "active") return null;
-  if (!(await customProcessRecipients(bundle, step, run, repository))
-    .includes(String(payload.recipientEmployeeNumber))) return null;
-  const preference = await repository.notificationPreference({
-    employeeNumber: payload.recipientEmployeeNumber,
-    channel: job.channel,
-  });
-  if (!preference?.process_notifications_enabled || !preference?.verified_at) return null;
-  if (!preference?.protected_destination || String(preference.updated_at || "") !== String(payload.preferenceRevision || "")) return null;
-  let destination = "";
-  try {
-    destination = parseProtectedJson(
-      preference.protected_destination,
-      sicknessPreferenceProtectionContext(preference),
-    ).destination || "";
-  } catch {
-    return null;
-  }
-  if (!destination || destination !== payload.destination) return null;
-  return { destination, bundle, run, step };
+  void job;
+  void payload;
+  void repository;
+  return null;
 }
 
 async function queueCustomProcessExternalNotification(
@@ -24216,55 +24709,13 @@ async function queueCustomProcessExternalNotification(
   channel,
   repository = customProcessRepository,
 ) {
-  const preference = await repository.notificationPreference({
-    employeeNumber: recipient,
-    channel,
-  });
-  if (!preference?.process_notifications_enabled || !preference?.verified_at) {
-    return { queued: false, blocked: true };
-  }
-  if (
-    !externalNotificationEventAvailable(channel, "process_notification")
-    || !preference?.protected_destination
-  ) return { queued: false, blocked: true };
-  let destination = "";
-  try {
-    destination = parseProtectedJson(
-      preference.protected_destination,
-      sicknessPreferenceProtectionContext(preference),
-    ).destination || "";
-  } catch {
-    return { queued: false, blocked: true };
-  }
-  if (!destination) return { queued: false, blocked: true };
-  const id = crypto.randomUUID();
-  const recipientLookup = customProcessLookup("recipient", recipient);
-  const entityLookup = customProcessLookup("run", run.id);
-  const activationCount = Math.max(1, Number(run.activation_count || 1));
-  const dedupeLookup = customProcessLookup("delivery", `${run.id}:${activationCount}:${step.id}:${recipient}:${channel}`);
-  const notBefore = externalAlertNotBefore({ reportAt: run.created_at, sendAfter: preference.earliest_time || "08:00" }).notBefore;
-  const payload = protectJson({
-    notificationKind: "custom_process",
-    destination,
-    recipientEmployeeNumber: recipient,
-    preferenceRevision: preference.updated_at,
-    processId: bundle.process.id,
-    processRevision: Number(bundle.process.revision),
-    activationCount,
-    runId: run.id,
-    stepId: step.id,
-  }, outboundNotificationProtectionContext({ id, recipient_lookup: recipientLookup }));
-  const inserted = await repository.insertOutboundJob({
-    id,
-    recipientLookup,
-    channel,
-    entityLookup,
-    protectedPayload: payload,
-    notBefore,
-    purgeAfter: addDays(notBefore.slice(0, 10), OUTBOUND_NOTIFICATION_RETENTION_DAYS),
-    dedupeLookup,
-  });
-  return { queued: Boolean(inserted.rowsAffected), blocked: false };
+  void bundle;
+  void run;
+  void step;
+  void recipient;
+  void channel;
+  void repository;
+  return { queued: false, blocked: true };
 }
 
 async function emitCustomProcessStepNotifications(
@@ -29771,27 +30222,71 @@ app.put("/api/portal/v1/me/notifications/read-all", async (request, response) =>
   response.json({ ok: true, updated: Number(result.rowsAffected || 0) });
 });
 
+app.get("/api/portal/v1/me/email-settings", async (request, response) => {
+  const session = requirePersonalEmailPortalSession(request);
+  response.json(await personalNotificationSettings(session.employeeNumber, session));
+});
+
+app.put("/api/portal/v1/me/email-settings/address", async (request, _response) => {
+  requirePersonalEmailPortalSession(request);
+  assertPortalCsrf(request);
+  throw httpError(405, "Benachrichtigungsziele werden im geschuetzten Personalakt gepflegt.",
+    "PERSONAL_NOTIFICATION_TARGET_READ_ONLY");
+});
+
+app.delete("/api/portal/v1/me/email-settings/address", async (request, _response) => {
+  requirePersonalEmailPortalSession(request);
+  assertPortalCsrf(request);
+  throw httpError(405, "Benachrichtigungsziele werden im geschuetzten Personalakt gepflegt.",
+    "PERSONAL_NOTIFICATION_TARGET_READ_ONLY");
+});
+
+app.post("/api/portal/v1/me/email-settings/verification", async (request, response) => {
+  const session = requirePersonalEmailPortalSession(request);
+  assertPortalCsrf(request);
+  response.json(await requestPersonalNotificationVerification(request, session, request.body || {}));
+});
+
+app.post("/api/portal/v1/me/email-settings/verification/confirm", async (request, response) => {
+  const session = requirePersonalEmailPortalSession(request);
+  assertPortalCsrf(request);
+  response.json(await confirmPersonalNotificationVerification(session, request.body || {}));
+});
+
+app.put("/api/portal/v1/me/email-settings/categories", async (request, response) => {
+  const session = requirePersonalEmailPortalSession(request);
+  assertPortalCsrf(request);
+  response.json(await savePersonalNotificationPreferences(session, request.body || {}));
+});
+
 app.get("/api/portal/v1/me/sickness-notification-preferences", async (request, response) => {
-  const session = requirePortalSession(request, "notifications:settings");
+  const session = requirePersonalEmailPortalSession(request);
   response.json(await sicknessNotificationPreferences(session.employeeNumber));
 });
 
-app.put("/api/portal/v1/me/sickness-notification-preferences", async (request, response) => {
-  const session = requirePortalSession(request, "notifications:settings");
+app.put("/api/portal/v1/me/sickness-notification-preferences", async (request, _response) => {
+  const session = requirePersonalEmailPortalSession(request);
+  if (!session.permissions?.includes("notifications:settings")) {
+    throw httpError(403, "Fuer diese Aktion fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
+  }
   assertPortalCsrf(request);
-  response.json(await saveSicknessNotificationPreferences(session.employeeNumber, request.body || {}));
+  throw httpError(
+    409,
+    "Fachliche Benachrichtigungsarten sind noch nicht freigeschaltet.",
+    "NOTIFICATION_EVENT_CATEGORIES_INACTIVE",
+  );
 });
 
 app.post("/api/portal/v1/me/sickness-notification-preferences/verification", async (request, response) => {
-  const session = requirePortalSession(request, "notifications:settings");
+  const session = requirePersonalEmailPortalSession(request);
   assertPortalCsrf(request);
-  response.json(await requestSicknessNotificationVerification(session.employeeNumber, request.body || {}));
+  response.json(await requestPersonalNotificationVerification(request, session, request.body || {}));
 });
 
 app.post("/api/portal/v1/me/sickness-notification-preferences/verification/confirm", async (request, response) => {
-  const session = requirePortalSession(request, "notifications:settings");
+  const session = requirePersonalEmailPortalSession(request);
   assertPortalCsrf(request);
-  response.json(await confirmSicknessNotificationVerification(session.employeeNumber, request.body || {}));
+  response.json(await confirmPersonalNotificationVerification(session, request.body || {}));
 });
 
 app.get("/api/portal/v1/me/sickness-cases", async (request, response) => {
@@ -30349,6 +30844,9 @@ app.put("/api/portal/v1/personnel-records/:employeeNumber", async (request, resp
       throw httpError(409, "Diese SV-Nummer ist bereits einem anderen Personalakt zugeordnet.", "PERSONNEL_SOCIAL_SECURITY_DUPLICATE");
     }
     throw error;
+  }
+  if (personalNotificationMasterFieldsChanged(changedFields)) {
+    await reconcilePersonalNotificationTargets(employeeNumber, null, session.employeeNumber);
   }
   auditPortal(session.employeeNumber, "personnel-record.update", "employee", employeeNumber,
     JSON.stringify({ fields: changedFields }));
@@ -33508,6 +34006,8 @@ app.get("/api/portal/v1/time-summary", async (request, response) => {
         differenceMinutes: summary.differenceMinutes,
         plannedValuedMinutes: summary.plannedValuedMinutes,
         actualValuedMinutes: summary.actualValuedMinutes,
+        absenceCreditedMinutes: summary.absenceCreditedMinutes,
+        valuedMinutes: summary.valuedMinutes,
         valuedDifferenceMinutes: summary.valuedDifferenceMinutes,
         breakMinutes: summary.breakMinutes,
         saturdayBonusMinutes: summary.saturdayBonusMinutes,
@@ -34447,7 +34947,6 @@ app.put("/api/settings", async (request, response) => {
     external_backup_enabled: externalBackupEnabled ? "1" : "0",
     backup_directory: backupDirectory.stored,
     backup_interval_hours: String(backupIntervalHours),
-    vacation_count_saturday: body.vacationCountSaturday === true ? "1" : "0",
     vacation_pdf_size: "A4",
     current_week_auto_lock: body.currentWeekAutoLock === false ? "0" : "1",
     current_week_lock_mode: currentWeekLockMode,
@@ -35017,22 +35516,56 @@ app.post("/api/schedule/auto", async (request, response) => {
         (totals[shift.employee_number] || 0) + (await shiftMetrics(shift, settings)).counted_minutes;
       if (dayLoads[shift.shift_date] !== undefined) dayLoads[shift.shift_date] += 1;
     }
+    const claimedOptionDates = new Set();
     for (const option of options) {
+      const creditedMinutesPerDay = optionMinutesPerDay(option, option.contracted_hours);
+      const creditedDays = optionIsAllDay(option) && creditedMinutesPerDay > 0
+        ? claimCreditedOptionDaysInRange(
+          option,
+          weekStart,
+          weekEnd,
+          context.locationId,
+          occupied,
+          claimedOptionDates,
+        )
+        : countCreditedOptionDaysInRange(
+          option,
+          weekStart,
+          weekEnd,
+          context.locationId,
+        );
       totals[option.employee_number] =
         (totals[option.employee_number] || 0) +
-        optionMinutesPerDay(option, option.contracted_hours) * countCreditedOptionDays(option, settings, context.locationId);
+        creditedMinutesPerDay * creditedDays;
+      if (!optionIsAllDay(option) && creditedMinutesPerDay > 0) {
+        for (const date of creditedOptionDatesInRange(
+          option,
+          weekStart,
+          weekEnd,
+          context.locationId,
+        )) claimedOptionDates.add(`${option.employee_number}|${date}`);
+      }
     }
+    const sicknessBlockedDates = new Set([...occupied, ...claimedOptionDates]);
+    const claimedSicknessDates = new Set();
     for (const employee of employees) {
       for (const credit of await sicknessCreditsForRange(employee.personnel_number, weekStart, weekEnd)) {
-        const alreadyEntered = options.some((option) => option.employee_number === employee.personnel_number
-          && option.option_type === "sick" && credit.date >= option.date_from && credit.date <= option.date_to);
-        if (!alreadyEntered) totals[employee.personnel_number] = (totals[employee.personnel_number] || 0) + credit.minutes;
+        const creditMinutes = Math.max(0, finiteScheduleMinutes(credit.minutes));
+        if (creditMinutes === 0 || !claimEmployeeDate(
+          employee.personnel_number,
+          credit.date,
+          sicknessBlockedDates,
+          claimedSicknessDates,
+        )) continue;
+        totals[employee.personnel_number] = (totals[employee.personnel_number] || 0) + creditMinutes;
       }
     }
     const creditedHolidayDates = new Set();
     for (const holiday of publicHolidaysForRange(weekStart, weekEnd)) {
       if ([0, 6].includes(new Date(`${holiday.date}T12:00:00Z`).getUTCDay())) continue;
       for (const employee of employees) {
+        const employeeDate = `${employee.personnel_number}|${holiday.date}`;
+        if (occupied.has(employeeDate) || claimedSicknessDates.has(employeeDate)) continue;
         if (hasNonVacationCreditOnDate(options, employee.personnel_number, holiday.date)) continue;
         totals[employee.personnel_number] =
           (totals[employee.personnel_number] || 0) + holidayCreditMinutes(employee);
@@ -35043,6 +35576,8 @@ app.post("/api/schedule/auto", async (request, response) => {
       if (!block.is_public_holiday || creditedHolidayDates.has(block.block_date)) continue;
       if ([0, 6].includes(new Date(`${block.block_date}T12:00:00Z`).getUTCDay())) continue;
       for (const employee of employees) {
+        const employeeDate = `${employee.personnel_number}|${block.block_date}`;
+        if (occupied.has(employeeDate) || claimedSicknessDates.has(employeeDate)) continue;
         if (hasNonVacationCreditOnDate(options, employee.personnel_number, block.block_date)) continue;
         totals[employee.personnel_number] =
           (totals[employee.personnel_number] || 0) + holidayCreditMinutes(employee);
@@ -35470,7 +36005,7 @@ function filteredVacationsForSelection(plan, selection) {
       const clippedTo = vacation.date_to > selection.end ? selection.end : vacation.date_to;
       return {
         ...vacation,
-        selection_days: vacationDayCount(clippedFrom, clippedTo, plan.settings, plan.context?.locationId),
+        selection_days: vacationDayCount(clippedFrom, clippedTo, plan.context?.locationId),
         selection_from: clippedFrom,
         selection_to: clippedTo,
       };
@@ -35856,7 +36391,7 @@ function drawVacationEmployeeOverviewPdf(doc, plan, selection, vacations, layout
         const clippedTo = vacation.selection_to || (vacation.date_to > selection.end ? selection.end : vacation.date_to);
         doc.fillColor(employee.color).roundedRect(x + 9, itemY + 1, 6, 6, 1.5).fill();
         doc.fillColor("#25313d").font("Helvetica").fontSize(6.2).text(
-          `${vacationDateRangeText(clippedFrom, clippedTo, true)} · ${formatVacationDays(vacationDayCount(clippedFrom, clippedTo, plan.settings, plan.context?.locationId))}${vacation.note ? ` · ${vacation.note}` : ""}`,
+          `${vacationDateRangeText(clippedFrom, clippedTo, true)} · ${formatVacationDays(vacationDayCount(clippedFrom, clippedTo, plan.context?.locationId))}${vacation.note ? ` · ${vacation.note}` : ""}`,
           x + 19,
           itemY,
           { width: columnWidth - 28, ellipsis: true, lineBreak: false },
@@ -36596,6 +37131,7 @@ async function startServer() {
         backupAdminAuthRateLimits.prune(now);
         backupAdminGlobalRateLimits.prune(now);
         articleLookupRateLimits.prune(now);
+        personalEmailVerificationIpRateLimits.prune(now);
       }, 5 * 60 * 1000);
       rateLimitCleanupInterval.unref();
     }
@@ -36708,6 +37244,9 @@ module.exports = {
   actualDayMetrics,
   shiftMetrics,
   scheduleShiftMinuteBasis,
+  countCreditedOptionDaysInRange,
+  claimCreditedOptionDaysInRange,
+  claimEmployeeDate,
   evaluateTimeDay,
   validateProposedTimeEntries,
   timeTrackingDayStatus,
@@ -36748,6 +37287,7 @@ module.exports = {
   verifyActiveProtectedDocumentBlobs,
   verifyProtectedBackupPair,
   verifyProtectedGovernanceRecords,
+  verifyImportedProtectedPersonnelPayloads,
   reconcileOrphanAmuBlobs,
   finalizeDeletedPersonnelRecordDocuments,
   ensureWorkRuleEvaluationReceiptIntegrity,

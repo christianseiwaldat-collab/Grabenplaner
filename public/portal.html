@@ -121,18 +121,38 @@
                 </div>
               </div>
             </details>
-            <details class="portal-card portal-settings-section sickness-preferences-card hidden" id="sicknessNotificationPreferencesCard">
+            <details class="portal-card portal-settings-section email-settings-card" id="emailSettingsCard">
               <summary class="portal-settings-summary">
-                <span><span class="eyebrow">Verifizierte Empfänger</span><strong>Externe Warnungen &amp; Prozessmeldungen</strong><small>Freiwillige, bestätigte Kanäle verwalten</small></span>
+                <span><span class="eyebrow">Persönlich</span><strong>Externe Benachrichtigungen</strong><small id="emailSettingsSummary">Zustellwege werden geladen.</small></span>
                 <span class="portal-settings-chevron" aria-hidden="true"></span>
               </summary>
               <div class="portal-settings-content">
-                <p>Die Portal-Meldung kommt immer sofort. Externe Nachrichten sind freiwillig, werden je Zweck ausdrücklich aktiviert und enthalten keine Gesundheits- oder Personendaten.</p>
-                <form id="sicknessNotificationPreferencesForm">
-                  <label><span>Warnungen zur Mindestbesetzung frühestens ab</span><input id="sicknessNotificationEarliestTime" type="time" value="08:00" required /></label>
-                  <div class="notification-channel-list" id="sicknessNotificationChannels"></div>
-                  <p class="message hidden" id="sicknessNotificationPreferencesMessage"></p>
-                  <button class="primary" type="submit">Kanäle speichern</button>
+                <form class="email-settings-layout" id="notificationPreferencesForm">
+                  <section class="email-settings-panel" aria-labelledby="notificationTargetsHeading">
+                    <div class="email-settings-panel-heading">
+                      <div><h2 id="notificationTargetsHeading">Meine Zustellziele</h2><p>E-Mail und Telefon stammen ausschließlich aus deinen geschützten Personalstammdaten.</p></div>
+                    </div>
+                    <div class="notification-target-list" id="notificationTargetList" aria-live="polite"><p class="empty-state">Zustellziele werden geladen.</p></div>
+                    <p class="notification-master-data-hint">Hier sind keine Kontaktdaten editierbar. Änderungen erfolgen kontrolliert in den Personalstammdaten.</p>
+                  </section>
+                  <section class="email-settings-panel" aria-labelledby="notificationChannelsHeading">
+                    <div class="email-settings-panel-heading"><div><h2 id="notificationChannelsHeading">Kanäle auswählen</h2><p>Du kannst vorhandene Zustellwege vormerken. Versand erfolgt erst nach Bestätigung und technischer Freigabe.</p></div></div>
+                    <div class="notification-channel-selection" id="notificationChannelSelection" aria-live="polite"><p class="empty-state">Kanäle werden geladen.</p></div>
+                    <button class="primary" id="notificationPreferencesSaveButton" type="submit">Auswahl speichern</button>
+                  </section>
+                  <section class="email-settings-panel notification-quiet-hours-panel" aria-labelledby="notificationQuietHoursHeading">
+                    <div class="email-settings-panel-heading">
+                      <div><h2 id="notificationQuietHoursHeading">Schlafmodus</h2><p>Externe Nachrichten werden bis zur frühesten morgendlichen Zustellzeit zurückgehalten. Portal-Meldungen bleiben sofort sichtbar.</p></div>
+                      <span class="notification-quiet-hours-badge" id="notificationQuietHoursBadge">Bis 08:00 Uhr</span>
+                    </div>
+                    <label class="notification-quiet-hours-field"><span>Früheste morgendliche Zustellzeit</span><input id="notificationEarliestTime" type="time" value="08:00" required disabled /></label>
+                    <p class="notification-quiet-hours-hint" id="notificationQuietHoursHint">Zentral vorgegeben · nur lesbar</p>
+                  </section>
+                  <section class="email-settings-panel notification-events-panel" aria-labelledby="emailCategoriesHeading">
+                    <div class="email-settings-panel-heading"><div><h2 id="emailCategoriesHeading">Fachereignisse</h2><p>Die fachlichen Meldungen werden zentral vorbereitet. Derzeit wird daraus noch nichts automatisch extern versendet.</p></div></div>
+                    <div class="email-category-list" id="emailCategoryList" aria-live="polite"><p class="empty-state">Kategorien werden geladen.</p></div>
+                  </section>
+                  <p class="message hidden notification-settings-message" id="emailSettingsMessage" role="status" aria-live="polite"></p>
                 </form>
               </div>
             </details>

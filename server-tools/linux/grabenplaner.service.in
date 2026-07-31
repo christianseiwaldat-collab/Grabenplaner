@@ -12,6 +12,8 @@ User=grabenplaner
 Group=grabenplaner
 WorkingDirectory=/opt/grabenplaner/app
 EnvironmentFile=/etc/grabenplaner/grabenplaner.env
+# PID 1 reads the host boot ID before the hardened /proc namespace is applied.
+LoadCredential=host-boot-id:/proc/sys/kernel/random/boot_id
 ExecStartPre=/usr/bin/test -x {{NODE_EXECUTABLE}}
 ExecStartPre=/usr/bin/test -x {{CLAMSCAN_EXECUTABLE}}
 ExecStartPre={{NODE_EXECUTABLE}} --check /opt/grabenplaner/app/server.js

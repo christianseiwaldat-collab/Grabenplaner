@@ -380,7 +380,6 @@ test("v0.63: finaler Ist-Lohnexport verlangt aktuelle Tagesprüfung und liefert 
 
 test("v0.63: geplanter Lohnartenexport zählt Urlaub über ein Wochenende nur an fünf Arbeitstagen und liefert XLSX", async () => {
   const admin = session("101", "admin");
-  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('vacation_count_saturday', '0')").run();
   db.prepare(`
     INSERT INTO week_options (employee_number, week_start, date_from, date_to, option_type, all_day)
     VALUES ('101', '2026-07-13', '2026-07-13', '2026-07-19', 'vacation', 1)

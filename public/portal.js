@@ -27,7 +27,8 @@ const portalState = {
   sicknessAumAllowance: null,
   sicknessCases: [],
   leadershipSicknessCases: [],
-  sicknessNotificationPreferences: null,
+  emailSettings: null,
+  emailSettingsLoading: false,
   amuOcr: { busy: false, assisted: false, startManuallyEdited: false, endManuallyEdited: false, autoFilledStart: false, autoFilledEnd: false, identityDetected: false, fileKey: "", runToken: 0 },
   sicknessAmuOcr: { busy: false, assisted: false, startManuallyEdited: false, endManuallyEdited: false, autoFilledStart: false, autoFilledEnd: false, identityDetected: false, fileKey: "", runToken: 0 },
   activeAmuOcrContext: "amu",
@@ -181,7 +182,7 @@ const el = Object.fromEntries([
   "sicknessDateRangeButton", "sicknessDateRangeText", "amuUploadPanel", "amuDateRangeButton", "amuDateRangeText",
   "dateRangeDialog", "dateRangeForm", "dateRangeDialogTitle", "dateRangeStartText", "dateRangeEndText", "dateRangePreviousMonth", "dateRangeMonthLabel", "dateRangeNextMonth", "dateRangeCalendarGrid", "dateRangeOpenEnd", "dateRangeMessage", "dateRangeClose", "dateRangeCancel", "dateRangeApply",
   "sicknessRecoveryDialog", "sicknessRecoveryForm", "sicknessRecoveryTitle", "sicknessRecoveryCaseId", "sicknessRecoveryDate", "sicknessRecoveryMessage", "sicknessRecoveryClose", "sicknessRecoveryCancel", "sicknessRecoverySubmit",
-  "sicknessNotificationPreferencesCard", "sicknessNotificationPreferencesForm", "sicknessNotificationEarliestTime", "sicknessNotificationChannels", "sicknessNotificationPreferencesMessage",
+  "emailSettingsCard", "emailSettingsSummary", "notificationPreferencesForm", "notificationTargetList", "notificationChannelSelection", "notificationPreferencesSaveButton", "notificationEarliestTime", "notificationQuietHoursBadge", "notificationQuietHoursHint", "emailSettingsMessage", "emailCategoryList",
 ].map((id) => [id, document.querySelector(`#${id}`)]));
 
 function mondayOf(value) {
@@ -414,6 +415,10 @@ function portalUser() {
 
 function isOrganizationAccount(user = portalUser()) {
   return user?.isEmployee === false || ["branch", "terminal"].includes(user?.accountType);
+}
+
+function personalEmailSettingsAvailable(user = portalUser()) {
+  return user?.isEmployee === true && !isOrganizationAccount(user);
 }
 
 function scheduleCapabilityEnabled(user = portalUser()) {
@@ -1176,6 +1181,7 @@ function applySelfServiceVisibility() {
   el.leadershipAmuShortcut?.classList.toggle("hidden", !portalTabAllowed("amu"));
   el.leadershipProcessTasksShortcut?.classList.toggle("hidden", !portalTabAllowed("processTasks"));
   el.notificationsButton?.classList.toggle("hidden", isOrganizationAccount());
+  el.emailSettingsCard?.classList.toggle("hidden", !personalEmailSettingsAvailable());
   if (!hasPortalPermission("own_time_record:read")) {
     el.timeRecordStatementsPanel?.classList.add("hidden");
   }
@@ -1229,7 +1235,6 @@ function showPortal(session) {
       ? "Filialplanung und persönliche Einstellungen."
       : "Persönliche Anträge und weitere Funktionen.";
   }
-  el.sicknessNotificationPreferencesCard?.classList.toggle("hidden", !session.user.permissions.includes("notifications:settings"));
   document.querySelector('[data-leadership-kind="sickness"]')?.classList.toggle("hidden", !session.user.permissions.includes("sickness:read"));
   el.passwordDialog.dataset.required = session.user.mustChangePassword ? "true" : "false";
   populateVacationAccountYears();
@@ -1287,7 +1292,7 @@ function setTab(tab) {
   if (tab === "settings") {
     if (hasPortalPermission("own_time:read")) loadWifiAutomation();
     if (hasPortalPermission("own_privacy_requests:read")) loadPrivacyRequests();
-    if (hasPortalPermission("notifications:settings")) loadSicknessNotificationPreferences();
+    if (personalEmailSettingsAvailable()) loadEmailSettings();
   }
   if (tab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking(), loadTimeSummary(), loadTimeCorrections()]);
   if (tab === "vacation") {
@@ -1389,11 +1394,12 @@ function renderTimeTracking() {
 
   el.timePlanned.textContent = durationText(data.plannedMinutes);
   el.timeActual.textContent = durationText(data.actualMinutes);
-  el.timeWeighted.textContent = durationText(data.actualValuedMinutes);
+  el.timeWeighted.textContent = durationText(data.valuedMinutes ?? data.actualValuedMinutes);
   el.timePause.textContent = durationText(data.breakMinutes);
-  el.timeDifference.textContent = durationText(data.differenceMinutes, true);
-  el.timeDifference.classList.toggle("positive", Number(data.differenceMinutes) > 0);
-  el.timeDifference.classList.toggle("negative", Number(data.differenceMinutes) < 0);
+  const valuedDifferenceMinutes = data.valuedDifferenceMinutes ?? data.differenceMinutes;
+  el.timeDifference.textContent = durationText(valuedDifferenceMinutes, true);
+  el.timeDifference.classList.toggle("positive", Number(valuedDifferenceMinutes) > 0);
+  el.timeDifference.classList.toggle("negative", Number(valuedDifferenceMinutes) < 0);
   const issues = Array.isArray(data.issues) ? data.issues : [];
   el.timeTrackingIssues.classList.toggle("hidden", !issues.length);
   el.timeTrackingIssues.innerHTML = issues.map((issue) => `<article class="${esc(issue.severity || "warning")}"><strong>${esc(issue.label || issue.code)}</strong><span>${esc(issue.message || "")}</span></article>`).join("");
@@ -1594,8 +1600,11 @@ function normalizedTimeSummary(result = {}) {
       plannedMinutes: Number(day.plannedMinutes ?? day.planned_minutes ?? 0),
       actualMinutes: Number(day.actualMinutes ?? day.actual_minutes ?? 0),
       actualValuedMinutes: Number(day.actualValuedMinutes ?? day.actual_valued_minutes ?? day.actualMinutes ?? 0),
+      absenceCreditedMinutes: Number(day.absenceCreditedMinutes ?? day.absence_credited_minutes ?? 0),
+      valuedMinutes: Number(day.valuedMinutes ?? day.valued_minutes ?? day.actualValuedMinutes ?? day.actual_valued_minutes ?? day.actualMinutes ?? 0),
       breakMinutes: Number(day.breakMinutes ?? day.break_minutes ?? 0),
       differenceMinutes: Number(day.differenceMinutes ?? day.difference_minutes ?? 0),
+      valuedDifferenceMinutes: Number(day.valuedDifferenceMinutes ?? day.valued_difference_minutes ?? day.differenceMinutes ?? day.difference_minutes ?? 0),
       issues: Array.isArray(day.issues) ? day.issues : [],
       entries: Array.isArray(day.entries) ? day.entries : [],
     })),
@@ -1620,8 +1629,11 @@ function renderTimeSummary() {
     plannedMinutes: days.reduce((sum, day) => sum + day.plannedMinutes, 0),
     actualMinutes: days.reduce((sum, day) => sum + day.actualMinutes, 0),
     actualValuedMinutes: days.reduce((sum, day) => sum + day.actualValuedMinutes, 0),
+    absenceCreditedMinutes: days.reduce((sum, day) => sum + day.absenceCreditedMinutes, 0),
+    valuedMinutes: days.reduce((sum, day) => sum + day.valuedMinutes, 0),
     breakMinutes: days.reduce((sum, day) => sum + day.breakMinutes, 0),
     differenceMinutes: days.reduce((sum, day) => sum + day.differenceMinutes, 0),
+    valuedDifferenceMinutes: days.reduce((sum, day) => sum + day.valuedDifferenceMinutes, 0),
   };
   const from = summary.from || days[0]?.date || portalState.timePeriodAnchor;
   const to = summary.to || days.at(-1)?.date || portalState.timePeriodAnchor;
@@ -1631,9 +1643,9 @@ function renderTimeSummary() {
   el.timePeriodSummary.innerHTML = [
     ["Plan", totals.plannedMinutes ?? totals.planned_minutes],
     ["Ist", totals.actualMinutes ?? totals.actual_minutes],
-    ["Gewertet", totals.actualValuedMinutes ?? totals.actual_valued_minutes],
+    ["Gewertet", totals.valuedMinutes ?? totals.valued_minutes ?? totals.actualValuedMinutes ?? totals.actual_valued_minutes],
     ["Pausen", totals.breakMinutes ?? totals.break_minutes],
-    ["Differenz", totals.differenceMinutes ?? totals.difference_minutes, true],
+    ["Differenz", totals.valuedDifferenceMinutes ?? totals.valued_difference_minutes ?? totals.differenceMinutes ?? totals.difference_minutes, true],
   ].map(([label, value, signed]) => `<article><span>${label}</span><strong>${durationText(value, Boolean(signed))}</strong></article>`).join("");
   const correctionByDate = new Map();
   for (const correction of portalState.timeCorrections) {
@@ -1650,12 +1662,12 @@ function renderTimeSummary() {
       : "Keine Buchung";
     const correctionStatus = correction?.status ? `<small class="time-period-correction">Korrektur: ${esc(statusLabels[correction.status] || correction.status)}</small>` : "";
     const issueStatus = day.issues.length ? `<small class="time-period-issues">${day.issues.map((issue) => esc(issue.label || issue.code)).join(" · ")}</small>` : "";
-    const difference = Number(day.differenceMinutes || 0);
+    const difference = Number(day.valuedDifferenceMinutes || 0);
     return `<article class="time-period-day ${day.date === today ? "today" : ""}" data-time-summary-date="${esc(day.date)}">
       <div><strong>${dateText(day.date, { weekday: "short", day: "2-digit", month: "2-digit" })}</strong><small>${esc(entryText)}</small>${issueStatus}${correctionStatus}</div>
       <div class="time-period-value"><span>Plan</span><strong>${durationText(day.plannedMinutes)}</strong></div>
       <div class="time-period-value"><span>Ist</span><strong>${durationText(day.actualMinutes)}</strong></div>
-      <div class="time-period-value"><span>Gew.</span><strong>${durationText(day.actualValuedMinutes)}</strong></div>
+      <div class="time-period-value"><span>Gew.</span><strong>${durationText(day.valuedMinutes)}</strong></div>
       <div class="time-period-value"><span>Pause</span><strong>${durationText(day.breakMinutes)}</strong></div>
       <div class="time-period-value"><span>Diff.</span><strong class="${difference < 0 ? "negative" : difference > 0 ? "positive" : ""}">${durationText(difference, true)}</strong></div>
       ${canRequest && day.date <= today && correction?.status !== "approved" ? `<button type="button" data-open-time-correction>${correction?.status === "pending" ? "Antrag bearbeiten" : "Korrektur anfragen"}</button>` : ""}
@@ -3406,151 +3418,305 @@ function handleAmuFileSelection(event) {
   if (files.length) recognizeAmuFiles(files, contextName);
 }
 
+const personalNotificationChannels = Object.freeze(["email", "sms", "whatsapp"]);
+
 function channelLabel(channel) {
   return ({ email: "E-Mail", sms: "SMS", whatsapp: "WhatsApp" })[channel] || channel;
 }
 
-function renderSicknessNotificationPreferences() {
-  const data = portalState.sicknessNotificationPreferences;
-  if (!data) return;
-  const first = Object.values(data.channels || {})[0];
-  el.sicknessNotificationEarliestTime.value = first?.earliestTime || "08:00";
-  el.sicknessNotificationChannels.innerHTML = ["email", "sms", "whatsapp"].map((channel) => {
-    const preference = data.channels?.[channel] || {};
-    const provider = data.providers?.[channel] || {};
-    const available = provider.available === true;
-    const verified = Boolean(preference.verifiedAt);
-    const verificationRequired = preference.verificationRequired === true;
-    const type = channel === "email" ? "email" : "tel";
-    const statusText = verified ? "Bestätigt" : "Bestätigung ausständig";
-    return `<div class="notification-channel-row ${available ? "" : "unavailable"}" data-notification-channel="${channel}" data-provider-available="${available ? "1" : "0"}">
-      <div class="notification-channel-head"><strong>${channelLabel(channel)}</strong><span class="verification-status ${verified ? "verified" : "pending"}" data-channel-status>${statusText}</span></div>
-      <div class="notification-purpose-options"><label class="portal-switch"><span>Warnung bei gefährdeter Mindestbesetzung</span><input data-channel-enabled type="checkbox" ${preference.enabled && verified ? "checked" : ""} ${available && verified ? "" : "disabled"} /></label><label class="portal-switch"><span>Auch neutrale Prozessmeldungen</span><input data-channel-process-enabled type="checkbox" ${preference.processEnabled && verified ? "checked" : ""} ${available && verified ? "" : "disabled"} /></label></div>
-      <div class="notification-channel-setup"><label><span>Empfänger${available ? "" : " · durch Firmen-IT nicht eingerichtet"}</span><input data-channel-destination type="${type}" value="${esc(preference.destination || "")}" placeholder="${channel === "email" ? "leitung@firma.at" : "+436601234567"}" autocomplete="${channel === "email" ? "email" : "tel"}" ${available ? "" : "disabled"} /></label><button class="text-button" data-send-channel-verification type="button" ${available && preference.destination ? "" : "disabled"}>Code senden</button></div>
-      <div class="notification-verification-row ${verificationRequired ? "" : "hidden"}" data-channel-verification><label><span>Sechsstelliger Bestätigungscode</span><input data-channel-code type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="000000" /></label><button class="primary" data-confirm-channel-verification type="button">Bestätigen</button></div>
+function notificationTargetKey(channel) {
+  return channel === "email" ? "email" : "phone";
+}
+
+function notificationTarget(data, targetKey) {
+  const targets = data?.targets && typeof data.targets === "object" ? data.targets : {};
+  if (targets[targetKey] && typeof targets[targetKey] === "object") return targets[targetKey];
+  if (targetKey === "email" && data?.address && typeof data.address === "object") return data.address;
+  return {};
+}
+
+function notificationTargetMasked(target) {
+  return String(target?.masked || "").trim();
+}
+
+function notificationTargetState(target) {
+  const status = String(target?.status || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (target?.verifiedAt || ["verified", "confirmed", "bestätigt"].includes(status)) return "verified";
+  if (["pending", "unverified", "verification_pending", "confirmation_pending"].includes(status)) return "pending";
+  if (target?.available === false && notificationTargetMasked(target)) return "unavailable";
+  return "missing";
+}
+
+function notificationTargetStatusText(state) {
+  return ({
+    verified: "Bestätigt",
+    pending: "Bestätigung ausständig",
+    unavailable: "Nicht verfügbar",
+    missing: "Nicht hinterlegt",
+  })[state] || "Nicht verfügbar";
+}
+
+function notificationChannelPreference(data, channel) {
+  const raw = data?.channels?.[channel] && typeof data.channels[channel] === "object"
+    ? data.channels[channel]
+    : {};
+  const target = notificationTarget(data, notificationTargetKey(channel));
+  const targetState = notificationTargetState(target);
+  const masked = notificationTargetMasked(target);
+  const selectable = raw.selectable === true || (raw.selectable !== false && Boolean(masked));
+  const deliveryReady = selectable
+    && targetState === "verified"
+    && raw.verificationRequired !== true
+    && (raw.deliveryReady === true || raw.available === true);
+  return {
+    enabled: selectable && raw.enabled === true,
+    selectable,
+    deliveryReady,
+    masked,
+    targetState,
+    verificationRequired: raw.verificationRequired === true,
+    verificationAvailable: raw.verificationAvailable === true,
+  };
+}
+
+function notificationQuietHoursEditable(data = portalState.emailSettings) {
+  return hasPortalPermission("notifications:settings") && data?.quietHours?.editable === true;
+}
+
+function emailCategoryItems(data = portalState.emailSettings) {
+  if (Array.isArray(data?.categories)) return data.categories;
+  if (Array.isArray(data?.categories?.items)) return data.categories.items;
+  return [];
+}
+
+function notificationEarliestTime(data = portalState.emailSettings) {
+  const value = String(data?.quietHours?.earliestTime || "08:00");
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : "08:00";
+}
+
+function notificationVerificationChannels(targetKey) {
+  return targetKey === "email" ? ["email"] : ["sms", "whatsapp"];
+}
+
+function notificationVerificationMarkup(data, targetKey) {
+  const target = notificationTarget(data, targetKey);
+  const masked = notificationTargetMasked(target);
+  if (!masked || notificationTargetState(target) === "verified") return "";
+
+  const selectableChannels = notificationVerificationChannels(targetKey).filter((channel) => {
+    const raw = data?.channels?.[channel];
+    return raw?.selectable === true || (raw?.selectable !== false && Boolean(masked));
+  });
+  if (!selectableChannels.length) return "";
+
+  const verification = data?.verification && typeof data.verification === "object"
+    ? data.verification
+    : {};
+  const activeChannel = selectableChannels.includes(verification.channel) && verification.required === true
+    ? verification.channel
+    : "";
+  if (activeChannel) {
+    const resendAvailable = data?.channels?.[activeChannel]?.verificationAvailable === true;
+    return `<div class="notification-target-verification" data-notification-verification="${esc(targetKey)}">
+      <p>Code für ${esc(channelLabel(activeChannel))} eingeben. Das Ziel bleibt unveränderbar.</p>
+      <div class="notification-verification-code">
+        <label><span>Sechsstelliger Bestätigungscode</span><input type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" placeholder="000000" data-notification-verification-code /></label>
+        <button class="primary" type="button" data-notification-verification-confirm="${esc(activeChannel)}">Bestätigen</button>
+      </div>
+      ${resendAvailable ? `<button class="text-button notification-verification-resend" type="button" data-notification-verification-request="${esc(activeChannel)}">Code erneut anfordern</button>` : ""}
+    </div>`;
+  }
+
+  const candidates = selectableChannels.filter((channel) => {
+    const raw = data?.channels?.[channel];
+    return raw?.verificationRequired === true && raw?.verificationAvailable === true;
+  });
+  if (!candidates.length) {
+    return `<div class="notification-target-verification unavailable" data-notification-verification="${esc(targetKey)}"><p>Die Bestätigung ist derzeit technisch nicht verfügbar.</p></div>`;
+  }
+
+  return `<div class="notification-target-verification" data-notification-verification="${esc(targetKey)}">
+    <p>Dieses Stammdatenziel muss einmalig bestätigt werden.</p>
+    <div class="notification-verification-actions">${candidates.map((channel) => `<button class="text-button" type="button" data-notification-verification-request="${esc(channel)}">Code per ${esc(channelLabel(channel))} anfordern</button>`).join("")}</div>
+  </div>`;
+}
+
+function renderEmailSettings() {
+  const data = portalState.emailSettings || {};
+  const targets = [
+    { key: "email", label: "E-Mail" },
+    { key: "phone", label: "Telefon · für SMS und WhatsApp" },
+  ];
+  el.notificationTargetList.innerHTML = targets.map(({ key, label }) => {
+    const target = notificationTarget(data, key);
+    const state = notificationTargetState(target);
+    const masked = notificationTargetMasked(target);
+    return `<div class="notification-target-row" data-notification-target="${esc(key)}">
+      <div><strong>${esc(label)}</strong><small>${esc(masked || "Nicht in den Personalstammdaten hinterlegt")}</small></div>
+      <span class="verification-status ${esc(state)}">${esc(notificationTargetStatusText(state))}</span>
+      ${notificationVerificationMarkup(data, key)}
     </div>`;
   }).join("");
-}
 
-function updateSicknessNotificationChannelRow(row) {
-  if (!row) return;
-  const channel = row.dataset.notificationChannel;
-  const preference = portalState.sicknessNotificationPreferences?.channels?.[channel] || {};
-  const available = row.dataset.providerAvailable === "1";
-  const destination = row.querySelector("[data-channel-destination]");
-  const enabled = row.querySelector("[data-channel-enabled]");
-  const processEnabled = row.querySelector("[data-channel-process-enabled]");
-  const sendButton = row.querySelector("[data-send-channel-verification]");
-  const verification = row.querySelector("[data-channel-verification]");
-  const status = row.querySelector("[data-channel-status]");
-  const unchanged = String(destination?.value || "").trim() === String(preference.destination || "").trim();
-  const verified = Boolean(preference.verifiedAt) && unchanged;
-  const verificationRequired = preference.verificationRequired === true && unchanged;
-  if (enabled) {
-    enabled.disabled = !available || !verified;
-    if (!verified) enabled.checked = false;
-  }
-  if (processEnabled) {
-    processEnabled.disabled = !available || !verified;
-    if (!verified) processEnabled.checked = false;
-  }
-  if (sendButton) sendButton.disabled = !available || !String(destination?.value || "").trim();
-  verification?.classList.toggle("hidden", !verificationRequired);
-  if (status) {
-    status.textContent = verified ? "Bestätigt" : "Bestätigung ausständig";
-    status.classList.toggle("verified", verified);
-    status.classList.toggle("pending", !verified);
-  }
-}
+  const preferences = personalNotificationChannels.map((channel) => ({
+    channel,
+    ...notificationChannelPreference(data, channel),
+  }));
+  el.notificationChannelSelection.innerHTML = preferences.map((preference) => {
+    const reason = !preference.selectable
+      ? "Kein Ziel in den Personalstammdaten"
+      : !preference.enabled
+        ? `${preference.masked} · Auswahl möglich`
+        : preference.targetState === "pending" || preference.verificationRequired
+          ? "Ausgewählt · Ziel noch nicht bestätigt"
+          : !preference.deliveryReady
+            ? "Ausgewählt · Versand noch nicht verfügbar"
+            : preference.masked;
+    return `<label class="notification-channel-choice ${preference.selectable ? "" : "unavailable"} ${preference.deliveryReady ? "delivery-ready" : "delivery-pending"}" data-notification-channel="${esc(preference.channel)}">
+      <span><strong>${esc(channelLabel(preference.channel))}</strong><small>${esc(reason)}</small></span>
+      <input type="checkbox" data-notification-channel-enabled ${preference.enabled ? "checked" : ""} ${preference.selectable ? "" : "disabled"} />
+    </label>`;
+  }).join("");
 
-async function loadSicknessNotificationPreferences() {
-  if (!portalUser()?.permissions?.includes("notifications:settings")) return;
-  try {
-    portalState.sicknessNotificationPreferences = await api("/api/portal/v1/me/sickness-notification-preferences");
-    renderSicknessNotificationPreferences();
-  } catch (error) {
-    message(el.sicknessNotificationPreferencesMessage, error.message, true);
-  }
-}
+  const selectedCount = preferences.filter((preference) => preference.enabled).length;
+  const readyCount = preferences.filter((preference) => preference.enabled && preference.deliveryReady).length;
+  el.emailSettingsSummary.textContent = selectedCount
+    ? `${selectedCount} Kanäle vorgemerkt · ${readyCount} versandbereit`
+    : "Keine externen Kanäle ausgewählt";
 
-async function saveSicknessNotificationPreferences(event) {
-  event.preventDefault();
-  const channels = {};
-  const rows = [...el.sicknessNotificationChannels.querySelectorAll("[data-notification-channel]")];
-  const changedDestination = rows.some((row) => {
-    const preference = portalState.sicknessNotificationPreferences?.channels?.[row.dataset.notificationChannel] || {};
-    return String(row.querySelector("[data-channel-destination]")?.value || "").trim() !== String(preference.destination || "").trim();
-  });
-  if (changedDestination) {
-    message(el.sicknessNotificationPreferencesMessage, "Bitte geänderte Empfänger zuerst mit einem Bestätigungscode bestätigen.", true);
+  const earliestTime = notificationEarliestTime(data);
+  const quietHoursEditable = notificationQuietHoursEditable(data);
+  el.notificationEarliestTime.value = earliestTime;
+  el.notificationEarliestTime.disabled = !quietHoursEditable;
+  el.notificationQuietHoursBadge.textContent = `Ruhezeit bis ${earliestTime} Uhr`;
+  el.notificationQuietHoursHint.textContent = quietHoursEditable
+    ? "Für deine Rolle persönlich anpassbar"
+    : "Zentral vorgegeben · nur lesbar";
+
+  const categories = emailCategoryItems(data);
+  if (!categories.length) {
+    el.emailCategoryList.innerHTML = `<div class="email-category-row"><div><strong>Fachereignisse</strong><small>Die Auswahl wird in einem späteren Schritt freigeschaltet.</small></div><span>Noch nicht aktiviert</span></div>`;
     return;
   }
-  rows.forEach((row) => {
-    const preference = portalState.sicknessNotificationPreferences?.channels?.[row.dataset.notificationChannel] || {};
-    channels[row.dataset.notificationChannel] = {
-      enabled: Boolean(preference.verifiedAt) && row.querySelector("[data-channel-enabled]").checked,
-      processEnabled: Boolean(preference.verifiedAt) && row.querySelector("[data-channel-process-enabled]").checked,
-      destination: preference.destination || "",
-    };
-  });
+  el.emailCategoryList.innerHTML = categories.map((category) => `
+    <div class="email-category-row" data-email-category="${esc(category.id || "")}">
+      <div><strong>${esc(category.label || category.title || category.id || "Benachrichtigung")}</strong>${category.description ? `<small>${esc(category.description)}</small>` : ""}</div>
+      <span>Noch nicht aktiviert</span>
+    </div>
+  `).join("");
+}
+
+function emailSettingsResponsePayload(result) {
+  if (result?.settings && typeof result.settings === "object") return result.settings;
+  if (result && typeof result === "object"
+    && (result.targets || result.channels || result.quietHours || result.categories || result.address)) return result;
+  return null;
+}
+
+async function loadEmailSettings({ force = false } = {}) {
+  if (!personalEmailSettingsAvailable()) return;
+  if (portalState.emailSettingsLoading && !force) return;
+  portalState.emailSettingsLoading = true;
   try {
-    portalState.sicknessNotificationPreferences = await api("/api/portal/v1/me/sickness-notification-preferences", {
-      method: "PUT",
-      body: JSON.stringify({ earliestTime: el.sicknessNotificationEarliestTime.value, channels }),
-    });
-    renderSicknessNotificationPreferences();
-    message(el.sicknessNotificationPreferencesMessage, "Die externen Warnungen und Prozessmeldungen wurden gespeichert.");
+    const result = await api("/api/portal/v1/me/email-settings");
+    portalState.emailSettings = emailSettingsResponsePayload(result) || {};
+    renderEmailSettings();
+    message(el.emailSettingsMessage, "");
   } catch (error) {
-    message(el.sicknessNotificationPreferencesMessage, error.message, true);
+    if (!portalState.emailSettings) {
+      el.emailSettingsSummary.textContent = "Derzeit nicht verfügbar";
+      el.notificationTargetList.innerHTML = `<p class="empty-state">Zustellziele konnten nicht geladen werden.</p>`;
+      el.notificationChannelSelection.innerHTML = `<p class="empty-state">Kanäle konnten nicht geladen werden.</p>`;
+      el.emailCategoryList.innerHTML = `<p class="empty-state">Die Kategorien konnten nicht geladen werden.</p>`;
+    }
+    message(el.emailSettingsMessage, error.message, true);
+  } finally {
+    portalState.emailSettingsLoading = false;
   }
 }
 
-async function requestSicknessNotificationVerification(button) {
-  const row = button.closest("[data-notification-channel]");
-  const channel = row?.dataset.notificationChannel || "";
-  const destination = String(row?.querySelector("[data-channel-destination]")?.value || "").trim();
-  if (!destination) {
-    message(el.sicknessNotificationPreferencesMessage, `Bitte für ${channelLabel(channel)} zuerst einen Empfänger eingeben.`, true);
-    return;
-  }
+async function requestNotificationVerification(button) {
+  const channel = String(button?.dataset.notificationVerificationRequest || "");
+  if (!personalNotificationChannels.includes(channel)) return;
   button.disabled = true;
-  message(el.sicknessNotificationPreferencesMessage, "");
+  message(el.emailSettingsMessage, "");
   try {
-    portalState.sicknessNotificationPreferences = await api("/api/portal/v1/me/sickness-notification-preferences/verification", {
+    const result = await api("/api/portal/v1/me/email-settings/verification", {
       method: "POST",
-      body: JSON.stringify({ channel, destination, earliestTime: el.sicknessNotificationEarliestTime.value }),
+      body: JSON.stringify({ channel }),
     });
-    renderSicknessNotificationPreferences();
-    message(el.sicknessNotificationPreferencesMessage, `Der Bestätigungscode für ${channelLabel(channel)} wurde gesendet.`);
+    portalState.emailSettings = emailSettingsResponsePayload(result) || portalState.emailSettings || {};
+    renderEmailSettings();
+    message(el.emailSettingsMessage, `Der Bestätigungscode für ${channelLabel(channel)} wurde angefordert.`);
+    el.notificationTargetList.querySelector("[data-notification-verification-code]")?.focus();
   } catch (error) {
-    message(el.sicknessNotificationPreferencesMessage, error.message, true);
+    message(el.emailSettingsMessage, error.message, true);
     button.disabled = false;
   }
 }
 
-async function confirmSicknessNotificationVerification(button) {
-  const row = button.closest("[data-notification-channel]");
-  const channel = row?.dataset.notificationChannel || "";
-  const codeInput = row?.querySelector("[data-channel-code]");
+async function confirmNotificationVerification(button) {
+  const channel = String(button?.dataset.notificationVerificationConfirm || "");
+  if (!personalNotificationChannels.includes(channel)) return;
+  const container = button.closest("[data-notification-verification]");
+  const codeInput = container?.querySelector("[data-notification-verification-code]");
   const code = String(codeInput?.value || "").trim();
   if (!/^\d{6}$/.test(code)) {
-    message(el.sicknessNotificationPreferencesMessage, "Bitte den sechsstelligen Bestätigungscode vollständig eingeben.", true);
+    message(el.emailSettingsMessage, "Bitte den sechsstelligen Bestätigungscode vollständig eingeben.", true);
     codeInput?.focus();
     return;
   }
   button.disabled = true;
-  message(el.sicknessNotificationPreferencesMessage, "");
+  message(el.emailSettingsMessage, "");
   try {
-    portalState.sicknessNotificationPreferences = await api("/api/portal/v1/me/sickness-notification-preferences/verification/confirm", {
+    const result = await api("/api/portal/v1/me/email-settings/verification/confirm", {
       method: "POST",
       body: JSON.stringify({ channel, code }),
     });
-    renderSicknessNotificationPreferences();
-    message(el.sicknessNotificationPreferencesMessage, `${channelLabel(channel)} wurde bestätigt und aktiviert.`);
+    portalState.emailSettings = emailSettingsResponsePayload(result) || portalState.emailSettings || {};
+    renderEmailSettings();
+    message(el.emailSettingsMessage, `${channelLabel(channel)} wurde für das maskierte Stammdatenziel bestätigt.`);
   } catch (error) {
-    message(el.sicknessNotificationPreferencesMessage, error.message, true);
+    message(el.emailSettingsMessage, error.message, true);
     button.disabled = false;
     codeInput?.focus();
+  }
+}
+
+async function saveNotificationPreferences(event) {
+  event.preventDefault();
+  if (!personalEmailSettingsAvailable()) return;
+  const channels = {};
+  for (const channel of personalNotificationChannels) {
+    const input = el.notificationChannelSelection.querySelector(
+      `[data-notification-channel="${channel}"] [data-notification-channel-enabled]`,
+    );
+    channels[channel] = Boolean(input && !input.disabled && input.checked);
+  }
+
+  const body = { channels };
+  const quietHoursEditable = notificationQuietHoursEditable();
+  if (quietHoursEditable) body.earliestTime = el.notificationEarliestTime.value;
+
+  el.notificationPreferencesSaveButton.disabled = true;
+  message(el.emailSettingsMessage, "");
+  try {
+    const result = await api("/api/portal/v1/me/email-settings/categories", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    portalState.emailSettings = emailSettingsResponsePayload(result) || portalState.emailSettings || {};
+    renderEmailSettings();
+    message(
+      el.emailSettingsMessage,
+      quietHoursEditable
+        ? "Kanalwahl und Schlafmodus wurden gespeichert."
+        : "Deine Kanalwahl wurde gespeichert.",
+    );
+  } catch (error) {
+    message(el.emailSettingsMessage, error.message, true);
+  } finally {
+    el.notificationPreferencesSaveButton.disabled = false;
   }
 }
 
@@ -4537,11 +4703,19 @@ document.querySelectorAll('input[name="mobilePortalPalette"],input[name="mobileP
   });
 });
 el.saveMobileAppearanceButton?.addEventListener("click", saveMobileAppearanceSettings);
-el.sicknessNotificationPreferencesCard?.addEventListener("toggle", () => {
-  if (el.sicknessNotificationPreferencesCard.open && hasPortalPermission("notifications:settings")) {
-    loadSicknessNotificationPreferences();
-  }
+el.emailSettingsCard?.addEventListener("toggle", () => {
+  if (el.emailSettingsCard.open && personalEmailSettingsAvailable()) loadEmailSettings();
 });
+el.notificationTargetList?.addEventListener("click", (event) => {
+  const requestButton = event.target.closest("[data-notification-verification-request]");
+  if (requestButton) {
+    requestNotificationVerification(requestButton);
+    return;
+  }
+  const confirmButton = event.target.closest("[data-notification-verification-confirm]");
+  if (confirmButton) confirmNotificationVerification(confirmButton);
+});
+el.notificationPreferencesForm?.addEventListener("submit", saveNotificationPreferences);
 el.passwordForm.addEventListener("submit", changePassword);
 document.addEventListener("click", (event) => {
   const toggle = event.target.closest("[data-password-toggle]");
@@ -4834,22 +5008,6 @@ el.amuDocuments.addEventListener("change", handleAmuFileSelection);
 el.amuCamera.addEventListener("change", handleAmuFileSelection);
 el.sicknessAmuDocuments?.addEventListener("change", handleAmuFileSelection);
 el.sicknessAmuCamera?.addEventListener("change", handleAmuFileSelection);
-el.sicknessNotificationPreferencesForm?.addEventListener("submit", saveSicknessNotificationPreferences);
-el.sicknessNotificationChannels?.addEventListener("input", (event) => {
-  if (event.target.closest("[data-channel-destination]")) updateSicknessNotificationChannelRow(event.target.closest("[data-notification-channel]"));
-});
-el.sicknessNotificationChannels?.addEventListener("click", (event) => {
-  const send = event.target.closest("[data-send-channel-verification]");
-  const confirmButton = event.target.closest("[data-confirm-channel-verification]");
-  if (send) requestSicknessNotificationVerification(send);
-  if (confirmButton) confirmSicknessNotificationVerification(confirmButton);
-});
-el.sicknessNotificationChannels?.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter" || !event.target.closest("[data-channel-code]")) return;
-  event.preventDefault();
-  const confirmButton = event.target.closest("[data-notification-channel]")?.querySelector("[data-confirm-channel-verification]");
-  if (confirmButton) confirmSicknessNotificationVerification(confirmButton);
-});
 el.amuReportList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-withdraw-amu]");
   const report = button?.closest("[data-amu-report-id]");
@@ -4861,7 +5019,11 @@ document.addEventListener("visibilitychange", () => {
     loadNotifications();
     loadProcessTasks();
     if (portalState.activeTab === "timeTracking") Promise.allSettled([loadPortalHome(), loadTimeTracking()]);
-    if (portalState.activeTab === "settings") loadWifiAutomation();
+    if (portalState.activeTab === "settings") {
+      const settingsRefreshes = [loadWifiAutomation()];
+      if (personalEmailSettingsAvailable()) settingsRefreshes.push(loadEmailSettings());
+      Promise.allSettled(settingsRefreshes);
+    }
     if (portalState.activeTab === "leadershipTeam") loadLeadershipOverview();
     if (portalState.activeTab === "leadershipApprovals") loadLeadershipApprovals();
     if (loanCapabilityEnabled()) loadPendingLoanConfirmations();

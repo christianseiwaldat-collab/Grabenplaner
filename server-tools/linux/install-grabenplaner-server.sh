@@ -557,6 +557,7 @@ for (const required of [
   "server-tools/linux/test-grabenplaner-server.sh",
   "server-tools/linux/migrate-grabenplaner-runtime-v2.sh",
   "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
+  "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
   "server-tools/linux/finalize-grabenplaner-runtime-v3.sh",
   "server-tools/linux/update-grabenplaner-server.sh",
   "server-tools/linux/uninstall-grabenplaner-server.sh",
@@ -598,11 +599,11 @@ const expectedRuntimeArtifacts = [
   ...expectedHostControlArtifacts,
 ];
 if (runtimeContract?.format !== "grabenplaner-linux-runtime-contract" || runtimeContract?.schemaVersion !== 1
-  || runtimeContract?.deploymentSchemaVersion !== 3 || runtimeContract?.migrationPolicy !== "explicit-maintenance"
+  || runtimeContract?.deploymentSchemaVersion !== 4 || runtimeContract?.migrationPolicy !== "explicit-maintenance"
   || !Array.isArray(runtimeContract?.managedArtifacts)
   || runtimeContract.managedArtifacts.length !== expectedRuntimeArtifacts.length
   || expectedRuntimeArtifacts.some((relative) => !runtimeContract.managedArtifacts.includes(relative))) {
-  fail("Der Linux-Runtimevertrag v3 ist ungueltig.");
+  fail("Der Linux-Runtimevertrag v4 ist ungueltig.");
 }
 const offsiteSchemaPath = path.join(root, "server-tools/linux/offsite/module-schema.json");
 let offsiteContract;

@@ -15,8 +15,14 @@ const backupVerifier = path.join(root, "server-tools/linux/lib/verify-backup.js"
 const integrationModule = path.join(root, "lib/integration-secret-vault.js");
 const databaseLockModule = path.join(root, "lib/database-lock.js");
 const { createAmuStorage, syncEncryptedFilesBackup } = require(amuModule);
+const {
+  ensureSqliteApplicationSchema,
+} = require("../lib/persistence/sqlite/operations/application-schema");
 const { verifyBackup } = require("../server-tools/linux/lib/verify-backup.js");
-const { verifyRecovery } = require("../server-tools/linux/recovery/lib/recovery-verify.js");
+const {
+  verifyProtectedRecords,
+  verifyRecovery,
+} = require("../server-tools/linux/recovery/lib/recovery-verify.js");
 const { applyRecovery } = require("../server-tools/linux/recovery/lib/recovery-apply.js");
 const { __internalTestOnly } = require("../server-tools/linux/recovery/lib/recovery-metadata.js");
 const nonRootPolicy = __internalTestOnly.nonRootOwnershipPolicy;
@@ -120,6 +126,73 @@ test("v0.74 performs full frozen-stage, SQLite, document, key and compatibility 
     assert.equal(JSON.parse(fs.readFileSync(output, "utf8")).ok, true);
   } finally {
     if (stage) thawTree(stage);
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
+test("Linux recovery verifies PII-free notification preferences and rejects legacy destinations", () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-contact-recovery-"));
+  const database = new DatabaseSync(":memory:");
+  try {
+    const storage = createAmuStorage({
+      rootDirectory: path.join(temporary, "amu"),
+      encryptionKeys: { primary: Buffer.alloc(32, 11) },
+      activeKeyId: "primary",
+    });
+    const employeeNumber = "101";
+    ensureSqliteApplicationSchema(database);
+    database.prepare(`
+      INSERT INTO employees (personnel_number, full_name, nickname)
+      VALUES (?, 'Recovery Test', 'Recovery')
+    `).run(employeeNumber);
+    database.prepare(`
+      INSERT INTO personal_notification_contacts (
+        employee_number,
+        email_target_fingerprint,
+        phone_target_fingerprint,
+        email_enabled,
+        sms_enabled,
+        earliest_time
+      ) VALUES (?, ?, ?, 1, 1, '07:30')
+    `).run(employeeNumber, "a".repeat(64), "b".repeat(64));
+
+    const contactColumns = database.prepare("PRAGMA table_info(personal_notification_contacts)")
+      .all().map((column) => column.name);
+    assert.equal(contactColumns.includes("protected_address"), false);
+    assert.equal(verifyProtectedRecords(database, storage), 0);
+
+    database.prepare(`
+      UPDATE personal_notification_contacts
+      SET email_target_fingerprint = 'keine-gueltige-fingerprint'
+      WHERE employee_number = ?
+    `).run(employeeNumber);
+    assert.throws(() => verifyProtectedRecords(database, storage));
+
+    database.prepare(`
+      UPDATE personal_notification_contacts
+      SET email_target_fingerprint = ?
+      WHERE employee_number = ?
+    `).run("a".repeat(64), employeeNumber);
+    const legacyDestination = storage.protectRecord(
+      JSON.stringify({ address: "legacy@example.at" }),
+      {
+        namespace: "sickness-notification-preference",
+        recordId: `${employeeNumber}:email`,
+        field: "destination",
+        employeeNumber,
+      },
+    );
+    database.prepare(`
+      INSERT INTO sickness_notification_preferences (
+        employee_number,
+        channel,
+        enabled,
+        protected_destination
+      ) VALUES (?, 'email', 1, ?)
+    `).run(employeeNumber, legacyDestination);
+    assert.throws(() => verifyProtectedRecords(database, storage));
+  } finally {
+    database.close();
     fs.rmSync(temporary, { recursive: true, force: true });
   }
 });

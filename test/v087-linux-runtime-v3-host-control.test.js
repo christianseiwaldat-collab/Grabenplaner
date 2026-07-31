@@ -17,9 +17,9 @@ const hostRuntimeArtifacts = [
   "server-tools/linux/host-control/systemd/grabenplaner-host-reboot.service.in",
 ];
 
-test("runtime schema 3 binds the exact root-managed host-control artifacts", () => {
+test("current runtime schema retains the exact root-managed host-control artifacts", () => {
   const schema = JSON.parse(read("server-tools", "linux", "runtime-schema.json"));
-  assert.equal(schema.deploymentSchemaVersion, 3);
+  assert.equal(schema.deploymentSchemaVersion, 4);
   assert.equal(schema.migrationPolicy, "explicit-maintenance");
   assert.equal(schema.managedArtifacts.length, 11);
   for (const relative of hostRuntimeArtifacts) assert.ok(schema.managedArtifacts.includes(relative), relative);
@@ -31,7 +31,7 @@ test("runtime schema 3 binds the exact root-managed host-control artifacts", () 
   ], { encoding: "utf8" });
   assert.equal(verification.status, 0, verification.stderr);
   const contract = JSON.parse(verification.stdout);
-  assert.equal(contract.deploymentSchemaVersion, 3);
+  assert.equal(contract.deploymentSchemaVersion, 4);
   assert.deepEqual(
     contract.managedArtifacts.filter((relative) => relative.includes("/host-control/")),
     [...hostRuntimeArtifacts].sort(),
@@ -39,13 +39,14 @@ test("runtime schema 3 binds the exact root-managed host-control artifacts", () 
   assert.match(contract.fingerprint, /^[a-f0-9]{64}$/);
 });
 
-test("package builder and both verifiers require runtime-v3 control files", () => {
+test("package builder and both verifiers require current runtime control files", () => {
   const builder = read("server-tools", "package", "New-GrabenplanerLinuxServerPackage.ps1");
   const verifier = read("server-tools", "linux", "lib", "verify-package.js");
   const installer = read("server-tools", "linux", "install-grabenplaner-server.sh");
   for (const relative of [
     ...hostRuntimeArtifacts,
     "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
+    "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
     "server-tools/linux/finalize-grabenplaner-runtime-v3.sh",
     "lib/controlled-host-reboot.js",
     "lib/host-reboot-control-client.js",
@@ -56,8 +57,8 @@ test("package builder and both verifiers require runtime-v3 control files", () =
     assert.match(verifier, new RegExp(basename), `Verifier fordert ${relative} nicht an.`);
     assert.match(installer, new RegExp(basename), `Installer fordert ${relative} nicht an.`);
   }
-  assert.match(installer, /deploymentSchemaVersion !== 3/);
-  assert.match(installer, /Der Linux-Runtimevertrag v3 ist ungueltig/);
+  assert.match(installer, /deploymentSchemaVersion !== 4/);
+  assert.match(installer, /Der Linux-Runtimevertrag v4 ist ungueltig/);
 });
 
 test("fresh install isolates host control behind one service-user-only socket group", () => {
@@ -432,7 +433,7 @@ printf '%s\\n' "nested-helper-ok"
   }
 });
 
-test("schema-3 updater rejects a damaged installed host-control contract", () => {
+test("schema-3/4 updater rejects a damaged installed host-control contract", () => {
   const updater = read("server-tools", "linux", "update-grabenplaner-server.sh");
   assert.match(updater, /installed_runtime_schema[\s\S]*deploymentSchemaVersion/);
   assert.match(updater, /Only|Nur der Grabenplaner-Dienstbenutzer darf Mitglied der Host-Control-Gruppe sein/);
@@ -441,7 +442,7 @@ test("schema-3 updater rejects a damaged installed host-control contract", () =>
   assert.match(updater, /systemctl is-enabled --quiet grabenplaner-host-control\.socket/);
   assert.match(updater, /systemctl is-active --quiet grabenplaner-host-control\.socket/);
   assert.match(updater, /Ein Host-Neustart ist bereits aktiv/);
-  assert.match(updater, /\.runtime-v\(2\|3\)-migration/);
+  assert.match(updater, /\.runtime-v\(2\|3\|4\)-migration/);
 });
 
 test("runtime-v3 uninstaller removes broker, units, and narrow group but preserves data", () => {

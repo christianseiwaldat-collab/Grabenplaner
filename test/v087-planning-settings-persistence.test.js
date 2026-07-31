@@ -162,6 +162,13 @@ test("Block 3/7: Einstellungen, Branding und Planung bleiben providerneutral les
 
     const optionResult = await context.repository.insertWeekOption(weekOption());
     const optionId = Number(optionResult.rows[0]?.id);
+    await context.repository.insertWeekOption(weekOption({
+      groupId: "legacy-spanning-option",
+      weekStart: "2026-08-03",
+      dateFrom: "2026-08-07",
+      dateTo: "2026-08-12",
+      note: "Wochenübergreifender Bestandsurlaub",
+    }));
     const blockResult = await context.repository.insertGlobalDayBlock(dayBlock());
     const blockId = Number(blockResult.rows[0]?.id);
 
@@ -201,6 +208,20 @@ test("Block 3/7: Einstellungen, Branding und Planung bleiben providerneutral les
       locationId: "18",
       departmentId: 1801,
     })).length, 2);
+    const followingWeekQuery = {
+      weekStart: "2026-08-10",
+      weekEnd: "2026-08-16",
+      locationId: "18",
+      departmentId: 1801,
+    };
+    assert.equal((await context.repository.listScheduleWeekOptions(followingWeekQuery))
+      .some((entry) => entry.group_id === "legacy-spanning-option"), true);
+    assert.equal((await context.repository.listAutoPlanningOptions(followingWeekQuery))
+      .some((entry) => (
+        entry.employee_number === "E18"
+          && entry.date_from === "2026-08-07"
+          && entry.date_to === "2026-08-12"
+      )), true);
   } finally {
     await context.close();
   }

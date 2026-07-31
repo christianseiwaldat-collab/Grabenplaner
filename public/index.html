@@ -33,7 +33,7 @@
       <aside class="sidebar" id="mainSidebar">
         <div class="brand">
           <img class="brand-logo" id="brandLogo" src="/assets/grabenplaner-logo.svg" alt="Grabenplaner" />
-          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.88.5 Beta</span></div>
+          <div class="brand-app"><strong>Grabenplaner</strong><span id="sidebarVersion">v0.88.6 Beta</span></div>
           <button class="sidebar-mobile-close" id="mobileNavigationClose" type="button" aria-label="Hauptmenü schließen">×</button>
         </div>
         <div class="sidebar-session hidden" id="sidebarSessionInfo" aria-live="polite">
@@ -1542,10 +1542,6 @@
               <label class="switch-row"><span><strong>Samstagsfaktor aktiv</strong><small>Standardmäßig ab 13:00 Uhr mit Faktor 1,5.</small></span><input id="saturdayBonusEnabled" type="checkbox" /></label>
               <div class="inline-fields"><label class="field"><span>Gültig ab</span><input id="saturdayBonusFrom" type="time" /></label><label class="field"><span>Faktor</span><input id="saturdayBonusFactor" type="number" min="1" max="5" step="0.1" /></label></div>
             </div>
-            <div class="settings-card vacation-count-card">
-              <div class="card-heading"><div class="card-icon">Urlaub</div><div><h2>Urlaubstage zählen</h2><p>Standardmäßig zählt der Samstag nicht als Urlaubstag, kann aber über einen Mo–Sa Urlaub trotzdem gesperrt werden.</p></div></div>
-              <label class="switch-row"><span><strong>Samstag als Urlaubstag werten</strong><small>Wenn aktiv, wird der Samstag beim Resturlaub mitgezählt.</small></span><input id="vacationCountSaturday" type="checkbox" /></label>
-            </div>
             <div class="settings-card full-span wifi-settings-card" id="wifiSettingsCard">
               <div class="card-heading"><div class="card-icon">WLAN</div><div><h2>WLAN-Zeitvorschläge</h2><p>Controller, Filialzuordnung und Anwesenheitsregeln gebündelt verwalten.</p></div></div>
               <p class="settings-note security-note">Die Erkennung erzeugt ausschließlich bearbeitbare Zeitvorschläge. Erst die persönliche Bestätigung übernimmt einen Vorschlag in die Zeiterfassung.</p>
@@ -1821,7 +1817,7 @@
         </section>
 
         <footer class="system-footer">
-          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.88.5 Beta</span></div>
+          <div class="system-footer-brand"><img id="footerBrandLogo" src="/assets/grabenplaner-logo.svg" alt="" /><span id="versionLabel"><strong>Grabenplaner</strong> v0.88.6 Beta</span></div>
           <div class="system-data" id="systemData"><span>Technische Daten werden geladen …</span></div>
           <a id="adminContactLink" class="hidden" href="#">Admin</a>
         </footer>
@@ -2541,6 +2537,7 @@
           <strong>Kurze Unterbrechung mit Sicherungsschutz</strong>
           <p>Der Neustart unterbricht die Verbindung für kurze Zeit. Nicht gespeicherte Eingaben in geöffneten Browserfenstern können verloren gehen.</p>
           <p>Vor dem Neustart erstellt Grabenplaner automatisch einen verifizierten Sicherungspunkt. Erst danach wird der verwaltete Serverdienst kontrolliert neu gestartet.</p>
+          <p><strong>Wichtig:</strong> Ein Neustart des Grabenplaner-Dienstes beseitigt keinen offenen Ubuntu-Sicherheitsneustart. Dafür ist die separate Developer-Aktion „VPS kontrolliert neu starten“ erforderlich.</p>
         </section>
         <p class="server-restart-message hidden" id="serverRestartMessage" role="status" aria-live="polite"></p>
         <div class="modal-actions server-restart-actions">
@@ -2557,7 +2554,7 @@
           <div>
             <span class="eyebrow">Developer · Ubuntu-Host</span>
             <h2 id="vpsRebootTitle">VPS kontrolliert neu starten</h2>
-            <p id="vpsRebootDescription">Dieser geschützte Vorgang startet den vollständigen Ubuntu-Host neu – nicht nur Grabenplaner.</p>
+            <p id="vpsRebootDescription">Dieser geschützte Vorgang startet den vollständigen Ubuntu-VPS kontrolliert neu – nicht nur den Grabenplaner-Dienst.</p>
           </div>
           <button type="button" class="close-button" id="vpsRebootCloseButton" data-close="vpsRebootModal" aria-label="Dialog schließen">×</button>
         </div>

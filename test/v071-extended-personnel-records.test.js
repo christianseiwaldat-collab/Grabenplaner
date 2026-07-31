@@ -366,7 +366,7 @@ test("v0.71 Block 4: Mitarbeiteranlage und -änderung rollen ungültige Personal
   assert.equal(db.prepare("SELECT nickname FROM employees WHERE personnel_number = '8713'").get().nickname, before);
 });
 
-test("v0.71 Block 4: geschützte Personalaktdaten und Dokumente bleiben auf PL+ begrenzt", async () => {
+test("v0.71 Block 4: nur freigegebene Personalaktfelder erreichen FL, Dokumente bleiben auf PL+ begrenzt", async () => {
   insertEmployee("8715");
   const hr = session("103", "hr");
   const rightsRecord = fullPersonnelRecord("RECHTE");
@@ -387,7 +387,9 @@ test("v0.71 Block 4: geschützte Personalaktdaten und Dokumente bleiben auf PL+ 
   `).run(locationId);
   const managerView = await request("/api/portal/v1/personnel-records/8715", { auth: manager });
   assert.equal(managerView.response.status, 200, managerView.text);
-  assert.equal(managerView.payload.profile.sensitive, null);
+  assert.deepEqual(managerView.payload.profile.sensitive, {
+    privateEmail: rightsRecord.sensitive.privateEmail,
+  });
   assert.deepEqual(managerView.payload.documents, []);
 
   const hrDocument = await uploadDocument("8715", hr, { title: "Nur für die Personalleitung" });

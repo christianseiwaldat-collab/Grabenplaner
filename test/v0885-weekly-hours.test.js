@@ -23,6 +23,9 @@ const {
   releaseInstanceLockForTests,
   scheduleShiftMinuteBasis,
   shiftMetrics,
+  countCreditedOptionDaysInRange,
+  claimCreditedOptionDaysInRange,
+  claimEmployeeDate,
 } = require("../server");
 
 let httpServer;
@@ -94,6 +97,9 @@ test("v0.88.5: API und JSON liefern für den 27-Stunden-Fall vollständig 29 gew
   assert.equal(locations.response.status, 200, locations.text);
   const location = locations.payload.find((entry) => entry.active !== false && entry.cost_center_id);
   assert.ok(location, "Aktive Testfiliale mit Kostenstelle fehlt");
+  const settings = await requestJson(`/api/settings?locationId=${encodeURIComponent(location.id)}`);
+  assert.equal(settings.response.status, 200, settings.text);
+  assert.equal(Object.hasOwn(settings.payload, "vacation_count_saturday"), false);
 
   const employeeNumber = "v0885-hours";
   const employee = await requestJson("/api/employees", {
@@ -149,6 +155,176 @@ test("v0.88.5: API und JSON liefern für den 27-Stunden-Fall vollständig 29 gew
     schedule.payload.bonusTotals[employeeNumber],
     schedule.payload.totals[employeeNumber],
   ].every(Number.isFinite));
+
+  const vacation = await requestJson("/api/vacations", {
+    method: "POST",
+    body: {
+      employeeNumber,
+      dateFrom: "2099-02-02",
+      dateTo: "2099-02-02",
+      note: "Regressionsprüfung Urlaubswertung",
+      locationId: location.id,
+    },
+  });
+  assert.equal(vacation.response.status, 201, vacation.text);
+
+  const scheduleWithVacation = await requestJson(
+    `/api/schedule?week=2099-02-02&location=${encodeURIComponent(location.id)}`,
+  );
+  assert.equal(scheduleWithVacation.response.status, 200, scheduleWithVacation.text);
+  assert.equal(scheduleWithVacation.payload.plannedTotals[employeeNumber], 27 * 60);
+  assert.equal(scheduleWithVacation.payload.bonusTotals[employeeNumber], 2 * 60);
+  assert.equal(scheduleWithVacation.payload.optionCreditTotals[employeeNumber], 384);
+  assert.equal(scheduleWithVacation.payload.totals[employeeNumber], (29 * 60) + 384);
+});
+
+test("v0.88.5: wochenübergreifender Urlaub wird in jeder betroffenen Woche gewertet", async () => {
+  const locations = await requestJson("/api/locations");
+  assert.equal(locations.response.status, 200, locations.text);
+  const location = locations.payload.find((entry) => entry.active !== false && entry.cost_center_id);
+  assert.ok(location, "Aktive Testfiliale mit Kostenstelle fehlt");
+
+  const employeeNumber = "v0885-vacation";
+  const employee = await requestJson("/api/employees", {
+    method: "POST",
+    body: {
+      personnelNumber: employeeNumber,
+      fullName: "API Urlaubswertung",
+      nickname: "Urlaub-Woche",
+      color: "#287a58",
+      contractedHours: 32,
+      targetWorkdaysPerWeek: 5,
+      preferredDayOff: "",
+      fixedWorkdays: [],
+      positionId: "verkaufsmitarbeiter",
+      timeConfirmationLevel: "C",
+      costCenterId: location.cost_center_id,
+      preferredDepartmentId: "",
+      active: true,
+    },
+  });
+  assert.equal(employee.response.status, 201, employee.text);
+
+  const vacation = await requestJson("/api/vacations", {
+    method: "POST",
+    body: {
+      employeeNumber,
+      dateFrom: "2099-02-05",
+      dateTo: "2099-02-12",
+      note: "Urlaub über zwei Kalenderwochen",
+      locationId: location.id,
+    },
+  });
+  assert.equal(vacation.response.status, 201, vacation.text);
+
+  db.prepare(`
+    UPDATE week_options
+    SET week_start = '2099-02-02'
+    WHERE employee_number = ? AND date_from = '2099-02-09'
+  `).run(employeeNumber);
+
+  const schedule = await requestJson(
+    `/api/schedule?week=2099-02-09&location=${encodeURIComponent(location.id)}`,
+  );
+  assert.equal(schedule.response.status, 200, schedule.text);
+  assert.ok(schedule.payload.weekOptions.some((option) => (
+    option.employee_number === employeeNumber && option.option_type === "vacation"
+  )));
+  assert.equal(schedule.payload.plannedTotals[employeeNumber], 0);
+  assert.equal(
+    schedule.payload.optionCreditTotals[employeeNumber],
+    4 * 384,
+    JSON.stringify(schedule.payload.weekOptions.filter((option) => option.employee_number === employeeNumber)),
+  );
+  assert.equal(schedule.payload.totals[employeeNumber], 4 * 384);
+
+  const automatic = await requestJson("/api/schedule/auto", {
+    method: "POST",
+    body: {
+      weekStart: "2099-02-09",
+      locationId: location.id,
+      replaceExisting: false,
+    },
+  });
+  assert.equal(automatic.response.status, 200, automatic.text);
+  const scheduleAfterAutoPlanning = await requestJson(
+    `/api/schedule?week=2099-02-09&location=${encodeURIComponent(location.id)}`,
+  );
+  assert.equal(scheduleAfterAutoPlanning.response.status, 200, scheduleAfterAutoPlanning.text);
+  assert.equal(scheduleAfterAutoPlanning.payload.shifts.some((shift) => (
+    shift.employee_number === employeeNumber
+      && shift.shift_date >= "2099-02-09"
+      && shift.shift_date <= "2099-02-12"
+  )), false, "Urlaub muss auch den Auto-Planer sperren");
+});
+
+test("v0.88.5: Feiertage werden neben Dienst oder Urlaub genau einmal gewertet", async () => {
+  const locations = await requestJson("/api/locations");
+  assert.equal(locations.response.status, 200, locations.text);
+  const location = locations.payload.find((entry) => entry.active !== false && entry.cost_center_id);
+  assert.ok(location, "Aktive Testfiliale mit Kostenstelle fehlt");
+
+  const employeeNumber = "v0885-holiday";
+  const employee = await requestJson("/api/employees", {
+    method: "POST",
+    body: {
+      personnelNumber: employeeNumber,
+      fullName: "API Feiertagswertung",
+      nickname: "Feiertag",
+      color: "#8a4f23",
+      contractedHours: 32,
+      targetWorkdaysPerWeek: 5,
+      preferredDayOff: "",
+      fixedWorkdays: [],
+      positionId: "verkaufsmitarbeiter",
+      timeConfirmationLevel: "C",
+      costCenterId: location.cost_center_id,
+      preferredDepartmentId: "",
+      active: true,
+    },
+  });
+  assert.equal(employee.response.status, 201, employee.text);
+
+  const shift = await requestJson("/api/shifts", {
+    method: "POST",
+    body: {
+      employeeNumber,
+      locationId: location.id,
+      departmentId: "",
+      date: "2099-05-01",
+      startTime: "09:00",
+      endTime: "17:00",
+      area: "Feiertagsregression",
+      note: "Dienst statt zusätzlicher Feiertagsgutschrift",
+    },
+  });
+  assert.equal(shift.response.status, 201, shift.text);
+  const shiftWeek = await requestJson(
+    `/api/schedule?week=2099-04-27&location=${encodeURIComponent(location.id)}`,
+  );
+  assert.equal(shiftWeek.response.status, 200, shiftWeek.text);
+  assert.equal(shiftWeek.payload.plannedTotals[employeeNumber], 450);
+  assert.equal(shiftWeek.payload.optionCreditTotals[employeeNumber], 0);
+  assert.equal(shiftWeek.payload.totals[employeeNumber], 450);
+
+  const vacation = await requestJson("/api/vacations", {
+    method: "POST",
+    body: {
+      employeeNumber,
+      dateFrom: "2099-01-06",
+      dateTo: "2099-01-06",
+      note: "Urlaub am Feiertag",
+      locationId: location.id,
+    },
+  });
+  assert.equal(vacation.response.status, 201, vacation.text);
+  const vacationWeek = await requestJson(
+    `/api/schedule?week=2099-01-05&location=${encodeURIComponent(location.id)}`,
+  );
+  assert.equal(vacationWeek.response.status, 200, vacationWeek.text);
+  assert.equal(vacationWeek.payload.plannedTotals[employeeNumber], 0);
+  assert.equal(vacationWeek.payload.optionCreditTotals[employeeNumber], 384);
+  assert.equal(vacationWeek.payload.totals[employeeNumber], 384);
 });
 
 test("v0.88.5: fehlende oder ungültige Samstagswerte fallen sicher auf 13:00 und Faktor 1,5 zurück", async () => {
@@ -191,6 +367,67 @@ test("v0.88.5: die Wochenaggregation verwendet bei ungültiger Bewertung die fin
     countedMinutes: 390,
   });
   assert.ok(Object.values(basis).every(Number.isFinite));
+});
+
+test("v0.88.5: Urlaubstage werden nur Montag bis Freitag und pro Woche höchstens einmal gewertet", () => {
+  const option = {
+    employee_number: "419",
+    option_type: "vacation",
+    date_from: "2099-02-02",
+    date_to: "2099-02-07",
+    all_day: 1,
+  };
+  assert.equal(
+    countCreditedOptionDaysInRange(option, "2099-02-02", "2099-02-08", null),
+    5,
+    "Samstag und Sonntag dürfen keine Urlaubsgutschrift erzeugen",
+  );
+  assert.equal(
+    countCreditedOptionDaysInRange({
+      ...option,
+      date_from: "2099-02-07",
+      date_to: "2099-02-07",
+    }, "2099-02-02", "2099-02-08", null),
+    0,
+  );
+
+  const blocked = new Set(["419|2099-02-03"]);
+  const claimed = new Set();
+  assert.equal(
+    claimCreditedOptionDaysInRange(
+      option,
+      "2099-02-02",
+      "2099-02-08",
+      null,
+      blocked,
+      claimed,
+    ),
+    4,
+  );
+  assert.equal(
+    claimCreditedOptionDaysInRange(
+      option,
+      "2099-02-02",
+      "2099-02-08",
+      null,
+      blocked,
+      claimed,
+    ),
+    0,
+    "Ein doppelter Altbestand darf dieselben Urlaubstage nicht erneut gutschreiben",
+  );
+});
+
+test("v0.88.5: berechneter Krankenstand wird nicht neben Dienst, Urlaub oder erneut am selben Tag gewertet", () => {
+  const blockedByShift = new Set(["419|2099-02-02"]);
+  const blockedByVacation = new Set(["419|2099-02-03"]);
+  const claimedSicknessDates = new Set();
+
+  assert.equal(claimEmployeeDate("419", "2099-02-02", blockedByShift, claimedSicknessDates), false);
+  assert.equal(claimEmployeeDate("419", "2099-02-03", blockedByVacation, claimedSicknessDates), false);
+  assert.equal(claimEmployeeDate("419", "2099-02-04", new Set(), claimedSicknessDates), true);
+  assert.equal(claimEmployeeDate("419", "2099-02-04", new Set(), claimedSicknessDates), false);
+  assert.deepEqual([...claimedSicknessDates], ["419|2099-02-04"]);
 });
 
 test("v0.88.5: die Wochenstunden-UI stellt ungültige API-Werte nicht als null Stunden dar", () => {

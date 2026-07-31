@@ -314,19 +314,29 @@ test("v0.71 Block 5: Migration und sichere Leitungsstandards sind vollständig",
   assert.deepEqual(rights.roles.map((entry) => entry.id), ["manager", "department_manager"]);
   assert.ok(rights.fields.length >= 30);
   assert.equal(rights.matrix.manager.phone, "read");
+  assert.equal(rights.matrix.manager.privateEmail, "write");
   assert.equal(rights.matrix.manager.documents, "hidden");
-  assert.ok(Object.entries(rights.matrix.manager).every(([key, level]) => key === "phone" ? level === "read" : level === "hidden"));
-  assert.ok(Object.values(rights.matrix.department_manager).every((level) => level === "hidden"));
+  assert.ok(Object.entries(rights.matrix.manager).every(([key, level]) => (
+    key === "phone" ? level === "read" : key === "privateEmail" ? level === "write" : level === "hidden"
+  )));
+  assert.ok(Object.entries(rights.matrix.department_manager).every(([key, level]) => (
+    key === "privateEmail" ? level === "write" : level === "hidden"
+  )));
 
   const profile = await saveProfile(TARGET_A, hr, "DEFAULT");
   const manager = session(MANAGER, "manager");
   const managerView = await request(`/api/portal/v1/personnel-records/${TARGET_A}`, { auth: manager });
   assert.equal(managerView.response.status, 200, managerView.text);
   assert.equal(managerView.payload.profile.phone, profile.phone);
-  assert.equal(managerView.payload.profile.sensitive, null);
+  assert.equal(managerView.payload.profile.sensitive.privateEmail, profile.sensitive.privateEmail);
   assert.deepEqual(managerView.payload.documents, []);
   assert.equal(managerView.payload.access.fieldAccess.phone, "read");
-  assert.equal(managerView.payload.access.fieldAccess.privateEmail, "hidden");
+  assert.equal(managerView.payload.access.fieldAccess.privateEmail, "write");
+  const privateEmailChanged = await request(`/api/portal/v1/personnel-records/${TARGET_A}`, {
+    method: "PUT", auth: manager, body: { sensitive: { privateEmail: "manager.updated@example.test" } },
+  });
+  assert.equal(privateEmailChanged.response.status, 200, privateEmailChanged.text);
+  assert.deepEqual(privateEmailChanged.payload.changedFields, ["privateEmail"]);
   const defaultWriteDenied = await request(`/api/portal/v1/personnel-records/${TARGET_A}`, {
     method: "PUT", auth: manager, body: { phone: "+43 512 5559999" },
   });
@@ -335,7 +345,14 @@ test("v0.71 Block 5: Migration und sichere Leitungsstandards sind vollständig",
 
   const departmentManager = session(DEPARTMENT_MANAGER, "department_manager");
   const departmentDefault = await request(`/api/portal/v1/personnel-records/${TARGET_A}`, { auth: departmentManager });
-  assert.equal(departmentDefault.response.status, 403, departmentDefault.text);
+  assert.equal(departmentDefault.response.status, 200, departmentDefault.text);
+  assert.equal(departmentDefault.payload.access.fieldAccess.privateEmail, "write");
+  assert.equal(departmentDefault.payload.profile.sensitive.privateEmail, "manager.updated@example.test");
+  const departmentEmailChanged = await request(`/api/portal/v1/personnel-records/${TARGET_A}`, {
+    method: "PUT", auth: departmentManager, body: { sensitive: { privateEmail: "department.updated@example.test" } },
+  });
+  assert.equal(departmentEmailChanged.response.status, 200, departmentEmailChanged.text);
+  assert.deepEqual(departmentEmailChanged.payload.changedFields, ["privateEmail"]);
 });
 
 test("Mitarbeitendenlisten liefern nur ausdrücklich lesbare Personalaktfelder", async () => {
@@ -347,7 +364,7 @@ test("Mitarbeitendenlisten liefern nur ausdrücklich lesbare Personalaktfelder",
   assert.equal(defaultList.response.status, 200, defaultList.text);
   const defaultTarget = defaultList.payload.find((employee) => employee.personnel_number === TARGET_A);
   assert.equal(defaultTarget.personnel_display.phone, profile.phone);
-  assert.equal(Object.hasOwn(defaultTarget.personnel_display, "privateEmail"), false);
+  assert.equal(defaultTarget.personnel_display.privateEmail, profile.sensitive.privateEmail);
   assert.equal(Object.hasOwn(defaultTarget.personnel_display, "employment"), false);
   assert.equal(defaultList.payload.some((employee) => employee.personnel_number === TARGET_REMOTE), false);
 
@@ -566,7 +583,8 @@ test("v0.71 Block 5: Abteilungsleitung bleibt im Abteilungs-Scope und Dokumentre
   const allowed = await request(`/api/portal/v1/personnel-records/${TARGET_A}`, { auth: departmentManager });
   assert.equal(allowed.response.status, 200, allowed.text);
   assert.equal(allowed.payload.profile.phone, null);
-  assert.equal(allowed.payload.profile.sensitive, null);
+  assert.equal(allowed.payload.profile.sensitive.privateEmail, "department-a@example.test");
+  assert.equal(allowed.payload.access.fieldAccess.privateEmail, "write");
   assert.equal(allowed.payload.access.fieldAccess.documents, "read");
   assert.deepEqual(allowed.payload.documents.map((entry) => entry.id), [documentA.payload.document.id]);
 

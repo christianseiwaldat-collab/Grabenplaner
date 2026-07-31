@@ -23,6 +23,7 @@ const applicationSmokeSource = read("server-tools/linux/offsite/lib/application-
 const {
   childEnvironment,
   PROTECTED_COLUMNS,
+  PROTECTED_ROW_TABLES,
   sanitizeSmokeDatabase,
   SMOKE_ROOT,
   DATABASE,
@@ -270,7 +271,22 @@ test("application smoke sanitizes every known protected domain but preserves ope
         FOREIGN KEY (sickness_case_id) REFERENCES sickness_cases(id));
       CREATE TABLE amu_documents (id TEXT PRIMARY KEY, report_id INTEGER, protected_payload TEXT NOT NULL,
         FOREIGN KEY (report_id) REFERENCES amu_reports(id));
-      CREATE TABLE sickness_notification_preferences (employee_number TEXT, protected_destination TEXT NOT NULL);
+      CREATE TABLE sickness_notification_preferences (
+        employee_number TEXT,
+        channel TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 0,
+        earliest_time TEXT NOT NULL DEFAULT '08:00',
+        protected_destination TEXT NOT NULL DEFAULT ''
+      );
+      CREATE TABLE personal_notification_contacts (
+        employee_number TEXT,
+        email_target_fingerprint TEXT NOT NULL DEFAULT '',
+        phone_target_fingerprint TEXT NOT NULL DEFAULT '',
+        email_enabled INTEGER NOT NULL DEFAULT 0,
+        sms_enabled INTEGER NOT NULL DEFAULT 0,
+        whatsapp_enabled INTEGER NOT NULL DEFAULT 0,
+        earliest_time TEXT NOT NULL DEFAULT '08:00'
+      );
       CREATE TABLE outbound_notification_jobs (id TEXT PRIMARY KEY, protected_payload TEXT NOT NULL);
       CREATE TABLE privacy_requests (
         id TEXT PRIMARY KEY,
@@ -388,7 +404,13 @@ test("application smoke sanitizes every known protected domain but preserves ope
       INSERT INTO sickness_alerts VALUES ('alert', 1, 'enc:v2:alert');
       INSERT INTO amu_reports VALUES (1, 1, 'enc:v2:report');
       INSERT INTO amu_documents VALUES ('amu', 1, 'enc:v2:amu');
-      INSERT INTO sickness_notification_preferences VALUES ('101', 'enc:v2:destination');
+      INSERT INTO sickness_notification_preferences
+        (employee_number, channel, enabled, earliest_time, protected_destination)
+      VALUES ('101', 'email', 1, '07:30', '');
+      INSERT INTO personal_notification_contacts
+        (employee_number, email_target_fingerprint, phone_target_fingerprint,
+         email_enabled, sms_enabled, whatsapp_enabled, earliest_time)
+      VALUES ('101', '${"a".repeat(64)}', '${"b".repeat(64)}', 1, 1, 0, '07:30');
       INSERT INTO outbound_notification_jobs VALUES ('job', 'enc:v2:job');
       INSERT INTO privacy_requests VALUES ('privacy', '101', 'enc:v2:privacy');
       INSERT INTO privacy_request_events VALUES ('privacy-event', 'privacy', 'enc:v2:privacy-event');
@@ -425,7 +447,7 @@ test("application smoke sanitizes every known protected domain but preserves ope
     for (const table of [
       "personnel_sensitive_records", "personnel_record_documents", "sickness_cases", "sickness_alerts",
       "protected_case_events",
-      "amu_reports", "amu_documents", "sickness_notification_preferences", "outbound_notification_jobs",
+      "amu_reports", "amu_documents", "outbound_notification_jobs",
       "privacy_export_receipts", "privacy_request_events", "privacy_requests",
       "vacation_account_events", "vacation_account_revisions",
       "vacation_history_events",
@@ -434,6 +456,39 @@ test("application smoke sanitizes every known protected domain but preserves ope
       "payroll_handoff_events", "payroll_handoffs",
       "portal_notifications",
     ]) assert.equal(database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count, 0, table);
+    assert.deepEqual(
+      {
+        ...database.prepare(`
+          SELECT employee_number, channel, enabled, earliest_time, protected_destination
+          FROM sickness_notification_preferences
+        `).get(),
+      },
+      {
+        employee_number: "101",
+        channel: "email",
+        enabled: 1,
+        earliest_time: "07:30",
+        protected_destination: "",
+      },
+    );
+    assert.deepEqual(
+      {
+        ...database.prepare(`
+          SELECT employee_number, email_target_fingerprint, phone_target_fingerprint,
+                 email_enabled, sms_enabled, whatsapp_enabled, earliest_time
+          FROM personal_notification_contacts
+        `).get(),
+      },
+      {
+        employee_number: "101",
+        email_target_fingerprint: "a".repeat(64),
+        phone_target_fingerprint: "b".repeat(64),
+        email_enabled: 1,
+        sms_enabled: 1,
+        whatsapp_enabled: 0,
+        earliest_time: "07:30",
+      },
+    );
     for (const column of [
       "privacy_requests.protected_payload",
       "privacy_request_events.protected_payload",
@@ -444,6 +499,14 @@ test("application smoke sanitizes every known protected domain but preserves ope
       "payroll_handoff_events.payload_json",
       "retention_preview_runs.result_json",
     ]) assert.equal(PROTECTED_COLUMNS.has(column), true, column);
+    for (const column of [
+      "personal_notification_contacts.protected_address",
+      "sickness_notification_preferences.protected_destination",
+    ]) assert.equal(PROTECTED_COLUMNS.has(column), false, column);
+    for (const table of [
+      "personal_notification_contacts",
+      "sickness_notification_preferences",
+    ]) assert.equal(PROTECTED_ROW_TABLES.includes(table), false, table);
     for (const trigger of [
       "trg_payroll_handoff_events_immutable_delete",
       "trg_payroll_handoffs_immutable_delete",
@@ -475,6 +538,34 @@ test("application smoke sanitizes every known protected domain but preserves ope
     assert.deepEqual(database.prepare("PRAGMA integrity_check").all().map((row) => Object.values(row)[0]), ["ok"]);
   } finally {
     if (database) database.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("application smoke rejects a non-empty legacy sickness destination before cleanup", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "grabenplaner-smoke-legacy-target-"));
+  const databaseFile = path.join(directory, "dienstplan.db");
+  const database = new DatabaseSync(databaseFile);
+  database.exec(`
+    CREATE TABLE sickness_notification_preferences (
+      employee_number TEXT,
+      protected_destination TEXT NOT NULL DEFAULT ''
+    );
+    INSERT INTO sickness_notification_preferences
+      (employee_number, protected_destination)
+    VALUES ('101', 'enc:v2:legacy-destination');
+  `);
+  database.close();
+  try {
+    assert.throws(() => sanitizeSmokeDatabase(databaseFile), /SMOKE_PRECONDITION_FAILED/);
+    const verify = new DatabaseSync(databaseFile, { readOnly: true });
+    assert.equal(
+      verify.prepare("SELECT protected_destination FROM sickness_notification_preferences").get()
+        .protected_destination,
+      "enc:v2:legacy-destination",
+    );
+    verify.close();
+  } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });

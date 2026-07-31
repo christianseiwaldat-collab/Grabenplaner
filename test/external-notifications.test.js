@@ -12,6 +12,36 @@ const {
   validateHttpsWebhookUrl,
 } = require("../lib/external-notifications");
 
+function enabledSmtp(event, overrides = {}) {
+  return {
+    enabled: true,
+    host: "smtp.example.test",
+    port: 587,
+    from: "Grabenplaner <app@example.test>",
+    user: "mailer",
+    password: "smtp-secret",
+    dispatchEnabled: true,
+    senderApproved: true,
+    allowedEvents: [event],
+    ...overrides,
+  };
+}
+
+function enabledWebhook(channel, event, overrides = {}) {
+  return {
+    enabled: true,
+    url: `https://notify.example.test/${channel}`,
+    token: `${channel}-secret`,
+    sender: channel === "email"
+      ? "Grabenplaner <app@example.test>"
+      : `approved-${channel}-sender`,
+    dispatchEnabled: true,
+    senderApproved: true,
+    allowedEvents: [event],
+    ...overrides,
+  };
+}
+
 test("Webhook-Adressen müssen HTTPS verwenden und dürfen keine Zugangsdaten enthalten", () => {
   assert.equal(validateHttpsWebhookUrl("https://notify.example.test/hook"), "https://notify.example.test/hook");
   assert.throws(() => validateHttpsWebhookUrl("http://notify.example.test/hook"), {
@@ -25,9 +55,9 @@ test("Webhook-Adressen müssen HTTPS verwenden und dürfen keine Zugangsdaten en
 test("Provider-Status enthält weder Konfigurationsgeheimnisse noch Empfänger", () => {
   const adapter = createExternalNotificationAdapter({
     configuration: {
-      email: { enabled: true, host: "smtp.example.test", from: "app@example.test", user: "mailer", password: "smtp-secret" },
-      sms: { enabled: true, url: "https://notify.example.test/sms", token: "sms-secret" },
-      whatsapp: { enabled: true, url: "http://unsafe.example.test", token: "wa-secret" },
+      email: enabledSmtp("staffing_warning"),
+      sms: enabledWebhook("sms", "staffing_warning"),
+      whatsapp: enabledWebhook("whatsapp", "staffing_warning", { url: "http://unsafe.example.test" }),
     },
     smtpTransport: { sendMail: async () => ({ accepted: true }) },
     fetchImplementation: async () => ({ ok: true }),
@@ -38,23 +68,87 @@ test("Provider-Status enthält weder Konfigurationsgeheimnisse noch Empfänger",
     configured: true, valid: true, available: true, transport: "smtp", issueCode: null,
     provider: "custom-smtp",
     dispatchEnabled: true,
-    enabledEvents: [
-      "destination_verification",
-      "loan_document",
-      "process_notification",
-      "staffing_warning",
-    ],
+    senderApproved: true,
+    enabledEvents: ["staffing_warning"],
   });
   assert.equal(adapter.getProviderStatus().whatsapp.valid, false);
   assert.equal(adapter.getProviderStatus().whatsapp.available, false);
+});
+
+test("Direkte send*-Aufrufe umgehen bei keinem Kanal die vier Versand-Gates", async (t) => {
+  const channels = ["email", "sms", "whatsapp"];
+  const gateCases = [
+    {
+      name: "credentials",
+      mutate(configuration, channel) {
+        if (channel === "email") configuration.password = "";
+        else configuration.token = "";
+      },
+      code: "EXTERNAL_NOTIFICATION_PROVIDER_NOT_CONFIGURED",
+    },
+    {
+      name: "sender approval",
+      mutate(configuration) { configuration.senderApproved = false; },
+      code: "EXTERNAL_NOTIFICATION_SENDER_NOT_APPROVED",
+    },
+    {
+      name: "dispatch switch",
+      mutate(configuration) { configuration.dispatchEnabled = false; },
+      code: "EXTERNAL_NOTIFICATION_DISPATCH_DISABLED",
+    },
+    {
+      name: "event allowlist",
+      mutate(configuration) { configuration.allowedEvents = ["process_notification"]; },
+      code: "EXTERNAL_NOTIFICATION_EVENT_DISABLED",
+    },
+    {
+      name: "missing event allowlist",
+      mutate(configuration) { delete configuration.allowedEvents; },
+      code: "EXTERNAL_NOTIFICATION_EVENT_DISABLED",
+    },
+  ];
+
+  for (const channel of channels) {
+    for (const gateCase of gateCases) {
+      await t.test(`${channel}: ${gateCase.name}`, async () => {
+        let deliveryAttempts = 0;
+        const channelConfiguration = channel === "email"
+          ? enabledSmtp("staffing_warning")
+          : enabledWebhook(channel, "staffing_warning");
+        gateCase.mutate(channelConfiguration, channel);
+        const adapter = createExternalNotificationAdapter({
+          configuration: channel === "email"
+            ? { email: channelConfiguration }
+            : { [channel]: channelConfiguration },
+          smtpTransport: {
+            async sendMail() { deliveryAttempts += 1; return { accepted: true }; },
+          },
+          fetchImplementation: async () => {
+            deliveryAttempts += 1;
+            return { ok: true };
+          },
+        });
+
+        assert.equal(adapter.canSendEvent(channel, "staffing_warning"), false);
+        await assert.rejects(
+          adapter.sendStaffingAlert({
+            channel,
+            recipient: channel === "email" ? "leitung@example.test" : "+436601234567",
+          }),
+          { code: gateCase.code },
+        );
+        assert.equal(deliveryAttempts, 0);
+      });
+    }
+  }
 });
 
 test("SMS- und WhatsApp-Webhooks erhalten ausschließlich den neutralen Besetzungswarnungstext", async () => {
   const calls = [];
   const adapter = createExternalNotificationAdapter({
     configuration: {
-      sms: { enabled: true, url: "https://notify.example.test/sms", token: "sms-secret" },
-      whatsapp: { enabled: true, url: "https://notify.example.test/whatsapp" },
+      sms: enabledWebhook("sms", "staffing_warning"),
+      whatsapp: enabledWebhook("whatsapp", "staffing_warning"),
     },
     fetchImplementation: async (url, options) => {
       calls.push({ url, options });
@@ -74,12 +168,14 @@ test("SMS- und WhatsApp-Webhooks erhalten ausschließlich den neutralen Besetzun
   assert.deepEqual(JSON.parse(calls[0].options.body), {
     event: "staffing_warning",
     channel: "sms",
+    sender: "approved-sms-sender",
     recipient: "+431234567",
     message: STAFFING_ALERT_TEXT,
   });
   assert.deepEqual(JSON.parse(calls[1].options.body), {
     event: "staffing_warning",
     channel: "whatsapp",
+    sender: "approved-whatsapp-sender",
     recipient: "+439876543",
     message: STAFFING_ALERT_TEXT,
   });
@@ -90,7 +186,7 @@ test("SMS- und WhatsApp-Webhooks erhalten ausschließlich den neutralen Besetzun
 test("Eigene Prozesse versenden extern nur den neutralen Anmeldehinweis", async () => {
   const calls = [];
   const adapter = createExternalNotificationAdapter({
-    configuration: { sms: { enabled: true, url: "https://notify.example.test/sms", token: "sms-secret" } },
+    configuration: { sms: enabledWebhook("sms", "process_notification") },
     fetchImplementation: async (url, options) => { calls.push({ url, options }); return { ok: true }; },
   });
   await adapter.sendProcessAlert({
@@ -102,6 +198,7 @@ test("Eigene Prozesse versenden extern nur den neutralen Anmeldehinweis", async 
   assert.deepEqual(JSON.parse(calls[0].options.body), {
     event: "process_notification",
     channel: "sms",
+    sender: "approved-sms-sender",
     recipient: "+436601234567",
     message: PROCESS_ALERT_TEXT,
   });
@@ -111,7 +208,7 @@ test("Eigene Prozesse versenden extern nur den neutralen Anmeldehinweis", async 
 test("Zielbestätigung sendet nur Einmalcode und neutralen Verifizierungstext", async () => {
   const calls = [];
   const adapter = createExternalNotificationAdapter({
-    configuration: { sms: { enabled: true, url: "https://notify.example.test/sms", token: "sms-secret" } },
+    configuration: { sms: enabledWebhook("sms", "destination_verification") },
     fetchImplementation: async (url, options) => { calls.push({ url, options }); return { ok: true }; },
   });
   await adapter.sendVerificationCode({
@@ -137,12 +234,7 @@ test("SMTP-Versand nutzt TLS-Zeitlimits und nur den neutralen Nachrichtentext", 
     timeoutMs: 250,
     configuration: {
       email: {
-        enabled: true,
-        host: "smtp.example.test",
-        port: 587,
-        from: "Grabenplaner <app@example.test>",
-        user: "mailer",
-        password: "smtp-secret",
+        ...enabledSmtp("staffing_warning"),
       },
     },
     loadSmtpModule: () => ({
@@ -175,12 +267,7 @@ test("Leihbelege werden nur per SMTP und als PDF-Anhang versendet", async () => 
   const pdf = Buffer.from("%PDF-1.7\nTest");
   const adapter = createExternalNotificationAdapter({
     configuration: {
-      email: {
-        enabled: true,
-        host: "smtp.example.test",
-        port: 587,
-        from: "Grabenplaner <app@example.test>",
-      },
+      email: enabledSmtp("loan_document"),
     },
     smtpTransport: {
       async sendMail(value) {
@@ -247,11 +334,7 @@ test("SMTP wird bei fehlender Konfiguration nicht geladen", () => {
 test("E-Mail-HTTPS-Fallback erscheint im Provider-Status als betriebsbereit", () => {
   const adapter = createExternalNotificationAdapter({
     configuration: {
-      emailWebhook: {
-        enabled: true,
-        url: "https://notify.example.test/email",
-        token: "email-webhook-secret",
-      },
+      emailWebhook: enabledWebhook("email", "staffing_warning", { token: "email-webhook-secret" }),
     },
     fetchImplementation: async () => ({ ok: true }),
   });
@@ -262,12 +345,8 @@ test("E-Mail-HTTPS-Fallback erscheint im Provider-Status als betriebsbereit", ()
     transport: "https-webhook",
     provider: "https-webhook",
     dispatchEnabled: true,
-    enabledEvents: [
-      "destination_verification",
-      "loan_document",
-      "process_notification",
-      "staffing_warning",
-    ],
+    senderApproved: true,
+    enabledEvents: ["staffing_warning"],
     issueCode: null,
   });
 });
@@ -276,11 +355,7 @@ test("E-Mail-HTTPS-Fallback sendet einen datensparsamen Payload mit Secret-Heade
   const calls = [];
   const adapter = createExternalNotificationAdapter({
     configuration: {
-      emailWebhook: {
-        enabled: true,
-        url: "https://notify.example.test/email",
-        token: "email-webhook-secret",
-      },
+      emailWebhook: enabledWebhook("email", "staffing_warning", { token: "email-webhook-secret" }),
     },
     fetchImplementation: async (url, options) => {
       calls.push({ url, options });
@@ -303,6 +378,7 @@ test("E-Mail-HTTPS-Fallback sendet einen datensparsamen Payload mit Secret-Heade
   assert.deepEqual(JSON.parse(calls[0].options.body), {
     event: "staffing_warning",
     channel: "email",
+    sender: "Grabenplaner <app@example.test>",
     recipient: "leitung@example.test",
     message: STAFFING_ALERT_TEXT,
   });
@@ -314,11 +390,7 @@ test("E-Mail-HTTPS-Fallback bereinigt Transportfehler vollständig", async () =>
   const recipient = "leitung@example.test";
   const adapter = createExternalNotificationAdapter({
     configuration: {
-      emailWebhook: {
-        enabled: true,
-        url: "https://notify.example.test/email",
-        token: secret,
-      },
+      emailWebhook: enabledWebhook("email", "staffing_warning", { token: secret }),
     },
     fetchImplementation: async () => {
       throw new Error(`Webhook rejected ${secret} for ${recipient}`);
@@ -336,7 +408,7 @@ test("E-Mail-HTTPS-Fallback bereinigt Transportfehler vollständig", async () =>
 
 test("Fehlendes optionales SMTP-Paket wird nur als neutraler Provider-Status gemeldet", async () => {
   const adapter = createExternalNotificationAdapter({
-    configuration: { email: { enabled: true, host: "smtp.example.test", from: "app@example.test" } },
+    configuration: { email: enabledSmtp("staffing_warning") },
     loadSmtpModule: () => { throw new Error(`Cannot find ${SMTP_OPTIONAL_PACKAGE} with smtp-secret`); },
   });
   assert.equal(adapter.getProviderStatus().email.available, false);
@@ -350,7 +422,7 @@ test("Fehlendes optionales SMTP-Paket wird nur als neutraler Provider-Status gem
 
 test("Transportfehler geben weder Geheimnisse noch Empfänger zurück", async () => {
   const adapter = createExternalNotificationAdapter({
-    configuration: { sms: { enabled: true, url: "https://notify.example.test/sms", token: "ultra-secret" } },
+    configuration: { sms: enabledWebhook("sms", "staffing_warning", { token: "ultra-secret" }) },
     fetchImplementation: async () => { throw new Error("ultra-secret for +431234567"); },
   });
   await assert.rejects(
@@ -364,7 +436,7 @@ test("Harte Zeitüberschreitung bricht Webhooks ab", async () => {
   let aborted = false;
   const adapter = createExternalNotificationAdapter({
     timeoutMs: 20,
-    configuration: { whatsapp: { enabled: true, url: "https://notify.example.test/whatsapp" } },
+    configuration: { whatsapp: enabledWebhook("whatsapp", "staffing_warning") },
     fetchImplementation: (_url, options) => new Promise((_resolve, reject) => {
       options.signal.addEventListener("abort", () => {
         aborted = true;
@@ -383,7 +455,7 @@ test("Harte Zeitüberschreitung beendet auch einen hängenden SMTP-Transport", a
   let closed = false;
   const adapter = createExternalNotificationAdapter({
     timeoutMs: 20,
-    configuration: { email: { enabled: true, host: "smtp.example.test", from: "app@example.test" } },
+    configuration: { email: enabledSmtp("staffing_warning") },
     smtpTransport: {
       sendMail: async () => new Promise(() => {}),
       close() { closed = true; },

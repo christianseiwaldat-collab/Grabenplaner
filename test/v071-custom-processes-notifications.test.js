@@ -16,6 +16,11 @@ process.env.GRABENPLANER_FORCE_PORTAL = "1";
 process.env.GRABENPLANER_SEED_DEMO = "1";
 process.env.GRABENPLANER_TEST_AMU_SCANNER = "clean";
 process.env.GRABENPLANER_SMS_WEBHOOK_URL = "https://notifications.invalid/grabenplaner/process";
+process.env.GRABENPLANER_SMS_WEBHOOK_TOKEN = "test-sms-token";
+process.env.GRABENPLANER_SMS_SENDER = "test-approved-sender";
+process.env.GRABENPLANER_SMS_SENDER_APPROVED = "1";
+process.env.GRABENPLANER_SMS_DISPATCH_ENABLED = "1";
+process.env.GRABENPLANER_SMS_ALLOWED_EVENTS = "destination_verification,process_notification";
 process.env.NODE_ENV = "test";
 process.env.TZ = "Europe/Vienna";
 
@@ -146,34 +151,38 @@ async function createProcess(payload = processPayload(), requestAuth = auth.hr) 
 }
 
 async function configureManagerSmsProcessNotifications(processEnabled) {
-  deliveredVerificationCode = "";
-  const verification = await api("/api/portal/v1/me/sickness-notification-preferences/verification", {
-    method: "POST",
-    auth: auth.manager,
-    body: { channel: "sms", destination: "+436601234567", earliestTime: "08:00" },
+  void processEnabled;
+  const masterPhone = await api("/api/portal/v1/personnel-records/8713", {
+    method: "PUT",
+    auth: auth.hr,
+    body: { phone: "+436601234567" },
   });
-  assert.equal(verification.response.status, 200, JSON.stringify(verification.payload));
-  assert.match(deliveredVerificationCode, /^\d{6}$/);
-  const confirmed = await api("/api/portal/v1/me/sickness-notification-preferences/verification/confirm", {
-    method: "POST",
-    auth: auth.manager,
-    body: { channel: "sms", code: deliveredVerificationCode },
-  });
-  assert.equal(confirmed.response.status, 200, JSON.stringify(confirmed.payload));
-  const saved = await api("/api/portal/v1/me/sickness-notification-preferences", {
+  assert.equal(masterPhone.response.status, 200, JSON.stringify(masterPhone.payload));
+  const settings = await api("/api/portal/v1/me/email-settings", { auth: auth.manager });
+  if (settings.payload.targets.phone.status !== "verified") {
+    deliveredVerificationCode = "";
+    const verification = await api("/api/portal/v1/me/email-settings/verification", {
+      method: "POST",
+      auth: auth.manager,
+      body: { channel: "sms" },
+    });
+    assert.equal(verification.response.status, 200, JSON.stringify(verification.payload));
+    assert.match(deliveredVerificationCode, /^\d{6}$/);
+    const confirmed = await api("/api/portal/v1/me/email-settings/verification/confirm", {
+      method: "POST",
+      auth: auth.manager,
+      body: { channel: "sms", code: deliveredVerificationCode },
+    });
+    assert.equal(confirmed.response.status, 200, JSON.stringify(confirmed.payload));
+  }
+  const saved = await api("/api/portal/v1/me/email-settings/categories", {
     method: "PUT",
     auth: auth.manager,
-    body: {
-      earliestTime: "08:00",
-      channels: {
-        email: { enabled: false, processEnabled: false, destination: "" },
-        sms: { enabled: true, processEnabled, destination: "+436601234567" },
-        whatsapp: { enabled: false, processEnabled: false, destination: "" },
-      },
-    },
+    body: { channels: { sms: true }, earliestTime: "08:00" },
   });
   assert.equal(saved.response.status, 200, JSON.stringify(saved.payload));
-  assert.equal(saved.payload.channels.sms.processEnabled, processEnabled);
+  assert.equal(saved.payload.channels.sms.enabled, true);
+  assert.equal(saved.payload.categories.deliveryActive, false);
   return saved.payload;
 }
 
@@ -699,7 +708,7 @@ test("v0.71: historische Revision und schrittweise Aufgaben bleiben auch nach Ä
   assert.equal(repeated.payload.duplicate, true);
 });
 
-test("v0.71: externe Prozesshinweise verwenden ausschließlich bestätigte Ziele", async () => {
+test("v0.71: externe Prozesshinweise bleiben trotz bestätigtem persönlichem Ziel deaktiviert", async () => {
   const { process } = await createProcess(processPayload({
     status: "active",
     steps: [
@@ -726,78 +735,32 @@ test("v0.71: externe Prozesshinweise verwenden ausschließlich bestätigte Ziele
     ],
   }));
 
-  db.prepare("DELETE FROM sickness_notification_preferences WHERE employee_number = '8713'").run();
+  db.prepare("DELETE FROM personal_notification_contacts WHERE employee_number = '8713'").run();
+  db.prepare("DELETE FROM personnel_sensitive_records WHERE employee_number = '8713'").run();
+  deliveredProcessPayloads.length = 0;
   const jobsBefore = Number(db.prepare("SELECT COUNT(*) AS count FROM outbound_notification_jobs").get().count);
   const withoutVerifiedTarget = await api(`/api/portal/v1/custom-processes/${encodeURIComponent(process.id)}/trigger`, {
     method: "POST", auth: auth.hr, body: { idempotencyKey: `v071-unverified-${crypto.randomUUID()}` },
   });
   assert.equal(withoutVerifiedTarget.response.status, 200, JSON.stringify(withoutVerifiedTarget.payload));
+  assert.equal(withoutVerifiedTarget.payload.notifications.blocked, 1);
   assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM outbound_notification_jobs").get().count), jobsBefore);
 
-  deliveredVerificationCode = "";
-  const verification = await api("/api/portal/v1/me/sickness-notification-preferences/verification", {
-    method: "POST",
-    auth: auth.manager,
-    body: { channel: "sms", destination: "+436601234567", earliestTime: "08:00" },
-  });
-  assert.equal(verification.response.status, 200, JSON.stringify(verification.payload));
-  assert.match(deliveredVerificationCode, /^\d{6}$/);
-  const pending = db.prepare("SELECT enabled, verified_at, protected_destination FROM sickness_notification_preferences WHERE employee_number = '8713' AND channel = 'sms'").get();
-  assert.equal(pending.enabled, 0);
-  assert.equal(pending.verified_at, null);
-  assert.equal(pending.protected_destination.includes("+436601234567"), false);
-
-  const stillUnverified = await api(`/api/portal/v1/custom-processes/${encodeURIComponent(process.id)}/trigger`, {
-    method: "POST", auth: auth.hr, body: { idempotencyKey: `v071-pending-${crypto.randomUUID()}` },
-  });
-  assert.equal(stillUnverified.response.status, 200, JSON.stringify(stillUnverified.payload));
-  assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM outbound_notification_jobs").get().count), jobsBefore);
-
-  const confirmed = await api("/api/portal/v1/me/sickness-notification-preferences/verification/confirm", {
-    method: "POST", auth: auth.manager, body: { channel: "sms", code: deliveredVerificationCode },
-  });
-  assert.equal(confirmed.response.status, 200, JSON.stringify(confirmed.payload));
-  assert.equal(confirmed.payload.channels.sms.enabled, true);
-  assert.equal(confirmed.payload.channels.sms.processEnabled, false);
-  assert.ok(confirmed.payload.channels.sms.verifiedAt);
-
-  const optedIn = await api("/api/portal/v1/me/sickness-notification-preferences", {
-    method: "PUT",
-    auth: auth.manager,
-    body: {
-      earliestTime: "08:00",
-      channels: {
-        email: { enabled: false, processEnabled: false, destination: "" },
-        sms: { enabled: true, processEnabled: true, destination: "+436601234567" },
-        whatsapp: { enabled: false, processEnabled: false, destination: "" },
-      },
-    },
-  });
-  assert.equal(optedIn.response.status, 200, JSON.stringify(optedIn.payload));
-  assert.equal(optedIn.payload.channels.sms.processEnabled, true);
+  const personalSettings = await configureManagerSmsProcessNotifications(true);
+  assert.equal(personalSettings.targets.phone.status, "verified");
 
   const withVerifiedTarget = await api(`/api/portal/v1/custom-processes/${encodeURIComponent(process.id)}/trigger`, {
     method: "POST", auth: auth.hr, body: { idempotencyKey: `v071-verified-${crypto.randomUUID()}` },
   });
   assert.equal(withVerifiedTarget.response.status, 200, JSON.stringify(withVerifiedTarget.payload));
-  const jobs = db.prepare("SELECT * FROM outbound_notification_jobs ORDER BY created_at, id").all();
-  assert.equal(jobs.length, jobsBefore + 1);
-  const job = jobs.at(-1);
-  assert.equal(job.channel, "sms");
-  assert.equal(job.status, "pending");
-  assert.match(job.protected_payload, /^enc:v2:/);
-  assert.equal(job.protected_payload.includes("+436601234567"), false);
-  assert.equal(job.protected_payload.includes(process.description), false);
-  assert.equal(String(job.recipient_lookup).includes("8713"), false);
+  assert.equal(withVerifiedTarget.payload.notifications.blocked, 1);
+  assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM outbound_notification_jobs").get().count), jobsBefore);
   const dispatched = await processOutboundNotificationJobs(new Date("2099-12-31T23:00:00.000Z"));
-  assert.equal(dispatched.sent, 1);
-  assert.equal(db.prepare("SELECT status FROM outbound_notification_jobs WHERE id = ?").get(job.id).status, "sent");
-  assert.equal(deliveredProcessPayloads.length, 1);
-  assert.equal(deliveredProcessPayloads[0].event, "process_notification");
-  assert.doesNotMatch(JSON.stringify(deliveredProcessPayloads[0]), /Externe Bereitschaft|8713|Notbesetzung/i);
+  assert.equal(dispatched.sent, 0);
+  assert.equal(deliveredProcessPayloads.length, 0);
 });
 
-test("v0.71: ein zunächst blockierter externer Hinweis wird bei der nächsten Prüfung nachgereicht", async () => {
+test("v0.71: ein blockierter externer Prozesshinweis wird auch später nicht nachgereicht", async () => {
   await configureManagerSmsProcessNotifications(false);
   const { process } = await createProcess(processPayload({
     status: "active",
@@ -838,10 +801,8 @@ test("v0.71: ein zunächst blockierter externer Hinweis wird bei der nächsten P
 
   await configureManagerSmsProcessNotifications(true);
   await reconcileCustomProcessTriggers(new Date("2099-06-15T10:00:00.000Z"));
-  assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM outbound_notification_jobs WHERE entity_lookup = ?").get(entityLookup).count), 1);
-  const queued = db.prepare("SELECT status, channel FROM outbound_notification_jobs WHERE entity_lookup = ?").get(entityLookup);
-  assert.equal(queued.status, "pending");
-  assert.equal(queued.channel, "sms");
+  assert.equal(Number(db.prepare("SELECT COUNT(*) AS count FROM outbound_notification_jobs WHERE entity_lookup = ?").get(entityLookup).count), 0);
+  assert.equal(deliveredProcessPayloads.length, 0);
 
   const tasks = await api("/api/portal/v1/me/process-tasks", { auth: auth.manager });
   const task = tasks.payload.tasks.find((entry) => entry.runId === triggered.payload.run.id);

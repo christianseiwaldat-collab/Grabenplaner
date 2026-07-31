@@ -279,6 +279,7 @@ try {
         'server-tools\linux\monitor\run-grabenplaner-monitor.sh',
         'server-tools\linux\migrate-grabenplaner-runtime-v2.sh',
         'server-tools\linux\migrate-grabenplaner-runtime-v3.sh',
+        'server-tools\linux\migrate-grabenplaner-runtime-v4.sh',
         'server-tools\linux\finalize-grabenplaner-runtime-v3.sh',
         'server-tools\linux\lib\extract-updater-contract.js',
         'lib\controlled-host-reboot.js',

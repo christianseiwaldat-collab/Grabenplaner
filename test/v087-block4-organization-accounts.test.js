@@ -548,6 +548,24 @@ test("Block 4: Filial- und Terminalkonten bleiben getrennte, standortgebundene N
       { method: "POST", route: "/api/portal/v1/me/process-tasks/test-run/test-step/complete", body: {} },
       { method: "GET", route: "/api/portal/v1/me/notifications" },
       { method: "PUT", route: "/api/portal/v1/me/notifications/read-all", body: {} },
+      { method: "GET", route: "/api/portal/v1/me/email-settings" },
+      {
+        method: "PUT",
+        route: "/api/portal/v1/me/email-settings/address",
+        body: { email: "organization-account@example.at" },
+      },
+      { method: "DELETE", route: "/api/portal/v1/me/email-settings/address" },
+      { method: "POST", route: "/api/portal/v1/me/email-settings/verification", body: {} },
+      {
+        method: "POST",
+        route: "/api/portal/v1/me/email-settings/verification/confirm",
+        body: { code: "123456" },
+      },
+      {
+        method: "PUT",
+        route: "/api/portal/v1/me/email-settings/categories",
+        body: { schedule_changes: true },
+      },
       { method: "GET", route: "/api/portal/v1/ui-preferences" },
       {
         method: "PUT",

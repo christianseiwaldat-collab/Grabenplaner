@@ -71,6 +71,28 @@ test("v0.72 Linux server documentation recommends Ubuntu without removing Window
   assert.match(documentation, /WinSW/);
 });
 
+test("Linux environment template prepares Scaleway TEM fail-closed without credentials", () => {
+  const environment = read("server-tools", "linux", "grabenplaner.env.example");
+
+  assert.match(environment, /^# GRABENPLANER_EMAIL_PROVIDER=scaleway-tem$/m);
+  assert.match(environment, /^# GRABENPLANER_EMAIL_FROM=Grabenplaner <benachrichtigung@grabenplaner\.eu>$/m);
+  assert.match(environment, /^# GRABENPLANER_SCALEWAY_TEM_PROJECT_ID=<Scaleway-Projekt-ID>$/m);
+  assert.match(environment, /^# GRABENPLANER_SCALEWAY_TEM_SECRET_KEY=<eingeschraenkter TEM-API-Schluessel>$/m);
+  assert.match(environment, /^# GRABENPLANER_EMAIL_SENDER_APPROVED=0$/m);
+  assert.match(environment, /^# GRABENPLANER_EMAIL_DISPATCH_ENABLED=0$/m);
+  assert.match(environment, /^# GRABENPLANER_EMAIL_ALLOWED_EVENTS=$/m);
+  assert.match(environment, /^# GRABENPLANER_SMS_SENDER_APPROVED=0$/m);
+  assert.match(environment, /^# GRABENPLANER_SMS_DISPATCH_ENABLED=0$/m);
+  assert.match(environment, /^# GRABENPLANER_SMS_ALLOWED_EVENTS=$/m);
+  assert.match(environment, /^# GRABENPLANER_WHATSAPP_SENDER_APPROVED=0$/m);
+  assert.match(environment, /^# GRABENPLANER_WHATSAPP_DISPATCH_ENABLED=0$/m);
+  assert.match(environment, /^# GRABENPLANER_WHATSAPP_ALLOWED_EVENTS=$/m);
+  assert.doesNotMatch(
+    environment,
+    /^GRABENPLANER_(?:EMAIL_PROVIDER|EMAIL_FROM|SCALEWAY_TEM_PROJECT_ID|SCALEWAY_TEM_SECRET_KEY|EMAIL_SENDER_APPROVED|EMAIL_DISPATCH_ENABLED|EMAIL_ALLOWED_EVENTS|SMS_SENDER_APPROVED|SMS_DISPATCH_ENABLED|SMS_ALLOWED_EVENTS|WHATSAPP_SENDER_APPROVED|WHATSAPP_DISPATCH_ENABLED|WHATSAPP_ALLOWED_EVENTS)=/m,
+  );
+});
+
 test("v0.72 Linux bootstrap stays private until public HTTPS readiness succeeds", () => {
   const installer = read("server-tools", "linux", "install-grabenplaner-server.sh");
   const updater = read("server-tools", "linux", "update-grabenplaner-server.sh");

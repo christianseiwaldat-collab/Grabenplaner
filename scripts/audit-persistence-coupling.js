@@ -136,6 +136,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/repositories/loan-module.js",
   "lib/persistence/repositories/mobile-auth.js",
   "lib/persistence/repositories/organization-personnel.js",
+  "lib/persistence/repositories/personal-notification-contacts.js",
   "lib/persistence/repositories/planning-settings.js",
   "lib/persistence/repositories/portal-access.js",
   "lib/persistence/repositories/runtime-recovery.js",
@@ -171,6 +172,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/sqlite/operations/system-center-metrics-schema.js",
   "lib/persistence/sqlite/operations/work-rule-store-schema.js",
   "lib/persistence/sqlite/organization-personnel-catalog.js",
+  "lib/persistence/sqlite/personal-notification-contacts-catalog.js",
   "lib/persistence/sqlite/planning-settings-catalog.js",
   "lib/persistence/sqlite/portal-access-catalog.js",
   "lib/persistence/sqlite/provider.js",
@@ -192,6 +194,7 @@ const PHASE_3_SQLITE_PROVIDER_FILES = Object.freeze([
   "lib/persistence/statements/loan-module.js",
   "lib/persistence/statements/mobile-auth.js",
   "lib/persistence/statements/organization-personnel.js",
+  "lib/persistence/statements/personal-notification-contacts.js",
   "lib/persistence/statements/planning-settings.js",
   "lib/persistence/statements/portal-access.js",
   "lib/persistence/statements/runtime-recovery.js",
@@ -228,6 +231,7 @@ const PHASE_3_SQLITE_PROVIDER_TEST_FILES = Object.freeze([
   "test/v087-startup-schema-migrations.test.js",
   "test/v087-time-tracking-persistence.test.js",
   "test/v087-wifi-automation-persistence.test.js",
+  "test/v088-personal-email-settings.test.js",
 ]);
 const PHASE_3_SQLITE_PROVIDER_TEST_FILE_SET = new Set(PHASE_3_SQLITE_PROVIDER_TEST_FILES);
 const PHASE_3_SQLITE_DRIVER_FILES = Object.freeze([
@@ -273,10 +277,10 @@ const PHASE_4_PERSISTENCE_TEST_FILES = Object.freeze([
   "test/v087-database-block4-statement-dialects.test.js",
 ]);
 const PHASE_4_PERSISTENCE_TEST_FILE_SET = new Set(PHASE_4_PERSISTENCE_TEST_FILES);
-const PHASE_4_EXPECTED_STATEMENT_COUNT = 891;
+const PHASE_4_EXPECTED_STATEMENT_COUNT = 899;
 const PHASE_4_EXPECTED_SQLITE_BASELINE_STATEMENT_COUNT = 24;
-const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 867;
-const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 795;
+const PHASE_4_EXPECTED_DIALECT_VARIANT_COUNT = 875;
+const PHASE_4_EXPECTED_NAMED_DOLLAR_PARAMETER_STATEMENT_COUNT = 803;
 const PHASE_4_EXPECTED_MIGRATION_OPERATION_COUNT = 9;
 const PHASE_4_CLASSIFICATION = Object.freeze({
   id: "phase-4-provider-sql-and-migrations",
@@ -316,7 +320,7 @@ const PHASE_5_POSTGRESQL_TEST_FILES = Object.freeze([
 ]);
 const PHASE_5_POSTGRESQL_TEST_FILE_SET = new Set(PHASE_5_POSTGRESQL_TEST_FILES);
 const PHASE_5_EXPECTED_COMPILER_VERSION = 2;
-const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 789;
+const PHASE_5_EXPECTED_PORTABLE_DIALECT_COUNT = 797;
 const PHASE_5_EXPECTED_OVERRIDE_DIALECT_COUNT = 102;
 const PHASE_5_EXPECTED_UI_PREFERENCES_STATEMENT_IDS = Object.freeze([
   "ui-preferences.list-by-employee",
@@ -484,6 +488,7 @@ const PRODUCTION_DIRECT_GROUPS = Object.freeze([
       "server-tools/linux/lib/verify-backup.js",
       "server-tools/linux/migrate-grabenplaner-runtime-v2.sh",
       "server-tools/linux/migrate-grabenplaner-runtime-v3.sh",
+      "server-tools/linux/migrate-grabenplaner-runtime-v4.sh",
       "server-tools/linux/monitor/lib/monitor-status.js",
       "server-tools/linux/offsite/lib/application-smoke.js",
       "server-tools/linux/recovery/lib/recovery-apply.js",
@@ -695,6 +700,7 @@ const BASELINE_TEST_FILES = Object.freeze([
   "test/v087-employee-cost-center-assignment.test.js",
   "test/v087-mobile-portal-personalization.test.js",
   "test/v087-pl-plus-functional-rights.test.js",
+  "test/v0885-weekly-hours.test.js",
   "test/v0885-past-week-user-preference.test.js",
   "test/work-rule-store.test.js",
 ]);
@@ -2820,7 +2826,9 @@ function inspectPhase5Postgresql(root) {
     try {
       catalogContract.assertFullPostgresqlApplicationCatalog(dialectPlan);
     } catch (error) {
-      applicationCatalogGateClosed = /0\/891/.test(String(error?.message || error));
+      applicationCatalogGateClosed = new RegExp(
+        `0/${PHASE_4_EXPECTED_STATEMENT_COUNT}`,
+      ).test(String(error?.message || error));
     }
   }
   const fullApplicationCatalogExecutable = (

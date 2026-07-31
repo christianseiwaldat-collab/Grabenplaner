@@ -104,6 +104,37 @@ test("v0.82 Arbeitszeit: Monatskopie enthaelt tatsaechlichen Beginn, Ende, Pause
   assert.ok(statement.sources.some(({ id }) => id === "at-arbeitsinspektion-arbeitszeitaufzeichnung"));
 });
 
+test("v0.82 Arbeitszeit: Gehen waehrend einer Pause schliesst Pause und Dienst vollstaendig ab", () => {
+  let ledger = baseLedger();
+  ledger = appendActualTimeEvent(ledger, actualEvent("paused-in", "clock_in", "2026-07-06T09:00:00+02:00"));
+  ledger = appendActualTimeEvent(ledger, actualEvent("paused-break", "break_start", "2026-07-06T12:30:00+02:00"));
+  ledger = appendActualTimeEvent(ledger, actualEvent("paused-out", "clock_out", "2026-07-06T13:00:00+02:00"));
+
+  const statement = createMonthlyTimeRecordStatement({
+    statementId: "statement-paused-clock-out",
+    ledger,
+    month: "2026-07",
+    createdAt: "2026-08-01T08:00:00.000Z",
+  });
+
+  assert.equal(statement.completeness, "complete");
+  assert.deepEqual(statement.issues, []);
+  assert.deepEqual(statement.days[0].sessions, [{
+    startAt: "2026-07-06T09:00:00+02:00",
+    endAt: "2026-07-06T13:00:00+02:00",
+    durationMinutes: 240,
+  }]);
+  assert.deepEqual(statement.days[0].breaks, [{
+    startAt: "2026-07-06T12:30:00+02:00",
+    endAt: "2026-07-06T13:00:00+02:00",
+    durationMinutes: 30,
+  }]);
+  assert.equal(statement.days[0].actualMinutes, 210);
+  assert.equal(statement.totals.breakMinutes, 30);
+  assert.equal(statement.totals.actualMinutes, 210);
+  assert.equal(verifyMonthlyTimeRecordStatement(statement), true);
+});
+
 test("v0.82 Arbeitszeit: unvollstaendige Kopien koennen weder genehmigt noch finalisiert werden", () => {
   let ledger = baseLedger();
   ledger = appendActualTimeEvent(ledger, actualEvent("open-in", "clock_in", "2026-07-06T09:00:00+02:00"));

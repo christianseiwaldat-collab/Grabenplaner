@@ -25,6 +25,7 @@ test("Scaleway TEM verwendet einen festen TLS-SMTP-Endpunkt und verlangt Authent
     valid: true,
     providerId: SCALEWAY_TEM_PROVIDER_ID,
     dispatchEnabled: false,
+    senderApproved: false,
     allowedEvents: [],
     authenticationRequired: true,
     host: SCALEWAY_TEM_SMTP_HOST,
@@ -49,6 +50,7 @@ test("Scaleway TEM bleibt ohne ausdrückliche Versand- und Ereignisfreigabe gesp
     transport: "smtp",
     provider: "scaleway-tem",
     dispatchEnabled: false,
+    senderApproved: false,
     enabledEvents: [],
     issueCode: "dispatch_disabled",
   });
@@ -66,6 +68,7 @@ test("Scaleway TEM versendet ausschließlich ausdrücklich freigegebene Ereignis
     environment: {
       ...COMPLETE_SCALEWAY_ENVIRONMENT,
       GRABENPLANER_EMAIL_DISPATCH_ENABLED: "1",
+      GRABENPLANER_EMAIL_SENDER_APPROVED: "1",
       GRABENPLANER_EMAIL_ALLOWED_EVENTS: "staffing_warning",
     },
     smtpTransport: { async sendMail(message) { sent.push(message); return { accepted: [message.to] }; } },
@@ -78,6 +81,27 @@ test("Scaleway TEM versendet ausschließlich ausdrücklich freigegebene Ereignis
     { code: "EXTERNAL_NOTIFICATION_EVENT_DISABLED" },
   );
   assert.equal(sent.length, 1);
+});
+
+test("Scaleway TEM verlangt die ausdrückliche Freigabe des Absenders auch bei direktem Versand", async () => {
+  let deliveryAttempts = 0;
+  const adapter = createExternalNotificationAdapter({
+    environment: {
+      ...COMPLETE_SCALEWAY_ENVIRONMENT,
+      GRABENPLANER_EMAIL_DISPATCH_ENABLED: "1",
+      GRABENPLANER_EMAIL_ALLOWED_EVENTS: "staffing_warning",
+    },
+    smtpTransport: {
+      async sendMail() { deliveryAttempts += 1; return { accepted: true }; },
+    },
+  });
+  assert.equal(adapter.getProviderStatus().email.issueCode, "sender_not_approved");
+  assert.equal(adapter.canSendEvent("email", "staffing_warning"), false);
+  await assert.rejects(
+    adapter.sendStaffingAlert({ channel: "email", recipient: "leitung@example.test" }),
+    { code: "EXTERNAL_NOTIFICATION_SENDER_NOT_APPROVED" },
+  );
+  assert.equal(deliveryAttempts, 0);
 });
 
 test("Unbekannte Anbieter und Ereignisse werden fail-closed abgewiesen", () => {

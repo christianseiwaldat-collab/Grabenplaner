@@ -151,7 +151,7 @@ commit_marker=""
 if [[ -n "$commit_marker_arg" ]]; then
   commit_marker="$(gp_safe_absolute_path "$commit_marker_arg" "Updater-Commitmarker")"
   commit_marker_parent="$(dirname -- "$commit_marker")"
-  [[ "$commit_marker_parent" =~ ^/opt/grabenplaner/\.runtime-v(2|3)-migration\.[A-Za-z0-9]+$ \
+  [[ "$commit_marker_parent" =~ ^/opt/grabenplaner/\.runtime-v(2|3|4)-migration\.[A-Za-z0-9]+$ \
     && -d "$commit_marker_parent" && ! -L "$commit_marker_parent" \
     && "$(stat --format='%u:%g:%a' -- "$commit_marker_parent")" == "0:0:711" \
     && ! -e "$commit_marker" && ! -L "$commit_marker" ]] \
@@ -491,7 +491,7 @@ esac
 installed_runtime_schema="$("$node" -e \
   'const fs=require("node:fs");process.stdout.write(String(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).deploymentSchemaVersion))' \
   "$installed_runtime_result_file")"
-if [[ "$installed_runtime_schema" == "3" ]]; then
+if [[ "$installed_runtime_schema" == "3" || "$installed_runtime_schema" == "4" ]]; then
   host_control_group="grabenplaner-host-control"
   host_control_module="/opt/grabenplaner-host-control/module"
   host_control_socket_unit="/etc/systemd/system/grabenplaner-host-control.socket"

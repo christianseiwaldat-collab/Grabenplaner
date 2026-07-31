@@ -182,6 +182,10 @@ test("v0.87 Block 7: Legacy-Schriftwerte und Betriebsmodus-Reste werden idempote
         INSERT INTO settings (key, value) VALUES ('operation_mode', 'lan')
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
       `).run();
+      database.prepare(`
+        INSERT INTO settings (key, value) VALUES ('vacation_count_saturday', '1')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `).run();
       database.exec("COMMIT");
     } catch (error) {
       try { database.exec("ROLLBACK"); } catch {}
@@ -209,6 +213,7 @@ test("v0.87 Block 7: Legacy-Schriftwerte und Betriebsmodus-Reste werden idempote
         { employee_number: "b7-standard", preference_key: "app_font_scale_percent", value: "100" },
       ]);
       assert.equal(verified.prepare("SELECT COUNT(*) AS count FROM settings WHERE key = 'operation_mode'").get().count, 0);
+      assert.equal(verified.prepare("SELECT COUNT(*) AS count FROM settings WHERE key = 'vacation_count_saturday'").get().count, 0);
       assert.equal(verified.prepare("SELECT COUNT(*) AS count FROM portal_permission_grants WHERE permission = 'operation_mode:write'").get().count, 0);
       assert.equal(verified.prepare("SELECT COUNT(*) AS count FROM portal_permission_denials WHERE permission = 'operation_mode:write'").get().count, 0);
       assert.deepEqual(
