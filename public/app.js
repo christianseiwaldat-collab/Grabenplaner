@@ -102,6 +102,7 @@ const state = {
   appFontScalePercent: 100,
   persistedAppFontScalePercent: 100,
   workRuleAssessmentExpanded: false,
+  allowPastWeekEditing: false,
   personnelDashboardLayout: { version: 1, order: [], hidden: [] },
   personnelDashboardDraftLayout: null,
   employeeDisplayColumns: [],
@@ -1428,6 +1429,7 @@ async function loadAll() {
       api(`/api/branding/kits?locationId=${encodeURIComponent(state.locationId)}`).catch(() => state.brandingKits || []),
     ]);
     state.data = schedule;
+    state.allowPastWeekEditing = schedule.settings?.allow_past_week_editing === "1";
     state.locations = schedule.locations || state.locations;
     state.vacationData = vacationData;
     state.allEmployees = employees;
@@ -2214,16 +2216,31 @@ function renderRemarks() {
   }`;
 }
 
+function hoursOverviewMinutes(values, employeeNumber) {
+  const value = values?.[employeeNumber];
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function hoursOverviewValue(value) {
+  return value === null
+    ? '<span class="status-badge danger">Berechnungsfehler</span>'
+    : formatHours(value);
+}
+
 function renderHoursOverview() {
   const showSaturdayStats = state.data.settings.show_saturday_service_stats !== "0";
   let hasEstimatedSaturdayStats = false;
   elements.hoursOverview.innerHTML = state.data.employees.map((employee) => {
-    const planned = state.data.plannedTotals[employee.personnel_number] || 0;
-    const optionCredit = state.data.optionCreditTotals[employee.personnel_number] || 0;
-    const counted = state.data.totals[employee.personnel_number] || 0;
-    const target = Number(employee.contracted_hours) * 60;
-    const difference = counted - target;
-    const percentage = target > 0 ? Math.min(100, (counted / target) * 100) : 0;
+    const planned = hoursOverviewMinutes(state.data.plannedTotals, employee.personnel_number);
+    const optionCredit = hoursOverviewMinutes(state.data.optionCreditTotals, employee.personnel_number);
+    const counted = hoursOverviewMinutes(state.data.totals, employee.personnel_number);
+    const contractedHours = Number(employee.contracted_hours);
+    const target = Number.isFinite(contractedHours) && contractedHours >= 0 ? contractedHours * 60 : null;
+    const difference = counted !== null && target !== null ? counted - target : null;
+    const percentage = counted !== null && target !== null && target > 0
+      ? Math.min(100, (counted / target) * 100)
+      : 0;
+    const calculationError = [planned, optionCredit, counted, target].some((value) => value === null);
     const saturdayStats = state.data.saturdayStats?.byEmployee?.[employee.personnel_number] || null;
     if (saturdayStats?.fourWeeksEstimated || saturdayStats?.threeMonthsEstimated) hasEstimatedSaturdayStats = true;
     const saturdayStatsHtml = showSaturdayStats && saturdayStats ? `
@@ -2239,12 +2256,13 @@ function renderHoursOverview() {
         <div><strong>${escapeHtml(employee.nickname)}</strong><small>${escapeHtml(employee.personnel_number)} · ${escapeHtml(employee.full_name)}</small></div>
       </div>
       <div class="hours-values">
-        <span><small>Eingeteilt</small><strong>${formatHours(planned)}</strong></span>
-        <span><small>Sonderfälle</small><strong>${formatHours(optionCredit)}</strong></span>
-        <span><small>Gewertet</small><strong>${formatHours(counted)}</strong></span>
-        <span><small>Wochen-Soll</small><strong>${formatHours(target)}</strong></span>
-        <span class="${difference > 0 ? "hours-over" : difference < 0 ? "hours-under" : "hours-exact"}"><small>Differenz</small><strong>${difference > 0 ? "+" : ""}${formatHours(difference)}</strong></span>
+        <span><small>Eingeteilt</small><strong>${hoursOverviewValue(planned)}</strong></span>
+        <span><small>Sonderfälle</small><strong>${hoursOverviewValue(optionCredit)}</strong></span>
+        <span><small>Gewertet</small><strong>${hoursOverviewValue(counted)}</strong></span>
+        <span><small>Wochen-Soll</small><strong>${hoursOverviewValue(target)}</strong></span>
+        <span class="${difference === null ? "hours-under" : difference > 0 ? "hours-over" : difference < 0 ? "hours-under" : "hours-exact"}"><small>Differenz</small><strong>${difference === null ? '<span class="status-badge danger">Berechnungsfehler</span>' : `${difference > 0 ? "+" : ""}${formatHours(difference)}`}</strong></span>
       </div>
+      ${calculationError ? '<p class="calculation-note">Die Wochenstunden konnten nicht vollständig berechnet werden. Bitte den Dienstplan neu laden.</p>' : ""}
       ${saturdayStatsHtml}
       <div class="hours-progress"><span style="width:${percentage}%;background:${employee.color}"></span></div>
     </article>`;
@@ -7268,7 +7286,13 @@ function renderSettings() {
   document.querySelector("#backupDirectory").value = settings.backup_directory || "";
   document.querySelector("#backupIntervalHours").value = settings.backup_interval_hours || "2";
   document.querySelector("#vacationCountSaturday").checked = settings.vacation_count_saturday === "1";
-  document.querySelector("#allowPastWeekEditing").checked = settings.allow_past_week_editing === "1";
+  const allowPastWeekEditing = document.querySelector("#allowPastWeekEditing");
+  allowPastWeekEditing.checked = state.portalStatus?.portalEnabled === true
+    ? state.allowPastWeekEditing
+    : settings.allow_past_week_editing === "1";
+  allowPastWeekEditing.disabled = state.portalStatus?.portalEnabled === true
+    && (!state.portalSession?.user?.permissions?.includes("schedule:write")
+      || !state.portalSession?.user?.permissions?.includes("settings:write"));
   elements.currentWeekAutoLock.checked = settings.current_week_auto_lock !== "0";
   elements.currentWeekLockMode.value = settings.current_week_lock_mode || "closing";
   elements.currentWeekLockDay.value = settings.current_week_lock_day || "saturday";
@@ -8183,6 +8207,11 @@ async function loadUiPreferences() {
   }
   const localOnly = preferences?.actor === "local"
     || state.portalStatus?.portalEnabled !== true;
+  if (!localOnly && typeof preferences?.allowPastWeekEditing === "boolean") {
+    state.allowPastWeekEditing = preferences.allowPastWeekEditing;
+    const allowPastWeekEditing = document.querySelector("#allowPastWeekEditing");
+    if (allowPastWeekEditing) allowPastWeekEditing.checked = state.allowPastWeekEditing;
+  }
   for (const view of UI_APPEARANCE_VIEWS) {
     const stored = localOnly ? localStorage.getItem(pageThemeStorageKey(view)) : "";
     applyPageTheme(view, stored || preferences?.pageThemes?.[view] || "light");
@@ -16336,6 +16365,9 @@ async function saveSettings(silent = false) {
     const portalEnabled = state.portalStatus?.portalEnabled === true;
     const canSaveGeneralSettings = !portalEnabled || permissions.includes("settings:write");
     const canSaveBranding = !portalEnabled || permissions.includes("branding:write");
+    const canSavePastWeekPreference = !portalEnabled
+      || (permissions.includes("schedule:write") && permissions.includes("settings:write"));
+    const allowPastWeekEditing = document.querySelector("#allowPastWeekEditing").checked;
     const payload = {
         locationId: state.locationId,
         departmentId: state.departmentId || "",
@@ -16359,7 +16391,7 @@ async function saveSettings(silent = false) {
         backupDirectory: document.querySelector("#backupDirectory").value,
         backupIntervalHours: Number(document.querySelector("#backupIntervalHours").value),
         vacationCountSaturday: document.querySelector("#vacationCountSaturday").checked,
-        allowPastWeekEditing: document.querySelector("#allowPastWeekEditing").checked,
+        ...(!portalEnabled ? { allowPastWeekEditing } : {}),
         currentWeekAutoLock: elements.currentWeekAutoLock.checked,
         currentWeekLockMode: elements.currentWeekLockMode.value,
         currentWeekLockDay: elements.currentWeekLockDay.value,
@@ -16379,6 +16411,13 @@ async function saveSettings(silent = false) {
         method: "PUT",
         body: JSON.stringify(payload),
       });
+    }
+    if (portalEnabled && canSavePastWeekPreference) {
+      const preferences = await api("/api/portal/v1/ui-preferences", {
+        method: "PUT",
+        body: JSON.stringify({ allowPastWeekEditing }),
+      });
+      state.allowPastWeekEditing = preferences.allowPastWeekEditing === true;
     }
     if (!silent && canSaveGeneralSettings && elements.appFontScalePercent) {
       await saveAppFontScalePercent(elements.appFontScalePercent.valueAsNumber, { silent: true });

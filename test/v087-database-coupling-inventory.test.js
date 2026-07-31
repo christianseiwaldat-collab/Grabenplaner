@@ -279,7 +279,7 @@ test("v0.87 Datenbank Block 5: historische Baselines und aktuelle Phasen bleiben
 
   assert.equal(report.summary.productionDirectFiles, 48);
   assert.equal(report.summary.productionIndirectFiles, BASELINE.productionIndirectFiles + 1);
-  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 1);
+  assert.equal(report.summary.testCandidateFiles, BASELINE.testCandidateFiles + 2);
   const expectedTestDriverFiles = BASELINE_DIRECT_TEST_DRIVER_FILES
     .filter((file) => ![
       "test/block6-custom-work-rule-evaluator.test.js",

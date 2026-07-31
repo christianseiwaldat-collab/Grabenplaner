@@ -695,12 +695,14 @@ const BASELINE_TEST_FILES = Object.freeze([
   "test/v087-employee-cost-center-assignment.test.js",
   "test/v087-mobile-portal-personalization.test.js",
   "test/v087-pl-plus-functional-rights.test.js",
+  "test/v0885-past-week-user-preference.test.js",
   "test/work-rule-store.test.js",
 ]);
 
 const TEST_SPECIAL_GROUPS = Object.freeze({
   "portal-ui-preferences-integration": new Set([
     "test/v087-mobile-portal-personalization.test.js",
+    "test/v0885-past-week-user-preference.test.js",
   ]),
   "historical-sqlite-fixture": new Set([
     "test-support/f18-backup-fixture.js",

@@ -4532,17 +4532,28 @@ function currentWeekLockPoint(settings = getSettings()) {
   return `${addDays(weekStart, last.index)}T${last.end}`;
 }
 
-function assertWeekEditable(weekStart, settings = getSettings()) {
-  if (isPastWeekStart(weekStart) && !settingEnabled(settings, "allow_past_week_editing")) {
-    throw httpError(423, "Vergangene Kalenderwochen sind standardmäßig gesperrt. Das kann in den Grundeinstellungen aktiviert werden.");
+async function pastWeekEditingAllowedForActor(actor, settings = getSettings()) {
+  if (!getPortalStatus().portalEnabled || actor?.employeeNumber === "local") {
+    return settingEnabled(settings, "allow_past_week_editing");
+  }
+  if (!actor?.employeeNumber
+    || !actor.permissions?.includes("schedule:write")
+    || !actor.permissions?.includes("settings:write")) return false;
+  const stored = await uiPreferencesRepository.get(actor.employeeNumber, "allow_past_week_editing");
+  return stored?.value === "1";
+}
+
+async function assertWeekEditable(weekStart, settings = getSettings(), actor = null) {
+  if (isPastWeekStart(weekStart) && !await pastWeekEditingAllowedForActor(actor, settings)) {
+    throw httpError(423, "Vergangene Kalenderwochen sind für deinen Benutzer gesperrt. Du kannst die persönliche Freigabe bei Bedarf in den Einstellungen aktivieren.");
   }
   if (weekStart === currentWeekStart() && settingEnabled(settings, "current_week_auto_lock") && viennaNowLocal() >= currentWeekLockPoint(settings)) {
     throw httpError(423, "Der Dienstplan der aktuellen Woche ist bereits für Änderungen gesperrt.");
   }
 }
 
-function assertDateEditable(isoDate, settings = getSettings()) {
-  assertWeekEditable(getMonday(isoDate), settings);
+async function assertDateEditable(isoDate, settings = getSettings(), actor = null) {
+  await assertWeekEditable(getMonday(isoDate), settings, actor);
 }
 
 function getSettings() {
@@ -13238,6 +13249,53 @@ function overlapMinutes(start, end, rangeStart, rangeEnd) {
   return Math.max(0, Math.min(end, rangeEnd) - Math.max(start, rangeStart));
 }
 
+function finiteNumberInRange(value, fallback, minimum, maximum) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= minimum && numeric <= maximum
+    ? numeric
+    : fallback;
+}
+
+function saturdayBonusSettings(settings = {}) {
+  const defaultFrom = isTime(defaultSettings.saturday_bonus_from)
+    ? defaultSettings.saturday_bonus_from
+    : "13:00";
+  const defaultFactor = finiteNumberInRange(
+    defaultSettings.saturday_bonus_factor,
+    1.5,
+    1,
+    5,
+  );
+  return {
+    from: isTime(settings.saturday_bonus_from) ? settings.saturday_bonus_from : defaultFrom,
+    factor: finiteNumberInRange(settings.saturday_bonus_factor, defaultFactor, 1, 5),
+  };
+}
+
+function finiteScheduleMinutes(value, fallback = 0) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function scheduleShiftMinuteBasis(shift) {
+  const rawMinutes = Math.max(0, finiteScheduleMinutes(shift.raw_minutes));
+  const breakMinutes = Math.min(
+    rawMinutes,
+    Math.max(0, finiteScheduleMinutes(shift.break_minutes)),
+  );
+  const plannedMinutes = rawMinutes - breakMinutes;
+  const bonusMinutes = Math.max(0, finiteScheduleMinutes(shift.bonus_minutes));
+  const countedMinutes = Math.max(
+    0,
+    finiteScheduleMinutes(shift.counted_minutes, plannedMinutes + bonusMinutes),
+  );
+  return { plannedMinutes, bonusMinutes, countedMinutes };
+}
+
+function addScheduleMinutes(current, addition, fallback = 0) {
+  return finiteScheduleMinutes(current) + finiteScheduleMinutes(addition, fallback);
+}
+
 async function overlappingWeekOption(employeeNumber, date, startTime, endTime) {
   return (await planningSettingsRepository.listWeekOptionsForEmployeeDate({
     employeeNumber,
@@ -13251,13 +13309,19 @@ async function shiftMetrics(shift, settings) {
   let end = timeToMinutes(shift.end_time);
   if (end <= start) end += 24 * 60;
   const rawMinutes = end - start;
+  const defaultBreakAfter = finiteNumberInRange(defaultSettings.break_after_minutes, 360, 0, 1440);
+  const defaultBreakDuration = finiteNumberInRange(defaultSettings.break_duration_minutes, 30, 0, 240);
+  const breakAfterMinutes = finiteNumberInRange(settings.break_after_minutes, defaultBreakAfter, 0, 1440);
+  const breakDurationMinutes = finiteNumberInRange(settings.break_duration_minutes, defaultBreakDuration, 0, 240);
   const ruleBreakMinutes =
     settingEnabled(settings, "break_rule_enabled") &&
-    rawMinutes > Number(settings.break_after_minutes)
-      ? Number(settings.break_duration_minutes)
+    rawMinutes > breakAfterMinutes
+      ? breakDurationMinutes
       : 0;
   const dayConfig = await dayConfiguration(shift.shift_date, settings);
   const lunchBreakMinutes = dayConfig?.lunchEnabled
+    && isTime(dayConfig.lunchStart)
+    && isTime(dayConfig.lunchEnd)
     ? overlapMinutes(
         start,
         end,
@@ -13272,9 +13336,10 @@ async function shiftMetrics(shift, settings) {
   const isSaturday = new Date(`${shift.shift_date}T12:00:00Z`).getUTCDay() === 6;
 
   if (isSaturday && settingEnabled(settings, "saturday_bonus_enabled")) {
-    const bonusStart = timeToMinutes(settings.saturday_bonus_from);
+    const saturdayBonus = saturdayBonusSettings(settings);
+    const bonusStart = timeToMinutes(saturdayBonus.from);
     let eligibleMinutes = Math.max(0, end - Math.max(start, bonusStart));
-    if (dayConfig?.lunchEnabled) {
+    if (dayConfig?.lunchEnabled && isTime(dayConfig.lunchStart) && isTime(dayConfig.lunchEnd)) {
       eligibleMinutes -= overlapMinutes(
         Math.max(start, bonusStart),
         end,
@@ -13282,7 +13347,7 @@ async function shiftMetrics(shift, settings) {
         timeToMinutes(dayConfig.lunchEnd),
       );
     }
-    bonusMinutes = Math.round(eligibleMinutes * (Number(settings.saturday_bonus_factor) - 1));
+    bonusMinutes = Math.round(Math.max(0, eligibleMinutes) * (saturdayBonus.factor - 1));
     countedMinutes += bonusMinutes;
   }
 
@@ -13426,7 +13491,7 @@ async function validateEmployee(body, isNew, options = {}) {
     };
 }
 
-async function validateShift(body, contextInput = {}) {
+async function validateShift(body, contextInput = {}, actor = null) {
   const employeeNumber = String(body.employeeNumber || "").trim();
   const shiftDate = String(body.date || "");
   const startTime = String(body.startTime || "");
@@ -13458,7 +13523,7 @@ async function validateShift(body, contextInput = {}) {
     throw httpError(409, `${employee.nickname} hat an diesem Wochentag keinen fix vereinbarten Arbeitstag.`);
   }
   const settings = await settingsForLocation(locationId);
-  assertDateEditable(shiftDate, settings);
+  await assertDateEditable(shiftDate, settings, actor);
   const globalBlock = getGlobalDayBlockForDate(shiftDate, locationId);
   if (globalBlock) {
     throw httpError(409, `Dieser Tag ist für alle gesperrt: ${globalBlock.reason || globalBlock.holiday_name || "gesperrt"}.`);
@@ -13614,7 +13679,7 @@ function optionOverlapsTime(option, startTime, endTime) {
   return timeRangesOverlap(startTime, endTime, option.start_time, option.end_time);
 }
 
-async function validateWeekOption(body, existingId = 0) {
+async function validateWeekOption(body, existingId = 0, actor = null) {
   const employeeNumber = String(body.employeeNumber || "").trim();
   const weekStart = getMonday(String(body.weekStart || ""));
   const dateFrom = String(body.dateFrom || "");
@@ -13638,7 +13703,7 @@ async function validateWeekOption(body, existingId = 0) {
   if (dateFrom < weekStart || dateTo > addDays(weekStart, 6)) {
     throw httpError(400, "Der Zeitraum muss innerhalb der ausgewählten Woche liegen.");
   }
-  assertWeekEditable(weekStart, await settingsForLocation(employee.home_location_id));
+  await assertWeekEditable(weekStart, await settingsForLocation(employee.home_location_id), actor);
   if (!allowedWeekOptionTypes.includes(optionType)) throw httpError(400, "Bitte eine gültige Option auswählen.");
   if (!alwaysFullDayOptionTypes.has(optionType) && !timedOptionTypes.has(optionType)) {
     throw httpError(400, "Bitte eine gültige Option auswählen.");
@@ -14431,6 +14496,8 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
   const context = await resolvePlanningContext(contextInput);
   assertSessionContextScope(session, context);
   const settings = applyScopedPdfSettings(await settingsForLocation(context.locationId), context, "schedule");
+  const allowPastWeekEditing = await pastWeekEditingAllowedForActor(session, settings);
+  settings.allow_past_week_editing = allowPastWeekEditing ? "1" : "0";
   const globalDayBlocks = getGlobalDayBlocksForRange(weekStart, weekEnd, context.locationId);
   const globalBlockDates = new Set(globalDayBlocks.map((block) => block.block_date));
   const planningQuery = {
@@ -14485,29 +14552,56 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     sicknessCreditTotals[employee.personnel_number] = 0;
   }
   for (const shift of shifts) {
-    totals[shift.employee_number] =
-      (totals[shift.employee_number] || 0) + shift.counted_minutes;
-    plannedTotals[shift.employee_number] =
-      (plannedTotals[shift.employee_number] || 0) + shift.raw_minutes - shift.break_minutes;
-    inStoreTotals[shift.employee_number] =
-      (inStoreTotals[shift.employee_number] || 0) + shift.raw_minutes - shift.break_minutes;
-    bonusTotals[shift.employee_number] =
-      (bonusTotals[shift.employee_number] || 0) + shift.bonus_minutes;
+    const minuteBasis = scheduleShiftMinuteBasis(shift);
+    totals[shift.employee_number] = addScheduleMinutes(
+      totals[shift.employee_number],
+      minuteBasis.countedMinutes,
+    );
+    plannedTotals[shift.employee_number] = addScheduleMinutes(
+      plannedTotals[shift.employee_number],
+      minuteBasis.plannedMinutes,
+    );
+    inStoreTotals[shift.employee_number] = addScheduleMinutes(
+      inStoreTotals[shift.employee_number],
+      minuteBasis.plannedMinutes,
+    );
+    bonusTotals[shift.employee_number] = addScheduleMinutes(
+      bonusTotals[shift.employee_number],
+      minuteBasis.bonusMinutes,
+    );
   }
   for (const option of weekOptions) {
-    option.credited_minutes_per_day_effective = optionMinutesPerDay(option, option.contracted_hours);
-    option.credited_minutes = option.credited_minutes_per_day_effective * countCreditedOptionDays(option, settings, context.locationId);
-    optionCreditTotals[option.employee_number] =
-      (optionCreditTotals[option.employee_number] || 0) + option.credited_minutes;
-    totals[option.employee_number] =
-      (totals[option.employee_number] || 0) + option.credited_minutes;
+    option.credited_minutes_per_day_effective = Math.max(
+      0,
+      finiteScheduleMinutes(optionMinutesPerDay(option, option.contracted_hours)),
+    );
+    option.credited_minutes = option.credited_minutes_per_day_effective * Math.max(
+      0,
+      finiteScheduleMinutes(countCreditedOptionDays(option, settings, context.locationId)),
+    );
+    optionCreditTotals[option.employee_number] = addScheduleMinutes(
+      optionCreditTotals[option.employee_number],
+      option.credited_minutes,
+    );
+    totals[option.employee_number] = addScheduleMinutes(
+      totals[option.employee_number],
+      option.credited_minutes,
+    );
   }
   for (const credit of sicknessCredits) {
-    sicknessCreditTotals[credit.employee_number] =
-      (sicknessCreditTotals[credit.employee_number] || 0) + credit.minutes;
-    optionCreditTotals[credit.employee_number] =
-      (optionCreditTotals[credit.employee_number] || 0) + credit.minutes;
-    totals[credit.employee_number] = (totals[credit.employee_number] || 0) + credit.minutes;
+    const creditMinutes = Math.max(0, finiteScheduleMinutes(credit.minutes));
+    sicknessCreditTotals[credit.employee_number] = addScheduleMinutes(
+      sicknessCreditTotals[credit.employee_number],
+      creditMinutes,
+    );
+    optionCreditTotals[credit.employee_number] = addScheduleMinutes(
+      optionCreditTotals[credit.employee_number],
+      creditMinutes,
+    );
+    totals[credit.employee_number] = addScheduleMinutes(
+      totals[credit.employee_number],
+      creditMinutes,
+    );
   }
   const saturdayStats = await buildSaturdayServiceStats(weekStart, context, employees, shifts, settings);
   const creditedHolidayDates = new Set();
@@ -14516,9 +14610,9 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     if (day === 0 || day === 6) continue;
     for (const employee of employees) {
       if (hasNonVacationCreditOnDate(weekOptions, employee.personnel_number, holiday.date)) continue;
-      const credit = holidayCreditMinutes(employee);
-      optionCreditTotals[employee.personnel_number] = (optionCreditTotals[employee.personnel_number] || 0) + credit;
-      totals[employee.personnel_number] = (totals[employee.personnel_number] || 0) + credit;
+      const credit = Math.max(0, finiteScheduleMinutes(holidayCreditMinutes(employee)));
+      optionCreditTotals[employee.personnel_number] = addScheduleMinutes(optionCreditTotals[employee.personnel_number], credit);
+      totals[employee.personnel_number] = addScheduleMinutes(totals[employee.personnel_number], credit);
     }
     creditedHolidayDates.add(holiday.date);
   }
@@ -14528,9 +14622,9 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     if (day === 0 || day === 6) continue;
     for (const employee of employees) {
       if (hasNonVacationCreditOnDate(weekOptions, employee.personnel_number, block.block_date)) continue;
-      const credit = holidayCreditMinutes(employee);
-      optionCreditTotals[employee.personnel_number] = (optionCreditTotals[employee.personnel_number] || 0) + credit;
-      totals[employee.personnel_number] = (totals[employee.personnel_number] || 0) + credit;
+      const credit = Math.max(0, finiteScheduleMinutes(holidayCreditMinutes(employee)));
+      optionCreditTotals[employee.personnel_number] = addScheduleMinutes(optionCreditTotals[employee.personnel_number], credit);
+      totals[employee.personnel_number] = addScheduleMinutes(totals[employee.personnel_number], credit);
     }
   }
   const workRuleAssessment = sessionCanReadWorkRules(session)
@@ -14546,7 +14640,7 @@ async function getSchedule(weekValue, contextInput = {}, session = null) {
     settings,
     currentWeekStart: currentWeekStart(),
     isPastWeek: isPastWeekStart(weekStart),
-    isPastWeekLocked: (isPastWeekStart(weekStart) && !settingEnabled(settings, "allow_past_week_editing"))
+    isPastWeekLocked: (isPastWeekStart(weekStart) && !allowPastWeekEditing)
       || (weekStart === currentWeekStart() && settingEnabled(settings, "current_week_auto_lock") && viennaNowLocal() >= currentWeekLockPoint(settings)),
     currentWeekLockPoint: currentWeekLockPoint(settings),
     employees,
@@ -14889,7 +14983,7 @@ async function validateVacationEntry(
   return { employeeNumber, dateFrom, dateTo, note };
 }
 
-async function validateGlobalDayBlock(body, existingId = 0) {
+async function validateGlobalDayBlock(body, existingId = 0, actor = null) {
   const context = await resolvePlanningContext({ ...body, departmentId: null, department: null });
   const blockDate = String(body.blockDate || body.date || "").trim();
   const weekStart = getMonday(String(body.weekStart || blockDate || ""));
@@ -14901,7 +14995,7 @@ async function validateGlobalDayBlock(body, existingId = 0) {
     throw httpError(400, "Der Sperrtag muss innerhalb der ausgewählten Kalenderwoche liegen.");
   }
   if (!reason) throw httpError(400, "Bitte einen Grund für den Sperrtag eintragen.");
-  assertWeekEditable(weekStart, await settingsForLocation(context.locationId));
+  await assertWeekEditable(weekStart, await settingsForLocation(context.locationId), actor);
 
   const existingBlock = planningSettingsReadModel.globalDayBlocks.find((entry) => (
     String(entry.location_id) === String(context.locationId)
@@ -15002,10 +15096,10 @@ async function getScheduleNote(weekStart, context) {
   };
 }
 
-async function validateScheduleNote(body) {
+async function validateScheduleNote(body, actor = null) {
   const weekStart = getMonday(isIsoDate(body.weekStart) ? body.weekStart : undefined);
   const context = await resolvePlanningContext(body);
-  assertWeekEditable(weekStart, await settingsForLocation(context.locationId));
+  await assertWeekEditable(weekStart, await settingsForLocation(context.locationId), actor);
   const noteHtml = sanitizeScheduleNoteHtml(body.noteHtml || "");
   const noteText = stripEmoji(
     textFromScheduleNoteHtml(noteHtml) || String(body.noteText || body.text || ""),
@@ -21270,7 +21364,7 @@ app.post("/api/work-rules/evaluate", async (request, response) => {
     }, {
       locationId: context.locationId,
       existingId: id,
-    });
+    }, request.portalSession);
     if (id) candidate.id = id;
     assertShiftEmployeeAssignmentScope(request.portalSession, candidate, existing);
   }
@@ -21379,7 +21473,7 @@ app.get("/api/schedule", async (request, response) => {
 });
 
 app.put("/api/schedule-note", async (request, response) => {
-  const note = await validateScheduleNote(request.body);
+  const note = await validateScheduleNote(request.body, request.portalSession);
   assertSessionContextScope(request.portalSession, note.context);
   await organizationPersonnelRepository.upsertScheduleNote({
     locationId: note.context.locationId,
@@ -21399,7 +21493,7 @@ app.delete("/api/schedule-note", async (request, response) => {
   const weekStart = getMonday(isIsoDate(request.query.week) ? request.query.week : undefined);
   const context = await resolvePlanningContext(request.query);
   assertSessionContextScope(request.portalSession, context);
-  assertWeekEditable(weekStart, await settingsForLocation(context.locationId));
+  await assertWeekEditable(weekStart, await settingsForLocation(context.locationId), request.portalSession);
   await organizationPersonnelRepository.deleteScheduleNote(
     context.locationId,
     pdfDepartmentKey(context),
@@ -22877,6 +22971,9 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   let employeeDisplayColumns = [...UI_DEFAULT_EMPLOYEE_DISPLAY_COLUMNS];
   let employeeDisplaySort = { key: "personnel_number", direction: "asc" };
   let workRuleAssessmentExpanded = false;
+  let allowPastWeekEditing = actor?.employeeNumber === "local"
+    ? settingEnabled(getSettings(), "allow_past_week_editing")
+    : false;
   let personnelDashboardLayout = defaultPersonnelDashboardLayout();
   let mobilePortalNavigation = defaultMobilePortalNavigation();
   let mobilePortalAppearance = defaultMobilePortalAppearance();
@@ -22906,6 +23003,9 @@ async function uiPreferencesForActor(actor, overrides = {}) {
       }
     } catch {}
     workRuleAssessmentExpanded = lookup.get("work_rule_assessment_expanded") === "1";
+    allowPastWeekEditing = Boolean(actor.permissions?.includes("schedule:write")
+      && actor.permissions?.includes("settings:write")
+      && lookup.get("allow_past_week_editing") === "1");
     try {
       personnelDashboardLayout = normalizePersonnelDashboardLayout(
         JSON.parse(lookup.get("personnel_dashboard_layout_v1") || "null"),
@@ -22934,6 +23034,9 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   if (typeof overrides.workRuleAssessmentExpanded === "boolean") {
     workRuleAssessmentExpanded = overrides.workRuleAssessmentExpanded;
   }
+  if (typeof overrides.allowPastWeekEditing === "boolean") {
+    allowPastWeekEditing = overrides.allowPastWeekEditing;
+  }
   if (overrides.personnelDashboardLayout) {
     personnelDashboardLayout = normalizePersonnelDashboardLayout(overrides.personnelDashboardLayout);
   }
@@ -22952,6 +23055,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
     employeeDisplayColumns,
     employeeDisplaySort,
     workRuleAssessmentExpanded,
+    allowPastWeekEditing,
     personnelDashboardLayout,
     mobilePortalNavigation,
     mobilePortalAppearance,
@@ -23002,6 +23106,21 @@ async function saveUiPreferencesForActor(actor, input = {}) {
   if (workRuleAssessmentExpanded !== undefined && typeof workRuleAssessmentExpanded !== "boolean") {
     throw httpError(400, "Bitte einen gültigen Zustand der Arbeitszeit-Regelprüfung übermitteln.", "UI_PREFERENCES_INVALID");
   }
+  const allowPastWeekEditing = input.allowPastWeekEditing === undefined
+    ? undefined
+    : input.allowPastWeekEditing;
+  if (allowPastWeekEditing !== undefined && typeof allowPastWeekEditing !== "boolean") {
+    throw httpError(400, "Bitte eine gültige persönliche Freigabe für vergangene Kalenderwochen übermitteln.", "UI_PREFERENCES_INVALID");
+  }
+  if (allowPastWeekEditing !== undefined && actor.employeeNumber !== "local"
+    && (!actor.permissions?.includes("schedule:write") || !actor.permissions?.includes("settings:write"))) {
+    throw httpError(403, "Für die persönliche Freigabe vergangener Kalenderwochen fehlen die Dienstplan- oder Einstellungsrechte.", "PORTAL_PERMISSION_DENIED");
+  }
+  const previousAllowPastWeekEditing = allowPastWeekEditing === undefined
+    ? undefined
+    : actor.employeeNumber === "local"
+      ? settingEnabled(getSettings(), "allow_past_week_editing")
+      : (await uiPreferencesRepository.get(actor.employeeNumber, "allow_past_week_editing"))?.value === "1";
   const personnelDashboardLayout = input.personnelDashboardLayout === undefined
     ? undefined
     : validatePersonnelDashboardLayout(input.personnelDashboardLayout);
@@ -23013,6 +23132,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     : validateMobilePortalAppearance(input.mobilePortalAppearance);
   if (!Object.keys(pageThemes).length && appFontScalePercent === undefined && employeeDisplayColumns === undefined
     && employeeDisplaySort === undefined && workRuleAssessmentExpanded === undefined
+    && allowPastWeekEditing === undefined
     && personnelDashboardLayout === undefined && mobilePortalNavigation === undefined
     && mobilePortalAppearance === undefined) {
     throw httpError(400, "Es wurde keine Darstellung zum Speichern übermittelt.", "UI_PREFERENCES_INVALID");
@@ -23049,6 +23169,12 @@ async function saveUiPreferencesForActor(actor, input = {}) {
         value: workRuleAssessmentExpanded ? "1" : "0",
       });
     }
+    if (allowPastWeekEditing !== undefined) {
+      upserts.push({
+        preferenceKey: "allow_past_week_editing",
+        value: allowPastWeekEditing ? "1" : "0",
+      });
+    }
     if (personnelDashboardLayout !== undefined) {
       upserts.push({
         preferenceKey: "personnel_dashboard_layout_v1",
@@ -23072,12 +23198,22 @@ async function saveUiPreferencesForActor(actor, input = {}) {
       deleteKeys: appFontScalePercent === undefined ? [] : ["dashboard_font_size"],
     });
   }
+  if (allowPastWeekEditing !== undefined && previousAllowPastWeekEditing !== allowPastWeekEditing) {
+    auditPortal(
+      actor.employeeNumber,
+      "schedule.past-week-preference.update",
+      "portal_user",
+      actor.employeeNumber,
+      JSON.stringify({ previousEnabled: previousAllowPastWeekEditing, enabled: allowPastWeekEditing }),
+    );
+  }
   return uiPreferencesForActor(actor, {
     pageThemes,
     appFontScalePercent,
     employeeDisplayColumns,
     employeeDisplaySort,
     workRuleAssessmentExpanded,
+    allowPastWeekEditing,
     personnelDashboardLayout,
     mobilePortalNavigation,
     mobilePortalAppearance,
@@ -34053,6 +34189,7 @@ app.get("/api/settings", async (request, response) => {
   const context = await resolvePlanningContext(request.query || {});
   assertSessionContextScope(request.portalSession, context);
   const settings = await settingsForLocation(context.locationId);
+  settings.allow_past_week_editing = await pastWeekEditingAllowedForActor(request.portalSession, settings) ? "1" : "0";
   if (serverModeActive) {
     settings.external_backup_enabled = "0";
     settings.backup_directory = "";
@@ -34312,7 +34449,6 @@ app.put("/api/settings", async (request, response) => {
     backup_interval_hours: String(backupIntervalHours),
     vacation_count_saturday: body.vacationCountSaturday === true ? "1" : "0",
     vacation_pdf_size: "A4",
-    allow_past_week_editing: body.allowPastWeekEditing === true ? "1" : "0",
     current_week_auto_lock: body.currentWeekAutoLock === false ? "0" : "1",
     current_week_lock_mode: currentWeekLockMode,
     current_week_lock_day: currentWeekLockDay,
@@ -34327,6 +34463,9 @@ app.put("/api/settings", async (request, response) => {
     remember_last_schedule_overall_plan: rememberLastScheduleOverallPlan ? "1" : "0",
     remember_last_vacation_overall_plan: rememberLastVacationOverallPlan ? "1" : "0",
   };
+  if (!getPortalStatus().portalEnabled) {
+    values.allow_past_week_editing = body.allowPastWeekEditing === true ? "1" : "0";
+  }
   await planningSettingsRepository.transaction(async (repository) => {
     for (const [key, value] of Object.entries(values)) {
       await repository.upsertSetting({ key, value });
@@ -34361,13 +34500,15 @@ app.put("/api/settings", async (request, response) => {
   await refreshPlanningSettingsReadModel();
   scheduleAutomaticBackups();
   await setPortalSetting("login_required", "1");
-  response.json(await settingsForLocation(scheduleContext.locationId));
+  const responseSettings = await settingsForLocation(scheduleContext.locationId);
+  responseSettings.allow_past_week_editing = await pastWeekEditingAllowedForActor(request.portalSession, responseSettings) ? "1" : "0";
+  response.json(responseSettings);
 });
 
 app.post("/api/shifts", async (request, response) => {
   const shift = await validateShift(request.body, {
     locationId: request.body.locationId ?? request.body.location_id ?? request.body.location,
-  });
+  }, request.portalSession);
   const context = await resolvePlanningContext({ locationId: shift.locationId, departmentId: shift.departmentId });
   const weekStart = getMonday(shift.shiftDate);
   assertSessionContextScope(request.portalSession, context);
@@ -34417,11 +34558,11 @@ app.put("/api/shifts/:id", async (request, response) => {
   const existing = await planningSettingsRepository.getShiftById({ id });
   if (!existing) throw httpError(404, "Der Dienst wurde nicht gefunden.");
   assertSessionContextScope(request.portalSession, { locationId: existing.location_id, departmentId: existing.department_id });
-  assertDateEditable(existing.shift_date, await settingsForLocation(existing.location_id));
+  await assertDateEditable(existing.shift_date, await settingsForLocation(existing.location_id), request.portalSession);
   const shift = await validateShift(request.body, {
     locationId: request.body.locationId ?? request.body.location_id ?? existing.location_id,
     existingId: id,
-  });
+  }, request.portalSession);
   const context = await resolvePlanningContext({ locationId: shift.locationId, departmentId: shift.departmentId });
   const weekStart = getMonday(shift.shiftDate);
   assertSessionContextScope(request.portalSession, context);
@@ -34487,7 +34628,7 @@ app.delete("/api/shifts/:id", async (request, response) => {
   const existing = await planningSettingsRepository.getShiftById({ id });
   if (!existing) throw httpError(404, "Der Dienst wurde nicht gefunden.");
   assertSessionContextScope(request.portalSession, { locationId: existing.location_id, departmentId: existing.department_id });
-  assertDateEditable(existing.shift_date, await settingsForLocation(existing.location_id));
+  await assertDateEditable(existing.shift_date, await settingsForLocation(existing.location_id), request.portalSession);
   const context = await resolvePlanningContext({ locationId: existing.location_id, departmentId: existing.department_id });
   const weekStart = getMonday(existing.shift_date);
   const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
@@ -34518,7 +34659,7 @@ app.delete("/api/schedule", async (request, response) => {
   const weekEnd = addDays(weekStart, 6);
   const context = await resolvePlanningContext(request.query);
   assertSessionContextScope(request.portalSession, context);
-  assertWeekEditable(weekStart, await settingsForLocation(context.locationId));
+  await assertWeekEditable(weekStart, await settingsForLocation(context.locationId), request.portalSession);
   const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
   const planningChange = {
     replaceRange: {
@@ -34567,7 +34708,7 @@ app.delete("/api/schedule", async (request, response) => {
 });
 
 app.post("/api/week-options", async (request, response) => {
-  const option = await validateWeekOption(request.body);
+  const option = await validateWeekOption(request.body, 0, request.portalSession);
   assertApprovedAbsenceEntryAccess(request.portalSession, option.optionType);
   await assertSessionEmployeeScope(request.portalSession, option.employeeNumber);
   const result = await planningSettingsRepository.insertWeekOption(option);
@@ -34589,11 +34730,11 @@ app.put("/api/week-options/:id", async (request, response) => {
   const existingLocation = (await planningSettingsRepository.getPlanningEmployee({
     employeeNumber: existing.employee_number,
   }))?.home_location_id;
-  assertWeekEditable(existing.week_start, await settingsForLocation(existingLocation));
+  await assertWeekEditable(existing.week_start, await settingsForLocation(existingLocation), request.portalSession);
   const option = await validateWeekOption({
     ...request.body,
     groupId: request.body.groupId === undefined ? existing.group_id : request.body.groupId,
-  }, id);
+  }, id, request.portalSession);
   assertApprovedAbsenceEntryAccess(request.portalSession, option.optionType);
   await assertSessionEmployeeScope(request.portalSession, option.employeeNumber);
   const updated = await planningSettingsRepository.updateWeekOption({ id, ...option });
@@ -34613,7 +34754,7 @@ app.delete("/api/week-options/:id", async (request, response) => {
   const existingLocation = (await planningSettingsRepository.getPlanningEmployee({
     employeeNumber: existing.employee_number,
   }))?.home_location_id;
-  assertWeekEditable(existing.week_start, await settingsForLocation(existingLocation));
+  await assertWeekEditable(existing.week_start, await settingsForLocation(existingLocation), request.portalSession);
   const result = await planningSettingsRepository.deleteWeekOption({ id });
   if (!result.rowsAffected) throw httpError(404, "Die Planungsoption wurde nicht gefunden.");
   for (let date = existing.date_from; date <= existing.date_to; date = addDays(date, 1)) await invalidateTimeDayReview(existing.employee_number, date);
@@ -34622,7 +34763,7 @@ app.delete("/api/week-options/:id", async (request, response) => {
 });
 
 app.post("/api/global-day-blocks", async (request, response) => {
-  const block = await validateGlobalDayBlock(request.body);
+  const block = await validateGlobalDayBlock(request.body, 0, request.portalSession);
   assertSessionContextScope(request.portalSession, { locationId: block.locationId });
   const result = await planningSettingsRepository.insertGlobalDayBlock(block);
   const id = Number(result.rows[0]?.id);
@@ -34636,8 +34777,8 @@ app.put("/api/global-day-blocks/:id", async (request, response) => {
   const existing = await planningSettingsRepository.getGlobalDayBlockById({ id });
   if (!existing) throw httpError(404, "Der Sperrtag wurde nicht gefunden.");
   assertSessionContextScope(request.portalSession, { locationId: existing.location_id });
-  assertWeekEditable(existing.week_start, await settingsForLocation(existing.location_id));
-  const block = await validateGlobalDayBlock(request.body, id);
+  await assertWeekEditable(existing.week_start, await settingsForLocation(existing.location_id), request.portalSession);
+  const block = await validateGlobalDayBlock(request.body, id, request.portalSession);
   assertSessionContextScope(request.portalSession, { locationId: block.locationId });
   const updated = await planningSettingsRepository.updateGlobalDayBlock({ id, ...block });
   if (!updated.rowsAffected) throw httpError(404, "Der Sperrtag wurde nicht gefunden.");
@@ -34650,7 +34791,7 @@ app.delete("/api/global-day-blocks/:id", async (request, response) => {
   const existing = await planningSettingsRepository.getGlobalDayBlockById({ id });
   if (!existing) throw httpError(404, "Der Sperrtag wurde nicht gefunden.");
   assertSessionContextScope(request.portalSession, { locationId: existing.location_id });
-  assertWeekEditable(existing.week_start, await settingsForLocation(existing.location_id));
+  await assertWeekEditable(existing.week_start, await settingsForLocation(existing.location_id), request.portalSession);
   const result = await planningSettingsRepository.deleteGlobalDayBlock({ id });
   if (!result.rowsAffected) throw httpError(404, "Der Sperrtag wurde nicht gefunden.");
   await refreshPlanningSettingsReadModel();
@@ -34840,7 +34981,7 @@ app.post("/api/schedule/auto", async (request, response) => {
   const context = await resolvePlanningContext(request.body);
   assertSessionContextScope(request.portalSession, context);
   const settings = await settingsForLocation(context.locationId);
-  assertWeekEditable(weekStart, settings);
+  await assertWeekEditable(weekStart, settings, request.portalSession);
   const scheduleBefore = await getSchedule(weekStart, context, request.portalSession);
   const globalDayBlocks = getGlobalDayBlocksForRange(weekStart, weekEnd, context.locationId);
   const globalBlockDates = new Set(globalDayBlocks.map((block) => block.block_date));
@@ -36565,6 +36706,8 @@ module.exports = {
   timeTrackingRequestAccess,
   parseTimeEntrySequence,
   actualDayMetrics,
+  shiftMetrics,
+  scheduleShiftMinuteBasis,
   evaluateTimeDay,
   validateProposedTimeEntries,
   timeTrackingDayStatus,
