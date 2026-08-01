@@ -70,7 +70,7 @@ test("v0.75.2 Navigation: Personal-Unterseiten sind aufklappbar, adressierbar un
   assert.match(contextualNavigation, /state\.personnelAdministrationTab === "vacations"/);
   const requestedView = between(app, "function applyRequestedView()", "function setSettingsTab");
   assert.match(requestedView, /parameters\.get\("section"\)/);
-  assert.match(requestedView, /\["dashboard", "employees", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"\]\.includes\(requestedSection\)/);
+  assert.match(requestedView, /\["dashboard", "employees", "applications", "workflows", "tasks", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"\]\.includes\(requestedSection\)/);
 });
 
 test("v0.75.2 Navigation: Teamstatus entfällt und Einstellungen bleiben außerhalb des Scrollmenüs erreichbar", () => {

@@ -89,6 +89,15 @@
               <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="employees" id="personnelDirectoryNavButton">
                 <span class="nav-symbol">◉</span><span>Mitarbeitende</span>
               </button>
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="applications" id="candidatePreboardingNavButton">
+                <span class="nav-symbol">✦</span><span>Bewerbungen &amp; Preboarding</span>
+              </button>
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="workflows" id="workflowCenterNavButton">
+                <span class="nav-symbol">⌘</span><span>Workflow-Center</span>
+              </button>
+              <button class="nav-item nav-module-route hidden" data-view="personnelAdministration" data-personnel-administration-route="tasks" id="personnelTasksNavButton">
+                <span class="nav-symbol">□</span><span>Personalaufgaben</span>
+              </button>
               <button class="nav-item nav-module-route request-nav-item hidden" data-view="requests" id="requestsNavButton">
                 <span class="nav-symbol">✓</span><span>Anträge</span><strong class="nav-count hidden" id="requestsNavCount">0</strong>
               </button>
@@ -372,6 +381,9 @@
 
           <div class="settings-tabs personnel-administration-tabs" role="tablist">
             <button class="settings-tab active" id="personnelDirectoryTab" type="button" role="tab" aria-controls="personnelDirectorySection" aria-selected="true" data-personnel-administration-tab="employees">Mitarbeitende</button>
+            <button class="settings-tab hidden" id="candidatePreboardingTab" type="button" role="tab" aria-controls="candidatePreboardingSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="applications">Bewerbungen &amp; Preboarding</button>
+            <button class="settings-tab hidden" id="workflowCenterTab" type="button" role="tab" aria-controls="workflowCenterSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="workflows">Workflow-Center</button>
+            <button class="settings-tab hidden" id="personnelTasksTab" type="button" role="tab" aria-controls="personnelTasksSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="tasks">Personalaufgaben</button>
             <button class="settings-tab" id="costCentersTab" type="button" role="tab" aria-controls="costCenterSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="costCenters">Kostenstellen</button>
             <button class="settings-tab hidden" id="customWorkRulesTab" type="button" role="tab" aria-controls="customWorkRulesSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="ruleDrafts">Regelwerk</button>
             <button class="settings-tab hidden" id="collectiveAgreementsTab" type="button" role="tab" aria-controls="collectiveAgreementsSection" aria-selected="false" tabindex="-1" data-personnel-administration-tab="collectiveAgreements">Kollektivverträge</button>
@@ -395,6 +407,76 @@
                 <thead id="personnelDirectoryHead"><tr><th>Personalnr.</th><th>Name</th><th>Position</th><th>Kostenstelle</th><th>Filiale / Abteilung</th><th>Wochen-Soll</th><th>Status</th><th></th></tr></thead>
                 <tbody id="personnelDirectoryBody"><tr><td colspan="8">Personalstammdaten werden geladen.</td></tr></tbody>
               </table>
+            </div>
+          </section>
+
+          <section class="personnel-administration-section personnel-candidates" id="candidatePreboardingSection" role="tabpanel" aria-labelledby="candidatePreboardingTab">
+            <div class="employee-toolbar personnel-lifecycle-foundation-heading">
+              <div><span class="eyebrow">Bewerbungsübersicht</span><h2>Bewerbungen &amp; Preboarding</h2><p>Datensparsame Übersicht innerhalb des serverseitig freigegebenen Standorts beziehungsweise der freigegebenen Abteilung.</p></div>
+              <span class="status-badge inactive" id="personnelCandidateScopeBadge">Bereich wird geladen</span>
+            </div>
+            <div class="personnel-candidate-toolbar" aria-label="Bewerbungen filtern">
+              <label class="field"><span>Suche</span><input id="personnelCandidateSearch" type="search" autocomplete="off" placeholder="Name, Stelle oder Bereich" /></label>
+              <label class="field"><span>Status</span><select id="personnelCandidateStatusFilter">
+                <option value="">Alle Status</option>
+                <option value="new">Neu</option>
+                <option value="screening">Vorauswahl</option>
+                <option value="first_interview">Erstgespräch</option>
+                <option value="further_interview">Weiteres Gespräch</option>
+                <option value="offer">Angebot</option>
+                <option value="accepted">Angenommen</option>
+                <option value="preboarding">Preboarding</option>
+                <option value="converted">Eingestellt</option>
+                <option value="rejected">Abgelehnt</option>
+                <option value="withdrawn">Zurückgezogen</option>
+                <option value="talent_pool">Talentpool</option>
+                <option value="archived">Archiviert</option>
+              </select></label>
+              <button class="secondary-button" id="refreshPersonnelCandidatesButton" type="button">Aktualisieren</button>
+            </div>
+            <p class="personnel-candidate-status" id="personnelCandidateStatus" role="status" aria-live="polite">Bewerbungen werden beim Öffnen geladen.</p>
+            <div class="personnel-candidate-workspace">
+              <section class="personnel-candidate-list-panel" aria-labelledby="personnelCandidateCount">
+                <div class="personnel-candidate-panel-heading"><span class="eyebrow">Treffer</span><strong id="personnelCandidateCount">0 Bewerbungen</strong></div>
+                <div class="personnel-candidate-list" id="personnelCandidateList">
+                  <p class="personnel-candidate-empty">Noch keine Liste geladen.</p>
+                </div>
+              </section>
+              <section class="personnel-candidate-detail-panel" id="personnelCandidateDetail" aria-label="Bewerbungsdetails">
+                <div class="personnel-candidate-empty"><strong>Details auswählen</strong><p>Wähle links eine Bewerbung. Vertrauliche Felder werden in dieser kompakten Ansicht nicht dargestellt.</p></div>
+              </section>
+            </div>
+          </section>
+
+          <section class="personnel-administration-section personnel-lifecycle-foundation" id="workflowCenterSection" role="tabpanel" aria-labelledby="workflowCenterTab">
+            <div class="employee-toolbar personnel-lifecycle-foundation-heading">
+              <div><span class="eyebrow">Technisches Fundament</span><h2>Workflow-Center</h2><p>Die vorhandene Prozessbasis besitzt jetzt eine getrennte, unveränderbare Publikationsschicht für Personalprozesse.</p></div>
+              <span class="status-badge inactive">M4-Fundament</span>
+            </div>
+            <article class="personnel-lifecycle-boundary">
+              <strong>Vorlage, Version und Instanz bleiben getrennt</strong>
+              <p>Veröffentlichungen frieren Version und Geltungsbereich ein, ohne bestehende Prozesse oder Läufe zu verändern. Die Bindung neuer Instanzen folgt getrennt in M5.</p>
+            </article>
+            <div class="personnel-lifecycle-foundation-grid">
+              <article><span class="eyebrow">Entwurf</span><h3>Workflow-Vorlagen</h3><p>Abläufe bearbeiten, ohne bereits laufende Prozesse zu verändern.</p></article>
+              <article><span class="eyebrow">Freigabe</span><h3>Veröffentlichte Versionen</h3><p>Geprüfte Fassungen unveränderbar veröffentlichen und bei Bedarf archivieren.</p></article>
+              <article><span class="eyebrow">Folgt in M5</span><h3>Prozessinstanzen</h3><p>Konkrete Onboarding-, Schulungs- und Offboarding-Abläufe werden erst nach der Versionsgrenze angebunden.</p></article>
+            </div>
+          </section>
+
+          <section class="personnel-administration-section personnel-lifecycle-foundation" id="personnelTasksSection" role="tabpanel" aria-labelledby="personnelTasksTab">
+            <div class="employee-toolbar personnel-lifecycle-foundation-heading">
+              <div><span class="eyebrow">Technisches Fundament</span><h2>Personalaufgaben</h2><p>Eigene und bereichsbezogene Aufgaben sollen hier später in einer geschützten, gemeinsamen Sicht zusammenlaufen.</p></div>
+              <span class="status-badge inactive">Vorbereitet</span>
+            </div>
+            <article class="personnel-lifecycle-boundary">
+              <strong>Keine neue Aufgabenquelle</strong>
+              <p>Aufgaben werden künftig aus versionsgebundenen Prozessinstanzen projiziert. Die Grundseite erzeugt noch keine Aufgaben und erweitert keine bestehenden Zugriffsrechte.</p>
+            </article>
+            <div class="personnel-lifecycle-foundation-grid">
+              <article><span class="eyebrow">Persönlich</span><h3>Meine Aufgaben</h3><p>Nur Aufgaben anzeigen, die der angemeldeten Person wirksam zugewiesen sind.</p></article>
+              <article><span class="eyebrow">Fristen</span><h3>Überfällig</h3><p>Fälligkeiten und Eskalationen nachvollziehbar und ohne automatische Fachentscheidung bündeln.</p></article>
+              <article><span class="eyebrow">Bereich</span><h3>Standort &amp; Abteilung</h3><p>Leitungsaufgaben ausschließlich innerhalb des von PL+ freigegebenen Bereichs zeigen.</p></article>
             </div>
           </section>
 

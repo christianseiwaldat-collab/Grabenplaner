@@ -163,6 +163,27 @@ const state = {
   personnelAdministrationLoaded: false,
   personnelAdministrationLoading: false,
   personnelAdministrationTab: "dashboard",
+  personnelCandidates: [],
+  personnelCandidateCapabilities: {
+    scope: null,
+    canReadCandidates: false,
+    canWriteCandidates: false,
+    canWriteApplications: false,
+    canReadConfidential: false,
+    canWriteConfidential: false,
+    canConvert: false,
+  },
+  personnelCandidatePagination: { limit: 50, offset: 0, count: 0, total: null },
+  personnelCandidatesLoaded: false,
+  personnelCandidatesLoading: false,
+  personnelCandidateSearch: "",
+  personnelCandidateStatusFilter: "",
+  selectedPersonnelCandidateId: "",
+  selectedPersonnelCandidate: null,
+  personnelCandidateDetailLoading: false,
+  personnelCandidateMutationPending: "",
+  personnelCandidateLoadError: "",
+  personnelCandidateDetailError: "",
   customWorkRuleRegistry: null,
   workRuleGovernance: null,
   customWorkRulesLoading: false,
@@ -284,7 +305,7 @@ const fixedDayShortLabels = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thur
 
 const elements = Object.fromEntries(
   [
-    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
+    "planningView", "requestsView", "timeTrackingView", "vacationsView", "personnelAdministrationView", "personnelView", "loansView", "rightsDashboardView", "settingsView", "deploymentBanner", "compactAdminNotice", "mobileNavigationToggle", "mobileNavigationClose", "mobileNavigationBackdrop", "mainSidebar", "filialManagementNav", "filialManagementToggle", "filialManagementNavChildren", "filialTeamsNavButton", "loanManagementNavButton", "loanManagementNavCount", "planningNavButton", "vacationsNavButton", "planningNavChildren", "vacationNavChildren", "personnelAdministrationNav", "personnelAdministrationToggle", "personnelAdministrationNavChildren", "personnelDashboardNavButton", "personnelDirectoryNavButton", "candidatePreboardingNavButton", "workflowCenterNavButton", "personnelTasksNavButton", "requestsNavButton", "requestsNavCount", "timeTrackingNavButton", "costCentersNavButton", "customWorkRulesNavButton", "collectiveAgreementsNavButton", "centralVacationsNavButton", "dataSubjectRequestsNavButton", "dataSubjectRequestsNavCount", "settingsNavButton", "rightsDashboardNavButton", "loanManagementRefresh", "loanManagementPortalLink", "loanManagementLocation", "loanManagementStatus", "loanManagementUpdated", "loanManagementSummary", "loanManagementList", "timeTrackingLocation", "timeTrackingDepartment", "refreshTimePresenceButton", "timePresenceSummary", "timePresenceList", "timePresenceUpdated", "weekTitle", "calendarWeek", "scheduleTitle", "shiftCount",
     "totalHours", "inStoreHours", "optionCount", "employeeCount", "sidebarVersion", "sidebarSessionInfo", "sidebarSessionRole", "sidebarSessionIdentity", "sidebarSessionPosition", "pdfButton", "timeline", "weekLockNotice",
     "remarks", "hoursOverview", "systemData", "versionLabel", "breakRuleHint", "saturdayRuleHint", "workRuleAssessmentPanel", "workRuleAssessmentSummary", "workRuleModeBadge", "workRuleAssessmentCounts", "workRuleAssessmentBody", "saveSettingsButton", "generalSettings", "brandingSettings", "pdfSettings", "personnelSettings", "vacationSettings", "timeTrackingSettings", "integrationSettings", "dataProtectionSettings", "backupSettings", "rightsSettings", "employeeSettings",
     "scheduleNoteButton", "scheduleNoteButtonHint", "scheduleNoteModal", "scheduleNoteForm", "scheduleNoteEditor", "scheduleNoteCounter", "deleteScheduleNoteButton",
@@ -293,7 +314,7 @@ const elements = Object.fromEntries(
     "requestBlackoutPanel", "requestBlackoutForm", "requestBlackoutId", "requestBlackoutLocation", "requestBlackoutDepartment", "requestBlackoutDateFrom", "requestBlackoutDateTo", "requestBlackoutReason", "requestBlackoutVacation", "requestBlackoutTimeOff", "requestBlackoutActive", "requestBlackoutSubmit", "cancelRequestBlackoutEdit", "addRequestBlackoutButton", "requestBlackoutList",
     "vacationModal", "vacationForm", "vacationModalTitle", "vacationSubmitButton", "vacationEmployee", "vacationDateFrom", "vacationDateTo", "vacationNote", "vacationCalculation",
     "employeeTable", "employeeTableHead", "employeeTableBody", "employeeModal", "employeeForm", "employeeModalTitle", "employeeEditScopeHint", "deleteEmployeeButton", "employeeCostCenter", "employeeCostCenterHint", "employeePreferredDepartment", "employeePreferredDepartmentHint", "employeePosition", "employeePositionHint", "employeeTimeConfirmationLevelField", "employeeTimeConfirmationLevel", "employeeTargetWorkdays", "employeeSicknessWithoutAumField", "employeeSicknessWithoutAumEnabled", "employeeSicknessWithoutAumHint", "employeeProtectedRecord", "employeeProtectedRecordHint",
-    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
+    "personnelDashboardSection", "personnelDashboardGrid", "personnelDashboardCustomizeButton", "personnelDashboardCustomizer", "personnelDashboardCustomizerList", "personnelDashboardCustomizerClose", "personnelDashboardCustomizerStatus", "resetPersonnelDashboardLayout", "savePersonnelDashboardLayout", "personnelAdministrationSummary", "personnelDirectorySection", "candidatePreboardingTab", "candidatePreboardingSection", "personnelCandidateScopeBadge", "personnelCandidateSearch", "personnelCandidateStatusFilter", "refreshPersonnelCandidatesButton", "personnelCandidateStatus", "personnelCandidateCount", "personnelCandidateList", "personnelCandidateDetail", "workflowCenterTab", "workflowCenterSection", "personnelTasksTab", "personnelTasksSection", "personnelDirectorySearch", "personnelDirectoryCostCenterFilter", "personnelDirectoryStatusFilter", "personnelDirectoryTable", "personnelDirectoryHead", "personnelDirectoryBody", "addCentralEmployeeButton", "costCenterSection", "costCenterList", "costCenterTypeList", "addCostCenterButton", "addCostCenterTypeButton", "costCenterModal", "costCenterForm", "costCenterModalTitle", "costCenterId", "costCenterCode", "costCenterName", "costCenterType", "costCenterTypeHint", "costCenterDescription", "costCenterActive", "costCenterSubmitButton", "deactivateCostCenterButton", "costCenterTypeModal", "costCenterTypeForm", "costCenterTypeModalTitle", "costCenterTypeId", "costCenterTypeCode", "costCenterTypeName", "costCenterTypeDescription", "costCenterTypeIsBranch", "costCenterTypeActive", "costCenterTypePositionSearch", "costCenterTypePositionOptions", "costCenterTypePositionCount", "costCenterTypePositionHint", "costCenterTypeSubmitButton", "deactivateCostCenterTypeButton", "customWorkRulesTab", "customWorkRulesSection", "customWorkRuleSummary", "customWorkRuleNotice", "customWorkRuleTaskFilter", "customWorkRuleList", "customWorkRuleListHint", "customWorkRuleDetail", "customWorkRuleUpdated", "refreshCustomWorkRulesButton", "addCustomWorkRuleButton", "customWorkRuleModal", "customWorkRuleForm", "customWorkRuleModalTitle", "customWorkRuleId", "customWorkRuleCode", "customWorkRuleTitle", "customWorkRuleType", "customWorkRuleTopic", "customWorkRuleDescription", "customWorkRuleScopeType", "customWorkRuleScopeSelectField", "customWorkRuleScopeSelectLabel", "customWorkRuleScopeSelect", "customWorkRuleScopeGroupField", "customWorkRuleScopeGroup", "customWorkRuleValidFrom", "customWorkRuleValidTo", "customWorkRuleMetric", "customWorkRuleMetricHelp", "customWorkRuleOperator", "customWorkRuleThresholdUnit", "customWorkRuleThreshold", "customWorkRuleSeverity", "customWorkRuleReaction", "customWorkRuleMessage", "customWorkRuleResponsibleUnit", "customWorkRuleSourceTitle", "customWorkRuleSourceReference", "customWorkRuleSourceUrl", "customWorkRuleSourceNote", "customWorkRulePositiveUnit", "customWorkRulePositiveTest", "customWorkRuleNegativeUnit", "customWorkRuleNegativeTest", "simulateCustomWorkRuleButton", "customWorkRuleTestResult", "customWorkRuleSubmitButton", "workRuleReviewModal", "workRuleReviewForm", "workRuleReviewModalTitle", "workRuleReviewModalCopy", "workRuleReviewAction", "workRuleReviewProfileId", "workRuleReviewVersionId", "workRuleReviewRequestId", "workRuleReviewBasisSha256", "workRuleReviewSummary", "workRuleReviewConflict", "workRuleReviewActor", "workRuleReviewReason", "workRuleReviewSourceReference", "workRuleReviewSubmitButton", "workRuleFinalizeModal", "workRuleFinalizeForm", "workRuleFinalizeModalTitle", "workRuleFinalizeModalCopy", "workRuleFinalizeRequestId", "workRuleFinalizeBasisSha256", "workRuleFinalizeSummary", "workRuleFinalizeConflict", "workRuleFinalizeActor", "workRuleFinalizeReason", "workRuleFinalizeSourceReference", "workRuleFinalizeConfirmation", "workRuleFinalizeSubmitButton", "workRuleAssignmentModal", "workRuleAssignmentForm", "workRuleAssignmentPublicationId", "workRuleAssignmentProfileId", "workRuleAssignmentBasisSha256", "workRuleAssignmentSummary", "workRuleAssignmentScopeType", "workRuleAssignmentScopeSelectField", "workRuleAssignmentScopeSelectLabel", "workRuleAssignmentScopeSelect", "workRuleAssignmentScopeGroupField", "workRuleAssignmentScopeGroup", "workRuleAssignmentValidFrom", "workRuleAssignmentValidTo", "workRuleAssignmentEnforcementMode", "workRuleAssignmentApplicabilityConfirmed", "workRuleAssignmentReason", "workRuleAssignmentSourceReference", "workRuleAssignmentConflict", "previewWorkRuleAssignmentButton", "workRuleAssignmentPreviewState", "workRuleAssignmentSubmitButton", "workRuleLifecycleModal", "workRuleLifecycleForm", "workRuleLifecycleModalTitle", "workRuleLifecycleModalCopy", "workRuleLifecycleAction", "workRuleLifecycleSubjectId", "workRuleLifecycleProfileId", "workRuleLifecycleVersionId", "workRuleLifecycleBasisSha256", "workRuleLifecycleSummary", "workRuleLifecycleEffectiveOn", "workRuleLifecycleReason", "workRuleLifecycleSourceReference", "workRuleLifecycleConflict", "workRuleLifecycleBoundary", "workRuleLifecycleSubmitButton", "collectiveAgreementsTab", "collectiveAgreementsSection", "collectiveAgreementSummary", "collectiveAgreementLegalNotice", "collectiveAgreementList", "collectiveAgreementDetail", "collectiveAgreementBusinessUnits", "collectiveAgreementAssignments", "refreshCollectiveAgreementsButton", "addCollectiveAgreementButton", "addCollectiveAgreementBusinessUnitButton", "addCollectiveAgreementAssignmentButton", "collectiveAgreementModal", "collectiveAgreementForm", "collectiveAgreementModalTitle", "collectiveAgreementId", "collectiveAgreementCode", "collectiveAgreementShortTitle", "collectiveAgreementTitle", "collectiveAgreementJurisdiction", "collectiveAgreementVersionLabel", "collectiveAgreementValidFrom", "collectiveAgreementValidTo", "collectiveAgreementPublishedOn", "collectiveAgreementSourceRetrievedOn", "collectiveAgreementSourceTitle", "collectiveAgreementSourceUrl", "collectiveAgreementSourceSha256", "collectiveAgreementContractingParties", "collectiveAgreementTerritorialScope", "collectiveAgreementFunctionalScope", "collectiveAgreementPersonalScope", "collectiveAgreementEmployeeGroups", "collectiveAgreementApprenticeRelevance", "collectiveAgreementLinkedProfileVersion", "collectiveAgreementApprenticeNote", "collectiveAgreementWorkTimeNote", "collectiveAgreementClassificationNote", "collectiveAgreementSourceNote", "collectiveAgreementSuccessorNote", "collectiveAgreementNote", "collectiveAgreementSubmitButton", "collectiveAgreementBusinessUnitModal", "collectiveAgreementBusinessUnitForm", "collectiveAgreementBusinessUnitModalTitle", "collectiveAgreementBusinessUnitId", "collectiveAgreementBusinessUnitCode", "collectiveAgreementBusinessUnitName", "collectiveAgreementBusinessUnitLegalEntity", "collectiveAgreementBusinessUnitDescription", "collectiveAgreementBusinessUnitScopeOptions", "collectiveAgreementBusinessUnitSubmitButton", "collectiveAgreementAssignmentModal", "collectiveAgreementAssignmentForm", "collectiveAgreementAssignmentVersion", "collectiveAgreementAssignmentBusinessUnit", "collectiveAgreementAssignmentValidFrom", "collectiveAgreementAssignmentValidTo", "collectiveAgreementAssignmentRationale", "collectiveAgreementAssignmentReference", "collectiveAgreementAssignmentSubmitButton", "centralVacationsTab", "centralVacationSection", "centralVacationSummary", "centralVacationSearch", "centralVacationCostCenterFilter", "centralVacationYear", "centralVacationList", "dataSubjectRequestsTab", "dataSubjectRequestsTabCount", "dataSubjectRequestsSection", "dataSubjectRequestSummary", "dataSubjectRequestSearch", "dataSubjectRequestStatusFilter", "dataSubjectRequestTypeFilter", "dataSubjectRequestList", "refreshDataSubjectRequestsButton", "addDataSubjectRequestButton",
     "teamDisplayColumnsButton", "personnelDisplayColumnsButton", "employeeColumnsModal", "employeeColumnsForm", "employeeColumnOptions", "resetEmployeeColumnsButton",
     "employeeAccessProfile", "employeeAccessStatus", "employeeAppRole", "employeeAppRoleDescription", "employeeRolePermissions", "employeeAdditionalRightsDetails", "employeeAdditionalRights", "employeeAdditionalRightsCount", "employeeAccessHint",
     "employeeSettings", "locationSettings", "locationFormCard", "departmentFormCard", "locationEditorModal", "departmentEditorModal", "addLocationButton", "addDepartmentButton", "locationForm", "locationId", "locationName", "locationCostCenterField", "locationCostCenter", "locationCostCenterReadonly", "locationMinStaff", "locationActive", "locationTimeTrackingEnabled", "locationTimeTrackingAccessMode", "locationTimeTrackingAllowedNetworks", "locationTimeTrackingVarianceMinutes", "locationSubmitButton", "cancelLocationEditButton",
@@ -888,9 +909,29 @@ function canManageLoanSettings() {
     && ["developer", "it_admin", "admin", "hr"].includes(state.portalSession?.user?.role || "");
 }
 
+function personnelLifecycleFoundationEnabled() {
+  return state.portalStatus?.installationFeatures?.personnelLifecycle === true;
+}
+
+function canReadCandidatePreboarding() {
+  return personnelLifecycleFoundationEnabled()
+    && hasGovernancePermission("personnel:candidates:read");
+}
+
+function canOpenWorkflowCenter() {
+  return personnelLifecycleFoundationEnabled()
+    && hasGovernancePermission("personnel:workflows:read");
+}
+
+function canReadPersonnelTasks() {
+  return personnelLifecycleFoundationEnabled()
+    && (canReadCentralPersonnel() || hasGovernancePermission("processes:write"));
+}
+
 function canOpenPersonnelAdministrationView() {
   return canReadCentralPersonnel() || canReadCostCenters() || canAccessCustomWorkRuleGovernance() || canReadCollectiveAgreements()
-    || canReadCentralVacations() || canReadDataSubjectRequests();
+    || canReadCentralVacations() || canReadDataSubjectRequests() || canReadCandidatePreboarding()
+    || canOpenWorkflowCenter() || canReadPersonnelTasks();
 }
 
 function canOpenPersonnelAdministrationModule() {
@@ -903,6 +944,9 @@ function canOpenPersonnelAdministrationModule() {
 function firstAccessiblePersonnelAdministrationTab() {
   if (canOpenPersonnelAdministrationModule()) return "dashboard";
   if (canReadCentralPersonnel()) return "employees";
+  if (canReadCandidatePreboarding()) return "applications";
+  if (canOpenWorkflowCenter()) return "workflows";
+  if (canReadPersonnelTasks()) return "tasks";
   if (canReadCostCenters()) return "costCenters";
   if (canAccessCustomWorkRuleGovernance()) return "ruleDrafts";
   if (canReadCollectiveAgreements()) return "collectiveAgreements";
@@ -914,6 +958,9 @@ function firstAccessiblePersonnelAdministrationTab() {
 function canOpenPersonnelAdministrationTab(tab) {
   return (tab === "dashboard" && canOpenPersonnelAdministrationModule())
     || (tab === "employees" && canReadCentralPersonnel())
+    || (tab === "applications" && canReadCandidatePreboarding())
+    || (tab === "workflows" && canOpenWorkflowCenter())
+    || (tab === "tasks" && canReadPersonnelTasks())
     || (tab === "costCenters" && canReadCostCenters())
     || (tab === "ruleDrafts" && canAccessCustomWorkRuleGovernance())
     || (tab === "collectiveAgreements" && canReadCollectiveAgreements())
@@ -1010,6 +1057,9 @@ function applyRoleVisibility() {
   const retentionManageAccess = canManageRetentionGovernance() && retentionReadAccess;
   const dataSubjectRequestsReadAccess = canReadDataSubjectRequests();
   const dataSubjectRequestsManageAccess = canManageDataSubjectRequests() && dataSubjectRequestsReadAccess;
+  const candidatePreboardingAccess = canReadCandidatePreboarding();
+  const workflowCenterAccess = canOpenWorkflowCenter();
+  const personnelTasksAccess = canReadPersonnelTasks();
   const customWorkRulesAccess = canAccessCustomWorkRuleGovernance();
   const collectiveAgreementsReadAccess = canReadCollectiveAgreements();
   const collectiveAgreementsManageAccess = canManageCollectiveAgreements() && collectiveAgreementsReadAccess;
@@ -1018,10 +1068,13 @@ function applyRoleVisibility() {
   const loanManagementAccess = canReadLoanManagement();
   const loanSettingsAccess = canManageLoanSettings();
   const personnelAdministrationViewAccess = centralPersonnelReadAccess || costCenterReadAccess || customWorkRulesAccess || collectiveAgreementsReadAccess
-    || centralVacationReadAccess || dataSubjectRequestsReadAccess;
+    || centralVacationReadAccess || dataSubjectRequestsReadAccess || candidatePreboardingAccess || workflowCenterAccess || personnelTasksAccess;
   const personnelModuleAccess = personnelAdministrationViewAccess || requestReadAccess || timeReadAccess;
   elements.personnelAdministrationNav?.classList.toggle("hidden", !personnelModuleAccess);
   elements.personnelDirectoryNavButton?.classList.toggle("hidden", !centralPersonnelReadAccess);
+  elements.candidatePreboardingNavButton?.classList.toggle("hidden", !candidatePreboardingAccess);
+  elements.workflowCenterNavButton?.classList.toggle("hidden", !workflowCenterAccess);
+  elements.personnelTasksNavButton?.classList.toggle("hidden", !personnelTasksAccess);
   elements.costCentersNavButton?.classList.toggle("hidden", !costCenterReadAccess);
   elements.customWorkRulesNavButton?.classList.toggle("hidden", !customWorkRulesAccess);
   elements.collectiveAgreementsNavButton?.classList.toggle("hidden", !collectiveAgreementsReadAccess);
@@ -1089,6 +1142,9 @@ function applyRoleVisibility() {
   document.querySelector("#addEmployeeButton")?.classList.toggle("hidden", !(employeeWriteAccess && centralPersonnelWriteAccess));
   elements.addCentralEmployeeButton?.classList.toggle("hidden", !centralPersonnelWriteAccess);
   document.querySelector('[data-personnel-administration-tab="employees"]')?.classList.toggle("hidden", !centralPersonnelReadAccess);
+  elements.candidatePreboardingTab?.classList.toggle("hidden", !candidatePreboardingAccess);
+  elements.workflowCenterTab?.classList.toggle("hidden", !workflowCenterAccess);
+  elements.personnelTasksTab?.classList.toggle("hidden", !personnelTasksAccess);
   document.querySelector('[data-personnel-administration-tab="costCenters"]')?.classList.toggle("hidden", !costCenterReadAccess);
   elements.customWorkRulesTab?.classList.toggle("hidden", !customWorkRulesAccess);
   elements.collectiveAgreementsTab?.classList.toggle("hidden", !collectiveAgreementsReadAccess);
@@ -1169,6 +1225,12 @@ function applyRoleVisibility() {
   elements.delegationSettingsCard?.classList.toggle("hidden", !settingsAccess);
   elements.generalSettings?.querySelector(".past-week-card")?.classList.toggle("hidden", !settingsAccess);
   if (!locationWriteAccess && state.personnelTab === "locations") setPersonnelTab("employees");
+  if (!candidatePreboardingAccess && (
+    state.personnelCandidatesLoaded
+    || state.personnelCandidatesLoading
+    || state.selectedPersonnelCandidateId
+    || state.personnelCandidateLoadError
+  )) clearPersonnelLifecycleCandidateState("Bewerberdaten wurden wegen geänderter Rechte aus der Ansicht entfernt.");
   if (!canOpenPersonnelAdministrationTab(state.personnelAdministrationTab)) {
     setPersonnelAdministrationTab(firstAccessiblePersonnelAdministrationTab());
   }
@@ -1790,6 +1852,12 @@ function renderContextNavigation() {
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "dashboard");
   setNavigationCurrent(elements.personnelDirectoryNavButton,
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "employees");
+  setNavigationCurrent(elements.candidatePreboardingNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "applications");
+  setNavigationCurrent(elements.workflowCenterNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "workflows");
+  setNavigationCurrent(elements.personnelTasksNavButton,
+    state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "tasks");
   setNavigationCurrent(elements.costCentersNavButton,
     state.currentView === "personnelAdministration" && state.personnelAdministrationTab === "costCenters");
   setNavigationCurrent(elements.customWorkRulesNavButton,
@@ -6756,6 +6824,482 @@ async function saveCollectiveAgreementAssignment(event) {
   }
 }
 
+const PERSONNEL_CANDIDATE_STATUS_LABELS = Object.freeze({
+  new: "Neu",
+  screening: "Vorauswahl",
+  first_interview: "Erstgespräch",
+  further_interview: "Weiteres Gespräch",
+  offer: "Angebot",
+  accepted: "Angenommen",
+  preboarding: "Preboarding",
+  converted: "Eingestellt",
+  rejected: "Abgelehnt",
+  withdrawn: "Zurückgezogen",
+  talent_pool: "Talentpool",
+  archived: "Archiviert",
+});
+
+const PERSONNEL_CANDIDATE_STATUS_TRANSITIONS = Object.freeze({
+  new: Object.freeze(["screening", "rejected", "withdrawn", "talent_pool", "archived"]),
+  screening: Object.freeze(["first_interview", "rejected", "withdrawn", "talent_pool", "archived"]),
+  first_interview: Object.freeze(["further_interview", "offer", "rejected", "withdrawn", "talent_pool", "archived"]),
+  further_interview: Object.freeze(["offer", "rejected", "withdrawn", "talent_pool", "archived"]),
+  offer: Object.freeze(["accepted", "rejected", "withdrawn", "archived"]),
+  accepted: Object.freeze(["preboarding", "withdrawn", "archived"]),
+  preboarding: Object.freeze(["withdrawn", "archived"]),
+  converted: Object.freeze([]),
+  rejected: Object.freeze(["talent_pool", "archived"]),
+  withdrawn: Object.freeze(["talent_pool", "archived"]),
+  talent_pool: Object.freeze(["archived"]),
+  archived: Object.freeze([]),
+});
+
+const PERSONNEL_CANDIDATE_REASON_STATUSES = Object.freeze(new Set([
+  "rejected",
+  "withdrawn",
+  "talent_pool",
+  "archived",
+]));
+
+function defaultPersonnelCandidateCapabilities() {
+  return {
+    scope: null,
+    canReadCandidates: false,
+    canWriteCandidates: false,
+    canWriteApplications: false,
+    canReadConfidential: false,
+    canWriteConfidential: false,
+    canConvert: false,
+  };
+}
+
+function normalizePersonnelCandidateCapabilities(value) {
+  const submitted = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return {
+    scope: submitted.scope && typeof submitted.scope === "object" ? submitted.scope : null,
+    canReadCandidates: submitted.canReadCandidates === true,
+    canWriteCandidates: submitted.canWriteCandidates === true,
+    canWriteApplications: submitted.canWriteApplications === true,
+    canReadConfidential: submitted.canReadConfidential === true,
+    canWriteConfidential: submitted.canWriteConfidential === true,
+    canConvert: submitted.canConvert === true,
+  };
+}
+
+function applyPersonnelCandidateCapabilities(payload) {
+  if (!payload || typeof payload.capabilities !== "object" || Array.isArray(payload.capabilities)) {
+    return state.personnelCandidateCapabilities;
+  }
+  state.personnelCandidateCapabilities = normalizePersonnelCandidateCapabilities(payload.capabilities);
+  return state.personnelCandidateCapabilities;
+}
+
+function personnelCandidateScopeLabel(scope) {
+  if (!scope || typeof scope !== "object") return "Freigegebener Bereich";
+  const suppliedLabel = String(scope.label || scope.name || "").trim();
+  if (suppliedLabel) return suppliedLabel;
+  const kind = String(scope.type || scope.kind || scope.scopeType || "").toLowerCase();
+  if (["all", "global", "company", "company_wide"].includes(kind)) return "Unternehmensweit freigegeben";
+  const locationCount = Array.isArray(scope.locationIds)
+    ? scope.locationIds.length
+    : (scope.locationId ? 1 : 0);
+  const departmentCount = Array.isArray(scope.departmentIds)
+    ? scope.departmentIds.length
+    : (scope.departmentId ? 1 : 0);
+  if (locationCount && departmentCount) return `${locationCount} Standort(e) · ${departmentCount} Abteilung(en)`;
+  if (departmentCount) return `${departmentCount} Abteilung(en) freigegeben`;
+  if (locationCount) return `${locationCount} Standort(e) freigegeben`;
+  return "Freigegebener Bereich";
+}
+
+function personnelCandidateProfile(candidate) {
+  return candidate?.profile && typeof candidate.profile === "object" && !Array.isArray(candidate.profile)
+    ? candidate.profile
+    : {};
+}
+
+function personnelCandidateName(candidate) {
+  const profile = personnelCandidateProfile(candidate);
+  const firstName = String(profile.firstName || candidate?.firstName || "").trim();
+  const lastName = String(profile.lastName || candidate?.lastName || "").trim();
+  return [firstName, lastName].filter(Boolean).join(" ") || "Bewerbung ohne Namensangabe";
+}
+
+function personnelCandidateApplications(candidate) {
+  return Array.isArray(candidate?.applications) ? candidate.applications.filter((entry) => (
+    entry && typeof entry === "object" && typeof entry.id === "string"
+  )) : [];
+}
+
+function personnelCandidatePrimaryApplication(candidate, preferredStatus = "") {
+  const applications = personnelCandidateApplications(candidate);
+  if (preferredStatus) {
+    const matching = applications.find((entry) => entry.status === preferredStatus);
+    if (matching) return matching;
+  }
+  return [...applications].sort((left, right) => (
+    String(right.updatedAt || right.statusChangedAt || right.createdAt || "")
+      .localeCompare(String(left.updatedAt || left.statusChangedAt || left.createdAt || ""))
+  ))[0] || null;
+}
+
+function personnelCandidateOrganization(application) {
+  if (!application) return "Noch keine Stelle zugeordnet";
+  const role = String(application.desiredRoleTitle || application.positionName || "").trim();
+  const location = String(application.desiredLocationName || application.locationName || application.desiredLocationId || "").trim();
+  const department = String(application.desiredDepartmentName || application.departmentName || application.desiredDepartmentId || "").trim();
+  return [role, location, department].filter(Boolean).join(" · ") || "Noch keine Stelle zugeordnet";
+}
+
+function formatPersonnelCandidateTimestamp(value, fallback = "Nicht angegeben") {
+  const parsed = new Date(String(value || ""));
+  if (!Number.isFinite(parsed.getTime())) return fallback;
+  try {
+    return new Intl.DateTimeFormat("de-AT", { dateStyle: "short", timeStyle: "short" }).format(parsed);
+  } catch {
+    return fallback;
+  }
+}
+
+function personnelCandidateStatusLabel(status) {
+  return PERSONNEL_CANDIDATE_STATUS_LABELS[status] || "Status nicht angegeben";
+}
+
+function personnelCandidateStatusClass(status) {
+  return Object.hasOwn(PERSONNEL_CANDIDATE_STATUS_LABELS, status)
+    ? ` status-${status.replaceAll("_", "-")}`
+    : "";
+}
+
+function filteredPersonnelCandidates() {
+  const query = state.personnelCandidateSearch.trim().toLocaleLowerCase("de-AT");
+  const status = state.personnelCandidateStatusFilter;
+  return state.personnelCandidates.filter((candidate) => {
+    const applications = personnelCandidateApplications(candidate);
+    if (status && !applications.some((entry) => entry.status === status)) return false;
+    if (!query) return true;
+    const profile = personnelCandidateProfile(candidate);
+    const searchable = [
+      personnelCandidateName(candidate),
+      ...applications.flatMap((entry) => [
+        entry.status,
+        personnelCandidateStatusLabel(entry.status),
+        entry.desiredRoleTitle,
+        entry.positionName,
+        entry.desiredLocationName,
+        entry.locationName,
+        entry.desiredLocationId,
+        entry.desiredDepartmentName,
+        entry.departmentName,
+        entry.desiredDepartmentId,
+      ]),
+      profile.email,
+    ].filter(Boolean).join(" ").toLocaleLowerCase("de-AT");
+    return searchable.includes(query);
+  });
+}
+
+function clearPersonnelLifecycleCandidateState(message = "") {
+  state.personnelCandidates = [];
+  state.personnelCandidateCapabilities = defaultPersonnelCandidateCapabilities();
+  state.personnelCandidatePagination = { limit: 50, offset: 0, count: 0, total: null };
+  state.personnelCandidatesLoaded = false;
+  state.personnelCandidatesLoading = false;
+  state.selectedPersonnelCandidateId = "";
+  state.selectedPersonnelCandidate = null;
+  state.personnelCandidateDetailLoading = false;
+  state.personnelCandidateMutationPending = "";
+  state.personnelCandidateLoadError = message;
+  state.personnelCandidateDetailError = "";
+  renderPersonnelCandidateOverview();
+}
+
+function renderPersonnelCandidateList() {
+  if (!elements.personnelCandidateList || !elements.personnelCandidateCount) return;
+  if (state.personnelCandidatesLoading) {
+    elements.personnelCandidateCount.textContent = "Bewerbungen werden geladen";
+    elements.personnelCandidateList.innerHTML = '<p class="personnel-candidate-empty">Die freigegebene Liste wird geladen …</p>';
+    return;
+  }
+  if (state.personnelCandidateLoadError) {
+    elements.personnelCandidateCount.textContent = "Liste nicht verfügbar";
+    elements.personnelCandidateList.innerHTML = `<div class="personnel-candidate-empty error"><strong>Liste konnte nicht geladen werden</strong><p>${escapeHtml(state.personnelCandidateLoadError)}</p></div>`;
+    return;
+  }
+  if (!state.personnelCandidatesLoaded) {
+    elements.personnelCandidateCount.textContent = "0 Bewerbungen";
+    elements.personnelCandidateList.innerHTML = '<p class="personnel-candidate-empty">Noch keine Liste geladen.</p>';
+    return;
+  }
+  const candidates = filteredPersonnelCandidates();
+  elements.personnelCandidateCount.textContent = `${candidates.length} ${candidates.length === 1 ? "Bewerbung" : "Bewerbungen"}`;
+  if (!candidates.length) {
+    const filtered = Boolean(state.personnelCandidateSearch.trim() || state.personnelCandidateStatusFilter);
+    elements.personnelCandidateList.innerHTML = `<div class="personnel-candidate-empty"><strong>${filtered ? "Keine passenden Bewerbungen" : "Keine Bewerbungen vorhanden"}</strong><p>${filtered ? "Bitte Suche oder Statusfilter anpassen." : "Im freigegebenen Bereich sind derzeit keine Bewerbungen sichtbar."}</p></div>`;
+    return;
+  }
+  elements.personnelCandidateList.innerHTML = candidates.map((candidate) => {
+    const application = personnelCandidatePrimaryApplication(candidate, state.personnelCandidateStatusFilter);
+    const status = application?.status || "";
+    const selected = candidate.id === state.selectedPersonnelCandidateId;
+    return `<button class="personnel-candidate-list-item${selected ? " active" : ""}" type="button" data-personnel-candidate-id="${escapeHtmlAttribute(candidate.id)}" aria-pressed="${String(selected)}">
+      <span class="personnel-candidate-list-title"><strong>${escapeHtml(personnelCandidateName(candidate))}</strong><span class="personnel-candidate-status-badge${personnelCandidateStatusClass(status)}">${escapeHtml(personnelCandidateStatusLabel(status))}</span></span>
+      <span>${escapeHtml(personnelCandidateOrganization(application))}</span>
+      <small>Aktualisiert: ${escapeHtml(formatPersonnelCandidateTimestamp(application?.updatedAt || candidate.updatedAt))}</small>
+    </button>`;
+  }).join("");
+}
+
+function personnelCandidateFact(label, value) {
+  return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value || "Nicht angegeben"))}</strong></div>`;
+}
+
+function renderPersonnelCandidateStatusForm(candidateId, application) {
+  const transitions = PERSONNEL_CANDIDATE_STATUS_TRANSITIONS[application.status] || [];
+  if (!state.personnelCandidateCapabilities.canWriteApplications || !transitions.length) return "";
+  const pending = state.personnelCandidateMutationPending === application.id;
+  return `<form class="personnel-candidate-status-form" data-personnel-candidate-status-form data-candidate-id="${escapeHtmlAttribute(candidateId)}" data-application-id="${escapeHtmlAttribute(application.id)}">
+    <label class="field"><span>Nächster Status</span><select name="status" required ${pending ? "disabled" : ""}>
+      <option value="">Bitte auswählen</option>
+      ${transitions.map((status) => `<option value="${escapeHtmlAttribute(status)}">${escapeHtml(personnelCandidateStatusLabel(status))}</option>`).join("")}
+    </select></label>
+    <label class="field personnel-candidate-reason hidden"><span>Begründung</span><input name="reason" type="text" maxlength="500" autocomplete="off" placeholder="Kurze nachvollziehbare Begründung" ${pending ? "disabled" : ""} /></label>
+    <button class="primary-button" type="submit" ${pending ? "disabled" : ""}>${pending ? "Wird gespeichert …" : "Status übernehmen"}</button>
+  </form>`;
+}
+
+function renderPersonnelCandidateApplication(candidateId, application) {
+  const weeklyMinutes = Number(application.desiredWeeklyMinutes);
+  const weeklyHours = Number.isFinite(weeklyMinutes) && weeklyMinutes > 0
+    ? `${(weeklyMinutes / 60).toLocaleString("de-AT", { maximumFractionDigits: 2 })} Std.`
+    : "Nicht angegeben";
+  return `<article class="personnel-candidate-application">
+    <header><div><span class="eyebrow">Bewerbung</span><h4>${escapeHtml(application.desiredRoleTitle || application.positionName || "Stelle nicht angegeben")}</h4></div><span class="personnel-candidate-status-badge${personnelCandidateStatusClass(application.status)}">${escapeHtml(personnelCandidateStatusLabel(application.status))}</span></header>
+    <div class="personnel-candidate-facts">
+      ${personnelCandidateFact("Standort", application.desiredLocationName || application.locationName || application.desiredLocationId)}
+      ${personnelCandidateFact("Abteilung", application.desiredDepartmentName || application.departmentName || application.desiredDepartmentId)}
+      ${personnelCandidateFact("Verfügbar ab", application.availableFrom ? formatDate(String(application.availableFrom).slice(0, 10)) : "Nicht angegeben")}
+      ${personnelCandidateFact("Wochenumfang", weeklyHours)}
+      ${personnelCandidateFact("Beschäftigungsart", application.employmentType)}
+      ${personnelCandidateFact("Stand", formatPersonnelCandidateTimestamp(application.updatedAt || application.statusChangedAt))}
+    </div>
+    ${renderPersonnelCandidateStatusForm(candidateId, application)}
+  </article>`;
+}
+
+function renderPersonnelCandidateDetail() {
+  if (!elements.personnelCandidateDetail) return;
+  if (state.personnelCandidateDetailLoading) {
+    elements.personnelCandidateDetail.innerHTML = '<div class="personnel-candidate-empty"><strong>Details werden geladen</strong><p>Die freigegebenen Bewerbungsdaten werden abgerufen.</p></div>';
+    return;
+  }
+  if (state.personnelCandidateDetailError && !state.selectedPersonnelCandidate) {
+    elements.personnelCandidateDetail.innerHTML = `<div class="personnel-candidate-empty error"><strong>Details konnten nicht geladen werden</strong><p>${escapeHtml(state.personnelCandidateDetailError)}</p></div>`;
+    return;
+  }
+  const candidate = state.selectedPersonnelCandidate;
+  if (!candidate) {
+    elements.personnelCandidateDetail.innerHTML = '<div class="personnel-candidate-empty"><strong>Details auswählen</strong><p>Wähle links eine Bewerbung. Vertrauliche Felder werden in dieser kompakten Ansicht nicht dargestellt.</p></div>';
+    return;
+  }
+  const profile = personnelCandidateProfile(candidate);
+  const applications = personnelCandidateApplications(candidate);
+  elements.personnelCandidateDetail.innerHTML = `<div class="personnel-candidate-detail-heading">
+      <div><span class="eyebrow">Bewerberprofil</span><h3>${escapeHtml(personnelCandidateName(candidate))}</h3><p>Getrennte Bewerberentität ohne Personalnummer.</p></div>
+      <span class="personnel-candidate-status-badge${candidate.state === "archived" ? " status-archived" : ""}">${candidate.state === "archived" ? "Archiviert" : "Aktiv"}</span>
+    </div>
+    ${state.personnelCandidateDetailError ? `<p class="personnel-candidate-inline-error">${escapeHtml(state.personnelCandidateDetailError)}</p>` : ""}
+    <div class="personnel-candidate-facts personnel-candidate-contact-facts">
+      ${personnelCandidateFact("E-Mail", profile.email)}
+      ${personnelCandidateFact("Telefon", profile.phone)}
+      ${personnelCandidateFact("Bewerbungen", String(applications.length))}
+      ${personnelCandidateFact("Zuletzt aktualisiert", formatPersonnelCandidateTimestamp(candidate.updatedAt))}
+    </div>
+    <div class="personnel-candidate-privacy-note"><strong>Datensparsame Ansicht</strong><p>Es werden ausschließlich Kontaktdaten und freigegebene Bewerbungsangaben dargestellt. Vertrauliche Bewertungs- und Verlaufsdaten bleiben ausgeblendet.</p></div>
+    <div class="personnel-candidate-applications">
+      ${applications.length
+        ? applications.map((application) => renderPersonnelCandidateApplication(candidate.id, application)).join("")
+        : '<div class="personnel-candidate-empty"><strong>Keine Bewerbung zugeordnet</strong><p>Für dieses Bewerberprofil ist keine Bewerbung sichtbar.</p></div>'}
+    </div>`;
+}
+
+function renderPersonnelCandidateOverview() {
+  const capabilities = state.personnelCandidateCapabilities;
+  if (elements.personnelCandidateScopeBadge) {
+    const capabilityKnown = state.personnelCandidatesLoaded || state.personnelCandidatesLoading || Boolean(state.personnelCandidateLoadError);
+    elements.personnelCandidateScopeBadge.textContent = capabilityKnown && capabilities.canReadCandidates
+      ? personnelCandidateScopeLabel(capabilities.scope)
+      : (state.personnelCandidatesLoading ? "Bereich wird geladen" : "Zugriff wird geprüft");
+    elements.personnelCandidateScopeBadge.classList.toggle("inactive", !capabilities.canReadCandidates);
+  }
+  if (elements.refreshPersonnelCandidatesButton) {
+    elements.refreshPersonnelCandidatesButton.disabled = state.personnelCandidatesLoading || !canReadCandidatePreboarding();
+  }
+  if (elements.personnelCandidateSearch) elements.personnelCandidateSearch.value = state.personnelCandidateSearch;
+  if (elements.personnelCandidateStatusFilter) elements.personnelCandidateStatusFilter.value = state.personnelCandidateStatusFilter;
+  if (elements.personnelCandidateStatus) {
+    const visibleCount = filteredPersonnelCandidates().length;
+    elements.personnelCandidateStatus.textContent = state.personnelCandidatesLoading
+      ? "Bewerbungen werden geladen."
+      : state.personnelCandidateLoadError
+        ? state.personnelCandidateLoadError
+        : state.personnelCandidatesLoaded
+          ? `${visibleCount} von ${state.personnelCandidates.length} freigegebenen Bewerbungen sichtbar. Vertrauliche Felder bleiben ausgeblendet.`
+          : "Bewerbungen werden beim Öffnen geladen.";
+  }
+  renderPersonnelCandidateList();
+  renderPersonnelCandidateDetail();
+}
+
+async function loadPersonnelCandidates({ force = false } = {}) {
+  if (!canReadCandidatePreboarding() || state.personnelCandidatesLoading) return;
+  if (state.personnelCandidatesLoaded && !force) {
+    renderPersonnelCandidateOverview();
+    return;
+  }
+  state.personnelCandidatesLoading = true;
+  state.personnelCandidateLoadError = "";
+  renderPersonnelCandidateOverview();
+  try {
+    const result = await api("/api/portal/v1/personnel-lifecycle/candidates?limit=50&offset=0");
+    if (!canReadCandidatePreboarding()) {
+      clearPersonnelLifecycleCandidateState("Der Bewerberzugriff wurde während des Ladens entzogen.");
+      return;
+    }
+    const capabilities = applyPersonnelCandidateCapabilities(result);
+    if (!capabilities.canReadCandidates) {
+      clearPersonnelLifecycleCandidateState("Der Server hat keinen Lesezugriff auf Bewerbungen freigegeben.");
+      return;
+    }
+    state.personnelCandidates = Array.isArray(result?.candidates)
+      ? result.candidates.filter((candidate) => candidate && typeof candidate.id === "string")
+      : [];
+    const pagination = result?.pagination && typeof result.pagination === "object" ? result.pagination : {};
+    state.personnelCandidatePagination = {
+      limit: Number.isInteger(pagination.limit) ? pagination.limit : 50,
+      offset: Number.isInteger(pagination.offset) ? pagination.offset : 0,
+      count: state.personnelCandidates.length,
+      total: Number.isInteger(pagination.total) ? pagination.total : null,
+    };
+    state.personnelCandidatesLoaded = true;
+    if (state.selectedPersonnelCandidateId
+      && !state.personnelCandidates.some((candidate) => candidate.id === state.selectedPersonnelCandidateId)) {
+      state.selectedPersonnelCandidateId = "";
+      state.selectedPersonnelCandidate = null;
+      state.personnelCandidateDetailError = "";
+    }
+  } catch (error) {
+    if ([401, 403].includes(error.status)) {
+      clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
+      return;
+    }
+    state.personnelCandidates = [];
+    state.personnelCandidatesLoaded = false;
+    state.personnelCandidateLoadError = error.message || "Die Bewerbungen konnten nicht geladen werden.";
+  } finally {
+    state.personnelCandidatesLoading = false;
+    renderPersonnelCandidateOverview();
+  }
+}
+
+async function loadPersonnelCandidateDetail(candidateId) {
+  const id = String(candidateId || "").trim();
+  if (!id || !canReadCandidatePreboarding() || !state.personnelCandidateCapabilities.canReadCandidates) return;
+  state.selectedPersonnelCandidateId = id;
+  state.selectedPersonnelCandidate = null;
+  state.personnelCandidateDetailError = "";
+  state.personnelCandidateDetailLoading = true;
+  renderPersonnelCandidateOverview();
+  try {
+    const result = await api(`/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(id)}`);
+    if (state.selectedPersonnelCandidateId !== id) return;
+    if (!canReadCandidatePreboarding()) {
+      clearPersonnelLifecycleCandidateState("Der Bewerberzugriff wurde während des Ladens entzogen.");
+      return;
+    }
+    const capabilities = applyPersonnelCandidateCapabilities(result);
+    if (!capabilities.canReadCandidates) {
+      clearPersonnelLifecycleCandidateState("Der Server hat keinen Lesezugriff auf diese Bewerbung freigegeben.");
+      return;
+    }
+    const candidate = result?.candidate;
+    if (!candidate || candidate.id !== id) throw new Error("Die Bewerbungsdetails sind unvollständig.");
+    state.selectedPersonnelCandidate = candidate;
+  } catch (error) {
+    if ([401, 403].includes(error.status)) {
+      clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
+      return;
+    }
+    if (state.selectedPersonnelCandidateId === id) {
+      state.personnelCandidateDetailError = error.message || "Die Bewerbungsdetails konnten nicht geladen werden.";
+    }
+  } finally {
+    if (state.selectedPersonnelCandidateId === id) state.personnelCandidateDetailLoading = false;
+    renderPersonnelCandidateOverview();
+  }
+}
+
+function updatePersonnelCandidateReasonField(form) {
+  const status = form?.elements?.status?.value || "";
+  const reasonField = form?.querySelector(".personnel-candidate-reason");
+  const reasonInput = form?.elements?.reason;
+  const required = PERSONNEL_CANDIDATE_REASON_STATUSES.has(status);
+  reasonField?.classList.toggle("hidden", !required);
+  if (reasonInput) {
+    reasonInput.required = required;
+    if (!required) reasonInput.value = "";
+  }
+}
+
+async function savePersonnelCandidateApplicationStatus(event) {
+  event.preventDefault();
+  const form = event.target.closest("[data-personnel-candidate-status-form]");
+  if (!form || !state.personnelCandidateCapabilities.canWriteApplications) return;
+  const candidateId = form.dataset.candidateId || "";
+  const applicationId = form.dataset.applicationId || "";
+  const candidate = state.selectedPersonnelCandidate;
+  const application = personnelCandidateApplications(candidate).find((entry) => (
+    entry.id === applicationId && candidate?.id === candidateId
+  ));
+  const status = form.elements.status.value;
+  const allowedTransitions = PERSONNEL_CANDIDATE_STATUS_TRANSITIONS[application?.status] || [];
+  if (!application || !allowedTransitions.includes(status)) {
+    state.personnelCandidateDetailError = "Der gewählte Statuswechsel ist nicht mehr verfügbar. Bitte Details aktualisieren.";
+    renderPersonnelCandidateDetail();
+    return;
+  }
+  const reason = String(form.elements.reason?.value || "").trim();
+  if (PERSONNEL_CANDIDATE_REASON_STATUSES.has(status) && !reason) {
+    form.elements.reason?.focus();
+    return;
+  }
+  state.personnelCandidateMutationPending = applicationId;
+  state.personnelCandidateDetailError = "";
+  renderPersonnelCandidateDetail();
+  try {
+    await api(`/api/portal/v1/personnel-lifecycle/candidates/${encodeURIComponent(candidateId)}/applications/${encodeURIComponent(applicationId)}/status`, {
+      method: "POST",
+      body: JSON.stringify({ status, ...(reason ? { reason } : {}), revision: application.revision }),
+    });
+    await loadPersonnelCandidates({ force: true });
+    await loadPersonnelCandidateDetail(candidateId);
+    showToast("Der Bewerbungsstatus wurde aktualisiert.");
+  } catch (error) {
+    if ([401, 403].includes(error.status)) {
+      clearPersonnelLifecycleCandidateState("Der Bewerberzugriff ist nicht mehr verfügbar.");
+      return;
+    }
+    state.personnelCandidateDetailError = error.message || "Der Bewerbungsstatus konnte nicht aktualisiert werden.";
+    if (error.status === 409) {
+      await loadPersonnelCandidates({ force: true });
+      await loadPersonnelCandidateDetail(candidateId);
+    }
+  } finally {
+    state.personnelCandidateMutationPending = "";
+    renderPersonnelCandidateOverview();
+  }
+}
+
 function renderPersonnelAdministration() {
   if (!canOpenPersonnelAdministrationView()) return;
   if (canReadCentralPersonnel()) {
@@ -6766,6 +7310,7 @@ function renderPersonnelAdministration() {
     renderCostCenterTypes();
     renderCostCenters();
   }
+  if (canReadCandidatePreboarding()) renderPersonnelCandidateOverview();
   if (canAccessCustomWorkRuleGovernance() && state.customWorkRuleRegistry) renderCustomWorkRuleRegistry();
   if (canReadCollectiveAgreements() && state.collectiveAgreementRegistry) renderCollectiveAgreementRegistry();
   if (canReadCentralVacations() && state.centralVacationLoadedYear !== null) renderCentralVacations();
@@ -6774,6 +7319,9 @@ function renderPersonnelAdministration() {
 
 const PERSONNEL_DASHBOARD_ITEM_IDS = Object.freeze([
   "employees",
+  "applications",
+  "workflows",
+  "tasks",
   "requests",
   "timeTracking",
   "costCenters",
@@ -6811,6 +7359,36 @@ function personnelDashboardCatalog() {
       view: "personnelAdministration",
       route: "employees",
       available: canReadCentralPersonnel(),
+    },
+    {
+      id: "applications",
+      symbol: "✦",
+      eyebrow: "Lebenszyklus",
+      label: "Bewerbungen & Preboarding",
+      description: "Bewerbungen getrennt von Mitarbeitenden führen und den Eintritt kontrolliert vorbereiten.",
+      view: "personnelAdministration",
+      route: "applications",
+      available: canReadCandidatePreboarding(),
+    },
+    {
+      id: "workflows",
+      symbol: "⌘",
+      eyebrow: "Prozesse",
+      label: "Workflow-Center",
+      description: "Vorlagen, veröffentlichte Versionen und laufende Instanzen getrennt verwalten.",
+      view: "personnelAdministration",
+      route: "workflows",
+      available: canOpenWorkflowCenter(),
+    },
+    {
+      id: "tasks",
+      symbol: "□",
+      eyebrow: "Aufgaben",
+      label: "Personalaufgaben",
+      description: "Persönliche und bereichsbezogene Prozessaufgaben geschützt zusammenführen.",
+      view: "personnelAdministration",
+      route: "tasks",
+      available: canReadPersonnelTasks(),
     },
     {
       id: "requests",
@@ -6980,6 +7558,9 @@ function setPersonnelAdministrationTab(tab) {
   document.querySelector(".personnel-administration-tabs")?.classList.toggle("hidden", normalized === "dashboard");
   elements.personnelDashboardSection?.classList.toggle("active", normalized === "dashboard");
   elements.personnelDirectorySection?.classList.toggle("active", normalized === "employees");
+  elements.candidatePreboardingSection?.classList.toggle("active", normalized === "applications");
+  elements.workflowCenterSection?.classList.toggle("active", normalized === "workflows");
+  elements.personnelTasksSection?.classList.toggle("active", normalized === "tasks");
   elements.costCenterSection?.classList.toggle("active", normalized === "costCenters");
   elements.customWorkRulesSection?.classList.toggle("active", normalized === "ruleDrafts");
   elements.collectiveAgreementsSection?.classList.toggle("active", normalized === "collectiveAgreements");
@@ -6991,6 +7572,7 @@ function setPersonnelAdministrationTab(tab) {
   if (state.currentView === "personnelAdministration" && ["employees", "costCenters"].includes(normalized)) {
     loadPersonnelAdministration().catch((error) => showToast(error.message, true));
   }
+  if (normalized === "applications") loadPersonnelCandidates();
   if (normalized === "ruleDrafts") loadCustomWorkRuleRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "collectiveAgreements") loadCollectiveAgreementRegistry().catch((error) => showToast(error.message, true));
   if (normalized === "vacations") loadCentralVacations().catch((error) => showToast(error.message, true));
@@ -7345,7 +7927,7 @@ function portalRoleAssignableInUi(actorRole, roleId) {
   if (roleId === "developer") return false;
   if (!actorRole || actorRole === "developer") return true;
   if (actorRole === "admin") return roleId !== "it_admin";
-  if (actorRole === "it_admin") return ["employee", "location_planner", "manager", "department_manager", "hr"].includes(roleId);
+  if (actorRole === "it_admin") return ["employee", "location_planner", "manager", "department_manager"].includes(roleId);
   if (actorRole === "hr") return ["employee", "location_planner", "manager", "department_manager"].includes(roleId);
   return actorRole === "manager" && roleId === "department_manager";
 }
@@ -7354,7 +7936,7 @@ function portalUserManageableInUi(actorRole, user) {
   if (user.roleLocked || user.role === "developer") return false;
   if (!actorRole || actorRole === "developer") return true;
   if (actorRole === "admin") return user.role !== "it_admin";
-  if (actorRole === "it_admin") return ["employee", "location_planner", "manager", "department_manager", "hr"].includes(user.role);
+  if (actorRole === "it_admin") return ["employee", "location_planner", "manager", "department_manager"].includes(user.role);
   if (actorRole === "hr") return ["employee", "location_planner", "manager", "department_manager"].includes(user.role);
   return actorRole === "manager" && user.role === "department_manager";
 }
@@ -7365,6 +7947,111 @@ function permissionEligibleForRole(permission, role) {
 }
 
 const permissionDependencyRules = Object.freeze([
+  Object.freeze({
+    permissionId: "personnel:candidates:convert",
+    requiredPermissionId: "personnel:candidates:write",
+    removedMessage: "Bewerber umwandeln wurde ebenfalls entzogen, weil Bewerber bearbeiten fehlt.",
+    unavailableMessage: "Bewerber umwandeln kann ohne verwaltbares Bearbeitungsrecht nicht vergeben werden.",
+    addedMessage: "Bewerber bearbeiten wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:candidates:convert",
+    requiredPermissionId: "personnel:candidates:confidential:write",
+    removedMessage: "Bewerber umwandeln wurde ebenfalls entzogen, weil vertrauliche Bewerberdaten bearbeiten fehlt.",
+    unavailableMessage: "Bewerber umwandeln kann ohne verwaltbares Recht für vertrauliche Bewerberdaten nicht vergeben werden.",
+    addedMessage: "Vertrauliche Bewerberdaten bearbeiten wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:candidates:confidential:write",
+    requiredPermissionId: "personnel:candidates:confidential:read",
+    removedMessage: "Vertrauliche Bewerberdaten bearbeiten wurde ebenfalls entzogen, weil das vertrauliche Leserecht fehlt.",
+    unavailableMessage: "Vertrauliche Bewerberdaten können ohne verwaltbares Leserecht nicht bearbeitet werden.",
+    addedMessage: "Vertrauliche Bewerberdaten lesen wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:candidates:confidential:write",
+    requiredPermissionId: "personnel:applications:write",
+    removedMessage: "Vertrauliche Bewerberdaten bearbeiten wurde ebenfalls entzogen, weil Bewerbungen bearbeiten fehlt.",
+    unavailableMessage: "Vertrauliche Bewerberdaten können ohne verwaltbares Bewerbungsrecht nicht bearbeitet werden.",
+    addedMessage: "Bewerbungen bearbeiten wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:candidates:write",
+    requiredPermissionId: "personnel:candidates:read",
+    removedMessage: "Bewerber bearbeiten wurde ebenfalls entzogen, weil das Leserecht fehlt.",
+    unavailableMessage: "Bewerber bearbeiten kann ohne verwaltbares Leserecht nicht vergeben werden.",
+    addedMessage: "Bewerber lesen wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:candidates:confidential:read",
+    requiredPermissionId: "personnel:candidates:read",
+    removedMessage: "Vertrauliche Bewerberdaten lesen wurde ebenfalls entzogen, weil das allgemeine Leserecht fehlt.",
+    unavailableMessage: "Vertrauliche Bewerberdaten können ohne verwaltbares allgemeines Leserecht nicht gelesen werden.",
+    addedMessage: "Bewerber lesen wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:applications:write",
+    requiredPermissionId: "personnel:candidates:read",
+    removedMessage: "Bewerbungen bearbeiten wurde ebenfalls entzogen, weil Bewerber lesen fehlt.",
+    unavailableMessage: "Bewerbungen bearbeiten kann ohne verwaltbares Leserecht nicht vergeben werden.",
+    addedMessage: "Bewerber lesen wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:workflows:draft:write",
+    requiredPermissionId: "personnel:workflows:read",
+    removedMessage: "Workflow-Entwürfe bearbeiten wurde ebenfalls entzogen, weil das Leserecht fehlt.",
+    unavailableMessage: "Workflow-Entwürfe können ohne verwaltbares Leserecht nicht bearbeitet werden.",
+    addedMessage: "Personal-Workflows lesen wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:workflows:review",
+    requiredPermissionId: "personnel:workflows:read",
+    removedMessage: "Workflow-Entwürfe prüfen wurde ebenfalls entzogen, weil das Leserecht fehlt.",
+    unavailableMessage: "Workflow-Entwürfe können ohne verwaltbares Leserecht nicht geprüft werden.",
+    addedMessage: "Personal-Workflows lesen wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:workflows:publish",
+    requiredPermissionId: "personnel:workflows:draft:write",
+    removedMessage: "Workflow-Versionen veröffentlichen wurde ebenfalls entzogen, weil das Entwurfsrecht fehlt.",
+    unavailableMessage: "Workflow-Versionen können ohne verwaltbares Entwurfsrecht nicht veröffentlicht werden.",
+    addedMessage: "Workflow-Entwürfe bearbeiten wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:workflows:local:supplement",
+    requiredPermissionId: "personnel:workflows:draft:write",
+    removedMessage: "Lokale Workflow-Ergänzungen wurden ebenfalls entzogen, weil das Entwurfsrecht fehlt.",
+    unavailableMessage: "Lokale Workflow-Ergänzungen können ohne verwaltbares Entwurfsrecht nicht vergeben werden.",
+    addedMessage: "Workflow-Entwürfe bearbeiten wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:workflows:confidential:read",
+    requiredPermissionId: "personnel:workflows:read",
+    removedMessage: "Vertrauliche Workflow-Inhalte lesen wurde ebenfalls entzogen, weil das allgemeine Leserecht fehlt.",
+    unavailableMessage: "Vertrauliche Workflow-Inhalte können ohne verwaltbares allgemeines Leserecht nicht gelesen werden.",
+    addedMessage: "Personal-Workflows lesen wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:workflows:confidential:write",
+    requiredPermissionId: "personnel:workflows:confidential:read",
+    removedMessage: "Vertrauliche Workflow-Inhalte bearbeiten wurde ebenfalls entzogen, weil das vertrauliche Leserecht fehlt.",
+    unavailableMessage: "Vertrauliche Workflow-Inhalte können ohne verwaltbares vertrauliches Leserecht nicht bearbeitet werden.",
+    addedMessage: "Vertrauliche Workflow-Inhalte lesen wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:workflows:confidential:write",
+    requiredPermissionId: "personnel:workflows:draft:write",
+    removedMessage: "Vertrauliche Workflow-Inhalte bearbeiten wurde ebenfalls entzogen, weil das Entwurfsrecht fehlt.",
+    unavailableMessage: "Vertrauliche Workflow-Inhalte können ohne verwaltbares Entwurfsrecht nicht bearbeitet werden.",
+    addedMessage: "Workflow-Entwürfe bearbeiten wurde automatisch ergänzt.",
+  }),
+  Object.freeze({
+    permissionId: "personnel:workflows:delegate",
+    requiredPermissionId: "personnel:workflows:read",
+    removedMessage: "Lokale Workflow-Rechte freigeben wurde ebenfalls entzogen, weil das Leserecht fehlt.",
+    unavailableMessage: "Lokale Workflow-Rechte können ohne verwaltbares Leserecht nicht freigegeben werden.",
+    addedMessage: "Personal-Workflows lesen wurde automatisch ergänzt.",
+  }),
   Object.freeze({
     permissionId: "schedule:write",
     requiredPermissionId: "schedule:read",
@@ -7607,6 +8294,9 @@ const rightsEditorOrganizationalPermissionIds = new Set([
   "vacation:read", "vacation:approve",
   "personnel:phone:read", "personnel:phone:write",
   "personnel:sensitive:read", "personnel:sensitive:write",
+  "personnel:candidates:read", "personnel:applications:write",
+  "personnel:workflows:read", "personnel:workflows:draft:write",
+  "personnel:workflows:publish", "personnel:workflows:local:supplement",
   "work_rules:planning:read",
   "sickness:read", "sickness:manage", "amu:local:manage",
 ]);
@@ -7723,27 +8413,46 @@ function refreshRightsEditorScope() {
 }
 
 function enforceRightsEditorPermissionDependencies(changedInput = null, announce = true) {
-  for (const dependency of permissionDependencyRules) {
-    const requiredInput = elements.rightsEditorPermissions.querySelector(`input[data-rights-permission][value="${dependency.requiredPermissionId}"]`);
-    const dependentInput = elements.rightsEditorPermissions.querySelector(`input[data-rights-permission][value="${dependency.permissionId}"]`);
-    if (!requiredInput || !dependentInput) continue;
-    if (changedInput && changedInput !== requiredInput && changedInput !== dependentInput) continue;
-    if (changedInput === requiredInput && !requiredInput.checked && dependentInput.checked) {
+  const removedPermissions = new Set();
+  if (changedInput && !changedInput.checked) removedPermissions.add(changedInput.value);
+  let announcement = "";
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const dependency of permissionDependencyRules) {
+      if (!removedPermissions.has(dependency.requiredPermissionId)) continue;
+      const dependentInput = elements.rightsEditorPermissions.querySelector(`input[data-rights-permission][value="${dependency.permissionId}"]`);
+      if (!dependentInput?.checked) continue;
       dependentInput.checked = false;
       updateRightsEditorPermissionStatus(dependentInput);
-      if (announce) rightsEditorAnnounce(dependency.removedMessage);
-    } else if (dependentInput.checked && !requiredInput.checked) {
-      if (requiredInput.disabled) {
-        dependentInput.checked = false;
-        updateRightsEditorPermissionStatus(dependentInput);
-        if (announce) rightsEditorAnnounce(dependency.unavailableMessage);
-      } else {
-        requiredInput.checked = true;
-        updateRightsEditorPermissionStatus(requiredInput);
-        if (announce) rightsEditorAnnounce(dependency.addedMessage);
+      removedPermissions.add(dependency.permissionId);
+      announcement ||= dependency.removedMessage;
+      changed = true;
+    }
+  }
+  changed = true;
+  while (changed) {
+    changed = false;
+    for (const dependency of permissionDependencyRules) {
+      const requiredInput = elements.rightsEditorPermissions.querySelector(`input[data-rights-permission][value="${dependency.requiredPermissionId}"]`);
+      const dependentInput = elements.rightsEditorPermissions.querySelector(`input[data-rights-permission][value="${dependency.permissionId}"]`);
+      if (!requiredInput || !dependentInput) continue;
+      if (dependentInput.checked && !requiredInput.checked) {
+        if (requiredInput.disabled) {
+          dependentInput.checked = false;
+          updateRightsEditorPermissionStatus(dependentInput);
+          removedPermissions.add(dependency.permissionId);
+          announcement ||= dependency.unavailableMessage;
+        } else {
+          requiredInput.checked = true;
+          updateRightsEditorPermissionStatus(requiredInput);
+          announcement ||= dependency.addedMessage;
+        }
+        changed = true;
       }
     }
   }
+  if (announce && announcement) rightsEditorAnnounce(announcement);
 }
 
 function openRightsEditor(employeeNumber) {
@@ -13588,7 +14297,7 @@ function applyRequestedView() {
   }
   if (requestedView === "personnelAdministration") {
     const requestedSection = parameters.get("section");
-    const establishedSection = ["dashboard", "employees", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"].includes(requestedSection);
+    const establishedSection = ["dashboard", "employees", "applications", "workflows", "tasks", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations"].includes(requestedSection);
     if (establishedSection || requestedSection === "dataRequests") {
       state.personnelAdministrationTab = requestedSection;
     }
@@ -13805,16 +14514,18 @@ function updateEmployeeAssignmentOptions(selectedPositionId = "", selectedDepart
 
 function canEditEmployeeAccessProfile(employee = null) {
   if (!state.portalStatus?.portalEnabled) return false;
-  if (!["developer", "it_admin"].includes(state.portalSession?.user?.role)) return false;
+  const actorRole = state.portalSession?.user?.role;
+  if (!["developer", "it_admin"].includes(actorRole)) return false;
   if (employee && !employee.portal_access) return false;
-  return employee?.portal_access?.roleLocked !== true && employee?.portal_access?.role !== "developer";
+  if (employee?.portal_access?.roleLocked === true || employee?.portal_access?.role === "developer") return false;
+  return actorRole !== "it_admin" || employee?.portal_access?.role !== "hr";
 }
 
 function appRoleAssignableInPersonnelModal(roleId) {
   const actorRole = state.portalSession?.user?.role;
   if (roleId === "developer") return false;
   if (actorRole === "developer") return true;
-  return actorRole === "it_admin" && ["employee", "location_planner", "department_manager", "manager", "hr"].includes(roleId);
+  return actorRole === "it_admin" && ["employee", "location_planner", "department_manager", "manager"].includes(roleId);
 }
 
 function permissionDisplayLabel(permissionId) {
@@ -17614,6 +18325,29 @@ elements.personnelDirectoryStatusFilter?.addEventListener("change", (event) => {
   state.personnelDirectoryStatusFilter = event.target.value;
   renderPersonnelDirectory();
 });
+elements.personnelCandidateSearch?.addEventListener("input", (event) => {
+  state.personnelCandidateSearch = event.target.value;
+  renderPersonnelCandidateOverview();
+});
+elements.personnelCandidateStatusFilter?.addEventListener("change", (event) => {
+  state.personnelCandidateStatusFilter = event.target.value;
+  renderPersonnelCandidateOverview();
+});
+elements.refreshPersonnelCandidatesButton?.addEventListener("click", async () => {
+  await loadPersonnelCandidates({ force: true });
+  if (state.selectedPersonnelCandidateId && state.personnelCandidateCapabilities.canReadCandidates) {
+    await loadPersonnelCandidateDetail(state.selectedPersonnelCandidateId);
+  }
+});
+elements.personnelCandidateList?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-personnel-candidate-id]");
+  if (button) loadPersonnelCandidateDetail(button.dataset.personnelCandidateId);
+});
+elements.personnelCandidateDetail?.addEventListener("change", (event) => {
+  const form = event.target.closest("[data-personnel-candidate-status-form]");
+  if (form && event.target.name === "status") updatePersonnelCandidateReasonField(form);
+});
+elements.personnelCandidateDetail?.addEventListener("submit", savePersonnelCandidateApplicationStatus);
 elements.centralVacationSearch?.addEventListener("input", (event) => {
   state.centralVacationSearch = event.target.value;
   renderCentralVacations();

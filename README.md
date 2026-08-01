@@ -65,6 +65,8 @@ Die [Codespaces-Demo](CODESPACES.md) ist ausschließlich für fiktive Testdaten 
 ## Dokumentation
 
 - [Serverbetrieb](SERVERBETRIEB.md)
+- [Zielarchitektur Personalmodul](docs/PERSONALMODUL-ZIELARCHITEKTUR-v0.1.md)
+- [Personalmodul – Workflow-Publikation M4](docs/PERSONALMODUL-WORKFLOW-PUBLIKATION-M4-v0.1.md)
 - [Datenbank-Provider-Strategie](docs/DATENBANK-PROVIDER-STRATEGIE.md)
 - [Integrationen](INTEGRATIONEN.md)
 - [Versionsverlauf](VERSIONS-LOG.md)

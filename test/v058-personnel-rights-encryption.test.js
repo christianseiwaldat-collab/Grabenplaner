@@ -130,21 +130,35 @@ test.after(async () => {
   fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
 });
 
-test("v0.58: IT-Admin legt Personalstammdaten, PL-Rolle und Zusatzrechte atomar an", async () => {
+test("v0.58: IT-Admin legt Personalstammdaten und freigegebene Leitungsrolle atomar an", async () => {
   const itAdmin = session("106", "it_admin");
   const result = await request("/api/employees", {
     method: "POST",
     auth: itAdmin,
     body: employeePayload("880", {
-      accessProfile: { role: "hr", permissions: ["employees:write", "backup:write"] },
+      accessProfile: { role: "manager", permissions: [] },
     }),
   });
   assert.equal(result.response.status, 201, JSON.stringify(result.payload));
-  assert.equal(result.payload.portal_access.role, "hr");
-  assert.deepEqual(result.payload.portal_access.grantedPermissions, ["backup:write"]);
-  assert.equal(db.prepare("SELECT role FROM portal_users WHERE employee_number = '880'").get().role, "hr");
-  assert.deepEqual(db.prepare("SELECT permission FROM portal_permission_grants WHERE employee_number = '880' ORDER BY permission").all().map((row) => row.permission), ["backup:write"]);
+  assert.equal(result.payload.portal_access.role, "manager");
+  assert.deepEqual(result.payload.portal_access.grantedPermissions, []);
+  assert.equal(db.prepare("SELECT role FROM portal_users WHERE employee_number = '880'").get().role, "manager");
+  assert.deepEqual(db.prepare("SELECT permission FROM portal_permission_grants WHERE employee_number = '880' ORDER BY permission").all().map((row) => row.permission), []);
   assert.ok(db.prepare("SELECT 1 FROM audit_log WHERE action = 'employee.access-profile.update' AND entity_id = '880'").get());
+});
+
+test("v0.58: IT-Admin kann ueber den Personalstamm keinen PL-Zugang erzeugen", async () => {
+  const itAdmin = session("106", "it_admin");
+  const denied = await request("/api/employees", {
+    method: "POST",
+    auth: itAdmin,
+    body: employeePayload("886", {
+      accessProfile: { role: "hr", permissions: [] },
+    }),
+  });
+  assert.equal(denied.response.status, 403, JSON.stringify(denied.payload));
+  assert.equal(denied.payload.code, "PORTAL_ROLE_HIERARCHY_DENIED");
+  assert.equal(db.prepare("SELECT 1 FROM employees WHERE personnel_number = '886'").get(), undefined);
 });
 
 test("v0.58: ungültiges Rechteprofil rollt die komplette Neuanlage zurück", async () => {
@@ -153,13 +167,47 @@ test("v0.58: ungültiges Rechteprofil rollt die komplette Neuanlage zurück", as
     method: "POST",
     auth: itAdmin,
     body: employeePayload("881", {
-      accessProfile: { role: "hr", permissions: ["developer:system"] },
+      accessProfile: { role: "manager", permissions: ["developer:system"] },
     }),
   });
   assert.equal(result.response.status, 403, JSON.stringify(result.payload));
   assert.equal(result.payload.code, "PORTAL_PERMISSION_NOT_DELEGABLE");
   assert.equal(db.prepare("SELECT 1 FROM employees WHERE personnel_number = '881'").get(), undefined);
   assert.equal(db.prepare("SELECT 1 FROM portal_users WHERE employee_number = '881'").get(), undefined);
+});
+
+test("Personalmodul R1: konkurrierender AccessProfile-Scope endet kontrolliert und atomar", async () => {
+  const itAdmin = session("106", "it_admin");
+  const employeeNumber = "889";
+  db.exec(`
+    CREATE TRIGGER test_access_profile_scope_unique_race
+    BEFORE INSERT ON portal_access_scopes
+    WHEN NEW.employee_number = '${employeeNumber}'
+    BEGIN
+      INSERT INTO portal_access_scopes (
+        employee_number, location_id, department_id, assigned_by
+      ) VALUES (
+        NEW.employee_number, NEW.location_id, NEW.department_id, NEW.assigned_by
+      );
+    END;
+  `);
+  try {
+    const result = await request("/api/employees", {
+      method: "POST",
+      auth: itAdmin,
+      body: employeePayload(employeeNumber, {
+        accessProfile: { role: "manager", permissions: [] },
+      }),
+    });
+    assert.equal(result.response.status, 409, JSON.stringify(result.payload));
+    assert.equal(result.payload.code, "PERSONNEL_LIFECYCLE_SCOPE_CONCURRENT_CHANGE");
+    assert.equal(db.prepare("SELECT 1 FROM employees WHERE personnel_number = ?").get(employeeNumber), undefined);
+    assert.equal(db.prepare("SELECT 1 FROM portal_users WHERE employee_number = ?").get(employeeNumber), undefined);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM portal_access_scopes WHERE employee_number = ?")
+      .get(employeeNumber).count, 0);
+  } finally {
+    db.exec("DROP TRIGGER IF EXISTS test_access_profile_scope_unique_race");
+  }
 });
 
 test("v0.58: PL darf Stammdaten anlegen, aber das geschützte Rechteprofil nicht ändern", async () => {
@@ -243,6 +291,59 @@ test("v0.58: Leitungsrolle erhält beim Speichern automatisch den passenden Bere
   assert.deepEqual(db.prepare("SELECT location_id, department_id FROM portal_access_scopes WHERE employee_number = '884'").all().map((row) => ({ ...row })), [
     { location_id: locationId, department_id: departmentId },
   ]);
+});
+
+test("Personalmodul R1: Rechteprofile binden keine Leitungsrolle an inaktive Bereiche", async () => {
+  if (!departmentId) return;
+  const itAdmin = session("106", "it_admin");
+  const locationEmployee = "887";
+  const departmentEmployee = "888";
+  try {
+    const createdLocationEmployee = await request("/api/employees", {
+      method: "POST",
+      auth: itAdmin,
+      body: employeePayload(locationEmployee),
+    });
+    assert.equal(createdLocationEmployee.response.status, 201, JSON.stringify(createdLocationEmployee.payload));
+    db.prepare("UPDATE locations SET active = 0 WHERE id = ?").run(locationId);
+    const inactiveLocation = await request(`/api/employees/${locationEmployee}`, {
+      method: "PUT",
+      auth: itAdmin,
+      body: employeePayload(locationEmployee, {
+        accessProfile: { role: "manager", permissions: [] },
+      }),
+    });
+    assert.equal(inactiveLocation.response.status, 409, JSON.stringify(inactiveLocation.payload));
+    assert.equal(inactiveLocation.payload.code, "PORTAL_SCOPE_LOCATION_INACTIVE");
+    assert.equal(db.prepare("SELECT 1 FROM portal_users WHERE employee_number = ?").get(locationEmployee), undefined);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM portal_access_scopes WHERE employee_number = ?")
+      .get(locationEmployee).count, 0);
+
+    db.prepare("UPDATE locations SET active = 1 WHERE id = ?").run(locationId);
+    const createdDepartmentEmployee = await request("/api/employees", {
+      method: "POST",
+      auth: itAdmin,
+      body: employeePayload(departmentEmployee, { preferredDepartmentId: departmentId }),
+    });
+    assert.equal(createdDepartmentEmployee.response.status, 201, JSON.stringify(createdDepartmentEmployee.payload));
+    db.prepare("UPDATE departments SET active = 0 WHERE id = ?").run(departmentId);
+    const inactiveDepartment = await request(`/api/employees/${departmentEmployee}`, {
+      method: "PUT",
+      auth: itAdmin,
+      body: employeePayload(departmentEmployee, {
+        preferredDepartmentId: departmentId,
+        accessProfile: { role: "department_manager", permissions: [] },
+      }),
+    });
+    assert.equal(inactiveDepartment.response.status, 409, JSON.stringify(inactiveDepartment.payload));
+    assert.equal(inactiveDepartment.payload.code, "PORTAL_SCOPE_DEPARTMENT_INACTIVE");
+    assert.equal(db.prepare("SELECT 1 FROM portal_users WHERE employee_number = ?").get(departmentEmployee), undefined);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM portal_access_scopes WHERE employee_number = ?")
+      .get(departmentEmployee).count, 0);
+  } finally {
+    db.prepare("UPDATE locations SET active = 1 WHERE id = ?").run(locationId);
+    db.prepare("UPDATE departments SET active = 1 WHERE id = ?").run(departmentId);
+  }
 });
 
 test("v0.58: bestehende Klartext-Personalaktfelder werden einmalig verschlüsselt und geleert", () => {
@@ -533,4 +634,70 @@ test("v0.70 Block 2: Personalakt-Oberfläche trennt Kontakt, sensible Daten und 
   assert.match(script, /phoneWriteRequiresTrustA/);
   assert.match(styles, /\.personnel-record-field-grid/);
   assert.match(styles, /\.sensitive-personnel-section/);
+});
+
+test("Personalmodul: DB-Import verwirft entschluesselbare, aber semantisch beschaedigte Bewerberdaten vor Aktivierung", async () => {
+  const configuredFeatures = JSON.parse(
+    String(db.prepare("SELECT value FROM settings WHERE key = 'installation_features'").get()?.value || "[]"),
+  );
+  db.prepare("UPDATE settings SET value = ? WHERE key = 'installation_features'")
+    .run(JSON.stringify([...new Set([...configuredFeatures, "personnelLifecycle"])]));
+
+  const admin = session("101", "admin");
+  const created = await request("/api/portal/v1/personnel-lifecycle/candidates", {
+    method: "POST",
+    auth: admin,
+    body: {
+      profile: {
+        firstName: "Import",
+        lastName: "Integritaet",
+        email: "import-integrity@example.invalid",
+      },
+    },
+  });
+  assert.equal(created.response.status, 201, JSON.stringify(created.payload));
+  const candidate = created.payload.candidate;
+  const currentRow = db.prepare(
+    "SELECT id, protected_payload, revision FROM candidates WHERE id = ?",
+  ).get(candidate.id);
+  assert.equal(currentRow.revision, 1);
+
+  const importedPath = path.join(testRoot, "candidate-semantic-corruption.db");
+  fs.rmSync(importedPath, { force: true });
+  db.exec(`VACUUM INTO '${importedPath.replace(/'/g, "''")}'`);
+  const imported = new DatabaseSync(importedPath);
+  try {
+    imported.prepare("UPDATE candidates SET revision = revision + 1 WHERE id = ?")
+      .run(candidate.id);
+    const corruptedRow = imported.prepare(
+      "SELECT id, protected_payload, revision FROM candidates WHERE id = ?",
+    ).get(candidate.id);
+    assert.equal(corruptedRow.revision, 2);
+    assert.equal(corruptedRow.protected_payload, currentRow.protected_payload);
+    assert.equal(parseProtectedJson(corruptedRow.protected_payload, {
+      namespace: "candidate-profile",
+      recordId: candidate.id,
+      field: "payload",
+      employeeNumber: `candidate:${candidate.id}`,
+    }).firstName, "Import");
+  } finally {
+    imported.close();
+  }
+
+  const importDirectory = path.join(process.env.GRABENPLANER_DATA_DIR, "data");
+  const pendingImports = () => fs.existsSync(importDirectory)
+    ? fs.readdirSync(importDirectory).filter((name) => name.startsWith("pending-import-")).sort()
+    : [];
+  const before = pendingImports();
+  const denied = await requestRaw("/api/backup/import", {
+    auth: session("106", "it_admin"),
+    body: fs.readFileSync(importedPath),
+  });
+  assert.equal(denied.response.status, 409, JSON.stringify(denied.payload));
+  assert.equal(denied.payload.code, "AMU_FULL_RESTORE_REQUIRED");
+  assert.deepEqual(pendingImports(), before);
+  assert.deepEqual(
+    db.prepare("SELECT id, protected_payload, revision FROM candidates WHERE id = ?").get(candidate.id),
+    currentRow,
+  );
 });

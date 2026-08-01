@@ -1402,11 +1402,13 @@ test("Fallbearbeitung: FL, delegierte AL und PL bearbeiten Krankmeldungen revisi
   assert.equal(beforeDelegation.response.status, 200, JSON.stringify(beforeDelegation.payload));
   assert.equal(beforeDelegation.payload.case.capabilities.close, false);
 
+  const delegationDateFrom = today < realViennaToday ? today : realViennaToday;
+  const delegationDateTo = today > realViennaToday ? today : realViennaToday;
   db.prepare(`
     INSERT INTO approval_delegations
       (location_id, delegate_employee_number, date_from, date_to, note, created_by)
     VALUES ('91', '618', ?, ?, 'Testvertretung', '595')
-  `).run(today, today);
+  `).run(delegationDateFrom, delegationDateTo);
   const withDelegation = await request(`/api/portal/v1/sickness-cases/${delegatedId}`, {
     auth: departmentManagerAuth,
   });
