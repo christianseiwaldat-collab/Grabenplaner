@@ -435,12 +435,22 @@ test("v0.87 Block 3: PL vergibt 275 fachliche Rechte atomar und strikt im Stando
   `).get(HR, PLANNER);
   assert.ok(audit);
   const auditDetail = JSON.parse(audit.detail);
-  assert.deepEqual(auditDetail.before.grantedPermissions, []);
-  assert.deepEqual(auditDetail.after.grantedPermissions, [...FUNCTIONAL_GRANTS].sort());
-  assert.deepEqual(auditDetail.after.scopes, [{
-    locationId: localFixture.locationId,
-    departmentId: null,
-  }]);
+  assert.equal(auditDetail.schemaVersion, 2);
+  assert.equal(auditDetail.before.granted.count, 0);
+  assert.equal(
+    auditDetail.before.granted.sha256,
+    crypto.createHash("sha256").update("[]").digest("hex"),
+  );
+  assert.equal(auditDetail.after.granted.count, FUNCTIONAL_GRANTS.length);
+  assert.equal(
+    auditDetail.after.granted.sha256,
+    crypto.createHash("sha256")
+      .update(JSON.stringify([...FUNCTIONAL_GRANTS].sort()))
+      .digest("hex"),
+  );
+  assert.equal(auditDetail.before.scopes.count, 1);
+  assert.equal(auditDetail.after.scopes.count, 1);
+  assert.equal(auditDetail.before.scopes.sha256, auditDetail.after.scopes.sha256);
 
   const planner = createSession(PLANNER, "location_planner");
   const session = await request("/api/portal/v1/session", { auth: planner });

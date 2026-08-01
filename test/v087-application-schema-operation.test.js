@@ -74,3 +74,39 @@ test("Block 3/7: SQLite-Anwendungsschema lehnt ungueltige Operationsdatenbanken 
     /SQLite-Operationsdatenbank/,
   );
 });
+
+test("SQLite-Anwendungsschema reserviert den lokalen Systemprinzipal case-insensitiv", () => {
+  const database = openSqliteLegacyDatabase(":memory:");
+  try {
+    ensureSqliteApplicationSchema(database);
+
+    const insertEmployee = database.prepare(`
+      INSERT INTO employees (personnel_number, full_name, nickname)
+      VALUES (?, ?, ?)
+    `);
+    assert.throws(
+      () => insertEmployee.run(" LoCaL ", "Unzulaessiger Benutzer", "Unzulaessig"),
+      /employee principal local is reserved/,
+    );
+    assert.throws(
+      () => insertEmployee.run("\tLoCaL\r\n", "Unzulaessiger Benutzer", "Unzulaessig"),
+      /employee principal local is reserved/,
+    );
+
+    insertEmployee.run("E-LOCAL", "Gueltiger Benutzer", "Gueltig");
+    assert.throws(
+      () => database.prepare(`
+        UPDATE employees SET personnel_number = ? WHERE personnel_number = ?
+      `).run("LOCAL", "E-LOCAL"),
+      /employee principal local is reserved/,
+    );
+
+    assert.deepEqual(
+      database.prepare("SELECT personnel_number FROM employees ORDER BY personnel_number").all()
+        .map((row) => ({ ...row })),
+      [{ personnel_number: "E-LOCAL" }],
+    );
+  } finally {
+    database.close();
+  }
+});

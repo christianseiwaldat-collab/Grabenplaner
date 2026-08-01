@@ -221,6 +221,235 @@ test("v0.63: Personalimport benötigt eigenes Recht und übernimmt Vorschau atom
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM integration_runs WHERE direction = 'import'").get().count, 1);
 });
 
+test("Personalmodul R1: konkurrierender Unique-Insert macht die Importvorschau kontrolliert veraltet", async () => {
+  const hr = session("103", "hr");
+  const employeeNumber = "00992";
+  const csv = Buffer.from(`Personalnummer;Name;Spitzname;Sollzeit\r\n${employeeNumber};Race Beispiel;Race;32,5\r\n`, "utf8");
+  const inspect = await request("/api/integrations/personnel-import/inspect", {
+    method: "POST", auth: hr, body: csv, contentType: "text/csv", fileName: "race.csv",
+  });
+  assert.equal(inspect.response.status, 201, JSON.stringify(inspect.payload));
+  const preview = await request("/api/integrations/personnel-import/preview", {
+    method: "POST",
+    auth: hr,
+    body: {
+      inspectionId: inspect.payload.inspectionId,
+      sheetName: "CSV",
+      headerRow: 1,
+      mapping: {
+        personnelNumber: { columnIndex: 0 },
+        fullName: { columnIndex: 1 },
+        nickname: { columnIndex: 2 },
+        contractedHours: { columnIndex: 3 },
+      },
+      defaults: { homeLocationId: locationId, positionId, contractedHours: 38.5, active: true },
+      duplicateStrategy: "skip",
+    },
+  });
+  assert.equal(preview.response.status, 201, JSON.stringify(preview.payload));
+  const auditCountBefore = db.prepare(`
+    SELECT COUNT(*) AS count FROM audit_log
+    WHERE action = 'integration.personnel.import.applied'
+  `).get().count;
+  db.exec(`
+    CREATE TRIGGER test_personnel_import_unique_race
+    BEFORE INSERT ON employees
+    WHEN NEW.personnel_number = '${employeeNumber}'
+    BEGIN
+      INSERT INTO employees (personnel_number, full_name, nickname, active)
+      VALUES ('${employeeNumber}', 'Race Konkurrent', 'Race', 1);
+    END;
+  `);
+  try {
+    const stale = await request("/api/integrations/personnel-import/apply", {
+      method: "POST",
+      auth: hr,
+      body: { previewId: preview.payload.previewId },
+    });
+    assert.equal(stale.response.status, 409, JSON.stringify(stale.payload));
+    assert.equal(stale.payload.code, "IMPORT_PREVIEW_STALE");
+    assert.equal(db.prepare("SELECT 1 FROM employees WHERE personnel_number = ?").get(employeeNumber), undefined);
+    assert.equal(db.prepare("SELECT COUNT(*) AS count FROM integration_runs WHERE direction = 'import'")
+      .get().count, 0);
+    assert.equal(db.prepare(`
+      SELECT COUNT(*) AS count FROM audit_log
+      WHERE action = 'integration.personnel.import.applied'
+    `).get().count, auditCountBefore);
+  } finally {
+    db.exec("DROP TRIGGER IF EXISTS test_personnel_import_unique_race");
+  }
+
+  const retried = await request("/api/integrations/personnel-import/apply", {
+    method: "POST",
+    auth: hr,
+    body: { previewId: preview.payload.previewId },
+  });
+  assert.equal(retried.response.status, 201, JSON.stringify(retried.payload));
+  assert.equal(db.prepare("SELECT full_name FROM employees WHERE personnel_number = ?")
+    .get(employeeNumber).full_name, "Race Beispiel");
+});
+
+test("Personalmodul R1: Import darf unveränderte archivierte Altzuordnungen beibehalten", async () => {
+  const hr = session("103", "hr");
+  const employeeNumber = "00993";
+  const costCenterId = String(db.prepare("SELECT cost_center_id FROM locations WHERE id = ?")
+    .get(locationId)?.cost_center_id || "");
+  assert.ok(costCenterId);
+  let departmentId = Number(db.prepare(`
+    SELECT id FROM departments WHERE location_id = ? ORDER BY id LIMIT 1
+  `).get(locationId)?.id || 0);
+  if (!departmentId) {
+    departmentId = Number(db.prepare(`
+      INSERT INTO departments (location_id, name, active)
+      VALUES (?, 'R1 Import Altzuordnung', 1)
+    `).run(locationId).lastInsertRowid);
+  }
+  assert.ok(departmentId);
+  const compatiblePositionId = String(db.prepare(`
+    SELECT cctp.position_id
+    FROM cost_centers cc
+    JOIN cost_center_type_positions cctp
+      ON cctp.cost_center_type_id = cc.cost_center_type_id
+    WHERE cc.id = ?
+    ORDER BY cctp.sort_order, cctp.position_id
+    LIMIT 1
+  `).get(costCenterId)?.position_id || "");
+  assert.ok(compatiblePositionId);
+  db.prepare(`
+    INSERT INTO employees (
+      personnel_number, full_name, nickname, color, contracted_hours,
+      target_workdays_per_week, position_id, time_confirmation_level,
+      home_location_id, preferred_department_id, cost_center_id, active
+    ) VALUES (?, 'Altzuordnung Bestand', 'Altbestand', '#2c7a68', 38.5, 5, ?, 'C', ?, ?, ?, 1)
+  `).run(employeeNumber, compatiblePositionId, locationId, departmentId, costCenterId);
+
+  const inspect = await request("/api/integrations/personnel-import/inspect", {
+    method: "POST",
+    auth: hr,
+    body: Buffer.from(`Personalnummer;Name\r\n${employeeNumber};Altzuordnung Aktualisiert\r\n`, "utf8"),
+    contentType: "text/csv",
+    fileName: "altzuordnung.csv",
+  });
+  assert.equal(inspect.response.status, 201, JSON.stringify(inspect.payload));
+  const preview = await request("/api/integrations/personnel-import/preview", {
+    method: "POST",
+    auth: hr,
+    body: {
+      inspectionId: inspect.payload.inspectionId,
+      sheetName: "CSV",
+      headerRow: 1,
+      mapping: {
+        personnelNumber: { columnIndex: 0 },
+        fullName: { columnIndex: 1 },
+      },
+      defaults: { homeLocationId: locationId, positionId: compatiblePositionId, contractedHours: 38.5, active: true },
+      duplicateStrategy: "update",
+    },
+  });
+  assert.equal(preview.response.status, 201, JSON.stringify(preview.payload));
+  assert.equal(preview.payload.summary.update, 1);
+
+  try {
+    db.prepare("UPDATE locations SET active = 0 WHERE id = ?").run(locationId);
+    db.prepare("UPDATE departments SET active = 0 WHERE id = ?").run(departmentId);
+    const applied = await request("/api/integrations/personnel-import/apply", {
+      method: "POST",
+      auth: hr,
+      body: { previewId: preview.payload.previewId },
+    });
+    assert.equal(applied.response.status, 201, JSON.stringify(applied.payload));
+    assert.deepEqual({ ...db.prepare(`
+      SELECT full_name, home_location_id, preferred_department_id, cost_center_id
+      FROM employees WHERE personnel_number = ?
+    `).get(employeeNumber) }, {
+      full_name: "Altzuordnung Aktualisiert",
+      home_location_id: locationId,
+      preferred_department_id: departmentId,
+      cost_center_id: costCenterId,
+    });
+  } finally {
+    db.prepare("UPDATE locations SET active = 1 WHERE id = ?").run(locationId);
+    db.prepare("UPDATE departments SET active = 1 WHERE id = ?").run(departmentId);
+  }
+});
+
+test("Personalmodul R1: Import darf eine unveränderte archivierte Verwaltungskostenstelle beibehalten", async () => {
+  const hr = session("103", "hr");
+  const employeeNumber = "00994";
+  const assignment = db.prepare(`
+    SELECT cc.id AS cost_center_id, cctp.position_id
+    FROM cost_centers cc
+    JOIN cost_center_types type ON type.id = cc.cost_center_type_id
+    JOIN cost_center_type_positions cctp
+      ON cctp.cost_center_type_id = cc.cost_center_type_id
+    WHERE cc.active = 1
+      AND type.active = 1
+      AND type.is_branch = 0
+      AND NOT EXISTS (SELECT 1 FROM locations WHERE cost_center_id = cc.id)
+    ORDER BY cc.sort_order, cctp.sort_order, cc.id, cctp.position_id
+    LIMIT 1
+  `).get();
+  assert.ok(assignment?.cost_center_id);
+  assert.ok(assignment?.position_id);
+  db.prepare(`
+    INSERT INTO employees (
+      personnel_number, full_name, nickname, color, contracted_hours,
+      target_workdays_per_week, position_id, time_confirmation_level,
+      home_location_id, preferred_department_id, cost_center_id, active
+    ) VALUES (?, 'Verwaltung Bestand', 'Verwaltung', '#2c7a68', 38.5, 5, ?, 'C', NULL, NULL, ?, 1)
+  `).run(employeeNumber, assignment.position_id, assignment.cost_center_id);
+
+  const inspect = await request("/api/integrations/personnel-import/inspect", {
+    method: "POST",
+    auth: hr,
+    body: Buffer.from(`Personalnummer;Name\r\n${employeeNumber};Verwaltung Aktualisiert\r\n`, "utf8"),
+    contentType: "text/csv",
+    fileName: "verwaltung-altzuordnung.csv",
+  });
+  assert.equal(inspect.response.status, 201, JSON.stringify(inspect.payload));
+  const preview = await request("/api/integrations/personnel-import/preview", {
+    method: "POST",
+    auth: hr,
+    body: {
+      inspectionId: inspect.payload.inspectionId,
+      sheetName: "CSV",
+      headerRow: 1,
+      mapping: {
+        personnelNumber: { columnIndex: 0 },
+        fullName: { columnIndex: 1 },
+      },
+      defaults: {
+        positionId: assignment.position_id,
+        contractedHours: 38.5,
+        active: true,
+      },
+      duplicateStrategy: "update",
+    },
+  });
+  assert.equal(preview.response.status, 201, JSON.stringify(preview.payload));
+  assert.equal(preview.payload.summary.update, 1);
+  try {
+    db.prepare("UPDATE cost_centers SET active = 0 WHERE id = ?").run(assignment.cost_center_id);
+    const applied = await request("/api/integrations/personnel-import/apply", {
+      method: "POST",
+      auth: hr,
+      body: { previewId: preview.payload.previewId },
+    });
+    assert.equal(applied.response.status, 201, JSON.stringify(applied.payload));
+    assert.deepEqual({ ...db.prepare(`
+      SELECT full_name, home_location_id, preferred_department_id, cost_center_id
+      FROM employees WHERE personnel_number = ?
+    `).get(employeeNumber) }, {
+      full_name: "Verwaltung Aktualisiert",
+      home_location_id: null,
+      preferred_department_id: null,
+      cost_center_id: assignment.cost_center_id,
+    });
+  } finally {
+    db.prepare("UPDATE cost_centers SET active = 1 WHERE id = ?").run(assignment.cost_center_id);
+  }
+});
+
 test("v0.63: Personalimport behandelt Groß-/Kleinschreibung als dieselbe Personalnummer und lehnt leere Daten ab", async () => {
   const hr = session("103", "hr");
   db.prepare(`
@@ -479,8 +708,8 @@ test("v0.63: Standortexport ordnet fremde Abteilungsdienste nur dem tatsächlich
 test("v0.63: historische Bewegungen inaktiver Teammitglieder brechen den Export nicht ab", async () => {
   const admin = session("101", "admin");
   const date = "2026-07-16";
-  db.prepare("INSERT INTO shifts (employee_number, shift_date, start_time, end_time, area) VALUES ('101', ?, '09:00', '17:00', 'Historisch')").run(date);
-  db.prepare("UPDATE employees SET active = 0 WHERE personnel_number = '101'").run();
+  db.prepare("INSERT INTO shifts (employee_number, shift_date, start_time, end_time, area) VALUES ('102', ?, '09:00', '17:00', 'Historisch')").run(date);
+  db.prepare("UPDATE employees SET active = 0 WHERE personnel_number = '102'").run();
   const result = await request("/api/integrations/payroll-export/preflight", {
     method: "POST", auth: admin, body: {
       dateFrom: date, dateTo: date, locationId, departmentId: null,

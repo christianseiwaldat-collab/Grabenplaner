@@ -106,7 +106,9 @@ const {
 } = require("./lib/server-runtime");
 const { resolvePersistenceConfiguration } = require("./lib/persistence/configuration");
 const {
+  createSqlitePersistenceProvider,
   openSqliteApplicationPersistence,
+  openSqliteLegacyDatabase,
 } = require("./lib/persistence/sqlite/provider");
 const {
   applicationSettingsSnapshotFromDatabase,
@@ -125,6 +127,7 @@ const {
 } = require("./lib/persistence/sqlite/operations/audit-log");
 const {
   applyBrandingSnapshotToSqliteFile,
+  inspectSqliteImportForeignKeyIntegrity,
   inspectSqliteImportFile,
 } = require("./lib/persistence/sqlite/operations/database-import");
 const {
@@ -133,6 +136,10 @@ const {
 const {
   ensureSqliteApplicationSchema,
 } = require("./lib/persistence/sqlite/operations/application-schema");
+const {
+  inspectSqlitePersonnelLifecycleConversionSchema,
+  inspectSqlitePersonnelLifecycleSchema,
+} = require("./lib/persistence/sqlite/operations/personnel-lifecycle-schema");
 const {
   runSqliteStartupSchemaMigrations,
 } = require("./lib/persistence/sqlite/operations/startup-schema-migrations");
@@ -163,6 +170,9 @@ const {
 const {
   createApplicationRepositories,
 } = require("./lib/persistence/application-repositories");
+const {
+  createPersonnelLifecycleRepository,
+} = require("./lib/persistence/repositories/personnel-lifecycle");
 const {
   DEFAULT_PORTAL_GREETING_SETTINGS,
   PortalGreetingValidationError,
@@ -307,6 +317,34 @@ const {
   listCollectiveAgreements,
   prepareCollectiveAgreementAssignment,
 } = require("./lib/collective-agreements");
+const {
+  PERSONNEL_LIFECYCLE_ERROR_KINDS,
+  PersonnelLifecycleError,
+  candidateApplicationProtectionContext,
+  candidateConversionProtectionContext,
+  candidateDocumentProtectionContext,
+  candidateDocumentVersionProtectionContext,
+  candidateEventProtectionContext,
+  candidateProtectionContext,
+  createPersonnelLifecycleService,
+} = require("./lib/personnel-lifecycle");
+const {
+  PERSONNEL_LIFECYCLE_PERMISSIONS,
+  isLocalSystemSession,
+  personnelLifecycleAccessForSession,
+  projectPersonnelLifecycleApplication,
+  projectPersonnelLifecycleCandidate,
+} = require("./lib/personnel-lifecycle-access");
+const {
+  PERSONNEL_WORKFLOW_PERMISSIONS,
+  PERSONNEL_WORKFLOW_PERMISSION_IDS,
+  createPersonnelWorkflowAccessSnapshot,
+} = require("./lib/personnel-workflow-access");
+const {
+  PERSONNEL_WORKFLOW_ERROR_KINDS,
+  PersonnelWorkflowError,
+  createPersonnelWorkflowPublicationService,
+} = require("./lib/personnel-workflow-publications");
 const {
   OFFICIAL_RETENTION_SOURCES,
   RETENTION_GOVERNANCE_NOTICE,
@@ -455,6 +493,13 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "personnel:sensitive:write", label: "Sensible MA-Daten bearbeiten", description: "Personalakt im ausdrücklich zugewiesenen Verantwortungsbereich verschlüsselt pflegen; keine technische oder globale Berechtigung.", group: "Personalakt", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "personnel:phone:read", label: "Telefonnummern im eigenen Bereich lesen", group: "Personalakt", warningLevel: "high", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "personnel:phone:write", label: "Telefonnummern im eigenen Bereich bearbeiten", description: "Bei standortgebundenen Leitungs- und Planungsrollen zusätzlich nur mit eigener Vertrauensstufe A.", group: "Personalakt", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:candidates:read", label: "Bewerbungen im freigegebenen Bereich lesen", description: "Datensparsame Bewerber- und Bewerbungsdaten ausschließlich in einem von PL+ fachlich freigegebenen Standort oder einer freigegebenen Abteilung lesen.", group: "Bewerbungen & Preboarding", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: "personnel:applications:write", label: "Bewerbungen im freigegebenen Bereich bearbeiten", description: "Strukturierte Bewerbungsdaten und Status ausschließlich im von PL+ freigegebenen Bereich bearbeiten; keine Kandidatenstammdaten, vertraulichen PL-Felder oder Umwandlung.", group: "Bewerbungen & Preboarding", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: "personnel:candidates:write", label: "Bewerber zentral anlegen und bearbeiten", description: "Kandidatenstammdaten und neue Bewerbungen unternehmensweit verwalten.", group: "Bewerbungen & Preboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: "personnel:candidates:confidential:read", label: "Vertrauliche Bewerberdaten lesen", description: "PL-vertrauliche Bewerbungsfelder, Dokumentmetadaten und vollständige Historie lesen; nicht an lokale Leitungen delegierbar.", group: "Bewerbungen & Preboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: "personnel:candidates:confidential:write", label: "Vertrauliche Bewerberdaten bearbeiten", description: "PL-vertrauliche Bewerbungsfelder bearbeiten; nicht an lokale Leitungen delegierbar.", group: "Bewerbungen & Preboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: "personnel:candidates:convert", label: "Bewerber kontrolliert als Mitarbeiter anlegen", description: "Die zentrale, transaktionale Einstellung einschließlich Personalnummer ausführen; lokale Leitungsrechte reichen dafür nicht aus.", group: "Bewerbungen & Preboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: "personnel:candidates:delegate", label: "Bewerbungsrechte und Fachbereiche freigeben", description: "Kennzeichnet PL+ für die fachrechtgebundene Freigabe lokaler Bewerbungsrechte und Bereiche; dieses Recht ist selbst nicht weiterdelegierbar.", group: "Bewerbungen & Preboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "amu:metadata:read", label: "Geschützte AUM-Metadaten lesen", description: "Nur Personalleitung und höhere geschützte Rollen; nicht an Filial- oder Abteilungsleitung delegierbar.", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "amu:file:read", label: "AUM-Dokumente öffnen", description: "Besonders geschütztes Zusatzrecht für Personalleitung und höhere Rollen.", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
   { id: "amu:review", label: "AUM-Meldungen prüfen", group: "AUM", warningLevel: "critical", eligibleRoles: ["hr", "admin", "it_admin", "developer"] },
@@ -501,9 +546,21 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "update:write", label: "Grabenplaner aktualisieren", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "system:write", label: "App neu starten oder beenden", group: "System & Verwaltung", warningLevel: "critical" },
   { id: "amu:local:manage", label: "AUM im eigenen Verantwortungsbereich öffnen und prüfen", description: "Standortgebundenes Fachrecht; für Planungs- und Abteilungsverantwortliche nur ausdrücklich zugewiesen, zusätzlich ist das Leserecht für Krankmeldungen erforderlich.", group: "AUM", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: "personnel:workflows:read", label: "Personal-Workflows im freigegebenen Bereich lesen", description: "Vorlagen- und Versionsmetadaten nur im von PL+ freigegebenen Bereich lesen.", group: "Personal-Workflows", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: "personnel:workflows:draft:write", label: "Lokale Personal-Workflow-Entw\u00fcrfe bearbeiten", description: "Entw\u00fcrfe im eigenen freigegebenen Bereich bearbeiten; keine zentrale Pflichtwirkung.", group: "Personal-Workflows", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: "personnel:workflows:review", label: "Personal-Workflow-Entw\u00fcrfe fachlich pr\u00fcfen", description: "Workflow-Entw\u00fcrfe zentral pr\u00fcfen; keine technische Rollenverwaltung.", group: "Personal-Workflows", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
+  { id: "personnel:workflows:publish", label: "Personal-Workflow-Versionen ver\u00f6ffentlichen", description: "Eine unver\u00e4nderliche Version erzeugen; lokal nur als freigegebene Erg\u00e4nzung.", group: "Personal-Workflows", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: "personnel:workflows:local:supplement", label: "Lokale Personal-Workflows erg\u00e4nzen", description: "Zus\u00e4tzliche lokale Prozesse im freigegebenen Bereich verwalten; zentrale Pflichtprozesse bleiben gesch\u00fctzt.", group: "Personal-Workflows", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
+  { id: "personnel:workflows:confidential:read", label: "Vertrauliche Personal-Workflow-Inhalte lesen", description: "Gesch\u00fctzte PL- und Offboarding-Schritte lesen; nicht lokal oder technisch delegierbar.", group: "Personal-Workflows", warningLevel: "critical", eligibleRoles: ["hr"] },
+  { id: "personnel:workflows:confidential:write", label: "Vertrauliche Personal-Workflow-Inhalte bearbeiten", description: "Gesch\u00fctzte PL- und Offboarding-Schritte bearbeiten; im M4-Fundament noch gesperrt.", group: "Personal-Workflows", warningLevel: "critical", eligibleRoles: ["hr"] },
+  { id: "personnel:workflows:delegate", label: "Lokale Personal-Workflow-Rechte freigeben", description: "Kennzeichnet PL+ f\u00fcr die fachrechtgebundene Freigabe lokaler Workflow-Rechte; nicht weiterdelegierbar.", group: "Personal-Workflows", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
 ]);
 const delegablePortalPermissions = new Set(delegablePortalPermissionCatalog.map((entry) => entry.id));
 const hrDelegablePortalPermissions = new Set(delegablePortalPermissionCatalog.filter((entry) => entry.hrDelegable).map((entry) => entry.id));
+const personnelLifecyclePermissionIds = new Set([
+  ...Object.values(PERSONNEL_LIFECYCLE_PERMISSIONS),
+  ...PERSONNEL_WORKFLOW_PERMISSION_IDS,
+]);
 const protectedAmuPermissionIds = new Set(["amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit"]);
 const protectedAmuRoleIds = new Set(["hr", "admin", "it_admin", "developer"]);
 const personnelFieldAccessLevels = new Set(["hidden", "read", "write"]);
@@ -583,6 +640,86 @@ function assertPortalPermissionDependencies(permissions) {
       "AUM im eigenen Verantwortungsbereich kann nur zusammen mit dem Leserecht für Krankmeldungen vergeben werden.",
       "PORTAL_PERMISSION_DEPENDENCY");
   }
+  const requirePermission = (permission, dependency, message) => {
+    if (projected.has(permission) && !projected.has(dependency)) {
+      throw httpError(400, message, "PORTAL_PERMISSION_DEPENDENCY");
+    }
+  };
+  requirePermission(
+    "personnel:applications:write",
+    "personnel:candidates:read",
+    "Bewerbungen können nur zusammen mit dem Leserecht für Bewerber bearbeitet werden.",
+  );
+  requirePermission(
+    "personnel:candidates:write",
+    "personnel:candidates:read",
+    "Bewerber können nur zusammen mit dem Leserecht angelegt oder bearbeitet werden.",
+  );
+  requirePermission(
+    "personnel:candidates:confidential:read",
+    "personnel:candidates:read",
+    "Vertrauliche Bewerberdaten setzen das Bewerber-Leserecht voraus.",
+  );
+  requirePermission(
+    "personnel:candidates:confidential:write",
+    "personnel:candidates:confidential:read",
+    "Vertrauliche Bewerberdaten können nur mit dem zugehörigen Leserecht bearbeitet werden.",
+  );
+  requirePermission(
+    "personnel:candidates:confidential:write",
+    "personnel:applications:write",
+    "Vertrauliche Bewerbungsdaten setzen das Bearbeitungsrecht für Bewerbungen voraus.",
+  );
+  requirePermission(
+    "personnel:candidates:convert",
+    "personnel:candidates:confidential:write",
+    "Die kontrollierte Einstellung setzt die vollständigen zentralen Bewerberrechte voraus.",
+  );
+  requirePermission(
+    "personnel:candidates:convert",
+    "personnel:candidates:write",
+    "Die kontrollierte Einstellung setzt das zentrale Schreibrecht für Bewerber voraus.",
+  );
+  requirePermission(
+    PERSONNEL_WORKFLOW_PERMISSIONS.DRAFT_WRITE,
+    PERSONNEL_WORKFLOW_PERMISSIONS.READ,
+    "Workflow-Entwürfe können nur zusammen mit dem Workflow-Leserecht bearbeitet werden.",
+  );
+  requirePermission(
+    PERSONNEL_WORKFLOW_PERMISSIONS.REVIEW,
+    PERSONNEL_WORKFLOW_PERMISSIONS.READ,
+    "Die fachliche Workflow-Prüfung setzt das Workflow-Leserecht voraus.",
+  );
+  requirePermission(
+    PERSONNEL_WORKFLOW_PERMISSIONS.PUBLISH,
+    PERSONNEL_WORKFLOW_PERMISSIONS.DRAFT_WRITE,
+    "Workflow-Versionen können nur mit dem zugehörigen Entwurfsrecht veröffentlicht werden.",
+  );
+  requirePermission(
+    PERSONNEL_WORKFLOW_PERMISSIONS.LOCAL_SUPPLEMENT,
+    PERSONNEL_WORKFLOW_PERMISSIONS.DRAFT_WRITE,
+    "Lokale Workflow-Ergänzungen setzen das zugehörige Entwurfsrecht voraus.",
+  );
+  requirePermission(
+    PERSONNEL_WORKFLOW_PERMISSIONS.CONFIDENTIAL_READ,
+    PERSONNEL_WORKFLOW_PERMISSIONS.READ,
+    "Vertrauliche Workflow-Inhalte setzen das Workflow-Leserecht voraus.",
+  );
+  requirePermission(
+    PERSONNEL_WORKFLOW_PERMISSIONS.CONFIDENTIAL_WRITE,
+    PERSONNEL_WORKFLOW_PERMISSIONS.CONFIDENTIAL_READ,
+    "Vertrauliche Workflow-Inhalte können nur mit dem zugehörigen Leserecht bearbeitet werden.",
+  );
+  requirePermission(
+    PERSONNEL_WORKFLOW_PERMISSIONS.CONFIDENTIAL_WRITE,
+    PERSONNEL_WORKFLOW_PERMISSIONS.DRAFT_WRITE,
+    "Vertrauliche Workflow-Inhalte setzen das normale Entwurfsrecht voraus.",
+  );
+  requirePermission(
+    PERSONNEL_WORKFLOW_PERMISSIONS.DELEGATE,
+    PERSONNEL_WORKFLOW_PERMISSIONS.READ,
+    "Die Freigabe lokaler Workflow-Rechte setzt das Workflow-Leserecht voraus.",
+  );
 }
 
 const portalDashboardPermissionDetails = Object.freeze([
@@ -621,6 +758,10 @@ const portalGlobalPermissionIds = new Set([
   "vacation_accounts:read", "vacation_accounts:manage",
   "retention:read", "retention:manage",
   "data_subject_requests:read", "data_subject_requests:manage", "data_subject_requests:export",
+  "personnel:candidates:write", "personnel:candidates:confidential:read",
+  "personnel:candidates:confidential:write", "personnel:candidates:convert", "personnel:candidates:delegate",
+  "personnel:workflows:review", "personnel:workflows:confidential:read",
+  "personnel:workflows:confidential:write", "personnel:workflows:delegate",
   "amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit",
   "processes:write",
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
@@ -916,6 +1057,39 @@ const ownGovernancePermissions = [
   "own_privacy_export:read",
 ];
 for (const role of builtinPortalRoles) addBuiltinRolePermissions(role.id, ownGovernancePermissions);
+const personnelLifecycleBusinessRolePermissions = Object.freeze([
+  "personnel:candidates:read",
+  "personnel:applications:write",
+  "personnel:candidates:write",
+  "personnel:candidates:confidential:read",
+  "personnel:candidates:confidential:write",
+  "personnel:candidates:convert",
+]);
+addBuiltinRolePermissions("hr", personnelLifecycleBusinessRolePermissions);
+for (const roleId of ["admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, [
+    ...personnelLifecycleBusinessRolePermissions,
+    "personnel:candidates:delegate",
+  ]);
+}
+const personnelWorkflowStandardRolePermissions = Object.freeze([
+  PERSONNEL_WORKFLOW_PERMISSIONS.READ,
+  PERSONNEL_WORKFLOW_PERMISSIONS.DRAFT_WRITE,
+  PERSONNEL_WORKFLOW_PERMISSIONS.REVIEW,
+  PERSONNEL_WORKFLOW_PERMISSIONS.PUBLISH,
+  PERSONNEL_WORKFLOW_PERMISSIONS.LOCAL_SUPPLEMENT,
+]);
+addBuiltinRolePermissions("hr", [
+  ...personnelWorkflowStandardRolePermissions,
+  PERSONNEL_WORKFLOW_PERMISSIONS.CONFIDENTIAL_READ,
+  PERSONNEL_WORKFLOW_PERMISSIONS.CONFIDENTIAL_WRITE,
+]);
+for (const roleId of ["admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, [
+    ...personnelWorkflowStandardRolePermissions,
+    PERSONNEL_WORKFLOW_PERMISSIONS.DELEGATE,
+  ]);
+}
 for (const role of builtinPortalRoles) addBuiltinRolePermissions(role.id, [LOAN_OVERVIEW_PERMISSION]);
 for (const role of builtinPortalRoles) {
   if (role.id === "location_planner") continue;
@@ -989,16 +1163,27 @@ const installationFeatureCatalog = Object.freeze([
   { id: "wifiSuggestions", label: "WLAN-Zeitvorschläge" },
   { id: "integrations", label: "Personalimport & Lohnverrechnung" },
   { id: "loans", label: "Leihe" },
+  {
+    id: "personnelLifecycle",
+    label: "Personal-Lebenszyklus",
+    defaultEnabled: false,
+    provisionable: false,
+  },
 ]);
 const installationFeatureIds = new Set(installationFeatureCatalog.map((feature) => feature.id));
-const defaultInstallationFeatures = installationFeatureCatalog.map((feature) => feature.id);
+const usbInstallationFeatureIds = new Set(installationFeatureCatalog
+  .filter((feature) => feature.provisionable !== false)
+  .map((feature) => feature.id));
+const defaultInstallationFeatures = installationFeatureCatalog
+  .filter((feature) => feature.required || feature.defaultEnabled !== false)
+  .map((feature) => feature.id);
 const preV063DefaultInstallationFeatures = defaultInstallationFeatures
   .filter((feature) => !["integrations", "loans"].includes(feature));
 const preV085DefaultInstallationFeatures = defaultInstallationFeatures.filter((feature) => feature !== "loans");
 const PORTAL_ROLE_ASSIGNMENTS = Object.freeze({
   developer: new Set(["employee", "location_planner", "department_manager", "manager", "hr", "admin", "it_admin"]),
   admin: new Set(["employee", "location_planner", "department_manager", "manager", "hr", "admin"]),
-  it_admin: new Set(["employee", "location_planner", "department_manager", "manager", "hr"]),
+  it_admin: new Set(["employee", "location_planner", "department_manager", "manager"]),
   hr: new Set(["employee", "location_planner", "department_manager", "manager"]),
   manager: new Set(["department_manager"]),
 });
@@ -1390,6 +1575,7 @@ const {
   mobileAuth: mobileAuthRepository,
   organizationPersonnel: organizationPersonnelRepository,
   personalNotificationContacts: personalNotificationContactsRepository,
+  personnelLifecycle: personnelLifecycleRepository,
   planningSettings: planningSettingsRepository,
   portalAccess: portalAccessRepository,
   runtimeRecovery: runtimeRecoveryRepository,
@@ -1704,8 +1890,11 @@ async function evaluateUploadedAumEvidence(employeeNumber, documents) {
   });
 }
 
-async function personnelSensitiveProfile(employeeNumber) {
-  const row = await organizationPersonnelRepository.getPersonnelSensitiveRecord(employeeNumber);
+async function personnelSensitiveProfile(
+  employeeNumber,
+  repository = organizationPersonnelRepository,
+) {
+  const row = await repository.getPersonnelSensitiveRecord(employeeNumber);
   if (!row) return emptyPersonnelSensitiveProfile();
   const payload = parseProtectedJson(row.protected_payload, personnelSensitiveProtectionContext(row));
   const identity = payload.identity && typeof payload.identity === "object" && !Array.isArray(payload.identity)
@@ -1909,6 +2098,29 @@ function parseProtectedJson(value, context) {
 
 function protectJson(value, context) {
   return requireAmuStorage().protectRecord(JSON.stringify(value), context);
+}
+
+let personnelLifecycleServiceInstance = null;
+
+function requirePersonnelLifecycleService() {
+  if (!personnelLifecycleServiceInstance) {
+    personnelLifecycleServiceInstance = createPersonnelLifecycleService(
+      personnelLifecycleRepository,
+      { protectJson, parseProtectedJson },
+    );
+  }
+  return personnelLifecycleServiceInstance;
+}
+
+let personnelWorkflowPublicationServiceInstance = null;
+
+function requirePersonnelWorkflowPublicationService() {
+  if (!personnelWorkflowPublicationServiceInstance) {
+    personnelWorkflowPublicationServiceInstance = createPersonnelWorkflowPublicationService(
+      customProcessRepository,
+    );
+  }
+  return personnelWorkflowPublicationServiceInstance;
 }
 
 let governanceStoreInstance = null;
@@ -2295,6 +2507,7 @@ function initializeApplicationPersistence() {
       await ensureDefaultRetentionRules("system");
       await backfillVacationAccountsFromEntitlements("system");
       await verifyProtectedGovernanceRecords();
+      await requirePersonnelLifecycleService().verifyIntegrity();
       await backfillCustomProcessRevisionSnapshots();
       await refreshLoanProtectedStorageSnapshot();
       if (localAmuRoutingMigrationNeeded) {
@@ -2428,6 +2641,37 @@ function httpError(status, message, code = "") {
 function isUniquePersistenceViolation(error) {
   return error?.code === "PERSISTENCE_UNIQUE_VIOLATION"
     || String(error?.message || "").includes("UNIQUE");
+}
+
+function personnelLifecycleConcurrentChangeError() {
+  const error = httpError(
+    409,
+    "Die Rechte oder Bereiche wurden gleichzeitig geaendert. Bitte den aktuellen Stand neu laden.",
+    "PERSONNEL_LIFECYCLE_SCOPE_CONCURRENT_CHANGE",
+  );
+  error.retryAfter = 1;
+  return error;
+}
+
+async function runPersonnelLifecycleSerializableMutation(
+  work,
+  { uniqueAsConcurrent = false } = {},
+) {
+  try {
+    return await work();
+  } catch (error) {
+    if (["PERSISTENCE_RETRYABLE_TRANSACTION", "PERSISTENCE_BUSY"].includes(error?.code)
+      || (uniqueAsConcurrent && isUniquePersistenceViolation(error))) {
+      throw personnelLifecycleConcurrentChangeError();
+    }
+    throw error;
+  }
+}
+
+function personnelLifecycleSerializableTransaction(work, options = {}) {
+  return runPersonnelLifecycleSerializableMutation(() => (
+    organizationPersonnelRepository.transaction(work, { isolation: "serializable" })
+  ), options);
 }
 
 function requireAmuStorage() {
@@ -3348,13 +3592,29 @@ function portalActorId(session) {
   return String(session?.actorId || session?.employeeNumber || "local");
 }
 
+function parsePortalPermissionScopes(value) {
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(String(value || "[]"));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
   const token = parseCookies(request)[PORTAL_SESSION_COOKIE];
   if (!token) return null;
-  const now = new Date().toISOString();
+  const currentDate = new Date();
+  const now = currentDate.toISOString();
   const tokenHash = sha256(token);
-  const session = await portalAccessRepository.getEmployeeSessionByToken({ tokenHash, now });
+  const session = await portalAccessRepository.getEmployeeSessionByToken({
+    tokenHash,
+    now,
+    businessDate: viennaTodayIso(currentDate),
+  });
   if (session) {
+    if (isReservedEmployeePrincipal(session.employee_number)) return null;
     if (touch) await portalAccessRepository.touchEmployeeSession({ id: session.id });
     const explicitScopes = portalAccessScopesForPrincipal({
       role: "employee",
@@ -3398,6 +3658,7 @@ async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
       grantedPermissions: permissionState.grantedPermissions,
       deniedPermissions: permissionState.deniedPermissions,
       explicitScopes,
+      permissionScopes: parsePortalPermissionScopes(session.permission_scopes),
       scopes,
       timeConfirmationLevel: normalizeTimeConfirmationLevel(session.time_confirmation_level),
       amuLocalAccessMode: normalizedManagerAmuAccessMode(session.amu_local_access_mode),
@@ -3441,6 +3702,7 @@ async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
     grantedPermissions: permissions,
     deniedPermissions: [],
     explicitScopes: scopes,
+    permissionScopes: [],
     scopes,
     mustChangePassword: Boolean(organizationSession.must_change_password),
     expiresAt: organizationSession.expires_at,
@@ -3518,12 +3780,12 @@ function publicPortalUser(session) {
 }
 
 function sessionHasGlobalScope(session) {
-  return !session || session.employeeNumber === "local" || GLOBAL_SCOPE_PORTAL_ROLES.has(session.role);
+  return !session || isLocalSystemSession(session) || GLOBAL_SCOPE_PORTAL_ROLES.has(session.role);
 }
 
 function sessionCanReadWorkRules(session) {
   return !session
-    || session.employeeNumber === "local"
+    || isLocalSystemSession(session)
     || session.permissions?.includes("work_rules:read")
     || session.permissions?.includes("work_rules:planning:read");
 }
@@ -3798,7 +4060,7 @@ function validateMobileDevice(input = {}) {
 }
 
 function mobileSessionPrincipal(row) {
-  if (!row) return null;
+  if (!row || isReservedEmployeePrincipal(row.employee_number)) return null;
   const scopes = portalAccessScopesForPrincipal({
     employeeNumber: row.employee_number,
     role: row.role,
@@ -3843,16 +4105,26 @@ function mobileSessionPrincipal(row) {
   };
 }
 
-async function mobileSessionRow(sessionId, repository = mobileAuthRepository) {
-  return repository.getSession({ sessionId });
+async function mobileSessionRow(
+  sessionId,
+  repository = mobileAuthRepository,
+  businessDate = viennaTodayIso(),
+) {
+  return repository.getSession({ sessionId, businessDate });
 }
 
 async function mobileSessionFromRequest(request, { touch = true } = {}) {
   const parsed = parseMobileToken(mobileBearerToken(request), MOBILE_ACCESS_TOKEN_PREFIX);
   if (!parsed) return null;
-  const row = await mobileSessionRow(parsed.sessionId);
-  const now = new Date().toISOString();
-  if (!row || row.revoked_at || !row.active || !row.employee_active || row.access_expires_at <= now
+  const currentDate = new Date();
+  const row = await mobileSessionRow(
+    parsed.sessionId,
+    mobileAuthRepository,
+    viennaTodayIso(currentDate),
+  );
+  const now = currentDate.toISOString();
+  if (!row || isReservedEmployeePrincipal(row.employee_number)
+    || row.revoked_at || !row.active || !row.employee_active || row.access_expires_at <= now
     || !safeHashEquals(row.access_token_hash, sha256(parsed.token))) return null;
   if (touch) await mobileAuthRepository.touchSession({ sessionId: row.id });
   return mobileSessionPrincipal(row);
@@ -4100,8 +4372,9 @@ async function rotateAuthenticatedMobileSession(
   now = new Date(),
   repository = mobileAuthRepository,
 ) {
-  const row = await mobileSessionRow(sessionId, repository);
-  if (!row || row.revoked_at || !row.active || !row.employee_active || row.refresh_expires_at <= now.toISOString()) {
+  const row = await mobileSessionRow(sessionId, repository, viennaTodayIso(now));
+  if (!row || isReservedEmployeePrincipal(row.employee_number)
+    || row.revoked_at || !row.active || !row.employee_active || row.refresh_expires_at <= now.toISOString()) {
     throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_AUTH_REQUIRED");
   }
   const accessToken = createMobileToken(MOBILE_ACCESS_TOKEN_PREFIX, row.id);
@@ -4126,9 +4399,10 @@ async function refreshMobileSession(rawRefreshToken, device, now = new Date()) {
   const parsed = parseMobileToken(rawRefreshToken, MOBILE_REFRESH_TOKEN_PREFIX);
   if (!parsed) throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_REFRESH_INVALID");
   const outcome = await mobileAuthRepository.transaction(async (repository) => {
-    const row = await mobileSessionRow(parsed.sessionId, repository);
+    const row = await mobileSessionRow(parsed.sessionId, repository, viennaTodayIso(now));
     const submittedHash = sha256(parsed.token);
-    if (!row || row.revoked_at || !row.active || !row.employee_active) {
+    if (!row || isReservedEmployeePrincipal(row.employee_number)
+      || row.revoked_at || !row.active || !row.employee_active) {
       throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_REFRESH_INVALID");
     }
     if (!safeHashEquals(row.installation_id_hash, device.installationIdHash) || row.platform !== device.platform) {
@@ -4177,8 +4451,13 @@ async function refreshMobileSession(rawRefreshToken, device, now = new Date()) {
 async function mobileSessionRowFromRefreshToken(rawRefreshToken, now = new Date()) {
   const parsed = parseMobileToken(rawRefreshToken, MOBILE_REFRESH_TOKEN_PREFIX);
   if (!parsed) return null;
-  const row = await mobileSessionRow(parsed.sessionId);
-  if (!row || row.revoked_at || !row.active || !row.employee_active || row.refresh_expires_at <= now.toISOString()
+  const row = await mobileSessionRow(
+    parsed.sessionId,
+    mobileAuthRepository,
+    viennaTodayIso(now),
+  );
+  if (!row || isReservedEmployeePrincipal(row.employee_number)
+    || row.revoked_at || !row.active || !row.employee_active || row.refresh_expires_at <= now.toISOString()
     || !safeHashEquals(row.refresh_token_hash, sha256(parsed.token))) return null;
   return row;
 }
@@ -4546,7 +4825,7 @@ function currentWeekLockPoint(settings = getSettings()) {
 }
 
 async function pastWeekEditingAllowedForActor(actor, settings = getSettings()) {
-  if (!getPortalStatus().portalEnabled || actor?.employeeNumber === "local") {
+  if (!getPortalStatus().portalEnabled || isLocalSystemSession(actor)) {
     return settingEnabled(settings, "allow_past_week_editing");
   }
   if (!actor?.employeeNumber
@@ -4585,6 +4864,7 @@ function installationFeaturesForApiPath(apiPath) {
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:amu|sickness)|portal\/v1\/(?:amu|sickness)|amu(?:-|\/|$)|sickness(?:-|\/|$))/.test(requestPath)) required.add("sicknessAmu");
   if (/^\/(?:portal\/v1\/(?:me\/)?(?:time-entries|time-summary|time-corrections)|portal\/v1\/(?:time-summary|time-day|time-corrections|time-presence)|time(?:-|\/|$)|mobile\/v1\/(?:time|me\/time-entries))/.test(requestPath)) required.add("timeTracking");
   if (/^\/(?:portal\/v1\/me(?:\/|$)|mobile\/v1\/(?:bootstrap|me(?:\/|$))|portal\/v1\/(?:greeting-settings|mobile-layout|leadership\/overview))/.test(requestPath)) required.add("employeePortal");
+  if (/^\/portal\/v1\/personnel-lifecycle(?:\/|$)/.test(requestPath)) required.add("personnelLifecycle");
   if (/^\/integrations\/(?:personnel-import|payroll-export|payroll-handoffs|profiles|runs|connections|contracts)(?:\/|$)/.test(requestPath)) required.add("integrations");
   if (/^\/(?:portal|mobile)\/v1\/loans(?:\/|$)/.test(requestPath)) {
     required.add("loans");
@@ -4791,7 +5071,7 @@ function wifiWebhookConfigured() {
 }
 
 function wifiConnectorPayload(actor = null) {
-  const maySeeTechnicalHint = actor?.employeeNumber === "local" || ["developer", "it_admin", "admin"].includes(actor?.role);
+  const maySeeTechnicalHint = isLocalSystemSession(actor) || ["developer", "it_admin", "admin"].includes(actor?.role);
   return {
     configured: wifiWebhookConfigured(),
     providerId: wifiProviderId,
@@ -6730,7 +7010,7 @@ function sessionMatchesOrganizationalContext(session, locationId, departmentId =
 
 function sessionCanManageLocalContext(session, { locationId, departmentId = null, permission, date = viennaTodayIso() } = {}) {
   if (!session) return false;
-  if (session.employeeNumber === "local") return true;
+  if (isLocalSystemSession(session)) return true;
   if (!session.permissions?.includes(permission)) return false;
   if (sessionHasGlobalScope(session)) return true;
   if (!sessionMatchesOrganizationalContext(session, locationId, departmentId)) return false;
@@ -6744,7 +7024,7 @@ function sessionCanManageLocalContext(session, { locationId, departmentId = null
 }
 
 function sessionHasLocalAmuAccess(session) {
-  if (!session || session.employeeNumber === "local") return false;
+  if (!session || isLocalSystemSession(session)) return false;
   if (!["location_planner", "manager", "department_manager"].includes(session.role)) return false;
   if (!session.permissions?.includes("amu:local:manage")
     || !session.permissions?.includes("sickness:read")
@@ -6841,54 +7121,54 @@ async function saveManagerAmuAccessPolicy(actor, input = {}) {
 
 function actorCanListAmuReports(session) {
   if (!session) return false;
-  if (session.employeeNumber === "local") return true;
+  if (isLocalSystemSession(session)) return true;
   return actorCanReadAmuSensitiveMetadata(session) || sessionHasLocalAmuAccess(session);
 }
 
 function actorCanReviewAmuReports(session) {
   if (!session) return false;
-  if (session.employeeNumber === "local") return true;
+  if (isLocalSystemSession(session)) return true;
   return (protectedAmuRoleIds.has(session.role) && session.permissions?.includes("amu:review"))
     || sessionHasLocalAmuAccess(session);
 }
 
 function actorCanReadAmuFiles(session) {
   if (!session) return false;
-  if (session.employeeNumber === "local") return true;
+  if (isLocalSystemSession(session)) return true;
   return (protectedAmuRoleIds.has(session.role) && session.permissions?.includes("amu:file:read"))
     || sessionHasLocalAmuAccess(session);
 }
 
 function actorCanReadAmuSensitiveMetadata(session) {
   if (!session) return false;
-  if (session.employeeNumber === "local") return true;
+  if (isLocalSystemSession(session)) return true;
   return protectedAmuRoleIds.has(session.role) && session.permissions?.includes("amu:metadata:read");
 }
 
 function actorCanReadPersonnelSensitiveData(session) {
   if (!session) return false;
-  if (session.employeeNumber === "local") return true;
+  if (isLocalSystemSession(session)) return true;
   return portalPermissionAllowedForRole("personnel:sensitive:read", session.role)
     && session.permissions?.includes("personnel:sensitive:read");
 }
 
 function actorCanWritePersonnelSensitiveData(session) {
   if (!session) return false;
-  if (session.employeeNumber === "local") return true;
+  if (isLocalSystemSession(session)) return true;
   return portalPermissionAllowedForRole("personnel:sensitive:write", session.role)
     && session.permissions?.includes("personnel:sensitive:write");
 }
 
 function actorCanReadPersonnelPhone(session) {
   if (!session) return false;
-  if (session.employeeNumber === "local") return true;
+  if (isLocalSystemSession(session)) return true;
   return portalPermissionAllowedForRole("personnel:phone:read", session.role)
     && session.permissions?.includes("personnel:phone:read");
 }
 
 function actorCanWritePersonnelPhone(session) {
   if (!session) return false;
-  if (session.employeeNumber === "local") return true;
+  if (isLocalSystemSession(session)) return true;
   if (!portalPermissionAllowedForRole("personnel:phone:write", session.role)
     || !session.permissions?.includes("personnel:phone:write")) return false;
   if (!["location_planner", "manager", "department_manager"].includes(session.role)) return true;
@@ -6952,7 +7232,7 @@ function applyPersonnelFieldAccessDependencies(matrix) {
 
 function personnelFieldEffectiveAccess(session) {
   if (!session) return Object.fromEntries(personnelFieldCatalog.map((field) => [field.key, "hidden"]));
-  if (session.employeeNumber === "local") {
+  if (isLocalSystemSession(session)) {
     return applyPersonnelFieldAccessDependencies(
       Object.fromEntries(personnelFieldCatalog.map((field) => [field.key, "write"])),
     );
@@ -7048,7 +7328,7 @@ async function personnelFieldRightsPayload(actor) {
       manager: managerMatrix,
       department_manager: departmentManagerMatrix,
     },
-    canChange: actor?.employeeNumber === "local"
+    canChange: isLocalSystemSession(actor)
       || (personnelFieldPrivilegedRoles.has(actor?.role) && actor?.permissions?.includes("rights:write")),
   };
 }
@@ -7130,6 +7410,8 @@ function requirePersonnelRecordSession(request, { write = false } = {}) {
       role: "admin",
       permissions: builtinPortalRoles.find((role) => role.id === "admin")?.permissions || [],
       scopes: [],
+      sessionKind: "local",
+      localSystem: true,
     };
   } else {
     session = requirePortalSession(request);
@@ -7535,48 +7817,101 @@ function redactPersonnelSensitiveProfile(profile, fieldAccess) {
   return redacted;
 }
 
-function assertPersonnelRecordFieldsWritable(request, session, access, submittedFields, employeeNumber) {
+const PERSONNEL_RECORD_DENIED_FIELD_KEYS = Symbol("personnelRecordDeniedFieldKeys");
+const PERSONNEL_RECORD_FIELD_DENIAL_CODES = new Set([
+  "PERSONNEL_FIELD_WRITE_DENIED",
+  "PERSONNEL_PHONE_WRITE_DENIED",
+]);
+
+function personnelRecordFieldDeniedError(message, code, denied) {
+  const error = httpError(403, message, code);
+  Object.defineProperty(error, PERSONNEL_RECORD_DENIED_FIELD_KEYS, {
+    enumerable: false,
+    value: Object.freeze([...denied]),
+  });
+  return error;
+}
+
+function assertPersonnelRecordFieldsWritable(
+  request,
+  session,
+  access,
+  submittedFields,
+  employeeNumber,
+  { auditDenied = true } = {},
+) {
   const denied = submittedFields.filter((fieldKey) => access.fieldAccess[fieldKey] !== "write");
   if (!denied.length) return;
   if (denied.length === 1 && denied[0] === "phone") {
     const message = access.phoneWriteRequiresTrustA
       ? "Telefonnummern dürfen durch Leitungen nur mit Vertrauensstufe A und ausdrücklich vergebenem Feldrecht geändert werden."
       : "Die Telefonnummer darf mit diesem Zugang nicht bearbeitet werden.";
-    auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_PHONE_WRITE_DENIED", denied);
-    throw httpError(403, message, "PERSONNEL_PHONE_WRITE_DENIED");
+    if (auditDenied) {
+      auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_PHONE_WRITE_DENIED", denied);
+    }
+    throw personnelRecordFieldDeniedError(message, "PERSONNEL_PHONE_WRITE_DENIED", denied);
   }
-  auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_FIELD_WRITE_DENIED", denied);
-  throw httpError(403, "Mindestens ein übermitteltes Personalakt-Feld darf mit diesem Zugang nicht bearbeitet werden.",
-    "PERSONNEL_FIELD_WRITE_DENIED");
+  if (auditDenied) {
+    auditPersonnelRecordDenied(session, employeeNumber, request, "PERSONNEL_FIELD_WRITE_DENIED", denied);
+  }
+  throw personnelRecordFieldDeniedError(
+    "Mindestens ein übermitteltes Personalakt-Feld darf mit diesem Zugang nicht bearbeitet werden.",
+    "PERSONNEL_FIELD_WRITE_DENIED",
+    denied,
+  );
 }
 
-async function preparePersonnelRecordMutation(request, employeeNumber, value) {
+async function preparePersonnelRecordMutation(
+  request,
+  employeeNumber,
+  value,
+  { assumeNew = false, auditDenied = true } = {},
+) {
   if (value === undefined) return null;
   const { session, access } = requirePersonnelRecordSession(request, { write: true });
   const submittedFields = submittedPersonnelRecordFieldKeys(value);
   if (!submittedFields.length) {
     throw httpError(400, "Es wurden keine gültigen Personalakt-Daten übermittelt.", "PERSONNEL_RECORD_INPUT_REQUIRED");
   }
-  assertPersonnelRecordFieldsWritable(request, session, access, submittedFields, employeeNumber);
+  assertPersonnelRecordFieldsWritable(
+    request,
+    session,
+    access,
+    submittedFields,
+    employeeNumber,
+    { auditDenied },
+  );
   const input = personnelRecordInput(value);
-  const before = await personnelSensitiveProfile(employeeNumber);
-  const next = mergePersonnelSensitiveProfile(before, input.hasSensitive ? input.sensitive : {});
-  if (input.hasPhone) next.phone = normalizePersonnelPhone(input.phone);
   return {
     session,
     employeeNumber: String(employeeNumber || ""),
-    before,
-    next,
-    changedFields: changedPersonnelProfileFields(before, next),
+    assumeNew: Boolean(assumeNew),
+    input,
+    before: null,
+    next: null,
+    changedFields: [],
     submittedFields,
   };
 }
 
 async function persistPersonnelRecordMutationWithRepository(repository, prepared, action = "update") {
-  if (!prepared || !prepared.changedFields.length) return [];
-  const socialSecurityLookup = prepared.next.socialSecurityNumber
-    ? personnelSensitiveLookup("social-security-number", prepared.next.socialSecurityNumber) : "";
-  const protectedPayload = protectJson(prepared.next,
+  if (!prepared) return [];
+  const before = prepared.assumeNew
+    ? emptyPersonnelSensitiveProfile()
+    : await personnelSensitiveProfile(prepared.employeeNumber, repository);
+  const next = mergePersonnelSensitiveProfile(
+    before,
+    prepared.input.hasSensitive ? prepared.input.sensitive : {},
+  );
+  if (prepared.input.hasPhone) next.phone = normalizePersonnelPhone(prepared.input.phone);
+  const changedFields = changedPersonnelProfileFields(before, next);
+  prepared.before = before;
+  prepared.next = next;
+  prepared.changedFields = changedFields;
+  if (!changedFields.length) return [];
+  const socialSecurityLookup = next.socialSecurityNumber
+    ? personnelSensitiveLookup("social-security-number", next.socialSecurityNumber) : "";
+  const protectedPayload = protectJson(next,
     personnelSensitiveProtectionContext({ employee_number: prepared.employeeNumber }));
   try {
     await repository.upsertPersonnelSensitiveRecord({
@@ -7596,9 +7931,9 @@ async function persistPersonnelRecordMutationWithRepository(repository, prepared
     `personnel-record.${action}`,
     "employee",
     prepared.employeeNumber,
-    JSON.stringify({ fields: prepared.changedFields }),
+    JSON.stringify({ fields: changedFields }),
   );
-  return prepared.changedFields;
+  return changedFields;
 }
 
 function parsePortalPermissions(value) {
@@ -7613,19 +7948,26 @@ function parsePortalPermissions(value) {
   }
 }
 
-async function portalPermissionGrantsForEmployee(employeeNumber, role = "") {
+async function portalPermissionGrantsForEmployee(
+  employeeNumber,
+  role = "",
+  repository = organizationPersonnelRepository,
+) {
   if (!employeeNumber) return [];
   const resolvedRole = role
-    || (await organizationPersonnelRepository.getPortalAccessProjection(employeeNumber))?.role
+    || (await repository.getPortalAccessProjection(employeeNumber))?.role
     || "employee";
-  return (await organizationPersonnelRepository.listPortalPermissionGrants(employeeNumber))
+  return (await repository.listPortalPermissionGrants(employeeNumber))
     .filter((permission) => delegablePortalPermissions.has(permission)
       && portalPermissionAllowedForRole(permission, resolvedRole));
 }
 
-async function portalPermissionDenialsForEmployee(employeeNumber) {
+async function portalPermissionDenialsForEmployee(
+  employeeNumber,
+  repository = organizationPersonnelRepository,
+) {
   if (!employeeNumber) return [];
-  return (await organizationPersonnelRepository.listPortalPermissionDenials(employeeNumber))
+  return (await repository.listPortalPermissionDenials(employeeNumber))
     .filter((permission) => delegablePortalPermissions.has(permission));
 }
 
@@ -7698,10 +8040,30 @@ function portalAccessScopesForPrincipal({
 
 function manageablePortalPermissionsForActor(actor) {
   if (!actor) return new Set();
-  if (actor.employeeNumber === "local" || ["developer", "admin", "it_admin"].includes(actor.role)) {
+  if (isLocalSystemSession(actor) || ["developer", "admin"].includes(actor.role)) {
     return new Set(delegablePortalPermissions);
   }
-  if (actor.role === "hr") return new Set(hrDelegablePortalPermissions);
+  if (actor.role === "it_admin") {
+    return new Set([...delegablePortalPermissions].filter((permission) => (
+      !permission.startsWith("personnel:candidates:")
+      && !permission.startsWith("personnel:workflows:")
+      && permission !== "personnel:applications:write"
+    )));
+  }
+  if (actor.role === "hr") {
+    const manageable = new Set(hrDelegablePortalPermissions);
+    if (!actor.permissions?.includes("personnel:candidates:delegate")) {
+      manageable.delete("personnel:candidates:read");
+      manageable.delete("personnel:applications:write");
+    }
+    if (!actor.permissions?.includes(PERSONNEL_WORKFLOW_PERMISSIONS.DELEGATE)) {
+      manageable.delete(PERSONNEL_WORKFLOW_PERMISSIONS.READ);
+      manageable.delete(PERSONNEL_WORKFLOW_PERMISSIONS.DRAFT_WRITE);
+      manageable.delete(PERSONNEL_WORKFLOW_PERMISSIONS.PUBLISH);
+      manageable.delete(PERSONNEL_WORKFLOW_PERMISSIONS.LOCAL_SUPPLEMENT);
+    }
+    return manageable;
+  }
   return new Set();
 }
 
@@ -7715,7 +8077,8 @@ function portalPermissionCatalogForActor(actor) {
 
 function actorCanManagePermissionGrants(actor, target) {
   if (!actor || !target || target.role === "developer" || target.roleLocked || !target.configured || !target.active) return false;
-  if (actor.employeeNumber === "local" || ["developer", "it_admin"].includes(actor.role)) return true;
+  if (isLocalSystemSession(actor) || actor.role === "developer") return true;
+  if (actor.role === "it_admin") return target.role !== "hr";
   if (actor.role === "admin") return target.role !== "it_admin";
   return actor.role === "hr" && ["employee", "location_planner", "department_manager", "manager"].includes(target.role);
 }
@@ -7743,7 +8106,7 @@ async function getPortalRoles() {
 
 function actorCanAssignPortalRole(actor, role, knownRoleExists = false) {
   if (!actor || role === "developer" || PROTECTED_PORTAL_ROLES.has(role)) return false;
-  if (actor.employeeNumber === "local") return role !== "developer";
+  if (isLocalSystemSession(actor)) return role !== "developer";
   const allowed = PORTAL_ROLE_ASSIGNMENTS[actor.role];
   if (allowed?.has(role)) return true;
   return actor.role === "developer" && knownRoleExists;
@@ -7751,11 +8114,47 @@ function actorCanAssignPortalRole(actor, role, knownRoleExists = false) {
 
 function actorCanManagePortalRole(actor, targetRole) {
   if (!actor || targetRole === "developer") return false;
-  if (actor.employeeNumber === "local" || actor.role === "developer") return true;
+  if (isLocalSystemSession(actor) || actor.role === "developer") return true;
   if (actor.role === "admin") return targetRole !== "it_admin";
-  if (actor.role === "it_admin") return ["employee", "location_planner", "department_manager", "manager", "hr"].includes(targetRole);
+  if (actor.role === "it_admin") return ["employee", "location_planner", "department_manager", "manager"].includes(targetRole);
   if (actor.role === "hr") return ["employee", "location_planner", "department_manager", "manager"].includes(targetRole);
   return actor.role === "manager" && targetRole === "department_manager";
+}
+
+async function portalTargetHasPersonnelLifecycleDelegation(
+  employeeNumber,
+  role = "",
+  repository = organizationPersonnelRepository,
+) {
+  const [grants, scopes] = await Promise.all([
+    portalPermissionGrantsForEmployee(employeeNumber, role, repository),
+    repository.listPortalPermissionScopeGrants(employeeNumber),
+  ]);
+  return grants.some((permission) => personnelLifecyclePermissionIds.has(permission))
+    || scopes.length > 0;
+}
+
+async function assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, target, repository) {
+  if (actor?.role !== "it_admin" || !target) return;
+  const protectedTarget = target.role === "hr"
+    || await portalTargetHasPersonnelLifecycleDelegation(
+      target.employee_number,
+      target.role,
+      repository,
+    );
+  if (!protectedTarget) return;
+  auditPortal(
+    actor.employeeNumber,
+    "portal.personnel-lifecycle-account.protected",
+    "portal_user",
+    target.employee_number,
+    JSON.stringify({ reason: "PERSONNEL_LIFECYCLE_ACCOUNT_TAKEOVER_DENIED" }),
+  );
+  throw httpError(
+    403,
+    "Personalkonten mit geschuetzten Personalmodul-Freigaben koennen nicht durch IT-Admin uebernommen oder sicherheitsrelevant geaendert werden.",
+    "PERSONNEL_LIFECYCLE_ACCOUNT_TAKEOVER_DENIED",
+  );
 }
 
 function assertPortalUserIsMutable(target, actor) {
@@ -7771,14 +8170,29 @@ function assertPortalUserIsMutable(target, actor) {
 }
 
 function personnelMutationActor(actor) {
-  return actor || { employeeNumber: "local", role: "admin", permissions: [] };
+  return actor || {
+    employeeNumber: "local",
+    role: "admin",
+    permissions: [],
+    sessionKind: "local",
+    localSystem: true,
+  };
 }
 
-async function assertEmployeeDestructiveMutationAllowed(actor, employeeNumber) {
+async function assertEmployeeDestructiveMutationAllowed(
+  actor,
+  employeeNumber,
+  repository = organizationPersonnelRepository,
+) {
   const normalizedActor = personnelMutationActor(actor);
-  const target = await organizationPersonnelRepository.getPortalMutationTarget(employeeNumber);
+  const target = await repository.getPortalMutationTarget(employeeNumber);
   if (!target) return;
   assertPortalUserIsMutable(target, normalizedActor);
+  await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
+    normalizedActor,
+    target,
+    repository,
+  );
   if (!actorCanManagePortalRole(normalizedActor, target.role)) {
     auditPortal(normalizedActor.employeeNumber, "employee.destructive-mutation.denied", "employee", target.employee_number,
       JSON.stringify({ targetRole: target.role }));
@@ -7786,7 +8200,7 @@ async function assertEmployeeDestructiveMutationAllowed(actor, employeeNumber) {
   }
   if (target.role === "admin" && target.active) {
     const otherSystemOwners = Number(
-      await organizationPersonnelRepository.countOtherSystemOwners(target.employee_number),
+      await repository.countOtherSystemOwners(target.employee_number),
     );
     if (!otherSystemOwners) {
       throw httpError(409, "Mindestens ein aktiver Developer- oder Admin-Zugang muss bestehen bleiben.", "PORTAL_SYSTEM_OWNER_REQUIRED");
@@ -7798,18 +8212,22 @@ function actorCanEditPersonnelAccessProfile(actor) {
   return Boolean(actor && ["developer", "it_admin"].includes(actor.role));
 }
 
-async function portalAccessProfileForEmployee(employeeNumber) {
-  const user = await organizationPersonnelRepository.getPortalAccessProjection(employeeNumber);
+async function portalAccessProfileForEmployee(
+  employeeNumber,
+  repository = organizationPersonnelRepository,
+) {
+  const user = await repository.getPortalAccessProjection(employeeNumber);
   const roleId = user?.role || "employee";
-  const role = await organizationPersonnelRepository.getPortalRoleProjection(roleId)
-    || await organizationPersonnelRepository.getPortalRoleProjection("employee");
-  const [grantedPermissions, deniedPermissions, scopeRows] = user
+  const role = await repository.getPortalRoleProjection(roleId)
+    || await repository.getPortalRoleProjection("employee");
+  const [grantedPermissions, deniedPermissions, scopeRows, permissionScopeRows] = user
     ? await Promise.all([
-      portalPermissionGrantsForEmployee(employeeNumber, roleId),
-      portalPermissionDenialsForEmployee(employeeNumber),
-      organizationPersonnelRepository.listPortalAccessScopes(employeeNumber),
+      portalPermissionGrantsForEmployee(employeeNumber, roleId, repository),
+      portalPermissionDenialsForEmployee(employeeNumber, repository),
+      repository.listPortalAccessScopes(employeeNumber),
+      repository.listPortalPermissionScopeGrants(employeeNumber),
     ])
-    : [[], [], []];
+    : [[], [], [], []];
   const permissionState = user
     ? effectivePortalPermissionState(
       employeeNumber,
@@ -7839,10 +8257,52 @@ async function portalAccessProfileForEmployee(employeeNumber) {
       locationId: scope.location_id,
       departmentId: Number(scope.department_id || 0) || null,
     })),
+    personnelLifecyclePermissionScopes: permissionScopeRows.map(publicPortalPermissionScopeGrant),
   };
 }
 
-async function validatePersonnelAccessProfile(actor, payload, employee = {}) {
+function personnelAccessProfileConcurrencySignature(snapshot = {}) {
+  return sha256(JSON.stringify({
+    configured: Boolean(snapshot.configured),
+    role: String(snapshot.role || ""),
+    roleLocked: Boolean(snapshot.roleLocked),
+    active: Boolean(snapshot.active),
+    grantedPermissions: sortedUniqueValues(snapshot.grantedPermissions || []),
+    deniedPermissions: sortedUniqueValues(snapshot.deniedPermissions || []),
+    scopes: sortedUniqueValues(snapshot.scopes || [], portalAccessScopeKey),
+    personnelLifecyclePermissionScopes: sortedUniqueValues(
+      snapshot.personnelLifecyclePermissionScopes || [],
+      canonicalPermissionScopeValue,
+    ),
+  }));
+}
+
+function employeeMutationConcurrencySignature(employee = {}) {
+  return sha256(JSON.stringify({
+    personnelNumber: String(employee.personnel_number || ""),
+    fullName: String(employee.full_name || ""),
+    nickname: String(employee.nickname || ""),
+    color: String(employee.color || ""),
+    contractedHours: String(employee.contracted_hours ?? ""),
+    targetWorkdaysPerWeek: Number(employee.target_workdays_per_week || 0),
+    preferredDayOff: String(employee.preferred_day_off || ""),
+    fixedWorkdays: String(employee.fixed_workdays || ""),
+    positionId: String(employee.position_id || ""),
+    timeConfirmationLevel: String(employee.time_confirmation_level || ""),
+    sicknessWithoutAumEnabled: Boolean(employee.sickness_without_aum_enabled),
+    homeLocationId: String(employee.home_location_id || ""),
+    preferredDepartmentId: Number(employee.preferred_department_id || 0) || null,
+    costCenterId: String(employee.cost_center_id || ""),
+    active: Boolean(employee.active),
+  }));
+}
+
+async function validatePersonnelAccessProfile(
+  actor,
+  payload,
+  employee = {},
+  repository = organizationPersonnelRepository,
+) {
   if (payload === undefined) return null;
   if (!actorCanEditPersonnelAccessProfile(actor)) {
     throw httpError(403, "App-Rolle und individuelle Rechte dürfen hier nur Developer oder IT-Admin ändern.", "PERSONNEL_ACCESS_PROFILE_DENIED");
@@ -7851,7 +8311,8 @@ async function validatePersonnelAccessProfile(actor, payload, employee = {}) {
     throw httpError(400, "Bitte ein gültiges Rechteprofil übermitteln.", "PERSONNEL_ACCESS_PROFILE_INVALID");
   }
   const employeeNumber = String(employee.personnelNumber || employee.personnel_number || "").trim();
-  const existing = await organizationPersonnelRepository.getPortalMutationTarget(employeeNumber);
+  assertEmployeePrincipalNotReserved(employeeNumber);
+  const existing = await repository.getPortalMutationTarget(employeeNumber);
   if (existing) {
     assertPortalUserIsMutable(existing, actor);
     if (!actorCanManagePortalRole(actor, existing.role)) {
@@ -7859,7 +8320,7 @@ async function validatePersonnelAccessProfile(actor, payload, employee = {}) {
     }
   }
   const role = String(payload.role || existing?.role || "employee").trim();
-  const roleProjection = await organizationPersonnelRepository.getPortalRoleProjection(role);
+  const roleProjection = await repository.getPortalRoleProjection(role);
   if (!roleProjection) {
     throw httpError(400, "Die ausgewählte App-Rolle ist ungültig.", "PORTAL_ROLE_INVALID");
   }
@@ -7874,6 +8335,29 @@ async function validatePersonnelAccessProfile(actor, payload, employee = {}) {
   const submittedPermissions = [...new Set(payload.permissions
     .map((value) => String(value || "").trim())
     .filter(Boolean))];
+  const submittedPersonnelLifecyclePermissions = submittedPermissions
+    .filter((permission) => personnelLifecyclePermissionIds.has(permission));
+  if (submittedPersonnelLifecyclePermissions.length) {
+    throw httpError(
+      403,
+      "Personalmodul-Rechte und ihre Geltungsbereiche dürfen ausschließlich in der zentralen Rechteverwaltung geändert werden.",
+      "PERSONNEL_LIFECYCLE_RIGHTS_ROUTE_REQUIRED",
+    );
+  }
+  if (existing) {
+    const [existingGrants, existingPermissionScopes] = await Promise.all([
+      portalPermissionGrantsForEmployee(employeeNumber, existing.role, repository),
+      repository.listPortalPermissionScopeGrants(employeeNumber),
+    ]);
+    if (existingGrants.some((permission) => personnelLifecyclePermissionIds.has(permission))
+      || existingPermissionScopes.length) {
+      throw httpError(
+        409,
+        "Das Rechteprofil enthält geschützte Personalmodul-Freigaben. Diese müssen zuerst in der zentralen Rechteverwaltung angepasst werden.",
+        "PERSONNEL_LIFECYCLE_RIGHTS_PROFILE_PROTECTED",
+      );
+    }
+  }
   const invalidPermissions = submittedPermissions.filter((permission) => !delegablePortalPermissions.has(permission));
   if (invalidPermissions.length) {
     throw httpError(403, `Diese Rechte dürfen nicht vergeben werden: ${invalidPermissions.join(", ")}`, "PORTAL_PERMISSION_NOT_DELEGABLE");
@@ -7899,13 +8383,53 @@ async function validatePersonnelAccessProfile(actor, payload, employee = {}) {
 
 async function applyPersonnelAccessProfileWithRepository(repository, actor, profile, before = null) {
   if (!profile) return;
-  if (profile.previous?.role === "admin" && profile.role !== "admin") {
+  const liveBefore = await portalAccessProfileForEmployee(profile.employeeNumber, repository);
+  assertRightsMutationSnapshotCurrent(
+    personnelAccessProfileConcurrencySignature(before || {}),
+    personnelAccessProfileConcurrencySignature(liveBefore),
+  );
+  const liveTarget = await repository.getPortalMutationTarget(profile.employeeNumber);
+  if (liveTarget) {
+    assertPortalUserIsMutable(liveTarget, actor);
+    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, liveTarget, repository);
+    if (!actorCanManagePortalRole(actor, liveTarget.role)) {
+      throw httpError(
+        403,
+        "Dieser Zugang liegt ausserhalb der eigenen Verwaltungsebene.",
+        "PORTAL_ROLE_HIERARCHY_DENIED",
+      );
+    }
+  }
+  if (liveBefore.grantedPermissions.some((permission) => personnelLifecyclePermissionIds.has(permission))
+    || liveBefore.personnelLifecyclePermissionScopes.length) {
+    throw httpError(
+      409,
+      "Das Rechteprofil enthaelt geschuetzte Personalmodul-Freigaben. Diese muessen zuerst in der zentralen Rechteverwaltung angepasst werden.",
+      "PERSONNEL_LIFECYCLE_RIGHTS_PROFILE_PROTECTED",
+    );
+  }
+  if (liveBefore.role === "admin" && profile.role !== "admin") {
     const otherSystemOwners = Number(await repository.countOtherSystemOwners(profile.employeeNumber));
     if (!otherSystemOwners) {
       throw httpError(409, "Mindestens ein aktiver Developer- oder Admin-Zugang muss bestehen bleiben.");
     }
   }
-  await repository.applyAccessProfile(actor, profile, before);
+  if (["location_planner", "manager", "department_manager"].includes(profile.role)) {
+    await validateActiveLocationExists(profile.homeLocationId, repository);
+    if (profile.role === "department_manager") {
+      await validateActiveDepartmentExists(
+        profile.preferredDepartmentId,
+        profile.homeLocationId,
+        repository,
+      );
+    }
+  }
+  try {
+    await repository.applyAccessProfile(actor, profile, liveBefore);
+  } catch (error) {
+    if (isUniquePersistenceViolation(error)) throw personnelLifecycleConcurrentChangeError();
+    throw error;
+  }
 }
 
 function getPortalStatus(locationId = "", request = null) {
@@ -7960,7 +8484,13 @@ function getPortalStatus(locationId = "", request = null) {
 
 function requirePortalAdminOrLocal(request, permission = "users:write") {
   if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) {
-    return { employeeNumber: "local", role: "admin", permissions: [permission] };
+    return {
+      employeeNumber: "local",
+      role: "admin",
+      permissions: [permission],
+      sessionKind: "local",
+      localSystem: true,
+    };
   }
   const session = requirePortalSession(request, permission);
   assertPortalCsrf(request);
@@ -7974,6 +8504,8 @@ function requirePortalReadOrLocal(request, permission = "schedule:read") {
       role: "admin",
       permissions: builtinPortalRoles.find((role) => role.id === "admin")?.permissions || [permission],
       scopes: [],
+      sessionKind: "local",
+      localSystem: true,
     };
   }
   return requirePortalSession(request, permission);
@@ -7988,6 +8520,8 @@ function requirePortalAnyPermissionOrLocal(request, permissions = [], { csrf = f
       role: "admin",
       permissions: builtinPortalRoles.find((role) => role.id === "admin")?.permissions || requested,
       scopes: [],
+      sessionKind: "local",
+      localSystem: true,
     };
   }
   const session = requirePortalSession(request);
@@ -8003,7 +8537,7 @@ function requirePortalAnyPermissionOrLocal(request, permissions = [], { csrf = f
 
 function requireAdminHrOrLocal(request, permission) {
   const session = requirePortalAdminOrLocal(request, permission);
-  if (session.employeeNumber !== "local" && !RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)) {
+  if (!isLocalSystemSession(session) && !RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)) {
     throw httpError(403, "Diese Aktion ist nur für Developer, IT-Admin, Admin oder Personalleitung verfügbar.", "PORTAL_PERMISSION_DENIED");
   }
   return session;
@@ -8033,7 +8567,15 @@ function employeeCanViewOwnTimeConfirmationLevel() {
 }
 
 function requirePortalAnyPermission(request, permissions) {
-  if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) return { employeeNumber: "local", role: "admin", permissions };
+  if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) {
+    return {
+      employeeNumber: "local",
+      role: "admin",
+      permissions,
+      sessionKind: "local",
+      localSystem: true,
+    };
+  }
   const session = requirePortalSession(request);
   assertPortalCsrf(request);
   if (!permissions.some((permission) => session.permissions.includes(permission))) throw httpError(403, "Für diese Aktion fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
@@ -8043,10 +8585,11 @@ function requirePortalAnyPermission(request, permissions) {
 async function portalUsersForAdmin() {
   return Promise.all((await organizationPersonnelRepository.listPortalUsersForAdmin()).map(async (row) => {
     const role = row.role || "employee";
-    const [grantedPermissions, deniedPermissions, scopeRows] = await Promise.all([
+    const [grantedPermissions, deniedPermissions, scopeRows, permissionScopeRows] = await Promise.all([
       portalPermissionGrantsForEmployee(row.personnel_number, role),
       portalPermissionDenialsForEmployee(row.personnel_number),
       organizationPersonnelRepository.listPortalAccessScopes(row.personnel_number),
+      organizationPersonnelRepository.listPortalPermissionScopeGrants(row.personnel_number),
     ]);
     return {
       employeeNumber: row.personnel_number,
@@ -8077,6 +8620,12 @@ async function portalUsersForAdmin() {
       scopes: scopeRows.map((scope) => ({
         locationId: scope.location_id,
         departmentId: Number(scope.department_id || 0) || null,
+      })),
+      personnelLifecyclePermissionScopes: permissionScopeRows.map((scope) => ({
+        permission: scope.permission,
+        locationId: scope.location_id,
+        departmentId: Number(scope.department_id || 0) || null,
+        approvedBy: scope.approved_by,
       })),
     };
   }));
@@ -9625,7 +10174,7 @@ function mobileLayoutPayload(session) {
     modules,
     availableModules: mobileLeadershipModules,
     layouts,
-    canChange: session.employeeNumber === "local" || RIGHTS_ADMIN_PORTAL_ROLES.has(session.role),
+    canChange: isLocalSystemSession(session) || RIGHTS_ADMIN_PORTAL_ROLES.has(session.role),
   };
 }
 
@@ -11320,7 +11869,7 @@ async function ownSicknessCases(employeeNumber) {
 
 function assertSicknessCaseScope(session, row) {
   if (!row) throw httpError(404, "Die Krankmeldung wurde nicht gefunden.", "SICKNESS_CASE_NOT_FOUND");
-  if (session.employeeNumber === "local" || GLOBAL_SCOPE_PORTAL_ROLES.has(session.role)) return;
+  if (isLocalSystemSession(session) || GLOBAL_SCOPE_PORTAL_ROLES.has(session.role)) return;
   const payload = sicknessCasePayload(row);
   const allowed = portalScopeMatchesAnyContext(session.role, session.scopes || [], sicknessNotificationContexts(payload));
   if (!allowed) throw httpError(403, "Diese Krankmeldung gehört nicht zum eigenen Verantwortungsbereich.", "PORTAL_PERMISSION_DENIED");
@@ -11505,7 +12054,7 @@ async function resolveAmuResponsibilityForReport(report) {
 }
 
 function amuResponsibilityForActorWithRouting(report, session, routing) {
-  const assignedToActor = session?.employeeNumber === "local"
+  const assignedToActor = isLocalSystemSession(session)
     || routing.reviewerEmployeeNumbers.includes(session?.employeeNumber);
   const canReview = actorCanReviewAmuReports(session)
     && sessionCanAccessAmuReport(session, report)
@@ -11653,7 +12202,7 @@ function readAmuDocument(metadata) {
   return { content, detectedMime: payload.detectedMime, originalFilename };
 }
 
-function verifyProtectedDocumentBlobRows(amuDocuments, personnelDocuments) {
+function verifyProtectedDocumentBlobRows(amuDocuments, personnelDocuments, candidateDocuments = []) {
   if (!amuStorage) throw new Error("Der geschützte Dokumentenspeicher ist nicht verfügbar.");
   const storageKeys = new Set();
   const loanDocuments = loanProtectedStorageSnapshot.documents;
@@ -11674,6 +12223,20 @@ function verifyProtectedDocumentBlobRows(amuDocuments, personnelDocuments) {
     verifyUniqueStorageKey(document.storage_key);
     readPersonnelRecordDocument(document);
   }
+  for (const document of candidateDocuments) {
+    verifyUniqueStorageKey(document.storage_key);
+    const payload = parseProtectedJson(
+      document.protected_payload,
+      candidateDocumentVersionProtectionContext(document),
+    );
+    requireAmuStorage().readBuffer({
+      storageKey: document.storage_key,
+      byteSize: document.size_bytes,
+      sha256: document.content_sha256,
+      detectedMime: document.media_type,
+      originalFilename: payload.originalFilename || "Dokument",
+    });
+  }
   for (const document of [...loanDocuments, ...loanPhotos, ...loanPhotoAttachments]) {
     verifyUniqueStorageKey(document.storage_key);
     requireAmuStorage().readBuffer({
@@ -11687,6 +12250,7 @@ function verifyProtectedDocumentBlobRows(amuDocuments, personnelDocuments) {
   return {
     amuDocuments: amuDocuments.length,
     personnelDocuments: personnelDocuments.length,
+    candidateDocuments: candidateDocuments.length,
     loanDocuments: loanDocuments.length,
     loanPhotos: loanPhotos.length,
     loanPhotoAttachments: loanPhotoAttachments.length,
@@ -11790,7 +12354,7 @@ function vacationHrApprovalRequired() {
 }
 
 function sessionCanApproveHr(session) {
-  return Boolean(session && (session.employeeNumber === "local" || session.permissions?.includes("hr:approve")));
+  return Boolean(session && (isLocalSystemSession(session) || session.permissions?.includes("hr:approve")));
 }
 
 function actorStage(session, entry) {
@@ -12159,7 +12723,13 @@ async function verifyActiveProtectedDocumentBlobs() {
     sicknessAmuManagementRepository.listActiveAmuDocuments({}),
     sicknessAmuManagementRepository.listActivePersonnelDocuments({}),
   ]);
-  return verifyProtectedDocumentBlobRows(amuDocuments, personnelDocuments);
+  const candidateDocuments = protectedSicknessAmuStorageSnapshotFromDatabase(db)
+    .candidateDocuments;
+  return verifyProtectedDocumentBlobRows(
+    amuDocuments,
+    personnelDocuments,
+    candidateDocuments,
+  );
 }
 
 function verifyActiveProtectedDocumentBlobsForBackup() {
@@ -12167,6 +12737,7 @@ function verifyActiveProtectedDocumentBlobsForBackup() {
   return verifyProtectedDocumentBlobRows(
     snapshot.amuDocuments,
     snapshot.personnelDocuments,
+    snapshot.candidateDocuments,
   );
 }
 
@@ -12257,9 +12828,10 @@ async function getCostCenters(includeInactive = true) {
 }
 
 async function validateCostCenterExists(value, options = {}) {
+  const repository = options.repository || organizationPersonnelRepository;
   const id = String(value || "").trim();
   if (!id) throw httpError(400, "Bitte eine Kostenstelle auswählen.", "COST_CENTER_REQUIRED");
-  const row = (await organizationPersonnelRepository.listCostCenters(true))
+  const row = (await repository.listCostCenters(true))
     .find((entry) => String(entry.id) === id);
   if (!row) throw httpError(404, "Die Kostenstelle wurde nicht gefunden.", "COST_CENTER_NOT_FOUND");
   if (!options.allowInactive && !row.active) {
@@ -12450,8 +13022,17 @@ async function defaultCostCenterId(locationId = "") {
 async function employeeAssignmentForCostCenter(value, options = {}) {
   const center = await validateCostCenterExists(value, {
     allowInactive: Boolean(options.allowInactive),
+    repository: options.repository,
   });
-  const location = (await organizationPersonnelRepository.listLocations(true))
+  if (!options.allowInactive && !center.cost_center_type_active) {
+    throw httpError(
+      409,
+      "Die Kostenstelle verwendet einen archivierten Kostenstellentyp und kann nicht neu zugeordnet werden.",
+      "COST_CENTER_TYPE_INACTIVE",
+    );
+  }
+  const repository = options.repository || organizationPersonnelRepository;
+  const location = (await repository.listLocations(true))
     .find((entry) => String(entry.cost_center_id || "") === String(center.id));
   const isBranch = Boolean(center.cost_center_type_is_branch);
   if (isBranch && !location && !options.allowUnlinkedBranch) {
@@ -12459,6 +13040,14 @@ async function employeeAssignmentForCostCenter(value, options = {}) {
       409,
       "Diese Filialkostenstelle ist noch keinem Standort zugeordnet und kann deshalb keinem Personalstamm zugewiesen werden.",
       "EMPLOYEE_COST_CENTER_LOCATION_REQUIRED",
+    );
+  }
+  if (isBranch && location && !location.active
+    && String(location.id) !== String(options.allowInactiveLocationId || "")) {
+    throw httpError(
+      409,
+      "Der aus der Kostenstelle abgeleitete Standort ist archiviert und kann nicht neu zugeordnet werden.",
+      "EMPLOYEE_LOCATION_INACTIVE",
     );
   }
   return {
@@ -12470,8 +13059,8 @@ async function employeeAssignmentForCostCenter(value, options = {}) {
   };
 }
 
-async function validateEmployeePositionForAssignment(positionId, assignment) {
-  const position = (await getPositions()).find((entry) => String(entry.id) === String(positionId));
+async function validateEmployeePositionForAssignment(positionId, assignment, repository = organizationPersonnelRepository) {
+  const position = (await getPositions(repository)).find((entry) => String(entry.id) === String(positionId));
   if (!position) {
     throw httpError(400, "Bitte eine gültige Position auswählen.", "EMPLOYEE_POSITION_INVALID");
   }
@@ -12536,8 +13125,8 @@ function serializePosition(row) {
   };
 }
 
-async function getPositions() {
-  return (await organizationPersonnelRepository.listPositions()).map(serializePosition);
+async function getPositions(repository = organizationPersonnelRepository) {
+  return (await repository.listPositions()).map(serializePosition);
 }
 
 async function getLocations(includeInactive = true) {
@@ -12556,7 +13145,7 @@ async function getLocations(includeInactive = true) {
 
 async function getLocationsForSession(session, includeInactive = true) {
   const locations = await getLocations(includeInactive);
-  const canReadTimeSettings = !session || session.employeeNumber === "local" || session.permissions?.includes("time:settings");
+  const canReadTimeSettings = !session || isLocalSystemSession(session) || session.permissions?.includes("time:settings");
   const visibleLocation = (location) => canReadTimeSettings ? location : { ...location, time_tracking_allowed_networks: "" };
   if (sessionHasGlobalScope(session)) return locations.map(visibleLocation);
   const allowed = new Map();
@@ -12595,10 +13184,22 @@ function normalizeDepartmentId(value, allowEmpty = true) {
   return id;
 }
 
-async function validateLocationExists(locationId) {
-  const location = (await organizationPersonnelRepository.listLocations(true))
+async function validateLocationExists(locationId, repository = organizationPersonnelRepository) {
+  const location = (await repository.listLocations(true))
     .find((entry) => String(entry.id) === String(locationId));
   if (!location) throw httpError(404, "Die Filiale wurde nicht gefunden.");
+  return location;
+}
+
+async function validateActiveLocationExists(locationId, repository = organizationPersonnelRepository) {
+  const location = await validateLocationExists(locationId, repository);
+  if (!location.active) {
+    throw httpError(
+      409,
+      "Berechtigungsbereiche duerfen nur auf aktive Filialen verweisen.",
+      "PORTAL_SCOPE_LOCATION_INACTIVE",
+    );
+  }
   return location;
 }
 
@@ -12619,13 +13220,33 @@ function normalizeTimeTrackingNetworks(value) {
   return entries.join("\n");
 }
 
-async function validateDepartmentExists(departmentId, locationId = null) {
+async function validateDepartmentExists(
+  departmentId,
+  locationId = null,
+  repository = organizationPersonnelRepository,
+) {
   if (!departmentId) return null;
-  const department = (await organizationPersonnelRepository.listDepartments(true))
+  const department = (await repository.listDepartments(true))
     .find((entry) => Number(entry.id) === Number(departmentId));
   if (!department) throw httpError(404, "Die Abteilung wurde nicht gefunden.");
   if (locationId && department.location_id !== locationId) {
     throw httpError(400, "Die Abteilung gehört nicht zur ausgewählten Filiale.");
+  }
+  return department;
+}
+
+async function validateActiveDepartmentExists(
+  departmentId,
+  locationId = null,
+  repository = organizationPersonnelRepository,
+) {
+  const department = await validateDepartmentExists(departmentId, locationId, repository);
+  if (department && !department.active) {
+    throw httpError(
+      409,
+      "Berechtigungsbereiche duerfen nur auf aktive Abteilungen verweisen.",
+      "PORTAL_SCOPE_DEPARTMENT_INACTIVE",
+    );
   }
   return department;
 }
@@ -13794,10 +14415,27 @@ function serializeEmployee(row, options = {}) {
   return serialized;
 }
 
-async function assertEmployeePrincipalLoginAvailable(personnelNumber) {
+function isReservedEmployeePrincipal(value) {
+  return String(value || "").trim().toLowerCase() === "local";
+}
+
+function assertEmployeePrincipalNotReserved(value) {
+  if (!isReservedEmployeePrincipal(value)) return;
+  throw httpError(
+    409,
+    "Diese Personalnummer ist fuer den internen lokalen Systemzugang reserviert.",
+    "EMPLOYEE_PRINCIPAL_RESERVED",
+  );
+}
+
+async function assertEmployeePrincipalLoginAvailable(
+  personnelNumber,
+  repository = organizationPersonnelRepository,
+) {
   const normalized = String(personnelNumber || "").trim();
   if (!normalized) return;
-  const collision = await organizationPersonnelRepository.organizationAccountLoginCollision(normalized);
+  assertEmployeePrincipalNotReserved(normalized);
+  const collision = await repository.organizationAccountLoginCollision(normalized);
   if (collision) {
     throw httpError(
       409,
@@ -13809,6 +14447,7 @@ async function assertEmployeePrincipalLoginAvailable(personnelNumber) {
 
 async function validateEmployee(body, isNew, options = {}) {
   const personnelNumber = String(body.personnelNumber || "").trim();
+  assertEmployeePrincipalNotReserved(personnelNumber);
   const fullName = String(body.fullName || "").trim();
   const nickname = String(body.nickname || "").trim();
   const color = /^#[0-9a-f]{6}$/i.test(body.color || "") ? body.color : "#0b84c6";
@@ -13830,7 +14469,9 @@ async function validateEmployee(body, isNew, options = {}) {
     : String(options.defaultCostCenterId || "").trim();
   const assignment = await employeeAssignmentForCostCenter(costCenterId, {
     allowInactive: costCenterId === options.allowInactiveCostCenterId,
+    allowInactiveLocationId: options.allowInactiveLocationId,
     allowUnlinkedBranch: Boolean(options.allowUnlinkedBranch),
+    repository: options.repository,
   });
   const homeLocationSubmitted = own(body, "homeLocationId") || own(body, "home_location_id");
   const submittedHomeLocationValue = homeLocationSubmitted
@@ -13855,10 +14496,33 @@ async function validateEmployee(body, isNew, options = {}) {
       "EMPLOYEE_DEPARTMENT_WITHOUT_LOCATION",
     );
   }
-  if (preferredDepartmentId) await validateDepartmentExists(preferredDepartmentId, homeLocationId);
-  await validateEmployeePositionForAssignment(positionId, assignment);
+  if (preferredDepartmentId) {
+    const department = await validateDepartmentExists(
+      preferredDepartmentId,
+      homeLocationId,
+      options.repository || organizationPersonnelRepository,
+    );
+    if (!department.active
+      && Number(preferredDepartmentId) !== Number(options.allowInactiveDepartmentId || 0)) {
+      throw httpError(
+        409,
+        "Die bevorzugte Abteilung ist archiviert und kann nicht neu zugeordnet werden.",
+        "EMPLOYEE_DEPARTMENT_INACTIVE",
+      );
+    }
+  }
+  await validateEmployeePositionForAssignment(
+    positionId,
+    assignment,
+    options.repository || organizationPersonnelRepository,
+  );
 
-  if (isNew) await assertEmployeePrincipalLoginAvailable(personnelNumber);
+  if (isNew) {
+    await assertEmployeePrincipalLoginAvailable(
+      personnelNumber,
+      options.repository || organizationPersonnelRepository,
+    );
+  }
   if (isNew && !/^[A-Za-z0-9._-]{1,24}$/.test(personnelNumber)) {
     throw httpError(400, "Bitte eine gültige Personalnummer eingeben.");
   }
@@ -16499,7 +17163,7 @@ function assertIntegrationConnectionScope(actor, connection, context = {}) {
 }
 
 function assertIntegrationPermission(actor, permission) {
-  if (actor.employeeNumber === "local") return;
+  if (isLocalSystemSession(actor)) return;
   if (!actor.permissions?.includes(permission)) {
     throw httpError(403, "Für diese Schnittstellenaktion fehlt die Berechtigung.", "PORTAL_PERMISSION_DENIED");
   }
@@ -16976,6 +17640,7 @@ async function resolvePersonnelImportCandidate(incoming, mapping, existing, acto
   }
   const assignment = await employeeAssignmentForCostCenter(base.costCenterId, {
     allowInactive: Boolean(existing && String(existing.cost_center_id) === String(base.costCenterId)),
+    allowInactiveLocationId: existing?.home_location_id || "",
   });
   if (legacyLocation && String(assignment.homeLocationId || "") !== String(legacyLocation.id)) {
     throw httpError(
@@ -17007,6 +17672,8 @@ async function resolvePersonnelImportCandidate(incoming, mapping, existing, acto
     defaultTimeConfirmationLevel: existing?.time_confirmation_level || "C",
     defaultCostCenterId: existing?.cost_center_id || base.costCenterId,
     allowInactiveCostCenterId: existing?.cost_center_id || "",
+    allowInactiveLocationId: existing?.home_location_id || "",
+    allowInactiveDepartmentId: existing?.preferred_department_id || 0,
   });
   if (existing && existing.active && !candidate.active) {
     await assertEmployeeDestructiveMutationAllowed(actor, existing.personnel_number);
@@ -17188,6 +17855,10 @@ async function applyPersonnelImport(actor, preview) {
     }
     const validated = await validateEmployee(candidate, row.action === "create", {
       defaultTimeConfirmationLevel: candidate.timeConfirmationLevel || "C",
+      defaultCostCenterId: current?.cost_center_id || candidate.costCenterId,
+      allowInactiveCostCenterId: current?.cost_center_id || "",
+      allowInactiveLocationId: current?.home_location_id || "",
+      allowInactiveDepartmentId: current?.preferred_department_id || 0,
     });
     assertSessionContextScope(actor, {
       locationId: validated.homeLocationId,
@@ -17205,70 +17876,110 @@ async function applyPersonnelImport(actor, preview) {
   }
 
   const runId = crypto.randomUUID();
-  await integrationRuntimeRepository.transaction(async (repository) => {
-    for (const row of preparedRows) {
-      const candidate = row.validated;
-      const currentMatches = await employeeImportRowsCaseInsensitive(candidate.personnelNumber, repository);
-      const current = currentMatches.length === 1 ? currentMatches[0] : null;
-      if (row.action === "create" && currentMatches.length) throw httpError(409, "Die Importvorschau ist veraltet. Eine Personalnummer wurde inzwischen angelegt.", "IMPORT_PREVIEW_STALE");
-      if (row.action === "update" && currentMatches.length !== 1) throw httpError(409, "Die Importvorschau ist veraltet. Die Personalnummer ist nicht mehr eindeutig.", "IMPORT_PREVIEW_STALE");
-      if (row.action === "update" && employeeImportFingerprint(current) !== row.expectedFingerprint) {
-        throw httpError(409, "Die Importvorschau ist veraltet. Stammdaten wurden inzwischen ge\u00e4ndert.", "IMPORT_PREVIEW_STALE");
-      }
-      const mutation = {
-        personnelNumber: candidate.personnelNumber,
-        fullName: candidate.fullName,
-        nickname: candidate.nickname,
-        color: candidate.color,
-        contractedHours: candidate.contractedHours,
-        targetWorkdaysPerWeek: candidate.targetWorkdaysPerWeek,
-        preferredDayOff: candidate.preferredDayOff,
-        fixedWorkdays: candidate.fixedWorkdays,
-        positionId: candidate.positionId,
-        timeConfirmationLevel: candidate.timeConfirmationLevel,
-        sicknessWithoutAumEnabled: candidate.sicknessWithoutAumEnabled ? 1 : 0,
-        homeLocationId: candidate.homeLocationId,
-        preferredDepartmentId: candidate.preferredDepartmentId || "",
-        costCenterId: candidate.costCenterId,
-        active: candidate.active ? 1 : 0,
-      };
-      if (row.action === "create") {
-        await repository.insertEmployee(mutation);
-      } else {
-        await repository.updateEmployee(mutation);
-        if (row.deactivate) {
-          await repository.deactivateImportedPortalUser({ personnelNumber: candidate.personnelNumber });
-          await repository.revokeImportedPortalSessions({ personnelNumber: candidate.personnelNumber });
-          await repository.revokeImportedMobileSessions({
-            personnelNumber: candidate.personnelNumber,
-            reason: "employee_deactivated",
+  try {
+    await runPersonnelLifecycleSerializableMutation(() => persistenceProvider.transaction(async (executor) => {
+      const repositories = createApplicationRepositories(executor);
+      const repository = repositories.integrationRuntime;
+      const organization = repositories.organizationPersonnel;
+      for (const row of preparedRows) {
+        const preparedCandidate = row.validated;
+        const currentMatches = await employeeImportRowsCaseInsensitive(preparedCandidate.personnelNumber, repository);
+        const current = currentMatches.length === 1 ? currentMatches[0] : null;
+        if (row.action === "create" && currentMatches.length) throw httpError(409, "Die Importvorschau ist veraltet. Eine Personalnummer wurde inzwischen angelegt.", "IMPORT_PREVIEW_STALE");
+        if (row.action === "update" && currentMatches.length !== 1) throw httpError(409, "Die Importvorschau ist veraltet. Die Personalnummer ist nicht mehr eindeutig.", "IMPORT_PREVIEW_STALE");
+        if (row.action === "update" && employeeImportFingerprint(current) !== row.expectedFingerprint) {
+          throw httpError(409, "Die Importvorschau ist veraltet. Stammdaten wurden inzwischen ge\u00e4ndert.", "IMPORT_PREVIEW_STALE");
+        }
+        if (current) {
+          assertSessionContextScope(actor, {
+            locationId: current.home_location_id,
+            departmentId: current.preferred_department_id,
           });
         }
+        const candidate = await validateEmployee(preparedCandidate, row.action === "create", {
+          defaultTimeConfirmationLevel: current?.time_confirmation_level || "C",
+          defaultCostCenterId: current?.cost_center_id || preparedCandidate.costCenterId,
+          allowInactiveCostCenterId: current?.cost_center_id || "",
+          allowInactiveLocationId: current?.home_location_id || "",
+          allowInactiveDepartmentId: current?.preferred_department_id || 0,
+          repository: organization,
+        });
+        assertSessionContextScope(actor, {
+          locationId: candidate.homeLocationId,
+          departmentId: candidate.preferredDepartmentId,
+        });
+        const deactivate = Boolean(row.action === "update" && current.active && !candidate.active);
+        const mutation = {
+          personnelNumber: candidate.personnelNumber,
+          fullName: candidate.fullName,
+          nickname: candidate.nickname,
+          color: candidate.color,
+          contractedHours: candidate.contractedHours,
+          targetWorkdaysPerWeek: candidate.targetWorkdaysPerWeek,
+          preferredDayOff: candidate.preferredDayOff,
+          fixedWorkdays: candidate.fixedWorkdays,
+          positionId: candidate.positionId,
+          timeConfirmationLevel: candidate.timeConfirmationLevel,
+          sicknessWithoutAumEnabled: candidate.sicknessWithoutAumEnabled ? 1 : 0,
+          homeLocationId: candidate.homeLocationId,
+          preferredDepartmentId: candidate.preferredDepartmentId || "",
+          costCenterId: candidate.costCenterId,
+          active: candidate.active ? 1 : 0,
+        };
+        if (row.action === "create") {
+          await repository.insertEmployee(mutation);
+        } else {
+          if (deactivate) {
+            await assertEmployeeDestructiveMutationAllowed(
+              actor,
+              candidate.personnelNumber,
+              organization,
+            );
+          }
+          await repository.updateEmployee(mutation);
+          if (deactivate) {
+            await repository.deactivateImportedPortalUser({ personnelNumber: candidate.personnelNumber });
+            await repository.revokeImportedPortalSessions({ personnelNumber: candidate.personnelNumber });
+            await repository.revokeImportedMobileSessions({
+              personnelNumber: candidate.personnelNumber,
+              reason: "employee_deactivated",
+            });
+          }
+        }
       }
+      await insertIntegrationRun({
+        id: runId,
+        profileId: preview.profileId,
+        direction: "import",
+        kind: "personnel",
+        format: ["csv", "xlsx"].includes(preview.format) ? preview.format : "csv",
+        contentSha256: preview.contentSha256,
+        actor: actor.employeeNumber,
+        totalCount: preview.summary.total,
+        createdCount: preview.summary.create,
+        updatedCount: preview.summary.update,
+        skippedCount: preview.summary.skip,
+        errorCount: 0,
+        options: {
+          duplicateStrategy: preview.duplicateStrategy,
+          sheetName: preview.sheetName,
+          headerRow: preview.headerRow,
+          sourceTransport: preview.sourceTransport || "file",
+          connectionId: preview.connectionId || null,
+        },
+        result: { rows: preview.rows.map((row) => ({ rowNumber: row.rowNumber, action: row.action })) },
+      }, repository);
+    }, { isolation: "serializable" }));
+  } catch (error) {
+    if (isUniquePersistenceViolation(error)) {
+      throw httpError(
+        409,
+        "Die Importvorschau ist veraltet. Eine Personalnummer wurde inzwischen angelegt.",
+        "IMPORT_PREVIEW_STALE",
+      );
     }
-    await insertIntegrationRun({
-      id: runId,
-      profileId: preview.profileId,
-      direction: "import",
-      kind: "personnel",
-      format: ["csv", "xlsx"].includes(preview.format) ? preview.format : "csv",
-      contentSha256: preview.contentSha256,
-      actor: actor.employeeNumber,
-      totalCount: preview.summary.total,
-      createdCount: preview.summary.create,
-      updatedCount: preview.summary.update,
-      skippedCount: preview.summary.skip,
-      errorCount: 0,
-      options: {
-        duplicateStrategy: preview.duplicateStrategy,
-        sheetName: preview.sheetName,
-        headerRow: preview.headerRow,
-        sourceTransport: preview.sourceTransport || "file",
-        connectionId: preview.connectionId || null,
-      },
-      result: { rows: preview.rows.map((row) => ({ rowNumber: row.rowNumber, action: row.action })) },
-    }, repository);
-  });
+    throw error;
+  }
   auditPortal(actor.employeeNumber, "integration.personnel.import.applied", "integration_run", runId,
     JSON.stringify({ profileId: preview.profileId, total: preview.summary.total, created: preview.summary.create, updated: preview.summary.update, skipped: preview.summary.skip, contentSha256: preview.contentSha256 }));
   return { runId, ...preview.summary };
@@ -19226,7 +19937,7 @@ function hostRebootHttpError(error, response) {
 
 app.post("/api/portal/v1/server-monitor/restart", (request, response) => {
   const actor = requirePortalAdminOrLocal(request, "system:write");
-  if (actor.employeeNumber === "local" || !SERVER_MONITOR_CONTROL_ROLES.has(actor.role)) {
+  if (isLocalSystemSession(actor) || !SERVER_MONITOR_CONTROL_ROLES.has(actor.role)) {
     throw httpError(
       403,
       "Nur Developer, IT-Administration oder Administration dürfen den Server kontrolliert neu starten.",
@@ -19557,6 +20268,25 @@ function verifyImportedProtectedPersonnelPayloads(inspection) {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid protected personnel document payload");
     verified += 1;
   }
+  const candidateProtectedGroups = [
+    [protectedRows.candidates || [], candidateProtectionContext, "candidate"],
+    [protectedRows.candidateApplications || [], candidateApplicationProtectionContext, "candidate application"],
+    [protectedRows.candidateConversions || [], candidateConversionProtectionContext, "candidate conversion"],
+    [protectedRows.candidateDocuments || [], candidateDocumentProtectionContext, "candidate document"],
+    [protectedRows.candidateDocumentVersions || [], candidateDocumentVersionProtectionContext, "candidate document version"],
+    [protectedRows.candidateEvents || [], candidateEventProtectionContext, "candidate event"],
+  ];
+  for (const [rows, contextFor, label] of candidateProtectedGroups) {
+    for (const row of rows) {
+      if (!row.protected_payload) throw new Error(`missing protected ${label} payload`);
+      const payload = storage.unprotectRecord(row.protected_payload, contextFor(row));
+      const parsed = JSON.parse(payload);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error(`invalid protected ${label} payload`);
+      }
+      verified += 1;
+    }
+  }
   for (const report of protectedRows.amuReports || []) {
     const payload = storage.unprotectRecord(report.protected_payload, amuReportProtectionContext(report), { allowLegacy: true });
     const parsed = JSON.parse(payload);
@@ -19615,6 +20345,59 @@ function verifyImportedProtectedPersonnelPayloads(inspection) {
   return verified;
 }
 
+async function verifyImportedPersonnelLifecycleState(importPath) {
+  let importedDatabase = null;
+  let importedProvider = null;
+  try {
+    importedDatabase = openSqliteLegacyDatabase(importPath, {
+      readOnly: true,
+      initializeConnection: false,
+    });
+    const schema = inspectSqlitePersonnelLifecycleSchema(importedDatabase);
+    const conversionSchema = inspectSqlitePersonnelLifecycleConversionSchema(importedDatabase);
+    if (schema.absent) {
+      if (!conversionSchema.absent) {
+        throw new Error("personnel lifecycle conversion schema without foundation");
+      }
+      return Object.freeze({ present: false });
+    }
+    if (!schema.valid) {
+      throw new Error("invalid personnel lifecycle schema");
+    }
+    if (!conversionSchema.absent && !conversionSchema.valid) {
+      throw new Error("invalid personnel lifecycle conversion schema");
+    }
+
+    if (!inspectSqliteImportForeignKeyIntegrity(importedDatabase).valid) {
+      throw new Error("invalid personnel lifecycle foreign keys");
+    }
+
+    importedProvider = createSqlitePersistenceProvider({
+      database: importedDatabase,
+      catalog: SQLITE_APPLICATION_CATALOG,
+      closeDatabase: false,
+      initializeConnection: false,
+    });
+    const importedRepository = createPersonnelLifecycleRepository(importedProvider);
+    const integrity = await createPersonnelLifecycleService(importedRepository, {
+      protectJson,
+      parseProtectedJson,
+      conversionAvailable: conversionSchema.valid,
+    }).verifyIntegrity();
+    return Object.freeze({
+      present: true,
+      conversionSchema: conversionSchema.valid ? "m3" : "m2-compatible",
+      ...integrity,
+    });
+  } finally {
+    try {
+      await importedProvider?.close();
+    } finally {
+      try { importedDatabase?.close(); } catch {}
+    }
+  }
+}
+
 async function verifyImportedIntegrationCredentials(connections = []) {
   if (!connections.length) return 0;
   const vault = requireIntegrationSecretVault();
@@ -19635,7 +20418,9 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
     amuDocuments: currentAmuDocuments,
     personnelDocuments: currentPersonnelDocuments,
   } = await runtimeRecoveryRepository.protectedDocumentCounts();
-  if (currentAmuDocuments + currentPersonnelDocuments > 0) {
+  const currentCandidateDocuments = protectedSicknessAmuStorageSnapshotFromDatabase(db)
+    .candidateDocuments.length;
+  if (currentAmuDocuments + currentPersonnelDocuments + currentCandidateDocuments > 0) {
     throw httpError(409, "Diese Datenbank enthält geschützte Personalakt-Dokumente. Bitte Datenbank und private Dateisicherung gemeinsam über die Wartungswerkzeuge wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
   }
   if (serverModeActive) throw httpError(409, "Datenbankimporte sind im laufenden Serverbetrieb gesperrt und müssen in einem Wartungsfenster am Server durchgeführt werden.", "SERVER_MAINTENANCE_REQUIRED");
@@ -19648,6 +20433,7 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   let importedInspection;
   let importedAmuDocuments = 0;
   let importedPersonnelDocuments = 0;
+  let importedCandidateDocuments = 0;
   let importedProtectedPayloadError = false;
   let importedIntegrationCredentialError = false;
   let importedDatabaseReadError = false;
@@ -19659,10 +20445,14 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
   if (importedInspection) {
     importedAmuDocuments = importedInspection.amuDocuments;
     importedPersonnelDocuments = importedInspection.personnelDocuments;
+    importedCandidateDocuments = importedInspection.candidateDocuments;
     importedProtectedPayloadError = importedInspection.protectedInspectionError;
     importedIntegrationCredentialError = importedInspection.integrationInspectionError;
-    if (!importedAmuDocuments && !importedPersonnelDocuments) {
-      try { verifyImportedProtectedPersonnelPayloads(importedInspection); }
+    if (!importedAmuDocuments && !importedPersonnelDocuments && !importedCandidateDocuments) {
+      try {
+        verifyImportedProtectedPersonnelPayloads(importedInspection);
+        await verifyImportedPersonnelLifecycleState(importPath);
+      }
       catch { importedProtectedPayloadError = true; }
     }
     try {
@@ -19683,7 +20473,7 @@ app.post("/api/backup/import", express.raw({ type: "application/octet-stream", l
     fs.rmSync(importPath, { force: true });
     throw httpError(409, "Die geschützten Zugangsdaten direkter Verbindungen gehören zu einem anderen Schlüsselsatz. Bitte die vollständige Serversicherung mit dem zugehörigen Integrationsschlüssel wiederherstellen oder die Verbindungen im Quellsystem entfernen.", "INTEGRATION_FULL_RESTORE_REQUIRED");
   }
-  if (importedAmuDocuments + importedPersonnelDocuments > 0) {
+  if (importedAmuDocuments + importedPersonnelDocuments + importedCandidateDocuments > 0) {
     fs.rmSync(importPath, { force: true });
     throw httpError(409, "Das ausgewählte Backup enthält geschützte Personalakt-Dokumente. Bitte die vollständige Datenbank- und private Dateisicherung gemeinsam wiederherstellen.", "AMU_FULL_RESTORE_REQUIRED");
   }
@@ -20628,12 +21418,12 @@ async function collectiveAgreementRegistryPayload(session) {
       assignments: relatedAssignments,
     };
   }).filter(Boolean);
-  const canManage = !session || session.employeeNumber === "local"
+  const canManage = !session || isLocalSystemSession(session)
     || session.permissions?.includes("collective_agreements:manage");
-  const canPrepareAssignments = !session || session.employeeNumber === "local"
+  const canPrepareAssignments = !session || isLocalSystemSession(session)
     || session.permissions?.includes("collective_agreements:assign");
   const canApprove = Boolean(session
-    && session.employeeNumber !== "local"
+    && !isLocalSystemSession(session)
     && session.permissions?.includes("collective_agreements:approve"));
   const locations = canManage ? (await getLocationsForSession(session, false)).map((location) => ({
     id: String(location.id),
@@ -20852,7 +21642,7 @@ async function customWorkRuleDraftVisibleToSession(session, draft) {
 }
 
 async function customWorkRuleDraftRegistryPayload(session) {
-  const canAudit = !session || session.employeeNumber === "local"
+  const canAudit = !session || isLocalSystemSession(session)
     || session.permissions?.includes("work_rules:audit");
   const drafts = (await Promise.all((await listCustomWorkRuleDrafts(customWorkRulesRepository))
     .map((draft) => customWorkRuleDraftVisibleToSession(session, draft))))
@@ -20892,9 +21682,9 @@ async function customWorkRuleDraftRegistryPayload(session) {
     name: unit.name,
     legalEntityName: unit.legalEntityName,
   }));
-  const canDraft = !session || session.employeeNumber === "local"
+  const canDraft = !session || isLocalSystemSession(session)
     || session.permissions?.includes("work_rules:draft");
-  const humanActor = Boolean(session && session.employeeNumber !== "local");
+  const humanActor = Boolean(session && !isLocalSystemSession(session));
   const canReview = Boolean(humanActor && session.permissions?.includes("work_rules:review"));
   const canPublish = Boolean(humanActor && session.permissions?.includes("work_rules:publish"));
   const canAssign = Boolean(humanActor && session.permissions?.includes("work_rules:assign"));
@@ -21034,15 +21824,18 @@ function workRuleGovernanceActor(request, permission, { allowLocal = false, qual
     role: "admin",
     roleName: "Lokaler Einzelplatz",
     permissions: [],
+    sessionKind: "local",
+    localSystem: true,
   };
-  if (session.employeeNumber === "local" && !allowLocal) {
+  const localSystem = isLocalSystemSession(session);
+  if (localSystem && !allowLocal) {
     throw httpError(
       409,
       "Dieser Freigabevorgang benötigt persönliche Portalzugänge. Der lokale Einzelplatz kann das Vier-Augen-Prinzip nicht ersetzen.",
       "WORK_RULE_GOVERNANCE_PERSONAL_LOGIN_REQUIRED",
     );
   }
-  if (session.employeeNumber !== "local" && !session.permissions?.includes(permission)) {
+  if (!localSystem && !session.permissions?.includes(permission)) {
     throw httpError(403, "Für diesen Schritt fehlt das ausdrücklich getrennte Fachrecht.", "PORTAL_PERMISSION_DENIED");
   }
   return {
@@ -21115,16 +21908,16 @@ async function workRuleGovernanceRequestVisibleToSession(session, entry) {
 }
 
 function workRuleGovernanceCapabilities(session) {
-  const human = Boolean(session && session.employeeNumber !== "local");
+  const human = Boolean(session && !isLocalSystemSession(session));
   const has = (permission) => Boolean(human && session.permissions?.includes(permission));
   return {
-    canDraft: !session || session.employeeNumber === "local" || has("work_rules:draft"),
+    canDraft: !session || isLocalSystemSession(session) || has("work_rules:draft"),
     canSubmitForReview: has("work_rules:draft"),
     canReview: has("work_rules:review"),
     canPublish: has("work_rules:publish"),
     canAssign: has("work_rules:assign"),
     canApproveCollectiveAgreement: has("collective_agreements:approve"),
-    canAudit: !session || session.employeeNumber === "local" || has("work_rules:audit"),
+    canAudit: !session || isLocalSystemSession(session) || has("work_rules:audit"),
   };
 }
 
@@ -21205,6 +21998,8 @@ async function workRuleGovernancePayload(session) {
       fullName: "Lokaler Einzelplatz",
       role: "admin",
       roleName: "Lokaler Einzelplatz",
+      sessionKind: "local",
+      localSystem: true,
     };
   if (sessionHasGlobalScope(session) && capabilities.canAudit) {
     return { ...complete, currentActor, capabilities };
@@ -21633,11 +22428,11 @@ async function workRuleDashboardPayload(session) {
     legalNotice: catalog.legalNotice,
     scopeLabel: sessionHasGlobalScope(session) ? "Unternehmensweite Lesesicht" : "Eigene zugewiesene Bereiche",
     capabilities: {
-      canManageAssignments: !session || session.employeeNumber === "local"
+      canManageAssignments: !session || isLocalSystemSession(session)
         || session.permissions?.includes("work_rules:manage"),
-      canDocumentExceptions: !session || session.employeeNumber === "local"
+      canDocumentExceptions: !session || isLocalSystemSession(session)
         || session.permissions?.includes("work_rules:exception"),
-      canReadAudit: !session || session.employeeNumber === "local"
+      canReadAudit: !session || isLocalSystemSession(session)
         || session.permissions?.includes("work_rules:audit"),
       canSimulate: sessionCanReadWorkRules(session),
     },
@@ -22087,7 +22882,7 @@ app.put("/api/locations/:id", async (request, response) => {
   const current = await validateLocationExists(id);
   const body = request.body && typeof request.body === "object" && !Array.isArray(request.body)
     ? request.body : {};
-  const fullLocationWrite = request.portalSession?.employeeNumber === "local"
+  const fullLocationWrite = isLocalSystemSession(request.portalSession)
     || request.portalSession?.permissions?.includes("locations:write");
   const submittedLocation = fullLocationWrite ? body : {
     id,
@@ -22483,7 +23278,14 @@ app.delete("/api/positions/:id", async (request, response) => {
 
 app.get("/api/employees", async (request, response) => {
   const session = request.portalSession || (!getPortalStatus().portalEnabled && isLoopbackRequest(request)
-    ? { employeeNumber: "local", role: "admin", permissions: [], scopes: [] }
+    ? {
+      employeeNumber: "local",
+      role: "admin",
+      permissions: [],
+      scopes: [],
+      sessionKind: "local",
+      localSystem: true,
+    }
     : null);
   let employees = await Promise.all((await organizationPersonnelRepository.listEmployees()).map(async (row) => ({
         ...serializeEmployee(row, {
@@ -22534,7 +23336,7 @@ app.post("/api/employees", async (request, response) => {
       "PERSONNEL_CENTRAL_WRITE_REQUIRED",
     );
   }
-  const employee = await validateEmployee(request.body, true, {
+  let employee = await validateEmployee(request.body, true, {
     defaultCostCenterId: scopedCostCenterId,
   });
   const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
@@ -22550,7 +23352,7 @@ app.post("/api/employees", async (request, response) => {
   }
   assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
   const accessProfile = await validatePersonnelAccessProfile(request.portalSession, request.body.accessProfile, employee);
-  const accessProfileBefore = accessProfile?.previous
+  const accessProfileBefore = accessProfile
     ? await portalAccessProfileForEmployee(accessProfile.employeeNumber)
     : null;
   const personnelRecordMutation = await preparePersonnelRecordMutation(
@@ -22559,12 +23361,37 @@ app.post("/api/employees", async (request, response) => {
     request.body.personnelRecord,
   );
   try {
-    await organizationPersonnelRepository.transaction(async (organization) => {
+    await personnelLifecycleSerializableTransaction(async (organization) => {
+      const liveEmployee = await validateEmployee(request.body, true, {
+        defaultCostCenterId: scopedCostCenterId,
+        repository: organization,
+      });
+      if (!canManageTimeConfirmationLevel) {
+        liveEmployee.timeConfirmationLevel = "C";
+        liveEmployee.sicknessWithoutAumEnabled = 0;
+      }
+      if (request.body.personnelRecord !== undefined) {
+        assertPersonnelRecordContextScope(request.portalSession, {
+          locationId: liveEmployee.homeLocationId,
+          departmentId: liveEmployee.preferredDepartmentId,
+        }, request, liveEmployee.personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
+      }
+      assertSessionContextScope(request.portalSession, {
+        locationId: liveEmployee.homeLocationId,
+        departmentId: liveEmployee.preferredDepartmentId,
+      });
+      const liveAccessProfile = await validatePersonnelAccessProfile(
+        request.portalSession,
+        request.body.accessProfile,
+        liveEmployee,
+        organization,
+      );
+      employee = liveEmployee;
       await organization.insertEmployee(employee);
       await applyPersonnelAccessProfileWithRepository(
         organization,
         request.portalSession,
-        accessProfile,
+        liveAccessProfile,
         accessProfileBefore,
       );
       if (!employee.active) {
@@ -22612,6 +23439,7 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
   await assertSessionEmployeeScope(request.portalSession, personnelNumber);
   const existing = await organizationPersonnelRepository.getEmployeeForUpdate(personnelNumber);
   if (!existing) throw httpError(404, "Die Person wurde nicht gefunden.");
+  const expectedEmployeeConcurrencySignature = employeeMutationConcurrencySignature(existing);
   const centralWrite = sessionCanManageCentralPersonnel(request.portalSession);
   const costCenterSubmitted = own(request.body, "costCenterId") || own(request.body, "cost_center_id");
   const submittedCostCenter = String(request.body.costCenterId ?? request.body.cost_center_id ?? existing.cost_center_id ?? "").trim();
@@ -22619,7 +23447,7 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
     throw httpError(403, "Kostenstellen können nur in der zentralen Personalverwaltung geändert werden.", "PERSONNEL_CENTRAL_WRITE_REQUIRED");
   }
   const canManageTimeConfirmationLevel = sessionCanManageTimeConfirmationLevel(request.portalSession);
-  const employee = await validateEmployee({
+  let employee = await validateEmployee({
     ...request.body,
     personnelNumber,
     targetWorkdaysPerWeek: request.body.targetWorkdaysPerWeek ?? request.body.target_workdays_per_week
@@ -22632,13 +23460,15 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
     defaultTimeConfirmationLevel: existing.time_confirmation_level || "C",
     defaultCostCenterId: existing.cost_center_id || "",
     allowInactiveCostCenterId: existing.cost_center_id || "",
+    allowInactiveLocationId: existing.home_location_id || "",
+    allowInactiveDepartmentId: existing.preferred_department_id || 0,
   });
   assertSessionContextScope(request.portalSession, { locationId: employee.homeLocationId, departmentId: employee.preferredDepartmentId });
   const accessProfile = await validatePersonnelAccessProfile(request.portalSession, request.body.accessProfile, {
     ...employee,
     personnelNumber,
   });
-  const accessProfileBefore = accessProfile?.previous
+  const accessProfileBefore = accessProfile
     ? await portalAccessProfileForEmployee(accessProfile.employeeNumber)
     : null;
   const personnelRecordMutation = await preparePersonnelRecordMutation(
@@ -22649,16 +23479,67 @@ app.put("/api/employees/:personnelNumber", async (request, response) => {
   if (existing.active && !employee.active) {
     await assertEmployeeDestructiveMutationAllowed(request.portalSession, personnelNumber);
   }
-  await organizationPersonnelRepository.transaction(async (organization) => {
+  await personnelLifecycleSerializableTransaction(async (organization) => {
+    const liveEmployee = await organization.getEmployeeForUpdate(personnelNumber);
+    if (!liveEmployee) throw httpError(404, "Die Person wurde nicht gefunden.");
+    if (!sessionHasGlobalScope(request.portalSession)) {
+      if (!String(liveEmployee.home_location_id || "").trim()) {
+        throw httpError(403, "Filialunabhängige Beschäftigte liegen außerhalb des zugewiesenen Bereichs.", "PORTAL_SCOPE_DENIED");
+      }
+      assertSessionContextScope(request.portalSession, {
+        locationId: liveEmployee.home_location_id,
+        departmentId: liveEmployee.preferred_department_id,
+      });
+    }
+    if (employeeMutationConcurrencySignature(liveEmployee)
+      !== expectedEmployeeConcurrencySignature) {
+      throw personnelLifecycleConcurrentChangeError();
+    }
+    const liveValidatedEmployee = await validateEmployee({
+      ...employee,
+      personnelNumber,
+    }, false, {
+      defaultTimeConfirmationLevel: liveEmployee.time_confirmation_level || "C",
+      defaultCostCenterId: liveEmployee.cost_center_id || "",
+      allowInactiveCostCenterId: liveEmployee.cost_center_id || "",
+      allowInactiveLocationId: liveEmployee.home_location_id || "",
+      allowInactiveDepartmentId: liveEmployee.preferred_department_id || 0,
+      repository: organization,
+    });
+    assertSessionContextScope(request.portalSession, {
+      locationId: liveValidatedEmployee.homeLocationId,
+      departmentId: liveValidatedEmployee.preferredDepartmentId,
+    });
+    if (request.body.personnelRecord !== undefined) {
+      assertPersonnelRecordContextScope(request.portalSession, {
+        locationId: liveValidatedEmployee.homeLocationId,
+        departmentId: liveValidatedEmployee.preferredDepartmentId,
+      }, request, personnelNumber, submittedPersonnelRecordFieldKeys(request.body.personnelRecord));
+    }
+    const liveAccessProfile = await validatePersonnelAccessProfile(
+      request.portalSession,
+      request.body.accessProfile,
+      liveValidatedEmployee,
+      organization,
+    );
+    const deactivatingLiveEmployee = Boolean(liveEmployee.active) && !liveValidatedEmployee.active;
+    if (deactivatingLiveEmployee) {
+      await assertEmployeeDestructiveMutationAllowed(
+        request.portalSession,
+        personnelNumber,
+        organization,
+      );
+    }
+    employee = liveValidatedEmployee;
     const result = await organization.updateEmployee({ ...employee, personnelNumber });
     if (!result.rowsAffected) throw httpError(404, "Die Person wurde nicht gefunden.");
     await applyPersonnelAccessProfileWithRepository(
       organization,
       request.portalSession,
-      accessProfile,
+      liveAccessProfile,
       accessProfileBefore,
     );
-    if (existing.active && !employee.active) {
+    if (deactivatingLiveEmployee) {
       await organization.deactivatePortalAccess(personnelNumber);
     }
     await persistPersonnelRecordMutationWithRepository(organization, personnelRecordMutation, "update");
@@ -22711,22 +23592,38 @@ app.patch("/api/employees/:personnelNumber/display", async (request, response) =
   if (nicknameSubmitted && !request.portalSession?.permissions?.includes("employees:nickname:write")) {
     throw httpError(403, "Der Dienstplan-Spitzname darf mit diesem Zugang nicht bearbeitet werden.", "EMPLOYEE_NICKNAME_WRITE_DENIED");
   }
-  const existing = await organizationPersonnelRepository.getEmployeeDisplay(personnelNumber);
-  if (!existing) throw httpError(404, "Die Person wurde nicht gefunden.");
-  const color = colorSubmitted ? String(body.color || "").trim().toLowerCase() : existing.color;
-  if (colorSubmitted && !/^#[0-9a-f]{6}$/.test(color)) {
+  const submittedColor = colorSubmitted ? String(body.color || "").trim().toLowerCase() : null;
+  if (colorSubmitted && !/^#[0-9a-f]{6}$/.test(submittedColor)) {
     throw httpError(400, "Bitte eine gültige RGB-Farbe auswählen.", "EMPLOYEE_DISPLAY_INVALID");
   }
-  const nickname = nicknameSubmitted ? String(body.nickname || "").trim() : existing.nickname;
-  if (nicknameSubmitted && (!nickname || nickname.length > 80)) {
+  const submittedNickname = nicknameSubmitted ? String(body.nickname || "").trim() : null;
+  if (nicknameSubmitted && (!submittedNickname || submittedNickname.length > 80)) {
     throw httpError(400, "Der Dienstplan-Spitzname muss zwischen 1 und 80 Zeichen lang sein.", "EMPLOYEE_NICKNAME_INVALID");
   }
-  const result = await organizationPersonnelRepository.updateEmployeeDisplay(personnelNumber, color, nickname);
-  if (!result.rowsAffected) throw httpError(404, "Die Person wurde nicht gefunden.");
-  const changedFields = [
-    colorSubmitted && color !== existing.color ? "color" : "",
-    nicknameSubmitted && nickname !== existing.nickname ? "nickname" : "",
-  ].filter(Boolean);
+  let color = "";
+  let nickname = "";
+  let changedFields = [];
+  await personnelLifecycleSerializableTransaction(async (organization) => {
+    const liveEmployee = await organization.getEmployeeForUpdate(personnelNumber);
+    if (!liveEmployee) throw httpError(404, "Die Person wurde nicht gefunden.");
+    if (!sessionHasGlobalScope(request.portalSession)) {
+      if (!String(liveEmployee.home_location_id || "").trim()) {
+        throw httpError(403, "Filialunabhängige Beschäftigte liegen außerhalb des zugewiesenen Bereichs.", "PORTAL_SCOPE_DENIED");
+      }
+      assertSessionContextScope(request.portalSession, {
+        locationId: liveEmployee.home_location_id,
+        departmentId: liveEmployee.preferred_department_id,
+      });
+    }
+    color = colorSubmitted ? submittedColor : liveEmployee.color;
+    nickname = nicknameSubmitted ? submittedNickname : liveEmployee.nickname;
+    const result = await organization.updateEmployeeDisplay(personnelNumber, color, nickname);
+    if (!result.rowsAffected) throw httpError(404, "Die Person wurde nicht gefunden.");
+    changedFields = [
+      colorSubmitted && color !== liveEmployee.color ? "color" : "",
+      nicknameSubmitted && nickname !== liveEmployee.nickname ? "nickname" : "",
+    ].filter(Boolean);
+  });
   auditPortal(request.portalSession?.employeeNumber || "local", "employee.display.update", "employee", personnelNumber,
     JSON.stringify({ changedFields }));
   response.json({ personnelNumber, color, nickname });
@@ -22738,14 +23635,32 @@ app.delete("/api/employees/:personnelNumber", async (request, response) => {
   await assertEmployeeDestructiveMutationAllowed(request.portalSession, personnelNumber);
   const existing = await organizationPersonnelRepository.getEmployeeActivation(personnelNumber);
   if (!existing) throw httpError(404, "Die Person wurde nicht gefunden.");
-  await organizationPersonnelRepository.transaction(async (organization) => {
+  let previousActive = Boolean(existing.active);
+  await personnelLifecycleSerializableTransaction(async (organization) => {
+    const liveEmployee = await organization.getEmployeeForUpdate(personnelNumber);
+    if (!liveEmployee) throw httpError(404, "Die Person wurde nicht gefunden.");
+    if (!sessionHasGlobalScope(request.portalSession)) {
+      if (!String(liveEmployee.home_location_id || "").trim()) {
+        throw httpError(403, "Filialunabhängige Beschäftigte liegen außerhalb des zugewiesenen Bereichs.", "PORTAL_SCOPE_DENIED");
+      }
+      assertSessionContextScope(request.portalSession, {
+        locationId: liveEmployee.home_location_id,
+        departmentId: liveEmployee.preferred_department_id,
+      });
+    }
+    previousActive = Boolean(liveEmployee.active);
+    await assertEmployeeDestructiveMutationAllowed(
+      request.portalSession,
+      personnelNumber,
+      organization,
+    );
     await organization.deactivateEmployee(personnelNumber);
     await organization.deactivatePortalAccess(personnelNumber);
   });
   await refreshConfiguredAdminSnapshot();
   auditPortal(request.portalSession?.employeeNumber || "local", "employee.deactivate", "employee", personnelNumber,
     JSON.stringify({
-      previousActive: Boolean(existing.active),
+      previousActive,
       reason: "controlled-deactivation",
       personalHistoryPreserved: true,
     }));
@@ -22773,7 +23688,9 @@ app.post("/api/mobile/v1/auth/login", async (request, response) => {
   assertLoginRateLimit(request);
   const employeeNumber = String(request.body?.employeeNumber || "").trim();
   const device = validateMobileDevice(request.body?.device || {});
-  const user = await portalAccessRepository.getEmployeeLogin({ loginName: employeeNumber });
+  const user = isReservedEmployeePrincipal(employeeNumber)
+    ? null
+    : await portalAccessRepository.getEmployeeLogin({ loginName: employeeNumber });
   const now = new Date();
   if (user?.locked_until && new Date(user.locked_until) > now) {
     throw httpError(429, "Der Zugang ist vorübergehend gesperrt. Bitte später erneut versuchen.", "MOBILE_ACCOUNT_LOCKED");
@@ -22801,7 +23718,11 @@ app.post("/api/mobile/v1/auth/login", async (request, response) => {
   clearLoginRate(request);
   await portalAccessRepository.markEmployeeLoginSuccess({ employeeNumber });
   const created = await createMobileSession(employeeNumber, device, now);
-  const session = mobileSessionPrincipal(await mobileSessionRow(created.id));
+  const session = mobileSessionPrincipal(await mobileSessionRow(
+    created.id,
+    mobileAuthRepository,
+    viennaTodayIso(now),
+  ));
   auditPortal(employeeNumber, "mobile.login.success", "mobile_session", created.id,
     JSON.stringify({ platform: device.platform, appVersion: device.appVersion }));
   response.status(201).json({
@@ -22815,8 +23736,11 @@ app.post("/api/mobile/v1/auth/refresh", async (request, response) => {
   assertMobileRefreshRateLimit(request);
   const device = validateMobileDevice(request.body?.device || {});
   const parsed = parseMobileToken(request.body?.refreshToken, MOBILE_REFRESH_TOKEN_PREFIX);
-  const rowBefore = parsed ? await mobileSessionRow(parsed.sessionId) : null;
-  const tokenSet = await refreshMobileSession(request.body?.refreshToken, device, new Date());
+  const now = new Date();
+  const rowBefore = parsed
+    ? await mobileSessionRow(parsed.sessionId, mobileAuthRepository, viennaTodayIso(now))
+    : null;
+  const tokenSet = await refreshMobileSession(request.body?.refreshToken, device, now);
   if (rowBefore) auditPortal(rowBefore.employee_number, "mobile.session.refresh", "mobile_session", rowBefore.id);
   response.json({ tokenSet });
 });
@@ -23003,7 +23927,7 @@ app.get("/api/portal/v1/workflow-settings", (request, response) => {
   const session = requirePortalAdminOrLocal(request, "vacation:read");
   response.json({
     vacationHrApprovalRequired: vacationHrApprovalRequired(),
-    canChange: session.employeeNumber === "local" || session.role === "admin" || session.permissions?.includes("hr:settings"),
+    canChange: isLocalSystemSession(session) || session.role === "admin" || session.permissions?.includes("hr:settings"),
   });
 });
 
@@ -23082,7 +24006,7 @@ app.get("/api/portal/v1/session", (request, response) => {
 app.post("/api/portal/v1/auth/branding", async (request, response) => {
   assertLoginBrandingRateLimit(request);
   const loginName = String(request.body.loginName || request.body.employeeNumber || "").trim();
-  const user = loginName
+  const user = loginName && !isReservedEmployeePrincipal(loginName)
     ? (await portalUsersForAdmin()).find((entry) =>
       entry.employeeNumber === loginName
         && entry.configured
@@ -23107,6 +24031,7 @@ app.post("/api/portal/v1/setup/admin", async (request, response) => {
   }
   if (getPortalStatus().adminSetupState === "configured") throw httpError(409, "Die Admin-Ersteinrichtung wurde bereits abgeschlossen.");
   const employeeNumber = String(request.body.employeeNumber || "").trim();
+  assertEmployeePrincipalNotReserved(employeeNumber);
   const employee = (await organizationPersonnelRepository.listEmployees())
     .find((entry) => entry.personnel_number === employeeNumber && entry.active);
   if (!employee) throw httpError(404, "Das ausgewählte aktive Teammitglied wurde nicht gefunden.");
@@ -23137,8 +24062,10 @@ app.post("/api/portal/v1/auth/login", async (request, response) => {
   assertLoginRateLimit(request);
   const loginName = String(request.body.loginName || request.body.employeeNumber || "").trim();
   let sessionKind = "employee";
-  let user = await portalAccessRepository.getEmployeeLogin({ loginName });
-  if (!user) {
+  let user = isReservedEmployeePrincipal(loginName)
+    ? null
+    : await portalAccessRepository.getEmployeeLogin({ loginName });
+  if (!user && !isReservedEmployeePrincipal(loginName)) {
     user = await portalAccessRepository.getOrganizationLogin({ loginName });
     if (user) sessionKind = "organization";
   }
@@ -23360,6 +24287,9 @@ const UI_DEFAULT_EMPLOYEE_DISPLAY_COLUMNS = Object.freeze([
 ]);
 const UI_PERSONNEL_DASHBOARD_ITEMS = Object.freeze([
   "employees",
+  "applications",
+  "workflows",
+  "tasks",
   "requests",
   "timeTracking",
   "costCenters",
@@ -23481,7 +24411,13 @@ function validateMobilePortalAppearance(value) {
 
 function uiPreferenceActor(request, { write = false } = {}) {
   if (!getPortalStatus().portalEnabled && isLoopbackRequest(request)) {
-    return { employeeNumber: "local", role: "admin", permissions: [] };
+    return {
+      employeeNumber: "local",
+      role: "admin",
+      permissions: [],
+      sessionKind: "local",
+      localSystem: true,
+    };
   }
   const session = requireEmployeePortalSession(request);
   if (write) assertPortalCsrf(request);
@@ -23494,7 +24430,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   let employeeDisplayColumns = [...UI_DEFAULT_EMPLOYEE_DISPLAY_COLUMNS];
   let employeeDisplaySort = { key: "personnel_number", direction: "asc" };
   let workRuleAssessmentExpanded = false;
-  let allowPastWeekEditing = actor?.employeeNumber === "local"
+  let allowPastWeekEditing = isLocalSystemSession(actor)
     ? settingEnabled(getSettings(), "allow_past_week_editing")
     : false;
   let personnelDashboardLayout = defaultPersonnelDashboardLayout();
@@ -23502,7 +24438,7 @@ async function uiPreferencesForActor(actor, overrides = {}) {
   let mobilePortalAppearance = defaultMobilePortalAppearance();
   let mobilePortalNavigationCustomized = false;
   let mobilePortalAppearanceCustomized = false;
-  if (actor?.employeeNumber && actor.employeeNumber !== "local") {
+  if (actor?.employeeNumber && !isLocalSystemSession(actor)) {
     const rows = await uiPreferencesRepository.list(actor.employeeNumber);
     const lookup = new Map(rows.map((row) => [row.preferenceKey, row.value]));
     for (const view of UI_PREFERENCE_VIEWS) {
@@ -23635,13 +24571,13 @@ async function saveUiPreferencesForActor(actor, input = {}) {
   if (allowPastWeekEditing !== undefined && typeof allowPastWeekEditing !== "boolean") {
     throw httpError(400, "Bitte eine gültige persönliche Freigabe für vergangene Kalenderwochen übermitteln.", "UI_PREFERENCES_INVALID");
   }
-  if (allowPastWeekEditing !== undefined && actor.employeeNumber !== "local"
+  if (allowPastWeekEditing !== undefined && !isLocalSystemSession(actor)
     && (!actor.permissions?.includes("schedule:write") || !actor.permissions?.includes("settings:write"))) {
     throw httpError(403, "Für die persönliche Freigabe vergangener Kalenderwochen fehlen die Dienstplan- oder Einstellungsrechte.", "PORTAL_PERMISSION_DENIED");
   }
   const previousAllowPastWeekEditing = allowPastWeekEditing === undefined
     ? undefined
-    : actor.employeeNumber === "local"
+    : isLocalSystemSession(actor)
       ? settingEnabled(getSettings(), "allow_past_week_editing")
       : (await uiPreferencesRepository.get(actor.employeeNumber, "allow_past_week_editing"))?.value === "1";
   const personnelDashboardLayout = input.personnelDashboardLayout === undefined
@@ -23660,7 +24596,7 @@ async function saveUiPreferencesForActor(actor, input = {}) {
     && mobilePortalAppearance === undefined) {
     throw httpError(400, "Es wurde keine Darstellung zum Speichern übermittelt.", "UI_PREFERENCES_INVALID");
   }
-  if (actor.employeeNumber !== "local") {
+  if (!isLocalSystemSession(actor)) {
     const upserts = [];
     for (const [view, theme] of Object.entries(pageThemes)) {
       upserts.push({ preferenceKey: `page_theme_${view}`, value: theme });
@@ -23767,7 +24703,7 @@ function locationDashboardCategory(optionType) {
 }
 
 async function locationDashboardOrderForActor(actor, validLocationIds = []) {
-  if (!actor?.employeeNumber || actor.employeeNumber === "local") return [];
+  if (!actor?.employeeNumber || isLocalSystemSession(actor)) return [];
   const stored = (await uiPreferencesRepository.get(
     actor.employeeNumber,
     LOCATION_DASHBOARD_ORDER_PREFERENCE,
@@ -23804,7 +24740,7 @@ async function validateLocationDashboardOrder(input) {
 
 async function saveLocationDashboardOrder(actor, input) {
   const locationOrder = await validateLocationDashboardOrder(input);
-  if (actor.employeeNumber !== "local") {
+  if (!isLocalSystemSession(actor)) {
     await uiPreferencesRepository.upsert(
       actor.employeeNumber,
       LOCATION_DASHBOARD_ORDER_PREFERENCE,
@@ -24321,7 +25257,7 @@ async function customProcessesForDashboard(repository = customProcessRepository)
 }
 
 async function customProcessEditorCatalog(actor) {
-  const canManage = actor?.employeeNumber === "local"
+  const canManage = isLocalSystemSession(actor)
     || (RIGHTS_ADMIN_PORTAL_ROLES.has(actor?.role) && actor?.permissions?.includes("processes:write"));
   const roles = (await getPortalRoles()).map((role) => ({ id: role.id, name: role.name }));
   const employees = (await customProcessRepository.listRecipientCandidates()).map((employee) => ({
@@ -26025,7 +26961,7 @@ async function productReadinessAcceptanceRows() {
 }
 
 function productReadinessCapabilities(actor) {
-  const local = actor.employeeNumber === "local";
+  const local = isLocalSystemSession(actor);
   const review = local || actor.permissions?.includes("system:readiness:review") === true;
   return {
     canRecordEvidence: review,
@@ -26230,7 +27166,7 @@ app.get("/api/portal/v1/system-center", async (request, response) => {
 
 app.post("/api/portal/v1/system-center/recovery-assurance/run", async (request, response) => {
   const actor = requirePortalAdminOrLocal(request, "system:recovery:run");
-  if (actor.employeeNumber === "local" || !serverModeActive || process.platform !== "linux") {
+  if (isLocalSystemSession(actor) || !serverModeActive || process.platform !== "linux") {
     throw httpError(409, "Der manuelle Recovery-Test ist ausschließlich am eingerichteten Ubuntu-Server verfügbar.", "RECOVERY_ASSURANCE_SERVER_REQUIRED");
   }
   if (!["admin", "it_admin", "developer"].includes(actor.role)
@@ -26289,7 +27225,7 @@ app.get("/api/portal/v1/rights-dashboard", async (request, response) => {
 app.get("/api/portal/v1/custom-processes", async (request, response) => {
   const actor = requireAdminHrOrLocal(request, "rights:read");
   const includeArchived = request.query.includeArchived === "1"
-    && (actor.employeeNumber === "local" || actor.permissions?.includes("processes:write"));
+    && (isLocalSystemSession(actor) || actor.permissions?.includes("processes:write"));
   response.json({
     processes: (await customProcessRows({ includeArchived }))
       .map(({ process, steps }) => customProcessDashboardDefinition(process, steps)),
@@ -26365,6 +27301,355 @@ async function explicitPortalAccessScopesForEmployee(employeeNumber) {
   }));
 }
 
+const PERSONNEL_LIFECYCLE_SCOPED_DELEGABLE_PERMISSIONS = Object.freeze([
+  PERSONNEL_LIFECYCLE_PERMISSIONS.CANDIDATES_READ,
+  PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
+  PERSONNEL_WORKFLOW_PERMISSIONS.READ,
+  PERSONNEL_WORKFLOW_PERMISSIONS.DRAFT_WRITE,
+  PERSONNEL_WORKFLOW_PERMISSIONS.PUBLISH,
+  PERSONNEL_WORKFLOW_PERMISSIONS.LOCAL_SUPPLEMENT,
+]);
+
+function publicPortalPermissionScopeGrant(scope) {
+  return {
+    permission: String(scope.permission || ""),
+    locationId: String(scope.locationId ?? scope.location_id ?? ""),
+    departmentId: Number(scope.departmentId ?? scope.department_id ?? 0) || null,
+    approvedBy: String(scope.approvedBy ?? scope.approved_by ?? ""),
+  };
+}
+
+function personnelLifecyclePermissionScopeKey(scope) {
+  return [
+    String(scope.permission || ""),
+    String(scope.locationId ?? scope.location_id ?? ""),
+    Number(scope.departmentId ?? scope.department_id ?? 0) || 0,
+  ].join("\u0000");
+}
+
+function actorCanManageProtectedPersonnelState(actor, permissions = [], permissionScopes = []) {
+  const manageable = manageablePortalPermissionsForActor(actor);
+  return permissions.every((permission) => manageable.has(String(permission || "")))
+    && permissionScopes.every((scope) => manageable.has(String(scope?.permission || "")));
+}
+
+function portalAccessScopeKey(scope) {
+  return [
+    String(scope.locationId ?? scope.location_id ?? ""),
+    Number(scope.departmentId ?? scope.department_id ?? 0) || 0,
+  ].join("\u0000");
+}
+
+function canonicalPermissionScopeValue(scope) {
+  const normalized = publicPortalPermissionScopeGrant(scope);
+  return [
+    personnelLifecyclePermissionScopeKey(normalized),
+    normalized.approvedBy,
+  ].join("\u0000");
+}
+
+function sortedUniqueValues(values, mapper = (value) => String(value || "")) {
+  return [...new Set((Array.isArray(values) ? values : [...(values || [])])
+    .map(mapper))].sort();
+}
+
+function collectionAuditSummary(values, mapper) {
+  const canonical = sortedUniqueValues(values, mapper);
+  return Object.freeze({ count: canonical.length, sha256: sha256(JSON.stringify(canonical)) });
+}
+
+function stringDelta(beforeValues, afterValues) {
+  const before = new Set(sortedUniqueValues(beforeValues));
+  const after = new Set(sortedUniqueValues(afterValues));
+  return Object.freeze({
+    added: [...after].filter((value) => !before.has(value)).sort(),
+    removed: [...before].filter((value) => !after.has(value)).sort(),
+  });
+}
+
+function rightsAuditSummary(snapshot = {}) {
+  return Object.freeze({
+    granted: collectionAuditSummary(snapshot.grantedPermissions || []),
+    denied: collectionAuditSummary(snapshot.deniedPermissions || []),
+    effective: collectionAuditSummary(snapshot.effectivePermissions || []),
+    scopes: collectionAuditSummary(snapshot.scopes || [], portalAccessScopeKey),
+    personnelLifecycleScopes: collectionAuditSummary(
+      snapshot.personnelLifecyclePermissionScopes || [],
+      canonicalPermissionScopeValue,
+    ),
+  });
+}
+
+function compactRightsAuditDetail(before = {}, after = {}) {
+  const lifecycleRights = (values) => (values || [])
+    .filter((permission) => personnelLifecyclePermissionIds.has(permission));
+  const scopeBefore = sortedUniqueValues(
+    before.personnelLifecyclePermissionScopes || [],
+    canonicalPermissionScopeValue,
+  );
+  const scopeAfter = sortedUniqueValues(
+    after.personnelLifecyclePermissionScopes || [],
+    canonicalPermissionScopeValue,
+  );
+  const detail = {
+    schemaVersion: 2,
+    before: rightsAuditSummary(before),
+    after: rightsAuditSummary(after),
+    personnelLifecycleDelta: {
+      granted: stringDelta(
+        lifecycleRights(before.grantedPermissions),
+        lifecycleRights(after.grantedPermissions),
+      ),
+      denied: stringDelta(
+        lifecycleRights(before.deniedPermissions),
+        lifecycleRights(after.deniedPermissions),
+      ),
+      effective: stringDelta(
+        lifecycleRights(before.effectivePermissions),
+        lifecycleRights(after.effectivePermissions),
+      ),
+      scopes: {
+        added: collectionAuditSummary(scopeAfter.filter((value) => !scopeBefore.includes(value))),
+        removed: collectionAuditSummary(scopeBefore.filter((value) => !scopeAfter.includes(value))),
+      },
+    },
+  };
+  const serialized = JSON.stringify(detail);
+  if (serialized.length <= 1900) return serialized;
+  const compacted = JSON.stringify({
+    schemaVersion: 2,
+    compacted: true,
+    detailSha256: sha256(serialized),
+    before: detail.before,
+    after: detail.after,
+    personnelLifecycleDelta: {
+      granted: {
+        added: collectionAuditSummary(detail.personnelLifecycleDelta.granted.added),
+        removed: collectionAuditSummary(detail.personnelLifecycleDelta.granted.removed),
+      },
+      denied: {
+        added: collectionAuditSummary(detail.personnelLifecycleDelta.denied.added),
+        removed: collectionAuditSummary(detail.personnelLifecycleDelta.denied.removed),
+      },
+      effective: {
+        added: collectionAuditSummary(detail.personnelLifecycleDelta.effective.added),
+        removed: collectionAuditSummary(detail.personnelLifecycleDelta.effective.removed),
+      },
+      scopes: detail.personnelLifecycleDelta.scopes,
+    },
+  });
+  if (compacted.length <= 1900) return compacted;
+  return JSON.stringify({
+    schemaVersion: 2,
+    compacted: true,
+    detailSha256: sha256(serialized),
+    beforeSha256: sha256(JSON.stringify(detail.before)),
+    afterSha256: sha256(JSON.stringify(detail.after)),
+    personnelLifecycleDeltaSha256: sha256(JSON.stringify(detail.personnelLifecycleDelta)),
+  });
+}
+
+function compactPortalUserAuditDetail({
+  roleBefore = null,
+  roleAfter = null,
+  active = false,
+  passwordReset = false,
+  personnelLifecycleRightsReset = [],
+  personnelLifecyclePermissionScopesBefore = [],
+  personnelLifecyclePermissionScopesAfter = [],
+} = {}) {
+  const beforeScopes = sortedUniqueValues(
+    personnelLifecyclePermissionScopesBefore,
+    canonicalPermissionScopeValue,
+  );
+  const afterScopes = sortedUniqueValues(
+    personnelLifecyclePermissionScopesAfter,
+    canonicalPermissionScopeValue,
+  );
+  const detail = {
+    schemaVersion: 2,
+    roleBefore,
+    roleAfter,
+    active: Boolean(active),
+    passwordReset: Boolean(passwordReset),
+    personnelLifecycleRightsReset: sortedUniqueValues(personnelLifecycleRightsReset),
+    personnelLifecyclePermissionScopes: {
+      before: collectionAuditSummary(beforeScopes),
+      after: collectionAuditSummary(afterScopes),
+      added: collectionAuditSummary(beforeScopes.length || afterScopes.length
+        ? afterScopes.filter((scope) => !beforeScopes.includes(scope))
+        : []),
+      removed: collectionAuditSummary(beforeScopes.length || afterScopes.length
+        ? beforeScopes.filter((scope) => !afterScopes.includes(scope))
+        : []),
+    },
+  };
+  const serialized = JSON.stringify(detail);
+  if (serialized.length <= 1900) return serialized;
+  const summarizedRole = (value) => {
+    if (value === null || value === undefined) return null;
+    const normalized = String(value);
+    return { length: normalized.length, sha256: sha256(normalized) };
+  };
+  return JSON.stringify({
+    schemaVersion: 2,
+    compacted: true,
+    detailSha256: sha256(serialized),
+    roleBefore: summarizedRole(roleBefore),
+    roleAfter: summarizedRole(roleAfter),
+    active: Boolean(active),
+    passwordReset: Boolean(passwordReset),
+    personnelLifecycleRightsReset: collectionAuditSummary(personnelLifecycleRightsReset),
+    personnelLifecyclePermissionScopes: detail.personnelLifecyclePermissionScopes,
+  });
+}
+
+function rightsConcurrencySignature({ target, rolePermissions = [], snapshot = {} }) {
+  return sha256(JSON.stringify({
+    target: target ? {
+      employeeNumber: String(target.employee_number ?? target.employeeNumber ?? ""),
+      role: String(target.role || ""),
+      active: Boolean(target.active),
+      roleLocked: Boolean(target.role_locked ?? target.roleLocked),
+    } : null,
+    rolePermissions: sortedUniqueValues(rolePermissions),
+    grantedPermissions: sortedUniqueValues(snapshot.grantedPermissions || []),
+    deniedPermissions: sortedUniqueValues(snapshot.deniedPermissions || []),
+    scopes: sortedUniqueValues(snapshot.scopes || [], portalAccessScopeKey),
+    personnelLifecyclePermissionScopes: sortedUniqueValues(
+      snapshot.personnelLifecyclePermissionScopes || [],
+      canonicalPermissionScopeValue,
+    ),
+  }));
+}
+
+function scopeMutationConcurrencySignature(target, scopes, permissionScopes) {
+  return sha256(JSON.stringify({
+    target: target ? {
+      employeeNumber: String(target.employee_number ?? target.employeeNumber ?? ""),
+      role: String(target.role || ""),
+      roleLocked: Boolean(target.role_locked ?? target.roleLocked),
+      active: Boolean(target.active),
+      homeLocationId: String(target.home_location_id ?? target.homeLocationId ?? ""),
+    } : null,
+    scopes: sortedUniqueValues(scopes || [], portalAccessScopeKey),
+    permissionScopes: sortedUniqueValues(
+      permissionScopes || [],
+      canonicalPermissionScopeValue,
+    ),
+  }));
+}
+
+function portalUserMutationConcurrencySignature(user, lifecycleGrants = [], lifecycleScopes = []) {
+  return sha256(JSON.stringify({
+    user: user ? {
+      employeeNumber: String(user.employee_number ?? user.employeeNumber ?? ""),
+      role: String(user.role || ""),
+      roleLocked: Boolean(user.role_locked ?? user.roleLocked),
+      active: Boolean(user.active),
+      mustChangePassword: Boolean(user.must_change_password ?? user.mustChangePassword),
+      passwordHash: String(user.password_hash ?? user.passwordHash ?? ""),
+    } : null,
+    lifecycleGrants: sortedUniqueValues(lifecycleGrants),
+    lifecycleScopes: sortedUniqueValues(lifecycleScopes, canonicalPermissionScopeValue),
+  }));
+}
+
+function assertRightsMutationSnapshotCurrent(expected, actual) {
+  if (expected === actual) return;
+  throw personnelLifecycleConcurrentChangeError();
+}
+
+function setDifference(currentValues, desiredValues, key) {
+  const current = new Map((currentValues || []).map((value) => [key(value), value]));
+  const desired = new Map((desiredValues || []).map((value) => [key(value), value]));
+  return Object.freeze({
+    added: [...desired].filter(([scopeKey]) => !current.has(scopeKey)).map(([, value]) => value),
+    removed: [...current].filter(([scopeKey]) => !desired.has(scopeKey)).map(([, value]) => value),
+  });
+}
+
+function personnelLifecycleScopeMatchesTarget(target, scope, portalScopes) {
+  const locationId = String(scope.locationId || "");
+  const departmentId = Number(scope.departmentId || 0) || null;
+  if (target.role === "manager") {
+    return departmentId === null && portalScopes.some((entry) => (
+      entry.locationId === locationId && !entry.departmentId
+    ));
+  }
+  if (target.role === "department_manager") {
+    return departmentId !== null && portalScopes.some((entry) => (
+      entry.locationId === locationId && Number(entry.departmentId || 0) === departmentId
+    ));
+  }
+  return false;
+}
+
+function personnelLifecycleScopesForTarget(target, portalScopes) {
+  if (target.role === "manager") {
+    return portalScopes
+      .filter((scope) => !scope.departmentId)
+      .map((scope) => ({ locationId: scope.locationId, departmentId: null }));
+  }
+  if (target.role === "department_manager") {
+    return portalScopes
+      .filter((scope) => Number(scope.departmentId || 0) > 0)
+      .map((scope) => ({
+        locationId: scope.locationId,
+        departmentId: Number(scope.departmentId),
+      }));
+  }
+  return [];
+}
+
+function planPersonnelLifecyclePermissionScopes({
+  actor,
+  target,
+  portalScopes,
+  currentGrants,
+  finalDirectGrants,
+  currentPermissionScopes,
+  manageablePermissions,
+  scopesInputProvided,
+}) {
+  if (!["manager", "department_manager"].includes(target.role)) return [];
+  const derivedScopes = personnelLifecycleScopesForTarget(target, portalScopes);
+  const currentByPermission = new Map(PERSONNEL_LIFECYCLE_SCOPED_DELEGABLE_PERMISSIONS
+    .map((permission) => [permission, currentPermissionScopes
+      .filter((scope) => scope.permission === permission)
+      .filter((scope) => personnelLifecycleScopeMatchesTarget(target, scope, portalScopes))]));
+  const planned = [];
+  for (const permission of PERSONNEL_LIFECYCLE_SCOPED_DELEGABLE_PERMISSIONS) {
+    if (!finalDirectGrants.has(permission)) continue;
+    const current = currentByPermission.get(permission) || [];
+    const newlyGranted = !currentGrants.has(permission);
+    const mayRewrite = manageablePermissions.has(permission);
+    const rewrite = mayRewrite && (scopesInputProvided || newlyGranted || !current.length);
+    const selected = rewrite
+      ? derivedScopes.map((scope) => ({ ...scope, approvedBy: actor.employeeNumber }))
+      : current;
+    if (rewrite && !selected.length) {
+      throw httpError(
+        400,
+        target.role === "manager"
+          ? "Für lokale Personalmodul-Rechte muss PL+ mindestens einen ganzen Standort freigeben."
+          : "Für lokale Personalmodul-Rechte muss PL+ mindestens eine konkrete Abteilung freigeben.",
+        "PERSONNEL_LIFECYCLE_PERMISSION_SCOPE_REQUIRED",
+      );
+    }
+    for (const scope of selected) {
+      planned.push({
+        employeeNumber: target.employeeNumber,
+        permission,
+        locationId: scope.locationId,
+        departmentId: Number(scope.departmentId || 0),
+        approvedBy: scope.approvedBy || actor.employeeNumber,
+      });
+    }
+  }
+  return planned;
+}
+
 async function normalizeRightsScopesForTarget(target, submittedScopes, projectedPermissions) {
   if (GLOBAL_SCOPE_PORTAL_ROLES.has(target.role)) {
     if (Array.isArray(submittedScopes) && submittedScopes.length) {
@@ -26394,8 +27679,10 @@ async function normalizeRightsScopesForTarget(target, submittedScopes, projected
     if (scope.locationId !== target.homeLocationId) {
       throw httpError(403, "Planungsrechte dürfen nur für die eigene Stammfiliale vergeben werden.", "PORTAL_SCOPE_HOME_LOCATION_REQUIRED");
     }
-    await validateLocationExists(scope.locationId);
-    if (scope.departmentId) await validateDepartmentExists(scope.departmentId, scope.locationId);
+    await validateActiveLocationExists(scope.locationId);
+    if (scope.departmentId) {
+      await validateActiveDepartmentExists(scope.departmentId, scope.locationId);
+    }
     unique.set(`${scope.locationId}:${scope.departmentId || 0}`, scope);
   }
   scopes = [...unique.values()];
@@ -26412,11 +27699,16 @@ async function rightsMutationSnapshot(
   role,
   rolePermissions,
   amuLocalAccessMode = "inherit",
+  repository = organizationPersonnelRepository,
 ) {
-  const [grantedPermissions, deniedPermissions, scopes] = await Promise.all([
-    portalPermissionGrantsForEmployee(employeeNumber, role),
-    portalPermissionDenialsForEmployee(employeeNumber),
-    explicitPortalAccessScopesForEmployee(employeeNumber),
+  const [grantedPermissions, deniedPermissions, scopes, permissionScopeRows] = await Promise.all([
+    portalPermissionGrantsForEmployee(employeeNumber, role, repository),
+    portalPermissionDenialsForEmployee(employeeNumber, repository),
+    repository.listPortalAccessScopes(employeeNumber).then((rows) => rows.map((scope) => ({
+      locationId: scope.location_id,
+      departmentId: Number(scope.department_id || 0) || null,
+    }))),
+    repository.listPortalPermissionScopeGrants(employeeNumber),
   ]);
   const permissionState = effectivePortalPermissionState(
     employeeNumber,
@@ -26431,6 +27723,7 @@ async function rightsMutationSnapshot(
     deniedPermissions: permissionState.deniedPermissions,
     effectivePermissions: permissionState.effectivePermissions,
     scopes,
+    personnelLifecyclePermissionScopes: permissionScopeRows.map(publicPortalPermissionScopeGrant),
   };
 }
 
@@ -26451,15 +27744,24 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
   if (denialInputProvided && !Array.isArray(request.body.deniedPermissions)) {
     throw httpError(400, "Bitte eine gültige Auswahl entzogener Grundrechte übermitteln.");
   }
-  const submittedDenials = denialInputProvided
+  const submittedDenialsInput = denialInputProvided
     ? [...new Set(request.body.deniedPermissions.map((value) => String(value || "").trim()).filter(Boolean))]
-    : await portalPermissionDenialsForEmployee(employeeNumber);
+    : null;
   const manageablePermissions = manageablePortalPermissionsForActor(actor);
-  const [currentGrantRows, currentDenialRows, roleProjection] = await Promise.all([
+  const [
+    currentGrantRows,
+    currentDenialRows,
+    roleProjection,
+    currentPermissionScopeRows,
+    currentPortalScopes,
+  ] = await Promise.all([
     portalPermissionGrantsForEmployee(employeeNumber, target.role),
     portalPermissionDenialsForEmployee(employeeNumber),
     organizationPersonnelRepository.getPortalRoleProjection(target.role),
+    organizationPersonnelRepository.listPortalPermissionScopeGrants(employeeNumber),
+    explicitPortalAccessScopesForEmployee(employeeNumber),
   ]);
+  const submittedDenials = submittedDenialsInput || currentDenialRows;
   const currentGrants = new Set(currentGrantRows);
   const currentDenials = new Set(currentDenialRows);
   const invalid = [
@@ -26506,32 +27808,149 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
     throw httpError(400, "Bitte eine gültige Bereichsauswahl übermitteln.", "PORTAL_SCOPE_INVALID");
   }
   const scopes = await normalizeRightsScopesForTarget(target,
-    scopesInputProvided ? request.body.scopes : undefined,
+    scopesInputProvided ? request.body.scopes : currentPortalScopes,
     projectedPermissions);
+  const finalDirectGrants = new Set([
+    ...[...currentGrants].filter((permission) => !manageablePermissions.has(permission)),
+    ...submitted.filter((permission) => manageablePermissions.has(permission)),
+  ]);
+  const plannedPermissionScopes = planPersonnelLifecyclePermissionScopes({
+    actor,
+    target,
+    portalScopes: scopes,
+    currentGrants,
+    finalDirectGrants,
+    currentPermissionScopes: currentPermissionScopeRows.map(publicPortalPermissionScopeGrant),
+    manageablePermissions,
+    scopesInputProvided,
+  });
+  const plannedPermissionScopeKeys = new Set(
+    plannedPermissionScopes.map(personnelLifecyclePermissionScopeKey),
+  );
+  const protectedPersonnelScopesToRemove = currentPermissionScopeRows
+    .map(publicPortalPermissionScopeGrant)
+    .filter((scope) => !plannedPermissionScopeKeys.has(
+      personnelLifecyclePermissionScopeKey(scope),
+    ));
+  if (protectedPersonnelScopesToRemove.length
+    && !actorCanManageProtectedPersonnelState(actor, [], protectedPersonnelScopesToRemove)) {
+    auditPortal(
+      actor.employeeNumber,
+      "portal.rights.update.denied",
+      "portal_user",
+      employeeNumber,
+      JSON.stringify({
+        reason: "PERSONNEL_LIFECYCLE_PERMISSION_SCOPE_PROTECTED",
+        route: personnelRecordDeniedRoute(request),
+      }),
+    );
+    throw httpError(
+      403,
+      "Ein von PL+ freigegebener Personalmodul-Geltungsbereich darf hier nicht entfernt oder verkleinert werden.",
+      "PERSONNEL_LIFECYCLE_PERMISSION_SCOPE_PROTECTED",
+    );
+  }
   const before = await rightsMutationSnapshot(
     employeeNumber,
     target.role,
     rolePermissions,
     target.amuLocalAccessMode,
   );
-  await organizationPersonnelRepository.transaction(async (organization) => {
-    for (const permission of manageablePermissions) {
-      await organization.deletePermissionGrant(employeeNumber, permission);
+  const prePlanPermissionState = effectivePortalPermissionState(
+    employeeNumber,
+    target.role,
+    rolePermissions,
+    currentGrantRows,
+    currentDenialRows,
+    target.amuLocalAccessMode,
+  );
+  const prePlanSnapshot = {
+    grantedPermissions: prePlanPermissionState.grantedPermissions,
+    deniedPermissions: prePlanPermissionState.deniedPermissions,
+    effectivePermissions: prePlanPermissionState.effectivePermissions,
+    scopes: currentPortalScopes,
+    personnelLifecyclePermissionScopes: currentPermissionScopeRows
+      .map(publicPortalPermissionScopeGrant),
+  };
+  assertRightsMutationSnapshotCurrent(
+    rightsConcurrencySignature({ target, rolePermissions, snapshot: prePlanSnapshot }),
+    rightsConcurrencySignature({ target, rolePermissions, snapshot: before }),
+  );
+  const expectedConcurrencySignature = rightsConcurrencySignature({
+    target,
+    rolePermissions,
+    snapshot: before,
+  });
+  const plannedAfter = {
+    grantedPermissions: [...finalDirectGrants].sort(),
+    deniedPermissions: [...normalizedDenials].sort(),
+    effectivePermissions: [...projectedPermissions].sort(),
+    scopes,
+    personnelLifecyclePermissionScopes: plannedPermissionScopes
+      .map(publicPortalPermissionScopeGrant),
+  };
+  await personnelLifecycleSerializableTransaction(async (organization) => {
+    const [liveTarget, liveRoleProjection, liveBefore] = await Promise.all([
+      organization.getPortalUserAccountProjection(employeeNumber),
+      organization.getPortalRoleProjection(target.role),
+      rightsMutationSnapshot(
+        employeeNumber,
+        target.role,
+        rolePermissions,
+        target.amuLocalAccessMode,
+        organization,
+      ),
+    ]);
+    const liveRolePermissions = parsePortalPermissions(liveRoleProjection?.permissions)
+      .filter((permission) => portalPermissionAllowedForRole(permission, target.role));
+    assertRightsMutationSnapshotCurrent(
+      expectedConcurrencySignature,
+      rightsConcurrencySignature({
+        target: liveTarget,
+        rolePermissions: liveRolePermissions,
+        snapshot: liveBefore,
+      }),
+    );
+    const liveScopeValidation = new Map();
+    for (const scope of [
+      ...(scopesInputProvided ? scopes : []),
+      ...plannedPermissionScopes,
+    ]) {
+      liveScopeValidation.set(portalAccessScopeKey(scope), scope);
     }
-    for (const permission of submitted.filter((entry) => manageablePermissions.has(entry))) {
+    for (const scope of liveScopeValidation.values()) {
+      await validateActiveLocationExists(scope.locationId, organization);
+      if (scope.departmentId) {
+        await validateActiveDepartmentExists(scope.departmentId, scope.locationId, organization);
+      }
+    }
+    const grantDelta = setDifference(
+      before.grantedPermissions,
+      plannedAfter.grantedPermissions,
+      (permission) => permission,
+    );
+    for (const permission of grantDelta.added) {
       await organization.insertPermissionGrant(employeeNumber, permission, actor.employeeNumber);
     }
+    for (const permission of grantDelta.removed) {
+      await organization.deletePermissionGrant(employeeNumber, permission);
+    }
     if (denialInputProvided) {
-      for (const permission of manageablePermissions) {
-        await organization.deletePermissionDenial(employeeNumber, permission);
-      }
-      for (const permission of [...normalizedDenials].filter((entry) => manageablePermissions.has(entry))) {
+      const denialDelta = setDifference(
+        before.deniedPermissions,
+        plannedAfter.deniedPermissions,
+        (permission) => permission,
+      );
+      for (const permission of denialDelta.added) {
         await organization.insertPermissionDenial(employeeNumber, permission, actor.employeeNumber);
       }
+      for (const permission of denialDelta.removed) {
+        await organization.deletePermissionDenial(employeeNumber, permission);
+      }
     }
+    const accessScopeDelta = setDifference(before.scopes, scopes, portalAccessScopeKey);
     if (scopesInputProvided) {
-      await organization.deleteAccessScopes(employeeNumber);
-      for (const scope of scopes) {
+      for (const scope of accessScopeDelta.added) {
         await organization.insertAccessScope({
           employeeNumber,
           locationId: scope.locationId,
@@ -26540,16 +27959,47 @@ app.put("/api/portal/v1/rights/:employeeNumber", async (request, response) => {
         });
       }
     }
+    const permissionScopeDelta = setDifference(
+      before.personnelLifecyclePermissionScopes,
+      plannedPermissionScopes,
+      personnelLifecyclePermissionScopeKey,
+    );
+    for (const permissionScope of permissionScopeDelta.removed) {
+      await organization.deletePermissionScopeGrant({
+        employeeNumber,
+        permission: permissionScope.permission,
+        locationId: permissionScope.locationId,
+        departmentId: Number(permissionScope.departmentId || 0),
+      });
+    }
+    if (scopesInputProvided) {
+      for (const scope of accessScopeDelta.removed) {
+        await organization.deleteAccessScope({
+          employeeNumber,
+          locationId: scope.locationId,
+          departmentId: Number(scope.departmentId || 0),
+        });
+      }
+    }
+    for (const permissionScope of permissionScopeDelta.added) {
+      await organization.insertPermissionScopeGrant(permissionScope);
+    }
     await organization.revokePortalSessions(employeeNumber);
     await organization.revokeMobileSessions(employeeNumber, "rights_changed");
-  });
+    await organization.insertAudit(
+      actor.employeeNumber,
+      "portal.rights.update",
+      "portal_user",
+      employeeNumber,
+      compactRightsAuditDetail(before, plannedAfter),
+    );
+  }, { uniqueAsConcurrent: true });
   const after = await rightsMutationSnapshot(
     employeeNumber,
     target.role,
     rolePermissions,
     target.amuLocalAccessMode,
   );
-  auditPortal(actor.employeeNumber, "portal.rights.update", "portal_user", employeeNumber, JSON.stringify({ before, after }));
   const amuRoutingChanged = ["amu:local:manage", "sickness:read"].some((permission) =>
     before.effectivePermissions.includes(permission) !== after.effectivePermissions.includes(permission));
   if (scopesInputProvided || amuRoutingChanged) await reconcileOpenAmuResponsibilities(actor.employeeNumber);
@@ -26788,7 +28238,16 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
   const employeeNumber = String(request.params.employeeNumber || "").trim();
   const target = await organizationPersonnelRepository
     .getPortalScopeAssignmentTarget(employeeNumber);
-  if (!target) throw httpError(404, "Der Zugang wurde nicht gefunden.");
+  if (!target || !target.active) throw httpError(404, "Der aktive Zugang wurde nicht gefunden.");
+  assertPortalUserIsMutable(target, actor);
+  await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
+    actor,
+    target,
+    organizationPersonnelRepository,
+  );
+  if (!actorCanManagePortalRole(actor, target.role)) {
+    throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
+  }
   if (!["location_planner", "manager", "department_manager"].includes(target.role)) {
     throw httpError(400, "Nur standortgebundene Planungs- und Leitungsrollen benötigen eine Bereichszuweisung.");
   }
@@ -26799,18 +28258,91 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
   }));
   if (!scopes.length) throw httpError(400, "Bitte mindestens einen Bereich zuweisen.");
   for (const scope of scopes) {
-    await validateLocationExists(scope.locationId);
+    await validateActiveLocationExists(scope.locationId);
     if (target.role === "department_manager") {
       if (!scope.departmentId) throw httpError(400, "Für eine Abteilungsleitung muss eine Abteilung ausgewählt werden.");
-      await validateDepartmentExists(scope.departmentId, scope.locationId);
+      await validateActiveDepartmentExists(scope.departmentId, scope.locationId);
     } else scope.departmentId = null;
     if (actor.role === "manager") assertSessionContextScope(actor, { locationId: scope.locationId });
     if (actor.role === "manager" && target.home_location_id !== scope.locationId) throw httpError(403, "Die Abteilungsleitung gehört nicht zum eigenen Standort.");
   }
   if (actor.role === "manager" && target.role !== "department_manager") throw httpError(403, "Eine Filialleitung darf nur Abteilungsleitungen ihres Standorts zuweisen.");
-  await organizationPersonnelRepository.transaction(async (organization) => {
-    await organization.deleteAccessScopes(employeeNumber);
+  const [currentPortalScopes, currentPermissionScopeRows] = await Promise.all([
+    explicitPortalAccessScopesForEmployee(employeeNumber),
+    organizationPersonnelRepository.listPortalPermissionScopeGrants(employeeNumber),
+  ]);
+  const currentPermissionScopes = currentPermissionScopeRows.map(publicPortalPermissionScopeGrant);
+  const projectedPermissionScopes = currentPermissionScopes.filter((scope) => (
+    personnelLifecycleScopeMatchesTarget(
+      { ...target, role: target.role },
+      scope,
+      scopes,
+    )
+  ));
+  const protectedPersonnelScopesToRemove = currentPermissionScopes.filter((scope) => (
+    !projectedPermissionScopes.some((projected) => (
+      personnelLifecyclePermissionScopeKey(projected) === personnelLifecyclePermissionScopeKey(scope)
+    ))
+  ));
+  if (protectedPersonnelScopesToRemove.length
+    && !actorCanManageProtectedPersonnelState(actor, [], protectedPersonnelScopesToRemove)) {
+    auditPortal(
+      actor.employeeNumber,
+      "portal.scope.update.denied",
+      "portal_user",
+      employeeNumber,
+      JSON.stringify({
+        reason: "PERSONNEL_LIFECYCLE_PERMISSION_SCOPE_PROTECTED",
+        route: personnelRecordDeniedRoute(request),
+      }),
+    );
+    throw httpError(
+      403,
+      "Ein von PL+ freigegebener Personalmodul-Geltungsbereich darf hier nicht entfernt werden.",
+      "PERSONNEL_LIFECYCLE_PERMISSION_SCOPE_PROTECTED",
+    );
+  }
+  const expectedConcurrencySignature = scopeMutationConcurrencySignature(
+    target,
+    currentPortalScopes,
+    currentPermissionScopes,
+  );
+  const before = {
+    scopes: currentPortalScopes,
+    personnelLifecyclePermissionScopes: currentPermissionScopes,
+  };
+  const after = {
+    scopes,
+    personnelLifecyclePermissionScopes: projectedPermissionScopes,
+  };
+  await personnelLifecycleSerializableTransaction(async (organization) => {
+    const [liveTarget, livePortalScopeRows, livePermissionScopeRows] = await Promise.all([
+      organization.getPortalScopeAssignmentTarget(employeeNumber),
+      organization.listPortalAccessScopes(employeeNumber),
+      organization.listPortalPermissionScopeGrants(employeeNumber),
+    ]);
+    const livePortalScopes = livePortalScopeRows.map((scope) => ({
+      locationId: scope.location_id,
+      departmentId: Number(scope.department_id || 0) || null,
+    }));
+    const livePermissionScopes = livePermissionScopeRows.map(publicPortalPermissionScopeGrant);
+    assertRightsMutationSnapshotCurrent(
+      expectedConcurrencySignature,
+      scopeMutationConcurrencySignature(liveTarget, livePortalScopes, livePermissionScopes),
+    );
+    assertPortalUserIsMutable(liveTarget, actor);
+    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, liveTarget, organization);
+    if (!actorCanManagePortalRole(actor, liveTarget.role)) {
+      throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
+    }
     for (const scope of scopes) {
+      await validateActiveLocationExists(scope.locationId, organization);
+      if (scope.departmentId) {
+        await validateActiveDepartmentExists(scope.departmentId, scope.locationId, organization);
+      }
+    }
+    const accessScopeDelta = setDifference(currentPortalScopes, scopes, portalAccessScopeKey);
+    for (const scope of accessScopeDelta.added) {
       await organization.insertAccessScope({
         employeeNumber,
         locationId: scope.locationId,
@@ -26818,10 +28350,36 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
         assignedBy: actor.employeeNumber,
       });
     }
+    const permissionScopeDelta = setDifference(
+      currentPermissionScopes,
+      projectedPermissionScopes,
+      personnelLifecyclePermissionScopeKey,
+    );
+    for (const permissionScope of permissionScopeDelta.removed) {
+      await organization.deletePermissionScopeGrant({
+        employeeNumber,
+        permission: permissionScope.permission,
+        locationId: permissionScope.locationId,
+        departmentId: Number(permissionScope.departmentId || 0),
+      });
+    }
+    for (const scope of accessScopeDelta.removed) {
+      await organization.deleteAccessScope({
+        employeeNumber,
+        locationId: scope.locationId,
+        departmentId: Number(scope.departmentId || 0),
+      });
+    }
     await organization.revokePortalSessions(employeeNumber);
     await organization.revokeMobileSessions(employeeNumber, "scopes_changed");
-  });
-  auditPortal(actor.employeeNumber, "portal.scope.update", "portal_user", employeeNumber, JSON.stringify(scopes));
+    await organization.insertAudit(
+      actor.employeeNumber,
+      "portal.scope.update",
+      "portal_user",
+      employeeNumber,
+      compactRightsAuditDetail(before, after),
+    );
+  }, { uniqueAsConcurrent: true });
   await reconcileOpenAmuResponsibilities(actor.employeeNumber);
   const [users, roles] = await Promise.all([portalUsersForActor(actor), getPortalRoles()]);
   response.json({ users, roles });
@@ -26830,6 +28388,7 @@ app.put("/api/portal/v1/users/:employeeNumber/scopes", async (request, response)
 app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
   const actor = requirePortalAdminOrLocal(request, "users:write");
   const employeeNumber = String(request.params.employeeNumber || "").trim();
+  assertEmployeePrincipalNotReserved(employeeNumber);
   if (!await organizationPersonnelRepository.employeeExists(employeeNumber)) {
     throw httpError(404, "Das Teammitglied wurde nicht gefunden.");
   }
@@ -26841,10 +28400,50 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
   }
   const existingUser = await organizationPersonnelRepository
     .getPortalUserAccountProjection(employeeNumber);
+  let existingPersonnelLifecycleGrants = [];
+  let existingPersonnelLifecyclePermissionScopes = [];
   if (existingUser) {
     assertPortalUserIsMutable(existingUser, actor);
+    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
+      actor,
+      existingUser,
+      organizationPersonnelRepository,
+    );
     if (!actorCanManagePortalRole(actor, existingUser.role)) {
       throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
+    }
+    if (existingUser.role !== role) {
+      const [grantRows, permissionScopeRows] = await Promise.all([
+        portalPermissionGrantsForEmployee(employeeNumber, existingUser.role),
+        organizationPersonnelRepository.listPortalPermissionScopeGrants(employeeNumber),
+      ]);
+      existingPersonnelLifecycleGrants = grantRows
+        .filter((permission) => personnelLifecyclePermissionIds.has(permission));
+      existingPersonnelLifecyclePermissionScopes = permissionScopeRows
+        .map(publicPortalPermissionScopeGrant);
+      if ((existingPersonnelLifecycleGrants.length
+          || existingPersonnelLifecyclePermissionScopes.length)
+        && !actorCanManageProtectedPersonnelState(
+          actor,
+          existingPersonnelLifecycleGrants,
+          existingPersonnelLifecyclePermissionScopes,
+        )) {
+        auditPortal(
+          actor.employeeNumber,
+          "portal.user.update.denied",
+          "portal_user",
+          employeeNumber,
+          JSON.stringify({
+            reason: "PERSONNEL_LIFECYCLE_PERMISSION_SCOPE_PROTECTED",
+            route: personnelRecordDeniedRoute(request),
+          }),
+        );
+        throw httpError(
+          403,
+          "Die Rolle kann erst geändert werden, nachdem PL+ die Personalmodul-Freigaben angepasst hat.",
+          "PERSONNEL_LIFECYCLE_PERMISSION_SCOPE_PROTECTED",
+        );
+      }
     }
   }
   if (!actorCanAssignPortalRole(actor, role, roleExists)) {
@@ -26864,7 +28463,42 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
     );
     if (!otherSystemOwners) throw httpError(409, "Mindestens ein aktiver Developer- oder Admin-Zugang muss bestehen bleiben.");
   }
-  await organizationPersonnelRepository.transaction(async (organization) => {
+  const expectedConcurrencySignature = portalUserMutationConcurrencySignature(
+    existingUser,
+    existingPersonnelLifecycleGrants,
+    existingPersonnelLifecyclePermissionScopes,
+  );
+  await personnelLifecycleSerializableTransaction(async (organization) => {
+    const liveUser = await organization.getPortalUserAccountProjection(employeeNumber);
+    let livePersonnelLifecycleGrants = [];
+    let livePersonnelLifecyclePermissionScopes = [];
+    if (liveUser && existingUser?.role !== role) {
+      const [grantRows, permissionScopeRows] = await Promise.all([
+        portalPermissionGrantsForEmployee(employeeNumber, liveUser.role, organization),
+        organization.listPortalPermissionScopeGrants(employeeNumber),
+      ]);
+      livePersonnelLifecycleGrants = grantRows
+        .filter((permission) => personnelLifecyclePermissionIds.has(permission));
+      livePersonnelLifecyclePermissionScopes = permissionScopeRows
+        .map(publicPortalPermissionScopeGrant);
+    }
+    assertRightsMutationSnapshotCurrent(
+      expectedConcurrencySignature,
+      portalUserMutationConcurrencySignature(
+        liveUser,
+        livePersonnelLifecycleGrants,
+        livePersonnelLifecyclePermissionScopes,
+      ),
+    );
+    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, liveUser, organization);
+    if (liveUser?.role === "admin" && (role !== "admin" || !active)) {
+      const liveOtherSystemOwners = Number(
+        await organization.countOtherSystemOwners(employeeNumber),
+      );
+      if (!liveOtherSystemOwners) {
+        throw httpError(409, "Mindestens ein aktiver Developer- oder Admin-Zugang muss bestehen bleiben.");
+      }
+    }
     await organization.upsertPortalUserAccount({
       employeeNumber,
       passwordHash,
@@ -26875,6 +28509,9 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
     });
     if (existingUser?.role && existingUser.role !== role) {
       await organization.deletePermissionDenials(employeeNumber);
+      for (const permission of personnelLifecyclePermissionIds) {
+        await organization.deletePermissionGrant(employeeNumber, permission);
+      }
     }
     if (!active || password || (existingUser?.role && existingUser.role !== role)) {
       await organization.revokePortalSessions(employeeNumber);
@@ -26885,7 +28522,16 @@ app.put("/api/portal/v1/users/:employeeNumber", async (request, response) => {
       "portal.user.update",
       "portal_user",
       employeeNumber,
-      JSON.stringify({ role, active: Boolean(active), passwordReset: Boolean(password) }),
+      compactPortalUserAuditDetail({
+        roleBefore: existingUser?.role || null,
+        roleAfter: role,
+        active: Boolean(active),
+        passwordReset: Boolean(password),
+        personnelLifecycleRightsReset: existingPersonnelLifecycleGrants,
+        personnelLifecyclePermissionScopesBefore: existingPersonnelLifecyclePermissionScopes,
+        personnelLifecyclePermissionScopesAfter: existingUser?.role !== role ? []
+          : existingPersonnelLifecyclePermissionScopes,
+      }),
     );
   });
   await refreshConfiguredAdminSnapshot();
@@ -26900,10 +28546,21 @@ app.post("/api/portal/v1/users/:employeeNumber/unlock", async (request, response
   const target = await organizationPersonnelRepository
     .getPortalMutationTarget(employeeNumber);
   assertPortalUserIsMutable(target, actor);
+  await assertItAdminCannotTakeOverPersonnelLifecycleTarget(
+    actor,
+    target,
+    organizationPersonnelRepository,
+  );
   if (!actorCanManagePortalRole(actor, target.role)) {
     throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
   }
-  await organizationPersonnelRepository.transaction(async (organization) => {
+  await personnelLifecycleSerializableTransaction(async (organization) => {
+    const liveTarget = await organization.getPortalMutationTarget(employeeNumber);
+    assertPortalUserIsMutable(liveTarget, actor);
+    await assertItAdminCannotTakeOverPersonnelLifecycleTarget(actor, liveTarget, organization);
+    if (!actorCanManagePortalRole(actor, liveTarget.role)) {
+      throw httpError(403, "Dieser Zugang liegt außerhalb der eigenen Verwaltungsebene.", "PORTAL_ROLE_HIERARCHY_DENIED");
+    }
     const result = await organization.unlockPortalUser(employeeNumber);
     if (!result.rowsAffected) throw httpError(404, "Der Zugang wurde nicht gefunden.");
     await organization.insertAudit(
@@ -26919,7 +28576,7 @@ app.post("/api/portal/v1/users/:employeeNumber/unlock", async (request, response
 
 function loanSettingsActor(request, { mutation = false } = {}) {
   const session = requirePortalAnyPermissionOrLocal(request, ["loans:settings"], { csrf: mutation });
-  if (session.employeeNumber !== "local" && !RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)) {
+  if (!isLocalSystemSession(session) && !RIGHTS_ADMIN_PORTAL_ROLES.has(session.role)) {
     throw httpError(
       403,
       "Die Einstellungen der Leihe sind nur für Personalleitung und höhere Rollen verfügbar.",
@@ -26969,7 +28626,7 @@ function publicLoanLocationSetting(row, { includeConfiguration = false } = {}) {
 
 async function loanLocationForSession(session, input = {}) {
   let locationId = String(input.locationId || input.location || session?.homeLocationId || "").trim();
-  if (!locationId && session?.employeeNumber === "local") {
+  if (!locationId && isLocalSystemSession(session)) {
     locationId = String((await getLocations(false))[0]?.id || "");
   }
   if (!locationId) {
@@ -27570,7 +29227,7 @@ async function prepareF18MigrationArtifacts(inspection, mappings, location, acto
 
 async function insertF18Migration(inspection, mappings, location, actor, artifacts) {
   const runId = crypto.randomUUID();
-  const importedBy = actor.employeeNumber === "local" ? null : actor.employeeNumber;
+  const importedBy = isLocalSystemSession(actor) ? null : actor.employeeNumber;
   const now = new Date().toISOString();
   try {
     await persistenceProvider.transaction(async (executor) => {
@@ -28485,7 +30142,7 @@ function assertLoanDocumentAccess(session, document) {
   if (!document) {
     throw httpError(404, "Der Leihbeleg wurde nicht gefunden.", "LOAN_DOCUMENT_NOT_FOUND");
   }
-  if (session.employeeNumber === "local") return;
+  if (isLocalSystemSession(session)) return;
   const participants = new Set([
     document.borrower_employee_number,
     document.created_by_employee_number,
@@ -28501,7 +30158,7 @@ function assertLoanDocumentAccess(session, document) {
 
 async function assertLoanPhotoAccess(session, photo) {
   if (!photo) throw httpError(404, "Das Leihfoto wurde nicht gefunden.", "LOAN_PHOTO_NOT_FOUND");
-  if (session.employeeNumber === "local") return;
+  if (isLocalSystemSession(session)) return;
   const participants = new Set([
     photo.borrower_employee_number,
     photo.created_by_employee_number,
@@ -28532,7 +30189,7 @@ async function assertLoanPhotoAttachmentAccess(session, attachment) {
   if (!attachment) {
     throw httpError(404, "Die Foto-PDF-Beilage wurde nicht gefunden.", "LOAN_PHOTO_ATTACHMENT_NOT_FOUND");
   }
-  if (session.employeeNumber === "local") return;
+  if (isLocalSystemSession(session)) return;
   const participants = new Set([
     attachment.borrower_employee_number,
     attachment.created_by_employee_number,
@@ -28651,7 +30308,7 @@ async function publicLoan(row, { includeEvents = true } = {}) {
 }
 
 function loanCanManageLocation(session) {
-  return session?.employeeNumber === "local"
+  return isLocalSystemSession(session)
     || session?.permissions?.includes("loans:location:manage") === true;
 }
 
@@ -28659,7 +30316,7 @@ function assertLoanReadAccess(session, row) {
   if (!row) throw httpError(404, "Der Leihvorgang wurde nicht gefunden.", "LOAN_NOT_FOUND");
   if (row.borrower_employee_number === session.employeeNumber
     && session.permissions?.includes("loans:self:read")) return;
-  if (session.employeeNumber === "local"
+  if (isLocalSystemSession(session)
     || session.permissions?.some((permission) => [
       "loans:location:read",
       "loans:location:manage",
@@ -28801,7 +30458,7 @@ async function cancelPendingLoanReturnConfirmation(
 
 async function loanBorrowerForIssue(actor, setting, requestedEmployeeNumber) {
   const requested = String(requestedEmployeeNumber || "").trim();
-  if (actor.employeeNumber === "local") {
+  if (isLocalSystemSession(actor)) {
     throw httpError(
       409,
       "Eine neue Leihe benötigt einen persönlich angemeldeten Mitarbeiterzugang.",
@@ -28865,7 +30522,7 @@ app.get("/api/portal/v1/loans/return-confirmations/pending", async (request, res
     request,
     ["loans:self:read", "loans:self:return", "loans:location:manage"],
   );
-  if (session.employeeNumber === "local") {
+  if (isLocalSystemSession(session)) {
     response.json({ confirmations: [] });
     return;
   }
@@ -28888,7 +30545,7 @@ app.get("/api/portal/v1/loans", async (request, response) => {
   let locationId = "";
   let employeeNumber = "";
   if (scope === "location") {
-    if (session.employeeNumber !== "local"
+    if (!isLocalSystemSession(session)
       && !session.permissions?.some((permission) => [
         "loans:location:read",
         "loans:location:manage",
@@ -28897,7 +30554,7 @@ app.get("/api/portal/v1/loans", async (request, response) => {
     }
     locationId = await loanLocationForSession(session, request.query);
   } else if (scope === "mine") {
-    if (session.employeeNumber === "local") {
+    if (isLocalSystemSession(session)) {
       throw httpError(400, "Im Lokalbetrieb muss ein Standortbereich ausgewählt werden.", "LOAN_SCOPE_REQUIRED");
     }
     employeeNumber = session.employeeNumber;
@@ -28928,7 +30585,7 @@ app.get("/api/portal/v1/loans/management/summary", async (request, response) => 
   const requestedLocationId = String(request.query.locationId || request.query.location || "").trim();
   if (requestedLocationId) {
     await validateLocationExists(requestedLocationId);
-    if (session.employeeNumber !== "local") {
+    if (!isLocalSystemSession(session)) {
       assertSessionContextScope(session, { locationId: requestedLocationId });
     }
   }
@@ -29472,7 +31129,7 @@ app.post("/api/portal/v1/loans/:loanId/management/close", async (request, respon
     ["loans:location:manage"],
     { csrf: true },
   );
-  if (actor.employeeNumber === "local") {
+  if (isLocalSystemSession(actor)) {
     throw httpError(
       409,
       "Das manuelle Schließen benötigt einen persönlich angemeldeten Leitungszugang.",
@@ -29646,7 +31303,7 @@ app.post("/api/portal/v1/loans/:loanId/return", async (request, response) => {
     ["loans:self:return", "loans:location:manage"],
     { csrf: true },
   );
-  if (actor.employeeNumber === "local") {
+  if (isLocalSystemSession(actor)) {
     throw httpError(
       409,
       "Die Live-Bestätigung benötigt einen persönlich angemeldeten Portalzugang.",
@@ -29778,7 +31435,7 @@ app.post("/api/portal/v1/loans/return-confirmations/:confirmationId/respond", as
     ["loans:self:read", "loans:self:return", "loans:location:manage"],
     { csrf: true },
   );
-  if (actor.employeeNumber === "local") {
+  if (isLocalSystemSession(actor)) {
     throw httpError(
       409,
       "Die Live-Bestätigung benötigt einen persönlich angemeldeten Portalzugang.",
@@ -30674,7 +32331,7 @@ app.get("/api/portal/v1/amu-settings", (request, response) => {
   const session = requirePortalAdminOrLocal(request, "own_amu:read");
   response.json({
     policy: getAmuPolicy(),
-    canChange: session.employeeNumber === "local" || ["admin", "hr"].includes(session.role) || session.permissions?.includes("hr:settings"),
+    canChange: isLocalSystemSession(session) || ["admin", "hr"].includes(session.role) || session.permissions?.includes("hr:settings"),
   });
 });
 
@@ -30737,6 +32394,1064 @@ app.put("/api/portal/v1/amu-settings", async (request, response) => {
   await refreshPortalSettingsSnapshot();
   await runSicknessEscalationSweep();
   response.json({ policy, canChange: true });
+});
+
+const PERSONNEL_LIFECYCLE_ROUTE_ACTIONS = Object.freeze({
+  read: Object.freeze({
+    permission: PERSONNEL_LIFECYCLE_PERMISSIONS.CANDIDATES_READ,
+    capability: "canReadCandidates",
+    write: false,
+  }),
+  candidateWrite: Object.freeze({
+    permission: PERSONNEL_LIFECYCLE_PERMISSIONS.CANDIDATES_WRITE,
+    capability: "canWriteCandidates",
+    write: true,
+  }),
+  applicationWrite: Object.freeze({
+    permission: PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
+    capability: "canWriteApplications",
+    write: true,
+  }),
+  confidentialRead: Object.freeze({
+    permission: PERSONNEL_LIFECYCLE_PERMISSIONS.CONFIDENTIAL_READ,
+    capability: "canReadConfidential",
+    write: false,
+  }),
+  convert: Object.freeze({
+    permission: PERSONNEL_LIFECYCLE_PERMISSIONS.CANDIDATES_CONVERT,
+    capability: "canConvertCandidates",
+    write: true,
+  }),
+});
+
+function publicPersonnelLifecycleCapabilities(access) {
+  const readScopes = access?.allowedScopesByPermission?.[
+    PERSONNEL_LIFECYCLE_PERMISSIONS.CANDIDATES_READ
+  ] || [];
+  const locationIds = [...new Set(readScopes.map((scope) => String(scope.locationId || ""))
+    .filter(Boolean))];
+  const departmentIds = [...new Set(readScopes.map((scope) => Number(scope.departmentId || 0))
+    .filter((departmentId) => Number.isSafeInteger(departmentId) && departmentId > 0))];
+  const scope = access?.global
+    ? { type: "global" }
+    : access?.role === "manager"
+      ? { type: "location", locationIds }
+      : access?.role === "department_manager"
+        ? { type: "department", locationIds, departmentIds }
+        : { type: "none" };
+  return Object.freeze({
+    scope,
+    canReadCandidates: access?.canReadCandidates === true,
+    canWriteCandidates: access?.canWriteCandidates === true,
+    canWriteApplications: access?.canWriteApplications === true,
+    canReadConfidential: access?.canReadConfidential === true,
+    canWriteConfidential: access?.canWriteConfidential === true,
+    canConvert: access?.canConvertCandidates === true,
+  });
+}
+
+function auditPersonnelLifecycleAccessDenied(session, request, reason, requiredPermission = "") {
+  if (!session?.employeeNumber) return;
+  auditPortal(
+    session.employeeNumber,
+    "personnel-lifecycle.access.denied",
+    "personnel_lifecycle",
+    "access",
+    JSON.stringify({
+      reason: String(reason || "PERSONNEL_LIFECYCLE_ACCESS_DENIED").slice(0, 120),
+      requiredPermission: String(requiredPermission || "").slice(0, 120),
+      route: personnelRecordDeniedRoute(request),
+    }),
+  );
+}
+
+function requirePersonnelLifecycleAccess(request, { action = "read" } = {}) {
+  const definition = PERSONNEL_LIFECYCLE_ROUTE_ACTIONS[action];
+  if (!definition) throw new TypeError(`Unbekannte Personalmodul-Aktion: ${action}`);
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requirePortalAnyPermissionOrLocal(
+      request,
+      [definition.permission],
+      { csrf: definition.write },
+    );
+    const access = personnelLifecycleAccessForSession(session);
+    if (access?.[definition.capability] !== true) {
+      throw httpError(
+        403,
+        "Für diese Personalmodul-Aktion fehlt die fachliche Freigabe.",
+        "PERSONNEL_LIFECYCLE_PERMISSION_REQUIRED",
+      );
+    }
+    if (definition.write && access.canReadCandidates !== true) {
+      throw httpError(
+        403,
+        "Für die Bearbeitung fehlt das zugehörige Bewerber-Leserecht.",
+        "PERSONNEL_LIFECYCLE_READ_PERMISSION_REQUIRED",
+      );
+    }
+    if (access.global && !access.localSystem) {
+      const requiredCentral = definition.write
+        ? ["personnel:central:read", "personnel:central:write"]
+        : ["personnel:central:read"];
+      if (requiredCentral.some((permission) => !session.permissions?.includes(permission))) {
+        throw httpError(
+          403,
+          "Für diese Aktion fehlt die zentrale Personalberechtigung.",
+          "PERSONNEL_LIFECYCLE_CENTRAL_PERMISSION_REQUIRED",
+        );
+      }
+      const readsConfidential = action === "confidentialRead"
+        || access.canReadConfidential;
+      const writesConfidential = action === "candidateWrite"
+        || action === "convert"
+        || (action === "applicationWrite" && access.canWriteConfidential);
+      const requiredSensitive = writesConfidential
+        ? ["personnel:sensitive:read", "personnel:sensitive:write"]
+        : readsConfidential ? ["personnel:sensitive:read"] : [];
+      if (requiredSensitive.some((permission) => !session.permissions?.includes(permission))) {
+        throw httpError(
+          403,
+          "Für vertrauliche Bewerberdaten fehlt die gesonderte Personalberechtigung.",
+          "PERSONNEL_LIFECYCLE_SENSITIVE_PERMISSION_REQUIRED",
+        );
+      }
+      if (action === "convert"
+        && (!access.canWriteCandidates
+          || !access.canWriteConfidential
+          || !session.permissions?.includes("employees:write")
+          || !sessionCanManageCentralPersonnel(session))) {
+        throw httpError(
+          403,
+          "Für die kontrollierte Einstellung fehlt die zentrale Berechtigung zur Mitarbeiteranlage.",
+          "PERSONNEL_LIFECYCLE_EMPLOYEE_CREATE_PERMISSION_REQUIRED",
+        );
+      }
+    }
+    return Object.freeze({
+      session,
+      access,
+      capabilities: publicPersonnelLifecycleCapabilities(access),
+    });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_LIFECYCLE_ACCESS_DENIED",
+        definition.permission,
+      );
+    }
+    throw error;
+  }
+}
+
+const PERSONNEL_WORKFLOW_ROUTE_ACTIONS = Object.freeze({
+  read: Object.freeze({
+    permission: PERSONNEL_WORKFLOW_PERMISSIONS.READ,
+    capability: "canRead",
+    write: false,
+  }),
+  publish: Object.freeze({
+    permission: PERSONNEL_WORKFLOW_PERMISSIONS.PUBLISH,
+    capability: "canPublish",
+    write: true,
+  }),
+});
+
+function publicPersonnelWorkflowCapabilities(access) {
+  const readScopes = access?.allowedScopesByPermission?.[
+    PERSONNEL_WORKFLOW_PERMISSIONS.READ
+  ] || [];
+  const locationIds = [...new Set(readScopes
+    .map((scope) => String(scope.locationId || ""))
+    .filter(Boolean))];
+  const departmentIds = [...new Set(readScopes
+    .map((scope) => Number(scope.departmentId || 0))
+    .filter((departmentId) => Number.isSafeInteger(departmentId) && departmentId > 0))];
+  const scope = access?.global
+    ? { type: "global" }
+    : access?.role === "manager"
+      ? { type: "location", locationIds }
+      : access?.role === "department_manager"
+        ? { type: "department", locationIds, departmentIds }
+        : { type: "none" };
+  return Object.freeze({
+    scope,
+    canRead: access?.canRead === true,
+    canWriteDrafts: access?.canWriteDrafts === true,
+    canReview: access?.canReview === true,
+    canPublish: access?.canPublish === true,
+    canManageLocalSupplements: access?.canManageLocalSupplements === true,
+    canReadConfidential: access?.canReadConfidential === true,
+    canWriteConfidential: access?.canWriteConfidential === true,
+    canDelegate: access?.canDelegate === true,
+  });
+}
+
+function auditPersonnelWorkflowAccessDenied(session, request, reason, requiredPermission = "") {
+  if (!session?.employeeNumber) return;
+  auditPortal(
+    session.employeeNumber,
+    "personnel-workflow.access.denied",
+    "personnel_workflow",
+    "access",
+    JSON.stringify({
+      reason: String(reason || "PERSONNEL_WORKFLOW_ACCESS_DENIED").slice(0, 120),
+      requiredPermission: String(requiredPermission || "").slice(0, 120),
+      route: personnelRecordDeniedRoute(request),
+    }),
+  );
+}
+
+function requirePersonnelWorkflowAccess(request, { action = "read" } = {}) {
+  const definition = PERSONNEL_WORKFLOW_ROUTE_ACTIONS[action];
+  if (!definition) throw new TypeError(`Unbekannte Workflow-Center-Aktion: ${action}`);
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requirePortalAnyPermissionOrLocal(
+      request,
+      [definition.permission],
+      { csrf: definition.write },
+    );
+    const access = createPersonnelWorkflowAccessSnapshot(session);
+    if (access?.[definition.capability] !== true) {
+      throw httpError(
+        403,
+        "Für diese Workflow-Center-Aktion fehlt die fachliche Freigabe.",
+        "PERSONNEL_WORKFLOW_PERMISSION_REQUIRED",
+      );
+    }
+    if (access.global && !access.localSystem) {
+      const requiredCentral = definition.write
+        ? ["personnel:central:read", "personnel:central:write"]
+        : ["personnel:central:read"];
+      if (requiredCentral.some((permission) => !session.permissions?.includes(permission))) {
+        throw httpError(
+          403,
+          "Für diese Aktion fehlt die zentrale Personalberechtigung.",
+          "PERSONNEL_WORKFLOW_CENTRAL_PERMISSION_REQUIRED",
+        );
+      }
+    }
+    return Object.freeze({
+      session,
+      access,
+      capabilities: publicPersonnelWorkflowCapabilities(access),
+    });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelWorkflowAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_WORKFLOW_ACCESS_DENIED",
+        definition.permission,
+      );
+    }
+    throw error;
+  }
+}
+
+function personnelWorkflowRouteError(error) {
+  if (error instanceof PersonnelWorkflowError) {
+    const status = error.kind === PERSONNEL_WORKFLOW_ERROR_KINDS.FORBIDDEN
+      ? 403
+      : error.kind === PERSONNEL_WORKFLOW_ERROR_KINDS.NOT_FOUND
+        ? 404
+        : error.kind === PERSONNEL_WORKFLOW_ERROR_KINDS.CONFLICT
+          ? 409
+          : error.kind === PERSONNEL_WORKFLOW_ERROR_KINDS.INTEGRITY
+            ? 503
+            : 400;
+    throw httpError(status, error.message, error.code);
+  }
+  if (["PERSISTENCE_UNIQUE_VIOLATION", "PERSISTENCE_RETRYABLE_TRANSACTION", "PERSISTENCE_BUSY"]
+    .includes(error?.code)) {
+    throw httpError(
+      409,
+      "Die Workflow-Version wurde parallel geändert. Bitte neu laden.",
+      "PERSONNEL_WORKFLOW_CONCURRENT_CHANGE",
+    );
+  }
+  if ([
+    "PERSISTENCE_FOREIGN_KEY_VIOLATION",
+    "PERSISTENCE_NOT_NULL_VIOLATION",
+    "PERSISTENCE_CHECK_VIOLATION",
+  ].includes(error?.code)) {
+    throw httpError(
+      400,
+      "Die Workflow-Version verweist auf einen ungültigen Bereich oder verletzt eine gespeicherte Regel.",
+      "PERSONNEL_WORKFLOW_REFERENCE_INVALID",
+    );
+  }
+  throw error;
+}
+
+function auditPersonnelWorkflowServiceDenied(accessContext, request, error) {
+  if (!(error instanceof PersonnelWorkflowError)) return;
+  const scopedNotFound = accessContext?.access?.global !== true
+    && error.kind === PERSONNEL_WORKFLOW_ERROR_KINDS.NOT_FOUND;
+  if (error.kind !== PERSONNEL_WORKFLOW_ERROR_KINDS.FORBIDDEN && !scopedNotFound) return;
+  auditPersonnelWorkflowAccessDenied(
+    accessContext.session,
+    request,
+    scopedNotFound ? "PERSONNEL_WORKFLOW_SCOPED_NOT_FOUND" : error.code,
+    PERSONNEL_WORKFLOW_PERMISSIONS.READ,
+  );
+}
+
+function personnelLifecycleConversionInput(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw httpError(
+      400,
+      "Bitte einen gültigen Einstellvorgang übermitteln.",
+      "PERSONNEL_LIFECYCLE_CONVERSION_INPUT_INVALID",
+    );
+  }
+  const allowed = new Set([
+    "operationId",
+    "candidateRevision",
+    "applicationRevision",
+    "employee",
+  ]);
+  if (Object.keys(value).some((key) => !allowed.has(key))) {
+    throw httpError(
+      400,
+      "Der Einstellvorgang enthält unbekannte Felder.",
+      "PERSONNEL_LIFECYCLE_CONVERSION_INPUT_INVALID",
+    );
+  }
+  const operationId = String(value.operationId || "").trim().toLowerCase();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(operationId)) {
+    throw httpError(
+      400,
+      "Für den Einstellvorgang wird eine neue UUID benötigt.",
+      "PERSONNEL_LIFECYCLE_CONVERSION_ID_INVALID",
+    );
+  }
+  const candidateRevision = Number(value.candidateRevision);
+  const applicationRevision = Number(value.applicationRevision);
+  if (!Number.isSafeInteger(candidateRevision) || candidateRevision < 1
+    || !Number.isSafeInteger(applicationRevision) || applicationRevision < 1) {
+    throw httpError(
+      400,
+      "Für Bewerber und Bewerbung werden die zuletzt gelesenen Revisionen benötigt.",
+      "PERSONNEL_LIFECYCLE_REVISION_INVALID",
+    );
+  }
+  const submittedEmployee = value.employee;
+  if (!submittedEmployee || typeof submittedEmployee !== "object" || Array.isArray(submittedEmployee)) {
+    throw httpError(
+      400,
+      "Bitte die Mitarbeiter-Zieldaten vollständig angeben.",
+      "PERSONNEL_LIFECYCLE_CONVERSION_EMPLOYEE_INVALID",
+    );
+  }
+  const allowedEmployeeFields = new Set([
+    "personnelNumber",
+    "nickname",
+    "color",
+    "contractedHours",
+    "targetWorkdaysPerWeek",
+    "preferredDayOff",
+    "fixedWorkdays",
+    "positionId",
+    "costCenterId",
+    "preferredDepartmentId",
+  ]);
+  const requiredEmployeeFields = [
+    "personnelNumber",
+    "nickname",
+    "contractedHours",
+    "targetWorkdaysPerWeek",
+    "positionId",
+    "costCenterId",
+  ];
+  if (Object.keys(submittedEmployee).some((key) => !allowedEmployeeFields.has(key))
+    || requiredEmployeeFields.some((key) => !own(submittedEmployee, key))) {
+    throw httpError(
+      400,
+      "Die Mitarbeiter-Zieldaten sind unvollständig oder enthalten unbekannte Felder.",
+      "PERSONNEL_LIFECYCLE_CONVERSION_EMPLOYEE_INVALID",
+    );
+  }
+  const fixedWorkdays = normalizeFixedWorkdays(submittedEmployee.fixedWorkdays)
+    .sort((left, right) => fixedWorkdayKeys.indexOf(left) - fixedWorkdayKeys.indexOf(right));
+  const employee = {
+    personnelNumber: String(submittedEmployee.personnelNumber || "").trim(),
+    nickname: String(submittedEmployee.nickname || "").trim(),
+    color: String(submittedEmployee.color || "#0b84c6").trim().toLowerCase(),
+    contractedHours: Number(submittedEmployee.contractedHours),
+    targetWorkdaysPerWeek: Number(submittedEmployee.targetWorkdaysPerWeek),
+    preferredDayOff: String(submittedEmployee.preferredDayOff || "").trim(),
+    fixedWorkdays,
+    positionId: String(submittedEmployee.positionId || "").trim(),
+    costCenterId: String(submittedEmployee.costCenterId || "").trim(),
+    preferredDepartmentId: normalizeDepartmentId(
+      submittedEmployee.preferredDepartmentId,
+      true,
+    ),
+  };
+  if (!/^[A-Za-z0-9._-]{1,24}$/.test(employee.personnelNumber)) {
+    throw httpError(
+      400,
+      "Bitte eine gültige Personalnummer eingeben.",
+      "PERSONNEL_LIFECYCLE_EMPLOYEE_NUMBER_INVALID",
+    );
+  }
+  return Object.freeze({
+    id: operationId,
+    candidateRevision,
+    applicationRevision,
+    employee: Object.freeze(employee),
+  });
+}
+
+function candidatePersonnelRecordInput(profile = {}) {
+  const identity = {
+    firstName: String(profile.firstName || ""),
+    lastName: String(profile.lastName || ""),
+  };
+  const address = Object.fromEntries(Object.entries(profile.address || {})
+    .filter(([, fieldValue]) => String(fieldValue || "").trim()));
+  const sensitive = { identity };
+  if (Object.keys(address).length) sensitive.address = address;
+  if (profile.email) sensitive.privateEmail = String(profile.email);
+  return {
+    ...(profile.phone ? { phone: String(profile.phone) } : {}),
+    sensitive,
+  };
+}
+
+function auditPersonnelLifecycleConversionFieldDenied(session, request, operationId, denial) {
+  const reason = String(denial?.reason || "");
+  if (!PERSONNEL_RECORD_FIELD_DENIAL_CODES.has(reason)) return;
+  const fieldKeys = [...new Set((Array.isArray(denial?.fieldKeys) ? denial.fieldKeys : [])
+    .map((fieldKey) => String(fieldKey || ""))
+    .filter((fieldKey) => personnelFieldKeys.has(fieldKey)))];
+  auditPortal(
+    portalActorId(session),
+    "personnel-lifecycle.candidate.convert.denied",
+    "candidate_conversion",
+    String(operationId || ""),
+    JSON.stringify({
+      reason,
+      route: personnelRecordDeniedRoute(request),
+      fieldKeys,
+    }),
+  );
+}
+
+function personnelLifecycleRouteError(error) {
+  if (error instanceof PersonnelLifecycleError) {
+    const status = error.kind === PERSONNEL_LIFECYCLE_ERROR_KINDS.NOT_FOUND
+      ? 404
+      : error.kind === PERSONNEL_LIFECYCLE_ERROR_KINDS.CONFLICT
+        ? 409
+        : error.kind === PERSONNEL_LIFECYCLE_ERROR_KINDS.INTEGRITY
+          ? 503
+          : 400;
+    throw httpError(status, error.message, error.code);
+  }
+  if (error?.code === "PERSISTENCE_UNIQUE_VIOLATION") {
+    throw httpError(409, "Der Datensatz ist bereits vorhanden.", "PERSONNEL_LIFECYCLE_CONFLICT");
+  }
+  if (["PERSISTENCE_RETRYABLE_TRANSACTION", "PERSISTENCE_BUSY"].includes(error?.code)) {
+    throw personnelLifecycleConcurrentChangeError();
+  }
+  if ([
+    "PERSISTENCE_FOREIGN_KEY_VIOLATION",
+    "PERSISTENCE_NOT_NULL_VIOLATION",
+    "PERSISTENCE_CHECK_VIOLATION",
+  ].includes(error?.code)) {
+    throw httpError(
+      400,
+      "Die Bewerberdaten verweisen auf einen ungültigen Bereich oder verletzen eine gespeicherte Regel.",
+      "PERSONNEL_LIFECYCLE_REFERENCE_INVALID",
+    );
+  }
+  throw error;
+}
+
+const PERSONNEL_LIFECYCLE_APPLICATION_UPDATE_FIELDS = new Set([
+  "revision",
+  "desiredPositionId",
+  "desiredLocationId",
+  "desiredDepartmentId",
+  "desiredWeeklyMinutes",
+  "desiredWeeklyHours",
+  "availableFrom",
+  "ownerEmployeeNumber",
+  "retentionDueAt",
+  "desiredRoleTitle",
+  "employmentType",
+  "source",
+  "internalRating",
+  "internalNotes",
+  "communicationNotes",
+  "tags",
+]);
+const PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_UPDATE_FIELDS = new Set([
+  "revision",
+  "desiredPositionId",
+  "desiredWeeklyMinutes",
+  "desiredWeeklyHours",
+  "availableFrom",
+  "desiredRoleTitle",
+  "employmentType",
+]);
+const PERSONNEL_LIFECYCLE_CONFIDENTIAL_APPLICATION_FIELDS = new Set([
+  "ownerEmployeeNumber",
+  "retentionDueAt",
+  "source",
+  "internalRating",
+  "internalNotes",
+  "communicationNotes",
+  "tags",
+]);
+
+function assertPersonnelLifecycleApplicationInput(
+  request,
+  accessContext,
+  { statusOnly = false } = {},
+) {
+  const submitted = request.body;
+  if (!submitted || typeof submitted !== "object" || Array.isArray(submitted)) {
+    throw httpError(400, "Bitte gültige Bewerbungsdaten übermitteln.", "PERSONNEL_LIFECYCLE_INVALID");
+  }
+  const allowed = statusOnly
+    ? new Set(["status", "reason", "revision"])
+    : PERSONNEL_LIFECYCLE_APPLICATION_UPDATE_FIELDS;
+  const unknown = Object.keys(submitted).filter((key) => !allowed.has(key));
+  if (unknown.length) {
+    throw httpError(400, "Die Bewerbungsdaten enthalten unbekannte Felder.", "PERSONNEL_LIFECYCLE_INVALID");
+  }
+  const { access, session } = accessContext;
+  if (!access.global) {
+    const localAllowed = statusOnly
+      ? allowed
+      : PERSONNEL_LIFECYCLE_LOCAL_APPLICATION_UPDATE_FIELDS;
+    const forbidden = Object.keys(submitted).filter((key) => !localAllowed.has(key));
+    if (forbidden.length) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        "PERSONNEL_LIFECYCLE_LOCAL_FIELD_FORBIDDEN",
+        PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
+      );
+      throw httpError(
+        403,
+        "Standort- und Abteilungsleitungen dürfen nur strukturierte Bewerbungsfelder und den Status bearbeiten.",
+        "PERSONNEL_LIFECYCLE_LOCAL_FIELD_FORBIDDEN",
+      );
+    }
+    return;
+  }
+  const requestedFields = Object.keys(submitted);
+  const changesScope = requestedFields.some((key) => (
+    key === "desiredLocationId" || key === "desiredDepartmentId"
+  ));
+  if (changesScope && !access.canWriteCandidates) {
+    auditPersonnelLifecycleAccessDenied(
+      session,
+      request,
+      "PERSONNEL_LIFECYCLE_SCOPE_CHANGE_PERMISSION_REQUIRED",
+      PERSONNEL_LIFECYCLE_PERMISSIONS.CANDIDATES_WRITE,
+    );
+    throw httpError(
+      403,
+      "Für eine Änderung des Bewerbungsbereichs fehlt das zentrale Bewerberrecht.",
+      "PERSONNEL_LIFECYCLE_SCOPE_CHANGE_PERMISSION_REQUIRED",
+    );
+  }
+  const writesConfidential = requestedFields.some((key) => (
+    PERSONNEL_LIFECYCLE_CONFIDENTIAL_APPLICATION_FIELDS.has(key)
+  ));
+  if (writesConfidential && !access.canWriteConfidential) {
+    auditPersonnelLifecycleAccessDenied(
+      session,
+      request,
+      "PERSONNEL_LIFECYCLE_CONFIDENTIAL_PERMISSION_REQUIRED",
+      PERSONNEL_LIFECYCLE_PERMISSIONS.CONFIDENTIAL_WRITE,
+    );
+    throw httpError(
+      403,
+      "Für vertrauliche Bewerbungsfelder fehlt das gesonderte Schreibrecht.",
+      "PERSONNEL_LIFECYCLE_CONFIDENTIAL_PERMISSION_REQUIRED",
+    );
+  }
+}
+
+function auditPersonnelLifecycleScopedNotFound(accessContext, request, error) {
+  if (!accessContext?.access?.global
+    && error instanceof PersonnelLifecycleError
+    && error.kind === PERSONNEL_LIFECYCLE_ERROR_KINDS.NOT_FOUND) {
+    auditPersonnelLifecycleAccessDenied(
+      accessContext.session,
+      request,
+      "PERSONNEL_LIFECYCLE_SCOPED_NOT_FOUND",
+      PERSONNEL_LIFECYCLE_PERMISSIONS.CANDIDATES_READ,
+    );
+  }
+}
+
+app.get("/api/portal/v1/personnel-lifecycle/workflows", async (request, response) => {
+  const accessContext = requirePersonnelWorkflowAccess(request, { action: "read" });
+  try {
+    response.json({
+      ...await requirePersonnelWorkflowPublicationService().list({
+        includeArchived: String(request.query.includeArchived || "") === "1",
+        access: accessContext.access,
+      }),
+      capabilities: accessContext.capabilities,
+    });
+  } catch (error) {
+    auditPersonnelWorkflowServiceDenied(accessContext, request, error);
+    personnelWorkflowRouteError(error);
+  }
+});
+
+app.get("/api/portal/v1/personnel-lifecycle/workflow-publications/resolve", async (request, response) => {
+  const accessContext = requirePersonnelWorkflowAccess(request, { action: "read" });
+  const locationId = normalizeLocationId(request.query.locationId);
+  const departmentId = normalizeDepartmentId(request.query.departmentId, true);
+  try {
+    response.json({
+      ...await requirePersonnelWorkflowPublicationService().resolve({
+        type: departmentId ? "department" : "location",
+        locationId,
+        departmentId,
+      }, { access: accessContext.access }),
+      capabilities: accessContext.capabilities,
+    });
+  } catch (error) {
+    auditPersonnelWorkflowServiceDenied(accessContext, request, error);
+    personnelWorkflowRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/workflows/:processId/publish", async (request, response) => {
+  const accessContext = requirePersonnelWorkflowAccess(request, { action: "publish" });
+  try {
+    const publication = await requirePersonnelWorkflowPublicationService().publish(
+      request.params.processId,
+      request.body,
+      {
+        access: accessContext.access,
+        actorId: portalActorId(accessContext.session),
+      },
+    );
+    response.status(201).json({ publication, capabilities: accessContext.capabilities });
+  } catch (error) {
+    auditPersonnelWorkflowServiceDenied(accessContext, request, error);
+    personnelWorkflowRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/workflow-publications/:publicationId/archive", async (request, response) => {
+  const accessContext = requirePersonnelWorkflowAccess(request, { action: "publish" });
+  try {
+    const publication = await requirePersonnelWorkflowPublicationService().archive(
+      request.params.publicationId,
+      request.body,
+      {
+        access: accessContext.access,
+        actorId: portalActorId(accessContext.session),
+      },
+    );
+    response.json({ publication, capabilities: accessContext.capabilities });
+  } catch (error) {
+    auditPersonnelWorkflowServiceDenied(accessContext, request, error);
+    personnelWorkflowRouteError(error);
+  }
+});
+
+app.get("/api/portal/v1/personnel-lifecycle/document-categories", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "confidentialRead" });
+  try {
+    response.json({
+      categories: await requirePersonnelLifecycleService().listDocumentCategories({
+        activeOnly: String(request.query.includeInactive || "") !== "1",
+      }),
+      capabilities: accessContext.capabilities,
+    });
+  } catch (error) {
+    personnelLifecycleRouteError(error);
+  }
+});
+
+app.get("/api/portal/v1/personnel-lifecycle/candidates", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "read" });
+  const { session, access, capabilities } = accessContext;
+  try {
+    const result = await requirePersonnelLifecycleService().listCandidates({
+      includeArchived: request.query.includeArchived,
+      limit: request.query.limit,
+      offset: request.query.offset,
+      access,
+    });
+    const candidates = result.items
+      .map((candidate) => projectPersonnelLifecycleCandidate(
+        candidate,
+        access,
+        { detail: false },
+      ))
+      .filter(Boolean);
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.candidate.list",
+      "candidate",
+      "page",
+      JSON.stringify({
+        count: candidates.length,
+        limit: result.pagination.limit,
+        offset: result.pagination.offset,
+        includeArchived: result.pagination.includeArchived,
+      }),
+    );
+    response.json({ candidates, pagination: result.pagination, capabilities });
+  } catch (error) {
+    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    personnelLifecycleRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/candidates", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "candidateWrite" });
+  const { session, access, capabilities } = accessContext;
+  try {
+    if (request.body?.application) {
+      if (!access.canWriteApplications) {
+        auditPersonnelLifecycleAccessDenied(
+          session,
+          request,
+          "PERSONNEL_LIFECYCLE_APPLICATION_WRITE_PERMISSION_REQUIRED",
+          PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
+        );
+        throw httpError(
+          403,
+          "Für die erste Bewerbung fehlt das zentrale Bewerbungsrecht.",
+          "PERSONNEL_LIFECYCLE_APPLICATION_WRITE_PERMISSION_REQUIRED",
+        );
+      }
+      assertPersonnelLifecycleApplicationInput(
+        {
+          body: request.body.application,
+          method: request.method,
+          route: request.route,
+        },
+        accessContext,
+      );
+    }
+    const created = await requirePersonnelLifecycleService().createCandidate(
+      request.body || {},
+      session.employeeNumber,
+    );
+    const candidate = projectPersonnelLifecycleCandidate(created, access, { detail: true });
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.candidate.create",
+      "candidate",
+      candidate.id,
+      JSON.stringify({ applicationCount: candidate.applications.length }),
+    );
+    response.status(201).json({ candidate, capabilities });
+  } catch (error) {
+    personnelLifecycleRouteError(error);
+  }
+});
+
+app.get("/api/portal/v1/personnel-lifecycle/candidates/:candidateId", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "read" });
+  const { session, access, capabilities } = accessContext;
+  try {
+    const detail = await requirePersonnelLifecycleService()
+      .getCandidate(request.params.candidateId, { access });
+    const candidate = projectPersonnelLifecycleCandidate(detail, access, { detail: true });
+    if (!candidate) {
+      throw new PersonnelLifecycleError(
+        "Der Bewerber wurde nicht gefunden.",
+        "PERSONNEL_LIFECYCLE_CANDIDATE_NOT_FOUND",
+        PERSONNEL_LIFECYCLE_ERROR_KINDS.NOT_FOUND,
+      );
+    }
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.candidate.read",
+      "candidate",
+      candidate.id,
+    );
+    response.json({ candidate, capabilities });
+  } catch (error) {
+    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    personnelLifecycleRouteError(error);
+  }
+});
+
+app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "candidateWrite" });
+  const { session, access, capabilities } = accessContext;
+  try {
+    const updated = await requirePersonnelLifecycleService().updateCandidate(
+      request.params.candidateId,
+      request.body || {},
+      session.employeeNumber,
+    );
+    const candidate = projectPersonnelLifecycleCandidate(updated, access, { detail: true });
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.candidate.update",
+      "candidate",
+      candidate.id,
+      JSON.stringify({ revision: candidate.revision }),
+    );
+    response.json({ candidate, capabilities });
+  } catch (error) {
+    personnelLifecycleRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "candidateWrite" });
+  const { session, access, capabilities } = accessContext;
+  if (!access.canWriteApplications) {
+    auditPersonnelLifecycleAccessDenied(
+      session,
+      request,
+      "PERSONNEL_LIFECYCLE_APPLICATION_WRITE_PERMISSION_REQUIRED",
+      PERSONNEL_LIFECYCLE_PERMISSIONS.APPLICATIONS_WRITE,
+    );
+    throw httpError(
+      403,
+      "Für eine neue Bewerbung fehlt das zentrale Bewerbungsrecht.",
+      "PERSONNEL_LIFECYCLE_APPLICATION_WRITE_PERMISSION_REQUIRED",
+    );
+  }
+  try {
+    assertPersonnelLifecycleApplicationInput(request, accessContext);
+    const created = await requirePersonnelLifecycleService().addApplication(
+      request.params.candidateId,
+      request.body || {},
+      session.employeeNumber,
+    );
+    const application = projectPersonnelLifecycleApplication(created, access);
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.application.create",
+      "candidate_application",
+      application.id,
+      JSON.stringify({ candidateId: request.params.candidateId }),
+    );
+    response.status(201).json({ application, capabilities });
+  } catch (error) {
+    personnelLifecycleRouteError(error);
+  }
+});
+
+app.put("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
+  const { session, access, capabilities } = accessContext;
+  try {
+    assertPersonnelLifecycleApplicationInput(request, accessContext);
+    const updated = await requirePersonnelLifecycleService().updateApplication(
+      request.params.candidateId,
+      request.params.applicationId,
+      request.body || {},
+      session.employeeNumber,
+      { access },
+    );
+    const application = projectPersonnelLifecycleApplication(updated, access);
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.application.update",
+      "candidate_application",
+      application.id,
+      JSON.stringify({ revision: application.revision }),
+    );
+    response.json({ application, capabilities });
+  } catch (error) {
+    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    personnelLifecycleRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/status", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "applicationWrite" });
+  const { session, access, capabilities } = accessContext;
+  try {
+    assertPersonnelLifecycleApplicationInput(request, accessContext, { statusOnly: true });
+    const transitioned = await requirePersonnelLifecycleService().transitionApplication(
+      request.params.candidateId,
+      request.params.applicationId,
+      request.body || {},
+      session.employeeNumber,
+      { access },
+    );
+    const application = projectPersonnelLifecycleApplication(transitioned, access);
+    auditPortal(
+      session.employeeNumber,
+      "personnel-lifecycle.application.status",
+      "candidate_application",
+      application.id,
+      JSON.stringify({ status: application.status, revision: application.revision }),
+    );
+    response.json({ application, capabilities });
+  } catch (error) {
+    auditPersonnelLifecycleScopedNotFound(accessContext, request, error);
+    personnelLifecycleRouteError(error);
+  }
+});
+
+app.post("/api/portal/v1/personnel-lifecycle/candidates/:candidateId/applications/:applicationId/convert", async (request, response) => {
+  const accessContext = requirePersonnelLifecycleAccess(request, { action: "convert" });
+  const { session, capabilities } = accessContext;
+  const submitted = personnelLifecycleConversionInput(request.body || {});
+  const candidateId = String(request.params.candidateId || "").trim();
+  const applicationId = String(request.params.applicationId || "").trim();
+  const requestSha256 = workRuleSha256({
+    schemaVersion: 1,
+    operationId: submitted.id,
+    candidateId,
+    applicationId,
+    candidateRevision: submitted.candidateRevision,
+    applicationRevision: submitted.applicationRevision,
+    employee: submitted.employee,
+  });
+  let deferredFieldDenial = null;
+  try {
+    const result = await runPersonnelLifecycleSerializableMutation(() => (
+      persistenceProvider.transaction(async (executor) => {
+        const repositories = createApplicationRepositories(executor);
+        const lifecycle = createPersonnelLifecycleService(
+          repositories.personnelLifecycle,
+          { protectJson, parseProtectedJson },
+        );
+        return lifecycle.convertCandidateInTransaction(
+        candidateId,
+        applicationId,
+        {
+          ...submitted,
+          employeeNumber: submitted.employee.personnelNumber,
+          requestSha256,
+        },
+        session.employeeNumber,
+        async (employeeProposal, { candidate }) => {
+          const employee = await validateEmployee({
+            ...employeeProposal,
+            fullName: `${candidate.profile.firstName} ${candidate.profile.lastName}`.trim(),
+            active: true,
+            timeConfirmationLevel: "C",
+            sicknessWithoutAumEnabled: false,
+          }, true, {
+            repository: repositories.organizationPersonnel,
+          });
+          employee.timeConfirmationLevel = "C";
+          employee.sicknessWithoutAumEnabled = 0;
+          employee.active = 1;
+          assertSessionContextScope(session, {
+            locationId: employee.homeLocationId,
+            departmentId: employee.preferredDepartmentId,
+          });
+          const personnelRecordInputValue = candidatePersonnelRecordInput(candidate.profile);
+          const submittedFields = submittedPersonnelRecordFieldKeys(personnelRecordInputValue);
+          assertPersonnelRecordContextScope(
+            session,
+            {
+              locationId: employee.homeLocationId,
+              departmentId: employee.preferredDepartmentId,
+            },
+            request,
+            employee.personnelNumber,
+            submittedFields,
+          );
+          let personnelRecordMutation;
+          try {
+            personnelRecordMutation = await preparePersonnelRecordMutation(
+              request,
+              employee.personnelNumber,
+              personnelRecordInputValue,
+              { assumeNew: true, auditDenied: false },
+            );
+          } catch (error) {
+            if (PERSONNEL_RECORD_FIELD_DENIAL_CODES.has(String(error?.code || ""))) {
+              deferredFieldDenial = {
+                error,
+                reason: error.code,
+                fieldKeys: error[PERSONNEL_RECORD_DENIED_FIELD_KEYS] || [],
+              };
+            }
+            throw error;
+          }
+          await repositories.organizationPersonnel.insertEmployee(employee);
+          await persistPersonnelRecordMutationWithRepository(
+            repositories.organizationPersonnel,
+            personnelRecordMutation,
+            "create-from-candidate",
+          );
+          await repositories.organizationPersonnel.insertAudit(
+            session.employeeNumber,
+            "personnel-lifecycle.candidate.convert",
+            "candidate_conversion",
+            submitted.id,
+            JSON.stringify({
+              candidateId,
+              applicationId,
+              employeeNumber: employee.personnelNumber,
+              documentTransfer: "none",
+              onboarding: "deferred",
+              portalAccess: "none",
+            }),
+          );
+          return employee;
+        },
+        );
+      }, { isolation: "serializable" })
+    ));
+    const application = result.candidate.applications
+      .find(({ id }) => id === result.conversion.applicationId);
+    if (result.replayed) response.set("Idempotency-Replayed", "true");
+    response.status(result.replayed ? 200 : 201).json({
+      conversion: {
+        id: result.conversion.id,
+        candidateId: result.conversion.candidateId,
+        applicationId: result.conversion.applicationId,
+        employeeNumber: result.conversion.employeeNumber,
+        createdAt: result.conversion.createdAt,
+        documentTransfer: "none",
+        onboarding: "deferred",
+      },
+      candidate: {
+        id: result.candidate.id,
+        state: result.candidate.state,
+        revision: result.candidate.revision,
+      },
+      application: {
+        id: application.id,
+        status: application.status,
+        revision: application.revision,
+      },
+      capabilities,
+      replayed: result.replayed,
+    });
+  } catch (error) {
+    if (deferredFieldDenial?.error === error) {
+      auditPersonnelLifecycleConversionFieldDenied(
+        session,
+        request,
+        submitted.id,
+        deferredFieldDenial,
+      );
+      deferredFieldDenial = null;
+    }
+    if (isUniquePersistenceViolation(error)) {
+      throw httpError(
+        409,
+        "Diese Personalnummer oder Umwandlung ist bereits vergeben.",
+        "PERSONNEL_LIFECYCLE_EMPLOYEE_NUMBER_CONFLICT",
+      );
+    }
+    personnelLifecycleRouteError(error);
+  }
 });
 
 app.get("/api/portal/v1/personnel-records/:employeeNumber", async (request, response) => {
@@ -32079,10 +34794,10 @@ app.put("/api/portal/v1/vacation-requests/:id/decision", async (request, respons
 async function sessionCanReadAbsenceEntry(session, entry) {
   const isTimeOff = String(entry.kind || "").startsWith("time_off");
   const permissions = isTimeOff ? ["time:read", "time:review"] : ["vacation:read", "vacation:approve"];
-  if (session?.employeeNumber !== "local" && !permissions.some((permission) => session?.permissions?.includes(permission))) {
+  if (!isLocalSystemSession(session) && !permissions.some((permission) => session?.permissions?.includes(permission))) {
     return false;
   }
-  if (session?.employeeNumber === "local" || sessionHasGlobalScope(session)) return true;
+  if (isLocalSystemSession(session) || sessionHasGlobalScope(session)) return true;
   const employee = await absenceManagementRepository.employeeHomeLocation(
     String(entry.employee_number || ""),
   ) || {};
@@ -32147,7 +34862,8 @@ app.get("/api/portal/v1/absence-requests", async (request, response) => {
   const actionable = requests.filter((entry) => {
     if (!["pending_local", "preliminary_local", "pending_hr"].includes(entry.status)) return false;
     if (entry.approval_stage === "hr") return sessionCanApproveHr(session);
-    return session.role !== "hr" || ["developer", "admin"].includes(session.role) || session.employeeNumber === "local";
+    return session.role !== "hr" || ["developer", "admin"].includes(session.role)
+      || isLocalSystemSession(session);
   });
   response.json({
     requests,
@@ -34262,7 +36978,7 @@ function validateUsbFeatures(body = {}) {
   let submitted = Array.isArray(body.enabledFeatures) ? body.enabledFeatures : [];
   if (profile === "full") submitted = defaultInstallationFeatures;
   if (profile === "planning-vacation") submitted = ["schedule", "vacation", "requests"];
-  const enabled = new Set(submitted.map((feature) => usbFeatureAliases[feature] || feature).filter((feature) => installationFeatureIds.has(feature)));
+  const enabled = new Set(submitted.map((feature) => usbFeatureAliases[feature] || feature).filter((feature) => usbInstallationFeatureIds.has(feature)));
   enabled.add("schedule");
   if (enabled.has("wifiSuggestions")) enabled.add("timeTracking");
   if (enabled.has("sicknessAmu")) enabled.add("requests");
@@ -34534,7 +37250,7 @@ app.get("/api/usb-provisioning/status", async (request, response) => {
     ...driveData,
     driveWarning,
     creators: await usbCreatorCandidates(session),
-    featureCatalog: installationFeatureCatalog,
+    featureCatalog: installationFeatureCatalog.filter((feature) => feature.provisionable !== false),
     profiles: {
       full: defaultInstallationFeatures,
       "planning-vacation": ["schedule", "vacation", "requests"],
@@ -35303,7 +38019,7 @@ app.get("/api/vacations", async (request, response) => {
 
 app.get("/api/personnel-vacations", async (request, response) => {
   const actor = requireAdminHrOrLocal(request, "personnel:central:read");
-  if (actor.employeeNumber !== "local" && !actor.permissions?.includes("vacation:read")) {
+  if (!isLocalSystemSession(actor) && !actor.permissions?.includes("vacation:read")) {
     throw httpError(403, "Für die zentrale Urlaubsübersicht fehlt die Urlaubs-Leseberechtigung.", "PORTAL_PERMISSION_DENIED");
   }
   if (!sessionHasGlobalScope(actor)) {

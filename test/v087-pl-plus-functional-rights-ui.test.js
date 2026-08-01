@@ -67,6 +67,9 @@ test("v0.87 Block 3 UI: Telefonansicht wird nur bei reinem Telefonzugriff bezeic
 test("v0.87 Block 3 UI: technische Verwaltungsgrenzen bleiben unverändert", () => {
   const accessProfile = between(app, "function canEditEmployeeAccessProfile(", "function appRoleAssignableInPersonnelModal(");
   assert.match(accessProfile, /\["developer", "it_admin"\]\.includes/);
+  assert.match(accessProfile, /actorRole !== "it_admin" \|\| employee\?\.portal_access\?\.role !== "hr"/);
+  const roleAssignment = between(app, "function appRoleAssignableInPersonnelModal(", "function permissionDisplayLabel(");
+  assert.doesNotMatch(roleAssignment, /"hr"/);
   const governance = between(app, "function canReadGovernanceDashboards()", "function canReadSystemCenter()");
   assert.match(governance, /\["developer", "it_admin", "admin", "hr"\]\.includes/);
   assert.match(governance, /permissions\.includes\("rights:read"\)/);
