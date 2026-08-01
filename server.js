@@ -3605,9 +3605,14 @@ function parsePortalPermissionScopes(value) {
 async function loadPortalSessionFromRequest(request, { touch = true } = {}) {
   const token = parseCookies(request)[PORTAL_SESSION_COOKIE];
   if (!token) return null;
-  const now = new Date().toISOString();
+  const currentDate = new Date();
+  const now = currentDate.toISOString();
   const tokenHash = sha256(token);
-  const session = await portalAccessRepository.getEmployeeSessionByToken({ tokenHash, now });
+  const session = await portalAccessRepository.getEmployeeSessionByToken({
+    tokenHash,
+    now,
+    businessDate: viennaTodayIso(currentDate),
+  });
   if (session) {
     if (isReservedEmployeePrincipal(session.employee_number)) return null;
     if (touch) await portalAccessRepository.touchEmployeeSession({ id: session.id });
@@ -4100,15 +4105,24 @@ function mobileSessionPrincipal(row) {
   };
 }
 
-async function mobileSessionRow(sessionId, repository = mobileAuthRepository) {
-  return repository.getSession({ sessionId });
+async function mobileSessionRow(
+  sessionId,
+  repository = mobileAuthRepository,
+  businessDate = viennaTodayIso(),
+) {
+  return repository.getSession({ sessionId, businessDate });
 }
 
 async function mobileSessionFromRequest(request, { touch = true } = {}) {
   const parsed = parseMobileToken(mobileBearerToken(request), MOBILE_ACCESS_TOKEN_PREFIX);
   if (!parsed) return null;
-  const row = await mobileSessionRow(parsed.sessionId);
-  const now = new Date().toISOString();
+  const currentDate = new Date();
+  const row = await mobileSessionRow(
+    parsed.sessionId,
+    mobileAuthRepository,
+    viennaTodayIso(currentDate),
+  );
+  const now = currentDate.toISOString();
   if (!row || isReservedEmployeePrincipal(row.employee_number)
     || row.revoked_at || !row.active || !row.employee_active || row.access_expires_at <= now
     || !safeHashEquals(row.access_token_hash, sha256(parsed.token))) return null;
@@ -4358,7 +4372,7 @@ async function rotateAuthenticatedMobileSession(
   now = new Date(),
   repository = mobileAuthRepository,
 ) {
-  const row = await mobileSessionRow(sessionId, repository);
+  const row = await mobileSessionRow(sessionId, repository, viennaTodayIso(now));
   if (!row || isReservedEmployeePrincipal(row.employee_number)
     || row.revoked_at || !row.active || !row.employee_active || row.refresh_expires_at <= now.toISOString()) {
     throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_AUTH_REQUIRED");
@@ -4385,7 +4399,7 @@ async function refreshMobileSession(rawRefreshToken, device, now = new Date()) {
   const parsed = parseMobileToken(rawRefreshToken, MOBILE_REFRESH_TOKEN_PREFIX);
   if (!parsed) throw httpError(401, "Die App-Sitzung ist abgelaufen. Bitte erneut anmelden.", "MOBILE_REFRESH_INVALID");
   const outcome = await mobileAuthRepository.transaction(async (repository) => {
-    const row = await mobileSessionRow(parsed.sessionId, repository);
+    const row = await mobileSessionRow(parsed.sessionId, repository, viennaTodayIso(now));
     const submittedHash = sha256(parsed.token);
     if (!row || isReservedEmployeePrincipal(row.employee_number)
       || row.revoked_at || !row.active || !row.employee_active) {
@@ -4437,7 +4451,11 @@ async function refreshMobileSession(rawRefreshToken, device, now = new Date()) {
 async function mobileSessionRowFromRefreshToken(rawRefreshToken, now = new Date()) {
   const parsed = parseMobileToken(rawRefreshToken, MOBILE_REFRESH_TOKEN_PREFIX);
   if (!parsed) return null;
-  const row = await mobileSessionRow(parsed.sessionId);
+  const row = await mobileSessionRow(
+    parsed.sessionId,
+    mobileAuthRepository,
+    viennaTodayIso(now),
+  );
   if (!row || isReservedEmployeePrincipal(row.employee_number)
     || row.revoked_at || !row.active || !row.employee_active || row.refresh_expires_at <= now.toISOString()
     || !safeHashEquals(row.refresh_token_hash, sha256(parsed.token))) return null;
@@ -23700,7 +23718,11 @@ app.post("/api/mobile/v1/auth/login", async (request, response) => {
   clearLoginRate(request);
   await portalAccessRepository.markEmployeeLoginSuccess({ employeeNumber });
   const created = await createMobileSession(employeeNumber, device, now);
-  const session = mobileSessionPrincipal(await mobileSessionRow(created.id));
+  const session = mobileSessionPrincipal(await mobileSessionRow(
+    created.id,
+    mobileAuthRepository,
+    viennaTodayIso(now),
+  ));
   auditPortal(employeeNumber, "mobile.login.success", "mobile_session", created.id,
     JSON.stringify({ platform: device.platform, appVersion: device.appVersion }));
   response.status(201).json({
@@ -23714,8 +23736,11 @@ app.post("/api/mobile/v1/auth/refresh", async (request, response) => {
   assertMobileRefreshRateLimit(request);
   const device = validateMobileDevice(request.body?.device || {});
   const parsed = parseMobileToken(request.body?.refreshToken, MOBILE_REFRESH_TOKEN_PREFIX);
-  const rowBefore = parsed ? await mobileSessionRow(parsed.sessionId) : null;
-  const tokenSet = await refreshMobileSession(request.body?.refreshToken, device, new Date());
+  const now = new Date();
+  const rowBefore = parsed
+    ? await mobileSessionRow(parsed.sessionId, mobileAuthRepository, viennaTodayIso(now))
+    : null;
+  const tokenSet = await refreshMobileSession(request.body?.refreshToken, device, now);
   if (rowBefore) auditPortal(rowBefore.employee_number, "mobile.session.refresh", "mobile_session", rowBefore.id);
   response.json({ tokenSet });
 });
