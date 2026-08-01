@@ -1115,7 +1115,35 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const itAdminRights = await fetch(`${url}/api/portal/v1/rights`, { headers: { Cookie: itAdmin.cookie } });
     assert.equal(itAdminRights.status, 200, await itAdminRights.clone().text());
     const itAdminRightsPayload = await itAdminRights.json();
-    assert.ok(itAdminRightsPayload.catalog.every((permission) => permission.editable));
+    const personnelLifecyclePermissionIds = new Set([
+      "personnel:candidates:read",
+      "personnel:applications:write",
+      "personnel:candidates:write",
+      "personnel:candidates:confidential:read",
+      "personnel:candidates:confidential:write",
+      "personnel:candidates:convert",
+      "personnel:candidates:delegate",
+      "personnel:workflows:read",
+      "personnel:workflows:draft:write",
+      "personnel:workflows:review",
+      "personnel:workflows:publish",
+      "personnel:workflows:local:supplement",
+      "personnel:workflows:confidential:read",
+      "personnel:workflows:confidential:write",
+      "personnel:workflows:delegate",
+    ]);
+    assert.ok(itAdminRightsPayload.catalog
+      .filter((permission) => !personnelLifecyclePermissionIds.has(permission.id))
+      .every((permission) => permission.editable));
+    assert.ok(itAdminRightsPayload.catalog
+      .filter((permission) => personnelLifecyclePermissionIds.has(permission.id))
+      .every((permission) => !permission.editable));
+    assert.deepEqual(
+      new Set(itAdminRightsPayload.catalog
+        .filter((permission) => !permission.editable)
+        .map((permission) => permission.id)),
+      personnelLifecyclePermissionIds,
+    );
     assert.ok(itAdminRightsPayload.users.some((user) => user.employeeNumber === "102" && user.manageable));
     const diagnosticsReadPermission = itAdminRightsPayload.catalog.find((permission) => permission.id === "system:diagnostics:read");
     const diagnosticsTechnicalPermission = itAdminRightsPayload.catalog.find((permission) => permission.id === "system:diagnostics:technical");
@@ -1128,9 +1156,19 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const hrDiagnosticsDenied = await fetch(`${url}/api/server-diagnostics`, { headers: { Cookie: hr.cookie } });
     assert.equal(hrDiagnosticsDenied.status, 403, await hrDiagnosticsDenied.clone().text());
 
-    const grantHrStatusRead = await fetch(`${url}/api/portal/v1/rights/103`, {
+    const grantHrStatusReadAsItAdmin = await fetch(`${url}/api/portal/v1/rights/103`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: itAdmin.cookie, "X-CSRF-Token": itAdmin.csrf },
+      body: JSON.stringify({ permissions: ["system:diagnostics:read"] }),
+    });
+    assert.equal(grantHrStatusReadAsItAdmin.status, 403, await grantHrStatusReadAsItAdmin.clone().text());
+    assert.equal((await grantHrStatusReadAsItAdmin.json()).code, "PORTAL_ROLE_HIERARCHY_DENIED");
+    const hrStatusStillDenied = await fetch(`${url}/api/server-status`, { headers: { Cookie: hr.cookie } });
+    assert.equal(hrStatusStillDenied.status, 403, await hrStatusStillDenied.clone().text());
+
+    const grantHrStatusRead = await fetch(`${url}/api/portal/v1/rights/103`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
       body: JSON.stringify({ permissions: ["system:diagnostics:read"] }),
     });
     assert.equal(grantHrStatusRead.status, 200, await grantHrStatusRead.clone().text());
@@ -1141,7 +1179,7 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     assert.equal(delegatedHrTechnicalDenied.status, 403, await delegatedHrTechnicalDenied.clone().text());
     const clearHrStatusRead = await fetch(`${url}/api/portal/v1/rights/103`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", Cookie: itAdmin.cookie, "X-CSRF-Token": itAdmin.csrf },
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
       body: JSON.stringify({ permissions: [] }),
     });
     assert.equal(clearHrStatusRead.status, 200, await clearHrStatusRead.clone().text());
@@ -1205,19 +1243,30 @@ test("LAN-Bereichsrechte trennen Filial- und Abteilungsdaten zuverlässig", asyn
     const employeeBrandingAccess = await fetch(`${url}/api/branding/assignments`, { headers: { Cookie: employee.cookie, "X-CSRF-Token": employee.csrf } });
     assert.equal(employeeBrandingAccess.status, 200, await employeeBrandingAccess.clone().text());
 
-    const itAdminCanManageHr = await fetch(`${url}/api/portal/v1/users/103`, {
+    const itAdminCannotTakeOverHr = await fetch(`${url}/api/portal/v1/users/103`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: itAdmin.cookie, "X-CSRF-Token": itAdmin.csrf },
       body: JSON.stringify({ role: "employee", active: true }),
     });
-    assert.equal(itAdminCanManageHr.status, 200, await itAdminCanManageHr.clone().text());
-    assert.equal((await itAdminCanManageHr.json()).users.find((user) => user.employeeNumber === "103").role, "employee");
-    const restoreHrByItAdmin = await fetch(`${url}/api/portal/v1/users/103`, {
+    assert.equal(itAdminCannotTakeOverHr.status, 403, await itAdminCannotTakeOverHr.clone().text());
+    assert.equal((await itAdminCannotTakeOverHr.json()).code, "PERSONNEL_LIFECYCLE_ACCOUNT_TAKEOVER_DENIED");
+    const hrStillActiveAfterDeniedTakeover = await fetch(`${url}/api/portal/v1/session`, { headers: { Cookie: hr.cookie } });
+    assert.equal(hrStillActiveAfterDeniedTakeover.status, 200, await hrStillActiveAfterDeniedTakeover.clone().text());
+    assert.equal((await hrStillActiveAfterDeniedTakeover.json()).user.role, "hr");
+
+    const adminCanManageHr = await fetch(`${url}/api/portal/v1/users/103`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", Cookie: itAdmin.cookie, "X-CSRF-Token": itAdmin.csrf },
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
+      body: JSON.stringify({ role: "employee", active: true }),
+    });
+    assert.equal(adminCanManageHr.status, 200, await adminCanManageHr.clone().text());
+    assert.equal((await adminCanManageHr.json()).users.find((user) => user.employeeNumber === "103").role, "employee");
+    const restoreHrByAdmin = await fetch(`${url}/api/portal/v1/users/103`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Cookie: admin.cookie, "X-CSRF-Token": admin.csrf },
       body: JSON.stringify({ role: "hr", active: true }),
     });
-    assert.equal(restoreHrByItAdmin.status, 200, await restoreHrByItAdmin.clone().text());
+    assert.equal(restoreHrByAdmin.status, 200, await restoreHrByAdmin.clone().text());
     hr = await login("103", "887766");
     const developerRoleCannotBeAssigned = await fetch(`${url}/api/portal/v1/users/106`, {
       method: "PUT",

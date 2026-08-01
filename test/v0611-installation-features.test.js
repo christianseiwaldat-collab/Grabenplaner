@@ -16,6 +16,7 @@ process.env.NODE_ENV = "test";
 
 const {
   db,
+  installationFeatures,
   installationFeaturesForApiPath,
   releaseInstanceLockForTests,
   validateUsbEmployees,
@@ -55,6 +56,19 @@ test("v0.61.1 Funktionsprofil: AUM aktiviert seine notwendigen Abhaengigkeiten",
     new Set(validateUsbFeatures({ enabledFeatures: ["sicknessAmu"] })),
     new Set(["schedule", "sicknessAmu", "requests", "employeePortal"]),
   );
+});
+
+test("Personal-Lebenszyklus: Fundament bleibt standardmaessig und in der USB-Bereitstellung gesperrt", () => {
+  assert.equal(installationFeatures({ installation_features: JSON.stringify(["schedule"]) }).personnelLifecycle, false);
+  assert.equal(
+    installationFeatures({ installation_features: JSON.stringify(["schedule", "personnelLifecycle"]) }).personnelLifecycle,
+    true,
+  );
+  assert.deepEqual(
+    installationFeaturesForApiPath("/portal/v1/personnel-lifecycle/candidates"),
+    ["personnelLifecycle"],
+  );
+  assert.equal(validateUsbFeatures({ enabledFeatures: ["personnelLifecycle"] }).includes("personnelLifecycle"), false);
 });
 
 test("v0.61.1 USB-Rollen: Abteilungsleitung benoetigt zwingend eine gueltige Abteilung", async () => {

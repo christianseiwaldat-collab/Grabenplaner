@@ -38,6 +38,13 @@ function fixture() {
     INSERT INTO portal_users (
       employee_number, password_hash, role, active, must_change_password
     ) VALUES ('E18', 'hash', 'manager', 1, 0);
+    INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+      VALUES ('E18', 'personnel:candidates:read', 'PL-PLUS');
+    INSERT INTO portal_access_scopes (employee_number, location_id, department_id)
+      VALUES ('E18', '18', 0);
+    INSERT INTO portal_permission_scope_grants (
+      employee_number, permission, location_id, department_id, approved_by
+    ) VALUES ('E18', 'personnel:candidates:read', '18', 0, 'PL-PLUS');
     INSERT INTO portal_sessions (
       id, employee_number, token_hash, expires_at
     ) VALUES (
@@ -81,6 +88,135 @@ test("Block 3/7: Browser-Sitzung wird über den Provider vollständig projiziert
     assert.equal(session.home_location_id, "18");
     assert.equal(session.time_confirmation_level, "B");
     assert.deepEqual(JSON.parse(session.permissions), ["own_time:read"]);
+    const permissionScopes = Array.isArray(session.permission_scopes)
+      ? session.permission_scopes
+      : JSON.parse(session.permission_scopes);
+    assert.deepEqual(permissionScopes, [{
+      permission: "personnel:candidates:read",
+      locationId: "18",
+      departmentId: null,
+      approvedBy: "PL-PLUS",
+    }]);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Personalmodul R1: deaktivierte Mitarbeiter bleiben trotz Legacy-Portalstatus abgemeldet", async () => {
+  const context = fixture();
+  try {
+    context.database.prepare("UPDATE employees SET active = 0 WHERE personnel_number = 'E18'").run();
+    assert.equal(await context.repository.getEmployeeSessionByToken({
+      tokenHash: "token-hash",
+      now: "2026-07-29T12:00:00.000Z",
+    }), null);
+    assert.equal(context.database.prepare(`
+      SELECT active FROM portal_users WHERE employee_number = 'E18'
+    `).get().active, 1);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Personalmodul R1: Browser-Sitzungen blenden inaktive Standort- und Abteilungsscopes aus", async () => {
+  const context = fixture();
+  const loadSession = async () => context.repository.getEmployeeSessionByToken({
+    tokenHash: "token-hash",
+    now: "2026-07-29T12:00:00.000Z",
+  });
+  const projectionArray = (value) => (Array.isArray(value) ? value : JSON.parse(value));
+  try {
+    let session = await loadSession();
+    assert.equal(projectionArray(session.access_scopes).length, 1);
+    assert.equal(projectionArray(session.permission_scopes).length, 1);
+
+    context.database.prepare("UPDATE locations SET active = 0 WHERE id = '18'").run();
+    session = await loadSession();
+    assert.deepEqual(projectionArray(session.access_scopes), []);
+    assert.deepEqual(projectionArray(session.permission_scopes), []);
+    assert.equal(context.database.prepare(`
+      SELECT COUNT(*) AS count FROM portal_permission_scope_grants
+      WHERE employee_number = 'E18'
+    `).get().count, 1);
+
+    context.database.prepare("UPDATE locations SET active = 1 WHERE id = '18'").run();
+    const departmentId = Number(context.database.prepare(`
+      INSERT INTO departments (location_id, name, active)
+      VALUES ('18', 'Verkauf', 1)
+    `).run().lastInsertRowid);
+    context.database.prepare(`
+      DELETE FROM portal_access_scopes WHERE employee_number = 'E18'
+    `).run();
+    context.database.prepare(`
+      INSERT INTO portal_access_scopes (employee_number, location_id, department_id)
+      VALUES ('E18', '18', ?)
+    `).run(departmentId);
+    context.database.prepare(`
+      INSERT INTO portal_permission_scope_grants (
+        employee_number, permission, location_id, department_id, approved_by
+      ) VALUES ('E18', 'personnel:candidates:read', '18', ?, 'PL-PLUS')
+    `).run(departmentId);
+
+    session = await loadSession();
+    assert.deepEqual(projectionArray(session.access_scopes).map((scope) => ({
+      locationId: scope.locationId,
+      departmentId: scope.departmentId,
+    })), [{ locationId: "18", departmentId }]);
+    assert.deepEqual(projectionArray(session.permission_scopes).map((scope) => ({
+      locationId: scope.locationId,
+      departmentId: scope.departmentId,
+    })), [{ locationId: "18", departmentId }]);
+
+    context.database.prepare("UPDATE departments SET active = 0 WHERE id = ?")
+      .run(departmentId);
+    session = await loadSession();
+    assert.deepEqual(projectionArray(session.access_scopes), []);
+    assert.deepEqual(projectionArray(session.permission_scopes), []);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Personalmodul R1: Organisationssitzungen blenden inaktive Standortscopes aus", async () => {
+  const context = fixture();
+  const projectionArray = (value) => (Array.isArray(value) ? value : JSON.parse(value));
+  try {
+    context.database.exec(`
+      INSERT INTO portal_organization_accounts (
+        id, login_name, display_name, account_type, password_hash, active,
+        must_change_password, created_by, updated_by
+      ) VALUES (
+        'organization-r1', 'organization-r1', 'Organisation R1', 'branch',
+        'test-only', 1, 0, 'test', 'test'
+      );
+      INSERT INTO portal_organization_account_scopes (
+        account_id, location_id, department_id, assigned_by
+      ) VALUES ('organization-r1', '18', 0, 'test');
+      INSERT INTO portal_organization_sessions (
+        id, account_id, token_hash, expires_at
+      ) VALUES (
+        'organization-session-r1', 'organization-r1', 'organization-token-r1',
+        '2099-01-01T00:00:00.000Z'
+      );
+    `);
+    const loadSession = async () => context.repository.getOrganizationSessionByToken({
+      tokenHash: "organization-token-r1",
+      now: "2026-07-29T12:00:00.000Z",
+    });
+
+    let session = await loadSession();
+    assert.deepEqual(projectionArray(session.access_scopes), [{
+      locationId: "18",
+      departmentId: null,
+    }]);
+
+    context.database.prepare("UPDATE locations SET active = 0 WHERE id = '18'").run();
+    session = await loadSession();
+    assert.deepEqual(projectionArray(session.access_scopes), []);
+    assert.equal(context.database.prepare(`
+      SELECT COUNT(*) AS count FROM portal_organization_account_scopes
+      WHERE account_id = 'organization-r1'
+    `).get().count, 1);
   } finally {
     await context.close();
   }
