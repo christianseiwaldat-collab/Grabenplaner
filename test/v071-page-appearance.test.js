@@ -149,13 +149,13 @@ test("v0.71: Seitendarstellungen und Grabenplaner-Schriftgröße sind benutzerbe
   assert.deepEqual(defaults.payload.employeeDisplaySort, { key: "personnel_number", direction: "asc" });
   assert.deepEqual(defaults.payload.personnelDashboardLayout, {
     version: 1,
-    order: ["employees", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations", "dataRequests"],
+    order: ["employees", "applications", "workflows", "tasks", "requests", "timeTracking", "costCenters", "ruleDrafts", "collectiveAgreements", "vacations", "dataRequests"],
     hidden: [],
   });
 
   const personnelDashboardLayout = {
     version: 1,
-    order: ["requests", "employees", "costCenters", "timeTracking", "vacations", "ruleDrafts", "collectiveAgreements", "dataRequests"],
+    order: ["requests", "employees", "applications", "workflows", "tasks", "costCenters", "timeTracking", "vacations", "ruleDrafts", "collectiveAgreements", "dataRequests"],
     hidden: ["collectiveAgreements"],
   };
   const changed = await requestJson("/api/portal/v1/ui-preferences", {

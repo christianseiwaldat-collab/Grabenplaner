@@ -138,11 +138,35 @@ function definePersistenceProviderContractTests({ name, createSubject }) {
     assert.equal(inspection.commits, 1);
     assert.equal(inspection.rollbacks, 0);
     assert.equal(inspection.transactionTokens.size, 1);
+    const beginEvent = inspection.events.find((entry) => entry.kind === "begin");
+    assert.deepEqual(beginEvent?.options, { isolation: "serializable", readOnly: false });
+    assert.equal(Object.isFrozen(beginEvent?.options), true);
     assert.equal((await provider.queryAll(statements.all)).some((row) => row.id === 3), true);
     await assert.rejects(
       leakedExecutor.queryAll(statements.all),
       isPersistenceCode(PERSISTENCE_ERROR_CODES.TRANSACTION_STATE_INVALID),
     );
+    await provider.close();
+  });
+
+  test(`${name}: Transaktionsoptionen werden vor dem Adapter strikt validiert`, async () => {
+    const subject = createSubject();
+    const { provider, inspection } = subject;
+    let callbackCalled = false;
+
+    for (const [options, expectedCode] of [
+      [{ isolation: "unsupported" }, PERSISTENCE_ERROR_CODES.TRANSACTION_STATE_INVALID],
+      [{ readOnly: "yes" }, PERSISTENCE_ERROR_CODES.TRANSACTION_STATE_INVALID],
+      [{ readOnly: true, unexpected: true }, PERSISTENCE_ERROR_CODES.CONTRACT_VIOLATION],
+    ]) {
+      await assert.rejects(
+        provider.transaction(async () => { callbackCalled = true; }, options),
+        isPersistenceCode(expectedCode),
+      );
+    }
+
+    assert.equal(callbackCalled, false);
+    assert.equal(inspection.begins, 0);
     await provider.close();
   });
 

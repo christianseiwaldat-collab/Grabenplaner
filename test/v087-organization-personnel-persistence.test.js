@@ -4,6 +4,9 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  PERSISTENCE_ERROR_CODES,
+} = require("../lib/persistence/contract");
+const {
   createOrganizationPersonnelRepository,
 } = require("../lib/persistence/repositories/organization-personnel");
 const {
@@ -337,6 +340,31 @@ test("Block 3/7: Organisation und Kostenstellen bleiben in einer Providertransak
   }
 });
 
+test("Block 3/7: Repository reicht Transaktionsoptionen an den Providervertrag weiter", async () => {
+  const context = await fixture();
+  try {
+    await assert.rejects(
+      context.repository.transaction(async (organization) => {
+        await organization.insertPosition({ id: "read-only-write", name: "Nicht schreiben" }, 1);
+      }, { readOnly: true }),
+      (error) => error?.code === PERSISTENCE_ERROR_CODES.TRANSACTION_STATE_INVALID,
+    );
+    assert.equal(
+      context.database.prepare("SELECT COUNT(*) AS count FROM positions").get().count,
+      0,
+    );
+
+    let callbackCalled = false;
+    await assert.rejects(
+      context.repository.transaction(async () => { callbackCalled = true; }, { unexpected: true }),
+      (error) => error?.code === PERSISTENCE_ERROR_CODES.CONTRACT_VIOLATION,
+    );
+    assert.equal(callbackCalled, false);
+  } finally {
+    await context.close();
+  }
+});
+
 test("Block 3/7: Personalstamm, Rechteprofil und Schutzdatensatz rollen gemeinsam zurueck", async () => {
   const context = await fixture();
   try {
@@ -534,6 +562,34 @@ test("Block 3/7: Organisations- und Rechteprojektionen werden providerbasiert ge
       location_id: "01",
       department_id: 0,
     }]);
+
+    context.database.prepare(`
+      UPDATE portal_permission_grants
+      SET updated_at = '2026-01-02T03:04:05.000Z'
+      WHERE employee_number = 'E1' AND permission = 'employees:read'
+    `).run();
+    await context.repository.transaction(async (organization) => {
+      await organization.applyAccessProfile(
+        { employeeNumber: "ADMIN" },
+        {
+          employeeNumber: "E1",
+          role: "manager",
+          permissions: ["employees:read"],
+          homeLocationId: "01",
+          preferredDepartmentId: 1,
+        },
+        {
+          role: "manager",
+          grantedPermissions: ["employees:read"],
+        },
+      );
+    });
+    assert.equal(context.database.prepare(`
+      SELECT updated_at
+      FROM portal_permission_grants
+      WHERE employee_number = 'E1' AND permission = 'employees:read'
+    `).get().updated_at, "2026-01-02T03:04:05.000Z");
+    assert.deepEqual(await context.repository.listPortalPermissionDenials("E1"), []);
   } finally {
     await context.close();
   }

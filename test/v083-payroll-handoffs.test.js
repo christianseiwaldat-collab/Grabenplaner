@@ -200,8 +200,21 @@ async function request(route, { method = "GET", session = hrSession, body } = {}
 test.before(async () => {
   locationId = db.prepare("SELECT id FROM locations WHERE active = 1 ORDER BY id LIMIT 1").get().id;
   db.prepare("UPDATE employees SET active = 0").run();
-  ensureEmployee(HR, "Hanna Personal", false);
+  ensureEmployee(HR, "Hanna Personal", true);
   ensureEmployee(EMPLOYEE, "Eva Beispiel", true);
+  const administrationCostCenterId = db.prepare(`
+    SELECT center.id
+    FROM cost_centers center
+    JOIN cost_center_types type ON type.id = center.cost_center_type_id
+    WHERE center.active = 1 AND type.active = 1 AND type.is_branch = 0
+    ORDER BY center.sort_order, center.id
+    LIMIT 1
+  `).get().id;
+  db.prepare(`
+    UPDATE employees
+    SET cost_center_id = ?, home_location_id = NULL, preferred_department_id = NULL
+    WHERE personnel_number = ?
+  `).run(administrationCostCenterId, HR);
   hrSession = createSession(HR, "hr");
   employeeSession = createSession(EMPLOYEE, "employee");
   await new Promise((resolve, reject) => {

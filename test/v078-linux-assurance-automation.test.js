@@ -723,6 +723,8 @@ test("smoke result verifier rejects links and same-inode races without reopening
     expectedMode,
     afterRead() {
       fs.writeFileSync(result, payload.replace('"ok":true', '"ok":null'));
+      // NTFS can coalesce timestamps for an immediate same-size rewrite.
+      fs.utimesSync(result, new Date(0), new Date(0));
     },
   }), /SMOKE_RESULT_INVALID/);
 });

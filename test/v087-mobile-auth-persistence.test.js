@@ -38,6 +38,11 @@ function fixture() {
     ) VALUES ('E18', 'hash', 'manager', 1, 0);
     INSERT INTO portal_access_scopes (employee_number, location_id, department_id)
       VALUES ('E18', '18', 0);
+    INSERT INTO portal_permission_grants (employee_number, permission, granted_by)
+      VALUES ('E18', 'personnel:candidates:read', 'PL-PLUS');
+    INSERT INTO portal_permission_scope_grants (
+      employee_number, permission, location_id, department_id, approved_by
+    ) VALUES ('E18', 'personnel:candidates:read', '18', 0, 'PL-PLUS');
     INSERT INTO personnel_field_permissions (role_id, field_key, access_level)
       VALUES ('manager', 'nickname', 'read');
     INSERT INTO amu_local_access_overrides (employee_number, access_mode, updated_by)
@@ -98,6 +103,9 @@ test("Block 3/7: Mobile-Projektion enthält Rechte-, AUM- und Vertretungskontext
     const accessScopes = Array.isArray(session.access_scopes)
       ? session.access_scopes
       : JSON.parse(session.access_scopes);
+    const permissionScopes = Array.isArray(session.permission_scopes)
+      ? session.permission_scopes
+      : JSON.parse(session.permission_scopes);
     assert.deepEqual(fieldPermissions, [
       { fieldKey: "nickname", accessLevel: "read" },
     ]);
@@ -108,6 +116,68 @@ test("Block 3/7: Mobile-Projektion enthält Rechte-, AUM- und Vertretungskontext
         departmentManagerSubstitutionActive: 0,
       },
     ]);
+    assert.deepEqual(permissionScopes, [{
+      permission: "personnel:candidates:read",
+      locationId: "18",
+      departmentId: null,
+      approvedBy: "PL-PLUS",
+    }]);
+  } finally {
+    await context.close();
+  }
+});
+
+test("Personalmodul R1: Mobile-Sitzungen blenden inaktive Standort- und Abteilungsscopes aus", async () => {
+  const context = fixture();
+  const projectionArray = (value) => (Array.isArray(value) ? value : JSON.parse(value));
+  try {
+    await context.repository.insertSession(sessionInput());
+    const loadSession = async () => context.repository.getSession({
+      sessionId: "mobile-session",
+    });
+
+    let session = await loadSession();
+    assert.equal(projectionArray(session.access_scopes).length, 1);
+    assert.equal(projectionArray(session.permission_scopes).length, 1);
+
+    context.database.prepare("UPDATE locations SET active = 0 WHERE id = '18'").run();
+    session = await loadSession();
+    assert.deepEqual(projectionArray(session.access_scopes), []);
+    assert.deepEqual(projectionArray(session.permission_scopes), []);
+
+    context.database.prepare("UPDATE locations SET active = 1 WHERE id = '18'").run();
+    const departmentId = Number(context.database.prepare(`
+      INSERT INTO departments (location_id, name, active)
+      VALUES ('18', 'Verkauf', 1)
+    `).run().lastInsertRowid);
+    context.database.prepare(`
+      DELETE FROM portal_access_scopes WHERE employee_number = 'E18'
+    `).run();
+    context.database.prepare(`
+      INSERT INTO portal_access_scopes (employee_number, location_id, department_id)
+      VALUES ('E18', '18', ?)
+    `).run(departmentId);
+    context.database.prepare(`
+      INSERT INTO portal_permission_scope_grants (
+        employee_number, permission, location_id, department_id, approved_by
+      ) VALUES ('E18', 'personnel:candidates:read', '18', ?, 'PL-PLUS')
+    `).run(departmentId);
+
+    session = await loadSession();
+    assert.deepEqual(projectionArray(session.access_scopes).map((scope) => ({
+      locationId: scope.locationId,
+      departmentId: scope.departmentId,
+    })), [{ locationId: "18", departmentId }]);
+    assert.deepEqual(projectionArray(session.permission_scopes).map((scope) => ({
+      locationId: scope.locationId,
+      departmentId: scope.departmentId,
+    })), [{ locationId: "18", departmentId }]);
+
+    context.database.prepare("UPDATE departments SET active = 0 WHERE id = ?")
+      .run(departmentId);
+    session = await loadSession();
+    assert.deepEqual(projectionArray(session.access_scopes), []);
+    assert.deepEqual(projectionArray(session.permission_scopes), []);
   } finally {
     await context.close();
   }

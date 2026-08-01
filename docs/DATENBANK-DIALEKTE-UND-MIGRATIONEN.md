@@ -1,7 +1,7 @@
 # Datenbank-Dialekte und providerfähige Migrationen
 
 **Status:** Block 4/7 abgeschlossen  
-**Stand:** 29.07.2026  
+**Stand:** 01.08.2026
 **Produktiver Datenbankpfad:** ausschließlich SQLite
 
 ## 1. Ergebnis und Grenze
@@ -35,7 +35,7 @@ Die Verantwortungsgrenzen sind verbindlich:
   bindet jedes Anwendungsstatement genau einmal an sein SQLite-SQL und erzeugt
   die deckungsgleiche PostgreSQL-Plan-Fixture.
 
-Der Stand umfasst 899 Statementverträge in 22 Fachbereichen. Die
+Der Stand umfasst 928 Statementverträge in 23 Fachbereichen. Die
 Klassifikation beschreibt ausschließlich die bekannte SQLite-Syntax und ist
 kein Nachweis, dass unverändertes SQL auf einem anderen Provider ausführbar
 wäre:
@@ -43,19 +43,19 @@ wäre:
 | Klassifikation | Anzahl | Bedeutung |
 | --- | ---: | --- |
 | geprüfte SQLite-Baseline | 24 | keine vom aktuellen, konservativen Scanner erkannte SQLite-Besonderheit; kein Portabilitätsversprechen |
-| benannte SQLite-Dialektvariante | 875 | mindestens ein explizites SQLite-Merkmal |
+| benannte SQLite-Dialektvariante | 904 | mindestens ein explizites SQLite-Merkmal |
 | ungebundene oder doppelte Statements | 0 | Block-4-Gate |
 
 Als Dialektmerkmale werden unter anderem Upserts, `INSERT OR IGNORE`,
 `COLLATE NOCASE`, SQLite-Datums- und JSON-Funktionen, `julianday()`,
 `RETURNING`, `GLOB`, `AUTOINCREMENT`, SQLite-Katalogzugriffe und
-`RAISE(ABORT)` geführt. 803 der 875 Varianten verwenden die in der
+`RAISE(ABORT)` geführt. 832 der 904 Varianten verwenden die in der
 SQLite-Anbindung benannten Dollar-Parameter wie `$employeeNumber`; sie sind ein
 explizites Dialektmerkmal und werden deshalb nie als SQLite-Baseline
 ausgewiesen. Neue Merkmale müssen vor ihrer Aufnahme eindeutig klassifiziert
 werden.
 
-Die PostgreSQL-Fixture besitzt für alle 899 Statement-IDs denselben Eigentümer
+Die PostgreSQL-Fixture besitzt für alle 928 Statement-IDs denselben Eigentümer
 und dieselbe SQLite-Ausgangsklassifikation. Das ist lediglich eine
 deckungsgleiche Arbeitsliste, keine Aussage über PostgreSQL-Kompatibilität. Sie
 enthält absichtlich kein SQL, keinen ausführbaren Handler und keinen Treiber.
@@ -128,7 +128,7 @@ behauptet diese Aktivierung nicht.
 
 Die Block-4-Tests prüfen:
 
-- vollständige und eindeutige Bindung aller 899 Statements;
+- vollständige und eindeutige Bindung aller 928 Statements;
 - strikte Trennung zwischen konservativer SQLite-Baseline und erkannten
   SQLite-Dialektvarianten;
 - vollständige, nicht ausführbare PostgreSQL-Statement-Fixture;
@@ -165,18 +165,18 @@ Nonprod-Live-Tests gegen PostgreSQL wurden erfolgreich ausgeführt. PostgreSQL
 bleibt dennoch in Produkt- und Serverkonfiguration deaktiviert; der
 produktive Datenbankpfad ist weiterhin ausschließlich SQLite.
 
-Der ergänzte PostgreSQL-Dialektplan ist nicht ausführbar und umfasst alle 899
+Der ergänzte PostgreSQL-Dialektplan ist nicht ausführbar und umfasst alle 928
 Anwendungsstatements:
 
-- Compiler v2 erzeugt 797 Syntaxkandidaten (`portable-generated`);
+- Compiler v2 erzeugt 826 Syntaxkandidaten (`portable-generated`);
 - 102 Einträge bleiben `requires-override`;
-- 0 von 899 bilden einen ausführbaren Vollanwendungskatalog.
+- 0 von 928 bilden einen ausführbaren Vollanwendungskatalog.
 
 Die generierten Einträge bleiben Kandidaten mit nachvollziehbarer Provenienz,
 Parameterbindung und SQL-Fingerprint; sie sind nicht pauschal live geprüft.
 Der Katalogvertrag fordert für einen für die Vollanwendung ausführbaren
-Katalog 899 akzeptierte Live- und Paritätsnachweise. Der aktuelle Stand ist
-0/899; deshalb bleiben selbst 899 strukturell vollständige Deklarationen ohne
+Katalog 928 akzeptierte Live- und Paritätsnachweise. Der aktuelle Stand ist
+0/928; deshalb bleiben selbst 928 strukturell vollständige Deklarationen ohne
 diese Receipts geschlossen und können nicht `applicationExecutable: true`
 werden.
 
@@ -201,7 +201,7 @@ Die vier Slices umfassen zusammen genau neun fachlich live geprüfte
 Statements. Alle vier tragen `development-contract`, deklarieren
 `fullApplicationCatalog: false` und bleiben
 `applicationExecutable: false` sowie `productActivation: false`. Diese
-Teilnachweise verändern den Vollanwendungsstand 0/899 nicht und sind keine
+Teilnachweise verändern den Vollanwendungsstand 0/928 nicht und sind keine
 Produkt- oder Supportfreigabe. Ihre Quellvertrags-Fingerprints binden den
 kanonischen SQLite-SQL-Text an ID, Operation, Parameterarten,
 Nullability/Optionalität sowie Ergebnisarten und -reihenfolge. SQL- oder
@@ -251,3 +251,55 @@ Datenübernahme, vollständige fachliche Parität und Lasttests bleiben offen.
 Der technische Provider-Zwischenstand ist in
 [PostgreSQL-Provider im nicht produktiven Entwicklungsstatus](DATENBANK-POSTGRESQL-PROVIDER.md)
 dokumentiert.
+
+## Additive Personalmodul-Stufe R1
+
+Die SQLite-Stufe `v0.89-personnel-lifecycle-scoped-rights` ergänzt die
+fachrechtgebundene PL+-Freigabehülle `portal_permission_scope_grants`. Im
+ursprünglichen R1-Stand bindet jeder Eintrag genau eines der Fachrechte
+`personnel:candidates:read` oder `personnel:applications:write` an Mitarbeiter,
+Standort und optional Abteilung sowie an einen nichtleeren Genehmiger. Der
+zusammengesetzte Fremdschlüssel auf `portal_permission_grants` widerruft die
+Bereichshülle gemeinsam mit dem Fachrecht; der Standort ist ebenfalls per
+Fremdschlüssel gebunden.
+
+Die additive M4-Migration erweitert denselben Scope-Träger um die vier
+Workflow-Rechte `personnel:workflows:read`,
+`personnel:workflows:draft:write`, `personnel:workflows:publish` und
+`personnel:workflows:local:supplement`. Bewerbungs- und Workflow-Rechte bleiben
+getrennte Fachverträge.
+
+Kanonische Trigger prüfen Abteilung und Standort sowie einen deckenden
+allgemeinen `portal_access_scopes`-Eintrag. Wird dieser allgemeine Bereich
+verkleinert oder entfernt, werden nicht länger gedeckte Fachfreigaben
+fail-closed entfernt. Abweichende nichtleere R1-Strukturen oder semantisch
+widersprüchliche Scope-Zeilen werden nach der verpflichtenden
+Pre-Migrationssicherung nicht automatisch umgebaut.
+
+M2-/M3-Datenbanken ohne R1 bleiben read-only importkompatibel und werden beim
+regulären SQLite-Start additiv migriert. Ein vollständiges R1 wird akzeptiert;
+partielle Tabellen, Trigger oder widersprüchliche Zeilen scheitern bei Import
+und Maintenance geschlossen. Die fünf ergänzten, typisierten Statements sind
+im 928er Providerplan enthalten; sie ändern weder den PostgreSQL-Stand 0/928
+noch die deaktivierte PostgreSQL-Produktfreigabe.
+
+Die bestehende Mitarbeitertabelle erhält zusätzlich zwei kanonische
+Identitätsschutztrigger. Sie verbieten `personnel_number = local`
+case-insensitiv und nach Entfernung umgebenden ASCII-Leerraums einschließlich
+TAB, CR und LF bei INSERT und UPDATE. Nach der Schemaanlage prüfen SQLite-Start
+und read-only Importinspektion auch Bestandszeilen; ein Konflikt stoppt mit
+`EMPLOYEE_PRINCIPAL_RESERVED` und wird weder automatisch umbenannt noch
+gelöscht. Diese Härtung ist keine neue fachliche Anwendungsmigrationsstufe und
+ändert den PostgreSQL-Anwendungsmigrationsstand 0/9 nicht.
+
+Die additive M4-Publikationsschicht ergänzt drei weitere typisierte Statements
+zum Lesen, Veröffentlichen und Archivieren unveränderbarer Workflow-Versionen.
+Sie erweitert die R1-Scope-Tabelle verlustfrei um
+`personnel:workflows:read`, `personnel:workflows:draft:write`,
+`personnel:workflows:publish` und `personnel:workflows:local:supplement`;
+die beiden Bewerbungsrechte und ihre vorhandenen Genehmigungszeilen bleiben
+unverändert erhalten.
+Der Compiler klassifiziert alle drei als `portable-generated`; sie erhöhen den
+geschlossenen Vollanwendungsplan auf 928 Statements und 826 Syntaxkandidaten.
+Ohne Live- und Paritätsreceipts bleibt der PostgreSQL-Stand dennoch 0/928; eine
+PostgreSQL-Anwendungsmigration wird dadurch nicht implementiert (weiterhin 0/9).

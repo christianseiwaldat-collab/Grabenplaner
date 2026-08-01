@@ -167,7 +167,7 @@ test("DB Block 5: der generierte Dialektplan ist niemals selbst ein ausfuehrbare
   );
   assert.throws(
     () => assertFullPostgresqlApplicationCatalog(POSTGRESQL_APPLICATION_DIALECT_PLAN),
-    /acceptance gate is closed at 0\/899/,
+    /acceptance gate is closed at 0\/928/,
   );
   assert.throws(
     () => defineCatalog(POSTGRESQL_APPLICATION_DIALECT_PLAN.entries, true),
@@ -190,13 +190,13 @@ test("DB Block 5: ein Teilkatalog ist nur isoliert entwicklungs-ausfuehrbar", ()
   assert.equal(catalog.acceptance, POSTGRESQL_APPLICATION_ACCEPTANCE);
   assert.deepEqual(catalog.acceptance, {
     status: "closed",
-    requiredReceiptCount: 899,
+    requiredReceiptCount: 928,
     acceptedReceiptCount: 0,
   });
   assert.equal(catalog.entries.length, 4);
   assert.equal(catalog.providerEntries.length, 4);
   assert.deepEqual(catalog.summary, {
-    expectedStatementCount: 899,
+    expectedStatementCount: 928,
     statementCount: 4,
     generatedCount: 3,
     overrideCount: 1,
@@ -207,7 +207,7 @@ test("DB Block 5: ein Teilkatalog ist nur isoliert entwicklungs-ausfuehrbar", ()
   assert.equal(isDeepFrozen(catalog), true);
   assert.throws(
     () => assertFullPostgresqlApplicationCatalog(catalog),
-    /acceptance gate is closed at 0\/899/,
+    /acceptance gate is closed at 0\/928/,
   );
 });
 
@@ -267,7 +267,7 @@ test("DB Block 5: reale PostgreSQL-Slices bleiben Teil-Slices ohne Anwendungsfre
     assert.equal(isDeepFrozen(description), true);
     assert.throws(
       () => assertFullPostgresqlApplicationCatalog(slice),
-      /acceptance gate is closed at 0\/899/,
+      /acceptance gate is closed at 0\/928/,
     );
   }
 });
@@ -334,7 +334,7 @@ test("DB Block 5: explizite Overrides binden nur benannte Parameter", () => {
   );
 });
 
-test("DB Block 5: auch 899 Deklarationen bleiben bei 0/899 Receipts ohne Vollfreigabe", () => {
+test("DB Block 5: auch 928 Deklarationen bleiben bei 0/928 Receipts ohne Vollfreigabe", () => {
   const entries = Object.freeze(
     SOURCE_ENTRIES.map((_, index) => catalogEntryAt(index)),
   );
@@ -350,7 +350,7 @@ test("DB Block 5: auch 899 Deklarationen bleiben bei 0/899 Receipts ohne Vollfre
 
   assert.throws(
     () => defineCatalog(entries.slice(0, -1), true),
-    /must cover exactly 899 statements/,
+    /must cover exactly 928 statements/,
   );
   assert.throws(
     () => defineCatalog([...entries.slice(0, -1), entries[0]], true),
@@ -365,22 +365,22 @@ test("DB Block 5: auch 899 Deklarationen bleiben bei 0/899 Receipts ohne Vollfre
   assert.equal(deliberatelyPartial.fullApplicationCatalog, false);
   assert.equal(deliberatelyPartial.productActivation, false);
   assert.equal(deliberatelyPartial.acceptance.acceptedReceiptCount, 0);
-  assert.equal(deliberatelyPartial.acceptance.requiredReceiptCount, 899);
+  assert.equal(deliberatelyPartial.acceptance.requiredReceiptCount, 928);
   assert.throws(
     () => assertFullPostgresqlApplicationCatalog(deliberatelyPartial),
-    /acceptance gate is closed at 0\/899/,
+    /acceptance gate is closed at 0\/928/,
   );
 
   assert.throws(
     () => defineCatalog(entries, true),
-    /acceptance gate is closed at 0\/899/,
+    /acceptance gate is closed at 0\/928/,
   );
   assert.throws(
     () => defineCatalog(entries, false),
-    /partial PostgreSQL development catalog cannot contain all 899 statements/,
+    /partial PostgreSQL development catalog cannot contain all 928 statements/,
   );
-  assert.equal(deliberatelyPartial.entries.length, 898);
-  assert.equal(deliberatelyPartial.providerEntries.length, 898);
+  assert.equal(deliberatelyPartial.entries.length, 927);
+  assert.equal(deliberatelyPartial.providerEntries.length, 927);
   assert.match(deliberatelyPartial.fingerprint, /^[a-f0-9]{64}$/);
   assert.equal(isDeepFrozen(deliberatelyPartial), true);
 });
