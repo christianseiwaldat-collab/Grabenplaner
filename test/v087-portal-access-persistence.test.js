@@ -102,6 +102,48 @@ test("Block 3/7: Browser-Sitzung wird über den Provider vollständig projiziert
   }
 });
 
+test("Browser-Sitzung bewertet Vertretungen mit dem expliziten Wiener Geschäftstag", async () => {
+  const context = fixture();
+  const substitutionActive = async (businessDate) => {
+    const session = await context.repository.getEmployeeSessionByToken({
+      tokenHash: "token-hash",
+      now: "2026-08-02T12:00:00.000Z",
+      businessDate,
+    });
+    const scopes = Array.isArray(session.access_scopes)
+      ? session.access_scopes
+      : JSON.parse(session.access_scopes);
+    return Number(scopes[0]?.departmentManagerSubstitutionActive || 0);
+  };
+  try {
+    context.database.prepare(`
+      INSERT INTO approval_delegations (
+        location_id, delegate_employee_number, date_from, date_to, note, created_by
+      ) VALUES ('18', 'E18', '2026-08-02', '2026-08-02', 'Geschäftstag', 'E18')
+    `).run();
+
+    assert.equal(await substitutionActive("2026-08-01"), 0);
+    assert.equal(await substitutionActive("2026-08-02"), 1);
+    assert.equal(await substitutionActive("2026-08-03"), 0);
+
+    context.database.prepare("DELETE FROM approval_delegations").run();
+    context.database.prepare(`
+      INSERT INTO week_options (
+        employee_number, week_start, date_from, date_to, option_type, note, all_day
+      ) VALUES (
+        'E18', '2026-07-27', '2026-08-02', '2026-08-02',
+        'vacation', 'Geschäftstag', 1
+      )
+    `).run();
+
+    assert.equal(await substitutionActive("2026-08-01"), 0);
+    assert.equal(await substitutionActive("2026-08-02"), 1);
+    assert.equal(await substitutionActive("2026-08-03"), 0);
+  } finally {
+    await context.close();
+  }
+});
+
 test("Personalmodul R1: deaktivierte Mitarbeiter bleiben trotz Legacy-Portalstatus abgemeldet", async () => {
   const context = fixture();
   try {
