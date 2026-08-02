@@ -269,6 +269,12 @@ Workflow-Rechte `personnel:workflows:read`,
 `personnel:workflows:local:supplement`. Bewerbungs- und Workflow-Rechte bleiben
 getrennte Fachverträge.
 
+Die gestapelte M7-Migration `v0.90-personnel-profile-scoped-rights` erweitert
+denselben Träger ausschließlich um `personnel:profiles:read` und
+`personnel:profiles:master:read`. Dokument- und Delegationsrecht erhalten keine
+Scope-Zeilen. Bewerbungs-, Workflow- und Profilrechte bleiben getrennte
+Fachverträge; die acht bestehenden Schutztrigger bleiben unverändert.
+
 Kanonische Trigger prüfen Abteilung und Standort sowie einen deckenden
 allgemeinen `portal_access_scopes`-Eintrag. Wird dieser allgemeine Bereich
 verkleinert oder entfernt, werden nicht länger gedeckte Fachfreigaben
@@ -277,9 +283,12 @@ widersprüchliche Scope-Zeilen werden nach der verpflichtenden
 Pre-Migrationssicherung nicht automatisch umgebaut.
 
 M2-/M3-Datenbanken ohne R1 bleiben read-only importkompatibel und werden beim
-regulären SQLite-Start additiv migriert. Ein vollständiges R1 wird akzeptiert;
-partielle Tabellen, Trigger oder widersprüchliche Zeilen scheitern bei Import
-und Maintenance geschlossen. Die fünf ergänzten, typisierten Statements sind
+regulären SQLite-Start additiv migriert. Die exakten historischen R1- und
+M4-Tabellendefinitionen sowie das kanonische M7-Schema werden bei Read-only-
+Import und Maintenance akzeptiert. Beim aktiven Start werden R1-/M4-Zeilen erst
+nach dem vorhandenen Pre-Migration-Sicherungspunkt verlustfrei in das erweiterte
+Schema übernommen; partielle Tabellen, Trigger oder widersprüchliche Zeilen
+scheitern geschlossen. Die fünf ergänzten, typisierten Statements sind
 im 950er Providerplan enthalten; sie ändern weder den PostgreSQL-Stand 0/950
 noch die deaktivierte PostgreSQL-Produktfreigabe.
 
