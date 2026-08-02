@@ -345,6 +345,12 @@ const {
   createPersonnelWorkflowAccessSnapshot,
 } = require("./lib/personnel-workflow-access");
 const {
+  PERSONNEL_PROFILE_PERMISSIONS,
+  PERSONNEL_PROFILE_PERMISSION_IDS,
+  PERSONNEL_PROFILE_SCOPED_PERMISSIONS,
+  createPersonnelProfileAccessSnapshot,
+} = require("./lib/personnel-profile-access");
+const {
   PERSONNEL_WORKFLOW_ERROR_KINDS,
   PersonnelWorkflowError,
   createPersonnelWorkflowPublicationService,
@@ -503,6 +509,10 @@ const delegablePortalPermissionCatalog = Object.freeze([
   { id: "personnel:sensitive:write", label: "Sensible MA-Daten bearbeiten", description: "Personalakt im ausdrücklich zugewiesenen Verantwortungsbereich verschlüsselt pflegen; keine technische oder globale Berechtigung.", group: "Personalakt", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "personnel:phone:read", label: "Telefonnummern im eigenen Bereich lesen", group: "Personalakt", warningLevel: "high", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
   { id: "personnel:phone:write", label: "Telefonnummern im eigenen Bereich bearbeiten", description: "Bei standortgebundenen Leitungs- und Planungsrollen zusätzlich nur mit eigener Vertrauensstufe A.", group: "Personalakt", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["location_planner", "department_manager", "manager", "hr", "admin", "it_admin", "developer"] },
+  { id: PERSONNEL_PROFILE_PERMISSIONS.READ, label: "Mitarbeiterprofile im freigegebenen Bereich lesen", description: "Datensparsame Profilübersichten ausschließlich in einem von PL+ fachlich freigegebenen Standort oder einer freigegebenen Abteilung lesen.", group: "Mitarbeiterprofile", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr"] },
+  { id: PERSONNEL_PROFILE_PERMISSIONS.MASTER_READ, label: "Mitarbeiter-Stammdaten im freigegebenen Bereich lesen", description: "Nur die zusätzlich im Feldrechteprofil freigegebenen Personalstammdaten im fachlich freigegebenen Bereich lesen.", group: "Mitarbeiterprofile", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr"] },
+  { id: PERSONNEL_PROFILE_PERMISSIONS.DOCUMENTS_READ, label: "Personalakt-Dokumente lesen", description: "Geschützte Dokumentmetadaten ausschließlich über einen persönlichen Personalleitungszugang lesen; nicht an lokale oder technische Rollen delegierbar.", group: "Mitarbeiterprofile", warningLevel: "critical", eligibleRoles: ["hr"] },
+  { id: PERSONNEL_PROFILE_PERMISSIONS.DELEGATE, label: "Lokale Mitarbeiterprofil-Rechte freigeben", description: "Kennzeichnet PL+ für die fachrechtgebundene Freigabe lokaler Profilrechte; nicht weiterdelegierbar und ohne eigenen Profildatenzugriff.", group: "Mitarbeiterprofile", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
   { id: "personnel:candidates:read", label: "Bewerbungen im freigegebenen Bereich lesen", description: "Datensparsame Bewerber- und Bewerbungsdaten ausschließlich in einem von PL+ fachlich freigegebenen Standort oder einer freigegebenen Abteilung lesen.", group: "Bewerbungen & Preboarding", warningLevel: "high", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: "personnel:applications:write", label: "Bewerbungen im freigegebenen Bereich bearbeiten", description: "Strukturierte Bewerbungsdaten und Status ausschließlich im von PL+ freigegebenen Bereich bearbeiten; keine Kandidatenstammdaten, vertraulichen PL-Felder oder Umwandlung.", group: "Bewerbungen & Preboarding", warningLevel: "critical", hrDelegable: true, eligibleRoles: ["department_manager", "manager", "hr", "admin", "developer"] },
   { id: "personnel:candidates:write", label: "Bewerber zentral anlegen und bearbeiten", description: "Kandidatenstammdaten und neue Bewerbungen unternehmensweit verwalten.", group: "Bewerbungen & Preboarding", warningLevel: "critical", eligibleRoles: ["hr", "admin", "developer"] },
@@ -570,6 +580,7 @@ const hrDelegablePortalPermissions = new Set(delegablePortalPermissionCatalog.fi
 const personnelLifecyclePermissionIds = new Set([
   ...Object.values(PERSONNEL_LIFECYCLE_PERMISSIONS),
   ...PERSONNEL_WORKFLOW_PERMISSION_IDS,
+  ...PERSONNEL_PROFILE_PERMISSION_IDS,
 ]);
 const protectedAmuPermissionIds = new Set(["amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit"]);
 const protectedAmuRoleIds = new Set(["hr", "admin", "it_admin", "developer"]);
@@ -730,6 +741,16 @@ function assertPortalPermissionDependencies(permissions) {
     PERSONNEL_WORKFLOW_PERMISSIONS.READ,
     "Die Freigabe lokaler Workflow-Rechte setzt das Workflow-Leserecht voraus.",
   );
+  requirePermission(
+    PERSONNEL_PROFILE_PERMISSIONS.MASTER_READ,
+    PERSONNEL_PROFILE_PERMISSIONS.READ,
+    "Mitarbeiter-Stammdaten können nur zusammen mit dem Profil-Leserecht gelesen werden.",
+  );
+  requirePermission(
+    PERSONNEL_PROFILE_PERMISSIONS.DOCUMENTS_READ,
+    PERSONNEL_PROFILE_PERMISSIONS.READ,
+    "Personalakt-Dokumente können nur zusammen mit dem Profil-Leserecht gelesen werden.",
+  );
 }
 
 const portalDashboardPermissionDetails = Object.freeze([
@@ -772,6 +793,7 @@ const portalGlobalPermissionIds = new Set([
   "personnel:candidates:confidential:write", "personnel:candidates:convert", "personnel:candidates:delegate",
   "personnel:workflows:review", "personnel:workflows:confidential:read",
   "personnel:workflows:confidential:write", "personnel:workflows:delegate",
+  PERSONNEL_PROFILE_PERMISSIONS.DOCUMENTS_READ, PERSONNEL_PROFILE_PERMISSIONS.DELEGATE,
   "amu:metadata:read", "amu:file:read", "amu:review", "amu:delete", "amu:audit",
   "processes:write",
   "integrations:read", "integrations:profiles:write", "integrations:connections:read",
@@ -1099,6 +1121,14 @@ for (const roleId of ["admin", "developer"]) {
     ...personnelWorkflowStandardRolePermissions,
     PERSONNEL_WORKFLOW_PERMISSIONS.DELEGATE,
   ]);
+}
+addBuiltinRolePermissions("hr", [
+  PERSONNEL_PROFILE_PERMISSIONS.READ,
+  PERSONNEL_PROFILE_PERMISSIONS.MASTER_READ,
+  PERSONNEL_PROFILE_PERMISSIONS.DOCUMENTS_READ,
+]);
+for (const roleId of ["admin", "developer"]) {
+  addBuiltinRolePermissions(roleId, [PERSONNEL_PROFILE_PERMISSIONS.DELEGATE]);
 }
 for (const role of builtinPortalRoles) addBuiltinRolePermissions(role.id, [LOAN_OVERVIEW_PERMISSION]);
 for (const role of builtinPortalRoles) {
@@ -8161,13 +8191,21 @@ function portalAccessScopesForPrincipal({
 
 function manageablePortalPermissionsForActor(actor) {
   if (!actor) return new Set();
-  if (isLocalSystemSession(actor) || ["developer", "admin"].includes(actor.role)) {
+  if (isLocalSystemSession(actor)) {
     return new Set(delegablePortalPermissions);
+  }
+  if (["developer", "admin"].includes(actor.role)) {
+    const manageable = new Set(delegablePortalPermissions);
+    manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.READ);
+    manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.MASTER_READ);
+    manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.DOCUMENTS_READ);
+    return manageable;
   }
   if (actor.role === "it_admin") {
     return new Set([...delegablePortalPermissions].filter((permission) => (
       !permission.startsWith("personnel:candidates:")
       && !permission.startsWith("personnel:workflows:")
+      && !permission.startsWith("personnel:profiles:")
       && permission !== "personnel:applications:write"
     )));
   }
@@ -8182,6 +8220,10 @@ function manageablePortalPermissionsForActor(actor) {
       manageable.delete(PERSONNEL_WORKFLOW_PERMISSIONS.DRAFT_WRITE);
       manageable.delete(PERSONNEL_WORKFLOW_PERMISSIONS.PUBLISH);
       manageable.delete(PERSONNEL_WORKFLOW_PERMISSIONS.LOCAL_SUPPLEMENT);
+    }
+    if (!actor.permissions?.includes(PERSONNEL_PROFILE_PERMISSIONS.DELEGATE)) {
+      manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.READ);
+      manageable.delete(PERSONNEL_PROFILE_PERMISSIONS.MASTER_READ);
     }
     return manageable;
   }
@@ -23421,6 +23463,7 @@ app.delete("/api/positions/:id", async (request, response) => {
 });
 
 app.get("/api/employees", async (request, response) => {
+  await refreshApplicationSettingsSnapshot();
   const session = request.portalSession || (!getPortalStatus().portalEnabled && isLoopbackRequest(request)
     ? {
       employeeNumber: "local",
@@ -23431,6 +23474,10 @@ app.get("/api/employees", async (request, response) => {
       localSystem: true,
     }
     : null);
+  const personnelProfileRosterAccess = createPersonnelProfileRosterAccess(
+    session,
+    installationFeatureEnabled("personnelLifecycle"),
+  );
   let employees = await Promise.all((await organizationPersonnelRepository.listEmployees()).map(async (row) => ({
         ...serializeEmployee(row, {
           includeTimeConfirmationLevel: sessionCanViewTimeConfirmationLevel(session),
@@ -23456,6 +23503,9 @@ app.get("/api/employees", async (request, response) => {
   employees = await Promise.all(employees.map(async (employee) => ({
     ...employee,
     personnel_display: await personnelDisplayProfile(employee.personnel_number, session),
+    personnel_profile_access: Object.freeze({
+      available: personnelProfileRosterAccess.canReadSubject(employee),
+    }),
   })));
   response.json(employees);
 });
@@ -27565,6 +27615,7 @@ const PERSONNEL_LIFECYCLE_SCOPED_DELEGABLE_PERMISSIONS = Object.freeze([
   PERSONNEL_WORKFLOW_PERMISSIONS.DRAFT_WRITE,
   PERSONNEL_WORKFLOW_PERMISSIONS.PUBLISH,
   PERSONNEL_WORKFLOW_PERMISSIONS.LOCAL_SUPPLEMENT,
+  ...PERSONNEL_PROFILE_SCOPED_PERMISSIONS,
 ]);
 
 function publicPortalPermissionScopeGrant(scope) {
@@ -32845,63 +32896,224 @@ function requirePersonnelLifecycleAccess(request, { action = "read" } = {}) {
   }
 }
 
-function requirePersonnelProfileOverviewAccess(request) {
-  const session = requirePortalReadOrLocal(request, "personnel:central:read");
-  if (isLocalSystemSession(session)) return session;
-  const personalHrAccess = session?.sessionKind === "employee"
-    && session?.isEmployee === true
-    && String(session?.employeeNumber || "").trim() !== ""
-    && session?.role === "hr"
-    && session?.permissions?.includes("personnel:central:read");
-  if (!personalHrAccess) {
-    auditPersonnelLifecycleAccessDenied(
-      session,
-      request,
-      "PERSONNEL_PROFILE_ACCESS_DENIED",
-      "personnel:central:read",
-    );
-    throw httpError(
-      403,
-      "Das Mitarbeiterprofil ist nur für einen persönlichen Personalleitungszugang verfügbar.",
-      "PERSONNEL_PROFILE_ACCESS_DENIED",
-    );
+const PERSONNEL_PROFILE_TABS = new Set(["overview", "master_org", "documents"]);
+const PERSONNEL_PROFILE_TAB_CAPABILITIES = Object.freeze({
+  overview: "canReadOverview",
+  master_org: "canReadMasterOrg",
+  documents: "canReadDocuments",
+});
+const PERSONNEL_PROFILE_MASTER_FIELD_ALLOWLIST = Object.freeze([
+  "identity.firstName",
+  "identity.lastName",
+  "identity.previousName",
+  "identity.salutation",
+  "identity.title",
+  "identity.birthDate",
+  "identity.birthPlace",
+  "identity.nationality",
+  "socialSecurityNumber",
+  "iban",
+  "bic",
+  "accountHolder",
+  "address.street",
+  "address.supplement",
+  "address.postalCode",
+  "address.city",
+  "address.state",
+  "address.country",
+  "phone",
+  "alternatePhone",
+  "privateEmail",
+  "emergencyContact.name",
+  "emergencyContact.relationship",
+  "emergencyContact.phone",
+  "employment.startDate",
+  "employment.endDate",
+  "employment.fixedTermEnd",
+  "employment.probationEnd",
+  "employment.employmentType",
+  "employment.contractType",
+  "employment.employmentStatus",
+  "employment.collectiveAgreement",
+  "employment.classification",
+  "employment.payrollGroup",
+]);
+
+function personnelProfileFoundationAvailable(session, profileAccess) {
+  if (profileAccess.localSystem) return true;
+  if (profileAccess.personalHr) {
+    return session.permissions?.includes("personnel:central:read") === true;
   }
-  return session;
+  if (profileAccess.scoped) {
+    return session.permissions?.includes("employees:read") === true;
+  }
+  return false;
 }
 
-function personnelProfileOverviewProjection(row) {
+function createPersonnelProfileRosterAccess(session, featureEnabled) {
+  const profileAccess = createPersonnelProfileAccessSnapshot(session || {});
+  const available = featureEnabled === true
+    && personnelProfileFoundationAvailable(session || {}, profileAccess);
   return Object.freeze({
-    profile: Object.freeze({
-      employeeNumber: String(row.personnel_number),
-      displayName: String(row.display_name),
-      active: Boolean(row.active),
-      organization: Object.freeze({
-        positionName: row.position_name === null ? null : String(row.position_name),
-        costCenter: Object.freeze({
-          code: row.cost_center_code === null ? null : String(row.cost_center_code),
-          name: row.cost_center_name === null ? null : String(row.cost_center_name),
-        }),
-        location: Object.freeze({
-          id: row.location_id === null ? null : String(row.location_id),
-          name: row.location_name === null ? null : String(row.location_name),
-        }),
-        department: Object.freeze({
-          id: row.department_id === null ? null : Number(row.department_id),
-          name: row.department_name === null ? null : String(row.department_name),
-        }),
+    canReadSubject(subject) {
+      return available && profileAccess.canReadSubject(subject) === true;
+    },
+  });
+}
+
+function requirePersonnelProfileAccess(request) {
+  let session = portalSessionFromRequest(request);
+  try {
+    session = requirePortalAnyPermissionOrLocal(
+      request,
+      PERSONNEL_PROFILE_PERMISSION_IDS,
+    );
+    const profileAccess = createPersonnelProfileAccessSnapshot(session);
+    if (!personnelProfileFoundationAvailable(session, profileAccess)) {
+      throw httpError(
+        403,
+        "Das Mitarbeiterprofil ist für diesen Zugang nicht verfügbar.",
+        "PERSONNEL_PROFILE_ACCESS_DENIED",
+      );
+    }
+    return Object.freeze({
+      session,
+      recordAccess: personnelRecordAccess(session),
+      profileAccess,
+    });
+  } catch (error) {
+    if (Number(error?.status) === 403) {
+      auditPersonnelLifecycleAccessDenied(
+        session,
+        request,
+        error.code || "PERSONNEL_PROFILE_ACCESS_DENIED",
+        PERSONNEL_PROFILE_PERMISSION_IDS.join("|"),
+      );
+    }
+    throw error;
+  }
+}
+
+function personnelProfileCanReadMasterProjection(accessContext) {
+  return accessContext.profileAccess.localSystem
+    || accessContext.profileAccess.scoped
+    || (accessContext.profileAccess.personalHr
+      && actorCanReadPersonnelSensitiveData(accessContext.session)
+      && accessContext.recordAccess.canReadSensitive === true);
+}
+
+function personnelProfileCanReadDocumentProjection(accessContext) {
+  return accessContext.profileAccess.localSystem
+    || (accessContext.profileAccess.personalHr
+      && actorCanReadPersonnelSensitiveData(accessContext.session)
+      && accessContext.recordAccess.canReadDocuments === true);
+}
+
+function personnelProfilePreflightCapability(accessContext, tab) {
+  if (tab === "overview") return accessContext.profileAccess.canReadProfiles === true;
+  if (tab === "master_org") {
+    return accessContext.profileAccess.canReadMaster === true
+      && personnelProfileCanReadMasterProjection(accessContext);
+  }
+  return tab === "documents"
+    && accessContext.profileAccess.canReadDocuments === true
+    && personnelProfileCanReadDocumentProjection(accessContext);
+}
+
+function personnelProfileCapabilities(accessContext, row) {
+  return Object.freeze({
+    canReadOverview: accessContext.profileAccess.canReadSubject(row) === true,
+    canReadMasterOrg: accessContext.profileAccess.canReadMasterSubject(row) === true
+      && personnelProfileCanReadMasterProjection(accessContext),
+    canReadDocuments: accessContext.profileAccess.canReadDocumentsSubject(row) === true
+      && personnelProfileCanReadDocumentProjection(accessContext),
+  });
+}
+
+function personnelProfileTabs(capabilities) {
+  return Object.freeze({
+    overview: Object.freeze({ available: capabilities.canReadOverview === true }),
+    masterData: Object.freeze({ available: capabilities.canReadMasterOrg === true }),
+    documents: Object.freeze({ available: capabilities.canReadDocuments === true }),
+    onboarding: Object.freeze({ available: false }),
+    training: Object.freeze({ available: false }),
+    offboarding: Object.freeze({ available: false }),
+    history: Object.freeze({ available: false }),
+  });
+}
+
+function personnelProfileSubjectProjection(row) {
+  return Object.freeze({
+    employeeNumber: String(row.personnel_number),
+    displayName: String(row.display_name),
+    active: Boolean(row.active),
+    organization: Object.freeze({
+      positionName: row.position_name === null ? null : String(row.position_name),
+      costCenter: Object.freeze({
+        code: row.cost_center_code === null ? null : String(row.cost_center_code),
+        name: row.cost_center_name === null ? null : String(row.cost_center_name),
+      }),
+      location: Object.freeze({
+        id: row.location_id === null ? null : String(row.location_id),
+        name: row.location_name === null ? null : String(row.location_name),
+      }),
+      department: Object.freeze({
+        id: row.department_id === null ? null : Number(row.department_id),
+        name: row.department_name === null ? null : String(row.department_name),
       }),
     }),
-    tabs: Object.freeze({
-      overview: Object.freeze({ available: true }),
-      masterData: Object.freeze({ available: false }),
-      documents: Object.freeze({ available: false }),
-      onboarding: Object.freeze({ available: false }),
-      training: Object.freeze({ available: false }),
-      offboarding: Object.freeze({ available: false }),
-      history: Object.freeze({ available: false }),
-    }),
-    capabilities: Object.freeze({ canReadOverview: true }),
   });
+}
+
+function personnelProfileBaseProjection(row, capabilities) {
+  return {
+    profile: personnelProfileSubjectProjection(row),
+    tabs: personnelProfileTabs(capabilities),
+    capabilities,
+  };
+}
+
+function personnelProfileReadableMasterFields(fieldAccess) {
+  return PERSONNEL_PROFILE_MASTER_FIELD_ALLOWLIST
+    .filter((fieldKey) => ["read", "write"].includes(fieldAccess[fieldKey]));
+}
+
+function personnelProfileMasterDataProjection(profile, fieldKeys) {
+  const projection = {};
+  for (const fieldKey of fieldKeys) {
+    setPersonnelPathValue(projection, fieldKey, personnelPathValue(profile, fieldKey) ?? "");
+  }
+  return projection;
+}
+
+function personnelProfileNotFound() {
+  return httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
+}
+
+async function loadPersonnelProfileSubject(accessContext, employeeNumber, request, tab) {
+  const row = await organizationPersonnelRepository
+    .getEmployeeProfileOverviewProjection(employeeNumber);
+  if (!row) {
+    auditPersonnelRecordDenied(
+      accessContext.session,
+      employeeNumber,
+      request,
+      "EMPLOYEE_NOT_FOUND",
+    );
+    throw personnelProfileNotFound();
+  }
+  const capabilities = personnelProfileCapabilities(accessContext, row);
+  if (capabilities[PERSONNEL_PROFILE_TAB_CAPABILITIES[tab]] !== true) {
+    auditPersonnelRecordDenied(
+      accessContext.session,
+      employeeNumber,
+      request,
+      "PERSONNEL_PROFILE_SCOPE_DENIED",
+      tab === "documents" ? ["documents"] : [],
+    );
+    throw personnelProfileNotFound();
+  }
+  return Object.freeze({ row, capabilities });
 }
 
 const PERSONNEL_WORKFLOW_ROUTE_ACTIONS = Object.freeze({
@@ -33470,13 +33682,27 @@ function auditPersonnelLifecycleScopedNotFound(accessContext, request, error) {
 }
 
 app.get("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile", async (request, response) => {
-  const session = requirePersonnelProfileOverviewAccess(request);
+  const accessContext = requirePersonnelProfileAccess(request);
   const tab = String(request.query.tab || "overview").trim().toLowerCase();
-  if (tab !== "overview") {
+  if (!PERSONNEL_PROFILE_TABS.has(tab)) {
     throw httpError(
       400,
-      "In diesem Ausbauschritt ist nur die Profilübersicht verfügbar.",
+      "Dieser Profilbereich ist nicht verfügbar.",
       "PERSONNEL_PROFILE_TAB_NOT_AVAILABLE",
+    );
+  }
+  if (!personnelProfilePreflightCapability(accessContext, tab)) {
+    auditPersonnelRecordDenied(
+      accessContext.session,
+      request.params.employeeNumber,
+      request,
+      "PERSONNEL_PROFILE_TAB_ACCESS_DENIED",
+      tab === "documents" ? ["documents"] : [],
+    );
+    throw httpError(
+      403,
+      "Dieser Profilbereich ist für diesen Zugang nicht verfügbar.",
+      "PERSONNEL_PROFILE_TAB_ACCESS_DENIED",
     );
   }
   const employeeNumber = String(request.params.employeeNumber || "").trim();
@@ -33487,18 +33713,60 @@ app.get("/api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile", 
       "PERSONNEL_PROFILE_EMPLOYEE_NUMBER_INVALID",
     );
   }
-  const profile = await organizationPersonnelRepository
-    .getEmployeeProfileOverviewProjection(employeeNumber);
-  if (!profile) {
-    throw httpError(404, "Das Teammitglied wurde nicht gefunden.", "EMPLOYEE_NOT_FOUND");
+  const { row, capabilities } = await loadPersonnelProfileSubject(
+    accessContext,
+    employeeNumber,
+    request,
+    tab,
+  );
+  const projection = personnelProfileBaseProjection(row, capabilities);
+  if (tab === "master_org") {
+    const masterFieldKeys = accessContext.profileAccess.scoped
+      ? []
+      : personnelProfileReadableMasterFields(accessContext.recordAccess.fieldAccess);
+    const masterData = accessContext.profileAccess.scoped
+      ? {}
+      : personnelProfileMasterDataProjection(
+          await personnelSensitiveProfile(employeeNumber),
+          masterFieldKeys,
+        );
+    auditPortal(
+      accessContext.session.employeeNumber || "local",
+      "personnel-profile.master-org.view",
+      "employee",
+      employeeNumber,
+      JSON.stringify({ fields: masterFieldKeys }),
+    );
+    return response.json({
+      profile: projection.profile,
+      masterData,
+      tabs: projection.tabs,
+      capabilities: projection.capabilities,
+    });
+  }
+  if (tab === "documents") {
+    const documents = await personnelRecordDocumentRows(employeeNumber);
+    auditPortal(
+      accessContext.session.employeeNumber || "local",
+      "personnel-profile.documents.view",
+      "employee",
+      employeeNumber,
+      JSON.stringify({ entries: documents.length }),
+    );
+    return response.json({
+      profile: projection.profile,
+      documents,
+      tabs: projection.tabs,
+      capabilities: projection.capabilities,
+    });
   }
   auditPortal(
-    session.employeeNumber || "local",
+    accessContext.session.employeeNumber || "local",
     "personnel-profile.overview.view",
     "employee",
     employeeNumber,
   );
-  response.json(personnelProfileOverviewProjection(profile));
+  response.json(projection);
 });
 
 app.get("/api/portal/v1/personnel-lifecycle/workflows", async (request, response) => {
