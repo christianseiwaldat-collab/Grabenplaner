@@ -466,8 +466,8 @@ Abnahme:
 Abschlussartefakt:
 [Datenbank-Dialekte und providerfähige Migrationen](DATENBANK-DIALEKTE-UND-MIGRATIONEN.md)
 
-Aktueller Stand am 29.07.2026: Block 4 wurde separat freigegeben und
-abgeschlossen. Sämtliche 939 Anwendungsstatements besitzen eine eindeutige
+Aktueller Stand am 02.08.2026: Block 4 wurde separat freigegeben und
+abgeschlossen. Sämtliche 950 Anwendungsstatements besitzen eine eindeutige
 SQLite-Bindung und eine deckungsgleiche, nicht ausführbare
 PostgreSQL-Plan-Fixture. Die neun realen Anwendungsmigrationsstufen sind durch
 providerneutrale Operations-IDs, SQLite-Bindungen und einen ausdrücklich nur
@@ -495,7 +495,7 @@ Abnahme:
 
 ### Phase 5 – PostgreSQL-Provider im nicht produktiven Status
 
-Zwischenstand am 30.07.2026: Phase 5 ist begonnen und weiterhin in
+Zwischenstand am 02.08.2026: Phase 5 ist begonnen und weiterhin in
 Bearbeitung. Der abgegrenzte PostgreSQL-Provider einschließlich
 Connection-Pool, Transaktionsbindung, Fehlernormalisierung und
 Sicherheitsrichtlinien ist für die nicht produktive Entwicklung implementiert.
@@ -512,14 +512,14 @@ weder in der Produkt- noch in der Serverkonfiguration aktiviert; beide bleiben
 ausschließlich auf SQLite festgelegt.
 
 Der aktuelle PostgreSQL-Dialektplan wird mit Compiler v2 erzeugt und bleibt
-absichtlich nicht ausführbar. Er umfasst alle 939 Anwendungsstatements: 837
+absichtlich nicht ausführbar. Er umfasst alle 950 Anwendungsstatements: 848
 Einträge sind generierte Syntaxkandidaten (`portable-generated`), 102
-benötigen eine ausdrückliche `requires-override`-Implementierung und 0 von 939
+benötigen eine ausdrückliche `requires-override`-Implementierung und 0 von 950
 bilden einen ausführbaren Vollanwendungskatalog.
 
-Der neue Katalogvertrag verhindert bei derzeit 0/939 akzeptierten Live- und
-Paritätsnachweisen jeden für die Vollanwendung ausführbaren Katalog. Auch 939
-strukturell vollständige Deklarationen reichen ohne diese 939
+Der neue Katalogvertrag verhindert bei derzeit 0/950 akzeptierten Live- und
+Paritätsnachweisen jeden für die Vollanwendung ausführbaren Katalog. Auch 950
+strukturell vollständige Deklarationen reichen ohne diese 950
 Acceptance-Nachweise nicht für `applicationExecutable: true`.
 
 Davon getrennt sind vier reale Teil-Slices auf SQLite und PostgreSQL
@@ -542,7 +542,7 @@ Parameter- oder Ergebnisdrift scheitert geschlossen. Cleanupfehler lassen die
 Dual-Provider-Tests fehlschlagen.
 
 Diese 4/4-, 2/2-, 2/2- und 1/1-Nachweise sind weder Vollkatalog noch
-Produktaktivierung und verändern den Stand 0/939 nicht.
+Produktaktivierung und verändern den Stand 0/950 nicht.
 
 Der generische PostgreSQL-Migrationsadapter ist als nicht aktivierter
 `development-contract` implementiert und real getestet. Ein
@@ -579,7 +579,7 @@ in
 dokumentiert.
 
 Der separat freigegebene Block 6 ergänzt Betriebs- und Recovery-Module, ändert
-aber keines dieser Phase-5-Gates: Der Vollanwendungsstand bleibt 0/939 und der
+aber keines dieser Phase-5-Gates: Der Vollanwendungsstand bleibt 0/950 und der
 Anwendungsmigrationsstand 0/9. Ein erfolgreicher technischer Backup- und
 Restore-Nachweis darf fehlende Anwendungsparität nicht ersetzen.
 
@@ -642,7 +642,7 @@ Abnahme:
   Dokumentkomponente sind technisch aneinander gebunden;
 - [x] der veröffentlichte Integrationscommit `25fab8e` besitzt mit Run
   `30508095599` einen grünen externen CI-E2E-Lauf;
-- [ ] die Phase-5-Gates 939/939 und 9/9 sind erfüllt;
+- [ ] die Phase-5-Gates 950/950 und 9/9 sind erfüllt;
 - [ ] ein Vollanwendungs-Restore auf realitätsnaher Datenmenge ist
   nachgewiesen;
 - [ ] RPO, RTO, Rollen, Secrets, Offsite, Retention, Betriebsverantwortung,
@@ -654,7 +654,7 @@ Abnahme:
 
 Die Startprüfung vom 30.07.2026 hat das Ergebnis **NO-GO**. Es ist noch keine
 konkrete Zielinstallation ausgewählt oder installationsbezogen freigegeben.
-PostgreSQL-Vollkatalog und Anwendungsmigrationen stehen weiterhin bei 0/939
+PostgreSQL-Vollkatalog und Anwendungsmigrationen stehen weiterhin bei 0/950
 beziehungsweise 0/9; `productActivation` bleibt `false`. Deshalb wurde keine
 Installation, kein VPS und keine Produktkonfiguration verändert.
 
