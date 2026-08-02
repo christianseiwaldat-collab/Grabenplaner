@@ -1,5 +1,12 @@
 # Grabenplaner Versions-Log
 
+## v0.90.1 Beta · Recovery-Smoke für versionierte Personalakten korrigiert
+
+- Der isolierte Recovery-App-Smoke entfernt nun auch die geschützten Versionen und Ereignisse versionierter Mitarbeiterdokumente in einer fremdschlüsselsicheren Reihenfolge aus seiner temporären Datenbank.
+- Die neue geschützte Versionsspalte und die drei bekannten Löschschutz-Trigger sind exakt freigegeben. Unbekannte geschützte Spalten oder Trigger stoppen den Nachweis weiterhin fail-closed; gelöste Trigger werden anschließend SQL-identisch wiederhergestellt.
+- Ein eigener Regressionstest prüft die vollständige Bereinigung der Dokumenthistorie, den Erhalt betrieblicher Stammzeilen sowie Fremdschlüssel- und Datenbankintegrität.
+- Produktive Daten, Funktionsumfang, Runtime-Schema, SQLite-Produktfreigabe und Host-Härtung entsprechen v0.90.0-beta.
+
 ## v0.90 Beta · Versionierte Mitarbeiterdokumente und sichere Profilprojektionen
 
 - Die bestehende verschlüsselte Personalakte führt Mitarbeiterdokumente nun mit Kategorien, unveränderbaren Fassungen und einer nachvollziehbaren, belegverketteten Ereignishistorie. Neue Versionen, historischer Abruf, Aufbewahrungsprüfung und Archivierung verwenden weiterhin denselben geschützten Datei- und Scanpfad.
