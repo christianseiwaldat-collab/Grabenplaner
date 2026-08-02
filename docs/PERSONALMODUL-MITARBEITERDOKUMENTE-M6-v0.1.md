@@ -2,7 +2,7 @@
 
 Stand: 2. August 2026
 
-Status: verbindlicher technischer Vertrag für das lokale M6-Fundament; noch nicht veröffentlicht und nicht zur produktiven Aktivierung freigegeben
+Status: verbindlicher technischer Vertrag für das mit v0.90.0-beta veröffentlichte M6-Fundament; nicht zur produktiven Aktivierung freigegeben
 
 Produktgrenze: Das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert. M6 erzeugt weder Onboarding-, Schulungs- oder Offboarding-Prozesse noch Aufgaben, Fristen, Benachrichtigungen oder Eskalationen.
 

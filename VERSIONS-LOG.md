@@ -1,5 +1,14 @@
 # Grabenplaner Versions-Log
 
+## v0.90 Beta · Versionierte Mitarbeiterdokumente und sichere Profilprojektionen
+
+- Die bestehende verschlüsselte Personalakte führt Mitarbeiterdokumente nun mit Kategorien, unveränderbaren Fassungen und einer nachvollziehbaren, belegverketteten Ereignishistorie. Neue Versionen, historischer Abruf, Aufbewahrungsprüfung und Archivierung verwenden weiterhin denselben geschützten Datei- und Scanpfad.
+- Das Mitarbeiterprofil besitzt sieben klar getrennte Register. Übersicht, Stammdaten und Organisation sowie die sichere Dokumentliste werden unabhängig und ausschließlich lesend geladen; Onboarding, Schulungen, Offboarding und Gesamthistorie bleiben technisch geschlossen.
+- Eigene Profilrechte und positiv definierte Datenprojektionen schützen jeden Abruf serverseitig. FL und AL bleiben auf ihre ausdrücklich freigegebene Standort- beziehungsweise Abteilungsschnittmenge und minimale Organisationsdaten begrenzt; private Kontakte, Personalvermerke und Dokumente werden ihnen nicht ausgegeben.
+- Verlustfreie SQLite-Migrationen erkennen die vollständigen Vorgängerschemata und deren unveränderte Schutztrigger. Partielle, unbekannte oder manipulierte Strukturen stoppen Start, Import und Wartung weiterhin fail-closed; notwendige Migrationen erzeugen zuvor einen internen Sicherungspunkt.
+- Das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert und nicht provisionierbar. Dieser Release startet weder Onboarding noch Offboarding und ergänzt keine Automatisierungen, Fristen, Benachrichtigungen oder Eskalationen.
+- SQLite bleibt der einzige freigegebene Produktprovider. Runtime-Schema 4, Ubuntu-Härtung und der bestehende backup- und rollbackfähige Server-Updater bleiben unverändert.
+
 ## v0.89.1 Beta · Recovery-Smoke für das Personalmodul abgesichert
 
 - Der isolierte Recovery-App-Smoke entfernt nun auch die geschützten Bewerber-, Bewerbungs-, Dokument-, Ereignis- und Umwandlungsdaten sowie die gebundenen Personal-Workflow-Instanzen aus seiner temporären Datenbank. Verwaiste Personal-Workflow-Läufe stoppen den Nachweis vor jeder Änderung fail-closed.
