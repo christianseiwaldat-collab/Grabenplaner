@@ -4,7 +4,7 @@ Stand: 2. August 2026
 
 Status: verbindlicher Architekturvertrag; Bewerber-, Dokument-, M3-Umwandlungs-, R1-Bereichsrechte-, M4-Workflow-Publikations- und M5-Instanzgrundlage im Quellstand umgesetzt
 
-Produktstatus: nicht released; keine Freigabe für den produktiven Betrieb; das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert
+Produktstatus: in v0.89.0-beta als standardmäßig deaktiviertes Fundament enthalten; keine Freigabe für die produktive Aktivierung; das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert
 
 ## 1. Ziel und Abgrenzung
 
@@ -27,7 +27,7 @@ Die bislang im Quellstand umgesetzte technische Ausbaustufe umfasst:
 - acht eigene Workflow-Rechte mit PL-/PL+-Trennung sowie rechtsspezifischer Scope-Schnittmenge für FL und AL,
 - Migrations-, Integritäts-, Fachlogik- und Regressionstests für diese Integrationsgrenze.
 
-Die M3-Umwandlung ist bewusst eng begrenzt: Sie übernimmt nur Bewerbungen im Status `preboarding`, legt kein Portalprofil an, kopiert keine Bewerberdokumente und startet weder Onboarding noch Workflow. R1 setzt die Bereichsrechte für Bewerbungen und Preboarding um; M4 ergänzt davon getrennte Workflow-Rechte und unveränderbare Veröffentlichungen. M5 bindet nur neue, ausdrücklich gestartete Standard-Instanzen an genau eine nicht archivierte Veröffentlichung und übernimmt keinen Legacy-Lauf. Weiterhin nicht umgesetzt sind eine Dokument-Upload-/Download-API, Mitarbeiterprofil-Tabs, ein grafischer Editor und neue Prozessautomatik. Vertrauliche, freie `custom_personnel`- sowie Onboarding- und Offboarding-Workflows bleiben bis zu ihrem eigenen Schutzvertrag fail-closed. Diese Ausbaustufe ist nicht released. SQLite bleibt der unterstützte Produktprovider. Die PostgreSQL-Grundlage bleibt bis zur gesonderten Freigabe nicht produktiv.
+Die M3-Umwandlung ist bewusst eng begrenzt: Sie übernimmt nur Bewerbungen im Status `preboarding`, legt kein Portalprofil an, kopiert keine Bewerberdokumente und startet weder Onboarding noch Workflow. R1 setzt die Bereichsrechte für Bewerbungen und Preboarding um; M4 ergänzt davon getrennte Workflow-Rechte und unveränderbare Veröffentlichungen. M5 bindet nur neue, ausdrücklich gestartete Standard-Instanzen an genau eine nicht archivierte Veröffentlichung und übernimmt keinen Legacy-Lauf. Weiterhin nicht umgesetzt sind eine Dokument-Upload-/Download-API, Mitarbeiterprofil-Tabs, ein grafischer Editor und neue Prozessautomatik. Vertrauliche, freie `custom_personnel`- sowie Onboarding- und Offboarding-Workflows bleiben bis zu ihrem eigenen Schutzvertrag fail-closed. Diese Ausbaustufe ist in v0.89.0-beta ausschließlich als standardmäßig deaktiviertes Fundament enthalten und keine Aktivierungsfreigabe. SQLite bleibt der unterstützte Produktprovider. Die PostgreSQL-Grundlage bleibt bis zur gesonderten Freigabe nicht produktiv.
 
 ## 2. Einordnung in die bestehende Anwendung
 
@@ -239,7 +239,7 @@ M5 ergänzt zwei Sidecar-Tabellen und zwölf Schutztrigger. `custom_process_run_
 
 ## 8. API-Oberfläche
 
-Die Endpunkte sind unter `/api/portal/v1/personnel-lifecycle/...` gebündelt und durch `personnelLifecycle` fail-closed gesperrt. Im lokalen, unveröffentlichten Stand umgesetzt sind:
+Die Endpunkte sind unter `/api/portal/v1/personnel-lifecycle/...` gebündelt und durch `personnelLifecycle` fail-closed gesperrt. Im standardmäßig deaktivierten v0.89.0-beta-Fundament enthalten sind:
 
 - `GET /document-categories`,
 - `GET|POST /candidates`,
