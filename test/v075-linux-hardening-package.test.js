@@ -113,16 +113,28 @@ function withCleanGitSnapshot(callback) {
   }
 }
 
-test("v0.90.2 keeps every managed Linux artifact LF-only", () => {
+test("v0.90.2 keeps every managed Linux byte contract platform-stable", () => {
   const attributes = read(".gitattributes");
   for (const rule of [
-    "server-tools/linux/**/*.js text eol=lf",
-    "server-tools/linux/**/*.json text eol=lf",
-    "server-tools/linux/**/*.in text eol=lf",
+    "server-tools/linux/runtime-schema.json text eol=lf",
+    "server-tools/linux/grabenplaner-monitor.timer.in text eol=crlf",
+    "server-tools/linux/host-control/lib/*.js text eol=lf",
+    "server-tools/linux/host-control/systemd/*.in text eol=lf",
+    "server-tools/linux/offsite/**/*.js text eol=lf",
+    "server-tools/linux/offsite/**/*.json text eol=lf",
+    "server-tools/linux/offsite/**/*.in text eol=lf",
+    "server-tools/linux/hardening/lib/*.js text eol=crlf",
+    "server-tools/linux/hardening/module-schema.json text eol=crlf",
   ]) assert.equal(attributes.includes(rule), true, rule);
 
   const runtimeSchema = JSON.parse(read("server-tools/linux/runtime-schema.json"));
   const offsiteSchema = JSON.parse(read("server-tools/linux/offsite/module-schema.json"));
+  const expectedCrlf = new Set([
+    "server-tools/linux/grabenplaner-monitor.timer.in",
+    "server-tools/linux/hardening/lib/hardening-contract.js",
+    "server-tools/linux/hardening/lib/hardening-policy.js",
+    "server-tools/linux/hardening/module-schema.json",
+  ]);
   const managedArtifacts = new Set([
     "server-tools/linux/runtime-schema.json",
     "server-tools/linux/offsite/module-schema.json",
@@ -132,8 +144,13 @@ test("v0.90.2 keeps every managed Linux artifact LF-only", () => {
     ...schema.managedArtifacts,
   ]);
   for (const relative of managedArtifacts) {
-    const content = fs.readFileSync(path.join(root, ...relative.split("/")));
-    assert.equal(content.includes(Buffer.from("\r\n")), false, relative);
+    const content = fs.readFileSync(path.join(root, ...relative.split("/")), "utf8");
+    if (expectedCrlf.has(relative)) {
+      assert.equal(content.includes("\r\n"), true, relative);
+      assert.equal(content.replaceAll("\r\n", "").includes("\n"), false, relative);
+    } else {
+      assert.equal(content.includes("\r\n"), false, relative);
+    }
   }
 });
 
@@ -146,12 +163,14 @@ test("hardening stays separate from the current core runtime and binds its exact
   assert.equal(verification.status, 0, verification.stderr);
   const result = JSON.parse(verification.stdout);
   assert.equal(result.deploymentSchemaVersion, 4);
+  assert.equal(result.fingerprint, "9457dcb880f64709e071b6645acf0ff548ce4c1c00b321d5894f47d9258b876e");
   assert.equal(result.managedArtifacts.length, 11);
   assert.equal(result.managedArtifacts.some((relative) => relative.includes("/hardening/")), false);
 
   const { moduleContract } = require(path.join(root, "server-tools/linux/hardening/lib/hardening-contract.js"));
   const expected = moduleContract(hardeningRoot);
   assert.deepEqual(result.hardeningModule, expected);
+  assert.equal(result.hardeningModule.fingerprint, "e917ee0355874ce08f8ab096335ea6b533d151a4e9ab2bc4755d4f940682f91d");
   assert.equal(result.hardeningModule.format, "grabenplaner-linux-hardening-installed-contract");
   assert.equal(result.hardeningModule.schemaVersion, schema.schemaVersion);
   assert.equal(result.hardeningModule.moduleVersion, schema.moduleVersion);
