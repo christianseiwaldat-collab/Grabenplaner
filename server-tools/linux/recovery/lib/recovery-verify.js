@@ -10,6 +10,14 @@ const {
   normalizePersonalEmailAddress,
 } = require("../../../../lib/personal-email-address.js");
 const {
+  candidateApplicationProtectionContext,
+  candidateConversionProtectionContext,
+  candidateDocumentProtectionContext,
+  candidateDocumentVersionProtectionContext,
+  candidateEventProtectionContext,
+  candidateProtectionContext,
+} = require("../../../../lib/personnel-lifecycle.js");
+const {
   inspectSqlitePersonalNotificationContactsSchema,
   inspectSqlitePersonalNotificationContactRows,
 } = require("../../../../lib/persistence/sqlite/operations/application-schema.js");
@@ -182,6 +190,42 @@ function verifyProtectedRecords(database, storage) {
     if (!personalNotificationContactRows.valid) {
       fail("Die Tabelle fuer persoenliche Benachrichtigungseinstellungen ist inhaltlich ungueltig.");
     }
+  }
+  for (const row of rowsIf(database, "candidates", ["id", "protected_payload"],
+    "SELECT id, protected_payload FROM candidates ORDER BY id")) {
+    protectedJson(storage, row.protected_payload, candidateProtectionContext(row), { allowLegacy: false });
+    verified += 1;
+  }
+  for (const row of rowsIf(database, "candidate_applications", ["id", "candidate_id", "protected_payload"],
+    "SELECT id, candidate_id, protected_payload FROM candidate_applications ORDER BY candidate_id, id")) {
+    protectedJson(storage, row.protected_payload, candidateApplicationProtectionContext(row), { allowLegacy: false });
+    verified += 1;
+  }
+  for (const row of rowsIf(database, "candidate_documents", ["id", "candidate_id", "protected_payload"],
+    "SELECT id, candidate_id, protected_payload FROM candidate_documents ORDER BY candidate_id, id")) {
+    protectedJson(storage, row.protected_payload, candidateDocumentProtectionContext(row), { allowLegacy: false });
+    verified += 1;
+  }
+  for (const row of rowsIf(database, "candidate_document_versions",
+    ["document_id", "version_number", "protected_payload"], `
+      SELECT version.document_id, version.version_number, version.protected_payload,
+             document.candidate_id
+      FROM candidate_document_versions version
+      LEFT JOIN candidate_documents document ON document.id = version.document_id
+      ORDER BY document.candidate_id, version.document_id, version.version_number
+    `)) {
+    protectedJson(storage, row.protected_payload, candidateDocumentVersionProtectionContext(row), { allowLegacy: false });
+    verified += 1;
+  }
+  for (const row of rowsIf(database, "candidate_events", ["id", "candidate_id", "protected_payload"],
+    "SELECT id, candidate_id, protected_payload FROM candidate_events ORDER BY candidate_id, id")) {
+    protectedJson(storage, row.protected_payload, candidateEventProtectionContext(row), { allowLegacy: false });
+    verified += 1;
+  }
+  for (const row of rowsIf(database, "candidate_conversions", ["id", "candidate_id", "protected_payload"],
+    "SELECT id, candidate_id, protected_payload FROM candidate_conversions ORDER BY candidate_id, id")) {
+    protectedJson(storage, row.protected_payload, candidateConversionProtectionContext(row), { allowLegacy: false });
+    verified += 1;
   }
   for (const row of rowsIf(database, "personnel_sensitive_records", ["employee_number", "protected_payload"],
     "SELECT employee_number, protected_payload FROM personnel_sensitive_records ORDER BY employee_number")) {

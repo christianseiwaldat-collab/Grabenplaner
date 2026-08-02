@@ -127,11 +127,9 @@ test("standalone Windows backup uses the same commit marker and committed-only r
   assert.match(source, /marker: markerTarget/);
 });
 
-test("all standalone backup and restore helpers include protected loan files", () => {
+test("standalone backup paths include protected loan files through direct or canonical references", () => {
   for (const relativePath of [
     "backup.js",
-    "server-tools/linux/lib/backup-snapshot.js",
-    "server-tools/linux/lib/verify-backup.js",
     "server-tools/windows/Backup-Grabenplaner.ps1",
     "server-tools/windows/Restore-Grabenplaner.ps1",
   ]) {
@@ -139,6 +137,26 @@ test("all standalone backup and restore helpers include protected loan files", (
     assert.match(source, /loan_documents/, relativePath);
     assert.match(source, /loan_photos/, relativePath);
     assert.match(source, /loan_photo_attachments/, relativePath);
+  }
+  const canonicalSource = fs.readFileSync(path.join(
+    __dirname,
+    "..",
+    "lib",
+    "persistence",
+    "sqlite",
+    "operations",
+    "maintenance.js",
+  ), "utf8");
+  assert.match(canonicalSource, /candidate_document_versions/);
+  assert.match(canonicalSource, /loan_documents/);
+  assert.match(canonicalSource, /loan_photos/);
+  assert.match(canonicalSource, /loan_photo_attachments/);
+  for (const relativePath of [
+    "server-tools/linux/lib/backup-snapshot.js",
+    "server-tools/linux/lib/verify-backup.js",
+  ]) {
+    const source = fs.readFileSync(path.join(__dirname, "..", ...relativePath.split("/")), "utf8");
+    assert.match(source, /protectedStorageReferencesFromDatabase/, relativePath);
   }
 });
 
