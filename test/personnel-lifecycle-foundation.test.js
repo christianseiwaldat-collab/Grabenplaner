@@ -106,9 +106,10 @@ test("Personalmodul-Fundament: Architekturvertrag hält Entitäten, Versionen un
     "## 8. API-Oberfläche",
     "Offene Architekturentscheidungen",
   ]) assert.match(architecture, new RegExp(statement));
-  assert.match(architecture, /M3-Umwandlung ist bewusst eng begrenzt:[\s\S]*kopiert keine Bewerberdokumente[\s\S]*eine Dokument-Upload-\/Download-API/);
+  assert.match(architecture, /M3-Umwandlung ist bewusst eng begrenzt:[\s\S]*kopiert keine Bewerberdokumente[\s\S]*M6 erweitert ausschließlich die bestehende verschlüsselte Mitarbeiterakte/);
   assert.match(architecture, /v0\.89-personnel-lifecycle-candidate-foundation/);
   assert.match(architecture, /v0\.89-personnel-workflow-instances/);
+  assert.match(architecture, /v0\.90-personnel-document-history[\s\S]*physische Löschung bleibt gesperrt/);
   const forbiddenPublicContext = new RegExp(
     `${["Mitter", "weg"].join("")}|${["Pi", "lot"].join("")}`,
     "i",

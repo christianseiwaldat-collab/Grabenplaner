@@ -2,9 +2,9 @@
 
 Stand: 2. August 2026
 
-Status: verbindlicher Architekturvertrag; Bewerber-, Dokument-, M3-Umwandlungs-, R1-Bereichsrechte-, M4-Workflow-Publikations- und M5-Instanzgrundlage im Quellstand umgesetzt
+Status: verbindlicher Architekturvertrag; M1 bis M5 veröffentlicht, M6-Dokumenthistorie und Mitarbeiterprofil-Grundgerüst im lokalen Arbeitsstand umgesetzt
 
-Produktstatus: in v0.89.0-beta als standardmäßig deaktiviertes Fundament enthalten; keine Freigabe für die produktive Aktivierung; das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert
+Produktstatus: v0.89.1-beta enthält das standardmäßig deaktivierte Fundament bis M5. M6 und das Mitarbeiterprofil-Grundgerüst sind ausschließlich lokal und noch nicht veröffentlicht. Das Installationsmerkmal `personnelLifecycle` bleibt standardmäßig deaktiviert; es besteht keine Freigabe für die produktive Aktivierung.
 
 ## 1. Ziel und Abgrenzung
 
@@ -25,9 +25,11 @@ Die bislang im Quellstand umgesetzte technische Ausbaustufe umfasst:
 - eine additive Publikationsschicht für unveränderbare Workflow-Versionen, Geltungsbereiche, Pflicht-/Ergänzungsauflösung und append-only Archivierung,
 - eine additive, unveränderbare Bindung ausschließlich neu und kontrolliert gestarteter Personalprozess-Instanzen an Veröffentlichung, Fachobjekttyp und eingefrorene Aufgabenzuweisungen,
 - acht eigene Workflow-Rechte mit PL-/PL+-Trennung sowie rechtsspezifischer Scope-Schnittmenge für FL und AL,
+- eine additive M6-Historie für bestehende Mitarbeiterdokumente mit Kategorien, unveränderbaren Versionen, verketteten Ereignisbelegen, Archivierung und Aufbewahrungsprüfung,
+- ein Mitarbeiterprofil-Grundgerüst mit sieben Tabs, dessen Übersicht bereits eine ausdrücklich begrenzte positive Projektion verwendet und dessen weitere Tabs fail-closed bleiben,
 - Migrations-, Integritäts-, Fachlogik- und Regressionstests für diese Integrationsgrenze.
 
-Die M3-Umwandlung ist bewusst eng begrenzt: Sie übernimmt nur Bewerbungen im Status `preboarding`, legt kein Portalprofil an, kopiert keine Bewerberdokumente und startet weder Onboarding noch Workflow. R1 setzt die Bereichsrechte für Bewerbungen und Preboarding um; M4 ergänzt davon getrennte Workflow-Rechte und unveränderbare Veröffentlichungen. M5 bindet nur neue, ausdrücklich gestartete Standard-Instanzen an genau eine nicht archivierte Veröffentlichung und übernimmt keinen Legacy-Lauf. Weiterhin nicht umgesetzt sind eine Dokument-Upload-/Download-API, Mitarbeiterprofil-Tabs, ein grafischer Editor und neue Prozessautomatik. Vertrauliche, freie `custom_personnel`- sowie Onboarding- und Offboarding-Workflows bleiben bis zu ihrem eigenen Schutzvertrag fail-closed. Diese Ausbaustufe ist in v0.89.0-beta ausschließlich als standardmäßig deaktiviertes Fundament enthalten und keine Aktivierungsfreigabe. SQLite bleibt der unterstützte Produktprovider. Die PostgreSQL-Grundlage bleibt bis zur gesonderten Freigabe nicht produktiv.
+Die M3-Umwandlung ist bewusst eng begrenzt: Sie übernimmt nur Bewerbungen im Status `preboarding`, legt kein Portalprofil an, kopiert keine Bewerberdokumente und startet weder Onboarding noch Workflow. R1 setzt die Bereichsrechte für Bewerbungen und Preboarding um; M4 ergänzt davon getrennte Workflow-Rechte und unveränderbare Veröffentlichungen. M5 bindet nur neue, ausdrücklich gestartete Standard-Instanzen an genau eine nicht archivierte Veröffentlichung und übernimmt keinen Legacy-Lauf. M6 erweitert ausschließlich die bestehende verschlüsselte Mitarbeiterakte: Upload, neue Version, Historie, historischer Abruf, Aufbewahrungsprüfung und Archivierung verwenden den vorhandenen Scan- und Binärspeicherpfad. Das lokale Profil-Grundgerüst aktiviert nur die datensparsame Übersicht; Stammdaten, Dokumente, Onboarding, Schulungen, Offboarding und Gesamthistorie bleiben bis zu ihren jeweiligen Rechte- und Projektionsverträgen geschlossen. Weiterhin nicht umgesetzt sind die Übernahme von Bewerberdokumenten, eingebettete Personalprozesse, ein grafischer Editor und neue Prozessautomatik. Vertrauliche, freie `custom_personnel`- sowie Onboarding- und Offboarding-Workflows bleiben bis zu ihrem eigenen Schutzvertrag fail-closed. SQLite bleibt der unterstützte Produktprovider. Die PostgreSQL-Grundlage bleibt bis zur gesonderten Freigabe nicht produktiv.
 
 ## 2. Einordnung in die bestehende Anwendung
 
@@ -219,7 +221,7 @@ Jede Stufe erhält eine eigene, vorwärtskompatible SQLite-Migration und passend
 | R1 | im Quellstand additiv umgesetzt als `v0.89-personnel-lifecycle-scoped-rights` | rechtsspezifische, durch PL+ genehmigte Fachbereiche für lokale Bewerbungsrechte | keine Änderung an Bewerberfachdaten; nur SQLite |
 | M4 | im Quellstand additiv umgesetzt als `v0.89-personnel-workflow-publications` | Workflow-Veröffentlichungen, unveränderbare Versionsmetadaten, Geltungsbereiche, additive Auflösung und Archivierung | bestehende Prozesse, Revisionen und Läufe werden erhalten; keine automatische Klassifikation |
 | M5 | im Quellstand additiv umgesetzt als `v0.89-personnel-workflow-instances` | unveränderbarer Instanzbezug auf Veröffentlichung und Fachobjekttyp, eingefrorene Schrittzuweisungen, datensparsame Instanz-/Aktivschrittprojektion | nur neue kontrollierte Läufe; bestehende und automatisch ausgelöste Prozesse werden nicht neu interpretiert |
-| M6 | offen | erweiterte Dokumentmetadaten und Historie für Mitarbeiterakten | bestehende Dokumente werden sicher nachklassifiziert |
+| M6 | im lokalen Arbeitsstand additiv umgesetzt als `v0.90-personnel-document-history` | Kategorien, unveränderbare Versionen, verkettete Ereignisse, Archivierung und Aufbewahrungsprüfung für Mitarbeiterakten | bestehende Dokumente werden verlustfrei als Version 1 nachklassifiziert; physische Löschung bleibt gesperrt |
 
 M1/M2 legen sechs Tabellen, die erforderlichen Indizes, sechs eingebaute Dokumentkategorien und neun Schutztrigger für Bereichsbezüge, Dokumentversionen sowie Historienereignisse an. M3 ergänzt verlustfrei die siebte Tabelle `candidate_conversions` und zwei Unveränderbarkeitstrigger. R1 ergänzt als achte Tabelle `portal_permission_scope_grants` und acht Scope-Schutztrigger; der lokale Gesamtstand umfasst damit acht Personal-Lifecycle-/R1-Tabellen und neunzehn Trigger. Die M3-Tabelle bindet Bewerber und Bewerbung mit `ON DELETE RESTRICT` an den historischen Ursprung und die Personalnummer mit `ON DELETE RESTRICT` an den erzeugten Mitarbeiter. Eindeutigkeitsgrenzen auf Bewerber, Bewerbung und Personalnummer verhindern Mehrfachumwandlungen zusätzlich auf Datenbankebene.
 
@@ -237,9 +239,11 @@ M4 ergänzt zwei Publikationstabellen und zehn Schutztrigger. Der Startpfad prü
 
 M5 ergänzt zwei Sidecar-Tabellen und zwölf Schutztrigger. `custom_process_run_bindings` bindet Lauf, Veröffentlichung, idempotente Vorgangs-ID, Fachobjekttyp, revisionsgebundenen Bewerbungsbezug oder Mitarbeiterbezug sowie Startbeleg unveränderbar zusammen. `custom_process_run_step_assignments` bindet jeden Instanzschritt an genau eine beim Start wirksame Person und einen eigenen Zuweisungsbeleg. Fremdschlüssel verwenden `ON DELETE RESTRICT`; Trigger prüfen Veröffentlichung, Snapshot, Bereich, Fachobjektstatus, Portalzugang, Schrittfolge und Unveränderbarkeit. Der Marker wird erst nach vollständiger Integritätsprüfung geschrieben. Altstände ohne M5 bleiben migrationsfähig, ein vollständiger M5-Stand wird als `m5` erkannt; partielle, verwaiste oder manipulierte Bindungen, Zuweisungen, Hashketten und Personal-Läufe sperren Start beziehungsweise Read-only-Import fail-closed. Vor einer notwendigen Änderung einer vorhandenen Datenbank entsteht weiterhin zuerst der interne Pre-Migration-Sicherungspunkt. Die neun providerneutralen Anwendungsmigrationsstufen bleiben unverändert und PostgreSQL bleibt 0/9 ohne Produktfreigabe.
 
+M6 ergänzt die bestehende Tabelle `personnel_record_documents` um den aktuellen Versionszeiger, eine optimistische Revision und Archivierungsmetadaten. `personnel_document_categories`, `personnel_record_document_versions` und `personnel_record_document_events` bilden Kategorien, unveränderbare Fassungen und eine SHA-256-verkettete Historie ab. Kategorie, Sichtbarkeit und fachliche Metadaten verbleiben im geschützten Payload; öffentlich unterstützt wird zunächst ausschließlich `hr_confidential`. Schutztrigger sperren nachträgliche Versions- und Ereignisänderungen, inkonsistente Zeiger, von ihrem terminalen Ereignis abweichende Archivmetadaten sowie das physische Löschen versionierter Dokumente. Dokumente in Aufbewahrungsprüfung bleiben in der berechtigten Personalakt-Liste sichtbar. Migration und Read-only-Import prüfen Sequenzen, Zeiger, Status, Ereigniskette und Belege; eine notwendige Migration erzeugt zuvor eine Sicherung und ist wiederholbar. Der vollständige lokale Vertrag steht in `PERSONALMODUL-MITARBEITERDOKUMENTE-M6-v0.1.md`.
+
 ## 8. API-Oberfläche
 
-Die Endpunkte sind unter `/api/portal/v1/personnel-lifecycle/...` gebündelt und durch `personnelLifecycle` fail-closed gesperrt. Im standardmäßig deaktivierten v0.89.0-beta-Fundament enthalten sind:
+Die Endpunkte sind unter `/api/portal/v1/personnel-lifecycle/...` gebündelt und durch `personnelLifecycle` fail-closed gesperrt. Im standardmäßig deaktivierten v0.89.1-beta-Fundament bis M5 enthalten sind:
 
 - `GET /document-categories`,
 - `GET|POST /candidates`,
@@ -256,6 +260,16 @@ Die Endpunkte sind unter `/api/portal/v1/personnel-lifecycle/...` gebündelt und
 - `POST /workflow-instances`,
 - `GET /api/portal/v1/me/process-tasks` als gemeinsame Legacy-/M5-Selbstprojektion,
 - `POST /api/portal/v1/me/process-tasks/:runId/:stepId/complete` als bestehende gemeinsame Abschlussgrenze.
+
+Der lokale M6-Arbeitsstand ergänzt innerhalb der bestehenden Personalakt-API:
+
+- `POST /api/portal/v1/personnel-records/:employeeNumber/documents` für die erste gescannte und verschlüsselte Fassung,
+- `POST /api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/versions` für eine neue unveränderbare Fassung,
+- `GET /api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/history`,
+- `GET /api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/versions/:versionNumber/content`,
+- `POST /api/portal/v1/personnel-records/:employeeNumber/documents/:documentId/retention-review`,
+- `DELETE /api/portal/v1/personnel-records/:employeeNumber/documents/:documentId` als reine Archivierungsaktion ohne Blob-Löschung,
+- `GET /api/portal/v1/personnel-lifecycle/employees/:employeeNumber/profile?tab=overview` als datensparsame Profilübersicht.
 
 R1 ergänzt an dieser Grenze die bisherige pauschale Kombination aus `personnel:central:*` und `personnel:sensitive:*` um aktionsbezogene Bewerbungsrechte, sodass die API nicht mehr allein auf den breiten Bestandsrechten beruht. Für globale Zugriffe bleiben die zentralen und sensiblen Personalrechte als zusätzliche Schutzgrenze erhalten. Lesen benötigt `personnel:candidates:read`. Dokumentkategorien benötigen wegen ihrer Sichtbarkeitsmetadaten zusätzlich `personnel:candidates:confidential:read`. Kandidatenstammänderungen benötigen global `personnel:candidates:write`; vertrauliche Felder bleiben zusätzlich durch `personnel:candidates:confidential:*` geschützt. Bewerbungsänderungen und Statuswechsel benötigen `personnel:applications:write`. FL und AL werden dabei auf ihre Scope-Schnittmenge und strukturierte Nicht-Scope-Felder bereits sichtbarer Bewerbungen begrenzt. Sie dürfen weder neue Bewerbungen anlegen noch Standort oder Abteilung ändern; die Neuanlage setzt global `personnel:candidates:write` und `personnel:applications:write` voraus. Die Umwandlung benötigt global `personnel:candidates:convert`, die vollständige Rechtekette, `employees:write` und die bestehende zentrale Grenze für Mitarbeiteranlage.
 
@@ -277,7 +291,7 @@ Der aktuelle HTTP-Vertrag bleibt bewusst klein:
 - Inaktive Standorte oder Abteilungen werden in Browser-, Mobile- und Organisationssitzungen unmittelbar ausgefiltert und können nicht neu als Rechtebereich gespeichert werden. Eine Browser-Sitzung wird außerdem nicht mehr aufgelöst, sobald der zugehörige Mitarbeiter deaktiviert ist, selbst wenn Portalzugang und Legacy-Sitzung noch aktiv markiert sind. IT-Admin kann weder `hr` zuweisen noch HR- oder R1-freigegebene Leitungskonten sicherheitsrelevant übernehmen.
 - Relevante Fehlergrenzen sind `400` für ungültige Eingaben oder Bezüge, `403` für deaktiviertes Feature, fehlende Rechte oder CSRF, `404` für fehlende oder im wirksamen Bereich nicht sichtbare Fachobjekte, `409` für Revisionen, unzulässige Übergänge, gesperrte lokale Scope-Änderungen, nicht erfüllte Umwandlungsvoraussetzungen, eine anderweitig belegte Personalnummer oder eine mit anderem Inhalt wiederverwendete Vorgangs-ID sowie `503` für Integritätsfehler. Die Antwort enthält jeweils einen stabilen Fehlercode.
 
-Dokumentmutationen sind noch nicht exponiert, damit kein Metadatensatz ohne den gescannten, verschlüsselten Blob-Workflow entstehen kann. Rechteverwaltungs- und Sitzungsprojektionen führen die rechtsspezifischen Fachscopes mit Recht, Standort, Abteilung und Genehmigungsidentität; die bestehende Rechteänderungsgrenze auditiert Änderungen und widerruft betroffene Sitzungen.
+M6-Dokumentmutationen verwenden ausnahmslos den vorhandenen Scan- und verschlüsselten Blob-Workflow. Version, aktueller Zeiger, Ereignis und Audit werden atomar geschrieben; bei einem Abbruch wird ein bereits erzeugter Blob wieder entfernt. API-Projektionen enthalten weder Speicherpfade noch Integritäts- oder Beleg-Hashes. Der Zugriff bleibt in diesem Zwischenstand auf die bereits vorhandene vertrauliche Personalakt-Grenze beschränkt. Rechteverwaltungs- und Sitzungsprojektionen führen die rechtsspezifischen Fachscopes mit Recht, Standort, Abteilung und Genehmigungsidentität; die bestehende Rechteänderungsgrenze auditiert Änderungen und widerruft betroffene Sitzungen.
 
 Die M4-Endpunkte verwenden ausschließlich den eigenen Workflow-Rechtevertrag. Globale Zugriffe benötigen zusätzlich die bestehenden zentralen Personalrechte; lokale Zugriffe werden pro Recht auf die Portalbereich-/PL+-Fachbereich-Schnittmenge beschränkt. Publikation und Archivierung sind CSRF-geschützt und transaktional auditiert. Antworten liefern nur fachliche Metadaten und Capabilities, jedoch weder Rohsnapshot noch Hashwerte, Publikationsakteur, Archivierungsgrund oder Genehmigungsidentitäten. Vertrauliche und Offboarding-Publikationen bleiben fail-closed gesperrt.
 
@@ -325,9 +339,9 @@ Die bestehenden Portal-Aufgabenendpunkte bleiben die einzige Selbstaufgabenquell
 6. **Workflow-Publikation und Instanzbindung – M4 und M5 im Quellstand umgesetzt**
 
    Vorhandene Prozessbasis um unveränderbare Veröffentlichungen, append-only Archivierung, Pflicht-/Ergänzungsauflösung und eigene Bereichsrechte ergänzen; ausschließlich neue kontrollierte Instanzen additiv und idempotent an Veröffentlichung, Fachobjekttyp und eingefrorene Aufgabenverantwortung binden. Keine Legacy-Übernahme und keine Automatisierung.
-7. **Mitarbeiterprofil und eingebettete Abläufe**
+7. **Mitarbeiterprofil und eingebettete Abläufe – Grundgerüst lokal umgesetzt**
 
-   Tabs, Onboarding, Schulungen und Offboarding mit vertraulichen Schrittklassen.
+   Sieben Tabs und die positiv projizierte Übersicht sind lokal umgesetzt. Eigene Rechteverträge und Fachprojektionen für Stammdaten, Dokumente, Onboarding, Schulungen, Offboarding und Historie sowie die eingebetteten Abläufe mit vertraulichen Schrittklassen bleiben offen.
 8. **Grafischer Editor und Automatisierung**
 
    erst nach stabilen Domänen-, Rechte- und Versionsgrenzen; Vorschau, Validierung und kontrollierte Trigger.
@@ -347,6 +361,10 @@ Für das Datenfundament, M3 und R1 wurden folgende Entscheidungen festgeschriebe
 - Bewerberdokumente bleiben beim historischen Bewerberbezug. M3 erzeugt weder Dokumentkopien noch Portalprofil, Zugangsdaten, Onboarding-Version oder Workflow-Instanz.
 - Dokumentbinärdaten verwenden den vorhandenen verschlüsselten AMU-Speicher; SQLite hält nur geschützte Metadaten, Integritätswerte und Speicherreferenzen.
 - Das Fundament kennt für Bewerberdokumente bewusst keinen Zustand `purged`: Physische Löschung, Anonymisierung oder Crypto-Shredding bleiben bis zu einer dokumentierten Aufbewahrungsentscheidung gesperrt. Archivierte und zur Aufbewahrungsprüfung vorgemerkte Dokumente bleiben in Sicherung und Import enthalten.
+- M6 verwendet für Mitarbeiterdokumente denselben verschlüsselten Binärspeicher wie die bestehende Personalakte. Jede neue Fassung erhält einen eigenen Blob; alle Fassungen und archivierten Dokumente bleiben in Sicherung, Integritätsprüfung und Import enthalten.
+- Kategorie, Sichtbarkeit und fachliche Dokumentmetadaten liegen ausschließlich im geschützten Payload. Bis zu einem eigenen Sichtbarkeits- und Rechtevertrag akzeptiert die API nur `hr_confidential`.
+- Archivierung und Aufbewahrungsprüfung sind nachvollziehbare Statusereignisse. Eine physische Bereinigung ist ohne die noch offene Aufbewahrungsentscheidung technisch gesperrt.
+- Das Mitarbeiterprofil verwendet pro Tab eine positive Serverprojektion. Im lokalen Grundgerüst ist nur die Übersicht freigegeben; die sechs übrigen Tabs besitzen weder Datenabrufe noch Mutationen.
 - Eine verantwortliche Person muss, sofern angegeben, ein bestehender Mitarbeiter sein; die Bewerbungsquelle bleibt verschlüsselt und wird nicht für Rechte- oder Bereichsentscheidungen verwendet.
 - Der R1-Zugriff auf die Bewerber-API setzt ein wirksames Fachrecht voraus; FL und AL benötigen zusätzlich die vollständige Scope-Schnittmenge.
 - PL verwendet die bestehende Rolle `hr`; PL+ ist dieselbe Rolle mit der zusätzlichen, nicht weiterdelegierbaren Capability `personnel:candidates:delegate`.
@@ -389,7 +407,9 @@ Neue Kernlogik benötigt mindestens:
 - Negativtests für reservierte `local`-Prinzipale, inaktive Organisationseinheiten, parallele Rechteänderungen, unveränderte Freigabezeitpunkte und parsebare Auditdetails,
 - Tests für unveränderbare Veröffentlichungen, additive Auflösung, Archivierung und M4-Rechte,
 - M5-Tests für additive und idempotente Instanzmigration, Read-only-Import, Veröffentlichungs-/Fachobjektbindung, explizite Schrittzuweisung, konkurrierende Starts, Belegintegrität, Legacy-Sperren, bereichsgefilterte Listen, datensparsame UI-Projektion sowie persönliche Aufgaben und idempotenten Abschluss,
-- Dokumentzugriffs-, Historien- und Bereinigungstests erst mit den jeweils freigegebenen Dokument-APIs und Aufbewahrungsregeln,
+- M6-Tests für Legacy-Nachklassifizierung, Wiederholbarkeit, Sicherung, Versions- und Ereignis-Unveränderbarkeit, Belegketten, Zeigerintegrität, Read-only-Import, alle geschützten Speicherreferenzen, API-Projektionen, historische Downloads, Archivierung und Aufbewahrungsprüfung,
+- Profiltests für Feature-Grenze, positive Übersichtsprojektion, Rollen-/Objektzugriff, geschlossene zukünftige Tabs und mobile Überläufe,
+- physische Dokumentbereinigungstests erst nach einer ausdrücklich freigegebenen Aufbewahrungsregel,
 - UI- und mobile Überlauftests,
 - Regressionstests für bestehende Personal-, Dienstplan-, Portal- und Prozessfunktionen.
 
