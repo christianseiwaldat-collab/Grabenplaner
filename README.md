@@ -2,9 +2,9 @@
 
 Grabenplaner bündelt Dienstplanung, Abwesenheiten, Personalorganisation, Zeiterfassung und ein mobiles Mitarbeiterportal in einer Anwendung.
 
-**v0.90.1 Beta · verwalteter Ubuntu-Einzelserver · SQLite · source-available**
+**v0.90.2 Beta · verwalteter Ubuntu-Einzelserver · SQLite · source-available**
 
-[Server-Release v0.90.1 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.90.1-beta) · [Serverbetrieb](SERVERBETRIEB.md) · [Sicherheit](SECURITY.md)
+[Server-Release v0.90.2 Beta](https://github.com/christianseiwaldat-collab/Grabenplaner/releases/tag/v0.90.2-beta) · [Serverbetrieb](SERVERBETRIEB.md) · [Sicherheit](SECURITY.md)
 
 ## Produktstatus
 
@@ -32,15 +32,15 @@ Grabenplaner unterstützt betriebliche Abläufe und Nachweise. Die Anwendung ers
 
 <table>
   <tr>
-    <td><img src="docs/readme/dienstplanung.webp" alt="Dienstplanung in Grabenplaner v0.90.1"></td>
-    <td><img src="docs/readme/teams-standorte.webp" alt="Personal- und Kostenstellenverwaltung in Grabenplaner v0.90.1"></td>
+    <td><img src="docs/readme/dienstplanung.webp" alt="Dienstplanung in Grabenplaner v0.90.2"></td>
+    <td><img src="docs/readme/teams-standorte.webp" alt="Personal- und Kostenstellenverwaltung in Grabenplaner v0.90.2"></td>
   </tr>
   <tr>
-    <td><img src="docs/readme/rechtemanagement.webp" alt="Rollen und wirksame Bereiche in Grabenplaner v0.90.1"></td>
-    <td><img src="docs/readme/branding-kits.webp" alt="Neutrales Branding in Grabenplaner v0.90.1"></td>
+    <td><img src="docs/readme/rechtemanagement.webp" alt="Rollen und wirksame Bereiche in Grabenplaner v0.90.2"></td>
+    <td><img src="docs/readme/branding-kits.webp" alt="Neutrales Branding in Grabenplaner v0.90.2"></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/readme/mitarbeiterportal.webp" alt="Mobiles Mitarbeiterportal in Grabenplaner v0.90.1" width="300"></td>
+    <td align="center"><img src="docs/readme/mitarbeiterportal.webp" alt="Mobiles Mitarbeiterportal in Grabenplaner v0.90.2" width="300"></td>
     <td align="center"><img src="docs/readme/aum-upload.webp" alt="Krankmeldung und AUM im mobilen Portal" width="300"></td>
   </tr>
 </table>
